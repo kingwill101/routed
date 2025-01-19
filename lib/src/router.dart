@@ -1,5 +1,3 @@
-// lib/my_router.dart
-
 /// Just a placeholder for a request/response handler.
 typedef Handler = void Function(dynamic request, dynamic response);
 
@@ -7,14 +5,13 @@ typedef Handler = void Function(dynamic request, dynamic response);
 typedef Middleware = void Function(dynamic request, dynamic response, void Function() next);
 
 /// Represents a single HTTP route, including:
-/// - HTTP method (GET, POST, etc.)
-/// - Path (e.g. `/api/books`)
+/// - HTTP method
+/// - Path
 /// - Name (e.g. `api.books.list`)
 /// - The actual route handler
-/// - A list of route-specific middlewares
+/// - A list of route-level middlewares
 ///
-/// We also include a field `finalMiddlewares` which is computed after build()
-/// to capture the *full* chain (group + route).
+/// After building, we store the *merged* middlewares in [finalMiddlewares].
 class RegisteredRoute {
   final String method;
   final String path;
@@ -24,8 +21,8 @@ class RegisteredRoute {
   /// Middlewares specifically attached to this route
   final List<Middleware> routeMiddlewares;
 
-  /// After calling `build()`, we store the *merged* middlewares here:
-  /// (group-level + route-level)
+  /// After `build()`, this holds the entire chain:
+  /// (inherited group-level MW + route-level MW).
   List<Middleware> finalMiddlewares = [];
 
   RegisteredRoute({
@@ -38,55 +35,58 @@ class RegisteredRoute {
 
   @override
   String toString() {
-    final mw = finalMiddlewares.isEmpty
-        ? ''
-        : ' [middlewares: ${finalMiddlewares.length}]';
-    return '[$method] $path with name ${name ?? "(no name)"}$mw';
+    final mwCount = finalMiddlewares.isEmpty ? 0 : finalMiddlewares.length;
+    return '[$method] $path with name ${name ?? "(no name)"} [middlewares: $mwCount]';
   }
 }
 
 /// A hierarchical Router supporting:
-/// - Sub-groups (which can each have path + middlewares)
+/// - Sub-groups (each can have path + middlewares)
 /// - Multiple HTTP verbs
 /// - Group-level middlewares
 /// - Route-level middlewares
+/// - Hierarchical naming
 class Router {
   /// Base path for this router (e.g. `/api`)
   final String _prefix;
 
-  /// Optional group name (e.g. `api`), for hierarchical naming.
+  /// Optional group name (e.g. `api`)
   String? groupName;
 
-  /// Middlewares for *this* group. All routes in this router & sub-routers inherit them.
-  List<Middleware> groupMiddlewares = [];
+  /// Middlewares *declared for this router group only*.
+  /// (We do not manually copy the parent's middlewares here.)
+  final List<Middleware> groupMiddlewares = [];
 
   /// Direct routes defined at this level
   final List<RegisteredRoute> _routes = [];
 
-  /// Sub-routers
+  /// Child routers
   final List<Router> _children = [];
 
-  /// Public getter so we can inspect direct routes if needed.
+  /// Public getter so tests or merges can inspect routes.
   List<RegisteredRoute> get routes => _routes;
 
   /// Constructor
   ///
-  /// - [path]: base path (e.g. `/api`)
-  /// - [groupName]: optional name (e.g. `api`)
-  /// - [middlewares]: group-level middlewares for this router
+  /// [path]: base path for this router, e.g. `/api`
+  /// [groupName]: optional name for hierarchical naming, e.g. `api`
+  /// [middlewares]: group-level middlewares declared for *this* router
   Router({
     String path = '',
     this.groupName,
     List<Middleware> middlewares = const [],
   }) : _prefix = path {
+    // We store only the *new* middlewares declared for this router.
     groupMiddlewares.addAll(middlewares);
   }
 
   /// Create a sub-group (child router).
   ///
-  /// - [path]: appended to this router’s path
-  /// - [middlewares]: appended to this router’s `groupMiddlewares`
-  /// - [builder]: function that configures the child router (routes, subgroups)
+  /// [path]: appended to this router’s path
+  /// [middlewares]: new middlewares for this child group
+  /// [builder]: configures the child (adding routes, subgroups)
+  ///
+  /// We do *not* copy the parent's middlewares here; that will be merged in [build()].
   RouterGroupBuilder group({
     String path = '',
     List<Middleware> middlewares = const [],
@@ -94,23 +94,21 @@ class Router {
   }) {
     final combinedPath = _joinPaths(_prefix, path);
 
-    // Create child
-    final child = Router(path: combinedPath);
-    // Inherit *this* router's group-level middlewares + plus new ones
-    child.groupMiddlewares = [...groupMiddlewares, ...middlewares];
+    // Child has only its newly declared middlewares
+    final child = Router(path: combinedPath, middlewares: middlewares);
 
-    // Let the user define routes or subgroups
+    // Let the user define routes/subgroups on the child
     builder(child);
 
-    // Register child
+    // Attach child to our children
     _children.add(child);
 
-    // Return a builder for `.name("someName")`.
+    // Return a builder so we can do `.name("someGroup")`.
     return RouterGroupBuilder(child);
   }
 
   // ----------------
-  //  HTTP VERBS
+  //  HTTP Methods
   // ----------------
   RouteBuilder get(String path, Handler handler, {List<Middleware> middlewares = const []}) {
     return _register("GET", path, handler, middlewares);
@@ -145,64 +143,67 @@ class Router {
   }
   // ----------------
 
-  /// Internal helper to register any method
+  /// Internal helper to create and store a [RegisteredRoute].
   RouteBuilder _register(
       String method,
       String path,
       Handler handler,
-      List<Middleware> middlewares,
+      List<Middleware> routeMW,
       ) {
     final fullPath = _joinPaths(_prefix, path);
     final route = RegisteredRoute(
       method: method,
       path: fullPath,
       handler: handler,
-      routeMiddlewares: middlewares,
+      routeMiddlewares: routeMW,
     );
     _routes.add(route);
     return RouteBuilder(route);
   }
 
-  /// Build merges naming & middlewares:
-  /// - [parentGroupName]: name from the parent (merged with `this.groupName`)
-  /// - [inheritedMiddlewares]: the parent's combined group middlewares
+  /// Build merges naming & middlewares.
+  ///
+  /// [parentGroupName]: parent's group name for hierarchical naming
+  /// [inheritedMiddlewares]: parent's middlewares so far
+  ///
+  /// The final route middlewares = inherited + groupMiddlewares + route-specific
   void build({
     String? parentGroupName,
     List<Middleware> inheritedMiddlewares = const [],
   }) {
-    // Merge parent's group name with ours => effective name
+    // Combine parent's name and ours => effective name
     final effectiveGroupName = _joinNames(parentGroupName, groupName);
 
-    // Merge parent's middlewares with ours
-    final combinedMiddlewares = [...inheritedMiddlewares, ...groupMiddlewares];
+    // Merge parent's middlewares + ours
+    final combinedMW = [...inheritedMiddlewares, ...groupMiddlewares];
 
-    // Update routes
+    // Update direct routes
     for (final route in _routes) {
       // Merge route name
       if (route.name != null && route.name!.isNotEmpty) {
         route.name = _joinNames(effectiveGroupName, route.name);
       }
-      // Merge route middlewares => group + route
-      route.finalMiddlewares = [...combinedMiddlewares, ...route.routeMiddlewares];
+      // Merge route-level middlewares
+      route.finalMiddlewares = [...combinedMW, ...route.routeMiddlewares];
     }
 
     // Recursively build children
     for (final child in _children) {
       child.build(
         parentGroupName: effectiveGroupName,
-        inheritedMiddlewares: combinedMiddlewares,
+        inheritedMiddlewares: combinedMW,
       );
     }
   }
 
-  /// Print all routes in the console.
+  /// Print all routes in this router + sub-routers to console.
   void printRoutes() {
     for (final route in getAllRoutes()) {
       print(route);
     }
   }
 
-  /// Return flattened list of routes
+  /// Flatten all routes (this router + children + deeper descendants)
   List<RegisteredRoute> getAllRoutes() {
     final results = <RegisteredRoute>[];
     results.addAll(_routes);
@@ -212,16 +213,16 @@ class Router {
     return results;
   }
 
-  // ---------------------------
-  //  Utility path/name joiners
-  // ---------------------------
+  // --------------------------------------------------
+  // Utility path & name joiners
+  // --------------------------------------------------
   static String _joinPaths(String base, String child) {
     if (base.isEmpty && child.isEmpty) return '';
     if (base.isEmpty) return child;
     if (child.isEmpty) return base;
 
     if (base.endsWith('/') && child.startsWith('/')) {
-      return base + child.substring(1); // remove double slash
+      return base + child.substring(1);
     } else if (!base.endsWith('/') && !child.startsWith('/')) {
       return '$base/$child';
     } else {
