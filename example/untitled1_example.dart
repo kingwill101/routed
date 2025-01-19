@@ -1,40 +1,58 @@
+// example/engine_example.dart
+
+
 import 'package:untitled1/untitled1.dart';
 
 void main() {
-  final router = Router(groupName: 'v1', path: '/api');
-  // The top-level router itself is named "v1" with base path "/api"
+  // Create two separate routers, r1 and r2:
+  final r1 = Router(groupName: 'v1');
+  r1.group(path: '/books', builder: (booksGroup) {
+    booksGroup.get('/', (req, res) {
+      // ...
+    }).name('list');
 
-  // e.g. GET /api/books => "v1.books.index"
-  router.group(
-    path: '/books',
-    builder: (booksGroup) {
-      booksGroup.get('/', (req, res) {
-        res.write('Listing books');
-      }).name('index');
+    booksGroup.post('/', (req, res) {
+      // ...
+    }).name('create');
+  }).name('books'); // => final route name "v1.books.list", "v1.books.create"
 
-      booksGroup.post('/', (req, res) {
-        res.write('Creating book');
-      }).name('create');
-    },
-  ).name('books'); // => final route names "v1.books.index", "v1.books.create"
+  final r2 = Router(groupName: 'v2');
+  r2.group(path: '/products', builder: (productsGroup) {
+    productsGroup.get('/', (req, res) {
+      // ...
+    }).name('index');
+  }).name('products'); // => final route name "v2.products.index"
 
-  // e.g. POST /api/auth/login => "v1.auth.login"
-  router.group(
-    path: '/auth',
-    builder: (authGroup) {
-      authGroup.post('/login', (req, res) {
-        res.write('Logging in...');
-      }).name('login');
+  // Simple example middlewares
+  authMiddleware(req, res, next) {
+    print('Auth check...');
+    next();
+  }
+  loggerMiddleware(req, res, next) {
+    print('Logging...');
+    next();
+  }
 
-      authGroup.post('/logout', (req, res) {
-        res.write('Logging out...');
-      }).name('logout');
-    },
-  ).name('auth');
+  // Create an engine and mount r1 and r2 at different prefixes
+  final engine = Engine();
 
-  // finalize the names
-  router.build();
+  // Mount r1 under "/api/v1" with one middleware
+  engine.use(
+    '/api/v1',
+    r1,
+    middlewares: [authMiddleware],
+  );
 
-  // print them
-  router.printRoutes();
+  // Mount r2 under "/api/v2" with two middlewares
+  engine.use(
+    '/api/v2',
+    r2,
+    middlewares: [authMiddleware, loggerMiddleware],
+  );
+
+  // Build the engine route table
+  engine.build();
+
+  // Print them:
+  engine.printRoutes();
 }
