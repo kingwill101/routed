@@ -1,46 +1,40 @@
-// example/my_router_example.dart
 import 'package:untitled1/untitled1.dart';
 
 void main() {
-  final router = Router();
+  final router = Router(groupName: 'v1', path: '/api');
+  // The top-level router itself is named "v1" with base path "/api"
 
-  router
-      .group(
-        path: '/api',
-        builder: (apiGroup) {
-          apiGroup
-              .group(
-                path: '/books',
-                builder: (booksGroup) {
-                  booksGroup.get('/', (req, res) {
-                    res.write('List books');
-                  }).name('list');
-                },
-              )
-              .name('books');
+  // e.g. GET /api/books => "v1.books.index"
+  router.group(
+    path: '/books',
+    builder: (booksGroup) {
+      booksGroup.get('/', (req, res) {
+        res.write('Listing books');
+      }).name('index');
 
-          apiGroup.get('/health', (req, res) {
-            res.write('System health check');
-          }).name('health.check');
+      booksGroup.post('/', (req, res) {
+        res.write('Creating book');
+      }).name('create');
+    },
+  ).name('books'); // => final route names "v1.books.index", "v1.books.create"
 
-          apiGroup
-              .group(
-                path: '/users',
-                builder: (usersGroup) {
-                  usersGroup.get('/', (req, res) {
-                    res.write('List Users');
-                  }).name('list');
-                },
-              )
-              .name('users');
-        },
-      )
-      .name("api");
+  // e.g. POST /api/auth/login => "v1.auth.login"
+  router.group(
+    path: '/auth',
+    builder: (authGroup) {
+      authGroup.post('/login', (req, res) {
+        res.write('Logging in...');
+      }).name('login');
 
-  router.get('/', (req, res) {
-    res.write('Hello, World!');
-  }).name("home");
+      authGroup.post('/logout', (req, res) {
+        res.write('Logging out...');
+      }).name('logout');
+    },
+  ).name('auth');
 
+  // finalize the names
   router.build();
+
+  // print them
   router.printRoutes();
 }
