@@ -37,6 +37,10 @@ void main() {
       )
       .name("api");
 
+  router.get('/', (req, res) {
+    res.write('Hello, World!');
+  }).name("home");
+
   router.build();
   router.printRoutes();
 }

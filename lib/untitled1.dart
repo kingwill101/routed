@@ -1,7 +1,9 @@
 // lib/my_router.dart
+
+/// Just a placeholder for the request/response handler type.
 typedef Handler = void Function(dynamic request, dynamic response);
 
-/// Represents a single HTTP route (e.g. GET /users/)
+/// Represents a single HTTP route (e.g. GET /users).
 class RegisteredRoute {
   final String method;
   final String path;
@@ -20,80 +22,86 @@ class RegisteredRoute {
       '[$method] $path with name ${name ?? "(no name)"}';
 }
 
-/// A simple hierarchical Router.
+/// A simple hierarchical Router
 class Router {
-  // Current router's base path:
+  /// The path prefix for this router (e.g. `/api`)
   final String _prefix;
 
-  // Current router's group name:
+  /// The "group" name (used for naming routes).
   String? groupName;
 
-  // Direct routes in this router
+  /// Direct routes defined at this router level.
   final List<RegisteredRoute> _routes = [];
 
-  // Child routers (subgroups)
+  /// Child routers (subgroups).
   final List<Router> _children = [];
 
-  /// Public getter so you can inspect routes in tests
+  /// Public getter so tests can inspect routes directly if needed.
   List<RegisteredRoute> get routes => _routes;
 
+  /// [path]: The base path for this router. E.g. `/api`
+  /// [groupName]: Optional name for this group (e.g. `api`).
   Router({
     String path = '',
     this.groupName,
-  }) : _prefix = _normalizeSlashes(path);
+  }) : _prefix = path;
 
-  /// Create a sub-group (which is itself a Router).
+  /// Create a subgroup (child Router).
   ///
-  /// - [path] is appended to this router's prefix.
-  /// - [builder] configures the sub-router.
+  /// [path]: sub-path to append to `_prefix`.
+  /// [builder]: function that configures the child router (adding routes, etc.).
   RouterGroupBuilder group({
     String path = '',
     required void Function(Router) builder,
   }) {
-    final child = Router(
-      path: _joinPaths(_prefix, path),
-    );
-    _children.add(child);
+    // Combine parent's prefix with child path, carefully avoiding double slashes.
+    final combinedPath = _joinPaths(_prefix, path);
 
-    // Let the caller define routes or subgroups within [child].
+    // Create a child router and let the caller configure it.
+    final child = Router(path: combinedPath);
     builder(child);
 
-    // Return a builder so we can `.name("someName")` for the group
+    // Store child so we can build it later, too.
+    _children.add(child);
+
+    // Return a builder so the user can do `.name("something")`.
     return RouterGroupBuilder(child);
   }
 
-  /// Register a GET route
+  /// Register a GET route at `[prefix]/[path]`.
   RouteBuilder get(String path, Handler handler) {
+    final fullPath = _joinPaths(_prefix, path);
     final route = RegisteredRoute(
       method: 'GET',
-      path: _joinPaths(_prefix, path),
+      path: fullPath,
       handler: handler,
     );
     _routes.add(route);
     return RouteBuilder(route);
   }
 
-  /// Once we've set up all groups/routes, we call build() to finalize name scopes.
+  /// Finalize route names by combining each route's `name` with our parent's name.
+  ///
+  /// Call this after all groups/routes are registered (e.g. before printing or using them).
   void build({String? parentGroupName}) {
-    // Combine parent's group name with this router's own groupName.
-    final currentGroupName = _joinNames(parentGroupName, groupName);
+    // Merge parent name + our own name => effective name
+    final effectiveGroupName = _joinNames(parentGroupName, groupName);
 
-    // Update all direct routes, prefixing route names with our group name
+    // Update direct routes
     for (final route in _routes) {
-      if (route.name != null) {
-        route.name = _joinNames(currentGroupName, route.name);
+      if (route.name != null && route.name!.isNotEmpty) {
+        route.name = _joinNames(effectiveGroupName, route.name);
       }
     }
 
-    // Recursively build children
+    // Recursively build children,
+    // passing our effectiveGroupName as their parentGroupName
     for (final child in _children) {
-      // If we (the parent) have a name, pass it to child
-      child._inheritGroupName(currentGroupName);
-      child.build(parentGroupName: currentGroupName);
+      child.build(parentGroupName: effectiveGroupName);
     }
   }
 
-  /// Print all routes (including descendants)
+  /// Print all routes in the console
   void printRoutes() {
     final all = getAllRoutes();
     for (final route in all) {
@@ -101,7 +109,7 @@ class Router {
     }
   }
 
-  /// Return all routes (this router + descendants)
+  /// Gather this router’s routes plus all descendants.
   List<RegisteredRoute> getAllRoutes() {
     final results = <RegisteredRoute>[];
     results.addAll(_routes);
@@ -111,46 +119,52 @@ class Router {
     return results;
   }
 
-  // Make a child inherit the parent's final group name.
+  /// Used internally to inherit the parent group name down to the child.
   void _inheritGroupName(String? parentName) {
-    // If parent doesn't have a name, no effect
     if (parentName == null || parentName.isEmpty) return;
 
-    // If this router has a group name, combine them; else just use parent's
+    // Debug: print what we have so far
+    print('Inheriting parentName=$parentName into groupName=$groupName');
+
     if (groupName != null && groupName!.isNotEmpty) {
       groupName = _joinNames(parentName, groupName);
     } else {
       groupName = parentName;
     }
+
+    // Debug: print the result
+    print('After inheriting => groupName=$groupName');
   }
 
-  /// Utility: join two path segments with a single slash
-  static String _joinPaths(String base, String part) {
-    final b = _normalizeSlashes(base);
-    final p = _normalizeSlashes(part);
-    if (b.isEmpty && p.isEmpty) return '';
-    if (b.isEmpty) return '/$p';
-    if (p.isEmpty) return b;
-    return '$b/$p';
-  }
 
-  /// Utility: ensure a path has no trailing slash (unless it's just "/")
-  static String _normalizeSlashes(String s) {
-    if (s.isEmpty) return '';
-    // remove trailing slash, except if it's just "/"
-    if (s != '/' && s.endsWith('/')) {
-      s = s.substring(0, s.length - 1);
+  /// A simpler join that avoids double slashes.
+  /// - If either side is empty, returns the other.
+  /// - If both are non-empty, ensures exactly one slash between them.
+  static String _joinPaths(String base, String child) {
+    if (base.isEmpty && child.isEmpty) {
+      return '';
     }
-    // ensure leading slash
-    if (!s.startsWith('/')) {
-      s = '/$s';
+    if (base.isEmpty) {
+      return child; // e.g. '' + '/api' => '/api'
     }
-    // if it's just "/", normalize to '' so we don't double slash
-    return s == '/' ? '' : s;
+    if (child.isEmpty) {
+      return base; // e.g. '/api' + '' => '/api'
+    }
+
+    // Both are non-empty
+    // - If base ends with '/', and child starts with '/', remove one to avoid `//`.
+    if (base.endsWith('/') && child.startsWith('/')) {
+      return base + child.substring(1);
+    } else if (!base.endsWith('/') && !child.startsWith('/')) {
+      // If neither has a slash, add one
+      return '$base/$child';
+    } else {
+      // Exactly one slash is present, so just concatenate
+      return base + child;
+    }
   }
 
-  /// Utility: join parent name and child name with a dot.
-  /// If either is empty or null, return the other.
+  /// Joins parent name and child name with a dot. e.g. `"api" + "books" => "api.books"`
   static String _joinNames(String? parent, String? child) {
     if (parent == null || parent.isEmpty) return child ?? '';
     if (child == null || child.isEmpty) return parent;
@@ -158,18 +172,18 @@ class Router {
   }
 }
 
-/// Lets you do `.name("myGroupName")` after calling `group(...)`.
+/// Returned by `router.group(...)`; lets you do `.name("foo")`.
 class RouterGroupBuilder {
   final Router _router;
   RouterGroupBuilder(this._router);
 
-  RouterGroupBuilder name(String n) {
-    _router.groupName = n;
+  RouterGroupBuilder name(String groupName) {
+    _router.groupName = groupName;
     return this;
   }
 }
 
-/// Lets you do `.name("myRouteName")` after calling `get(...)`.
+/// Returned by `router.get(...)`; lets you do `.name("foo")`.
 class RouteBuilder {
   final RegisteredRoute _route;
   RouteBuilder(this._route);
