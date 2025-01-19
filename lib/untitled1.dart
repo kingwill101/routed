@@ -1,5 +1,3 @@
-// lib/my_router.dart
-
 /// Just a placeholder for the request/response handler type.
 typedef Handler = void Function(dynamic request, dynamic response);
 
@@ -22,7 +20,7 @@ class RegisteredRoute {
       '[$method] $path with name ${name ?? "(no name)"}';
 }
 
-/// A simple hierarchical Router
+/// A simple hierarchical Router.
 class Router {
   /// The path prefix for this router (e.g. `/api`)
   final String _prefix;
@@ -39,7 +37,7 @@ class Router {
   /// Public getter so tests can inspect routes directly if needed.
   List<RegisteredRoute> get routes => _routes;
 
-  /// [path]: The base path for this router. E.g. `/api`
+  /// [path]: The base path for this router. e.g. `/api`.
   /// [groupName]: Optional name for this group (e.g. `api`).
   Router({
     String path = '',
@@ -48,31 +46,66 @@ class Router {
 
   /// Create a subgroup (child Router).
   ///
-  /// [path]: sub-path to append to `_prefix`.
-  /// [builder]: function that configures the child router (adding routes, etc.).
+  /// - [path]: sub-path to append to `_prefix`.
+  /// - [builder]: function that configures the child router (adding routes, etc.).
   RouterGroupBuilder group({
     String path = '',
     required void Function(Router) builder,
   }) {
-    // Combine parent's prefix with child path, carefully avoiding double slashes.
     final combinedPath = _joinPaths(_prefix, path);
 
     // Create a child router and let the caller configure it.
     final child = Router(path: combinedPath);
     builder(child);
 
-    // Store child so we can build it later, too.
+    // Store child so we can include it in the final build.
     _children.add(child);
 
-    // Return a builder so the user can do `.name("something")`.
+    // Return a builder so you can do `.name("something")`.
     return RouterGroupBuilder(child);
   }
 
-  /// Register a GET route at `[prefix]/[path]`.
+  // -----------------------------------------------
+  //  Common HTTP Methods
+  // -----------------------------------------------
   RouteBuilder get(String path, Handler handler) {
+    return _register("GET", path, handler);
+  }
+
+  RouteBuilder post(String path, Handler handler) {
+    return _register("POST", path, handler);
+  }
+
+  RouteBuilder put(String path, Handler handler) {
+    return _register("PUT", path, handler);
+  }
+
+  RouteBuilder delete(String path, Handler handler) {
+    return _register("DELETE", path, handler);
+  }
+
+  RouteBuilder patch(String path, Handler handler) {
+    return _register("PATCH", path, handler);
+  }
+
+  RouteBuilder head(String path, Handler handler) {
+    return _register("HEAD", path, handler);
+  }
+
+  RouteBuilder options(String path, Handler handler) {
+    return _register("OPTIONS", path, handler);
+  }
+
+  RouteBuilder connect(String path, Handler handler) {
+    return _register("CONNECT", path, handler);
+  }
+  // -----------------------------------------------
+
+  /// Internal helper to register a route of any method
+  RouteBuilder _register(String method, String path, Handler handler) {
     final fullPath = _joinPaths(_prefix, path);
     final route = RegisteredRoute(
-      method: 'GET',
+      method: method,
       path: fullPath,
       handler: handler,
     );
@@ -94,14 +127,13 @@ class Router {
       }
     }
 
-    // Recursively build children,
-    // passing our effectiveGroupName as their parentGroupName
+    // Recursively build children, passing our effectiveGroupName.
     for (final child in _children) {
       child.build(parentGroupName: effectiveGroupName);
     }
   }
 
-  /// Print all routes in the console
+  /// Print all routes to the console.
   void printRoutes() {
     final all = getAllRoutes();
     for (final route in all) {
@@ -119,27 +151,7 @@ class Router {
     return results;
   }
 
-  /// Used internally to inherit the parent group name down to the child.
-  void _inheritGroupName(String? parentName) {
-    if (parentName == null || parentName.isEmpty) return;
-
-    // Debug: print what we have so far
-    print('Inheriting parentName=$parentName into groupName=$groupName');
-
-    if (groupName != null && groupName!.isNotEmpty) {
-      groupName = _joinNames(parentName, groupName);
-    } else {
-      groupName = parentName;
-    }
-
-    // Debug: print the result
-    print('After inheriting => groupName=$groupName');
-  }
-
-
-  /// A simpler join that avoids double slashes.
-  /// - If either side is empty, returns the other.
-  /// - If both are non-empty, ensures exactly one slash between them.
+  /// A helper to join path segments without double slashes.
   static String _joinPaths(String base, String child) {
     if (base.isEmpty && child.isEmpty) {
       return '';
@@ -164,7 +176,7 @@ class Router {
     }
   }
 
-  /// Joins parent name and child name with a dot. e.g. `"api" + "books" => "api.books"`
+  /// Joins parent name and child name with a dot, e.g. `"api" + "books" = "api.books"`.
   static String _joinNames(String? parent, String? child) {
     if (parent == null || parent.isEmpty) return child ?? '';
     if (child == null || child.isEmpty) return parent;
@@ -172,7 +184,7 @@ class Router {
   }
 }
 
-/// Returned by `router.group(...)`; lets you do `.name("foo")`.
+/// Returned by `router.group(...)` so you can do `.name("myGroup")`.
 class RouterGroupBuilder {
   final Router _router;
   RouterGroupBuilder(this._router);
@@ -183,7 +195,7 @@ class RouterGroupBuilder {
   }
 }
 
-/// Returned by `router.get(...)`; lets you do `.name("foo")`.
+/// Returned by `router.get(...)`, `router.post(...)`, etc. so you can do `.name("myRoute")`.
 class RouteBuilder {
   final RegisteredRoute _route;
   RouteBuilder(this._route);
