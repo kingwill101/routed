@@ -11,29 +11,66 @@ and the Flutter guide for
 [developing packages and plugins](https://flutter.dev/to/develop-packages). 
 -->
 
-TODO: Put a short description of the package here that helps potential users
-know whether this package might be useful for them.
+# Routed
+
+A fast, flexible HTTP router for Dart with support for middleware, template engines, and more.
 
 ## Features
 
-TODO: List what your package can do. Maybe include images, gifs, or videos.
+- 🚀 Fast routing with path parameters and wildcards
+- 🔌 Middleware support (timeout, logging, CORS)
+- 🎨 Template engine support (Jinja and Liquid)
+- 📁 Static file serving with directory listing
+- 🍪 Cookie handling
+- 🔄 Forward proxy support
+- ⚡ Async request handling
 
-## Getting started
-
-TODO: List prerequisites and provide or point to information on how to
-start using the package.
-
-## Usage
-
-TODO: Include short and useful examples for package users. Add longer examples
-to `/example` folder. 
+## Quick Start
 
 ```dart
-const like = 'sample';
+import 'package:routed/routed.dart';
+
+void main() async {
+  final engine = Engine();
+  
+  // Basic routing
+  engine.get('/hello/{name}', (ctx) {
+    final name = ctx.param('name');
+    ctx.string('Hello, $name!');
+  });
+
+  // JSON handling
+  engine.post('/api/users', (ctx) async {
+    final data = await ctx.request.body();
+    ctx.json({'message': 'Created user', 'data': data});
+  });
+
+  await engine.serve(port: 8080);
+}
 ```
 
-## Additional information
+## Examples
 
-TODO: Tell users more about the package: where to find more information, how to 
-contribute to the package, how to file issues, what response they can expect 
-from the package authors, and more.
+The `examples` directory contains working examples for common use cases:
+
+- [Basic Router](examples/basic_router) - Path parameters, query strings, request body
+- [Cookie Handling](examples/cookie_handling) - Setting and reading cookies
+- [Forward Proxy](examples/forward_proxy) - Using as a proxy server
+- [Jinja Template](examples/jinja_template) - Jinja templates with inheritance
+- [Liquid Template](examples/liquid_template) - Liquid templates with partials
+- [Route Parameters](examples/route_parameter_types) - Int, double, UUID, email parameters
+- [Static File](examples/static_file) - File serving and directory listing
+- [Timeout Middleware](examples/timeout_middleware) - Request timeouts
+
+## Packages
+
+- [routed](packages/routed) - Core routing package
+- [routed_testing](packages/routed_testing) - Testing utilities
+
+## Contributing
+
+Contributions are welcome! Please read our contributing guidelines before submitting pull requests.
+
+## License
+
+This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.

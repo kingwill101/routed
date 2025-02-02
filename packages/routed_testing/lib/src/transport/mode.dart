@@ -1,0 +1,4 @@
+enum TransportMode {
+  inMemory,
+  ephemeralServer,
+}

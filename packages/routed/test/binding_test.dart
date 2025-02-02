@@ -1,0 +1,155 @@
+import 'dart:convert';
+import 'dart:io';
+
+import 'package:http_parser/http_parser.dart';
+import 'package:routed/routed.dart';
+import 'package:routed/src/binding/binding.dart';
+import 'package:routed_testing/routed_testing.dart';
+import 'package:test/test.dart';
+
+void main() {
+  late EngineTestClient client;
+
+  tearDown(() async {
+    await client.close();
+  });
+
+  group('Binding Tests', () {
+    test('JSON Binding', () async {
+      final engine = Engine();
+      final router = Router();
+
+      router.post('/json', (ctx) async {
+        final data = <String, dynamic>{};
+        await ctx.shouldBindWith(data, jsonBinding);
+        ctx.json(data);
+      });
+
+      engine.use(router);
+      client = EngineTestClient(engine);
+
+      final response = await client.post('/json', {
+        'name': 'test',
+        'age': 25,
+        'tags': ['one', 'two']
+      });
+
+      response
+        ..assertStatus(200)
+        ..assertJsonContains({
+          'name': 'test',
+          'age': 25,
+          'tags': ['one', 'two']
+        });
+    });
+
+    test('Form URL Encoded Binding', () async {
+      final engine = Engine();
+      final router = Router();
+
+      router.post('/form', (ctx) async {
+        final data = <String, dynamic>{};
+        await ctx.shouldBindWith(data, formBinding);
+        ctx.json(data);
+      });
+
+      engine.use(router);
+      client = EngineTestClient(engine);
+
+      final response = await client.post(
+        '/form',
+        'name=test&age=25',
+        headers: {
+          'Content-Type': ['application/x-www-form-urlencoded']
+        },
+      );
+
+      response
+        ..assertStatus(200)
+        ..assertJsonContains({'name': 'test', 'age': '25'});
+    });
+
+    test('Multipart Form Binding', () async {
+      final engine = Engine();
+      final router = Router();
+
+      router.post('/upload', (ctx) async {
+        // Test form fields
+        final name = await ctx.postForm('name');
+        final age = await ctx.defaultPostForm('age', '0');
+        final hobby = await ctx.postForm('hobby');
+        final tags = await ctx.postFormArray('tags');
+        final Map<String, dynamic> prefs = {
+          "pref_theme": await ctx.postForm('pref_theme'),
+          "pref_lang": await ctx.postForm('pref_lang'),
+        };
+
+        // Test file upload
+        final file = await ctx.formFile('document');
+
+        ctx.json({
+          'name': name,
+          'age': age,
+          'hobby': hobby,
+          'tags': tags,
+          'preferences': prefs,
+          'hasFile': file != null,
+          'fileName': file?.filename,
+          'fileSize': file?.size,
+        });
+      });
+
+      engine.use(router);
+      client = EngineTestClient(engine);
+
+      final response = await client.multipart('/upload', (request) {
+        request
+          ..addField('name', 'test')
+          ..addField('age', '25')
+          ..addField('hobby', 'reading')
+          ..addField('tags', 'one')
+          ..addField('tags', 'two')
+          ..addField('pref_theme', 'dark')
+          ..addField('pref_lang', 'en')
+          ..addFileFromBytes(
+              name: 'document',
+              filename: 'test.txt',
+              bytes: utf8.encode('Hello World'),
+              contentType: MediaType.parse(ContentType.text.value));
+      });
+
+      response
+        ..assertStatus(200)
+        ..assertJsonContains({
+          'name': 'test',
+          'age': '25',
+          'hobby': 'reading',
+          'tags': ['one', 'two'],
+          'preferences': {'pref_theme': 'dark', 'pref_lang': 'en'},
+          'hasFile': true,
+          'fileName': 'test.txt',
+          'fileSize': 11,
+        });
+    });
+
+    test('Query Binding', () async {
+      final engine = Engine();
+      final router = Router();
+
+      router.get('/search', (ctx) async {
+        final Map<String, dynamic>? data = {};
+        await ctx.shouldBindWith(data, queryBinding);
+        ctx.json(data);
+      });
+
+      engine.use(router);
+      client = EngineTestClient(engine);
+
+      final response = await client.get('/search?q=test&page=1&sort=desc');
+
+      response
+        ..assertStatus(200)
+        ..assertJsonContains({'q': 'test', 'page': '1', 'sort': 'desc'});
+    });
+  });
+}
