@@ -6,6 +6,7 @@ import 'package:routed/routed.dart';
 import 'package:routed/src/binding/binding.dart';
 import 'package:routed/src/binding/multipart.dart';
 import 'package:routed/src/binding/utils.dart';
+import 'package:routed/src/cache/cache_manager.dart';
 import 'package:routed/src/engine/engine_template.dart';
 import 'package:routed/src/file_handler.dart';
 import 'package:routed/src/render/data_render.dart';
@@ -23,6 +24,7 @@ import '../render/html.dart';
 part 'binding.dart';
 part 'error.dart';
 part 'render.dart';
+part 'cache.dart';
 
 /// The EngineContext is loosely inspired by gin.Context in Go.
 /// It wraps [Request] and [Response], holds arbitrary keys/values,
