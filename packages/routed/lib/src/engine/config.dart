@@ -1,5 +1,6 @@
 import 'package:file/file.dart';
 import 'package:file/local.dart' as local;
+import 'package:routed/src/cache/cache_manager.dart';
 import 'package:routed/src/render/html/template_engine.dart';
 
 /// Configuration for handling multipart file uploads.
@@ -96,6 +97,9 @@ class EngineConfig {
   /// Configuration for handling multipart file uploads.
   MultipartConfig multipart;
 
+  /// Cache manager for handling cache stores.
+  CacheManager cacheManager;
+
   /// Constructor for [EngineConfig].
   ///
   /// [redirectTrailingSlash] sets whether to redirect requests with a trailing slash.
@@ -111,6 +115,7 @@ class EngineConfig {
   /// [templateEngine] sets the template engine for rendering templates.
   /// [fileSystem] sets the file system to use.
   /// [multipart] sets the configuration for handling multipart file uploads.
+  /// [cacheManager] sets the cache manager for handling cache stores.
   EngineConfig({
     this.redirectTrailingSlash = true,
     this.redirectFixedPath = false,
@@ -125,6 +130,13 @@ class EngineConfig {
     this.templateEngine,
     FileSystem? fileSystem,
     MultipartConfig? multipart,
+    CacheManager? cacheManager,
   })  : fileSystem = fileSystem ?? const local.LocalFileSystem(),
-        multipart = multipart ?? MultipartConfig();
+        multipart = multipart ?? MultipartConfig(),
+        cacheManager = cacheManager ?? CacheManager() {
+    // Register a default file store
+    this
+        .cacheManager
+        .registerStore('file', {'driver': 'file', 'path': 'cache'});
+  }
 }
