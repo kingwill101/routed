@@ -14,7 +14,7 @@
 include: package:lints/recommended.yaml
 analyzer:
   errors:
-    depend_on_referenced_packages: ignore
+    unintended_html_in_doc_comment: ignore
 
 # Uncomment the following section to specify additional rules.
 
