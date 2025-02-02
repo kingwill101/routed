@@ -51,6 +51,13 @@ class EngineRoute {
 
   /// Attempts to match a request to this route
   RouteMatch? tryMatch(HttpRequest request, {bool checkMethodOnly = false}) {
+    final pathMatches = _uriPattern.hasMatch(request.uri.path.split("?")[0]) ||
+        _uriPattern.hasMatch("${request.uri.path}/");
+
+    if (!pathMatches) {
+      return RouteMatch(matched: false, isMethodMismatch: false);
+    }
+
     if (method != request.method) {
       return RouteMatch(matched: false, isMethodMismatch: true);
     }
@@ -59,13 +66,10 @@ class EngineRoute {
       return RouteMatch(matched: true, isMethodMismatch: false);
     }
 
-    final pathMatches = _uriPattern.hasMatch(request.uri.path.split("?")[0]) ||
-        _uriPattern.hasMatch("${request.uri.path}/");
-
     final constraintsValid = validateConstraints(request);
 
     return RouteMatch(
-      matched: pathMatches && constraintsValid,
+      matched: constraintsValid,
       isMethodMismatch: false,
       route: this,
     );
