@@ -99,7 +99,8 @@ class RepositoryImpl implements Repository {
       return value;
     }
     final result = await callback();
-    await store.put(key, result, ttl.inSeconds);
+    int seconds = ttl is Duration ? ttl.inSeconds : ttl;
+    await store.put(key, result, seconds);
     return result;
   }
 
