@@ -31,6 +31,7 @@ class EngineRoute {
   /// Whether this is a fallback route
   final bool isFallback;
 
+
   /// Creates a new route with the given properties
   EngineRoute({
     required this.method,
@@ -43,6 +44,18 @@ class EngineRoute {
   })  : _uriPattern = _buildUriPattern(path).pattern,
         _parameterPatterns = _buildUriPattern(path).paramInfo;
 
+  /// Creates a fallback route
+  EngineRoute.fallback({
+    required this.handler,
+    this.middlewares = const [],
+  })  : method = '*',
+        path = '*',
+        name = null,
+        constraints = const {},
+        isFallback = true,
+        _uriPattern = RegExp('.*'),
+        _parameterPatterns = const {};
+
   /// Checks if a request matches this route
   bool matches(HttpRequest request) {
     final match = tryMatch(request);
@@ -51,6 +64,12 @@ class EngineRoute {
 
   /// Attempts to match a request to this route
   RouteMatch? tryMatch(HttpRequest request, {bool checkMethodOnly = false}) {
+    // If this is a fallback route, match any path and ignore the method.
+    if (isFallback) {
+      return RouteMatch(matched: true, isMethodMismatch: false, route: this);
+    }
+
+    // For non-fallback routes, check path and method.
     final pathMatches = _uriPattern.hasMatch(request.uri.path.split("?")[0]) ||
         _uriPattern.hasMatch("${request.uri.path}/");
 
@@ -67,7 +86,6 @@ class EngineRoute {
     }
 
     final constraintsValid = validateConstraints(request);
-
     return RouteMatch(
       matched: constraintsValid,
       isMethodMismatch: false,
@@ -167,19 +185,25 @@ class EngineRoute {
 
   /// Builds a regex pattern for matching URIs
   static _PatternData _buildUriPattern(String uri) {
+    // If this is the fallback route, return a regex that matches everything.
+    if (uri == '*' || uri == '/{__fallback:*}') {
+      return _PatternData(RegExp('.*'), {});
+    }
+    
     final paramInfo = <String, ParamInfo>{};
     var pattern = uri;
 
+    // Handle optional parameters e.g. {param?}
     pattern = pattern.replaceAllMapped(RegExp(r'{(\w+)\?}'), (m) {
       final paramName = m.group(1)!;
       paramInfo[paramName] = ParamInfo(
         type: 'string',
         isOptional: true,
       );
-
       return '(?:/{0,1}(?<$paramName>[^/]+))?';
     });
 
+    // Handle wildcard parameters with leading '*' e.g. {*param}
     pattern = pattern.replaceAllMapped(RegExp(r'{[*](\w+)}'), (m) {
       final paramName = m.group(1)!;
       paramInfo[paramName] = ParamInfo(
@@ -189,18 +213,17 @@ class EngineRoute {
       return '(?<$paramName>.*)';
     });
 
+    // Handle normal parameters with an optional explicit type e.g. {id:int}
     pattern = pattern.replaceAllMapped(RegExp(r'{(\w+)(?::(\w+))?}'), (m) {
       final paramName = m.group(1)!;
       final explicitType = m.group(2);
-
       paramInfo[paramName] = ParamInfo(
         type: explicitType ?? 'string',
         isOptional: false,
         isWildcard: false,
       );
-
-      final pattern = getPattern(explicitType ?? 'string');
-      return '(?<$paramName>${pattern ?? r'[^/]+'})';
+      final paramPattern = getPattern(explicitType ?? 'string');
+      return '(?<$paramName>${paramPattern ?? r'[^/]+'})';
     });
 
     return _PatternData(RegExp('^$pattern\$'), paramInfo);
