@@ -4,7 +4,7 @@ import 'package:routed/src/router/types.dart';
 /// This will be converted into an [EngineRoute] when we call [router.build()].
 class RegisteredRoute {
   final String method;
-  final String path;
+  String path;
   final Handler handler;
 
   /// Route-level middlewares (only declared on this route).

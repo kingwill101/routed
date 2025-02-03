@@ -45,12 +45,14 @@ extension ServerExtension on Engine {
     final path = httpRequest.uri.path;
     final method = httpRequest.method;
 
-    // First pass: check for exact route matches
+    // First pass: check for exact route matches (excluding fallback routes)
     final routeMatches = _engineRoutes
         .map((r) => r.tryMatch(httpRequest))
-        .where((match) => match != null)
+        .where((match) =>
+            match != null &&
+            !(match.route != null &&
+                match.route!.isFallback)) // Exclude fallback routes
         .toList();
-
     final exactMatch = routeMatches.where((m) => m!.matched).firstOrNull;
 
     if (exactMatch != null) {
@@ -90,17 +92,38 @@ extension ServerExtension on Engine {
       }
     }
 
-    // Fourth pass: check for a fallback route if no other match was found
-    EngineRoute? fallbackRoute;
-    try {
-      fallbackRoute = _engineRoutes.firstWhere((r) => r.isFallback);
-    } catch (e) {
-      fallbackRoute = null;
+    // Fourth pass: check for fallback routes if no other match was found
+    final fallbackRoutes = _engineRoutes.where((r) => r.isFallback).toList();
+    if (fallbackRoutes.isNotEmpty) {
+      // Find the most specific fallback route using fuzzy matching
+      EngineRoute? mostSpecificFallback;
+      int maxSimilarityScore = 0;
+
+      for (final fallbackRoute in fallbackRoutes) {
+        // Extract the static part of the fallback route's path
+        final staticPath = _extractStaticPath(fallbackRoute.path);
+
+        // Calculate the similarity score between the request path and the static path
+        final similarityScore =
+            ratio(path, staticPath.isNotEmpty ? staticPath : "/");
+
+        // Update the most specific fallback route if the similarity score is higher
+        if (similarityScore > maxSimilarityScore) {
+          maxSimilarityScore = similarityScore;
+          mostSpecificFallback = fallbackRoute;
+        }
+      }
+
+      if (mostSpecificFallback != null) {
+        // Extract parameters for the fallback route
+        final params = mostSpecificFallback.extractParameters(path);
+        final request =
+            Request(httpRequest, params); // Pass the extracted parameters
+        await _handleMatchedRoute(mostSpecificFallback, httpRequest);
+        return;
+      }
     }
-    if (fallbackRoute != null) {
-      await _handleMatchedRoute(fallbackRoute, httpRequest);
-      return;
-    }
+
     // No matches found
     httpRequest.response.statusCode = HttpStatus.notFound;
     httpRequest.response.write('404 Not Found');
@@ -208,4 +231,9 @@ extension ServerExtension on Engine {
     await _server?.close(force: true);
     _server = null;
   }
+}
+
+/// Extracts the static part of a fallback route's path by removing the `{__fallback:*}` parameter.
+String _extractStaticPath(String path) {
+  return path.replaceAll('/{__fallback:*}', '');
 }

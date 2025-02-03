@@ -72,6 +72,23 @@ class Router {
     return RouterGroupBuilder(child);
   }
 
+  /// Registers a fallback route with the router.
+  ///
+  /// [handler]: The handler function for the fallback route.
+  /// [middlewares]: Optional middlewares specific to this fallback route.
+  RouteBuilder fallback(Handler handler,
+      {List<Middleware> middlewares = const []}) {
+    final route = RegisteredRoute(
+      method: '*',
+      path: '/{__fallback:*}',
+      handler: handler,
+      routeMiddlewares: middlewares,
+      constraints: {'isFallback': true},
+    );
+    _routes.add(route);
+    return RouteBuilder(route, this);
+  }
+
   // ----------------
   //  HTTP Methods
   // ----------------
@@ -228,6 +245,9 @@ class Router {
       }
       // Merge route-level middlewares
       route.finalMiddlewares = [...combinedMW, ...route.routeMiddlewares];
+      if (!route.path.startsWith(_prefix)) {
+        route.path = _joinPaths(_prefix, route.path);
+      }
     }
 
     // Recursively build children
@@ -235,6 +255,7 @@ class Router {
       child.build(
         parentGroupName: effectiveGroupName,
         inheritedMiddlewares: combinedMW,
+        parentPrefix: _joinPaths(parentPrefix, _prefix), // Propagate the prefix
       );
     }
   }

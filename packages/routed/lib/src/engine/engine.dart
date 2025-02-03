@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:io';
 
+import 'package:fuzzywuzzy/fuzzywuzzy.dart';
 import 'package:routed/middlewares.dart';
 import 'package:routed/src/context/context.dart';
 import 'package:routed/src/engine/config.dart';
@@ -129,7 +130,8 @@ class Engine {
 
     for (final mount in _mounts) {
       // Let the child router finish its group & route merges
-      mount.router.build(parentGroupName: parentGroupName);
+      mount.router
+          .build(parentGroupName: parentGroupName, parentPrefix: mount.prefix);
 
       // Flatten all routes
       final childRoutes = mount.router.getAllRoutes();
