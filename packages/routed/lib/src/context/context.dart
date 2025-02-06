@@ -6,8 +6,6 @@ import 'package:routed/routed.dart';
 import 'package:routed/src/binding/binding.dart';
 import 'package:routed/src/binding/multipart.dart';
 import 'package:routed/src/binding/utils.dart';
-import 'package:routed/src/cache/cache_manager.dart';
-import 'package:routed/src/engine/engine_template.dart';
 import 'package:routed/src/file_handler.dart';
 import 'package:routed/src/render/data_render.dart';
 import 'package:routed/src/render/json_render.dart';
@@ -23,6 +21,7 @@ import 'package:routed/src/sessions/session.dart';
 import '../render/html.dart';
 
 part 'binding.dart';
+part 'cache.dart';
 part 'error.dart';
 part 'proxy.dart';
 part 'render.dart';
@@ -347,6 +346,7 @@ extension MultipartFormMethods on EngineContext {
   Future<void> saveUploadedFile(MultipartFile file, String destination) async {
     final sourceFile = _engine?.config.fileSystem.file(file.path);
     final destFile = _engine?.config.fileSystem.file(destination);
+    destFile?.parent.existsSync() ?? destFile?.parent.create(recursive: true);
     await sourceFile?.copy(destFile?.path ?? "");
   }
 
