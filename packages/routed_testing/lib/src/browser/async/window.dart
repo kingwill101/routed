@@ -1,7 +1,8 @@
 import 'dart:async';
 import 'dart:math';
-import 'package:webdriver/async_core.dart'
-    show WebDriver;
+
+import 'package:webdriver/async_core.dart' show WebDriver;
+
 import '../interfaces/window.dart';
 import 'browser.dart';
 

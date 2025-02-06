@@ -86,9 +86,7 @@ MockHttpRequest setupRequest(String method, String uri,
   mockResponse ??= MockHttpResponse();
   when(mockRequest.response).thenReturn(mockResponse);
   // Handle multipart content type
-  if (requestHeaders['Content-Type']
-          ?.first
-          .startsWith('multipart/form-data') ??
+  if (requestHeaders['Content-Type']?.first.startsWith('multipart/form-data') ??
       false) {
     final contentType =
         ContentType.parse(requestHeaders['Content-Type']!.first);
