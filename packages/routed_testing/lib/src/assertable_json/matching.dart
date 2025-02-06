@@ -152,13 +152,32 @@ mixin MatchingMixin on AssertableJsonBase {
   /// Validates that the JSON structure matches a given [schema].
   ///
   /// The [schema] map specifies property names and their expected types.
+  /// Property names ending with '?' indicate optional fields.
+  ///
+  /// Example:
+  /// ```dart
+  /// json.matchesSchema({
+  ///   'name': String,    // Required field
+  ///   'age?': int,       // Optional field
+  /// });
+  /// ```
   AssertableJson matchesSchema(Map<String, Type> schema) {
     schema.forEach((key, type) {
-      final value = getRequired(key);
-      expect(value.runtimeType, equals(type),
-          reason:
-              'Expected $key to be of type $type but was ${value.runtimeType}');
-      interactsWith(key);
+      final isOptional = key.endsWith('?');
+      final actualKey = isOptional ? key.substring(0, key.length - 1) : key;
+
+      try {
+        (this as AssertableJson).has(actualKey);
+        final value = get(actualKey);
+        expect(value.runtimeType, equals(type),
+            reason:
+                'Expected $actualKey to be of type $type but was ${value.runtimeType}');
+        interactsWith(actualKey);
+      } catch (e) {
+        if (!isOptional) {
+          fail('Required field $actualKey is missing');
+        }
+      }
     });
     return this as AssertableJson;
   }

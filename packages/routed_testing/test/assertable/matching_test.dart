@@ -39,5 +39,36 @@ void main() {
 
       json.matchesSchema({'string': String, 'number': int});
     });
+    test('matchesSchema handles optional fields', () {
+      final json = AssertableJson({'required': 'value'});
+
+      // Should pass - optional field can be missing
+      json.matchesSchema({
+        'required': String,
+        'optional?': int,
+      });
+
+      // Should pass - optional field can be present
+      final jsonWithOptional = AssertableJson({
+        'required': 'value',
+        'optional': 42,
+      });
+      jsonWithOptional.matchesSchema({
+        'required': String,
+        'optional?': int,
+      });
+    });
+
+    test('matchesSchema fails on missing required field', () {
+      final json = AssertableJson({'optional': 42});
+
+      expect(
+        () => json.matchesSchema({
+          'required': String,
+          'optional?': int,
+        }),
+        throwsA(anything),
+      );
+    });
   });
 }
