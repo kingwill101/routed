@@ -23,6 +23,7 @@ import '../render/html.dart';
 
 part 'binding.dart';
 part 'error.dart';
+part 'proxy.dart';
 part 'render.dart';
 part 'cache.dart';
 
