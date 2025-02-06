@@ -6,7 +6,6 @@ import 'package:routed/src/request.dart';
 import 'package:routed/src/response.dart';
 import 'package:routed/src/sessions/sessions.dart';
 
-
 class CookieStore implements Store {
   final List<SecureCookie> codecs;
   final Options defaultOptions;
@@ -88,7 +87,7 @@ class CookieStore implements Store {
       return;
     }
 
-    final sessionData =session.toMap();
+    final sessionData = session.toMap();
     print("Session data before encoding: $sessionData");
     var value = '';
     for (final codec in codecs.reversed) {
