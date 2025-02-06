@@ -43,7 +43,7 @@ class Response {
   void writeHeaderNow() {
     if (!_headersWritten) {
       _headers.forEach((name, values) {
-        _httpResponse.headers.set(name, values);
+        _httpResponse.headers.set(name, values.join(', '));
       });
       _headersWritten = true;
     }
@@ -140,6 +140,8 @@ class Response {
       bool secure = false,
       bool httpOnly = false,
       SameSite? sameSite}) {
+    print(
+        'setCookie: $name, $value, $maxAge, $path, $domain, $secure, $httpOnly, $sameSite');
     final cookie = Cookie(name, value)
       ..maxAge = maxAge
       ..path = path
@@ -148,8 +150,16 @@ class Response {
       ..httpOnly = httpOnly
       ..sameSite = sameSite;
 
+    // Remove existing cookies with same name
+    _httpResponse.cookies.removeWhere((c) => c.name == name);
+    _httpResponse.cookies.add(cookie);
+
+    // Update headers collection
     final existing = _headers[HttpHeaders.setCookieHeader] ?? [];
-    _headers[HttpHeaders.setCookieHeader] = [...existing, cookie.toString()];
+    _headers[HttpHeaders.setCookieHeader] = [
+      ...existing.where((h) => !h.startsWith('$name=')),
+      cookie.toString()
+    ];
   }
 
   /// Returns the headers of the HTTP response.
@@ -166,8 +176,18 @@ class Response {
 
   /// Adds a header with the given [name] and [value] to the response.
   void addHeader(String name, String value) {
-    final existing = _headers[name] ?? [];
-    _headers[name] = [...existing, value];
+    if (name.toLowerCase() == HttpHeaders.setCookieHeader) {
+      // Special case: Set-Cookie headers are always separate
+      _headers.putIfAbsent(name, () => []).add(value);
+    } else {
+      // Standard case: Combine with comma-separation
+      final existing = _headers[name];
+      if (existing != null) {
+        _headers[name] = [...existing, value]; // Preserve order
+      } else {
+        _headers[name] = [value];
+      }
+    }
   }
 }
 

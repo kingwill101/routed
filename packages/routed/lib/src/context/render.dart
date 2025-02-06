@@ -128,9 +128,10 @@ extension ContextRender on EngineContext {
   ///
   /// - Parameters:
   ///   - url: The URL to redirect to.
-  ///   - statusCode: The HTTP status code to set for the response (default is 200).
-  void redirect(String url, {int statusCode = HttpStatus.ok}) {
-    render(-1, RedirectRender(code: statusCode, location: url));
+  ///   - statusCode: The HTTP status code to set for the response .
+  Future<void> redirect(String url,
+      {int statusCode = HttpStatus.movedTemporarily}) async {
+    await render(-1, RedirectRender(code: statusCode, location: url));
   }
 
   /// Renders an HTML response using a template engine.

@@ -101,6 +101,8 @@ class Request {
     return remoteAddr;
   }
 
+  get contentLength => httpRequest.contentLength;
+
   /// Retrieves a request-scoped attribute by [key].
   ///
   /// Returns the attribute value if found, otherwise returns null.
