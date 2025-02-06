@@ -53,12 +53,9 @@ void main() {
 
     test('Route mismatch returns 404', () async {
       final engine = Engine();
-      final router = Router();
 
       // Define a single POST route
-      router.post('/test_2', (ctx) => ctx.string('post ok'));
-
-      engine.use(router);
+      engine.post('/test_2', (ctx) => ctx.string('post ok'));
 
       client = EngineTestClient(engine);
 

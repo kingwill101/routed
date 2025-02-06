@@ -1,6 +1,5 @@
 import 'package:file/memory.dart';
 import 'package:routed/routed.dart';
-import 'package:routed/src/engine/engine_template.dart';
 import 'package:routed_testing/routed_testing.dart';
 import 'package:test/test.dart';
 

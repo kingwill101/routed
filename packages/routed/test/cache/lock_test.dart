@@ -33,6 +33,6 @@ void main() {
       lock.forceRelease();
       final owner = await lock.getCurrentOwner();
       expect(owner, isNull);
-      });
+    });
   });
 }

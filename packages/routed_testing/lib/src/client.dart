@@ -5,7 +5,7 @@ import 'package:routed_testing/src/transport/memory.dart';
 import 'package:routed_testing/src/transport/mode.dart';
 import 'package:routed_testing/src/transport/server.dart';
 import 'package:routed_testing/src/transport/transport.dart';
-import 'package:http/http.dart' as http;
+
 export 'transport/mode.dart';
 
 /// A client for testing the Engine with different transport modes.

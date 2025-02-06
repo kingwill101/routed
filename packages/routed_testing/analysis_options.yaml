@@ -15,7 +15,7 @@ include: package:lints/recommended.yaml
 analyzer:
   errors:
     unintended_html_in_doc_comment: ignore
-
+# include: package:very_good_analysis/analysis_options.yaml
 # Uncomment the following section to specify additional rules.
 
 # linter:
