@@ -1,6 +1,6 @@
 import 'dart:io' show sleep;
 import 'package:webdriver/sync_core.dart'
-    show By, TimeoutException, WebDriver, WebElement;
+    show TimeoutException;
 import '../interfaces/waiter.dart';
 import 'browser.dart';
 

@@ -1,5 +1,4 @@
 import 'dart:async';
-import 'package:webdriver/async_core.dart' show WebDriver, WebElement, By;
 import '../interfaces/waiter.dart';
 import 'browser.dart';
 

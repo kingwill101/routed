@@ -90,7 +90,6 @@ void main() {
               ctx.string('Update User $userId');
             }).name('users.update');
           });
-      final allRoutes = engine.getAllRoutes();
       // Test GET /users
       var response = await client.get('/users');
       response

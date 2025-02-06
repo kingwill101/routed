@@ -137,7 +137,7 @@ void main() {
       final router = Router();
 
       router.get('/search', (ctx) async {
-        final Map<String, dynamic>? data = {};
+        final Map<String, dynamic> data = {};
         await ctx.shouldBindWith(data, queryBinding);
         ctx.json(data);
       });

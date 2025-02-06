@@ -5,8 +5,6 @@ import 'dart:typed_data';
 
 import 'package:routed/routed.dart';
 import 'package:routed_testing/routed_testing.dart';
-import 'package:routed_testing/src/mock/headers.dart';
-import 'package:routed_testing/src/mock/uri.dart';
 import 'package:routed_testing/src/response.dart';
 import 'package:routed_testing/src/transport/transport.dart';
 

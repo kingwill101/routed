@@ -12,13 +12,13 @@ import 'package:encrypt/encrypt.dart' as encrypt;
 /// - AES only: Encrypts data for confidentiality
 /// - Both: Combines encryption and signing for maximum security
 class SecureCookie {
-  final List<int> _key;
+  // final List<int> _key;
   final Hmac? _hmac;
   final encrypt.Encrypter? _encrypter;
   final SecurityMode _mode;
 
   /// Private constructor for SecureCookie.
-  SecureCookie._(this._key, this._hmac, this._encrypter, this._mode);
+  SecureCookie._(this._hmac, this._encrypter, this._mode);
 
   /// Factory constructor to create a new SecureCookie with the provided key and security mode.
   ///
@@ -64,7 +64,7 @@ class SecureCookie {
             .AES(encrypt.Key(Uint8List.fromList(keyBytes.sublist(0, 32)))))
         : null;
 
-    return SecureCookie._(keyBytes, hmac, encrypter, effectiveMode);
+    return SecureCookie._(hmac, encrypter, effectiveMode);
   }
 
   static List<int> _generateKeyFromEnv() {

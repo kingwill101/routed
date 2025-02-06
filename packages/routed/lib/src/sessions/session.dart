@@ -90,6 +90,7 @@ class Session {
   }
 
   /// The unique identifier for this session.
+  // ignore: unnecessary_getters_setters
   String get id => _id;
 
   /// When the session was created.
@@ -102,7 +103,6 @@ class Session {
   bool get isDestroyed => _destroyed;
 
   /// Whether this is a new session
-  bool get isNew => _isNew;
   set isNew(bool value) => _isNew = value;
 
   int get age {
@@ -126,7 +126,7 @@ class Session {
   /// Convert session to a map for serialization
   Map<String, dynamic> toMap() {
     return {
-      'id': _id,
+      'id': id,
       'name': name,
       'options': options,
       'values': values,

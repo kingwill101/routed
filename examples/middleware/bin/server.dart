@@ -23,24 +23,24 @@ Future<void> authMiddleware(EngineContext ctx) async {
 
 // Rate limiting middleware
 Future<void> rateLimitMiddleware(EngineContext ctx) async {
-  final _requests = <String, List<DateTime>>{};
+  final requests = <String, List<DateTime>>{};
   final ip = ctx.request.ip;
   final now = DateTime.now();
 
   // Clean old requests
-  _requests[ip] = _requests[ip]
+  requests[ip] = requests[ip]
           ?.where((time) => now.difference(time).inMinutes < 1)
           .toList() ??
       [];
 
   // Check rate limit (max 10 requests per minute)
-  if ((_requests[ip]?.length ?? 0) >= 10) {
+  if ((requests[ip]?.length ?? 0) >= 10) {
     return ctx.json({'error': 'Too many requests', 'retry_after': '60 seconds'},
         statusCode: 429);
   }
 
   // Add request
-  _requests[ip] = [...(_requests[ip] ?? []), now];
+  requests[ip] = [...(requests[ip] ?? []), now];
 
   await ctx.next();
 }

@@ -30,7 +30,7 @@ Map<String, dynamic> parseUrlEncoded(String input) {
   return _flattenSingles(result);
 }
 
-/// Inserts [value] into [root] (a Map<String,dynamic>) at the path given
+/// Inserts [value] into [root] (a `Map<String,dynamic>`) at the path given
 /// by bracket-notation in [rawKey], handling array expansions ("[]").
 void _storeKeyValue(Map<String, dynamic> root, String rawKey, String value) {
   final segments = _splitKeyIntoSegments(rawKey);

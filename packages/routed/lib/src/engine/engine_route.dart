@@ -268,6 +268,7 @@ class RouteMatch {
 
 extension on Engine {
   // Method to generate URL for a named route
+  // ignore: unused_element
   String route(String name, [Map<String, dynamic>? params]) {
     final route = getAllRoutes().where((r) => r.name == name).firstOrNull;
 

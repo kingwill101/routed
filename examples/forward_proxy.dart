@@ -1,4 +1,3 @@
-// ignore_for_file: depend_on_referenced_packages
 
 import 'package:http/http.dart' as http;
 import 'package:routed/routed.dart';
@@ -27,9 +26,6 @@ Middleware routedForwardMiddleware() {
   };
 }
 
-void main() async {
-  Engine engine = Engine();
-}
 
 reverse(EngineContext context) async {
   var remote = Uri.parse('http://xxx.xxx.xxx');

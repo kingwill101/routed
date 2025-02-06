@@ -20,7 +20,7 @@ class XmlBinding extends Binding {
   /// [instance] - The instance to which the XML data should be bound.
   @override
   Future<void> bind(EngineContext context, dynamic instance) async {
-    final bodyBytes = await context.request.bytes;
+    // final bodyBytes = await context.request.bytes;
     // The following line is commented out and should contain the logic to bind
     // the body bytes to the instance.
     // await bindBody(bodyBytes, instance);

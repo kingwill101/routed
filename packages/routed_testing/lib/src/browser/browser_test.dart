@@ -149,7 +149,7 @@ Future<Browser> launchBrowser(BrowserTestConfig? config,
       }
   };
 
-  var driver;
+  Object driver;
   if (useAsync) {
     driver = await wdasync.createDriver(
       desired: capabilities,
@@ -164,14 +164,14 @@ Future<Browser> launchBrowser(BrowserTestConfig? config,
 
   if (useAsync) {
     return BrowserFactory.createAsync(
-        driver,
+        driver as wdasync.WebDriver,
         BrowserConfig(
           browserName: config.browser,
           baseUrl: config.baseUrl,
         ));
   } else {
     return BrowserFactory.createSync(
-        driver,
+        driver as sync.WebDriver,
         BrowserConfig(
           browserName: config.browser,
           baseUrl: config.baseUrl,

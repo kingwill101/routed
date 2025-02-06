@@ -6,17 +6,6 @@ import 'package:routed/src/request.dart';
 import 'package:routed/src/response.dart';
 import 'package:routed/src/sessions/sessions.dart';
 
-/// Serializes a session to a Map that can be safely JSON encoded
-Map<String, dynamic> _serializeSession(Session session) {
-  return {
-    'id': session.id,
-    'values': session.values,
-    'created_at': session.createdAt.toIso8601String(),
-    'last_accessed': session.lastAccessed.toIso8601String(),
-    'is_new': session.isNew,
-    'destroyed': session.isDestroyed,
-  };
-}
 
 class CookieStore implements Store {
   final List<SecureCookie> codecs;
@@ -99,7 +88,7 @@ class CookieStore implements Store {
       return;
     }
 
-    final sessionData = _serializeSession(session);
+    final sessionData =session.toMap();
     print("Session data before encoding: $sessionData");
     var value = '';
     for (final codec in codecs.reversed) {

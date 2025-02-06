@@ -6,6 +6,30 @@
       <excludeFolder url="file://$MODULE_DIR$/.dart_tool" />
       <excludeFolder url="file://$MODULE_DIR$/.pub" />
       <excludeFolder url="file://$MODULE_DIR$/build" />
+      <excludeFolder url="file://$MODULE_DIR$/packages/routed/.dart_tool" />
+      <excludeFolder url="file://$MODULE_DIR$/packages/routed/.pub" />
+      <excludeFolder url="file://$MODULE_DIR$/packages/routed/build" />
+      <excludeFolder url="file://$MODULE_DIR$/packages/routed_testing/.dart_tool" />
+      <excludeFolder url="file://$MODULE_DIR$/packages/routed_testing/.pub" />
+      <excludeFolder url="file://$MODULE_DIR$/packages/routed_testing/build" />
+      <excludeFolder url="file://$MODULE_DIR$/examples/multipart/.dart_tool" />
+      <excludeFolder url="file://$MODULE_DIR$/examples/multipart/.pub" />
+      <excludeFolder url="file://$MODULE_DIR$/examples/multipart/build" />
+      <excludeFolder url="file://$MODULE_DIR$/examples/sessions/.dart_tool" />
+      <excludeFolder url="file://$MODULE_DIR$/examples/sessions/.pub" />
+      <excludeFolder url="file://$MODULE_DIR$/examples/sessions/build" />
+      <excludeFolder url="file://$MODULE_DIR$/examples/forward_proxy/.dart_tool" />
+      <excludeFolder url="file://$MODULE_DIR$/examples/forward_proxy/.pub" />
+      <excludeFolder url="file://$MODULE_DIR$/examples/forward_proxy/build" />
+      <excludeFolder url="file://$MODULE_DIR$/examples/validation/.dart_tool" />
+      <excludeFolder url="file://$MODULE_DIR$/examples/validation/.pub" />
+      <excludeFolder url="file://$MODULE_DIR$/examples/validation/build" />
+      <excludeFolder url="file://$MODULE_DIR$/examples/liquid_template/.dart_tool" />
+      <excludeFolder url="file://$MODULE_DIR$/examples/liquid_template/.pub" />
+      <excludeFolder url="file://$MODULE_DIR$/examples/liquid_template/build" />
+      <excludeFolder url="file://$MODULE_DIR$/examples/middleware/.dart_tool" />
+      <excludeFolder url="file://$MODULE_DIR$/examples/middleware/.pub" />
+      <excludeFolder url="file://$MODULE_DIR$/examples/middleware/build" />
     </content>
     <orderEntry type="sourceFolder" forTests="false" />
     <orderEntry type="library" name="Dart SDK" level="project" />
