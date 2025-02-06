@@ -1,0 +1,13 @@
+{% extends "base.html" %} {% block content %}
+<h1>Welcome {{ name }}</h1>
+<div class="extended-content">
+    <p>{{ content }}</p>
+    <h2>Template Features:</h2>
+    <ul>
+        <li>Template inheritance from base.html</li>
+        <li>Block overriding</li>
+        <li>Variable interpolation</li>
+        <li>Default filters</li>
+    </ul>
+</div>
+{% endblock %}

@@ -1,0 +1,5 @@
+.dart_tool/
+.packages
+pubspec.lock
+# Keep template files in version control
+# templates/*.html

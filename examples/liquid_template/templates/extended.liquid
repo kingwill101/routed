@@ -1,0 +1,23 @@
+{% assign page_title = 'Extended Example' %}
+{% assign footer_text = 'Extended Template Example' %}
+
+{% render "partials/header.liquid" %}
+
+<h1>Welcome {{ name }}</h1>
+
+<div class="extended-content">
+    {% if message %}
+        <p>{{ message }}</p>
+    {% endif %}
+
+    <h2>Liquid Template Features:</h2>
+    <ul>
+        {% for feature in features %}
+            <li>{{ feature }}</li>
+        {% endfor %}
+    </ul>
+
+    <p>Current time: {{ current_time }}</p>
+</div>
+
+{% render "partials/footer.liquid" %}

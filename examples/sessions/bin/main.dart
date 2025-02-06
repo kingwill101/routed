@@ -1,26 +1,32 @@
+import 'dart:convert';
 import 'package:routed/routed.dart';
 import 'package:routed/session.dart';
-import 'package:routed/middlewares.dart';
 
 void main(List<String> args) async {
   // Create a secure cookie store with a random or fixed hash key
-  final store = CookieStore(
-    codecs: [
-      SecureCookie([1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16])
-    ],
-    defaultOptions: Options(
-      path: '/',
-      maxAge: 3600, // 1 hour
-      secure: false,
-      httpOnly: true,
-    ),
-  );
 
   // Construct an Engine instance
-  final engine = Engine();
-  // Add the session middleware globally
-  engine.middlewares
-      .add(sessionMiddleware(store)); // from your session.dart middleware
+  final engine = Engine(options: [
+    withSessionConfig(SessionConfig(
+      store: CookieStore(
+        defaultOptions: Options(
+          path: '/',
+          maxAge: 3600, // 1 hour
+          secure: false,
+          httpOnly: true,
+        ),
+        codecs: [
+          SecureCookie(
+            useEncryption: true,
+            useSigning: true,
+            key:
+                'base64:${base64.encode(List<int>.generate(32, (i) => i + 1))}',
+          ),
+        ],
+      ),
+      cookieName: 'routed_session',
+    ))
+  ]);
 
   // Example route: increments a session counter each time it’s visited
   engine.get('/counter', (ctx) async {

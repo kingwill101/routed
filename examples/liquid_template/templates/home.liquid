@@ -1,0 +1,17 @@
+{% assign page_title = 'Home Page' %}
+{% assign footer_text = 'Welcome to our website!' %}
+
+{% render "partials/header.liquid" %}
+
+<h1>{{ welcome_message }}</h1>
+
+<div class="content">
+    <h2>Features:</h2>
+    <ul>
+        {% for feature in features %}
+            <li>{{ feature }}</li>
+        {% endfor %}
+    </ul>
+</div>
+
+{% render "partials/footer.liquid" %}

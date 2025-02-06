@@ -1,0 +1,23 @@
+{% assign page_title = name | append: "'s Page" %}
+{% assign footer_text = "Dynamic Template for " | append: name %}
+
+{% render "partials/header.liquid" %}
+
+<h1>Welcome {{ name }}</h1>
+
+<div class="user-info">
+    <h2>Your Information:</h2>
+    <ul>
+        {% for item in items %}
+            <li>{{ item }}</li>
+        {% endfor %}
+    </ul>
+
+    {% if ip_address %}
+        <p>Your IP: {{ ip_address }}</p>
+    {% endif %}
+
+    <p>Visit time: {{ 'now' | date: '%Y-%m-%d %H:%M:%S' }}</p>
+</div>
+
+{% render "partials/footer.liquid" %}
