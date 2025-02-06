@@ -1,6 +1,5 @@
+import 'package:routed_testing/src/browser/interfaces/browser.dart';
 import 'package:test/test.dart';
-import 'package:webdriver/async_core.dart' show WebElement;
-import 'browser.dart';
 
 abstract class Component {
   final Browser browser;
@@ -8,7 +7,7 @@ abstract class Component {
 
   Component(this.browser, this.selector);
 
-  Future<WebElement> findElement() async {
+  Future<dynamic> findElement() async {
     return await browser.findElement(selector);
   }
 

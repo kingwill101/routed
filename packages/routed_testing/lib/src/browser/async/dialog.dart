@@ -1,39 +1,48 @@
+import 'dart:async';
+import 'package:webdriver/async_core.dart' show WebDriver, WebElement, By;
+import '../interfaces/dialog.dart';
 import 'browser.dart';
 
-class DialogHandler {
-  final Browser browser;
+class AsyncDialogHandler implements DialogHandler {
+  final AsyncBrowser browser;
+  final WebDriver driver;
 
-  DialogHandler(this.browser);
+  AsyncDialogHandler(this.browser) : driver = browser.driver;
 
+  @override
   Future<void> waitForDialog([Duration? timeout]) async {
     timeout ??= const Duration(seconds: 5);
     await browser.waitUntil(() async {
       try {
-        browser.driver.switchTo.alert;
-        return Future.value(true);
+        await driver.switchTo.alert;
+        return true;
       } catch (_) {
-        return Future.value(false);
+        return false;
       }
     }, timeout: timeout);
   }
 
+  @override
   Future<void> acceptDialog() async {
-    final alert = browser.driver.switchTo.alert;
+    final alert = await driver.switchTo.alert;
     await alert.accept();
   }
 
+  @override
   Future<void> dismissDialog() async {
-    final alert = browser.driver.switchTo.alert;
+    final alert = await driver.switchTo.alert;
     await alert.dismiss();
   }
 
+  @override
   Future<void> typeInDialog(String text) async {
-    final alert = browser.driver.switchTo.alert;
+    final alert = await driver.switchTo.alert;
     await alert.sendKeys(text);
   }
 
+  @override
   Future<void> assertDialogOpened(String message) async {
-    final alert = browser.driver.switchTo.alert;
+    final alert = await driver.switchTo.alert;
     final text = await alert.text;
     assert(text == message, 'Expected dialog with message: $message');
   }

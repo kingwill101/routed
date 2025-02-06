@@ -1,6 +1,6 @@
 import 'package:routed_testing/src/browser/bootstrap/browser_manager.dart';
-import 'package:routed_testing/src/browser/progress.dart';
-import 'package:routed_testing/src/browser/proxy.dart';
+import 'package:routed_testing/src/browser/bootstrap/progress.dart';
+import 'package:routed_testing/src/browser/bootstrap/proxy.dart';
 import 'package:routed_testing/src/browser/bootstrap/version.dart';
 
 class BrowserConfig {

@@ -20,8 +20,7 @@ void main() async {
     await browser.visit('/');
 
     await browser.assertSee('Bahasa');
-    await browser.assertTitle('Home Page');
-    // await browser.assertPresent('nav');
-    // await browser.assertSeeIn('footer', '© 2024');
-  });
+    await browser.assertTitle('Wikipedia');
+
+  },useAsync: false);
 }
