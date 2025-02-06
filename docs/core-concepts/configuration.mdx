@@ -1,0 +1,443 @@
+---
+title: Configuration
+description: Learn how to configure the Routed framework
+---
+
+# Configuration
+
+Routed provides extensive configuration options through `EngineConfig` and functional options.
+
+## Basic Configuration
+## Application Configuration
+
+```dart
+final engine = Engine(
+  configItems: {
+    'app.name': 'My App',
+    'app.env': 'production',
+    'app.debug': false,
+    'database.host': 'localhost',
+    'database.port': 5432
+  }
+);
+
+// Access config values in routes
+router.get('/info', (ctx) {
+  final appName = ctx.appConfig.get('app.name');
+  final dbHost = ctx.appConfig.get('database.host');
+  
+  ctx.json({
+    'app': appName,
+    'environment': ctx.appConfig.get('app.env'),
+    'database': dbHost
+  });
+});
+```
+
+## File System Configuration
+
+```dart
+import 'package:file/file.dart';
+import 'package:file/memory.dart' as memory;
+import 'package:file/local.dart' as local;
+
+// Use local file system (default)
+final engine = Engine(
+  config: EngineConfig(
+    fileSystem: const local.LocalFileSystem()
+  )
+);
+
+// Use memory file system (for testing)
+final testEngine = Engine(
+  config: EngineConfig(
+    fileSystem: memory.MemoryFileSystem()
+  )
+);
+
+// Custom file system implementation
+class CustomFileSystem implements FileSystem {
+  // Implement required methods...
+}
+
+final customEngine = Engine(
+  config: EngineConfig(
+    fileSystem: CustomFileSystem()
+  )
+);
+```
+
+## Request Size Configuration
+
+```dart
+final engine = Engine(
+  options: [
+    // Set maximum request body size
+    withMaxRequestSize(10 * 1024 * 1024), // 10MB
+    
+    // Configure file uploads
+    withMultipart(
+      maxMemory: 32 * 1024 * 1024,     // 32MB in-memory limit
+      maxFileSize: 50 * 1024 * 1024,    // 50MB per file
+      allowedExtensions: {'.jpg', '.pdf'}
+    )
+  ]
+);
+```
+
+```dart
+final engine = Engine(
+  config: EngineConfig(
+    // Routing behavior
+    redirectTrailingSlash: true,
+    handleMethodNotAllowed: true,
+    
+    // Templates
+    templateDirectory: 'templates',
+    
+    // Trusted proxies
+    forwardedByClientIP: true,
+    remoteIPHeaders: ['X-Forwarded-For', 'X-Real-IP'],
+    trustedProxies: ['10.0.0.0/8']
+  )
+);
+```
+
+## Functional Configuration
+
+Use functional options for cleaner configuration:
+
+```dart
+final engine = Engine(
+  options: [
+    // Configure trusted proxies
+    withTrustedProxies(['10.0.0.0/8']),
+    
+    // Configure request size
+    withMaxRequestSize(10 * 1024 * 1024),
+    
+    // Configure routing behavior
+    withRedirectTrailingSlash(true),
+    withHandleMethodNotAllowed(true),
+    
+    // Add global middleware
+    withMiddleware([loggerMiddleware, corsMiddleware]),
+    
+    // Configure template engine
+    withTemplateEngine(JinjaTemplateEngine()),
+    
+    // Configure multipart
+    withMultipart(
+      maxMemory: 32 * 1024 * 1024,
+      maxFileSize: 10 * 1024 * 1024,
+      allowedExtensions: {'.jpg', '.png', '.pdf'}
+    ),
+    
+    // Configure cache
+    withCacheManager(cacheManager),
+    
+    // Configure sessions
+    withSessionConfig(SessionConfig.cookie(
+      appKey: 'your-secret-key'
+    ))
+  ]
+);
+```
+
+## File Upload Configuration
+
+Configure multipart file handling:
+
+```dart
+final config = EngineConfig(
+  multipart: MultipartConfig(
+    // Maximum memory usage
+    maxMemory: 32 * 1024 * 1024,  // 32MB
+    
+    // Maximum file size
+    maxFileSize: 10 * 1024 * 1024, // 10MB
+    
+    // Allowed file types
+    allowedExtensions: {'jpg', 'png', 'pdf'},
+    
+    // Upload directory
+    uploadDirectory: 'uploads',
+    
+    // File permissions
+    filePermissions: 0750
+  )
+);
+```
+
+## Session Configuration
+
+### Cookie-based Sessions
+
+```dart
+final config = EngineConfig(
+  sessionConfig: SessionConfig.cookie(
+    appKey: 'your-secret-key',
+    cookieName: 'app_session',
+    maxAge: Duration(hours: 24)
+  )
+);
+```
+
+### File-based Sessions
+
+```dart
+final config = EngineConfig(
+  sessionConfig: SessionConfig.file(
+    appKey: 'your-secret-key',
+    storagePath: 'sessions',
+    cookieName: 'app_session',
+    maxAge: Duration(hours: 24)
+  )
+);
+```
+
+## Template Engine Configuration
+
+```dart
+final config = EngineConfig(
+  // Template directory
+  templateDirectory: 'templates',
+  
+  // Configure template engine
+  templateEngine: JinjaTemplateEngine(
+    fileSystem: LocalFileSystem()
+  )
+);
+```
+
+## Routing Configuration
+
+```dart
+final config = EngineConfig(
+  // URL handling
+  redirectTrailingSlash: true,   // /about/ -> /about
+  redirectFixedPath: false,      // Remove duplicate slashes
+  removeExtraSlash: false,       // /path//to -> /path/to
+  
+  // Path handling
+  useRawPath: false,            // Use raw URL path
+  unescapePathValues: true,     // Unescape URL values
+  
+  // Error handling
+  handleMethodNotAllowed: true   // Return 405 status
+);
+```
+
+## Proxy Configuration
+
+```dart
+final config = EngineConfig(
+  // Trust forwarded headers
+  forwardedByClientIP: true,
+  
+  // Headers to check for real IP
+  remoteIPHeaders: [
+    'X-Forwarded-For',
+    'X-Real-IP'
+  ],
+  
+  // Trusted proxy IPs/ranges
+  trustedProxies: [
+    '127.0.0.1',
+    '10.0.0.0/8',
+    '172.16.0.0/12'
+  ]
+);
+```
+
+## Cache Configuration
+
+```dart
+final config = EngineConfig(
+  cacheManager: CacheManager()
+    ..registerStore('array', {
+      'driver': 'array',
+      'serialize': false
+    })
+    ..registerStore('file', {
+      'driver': 'file',
+      'path': 'cache'
+    })
+);
+```
+
+## Configuration Best Practices
+## Development vs Production
+
+```dart
+import 'dart:io' show Platform;
+
+EngineConfig createConfig() {
+  final env = Platform.environment['APP_ENV'] ?? 'development';
+  
+  if (env == 'production') {
+    return EngineConfig(
+      // Production settings
+      appKey: Platform.environment['APP_KEY']!,
+      handleMethodNotAllowed: true,
+      forwardedByClientIP: true,
+      trustedProxies: Platform.environment['TRUSTED_PROXIES']?.split(',') ?? [],
+      multipart: MultipartConfig(
+        maxFileSize: 50 * 1024 * 1024,  // 50MB
+        allowedExtensions: {'.jpg', '.pdf', '.png'},
+        uploadDirectory: '/var/www/uploads'
+      ),
+      sessionConfig: SessionConfig.file(
+        appKey: Platform.environment['APP_KEY']!,
+        storagePath: '/var/www/sessions',
+        secure: true
+      )
+    );
+  }
+  
+  // Development settings
+  return EngineConfig(
+    appKey: 'dev-key',
+    handleMethodNotAllowed: false,
+    forwardedByClientIP: false,
+    multipart: MultipartConfig(
+      maxFileSize: 100 * 1024 * 1024,  // 100MB
+      allowedExtensions: {'.*'},  // Allow all extensions
+      uploadDirectory: 'uploads'
+    ),
+    sessionConfig: SessionConfig.cookie(
+      appKey: 'dev-key',
+      secure: false
+    )
+  );
+}
+
+final engine = Engine(
+  config: createConfig(),
+  configItems: {
+    'app.env': Platform.environment['APP_ENV'] ?? 'development',
+    'app.debug': Platform.environment['APP_DEBUG'] == 'true'
+  }
+);
+```
+
+## Type-safe Configuration
+
+```dart
+class AppConfig {
+  final String environment;
+  final bool debug;
+  final DatabaseConfig database;
+  final CacheConfig cache;
+  
+  AppConfig({
+    required this.environment,
+    required this.debug,
+    required this.database,
+    required this.cache,
+  });
+  
+  factory AppConfig.fromEnv() {
+    return AppConfig(
+      environment: Platform.environment['APP_ENV'] ?? 'development',
+      debug: Platform.environment['APP_DEBUG'] == 'true',
+      database: DatabaseConfig.fromEnv(),
+      cache: CacheConfig.fromEnv(),
+    );
+  }
+  
+  EngineConfig toEngineConfig() {
+    return EngineConfig(
+      appKey: Platform.environment['APP_KEY'],
+      sessionConfig: createSessionConfig(),
+      multipart: createMultipartConfig(),
+      cacheManager: cache.createManager()
+    );
+  }
+}
+
+// Usage
+final appConfig = AppConfig.fromEnv();
+final engine = Engine(
+  config: appConfig.toEngineConfig(),
+  configItems: appConfig.toMap()
+);
+```
+
+1. Use Environment Variables
+
+```dart
+final engine = Engine(
+  config: EngineConfig(
+    appKey: Platform.environment['APP_KEY'],
+    templateDirectory: Platform.environment['TEMPLATE_DIR'] ?? 'templates'
+  )
+);
+```
+
+2. Separate Development/Production Configs
+
+```dart
+EngineConfig getConfig(String env) {
+  switch (env) {
+    case 'production':
+      return EngineConfig(
+        handleMethodNotAllowed: true,
+        forwardedByClientIP: true,
+        trustedProxies: ['10.0.0.0/8']
+      );
+      
+    case 'development':
+      return EngineConfig(
+        handleMethodNotAllowed: false,
+        forwardedByClientIP: false,
+        trustedProxies: []
+      );
+      
+    default:
+      throw Exception('Unknown environment: $env');
+  }
+}
+```
+
+3. Use Factory Methods
+
+```dart
+class AppConfig {
+  static EngineConfig create() {
+    return EngineConfig(
+      appKey: loadSecretKey(),
+      sessionConfig: createSessionConfig(),
+      multipart: createMultipartConfig(),
+      cacheManager: createCacheManager()
+    );
+  }
+  
+  static SessionConfig createSessionConfig() {
+    return SessionConfig.cookie(
+      appKey: loadSecretKey(),
+      maxAge: Duration(hours: 24)
+    );
+  }
+  
+  // Additional factory methods...
+}
+```
+
+4. Validate Configuration
+
+```dart
+void validateConfig(EngineConfig config) {
+  if (config.appKey == null || config.appKey!.isEmpty) {
+    throw Exception('APP_KEY must be set');
+  }
+  
+  if (config.multipart.maxFileSize > 100 * 1024 * 1024) {
+    throw Exception('Maximum file size cannot exceed 100MB');
+  }
+  
+  // Additional validation...
+}
+```
+
+This covers the main configuration options available in Routed. Each section can be further customized based on your application's needs.

@@ -1,0 +1,176 @@
+---
+title: Numeric Assertions
+description: Learn about numeric testing capabilities in Routed
+---
+
+# Numeric Testing
+
+The `routed_testing` package provides comprehensive numeric testing capabilities through extensions and assertions.
+
+## Basic Numeric Assertions
+
+```dart
+response.assertJson((json) {
+  json
+    // Basic comparisons
+    .isGreaterThan('age', 18)
+    .isLessThan('price', 100)
+    .isGreaterOrEqual('quantity', 1)
+    .isLessOrEqual('discount', 50)
+    
+    // Range testing
+    .isBetween('score', 0, 100)
+    
+    // Mathematical checks
+    .isDivisibleBy('quantity', 5)
+    .isMultipleOf('price', 10)
+    .isPerfectSquare('area')  // e.g., 16, 25, 36
+    
+    // Sign testing
+    .isPositive('balance')
+    .isNegative('debt')
+    .isZero('count')
+    
+    // Number properties
+    .isEven('evenNumber')
+    .isOdd('oddNumber')
+    .isPrime('primeNumber')  // Tests if number is prime
+});
+```
+
+## Mathematical Functions
+
+```dart
+response.assertJson((json) {
+  json
+    // Square root
+    .where('sqrt', (value) => value.sqrt() == 5)  // value = 25
+    
+    // Power
+    .where('squared', (value) => value.pow(2) == 25)  // value = 5
+    
+    // Custom calculations
+    .where('total', (value) {
+      final number = value as num;
+      return number.isGreaterThan(100) && 
+             number.isDivisibleBy(10);
+    });
+});
+```
+
+## Array Operations
+
+```dart
+response.assertJson((json) {
+  json
+    // Array length
+    .count('items', 5)
+    .countBetween('items', 1, 10)
+    
+    // Array items
+    .scope('numbers', (numbers) {
+      numbers.each((num) {
+        num
+          .isGreaterThan(0)
+          .isLessThan(100)
+          .isDivisibleBy(5);
+      });
+    });
+});
+```
+
+## Numeric Validation in Schema
+
+```dart
+response.assertJson((json) {
+  json.matchesSchema({
+    'id': int,
+    'score': double,
+    'metrics': {
+      'count': int,
+      'average': double,
+      'values': List<num>
+    }
+  });
+});
+```
+
+## Error Margins
+
+```dart
+response.assertJson((json) {
+  json
+    // Approximate equality
+    .where('pi', (value) => (value - 3.14159).abs() < 0.00001)
+    
+    // Range checks with tolerance
+    .where('temperature', (value) {
+      final temp = value as num;
+      return temp.isBetween(36.5, 37.5);
+    });
+});
+```
+
+## Conditional Testing
+
+```dart
+response.assertJson((json) {
+  json
+    // Test conditionally
+    .when(isPremiumUser, (json) {
+      json
+        .isGreaterThan('credits', 1000)
+        .isPositive('bonus');
+    })
+    
+    // Test numeric ranges
+    .where('score', (value) {
+      final score = value as num;
+      if (isDifficultMode) {
+        return score.isBetween(80, 100);
+      } else {
+        return score.isBetween(60, 100);
+      }
+    });
+});
+```
+
+## Best Practices
+
+1. Use Type-Safe Checks
+```dart
+// Good
+json.whereType<int>('id')
+    .isGreaterThan('id', 0);
+
+// Less Good
+json.where('id', (value) => value > 0);
+```
+
+2. Chain Related Assertions
+```dart
+json
+  .isGreaterThan('age', 0)
+  .isLessThan('age', 120)
+  .whereType<int>('age');
+```
+
+3. Group Related Checks
+```dart
+json.scope('stats', (stats) {
+  stats
+    .isGreaterThan('min', 0)
+    .isLessThan('max', 100)
+    .isBetween('average', 0, 100);
+});
+```
+
+4. Use Clear Error Messages
+```dart
+json.where('score', (value) {
+  if (!value.isBetween(0, 100)) {
+    throw TestFailure('Score must be between 0 and 100');
+  }
+  return true;
+});
+```

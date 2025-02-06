@@ -1,0 +1,113 @@
+---
+title: Caching
+description: Learn how to use caching in Routed
+---
+
+# Caching
+
+Routed provides a flexible caching system with multiple storage backends.
+
+## Basic Cache Operations
+
+```dart
+router.get('/data', (ctx) async {
+  // Get from cache
+  final value = await ctx.getCache('my-key');
+  
+  if (value != null) {
+    return ctx.json({'data': value, 'from_cache': true});
+  }
+  
+  // Store in cache for 60 seconds
+  final data = await expensiveOperation();
+  await ctx.cache('my-key', data, 60);
+  
+  return ctx.json({'data': data, 'from_cache': false});
+});
+```
+
+## Cache Duration
+
+```dart
+// Cache for 1 hour
+await ctx.cache('hourly-key', value, 3600);
+
+// Cache forever
+await ctx.cacheForever('permanent-key', value);
+
+// Remove from cache
+await ctx.removeCache('my-key');
+```
+
+## Counter Operations
+
+```dart
+// Increment cache value
+await ctx.incrementCache('visits', 1);  // Add 1
+await ctx.incrementCache('score', 5);   // Add 5
+
+// Decrement cache value
+await ctx.decrementCache('stock', 1);   // Subtract 1
+await ctx.decrementCache('points', 10); // Subtract 10
+```
+
+## Remember Pattern
+
+Cache computed values:
+
+```dart
+// Cache if not exists
+final value = await ctx.rememberCache(
+  'user-stats', 
+  300,  // 5 minutes 
+  () => computeUserStats()
+);
+
+// Remember forever
+final config = await ctx.rememberCacheForever(
+  'app-config',
+  () => loadAppConfig()
+);
+```
+
+## Cache Stores
+
+Configure different cache stores:
+
+```dart
+final cacheManager = CacheManager()
+  ..registerStore('array', {
+    'driver': 'array',
+    'serialize': false,
+  })
+  ..registerStore('file', {
+    'driver': 'file',
+    'path': 'cache',
+  });
+
+final engine = Engine(
+  options: [
+    withCacheManager(cacheManager),
+  ]
+);
+```
+
+Using specific stores:
+
+```dart
+// Use default store
+await ctx.cache('key', value, 60);
+
+// Use specific store
+await ctx.cache('key', value, 60, store: 'file');
+```
+
+## Best Practices
+
+1. Set appropriate cache durations
+2. Use meaningful cache keys
+3. Handle cache misses gracefully
+4. Consider cache invalidation
+5. Choose appropriate store for use case
+6. Cache expensive operations
+7. Monitor cache usage

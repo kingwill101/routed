@@ -1,0 +1,235 @@
+---
+title: Custom Validation
+description: Creating custom validation rules in Routed
+---
+
+# Custom Validation Rules
+
+While Routed provides many built-in validation rules, you can also create custom rules for your specific needs.
+
+## Creating a Custom Rule
+
+To create a custom validation rule, implement the `ValidationRule` interface:
+
+```dart
+class CustomRule implements ValidationRule {
+  @override
+  String get name => 'custom_rule_name';
+
+  @override
+  String get message => 'Custom error message';
+
+  @override
+  bool validate(dynamic value, [List<String>? options]) {
+    // Implement validation logic
+    return true; // or false based on validation
+  }
+}
+```
+
+## Example Rules
+
+### Password Strength Rule
+
+```dart
+class PasswordStrengthRule implements ValidationRule {
+  @override
+  String get name => 'strong_password';
+
+  @override
+  String get message => 'Password must contain at least one uppercase letter, one lowercase letter, one number, and one special character';
+
+  @override
+  bool validate(dynamic value, [List<String>? options]) {
+    if (value == null || value is! String) return false;
+    
+    return RegExp(
+      r'^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&])[A-Za-z\d@$!%*?&]{8,}$'
+    ).hasMatch(value);
+  }
+}
+```
+
+### Credit Card Rule
+
+```dart
+class CreditCardRule implements ValidationRule {
+  @override
+  String get name => 'credit_card';
+
+  @override
+  String get message => 'Must be a valid credit card number';
+
+  @override
+  bool validate(dynamic value, [List<String>? options]) {
+    if (value == null) return false;
+    
+    // Remove spaces and dashes
+    final number = value.toString().replaceAll(RegExp(r'[\s-]'), '');
+    
+    // Check if contains only digits
+    if (!RegExp(r'^\d+$').hasMatch(number)) return false;
+    
+    // Implement Luhn algorithm
+    int sum = 0;
+    bool alternate = false;
+    
+    for (int i = number.length - 1; i >= 0; i--) {
+      int n = int.parse(number[i]);
+      if (alternate) {
+        n *= 2;
+        if (n > 9) n = (n % 10) + 1;
+      }
+      sum += n;
+      alternate = !alternate;
+    }
+    
+    return sum % 10 == 0;
+  }
+}
+```
+
+### Phone Number Rule
+
+```dart
+class PhoneNumberRule implements ValidationRule {
+  @override
+  String get name => 'phone';
+
+  @override
+  String get message => 'Must be a valid phone number';
+
+  @override
+  bool validate(dynamic value, [List<String>? options]) {
+    if (value == null) return false;
+    
+    // Basic US phone number format
+    return RegExp(r'^\d{3}-\d{3}-\d{4}$').hasMatch(value.toString());
+  }
+}
+```
+
+## Using Custom Rules
+
+### Registration
+
+First, register your custom rules:
+
+```dart
+void main() {
+  // Add custom rules
+  kKnownRules.addAll([
+    PasswordStrengthRule(),
+    CreditCardRule(),
+    PhoneNumberRule(),
+  ]);
+
+  final engine = Engine();
+  // ... rest of setup
+}
+```
+
+### Usage in Validation
+
+```dart
+router.post('/register', (ctx) async {
+  await ctx.validate({
+    'username': 'required|string|min:3',
+    'password': 'required|strong_password',
+    'phone': 'required|phone',
+    'credit_card': 'required|credit_card'
+  });
+  
+  // Process valid registration...
+});
+```
+
+## Rules with Options
+
+You can create rules that accept options for more flexible validation:
+
+```dart
+class EnumRule implements ValidationRule {
+  @override
+  String get name => 'enum';
+
+  @override
+  String get message => 'Value must be one of the allowed values';
+
+  @override
+  bool validate(dynamic value, [List<String>? options]) {
+    if (value == null || options == null) return false;
+    return options.contains(value.toString());
+  }
+}
+
+// Usage:
+await ctx.validate({
+  'status': 'required|enum:pending,active,completed'
+});
+```
+
+## Asynchronous Validation
+
+For validation that requires async operations (like database lookups):
+
+```dart
+class UniqueEmailRule implements ValidationRule {
+  final Database db;
+  
+  UniqueEmailRule(this.db);
+
+  @override
+  String get name => 'unique_email';
+
+  @override
+  String get message => 'Email is already taken';
+
+  @override
+  Future<bool> validate(dynamic value, [List<String>? options]) async {
+    if (value == null) return false;
+    
+    final exists = await db.users.where('email', value).exists();
+    return !exists;
+  }
+}
+
+// Usage with async validation:
+router.post('/users', (ctx) async {
+  await ctx.validateAsync({
+    'email': 'required|email|unique_email'
+  });
+});
+```
+
+## Best Practices
+
+1. Give rules clear, descriptive names
+2. Provide helpful error messages
+3. Handle null values appropriately
+4. Document expected input formats
+5. Consider performance implications
+6. Add unit tests for custom rules
+7. Keep validation logic focused and reusable
+
+## Testing Custom Rules
+
+```dart
+void main() {
+  group('PasswordStrengthRule', () {
+    final rule = PasswordStrengthRule();
+    
+    test('accepts valid strong password', () {
+      expect(rule.validate('Test123!@'), isTrue);
+    });
+    
+    test('rejects weak password', () {
+      expect(rule.validate('password'), isFalse);
+    });
+    
+    test('handles null value', () {
+      expect(rule.validate(null), isFalse);
+    });
+  });
+}
+```

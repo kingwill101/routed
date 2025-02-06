@@ -1,0 +1,186 @@
+---
+title: Sessions
+description: Managing sessions in Routed
+---
+
+# Sessions
+
+Routed provides a robust session management system with support for different storage backends and security features.
+
+## Session Configuration
+
+### Basic Setup
+
+```dart
+// Create a secure cookie store
+final store = CookieStore(
+  codecs: [
+    SecureCookie(
+      key: 'your-secret-key',
+      useEncryption: true,
+      useSigning: true
+    )
+  ],
+  defaultOptions: Options(
+    path: '/',
+    maxAge: 3600, // 1 hour
+    secure: true,
+    httpOnly: true,
+  ),
+);
+
+// Add session middleware
+final engine = Engine(
+  middlewares: [
+    sessionMiddleware(store, sessionName: 'routed_session')
+  ]
+);
+```
+
+## Working with Sessions
+
+### Reading and Writing Data
+
+```dart
+engine.get('/profile', (ctx) {
+  // Get session data
+  final userId = ctx.sessionData['user_id'];
+  final preferences = ctx.sessionData['preferences'];
+
+  // Set session data
+  ctx.setSession('last_visit', DateTime.now().toIso8601String());
+  
+  ctx.json({
+    'user_id': userId,
+    'preferences': preferences,
+    'last_visit': ctx.sessionData['last_visit']
+  });
+});
+```
+
+### Session Information
+
+```dart
+engine.get('/session-info', (ctx) {
+  ctx.json({
+    'session_id': ctx.sessionId,
+    'created_at': ctx.sessionCreatedAt,
+    'last_accessed': ctx.sessionLastAccessed,
+    'age_seconds': ctx.sessionAge,
+    'idle_time_seconds': ctx.sessionIdleTime,
+  });
+});
+```
+
+## Security Features
+
+### Encryption and Signing
+
+```dart
+final store = CookieStore(
+  codecs: [
+    // AES encryption
+    SecureCookie(
+      key: 'encryption-key',
+      useEncryption: true,
+      useSigning: false,
+    ),
+    // HMAC signing
+    SecureCookie(
+      key: 'signing-key',
+      useEncryption: false,
+      useSigning: true,
+    ),
+  ]
+);
+```
+
+### Cookie Options
+
+```dart
+final store = CookieStore(
+  defaultOptions: Options(
+    path: '/',
+    maxAge: 3600,
+    secure: true,    // HTTPS only
+    httpOnly: true,  // No JavaScript access
+    sameSite: SameSite.strict,
+  ),
+);
+```
+
+## Session Storage Backends
+
+### Cookie Store
+
+Stores session data in encrypted cookies:
+
+```dart
+final store = CookieStore(
+  codecs: [SecureCookie(key: 'secret')],
+  defaultOptions: Options(maxAge: 3600),
+);
+```
+
+### Memory Store
+
+Stores sessions in memory (development only):
+
+```dart
+final store = MemoryStore(
+  cleanupInterval: Duration(minutes: 15),
+);
+```
+
+### Custom Store
+
+Implement custom storage:
+
+```dart
+class RedisStore implements SessionStore {
+  // Implement required methods
+}
+```
+
+## Best Practices
+
+1. Always use HTTPS in production
+2. Set appropriate cookie security options
+3. Use secure keys for encryption/signing
+4. Implement session cleanup/garbage collection
+5. Don't store sensitive data in sessions
+6. Set reasonable session timeouts
+7. Consider using a distributed store for scalability
+
+## Example: Authentication Flow
+
+```dart
+// Login route
+engine.post('/login', (ctx) async {
+  final credentials = await ctx.request.body();
+  
+  if (await validateCredentials(credentials)) {
+    ctx.setSession('user_id', userId);
+    ctx.setSession('logged_in_at', DateTime.now().toIso8601String());
+    
+    return ctx.json({'message': 'Logged in successfully'});
+  }
+  
+  return ctx.json(
+    {'error': 'Invalid credentials'}, 
+    statusCode: 401
+  );
+});
+
+// Auth middleware
+Future<void> authMiddleware(EngineContext ctx) async {
+  final userId = ctx.sessionData['user_id'];
+  if (userId == null) {
+    return ctx.json(
+      {'error': 'Unauthorized'}, 
+      statusCode: 401
+    );
+  }
+  await ctx.next();
+}
+```
