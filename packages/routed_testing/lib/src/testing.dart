@@ -17,16 +17,29 @@ import 'package:routed_testing/src/transport/server.dart';
 import 'package:routed_testing/src/transport/transport.dart';
 import 'package:test/test.dart';
 
-/// Creates a test similar to `test()`, but with Engine transport preconfigured.
+typedef TestCallback = Future<void> Function(
+    Engine engine, EngineTestClient client);
+
 @visibleForTesting
 void engineTest(
   String description,
-  Future<void> Function(EngineTestClient client) body, {
+  TestCallback callback, {
   TransportMode transportMode = TransportMode.inMemory,
+  Map<String, dynamic>? configItems,
+  EngineConfig? engineConfig,
+  List<EngineOpt>? options,
 }) {
   test(description, () async {
-    // Initialize Engine
-    final engine = Engine();
+    // Initialize Engine with config
+    final engine = Engine(
+      configItems: configItems ??
+          {
+            'app.name': 'Test App',
+            'app.env': 'testing',
+          },
+      config: engineConfig,
+      options: options,
+    );
 
     // Initialize TestClient based on transport mode
     final client = transportMode == TransportMode.inMemory
@@ -34,29 +47,50 @@ void engineTest(
         : EngineTestClient.ephemeralServer(engine);
 
     try {
-      await body(client);
+      await AppZone.run(
+        engine: engine,
+        body: () async {
+          await callback(engine, client);
+        },
+      );
     } finally {
       await client.close();
     }
   });
 }
 
-/// Creates a group of tests similar to `group()`, with optional transport configuration.
+/// Creates a group of tests with shared engine configuration
 @visibleForTesting
 void engineGroup(
-  String description,
-  void Function() body, {
-  TransportMode? transportMode,
+  String description, {
+  required void Function(Engine engine, EngineTestClient client) define,
+  TransportMode transportMode = TransportMode.inMemory,
+  Map<String, dynamic>? configItems,
+  EngineConfig? engineConfig,
+  List<EngineOpt>? options,
 }) {
   group(description, () {
-    if (transportMode != null) {
-      // Push the transport mode to the stack
-      EngineTestEnvironment.pushTransportMode(transportMode);
-      // Ensure it's popped after the group is done
-      tearDown(() {
-        EngineTestEnvironment.popTransportMode();
-      });
-    }
-    body();
+    Engine sharedEngine;
+    EngineTestClient sharedClient;
+
+    sharedEngine = Engine(
+      configItems: configItems ??
+          {
+            'app.name': 'Test App',
+            'app.env': 'testing',
+          },
+      config: engineConfig,
+      options: options,
+    );
+    sharedClient = transportMode == TransportMode.inMemory
+        ? EngineTestClient.inMemory(sharedEngine)
+        : EngineTestClient.ephemeralServer(sharedEngine);
+
+    tearDown(() async {
+      await sharedClient.close();
+    });
+
+    // Run the test definitions with the shared configuration
+    define(sharedEngine, sharedClient);
   });
 }

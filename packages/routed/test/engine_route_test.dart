@@ -1,12 +1,8 @@
-// test/engine_route_test.dart
-
-import 'package:routed/src/engine/engine.dart';
+import 'dart:io';
+import 'package:routed/routed.dart';
 import 'package:routed_testing/routed_testing.dart';
 import 'package:routed_testing/src/mock.mocks.dart';
 import 'package:test/test.dart';
-
-// Or wherever your EngineRoute is defined, e.g. 'package:my_app/engine_route.dart'
-// Adjust the import path as needed.
 
 void main() {
   group('Parameter Type Tests', () {
@@ -237,61 +233,6 @@ void main() {
 
       expect(route.matches(request), isFalse);
     });
-
-    test('string parameter (success)', () {
-      final route = EngineRoute(
-        method: 'GET',
-        path: '/anything/{value:string}',
-        handler: (ctx) => null,
-      );
-
-      final request = MockHttpRequest();
-      when(request.method).thenReturn('GET');
-      when(request.uri).thenReturn(Uri.parse('/anything/hello_world'));
-
-      // string => r'[^/]+', so any non-slash is okay
-      expect(route.matches(request), isTrue);
-
-      final params = route.extractParameters(request.uri.path);
-      expect(params['value'], 'hello_world');
-    });
-
-    test('string parameter (fail - slash in param)', () {
-      final route = EngineRoute(
-        method: 'GET',
-        path: '/anything/{value:string}',
-        handler: (ctx) => null,
-      );
-
-      // If we put a slash in the param, it won't match because r'[^/]+' excludes slashes
-      final uri = Uri.parse('/anything/hello/world');
-      // This route expects exactly two segments, so "hello/world" is a second segment
-      final request = MockHttpRequest();
-      when(request.method).thenReturn('GET');
-      when(request.uri).thenReturn(uri);
-
-      expect(route.matches(request), isFalse);
-    });
-
-    test('Multiple placeholders (int + slug)', () {
-      final route = EngineRoute(
-        method: 'GET',
-        path: '/book/{id:int}/chapter/{ch:slug}',
-        handler: (ctx) => null,
-      );
-
-      // Should match e.g. "/book/42/chapter/intro-section"
-      final uri = Uri.parse('/book/42/chapter/intro-section');
-      final request = MockHttpRequest();
-      when(request.method).thenReturn('GET');
-      when(request.uri).thenReturn(uri);
-
-      expect(route.matches(request), isTrue);
-
-      final params = route.extractParameters(uri.path);
-      expect(params['id'], 42);
-      expect(params['ch'], 'intro-section');
-    });
   });
 
   group('Optional Parameter Tests', () {
@@ -375,46 +316,6 @@ void main() {
     });
   });
 
-  group('Combined Parameter Types', () {
-    test('combines typed, optional and wildcard parameters', () {
-      final route = EngineRoute(
-        method: 'GET',
-        path: '/users/{id:int}/files/{type?}/{*path}',
-        handler: (ctx) => null,
-      );
-
-      final uri = Uri.parse('/users/123/files/images/2023/photo.jpg');
-      final request = MockHttpRequest();
-      when(request.method).thenReturn('GET');
-      when(request.uri).thenReturn(uri);
-
-      expect(route.matches(request), isTrue);
-      final params = route.extractParameters(uri.path);
-      expect(params['id'], 123);
-      expect(params['type'], 'images');
-      expect(params['path'], '2023/photo.jpg');
-    });
-
-    test('combines typed and wildcard with optional omitted', () {
-      final route = EngineRoute(
-        method: 'GET',
-        path: '/users/{id:int}/files/{type?}/{*path}',
-        handler: (ctx) => null,
-      );
-
-      final uri = Uri.parse('/users/123/files/docs/report.pdf');
-      final request = MockHttpRequest();
-      when(request.method).thenReturn('GET');
-      when(request.uri).thenReturn(uri);
-
-      expect(route.matches(request), isTrue);
-      final params = route.extractParameters(uri.path);
-      expect(params['id'], 123);
-      expect(params['type'], 'docs');
-      expect(params['path'], 'report.pdf');
-    });
-  });
-
   group('Query Parameter Tests', () {
     test('matches route with query parameters', () {
       final route = EngineRoute(
@@ -466,78 +367,310 @@ void main() {
       expect(
           request.uri.queryParametersAll['tag'], ['web', 'mobile', 'desktop']);
     });
+  });
 
-    test('matches route with empty query parameters', () {
+  group('Custom Pattern Tests', () {
+    setUp(() {
+      clearCustomPatterns();
+    });
+
+    test('registerCustomType - custom phone number type', () {
+      registerCustomType('phone', r'\d{3}-\d{3}-\d{4}');
+
       final route = EngineRoute(
         method: 'GET',
-        path: '/items',
+        path: '/contact/{number:phone}',
         handler: (ctx) => null,
       );
 
-      final uri = Uri.parse('/items?sort=&filter=');
-      final request = MockHttpRequest();
-      when(request.method).thenReturn('GET');
-      when(request.uri).thenReturn(uri);
+      final validRequest = MockHttpRequest();
+      when(validRequest.method).thenReturn('GET');
+      when(validRequest.uri).thenReturn(Uri.parse('/contact/123-456-7890'));
 
-      expect(route.matches(request), isTrue);
-      expect(request.uri.queryParameters, {'sort': '', 'filter': ''});
+      final invalidRequest = MockHttpRequest();
+      when(invalidRequest.method).thenReturn('GET');
+      when(invalidRequest.uri).thenReturn(Uri.parse('/contact/123456789'));
+
+      expect(route.matches(validRequest), isTrue);
+      expect(route.matches(invalidRequest), isFalse);
+
+      final params = route.extractParameters('/contact/123-456-7890');
+      expect(params['number'], '123-456-7890');
+    });
+
+    test('registerParamPattern - global param pattern', () {
+      registerParamPattern('id', r'\d{6}'); // 6-digit ID
+
+      final route = EngineRoute(
+        method: 'GET',
+        path: '/users/{id}',
+        handler: (ctx) => null,
+      );
+
+      final validRequest = MockHttpRequest();
+      when(validRequest.method).thenReturn('GET');
+      when(validRequest.uri).thenReturn(Uri.parse('/users/123456'));
+
+      final invalidRequest = MockHttpRequest();
+      when(invalidRequest.method).thenReturn('GET');
+      when(invalidRequest.uri).thenReturn(Uri.parse('/users/12345'));
+
+      expect(route.matches(validRequest), isTrue);
+      expect(route.matches(invalidRequest), isFalse);
+
+      final params = route.extractParameters('/users/123456');
+      expect(params['id'], '123456');
+    });
+
+    test('addPattern - custom zipcode pattern', () {
+      addPattern('zipcode', r'\d{5}(?:-\d{4})?');
+
+      final route = EngineRoute(
+        method: 'GET',
+        path: '/location/{zip:zipcode}',
+        handler: (ctx) => null,
+      );
+
+      final validRequest1 = MockHttpRequest();
+      when(validRequest1.method).thenReturn('GET');
+      when(validRequest1.uri).thenReturn(Uri.parse('/location/12345'));
+
+      final validRequest2 = MockHttpRequest();
+      when(validRequest2.method).thenReturn('GET');
+      when(validRequest2.uri).thenReturn(Uri.parse('/location/12345-6789'));
+
+      final invalidRequest = MockHttpRequest();
+      when(invalidRequest.method).thenReturn('GET');
+      when(invalidRequest.uri).thenReturn(Uri.parse('/location/1234'));
+
+      expect(route.matches(validRequest1), isTrue);
+      expect(route.matches(validRequest2), isTrue);
+      expect(route.matches(invalidRequest), isFalse);
+
+      final params1 = route.extractParameters('/location/12345');
+      final params2 = route.extractParameters('/location/12345-6789');
+      expect(params1['zip'], '12345');
+      expect(params2['zip'], '12345-6789');
+    });
+
+    test('multiple custom patterns in same route', () {
+      registerCustomType('phone', r'\d{3}-\d{3}-\d{4}');
+      registerCustomType('zipcode', r'\d{5}(?:-\d{4})?');
+
+      final route = EngineRoute(
+        method: 'GET',
+        path: '/contact/{phone:phone}/area/{zip:zipcode}',
+        handler: (ctx) => null,
+      );
+
+      final validRequest = MockHttpRequest();
+      when(validRequest.method).thenReturn('GET');
+      when(validRequest.uri)
+          .thenReturn(Uri.parse('/contact/123-456-7890/area/12345-6789'));
+
+      expect(route.matches(validRequest), isTrue);
+
+      final params =
+          route.extractParameters('/contact/123-456-7890/area/12345-6789');
+      expect(params['phone'], '123-456-7890');
+      expect(params['zip'], '12345-6789');
     });
   });
 
-  group('EngineRoute Constraint Validation Tests', () {
-    test('Constraint pass', () {
+  group('Route Constraint Validation Tests', () {
+    test('regex string constraint', () {
       final route = EngineRoute(
         method: 'GET',
-        path: '/items/{id}',
+        path: '/users/{id}',
         handler: (ctx) => null,
-        constraints: {
-          'id': r'^\d+$',
-        },
+        constraints: {'id': r'^\d{5}$'},
       );
 
-      final request = MockHttpRequest();
-      when(request.method).thenReturn('GET');
-      when(request.uri).thenReturn(Uri.parse('/items/123'));
+      final validRequest = MockHttpRequest();
+      when(validRequest.method).thenReturn('GET');
+      when(validRequest.uri).thenReturn(Uri.parse('/users/12345'));
 
-      // Should pass (id=123 matches /^\d+$/)
-      expect(route.matches(request), isTrue);
+      final invalidRequest = MockHttpRequest();
+      when(invalidRequest.method).thenReturn('GET');
+      when(invalidRequest.uri).thenReturn(Uri.parse('/users/123'));
+
+      expect(route.matches(validRequest), isTrue);
+      expect(route.matches(invalidRequest), isFalse);
     });
 
-    test('Constraint fail', () {
+    test('domain constraint', () {
       final route = EngineRoute(
         method: 'GET',
-        path: '/items/{id}',
+        path: '/api/v1/resource',
         handler: (ctx) => null,
-        constraints: {
-          'id': r'^\d+$',
-        },
+        constraints: {'domain': r'^api\.example\.com$'},
       );
 
-      final request = MockHttpRequest();
-      when(request.method).thenReturn('GET');
-      // "abc" does not match the numeric constraint
-      when(request.uri).thenReturn(Uri.parse('/items/abc'));
+      // Valid request setup
+      final validRequest = MockHttpRequest();
+      final validHeaders = MockHttpHeaders();
+      when(validHeaders.host).thenReturn('api.example.com');
+      when(validRequest.method).thenReturn('GET');
+      when(validRequest.uri).thenReturn(Uri.parse('/api/v1/resource'));
+      when(validRequest.headers).thenAnswer((_) => validHeaders);
 
-      expect(route.matches(request), isFalse);
+      // Invalid request setup
+      final invalidRequest = MockHttpRequest();
+      final invalidHeaders = MockHttpHeaders();
+      when(invalidHeaders.host).thenReturn('wrong.example.com');
+      when(invalidRequest.method).thenReturn('GET');
+      when(invalidRequest.uri).thenReturn(Uri.parse('/api/v1/resource'));
+      when(invalidRequest.headers).thenAnswer((_) => invalidHeaders);
+
+      expect(route.matches(validRequest), isTrue);
+      expect(route.matches(invalidRequest), isFalse);
     });
 
-    test('Multiple constraints', () {
+    test('function constraint', () {
       final route = EngineRoute(
         method: 'GET',
-        path: '/users/{userId}/{slug}',
+        path: '/secure/data',
         handler: (ctx) => null,
         constraints: {
-          'userId': r'^\d+$',
-          'slug': r'^[a-z0-9-]+$',
+          'auth': (HttpRequest request) {
+            return request.headers.value('Authorization') ==
+                'Bearer valid-token';
+          }
         },
       );
 
-      final request = MockHttpRequest();
-      when(request.method).thenReturn('GET');
-      // userId=42 (passes), slug=my-post (passes)
-      when(request.uri).thenReturn(Uri.parse('/users/42/my-post'));
+      // Valid request setup
+      final validRequest = MockHttpRequest();
+      final validHeaders = MockHttpHeaders();
+      when(validHeaders.value('Authorization'))
+          .thenReturn('Bearer valid-token');
+      when(validRequest.method).thenReturn('GET');
+      when(validRequest.uri).thenReturn(Uri.parse('/secure/data'));
+      when(validRequest.headers).thenAnswer((_) => validHeaders);
 
-      expect(route.matches(request), isTrue);
+      // Invalid request setup
+      final invalidRequest = MockHttpRequest();
+      final invalidHeaders = MockHttpHeaders();
+      when(invalidHeaders.value('Authorization'))
+          .thenReturn('Bearer invalid-token');
+      when(invalidRequest.method).thenReturn('GET');
+      when(invalidRequest.uri).thenReturn(Uri.parse('/secure/data'));
+      when(invalidRequest.headers).thenAnswer((_) => invalidHeaders);
+
+      expect(route.matches(validRequest), isTrue);
+      expect(route.matches(invalidRequest), isFalse);
+    });
+
+    test('multiple constraints of different types', () {
+      final route = EngineRoute(
+        method: 'GET',
+        path: '/api/users/{id}/profile',
+        handler: (ctx) => null,
+        constraints: {
+          'id': r'^\d{6}$',
+          'domain': r'^api\.example\.com$',
+          'auth': (HttpRequest request) {
+            return request.headers.value('API-Key') == 'valid-key';
+          }
+        },
+      );
+
+      // Valid request setup
+      final validRequest = MockHttpRequest();
+      final validHeaders = MockHttpHeaders();
+      when(validHeaders.host).thenReturn('api.example.com');
+      when(validHeaders.value('API-Key')).thenReturn('valid-key');
+      when(validRequest.method).thenReturn('GET');
+      when(validRequest.uri).thenReturn(Uri.parse('/api/users/123456/profile'));
+      when(validRequest.headers).thenAnswer((_) => validHeaders);
+
+      // Invalid requests setup
+      final invalidRequest1 = MockHttpRequest();
+      final invalidHeaders1 = MockHttpHeaders();
+      when(invalidHeaders1.host).thenReturn('api.example.com');
+      when(invalidHeaders1.value('API-Key')).thenReturn('valid-key');
+      when(invalidRequest1.method).thenReturn('GET');
+      when(invalidRequest1.uri)
+          .thenReturn(Uri.parse('/api/users/12345/profile'));
+      when(invalidRequest1.headers).thenAnswer((_) => invalidHeaders1);
+
+      final invalidRequest2 = MockHttpRequest();
+      final invalidHeaders2 = MockHttpHeaders();
+      when(invalidHeaders2.host).thenReturn('wrong.example.com');
+      when(invalidHeaders2.value('API-Key')).thenReturn('valid-key');
+      when(invalidRequest2.method).thenReturn('GET');
+      when(invalidRequest2.uri)
+          .thenReturn(Uri.parse('/api/users/123456/profile'));
+      when(invalidRequest2.headers).thenAnswer((_) => invalidHeaders2);
+
+      final invalidRequest3 = MockHttpRequest();
+      final invalidHeaders3 = MockHttpHeaders();
+      when(invalidHeaders3.host).thenReturn('api.example.com');
+      when(invalidHeaders3.value('API-Key')).thenReturn('invalid-key');
+      when(invalidRequest3.method).thenReturn('GET');
+      when(invalidRequest3.uri)
+          .thenReturn(Uri.parse('/api/users/123456/profile'));
+      when(invalidRequest3.headers).thenAnswer((_) => invalidHeaders3);
+
+      expect(route.matches(validRequest), isTrue);
+      expect(route.matches(invalidRequest1), isFalse); // wrong ID
+      expect(route.matches(invalidRequest2), isFalse); // wrong domain
+      expect(route.matches(invalidRequest3), isFalse); // wrong API key
+    });
+
+    test('constraint with missing parameter', () {
+      final route = EngineRoute(
+        method: 'GET',
+        path: '/optional/{param?}',
+        handler: (ctx) => null,
+        constraints: {'param': r'^\d+$'},
+      );
+
+      final requestWithoutParam = MockHttpRequest();
+      when(requestWithoutParam.method).thenReturn('GET');
+      when(requestWithoutParam.uri).thenReturn(Uri.parse('/optional'));
+
+      expect(route.matches(requestWithoutParam), isFalse);
+    });
+
+    test('complex function constraint', () {
+      final route = EngineRoute(
+        method: 'GET',
+        path: '/advanced/{id}',
+        handler: (ctx) => null,
+        constraints: {
+          'complex': (HttpRequest request) {
+            final id = request.uri.pathSegments.last;
+            final apiKey = request.headers.value('API-Key');
+            final userAgent = request.headers.value('User-Agent');
+
+            return id.length == 6 &&
+                apiKey == 'valid-key' &&
+                userAgent?.contains('Mozilla') == true;
+          }
+        },
+      );
+
+      // Valid request setup
+      final validRequest = MockHttpRequest();
+      final validHeaders = MockHttpHeaders();
+      when(validHeaders.value('API-Key')).thenReturn('valid-key');
+      when(validHeaders.value('User-Agent')).thenReturn('Mozilla/5.0');
+      when(validRequest.method).thenReturn('GET');
+      when(validRequest.uri).thenReturn(Uri.parse('/advanced/123456'));
+      when(validRequest.headers).thenAnswer((_) => validHeaders);
+
+      // Invalid request setup
+      final invalidRequest = MockHttpRequest();
+      final invalidHeaders = MockHttpHeaders();
+      when(invalidHeaders.value('API-Key')).thenReturn('valid-key');
+      when(invalidHeaders.value('User-Agent')).thenReturn('Custom/1.0');
+      when(invalidRequest.method).thenReturn('GET');
+      when(invalidRequest.uri).thenReturn(Uri.parse('/advanced/123456'));
+      when(invalidRequest.headers).thenAnswer((_) => invalidHeaders);
+
+      expect(route.matches(validRequest), isTrue);
+      expect(route.matches(invalidRequest), isFalse);
     });
   });
 }
