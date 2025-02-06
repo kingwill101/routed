@@ -1,0 +1,18 @@
+{% assign page_title = 'About Us' %}
+{% assign footer_text = 'Learn more about our team.' %}
+
+{% render "partials/header.liquid" %}
+
+<h1>About Us</h1>
+
+<div class="content">
+    <p>{{ description }}</p>
+    <h2>Our Team:</h2>
+    <ul>
+        {% for member in team_members %}
+            <li>{{ member.name }} - {{ member.role }}</li>
+        {% endfor %}
+    </ul>
+</div>
+
+{% render "partials/footer.liquid" %}

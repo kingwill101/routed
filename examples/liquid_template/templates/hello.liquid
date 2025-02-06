@@ -1,0 +1,16 @@
+{% assign page_title = 'Hello Example' %}
+{% assign footer_text = 'Simple Hello Template Example' %}
+
+{% render "partials/header.liquid" %}
+
+<h1>Hello {{ name }}!</h1>
+
+{% if show_list %}
+    <ul>
+    {% for item in items %}
+        <li>{{ item | upcase }}</li>
+    {% endfor %}
+    </ul>
+{% endif %}
+
+{% render "partials/footer.liquid" %}

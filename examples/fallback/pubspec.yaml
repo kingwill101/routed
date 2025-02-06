@@ -1,7 +1,7 @@
-name: basic_router_example
+name: fallback_example
 environment:
   sdk: ">=3.6.0 <4.0.0"
 dependencies:
   routed:
     path: ../../packages/routed
-  http: ^1.1.0 
+  http: ^1.1.0

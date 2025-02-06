@@ -1,0 +1,14 @@
+{% extends "hello.html" %} {% block content %}
+<div
+    style="
+        margin-top: 20px;
+        padding: 10px;
+        background: #f5f5f5;
+        border-radius: 4px;
+    "
+>
+    <p>Extended content here</p>
+    <p>This template inherits from hello.html</p>
+    <p>The current user is: {{ name }}</p>
+</div>
+{% endblock %}

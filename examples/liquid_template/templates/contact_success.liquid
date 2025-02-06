@@ -1,0 +1,13 @@
+{% assign page_title = 'Contact Form Submitted' %}
+{% assign footer_text = 'Thank you for contacting us!' %}
+
+{% render "partials/header.liquid" %}
+
+<h1>Thank You!</h1>
+
+<div class="content">
+    <p>{{ message }}</p>
+    <p><a href="/contact">Back to Contact Page</a></p>
+</div>
+
+{% render "partials/footer.liquid" %}
