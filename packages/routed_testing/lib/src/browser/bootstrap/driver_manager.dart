@@ -17,14 +17,14 @@ class DriverManager {
   static Future<void> ensureDriver(String browser, {int port = 4444}) async {
     final driver = _getDriver(browser);
     final targetDir = path.join(BrowserPaths.getRegistryDirectory(), 'drivers');
-    
+
     print('Ensuring driver directory exists: $targetDir');
     await Directory(targetDir).create(recursive: true);
 
     // Always run setup first
     print('Setting up driver...');
     await driver.setup(targetDir);
-    
+
     print('Starting driver...');
     await driver.start(port: port);
     _activePorts[browser] = port;

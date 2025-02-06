@@ -5,7 +5,8 @@ class Version implements Comparable<Version> {
 
   factory Version.parse(String version) {
     // Split on dots and any non-numeric characters
-    final parts = version.split(RegExp(r'[^\d]+'))
+    final parts = version
+        .split(RegExp(r'[^\d]+'))
         .where((part) => part.isNotEmpty)
         .map(int.parse)
         .toList();
@@ -19,9 +20,8 @@ class Version implements Comparable<Version> {
 
   @override
   int compareTo(Version other) {
-    final maxLength = parts.length > other.parts.length
-        ? parts.length
-        : other.parts.length;
+    final maxLength =
+        parts.length > other.parts.length ? parts.length : other.parts.length;
 
     for (var i = 0; i < maxLength; i++) {
       final thisPart = i < parts.length ? parts[i] : 0;
@@ -39,9 +39,8 @@ class Version implements Comparable<Version> {
 
   @override
   bool operator ==(Object other) =>
-    identical(this, other) ||
-    other is Version &&
-      toString() == other.toString();
+      identical(this, other) ||
+      other is Version && toString() == other.toString();
 
   @override
   int get hashCode => toString().hashCode;

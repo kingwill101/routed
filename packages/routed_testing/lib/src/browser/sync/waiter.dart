@@ -1,5 +1,6 @@
 import 'dart:io' show sleep;
-import 'package:webdriver/sync_core.dart' show By, TimeoutException, WebDriver, WebElement;
+import 'package:webdriver/sync_core.dart'
+    show By, TimeoutException, WebDriver, WebElement;
 import '../interfaces/waiter.dart';
 import 'browser.dart';
 
@@ -7,7 +8,8 @@ class SyncBrowserWaiter implements BrowserWaiter {
   final SyncBrowser browser;
   final Duration defaultTimeout;
 
-  SyncBrowserWaiter(this.browser, [this.defaultTimeout = const Duration(seconds: 5)]);
+  SyncBrowserWaiter(this.browser,
+      [this.defaultTimeout = const Duration(seconds: 5)]);
 
   @override
   void waitFor(String selector, [Duration? timeout]) {

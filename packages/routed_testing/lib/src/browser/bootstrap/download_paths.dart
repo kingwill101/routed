@@ -45,8 +45,7 @@ final executablePaths = {
     'linux': ['chrome-linux', 'chrome'],
     'mac': ['chrome-mac', 'Chromium.app', 'Contents', 'MacOS', 'Chromium'],
     'win': ['chrome-win', 'chrome.exe'],
-
- },
+  },
   'firefox': {
     'linux': ['firefox', 'firefox'],
     'mac': ['firefox', 'Nightly.app', 'Contents', 'MacOS', 'firefox'],
@@ -58,4 +57,4 @@ final playwrightCdnMirrors = [
   'https://playwright.azureedge.net',
   'https://playwright-akamai.azureedge.net',
   'https://playwright-verizon.azureedge.net',
-]; 
+];

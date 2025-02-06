@@ -66,6 +66,7 @@ class BrowserDescriptor {
 }
 
 enum ExecutableType { browser, tool, channel }
+
 enum InstallType { downloadByDefault, downloadOnDemand, installScript, none }
 
 class Executable {
@@ -95,4 +96,3 @@ class Executable {
     this.install,
   });
 }
-

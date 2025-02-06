@@ -44,6 +44,7 @@ abstract class Lock {
   ///
   /// Returns true if the lock is owned by the current process, otherwise false.
   FutureOr<bool> isOwnedByCurrentProcess();
+
   /// Forcefully releases the lock regardless of the current owner.
   void forceRelease();
 }

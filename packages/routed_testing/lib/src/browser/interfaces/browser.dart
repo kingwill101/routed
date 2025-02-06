@@ -2,8 +2,7 @@ import 'dart:async';
 
 import 'package:routed_testing/src/browser/interfaces/assertions.dart';
 
-
-mixin Browser on BrowserAssertions{
+mixin Browser on BrowserAssertions {
   FutureOr<void> visit(String url);
   FutureOr<void> back();
   FutureOr<void> forward();

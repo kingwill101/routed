@@ -12,8 +12,8 @@ class BrowserLogger {
   BrowserLogger({
     String logDir = 'test/logs',
     bool verbose = false,
-  }) : _logDir = Directory(logDir),
-       _verbose = verbose {
+  })  : _logDir = Directory(logDir),
+        _verbose = verbose {
     if (!_logDir.existsSync()) {
       _logDir.createSync(recursive: true);
     }
@@ -22,7 +22,8 @@ class BrowserLogger {
   void startTestLog(String testName) {
     final sanitizedName = testName.replaceAll(RegExp(r'[^a-zA-Z0-9]'), '_');
     final timestamp = DateTime.now().toIso8601String().replaceAll(':', '-');
-    final logFile = File(path.join(_logDir.path, '${sanitizedName}_$timestamp.log'));
+    final logFile =
+        File(path.join(_logDir.path, '${sanitizedName}_$timestamp.log'));
     _currentTestLog = logFile.openWrite();
     info('Starting test: $testName');
     _writeMetadata();
@@ -30,7 +31,8 @@ class BrowserLogger {
 
   void _writeMetadata() {
     info('Test Environment:');
-    info('  Platform: ${Platform.operatingSystem} ${Platform.operatingSystemVersion}');
+    info(
+        '  Platform: ${Platform.operatingSystem} ${Platform.operatingSystemVersion}');
     info('  Dart: ${Platform.version}');
     info('  Directory: ${Directory.current.path}');
     info('  PID: $pid');
@@ -46,7 +48,7 @@ class BrowserLogger {
     if (_verbose) {
       final entry = _formatLogEntry('DEBUG', message);
       _write(entry);
-      
+
       if (stackTrace != null) {
         _write(_formatLogEntry('DEBUG', 'Stack trace:\n$stackTrace'));
       }
@@ -56,11 +58,11 @@ class BrowserLogger {
   void error(String message, [dynamic error, StackTrace? stackTrace]) {
     final entry = _formatLogEntry('ERROR', message);
     _write(entry);
-    
+
     if (error != null) {
       _write(_formatLogEntry('ERROR', 'Cause: $error'));
     }
-    
+
     if (stackTrace != null) {
       _write(_formatLogEntry('ERROR', 'Stack trace:\n$stackTrace'));
     }
@@ -86,8 +88,9 @@ class BrowserLogger {
   Future<void> saveTestReport(String testName) async {
     final sanitizedName = testName.replaceAll(RegExp(r'[^a-zA-Z0-9]'), '_');
     final timestamp = DateTime.now().toIso8601String().replaceAll(':', '-');
-    final reportFile = File(path.join(_logDir.path, '${sanitizedName}_report_$timestamp.txt'));
-    
+    final reportFile =
+        File(path.join(_logDir.path, '${sanitizedName}_report_$timestamp.txt'));
+
     final report = StringBuffer()
       ..writeln('Test Report: $testName')
       ..writeln('Timestamp: ${DateTime.now()}')
@@ -95,15 +98,17 @@ class BrowserLogger {
       ..writeln('---\n')
       ..writeln('Complete Log:')
       ..writeln(_memoryLog.toString());
-    
+
     await reportFile.writeAsString(report.toString());
   }
 
-  Future<void> saveBrowserLogs(String testName, List<Map<String, dynamic>> logs) async {
+  Future<void> saveBrowserLogs(
+      String testName, List<Map<String, dynamic>> logs) async {
     final sanitizedName = testName.replaceAll(RegExp(r'[^a-zA-Z0-9]'), '_');
     final timestamp = DateTime.now().toIso8601String().replaceAll(':', '-');
-    final logFile = File(path.join(_logDir.path, '${sanitizedName}_browser_$timestamp.json'));
-    
+    final logFile = File(
+        path.join(_logDir.path, '${sanitizedName}_browser_$timestamp.json'));
+
     await logFile.writeAsString(
       JsonEncoder.withIndent('  ').convert({
         'timestamp': timestamp,

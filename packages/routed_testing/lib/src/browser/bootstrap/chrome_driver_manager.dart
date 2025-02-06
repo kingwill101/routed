@@ -12,12 +12,11 @@ class ChromeDriverManager implements WebDriverManager {
     final metadata = await _fetchDriverMetadata();
     final chromeVersion = await _getInstalledChromeVersion();
     final majorVersion = chromeVersion.split('.').first;
-    
+
     final driverUrl = _getDriverUrlForPlatform(
-      metadata['milestones'][majorVersion]['downloads']['chromedriver'],
-      _getCurrentPlatform()
-    );
-    
+        metadata['milestones'][majorVersion]['downloads']['chromedriver'],
+        _getCurrentPlatform());
+
     final zipPath = path.join(targetDir, 'chromedriver.zip');
     await _downloadDriver(driverUrl, zipPath);
     await _extractDriver(zipPath, targetDir);
@@ -36,7 +35,8 @@ class ChromeDriverManager implements WebDriverManager {
   String _getDriverUrlForPlatform(List<dynamic> downloads, String platform) {
     final download = downloads.firstWhere(
       (d) => d['platform'] == platform,
-      orElse: () => throw Exception('No ChromeDriver available for platform: $platform'),
+      orElse: () =>
+          throw Exception('No ChromeDriver available for platform: $platform'),
     );
     return download['url'];
   }
@@ -44,7 +44,8 @@ class ChromeDriverManager implements WebDriverManager {
   Future<void> _downloadDriver(String url, String outputPath) async {
     final response = await http.get(Uri.parse(url));
     if (response.statusCode != 200) {
-      throw Exception('Failed to download ChromeDriver: ${response.statusCode}');
+      throw Exception(
+          'Failed to download ChromeDriver: ${response.statusCode}');
     }
     await File(outputPath).writeAsBytes(response.bodyBytes);
   }
@@ -55,7 +56,7 @@ class ChromeDriverManager implements WebDriverManager {
     } else {
       await Process.run('unzip', ['-o', zipPath], workingDirectory: targetDir);
     }
-    
+
     // Set executable permissions on Unix-like systems
     if (!Platform.isWindows) {
       final driverPath = path.join(targetDir, 'chromedriver');
@@ -121,8 +122,7 @@ class ChromeDriverManager implements WebDriverManager {
   // Private helper methods
   Future<Map<String, dynamic>> _fetchDriverMetadata() async {
     final response = await http.get(Uri.parse(
-      'https://googlechromelabs.github.io/chrome-for-testing/latest-versions-per-milestone-with-downloads.json'
-    ));
+        'https://googlechromelabs.github.io/chrome-for-testing/latest-versions-per-milestone-with-downloads.json'));
     return json.decode(response.body);
   }
 

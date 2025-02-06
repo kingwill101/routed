@@ -25,11 +25,13 @@ class BrowserProcess {
     );
 
     // Handle stdout
-    _process!.stdout.transform(const SystemEncoding().decoder)
+    _process!.stdout
+        .transform(const SystemEncoding().decoder)
         .listen(_outputController.add);
 
     // Handle stderr
-    _process!.stderr.transform(const SystemEncoding().decoder)
+    _process!.stderr
+        .transform(const SystemEncoding().decoder)
         .listen(_outputController.add);
   }
 

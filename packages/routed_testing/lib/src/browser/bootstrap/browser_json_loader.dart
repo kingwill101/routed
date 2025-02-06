@@ -6,7 +6,7 @@ import 'browser_json.dart';
 class BrowserJsonLoader {
   static Future<BrowserJson> load() async {
     final file = File(path.join(Directory.current.path, 'browsers.json'));
-    
+
     // If file doesn't exist, return default configuration
     if (!await file.exists()) {
       print('No browsers.json found, using default configuration');
@@ -16,6 +16,7 @@ class BrowserJsonLoader {
     final content = await file.readAsString();
     return BrowserJson.fromJson(json.decode(content) as Map<String, dynamic>);
   }
+
   static BrowserJson _createDefaultConfig() {
     return BrowserJson(
       comment: 'Default browser configuration',

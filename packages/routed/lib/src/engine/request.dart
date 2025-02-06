@@ -200,7 +200,6 @@ extension ServerExtension on Engine {
       // Customize the body for dev, staging, or production:
       ctx.string('An unexpected error occurred. Please try again later.',
           statusCode: HttpStatus.internalServerError);
-
     }
 
     // Make sure no further processing occurs.
