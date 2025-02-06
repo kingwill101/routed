@@ -1,0 +1,97 @@
+---
+title: Header Extensions
+description: Learn about HTTP header utilities in Routed testing
+---
+
+# Header Extensions
+
+Routed provides utilities for working with HTTP headers in tests through the `HttpHeaderExtension`.
+
+## Converting Headers to Map
+
+The `toMap()` extension method converts HttpHeaders to a Map for easier manipulation:
+
+```dart
+test('header manipulation', () {
+  final response = await client.get('/api');
+  
+  // Get headers as map
+  final headerMap = response.headers.toMap();
+  
+  // Access header values
+  final contentType = headerMap['content-type'];
+  final authorization = headerMap['authorization'];
+  
+  // Headers are preserved as lists
+  expect(headerMap['accept'], isList);
+});
+```
+
+## Working with Header Maps
+
+Use the header map for testing and manipulation:
+
+```dart
+test('verify headers', () async {
+  final response = await client.get('/api');
+  final headers = response.headers.toMap();
+  
+  // Check header existence
+  expect(headers.containsKey('content-type'), isTrue);
+  
+  // Check header values
+  expect(
+    headers['content-type']?[0],
+    equals('application/json')
+  );
+  
+  // Check multiple values
+  expect(
+    headers['accept']?.length,
+    greaterThan(1)
+  );
+});
+```
+
+## Best Practices
+
+1. Convert Once, Use Multiple Times:
+```dart
+test('header checks', () async {
+  final response = await client.get('/api');
+  final headers = response.headers.toMap();
+  
+  // Multiple checks on same headers
+  expect(headers['x-version'], isNotNull);
+  expect(headers['x-api-key'], isNotNull);
+  expect(headers['content-type'], contains('json'));
+});
+```
+
+2. Handle Missing Headers:
+```dart
+test('optional headers', () async {
+  final response = await client.get('/api');
+  final headers = response.headers.toMap();
+  
+  // Safe access with null checks
+  final cacheControl = headers['cache-control']?.first;
+  if (cacheControl != null) {
+    expect(cacheControl, contains('max-age='));
+  }
+});
+```
+
+3. Check Multiple Values:
+```dart
+test('multiple header values', () async {
+  final response = await client.get('/api');
+  final headers = response.headers.toMap();
+  
+  // Check all values in allow header
+  expect(
+    headers['allow'],
+    containsAll(['GET', 'POST', 'PUT'])
+  );
+});
+```

@@ -1,0 +1,384 @@
+---
+title: Routing
+description: Learn about routing in the Routed framework
+---
+
+# Routing
+
+Routed provides a powerful and flexible routing system with two ways to define routes:
+
+1. Directly on the Engine:
+```dart
+final engine = Engine();
+
+engine.get('/hello', (ctx) => ctx.string('Hello World!'));
+engine.post('/users', createUser);
+```
+
+2. Using separate Routers (great for modularization):
+```dart
+final v1 = Router(path: '/v1');
+final v2 = Router(path: '/v2');
+
+// API version 1 routes
+v1.get('/users', getUsers);
+v1.post('/users', createUserV1);
+
+// API version 2 routes
+v2.get('/users', getUsers);
+v2.post('/users', createUserV2);
+
+// Mount routers to engine
+engine.use(v1);
+engine.use(v2);
+```
+
+## Route Definition
+
+## Basic Routes
+
+The most basic route definition accepts a URI pattern and a closure:
+
+```dart
+router.get('/hello', (ctx) {
+  ctx.string('Hello World!');
+});
+```
+
+## Route Parameters
+
+### Basic Parameters
+
+Routes can capture URI segments using parameters:
+
+```dart
+router.get('/users/{id}', (ctx) {
+  final id = ctx.param('id');
+  ctx.json({'user_id': id});
+});
+```
+
+### Optional Parameters 
+
+Make parameters optional by adding a `?`:
+
+```dart
+router.get('/posts/{page?}', (ctx) {
+  final page = ctx.param('page') ?? '1';
+  ctx.json({'page': page});
+});
+```
+
+### Type Constraints
+
+Add type constraints to parameters:
+
+```dart
+// Integer constraint
+router.get('/items/{id:int}', (ctx) {
+  final id = ctx.param('id'); // Returns integer
+});
+
+// Double constraint
+router.get('/prices/{amount:double}', (ctx) {
+  final amount = ctx.param('amount'); // Returns double
+});
+```
+
+### Available Type Constraints
+### Wildcard Parameters
+
+Capture remaining path segments using wildcards:
+
+```dart
+// Matches /files/path/to/any/file
+engine.get('/files/{*path}', (ctx) {
+  final path = ctx.param('path'); // "path/to/any/file"
+  // Serve file from path...
+});
+```
+
+- `int`: Integer values
+- `double`: Floating point numbers
+- `uuid`: UUID strings
+- `slug`: URL-friendly slugs
+- `email`: Email addresses
+- `url`: Valid URLs
+- `ip`: IP addresses
+
+## Route Groups
+
+Group related routes together. Groups can be created both on Engine and Router:
+
+```dart
+// On Engine
+engine.group(
+  path: '/admin',
+  middlewares: [authMiddleware],
+  builder: (router) {
+    router.get('/dashboard', dashboardHandler);
+    router.get('/users', usersHandler);
+  },
+);
+
+// Using Router for API versioning
+final api = Router(path: '/api');
+
+api.group(
+  path: '/v1',
+  builder: (v1) {
+    v1.get('/users', getUsersV1);
+    v1.post('/users', createUserV1);
+  }
+);
+
+api.group(
+  path: '/v2',
+  builder: (v2) {
+    v2.get('/users', getUsersV2);
+    v2.post('/users', createUserV2);
+  }
+);
+
+engine.use(api);
+```
+
+Groups can be nested and share middleware:
+
+```dart
+engine.group(
+  path: '/admin',
+  middlewares: [authMiddleware],
+  builder: (admin) {
+    admin.get('/dashboard', dashboardHandler);
+    
+    admin.group(
+      path: '/users',
+      middlewares: [userPermissionsMiddleware],
+      builder: (users) {
+        users.get('/', listUsers);
+        users.post('/', createUser);
+        users.get('/{id}', getUser);
+      }
+    );
+  }
+);
+```
+
+## Route Naming
+
+Name your routes for URL generation:
+
+```dart
+router
+  .get('/articles/{slug}', articleHandler)
+  .name('articles.show');
+
+// Generate URL
+final url = route('articles.show', {'slug': 'hello-world'});
+```
+
+## HTTP Methods
+
+Routed supports all common HTTP methods:
+
+```dart
+router.get('/users', getUsers);
+router.post('/users', createUser);
+router.put('/users/{id}', updateUser);
+router.delete('/users/{id}', deleteUser);
+router.patch('/users/{id}', patchUser);
+```
+
+## Constraints
+
+### Regular Expression Constraints
+
+Add custom regex patterns to validate parameters:
+
+```dart
+// Product code must be 2 letters followed by 3 numbers (e.g., AB123)
+engine.get('/products/{code}', handler, 
+  constraints: {
+    'code': r'^[A-Z]{2}\d{3}$'
+  }
+);
+
+// Username must be alphanumeric, 3-16 characters
+engine.get('/users/{username}', handler,
+  constraints: {
+    'username': r'^[a-zA-Z0-9]{3,16}$'
+  }
+);
+
+// Multiple constraints
+engine.get('/orders/{year}/{id}', handler,
+  constraints: {
+    'year': r'^\d{4}$',
+    'id': r'^\d{6}$'
+  }
+);
+```
+
+### Domain Constraints
+
+Restrict routes to specific domains or subdomains:
+
+```dart
+// Admin panel only accessible from admin subdomain
+engine.get('/dashboard', handler,
+  constraints: {
+    'domain': r'^admin\.example\.com$'
+  }
+);
+
+// API routes restricted to api subdomain
+engine.group(
+  path: '/v1',
+  constraints: {
+    'domain': r'^api\.example\.com$'
+  },
+  builder: (api) {
+    api.get('/users', listUsers);
+    api.post('/users', createUser);
+  }
+);
+
+// Multiple domains
+engine.get('/shared', handler,
+  constraints: {
+    'domain': r'^(api|admin)\.example\.com$'
+  }
+);
+```
+
+### Custom Constraints
+
+Add custom validation functions:
+
+```dart
+engine.get('/users/{id}', handler,
+  constraints: {
+    // Custom function constraint
+    'id': (request) => request.headers['X-User-Role'] == 'admin'
+  }
+);
+
+// Combine with other constraints
+engine.get('/files/{path}', handler,
+  constraints: {
+    'path': r'^[a-zA-Z0-9/]+$',
+    'access': (request) => checkUserPermissions(request)
+  }
+);
+```
+
+## Fallback Routes
+
+Handle unmatched requests:
+## Route Naming and URL Generation
+
+Name your routes to generate URLs:
+
+```dart
+// On Engine
+engine
+  .get('/articles/{slug}', showArticle)
+  .name('article.show');
+
+engine
+  .post('/articles', createArticle)
+  .name('article.create');
+
+// On Router
+final blog = Router(path: '/blog');
+
+blog
+  .get('/posts/{id}/edit', editPost)
+  .name('post.edit');
+
+// Generate URLs
+final url1 = engine.route('article.show', {'slug': 'hello-world'});
+// Output: /articles/hello-world
+
+final url2 = engine.route('post.edit', {'id': '123'});
+// Output: /blog/posts/123/edit
+```
+
+## Route Parameters and Wildcards
+
+### Basic Parameters
+```dart
+// Required parameter
+engine.get('/users/{id}', (ctx) {
+  final id = ctx.param('id');
+});
+
+// Optional parameter
+engine.get('/posts/{page?}', (ctx) {
+  final page = ctx.param('page') ?? '1';
+});
+
+// Multiple parameters
+engine.get('/orders/{year}/{month}/{id}', (ctx) {
+  final year = ctx.param('year');
+  final month = ctx.param('month');
+  final id = ctx.param('id');
+});
+```
+
+### Wildcard Parameters
+```dart
+// Match all files in any subdirectory
+engine.get('/files/{*path}', (ctx) {
+  final path = ctx.param('path');
+  // path could be "docs/images/logo.png"
+});
+
+// Match all API versions
+engine.get('/api/{version}/{*rest}', (ctx) {
+  final version = ctx.param('version');
+  final rest = ctx.param('rest');
+});
+```
+
+## Fallback Routes
+
+Handle unmatched requests with different levels of specificity:
+
+```dart
+// Global fallback
+engine.fallback((ctx) {
+  return ctx.json({
+    'error': 'Route not found',
+    'path': ctx.request.path
+  }, statusCode: 404);
+});
+
+// Group-specific fallback
+engine.group(
+  path: '/api',
+  builder: (api) {
+    // Regular routes
+    api.get('/users', listUsers);
+    
+    // API-specific fallback
+    api.fallback((ctx) {
+      return ctx.json({
+        'error': 'API endpoint not found',
+        'endpoint': ctx.request.path,
+        'version': 'v1'
+      }, statusCode: 404);
+    });
+  }
+);
+```
+
+```dart
+router.fallback((ctx) {
+  return ctx.json({
+    'error': 'Route not found',
+    'path': ctx.request.path
+  }, statusCode: 404);
+});
+```

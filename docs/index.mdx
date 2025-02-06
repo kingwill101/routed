@@ -1,0 +1,39 @@
+---
+title: Routed Framework
+description: High-performance Dart web framework with powerful routing capabilities
+---
+
+# Routed Framework
+
+Routed is a modern Dart web framework designed for building scalable web applications with powerful routing capabilities, middleware support, and extensive features.
+
+## Key Features
+
+- **Advanced Routing**: Support for path parameters, query strings, and complex route patterns
+- **Middleware System**: Global, group, and route-specific middleware
+- **Template Engines**: Built-in support for Jinja and Liquid templates
+- **File Handling**: Static file serving and multipart form handling
+- **Session Management**: Robust session handling with multiple storage backends
+- **Request Validation**: Built-in request validation and constraint checking
+
+## Basic Example
+
+Here's a simple example to get you started:
+
+
+import 'package:routed/routed.dart';
+
+void main() async {
+  final engine = Engine();
+  final router = Router();
+
+  // Basic GET route
+  router.get('/hello/{name}', (ctx) {
+    final name = ctx.param('name');
+    ctx.json({'message': 'Hello, $name!'});
+  });
+
+  engine.use(router);
+  await engine.serve(host: '127.0.0.1', port: 8080);
+}
+
