@@ -69,7 +69,8 @@ class CacheManager {
     final factory = _storeFactories[driver];
 
     if (factory == null) {
-      throw ArgumentError('Driver [$driver] is not supported. Supported drivers are: ${_storeFactories.keys.join(", ")}.');
+      throw ArgumentError(
+          'Driver [$driver] is not supported. Supported drivers are: ${_storeFactories.keys.join(", ")}.');
     }
     // Create the underlying store using the factory.
     final storeInstance = factory.create(config);

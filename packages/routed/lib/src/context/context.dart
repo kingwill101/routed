@@ -18,6 +18,7 @@ import 'package:routed/src/render/string_render.dart';
 import 'package:routed/src/render/toml.dart';
 import 'package:routed/src/render/xml.dart';
 import 'package:routed/src/render/yaml.dart';
+import 'package:routed/src/sessions/session.dart';
 
 import '../render/html.dart';
 
@@ -25,7 +26,7 @@ part 'binding.dart';
 part 'error.dart';
 part 'proxy.dart';
 part 'render.dart';
-part 'cache.dart';
+part 'session.dart';
 
 /// The EngineContext is loosely inspired by gin.Context in Go.
 /// It wraps [Request] and [Response], holds arbitrary keys/values,
@@ -58,6 +59,8 @@ class EngineContext {
 
   // Cache for form data
   Map<String, List<String>>? _formCache;
+
+  Session? _session;
 
   /// Unique identifier for tracking, same as request.id.
   final String id;
@@ -219,6 +222,11 @@ class EngineContext {
   /// Helper to start processing the chain from the first handler.
   Future<void> run() async {
     resetHandlers();
+    if (engineConfig.sessionConfig != null) {
+      _session = await engineConfig.sessionConfig!.store
+          .read(request, engineConfig.sessionConfig!.cookieName);
+    }
+
     await next(); // start from index = -1 -> 0
   }
 

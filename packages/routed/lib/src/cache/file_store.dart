@@ -153,7 +153,6 @@ class FileStore implements Store, LockProvider {
     final path = _path(key);
     final file = fileSystem.file(path);
 
-
     if (!file.existsSync()) {
       return _emptyPayload();
     }

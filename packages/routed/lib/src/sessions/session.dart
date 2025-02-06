@@ -1,67 +1,154 @@
+import 'dart:convert';
+import 'dart:math';
+
 import 'package:routed/src/sessions/options.dart';
 
-/// A simple Dart Session, analogous to Gorilla's Session struct.
-/// It holds a generic map of values plus some metadata.
+/// Represents a session with a unique ID and associated data.
 class Session {
-  /// The name of the session.
+  /// The unique identifier for this session.
+  String _id;
+  set id(String value) => _id = value;
+
+  /// Name of the session cookie
   final String name;
 
-  /// A map that holds the session values. The keys are strings and the values can be of any type.
+  /// The session options
+  final Options options;
+
+  /// Map containing the session data.
   final Map<String, dynamic> values;
 
-  /// A boolean flag indicating whether the session is new.
-  bool isNew;
+  /// When the session was created.
+  final DateTime _createdAt;
 
-  /// Options for the session, encapsulated in an Options object.
-  Options options;
+  /// When the session was last accessed.
+  DateTime _lastAccessed;
 
-  /// An optional ID for the session. This can be useful for identifying the session in different storage mechanisms.
-  /// For example, in a CookieStore approach, the ID might be embedded in the cookie.
-  /// In a FilesystemStore, you typically have a separate ID.
-  /// We leave it nullable here.
-  String? id;
+  /// Whether the session has been destroyed.
+  bool _destroyed = false;
 
-  /// Constructor for the Session class.
-  ///
-  /// Takes the following parameters:
-  /// - [name]: The name of the session.
-  /// - [isNew]: A boolean indicating if the session is new.
-  /// - [values]: A map of session values.
-  /// - [options]: Session options.
-  /// - [id]: An optional session ID.
+  /// Whether this is a new session
+  bool _isNew = true;
+
+  /// Creates a new session with the given [id] and optionally [values].
   Session({
+    String? id,
     required this.name,
-    required this.isNew,
-    required this.values,
     required this.options,
-    this.id,
-  });
+    Map<String, dynamic>? values,
+    DateTime? createdAt,
+    DateTime? lastAccessed,
+  })  : _id = id ?? _generateId(),
+        values = values ?? {},
+        _createdAt = createdAt ?? DateTime.now(),
+        _lastAccessed = lastAccessed ?? DateTime.now();
 
-  /// Retrieves and removes flash messages from the session.
-  ///
-  /// Flash messages are temporary messages that are typically used for notifications.
-  /// They are removed from the session once they are accessed.
-  ///
-  /// Takes an optional [key] parameter, which defaults to '_flash'.
-  /// Returns a list of flash messages.
-  List<dynamic> flashes([String key = '_flash']) {
-    final raw = values.remove(key);
-    if (raw is List) {
-      return raw;
-    }
-    return [];
+  /// Serializes the session to a JSON string.
+  String serialize() => jsonEncode(toMap());
+
+  /// Creates a session from a JSON string.
+  static Session deserialize(String data) {
+    final Map<String, dynamic> map = jsonDecode(data) as Map<String, dynamic>;
+    return Session(
+      id: map['id'] as String?,
+      name: map['name'] as String,
+      options: map['options'] as Options,
+      values: Map<String, dynamic>.from(map['values'] as Map),
+      createdAt: DateTime.parse(map['created_at'] as String),
+      lastAccessed: DateTime.parse(map['last_accessed'] as String),
+    )
+      .._destroyed = map['destroyed'] as bool? ?? false
+      .._isNew = map['is_new'] as bool? ?? false;
   }
 
-  /// Adds a flash message to the session.
-  ///
-  /// Flash messages are temporary messages that are typically used for notifications.
-  ///
-  /// Takes a [message] parameter, which is the message to be added.
-  /// Takes an optional [key] parameter, which defaults to '_flash'.
-  void addFlash(dynamic message, [String key = '_flash']) {
-    if (!values.containsKey(key)) {
-      values[key] = <dynamic>[];
-    }
-    (values[key] as List).add(message);
+  /// Generates a random session ID.
+  static String _generateId() {
+    final random = Random.secure();
+    final values = List<int>.generate(32, (i) => random.nextInt(256));
+    return values.map((b) => b.toRadixString(16).padLeft(2, '0')).join('');
   }
+
+  /// Updates the last accessed time to now.
+  void touch() {
+    _lastAccessed = DateTime.now();
+    _isNew = false; // Mark as not new after first access
+  }
+
+  /// Marks the session as destroyed and clears all values.
+  void destroy() {
+    _destroyed = true;
+    values.clear();
+    _id = _generateId(); // Reset ID
+    _lastAccessed = DateTime.now(); // Update last accessed
+    options.setMaxAge(0); // Expire the cookie immediately
+  }
+
+  /// Regenerates the session ID while maintaining the session data.
+  void regenerate() {
+    _id = _generateId();
+    touch();
+  }
+
+  /// The unique identifier for this session.
+  String get id => _id;
+
+  /// When the session was created.
+  DateTime get createdAt => _createdAt;
+
+  /// When the session was last accessed.
+  DateTime get lastAccessed => _lastAccessed;
+
+  /// Whether the session has been destroyed.
+  bool get isDestroyed => _destroyed;
+
+  /// Whether this is a new session
+  bool get isNew => _isNew;
+  set isNew(bool value) => _isNew = value;
+
+  int get age {
+    final now = DateTime.now();
+    if (_lastCalculation != now) {
+      _cachedAge = now.difference(_createdAt).inSeconds;
+      _lastCalculation = now;
+    }
+    return _cachedAge!;
+  }
+
+  int get idleTime {
+    final now = DateTime.now();
+    if (_lastCalculation != now) {
+      _cachedIdleTime = now.difference(_lastAccessed).inSeconds;
+      _lastCalculation = now;
+    }
+    return _cachedIdleTime!;
+  }
+
+  /// Convert session to a map for serialization
+  Map<String, dynamic> toMap() {
+    return {
+      'id': _id,
+      'name': name,
+      'options': options,
+      'values': values,
+      'created_at': _createdAt.toIso8601String(),
+      'last_accessed': _lastAccessed.toIso8601String(),
+      'destroyed': _destroyed,
+      'is_new': _isNew,
+    };
+  }
+
+  T? getValue<T>(String key) {
+    touch(); // Update access time on reads
+    return values[key] as T?;
+  }
+
+  void setValue(String key, dynamic value) {
+    touch(); // Update access time on writes
+    values[key] = value;
+  }
+
+  // Cache for age/idle calculations
+  int? _cachedAge;
+  int? _cachedIdleTime;
+  DateTime? _lastCalculation;
 }
