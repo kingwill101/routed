@@ -3,7 +3,6 @@ import 'package:file/local.dart' as local;
 import 'package:jinja/jinja.dart';
 import 'package:path/path.dart' as p;
 import 'package:routed/src/render/html/template_engine.dart';
-import 'package:jinja/loaders.dart';
 
 /// Creates a default Jinja environment with templates loaded from the file system.
 ///

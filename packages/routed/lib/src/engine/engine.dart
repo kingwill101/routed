@@ -3,15 +3,18 @@ import 'dart:io';
 
 import 'package:fuzzywuzzy/fuzzywuzzy.dart' as fuzzy;
 import 'package:routed/middlewares.dart';
+import 'package:routed/src/config/config.dart';
 import 'package:routed/src/context/context.dart';
+import 'package:routed/src/contracts/config.dart/config.dart';
 import 'package:routed/src/engine/config.dart';
+import 'package:routed/src/engine/engine_opt.dart';
 import 'package:routed/src/request.dart';
 import 'package:routed/src/response.dart';
 import 'package:routed/src/router/route_builder.dart';
 import 'package:routed/src/router/router.dart';
 import 'package:routed/src/router/router_group_builder.dart';
 import 'package:routed/src/router/types.dart';
-import 'package:routed/src/engine/engine_opt.dart';
+import 'package:meta/meta.dart' show visibleForTesting;
 
 part 'engine_route.dart';
 part 'engine_routing.dart';
@@ -19,62 +22,48 @@ part 'mount.dart';
 part 'patterns.dart';
 part 'request.dart';
 
-/// The Engine class is responsible for managing multiple routers, each of which
-/// can be mounted under different prefixes. It also supports optional "engine-level"
-/// middlewares that apply to all routes within the engine. After configuring the routers
-/// and middlewares, you call the `build()` method to produce a flattened route table.
+/// The Engine can mount multiple routers under different prefixes,
+/// each with optional "engine-level" middlewares.
+/// Then you call build() to produce a flattened route table.
 class Engine {
-  /// Configuration settings for the engine.
   final EngineConfig config;
+  final Config _appConfig;
 
-  /// List of mounted routers with their associated prefixes and middlewares.
+  Config get appConfig => _appConfig;
   final List<_EngineMount> _mounts = [];
-
-  /// List of all routes managed by the engine.
   final List<EngineRoute> _engineRoutes = [];
-
-  /// List of middlewares that apply to all routes within the engine.
   List<Middleware> middlewares;
-
-  /// The HTTP server instance.
   HttpServer? _server;
-
-  /// Flag to indicate whether the routes have been initialized.
   bool _routesInitialized = false;
-
-  /// Default router instance.
   final Router _defaultRouter = Router();
 
-  /// Map to track active requests by their ID.
+  // Track active requests
   final Map<String, Request> _activeRequests = {};
 
-  /// Total number of requests handled by the engine.
+  // Optional: Track request metrics
   int _totalRequests = 0;
 
-  /// Getter to retrieve the count of active requests.
   int get activeRequestCount => _activeRequests.length;
 
-  /// Getter to retrieve the total number of requests handled.
   int get totalRequests => _totalRequests;
 
-  /// Constructor for the Engine class.
-  ///
-  /// [config] - Optional configuration settings for the engine.
-  /// [middlewares] - Optional list of middlewares to apply to all routes.
-  /// [options] - Optional list of engine options to apply.
   Engine({
     EngineConfig? config,
     List<Middleware>? middlewares,
     List<EngineOpt>? options,
+    Map<String, dynamic>? configItems,
   })  : config = config ?? EngineConfig(),
+        _appConfig = ConfigImpl(configItems ??
+            {
+              'app.name': 'Routed App',
+              'app.env': 'production',
+              'app.debug': false,
+            }),
         middlewares = middlewares ?? [] {
     // Apply options in order
     options?.forEach((opt) => opt(this));
   }
 
-  /// Factory constructor to create a new Engine instance from an existing one.
-  ///
-  /// [other] - The existing Engine instance to copy.
   factory Engine.from(Engine other) {
     final engine = Engine(config: other.config);
     engine._mounts.addAll(other._mounts);
