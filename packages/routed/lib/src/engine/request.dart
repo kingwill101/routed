@@ -115,10 +115,6 @@ extension ServerExtension on Engine {
       }
 
       if (mostSpecificFallback != null) {
-        // Extract parameters for the fallback route
-        final params = mostSpecificFallback.extractParameters(path);
-        final request =
-            Request(httpRequest, params); // Pass the extracted parameters
         await _handleMatchedRoute(mostSpecificFallback, httpRequest);
         return;
       }

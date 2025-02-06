@@ -12,7 +12,7 @@ class JsonBinding extends Binding {
   /// Decodes the body of the request from JSON format.
   ///
   /// This method reads the bytes from the request body, decodes them into a UTF-8 string,
-  /// and then parses that string into a Map<String, dynamic> using jsonDecode.
+  /// and then parses that string into a `Map<String, dynamic>` using jsonDecode.
   ///
   /// [ctx] - The EngineContext containing the request information.
   ///

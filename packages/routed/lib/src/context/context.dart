@@ -53,12 +53,6 @@ class EngineContext {
   final Engine? _engine;
   final EngineRoute? _route;
 
-  // Cache for query parameters
-  Map<String, List<String>>? _queryCache;
-
-  // Cache for form data
-  Map<String, List<String>>? _formCache;
-
   Session? _session;
 
   /// Unique identifier for tracking, same as request.id.

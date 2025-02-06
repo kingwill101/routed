@@ -41,7 +41,7 @@ class Engine {
   final Map<String, Request> _activeRequests = {};
 
   // Optional: Track request metrics
-  int _totalRequests = 0;
+  final int _totalRequests = 0;
 
   int get activeRequestCount => _activeRequests.length;
 

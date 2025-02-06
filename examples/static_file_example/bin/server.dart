@@ -1,4 +1,5 @@
 import 'dart:io';
+
 import 'package:routed/routed.dart';
 import 'package:routed/src/file_handler.dart';
 
@@ -7,8 +8,9 @@ void main(List<String> args) async {
   final router = Router();
 
   // Create some test files and directories
-  final publicDir = Directory('public')..createSync();
-  final imagesDir = Directory('public/images')..createSync();
+  Directory('public').createSync();
+
+  Directory('public/images').createSync();
 
   // Create some test files
   File('public/index.html')

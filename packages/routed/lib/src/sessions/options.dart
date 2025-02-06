@@ -50,7 +50,7 @@ class Options {
     return Options(
       path: path ?? this.path,
       domain: domain ?? this.domain,
-      maxAge: maxAge ?? this._maxAge,
+      maxAge: maxAge ?? _maxAge,
       secure: secure ?? this.secure,
       httpOnly: httpOnly ?? this.httpOnly,
       partitioned: partitioned ?? this.partitioned,

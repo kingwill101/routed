@@ -34,7 +34,7 @@ class PlatformInfo {
     try {
       final result = Process.runSync('lsb_release', ['-is', '-rs']);
       final distro = result.stdout.toString().toLowerCase().trim();
-      final version = result.stdout.toString().trim();
+      // final version = result.stdout.toString().trim();
 
       // Map known distributions to compatible platforms
       if (distro.contains('debian')) {
