@@ -31,7 +31,6 @@ class EngineRoute {
   /// Whether this is a fallback route
   final bool isFallback;
 
-
   /// Creates a new route with the given properties
   EngineRoute({
     required this.method,
@@ -189,7 +188,7 @@ class EngineRoute {
     if (uri == '*' || uri == '/{__fallback:*}') {
       return _PatternData(RegExp('.*'), {});
     }
-    
+
     final paramInfo = <String, ParamInfo>{};
     var pattern = uri;
 
@@ -217,13 +216,19 @@ class EngineRoute {
     pattern = pattern.replaceAllMapped(RegExp(r'{(\w+)(?::(\w+))?}'), (m) {
       final paramName = m.group(1)!;
       final explicitType = m.group(2);
+
+      // If no explicit type, check for global param pattern
+      final globalPattern = getGlobalParamPattern(paramName);
+      final effectivePattern =
+          explicitType != null ? getPattern(explicitType) : globalPattern;
+
       paramInfo[paramName] = ParamInfo(
         type: explicitType ?? 'string',
         isOptional: false,
         isWildcard: false,
       );
-      final paramPattern = getPattern(explicitType ?? 'string');
-      return '(?<$paramName>${paramPattern ?? r'[^/]+'})';
+
+      return '(?<$paramName>${effectivePattern ?? r'[^/]+'})';
     });
 
     return _PatternData(RegExp('^$pattern\$'), paramInfo);

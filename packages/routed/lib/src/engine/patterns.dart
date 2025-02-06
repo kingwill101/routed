@@ -2,7 +2,7 @@ part of 'engine.dart';
 
 /// Custom type patterns for route parameters.
 /// Maps type names to regular expression patterns.
-final Map<String, String> customTypePatterns = {
+final Map<String, String> builtInTypePatterns = {
   'int': r'\d+',
   'double': r'\d+(\.\d+)?',
   'uuid':
@@ -14,6 +14,9 @@ final Map<String, String> customTypePatterns = {
   'email': r'[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}',
   'url': r'https?://[^\s/$.?#].[^\s]*',
   'ip': r'\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}',
+};
+final Map<String, String> customTypePatterns = {
+  ...builtInTypePatterns,
 };
 
 /// Global param patterns: if a route has {id} with NO explicit type,
@@ -56,4 +59,10 @@ getGlobalParamPattern(String paramName) {
 /// [pattern] The regular expression pattern
 addPattern(String name, String pattern) {
   customTypePatterns[name] = pattern;
+}
+
+@visibleForTesting
+clearCustomPatterns() {
+  customTypePatterns.clear();
+  _globalParamPatterns.clear();
 }

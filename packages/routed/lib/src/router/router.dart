@@ -230,11 +230,12 @@ class Router {
   void build({
     String? parentGroupName,
     List<Middleware> inheritedMiddlewares = const [],
+    String parentPrefix = '', // Add this parameter
   }) {
     // Combine parent's name and ours => effective name
     final effectiveGroupName = _joinNames(parentGroupName, groupName);
 
-    // Merge parent's middlewares + ours
+    // Combine parent's middlewares and ours
     final combinedMW = [...inheritedMiddlewares, ...groupMiddlewares];
 
     // Update direct routes

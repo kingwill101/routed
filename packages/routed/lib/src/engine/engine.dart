@@ -1,7 +1,7 @@
 import 'dart:async';
 import 'dart:io';
 
-import 'package:fuzzywuzzy/fuzzywuzzy.dart';
+import 'package:fuzzywuzzy/fuzzywuzzy.dart' as fuzzy;
 import 'package:routed/middlewares.dart';
 import 'package:routed/src/context/context.dart';
 import 'package:routed/src/engine/config.dart';
@@ -196,87 +196,11 @@ class Engine {
     }
   }
 
-  /// Handle an incoming HTTP request by matching it to the appropriate route.
-  ///
-  /// [httpRequest] - The incoming HTTP request to handle.
-  Future<void> handleRequest(HttpRequest httpRequest) async {
-    _ensureRoutes();
-
-    final request = Request(httpRequest, {});
-    _activeRequests[request.id] = request;
-    _totalRequests++;
-
-    try {
-      final path = httpRequest.uri.path;
-      final method = httpRequest.method;
-
-      // First pass: check for exact route matches
-      final routeMatches = _engineRoutes
-          .map((r) => r.tryMatch(httpRequest))
-          .where((match) => match != null)
-          .toList();
-
-      final exactMatch = routeMatches.where((m) => m!.matched).firstOrNull;
-
-      if (exactMatch != null) {
-        await _handleMatchedRoute(exactMatch.route!, httpRequest);
-        return;
-      }
-
-      // Second pass: handle trailing slash redirects
-      if (config.redirectTrailingSlash) {
-        final alternativePath =
-            path.endsWith('/') ? path.substring(0, path.length - 1) : '$path/';
-
-        final alternativeMatch = _engineRoutes
-            .where((r) => r.path == alternativePath && r.method == method)
-            .firstOrNull;
-
-        if (alternativeMatch != null) {
-          final statusCode = method == 'GET'
-              ? HttpStatus.movedPermanently // 301
-              : HttpStatus.temporaryRedirect; // 307
-
-          httpRequest.response.statusCode = statusCode;
-          httpRequest.response.headers.add('Location', alternativePath);
-          await httpRequest.response.close();
-          return;
-        }
-      }
-
-      // Third pass: handle method not allowed
-      if (config.handleMethodNotAllowed) {
-        final methodMismatches =
-            routeMatches.where((m) => m!.isMethodMismatch).toList();
-
-        if (methodMismatches.isNotEmpty) {
-          // Get all allowed methods for this path
-          final allowedMethods = _engineRoutes
-              .where((r) => r.path == path)
-              .map((r) => r.method)
-              .toSet();
-
-          httpRequest.response.headers.add('Allow', allowedMethods.join(', '));
-          httpRequest.response.statusCode = HttpStatus.methodNotAllowed;
-          await httpRequest.response.close();
-          return;
-        }
-      }
-
-      // No matches found - 404
-      httpRequest.response.statusCode = HttpStatus.notFound;
-      httpRequest.response.write('404 Not Found');
-      await httpRequest.response.close();
-    } finally {
-      _activeRequests.remove(request.id);
-    }
-  }
-
-  /// Retrieve a request by its ID.
-  ///
-  /// [id] - The ID of the request to retrieve.
+  // Add ability to get request by ID
   Request? getRequest(String id) => _activeRequests[id];
 
-  /// Retrieve all active requests.
+  // Add ability to get all active requests (e.g., for admin/monitoring)
   List<Request> get activeRequests => List.unmodifiable(_activeRequests.values);
+
+  get defaultRouter => _defaultRouter;
 }

@@ -105,7 +105,7 @@ extension ServerExtension on Engine {
 
         // Calculate the similarity score between the request path and the static path
         final similarityScore =
-            ratio(path, staticPath.isNotEmpty ? staticPath : "/");
+            fuzzy.ratio(path, staticPath.isNotEmpty ? staticPath : "/");
 
         // Update the most specific fallback route if the similarity score is higher
         if (similarityScore > maxSimilarityScore) {
@@ -200,6 +200,7 @@ extension ServerExtension on Engine {
       // Customize the body for dev, staging, or production:
       ctx.string('An unexpected error occurred. Please try again later.',
           statusCode: HttpStatus.internalServerError);
+
     }
 
     // Make sure no further processing occurs.
