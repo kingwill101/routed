@@ -46,18 +46,14 @@ class BrowserUpdateChecker {
     final content = await file.readAsString();
     final data = jsonDecode(content) as Map<String, dynamic>;
 
-    return Map.fromEntries(
-      data.entries.map((e) => MapEntry(e.key, Version.parse(e.value as String)))
-    );
+    return Map.fromEntries(data.entries
+        .map((e) => MapEntry(e.key, Version.parse(e.value as String))));
   }
 
   Future<void> _saveInstalledBrowsers(Map<String, Version> browsers) async {
     final file = File(path.join(_storageDir.path, _installedBrowsersFile));
-    await file.writeAsString(jsonEncode(
-      Map.fromEntries(
-        browsers.entries.map((e) => MapEntry(e.key, e.value.toString()))
-      )
-    ));
+    await file.writeAsString(jsonEncode(Map.fromEntries(
+        browsers.entries.map((e) => MapEntry(e.key, e.value.toString())))));
   }
 
   Future<void> checkForUpdates() async {

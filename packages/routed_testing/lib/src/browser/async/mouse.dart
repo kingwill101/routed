@@ -48,7 +48,8 @@ class AsyncMouse implements Mouse {
   }
 
   @override
-  Future<Mouse> moveToOffset(String selector, {int? xOffset, int? yOffset}) async {
+  Future<Mouse> moveToOffset(String selector,
+      {int? xOffset, int? yOffset}) async {
     final element = await browser.findElement(selector);
     await driver.mouse.moveTo(
       element: element,

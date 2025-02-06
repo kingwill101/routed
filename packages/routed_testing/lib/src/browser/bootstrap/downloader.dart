@@ -33,13 +33,12 @@ class BrowserDownloader {
     void Function(DownloadProgress)? onProgress,
   }) async {
     print('Starting download from: $url');
-  
+
     final response = await http.get(Uri.parse(url));
     if (response.statusCode != 200) {
       throw BrowserException(
-        'Download failed with status ${response.statusCode}',
-        'Response: ${response.body}'
-      );
+          'Download failed with status ${response.statusCode}',
+          'Response: ${response.body}');
     }
 
     final bytes = response.bodyBytes;
@@ -53,7 +52,7 @@ class BrowserDownloader {
     try {
       final archive = ZipDecoder().decodeBytes(bytes);
       print('Archive contains ${archive.files.length} files');
-      
+
       // List some files for verification
       final fileNames = archive.files.take(5).map((f) => f.name).join(', ');
       print('Sample files: $fileNames');

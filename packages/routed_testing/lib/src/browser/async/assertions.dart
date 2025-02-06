@@ -175,16 +175,16 @@ mixin AsyncBrowserAssertions implements BrowserAssertions {
 
   @override
   Future<Browser> assertRadioSelected(String field, String value) async {
-    final element = await browser.findElement(
-        'input[type="radio"][name="$field"][value="$value"]');
+    final element = await browser
+        .findElement('input[type="radio"][name="$field"][value="$value"]');
     expect(await element.selected, isTrue);
     return browser;
   }
 
   @override
   Future<Browser> assertRadioNotSelected(String field, String value) async {
-    final element = await browser.findElement(
-        'input[type="radio"][name="$field"][value="$value"]');
+    final element = await browser
+        .findElement('input[type="radio"][name="$field"][value="$value"]');
     expect(await element.selected, isFalse);
     return browser;
   }

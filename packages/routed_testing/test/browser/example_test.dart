@@ -21,6 +21,5 @@ void main() async {
 
     await browser.assertSee('Bahasa');
     await browser.assertTitle('Wikwsssipedia');
-
-  },useAsync: false);
+  }, useAsync: false);
 }

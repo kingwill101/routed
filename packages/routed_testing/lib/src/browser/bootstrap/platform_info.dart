@@ -29,7 +29,7 @@ class PlatformInfo {
 
   static String _getLinuxPlatform() {
     final arch = _getArchitecture();
-    
+
     // First try distribution-specific detection
     try {
       final result = Process.runSync('lsb_release', ['-is', '-rs']);
@@ -50,15 +50,15 @@ class PlatformInfo {
     // Check for common package managers to determine distribution family
     if (_hasCommand('pacman')) {
       // Arch-based: Manjaro, Arch, etc.
-      return 'ubuntu22.04-$arch';  // Use Ubuntu build for Arch-based
+      return 'ubuntu22.04-$arch'; // Use Ubuntu build for Arch-based
     }
     if (_hasCommand('dnf') || _hasCommand('yum')) {
       // RedHat family: Fedora, CentOS, etc.
-      return 'ubuntu22.04-$arch';  // Use Ubuntu build for RedHat-based
+      return 'ubuntu22.04-$arch'; // Use Ubuntu build for RedHat-based
     }
     if (_hasCommand('zypper')) {
       // SUSE family
-      return 'ubuntu22.04-$arch';  // Use Ubuntu build for SUSE-based
+      return 'ubuntu22.04-$arch'; // Use Ubuntu build for SUSE-based
     }
 
     // Default to most compatible platform
@@ -68,7 +68,7 @@ class PlatformInfo {
   static String _getMacPlatform() {
     final version = Platform.operatingSystemVersion;
     final isArm = Platform.version.contains('arm');
-    
+
     if (version.contains('Version 13')) {
       return isArm ? 'mac13-arm64' : 'mac13';
     }
@@ -78,7 +78,7 @@ class PlatformInfo {
     if (version.contains('Version 11')) {
       return isArm ? 'mac11-arm64' : 'mac11';
     }
-    
+
     return isArm ? 'mac13-arm64' : 'mac13';
   }
 

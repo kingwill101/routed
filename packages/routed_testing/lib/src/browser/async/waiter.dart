@@ -7,7 +7,8 @@ class AsyncBrowserWaiter implements BrowserWaiter {
   final AsyncBrowser browser;
   final Duration defaultTimeout;
 
-  AsyncBrowserWaiter(this.browser, [this.defaultTimeout = const Duration(seconds: 5)]);
+  AsyncBrowserWaiter(this.browser,
+      [this.defaultTimeout = const Duration(seconds: 5)]);
 
   @override
   Future<void> waitFor(String selector, [Duration? timeout]) async {

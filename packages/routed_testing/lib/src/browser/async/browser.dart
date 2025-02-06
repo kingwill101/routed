@@ -11,7 +11,7 @@ import 'package:routed_testing/src/browser/utils.dart';
 import 'package:webdriver/async_core.dart' show WebDriver, By;
 import '../interfaces/browser.dart';
 
-class AsyncBrowser with AsyncBrowserAssertions implements Browser  {
+class AsyncBrowser with AsyncBrowserAssertions implements Browser {
   final WebDriver driver;
   final BrowserConfig config;
 

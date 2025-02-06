@@ -5,7 +5,7 @@ class BrowserConnection {
   final String host;
   final int port;
   final Duration timeout;
-  
+
   BrowserConnection({
     this.host = 'localhost',
     required this.port,
@@ -14,11 +14,11 @@ class BrowserConnection {
 
   Future<void> waitForConnection() async {
     final stopwatch = Stopwatch()..start();
-    
+
     while (stopwatch.elapsed < timeout) {
       try {
         final socket = await Socket.connect(
-          host, 
+          host,
           port,
           timeout: Duration(seconds: 1),
         );
@@ -28,7 +28,7 @@ class BrowserConnection {
         await Future.delayed(Duration(milliseconds: 100));
       }
     }
-    
+
     throw TimeoutException(
       'Failed to connect to browser on $host:$port',
       timeout,

@@ -1,4 +1,3 @@
-
 import 'dart:async';
 
 import 'package:routed_testing/src/browser/interfaces/browser.dart';

@@ -6,20 +6,21 @@ class InstallationLock {
   final String lockFile;
   File? _lock;
 
-  InstallationLock(this.lockDir) : lockFile = path.join(lockDir, 'install.lock');
+  InstallationLock(this.lockDir)
+      : lockFile = path.join(lockDir, 'install.lock');
 
   Future<void> acquire() async {
     final dir = Directory(lockDir);
     if (!dir.existsSync()) {
       await dir.create(recursive: true);
     }
-    
+
     int attempts = 0;
     const maxAttempts = 60; // 1 minute with 1-second intervals
-    
+
     while (attempts < maxAttempts) {
       try {
-        _lock =  File(lockFile)..createSync(exclusive: true);
+        _lock = File(lockFile)..createSync(exclusive: true);
         await _lock!.writeAsString(pid.toString());
         return;
       } catch (e) {
@@ -31,7 +32,7 @@ class InstallationLock {
         await Future.delayed(Duration(seconds: 1));
       }
     }
-    
+
     throw Exception('Could not acquire lock after $maxAttempts attempts');
   }
 

@@ -53,37 +53,38 @@ class GeckoDriverManager implements WebDriverManager {
     return 'win64.zip';
   }
 
-Future<void> _extractDriver(String archivePath, String targetDir) async {
-  print('Verifying archive exists: ${await File(archivePath).exists()}');
-  print('Archive size: ${await File(archivePath).length()} bytes');
+  Future<void> _extractDriver(String archivePath, String targetDir) async {
+    print('Verifying archive exists: ${await File(archivePath).exists()}');
+    print('Archive size: ${await File(archivePath).length()} bytes');
 
-  // Use -xf instead of -xvzf since it's just a tar file
-  final result = await Process.run('tar', [
-    '-xf',  // Extract, use archive file
-    archivePath,
-    '-C',   // Change to directory
-    targetDir
-  ]);
-  
-  print('Extraction output: ${result.stdout}');
-  print('Extraction errors: ${result.stderr}');
-  print('Extraction exit code: ${result.exitCode}');
-  
-  // List contents after extraction
-  final contents = Directory(targetDir).listSync();
-  print('Target directory contents: ${contents.map((e) => path.basename(e.path)).join(', ')}');
+    // Use -xf instead of -xvzf since it's just a tar file
+    final result = await Process.run('tar', [
+      '-xf', // Extract, use archive file
+      archivePath,
+      '-C', // Change to directory
+      targetDir
+    ]);
 
-  if (!Platform.isWindows) {
-    final driverPath = path.join(targetDir, 'geckodriver');
-    if (await File(driverPath).exists()) {
-      await Process.run('chmod', ['+x', driverPath]);
-      print('Set executable permissions on: $driverPath');
-    } else {
-      print('Driver not found at expected path: $driverPath');
-      throw Exception('Driver extraction failed');
+    print('Extraction output: ${result.stdout}');
+    print('Extraction errors: ${result.stderr}');
+    print('Extraction exit code: ${result.exitCode}');
+
+    // List contents after extraction
+    final contents = Directory(targetDir).listSync();
+    print(
+        'Target directory contents: ${contents.map((e) => path.basename(e.path)).join(', ')}');
+
+    if (!Platform.isWindows) {
+      final driverPath = path.join(targetDir, 'geckodriver');
+      if (await File(driverPath).exists()) {
+        await Process.run('chmod', ['+x', driverPath]);
+        print('Set executable permissions on: $driverPath');
+      } else {
+        print('Driver not found at expected path: $driverPath');
+        throw Exception('Driver extraction failed');
+      }
     }
   }
-}
 
   Future<void> _downloadDriver(String url, String outputPath) async {
     final response = await http.get(Uri.parse(url));

@@ -42,7 +42,7 @@ class BrowserManager {
 
   static Future<void> install(List<String> browsers) async {
     final registry = Registry(
-    await BrowserJsonLoader.load(),
+      await BrowserJsonLoader.load(),
       requestedBrowser: browsers.first, // Pass the first browser as requested
     );
 
