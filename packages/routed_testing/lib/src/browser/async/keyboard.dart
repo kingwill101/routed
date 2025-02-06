@@ -1,5 +1,7 @@
 import 'dart:async';
-import 'package:webdriver/async_core.dart' show WebDriver, WebElement;
+
+import 'package:webdriver/async_core.dart' show WebDriver;
+
 import '../interfaces/keyboard.dart';
 import 'browser.dart';
 

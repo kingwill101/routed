@@ -1,10 +1,11 @@
 import 'dart:async';
 import 'dart:io';
+
 import 'package:routed_testing/src/browser/bootstrap/browser_json_loader.dart';
 import 'package:routed_testing/src/browser/bootstrap/driver_manager.dart';
-import 'package:test/test.dart';
 import 'package:routed_testing/src/browser/bootstrap/registry.dart';
 import 'package:routed_testing/src/browser/logger.dart';
+import 'package:test/test.dart';
 
 class TestBootstrapConfig {
   final String browser;

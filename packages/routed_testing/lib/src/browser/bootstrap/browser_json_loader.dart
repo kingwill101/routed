@@ -1,6 +1,8 @@
-import 'dart:io';
 import 'dart:convert';
+import 'dart:io';
+
 import 'package:path/path.dart' as path;
+
 import 'browser_json.dart';
 
 class BrowserJsonLoader {

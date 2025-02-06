@@ -2,9 +2,10 @@ import 'dart:convert' show jsonEncode, jsonDecode;
 import 'dart:io' show File, Directory;
 
 import 'package:path/path.dart' as path;
+
 import 'browser_registry.dart';
-import 'version.dart';
 import 'version.dart' show Version;
+import 'version.dart';
 
 class BrowserUpdateChecker {
   final Duration checkInterval;

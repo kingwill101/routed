@@ -1,5 +1,5 @@
 import 'dart:async';
-import 'package:routed_testing/src/browser/browser_config.dart';
+
 import 'package:routed_testing/src/browser/async/assertions.dart';
 import 'package:routed_testing/src/browser/async/dialog.dart';
 import 'package:routed_testing/src/browser/async/frame.dart';
@@ -7,8 +7,10 @@ import 'package:routed_testing/src/browser/async/keyboard.dart';
 import 'package:routed_testing/src/browser/async/mouse.dart';
 import 'package:routed_testing/src/browser/async/waiter.dart';
 import 'package:routed_testing/src/browser/async/window.dart';
+import 'package:routed_testing/src/browser/browser_config.dart';
 import 'package:routed_testing/src/browser/utils.dart';
 import 'package:webdriver/async_core.dart' show WebDriver, By;
+
 import '../interfaces/browser.dart';
 
 class AsyncBrowser with AsyncBrowserAssertions implements Browser {

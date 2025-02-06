@@ -1,4 +1,7 @@
+// ignore_for_file: unused_shown_name
+
 import 'package:webdriver/sync_core.dart' show WebDriver, WebElement, By;
+
 import '../interfaces/dialog.dart';
 import 'browser.dart';
 

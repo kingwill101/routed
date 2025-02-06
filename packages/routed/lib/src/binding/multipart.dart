@@ -259,8 +259,8 @@ class MultipartBinding extends Binding {
 
   @override
   Future<void> validate(
-      // ignore: avoid_renaming_method_parameters
       EngineContext context,
+      // ignore: avoid_renaming_method_parameters
       Map<String, String> rules) async {
     final multipartForm = await context.multipartForm;
     final data = multipartForm.fields;

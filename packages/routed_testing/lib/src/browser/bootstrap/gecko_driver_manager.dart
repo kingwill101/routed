@@ -1,7 +1,9 @@
 import 'dart:io';
+
 import 'package:http/http.dart' as http;
 import 'package:path/path.dart' as path;
 import 'package:routed_testing/src/browser/bootstrap/browser_paths.dart';
+
 import 'driver_interface.dart';
 
 class GeckoDriverManager implements WebDriverManager {

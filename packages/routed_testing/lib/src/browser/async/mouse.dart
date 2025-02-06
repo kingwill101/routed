@@ -1,5 +1,9 @@
+// ignore_for_file: unused_shown_name
+
 import 'dart:async';
+
 import 'package:webdriver/async_core.dart' show WebDriver, WebElement;
+
 import '../interfaces/mouse.dart';
 import 'browser.dart';
 

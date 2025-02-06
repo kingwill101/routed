@@ -1,6 +1,8 @@
 import 'dart:async';
+
 import 'package:routed_testing/src/browser/interfaces/browser.dart';
-import 'package:webdriver/async_core.dart' show WebDriver, WebElement, By;
+import 'package:webdriver/async_core.dart' show WebDriver;
+
 import '../interfaces/frame.dart';
 import 'browser.dart';
 

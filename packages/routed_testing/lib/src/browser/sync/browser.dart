@@ -1,16 +1,18 @@
-import 'dart:io' show sleep;
 import 'dart:async' show FutureOr, TimeoutException;
+import 'dart:io' show sleep;
+
 import 'package:routed_testing/src/browser/browser_config.dart';
 import 'package:routed_testing/src/browser/sync/assertions.dart';
 import 'package:routed_testing/src/browser/utils.dart';
 import 'package:webdriver/sync_core.dart' show WebDriver, WebElement, By;
-import 'keyboard.dart';
-import 'mouse.dart';
+
+import '../interfaces/browser.dart';
 import 'dialog.dart';
 import 'frame.dart';
+import 'keyboard.dart';
+import 'mouse.dart';
 import 'waiter.dart';
 import 'window.dart';
-import '../interfaces/browser.dart';
 
 class SyncBrowser with SyncBrowserAssertions implements Browser {
   final WebDriver driver;
