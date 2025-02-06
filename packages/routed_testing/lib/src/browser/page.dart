@@ -1,4 +1,7 @@
-import 'browser.dart';
+
+import 'dart:async';
+
+import 'package:routed_testing/src/browser/interfaces/browser.dart';
 
 abstract class Page {
   final Browser browser;
@@ -7,7 +10,7 @@ abstract class Page {
 
   String get url;
 
-  Future<void> navigate() => browser.visit(url);
+  FutureOr<void> navigate() => browser.visit(url);
 
   Future<void> assertOnPage() async {
     await browser.assertUrlIs(url);

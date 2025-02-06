@@ -1,9 +1,9 @@
 import 'package:path/path.dart';
 import 'package:routed_testing/routed_testing.dart';
 import 'package:routed_testing/src/browser/bootstrap/browser_json_loader.dart';
-import 'package:routed_testing/src/browser/bootstrap/browser_paths.dart';
 import 'package:test/test.dart';
-import 'package:webdriver/async_io.dart' show createDriver;
+import 'package:webdriver/async_io.dart' as wdasync;
+import 'package:webdriver/sync_io.dart' as sync;
 import 'bootstrap/registry.dart';
 import 'browser_exception.dart';
 
@@ -11,24 +11,29 @@ Future<void> browserTest(
   String description,
   Future<void> Function(Browser browser) callback, {
   BrowserTestConfig? config,
+  bool useAsync = true,
 }) async {
   // Get the global config from bootstrap
   final globalConfig = TestBootstrap.currentConfig;
 
   test(description, () async {
     final browser = await launchBrowser(
-      config ??
-          BrowserTestConfig(
-            browser: globalConfig.browser,
-            headless: true,
-            baseUrl: globalConfig.baseUrl,
-          ),
-    );
+        config ??
+            BrowserTestConfig(
+              browser: globalConfig.browser,
+              headless: true,
+              baseUrl: globalConfig.baseUrl,
+            ),
+        useAsync);
 
     try {
       await callback(browser);
     } finally {
-      await browser.driver.quit();
+      if (useAsync) {
+        await (browser).quit();
+      } else {
+        browser.quit();
+      }
     }
   });
 }
@@ -37,16 +42,21 @@ void browserGroup(
   String description, {
   required void Function(Browser browser) define,
   BrowserTestConfig? config,
+  bool useAsync = true,
 }) {
   group(description, () {
     late Browser browser;
 
     setUp(() async {
-      browser = await launchBrowser(config);
+      browser = await launchBrowser(config, useAsync);
     });
 
     tearDown(() async {
-      await browser.driver.quit();
+      if (useAsync) {
+        await browser.quit();
+      } else {
+        browser.quit();
+      }
     });
 
     define(browser);
@@ -83,15 +93,23 @@ String _getBrowserName(String browser) {
   return browserMap[browser.toLowerCase()] ?? browser;
 }
 
-Future<Browser> launchBrowser(BrowserTestConfig? config) async {
+Future<Browser> launchBrowser(BrowserTestConfig? config,
+    [bool useAsync = true]) async {
   config ??= BrowserTestConfig();
 
   // First ensure any existing sessions are cleaned up
   try {
-    final existingDriver = await createDriver(
-      uri: _getDriverUrl(config.browser, 4444),
-    );
-    await existingDriver.quit();
+    if (useAsync) {
+      final existingDriver = await wdasync.createDriver(
+        uri: _getDriverUrl(config.browser, 4444),
+      );
+      await existingDriver.quit();
+    } else {
+      final existingDriver = sync.createDriver(
+        uri: _getDriverUrl(config.browser, 4444),
+      );
+      existingDriver.quit();
+    }
   } catch (_) {
     // Ignore errors from no existing session
   }
@@ -131,15 +149,32 @@ Future<Browser> launchBrowser(BrowserTestConfig? config) async {
       }
   };
 
-  final driver = await createDriver(
-    desired: capabilities,
-    uri: _getDriverUrl(config.browser, 4444),
-  );
+  var driver;
+  if (useAsync) {
+    driver = await wdasync.createDriver(
+      desired: capabilities,
+      uri: _getDriverUrl(config.browser, 4444),
+    );
+  } else {
+    driver = sync.createDriver(
+      desired: capabilities,
+      uri: _getDriverUrl(config.browser, 4444),
+    );
+  }
 
-  return Browser(
-      driver,
-      BrowserConfig(
-        browserName: config.browser,
-        baseUrl: config.baseUrl,
-      ));
+  if (useAsync) {
+    return BrowserFactory.createAsync(
+        driver,
+        BrowserConfig(
+          browserName: config.browser,
+          baseUrl: config.baseUrl,
+        ));
+  } else {
+    return BrowserFactory.createSync(
+        driver,
+        BrowserConfig(
+          browserName: config.browser,
+          baseUrl: config.baseUrl,
+        ));
+  }
 }
