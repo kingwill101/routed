@@ -1,6 +1,10 @@
+import 'dart:convert';
 import 'dart:io';
 import 'dart:math';
+
 import 'package:path/path.dart' as p;
+import 'package:routed/src/request.dart';
+import 'package:routed/src/response.dart';
 import 'package:routed/src/sessions/options.dart';
 import 'package:routed/src/sessions/secure_cookie.dart';
 import 'package:routed/src/sessions/session.dart';
@@ -18,12 +22,20 @@ class FilesystemStore implements Store {
   /// Default options for the session.
   final Options defaultOptions;
 
+  /// Whether to encrypt session data
+  final bool useEncryption;
+
+  /// Whether to sign session data
+  final bool useSigning;
+
   /// Constructor for FilesystemStore.
   /// Ensures the storage directory exists.
   FilesystemStore({
     required this.storageDir,
     required this.codecs,
     Options? defaultOptions,
+    this.useEncryption = false,
+    this.useSigning = false,
   }) : defaultOptions = defaultOptions ?? Options() {
     final dir = Directory(storageDir);
     if (!dir.existsSync()) {
@@ -34,17 +46,15 @@ class FilesystemStore implements Store {
   /// Retrieves a session based on the request and session name.
   /// If no session exists, a new one is created.
   @override
-  Future<Session> getSession(HttpRequest request, String name) async {
+  Future<Session> read(Request request, String name) async {
     final cookie = request.cookies.firstWhere(
       (c) => c.name == name,
       orElse: () => Cookie(name, ''),
     );
     final session = Session(
       name: name,
-      isNew: true,
-      values: {},
       options: defaultOptions,
-      id: '',
+      values: {},
     );
 
     if (cookie.value.isEmpty) {
@@ -70,7 +80,7 @@ class FilesystemStore implements Store {
       }
     }
 
-    if (session.id!.isEmpty) {
+    if (session.id.isEmpty) {
       session.id = _generateSessionId();
     }
     return session;
@@ -78,18 +88,21 @@ class FilesystemStore implements Store {
 
   /// Saves the session data to a file and sets the appropriate cookie.
   @override
-  Future<void> saveSession(
-    HttpRequest request,
-    HttpResponse response,
+  @override
+  Future<void> write(
+    Request request,
+    Response response,
     Session session,
   ) async {
     final maxAge = session.options.maxAge ?? 0;
     if (maxAge <= 0) {
       await _eraseFile(session.id);
-      final expired = Cookie(session.name, '');
-      expired.maxAge = -1;
-      expired.path = session.options.path;
-      response.cookies.add(expired);
+      response.setCookie(
+        session.name,
+        '',
+        maxAge: -1,
+        path: session.options.path ?? "/",
+      );
       return;
     }
 
@@ -98,24 +111,15 @@ class FilesystemStore implements Store {
     final codec = codecs.first;
     final encoded = codec.encode(session.name, {'id': session.id});
 
-    final newCookie = Cookie(session.name, encoded);
-    if (session.options.path.isNotEmpty) {
-      newCookie.path = session.options.path;
-    }
-    if (session.options.domain != null) {
-      newCookie.domain = session.options.domain;
-    }
-    if (session.options.maxAge != null) {
-      newCookie.maxAge = session.options.maxAge!;
-    }
-    if (session.options.secure != null) {
-      newCookie.secure = session.options.secure!;
-    }
-    if (session.options.httpOnly != null) {
-      newCookie.httpOnly = session.options.httpOnly!;
-    }
-
-    response.cookies.add(newCookie);
+    response.setCookie(
+      session.name,
+      encoded,
+      path: session.options.path ?? "/",
+      domain: session.options.domain ?? "",
+      maxAge: session.options.maxAge,
+      secure: session.options.secure ?? false,
+      httpOnly: session.options.httpOnly ?? true,
+    );
   }
 
   // ---------------------------------------------------------
@@ -127,8 +131,7 @@ class FilesystemStore implements Store {
     if (sid == null || sid.isEmpty) return;
     final filePath = p.join(storageDir, 'session_$sid');
     final file = File(filePath);
-    // In a real app, do proper jsonEncode. This is a placeholder:
-    final jsonStr = data.toString();
+    final jsonStr = jsonEncode(data);
     await file.writeAsString(jsonStr);
   }
 

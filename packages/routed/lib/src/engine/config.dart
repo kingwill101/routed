@@ -1,5 +1,6 @@
 import 'package:file/file.dart';
 import 'package:file/local.dart' as local;
+import 'package:routed/session.dart';
 import 'package:routed/src/cache/cache_manager.dart';
 import 'package:routed/src/render/html/template_engine.dart';
 
@@ -97,6 +98,10 @@ class EngineConfig {
   /// Configuration for handling multipart file uploads.
   MultipartConfig multipart;
 
+  SessionConfig? sessionConfig;
+
+  final String? appKey;
+
   /// Cache manager for handling cache stores.
   CacheManager cacheManager;
 
@@ -128,6 +133,8 @@ class EngineConfig {
     this.trustedProxies = const [],
     this.templateDirectory = 'templates',
     this.templateEngine,
+    this.sessionConfig,
+    this.appKey,
     FileSystem? fileSystem,
     MultipartConfig? multipart,
     CacheManager? cacheManager,
@@ -138,5 +145,64 @@ class EngineConfig {
     this
         .cacheManager
         .registerStore('file', {'driver': 'file', 'path': 'cache'});
+  }
+}
+
+class SessionConfig {
+  final String cookieName;
+  final Store store;
+  final Duration maxAge;
+  final String path;
+  final bool secure;
+  final bool httpOnly;
+
+  const SessionConfig({
+    this.cookieName = 'routed_session',
+    required this.store,
+    this.maxAge = const Duration(hours: 1),
+    this.path = '/',
+    this.secure = false,
+    this.httpOnly = true,
+  });
+
+  factory SessionConfig.cookie({
+    required String appKey,
+    String cookieName = 'routed_session',
+    Duration maxAge = const Duration(hours: 1),
+  }) {
+    return SessionConfig(
+      cookieName: cookieName,
+      store: CookieStore(
+        codecs: [SecureCookie(key: appKey)],
+        defaultOptions: Options(
+          path: '/',
+          maxAge: maxAge.inSeconds,
+          secure: true,
+          httpOnly: true,
+        ),
+      ),
+      maxAge: maxAge,
+    );
+  }
+
+  factory SessionConfig.file({
+    required String appKey,
+    required String storagePath,
+    String cookieName = 'routed_session',
+    Duration maxAge = const Duration(hours: 1),
+  }) {
+    return SessionConfig(
+      cookieName: cookieName,
+      store: FilesystemStore(
+        storageDir: storagePath,
+        codecs: [SecureCookie(key: appKey)],
+        defaultOptions: Options(
+          maxAge: maxAge.inSeconds,
+          secure: true,
+          httpOnly: true,
+        ),
+      ),
+      maxAge: maxAge,
+    );
   }
 }
