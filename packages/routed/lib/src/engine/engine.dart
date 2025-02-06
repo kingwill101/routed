@@ -83,10 +83,7 @@ class Engine {
     return engine;
   }
 
-  /// Factory constructor to create a default Engine instance with common options.
-  ///
-  /// [config] - Optional configuration settings for the engine.
-  /// [options] - Optional list of engine options to apply.
+  // Factory for default engine with common options
   factory Engine.d({
     EngineConfig? config,
     List<EngineOpt>? options,
@@ -100,11 +97,30 @@ class Engine {
     );
   }
 
-  /// Attach a router at a given prefix, with optional engine-level middlewares.
-  ///
-  /// [router] - The router to attach.
-  /// [prefix] - The prefix under which to mount the router.
-  /// [middlewares] - Optional list of middlewares to apply to the router.
+  /// Get route URL by name with optional parameters
+  String? route(String name, [Map<String, dynamic>? params]) {
+    _ensureRoutes();
+
+    final route = _engineRoutes.firstWhere(
+      (r) => r.name == name,
+      orElse: () => throw Exception('Route with name "$name" not found'),
+    );
+
+    var path = route.path;
+
+    if (params != null) {
+      params.forEach((key, value) {
+        // Replace both :param and {param} formats
+        path = path
+            .replaceAll(':$key', value.toString())
+            .replaceAll('{$key}', value.toString());
+      });
+    }
+
+    return path;
+  }
+
+  /// Attach a router at a given prefix, with optional engine-level middlewares
   Engine use(
     Router router, {
     String prefix = '',
@@ -114,9 +130,10 @@ class Engine {
     return this;
   }
 
-  /// Build the final route table by merging routes from all mounted routers.
-  ///
-  /// [parentGroupName] - Optional parent group name for route grouping.
+  /// Build the final route table:
+  /// 1) For each mount, call `router.build()`
+  /// 2) For each route in the router, merge with the prefix
+  /// 3) Combine engine-level middlewares with the route's finalMiddlewares
   void _build({String? parentGroupName}) {
     if (_routesInitialized) {
       _engineRoutes.clear();
@@ -136,6 +153,7 @@ class Engine {
       // Flatten all routes
       final childRoutes = mount.router.getAllRoutes();
       for (final r in childRoutes) {
+        // Combine the mount prefix with the route path
         final combinedPath = _joinPaths(mount.prefix, r.path);
 
         // Engine-level + route's final
@@ -158,30 +176,26 @@ class Engine {
     _routesInitialized = true;
   }
 
-  /// Ensure that the routes are built and initialized.
-  void _ensureRoutes() {
+  _ensureRoutes() {
     if (!_routesInitialized) {
       _build();
     }
   }
 
-  /// Return all final routes managed by the engine.
+  /// Return all final routes
   List<EngineRoute> getAllRoutes() {
     _ensureRoutes();
     return List.unmodifiable(_engineRoutes);
   }
 
-  /// Print all routes managed by the engine to the console.
+  /// Print them
   void printRoutes() {
     for (final route in _engineRoutes) {
       print(route);
     }
   }
 
-  /// Join two paths, ensuring proper handling of slashes.
-  ///
-  /// [base] - The base path.
-  /// [child] - The child path to append to the base path.
+// same path-join logic as the router
   static String _joinPaths(String base, String child) {
     if (base.isEmpty && child.isEmpty) return '';
     if (base.isEmpty) return child;
