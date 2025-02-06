@@ -1,4 +1,5 @@
 import 'package:test/test.dart';
+
 import '../interfaces/assertions.dart';
 import '../interfaces/browser.dart';
 import 'browser.dart' show SyncBrowser;

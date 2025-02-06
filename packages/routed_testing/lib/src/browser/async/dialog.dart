@@ -1,7 +1,8 @@
-// ignore_for_file: unused_shown_name
 
 import 'dart:async';
-import 'package:webdriver/async_core.dart' show WebDriver, WebElement, By;
+
+import 'package:webdriver/async_core.dart' show WebDriver;
+
 import '../interfaces/dialog.dart';
 import 'browser.dart';
 

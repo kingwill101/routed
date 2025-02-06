@@ -1,5 +1,8 @@
+// ignore_for_file: unused_shown_name
+
 import 'package:routed_testing/src/browser/interfaces/browser.dart';
 import 'package:webdriver/sync_core.dart' show WebDriver, WebElement, By;
+
 import '../interfaces/frame.dart';
 import 'browser.dart';
 

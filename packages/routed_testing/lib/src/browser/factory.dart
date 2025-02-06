@@ -1,8 +1,9 @@
 import 'package:routed_testing/src/browser/browser_config.dart';
 import 'package:webdriver/async_core.dart' as async;
 import 'package:webdriver/sync_core.dart' as sync;
-import 'interfaces/browser.dart';
+
 import 'async/browser.dart';
+import 'interfaces/browser.dart';
 import 'sync/browser.dart';
 
 class BrowserFactory {

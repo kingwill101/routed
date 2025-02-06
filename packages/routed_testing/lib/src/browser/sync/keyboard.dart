@@ -1,6 +1,9 @@
+// ignore_for_file: unused_shown_name
+
 import 'dart:io';
 
 import 'package:webdriver/sync_core.dart' show WebDriver, WebElement, By;
+
 import '../interfaces/keyboard.dart';
 import 'browser.dart';
 

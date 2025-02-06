@@ -1,10 +1,11 @@
 import 'dart:io';
 
+import 'package:path/path.dart' as path;
+
 import 'browser_paths.dart';
 import 'chrome_driver_manager.dart';
-import 'gecko_driver_manager.dart';
 import 'driver_interface.dart';
-import 'package:path/path.dart' as path;
+import 'gecko_driver_manager.dart';
 
 class DriverManager {
   static final Map<String, WebDriverManager> _drivers = {
