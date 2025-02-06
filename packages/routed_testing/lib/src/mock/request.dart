@@ -43,15 +43,40 @@ MockHttpRequest setupRequest(String method, String uri,
     {MockHttpHeaders? mockRequestHeaders,
     Uri? uriObj,
     Map<String, List<String>>? requestHeaders,
+    List<Cookie>? cookies,
     dynamic body,
     MockHttpResponse? mockResponse}) {
-  mockRequestHeaders ??= setupHeaders(requestHeaders ?? {});
+  requestHeaders ??= {};
+
+  // Add cookies to headers if provided
+  if (cookies != null && cookies.isNotEmpty) {
+    requestHeaders[HttpHeaders.cookieHeader] =
+        cookies.map((cookie) => '${cookie.name}=${cookie.value}').toList();
+  }
+
+  //check if header has cookie header
+  if (requestHeaders.containsKey(HttpHeaders.cookieHeader)) {
+    final cookieHeader = requestHeaders[HttpHeaders.cookieHeader]!.first;
+    //append to cookies variable
+    cookies = [
+      ...cookies ?? [],
+      ...cookieHeader
+          .split(',')
+          .map((cookie) => Cookie.fromSetCookieValue(cookie))
+    ];
+  }
+
+  mockRequestHeaders ??= setupHeaders(requestHeaders);
 
   uriObj ??= Uri.parse(uri);
 
   final mockUri = setupUri(uriObj);
 
   final mockRequest = MockHttpRequest();
+
+  // Setup cookies
+  when(mockRequest.cookies).thenReturn(cookies ?? []);
+
   when(mockRequest.method).thenReturn(method);
   when(mockRequest.uri).thenReturn(mockUri);
   when(mockRequest.headers).thenReturn(mockRequestHeaders);

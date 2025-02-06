@@ -22,10 +22,37 @@ import 'package:routed_testing/src/mock/headers.dart';
 /// Returns:
 /// The configured [MockHttpResponse] instance.
 MockHttpResponse setupResponse(
-    {Map<String, List<String>>? headers, BytesBuilder? body}) {
+    {Map<String, List<String>>? headers,
+    List<Cookie>? cookies,
+    BytesBuilder? body}) {
   final mockResponse = MockHttpResponse();
-  final responseHeaders = <String, List<String>>{};
+  headers ??= {};
   body ??= BytesBuilder();
+
+  cookies ?? [];
+
+  // Setup cookies
+  // Add cookies to headers if provided
+  if (cookies != null && cookies.isNotEmpty) {
+    headers[HttpHeaders.cookieHeader] =
+        cookies.map((cookie) => '${cookie.name}=${cookie.value}').toList();
+  }
+
+  //check if header has cookie header
+  if (headers.containsKey(HttpHeaders.cookieHeader)) {
+    final cookieHeader = headers[HttpHeaders.cookieHeader]!.first;
+    //append to cookies variable
+    cookies = [
+      ...cookies ?? [],
+      ...cookieHeader
+          .split(',')
+          .map((cookie) => Cookie.fromSetCookieValue(cookie))
+    ];
+  }
+
+  // Handle getting cookies
+  when(mockResponse.cookies).thenAnswer((invocation) => cookies ?? []);
+
   int statusCode = HttpStatus.ok;
   final mockResponseHeaders = setupHeaders(headers ?? {});
   when(mockResponse.statusCode).thenReturn(statusCode);
@@ -65,10 +92,6 @@ MockHttpResponse setupResponse(
   });
   // Build the TestResponse
 
-  // Collect response headers
-  final responseHeaderMap = <String, String>{};
-  responseHeaders.forEach((key, values) {
-    responseHeaderMap[key] = values.join(', ');
-  });
+  // No need to collect headers separately as they're handled by mockResponseHeaders
   return mockResponse;
 }

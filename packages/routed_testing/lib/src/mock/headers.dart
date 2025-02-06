@@ -30,6 +30,24 @@ import 'package:routed_testing/src/mock.mocks.dart';
 MockHttpHeaders setupHeaders(Map<String, List<String>> requestHeaders) {
   final mockRequestHeaders = MockHttpHeaders();
   ContentType? contentType;
+  List<Cookie> cookies = [];
+
+  // Parse existing cookies from headers
+  if (requestHeaders.containsKey(HttpHeaders.cookieHeader)) {
+    for (final cookieHeader in requestHeaders[HttpHeaders.cookieHeader]!) {
+      for (final singleCookie in cookieHeader.split(';')) {
+        final parts = singleCookie.trim().split('=');
+        if (parts.length == 2) {
+          cookies.add(Cookie(parts[0].trim(), parts[1].trim()));
+        }
+      }
+    }
+  }
+
+  // Handle cookie header value
+  when(mockRequestHeaders.value(HttpHeaders.cookieHeader)).thenAnswer((_) {
+    return cookies.map((c) => '${c.name}=${c.value}').join('; ');
+  });
 
   for (final entry in requestHeaders.entries) {
     if (entry.key.toLowerCase() == HttpHeaders.contentTypeHeader) {
@@ -67,10 +85,24 @@ MockHttpHeaders setupHeaders(Map<String, List<String>> requestHeaders) {
     });
   });
 
+  // Handle Set-Cookie headers properly
   when(mockRequestHeaders.add(any, any)).thenAnswer((invocation) {
     final name = invocation.positionalArguments[0].toString();
     final value = invocation.positionalArguments[1].toString();
-    requestHeaders.putIfAbsent(name, () => []).add(value);
+
+    if (name.toLowerCase() == HttpHeaders.setCookieHeader.toLowerCase()) {
+      // For Set-Cookie, maintain list of values
+      requestHeaders.putIfAbsent(name, () => []).add(value);
+    } else {
+      // For other headers, replace
+      requestHeaders[name] = [value];
+    }
+  });
+
+  // Add cookie removal capability
+  when(mockRequestHeaders.removeAll(any)).thenAnswer((invocation) {
+    final name = invocation.positionalArguments[0].toString();
+    requestHeaders.remove(name);
   });
 
   when(mockRequestHeaders.set(any, any)).thenAnswer((invocation) {
