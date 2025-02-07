@@ -31,11 +31,9 @@ class InMemoryTransport implements TestTransport {
     String uri, {
     Map<String, List<String>>? headers,
     dynamic body,
+    TransportOptions? options,
   }) async {
-    final uriObj = setupUri(Uri.parse(uri));
-    if (uriObj.path != uri) {
-      when(uriObj.path).thenAnswer((c) => uri);
-    }
+    final uriObj = setupUri(uri);
 
     final responseBody = BytesBuilder();
 
@@ -43,11 +41,15 @@ class InMemoryTransport implements TestTransport {
     final mockResponse = setupResponse(headers: headers, body: responseBody);
 
     // Use setupRequest helper
-    final mockRequest = setupRequest(method, uri,
-        uriObj: uriObj,
-        requestHeaders: headers,
-        body: body,
-        mockResponse: mockResponse);
+    final mockRequest = setupRequest(
+      method,
+      uri,
+      uriObj: uriObj,
+      requestHeaders: headers,
+      body: body,
+      mockResponse: mockResponse,
+      remoteAddress: options?.remoteAddress,
+    );
 
     // Handle the request with the engine
     await _engine.handleRequest(mockRequest);
