@@ -93,7 +93,84 @@ MockHttpRequest setupRequest(String method, String uri,
     mockRequest.headers.contentType = contentType;
   }
 
-  // Mock body stream
+// Mock body stream
+  if (body != null) {
+    // Prepare body bytes
+    List<int> bodyBytes;
+    if (body is String) {
+      bodyBytes = utf8.encode(body);
+    } else if (body is List<int>) {
+      bodyBytes = body;
+    } else if (body is Map || body is List) {
+      bodyBytes = utf8.encode(jsonEncode(body));
+    } else if (body is Stream<List<int>>) {
+      // Handle Stream<List<int>> type
+      when(mockRequest.listen(
+        any,
+        onDone: anyNamed('onDone'),
+        onError: anyNamed('onError'),
+        cancelOnError: anyNamed('cancelOnError'),
+      )).thenAnswer((invocation) {
+        final onData =
+            invocation.positionalArguments[0] as void Function(List<int>)?;
+        final onDone = invocation.namedArguments[#onDone] as void Function()?;
+        final onError = invocation.namedArguments[#onError] as Function?;
+
+        // Forward the stream events
+        body.listen(
+          (data) {
+            if (onData != null) onData(data);
+          },
+          onDone: onDone,
+          onError: onError,
+        );
+
+        return Stream<Uint8List>.empty().listen(null);
+      });
+      return mockRequest;
+    } else {
+      throw ArgumentError('Unsupported body type: ${body.runtimeType}');
+    }
+
+    // Mock body stream
+    when(mockRequest.listen(
+      any,
+      onDone: anyNamed('onDone'),
+      onError: anyNamed('onError'),
+      cancelOnError: anyNamed('cancelOnError'),
+    )).thenAnswer((invocation) {
+      final onData =
+          invocation.positionalArguments[0] as void Function(List<int>)?;
+      final onDone = invocation.namedArguments[#onDone] as void Function()?;
+
+      // Emit the body bytes and then complete
+      Future.microtask(() {
+        if (onData != null) onData(bodyBytes);
+        if (onDone != null) onDone();
+      });
+
+      // Return a StreamSubscription that does nothing
+      return Stream<Uint8List>.fromIterable([Uint8List.fromList(bodyBytes)])
+          .listen(null);
+    });
+  } else {
+    // Mock empty body
+    when(mockRequest.listen(
+      any,
+      onDone: anyNamed('onDone'),
+      onError: anyNamed('onError'),
+      cancelOnError: anyNamed('cancelOnError'),
+    )).thenAnswer((invocation) {
+      final onDone = invocation.namedArguments[#onDone] as void Function()?;
+
+      // Immediately complete without emitting data
+      Future.microtask(() {
+        if (onDone != null) onDone();
+      });
+
+      return Stream<Uint8List>.empty().listen(null);
+    });
+  }
   if (body != null) {
     // Prepare body bytes
     List<int> bodyBytes;
