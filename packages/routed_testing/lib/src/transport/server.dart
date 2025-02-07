@@ -48,6 +48,7 @@ class ServerTransport implements TestTransport {
     String uri, {
     Map<String, List<String>>? headers,
     dynamic body,
+    TransportOptions? options,
   }) async {
     await _maybeStartServer();
 

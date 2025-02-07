@@ -23,8 +23,20 @@ import '../mock.mocks.dart';
 /// * hasQuery
 ///
 /// Returns a [MockUri] instance that can be used for testing.
-MockUri setupUri(Uri uri) {
+MockUri setupUri(String url) {
   final uriObj = MockUri();
+
+  final uri = Uri.parse(url);
+  if (uri.path != url) {
+    when(uriObj.path).thenAnswer((c) {
+      return url;
+    });
+  } else {
+    when(uriObj.path).thenAnswer((c) {
+      return uri.path;
+    });
+  }
+
   when(uriObj.path).thenAnswer((c) => uri.path);
   when(uriObj.queryParameters).thenAnswer((c) => uri.queryParameters);
   when(uriObj.query).thenAnswer((c) => uri.query);

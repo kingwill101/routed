@@ -121,6 +121,7 @@ class Response {
   /// Redirects the response to a [location] with an optional [status] and [headers].
   HttpResponse redirect(String location,
       {int status = HttpStatus.found, Map<String, String>? headers}) {
+    _ensureNotClosed();
     _httpResponse.statusCode = status;
     _headers['Location'] = [location];
 

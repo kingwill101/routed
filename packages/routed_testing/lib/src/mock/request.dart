@@ -45,7 +45,8 @@ MockHttpRequest setupRequest(String method, String uri,
     Map<String, List<String>>? requestHeaders,
     List<Cookie>? cookies,
     dynamic body,
-    MockHttpResponse? mockResponse}) {
+    MockHttpResponse? mockResponse,
+    InternetAddress? remoteAddress}) {
   requestHeaders ??= {};
 
   // Add cookies to headers if provided
@@ -68,9 +69,7 @@ MockHttpRequest setupRequest(String method, String uri,
 
   mockRequestHeaders ??= setupHeaders(requestHeaders);
 
-  uriObj ??= Uri.parse(uri);
-
-  final mockUri = setupUri(uriObj);
+  final mockUri = setupUri(uri);
 
   final mockRequest = MockHttpRequest();
 
@@ -225,5 +224,13 @@ MockHttpRequest setupRequest(String method, String uri,
       return Stream<Uint8List>.empty().listen(null);
     });
   }
+
+  // Mock connection info if remote address provided
+  if (remoteAddress != null) {
+    final mockConnectionInfo = MockHttpConnectionInfo();
+    when(mockConnectionInfo.remoteAddress).thenReturn(remoteAddress);
+    when(mockRequest.connectionInfo).thenReturn(mockConnectionInfo);
+  }
+
   return mockRequest;
 }
