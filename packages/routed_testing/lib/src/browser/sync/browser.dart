@@ -2,7 +2,13 @@ import 'dart:async' show FutureOr, TimeoutException;
 import 'dart:io' show sleep;
 
 import 'package:routed_testing/src/browser/browser_config.dart';
+import 'package:routed_testing/src/browser/interfaces/download.dart';
+import 'package:routed_testing/src/browser/interfaces/emulation.dart';
+import 'package:routed_testing/src/browser/interfaces/network.dart';
 import 'package:routed_testing/src/browser/sync/assertions.dart';
+import 'package:routed_testing/src/browser/sync/cookie.dart';
+import 'package:routed_testing/src/browser/sync/local_storage.dart';
+import 'package:routed_testing/src/browser/sync/session_storage.dart';
 import 'package:routed_testing/src/browser/utils.dart';
 import 'package:webdriver/sync_core.dart' show WebDriver, WebElement, By;
 
@@ -18,12 +24,24 @@ class SyncBrowser with SyncBrowserAssertions implements Browser {
   final WebDriver driver;
   final BrowserConfig config;
 
+  @override
   late final keyboard = SyncKeyboard(this);
+  @override
   late final mouse = SyncMouse(this);
+  @override
   late final dialogs = SyncDialogHandler(this);
+  @override
   late final frames = SyncFrameHandler(this);
+  @override
   late final waiter = SyncBrowserWaiter(this);
+  @override
   late final window = SyncWindowManager(this);
+  @override
+  late final cookies = SyncCookieHandler(this);
+  @override
+  late final localStorage = SyncLocalStorageHandler(this);
+  @override
+  late final sessionStorage = SyncSessionStorageHandler(this);
 
   SyncBrowser(this.driver, this.config);
 
@@ -106,4 +124,16 @@ class SyncBrowser with SyncBrowserAssertions implements Browser {
 
   @override
   void quit() => driver.quit();
+
+  @override
+  // TODO: implement download
+  Download get download => throw UnimplementedError();
+
+  @override
+  // TODO: implement emulation
+  Emulation get emulation => throw UnimplementedError();
+
+  @override
+  // TODO: implement network
+  Network get network => throw UnimplementedError();
 }

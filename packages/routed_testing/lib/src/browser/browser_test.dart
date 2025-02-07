@@ -179,3 +179,5 @@ Future<Browser> launchBrowser(BrowserTestConfig? config,
         ));
   }
 }
+
+main() {}
