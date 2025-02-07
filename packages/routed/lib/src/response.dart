@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 import 'dart:typed_data';
@@ -17,10 +18,40 @@ class Response {
   /// Returns whether the response is closed.
   bool get isClosed => _isClosed;
 
+  /// Gets the content length of the HTTP response.
+  int? get contentLength => _httpResponse.contentLength;
+
+  /// Gets the persistent connection state of the HTTP response.
+  bool get persistentConnection => _httpResponse.persistentConnection;
+
+  /// Gets the reason phrase of the HTTP response.
+  String? get reasonPhrase => _httpResponse.reasonPhrase;
+
+  /// Gets the transfer encoding of the HTTP response.
+  bool get hasTransferEncoding =>
+      _httpResponse.headers[HttpHeaders.transferEncodingHeader] != null;
+
+  /// Gets the content type of the HTTP response.
+  String? get contentType => _httpResponse.headers.contentType?.value;
+
+  /// Gets the cookies of the HTTP response.
+  List<Cookie> get cookies => _httpResponse.cookies;
+
+  /// Gets the local port of the HTTP connection.
+  int? get localPort => _httpResponse.connectionInfo?.localPort;
+
+  /// Gets the remote address of the HTTP connection.
+  String? get remoteAddress =>
+      _httpResponse.connectionInfo?.remoteAddress.address;
+
+  /// Gets the remote port of the HTTP connection.
+  int? get remotePort => _httpResponse.connectionInfo?.remotePort;
+
   /// Writes [data] to the response.
   /// If the body has not started, the data is added to the buffer.
   /// Otherwise, it is written directly to the HTTP response.
   void write(dynamic data) {
+    _ensureNotClosed();
     if (!_bodyStarted) {
       _buffer.add(utf8.encode(data.toString()));
     } else {
@@ -32,6 +63,7 @@ class Response {
   /// If the body has not started, the data is added to the buffer.
   /// Otherwise, it is added directly to the HTTP response.
   void writeBytes(List<int> data) {
+    _ensureNotClosed();
     if (!_bodyStarted) {
       _buffer.add(data);
     } else {
@@ -41,6 +73,7 @@ class Response {
 
   /// Writes the headers to the HTTP response.
   void writeHeaderNow() {
+    _ensureNotClosed();
     if (!_headersWritten) {
       _headers.forEach((name, values) {
         _httpResponse.headers.set(name, values.join(', '));
@@ -51,6 +84,7 @@ class Response {
 
   /// Writes the buffered data to the HTTP response and starts the body.
   void writeNow() {
+    _ensureNotClosed();
     writeHeaderNow();
     _httpResponse.add(_buffer.takeBytes());
     _bodyStarted = true;
@@ -67,8 +101,15 @@ class Response {
     _httpResponse.close();
   }
 
+  void _ensureNotClosed() {
+    if (_isClosed) {
+      throw StateError('Cannot write to a closed response.');
+    }
+  }
+
   /// Sends a string [content] as the response body with an optional [statusCode].
   Future<void> string(String content, {int statusCode = HttpStatus.ok}) async {
+    _ensureNotClosed();
     _httpResponse.statusCode = statusCode;
     write(content);
     close();
@@ -77,6 +118,7 @@ class Response {
   /// Sends a JSON [data] as the response body with an optional [statusCode].
   Future<void> json(Map<String, dynamic> data,
       {int statusCode = HttpStatus.ok}) async {
+    _ensureNotClosed();
     _httpResponse.statusCode = statusCode;
     _headers['Content-Type'] = ['application/json; charset=utf-8'];
     write(jsonEncode(data));
@@ -94,6 +136,7 @@ class Response {
 
   /// Adds a stream of bytes [stream] to the response.
   Future<void> addStream(Stream<List<int>> stream) async {
+    _ensureNotClosed();
     writeHeaderNow();
     _bodyStarted = true;
     await _httpResponse.addStream(stream);
@@ -102,6 +145,7 @@ class Response {
   /// Sends a file [file] as a downloadable attachment with an optional [name] and [headers].
   HttpResponse download(File file,
       {String? name, Map<String, String>? headers}) {
+    _ensureNotClosed();
     _httpResponse.statusCode = HttpStatus.ok;
     _headers['Content-Type'] = ['application/octet-stream'];
     _headers['Content-Disposition'] = [
@@ -141,8 +185,7 @@ class Response {
       bool secure = false,
       bool httpOnly = false,
       SameSite? sameSite}) {
-    print(
-        'setCookie: $name, $value, $maxAge, $path, $domain, $secure, $httpOnly, $sameSite');
+    _ensureNotClosed();
     final cookie = Cookie(name, value)
       ..maxAge = maxAge
       ..path = path
@@ -177,6 +220,7 @@ class Response {
 
   /// Adds a header with the given [name] and [value] to the response.
   void addHeader(String name, String value) {
+    _ensureNotClosed();
     if (name.toLowerCase() == HttpHeaders.setCookieHeader) {
       // Special case: Set-Cookie headers are always separate
       _headers.putIfAbsent(name, () => []).add(value);
@@ -189,6 +233,23 @@ class Response {
         _headers[name] = [value];
       }
     }
+  }
+
+  /// Adds a header with the given [name] and [value] to the response.
+  void setHeader(String name, String value) {
+    _ensureNotClosed();
+    _httpResponse.headers.set(name, value);
+  }
+
+  /// Removes a header with the given [name] from the response.
+  void removeHeader(String name, {Object? value}) {
+    _ensureNotClosed();
+    if (value != null) {
+      _httpResponse.headers.remove(name, value);
+    } else {
+      _httpResponse.headers.removeAll(name);
+    }
+    _headers.remove(name);
   }
 }
 
