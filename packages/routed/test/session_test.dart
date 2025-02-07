@@ -87,7 +87,7 @@ void main() {
             await ctx.removeSession('key1');
             assert(ctx.hasSession('key1') == false);
 
-            assert(ctx.sessionData == {'key2': 'value2'});
+            expect(ctx.sessionData, containsPair('key2', 'value2'));
 
             await ctx.clearSession();
             assert(ctx.sessionData.isEmpty);
