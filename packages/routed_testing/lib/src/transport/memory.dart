@@ -51,6 +51,8 @@ class InMemoryTransport implements TestTransport {
       remoteAddress: options?.remoteAddress,
     );
 
+// Ensure proxy configuration is parsed
+    await _engine.config.parseTrustedProxies();
     // Handle the request with the engine
     await _engine.handleRequest(mockRequest);
 
