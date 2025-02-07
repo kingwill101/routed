@@ -2,6 +2,8 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 import 'dart:typed_data';
+
+import 'package:routed/src/engine/config.dart';
 import 'package:routed/src/utils/request_id.dart';
 
 /// Represents an HTTP request and provides various utilities to access
@@ -25,17 +27,52 @@ class Request {
   /// Cached body bytes of the request.
   Uint8List? _bodyBytes;
 
+  EngineConfig config;
+
   /// Constructs a [Request] object.
   ///
   /// The [httpRequest] parameter is the underlying HTTP request.
   /// The [pathParameters] parameter is a map of path parameters.
-  Request(this.httpRequest, this.pathParameters)
+  Request(this.httpRequest, this.pathParameters, this.config)
       : queryParameters = httpRequest.uri.queryParameters,
         _attributes = {},
         id = RequestId.generate();
 
   /// Returns the HTTP method of the request (e.g., GET, POST).
   String get method => httpRequest.method;
+
+  /// Returns the content length of the request body.
+  int get contentLength => httpRequest.contentLength;
+
+  /// Returns the URI of the request.
+  Uri get uri => httpRequest.uri;
+
+  /// Returns the requested URI for the request.
+  Uri get requestedUri => httpRequest.requestedUri;
+
+  /// Returns the headers of the request.
+  HttpHeaders get headers => httpRequest.headers;
+
+  /// Returns the cookies sent with the request.
+  List<Cookie> get cookies => httpRequest.cookies;
+
+  /// Returns the persistent connection state signaled by the client.
+  bool get persistentConnection => httpRequest.persistentConnection;
+
+  /// Returns the client certificate of the client making the request.
+  X509Certificate? get certificate => httpRequest.certificate;
+
+  /// Returns the session for the given request.
+  HttpSession get session => httpRequest.session;
+
+  /// Returns the HTTP protocol version used in the request, either "1.0" or "1.1".
+  String get protocolVersion => httpRequest.protocolVersion;
+
+  /// Information about the client connection.
+  HttpConnectionInfo? get connectionInfo => httpRequest.connectionInfo;
+
+  /// The [HttpResponse] object, used for sending back the response to the client.
+  HttpResponse get response => httpRequest.response;
 
   /// Returns the content type of the request, if available.
   ContentType? get contentType => httpRequest.headers.contentType;
@@ -52,15 +89,9 @@ class Request {
   /// Returns the value of the specified header [name].
   header(String name) => httpRequest.headers[name];
 
-  /// Returns the headers of the request.
-  HttpHeaders get headers => httpRequest.headers;
-
   /// Returns the remote address of the client making the request.
   String get remoteAddr =>
       httpRequest.connectionInfo?.remoteAddress.address ?? '';
-
-  /// Returns the cookies sent with the request.
-  List<Cookie> get cookies => httpRequest.cookies;
 
   /// Returns the body of the request as a UTF-8 decoded string.
   FutureOr<String> body() async {
@@ -79,29 +110,38 @@ class Request {
     return _bodyBytes!;
   }
 
-  /// Returns the URI of the request.
-  Uri get uri => httpRequest.uri;
-
   /// Returns the IP address of the client making the request.
   ///
-  /// This method checks for forwarded headers first (e.g., X-Forwarded-For,
-  /// X-Real-IP) and falls back to the direct connection IP if no forwarded
-  /// headers are found.
-  String get ip {
-    final forwardedFor = headers['X-Forwarded-For']?.firstOrNull;
-    if (forwardedFor != null) {
-      return forwardedFor.split(',').first.trim();
+  /// This method checks for forwarded headers and trusted proxies based on the
+  /// engine configuration. It falls back to the direct connection IP if no
+  /// forwarded headers are found or if the immediate client is not trusted.
+  String get clientIP {
+    if (!config.forwardedByClientIP) {
+      return httpRequest.connectionInfo?.remoteAddress.address ?? '';
     }
 
-    final realIp = headers['X-Real-IP']?.firstOrNull;
-    if (realIp != null) {
-      return realIp;
+    // Check if immediate client is trusted
+    final remoteAddr = httpRequest.connectionInfo?.remoteAddress;
+    if (remoteAddr == null || !config.isTrustedProxy(remoteAddr)) {
+      return remoteAddr?.address ?? '';
     }
 
-    return remoteAddr;
+    // Check platform-specific header first
+    if (config.trustedPlatform != null) {
+      final platformIP = headers[config.trustedPlatform!]?.first;
+      if (platformIP != null) return platformIP;
+    }
+
+    // Check forwarded headers in order of priority
+    for (final header in config.remoteIPHeaders) {
+      final values = headers[header];
+      if (values != null && values.isNotEmpty) {
+        return values.first.split(',')[0].trim();
+      }
+    }
+
+    return remoteAddr.address;
   }
-
-  get contentLength => httpRequest.contentLength;
 
   /// Retrieves a request-scoped attribute by [key].
   ///
