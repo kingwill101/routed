@@ -20,6 +20,6 @@ void main() async {
     await browser.visit('/');
 
     await browser.assertSee('Bahasa');
-    await browser.assertTitle('Wikwsssipedia');
+    await browser.assertTitle('Wikipedia');
   }, useAsync: false);
 }
