@@ -11,35 +11,40 @@ export 'transport/mode.dart';
 /// A client for testing the Engine with different transport modes.
 class EngineTestClient {
   final TestTransport _transport;
+  TransportOptions? _options;
 
   /// Factory constructor to create an instance of [EngineTestClient].
   ///
   /// [engine] is an optional parameter to provide a custom [Engine] instance.
   /// [mode] specifies the transport mode, defaulting to [TransportMode.inMemory].
-  factory EngineTestClient(
-      [Engine? engine, TransportMode mode = TransportMode.inMemory]) {
+  factory EngineTestClient(Engine? engine,
+      {TransportMode mode = TransportMode.inMemory,
+      TransportOptions? options}) {
     engine ??= Engine();
     switch (mode) {
       case TransportMode.inMemory:
-        return EngineTestClient.inMemory(engine);
+        return EngineTestClient.inMemory(engine, options);
       case TransportMode.ephemeralServer:
-        return EngineTestClient.ephemeralServer(engine);
+        return EngineTestClient.ephemeralServer(engine, options);
     }
   }
 
   /// Constructor for creating an in-memory transport client.
-  EngineTestClient.inMemory([Engine? engine])
-      : _transport = InMemoryTransport(engine ?? Engine());
+  EngineTestClient.inMemory([Engine? engine, TransportOptions? options])
+      : _transport = InMemoryTransport(engine ?? Engine()),
+        _options = options;
 
   /// Constructor for creating an ephemeral server transport client.
-  EngineTestClient.ephemeralServer([Engine? engine])
-      : _transport = ServerTransport(engine ?? Engine());
+  EngineTestClient.ephemeralServer([Engine? engine, TransportOptions? options])
+      : _transport = ServerTransport(engine ?? Engine()),
+        _options = options;
 
   /// Sends a GET request to the specified [uri].
   ///
   /// [headers] is an optional parameter to provide additional headers.
   Future<TestResponse> get(String uri, {Map<String, List<String>>? headers}) {
-    return _transport.sendRequest('GET', uri, headers: headers);
+    return _transport.sendRequest('GET', uri,
+        headers: headers, options: _options);
   }
 
   /// Sends a GET request to the specified [uri] expecting a JSON response.
@@ -47,10 +52,12 @@ class EngineTestClient {
   /// [headers] is an optional parameter to provide additional headers.
   Future<TestResponse> getJson(String uri,
       {Map<String, List<String>>? headers}) {
-    return _transport.sendRequest('GET', uri, headers: {
-      ...?headers,
-      'Accept': ['application/json']
-    });
+    return _transport.sendRequest('GET', uri,
+        headers: {
+          ...?headers,
+          'Accept': ['application/json']
+        },
+        options: _options);
   }
 
   /// Sends a POST request with a JSON body to the specified [uri].
@@ -64,7 +71,8 @@ class EngineTestClient {
           ...?headers,
           'Content-Type': ['application/json']
         },
-        body: body);
+        body: body,
+        options: _options);
   }
 
   /// Sends a PUT request with a JSON body to the specified [uri].
@@ -78,7 +86,8 @@ class EngineTestClient {
           ...?headers,
           'Content-Type': ['application/json']
         },
-        body: body);
+        body: body,
+        options: _options);
   }
 
   /// Sends a PATCH request with a JSON body to the specified [uri].
@@ -92,7 +101,8 @@ class EngineTestClient {
           ...?headers,
           'Content-Type': ['application/json']
         },
-        body: body);
+        body: body,
+        options: _options);
   }
 
   /// Sends a DELETE request to the specified [uri] expecting a JSON response.
@@ -100,10 +110,12 @@ class EngineTestClient {
   /// [headers] is an optional parameter to provide additional headers.
   Future<TestResponse> deleteJson(String uri,
       {Map<String, List<String>>? headers}) {
-    return _transport.sendRequest('DELETE', uri, headers: {
-      ...?headers,
-      'Accept': ['application/json']
-    });
+    return _transport.sendRequest('DELETE', uri,
+        headers: {
+          ...?headers,
+          'Accept': ['application/json']
+        },
+        options: _options);
   }
 
   /// Sends a POST request to the specified [uri].
@@ -112,14 +124,16 @@ class EngineTestClient {
   /// [headers] is an optional parameter to provide additional headers.
   Future<TestResponse> post(String uri, dynamic body,
       {Map<String, List<String>>? headers}) {
-    return _transport.sendRequest('POST', uri, headers: headers, body: body);
+    return _transport.sendRequest('POST', uri,
+        headers: headers, body: body, options: _options);
   }
 
   /// Sends a HEAD request to the specified [uri].
   ///
   /// [headers] is an optional parameter to provide additional headers.
   Future<TestResponse> head(String uri, {Map<String, List<String>>? headers}) {
-    return _transport.sendRequest('HEAD', uri, headers: headers);
+    return _transport.sendRequest('HEAD', uri,
+        headers: headers, options: _options);
   }
 
   /// Sends a PUT request to the specified [uri].
@@ -128,7 +142,8 @@ class EngineTestClient {
   /// [headers] is an optional parameter to provide additional headers.
   Future<TestResponse> put(String uri, dynamic body,
       {Map<String, List<String>>? headers}) {
-    return _transport.sendRequest('PUT', uri, headers: headers, body: body);
+    return _transport.sendRequest('PUT', uri,
+        headers: headers, body: body, options: _options);
   }
 
   /// Sends a PATCH request to the specified [uri].
@@ -137,7 +152,8 @@ class EngineTestClient {
   /// [headers] is an optional parameter to provide additional headers.
   Future<TestResponse> patch(String uri, dynamic body,
       {Map<String, List<String>>? headers}) {
-    return _transport.sendRequest('PATCH', uri, headers: headers, body: body);
+    return _transport.sendRequest('PATCH', uri,
+        headers: headers, body: body, options: _options);
   }
 
   /// Sends a DELETE request to the specified [uri].
@@ -145,7 +161,8 @@ class EngineTestClient {
   /// [headers] is an optional parameter to provide additional headers.
   Future<TestResponse> delete(String uri,
       {Map<String, List<String>>? headers}) {
-    return _transport.sendRequest('DELETE', uri, headers: headers);
+    return _transport.sendRequest('DELETE', uri,
+        headers: headers, options: _options);
   }
 
   /// Closes the transport client.
@@ -155,7 +172,7 @@ class EngineTestClient {
   ///
   /// [headers] is an optional parameter to provide additional headers.
   request(String method, String s, [Map<String, List<String>>? headers]) =>
-      _transport.sendRequest(method, s, headers: headers);
+      _transport.sendRequest(method, s, headers: headers, options: _options);
 
   /// Sends a multipart POST request to the specified [path].
   ///
@@ -173,6 +190,7 @@ class EngineTestClient {
       path,
       body: body,
       headers: header.map((key, value) => MapEntry(key, [value])),
+      options: _options,
     );
   }
 }

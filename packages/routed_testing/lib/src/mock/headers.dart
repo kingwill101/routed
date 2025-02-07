@@ -68,7 +68,8 @@ MockHttpHeaders setupHeaders(Map<String, List<String>> requestHeaders) {
   when(mockRequestHeaders.contentType = any).thenAnswer((invocation) {
     final contentTypeArg = invocation.positionalArguments[0] as ContentType;
     contentType = contentTypeArg;
-    requestHeaders.putIfAbsent(HttpHeaders.contentTypeHeader, () => [contentType?.value ?? '']);
+    requestHeaders.putIfAbsent(
+        HttpHeaders.contentTypeHeader, () => [contentType?.value ?? '']);
   });
 
   when(mockRequestHeaders[any]).thenAnswer((invocation) {
