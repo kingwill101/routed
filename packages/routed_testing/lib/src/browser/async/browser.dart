@@ -1,13 +1,19 @@
 import 'dart:async';
 
 import 'package:routed_testing/src/browser/async/assertions.dart';
+import 'package:routed_testing/src/browser/async/cookie.dart';
 import 'package:routed_testing/src/browser/async/dialog.dart';
 import 'package:routed_testing/src/browser/async/frame.dart';
 import 'package:routed_testing/src/browser/async/keyboard.dart';
+import 'package:routed_testing/src/browser/async/local_storage.dart';
 import 'package:routed_testing/src/browser/async/mouse.dart';
+import 'package:routed_testing/src/browser/async/session_storage.dart';
 import 'package:routed_testing/src/browser/async/waiter.dart';
 import 'package:routed_testing/src/browser/async/window.dart';
 import 'package:routed_testing/src/browser/browser_config.dart';
+import 'package:routed_testing/src/browser/interfaces/download.dart';
+import 'package:routed_testing/src/browser/interfaces/emulation.dart';
+import 'package:routed_testing/src/browser/interfaces/network.dart';
 import 'package:routed_testing/src/browser/utils.dart';
 import 'package:webdriver/async_core.dart' show WebDriver, By;
 
@@ -17,12 +23,32 @@ class AsyncBrowser with AsyncBrowserAssertions implements Browser {
   final WebDriver driver;
   final BrowserConfig config;
 
+  @override
   late final keyboard = AsyncKeyboard(this);
+
+  @override
   late final mouse = AsyncMouse(this);
+
+  @override
   late final dialogs = AsyncDialogHandler(this);
+
+  @override
   late final frames = AsyncFrameHandler(this);
+
+  @override
   late final waiter = AsyncBrowserWaiter(this);
+
+  @override
   late final window = AsyncWindowManager(this);
+
+  @override
+  late final cookies = AsyncCookieHandler(this);
+
+  @override
+  late final localStorage = AsyncLocalStorageHandler(this);
+
+  @override
+  late final sessionStorage = AsyncSessionStorageHandler(this);
 
   AsyncBrowser(this.driver, this.config);
 
@@ -105,4 +131,16 @@ class AsyncBrowser with AsyncBrowserAssertions implements Browser {
 
   @override
   Future<void> quit() => driver.quit();
+
+  @override
+  // TODO: implement download
+  Download get download => throw UnimplementedError();
+
+  @override
+  // TODO: implement emulation
+  Emulation get emulation => throw UnimplementedError();
+
+  @override
+  // TODO: implement network
+  Network get network => throw UnimplementedError();
 }
