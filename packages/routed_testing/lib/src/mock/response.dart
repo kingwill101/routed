@@ -55,7 +55,9 @@ MockHttpResponse setupResponse(
 
   int statusCode = HttpStatus.ok;
   final mockResponseHeaders = setupHeaders(headers);
-  when(mockResponse.statusCode).thenReturn(statusCode);
+  when(mockResponse.statusCode).thenAnswer((c) {
+    return statusCode;
+  });
   when(mockResponse.statusCode = any).thenAnswer((invocation) {
     statusCode = invocation.positionalArguments.first as int;
   });

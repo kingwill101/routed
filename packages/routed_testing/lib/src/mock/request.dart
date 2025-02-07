@@ -80,7 +80,9 @@ MockHttpRequest setupRequest(String method, String uri,
   when(mockRequest.method).thenReturn(method);
   when(mockRequest.uri).thenReturn(mockUri);
   when(mockRequest.headers).thenReturn(mockRequestHeaders);
-  when(mockRequest.contentLength).thenReturn(body?.length ?? 0);
+  when(mockRequest.contentLength).thenAnswer((c) {
+    return body?.length ?? 0;
+  });
   when(mockRequest.persistentConnection).thenReturn(true);
 
   mockResponse ??= MockHttpResponse();
