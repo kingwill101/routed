@@ -71,6 +71,20 @@ class Validator {
   /// Constructs a [Validator] with a map of parsed rules.
   Validator(this._rules);
 
+  /// Registers a new validation rule to the global validation system
+  ///
+  /// This static method adds or updates custom validation rules in [kKnownRules].
+  /// When registering a rule with a name that already exists, the new rule replaces the old one.
+  ///
+  /// Example:
+  ///
+  /// Validator.registerRule(CustomPhoneRule());
+  ///
+  static void registerRule(ValidationRule rule) {
+    kKnownRules.removeWhere((existing) => existing.name == rule.name);
+    kKnownRules.add(rule);
+  }
+
   /// Factory method to create a [Validator] from a map of string rules.
   ///
   /// The input [rules] map contains field names as keys and rule strings as values.
