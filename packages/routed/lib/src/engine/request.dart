@@ -18,6 +18,8 @@ extension ServerExtension on Engine {
     if (_engineRoutes.isEmpty) {
       _build();
     }
+    // Ensure proxy configuration is parsed
+    await config.parseTrustedProxies();
     if (echoRoutes) printRoutes();
     port ??= 0;
     _server = await HttpServer.bind(host, port, shared: true);

@@ -81,8 +81,14 @@ class EngineConfig {
   List<String> remoteIPHeaders;
 
   /// List of trusted proxies.
-  /// Default is an empty list.
-  List<String> trustedProxies;
+  /// Default includes '0.0.0.0/0' and '::/0'.
+  List<String> trustedProxies = [];
+
+  /// Specifies the trusted platform, if any.
+  String? trustedPlatform;
+
+  /// Parsed list of network addresses from the trusted proxies.
+  List<({InternetAddress address, int prefixLength})> _parsedProxies = [];
 
   /// Directory for storing templates.
   /// Default is 'templates'.
@@ -130,7 +136,8 @@ class EngineConfig {
     this.unescapePathValues = true,
     this.forwardedByClientIP = true,
     this.remoteIPHeaders = const ['X-Forwarded-For', 'X-Real-IP'],
-    this.trustedProxies = const [],
+    this.trustedProxies = const ['0.0.0.0/0', '::/0'],
+    this.trustedPlatform,
     this.templateDirectory = 'templates',
     this.templateEngine,
     this.sessionConfig,
@@ -141,10 +148,59 @@ class EngineConfig {
   })  : fileSystem = fileSystem ?? const local.LocalFileSystem(),
         multipart = multipart ?? MultipartConfig(),
         cacheManager = cacheManager ?? CacheManager() {
+    if (trustedProxies.contains('0.0.0.0/0')) {
+      debugPrintWarning(
+          'Running with trustedProxies set to trust all IPs (0.0.0.0/0).\n'
+          'This is potentially insecure. Consider restricting trusted proxy IPs in production.');
+    }
     // Register a default file store
     this
         .cacheManager
         .registerStore('file', {'driver': 'file', 'path': 'cache'});
+  }
+
+  /// Parses the `trustedProxies` list into a list of `InternetAddress` and prefix length.
+  ///
+  /// This method should be called during engine initialization to pre-parse the trusted proxy
+  /// configurations for efficient lookup. It uses `InternetAddress.lookup` to resolve the
+  /// proxy addresses and supports both IPv4 and IPv6 addresses with optional CIDR notation
+  /// for specifying the prefix length.
+  ///
+  /// The parsed proxies are stored in the `_parsedProxies` field.
+  Future<void> parseTrustedProxies() async {
+    _parsedProxies = await Future.wait(
+      trustedProxies.map((proxy) async {
+        final parts = proxy.split('/');
+        final addr = await InternetAddress.lookup(parts[0]);
+        final prefix = parts.length > 1
+            ? int.parse(parts[1])
+            : (addr.first.type == InternetAddressType.IPv4 ? 32 : 128);
+        return (address: addr.first, prefixLength: prefix);
+      }),
+    );
+  }
+
+  /// Checks if the given `InternetAddress` is a trusted proxy.
+  ///
+  /// This method iterates through the parsed trusted proxies (`_parsedProxies`) and compares
+  /// the provided `InternetAddress` against each trusted proxy, taking into account the
+  /// prefix length specified in CIDR notation.
+  ///
+  /// Returns `true` if the address is a trusted proxy, `false` otherwise.
+  bool isTrustedProxy(InternetAddress addr) {
+    if (_parsedProxies.isEmpty) return false;
+    for (final proxy in _parsedProxies) {
+      final addrBytes = addr.rawAddress;
+      final proxyBytes = proxy.address.rawAddress;
+      final prefixBytes = (proxy.prefixLength / 8).ceil();
+      if (addrBytes.length != proxyBytes.length) continue;
+      var matches = true;
+      for (var i = 0; i < prefixBytes && matches; i++) {
+        matches = addrBytes[i] == proxyBytes[i];
+      }
+      if (matches) return true;
+    }
+    return false;
   }
 }
 
