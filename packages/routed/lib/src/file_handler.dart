@@ -101,7 +101,7 @@ class FileHandler {
       final fileStat = await fileSystem.stat(filePath);
 
       if (fileStat.type == FileSystemEntityType.directory) {
-        await serveDirectory(request, filePath);
+        await serveDirectory(request, filePath, file);
       } else if (fileStat.type == FileSystemEntityType.file) {
         await _serveFile(request, filePath, fileStat);
       } else {
@@ -117,7 +117,8 @@ class FileHandler {
   ///
   /// The [request] parameter specifies the HTTP request.
   /// The [dirPath] parameter specifies the directory to serve.
-  Future<void> serveDirectory(HttpRequest request, String dirPath) async {
+  Future<void> serveDirectory(HttpRequest request, String dirPath,
+      [String parent = '']) async {
     // First try to serve index.html if it exists
     final indexPath = p.join(p.join(rootPath, dirPath), 'index.html');
 
@@ -137,14 +138,15 @@ class FileHandler {
       return;
     }
 
-    await _listDirectory(request, dirPath);
+    await _listDirectory(request, dirPath, parent);
   }
 
   /// Lists the contents of a directory over HTTP.
   ///
   /// The [request] parameter specifies the HTTP request.
   /// The [dirPath] parameter specifies the directory to list.
-  Future<void> _listDirectory(HttpRequest request, String dirPath) async {
+  Future<void> _listDirectory(HttpRequest request, String dirPath,
+      [String? parent]) async {
     final directory = fileSystem.directory(p.join(rootPath, dirPath));
     final entities = await directory.list().toList();
 
@@ -156,8 +158,8 @@ class FileHandler {
     for (var entity in entities) {
       final name = p.basename(entity.path);
       final isDir = await FileSystemEntity.isDirectory(entity.path);
-      final displayName = isDir ? '$name/' : name;
-      final encodedName = Uri.encodeComponent(displayName);
+      final displayName = isDir ? '${entity.parent.basename}/$name/' : name;
+      final encodedName = Uri.encodeComponent("$parent/$name");
       request.response
           .write('<li><a href="$encodedName">$displayName</a></li>');
     }
@@ -184,7 +186,6 @@ class FileHandler {
     final contentType = _getContentType(file.path);
 
     request.response.headers.contentType = contentType;
-    request.response.headers.add(HttpHeaders.contentTypeHeader, contentType);
     request.response.headers.add(HttpHeaders.contentLengthHeader, length);
     request.response.headers.add(
         HttpHeaders.lastModifiedHeader, HttpDate.format(fileStat.modified));
