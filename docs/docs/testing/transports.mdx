@@ -1,0 +1,222 @@
+---
+title: Test Transports
+description: Learn about the different test transport modes in Routed
+---
+
+# Test Transports
+
+Routed provides two transport mechanisms for testing: InMemory and EphemeralServer.
+
+## InMemory Transport
+
+Default transport that simulates HTTP requests without actual network connections. While this mode is sufficient for most test cases, it has some limitations since it mocks HTTP behavior:
+
+### What Works
+- Route matching
+- Request/response body handling
+- Basic headers
+- JSON content
+- Form data
+- File uploads (in memory)
+- Session handling
+- Cookie basics
+- Status codes
+- Response types (JSON, HTML, etc)
+
+### Limitations
+- Some complex header behaviors
+- Certain network-specific features
+- Real TCP/IP behaviors
+- Some cookie attributes
+- Some HTTP/2 features
+- WebSocket testing
+- Some SSL/TLS features
+
+For these cases, use the EphemeralServer transport.
+
+```dart
+// Implicitly using InMemory transport
+final client = EngineTestClient(RoutedRequestHandler(engine));
+
+// Or explicitly
+final client = EngineTestClient.inMemory(engine);
+```
+
+### Advantages
+- Faster execution
+- No network overhead
+- No port conflicts
+- Suitable for most tests
+
+### Limitations
+- Cannot test actual HTTP behavior
+- Some headers may not be perfectly simulated
+- Network-specific issues can't be tested
+- State can leak between test cases in the same process
+
+### State Isolation Warning
+
+When using InMemory transport, internal state may leak between test cases due to shared memory and implementation details. To ensure test isolation:
+
+```dart
+// RECOMMENDED: Create new engine and client for each test
+void main() {
+  group('API Tests', () {
+    test('test 1', () async {
+      final engine = Engine();
+      final client = EngineTestClient(RoutedRequestHandler(engine));
+      // Test implementation...
+      await client.close();
+    });
+
+    test('test 2', () async {
+      final engine = Engine();
+      final client = EngineTestClient(RoutedRequestHandler(engine));
+      // Test implementation...
+      await client.close();
+    });
+  });
+}
+
+// NOT RECOMMENDED: State may leak between tests
+void main() {
+  late Engine engine;
+  late EngineTestClient client;
+
+  setUp(() {
+    engine = Engine();
+    client = EngineTestClient(RoutedRequestHandler(engine));
+  });
+
+  test('test 1', () async {
+    // May be affected by state from previous tests
+    await client.postJson('/cache', {'key': 'value'});
+  });
+
+  test('test 2', () async {
+    // Cache from test 1 might still exist
+    final response = await client.getJson('/cache');
+  });
+}
+```
+
+For guaranteed isolation, use `TransportMode.ephemeralServer`:
+
+```dart
+// Each request gets a fresh server instance
+final client = EngineTestClient(
+  engine,
+  TransportMode.ephemeralServer
+);
+```
+- Potential state leakage between test cases
+
+### Important: State Isolation
+
+The InMemory transport can sometimes leak state between test cases due to implementation details. To avoid this:
+
+```dart
+// GOOD: Isolate each test with its own engine and client
+void main() {
+  group('API Tests', () {
+    test('test 1', () async {
+      final engine = Engine();
+      final client = EngineTestClient(RoutedRequestHandler(engine));
+      // Test implementation...
+    });
+    
+    test('test 2', () async {
+      final engine = Engine();
+      final client = EngineTestClient(RoutedRequestHandler(engine));
+      // Test implementation...
+    });
+  });
+}
+
+// BAD: Shared engine/client may leak state
+void main() {
+  late Engine engine;
+  late EngineTestClient client;
+  
+  setUp(() {
+    engine = Engine();
+    client = EngineTestClient(RoutedRequestHandler(engine));
+  });
+  
+  test('test 1', () async {
+    // May be affected by state from other tests
+  });
+  
+  test('test 2', () async {
+    // May be affected by state from other tests
+  });
+}
+```
+
+Alternatively, use the EphemeralServer transport which provides better state isolation by default since it creates a fresh server instance for each request:
+
+```dart
+final client = EngineTestClient(
+  engine,
+  TransportMode.ephemeralServer
+);
+```
+
+## Ephemeral Server Transport
+
+Creates a real HTTP server for each test:
+
+```dart
+final client = EngineTestClient.ephemeralServer(engine);
+```
+
+### Advantages
+- Tests real HTTP behavior
+- Network headers work exactly as in production
+- Can test network-related features
+- More accurate simulation
+
+### Limitations
+- Slower than InMemory
+- Requires port management
+- More resource intensive
+
+## Choosing a Transport
+
+```dart
+// Default for most tests
+final client = EngineTestClient(RoutedRequestHandler(engine));
+
+// When testing HTTP-specific behavior
+final client = EngineTestClient(
+  engine,
+  TransportMode.ephemeralServer
+);
+
+// When testing complex headers/cookies
+final client = EngineTestClient(
+  engine,
+  TransportMode.ephemeralServer
+);
+```
+
+## Transport Lifecycle
+
+```dart
+void main() {
+  late EngineTestClient client;
+
+  setUp(() {
+    client = EngineTestClient(RoutedRequestHandler(engine));
+  });
+
+  tearDown(() async {
+    await client.close();  // Important for EphemeralServer
+  });
+  
+  test('example test', () async {
+    final response = await client.get('/test');
+    response.assertStatus(200);
+  });
+}
+```

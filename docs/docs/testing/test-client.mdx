@@ -1,0 +1,173 @@
+---
+title: Engine Test Client
+description: Learn about the EngineTestClient and its testing modes
+---
+
+# Engine Test Client
+
+The `EngineTestClient` provides two modes for testing your Routed applications:
+
+## Testing Modes
+
+### InMemory Mode
+
+Uses simulated requests/responses without actual HTTP connections. This is faster and sufficient for most tests:
+
+```dart
+// Default is InMemory mode
+final client = EngineTestClient(RoutedRequestHandler(engine));
+
+// Or explicitly specify
+final client = EngineTestClient(
+  engine, 
+  TransportMode.inMemory
+);
+```
+
+### Ephemeral Server Mode
+
+Spins up a real HTTP server for each test. Useful when you need to test real HTTP behavior:
+
+```dart
+final client = EngineTestClient(
+  engine,
+  TransportMode.ephemeralServer
+);
+```
+
+## Making Requests
+
+### Basic Requests
+
+```dart
+// GET request
+final response = await client.get('/users');
+
+// POST request
+final response = await client.post(
+  '/users', 
+  {'name': 'John'}
+);
+
+// PUT request  
+final response = await client.put(
+  '/users/1',
+  {'name': 'Updated'}
+);
+
+// PATCH request
+final response = await client.patch(
+  '/users/1',
+  {'status': 'active'}  
+);
+
+// DELETE request
+final response = await client.delete('/users/1');
+
+// HEAD request
+final response = await client.head('/users');
+```
+
+### JSON Requests
+
+```dart
+// GET JSON
+final response = await client.getJson('/api/users');
+
+// POST JSON
+final response = await client.postJson(
+  '/api/users',
+  {
+    'name': 'John',
+    'email': 'john@example.com'
+  }
+);
+
+// PUT JSON
+final response = await client.putJson(
+  '/api/users/1',
+  {'name': 'Updated'}
+);
+
+// PATCH JSON  
+final response = await client.patchJson(
+  '/api/users/1',
+  {'status': 'active'}
+);
+
+// DELETE JSON
+final response = await client.deleteJson('/api/users/1');
+```
+
+### Multipart Requests
+
+```dart
+final response = await client.multipart(
+  '/upload',
+  (builder) {
+    // Add fields
+    builder.field('name', 'John');
+    builder.field('age', '30');
+    
+    // Add files
+    builder.file(
+      'document',
+      'hello.txt',
+      'Hello World'.codeUnits
+    );
+    
+    builder.file(
+      'image',
+      'photo.jpg',
+      imageBytes,
+      contentType: 'image/jpeg'
+    );
+  }
+);
+```
+
+### Custom Headers
+
+```dart
+final response = await client.getJson(
+  '/api/users',
+  headers: {
+    'Authorization': ['Bearer token'],
+    'X-Custom-Header': ['value']
+  }
+);
+```
+
+## Testing Responses
+
+The client returns `TestResponse` objects that provide rich assertion capabilities:
+
+```dart
+final response = await client.getJson('/api/users');
+
+response
+  // Status assertions
+  ..assertStatus(200)
+  
+  // Header assertions
+  ..assertHasHeader('Content-Type')
+  ..assertHeader('Content-Type', 'application/json')
+  ..assertHeaderContains('Content-Type', 'json')
+  
+  // Body assertions
+  ..assertBodyContains('John')
+  ..assertBodyEquals('{"name":"John"}')
+  ..assertBodyIsNotEmpty()
+  
+  // JSON assertions
+  ..assertJsonPath('user.name', 'John')
+  ..assertJsonContains({
+    'user': {'name': 'John'}
+  })
+  ..assertJson((json) {
+    json
+      .has('user')
+      .where('user.name', 'John')
+      .whereType<String>('user.email');
+  });
+```

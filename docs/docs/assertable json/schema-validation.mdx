@@ -1,0 +1,307 @@
+---
+title: Schema Validation
+description: Learn about validating JSON structures against expected schemas
+---
+
+# Schema Validation
+
+Validating the structure of JSON objects against an expected schema is a powerful way to ensure your data conforms to your requirements. The `assertable_json` package provides robust tools for schema validation.
+
+## Basic Schema Validation
+
+```dart
+json.matchesSchema({
+  'id': int,
+  'name': String,
+  'email': String,
+  'isActive': bool,
+  'createdAt': String
+});
+```
+
+The `matchesSchema` method validates that:
+1. All keys in the schema exist in the JSON
+2. The values match the expected types
+
+## Optional Fields
+
+You can mark fields as optional by appending '?' to the key:
+
+```dart
+json.matchesSchema({
+  'id': int,
+  'name': String,
+  'email': String,
+  'phone?': String,  // Optional field
+  'address?': Map    // Optional field
+});
+```
+
+## Structure Validation with AssertableJsonString
+
+The `AssertableJsonString` class provides an `assertStructure` method for more complex schema validation:
+
+```dart
+final jsonString = AssertableJsonString(responseString);
+
+jsonString.assertStructure({
+  'user': {
+    'id': int,
+    'name': String,
+    'email': String
+  },
+  'settings': {
+    'theme': String,
+    'notifications': bool
+  }
+});
+```
+
+## Validating Arrays in Schemas
+
+For arrays with consistent structure, you can use wildcard patterns:
+
+```dart
+jsonString.assertStructure({
+  'users': {
+    '*': [           // Wildcard for all array items
+      'id',
+      'name',
+      'email'
+    ]
+  },
+  'meta': {
+    'total': null,
+    'page': null
+  }
+});
+```
+
+This validates that each item in the 'users' array has 'id', 'name', and 'email' properties.
+
+## Combining Schema Validation with Other Assertions
+
+Schema validation works well combined with other assertion types:
+
+```dart
+json
+  // First validate the schema
+  .matchesSchema({
+    'id': int,
+    'name': String,
+    'email': String,
+    'isActive': bool
+  })
+  
+  // Then validate specific values
+  .where('id', 123)
+  .where('name', 'John Doe')
+  .whereContains('email', '@')
+  .where('isActive', true);
+```
+
+## Handling Complex Structures
+
+For more complex schemas with nested objects and arrays:
+
+```dart
+json.matchesSchema({
+  'user': Map,       // Validate as a Map without specifying contents
+  'items': List,     // Validate as a List without specifying contents
+  'settings': {      // Validate specific structure
+    'theme': String,
+    'language': String
+  }
+});
+```
+
+## Validating Schemas in Arrays
+
+```dart
+json.scope('users', (users) => {
+  users.each((user) => {
+    user.matchesSchema({
+      'id': int,
+      'name': String,
+      'email': String
+    });
+  });
+});
+```
+
+## Schema Validation vs Structure Validation
+
+There are two main approaches to schema validation in the package:
+
+1. **`matchesSchema()`** - Used with `AssertableJson`, focuses on type validation
+2. **`assertStructure()`** - Used with `AssertableJsonString`, focuses on structure validation
+
+The key differences:
+
+| Feature | matchesSchema() | assertStructure() |
+|---------|----------------|-------------------|
+| Class used with | AssertableJson | AssertableJsonString |
+| Primary focus | Type checking | Structure verification |
+| Handling of values | Validates types | Only checks existence |
+| Optional fields | Supports with '?' syntax | Less explicit support |
+| Array handling | Limited | Better with wildcards |
+
+## Advanced Schema Validation Techniques
+
+### Recursive Schema Validation
+
+For deeply nested structures:
+
+```dart
+json.matchesSchema({
+  'user': {
+    'id': int,
+    'profile': {
+      'settings': {
+        'preferences': {
+          'theme': String,
+          'language': String
+        }
+      }
+    }
+  }
+});
+```
+
+### Combining with Custom Logic
+
+```dart
+// First validate the schema
+json.matchesSchema({
+  'user': Map,
+  'settings': Map
+});
+
+// Then validate specific parts with custom logic
+json.scope('user', (user) => {
+  if (user.get<String>('role') == 'admin') {
+    user.matchesSchema({
+      'role': String,
+      'permissions': List,
+      'accessLevel': int
+    });
+  } else {
+    user.matchesSchema({
+      'role': String,
+      'permissions': List
+    });
+  }
+});
+```
+
+## Complete Example
+
+```dart
+test('testing API response structure', () {
+  final jsonString = '''
+  {
+    "status": "success",
+    "data": {
+      "users": [
+        {
+          "id": 1,
+          "name": "John Doe",
+          "email": "john@example.com",
+          "profile": {
+            "avatar": "avatar1.jpg",
+            "bio": "Developer"
+          }
+        },
+        {
+          "id": 2,
+          "name": "Jane Smith",
+          "email": "jane@example.com",
+          "profile": {
+            "avatar": "avatar2.jpg",
+            "bio": "Designer"
+          }
+        }
+      ],
+      "pagination": {
+        "total": 50,
+        "page": 1,
+        "perPage": 10
+      }
+    },
+    "meta": {
+      "version": "1.0",
+      "timestamp": 1609459200
+    }
+  }
+  ''';
+
+  final response = AssertableJsonString(jsonString);
+  
+  // Validate overall structure
+  response.assertStructure({
+    'status': null,
+    'data': {
+      'users': {
+        '*': [         // Each user has these fields
+          'id',
+          'name',
+          'email',
+          'profile'
+        ]
+      },
+      'pagination': {
+        'total': null,
+        'page': null,
+        'perPage': null
+      }
+    },
+    'meta': {
+      'version': null,
+      'timestamp': null
+    }
+  });
+  
+  // Now validate specific parts using AssertableJson
+  final json = AssertableJson(response.decoded);
+  
+  json
+    .whereType<String>('status')
+    .where('status', 'success')
+    
+    .scope('data.users', (users) => {
+      users.each((user) => {
+        user
+          .matchesSchema({
+            'id': int,
+            'name': String,
+            'email': String,
+            'profile': Map
+          });
+          
+        user.scope('profile', (profile) => {
+          profile.matchesSchema({
+            'avatar': String,
+            'bio': String
+          });
+        });
+      });
+    })
+    
+    .scope('data.pagination', (pagination) => {
+      pagination
+        .matchesSchema({
+          'total': int,
+          'page': int,
+          'perPage': int
+        });
+    })
+    
+    .scope('meta', (meta) => {
+      meta
+        .matchesSchema({
+          'version': String,
+          'timestamp': int
+        });
+    });
+});
+```

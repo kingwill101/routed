@@ -1,0 +1,84 @@
+---
+title: Assertable JSON
+description: A powerful, fluent JSON testing utility for Dart
+---
+
+# assertable_json
+
+A powerful, fluent JSON testing utility for Dart that makes it easy to write expressive and readable assertions for JSON data structures.
+
+## Overview
+
+The `assertable_json` package provides a fluent API for testing JSON data in Dart applications. Inspired by Laravel's JSON testing utilities, it allows you to write clear, readable assertions for complex JSON structures.
+
+## Features
+
+- 🔍 **Property Validation**: Assert presence/absence of keys, nested properties, and values
+- 📐 **Type Checking**: Verify types with strong type safety
+- 🔢 **Numeric Assertions**: Compare numbers, check ranges, validate mathematical properties
+- 🎯 **Pattern Matching**: Test values against patterns and custom conditions
+- 📦 **Schema Validation**: Validate JSON structure against expected schemas
+- 🎭 **Conditional Testing**: Execute assertions based on conditions
+- 🔄 **Chain Operations**: Fluent API for chaining multiple assertions
+- 🎨 **JSON String Testing**: Special support for testing JSON string responses
+
+## Installation
+
+Add to your `pubspec.yaml`:
+
+```yaml
+dependencies:
+  assertable_json: ^0.1.1
+```
+
+Or install via command line:
+
+```bash
+dart pub add assertable_json
+```
+
+## Basic Usage
+
+```dart
+import 'package:assertable_json/assertable_json.dart';
+import 'package:test/test.dart';
+
+void main() {
+  test('verify user data', () {
+    final json = AssertableJson({
+      'user': {
+        'id': 123,
+        'name': 'John Doe',
+        'email': 'john@example.com',
+        'age': 30,
+        'roles': ['admin', 'user']
+      }
+    });
+
+    json
+      .has('user', (user) => user
+        .has('id')
+        .whereType<int>('id')
+        .has('name')
+        .whereType<String>('name')
+        .has('email')
+        .whereContains('email', '@')
+        .has('age')
+        .isGreaterThan('age', 18)
+        .has('roles')
+        .count('roles', 2));
+  });
+}
+```
+
+## Getting Started
+
+Visit the following pages to learn more about using the assertable_json package:
+
+- [Property Assertions](./property-assertions) - Learn about basic property validation
+- [Type & Value Assertions](./type-value-assertions) - Type checking and value matching
+- [Numeric Assertions](./numeric-assertions) - For validating numeric values
+- [Array & Object Testing](./array-object-testing) - Working with complex structures
+- [Schema Validation](./schema-validation) - Matching against expected schema
+- [Debugging Tools](./debugging-tools) - Utilities for troubleshooting
+- [JSON String Testing](./json-string-testing) - Testing JSON string responses

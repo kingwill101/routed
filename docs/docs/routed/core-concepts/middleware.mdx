@@ -1,0 +1,229 @@
+---
+title: Middleware
+description: Learn how to use middleware in Routed for request/response processing
+---
+
+Middleware provides a way to intercept and process requests/responses at different levels of your application.
+
+
+### Global Middleware
+
+Applied to all routes:
+
+```dart
+final engine = Engine(
+  middlewares: [
+    loggerMiddleware,
+    corsMiddleware,
+    securityHeadersMiddleware
+  ]
+);
+```
+
+### Group Middleware
+
+Applied to specific route groups:
+
+```dart
+engine.group(
+  path: '/admin',
+  middlewares: [
+    authMiddleware,
+    roleCheckMiddleware(['admin'])
+  ],
+  builder: (router) {
+    router.get('/dashboard', dashboardHandler);
+    router.get('/users', usersHandler);
+  }
+);
+```
+
+### Route Middleware
+
+Applied to specific routes:
+
+```dart
+router.get('/profile',
+  handler,
+  middlewares: [authMiddleware]
+);
+```
+
+## Common Middleware Examples
+
+### Authentication
+
+```dart
+Future<void> authMiddleware(EngineContext ctx) async {
+  final token = ctx.requestHeader('Authorization');
+
+  if (token == null) {
+    ctx.json({
+      'error': 'No token provided'
+    }, statusCode: 401);
+    return;
+  }
+
+  try {
+    final user = await validateToken(token);
+    ctx.set('user', user);
+    await ctx.next();
+  } catch (e) {
+    ctx.json({
+      'error': 'Invalid token'
+    }, statusCode: 401);
+  }
+}
+```
+
+### CORS
+
+```dart
+Future<void> corsMiddleware(EngineContext ctx) async {
+  ctx.setHeader('Access-Control-Allow-Origin', '*');
+  ctx.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE');
+  ctx.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
+
+  if (ctx.request.method == 'OPTIONS') {
+    ctx.status(200);
+    return;
+  }
+
+  await ctx.next();
+}
+```
+
+### Rate Limiting
+
+```dart
+Future<void> rateLimitMiddleware(EngineContext ctx) async {
+  final ip = ctx.request.clientIP;
+  final key = 'rate_limit:$ip';
+
+  final count = await ctx.getCache(key) ?? 0;
+  if (count >= 100) { // 100 requests per minute
+    ctx.json({
+      'error': 'Too many requests'
+    }, statusCode: 429);
+    return;
+  }
+
+  await ctx.incrementCache(key, 1);
+  await ctx.next();
+}
+```
+
+### Request Logging
+
+```dart
+Future<void> loggerMiddleware(EngineContext ctx) async {
+  final startTime = DateTime.now();
+  final requestId = generateRequestId();
+
+  ctx.set('request_id', requestId);
+  ctx.setHeader('X-Request-ID', requestId);
+
+  try {
+    await ctx.next();
+
+    final duration = DateTime.now().difference(startTime);
+    print('[${ctx.request.method}] ${ctx.request.path}'
+          ' - ${ctx.response.statusCode}'
+          ' (${duration.inMilliseconds}ms)');
+
+  } catch (e) {
+    print('Error processing request: $e');
+    rethrow;
+  }
+}
+```
+
+### Error Handling
+
+```dart
+Future<void> errorHandlerMiddleware(EngineContext ctx) async {
+  try {
+    await ctx.next();
+  } catch (e) {
+    if (e is ValidationError) {
+      ctx.json({
+        'error': 'Validation failed',
+        'details': e.errors
+      }, statusCode: 422);
+    } else if (e is AuthError) {
+      ctx.json({
+        'error': e.message
+      }, statusCode: 401);
+    } else {
+      ctx.json({
+        'error': 'Internal server error'
+      }, statusCode: 500);
+      logError(e);
+    }
+  }
+}
+```
+
+## Middleware Composition
+
+### Chaining Middleware
+
+```dart
+router.group(
+  middlewares: [
+    loggerMiddleware,
+    corsMiddleware,
+    authMiddleware,
+    rateLimitMiddleware
+  ],
+  builder: (router) {
+    // Protected routes...
+  }
+);
+```
+
+### Conditional Middleware
+
+```dart
+Future<void> conditionalMiddleware(EngineContext ctx) async {
+  if (isMaintenanceMode) {
+    ctx.json({
+      'error': 'Service under maintenance'
+    }, statusCode: 503);
+    return;
+  }
+
+  if (ctx.request.path.startsWith('/api')) {
+    await apiMiddleware(ctx);
+  } else {
+    await webMiddleware(ctx);
+  }
+
+  await ctx.next();
+}
+```
+
+
+## Middleware Order
+
+The execution order is important:
+
+1. Global middleware
+2. Group middleware
+3. Route middleware
+4. Route handler
+5. Middleware cleanup (reverse order)
+
+Example flow:
+
+```dart
+// Request →
+loggerMiddleware
+  → corsMiddleware
+    → authMiddleware
+      → routeHandler
+    ← authMiddleware cleanup
+  ← corsMiddleware cleanup
+← loggerMiddleware cleanup
+// Response
+```

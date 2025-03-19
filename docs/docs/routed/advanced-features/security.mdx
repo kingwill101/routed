@@ -1,0 +1,128 @@
+
+# Security Features
+
+## Proxy Trust and Client IP Resolution
+
+Routed provides secure-by-default proxy handling with explicit opt-in required for trusting proxies or CDN platforms.
+
+### Default Behavior
+
+By default, Routed does not trust any proxies and will return the direct client IP. This is the safest approach for applications not using proxies or CDNs.
+
+### Enabling Proxy Support
+
+To trust specific proxies:
+
+```dart
+final engine = Engine(
+  config: EngineConfig(
+    features: EngineFeatures(enableProxySupport: true),
+    trustedProxies: ['192.168.1.2', '10.0.0.0/8']
+  )
+);
+```
+
+When proxy support is enabled:
+
+- Only listed IP addresses and CIDR ranges are trusted
+- X-Forwarded-For headers are only processed from trusted proxies
+- Client IP resolution follows the proxy chain correctly
+
+### CDN and Platform Trust
+For applications behind CDNs, Routed provides predefined trusted platform headers:
+
+```dart
+final engine = Engine(
+  config: EngineConfig(
+    features: EngineFeatures(enableTrustedPlatform: true),
+    trustedPlatform: EngineConfig.platformCloudflare
+  )
+);
+```
+
+Available platform constants:
+
+`platformCloudflare`: Uses CF-Connecting-IP header
+`platformGoogleAppEngine`: Uses X-Appengine-Remote-Addr header
+`platformFlyIO`: Uses Fly-Client-IP header
+
+You can also specify custom headers:
+```
+trustedPlatform: 'X-Custom-Client-IP'
+```
+
+### Feature Priority
+
+- If trusted platform is enabled, its header takes precedence
+- If only proxy support is enabled, trusted proxy rules apply
+- If neither is enabled, direct client IP is used
+
+### Security Considerations
+- Never trust all proxies by default
+- Only enable proxy support if you use reverse proxies
+- Validate CDN headers are not user-controllable
+- Use CIDR ranges carefully to limit trust scope
+- Monitor logs for IP spoofing attempts
+
+
+### Best Practices
+1. Minimal Trust Configuration:
+```dart
+// Trust single proxy
+engine.config.trustedProxies = ['10.0.0.1'];
+```
+
+2. CDN Configuration:
+```
+// Using Cloudflare
+engine.config.trustedPlatform = EngineConfig.platformCloudflare;
+```
+
+3. Development Setup:
+```
+// Local development with proxy
+if (isDevelopment) {
+  engine.config.trustedProxies = ['127.0.0.1'];
+}
+```
+
+### Client IP Resolution
+
+The `Context.clientIP()` method follows this resolution order:
+
+- Trusted platform header if enabled
+- X-Forwarded-For from trusted proxies if enabled
+- Direct remote IP address
+
+
+### Example Configurations
+
+1. Basic Proxy Setup:
+
+```dart
+engine.config = EngineConfig(
+    features: EngineFeatures(enableProxySupport: true),
+    trustedProxies: ['192.168.1.2']
+);
+```
+
+2. CDN Configuration:
+
+```dart
+    engine.config = EngineConfig(
+    features: EngineFeatures(enableTrustedPlatform: true),
+    trustedPlatform: EngineConfig.platformCloudflare
+    );
+```
+
+3. Mixed Environment:
+    ```dart
+    engine.config = EngineConfig(
+    features: EngineFeatures(
+        enableProxySupport: true,
+        enableTrustedPlatform: true
+    ),
+    trustedProxies: ['10.0.0.0/8'],
+    trustedPlatform: EngineConfig.platformCloudflare
+    );
+```

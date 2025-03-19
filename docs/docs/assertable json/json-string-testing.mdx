@@ -1,0 +1,306 @@
+---
+title: JSON String Testing
+description: Learn about testing JSON string responses with assertable_json
+---
+
+# JSON String Testing
+
+The `assertable_json` package provides the `AssertableJsonString` class specifically designed for testing JSON data that comes in string format, such as API responses.
+
+## Introduction to AssertableJsonString
+
+While `AssertableJson` works with already parsed JSON objects, `AssertableJsonString` accepts JSON string input and provides additional methods for testing it:
+
+```dart
+// Create from JSON string
+final jsonResponse = AssertableJsonString('{"status":"success","data":{"id":123}}');
+
+// Or from an object (it will be converted to a string)
+final jsonResponse = AssertableJsonString({
+  "status": "success",
+  "data": {"id": 123}
+});
+```
+
+## Basic Assertions
+
+### Count Assertions
+
+```dart
+jsonResponse
+  // Check root element count
+  .assertCount(2)  // Has 2 root properties: 'status' and 'data'
+  
+  // Check count within a path
+  .assertCount(1, 'data');  // 'data' has 1 property
+```
+
+### Structure Validation
+
+```dart
+jsonResponse.assertStructure({
+  'status': null,  // Just check existence
+  'data': {
+    'id': null,    // Just check existence
+    'user': {
+      'name': null,
+      'email': null
+    }
+  }
+});
+```
+
+### Fragment Validation
+
+Check if the JSON contains specific data fragments:
+
+```dart
+jsonResponse.assertFragment({
+  'status': 'success'
+});
+
+// Deeper fragments
+jsonResponse.assertFragment({
+  'data': {
+    'id': 123
+  }
+});
+```
+
+### Exact Matching
+
+Validate that the JSON matches exactly with the provided data:
+
+```dart
+jsonResponse.assertExact({
+  'status': 'success',
+  'data': {
+    'id': 123
+  }
+});
+```
+
+## Accessing Nested Data
+
+Use JSON path notation to retrieve nested values:
+
+```dart
+final userId = jsonResponse.jsonPath('data.id');
+expect(userId, equals(123));
+
+final status = jsonResponse.jsonPath('status');
+expect(status, equals('success'));
+```
+
+## Combining with AssertableJson
+
+You can combine `AssertableJsonString` with `AssertableJson` for more comprehensive testing:
+
+```dart
+// First validate basic structure 
+final jsonResponse = AssertableJsonString(responseString)
+  .assertCount(3)
+  .assertStructure({
+    'status': null,
+    'data': {
+      'users': {
+        '*': ['id', 'name']  // All array items have these fields
+      }
+    },
+    'meta': null
+  });
+
+// Then use AssertableJson for detailed assertions
+final json = AssertableJson(jsonResponse.decoded);
+
+json
+  .where('status', 'success')
+  .scope('data.users', (users) {
+    users.each((user) {
+      user
+        .whereType<int>('id')
+        .whereType<String>('name');
+    });
+  });
+```
+
+## Testing API Responses
+
+A common use case is testing HTTP API responses:
+
+```dart
+test('API returns expected user data', () async {
+  // Make the API call
+  final response = await httpClient.get('/api/users/1');
+  
+  // Create AssertableJsonString from response body
+  final jsonResponse = AssertableJsonString(response.body);
+  
+  // Test the response structure and content
+  jsonResponse
+    .assertCount(2)
+    .assertStructure({
+      'status': null,
+      'data': {
+        'user': {
+          'id': null,
+          'name': null,
+          'email': null
+        }
+      }
+    })
+    .assertFragment({
+      'status': 'success'
+    });
+  
+  // Get the decoded data for further testing
+  final userData = jsonResponse.jsonPath('data.user');
+  expect(userData['id'], equals(1));
+});
+```
+
+## Handling Arrays
+
+Testing arrays in JSON strings:
+
+```dart
+test('API returns list of products', () async {
+  final jsonResponse = AssertableJsonString('''
+  {
+    "status": "success",
+    "products": [
+      {"id": 1, "name": "Product 1", "price": 29.99},
+      {"id": 2, "name": "Product 2", "price": 49.99},
+      {"id": 3, "name": "Product 3", "price": 19.99}
+    ],
+    "count": 3
+  }
+  ''');
+  
+  // Check structure and count
+  jsonResponse
+    .assertCount(3)  // 3 root properties
+    .assertStructure({
+      'status': null,
+      'products': {
+        '*': ['id', 'name', 'price']  // Each product has these fields
+      },
+      'count': null
+    });
+  
+  // Check fragment
+  jsonResponse.assertFragment({
+    'status': 'success',
+    'count': 3
+  });
+  
+  // Access array for more detailed testing
+  final products = jsonResponse.jsonPath('products') as List;
+  expect(products.length, equals(3));
+  expect(products[0]['name'], equals('Product 1'));
+});
+```
+
+## Complete Example
+
+```dart
+test('complete JSON string testing example', () {
+  final jsonStr = '''
+  {
+    "status": "success",
+    "data": {
+      "user": {
+        "id": 123,
+        "name": "John Doe",
+        "email": "john@example.com",
+        "isActive": true,
+        "roles": ["admin", "user"]
+      },
+      "permissions": {
+        "read": true,
+        "write": true,
+        "delete": false
+      }
+    },
+    "meta": {
+      "timestamp": 1609459200,
+      "version": "1.0"
+    }
+  }
+  ''';
+
+  final response = AssertableJsonString(jsonStr);
+  
+  // Basic structure validation
+  response
+    .assertCount(3)  // 3 root properties
+    .assertStructure({
+      'status': null,
+      'data': {
+        'user': {
+          'id': null,
+          'name': null,
+          'email': null,
+          'isActive': null,
+          'roles': null
+        },
+        'permissions': {
+          'read': null,
+          'write': null,
+          'delete': null
+        }
+      },
+      'meta': {
+        'timestamp': null,
+        'version': null
+      }
+    });
+  
+  // Fragment testing
+  response
+    .assertFragment({
+      'status': 'success',
+      'data': {
+        'user': {
+          'id': 123,
+          'name': 'John Doe'
+        }
+      }
+    });
+  
+  // More detailed testing with AssertableJson
+  final json = AssertableJson(response.decoded);
+  
+  json
+    .where('status', 'success')
+    
+    .scope('data.user', (user) {
+      user
+        .whereType<int>('id')
+        .whereType<String>('name')
+        .whereType<String>('email')
+        .whereContains('email', '@')
+        .whereType<bool>('isActive')
+        .where('isActive', true)
+        .whereType<List>('roles')
+        .count('roles', 2);
+    })
+    
+    .scope('data.permissions', (permissions) {
+      permissions
+        .whereType<bool>('read')
+        .whereType<bool>('write')
+        .whereType<bool>('delete')
+        .where('read', true)
+        .where('write', true)
+        .where('delete', false);
+    })
+    
+    .scope('meta', (meta) {
+      meta
+        .whereType<int>('timestamp')
+        .whereType<String>('version')
+        .where('version', '1.0');
+    });
+});
+```

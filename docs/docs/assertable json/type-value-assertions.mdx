@@ -1,0 +1,179 @@
+---
+title: Type & Value Assertions
+description: Learn about type checking and value matching in assertable_json
+---
+
+# Type & Value Assertions
+
+Verifying the correct types and values of properties is essential for thorough JSON testing. The `assertable_json` package provides comprehensive methods for these validations.
+
+## Type Assertions
+
+### Basic Type Checking
+
+```dart
+json
+  .whereType<int>('id')
+  .whereType<String>('name')
+  .whereType<bool>('isActive')
+  .whereType<List>('items')
+  .whereType<Map>('settings')
+```
+
+### Checking Types of Multiple Properties
+
+```dart
+json.whereAllType<String>(['title', 'description', 'category']);
+```
+
+### Type Checking in Arrays
+
+```dart
+json.scope('items', (items) => {
+  items.each((item) => {
+    item.whereType<int>('id');
+    item.whereType<String>('name');
+  });
+});
+```
+
+## Value Assertions
+
+### Exact Matching
+
+```dart
+json
+  .where('status', 'active')            // Equal to "active"
+  .whereNot('status', 'inactive')       // Not equal to "inactive"
+```
+
+### List-Based Matching
+
+```dart
+json
+  .whereIn('role', ['admin', 'user'])   // Value is in the list
+  .whereNotIn('role', ['guest', 'banned']) // Value is not in the list
+```
+
+### Custom Validation Functions
+
+```dart
+json.where('email', (value) => value.toString().contains('@'));
+```
+
+### String Pattern Matching
+
+```dart
+json
+  .whereContains('email', '@')          // Contains substring
+  .whereContains('tags', 'urgent')      // For lists, checks if item exists
+```
+
+## Combining Type and Value Assertions
+
+```dart
+json
+  .whereType<int>('id')
+  .where('id', (id) => id > 0)
+  
+  .whereType<String>('email')
+  .whereContains('email', '@')
+  
+  .whereType<bool>('isActive')
+  .where('isActive', true);
+```
+
+## Validating Multiple Values
+
+```dart
+json.whereAll({
+  'id': 123,
+  'name': 'John Doe',
+  'isActive': true,
+  'role': 'admin'
+});
+```
+
+## Using with Scopes
+
+Type and value assertions can be combined with scoping for complex validations:
+
+```dart
+json.scope('user', (user) => {
+  user
+    .whereType<int>('id')
+    .whereType<String>('name')
+    .where('name', 'John Doe')
+    
+    .scope('settings', (settings) => {
+      settings
+        .whereType<bool>('notifications')
+        .where('notifications', true)
+        .whereType<String>('theme')
+        .whereIn('theme', ['light', 'dark']);
+    });
+});
+```
+
+## Complete Example
+
+```dart
+test('testing api response', () {
+  final json = AssertableJson({
+    'status': 'success',
+    'data': {
+      'user': {
+        'id': 123,
+        'name': 'John Doe',
+        'email': 'john@example.com',
+        'isActive': true,
+        'role': 'admin',
+        'settings': {
+          'notifications': true,
+          'theme': 'dark'
+        },
+        'tags': ['developer', 'manager']
+      }
+    },
+    'meta': {
+      'timestamp': 1234567890,
+      'version': '1.0'
+    }
+  });
+
+  json
+    .whereType<String>('status')
+    .where('status', 'success')
+    
+    .scope('data.user', (user) => {
+      user
+        .whereType<int>('id')
+        .whereType<String>('name')
+        .whereType<String>('email')
+        .whereContains('email', '@')
+        .whereType<bool>('isActive')
+        .where('isActive', true)
+        .whereType<String>('role')
+        .whereIn('role', ['admin', 'user', 'manager'])
+        
+        .scope('settings', (settings) => {
+          settings
+            .whereType<bool>('notifications')
+            .whereType<String>('theme')
+            .whereIn('theme', ['light', 'dark']);
+        })
+        
+        .scope('tags', (tags) => {
+          tags.each((tag) => {
+            tag.whereType<String>();
+          });
+        });
+    })
+    
+    .scope('meta', (meta) => {
+      meta
+        .whereType<int>('timestamp')
+        .whereType<String>('version');
+    });
+});
+```
