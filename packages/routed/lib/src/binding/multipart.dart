@@ -261,11 +261,12 @@ class MultipartBinding extends Binding {
   Future<void> validate(
       EngineContext context,
       // ignore: avoid_renaming_method_parameters
-      Map<String, String> rules) async {
+      Map<String, String> rules,
+      {bool bail = false}) async {
     final multipartForm = await context.multipartForm;
     final data = multipartForm.fields;
 
-    final validator = Validator.make(rules);
+    final validator = Validator.make(rules, bail: bail);
 
     for (final file in multipartForm.files) {
       data[file.name] = file;

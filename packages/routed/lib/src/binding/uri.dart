@@ -33,9 +33,9 @@ class UriBinding extends Binding {
   /// [context] - The engine context containing the parameters to validate.
   /// [rules] - A map of validation rules to apply to the parameters.
   @override
-  Future<void> validate(
-      EngineContext context, Map<String, String> rules) async {
-    final validator = Validator.make(rules);
+  Future<void> validate(EngineContext context, Map<String, String> rules,
+      {bool bail = false}) async {
+    final validator = Validator.make(rules, bail: bail);
     final errors = validator.validate(context.params);
 
     if (errors.isNotEmpty) {

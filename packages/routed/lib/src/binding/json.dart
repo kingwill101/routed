@@ -33,10 +33,10 @@ class JsonBinding extends Binding {
   ///
   /// Returns a Future that completes when validation is done.
   @override
-  Future<void> validate(
-      EngineContext context, Map<String, String> rules) async {
+  Future<void> validate(EngineContext context, Map<String, String> rules,
+      {bool bail = false}) async {
     final decoded = await _decodedBody(context);
-    final validator = Validator.make(rules);
+    final validator = Validator.make(rules, bail: bail);
     final errors = validator.validate(decoded);
 
     if (errors.isNotEmpty) {
