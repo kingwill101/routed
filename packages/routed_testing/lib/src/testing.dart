@@ -1,56 +1,49 @@
-// ignore_for_file: unused_import
-
 library;
 
 import 'dart:async';
-import 'dart:convert';
-import 'dart:io';
 
 import 'package:meta/meta.dart';
-import 'package:mockito/mockito.dart';
 import 'package:routed/routed.dart';
-import 'package:routed_testing/src/assertable_json/assertable_json.dart';
-import 'package:routed_testing/src/client.dart';
-import 'package:routed_testing/src/environment.dart';
-import 'package:routed_testing/src/transport/memory.dart';
-import 'package:routed_testing/src/transport/server.dart';
-import 'package:routed_testing/src/transport/transport.dart';
-import 'package:test/test.dart';
+import 'package:routed_testing/src/routed_transport.dart';
+import 'package:server_testing/server_testing.dart';
 
 typedef TestCallback = Future<void> Function(
     Engine engine, EngineTestClient client);
 
 @visibleForTesting
+@isTest
 void engineTest(
   String description,
   TestCallback callback, {
+  Engine? engine,
   TransportMode transportMode = TransportMode.inMemory,
   Map<String, dynamic>? configItems,
   EngineConfig? engineConfig,
   List<EngineOpt>? options,
 }) {
   test(description, () async {
-    // Initialize Engine with config
-    final engine = Engine(
-      configItems: configItems ??
-          {
-            'app.name': 'Test App',
-            'app.env': 'testing',
-          },
-      config: engineConfig,
-      options: options,
-    );
+    // Use provided engine or create new one
+    final testEngine = engine ??
+        Engine(
+          configItems: configItems ??
+              {
+                'app.name': 'Test App',
+                'app.env': 'testing',
+              },
+          config: engineConfig,
+          options: options,
+        );
 
     // Initialize TestClient based on transport mode
     final client = transportMode == TransportMode.inMemory
-        ? EngineTestClient.inMemory(engine)
-        : EngineTestClient.ephemeralServer(engine);
+        ? EngineTestClient.inMemory(RoutedRequestHandler(testEngine))
+        : EngineTestClient.ephemeralServer(RoutedRequestHandler(testEngine));
 
     try {
       await AppZone.run(
-        engine: engine,
+        engine: testEngine,
         body: () async {
-          await callback(engine, client);
+          await callback(testEngine, client);
         },
       );
     } finally {
@@ -61,8 +54,10 @@ void engineTest(
 
 /// Creates a group of tests with shared engine configuration
 @visibleForTesting
+@isTestGroup
 void engineGroup(
   String description, {
+  Engine? engine,
   required void Function(Engine engine, EngineTestClient client) define,
   TransportMode transportMode = TransportMode.inMemory,
   Map<String, dynamic>? configItems,
@@ -73,24 +68,25 @@ void engineGroup(
     Engine sharedEngine;
     EngineTestClient sharedClient;
 
-    sharedEngine = Engine(
-      configItems: configItems ??
-          {
-            'app.name': 'Test App',
-            'app.env': 'testing',
-          },
-      config: engineConfig,
-      options: options,
-    );
+    sharedEngine = engine ??
+        Engine(
+          configItems: configItems ??
+              {
+                'app.name': 'Test App',
+                'app.env': 'testing',
+              },
+          config: engineConfig,
+          options: options,
+        );
+
     sharedClient = transportMode == TransportMode.inMemory
-        ? EngineTestClient.inMemory(sharedEngine)
-        : EngineTestClient.ephemeralServer(sharedEngine);
+        ? EngineTestClient.inMemory(RoutedRequestHandler(sharedEngine))
+        : EngineTestClient.ephemeralServer(RoutedRequestHandler(sharedEngine));
 
     tearDown(() async {
       await sharedClient.close();
     });
 
-    // Run the test definitions with the shared configuration
     define(sharedEngine, sharedClient);
   });
 }

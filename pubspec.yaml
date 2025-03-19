@@ -2,6 +2,12 @@ name: routed_ecosystem
 workspace:
   - packages/routed
   - packages/routed_testing
+  - packages/server_testing
+  - packages/property_testing
+  - examples/kitchen_sink
 
 environment:
-  sdk: ^3.6.0
+  sdk: ">=3.6.0 <4.0.0"
+
+dev_dependencies:
+  melos: ^6.3.2
