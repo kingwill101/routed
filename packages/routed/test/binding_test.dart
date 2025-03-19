@@ -5,10 +5,10 @@ import 'package:http_parser/http_parser.dart';
 import 'package:routed/routed.dart';
 import 'package:routed/src/binding/binding.dart';
 import 'package:routed_testing/routed_testing.dart';
-import 'package:test/test.dart';
+import 'package:server_testing/server_testing.dart';
 
 void main() {
-  late EngineTestClient client;
+  late TestClient client;
 
   tearDown(() async {
     await client.close();
@@ -26,7 +26,7 @@ void main() {
       });
 
       engine.use(router);
-      client = EngineTestClient(engine);
+      client = TestClient(RoutedRequestHandler(engine));
 
       final response = await client.post('/json', {
         'name': 'test',
@@ -54,7 +54,7 @@ void main() {
       });
 
       engine.use(router);
-      client = EngineTestClient(engine);
+      client = TestClient(RoutedRequestHandler(engine));
 
       final response = await client.post(
         '/form',
@@ -100,7 +100,7 @@ void main() {
       });
 
       engine.use(router);
-      client = EngineTestClient(engine);
+      client = TestClient(RoutedRequestHandler(engine));
 
       final response = await client.multipart('/upload', (request) {
         request
@@ -143,7 +143,7 @@ void main() {
       });
 
       engine.use(router);
-      client = EngineTestClient(engine);
+      client = TestClient(RoutedRequestHandler(engine));
 
       final response = await client.get('/search?q=test&page=1&sort=desc');
 

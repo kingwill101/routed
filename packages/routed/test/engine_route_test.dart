@@ -1,8 +1,7 @@
 import 'dart:io';
+
 import 'package:routed/routed.dart';
-import 'package:routed_testing/routed_testing.dart';
-import 'package:routed_testing/src/mock.mocks.dart';
-import 'package:test/test.dart';
+import 'package:server_testing/server_testing.dart';
 
 void main() {
   group('Parameter Type Tests', () {
@@ -423,7 +422,7 @@ void main() {
     });
 
     test('addPattern - custom zipcode pattern', () {
-      addPattern('zipcode', r'\d{5}(?:-\d{4})?');
+      registerPattern('zipcode', r'\d{5}(?:-\d{4})?');
 
       final route = EngineRoute(
         method: 'GET',
@@ -476,7 +475,55 @@ void main() {
       expect(params['zip'], '12345-6789');
     });
   });
+  group('Custom route parameter casting', () {
+    test('custom casting type (success)', () {
+      EngineRoute.registerCustomCasting(
+          'bool', (String? value) => value == 'true');
 
+      final route = EngineRoute(
+        method: 'GET',
+        path: '/toggle/{enabled:bool}',
+        handler: (ctx) => null,
+      );
+
+      final uri = Uri.parse('/toggle/true');
+      final request = MockHttpRequest();
+      when(request.method).thenReturn('GET');
+      when(request.uri).thenReturn(uri);
+
+      expect(route.matches(request), isTrue);
+
+      final params = route.extractParameters(uri.path);
+      expect(params['enabled'], true);
+      expect(params['enabled'], isA<bool>());
+
+      EngineRoute.unregisterCustomCasting('bool');
+    });
+
+    test('custom casting type (fail)', () {
+      EngineRoute.registerCustomCasting(
+          'bool', (String? value) => value == 'true');
+
+      final route = EngineRoute(
+        method: 'GET',
+        path: '/toggle/{enabled:bool}',
+        handler: (ctx) => null,
+      );
+
+      final uri = Uri.parse('/toggle/false');
+      final request = MockHttpRequest();
+      when(request.method).thenReturn('GET');
+      when(request.uri).thenReturn(uri);
+
+      expect(route.matches(request), isTrue);
+
+      final params = route.extractParameters(uri.path);
+      expect(params['enabled'], false);
+      expect(params['enabled'], isA<bool>());
+
+      EngineRoute.unregisterCustomCasting('bool');
+    });
+  });
   group('Route Constraint Validation Tests', () {
     test('regex string constraint', () {
       final route = EngineRoute(

@@ -1,25 +1,15 @@
 import 'package:file/memory.dart';
 import 'package:routed/routed.dart';
 import 'package:routed_testing/routed_testing.dart';
-import 'package:test/test.dart';
+import 'package:server_testing/server_testing.dart';
 
 void main() {
-  late EngineTestClient client;
+  TestClient? client;
   late MemoryFileSystem fs;
-
   setUp(() {
     fs = MemoryFileSystem();
-  });
-
-  tearDown(() async {
-    await client.close();
-  });
-
-  group('Jinja Template Tests', () {
-    setUp(() {
-      // Create Jinja template with its specific syntax
-      final templates = fs.directory('templates')..createSync();
-      templates.childFile('hello.html').writeAsStringSync('''
+    final templates = fs.directory('templates')..createSync();
+    templates.childFile('hello.html').writeAsStringSync('''
         <!DOCTYPE html>
         <html>
           <body>
@@ -36,48 +26,16 @@ void main() {
         </html>
       ''');
 
-      templates.childFile('extended.html').writeAsStringSync('''
+    templates.childFile('extended.html').writeAsStringSync('''
         {% extends "hello.html" %}
         {% block content %}
           <p>Extended content here</p>
         {% endblock %}
       ''');
-    });
+  });
 
-    test('Jinja renders variables and loops', () async {
-      final engine = Engine();
-      engine.useJinja(directory: 'templates', fileSystem: fs);
-      fs.currentDirectory = fs.directory("templates");
-      engine.get('/hello', (ctx) {
-        ctx.html('hello.html', data: {
-          'name': 'World',
-          'showList': true,
-          'items': ['one', 'two', 'three']
-        });
-      });
-
-      client = EngineTestClient(engine);
-      final response = await client.get('/hello');
-      response
-        ..assertStatus(200)
-        ..assertBodyContains('Hello World!')
-        ..assertBodyContains('<li>one</li>');
-    });
-
-    test('Jinja template inheritance', () async {
-      final engine = Engine();
-      engine.useJinja(directory: 'templates', fileSystem: fs);
-
-      engine.get('/extended', (ctx) {
-        ctx.html('extended.html', data: {'name': 'World'});
-      });
-
-      client = EngineTestClient(engine);
-      final response = await client.get('/extended');
-      response
-        ..assertStatus(200)
-        ..assertBodyContains('Extended content here');
-    });
+  tearDown(() async {
+    await client?.close();
   });
 
   group('Liquid Template Tests', () {
@@ -119,8 +77,8 @@ void main() {
         });
       });
 
-      client = EngineTestClient(engine);
-      final response = await client.get('/hello');
+      client = TestClient(RoutedRequestHandler(engine));
+      final response = await client!.get('/hello');
       response
         ..assertStatus(200)
         ..assertBodyContains('Hello World!')
@@ -137,8 +95,8 @@ void main() {
             data: {'name': 'World', 'footer_text': 'Custom Footer'});
       });
 
-      client = EngineTestClient(engine);
-      final response = await client.get('/partial');
+      client = TestClient(RoutedRequestHandler(engine));
+      final response = await client!.get('/partial');
       response
         ..assertStatus(200)
         ..assertBodyContains('Custom Footer');

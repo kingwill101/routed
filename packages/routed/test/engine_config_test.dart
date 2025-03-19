@@ -1,9 +1,11 @@
+import 'dart:io';
+
 import 'package:routed/routed.dart';
 import 'package:routed_testing/routed_testing.dart';
-import 'package:test/test.dart';
+import 'package:server_testing/server_testing.dart';
 
 void main() {
-  late EngineTestClient client;
+  late TestClient client;
 
   tearDown(() async {
     await client.close();
@@ -18,7 +20,7 @@ void main() {
         router.get('/users', (ctx) => ctx.string('users'));
         engine.use(router);
 
-        client = EngineTestClient(engine);
+        client = TestClient(RoutedRequestHandler(engine));
         final response = await client.get('/users/');
         response
           ..assertStatus(301)
@@ -32,7 +34,7 @@ void main() {
         router.post('/users', (ctx) => ctx.string('created'));
         engine.use(router);
 
-        client = EngineTestClient(engine);
+        client = TestClient(RoutedRequestHandler(engine));
         final response = await client.post('/users/', null);
         response
           ..assertStatus(307)
@@ -46,7 +48,7 @@ void main() {
         router.get('/users', (ctx) => ctx.string('users'));
         engine.use(router);
 
-        client = EngineTestClient(engine);
+        client = TestClient(RoutedRequestHandler(engine));
         final response = await client.get('/users/');
         response.assertStatus(404);
       });
@@ -61,7 +63,7 @@ void main() {
         router.post('/users', (ctx) => ctx.string('created'));
         engine.use(router);
 
-        client = EngineTestClient(engine);
+        client = TestClient(RoutedRequestHandler(engine));
         final response = await client.put('/users', null);
         response
           ..assertStatus(405)
@@ -75,7 +77,7 @@ void main() {
         router.get('/users', (ctx) => ctx.string('users'));
         engine.use(router);
 
-        client = EngineTestClient(engine);
+        client = TestClient(RoutedRequestHandler(engine));
         final response = await client.post('/users', null);
         response.assertStatus(404);
       });
@@ -85,13 +87,21 @@ void main() {
       test('processes X-Forwarded-For header', () async {
         final engine = Engine(
             config: EngineConfig(
+                features: EngineFeatures(
+                  enableProxySupport: true,
+                  enableTrustedPlatform: true,
+                ),
                 forwardedByClientIP: true,
                 remoteIPHeaders: ['X-Forwarded-For']));
         final router = Router();
-        router.get('/ip', (ctx) => ctx.string(ctx.request.ip));
+        router.get('/ip', (ctx) => ctx.string(ctx.request.clientIP));
         engine.use(router);
 
-        client = EngineTestClient(engine);
+        client = TestClient(
+          RoutedRequestHandler(engine),
+          options: (remoteAddress: InternetAddress('192.168.1.2')),
+        );
+
         final response = await client.get('/ip', headers: {
           'X-Forwarded-For': ['1.2.3.4']
         });
@@ -103,16 +113,43 @@ void main() {
       test('processes X-Real-IP header', () async {
         final engine = Engine(
             config: EngineConfig(
-                forwardedByClientIP: true, remoteIPHeaders: ['X-Real-IP']));
+                features: EngineFeatures(
+                  enableProxySupport: true,
+                  enableTrustedPlatform: true,
+                ),
+                forwardedByClientIP: true,
+                remoteIPHeaders: ['X-Real-IP']));
         final router = Router();
-        router.get('/ip', (ctx) => ctx.string(ctx.request.ip));
+        router.get('/ip', (ctx) => ctx.string(ctx.request.clientIP));
         engine.use(router);
 
-        client = EngineTestClient(engine);
+        client = TestClient(
+          RoutedRequestHandler(engine),
+          options: (remoteAddress: InternetAddress('192.168.1.2')),
+        );
+
         final response = await client.get('/ip', headers: {
           'X-Real-IP': ['5.6.7.8']
         });
         response.assertBodyEquals('5.6.7.8');
+      });
+
+      test('respects forwardedByClientIP setting when disabled', () async {
+        final engine = Engine(config: EngineConfig(forwardedByClientIP: false));
+        final router = Router();
+        router.get('/ip', (ctx) => ctx.string(ctx.request.clientIP));
+        engine.use(router);
+
+        client = TestClient(
+          RoutedRequestHandler(engine),
+          options: (remoteAddress: InternetAddress('192.168.1.2')),
+        );
+
+        final response = await client.get('/ip', headers: {
+          'X-Forwarded-For': ['1.2.3.4'],
+          'X-Real-IP': ['5.6.7.8']
+        });
+        response.assertBodyEquals('192.168.1.2');
       });
     });
 
@@ -120,17 +157,24 @@ void main() {
       test('multiple options work together', () async {
         final engine = Engine(
             config: EngineConfig(
+                features: EngineFeatures(
+                  enableProxySupport: true,
+                  enableTrustedPlatform: true,
+                ),
                 redirectTrailingSlash: true,
                 handleMethodNotAllowed: true,
                 forwardedByClientIP: true,
                 remoteIPHeaders: ['X-Real-IP']));
         final router = Router();
         router.get('/users', (ctx) => ctx.string('users'));
-        router.get('/ip', (ctx) => ctx.string(ctx.request.ip));
+        router.get('/ip', (ctx) => ctx.string(ctx.request.clientIP));
 
         engine.use(router);
 
-        client = EngineTestClient(engine);
+        client = TestClient(
+          RoutedRequestHandler(engine),
+          options: (remoteAddress: InternetAddress('192.168.1.2')),
+        );
 
         // Test trailing slash redirect
         var response = await client.get('/users/');
@@ -157,5 +201,143 @@ void main() {
           ..assertBodyEquals('users');
       });
     });
+  });
+
+  group('Proxy Trust Tests', () {
+    test('default configuration trusts all proxies', () async {
+      final engine = Engine(
+          config: EngineConfig(
+        features: EngineFeatures(
+          enableProxySupport: true,
+          enableTrustedPlatform: true,
+        ),
+      ));
+      engine.get('/ip', (ctx) => ctx.string(ctx.request.clientIP));
+
+      client = TestClient(
+        RoutedRequestHandler(engine),
+        options: (remoteAddress: InternetAddress('192.168.1.2')),
+      );
+
+      final response = await client.get('/ip', headers: {
+        'X-Forwarded-For': ['1.2.3.4']
+      });
+      response.assertBodyEquals('1.2.3.4');
+    });
+
+    test('restricted proxy list only trusts specified IPs', () async {
+      final engine = Engine(
+          config: EngineConfig(
+              features: EngineFeatures(
+                enableProxySupport: true,
+                enableTrustedPlatform: true,
+              ),
+              trustedProxies: ['10.0.0.0/8'],
+              remoteIPHeaders: ['X-Forwarded-For']));
+      final router = Router();
+      router.get('/ip', (ctx) => ctx.string(ctx.request.clientIP));
+      engine.use(router);
+
+      client = TestClient(
+        RoutedRequestHandler(engine),
+        options: (remoteAddress: InternetAddress('10.0.0.2')),
+      );
+
+      final response = await client.get('/ip', headers: {
+        'X-Forwarded-For': ['1.2.3.4']
+      });
+      response.assertBodyEquals('1.2.3.4');
+    });
+
+    test('untrusted proxy returns immediate client IP', () async {
+      final engine = Engine(
+          config: EngineConfig(
+              features: EngineFeatures(
+                enableProxySupport: true,
+                enableTrustedPlatform: true,
+              ),
+              trustedProxies: ['10.0.0.0/8'],
+              remoteIPHeaders: ['X-Forwarded-For']));
+      final router = Router();
+      router.get('/ip', (ctx) => ctx.string(ctx.request.clientIP));
+      engine.use(router);
+
+      client = TestClient(
+        RoutedRequestHandler(engine),
+        options: (remoteAddress: InternetAddress('192.168.1.2')),
+      );
+
+      final response = await client.get('/ip', headers: {
+        'X-Forwarded-For': ['1.2.3.4']
+      });
+      response.assertBodyEquals('192.168.1.2');
+    });
+
+    test('trusted platform headers take precedence', () async {
+      final engine = Engine(
+          config: EngineConfig(
+              features: EngineFeatures(
+                enableProxySupport: true,
+                enableTrustedPlatform: true,
+              ),
+              trustedPlatform: 'CF-Connecting-IP',
+              remoteIPHeaders: ['X-Forwarded-For']));
+      final router = Router();
+      router.get('/ip', (ctx) => ctx.string(ctx.request.clientIP));
+      engine.use(router);
+
+      client = TestClient(
+        RoutedRequestHandler(engine),
+        options: (remoteAddress: InternetAddress('10.0.0.2')),
+      );
+
+      final response = await client.get('/ip', headers: {
+        'CF-Connecting-IP': ['2.2.2.2'],
+        'X-Forwarded-For': ['1.1.1.1']
+      });
+      response.assertBodyEquals('2.2.2.2');
+    });
+
+    test('header order is respected', () async {
+      final engine = Engine(
+          config: EngineConfig(
+              features: EngineFeatures(
+                enableProxySupport: true,
+                enableTrustedPlatform: true,
+              ),
+              remoteIPHeaders: ['X-Real-IP', 'X-Forwarded-For']));
+      final router = Router();
+      router.get('/ip', (ctx) => ctx.string(ctx.request.clientIP));
+      engine.use(router);
+
+      client = TestClient(
+        RoutedRequestHandler(engine),
+        options: (remoteAddress: InternetAddress('10.0.0.2')),
+      );
+
+      final response = await client.get('/ip', headers: {
+        'X-Real-IP': ['5.5.5.5'],
+        'X-Forwarded-For': ['1.1.1.1']
+      });
+      response.assertBodyEquals('5.5.5.5');
+    });
+  });
+
+  test('proxy support requires explicit feature flag', () {
+    final engine = Engine(
+        config:
+            EngineConfig(features: EngineFeatures(enableProxySupport: true)));
+
+    engine.config.trustedProxies = ['10.0.0.0/8'];
+    expect(engine.config.trustedProxies, contains('10.0.0.0/8'));
+  });
+
+  test('trusted platform requires explicit feature flag', () {
+    final engine = Engine(
+        config: EngineConfig(
+            features: EngineFeatures(enableTrustedPlatform: true)));
+
+    engine.config.trustedPlatform = 'CF-Connecting-IP';
+    expect(engine.config.trustedPlatform, equals('CF-Connecting-IP'));
   });
 }

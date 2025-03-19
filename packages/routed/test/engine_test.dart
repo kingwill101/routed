@@ -159,17 +159,4 @@ void main() {
       });
     });
   });
-
-  group("Calling routes by name", () {
-    test('Calling routes by name', () {
-      final router = Router();
-      router.get('/test', (c) {
-        expect(c.request.path, '/test');
-        expect(c.request.method, 'GET');
-      }).name('test');
-
-      // final engine = Engine()..use(router);
-      // engine.
-    });
-  });
 }

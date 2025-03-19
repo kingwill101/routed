@@ -4,10 +4,11 @@ import 'dart:io';
 import 'package:http_parser/http_parser.dart';
 import 'package:routed/routed.dart';
 import 'package:routed_testing/routed_testing.dart';
-import 'package:test/test.dart';
+import 'package:server_testing/server_testing.dart';
 
-EngineTestClient useClient(Engine engine) =>
-    EngineTestClient(engine, TransportMode.inMemory);
+TestClient useClient(Engine engine) =>
+    TestClient(RoutedRequestHandler(engine),
+        mode: TransportMode.inMemory);
 
 void main() {
   group('Validation Tests', () {
@@ -157,7 +158,7 @@ void main() {
         }
       });
 
-      final EngineTestClient client = useClient(engine);
+      final TestClient client = useClient(engine);
 
       final response = await client.postJson('/json2', {
         'name': 'test',
