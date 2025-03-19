@@ -60,7 +60,7 @@ extension BindingMethods on EngineContext {
   ///
   /// This method will determine the appropriate binding based on the request method and content type,
   /// and then validate the [data] using that binding. It is an asynchronous operation.
-  Future<void> validate(Map<String, String> data) async {
+  Future<void> validate(Map<String, String> data, {bool bail = false}) async {
     await defaultBinding(request.method, request.contentType?.value ?? '')
         .validate(this, data);
   }

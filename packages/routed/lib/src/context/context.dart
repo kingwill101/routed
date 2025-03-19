@@ -368,6 +368,11 @@ extension MultipartFormMethods on EngineContext {
     await initFormCache();
     return get<Map<String, dynamic>>(formCacheKey) ?? {};
   }
+
+  /// Retrieves the multipart form asynchronously.
+  form() async {
+    return await formCache;
+  }
 }
 
 extension QueryMethods on EngineContext {

@@ -20,6 +20,18 @@ class EngineError {
     if (code == null) return 'EngineError: $message';
     return 'EngineError($code): $message';
   }
+
+  /// Converts this [EngineError] to a JSON-compatible map.
+  Map<String, dynamic> toJson() => {
+        'message': message,
+        if (code != null) 'code': code,
+      };
+
+  /// Creates an [EngineError] from a JSON-compatible map.
+  factory EngineError.fromJson(Map<String, dynamic> json) => EngineError(
+        message: json['message'],
+        code: json['code'],
+      );
 }
 
 /// Represents a validation error in the engine.
@@ -55,10 +67,27 @@ class ValidationError implements EngineError {
   /// Returns a string representation of the validation error.
   @override
   String toString() => 'ValidationError: $message';
+
+  /// Converts this [ValidationError] to a JSON-compatible map.
+  @override
+  Map<String, dynamic> toJson() => {
+        'errors': errors,
+        'code': code,
+        'message': message,
+      };
+
+  /// Creates a [ValidationError] from a JSON-compatible map.
+  factory ValidationError.fromJson(Map<String, dynamic> json) =>
+      ValidationError(
+        (json['errors'] as Map).map((key, value) =>
+            MapEntry(key as String, (value as List).cast<String>())),
+      );
 }
 
 /// Represents a "Not Found" error in the engine.
-class NotFoundError implements EngineError {
+class NotFoundError extends EngineError {
+  NotFoundError({required super.message});
+
   /// The error code for "Not Found" errors, which is always 404.
   @override
   int? get code => 404;
@@ -69,7 +98,9 @@ class NotFoundError implements EngineError {
 }
 
 /// Represents an "Unauthorized" error in the engine.
-class UnauthorizedError implements EngineError {
+class UnauthorizedError extends EngineError {
+  UnauthorizedError({required super.message});
+
   /// The error code for "Unauthorized" errors, which is always 401.
   @override
   int? get code => 401;
@@ -80,7 +111,9 @@ class UnauthorizedError implements EngineError {
 }
 
 /// Represents a "Forbidden" error in the engine.
-class ForbiddenError implements EngineError {
+class ForbiddenError extends EngineError {
+  ForbiddenError({required super.message});
+
   /// The error code for "Forbidden" errors, which is always 403.
   @override
   int? get code => 403;
@@ -91,7 +124,9 @@ class ForbiddenError implements EngineError {
 }
 
 /// Represents an "Internal Server Error" in the engine.
-class InternalServerError implements EngineError {
+class InternalServerError extends EngineError {
+  InternalServerError({required super.message});
+
   /// The error code for "Internal Server Error" errors, which is always 500.
   @override
   int? get code => 500;
@@ -102,18 +137,18 @@ class InternalServerError implements EngineError {
 }
 
 /// Represents a "Bad Request" error in the engine.
-class BadRequestError implements EngineError {
+class BadRequestError extends EngineError {
+  BadRequestError() : super(message: 'Bad request.');
+
   /// The error code for "Bad Request" errors, which is always 400.
   @override
   int? get code => 400;
-
-  /// The error message for "Bad Request" errors, which is always 'Bad request.'.
-  @override
-  String get message => 'Bad request.';
 }
 
 /// Represents a "Conflict" error in the engine.
-class ConflictError implements EngineError {
+class ConflictError extends EngineError {
+  ConflictError({required super.message});
+
   /// The error code for "Conflict" errors, which is always 409.
   @override
   int? get code => 409;
