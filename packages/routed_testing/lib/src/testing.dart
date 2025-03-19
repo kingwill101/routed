@@ -7,8 +7,7 @@ import 'package:routed/routed.dart';
 import 'package:routed_testing/src/routed_transport.dart';
 import 'package:server_testing/server_testing.dart';
 
-typedef TestCallback = Future<void> Function(
-    Engine engine, EngineTestClient client);
+typedef TestCallback = Future<void> Function(Engine engine, TestClient client);
 
 @visibleForTesting
 @isTest
@@ -36,8 +35,8 @@ void engineTest(
 
     // Initialize TestClient based on transport mode
     final client = transportMode == TransportMode.inMemory
-        ? EngineTestClient.inMemory(RoutedRequestHandler(testEngine))
-        : EngineTestClient.ephemeralServer(RoutedRequestHandler(testEngine));
+        ? TestClient.inMemory(RoutedRequestHandler(testEngine))
+        : TestClient.ephemeralServer(RoutedRequestHandler(testEngine));
 
     try {
       await AppZone.run(
@@ -58,7 +57,7 @@ void engineTest(
 void engineGroup(
   String description, {
   Engine? engine,
-  required void Function(Engine engine, EngineTestClient client) define,
+  required void Function(Engine engine, TestClient client) define,
   TransportMode transportMode = TransportMode.inMemory,
   Map<String, dynamic>? configItems,
   EngineConfig? engineConfig,
@@ -66,7 +65,7 @@ void engineGroup(
 }) {
   group(description, () {
     Engine sharedEngine;
-    EngineTestClient sharedClient;
+    TestClient sharedClient;
 
     sharedEngine = engine ??
         Engine(
@@ -80,8 +79,8 @@ void engineGroup(
         );
 
     sharedClient = transportMode == TransportMode.inMemory
-        ? EngineTestClient.inMemory(RoutedRequestHandler(sharedEngine))
-        : EngineTestClient.ephemeralServer(RoutedRequestHandler(sharedEngine));
+        ? TestClient.inMemory(RoutedRequestHandler(sharedEngine))
+        : TestClient.ephemeralServer(RoutedRequestHandler(sharedEngine));
 
     tearDown(() async {
       await sharedClient.close();

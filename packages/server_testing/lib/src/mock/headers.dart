@@ -18,15 +18,23 @@ import 'package:server_testing/src/mock.mocks.dart';
 /// Returns a [MockHttpHeaders] instance configured with the provided request headers.
 /// The mock headers will maintain state in the provided headers map.
 ///
+/// ## Example
 ///
+/// ```dart
 /// final headers = <String, List<String>>{};
 /// final mockHeaders = setupHeaders(headers);
+///
+/// // Set content type and observe it reflected in the map
 /// mockHeaders.contentType = ContentType.json;
-/// print(headers['content-type']); // ['application', 'json']
+/// print(headers['content-type']); // ['application/json; charset=utf-8']
 ///
+/// // Add a custom header
+/// mockHeaders.add('X-Custom-Header', 'Value');
+/// print(headers['X-Custom-Header']); // ['Value']
+/// ```
 ///
-/// This is primarily used for testing HTTP request/response handling.
-
+/// This is primarily used for testing HTTP request/response handling where
+/// header manipulation is needed without real HTTP connections.
 MockHttpHeaders setupHeaders(Map<String, List<String>> requestHeaders) {
   final mockRequestHeaders = MockHttpHeaders();
   ContentType? contentType;
@@ -49,12 +57,15 @@ MockHttpHeaders setupHeaders(Map<String, List<String>> requestHeaders) {
     return cookies.map((c) => '${c.name}=${c.value}').join('; ');
   });
 
+  // Initialize content type from existing headers if present
   for (final entry in requestHeaders.entries) {
-    if (entry.key.toLowerCase() == HttpHeaders.contentTypeHeader) {
+    if (entry.key.toLowerCase() ==
+        HttpHeaders.contentTypeHeader.toLowerCase()) {
       contentType = ContentType.parse(entry.value.join(", "));
     }
   }
 
+  // Handle content length setter
   when(mockRequestHeaders.contentLength = any).thenAnswer((invocation) {
     final contentLength = invocation.positionalArguments[0] as int;
     requestHeaders
@@ -62,21 +73,24 @@ MockHttpHeaders setupHeaders(Map<String, List<String>> requestHeaders) {
         .add(contentLength.toString());
   });
 
+  // Handle content type getter/setter
   when(mockRequestHeaders.contentType).thenAnswer((invocation) {
     return contentType;
   });
+
   when(mockRequestHeaders.contentType = any).thenAnswer((invocation) {
     final contentTypeArg = invocation.positionalArguments[0] as ContentType;
     contentType = contentTypeArg;
-    requestHeaders.putIfAbsent(
-        HttpHeaders.contentTypeHeader, () => [contentType?.value ?? '']);
+    requestHeaders[HttpHeaders.contentTypeHeader] = [contentType?.value ?? ''];
   });
 
+  // Handle header access by name
   when(mockRequestHeaders[any]).thenAnswer((invocation) {
     final name = invocation.positionalArguments[0].toString();
     return requestHeaders.putIfAbsent(name, () => []);
   });
 
+  // Handle iteration over headers
   when(mockRequestHeaders.forEach(any)).thenAnswer((invocation) {
     Function(String, List<String>)? callback =
         invocation.positionalArguments[0];
@@ -85,7 +99,7 @@ MockHttpHeaders setupHeaders(Map<String, List<String>> requestHeaders) {
     });
   });
 
-  // Handle Set-Cookie headers properly
+  // Handle Set-Cookie headers properly - they accumulate multiple values
   when(mockRequestHeaders.add(any, any)).thenAnswer((invocation) {
     final name = invocation.positionalArguments[0].toString();
     final value = invocation.positionalArguments[1].toString();
@@ -105,23 +119,19 @@ MockHttpHeaders setupHeaders(Map<String, List<String>> requestHeaders) {
     requestHeaders.remove(name);
   });
 
+  // Handle setting header values
   when(mockRequestHeaders.set(any, any)).thenAnswer((invocation) {
     final name = invocation.positionalArguments[0].toString();
     final value = invocation.positionalArguments[1].toString();
     requestHeaders[name] = [value];
   });
 
+  // Handle getting singular header value
   when(mockRequestHeaders.value(any)).thenAnswer((invocation) {
     final name = invocation.positionalArguments[0].toString();
     final values = requestHeaders[name];
     if (values == null) return null;
     return values.join(', ');
-  });
-
-  when(mockRequestHeaders[any]).thenAnswer((invocation) {
-    final name = invocation.positionalArguments[0].toString();
-    final val = requestHeaders.putIfAbsent(name, () => []);
-    return val;
   });
 
   return mockRequestHeaders;
