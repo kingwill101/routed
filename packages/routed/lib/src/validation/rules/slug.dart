@@ -4,14 +4,15 @@ import 'package:routed/src/validation/rule.dart';
 ///
 /// A slug is a URL-friendly string typically used in web development.
 /// It usually contains only lowercase letters, numbers, and hyphens.
-class SlugRule implements ValidationRule {
+class SlugRule extends ValidationRule {
   /// The name of the validation rule.
   @override
   String get name => 'slug';
 
   /// The error message returned when the validation fails.
   @override
-  String get message => 'This field must be a valid slug.';
+  String message(dynamic value, [List<String>? options]) =>
+      'This field must be a valid slug.';
 
   /// Validates whether the given [value] is a valid slug.
   ///

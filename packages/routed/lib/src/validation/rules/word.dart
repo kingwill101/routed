@@ -5,7 +5,7 @@ import 'package:routed/src/validation/rule.dart';
 /// This class implements the [ValidationRule] interface and provides
 /// functionality to validate if a given value is a word consisting of
 /// alphanumeric characters and underscores.
-class WordRule implements ValidationRule {
+class WordRule extends ValidationRule {
   /// The name of the validation rule.
   ///
   /// This is used to identify the rule and can be useful for error
@@ -17,7 +17,8 @@ class WordRule implements ValidationRule {
   ///
   /// This message indicates that the field must contain a valid word.
   @override
-  String get message => 'This field must be a valid word.';
+  String message(dynamic value, [List<String>? options]) =>
+      'This field must be a valid word.';
 
   /// Validates if the given [value] is a valid word.
   ///

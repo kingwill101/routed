@@ -1,10 +1,16 @@
-import 'package:routed/src/validation/rule.dart';
-
 /// A validation rule that checks if a given value is a valid date in the format YYYY-MM-DD.
-class DateRule implements ValidationRule {
+library;
+
+import 'package:routed/src/validation/abstract_rule.dart';
+
+class DateRule extends AbstractValidationRule {
+  @override
+  String get name => "date";
+
   /// The error message to be displayed if the validation fails.
   @override
-  String get message => 'This field must be a valid date (YYYY-MM-DD).';
+  String message(dynamic value, [List<String>? options]) =>
+      'This field must be a valid date (YYYY-MM-DD).';
 
   /// Validates whether the provided [value] is a valid date in the format YYYY-MM-DD.
   ///
@@ -18,8 +24,4 @@ class DateRule implements ValidationRule {
     // Check if the value matches the regular expression for the date format YYYY-MM-DD.
     return RegExp(r'^\d{4}-\d{2}-\d{2}$').hasMatch(value.toString());
   }
-
-  /// The name of the validation rule.
-  @override
-  String get name => "date";
 }

@@ -2,14 +2,15 @@ import 'package:routed/src/validation/rule.dart';
 
 /// The `InRule` class is a validation rule that checks if a given value
 /// is within a specified list of allowed values.
-class InRule implements ValidationRule {
+class InRule extends ValidationRule {
   /// The name of the validation rule.
   @override
   String get name => 'in';
 
   /// The error message returned when validation fails.
   @override
-  String get message => 'This field must be one of the allowed values.';
+  String message(dynamic value, [List<String>? options]) =>
+      'This field must be one of the allowed values: ${options?.join(', ')}.';
 
   /// Validates whether the provided [value] is within the [options] list.
   ///

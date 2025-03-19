@@ -1,14 +1,19 @@
 import 'package:routed/src/validation/rule.dart';
 
 /// A validation rule that checks if the length of a given string does not exceed a specified maximum length.
-class MaxLengthRule implements ValidationRule {
+class MaxLengthRule extends ValidationRule {
   /// The name of the validation rule.
   @override
   String get name => 'max_length';
 
   /// The error message to be displayed if the validation fails.
   @override
-  String get message => 'This field must not exceed the maximum length.';
+  String message(dynamic value, [List<String>? options]) {
+    if (options != null && options.isNotEmpty) {
+      return 'This field must not exceed ${options[0]} characters.';
+    }
+    return 'This field must not exceed the maximum length.';
+  }
 
   /// Validates whether the provided [value] meets the maximum length requirement.
   ///

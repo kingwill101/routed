@@ -1,14 +1,15 @@
 import 'package:routed/src/validation/rule.dart';
 
 /// A validation rule that checks if a given value is a valid UUID (Universally Unique Identifier).
-class UuidRule implements ValidationRule {
+class UuidRule extends ValidationRule {
   /// The name of the validation rule.
   @override
   String get name => 'uuid';
 
   /// The error message to be displayed if the validation fails.
   @override
-  String get message => 'This field must be a valid UUID.';
+  String message(dynamic value, [List<String>? options]) =>
+      'This field must be a valid UUID.';
 
   /// Validates whether the provided [value] is a valid UUID.
   ///

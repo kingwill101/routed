@@ -1,14 +1,15 @@
 import 'package:routed/src/validation/rule.dart';
 
 /// A validation rule that checks if a given value is an integer.
-class IntRule implements ValidationRule {
+class IntRule extends ValidationRule {
   /// The name of the validation rule.
   @override
   String get name => 'int';
 
   /// The error message returned when the validation fails.
   @override
-  String get message => 'This field must be an integer.';
+  String message(dynamic value, [List<String>? options]) =>
+      'This field must be an integer.';
 
   /// Validates whether the provided [value] is an integer.
   ///

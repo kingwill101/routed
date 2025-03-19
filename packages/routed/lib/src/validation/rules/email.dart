@@ -1,14 +1,16 @@
-import 'package:routed/src/validation/rule.dart';
-
 /// A validation rule that checks if a given value is a valid email address.
-class EmailRule implements ValidationRule {
-  /// The name of the validation rule.
+library;
+
+import 'package:routed/src/validation/abstract_rule.dart';
+
+class EmailRule extends AbstractValidationRule {
   @override
   String get name => 'email';
 
   /// The error message to be displayed if the validation fails.
   @override
-  String get message => 'This field must be a valid email address.';
+  String message(dynamic value, [List<String>? options]) =>
+      'This field must be a valid email address.';
 
   /// Validates whether the provided [value] is a valid email address.
   ///
