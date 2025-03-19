@@ -1,10 +1,8 @@
-import 'package:file/file.dart' as file;
-import 'package:path/path.dart' as p;
 import 'package:routed/routed.dart';
-import 'package:routed/src/file_handler.dart';
 import 'package:routed/src/router/registered_route.dart';
 import 'package:routed/src/router/route_builder.dart';
 import 'package:routed/src/router/router_group_builder.dart';
+import 'package:routed/src/static_files.dart';
 
 /// A hierarchical Router supporting:
 /// - Sub-groups (each can have path + middlewares)
@@ -12,7 +10,7 @@ import 'package:routed/src/router/router_group_builder.dart';
 /// - Group-level middlewares
 /// - Route-level middlewares
 /// - Hierarchical naming
-class Router {
+class Router with StaticFileHandler {
   /// Base path for this router (e.g. `/api`)
   final String _prefix;
 
@@ -315,67 +313,67 @@ class Router {
   }
 }
 
-extension RouterStaticFiles on Router {
-  /// Serve a single static file with the default filesystem.
-  ///
-  /// [relativePath]: The URL path to serve the file at.
-  /// [filePath]: The filesystem path to the file.
-  /// [fs]: Optional custom filesystem.
-  void staticFile(String relativePath, String filePath, [file.FileSystem? fs]) {
-    staticFileFS(
-        relativePath, filePath, Dir(p.dirname(filePath), fileSystem: fs));
-  }
+// extension RouterStaticFiles on Router {
+//   /// Serve a single static file with the default filesystem.
+//   ///
+//   /// [relativePath]: The URL path to serve the file at.
+//   /// [filePath]: The filesystem path to the file.
+//   /// [fs]: Optional custom filesystem.
+//   void staticFile(String relativePath, String filePath, [file.FileSystem? fs]) {
+//     staticFileFS(
+//         relativePath, filePath, Dir(p.dirname(filePath), fileSystem: fs));
+//   }
 
-  /// Serve a single static file with a custom filesystem.
-  ///
-  /// [relativePath]: The URL path to serve the file at.
-  /// [filePath]: The filesystem path to the file.
-  /// [fs]: The custom filesystem directory.
-  void staticFileFS(String relativePath, String filePath, Dir fs) {
-    if (relativePath.contains(':') || relativePath.contains('*')) {
-      throw Exception(
-          'URL parameters cannot be used when serving a static file');
-    }
+//   /// Serve a single static file with a custom filesystem.
+//   ///
+//   /// [relativePath]: The URL path to serve the file at.
+//   /// [filePath]: The filesystem path to the file.
+//   /// [fs]: The custom filesystem directory.
+//   void staticFileFS(String relativePath, String filePath, Dir fs) {
+//     if (relativePath.contains(':') || relativePath.contains('*')) {
+//       throw Exception(
+//           'URL parameters cannot be used when serving a static file');
+//     }
 
-    final fileHandler = FileHandler.fromDir(fs);
-    final fileName = p.basename(filePath);
+//     final fileHandler = FileHandler.fromDir(fs);
+//     final fileName = p.basename(filePath);
 
-    handler(EngineContext context) async {
-      await fileHandler.serveFile(context.request.httpRequest, fileName);
-    }
+//     handler(EngineContext context) async {
+//       await fileHandler.serveFile(context.request.httpRequest, fileName);
+//     }
 
-    get(relativePath, handler);
-    head(relativePath, handler);
-  }
+//     get(relativePath, handler);
+//     head(relativePath, handler);
+//   }
 
-  /// Serve a directory of static files with the default filesystem.
-  ///
-  /// [relativePath]: The URL path to serve the directory at.
-  /// [rootPath]: The filesystem path to the root directory.
-  /// [fs]: Optional custom filesystem.
-  void static(String relativePath, String rootPath, [file.FileSystem? fs]) {
-    staticFS(relativePath, Dir(rootPath, fileSystem: fs));
-  }
+//   /// Serve a directory of static files with the default filesystem.
+//   ///
+//   /// [relativePath]: The URL path to serve the directory at.
+//   /// [rootPath]: The filesystem path to the root directory.
+//   /// [fs]: Optional custom filesystem.
+//   void static(String relativePath, String rootPath, [file.FileSystem? fs]) {
+//     staticFS(relativePath, Dir(rootPath, fileSystem: fs));
+//   }
 
-  /// Serve a directory of static files with a custom filesystem.
-  ///
-  /// [relativePath]: The URL path to serve the directory at.
-  /// [dir]: The custom filesystem directory.
-  void staticFS(String relativePath, Dir dir) {
-    if (relativePath.contains(':') || relativePath.contains('*')) {
-      throw Exception(
-          'URL parameters cannot be used when serving a static folder');
-    }
+//   /// Serve a directory of static files with a custom filesystem.
+//   ///
+//   /// [relativePath]: The URL path to serve the directory at.
+//   /// [dir]: The custom filesystem directory.
+//   void staticFS(String relativePath, Dir dir) {
+//     if (relativePath.contains(':') || relativePath.contains('*')) {
+//       throw Exception(
+//           'URL parameters cannot be used when serving a static folder');
+//     }
 
-    final urlPattern = p.join(relativePath, '{*filepath}');
-    final fileHandler = FileHandler.fromDir(dir);
+//     final urlPattern = p.join(relativePath, '{*filepath}');
+//     final fileHandler = FileHandler.fromDir(dir);
 
-    handler(EngineContext context) async {
-      final requestPath = context.param('filepath') as String;
-      await fileHandler.serveFile(context.request.httpRequest, requestPath);
-    }
+//     handler(EngineContext context) async {
+//       final requestPath = context.param('filepath') as String;
+//       await fileHandler.serveFile(context.request.httpRequest, requestPath);
+//     }
 
-    get(urlPattern, handler);
-    head(urlPattern, handler);
-  }
-}
+//     get(urlPattern, handler);
+//     head(urlPattern, handler);
+//   }
+// }
