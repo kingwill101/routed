@@ -1,8 +1,8 @@
-import 'package:liquify/liquify.dart';
 import 'package:file/file.dart';
 import 'package:file/local.dart' as local;
-import 'package:routed/src/render/html/template_engine.dart';
+import 'package:liquify/liquify.dart';
 import 'package:path/path.dart' as p;
+import 'package:routed/src/render/html/template_engine.dart';
 
 /// The `LiquidRoot` class implements the `Root` interface and is responsible
 /// for resolving template file paths and reading their contents.
@@ -34,34 +34,49 @@ class LiquidRoot implements Root {
   }
 }
 
-/// The `LiquidTemplateEngine` class implements the `TemplateEngine` interface
-/// and is responsible for rendering templates using the Liquid templating engine.
 class LiquidTemplateEngine implements TemplateEngine {
-  /// The file system to be used for file operations.
   final FileSystem _fileSystem;
-
-  /// The root object for resolving template paths.
   Root? _root;
+  final Map<String, Function> _funcMap = {};
+  final Map<String, Function> _filterMap = {};
 
-  /// Constructor for `LiquidTemplateEngine`.
-  ///
-  /// If no `fileSystem` is provided, it defaults to `local.LocalFileSystem()`.
+  @override
+  Map<String, Function> get funcMap => Map.unmodifiable(_funcMap);
+
+  @override
+  Map<String, Function> get filterMap => Map.unmodifiable(_filterMap);
+
   LiquidTemplateEngine({
     FileSystem? fileSystem,
   }) : _fileSystem = fileSystem ?? const local.LocalFileSystem() {
     _root = LiquidRoot(fileSystem: _fileSystem);
   }
 
-  /// Renders the template with the given name and data.
-  ///
-  /// This method loads the template from the file system, renders it with the
-  /// provided data, and returns the rendered string.
-  ///
-  /// If an error occurs during rendering, it prints the error and returns an
-  /// empty string.
   @override
-  Future<String> render(String templateName, Map<String, dynamic> data) async {
-    final template = Template.fromFile(templateName, _root!, data: data);
+  void addFunc(String name, Function fn) {}
+
+  @override
+  void addFilter(String name, Function filter) {
+    _filterMap[name] = filter;
+
+    // Register using FilterRegister with proper FilterFunction signature
+    FilterRegistry.register(name, (
+      dynamic value,
+      List<dynamic> arguments,
+      Map<String, dynamic> namedArguments,
+    ) {
+      return filter(value, arguments);
+    });
+  }
+
+  @override
+  Future<String> render(String templateName,
+      [Map<String, dynamic> data = const {}]) async {
+    final template = Template.fromFile(templateName, _root!, data: {
+      ...data,
+      // Make functions available in template context
+      ..._funcMap,
+    });
 
     try {
       return template.render();
@@ -71,10 +86,6 @@ class LiquidTemplateEngine implements TemplateEngine {
     }
   }
 
-  /// Loads templates from the specified directory path.
-  ///
-  /// This method sets the current directory of the file system to the specified
-  /// path. If the directory does not exist, it throws an exception.
   @override
   void loadTemplates(String path) {
     final directory = _fileSystem.directory(path);
@@ -82,5 +93,11 @@ class LiquidTemplateEngine implements TemplateEngine {
       throw Exception('Directory not found: $path');
     }
     _fileSystem.currentDirectory = directory.path;
+  }
+
+  @override
+  String renderContent(String content, [Map<String, dynamic> data = const {}]) {
+    Template.parse(content, data: data, root: _root);
+    throw UnimplementedError();
   }
 }
