@@ -8,27 +8,33 @@ extension ServerExtension on Engine {
   /// Parameters:
   /// - [host]: The host address to bind to. Defaults to '127.0.0.1'.
   /// - [port]: The port number to listen on. If null, port 0 will be used.
-  /// - [echoRoutes]: Whether to print the registered routes when starting. Defaults to true.
+  /// - [echo]: Whether to print the registered routes when starting. Defaults to true.
   ///
   /// Throws:
   /// - [SocketException] if the server cannot bind to the specified host/port.
   Future<void> serve(
-      {String host = '127.0.0.1', int? port, bool echoRoutes = true}) async {
+      {String host = '127.0.0.1', int? port, bool echo = true}) async {
     // Build routes if not already done
     if (_engineRoutes.isEmpty) {
       _build();
     }
     // Ensure proxy configuration is parsed
-    await config.parseTrustedProxies();
-    if (echoRoutes) printRoutes();
-    port ??= 0;
-    _server = await HttpServer.bind(host, port, shared: true);
-    print('Engine listening on http://$host:$port');
-
-    // Handle incoming connections
-    await for (HttpRequest httpRequest in _server!) {
-      await handleRequest(httpRequest);
+    if (config.features.enableProxySupport) {
+      await config.parseTrustedProxies();
     }
+    if (echo) printRoutes();
+
+    runZonedGuarded(() async {
+      _server = await HttpServer.bind(host, port ?? 0, shared: true);
+      print('Engine listening on http://$host:$port');
+
+      // Handle incoming connections
+      await for (HttpRequest httpRequest in _server!) {
+        await handleRequest(httpRequest);
+      }
+    }, (e, s) {
+      print(e);
+    });
   }
 
   /// Handles an individual HTTP request by matching it to registered routes.
@@ -47,36 +53,42 @@ extension ServerExtension on Engine {
     final path = httpRequest.uri.path;
     final method = httpRequest.method;
 
-    // First pass: check for exact route matches (excluding fallback routes)
-    final routeMatches = _engineRoutes
-        .map((r) => r.tryMatch(httpRequest))
-        .where((match) =>
-            match != null &&
-            !(match.route != null &&
-                match.route!.isFallback)) // Exclude fallback routes
-        .toList();
-    final exactMatch = routeMatches.where((m) => m!.matched).firstOrNull;
+    final maxRequestSize = config.security.maxRequestSize;
 
-    if (exactMatch != null) {
-      await _handleMatchedRoute(exactMatch.route!, httpRequest);
-      return;
-    }
+    // Wrap the httpRequest in a size-limiting stream
+    final wrappedRequest = WrappedRequest(httpRequest, maxRequestSize);
 
-    // Second pass: handle trailing slash redirects
+    // Handle trailing slash redirects first
     if (config.redirectTrailingSlash) {
+      final hasTrailingSlash = path.endsWith('/');
       final alternativePath =
-          path.endsWith('/') ? path.substring(0, path.length - 1) : '$path/';
+          hasTrailingSlash ? path.substring(0, path.length - 1) : '$path/';
 
+      // Check if alternative path exists
       final alternativeMatch = _engineRoutes
           .where((r) => r.path == alternativePath && r.method == method)
           .firstOrNull;
 
       if (alternativeMatch != null) {
-        _redirectRequest(httpRequest, alternativePath, method);
+        _redirectRequest(wrappedRequest, alternativePath, method);
+        await wrappedRequest.response.close();
         return;
       }
     }
 
+    // Rest of existing route matching logic...
+    final routeMatches = _engineRoutes
+        .map((r) => r.tryMatch(wrappedRequest))
+        .where((match) =>
+            match != null && !(match.route != null && match.route!.isFallback))
+        .toList();
+
+    final exactMatch = routeMatches.where((m) => m!.matched).firstOrNull;
+
+    if (exactMatch != null) {
+      await _handleMatchedRoute(exactMatch.route!, wrappedRequest);
+      return;
+    }
     // Third pass: handle method not allowed
     if (config.handleMethodNotAllowed) {
       final methodMismatches = routeMatches.where((m) => m!.isMethodMismatch);
@@ -87,9 +99,9 @@ extension ServerExtension on Engine {
             .map((r) => r.method)
             .toSet();
 
-        httpRequest.response.headers.add('Allow', allowedMethods.join(', '));
-        httpRequest.response.statusCode = HttpStatus.methodNotAllowed;
-        await httpRequest.response.close();
+        wrappedRequest.response.headers.add('Allow', allowedMethods.join(', '));
+        wrappedRequest.response.statusCode = HttpStatus.methodNotAllowed;
+        await wrappedRequest.response.close();
         return;
       }
     }
@@ -117,15 +129,15 @@ extension ServerExtension on Engine {
       }
 
       if (mostSpecificFallback != null) {
-        await _handleMatchedRoute(mostSpecificFallback, httpRequest);
+        await _handleMatchedRoute(mostSpecificFallback, wrappedRequest);
         return;
       }
     }
 
     // No matches found
-    httpRequest.response.statusCode = HttpStatus.notFound;
-    httpRequest.response.write('404 Not Found');
-    await httpRequest.response.close();
+    wrappedRequest.response.statusCode = HttpStatus.notFound;
+    wrappedRequest.response.write('404 Not Found');
+    await wrappedRequest.response.close();
   }
 
   /// Handles a matched route by creating a context and executing the middleware chain.
@@ -138,7 +150,7 @@ extension ServerExtension on Engine {
   /// in the correct order. It also handles any errors that occur during processing.
   Future<void> _handleMatchedRoute(
       EngineRoute route, HttpRequest httpRequest) async {
-    final request = Request(httpRequest, {});
+    final request = Request(httpRequest, {}, config);
     final response = Response(httpRequest.response);
 
     final context = EngineContext(
@@ -150,14 +162,31 @@ extension ServerExtension on Engine {
     );
 
     try {
-      await context.run();
+      await AppZone.run(
+        body: () async {
+          try {
+            await context.run();
+          } catch (err, stack) {
+            // Anything that wasn't caught at a lower level gets caught here.
+            _handleGlobalError(context, err, stack);
+          } finally {
+            print("");
+            // Only close if not already closed
+            if (!response.isClosed) {
+              response.close();
+            }
+          }
+        },
+        engine: this,
+        context: context,
+      );
     } catch (err, stack) {
       // Anything that wasn't caught at a lower level gets caught here.
       _handleGlobalError(context, err, stack);
     } finally {
       // Only close if not already closed
       if (!response.isClosed) {
-        response.close();
+        // response.close();
       }
     }
   }
@@ -180,7 +209,9 @@ extension ServerExtension on Engine {
   ) {
     // For logging—replace with your logging approach (e.g. Sentry, package:logging, etc).
     stderr.writeln('Global error caught in Engine: $err\n$stack');
-
+    if (err is EngineError) {
+      // print(jsonEncode(err));
+    }
     if (err is ValidationError) {
       ctx.json(err.errors,
           statusCode: err.code ?? HttpStatus.unprocessableEntity);
