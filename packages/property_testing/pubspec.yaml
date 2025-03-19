@@ -1,0 +1,13 @@
+name: property_testing
+description: A starting point for Dart libraries or applications.
+version: 0.0.1
+# repository: https://github.com/my_org/my_repo
+
+resolution: workspace
+
+environment:
+  sdk: ^3.6.0
+
+dev_dependencies:
+  routed_testing: 0.0.1
+  server_testing:
