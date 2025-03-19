@@ -1,8 +1,8 @@
 import 'package:file/file.dart';
 import 'package:routed/src/engine/engine.dart';
-import 'package:routed/src/render/html/jinja.dart';
 import 'package:routed/src/render/html/liquid.dart';
 import 'package:routed/src/render/html/template_engine.dart';
+import 'package:routed/src/support/template_helpers.dart';
 
 /// Extension on the Engine class to provide template engine functionalities.
 extension TemplateEngineExtension on Engine {
@@ -39,43 +39,24 @@ extension TemplateEngineExtension on Engine {
     engine.loadTemplates(config.templateDirectory);
   }
 
-  /// Configures the engine to use the Jinja template engine.
-  ///
-  /// This method sets up the Jinja template engine with optional parameters
-  /// for the template directory and file system.
-  ///
-  /// - [directory]: Optional. The directory where Jinja templates are stored.
-  /// - [fileSystem]: Optional. The file system to be used for file operations.
-  void useJinja({
-    String? directory,
-    FileSystem? fileSystem,
-  }) {
-    useTemplateEngine(
-      JinjaTemplateEngine(
-        fileSystem: fileSystem ?? config.fileSystem,
-      ),
-      directory: directory,
-      fileSystem: fileSystem,
+  void useLiquid({String? directory, FileSystem? fileSystem}) {
+    final engine = LiquidTemplateEngine(
+      fileSystem: fileSystem ?? config.fileSystem,
     );
+
+    // Register built-in filters for Liquid
+    TemplateHelpers.getBuiltins().forEach((name, fn) {
+      engine.addFilter(name, fn);
+    });
+
+    useTemplateEngine(engine, directory: directory, fileSystem: fileSystem);
   }
 
-  /// Configures the engine to use the Liquid template engine.
-  ///
-  /// This method sets up the Liquid template engine with optional parameters
-  /// for the template directory and file system.
-  ///
-  /// - [directory]: Optional. The directory where Liquid templates are stored.
-  /// - [fileSystem]: Optional. The file system to be used for file operations.
-  void useLiquid({
-    String? directory,
-    FileSystem? fileSystem,
-  }) {
-    useTemplateEngine(
-      LiquidTemplateEngine(
-        fileSystem: fileSystem ?? config.fileSystem,
-      ),
-      directory: directory,
-      fileSystem: fileSystem,
-    );
+  void addTemplateFunc(String name, Function fn) {
+    templateEngine?.addFunc(name, fn);
+  }
+
+  void addTemplateFilter(String name, Function filter) {
+    templateEngine?.addFilter(name, filter);
   }
 }
