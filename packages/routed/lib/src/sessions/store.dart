@@ -3,49 +3,48 @@ import 'package:routed/src/request.dart';
 import 'package:routed/src/response.dart';
 import 'package:routed/src/sessions/session.dart';
 
-/// The `Store` abstract class defines the interface for session management.
-/// Implementations are responsible for loading, creating, and saving sessions,
-/// with optional support for encryption and signing of session data.
+/// The `Store` abstract class defines the interface for session storage and
+/// retrieval. Implementations handle loading, creating, and saving sessions.
 ///
-/// When encryption is enabled, session data is encrypted before storage.
-/// When signing is enabled, session data is signed to prevent tampering.
-
+/// Stores can optionally support:
+///   - Encryption: Session data is encrypted before storage for enhanced security.
+///   - Signing: Session data is signed to prevent tampering, ensuring data integrity.
+///
 abstract class Store {
-  /// Loads an existing session or creates a new one if it does not exist.
+  /// Reads an existing session or creates a new one if it does not exist.
   ///
-  /// This method is analogous to Gorilla's `Store.Get` or `Store.New` methods.
-  /// It takes an `Request` object and a session `name` as parameters.
-  /// The `Request` object provides the context for the session, including
-  /// any cookies or headers that might be used to identify the session.
-  /// The `name` parameter is a string that uniquely identifies the session.
+  /// This method retrieves a session associated with the given [request] and
+  /// session [name]. If a session exists, it's loaded; otherwise, a new session
+  /// is created.
+  ///
+  /// The [request] object provides context, including cookies or headers used to
+  /// identify the session. The [name] parameter uniquely identifies the session.
   ///
   /// Returns a `Future<Session>` that completes with the loaded or newly created
   /// `Session` object.
   ///
-  /// Example usage:
+  /// Example:
   /// ```dart
-  /// Future<Session> session = store.getSession(request, 'session_name');
+  /// final session = await store.read(request, 'my_session');
   /// ```
   FutureOr<Session> read(Request request, String name);
 
-  /// Saves the session to the underlying storage mechanism.
+  /// Writes the session data to the underlying storage.
   ///
-  /// This method is responsible for persisting the session data. The storage
-  /// mechanism could be a cookie, a file, a database, or any other form of
-  /// persistent storage. It takes three parameters: the `Request` object,
-  /// the `Response` object, and the `Session` object to be saved.
+  /// This method persists the session data using a storage mechanism like a
+  /// cookie, file, or database. It receives the [request], [response], and
+  /// [session] objects.
   ///
-  /// The `Request` object provides the context for the session, while the
-  /// `Response` object allows the method to modify the response, such as
-  /// setting cookies or headers. The `Session` object contains the session data
-  /// that needs to be saved.
+  /// The [request] object provides context for the session. The [response]
+  /// object allows modifying the outgoing response (e.g., setting cookies).
+  /// The [session] object contains the data to be saved.
   ///
-  /// Returns a `Future<void>` that completes when the session has been successfully
+  /// Returns a `Future<void>` that completes when the session is successfully
   /// saved.
   ///
-  /// Example usage:
+  /// Example:
   /// ```dart
-  /// await store.saveSession(request, response, session);
+  /// await store.write(request, response, session);
   /// ```
   FutureOr<void> write(
     Request request,
