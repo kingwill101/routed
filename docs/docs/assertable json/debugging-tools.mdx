@@ -1,0 +1,182 @@
+---
+title: Debugging Tools
+description: Learn about the debugging utilities in assertable_json
+---
+
+# Debugging Tools
+
+The `assertable_json` package includes several useful tools for debugging your JSON tests. These tools can help identify issues in your tests or JSON data.
+
+## Printing JSON Data
+
+### Basic Printing
+
+```dart
+// Pretty-print the JSON data
+json.printR();
+
+// Pretty-print with custom indentation
+json.printR(indent: 4);
+```
+
+### Dump and Die (dd)
+
+Inspired by Laravel's dd() function, this method prints the JSON data and then stops execution:
+
+```dart
+// Print JSON and stop execution
+json.dd();
+```
+
+This is particularly useful when you need to see the JSON structure at a specific point in your test.
+
+## Tapping Into the Assertion Chain
+
+The `tap` method allows you to inspect the JSON data at any point in your assertion chain without breaking it:
+
+```dart
+json
+  .has('user')
+  .tap((j) {
+    print('User object: ${j.get('user')}');
+    // Perform any other debugging here
+  })
+  .scope('user', (user) {
+    user.has('id').has('name');
+  });
+```
+
+## Scoping for Debugging
+
+You can use scopes to focus your debugging on specific parts of the JSON:
+
+```dart
+json.scope('complex.nested.structure', (nested) {
+  // Now you can debug just this part
+  nested.printR();
+  // Continue with assertions
+  nested.has('id');
+});
+```
+
+## Checking Property Interaction
+
+See which properties have been checked in your assertions:
+
+```dart
+// At the end of your test
+json.verifyInteracted();
+```
+
+This will fail if any properties in the JSON haven't been checked, helping you identify missed properties.
+
+## Getting Raw Values
+
+Extract specific values for debugging:
+
+```dart
+// Get a value for inspection
+final userId = json.get<int>('user.id');
+print('User ID: $userId');
+
+// Get a list
+final tags = json.getList<String>('user.tags');
+print('Tags: $tags');
+```
+
+## Debugging with Conditionals
+
+Use conditionals to add debugging logic:
+
+```dart
+json.when(isDebugMode, (j) {
+  print('DEBUG MODE: JSON Data');
+  j.printR();
+});
+```
+
+## Complete Example
+
+Here's a comprehensive example showing how to use various debugging tools:
+
+```dart
+test('debugging complex JSON response', () {
+  final json = AssertableJson({
+    'status': 'success',
+    'data': {
+      'user': {
+        'id': 123,
+        'name': 'John Doe',
+        'permissions': ['read', 'write'],
+        'settings': {
+          'theme': 'dark',
+          'notifications': true
+        }
+      },
+      'posts': [
+        {'id': 1, 'title': 'First Post'},
+        {'id': 2, 'title': 'Second Post'}
+      ]
+    }
+  });
+
+  // Debug the whole structure
+  print('Full JSON structure:');
+  json.printR();
+  
+  json
+    .has('status')
+    .has('data')
+    
+    // Tap into the chain to debug
+    .tap((j) {
+      print('Status: ${j.get<String>('status')}');
+      print('Has data object: ${j.exists('data')}');
+    })
+    
+    .scope('data', (data) {
+      // Debug just the data object
+      print('Data object:');
+      data.printR();
+      
+      data
+        .has('user')
+        .tap((d) {
+          // Extract and print user ID
+          final userId = d.get<int>('user.id');
+          print('User ID: $userId');
+          
+          // Print user permissions
+          final permissions = d.getList<String>('user.permissions');
+          print('Permissions: $permissions');
+        })
+        
+        .scope('user', (user) {
+          user
+            .has('id')
+            .has('name')
+            .has('permissions')
+            .has('settings');
+        })
+        
+        .scope('posts', (posts) {
+          posts
+            .count('posts', 2)
+            .each((post) {
+              post.has('id').has('title');
+            });
+        });
+    })
+    
+    // Ensure all properties were checked
+    .verifyInteracted();
+});
+```
+
+## Best Practices for Debugging
+
+1. **Use `tap()` for non-intrusive debugging** - It allows you to inspect without breaking your assertion chain
+2. **Use `printR()` for complex structures** - It provides a formatted view of JSON data
+3. **Use `dd()` sparingly** - Since it stops execution, only use when necessary
+4. **Use `verifyInteracted()` to find missed properties** - It helps ensure thorough testing
+5. **Scope debugging to relevant sections** - This keeps debug output focused and readable

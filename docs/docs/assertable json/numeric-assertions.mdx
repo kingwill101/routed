@@ -1,0 +1,246 @@
+---
+title: Numeric Assertions
+description: Learn about numeric validations in assertable_json
+---
+
+# Numeric Assertions
+
+The `assertable_json` package provides powerful methods for validating numeric values in your JSON data. These methods allow you to check for various numeric conditions like ranges, comparisons, and mathematical properties.
+
+## Comparison Assertions
+
+### Basic Comparisons
+
+```dart
+json
+  .isGreaterThan('age', 18)         // Value > 18
+  .isLessThan('price', 100)         // Value < 100
+  .isGreaterOrEqual('quantity', 1)  // Value >= 1
+  .isLessOrEqual('discount', 50)    // Value <= 50
+  .equals('count', 100)             // Value == 100
+  .notEquals('price', 0)            // Value != 0
+```
+
+### Range Validation
+
+```dart
+// Between 1 and 5 (inclusive)
+json.isBetween('rating', 1, 5);
+
+// Use with nested paths
+json.isBetween('product.statistics.rating', 1, 5);
+```
+
+## Sign Assertions
+
+```dart
+json
+  .isPositive('balance')       // Value > 0
+  .isNegative('temperature')   // Value < 0
+```
+
+## Mathematical Property Assertions
+
+```dart
+json
+  // Check if divisible by a number (integer result)
+  .isDivisibleBy('quantity', 5)   
+
+  // Check if it's a multiple of another number
+  .isMultipleOf('price', 0.99)
+```
+
+## Type Checking with Numeric Assertions
+
+It's good practice to combine numeric assertions with type checking:
+
+```dart
+json
+  .whereType<int>('count')
+  .isGreaterThan('count', 0)
+  
+  .whereType<double>('price')
+  .isGreaterThan('price', 0.0)
+```
+
+## Complex Validations
+
+Chain multiple assertions for more complex validations:
+
+```dart
+json
+  // Age is an integer between 18 and 65
+  .whereType<int>('age')
+  .isGreaterOrEqual('age', 18)
+  .isLessOrEqual('age', 65)
+  
+  // Price is a positive number less than 1000
+  .whereType<double>('price')
+  .isPositive('price')
+  .isLessThan('price', 1000)
+```
+
+## Nested Objects and Arrays
+
+Use with scoping to test nested structures:
+
+```dart
+json.scope('product', (product) => {
+  product
+    .isGreaterThan('price', 0)
+    .isLessThan('price', 1000)
+    
+    // Test metrics in a nested object
+    .scope('metrics', (metrics) => {
+      metrics
+        .isBetween('rating', 1, 5)
+        .isGreaterThan('viewCount', 0)
+    });
+});
+
+// Test each item in an array
+json.scope('items', (items) => {
+  items.each((item) => {
+    item
+      .isGreaterThan('price', 0)
+      .isLessOrEqual('discount', 100);
+  });
+});
+```
+
+## Numeric Validations with Custom Logic
+
+For more complex numeric validations, combine with `where()`:
+
+```dart
+// Check if a number is even
+json.where('count', (value) => (value as int) % 2 == 0);
+
+// Check if a price has exactly 2 decimal places
+json.where('price', (value) {
+  final price = value as double;
+  final decimalStr = price.toString().split('.')[1];
+  return decimalStr.length == 2;
+});
+```
+
+## Complete Example
+
+```dart
+test('comprehensive numeric testing', () {
+  final json = AssertableJson({
+    'user': {
+      'id': 123,
+      'age': 30,
+      'scores': [85, 92, 78],
+      'wallet': {
+        'balance': 250.50,
+        'debt': -75.25
+      }
+    },
+    'product': {
+      'id': 456,
+      'price': 99.99,
+      'discount': 15,
+      'stock': 100,
+      'ratings': {
+        'average': 4.7,
+        'count': 230
+      }
+    },
+    'order': {
+      'id': 789,
+      'total': 84.99,
+      'items': 3,
+      'taxes': 5.01,
+      'timestamp': 1609459200
+    }
+  });
+
+  json
+    // Test user numeric properties
+    .scope('user', (user) => {
+      user
+        .whereType<int>('id')
+        .isGreaterThan('id', 0)
+        
+        .whereType<int>('age')
+        .isBetween('age', 18, 120)
+        
+        // Test array of numbers
+        .scope('scores', (scores) => {
+          scores.each((score) => {
+            // Assert that each score is in the valid range
+            final value = score.json as int;
+            expect(value, greaterThanOrEqualTo(0));
+            expect(value, lessThanOrEqualTo(100));
+          });
+        })
+        
+        // Test nested wallet object
+        .scope('wallet', (wallet) => {
+          wallet
+            .whereType<double>('balance')
+            .isPositive('balance')
+            
+            .whereType<double>('debt')
+            .isNegative('debt');
+        });
+    })
+    
+    // Test product numeric properties
+    .scope('product', (product) => {
+      product
+        .whereType<int>('id')
+        .isGreaterThan('id', 0)
+        
+        .whereType<double>('price')
+        .isGreaterThan('price', 0)
+        .isLessThan('price', 1000)
+        
+        .whereType<int>('discount')
+        .isBetween('discount', 0, 100)
+        
+        .whereType<int>('stock')
+        .isGreaterOrEqual('stock', 0)
+        .isDivisibleBy('stock', 10)
+        
+        // Test nested ratings object
+        .scope('ratings', (ratings) => {
+          ratings
+            .whereType<double>('average')
+            .isBetween('average', 1, 5)
+            
+            .whereType<int>('count')
+            .isGreaterThan('count', 0);
+        });
+    })
+    
+    // Test order numeric properties
+    .scope('order', (order) => {
+      order
+        .whereType<int>('id')
+        .isGreaterThan('id', 0)
+        
+        .whereType<double>('total')
+        .isGreaterThan('total', 0)
+        
+        .whereType<int>('items')
+        .isGreaterThan('items', 0)
+        
+        .whereType<double>('taxes')
+        .isGreaterOrEqual('taxes', 0)
+        
+        .whereType<int>('timestamp')
+        .isGreaterThan('timestamp', 0);
+    });
+});
+```
+
+## Best Practices
+
+1. **Combine with type checking** - Always verify the type before numeric assertions
+2. **Use range validations** - For values with known ranges, use `isBetween` 
+3. **Chain multiple assertions** - Create comprehensive tests with multiple conditions
+4. **Test all numeric properties** - Don't forget nested numeric values
+5. **Use sign checks** - For values that should always be positive or negative

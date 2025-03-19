@@ -1,0 +1,168 @@
+---
+title: Property Assertions
+description: Learn about property existence and validation in assertable_json
+---
+
+# Property Assertions
+
+One of the most fundamental aspects of JSON testing is validating the presence or absence of properties. The `assertable_json` package provides a rich set of methods for these validations.
+
+## Checking Property Existence
+
+### Basic Property Checking
+
+```dart
+json
+  .has('name')             // Verify a property exists
+  .missing('deletedAt')    // Verify a property doesn't exist
+```
+
+### Multiple Property Checking
+
+```dart
+json
+  .hasAll(['id', 'name', 'email'])  // All properties must exist
+  .hasAny(['firstName', 'name'])    // At least one property must exist
+  .missingAll(['error', 'deletedAt']) // All properties must be missing
+```
+
+### Nested Property Checking
+
+```dart
+json
+  .hasNested('user.profile.email')  // Check a deeply nested property
+  .hasNested('items.0.id')          // Check first item in array
+```
+
+## Validating Property Values
+
+```dart
+json
+  .where('status', 'active')        // Value equals "active"
+  .whereNot('status', 'inactive')   // Value doesn't equal "inactive"
+  .whereIn('role', ['admin', 'user']) // Value is in list
+  .whereNotIn('role', ['guest', 'none']) // Value not in list
+```
+
+## Checking Multiple Properties
+
+```dart
+json.whereAll({
+  'id': 123,
+  'status': 'active',
+  'isAdmin': true
+});
+```
+
+## Handling Nested Objects
+
+```dart
+json.has('user', (user) => {
+  user
+    .has('id')
+    .has('profile', (profile) => {
+      profile
+        .has('email')
+        .has('avatar');
+    });
+});
+```
+
+## Verifying Property Interaction
+
+The package tracks which properties you've interacted with, helping ensure thorough testing:
+
+```dart
+json
+  .has('id')
+  .has('name')
+  .verifyInteracted();    // Will fail if any properties weren't checked
+```
+
+Or mark all remaining properties as checked:
+
+```dart
+json
+  .has('id')
+  .has('name')
+  .etc();    // Marks all remaining properties as checked
+```
+
+## Using With Scopes
+
+You can combine property assertions with scoping for more complex validation:
+
+```dart
+json.scope('user', (user) => {
+  user
+    .has('id')
+    .where('name', 'John')
+    .scope('settings', (settings) => {
+      settings
+        .has('theme')
+        .has('notifications');
+    });
+});
+```
+
+## Chaining Assertions
+
+Property assertions can be chained together for concise, readable tests:
+
+```dart
+json
+  .has('id')
+  .whereType<int>('id')
+  .has('name')
+  .whereType<String>('name')
+  .whereContains('name', 'John')
+  .has('isActive')
+  .whereType<bool>('isActive');
+```
+
+## Complete Example
+
+```dart
+test('testing user object', () {
+  final json = AssertableJson({
+    'user': {
+      'id': 123,
+      'name': 'John Doe',
+      'email': 'john@example.com',
+      'profile': {
+        'avatar': 'avatar.jpg',
+        'bio': 'Software developer'
+      },
+      'roles': ['admin', 'user']
+    },
+    'status': 'active',
+    'timestamp': 1234567890
+  });
+
+  json
+    .has('user')
+    .has('status')
+    .has('timestamp')
+    .hasNested('user.profile.avatar')
+    .missing('error')
+    .where('status', 'active')
+    
+    .scope('user', (user) => {
+      user
+        .has('id')
+        .has('name')
+        .has('email')
+        .has('profile')
+        .has('roles')
+        .where('id', 123)
+        .whereContains('email', '@')
+        
+        .scope('profile', (profile) => {
+          profile
+            .has('avatar')
+            .has('bio')
+            .whereContains('bio', 'developer');
+        });
+    });
+});
+```

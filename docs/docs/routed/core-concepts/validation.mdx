@@ -1,0 +1,254 @@
+---
+title: Validation
+description: Learn how to validate request data in Routed
+---
+
+
+Routed provides a powerful validation system that lets you validate incoming request data including JSON payloads, form data, query parameters, and file uploads.
+
+## Basic Validation
+
+The simplest way to validate request data is using the `validate()` method:
+Validation errors are handled automatically by the global error handler, so you don't need to catch them unless you want custom formatting:
+
+```dart
+// Validation errors are handled automatically
+router.post('/users', (ctx) async {
+  await ctx.validate({
+    'email': 'required|email',
+    'password': 'required|min:8'
+  });
+  
+  // Only runs if validation passes
+  await createUser(ctx.request.body());
+  ctx.json({'message': 'User created'});
+});
+
+// Custom validation error handling if needed
+router.post('/users-custom', (ctx) async {
+  try {
+    await ctx.validate({
+      'email': 'required|email',
+      'password': 'required|min:8'
+    });
+    
+    await createUser(ctx.request.body());
+    ctx.json({'message': 'User created'});
+    
+  } on ValidationError catch (e) {
+    // Custom error format
+    ctx.json({
+      'validation_errors': e.errors,
+      'help': 'Please check your input'
+    }, statusCode: 422);
+  }
+});
+```
+
+```dart
+router.post('/users', (ctx) async {
+  await ctx.validate({
+    'name': 'required|string|min:3',
+    'email': 'required|email',
+    'age': 'required|numeric|min:18',
+    'website': 'url|nullable'
+  });
+
+  // Validation passed
+  final data = await ctx.request.body();
+  ctx.json({'message': 'User created'});
+});
+```
+
+## Available Rules
+
+### Type Rules
+- `string` - Must be a string
+- `numeric` - Must be a number 
+- `int` - Must be an integer
+- `double` - Must be a floating point number
+- `array` - Must be an array
+- `date` - Must be a valid date (YYYY-MM-DD)
+- `uuid` - Must be a valid UUID
+- `email` - Must be a valid email address
+- `url` - Must be a valid URL 
+- `slug` - Must be a valid URL slug
+- `word` - Must contain only word characters (letters, numbers, underscores)
+
+### Size Rules
+- `min:value` - String/array minimum length or number minimum value
+- `max:value` - String/array maximum length or number maximum value
+- `between:min,max` - Value must be between min and max
+- `size:value` - String/array must be exact length
+
+### File Rules
+- `file` - Value must be a file upload
+- `max_file_size:bytes` - Maximum file size in bytes 
+- `allowed_mime_types:jpg,png,pdf` - Allowed MIME types
+
+### Other Rules
+- `required` - Field must be present and not empty
+- `nullable` - Field is optional
+- `in:foo,bar,baz` - Value must be in list
+- `regex:pattern` - Must match regular expression pattern
+
+## Handling Validation Errors
+
+When validation fails, a `ValidationError` is thrown with details about what failed:
+
+```dart
+router.post('/register', (ctx) async {
+  try {
+    await ctx.validate({
+      'username': 'required|string|min:3',
+      'email': 'required|email',
+      'password': 'required|string|min:8'
+    });
+
+    // Process valid data...
+    
+  } on ValidationError catch (e) {
+    return ctx.json({
+      'error': 'Validation failed',
+      'errors': e.errors
+    }, statusCode: 422);
+  }
+});
+```
+
+The error response will look like:
+
+```json
+{
+  "error": "Validation failed", 
+  "errors": {
+    "username": ["The username must be at least 3 characters"],
+    "email": ["This field must be a valid email address"],
+    "password": ["The password must be at least 8 characters"]
+  }
+}
+```
+
+## Form Validation
+
+When handling form submissions, you can validate both the form fields and file uploads:
+
+```dart
+router.post('/upload', (ctx) async {
+  await ctx.validate({
+    'title': 'required|string|max:100',
+    'description': 'nullable|string',
+    'category': 'required|in:image,document,other',
+    'file': 'required|file|max_file_size:5242880|allowed_mime_types:jpg,png,pdf'
+  });
+
+  final file = await ctx.formFile('file');
+  final title = await ctx.postForm('title');
+  
+  // Process valid form data...
+});
+```
+
+## Custom Validation Rules
+
+You can create custom validation rules by implementing the `ValidationRule` interface and registering them using the `Validator.registerRule()` static method:
+
+```dart
+class PhoneRule implements ValidationRule {
+  @override
+  String get name => 'phone';
+
+  @override 
+  String get message => 'Must be a valid phone number';
+
+  @override
+  bool validate(dynamic value, [List<String>? options]) {
+    if (value == null) return false;
+    return RegExp(r'^\d{3}-\d{3}-\d{4}').hasMatch(value.toString());
+  }
+}
+
+// Register custom rule using the static method
+Validator.registerRule(PhoneRule());
+
+// Use custom rule
+await ctx.validate({
+  'phone': 'required|phone'
+});
+  
+```
+
+You can also create rules that accept options:
+
+```dart
+class InRangeRule implements ValidationRule {
+  @override
+  String get name => 'range';
+  
+  @override 
+  String get message => 'Value must be within the specified range';
+  
+  @override
+  bool validate(dynamic value, [List<String>? options]) {
+    if (options == null || options.length != 2) return false;
+    final min = int.parse(options[0]);
+    final max = int.parse(options[1]);
+    return value >= min && value <= max;
+  }
+}
+
+// Register the rule
+Validator.registerRule(InRangeRule());
+
+// Use with options
+await ctx.validate({
+  'age': 'range:18,65'
+});
+```
+
+
+
+## Complete Example
+
+Here's a complete example showing various validation features:
+
+```dart
+router.post('/products', (ctx) async {
+  try {
+    // Validate request
+    await ctx.validate({
+      'name': 'required|string|min:3',
+      'price': 'required|numeric|min:0',
+      'category': 'required|in:electronics,clothing,food',
+      'description': 'nullable|string|max:1000',
+      'tags': 'array|min:1',
+      'image': 'required|file|max_file_size:5242880|allowed_mime_types:jpg,png'
+    });
+
+    // Get validated data
+    final data = await ctx.request.body();
+    final image = await ctx.formFile('image');
+    
+    // Process valid data...
+    return ctx.json({
+      'message': 'Product created successfully',
+      'product': {
+        'name': data['name'],
+        'price': data['price'],
+        'image': image.filename
+      }
+    });
+
+  } on ValidationError catch (e) {
+    return ctx.json({
+      'error': 'Validation failed',
+      'errors': e.errors
+    }, statusCode: 422);
+    
+  } catch (e) {
+    return ctx.json({
+      'error': 'An error occurred'
+    }, statusCode: 500);
+  }
+});
+```

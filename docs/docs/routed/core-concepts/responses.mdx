@@ -1,0 +1,195 @@
+---
+title: Response Rendering
+description: Learn how to render different types of responses in Routed
+---
+
+Routed provides multiple ways to render responses in different formats. The framework includes built-in support for:
+
+- JSON responses
+- HTML templates (Jinja and Liquid)
+- Plain text
+- XML
+- YAML
+- TOML
+- File downloads
+- Static files
+- Redirects
+
+## JSON Responses
+
+Several JSON rendering options are available:
+
+```dart
+// Basic JSON
+ctx.json({
+  'message': 'Hello World',
+  'count': 42
+});
+
+// Pretty printed JSON
+ctx.indentedJson({
+  'message': 'Hello World',
+  'nested': {
+    'count': 42
+  }
+});
+
+// ASCII-safe JSON
+ctx.asciiJson(data);
+
+// JSONP
+ctx.jsonp(data, callback: 'handleResponse');
+
+// Secure JSON (prevents JSON hijacking)
+ctx.secureJson(data);
+```
+
+## HTML Templates
+
+### Using Jinja Templates
+
+```dart
+// Configure Jinja template engine
+engine.useJinja(directory: 'templates');
+
+// Render template
+router.get('/profile', (ctx) {
+  ctx.html('profile.html', data: {
+    'name': 'John Doe',
+    'email': 'john@example.com'
+  });
+});
+```
+
+### Using Liquid Templates
+
+```dart
+// Configure Liquid template engine
+engine.useLiquid(directory: 'templates');
+
+// Render template
+router.get('/dashboard', (ctx) {
+  ctx.html('dashboard.liquid', data: {
+    'stats': {
+      'visits': 1234,
+      'conversions': 56
+    }
+  });
+});
+```
+
+## Other Response Types
+
+### Plain Text
+
+```dart
+ctx.string('Hello World');
+```
+
+### XML
+
+```dart
+ctx.xml({
+  'user': {
+    'name': 'John',
+    'age': 30
+  }
+});
+```
+
+### YAML
+
+```dart
+ctx.yaml({
+  'config': {
+    'debug': true,
+    'api_key': 'abc123'
+  }
+});
+```
+
+### TOML
+
+```dart
+ctx.toml({
+  'database': {
+    'host': 'localhost',
+    'port': 5432
+  }
+});
+```
+
+## File Responses
+
+### Serving Files
+
+```dart
+// Serve a file
+ctx.file('path/to/document.pdf');
+
+// Serve as attachment (triggers download)
+ctx.fileAttachment('path/to/document.pdf', 'report.pdf');
+
+// Serve a directory of files
+ctx.dir('path/to/public');
+```
+
+### Static File Server
+
+```dart
+// Serve static files from directory
+router.static('/public', 'path/to/public');
+
+// Enable directory listing
+router.staticFS('/files', Dir('path/to/files', listDirectory: true));
+
+// Serve single file
+router.staticFile('/logo.png', 'path/to/logo.png');
+```
+
+## Redirects
+
+```dart
+// Temporary redirect (302)
+ctx.redirect('/new-page');
+
+// Permanent redirect (301)
+ctx.redirect('/new-page', statusCode: HttpStatus.movedPermanently);
+
+// Other status codes
+ctx.redirect('/other', statusCode: HttpStatus.seeOther); // 303
+```
+
+## Custom Responses
+
+### Setting Headers
+
+```dart
+ctx.setHeader('X-Custom-Header', 'value');
+ctx.setHeader('Cache-Control', 'max-age=3600');
+```
+
+### Setting Status Code
+
+```dart
+ctx.status(HttpStatus.created); // 201
+ctx.status(HttpStatus.notFound); // 404
+```
+
+### Raw Response
+
+```dart
+// Write directly to response
+ctx.write('Custom response body');
+```
+
+### Streaming Response
+
+```dart
+ctx.dataFromReader(
+  statusCode: 200,
+  contentType: 'text/plain',
+  contentLength: 1024,
+  reader: myStream
+);
+```

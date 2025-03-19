@@ -1,0 +1,281 @@
+---
+title: Array & Object Testing
+description: Learn about testing arrays and nested objects with assertable_json
+---
+
+# Array & Object Testing
+
+Testing complex JSON structures with arrays and nested objects is a common requirement. The `assertable_json` package provides powerful tools for these scenarios.
+
+## Array Testing
+
+### Counting Elements
+
+```dart
+json
+  .count('items', 3)              // Exact count
+  .countBetween('items', 1, 5)    // Count within range
+```
+
+### Testing Array Contents
+
+```dart
+json.scope('items', (items) => {
+  // Test first element
+  items.first((item) => {
+    item
+      .has('id')
+      .where('id', 1);
+  });
+  
+  // Test each element
+  items.each((item) => {
+    item
+      .has('id')
+      .has('name')
+      .whereType<int>('id')
+      .whereType<String>('name');
+  });
+});
+```
+
+### Working with Array Values
+
+```dart
+json
+  .hasValues(['apple', 'banana', 'orange'])  // Array contains exact values
+  .whereContains('fruits', 'apple')          // Array contains specific value
+```
+
+## Nested Object Testing
+
+### Scoping to Nested Objects
+
+```dart
+json.scope('user', (user) => {
+  user
+    .has('id')
+    .has('profile')
+    
+    .scope('profile', (profile) => {
+      profile
+        .has('email')
+        .has('settings');
+    });
+});
+```
+
+### Deeply Nested Navigation
+
+```dart
+json
+  .hasNested('user.profile.settings.theme')
+  .scope('user.profile.settings', (settings) => {
+    settings
+      .has('theme')
+      .has('notifications');
+  });
+```
+
+## Combining Array and Object Testing
+
+```dart
+json.scope('users', (users) => {
+  users.each((user) => {
+    user
+      .has('id')
+      .has('name')
+      .has('permissions')
+      
+      .scope('permissions', (permissions) => {
+        permissions.each((permission) => {
+          permission
+            .has('resource')
+            .has('access');
+        });
+      });
+  });
+});
+```
+
+## Complex Assertions with Arrays
+
+```dart
+// Checking specific array index
+json.scope('items.0', (firstItem) => {
+  firstItem
+    .has('id')
+    .where('id', 1);
+});
+
+// Filtering arrays
+json.scope('items', (items) => {
+  // Find items with specific property values
+  let activeItems = 0;
+  
+  items.each((item) => {
+    if (item.get<bool>('isActive') == true) {
+      activeItems++;
+    }
+  });
+  
+  // Assert on the filter results
+  expect(activeItems, greaterThan(0));
+});
+```
+
+## Testing Arrays of Primitives
+
+```dart
+json.scope('scores', (scores) => {
+  scores.each((score) => {
+    score.whereType<int>();
+    
+    // For direct value testing
+    final value = score.json as int;
+    expect(value, greaterThanOrEqualTo(0));
+    expect(value, lessThanOrEqualTo(100));
+  });
+});
+```
+
+## Complete Example
+
+```dart
+test('testing complex array and object structure', () {
+  final json = AssertableJson({
+    'users': [
+      {
+        'id': 1,
+        'name': 'John Doe',
+        'email': 'john@example.com',
+        'roles': ['admin', 'user'],
+        'settings': {
+          'theme': 'dark',
+          'notifications': true
+        }
+      },
+      {
+        'id': 2,
+        'name': 'Jane Smith',
+        'email': 'jane@example.com',
+        'roles': ['user'],
+        'settings': {
+          'theme': 'light',
+          'notifications': false
+        }
+      }
+    ],
+    'products': [
+      {
+        'id': 101,
+        'name': 'Product 1',
+        'price': 29.99,
+        'categories': ['electronics', 'featured'],
+        'stock': {
+          'quantity': 100,
+          'locations': ['warehouse-a', 'store-5']
+        }
+      },
+      {
+        'id': 102,
+        'name': 'Product 2',
+        'price': 49.99,
+        'categories': ['home'],
+        'stock': {
+          'quantity': 50,
+          'locations': ['warehouse-b']
+        }
+      }
+    ],
+    'stats': {
+      'userCount': 2,
+      'productCount': 2,
+      'topCategories': ['electronics', 'home', 'featured']
+    }
+  });
+
+  json
+    // Test users array
+    .has('users')
+    .count('users', 2)
+    
+    .scope('users', (users) => {
+      users.each((user) => {
+        user
+          .has('id')
+          .has('name')
+          .has('email')
+          .has('roles')
+          .has('settings')
+          
+          .scope('roles', (roles) => {
+            roles.each((role) => {
+              role.whereType<String>();
+            });
+          })
+          
+          .scope('settings', (settings) => {
+            settings
+              .has('theme')
+              .has('notifications')
+              .whereType<String>('theme')
+              .whereType<bool>('notifications');
+          });
+      });
+      
+      // Test first user specifically
+      users.first((user) => {
+        user
+          .where('id', 1)
+          .where('name', 'John Doe')
+          .count('roles', 2);
+      });
+    })
+    
+    // Test products array
+    .has('products')
+    .count('products', 2)
+    
+    .scope('products', (products) => {
+      products.each((product) => {
+        product
+          .has('id')
+          .has('name')
+          .has('price')
+          .has('categories')
+          .has('stock')
+          
+          .whereType<int>('id')
+          .whereType<String>('name')
+          .whereType<double>('price')
+          .whereType<List>('categories')
+          
+          .scope('stock', (stock) => {
+            stock
+              .has('quantity')
+              .has('locations')
+              .whereType<int>('quantity')
+              .whereType<List>('locations');
+          });
+      });
+    })
+    
+    // Test stats object
+    .has('stats')
+    .scope('stats', (stats) => {
+      stats
+        .has('userCount')
+        .has('productCount')
+        .has('topCategories')
+        
+        .whereType<int>('userCount')
+        .whereType<int>('productCount')
+        .whereType<List>('topCategories')
+        
+        .where('userCount', 2)
+        .where('productCount', 2)
+        .count('topCategories', 3);
+    });
+});
+```

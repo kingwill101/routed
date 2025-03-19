@@ -1,0 +1,167 @@
+---
+title: Cookie Handling
+description: Learn how to work with cookies in Routed
+---
+
+Routed provides methods to work with HTTP cookies for state management.
+
+## Setting Cookies
+
+```dart
+router.get('/preferences', (ctx) {
+  // Basic cookie
+  ctx.setCookie('theme', 'dark');
+  
+  // Cookie with options
+  ctx.setCookie(
+    'session', 
+    'abc123',
+    maxAge: 3600,          // 1 hour
+    path: '/',             // Available on all paths
+    domain: 'example.com', // Domain scope
+    secure: true,          // HTTPS only
+    httpOnly: true,        // No JavaScript access
+    sameSite: SameSite.strict
+  );
+});
+```
+
+## Reading Cookies
+
+```dart
+router.get('/user', (ctx) {
+  // Get specific cookie
+  final sessionCookie = ctx.cookie('session');
+  if (sessionCookie != null) {
+    print('Value: ${sessionCookie.value}');
+    print('Domain: ${sessionCookie.domain}');
+    print('Expires: ${sessionCookie.expires}');
+  }
+  
+  // Access all cookies
+  ctx.request.cookies.forEach((cookie) {
+    print('${cookie.name}: ${cookie.value}');
+  });
+});
+```
+
+## Deleting Cookies
+
+```dart
+router.get('/logout', (ctx) {
+  // Delete by setting empty value and immediate expiration
+  ctx.setCookie(
+    'session', 
+    '', 
+    maxAge: 0,
+    path: '/'  // Must match path used when setting
+  );
+});
+```
+
+## Cookie Security
+
+### Secure Cookies
+
+```dart
+// HTTPS-only cookie
+ctx.setCookie(
+  'auth_token',
+  token,
+  secure: true,    // Requires HTTPS
+  httpOnly: true,  // No JavaScript access
+  sameSite: SameSite.strict  // Strict same-site policy
+);
+```
+
+### Domain and Path Restrictions
+
+```dart
+// Subdomain cookie
+ctx.setCookie(
+  'api_key',
+  key,
+  domain: 'api.example.com',
+  path: '/v1'
+);
+
+// Root domain cookie
+ctx.setCookie(
+  'user_id',
+  id,
+  domain: 'example.com',
+  path: '/'
+);
+```
+
+## Common Use Cases
+
+### Remember Me
+
+```dart
+router.post('/login', (ctx) async {
+  if (await authenticate(ctx)) {
+    // Set long-lived remember token
+    ctx.setCookie(
+      'remember_token',
+      generateToken(),
+      maxAge: 30 * 24 * 3600,  // 30 days
+      secure: true,
+      httpOnly: true
+    );
+  }
+});
+```
+
+### User Preferences
+
+```dart
+router.post('/settings', (ctx) async {
+  // Store user preferences
+  ctx.setCookie('theme', await ctx.postForm('theme'));
+  ctx.setCookie('language', await ctx.postForm('language'));
+  
+  // Store notifications preference with shorter lifetime
+  ctx.setCookie(
+    'notifications',
+    await ctx.postForm('notifications'),
+    maxAge: 7 * 24 * 3600  // 7 days
+  );
+});
+```
+
+
+## Cookie Middleware
+
+```dart
+Future<void> cookieMiddleware(EngineContext ctx) async {
+  // Check required cookie
+  final authCookie = ctx.cookie('auth');
+  if (authCookie == null) {
+    ctx.json({
+      'error': 'Authentication required'
+    }, statusCode: 401);
+    return;
+  }
+  
+  // Validate cookie
+  if (!isValidCookie(authCookie)) {
+    // Clear invalid cookie
+    ctx.setCookie('auth', '', maxAge: 0);
+    ctx.json({
+      'error': 'Invalid authentication'
+    }, statusCode: 401);
+    return;
+  }
+  
+  await ctx.next();
+}
+
+router.group(
+  path: '/protected',
+  middlewares: [cookieMiddleware],
+  builder: (router) {
+    // Protected routes...
+  }
+);
+```
