@@ -5,7 +5,7 @@ import 'package:routed/routed.dart';
 import 'package:routed/src/sessions/cookie_store.dart';
 import 'package:routed/src/sessions/secure_cookie.dart';
 import 'package:routed_testing/routed_testing.dart';
-import 'package:test/test.dart';
+import 'package:server_testing/server_testing.dart';
 
 void main() {
   group('Session Tests', () {
@@ -37,7 +37,7 @@ void main() {
           });
 
           engine.get('/read', (ctx) async {
-            final value = await ctx.getSession<String>('key');
+            final value = ctx.getSession<String>('key');
             ctx.string(value ?? '');
           });
 
@@ -79,10 +79,9 @@ void main() {
             assert(ctx.hasSession('key1') == true);
             assert(ctx.hasSession('nonexistent') == false);
 
+            assert(ctx.getSessionOrDefault('key1', 'default') == 'value1');
             assert(
-                await ctx.getSessionOrDefault('key1', 'default') == 'value1');
-            assert(await ctx.getSessionOrDefault('nonexistent', 'default') ==
-                'default');
+                ctx.getSessionOrDefault('nonexistent', 'default') == 'default');
 
             await ctx.removeSession('key1');
             assert(ctx.hasSession('key1') == false);

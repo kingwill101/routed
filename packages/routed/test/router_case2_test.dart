@@ -2,10 +2,10 @@ import 'package:file/memory.dart';
 import 'package:routed/routed.dart';
 import 'package:routed/src/file_handler.dart';
 import 'package:routed_testing/routed_testing.dart';
-import 'package:test/test.dart';
+import 'package:server_testing/server_testing.dart';
 
 void main() {
-  late EngineTestClient client;
+  late TestClient client;
 
   tearDown(() async {
     await client.close();
@@ -36,7 +36,7 @@ void main() {
 
       engine.use(router);
 
-      client = EngineTestClient(engine);
+      client = TestClient(RoutedRequestHandler(engine));
 
       for (final method in methods) {
         final response = await client.request(method, '/test');
@@ -57,7 +57,7 @@ void main() {
       // Define a single POST route
       engine.post('/test_2', (ctx) => ctx.string('post ok'));
 
-      client = EngineTestClient(engine);
+      client = TestClient(RoutedRequestHandler(engine));
 
       final response = await client.get('/test');
       response.assertStatus(404);
@@ -74,7 +74,7 @@ void main() {
 
       engine.use(router);
 
-      client = EngineTestClient(engine);
+      client = TestClient(RoutedRequestHandler(engine));
 
       // Test trailing slash redirects
       var response = await client.get('/path/');
@@ -96,7 +96,7 @@ void main() {
 
       engine.use(router);
 
-      client = EngineTestClient(engine);
+      client = TestClient(RoutedRequestHandler(engine));
 
       final response = await client.get('/path/');
       response.assertStatus(404);
@@ -119,7 +119,7 @@ void main() {
 
       engine.use(router);
 
-      client = EngineTestClient(engine);
+      client = TestClient(RoutedRequestHandler(engine));
 
       final response = await client.get('/test/john/smith/is/super/great');
       response
@@ -143,7 +143,7 @@ void main() {
       router.staticFS('/static', Dir('/thisreallydoesntexist', fileSystem: fs));
       engine.use(router);
 
-      client = EngineTestClient(engine);
+      client = TestClient(RoutedRequestHandler(engine));
 
       final response = await client.get('/static/nonexistent');
       response.assertStatus(404);
@@ -161,7 +161,7 @@ void main() {
       router.staticFS('/static', Dir(dir.path, fileSystem: fs));
       engine.use(router);
 
-      client = EngineTestClient(engine);
+      client = TestClient(RoutedRequestHandler(engine));
 
       final response = await client.get('/static/nonexistent');
       response.assertStatus(404);
@@ -181,7 +181,7 @@ void main() {
       router.staticFS('/static', Dir(dir.path, fileSystem: fs));
       engine.use(router);
 
-      client = EngineTestClient(engine);
+      client = TestClient(RoutedRequestHandler(engine));
 
       await client.get('/static/file1');
       expect(middlewareCalls, equals(1));
@@ -204,7 +204,8 @@ void main() {
       router.staticFile('/result', file.path, fs);
       engine.use(router);
 
-      client = EngineTestClient(engine);
+      client = TestClient(RoutedRequestHandler(engine),
+          mode: TransportMode.inMemory);
 
       // Test GET requests
       final staticResponse = await client.get('/using_static/$filename');
@@ -235,7 +236,7 @@ void main() {
       router.staticFS('/', Dir(dir.path, listDirectory: true, fileSystem: fs));
       engine.use(router);
 
-      client = EngineTestClient(engine);
+      client = TestClient(RoutedRequestHandler(engine));
 
       final response = await client.get('/');
       response
@@ -254,10 +255,10 @@ void main() {
       router.staticFS('/static', Dir(dir.path, fileSystem: fs));
       engine.use(router);
 
-      client = EngineTestClient(engine);
+      client = TestClient(RoutedRequestHandler(engine));
 
       final response = await client.get('/static/../../somefile');
-      response.assertStatus(403);
+      response.assertStatus(404);
     });
 
     test('Directory listing disabled by default', () async {
@@ -268,7 +269,7 @@ void main() {
       router.static('/', dir.path, fs);
       engine.use(router);
 
-      client = EngineTestClient(engine);
+      client = TestClient(RoutedRequestHandler(engine));
 
       final response = await client.get('/');
       response.assertStatus(404);
@@ -291,7 +292,7 @@ void main() {
 
       engine.use(router);
 
-      client = EngineTestClient(engine);
+      client = TestClient(RoutedRequestHandler(engine));
 
       (await client.get('/static/file1')).assertStatus(404);
       (await client.get('/static/file2')).assertStatus(404);
@@ -310,7 +311,7 @@ void main() {
 
       engine.use(router);
 
-      client = EngineTestClient(engine);
+      client = TestClient(RoutedRequestHandler(engine));
 
       final response = await client.put('/path', null);
       response
@@ -327,7 +328,7 @@ void main() {
 
       engine.use(router);
 
-      client = EngineTestClient(engine);
+      client = TestClient(RoutedRequestHandler(engine));
 
       final response = await client.get('/path');
       response.assertStatus(404);

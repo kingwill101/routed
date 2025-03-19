@@ -1,15 +1,15 @@
 import 'package:routed/routed.dart';
 import 'package:routed_testing/routed_testing.dart';
-import 'package:test/test.dart';
+import 'package:server_testing/server_testing.dart';
 
 void main() {
   group('Fallback Route Tests', () {
-    late EngineTestClient client;
+    late TestClient client;
     late Engine engine;
 
     setUp(() {
       engine = Engine();
-      client = EngineTestClient.inMemory(engine);
+      client = TestClient.inMemory(RoutedRequestHandler(engine));
     });
 
     tearDown(() async {

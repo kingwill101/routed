@@ -15,3 +15,14 @@ Middleware makeMiddleware(String label, List<String> log) {
 String middlewareLabel(Middleware mw, List<String> log) {
   return _middlewareIdentityMap[mw] ?? "UnknownMiddleware";
 }
+
+Engine engineWithFeatures({
+  bool enableProxySupport = false,
+  bool enableTrustedPlatform = false,
+}) {
+  return Engine(
+      config: EngineConfig(
+          features: EngineFeatures(
+              enableProxySupport: enableProxySupport,
+              enableTrustedPlatform: enableTrustedPlatform)));
+}
