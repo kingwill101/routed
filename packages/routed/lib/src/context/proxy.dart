@@ -21,7 +21,7 @@ extension ProxyMethods on EngineContext {
       }
 
       // Add standard proxy headers
-      proxyRequest.headers.set('X-Forwarded-For', request.ip);
+      proxyRequest.headers.set('X-Forwarded-For', request.clientIP);
       proxyRequest.headers.set('X-Forwarded-Host', request.host);
       proxyRequest.headers.set('X-Forwarded-Proto', request.scheme);
 

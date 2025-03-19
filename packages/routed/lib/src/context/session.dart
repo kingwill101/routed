@@ -7,7 +7,7 @@ extension SessionMethods on EngineContext {
       _session ?? (throw StateError('Session middleware not configured'));
 
   /// Get a session value with optional type
-  FutureOr<T?> getSession<T>(String key) => session.getValue<T>(key);
+  T? getSession<T>(String key) => session.getValue<T>(key);
 
   Future<void> setSession(String key, dynamic value) async {
     session.setValue(key, value);
@@ -27,8 +27,8 @@ extension SessionMethods on EngineContext {
   }
 
   /// Get a session value with a default fallback
-  Future<T> getSessionOrDefault<T>(String key, T defaultValue) async {
-    return await getSession<T>(key) ?? defaultValue;
+  getSessionOrDefault<T>(String key, T defaultValue) {
+    return getSession<T>(key) ?? defaultValue;
   }
 
   /// Remove a session value
@@ -75,5 +75,63 @@ extension SessionMethods on EngineContext {
 
   Future<void> _commitSession() async {
     await engineConfig.sessionConfig!.store.write(request, response, session);
+  }
+}
+
+/// Flask-style flash message implementation
+extension FlashMessages on EngineContext {
+  static const String _flashKey = '_flashes';
+
+  /// Add a flash message to the session
+  Future<void> flash(String message, [String category = 'message']) async {
+    try {
+      // Get existing flashes, defaulting to empty list
+      final flashes = getSession(_flashKey) ?? [];
+      flashes.add([category, message]);
+
+      // Store back in session
+      await setSession(_flashKey, flashes);
+    } catch (e) {
+      print('Error setting flash message: $e');
+      rethrow;
+    }
+  }
+
+  /// Get and remove flash messages from the session
+  ///
+  /// [withCategories] - If true, returns list of (category, message) tuples
+  /// [categoryFilter] - Optional list of categories to filter messages
+  List<dynamic> getFlashMessages({
+    bool withCategories = false,
+    List<String> categoryFilter = const [],
+  }) {
+    try {
+      // Get and immediately remove flashes from session
+      final List<List<String>> flashes =
+          (getSession<List<dynamic>>(_flashKey) ?? [])
+              .map((flash) => (flash as List<dynamic>).cast<String>())
+              .toList();
+
+      removeSession(_flashKey);
+
+      // Apply category filter if provided
+      var filteredFlashes = categoryFilter.isEmpty
+          ? flashes
+          : flashes.where((f) => categoryFilter.contains(f[0])).toList();
+
+      // Return either just messages or category-message pairs
+      return withCategories
+          ? filteredFlashes
+          : filteredFlashes.map((f) => f[1]).toList();
+    } catch (e) {
+      print('Error retrieving flash messages: $e');
+      return [];
+    }
+  }
+
+  /// Check if there are any flash messages
+  bool hasFlashMessages() {
+    final flashes = getSession<List<dynamic>>(_flashKey);
+    return flashes != null && flashes.isNotEmpty;
   }
 }

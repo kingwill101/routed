@@ -142,12 +142,13 @@ extension ContextRender on EngineContext {
   ///   - statusCode: The HTTP status code to set for the response (default is 200).
   ///
   /// Throws an exception if the template engine is not set.
-  void html(String content,
-      {Map<String, dynamic> data = const {}, int statusCode = HttpStatus.ok}) {
+  Future<void> html(String content,
+      {Map<String, dynamic> data = const {},
+      int statusCode = HttpStatus.ok}) async {
     if (_engine?.templateEngine == null) {
       throw Exception('Template engine not set');
     }
-    render(
+    await render(
       statusCode,
       HTMLRender(
           templateName: content, data: data, engine: _engine!.templateEngine!),
