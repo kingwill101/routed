@@ -36,7 +36,8 @@ abstract class Binding {
   ///
   /// [context] - The context of the engine containing request data.
   /// [data] - A map of data to be validated.
-  Future<void> validate(EngineContext context, Map<String, String> data);
+  Future<void> validate(EngineContext context, Map<String, String> data,
+      {bool bail = false});
 }
 
 // Create singleton instances of each binding type.

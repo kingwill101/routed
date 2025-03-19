@@ -34,8 +34,8 @@ class XmlBinding extends Binding {
   /// [context] - The context of the engine containing the request information.
   /// [rules] - A map of validation rules to apply to the XML data.
   @override
-  Future<void> validate(
-      EngineContext context, Map<String, String> rules) async {
+  Future<void> validate(EngineContext context, Map<String, String> rules,
+      {bool bail = false}) async {
     // XML validation will be implemented later
     throw UnimplementedError('XML validation not yet implemented');
   }

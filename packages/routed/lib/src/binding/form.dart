@@ -33,11 +33,11 @@ class FormBinding extends Binding {
   ///
   /// Returns a [Future] that completes when validation is done.
   @override
-  Future<void> validate(
-      EngineContext context, Map<String, String> rules) async {
+  Future<void> validate(EngineContext context, Map<String, String> rules,
+      {bool bail = false}) async {
     final decoded = await _decodedBody(context); // Decode the request body.
     final validator =
-        Validator.make(rules); // Create a validator with the rules.
+        Validator.make(rules, bail: bail); // Create a validator with the rules.
     final errors = validator.validate(decoded); // Validate the decoded body.
 
     if (errors.isNotEmpty) {
