@@ -2,7 +2,7 @@ part of 'engine.dart';
 
 /// Extension on the [Engine] class to provide routing capabilities.
 extension EngineRouting on Engine {
-  /// Registers a GET route with the given [path] and [handler].
+  /// Registers a GET route with th e given [path] and [handler].
   ///
   /// [middlewares] is an optional list of middleware to apply to this route.
   /// [constraints] is an optional map of constraints to apply to this route.
