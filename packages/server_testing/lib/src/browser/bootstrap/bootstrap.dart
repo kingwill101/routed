@@ -7,6 +7,38 @@ import 'package:server_testing/src/browser/bootstrap/driver/driver_manager.dart'
 import 'package:server_testing/src/browser/bootstrap/registry.dart';
 import 'package:server_testing/src/browser/logger.dart';
 
+/// Initializes the browser testing environment.
+///
+/// This function sets up the necessary infrastructure for browser testing,
+/// including:
+/// - Installing browser binaries if needed
+/// - Starting WebDriver servers
+/// - Configuring test hooks for proper cleanup
+///
+/// [config] is an optional [BrowserConfig] that specifies browser settings.
+/// If not provided, a default configuration will be used.
+///
+/// Example:
+/// ```dart
+/// void main() async {
+///   // Set up with default Chrome configuration
+///   await testBootstrap();
+///
+///   // Or with custom configuration
+///   await testBootstrap(
+///     BrowserConfig(
+///       browserName: 'firefox',
+///       headless: false,
+///       baseUrl: 'https://example.com',
+///     )
+///   );
+///
+///   // Run your browser tests
+///   browserTest('should display homepage', (browser) async {
+///     // Test implementation
+///   });
+/// }
+/// ```
 Future<void> testBootstrap([BrowserConfig? config]) async {
   config ??= BrowserConfig();
 
@@ -62,9 +94,17 @@ Future<void> testBootstrap([BrowserConfig? config]) async {
   });
 }
 
+/// Internal class that maintains the global browser configuration.
+///
+/// This class stores configuration used across multiple browser test
+/// instances to ensure consistent settings.
 class TestBootstrap {
+  /// The global browser configuration used by all tests.
   static late BrowserConfig currentConfig;
 
+  /// Initializes the global browser configuration.
+  ///
+  /// [config] is the configuration to use for browser tests.
   static Future<void> initialize(BrowserConfig config) async {
     currentConfig = config;
   }
