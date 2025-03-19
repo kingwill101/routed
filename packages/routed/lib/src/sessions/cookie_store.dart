@@ -6,10 +6,18 @@ import 'package:routed/src/request.dart';
 import 'package:routed/src/response.dart';
 import 'package:routed/src/sessions/sessions.dart';
 
+/// A [Store] implementation that uses cookies to store session data.
 class CookieStore implements Store {
+  /// A list of [SecureCookie] codecs used to encode and decode session data.
   final List<SecureCookie> codecs;
+
+  /// Default options for sessions created by this store.
   final Options defaultOptions;
 
+  /// Creates a new [CookieStore] instance.
+  ///
+  /// [codecs] is required and must not be empty. It is a list of [SecureCookie] objects used to encode and decode session data.
+  /// [defaultOptions] are the default options used for creating new sessions. If not provided, a default set of options is used.
   CookieStore({
     required this.codecs,
     Options? defaultOptions,
@@ -107,6 +115,9 @@ class CookieStore implements Store {
     );
   }
 
+  /// Converts a [String] representation of SameSite to a [SameSite] enum.
+  ///
+  /// Defaults to [SameSite.lax] if the value is null or not recognized.
   SameSite _getSameSite(String? value) {
     switch (value?.toLowerCase()) {
       case 'strict':

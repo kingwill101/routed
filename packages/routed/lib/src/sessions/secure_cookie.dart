@@ -1,10 +1,10 @@
 import 'dart:convert';
-import 'dart:io';
 import 'dart:math';
 import 'dart:typed_data';
 
 import 'package:crypto/crypto.dart';
 import 'package:encrypt/encrypt.dart' as encrypt;
+import 'package:routed/routed.dart';
 
 /// A secure cookie implementation supporting both HMAC signing and AES encryption.
 /// Provides three security modes:
@@ -12,7 +12,6 @@ import 'package:encrypt/encrypt.dart' as encrypt;
 /// - AES only: Encrypts data for confidentiality
 /// - Both: Combines encryption and signing for maximum security
 class SecureCookie {
-  // final List<int> _key;
   final Hmac? _hmac;
   final encrypt.Encrypter? _encrypter;
   final SecurityMode _mode;
@@ -68,7 +67,7 @@ class SecureCookie {
   }
 
   static List<int> _generateKeyFromEnv() {
-    final appKey = Platform.environment['APP_KEY'];
+    final appKey = env['APP_KEY'];
     if (appKey != null) {
       return base64.decode(appKey.replaceFirst('base64:', ''));
     }
