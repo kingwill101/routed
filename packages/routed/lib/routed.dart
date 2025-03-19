@@ -11,3 +11,4 @@ export 'src/context/context.dart';
 export 'src/router/types.dart';
 export 'src/utils/request_id.dart';
 export 'src/cache/cache.dart';
+export 'src/utils/environment.dart';
