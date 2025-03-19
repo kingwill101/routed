@@ -1,8 +1,11 @@
+import 'dart:io';
+
 import 'package:file/file.dart';
 import 'package:file/local.dart' as local;
 import 'package:routed/session.dart';
 import 'package:routed/src/cache/cache_manager.dart';
 import 'package:routed/src/render/html/template_engine.dart';
+import 'package:routed/src/utils/debug.dart';
 
 /// Configuration for handling multipart file uploads.
 class MultipartConfig {
@@ -43,7 +46,102 @@ class MultipartConfig {
 }
 
 /// Configuration for the engine.
+class EngineFeatures {
+  final bool enableTrustedPlatform;
+  final bool enableProxySupport;
+  final bool enableSecurityFeatures;
+
+  const EngineFeatures({
+    this.enableTrustedPlatform = false,
+    this.enableProxySupport = false,
+    this.enableSecurityFeatures = true,
+  });
+}
+
+class EngineSecurityFeatures {
+  final bool csrfProtection;
+  final String csrfCookieName;
+  final String? csp;
+  final bool xContentTypeOptionsNoSniff;
+  final int? hstsMaxAge;
+  final String? xFrameOptions;
+  final int maxRequestSize;
+
+  final CorsConfig cors;
+
+  const EngineSecurityFeatures({
+    this.csrfProtection = true,
+    this.csrfCookieName = 'csrf_token',
+    this.csp,
+    this.xContentTypeOptionsNoSniff = true,
+    this.hstsMaxAge,
+    this.xFrameOptions,
+    this.maxRequestSize = 1024 * 1024 * 10, // 10MB Default
+    this.cors = const CorsConfig(),
+  });
+}
+
+class CorsConfig {
+  final bool enabled;
+  final List<String> allowedOrigins;
+  final List<String> allowedMethods;
+  final List<String> allowedHeaders;
+  final bool allowCredentials;
+  final String? exposedHeaders;
+
+  const CorsConfig({
+    this.enabled = false,
+    this.allowedOrigins = const ['*'],
+    this.allowedMethods = const [
+      'GET',
+      'POST',
+      'PUT',
+      'DELETE',
+      'PATCH',
+      'OPTIONS'
+    ],
+    this.allowedHeaders = const [],
+    this.allowCredentials = false,
+    this.exposedHeaders,
+  });
+}
+
 class EngineConfig {
+  final EngineFeatures features;
+  final EngineSecurityFeatures security;
+
+  List<String> get trustedProxies {
+    if (!features.enableProxySupport) {
+      throw StateError(
+          'Proxy support not enabled. Enable with EngineFeatures.enableProxySupport');
+    }
+    return _trustedProxies;
+  }
+
+  set trustedProxies(List<String> value) {
+    if (!features.enableProxySupport) {
+      throw StateError(
+          'Proxy support not enabled. Enable with EngineFeatures.enableProxySupport');
+    }
+    _trustedProxies = value;
+  }
+
+  String? get trustedPlatform {
+    if (!features.enableTrustedPlatform) {
+      throw StateError(
+          'Trusted platform not enabled. Enable with EngineFeatures.enableTrustedPlatform');
+    }
+    return _trustedPlatform;
+  }
+
+  set trustedPlatform(String? value) {
+    if (!features.enableTrustedPlatform) {
+      throw StateError(
+          'Trusted platform not enabled. Enable with EngineFeatures.enableTrustedPlatform');
+    }
+    _trustedPlatform = value;
+  }
+
   // Routing behavior
 
   /// Whether to redirect requests with a trailing slash.
@@ -82,10 +180,10 @@ class EngineConfig {
 
   /// List of trusted proxies.
   /// Default includes '0.0.0.0/0' and '::/0'.
-  List<String> trustedProxies = [];
+  List<String> _trustedProxies = [];
 
   /// Specifies the trusted platform, if any.
-  String? trustedPlatform;
+  String? _trustedPlatform;
 
   /// Parsed list of network addresses from the trusted proxies.
   List<({InternetAddress address, int prefixLength})> _parsedProxies = [];
@@ -111,6 +209,11 @@ class EngineConfig {
   /// Cache manager for handling cache stores.
   CacheManager cacheManager;
 
+  // Predefined trusted platforms
+  static const platformCloudflare = 'CF-Connecting-IP';
+  static const platformGoogleAppEngine = 'X-Appengine-Remote-Addr';
+  static const platformFlyIO = 'Fly-Client-IP';
+
   /// Constructor for [EngineConfig].
   ///
   /// [redirectTrailingSlash] sets whether to redirect requests with a trailing slash.
@@ -128,6 +231,8 @@ class EngineConfig {
   /// [multipart] sets the configuration for handling multipart file uploads.
   /// [cacheManager] sets the cache manager for handling cache stores.
   EngineConfig({
+    EngineFeatures? features,
+    EngineSecurityFeatures? security,
     this.redirectTrailingSlash = true,
     this.redirectFixedPath = false,
     this.handleMethodNotAllowed = true,
@@ -136,8 +241,8 @@ class EngineConfig {
     this.unescapePathValues = true,
     this.forwardedByClientIP = true,
     this.remoteIPHeaders = const ['X-Forwarded-For', 'X-Real-IP'],
-    this.trustedProxies = const ['0.0.0.0/0', '::/0'],
-    this.trustedPlatform,
+    List<String>? trustedProxies,
+    String? trustedPlatform,
     this.templateDirectory = 'templates',
     this.templateEngine,
     this.sessionConfig,
@@ -145,10 +250,21 @@ class EngineConfig {
     FileSystem? fileSystem,
     MultipartConfig? multipart,
     CacheManager? cacheManager,
-  })  : fileSystem = fileSystem ?? const local.LocalFileSystem(),
+  })  : features = features ?? const EngineFeatures(),
+        security = security ?? const EngineSecurityFeatures(),
+        fileSystem = fileSystem ?? const local.LocalFileSystem(),
         multipart = multipart ?? MultipartConfig(),
         cacheManager = cacheManager ?? CacheManager() {
-    if (trustedProxies.contains('0.0.0.0/0')) {
+    if (features?.enableProxySupport == true) {
+      _trustedProxies = trustedProxies ?? ['0.0.0.0/0', '::/0'];
+    }
+
+    if (features?.enableTrustedPlatform == true) {
+      _trustedPlatform = trustedPlatform;
+    }
+
+    if (this.features.enableProxySupport &&
+        _trustedProxies.contains('0.0.0.0/0') == true) {
       debugPrintWarning(
           'Running with trustedProxies set to trust all IPs (0.0.0.0/0).\n'
           'This is potentially insecure. Consider restricting trusted proxy IPs in production.');
@@ -168,6 +284,10 @@ class EngineConfig {
   ///
   /// The parsed proxies are stored in the `_parsedProxies` field.
   Future<void> parseTrustedProxies() async {
+    if (!features.enableProxySupport) {
+      throw StateError(
+          'Proxy support not enabled. Enable with EngineFeatures.enableProxySupport');
+    }
     _parsedProxies = await Future.wait(
       trustedProxies.map((proxy) async {
         final parts = proxy.split('/');
@@ -188,6 +308,10 @@ class EngineConfig {
   ///
   /// Returns `true` if the address is a trusted proxy, `false` otherwise.
   bool isTrustedProxy(InternetAddress addr) {
+    if (!features.enableProxySupport) {
+      throw StateError(
+          'Proxy support not enabled. Enable with EngineFeatures.enableProxySupport');
+    }
     if (_parsedProxies.isEmpty) return false;
     for (final proxy in _parsedProxies) {
       final addrBytes = addr.rawAddress;
@@ -204,14 +328,34 @@ class EngineConfig {
   }
 }
 
+/// Configuration for session management.
 class SessionConfig {
+  /// The name of the session cookie. Defaults to 'routed_session'.
   final String cookieName;
+
+  /// The session store implementation.
   final Store store;
+
+  /// The maximum age of the session. Defaults to 1 hour.
   final Duration maxAge;
+
+  /// The path for which the cookie is valid. Defaults to '/'.
   final String path;
+
+  /// Whether the cookie should only be sent over HTTPS. Defaults to `false`.
   final bool secure;
+
+  /// Whether the cookie should be marked as HttpOnly, preventing client-side JavaScript access. Defaults to `true`.
   final bool httpOnly;
 
+  /// Creates a [SessionConfig].
+  ///
+  /// The [cookieName] parameter specifies the name of the session cookie.
+  /// The [store] parameter specifies the session store implementation.
+  /// The [maxAge] parameter specifies the maximum age of the session.
+  /// The [path] parameter specifies the path for which the cookie is valid.
+  /// The [secure] parameter specifies whether the cookie should only be sent over HTTPS.
+  /// The [httpOnly] parameter specifies whether the cookie should be marked as HttpOnly, preventing client-side JavaScript access.
   const SessionConfig({
     this.cookieName = 'routed_session',
     required this.store,
@@ -221,8 +365,13 @@ class SessionConfig {
     this.httpOnly = true,
   });
 
+  /// Creates a [SessionConfig] that uses cookie storage.
+  ///
+  /// The [appKey] parameter is required and is used to encrypt and sign the session data.
+  /// The [cookieName] parameter specifies the name of the session cookie. Defaults to 'routed_session'.
+  /// The [maxAge] parameter specifies the maximum age of the session. Defaults to 1 hour.
   factory SessionConfig.cookie({
-    required String appKey,
+    String? appKey,
     String cookieName = 'routed_session',
     Duration maxAge = const Duration(hours: 1),
   }) {
@@ -241,6 +390,12 @@ class SessionConfig {
     );
   }
 
+  /// Creates a [SessionConfig] that uses file storage.
+  ///
+  /// The [appKey] parameter is required and is used to encrypt and sign the session data.
+  /// The [storagePath] parameter specifies the directory where session files will be stored.
+  /// The [cookieName] parameter specifies the name of the session cookie. Defaults to 'routed_session'.
+  /// The [maxAge] parameter specifies the maximum age of the session. Defaults to 1 hour.
   factory SessionConfig.file({
     required String appKey,
     required String storagePath,
