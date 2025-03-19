@@ -1,14 +1,16 @@
-import 'package:routed/src/validation/rule.dart';
-
 /// A validation rule that checks if a given value is a valid double.
-class DoubleRule implements ValidationRule {
-  /// The name of the validation rule.
+library;
+
+import 'package:routed/src/validation/abstract_rule.dart';
+
+class DoubleRule extends AbstractValidationRule {
   @override
   String get name => 'double';
 
   /// The error message returned when the validation fails.
   @override
-  String get message => 'This field must be a valid double.';
+  String message(dynamic value, [List<String>? options]) =>
+      'This field must be a valid double.';
 
   /// Validates whether the provided [value] is a valid double.
   ///

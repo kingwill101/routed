@@ -5,7 +5,7 @@ import 'package:routed/src/binding/multipart.dart';
 ///
 /// This rule is used to ensure that the value being validated is an instance
 /// of [MultipartFile]. If the value is not a file, the validation will fail.
-class FileRule implements ValidationRule {
+class FileRule extends ValidationRule {
   /// The name of the validation rule.
   ///
   /// This is used to identify the rule in validation configurations.
@@ -16,7 +16,8 @@ class FileRule implements ValidationRule {
   ///
   /// This message indicates that the field must be a file.
   @override
-  String get message => 'This field must be a file.';
+  String message(dynamic value, [List<String>? options]) =>
+      'This field must be a file.';
 
   /// Validates whether the given value is a file.
   ///
@@ -36,7 +37,7 @@ class FileRule implements ValidationRule {
 ///
 /// This rule is used to ensure that the size of the file being validated does not
 /// exceed the maximum allowed size specified in the options.
-class MaxFileSizeRule implements ValidationRule {
+class MaxFileSizeRule extends ValidationRule {
   /// The name of the validation rule.
   ///
   /// This is used to identify the rule in validation configurations.
@@ -47,7 +48,12 @@ class MaxFileSizeRule implements ValidationRule {
   ///
   /// This message indicates that the file size must not exceed the specified limit.
   @override
-  String get message => 'The file size must not exceed the limit.';
+  String message(dynamic value, [List<String>? options]) {
+    if (options != null && options.isNotEmpty) {
+      return 'The file size must not exceed ${options[0]} bytes.';
+    }
+    return 'The file size must not exceed the limit.';
+  }
 
   /// Validates whether the file size does not exceed the specified limit.
   ///
@@ -73,7 +79,7 @@ class MaxFileSizeRule implements ValidationRule {
 ///
 /// This rule is used to ensure that the MIME type of the file being validated
 /// is one of the allowed types specified in the options.
-class AllowedMimeTypesRule implements ValidationRule {
+class AllowedMimeTypesRule extends ValidationRule {
   /// The name of the validation rule.
   ///
   /// This is used to identify the rule in validation configurations.
@@ -84,7 +90,8 @@ class AllowedMimeTypesRule implements ValidationRule {
   ///
   /// This message indicates that the file type is not allowed.
   @override
-  String get message => 'The file type is not allowed.';
+  String message(dynamic value, [List<String>? options]) =>
+      'The file type is not allowed.';
 
   /// Validates whether the file's MIME type is allowed.
   ///

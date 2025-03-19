@@ -1,14 +1,15 @@
 import 'package:routed/src/validation/rule.dart';
 
 /// A validation rule that checks if a given value is numeric.
-class NumericRule implements ValidationRule {
+class NumericRule extends ValidationRule {
   /// The name of the validation rule.
   @override
   String get name => 'numeric';
 
   /// The error message to be displayed if validation fails.
   @override
-  String get message => 'This field must be a number.';
+  String message(dynamic value, [List<String>? options]) =>
+      'This field must be a number.';
 
   /// Validates whether the provided [value] is numeric.
   ///

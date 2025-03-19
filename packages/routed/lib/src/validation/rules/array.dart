@@ -1,43 +1,31 @@
 import 'package:routed/src/validation/rule.dart';
 
 /// A validation rule that checks if a given value is an array (List).
-class ArrayRule implements ValidationRule {
-  /// The error message returned when the validation fails.
+class ArrayRule extends ValidationRule {
   @override
-  String get message => 'This field must be an array.';
+  String get name => "array";
 
-  /// Validates whether the provided [value] is an array (List).
-  ///
-  /// If [options] are provided, they are used to further validate the length
-  /// of the array. The first element in [options] is treated as the minimum
-  /// length, and the second element (if present) is treated as the maximum length.
-  ///
-  /// Returns `true` if the [value] is a valid array and meets the optional length
-  /// constraints, otherwise returns `false`.
-  ///
-  /// - [value]: The value to be validated.
-  /// - [options]: An optional list of strings where the first element is the minimum
-  ///   length and the second element is the maximum length.
+  @override
+  String message(dynamic value, [List<String>? options]) {
+    if (options != null && options.isNotEmpty) {
+      return 'The array may only contain the following keys: ${options.join(", ")}.';
+    }
+    return 'This field must be an array.';
+  }
+
   @override
   bool validate(dynamic value, [List<String>? options]) {
-    if (value == null) return false;
+    if (value == null || value is! List) return false;
 
-    // Check if the value is a list
-    if (value is! List) return false;
+    // If no specific keys are required, just validate it's an array
+    if (options == null || options.isEmpty) return true;
 
-    // Optional: Validate the length of the array if options are provided
-    if (options != null && options.isNotEmpty) {
-      final minLength = int.tryParse(options[0]);
-      final maxLength = options.length > 1 ? int.tryParse(options[1]) : null;
-
-      if (minLength != null && value.length < minLength) return false;
-      if (maxLength != null && value.length > maxLength) return false;
+    // If keys are specified, validate that the array contains only those values
+    if (options.isNotEmpty) {
+      final allowedValues = options.toSet();
+      return value.every((item) => allowedValues.contains(item.toString()));
     }
 
     return true;
   }
-
-  /// The name of the validation rule.
-  @override
-  String get name => "array";
 }

@@ -1,3 +1,5 @@
+export 'context_aware_rule.dart';
+
 abstract class ValidationRule {
   /// The name of the validation rule.
   /// This should be a unique identifier for the rule.
@@ -15,7 +17,10 @@ abstract class ValidationRule {
   /// The message should be clear and informative, helping the user understand what
   /// went wrong and how they can correct the input. It is important that the message
   /// is written in a way that is easy to understand, avoiding technical jargon.
-  String get message;
+  String message(dynamic value, [List<String>? options]);
+
+  /// Provide the values from the data to the rule, null if none
+  Map<String, dynamic>? get contextValues => null;
 
   /// Validates the given value against the rule.
   ///

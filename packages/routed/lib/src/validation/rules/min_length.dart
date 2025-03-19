@@ -2,14 +2,19 @@ import 'package:routed/src/validation/rule.dart';
 
 /// A validation rule that checks if the length of a given string
 /// meets a specified minimum length.
-class MinLengthRule implements ValidationRule {
+class MinLengthRule extends ValidationRule {
   /// The name of the validation rule.
   @override
   String get name => 'minLength';
 
   /// The error message to be displayed if the validation fails.
   @override
-  String get message => 'This field must be at least the minimum length.';
+  String message(dynamic value, [List<String>? options]) {
+    if (options != null && options.isNotEmpty) {
+      return 'This field must be at least ${options[0]} characters.';
+    }
+    return 'This field must be at least the minimum length.';
+  }
 
   /// Validates whether the provided [value] meets the minimum length
   /// specified in [options].

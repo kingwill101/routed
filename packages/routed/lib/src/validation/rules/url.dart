@@ -1,14 +1,15 @@
 import 'package:routed/src/validation/rule.dart';
 
 /// A validation rule that checks if a given value is a valid URL.
-class UrlRule implements ValidationRule {
+class UrlRule extends ValidationRule {
   /// The name of the validation rule.
   @override
   String get name => 'url';
 
   /// The error message returned when the validation fails.
   @override
-  String get message => 'This field must be a valid URL.';
+  String message(dynamic value, [List<String>? options]) =>
+      'This field must be a valid URL.';
 
   /// Validates whether the provided [value] is a valid URL.
   ///
