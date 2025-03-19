@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:routed/src/context/context.dart';
 import 'package:routed/src/contracts/config.dart/config.dart';
 import 'package:routed/src/engine/config.dart';
 import 'package:routed/src/engine/engine.dart';
@@ -7,10 +8,13 @@ import 'package:routed/src/engine/engine.dart';
 class AppZone {
   static const _configKey = #config;
   static const _engineKey = #engine;
+  static const _contextKey = #context;
 
   // Access the current zone's values
   static Config get config => _get<Config>(_configKey, 'Config');
   static Engine get engine => _get<Engine>(_engineKey, 'Engine');
+  static EngineContext get context =>
+      _get<EngineContext>(_contextKey, 'EngineContext');
 
   // Helper to get the engine config
   static EngineConfig get engineConfig => engine.config;
@@ -35,16 +39,21 @@ class AppZone {
   }
 
   // Run code with zone values
-  static Future<R> run<R>({
+  static FutureOr<R?> run<R>({
     required FutureOr<R> Function() body,
     required Engine engine,
+    EngineContext? context,
   }) async {
-    return await runZoned(
+    await runZonedGuarded(
       () async => await body(),
+      (a, s) {},
       zoneValues: {
         _engineKey: engine,
         _configKey: engine.appConfig,
+        _contextKey: context,
       },
+      zoneSpecification: ZoneSpecification(),
     );
+    return null;
   }
 }
