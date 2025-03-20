@@ -32,6 +32,16 @@ class LiquidRoot implements Root {
     final content = file.readAsStringSync();
     return Source(file.uri, content, this);
   }
+
+  @override
+  Future<Source> resolveAsync(String relPath) async {
+    final file = fileSystem.file(p.normalize(relPath));
+    if (!await file.exists()) {
+      throw Exception('Template file not found: $relPath');
+    }
+    final content = await file.readAsString();
+    return Source(file.uri, content, this);
+  }
 }
 
 class LiquidTemplateEngine implements TemplateEngine {

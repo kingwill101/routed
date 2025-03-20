@@ -22,7 +22,7 @@ dependencies:
   file: ^7.0.1
   mime: ^2.0.0
   http_parser: ^4.1.2
-  liquify: ^0.8.2
+  liquify: ^1.0.1
   jinja: ^0.6.0
   encrypt: ^5.0.3
   dotenv: ^4.2.0
