@@ -48,7 +48,7 @@ typedef TestCallback = Future<void> Function(TestClient client);
 /// ```
 @visibleForTesting
 @isTest
-void engineTest(
+void serverTest(
   String description,
   TestCallback callback, {
   required RequestHandler handler,
@@ -68,8 +68,6 @@ void engineTest(
     try {
       await callback(client);
     } catch (e, stack) {
-      print('Test failed: $e');
-      print(stack);
       rethrow; // Rethrow to ensure test fails properly
     } finally {
       await client.close();
