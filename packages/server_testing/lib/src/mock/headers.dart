@@ -64,7 +64,8 @@ MockHttpHeaders setupHeaders(Map<String, List<String>> requestHeaders) {
   });
 
   // Initialize content type from existing headers if present
-  final contentTypeHeaderName = normalizeHeaderName(HttpHeaders.contentTypeHeader);
+  final contentTypeHeaderName =
+      normalizeHeaderName(HttpHeaders.contentTypeHeader);
   for (final entry in requestHeaders.entries) {
     if (normalizeHeaderName(entry.key) == contentTypeHeaderName) {
       contentType = ContentType.parse(entry.value.join(", "));
@@ -95,9 +96,9 @@ MockHttpHeaders setupHeaders(Map<String, List<String>> requestHeaders) {
   when(mockRequestHeaders[any]).thenAnswer((invocation) {
     final name = invocation.positionalArguments[0].toString();
     final normalizedName = normalizeHeaderName(name);
-    final existingKey = requestHeaders.keys
-        .firstWhere((k) => normalizeHeaderName(k) == normalizedName,
-            orElse: () => name);
+    final existingKey = requestHeaders.keys.firstWhere(
+        (k) => normalizeHeaderName(k) == normalizedName,
+        orElse: () => name);
     return requestHeaders.putIfAbsent(existingKey, () => []);
   });
 
@@ -118,15 +119,15 @@ MockHttpHeaders setupHeaders(Map<String, List<String>> requestHeaders) {
 
     if (normalizedName == normalizeHeaderName(HttpHeaders.setCookieHeader)) {
       // For Set-Cookie, maintain list of values
-      final existingKey = requestHeaders.keys
-          .firstWhere((k) => normalizeHeaderName(k) == normalizedName,
-              orElse: () => name);
+      final existingKey = requestHeaders.keys.firstWhere(
+          (k) => normalizeHeaderName(k) == normalizedName,
+          orElse: () => name);
       requestHeaders.putIfAbsent(existingKey, () => []).add(value);
     } else {
       // For other headers, replace
-      final existingKey = requestHeaders.keys
-          .firstWhere((k) => normalizeHeaderName(k) == normalizedName,
-              orElse: () => name);
+      final existingKey = requestHeaders.keys.firstWhere(
+          (k) => normalizeHeaderName(k) == normalizedName,
+          orElse: () => name);
       requestHeaders[existingKey] = [value];
     }
   });
@@ -135,7 +136,8 @@ MockHttpHeaders setupHeaders(Map<String, List<String>> requestHeaders) {
   when(mockRequestHeaders.removeAll(any)).thenAnswer((invocation) {
     final name = invocation.positionalArguments[0].toString();
     final normalizedName = normalizeHeaderName(name);
-    requestHeaders.removeWhere((k, _) => normalizeHeaderName(k) == normalizedName);
+    requestHeaders
+        .removeWhere((k, _) => normalizeHeaderName(k) == normalizedName);
   });
 
   // Handle setting header values
@@ -143,9 +145,9 @@ MockHttpHeaders setupHeaders(Map<String, List<String>> requestHeaders) {
     final name = invocation.positionalArguments[0].toString();
     final value = invocation.positionalArguments[1].toString();
     final normalizedName = normalizeHeaderName(name);
-    final existingKey = requestHeaders.keys
-        .firstWhere((k) => normalizeHeaderName(k) == normalizedName,
-            orElse: () => name);
+    final existingKey = requestHeaders.keys.firstWhere(
+        (k) => normalizeHeaderName(k) == normalizedName,
+        orElse: () => name);
     requestHeaders[existingKey] = [value];
   });
 
@@ -153,9 +155,9 @@ MockHttpHeaders setupHeaders(Map<String, List<String>> requestHeaders) {
   when(mockRequestHeaders.value(any)).thenAnswer((invocation) {
     final name = invocation.positionalArguments[0].toString();
     final normalizedName = normalizeHeaderName(name);
-    final key = requestHeaders.keys
-        .firstWhere((k) => normalizeHeaderName(k) == normalizedName,
-            orElse: () => '');
+    final key = requestHeaders.keys.firstWhere(
+        (k) => normalizeHeaderName(k) == normalizedName,
+        orElse: () => '');
     final values = requestHeaders[key];
     if (values == null) return null;
     return values.join(', ');

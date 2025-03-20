@@ -14,10 +14,13 @@ export 'bootstrap/progress.dart';
 export 'bootstrap/proxy.dart';
 export 'bootstrap/update_checker.dart';
 export 'browser_config.dart';
+
 /// Browser testing utilities
 export 'browser_test.dart';
+
 /// Page object pattern support
 export 'component.dart';
+
 /// Browser factory and interfaces
 export 'factory.dart';
 export 'interfaces/browser.dart';

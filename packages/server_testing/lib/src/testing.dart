@@ -67,7 +67,7 @@ void serverTest(
 
     try {
       await callback(client);
-    } catch (e, stack) {
+    } catch (e) {
       rethrow; // Rethrow to ensure test fails properly
     } finally {
       await client.close();
