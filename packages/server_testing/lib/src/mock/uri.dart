@@ -26,15 +26,10 @@ import '../mock.mocks.dart';
 MockUri setupUri(String url) {
   final uriObj = MockUri();
 
-  final uri = Uri.parse(url);
-  if (uri.path != url) {
-    when(uriObj.path).thenAnswer((c) {
-      return url;
-    });
-  } else {
-    when(uriObj.path).thenAnswer((c) {
-      return uri.path;
-    });
+  var uri = Uri.parse(url);
+
+  if (!uri.isAbsolute) {
+    uri = Uri.parse('http://server_testing.internal$url');
   }
 
   when(uriObj.path).thenAnswer((c) => uri.path);
@@ -46,6 +41,7 @@ MockUri setupUri(String url) {
   when(uriObj.pathSegments).thenAnswer((c) => uri.pathSegments);
   when(uriObj.fragment).thenAnswer((c) => uri.fragment);
   when(uriObj.hasAbsolutePath).thenAnswer((c) => uri.hasAbsolutePath);
+  when(uriObj.isAbsolute).thenAnswer((c) => uri.isAbsolute);
   when(uriObj.hasAuthority).thenAnswer((c) => uri.hasAuthority);
   when(uriObj.hasEmptyPath).thenAnswer((c) => uri.hasEmptyPath);
   when(uriObj.hasPort).thenAnswer((c) => uri.hasPort);
