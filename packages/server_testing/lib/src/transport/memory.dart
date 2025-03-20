@@ -34,14 +34,14 @@ class InMemoryTransport extends TestTransport {
     dynamic body,
     TransportOptions? options,
   }) async {
-
     final uriObj = setupUri(uri);
 
     final responseBody = BytesBuilder();
 
-    var responseHeaders =  headers ?? {};
+    var responseHeaders = headers ?? {};
     // Use setupResponse helper
-    final mockResponse = setupResponse(headers: responseHeaders, body: responseBody);
+    final mockResponse =
+        setupResponse(headers: responseHeaders, body: responseBody);
 
     // Use setupRequest helper
     final mockRequest = setupRequest(
