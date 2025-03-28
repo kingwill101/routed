@@ -1,0 +1,25 @@
+name: Publish
+
+# When a pull request is opened or updated the job will run the validation
+# steps (using firehose, this checks for correct pubspec versioning, changelog entries, etc.).
+# When you push a tag (for a package), firehose will attempt to publish that package.
+on:
+  pull_request:
+    branches: [ master ]
+    types: [ opened, synchronize, reopened, labeled, unlabeled ]
+  push:
+    # For mono repos the tag must be prefixed with the package name,
+    # e.g. "routed-v1.0.0". Adjust the regular expression as needed.
+    tags:
+      - 'v[0-9]+.[0-9]+.[0-9]+'
+      - '[A-Za-z0-9_-]+-v[0-9]+.[0-9]+.[0-9]+'
+  workflow_dispatch:
+
+jobs:
+  publish:
+    # This job uses the common publish workflow provided by the ecosystem.
+    # See https://github.com/dart-lang/ecosystem/wiki/Publishing-automation
+    uses: dart-lang/ecosystem/.github/workflows/publish.yaml@main
+    permissions:
+      id-token: write
+      pull-requests: write
