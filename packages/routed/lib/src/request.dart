@@ -34,9 +34,19 @@ class Request {
   /// The [httpRequest] parameter is the underlying HTTP request.
   /// The [pathParameters] parameter is a map of path parameters.
   Request(this.httpRequest, this.pathParameters, this.config)
-      : queryParameters = httpRequest.uri.queryParameters,
+      : queryParameters = _safeQueryParameters(httpRequest.uri),
         _attributes = {},
         id = RequestId.generate();
+
+  /// Safely extracts query parameters from a URI, handling invalid encodings
+  static Map<String, String> _safeQueryParameters(Uri uri) {
+    try {
+      return uri.queryParameters;
+    } catch (e) {
+      // Return empty map if query parameter parsing fails
+      return <String, String>{};
+    }
+  }
 
   /// Returns the HTTP method of the request (e.g., GET, POST).
   String get method => httpRequest.method;
