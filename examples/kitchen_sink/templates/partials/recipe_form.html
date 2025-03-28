@@ -1,0 +1,102 @@
+<form action="{{ route('web.recipe.save') }}" class="bg-white rounded-lg shadow-md p-6 max-w-2xl mx-auto" method="post">
+
+
+    <div class="space-y-4">
+        <!-- Name -->
+        <div>
+            <label class="block text-gray-700 text-sm font-bold mb-2">Recipe Name</label>
+            <input class="w-full px-3 py-2 border {% if has_error('name') %}border-red-500{% else %}border-gray-300{% endif %} rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                   name="name"
+                   type="text"
+                   value="{{ old_input('name') }}">
+            {% if has_error('name') %}
+            <p class="text-red-500 text-xs mt-1">{{ get_error('name') }}</p>
+            {% endif %}
+        </div>
+
+        <!-- Description -->
+        <div>
+            <label class="block text-gray-700 text-sm font-bold mb-2">Description</label>
+            <textarea class="w-full px-3 py-2 border {% if has_error('description') %}border-red-500{% else %}border-gray-300{% endif %} rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      name="description"
+                      rows="3">{{ old_input('description') }}</textarea>
+            {% if has_error('description') %}
+            <p class="text-red-500 text-xs mt-1">{{ get_error('description') }}</p>
+            {% endif %}
+        </div>
+
+        <!-- Ingredients -->
+        <div>
+            <label class="block text-gray-700 text-sm font-bold mb-2">Ingredients (comma separated)</label>
+            <textarea class="w-full px-3 py-2 border {% if has_error('ingredients') %}border-red-500{% else %}border-gray-300{% endif %} rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      name="ingredients"
+                      placeholder="Ingredient 1, Ingredient 2, Ingredient 3"
+                      rows="3">{{ old_input('ingredients') }}</textarea>
+            {% if has_error('ingredients') %}
+            <p class="text-red-500 text-xs mt-1">{{ get_error('ingredients') }}</p>
+            {% endif %}
+        </div>
+
+        <!-- Instructions -->
+        <div>
+            <label class="block text-gray-700 text-sm font-bold mb-2">Instructions</label>
+            <textarea class="w-full px-3 py-2 border {% if has_error('instructions') %}border-red-500{% else %}border-gray-300{% endif %} rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      name="instructions"
+                      rows="4">{{ old_input('instructions') }}</textarea>
+            {% if has_error('instructions') %}
+            <p class="text-red-500 text-xs mt-1">{{ get_error('instructions') }}</p>
+            {% endif %}
+        </div>
+
+        <!-- Prep Time and Cook Time -->
+        <div class="grid grid-cols-2 gap-4">
+            <div>
+                <label class="block text-gray-700 text-sm font-bold mb-2">Prep Time (minutes)</label>
+                <input class="w-full px-3 py-2 border {% if has_error('prepTime') %}border-red-500{% else %}border-gray-300{% endif %} rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                       min="0"
+                       name="prepTime"
+                       type="number"
+                       value="{{ old_input('prepTime') }}">
+                {% if has_error('prepTime') %}
+                <p class="text-red-500 text-xs mt-1">{{ get_error('prepTime') }}</p>
+                {% endif %}
+            </div>
+
+            <div>
+                <label class="block text-gray-700 text-sm font-bold mb-2">Cook Time (minutes)</label>
+                <input class="w-full px-3 py-2 border {% if has_error('cookTime') %}border-red-500{% else %}border-gray-300{% endif %} rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                       min="0"
+                       name="cookTime"
+                       type="number"
+                       value="{{ old_input('cookTime') }}">
+                {% if has_error('cookTime') %}
+                <p class="text-red-500 text-xs mt-1">{{ get_error('cookTime') }}</p>
+                {% endif %}
+            </div>
+
+
+        </div>
+
+        <div>
+            <label class="block text-gray-700 text-sm font-bold mb-2">Category</label>
+            <select class="w-full px-3 py-2 border {% if has_error('category') %}border-red-500{% else %}border-gray-300{% endif %} rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    name="category">
+                <option if old_input( value="breakfast" {%
+                'category') == 'breakfast' %}selected{% endif %}>Breakfast</option>
+                <option if old_input( value="lunch" {%
+                'category') == 'lunch' %}selected{% endif %}>Lunch</option>
+                <option if old_input( value="dinner" {%
+                'category') == 'dinner' %}selected{% endif %}>Dinner</option>
+                <option if old_input( value="dessert" {%
+                'category') == 'dessert' %}selected{% endif %}>Dessert</option>
+            </select>
+            {% if has_error('category') %}
+            <p class="text-red-500 text-xs mt-1">{{ get_error('category') }}</p>
+            {% endif %}
+        </div>
+        <button class="w-full bg-green-500 hover:bg-green-600 text-white font-bold py-3 px-4 rounded-lg transition duration-200"
+                type="submit">
+            Save Recipe
+        </button>
+    </div>
+</form>

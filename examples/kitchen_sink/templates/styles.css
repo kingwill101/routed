@@ -1,0 +1,139 @@
+body {
+    font-family: Arial, sans-serif;
+    background-color: #f0f0f0;
+    margin: 0;
+    padding: 0;
+}
+
+.container {
+    width: 80%;
+    margin: auto;
+    overflow: hidden;
+    padding: 20px;
+    background-color: #fff;
+    box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
+}
+
+h1, h2 {
+    color: #333;
+    text-align: center;
+}
+
+h2 {
+    margin-top: 20px;
+    border-bottom: 2px solid #eee;
+    padding-bottom: 10px;
+}
+
+ul {
+    list-style: none;
+    padding: 0;
+}
+
+.recipe-list {
+    margin-top: 20px;
+}
+
+.recipe-item {
+    background: #f9f9f9;
+    padding: 15px;
+    border-bottom: 1px solid #eee;
+    margin-bottom: 10px;
+    border-radius: 5px;
+}
+
+.recipe-item:last-child {
+    border-bottom: none;
+}
+
+.recipe-item h3 {
+    margin: 0;
+    color: #555;
+}
+
+.recipe-item p {
+    margin: 5px 0;
+    color: #777;
+}
+
+.recipe-actions {
+    margin-top: 10px;
+    text-align: right;
+}
+
+.recipe-actions a,
+.recipe-actions button {
+    display: inline-block;
+    padding: 8px 12px;
+    margin-left: 5px;
+    text-decoration: none;
+    background-color: #4CAF50;
+    color: white;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 14px;
+    transition: background-color 0.3s;
+}
+
+.recipe-actions a:hover,
+.recipe-actions button:hover {
+    background-color: #3e8e41;
+}
+
+.recipe-form {
+    display: flex;
+    flex-direction: column;
+    width: 60%;
+    margin: auto;
+    padding: 20px;
+    background-color: #f4f4f4;
+    border-radius: 5px;
+}
+
+.recipe-form input,
+.recipe-form select,
+.recipe-form textarea {
+    margin-bottom: 10px;
+    padding: 8px;
+    border-radius: 4px;
+    border: 1px solid #ccc;
+}
+
+.recipe-form button {
+    padding: 10px 15px;
+    border: none;
+    background-color: #5bc0de;
+    color: white;
+    cursor: pointer;
+    border-radius: 4px;
+    transition: background-color 0.3s;
+}
+
+.recipe-form button:hover {
+    background-color: #46b8da;
+}
+
+.pagination {
+    display: flex;
+    justify-content: center;
+    margin-top: 20px;
+}
+
+.pagination a {
+    display: inline-block;
+    padding: 8px 16px;
+    text-decoration: none;
+    border: 1px solid #ddd;
+    color: black;
+}
+
+.pagination a.active {
+    background-color: #4CAF50;
+    color: white;
+    border: 1px solid #4CAF50;
+}
+
+.pagination a:hover:not(.active) {
+    background-color: #ddd;
+}

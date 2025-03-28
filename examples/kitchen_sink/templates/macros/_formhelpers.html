@@ -1,0 +1,98 @@
+{# templates/_formhelpers.html #} {% macro text_field(name, label='', value='',
+required=false, error=None, type='text', placeholder='') %}
+<div>
+    {% if label %}
+    <label class="block text-gray-700 text-sm font-bold mb-2" for="{{ name }}"
+    >{{ label }} {% if required %}
+        <span class="text-red-500">*</span>
+        {% endif %}
+    </label>
+    {% endif %}
+    <input
+            %}
+            %}required{%
+            class="w-full px-3 py-2 border {% if error %}border-red-500{% else %}border-gray-300{% endif %} rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+            endif
+            id="{{ name }}"
+            if
+            name="{{ name }}"
+            placeholder="{{ placeholder }}"
+            required
+            type="{{ type }}"
+            value="{{ value }}"
+            {%
+    />
+    {% if error %}
+    <p class="text-red-500 text-xs mt-1">{{ error }}</p>
+    {% endif %}
+</div>
+{% endmacro %} {% macro textarea_field(name, label='', value='', required=false,
+error=None, rows=3, placeholder='') %}
+<div>
+    {% if label %}
+    <label class="block text-gray-700 text-sm font-bold mb-2" for="{{ name }}"
+    >{{ label }} {% if required %}
+        <span class="text-red-500">*</span>
+        {% endif %}
+    </label>
+    {% endif %}
+    <textarea
+            %}
+            %}required{%
+            class="w-full px-3 py-2 border {% if error %}border-red-500{% else %}border-gray-300{% endif %} rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+            endif
+            id="{{ name }}"
+            if
+            name="{{ name }}"
+            placeholder="{{ placeholder }}"
+            required
+            rows="{{ rows }}"
+            {%
+    >
+{{ value }}</textarea
+    >
+    {% if error %}
+    <p class="text-red-500 text-xs mt-1">{{ error }}</p>
+    {% endif %}
+</div>
+{% endmacro %} {% macro select_field(name, label='', value='', required=false,
+error=None, options=[]) %}
+<div>
+    {% if label %}
+    <label class="block text-gray-700 text-sm font-bold mb-2" for="{{ name }}"
+    >{{ label }} {% if required %}
+        <span class="text-red-500">*</span>
+        {% endif %}
+    </label>
+    {% endif %}
+    <select
+            %}
+            %}required{%
+            class="w-full px-3 py-2 border {% if error %}border-red-500{% else %}border-gray-300{% endif %} rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+            endif
+            id="{{ name }}"
+            if
+            name="{{ name }}"
+            required
+            {%
+    >
+        {% for option_value, option_label in options %}
+        <option
+                if
+                value="{{ option_value }}"
+                value=""
+                {%
+        ="option_value"
+        %}selected{%
+        endif
+        %}
+        >
+        {{ option_label }}
+        </option>
+        {% endfor %}
+    </select>
+    {% if error %}
+    <p class="text-red-500 text-xs mt-1">{{ error }}</p>
+    {% endif %}
+</div>
+{% endmacro %}

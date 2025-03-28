@@ -24,7 +24,7 @@ Future<void> authMiddleware(EngineContext ctx) async {
 // Rate limiting middleware
 Future<void> rateLimitMiddleware(EngineContext ctx) async {
   final requests = <String, List<DateTime>>{};
-  final ip = ctx.request.ip;
+  final ip = ctx.request.clientIP;
   final now = DateTime.now();
 
   // Clean old requests

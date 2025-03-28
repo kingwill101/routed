@@ -1,12 +1,13 @@
 import 'dart:io';
+
 import 'package:routed/routed.dart';
 
 // Custom error type
-class ResourceError implements EngineError {
+class ResourceError extends EngineError {
   @override
-  final int code = HttpStatus.conflict;
-  @override
-  final String message = 'Resource already exists';
+  get code => HttpStatus.conflict;
+
+  ResourceError() : super(message: "Resource already exists");
 }
 
 void main() async {

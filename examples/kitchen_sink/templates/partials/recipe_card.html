@@ -1,0 +1,25 @@
+<div class="bg-white rounded-lg shadow-md overflow-hidden hover:shadow-xl transition duration-200 mb-4">
+    <div class="p-6">
+        <h3 class="text-xl font-bold text-gray-800 mb-2">{{ recipe.name }}</h3>
+        <span class="inline-block bg-blue-100 text-blue-800 text-sm px-3 py-1 rounded-full mb-4">{{ recipe.category }}</span>
+
+        <p class="text-gray-600 mb-4">{{ recipe.description }}</p>
+
+        {% if recipe.image %}
+        <img alt="{{ recipe.name }}" class="w-full h-48 object-cover rounded-lg mb-4" src="{{ recipe.image }}">
+        {% endif %}
+
+        <div class="flex justify-between items-center mt-4">
+            <div class="flex space-x-2">
+                <span class="text-sm text-gray-500">Prep: {{ recipe.prepTime }}m</span>
+                <span class="text-sm text-gray-500">Cook: {{ recipe.cookTime }}m</span>
+            </div>
+            <div class="flex space-x-2">
+                <a class="bg-blue-500 hover:bg-blue-600 text-white px-4 py-2 rounded-lg"
+                   href="{{ route('web.recipe.show', {'id': recipe.id}) }}">View</a>
+                <a class="bg-yellow-500 hover:bg-yellow-600 text-white px-4 py-2 rounded-lg"
+                   href="{{ route('web.recipe.edit', {'id': recipe.id}) }}">Edit</a>
+            </div>
+        </div>
+    </div>
+</div>

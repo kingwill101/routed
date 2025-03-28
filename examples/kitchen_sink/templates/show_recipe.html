@@ -1,0 +1,8 @@
+{% layout "base.html" %}
+
+{% block title %}{{ recipe.name }}{% endblock %}
+
+{% block content %}
+{% include "partials/recipe_card.html" %}
+<a href="/">Back to Recipe List</a>
+{% endblock %}

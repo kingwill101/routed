@@ -1,0 +1,71 @@
+{% layout "base.html" %}
+{% block title %}Recipe List{% endblock %}
+{% block content %}
+
+<h1 class="text-3xl font-bold text-gray-800 mb-8">Recipes</h1>
+
+<h2 class="text-2xl font-semibold text-gray-700 mb-6">Add New Recipe</h2>
+
+{% render "partials/recipe_form.html" %}
+
+<h2 class="text-2xl font-semibold text-gray-700 my-6">All Recipes</h2>
+<div class="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
+    {% for recipe in recipes %}
+    <div `
+         class="bg-white rounded-lg shadow-md overflow-hidden hover:shadow-xl transition duration-200"
+    >
+        <div class="p-6">
+            <h3 class="text-xl font-bold text-gray-800 mb-2">
+                {{ recipe.name }}
+            </h3>
+            <p class="text-gray-600 mb-4">{{ recipe.description }}</p>
+
+            <div class="flex items-center text-sm text-gray-500 mb-4">
+                <span class="mr-4">
+                    <i class="fas fa-clock"></i> Prep: {{ recipe.prepTime }}m
+                </span>
+                <span>
+                    <i class="fas fa-fire"></i> Cook: {{ recipe.cookTime }}m
+                </span>
+            </div>
+
+            <div class="mb-4">
+                <span
+                        class="inline-block bg-gray-200 rounded-full px-3 py-1 text-sm font-semibold text-gray-700"
+                >
+                    {{ recipe.category }}
+                </span>
+            </div>
+
+            <div class="flex space-x-2">
+                <a
+                        class="bg-blue-500 hover:bg-blue-600 text-white px-4 py-2 rounded-lg transition duration-200"
+                        href="{{ route('web.recipe.show', {'id': recipe.id}) }}"
+                >
+                    View
+                </a>
+                <a
+                        class="bg-yellow-500 hover:bg-yellow-600 text-white px-4 py-2 rounded-lg transition duration-200"
+                        href="{{ route('web.recipe.edit', {'id': recipe.id}) }}"
+                >
+                    Edit
+                </a>
+                <form
+                        action="{{ route('web.recipe.delete', {'id': recipe.id}) }}"
+                        class="inline"
+                        method="POST"
+                >
+                    {{ csrf_field() }}
+                    <button
+                            class="bg-red-500 hover:bg-red-600 text-white px-4 py-2 rounded-lg transition duration-200"
+                            type="submit"
+                    >
+                        Delete
+                    </button>
+                </form>
+            </div>
+        </div>
+    </div>
+    {% endfor %}
+</div>
+{% endblock %}
