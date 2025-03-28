@@ -88,17 +88,5 @@ void main() async {
   });
 
   // Start the server
-  await engine.serve(port: 3000);
-  print('Server running at http://localhost:3000');
-  print('\nAvailable routes:');
-  print('  /hello');
-  print('  /users/{id}');
-  print('  /posts/{page?}');
-  print('  /items/{id:int}');
-  print('  /users/{userId}/posts/{postId}');
-  print('  /products/{code} (format: XX000)');
-  print('  /admin (requires admin.localhost)');
-  print('  /files/{*path}');
-  print('  /api/v1/status');
-  print('  /api/v1/admin/dashboard');
+  await engine.serve(port: 3000, echo: true);
 }

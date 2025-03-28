@@ -24,7 +24,7 @@ void main() async {
     });
     return ctx.json({
       'headers': headers,
-      'client_ip': ctx.request.ip,
+      'client_ip': ctx.request.clientIP,
     });
   });
 

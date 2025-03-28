@@ -59,9 +59,9 @@ void main() async {
       'items': [
         'Welcome $name',
         'Current time: ${DateTime.now()}',
-        'Your IP: ${ctx.request.ip}'
+        'Your IP: ${ctx.request.clientIP}'
       ],
-      'ip_address': ctx.request.ip
+      'ip_address': ctx.request.clientIP
     });
   });
 

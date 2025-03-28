@@ -1,12 +1,13 @@
 name: routed
 description: A starting point for Dart libraries or applications.
 version: 0.0.1
-# repository: https://github.com/my_org/my_repo
+repository: https://github.com/kingwill101/routed/tree/master/packages/routed
+
 
 resolution: workspace
 
 environment:
-  sdk: ^3.6.0
+  sdk: '>=3.5.0 <4.0.0'
 
 # Add regular dependencies here.
 dependencies:

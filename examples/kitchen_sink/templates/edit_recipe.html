@@ -1,0 +1,30 @@
+{% layout "base.html" %}
+
+{% block title %}Edit {{ recipe.name }}{% endblock %}
+
+{% block content %}
+<div class="max-w-4xl mx-auto py-8">
+
+
+    <form action="{{ route('web.recipe.edit', {'id': recipe.id}) }}" class="bg-white rounded-lg shadow-md p-6"
+          method="POST">
+        {{ csrf_field() }}
+        <input name="_method" type="hidden" value="PUT">
+
+        <div class="space-y-6">
+            {{ form_text('name',
+            label='Recipe Name',
+            value=recipe.name,
+            required=true) }}
+
+
+            <div class="flex justify-end space-x-4">
+                <button class="bg-blue-500 hover:bg-blue-600 text-white px-6 py-2 rounded-lg transition duration-200"
+                        type="submit">
+                    Update Recipe
+                </button>
+            </div>
+        </div>
+    </form>
+</div>
+{% endblock %}

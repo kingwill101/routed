@@ -1,6 +1,0 @@
-name: untitled1
-packages:
-  - packages/*
-
-scripts:
-  test: dart test
