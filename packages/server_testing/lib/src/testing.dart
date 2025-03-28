@@ -7,7 +7,8 @@ import 'package:meta/meta.dart';
 import 'package:server_testing/server_testing.dart';
 
 /// Callback type for test functions that use [TestClient]
-typedef TestCallback = Future<void> Function(TestClient client);
+typedef TestCallback = Future<void> Function(
+    TestClient client, RequestHandler handler);
 
 /// Creates a test that uses an [TestClient] to test HTTP endpoints.
 ///
@@ -66,7 +67,7 @@ void serverTest(
         : TestClient.ephemeralServer(handler);
 
     try {
-      await callback(client);
+      await callback(client, handler);
     } catch (e) {
       rethrow; // Rethrow to ensure test fails properly
     } finally {
