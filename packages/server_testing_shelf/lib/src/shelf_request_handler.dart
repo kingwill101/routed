@@ -1,5 +1,4 @@
 import 'dart:async';
-import 'dart:convert';
 import 'dart:io';
 
 import 'package:server_testing/server_testing.dart';
@@ -67,23 +66,21 @@ class ShelfRequestHandler implements RequestHandler {
 
   /// Handles an HTTP request by delegating to the Shelf handler.
   ///
-  /// This method transforms the [HttpRequest] into a Shelf [Request], 
+  /// This method transforms the [HttpRequest] into a Shelf [Request],
   /// passes it to the Shelf handler, and writes the resulting [Response]
   /// back to the [HttpResponse].
   @override
   Future<void> handleRequest(HttpRequest request) async {
     // Convert HttpRequest to shelf.Request
-    final shelfRequest = await ShelfTranslator.httpRequestToShelfRequest(
-        request);
+    final shelfRequest =
+        await ShelfTranslator.httpRequestToShelfRequest(request);
 
     // Process with shelf handler
     final shelfResponse = await _handler(shelfRequest);
 
     // Write the shelf Response back to the HttpResponse
     await ShelfTranslator.writeShelfResponseToHttpResponse(
-        shelfResponse,
-        request.response
-    );
+        shelfResponse, request.response);
   }
 
   /// Starts an HTTP server on the specified port.
@@ -102,7 +99,6 @@ class ShelfRequestHandler implements RequestHandler {
       port,
       poweredByHeader: 'server_testing_shelf',
       shared: true,
-
     );
 
     return _server!.port;

@@ -1,5 +1,6 @@
 import 'dart:io';
 
+import 'package:server_testing/server_testing.dart';
 import 'package:server_testing/src/response.dart';
 
 /// An abstract class that defines the transport mechanism for sending test requests.
@@ -36,4 +37,11 @@ abstract class TestTransport {
   Future<void> close();
 }
 
-typedef TransportOptions = ({InternetAddress? remoteAddress});
+class TransportOptions {
+  final InternetAddress? remoteAddress;
+  final bool? keepAlive;
+  final TransportMode mode;
+
+  const TransportOptions(
+      {this.remoteAddress, this.keepAlive, this.mode = TransportMode.inMemory});
+}

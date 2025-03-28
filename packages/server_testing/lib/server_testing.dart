@@ -54,8 +54,9 @@ library;
 
 export 'package:test/test.dart';
 
+export 'browser.dart';
 export 'extension.dart';
 export 'mock.dart';
 export 'src/client.dart';
-export 'browser.dart';
+export 'src/transport/transport.dart';
 export 'testing.dart';
