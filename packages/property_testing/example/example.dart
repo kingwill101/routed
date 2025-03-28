@@ -1,22 +1,24 @@
-import 'package:property_testing/src/generators.dart';
-import 'package:property_testing/src/property_context.dart';
-import 'package:property_testing/src/property_test.dart';
-import 'package:routed_testing/routed_testing.dart';
-import 'package:routed/routed.dart';
-import 'package:server_testing/server_testing.dart';
+import 'package:property_testing/property_testing.dart';
 
 void main() async {
-  final engine = Engine();
+  // Using the new PropertyTestRunner with an email generator
+  final runner = PropertyTestRunner(
+    Specialized.email(),
+    (email) {
+      // You can add property assertions here
+      assert(email.contains('@'), 'Email should contain @');
 
-  final tester = ForAllTester(Any.string(maxLength: 20),
-      config: ExploreConfig(numRuns: 200));
+      // Example property test
+      final parts = email.split('@');
+      assert(parts.length == 2, 'Email should have exactly one @');
 
-  await tester.check((input) async {
-    final context = PropertyContext(
-        client: TestClient.inMemory(RoutedRequestHandler(engine)));
+      // Property: email should have local part and domain
+      assert(parts[0].isNotEmpty, 'Local part should not be empty');
+      assert(parts[1].isNotEmpty, 'Domain should not be empty');
+    },
+    PropertyConfig(numTests: 100),
+  );
 
-    // Convert bool to void using expect
-    // final exists = await RouteProperties.routeExists(context, '/api/$input');
-    // expect(exists, isTrue, reason: 'Route should exist');
-  });
+  final result = await runner.run();
+  print(result.report);
 }

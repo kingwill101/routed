@@ -41,8 +41,8 @@ class Any {
   }) {
     return (Random random, int size) {
       final length = random.nextInt(maxLength);
-      final chars = List.generate(
-          length, (_) => charset[random.nextInt(charset.length)]);
+      final chars =
+          List.generate(length, (_) => charset[random.nextInt(charset.length)]);
       return DataShape(chars.join(),
           shrinkValues: ['', chars.take(length ~/ 2).join()]);
     };
@@ -70,12 +70,19 @@ class Any {
   /// Generates a potentially valid (but randomized) email address.
   static Generator<String> email() {
     return (random, size) {
-      final domains = ['gmail.com', 'yahoo.com', 'example.com', 'test.org', 'company.co'];
+      final domains = [
+        'gmail.com',
+        'yahoo.com',
+        'example.com',
+        'test.org',
+        'company.co'
+      ];
       final usernameLength = 3 + random.nextInt(10);
       final username = string(
         maxLength: usernameLength,
         charset: 'abcdefghijklmnopqrstuvwxyz0123456789._',
-      )(random, size).value;
+      )(random, size)
+          .value;
       final domain = domains[random.nextInt(domains.length)];
       return DataShape('$username@$domain');
     };
@@ -87,8 +94,9 @@ class Any {
       final char = '0123456789abcdef';
       final sections = [8, 4, 4, 4, 12]; // UUID format sections
       final uuid = sections
-          .map((length) => List.generate(
-          length, (_) => char[random.nextInt(char.length)]).join())
+          .map((length) =>
+              List.generate(length, (_) => char[random.nextInt(char.length)])
+                  .join())
           .join('-');
       return DataShape(uuid);
     };
@@ -115,10 +123,7 @@ class Any {
   static Generator<String> macAddress() {
     return (random, size) {
       final segments = List.generate(
-          6,
-              (_) => random.nextInt(256)
-              .toRadixString(16)
-              .padLeft(2, '0'));
+          6, (_) => random.nextInt(256).toRadixString(16).padLeft(2, '0'));
       return DataShape(segments.join(':'));
     };
   }
@@ -185,7 +190,7 @@ class Any {
     return (random, size) {
       final segments = ['usr', 'bin', 'lib', 'var', 'home', 'temp'];
       final pathSegments = List.generate(random.nextInt(5) + 1,
-              (_) => segments[random.nextInt(segments.length)]);
+          (_) => segments[random.nextInt(segments.length)]);
       return DataShape('/${pathSegments.join('/')}');
     };
   }
@@ -207,9 +212,9 @@ class Any {
     return (random, size) {
       const charset =
           'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789!@#\$%^&*()_+-=[]{}|;';
-      final pwd = List.generate(
-          length, (_) => charset[random.nextInt(charset.length)])
-          .join();
+      final pwd =
+          List.generate(length, (_) => charset[random.nextInt(charset.length)])
+              .join();
       return DataShape(pwd);
     };
   }
@@ -225,7 +230,8 @@ class Any {
   /// Generates a random list of type [T] using the provided [generator].
   ///
   /// The list length is randomly determined up to [maxLength].
-  static Generator<List<T>> listOf<T>(Generator<T> generator, {int maxLength = 10}) {
+  static Generator<List<T>> listOf<T>(Generator<T> generator,
+      {int maxLength = 10}) {
     return (Random random, int size) {
       final length = random.nextInt(maxLength);
       final list = List.generate(length, (_) => generator(random, size).value);

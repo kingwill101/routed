@@ -1,19 +1,48 @@
-import 'package:property_testing/src/generators.dart';
-import 'package:property_testing/src/payload_builder.dart';
-import 'package:property_testing/src/property_test.dart';
+import 'package:property_testing/property_testing.dart';
+import 'package:test/test.dart';
+
+// Define a User class to test with
+class User {
+  final String name;
+  final String email;
+  final int age;
+
+  User({required this.name, required this.email, required this.age});
+
+  Map<String, dynamic> toJson() => {
+        'name': name,
+        'email': email,
+        'age': age,
+      };
+}
 
 void main() async {
-  final schema = {
-    'name': Any.string(),
-    'phone': Any.phone(),
-    'age': Any.randomDigit(min: 18, max: 100),
-  };
+  // Create a generator for User objects
+  final emailGenerator = Specialized.email();
+  final userGenerator = emailGenerator.map((email) => User(
+        name: email.split('@')[0], // Use local part of email as name
+        email: email,
+        age: 18 + (email.hashCode % 82), // Random age between 18-99
+      ));
 
-  final payloadGenerator = PayloadBuilder(schema);
-  final tester =
-      ForAllTester((random, size) => payloadGenerator.generate(random, size));
+  final runner = PropertyTestRunner(
+    userGenerator,
+    (user) {
+      // Test properties of the generated User
+      expect(user.name, equals(user.email.split('@')[0]));
+      expect(user.email.contains('@'), isTrue);
+      expect(user.age, greaterThanOrEqualTo(18));
+      expect(user.age, lessThanOrEqualTo(99));
 
-  await tester.check((payload) async {
-    print('payload: $payload');
-  });
+      // Test JSON conversion
+      final json = user.toJson();
+      expect(json['name'], equals(user.name));
+      expect(json['email'], equals(user.email));
+      expect(json['age'], equals(user.age));
+    },
+    PropertyConfig(numTests: 100),
+  );
+
+  final result = await runner.run();
+  print(result.report);
 }
