@@ -25,15 +25,31 @@ import '../mock.mocks.dart';
 /// Returns a [MockUri] instance that can be used for testing.
 MockUri setupUri(String url) {
   final uriObj = MockUri();
+  Uri uri;
 
-  var uri = Uri.parse(url);
+  try {
+    uri = Uri.parse(url);
 
-  if (!uri.isAbsolute) {
-    uri = Uri.parse('http://server_testing.internal$url');
+    if (!uri.isAbsolute) {
+      uri = Uri.parse('http://server_testing.internal$url');
+    }
+  } catch (e) {
+    // Fallback to a basic URI if parsing fails completely
+    uri = Uri.parse('http://server_testing.internal/');
   }
 
   when(uriObj.path).thenAnswer((c) => uri.path);
-  when(uriObj.queryParameters).thenAnswer((c) => uri.queryParameters);
+
+  // Handle query parameters safely
+  when(uriObj.queryParameters).thenAnswer((c) {
+    try {
+      return uri.queryParameters;
+    } catch (e) {
+      // Return empty map if query parameter parsing fails
+      return <String, String>{};
+    }
+  });
+
   when(uriObj.query).thenAnswer((c) => uri.query);
   when(uriObj.scheme).thenAnswer((c) => uri.scheme);
   when(uriObj.host).thenAnswer((c) => uri.host);
