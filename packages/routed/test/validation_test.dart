@@ -7,8 +7,7 @@ import 'package:routed_testing/routed_testing.dart';
 import 'package:server_testing/server_testing.dart';
 
 TestClient useClient(Engine engine) =>
-    TestClient(RoutedRequestHandler(engine),
-        mode: TransportMode.inMemory);
+    TestClient(RoutedRequestHandler(engine), mode: TransportMode.inMemory);
 
 void main() {
   group('Validation Tests', () {

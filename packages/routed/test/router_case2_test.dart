@@ -14,7 +14,6 @@ void main() {
   group('Route Matching Tests', () {
     test('Single route match works for various HTTP methods', () async {
       final engine = Engine();
-      final router = Router();
 
       // Define routes for all HTTP methods
       final methods = [
@@ -30,11 +29,9 @@ void main() {
       ];
 
       for (final method in methods) {
-        router.handle(method, '/test', (ctx) => ctx.string('ok'));
-        router.handle(method, '/test2', (ctx) => ctx.string('any ok'));
+        engine.handle(method, '/test', (ctx) => ctx.string('ok'));
+        engine.handle(method, '/test2', (ctx) => ctx.string('any ok'));
       }
-
-      engine.use(router);
 
       client = TestClient(RoutedRequestHandler(engine));
 
@@ -67,12 +64,9 @@ void main() {
   group('Trailing Slash Redirect Tests', () {
     test('Redirects for trailing slashes with 301 or 307', () async {
       final engine = Engine(config: EngineConfig(redirectTrailingSlash: true));
-      final router = Router();
 
-      router.get('/path', (ctx) => ctx.string('get ok'));
-      router.post('/path2', (ctx) => ctx.string('post ok'));
-
-      engine.use(router);
+      engine.get('/path', (ctx) => ctx.string('get ok'));
+      engine.post('/path2', (ctx) => ctx.string('post ok'));
 
       client = TestClient(RoutedRequestHandler(engine));
 
@@ -90,11 +84,8 @@ void main() {
 
     test('Disables trailing slash redirects when configured', () async {
       final engine = Engine(config: EngineConfig(redirectTrailingSlash: false));
-      final router = Router();
 
-      router.get('/path', (ctx) => ctx.string('ok'));
-
-      engine.use(router);
+      engine.get('/path', (ctx) => ctx.string('ok'));
 
       client = TestClient(RoutedRequestHandler(engine));
 
@@ -106,9 +97,8 @@ void main() {
   group('Path Parameters Tests', () {
     test('Correctly parses path parameters', () async {
       final engine = Engine();
-      final router = Router();
 
-      router.get('/test/{name}/{last_name}/{*wild}', (ctx) {
+      engine.get('/test/{name}/{last_name}/{*wild}', (ctx) {
         final params = ctx.params;
         ctx.json({
           'name': params['name'],
@@ -116,8 +106,6 @@ void main() {
           'wild': params['wild']
         });
       });
-
-      engine.use(router);
 
       client = TestClient(RoutedRequestHandler(engine));
 
@@ -138,10 +126,8 @@ void main() {
 
     test('StaticFS returns 404 for non-existent directory', () async {
       final engine = Engine();
-      final router = Router();
 
-      router.staticFS('/static', Dir('/thisreallydoesntexist', fileSystem: fs));
-      engine.use(router);
+      engine.staticFS('/static', Dir('/thisreallydoesntexist', fileSystem: fs));
 
       client = TestClient(RoutedRequestHandler(engine));
 
@@ -154,12 +140,10 @@ void main() {
 
     test('StaticFS handles file not found gracefully', () async {
       final engine = Engine();
-      final router = Router();
 
       final dir = fs.directory('testdir')..createSync();
 
-      router.staticFS('/static', Dir(dir.path, fileSystem: fs));
-      engine.use(router);
+      engine.staticFS('/static', Dir(dir.path, fileSystem: fs));
 
       client = TestClient(RoutedRequestHandler(engine));
 
@@ -175,11 +159,9 @@ void main() {
           await ctx.next();
         }
       ]);
-      final router = Router();
 
       final dir = fs.directory('nonexistent');
-      router.staticFS('/static', Dir(dir.path, fileSystem: fs));
-      engine.use(router);
+      engine.staticFS('/static', Dir(dir.path, fileSystem: fs));
 
       client = TestClient(RoutedRequestHandler(engine));
 
@@ -192,7 +174,6 @@ void main() {
 
     test('Static file serving works correctly', () async {
       final engine = Engine();
-      final router = Router();
 
       final dir = fs.directory("files")..createSync();
       final file = dir.childFile('test_file.txt')
@@ -200,9 +181,8 @@ void main() {
 
       final filename = file.uri.pathSegments.last;
 
-      router.static('/using_static', dir.path, fs);
-      router.staticFile('/result', file.path, fs);
-      engine.use(router);
+      engine.static('/using_static', dir.path, fs);
+      engine.staticFile('/result', file.path, fs);
 
       client = TestClient(RoutedRequestHandler(engine),
           mode: TransportMode.inMemory);
@@ -227,14 +207,12 @@ void main() {
 
     test('Directory listing works when enabled', () async {
       final engine = Engine();
-      final router = Router();
 
       final dir = fs.directory('listingtest')..createSync();
       dir.childFile('testfile1.txt').createSync();
       dir.childFile('testfile2.txt').createSync();
 
-      router.staticFS('/', Dir(dir.path, listDirectory: true, fileSystem: fs));
-      engine.use(router);
+      engine.staticFS('/', Dir(dir.path, listDirectory: true, fileSystem: fs));
 
       client = TestClient(RoutedRequestHandler(engine));
 
@@ -248,12 +226,10 @@ void main() {
 
     test('StaticFS returns 403 for path traversal attempts', () async {
       final engine = Engine();
-      final router = Router();
 
       final dir = fs.directory('file/is/very/secured')
         ..createSync(recursive: true);
-      router.staticFS('/static', Dir(dir.path, fileSystem: fs));
-      engine.use(router);
+      engine.staticFS('/static', Dir(dir.path, fileSystem: fs));
 
       client = TestClient(RoutedRequestHandler(engine));
 
@@ -263,11 +239,9 @@ void main() {
 
     test('Directory listing disabled by default', () async {
       final engine = Engine();
-      final router = Router();
 
       final dir = fs.directory('nolist')..createSync();
-      router.static('/', dir.path, fs);
-      engine.use(router);
+      engine.static('/', dir.path, fs);
 
       client = TestClient(RoutedRequestHandler(engine));
 
@@ -286,11 +260,8 @@ void main() {
           await ctx.next();
         }
       ]);
-      final router = Router();
 
-      router.staticFile('/static/{file}', './nonexistent');
-
-      engine.use(router);
+      engine.staticFile('/static/{file}', './nonexistent');
 
       client = TestClient(RoutedRequestHandler(engine));
 
@@ -304,12 +275,9 @@ void main() {
   group('Method Not Allowed Tests', () {
     test('Returns 405 with allowed methods when enabled', () async {
       final engine = Engine(config: EngineConfig(handleMethodNotAllowed: true));
-      final router = Router();
 
-      router.get('/path', (ctx) => ctx.string('get ok'));
-      router.post('/path', (ctx) => ctx.string('post ok'));
-
-      engine.use(router);
+      engine.get('/path', (ctx) => ctx.string('get ok'));
+      engine.post('/path', (ctx) => ctx.string('post ok'));
 
       client = TestClient(RoutedRequestHandler(engine));
 
@@ -322,11 +290,8 @@ void main() {
     test('Returns 404 for wrong methods when disabled', () async {
       final engine =
           Engine(config: EngineConfig(handleMethodNotAllowed: false));
-      final router = Router();
 
-      router.post('/path', (ctx) => ctx.string('post ok'));
-
-      engine.use(router);
+      engine.post('/path', (ctx) => ctx.string('post ok'));
 
       client = TestClient(RoutedRequestHandler(engine));
 
