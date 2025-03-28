@@ -204,9 +204,13 @@ class Router with StaticFileHandler {
   /// [handler]: The handler function for the route.
   /// [middlewares]: Optional middlewares specific to this route.
   /// [constraints]: Optional constraints for the route parameters.
-  RouteBuilder handle(String method, String path, Handler handler,
-      {List<Middleware> middlewares = const [],
-      Map<String, dynamic> constraints = const {}}) {
+  RouteBuilder handle(
+    String method,
+    String path,
+    Handler handler, {
+    List<Middleware> middlewares = const [],
+    Map<String, dynamic> constraints = const {},
+  }) {
     final fullPath = _joinPaths(_prefix, path);
     final route = RegisteredRoute(
       method: method,

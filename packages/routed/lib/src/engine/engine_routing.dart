@@ -92,7 +92,8 @@ extension EngineRouting on Engine {
   /// [middlewares] is an optional list of middleware to apply to this route.
   /// [constraints] is an optional map of constraints to apply to this route.
   RouteBuilder handle(String method, String path, Handler handler,
-      {List<Middleware> middlewares = const [], constraints = const {}}) {
+      {List<Middleware> middlewares = const [],
+      Map<String, dynamic> constraints = const {}}) {
     return _defaultRouter.handle(method, path, handler,
         middlewares: middlewares, constraints: constraints);
   }
