@@ -3,193 +3,121 @@ title: Response Rendering
 description: Learn how to render different types of responses in Routed
 ---
 
-Routed provides multiple ways to render responses in different formats. The framework includes built-in support for:
-
-- JSON responses
-- HTML templates (Jinja and Liquid)
-- Plain text
-- XML
-- YAML
-- TOML
-- File downloads
-- Static files
-- Redirects
+# Response Rendering
 
 ## JSON Responses
-
-Several JSON rendering options are available:
 
 ```dart
 // Basic JSON
 ctx.json({
-  'message': 'Hello World',
-  'count': 42
+  'message': 'Hello World'
 });
 
-// Pretty printed JSON
+// Pretty printed
 ctx.indentedJson({
-  'message': 'Hello World',
   'nested': {
     'count': 42
   }
 });
 
-// ASCII-safe JSON
-ctx.asciiJson(data);
-
 // JSONP
 ctx.jsonp(data, callback: 'handleResponse');
 
-// Secure JSON (prevents JSON hijacking)
-ctx.secureJson(data);
+// ASCII-safe JSON (escapes non-ASCII chars)
+ctx.asciiJson(data);
+
+// Secure JSON (prevents hijacking)
+ctx.secureJson(data, prefix: ")]}',\n");
 ```
 
 ## HTML Templates
 
-### Using Jinja Templates
-
 ```dart
-// Configure Jinja template engine
-engine.useJinja(directory: 'templates');
-
-// Render template
-router.get('/profile', (ctx) {
-  ctx.html('profile.html', data: {
-    'name': 'John Doe',
-    'email': 'john@example.com'
-  });
-});
-```
-
-### Using Liquid Templates
-
-```dart
-// Configure Liquid template engine
+// Configure Liquid engine
 engine.useLiquid(directory: 'templates');
 
 // Render template
 router.get('/dashboard', (ctx) {
-  ctx.html('dashboard.liquid', data: {
-    'stats': {
-      'visits': 1234,
-      'conversions': 56
+  await ctx.html('dashboard.liquid', data: {
+    'user': {
+      'name': 'John',
+      'email': 'john@example.com'
     }
   });
 });
+
+// Add custom filters/functions
+engine.addTemplateFilter('uppercase', (v) => v.toString().toUpperCase());
+engine.addTemplateFunc('now', () => DateTime.now());
 ```
 
 ## Other Response Types
 
-### Plain Text
-
 ```dart
+// Plain text
 ctx.string('Hello World');
-```
 
-### XML
-
-```dart
+// XML
 ctx.xml({
-  'user': {
-    'name': 'John',
-    'age': 30
-  }
+  'user': {'name': 'John'}
 });
-```
 
-### YAML
-
-```dart
+// YAML 
 ctx.yaml({
-  'config': {
-    'debug': true,
-    'api_key': 'abc123'
-  }
+  'debug': true,
+  'port': 8080
 });
-```
 
-### TOML
-
-```dart
+// TOML
 ctx.toml({
   'database': {
-    'host': 'localhost',
-    'port': 5432
+    'host': 'localhost'
   }
 });
 ```
 
-## File Responses
-
-### Serving Files
+## File Handling
 
 ```dart
-// Serve a file
+// Serve file
 ctx.file('path/to/document.pdf');
 
-// Serve as attachment (triggers download)
-ctx.fileAttachment('path/to/document.pdf', 'report.pdf');
+// Download attachment
+ctx.fileAttachment('path/to/file.pdf', 'report.pdf');
 
-// Serve a directory of files
+// Serve directory
 ctx.dir('path/to/public');
+
+// Static files
+router.static('/assets', 'path/to/public');
+router.staticFile('/favicon.ico', 'path/to/favicon.ico');
 ```
 
-### Static File Server
+## Redirects & Headers
 
 ```dart
-// Serve static files from directory
-router.static('/public', 'path/to/public');
+// Redirects
+ctx.redirect('/new-page');  // 302 Temporary
+ctx.redirect('/new-page', statusCode: HttpStatus.movedPermanently); // 301
 
-// Enable directory listing
-router.staticFS('/files', Dir('path/to/files', listDirectory: true));
-
-// Serve single file
-router.staticFile('/logo.png', 'path/to/logo.png');
-```
-
-## Redirects
-
-```dart
-// Temporary redirect (302)
-ctx.redirect('/new-page');
-
-// Permanent redirect (301)
-ctx.redirect('/new-page', statusCode: HttpStatus.movedPermanently);
-
-// Other status codes
-ctx.redirect('/other', statusCode: HttpStatus.seeOther); // 303
-```
-
-## Custom Responses
-
-### Setting Headers
-
-```dart
+// Headers
 ctx.setHeader('X-Custom-Header', 'value');
 ctx.setHeader('Cache-Control', 'max-age=3600');
-```
 
-### Setting Status Code
-
-```dart
+// Status code
 ctx.status(HttpStatus.created); // 201
-ctx.status(HttpStatus.notFound); // 404
 ```
 
-### Raw Response
-
-```dart
-// Write directly to response
-ctx.write('Custom response body');
-```
-
-### Streaming Response
+## Streaming Responses
 
 ```dart
 ctx.dataFromReader(
   statusCode: 200,
   contentType: 'text/plain',
   contentLength: 1024,
-  reader: myStream
+  reader: myStream,
+  extraHeaders: {
+    'X-Stream': 'true'
+  }
 );
 ```

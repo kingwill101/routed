@@ -3,141 +3,196 @@ title: Sessions
 description: Managing sessions in Routed
 ---
 
-# Sessions
+# Session Management
 
-Routed provides a robust session management system with support for different storage backends and security features.
-
-## Session Configuration
+## Configuration
 
 ### Basic Setup
-
 ```dart
-// Create a secure cookie store
+final engine = Engine(
+  config: EngineConfig(
+    sessionConfig: SessionConfig.cookie(
+      appKey: 'your-secret-key',
+      cookieName: 'app_session', 
+      maxAge: Duration(hours: 1)
+    )
+  )
+);
+```
+
+### Security Options
+```dart
+// Cookie Store with security options
 final store = CookieStore(
   codecs: [
     SecureCookie(
-      key: 'your-secret-key',
-      useEncryption: true,
-      useSigning: true
+      key: SecureCookie.generateKey(), // Generate secure key
+      useEncryption: true,  // Enable AES encryption
+      useSigning: true      // Enable HMAC signing
     )
   ],
   defaultOptions: Options(
     path: '/',
-    maxAge: 3600, // 1 hour
-    secure: true,
-    httpOnly: true,
-  ),
-);
-
-// Add session middleware
-final engine = Engine(
-  middlewares: [
-    sessionMiddleware(store, sessionName: 'routed_session')
-  ]
+    maxAge: 86400,     // 24 hours
+    secure: true,      // HTTPS only
+    httpOnly: true,    // No JavaScript access
+    sameSite: 'lax'   // Cross-site behavior
+  )
 );
 ```
 
-## Working with Sessions
+## Session Operations
 
-### Reading and Writing Data
-
+### Basic Operations
 ```dart
-engine.get('/profile', (ctx) {
-  // Get session data
-  final userId = ctx.sessionData['user_id'];
-  final preferences = ctx.sessionData['preferences'];
-
-  // Set session data
-  ctx.setSession('last_visit', DateTime.now().toIso8601String());
+router.get('/profile', (ctx) async {
+  // Get session values
+  final userId = ctx.getSession<String>('user_id');
+  final role = ctx.getSessionOrDefault('role', 'guest');
   
-  ctx.json({
-    'user_id': userId,
-    'preferences': preferences,
-    'last_visit': ctx.sessionData['last_visit']
-  });
+  // Set values
+  await ctx.setSession('last_visit', DateTime.now());
+  
+  // Check existence
+  if (ctx.hasSession('preferences')) {
+    // Access preferences
+  }
+  
+  // Remove value
+  await ctx.removeSession('temp_data');
+  
+  // Clear all data
+  await ctx.clearSession();
+  
+  // Get all session data
+  final allData = ctx.sessionData;
 });
 ```
 
-### Session Information
-
+### Session Lifecycle
 ```dart
-engine.get('/session-info', (ctx) {
-  ctx.json({
-    'session_id': ctx.sessionId,
-    'created_at': ctx.sessionCreatedAt,
+router.post('/auth', (ctx) async {
+  // Session metadata
+  final info = {
+    'id': ctx.sessionId,
+    'created': ctx.sessionCreatedAt,
     'last_accessed': ctx.sessionLastAccessed,
     'age_seconds': ctx.sessionAge,
-    'idle_time_seconds': ctx.sessionIdleTime,
-  });
+    'idle_seconds': ctx.sessionIdleTime
+  };
+
+  // Security operations
+  await ctx.regenerateSession();  // New session ID
+  await ctx.destroySession();     // End session
+  
+  // Check state
+  if (ctx.isSessionDestroyed) {
+    return ctx.json({'error': 'Session expired'});
+  }
 });
 ```
 
-## Security Features
-
-### Encryption and Signing
-
-```dart
-final store = CookieStore(
-  codecs: [
-    // AES encryption
-    SecureCookie(
-      key: 'encryption-key',
-      useEncryption: true,
-      useSigning: false,
-    ),
-    // HMAC signing
-    SecureCookie(
-      key: 'signing-key',
-      useEncryption: false,
-      useSigning: true,
-    ),
-  ]
-);
-```
-
-### Cookie Options
-
-```dart
-final store = CookieStore(
-  defaultOptions: Options(
-    path: '/',
-    maxAge: 3600,
-    secure: true,    // HTTPS only
-    httpOnly: true,  // No JavaScript access
-    sameSite: SameSite.strict,
-  ),
-);
-```
-
-## Session Storage Backends
+## Storage Backends
 
 ### Cookie Store
-
-Stores session data in encrypted cookies:
-
+Store sessions in encrypted cookies:
 ```dart
-final store = CookieStore(
-  codecs: [SecureCookie(key: 'secret')],
-  defaultOptions: Options(maxAge: 3600),
-);
+SessionConfig.cookie(
+  appKey: 'your-secret-key',
+  cookieName: 'app_session',
+  maxAge: Duration(hours: 1)
+)
 ```
 
-### Memory Store
-
-Stores sessions in memory (development only):
-
+### File Store
+Store sessions on filesystem:
 ```dart
-final store = MemoryStore(
-  cleanupInterval: Duration(minutes: 15),
-);
+SessionConfig.file(
+  appKey: 'your-secret-key',
+  storagePath: 'storage/sessions',
+  cookieName: 'app_session',
+  maxAge: Duration(hours: 1)
+)
 ```
 
 ### Custom Store
+Implement custom storage backend:
+```dart
+class CustomStore implements Store {
+  @override
+  Future<Session> read(Request request, String name) async {
+    // Load session data
+  }
 
-Implement custom storage:
+  @override
+  Future<void> write(
+    Request request, 
+    Response response, 
+    Session session
+  ) async {
+    // Save session data
+  }
+}
+```
+
+## Flash Messages
+
+Temporary session data that auto-clears after being read:
 
 ```dart
-class RedisStore implements SessionStore {
-  // Implement required methods
+// Set messages
+await ctx.flash('Profile updated', 'success');
+await ctx.flash('Fix these errors', 'error');
+
+// Get all messages
+final messages = ctx.getFlashMessages();
+
+// Get filtered messages
+final errors = ctx.getFlashMessages(
+  withCategories: true,
+  categoryFilter: ['error']
+);
+
+// Check for messages
+if (ctx.hasFlashMessages()) {
+  // Handle pending messages
 }
+```
+
+## Session Internals
+
+### Session Object
+```dart
+final session = Session(
+  name: 'app_session',
+  options: Options(
+    path: '/',
+    maxAge: 3600,
+    secure: true
+  ),
+  values: {
+    'user_id': '123',
+    'role': 'admin'
+  }
+);
+
+// Session properties
+print(session.id);          // Unique ID
+print(session.createdAt);   // Creation time
+print(session.lastAccessed);// Last access time
+print(session.age);         // Session age in seconds
+print(session.idleTime);    // Idle time in seconds
+print(session.isDestroyed); // Destroyed state
+```
+
+### Store Configuration
+```dart
+final config = SessionConfig(
+  cookieName: 'app_session',
+  store: CustomStore(),
+  maxAge: Duration(hours: 1),
+  path: '/',
+  secure: true,
+  httpOnly: true
+);
 ```
