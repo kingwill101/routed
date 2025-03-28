@@ -126,11 +126,20 @@ class EngineRoute {
       if (rawValue == null && !info.isOptional) {
         return (key: key, value: null, info: ParamInfo(type: 'string'));
       }
+
+      String? decodedValue;
+      if (rawValue != null) {
+        try {
+          decodedValue = Uri.decodeComponent(rawValue);
+        } catch (e) {
+          // If decoding fails, use the raw value instead
+          decodedValue = rawValue;
+        }
+      }
+
       return (
         key: key,
-        value: _castParameter(
-            rawValue != null ? Uri.decodeComponent(rawValue) : rawValue,
-            info.type),
+        value: _castParameter(decodedValue, info.type),
         info: info
       );
     }).toList();
@@ -148,11 +157,19 @@ class EngineRoute {
       if (rawValue == null && !info.isOptional) {
         return MapEntry(key, null);
       }
+
+      String? decodedValue;
+      if (rawValue != null) {
+        try {
+          decodedValue = Uri.decodeComponent(rawValue);
+        } catch (e) {
+          // If decoding fails, use the raw value instead
+          decodedValue = rawValue;
+        }
+      }
+
       return MapEntry(
-          key,
-          _castParameter(
-              rawValue != null ? Uri.decodeComponent(rawValue) : rawValue,
-              info.type));
+          key, _castParameter(decodedValue, info.type));
     });
   }
 
