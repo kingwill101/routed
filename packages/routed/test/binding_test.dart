@@ -17,15 +17,12 @@ void main() {
   group('Binding Tests', () {
     test('JSON Binding', () async {
       final engine = Engine();
-      final router = Router();
-
-      router.post('/json', (ctx) async {
+      engine.post('/json', (ctx) async {
         final data = <String, dynamic>{};
         await ctx.shouldBindWith(data, jsonBinding);
         ctx.json(data);
       });
 
-      engine.use(router);
       client = TestClient(RoutedRequestHandler(engine));
 
       final response = await client.post('/json', {
@@ -45,15 +42,13 @@ void main() {
 
     test('Form URL Encoded Binding', () async {
       final engine = Engine();
-      final router = Router();
 
-      router.post('/form', (ctx) async {
+      engine.post('/form', (ctx) async {
         final data = <String, dynamic>{};
         await ctx.shouldBindWith(data, formBinding);
         ctx.json(data);
       });
 
-      engine.use(router);
       client = TestClient(RoutedRequestHandler(engine));
 
       final response = await client.post(
@@ -71,9 +66,8 @@ void main() {
 
     test('Multipart Form Binding', () async {
       final engine = Engine();
-      final router = Router();
 
-      router.post('/upload', (ctx) async {
+      engine.post('/upload', (ctx) async {
         // Test form fields
         final name = await ctx.postForm('name');
         final age = await ctx.defaultPostForm('age', '0');
@@ -99,7 +93,6 @@ void main() {
         });
       });
 
-      engine.use(router);
       client = TestClient(RoutedRequestHandler(engine));
 
       final response = await client.multipart('/upload', (request) {
@@ -134,15 +127,13 @@ void main() {
 
     test('Query Binding', () async {
       final engine = Engine();
-      final router = Router();
 
-      router.get('/search', (ctx) async {
+      engine.get('/search', (ctx) async {
         final Map<String, dynamic> data = {};
         await ctx.shouldBindWith(data, queryBinding);
         ctx.json(data);
       });
 
-      engine.use(router);
       client = TestClient(RoutedRequestHandler(engine));
 
       final response = await client.get('/search?q=test&page=1&sort=desc');

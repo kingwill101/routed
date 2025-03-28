@@ -16,9 +16,7 @@ void main() {
       test('enabled - redirects GET requests with 301', () async {
         final engine =
             Engine(config: EngineConfig(redirectTrailingSlash: true));
-        final router = Router();
-        router.get('/users', (ctx) => ctx.string('users'));
-        engine.use(router);
+        engine.get('/users', (ctx) => ctx.string('users'));
 
         client = TestClient(RoutedRequestHandler(engine));
         final response = await client.get('/users/');
@@ -30,9 +28,7 @@ void main() {
       test('enabled - redirects POST requests with 307', () async {
         final engine =
             Engine(config: EngineConfig(redirectTrailingSlash: true));
-        final router = Router();
-        router.post('/users', (ctx) => ctx.string('created'));
-        engine.use(router);
+        engine.post('/users', (ctx) => ctx.string('created'));
 
         client = TestClient(RoutedRequestHandler(engine));
         final response = await client.post('/users/', null);
@@ -44,9 +40,7 @@ void main() {
       test('disabled - returns 404 for trailing slash', () async {
         final engine =
             Engine(config: EngineConfig(redirectTrailingSlash: false));
-        final router = Router();
-        router.get('/users', (ctx) => ctx.string('users'));
-        engine.use(router);
+        engine.get('/users', (ctx) => ctx.string('users'));
 
         client = TestClient(RoutedRequestHandler(engine));
         final response = await client.get('/users/');
@@ -58,10 +52,8 @@ void main() {
       test('enabled - returns 405 with Allow header', () async {
         final engine =
             Engine(config: EngineConfig(handleMethodNotAllowed: true));
-        final router = Router();
-        router.get('/users', (ctx) => ctx.string('users'));
-        router.post('/users', (ctx) => ctx.string('created'));
-        engine.use(router);
+        engine.get('/users', (ctx) => ctx.string('users'));
+        engine.post('/users', (ctx) => ctx.string('created'));
 
         client = TestClient(RoutedRequestHandler(engine));
         final response = await client.put('/users', null);
@@ -73,9 +65,7 @@ void main() {
       test('disabled - returns 404 for wrong method', () async {
         final engine =
             Engine(config: EngineConfig(handleMethodNotAllowed: false));
-        final router = Router();
-        router.get('/users', (ctx) => ctx.string('users'));
-        engine.use(router);
+        engine.get('/users', (ctx) => ctx.string('users'));
 
         client = TestClient(RoutedRequestHandler(engine));
         final response = await client.post('/users', null);
@@ -93,13 +83,12 @@ void main() {
                 ),
                 forwardedByClientIP: true,
                 remoteIPHeaders: ['X-Forwarded-For']));
-        final router = Router();
-        router.get('/ip', (ctx) => ctx.string(ctx.request.clientIP));
-        engine.use(router);
+        engine.get('/ip', (ctx) => ctx.string(ctx.request.clientIP));
 
         client = TestClient(
           RoutedRequestHandler(engine),
-          options: (remoteAddress: InternetAddress('192.168.1.2')),
+          options:
+              TransportOptions(remoteAddress: InternetAddress('192.168.1.2')),
         );
 
         final response = await client.get('/ip', headers: {
@@ -119,13 +108,12 @@ void main() {
                 ),
                 forwardedByClientIP: true,
                 remoteIPHeaders: ['X-Real-IP']));
-        final router = Router();
-        router.get('/ip', (ctx) => ctx.string(ctx.request.clientIP));
-        engine.use(router);
+        engine.get('/ip', (ctx) => ctx.string(ctx.request.clientIP));
 
         client = TestClient(
           RoutedRequestHandler(engine),
-          options: (remoteAddress: InternetAddress('192.168.1.2')),
+          options:
+              TransportOptions(remoteAddress: InternetAddress('192.168.1.2')),
         );
 
         final response = await client.get('/ip', headers: {
@@ -136,13 +124,12 @@ void main() {
 
       test('respects forwardedByClientIP setting when disabled', () async {
         final engine = Engine(config: EngineConfig(forwardedByClientIP: false));
-        final router = Router();
-        router.get('/ip', (ctx) => ctx.string(ctx.request.clientIP));
-        engine.use(router);
+        engine.get('/ip', (ctx) => ctx.string(ctx.request.clientIP));
 
         client = TestClient(
           RoutedRequestHandler(engine),
-          options: (remoteAddress: InternetAddress('192.168.1.2')),
+          options:
+              TransportOptions(remoteAddress: InternetAddress('192.168.1.2')),
         );
 
         final response = await client.get('/ip', headers: {
@@ -165,15 +152,13 @@ void main() {
                 handleMethodNotAllowed: true,
                 forwardedByClientIP: true,
                 remoteIPHeaders: ['X-Real-IP']));
-        final router = Router();
-        router.get('/users', (ctx) => ctx.string('users'));
-        router.get('/ip', (ctx) => ctx.string(ctx.request.clientIP));
-
-        engine.use(router);
+        engine.get('/users', (ctx) => ctx.string('users'));
+        engine.get('/ip', (ctx) => ctx.string(ctx.request.clientIP));
 
         client = TestClient(
           RoutedRequestHandler(engine),
-          options: (remoteAddress: InternetAddress('192.168.1.2')),
+          options:
+              TransportOptions(remoteAddress: InternetAddress('192.168.1.2')),
         );
 
         // Test trailing slash redirect
@@ -216,7 +201,8 @@ void main() {
 
       client = TestClient(
         RoutedRequestHandler(engine),
-        options: (remoteAddress: InternetAddress('192.168.1.2')),
+        options:
+            TransportOptions(remoteAddress: InternetAddress('192.168.1.2')),
       );
 
       final response = await client.get('/ip', headers: {
@@ -234,13 +220,11 @@ void main() {
               ),
               trustedProxies: ['10.0.0.0/8'],
               remoteIPHeaders: ['X-Forwarded-For']));
-      final router = Router();
-      router.get('/ip', (ctx) => ctx.string(ctx.request.clientIP));
-      engine.use(router);
+      engine.get('/ip', (ctx) => ctx.string(ctx.request.clientIP));
 
       client = TestClient(
         RoutedRequestHandler(engine),
-        options: (remoteAddress: InternetAddress('10.0.0.2')),
+        options: TransportOptions(remoteAddress: InternetAddress('10.0.0.2')),
       );
 
       final response = await client.get('/ip', headers: {
@@ -258,13 +242,12 @@ void main() {
               ),
               trustedProxies: ['10.0.0.0/8'],
               remoteIPHeaders: ['X-Forwarded-For']));
-      final router = Router();
-      router.get('/ip', (ctx) => ctx.string(ctx.request.clientIP));
-      engine.use(router);
+      engine.get('/ip', (ctx) => ctx.string(ctx.request.clientIP));
 
       client = TestClient(
         RoutedRequestHandler(engine),
-        options: (remoteAddress: InternetAddress('192.168.1.2')),
+        options:
+            TransportOptions(remoteAddress: InternetAddress('192.168.1.2')),
       );
 
       final response = await client.get('/ip', headers: {
@@ -282,13 +265,11 @@ void main() {
               ),
               trustedPlatform: 'CF-Connecting-IP',
               remoteIPHeaders: ['X-Forwarded-For']));
-      final router = Router();
-      router.get('/ip', (ctx) => ctx.string(ctx.request.clientIP));
-      engine.use(router);
+      engine.get('/ip', (ctx) => ctx.string(ctx.request.clientIP));
 
       client = TestClient(
         RoutedRequestHandler(engine),
-        options: (remoteAddress: InternetAddress('10.0.0.2')),
+        options: TransportOptions(remoteAddress: InternetAddress('10.0.0.2')),
       );
 
       final response = await client.get('/ip', headers: {
@@ -306,13 +287,11 @@ void main() {
                 enableTrustedPlatform: true,
               ),
               remoteIPHeaders: ['X-Real-IP', 'X-Forwarded-For']));
-      final router = Router();
-      router.get('/ip', (ctx) => ctx.string(ctx.request.clientIP));
-      engine.use(router);
+      engine.get('/ip', (ctx) => ctx.string(ctx.request.clientIP));
 
       client = TestClient(
         RoutedRequestHandler(engine),
-        options: (remoteAddress: InternetAddress('10.0.0.2')),
+        options: TransportOptions(remoteAddress: InternetAddress('10.0.0.2')),
       );
 
       final response = await client.get('/ip', headers: {
