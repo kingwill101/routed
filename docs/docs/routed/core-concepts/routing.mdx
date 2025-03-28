@@ -5,177 +5,139 @@ description: Learn about routing in the Routed framework
 
 # Routing
 
-Routed provides a powerful and flexible routing system with two ways to define routes:
-
-1. Directly on the Engine:
-```dart
-final engine = Engine();
-
-engine.get('/hello', (ctx) => ctx.string('Hello World!'));
-engine.post('/users', createUser);
-```
-
-2. Using separate Routers (great for modularization):
-```dart
-final v1 = Router(path: '/v1');
-final v2 = Router(path: '/v2');
-
-// API version 1 routes
-v1.get('/users', getUsers);
-v1.post('/users', createUserV1);
-
-// API version 2 routes
-v2.get('/users', getUsers);
-v2.post('/users', createUserV2);
-
-// Mount routers to engine
-engine.use(v1);
-engine.use(v2);
-```
-
-## Route Definition
-
 ## Basic Routes
 
-The most basic route definition accepts a URI pattern and a closure:
+Routes can be defined directly on Engine or using Routers for modularization:
 
 ```dart
-router.get('/hello', (ctx) {
-  ctx.string('Hello World!');
-});
+// On Engine
+final engine = Engine();
+engine.get('/hello', (ctx) => ctx.string('Hello World!'));
+
+// Using Router
+final api = Router(path: '/api');
+api.get('/users', getUsers);
+api.post('/users', createUser);
+
+engine.use(api);
 ```
 
 ## Route Parameters
 
 ### Basic Parameters
-
-Routes can capture URI segments using parameters:
+Parameters capture URI segments:
 
 ```dart
+// Required parameter
 router.get('/users/{id}', (ctx) {
   final id = ctx.param('id');
-  ctx.json({'user_id': id});
 });
-```
 
-### Optional Parameters
-
-Make parameters optional by adding a `?`:
-
-```dart
+// Optional parameter 
 router.get('/posts/{page?}', (ctx) {
   final page = ctx.param('page') ?? '1';
-  ctx.json({'page': page});
 });
 ```
 
 ### Type Constraints
+Parameters can have type constraints:
 
-Add type constraints to parameters:
-
-```dart
+```dart 
 // Integer constraint
-router.get('/items/{id:int}', (ctx) {
+router.get('/products/{id:int}', (ctx) {
   final id = ctx.param('id'); // Returns integer
 });
 
-// Double constraint
-router.get('/prices/{amount:double}', (ctx) {
-  final amount = ctx.param('amount'); // Returns double
+// Multiple typed parameters
+router.get('/orders/{year:int}/{status:string}', (ctx) {
+  final year = ctx.param('year'); // Returns integer
+  final status = ctx.param('status'); // Returns string
 });
 ```
 
-### Available Type Constraints
-### Wildcard Parameters
-
-Capture remaining path segments using wildcards:
+Available type constraints:
+- `int` - Integer values
+- `double` - Decimal numbers
+- `string` - Any string
+- `uuid` - UUID strings
+- `slug` - URL slugs
+- `email` - Email addresses
+- `url` - URLs
+- `ip` - IP addresses
+### Custom Type Registration
+You can register custom types for route parameters with optional type casting:
 
 ```dart
-// Matches /files/path/to/any/file
-engine.get('/files/{*path}', (ctx) {
-  final path = ctx.param('path'); // "path/to/any/file"
-  // Serve file from path...
+// Register a custom boolean type
+registerCustomType(
+  'bool',
+  r'true|false',
+  (String? value) => value == 'true'
+);
+
+// Use in routes
+router.get('/feature/{enabled:bool}', (ctx) {
+  final enabled = ctx.param('enabled'); // Returns bool
+});
+
+// Register a custom ID pattern
+registerParamPattern('id', r'\d{6}');
+
+// Use in routes without explicit type
+router.get('/users/{id}', (ctx) {
+  final id = ctx.param('id'); // Matches 6 digits
 });
 ```
 
-- `int`: Integer values
-- `double`: Floating point numbers
-- `uuid`: UUID strings
-- `slug`: URL-friendly slugs
-- `email`: Email addresses
-- `url`: Valid URLs
-- `ip`: IP addresses
+Types are registered with:
+- Name - The type identifier used in routes
+- Pattern - A regular expression for validation
+- Cast Function (optional) - Converts the string value to another type
+
+You can also add global patterns that match parameter names without explicit types using `registerParamPattern()`.
+
+### Wildcard Parameters
+Capture remaining path segments:
+
+```dart
+router.get('/files/{*path}', (ctx) {
+  final path = ctx.param('path'); // "path/to/file"
+});
+```
 
 ## Route Groups
 
-Group related routes together. Groups can be created both on Engine and Router:
+Groups help organize related routes:
 
 ```dart
-// On Engine
-engine.group(
+router.group(
   path: '/admin',
-  middlewares: [authMiddleware],
-  builder: (router) {
-    router.get('/dashboard', dashboardHandler);
-    router.get('/users', usersHandler);
-  },
-);
-
-// Using Router for API versioning
-final api = Router(path: '/api');
-
-api.group(
-  path: '/v1',
-  builder: (v1) {
-    v1.get('/users', getUsersV1);
-    v1.post('/users', createUserV1);
-  }
-);
-
-api.group(
-  path: '/v2',
-  builder: (v2) {
-    v2.get('/users', getUsersV2);
-    v2.post('/users', createUserV2);
-  }
-);
-
-engine.use(api);
-```
-
-Groups can be nested and share middleware:
-
-```dart
-engine.group(
-  path: '/admin',
-  middlewares: [authMiddleware],
+  middlewares: [authMiddleware], 
   builder: (admin) {
-    admin.get('/dashboard', dashboardHandler);
-
+    admin.get('/dashboard', dashboard);
+    
     admin.group(
       path: '/users',
-      middlewares: [userPermissionsMiddleware],
       builder: (users) {
         users.get('/', listUsers);
         users.post('/', createUser);
-        users.get('/{id}', getUser);
       }
     );
   }
 );
 ```
 
-## Route Naming
+## Route Names
 
-Name your routes for URL generation:
+Name routes for URL generation:
 
 ```dart
 router
-  .get('/articles/{slug}', articleHandler)
-  .name('articles.show');
+  .get('/articles/{slug}', showArticle)
+  .name('article.show');
 
 // Generate URL
-final url = route('articles.show', {'slug': 'hello-world'});
+final url = router.route('article.show', {'slug': 'hello-world'});
 ```
 
 ## HTTP Methods
@@ -184,307 +146,54 @@ Routed supports all common HTTP methods:
 
 ```dart
 router.get('/users', getUsers);
-router.post('/users', createUser);
+router.post('/users', createUser); 
 router.put('/users/{id}', updateUser);
-router.delete('/users/{id}', deleteUser);
 router.patch('/users/{id}', patchUser);
+router.delete('/users/{id}', deleteUser);
+router.options('/users', optionsHandler);
+router.head('/users', headHandler);
 ```
 
-## Constraints
+## Route Constraints
 
-### Regular Expression Constraints
-
-Add custom regex patterns to validate parameters:
+### Pattern Constraints
+Add regex validation:
 
 ```dart
-// Product code must be 2 letters followed by 3 numbers (e.g., AB123)
-engine.get('/products/{code}', handler,
+router.get('/users/{name}', handler,
   constraints: {
-    'code': r'^[A-Z]{2}\d{3}$'
-  }
-);
-
-// Username must be alphanumeric, 3-16 characters
-engine.get('/users/{username}', handler,
-  constraints: {
-    'username': r'^[a-zA-Z0-9]{3,16}$'
-  }
-);
-
-// Multiple constraints
-engine.get('/orders/{year}/{id}', handler,
-  constraints: {
-    'year': r'^\d{4}$',
-    'id': r'^\d{6}$'
+    'name': r'^[a-zA-Z]{2,50}$'
   }
 );
 ```
 
 ### Domain Constraints
-
-Restrict routes to specific domains or subdomains:
+Restrict routes to domains:
 
 ```dart
-// Admin panel only accessible from admin subdomain
-engine.get('/dashboard', handler,
+router.get('/admin', handler,
   constraints: {
     'domain': r'^admin\.example\.com$'
-  }
-);
-
-// API routes restricted to api subdomain
-engine.group(
-  path: '/v1',
-  constraints: {
-    'domain': r'^api\.example\.com$'
-  },
-  builder: (api) {
-    api.get('/users', listUsers);
-    api.post('/users', createUser);
-  }
-);
-
-// Multiple domains
-engine.get('/shared', handler,
-  constraints: {
-    'domain': r'^(api|admin)\.example\.com$'
   }
 );
 ```
 
 ### Custom Constraints
-
-Add custom validation functions:
+Add custom validation:
 
 ```dart
-engine.get('/users/{id}', handler,
+router.get('/users/{id}', handler,
   constraints: {
-    // Custom function constraint
-    'id': (request) => request.headers['X-User-Role'] == 'admin'
+    'id': (request) => request.headers['X-Role'] == 'admin'
   }
 );
-
-// Combine with other constraints
-engine.get('/files/{path}', handler,
-  constraints: {
-    'path': r'^[a-zA-Z0-9/]+$',
-    'access': (request) => checkUserPermissions(request)
-  }
-);
-```
-
-## Custom Types and Casting
-
-Routed allows you to define custom types for route parameters, enabling validation and automated type conversion.
-
-### Registering Custom Types
-
-You can register a custom type using the `registerCustomType` function:
-
-```dart
-import 'package:routed/routed.dart';
-
-void main() {
-  registerCustomType(
-    'bool',
-    r'true|false',
-    cast: (String? value) => value == 'true',
-  );
-
-  // Now you can use {param:bool} in your routes!
-}
-```
-
-This code registers a `bool` type that matches either "true" or "false" (case-sensitive) and casts the matched string to a Dart `bool` value.
-
-### Using Custom Types in Routes
-
-Once registered, you can use your custom types in route definitions:
-
-```dart
-import 'package:routed/routed.dart';
-
-void main() async {
-  registerCustomType(
-    'bool',
-    r'true|false',
-    cast: (String? value) => value == 'true',
-  );
-
-  final router = Router();
-
-  router.get('/toggle/{enabled:bool}', (Context context) {
-    final enabled = context.param('enabled'); // enabled is now a bool
-    return Response.ok('Enabled: $enabled (Type: ${enabled.runtimeType})');
-  });
-}
-```
-
-In this example, the `enabled` parameter will be a Dart `bool` with a value of `true` or `false` depending on the URL.
-
-### Built-in Types
-
-Routed comes with a set of built-in types that are pre-defined for you:
-
-*   `int`: Matches one or more digits and casts to `int`.
-*   `double`: Matches a floating-point number and casts to `double`.
-*   `uuid`: Matches a UUID.
-*   `slug`: Matches a slug.
-*   `word`: Matches a word.
-*   `string`: Matches any character except `/`.
-*   `date`: Matches a date in YYYY-MM-DD format.
-*   `email`: Matches an email address.
-*   `url`: Matches a URL.
-*   `ip`: Matches an IP address.
-
-### Behind the Scenes: `TypeDefinition`
-
-Custom types are internally represented by the `TypeDefinition` class:
-
-```dart
-class TypeDefinition {
-  /// The name of the type.
-  final String name;
-
-  /// The regular expression pattern used to validate the type.
-  final String pattern;
-
-  /// An optional function to cast the string value to the desired type.
-  final dynamic Function(String?)? cast;
-
-  /// Creates a new [TypeDefinition].
-  TypeDefinition({
-    required this.name,
-    required this.pattern,
-    this.cast,
-  });
-
-  /// Returns whether this type has a casting function.
-  bool get canCast => cast != null;
-}
-```
-
-When you call `registerCustomType`, you are creating a `TypeDefinition` object and storing it in a map.
-
-### Unregistering Custom Types
-
-You can remove your custom types using the `unregisterCustomType` function.
-
-```dart
-import 'package:routed/routed.dart';
-
-void main() async {
-  registerCustomType(
-    'bool',
-    r'true|false',
-    cast: (String? value) => value == 'true',
-  );
-
-  unregisterCustomType('bool');
-}
-```
-## Fallback Routes
-
-Handle unmatched requests:
-## Route Naming and URL Generation
-
-Name your routes to generate URLs:
-
-```dart
-// On Engine
-engine
-  .get('/articles/{slug}', showArticle)
-  .name('article.show');
-
-engine
-  .post('/articles', createArticle)
-  .name('article.create');
-
-// On Router
-final blog = Router(path: '/blog');
-
-blog
-  .get('/posts/{id}/edit', editPost)
-  .name('post.edit');
-
-// Generate URLs
-final url1 = engine.route('article.show', {'slug': 'hello-world'});
-// Output: /articles/hello-world
-
-final url2 = engine.route('post.edit', {'id': '123'});
-// Output: /blog/posts/123/edit
-```
-
-## Route Parameters and Wildcards
-
-### Basic Parameters
-```dart
-// Required parameter
-engine.get('/users/{id}', (ctx) {
-  final id = ctx.param('id');
-});
-
-// Optional parameter
-engine.get('/posts/{page?}', (ctx) {
-  final page = ctx.param('page') ?? '1';
-});
-
-// Multiple parameters
-engine.get('/orders/{year}/{month}/{id}', (ctx) {
-  final year = ctx.param('year');
-  final month = ctx.param('month');
-  final id = ctx.param('id');
-});
-```
-
-### Wildcard Parameters
-```dart
-// Match all files in any subdirectory
-engine.get('/files/{*path}', (ctx) {
-  final path = ctx.param('path');
-  // path could be "docs/images/logo.png"
-});
-
-// Match all API versions
-engine.get('/api/{version}/{*rest}', (ctx) {
-  final version = ctx.param('version');
-  final rest = ctx.param('rest');
-});
 ```
 
 ## Fallback Routes
 
-Handle unmatched requests with different levels of specificity:
+Handle unmatched requests:
 
-```dart
-// Global fallback
-engine.fallback((ctx) {
-  return ctx.json({
-    'error': 'Route not found',
-    'path': ctx.request.path
-  }, statusCode: 404);
-});
-
-// Group-specific fallback
-engine.group(
-  path: '/api',
-  builder: (api) {
-    // Regular routes
-    api.get('/users', listUsers);
-
-    // API-specific fallback
-    api.fallback((ctx) {
-      return ctx.json({
-        'error': 'API endpoint not found',
-        'endpoint': ctx.request.path,
-        'version': 'v1'
-      }, statusCode: 404);
-    });
-  }
-);
-```
-
-```dart
+```dart 
 router.fallback((ctx) {
   return ctx.json({
     'error': 'Route not found',
