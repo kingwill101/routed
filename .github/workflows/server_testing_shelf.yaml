@@ -1,0 +1,41 @@
+name: package:server_testing_shelf
+permissions: read-all
+
+on:
+  schedule:
+    - cron: '0 0 * * 0'
+  push:
+    branches: [ main ]
+    paths:
+      - '.github/workflows/server_testing_shelf.yaml'
+      - 'packages/server_testing_shelf/**'
+  pull_request:
+    branches: [ main ]
+    paths:
+      - '.github/workflows/server_testing_shelf.yaml'
+      - 'packages/server_testing_shelf/**'
+
+defaults:
+  run:
+    working-directory: packages/server_testing_shelf/
+
+jobs:
+  build:
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        os: [ ubuntu-latest, macos-latest, windows-latest ]
+        sdk: [ stable, beta ]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dart-lang/setup-dart@v1
+        with:
+          sdk: ${{ matrix.sdk }}
+      - name: Install dependencies
+        run: dart pub get
+      - name: Verify formatting
+        run: dart format --output=none --set-exit-if-changed .
+      - name: Analyze project source
+        run: dart analyze --fatal-infos
+      - name: Run tests
+        run: dart test
