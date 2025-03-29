@@ -3,6 +3,30 @@ import 'dart:math' as math;
 import '../generator_base.dart';
 
 /// Generator for DateTime values
+/// A generator that produces [DateTime] values within a specified range.
+///
+/// Allows specifying `min` and `max` bounds and whether the generated
+/// [DateTime] should be in `utc`. Includes special logic to handle dates
+/// near the epoch and ensure good distribution across months and maintain
+/// chronological order in certain test scenarios (though this stateful behavior
+/// might be reconsidered).
+///
+/// Shrinking targets the `min` date, the Unix epoch (if within range), and
+/// simpler date/time components (e.g., start of day/month/year).
+///
+/// Usually used via [Specialized.dateTime].
+///
+/// ```dart
+/// final dateTimeGen = Specialized.dateTime(
+///   min: DateTime(2023),
+///   max: DateTime(2024),
+///   utc: true,
+/// );
+/// final runner = PropertyTestRunner(dateTimeGen, (date) {
+///   // Test property with generated date
+/// });
+/// await runner.run();
+/// ```
 class DateTimeGenerator extends Generator<DateTime> {
   final DateTime min;
   final DateTime max;

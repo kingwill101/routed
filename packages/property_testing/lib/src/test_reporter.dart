@@ -3,6 +3,20 @@ import 'dart:convert';
 import 'property_test_runner.dart';
 
 /// A reporter for property test results
+/// Provides static methods for formatting [PropertyResult] objects into
+/// human-readable reports.
+///
+/// The [formatResult] method generates a detailed string summarizing the test
+/// outcome, including pass/fail status, number of tests run, failing inputs
+/// (original and shrunk), error details, and stack traces for failures.
+///
+/// ```dart
+/// // Assuming 'result' is a PropertyResult from PropertyTestRunner.run()
+/// print(PropertyTestReporter.formatResult(result));
+///
+/// // Or using the extension method:
+/// print(result.report);
+/// ```
 class PropertyTestReporter {
   /// Format a test result into a detailed report
   static String formatResult(PropertyResult result) {
@@ -69,12 +83,35 @@ class PropertyTestReporter {
 }
 
 /// Extension methods for working with test results
+/// Extension methods for [PropertyResult] providing convenience accessors.
 extension PropertyResultExtensions on PropertyResult {
   /// Get a detailed report of this test result
   String get report => PropertyTestReporter.formatResult(this);
 }
 
 /// A collector for test statistics across multiple runs
+/// Collects and summarizes statistics across multiple property test runs.
+///
+/// Tracks total tests, passed/failed counts, total shrinks performed, and
+/// total execution duration. The [recordResult] method updates the statistics
+/// with the outcome of a single test run. The [getSummary] method provides
+/// a formatted string report of the aggregated statistics.
+///
+/// ```dart
+/// final collector = TestStatisticsCollector();
+/// final stopwatch = Stopwatch();
+///
+/// for (int i = 0; i < 10; i++) {
+///   final runner = PropertyTestRunner(/* ... */);
+///   stopwatch.start();
+///   final result = await runner.run();
+///   stopwatch.stop();
+///   collector.recordResult(result, stopwatch.elapsed);
+///   stopwatch.reset();
+/// }
+///
+/// print(collector.getSummary());
+/// ```
 class TestStatisticsCollector {
   int _totalTests = 0;
   int _passedTests = 0;

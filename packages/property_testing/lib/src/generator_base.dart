@@ -1,6 +1,20 @@
 import 'dart:math' show Random;
 
 /// Base class for all generators in the property testing framework.
+/// The base class for all value generators in the property testing framework.
+///
+/// A generator is responsible for creating [ShrinkableValue] instances of type
+/// [T]. These values are used as inputs for property tests. Generators also
+/// define how values can be combined or transformed using methods like [map],
+/// [flatMap], [where], and [list].
+///
+/// ```dart
+/// // Example: Creating a generator for positive integers
+/// final positiveIntGenerator = Gen.integer().where((n) => n > 0);
+///
+/// // Example: Creating a generator for user IDs (strings) from integers
+/// final userIdGenerator = Gen.integer(min: 1).map((id) => 'user_$id');
+/// ```
 abstract class Generator<T> {
   /// Generate a shrinkable value of type T
   ShrinkableValue<T> generate([Random? random]);
@@ -22,6 +36,24 @@ abstract class Generator<T> {
 }
 
 /// A value that can be shrunk to simpler values
+/// Represents a generated value along with the logic for shrinking it.
+///
+/// Shrinking is the process of simplifying a failing test case input to find
+/// the smallest possible example that still causes the failure. This makes
+/// debugging easier.
+///
+/// The [value] property holds the actual generated data, while the [shrinks]
+/// method provides an iterable of potentially simpler [ShrinkableValue]s.
+///
+/// ```dart
+/// final shrinkableInt = Gen.integer().generate();
+/// print('Generated value: ${shrinkableInt.value}');
+///
+/// // Get potential shrinks
+/// for (final shrunkValue in shrinkableInt.shrinks()) {
+///   print('Shrunk value: ${shrunkValue.value}');
+/// }
+/// ```
 class ShrinkableValue<T> {
   final T value;
   final Iterable<ShrinkableValue<T>> Function() _shrinks;
@@ -37,6 +69,18 @@ class ShrinkableValue<T> {
 }
 
 /// A generator that maps values from one type to another
+/// A generator that transforms values produced by a source generator.
+///
+/// It takes a `source` generator of type [T] and a function `f` that converts
+/// values of type [T] to type [R]. The resulting generator produces values
+/// of type [R]. Shrinking is delegated to the source generator, and the
+/// transformation function is applied to the shrunk values.
+///
+/// Typically created using [Generator.map].
+///
+/// ```dart
+/// final stringLengthGen = Gen.string().map((s) => s.length);
+/// ```
 class MappedGenerator<T, R> extends Generator<R> {
   final Generator<T> source;
   final R Function(T) f;
@@ -56,6 +100,22 @@ class MappedGenerator<T, R> extends Generator<R> {
 }
 
 /// A generator that uses the output of one generator to create another
+/// A generator that creates a new generator based on the value of a source generator.
+///
+/// This allows for dependent generators, where the generation of the next value
+/// depends on the previously generated value. It takes a `source` generator of
+/// type [T] and a function `f` that takes a value of type [T] and returns a
+/// new `Generator<R>`.
+///
+/// Shrinking attempts to shrink both the source value and the resulting value.
+///
+/// Typically created using [Generator.flatMap].
+///
+/// ```dart
+/// final dependentGen = Gen.integer(min: 1, max: 10).flatMap((count) {
+///   return Gen.string(maxLength: count); // String length depends on integer
+/// });
+/// ```
 class FlatMappedGenerator<T, R> extends Generator<R> {
   final Generator<T> source;
   final Generator<R> Function(T) f;
@@ -84,6 +144,19 @@ class FlatMappedGenerator<T, R> extends Generator<R> {
 }
 
 /// A generator that filters values based on a predicate
+/// A generator that filters values produced by a source generator based on a predicate.
+///
+/// It takes a `source` generator and a `predicate` function. Only values from
+/// the source generator for which the predicate returns `true` are produced.
+/// If the predicate rejects too many values consecutively, an exception is thrown.
+///
+/// Shrinking only considers shrunk values that also satisfy the predicate.
+///
+/// Typically created using [Generator.where].
+///
+/// ```dart
+/// final evenIntGen = Gen.integer().where((n) => n.isEven);
+/// ```
 class FilteredGenerator<T> extends Generator<T> {
   final Generator<T> source;
   final bool Function(T) predicate;
@@ -108,6 +181,19 @@ class FilteredGenerator<T> extends Generator<T> {
 }
 
 /// A generator that produces lists of values
+/// A generator that produces lists of values from an element generator.
+///
+/// Takes an `elementGen` generator for the list items and optional `minLength`
+/// and `maxLength` constraints.
+///
+/// Shrinking attempts to remove elements from the list (respecting `minLength`)
+/// and shrink individual elements within the list.
+///
+/// Typically created using [Generator.list].
+///
+/// ```dart
+/// final listOfBoolsGen = Gen.boolean().list(minLength: 1, maxLength: 5);
+/// ```
 class ListGenerator<T> extends Generator<List<T>> {
   final Generator<T> elementGen;
   final int? minLength;

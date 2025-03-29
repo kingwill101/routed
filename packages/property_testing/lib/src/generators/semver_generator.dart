@@ -3,6 +3,24 @@ import 'dart:math' as math;
 import '../generator_base.dart';
 
 /// Generator for semantic version strings
+/// A generator that produces semantic version strings (SemVer).
+///
+/// Can optionally include `prerelease` identifiers (e.g., `-alpha.1`) and
+/// `build` metadata (e.g., `+build.123`). Generates version numbers with
+/// a distribution favoring lower numbers.
+///
+/// Shrinking attempts to remove build metadata, then prerelease identifiers,
+/// reduce version numbers towards `0.1.0` or `1.0.0`.
+///
+/// Usually used via [Specialized.semver].
+///
+/// ```dart
+/// final semverGen = Specialized.semver(prerelease: false, build: true);
+/// final runner = PropertyTestRunner(semverGen, (version) {
+///   // Test property with generated version string
+/// });
+/// await runner.run();
+/// ```
 class SemverGenerator extends Generator<String> {
   final bool prerelease;
   final bool build;

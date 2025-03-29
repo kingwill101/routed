@@ -316,7 +316,7 @@ double _colorDistance(Color c1, Color c2) {
 
 /// Helper function to convert HSL to RGB
 (int, int, int) _hslToRgb(double h, double s, double l) {
-  double _hue2rgb(double p, double q, double t) {
+  double hue2rgb(double p, double q, double t) {
     if (t < 0) t += 1;
     if (t > 1) t -= 1;
     if (t < 1 / 6) return p + (q - p) * 6 * t;
@@ -333,9 +333,9 @@ double _colorDistance(Color c1, Color c2) {
   final q = l < 0.5 ? l * (1 + s) : l + s - l * s;
   final p = 2 * l - q;
 
-  final r = (255 * _hue2rgb(p, q, h + 1 / 3)).round();
-  final g = (255 * _hue2rgb(p, q, h)).round();
-  final b = (255 * _hue2rgb(p, q, h - 1 / 3)).round();
+  final r = (255 * hue2rgb(p, q, h + 1 / 3)).round();
+  final g = (255 * hue2rgb(p, q, h)).round();
+  final b = (255 * hue2rgb(p, q, h - 1 / 3)).round();
 
   return (r, g, b);
 }

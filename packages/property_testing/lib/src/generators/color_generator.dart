@@ -3,6 +3,18 @@ import 'dart:math' as math;
 import '../generator_base.dart';
 
 /// Represents a color in RGBA format
+/// Represents a color with red, green, blue, and alpha components.
+///
+/// Components `r`, `g`, `b` are integers ranging from 0 to 255.
+/// The `a` (alpha) component is a double ranging from 0.0 (transparent)
+/// to 1.0 (opaque).
+///
+/// ```dart
+/// const red = Color(r: 255, g: 0, b: 0, a: 1.0);
+/// const semiTransparentBlue = Color(r: 0, g: 0, b: 255, a: 0.5);
+/// print(red); // Output: rgb(255, 0, 0)
+/// print(semiTransparentBlue); // Output: rgba(0, 0, 255, 0.50)
+/// ```
 class Color {
   final int r;
   final int g;
@@ -35,6 +47,22 @@ class Color {
 }
 
 /// Generator for Color values
+/// A generator that produces [Color] values.
+///
+/// Can optionally include an alpha channel (`includeAlpha`). Generated colors
+/// aim for good distribution across the color space using HSL conversion internally.
+///
+/// Shrinking targets primary colors (red, green, blue), black, and white.
+///
+/// Usually used via [Specialized.color].
+///
+/// ```dart
+/// final colorGen = Specialized.color(alpha: true);
+/// final runner = PropertyTestRunner(colorGen, (color) {
+///   // Test property with generated color
+/// });
+/// await runner.run();
+/// ```
 class ColorGenerator extends Generator<Color> {
   final bool includeAlpha;
 

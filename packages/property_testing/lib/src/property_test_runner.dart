@@ -20,6 +20,21 @@ class _DefaultRandom implements Random {
 }
 
 /// Configuration for property testing
+/// Configuration options for controlling the execution of property tests.
+///
+/// Defines parameters such as the number of tests to run (`numTests`), the
+/// maximum number of shrink attempts (`maxShrinks`), an optional execution
+/// `timeout` per test case, and the `random` number generator to use for
+/// reproducibility.
+///
+/// ```dart
+/// final config = PropertyConfig(
+///   numTests: 500,
+///   maxShrinks: 50,
+///   timeout: const Duration(seconds: 5),
+///   random: Random(12345), // For reproducible runs
+/// );
+/// ```
 class PropertyConfig {
   /// The number of test cases to run
   final int numTests;
@@ -42,6 +57,12 @@ class PropertyConfig {
 }
 
 /// The result of a property test
+/// Represents the outcome of executing a property test using [PropertyTestRunner].
+///
+/// Contains information about whether the test `success`ded, the number of
+/// `numTests` run, details about the failure (`failingInput`,
+/// `originalFailingInput`, `error`, `stackTrace`), and the number of
+/// `numShrinks` performed if a failure occurred.
 class PropertyResult {
   /// Whether the property passed all test cases
   final bool success;
@@ -76,6 +97,35 @@ class PropertyResult {
 }
 
 /// A runner for property tests
+/// Executes a property test for a given generator and property function.
+///
+/// Takes a `generator` to produce input values of type [T], a `property`
+/// function to test against each generated value, and an optional `config`
+/// ([PropertyConfig]) to control execution.
+///
+/// The [run] method executes the test loop: generating values, running the
+/// property, and attempting to shrink any failures found. It returns a
+/// [PropertyResult] summarizing the outcome.
+///
+/// ```dart
+/// import 'package:property_testing/property_testing.dart';
+/// import 'package:test/test.dart';
+///
+/// void main() {
+///   test('addition is commutative', () async {
+///     final runner = PropertyTestRunner(
+///       Gen.integer().list(minLength: 2, maxLength: 2),
+///       (pair) {
+///         expect(pair[0] + pair[1], equals(pair[1] + pair[0]));
+///       },
+///       PropertyConfig(numTests: 500),
+///     );
+///
+///     final result = await runner.run();
+///     expect(result.success, isTrue, reason: result.report);
+///   });
+/// }
+/// ```
 class PropertyTestRunner<T> {
   final Generator<T> generator;
   final FutureOr<void> Function(T) property;

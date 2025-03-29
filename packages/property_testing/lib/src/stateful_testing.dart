@@ -5,6 +5,39 @@ import 'primitive_generators.dart';
 import 'property_test_runner.dart';
 
 /// Represents a command that can be executed against a system under test
+/// Represents a single operation or action that can be performed on a system
+/// under test (SUT) in stateful property testing.
+///
+/// Commands encapsulate the logic for checking preconditions, executing the
+/// action on the SUT, updating a simplified `Model` of the SUT's state, and
+/// checking postconditions against the actual SUT state.
+///
+/// Implementations define specific actions within the system being tested.
+///
+/// ```dart
+/// // Example command for a counter model/SUT
+/// class IncrementCommand extends Command&lt;int, Counter> {
+///   final int amount;
+///   IncrementCommand(this.amount);
+///
+///   @override
+///   bool precondition(int model) => true; // Always possible to increment
+///
+///   @override
+///   FutureOr&lt;void> run(Counter sut) => sut.increment(amount);
+///
+///   @override
+///   int update(int model) => model + amount;
+///
+///   @override
+///   FutureOr&lt;void> postcondition(int model, Counter sut) {
+///     expect(sut.count, equals(model));
+///   }
+///
+///   @override
+///   String toString() => 'Increment($amount)';
+/// }
+/// ```
 abstract class Command<Model, Sut> {
   /// Check if this command can be run in the current state
   bool precondition(Model model) => true;
@@ -24,6 +57,12 @@ abstract class Command<Model, Sut> {
 }
 
 /// A sequence of commands to be executed against a system under test
+/// Represents a sequence of [Command] objects to be executed against a
+/// system under test (SUT) during stateful property testing.
+///
+/// The sequence maintains the order of commands. The [run] method executes
+/// each command sequentially, checking preconditions, running the command,
+/// updating the model, and checking postconditions at each step.
 class CommandSequence<Model, Sut> {
   final List<Command<Model, Sut>> commands;
 
@@ -49,6 +88,18 @@ class CommandSequence<Model, Sut> {
 }
 
 /// Configuration for stateful property testing
+/// Configuration options specifically for stateful property tests.
+///
+/// Extends [PropertyConfig] and adds options like `maxCommandSequenceLength`
+/// to control the maximum number of commands generated in a single test sequence.
+///
+/// ```dart
+/// final config = StatefulPropertyConfig(
+///   maxCommandSequenceLength: 50,
+///   numTests: 200,
+///   random: Random(99),
+/// );
+/// ```
 class StatefulPropertyConfig extends PropertyConfig {
   /// The maximum number of commands to generate per test case
   final int maxCommandSequenceLength;
@@ -63,6 +114,31 @@ class StatefulPropertyConfig extends PropertyConfig {
 }
 
 /// A builder for creating stateful property tests
+/// A fluent builder for constructing and running stateful property tests.
+///
+/// Configures the test by defining how to create the initial `Model`, how to
+/// `setupSut` (System Under Test) and `teardownSut`, and providing command
+/// generators via `withCommands`. The test execution parameters can be set
+/// using `withConfig`.
+///
+/// The [run] method builds the necessary generators and executes the stateful
+/// test using [PropertyTestRunner].
+///
+/// ```dart
+/// // Assume Counter, IncrementCommand, DecrementCommand are defined
+///
+/// final builder = StatefulPropertyBuilder&lt;int, Counter>.create(
+///   initialModel: () => 0,
+///   setupSut: () async => Counter(),
+///   teardownSut: (sut) async { /* cleanup */ },
+/// )
+///   .withCommands(Gen.integer(min: 1, max: 5).map((i) => IncrementCommand(i)))
+///   .withCommands(Gen.integer(min: 1, max: 5).map((i) => DecrementCommand(i)))
+///   .withConfig(StatefulPropertyConfig(numTests: 100));
+///
+/// final result = await builder.run();
+/// expect(result.success, isTrue, reason: result.report);
+/// ```
 class StatefulPropertyBuilder<Model, Sut> {
   final Model Function() _initialModel;
   final Future<Sut> Function() _setupSut;
@@ -162,6 +238,8 @@ class StatefulPropertyBuilder<Model, Sut> {
 }
 
 /// Extension methods for working with stateful property tests
+/// Extension methods providing convenience functions for stateful property testing
+/// scenarios, particularly related to command generation.
 extension StatefulPropertyTestingExtensions<T> on Generator<T> {
   /// Filter commands based on their precondition
   Generator<T> whereValid<Model>(
@@ -172,6 +250,29 @@ extension StatefulPropertyTestingExtensions<T> on Generator<T> {
   }
 }
 
+/// A simplified runner for stateful property tests focusing on model-based invariants.
+///
+/// This runner is suitable when the primary goal is to verify that a sequence
+/// of commands maintains a specific invariant on the model state, without needing
+/// explicit setup/teardown or postcondition checks against a real SUT.
+///
+/// Takes a `commandGen`, an `initialState` function for the model, an
+/// `invariant` function to check the model state, and an `update` function
+/// to apply command effects to the model.
+///
+/// ```dart
+/// // Example: Testing a simple counter model
+/// final counterRunner = StatefulPropertyRunner&lt;int, int>(
+///   Gen.oneOf([1, -1]), // Commands are just +1 or -1
+///   () => 0,            // Initial state is 0
+///   (model) => model >= 0, // Invariant: counter never negative
+///   (model, command) => model + command, // Update: add command value
+///   StatefulPropertyConfig(numTests: 500),
+/// );
+///
+/// final result = await counterRunner.run();
+/// expect(result.success, isTrue, reason: result.report);
+/// ```
 class StatefulPropertyRunner<Model, Command> {
   final Generator<Command> commandGen;
   final Model Function() initialState;

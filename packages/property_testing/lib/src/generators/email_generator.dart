@@ -3,6 +3,27 @@ import 'dart:math' as math;
 import '../generator_base.dart';
 
 /// Generator for email addresses
+/// A generator that produces plausible email address strings.
+///
+/// Allows specifying a list of allowed `domains` and a `maxLocalPartLength`.
+/// Generates local parts using alphanumeric characters and `._-`, avoiding
+/// consecutive special characters or leading/trailing ones.
+///
+/// Shrinking attempts to shorten the local part and uses common local parts
+/// like 'test' or 'user'. Requires a [Random] instance provided to `generate`.
+///
+/// Usually used via [Specialized.email].
+///
+/// ```dart
+/// final emailGen = Specialized.email(
+///   domains: ['example.com', 'test.org'],
+///   maxLocalPartLength: 30,
+/// );
+/// final runner = PropertyTestRunner(emailGen, (email) {
+///   // Test property with generated email
+/// });
+/// await runner.run();
+/// ```
 class EmailGenerator extends Generator<String> {
   final List<String> domains;
   final int maxLocalPartLength;
@@ -94,10 +115,12 @@ class EmailGenerator extends Generator<String> {
 
   bool _isValidLocalPart(String part) {
     if (part.isEmpty || part.length > 64) return false;
-    if (!RegExp(r'^[a-zA-Z0-9][a-zA-Z0-9._-]*[a-zA-Z0-9]$').hasMatch(part))
+    if (!RegExp(r'^[a-zA-Z0-9][a-zA-Z0-9._-]*[a-zA-Z0-9]$').hasMatch(part)) {
       return false;
-    if (part.contains('..') || part.contains('__') || part.contains('--'))
+    }
+    if (part.contains('..') || part.contains('__') || part.contains('--')) {
       return false;
+    }
     return true;
   }
 }

@@ -3,6 +3,26 @@ import 'dart:math' as math;
 import '../generator_base.dart';
 
 /// Generator for Duration values
+/// A generator that produces [Duration] values within a specified range.
+///
+/// Allows specifying `min` and `max` duration bounds. Defaults to generating
+/// non-negative durations up to one year.
+///
+/// Shrinking targets zero duration (or the `min` duration), common durations
+/// (like 1 second, 1 minute), and progressively smaller durations by halving.
+///
+/// Usually used via [Specialized.duration].
+///
+/// ```dart
+/// final durationGen = Specialized.duration(
+///   min: Duration.zero,
+///   max: const Duration(hours: 1),
+/// );
+/// final runner = PropertyTestRunner(durationGen, (duration) {
+///   // Test property with generated duration
+/// });
+/// await runner.run();
+/// ```
 class DurationGenerator extends Generator<Duration> {
   final Duration min;
   final Duration max;
