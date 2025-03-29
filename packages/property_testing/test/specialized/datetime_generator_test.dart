@@ -46,15 +46,10 @@ void main() {
 
     test('shrinks towards epoch while respecting minimum', () async {
       final min = DateTime(2020);
-      var shrunkValue = DateTime(2024);
 
       final runner = PropertyTestRunner(
         Specialized.dateTime(min: min),
         (date) {
-          print('Generated date: $date');
-          print('Min date: $min');
-          shrunkValue = date;
-          // Force failure to trigger shrinking
           fail('Triggering shrink');
         },
       );

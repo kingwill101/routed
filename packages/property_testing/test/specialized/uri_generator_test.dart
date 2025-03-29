@@ -13,6 +13,7 @@ void main() {
             final reEncoded = Uri.encodeQueryComponent(decoded);
             expect(Uri.parse(uri.toString()).queryParameters[entry.key],
                 equals(decoded));
+            expect(decoded, equals(reEncoded));
           }
         },
       );
@@ -30,6 +31,7 @@ void main() {
             final decoded = Uri.decodeComponent(segment);
             final reEncoded = Uri.encodeComponent(decoded);
             expect(Uri.parse(uri.toString()).pathSegments, contains(decoded));
+            expect(decoded, equals(reEncoded));
           }
         },
       );
@@ -90,9 +92,9 @@ void main() {
           // For file URIs without query parameters or fragments, toFilePath should work
           if (uri.scheme == 'file' &&
               uri.queryParameters.isEmpty &&
-              uri.fragment == null) {
+              uri.fragment.isEmpty) {
             try {
-              final filePath = normalized.toFilePath(windows: false);
+              final _ = normalized.toFilePath(windows: false);
               // File path conversion worked
             } catch (e) {
               fail('Failed to convert valid file URI to path: $e');

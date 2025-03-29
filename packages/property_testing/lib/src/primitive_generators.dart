@@ -3,6 +3,21 @@ import 'dart:math' show Random;
 import 'generator_base.dart';
 
 /// A collection of primitive generators
+/// Provides static factory methods for creating common primitive value generators.
+///
+/// Offers generators for basic types like integers ([Gen.integer]), doubles
+/// ([Gen.double_]), booleans ([Gen.boolean]), and strings ([Gen.string]).
+/// Also includes combinators like [Gen.oneOf] (choose from values),
+/// [Gen.oneOfGen] (choose from generators), and [Gen.constant].
+///
+/// ```dart
+/// final intGen = Gen.integer(min: 0, max: 100);
+/// final boolGen = Gen.boolean();
+/// final stringGen = Gen.string(maxLength: 20);
+/// final choiceGen = Gen.oneOf(['apple', 'banana', 'cherry']);
+///
+/// final combinedGen = intGen.map((i) => 'Number: $i');
+/// ```
 class Gen {
   /// Generate integer values
   static Generator<int> integer({

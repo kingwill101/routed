@@ -37,6 +37,18 @@ enum ChaosCategory {
 }
 
 /// Configuration for chaos generators
+/// Configuration for chaos generators.
+///
+/// Allows customizing the categories of chaos, maximum length of generated
+/// strings, and the intensity (probability) of including chaotic elements.
+///
+/// ```dart
+/// final config = ChaosConfig(
+///   categories: {ChaosCategory.sqlInjection, ChaosCategory.unicode},
+///   maxLength: 500,
+///   intensity: 0.8,
+/// );
+/// ```
 class ChaosConfig {
   /// The categories of chaos to include
   final Set<ChaosCategory> categories;
@@ -62,8 +74,27 @@ class ChaosConfig {
 }
 
 /// A collection of chaos generators for testing edge cases and security issues
+/// A collection of chaos generators designed for testing edge cases and
+/// security vulnerabilities.
+///
+/// These generators produce inputs that mimic common attack vectors like
+/// SQL injection, XSS, path traversal, and also generate problematic
+/// data like unicode edge cases, large inputs, and control characters.
+///
+/// Use static methods like [Chaos.string], [Chaos.integer], [Chaos.json],
+/// and [Chaos.bytes] to create specific chaos generators.
+///
+/// ```dart
+/// final chaoticStringGen = Chaos.string(maxLength: 50);
+/// final chaoticIntGen = Chaos.integer(min: -100, max: 100);
+/// final chaoticJsonGen = Chaos.json(maxDepth: 2);
+///
+/// final runner = PropertyTestRunner(chaoticStringGen, (input) {
+///   // Test property with chaotic string input
+/// });
+/// runner.run();
+/// ```
 class Chaos {
-  static final _random = Random(42);
 
   /// Generate chaotic strings
   static Generator<String> string({
@@ -200,7 +231,7 @@ class _ChaoticStringGenerator extends Generator<String> {
       for (var i = 0; i < value.length; i++) {
         if (_problematicChars.contains(value[i])) {
           yield ShrinkableValue.leaf(
-            value.substring(0, i) + ' ' + value.substring(i + 1),
+            '${value.substring(0, i)} ${value.substring(i + 1)}',
           );
         }
       }

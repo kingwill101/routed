@@ -3,6 +3,29 @@ import 'dart:math' as math;
 import '../generator_base.dart';
 
 /// Generator for URI values
+/// A generator that produces [Uri] objects.
+///
+/// Allows configuration of allowed `schemes`, inclusion of `userInfo`, `fragment`,
+/// and `queryParameters`. Constraints `maxPathSegments` and `maxQueryParameters`
+/// control the complexity of generated URIs. Generates plausible hostnames and
+/// path/query components.
+///
+/// Shrinking attempts to remove components like path segments, query parameters,
+/// fragments, and user info, and simplifies the host to common examples like
+/// 'example.com'.
+///
+/// Usually used via [Specialized.uri].
+///
+/// ```dart
+/// final uriGen = Specialized.uri(
+///   schemes: ['https', 'http'],
+///   includeQueryParameters: false,
+/// );
+/// final runner = PropertyTestRunner(uriGen, (uri) {
+///   // Test property with generated Uri
+/// });
+/// await runner.run();
+/// ```
 class UriGenerator extends Generator<Uri> {
   final List<String> schemes;
   final bool includeUserInfo;

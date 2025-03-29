@@ -1,5 +1,3 @@
-import 'dart:math' as math;
-
 import 'generator_base.dart';
 import 'generators/color_generator.dart';
 import 'generators/datetime_generator.dart';
@@ -17,6 +15,27 @@ export 'generators/semver_generator.dart';
 export 'generators/uri_generator.dart';
 
 /// A collection of specialized generators for common data types
+/// Provides static factory methods for creating generators for more complex,
+/// specialized data types.
+///
+/// Offers generators for common structured data like [DateTime], [Duration],
+/// [Uri], email addresses, semantic version strings ([semver]), and [Color] objects.
+/// These generators often have specific configuration options tailored to the
+/// data type they produce.
+///
+/// Re-exports the underlying generator classes (e.g., [DateTimeGenerator])
+/// for direct use if needed.
+///
+/// ```dart
+/// final emailGen = Specialized.email(domains: ['example.com']);
+/// final dateGen = Specialized.dateTime(utc: true);
+/// final versionGen = Specialized.semver(prerelease: false);
+///
+/// final runner = PropertyTestRunner(emailGen, (email) {
+///   // Test property with generated email
+/// });
+/// await runner.run();
+/// ```
 class Specialized {
   /// Generate DateTime values
   static Generator<DateTime> dateTime({
