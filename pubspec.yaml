@@ -1,4 +1,5 @@
 name: routed_ecosystem
+publish_to: none
 workspace:
   - packages/routed
   - packages/routed_testing

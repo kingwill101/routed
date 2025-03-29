@@ -1,9 +1,0 @@
-[2025-03-18T20:54:32.197002] [1097667] INFO: Starting test: setup
-[2025-03-18T20:54:32.200245] [1097667] INFO: Test Environment:
-[2025-03-18T20:54:32.200805] [1097667] INFO:   Platform: linux Linux 6.12.17-1-MANJARO #1 SMP PREEMPT_DYNAMIC Thu, 27 Feb 2025 13:04:33 +0000
-[2025-03-18T20:54:32.201102] [1097667] INFO:   Dart: 3.7.0 (stable) (Wed Feb 5 04:53:58 2025 -0800) on "linux_x64"
-[2025-03-18T20:54:32.201471] [1097667] INFO:   Directory: /home/kingwill101/code/kmp/untitled1/packages/server_testing
-[2025-03-18T20:54:32.201575] [1097667] INFO:   PID: 1097667
-[2025-03-18T20:54:32.201646] [1097667] INFO: ---
-[2025-03-18T20:54:32.201747] [1097667] INFO: Setting up browser testing environment...
-[2025-03-18T20:54:33.324114] [1097667] INFO: Browser already installed, skipping installation.
