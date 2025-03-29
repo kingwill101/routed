@@ -1,4 +1,4 @@
-## 0.1.0
+## 0.0.1-alpha
 
 - Initial version
 - ShelfRequestHandler implementation for integrating Shelf apps with server_testing
