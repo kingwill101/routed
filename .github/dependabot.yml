@@ -4,6 +4,7 @@ updates:
     directories:
       - packages/**/*
     schedule:
-      interval: "daily"
+      interval: "weekly"
+      day: "sunday"
     versioning-strategy: "widen"
     open-pull-requests-limit: 1
