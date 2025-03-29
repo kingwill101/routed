@@ -5,12 +5,12 @@ on:
   schedule:
     - cron: '0 0 * * 0'
   push:
-    branches: [ main ]
+    branches: [ master ]
     paths:
       - '.github/workflows/server_testing.yaml'
       - 'packages/server_testing/**'
   pull_request:
-    branches: [ main ]
+    branches: [ master ]
     paths:
       - '.github/workflows/server_testing.yaml'
       - 'packages/server_testing/**'
