@@ -1,7 +1,12 @@
 name: server_testing
-description: A starting point for Dart libraries or applications.
+description: Reusable server testing library for Dart.
 version: 0.0.1-alpha
 repository: https://github.com/kingwill101/routed/tree/master/packages/server_testing
+tags:
+  - server-testing
+  - testing
+  - server
+  - testing-library
 
 resolution: workspace
 environment:
