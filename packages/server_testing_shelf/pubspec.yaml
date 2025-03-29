@@ -5,10 +5,10 @@ repository: https://github.com/kingwill101/routed/tree/master/packages/server_te
 
 resolution: workspace
 environment:
-  sdk: '>=3.5.0 <4.0.0'
+  sdk: '>=3.6.0 <4.0.0'
 
 dependencies:
-  server_testing:
+  server_testing: 0.0.1-alpha
   meta: ^1.16.0
   shelf:
 

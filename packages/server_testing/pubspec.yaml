@@ -5,7 +5,7 @@ repository: https://github.com/kingwill101/routed/tree/master/packages/server_te
 
 resolution: workspace
 environment:
-  sdk: '>=3.5.0 <4.0.0'
+  sdk: '>=3.6.0 <4.0.0'
 
 # Add regular dependencies here.
 dependencies:
