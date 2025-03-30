@@ -172,7 +172,7 @@ The package is organized into several key components:
 
 ### Browser Driver System
 
-- **BrowserManager**: Handles browser installation and configuration
+- **Registry**: Handles browser installation and configuration
 - **DriverManager**: Manages WebDriver instances for browser communication
 - **Page & Component**: Base classes for page object pattern
 

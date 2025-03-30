@@ -14,10 +14,7 @@ library;
 
 /// Browser bootstrap and configuration
 export 'bootstrap/bootstrap.dart';
-export 'bootstrap/browser_manager.dart';
-export 'bootstrap/progress.dart';
 export 'bootstrap/proxy.dart';
-export 'bootstrap/update_checker.dart';
 export 'browser_config.dart';
 
 /// Browser testing utilities
