@@ -1,6 +1,7 @@
 import 'dart:math' show Random;
 
 import 'package:property_testing/property_testing.dart';
+import 'package:property_testing/src/generators/gen.dart';
 import 'package:test/test.dart';
 
 void main() {

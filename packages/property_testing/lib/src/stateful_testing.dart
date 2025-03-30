@@ -1,7 +1,7 @@
 import 'dart:async';
 
 import 'generator_base.dart';
-import 'primitive_generators.dart';
+import 'generators/gen.dart';
 import 'property_test_runner.dart';
 
 /// Represents a command that can be executed against a system under test
