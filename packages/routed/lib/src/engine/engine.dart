@@ -313,7 +313,7 @@ Middleware requestSizeLimitMiddleware() {
       final byteStream =
           request.cast<List<int>>(); // Ensure we have a byte stream
 
-     byteStream.transform(
+      byteStream.transform(
         StreamTransformer<List<int>, List<int>>.fromHandlers(
           handleData: (List<int> data, EventSink<List<int>> sink) {
             totalBytesRead += data.length;
@@ -383,7 +383,6 @@ extension SecureEngine on Engine {
   }
 
   Future<void> processStream(ServerTransportStream stream) async {
-    
     await for (var message in stream.incomingMessages) {
       if (message is HeadersStreamMessage) {
         final headers = <String, String>{};

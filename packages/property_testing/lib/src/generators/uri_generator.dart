@@ -48,17 +48,17 @@ class UriGenerator extends Generator<Uri> {
   }) : schemes = schemes ?? _defaultSchemes;
 
   @override
-    ShrinkableValue<Uri> generate(math.Random random) {
-      final scheme = schemes[random.nextInt(schemes.length)];
-      final host = _generateHost(random);
-      final pathSegments = _generatePathSegments(random);
-      final queryParameters = includeQueryParameters
-          ? _generateQueryParameters(random)
-          : <String, String>{};
-      final fragment = includeFragment ? _generateFragment(random) : null;
-      final userInfo = includeUserInfo ? _generateUserInfo(random) : null;
-  
-      final uri = Uri(
+  ShrinkableValue<Uri> generate(math.Random random) {
+    final scheme = schemes[random.nextInt(schemes.length)];
+    final host = _generateHost(random);
+    final pathSegments = _generatePathSegments(random);
+    final queryParameters = includeQueryParameters
+        ? _generateQueryParameters(random)
+        : <String, String>{};
+    final fragment = includeFragment ? _generateFragment(random) : null;
+    final userInfo = includeUserInfo ? _generateUserInfo(random) : null;
+
+    final uri = Uri(
       scheme: scheme,
       userInfo: userInfo,
       host: host,

@@ -58,4 +58,4 @@ class ListGenerator<T> extends Generator<List<T>> {
     final max = maxLength ?? (min + 10);
     return min + random.nextInt(max - min + 1);
   }
-} 
+}

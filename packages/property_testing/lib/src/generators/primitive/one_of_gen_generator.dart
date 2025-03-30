@@ -36,4 +36,4 @@ class OneOfGenGenerator<T> extends Generator<T> {
       yield* shrinkableValue.shrinks();
     });
   }
-} 
+}

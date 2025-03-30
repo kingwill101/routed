@@ -3,7 +3,7 @@ import 'dart:math' show Random;
 import '../../generator_base.dart';
 
 /// A generator for boolean values with shrinking capabilities.
-/// 
+///
 /// True values shrink to false, while false values cannot be shrunk further.
 class BoolGenerator extends Generator<bool> {
   @override
@@ -22,4 +22,4 @@ class BoolGenerator extends Generator<bool> {
       return ShrinkableValue.leaf(value);
     }
   }
-} 
+}

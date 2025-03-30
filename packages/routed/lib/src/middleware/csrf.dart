@@ -32,8 +32,7 @@ Middleware csrfMiddleware() {
     // For state-changing methods, verify the token
     final cookieToken = ctx.cookie(config.security.csrfCookieName)?.value;
     final sessionToken = await ctx.getSession('csrf_token') as String?;
-    final requestToken =
-        (await ctx.postForm('_csrf'));
+    final requestToken = (await ctx.postForm('_csrf'));
 
     if (cookieToken == null ||
         sessionToken == null ||

@@ -37,5 +37,5 @@ void main() async {
     PropertyConfig(numTests: 100),
   );
 
-   await runner.run();
+  await runner.run();
 }

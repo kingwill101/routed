@@ -82,7 +82,6 @@ void main() {
 
       await runner.run();
 
-
       expect(seenMonths.length, greaterThan(6)); // Should see most months
       expect(seenDays.length, greaterThan(15)); // Should see many days
       expect(seenHours.length, greaterThan(12)); // Should see many hours

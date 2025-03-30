@@ -43,18 +43,21 @@ void main() {
       // Rather than trying to test through the PropertyTestRunner, let's test
       // the boolean generator's shrinking behavior directly
       final gen = Gen.boolean();
-      
+
       // Generate a true value
       // We'll use a fixed seed to ensure we get true
       final shrinkableValue = gen.generate(Random(123));
-      expect(shrinkableValue.value, isTrue, reason: 'Should generate true with this seed');
-      
+      expect(shrinkableValue.value, isTrue,
+          reason: 'Should generate true with this seed');
+
       // Check that it produces shrinks
       final shrinks = shrinkableValue.shrinks().toList();
-      expect(shrinks.isNotEmpty, isTrue, reason: 'Should produce at least one shrink');
-      
+      expect(shrinks.isNotEmpty, isTrue,
+          reason: 'Should produce at least one shrink');
+
       // Verify that the shrink is false
-      expect(shrinks.first.value, isFalse, reason: 'Should shrink true to false');
+      expect(shrinks.first.value, isFalse,
+          reason: 'Should shrink true to false');
     });
 
     test('Gen.boolean does not shrink false', () async {
@@ -201,63 +204,71 @@ void main() {
     });
   });
 
-  
-group('Gen.frequency', () {
-  test('selects generators based on weight', () async {
-    final gen = Gen.frequency([
-      (9, Gen.constant('A')), // 90% chance
-      (1, Gen.constant('B')), // 10% chance
-    ]);
-    int countA = 0;
-    int countB = 0;
-    final runner = PropertyTestRunner(gen, (value) {
-      if (value == 'A') countA++;
-      if (value == 'B') countB++;
-    }, PropertyConfig(numTests: 200)); // Run enough times for stats
+  group('Gen.frequency', () {
+    test('selects generators based on weight', () async {
+      final gen = Gen.frequency([
+        (9, Gen.constant('A')), // 90% chance
+        (1, Gen.constant('B')), // 10% chance
+      ]);
+      int countA = 0;
+      int countB = 0;
+      final runner = PropertyTestRunner(gen, (value) {
+        if (value == 'A') countA++;
+        if (value == 'B') countB++;
+      }, PropertyConfig(numTests: 200)); // Run enough times for stats
 
-    await runner.run();
+      await runner.run();
 
-    expect(countA, greaterThan(150)); // Should be around 180
-    expect(countB, greaterThan(5));   // Should be around 20
-    expect(countB, lessThan(50));
-    expect(countA + countB, equals(200));
+      expect(countA, greaterThan(150)); // Should be around 180
+      expect(countB, greaterThan(5)); // Should be around 20
+      expect(countB, lessThan(50));
+      expect(countA + countB, equals(200));
+    });
+
+    test('shrinks using the chosen generator', () async {
+      // Generate 'long_string' with high probability, 'short' with low
+      final gen = Gen.frequency([
+        (1, Gen.constant('short')),
+        (
+          9,
+          Gen.string(minLength: 10, maxLength: 10)
+        ), // Generate a 10-char string
+      ]);
+
+      final runner = PropertyTestRunner(gen, (value) {
+        // Fail if the string is long to trigger shrinking
+        if (value.length > 5) {
+          fail('String too long: $value');
+        }
+      },
+          PropertyConfig(
+              numTests: 20)); // Run enough times to likely get long string
+
+      final result = await runner.run();
+      expect(result.success, isFalse);
+      expect(result.originalFailingInput, isA<String>());
+      expect((result.originalFailingInput as String).length, equals(10));
+
+      // The shrunk value should be from the string generator's shrinking,
+      // likely a shorter string, not 'short'.
+      expect(result.failingInput, isA<String>());
+      expect((result.failingInput as String).length, lessThanOrEqualTo(10));
+      expect(
+          (result.failingInput as String).length,
+          greaterThanOrEqualTo(
+              6)); // Should shrink towards the boundary length 5+1
+      expect(result.failingInput, isNot(equals('short')));
+    });
+
+    test('throws ArgumentError for empty list', () {
+      expect(() => Gen.frequency([]), throwsArgumentError);
+    });
+
+    test('throws ArgumentError for non-positive weights', () {
+      expect(() => Gen.frequency([(0, Gen.constant(1))]), throwsArgumentError);
+      expect(() => Gen.frequency([(-1, Gen.constant(1))]), throwsArgumentError);
+      expect(() => Gen.frequency([(1, Gen.constant(1)), (0, Gen.constant(2))]),
+          throwsArgumentError);
+    });
   });
-
-  test('shrinks using the chosen generator', () async {
-     // Generate 'long_string' with high probability, 'short' with low
-     final gen = Gen.frequency([
-       (1, Gen.constant('short')),
-       (9, Gen.string(minLength: 10, maxLength: 10)), // Generate a 10-char string
-     ]);
-
-     final runner = PropertyTestRunner(gen, (value) {
-         // Fail if the string is long to trigger shrinking
-         if (value.length > 5) {
-           fail('String too long: $value');
-         }
-     }, PropertyConfig(numTests: 20)); // Run enough times to likely get long string
-
-     final result = await runner.run();
-     expect(result.success, isFalse);
-     expect(result.originalFailingInput, isA<String>());
-     expect((result.originalFailingInput as String).length, equals(10));
-
-     // The shrunk value should be from the string generator's shrinking,
-     // likely a shorter string, not 'short'.
-     expect(result.failingInput, isA<String>());
-     expect((result.failingInput as String).length, lessThanOrEqualTo(10));
-     expect((result.failingInput as String).length, greaterThanOrEqualTo(6)); // Should shrink towards the boundary length 5+1
-     expect(result.failingInput, isNot(equals('short')));
-  });
-
-  test('throws ArgumentError for empty list', () {
-    expect(() => Gen.frequency([]), throwsArgumentError);
-  });
-
-  test('throws ArgumentError for non-positive weights', () {
-    expect(() => Gen.frequency([(0, Gen.constant(1))]), throwsArgumentError);
-    expect(() => Gen.frequency([(-1, Gen.constant(1))]), throwsArgumentError);
-    expect(() => Gen.frequency([(1, Gen.constant(1)), (0, Gen.constant(2))]), throwsArgumentError);
-  });
-});
 }

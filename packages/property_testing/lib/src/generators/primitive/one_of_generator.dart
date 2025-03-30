@@ -24,9 +24,9 @@ class OneOfGenerator<T> extends Generator<T> {
       for (var i = 0; i < index; i++) {
         // Check if the earlier value is actually different
         if (values[i] != value) {
-             yield ShrinkableValue.leaf(values[i]);
+          yield ShrinkableValue.leaf(values[i]);
         }
       }
     });
   }
-} 
+}

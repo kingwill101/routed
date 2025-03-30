@@ -25,20 +25,20 @@ void main() async {
       ));
 
   final runner = PropertyTestRunner(
-      userGenerator,
-      (user) {
-        // Test properties of the generated User using assert
-        assert(user.name == user.email.split('@')[0], 'Name mismatch');
-        assert(user.email.contains('@'), 'Email should contain @');
-        assert(user.age >= 18, 'Age should be >= 18');
-        assert(user.age <= 99, 'Age should be <= 99');
-  
-        // Test JSON conversion using assert
-        final json = user.toJson();
-        assert(json['name'] == user.name, 'JSON name mismatch');
-        assert(json['email'] == user.email, 'JSON email mismatch');
-        assert(json['age'] == user.age, 'JSON age mismatch');
-      },
+    userGenerator,
+    (user) {
+      // Test properties of the generated User using assert
+      assert(user.name == user.email.split('@')[0], 'Name mismatch');
+      assert(user.email.contains('@'), 'Email should contain @');
+      assert(user.age >= 18, 'Age should be >= 18');
+      assert(user.age <= 99, 'Age should be <= 99');
+
+      // Test JSON conversion using assert
+      final json = user.toJson();
+      assert(json['name'] == user.name, 'JSON name mismatch');
+      assert(json['email'] == user.email, 'JSON email mismatch');
+      assert(json['age'] == user.age, 'JSON age mismatch');
+    },
     PropertyConfig(numTests: 100),
   );
 

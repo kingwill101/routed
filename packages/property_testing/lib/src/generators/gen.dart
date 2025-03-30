@@ -84,7 +84,8 @@ class Gen {
     int? minLength,
     int? maxLength,
   }) =>
-      ContainerGenerator(elementGen, factory, minLength: minLength, maxLength: maxLength);
+      ContainerGenerator(elementGen, factory,
+          minLength: minLength, maxLength: maxLength);
 
   /// Choose one generator from a list based on assigned weights.
   ///
@@ -99,7 +100,8 @@ class Gen {
   ///   (1, Gen.integer(min: 100)),
   /// ]);
   /// ```
-  static Generator<T> frequency<T>(List<(int weight, Generator<T> generator)> weightedGenerators) =>
+  static Generator<T> frequency<T>(
+          List<(int weight, Generator<T> generator)> weightedGenerators) =>
       FrequencyGenerator(weightedGenerators);
 
   /// Generate a list containing exactly [n] distinct elements chosen
@@ -144,4 +146,4 @@ class Gen {
   /// ```
   static Generator<List<T>> atLeastOne<T>(List<T> options) =>
       SomeOfGenerator(options, min: 1, max: options.length);
-} 
+}

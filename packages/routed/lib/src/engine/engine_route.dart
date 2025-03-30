@@ -168,8 +168,7 @@ class EngineRoute {
         }
       }
 
-      return MapEntry(
-          key, _castParameter(decodedValue, info.type));
+      return MapEntry(key, _castParameter(decodedValue, info.type));
     });
   }
 

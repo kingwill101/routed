@@ -75,7 +75,7 @@ void main() {
           expect(['example.com', 'test.org'], contains(parts[1]));
         },
       );
-await runner.run();
+      await runner.run();
     });
 
     test('Semantic version ordering properties', () async {
@@ -98,7 +98,7 @@ await runner.run();
         },
       );
 
-       await runner.run();
+      await runner.run();
     });
 
     test('Color blending properties', () async {
@@ -123,11 +123,11 @@ await runner.run();
           expect(blended.b, greaterThanOrEqualTo(min(c1.b, c2.b)));
           expect(blended.b, lessThanOrEqualTo(max(c1.b, c2.b)));
         },
-        );
-  
+      );
+
       await runner.run();
     });
-      });
+  });
 }
 
 /// Simple semantic version class for comparison testing

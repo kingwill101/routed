@@ -3,6 +3,7 @@
 /// chaotic strings, integers, JSON, and byte sequences, mimicking common attack
 /// vectors and edge cases.
 library;
+
 import 'dart:convert';
 import 'dart:math' show Random;
 
@@ -128,59 +129,59 @@ class Chaos {
   ///
   /// Shrinking attempts to remove characters or replace problematic characters
   /// with spaces while staying within length bounds.
-  
+
   static Generator<String> string({
     int? minLength,
     int? maxLength,
   }) =>
       _ChaoticStringGenerator(minLength: minLength, maxLength: maxLength);
 
-      /// Creates a generator for chaotic integers.
-      ///
-      /// Produces integers within the optional [min] and [max] bounds. It has a
-      /// high probability of generating common integer edge cases (like 0, 1, -1,
-      /// min/max int values, max safe JS integer) clamped within the bounds,
-      /// as well as random integers within the range.
-      ///
-      /// Shrinking targets 0 (if in range) or the `min`/`max` boundary, as well
-      /// as the included edge cases.
-      
+  /// Creates a generator for chaotic integers.
+  ///
+  /// Produces integers within the optional [min] and [max] bounds. It has a
+  /// high probability of generating common integer edge cases (like 0, 1, -1,
+  /// min/max int values, max safe JS integer) clamped within the bounds,
+  /// as well as random integers within the range.
+  ///
+  /// Shrinking targets 0 (if in range) or the `min`/`max` boundary, as well
+  /// as the included edge cases.
+
   static Generator<int> integer({
     int? min,
     int? max,
   }) =>
       _ChaoticIntGenerator(min: min, max: max);
 
-      /// Creates a generator for chaotic JSON strings.
-      ///
-      /// Produces strings that are *likely* JSON, but may contain structural errors,
-      /// problematic characters within strings, deeply nested structures (up to
-      /// [maxDepth]), or large arrays/objects (up to [maxLength] elements/keys
-      /// per level).
-      ///
-      /// This is useful for testing JSON parser robustness.
-      ///
-      /// Shrinking attempts to simplify the structure (removing keys/elements) and
-      /// targets basic valid JSON primitives (`{}`, `[]`, `null`, `""`, `0`, `true`, `false`).
-      /// Note: Shrinking might sometimes result in invalid JSON if the original was invalid.
-      
+  /// Creates a generator for chaotic JSON strings.
+  ///
+  /// Produces strings that are *likely* JSON, but may contain structural errors,
+  /// problematic characters within strings, deeply nested structures (up to
+  /// [maxDepth]), or large arrays/objects (up to [maxLength] elements/keys
+  /// per level).
+  ///
+  /// This is useful for testing JSON parser robustness.
+  ///
+  /// Shrinking attempts to simplify the structure (removing keys/elements) and
+  /// targets basic valid JSON primitives (`{}`, `[]`, `null`, `""`, `0`, `true`, `false`).
+  /// Note: Shrinking might sometimes result in invalid JSON if the original was invalid.
+
   static Generator<String> json({
     int maxDepth = 3,
     int maxLength = 10,
   }) =>
       _ChaoticJsonGenerator(maxDepth: maxDepth, maxLength: maxLength);
 
-      /// Creates a generator for chaotic byte lists (`List<int>`).
-      ///
-      /// Produces lists of integers (each 0-255) within the optional [minLength]
-      /// and [maxLength]. Includes a mix of random bytes and "problematic" bytes
-      /// (like 0x00, 0xFF, BOM sequences, control characters).
-      ///
-      /// Useful for testing binary data parsing or handling.
-      ///
-      /// Shrinking attempts to remove bytes, replace problematic bytes with 0x00,
-      /// and shrink towards the minimum length or an empty list.
-      
+  /// Creates a generator for chaotic byte lists (`List<int>`).
+  ///
+  /// Produces lists of integers (each 0-255) within the optional [minLength]
+  /// and [maxLength]. Includes a mix of random bytes and "problematic" bytes
+  /// (like 0x00, 0xFF, BOM sequences, control characters).
+  ///
+  /// Useful for testing binary data parsing or handling.
+  ///
+  /// Shrinking attempts to remove bytes, replace problematic bytes with 0x00,
+  /// and shrink towards the minimum length or an empty list.
+
   static Generator<List<int>> bytes({
     int? minLength,
     int? maxLength,
@@ -270,13 +271,14 @@ class _ChaoticStringGenerator extends Generator<String> {
     for (var i = 0; i < length; i++) {
       if (random.nextBool()) {
         // Use a problematic character
-        buffer.write(_problematicChars[random.nextInt(_problematicChars.length)]);
+        buffer
+            .write(_problematicChars[random.nextInt(_problematicChars.length)]);
       } else {
         // Use a random Unicode character
         // Avoid generating surrogate code points which are invalid alone
         int codePoint;
         do {
-            codePoint = random.nextInt(0x10FFFF + 1);
+          codePoint = random.nextInt(0x10FFFF + 1);
         } while (codePoint >= 0xD800 && codePoint <= 0xDFFF);
         buffer.writeCharCode(codePoint);
       }
@@ -338,23 +340,28 @@ class _ChaoticIntGenerator extends Generator<int> {
     // Ensure generated value is within bounds
     int value;
     if (useProblematic) {
-       value = _edgeCases[random.nextInt(_edgeCases.length)];
-       // Clamp problematic value within configured min/max
-       if (value < min) value = min;
-       if (value > max) value = max;
+      value = _edgeCases[random.nextInt(_edgeCases.length)];
+      // Clamp problematic value within configured min/max
+      if (value < min) value = min;
+      if (value > max) value = max;
     } else {
-        final range = max - min + 1;
-        value = range <= 0 ? min : min + random.nextInt(range);
+      final range = max - min + 1;
+      value = range <= 0 ? min : min + random.nextInt(range);
     }
-
 
     return ShrinkableValue(value, () sync* {
       // Try problematic values that are smaller (closer to zero or min)
       for (final problematic in _edgeCases) {
-        if (problematic >= min && problematic <= max) { // Ensure within bounds
-          if ((value > 0 && problematic < value && problematic >= 0) || // Shrink positive towards 0
-              (value < 0 && problematic > value && problematic <= 0) || // Shrink negative towards 0
-              (problematic == min && value != min)) { // Always try min
+        if (problematic >= min && problematic <= max) {
+          // Ensure within bounds
+          if ((value > 0 &&
+                  problematic < value &&
+                  problematic >= 0) || // Shrink positive towards 0
+              (value < 0 &&
+                  problematic > value &&
+                  problematic <= 0) || // Shrink negative towards 0
+              (problematic == min && value != min)) {
+            // Always try min
             yield ShrinkableValue.leaf(problematic);
           }
         }
@@ -365,22 +372,24 @@ class _ChaoticIntGenerator extends Generator<int> {
       final target = (min <= 0 && max >= 0) ? 0 : (value > 0 ? min : max);
 
       while (current != target) {
-         final next = (current + target) ~/ 2; // Move halfway to target
-         if (next == current) break; // Avoid infinite loop if no change
-         // Ensure next is within bounds before yielding
-         if (next >= min && next <= max) {
-            yield ShrinkableValue.leaf(next);
-         }
-         current = next;
+        final next = (current + target) ~/ 2; // Move halfway to target
+        if (next == current) break; // Avoid infinite loop if no change
+        // Ensure next is within bounds before yielding
+        if (next >= min && next <= max) {
+          yield ShrinkableValue.leaf(next);
+        }
+        current = next;
       }
-       // Ensure the target itself is yielded if it wasn't reached and is valid
-      if (current != target && target >= min && target <= max && value != target) {
-          yield ShrinkableValue.leaf(target);
+      // Ensure the target itself is yielded if it wasn't reached and is valid
+      if (current != target &&
+          target >= min &&
+          target <= max &&
+          value != target) {
+        yield ShrinkableValue.leaf(target);
       }
     });
   }
 }
-
 
 /// Internal implementation for generating chaotic JSON strings.
 class _ChaoticJsonGenerator extends Generator<String> {
@@ -406,49 +415,53 @@ class _ChaoticJsonGenerator extends Generator<String> {
             final tempMap = Map<String, dynamic>.from(map)..remove(key);
             yield ShrinkableValue.leaf(json.encode(tempMap));
           }
-           // Try shrinking values within the map
+          // Try shrinking values within the map
           for (final entry in (decoded).entries) {
-             // Simplified: only shrink leaf strings for now
-             if(entry.value is String) {
-                final stringVal = entry.value as String;
-                 if(stringVal.length > 1) {
-                    final tempMap = Map<String, dynamic>.from(map);
-                    tempMap[entry.key] = stringVal.substring(0, stringVal.length ~/ 2);
-                    yield ShrinkableValue.leaf(json.encode(tempMap));
-                 }
-             }
+            // Simplified: only shrink leaf strings for now
+            if (entry.value is String) {
+              final stringVal = entry.value as String;
+              if (stringVal.length > 1) {
+                final tempMap = Map<String, dynamic>.from(map);
+                tempMap[entry.key] =
+                    stringVal.substring(0, stringVal.length ~/ 2);
+                yield ShrinkableValue.leaf(json.encode(tempMap));
+              }
+            }
           }
         } else if (decoded is List) {
           // Try removing elements
           final list = List.from(decoded);
           if (list.isNotEmpty) {
-              for (var i = 0; i < list.length; i++) {
-                final tempList = List.from(list)..removeAt(i);
+            for (var i = 0; i < list.length; i++) {
+              final tempList = List.from(list)..removeAt(i);
+              yield ShrinkableValue.leaf(json.encode(tempList));
+            }
+          }
+          // Try shrinking elements within the list
+          for (var i = 0; i < (decoded).length; i++) {
+            final element = decoded[i];
+            // Simplified: only shrink leaf strings for now
+            if (element is String) {
+              if (element.length > 1) {
+                final tempList = List.from(list);
+                tempList[i] = element.substring(0, element.length ~/ 2);
                 yield ShrinkableValue.leaf(json.encode(tempList));
               }
-          }
-           // Try shrinking elements within the list
-            for(var i = 0; i < (decoded).length; i++) {
-                 final element = decoded[i];
-                 // Simplified: only shrink leaf strings for now
-                 if(element is String) {
-                     if(element.length > 1) {
-                         final tempList = List.from(list);
-                         tempList[i] = element.substring(0, element.length ~/ 2);
-                         yield ShrinkableValue.leaf(json.encode(tempList));
-                     }
-                 }
             }
+          }
         }
-         // Try shrinking to simpler valid JSON types
-        if (decoded is Map && (decoded).isNotEmpty) yield ShrinkableValue.leaf('{}');
-        if (decoded is List && (decoded).isNotEmpty) yield ShrinkableValue.leaf('[]');
+        // Try shrinking to simpler valid JSON types
+        if (decoded is Map && (decoded).isNotEmpty) {
+          yield ShrinkableValue.leaf('{}');
+        }
+        if (decoded is List && (decoded).isNotEmpty) {
+          yield ShrinkableValue.leaf('[]');
+        }
         if (value != 'null') yield ShrinkableValue.leaf('null');
         if (value != '""') yield ShrinkableValue.leaf('""');
         if (value != '0') yield ShrinkableValue.leaf('0');
         if (value != 'true') yield ShrinkableValue.leaf('true');
         if (value != 'false') yield ShrinkableValue.leaf('false');
-
       } catch (_) {
         // If we can't parse the JSON initially, try yielding simple valid JSON
         yield ShrinkableValue.leaf('{}');
@@ -526,19 +539,18 @@ class _ChaoticJsonGenerator extends Generator<String> {
   }
 
   // Helper to escape strings for JSON
-   String _escapeString(String s) {
-      return s
-          .replaceAll('\\', r'\\')
-          .replaceAll('"', r'\"')
-          .replaceAll('\b', r'\b')
-          .replaceAll('\f', r'\f')
-          .replaceAll('\n', r'\n')
-          .replaceAll('\r', r'\r')
-          .replaceAll('\t', r'\t');
-          // Note: Does not handle unicode escapes \uXXXX for simplicity here
+  String _escapeString(String s) {
+    return s
+        .replaceAll('\\', r'\\')
+        .replaceAll('"', r'\"')
+        .replaceAll('\b', r'\b')
+        .replaceAll('\f', r'\f')
+        .replaceAll('\n', r'\n')
+        .replaceAll('\r', r'\r')
+        .replaceAll('\t', r'\t');
+    // Note: Does not handle unicode escapes \uXXXX for simplicity here
   }
 }
-
 
 /// Internal implementation for generating chaotic byte lists.
 class _ChaoticBytesGenerator extends Generator<List<int>> {
@@ -579,10 +591,10 @@ class _ChaoticBytesGenerator extends Generator<List<int>> {
       if (bytes.length > minLength) {
         // Shrink towards half the size first
         if (bytes.length > 1) {
-           final halfLen = (bytes.length + minLength) ~/ 2;
-           if (halfLen >= minLength && halfLen < bytes.length) {
-             yield ShrinkableValue.leaf(bytes.sublist(0, halfLen));
-           }
+          final halfLen = (bytes.length + minLength) ~/ 2;
+          if (halfLen >= minLength && halfLen < bytes.length) {
+            yield ShrinkableValue.leaf(bytes.sublist(0, halfLen));
+          }
         }
         // Try removing individual bytes
         for (var i = 0; i < bytes.length; i++) {
@@ -603,17 +615,16 @@ class _ChaoticBytesGenerator extends Generator<List<int>> {
         }
       }
       if (changed) {
-         yield ShrinkableValue.leaf(simplified);
+        yield ShrinkableValue.leaf(simplified);
       }
 
-       // Try yielding the minimal list if not already generated
+      // Try yielding the minimal list if not already generated
       if (minLength > 0 && bytes.length > minLength) {
-         final minList = List.filled(minLength, 0); // Simplest min-length list
-         yield ShrinkableValue.leaf(minList);
+        final minList = List.filled(minLength, 0); // Simplest min-length list
+        yield ShrinkableValue.leaf(minList);
       } else if (minLength == 0 && bytes.isNotEmpty) {
-         yield ShrinkableValue.leaf([]); // Empty list
+        yield ShrinkableValue.leaf([]); // Empty list
       }
-
     });
   }
 }
