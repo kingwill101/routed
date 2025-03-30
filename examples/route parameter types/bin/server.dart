@@ -51,7 +51,7 @@ void main() async {
 
   // URL parameter
   engine.get('/links/{url:url}', (ctx) {
-    final url = ctx.param('url');
+    final url = ctx.mustGetParam('url');
     return ctx
         .json({'type': 'url', 'value': url, 'protocol': Uri.parse(url).scheme});
   });

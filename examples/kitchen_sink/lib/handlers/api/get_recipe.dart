@@ -10,7 +10,7 @@ import 'package:kitchen_sink_example/services/recipe_service.dart';
 import 'package:routed/routed.dart';
 
 getRecipe(EngineContext ctx) async {
-  final id = ctx.param('id');
+  final id = ctx.mustGetParam('id');
   final cacheKey = '${kRecipeCacheKeyPrefix}_$id';
 
   // Try cache first
