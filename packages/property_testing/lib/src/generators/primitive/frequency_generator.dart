@@ -21,7 +21,7 @@ class FrequencyGenerator<T> extends Generator<T> {
       throw ArgumentError('weightedGenerators must not be empty');
     }
     if (totalWeight <= 0) {
-       // This case should be caught by the individual weight check, but as a safeguard:
+      // This case should be caught by the individual weight check, but as a safeguard:
       throw ArgumentError('Total weight must be positive');
     }
   }
@@ -46,4 +46,4 @@ class FrequencyGenerator<T> extends Generator<T> {
     // It does NOT try to switch to a different generator from the list.
     return ShrinkableValue(shrinkable.value, shrinkable.shrinks);
   }
-} 
+}

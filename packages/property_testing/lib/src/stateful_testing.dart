@@ -80,16 +80,16 @@ class CommandSequence<Model, Sut> {
   CommandSequence(this.commands);
 
   /// Executes the sequence of commands against the [sut], starting from the
-    /// [initialModel] state.
-    ///
-    /// For each command, it:
-    /// 1. Checks the [Command.precondition].
-    /// 2. Executes [Command.run] on the [sut].
-    /// 3. Updates the model state using [Command.update].
-    /// 4. Verifies the state using [Command.postcondition].
-    ///
-    /// Throws a [StateError] if any precondition fails.
-    Future<void> run(Model initialModel, Sut sut) async {
+  /// [initialModel] state.
+  ///
+  /// For each command, it:
+  /// 1. Checks the [Command.precondition].
+  /// 2. Executes [Command.run] on the [sut].
+  /// 3. Updates the model state using [Command.update].
+  /// 4. Verifies the state using [Command.postcondition].
+  ///
+  /// Throws a [StateError] if any precondition fails.
+  Future<void> run(Model initialModel, Sut sut) async {
     var model = initialModel;
 
     for (final command in commands) {
@@ -200,12 +200,12 @@ class StatefulPropertyBuilder<Model, Sut> {
   }
 
   /// Adds a generator that produces [Command] instances for the test.
-    ///
-    /// Multiple command generators can be added; the runner will typically choose
-    /// between them randomly using [Gen.oneOfGen] during sequence generation.
-    StatefulPropertyBuilder<Model, Sut> withCommands(
-      Generator<Command<Model, Sut>> commandGenerator,
-    ) {
+  ///
+  /// Multiple command generators can be added; the runner will typically choose
+  /// between them randomly using [Gen.oneOfGen] during sequence generation.
+  StatefulPropertyBuilder<Model, Sut> withCommands(
+    Generator<Command<Model, Sut>> commandGenerator,
+  ) {
     return StatefulPropertyBuilder._(
       initialModel: _initialModel,
       setupSut: _setupSut,
@@ -216,10 +216,10 @@ class StatefulPropertyBuilder<Model, Sut> {
   }
 
   /// Sets the [StatefulPropertyConfig] to use for this test run, overriding
-    /// the default configuration.
-    StatefulPropertyBuilder<Model, Sut> withConfig(
-      StatefulPropertyConfig config,
-    ) {
+  /// the default configuration.
+  StatefulPropertyBuilder<Model, Sut> withConfig(
+    StatefulPropertyConfig config,
+  ) {
     return StatefulPropertyBuilder._(
       initialModel: _initialModel,
       setupSut: _setupSut,
@@ -230,10 +230,10 @@ class StatefulPropertyBuilder<Model, Sut> {
   }
 
   /// Builds the command sequence generator and runs the stateful property test.
-    ///
-    /// Returns a [PropertyResult] summarizing the outcome. Throws a [StateError]
-    /// if no command generators were provided via [withCommands].
-    Future<PropertyResult> run() async {
+  ///
+  /// Returns a [PropertyResult] summarizing the outcome. Throws a [StateError]
+  /// if no command generators were provided via [withCommands].
+  Future<PropertyResult> run() async {
     if (_commandGenerators.isEmpty) {
       throw StateError('No command generators provided');
     }

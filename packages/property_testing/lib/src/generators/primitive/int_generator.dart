@@ -10,7 +10,8 @@ class IntGenerator extends Generator<int> {
   IntGenerator({int? min, int? max})
       : min = min ?? -1000,
         max = max ?? 1000 {
-    if (this.min > this.max) { // Use resolved min/max
+    if (this.min > this.max) {
+      // Use resolved min/max
       throw ArgumentError('min must be less than or equal to max');
     }
   }
@@ -26,13 +27,14 @@ class IntGenerator extends Generator<int> {
     // 3. Try small increments/decrements from target.
     // 4. Yield boundaries (min, max).
     return ShrinkableValue(value, () sync* {
-      final int target = (min <= 0 && max >= 0) ? 0 : (min.abs() < max.abs() ? min : max);
+      final int target =
+          (min <= 0 && max >= 0) ? 0 : (min.abs() < max.abs() ? min : max);
       var current = value;
       final yielded = <int>{value}; // Track yielded values to avoid duplicates
 
       // Common failure boundary values to try first
-      final commonBoundaries = <int>[11, -11, 10, -10, 1, -1, 100, -100, 0]; 
-      
+      final commonBoundaries = <int>[11, -11, 10, -10, 1, -1, 100, -100, 0];
+
       // 1. Try common values first (especially those near common test boundary thresholds)
       for (final boundary in commonBoundaries) {
         if (!yielded.contains(boundary) && boundary >= min && boundary <= max) {
@@ -56,7 +58,7 @@ class IntGenerator extends Generator<int> {
           break; // Out of bounds or already yielded
         }
       }
-      
+
       // 3. Try small increments/decrements near target
       // This helps when the test fails at a specific threshold
       for (int i = 1; i <= 20; i++) {
@@ -65,7 +67,7 @@ class IntGenerator extends Generator<int> {
           yielded.add(plusI);
           yield ShrinkableValue.leaf(plusI);
         }
-        
+
         final minusI = target - i;
         if (!yielded.contains(minusI) && minusI >= min && minusI <= max) {
           yielded.add(minusI);
@@ -78,11 +80,11 @@ class IntGenerator extends Generator<int> {
         yielded.add(min);
         yield ShrinkableValue.leaf(min);
       }
-      
+
       if (!yielded.contains(max) && max >= min && max <= max) {
         yielded.add(max);
         yield ShrinkableValue.leaf(max);
       }
     }); // End sync*
   }
-} 
+}

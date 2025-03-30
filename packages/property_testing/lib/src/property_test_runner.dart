@@ -71,12 +71,12 @@ class PropertyConfig {
   final int? seed;
 
   PropertyConfig({
-      this.numTests = 100,
-      this.maxShrinks = 100,
-      this.timeout,
-      Random? random,
-      this.seed,
-    }) : random = random ?? (seed != null ? Random(seed) : _DefaultRandom());
+    this.numTests = 100,
+    this.maxShrinks = 100,
+    this.timeout,
+    Random? random,
+    this.seed,
+  }) : random = random ?? (seed != null ? Random(seed) : _DefaultRandom());
 }
 
 /// The result of a property test
@@ -126,15 +126,15 @@ class PropertyResult {
   final int? seed;
 
   const PropertyResult({
-      required this.success,
-      required this.numTests,
-      this.failingInput,
-      this.originalFailingInput,
-      this.error,
-      this.stackTrace,
-      this.numShrinks = 0,
-      this.seed,
-    });
+    required this.success,
+    required this.numTests,
+    this.failingInput,
+    this.originalFailingInput,
+    this.error,
+    this.stackTrace,
+    this.numShrinks = 0,
+    this.seed,
+  });
 }
 
 /// A runner for property tests
@@ -204,23 +204,23 @@ class PropertyTestRunner<T> {
         // Found a failing case, try to shrink it
         final shrinkResult = await _shrink(value, e, st);
         return PropertyResult(
-                  success: false,
-                  numTests: i + 1,
-                  failingInput: shrinkResult.shrunkValue,
-                  originalFailingInput: value.value,
-                  error: shrinkResult.error,
-                  stackTrace: shrinkResult.stackTrace,
-                  numShrinks: shrinkResult.numShrinks,
-                  seed: config.seed, // Pass the seed used
-                );
+          success: false,
+          numTests: i + 1,
+          failingInput: shrinkResult.shrunkValue,
+          originalFailingInput: value.value,
+          error: shrinkResult.error,
+          stackTrace: shrinkResult.stackTrace,
+          numShrinks: shrinkResult.numShrinks,
+          seed: config.seed, // Pass the seed used
+        );
       }
     }
 
     return PropertyResult(
-          success: true,
-          numTests: config.numTests,
-          seed: config.seed, // Pass the seed used
-        );
+      success: true,
+      numTests: config.numTests,
+      seed: config.seed, // Pass the seed used
+    );
   }
 
   Future<_ShrinkResult<T>> _shrink(

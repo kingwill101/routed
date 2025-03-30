@@ -28,14 +28,15 @@ class PropertyTestReporter {
     } else {
       buffer.writeln('✗ Property test failed');
       buffer.writeln('  Failed after ${result.numTests} test cases');
-      
+
       if (result.seed != null) {
         buffer.writeln('  Seed: ${result.seed}');
       } else {
         // Note: If Random instance was provided directly, seed might not be available.
         // Consider adding logic to PropertyConfig/Result to store the Random instance
         // or a way to represent its state if the integer seed isn't known.
-        buffer.writeln('  Seed: (Not available - Random instance likely provided directly)');
+        buffer.writeln(
+            '  Seed: (Not available - Random instance likely provided directly)');
       }
 
       if (result.originalFailingInput != null) {

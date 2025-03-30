@@ -12,4 +12,4 @@ export 'one_of_generator.dart';
 export 'pick_generator.dart';
 export 'sampling_generator.dart';
 export 'some_of_generator.dart';
-export 'string_generator.dart'; 
+export 'string_generator.dart';

@@ -9,13 +9,15 @@ class PickGenerator<T> extends SamplingGenerator<T> {
 
   PickGenerator(this.count, List<T> options) : super(options) {
     if (count < 0 || count > options.length) {
-      throw ArgumentError('count ($count) must be between 0 and options.length (${options.length})');
+      throw ArgumentError(
+          'count ($count) must be between 0 and options.length (${options.length})');
     }
   }
 
   @override
   ShrinkableValue<List<T>> generate(Random random) {
     final value = selectItems(count, random);
-    return ShrinkableValue(value, () => shrinkList(value, count)); // minCount is fixed at count
+    return ShrinkableValue(
+        value, () => shrinkList(value, count)); // minCount is fixed at count
   }
-} 
+}

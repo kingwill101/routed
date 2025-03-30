@@ -15,10 +15,12 @@ class SomeOfGenerator<T> extends SamplingGenerator<T> {
         max = max ?? options.length,
         super(options) {
     if (this.min < 0 || this.min > options.length) {
-      throw ArgumentError('min (${this.min}) must be between 0 and options.length (${options.length})');
+      throw ArgumentError(
+          'min (${this.min}) must be between 0 and options.length (${options.length})');
     }
     if (this.max < this.min || this.max > options.length) {
-      throw ArgumentError('max (${this.max}) must be between min (${this.min}) and options.length (${options.length})');
+      throw ArgumentError(
+          'max (${this.max}) must be between min (${this.min}) and options.length (${options.length})');
     }
   }
 
@@ -26,6 +28,7 @@ class SomeOfGenerator<T> extends SamplingGenerator<T> {
   ShrinkableValue<List<T>> generate(Random random) {
     final count = min + random.nextInt(max - min + 1);
     final value = selectItems(count, random);
-    return ShrinkableValue(value, () => shrinkList(value, min)); // Use dynamic minCount
+    return ShrinkableValue(
+        value, () => shrinkList(value, min)); // Use dynamic minCount
   }
-} 
+}
