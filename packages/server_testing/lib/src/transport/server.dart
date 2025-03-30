@@ -26,7 +26,7 @@ class ServerTransport extends TestTransport {
     final receivePort = ReceivePort();
     _isolate = await Isolate.spawn(
         _serverRunner, _ServerConfig(_handler, receivePort.sendPort));
-    _port = await receivePort.first;
+    _port = await receivePort.first as int;
   }
 
   /// Sends an HTTP request to the server and returns the response.

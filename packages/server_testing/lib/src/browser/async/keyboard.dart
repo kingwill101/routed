@@ -39,7 +39,7 @@ class AsyncKeyboard implements Keyboard {
 
   @override
   Future<Keyboard> pause([int milliseconds = 100]) async {
-    await Future.delayed(Duration(milliseconds: milliseconds));
+    await Future<void>.delayed(Duration(milliseconds: milliseconds));
     return this;
   }
 }

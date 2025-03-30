@@ -17,7 +17,7 @@ class AsyncMouse implements Mouse {
   Future<Mouse> clickAndHold([String? selector]) async {
     if (selector != null) {
       final element = await browser.findElement(selector);
-      await driver.mouse.moveTo(element: element);
+      await driver.mouse.moveTo(element: element as WebElement?);
       await driver.mouse.down();
     } else {
       await driver.mouse.down();
@@ -34,14 +34,14 @@ class AsyncMouse implements Mouse {
   @override
   Future<Mouse> moveTo(String selector) async {
     final element = await browser.findElement(selector);
-    await driver.mouse.moveTo(element: element);
+    await driver.mouse.moveTo(element: element as WebElement?);
     return this;
   }
 
   @override
   Future<Mouse> dragTo(String selector) async {
     final target = await browser.findElement(selector);
-    await driver.mouse.moveTo(element: target);
+    await driver.mouse.moveTo(element: target as WebElement?);
     return this;
   }
 
@@ -56,7 +56,7 @@ class AsyncMouse implements Mouse {
       {int? xOffset, int? yOffset}) async {
     final element = await browser.findElement(selector);
     await driver.mouse.moveTo(
-      element: element,
+      element: element as WebElement?,
       xOffset: xOffset,
       yOffset: yOffset,
     );

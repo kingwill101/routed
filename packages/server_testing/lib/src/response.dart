@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:assertable_json/assertable_json.dart';
+import 'package:server_testing/src/status_message.dart';
 import 'package:test/test.dart';
 
 /// A class representing a test response, including status code, headers, body, and URI.
@@ -34,7 +35,7 @@ class TestResponse {
   void _parseJsonIfApplicable() {
     if (!_headerExists(HttpHeaders.contentTypeHeader)) return;
     final ct = _headerEntry(HttpHeaders.contentTypeHeader) ?? '';
-    if (ct[0].contains('application/json')) {
+    if (ct[0].contains('application/json') as bool) {
       try {
         jsonBody = jsonDecode(body);
       } catch (_) {
@@ -124,7 +125,7 @@ class TestResponse {
       return this;
     } else if (value is Iterable) {
       for (var v in value) {
-        if (actual.isEmpty || !actual[0].contains(v)) {
+        if (actual.isEmpty || !actual[0].contains(v as String)) {
           throw TestFailure(
               'Expected header "$key($actual)" to contain "$v", but never found it');
         }
@@ -274,7 +275,7 @@ class TestResponse {
     print(uri);
 
     // Print the status line
-    print('HTTP/1.1 $statusCode ${_getStatusMessage(statusCode)}');
+    print('HTTP/1.1 $statusCode ${statusMessage(statusCode)}');
 
     // Print the headers
     headers.forEach((key, values) {
@@ -288,34 +289,5 @@ class TestResponse {
     print(body);
   }
 
-  /// Helper method to get the status message for a given status code.
-  ///
-  /// Returns a string representing the status message for the given [statusCode].
-  String _getStatusMessage(int statusCode) {
-    HttpStatus.ok;
-    switch (statusCode) {
-      case 200:
-        return 'OK';
-      case 201:
-        return 'Created';
-      case 204:
-        return 'No Content';
-      case 400:
-        return 'Bad Request';
-      case 401:
-        return 'Unauthorized';
-      case 403:
-        return 'Forbidden';
-      case 404:
-        return 'Not Found';
-      case 422:
-        return 'Unprocessable Entity';
-      case 429:
-        return 'Too Many Requests';
-      case 500:
-        return 'Internal Server Error';
-      default:
-        return 'Unknown';
-    }
-  }
+
 }

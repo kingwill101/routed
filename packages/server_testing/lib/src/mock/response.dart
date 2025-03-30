@@ -29,8 +29,6 @@ MockHttpResponse setupResponse(
   headers ??= {};
   body ??= BytesBuilder();
 
-  cookies ?? [];
-
   // Setup cookies
   // Add cookies to headers if provided
   if (cookies != null && cookies.isNotEmpty) {

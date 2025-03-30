@@ -21,7 +21,7 @@ import 'package:server_testing/src/mock.mocks.dart';
 /// ## Example
 ///
 ///
-/// final headers = <String, List<String>>{};
+/// final headers = &ltString, List&ltString&gt&gt{};
 /// final mockHeaders = setupHeaders(headers);
 ///
 /// // Set content type and observe it reflected in the map
@@ -102,10 +102,11 @@ MockHttpHeaders setupHeaders(Map<String, List<String>> requestHeaders) {
     return requestHeaders.putIfAbsent(existingKey, () => []);
   });
 
+
   // Handle iteration over headers
   when(mockRequestHeaders.forEach(any)).thenAnswer((invocation) {
-    Function(String, List<String>)? callback =
-        invocation.positionalArguments[0];
+    final callback =
+        invocation.positionalArguments[0] as void Function(String, List<String>)?;
     requestHeaders.forEach((key, values) {
       callback!(key, values);
     });

@@ -20,12 +20,12 @@ class BrowserConnection {
         final socket = await Socket.connect(
           host,
           port,
-          timeout: Duration(seconds: 1),
+          timeout: const Duration(seconds: 1),
         );
         await socket.close();
         return;
       } catch (_) {
-        await Future.delayed(Duration(milliseconds: 100));
+        await Future<void>.delayed(const Duration(milliseconds: 100));
       }
     }
 

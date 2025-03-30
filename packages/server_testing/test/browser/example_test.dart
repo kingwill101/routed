@@ -37,6 +37,6 @@ void main() async {
 
     await browser.assertSee('Bahasa');
     await browser.assertTitle('Wikipedia');
-    await browser.waiter.wait(Duration(seconds: 3));
+    await browser.waiter.wait(const Duration(seconds: 3));
   }, useAsync: true, config: config);
 }

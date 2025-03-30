@@ -44,7 +44,7 @@ class SyncBrowserWaiter implements BrowserWaiter {
   }
 
   @override
-  void waitForReload(Function() callback) {
+  void waitForReload(WaiterCallback callback) {
     final beforeSource = browser.getPageSource();
     callback();
     _waitUntil(() {
