@@ -1,6 +1,5 @@
 // ignore_for_file: unused_shown_name
 
-import 'package:server_testing/src/browser/interfaces/browser.dart';
 import 'package:webdriver/sync_core.dart' show WebDriver, WebElement, By;
 
 import '../interfaces/frame.dart';
@@ -13,7 +12,7 @@ class SyncFrameHandler implements FrameHandler {
   SyncFrameHandler(this.browser) : driver = browser.driver;
 
   @override
-  void withinFrame(String selector, Function(Browser) callback) {
+  void withinFrame(String selector, FrameCallback callback) {
     final frame = browser.findElement(selector);
     driver.switchTo.frame(frame);
     try {

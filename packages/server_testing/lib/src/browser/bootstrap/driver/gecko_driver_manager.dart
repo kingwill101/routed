@@ -125,13 +125,13 @@ class GeckoDriverManager implements WebDriverManager {
 
   Future<void> _waitForPort(int port) async {
     final stopwatch = Stopwatch()..start();
-    while (stopwatch.elapsed < Duration(seconds: 30)) {
+    while (stopwatch.elapsed < const Duration(seconds: 30)) {
       try {
         final socket = await Socket.connect('localhost', port);
         await socket.close();
         return;
       } catch (_) {
-        await Future.delayed(Duration(milliseconds: 100));
+        await Future<void>.delayed(const Duration(milliseconds: 100));
       }
     }
     throw Exception('GeckoDriver failed to start on port $port');

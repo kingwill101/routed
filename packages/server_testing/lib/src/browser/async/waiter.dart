@@ -46,7 +46,7 @@ class AsyncBrowserWaiter implements BrowserWaiter {
   }
 
   @override
-  Future<void> waitForReload(Function() callback) async {
+  Future<void> waitForReload(WaiterCallback callback) async {
     final beforeSource = await browser.getPageSource();
     await callback();
     await _waitUntil(() async {
@@ -63,7 +63,7 @@ class AsyncBrowserWaiter implements BrowserWaiter {
     final endTime = DateTime.now().add(timeout);
     while (DateTime.now().isBefore(endTime)) {
       if (await predicate()) return;
-      await Future.delayed(interval);
+      await Future<void>.delayed(interval);
     }
     throw TimeoutException('Condition not met within timeout', timeout);
   }

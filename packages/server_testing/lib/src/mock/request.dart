@@ -12,7 +12,7 @@ import 'package:server_testing/server_testing.dart';
 /// - [mockRequestHeaders]: Optional pre-configured mock headers
 /// - [uriObj]: Optional pre-parsed URI object
 /// - [requestHeaders]: Optional map of header names to values
-/// - [body]: Optional request body (supports String, List<int>, Map, or List)
+/// - [body]: Optional request body (supports String, List&ltint&gt, Map, or List)
 /// - [mockResponse]: Optional pre-configured mock response
 ///
 /// The request is configured with:
@@ -25,7 +25,7 @@ import 'package:server_testing/server_testing.dart';
 /// For multipart requests, the content type header is properly parsed and set.
 /// The body is encoded appropriately based on its type:
 /// - String bodies are UTF-8 encoded
-/// - List<int> bodies are used directly
+/// - List&ltint&gt bodies are used directly
 /// - Map/List bodies are JSON encoded
 ///
 /// Throws [ArgumentError] if the body type is not supported.
@@ -79,7 +79,7 @@ MockHttpRequest setupRequest(String method, String uri,
   when(mockRequest.uri).thenReturn(mockUri);
   when(mockRequest.headers).thenReturn(mockRequestHeaders);
   when(mockRequest.contentLength).thenAnswer((c) {
-    return body?.length ?? 0;
+    return (body?.length ?? 0) as int;
   });
   when(mockRequest.persistentConnection).thenReturn(true);
 
@@ -125,7 +125,7 @@ MockHttpRequest setupRequest(String method, String uri,
           onError: onError,
         );
 
-        return Stream<Uint8List>.empty().listen(null);
+        return const Stream<Uint8List>.empty().listen(null);
       });
       return mockRequest;
     } else {
@@ -168,7 +168,7 @@ MockHttpRequest setupRequest(String method, String uri,
         if (onDone != null) onDone();
       });
 
-      return Stream<Uint8List>.empty().listen(null);
+      return const Stream<Uint8List>.empty().listen(null);
     });
   }
   if (body != null) {
@@ -220,7 +220,7 @@ MockHttpRequest setupRequest(String method, String uri,
         if (onDone != null) onDone();
       });
 
-      return Stream<Uint8List>.empty().listen(null);
+      return const Stream<Uint8List>.empty().listen(null);
     });
   }
 

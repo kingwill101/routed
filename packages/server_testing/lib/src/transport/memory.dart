@@ -14,6 +14,7 @@ class InMemoryTransport extends TestTransport {
 
   final RequestHandler _handler;
   final Map<String, Cookie> _cookieStore = {};
+  late MockHttpResponse _mockResponse;
 
   /// Constructor for InMemoryTransport.
   /// Takes an [Engine] as a parameter.
@@ -39,8 +40,7 @@ class InMemoryTransport extends TestTransport {
 
     var responseHeaders = headers ?? {};
     // Use setupResponse helper
-    final mockResponse =
-        setupResponse(headers: responseHeaders, body: responseBody);
+    _mockResponse = setupResponse(headers: responseHeaders, body: responseBody);
 
     // Use setupRequest helper
     final mockRequest = setupRequest(
@@ -49,7 +49,7 @@ class InMemoryTransport extends TestTransport {
       uriObj: uriObj,
       requestHeaders: headers,
       body: body,
-      mockResponse: mockResponse,
+      mockResponse: _mockResponse,
       remoteAddress: options?.remoteAddress,
     );
 
@@ -62,8 +62,8 @@ class InMemoryTransport extends TestTransport {
 
     final response = TestResponse(
       uri: uriObj.path,
-      statusCode: mockResponse.statusCode,
-      headers: mockResponse.headers.toMap(),
+      statusCode: _mockResponse.statusCode,
+      headers: _mockResponse.headers.toMap(),
       body: responseBodyString,
     );
 
@@ -85,5 +85,8 @@ class InMemoryTransport extends TestTransport {
   }
 
   @override
-  Future<void> close() async {}
+  Future<void> close() async {
+    await _handler.close();
+    await _mockResponse.close();
+  }
 }

@@ -1,16 +1,12 @@
 import 'package:server_testing/src/browser/interfaces/browser.dart';
 import 'package:test/test.dart';
 
-/// Base class for UI components in the page object pattern.
+/// A reusable UI element in the page object pattern.
 ///
-/// A Component represents a reusable UI element on a web page, such as a
-/// navigation menu, modal dialog, or form. Components encapsulate the
-/// selector logic and user interactions specific to that element.
+/// Encapsulates a specific UI component on a web page such as a navigation menu,
+/// modal dialog, or form. Provides an abstraction layer for element selectors
+/// and interactions.
 ///
-/// Components can be used alongside [Page] objects to organize browser tests
-/// using the page object pattern.
-///
-/// Example:
 /// ```dart
 /// class NavMenu extends Component {
 ///   NavMenu(Browser browser) : super(browser, 'nav.main-menu');
@@ -24,6 +20,8 @@ import 'package:test/test.dart';
 ///   }
 /// }
 /// ```
+///
+/// Use with [Page] objects to organize browser tests using the page object pattern.
 abstract class Component {
   /// The browser instance for interacting with the page.
   final Browser browser;
@@ -31,16 +29,15 @@ abstract class Component {
   /// The CSS selector that identifies this component in the DOM.
   final String selector;
 
-  /// Creates a new component with the specified browser and selector.
+  /// Creates a new component with the given browser and selector.
   ///
-  /// [browser] is the browser instance to use for interactions.
-  /// [selector] is the CSS selector that identifies this component.
+  /// The [browser] is used for page interactions.
+  /// The [selector] identifies this component in the DOM.
   Component(this.browser, this.selector);
 
-  /// Finds the DOM element that represents this component.
+  /// Finds the DOM element representing this component.
   ///
-  /// Returns the element as a WebElement or equivalent, depending on
-  /// the browser implementation.
+  /// Returns a WebElement or equivalent, depending on the browser implementation.
   Future<dynamic> findElement() async {
     return await browser.findElement(selector);
   }
@@ -50,7 +47,7 @@ abstract class Component {
   /// Throws a [TestFailure] if the component is not visible.
   Future<void> assertVisible() async {
     final element = await findElement();
-    if (!await element.displayed) {
+    if (!(element != null && (await element!.displayed) as bool)) {
       throw TestFailure('Component is not visible: $selector');
     }
   }
@@ -60,7 +57,7 @@ abstract class Component {
   /// Throws a [TestFailure] if the component is visible.
   Future<void> assertHidden() async {
     final element = await findElement();
-    if (await element.displayed) {
+    if (!(element != null && (await element!.displayed) as bool)) {
       throw TestFailure('Component is visible but should be hidden: $selector');
     }
   }

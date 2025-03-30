@@ -123,7 +123,7 @@ class AsyncBrowser with AsyncBrowserAssertions implements Browser {
 
     while (DateTime.now().isBefore(endTime)) {
       if (await predicate()) return;
-      await Future.delayed(interval);
+      await Future<void>.delayed(interval);
     }
 
     throw TimeoutException('Condition not met within timeout', timeout);

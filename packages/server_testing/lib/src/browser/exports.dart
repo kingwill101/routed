@@ -1,4 +1,9 @@
-/// This file exports the public API for browser testing features.
+/// Browser testing components for automated end-to-end tests.
+///
+/// Provides a unified API for browser automation, page object pattern 
+/// implementation, and browser configuration. This library abstracts
+/// WebDriver implementations to make writing browser tests simpler and
+/// more maintainable.
 ///
 /// These exports include:
 /// - Browser configuration and management

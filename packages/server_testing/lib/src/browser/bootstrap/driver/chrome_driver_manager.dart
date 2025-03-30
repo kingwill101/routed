@@ -16,7 +16,7 @@ class ChromeDriverManager implements WebDriverManager {
     final majorVersion = chromeVersion.split('.').first;
 
     final driverUrl = _getDriverUrlForPlatform(
-        metadata['milestones'][majorVersion]['downloads']['chromedriver'],
+        metadata['milestones'][majorVersion]['downloads']['chromedriver'] as List,
         _getCurrentPlatform());
 
     final zipPath = path.join(targetDir, 'chromedriver.zip');
@@ -40,7 +40,7 @@ class ChromeDriverManager implements WebDriverManager {
       orElse: () =>
           throw Exception('No ChromeDriver available for platform: $platform'),
     );
-    return download['url'];
+    return download['url'] as String;
   }
 
   Future<void> _downloadDriver(String url, String outputPath) async {
@@ -81,13 +81,13 @@ class ChromeDriverManager implements WebDriverManager {
 
   Future<void> _waitForPort(int port) async {
     final stopwatch = Stopwatch()..start();
-    while (stopwatch.elapsed < Duration(seconds: 30)) {
+    while (stopwatch.elapsed < const Duration(seconds: 30)) {
       try {
         final socket = await Socket.connect('localhost', port);
         await socket.close();
         return;
       } catch (_) {
-        await Future.delayed(Duration(milliseconds: 100));
+        await Future<void>.delayed(const Duration(milliseconds: 100));
       }
     }
     throw Exception('ChromeDriver failed to start on port $port');
@@ -125,7 +125,7 @@ class ChromeDriverManager implements WebDriverManager {
   Future<Map<String, dynamic>> _fetchDriverMetadata() async {
     final response = await http.get(Uri.parse(
         'https://googlechromelabs.github.io/chrome-for-testing/latest-versions-per-milestone-with-downloads.json'));
-    return json.decode(response.body);
+    return json.decode(response.body) as Map<String, dynamic>;
   }
 
   String _getCurrentPlatform() {

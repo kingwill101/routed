@@ -1,6 +1,5 @@
 import 'dart:async';
 
-import 'package:server_testing/src/browser/interfaces/browser.dart';
 import 'package:webdriver/async_core.dart' show WebDriver;
 
 import '../interfaces/frame.dart';
@@ -13,7 +12,7 @@ class AsyncFrameHandler implements FrameHandler {
   AsyncFrameHandler(this.browser) : driver = browser.driver;
 
   @override
-  Future<void> withinFrame(String selector, Function(Browser) callback) async {
+  Future<void> withinFrame(String selector, FrameCallback callback) async {
     final frame = await browser.findElement(selector);
     await driver.switchTo.frame(frame);
     try {

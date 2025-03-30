@@ -2,15 +2,11 @@ import 'dart:async';
 
 import 'package:server_testing/src/browser/interfaces/browser.dart';
 
-/// Base class for the Page Object Pattern.
+/// A page object representing a specific page in a web application.
 ///
-/// The Page class is part of the Page Object Pattern, a design pattern that
-/// creates an object representation of each page in your application. This
-/// abstraction helps separate test logic from page implementation details,
-/// making tests more maintainable and readable.
-///
-/// Each page class encapsulates the structure of a specific page, including
-/// its URL, elements, and common interactions.
+/// Implements the Page Object Pattern by encapsulating page structure, elements,
+/// and interactions for a specific page. Helps separate test logic from page
+/// implementation details.
 ///
 /// ## Example
 ///
@@ -62,23 +58,23 @@ abstract class Page {
   /// The browser instance for interacting with the page.
   final Browser browser;
 
-  /// Creates a new page with the specified browser.
+  /// Creates a new page with the given browser.
   Page(this.browser);
 
   /// The URL of this page.
   ///
-  /// This is used by [navigate] to go to the page and by [assertOnPage]
-  /// to verify the browser is on this page.
+  /// Used by [navigate] to visit the page and by [assertOnPage]
+  /// to verify the current location.
   String get url;
 
   /// Navigates to this page's URL.
   ///
-  /// This method uses the browser's [visit] method with the page's [url].
+  /// Uses the browser's [visit] method with this page's [url].
   FutureOr<void> navigate() => browser.visit(url);
 
   /// Asserts that the browser is currently on this page.
   ///
-  /// This method verifies that the current URL matches the page's [url].
+  /// Verifies that the current URL matches this page's [url].
   Future<void> assertOnPage() async {
     await browser.assertUrlIs(url);
   }

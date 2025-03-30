@@ -7,19 +7,11 @@ import 'package:webdriver/sync_io.dart' as sync;
 import 'bootstrap/registry.dart';
 import 'browser_exception.dart';
 
-/// Creates a browser test.
+/// Creates an isolated browser test with automatic setup and teardown.
 ///
-/// This function sets up an isolated test with a browser instance. The browser
-/// is launched with the provided configuration (or falls back to the global config
-/// from [testBootstrap]), then passed to the test callback. After the test completes,
-/// the browser is automatically closed.
+/// Sets up a test with a browser instance launched according to the provided
+/// configuration. After the test completes, the browser is automatically closed.
 ///
-/// [description] is the name of the test.
-/// [callback] is the test function that receives the browser instance.
-/// [config] is an optional configuration for this specific browser test.
-/// [useAsync] determines whether to use the async or sync WebDriver API.
-///
-/// Example:
 /// ```dart
 /// void main() async {
 ///   await testBootstrap();
@@ -33,6 +25,11 @@ import 'browser_exception.dart';
 ///   });
 /// }
 /// ```
+///
+/// The [description] identifies the test in output.
+/// The [callback] receives the configured browser instance.
+/// The [config] overrides default browser settings when provided.
+/// The [useAsync] flag determines whether to use async or sync WebDriver API.
 Future<void> browserTest(
   String description,
   Future<void> Function(Browser browser) callback, {
@@ -64,19 +61,11 @@ Future<void> browserTest(
   });
 }
 
-/// Creates a group of browser tests that share a browser instance.
+/// Creates a group of browser tests that share a single browser instance.
 ///
-/// This function sets up a test group where all tests share the same browser instance.
-/// The browser is launched once at the beginning of the group and closed after all
-/// tests in the group have completed. This is more efficient than creating a new
-/// browser for each test.
+/// Launches a browser once for all tests in the group, improving test
+/// efficiency. The browser automatically closes after all tests complete.
 ///
-/// [description] is the name of the test group.
-/// [define] is a function that defines the tests in the group.
-/// [config] is an optional configuration for the browser.
-/// [useAsync] determines whether to use the async or sync WebDriver API.
-///
-/// Example:
 /// ```dart
 /// void main() async {
 ///   await testBootstrap();
@@ -97,6 +86,11 @@ Future<void> browserTest(
 ///   });
 /// }
 /// ```
+///
+/// The [description] identifies the test group in output.
+/// The [define] function receives the browser instance for defining tests.
+/// The [config] overrides default browser settings when provided.
+/// The [useAsync] flag determines whether to use async or sync WebDriver API.
 void browserGroup(
   String description, {
   required void Function(Browser browser) define,
