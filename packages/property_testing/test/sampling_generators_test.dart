@@ -1,7 +1,5 @@
 import 'package:property_testing/property_testing.dart';
-import 'package:property_testing/src/generators/gen.dart';
 import 'package:test/test.dart';
-import 'dart:math';
 
 void main() {
   group('Sampling Generators (pick, someOf, atLeastOne)', () {

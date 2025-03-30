@@ -1,7 +1,6 @@
 import 'dart:collection';
 
 import 'package:property_testing/property_testing.dart';
-import 'package:property_testing/src/generators/gen.dart';
 import 'package:test/test.dart';
 
 // Example custom container

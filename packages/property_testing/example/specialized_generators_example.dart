@@ -18,7 +18,7 @@ void main() {
         },
       );
 
-      final result = await runner.run();
+      await runner.run();
     });
 
     test('Duration arithmetic properties', () async {
@@ -35,7 +35,7 @@ void main() {
         },
       );
 
-      final result = await runner.run();
+      await runner.run();
     });
 
     test('URI parsing properties', () async {
@@ -56,7 +56,7 @@ void main() {
         },
       );
 
-      final result = await runner.run();
+      await runner.run();
     });
 
     test('Email validation properties', () async {
@@ -75,8 +75,7 @@ void main() {
           expect(['example.com', 'test.org'], contains(parts[1]));
         },
       );
-
-      final result = await runner.run();
+await runner.run();
     });
 
     test('Semantic version ordering properties', () async {
@@ -99,7 +98,7 @@ void main() {
         },
       );
 
-      final result = await runner.run();
+       await runner.run();
     });
 
     test('Color blending properties', () async {
@@ -126,7 +125,7 @@ void main() {
         },
         );
   
-      final result = await runner.run();
+      await runner.run();
     });
       });
 }
