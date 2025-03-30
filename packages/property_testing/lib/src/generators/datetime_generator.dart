@@ -280,7 +280,7 @@ class DateTimeGenerator extends Generator<DateTime> {
           if (result.isAfter(_lastGeneratedDate!)) {
             // If we're already after the last date, we can shrink towards it
             yield ShrinkableValue.leaf(
-                _lastGeneratedDate!.add(Duration(milliseconds: 1)));
+                _lastGeneratedDate!.add(const Duration(milliseconds: 1)));
           }
         }
       }
