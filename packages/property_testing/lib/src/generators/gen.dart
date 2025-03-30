@@ -5,7 +5,6 @@ import 'primitive/container_generator.dart';
 import 'primitive/double_generator.dart';
 import 'primitive/frequency_generator.dart';
 import 'primitive/int_generator.dart';
-import 'primitive/list_generator.dart';
 import 'primitive/one_of_gen_generator.dart';
 import 'primitive/one_of_generator.dart';
 import 'primitive/pick_generator.dart';

@@ -1,5 +1,5 @@
-
 library;
+
 /// A property-based testing framework for Dart inspired by Hypothesis and ScalaCheck.
 ///
 /// Provides tools for generating random data based on specified constraints,
@@ -43,15 +43,35 @@ library;
 
 // Core
 export 'src/generator_base.dart' show Generator, ShrinkableValue;
-export 'src/property_test_runner.dart' show PropertyTestRunner, PropertyConfig, PropertyResult;
+export 'src/property_test_runner.dart'
+    show PropertyTestRunner, PropertyConfig, PropertyResult;
 
 // Generators
-export 'src/primitive_generators.dart' show Gen;
-export 'src/specialized_generators.dart' show Specialized, Color, DateTimeGenerator, DurationGenerator, EmailGenerator, SemverGenerator, UriGenerator; // Also export Color type
+export 'src/generators/gen.dart' show Gen;
+export 'src/specialized_generators.dart'
+    show
+        Specialized,
+        Color,
+        DateTimeGenerator,
+        DurationGenerator,
+        EmailGenerator,
+        SemverGenerator,
+        UriGenerator; // Also export Color type
 export 'src/chaos_generators.dart' show Chaos, ChaosConfig, ChaosCategory;
 
 // Stateful Testing
-export 'src/stateful_testing.dart' show Command, CommandSequence, StatefulPropertyBuilder, StatefulPropertyConfig, StatefulPropertyRunner, StatefulPropertyTestingExtensions;
+export 'src/stateful_testing.dart'
+    show
+        Command,
+        CommandSequence,
+        StatefulPropertyBuilder,
+        StatefulPropertyConfig,
+        StatefulPropertyRunner,
+        StatefulPropertyTestingExtensions;
 
 // Reporting
-export 'src/test_reporter.dart' show PropertyTestReporter, TestStatisticsCollector, PropertyResultExtensions;
+export 'src/test_reporter.dart'
+    show
+        PropertyTestReporter,
+        TestStatisticsCollector,
+        PropertyResultExtensions;

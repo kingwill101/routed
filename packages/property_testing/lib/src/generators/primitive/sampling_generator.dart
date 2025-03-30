@@ -47,8 +47,12 @@ abstract class SamplingGenerator<T> extends Generator<List<T>> {
                if (yieldIfNew(sub)) {
                   yield ShrinkableValue.leaf(sub);
                   len = nextLen;
-               } else break;
-           } else break;
+               } else {
+                 break;
+               }
+           } else {
+             break;
+           }
         }
         // Ensure exact min length is tried if possible
         if (len != minCount && minCount < currentList.length) {

@@ -1,5 +1,4 @@
 import 'package:property_testing/property_testing.dart';
-import 'package:test/test.dart';
 
 // Define a User class to test with
 class User {
