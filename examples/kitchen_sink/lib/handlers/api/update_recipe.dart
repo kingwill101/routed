@@ -16,7 +16,7 @@ class RecipeUpdateBinding {
 }
 
 updateRecipe(EngineContext ctx) async {
-  final id = ctx.param('id');
+  final id = ctx.mustGetParam('id');
   final existingRecipe = RecipeService.getById(id);
 
   if (existingRecipe == null) {

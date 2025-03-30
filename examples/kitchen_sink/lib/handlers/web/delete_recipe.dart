@@ -3,7 +3,7 @@ import 'package:routed/routed.dart';
 
 Future<void> deleteRecipe(EngineContext ctx) async {
   // Get recipe ID from route parameters
-  final id = ctx.param('id');
+  final id = ctx.mustGetParam('id');
 
   try {
     // Delete the recipe

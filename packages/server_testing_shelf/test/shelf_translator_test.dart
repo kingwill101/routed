@@ -1,9 +1,9 @@
 import 'dart:convert';
-import 'dart:io';
 
 import 'package:server_testing/server_testing.dart';
 import 'package:server_testing_shelf/src/shelf_translator.dart';
 import 'package:shelf/shelf.dart' as shelf;
+import 'dart:typed_data';
 
 void main() {
   group('ShelfTranslator Tests', () {

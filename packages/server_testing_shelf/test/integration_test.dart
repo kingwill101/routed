@@ -139,24 +139,6 @@ void main() {
     serverTest(
       'Works with request context',
       (client, h) async {
-        // Handler that uses context
-        handler(shelf.Request request) {
-          // Get the request with added context data
-          final requestWithContext = request.change(context: {
-            'user': {'id': 1, 'name': 'Test User'},
-            'timestamp': DateTime.now().toIso8601String(),
-          });
-
-          // Handler that uses the context
-          return (shelf.Request req) {
-            final context = req.context;
-            return shelf.Response.ok(
-              jsonEncode(context),
-              headers: {'content-type': 'application/json'},
-            );
-          }(requestWithContext);
-        }
-
         // Test context data in response
         final response = await client.get('/');
         response

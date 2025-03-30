@@ -34,10 +34,10 @@ void main() {
         if (request.headers['content-type']
                 ?.startsWith('multipart/form-data') ==
             true) {
-          final String body = await request.readAsString();
           return shelf.Response.ok(
             jsonEncode({
               'success': true,
+              'received': await request.readAsString(),
               'receivedMultipart': true,
               'contentTypeReceived': request.headers['content-type'],
               'contentLength': request.headers['content-length'],
