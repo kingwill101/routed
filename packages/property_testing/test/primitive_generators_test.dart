@@ -192,7 +192,7 @@ void main() {
       expect(shrunkString.length, greaterThanOrEqualTo(1));
       // It should be simpler - either shorter OR fewer non-'aA0' chars than original
       final originalBadChars =
-          RegExp(r'[b-zB-Z1-9]').allMatches(result.originalFailingInput).length;
+          RegExp(r'[b-zB-Z1-9]').allMatches(result.originalFailingInput as String).length;
       final shrunkBadChars =
           RegExp(r'[b-zB-Z1-9]').allMatches(shrunkString).length;
       expect(

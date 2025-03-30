@@ -422,7 +422,7 @@ class _ChaoticJsonGenerator extends Generator<String> {
               final stringVal = entry.value as String;
               if (stringVal.length > 1) {
                 final tempMap = Map<String, dynamic>.from(map);
-                tempMap[entry.key] =
+                tempMap[entry.key as String] =
                     stringVal.substring(0, stringVal.length ~/ 2);
                 yield ShrinkableValue.leaf(json.encode(tempMap));
               }
@@ -430,10 +430,10 @@ class _ChaoticJsonGenerator extends Generator<String> {
           }
         } else if (decoded is List) {
           // Try removing elements
-          final list = List.from(decoded);
+          final list = decoded;
           if (list.isNotEmpty) {
             for (var i = 0; i < list.length; i++) {
-              final tempList = List.from(list)..removeAt(i);
+              final tempList = [list]..removeAt(i);
               yield ShrinkableValue.leaf(json.encode(tempList));
             }
           }
@@ -443,7 +443,7 @@ class _ChaoticJsonGenerator extends Generator<String> {
             // Simplified: only shrink leaf strings for now
             if (element is String) {
               if (element.length > 1) {
-                final tempList = List.from(list);
+                final tempList = [...list];
                 tempList[i] = element.substring(0, element.length ~/ 2);
                 yield ShrinkableValue.leaf(json.encode(tempList));
               }

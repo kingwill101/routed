@@ -62,7 +62,7 @@ void main() {
       });
 
       engine.post('/api/users', (ctx) async {
-        final data = {};
+        final data = <String, dynamic>{};
         ctx.bindJSON(data);
         ctx.json(data);
       });
@@ -74,7 +74,7 @@ void main() {
 
       engine.post('/api/data/{type}', (ctx) async {
         final type = ctx.param("type");
-        final data = {};
+        final data = <String, dynamic>{};
         ctx.bindJSON(data);
         ctx.json({'type': type, 'data': data});
       });
