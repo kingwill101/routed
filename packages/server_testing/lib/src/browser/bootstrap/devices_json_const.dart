@@ -1,8 +1,15 @@
+/// Provides a collection of predefined device emulation profiles.
+///
+/// This data defines various mobile and desktop devices with their respective
+/// [Device] parameters, suitable for use in browser testing or emulation scenarios.
+library;
 // GENERATED CODE - DO NOT MODIFY BY HAND
 // Generated at: 2025-03-19T08:15:32.181542
 
 import 'device_json.dart';
 
+/// A map of device names (e.g., 'iPhone 15', 'Pixel 7') to their
+/// corresponding [Device] profiles.
 final devicesJsonData = {
   'Blackberry PlayBook': Device(
       userAgent:

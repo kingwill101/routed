@@ -7,10 +7,25 @@ import 'package:server_testing/src/browser/bootstrap/driver/gecko_driver_version
 
 import 'driver_interface.dart';
 
+/// Manages the setup, start, and stop operations for the GeckoDriver (Firefox) server.
+///
+/// Implements the [WebDriverManager] interface for Firefox browsers. Handles
+/// downloading a specific GeckoDriver version from GitHub releases, extracting it,
+/// setting permissions, and managing the server process.
 class GeckoDriverManager implements WebDriverManager {
+  /// The running GeckoDriver process instance, or `null` if not started.
   Process? _driverProcess;
+  /// The base URL for GeckoDriver release downloads, sourced from generated code.
   static const _baseUrl = geckoDriverBaseUrl;
+  /// The specific version of GeckoDriver to download, sourced from generated code.
   static const _version = geckoDriverVersion;
+  /// Sets up GeckoDriver by downloading and extracting the specified version.
+  ///
+  /// Constructs the download URL based on the platform, downloads the archive
+  /// (tar.gz or zip), extracts it into the [targetDir], and sets executable
+  /// permissions on the `geckodriver` binary (for non-Windows platforms).
+  ///
+  /// Throws an exception if the download or extraction fails.
   @override
   Future<void> setup(String targetDir) async {
     print('Setting up GeckoDriver in: $targetDir');
@@ -32,11 +47,15 @@ class GeckoDriverManager implements WebDriverManager {
     print('GeckoDriver setup complete');
   }
 
+  /// Constructs the full download URL for the configured GeckoDriver version
+  /// ([_version]) and the current platform.
   String _getDriverUrl() {
     final platform = _getCurrentPlatform();
     return '$_baseUrl/$_version/geckodriver-$_version-$platform';
   }
 
+  /// Determines the platform and architecture string used in GeckoDriver
+  /// download artifact names (e.g., 'linux64.tar.gz', 'macos-aarch64.tar.gz', 'win64.zip').
   String _getCurrentPlatform() {
     if (Platform.isLinux) return 'linux64.tar.gz';
     if (Platform.isMacOS) {
@@ -47,6 +66,9 @@ class GeckoDriverManager implements WebDriverManager {
     return 'win64.zip';
   }
 
+  /// Extracts the downloaded GeckoDriver archive from [archivePath] into the
+  /// [targetDir] and sets executable permissions on the driver binary
+  /// (for non-Windows platforms). Handles both `.tar.gz` and `.zip` archives.
   Future<void> _extractDriver(String archivePath, String targetDir) async {
     print('Verifying archive exists: ${await File(archivePath).exists()}');
     print('Archive size: ${await File(archivePath).length()} bytes');
@@ -80,6 +102,8 @@ class GeckoDriverManager implements WebDriverManager {
     }
   }
 
+  /// Downloads the GeckoDriver archive from the given [url] and saves it
+  /// to [outputPath]. Verifies the download was successful and the file was saved.
   Future<void> _downloadDriver(String url, String outputPath) async {
     final response = await http.get(Uri.parse(url));
     if (response.statusCode != 200) {
@@ -102,6 +126,14 @@ class GeckoDriverManager implements WebDriverManager {
     }
   }
 
+  /// Starts the GeckoDriver server process, listening on the specified [port].
+  ///
+  /// Locates the `geckodriver` executable within the driver registry directory,
+  /// starts it detached, and waits for the server to become available by
+  /// attempting to connect to the specified [port].
+  ///
+  /// Throws an exception if the driver executable is not found or fails to start
+  /// within a reasonable timeout.
   @override
   Future<void> start({int port = 4444}) async {
     final targetDir = BrowserPaths.getRegistryDirectory();
@@ -123,6 +155,11 @@ class GeckoDriverManager implements WebDriverManager {
     print('GeckoDriver ready on port $port');
   }
 
+  /// Waits for a network service to start listening on the specified [port]
+  /// on localhost.
+  ///
+  /// Attempts to establish a socket connection periodically until successful or
+  /// a timeout (30 seconds) is reached. Throws an exception on timeout.
   Future<void> _waitForPort(int port) async {
     final stopwatch = Stopwatch()..start();
     while (stopwatch.elapsed < const Duration(seconds: 30)) {
@@ -137,6 +174,8 @@ class GeckoDriverManager implements WebDriverManager {
     throw Exception('GeckoDriver failed to start on port $port');
   }
 
+  /// Stops the running GeckoDriver server process, if one was started by this manager.
+  ///
   @override
   Future<void> stop() async {
     if (_driverProcess != null) {
@@ -145,6 +184,10 @@ class GeckoDriverManager implements WebDriverManager {
     }
   }
 
+  /// Gets the version string of the installed GeckoDriver executable.
+  ///
+  /// Executes `./geckodriver --version` and returns the output. Assumes the
+  /// executable is in the current directory.
   @override
   Future<String> getVersion() async {
     final result = await Process.run('./geckodriver', ['--version']);
@@ -154,6 +197,8 @@ class GeckoDriverManager implements WebDriverManager {
     return result.stdout.toString().trim();
   }
 
+  /// Checks if a process is actively listening on the specified [port] on localhost.
+  ///
   @override
   Future<bool> isRunning(int port) async {
     try {

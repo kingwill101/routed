@@ -12,6 +12,10 @@ import 'browser_paths.dart';
 import 'lock.dart';
 import 'platform_info.dart';
 
+/// Helper function to create an [Executable] instance from a [BrowserDescriptor].
+///
+/// Populates the [Executable] fields based on the descriptor, including
+/// calculating paths, download URLs, and defining install/validation logic.
 Executable? _createExecutableStatic(
   BrowserDescriptor descriptor,
   String registryDir,
@@ -57,6 +61,11 @@ Executable? _createExecutableStatic(
   );
 }
 
+/// Helper function to download and install an executable described by [descriptor].
+///
+/// Uses the provided [urls] or generates them if empty. Iterates through mirror
+/// URLs, attempts download and extraction using [_downloadAndExtractStatic].
+/// Throws [BrowserException] if all download attempts fail.
 Future<void> _downloadExecutableStatic(BrowserDescriptor descriptor,
     [List<String> urls = const []]) async {
   urls = urls.isNotEmpty ? urls : Registry._getDownloadUrlsStatic(descriptor);
@@ -83,17 +92,34 @@ Future<void> _downloadExecutableStatic(BrowserDescriptor descriptor,
   throw BrowserException('Failed to download ${descriptor.name}');
 }
 
+/// Manages the discovery, installation, and validation of browser executables
+/// based on a configuration source (like `browsers.json`).
+///
+/// Provides access to [BrowserDescriptor]s and [Executable] objects, handling
+/// platform-specific details, download URLs, installation paths, and locking.
 class Registry {
+  /// The root directory where browsers are installed and managed.
   final String registryDir;
+  /// A list of resolved [BrowserDescriptor]s relevant for the current platform
+  /// and the requested browser.
   final List<BrowserDescriptor> descriptors;
+  /// The internal list of [Executable] objects created from the descriptors.
   final List<Executable> _executables;
 
+  /// Internal constructor for creating a [Registry] instance.
   Registry._({
     required this.registryDir,
     required this.descriptors,
     required List<Executable> executables,
   }) : _executables = executables;
 
+  /// Creates and initializes a [Registry] instance.
+  ///
+  /// Processes the provided [browsersJson] data, determines the appropriate
+  /// registry directory using [BrowserPaths.getRegistryDirectory], maps the
+  /// [requestedBrowser] name to its internal registry name (e.g., 'chrome' -> 'chromium'),
+  /// creates relevant [BrowserDescriptor]s using [_createBrowserDescriptors],
+  /// and generates corresponding [Executable] objects using [_createExecutableStatic].
   factory Registry(BrowserJson browsersJson,
       {required String requestedBrowser}) {
     final registryDir = BrowserPaths.getRegistryDirectory();
@@ -127,6 +153,11 @@ class Registry {
     );
   }
 
+  /// Creates a list of [BrowserDescriptor]s relevant for the requested [browserName]
+  /// based on the entries in [browsersJson].
+  ///
+  /// Finds the corresponding [BrowserEntry] and uses [_createDescriptorFromEntry]
+  /// to resolve platform-specific details. Currently creates only one descriptor.
   static List<BrowserDescriptor> _createBrowserDescriptors(
     BrowserJson browsersJson,
     String browserName,
@@ -147,6 +178,11 @@ class Registry {
     return [_createDescriptorFromEntry(entry)];
   }
 
+  /// Creates a single [BrowserDescriptor] from a [BrowserEntry].
+  ///
+  /// Resolves the correct revision number based on the current platform ID
+  /// ([PlatformInfo.platformId]) and any overrides defined in the entry's
+  /// `revisionOverrides`. Calculates the final installation directory path.
   static BrowserDescriptor _createDescriptorFromEntry(BrowserEntry entry) {
     final platformId = PlatformInfo.platformId;
     final revision = entry.revisionOverrides?[platformId] ?? entry.revision;
@@ -161,6 +197,11 @@ class Registry {
         dir: BrowserPaths.getBrowserInstallDirectory(entry.name, revision));
   }
 
+  /// Performs post-extraction initialization for a browser installation.
+  ///
+  /// Validates system dependencies using [InstallationValidator.validateDependencies],
+  /// marks the installation as complete using [InstallationValidator.markInstalled],
+  /// and releases the installation [lock].
   static Future<void> _initializeExecutable(
     BrowserDescriptor descriptor,
     InstallationLock lock,
@@ -173,6 +214,13 @@ class Registry {
     }
   }
 
+  /// Downloads an archive from [url], extracts it into the target directory
+  /// specified by the [descriptor] within the main [registryDir], and performs
+  /// initialization using [_initializeExecutable].
+  ///
+  /// Acquires an [InstallationLock] before proceeding and releases it afterwards.
+  /// Uses [BrowserDownloader] for the download and handles ZIP extraction and
+  /// permission setting.
   static Future<void> _downloadAndExtractStatic(
     String url,
     BrowserDescriptor descriptor,
@@ -226,6 +274,10 @@ class Registry {
     }
   }
 
+  /// Generates a list of potential download URLs for the given [descriptor].
+  ///
+  /// Uses [BrowserPaths.downloadPaths] and [BrowserPaths.cdnMirrors] to construct
+  /// URLs based on the descriptor's name, revision, and the current platform ID.
   static List<String> _getDownloadUrlsStatic(BrowserDescriptor descriptor) {
     final paths = BrowserPaths.downloadPaths[descriptor.name];
     if (paths == null) return [];
@@ -239,12 +291,19 @@ class Registry {
         .toList();
   }
 
+  /// Returns an unmodifiable list of all known [Executable]s derived from the
+  /// loaded configuration and relevant to the current platform.
   List<Executable> get executables => List.unmodifiable(_executables);
 
+  /// Returns a list of [Executable]s that are marked for installation by default
+  /// ([InstallType.downloadByDefault]).
   List<Executable> get defaultExecutables => _executables
       .where((e) => e.installType == InstallType.downloadByDefault)
       .toList();
 
+      /// Gets the specific [Executable] instance identified by its [name].
+      ///
+      /// Returns `null` if no executable with the given name is found in the registry.
   Executable? getExecutable(String name) {
     try {
       return _executables.firstWhere((e) => e.name == name);
@@ -253,6 +312,11 @@ class Registry {
     }
   }
 
+  /// Validates platform-specific host requirements for each executable in the
+  /// provided list of [executables].
+  ///
+  /// The [sdkLanguage] parameter provides context, potentially for error messages.
+  /// Delegates to each executable's `validateHostRequirements` method.
   Future<void> validateRequirements(
     List<Executable> executables,
     String sdkLanguage,
@@ -262,6 +326,12 @@ class Registry {
     }
   }
 
+  /// Installs the specified list of [executables].
+  ///
+  /// Iterates through the list and calls the `install` method of each executable,
+  /// if defined. Set [force] to true to potentially trigger reinstallation logic
+  /// within the `install` method (depending on its implementation).
+  /// Throws [BrowserException] if installation is not supported for an executable.
   Future<void> installExecutables(
     List<Executable> executables, {
     bool force = false,
