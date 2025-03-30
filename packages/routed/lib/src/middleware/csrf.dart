@@ -29,20 +29,19 @@ Middleware csrfMiddleware() {
       return;
     }
 
-    // // For state-changing methods, verify the token
-    // final cookieToken = ctx.cookie(config.security.csrfCookieName)?.value;
-    // final sessionToken = await ctx.getSession('csrf_token') as String?;
-    // final requestToken =
-    //     (await ctx.postForm('_csrf')) ?? request.headers['x-csrf-token']?.first;
+    // For state-changing methods, verify the token
+    final cookieToken = ctx.cookie(config.security.csrfCookieName)?.value;
+    final sessionToken = await ctx.getSession('csrf_token') as String?;
+    final requestToken =
+        (await ctx.postForm('_csrf'));
 
-    // if (cookieToken == null ||
-    //     sessionToken == null ||
-    //     requestToken == null ||
-    //     cookieToken != sessionToken ||
-    //     requestToken != sessionToken) {
-    //   ctx.abortWithStatus(HttpStatus.forbidden, 'CSRF token mismatch');
-    //   return;
-    // }
+    if (cookieToken == null ||
+        sessionToken == null ||
+        cookieToken != sessionToken ||
+        requestToken != sessionToken) {
+      ctx.abortWithStatus(HttpStatus.forbidden, 'CSRF token mismatch');
+      return;
+    }
 
     await ctx.next();
   };

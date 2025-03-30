@@ -313,7 +313,7 @@ Middleware requestSizeLimitMiddleware() {
       final byteStream =
           request.cast<List<int>>(); // Ensure we have a byte stream
 
-      final limitedStream = byteStream.transform(
+     byteStream.transform(
         StreamTransformer<List<int>, List<int>>.fromHandlers(
           handleData: (List<int> data, EventSink<List<int>> sink) {
             totalBytesRead += data.length;
@@ -393,12 +393,12 @@ extension SecureEngine on Engine {
           headers[name] = value;
         }
 
-        final method = headers[':method']!;
-        final path = headers[':path']!;
-        final scheme = headers[':scheme']!;
-        final authority = headers[':authority']!;
+        // final _ = headers[':method']!;
+        // final path = headers[':path']!;
+        // final scheme = headers[':scheme']!;
+        // final authority = headers[':authority']!;
 
-        final uri = Uri.parse('$scheme://$authority$path');
+        // final _ = Uri.parse('$scheme://$authority$path');
 
         // final request = Request(method, uri, headers: headers);
 
