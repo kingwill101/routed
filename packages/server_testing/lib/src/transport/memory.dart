@@ -77,7 +77,8 @@ class InMemoryTransport extends TestTransport {
           _cookieStore[cookie.name] = cookie;
         }
       } catch (e, s) {
-        print("Error parsing cookie: $e");
+        print("Error parsing cookie: $cookieStr");
+        print(e.toString());
         print('Stack trace: $s');
       }
     }

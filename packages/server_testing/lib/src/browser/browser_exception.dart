@@ -5,6 +5,7 @@
 class BrowserException implements Exception {
   /// A message describing the error.
   final String message;
+
   /// The underlying error or exception that caused this [BrowserException], if any.
   final dynamic cause;
 
@@ -19,5 +20,29 @@ class BrowserException implements Exception {
       return 'BrowserException: $message (Cause: $cause)';
     }
     return 'BrowserException: $message';
+  }
+}
+
+/// An error indicating that an operation did not complete within the expected time limit.
+///
+/// Distinct from [TimeoutException] which is an [Exception]. This is typically
+/// used for unrecoverable timeout situations.
+class TimeoutException extends BrowserException {
+  /// A message describing the browser error.
+
+  /// The timeout duration that was exceeded, if available.
+  final Duration? timeout;
+
+  TimeoutException(super.message, [this.timeout]);
+
+  /// Returns a string representation including the message, cause, and stack trace if available.
+
+  /// Returns a string representation of the timeout error, including the timeout duration if available.
+  @override
+  String toString() {
+    if (timeout != null) {
+      return 'TimeoutError: $message (${timeout!.inSeconds}s)';
+    }
+    return 'TimeoutError: $message';
   }
 }
