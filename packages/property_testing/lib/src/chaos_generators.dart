@@ -1,9 +1,16 @@
+/// Provides generators for creating chaotic and potentially problematic data
+/// inputs, useful for robustness and security testing. Includes generators for
+/// chaotic strings, integers, JSON, and byte sequences, mimicking common attack
+/// vectors and edge cases.
+library;
 import 'dart:convert';
 import 'dart:math' show Random;
 
 import 'generator_base.dart';
 
 /// Categories of chaotic data
+/// Defines different categories of chaotic data that generators can produce.
+/// Used primarily for configuring the `_ChaoticStringGenerator`.
 enum ChaosCategory {
   /// SQL injection attempts
   sqlInjection,
@@ -37,28 +44,42 @@ enum ChaosCategory {
 }
 
 /// Configuration for chaos generators
-/// Configuration for chaos generators.
+/// Configuration for chaos generators, primarily the string generator.
 ///
-/// Allows customizing the categories of chaos, maximum length of generated
-/// strings, and the intensity (probability) of including chaotic elements.
+/// Allows customizing the types of chaotic data included ([categories]),
+/// the maximum length of generated strings ([maxLength]), and the likelihood
+/// ([intensity]) of including chaotic elements versus random characters.
 ///
+/// Example:
 /// ```dart
+/// // Generate mostly SQL injection and Unicode chaos, up to 500 chars long
 /// final config = ChaosConfig(
 ///   categories: {ChaosCategory.sqlInjection, ChaosCategory.unicode},
 ///   maxLength: 500,
-///   intensity: 0.8,
+///   intensity: 0.8, // 80% chance to pick a chaos element
 /// );
+/// final chaosStringGen = Chaos.string(config: config); // Pass config if generator supports it
 /// ```
+
 class ChaosConfig {
   /// The categories of chaos to include
+  /// The categories of chaos to potentially include in generated strings.
+  /// Defaults to a broad set including SQLi, XSS, path traversal, etc.
   final Set<ChaosCategory> categories;
 
   /// The maximum length for generated strings
+  /// The maximum length (typically in runes/code points for strings) for
+  /// generated chaotic data. Defaults to 1000.
   final int maxLength;
 
   /// The probability of including each type of chaos (0.0 to 1.0)
+  /// The probability (0.0 to 1.0) that a generated element (e.g., a character
+  /// in a string) will be a "chaotic" one (like a control character or part
+  /// of an attack pattern) rather than a standard random character.
+  /// Defaults to 0.5.
   final double intensity;
 
+  /// Creates a configuration for chaos generators.
   const ChaosConfig({
     this.categories = const {
       ChaosCategory.sqlInjection,
@@ -73,51 +94,93 @@ class ChaosConfig {
   });
 }
 
-/// A collection of chaos generators for testing edge cases and security issues
-/// A collection of chaos generators designed for testing edge cases and
-/// security vulnerabilities.
+/// Provides static factory methods for creating chaos generators.
 ///
-/// These generators produce inputs that mimic common attack vectors like
-/// SQL injection, XSS, path traversal, and also generate problematic
-/// data like unicode edge cases, large inputs, and control characters.
+/// These generators produce data designed to stress test systems by including
+/// edge cases, potentially malicious inputs, and unusual values. This helps
+/// uncover bugs related to input validation, parsing, security, and robustness.
 ///
-/// Use static methods like [Chaos.string], [Chaos.integer], [Chaos.json],
-/// and [Chaos.bytes] to create specific chaos generators.
-///
+/// Example:
 /// ```dart
-/// final chaoticStringGen = Chaos.string(maxLength: 50);
-/// final chaoticIntGen = Chaos.integer(min: -100, max: 100);
-/// final chaoticJsonGen = Chaos.json(maxDepth: 2);
-///
-/// final runner = PropertyTestRunner(chaoticStringGen, (input) {
-///   // Test property with chaotic string input
+/// test('API handles chaotic user IDs', () async {
+///   // Generate chaotic strings up to 50 chars long
+///   final chaoticIdGen = Chaos.string(maxLength: 50);
+///   final runner = PropertyTestRunner(chaoticIdGen, (userId) async {
+///     final response = await client.get('/api/users/$userId');
+///     // Ensure the server doesn't crash (500 error)
+///     expect(response.statusCode, lessThan(500));
+///   });
+///   await runner.run();
 /// });
-/// runner.run();
 /// ```
-class Chaos {
 
+class Chaos {
   /// Generate chaotic strings
+  /// Creates a generator for chaotic strings.
+  ///
+  /// Produces strings containing a mix of "problematic" characters (like null
+  /// bytes, control characters, obscure Unicode characters) and random valid
+  /// Unicode code points.
+  ///
+  /// The [minLength] and [maxLength] primarily control the number of Unicode
+  /// code points (runes). The actual `String.length` (UTF-16 code units) might
+  /// exceed [maxLength] if multi-unit characters are generated.
+  ///
+  /// Shrinking attempts to remove characters or replace problematic characters
+  /// with spaces while staying within length bounds.
+  
   static Generator<String> string({
     int? minLength,
     int? maxLength,
   }) =>
       _ChaoticStringGenerator(minLength: minLength, maxLength: maxLength);
 
-  /// Generate chaotic integers
+      /// Creates a generator for chaotic integers.
+      ///
+      /// Produces integers within the optional [min] and [max] bounds. It has a
+      /// high probability of generating common integer edge cases (like 0, 1, -1,
+      /// min/max int values, max safe JS integer) clamped within the bounds,
+      /// as well as random integers within the range.
+      ///
+      /// Shrinking targets 0 (if in range) or the `min`/`max` boundary, as well
+      /// as the included edge cases.
+      
   static Generator<int> integer({
     int? min,
     int? max,
   }) =>
       _ChaoticIntGenerator(min: min, max: max);
 
-  /// Generate chaotic JSON
+      /// Creates a generator for chaotic JSON strings.
+      ///
+      /// Produces strings that are *likely* JSON, but may contain structural errors,
+      /// problematic characters within strings, deeply nested structures (up to
+      /// [maxDepth]), or large arrays/objects (up to [maxLength] elements/keys
+      /// per level).
+      ///
+      /// This is useful for testing JSON parser robustness.
+      ///
+      /// Shrinking attempts to simplify the structure (removing keys/elements) and
+      /// targets basic valid JSON primitives (`{}`, `[]`, `null`, `""`, `0`, `true`, `false`).
+      /// Note: Shrinking might sometimes result in invalid JSON if the original was invalid.
+      
   static Generator<String> json({
     int maxDepth = 3,
     int maxLength = 10,
   }) =>
       _ChaoticJsonGenerator(maxDepth: maxDepth, maxLength: maxLength);
 
-  /// Generate chaotic byte arrays
+      /// Creates a generator for chaotic byte lists (`List<int>`).
+      ///
+      /// Produces lists of integers (each 0-255) within the optional [minLength]
+      /// and [maxLength]. Includes a mix of random bytes and "problematic" bytes
+      /// (like 0x00, 0xFF, BOM sequences, control characters).
+      ///
+      /// Useful for testing binary data parsing or handling.
+      ///
+      /// Shrinking attempts to remove bytes, replace problematic bytes with 0x00,
+      /// and shrink towards the minimum length or an empty list.
+      
   static Generator<List<int>> bytes({
     int? minLength,
     int? maxLength,
@@ -125,6 +188,7 @@ class Chaos {
       _ChaoticBytesGenerator(minLength: minLength, maxLength: maxLength);
 }
 
+/// Internal implementation for generating chaotic strings.
 class _ChaoticStringGenerator extends Generator<String> {
   final int minLength;
   final int maxLength;
@@ -199,18 +263,22 @@ class _ChaoticStringGenerator extends Generator<String> {
         maxLength = maxLength ?? 100;
 
   @override
-  ShrinkableValue<String> generate([Random? random]) {
-    final rng = random ?? Random(42);
-    final length = minLength + rng.nextInt(maxLength - minLength + 1);
+  ShrinkableValue<String> generate(Random random) {
+    final length = minLength + random.nextInt(maxLength - minLength + 1);
     final buffer = StringBuffer();
 
     for (var i = 0; i < length; i++) {
-      if (rng.nextBool()) {
+      if (random.nextBool()) {
         // Use a problematic character
-        buffer.write(_problematicChars[rng.nextInt(_problematicChars.length)]);
+        buffer.write(_problematicChars[random.nextInt(_problematicChars.length)]);
       } else {
         // Use a random Unicode character
-        buffer.writeCharCode(rng.nextInt(0x10FFFF));
+        // Avoid generating surrogate code points which are invalid alone
+        int codePoint;
+        do {
+            codePoint = random.nextInt(0x10FFFF + 1);
+        } while (codePoint >= 0xD800 && codePoint <= 0xDFFF);
+        buffer.writeCharCode(codePoint);
       }
     }
 
@@ -239,6 +307,7 @@ class _ChaoticStringGenerator extends Generator<String> {
   }
 }
 
+/// Internal implementation for generating chaotic integers.
 class _ChaoticIntGenerator extends Generator<int> {
   final int min;
   final int max;
@@ -263,34 +332,57 @@ class _ChaoticIntGenerator extends Generator<int> {
         max = max ?? 9223372036854775807;
 
   @override
-  ShrinkableValue<int> generate([Random? random]) {
-    final rng = random ?? Random(42);
-    final useProblematic = rng.nextBool();
+  ShrinkableValue<int> generate(Random random) {
+    final useProblematic = random.nextBool();
 
-    final value = useProblematic
-        ? _edgeCases[rng.nextInt(_edgeCases.length)]
-        : min + rng.nextInt(max - min + 1);
+    // Ensure generated value is within bounds
+    int value;
+    if (useProblematic) {
+       value = _edgeCases[random.nextInt(_edgeCases.length)];
+       // Clamp problematic value within configured min/max
+       if (value < min) value = min;
+       if (value > max) value = max;
+    } else {
+        final range = max - min + 1;
+        value = range <= 0 ? min : min + random.nextInt(range);
+    }
+
 
     return ShrinkableValue(value, () sync* {
-      // Try problematic values that are smaller
+      // Try problematic values that are smaller (closer to zero or min)
       for (final problematic in _edgeCases) {
-        if (problematic < value && problematic >= min) {
-          yield ShrinkableValue.leaf(problematic);
+        if (problematic >= min && problematic <= max) { // Ensure within bounds
+          if ((value > 0 && problematic < value && problematic >= 0) || // Shrink positive towards 0
+              (value < 0 && problematic > value && problematic <= 0) || // Shrink negative towards 0
+              (problematic == min && value != min)) { // Always try min
+            yield ShrinkableValue.leaf(problematic);
+          }
         }
       }
 
-      // Try regular shrinking
+      // Try regular shrinking towards zero (or min/max if zero is out of bounds)
       var current = value;
-      while (current != 0 && current > min) {
-        current ~/= 2;
-        if (current >= min) {
-          yield ShrinkableValue.leaf(current);
-        }
+      final target = (min <= 0 && max >= 0) ? 0 : (value > 0 ? min : max);
+
+      while (current != target) {
+         final next = (current + target) ~/ 2; // Move halfway to target
+         if (next == current) break; // Avoid infinite loop if no change
+         // Ensure next is within bounds before yielding
+         if (next >= min && next <= max) {
+            yield ShrinkableValue.leaf(next);
+         }
+         current = next;
+      }
+       // Ensure the target itself is yielded if it wasn't reached and is valid
+      if (current != target && target >= min && target <= max && value != target) {
+          yield ShrinkableValue.leaf(target);
       }
     });
   }
 }
 
+
+/// Internal implementation for generating chaotic JSON strings.
 class _ChaoticJsonGenerator extends Generator<String> {
   final int maxDepth;
   final int maxLength;
@@ -301,9 +393,8 @@ class _ChaoticJsonGenerator extends Generator<String> {
   });
 
   @override
-  ShrinkableValue<String> generate([Random? random]) {
-    final rng = random ?? Random(42);
-    final value = _generateJson(0, rng);
+  ShrinkableValue<String> generate(Random random) {
+    final value = generateJson(0, random); // Updated call
 
     return ShrinkableValue(value, () sync* {
       try {
@@ -312,39 +403,79 @@ class _ChaoticJsonGenerator extends Generator<String> {
           // Try removing keys
           final map = Map<String, dynamic>.from(decoded);
           for (final key in map.keys.toList()) {
-            map.remove(key);
-            yield ShrinkableValue.leaf(json.encode(map));
+            final tempMap = Map<String, dynamic>.from(map)..remove(key);
+            yield ShrinkableValue.leaf(json.encode(tempMap));
+          }
+           // Try shrinking values within the map
+          for (final entry in (decoded).entries) {
+             // Simplified: only shrink leaf strings for now
+             if(entry.value is String) {
+                final stringVal = entry.value as String;
+                 if(stringVal.length > 1) {
+                    final tempMap = Map<String, dynamic>.from(map);
+                    tempMap[entry.key] = stringVal.substring(0, stringVal.length ~/ 2);
+                    yield ShrinkableValue.leaf(json.encode(tempMap));
+                 }
+             }
           }
         } else if (decoded is List) {
           // Try removing elements
           final list = List.from(decoded);
-          for (var i = 0; i < list.length; i++) {
-            list.removeAt(i);
-            yield ShrinkableValue.leaf(json.encode(list));
+          if (list.isNotEmpty) {
+              for (var i = 0; i < list.length; i++) {
+                final tempList = List.from(list)..removeAt(i);
+                yield ShrinkableValue.leaf(json.encode(tempList));
+              }
           }
+           // Try shrinking elements within the list
+            for(var i = 0; i < (decoded).length; i++) {
+                 final element = decoded[i];
+                 // Simplified: only shrink leaf strings for now
+                 if(element is String) {
+                     if(element.length > 1) {
+                         final tempList = List.from(list);
+                         tempList[i] = element.substring(0, element.length ~/ 2);
+                         yield ShrinkableValue.leaf(json.encode(tempList));
+                     }
+                 }
+            }
         }
+         // Try shrinking to simpler valid JSON types
+        if (decoded is Map && (decoded).isNotEmpty) yield ShrinkableValue.leaf('{}');
+        if (decoded is List && (decoded).isNotEmpty) yield ShrinkableValue.leaf('[]');
+        if (value != 'null') yield ShrinkableValue.leaf('null');
+        if (value != '""') yield ShrinkableValue.leaf('""');
+        if (value != '0') yield ShrinkableValue.leaf('0');
+        if (value != 'true') yield ShrinkableValue.leaf('true');
+        if (value != 'false') yield ShrinkableValue.leaf('false');
+
       } catch (_) {
-        // If we can't parse the JSON, we can't shrink it
+        // If we can't parse the JSON initially, try yielding simple valid JSON
+        yield ShrinkableValue.leaf('{}');
+        yield ShrinkableValue.leaf('[]');
+        yield ShrinkableValue.leaf('null');
       }
     });
   }
 
-  String _generateJson(int depth, Random random) {
+  // Renamed local helper method
+  String generateJson(int depth, Random random) {
     if (depth >= maxDepth) {
-      return _generateLeafValue(random);
+      return generateLeafValue(random);
     }
 
     switch (random.nextInt(3)) {
       case 0:
-        return _generateLeafValue(random);
+        return generateLeafValue(random);
       case 1:
-        return _generateObject(depth, random);
+        return generateObject(depth, random);
       default:
-        return _generateArray(depth, random);
+        return generateArray(depth, random);
     }
   }
 
-  String _generateLeafValue(Random random) {
+  // Renamed local helper method
+  String generateLeafValue(Random random) {
     switch (random.nextInt(4)) {
       case 0:
         return random.nextBool().toString();
@@ -353,44 +484,63 @@ class _ChaoticJsonGenerator extends Generator<String> {
       case 2:
         return 'null';
       default:
-        return '"${_generateString(random)}"';
+        return '"${generateString(random)}"';
     }
   }
 
-  String _generateObject(int depth, Random random) {
-    final length = random.nextInt(maxLength);
+  // Renamed local helper method
+  String generateObject(int depth, Random random) {
+    final length = random.nextInt(maxLength + 1); // Allow empty objects
     final entries = <String>[];
 
     for (var i = 0; i < length; i++) {
-      final key = _generateString(random);
-      final value = _generateJson(depth + 1, random);
-      entries.add('"$key": $value');
+      final key = generateString(random);
+      final value = generateJson(depth + 1, random);
+      entries.add('"${_escapeString(key)}": $value'); // Escape key
     }
 
     return '{${entries.join(', ')}}';
   }
 
-  String _generateArray(int depth, Random random) {
-    final length = random.nextInt(maxLength);
+  // Renamed local helper method
+  String generateArray(int depth, Random random) {
+    final length = random.nextInt(maxLength + 1); // Allow empty arrays
     final elements = List.generate(
       length,
-      (_) => _generateJson(depth + 1, random),
+      (_) => generateJson(depth + 1, random),
     );
 
     return '[${elements.join(', ')}]';
   }
 
-  String _generateString(Random random) {
+  // Renamed local helper method
+  String generateString(Random random) {
     final length = random.nextInt(10);
     final chars = List.generate(
       length,
       (_) => _ChaoticStringGenerator._problematicChars[
           random.nextInt(_ChaoticStringGenerator._problematicChars.length)],
     );
-    return chars.join();
+    // Basic JSON string escaping
+    return _escapeString(chars.join());
+  }
+
+  // Helper to escape strings for JSON
+   String _escapeString(String s) {
+      return s
+          .replaceAll('\\', r'\\')
+          .replaceAll('"', r'\"')
+          .replaceAll('\b', r'\b')
+          .replaceAll('\f', r'\f')
+          .replaceAll('\n', r'\n')
+          .replaceAll('\r', r'\r')
+          .replaceAll('\t', r'\t');
+          // Note: Does not handle unicode escapes \uXXXX for simplicity here
   }
 }
 
+
+/// Internal implementation for generating chaotic byte lists.
 class _ChaoticBytesGenerator extends Generator<List<int>> {
   final int minLength;
   final int maxLength;
@@ -402,10 +552,11 @@ class _ChaoticBytesGenerator extends Generator<List<int>> {
     0x1A, // EOF
     0x0A, // Line feed
     0x0D, // Carriage return
-    0xFE, // UTF-16 BOM
-    0xEF, // UTF-8 BOM
-    0xBB, // UTF-8 BOM
-    0xBF, // UTF-8 BOM
+    0xFE, // UTF-16 BOM byte
+    0xFF, // UTF-16 BOM byte / Max byte
+    0xEF, // UTF-8 BOM byte
+    0xBB, // UTF-8 BOM byte
+    0xBF, // UTF-8 BOM byte
   ];
 
   _ChaoticBytesGenerator({
@@ -415,18 +566,25 @@ class _ChaoticBytesGenerator extends Generator<List<int>> {
         maxLength = maxLength ?? 100;
 
   @override
-  ShrinkableValue<List<int>> generate([Random? random]) {
-    final rng = random ?? Random(42);
-    final length = minLength + rng.nextInt(maxLength - minLength + 1);
+  ShrinkableValue<List<int>> generate(Random random) {
+    final length = minLength + random.nextInt(maxLength - minLength + 1);
     final bytes = List<int>.generate(length, (i) {
-      return rng.nextBool()
-          ? _problematicBytes[rng.nextInt(_problematicBytes.length)]
-          : rng.nextInt(256);
+      return random.nextBool()
+          ? _problematicBytes[random.nextInt(_problematicBytes.length)]
+          : random.nextInt(256);
     });
 
     return ShrinkableValue(bytes, () sync* {
       // Try removing bytes
       if (bytes.length > minLength) {
+        // Shrink towards half the size first
+        if (bytes.length > 1) {
+           final halfLen = (bytes.length + minLength) ~/ 2;
+           if (halfLen >= minLength && halfLen < bytes.length) {
+             yield ShrinkableValue.leaf(bytes.sublist(0, halfLen));
+           }
+        }
+        // Try removing individual bytes
         for (var i = 0; i < bytes.length; i++) {
           final shortened = List<int>.from(bytes)..removeAt(i);
           if (shortened.length >= minLength) {
@@ -436,13 +594,26 @@ class _ChaoticBytesGenerator extends Generator<List<int>> {
       }
 
       // Try replacing problematic bytes with zeros
+      bool changed = false;
+      final simplified = List<int>.from(bytes);
       for (var i = 0; i < bytes.length; i++) {
-        if (_problematicBytes.contains(bytes[i])) {
-          final simplified = List<int>.from(bytes);
+        if (_problematicBytes.contains(bytes[i]) && bytes[i] != 0) {
           simplified[i] = 0;
-          yield ShrinkableValue.leaf(simplified);
+          changed = true;
         }
       }
+      if (changed) {
+         yield ShrinkableValue.leaf(simplified);
+      }
+
+       // Try yielding the minimal list if not already generated
+      if (minLength > 0 && bytes.length > minLength) {
+         final minList = List.filled(minLength, 0); // Simplest min-length list
+         yield ShrinkableValue.leaf(minList);
+      } else if (minLength == 0 && bytes.isNotEmpty) {
+         yield ShrinkableValue.leaf([]); // Empty list
+      }
+
     });
   }
 }

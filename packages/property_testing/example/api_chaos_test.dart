@@ -38,5 +38,4 @@ void main() async {
   );
 
   final result = await runner.run();
-  print(result.report);
 }

@@ -24,23 +24,23 @@
     - [x] Delete `lib/src/property_test.dart` (containing `ForAllTester`, old `Generator` typedef, etc.).
     - [x] Delete `test/property/record_test.dart`.
     - [x] Ensure no examples or tests still reference the deleted files/classes (especially `Any`).
+5.  **Require `Random` in `Generator.generate`:**
+    - [x] Change signature from `generate([Random? random])` to `generate(Random random)`.
+    - [x] Update all generator implementations (`primitive_generators`, `chaos_generators`, `specialized_generators`, `generator_base` combinators) to accept the required `Random` instance and remove internal `?? Random()` defaults.
+    - [x] Ensure `PropertyTestRunner` correctly passes the configured `Random` instance.
 
 **Medium Priority / Recommended:**
 
-5.  **Add Comprehensive DartDoc:**
-    - [ ] Document all public classes in `lib/src/` (`Generator`, `PropertyTestRunner`, `ShrinkableValue`, `PropertyConfig`, `PropertyResult`, stateful classes, `ChaosConfig`, etc.).
-    - [ ] Document all public methods, especially generator combinators.
-    - [ ] Explain the purpose, configuration, and shrinking strategy of each generator type (`Gen`, `Specialized`, `Chaos`).
-    - [ ] Document stateful testing concepts (`Command`, `StatefulPropertyBuilder`, `StatefulPropertyRunner`).
-6.  **Require `Random` in `Generator.generate`:**
-    - [ ] Change signature from `generate([Random? random])` to `generate(Random random)`.
-    - [ ] Update all generator implementations (`primitive_generators`, `chaos_generators`, `specialized_generators`, `generator_base` combinators) to accept the required `Random` instance and remove internal `?? Random()` defaults.
-    - [ ] Ensure `PropertyTestRunner` correctly passes the configured `Random` instance.
+6.  **Add Comprehensive DartDoc:**
+    - [x] Document main public classes (`Generator`, `PropertyTestRunner`, `ShrinkableValue`, `PropertyConfig`, `PropertyResult`, `ChaosConfig`, `Gen`, `Specialized`, `Chaos`).
+    - [x] Document stateful testing concepts (`Command`, `StatefulPropertyBuilder`, `StatefulPropertyRunner`).
+    - [ ] Document _all_ public methods, especially generator combinators.
+    - [ ] Explain the purpose, configuration, and shrinking strategy of each generator type (`Gen`, `Specialized`, `Chaos`) in more detail.
 7.  **Expand Test Coverage:**
-    - [x] Add tests for `PropertyTestRunner` focusing on shrinking behavior.
-    - [x] Add tests for all primitive generators in `Gen`.
-    - [x] Add tests for all chaos generators in `Chaos` and `ChaosConfig`.
-    - [x] Add tests for generator combinators (`map`, `flatMap`, `where`, `list`, `setOf`, `frequency`, `oneOf`, tuples, `recursive`, `payload`).
+    - [x] Add tests for `PropertyTestRunner` focusing on shrinking behavior (`shrinking_test.dart`).
+    - [ ] Add explicit tests for all primitive generators in `Gen`.
+    - [ ] Add tests for all chaos generators in `Chaos` and `ChaosConfig`.
+    - [x] Add tests for generator combinators (`generator_composition_test.dart`).
     - [ ] Add tests for stateful testing components (`CommandSequence`, `StatefulPropertyBuilder`, `StatefulPropertyRunner`, precondition-aware shrinking).
 8.  **Clarify `Gen.payload`:**
     - [ ] Add documentation explaining its use case (simple, schema-based maps) and contrast it with `Gen.map`/tuples. Consider if it should be deprecated or kept for convenience.
@@ -49,14 +49,12 @@
 
 9.  **Optimize Stateful Shrinking:**
     - [ ] Investigate if `shrinkWithPreconditions` performance can be improved for very long command sequences (potentially complex).
-
 10. **Improve Documentation Quality:**
     - [ ] Follow Dart documentation best practices (see dartdoc.mdc rules).
     - [ ] Add examples to all public API documentation.
-    - [ ] Document shrinking strategies for each generator type.
+    - [ ] Document shrinking strategies for each generator type in more detail.
     - [ ] Add cross-references between related classes and methods.
     - [ ] Include property-based testing best practices and patterns.
-
 11. **Enhance Tuple Generators:**
     - [x] Add comprehensive tests for all tuple generators (TupleGenerator2, TupleGenerator3, TupleGenerator4).
     - [ ] Document tuple generator shrinking strategies.

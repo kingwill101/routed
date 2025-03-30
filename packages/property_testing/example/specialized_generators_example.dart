@@ -19,7 +19,6 @@ void main() {
       );
 
       final result = await runner.run();
-      print(result.report);
     });
 
     test('Duration arithmetic properties', () async {
@@ -37,7 +36,6 @@ void main() {
       );
 
       final result = await runner.run();
-      print(result.report);
     });
 
     test('URI parsing properties', () async {
@@ -59,7 +57,6 @@ void main() {
       );
 
       final result = await runner.run();
-      print(result.report);
     });
 
     test('Email validation properties', () async {
@@ -80,7 +77,6 @@ void main() {
       );
 
       final result = await runner.run();
-      print(result.report);
     });
 
     test('Semantic version ordering properties', () async {
@@ -104,7 +100,6 @@ void main() {
       );
 
       final result = await runner.run();
-      print(result.report);
     });
 
     test('Color blending properties', () async {
@@ -129,12 +124,11 @@ void main() {
           expect(blended.b, greaterThanOrEqualTo(min(c1.b, c2.b)));
           expect(blended.b, lessThanOrEqualTo(max(c1.b, c2.b)));
         },
-      );
-
+        );
+  
       final result = await runner.run();
-      print(result.report);
     });
-  });
+      });
 }
 
 /// Simple semantic version class for comparison testing

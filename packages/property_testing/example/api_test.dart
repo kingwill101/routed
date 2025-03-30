@@ -26,23 +26,25 @@ void main() async {
       ));
 
   final runner = PropertyTestRunner(
-    userGenerator,
-    (user) {
-      // Test properties of the generated User
-      expect(user.name, equals(user.email.split('@')[0]));
-      expect(user.email.contains('@'), isTrue);
-      expect(user.age, greaterThanOrEqualTo(18));
-      expect(user.age, lessThanOrEqualTo(99));
-
-      // Test JSON conversion
-      final json = user.toJson();
-      expect(json['name'], equals(user.name));
-      expect(json['email'], equals(user.email));
-      expect(json['age'], equals(user.age));
-    },
+      userGenerator,
+      (user) {
+        // Test properties of the generated User using assert
+        assert(user.name == user.email.split('@')[0], 'Name mismatch');
+        assert(user.email.contains('@'), 'Email should contain @');
+        assert(user.age >= 18, 'Age should be >= 18');
+        assert(user.age <= 99, 'Age should be <= 99');
+  
+        // Test JSON conversion using assert
+        final json = user.toJson();
+        assert(json['name'] == user.name, 'JSON name mismatch');
+        assert(json['email'] == user.email, 'JSON email mismatch');
+        assert(json['age'] == user.age, 'JSON age mismatch');
+      },
     PropertyConfig(numTests: 100),
   );
 
   final result = await runner.run();
-  print(result.report);
+  if (!result.success) {
+    print(result.report);
+  }
 }

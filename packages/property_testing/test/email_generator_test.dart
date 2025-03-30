@@ -148,18 +148,17 @@ void main() {
       final random = Random(42);
       final config = PropertyConfig(numTests: 100, random: random);
       final runner = PropertyTestRunner(
-        Specialized.email(maxLocalPartLength: 1),
-        (email) {
-          final localPart = email.split('@')[0];
-          try {
-            expect(localPart.length, equals(1));
-            expect(
+              Specialized.email(maxLocalPartLength: 1),
+              (email) {
+                // final localPart = email.split('@')[0]; // Removed unused variable
+                try {
+                  expect(email.split('@')[0].length, equals(1)); // Use expression directly
+                  expect(
                 email,
                 matches(
                     r'^[a-zA-Z0-9]@')); // Only one alphanumeric character before @
           } catch (e) {
             print('Failed with email: $email');
-            print('Local part: $localPart');
             rethrow;
           }
         },
@@ -168,9 +167,9 @@ void main() {
 
       final result = await runner.run();
       if (!result.success) {
-        print('Test failed with input: ${result.failingInput}');
-        print('Original failing input: ${result.originalFailingInput}');
-        print('Error: ${result.error}');
+        final email = result.failingInput;
+        // final localPart = email.split('@')[0]; // Unused
+        fail('Email validation failed for maxLocalPartLength=1: $email. Error: ${result.error}');
       }
       expect(result.success, isTrue);
     });
@@ -194,6 +193,9 @@ void main() {
       );
 
       final result = await runner.run();
+      if (!result.success) {
+        fail('Test failed: ${result.error}\nInput: ${result.failingInput}\nOriginal input: ${result.originalFailingInput}');
+      }
       expect(result.success, isTrue);
     });
   });

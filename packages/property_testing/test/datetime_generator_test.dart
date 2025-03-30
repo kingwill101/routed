@@ -55,7 +55,6 @@ void main() {
       );
 
       final result = await runner.run();
-      print('Shrunk to: ${result.failingInput}');
       expect(result.success, isFalse);
       expect(result.failingInput, isNotNull);
       expect((result.failingInput as DateTime).isBefore(min), isFalse,
@@ -67,30 +66,22 @@ void main() {
     test('generates dates across full range', () async {
       final min = DateTime(2000);
       final max = DateTime(2001);
-      final seenMonths = <int>{};
+      final seenMonths = <int, int>{};
       final seenDays = <int>{};
       final seenHours = <int>{};
 
       final runner = PropertyTestRunner(
         Specialized.dateTime(min: min, max: max),
         (date) {
-          print(
-              'Generated date for month distribution: $date, month: ${date.month}');
-          seenMonths.add(date.month);
+          seenMonths[date.month] = (seenMonths[date.month] ?? 0) + 1;
           seenDays.add(date.day);
           seenHours.add(date.hour);
-
-          print('Seen months so far: $seenMonths');
         },
         PropertyConfig(numTests: 1000),
       );
 
       await runner.run();
 
-      // We should see a good distribution of values
-      print('Final months distribution: $seenMonths');
-      print('Final days distribution: $seenDays');
-      print('Final hours distribution: $seenHours');
 
       expect(seenMonths.length, greaterThan(6)); // Should see most months
       expect(seenDays.length, greaterThan(15)); // Should see many days
@@ -108,9 +99,6 @@ void main() {
           utc: true, // Force UTC to avoid timezone issues
         ),
         (date) {
-          print('Generated date: $date');
-          print('Min date: $min');
-          print('Max date: $max');
           // Check that it's either Dec 31, 1969 or Jan 1, 1970 depending on timezone
           if (date.isUtc) {
             expect(date.year, equals(1970), reason: 'UTC year should be 1970');
@@ -219,11 +207,6 @@ void main() {
           dates.add(date);
           if (dates.length >= 2) {
             for (var i = 1; i < dates.length; i++) {
-              if (dates[i - 1].isAfter(dates[i])) {
-                print('Order violation:');
-                print('Previous: ${dates[i - 1]}');
-                print('Current: ${dates[i]}');
-              }
               expect(dates[i - 1].isAfter(dates[i]), isFalse,
                   reason: 'Dates should be in chronological order');
             }

@@ -31,25 +31,23 @@ class SemverGenerator extends Generator<String> {
   });
 
   @override
-  ShrinkableValue<String> generate([math.Random? random]) {
-    final rng = random ?? math.Random(42);
-
-    // Generate version numbers with good distribution
-    final major = rng.nextInt(10); // 0-9
-    final minor = rng.nextInt(20); // 0-19
-    final patch = rng.nextInt(50); // 0-49
-
-    var version = '$major.$minor.$patch';
-
-    // Add prerelease with 50% probability if enabled
-    if (prerelease && rng.nextBool()) {
-      version += '-${_generatePrerelease(rng)}';
-    }
-
-    // Add build metadata with 50% probability if enabled
-    if (build && rng.nextBool()) {
-      version += '+${_generateBuild(rng)}';
-    }
+    ShrinkableValue<String> generate(math.Random random) {
+      // Use the provided random generator
+      final major = random.nextInt(10); // 0-9
+        final minor = random.nextInt(20); // 0-19
+            final patch = random.nextInt(50); // 0-49
+        
+            var version = '$major.$minor.$patch';
+        
+            // Add prerelease with 50% probability if enabled
+            if (prerelease && random.nextBool()) {
+              version += '-${_generatePrerelease(random)}';
+            }
+        
+            // Add build metadata with 50% probability if enabled
+            if (build && random.nextBool()) {
+              version += '+${_generateBuild(random)}';
+            }
 
     return ShrinkableValue(version, () sync* {
       // Try removing build metadata

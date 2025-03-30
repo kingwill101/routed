@@ -94,12 +94,7 @@ void main() {
       final result = await runner.run();
 
       if (!result.success) {
-        print("Failing input: ${result.failingInput}");
-
-        print("Number of shrinks ${result.numShrinks}");
-        print("Original failing input: ${result.originalFailingInput}");
-        print("Error: ${result.error}");
-        print("Stack trace: ${result.stackTrace}");
+        print(result.report);
       }
       expect(result.success, isTrue);
     });
@@ -138,12 +133,7 @@ void main() {
       final result = await runner.run();
 
       if (!result.success) {
-        print("Failing input: ${result.failingInput}");
-
-        print("Number of shrinks ${result.numShrinks}");
-        print("Original failing input: ${result.originalFailingInput}");
-        print("Error: ${result.error}");
-        print("Stack trace: ${result.stackTrace}");
+        // Error handling without prints
       }
       expect(result.success, isTrue);
     });
