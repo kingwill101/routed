@@ -97,7 +97,7 @@ class Request {
   String get scheme => httpRequest.uri.scheme;
 
   /// Returns the value of the specified header [name].
-  header(String name) => httpRequest.headers[name];
+  String header(String name) => httpRequest.headers[name]?.join(',') ?? '';
 
   /// Returns the remote address of the client making the request.
   String get remoteAddr =>

@@ -155,12 +155,14 @@ class FileStore implements Store, LockProvider {
   Future<dynamic> increment(String key, [dynamic value = 1]) async {
     final raw = _getPayload(key);
     final currentValue = raw['data'] ?? 0;
+    final num numValue = (value is num) ? value : 1;
     final newValue = (currentValue is int
             ? currentValue
             : int.parse(currentValue.toString())) +
-        value;
+        numValue;
     final expiresAt = raw['time'] ?? 0;
-    put(key, newValue, expiresAt == 0 ? 0 : expiresAt);
+    final int expTime = (expiresAt is int) ? expiresAt : 0;
+    put(key, newValue, expTime == 0 ? 0 : expTime);
     return newValue;
   }
 
@@ -169,7 +171,8 @@ class FileStore implements Store, LockProvider {
   /// Returns the new value.
   @override
   Future<dynamic> decrement(String key, [dynamic value = 1]) async {
-    return increment(key, -value);
+    final num numValue = (value is num) ? value : 1;
+    return increment(key, -numValue);
   }
 
   /// Stores an item in the cache permanently, without expiration.
@@ -238,18 +241,20 @@ class FileStore implements Store, LockProvider {
   /// Checks if a cache item has expired.
   ///
   /// Returns true if the item has expired; otherwise, returns false.
-  bool _isExpired(int expiresAt) {
-    return expiresAt != 0 &&
-        (DateTime.now().millisecondsSinceEpoch / 1000) >= expiresAt;
+  bool _isExpired(dynamic expiresAt) {
+    final int expTime = expiresAt is int ? expiresAt : 0;
+    return expTime != 0 &&
+        (DateTime.now().millisecondsSinceEpoch / 1000) >= expTime;
   }
 
   /// Gets the remaining time until a cache item expires.
   ///
   /// Returns the remaining time in seconds, or 0 if the item does not expire.
-  int _getRemainingTime(int expiresAt) {
-    return expiresAt == 0
+  int _getRemainingTime(dynamic expiresAt) {
+    final int expTime = expiresAt is int ? expiresAt : 0;
+    return expTime == 0
         ? 0
-        : (expiresAt - DateTime.now().millisecondsSinceEpoch) ~/ 1000;
+        : (expTime - DateTime.now().millisecondsSinceEpoch) ~/ 1000;
   }
 
   /// Calculates the expiration timestamp based on the specified TTL.

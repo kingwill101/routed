@@ -43,7 +43,7 @@ void main() {
         path: '/api/v1',
         builder: (router) {
           // Regular API route
-          router.get('/users', (ctx) => ctx.json({'users': []}));
+          router.get('/users', (ctx) => ctx.json({'users': <Object>[]}));
 
           // API-specific fallback
           router.fallback((ctx) {
@@ -60,7 +60,7 @@ void main() {
       var response = await client.get('/api/v1/users');
       response
         ..assertStatus(200)
-        ..assertJson((json) => json.where('users', []));
+        ..assertJson((json) => json.where('users', <Object>[]));
 
       // Test unmatched API route
       response = await client.get('/api/v1/nonexistent');

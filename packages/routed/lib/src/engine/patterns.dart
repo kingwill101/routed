@@ -92,7 +92,7 @@ String? getPattern(String? type) {
 /// Gets the global parameter pattern for a given parameter name
 /// [paramName] The parameter name to look up
 /// Returns the pattern string or null if not found
-getGlobalParamPattern(String paramName) {
+String? getGlobalParamPattern(String paramName) {
   return _globalParamPatterns[paramName];
 }
 
@@ -110,7 +110,7 @@ TypeDefinition? getTypeDefinition(String name) {
 }
 
 @visibleForTesting
-clearCustomPatterns() {
+void clearCustomPatterns() {
   customTypePatterns.clear();
   _globalParamPatterns.clear();
 }

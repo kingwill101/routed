@@ -6,6 +6,8 @@ class ArrayStoreFactory implements StoreFactory {
   @override
   Store create(Map<String, dynamic> config) {
     // Create an ArrayStore using configuration values.
-    return ArrayStore(config['serialize'] ?? false);
+    final dynamic serializeValue = config['serialize'];
+    final bool serialize = serializeValue is bool ? serializeValue : false;
+    return ArrayStore(serialize);
   }
 }

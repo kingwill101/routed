@@ -20,8 +20,9 @@ class RepositoryImpl implements Repository {
   /// - Returns: The cached item or the [defaultValue] if the item is not found.
   @override
   Future<dynamic> pull(dynamic key, [dynamic defaultValue]) async {
-    final value = await store.get(key);
-    await store.forget(key);
+    final String keyString = key is String ? key : key.toString();
+    final value = await store.get(keyString);
+    await store.forget(keyString);
     return value ?? defaultValue;
   }
 
@@ -60,7 +61,8 @@ class RepositoryImpl implements Repository {
   /// - Returns: The new value after incrementing.
   @override
   Future<dynamic> increment(String key, [dynamic value = 1]) async {
-    return await store.increment(key, value);
+    final int incrementValue = value is int ? value : 1;
+    return await store.increment(key, incrementValue);
   }
 
   /// Decrements the value of an item in the cache.
@@ -71,7 +73,8 @@ class RepositoryImpl implements Repository {
   /// - Returns: The new value after decrementing.
   @override
   Future<dynamic> decrement(String key, [dynamic value = 1]) async {
-    return await store.decrement(key, value);
+    final int decrementValue = value is int ? value : 1;
+    return await store.decrement(key, decrementValue);
   }
 
   /// Stores an item in the cache indefinitely.
@@ -99,7 +102,14 @@ class RepositoryImpl implements Repository {
       return value;
     }
     final result = await callback();
-    int seconds = ttl is Duration ? ttl.inSeconds : ttl;
+    int seconds;
+    if (ttl is Duration) {
+      seconds = ttl.inSeconds;
+    } else if (ttl is int) {
+      seconds = ttl;
+    } else {
+      seconds = 0;
+    }
     await store.put(key, result, seconds);
     return result;
   }

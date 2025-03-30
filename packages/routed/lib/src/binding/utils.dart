@@ -167,16 +167,30 @@ String _findNextAvailableKey(Map<String, dynamic> map) {
 /// Flattens any single-element lists in a nested map structure.
 /// If a map entry's value is a list of length == 1, replace it with that element.
 /// If that element is also a map, recurse. If the value is a map, recurse into it.
-dynamic _flattenSingles(dynamic value) {
+Map<String, dynamic> _flattenSingles(dynamic value) {
   if (value is Map<String, dynamic>) {
     final result = <String, dynamic>{};
     value.forEach((k, v) {
-      result[k] = _flattenSingles(v);
+      result[k] = _processValue(v);
+    });
+    return result;
+  } 
+  
+  // If the input wasn't a Map, we need to return an empty map to maintain type
+  return <String, dynamic>{};
+}
+
+/// Helper function to process individual values in the flattening process
+dynamic _processValue(dynamic value) {
+  if (value is Map<String, dynamic>) {
+    final result = <String, dynamic>{};
+    value.forEach((k, v) {
+      result[k] = _processValue(v);
     });
     return result;
   } else if (value is List) {
     // Flatten each element, then if there's exactly 1 element, remove the list
-    final newList = value.map(_flattenSingles).toList();
+    final newList = value.map(_processValue).toList();
     if (newList.length == 1) {
       return newList.first;
     } else {

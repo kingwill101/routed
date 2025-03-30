@@ -52,7 +52,7 @@ class AppZone {
         _configKey: engine.appConfig,
         _contextKey: context,
       },
-      zoneSpecification: ZoneSpecification(),
+      zoneSpecification: const ZoneSpecification(),
     );
     return null;
   }

@@ -22,14 +22,14 @@ Middleware test3() {
   };
 }
 
-root(EngineContext c) async {
+void root(EngineContext c) async {
   print("sleeping");
-  await Future.delayed(Duration(seconds: 3));
+  await Future<void>.delayed(const Duration(seconds: 3));
   print("woke up");
   c.string('Hello from router1');
 }
 
-root2(EngineContext c) async {
+void root2(EngineContext c) async {
   final name = c.param("name");
   c.string('Hello $name');
 }
@@ -39,7 +39,7 @@ void main() {
   router1.get('/', root);
   router1.get('/{name:string}', root2);
   Engine engine =
-      Engine(middlewares: [timeoutMiddleware(Duration(seconds: 1))]);
+      Engine(middlewares: [timeoutMiddleware(const Duration(seconds: 1))]);
   engine.use(
     prefix: '/api',
     router1,

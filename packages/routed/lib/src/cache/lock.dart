@@ -77,7 +77,7 @@ abstract class Lock implements lock_contract.Lock {
         throw LockTimeoutException('Lock timeout');
       }
 
-      await Future.delayed(Duration(milliseconds: sleepMilliseconds));
+      await Future<void>.delayed(Duration(milliseconds: sleepMilliseconds));
     }
 
     if (callback != null) {

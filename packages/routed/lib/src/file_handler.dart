@@ -27,7 +27,7 @@ class Dir {
   /// The [listDirectory] parameter specifies whether to list the contents of the directory.
   /// The [fileSystem] parameter specifies the file system to use.
   Dir(this.path, {this.listDirectory = false, file.FileSystem? fileSystem})
-      : fileSystem = fileSystem ?? local.LocalFileSystem();
+      : fileSystem = fileSystem ?? const local.LocalFileSystem();
 }
 
 /// Handles file operations such as serving files and directories over HTTP.

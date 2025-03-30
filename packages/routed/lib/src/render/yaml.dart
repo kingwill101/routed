@@ -5,7 +5,7 @@ import 'package:routed/src/response.dart';
 /// A class that implements the [Render] interface to render data as YAML.
 class YamlRender implements Render {
   /// The data to be serialized to YAML.
-  final dynamic data;
+  final Map<String, dynamic> data;
 
   /// Constructor for [YamlRender] that initializes the [data] field.
   YamlRender(this.data);

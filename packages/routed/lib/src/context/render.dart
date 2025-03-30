@@ -34,7 +34,7 @@ extension ContextRender on EngineContext {
   /// - Parameters:
   ///   - data: The data to serialize to JSON.
   ///   - statusCode: The HTTP status code to set for the response (default is 200).
-  void json(data, {int statusCode = HttpStatus.ok}) {
+  void json(dynamic data, {int statusCode = HttpStatus.ok}) {
     render(statusCode, JsonRender(data));
   }
 
@@ -44,7 +44,7 @@ extension ContextRender on EngineContext {
   ///   - data: The data to serialize to JSONP.
   ///   - callback: The JSONP callback function name (default is "callback").
   ///   - statusCode: The HTTP status code to set for the response (default is 200).
-  void jsonp(data,
+  void jsonp(dynamic data,
       {String callback = "callback", int statusCode = HttpStatus.ok}) {
     render(statusCode, JsonpRender(callback, data));
   }
@@ -54,7 +54,7 @@ extension ContextRender on EngineContext {
   /// - Parameters:
   ///   - data: The data to serialize to indented JSON.
   ///   - statusCode: The HTTP status code to set for the response (default is 200).
-  void indentedJson(data, {int statusCode = HttpStatus.ok}) {
+  void indentedJson(dynamic data, {int statusCode = HttpStatus.ok}) {
     render(statusCode, IndentedJsonRender(data));
   }
 
@@ -64,7 +64,7 @@ extension ContextRender on EngineContext {
   ///   - data: The data to serialize to JSON.
   ///   - statusCode: The HTTP status code to set for the response (default is 200).
   ///   - prefix: The prefix to prepend to the JSON response (default is ")]}',\n").
-  void secureJson(data,
+  void secureJson(dynamic data,
       {int statusCode = HttpStatus.ok, String prefix = ")]}',\n"}) {
     render(statusCode, SecureJsonRender(data, prefix: prefix));
   }
@@ -74,7 +74,7 @@ extension ContextRender on EngineContext {
   /// - Parameters:
   ///   - data: The data to serialize to ASCII JSON.
   ///   - statusCode: The HTTP status code to set for the response (default is 200).
-  void asciiJson(data, {int statusCode = HttpStatus.ok}) {
+  void asciiJson(dynamic data, {int statusCode = HttpStatus.ok}) {
     render(statusCode, AsciiJsonRender(data));
   }
 
@@ -92,7 +92,7 @@ extension ContextRender on EngineContext {
   /// - Parameters:
   ///   - data: The data to serialize to XML.
   ///   - statusCode: The HTTP status code to set for the response (default is 200).
-  void xml(data, {int statusCode = HttpStatus.ok}) {
+  void xml(Map<String, dynamic> data, {int statusCode = HttpStatus.ok}) {
     render(statusCode, XMLRender(data));
   }
 
@@ -101,7 +101,7 @@ extension ContextRender on EngineContext {
   /// - Parameters:
   ///   - data: The data to serialize to YAML.
   ///   - statusCode: The HTTP status code to set for the response (default is 200).
-  void yaml(data, {int statusCode = HttpStatus.ok}) {
+  void yaml(Map<String, dynamic> data, {int statusCode = HttpStatus.ok}) {
     render(statusCode, YamlRender(data));
   }
 
@@ -110,7 +110,7 @@ extension ContextRender on EngineContext {
   /// - Parameters:
   ///   - data: The data to serialize to TOML.
   ///   - statusCode: The HTTP status code to set for the response (default is 200).
-  void toml(data, {int statusCode = HttpStatus.ok}) {
+  void toml(Map<String, dynamic> data, {int statusCode = HttpStatus.ok}) {
     render(statusCode, TomlRender(data));
   }
 
@@ -120,7 +120,7 @@ extension ContextRender on EngineContext {
   ///   - contentType: The content type of the response.
   ///   - data: The data to send in the response.
   ///   - statusCode: The HTTP status code to set for the response (default is 200).
-  void data(String contentType, data, {int statusCode = HttpStatus.ok}) {
+  void data(String contentType, List<int> data, {int statusCode = HttpStatus.ok}) {
     render(statusCode, DataRender(contentType, data));
   }
 

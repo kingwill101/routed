@@ -8,7 +8,7 @@ mixin StaticFileHandler {
     if (this is Router) {
       return this as Router;
     } else if (this is Engine) {
-      return (this as Engine).defaultRouter as Router;
+      return (this as Engine).defaultRouter;
     } else {
       throw Exception('This class does not have a router');
     }

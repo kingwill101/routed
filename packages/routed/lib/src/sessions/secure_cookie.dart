@@ -69,7 +69,7 @@ class SecureCookie {
   static List<int> _generateKeyFromEnv() {
     final appKey = env['APP_KEY'];
     if (appKey != null) {
-      return base64.decode(appKey.replaceFirst('base64:', ''));
+      return base64.decode((appKey).replaceFirst('base64:', ''));
     }
     return _generateRandomKeyBytes();
   }
@@ -157,7 +157,11 @@ class SecureCookie {
       throw Exception('Signature mismatch');
     }
 
-    return jsonDecode(payload);
+    final dynamic decoded = jsonDecode(payload);
+    if (decoded is Map<String, dynamic>) {
+      return decoded;
+    }
+    return <String, dynamic>{'value': decoded};
   }
 
   Map<String, dynamic> _decodeAesOnly(String decodedStr) {
@@ -175,7 +179,11 @@ class SecureCookie {
     final encrypted = encrypt.Encrypted.fromBase64(encryptedData);
     final decrypted = _encrypter.decrypt(encrypted, iv: iv);
 
-    return jsonDecode(decrypted);
+    final dynamic decoded = jsonDecode(decrypted);
+    if (decoded is Map<String, dynamic>) {
+      return decoded;
+    }
+    return <String, dynamic>{'value': decoded};
   }
 
   Map<String, dynamic> _decodeWithBoth(String decodedStr) {
@@ -200,7 +208,11 @@ class SecureCookie {
     final encrypted = encrypt.Encrypted.fromBase64(encryptedData);
     final decrypted = _encrypter.decrypt(encrypted, iv: iv);
 
-    return jsonDecode(decrypted);
+    final dynamic decoded = jsonDecode(decrypted);
+    if (decoded is Map<String, dynamic>) {
+      return decoded;
+    }
+    return <String, dynamic>{'value': decoded};
   }
 
   String _sign(String payload) {

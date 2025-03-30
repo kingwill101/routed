@@ -56,7 +56,8 @@ class FileLock implements Lock {
   /// the identifier of the process that currently holds the lock.
   @override
   Future<String?> getCurrentOwner() async {
-    return store.get(name);
+    final dynamic value = await store.get(name);
+    return value as String?;
   }
 
   /// Forces the release of the lock, regardless of ownership.
@@ -115,7 +116,7 @@ class FileLock implements Lock {
           await release();
         }
       }
-      await Future.delayed(Duration(milliseconds: 100));
+      await Future<void>.delayed(const Duration(milliseconds: 100));
     }
     throw LockTimeoutException(
         'Could not acquire lock within $seconds seconds');
@@ -126,7 +127,8 @@ class FileLock implements Lock {
   /// If no owner is set `''` is returned.
   @override
   Future<String> owner() async {
-    return store.get(name) ?? '';
+    final dynamic value = await store.get(name);
+    return (value as String?) ?? '';
   }
 
   /// Checks if the current process owns the lock.

@@ -23,8 +23,9 @@ class TaggedCache implements Repository {
   /// Returns the cached item or the [defaultValue] if the item is not found.
   @override
   Future<dynamic> pull(dynamic key, [dynamic defaultValue]) async {
-    final value = await store.get(key);
-    await store.forget(key);
+    final String keyString = key is String ? key : key.toString();
+    final value = await store.get(keyString);
+    await store.forget(keyString);
     return value ?? defaultValue;
   }
 
@@ -64,7 +65,8 @@ class TaggedCache implements Repository {
   @override
   Future<dynamic> increment(String key, [dynamic value = 1]) async {
     final currentValue = await store.get(key) ?? 0;
-    final newValue = currentValue + value;
+    final int incrementValue = value is int ? value : 1;
+    final newValue = currentValue + incrementValue;
     await store.put(key, newValue, 0);
     return newValue;
   }
@@ -78,7 +80,8 @@ class TaggedCache implements Repository {
   @override
   Future<dynamic> decrement(String key, [dynamic value = 1]) async {
     final currentValue = await store.get(key) ?? 0;
-    final newValue = currentValue - value;
+    final int decrementValue = value is int ? value : 1;
+    final newValue = currentValue - decrementValue;
     await store.put(key, newValue, 0);
     return newValue;
   }
@@ -108,7 +111,8 @@ class TaggedCache implements Repository {
       return value;
     }
     final result = await callback();
-    await store.put(key, result, ttl.inSeconds);
+    final int seconds = ttl is Duration ? ttl.inSeconds : (ttl is int ? ttl : 0);
+    await store.put(key, result, seconds);
     return result;
   }
 

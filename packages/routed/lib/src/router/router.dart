@@ -61,7 +61,7 @@ class Router with StaticFileHandler {
     // Child has only its newly declared middlewares
     final child = Router(path: combinedPath, middlewares: middlewares);
     // Let the user define routes/subgroups on the child
-    builder != null ? builder(child) : null;
+    if (builder != null) builder(child);
 
     // Attach child to our children
     _children.add(child);

@@ -3,17 +3,22 @@ part of 'context.dart';
 /// Extension for session-related functionality
 extension SessionMethods on EngineContext {
   /// Get the current session instance
-  Session get session =>
-      _session ?? (throw StateError('Session middleware not configured'));
+  Session get session {
+    if (_session == null) {
+      throw StateError('Session middleware not configured');
+    }
+    return _session!;
+  }
 
   /// Get a session value with optional type
   T? getSession<T>(String key) => session.getValue<T>(key);
 
   Future<void> setSession(String key, dynamic value) async {
+    if (_session == null) {
+      throw StateError('Session middleware not configured');
+    }
     session.setValue(key, value);
-    print("setting session value $key to $value");
     await _commitSession();
-    print("session values: ${session.values}");
   }
 
   Future<void> regenerateSession() async {
@@ -27,7 +32,7 @@ extension SessionMethods on EngineContext {
   }
 
   /// Get a session value with a default fallback
-  getSessionOrDefault<T>(String key, T defaultValue) {
+  T getSessionOrDefault<T>(String key, T defaultValue) {
     return getSession<T>(key) ?? defaultValue;
   }
 
@@ -86,7 +91,7 @@ extension FlashMessages on EngineContext {
   Future<void> flash(String message, [String category = 'message']) async {
     try {
       // Get existing flashes, defaulting to empty list
-      final flashes = getSession(_flashKey) ?? [];
+      final List<dynamic> flashes = getSession(_flashKey) ?? <List<dynamic>>[];
       flashes.add([category, message]);
 
       // Store back in session
@@ -107,22 +112,22 @@ extension FlashMessages on EngineContext {
   }) {
     try {
       // Get and immediately remove flashes from session
-      final List<List<String>> flashes =
-          (getSession<List<dynamic>>(_flashKey) ?? [])
-              .map((flash) => (flash as List<dynamic>).cast<String>())
-              .toList();
+      final dynamic flashesRaw = getSession<dynamic>(_flashKey);
+      final List<List<dynamic>> flashes = (flashesRaw is List)
+          ? flashesRaw.map((flash) => flash is List ? flash : <dynamic>[]).toList()
+          : <List<dynamic>>[];
 
       removeSession(_flashKey);
 
       // Apply category filter if provided
       var filteredFlashes = categoryFilter.isEmpty
           ? flashes
-          : flashes.where((f) => categoryFilter.contains(f[0])).toList();
+          : flashes.where((f) => f.isNotEmpty && f[0] is String && categoryFilter.contains(f[0])).toList();
 
       // Return either just messages or category-message pairs
       return withCategories
           ? filteredFlashes
-          : filteredFlashes.map((f) => f[1]).toList();
+          : filteredFlashes.map((f) => f.length > 1 ? f[1] : null).where((m) => m != null).toList();
     } catch (e) {
       print('Error retrieving flash messages: $e');
       return [];

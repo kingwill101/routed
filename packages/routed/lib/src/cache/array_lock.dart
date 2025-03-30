@@ -22,7 +22,7 @@ class ArrayLock extends Lock {
     final expiration = store.locks[super.name]?['expiresAt'];
     if (expiration != null &&
         DateTime.now()
-            .isBefore(DateTime.fromMillisecondsSinceEpoch(expiration))) {
+            .isBefore(DateTime.fromMillisecondsSinceEpoch(expiration as int))) {
       return false;
     }
 
@@ -54,7 +54,8 @@ class ArrayLock extends Lock {
   /// Returns the owner ID if the lock is held, `null` otherwise.
   @override
   Future<String?> getCurrentOwner() async {
-    return store.locks[super.name]?['owner'];
+    final dynamic owner = store.locks[super.name]?['owner'];
+    return owner as String?;
   }
 
   /// Checks if the lock is owned by the current process.
@@ -87,7 +88,7 @@ class ArrayLock extends Lock {
         throw LockTimeoutException('Lock timeout');
       }
 
-      await Future.delayed(Duration(milliseconds: super.sleepMilliseconds));
+      await Future<void>.delayed(Duration(milliseconds: super.sleepMilliseconds));
     }
 
     if (callback != null) {

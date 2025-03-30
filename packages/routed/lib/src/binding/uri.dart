@@ -20,7 +20,8 @@ class UriBinding extends Binding {
   Future<void> bind(EngineContext context, dynamic instance) async {
     if (instance is Map) {
       for (final entry in context.params.entries) {
-        instance[entry.key] = entry.value.isNotEmpty ? entry.value.first : null;
+        final values = entry.value as List;
+        instance[entry.key] = values.isEmpty ? null : values.first;
       }
     }
   }

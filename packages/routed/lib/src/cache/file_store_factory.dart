@@ -8,7 +8,8 @@ class FileStoreFactory implements StoreFactory {
   Store create(Map<String, dynamic> config) {
     final fileSystem = const LocalFileSystem();
     final directory = fileSystem.directory(config['path']);
-    final permission = config['permission'];
-    return FileStore(directory, permission, null, fileSystem);
+    final dynamic permission = config['permission'];
+    final int? permissionInt = permission is int ? permission : null;
+    return FileStore(directory, permissionInt, null, fileSystem);
   }
 }

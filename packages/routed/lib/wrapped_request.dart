@@ -18,18 +18,18 @@ class WrappedRequest implements HttpRequest {
         if (!_limitExceeded) {
           _limitExceeded = true;
           _limitedStreamController.addError(
-              HttpException('Request body exceeds the maximum allowed size.'));
+              const HttpException('Request body exceeds the maximum allowed size.'));
           _limitedStreamController.close();
           //We stop listening to the original subscription
           _originalSubscription?.cancel();
           // We still have to consume remaining chunks
-          _originalRequest.drain();
+          _originalRequest.drain<void>();
         }
         // We don't add the chunk to the limited stream after the limit has been exceeded
       } else {
         _limitedStreamController.add(chunk);
       }
-    }, onError: (error) {
+    }, onError: (Object error) {
       if (!_limitedStreamController.isClosed) {
         _limitedStreamController.addError(error);
         _limitedStreamController.close();
@@ -206,7 +206,7 @@ class WrappedRequest implements HttpRequest {
   }
 
   @override
-  Future pipe(StreamConsumer<List<int>> streamConsumer) async {
+  Future<void> pipe(StreamConsumer<List<int>> streamConsumer) async {
     return _limitedStreamController.stream.pipe(streamConsumer);
   }
 
