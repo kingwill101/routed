@@ -5,7 +5,6 @@ import 'dart:typed_data';
 
 import 'package:server_testing/server_testing.dart';
 import 'package:server_testing/src/response.dart';
-import 'package:server_testing/src/transport/transport.dart';
 
 /// InMemoryTransport is a class that implements the TestTransport interface.
 /// It is used to simulate HTTP requests and responses in memory for testing purposes.

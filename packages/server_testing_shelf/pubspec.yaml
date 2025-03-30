@@ -8,10 +8,10 @@ environment:
   sdk: '>=3.6.0 <4.0.0'
 
 dependencies:
-  server_testing: ^0.0.1-alpha
   meta: ^1.16.0
+  server_testing: ^0.0.1-alpha
   shelf: ^1.4.2
 
 dev_dependencies:
-  shelf_router: ^1.1.4
   http_parser: ^4.1.2
+  shelf_router: ^1.1.4
