@@ -7,6 +7,8 @@ import 'package:server_testing/src/browser/bootstrap/driver/driver_manager.dart'
 import 'package:server_testing/src/browser/bootstrap/registry.dart';
 import 'package:server_testing/src/browser/logger.dart';
 
+/// Configures and initializes the browser testing environment.
+///
 /// Initializes the browser testing environment.
 ///
 /// This function sets up the necessary infrastructure for browser testing,
@@ -37,6 +39,45 @@ import 'package:server_testing/src/browser/logger.dart';
 ///   browserTest('should display homepage', (browser) async {
 ///     // Test implementation
 ///   });
+/// }
+/// ```
+///
+/// This function performs the necessary setup steps for running browser tests,
+/// which may include:
+/// *   Ensuring required browser binaries are installed.
+/// *   Starting the appropriate WebDriver server (e.g., ChromeDriver, GeckoDriver).
+/// *   Setting up global test hooks (`setUpAll`, `tearDownAll`) for environment
+///     management and cleanup.
+/// *   Initializing global configuration access.
+///
+/// Call this function once at the beginning of your test suite, typically in
+/// the `main` function of your primary test file.
+///
+/// The optional [config] parameter allows customization of the browser setup,
+/// such as specifying the browser type, headless mode, or base URL. If not
+/// provided, a default [BrowserConfig] (usually Chrome) will be used.
+///
+/// ### Example
+///
+/// ```dart
+/// import 'package:server_testing/server_testing.dart';
+/// import 'package:test/test.dart';
+///
+/// void main() async {
+///   // Set up the browser test environment using default settings (Chrome).
+///   await testBootstrap();
+///
+///   // Alternatively, configure a specific browser:
+///   // await testBootstrap(BrowserConfig(browserName: 'firefox', headless: false));
+///
+///   // Define browser tests
+///   browserTest('Homepage loads correctly', (browser) async {
+///     await browser.visit('/');
+///     await browser.assertTitle('My Awesome App');
+///     await browser.assertSee('Welcome!');
+///   });
+///
+///   // Run tests...
 /// }
 /// ```
 Future<void> testBootstrap([BrowserConfig? config]) async {
@@ -94,17 +135,26 @@ Future<void> testBootstrap([BrowserConfig? config]) async {
   });
 }
 
+/// Manages global state for the browser test bootstrap process.
+///
 /// Internal class that maintains the global browser configuration.
 ///
 /// This class stores configuration used across multiple browser test
 /// instances to ensure consistent settings.
 class TestBootstrap {
   /// The global browser configuration used by all tests.
+  /// The globally shared [BrowserConfig] for the current test run.
+  ///
+  /// Initialized by [testBootstrap] and accessible by test helpers like
+  /// [browserTest] and [browserGroup] to ensure consistent settings.
   static late BrowserConfig currentConfig;
 
   /// Initializes the global browser configuration.
   ///
   /// [config] is the configuration to use for browser tests.
+  /// Initializes the global [TestBootstrap] state with the provided [config].
+  ///
+  /// This should only be called once by [testBootstrap].
   static Future<void> initialize(BrowserConfig config) async {
     currentConfig = config;
   }

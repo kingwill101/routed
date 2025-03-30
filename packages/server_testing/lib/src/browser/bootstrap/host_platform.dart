@@ -1,6 +1,14 @@
 import 'dart:io';
 
+/// Provides information about the host operating system platform, specifically
+/// tailored for determining compatibility and download paths for browser testing tools.
 class HostPlatform {
+  /// Gets the specific platform identifier string used for browser downloads.
+  ///
+  /// Examples: 'ubuntu20.04-x64', 'ubuntu22.04-x64', 'mac13-arm64', 'win64'.
+  /// Attempts to detect Linux distribution and version using `lsb_release`.
+  /// Detects macOS version and architecture.
+  /// Throws an exception for unsupported platforms or Linux distributions.
   static String get platform {
     if (Platform.isLinux) return _detectLinuxPlatform();
     if (Platform.isMacOS) return _detectMacPlatform();
@@ -8,6 +16,11 @@ class HostPlatform {
     throw Exception('Unsupported platform: ${Platform.operatingSystem}');
   }
 
+  /// Detects the specific Linux distribution and version using `lsb_release`.
+  ///
+  /// Returns a platform identifier string like 'ubuntu20.04-x64' or 'debian11-x64'.
+  /// Throws an exception if `lsb_release` fails or the distribution/version
+  /// is not supported.
   static String _detectLinuxPlatform() {
     // Use lsb_release to detect distribution and version
     final result = Process.runSync('lsb_release', ['-a']);
@@ -39,6 +52,10 @@ class HostPlatform {
     throw Exception('Unsupported Linux distribution: $distro $version');
   }
 
+  /// Detects the specific macOS version (major) and architecture (x64 or arm64).
+  ///
+  /// Returns a platform identifier string like 'mac11', 'mac11-arm64', 'mac13'.
+  /// Throws an exception if the macOS version is not recognized or supported.
   static String _detectMacPlatform() {
     final version = Platform.operatingSystemVersion;
     final isArm = Platform.version.contains('arm');
@@ -57,6 +74,10 @@ class HostPlatform {
     throw Exception('Unsupported macOS version: $version');
   }
 
+  /// Whether the current host platform is recognized and officially supported
+  /// for browser downloads by this package.
+  ///
+  /// Checks if the [platform] getter executes without throwing an exception.
   static bool get isOfficiallySupportedPlatform {
     try {
       platform;

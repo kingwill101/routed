@@ -3,13 +3,22 @@ import 'dart:io';
 import 'package:path/path.dart' as path;
 import 'package:server_testing/src/browser/bootstrap/platform_info.dart';
 
+/// Provides canonical paths and URLs related to browser downloads and installations,
+/// mirroring the structure expected by tools like Playwright.
 class BrowserPaths {
+  /// A list of base URLs for CDN mirrors hosting browser binary downloads.
   static const cdnMirrors = [
     'https://cdn.playwright.dev/dbazure/download/playwright',
     'https://playwright.download.prss.microsoft.com/dbazure/download/playwright',
     'https://cdn.playwright.dev',
   ];
 
+  /// Defines the platform-specific relative path segments to the main browser
+  /// executable within its installation directory.
+  ///
+  /// Keys are browser names ('chromium', 'firefox'), values are maps where keys
+  /// are platform identifiers ('linux', 'mac', 'win') and values are lists of
+  /// path segments.
   static const executablePaths = {
     'chromium': {
       'linux': ['chrome-linux', 'chrome'],
@@ -23,6 +32,13 @@ class BrowserPaths {
     },
   };
 
+  /// Defines the platform-specific URL path templates used for downloading
+  /// browser archives.
+  ///
+  /// Keys are browser names, values are maps where keys are specific platform IDs
+  /// (e.g., 'ubuntu22.04-x64', 'mac13-arm64', 'win64') and values are URL path
+  /// templates. The `%s` placeholder in the template is replaced with the
+  /// browser revision number.
   static const downloadPaths = {
     'chromium': {
       'ubuntu20.04-x64': 'builds/chromium/%s/chromium-linux.zip',
@@ -48,6 +64,11 @@ class BrowserPaths {
     },
   };
 
+  /// Gets the platform-specific relative path for the [browserName]'s executable
+  /// within its installation folder.
+  ///
+  /// Returns `null` if the browser name or current platform is not defined in
+  /// [executablePaths].
   static String? getExecutablePath(String browserName) {
     final paths = executablePaths[browserName];
     if (paths == null) return null;
@@ -59,6 +80,11 @@ class BrowserPaths {
     return path.joinAll(segments);
   }
 
+  /// Gets a list of potential full download URLs for a specific [browserName]
+  /// and [revision] by combining [cdnMirrors] and [downloadPaths] for the
+  /// current platform.
+  ///
+  /// Returns an empty list if no download path template exists for the combination.
   static List<String> getDownloadUrls(String browserName, String revision) {
     final paths = downloadPaths[browserName];
     if (paths == null) return [];
@@ -72,7 +98,16 @@ class BrowserPaths {
     return cdnMirrors.map((mirror) => '$mirror/$downloadPath').toList();
   }
 
-  // Add to existing BrowserPaths class
+  /// Gets the root directory used for storing browser installations and metadata.
+  ///
+  /// This location can be overridden by the `PLAYWRIGHT_BROWSERS_PATH`
+  /// environment variable. If the variable is set to '0', a local directory
+  /// `.local-browsers` is used. Otherwise, it defaults to a platform-specific
+  /// cache directory (`~/.cache/ms-playwright` on Linux,
+  /// `~/Library/Caches/ms-playwright` on macOS,
+  /// `%LOCALAPPDATA%/ms-playwright` on Windows).
+
+
   static String getRegistryDirectory() {
     final envDefined = Platform.environment['PLAYWRIGHT_BROWSERS_PATH'];
     if (envDefined == '0') {
@@ -100,6 +135,9 @@ class BrowserPaths {
     return path.join(cacheDirectory, 'ms-playwright');
   }
 
+  /// Gets the specific installation directory path for a given [browserName]
+  /// and [revision] within the main registry directory obtained from
+  /// [getRegistryDirectory].
   static String getBrowserInstallDirectory(
       String browserName, String revision) {
     final registryDir = getRegistryDirectory();
