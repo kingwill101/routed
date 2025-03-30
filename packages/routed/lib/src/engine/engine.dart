@@ -133,7 +133,7 @@ class Engine with StaticFileHandler {
     return Engine(
       config: config ?? EngineConfig(),
       middlewares: [
-        timeoutMiddleware(Duration(seconds: 30)),
+        timeoutMiddleware(const Duration(seconds: 30)),
       ],
       options: options,
     );
@@ -291,7 +291,7 @@ class Engine with StaticFileHandler {
   List<Request> get activeRequests => List.unmodifiable(_activeRequests.values);
 
   /// Returns the default router.
-  get defaultRouter => _defaultRouter;
+  Router get defaultRouter => _defaultRouter;
 }
 
 Middleware requestSizeLimitMiddleware() {
@@ -320,7 +320,7 @@ Middleware requestSizeLimitMiddleware() {
 
             if (totalBytesRead > maxRequestSize) {
               // Exceeded the limit.  Abort the request.
-              throw HttpException(
+              throw const HttpException(
                   'Request body exceeds the maximum allowed size.');
             }
 

@@ -13,12 +13,12 @@ class ConfirmedRule extends ContextAwareValidationRule {
   @override
   bool validate(dynamic value, [List<String>? options]) {
     if (options == null || options.isEmpty) return false;
-    if (contextValues == null) return false;
+    if (contextValues.isEmpty) return false;
 
     final confirmationFieldName = options[0];
-    if (contextValues!.containsKey(confirmationFieldName)) return false;
+    if (contextValues.containsKey(confirmationFieldName)) return false;
 
-    final confirmationValue = contextValues![confirmationFieldName];
+    final confirmationValue = contextValues[confirmationFieldName];
 
     return value == confirmationValue;
   }

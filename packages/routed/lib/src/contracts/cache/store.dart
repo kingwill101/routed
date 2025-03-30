@@ -24,12 +24,12 @@ abstract class Store {
   /// Increments the value of an item in the cache by [value].
   ///
   /// Returns the new value.
-  FutureOr<dynamic> increment(String key, [dynamic value = 1]);
+  FutureOr<dynamic> increment(String key, [int value = 1]);
 
   /// Decrements the value of an item in the cache by [value].
   ///
   /// Returns the new value.
-  FutureOr<dynamic> decrement(String key, [dynamic value = 1]);
+  FutureOr<dynamic> decrement(String key, [int value = 1]);
 
   /// Stores an item in the cache indefinitely.
   ///

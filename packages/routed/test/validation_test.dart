@@ -96,7 +96,7 @@ void main() {
     });
 
     test('Multipart Form Binding Validation',
-        timeout: Timeout(Duration(seconds: 100)), () async {
+        timeout: const Timeout(Duration(seconds: 100)), () async {
       final engine = Engine();
 
       engine.post('/upload', (ctx) async {

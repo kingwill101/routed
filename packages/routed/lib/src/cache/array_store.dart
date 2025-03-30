@@ -1,10 +1,11 @@
 import 'dart:async';
 import 'dart:convert';
+
 import 'package:routed/src/cache/array_lock.dart';
 import 'package:routed/src/cache/taggable_store.dart';
-import 'package:routed/src/contracts/cache/store.dart';
-import 'package:routed/src/contracts/cache/lock_provider.dart';
 import 'package:routed/src/contracts/cache/lock.dart';
+import 'package:routed/src/contracts/cache/lock_provider.dart';
+import 'package:routed/src/contracts/cache/store.dart';
 
 /// A store that uses an in-memory array to store cache data.
 class ArrayStore extends TaggableStore implements Store, LockProvider {
@@ -38,18 +39,26 @@ class ArrayStore extends TaggableStore implements Store, LockProvider {
     if (!storage.containsKey(key)) {
       return null;
     }
+      final item = storage[key];
+      if (item == null) {
+        return null;
+      }
 
-    final item = storage[key];
-    final expiresAt = item['expiresAt'];
+      final num? expiresAt = item['expiresAt'] as num?;
+      if (expiresAt != null &&
+          expiresAt != 0 &&
+          (DateTime.now().millisecondsSinceEpoch / 1000) >= expiresAt) {
+        await forget(key);
+        return null;
+      }
 
-    if (expiresAt != 0 &&
-        (DateTime.now().millisecondsSinceEpoch / 1000) >= expiresAt) {
-      await forget(key);
-      return null;
+      final value = item['value'];
+      if (value == null) {
+        return null;
+      }
+
+      return serializesValues ? _deserialize(value as String) : value;
     }
-
-    return serializesValues ? _deserialize(item['value']) : item['value'];
-  }
 
   /// Stores an item in the store with a time-to-live of [seconds].
   ///
@@ -78,20 +87,18 @@ class ArrayStore extends TaggableStore implements Store, LockProvider {
   ///
   /// Returns the new value.
   @override
-  Future<dynamic> increment(String key, [dynamic value = 1]) async {
+  Future<dynamic> increment(String key, [int value = 1]) async {
     final item = storage[key];
     final currentValue = item?['value'] ?? 0;
     final newValue = (currentValue is int
             ? currentValue
             : int.parse(currentValue.toString())) +
         value;
-    final expiresAt = item?['expiresAt'] ?? 0;
-    await put(
-        key,
-        newValue,
-        expiresAt == 0
-            ? 0
-            : (expiresAt - DateTime.now().millisecondsSinceEpoch) ~/ 1000);
+    final num? expiresAt = item?['expiresAt'] as num?;
+    final int remainingTime = expiresAt == null || expiresAt == 0
+        ? 0
+        : ((expiresAt - DateTime.now().millisecondsSinceEpoch / 1000).round());
+    await put(key, newValue, remainingTime);
     return newValue;
   }
 
@@ -99,7 +106,7 @@ class ArrayStore extends TaggableStore implements Store, LockProvider {
   ///
   /// Returns the new value.
   @override
-  Future<dynamic> decrement(String key, [dynamic value = 1]) async {
+  Future<dynamic> decrement(String key, [int value = 1]) async {
     return increment(key, -value);
   }
 

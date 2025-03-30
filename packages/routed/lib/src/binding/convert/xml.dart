@@ -176,8 +176,8 @@ class User implements XmlEncodable, XmlDecodable<User> {
   @override
   User fromXml(Map<String, dynamic> xmlMap) {
     return User(
-      name: xmlMap['name']['#text'],
-      age: int.parse(xmlMap['age']['#text']),
+      name: xmlMap['name']['#text'] as String,
+      age: int.parse(xmlMap['age']['#text'] as String),
       emails: (xmlMap['emails']['email'] as List)
           .map((e) => e['#text'] as String)
           .toList(),
@@ -236,6 +236,6 @@ void main() {
 
   // Decode XML back to User object
   final decodedUserMap = codec.decode(userXml);
-  final userFromXml = User().fromXml(decodedUserMap['user']);
+  final userFromXml = User().fromXml(decodedUserMap['user'] as Map<String, dynamic>) ;
   print('Decoded User Object:\n$userFromXml');
 }

@@ -29,11 +29,11 @@ class Environment {
     return instance;
   }
 
-  operator []=(String name, String value) {
+  void operator []=(String name, String value) {
     _variables[name] = value;
   }
 
-  operator [](String name) {
+  String? operator [](String name) {
     return get(name);
   }
 

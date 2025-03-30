@@ -14,7 +14,7 @@ class LiquidRoot implements Root {
   ///
   /// If no `fileSystem` is provided, it defaults to `local.LocalFileSystem()`.
   LiquidRoot({FileSystem? fileSystem})
-      : fileSystem = fileSystem ?? local.LocalFileSystem();
+      : fileSystem = fileSystem ?? const local.LocalFileSystem();
 
   /// Resolves the given relative path to a `Source` object.
   ///

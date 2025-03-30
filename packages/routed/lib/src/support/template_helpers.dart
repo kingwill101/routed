@@ -31,7 +31,7 @@ class TemplateHelpers {
 
         // Session access
         'session': (String key, [dynamic defaultValue]) =>
-            AppZone.context.getSession(key),
+            AppZone.context.getSession<dynamic>(key) ?? defaultValue,
 
         'has_session': (String key) => AppZone.context.hasSession(key),
 
@@ -49,28 +49,25 @@ class TemplateHelpers {
 
         'old_input': (String key, [String defaultValue = '']) {
           final oldInput =
-              AppZone.context.getSession('old') as Map<String, dynamic>? ?? {};
+              AppZone.context.getSession<Map<String, dynamic>>('old') ?? {};
           return oldInput[key] ?? defaultValue;
         },
 
         'has_error': (String key) {
           final errors =
-              AppZone.context.getSession('errors') as Map<String, dynamic>? ??
-                  {};
+              AppZone.context.getSession<Map<String, dynamic>>('errors') ?? {};
           return errors.containsKey(key);
         },
 
         'get_error': (String key) {
           final errors =
-              AppZone.context.getSession('errors') as Map<String, dynamic>? ??
-                  {};
+              AppZone.context.getSession<Map<String, dynamic>>('errors') ?? {};
           return (errors[key] as List<dynamic>? ?? []).firstOrNull;
         },
 
         'get_errors': (String field) {
           final errors =
-              AppZone.context.getSession('errors') as Map<String, dynamic>? ??
-                  {};
+              AppZone.context.getSession<Map<String, dynamic>>('errors') ?? {};
           return errors[field] as List<dynamic>? ?? [];
         },
 
@@ -96,8 +93,14 @@ class TemplateHelpers {
           int rows = 0,
         }) {
           final oldInput =
-              AppZone.context.getSession('old') as Map<String, dynamic>? ?? {};
-          final inputValue = oldInput[name] ?? value;
+              AppZone.context.getSession<Map<String, dynamic>>('old') ?? {};
+          String inputValue;
+          final oldValue = oldInput[name];
+          if (oldValue != null) {
+            inputValue = oldValue is String ? oldValue : oldValue.toString();
+          } else {
+            inputValue = value;
+          }
 
           return FormBuilder.textField(
             name,
@@ -118,8 +121,15 @@ class TemplateHelpers {
           bool required = false,
         }) {
           final oldInput =
-              AppZone.context.getSession('old') as Map<String, dynamic>? ?? {};
-          final inputValue = oldInput[name] ?? value;
+              AppZone.context.getSession<Map<String, dynamic>>('old') ?? {};
+          String inputValue;
+          final oldValue = oldInput[name];
+          if (oldValue != null) {
+            inputValue = oldValue is String ? oldValue : oldValue.toString();
+          } else {
+            inputValue = value;
+          }
+          
           return FormBuilder.select(
             name,
             options,
@@ -145,18 +155,30 @@ class TemplateHelpers {
     FormBuilder.helperFunctions,
   ];
 
-  static Map<String, dynamic> routed_vars = {
-    'csrf_token': () => AppZone.context
-        .getSession(AppZone.engine.config.security.csrfCookieName),
-    'csrf_field': () => '''
+  static Map<String, dynamic> routedVars = {
+    'csrf_token': () {
+      final token = AppZone.context.getSession<String>(AppZone.engine.config.security.csrfCookieName);
+      if (token is String) {
+        return token;
+      }
+      return '';
+    },
+    'csrf_field': () {
+      final token = AppZone.context.getSession<String>(AppZone.engine.config.security.csrfCookieName);
+      final tokenStr = token is String ? token : '';
+      return '''
             <input type="hidden"
                    name="_csrf"
-                   value="${AppZone.context.getSession(AppZone.engine.config.security.csrfCookieName)}">
-          ''',
-    'csrf_meta': () => '''
+                   value="$tokenStr">
+          ''';
+    },
+    'csrf_meta': () {
+      final token = AppZone.context.getSession<String>(AppZone.engine.config.security.csrfCookieName);
+      final tokenStr = token is String ? token : '';
+      return '''
             <meta name="csrf-token"
-                  content="${AppZone.context.getSession(AppZone.engine.config.security.csrfCookieName)}">  ''',
+                  content="$tokenStr">  ''';
+    },
     'helper_functions': () => FormBuilder.helperFunctions,
-    //   'flash_messages_html': () => FormBuilder.flashMessages(),
   };
 }

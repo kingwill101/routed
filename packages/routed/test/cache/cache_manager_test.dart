@@ -17,7 +17,7 @@ void main() {
     test('store and retrieve from array store', () async {
       cacheManager.registerStore('array', {'driver': 'array'});
       final repository = cacheManager.store('array');
-      await repository.put('key', 'value', Duration(seconds: 60));
+      await repository.put('key', 'value', const Duration(seconds: 60));
       final value = await repository.pull('key');
       expect(value, 'value');
     });
@@ -30,7 +30,7 @@ void main() {
         'permission': null,
       });
       final repository = cacheManager.store('file');
-      await repository.put('key', 'value', Duration(seconds: 60));
+      await repository.put('key', 'value', const Duration(seconds: 60));
       final value = await repository.pull('key');
       expect(value, 'value');
       tempDir.deleteSync(recursive: true);
@@ -39,12 +39,12 @@ void main() {
     test('increment and decrement in array store', () async {
       cacheManager.registerStore('array', {'driver': 'array'});
       final repository = cacheManager.store('array');
-      await repository.put('counter', 1, Duration(seconds: 60));
+      await repository.put('counter', 1, const Duration(seconds: 60));
       await repository.increment('counter', 1);
       var value = await repository.pull('counter');
       expect(value, 2);
 
-      await repository.put('counter', 1, Duration(seconds: 60));
+      await repository.put('counter', 1, const Duration(seconds: 60));
       await repository.decrement('counter', 1);
       value = await repository.pull('counter');
       expect(value, 0);
@@ -58,12 +58,12 @@ void main() {
         'permission': null,
       });
       final repository = cacheManager.store('file');
-      await repository.put('counter', 1, Duration(seconds: 60));
+      await repository.put('counter', 1, const Duration(seconds: 60));
       await repository.increment('counter', 1);
       var value = await repository.pull('counter');
       expect(value, 2);
 
-      await repository.put('counter', 1, Duration(seconds: 60));
+      await repository.put('counter', 1, const Duration(seconds: 60));
       await repository.decrement('counter', 1);
       value = await repository.pull('counter');
       expect(value, 0);
@@ -73,8 +73,8 @@ void main() {
     test('flush all items in array store', () async {
       cacheManager.registerStore('array', {'driver': 'array'});
       final repository = cacheManager.store('array');
-      await repository.put('key1', 'value1', Duration(seconds: 60));
-      await repository.put('key2', 'value2', Duration(seconds: 60));
+      await repository.put('key1', 'value1', const Duration(seconds: 60));
+      await repository.put('key2', 'value2', const Duration(seconds: 60));
       await repository.getStore().flush();
       final value1 = await repository.pull('key1');
       final value2 = await repository.pull('key2');
@@ -90,8 +90,8 @@ void main() {
         'permission': null,
       });
       final repository = cacheManager.store('file');
-      await repository.put('key1', 'value1', Duration(seconds: 60));
-      await repository.put('key2', 'value2', Duration(seconds: 60));
+      await repository.put('key1', 'value1', const Duration(seconds: 60));
+      await repository.put('key2', 'value2', const Duration(seconds: 60));
       await repository.getStore().flush();
       final value1 = await repository.pull('key1');
       final value2 = await repository.pull('key2');

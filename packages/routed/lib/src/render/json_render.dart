@@ -52,7 +52,7 @@ class IndentedJsonRender implements Render {
   @override
   void render(Response response) {
     writeContentType(response);
-    final encoder = JsonEncoder.withIndent('  ');
+    final encoder = const JsonEncoder.withIndent('  ');
     final jsonData = encoder.convert(data);
     response.write(jsonData);
   }

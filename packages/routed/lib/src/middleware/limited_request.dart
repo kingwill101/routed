@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:io';
 import 'dart:typed_data';
 
+// ignore: unused_element
 class _LimitedHttpRequestWrapper implements HttpRequest {
   final HttpRequest _originalRequest;
   final Stream<List<int>> _limitedStream;
@@ -148,7 +149,7 @@ class _LimitedHttpRequestWrapper implements HttpRequest {
       _limitedStream.cast<Uint8List>().map(convert);
 
   @override
-  Future pipe(StreamConsumer<List<int>> streamConsumer) =>
+  Future<void> pipe(StreamConsumer<List<int>> streamConsumer) =>
       _limitedStream.pipe(streamConsumer);
 
   @override

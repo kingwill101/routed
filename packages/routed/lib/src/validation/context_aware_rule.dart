@@ -9,5 +9,5 @@ abstract class ContextAwareValidationRule extends ValidationRule {
   }
 
   @override
-  get contextValues => _contextValues;
+  Map<String, dynamic> get contextValues => _contextValues;
 }

@@ -139,7 +139,22 @@ class Session {
 
   T? getValue<T>(String key) {
     touch(); // Update access time on reads
-    return values[key] as T?;
+    final value = values[key];
+    if (value == null) {
+      return null;
+    }
+    
+    if (value is T) {
+      return value;
+    }
+    
+    // Handle common type conversions
+    if (T == String && value != null) {
+      return value.toString() as T;
+    }
+    
+    // For other types, return null if type doesn't match
+    return null;
   }
 
   void setValue(String key, dynamic value) {

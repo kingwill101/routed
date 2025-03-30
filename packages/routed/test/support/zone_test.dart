@@ -28,9 +28,9 @@ void main() {
       await AppZone.run(
         engine: engine,
         body: () async {
-          expect(config('app.name'), equals('Test App'));
-          expect(config('app.env'), equals('testing'));
-          expect(config('database.host'), equals('localhost'));
+          expect(config('app.name') as String, equals('Test App'));
+          expect(config('app.env') as String, equals('testing'));
+          expect(config('database.host') as String, equals('localhost'));
           expect(config('non.existent', 'default'), equals('default'));
         },
       );
@@ -65,7 +65,7 @@ void main() {
     });
 
     test('accessing helpers outside zone throws error', () {
-      expect(() => config('app.name'), throwsStateError);
+      expect(() => config('app.name') as String, throwsStateError);
       expect(() => route('users.show'), throwsStateError);
     });
   });

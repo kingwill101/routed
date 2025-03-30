@@ -29,8 +29,8 @@ class EngineError {
 
   /// Creates an [EngineError] from a JSON-compatible map.
   factory EngineError.fromJson(Map<String, dynamic> json) => EngineError(
-        message: json['message'],
-        code: json['code'],
+        message: json['message'] as String,
+        code: json['code'] != null ? json['code'] as int? : null,
       );
 }
 

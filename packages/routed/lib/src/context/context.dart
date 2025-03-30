@@ -85,7 +85,7 @@ class EngineContext {
   /// Retrieves the form cache asynchronously.
   Future<Map<String, dynamic>> get formCache async {
     await initFormCache();
-    return get(formCacheKey);
+    return get<Map<String, dynamic>>(formCacheKey) ?? <String, dynamic>{};
   }
 
   /// Retrieves the multipart form asynchronously.
@@ -229,13 +229,13 @@ class EngineContext {
   }
 
   /// Set a cookie in the response.
-  void setCookie(String name, value,
+  void setCookie(String name, String value,
       {int maxAge = 0,
       String path = '/',
       String domain = '',
       bool secure = false,
       SameSite? sameSite,
-      httpOnly = false}) {
+      bool httpOnly = false}) {
     _response.setCookie(name, value,
         path: path,
         domain: domain,
@@ -251,16 +251,25 @@ class EngineContext {
   }
 
   /// Retrieve a parameter from the route.
-  param(String s) {
+  String? param(String s) {
     if (_route == null) {
       return null;
     }
     final params = _route.extractParameters(request.path);
-    return params[s];
+    final value = params[s];
+    return value?.toString();
+  }
+
+  T mustGetParam<T>(String s) {
+    final routeParam = param(s);
+    if (routeParam == null) {
+      throw StateError('Missing required param $s');
+    }
+    return param as T;
   }
 
   /// Retrieve a query parameter from the request.
-  query(String s) {
+  dynamic query(String s) {
     return queryCache[s];
   }
 
@@ -354,13 +363,20 @@ extension MultipartFormMethods on EngineContext {
   Future<String> postForm(String key) async {
     await initFormCache();
     final form = get<Map<String, dynamic>>(formCacheKey) ?? {};
-    return form[key] ?? "";
+    final value = form[key];
+    return value == null ? "" : value.toString();
   }
 
   /// Get all values of a form field.
   Future<List<String>> postFormArray(String key) async {
+    await initFormCache();
     final form = get<Map<String, dynamic>>(formCacheKey) ?? {};
-    return form[key] ?? [];
+    final value = form[key];
+    if (value == null) return [];
+    if (value is List) {
+      return value.map((e) => e.toString()).toList();
+    }
+    return [value.toString()];
   }
 
   /// Get a map of form fields with a key prefix.
@@ -370,7 +386,7 @@ extension MultipartFormMethods on EngineContext {
   }
 
   /// Retrieves the multipart form asynchronously.
-  form() async {
+  Future<Map<String, dynamic>> form() async {
     return await formCache;
   }
 }
@@ -379,7 +395,19 @@ extension QueryMethods on EngineContext {
   /// Retrieve a query parameter by key.
   T? getQuery<T>(String key) {
     final value = queryCache[key];
-    if (value == null || value.isEmpty) return null;
+    if (value == null) return null;
+
+    // Check if the value is empty, if it has that property
+    bool isEmpty = false;
+    if (value is String) {
+      isEmpty = value.isEmpty;
+    } else if (value is List) {
+      isEmpty = value.isEmpty;
+    } else if (value is Map) {
+      isEmpty = value.isEmpty;
+    }
+
+    if (isEmpty) return null;
     return value as T;
   }
 
@@ -392,9 +420,9 @@ extension QueryMethods on EngineContext {
 
   /// Get a query parameter with a default fallback.
   T defaultQuery<T>(String key, T defaultValue) {
-    final result = getQuery(key);
-    if (!result.found) return defaultValue;
-    return result.value as T;
+    final result = getQuery<T>(key);
+    if (result == null) return defaultValue;
+    return result;
   }
 
   /// Get all values for a query key.

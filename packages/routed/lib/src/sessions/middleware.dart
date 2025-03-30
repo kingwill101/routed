@@ -1,9 +1,6 @@
 import 'package:routed/routed.dart';
+import 'package:routed/session.dart';
 
-import 'cookie_store.dart';
-import 'options.dart';
-import 'secure_cookie.dart';
-import 'store.dart';
 
 /// Creates session middleware with the specified options
 Handler sessionMiddleware({
@@ -35,11 +32,14 @@ Handler sessionMiddleware({
     await ctx.next();
 
     if (!ctx.response.isClosed) {
-      await sessionStore.write(
-        ctx.request,
-        ctx.response,
-        ctx.get('session'),
-      );
+      final sessionData = ctx.get<dynamic>('session');
+      if (sessionData is Session) {
+        await sessionStore.write(
+          ctx.request,
+          ctx.response,
+          sessionData,
+        );
+      }
     }
   };
 }

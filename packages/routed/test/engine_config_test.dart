@@ -77,7 +77,7 @@ void main() {
       test('processes X-Forwarded-For header', () async {
         final engine = Engine(
             config: EngineConfig(
-                features: EngineFeatures(
+                features: const EngineFeatures(
                   enableProxySupport: true,
                   enableTrustedPlatform: true,
                 ),
@@ -102,7 +102,7 @@ void main() {
       test('processes X-Real-IP header', () async {
         final engine = Engine(
             config: EngineConfig(
-                features: EngineFeatures(
+                features: const EngineFeatures(
                   enableProxySupport: true,
                   enableTrustedPlatform: true,
                 ),
@@ -144,7 +144,7 @@ void main() {
       test('multiple options work together', () async {
         final engine = Engine(
             config: EngineConfig(
-                features: EngineFeatures(
+                features: const EngineFeatures(
                   enableProxySupport: true,
                   enableTrustedPlatform: true,
                 ),
@@ -192,7 +192,7 @@ void main() {
     test('default configuration trusts all proxies', () async {
       final engine = Engine(
           config: EngineConfig(
-        features: EngineFeatures(
+        features: const EngineFeatures(
           enableProxySupport: true,
           enableTrustedPlatform: true,
         ),
@@ -214,7 +214,7 @@ void main() {
     test('restricted proxy list only trusts specified IPs', () async {
       final engine = Engine(
           config: EngineConfig(
-              features: EngineFeatures(
+              features: const EngineFeatures(
                 enableProxySupport: true,
                 enableTrustedPlatform: true,
               ),
@@ -236,7 +236,7 @@ void main() {
     test('untrusted proxy returns immediate client IP', () async {
       final engine = Engine(
           config: EngineConfig(
-              features: EngineFeatures(
+              features: const EngineFeatures(
                 enableProxySupport: true,
                 enableTrustedPlatform: true,
               ),
@@ -259,7 +259,7 @@ void main() {
     test('trusted platform headers take precedence', () async {
       final engine = Engine(
           config: EngineConfig(
-              features: EngineFeatures(
+              features: const EngineFeatures(
                 enableProxySupport: true,
                 enableTrustedPlatform: true,
               ),
@@ -282,7 +282,7 @@ void main() {
     test('header order is respected', () async {
       final engine = Engine(
           config: EngineConfig(
-              features: EngineFeatures(
+              features: const EngineFeatures(
                 enableProxySupport: true,
                 enableTrustedPlatform: true,
               ),
@@ -305,7 +305,7 @@ void main() {
   test('proxy support requires explicit feature flag', () {
     final engine = Engine(
         config:
-            EngineConfig(features: EngineFeatures(enableProxySupport: true)));
+            EngineConfig(features: const EngineFeatures(enableProxySupport: true)));
 
     engine.config.trustedProxies = ['10.0.0.0/8'];
     expect(engine.config.trustedProxies, contains('10.0.0.0/8'));
@@ -314,7 +314,7 @@ void main() {
   test('trusted platform requires explicit feature flag', () {
     final engine = Engine(
         config: EngineConfig(
-            features: EngineFeatures(enableTrustedPlatform: true)));
+            features: const EngineFeatures(enableTrustedPlatform: true)));
 
     engine.config.trustedPlatform = 'CF-Connecting-IP';
     expect(engine.config.trustedPlatform, equals('CF-Connecting-IP'));

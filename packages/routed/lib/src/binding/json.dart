@@ -19,7 +19,7 @@ class JsonBinding extends Binding {
   /// Returns a Future that completes with the decoded JSON body as a Map.
   Future<Map<String, dynamic>> _decodedBody(EngineContext ctx) async {
     final bodyBytes = await ctx.request.bytes;
-    return jsonDecode(utf8.decode(bodyBytes));
+    return jsonDecode(utf8.decode(bodyBytes)) as Map<String, dynamic>;
   }
 
   /// Validates the JSON body of the request against a set of rules.

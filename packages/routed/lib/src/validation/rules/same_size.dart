@@ -15,12 +15,12 @@ class SameSizeRule extends ContextAwareValidationRule {
   @override
   bool validate(dynamic value, [List<String>? options]) {
     if (value == null || options == null || options.isEmpty) return false;
-    if (contextValues == null) return false;
+    if (contextValues.isEmpty) return false;
 
     final otherFieldName = options[0];
-    if (!contextValues!.containsKey(otherFieldName)) return false;
+    if (!contextValues.containsKey(otherFieldName)) return false;
 
-    final otherValue = contextValues![otherFieldName];
+    final otherValue = contextValues[otherFieldName];
     if (value is String && otherValue is String) {
       return value.length == otherValue.length;
     } else if (value is List && otherValue is List) {

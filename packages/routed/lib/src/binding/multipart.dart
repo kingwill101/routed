@@ -68,7 +68,8 @@ Future<String?> storeFileWithLimit({
 /// Sends an error response with the specified [code] and closes the request.
 Future<void> _reject(HttpRequest request, String message,
     [int code = HttpStatus.badRequest]) async {
-  if (!(await request.response.done)) {
+  final isDone = await request.response.done;
+  if (isDone == false) {
     request.response
       ..statusCode = code
       ..write(message);

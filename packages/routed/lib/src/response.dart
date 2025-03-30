@@ -178,7 +178,7 @@ class Response {
   }
 
   /// Sets a cookie with the given [name] and [value], and optional parameters.
-  void setCookie(String name, value,
+  void setCookie(String name, dynamic value,
       {int? maxAge,
       String path = '/',
       String domain = '',
@@ -186,7 +186,8 @@ class Response {
       bool httpOnly = false,
       SameSite? sameSite}) {
     _ensureNotClosed();
-    final cookie = Cookie(name, value)
+    final String stringValue = value is String ? value : value.toString();
+    final cookie = Cookie(name, stringValue)
       ..maxAge = maxAge
       ..path = path
       ..domain = domain
