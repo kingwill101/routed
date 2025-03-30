@@ -33,17 +33,16 @@ class DurationGenerator extends Generator<Duration> {
   })  : min = min ?? Duration.zero,
         max = max ?? const Duration(days: 365);
 
-  @override
-  ShrinkableValue<Duration> generate([math.Random? random]) {
-    final rng = random ?? math.Random(42);
-    final minUs = min.inMicroseconds;
-    final maxUs = max.inMicroseconds;
-    final range = maxUs - minUs;
+        @override
+          ShrinkableValue<Duration> generate(math.Random random) {
+            final minUs = min.inMicroseconds;
+            final maxUs = max.inMicroseconds;
+            final range = maxUs - minUs;
 
-    // Generate a random duration with microsecond precision
-    final value = Duration(
-      microseconds: minUs + (rng.nextDouble() * range).round(),
-    );
+              // Generate a random duration with microsecond precision
+                  final value = Duration(
+                    microseconds: range <= 0 ? minUs : minUs + (random.nextDouble() * range).round(),
+                  );
 
     return ShrinkableValue(value, () sync* {
       // Try shrinking towards zero while respecting minimum

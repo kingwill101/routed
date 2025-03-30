@@ -20,5 +20,7 @@ void main() async {
   );
 
   final result = await runner.run();
-  print(result.report);
+  if (!result.success) {
+    print(result.report);
+  }
 }

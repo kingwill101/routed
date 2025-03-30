@@ -28,6 +28,15 @@ class PropertyTestReporter {
     } else {
       buffer.writeln('✗ Property test failed');
       buffer.writeln('  Failed after ${result.numTests} test cases');
+      
+      if (result.seed != null) {
+        buffer.writeln('  Seed: ${result.seed}');
+      } else {
+        // Note: If Random instance was provided directly, seed might not be available.
+        // Consider adding logic to PropertyConfig/Result to store the Random instance
+        // or a way to represent its state if the integer seed isn't known.
+        buffer.writeln('  Seed: (Not available - Random instance likely provided directly)');
+      }
 
       if (result.originalFailingInput != null) {
         buffer.writeln('\nOriginal failing input:');
@@ -85,7 +94,8 @@ class PropertyTestReporter {
 /// Extension methods for working with test results
 /// Extension methods for [PropertyResult] providing convenience accessors.
 extension PropertyResultExtensions on PropertyResult {
-  /// Get a detailed report of this test result
+  /// Generates a detailed, human-readable report string for this test result
+  /// using [PropertyTestReporter.formatResult].
   String get report => PropertyTestReporter.formatResult(this);
 }
 
@@ -121,6 +131,10 @@ class TestStatisticsCollector {
   final List<PropertyResult> _failedResults = [];
 
   /// Record a test result
+  /// Updates the collector's statistics with the outcome of a single test run.
+  ///
+  /// - [result]: The [PropertyResult] from the test run.
+  /// - [duration]: The time taken for the test run.
   void recordResult(PropertyResult result, Duration duration) {
     _totalTests++;
     _totalDuration += duration;
@@ -135,6 +149,10 @@ class TestStatisticsCollector {
   }
 
   /// Get a summary of all recorded test results
+  /// Generates a summary report string based on all the results recorded so far.
+  ///
+  /// Includes total tests run, pass/fail counts, success rate, shrink statistics,
+  /// average duration, and details of failed tests.
   String getSummary() {
     final buffer = StringBuffer();
 

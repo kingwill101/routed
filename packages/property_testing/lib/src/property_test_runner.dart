@@ -37,23 +37,46 @@ class _DefaultRandom implements Random {
 /// ```
 class PropertyConfig {
   /// The number of test cases to run
+  /// The total number of test cases executed before the test finished
+  /// (either by passing the configured number of tests or by failing).
+
+  /// The number of successful test cases that must run for the property
+  /// to be considered passed.
+  /// Defaults to 100.
   final int numTests;
 
   /// The maximum number of shrink attempts
+  /// The maximum number of shrinking steps to perform when a failing
+  /// test case is found. Controls how much effort is spent minimizing
+  /// the failure.
+  /// Defaults to 100.
   final int maxShrinks;
 
   /// The timeout for each test case
+  /// An optional maximum duration allowed for a single execution of the
+  /// property function. If the execution exceeds this duration, it's
+  /// considered a failure.
   final Duration? timeout;
 
   /// The random number generator to use for test case generation
+  /// The random number generator used for generating test inputs.
+  /// Providing a generator with a fixed seed ensures reproducible test runs.
+  /// If not provided, a default generator with a fixed seed (42) is used.
   final Random random;
 
+  /// The seed used for the random number generator. If a [random] instance
+  /// is provided directly, this might be null. If null, a default seed (42)
+  /// or a system-generated one might be used internally. Reporting this helps
+  /// in reproducing test runs.
+  final int? seed;
+
   PropertyConfig({
-    this.numTests = 100,
-    this.maxShrinks = 100,
-    this.timeout,
-    Random? random,
-  }) : random = random ?? _DefaultRandom();
+      this.numTests = 100,
+      this.maxShrinks = 100,
+      this.timeout,
+      Random? random,
+      this.seed,
+    }) : random = random ?? (seed != null ? Random(seed) : _DefaultRandom());
 }
 
 /// The result of a property test
@@ -65,35 +88,53 @@ class PropertyConfig {
 /// `numShrinks` performed if a failure occurred.
 class PropertyResult {
   /// Whether the property passed all test cases
+  /// `true` if the property held for all generated test cases, `false` otherwise.
   final bool success;
 
   /// The number of test cases that passed
   final int numTests;
 
   /// The failing input, if any
+  /// If the test failed, this holds the minimal input value (after shrinking)
+  /// that caused the failure. `null` if the test succeeded.
   final dynamic failingInput;
 
   /// The original failing input before shrinking, if any
+  /// If the test failed, this holds the first input value discovered that
+  /// caused the failure, before any shrinking was performed. `null` if the
+  /// test succeeded.
   final dynamic originalFailingInput;
 
   /// The error that caused the failure, if any
+  /// If the test failed, this holds the error or exception thrown by the
+  /// property function for the [failingInput]. `null` if the test succeeded.
   final Object? error;
 
   /// The stack trace of the error, if any
+  /// If the test failed, this holds the stack trace associated with the
+  /// [error]. `null` if the test succeeded.
   final StackTrace? stackTrace;
 
   /// The number of shrink attempts made
+  /// If the test failed, this indicates the number of successful shrinking
+  /// steps performed to minimize the failing input. `0` if the test succeeded
+  /// or no shrinking occurred.
   final int numShrinks;
 
+  /// The seed used for the random number generator during this test run.
+  /// Can be used to reproduce the exact sequence of generated values.
+  final int? seed;
+
   const PropertyResult({
-    required this.success,
-    required this.numTests,
-    this.failingInput,
-    this.originalFailingInput,
-    this.error,
-    this.stackTrace,
-    this.numShrinks = 0,
-  });
+      required this.success,
+      required this.numTests,
+      this.failingInput,
+      this.originalFailingInput,
+      this.error,
+      this.stackTrace,
+      this.numShrinks = 0,
+      this.seed,
+    });
 }
 
 /// A runner for property tests
@@ -131,10 +172,22 @@ class PropertyTestRunner<T> {
   final FutureOr<void> Function(T) property;
   final PropertyConfig config;
 
+  /// Creates a new property test runner.
+  ///
+  /// Requires a [generator] to produce inputs of type [T] and a [property]
+  /// function that takes an input of type [T] and performs assertions.
+  /// The [property] function should return `void` or `Future<void>`.
+  /// An optional [config] can be provided to customize test execution.
   PropertyTestRunner(this.generator, this.property, [PropertyConfig? config])
       : config = config ?? PropertyConfig();
 
-  /// Run the property test
+  /// Runs the property test according to the configuration.
+  ///
+  /// Generates test cases using the provided [generator], executes the
+  /// [property] function for each case, and performs shrinking if a failure
+  /// is detected.
+  ///
+  /// Returns a [PropertyResult] summarizing the outcome.
   Future<PropertyResult> run() async {
     for (var i = 0; i < config.numTests; i++) {
       final value = generator.generate(config.random);
@@ -151,21 +204,23 @@ class PropertyTestRunner<T> {
         // Found a failing case, try to shrink it
         final shrinkResult = await _shrink(value, e, st);
         return PropertyResult(
-          success: false,
-          numTests: i + 1,
-          failingInput: shrinkResult.shrunkValue,
-          originalFailingInput: value.value,
-          error: shrinkResult.error,
-          stackTrace: shrinkResult.stackTrace,
-          numShrinks: shrinkResult.numShrinks,
-        );
+                  success: false,
+                  numTests: i + 1,
+                  failingInput: shrinkResult.shrunkValue,
+                  originalFailingInput: value.value,
+                  error: shrinkResult.error,
+                  stackTrace: shrinkResult.stackTrace,
+                  numShrinks: shrinkResult.numShrinks,
+                  seed: config.seed, // Pass the seed used
+                );
       }
     }
 
     return PropertyResult(
-      success: true,
-      numTests: config.numTests,
-    );
+          success: true,
+          numTests: config.numTests,
+          seed: config.seed, // Pass the seed used
+        );
   }
 
   Future<_ShrinkResult<T>> _shrink(

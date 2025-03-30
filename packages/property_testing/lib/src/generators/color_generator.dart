@@ -69,14 +69,12 @@ class ColorGenerator extends Generator<Color> {
   ColorGenerator({this.includeAlpha = false});
 
   @override
-  ShrinkableValue<Color> generate([math.Random? random]) {
-    final rng = random ?? math.Random(42);
-
-    // Use a deterministic approach to generate colors
-    final hue = rng.nextDouble() * 360; // 0-360
-    final saturation = 0.7 + rng.nextDouble() * 0.3; // 70-100%
-    final lightness = 0.4 + rng.nextDouble() * 0.2; // 40-60%
-    final alpha = includeAlpha ? (rng.nextInt(100) / 100) : 1.0;
+    ShrinkableValue<Color> generate(math.Random random) {
+      // Use the provided random generator
+      final hue = random.nextDouble() * 360; // 0-360
+        final saturation = 0.7 + random.nextDouble() * 0.3; // 70-100%
+            final lightness = 0.4 + random.nextDouble() * 0.2; // 40-60%
+            final alpha = includeAlpha ? (random.nextInt(101) / 100.0) : 1.0; // Correct range 0-100 -> 0.0-1.0
 
     final rgb = _hslToRgb(hue, saturation, lightness);
     final original = Color(

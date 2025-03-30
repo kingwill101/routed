@@ -44,17 +44,14 @@ void main() {
       final runner = PropertyTestRunner(
         Specialized.uri(),
         (uri) {
-          print('Testing URI host: ${uri.host}');
-          // Domain name should have at least a domain and TLD
+          // Test URI host validation
           final parts = uri.host.split('.');
-          print('Parts: $parts');
           expect(parts.length,
               greaterThanOrEqualTo(2)); // domain + TLD (subdomain optional)
 
           // Each part should be valid
           for (final part in parts.take(parts.length - 1)) {
             // All parts except TLD
-            print('Checking part: $part');
             expect(
                 part,
                 matches(
@@ -64,7 +61,6 @@ void main() {
           }
 
           // Check TLD
-          print('Checking TLD: ${parts.last}');
           expect(
               parts.last, matches(r'^[a-z]+$')); // TLD should be letters only
         },
@@ -82,19 +78,16 @@ void main() {
           includeFragment: true,
         ),
         (uri) {
-          print('Testing URI: $uri');
-          final normalized = Uri.parse(uri.toString());
-          print('Normalized: $normalized');
-
-          // The toString representation should be preserved after parsing
-          expect(normalized.toString(), equals(uri.toString()));
+          // Test URI normalization
+          final normalized = uri.toString();
+          expect(Uri.parse(normalized).toString(), equals(normalized));
 
           // For file URIs without query parameters or fragments, toFilePath should work
           if (uri.scheme == 'file' &&
               uri.queryParameters.isEmpty &&
               uri.fragment.isEmpty) {
             try {
-              final _ = normalized.toFilePath(windows: false);
+              final _ = Uri.parse(normalized).toFilePath(windows: false);
               // File path conversion worked
             } catch (e) {
               fail('Failed to convert valid file URI to path: $e');

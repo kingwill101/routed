@@ -40,15 +40,26 @@ import 'property_test_runner.dart';
 /// ```
 abstract class Command<Model, Sut> {
   /// Check if this command can be run in the current state
+  /// Checks if this command is valid to execute given the current abstract
+  /// state represented by the [model].
+  /// Defaults to `true`.
   bool precondition(Model model) => true;
 
   /// Run the command against the system under test
+  /// Executes the command's action against the actual System Under Test [sut].
+  /// Can be synchronous or asynchronous.
   FutureOr<void> run(Sut sut);
 
   /// Update the model to reflect the expected state after running this command
+  /// Updates the abstract [model] state to reflect the expected state *after*
+  /// this command has been successfully executed. This should mirror the
+  /// state change in the [sut].
   Model update(Model model);
 
   /// Check that the system under test matches the model after running this command
+  /// Verifies that the actual state of the [sut] matches the predicted state
+  /// in the [model] *after* the command has executed. This typically involves
+  /// assertions comparing properties of the [sut] and the [model].
   FutureOr<void> postcondition(Model model, Sut sut);
 
   /// Get a string representation of this command for debugging
@@ -68,8 +79,17 @@ class CommandSequence<Model, Sut> {
 
   CommandSequence(this.commands);
 
-  /// Run all commands in sequence against the system under test
-  Future<void> run(Model initialModel, Sut sut) async {
+  /// Executes the sequence of commands against the [sut], starting from the
+    /// [initialModel] state.
+    ///
+    /// For each command, it:
+    /// 1. Checks the [Command.precondition].
+    /// 2. Executes [Command.run] on the [sut].
+    /// 3. Updates the model state using [Command.update].
+    /// 4. Verifies the state using [Command.postcondition].
+    ///
+    /// Throws a [StateError] if any precondition fails.
+    Future<void> run(Model initialModel, Sut sut) async {
     var model = initialModel;
 
     for (final command in commands) {
@@ -102,6 +122,8 @@ class CommandSequence<Model, Sut> {
 /// ```
 class StatefulPropertyConfig extends PropertyConfig {
   /// The maximum number of commands to generate per test case
+  /// The maximum number of commands to generate in a single test sequence.
+  /// Defaults to 100.
   final int maxCommandSequenceLength;
 
   StatefulPropertyConfig({
@@ -159,6 +181,12 @@ class StatefulPropertyBuilder<Model, Sut> {
         _config = config ?? StatefulPropertyConfig();
 
   /// Create a new stateful property test builder
+  /// Creates a new builder instance.
+  ///
+  /// Requires functions to:
+  /// - [initialModel]: Create a fresh instance of the model at the start of each test sequence.
+  /// - [setupSut]: Create and initialize a fresh instance of the System Under Test.
+  /// - [teardownSut]: Clean up the SUT instance after a test sequence completes.
   static StatefulPropertyBuilder<Model, Sut> create<Model, Sut>({
     required Model Function() initialModel,
     required Future<Sut> Function() setupSut,
@@ -171,10 +199,13 @@ class StatefulPropertyBuilder<Model, Sut> {
     );
   }
 
-  /// Add a command generator to this builder
-  StatefulPropertyBuilder<Model, Sut> withCommands(
-    Generator<Command<Model, Sut>> commandGenerator,
-  ) {
+  /// Adds a generator that produces [Command] instances for the test.
+    ///
+    /// Multiple command generators can be added; the runner will typically choose
+    /// between them randomly using [Gen.oneOfGen] during sequence generation.
+    StatefulPropertyBuilder<Model, Sut> withCommands(
+      Generator<Command<Model, Sut>> commandGenerator,
+    ) {
     return StatefulPropertyBuilder._(
       initialModel: _initialModel,
       setupSut: _setupSut,
@@ -184,10 +215,11 @@ class StatefulPropertyBuilder<Model, Sut> {
     );
   }
 
-  /// Set the configuration for this builder
-  StatefulPropertyBuilder<Model, Sut> withConfig(
-    StatefulPropertyConfig config,
-  ) {
+  /// Sets the [StatefulPropertyConfig] to use for this test run, overriding
+    /// the default configuration.
+    StatefulPropertyBuilder<Model, Sut> withConfig(
+      StatefulPropertyConfig config,
+    ) {
     return StatefulPropertyBuilder._(
       initialModel: _initialModel,
       setupSut: _setupSut,
@@ -197,8 +229,11 @@ class StatefulPropertyBuilder<Model, Sut> {
     );
   }
 
-  /// Run the stateful property test
-  Future<PropertyResult> run() async {
+  /// Builds the command sequence generator and runs the stateful property test.
+    ///
+    /// Returns a [PropertyResult] summarizing the outcome. Throws a [StateError]
+    /// if no command generators were provided via [withCommands].
+    Future<PropertyResult> run() async {
     if (_commandGenerators.isEmpty) {
       throw StateError('No command generators provided');
     }
@@ -280,6 +315,13 @@ class StatefulPropertyRunner<Model, Command> {
   final Model Function(Model, Command) update;
   final StatefulPropertyConfig config;
 
+  /// Creates a new stateful property runner using the invariant-based approach.
+  ///
+  /// - [commandGen]: Generator for the commands/operations to apply.
+  /// - [initialState]: Function to create the initial model state.
+  /// - [invariant]: Function to check if a model state is valid.
+  /// - [update]: Function to apply the effect of a command to the model state.
+  /// - [config]: Optional configuration for the test run.
   StatefulPropertyRunner(
     this.commandGen,
     this.initialState,
