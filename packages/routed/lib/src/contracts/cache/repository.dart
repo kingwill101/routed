@@ -8,6 +8,9 @@ abstract class Repository {
   /// Returns the cached item or the [defaultValue] if the item is not found.
   FutureOr<dynamic> pull(dynamic key, [dynamic defaultValue]);
 
+  /// Retrieves an item from the cache without mutating it.
+  FutureOr<dynamic> get(String key);
+
   /// Stores an item in the cache.
   ///
   /// The [ttl] parameter specifies the time-to-live duration.

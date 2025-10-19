@@ -1,0 +1,111 @@
+---
+title: "Specialized Generators"
+sidebar_position: 4
+---
+
+`Specialized` packages up higher-level data types that would otherwise take time to craft by hand. They expose expressive options and tuned shrinking strategies.
+
+```dart
+final runner = PropertyTestRunner(
+  Specialized.uri(schemes: ['https'], includeQueryParameters: false),
+  (uri) {
+    expect(uri.scheme, equals('https'));
+    expect(uri.host, isNotEmpty);
+  },
+);
+await runner.run();
+```
+
+## `Specialized.dateTime`
+
+```dart
+Specialized.dateTime({
+  DateTime? min,
+  DateTime? max,
+  bool utc = false,
+});
+```
+
+- Defaults to the `[1970-01-01, 2100-01-01)` UTC range.
+- Generates balanced coverage across months and handles edge-cases such as the Unix epoch.
+- Shrinking targets the minimum bound, the epoch (when in range), and rounded components (start of day/month).
+- Set `utc: true` to produce `DateTime.utc` values; otherwise local instances are returned.
+
+## `Specialized.duration`
+
+```dart
+Specialized.duration({
+  Duration? min,
+  Duration? max,
+});
+```
+
+- Defaults to `Duration.zero` through `Duration(days: 365)`.
+- Emits microsecond-precision durations and shrinks by halving toward `min`.
+- Always tries canonical durations such as 1 µs, 1 ms, 1 second, 1 minute, etc.
+
+## `Specialized.uri`
+
+```dart
+Specialized.uri({
+  List<String>? schemes,
+  bool includeUserInfo = false,
+  bool includeFragment = true,
+  bool includeQueryParameters = true,
+  int maxPathSegments = 5,
+  int maxQueryParameters = 5,
+});
+```
+
+- Generates realistic hosts, path segments, query parameters, fragments, and optional credentials.
+- Shrinking progressively strips segments, query parameters, fragments, and user info before simplifying the host to common values like `example.com`.
+- Restrict schemes (e.g. `['https']`) or turn off extra components for more targeted inputs.
+
+## `Specialized.email`
+
+```dart
+Specialized.email({
+  List<String>? domains,
+  int maxLocalPartLength = 64,
+});
+```
+
+- Produces plausible RFC 5322-style addresses with alphanumeric local parts and occasional `._-` characters.
+- Local parts never start/end with punctuation or contain double separators.
+- Shrinks by shortening the local part and trying common handles (`test`, `user`, `admin`).
+- Provide custom `domains` to match your application (defaults to Gmail/Yahoo/etc.).
+
+## `Specialized.semver`
+
+```dart
+Specialized.semver({
+  bool prerelease = true,
+  bool build = true,
+});
+```
+
+- Emits semantic version strings such as `1.4.12-beta.2+build.57`.
+- `prerelease` toggles generation of `-alpha.1` style identifiers.
+- `build` toggles `+build.123` metadata.
+- Shrinking removes build metadata first, then prerelease parts, and gradually lowers the version numbers toward `0.1.0`, `1.0.0`, etc.
+
+## `Specialized.color`
+
+```dart
+Specialized.color({bool alpha = false});
+```
+
+- Produces RGBA colours with perceptually-distributed RGB components.
+- Returns a `Color` value object (`r`, `g`, `b` 0–255, `a` 0.0–1.0).
+- Shrinks toward key reference colours (black, white, RGB primaries).
+- Set `alpha: true` to randomise the opacity channel; otherwise `a` is fixed to `1.0`.
+
+## Fine-tuning shrinking
+
+Each specialised generator returns domain-aware shrinks out of the box. You can still map over the value to enforce additional constraints. For example, to ensure semantic versions never contain build metadata during shrinking:
+
+```dart
+final releaseOnlySemver = Specialized.semver(build: false).map((version) {
+  return version.split('+').first; // defensive clean-up
+});
+```

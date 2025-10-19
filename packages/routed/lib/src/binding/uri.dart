@@ -1,5 +1,5 @@
-import 'package:routed/routed.dart';
 import 'package:routed/src/binding/binding.dart';
+import 'package:routed/src/context/context.dart';
 import 'package:routed/src/validation/validator.dart';
 
 /// A class that binds URI parameters to a given instance and validates them.
@@ -34,9 +34,13 @@ class UriBinding extends Binding {
   /// [context] - The engine context containing the parameters to validate.
   /// [rules] - A map of validation rules to apply to the parameters.
   @override
-  Future<void> validate(EngineContext context, Map<String, String> rules,
-      {bool bail = false}) async {
-    final validator = Validator.make(rules, bail: bail);
+  Future<void> validate(
+    EngineContext context,
+    Map<String, String> rules, {
+    bool bail = false,
+    Map<String, String>? messages,
+  }) async {
+    final validator = Validator.make(rules, bail: bail, messages: messages);
     final errors = validator.validate(context.params);
 
     if (errors.isNotEmpty) {

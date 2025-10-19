@@ -1,7 +1,5 @@
 import 'dart:convert';
-import 'dart:io';
 
-import 'package:http_parser/http_parser.dart';
 import 'package:routed/routed.dart';
 import 'package:routed_testing/routed_testing.dart';
 import 'package:server_testing/server_testing.dart';
@@ -20,7 +18,7 @@ void main() {
         await ctx.validate({
           'name': 'required',
           'age': 'required|numeric',
-          'tags': 'required|array'
+          'tags': 'required|array',
         });
 
         await ctx.bind(data);
@@ -32,7 +30,7 @@ void main() {
       final response = await client.postJson('/json', {
         'name': 'test',
         'age': 2511,
-        'tags': ['one', 'two']
+        'tags': ['one', 'two'],
       });
 
       response.assertStatus(200);
@@ -43,10 +41,7 @@ void main() {
       engine.post('/form', (ctx) async {
         final data = <String, dynamic>{};
 
-        await ctx.validate({
-          'name': 'required',
-          'age': 'required|numeric',
-        });
+        await ctx.validate({'name': 'required', 'age': 'required|numeric'});
 
         await ctx.bind(data);
         ctx.json(data);
@@ -58,16 +53,13 @@ void main() {
         '/form',
         'name=test&age=25',
         headers: {
-          'Content-Type': ['application/x-www-form-urlencoded']
+          'Content-Type': ['application/x-www-form-urlencoded'],
         },
       );
 
       response
         ..assertStatus(200)
-        ..assertJsonContains({
-          'name': 'test',
-          'age': '25',
-        });
+        ..assertJsonContains({'name': 'test', 'age': '25'});
     });
 
     test('Query Binding Validation', () async {
@@ -95,47 +87,51 @@ void main() {
         ..assertJsonContains({'q': 'test', 'page': '1', 'sort': 'desc'});
     });
 
-    test('Multipart Form Binding Validation',
-        timeout: const Timeout(Duration(seconds: 100)), () async {
-      final engine = Engine();
+    test(
+      'Multipart Form Binding Validation',
+      timeout: const Timeout(Duration(seconds: 100)),
+      () async {
+        final engine = Engine();
 
-      engine.post('/upload', (ctx) async {
-        final data = <String, dynamic>{};
+        engine.post('/upload', (ctx) async {
+          final data = <String, dynamic>{};
 
-        await ctx.validate({
-          'name': 'required',
-          'age': 'required|numeric',
-          'tags': 'required|array',
-          'document': 'required|file'
+          await ctx.validate({
+            'name': 'required',
+            'age': 'required|numeric',
+            'tags': 'required|array',
+            'document': 'required|file',
+          });
+
+          await ctx.bind(data);
+          ctx.json(data);
         });
 
-        await ctx.bind(data);
-        ctx.json(data);
-      });
+        final client = useClient(engine);
 
-      final client = useClient(engine);
-
-      final response = await client.multipart('/upload', (request) {
-        request
-          ..addField('name', 'test')
-          ..addField('age', '255')
-          ..addField('tags', 'one')
-          ..addField('tags', 'two')
-          ..addFileFromBytes(
+        final response = await client.multipart('/upload', (request) {
+          request
+            ..addField('name', 'test')
+            ..addField('age', '255')
+            ..addField('tags', 'one')
+            ..addField('tags', 'two')
+            ..addFileFromBytes(
               name: 'document',
-              filename: 'test.txt',
+              filename: 'test.pdf',
               bytes: utf8.encode('Hello World'),
-              contentType: MediaType.parse(ContentType.text.value));
-      });
-
-      response
-        ..assertStatus(200)
-        ..assertJsonContains({
-          'name': 'test',
-          'age': '255',
-          'tags': ['one', 'two']
+              contentType: MediaType.parse('application/pdf'),
+            );
         });
-    });
+
+        response
+          ..assertStatus(200)
+          ..assertJsonContains({
+            'name': 'test',
+            'age': '255',
+            'tags': ['one', 'two'],
+          });
+      },
+    );
 
     test('Validation Error Handling', () async {
       final engine = Engine();
@@ -147,7 +143,7 @@ void main() {
           await ctx.validate({
             'name': 'required',
             'age': 'required|numeric',
-            'tags': 'required|array'
+            'tags': 'required|array',
           });
 
           await ctx.bind(data);
@@ -162,7 +158,7 @@ void main() {
       final response = await client.postJson('/json2', {
         'name': 'test',
         'age': 'invalid', // Invalid age (not numeric)
-        'tags': 'not an array' // Invalid tags (not an array)
+        'tags': 'not an array', // Invalid tags (not an array)
       });
 
       response
@@ -170,8 +166,75 @@ void main() {
         ..assertJsonContains({
           'errors': {
             'age': ['This field must be a number.'],
-            'tags': ['This field must be an array.']
+            'tags': ['This field must be an array.'],
+          },
+        });
+    });
+
+    test(
+      'Validation accumulates errors and supports custom messages',
+      () async {
+        final engine = Engine();
+
+        engine.post('/multi', (ctx) async {
+          try {
+            await ctx.validate(
+              {'username': 'required|min:5|alpha'},
+              messages: {
+                'username.min': 'Username must be at least five characters.',
+                'username.alpha': 'Username may only contain letters.',
+              },
+            );
+            ctx.string('ok');
+          } on ValidationError catch (e) {
+            ctx.json({'errors': e.errors});
           }
+        });
+
+        final client = useClient(engine);
+        final response = await client.postJson('/multi', {'username': '12'});
+
+        response
+          ..assertStatus(200)
+          ..assertJsonContains({
+            'errors': {
+              'username': [
+                'Username must be at least five characters.',
+                'Username may only contain letters.',
+              ],
+            },
+          });
+      },
+    );
+
+    test('Validation bail stops after first failure', () async {
+      final engine = Engine();
+
+      engine.post('/bail', (ctx) async {
+        try {
+          await ctx.validate(
+            {'username': 'required|min:5|alpha'},
+            bail: true,
+            messages: {
+              'username.min': 'Too short',
+              'username.alpha': 'Letters only',
+            },
+          );
+          ctx.string('ok');
+        } on ValidationError catch (e) {
+          ctx.json({'errors': e.errors});
+        }
+      });
+
+      final client = useClient(engine);
+      final response = await client.postJson('/bail', {'username': '12'});
+
+      response
+        ..assertStatus(200)
+        ..assertJsonContains({
+          'errors': {
+            'username': ['Too short'],
+          },
         });
     });
   });

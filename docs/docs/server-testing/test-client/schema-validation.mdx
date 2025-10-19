@@ -1,0 +1,173 @@
+---
+title: Schema Validation
+description: Learn how to validate JSON schemas in tests
+sidebar_position: 6
+---
+
+# Schema Validation
+
+server_testing provides powerful schema validation capabilities through AssertableJson.
+
+## Basic Schema Validation
+
+```dart
+response.assertJson((json) {
+  json.matchesSchema({
+    // Basic types
+    'id': int,
+    'name': String,
+    'active': bool,
+    'score': double,
+    
+    // Nested objects
+    'profile': {
+      'email': String,
+      'age': int,
+      'preferences': Map<String, dynamic>
+    },
+    
+    // Arrays
+    'tags': List<String>,
+    'scores': List<int>,
+    'records': List<Map<String, dynamic>>
+  });
+});
+```
+
+## Array Structure Validation
+
+```dart
+response.assertJson((json) {
+  // Validate array item structure
+  json.assertStructure({
+    'users': {
+      '*': [  // Wildcard matches all array items
+        'id',
+        'name',
+        'email'
+      ]
+    },
+    
+    // Nested arrays
+    'departments': {
+      '*': {  // Each department
+        'name': String,
+        'employees': {
+          '*': [  // Each employee
+            'id',
+            'role'
+          ]
+        }
+      }
+    }
+  });
+});
+```
+
+## Optional Fields
+
+```dart
+response.assertJson((json) {
+  json.matchesSchema({
+    // Required fields
+    'id': int,
+    'name': String,
+    
+    // Optional fields (nullable)
+    'description?': String,
+    'metadata?': Map<String, dynamic>,
+    
+    // Nested optional fields
+    'profile': {
+      'email': String,
+      'phone?': String,
+      'address?': {
+        'street': String,
+        'city': String
+      }
+    }
+  });
+});
+```
+
+## Type Validation
+
+```dart
+response.assertJson((json) {
+  json
+    // Direct type checks
+    .whereType<int>('id')
+    .whereType<String>('name')
+    .whereType<bool>('active')
+    .whereType<List>('items')
+    .whereType<Map>('metadata')
+    
+    // Nested type checks
+    .scope('user', (user) {
+      user
+        .whereType<String>('email')
+        .whereType<int>('age')
+        .scope('settings', (settings) {
+          settings.whereType<bool>('notifications');
+        });
+    });
+});
+```
+
+## Custom Validation
+
+```dart
+response.assertJson((json) {
+  json
+    // Custom validation function
+    .where('email', (value) {
+      return RegExp(r'^[\w-\.]+@([\w-]+\.)+[\w-]{2,4}$')
+        .hasMatch(value as String);
+    })
+    
+    // Custom type validation
+    .where('date', (value) {
+      return DateTime.tryParse(value as String) != null;
+    })
+    
+    // Complex validation
+    .where('permissions', (value) {
+      final perms = value as List;
+      return perms.every((p) => 
+        p is String && ['read', 'write', 'admin'].contains(p));
+    });
+});
+```
+
+## Combining Validations
+
+```dart
+response.assertJson((json) {
+  json
+    // Schema validation
+    .matchesSchema({
+      'user': {
+        'id': int,
+        'name': String,
+        'email': String
+      }
+    })
+    
+    // Additional type checks
+    .whereType<int>('user.id')
+    
+    // Value validation
+    .where('user.id', (id) => id > 0)
+    
+    // Nested validation
+    .scope('user', (user) {
+      user
+        .has('id')
+        .has('name')
+        .has('email')
+        .whereType<String>('email')
+        .where('email', (email) => 
+          email.toString().contains('@'));
+    });
+});
+```

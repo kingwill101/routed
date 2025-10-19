@@ -1,0 +1,9 @@
+default: assets
+disks:
+  assets:
+    driver: local
+    root: "{{ storage.disks.assets.root | default: 'public/assets' }}"
+  transient:
+    driver: memory_ephemeral
+    root: "{{ storage.disks.transient.root | default: 'runtime/transient' }}"
+    seed: "{{ storage.disks.transient.seed | default: 'demo-seed' }}"

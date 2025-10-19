@@ -1,0 +1,9 @@
+{
+  "label": "Fundamentals",
+  "collapsed": false,
+  "position": 2,
+  "link": {
+    "type": "doc",
+    "id": "routed/fundamentals/index"
+  }
+}

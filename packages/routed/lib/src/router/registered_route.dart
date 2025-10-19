@@ -5,7 +5,7 @@ import 'package:routed/src/router/types.dart';
 class RegisteredRoute {
   final String method;
   String path;
-  final Handler handler;
+  final RouteHandler handler;
 
   /// Route-level middlewares (only declared on this route).
   final List<Middleware> routeMiddlewares;
@@ -24,8 +24,8 @@ class RegisteredRoute {
     required this.handler,
     this.routeMiddlewares = const [],
     this.name,
-    this.constraints = const {},
-  });
+    Map<String, dynamic>? constraints,
+  }) : constraints = Map<String, dynamic>.from(constraints ?? const {});
 
   @override
   String toString() {

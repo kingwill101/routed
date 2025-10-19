@@ -1,8 +1,8 @@
 import 'package:routed/routed.dart';
 import 'package:routed/src/router/registered_route.dart';
-import 'package:routed/src/router/route_builder.dart';
 import 'package:routed/src/router/router_group_builder.dart';
 import 'package:routed/src/static_files.dart';
+export 'route_builder.dart';
 
 /// A hierarchical Router supporting:
 /// - Sub-groups (each can have path + middlewares)
@@ -23,6 +23,9 @@ class Router with StaticFileHandler {
 
   /// Direct routes defined at this level
   final List<RegisteredRoute> _routes = [];
+
+  /// WebSocket routes defined at this level
+  final List<RouterWebSocketRoute> _wsRoutes = [];
 
   /// Child routers
   final List<Router> _children = [];
@@ -46,7 +49,7 @@ class Router with StaticFileHandler {
 
   /// Create a sub-group (child router).
   ///
-  /// [path]: appended to this router’s path
+  /// [path]: appended to this router's path
   /// [middlewares]: new middlewares for this child group
   /// [builder]: configures the child (adding routes, subgroups)
   ///
@@ -74,8 +77,10 @@ class Router with StaticFileHandler {
   ///
   /// [handler]: The handler function for the fallback route.
   /// [middlewares]: Optional middlewares specific to this fallback route.
-  RouteBuilder fallback(Handler handler,
-      {List<Middleware> middlewares = const []}) {
+  RouteBuilder fallback(
+    Handler handler, {
+    List<Middleware> middlewares = const [],
+  }) {
     final route = RegisteredRoute(
       method: '*',
       path: '/{__fallback:*}',
@@ -85,6 +90,21 @@ class Router with StaticFileHandler {
     );
     _routes.add(route);
     return RouteBuilder(route, this);
+  }
+
+  /// Registers a WebSocket route with the router.
+  void ws(
+    String path,
+    WebSocketHandler handler, {
+    List<Middleware> middlewares = const [],
+  }) {
+    _wsRoutes.add(
+      RouterWebSocketRoute(
+        path: path,
+        handler: handler,
+        routeMiddlewares: middlewares,
+      ),
+    );
   }
 
   // ----------------
@@ -97,11 +117,19 @@ class Router with StaticFileHandler {
   /// [handler]: The handler function for the GET route.
   /// [middlewares]: Optional middlewares specific to this route.
   /// [constraints]: Optional constraints for the route parameters.
-  RouteBuilder get(String path, Handler handler,
-      {List<Middleware> middlewares = const [],
-      Map<String, dynamic> constraints = const {}}) {
-    return handle("GET", path, handler,
-        middlewares: middlewares, constraints: constraints);
+  RouteBuilder get(
+    String path,
+    RouteHandler handler, {
+    List<Middleware> middlewares = const [],
+    Map<String, dynamic> constraints = const {},
+  }) {
+    return handle(
+      "GET",
+      path,
+      handler,
+      middlewares: middlewares,
+      constraints: constraints,
+    );
   }
 
   /// Registers a POST route with the router.
@@ -110,11 +138,19 @@ class Router with StaticFileHandler {
   /// [handler]: The handler function for the POST route.
   /// [middlewares]: Optional middlewares specific to this route.
   /// [constraints]: Optional constraints for the route parameters.
-  RouteBuilder post(String path, Handler handler,
-      {List<Middleware> middlewares = const [],
-      Map<String, dynamic> constraints = const {}}) {
-    return handle("POST", path, handler,
-        middlewares: middlewares, constraints: constraints);
+  RouteBuilder post(
+    String path,
+    RouteHandler handler, {
+    List<Middleware> middlewares = const [],
+    Map<String, dynamic> constraints = const {},
+  }) {
+    return handle(
+      "POST",
+      path,
+      handler,
+      middlewares: middlewares,
+      constraints: constraints,
+    );
   }
 
   /// Registers a PUT route with the router.
@@ -123,11 +159,19 @@ class Router with StaticFileHandler {
   /// [handler]: The handler function for the PUT route.
   /// [middlewares]: Optional middlewares specific to this route.
   /// [constraints]: Optional constraints for the route parameters.
-  RouteBuilder put(String path, Handler handler,
-      {List<Middleware> middlewares = const [],
-      Map<String, dynamic> constraints = const {}}) {
-    return handle("PUT", path, handler,
-        middlewares: middlewares, constraints: constraints);
+  RouteBuilder put(
+    String path,
+    RouteHandler handler, {
+    List<Middleware> middlewares = const [],
+    Map<String, dynamic> constraints = const {},
+  }) {
+    return handle(
+      "PUT",
+      path,
+      handler,
+      middlewares: middlewares,
+      constraints: constraints,
+    );
   }
 
   /// Registers a DELETE route with the router.
@@ -136,11 +180,19 @@ class Router with StaticFileHandler {
   /// [handler]: The handler function for the DELETE route.
   /// [middlewares]: Optional middlewares specific to this route.
   /// [constraints]: Optional constraints for the route parameters.
-  RouteBuilder delete(String path, Handler handler,
-      {List<Middleware> middlewares = const [],
-      Map<String, dynamic> constraints = const {}}) {
-    return handle("DELETE", path, handler,
-        middlewares: middlewares, constraints: constraints);
+  RouteBuilder delete(
+    String path,
+    RouteHandler handler, {
+    List<Middleware> middlewares = const [],
+    Map<String, dynamic> constraints = const {},
+  }) {
+    return handle(
+      "DELETE",
+      path,
+      handler,
+      middlewares: middlewares,
+      constraints: constraints,
+    );
   }
 
   /// Registers a PATCH route with the router.
@@ -149,11 +201,19 @@ class Router with StaticFileHandler {
   /// [handler]: The handler function for the PATCH route.
   /// [middlewares]: Optional middlewares specific to this route.
   /// [constraints]: Optional constraints for the route parameters.
-  RouteBuilder patch(String path, Handler handler,
-      {List<Middleware> middlewares = const [],
-      Map<String, dynamic> constraints = const {}}) {
-    return handle("PATCH", path, handler,
-        middlewares: middlewares, constraints: constraints);
+  RouteBuilder patch(
+    String path,
+    RouteHandler handler, {
+    List<Middleware> middlewares = const [],
+    Map<String, dynamic> constraints = const {},
+  }) {
+    return handle(
+      "PATCH",
+      path,
+      handler,
+      middlewares: middlewares,
+      constraints: constraints,
+    );
   }
 
   /// Registers a HEAD route with the router.
@@ -162,11 +222,19 @@ class Router with StaticFileHandler {
   /// [handler]: The handler function for the HEAD route.
   /// [middlewares]: Optional middlewares specific to this route.
   /// [constraints]: Optional constraints for the route parameters.
-  RouteBuilder head(String path, Handler handler,
-      {List<Middleware> middlewares = const [],
-      Map<String, dynamic> constraints = const {}}) {
-    return handle("HEAD", path, handler,
-        middlewares: middlewares, constraints: constraints);
+  RouteBuilder head(
+    String path,
+    RouteHandler handler, {
+    List<Middleware> middlewares = const [],
+    Map<String, dynamic> constraints = const {},
+  }) {
+    return handle(
+      "HEAD",
+      path,
+      handler,
+      middlewares: middlewares,
+      constraints: constraints,
+    );
   }
 
   /// Registers an OPTIONS route with the router.
@@ -175,11 +243,19 @@ class Router with StaticFileHandler {
   /// [handler]: The handler function for the OPTIONS route.
   /// [middlewares]: Optional middlewares specific to this route.
   /// [constraints]: Optional constraints for the route parameters.
-  RouteBuilder options(String path, Handler handler,
-      {List<Middleware> middlewares = const [],
-      Map<String, dynamic> constraints = const {}}) {
-    return handle("OPTIONS", path, handler,
-        middlewares: middlewares, constraints: constraints);
+  RouteBuilder options(
+    String path,
+    RouteHandler handler, {
+    List<Middleware> middlewares = const [],
+    Map<String, dynamic> constraints = const {},
+  }) {
+    return handle(
+      "OPTIONS",
+      path,
+      handler,
+      middlewares: middlewares,
+      constraints: constraints,
+    );
   }
 
   /// Registers a CONNECT route with the router.
@@ -188,14 +264,61 @@ class Router with StaticFileHandler {
   /// [handler]: The handler function for the CONNECT route.
   /// [middlewares]: Optional middlewares specific to this route.
   /// [constraints]: Optional constraints for the route parameters.
-  RouteBuilder connect(String path, Handler handler,
-      {List<Middleware> middlewares = const [],
-      Map<String, dynamic> constraints = const {}}) {
-    return handle("CONNECT", path, handler,
-        middlewares: middlewares, constraints: constraints);
+  RouteBuilder connect(
+    String path,
+    RouteHandler handler, {
+    List<Middleware> middlewares = const [],
+    Map<String, dynamic> constraints = const {},
+  }) {
+    return handle(
+      "CONNECT",
+      path,
+      handler,
+      middlewares: middlewares,
+      constraints: constraints,
+    );
   }
 
-  // ----------------
+  /// Registers a route that accepts any HTTP method.
+  ///
+  /// [path]: The path for the route.
+  /// [handler]: The handler function for the route.
+  /// [middlewares]: Optional middlewares specific to this route.
+  /// [constraints]: Optional constraints for the route parameters.
+  RouteBuilder any(
+    String path,
+    Handler handler, {
+    List<Middleware> middlewares = const [],
+    Map<String, dynamic> constraints = const {},
+  }) {
+    // Create routes for all common HTTP methods
+    final methods = [
+      'GET',
+      'POST',
+      'PUT',
+      'DELETE',
+      'PATCH',
+      'HEAD',
+      'OPTIONS',
+    ];
+
+    // Use the first route for naming and return its builder
+    RouteBuilder? firstBuilder;
+
+    for (final method in methods) {
+      final builder = handle(
+        method,
+        path,
+        handler,
+        middlewares: middlewares,
+        constraints: constraints,
+      );
+
+      firstBuilder ??= builder;
+    }
+
+    return firstBuilder!;
+  }
 
   /// Internal helper to create and store a [RegisteredRoute].
   ///
@@ -207,7 +330,7 @@ class Router with StaticFileHandler {
   RouteBuilder handle(
     String method,
     String path,
-    Handler handler, {
+    RouteHandler handler, {
     List<Middleware> middlewares = const [],
     Map<String, dynamic> constraints = const {},
   }) {
@@ -222,6 +345,40 @@ class Router with StaticFileHandler {
     _routes.add(route);
     return RouteBuilder(route, this);
   }
+
+  //
+  // /// Register a class-based view with the router.
+  // ///
+  // /// [path]: The path for the view.
+  // /// [view]: The view instance to register.
+  // /// [middlewares]: Optional middlewares specific to this view.
+  // /// [constraints]: Optional constraints for the route parameters.
+  // RouteBuilder view(
+  //   String path,
+  //   View view, {
+  //   List<Middleware> middlewares = const [],
+  //   Map<String, dynamic> constraints = const {},
+  // }) {
+  //   // Convert the view to a handler function
+  //   handler(EngineContext context) => view.dispatch(context);
+  //
+  //   // For views, we'll register routes for all methods the view allows
+  //   final allowedMethods = view.allowedMethods;
+  //
+  //   // Use the first route for naming and return its builder
+  //   RouteBuilder? firstBuilder;
+  //
+  //   for (final method in allowedMethods) {
+  //     final builder = handle(method, path, handler,
+  //         middlewares: middlewares, constraints: constraints);
+  //
+  //     firstBuilder ??= builder;
+  //   }
+  //
+  //   return firstBuilder ?? // Fallback in case allowedMethods is empty (shouldn't happen)
+  //       handle('GET', path, handler,
+  //           middlewares: middlewares, constraints: constraints);
+  // }
 
   /// Build merges naming & middlewares.
   ///
@@ -253,6 +410,13 @@ class Router with StaticFileHandler {
       }
     }
 
+    for (final wsRoute in _wsRoutes) {
+      wsRoute.finalMiddlewares = [...combinedMW, ...wsRoute.routeMiddlewares];
+      if (!wsRoute.path.startsWith(_prefix)) {
+        wsRoute.path = _joinPaths(_prefix, wsRoute.path);
+      }
+    }
+
     // Recursively build children
     for (final child in _children) {
       child.build(
@@ -278,6 +442,41 @@ class Router with StaticFileHandler {
       results.addAll(c.getAllRoutes());
     }
     return results;
+  }
+
+  List<RouterWebSocketRoute> getAllWebSocketRoutes() {
+    final results = <RouterWebSocketRoute>[];
+    results.addAll(_wsRoutes);
+    for (final child in _children) {
+      results.addAll(child.getAllWebSocketRoutes());
+    }
+    return results;
+  }
+
+  /// Resolves [MiddlewareReference] placeholders into executable middleware.
+  void resolveMiddlewareReferences(
+    MiddlewareRegistry registry,
+    Container container,
+  ) {
+    registry.resolveInPlace(groupMiddlewares, container);
+
+    for (final route in _routes) {
+      route.finalMiddlewares = registry.resolveAll(
+        route.finalMiddlewares,
+        container,
+      );
+    }
+
+    for (final wsRoute in _wsRoutes) {
+      wsRoute.finalMiddlewares = registry.resolveAll(
+        wsRoute.finalMiddlewares,
+        container,
+      );
+    }
+
+    for (final child in _children) {
+      child.resolveMiddlewareReferences(registry, container);
+    }
   }
 
   // --------------------------------------------------
@@ -317,67 +516,15 @@ class Router with StaticFileHandler {
   }
 }
 
-// extension RouterStaticFiles on Router {
-//   /// Serve a single static file with the default filesystem.
-//   ///
-//   /// [relativePath]: The URL path to serve the file at.
-//   /// [filePath]: The filesystem path to the file.
-//   /// [fs]: Optional custom filesystem.
-//   void staticFile(String relativePath, String filePath, [file.FileSystem? fs]) {
-//     staticFileFS(
-//         relativePath, filePath, Dir(p.dirname(filePath), fileSystem: fs));
-//   }
+class RouterWebSocketRoute {
+  RouterWebSocketRoute({
+    required this.path,
+    required this.handler,
+    List<Middleware> routeMiddlewares = const [],
+  }) : routeMiddlewares = List<Middleware>.from(routeMiddlewares);
 
-//   /// Serve a single static file with a custom filesystem.
-//   ///
-//   /// [relativePath]: The URL path to serve the file at.
-//   /// [filePath]: The filesystem path to the file.
-//   /// [fs]: The custom filesystem directory.
-//   void staticFileFS(String relativePath, String filePath, Dir fs) {
-//     if (relativePath.contains(':') || relativePath.contains('*')) {
-//       throw Exception(
-//           'URL parameters cannot be used when serving a static file');
-//     }
-
-//     final fileHandler = FileHandler.fromDir(fs);
-//     final fileName = p.basename(filePath);
-
-//     handler(EngineContext context) async {
-//       await fileHandler.serveFile(context.request.httpRequest, fileName);
-//     }
-
-//     get(relativePath, handler);
-//     head(relativePath, handler);
-//   }
-
-//   /// Serve a directory of static files with the default filesystem.
-//   ///
-//   /// [relativePath]: The URL path to serve the directory at.
-//   /// [rootPath]: The filesystem path to the root directory.
-//   /// [fs]: Optional custom filesystem.
-//   void static(String relativePath, String rootPath, [file.FileSystem? fs]) {
-//     staticFS(relativePath, Dir(rootPath, fileSystem: fs));
-//   }
-
-//   /// Serve a directory of static files with a custom filesystem.
-//   ///
-//   /// [relativePath]: The URL path to serve the directory at.
-//   /// [dir]: The custom filesystem directory.
-//   void staticFS(String relativePath, Dir dir) {
-//     if (relativePath.contains(':') || relativePath.contains('*')) {
-//       throw Exception(
-//           'URL parameters cannot be used when serving a static folder');
-//     }
-
-//     final urlPattern = p.join(relativePath, '{*filepath}');
-//     final fileHandler = FileHandler.fromDir(dir);
-
-//     handler(EngineContext context) async {
-//       final requestPath = context.param('filepath') as String;
-//       await fileHandler.serveFile(context.request.httpRequest, requestPath);
-//     }
-
-//     get(urlPattern, handler);
-//     head(urlPattern, handler);
-//   }
-// }
+  String path;
+  final WebSocketHandler handler;
+  final List<Middleware> routeMiddlewares;
+  List<Middleware> finalMiddlewares = [];
+}

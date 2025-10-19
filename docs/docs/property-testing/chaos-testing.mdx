@@ -1,0 +1,86 @@
+---
+title: "Chaos & Adversarial Inputs"
+sidebar_position: 5
+---
+
+Use the `Chaos` helpers when you want to blast your system with malicious, malformed, or extreme values. They mix in edge-case characters, control bytes, deep JSON structures, and integer boundary values that regular generators rarely cover.
+
+```dart
+test('search endpoint survives untrusted strings', () async {
+  final runner = PropertyTestRunner(
+    Chaos.string(maxLength: 200),
+    (payload) async {
+      final response = await client.get('/api/search?q=$payload');
+      expect(response.statusCode, lessThan(500));
+    },
+    PropertyConfig(numTests: 500),
+  );
+
+  final result = await runner.run();
+  expect(result.success, isTrue, reason: result.report);
+});
+```
+
+## Generators
+
+| API | Description |
+| --- | --- |
+| `Chaos.string({int? minLength, int? maxLength})` | Builds strings that interleave random Unicode with problematic characters (null bytes, zero-width spaces, SQL injection payloads, etc.). Shrinking removes or neutralises problematic characters. |
+| `Chaos.integer({int? min, int? max})` | Generates integers biased toward well-known edge cases (JS max safe int, ±2³¹, ±2⁶³, 0, ±1) and shrinks by trying those boundaries first. |
+| `Chaos.json({int maxDepth = 3, int maxLength = 10})` | Produces JSON-like strings with potentially malformed structures, huge nesting, and injected control characters. |
+| `Chaos.bytes({int? minLength, int? maxLength})` | Emits `List<int>` values containing random bytes, BOM sequences, null bytes, and other tricky values. |
+
+All generators share the same shrinking philosophy: simplify structure first (shorter strings, fewer JSON members, shorter byte lists), then smooth out problematic tokens.
+
+## Chaos categories
+
+`ChaosCategory` enumerates the kinds of attack payloads baked into the chaotic string generator:
+
+- `sqlInjection`
+- `xss`
+- `pathTraversal`
+- `commandInjection`
+- `unicode`
+- `large`
+- `special`
+- `format`
+- `control`
+- `json`
+
+`ChaosConfig` packages up a set of categories, a maximum length, and an intensity value. The current release uses the defaults internally; future releases will surface the config object as an argument once the tuning API is stabilised.
+
+```dart
+// Keep a config handy so you can re-run with the same knobs
+const loginChaos = ChaosConfig(
+  categories: {
+    ChaosCategory.sqlInjection,
+    ChaosCategory.unicode,
+    ChaosCategory.control,
+  },
+  maxLength: 512,
+  intensity: 0.7,
+);
+```
+
+## Combining chaos with structured generators
+
+Mix chaotic primitives into richer structures by composing with the core generator API:
+
+```dart
+final chaoticFormGen = Chaos.string(maxLength: 64).flatMap((value) {
+  return Gen.oneOf(['name', 'email', 'comment']).map((field) {
+    return {'field': field, 'value': value};
+  });
+});
+
+final runner = PropertyTestRunner(
+  chaoticFormGen,
+  (payload) async {
+    final response = await client.postJson('/forms', payload);
+    expect(response.statusCode, lessThan(500));
+  },
+  PropertyConfig(numTests: 200),
+);
+```
+
+Use `flatMap` to connect chaotic components with valid counterparts (e.g. chaos in one field, hand-crafted defaults in others) so the overall payload stays meaningful while still attacking the fragile parts.

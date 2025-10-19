@@ -1,0 +1,102 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>WebSocket Chat</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+
+        #chat-container {
+            border: 1px solid #ccc;
+            height: 400px;
+            margin-bottom: 20px;
+            overflow-y: auto;
+            padding: 10px;
+        }
+
+        #message-form {
+            display: flex;
+            gap: 10px;
+        }
+
+        #message-input {
+            flex: 1;
+            padding: 8px;
+        }
+
+        button {
+            padding: 8px 16px;
+            background-color: #007bff;
+            color: white;
+            border: none;
+            cursor: pointer;
+        }
+
+        button:hover {
+            background-color: #0056b3;
+        }
+
+        .system-message {
+            color: #666;
+            font-style: italic;
+        }
+    </style>
+</head>
+<body>
+<h1>WebSocket Chat</h1>
+<div id="chat-container"></div>
+<form id="message-form">
+    <input type="text" id="message-input" placeholder="Type a message or /nick <username> to change name" required>
+    <button type="submit">Send</button>
+</form>
+
+<script>
+    const chatContainer = document.getElementById('chat-container');
+    const messageForm = document.getElementById('message-form');
+    const messageInput = document.getElementById('message-input');
+
+    // Connect to WebSocket server
+    const ws = new WebSocket(`ws://${window.location.host}/chat`);
+
+    // Handle incoming messages
+    ws.onmessage = (event) => {
+        const message = event.data;
+        const messageElement = document.createElement('div');
+
+        // Style system messages differently
+        if (!message.includes(':')) {
+            messageElement.classList.add('system-message');
+        }
+
+        messageElement.textContent = message;
+        chatContainer.appendChild(messageElement);
+        chatContainer.scrollTop = chatContainer.scrollHeight;
+    };
+
+    // Handle WebSocket connection errors
+    ws.onerror = (error) => {
+        console.error('WebSocket error:', error);
+        const messageElement = document.createElement('div');
+        messageElement.classList.add('system-message');
+        messageElement.textContent = 'Error: Could not connect to the chat server.';
+        chatContainer.appendChild(messageElement);
+    };
+
+    // Handle form submission
+    messageForm.onsubmit = (e) => {
+        e.preventDefault();
+        const message = messageInput.value.trim();
+        if (message && ws.readyState === WebSocket.OPEN) {
+            ws.send(message);
+            messageInput.value = '';
+        }
+    };
+</script>
+</body>
+</html> 

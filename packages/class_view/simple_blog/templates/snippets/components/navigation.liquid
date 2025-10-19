@@ -1,0 +1,38 @@
+{% comment %}
+  Navigation Component
+  
+  Usage:
+    {% render 'components/navigation' %}
+    {% render 'components/navigation', current_page: 'posts' %}
+  
+  Parameters:
+    - current_page: Optional current page for highlighting active nav items
+{% endcomment %}
+
+<nav class="bg-white shadow-sm border-b">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+        <div class="flex justify-between h-16">
+            <div class="flex items-center">
+                <a href="/" class="text-xl font-bold text-gray-900">
+                    SimpleBlog
+                </a>
+                <span class="ml-2 text-sm text-gray-500">Class View Demo</span>
+            </div>
+
+            <div class="flex items-center space-x-6">
+                <a href="/"
+                   class="text-gray-600 hover:text-gray-900 transition-colors {% if current_page == 'home' %}text-blue-600 font-medium{% endif %}">
+                    Home
+                </a>
+                <a href="/posts"
+                   class="text-gray-600 hover:text-gray-900 transition-colors {% if current_page == 'posts' %}text-blue-600 font-medium{% endif %}">
+                    Posts
+                </a>
+                <a href="/posts/new"
+                   class="bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700 transition-colors">
+                    New Post
+                </a>
+            </div>
+        </div>
+    </div>
+</nav> 

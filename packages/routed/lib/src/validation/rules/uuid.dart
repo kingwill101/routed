@@ -24,7 +24,7 @@ class UuidRule extends ValidationRule {
   bool validate(dynamic value, [List<String>? options]) {
     if (value == null) return false;
     return RegExp(
-            r'^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$')
-        .hasMatch(value.toString());
+      r'^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$',
+    ).hasMatch(value.toString());
   }
 }

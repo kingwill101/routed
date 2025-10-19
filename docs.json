@@ -11,87 +11,87 @@
           "icon": "rocket"
         },
         {
-          "title": "Quick Start", 
-          "href": "/getting-started",
+          "title": "Quick Start",
+          "href": "/routed/getting-started",
           "icon": "play"
         },
         {
-          "title": "Next Steps",
-          "href": "/next-steps"
+          "title": "Routed Overview",
+          "href": "/routed/index"
         }
       ]
     },
     {
-      "group": "Core Concepts",
+      "group": "Fundamentals",
       "pages": [
         {
           "title": "Routing",
-          "href": "/core-concepts/routing"
+          "href": "/routed/fundamentals/routing"
         },
         {
           "title": "Middleware",
-          "href": "/core-concepts/middleware"
+          "href": "/routed/fundamentals/middleware"
         },
         {
-          "title": "Request Handling",
-          "href": "/core-concepts/requests"
+          "title": "Requests",
+          "href": "/routed/fundamentals/requests"
         },
         {
-          "title": "Response Rendering",
-          "href": "/core-concepts/responses"
+          "title": "Responses",
+          "href": "/routed/fundamentals/responses"
         },
         {
           "title": "Validation",
-          "href": "/core-concepts/validation"
+          "href": "/routed/fundamentals/validation"
         },
         {
           "title": "Error Handling",
-          "href": "/core-concepts/error-handling"
+          "href": "/routed/fundamentals/error-handling"
         },
         {
           "title": "Configuration",
-          "href": "/core-concepts/configuration"
+          "href": "/routed/fundamentals/configuration"
         },
         {
           "title": "Context Data",
-          "href": "/core-concepts/context-data"
+          "href": "/routed/fundamentals/context-data"
         },
         {
           "title": "Cookies",
-          "href": "/core-concepts/cookies"
+          "href": "/routed/fundamentals/cookies"
         },
         {
           "title": "Headers",
-          "href": "/core-concepts/headers"
-        },
-        {
-          "title": "Flow Control",
-          "href": "/core-concepts/flow-control"
+          "href": "/routed/fundamentals/headers"
         },
         {
           "title": "Data Binding",
-          "href": "/core-concepts/binding"
+          "href": "/routed/fundamentals/binding"
         }
       ]
     },
     {
-      "group": "Advanced Features",
+      "group": "State & Security",
       "pages": [
         {
-          "title": "Sessions",
-          "href": "/advanced-features/sessions"
-        },
-        {
           "title": "Caching",
-          "href": "/advanced-features/caching"
+          "href": "/routed/state/caching"
         },
         {
-          "title": "Custom Validation",
-          "href": "/advanced-features/custom-validation"
+          "title": "Sessions",
+          "href": "/routed/state/sessions"
+        },
+        {
+          "title": "Security",
+          "href": "/routed/security/security"
         },
         {
           "title": "Proxy Support",
-          "href": "/advanced-features/proxy"
+          "href": "/routed/security/proxy"
+        },
+        {
+          "title": "Custom Validation",
+          "href": "/routed/advanced/custom-validation"
         }
       ]
     },
@@ -100,35 +100,15 @@
       "pages": [
         {
           "title": "Overview",
-          "href": "/testing/overview"
+          "href": "/routed/testing/overview"
         },
         {
-          "title": "Test Client",
-          "href": "/testing/test-client"
+          "title": "Getting Started",
+          "href": "/routed/testing/getting-started"
         },
         {
-          "title": "Engine Group",
-          "href": "/testing/engine-group"
-        },
-        {
-          "title": "Response Assertions",
-          "href": "/testing/response-assertions"
-        },
-        {
-          "title": "JSON Assertions",
-          "href": "/testing/json-assertions"
-        },
-        {
-          "title": "Schema Validation",
-          "href": "/testing/schema-validation"
-        },
-        {
-          "title": "Numeric Assertions",
-          "href": "/testing/numeric-assertions"
-        },
-        {
-          "title": "Numeric Extensions",
-          "href": "/testing/numeric-extensions"
+          "title": "engineGroup",
+          "href": "/routed/testing/engine-group"
         }
       ]
     }

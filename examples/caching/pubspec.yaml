@@ -1,8 +1,0 @@
-name: caching_example
-description: Example demonstrating caching functionality in routed
-environment:
-  sdk: ">=3.6.0 <4.0.0"
-
-dependencies:
-  routed:
-    path: ../../packages/routed

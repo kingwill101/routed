@@ -1,0 +1,86 @@
+---
+title: "Getting Started"
+sidebar_position: 2
+---
+
+## Install
+
+Add the package to your `dev_dependencies`:
+
+```yaml
+dev_dependencies:
+  property_testing: ^0.1.0
+  test: ^1.25.0
+```
+
+Then import everything from the umbrella library:
+
+```dart
+import 'package:property_testing/property_testing.dart';
+```
+
+## Your first property
+
+Wrap the runner inside a `package:test` case so failures get reported like any other test:
+
+```dart
+test('addition is commutative', () async {
+  final runner = PropertyTestRunner(
+    Gen.integer().list(minLength: 2, maxLength: 2),
+    (pair) {
+      expect(pair[0] + pair[1], equals(pair[1] + pair[0]));
+    },
+    PropertyConfig(
+      numTests: 400, // more coverage than a hand-written handful
+      seed: 20240115, // keep failing seeds to reproduce
+    ),
+  );
+
+  final result = await runner.run();
+  expect(result.success, isTrue, reason: result.report);
+});
+```
+
+`PropertyTestRunner` executes the property `numTests` times, shrinking any failure before returning a `PropertyResult`. Passing the `report` into `expect` ensures the minimal counterexample, error, and stack trace are printed if the property breaks.
+
+## Asynchronous properties and timeouts
+
+The runner accepts property functions that return `Future<void>`—ideal for exercising HTTP handlers, database calls, or any async logic. Use `PropertyConfig.timeout` to guard long-running cases:
+
+```dart
+test('API never returns 5xx for valid payloads', () async {
+  final runner = PropertyTestRunner(
+    Gen.string(maxLength: 128),
+    (payload) async {
+      final response = await client.post('/api/data', body: payload);
+      expect(response.statusCode, lessThan(500));
+    },
+    PropertyConfig(
+      numTests: 250,
+      timeout: const Duration(seconds: 2), // per-case timeout
+    ),
+  );
+
+  final result = await runner.run();
+  expect(result.success, isTrue, reason: result.report);
+});
+```
+
+If a single invocation exceeds the timeout or throws, the runner captures the error, shrinks the input, and returns immediately with the failing example.
+
+## Re-running a failing seed
+
+When a property fails, note the reported seed to reproduce the sequence:
+
+```txt
+✗ Property test failed
+  Failed after 37 test cases
+  Seed: 20240115
+  ...
+```
+
+Reuse that seed in the `PropertyConfig` to replay the same inputs while you debug. If you supply your own `Random` instance via `PropertyConfig(random: Random(...))`, you are responsible for preserving it to reproduce the run.
+
+## When to stop shrinking?
+
+The default `maxShrinks` (100) works well for most use-cases. Increase it if you have deeply nested structures or long command sequences, or decrease it to speed up debugging when the full shrinking search is too costly.

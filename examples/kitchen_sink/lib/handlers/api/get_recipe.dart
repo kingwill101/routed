@@ -1,7 +1,6 @@
 // ignore_for_file: unused_import
 
 import 'dart:convert';
-import 'dart:io';
 
 import 'package:file/local.dart';
 import 'package:kitchen_sink_example/consts.dart';
@@ -9,7 +8,7 @@ import 'package:kitchen_sink_example/models/recipe.dart';
 import 'package:kitchen_sink_example/services/recipe_service.dart';
 import 'package:routed/routed.dart';
 
-getRecipe(EngineContext ctx) async {
+Future<Response> getRecipe(EngineContext ctx) async {
   final id = ctx.mustGetParam('id');
   final cacheKey = '${kRecipeCacheKeyPrefix}_$id';
 

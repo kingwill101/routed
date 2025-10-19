@@ -1,0 +1,60 @@
+{
+  "id": "demo",
+  "realm": "demo",
+  "enabled": true,
+  "clients": [
+    {
+      "clientId": "routed-resource",
+      "name": "Routed Resource Server",
+      "enabled": true,
+      "clientAuthenticatorType": "client-secret",
+      "secret": "secret",
+      "publicClient": false,
+      "bearerOnly": false,
+      "serviceAccountsEnabled": true,
+      "authorizationServicesEnabled": false,
+      "redirectUris": [
+        "http://localhost:8080/*"
+      ],
+      "defaultClientScopes": [
+        "profile",
+        "email"
+      ],
+      "optionalClientScopes": [
+        "address",
+        "phone"
+      ],
+      "protocol": "openid-connect"
+    }
+  ],
+  "users": [
+    {
+      "username": "alice",
+      "enabled": true,
+      "emailVerified": true,
+      "credentials": [
+        {
+          "type": "password",
+          "value": "password",
+          "temporary": false
+        }
+      ],
+      "realmRoles": [
+        "default-roles-demo"
+      ],
+      "clientRoles": {
+        "routed-resource": [
+          "profile"
+        ]
+      }
+    }
+  ],
+  "clientScopes": [
+    {
+      "id": "profile",
+      "name": "profile",
+      "description": "OpenID Connect built-in scope: profile",
+      "protocol": "openid-connect"
+    }
+  ]
+}

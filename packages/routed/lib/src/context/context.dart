@@ -1,31 +1,48 @@
 import 'dart:async';
+import 'dart:convert';
 import 'dart:io';
 
 import 'package:path/path.dart' as p;
-import 'package:routed/routed.dart';
 import 'package:routed/src/binding/binding.dart';
+import 'package:routed/src/binding/convert/sse.dart';
 import 'package:routed/src/binding/multipart.dart';
 import 'package:routed/src/binding/utils.dart';
+import 'package:routed/src/cache/cache.dart';
+import 'package:routed/src/container/container.dart' show Container;
+import 'package:routed/src/engine/config.dart';
+import 'package:routed/src/engine/engine.dart';
+import 'package:routed/src/engine/engine_template.dart';
 import 'package:routed/src/file_handler.dart';
+import 'package:routed/src/http/negotiation.dart';
 import 'package:routed/src/render/data_render.dart';
+import 'package:routed/src/render/html.dart';
 import 'package:routed/src/render/json_render.dart';
 import 'package:routed/src/render/reader_render.dart';
 import 'package:routed/src/render/redirect.dart';
 import 'package:routed/src/render/render.dart';
 import 'package:routed/src/render/string_render.dart';
-import 'package:routed/src/render/toml.dart';
 import 'package:routed/src/render/xml.dart';
 import 'package:routed/src/render/yaml.dart';
+import 'package:routed/src/request.dart';
+import 'package:routed/src/response.dart';
 import 'package:routed/src/sessions/session.dart';
 
-import '../render/html.dart';
+import '../../middlewares.dart' show Middleware, disableCompression;
 
 part 'binding.dart';
 part 'cache.dart';
 part 'error.dart';
+
+part 'multipart.dart';
+
+part 'negotiation.dart';
 part 'proxy.dart';
+
+part 'query.dart';
 part 'render.dart';
 part 'session.dart';
+
+part 'sse.dart';
 
 /// The EngineContext is loosely inspired by gin.Context in Go.
 /// It wraps [Request] and [Response], holds arbitrary keys/values,
@@ -41,8 +58,11 @@ class EngineContext {
   /// Similar to gin.Context.Errors.
   final List<EngineError> _errors = [];
 
-  /// Handlers chain, each of which can call `ctx.next()` or abort.
-  List<Handler>? _handlers;
+  /// Handlers/middlewares chain returning Response via Next.
+  List<Middleware>? _handlers;
+
+  /// Indicates the underlying connection has been upgraded and detached.
+  bool _upgraded = false;
 
   /// Current index in the handler chain.
   int _index = -1;
@@ -51,27 +71,41 @@ class EngineContext {
   bool _aborted = false;
 
   final Engine? _engine;
+
   final EngineRoute? _route;
 
-  Session? _session;
+  final Container? _container;
 
   /// Unique identifier for tracking, same as request.id.
   final String id;
 
+  Engine? get engine => _engine;
+
   /// Retrieves the engine configuration.
   EngineConfig get engineConfig => _engine?.config ?? EngineConfig();
+
+  /// Retrieves the request-scoped container.
+  Container get container {
+    final container = _container ?? _engine?.container;
+    if (container == null) {
+      throw StateError('No container associated with this context');
+    }
+    return container;
+  }
 
   /// Create a new context around a [Request] and [Response].
   EngineContext({
     required this.request,
     required Response response,
-    List<Handler>? handlers,
+    List<Middleware>? handlers,
     Engine? engine,
     EngineRoute? route,
-  })  : _response = response,
-        _engine = engine,
-        _route = route,
-        id = request.id {
+    Container? container,
+  }) : _response = response,
+       _engine = engine,
+       _route = route,
+       _container = container,
+       id = request.id {
     if (handlers != null && handlers.isNotEmpty) {
       _handlers = handlers;
     }
@@ -182,6 +216,9 @@ class EngineContext {
   /// Check if the response is closed.
   bool get isClosed => _response.isClosed;
 
+  /// Indicates that the connection has been upgraded and detached.
+  bool get isUpgraded => _upgraded;
+
   /// Retrieve the request headers.
   HttpHeaders get headers => request.headers;
 
@@ -202,25 +239,68 @@ class EngineContext {
   }
 
   /// Move to the next handler in the chain, if available and not aborted.
-  Future<void> next() async {
+  Future<Response> _nextImpl() async {
     if (_aborted || _handlers == null || _response.isClosed) {
-      return;
+      return _response;
     }
     _index++;
     if (_index < _handlers!.length) {
-      await _handlers![_index](this);
+      final current = _handlers![_index];
+      FutureOr<Response> next() => _nextImpl();
+      final result = await current(this, next);
+      return result;
     }
+    return _response;
+  }
+
+  @Deprecated(
+    'Use Next in middleware. This remains for internal compatibility.',
+  )
+  Future<void> next() async {
+    await _nextImpl();
   }
 
   /// Helper to start processing the chain from the first handler.
-  Future<void> run() async {
+  Future<Response> run() async {
     resetHandlers();
-    if (engineConfig.sessionConfig != null) {
-      _session = await engineConfig.sessionConfig!.store
-          .read(request, engineConfig.sessionConfig!.cookieName);
+    return await _nextImpl(); // start from index = -1 -> 0
+  }
+
+  /// Upgrades the HTTP connection and yields the underlying socket to the caller.
+  ///
+  /// This mirrors Shelf's `Request.hijack` pattern but ensures the Engine stays
+  /// aware of the upgrade lifecycle. Only one upgrade is allowed per request.
+  Future<T> upgrade<T>(
+    Future<T> Function(Socket socket) handler, {
+    bool writeHeaders = true,
+  }) async {
+    if (_upgraded) {
+      throw StateError(
+        'Connection has already been upgraded for this request.',
+      );
+    }
+    if (_response.isClosed) {
+      throw StateError('Response is already closed; cannot upgrade.');
+    }
+    if (request.protocolVersion != '1.1') {
+      throw StateError(
+        'Connection upgrades are only supported for HTTP/1.1 requests.',
+      );
     }
 
-    await next(); // start from index = -1 -> 0
+    _upgraded = true;
+
+    await _response.flush();
+    final socket = await _response.detachSocket(writeHeaders: writeHeaders);
+
+    try {
+      return await handler(socket);
+    } catch (error, stack) {
+      try {
+        await socket.close();
+      } catch (_) {}
+      Error.throwWithStackTrace(error, stack);
+    }
   }
 
   /// Write a string to the response.
@@ -229,20 +309,26 @@ class EngineContext {
   }
 
   /// Set a cookie in the response.
-  void setCookie(String name, String value,
-      {int maxAge = 0,
-      String path = '/',
-      String domain = '',
-      bool secure = false,
-      SameSite? sameSite,
-      bool httpOnly = false}) {
-    _response.setCookie(name, value,
-        path: path,
-        domain: domain,
-        httpOnly: httpOnly,
-        sameSite: sameSite,
-        maxAge: maxAge,
-        secure: secure);
+  void setCookie(
+    String name,
+    String value, {
+    int maxAge = 0,
+    String path = '/',
+    String domain = '',
+    bool secure = false,
+    SameSite? sameSite,
+    bool httpOnly = false,
+  }) {
+    _response.setCookie(
+      name,
+      value,
+      path: path,
+      domain: domain,
+      httpOnly: httpOnly,
+      sameSite: sameSite,
+      maxAge: maxAge,
+      secure: secure,
+    );
   }
 
   /// Retrieve a cookie from the request.
@@ -260,12 +346,18 @@ class EngineContext {
     return value?.toString();
   }
 
+  /// Retrieve a required route parameter as type [T].
+  ///
+  /// Throws a [StateError] when the parameter is missing. If the
+  /// parameter exists but cannot be cast to `T`, the regular Dart
+  /// `TypeError` / `CastError` will surface, keeping the behaviour
+  /// identical to prior releases.
   T mustGetParam<T>(String s) {
-    final routeParam = param(s);
-    if (routeParam == null) {
+    final map = params;
+    if (!map.containsKey(s) || map[s] == null) {
       throw StateError('Missing required param $s');
     }
-    return param as T;
+    return map[s] as T;
   }
 
   /// Retrieve a query parameter from the request.
@@ -275,7 +367,14 @@ class EngineContext {
 
   /// Retrieve a header from the request.
   String? requestHeader(String s) {
-    return request.headers[s]?.join(',');
+    final target = s.toLowerCase();
+    String? result;
+    request.headers.forEach((k, v) {
+      if (k.toLowerCase() == target) {
+        result = v.join(',');
+      }
+    });
+    return result;
   }
 
   /// Retrieve the content type of the request.
@@ -315,6 +414,14 @@ class EngineContext {
     _response.headers.add(s, t);
   }
 
+  String? header(String s) {
+    final value = _response.headers[s]?.join(', ');
+    if (value == null) {
+      return null;
+    }
+    return value;
+  }
+
   /// Store context-scoped data.
   void setContextData(String key, dynamic value) {
     request.setAttribute(key, value);
@@ -328,127 +435,5 @@ class EngineContext {
   /// Clear all data for this request context.
   void clear() {
     request.clearAttributes();
-  }
-}
-
-extension MultipartFormMethods on EngineContext {
-  /// Retrieve the multipart form asynchronously.
-  Future<MultipartForm> multipartForm() async {
-    await initFormCache();
-    final a = get<MultipartForm>(multipartFormKey) ?? MultipartForm();
-    return a;
-  }
-
-  /// Retrieve a file from the multipart form.
-  Future<MultipartFile?> formFile(String name) async {
-    final form = await multipartForm();
-    return form.files.where((f) => f.name == name).firstOrNull;
-  }
-
-  /// Save an uploaded file to a destination.
-  Future<void> saveUploadedFile(MultipartFile file, String destination) async {
-    final sourceFile = _engine?.config.fileSystem.file(file.path);
-    final destFile = _engine?.config.fileSystem.file(destination);
-    destFile?.parent.existsSync() ?? destFile?.parent.create(recursive: true);
-    await sourceFile?.copy(destFile?.path ?? "");
-  }
-
-  /// Get the first value of a form field with a default fallback.
-  Future<String> defaultPostForm(String key, String defaultValue) async {
-    final value = (await postForm(key));
-    return value.isEmpty ? defaultValue : value;
-  }
-
-  /// Get the value of a form field.
-  Future<String> postForm(String key) async {
-    await initFormCache();
-    final form = get<Map<String, dynamic>>(formCacheKey) ?? {};
-    final value = form[key];
-    return value == null ? "" : value.toString();
-  }
-
-  /// Get all values of a form field.
-  Future<List<String>> postFormArray(String key) async {
-    await initFormCache();
-    final form = get<Map<String, dynamic>>(formCacheKey) ?? {};
-    final value = form[key];
-    if (value == null) return [];
-    if (value is List) {
-      return value.map((e) => e.toString()).toList();
-    }
-    return [value.toString()];
-  }
-
-  /// Get a map of form fields with a key prefix.
-  Future<Map<String, dynamic>> postFormMap(String key) async {
-    await initFormCache();
-    return get<Map<String, dynamic>>(formCacheKey) ?? {};
-  }
-
-  /// Retrieves the multipart form asynchronously.
-  Future<Map<String, dynamic>> form() async {
-    return await formCache;
-  }
-}
-
-extension QueryMethods on EngineContext {
-  /// Retrieve a query parameter by key.
-  T? getQuery<T>(String key) {
-    final value = queryCache[key];
-    if (value == null) return null;
-
-    // Check if the value is empty, if it has that property
-    bool isEmpty = false;
-    if (value is String) {
-      isEmpty = value.isEmpty;
-    } else if (value is List) {
-      isEmpty = value.isEmpty;
-    } else if (value is Map) {
-      isEmpty = value.isEmpty;
-    }
-
-    if (isEmpty) return null;
-    return value as T;
-  }
-
-  /// Retrieve an array of query parameters by key.
-  List<String> getQueryArray(String key) {
-    final values = getQuery<List<String>>(key);
-    if (values == null) return [];
-    return values;
-  }
-
-  /// Get a query parameter with a default fallback.
-  T defaultQuery<T>(String key, T defaultValue) {
-    final result = getQuery<T>(key);
-    if (result == null) return defaultValue;
-    return result;
-  }
-
-  /// Get all values for a query key.
-  List<String> queryArray(String key) {
-    return getQueryArray(key);
-  }
-
-  /// Get a map of query parameters with a key prefix.
-  Map<String, String> queryMap(String keyPrefix) {
-    return getQueryMap(keyPrefix).$1;
-  }
-
-  /// Get a map of query parameters with an existence flag.
-  (Map<String, String>, bool) getQueryMap(String keyPrefix) {
-    final result = <String, String>{};
-    var found = false;
-
-    for (final entry in request.uri.queryParametersAll.entries) {
-      if (entry.key.startsWith(keyPrefix)) {
-        found = true;
-        if (entry.value.isNotEmpty) {
-          result[entry.key] = entry.value.first;
-        }
-      }
-    }
-
-    return (result, found);
   }
 }

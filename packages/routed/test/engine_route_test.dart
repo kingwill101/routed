@@ -9,7 +9,7 @@ void main() {
       final route = EngineRoute(
         method: 'GET',
         path: '/users/{id:int}',
-        handler: (ctx) => null,
+        handler: (ctx) => ctx.string('ok'),
       );
 
       // Should match for e.g. "/users/123"
@@ -29,7 +29,7 @@ void main() {
       final route = EngineRoute(
         method: 'GET',
         path: '/users/{id:int}',
-        handler: (ctx) => null,
+        handler: (ctx) => ctx.string('ok'),
       );
 
       final uri = Uri.parse('/users/abc');
@@ -44,7 +44,7 @@ void main() {
       final route = EngineRoute(
         method: 'GET',
         path: '/price/{amount:double}',
-        handler: (ctx) => null,
+        handler: (ctx) => ctx.string('ok'),
       );
 
       final uri = Uri.parse('/price/12.34');
@@ -64,7 +64,7 @@ void main() {
       final route = EngineRoute(
         method: 'GET',
         path: '/price/{amount:double}',
-        handler: (ctx) => null,
+        handler: (ctx) => ctx.string('ok'),
       );
 
       final uri = Uri.parse('/price/42');
@@ -84,7 +84,7 @@ void main() {
       final route = EngineRoute(
         method: 'GET',
         path: '/price/{amount:double}',
-        handler: (ctx) => null,
+        handler: (ctx) => ctx.string('ok'),
       );
 
       final uri = Uri.parse('/price/abc');
@@ -99,7 +99,7 @@ void main() {
       final route = EngineRoute(
         method: 'GET',
         path: '/posts/{slug:slug}',
-        handler: (ctx) => null,
+        handler: (ctx) => ctx.string('ok'),
       );
 
       final uri = Uri.parse('/posts/my-awesome-post');
@@ -117,7 +117,7 @@ void main() {
       final route = EngineRoute(
         method: 'GET',
         path: '/posts/{slug:slug}',
-        handler: (ctx) => null,
+        handler: (ctx) => ctx.string('ok'),
       );
 
       // Slug pattern is `[a-z0-9]+(?:-[a-z0-9]+)*`
@@ -135,7 +135,7 @@ void main() {
       final route = EngineRoute(
         method: 'GET',
         path: '/resources/{rid:uuid}',
-        handler: (ctx) => null,
+        handler: (ctx) => ctx.string('ok'),
       );
 
       final uri = Uri.parse('/resources/123e4567-e89b-12d3-a456-426614174000');
@@ -153,7 +153,7 @@ void main() {
       final route = EngineRoute(
         method: 'GET',
         path: '/resources/{rid:uuid}',
-        handler: (ctx) => null,
+        handler: (ctx) => ctx.string('ok'),
       );
 
       // Not a valid UUID
@@ -169,7 +169,7 @@ void main() {
       final route = EngineRoute(
         method: 'GET',
         path: '/subscribe/{contact:email}',
-        handler: (ctx) => null,
+        handler: (ctx) => ctx.string('ok'),
       );
 
       final uri = Uri.parse('/subscribe/test.user@example.com');
@@ -187,7 +187,7 @@ void main() {
       final route = EngineRoute(
         method: 'GET',
         path: '/subscribe/{contact:email}',
-        handler: (ctx) => null,
+        handler: (ctx) => ctx.string('ok'),
       );
 
       // Missing "@" or domain
@@ -203,7 +203,7 @@ void main() {
       final route = EngineRoute(
         method: 'GET',
         path: '/diagnose/{address:ip}',
-        handler: (ctx) => null,
+        handler: (ctx) => ctx.string('ok'),
       );
 
       final uri = Uri.parse('/diagnose/192.168.1.100');
@@ -221,7 +221,7 @@ void main() {
       final route = EngineRoute(
         method: 'GET',
         path: '/diagnose/{address:ip}',
-        handler: (ctx) => null,
+        handler: (ctx) => ctx.string('ok'),
       );
 
       // 999 is not a valid segment for IPv4
@@ -239,7 +239,7 @@ void main() {
       final route = EngineRoute(
         method: 'GET',
         path: '/users/{id}/posts/{title?}',
-        handler: (ctx) => null,
+        handler: (ctx) => ctx.string('ok'),
       );
 
       final uri = Uri.parse('/users/123/posts/hello-world');
@@ -257,7 +257,7 @@ void main() {
       final route = EngineRoute(
         method: 'GET',
         path: '/users/{id}/posts/{title?}',
-        handler: (ctx) => null,
+        handler: (ctx) => ctx.string('ok'),
       );
 
       final uri = Uri.parse('/users/123/posts');
@@ -284,7 +284,7 @@ void main() {
       final route = EngineRoute(
         method: 'GET',
         path: '/files/{*path}',
-        handler: (ctx) => null,
+        handler: (ctx) => ctx.string('ok'),
       );
 
       final uri = Uri.parse('/files/documents/report.pdf');
@@ -301,7 +301,7 @@ void main() {
       final route = EngineRoute(
         method: 'GET',
         path: '/files/{*path}',
-        handler: (ctx) => null,
+        handler: (ctx) => ctx.string('ok'),
       );
 
       final uri = Uri.parse('/files/2023/q1/reports/financial.xlsx');
@@ -320,7 +320,7 @@ void main() {
       final route = EngineRoute(
         method: 'GET',
         path: '/search',
-        handler: (ctx) => null,
+        handler: (ctx) => ctx.string('ok'),
       );
 
       final uri = Uri.parse('/search?q=dart&page=1&sort=desc');
@@ -329,15 +329,18 @@ void main() {
       when(request.uri).thenReturn(uri);
 
       expect(route.matches(request), isTrue);
-      expect(request.uri.queryParameters,
-          {'q': 'dart', 'page': '1', 'sort': 'desc'});
+      expect(request.uri.queryParameters, {
+        'q': 'dart',
+        'page': '1',
+        'sort': 'desc',
+      });
     });
 
     test('matches route with encoded query parameters', () {
       final route = EngineRoute(
         method: 'GET',
         path: '/search',
-        handler: (ctx) => null,
+        handler: (ctx) => ctx.string('ok'),
       );
 
       final uri = Uri.parse('/search?q=dart+language&tags=web%2Capi');
@@ -346,15 +349,17 @@ void main() {
       when(request.uri).thenReturn(uri);
 
       expect(route.matches(request), isTrue);
-      expect(request.uri.queryParameters,
-          {'q': 'dart language', 'tags': 'web,api'});
+      expect(request.uri.queryParameters, {
+        'q': 'dart language',
+        'tags': 'web,api',
+      });
     });
 
     test('matches route with repeated query parameters', () {
       final route = EngineRoute(
         method: 'GET',
         path: '/filter',
-        handler: (ctx) => null,
+        handler: (ctx) => ctx.string('ok'),
       );
 
       final uri = Uri.parse('/filter?tag=web&tag=mobile&tag=desktop');
@@ -363,8 +368,11 @@ void main() {
       when(request.uri).thenReturn(uri);
 
       expect(route.matches(request), isTrue);
-      expect(
-          request.uri.queryParametersAll['tag'], ['web', 'mobile', 'desktop']);
+      expect(request.uri.queryParametersAll['tag'], [
+        'web',
+        'mobile',
+        'desktop',
+      ]);
     });
   });
 
@@ -379,7 +387,7 @@ void main() {
       final route = EngineRoute(
         method: 'GET',
         path: '/contact/{number:phone}',
-        handler: (ctx) => null,
+        handler: (ctx) => ctx.string('ok'),
       );
 
       final validRequest = MockHttpRequest();
@@ -403,7 +411,7 @@ void main() {
       final route = EngineRoute(
         method: 'GET',
         path: '/users/{id}',
-        handler: (ctx) => null,
+        handler: (ctx) => ctx.string('ok'),
       );
 
       final validRequest = MockHttpRequest();
@@ -427,7 +435,7 @@ void main() {
       final route = EngineRoute(
         method: 'GET',
         path: '/location/{zip:zipcode}',
-        handler: (ctx) => null,
+        handler: (ctx) => ctx.string('ok'),
       );
 
       final validRequest1 = MockHttpRequest();
@@ -459,18 +467,20 @@ void main() {
       final route = EngineRoute(
         method: 'GET',
         path: '/contact/{phone:phone}/area/{zip:zipcode}',
-        handler: (ctx) => null,
+        handler: (ctx) => ctx.string('ok'),
       );
 
       final validRequest = MockHttpRequest();
       when(validRequest.method).thenReturn('GET');
-      when(validRequest.uri)
-          .thenReturn(Uri.parse('/contact/123-456-7890/area/12345-6789'));
+      when(
+        validRequest.uri,
+      ).thenReturn(Uri.parse('/contact/123-456-7890/area/12345-6789'));
 
       expect(route.matches(validRequest), isTrue);
 
-      final params =
-          route.extractParameters('/contact/123-456-7890/area/12345-6789');
+      final params = route.extractParameters(
+        '/contact/123-456-7890/area/12345-6789',
+      );
       expect(params['phone'], '123-456-7890');
       expect(params['zip'], '12345-6789');
     });
@@ -478,12 +488,14 @@ void main() {
   group('Custom route parameter casting', () {
     test('custom casting type (success)', () {
       EngineRoute.registerCustomCasting(
-          'bool', (String? value) => value == 'true');
+        'bool',
+        (String? value) => value == 'true',
+      );
 
       final route = EngineRoute(
         method: 'GET',
         path: '/toggle/{enabled:bool}',
-        handler: (ctx) => null,
+        handler: (ctx) => ctx.string('ok'),
       );
 
       final uri = Uri.parse('/toggle/true');
@@ -502,12 +514,14 @@ void main() {
 
     test('custom casting type (fail)', () {
       EngineRoute.registerCustomCasting(
-          'bool', (String? value) => value == 'true');
+        'bool',
+        (String? value) => value == 'true',
+      );
 
       final route = EngineRoute(
         method: 'GET',
         path: '/toggle/{enabled:bool}',
-        handler: (ctx) => null,
+        handler: (ctx) => ctx.string('ok'),
       );
 
       final uri = Uri.parse('/toggle/false');
@@ -529,7 +543,7 @@ void main() {
       final route = EngineRoute(
         method: 'GET',
         path: '/users/{id}',
-        handler: (ctx) => null,
+        handler: (ctx) => ctx.string('ok'),
         constraints: {'id': r'^\d{5}$'},
       );
 
@@ -549,7 +563,7 @@ void main() {
       final route = EngineRoute(
         method: 'GET',
         path: '/api/v1/resource',
-        handler: (ctx) => null,
+        handler: (ctx) => ctx.string('ok'),
         constraints: {'domain': r'^api\.example\.com$'},
       );
 
@@ -577,20 +591,21 @@ void main() {
       final route = EngineRoute(
         method: 'GET',
         path: '/secure/data',
-        handler: (ctx) => null,
+        handler: (ctx) => ctx.string('ok'),
         constraints: {
           'auth': (HttpRequest request) {
             return request.headers.value('Authorization') ==
                 'Bearer valid-token';
-          }
+          },
         },
       );
 
       // Valid request setup
       final validRequest = MockHttpRequest();
       final validHeaders = MockHttpHeaders();
-      when(validHeaders.value('Authorization'))
-          .thenReturn('Bearer valid-token');
+      when(
+        validHeaders.value('Authorization'),
+      ).thenReturn('Bearer valid-token');
       when(validRequest.method).thenReturn('GET');
       when(validRequest.uri).thenReturn(Uri.parse('/secure/data'));
       when(validRequest.headers).thenAnswer((_) => validHeaders);
@@ -598,8 +613,9 @@ void main() {
       // Invalid request setup
       final invalidRequest = MockHttpRequest();
       final invalidHeaders = MockHttpHeaders();
-      when(invalidHeaders.value('Authorization'))
-          .thenReturn('Bearer invalid-token');
+      when(
+        invalidHeaders.value('Authorization'),
+      ).thenReturn('Bearer invalid-token');
       when(invalidRequest.method).thenReturn('GET');
       when(invalidRequest.uri).thenReturn(Uri.parse('/secure/data'));
       when(invalidRequest.headers).thenAnswer((_) => invalidHeaders);
@@ -612,13 +628,13 @@ void main() {
       final route = EngineRoute(
         method: 'GET',
         path: '/api/users/{id}/profile',
-        handler: (ctx) => null,
+        handler: (ctx) => ctx.string('ok'),
         constraints: {
           'id': r'^\d{6}$',
           'domain': r'^api\.example\.com$',
           'auth': (HttpRequest request) {
             return request.headers.value('API-Key') == 'valid-key';
-          }
+          },
         },
       );
 
@@ -637,8 +653,9 @@ void main() {
       when(invalidHeaders1.host).thenReturn('api.example.com');
       when(invalidHeaders1.value('API-Key')).thenReturn('valid-key');
       when(invalidRequest1.method).thenReturn('GET');
-      when(invalidRequest1.uri)
-          .thenReturn(Uri.parse('/api/users/12345/profile'));
+      when(
+        invalidRequest1.uri,
+      ).thenReturn(Uri.parse('/api/users/12345/profile'));
       when(invalidRequest1.headers).thenAnswer((_) => invalidHeaders1);
 
       final invalidRequest2 = MockHttpRequest();
@@ -646,8 +663,9 @@ void main() {
       when(invalidHeaders2.host).thenReturn('wrong.example.com');
       when(invalidHeaders2.value('API-Key')).thenReturn('valid-key');
       when(invalidRequest2.method).thenReturn('GET');
-      when(invalidRequest2.uri)
-          .thenReturn(Uri.parse('/api/users/123456/profile'));
+      when(
+        invalidRequest2.uri,
+      ).thenReturn(Uri.parse('/api/users/123456/profile'));
       when(invalidRequest2.headers).thenAnswer((_) => invalidHeaders2);
 
       final invalidRequest3 = MockHttpRequest();
@@ -655,8 +673,9 @@ void main() {
       when(invalidHeaders3.host).thenReturn('api.example.com');
       when(invalidHeaders3.value('API-Key')).thenReturn('invalid-key');
       when(invalidRequest3.method).thenReturn('GET');
-      when(invalidRequest3.uri)
-          .thenReturn(Uri.parse('/api/users/123456/profile'));
+      when(
+        invalidRequest3.uri,
+      ).thenReturn(Uri.parse('/api/users/123456/profile'));
       when(invalidRequest3.headers).thenAnswer((_) => invalidHeaders3);
 
       expect(route.matches(validRequest), isTrue);
@@ -669,7 +688,7 @@ void main() {
       final route = EngineRoute(
         method: 'GET',
         path: '/optional/{param?}',
-        handler: (ctx) => null,
+        handler: (ctx) => ctx.string('ok'),
         constraints: {'param': r'^\d+$'},
       );
 
@@ -684,7 +703,7 @@ void main() {
       final route = EngineRoute(
         method: 'GET',
         path: '/advanced/{id}',
-        handler: (ctx) => null,
+        handler: (ctx) => ctx.string('ok'),
         constraints: {
           'complex': (HttpRequest request) {
             final id = request.uri.pathSegments.last;
@@ -694,7 +713,7 @@ void main() {
             return id.length == 6 &&
                 apiKey == 'valid-key' &&
                 userAgent?.contains('Mozilla') == true;
-          }
+          },
         },
       );
 

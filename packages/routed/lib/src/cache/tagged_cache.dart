@@ -1,6 +1,6 @@
+import 'package:routed/src/cache/tag_set.dart';
 import 'package:routed/src/contracts/cache/repository.dart';
 import 'package:routed/src/contracts/cache/store.dart';
-import 'package:routed/src/cache/tag_set.dart';
 
 /// A cache repository that supports tagging.
 class TaggedCache implements Repository {
@@ -27,6 +27,11 @@ class TaggedCache implements Repository {
     final value = await store.get(keyString);
     await store.forget(keyString);
     return value ?? defaultValue;
+  }
+
+  @override
+  Future<dynamic> get(String key) async {
+    return await store.get(key);
   }
 
   /// Stores an item in the cache.
@@ -111,7 +116,9 @@ class TaggedCache implements Repository {
       return value;
     }
     final result = await callback();
-    final int seconds = ttl is Duration ? ttl.inSeconds : (ttl is int ? ttl : 0);
+    final int seconds = ttl is Duration
+        ? ttl.inSeconds
+        : (ttl is int ? ttl : 0);
     await store.put(key, result, seconds);
     return result;
   }

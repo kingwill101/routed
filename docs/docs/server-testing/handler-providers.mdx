@@ -1,0 +1,119 @@
+---
+title: Handler Providers
+description: Adapt any framework to server_testing with RequestHandler implementations
+sidebar_position: 5
+---
+
+# Handler Providers
+
+`server_testing` does not know how to boot your framework directly—it depends on a `RequestHandler` abstraction. A provider is simply a class that implements:
+
+```dart
+abstract class RequestHandler {
+  Future<void> handleRequest(HttpRequest request);
+  Future<int> startServer({int port = 0});
+  Future<void> close([bool force = true]);
+}
+```
+
+`handleRequest` is used for the in-memory transport, while `startServer`/`close` back the ephemeral server transport.
+
+## Using the Built-in `IoRequestHandler`
+
+For applications using `dart:io` `HttpServer` directly, `server_testing` ships with a default handler:
+
+```dart
+import 'dart:io';
+import 'package:server_testing/server_testing.dart';
+
+// Your existing request handler function
+Future<void> handleRequest(HttpRequest request) async {
+  final response = request.response;
+  
+  if (request.uri.path == '/ping') {
+    response.statusCode = 200;
+    response.write('pong');
+  } else {
+    response.statusCode = 404;
+    response.write('Not found');
+  }
+  
+  await response.close();
+}
+
+void main() {
+  // Wrap your handler with IoRequestHandler
+  final handler = IoRequestHandler(handleRequest);
+  
+  serverTest('GET /ping returns pong', (client) async {
+    final response = await client.get('/ping');
+    response.assertStatus(200).assertBodyEquals('pong');
+  }, handler: handler);
+}
+```
+
+`IoRequestHandler` works with any `FutureOr<void> Function(HttpRequest)` callback, making it the simplest way to test applications that don't use a web framework.
+
+## Using the Shelf Provider
+
+```dart
+import 'package:shelf/shelf.dart' as shelf;
+import 'package:server_testing/server_testing.dart';
+import 'package:server_testing_shelf/server_testing_shelf.dart';
+
+final app = (shelf.Request req) async => shelf.Response.ok('ok');
+final handler = ShelfRequestHandler(app);
+
+serverTest('works', (client, _) async {
+  final res = await client.get('/');
+  res.assertStatus(200).assertBody('ok');
+}, handler: handler);
+```
+
+`server_testing_shelf` handles translating a Shelf `Response` into an `HttpResponse`, manages the server lifecycle, and includes helpers for middleware chains.
+
+## Authoring a New Provider
+
+When adapting another framework:
+
+1. **Translate the incoming `HttpRequest`** into whatever request object your framework expects.
+2. **Invoke the framework** and await the response.
+3. **Write the response** back to the `HttpResponse` attached to the original request.
+4. **Manage server lifecycle** in `startServer`/`close`. Reuse existing bootstrapping logic if your framework already knows how to bind a port.
+5. **Keep translation utilities isolated**—write separate tests for them using the Mockito helpers from `server_testing/mock.dart`.
+
+### Template
+
+```dart
+class MyFrameworkRequestHandler implements RequestHandler {
+  final MyFrameworkApp app;
+  HttpServer? _server;
+  MyFrameworkRequestHandler(this.app);
+
+  @override
+  Future<void> handleRequest(HttpRequest request) async {
+    final fwReq = await _toFrameworkRequest(request);
+    final fwRes = await app.handle(fwReq);
+    await _writeFrameworkResponse(request.response, fwRes);
+  }
+
+  @override
+  Future<int> startServer({int port = 0}) async {
+    _server = await HttpServer.bind(InternetAddress.loopbackIPv4, port);
+    _server!.listen(handleRequest);
+    return _server!.port;
+  }
+
+  @override
+  Future<void> close([bool force = true]) async {
+    await _server?.close(force: force);
+    _server = null;
+  }
+}
+```
+
+### Best Practices
+- **Keep handlers stateless when possible.** If you must share state (e.g. database connections), clean up in `close()` so each test starts fresh.
+- **Validate both transports.** Unit-test your provider by calling `handleRequest` with mock objects, then add higher-level tests using `TransportMode.ephemeralServer` to verify real socket behaviour.
+- **Expose factory helpers.** Consider shipping your handler provider in its own package (like `server_testing_shelf`) so applications can depend on a stable adapter.
+- **Reuse in browser tests.** The same handler instance can serve an HTTP client and a WebDriver-driven browser by sharing `baseUrlFuture`.

@@ -1,11 +1,8 @@
 import 'package:routed/routed.dart';
 
-Future<void> validateSession(EngineContext ctx) async {
+Future<Response> validateSession(EngineContext ctx, Next next) async {
   // if (userId == null) {
-  //   ctx.response
-  //     ..statusCode = 401
-  //     ..write('Unauthorized');
-  //   return;
+  //   return ctx.string('Unauthorized', statusCode: 401);
   // }
-  await ctx.next();
+  return await next();
 }

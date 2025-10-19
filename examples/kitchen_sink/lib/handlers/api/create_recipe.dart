@@ -1,5 +1,3 @@
-import 'dart:io';
-
 import 'package:kitchen_sink_example/consts.dart';
 import 'package:kitchen_sink_example/models/recipe.dart';
 import 'package:kitchen_sink_example/services/recipe_service.dart';
@@ -16,7 +14,7 @@ class RecipeBinding {
   String? image;
 }
 
-createRecipe(EngineContext ctx) async {
+Future<Response> createRecipe(EngineContext ctx) async {
   final data = RecipeBinding();
   await ctx.bind(data);
 
@@ -32,8 +30,10 @@ createRecipe(EngineContext ctx) async {
   }, bail: true);
 
   if ((data.cookTime ?? 0) + (data.prepTime ?? 0) > 180) {
-    return ctx.string('Total cooking time cannot exceed 3 hours',
-        statusCode: HttpStatus.badRequest);
+    return ctx.string(
+      'Total cooking time cannot exceed 3 hours',
+      statusCode: HttpStatus.badRequest,
+    );
   }
 
   final recipe = Recipe(

@@ -1,153 +1,101 @@
-# Routed Fallback Route Example
+# HTTP/2 Example
 
-This example demonstrates how to use fallback routes in the routed package for handling unmatched requests.
+This directory hosts a minimal TLS-enabled server showcasing Routed's HTTP/2 support and the tooling needed to test it
+locally.
 
-## Features Demonstrated
+## Prerequisites
 
-### Fallback Routes
+- Dart SDK installed
+- OpenSSL available on your PATH (`openssl` command)
+- `curl` ≥ 7.43 (must support `--http2` and ALPN)
 
-- Global fallback handling
-- Group-specific fallbacks
-- Nested group fallbacks
-- Fallbacks with middleware
-- Route priority with fallbacks
+## Generate Self-Signed Certificates
 
-## Running the Example
-
-1. Start the server:
+The example ships with a SAN-enabled self-signed certificate covering `localhost`, `127.0.0.1`, and `::1`. To regenerate
+it:
 
 ```bash
-dart run bin/server.dart
+cat <<'EOF' > openssl-san.cnf
+[ req ]
+default_bits       = 2048
+prompt             = no
+default_md         = sha256
+req_extensions     = req_ext
+distinguished_name = dn
+
+[ dn ]
+C  = US
+ST = Local
+L  = Local
+O  = RoutedDev
+CN = localhost
+
+[ req_ext ]
+subjectAltName = @alt_names
+
+[ alt_names ]
+DNS.1 = localhost
+IP.1  = 127.0.0.1
+IP.2  = ::1
+EOF
+
+openssl req -x509 -nodes -days 365 -newkey rsa:2048 \
+  -keyout key.pem -out cert.pem -config openssl-san.cnf
+rm openssl-san.cnf
 ```
 
-2. In another terminal, run the client:
+This produces `cert.pem` and `key.pem` in the directory. Keep them out of version control in production; they are purely
+for local testing.
+
+## Run the Server
+
+From this directory:
 
 ```bash
-dart run bin/client.dart
+dart bin/server.dart
 ```
 
-## Code Examples
+You should see:
 
-### Global Fallback
-
-```dart
-// Catches any unmatched route
-engine.fallback((ctx) {
-  return ctx.string('Fallback: ${ctx.uri.path}');
-});
+```
+Secure server listening on https://localhost:4043 (HTTP/2 enabled)
 ```
 
-### Nested API Fallbacks
+### Configure via Manifest
 
-```dart
-engine.group(
-  path: '/api',
-  builder: (api) {
-    // General API fallback
-    api.fallback((ctx) => ctx.json({
-      'error': 'API route not found',
-      'scope': 'api',
-    }));
+Instead of toggling HTTP/2 in code you can add the following to your project’s `config/http.yaml`:
 
-    api.group(
-      path: '/v1',
-      builder: (v1) {
-        // V1-specific fallback
-        v1.fallback((ctx) => ctx.json({
-          'error': 'V1 API route not found',
-          'scope': 'v1',
-        }));
-      },
-    );
-  },
-);
+```yaml
+http:
+  http2:
+    enabled: true
+    allow_cleartext: false
+    max_concurrent_streams: 256
+    idle_timeout: 30s
+  tls:
+    certificate_path: cert.pem
+    key_path: key.pem
+    password:
+    request_client_certificate: false
+    shared: false
+    v6_only: false
 ```
 
-### Fallback with Middleware
+The example sets these values directly via `EngineConfig`, but the manifest option keeps secrets/config out of code.
+When `http.tls.*` is populated you can call `engine.serveSecure()` without passing paths.
 
-```dart
-engine.group(
-  path: '/secured',
-  middlewares: [
-    (ctx) async {
-      print('Middleware executed');
-      await ctx.next();
-    },
-  ],
-  builder: (router) {
-    router.fallback((ctx) => ctx.json({
-      'error': 'Secured route not found',
-    }));
-  },
-);
+## Verify with curl
+
+Use `curl` with HTTP/2 and the generated CA:
+
+```bash
+curl --http2 --tlsv1.2 --cacert cert.pem https://localhost:4043/ -v
 ```
 
-## API Endpoints
+Expected output includes:
 
-### GET /hello
+- `ALPN: server accepted h2`
+- `HTTP/2 200`
+- Body: `Hello World`
 
-Regular route example
-
-### GET /api/v1/users
-
-Regular API route example
-
-### GET /api/v1/*
-
-Shows V1 API-specific fallback handling
-
-### GET /api/*
-
-Shows general API fallback handling
-
-### GET /secured/*
-
-Shows middleware-enabled fallback handling
-
-### GET /*
-
-Shows global fallback handling
-
-## Response Examples
-
-### V1 API Fallback
-
-```json
-{
-  "error": "V1 API route not found",
-  "scope": "v1",
-  "path": "/api/v1/unknown"
-}
-```
-
-### General API Fallback
-
-```json
-{
-  "error": "API route not found",
-  "scope": "api",
-  "path": "/api/unknown"
-}
-```
-
-### Secured Route Fallback
-
-```json
-{
-  "error": "Secured route not found",
-  "path": "/secured/unknown"
-}
-```
-
-### Global Fallback
-
-```text
-Fallback: /unknown/path
-```
-
-## Code Structure
-
-- `bin/server.dart`: Server implementation with fallback examples
-- `bin/client.dart`: Test client demonstrating fallbacks
-- `pubspec.yaml`: Project dependencies
-- `public/`: Directory for static files
+If you need to test fallback behavior, remove `--http2` or force HTTP/1.1 with `--http1.1`.

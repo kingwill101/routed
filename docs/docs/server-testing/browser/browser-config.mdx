@@ -1,0 +1,133 @@
+---
+title: BrowserConfig & Devices
+description: Configure browsers, logging, and device emulation for WebDriver tests
+sidebar_position: 2
+---
+
+# BrowserConfig & Devices
+
+`BrowserConfig` defines the defaults used by `testBootstrap`, `browserTest`, and `browserGroup`. All fields have sensible defaults, but understanding the knobs helps when running in CI or reproducing user environments.
+
+## Common Options
+
+```dart
+final config = BrowserConfig(
+  browserName: 'firefox',        // default is 'chromium'
+  headless: true,                // run with UI off; set to false for debugging
+  baseUrl: 'http://localhost:8080',
+  timeout: const Duration(seconds: 45),
+  autoScreenshots: true,         // capture screenshots on failure
+  logDir: 'test_logs',           // where logs & screenshots end up
+  forceReinstall: false,         // set true to refresh cached binaries
+  verbose: true,                 // CLI-style logs during bootstrap
+);
+
+await testBootstrap(config);
+```
+
+### Field Highlights
+- `browserName` – `'chromium'` by default. Supported names include `'firefox'` and `'chromium'` (others depend on registered `BrowserType`s).
+- `headless` – `true` by default. Flip to inspect the UI locally.
+- `baseUrl` – used to resolve relative paths passed to `browser.visit`.
+- `timeout` / `defaultWaitTimeout` – adjust for slow environments.
+- `autoInstall` / `autoDownload` – leave enabled to automatically fetch missing browser binaries; disable if you provide them manually.
+- `forceReinstall` – force a clean download the next time a test runs.
+- `autoScreenshots` & `screenshotDirectory` – toggle and customize screenshot capture on failures.
+- `logDir` & `verboseLogging` – route log output and increase verbosity when diagnosing issues.
+
+## Device Emulation
+
+Supply a device descriptor (from `devicesJsonData`) when launching a group or individual test. This applies viewport size, user agent, and other hints where supported.
+
+```dart
+import 'package:server_testing/src/browser/bootstrap/devices_json_const.dart';
+
+browserGroup('Pixel 5', device: devicesJsonData['Pixel 5'], define: (getBrowser) {
+  test('mobile layout', () async {
+    final browser = getBrowser();
+    await browser.visit('/');
+    await browser.assertSee('Menu');
+  });
+});
+```
+
+You can also call `browser.emulation.setDevice(device)` manually inside a test for finer control.
+
+## Proxy Configuration
+
+Pass a `ProxyConfiguration` to route WebDriver traffic through a proxy (useful for corporate networks or traffic capture):
+
+```dart
+final config = BrowserConfig(
+  proxy: ProxyConfiguration(httpProxy: 'http://localhost:3128'),
+);
+await testBootstrap(config);
+```
+
+Overrides can also be supplied per test via `browserTest(..., proxy: ProxyConfiguration(...))`.
+
+## Per-Test Overrides
+
+`browserTest` and `browserGroup` accept override parameters. These push a temporary configuration onto a stack and automatically restore it after the test finishes.
+
+```dart
+import 'package:server_testing/server_testing.dart';
+
+browserTest(
+  'run headed chrome',
+  (browser) async {
+    await browser.visit('/');
+    await browser.assertTitleContains('Demo');
+  },
+  browserType: ChromiumType(),
+  headless: false,
+  baseUrl: 'http://127.0.0.1:4000',
+  timeout: const Duration(seconds: 90),
+);
+```
+
+Use this for occasional variations without affecting the global bootstrap configuration.
+
+
+
+## ChromeDriver and Browser Version Matching
+
+Server Testing now aligns ChromeDriver with the bundled Chromium version automatically.
+
+- Build time: the builder reads Playwright’s browsers.json and records Chromium’s browserVersion major. It generates a default ChromeDriver version for that major.
+- Run time: when launching Chromium, DriverManager detects the installed Chromium binary (from the selected revision), derives its major version, and fetches the latest matching ChromeDriver from googlechromelabs milestone JSON. If the network fetch fails, it falls back to the generated default.
+
+### Overriding the detected driver
+
+You can override the driver version explicitly:
+
+- Environment variables:
+  - SERVER_TESTING_CHROMEDRIVER_VERSION: exact version, e.g. 141.0.7390.76
+  - SERVER_TESTING_CHROMEDRIVER_MAJOR: major only, e.g. 141
+- Per-launch via extraCapabilities:
+
+```dart
+browserTest('pin driver version', (browser) async { /* ... */ },
+  browserType: chromium,
+  extraCapabilities: {
+    'driver:version': '141.0.7390.76', // or
+    'driver:major': 141,
+  },
+);
+```
+
+### Choosing browser channel/variant
+
+Use BrowserLaunchOptions.channel to control which browser binary is used (e.g., 'chrome', 'chromium', 'chromium-tip-of-tree'). The driver resolver will use the final binary’s version to pick a compatible driver. Headless/headed is already controlled by headless: true/false.
+
+```dart
+final options = BrowserLaunchOptions(
+  channel: 'chrome',  // or 'chromium', 'chromium-tip-of-tree'
+  headless: true,
+);
+```
+
+Notes:
+- Cache location: ~/.server_testing by default (override with SERVER_TESTING_CACHE_DIR). Drivers cached per platform/version in ~/.server_testing/drivers.
+- Set forceReinstall: true in BrowserConfig to refresh both browser and driver caches for a run.
+- Firefox uses GeckoDriver; dynamic resolution is analogous but may fall back to a generated version if compatibility lookup is unavailable.

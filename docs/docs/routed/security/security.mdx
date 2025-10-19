@@ -1,0 +1,292 @@
+---
+title: Security Features
+description: Enable CSRF, CORS, security headers, and request limits
+sidebar_position: 1
+slug: /routed/security
+---
+
+# Security Features
+
+Secure your app with headers, CSRF, CORS, trusted proxies, request limits, and session hardening. For uploads and form parsing, see [Request Handling](/docs/routed/fundamentals/requests#file-uploads) and [Validation](/docs/routed/fundamentals/validation). For end-to-end proxy setup, see [Proxy Support](/docs/routed/security/proxy).
+
+## Core Security Features
+
+### Security Headers
+
+Configure defaults via `config/http.yaml`:
+
+```yaml title="config/http.yaml"
+security:
+  headers:
+    Content-Security-Policy: "default-src 'self'"
+    X-Frame-Options: DENY
+    X-Content-Type-Options: nosniff
+  max_request_size: 10485760   # 10 MB
+  trusted_proxies:
+    enabled: true
+    forward_client_ip: true
+    proxies: ['10.0.0.0/8', '::/0']
+    headers: ['X-Forwarded-For', 'X-Real-IP']
+```
+
+The `routed.security` provider validates these entries and applies them to `EngineConfig.security`. Run `dart run routed_cli provider:list --config` to confirm the active defaults and catch malformed overrides. If you enable a strict Content Security Policy (CSP), confirm your templates, inline scripts, and assets comply; see [Views & Templates](/docs/routed/views/).
+
+### Rate limiting
+
+See [Rate limiting](/docs/routed/security/rate-limit) for configuring token-bucket policies. The limiter integrates with the cache subsystem, supports memory and Redis stores, and responds with `429 Too Many Requests` plus `Retry-After` headers.
+
+Prefer code? Configure the engine directly:
+
+```dart
+final engine = Engine(
+  config: EngineConfig(
+    features: EngineFeatures(
+      enableSecurityFeatures: true
+    ),
+    security: EngineSecurityFeatures(
+      // Content Security Policy
+      csp: "default-src 'self'",
+      
+      // HSTS configuration
+      hstsMaxAge: 31536000, // 1 year
+      
+      // Frame options
+      xFrameOptions: 'DENY',
+      
+      // Type sniffing protection
+      xContentTypeOptionsNoSniff: true,
+      
+      // Request size limit
+      maxRequestSize: 10 * 1024 * 1024 // 10MB
+    )
+  )
+);
+```
+
+### CSRF Protection
+Use the built-in token-based protection. Pair it with `SameSite` and `HttpOnly` cookies; see [Sessions](/docs/routed/state/sessions).
+```dart
+final engine = Engine(
+  config: EngineConfig(
+    security: EngineSecurityFeatures(
+      csrfProtection: true,
+      csrfCookieName: 'csrf_token'
+    )
+  )
+);
+```
+
+### CORS Configuration
+
+Configure CORS via the manifest so defaults survive restarts:
+
+```yaml title="config/http.yaml"
+cors:
+  enabled: true
+  allowed_origins: ['https://example.com']
+  allowed_methods: ['GET', 'POST']
+  allowed_headers: ['Authorization', 'Content-Type']
+  allow_credentials: true
+  exposed_headers: ['X-Token']
+  max_age: 600
+```
+
+Or set it directly on the engine:
+
+```dart
+final engine = Engine(
+  config: EngineConfig(
+    security: EngineSecurityFeatures(
+      cors: CorsConfig(
+        enabled: true,
+        allowedOrigins: ['https://example.com'],
+        allowedMethods: ['GET', 'POST'],
+        allowedHeaders: ['Authorization', 'Content-Type'],
+        allowCredentials: true,
+        exposedHeaders: ['X-Token'],
+        maxAge: 600,
+      ),
+    ),
+  ),
+);
+```
+
+> Validation: Security and CORS providers validate their inputs during boot. Non-boolean flags (for example `security.csrf.enabled: "yes"`), negative `security.max_request_size` values, malformed trusted proxy lists, or non-string CORS origins/methods trigger a `ProviderConfigException` with an explicit config path so you can fix the override before requests start flowing. Use `dart run routed_cli provider:list --config` to inspect the merged security/CORS defaults.
+
+## TLS & HTTPS
+
+Use the `serveSecure` helper (`packages/routed/lib/src/engine/engine.dart:422`) to mount HTTPS endpoints with your certificate chain:
+
+```dart
+import 'package:routed/routed.dart';
+
+Future<void> main() async {
+  final engine = Engine(
+    config: EngineConfig(
+      features: const EngineFeatures(enableSecurityFeatures: true),
+    ),
+  )..get('/', (ctx) => ctx.string('secure'));
+
+  await engine.serveSecure(
+    address: '0.0.0.0',
+    port: 8443,
+    certificatePath: 'certs/server.crt',
+    keyPath: 'certs/server.key',
+    requestClientCertificate: false,
+  );
+}
+```
+
+`serveSecure` configures ALPN for HTTP/1.1 and shares the same routing pipeline as `serve`. You can run the secure server alongside the standard `serve()` instance if you need both HTTP and HTTPS listeners. An experimental `processStream` helper is also available for advanced HTTP/2 integrations. In production, you can also terminate TLS at a reverse proxy or edge and forward to Routed; configure trusted proxies accordingly (see [Proxy Support](/docs/routed/security/proxy)).
+
+## Proxy and IP Resolution
+
+See [Proxy Support](/docs/routed/security/proxy) for end-to-end examples, [Authentication & Authorization](/docs/routed/security/auth) for JWT/IP filter usage, and [Security Uploads](/docs/routed/security/uploads) for hardened multipart defaults.
+
+
+### Trusted Proxies
+```dart
+final engine = Engine(
+  config: EngineConfig(
+    features: EngineFeatures(
+      enableProxySupport: true
+    ),
+    // Trust specific IPs/ranges
+    trustedProxies: [
+      '10.0.0.0/8',
+      '192.168.1.100'
+    ]
+  )
+);
+```
+
+### Trusted Platforms
+```dart
+final engine = Engine(
+  config: EngineConfig(
+    features: EngineFeatures(
+      enableTrustedPlatform: true
+    ),
+    // Use predefined platforms
+    trustedPlatform: EngineConfig.platformCloudflare // CF-Connecting-IP
+    // Or: platformGoogleAppEngine   // X-Appengine-Remote-Addr
+    // Or: platformFlyIO            // Fly-Client-IP
+  )
+);
+```
+
+## Request Protection
+
+### Size Limits
+```dart
+final engine = Engine(
+  config: EngineConfig(
+    security: EngineSecurityFeatures(
+      maxRequestSize: 5 * 1024 * 1024 // 5MB limit
+    ),
+    multipart: MultipartConfig(
+      maxFileSize: 2 * 1024 * 1024,    // 2MB per file
+      maxMemory: 32 * 1024 * 1024,     // 32MB total
+      allowedExtensions: {'.jpg', '.pdf'}
+    )
+  )
+);
+```
+
+### Request Validation
+Combine size limits with schema rules; see [Validation](/docs/routed/fundamentals/validation).
+```dart
+router.post('/upload', (ctx) async {
+  await ctx.validate({
+    'file': 'required|file|max_file_size:5242880',
+    'type': 'required|in:image,document'
+  });
+});
+```
+
+## Session Security
+
+### Secure Session Configuration
+```dart
+final config = SessionConfig.cookie(
+  appKey: 'your-secret-key',
+  cookieName: 'app_session',
+  maxAge: Duration(hours: 1)
+);
+
+// Or with more options
+final store = CookieStore(
+  codecs: [
+    SecureCookie(
+      key: SecureCookie.generateKey(),
+      useEncryption: true,  // AES-GCM encryption
+      useSigning: true      // HMAC signing
+    )
+  ],
+  defaultOptions: Options(
+    secure: true,      // HTTPS only
+    httpOnly: true,    // No JS access
+    sameSite: SameSite.strict // Strict same-site
+  )
+);
+```
+
+### Session Best Practices
+See [Sessions](/docs/routed/state/sessions) for a full guide.
+```dart
+// Regenerate session ID after login
+ctx.regenerateSession();
+
+// Clear sensitive data
+ctx.removeSession('temp_password');
+
+// Destroy session on logout
+ctx.destroySession();
+
+// Check session state
+if (ctx.sessionAge > maxSessionAge || 
+    ctx.sessionIdleTime > maxIdleTime) {
+  ctx.destroySession();
+}
+```
+
+## Implementation Details
+
+### Security Middleware Order
+The security features are applied in this order:
+
+1. Request size limits
+2. CORS headers
+3. Security headers
+4. CSRF protection
+5. Session handling
+
+### IP Resolution Logic
+Client IP resolution follows this order:
+
+1. Trusted platform header if enabled
+2. X-Forwarded-For from trusted proxies
+3. Direct connection IP
+
+### Security Feature Flags
+```dart
+EngineFeatures(
+  enableSecurityFeatures: true,   // Enable all security
+  enableProxySupport: false,      // Disable proxy trust
+  enableTrustedPlatform: false    // Disable platform headers
+)
+```
+
+## Best Practices
+
+1. Always enable security features in production
+2. Use HTTPS-only, HttpOnly, and SameSite cookies
+3. Set appropriate size limits
+4. Validate file uploads (see [Securing file uploads](/docs/routed/security/upload-hardening))
+5. Enable response compression where appropriate ([guide](/docs/routed/fundamentals/compression))
+5. Implement proper session management
+6. Configure CORS carefully (prefer explicit origins/methods; avoid wildcard credentials)
+7. Use CSP headers
+8. Enable CSRF protection
+9. Trust proxies selectively
+10. Monitor security logs

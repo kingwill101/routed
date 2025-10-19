@@ -7,7 +7,11 @@ class RecipeService {
   }
 
   static Recipe? getById(String id) {
-    return recipes.firstWhere((r) => r.id == id);
+    try {
+      return recipes.firstWhere((r) => r.id == id);
+    } catch (_) {
+      return null;
+    }
   }
 
   static Recipe create(Recipe recipe) {
@@ -18,6 +22,9 @@ class RecipeService {
 
   static Recipe update(String id, Recipe recipe) {
     final index = recipes.indexWhere((r) => r.id == id);
+    if (index == -1) {
+      throw StateError('Recipe not found');
+    }
     recipes[index] = recipe;
     recipeStreamController.add(recipes);
     return recipe;

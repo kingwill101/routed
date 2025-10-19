@@ -1,0 +1,140 @@
+---
+title: Getting Started (Server Testing)
+description: Install the tooling, connect your framework, and run the first server_test
+sidebar_position: 2
+---
+
+# Getting Started
+
+These steps get you from an empty project to a runnable server test using the Shelf adapter. Swap in a different handler provider if you use another framework.
+
+## 1. Add the Dev Dependencies
+
+```yaml
+# pubspec.yaml (dev_dependencies)
+dev_dependencies:
+  server_testing: ^0.1.0
+  server_testing_shelf: ^0.1.0
+  test: ^1.25.0
+```
+
+Then install packages:
+
+```bash
+dart pub get
+```
+
+## 2. (Optional) Scaffold Browser Assets
+
+If you plan to run UI automation, bootstrap the workspace now so browser bundles, drivers, and example tests are in place:
+
+```bash
+dart run server_testing init
+dart run server_testing install          # install default browsers
+dart run server_testing install:driver   # ensure webdriver binaries
+```
+
+The CLI creates `test/http/` and `test/browser/` folders, writes a sample `browsers.json`, and caches downloads under `~/.cache`.
+
+## 3. Choose or Build a RequestHandler
+
+`server_testing` never talks to your framework directly. It relies on a `RequestHandler` abstraction that translates between `HttpRequest` objects and your app.
+
+### Using the Built-in `IoRequestHandler`
+
+For applications using `dart:io` `HttpServer` directly, use the built-in handler:
+
+```dart
+import 'dart:io';
+import 'package:server_testing/server_testing.dart';
+
+Future<void> handleRequest(HttpRequest request) async {
+  final response = request.response;
+  response.statusCode = 200;
+  response.write('ok');
+  await response.close();
+}
+
+final handler = IoRequestHandler(handleRequest);
+```
+
+### Using the Shelf Provider
+
+For Shelf applications, there is a ready-made provider:
+
+```dart
+import 'package:shelf/shelf.dart' as shelf;
+import 'package:server_testing/server_testing.dart';
+import 'package:server_testing_shelf/server_testing_shelf.dart';
+
+final app = (shelf.Request req) async => shelf.Response.ok('ok');
+final handler = ShelfRequestHandler(app);
+```
+
+If your framework is not covered, implement `RequestHandler` yourself—see [Handler Providers](/docs/server-testing/handler-providers).
+
+## 4. Write Your First Test
+
+`serverTest` is a thin wrapper around `test()` that wires up a `TestClient`, passes the handler into your callback, and disposes everything for you.
+
+### Example with `IoRequestHandler`
+
+```dart
+import 'dart:io';
+import 'package:server_testing/server_testing.dart';
+
+void main() {
+  Future<void> handleRequest(HttpRequest request) async {
+    final response = request.response;
+    
+    if (request.uri.path == '/health') {
+      response.statusCode = 200;
+      response.write('ok');
+    } else {
+      response.statusCode = 404;
+      response.write('missing');
+    }
+    
+    await response.close();
+  }
+
+  final handler = IoRequestHandler(handleRequest);
+
+  serverTest('health endpoint', (client, _) async {
+    final res = await client.get('/health');
+    res.assertStatus(200).assertBody('ok');
+  }, handler: handler);
+}
+```
+
+### Example with Shelf
+
+```dart
+void main() {
+  final handler = ShelfRequestHandler((shelf.Request req) async {
+    if (req.url.path == 'health') {
+      return shelf.Response.ok('ok', headers: {'content-type': 'text/plain'});
+    }
+    return shelf.Response.notFound('missing');
+  });
+
+  serverTest('health endpoint', (client, _) async {
+    final res = await client.get('/health');
+    res.assertStatus(200).assertBody('ok');
+  }, handler: handler);
+}
+```
+
+The callback receives the `TestClient` plus the same `handler` instance. You can use the second parameter to inspect shared state or tear down external resources.
+
+## 5. Run the Suite
+
+```bash
+dart test                     # fast in-memory transport by default
+dart test --exclude-tags real-browser
+dart test -t real-browser -r expanded
+```
+
+By default `serverTest` uses the in-memory transport. Pass `transportMode: TransportMode.ephemeralServer` when you need the full HTTP stack or want to share the ephemeral server with browser tests.
+
+Next, dive into [HTTP Testing](/docs/server-testing/http-testing) to explore the client API, or [Browser Testing](/docs/server-testing/browser/browser-testing) to wire a UI flow on top of the same handler.

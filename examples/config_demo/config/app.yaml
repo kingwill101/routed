@@ -1,0 +1,4 @@
+name: "{{ env.APP_NAME | default: 'Config Demo' }}"
+env: "{{ env.APP_ENV | default: 'development' }}"
+debug: { { env.APP_DEBUG | default: true } }
+greeting: "Hello {{ env.APP_GREETING_NAME | default: 'friend' }}!"

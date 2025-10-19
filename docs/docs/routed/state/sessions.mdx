@@ -1,0 +1,450 @@
+---
+title: Sessions
+description: Configure cookie or file-based sessions and work with flash messages
+sidebar_position: 2
+---
+
+# Session Management
+
+## Configuration
+
+Routed now mirrors Laravel's manifest, so the same `.env` switches carry straight across:
+
+```yaml title="config/http.yaml"
+session:
+  driver: cookie                    # cookie, file, array, database, redis, memcached, dynamodb
+  lifetime: 120                     # minutes
+  expire_on_close: false
+  encrypt: true                     # AES-GCM + HMAC
+  cookie: "{{ env.APP_NAME | default: 'routed' | downcase | replace: ' ', '-' }}-session"
+  path: /
+  domain: null
+  secure: ${SESSION_SECURE_COOKIE:true}
+  http_only: true
+  same_site: lax                    # lax, strict, none, or null
+  partitioned: ${SESSION_PARTITIONED_COOKIE:false}
+
+  files: storage/framework/sessions # file driver storage path
+  store: session                    # cache-backed drivers resolve via cache.stores
+  cache_prefix: sess:
+  lottery: [2, 100]
+
+app:
+  name: "{{ env.APP_NAME | default: 'Routed App' }}"
+  env: "{{ env.APP_ENV | default: 'production' }}"
+  debug: {{ env.APP_DEBUG | default: false }}
+  url: "{{ env.APP_URL | default: 'http://localhost' }}"
+  timezone: UTC
+  locale: en
+  fallback_locale: en
+  faker_locale: en_US
+  cipher: AES-256-CBC
+  key: "{{ env.APP_KEY }}"                     # generate with `dart run routed_cli key:generate`
+  previous_keys: {{ env.APP_PREVIOUS_KEYS | split: ',' }}
+  maintenance:
+    driver: "{{ env.APP_MAINTENANCE_DRIVER | default: 'file' }}"
+    store: "{{ env.APP_MAINTENANCE_STORE | default: 'database' }}"
+```
+
+```dotenv title=".env"
+SESSION_DRIVER=redis
+SESSION_LIFETIME=120
+SESSION_EXPIRE_ON_CLOSE=true
+SESSION_STORE=redis
+SESSION_FILES=storage/framework/sessions
+SESSION_LOTTERY=2,100
+SESSION_SAME_SITE=none
+SESSION_HTTP_ONLY=true
+SESSION_SECURE_COOKIE=true
+SESSION_COOKIE=myapp-session
+```
+
+- Double underscores still expand to dotted keys (`SESSION__CACHE__PREFIX` ➜ `session.cache.prefix`).
+- The cache-backed drivers (`database`, `redis`, `memcached`, `dynamodb`) reuse whichever repository you register under `cache.stores[session.store]`.
+- `app.previous_keys` lets you rotate secrets without signing out active users. New cookies are issued with `app.key` while older ones remain readable via the fallback list.
+
+Prefer code? Supply a `SessionConfig` when creating the engine:
+
+```dart
+final codecs = [SecureCookie(key: SecureCookie.generateKey(), useEncryption: true, useSigning: true)];
+final engine = Engine(
+  config: EngineConfig(
+    sessionConfig: SessionConfig.cookie(
+      codecs: codecs,
+      cookieName: 'app_session',
+      maxAge: const Duration(hours: 1),
+      expireOnClose: false,
+    ),
+  ),
+);
+```
+
+The `withSessionConfig` engine option applies the same configuration and automatically inserts the session middleware as the first global middleware.
+
+> The `routed.sessions` provider validates manifest overrides for `session.*`. If a value has the wrong shape (for example, an unknown cache store) a `ProviderConfigException` is thrown during boot. Use `dart run routed_cli provider:list --config` to inspect the merged config before deploying.
+
+> **Keys & rotation:** Every driver still needs `app.key` (or `session.app_key`). Keep it secret, rotate it with `dart run routed_cli key:generate`, then append the previous value to `APP_PREVIOUS_KEYS` so existing cookies continue to decode while new ones are issued with the replacement key.
+
+### Supported drivers
+
+- `cookie` – stores the entire payload in the cookie using layered `SecureCookie` codecs when `encrypt: true`.
+- `file` – persists JSON blobs under `session.files`. Use `session.lottery` or `FilesystemStore.pruneOnStartup` to clear expired sessions opportunistically.
+- `array` – process-local, in-memory storage that resets on every restart.
+- `database`, `redis`, `memcached`, `dynamodb` – delegate to the cache manager and respect both `session.cache_prefix` and the global `cache.prefix`.
+
+`partitioned` is accepted for forward compatibility (the current `dart:io` `Cookie` API does not emit the Partitioned attribute yet).
+
+### Driver registry & documentation
+
+`SessionServiceProvider.registerDriver` is the single entrypoint for adding or overriding drivers. The built-ins use this method, so any custom driver you publish rides the same resolution path:
+
+```dart
+SessionServiceProvider.registerDriver(
+  'dropbox',
+  (context) => SessionConfig(
+    cookieName: context.cookieName,
+    store: DropboxSessionStore(
+      root: context.raw['root'] ?? '/sessions',
+      token: context.raw['token'] as String,
+    ),
+    maxAge: context.lifetime,
+    defaultOptions: context.options,
+    expireOnClose: context.expireOnClose,
+  ),
+  documentation: (ctx) => <ConfigDocEntry>[
+    ConfigDocEntry(
+      path: ctx.path('token'),
+      type: 'string',
+      description: 'Access token required for the dropbox session driver.',
+    ),
+    ConfigDocEntry(
+      path: ctx.path('root'),
+      type: 'string',
+      description: 'Remote folder for storing session payloads.',
+    ),
+  ],
+);
+```
+
+Provide a `documentation` callback to advertise config keys in `provider:list --config` output and in the table above. This keeps built-in and custom drivers equally discoverable; the docs list everything under `session.*`, including the entries contributed by your driver. See [Driver Registries](/docs/routed/advanced/driver-registries) for additional guidance.
+
+```bash
+routed provider:driver --type cache session_cache
+```
+
+Need a starting point? The CLI generates driver skeletons (storage or cache) in `lib/drivers/<type>/`, mirroring the patterns described above.
+
+### Cache-backed sessions
+
+Declare the cache store and point `session.store` at it:
+
+```yaml title="config/http.yaml"
+cache:
+  stores:
+    session:
+      driver: redis
+      endpoint: {{ env.REDIS_URL }}
+
+session:
+  driver: redis
+  store: session
+  cache_prefix: sess:
+```
+
+### Security Options
+```dart
+final store = CookieStore(
+  codecs: [
+    SecureCookie(
+      key: SecureCookie.generateKey(),
+      useEncryption: true,
+      useSigning: true,
+    ),
+    SecureCookie(
+      key: previousKey,
+      useEncryption: true,
+      useSigning: true,
+    ),
+  ],
+  defaultOptions: Options(
+    path: '/',
+    maxAge: 86400,
+    secure: true,
+    httpOnly: true,
+    sameSite: SameSite.lax,
+  ),
+);
+```
+
+Each encrypted cookie uses a unique 12-byte nonce (IV). The nonce is sent alongside the ciphertext and validated by the GCM authentication tag—never reuse a `(key, nonce)` pair.
+
+## Session Operations
+
+### Basic Operations
+```dart
+router.get('/profile', (ctx) async {
+  // Get session values
+  final userId = ctx.getSession<String>('user_id');
+  final role = ctx.getSessionOrDefault('role', 'guest');
+  
+  // Set values
+  ctx.setSession('last_visit', DateTime.now());
+  
+  // Check existence
+  if (ctx.hasSession('preferences')) {
+    // Access preferences
+  }
+  
+  // Remove value
+  ctx.removeSession('temp_data');
+  
+  // Clear all data
+  ctx.clearSession();
+  
+  // Get all session data
+  final allData = ctx.sessionData;
+});
+```
+
+### Session Lifecycle
+```dart
+router.post('/auth', (ctx) async {
+  // Session metadata
+  final info = {
+    'id': ctx.sessionId,
+    'created': ctx.sessionCreatedAt,
+    'last_accessed': ctx.sessionLastAccessed,
+    'age_seconds': ctx.sessionAge,
+    'idle_seconds': ctx.sessionIdleTime
+  };
+
+  // Security operations
+  // Regenerate after login or privilege changes to prevent fixation
+  ctx.regenerateSession();  // New session ID
+  ctx.destroySession();     // End session
+  
+  // Check state
+  if (ctx.isSessionDestroyed) {
+    return ctx.json({'error': 'Session expired'});
+  }
+});
+```
+
+## Storage Backends
+
+### Cookie Store
+Store sessions in encrypted cookies (good for stateless apps; constrained by cookie size limits):
+```dart
+SessionConfig.cookie(
+  appKey: 'your-secret-key',
+  cookieName: 'app_session',
+  maxAge: Duration(hours: 1)
+)
+```
+
+### File Store
+Store sessions on filesystem (server-side storage; supports pruning; centralize or share for multi-instance deployments):
+```dart
+SessionConfig.file(
+  appKey: 'your-secret-key',
+  storagePath: 'storage/sessions',
+  cookieName: 'app_session',
+  maxAge: Duration(hours: 1)
+)
+```
+
+Advanced options (explicit store to enable pruning and security options):
+```dart
+final config = SessionConfig(
+  cookieName: 'app_session',
+  store: FilesystemStore(
+    storageDir: 'storage/sessions',
+    useEncryption: true,   // AES-GCM for cookie value
+    useSigning: true,      // HMAC signing for cookie value
+    pruneOnStartup: true,  // remove expired files on startup
+    lottery: [2, 100],     // 2% chance to sweep on each write
+  ),
+  maxAge: Duration(hours: 1),
+  path: '/',
+  secure: true,
+  httpOnly: true
+);
+```
+
+### Cache-backed Store
+Reuse the cache manager for server-side sessions:
+```dart
+final cacheManager = await engine.make<CacheManager>();
+final config = SessionConfig(
+  cookieName: 'app_session',
+  store: CacheSessionStore(
+    repository: cacheManager.store('session'),
+    codecs: [
+      SecureCookie(
+        key: 'base64:...',
+        useEncryption: true,
+        useSigning: true,
+      ),
+    ],
+    defaultOptions: Options(path: '/', maxAge: 7200, secure: true, httpOnly: true),
+    cachePrefix: 'sess:',
+  ),
+  maxAge: const Duration(minutes: 120),
+);
+```
+
+### Array Store
+Ephemeral, process-local sessions that reset whenever the process restarts:
+```dart
+final config = SessionConfig(
+  cookieName: 'app_session',
+  store: MemorySessionStore(
+    codecs: [
+      SecureCookie(
+        key: 'base64:...',
+        useEncryption: true,
+        useSigning: true,
+      ),
+    ],
+    defaultOptions: Options(path: '/', maxAge: 0, secure: false, httpOnly: true),
+  ),
+  maxAge: const Duration(minutes: 30),
+);
+```
+
+### Custom Store
+Implement custom storage backend:
+```dart
+class CustomStore implements Store {
+  @override
+  Future<Session> read(Request request, String name) async {
+    // Load session data
+  }
+
+  @override
+  Future<void> write(
+    Request request, 
+    Response response, 
+    Session session
+  ) async {
+    // Save session data
+  }
+}
+
+To bundle a custom store as a provider, register it with the `ProviderRegistry` and add it to `http.providers`:
+
+```dart
+class RedisSessionProvider extends ServiceProvider with ProvidesDefaultConfig {
+  @override
+  Map<String, dynamic> get defaultConfig => const {
+    'session': {
+      'driver': 'redis',
+      'store': 'session',
+    },
+    'cache': {
+      'stores': {
+        'session': {
+          'driver': 'redis',
+          'endpoint': '{{ env.REDIS_URL }}',
+        },
+      },
+    },
+  };
+
+  @override
+  void register(Container container) {
+    container.singleton<SessionConfig>((c) async {
+      final config = await c.make<Config>();
+      final cacheManager = await c.make<CacheManager>();
+      final appKey = config.get('app.key') as String;
+      return SessionConfig(
+        cookieName: 'app_session',
+        store: CacheSessionStore(
+          repository: cacheManager.store('session'),
+          codecs: [
+            SecureCookie(
+              key: appKey,
+              useEncryption: true,
+              useSigning: true,
+            ),
+          ],
+          defaultOptions: Options(path: '/', maxAge: 7200, secure: true, httpOnly: true),
+          cachePrefix: 'sess:',
+        ),
+        maxAge: const Duration(minutes: 120),
+      );
+    });
+  }
+}
+
+ProviderRegistry.instance.register(
+  'app.sessions.redis',
+  factory: () => RedisSessionProvider(),
+  description: 'Redis-backed session store',
+);
+```
+
+
+## Flash Messages
+
+Temporary session data that auto-clears after being read:
+
+```dart
+// Set messages
+ctx.flash('Profile updated', 'success');
+ctx.flash('Fix these errors', 'error');
+
+// Get all messages
+final messages = ctx.getFlashMessages();
+
+// Get filtered messages
+final errors = ctx.getFlashMessages(
+  withCategories: true,
+  categoryFilter: ['error']
+);
+
+// Check for messages
+if (ctx.hasFlashMessages()) {
+  // Handle pending messages
+}
+```
+
+Flash data is removed when you call `getFlashMessages`, so store the result if you need to reference it more than once during the same request.
+
+## Session Internals
+
+### Session Object
+```dart
+final session = Session(
+  name: 'app_session',
+  options: Options(
+    path: '/',
+    maxAge: 3600,
+    secure: true
+  ),
+  values: {
+    'user_id': '123',
+    'role': 'admin'
+  }
+);
+
+// Session properties
+print(session.id);          // Unique ID
+print(session.createdAt);   // Creation time
+print(session.lastAccessed);// Last access time
+print(session.age);         // Session age in seconds
+print(session.idleTime);    // Idle time in seconds
+print(session.isDestroyed); // Destroyed state
+```
+
+### Store Configuration
+```dart
+final config = SessionConfig(
+  cookieName: 'app_session',
+  store: CustomStore(),
+  maxAge: Duration(hours: 1),
+  path: '/',
+  secure: true,
+  httpOnly: true
+);
+```

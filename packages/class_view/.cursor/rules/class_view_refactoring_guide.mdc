@@ -1,0 +1,298 @@
+---
+description: refactoring of class view and related packages
+globs: 
+alwaysApply: false
+---
+# Class View Refactoring Guide
+
+> **📋 Complete Plan Reference**: See [class_view_refactoring_plan.md](mdc:class_view_refactoring_plan.md) for the full detailed refactoring plan.
+
+## Design Philosophy & Architecture
+
+The class_view package provides Django-inspired class-based views for Dart web frameworks. The core design principles are:
+
+1. **Hidden Complexity**: Mixins work behind the scenes as building blocks - users never interact with mixins directly
+2. **Clean User Interface**: `class PostCreateView extends CreateView<Post>` - no mixin exposure to users
+3. **Internal Consistency**: Refactored mixins provide consistent patterns for building views
+4. **Django-Inspired Ergonomics**: Familiar patterns (`performCreate`, `getObject`) and workflows
+5. **Framework Agnostic**: Same view code works with any framework through adapters
+
+## Target Architecture
+
+### What Users See (Clean Interface)
+```dart
+// REST API Views - Primary Use Case
+class PostCreateView extends CreateView<Post> {
+  @override
+  Future<Post> performCreate(Map<String, dynamic> data) async {
+    return Post.fromJson(data);
+  }
+}
+
+class PostDetailView extends DetailView<Post> {
+  @override
+  Future<Post?> getObject() async {
+    final id = await getParam('id');
+    return await PostRepository.findById(id);
+  }
+}
+
+// HTML Form Views - Secondary Use Case  
+class PostFormView extends ModelFormView<Post> {
+  @override
+  String get templateName => 'posts/form.html';
+  
+  @override
+  Form createForm(Post? instance, [Map<String, dynamic>? data]) {
+    return PostForm(instance: instance, data: data);
+  }
+}
+```
+
+### What Happens Behind the Scenes (Hidden Complexity)
+```dart
+abstract class CreateView<T> extends View 
+    with ContextMixin, SuccessFailureUrlMixin {
+  // Implementation using mixins internally
+}
+```
+
+## Implementation Strategy
+
+### Phase 1: Adapter Interface ([adapter/base.dart](mdc:class_view/lib/src/adapter/base.dart))
+- **CRITICAL**: Make all adapter methods async for consistency
+- Remove context generic exposure
+- Standardize method signatures
+- Framework adapters in [engines/](mdc:class_view/lib/src/view/engines) must be updated
+
+### Phase 2: Mixin Refactoring 
+- **[mixins/view_mixin.dart](mdc:class_view/lib/src/view/class_view/mixins/view_mixin.dart)**: Core request/response handling, fully async
+- **[mixins/context_mixin.dart](mdc:class_view/lib/src/view/class_view/mixins/context_mixin.dart)**: Context data building, no context generics
+- **[mixins/single_object_mixin.dart](mdc:class_view/lib/src/view/class_view/mixins/single_object_mixin.dart)**: Single object handling, clean `getObject()` pattern
+- **[mixins/multiple_object_mixin.dart](mdc:class_view/lib/src/view/class_view/mixins/multiple_object_mixin.dart)**: List handling with automatic pagination
+- **Success/failure handling mixin**: Standardized response patterns
+
+### Phase 3: Base View Class ([base_views/base.dart](mdc:class_view/lib/src/view/class_view/base_views/base.dart))
+- New `View` class with standardized dispatch and error handling
+- No context generics exposed
+- Clean async patterns throughout
+
+### Phase 4: CRUD Views Implementation
+- **[crud/create.dart](mdc:class_view/lib/src/view/class_view/base_views/crud/create.dart)**: `performCreate(data)` method only
+- **[crud/detail.dart](mdc:class_view/lib/src/view/class_view/base_views/crud/detail.dart)**: `getObject()` method only  
+- **[crud/list.dart](mdc:class_view/lib/src/view/class_view/base_views/crud/list.dart)**: `getObjects()` + automatic pagination
+- **[crud/update.dart](mdc:class_view/lib/src/view/class_view/base_views/crud/update.dart)**: `getObject()` + `performUpdate(object, data)`
+- **[crud/delete.dart](mdc:class_view/lib/src/view/class_view/base_views/crud/delete.dart)**: `getObject()` + `performDelete(object)`
+
+### Phase 5: Form Views for HTML Templates
+- **FormView**: For custom forms with `getForm()` and `processForm()`
+- **ModelFormView**: For model-backed forms with `createForm()` and `saveForm()`
+
+## Cleanup Strategy
+
+### 🧹 Systematic Cleanup Process
+1. **Audit Current Codebase** - Identify all current mixins and views
+2. **Map Dependencies** - Understand which components are used where
+3. **Apply Cleanup Criteria** - Use the criteria below to determine what to delete
+4. **Safe Deletion** - Remove unused components in dependency order
+5. **Update Exports** - Clean up public API exports and documentation
+6. **Validate Tests** - Ensure no broken test references remain
+
+### 🔍 What to Delete
+
+#### Mixins to Delete:
+- Mixins with generic context parameters (`<T, C>` patterns)
+- Mixins that expose framework-specific request/response objects
+- Overlapping mixins with similar functionality
+- Mixins that require complex composition by users
+- Mixins not used by the new CRUD views internally
+
+#### Views to Delete:
+- Views requiring complex mixin inheritance by users
+- Views with verbose generic signatures
+- Views that duplicate CRUD functionality
+- Views that don't follow single-method implementation pattern
+- Views that expose adapter/context complexity
+
+#### Files to Clean:
+- Remove export statements for deleted classes
+- Delete corresponding test files for deleted components
+- Update documentation to remove references
+- Clean up example usage in [simple_blog/](mdc:simple_blog)
+
+### ⚠️ Safety Guidelines
+- **Never delete during active development** - Complete one phase before cleanup
+- **Check dependencies first** - Ensure no internal usage before deletion
+- **Keep tests for kept components** - Only delete tests for deleted components
+- **Document deletions** - Track what was removed and why
+- **Gradual removal** - Delete in small batches, not all at once
+
+## Key Implementation Rules
+
+### 1. Never Expose Context at View Level
+```dart
+// ❌ OLD - Context exposed
+class CreateView<T, C> extends View<C> {
+  Future<T> createObject(C context, Map<String, dynamic> data);
+}
+
+// ✅ NEW - No context exposure
+abstract class CreateView<T> extends View {
+  Future<T> performCreate(Map<String, dynamic> data);
+}
+```
+
+### 2. Always Use Mixins for Internal Composition
+```dart
+// Views use mixins internally but users don't see them
+abstract class CreateView<T> extends View 
+    with ContextMixin, SuccessFailureUrlMixin {
+  // Mixin functionality available internally
+}
+```
+
+### 3. Consistent Async Patterns
+```dart
+// All adapter methods are async
+Future<String> getMethod();
+Future<String?> getParam(String name);
+Future<Map<String, dynamic>> getJsonBody();
+
+// All mixin methods are async  
+Future<Map<String, dynamic>> getContextData();
+Future<T?> getObject();
+```
+
+### 4. Django-Like Method Names
+- `performCreate()` instead of `createObject()`
+- `getObject()` instead of `getObjectForView()`
+- `getObjects()` instead of `getObjectList()`
+- `performUpdate()` instead of `updateObject()`
+- `performDelete()` instead of `deleteObject()`
+
+### 5. Single Responsibility Methods
+Each view should require minimal implementation:
+```dart
+// CreateView - only need one method
+class PostCreateView extends CreateView<Post> {
+  @override
+  Future<Post> performCreate(Map<String, dynamic> data) async {
+    return Post.fromJson(data);
+  }
+}
+```
+
+## Documentation Requirements
+
+### Every Class Must Have
+1. **Purpose and use case description**
+2. **Complete usage example with realistic scenario** 
+3. **List of required methods to implement**
+4. **List of optional methods that can be overridden**
+5. **Common patterns and best practices**
+
+### Every Method Must Have
+1. **Clear description of functionality**
+2. **Parameter documentation with types and constraints**
+3. **Return value documentation** 
+4. **Exception documentation**
+5. **Usage examples for complex methods**
+
+## Testing Strategy
+
+### Test Files to Update/Create
+- **[test/view/](mdc:class_view/test/view)**: Update all view tests for new patterns
+- **[test/integration/](mdc:class_view/test/integration)**: Integration tests with different frameworks
+- Each CRUD view needs comprehensive test coverage
+- Form view testing with template integration
+
+### Simple Blog Updates ([simple_blog/](mdc:simple_blog))
+- **[views/api/](mdc:simple_blog/lib/src/views/api)**: Update to use new CRUD view patterns
+- **[views/web/](mdc:simple_blog/lib/src/views/web)**: Update to use new form view patterns
+- Remove complex mixin compositions
+- Demonstrate clean inheritance patterns
+
+## Migration Checklist
+
+### ✅ Phase 1: Adapter Interface
+- [ ] Update [adapter/base.dart](mdc:class_view/lib/src/adapter/base.dart) to fully async interface
+- [ ] Update [engines/routed.dart](mdc:class_view/lib/src/view/engines/routed.dart) for new interface
+- [ ] Update [engines/shelf.dart](mdc:class_view/lib/src/view/engines/shelf.dart) for new interface
+- [ ] Maintain backward compatibility
+
+### ✅ Phase 2: Mixin Refactoring
+- [ ] Refactor [mixins/view_mixin.dart](mdc:class_view/lib/src/view/class_view/mixins/view_mixin.dart)
+- [ ] Refactor [mixins/context_mixin.dart](mdc:class_view/lib/src/view/class_view/mixins/context_mixin.dart)
+- [ ] Refactor [mixins/single_object_mixin.dart](mdc:class_view/lib/src/view/class_view/mixins/single_object_mixin.dart)
+- [ ] Refactor [mixins/multiple_object_mixin.dart](mdc:class_view/lib/src/view/class_view/mixins/multiple_object_mixin.dart)
+- [ ] Add success/failure mixin
+- [ ] Add template response mixin
+
+### ✅ Phase 3: Base View Class
+- [ ] Implement new [base_views/base.dart](mdc:class_view/lib/src/view/class_view/base_views/base.dart)
+- [ ] Standardized error handling
+- [ ] Method dispatch logic
+- [ ] No context generics
+
+### ✅ Phase 4: CRUD Views
+- [ ] Implement [crud/create.dart](mdc:class_view/lib/src/view/class_view/base_views/crud/create.dart)
+- [ ] Implement [crud/detail.dart](mdc:class_view/lib/src/view/class_view/base_views/crud/detail.dart)
+- [ ] Implement [crud/list.dart](mdc:class_view/lib/src/view/class_view/base_views/crud/list.dart)
+- [ ] Implement [crud/update.dart](mdc:class_view/lib/src/view/class_view/base_views/crud/update.dart)
+- [ ] Implement [crud/delete.dart](mdc:class_view/lib/src/view/class_view/base_views/crud/delete.dart)
+
+### ✅ Phase 5: Form Views
+- [ ] Implement FormView class
+- [ ] Implement ModelFormView class
+- [ ] Template integration
+- [ ] Form processing patterns
+
+### ✅ Phase 6: Cleanup and Consolidation
+- [ ] **Delete unused mixins** - Remove mixins not used by new architecture
+- [ ] **Delete unnecessary views** - Remove views that don't fit clean architecture
+- [ ] **Remove deprecated patterns** - Clean up old inheritance patterns
+- [ ] **Update exports** - Remove deleted classes from public API
+- [ ] **Clean up test files** - Remove tests for deleted components
+
+#### 🗑️ Cleanup Criteria
+**Delete mixins that:**
+- Have complex generic signatures not used internally
+- Expose framework-specific context
+- Have overlapping functionality with other mixins
+- Contradict the new clean architecture
+
+**Delete views that:**
+- Have complex mixin compositions visible to users
+- Expose context generics to users
+- Duplicate functionality of other views
+- Don't follow the new clean patterns
+
+### ✅ Phase 7: Testing & Documentation
+- [ ] Comprehensive test suite for all views
+- [ ] Update [simple_blog/](mdc:simple_blog) examples
+- [ ] API documentation for all classes and methods
+- [ ] How-to guides and examples
+- [ ] Migration guides
+
+## Success Criteria
+
+### User Experience
+- Users can create views with single method implementations
+- No exposure to mixin complexity
+- Django-like ergonomics achieved
+- Framework-agnostic operation
+
+### Code Quality
+- Consistent async patterns throughout
+- Standardized error handling
+- Clean separation of concerns
+- Comprehensive test coverage
+- Excellent documentation
+
+### Examples Working
+- [simple_blog/](mdc:simple_blog) demonstrates all patterns
+- REST API views work cleanly
+- HTML form views integrate properly
+- Framework integration is seamless
+
+This refactoring transforms class_view from a complex mixin-heavy system into a Django-like framework with clean inheritance patterns while maintaining powerful internal architecture through hidden mixins.

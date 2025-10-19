@@ -34,8 +34,10 @@ void main() {
       final result = parseUrlEncoded(input);
 
       expect(result['user']['hobbies'], equals(['reading', 'sports']));
-      expect(result['user']['details']['languages'],
-          equals(['English', 'Spanish']));
+      expect(
+        result['user']['details']['languages'],
+        equals(['English', 'Spanish']),
+      );
     });
 
     test('should decode special characters', () {
@@ -58,12 +60,13 @@ void main() {
       final result = parseUrlEncoded(input);
 
       expect(
-          result['key'],
-          equals([
-            'value1',
-            'value2',
-            {'nested': 'value3'}
-          ]));
+        result['key'],
+        equals([
+          'value1',
+          'value2',
+          {'nested': 'value3'},
+        ]),
+      );
     });
 
     test('should handle complex nested structures', () {
@@ -72,11 +75,15 @@ void main() {
       final result = parseUrlEncoded(input);
 
       expect(result['user']['info']['name'], equals('Alice'));
-      expect(result['user']['info']['contacts']['email'],
-          equals('alice@example.com'));
+      expect(
+        result['user']['info']['contacts']['email'],
+        equals('alice@example.com'),
+      );
       expect(result['user']['info']['contacts']['phone'], equals('1234567890'));
-      expect(result['user']['preferences'],
-          equals(['dark_mode', 'notifications']));
+      expect(
+        result['user']['preferences'],
+        equals(['dark_mode', 'notifications']),
+      );
     });
   });
 }

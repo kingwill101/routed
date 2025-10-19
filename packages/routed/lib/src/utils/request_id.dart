@@ -28,8 +28,10 @@ class RequestId {
     final timestamp = DateTime.now().microsecondsSinceEpoch.toRadixString(36);
 
     // Generate a random string of the required length minus the length of the timestamp.
-    final random = List.generate(length - timestamp.length,
-        (index) => _chars[_random.nextInt(_chars.length)]).join();
+    final random = List.generate(
+      length - timestamp.length,
+      (index) => _chars[_random.nextInt(_chars.length)],
+    ).join();
 
     // Combine the timestamp and the random string to form the final ID.
     return '$timestamp$random';

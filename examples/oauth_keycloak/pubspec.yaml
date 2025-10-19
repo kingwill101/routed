@@ -1,0 +1,23 @@
+name: oauth_keycloak
+version: 0.0.1
+description: Example Routed app showcasing configuration loader and CLI integration.
+publish_to: none
+resolution: workspace
+
+environment:
+  sdk: '>=3.9.0 <4.0.0'
+
+dependencies:
+  routed:
+    path: ../../packages/routed
+  file: ^7.0.1
+  path: ^1.9.1
+
+dev_dependencies:
+  routed_cli:
+    path: ../../packages/routed_cli
+  test: ^1.26.3
+
+dependency_overrides:
+  class_view:
+    path: ../../packages/class_view

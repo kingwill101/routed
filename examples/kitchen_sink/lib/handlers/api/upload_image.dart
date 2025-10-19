@@ -1,9 +1,7 @@
-import 'dart:io';
-
 import 'package:kitchen_sink_example/consts.dart';
 import 'package:routed/routed.dart';
 
-uploadImage(EngineContext ctx) async {
+Future<Object> uploadImage(EngineContext ctx) async {
   final id = ctx.param('id');
 
   try {
@@ -21,15 +19,22 @@ uploadImage(EngineContext ctx) async {
     final filePath = 'public/images/$imageName';
     await ctx.saveUploadedFile(imageFile, filePath);
     // For simplicity, we'll just store the filename and type.
-    recipes[recipeIndex] =
-        recipes[recipeIndex].copyWith(image: '/images/$imageName');
-    ctx.removeCache('${kRecipeCacheKeyPrefix}_$id',
-        store: 'array'); // Invalidate the recipe cache
-    ctx.removeCache(kAllRecipesCacheKey,
-        store: 'array'); // Invalidate the cache
+    recipes[recipeIndex] = recipes[recipeIndex].copyWith(
+      image: '/images/$imageName',
+    );
+    ctx.removeCache(
+      '${kRecipeCacheKeyPrefix}_$id',
+      store: 'array',
+    ); // Invalidate the recipe cache
+    ctx.removeCache(
+      kAllRecipesCacheKey,
+      store: 'array',
+    ); // Invalidate the cache
     return ctx.redirect('/');
   } catch (e) {
-    return ctx.string('Error: ${e.toString()}',
-        statusCode: HttpStatus.badRequest);
+    return ctx.string(
+      'Error: ${e.toString()}',
+      statusCode: HttpStatus.badRequest,
+    );
   }
 }

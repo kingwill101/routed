@@ -1,0 +1,52 @@
+targets:
+  $default:
+    builders:
+      mockito|mockBuilder:
+        generate_for:
+          - lib/**.dart
+          - test/**.dart
+
+      server_testing|browser_json_builder:
+        enabled: true
+        generate_for:
+          - lib/src/browser/bootstrap/browser_json.dart
+      server_testing|device_descriptor_json_builder:
+        enabled: true
+        generate_for:
+          - lib/src/browser/bootstrap/device_json.dart
+      server_testing|gecko_driver_version_builder:
+        enabled: true
+        generate_for:
+          - lib/src/browser/bootstrap/driver/gecko_driver_manager_base.dart
+      server_testing|chrome_driver_version_builder:
+        enabled: true
+        generate_for:
+          - lib/src/browser/bootstrap/driver/chrome_driver_manager_base.dart
+builders:
+  browser_json_builder:
+    import: "package:server_testing/src/builder/browser_json_builder.dart"
+    builder_factories: [ "createBrowserJsonBuilder" ]
+    build_extensions: { "lib/src/browser/bootstrap/browser_json.dart": [ "lib/src/browser/bootstrap/browsers_json_const.dart" ] }
+    build_to: source
+    auto_apply: dependents
+
+  device_descriptor_json_builder:
+    import: "package:server_testing/src/builder/device_descriptor_source_json_builder.dart"
+    builder_factories: [ "createDeviceDescriptorSourceJsonBuilder" ]
+    build_extensions: { "lib/src/browser/bootstrap/device_json.dart": [ "lib/src/browser/bootstrap/devices_json_const.dart" ] }
+    build_to: source
+    auto_apply: dependents
+
+  gecko_driver_version_builder:
+    import: "package:server_testing/src/builder/gecko_driver_version_builder.dart"
+    builder_factories: [ "createGeckoDriverVersionBuilder" ]
+    build_extensions: { "lib/src/browser/bootstrap/driver/gecko_driver_manager_base.dart": [ "lib/src/browser/bootstrap/driver/gecko_driver_version.dart" ] }
+    build_to: source
+    auto_apply: dependents
+
+  chrome_driver_version_builder:
+    import: "package:server_testing/src/builder/chrome_driver_version_builder.dart"
+    builder_factories: [ "chromeDriverVersionBuilder" ]
+    build_extensions: { "lib/src/browser/bootstrap/driver/chrome_driver_manager_base.dart": [ "lib/src/browser/bootstrap/driver/chrome_driver_version.dart" ] }
+    build_to: source
+    auto_apply: dependents

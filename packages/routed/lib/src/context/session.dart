@@ -2,33 +2,34 @@ part of 'context.dart';
 
 /// Extension for session-related functionality
 extension SessionMethods on EngineContext {
-  /// Get the current session instance
+  /// Get the current session instance (provided by sessionMiddleware via ctx.set('session', ...))
   Session get session {
-    if (_session == null) {
+    final s = get<Session>('session');
+    if (s == null) {
       throw StateError('Session middleware not configured');
     }
-    return _session!;
+    return s;
   }
 
   /// Get a session value with optional type
   T? getSession<T>(String key) => session.getValue<T>(key);
 
-  Future<void> setSession(String key, dynamic value) async {
-    if (_session == null) {
-      throw StateError('Session middleware not configured');
-    }
+  void setSession(String key, dynamic value) {
     session.setValue(key, value);
-    await _commitSession();
   }
 
-  Future<void> regenerateSession() async {
+  void regenerateSession() {
     final oldSession = session;
-    session.regenerate();
-    await _commitSession();
-
-    // Ensure old session is invalidated
+    // Create a new session with a new ID but keep the same data
+    final newSession = Session(
+      name: oldSession.name,
+      options: oldSession.options,
+      values: Map<String, dynamic>.from(oldSession.values),
+    );
+    // Replace the old session with the new one in the context
+    set('session', newSession);
+    // Destroy the old session
     oldSession.destroy();
-    await _commitSession();
   }
 
   /// Get a session value with a default fallback
@@ -37,15 +38,13 @@ extension SessionMethods on EngineContext {
   }
 
   /// Remove a session value
-  Future<void> removeSession(String key) async {
+  void removeSession(String key) {
     session.values.remove(key);
-    await _commitSession();
   }
 
   /// Clear all session values
-  Future<void> clearSession() async {
+  void clearSession() {
     session.values.clear();
-    await _commitSession();
   }
 
   /// Check if session has a key
@@ -70,17 +69,12 @@ extension SessionMethods on EngineContext {
   bool get isSessionDestroyed => session.isDestroyed;
 
   /// Destroy the current session
-  Future<void> destroySession() async {
+  void destroySession() {
     session.destroy();
-    await _commitSession();
   }
 
   /// Get the session ID
   String get sessionId => session.id;
-
-  Future<void> _commitSession() async {
-    await engineConfig.sessionConfig!.store.write(request, response, session);
-  }
 }
 
 /// Flask-style flash message implementation
@@ -88,14 +82,11 @@ extension FlashMessages on EngineContext {
   static const String _flashKey = '_flashes';
 
   /// Add a flash message to the session
-  Future<void> flash(String message, [String category = 'message']) async {
+  void flash(String message, [String category = 'message']) {
     try {
-      // Get existing flashes, defaulting to empty list
       final List<dynamic> flashes = getSession(_flashKey) ?? <List<dynamic>>[];
       flashes.add([category, message]);
-
-      // Store back in session
-      await setSession(_flashKey, flashes);
+      setSession(_flashKey, flashes);
     } catch (e) {
       print('Error setting flash message: $e');
       rethrow;
@@ -114,7 +105,9 @@ extension FlashMessages on EngineContext {
       // Get and immediately remove flashes from session
       final dynamic flashesRaw = getSession<dynamic>(_flashKey);
       final List<List<dynamic>> flashes = (flashesRaw is List)
-          ? flashesRaw.map((flash) => flash is List ? flash : <dynamic>[]).toList()
+          ? flashesRaw
+                .map((flash) => flash is List ? flash : <dynamic>[])
+                .toList()
           : <List<dynamic>>[];
 
       removeSession(_flashKey);
@@ -122,12 +115,22 @@ extension FlashMessages on EngineContext {
       // Apply category filter if provided
       var filteredFlashes = categoryFilter.isEmpty
           ? flashes
-          : flashes.where((f) => f.isNotEmpty && f[0] is String && categoryFilter.contains(f[0])).toList();
+          : flashes
+                .where(
+                  (f) =>
+                      f.isNotEmpty &&
+                      f[0] is String &&
+                      categoryFilter.contains(f[0]),
+                )
+                .toList();
 
       // Return either just messages or category-message pairs
       return withCategories
           ? filteredFlashes
-          : filteredFlashes.map((f) => f.length > 1 ? f[1] : null).where((m) => m != null).toList();
+          : filteredFlashes
+                .map((f) => f.length > 1 ? f[1] : null)
+                .where((m) => m != null)
+                .toList();
     } catch (e) {
       print('Error retrieving flash messages: $e');
       return [];

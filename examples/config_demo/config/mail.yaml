@@ -1,0 +1,7 @@
+driver: smtp
+host: "{{ mail.host | default: 'localhost' }}"
+port: { { mail.port | default: 2525 } }
+from: "{{ mail.from | default: 'demo@example.dev' }}"
+credentials:
+  username: "{{ mail.credentials.username | default: 'demo' }}"
+  password: "{{ mail.credentials.password | default: 'secret' }}"

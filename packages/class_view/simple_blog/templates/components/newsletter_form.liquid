@@ -1,0 +1,40 @@
+{% comment %}
+  Newsletter Form Component
+  
+  Usage:
+    {% render 'components/newsletter_form', form: form %}
+    {% render 'components/newsletter_form', form: form, success_message: success_message %}
+  
+  Parameters:
+    - form: The newsletter form object
+    - success_message: Optional success message to display
+{% endcomment %}
+
+<div class="bg-blue-50 rounded-lg p-8">
+    <div class="text-center mb-6">
+        <h3 class="text-2xl font-bold text-gray-900 mb-2">
+            📧 Stay Updated
+        </h3>
+        <p class="text-gray-600">
+            Subscribe to our newsletter for the latest posts and updates.
+        </p>
+    </div>
+
+    {% if success_message %}
+        <div class="mb-6 p-4 bg-green-50 border border-green-200 text-green-700 rounded-md text-center">
+            {{ success_message }}
+        </div>
+    {% endif %}
+
+    <form method="POST" class="max-w-md mx-auto">
+        {{ form_html }}
+        <div class="text-center">
+            <button
+                    type="submit"
+                    class="bg-blue-600 text-white px-8 py-3 rounded-md hover:bg-blue-700 transition-colors font-medium"
+            >
+                📬 Subscribe
+            </button>
+        </div>
+    </form>
+</div>

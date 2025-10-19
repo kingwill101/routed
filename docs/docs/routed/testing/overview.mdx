@@ -1,0 +1,42 @@
+---
+title: Testing Routed Apps
+description: Test Routed apps with fluent assertions using routed_testing and server_testing
+sidebar_position: 0
+---
+
+# Testing Routed Applications
+
+Routed integrates tightly with the `server_testing` ecosystem. The `routed_testing` package wraps an `Engine` in a `RequestHandler` so you can write fluent HTTP assertions with minimal boilerplate, using either an in-memory transport or an ephemeral HTTP server when needed.
+
+## Recommended stack
+
+- **`server_testing`** – transport-agnostic HTTP client, JSON assertions, and browser automation.
+- **`routed_testing`** – helpers (`engineTest`, `engineGroup`, `RoutedRequestHandler`) that wire a Routed engine into `server_testing`.
+- **`property_testing`** *(optional)* – generate inputs and run stateful properties against your routes.
+
+Install as dev dependencies:
+
+```bash
+dart pub add --dev server_testing server_testing_shelf routed_testing
+```
+
+## Quick start
+
+```dart
+import 'package:routed/routed.dart';
+import 'package:routed_testing/routed_testing.dart';
+import 'package:server_testing/server_testing.dart';
+
+void main() {
+  engineTest('GET /ping returns 200', (engine, client) async {
+    engine.get('/ping', (ctx) => ctx.json({'ok': true}));
+
+    final res = await client.getJson('/ping');
+    res
+      ..assertStatus(200)
+      ..assertJson((json) => json.where('ok', true));
+  });
+}
+```
+
+See [Getting Started](/docs/routed/testing/getting-started) for a walkthrough, or jump to [engineGroup](/docs/routed/testing/engine-group) to share setup across multiple tests and choose between in-memory or ephemeral-server transports.

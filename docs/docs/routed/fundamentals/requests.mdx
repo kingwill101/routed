@@ -1,0 +1,174 @@
+---
+title: Request Handling
+description: Access query strings, forms, files, and request metadata
+sidebar_position: 3
+---
+
+# Request Handling
+
+`EngineContext` exposes concise helpers for query strings, forms, file uploads, and request bodies (with content-type aware parsing).
+
+## Query parameters
+
+```dart
+router.get('/search', (ctx) async {
+  final term = ctx.defaultQuery('q', '');
+  final page = ctx.defaultQuery('page', '1');
+  final tags = ctx.queryArray('tag');
+
+  final (sort, hasSort) = ctx.getQueryMap('sort_');
+
+  return ctx.json({
+    'term': term,
+    'page': page,
+    'tags': tags,
+    'sort': sort,
+    'hasSort': hasSort,
+  });
+});
+```
+
+- `query(key)` returns the first value for a parameter.
+- `defaultQuery(key, fallback)` returns a fallback when the value is missing.
+- `queryArray(key)` yields all values for a repeated key.
+- `getQueryMap(prefix)` returns a (Map, bool) pair of matching entries and whether any were found.
+
+## Forms and multipart data
+
+```dart
+router.post('/contact', (ctx) async {
+  final name = await ctx.postForm('name');
+  final age = await ctx.defaultPostForm('age', '0');
+  final interests = await ctx.postFormArray('interest');
+  final form = await ctx.form();
+  final grouped = Map<String, dynamic>.fromEntries(
+    form.entries.where((entry) => entry.key.startsWith('pref_')),
+  );
+
+  return ctx.json({'name': name, 'age': age, 'interests': interests, 'prefs': grouped});
+});
+```
+
+Use `ctx.form()` when you need to inspect all fields and apply your own grouping logic. Files are read separately via `ctx.formFile`/`ctx.formFiles`.
+
+### File uploads
+
+```dart
+router.post('/upload', (ctx) async {
+  final upload = await ctx.formFile('document');
+  if (upload != null) {
+    await ctx.saveUploadedFile(upload, 'uploads/${upload.filename}');
+  }
+
+  return ctx.json({
+    'filename': upload?.filename,
+    'size': upload?.size,
+    'contentType': upload?.contentType,
+  });
+});
+```
+
+Configure size and extension limits via `EngineConfig.multipart` or the `withMultipart` option:
+
+```dart
+final engine = Engine(
+  config: EngineConfig(
+    multipart: MultipartConfig(
+      maxFileSize: 10 * 1024 * 1024,
+      maxMemory: 32 * 1024 * 1024,
+      allowedExtensions: {'.jpg', '.png', '.pdf'},
+    ),
+  ),
+);
+```
+
+If you prefer configuration files, describe the same limits under `uploads.*` so the uploads provider applies them:
+
+```yaml title="config/http.yaml"
+uploads:
+  max_memory: 33554432         # bytes
+  max_file_size: 10485760
+  allowed_extensions: ['jpg', 'png', 'pdf']
+  directory: uploads
+  file_permissions: 493        # 0755
+```
+
+`routed.uploads` validates these values (types; for extensions use ".ext" in code and "ext" in config — Routed normalizes both) and feeds them into `EngineConfig`. Run `dart run routed_cli provider:list --config` to review the effective settings and catch malformed overrides.
+
+## JSON and raw bodies
+
+Use the binding helpers when you want to map JSON to a map or object:
+
+```dart
+router.post('/api/users', (ctx) async {
+  final payload = <String, dynamic>{};
+  await ctx.bindJSON(payload); // or ctx.bind(payload) for auto detection
+
+  // Optionally validate fields after binding
+  await ctx.shouldBind(payload);
+
+  return ctx.json({'received': payload});
+});
+```
+
+Or access the body directly from the request. For large payloads, prefer streaming over buffering the entire body:
+
+```dart
+router.post('/raw', (ctx) async {
+  final text = await ctx.request.body();      // UTF-8 string
+  final bytes = await ctx.request.bytes;      // Uint8List
+
+  return ctx.data('text/plain', text.codeUnits);
+});
+```
+
+## Request metadata
+
+```dart
+router.get('/info', (ctx) {
+  final method = ctx.request.method;
+  final uri = ctx.request.uri;
+  final clientIP = ctx.request.clientIP;
+  final userAgent = ctx.requestHeader('User-Agent');
+  final headers = ctx.request.headers;
+
+  return ctx.json({
+    'method': method,
+    'uri': uri.toString(),
+    'clientIP': clientIP,
+    'userAgent': userAgent,
+    'headers': headers.value('accept'),
+  });
+});
+```
+
+## Trusted proxies
+
+If your app runs behind a proxy/load balancer, enable proxy support so `clientIP` honors trusted forwarding headers:
+
+```dart
+final engine = Engine(
+  config: EngineConfig(
+    features: const EngineFeatures(enableProxySupport: true),
+    forwardedByClientIP: true,
+    remoteIPHeaders: ['X-Forwarded-For', 'X-Real-IP'],
+  ),
+  options: [withTrustedProxies(['10.0.0.0/8'])],
+);
+```
+
+The security provider exposes the same knobs via configuration:
+
+```yaml title="config/http.yaml"
+security:
+  trusted_proxies:
+    enabled: true
+    forward_client_ip: true
+    proxies: ['10.0.0.0/8', '::/0']
+    headers: ['X-Forwarded-For', 'X-Real-IP']
+    platform_header: CF-Connecting-IP
+```
+
+Validation occurs during boot—invalid proxies or header lists trigger a `ProviderConfigException`. Check the CLI output (`provider:list --config`) to verify your proxy settings.
+
+See [proxy support](/docs/routed/security/proxy) for more details.

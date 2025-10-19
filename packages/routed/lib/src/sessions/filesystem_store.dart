@@ -22,24 +22,41 @@ class FilesystemStore implements Store {
   /// Default options for the session.
   final Options defaultOptions;
 
-  /// Whether to encrypt session data
-  final bool useEncryption;
+  /// Whether to prune expired session files when this store is constructed.
+  final bool pruneOnStartup;
 
-  /// Whether to sign session data
-  final bool useSigning;
+  /// Lottery configuration for opportunistic pruning (e.g. [2, 100]).
+  final List<int>? lottery;
+
+  final Random _random = Random.secure();
 
   /// Constructor for FilesystemStore.
   /// Ensures the storage directory exists.
   FilesystemStore({
     required this.storageDir,
-    required this.codecs,
+    List<SecureCookie>? codecs,
     Options? defaultOptions,
-    this.useEncryption = false,
-    this.useSigning = false,
-  }) : defaultOptions = defaultOptions ?? Options() {
+    bool useEncryption = false,
+    bool useSigning = false,
+    this.pruneOnStartup = false,
+    this.lottery,
+  }) : codecs =
+           codecs ??
+           [
+             SecureCookie(
+               key: SecureCookie.generateKey(),
+               useEncryption: useEncryption,
+               useSigning: useSigning,
+             ),
+           ],
+       defaultOptions = defaultOptions ?? Options() {
     final dir = Directory(storageDir);
     if (!dir.existsSync()) {
       dir.createSync(recursive: true);
+    }
+    if (pruneOnStartup) {
+      // Best-effort cleanup of expired sessions
+      _pruneExpiredFiles();
     }
   }
 
@@ -51,11 +68,7 @@ class FilesystemStore implements Store {
       (c) => c.name == name,
       orElse: () => Cookie(name, ''),
     );
-    final session = Session(
-      name: name,
-      options: defaultOptions,
-      values: {},
-    );
+    final session = Session(name: name, options: defaultOptions, values: {});
 
     if (cookie.value.isEmpty) {
       session.id = _generateSessionId();
@@ -88,7 +101,6 @@ class FilesystemStore implements Store {
 
   /// Saves the session data to a file and sets the appropriate cookie.
   @override
-  @override
   Future<void> write(
     Request request,
     Response response,
@@ -120,6 +132,8 @@ class FilesystemStore implements Store {
       secure: session.options.secure ?? false,
       httpOnly: session.options.httpOnly ?? true,
     );
+
+    await _maybePrune();
   }
 
   // ---------------------------------------------------------
@@ -141,7 +155,8 @@ class FilesystemStore implements Store {
     final file = File(filePath);
     if (!await file.exists()) return null;
     final contents = await file.readAsString();
-    return _pseudoParse(contents);
+
+    return jsonDecode(contents) as Map<String, dynamic>;
   }
 
   /// Erases session data file.
@@ -154,28 +169,41 @@ class FilesystemStore implements Store {
     }
   }
 
-  /// A simple pseudo-parser. For production, use jsonDecode() instead.
-  /// This tries to parse a string that looks like a Dart map literal, e.g.
-  /// "{key: value, other: something}" just enough for demonstration.
-  Map<String, dynamic> _pseudoParse(String contents) {
-    // Very naive demonstration:
-    // 1) Remove outer braces `{...}` if they exist
-    final trimmed = contents.trim();
-    final mapString = trimmed.startsWith('{') && trimmed.endsWith('}')
-        ? trimmed.substring(1, trimmed.length - 1).trim()
-        : trimmed;
-
-    // 2) Split on commas, then on ':' to build a map
-    final result = <String, dynamic>{};
-    for (final pair in mapString.split(',')) {
-      final parts = pair.split(':');
-      if (parts.length == 2) {
-        final key = parts[0].trim();
-        final value = parts[1].trim();
-        result[key] = value; // Not typed or deeply parsed
+  /// Scans the storage directory and deletes session files whose age exceeds
+  /// `defaultOptions.maxAge`.  This is a best-effort cleanup and will silently
+  /// ignore IO errors.
+  Future<void> _pruneExpiredFiles() async {
+    final maxAge = defaultOptions.maxAge;
+    if (maxAge == null || maxAge <= 0) return;
+    final dir = Directory(storageDir);
+    await for (final entity in dir.list(followLinks: false)) {
+      if (entity is File && p.basename(entity.path).startsWith('session_')) {
+        try {
+          final stat = await entity.stat();
+          final ageSeconds = DateTime.now().difference(stat.modified).inSeconds;
+          if (ageSeconds > maxAge) {
+            await entity.delete();
+          }
+        } catch (_) {
+          // Ignore file that might disappear mid-scan or other IO errors.
+        }
       }
     }
-    return result;
+  }
+
+  Future<void> _maybePrune() async {
+    if (lottery == null || lottery!.length != 2) {
+      return;
+    }
+    final wins = lottery![0];
+    final outOf = lottery![1];
+    if (wins <= 0 || outOf <= 0) {
+      return;
+    }
+    final roll = _random.nextInt(outOf);
+    if (roll < wins) {
+      await _pruneExpiredFiles();
+    }
   }
 
   /// Generates a random session ID for new sessions.

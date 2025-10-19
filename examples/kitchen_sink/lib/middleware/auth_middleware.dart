@@ -1,12 +1,9 @@
 import 'package:routed/routed.dart';
 
-Future<void> validateApiKey(EngineContext ctx) async {
+Future<Response> validateApiKey(EngineContext ctx, Next next) async {
   final apiKey = ctx.requestHeader('X-API-Key');
   if (apiKey != 'YOUR_API_KEY') {
-    ctx.response
-      ..statusCode = 401
-      ..write('Unauthorized');
-    return;
+    return ctx.string('Unauthorized', statusCode: 401);
   }
-  await ctx.next();
+  return await next();
 }

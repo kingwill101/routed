@@ -1,0 +1,38 @@
+---
+title: Server Testing Overview
+description: End-to-end and HTTP testing with server_testing, server_testing_shelf, and browser automation tooling
+sidebar_position: 1
+---
+
+# Server Testing Overview
+
+`server_testing` is the foundation for HTTP and full-stack testing across the routed ecosystem.  
+It layers fluent assertions, transport adapters, and browser automation on top of the `test` package so you can exercise an application end to end inside your normal Dart test suite.
+
+## Packages in This Guide
+- `server_testing`: core library that ships the HTTP client, response assertions, transports, browser APIs, CLI, Mockito helpers, and a built-in `IoRequestHandler` for `dart:io` applications.
+- `server_testing_shelf`: first-party adapter that turns a Shelf handler into a `RequestHandler`.
+- `routed_testing`: ready-made handler providers for the routed framework, built on top of the same primitives.
+
+## What You Can Test
+- **HTTP & API tests** — run fast, in-memory requests or spin up an ephemeral `HttpServer` and assert on the real wire format.
+- **Browser flows** — launch Chromium or Firefox through WebDriver, interact with the UI via a high-level `Browser` API, and capture logs/screenshots.
+- **Page objects** — model screens and reusable components via the provided `Page` and `Component` base classes.
+- **Custom servers** — adapt any framework by implementing the lightweight `RequestHandler` interface.
+- **Mock-level tests** — construct `MockHttpRequest`, `MockHttpResponse`, and header/URI helpers for isolated unit tests.
+
+## Core Building Blocks
+- `RequestHandler` bridges your app/framework to the testing runtime. Implement `handleRequest`, `startServer`, and `close`.
+- `IoRequestHandler` is a built-in implementation for `dart:io` `HttpServer` applications—no framework required.
+- `serverTest` wraps a standard `test()` and automatically manages a `TestClient` lifecycle.
+- `TestClient` sends HTTP requests through either the in-memory or ephemeral server transports.
+- `TestResponse` exposes fluent status/headers/body/JSON assertions plus debugging helpers like `dump()`.
+- `BrowserConfig`, `browserTest`, and `browserGroup` orchestrate WebDriver-backed UI automation with optional device profiles.
+- `server_testing` CLI installs browser bundles, drivers, and scaffolds test directories.
+
+## Where to Go Next
+- **Brand new?** Start with [Getting Started](/docs/server-testing/getting-started) to install dependencies and write your first test.
+- **Testing APIs?** See [HTTP Testing](/docs/server-testing/http-testing) and the detailed [TestClient](/docs/server-testing/test-client) guide.
+- **Need a framework adapter?** Read [Handler Providers](/docs/server-testing/handler-providers).
+- **Running UI flows?** Combine [Browser Testing](/docs/server-testing/browser/browser-testing) with the [BrowserConfig](/docs/server-testing/browser/browser-config) options and [Pages & Components](/docs/server-testing/browser/pages-and-components).
+- **Installing tooling?** The [CLI](/docs/server-testing/cli) covers browser bundle and driver management.

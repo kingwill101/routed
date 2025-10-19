@@ -10,6 +10,9 @@ import 'package:routed/src/utils/request_id.dart';
 /// request data and metadata.
 class Request {
   /// The underlying [HttpRequest] object.
+  ///
+  /// @deprecated Use the public API methods instead of accessing httpRequest directly.
+  /// This field will be made private in a future version.
   final HttpRequest httpRequest;
 
   /// A unique identifier for the request.
@@ -21,6 +24,9 @@ class Request {
   /// A map of path parameters extracted from the request URI.
   final Map<String, dynamic> pathParameters;
 
+  /// Timestamp indicating when the request handling began.
+  final DateTime startedAt;
+
   /// A map of query parameters extracted from the request URI.
   final Map<String, String> queryParameters;
 
@@ -28,15 +34,17 @@ class Request {
   Uint8List? _bodyBytes;
 
   EngineConfig config;
+  String? _overrideClientIp;
 
   /// Constructs a [Request] object.
   ///
   /// The [httpRequest] parameter is the underlying HTTP request.
   /// The [pathParameters] parameter is a map of path parameters.
   Request(this.httpRequest, this.pathParameters, this.config)
-      : queryParameters = _safeQueryParameters(httpRequest.uri),
-        _attributes = {},
-        id = RequestId.generate();
+    : queryParameters = _safeQueryParameters(httpRequest.uri),
+      _attributes = {},
+      id = RequestId.generate(),
+      startedAt = DateTime.now();
 
   /// Safely extracts query parameters from a URI, handling invalid encodings
   static Map<String, String> _safeQueryParameters(Uri uri) {
@@ -81,9 +89,6 @@ class Request {
   /// Information about the client connection.
   HttpConnectionInfo? get connectionInfo => httpRequest.connectionInfo;
 
-  /// The [HttpResponse] object, used for sending back the response to the client.
-  HttpResponse get response => httpRequest.response;
-
   /// Returns the content type of the request, if available.
   ContentType? get contentType => httpRequest.headers.contentType;
 
@@ -126,12 +131,14 @@ class Request {
   /// engine configuration. It falls back to the direct connection IP if no
   /// forwarded headers are found or if the immediate client is not trusted.
   String get clientIP {
-    if (!config.forwardedByClientIP) {
-      return httpRequest.connectionInfo?.remoteAddress.address ?? '';
+    if (_overrideClientIp != null) {
+      return _overrideClientIp!;
+    }
+    final remoteAddr = httpRequest.connectionInfo?.remoteAddress;
+    if (!config.forwardedByClientIP || !config.features.enableProxySupport) {
+      return remoteAddr?.address ?? '';
     }
 
-    // Check if immediate client is trusted
-    final remoteAddr = httpRequest.connectionInfo?.remoteAddress;
     if (remoteAddr == null || !config.isTrustedProxy(remoteAddr)) {
       return remoteAddr?.address ?? '';
     }
@@ -153,16 +160,27 @@ class Request {
     return remoteAddr.address;
   }
 
+  void overrideClientIp(String ip) {
+    _overrideClientIp = ip;
+  }
+
   /// Retrieves a request-scoped attribute by [key].
   ///
   /// Returns the attribute value if found, otherwise returns null.
   T? getAttribute<T>(String key) => _attributes[key] as T?;
 
   /// Sets a request-scoped attribute with the given [key] and [value].
+  /// Store a value [value] under [key].
   void setAttribute(String key, dynamic value) => _attributes[key] = value;
 
   /// Clears all request-scoped attributes.
   void clearAttributes() {
     _attributes.clear();
   }
+
+  /// Returns a stream of the request body data.
+  ///
+  /// This allows consuming the request body as a stream without directly
+  /// accessing the underlying HttpRequest object.
+  Stream<List<int>> get stream => httpRequest;
 }

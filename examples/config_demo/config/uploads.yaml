@@ -1,0 +1,5 @@
+allowed_extensions:
+  - jpg
+  - png
+  - pdf
+max_file_size: { { uploads.max_file_size | default: 5242880 } }

@@ -1,0 +1,47 @@
+---
+title: Routed Overview
+description: Get an overview of the Routed HTTP framework and its building blocks
+sidebar_position: 0
+---
+
+# Routed Overview
+
+Routed is a modular HTTP framework for Dart applications. It combines a lightweight engine, a composable router, first-class middleware, view rendering, caching, sessions, and tight integration with the testing packages in this repository.
+
+## Core Pieces
+
+- **Engine** – bootstraps service providers, mounts routers, hosts global middleware, and serves HTTP/WebSocket requests.
+- **Router** – builds hierarchical route trees with parameter constraints, route naming, fallback handlers, and static file support.
+- **Context APIs** – expose rich request/response helpers, validation, headers, cookies, and cache/session utilities from within handlers.
+- **View rendering** – render Liquid templates out of the box and plug in custom template engines.
+- **Stateful utilities** – optional cache manager, session middleware, and request-ID helpers.
+- **Security & runtime** – built-in CSRF, CORS, security headers, request size limits, trusted proxy support, HTTP/2 negotiation, response compression, and graceful shutdown controls via `EngineConfig`.
+- **Providers & manifest** – each subsystem (cache, sessions, uploads, static assets, security, logging, etc.) ships as a service provider with sensible defaults. The manifest (`config/http.yaml`) controls which providers are active, and the CLI (`dart run routed_cli provider:list --config`) shows active providers, merged defaults, and any validation errors.
+- **CLI tooling** – `routed_cli` scaffolds projects, runs a hot-reload dev server, inspects routes, and generates persisted specs.
+
+## Where to Start
+
+- [Getting Started](/docs/routed/getting-started): install packages, create an engine, mount a router, and run your first server.
+- [Fundamentals](/docs/routed/fundamentals/): routing, middleware, request and response helpers, validation, CLI tooling, and configuration.
+- [State & Persistence](/docs/routed/state/): caching and session management using configurable stores.
+- [Security](/docs/routed/security): enable CSRF, CORS, proxy awareness, secure headers, upload hardening, and tune compression.
+- [Server-Sent Events](/docs/routed/fundamentals/sse): stream real-time updates with the built-in SSE helper and heartbeats.
+- [Graceful shutdown](/docs/routed/fundamentals/graceful-shutdown): configure signal handlers and draining behaviour.
+- [Views & Templating](/docs/routed/views/): render Liquid views and integrate custom template engines.
+- [Testing](/docs/routed/testing/overview): test Routed applications with `routed_testing` and `server_testing`.
+- [Examples](/docs/routed/examples/): copy-ready snippets for APIs, sessions, and templated responses.
+
+## Ecosystem Packages
+
+| Package | Purpose |
+| --- | --- |
+| `routed` | Core engine, router, middleware, context utilities, caching, sessions, view rendering |
+| `routed_testing` | Test helpers built on top of `server_testing` for Routed projects |
+| `server_testing` | Transport-agnostic HTTP and browser testing utilities |
+| `property_testing` | Generators, shrinking, chaos suites, and stateful properties for Dart |
+
+## Next Steps
+
+1. Walk through the [Getting Started](/docs/routed/getting-started) guide to spin up a small API.
+2. Browse the [Fundamentals](/docs/routed/fundamentals/) section for routing, middleware, and request patterns.
+3. Explore [Examples](/docs/routed/examples/) to see how features fit together in larger examples.

@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:mime/mime.dart';
+import 'package:path/path.dart' as p;
 import 'package:routed/src/binding/binding.dart';
 import 'package:routed/src/binding/utils.dart';
 import 'package:routed/src/context/context.dart';
@@ -9,72 +10,196 @@ import 'package:routed/src/validation/validator.dart';
 
 /// Streams file data to disk, enforcing a maximum file size limit.
 ///
-/// This function takes an HTTP request, a stream of file parts, a safe filename,
+/// This function takes a stream of file parts, a safe filename,
 /// and a callback function to handle bytes read. It writes the file to a temporary
 /// directory and ensures the file does not exceed the specified maximum file size.
 ///
-/// Returns the file path if successful, or null if the file is rejected due to size constraints.
-Future<String?> storeFileWithLimit({
-  required HttpRequest request,
+/// Returns the file path if successful.
+/// Throws [FileTooLargeException] if the file exceeds the maximum size.
+Future<String> storeFileWithLimit({
   required Stream<List<int>> part,
   required String safeFilename,
   required void Function(int chunkSize) onBytesRead,
   num maxFileSize = 20 * 1024 * 1024,
-  num maxRequestSize = 5 * 1024 * 1024,
-  Set<String> allowedFileExtensions = const {'jpg', 'png', 'txt'},
+  Set<String> allowedFileExtensions = const {
+    'jpg',
+    'jpeg',
+    'png',
+    'gif',
+    'pdf',
+  },
+  String? uploadDirectory,
+  int? filePermissions,
+  UploadQuotaTracker? quota,
 }) async {
-  final tempDir = Directory.systemTemp;
+  final normalizedAllowedExtensions = allowedFileExtensions
+      .map((ext) => ext.toLowerCase())
+      .toSet();
+  final extension = getExtension(safeFilename);
+  final extensionsConfigured = normalizedAllowedExtensions.isNotEmpty;
+  if (!extensionsConfigured || extension.isEmpty) {
+    throw FileExtensionNotAllowedException(
+      extension,
+      normalizedAllowedExtensions,
+    );
+  }
+  if (!normalizedAllowedExtensions.contains(extension)) {
+    throw FileExtensionNotAllowedException(
+      extension,
+      normalizedAllowedExtensions,
+    );
+  }
+
+  final baseDir = uploadDirectory == null || uploadDirectory.isEmpty
+      ? Directory.systemTemp
+      : Directory(uploadDirectory).absolute;
+  if (!await baseDir.exists()) {
+    await baseDir.create(recursive: true);
+  }
+  if (filePermissions != null) {
+    await _applyPermissions(baseDir, filePermissions);
+  }
+
   final uniqueId = DateTime.now().microsecondsSinceEpoch;
-  final outPath = '${tempDir.path}/upload_${uniqueId}_$safeFilename';
+  final outPath = p.join(baseDir.path, 'upload_${uniqueId}_$safeFilename');
 
   final outFile = File(outPath);
   final sink = outFile.openWrite();
 
   var fileBytesSoFar = 0;
+  var sinkClosed = false;
 
   try {
     await for (final chunk in part) {
-      fileBytesSoFar += chunk.length;
-      onBytesRead(chunk.length);
+      final chunkSize = chunk.length;
+      onBytesRead(chunkSize);
+
+      if (quota != null && !quota.tryConsume(chunkSize)) {
+        throw FileQuotaExceededException(quota.maxDiskUsage);
+      }
+
+      fileBytesSoFar += chunkSize;
 
       if (fileBytesSoFar > maxFileSize) {
-        // File is too large
-        await sink.close();
-        await outFile.delete();
-        _reject(
-          request,
+        throw FileTooLargeException(
           'File exceeded max size of $maxFileSize bytes.',
-          HttpStatus.requestEntityTooLarge,
+          maxFileSize,
         );
-        return null;
       }
 
       sink.add(chunk);
     }
   } catch (e) {
-    // On error, remove partial file
-    await sink.close();
+    if (!sinkClosed) {
+      await sink.close();
+      sinkClosed = true;
+    }
+    if (fileBytesSoFar > 0) {
+      quota?.release(fileBytesSoFar);
+      fileBytesSoFar = 0;
+    }
     if (await outFile.exists()) {
       await outFile.delete();
     }
     rethrow;
   } finally {
-    await sink.close();
+    if (!sinkClosed) {
+      await sink.close();
+      sinkClosed = true;
+    }
+  }
+
+  if (filePermissions != null && await outFile.exists()) {
+    await _applyPermissions(outFile, filePermissions);
   }
 
   return outPath;
 }
 
-/// Sends an error response with the specified [code] and closes the request.
-Future<void> _reject(HttpRequest request, String message,
-    [int code = HttpStatus.badRequest]) async {
-  final isDone = await request.response.done;
-  if (isDone == false) {
-    request.response
-      ..statusCode = code
-      ..write(message);
+Future<void> _applyPermissions(FileSystemEntity entity, int mode) async {
+  if (!Platform.isWindows && !Platform.isIOS) {
+    final octal = mode.toRadixString(8);
+    try {
+      final result = await Process.run('chmod', [octal, entity.path]);
+      if (result.exitCode != 0) {
+        // ignore: avoid_print
+        print(
+          'Failed to apply permissions $octal to ${entity.path}: ${result.stderr}',
+        );
+      }
+    } catch (_) {
+      // ignore inability to set permissions.
+    }
   }
-  request.response.close();
+}
+
+/// Exception thrown when a file upload exceeds the maximum allowed size.
+class FileTooLargeException implements Exception {
+  final String message;
+  final num maxSize;
+
+  FileTooLargeException(this.message, this.maxSize);
+
+  @override
+  String toString() => 'FileTooLargeException: $message';
+}
+
+/// Exception thrown when a file upload has a disallowed extension.
+class FileExtensionNotAllowedException implements Exception {
+  FileExtensionNotAllowedException(this.extension, this.allowedExtensions);
+
+  final String extension;
+  final Set<String> allowedExtensions;
+
+  @override
+  String toString() {
+    if (allowedExtensions.isEmpty) {
+      return 'FileExtensionNotAllowedException: No upload extensions are currently allowed.';
+    }
+    return 'FileExtensionNotAllowedException: Extension "$extension" is not allowed. Allowed extensions: ${allowedExtensions.join(', ')}';
+  }
+}
+
+/// Exception thrown when total disk usage for a request exceeds the configured limit.
+class FileQuotaExceededException implements Exception {
+  FileQuotaExceededException(this.maxDiskUsage);
+
+  final int maxDiskUsage;
+
+  @override
+  String toString() => maxDiskUsage <= 0
+      ? 'FileQuotaExceededException: Upload quota exceeded.'
+      : 'FileQuotaExceededException: Upload quota exceeded $maxDiskUsage bytes.';
+}
+
+class UploadQuotaTracker {
+  UploadQuotaTracker(this.maxDiskUsage);
+
+  final int maxDiskUsage;
+  int _used = 0;
+
+  bool get _enabled => maxDiskUsage > 0;
+
+  bool tryConsume(int bytes) {
+    if (!_enabled) return true;
+    if (_used + bytes > maxDiskUsage) {
+      return false;
+    }
+    _used += bytes;
+    return true;
+  }
+
+  void release(int bytes) {
+    if (!_enabled) return;
+    _used -= bytes;
+    if (_used < 0) {
+      _used = 0;
+    }
+  }
+
+  void reset() {
+    _used = 0;
+  }
 }
 
 /// Extracts a parameter (e.g., name="foo") from the content-disposition header.
@@ -118,10 +243,14 @@ Future<MultipartForm> parseMultipartForm(EngineContext context) async {
   final fields = <String, dynamic>{};
   final List<MultipartFile> files = [];
   int totalBytesRead = 0;
+  final quota = UploadQuotaTracker(context.engineConfig.multipart.maxDiskUsage);
+  final createdFiles = <String>[];
+  var parsingCompleted = false;
 
   try {
-    await for (final part in MimeMultipartTransformer(boundary)
-        .bind(context.request.httpRequest)) {
+    await for (final part in MimeMultipartTransformer(
+      boundary,
+    ).bind(context.request.stream)) {
       final disposition = part.headers['content-disposition'] ?? '';
       final name = extractParam(disposition, 'name') ?? 'unnamed';
       final filename = extractParam(disposition, 'filename');
@@ -129,48 +258,57 @@ Future<MultipartForm> parseMultipartForm(EngineContext context) async {
       if (filename != null) {
         // Handle file upload
         final safeFilename = sanitizeFilename(filename);
-        final savedPath = await storeFileWithLimit(
-          allowedFileExtensions:
-              context.engineConfig.multipart.allowedExtensions,
-          maxFileSize: context.engineConfig.multipart.maxFileSize,
-          maxRequestSize: context.engineConfig.multipart.maxMemory,
-          request: context.request.httpRequest,
-          part: part,
-          safeFilename: safeFilename,
-          onBytesRead: (chunkSize) {
-            totalBytesRead += chunkSize;
-            if (totalBytesRead > context.engineConfig.multipart.maxMemory) {
-              throw Exception(
-                  'Request exceeded ${context.engineConfig.multipart.maxMemory} bytes');
-            }
-          },
-        );
+        try {
+          final savedPath = await storeFileWithLimit(
+            allowedFileExtensions:
+                context.engineConfig.multipart.allowedExtensions,
+            maxFileSize: context.engineConfig.multipart.maxFileSize,
+            uploadDirectory: context.engineConfig.multipart.uploadDirectory,
+            filePermissions: context.engineConfig.multipart.filePermissions,
+            quota: quota,
+            part: part,
+            safeFilename: safeFilename,
+            onBytesRead: (chunkSize) {
+              totalBytesRead += chunkSize;
+              if (totalBytesRead > context.engineConfig.multipart.maxMemory) {
+                throw Exception(
+                  'Request exceeded ${context.engineConfig.multipart.maxMemory} bytes',
+                );
+              }
+            },
+          );
 
-        if (savedPath != null) {
+          createdFiles.add(savedPath);
+
           if (files.where((MultipartFile file) => file.name == name).isEmpty) {
-            files.add(MultipartFile(
-              name: name,
-              filename: filename,
-              path: savedPath,
-              size: await File(savedPath).length(),
-              contentType:
-                  part.headers['content-type'] ?? 'application/octet-stream',
-            ));
+            final savedFile = File(savedPath);
+            files.add(
+              MultipartFile(
+                name: name,
+                filename: filename,
+                path: savedPath,
+                size: await savedFile.length(),
+                contentType:
+                    part.headers['content-type'] ?? 'application/octet-stream',
+              ),
+            );
           }
+        } on FileTooLargeException catch (_) {
+          // File exceeded max size - skip this file but continue processing
+          // The exception message contains details about the size limit
+          continue;
         }
       } else {
         // Handle form field
-        final bytes = await part.fold<List<int>>(
-          [],
-          (prev, chunk) {
-            totalBytesRead += chunk.length;
-            if (totalBytesRead > context.engineConfig.multipart.maxMemory) {
-              throw Exception(
-                  'Request exceeded ${context.engineConfig.multipart.maxMemory} bytes');
-            }
-            return [...prev, ...chunk];
-          },
-        );
+        final bytes = await part.fold<List<int>>([], (prev, chunk) {
+          totalBytesRead += chunk.length;
+          if (totalBytesRead > context.engineConfig.multipart.maxMemory) {
+            throw Exception(
+              'Request exceeded ${context.engineConfig.multipart.maxMemory} bytes',
+            );
+          }
+          return [...prev, ...chunk];
+        });
 
         final value = utf8.decode(bytes);
 
@@ -188,14 +326,23 @@ Future<MultipartForm> parseMultipartForm(EngineContext context) async {
         }
       }
     }
-  } catch (e) {
-    throw Exception(e);
+    parsingCompleted = true;
+  } finally {
+    if (!parsingCompleted) {
+      for (final path in createdFiles.reversed) {
+        try {
+          final file = File(path);
+          if (await file.exists()) {
+            quota.release(await file.length());
+            await file.delete();
+          }
+        } catch (_) {}
+      }
+      quota.reset();
+    }
   }
 
-  return MultipartForm(
-    fields: fields,
-    files: files,
-  );
+  return MultipartForm(fields: fields, files: files);
 }
 
 /// Represents a file in a multipart form.
@@ -220,10 +367,7 @@ class MultipartForm {
   final Map<String, dynamic> fields;
   final List<MultipartFile> files;
 
-  MultipartForm({
-    this.fields = const {},
-    this.files = const [],
-  });
+  MultipartForm({this.fields = const {}, this.files = const []});
 }
 
 /// Parses a URL-encoded form from the given [EngineContext].
@@ -259,15 +403,16 @@ class MultipartBinding extends Binding {
   }
 
   @override
-  Future<void> validate(
-      EngineContext context,
+  Future<void> validate(EngineContext context,
       // ignore: avoid_renaming_method_parameters
-      Map<String, String> rules,
-      {bool bail = false}) async {
+      Map<String, String> rules, {
+        bool bail = false,
+        Map<String, String>? messages,
+      }) async {
     final multipartForm = await context.multipartForm;
     final data = multipartForm.fields;
 
-    final validator = Validator.make(rules, bail: bail);
+    final validator = Validator.make(rules, bail: bail, messages: messages);
 
     for (final file in multipartForm.files) {
       data[file.name] = file;

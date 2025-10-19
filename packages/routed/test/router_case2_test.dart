@@ -12,6 +12,27 @@ void main() {
   });
 
   group('Route Matching Tests', () {
+    /// Test suite for verifying route matching and HTTP method handling in the routing engine
+    ///
+    /// This test group focuses on two key scenarios:
+    /// 1. Ensuring routes can be matched for all standard HTTP methods
+    /// 2. Verifying that unmatched routes return a 404 status code
+    ///
+    /// The tests demonstrate:
+    /// - Dynamic route registration for multiple HTTP methods
+    /// - Consistent response handling across different HTTP methods
+    /// - Proper 404 error handling for non-existent routes
+    ///
+    /// Key test cases:
+    /// - [test('Single route match works for various HTTP methods')]:
+    ///   Validates route matching for GET, POST, PUT, PATCH, HEAD,
+    ///   OPTIONS, DELETE, CONNECT, and TRACE methods
+    /// - [test('Route mismatch returns 404')]:
+    ///   Confirms that requests to undefined routes result in a 404 status
+    ///
+    /// @see Engine
+    /// @see RoutedRequestHandler
+    /// @see TestClient
     test('Single route match works for various HTTP methods', () async {
       final engine = Engine();
 
@@ -25,7 +46,7 @@ void main() {
         'OPTIONS',
         'DELETE',
         'CONNECT',
-        'TRACE'
+        'TRACE',
       ];
 
       for (final method in methods) {
@@ -63,7 +84,11 @@ void main() {
 
   group('Trailing Slash Redirect Tests', () {
     test('Redirects for trailing slashes with 301 or 307', () async {
-      final engine = Engine(config: EngineConfig(redirectTrailingSlash: true));
+      final engine = Engine(
+        configItems: {
+          'routing': {'redirect_trailing_slash': true},
+        },
+      );
 
       engine.get('/path', (ctx) => ctx.string('get ok'));
       engine.post('/path2', (ctx) => ctx.string('post ok'));
@@ -83,7 +108,11 @@ void main() {
     });
 
     test('Disables trailing slash redirects when configured', () async {
-      final engine = Engine(config: EngineConfig(redirectTrailingSlash: false));
+      final engine = Engine(
+        configItems: {
+          'routing': {'redirect_trailing_slash': false},
+        },
+      );
 
       engine.get('/path', (ctx) => ctx.string('ok'));
 
@@ -103,7 +132,7 @@ void main() {
         ctx.json({
           'name': params['name'],
           'last_name': params['last_name'],
-          'wild': params['wild']
+          'wild': params['wild'],
         });
       });
 
@@ -112,8 +141,11 @@ void main() {
       final response = await client.get('/test/john/smith/is/super/great');
       response
         ..assertStatus(200)
-        ..assertJsonContains(
-            {'name': 'john', 'last_name': 'smith', 'wild': 'is/super/great'});
+        ..assertJsonContains({
+          'name': 'john',
+          'last_name': 'smith',
+          'wild': 'is/super/great',
+        });
     });
   });
 
@@ -153,12 +185,14 @@ void main() {
 
     test('Middleware called once per request for static files', () async {
       int middlewareCalls = 0;
-      final engine = Engine(middlewares: [
-        (ctx) async {
-          middlewareCalls++;
-          await ctx.next();
-        }
-      ]);
+      final engine = Engine(
+        middlewares: [
+          (EngineContext ctx, Next next) async {
+            middlewareCalls++;
+            return await next();
+          },
+        ],
+      );
 
       final dir = fs.directory('nonexistent');
       engine.staticFS('/static', Dir(dir.path, fileSystem: fs));
@@ -184,8 +218,10 @@ void main() {
       engine.static('/using_static', dir.path, fs);
       engine.staticFile('/result', file.path, fs);
 
-      client = TestClient(RoutedRequestHandler(engine),
-          mode: TransportMode.inMemory);
+      client = TestClient(
+        RoutedRequestHandler(engine),
+        mode: TransportMode.inMemory,
+      );
 
       // Test GET requests
       final staticResponse = await client.get('/using_static/$filename');
@@ -214,7 +250,10 @@ void main() {
 
       engine.staticFS('/', Dir(dir.path, listDirectory: true, fileSystem: fs));
 
-      client = TestClient(RoutedRequestHandler(engine));
+      client = TestClient(
+        RoutedRequestHandler(engine),
+        mode: TransportMode.inMemory,
+      );
 
       final response = await client.get('/');
       response
@@ -254,12 +293,14 @@ void main() {
     test('Middleware is applied once per request', () async {
       int middlewareCalls = 0;
 
-      final engine = Engine(middlewares: [
-        (EngineContext ctx) async {
-          middlewareCalls++;
-          await ctx.next();
-        }
-      ]);
+      final engine = Engine(
+        middlewares: [
+          (EngineContext ctx, Next next) async {
+            middlewareCalls++;
+            return await next();
+          },
+        ],
+      );
 
       engine.staticFile('/static/{file}', './nonexistent');
 
@@ -274,7 +315,11 @@ void main() {
 
   group('Method Not Allowed Tests', () {
     test('Returns 405 with allowed methods when enabled', () async {
-      final engine = Engine(config: EngineConfig(handleMethodNotAllowed: true));
+      final engine = Engine(
+        configItems: {
+          'routing': {'handle_method_not_allowed': true},
+        },
+      );
 
       engine.get('/path', (ctx) => ctx.string('get ok'));
       engine.post('/path', (ctx) => ctx.string('post ok'));
@@ -288,8 +333,11 @@ void main() {
     });
 
     test('Returns 404 for wrong methods when disabled', () async {
-      final engine =
-          Engine(config: EngineConfig(handleMethodNotAllowed: false));
+      final engine = Engine(
+        configItems: {
+          'routing': {'handle_method_not_allowed': false},
+        },
+      );
 
       engine.post('/path', (ctx) => ctx.string('post ok'));
 

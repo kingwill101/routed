@@ -80,16 +80,18 @@ void main() {
       engine.group(
         path: '/secured',
         middlewares: [
-          (ctx) async {
+          (EngineContext ctx, Next next) async {
             middlewareCalled++;
-            await ctx.next();
+            return await next();
           },
         ],
         builder: (router) {
-          router.fallback((ctx) => ctx.json({
-                'error': 'Secured route not found',
-                'path': ctx.uri.path,
-              }));
+          router.fallback(
+            (ctx) => ctx.json({
+              'error': 'Secured route not found',
+              'path': ctx.uri.path,
+            }),
+          );
         },
       );
 
@@ -110,21 +112,25 @@ void main() {
         path: '/api',
         builder: (api) {
           // General API fallback
-          api.fallback((ctx) => ctx.json({
-                'error': 'API route not found',
-                'scope': 'api',
-                'path': ctx.uri.path,
-              }));
+          api.fallback(
+            (ctx) => ctx.json({
+              'error': 'API route not found',
+              'scope': 'api',
+              'path': ctx.uri.path,
+            }),
+          );
 
           api.group(
             path: '/v1',
             builder: (v1) {
               // V1-specific fallback
-              v1.fallback((ctx) => ctx.json({
-                    'error': 'V1 API route not found',
-                    'scope': 'v1',
-                    'path': ctx.uri.path,
-                  }));
+              v1.fallback(
+                (ctx) => ctx.json({
+                  'error': 'V1 API route not found',
+                  'scope': 'v1',
+                  'path': ctx.uri.path,
+                }),
+              );
             },
           );
         },

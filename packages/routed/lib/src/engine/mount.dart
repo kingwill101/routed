@@ -9,5 +9,18 @@ class _EngineMount {
   final Router router;
   final List<Middleware> middlewares;
 
-  _EngineMount(this.prefix, this.router, this.middlewares);
+  _EngineMount(this.prefix, this.router, List<Middleware> middlewares)
+    : middlewares = List<Middleware>.from(middlewares);
+}
+
+class WebSocketEngineRoute {
+  WebSocketEngineRoute({
+    required this.path,
+    required this.handler,
+    List<Middleware>? middlewares,
+  }) : middlewares = List<Middleware>.from(middlewares ?? const []);
+
+  final String path;
+  final WebSocketHandler handler;
+  final List<Middleware> middlewares;
 }

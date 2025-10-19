@@ -1,0 +1,57 @@
+---
+title: HTTP Semantics
+description: Content negotiation, conditional requests, and automatic OPTIONS responses
+sidebar_position: 5
+---
+
+Routed now bundles helpers for negotiating response formats, honouring conditional request headers, and serving default `OPTIONS` responses. These utilities keep handlers focused on business logic while emitting compliant HTTP behaviour out of the box.
+
+## Content Negotiation
+
+`ContentNegotiator` parses `Accept` headers and picks the best match from a list of supported media types. The `EngineContext.negotiate` helper does the heavy lifting for typical handlers:
+
+```dart
+router.get('/profile', (ctx) async {
+  return await ctx.negotiate({
+    'application/json': () => ctx.json({'message': 'hello'}),
+    'text/html': () => ctx.html('<h1>Hello</h1>'),
+  });
+});
+```
+
+`ctx.negotiate` attaches `Vary: Accept`, honours quality factors, and falls back to the first supported type (or a `defaultType` that you provide). When no offer matches, the helper responds with `406 Not Acceptable`. For advanced scenarios you can invoke `ContentNegotiator.negotiate` directly and inspect the returned `NegotiatedMediaType`.
+
+## Conditional Requests
+
+Use the `conditionalRequests` middleware when a route can validate resources via ETags or last-modified timestamps:
+
+```dart
+router.get(
+  '/articles/:id',
+  (ctx) async {
+    final id = ctx.request.pathParameters['id']!;
+    final article = await repo.fetch(id);
+    return ctx.json(article);
+  },
+  middlewares: [
+    conditionalRequests(
+      etag: (ctx) {
+        final id = ctx.request.pathParameters['id']!;
+        return generateStrongEtagFromString(repo.versionFor(id));
+      },
+      lastModified: (ctx) {
+        final id = ctx.request.pathParameters['id']!;
+        return repo.lastUpdatedFor(id);
+      },
+    ),
+  ],
+);
+```
+
+The middleware evaluates `If-None-Match`, `If-Match`, `If-Modified-Since`, and `If-Unmodified-Since`, short-circuiting with `304 Not Modified` for safe requests and `412 Precondition Failed` when preconditions are violated. Helpers such as `generateStrongEtag`, `generateWeakEtag`, and `generateStrongEtagFromString` simplify creating validators. To align middleware defaults with your deployment, set `routing.etag.strategy` to `strong`, `weak`, or `disabled`—the `resolveDefaultEtag` helper maps the configured strategy to a generated value. When you already have the raw representation bytes, call `resolveDefaultEtag(bytes, ctx.engineConfig.etagStrategy)` to produce a validator consistent with the configured policy.
+
+## Automatic OPTIONS Responses
+
+When `routing.default_options` is enabled (the default), Routed returns `204 No Content` with a populated `Allow` header whenever an `OPTIONS` request hits a path that has handlers but no explicit `OPTIONS` route. The response enumerates allowed methods, including implicit support for `HEAD` and `OPTIONS` themselves. Persistent `405 Method Not Allowed` responses now also include `OPTIONS` in the `Allow` header so clients can discover capabilities.
+
+Set `routing.default_options` to `false` if you prefer to author every `OPTIONS` handler manually or want middleware to take full control.

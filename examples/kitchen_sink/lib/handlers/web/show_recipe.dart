@@ -1,9 +1,8 @@
-import 'dart:io';
-
 import 'package:kitchen_sink_example/services/recipe_service.dart';
+import 'package:kitchen_sink_example/view_models.dart';
 import 'package:routed/routed.dart';
 
-showRecipe(EngineContext ctx) async {
+Future<Object> showRecipe(EngineContext ctx) async {
   final id = ctx.mustGetParam('id');
   final recipe = RecipeService.getById(id);
 
@@ -11,5 +10,12 @@ showRecipe(EngineContext ctx) async {
     return ctx.string('Recipe not found', statusCode: HttpStatus.notFound);
   }
 
-  return ctx.html('show_recipe.html', data: {'recipe': recipe.toJson()});
+  final base = buildViewData(ctx, {
+    'page': {'title': recipe.name, 'heading': recipe.name},
+  });
+
+  return await ctx.template(
+    templateName: 'show_recipe.html',
+    data: {...base, 'recipe': recipeView(recipe)},
+  );
 }

@@ -1,0 +1,149 @@
+{% layout 'base/layout' %}
+
+{% block content %}
+<div class="max-w-4xl mx-auto">
+    <!-- Success Header -->
+    <div class="text-center mb-8">
+        <div class="inline-flex items-center justify-center w-20 h-20 bg-green-100 rounded-full mb-4">
+            <svg class="w-10 h-10 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                      d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/>
+            </svg>
+        </div>
+        <h1 class="text-4xl font-bold text-gray-900 mb-3">
+            {{ page_title }}
+        </h1>
+        <p class="text-lg text-gray-600">
+            All fields validated successfully! Here's what you submitted:
+        </p>
+    </div>
+
+    <!-- Submitted Data -->
+    <div class="bg-white rounded-xl shadow-lg border border-gray-100 overflow-hidden mb-8">
+        <div class="bg-gradient-to-r from-green-50 to-emerald-50 px-8 py-6 border-b border-gray-100">
+            <h2 class="text-2xl font-semibold text-gray-800 flex items-center">
+                <svg class="w-6 h-6 mr-2 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                          d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"/>
+                </svg>
+                Submitted Data
+            </h2>
+        </div>
+
+        <div class="p-8">
+            {% if submitted_data %}
+                <div class="space-y-6">
+                    {% for category, fields in field_categories %}
+                        {% assign has_data = false %}
+                        {% for field in fields %}
+                            {% if submitted_data[field.name] %}
+                                {% assign has_data = true %}
+                            {% endif %}
+                        {% endfor %}
+
+                        {% if has_data %}
+                            <div class="border-l-4 border-purple-500 pl-6 py-2">
+                                <h3 class="font-semibold text-gray-900 mb-4 text-sm uppercase tracking-wide">
+                                    {{ category }}
+                                </h3>
+                                <div class="grid gap-4">
+                                    {% for field in fields %}
+                                        {% if submitted_data[field.name] %}
+                                            <div class="bg-gray-50 rounded-lg p-4 hover:bg-gray-100 transition-colors">
+                                                <div class="flex items-start justify-between">
+                                                    <div class="flex-1">
+                                                        <div class="text-sm font-medium text-gray-500 mb-1">
+                                                            {{ field.name }}
+                                                        </div>
+                                                        <div class="font-mono text-sm text-gray-900 break-all">
+                                                            {{ submitted_data[field.name] }}
+                                                        </div>
+                                                        <div class="text-xs text-gray-500 mt-2">
+                                                            {{ field.description }}
+                                                        </div>
+                                                    </div>
+                                                    <span class="ml-4 text-green-600">
+                                                        <svg class="w-5 h-5" fill="none" stroke="currentColor"
+                                                             viewBox="0 0 24 24">
+                                                            <path stroke-linecap="round" stroke-linejoin="round"
+                                                                  stroke-width="2" d="M5 13l4 4L19 7"/>
+                                                        </svg>
+                                                    </span>
+                                                </div>
+                                            </div>
+                                        {% endif %}
+                                    {% endfor %}
+                                </div>
+                            </div>
+                        {% endif %}
+                    {% endfor %}
+                </div>
+            {% else %}
+                <div class="text-center py-12 text-gray-500">
+                    <svg class="w-16 h-16 mx-auto mb-4 text-gray-300" fill="none" stroke="currentColor"
+                         viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                              d="M20 13V6a2 2 0 00-2-2H6a2 2 0 00-2 2v7m16 0v5a2 2 0 01-2 2H6a2 2 0 01-2-2v-5m16 0h-2.586a1 1 0 00-.707.293l-2.414 2.414a1 1 0 01-.707.293h-3.172a1 1 0 01-.707-.293l-2.414-2.414A1 1 0 006.586 13H4"/>
+                    </svg>
+                    <p>No data was submitted</p>
+                </div>
+            {% endif %}
+        </div>
+    </div>
+
+    <!-- Action Buttons -->
+    <div class="flex gap-4 justify-center">
+        <a href="/widgets"
+           class="inline-flex items-center bg-gradient-to-r from-purple-600 to-pink-600 text-white px-8 py-3 rounded-lg hover:from-purple-700 hover:to-pink-700 transition-all duration-200 font-semibold shadow-md hover:shadow-lg transform hover:-translate-y-0.5">
+            <svg class="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                      d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/>
+            </svg>
+            Try Again
+        </a>
+        <a href="/"
+           class="inline-flex items-center bg-white text-gray-700 px-8 py-3 rounded-lg border-2 border-gray-200 hover:border-gray-300 hover:bg-gray-50 transition-all duration-200 font-semibold">
+            <svg class="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                      d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6"/>
+            </svg>
+            Back to Home
+        </a>
+    </div>
+
+    <!-- JSON Preview (for developers) -->
+    {% if submitted_data %}
+        <div class="mt-8 bg-gray-900 rounded-xl shadow-lg overflow-hidden">
+            <div class="px-6 py-4 bg-gray-800 border-b border-gray-700 flex items-center justify-between">
+                <h3 class="text-white font-semibold flex items-center">
+                    <svg class="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                              d="M10 20l4-16m4 4l4 4-4 4M6 16l-4-4 4-4"/>
+                    </svg>
+                    JSON Preview
+                </h3>
+                <button onclick="copyJSON()" class="text-gray-400 hover:text-white transition-colors text-sm">
+                    Copy JSON
+                </button>
+            </div>
+            <div class="p-6">
+                <pre id="jsonData"
+                     class="text-green-400 font-mono text-sm overflow-x-auto"><code>{
+  {% for field, value in submitted_data %}
+      "{{ field }}": {% if value == true or value == false %}{{ value }}{% else %}"{{ value }}"{% endif %}{% unless forloop.last %},{% endunless %}
+  {% endfor %}
+}</code></pre>
+            </div>
+        </div>
+    {% endif %}
+</div>
+
+<script>
+    function copyJSON() {
+        const jsonText = document.getElementById('jsonData').textContent;
+        navigator.clipboard.writeText(jsonText).then(() => {
+            alert('JSON copied to clipboard!');
+        });
+    }
+</script>
+{% endblock %}

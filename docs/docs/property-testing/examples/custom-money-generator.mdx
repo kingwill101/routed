@@ -1,0 +1,80 @@
+---
+title: "Custom Money Generator"
+sidebar_position: 2
+---
+
+Sometimes you need domain-specific values with tailored shrinking. This example demonstrates how to write a `MoneyGenerator` that favours round amounts and shrinks toward `$0.00`.
+
+```dart
+import 'dart:math';
+
+import 'package:property_testing/property_testing.dart';
+import 'package:test/test.dart';
+
+class Money {
+  final String currency;
+  final int cents;
+
+  const Money(this.currency, this.cents);
+
+  @override
+  String toString() => '$currency ${(cents / 100).toStringAsFixed(2)}';
+}
+
+class MoneyGenerator extends Generator<Money> {
+  final List<String> currencies;
+
+  MoneyGenerator({this.currencies = const ['USD', 'EUR', 'GBP']});
+
+  @override
+  ShrinkableValue<Money> generate(Random random) {
+    final currency = currencies[random.nextInt(currencies.length)];
+    final cents = random.nextInt(20_000); // up to 200.00 in smallest unit
+    final money = Money(currency, cents);
+
+    return ShrinkableValue(money, () sync* {
+      // Prefer whole dollars first.
+      if (money.cents % 100 != 0) {
+        yield ShrinkableValue.leaf(Money(currency, money.cents - money.cents % 100));
+      }
+
+      // Halve towards zero for finer shrinking.
+      var current = money.cents;
+      while (current > 0) {
+        current ~/= 2;
+        yield ShrinkableValue.leaf(Money(currency, current));
+      }
+
+      yield ShrinkableValue.leaf(Money(currency, 0));
+    });
+  }
+}
+
+Money applyDiscount(Money money) {
+  final discountedCents = max(0, money.cents - 1500); // clamp at zero
+  return Money(money.currency, discountedCents);
+}
+
+void main() {
+  test('discount never produces negative money', () async {
+    final moneyGen = MoneyGenerator();
+
+    final runner = PropertyTestRunner(
+      moneyGen,
+      (money) {
+        final discounted = applyDiscount(money);
+        expect(discounted.cents, greaterThanOrEqualTo(0),
+            reason: 'Negative result for $money');
+        expect(discounted.cents, lessThanOrEqualTo(money.cents),
+            reason: 'Discount increased value for $money');
+      },
+      PropertyConfig(numTests: 200),
+    );
+
+    final result = await runner.run();
+    expect(result.success, isTrue, reason: result.report);
+  });
+}
+```
+
+The custom shrinker first drops cents to the nearest dollar and then halves the value repeatedly, so failing cases quickly converge on the smallest problematic amount.

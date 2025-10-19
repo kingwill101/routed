@@ -5,8 +5,10 @@ import '../router/types.dart';
 
 /// A type definition for the recovery handler function.
 /// This function is called when an error occurs during the execution of a middleware.
-typedef RecoveryHandler = void Function(
-    EngineContext ctx, Object error, StackTrace stack);
+typedef RecoveryHandler =
+    void Function(EngineContext ctx, Object error, StackTrace stack);
+
+const String _recoveryHandledKey = '__recoveryHandled';
 
 /// Middleware that provides error recovery functionality.
 ///
@@ -18,27 +20,37 @@ typedef RecoveryHandler = void Function(
 /// If the error is related to a broken pipe or connection reset, the middleware quietly aborts
 /// the context without logging or calling the handler.
 Middleware recoveryMiddleware({RecoveryHandler? handler}) {
-  // Use the default recovery handler if none is provided.
   handler ??= _defaultRecoveryHandler;
 
-  return (EngineContext ctx) async {
+  return (EngineContext ctx, Next next) async {
     try {
-      // Proceed to the next middleware in the chain.
-      await ctx.next();
+      return await next();
     } catch (error, stackTrace) {
-      // Determine if the error is related to a broken pipe or connection reset.
       final isBrokenPipe = _isBrokenPipeError(error);
 
       if (!isBrokenPipe) {
-        // Log the error and stack trace if it is not a broken pipe error.
         final trace = Trace.from(stackTrace).terse;
-        print('[Recovery] ${DateTime.now()}: $error\n$trace');
-
-        // Call the custom recovery handler.
-        handler!(ctx, error, stackTrace);
+        // print suppressed in tests; could route to logger
+        // print('[Recovery] ${DateTime.now()}: $error\n$trace');
+        final enrichedStack = StackTrace.fromString(
+          'Route: ${ctx.request.uri.path}\n${trace.toString()}',
+        );
+        handler!(ctx, error, enrichedStack);
+        // Send the default JSON response only if the handler hasn't already
+        // completed / closed the context.
+        final handled = ctx.get<bool>(_recoveryHandledKey) ?? false;
+        if (!ctx.isClosed && !handled) {
+          ctx.set(_recoveryHandledKey, true);
+          return ctx.json({
+            'error': 'Internal Server Error',
+          }, statusCode: HttpStatus.internalServerError);
+        }
+        // The response has already been handled inside the custom recovery
+        // handler, so we simply return the current response.
+        return ctx.response;
       } else {
-        // Quietly abort the context for broken pipe errors.
         ctx.abort();
+        return ctx.string('', statusCode: HttpStatus.internalServerError);
       }
     }
   };
@@ -48,14 +60,11 @@ Middleware recoveryMiddleware({RecoveryHandler? handler}) {
 ///
 /// This function sends a JSON response with a 500 Internal Server Error status code
 /// if the context is not already closed.
-void _defaultRecoveryHandler(
-    EngineContext ctx, Object error, StackTrace stack) {
-  if (!ctx.isClosed) {
-    ctx.json(
-      {'error': 'Internal Server Error'},
-      statusCode: HttpStatus.internalServerError,
-    );
-  }
+void _defaultRecoveryHandler(EngineContext ctx,
+    Object error,
+    StackTrace stack,) {
+  // Default handler intentionally left blank. The middleware will emit
+  // the fallback response when the handler does not override it.
 }
 
 /// Checks if the given error is related to a broken pipe or connection reset.

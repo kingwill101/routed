@@ -99,5 +99,41 @@ void main() {
       expect(value2, isNull);
       tempDir.deleteSync(recursive: true);
     });
+
+    test('registerDriver wires custom cache store', () async {
+      CacheManager.registerDriver('custom', () => ArrayStoreFactory());
+      addTearDown(() {
+        CacheManager.unregisterDriver('custom');
+      });
+
+      final manager = CacheManager();
+      manager.registerStore('custom-store', {'driver': 'custom'});
+      final repository = manager.store('custom-store');
+      await repository.put('key', 'value', const Duration(seconds: 60));
+      expect(await repository.pull('key'), equals('value'));
+    });
+
+    test('custom driver override takes precedence over built-in', () async {
+      var invoked = false;
+      CacheManager.registerDriver('array', () {
+        invoked = true;
+        return ArrayStoreFactory();
+      }, overrideExisting: true);
+      addTearDown(() {
+        CacheManager.registerDriver(
+          'array',
+          () => ArrayStoreFactory(),
+          overrideExisting: true,
+        );
+      });
+
+      final manager = CacheManager();
+      manager.registerStore('override', {'driver': 'array'});
+      await manager
+          .store('override')
+          .put('x', 'y', const Duration(seconds: 60));
+
+      expect(invoked, isTrue);
+    });
   });
 }

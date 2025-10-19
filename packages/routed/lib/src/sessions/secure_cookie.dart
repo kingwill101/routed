@@ -30,19 +30,20 @@ class SecureCookie {
     bool useSigning = false,
   }) {
     // Determine mode based on encryption/signing flags
-    final effectiveMode = mode ??
+    final effectiveMode =
+        mode ??
         (useEncryption && useSigning
             ? SecurityMode.both
             : useEncryption
-                ? SecurityMode.aesOnly
-                : useSigning
-                    ? SecurityMode.hmacOnly
-                    : SecurityMode.both);
+            ? SecurityMode.aesOnly
+            : useSigning
+            ? SecurityMode.hmacOnly
+            : SecurityMode.both);
 
     final keyBytes = key != null
         ? (key is String
-            ? base64.decode(key.replaceFirst('base64:', ''))
-            : key as Uint8List)
+              ? base64.decode(key.replaceFirst('base64:', ''))
+              : key as Uint8List)
         : _generateKeyFromEnv();
 
     // Ensure key is long enough for selected mode
@@ -51,16 +52,23 @@ class SecureCookie {
     }
 
     // Create HMAC if needed
-    final hmac = (effectiveMode == SecurityMode.hmacOnly ||
+    final hmac =
+        (effectiveMode == SecurityMode.hmacOnly ||
             effectiveMode == SecurityMode.both)
         ? Hmac(sha256, keyBytes)
         : null;
 
     // Create AES encrypter if needed
-    final encrypter = (effectiveMode == SecurityMode.aesOnly) ||
+    final encrypter =
+        (effectiveMode == SecurityMode.aesOnly) ||
             (effectiveMode == SecurityMode.both)
-        ? encrypt.Encrypter(encrypt
-            .AES(encrypt.Key(Uint8List.fromList(keyBytes.sublist(0, 32)))))
+        ? encrypt.Encrypter(
+            encrypt.AES(
+              encrypt.Key(Uint8List.fromList(keyBytes.sublist(0, 32))),
+              mode: encrypt.AESMode.gcm,
+              padding: null,
+            ),
+          )
         : null;
 
     return SecureCookie._(hmac, encrypter, effectiveMode);
@@ -124,17 +132,20 @@ class SecureCookie {
 
   String _encodeAesOnly(String payload) {
     if (_encrypter == null) throw StateError('Encrypter not initialized');
-    final iv = encrypt.IV.fromSecureRandom(16);
+    // GCM prefers a 12-byte nonce/IV
+    final iv = encrypt.IV.fromSecureRandom(12);
     final encrypted = _encrypter.encrypt(payload, iv: iv);
-    return base64Url
-        .encode(utf8.encode('${encrypted.base64}|${base64.encode(iv.bytes)}'));
+    return base64Url.encode(
+      utf8.encode('${encrypted.base64}|${base64.encode(iv.bytes)}'),
+    );
   }
 
   String _encodeWithBoth(String payload) {
     if (_encrypter == null) throw StateError('Encrypter not initialized');
     if (_hmac == null) throw StateError('HMAC not initialized');
 
-    final iv = encrypt.IV.fromSecureRandom(16);
+    // GCM prefers a 12-byte nonce/IV
+    final iv = encrypt.IV.fromSecureRandom(12);
     final encrypted = _encrypter.encrypt(payload, iv: iv);
     final combined = '${encrypted.base64}|${base64.encode(iv.bytes)}';
     final signature = _sign(combined);
@@ -249,5 +260,5 @@ enum SecurityMode {
   aesOnly,
 
   /// Both encrypt and sign the data (most secure)
-  both
+  both,
 }

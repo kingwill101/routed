@@ -1,0 +1,335 @@
+---
+title: Routing
+description: Define routes, parameters, groups, and static assets
+sidebar_position: 1
+---
+
+# Routing
+
+Routed exposes a hierarchical, composable router you can use directly from the engine or by composing standalone `Router` instances. Routers are cheap to compose and nest; mounts determine shared path prefixes and middleware.
+
+## Defining routes
+
+```dart
+final engine = Engine();
+
+// Define routes on the engine itself
+engine.get('/', (ctx) => ctx.string('Hello world'));
+
+// Or create routers and mount them
+final api = Router(path: '/api');
+api.get('/users', (ctx) => ctx.json({'users': []}));
+api.post('/users', createUserHandler);
+
+engine.use(api);         // Mount the router
+await engine.serve(port: 8080);
+```
+
+Engine and router instances share the same API: `get`, `post`, `put`, `delete`, `patch`, `options`, `head`, `connect`, and the generic `handle`. A router's `path` prefixes its children, and `engine.use(router)` mounts the subtree at that prefix.
+
+## Route parameters
+
+Named segments capture values from the path; mark a segment optional with a trailing `?` (for example `{page?}`).
+
+```dart
+router.get('/users/{id}', (ctx) {
+  final id = ctx.param('id'); // Defaults to String
+  return ctx.json({'id': id});
+});
+
+router.get('/posts/{slug}/{page?}', (ctx) {
+  final slug = ctx.param('slug');
+  final page = ctx.param('page') ?? '1';
+  return ctx.json({'slug': slug, 'page': page});
+});
+```
+
+### Type constraints
+
+Append a type to validate and optionally cast the value:
+
+```dart
+router.get('/orders/{id:int}', (ctx) {
+  final orderId = ctx.params['id'] as int;
+});
+
+router.get('/reports/{year:int}/{month:int}', (ctx) {
+  final year = ctx.params['year'] as int;
+  final month = ctx.params['month'] as int;
+});
+```
+
+Built-in types include `int`, `double`, `string`, `uuid`, `slug`, `word`, `date`, `email`, `url`, and `ip`.
+
+`ctx.params` exposes cast values, while `ctx.param('name')` returns the raw string (or `null`). You can also request a typed value inline with `ctx.param<T>('name')` when a cast exists. For required, typed parameters use `ctx.params.require<T>('key')` or `ctx.mustGetParam<T>('key')` (both throw a `StateError` when missing).
+
+### Custom types & patterns
+
+Register reusable patterns and casts. The cast function transforms the matched string into the value stored in `ctx.params` (and `ctx.param<T>` respects it):
+
+```dart
+registerCustomType(
+  'bool',
+  r'true|false',
+  (value) => value == 'true',
+);
+
+registerParamPattern('token', r'[A-Z0-9]{32}');
+
+router.get('/features/{enabled:bool}', (ctx) {
+  final enabled = ctx.params['enabled'] as bool;
+});
+
+router.get('/invite/{token}', (ctx) {
+  // Matches registered token pattern
+  final token = ctx.params['token'] as String?;
+});
+```
+
+### Wildcards
+
+Capture the remainder of the path with `{*name}`:
+
+```dart
+router.get('/files/{*path}', (ctx) {
+  final path = ctx.param<String>('path'); // e.g. "images/avatar.png"
+  return ctx.json({'path': path});
+});
+```
+
+## Route groups
+
+Organize routes with shared prefixes and middleware.
+
+```dart
+router.group(
+  path: '/admin',
+  middlewares: [authMiddleware],
+  builder: (admin) {
+    admin.get('/dashboard', showDashboard);
+
+    admin.group(path: '/users', builder: (users) {
+      users.get('/', listUsers);
+      users.post('/', createUser);
+    });
+  },
+);
+```
+
+Groups can be nested and their paths are prefixed cumulatively. Middleware declared on a group runs after any parent middleware and before route-level middleware.
+
+## Naming routes
+
+Assign names to routes and generate URLs later.
+
+```dart
+router
+  .get('/articles/{slug}', showArticle)
+  .name('articles.show');
+
+final path = engine.route('articles.show', {'slug': 'welcome'});
+// => /articles/welcome
+```
+
+Use names when generating links within templates or redirects. Placeholders must be supplied; missing or extra parameters cause a validation error when calling `engine.route(...)`. Route names should be unique per engine—dot-notation is a common convention (for example, `articles.show`).
+
+## Documenting routes for OpenAPI
+
+Invoke `openApi` on a `RouteBuilder` to attach metadata that flows into the generated manifest and CLI tooling:
+
+```dart
+router
+    .put('/users/{id:int}', updateUser)
+    .name('users.update')
+    .openApi((operation) {
+      operation.summary = 'Update a user';
+      operation.tags(['users']);
+      operation.jsonRequestBody(
+        schema: {
+          'type': 'object',
+          'required': ['name'],
+          'properties': {
+            'name': {'type': 'string'},
+            'email': {'type': 'string', 'format': 'email'},
+          },
+        },
+      );
+      operation.jsonResponse(
+        status: '200',
+        description: 'Updated user',
+        schema: {
+          r'$ref': '#/components/schemas/User',
+        },
+      );
+    });
+```
+
+Every call merges into the existing metadata so you can build the description incrementally (for example, set tags in a group helper and add responses alongside the handler). Use the CLI to turn the manifest plus metadata into a spec:
+
+```bash
+dart run routed_cli openapi generate --output openapi.json
+```
+
+The generator infers tags and parameter definitions from route declarations, so even minimal metadata (summary/response schema) results in a usable document.
+
+## Route manifest API
+
+If you need a programmatic view of every route, call `engine.buildRouteManifest()`. The helper walks
+the router tree and returns a serialisable `RouteManifest` that mirrors the data emitted by the CLI:
+
+```dart
+final manifest = engine.buildRouteManifest();
+for (final route in manifest.routes) {
+  logger.info('${route.method} ${route.path}', {
+    'name': route.name,
+    'middlewares': route.middleware,
+    'constraints': route.constraints,
+  });
+}
+
+// Persist to JSON if you want to hydrate tooling:
+await File('.dart_tool/routed/route_manifest.json')
+    .writeAsString(manifest.toJsonString(pretty: true));
+```
+
+WebSocket routes appear under `manifest.webSockets`, and each entry includes the resolved middleware
+chain. Use this when generating documentation, building contract tests, or wiring custom tooling
+that needs the flattened route table without spinning up the CLI.
+
+## Constraints
+
+You can also supply inline regexes or custom predicates via the `constraints` map. Supported predicate keys include `'method'` and `'domain'`, in addition to per-parameter regexes:
+
+```dart
+router.get('/teams/{slug}', handler, constraints: {
+  'slug': r'^[a-z0-9]+(?:-[a-z0-9]+)*$',
+});
+
+router.get('/admin', handler, constraints: {
+  'domain': r'^admin\.example\.com$',
+});
+
+router.get('/reports', handler, constraints: {
+  'method': (req) => req.headers.value('X-Report') == 'enabled',
+});
+```
+
+### Matching precedence
+
+Routes are matched by specificity:
+
+- Exact static routes outrank parameterised routes.
+- Among parameterised routes, ones with longer static prefixes win.
+- Wildcard captures (`{*name}`) match last.
+- Definition order only matters when two routes have identical specificity.
+
+## Static assets
+
+Serve a single file or an entire directory with `staticFile` / `static`.
+
+```dart
+// Serve a single file
+router.staticFile('/favicon.ico', 'public/favicon.ico');
+
+// Serve a folder (maps /assets/* to files under ./public/assets)
+router.static('/assets', 'public/assets');
+```
+
+The same helpers are available on the engine. When using `staticFile`/`static`, paths are resolved relative to the current working directory—never interpolate untrusted input into these paths. For index files and directory listings (or to isolate paths to a storage disk), prefer configuring the static provider via `config/http.yaml`.
+
+Prefer configuration? Enable the static provider and describe mounts in `config/http.yaml`:
+
+```yaml
+static:
+  enabled: true
+  mounts:
+    - route: /assets
+      disk: assets          # storage disk name (see storage.*)
+      path: ''              # subdirectory within the disk root
+      index: index.html     # optional default file for directory requests
+      list_directories: false
+```
+
+Each mount references a storage disk (`static.mounts[].disk`), so the static provider serves files through the same file-system abstraction as the rest of your app. The `path` is resolved relative to that disk’s root (falls back to `directory` for legacy configs). Directory listings are disabled by default unless you set `list_directories: true`. For safety, the provider normalises and rejects paths that escape the disk root (for example, via `../`); avoid mounting sensitive folders and prefer a dedicated assets disk.
+
+Run `dart run routed_cli provider:list --config` to confirm the static provider is enabled and to inspect the mounts after merging defaults—misconfigured mounts emit `ProviderConfigException` during boot.
+
+## Method Not Allowed (405)
+
+If `handleMethodNotAllowed` is enabled in `EngineConfig`, requests to a known path with the wrong HTTP method return 405 and include an `Allow` header with permitted methods. For example:
+
+```dart
+final engine = Engine(config: EngineConfig(handleMethodNotAllowed: true));
+engine.get('/things', (ctx) => ctx.string('ok'));
+
+// A POST to /things will receive:
+// - 405 Method Not Allowed
+// - Allow: GET
+```
+
+You can also inspect allowed methods programmatically via `engine.allowedMethods('/things')`.
+
+### Config-driven routing defaults
+
+The routing provider reads defaults from the `routing.*` namespace. Configure `redirectTrailingSlash`, `handle_method_not_allowed`, or other toggles without touching code:
+
+```yaml title="config/http.yaml"
+routing:
+  redirect_trailing_slash: true
+  handle_method_not_allowed: true
+  remove_extra_slash: false
+
+http:
+  features:
+    routing: { enabled: true }
+```
+
+At runtime you can still override behaviour with `EngineConfig` or helper options (`withRedirectTrailingSlash`, `withHandleMethodNotAllowed`). Run `dart run routed_cli provider:list --config` to confirm the routing provider is active and to review the merged defaults.
+
+## Fallback routes
+
+Handle unmatched routes with a fallback handler. You can register multiple fallbacks (for example, a global one and group-specific ones). When no regular route matches, the engine selects the most specific fallback based on how closely its static path prefix matches the request path:
+
+```dart
+router.fallback((ctx) {
+  return ctx.json(
+    {'error': 'Not Found', 'path': ctx.request.uri.path},
+    statusCode: HttpStatus.notFound, // import dart:io for HttpStatus
+  );
+});
+```
+
+> Note: Add `import 'dart:io';` to access the `HttpStatus` constants.  
+> Multiple fallbacks are supported; define group-level fallbacks to tailor responses per section (e.g., `/api` vs `/api/v1`). The engine automatically chooses the most specific one when no regular route matches.
+
+See [Fallback precedence](/docs/routed/fundamentals/fallback-precedence) for a deeper look at specificity scoring, precedence tuning, and troubleshooting tips.
+
+## WebSockets
+
+Register WebSocket handlers by providing a `WebSocketHandler` implementation:
+
+```dart
+class LiveUpdatesHandler extends WebSocketHandler {
+  @override
+  Future<void> onOpen(WebSocketContext socket) async {
+    socket.send('connected');
+  }
+
+  @override
+  Future<void> onMessage(WebSocketContext socket, dynamic message) async {
+    socket.send('echo: $message');
+  }
+
+  @override
+  Future<void> onClose(WebSocketContext socket) async {}
+
+  @override
+  Future<void> onError(WebSocketContext socket, dynamic error) async {
+    print('websocket error: $error');
+  }
+}
+
+engine.ws('/live', LiveUpdatesHandler());
+```
+
+The `Engine` automatically detects upgrade requests and forwards them to the handler registered for the path, exposing the initial HTTP context through `WebSocketContext`.

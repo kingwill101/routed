@@ -41,21 +41,29 @@ class _LimitedHttpRequestWrapper implements HttpRequest {
 
   @override
   @override
-  StreamSubscription<Uint8List> listen(void Function(Uint8List event)? onData,
-      {Function? onError, void Function()? onDone, bool? cancelOnError}) {
-    return _limitedStream.cast<Uint8List>().listen(onData,
-        onError: onError, onDone: onDone, cancelOnError: cancelOnError);
+  StreamSubscription<Uint8List> listen(
+    void Function(Uint8List event)? onData, {
+    Function? onError,
+    void Function()? onDone,
+    bool? cancelOnError,
+  }) {
+    return _limitedStream.cast<Uint8List>().listen(
+      onData,
+      onError: onError,
+      onDone: onDone,
+      cancelOnError: cancelOnError,
+    );
   }
 
   @override
   @override
-  Stream<Uint8List> asBroadcastStream(
-          {void Function(StreamSubscription<Uint8List> subscription)? onListen,
-          void Function(StreamSubscription<Uint8List> subscription)?
-              onCancel}) =>
-      _limitedStream
-          .cast<Uint8List>()
-          .asBroadcastStream(onListen: onListen, onCancel: onCancel);
+  Stream<Uint8List> asBroadcastStream({
+    void Function(StreamSubscription<Uint8List> subscription)? onListen,
+    void Function(StreamSubscription<Uint8List> subscription)? onCancel,
+  }) => _limitedStream.cast<Uint8List>().asBroadcastStream(
+    onListen: onListen,
+    onCancel: onCancel,
+  );
 
   @override
   @override
@@ -75,9 +83,9 @@ class _LimitedHttpRequestWrapper implements HttpRequest {
 
   @override
   @override
-  Stream<Uint8List> distinct(
-          [bool Function(Uint8List previous, Uint8List next)? equals]) =>
-      _limitedStream.cast<Uint8List>().distinct(equals);
+  Stream<Uint8List> distinct([
+    bool Function(Uint8List previous, Uint8List next)? equals,
+  ]) => _limitedStream.cast<Uint8List>().distinct(equals);
 
   @override
   @override
@@ -100,14 +108,15 @@ class _LimitedHttpRequestWrapper implements HttpRequest {
 
   @override
   @override
-  Future<Uint8List> firstWhere(bool Function(Uint8List element) test,
-          {Uint8List Function()? orElse}) =>
-      _limitedStream.cast<Uint8List>().firstWhere(test, orElse: orElse);
+  Future<Uint8List> firstWhere(
+    bool Function(Uint8List element) test, {
+    Uint8List Function()? orElse,
+  }) => _limitedStream.cast<Uint8List>().firstWhere(test, orElse: orElse);
 
   @override
   @override
-  Future<S> fold<S>(
-          S initialValue, S Function(S previous, Uint8List element) combine) =>
+  Future<S> fold<S>(S initialValue,
+      S Function(S previous, Uint8List element) combine,) =>
       _limitedStream.cast<Uint8List>().fold(initialValue, combine);
 
   @override
@@ -117,9 +126,10 @@ class _LimitedHttpRequestWrapper implements HttpRequest {
 
   @override
   @override
-  Stream<Uint8List> handleError(Function onError,
-          {bool Function(dynamic error)? test}) =>
-      _limitedStream.cast<Uint8List>().handleError(onError, test: test);
+  Stream<Uint8List> handleError(
+    Function onError, {
+    bool Function(dynamic error)? test,
+  }) => _limitedStream.cast<Uint8List>().handleError(onError, test: test);
 
   @override
   bool get isBroadcast => _limitedStream.isBroadcast;
@@ -136,9 +146,10 @@ class _LimitedHttpRequestWrapper implements HttpRequest {
   Future<Uint8List> get last => _limitedStream.cast<Uint8List>().last;
   @override
   @override
-  Future<Uint8List> lastWhere(bool Function(Uint8List element) test,
-          {Uint8List Function()? orElse}) =>
-      _limitedStream.cast<Uint8List>().lastWhere(test, orElse: orElse);
+  Future<Uint8List> lastWhere(
+    bool Function(Uint8List element) test, {
+    Uint8List Function()? orElse,
+  }) => _limitedStream.cast<Uint8List>().lastWhere(test, orElse: orElse);
 
   @override
   Future<int> get length => _limitedStream.length;
@@ -155,8 +166,8 @@ class _LimitedHttpRequestWrapper implements HttpRequest {
   @override
   @override
   Future<Uint8List> reduce(
-          Uint8List Function(Uint8List previous, Uint8List element) combine) =>
-      _limitedStream.cast<Uint8List>().reduce(combine);
+    Uint8List Function(Uint8List previous, Uint8List element) combine,
+  ) => _limitedStream.cast<Uint8List>().reduce(combine);
 
   @override
   Uri get requestedUri => _originalRequest.requestedUri;
@@ -166,9 +177,10 @@ class _LimitedHttpRequestWrapper implements HttpRequest {
   Future<Uint8List> get single => _limitedStream.cast<Uint8List>().single;
   @override
   @override
-  Future<Uint8List> singleWhere(bool Function(Uint8List element) test,
-          {Uint8List Function()? orElse}) =>
-      _limitedStream.cast<Uint8List>().singleWhere(test, orElse: orElse);
+  Future<Uint8List> singleWhere(
+    bool Function(Uint8List element) test, {
+    Uint8List Function()? orElse,
+  }) => _limitedStream.cast<Uint8List>().singleWhere(test, orElse: orElse);
 
   @override
   @override
@@ -192,8 +204,10 @@ class _LimitedHttpRequestWrapper implements HttpRequest {
 
   @override
   @override
-  Stream<Uint8List> timeout(Duration timeLimit,
-          {void Function(EventSink<Uint8List> sink)? onTimeout}) =>
+  Stream<Uint8List> timeout(
+    Duration timeLimit, {
+    void Function(EventSink<Uint8List> sink)? onTimeout,
+  }) =>
       _limitedStream.cast<Uint8List>().timeout(timeLimit, onTimeout: onTimeout);
 
   @override

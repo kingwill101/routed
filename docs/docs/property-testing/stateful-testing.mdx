@@ -1,0 +1,119 @@
+---
+title: "Stateful Testing"
+sidebar_position: 6
+---
+
+Property-based testing shines when you verify behaviours across sequences of operations. The stateful module models your system under test (SUT) with `Command` objects and compares it against an expected `Model`.
+
+## Command basics
+
+Create a command per operation you want to exercise. Each command can:
+
+- check a `precondition(model)` before it runs,
+- `run(sut)` (sync or async),
+- `update(model)` to reflect the expected state, and
+- assert `postcondition(model, sut)` afterwards.
+
+```dart
+class Deposit extends Command<AccountBalance, BankAccount> {
+  final int amount;
+  Deposit(this.amount);
+
+  @override
+  bool precondition(AccountBalance balance) => amount > 0;
+
+  @override
+  Future<void> run(BankAccount sut) => sut.deposit(amount);
+
+  @override
+  AccountBalance update(AccountBalance model) =>
+      model.copyWith(cents: model.cents + amount);
+
+  @override
+  Future<void> postcondition(AccountBalance model, BankAccount sut) async {
+    expect(await sut.balance(), equals(model.cents));
+  }
+
+  @override
+  String toString() => 'Deposit($amount)';
+}
+```
+
+`CommandSequence` simply wraps a list of commands and executes the precondition → run → update → postcondition cycle for each step.
+
+## StatefulPropertyBuilder
+
+Use the builder when you need to set up a fresh SUT per test case and combine multiple command generators.
+
+```dart
+final builder = StatefulPropertyBuilder<AccountBalance, BankAccount>.create(
+  initialModel: () => AccountBalance.zero(),
+  setupSut: () async => BankAccount.withInMemoryStore(),
+  teardownSut: (account) async => account.dispose(),
+)
+    .withCommands(
+      Gen.integer(min: 1, max: 10).map((dollars) => Deposit(dollars * 100)),
+    )
+    .withCommands(
+      Gen.integer(min: 1, max: 10).map((dollars) => Withdraw(dollars * 100)),
+    ) // Withdraw is another Command that mirrors Deposit with overdraft checks
+    .withConfig(StatefulPropertyConfig(
+      numTests: 200,
+      maxCommandSequenceLength: 25,
+    ));
+
+final result = await builder.run();
+expect(result.success, isTrue, reason: result.report);
+```
+
+Behind the scenes the builder:
+
+1. Picks a random sequence length up to `maxCommandSequenceLength`.
+2. Chooses commands from your registered generators (using `Gen.oneOfGen`).
+3. Runs the sequence against a fresh SUT and model.
+4. Shrinks by trimming the command list and shrinking the commands themselves.
+
+## Invariant-only runners
+
+Some scenarios only need to check that a model invariant holds after applying commands. `StatefulPropertyRunner` provides a lighter interface:
+
+```dart
+final counterRunner = StatefulPropertyRunner<int, int>(
+  Gen.oneOf([1, -1]),
+  () => 0,
+  (value) => value >= 0, // invariant: counter never goes negative
+  (state, command) => state + command,
+  StatefulPropertyConfig(
+    numTests: 300,
+    maxCommandSequenceLength: 20,
+  ),
+);
+
+final result = await counterRunner.run();
+expect(result.success, isTrue, reason: result.report);
+```
+
+This variant focuses on shrinking command lists and validating the invariant after every update. It is handy for pure model simulations or lower-level data structures.
+
+## Filtering commands with preconditions
+
+Use the `StatefulPropertyTestingExtensions.whereValid` helper when you want to discard commands that do not meet a predicate evaluated against a model snapshot (often your initial model).
+
+```dart
+final withdrawGen = Gen.integer(min: 1, max: 10)
+    .map((dollars) => Withdraw(dollars * 100))
+    .whereValid(
+      () => AccountBalance.zero(),
+      (command, model) => command.amount <= model.cents,
+    );
+```
+
+Because the extension builds on the standard `where` combinator, shrinking only keeps values that continue to satisfy the predicate.
+
+## Configuration knobs
+
+`StatefulPropertyConfig` extends `PropertyConfig` and adds:
+
+- `maxCommandSequenceLength` – upper bound on randomly generated sequence length (default: 100).
+
+All other knobs (`numTests`, `maxShrinks`, `timeout`, `random`) behave exactly like they do for stateless properties.

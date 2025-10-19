@@ -1,0 +1,82 @@
+---
+title: Engine Default Router Example
+description: Use the engine-level router to define routes, middleware, and named URLs
+sidebar_position: 4
+---
+
+The repository ships with [`examples/engine_default_router`](https://github.com/kingwill101/routed/tree/main/examples/engine_default_router), a concise demo that relies solely on the engine’s built-in router. It illustrates how to:
+
+- Register routes directly on the `Engine`
+- Access route parameters and name routes for URL generation
+- Guard endpoints with middleware
+- Mix JSON responses and simple strings
+
+## Running the example
+
+```bash
+cd examples/engine_default_router
+dart pub get
+dart run bin/server.dart
+```
+
+The server starts on [http://localhost:3000](http://localhost:3000). Try the following requests:
+
+```bash
+# List users (run these in a second terminal while the server is running)
+curl http://localhost:3000/users | jq
+
+# Create a user (echoes the request body)
+curl -X POST http://localhost:3000/users \
+  -H 'content-type: application/json' \
+  -d '{"name": "Ada"}' | jq
+
+# Fetch a user by ID
+curl http://localhost:3000/users/42 | jq
+```
+
+## Middleware highlight
+
+The example protects `/admin/*` routes with inline middleware:
+
+```dart
+engine.group(
+  path: '/admin',
+  middlewares: [
+    (ctx, next) async {
+      final token = ctx.requestHeader('Authorization');
+      if (token != 'secret') {
+        return ctx.json({'error': 'Unauthorized'}, statusCode: 401);
+      }
+      return next();
+    },
+  ],
+  builder: (router) {
+    router.get('/stats', (ctx) => ctx.json({'stats': {'users': 100, 'posts': 500}}));
+  },
+);
+```
+
+Swap the middleware for your own authentication or rate-limiting logic when adapting the example for real projects.
+
+## Named routes
+
+`engine_default_router` also demonstrates generating URLs from named routes:
+
+```dart
+engine.get('/articles/{slug}', (ctx) {
+  final slug = ctx.param('slug');
+  return ctx.json({
+    'article': {
+      'slug': slug,
+      'title': 'Article about $slug',
+    },
+    'url': route('articles.show', {'slug': slug}),
+  });
+}).name('articles.show');
+```
+
+Named routes are especially useful when building HTML links or generating URLs inside templates.
+
+Use this example as a starting point whenever you want to stay close to the engine API without introducing additional routers.
+
+> Prefer configuration-driven middleware/feature toggles? Mirror the example by adding the corresponding entries to `config/http.yaml` (see [configuration fundamentals](/docs/routed/fundamentals/configuration)) and register the required providers. `dart run routed_cli provider:list --config` helps you verify the manifest when you migrate this sample into a larger application.

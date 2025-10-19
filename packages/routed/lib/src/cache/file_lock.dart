@@ -119,7 +119,8 @@ class FileLock implements Lock {
       await Future<void>.delayed(const Duration(milliseconds: 100));
     }
     throw LockTimeoutException(
-        'Could not acquire lock within $seconds seconds');
+      'Could not acquire lock within $seconds seconds',
+    );
   }
 
   /// Returns the current owner of the lock.

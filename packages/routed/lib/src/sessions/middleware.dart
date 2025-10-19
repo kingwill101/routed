@@ -1,9 +1,9 @@
-import 'package:routed/routed.dart';
 import 'package:routed/session.dart';
-
+import 'package:routed/src/context/context.dart';
+import 'package:routed/src/router/types.dart';
 
 /// Creates session middleware with the specified options
-Handler sessionMiddleware({
+Middleware sessionMiddleware({
   Store? store,
   String name = 'session',
   Options? defaultOptions,
@@ -12,34 +12,38 @@ Handler sessionMiddleware({
   bool useSigning = false,
 }) {
   final options = defaultOptions ?? Options();
-  final sessionStore = store ??
+  final sessionStore =
+      store ??
       CookieStore(
         defaultOptions: options,
-        codecs: codecs ??
+        codecs:
+            codecs ??
             [
               SecureCookie(
                 key: SecureCookie.generateKey(),
                 useEncryption: useEncryption,
                 useSigning: useSigning,
-              )
+              ),
             ],
       );
 
-  return (EngineContext ctx) async {
+  return (EngineContext ctx, Next next) async {
     final session = await sessionStore.read(ctx.request, name);
     ctx.set('session', session);
 
-    await ctx.next();
+    // Pre-commit the session so the cookie is present even if the handler closes
+    // the response (e.g. via ctx.string/json). We'll update again after next()
+    // if the response is still open to capture any later changes.
+    if (!ctx.response.isClosed) {
+      await sessionStore.write(ctx.request, ctx.response, session);
+    }
+
+    final res = await next();
 
     if (!ctx.response.isClosed) {
-      final sessionData = ctx.get<dynamic>('session');
-      if (sessionData is Session) {
-        await sessionStore.write(
-          ctx.request,
-          ctx.response,
-          sessionData,
-        );
-      }
+      final sess = ctx.get<Session>('session') ?? session;
+      await sessionStore.write(ctx.request, ctx.response, sess);
     }
+    return res;
   };
 }

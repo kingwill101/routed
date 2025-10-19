@@ -1,0 +1,71 @@
+{% comment %}
+  Pagination Component
+  
+  Usage:
+    {% render 'components/pagination', paginator: paginator %}
+    {% render 'components/pagination', paginator: paginator, search_query: search_query %}
+  
+  Parameters:
+    - paginator: Pagination object with current_page, num_pages, has_next, has_previous
+    - search_query: Optional search query to preserve in links
+{% endcomment %}
+
+{% if paginator.num_pages > 1 %}
+    <div class="flex justify-center items-center gap-2">
+        <!-- Previous Page -->
+        {% if paginator.has_previous %}
+            <a href="?page={{ paginator.current_page | minus: 1 }}{% if search_query != '' %}&search={{ search_query }}{% endif %}"
+               class="px-3 py-2 bg-white border border-gray-300 rounded-md hover:bg-gray-50 transition-colors">
+                ← Previous
+            </a>
+        {% endif %}
+
+        <!-- Page Numbers -->
+        {% assign start_page = paginator.current_page | minus: 2 %}
+        {% assign end_page = paginator.current_page | plus: 2 %}
+        {% if start_page < 1 %}{% assign start_page = 1 %}{% endif %}
+        {% if end_page > paginator.num_pages %}{% assign end_page = paginator.num_pages %}{% endif %}
+
+        <!-- First page if we're not showing it -->
+        {% if start_page > 1 %}
+            <a href="?page=1{% if search_query != '' %}&search={{ search_query }}{% endif %}"
+               class="px-3 py-2 bg-white border border-gray-300 rounded-md hover:bg-gray-50 transition-colors">
+                1
+            </a>
+            {% if start_page > 2 %}
+                <span class="px-3 py-2 text-gray-500">...</span>
+            {% endif %}
+        {% endif %}
+
+        <!-- Page range -->
+        {% for page in (start_page..end_page) %}
+            {% if page == paginator.current_page %}
+                <span class="px-3 py-2 bg-blue-600 text-white rounded-md">{{ page }}</span>
+            {% else %}
+                <a href="?page={{ page }}{% if search_query != '' %}&search={{ search_query }}{% endif %}"
+                   class="px-3 py-2 bg-white border border-gray-300 rounded-md hover:bg-gray-50 transition-colors">
+                    {{ page }}
+                </a>
+            {% endif %}
+        {% endfor %}
+
+        <!-- Last page if we're not showing it -->
+        {% if end_page < paginator.num_pages %}
+            {% if end_page < paginator.num_pages | minus: 1 %}
+                <span class="px-3 py-2 text-gray-500">...</span>
+            {% endif %}
+            <a href="?page={{ paginator.num_pages }}{% if search_query != '' %}&search={{ search_query }}{% endif %}"
+               class="px-3 py-2 bg-white border border-gray-300 rounded-md hover:bg-gray-50 transition-colors">
+                {{ paginator.num_pages }}
+            </a>
+        {% endif %}
+
+        <!-- Next Page -->
+        {% if paginator.has_next %}
+            <a href="?page={{ paginator.current_page | plus: 1 }}{% if search_query != '' %}&search={{ search_query }}{% endif %}"
+               class="px-3 py-2 bg-white border border-gray-300 rounded-md hover:bg-gray-50 transition-colors">
+                Next →
+            </a>
+        {% endif %}
+    </div>
+{% endif %} 

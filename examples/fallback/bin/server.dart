@@ -39,10 +39,10 @@ void main() async {
   engine.group(
     path: '/secured',
     middlewares: [
-      (ctx) async {
+      (ctx, next) async {
         middlewareCalled++;
         print('Middleware called: $middlewareCalled times');
-        await ctx.next();
+        return ctx.response;
       },
     ],
     builder: (router) {

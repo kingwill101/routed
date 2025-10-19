@@ -1,0 +1,124 @@
+---
+title: Dependency Injection
+description: Use the service container, providers, and AppZone helpers in Routed
+sidebar_position: 2
+---
+
+# Dependency Injection
+
+Routed ships with a lightweight dependency-injection container that powers the engine, request lifecycle, and background helpers. Factories can be async, singletons are cached, and request-scoped bindings are disposed automatically at the end of a request.
+
+## Container fundamentals
+
+```dart
+final container = Container();
+
+// Register a transient binding
+container.bind<UuidGenerator>((c) async => UuidGenerator());
+
+// Register a singleton
+container.singleton<Database>((c) async => Database.connect());
+
+// Store a pre-built instance
+container.instance<AppConfig>(AppConfig.fromEnv());
+
+final db = await container.make<Database>();
+```
+
+Key APIs (highlights in `packages/routed/lib/src/container/container.dart:1`):
+
+- `bind<T>` registers a factory (transient by default).
+- `singleton<T>` caches the resolved value.
+- `instance<T>` stores an already-constructed object.
+- `scoped<T>` registers bindings tied to the current scope (for example, a request); they’re cleared via `clearScoped()` and disposed at request end.
+- `addContextualBinding`, `resolving`, and `afterResolving` let you tailor bindings per consumer type and attach hooks before/after resolution.
+
+## Service providers
+
+Use service providers to organize application bindings and their lifecycle (register → boot → cleanup).
+
+```dart
+class BillingServiceProvider extends ServiceProvider {
+  @override
+  void register(Container container) {
+    container.singleton<BillingClient>(
+      (c) async => BillingClient(baseUrl: c.get<AppConfig>().billingUrl),
+    );
+  }
+
+  @override
+  Future<void> boot(Container container) async {
+    final client = await container.make<BillingClient>();
+    await client.warmup();
+  }
+
+  @override
+  Future<void> cleanup(Container container) async {
+    if (container.has<BillingClient>()) {
+      final client = await container.make<BillingClient>();
+      await client.close();
+    }
+  }
+}
+```
+
+Attach providers to the engine via `registerProvider` (see `packages/routed/lib/src/container/container_mixin.dart:9`). Providers run in three phases:
+
+1. `register` – executed immediately to add bindings.
+2. `boot` – invoked once when the engine initialises (`Engine.initialize()`); safe to resolve other bindings.
+3. `cleanup` – called for each request container and during engine shutdown.
+
+The built-in `CoreServiceProvider` wires `EngineConfig`, `Config`, caching, and view engines, while `RoutingServiceProvider` configures routing events (`packages/routed/lib/src/engine/providers/core.dart:1`, `packages/routed/lib/src/engine/providers/routing.dart:1`). Providers can also opt into `ProvidesDefaultConfig` to advertise defaults to the global `ConfigRegistry`, allowing the loader to merge them automatically. If you want to control which providers boot, pass them when constructing the engine:
+
+```dart
+final engine = await Engine.create(
+  providers: [AnalyticsProvider()],
+);
+
+// or skip built-ins entirely and provide your own
+final minimal = await Engine.create(
+  includeDefaultProviders: false,
+  providers: [CoreProvider(), RoutingProvider()],
+);
+```
+
+## Request-scoped containers
+
+Every request receives its own child container so you can safely store per-request state; any bindings registered as scoped are cleaned up automatically.
+
+```dart
+Future<void> handle(HttpRequest raw) async {
+  final container = engine.createRequestContainer(raw, raw.response);
+  try {
+    final ctx = await container.make<EngineContext>();
+    await myHandler(ctx);
+  } finally {
+    await engine.cleanupRequestContainer(container);
+  }
+}
+```
+
+`RequestServiceProvider` (`packages/routed/lib/src/engine/providers/request.dart:1`) registers the HTTP request/response, the `Request`/`Response` wrappers, and `EngineContext`. Any binding marked with `container.scoped()` will be disposed when the request completes.
+
+## AppZone helpers
+
+Code that runs outside a request can still reuse configuration, routing, and logging helpers through `AppZone` (`packages/routed/lib/src/support/zone.dart:1`).
+
+```dart
+await AppZone.run(
+  engine: engine,
+  body: () async {
+    final url = route('notifications.show', {'id': '123'});
+    final appName = configValue<String>('app.name');
+    await scheduler.enqueue(url: url, app: appName);
+  },
+);
+```
+
+Inside an `AppZone`:
+
+- `configValue<T>(key)` reads from the app configuration (`packages/routed/lib/src/config/helpers.dart:1`).
+- `route(name, params)` generates URLs using named routes (throws if the route is unknown or parameters are missing).
+- `AppZone.context` exposes an `EngineContext` when you wrap request work manually.
+
+This is useful for background jobs, scheduled tasks, or integration tests where you still want access to the same resolved services the HTTP pipeline uses.

@@ -1,0 +1,88 @@
+{% comment %}
+  Newsletter Form Component
+  
+  Usage:
+    {% render 'components/newsletter_form', form: form %}
+    {% render 'components/newsletter_form', form: form, success_message: success_message %}
+  
+  Parameters:
+    - form: The newsletter form object
+    - success_message: Optional success message to display
+{% endcomment %}
+
+<!-- DEBUG: Newsletter component is loading -->
+<div class="bg-blue-50 rounded-lg p-8">
+    <div class="text-center mb-6">
+        <h3 class="text-2xl font-bold text-gray-900 mb-2">
+            📧 Stay Updated
+        </h3>
+        <p class="text-gray-600">
+            Subscribe to our newsletter for the latest posts and updates.
+        </p>
+    </div>
+
+    {% if success_message %}
+        <div class="mb-6 p-4 bg-green-50 border border-green-200 text-green-700 rounded-md text-center">
+            {{ success_message }}
+        </div>
+    {% endif %}
+
+    {% if error_message %}
+        <div class="mb-6 p-4 bg-red-50 border border-red-200 text-red-700 rounded-md text-center">
+            {{ error_message }}
+        </div>
+    {% endif %}
+
+    <form method="POST" class="max-w-md mx-auto">
+        <!-- Use form's built-in field rendering with custom styling -->
+        <div class="space-y-4">
+            {% for field_data in fields %}
+                {% assign field = field_data[0] %}
+                {% assign field_errors = field_data[1] %}
+
+                <div class="form-field">
+                    <!-- Field label -->
+                    <label for="{{ field.auto_id }}" class="block text-sm font-medium text-gray-700 mb-2">
+                        {{ field.label }}
+                        {% if field.field.required %}<span class="text-red-500">*</span>{% endif %}
+                    </label>
+
+                    <!-- Field widget (input) -->
+                    <div>
+                        {{ field.widget_html }}
+                    </div>
+
+                    <!-- Field errors -->
+                    {% if field_errors %}
+                        <div class="mt-2 text-sm text-red-600">
+                            {% for error in field_errors %}
+                                <div class="flex items-center">
+                                    <svg class="w-4 h-4 mr-1" fill="currentColor" viewBox="0 0 20 20">
+                                        <path fill-rule="evenodd"
+                                              d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7 4a1 1 0 11-2 0 1 1 0 012 0zm-1-9a1 1 0 00-1 1v4a1 1 0 102 0V6a1 1 0 00-1-1z"
+                                              clip-rule="evenodd"></path>
+                                    </svg>
+                                    {{ error }}
+                                </div>
+                            {% endfor %}
+                        </div>
+                    {% else %}
+                        <!-- Help text when no errors -->
+                        {% if field.help_text %}
+                            <p class="mt-1 text-sm text-gray-500">{{ field.help_text }}</p>
+                        {% endif %}
+                    {% endif %}
+                </div>
+            {% endfor %}
+        </div>
+
+        <div class="text-center mt-6">
+            <button
+                    type="submit"
+                    class="bg-blue-600 text-white px-8 py-3 rounded-md hover:bg-blue-700 transition-colors font-medium"
+            >
+                📬 Subscribe
+            </button>
+        </div>
+    </form>
+</div>

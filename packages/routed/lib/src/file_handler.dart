@@ -5,6 +5,7 @@ import 'package:file/file.dart' as file;
 import 'package:file/local.dart' as local;
 import 'package:mime/mime.dart';
 import 'package:path/path.dart' as p;
+import 'package:routed/src/context/context.dart';
 
 /// Represents a directory in the file system.
 ///
@@ -27,7 +28,7 @@ class Dir {
   /// The [listDirectory] parameter specifies whether to list the contents of the directory.
   /// The [fileSystem] parameter specifies the file system to use.
   Dir(this.path, {this.listDirectory = false, file.FileSystem? fileSystem})
-      : fileSystem = fileSystem ?? const local.LocalFileSystem();
+    : fileSystem = fileSystem ?? const local.LocalFileSystem();
 }
 
 /// Handles file operations such as serving files and directories over HTTP.
@@ -60,7 +61,8 @@ class FileHandler {
   }) {
     final currentDir = p.normalize(fileSystem.currentDirectory.path);
     final normalizedPath = p.normalize(
-        p.isAbsolute(rootPath) ? rootPath : p.join(currentDir, rootPath));
+      p.isAbsolute(rootPath) ? rootPath : p.join(currentDir, rootPath),
+    );
 
     return FileHandler._(
       rootPath: normalizedPath,
@@ -75,7 +77,8 @@ class FileHandler {
   factory FileHandler.fromDir(Dir dir) {
     final currentDir = p.normalize(dir.fileSystem.currentDirectory.path);
     final normalizedPath = p.normalize(
-        p.isAbsolute(dir.path) ? dir.path : p.join(currentDir, dir.path));
+      p.isAbsolute(dir.path) ? dir.path : p.join(currentDir, dir.path),
+    );
 
     return FileHandler._(
       rootPath: normalizedPath,
@@ -88,28 +91,37 @@ class FileHandler {
   ///
   /// The [request] parameter specifies the HTTP request.
   /// The [file] parameter specifies the file to serve.
-  Future<void> serveFile(HttpRequest request, String file) async {
+  Future<void> serveFile(EngineContext ctx, String file) async {
+    // removed direct request reference
     try {
       final filePath = p.normalize(p.join(rootPath, file));
 
       // Robust security check to prevent directory traversal
       if (rootPath != filePath && !p.isWithin(rootPath, filePath)) {
-        _sendError(request.response, HttpStatus.forbidden, 'Access denied');
+        ctx.abortWithStatus(
+          HttpStatus.forbidden,
+          ctx.method == 'HEAD' ? '' : 'Access denied',
+        );
         return;
       }
 
       final fileStat = await fileSystem.stat(filePath);
 
       if (fileStat.type == FileSystemEntityType.directory) {
-        await serveDirectory(request, filePath, file);
+        await serveDirectory(ctx, filePath, file);
       } else if (fileStat.type == FileSystemEntityType.file) {
-        await _serveFile(request, filePath, fileStat);
+        await _serveFile(ctx, filePath, fileStat);
       } else {
-        _sendError(request.response, HttpStatus.notFound, 'Not Found');
+        ctx.abortWithStatus(
+          HttpStatus.notFound,
+          ctx.method == 'HEAD' ? '' : 'Not Found',
+        );
       }
     } catch (e) {
-      _sendError(request.response, HttpStatus.internalServerError,
-          'Internal Server Error');
+      ctx.abortWithStatus(
+        HttpStatus.internalServerError,
+        'Internal Server Error',
+      );
     }
   }
 
@@ -117,15 +129,18 @@ class FileHandler {
   ///
   /// The [request] parameter specifies the HTTP request.
   /// The [dirPath] parameter specifies the directory to serve.
-  Future<void> serveDirectory(HttpRequest request, String dirPath,
-      [String parent = '']) async {
+  Future<void> serveDirectory(
+    EngineContext ctx,
+    String dirPath, [
+    String parent = '',
+  ]) async {
     // First try to serve index.html if it exists
     final indexPath = p.join(p.join(rootPath, dirPath), 'index.html');
 
     try {
       final indexFileStat = await fileSystem.stat(indexPath);
       if (indexFileStat.type == FileSystemEntityType.file) {
-        await _serveFile(request, indexPath, indexFileStat);
+        await _serveFile(ctx, indexPath, indexFileStat);
         return;
       }
     } catch (_) {
@@ -134,38 +149,43 @@ class FileHandler {
 
     // Check if directory listing is allowed
     if (!allowDirectoryListing) {
-      _sendError(request.response, HttpStatus.notFound, 'Not Found');
+      ctx.abortWithStatus(
+        HttpStatus.notFound,
+        ctx.method == 'HEAD' ? '' : 'Not Found',
+      );
       return;
     }
 
-    await _listDirectory(request, dirPath, parent);
+    await _listDirectory(ctx, dirPath, parent);
   }
 
   /// Lists the contents of a directory over HTTP.
   ///
   /// The [request] parameter specifies the HTTP request.
   /// The [dirPath] parameter specifies the directory to list.
-  Future<void> _listDirectory(HttpRequest request, String dirPath,
-      [String? parent]) async {
+  Future<void> _listDirectory(
+    EngineContext ctx,
+    String dirPath, [
+    String? parent,
+  ]) async {
     final directory = fileSystem.directory(p.join(rootPath, dirPath));
     final entities = await directory.list().toList();
 
-    request.response.headers.contentType = ContentType.html;
-    request.response.headers
-        .add(HttpHeaders.contentTypeHeader, ContentType.html.toString());
-    request.response.write('<!DOCTYPE html><html><body><ul>');
+    // Directory listing should explicitly send text/html with utf-8 charset
+    ctx.setHeader(HttpHeaders.contentTypeHeader, 'text/html; charset=utf-8');
+    ctx.response.write('<!DOCTYPE html><html><body><ul>');
 
     for (var entity in entities) {
       final name = p.basename(entity.path);
       final isDir = await FileSystemEntity.isDirectory(entity.path);
       final displayName = isDir ? '${entity.parent.basename}/$name/' : name;
-      final encodedName = Uri.encodeComponent("$parent/$name");
-      request.response
-          .write('<li><a href="$encodedName">$displayName</a></li>');
+      final prefix = (parent != null && parent.isNotEmpty) ? '$parent/' : '';
+      final encodedName = Uri.encodeComponent("$prefix$name");
+      ctx.response.write('<li><a href="$encodedName">$displayName</a></li>');
     }
 
-    request.response.write('</ul></body></html>');
-    await request.response.close();
+    ctx.response.write('</ul></body></html>');
+    ctx.response.close();
   }
 
   /// Serves a file over HTTP.
@@ -173,48 +193,60 @@ class FileHandler {
   /// The [request] parameter specifies the HTTP request.
   /// The [filePath] parameter specifies the file path to serve.
   /// The [fileStat] parameter specifies the file statistics.
-  Future<void> _serveFile(
-      HttpRequest request, String filePath, FileStat fileStat) async {
+  Future<void> _serveFile(EngineContext ctx,
+      String filePath,
+      FileStat fileStat,) async {
     final file = fileSystem.file(p.join(rootPath, filePath));
 
     // Conditional request handling
-    if (_handleIfModifiedSince(request, fileStat.modified)) {
+    if (_handleIfModifiedSince(ctx, fileStat.modified)) {
       return;
     }
 
     final length = fileStat.size;
     final contentType = _getContentType(file.path);
 
-    request.response.headers.contentType = contentType;
-    request.response.headers.add(HttpHeaders.contentLengthHeader, length);
-    request.response.headers.add(
-        HttpHeaders.lastModifiedHeader, HttpDate.format(fileStat.modified));
+    ctx.setHeader(HttpHeaders.contentTypeHeader, contentType.toString());
+
+    ctx.setHeader(HttpHeaders.contentLengthHeader, length.toString());
+    ctx.setHeader(
+      HttpHeaders.lastModifiedHeader,
+      HttpDate.format(fileStat.modified),
+    );
 
     // Range request support
-    final range = request.headers.value(HttpHeaders.rangeHeader);
+    final range = ctx.headers.value(HttpHeaders.rangeHeader);
+    final isHead = ctx.method == 'HEAD';
+    if (isHead) {
+      // Close early after writing headers; no body
+      ctx.abort();
+      return;
+    }
+
     if (range != null) {
-      await _handleRangeRequest(request, file, length, range);
+      await _handleRangeRequest(ctx, file, length, range);
     } else {
       // Serve entire file efficiently
-      await file.openRead().pipe(request.response);
+      await ctx.response.addStream(file.openRead());
+      ctx.response.close();
     }
   }
 
   /// Handles conditional requests based on the If-Modified-Since header.
   ///
-  /// The [request] parameter specifies the HTTP request.
+  /// The [ctx] parameter specifies the engine context.
   /// The [lastModified] parameter specifies the last modified date of the file.
   /// Returns true if the file has not been modified since the specified date.
-  bool _handleIfModifiedSince(HttpRequest request, DateTime lastModified) {
-    final ifModifiedSince = request.headers.ifModifiedSince;
+  bool _handleIfModifiedSince(EngineContext ctx, DateTime lastModified) {
+    final ifModifiedSince = ctx.request.headers.ifModifiedSince;
     if (ifModifiedSince != null) {
       final lastModifiedTruncated =
           lastModified.toUtc().millisecondsSinceEpoch ~/ 1000;
       final imsTruncated =
           ifModifiedSince.toUtc().millisecondsSinceEpoch ~/ 1000;
       if (lastModifiedTruncated <= imsTruncated) {
-        request.response.statusCode = HttpStatus.notModified;
-        request.response.close();
+        ctx.response.statusCode = HttpStatus.notModified;
+        ctx.response.close();
         return true;
       }
     }
@@ -227,29 +259,41 @@ class FileHandler {
   /// The [file] parameter specifies the file to serve.
   /// The [fileLength] parameter specifies the length of the file.
   /// The [rangeHeader] parameter specifies the range header value.
-  Future<void> _handleRangeRequest(HttpRequest request, File file,
-      int fileLength, String rangeHeader) async {
+  Future<void> _handleRangeRequest(
+    EngineContext ctx,
+    File file,
+    int fileLength,
+    String rangeHeader,
+  ) async {
     final ranges = _parseRangeHeader(rangeHeader, fileLength);
     if (ranges == null || ranges.isEmpty) {
-      request.response.headers
-          .set(HttpHeaders.contentRangeHeader, 'bytes */$fileLength');
-      _sendError(request.response, HttpStatus.requestedRangeNotSatisfiable,
-          'Requested Range Not Satisfiable');
+      ctx.setHeader(HttpHeaders.contentRangeHeader, 'bytes */$fileLength');
+      ctx.abortWithStatus(
+        HttpStatus.requestedRangeNotSatisfiable,
+        'Requested Range Not Satisfiable',
+      );
       return;
     }
 
     if (ranges.length == 1) {
       final range = ranges[0];
-      request.response.statusCode = HttpStatus.partialContent;
-      request.response.headers.set(HttpHeaders.contentRangeHeader,
-          'bytes ${range.start}-${range.end}/$fileLength');
-      request.response.headers.contentLength = range.end - range.start + 1;
+      ctx.response.statusCode = HttpStatus.partialContent;
+      ctx.setHeader(
+        HttpHeaders.contentRangeHeader,
+        'bytes ${range.start}-${range.end}/$fileLength',
+      );
+      ctx.setHeader(
+        HttpHeaders.contentLengthHeader,
+        (range.end - range.start + 1).toString(),
+      );
 
-      await file.openRead(range.start, range.end + 1).pipe(request.response);
+      await ctx.response.addStream(file.openRead(range.start, range.end + 1));
+      ctx.response.close();
     } else {
-      // Multipart ranges not supported in this implementation
-      _sendError(request.response, HttpStatus.notImplemented,
-          'Multiple Ranges Not Supported');
+      ctx.abortWithStatus(
+        HttpStatus.notImplemented,
+        'Multiple Ranges Not Supported',
+      );
     }
   }
 
@@ -310,17 +354,6 @@ class FileHandler {
     }
 
     return _ByteRange(start, end);
-  }
-
-  /// Sends an error response over HTTP.
-  ///
-  /// The [response] parameter specifies the HTTP response.
-  /// The [statusCode] parameter specifies the status code.
-  /// The [message] parameter specifies the error message.
-  void _sendError(HttpResponse response, int statusCode, String message) {
-    response.statusCode = statusCode;
-    response.headers.contentType = ContentType.text;
-    response.write(message);
   }
 
   /// Gets the content type of a file based on its path.

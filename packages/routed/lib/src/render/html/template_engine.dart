@@ -4,8 +4,10 @@ abstract class TemplateEngine {
   /// [templateName] is the name of the template to be rendered.
   /// [data] is a map containing key-value pairs that will be used to populate the template.
   /// Returns a [Future] that completes with the rendered template as a [String].
-  Future<String> render(String templateName,
-      [Map<String, dynamic> data = const {}]);
+  Future<String> render(
+    String templateName, [
+    Map<String, dynamic> data = const {},
+  ]);
 
   String renderContent(String content, [Map<String, dynamic> data = const {}]);
 

@@ -1,0 +1,116 @@
+---
+title: Driver Registries
+description: Register storage, cache, and session drivers the same way the framework does
+sidebar_position: 4
+---
+
+# Driver Registries
+
+Routed ships registries for every subsystem that supports pluggable drivers. The framework registers its built-ins through these registries, which means third-party drivers automatically exercise the same code paths. Use them to add new backends, override existing behaviour, or document per-driver configuration.
+
+## Storage
+
+```dart
+StorageServiceProvider.registerDriver(
+  'memory',
+  (context) {
+    final root =
+        context.configuration['root']?.toString() ?? 'memory/${context.diskName}';
+    final override = context.configuration['file_system'];
+    final fileSystem = override is FileSystem
+        ? override
+        : context.manager.defaultFileSystem;
+    return LocalStorageDisk(root: root, fileSystem: fileSystem);
+  },
+  documentation: (ctx) => <ConfigDocEntry>[
+    ConfigDocEntry(
+      path: ctx.path('root'),
+      type: 'string',
+      description: 'Disk root (defaults to memory/<name>).',
+    ),
+    ConfigDocEntry(
+      path: ctx.path('file_system'),
+      type: 'FileSystem',
+      description: 'Optional file system override for tests.',
+    ),
+  ],
+);
+```
+
+- **Resolution:** The storage provider calls into the registry whenever it encounters `storage.disks.*.driver`.
+- **Documentation:** Add a `documentation` callback to publish `ConfigDocEntry` items. They appear under `storage.disks.*` in `provider:list --config` output and in the docs.
+
+## Cache
+
+```dart
+CacheManager.registerDriver(
+  'redis',
+  () => RedisStoreFactory(),
+  documentation: (ctx) => <ConfigDocEntry>[
+    ConfigDocEntry(
+      path: ctx.path('endpoint'),
+      type: 'string',
+      description: 'Redis connection string.',
+    ),
+    ConfigDocEntry(
+      path: ctx.path('prefix'),
+      type: 'string',
+      description: 'Optional key prefix for cache entries.',
+    ),
+  ],
+);
+```
+
+- **Factories:** Registration wires builders that create `StoreFactory` instances; the provider caches them so every manager sees the same drivers.
+- **Docs:** `CacheServiceProvider` automatically appends the documentation entries under `cache.stores.*`.
+
+## Sessions
+
+```dart
+SessionServiceProvider.registerDriver(
+  'dropbox',
+  (context) => SessionConfig(
+    cookieName: context.cookieName,
+    store: DropboxSessionStore(
+      token: context.raw['token'] as String,
+      root: context.raw['root']?.toString() ?? '/sessions',
+    ),
+    maxAge: context.lifetime,
+    defaultOptions: context.options,
+    expireOnClose: context.expireOnClose,
+  ),
+  documentation: (ctx) => <ConfigDocEntry>[
+    ConfigDocEntry(
+      path: ctx.path('token'),
+      type: 'string',
+      description: 'API token used to authenticate Dropbox requests.',
+    ),
+    ConfigDocEntry(
+      path: ctx.path('root'),
+      type: 'string',
+      description: 'Remote folder for storing session payloads.',
+    ),
+  ],
+);
+```
+
+- **Cache-backed drivers:** Session builders receive a `SessionDriverBuilderContext` with the resolved cache manager and merged config.
+- **Documentation:** Entries are merged into the `session.*` docs so operators can discover extra keys.
+
+## CLI scaffolding
+
+Prefer a starter file? Use the CLI to scaffold the boilerplate and documentation hooks:
+
+```bash
+routed provider:driver storage dropbox
+routed provider:driver --type cache redis
+```
+
+The command writes a driver template under `lib/drivers/<type>/` and wires in the `registerDriver` call plus documentation callback so you can focus on the implementation details.
+
+## Tips
+
+- Register drivers at startup (before `Engine.initialize`) or inside a custom provider's `register` method.
+- Use `overrideExisting: true` to replace a built-in driver. This is how the framework supports drop-in replacements.
+- Documentation callbacks are optional but recommended; they keep `provider:list --config` and the Docusaurus docs aligned with the actual configuration surface.
+- When experimenting locally, create integration tests similar to `test/provider/*_provider_test.dart` to ensure your driver and docs stay wired correctly.

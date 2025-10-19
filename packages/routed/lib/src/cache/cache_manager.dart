@@ -1,8 +1,90 @@
-import 'package:routed/src/contracts/cache/repository.dart';
-import 'package:routed/src/cache/repository.dart';
-import 'package:routed/src/cache/store_factory.dart';
 import 'package:routed/src/cache/array_store_factory.dart';
 import 'package:routed/src/cache/file_store_factory.dart';
+import 'package:routed/src/cache/null_store_factory.dart';
+import 'package:routed/src/cache/redis_store_factory.dart';
+import 'package:routed/src/cache/repository.dart';
+import 'package:routed/src/cache/store_factory.dart';
+import 'package:routed/src/contracts/cache/repository.dart';
+import 'package:routed/src/events/event_manager.dart';
+import 'package:routed/src/provider/provider.dart';
+
+typedef StoreFactoryBuilder = StoreFactory Function();
+typedef CacheDriverDocBuilder =
+    List<ConfigDocEntry> Function(CacheDriverDocContext context);
+
+class CacheDriverDocContext {
+  CacheDriverDocContext({required this.driver, required this.pathTemplate});
+
+  final String driver;
+  final String pathTemplate;
+
+  String path(String segment) => '$pathTemplate.$segment';
+}
+
+class _CacheDriverRegistration {
+  _CacheDriverRegistration({required this.builder, this.documentation});
+
+  final StoreFactoryBuilder builder;
+  final CacheDriverDocBuilder? documentation;
+}
+
+class CacheDriverRegistry {
+  CacheDriverRegistry._internal();
+
+  static final CacheDriverRegistry instance = CacheDriverRegistry._internal();
+
+  final Map<String, _CacheDriverRegistration> _registrations =
+      <String, _CacheDriverRegistration>{};
+
+  void register(
+    String driver,
+    StoreFactoryBuilder builder, {
+    CacheDriverDocBuilder? documentation,
+    bool overrideExisting = true,
+  }) {
+    if (!overrideExisting && _registrations.containsKey(driver)) {
+      return;
+    }
+    _registrations[driver] = _CacheDriverRegistration(
+      builder: builder,
+      documentation: documentation,
+    );
+  }
+
+  void unregister(String driver) {
+    _registrations.remove(driver);
+  }
+
+  bool contains(String driver) => _registrations.containsKey(driver);
+
+  List<String> get drivers => _registrations.keys.toList(growable: false);
+
+  StoreFactoryBuilder? builderFor(String driver) =>
+      _registrations[driver]?.builder;
+
+  void populate(CacheManager manager) {
+    for (final entry in _registrations.entries) {
+      manager.registerStoreFactory(entry.key, entry.value.builder());
+    }
+  }
+
+  List<ConfigDocEntry> documentation({required String pathTemplate}) {
+    final docs = <ConfigDocEntry>[];
+    _registrations.forEach((driver, registration) {
+      final builder = registration.documentation;
+      if (builder == null) {
+        return;
+      }
+      final entries = builder(
+        CacheDriverDocContext(driver: driver, pathTemplate: pathTemplate),
+      );
+      if (entries.isNotEmpty) {
+        docs.addAll(entries);
+      }
+    });
+    return docs;
+  }
+}
 
 /// The CacheManager class is responsible for managing multiple cache stores.
 /// It allows registering, retrieving, and resolving cache stores based on their configurations.
@@ -15,16 +97,21 @@ class CacheManager {
   /// The key is the name of the store, and the value is a map containing the configuration details.
   final Map<String, Map<String, dynamic>> _configurations = {};
 
+  /// Optional event manager used for cache events.
+  EventManager? _eventManager;
+  String _prefix = '';
+
   /// A registry of store factories.
   /// The key is the driver name, and the value is the corresponding StoreFactory instance.
   final Map<String, StoreFactory> _storeFactories = {};
 
   /// Constructor for CacheManager.
   /// Initializes the CacheManager and registers the default store factories.
-  CacheManager() {
-    // Register default factories.
-    _storeFactories['array'] = ArrayStoreFactory();
-    _storeFactories['file'] = FileStoreFactory();
+  CacheManager({EventManager? events, String prefix = ''})
+    : _eventManager = events,
+      _prefix = prefix {
+    _ensureDefaultDriversRegistered();
+    CacheDriverRegistry.instance.populate(this);
   }
 
   /// Registers a new cache store configuration under the given [name].
@@ -34,10 +121,17 @@ class CacheManager {
   ///   - name: The name of the cache store.
   ///   - config: A map containing the configuration details for the cache store.
   ///   - repository: An optional prebuilt Repository instance.
-  void registerStore(String name, Map<String, dynamic> config,
-      {Repository? repository}) {
+  void registerStore(
+    String name,
+    Map<String, dynamic> config, {
+    Repository? repository,
+  }) {
     _configurations[name] = config;
     if (repository != null) {
+      if (repository is RepositoryImpl) {
+        repository.updatePrefix(_prefix);
+        repository.attachEventManager(_eventManager);
+      }
       _repositories[name] = repository;
     }
   }
@@ -51,6 +145,29 @@ class CacheManager {
   Repository store(String name) {
     return _repositories[name] ??= resolve(name);
   }
+
+  /// Attach an event manager so repositories can publish cache events.
+  void attachEventManager(EventManager eventManager) {
+    _eventManager = eventManager;
+    _repositories.updateAll((_, repository) {
+      if (repository is RepositoryImpl) {
+        repository.attachEventManager(eventManager);
+      }
+      return repository;
+    });
+  }
+
+  void setPrefix(String prefix) {
+    _prefix = prefix;
+    _repositories.updateAll((_, repository) {
+      if (repository is RepositoryImpl) {
+        repository.updatePrefix(prefix);
+      }
+      return repository;
+    });
+  }
+
+  String get prefix => _prefix;
 
   /// Builds a repository instance from the configuration.
   ///
@@ -70,11 +187,16 @@ class CacheManager {
 
     if (factory == null) {
       throw ArgumentError(
-          'Driver [$driver] is not supported. Supported drivers are: ${_storeFactories.keys.join(", ")}.');
+        'Driver [$driver] is not supported. Supported drivers are: ${_storeFactories.keys.join(", ")}.',
+      );
     }
     // Create the underlying store using the factory.
     final storeInstance = factory.create(config);
-    return RepositoryImpl(storeInstance);
+    final repository = RepositoryImpl(storeInstance, name, _prefix);
+    if (_eventManager != null) {
+      repository.attachEventManager(_eventManager);
+    }
+    return repository;
   }
 
   /// Allows registering custom store factories.
@@ -85,6 +207,126 @@ class CacheManager {
   void registerStoreFactory(String driver, StoreFactory factory) {
     _storeFactories[driver] = factory;
   }
+
+  /// Registers a cache driver globally so future managers can resolve it.
+  static void registerDriver(
+    String driver,
+    StoreFactoryBuilder builder, {
+    CacheDriverDocBuilder? documentation,
+    bool overrideExisting = true,
+  }) {
+    CacheDriverRegistry.instance.register(
+      driver,
+      builder,
+      documentation: documentation,
+      overrideExisting: overrideExisting,
+    );
+  }
+
+  /// Removes a previously registered global cache driver.
+  static void unregisterDriver(String driver) {
+    CacheDriverRegistry.instance.unregister(driver);
+  }
+
+  /// Lists all known driver identifiers, including built-ins.
+  static List<String> get registeredDrivers {
+    _ensureDefaultDriversRegistered();
+    return CacheDriverRegistry.instance.drivers;
+  }
+
+  static bool _defaultsRegistered = false;
+
+  static List<ConfigDocEntry> driverDocumentation({
+    required String pathTemplate,
+  }) {
+    _ensureDefaultDriversRegistered();
+    return CacheDriverRegistry.instance.documentation(
+      pathTemplate: pathTemplate,
+    );
+  }
+
+  static void _ensureDefaultDriversRegistered() {
+    if (_defaultsRegistered) {
+      return;
+    }
+    registerDriver(
+      'array',
+      () => ArrayStoreFactory(),
+      documentation: _arrayDriverDocs,
+      overrideExisting: false,
+    );
+    registerDriver(
+      'file',
+      () => FileStoreFactory(),
+      documentation: _fileDriverDocs,
+      overrideExisting: false,
+    );
+    registerDriver(
+      'null',
+      () => NullStoreFactory(),
+      documentation: _nullDriverDocs,
+      overrideExisting: false,
+    );
+    registerDriver(
+      'redis',
+      () => RedisStoreFactory(),
+      documentation: _redisDriverDocs,
+      overrideExisting: false,
+    );
+    _defaultsRegistered = true;
+  }
+
+  static List<ConfigDocEntry> _arrayDriverDocs(CacheDriverDocContext context) =>
+      const <ConfigDocEntry>[];
+
+  static List<ConfigDocEntry> _fileDriverDocs(CacheDriverDocContext context) {
+    return <ConfigDocEntry>[
+      ConfigDocEntry(
+        path: context.path('path'),
+        type: 'string',
+        description:
+            'Directory path where cache files are stored for the file driver.',
+      ),
+      ConfigDocEntry(
+        path: context.path('permission'),
+        type: 'int',
+        description:
+            'File system permission mask applied to created cache files.',
+      ),
+    ];
+  }
+
+  static List<ConfigDocEntry> _nullDriverDocs(CacheDriverDocContext context) =>
+      const <ConfigDocEntry>[];
+
+  static List<ConfigDocEntry> _redisDriverDocs(CacheDriverDocContext context) =>
+      <ConfigDocEntry>[
+        ConfigDocEntry(
+          path: context.path('url'),
+          type: 'string',
+          description: 'Redis connection URL (e.g. redis://localhost:6379/0).',
+        ),
+        ConfigDocEntry(
+          path: context.path('host'),
+          type: 'string',
+          description: 'Redis host when url is not provided.',
+        ),
+        ConfigDocEntry(
+          path: context.path('port'),
+          type: 'int',
+          description: 'Redis port when url is not provided.',
+        ),
+        ConfigDocEntry(
+          path: context.path('password'),
+          type: 'string',
+          description: 'Redis password if authentication is required.',
+        ),
+        ConfigDocEntry(
+          path: context.path('db'),
+          type: 'int',
+          description: 'Database index selected after connecting.',
+        ),
+      ];
 
   /// Retrieves the default driver name.
   ///

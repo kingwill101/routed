@@ -1,0 +1,19 @@
+---
+title: Force reinstall & cache
+description: How force reinstall works, when to use it, and parallel safety
+---
+
+# Force reinstall & cache
+
+- BrowserConfig.forceReinstall triggers re-download for browsers and drivers during bootstrap/launch.
+- The registry uses an installation lock to avoid races when multiple tests download the same browser.
+- On force reinstall, the existing directory is removed and re-created; drivers are deleted then fetched again.
+
+When to use
+
+- Corrupted caches, switching to a different revision/channel, or CI cold-start scenarios.
+
+Parallel safety
+
+- Locks serialize installation; multiple parallel test processes won’t corrupt the cache.
+- For best results in CI, pre-warm the cache in a dedicated job.

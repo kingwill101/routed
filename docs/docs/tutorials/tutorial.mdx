@@ -1,654 +1,164 @@
 ---
-title:  Developing a RESTful API with Routed
-description: Learn how to develop a RESTful API with Routed
+title: Build a REST API with Routed
+description: Create a small albums API with validation, routing, and JSON responses
+slug: /tutorials/routed-rest-api
 ---
 
+Routed makes it easy to stand up HTTP APIs without writing a lot of boilerplate. This tutorial walks through creating a tiny albums catalogue with three endpoints:
 
-This tutorial introduces the basics of writing a RESTful web service API with Routed.
+- `GET /albums` – list every album
+- `GET /albums/{id}` – fetch a single album by ID
+- `POST /albums` – add a new album
 
-You’ll get the most out of this tutorial if you have a basic familiarity with Dart and its tooling.
-
-Routed simplifies many coding tasks associated with building web applications, including web services. In this tutorial, you’ll use Routed to route requests, retrieve request details, and marshal JSON for responses.
-
-In this tutorial, you will build a RESTful API server with two endpoints. Your example project will be a repository of data about vintage jazz records.
-
-The tutorial includes the following sections:
-
-- Design API endpoints.
-- Create a folder for your code.
-- Create the data.
-- Write a handler to return all items.
-- Write a handler to add a new item.
-- Write a handler to return a specific item.
+We will keep data in memory for brevity, but the same patterns apply to database-backed services.
 
 ## Prerequisites
 
-- **An installation of Dart SDK 3.0 or later.** For installation instructions, see [Dart SDK Installation](https://dart.dev/get-dart).
-- **A tool to edit your code.** Any text editor you have will work fine. VSCode is recommended.
-- **A command terminal.** Dart works well using any terminal on Linux and Mac, and on PowerShell or cmd in Windows.
-- **The curl tool.**  This will be used to test the API.
+- Dart SDK 3.0 or later (see [dart.dev/get-dart](https://dart.dev/get-dart))
+- A terminal and your favourite editor (VS Code, IntelliJ, etc.)
+- `curl` or a similar HTTP client for manual requests
 
-## Design API endpoints
+## 1. Scaffold the project
 
-You’ll build an API that provides access to a store selling vintage recordings on vinyl. So you’ll need to provide endpoints through which a client can get and add albums for users.
+```bash
+mkdir routed_albums
+cd routed_albums
+# Generate a minimal Dart package
+dart create -t console-full .
 
-When developing an API, you typically begin by designing the endpoints. Your API’s users will have more success if the endpoints are easy to understand.
+# Add runtime dependencies
+dart pub add routed
+```
 
-Here are the endpoints you’ll create in this tutorial.
+The `console-full` template gives you a `bin/` entry point and `lib/` folder. We will place all code in `bin/server.dart`, but feel free to split it into libraries for larger projects.
 
-/albums
+## 2. Implement the API
 
--   `GET` – Get a list of all albums, returned as JSON.
--   `POST` – Add a new album from request data sent as JSON.
-
-/albums/:id
-
--   `GET` – Get an album by its ID, returning the album data as JSON.
-
-Next, you’ll create a folder for your code.
-
-## Create a folder for your code
-
-To begin, create a project for the code you’ll write.
-
-1.  Open a command prompt and change to your home directory.
-
-    On Linux or Mac:
-
-    ```bash
-    $ cd
-    ```
-
-    On Windows:
-
-    ```cmd
-    C:\> cd %HOMEPATH%
-    ```
-
-2.  Using the command prompt, create a directory for your code called `web-service-routed`.
-
-    ```bash
-    $ mkdir web-service-routed
-    $ cd web-service-routed
-    ```
-
-3.  Create a Dart project using the `dart create` command.
-
-    ```bash
-    $ dart create .
-    ```
-
-    Choose the `console` application template. This will create a basic Dart project structure.
-
-4.  Add `routed` and `http` as dependencies
-
-    Edit the `pubspec.yaml` file.  Add `routed` and `http` to the dependencies section:
-    ```yaml
-    dependencies:
-      routed: ^1.0.0 # Replace with the current version
-      http: ^1.0.0
-    ```
-
-    Run `dart pub get` to fetch the dependencies.
-
-Next, you’ll design data structures for handling data.
-
-## Create the data
-
-To keep things simple for the tutorial, you’ll store data in memory. A more typical API would interact with a database.
-
-Note that storing data in memory means that the set of albums will be lost each time you stop the server, then recreated when you start it.
-
-### Write the code
-
-1.  Delete the `bin/web_service_routed.dart` that was generated.
-2.  Using your text editor, create a file called `bin/server.dart` in the `web-service-routed` directory. You’ll write your Dart code in this file.
-3.  Into `bin/server.dart`, at the top of the file, paste the following code.
-
-    ```dart
-    import 'dart:convert';
-    import 'dart:io';
-
-    import 'package:routed/routed.dart';
-
-    void main() async {
-      final engine = Engine();
-
-      // Route handler will go here
-
-      await engine.serve(host: '127.0.0.1', port: 8080);
-    }
-
-    /// The framework will automatically decode the body and deserialize it.
-    /// You must use the [ctx.bind()] helper and define the associated data model.
-    ```
-
-    This imports the necessary packages and sets up the `main` function, which is the entry point of the Dart application.
-
-4.  Beneath the `main` function, paste the following declaration of an `Album` class. You’ll use this to store album data in memory.
-
-    ```dart
-    class Album {
-      String id;
-      String title;
-      String artist;
-      double price;
-
-      Album({
-        required this.id,
-        required this.title,
-        required this.artist,
-        required this.price,
-      });
-
-      factory Album.fromJson(Map<String, dynamic> json) {
-        return Album(
-          id: json['id'],
-          title: json['title'],
-          artist: json['artist'],
-          price: json['price'].toDouble(),
-        );
-      }
-
-      Map<String, dynamic> toJson() => {
-            'id': id,
-            'title': title,
-            'artist': artist,
-            'price': price,
-          };
-    }
-    factory Album.fromJson(Map<String, dynamic> json) {
-      return Album(
-        id: json['id'],
-        title: json['title'],
-        artist: json['artist'],
-        price: json['price'].toDouble(),
-      );
-    }
-
-    Map<String, dynamic> toJson() => {
-          'id': id,
-          'title': title,
-          'artist': artist,
-          'price': price,
-        };
-  }
-
-  /// The album class is a data model to handle the data,
-  /// it contains a `toJson` method to serialize to json and `fromJson`
-  /// used for constructing the object
-    ```
-
-5.  Beneath the class declaration you just added, paste the following list of `Album` objects containing data you’ll use to start.
-
-    ```dart
-    final List<Album> albums = [
-      Album(id: '1', title: 'Blue Train', artist: 'John Coltrane', price: 56.99),
-      Album(id: '2', title: 'Jeru', artist: 'Gerry Mulligan', price: 17.99),
-      Album(id: '3', title: 'Sarah Vaughan and Clifford Brown', artist: 'Sarah Vaughan', price: 39.99),
-    ];
-    ```
-
-Next, you’ll write code to implement your first endpoint.
-
-## Write a handler to return all items
-
-When the client makes a request at `GET /albums`, you want to return all the albums as JSON.
-
-To do this, you’ll write the following:
-
-- Logic to prepare a response
-- Code to map the request path to your logic
-
-Note that this is the reverse of how they’ll be executed at runtime, but you’re adding dependencies first, then the code that depends on them.
-
-### Write the code
-
-1.  Add the handler to send the album list as JSON.
-
-    Inside the `main` function, above the `await engine.serve` call, paste the following code:
-
-    ```dart
-    engine.get('/albums', (Context ctx) {
-      final json = albums.map((a) => a.toJson()).toList();
-      return ctx.json(json);
-    });
-    ```
-
-    In this code, you:
-
-    - Use `engine.get` to register a route that handles `GET` requests to the `/albums` endpoint.
-    - Use `ctx.json` to serialize the `albums` list into JSON format and send it as the response.
-
-2.  Start the server
-
-    Your `main` function should now look like this:
-    ```dart
-    import 'dart:convert';
-    import 'dart:io';
-
-    import 'package:routed/routed.dart';
-
-    class Album {
-      final String id;
-      final String title;
-      final String artist;
-      final double price;
-
-      Album({
-        required this.id,
-        required this.title,
-        required this.artist,
-        required this.price,
-      });
-
-      Map<String, dynamic> toJson() => {
-            'id': id,
-            'title': title,
-            'artist': artist,
-            'price': price,
-          };
-    }
-
-    final List<Album> albums = [
-      Album(id: '1', title: 'Blue Train', artist: 'John Coltrane', price: 56.99),
-      Album(id: '2', title: 'Jeru', artist: 'Gerry Mulligan', price: 17.99),
-      Album(id: '3', title: 'Sarah Vaughan and Clifford Brown', artist: 'Sarah Vaughan', price: 39.99),
-    ];
-
-
-    void main() async {
-      final engine = Engine();
-
-      engine.get('/albums', (Context ctx) {
-        final json = albums.map((a) => a.toJson()).toList();
-        return ctx.json(json);
-      });
-
-      await engine.serve(host: '127.0.0.1', port: 8080);
-    }
-    ```
-    Run the server
-
-    ```bash
-    dart run bin/server.dart
-    ```
-
-3.   From a new command line window, use `curl` to make a request to your running web service.
-
-    ```bash
-    $ curl http://localhost:8080/albums
-    ```
-
-    The command should display the data you seeded the service with.
-
-    ```json
-    [
-      {"id":"1","title":"Blue Train","artist":"John Coltrane","price":56.99},
-      {"id":"2","title":"Jeru","artist":"Gerry Mulligan","price":17.99},
-      {"id":"3","title":"Sarah Vaughan and Clifford Brown","artist":"Sarah Vaughan","price":39.99}
-    ]
-    ```
-
-You’ve started an API! In the next section, you’ll create another endpoint with code to handle a `POST` request to add an item.
-
-## Write a handler to add a new item
-
-When the client makes a `POST` request at `/albums`, you want to add the album described in the request body to the existing albums’ data.
-
-To do this, you’ll write the following:
-
-- Logic to add the new album to the existing list.
-- A bit of code to route the `POST` request to your logic.
-
-### Write the code
-
-1.  Add code to add albums data to the list of albums.
-
-    Before the `await engine.serve` line, paste the following code.
-
-    ```dart
-     engine.post('/albums', (Context ctx) async {
-        final body = await ctx.request.body();
-        final decoded = jsonDecode(body);
-
-        final album = Album(
-          id: decoded['id'],
-          title: decoded['title'],
-          artist: decoded['artist'],
-          price: decoded['price'].toDouble(),
-        );
-
-        albums.add(album);
-
-        return ctx.json(album.toJson(), statusCode: HttpStatus.created);
-      });
-    ```
-
-    In this code, you:
-
-    - Use `ctx.request.body()` to read the request body.
-    - Decode the JSON from the request body into a map.
-    - Create a new `Album` object using the data from the map.
-    - Add the new `Album` to the `albums` list.
-    - Return a 201 Created status code with the JSON representation of the new album.
-
-2. The `main` function should now look like this:
-    ```dart
-    import 'dart:convert';
-    import 'dart:io';
-
-    import 'package:routed/routed.dart';
-
-    class Album {
-      final String id;
-      final String title;
-      final String artist;
-      final double price;
-
-      Album({
-        required this.id,
-        required this.title,
-        required this.artist,
-        required this.price,
-      });
-
-      Map<String, dynamic> toJson() => {
-            'id': id,
-            'title': title,
-            'artist': artist,
-            'price': price,
-          };
-    }
-
-    final List<Album> albums = [
-      Album(id: '1', title: 'Blue Train', artist: 'John Coltrane', price: 56.99),
-      Album(id: '2', title: 'Jeru', artist: 'Gerry Mulligan', price: 17.99),
-      Album(id: '3', title: 'Sarah Vaughan and Clifford Brown', artist: 'Sarah Vaughan', price: 39.99),
-    ];
-
-
-    void main() async {
-      final engine = Engine();
-
-      engine.get('/albums', (Context ctx) {
-        final json = albums.map((a) => a.toJson()).toList();
-        return ctx.json(json);
-      });
-
-        engine.post('/albums', (Context ctx) async {
-          final album = Album(
-            id: '',
-            title: '',
-            artist: '',
-            price: 0.0,
-          );
-
-          await ctx.bind(album);
-
-          albums.add(album);
-
-          return ctx.json(album.toJson(), statusCode: HttpStatus.created);
-        });
-
-      await engine.serve(host: '127.0.0.1', port: 8080);
-    }
-    ```
-3. If the server is still running from the last section, stop it.
-4. From the command line in the directory containing `bin/server.dart`, run the code.
-
-   ```bash
-   $ dart run bin/server.dart
-   ```
-5. From a different command line window, use `curl` to make a request to your running web service.
-
-   ```bash
-   $ curl http://localhost:8080/albums \
-       --include \
-       --header "Content-Type: application/json" \
-       --request "POST" \
-       --data '{"id": "4","title": "The Modern Sound of Betty Carter","artist": "Betty Carter","price": 49.99}'
-   ```
-
-   The command should display headers and JSON for the added album.
-
-   ```json
-   HTTP/1.1 201 Created
-   content-type: application/json
-   transfer-encoding: chunked
-   date: Sat, 22 Jun 2024 22:36:17 GMT
-
-   {"id":"4","title":"The Modern Sound of Betty Carter","artist":"Betty Carter","price":49.99}
-   ```
-
-6.  As in the previous section, use `curl` to retrieve the full list of albums, which you can use to confirm that the new album was added.
-
-    ```bash
-    $ curl http://localhost:8080/albums
-        --header "Content-Type: application/json"
-        --request "GET"
-    ```
-
-    The command should display the album list.
-
-    ```json
-    [
-      {"id":"1","title":"Blue Train","artist":"John Coltrane","price":56.99},
-      {"id":"2","title":"Jeru","artist":"Gerry Mulligan","price":17.99},
-      {"id":"3","title":"Sarah Vaughan and Clifford Brown","artist":"Sarah Vaughan","price":39.99},
-      {"id":"4","title":"The Modern Sound of Betty Carter","artist":"Betty Carter","price":49.99}
-    ]
-    ```
-
-In the next section, you’ll add code to handle a `GET` for a specific item.
-
-## Write a handler to return a specific item
-
-When the client makes a request to `GET /albums/[id]`, you want to return the album whose ID matches the `id` path parameter.
-
-To do this, you will:
-
-- Add logic to retrieve the requested album.
-- Map the path to the logic.
-
-### Write the code
-
-1.  Add code to retrieve a specific album.
-
-    Inside the `main` function and above the `await engine.serve` line, paste the following code:
-
-    ```dart
-     engine.get('/albums/{id}', (Context ctx) {
-        final id = ctx.param('id');
-
-        try {
-          final album = albums.firstWhere((album) => album.id == id);
-          return ctx.json(album.toJson());
-        } catch (e) {
-          return ctx.string('Album not found', statusCode: HttpStatus.notFound);
-        }
-      });
-    ```
-
-    In this code, you:
-
-    - Use `ctx.param('id')` to retrieve the `id` path parameter from the URL.
-    - Use `albums.firstWhere` to find the album with a matching ID.
-    - Use `ctx.json` to return the found album as a JSON response.
-    - Use `HttpStatus.notFound` to return a `404 Not Found` status code if no album with the given ID is found.
-
-2.  The full `main` function should look like this:
-
-    ```dart
-    import 'dart:convert';
-    import 'dart:io';
-
-    import 'package:routed/routed.dart';
-
-    class Album {
-      final String id;
-      final String title;
-      final String artist;
-      final double price;
-
-      Album({
-        required this.id,
-        required this.title,
-        required this.artist,
-        required this.price,
-      });
-
-      Map<String, dynamic> toJson() => {
-            'id': id,
-            'title': title,
-            'artist': artist,
-            'price': price,
-          };
-    }
-
-    final List<Album> albums = [
-      Album(id: '1', title: 'Blue Train', artist: 'John Coltrane', price: 56.99),
-      Album(id: '2', title: 'Jeru', artist: 'Gerry Mulligan', price: 17.99),
-      Album(id: '3', title: 'Sarah Vaughan and Clifford Brown', artist: 'Sarah Vaughan', price: 39.99),
-    ];
-
-
-    void main() async {
-      final engine = Engine();
-
-      engine.get('/albums', (Context ctx) {
-        final json = albums.map((a) => a.toJson()).toList();
-        return ctx.json(json);
-      });
-
-      engine.post('/albums', (Context ctx) async {
-        final body = await ctx.request.body();
-        final decoded = jsonDecode(body);
-
-        final album = Album(
-          id: decoded['id'],
-          title: decoded['title'],
-          artist: decoded['artist'],
-          price: decoded['price'].toDouble(),
-        );
-
-        albums.add(album);
-
-        return ctx.json(album.toJson(), statusCode: HttpStatus.created);
-      });
-
-       engine.get('/albums/{id}', (Context ctx) {
-        final id = ctx.param('id');
-
-        final album = albums.firstWhere((album) => album.id == id, orElse: () => throw NotFoundError());
-        return ctx.json(album.toJson());
-      });
-
-      await engine.serve(host: '127.0.0.1', port: 8080);
-    }
-    ```
-
-3.  If the server is still running from the last section, stop it.
-4.  From the command line in the directory containing `bin/server.dart`, run the code to start the server.
-
-    ```bash
-    $ dart run bin/server.dart
-    ```
-
-5.  From a different command line window, use `curl` to make a request to your running web service.
-
-    ```bash
-    $ curl http://localhost:8080/albums/2
-    ```
-
-    The command should display JSON for the album whose ID you used. If the album wasn’t found, you’ll get JSON with an error message.
-
-    ```json
-    {"id":"2","title":"Jeru","artist":"Gerry Mulligan","price":17.99}
-    ```
-
-## Conclusion
-
-Congratulations! You’ve just used Dart and Routed to write a simple RESTful web service.
-
-Suggested next topics:
-
-- Learn how to register custom types in the [Custom Types Documentation](./custom-types)
-- Explore more about routed features in the [Core Concepts Section](./)
-
-## Completed code
-
-This section contains the code for the application you build with this tutorial.
-
+Replace the contents of `bin/server.dart` with the following:
 
 ```dart
-import 'dart:convert';
 import 'dart:io';
 
+import 'package:routed/middlewares.dart';
 import 'package:routed/routed.dart';
 
-class Album {
-  final String id;
-  final String title;
-  final String artist;
-  final double price;
+Future<void> main() async {
+  final engine = Engine(
+    options: [
+      // Abort requests that take longer than 10 seconds.
+      withMiddleware([timeoutMiddleware(const Duration(seconds: 10))]),
+    ],
+  );
 
-  Album({
-    required this.id,
-    required this.title,
-    required this.artist,
-    required this.price,
-  });
+  final albums = <String, Map<String, dynamic>>{
+    '1': {'id': '1', 'title': 'Blue Train', 'artist': 'John Coltrane', 'price': 56.99},
+    '2': {'id': '2', 'title': 'Jeru', 'artist': 'Gerry Mulligan', 'price': 17.99},
+    '3': {'id': '3', 'title': 'Sarah Vaughan and Clifford Brown', 'artist': 'Sarah Vaughan', 'price': 39.99},
+  };
+  var nextId = albums.length;
 
-  Map<String, dynamic> toJson() => {
-        'id': id,
-        'title': title,
-        'artist': artist,
-        'price': price,
-      };
-}
+  engine.get('/', (ctx) => ctx.json({'message': 'Routed albums API'}));
 
-final List<Album> albums = [
-  Album(id: '1', title: 'Blue Train', artist: 'John Coltrane', price: 56.99),
-  Album(id: '2', title: 'Jeru', artist: 'Gerry Mulligan', price: 17.99),
-  Album(id: '3', title: 'Sarah Vaughan and Clifford Brown', artist: 'Sarah Vaughan', price: 39.99),
-];
-
-
-void main() async {
-  final engine = Engine();
-
-  engine.get('/albums', (Context ctx) {
-    final json = albums.map((a) => a.toJson()).toList();
-    return ctx.json(json);
-  });
-
-    engine.post('/albums', (Context ctx) async {
-      final album = Album(
-        id: '',
-        title: '',
-        artist: '',
-        price: 0.0,
-      );
-
-      await ctx.bind(album);
-
-      albums.add(album);
-
-      return ctx.json(album.toJson(), statusCode: HttpStatus.created);
+  engine.group(path: '/albums', builder: (router) {
+    router.get('/', (ctx) {
+      return ctx.json({'albums': albums.values.toList()});
     });
 
-   engine.get('/albums/{id}', (Context ctx) {
-    final id = ctx.param('id');
+    router.get('/{id}', (ctx) {
+      final id = ctx.param('id');
+      final album = id != null ? albums[id] : null;
+      if (album == null) {
+        return ctx.json({'error': 'Album not found'}, statusCode: HttpStatus.notFound);
+      }
+      return ctx.json(album);
+    });
 
-    try {
-      final album = albums.firstWhere((album) => album.id == id);
-      return ctx.json(album.toJson());
-    } catch (e) {
-      return ctx.string('Album not found', statusCode: HttpStatus.notFound);
-    }
+    router.post('/', (ctx) async {
+      await ctx.validate({
+        'title': 'required|string|min_length:1|max_length:120',
+        'artist': 'required|string|min_length:1|max_length:120',
+        'price': 'required|numeric',
+      });
+
+      final payload = <String, dynamic>{};
+      await ctx.bindJSON(payload);
+
+      final price = double.tryParse(payload['price'].toString());
+      if (price == null) {
+        return ctx.json({'error': 'Price must be numeric'}, statusCode: HttpStatus.unprocessableEntity);
+      }
+
+      final id = (++nextId).toString();
+      final album = {
+        'id': id,
+        'title': payload['title'],
+        'artist': payload['artist'],
+        'price': price,
+      };
+
+      albums[id] = album;
+      return ctx.json(album, statusCode: HttpStatus.created);
+    });
   });
 
   await engine.serve(host: '127.0.0.1', port: 8080);
+  print('Listening on http://127.0.0.1:8080');
 }
 ```
+
+Key takeaways:
+
+- `ctx.json()` serialises maps/lists to JSON and sets the response headers.
+- `ctx.param('id')` reads route parameters. The router automatically enforces the placeholders defined in the path.
+- `ctx.validate()` uses Routed’s built-in validation rules. It runs before we mutate the data.
+- `ctx.bindJSON()` copies decoded JSON into the supplied map so you can work with strongly typed objects if desired.
+
+> In a larger app you can move the timeout middleware—and other feature toggles—into `config/http.yaml` (for example under `http.middleware.global`). Running `dart run routed_cli provider:list --config` shows the active providers/middleware and surfaces validation errors before booting the server.
+
+## 3. Run the server
+
+```bash
+dart run bin/server.dart
+```
+
+You should see the log `Listening on http://127.0.0.1:8080`.
+
+## 4. Exercise the endpoints
+
+List all albums:
+
+```bash
+curl http://127.0.0.1:8080/albums | jq
+```
+
+Create a new album:
+
+```bash
+curl -X POST http://127.0.0.1:8080/albums \
+  -H 'content-type: application/json' \
+  -d '{"title": "Kind of Blue", "artist": "Miles Davis", "price": 49.99}' | jq
+```
+
+Fetch a single album:
+
+```bash
+curl http://127.0.0.1:8080/albums/1 | jq
+```
+
+Invalid payloads return validation errors:
+
+```bash
+curl -X POST http://127.0.0.1:8080/albums \
+  -H 'content-type: application/json' \
+  -d '{"title": "", "artist": "", "price": "free"}' | jq
+```
+
+The response status is `422` with details about the failing fields.
+
+## 5. Where to go next
+
+- Inspect the full example in this repository at [`examples/basic_router`](https://github.com/kingwill101/routed/tree/main/examples/basic_router).
+- Continue with the [routing fundamentals](/docs/routed/fundamentals/routing) guide to learn about middleware, route groups, and named routes.
+- Add persistence (for example with PostgreSQL) by swapping the in-memory map for a repository layer.
+
+You now have a working REST API built with Routed. Extend it with authentication, database access, or property-based tests using the other guides in this documentation set.

@@ -1,0 +1,28 @@
+---
+title: Ephemeral server
+description: Using TestClient.ephemeralServer with real browsers
+---
+
+# Ephemeral server
+
+Use TestClient.ephemeralServer with a handler provider (e.g., server_testing_shelf) to spin up a real HTTP server per test group.
+
+```dart
+final handler = ShelfRequestHandler(app);
+final client = TestClient.ephemeralServer(handler);
+final baseUrl = await client.baseUrlFuture;
+
+browserGroup('e2e', baseUrl: baseUrl, define: (getBrowser) {
+  test('home', () async {
+    final browser = getBrowser();
+    await browser.visit('/');
+    await browser.assertTitle('Home');
+  });
+  tearDownAll(() async { await client.close(); });
+});
+```
+
+Lifecycle
+
+- Create client before browserGroup, await baseUrlFuture, and pass baseUrl.
+- Always close the client in tearDownAll.

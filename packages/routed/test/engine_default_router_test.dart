@@ -23,7 +23,7 @@ void main() {
       engine.get('/hello', (ctx) => ctx.string('Hello, World!'));
       engine.post('/echo', (ctx) async {
         final body = await ctx.request.body();
-        ctx.string('Echo: $body');
+        return ctx.string('Echo: $body');
       });
 
       // Test GET /hello
@@ -58,13 +58,22 @@ void main() {
 
     test('Can apply middlewares to the Engine directly', () async {
       // Apply a middleware to the engine
-      engine.middlewares.add((ctx) async {
+      engine.addGlobalMiddleware((EngineContext ctx, Next next) async {
         ctx.setHeader('X-Engine-Middleware', 'Active');
-        await ctx.next();
+        return await next();
       });
 
       // Register a route
-      engine.get('/middleware', (ctx) => ctx.string('Middleware Test'));
+      engine.get(
+        '/middleware',
+        (ctx) => ctx.string('Middleware Test'),
+        middlewares: [
+          (EngineContext ctx, Next next) async {
+            ctx.setHeader('X-Engine-Middleware-Inside', 'Active');
+            return await next();
+          },
+        ],
+      );
 
       // Test GET /middleware
       var response = await client.get('/middleware');
@@ -78,18 +87,23 @@ void main() {
       // Register a route and set its name
       engine.get('/users', (ctx) => ctx.string('User List')).name('users.list');
       engine.group(
-          path: '/users',
-          builder: (router) {
-            router.get('/{userId:int}', (ctx) {
-              final userId = ctx.param('userId');
-              ctx.string('User Details for $userId');
-            }).name('users.details');
+        path: '/users',
+        builder: (router) {
+          router
+              .get('/{userId:int}', (ctx) {
+                final userId = ctx.param('userId');
+                ctx.string('User Details for $userId');
+              })
+              .name('users.details');
 
-            router.put('/{userId:int}', (ctx) {
-              final userId = ctx.param('userId');
-              ctx.string('Update User $userId');
-            }).name('users.update');
-          });
+          router
+              .put('/{userId:int}', (ctx) {
+                final userId = ctx.param('userId');
+                ctx.string('Update User $userId');
+              })
+              .name('users.update');
+        },
+      );
       // Test GET /users
       var response = await client.get('/users');
       response

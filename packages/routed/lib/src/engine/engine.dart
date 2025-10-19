@@ -1,53 +1,163 @@
 import 'dart:async';
-import 'dart:convert';
 import 'dart:io';
 
 import 'package:collection/collection.dart';
+import 'package:contextual/contextual.dart' as contextual;
 import 'package:fuzzywuzzy/fuzzywuzzy.dart' as fuzzy;
-import 'package:meta/meta.dart' show visibleForTesting;
+import 'package:http2/http2.dart' as http2;
+import 'package:meta/meta.dart' show internal, visibleForTesting;
 import 'package:routed/middlewares.dart';
-import 'package:routed/src/config/config.dart';
+import 'package:routed/src/config/loader.dart';
+import 'package:routed/src/contracts/contracts.dart';
+import 'package:routed/src/container/container.dart';
+import 'package:routed/src/container/container_mixin.dart';
 import 'package:routed/src/context/context.dart';
-import 'package:routed/src/contracts/config.dart/config.dart';
+import 'package:routed/src/config/registry.dart';
 import 'package:routed/src/engine/config.dart';
+import 'package:routed/src/engine/events/config.dart';
+import 'package:routed/src/engine/events/route.dart';
 import 'package:routed/src/engine/engine_opt.dart';
-import 'package:routed/src/middleware/cors.dart';
+import 'package:routed/src/engine/middleware_registry.dart';
+import 'package:routed/src/engine/provider_manifest.dart';
+import 'package:routed/src/engine/providers/core.dart';
+import 'package:routed/src/engine/providers/logging.dart';
+import 'package:routed/src/engine/providers/routing.dart';
+import 'package:routed/src/engine/providers/registry.dart';
+import 'package:routed/src/engine/route_match.dart';
+import 'package:routed/src/engine/wrapped_request.dart';
+import 'package:routed/src/engine/http2_server.dart';
+import 'package:routed/src/events/event_manager.dart';
+import 'package:routed/src/runtime/shutdown.dart';
 import 'package:routed/src/request.dart';
 import 'package:routed/src/response.dart';
-import 'package:routed/src/router/route_builder.dart';
 import 'package:routed/src/router/router.dart';
 import 'package:routed/src/router/router_group_builder.dart';
 import 'package:routed/src/router/types.dart';
 import 'package:routed/src/static_files.dart';
-import 'package:routed/src/support/zone.dart';
-import 'package:routed/wrapped_request.dart';
-import 'package:http2/http2.dart';
-import 'package:http2/multiprotocol_server.dart';
+import 'package:routed/src/websocket/websocket_handler.dart';
+import 'package:routed/src/logging/logging.dart';
+import 'package:routed/src/provider/provider.dart';
+import 'package:routed/src/utils/debug.dart';
+import 'package:routed/src/observability/health.dart';
 
-import '../middleware/csrf.dart';
-import '../middleware/security_header.dart';
-
+import '../support/zone.dart';
+export 'events/events.dart';
 part 'engine_route.dart';
 part 'engine_routing.dart';
 part 'mount.dart';
 part 'patterns.dart';
 part 'request.dart';
 
-/// The Engine is the core component of the Routed framework, responsible for
-/// managing routers, middlewares, and handling incoming HTTP requests.
+part 'error_handling.dart';
+
+part 'param_utils.dart';
+
+/// The core HTTP engine of the Routed framework.
 ///
-/// It allows mounting multiple routers under different prefixes, each with
-/// optional engine-level middlewares. The `build()` method is then called
-/// to produce a flattened route table for efficient request handling.
-class Engine with StaticFileHandler {
+/// The [Engine] is responsible for managing the complete HTTP request lifecycle,
+/// including routing, middleware execution, static file serving, WebSocket
+/// connections, and error handling. It serves as the central orchestrator for
+/// all incoming HTTP requests and their corresponding responses.
+///
+/// ## Features
+///
+/// - **Flexible Routing**: Register routes with path parameters, constraints,
+///   and HTTP method validation
+/// - **Middleware Pipeline**: Apply global, group, and route-specific middleware
+/// - **Static File Serving**: Serve static assets from directories or disk storage
+/// - **WebSocket Support**: Handle WebSocket connections with middleware
+/// - **Service Providers**: Extensible architecture through service providers
+/// - **Configuration**: Comprehensive configuration system with YAML/JSON support
+/// - **HTTP/2 Support**: Optional HTTP/2 protocol support with multiplexing
+/// - **Graceful Shutdown**: Handle shutdown signals with configurable grace periods
+///
+/// ## Basic Usage
+///
+/// ```dart
+/// final engine = Engine();
+///
+/// engine.get('/hello', (req) {
+///   return Response.ok('Hello, World!');
+/// });
+///
+/// engine.get('/users/:id', (req) {
+///   final id = req.params['id'];
+///   return Response.ok('User $id');
+/// });
+///
+/// await engine.listen();
+/// ```
+///
+/// ## With Configuration
+///
+/// ```dart
+/// final engine = Engine(
+///   config: EngineConfig(
+///     security: EngineSecurityFeatures(
+///       maxRequestSize: 10 * 1024 * 1024,
+///       cors: CorsConfig(enabled: true),
+///     ),
+///   ),
+///   options: [
+///     withTrustedProxies(['192.168.1.1']),
+///     withLogging(enabled: true, level: 'info'),
+///   ],
+/// );
+/// ```
+///
+/// ## Mounting Routers
+///
+/// Multiple routers can be mounted at different path prefixes:
+///
+/// ```dart
+/// final apiRouter = Router();
+/// apiRouter.get('/users', listUsers);
+///
+/// engine.route('/api/v1', apiRouter, middlewares: [AuthMiddleware()]);
+/// ```
+///
+/// ## Route Groups
+///
+/// Organize related routes with shared configuration:
+///
+/// ```dart
+/// engine.group(
+///   path: '/admin',
+///   middlewares: [AuthMiddleware(), AdminMiddleware()],
+///   builder: (router) {
+///     router.get('/dashboard', showDashboard);
+///     router.get('/users', listUsers);
+///   },
+/// );
+/// ```
+///
+/// ## Service Providers
+///
+/// Extend the engine with custom service providers:
+///
+/// ```dart
+/// class DatabaseServiceProvider extends ServiceProvider {
+///   @override
+///   void register() {
+///     container.singleton<Database>((c) => Database());
+///   }
+///
+///   @override
+///   void boot() {
+///     // Initialize database connection
+///   }
+/// }
+///
+/// final engine = Engine(providers: [DatabaseServiceProvider()]);
+/// ```
+class Engine with StaticFileHandler, ContainerMixin {
+  bool _closed = false;
+
   /// The configuration settings for this engine.
-  final EngineConfig config;
+  EngineConfig get config => container.get();
 
   /// The application configuration, providing access to application-level settings.
-  final Config _appConfig;
-
-  /// Provides access to the application configuration.
-  Config get appConfig => _appConfig;
+  Config get appConfig => container.get();
 
   /// A list of [_EngineMount] objects, representing the mounted routers and their prefixes.
   final List<_EngineMount> _mounts = [];
@@ -55,23 +165,44 @@ class Engine with StaticFileHandler {
   /// A list of [EngineRoute] objects, representing the flattened route table.
   final List<EngineRoute> _engineRoutes = [];
 
+  /// Map for quick lookup of routes by their name once the routing table is frozen.
+  Map<String, EngineRoute> _routesByName = {};
+
   /// A list of global middlewares that are applied to all routes handled by this engine.
   List<Middleware> middlewares;
 
+  /// Registry of configurable error handling hooks.
+  final ErrorHandlingRegistry errorHooks;
+  final ConfigLoaderOptions _configOptions;
+
   /// The HTTP server instance used to listen for incoming requests.
   HttpServer? _server;
+  Http2ServerBinding? _http2Binding;
 
   /// A flag indicating whether the routes have been initialized.
   bool _routesInitialized = false;
+  bool _providersBooted = false;
+  bool _configLoadedEmitted = false;
+  ProviderManifest? _providerManifest;
+  final List<String> _unresolvedProviderIds = [];
+  final bool _includeDefaultProviders;
+  final Set<Middleware> _configuredGlobalSet = {};
+  final Map<String, List<Middleware>> _configuredMiddlewareGroups = {};
+  final Set<Type> _registeredProviderTypes = {};
 
   /// The default router used when no other routers are explicitly mounted.
   final Router _defaultRouter = Router();
 
   /// Tracks active requests by their unique ID.
   final Map<String, Request> _activeRequests = {};
+  Completer<void>? _activeRequestsCompleter;
 
   /// Optional: Tracks the total number of requests handled by this engine.
   final int _totalRequests = 0;
+
+  ShutdownController? _shutdownController;
+  bool _draining = false;
+  bool _ready = true;
 
   /// Returns the number of currently active requests.
   int get activeRequestCount => _activeRequests.length;
@@ -79,102 +210,506 @@ class Engine with StaticFileHandler {
   /// Returns the total number of requests handled by this engine.
   int get totalRequests => _totalRequests;
 
-  /// Creates a new [Engine] instance.
+  bool get isReady => !_draining && _ready;
+
+  int? get httpPort => _server?.port ?? _http2Binding?.port;
+
+  @visibleForTesting
+  ShutdownController? get shutdownController => _shutdownController;
+
+  @internal
+  void attachServer(HttpServer server) {
+    _server = server;
+    _setupShutdownController();
+  }
+
+  @visibleForTesting
+  Map<String, WebSocketEngineRoute> get debugWebSocketRoutes => _wsRoutes;
+
+  /// Stores WebSocket route handlers mapped by path.
+  final Map<String, WebSocketEngineRoute> _wsRoutes = {};
+
+  /// Creates a new [Engine] instance with the given configuration.
   ///
-  /// The [config] parameter allows specifying an [EngineConfig] object to
-  /// customize the engine's behavior. If not provided, a default [EngineConfig]
+  /// All parameters are optional and have sensible defaults for typical applications.
+  ///
+  /// The [config] parameter provides an [EngineConfig] object to customize
+  /// core engine behavior including security, routing, and TLS settings.
+  ///
+  /// The [middlewares] parameter specifies global middleware applied to all
+  /// routes. These execute before any route-specific middleware.
+  ///
+  /// The [options] parameter accepts a list of [EngineOpt] functions for
+  /// additional configuration. These are applied in sequence after the main
+  /// configuration.
+  ///
+  /// The [configItems] parameter provides a map of additional configuration
+  /// values accessible via the [appConfig] property. Useful for storing
+  /// application-specific settings.
+  ///
+  /// The [errorHandling] parameter allows customizing error handling behavior
+  /// through an [ErrorHandlingRegistry]. If not provided, a default registry
   /// is used.
   ///
-  /// The [middlewares] parameter allows specifying a list of global middlewares
-  /// to be applied to all routes. If not provided, an empty list is used.
+  /// The [configOptions] parameter controls how configuration files are loaded
+  /// and processed from the filesystem.
   ///
-  /// The [options] parameter allows specifying a list of [EngineOpt] functions
-  /// to further configure the engine. These options are applied in order.
+  /// The [providers] parameter specifies custom service providers to register.
+  /// These providers can register services, middleware, and perform initialization.
   ///
-  /// The [configItems] parameter allows specifying a map of configuration
-  /// items that can be accessed via the [appConfig] property.
+  /// The [includeDefaultProviders] parameter controls whether built-in service
+  /// providers (core, routing, logging) are automatically registered. Default is `true`.
+  ///
+  /// Example:
+  /// ```dart
+  /// final engine = Engine(
+  ///   config: EngineConfig(
+  ///     security: EngineSecurityFeatures(maxRequestSize: 5 * 1024 * 1024),
+  ///   ),
+  ///   middlewares: [LoggingMiddleware()],
+  ///   options: [
+  ///     withCors(enabled: true),
+  ///     withTrustedProxies(['10.0.0.0/8']),
+  ///   ],
+  ///   providers: [DatabaseServiceProvider()],
+  /// );
+  /// ```
   Engine({
     EngineConfig? config,
     List<Middleware>? middlewares,
     List<EngineOpt>? options,
     Map<String, dynamic>? configItems,
-  })  : config = config ?? EngineConfig(),
-        _appConfig = ConfigImpl(configItems ??
-            {
-              'app.name': 'Routed App',
-              'app.env': 'production',
-              'app.debug': false,
-            }),
-        middlewares = middlewares ?? [] {
+    ErrorHandlingRegistry? errorHandling,
+    ConfigLoaderOptions? configOptions,
+    List<ServiceProvider>? providers,
+    bool includeDefaultProviders = true,
+  }) : middlewares = middlewares ?? [],
+       errorHooks = errorHandling?.clone() ?? ErrorHandlingRegistry(),
+       _includeDefaultProviders = includeDefaultProviders,
+       _configOptions = configOptions ?? const ConfigLoaderOptions() {
+    if (includeDefaultProviders) {
+      // Register built-in service providers first
+      _registerBuiltInProviders(config: config, configItems: configItems);
+    }
+
+    if (providers != null && providers.isNotEmpty) {
+      for (final provider in providers) {
+        registerProvider(provider);
+      }
+    }
     // Apply options in order
     options?.forEach((opt) => opt(this));
+    _loadManifestProviders();
+    _rebuildMiddlewareStacks();
   }
 
-  /// Creates a new [Engine] instance from an existing [Engine] instance.
+  /// Registers the built-in service providers that come with the framework
+  void _registerBuiltInProviders({
+    EngineConfig? config,
+    Map<String, dynamic>? configItems,
+  }) {
+    // Register core services
+    final coreProvider = CoreServiceProvider(
+      config: config,
+      configItems: configItems,
+      configOptions: _configOptions,
+    );
+    registerProvider(coreProvider);
+    _registeredProviderTypes.add(coreProvider.runtimeType);
+
+    // Register routing services
+    final routingProvider = RoutingServiceProvider();
+    registerProvider(routingProvider);
+    _registeredProviderTypes.add(routingProvider.runtimeType);
+  }
+
+  void _loadManifestProviders() {
+    if (!_includeDefaultProviders) {
+      return;
+    }
+    if (_providerManifest != null) {
+      return;
+    }
+    if (!container.has<Config>()) {
+      return;
+    }
+    final config = container.get<Config>();
+    final manifest = ProviderManifest.fromConfig(config);
+    final registry = ProviderRegistry.instance;
+
+    for (final id in manifest.providers) {
+      final registration = registry.resolve(id);
+      if (registration == null) {
+        if (!_unresolvedProviderIds.contains(id)) {
+          _unresolvedProviderIds.add(id);
+        }
+        continue;
+      }
+      final provider = registration.factory();
+      if (_registeredProviderTypes.contains(provider.runtimeType)) {
+        continue;
+      }
+      if (!_shouldActivateProvider(id, config)) {
+        continue;
+      }
+      registerProvider(provider);
+      _registeredProviderTypes.add(provider.runtimeType);
+    }
+    _providerManifest = manifest;
+    _rebuildMiddlewareStacks();
+    if (_unresolvedProviderIds.isNotEmpty) {
+      debugPrintWarning(
+        'Unknown providers in http.providers manifest: '
+        '${_unresolvedProviderIds.join(', ')}',
+      );
+      _unresolvedProviderIds.clear();
+    }
+  }
+
+  void _rebuildMiddlewareStacks() {
+    if (!container.has<MiddlewareRegistry>() || !container.has<Config>()) {
+      return;
+    }
+    final registry = container.get<MiddlewareRegistry>();
+    final appConfig = container.get<Config>();
+    final manifest = ProviderManifest.fromConfig(appConfig);
+
+    final globalIds = <String>[];
+    final groupIds = <String, List<String>>{};
+
+    void appendUnique(List<String> target, Iterable<String> items) {
+      for (final item in items) {
+        if (!target.contains(item)) {
+          target.add(item);
+        }
+      }
+    }
+
+    appendUnique(
+      globalIds,
+      _stringList(appConfig.get('http.middleware.global')),
+    );
+    final baseGroups = _groupMap(appConfig.get('http.middleware.groups'));
+    groupIds.addAll(
+      baseGroups,
+    ); // shallow copy is fine as lists recreated below.
+
+    final mergedSources = _collectMiddlewareSources(appConfig);
+
+    for (final providerId in manifest.providers) {
+      if (!_shouldActivateProvider(providerId, appConfig)) {
+        continue;
+      }
+      final contribution = mergedSources[providerId];
+      if (contribution == null) {
+        continue;
+      }
+      appendUnique(globalIds, contribution.global);
+      contribution.groups.forEach((group, ids) {
+        final existing = groupIds.putIfAbsent(group, () => <String>[]);
+        appendUnique(existing, ids);
+      });
+    }
+
+    appConfig.set('http.middleware.global', List<String>.from(globalIds));
+    appConfig.set(
+      'http.middleware.groups',
+      groupIds.map((key, ids) => MapEntry(key, List<String>.from(ids))),
+    );
+
+    final configuredGlobal = <Middleware>[];
+    for (final id in globalIds) {
+      final middleware = registry.build(id, container);
+      if (middleware != null) {
+        configuredGlobal.add(middleware);
+      }
+    }
+
+    final userGlobal = middlewares
+        .where((middleware) => !_configuredGlobalSet.contains(middleware))
+        .toList();
+    middlewares = [...configuredGlobal, ...userGlobal];
+    _configuredGlobalSet
+      ..clear()
+      ..addAll(configuredGlobal);
+
+    _configuredMiddlewareGroups.clear();
+    groupIds.forEach((group, ids) {
+      final stack = <Middleware>[];
+      for (final id in ids) {
+        final middleware = registry.build(id, container);
+        if (middleware != null) {
+          stack.add(middleware);
+        }
+      }
+      _configuredMiddlewareGroups[group] = stack;
+    });
+  }
+
+  Map<String, ProviderMiddlewareContribution> _collectMiddlewareSources(
+    Config appConfig,
+  ) {
+    final contributions = <String, _MutableContribution>{};
+
+    void merge(Object? raw) {
+      if (raw is Map) {
+        raw.forEach((key, value) {
+          if (key is! String || value is! Map) {
+            return;
+          }
+          final target = contributions.putIfAbsent(
+            key,
+            () => _MutableContribution(),
+          );
+          target.addGlobal(_stringList(value['global']));
+          target.addGroups(_groupMap(value['groups']));
+        });
+      }
+    }
+
+    final registry = container.get<ConfigRegistry>();
+    for (final entry in registry.entries) {
+      final http = entry.defaults['http'];
+      if (http is Map<String, dynamic>) {
+        merge(http['middleware_sources']);
+      }
+    }
+
+    merge(appConfig.get('http.middleware_sources'));
+
+    return contributions.map(
+      (key, value) => MapEntry(key, value.toImmutable()),
+    );
+  }
+
+  static List<String> _stringList(Object? value) {
+    if (value is Iterable) {
+      return value.map((e) => e.toString()).toList();
+    }
+    return const <String>[];
+  }
+
+  static Map<String, List<String>> _groupMap(Object? value) {
+    if (value is Map) {
+      final result = <String, List<String>>{};
+      value.forEach((key, items) {
+        if (key is String && items is Iterable) {
+          result[key] = items.map((e) => e.toString()).toList();
+        }
+      });
+      return result;
+    }
+    return const <String, List<String>>{};
+  }
+
+  bool _shouldActivateProvider(String providerId, Config appConfig) {
+    bool enabled = true;
+    final suffix = providerId.split('.').last;
+    final featureEntry = appConfig.get('http.features.$suffix');
+    if (featureEntry is Map<String, dynamic>) {
+      final toggle = featureEntry['enabled'];
+      if (toggle is bool) {
+        enabled = toggle;
+      }
+    } else if (featureEntry is bool) {
+      enabled = featureEntry;
+    }
+
+    switch (providerId) {
+      case 'routed.security':
+        enabled =
+            (enabled || config.features.enableSecurityFeatures) &&
+            config.features.enableSecurityFeatures;
+        break;
+      case 'routed.cors':
+        enabled =
+            (enabled || config.features.enableSecurityFeatures) ||
+            config.security.cors.enabled;
+        break;
+      case 'routed.static':
+        enabled = enabled || appConfig.get('static.enabled') == true;
+        break;
+      case 'routed.sessions':
+        bool sessionDiffers = false;
+        if (appConfig.has('session')) {
+          final node = appConfig.get('session');
+          if (node is Map) {
+            Map<String, dynamic>? defaultSession;
+            if (container.has<ConfigRegistry>()) {
+              final defaults = container
+                  .get<ConfigRegistry>()
+                  .combinedDefaults();
+              final defaultNode = defaults['session'];
+              if (defaultNode is Map) {
+                defaultSession = Map<String, dynamic>.from(defaultNode);
+              }
+            }
+            if (defaultSession == null) {
+              sessionDiffers = node.isNotEmpty;
+            } else {
+              final equality = const DeepCollectionEquality();
+              sessionDiffers = !equality.equals(
+                Map<String, dynamic>.from(node),
+                defaultSession,
+              );
+            }
+          }
+        }
+        enabled = enabled || sessionDiffers;
+        break;
+      case 'routed.logging':
+        // Keep configured value.
+        break;
+      case 'routed.observability':
+        enabled =
+            enabled ||
+            appConfig.get('observability.enabled') == true ||
+            appConfig.get('observability.tracing.enabled') == true ||
+            appConfig.get('observability.metrics.enabled') == true ||
+            appConfig.get('observability.health.enabled') == true;
+        break;
+      default:
+        break;
+    }
+    return enabled;
+  }
+
+  /// Creates a new engine instance from an existing engine.
   ///
-  /// This factory method creates a deep copy of the provided [Engine],
-  /// ensuring that all configuration and route information is preserved.
+  /// This factory creates a copy of [other], preserving its configuration,
+  /// routes, middlewares, and error handling settings. Useful for creating
+  /// variations of an engine with modified settings.
+  ///
+  /// Example:
+  /// ```dart
+  /// final baseEngine = Engine(
+  ///   config: EngineConfig(redirectTrailingSlash: true),
+  /// );
+  /// final testEngine = Engine.from(baseEngine);
+  /// ```
   factory Engine.from(Engine other) {
-    final engine = Engine(config: other.config);
+    final engine = Engine(
+      config: other.config,
+      errorHandling: other.errorHooks,
+      configOptions: other._configOptions,
+    );
     engine._mounts.addAll(other._mounts);
     engine._engineRoutes.addAll(other._engineRoutes);
     engine.middlewares.addAll(other.middlewares);
     return engine;
   }
 
-  /// Creates a default [Engine] instance with common options.
+  /// Creates a default engine instance with common production settings.
   ///
-  /// This factory method creates an [Engine] with a default [EngineConfig]
-  /// and a [timeoutMiddleware] with a duration of 30 seconds.
-  factory Engine.d({
-    EngineConfig? config,
-    List<EngineOpt>? options,
-  }) {
+  /// This factory creates an engine with a 30-second timeout middleware
+  /// pre-configured, which is suitable for most production applications.
+  ///
+  /// Example:
+  /// ```dart
+  /// final engine = Engine.d(
+  ///   config: EngineConfig(
+  ///     security: EngineSecurityFeatures(maxRequestSize: 10 * 1024 * 1024),
+  ///   ),
+  ///   options: [withCors(enabled: true)],
+  /// );
+  /// ```
+  factory Engine.d({EngineConfig? config, List<EngineOpt>? options}) {
     return Engine(
       config: config ?? EngineConfig(),
-      middlewares: [
-        timeoutMiddleware(const Duration(seconds: 30)),
-      ],
+      middlewares: [timeoutMiddleware(const Duration(seconds: 30))],
       options: options,
     );
   }
 
-  /// Gets the URL for a named route, substituting parameters if provided.
+  /// Generates a URL for a named route with parameter substitution.
   ///
-  /// The [name] parameter is the name of the route.
-  /// The [params] parameter is an optional map of parameters to substitute into the route path.
+  /// Routes must be explicitly named using the `name()` method on [RouteBuilder]
+  /// to be accessible through this method. All required route parameters must
+  /// be provided in the [params] map.
   ///
-  /// Returns the generated URL, or `null` if the route is not found.
+  /// Example:
+  /// ```dart
+  /// engine.get('/users/:id/posts/:postId', handler).name('user.posts');
   ///
-  /// Throws:
-  ///  - [Exception] if a route with the given name is not found.
+  /// final url = engine.route('user.posts', {
+  ///   'id': 123,
+  ///   'postId': 456,
+  /// });
+  /// // Returns: '/users/123/posts/456'
+  /// ```
+  ///
+  /// Throws an [Exception] if a route with [name] is not found.
+  /// Throws an [ArgumentError] if required parameters are missing or if
+  /// unknown parameters are provided.
   String? route(String name, [Map<String, dynamic>? params]) {
     _ensureRoutes();
 
-    final route = _engineRoutes.firstWhere(
-      (r) => r.name == name,
-      orElse: () => throw Exception('Route with name "$name" not found'),
-    );
+    final route = _routesByName[name];
+    if (route == null) {
+      throw Exception('Route with name "$name" not found');
+    }
+
+    // Collect placeholder names ( `:param`, `{param}`, `{param:int}`, `{param?}`, `{*param}` )
+    final placeholderPattern = RegExp(r':(\w+)|{[*]?(\w+)[^}]*}');
+    final placeholders = <String>{
+      for (final m in placeholderPattern.allMatches(route.path))
+        (m.group(1) ?? m.group(2))!,
+    };
+
+    params ??= const {};
+
+    // Validate that every placeholder has a supplied value
+    final missing = placeholders.where((p) => !params!.containsKey(p)).toList();
+    if (missing.isNotEmpty) {
+      throw ArgumentError(
+        'Missing route parameter${missing.length == 1 ? "" : "s"}: '
+        '${missing.join(", ")} for route "$name"',
+      );
+    }
+
+    // Validate that no unknown params were provided
+    final extra = params.keys.where((k) => !placeholders.contains(k)).toList();
+    if (extra.isNotEmpty) {
+      throw ArgumentError(
+        'Unknown route parameter${extra.length == 1 ? "" : "s"}: '
+        '${extra.join(", ")} for route "$name"',
+      );
+    }
 
     var path = route.path;
 
-    if (params != null) {
-      params.forEach((key, value) {
-        // Replace both :param and {param} formats
-        path = path
-            .replaceAll(':$key', value.toString())
-            .replaceAll('{$key}', value.toString());
-      });
-    }
+    // Perform replacement
+    params.forEach((key, value) {
+      path = path
+          .replaceAll(':$key', value.toString())
+          .replaceAll('{$key}', value.toString());
+    });
 
     return path;
   }
 
-  /// Attaches a [Router] to this engine at a given prefix.
+  /// Mounts a router at a specific path prefix with optional middleware.
   ///
-  /// The [router] parameter is the [Router] instance to attach.
-  /// The [prefix] parameter is the URL prefix at which the router will be mounted.
-  /// The [middlewares] parameter is an optional list of engine-level middlewares that apply to this mount.
+  /// This method allows organizing routes into separate router instances and
+  /// mounting them at different path prefixes. Each mounted router can have
+  /// its own engine-level middleware that applies to all routes within it.
+  ///
+  /// Example:
+  /// ```dart
+  /// final apiRouter = Router();
+  /// apiRouter.get('/users', listUsers);
+  /// apiRouter.get('/posts', listPosts);
+  ///
+  /// final adminRouter = Router();
+  /// adminRouter.get('/dashboard', showDashboard);
+  ///
+  /// engine.use(apiRouter, prefix: '/api/v1', middlewares: [RateLimitMiddleware()]);
+  /// engine.use(adminRouter, prefix: '/admin', middlewares: [AuthMiddleware()]);
+  /// ```
+  ///
+  /// The [prefix] is prepended to all routes in the router. The [middlewares]
+  /// are applied to all routes within this mount, executing before any
+  /// route-specific middleware.
   Engine use(
     Router router, {
     String prefix = '',
@@ -184,38 +719,53 @@ class Engine with StaticFileHandler {
     return this;
   }
 
-  /// Builds the final route table by flattening all mounted routers and their routes.
+  /// Builds the final route table by flattening all mounted routers.
   ///
-  /// This method performs the following steps:
-  /// 1. For each mount, calls `router.build()` to build the router's route table.
-  /// 2. For each route in the router, merges the mount prefix with the route path.
-  /// 3. Combines engine-level middlewares with the route's final middlewares.
+  /// This internal method processes all mounted routers and their routes to
+  /// create a flat list of [EngineRoute] objects. For each route, it:
+  /// 1. Merges the mount prefix with the route path
+  /// 2. Combines engine-level middlewares with route-specific middlewares
+  /// 3. Resolves middleware references using the middleware registry
+  /// 4. Stores routes by name for URL generation
   ///
-  /// The [parentGroupName] parameter is used for hierarchical route naming and is passed to child routers.
+  /// This method is called automatically before serving requests and should
+  /// not typically be called directly.
   void _build({String? parentGroupName}) {
     if (_routesInitialized) {
       _engineRoutes.clear();
     }
 
-    if (config.features.enableSecurityFeatures) {
-      middlewares.insertAll(0, [
-        corsMiddleware(),
-        csrfMiddleware(),
-        securityHeadersMiddleware(),
-        requestSizeLimitMiddleware(),
-      ]);
-    }
     // Build routes if not already done
     if (_engineRoutes.isEmpty) {
       use(_defaultRouter);
     }
 
     _engineRoutes.clear();
+    // Reset caches before rebuilding
+    _routesByName = {};
+
+    final registry = container.has<MiddlewareRegistry>()
+        ? container.get<MiddlewareRegistry>()
+        : null;
 
     for (final mount in _mounts) {
       // Let the child router finish its group & route merges
-      mount.router
-          .build(parentGroupName: parentGroupName, parentPrefix: mount.prefix);
+      mount.router.build(
+        parentGroupName: parentGroupName,
+        parentPrefix: mount.prefix,
+      );
+
+      List<Middleware> resolvedMountMiddlewares = mount.middlewares;
+      if (registry != null) {
+        mount.router.resolveMiddlewareReferences(registry, container);
+        resolvedMountMiddlewares = registry.resolveAll(
+          mount.middlewares,
+          container,
+        );
+        mount.middlewares
+          ..clear()
+          ..addAll(resolvedMountMiddlewares);
+      }
 
       // Flatten all routes
       final childRoutes = mount.router.getAllRoutes();
@@ -224,18 +774,56 @@ class Engine with StaticFileHandler {
         final combinedPath = _joinPaths(mount.prefix, r.path);
 
         // Engine-level + route's final
-        final allMiddlewares = [...mount.middlewares, ...r.finalMiddlewares];
+        final allMiddlewares = [
+          ...resolvedMountMiddlewares,
+          ...r.finalMiddlewares,
+        ];
 
-        _engineRoutes.add(
-          EngineRoute(
-            method: r.method,
-            path: combinedPath,
-            handler: r.handler,
-            name: r.name,
-            middlewares: allMiddlewares,
-            constraints: r.constraints,
-            isFallback: r.constraints['isFallback'] == true,
-          ),
+        final engineRoute = EngineRoute(
+          method: r.method,
+          path: combinedPath,
+          handler: (ctx) async {
+            final v = await r.handler(ctx);
+            return v is Response ? v : ctx.response;
+          },
+          name: r.name,
+          middlewares: allMiddlewares,
+          constraints: r.constraints,
+          isFallback: r.constraints['isFallback'] == true,
+        );
+
+        // Uniqueness checks
+        if (_engineRoutes.any(
+          (er) =>
+              er.method == engineRoute.method && er.path == engineRoute.path,
+        )) {
+          throw StateError(
+            'Duplicate route registered for [${engineRoute.method}] ${engineRoute.path}',
+          );
+        }
+
+        if (engineRoute.name != null) {
+          if (_routesByName.containsKey(engineRoute.name)) {
+            throw StateError('Duplicate route name "${engineRoute.name}"');
+          }
+          _routesByName[engineRoute.name!] = engineRoute;
+        }
+
+        _engineRoutes.add(engineRoute);
+      }
+
+      final childWebSockets = mount.router.getAllWebSocketRoutes();
+      for (final ws in childWebSockets) {
+        final combinedPath = _joinPaths(mount.prefix, ws.path);
+        final allMiddlewares = [
+          ...resolvedMountMiddlewares,
+          ...ws.finalMiddlewares,
+        ];
+
+        _wsRoutes[combinedPath] = WebSocketEngineRoute(
+          path: combinedPath,
+          handler: ws.handler,
+          middlewares: allMiddlewares,
         );
       }
     }
@@ -258,12 +846,38 @@ class Engine with StaticFileHandler {
 
   /// Prints all routes to the console.
   void printRoutes() {
+    _ensureRoutes();
     for (final route in _engineRoutes) {
       print(route);
     }
   }
 
-// same path-join logic as the router
+  /// Returns the set of HTTP methods that are valid for a given [path].
+  ///
+  /// Useful for building `Allow` headers (e.g. 405 responses, CORS pre-flight).
+  /// Considers the trailing-slash alternative when
+  /// [EngineConfig.redirectTrailingSlash] is enabled.
+  Set<String> allowedMethods(String path) {
+    _ensureRoutes();
+
+    final pathsToCheck = <String>{path};
+    if (config.redirectTrailingSlash) {
+      final alt = path.endsWith('/')
+          ? path.substring(0, path.length - 1)
+          : '$path/';
+      pathsToCheck.add(alt);
+    }
+
+    final methods = <String>{};
+    for (final route in _engineRoutes) {
+      if (pathsToCheck.contains(route.path)) {
+        methods.add(route.method);
+      }
+    }
+    return methods;
+  }
+
+  // same path-join logic as the router
   static String _joinPaths(String base, String child) {
     if (base.isEmpty && child.isEmpty) return '';
     if (base.isEmpty) return child;
@@ -292,128 +906,441 @@ class Engine with StaticFileHandler {
 
   /// Returns the default router.
   Router get defaultRouter => _defaultRouter;
-}
 
-Middleware requestSizeLimitMiddleware() {
-  return (EngineContext ctx) async {
-    final config = ctx.engineConfig;
-    final maxRequestSize = config.security.maxRequestSize;
+  void _onRequestStarted(Request request) {
+    _activeRequests[request.id] = request;
+    if (_activeRequestsCompleter == null ||
+        _activeRequestsCompleter!.isCompleted) {
+      _activeRequestsCompleter = Completer<void>();
+    }
+  }
 
-    if (maxRequestSize <= 0 || !config.features.enableSecurityFeatures) {
-      // Disable the limit if maxRequestSize is zero or negative.
-      await ctx.next();
+  void _onRequestFinished(String id) {
+    final removed = _activeRequests.remove(id);
+    if (removed != null && _activeRequests.isEmpty) {
+      _activeRequestsCompleter?.complete();
+      _activeRequestsCompleter = null;
+    }
+  }
+
+  /// Registers a WebSocket handler for the given path.
+  ///
+  /// The [path] parameter specifies the URL path at which the WebSocket handler will be mounted.
+  /// The [handler] parameter is the [WebSocketHandler] instance that will handle WebSocket events.
+  void ws(
+    String path,
+    WebSocketHandler handler, {
+    List<Middleware> middlewares = const [],
+  }) {
+    _wsRoutes[path] = WebSocketEngineRoute(
+      path: path,
+      handler: handler,
+      middlewares: middlewares,
+    );
+  }
+
+  /// Handles an incoming HTTP request.
+  ///
+  /// This method is responsible for processing both HTTP and WebSocket upgrade requests.
+  /// The actual implementation is in [ServerExtension._handleRequest].
+  Future<void> handleRequest(HttpRequest httpRequest) async {
+    if (_closed) {
+      throw StateError('Cannot handle requests on a closed engine');
+    }
+    final bypassHealth =
+        container.has<HealthEndpointRegistry>() &&
+        container.get<HealthEndpointRegistry>().allows(httpRequest.uri.path);
+
+    if ((_draining || _shutdownController?.isDraining == true) &&
+        !bypassHealth) {
+      httpRequest.response.statusCode = HttpStatus.serviceUnavailable;
+      httpRequest.response.headers.set(HttpHeaders.connectionHeader, 'close');
+      await httpRequest.response.close();
       return;
     }
-
-    final request = ctx.request.httpRequest;
-    int totalBytesRead = 0;
-
+    if (!_providersBooted) await initialize();
+    _ensureRoutes();
+    final requestContainer = createRequestContainer(
+      httpRequest,
+      httpRequest.response,
+    );
+    Request? trackedRequest;
     try {
-      // Use a StreamTransformer to intercept the request body stream.
-      final byteStream =
-          request.cast<List<int>>(); // Ensure we have a byte stream
+      trackedRequest = await _handleRequest(httpRequest, requestContainer);
+    } finally {
+      if (trackedRequest != null) {
+        _onRequestFinished(trackedRequest.id);
+      }
+      await cleanupRequestContainer(requestContainer);
+    }
+  }
 
-      byteStream.transform(
-        StreamTransformer<List<int>, List<int>>.fromHandlers(
-          handleData: (List<int> data, EventSink<List<int>> sink) {
-            totalBytesRead += data.length;
+  /// Close the engine and clean up resources
+  Future<void> close() async {
+    _closed = true;
+    final server = _server;
+    try {
+      await server?.close(force: true);
+    } catch (_) {}
+    _server = null;
+    final http2Binding = _http2Binding;
+    if (http2Binding != null) {
+      try {
+        await http2Binding.close(force: true);
+      } catch (_) {}
+      _http2Binding = null;
+    }
+    final controller = _shutdownController;
+    if (controller != null && !controller.isDraining) {
+      controller.dispose();
+      _shutdownController = null;
+      container.remove<ShutdownController>();
+    }
+    _ready = false;
+    await cleanupProviders();
+    await container.cleanup();
+  }
 
-            if (totalBytesRead > maxRequestSize) {
-              // Exceeded the limit.  Abort the request.
-              throw const HttpException(
-                  'Request body exceeds the maximum allowed size.');
-            }
+  /// Updates the engine's configuration.
+  ///
+  /// This method allows updating the configuration while maintaining immutability
+  /// of the config object itself.
+  void updateConfig(EngineConfig newConfig) {
+    container.instance<EngineConfig>(newConfig);
+    _rebuildMiddlewareStacks();
+    _configureShutdownHooks();
+  }
 
-            // Pass the data along to the next handler.
-            sink.add(data);
-          },
-          handleError:
-              (Object error, StackTrace stackTrace, EventSink<List<int>> sink) {
-            // Handle stream errors.  You might want to log this.
-            sink.addError(error, stackTrace);
-          },
-          handleDone: (EventSink<List<int>> sink) {
-            // Signal the end of the transformed stream.
-            sink.close();
-          },
-        ),
-      );
-
-      await ctx.next();
-    } catch (e) {
-      ctx.abortWithStatus(
-          HttpStatus.requestEntityTooLarge, 'Request body too large');
-      //Close the connection to prevent further data transmission
-      request.response.close();
+  void _configureShutdownHooks() {
+    if (_shutdownController?.isDraining == true) {
       return;
     }
-  };
+    _setupShutdownController();
+  }
+
+  void _setupShutdownController() {
+    final server = _server;
+    final shutdownConfig = config.shutdown;
+
+    _shutdownController?.dispose();
+    _shutdownController = null;
+    container.remove<ShutdownController>();
+
+    if (server == null || !shutdownConfig.enabled) {
+      if (!shutdownConfig.enabled) {
+        _ready = true;
+      }
+      return;
+    }
+
+    final controller = ShutdownController(
+      config: shutdownConfig,
+      onShutdown: () async {
+        _draining = true;
+        if (shutdownConfig.notifyReadiness) {
+          _ready = false;
+        }
+        try {
+          if (_http2Binding != null) {
+            await _http2Binding!.close(force: false);
+            _http2Binding = null;
+            _server = null;
+          } else {
+            await server.close(force: false);
+          }
+        } catch (_) {}
+      },
+      onDrain: () async {
+        await _waitForActiveRequests(Duration.zero);
+        if (_activeRequests.isEmpty) {
+          await close();
+        }
+      },
+      onForceClose: () async {
+        if (_http2Binding != null) {
+          await _http2Binding!.close(force: true);
+          _http2Binding = null;
+          _server = null;
+        }
+        await _forceCloseActiveRequests(server);
+      },
+    );
+    _shutdownController = controller;
+    container.instance<ShutdownController>(controller);
+    controller.watchSignals();
+    controller.done.then((_) {
+      _draining = false;
+      _shutdownController = null;
+      container.remove<ShutdownController>();
+    });
+  }
+
+  Future<void> _waitForActiveRequests(Duration timeout) async {
+    if (_activeRequests.isEmpty) {
+      return;
+    }
+    _activeRequestsCompleter ??= Completer<void>();
+    if (timeout <= Duration.zero) {
+      await _activeRequestsCompleter!.future;
+      return;
+    }
+    try {
+      await _activeRequestsCompleter!.future.timeout(timeout);
+    } on TimeoutException {
+      // Timer in shutdown controller will handle forceful close.
+    }
+  }
+
+  Future<void> _forceCloseActiveRequests(HttpServer? server) async {
+    if (server != null) {
+      try {
+        await server.close(force: true);
+      } catch (_) {}
+      if (identical(_server, server)) {
+        _server = null;
+      }
+    }
+    for (final request in _activeRequests.values.toList()) {
+      try {
+        await request.httpRequest.response.close();
+      } catch (_) {}
+    }
+    _activeRequests.clear();
+    _activeRequestsCompleter?.complete();
+    _activeRequestsCompleter = null;
+    await close();
+  }
+
+  /// Replaces the current application configuration and notifies listeners.
+  ///
+  /// The [config] is bound into the root container, making it available for
+  /// subsequent resolutions. A [ConfigReloadedEvent] is published so that
+  /// interested listeners (e.g. caches, feature toggles) can react to the
+  /// change. Optional [metadata] can describe the source of the reload.
+  Future<void> replaceConfig(
+    Config config, {
+    Map<String, dynamic>? metadata,
+  }) async {
+    container.instance<Config>(config);
+    await notifyProvidersOfConfigReload(config);
+    _rebuildMiddlewareStacks();
+    await _publishConfigEvent(ConfigReloadedEvent(config, metadata: metadata));
+  }
+
+  /// Initialize the engine and boot service providers
+  Future<void> initialize() async {
+    container.instance<Engine>(this);
+    _loadManifestProviders();
+    await bootProviders();
+    _rebuildMiddlewareStacks();
+    _providersBooted = true;
+    await _emitConfigLoaded();
+  }
+
+  /// Creates an initialized engine.
+  static Future<Engine> create({
+    EngineConfig? config,
+    List<Middleware>? middlewares,
+    List<EngineOpt>? options,
+    Map<String, dynamic>? configItems,
+    ErrorHandlingRegistry? errorHandling,
+    ConfigLoaderOptions? configOptions,
+    List<ServiceProvider>? providers,
+    bool includeDefaultProviders = true,
+  }) async {
+    final engine = Engine(
+      config: config,
+      middlewares: middlewares,
+      options: options,
+      configItems: configItems,
+      errorHandling: errorHandling,
+      configOptions: configOptions,
+      providers: providers,
+      includeDefaultProviders: includeDefaultProviders,
+    );
+    await engine.initialize();
+    return engine;
+  }
+
+  void addGlobalMiddleware(Middleware middleware) {
+    middlewares.add(middleware);
+  }
+
+  List<Middleware> middlewareGroup(String name) {
+    final stack = _configuredMiddlewareGroups[name];
+    if (stack == null) {
+      return const [];
+    }
+    return List<Middleware>.from(stack);
+  }
+
+  void onError<T extends Object>(EngineErrorHandler<T> handler) {
+    errorHooks.addHandler(handler);
+  }
+
+  void beforeError(EngineErrorObserver observer) {
+    errorHooks.addBefore(observer);
+  }
+
+  void afterError(EngineErrorObserver observer) {
+    errorHooks.addAfter(observer);
+  }
+
+  Future<void> _emitConfigLoaded() async {
+    if (_configLoadedEmitted) {
+      return;
+    }
+    if (!container.has<Config>()) {
+      return;
+    }
+    _configLoadedEmitted = true;
+    final config = container.get<Config>();
+    await _publishConfigEvent(ConfigLoadedEvent(config));
+  }
+
+  Future<void> _publishConfigEvent(ConfigEvent event) async {
+    if (!container.has<EventManager>()) {
+      return;
+    }
+    final manager = await container.make<EventManager>();
+    manager.publish(event);
+  }
 }
 
 extension SecureEngine on Engine {
   Future<void> serveSecure({
     String address = 'localhost',
     int port = 443,
-    required String certificatePath,
-    required String keyPath,
+    String? certificatePath,
+    String? keyPath,
+    String? certificatePassword,
+    bool? v6Only,
+    bool? requestClientCertificate,
+    bool? shared,
   }) async {
-    final securityContext = SecurityContext()
-      ..useCertificateChain(certificatePath)
-      ..usePrivateKey(keyPath);
+    if (_engineRoutes.isEmpty) {
+      _build();
+    }
+    if (config.features.enableProxySupport) {
+      await config.parseTrustedProxies();
+    }
 
-    final server = await MultiProtocolHttpServer.bind(
+    certificatePath ??= config.tlsCertificatePath;
+    keyPath ??= config.tlsKeyPath;
+    certificatePassword ??= config.tlsCertificatePassword;
+    final effectiveV6Only = v6Only ?? config.tlsV6Only ?? false;
+    final effectiveRequestClientCertificate =
+        requestClientCertificate ?? config.tlsRequestClientCertificate ?? false;
+    final effectiveShared = shared ?? config.tlsShared ?? false;
+
+    if (certificatePath == null || keyPath == null) {
+      throw ArgumentError(
+        'TLS certificatePath and keyPath must be provided either via '
+        'serveSecure parameters or configuration (http.tls.*).',
+      );
+    }
+
+    final securityContext = SecurityContext()
+      ..useCertificateChain(certificatePath, password: certificatePassword)
+      ..usePrivateKey(keyPath, password: certificatePassword);
+
+    if (config.http2.enabled) {
+      final settings = config.http2.maxConcurrentStreams != null
+          ? http2.ServerSettings(
+              concurrentStreamLimit: config.http2.maxConcurrentStreams!,
+            )
+          : const http2.ServerSettings();
+
+      final binding = await Http2ServerBinding.bind(
+        address: address,
+        port: port,
+        context: securityContext,
+        settings: settings,
+        v6Only: effectiveV6Only,
+        requestClientCertificate: effectiveRequestClientCertificate,
+        shared: effectiveShared,
+      );
+
+      _http2Binding = binding;
+      _server = binding.http1Server;
+
+      binding.start(
+        handleHttp11: (request) async {
+          await handleRequest(request);
+        },
+        handleHttp2: (stream, socket) async {
+          await _handleHttp2Stream(stream, socket);
+        },
+        onError: (error, stackTrace) {
+          stderr.writeln('HTTP/2 server error: $error\n$stackTrace');
+        },
+      );
+
+      print(
+        'Secure server listening on https://$address:$port (HTTP/2 enabled)',
+      );
+      _setupShutdownController();
+      return;
+    }
+
+    securityContext.setAlpnProtocols(['http/1.1'], true);
+
+    final server = await HttpServer.bindSecure(
       address,
       port,
       securityContext,
+      v6Only: effectiveV6Only,
+      requestClientCertificate: effectiveRequestClientCertificate,
+      shared: effectiveShared,
     );
+
+    _server = server;
 
     print('Secure server listening on https://$address:$port');
 
-    server.startServing(
-      // HTTP/1.1 handler
-      (request) async {
-        await handleRequest(request);
-      },
-      // HTTP/2 handler
-      (stream) async {
-        throw UnimplementedError();
-        // await processStream(stream);
-      },
-    );
+    _setupShutdownController();
+
+    await for (final request in server) {
+      await handleRequest(request);
+    }
   }
 
-  Future<void> processStream(ServerTransportStream stream) async {
-    await for (var message in stream.incomingMessages) {
-      if (message is HeadersStreamMessage) {
-        final headers = <String, String>{};
-        for (var header in message.headers) {
-          final name = utf8.decode(header.name);
-          final value = utf8.decode(header.value);
-          headers[name] = value;
-        }
-
-        // final _ = headers[':method']!;
-        // final path = headers[':path']!;
-        // final scheme = headers[':scheme']!;
-        // final authority = headers[':authority']!;
-
-        // final _ = Uri.parse('$scheme://$authority$path');
-
-        // final request = Request(method, uri, headers: headers);
-
-        // await handleRequest(request);
-
-        // // Send response
-        // final responseHeaders = [
-        //   Header.ascii(':status', ctx.response.statusCode.toString()),
-        //   ...ctx.response.headers.entries.map(
-        //     (e) => Header.ascii(e.key, e.value)
-        //   ),
-        // ];
-
-        // stream.sendHeaders(responseHeaders);
-        // await stream.sendData(ctx.response.bodyBytes);
-      }
+  Future<void> _handleHttp2Stream(
+    http2.ServerTransportStream stream,
+    Socket socket,
+  ) async {
+    try {
+      final httpRequest = await Http2Adapter.createHttpRequest(stream, socket);
+      await handleRequest(httpRequest);
+    } catch (error, stackTrace) {
+      stderr.writeln('HTTP/2 stream error: $error\n$stackTrace');
     }
+  }
+}
+
+class _MutableContribution {
+  final Set<String> global = <String>{};
+  final Map<String, Set<String>> groups = <String, Set<String>>{};
+
+  void addGlobal(Iterable<String> items) {
+    global.addAll(items);
+  }
+
+  void addGroups(Map<String, List<String>> items) {
+    items.forEach((key, values) {
+      final target = groups.putIfAbsent(key, () => <String>{});
+      target.addAll(values);
+    });
+  }
+
+  ProviderMiddlewareContribution toImmutable() {
+    final mappedGroups = <String, List<String>>{};
+    groups.forEach((key, value) {
+      mappedGroups[key] = value.toList();
+    });
+    return ProviderMiddlewareContribution(
+      global: global.toList(),
+      groups: mappedGroups,
+    );
   }
 }

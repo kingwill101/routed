@@ -1,0 +1,53 @@
+---
+id: graceful-shutdown
+title: Graceful shutdown
+sidebar_position: 8
+description: Configure Routed to drain in-flight requests when the process receives a termination signal.
+---
+
+Routed shuts down abruptly by default—terminating the process drops TCP
+connections immediately. Enable the runtime shutdown controller to let the
+server stop accepting new connections, drain requests within a grace period, and
+then exit cleanly.
+
+## Configuration
+
+Add the `runtime.shutdown` block to `config/http.yaml` (or any manifest
+override):
+
+```yaml title="config/http.yaml"
+runtime:
+  shutdown:
+    enabled: true
+    grace_period: 20s     # wait for active requests to finish
+    force_after: 1m       # hard timeout before we exit anyway
+    exit_code: 0          # process exit code after shutdown
+    notify_readiness: true
+    signals: [sigint, sigterm]
+```
+
+If you need different behaviour on Windows, trim the `signals` list to the ones
+the platform supports (for example `sigint`).
+
+For embedding scenarios or CLI tooling, resolve the `ShutdownController` from
+the container and call `trigger()`:
+
+```dart
+final controller = await engine.container.make<ShutdownController>();
+await controller.trigger();
+await controller.done; // waits for drain/force sequence to finish
+```
+
+## Operational notes
+
+- When shutdown begins, the engine returns `503 Service Unavailable` to new
+  requests. Existing handlers can still finish until `grace_period` elapses.
+- Once the grace window closes, remaining requests are terminated and the server
+  exits with `force_after` as the upper bound.
+- Set `notify_readiness` to `false` if your readiness probes live outside the
+  process (for example, via Kubernetes pre-stop hooks).
+- The controller listens for signals only while the engine is running; signal
+  hooks are rebuilt automatically when config reloads.
+- Streaming handlers such as `ctx.sse` count as active requests. They are closed
+  as soon as draining starts, allowing the shutdown controller to finish without
+  hanging on long-lived connections.

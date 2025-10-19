@@ -1,0 +1,204 @@
+---
+title: "Shelf Router Chaos Testing"
+sidebar_position: 4
+---
+
+This walkthrough shows how to combine **property_testing**, **server_testing**, and **server_testing_shelf** to harden a Shelf API built with `shelf_router`. We exercise the router with randomly generated requests and ensure the service never crashes, even when hit with adversarial payloads.
+
+## Dependencies
+
+Add the relevant packages to your `dev_dependencies`:
+
+```yaml
+dev_dependencies:
+  property_testing: ^0.1.0
+  server_testing: ^0.1.0
+  server_testing_shelf: ^0.1.0
+  shelf: ^1.4.0
+  shelf_router: ^1.1.0
+  test: ^1.25.0
+```
+
+## Define the Shelf router
+
+```dart
+import 'dart:convert';
+
+import 'package:shelf/shelf.dart' as shelf;
+import 'package:shelf_router/shelf_router.dart';
+
+Router buildRouter() {
+  final router = Router();
+
+  router
+    ..get('/users/<id>', (shelf.Request request, String id) {
+      final parsed = int.tryParse(id);
+      if (parsed == null || parsed <= 0) {
+        return shelf.Response.notFound(jsonEncode({
+          'error': 'User id must be a positive integer',
+        }), headers: {'content-type': 'application/json'});
+      }
+
+      return shelf.Response.ok(
+        jsonEncode({
+          'id': parsed,
+          'name': parsed == 1 ? 'Alice' : 'Guest $parsed',
+          'role': parsed == 1 ? 'admin' : 'user',
+        }),
+        headers: {'content-type': 'application/json'},
+      );
+    })
+    ..post('/login', (shelf.Request request) async {
+      final body = jsonDecode(await request.readAsString())
+          as Map<String, dynamic>;
+
+      final username = (body['username'] ?? '').toString();
+      final password = (body['password'] ?? '').toString();
+
+      if (username == 'admin' && password == 'password123') {
+        return shelf.Response.ok(
+          jsonEncode({'token': 'mock-jwt-token', 'success': true}),
+          headers: {'content-type': 'application/json'},
+        );
+      }
+
+      return shelf.Response(
+        401,
+        body: jsonEncode({'error': 'Invalid credentials', 'success': false}),
+        headers: {'content-type': 'application/json'},
+      );
+    })
+    ..get('/search', (shelf.Request request) {
+      final query = request.requestedUri.queryParameters['q'] ?? '';
+      return shelf.Response.ok(
+        jsonEncode({'query': query, 'results': []}),
+        headers: {'content-type': 'application/json'},
+      );
+    });
+
+  return router;
+}
+```
+
+## Wrap the router for testing
+
+`server_testing_shelf` adapts the Shelf router into a `RequestHandler` that server_testing and property_testing can drive in-memory:
+
+```dart
+import 'package:server_testing/server_testing.dart';
+import 'package:server_testing_shelf/server_testing_shelf.dart';
+
+late TestClient client;
+
+setUp(() {
+  final router = buildRouter();
+  final handler = ShelfRequestHandler(router.call);
+  client = TestClient.inMemory(handler);
+});
+
+tearDown(() => client.close());
+```
+
+The `TestClient` gives the familiar fluent assertion API (`assertStatus`, `assertJson`, `postJson`, etc.) but never spawns a real HTTP server.
+
+## Property tests in action
+
+Below is a complete test file that mixes generators from `property_testing` with the in-memory client. Each property run reuses the same client instance, so requests remain cheap while still covering hundreds of cases.
+
+```dart
+import 'package:property_testing/property_testing.dart';
+import 'package:server_testing/server_testing.dart';
+import 'package:server_testing_shelf/server_testing_shelf.dart';
+import 'package:test/test.dart';
+
+// Assumes buildRouter() from the earlier snippet is available in scope.
+void main() {
+  late TestClient client;
+
+  setUp(() {
+    final router = buildRouter();
+    client = TestClient.inMemory(ShelfRequestHandler(router.call));
+  });
+
+  tearDown(() => client.close());
+
+  test('GET /users/<id> tolerates chaotic ids', () async {
+    final runner = PropertyTestRunner(
+      Chaos.string(maxLength: 32),
+      (id) async {
+        final response = await client.get('/users/$id');
+        // Invariant: The API should never crash with a 5xx.
+        expect(response.statusCode, lessThan(500), reason: 'id=$id');
+
+        // Valid ids respond with JSON; invalid ones provide a JSON error.
+        if (int.tryParse(id) != null && int.parse(id) > 0) {
+          response
+              .assertStatus(200)
+              .assertJson((json) => json.where('id', int.parse(id)));
+        } else {
+          expect(response.statusCode, anyOf(400, 404));
+          response.assertJson((json) => json.has('error'));
+        }
+      },
+      PropertyConfig(numTests: 300, seed: 1337),
+    );
+
+    final result = await runner.run();
+    expect(result.success, isTrue, reason: result.report);
+  });
+
+  test('POST /login handles random credentials', () async {
+    final credentialsGen = Gen.string(minLength: 3, maxLength: 24)
+        .flatMap((username) => Gen.string(minLength: 6, maxLength: 32).map(
+              (password) => {
+                'username': username,
+                'password': password,
+              },
+            ));
+
+    final runner = PropertyTestRunner(
+      credentialsGen,
+      (credentials) async {
+        final response = await client.postJson('/login', credentials);
+        // The handler should respond with either 200 (valid) or 401 (invalid).
+        expect(response.statusCode, anyOf(200, 401));
+
+        response.assertJson((json) {
+          json.has('success');
+          if (response.statusCode == 200) {
+            json.has('token');
+          }
+        });
+      },
+      PropertyConfig(numTests: 200),
+    );
+
+    final result = await runner.run();
+    expect(result.success, isTrue, reason: result.report);
+  });
+
+  test('GET /search sanitises chaotic queries', () async {
+    final runner = PropertyTestRunner(
+      Chaos.string(maxLength: 120),
+      (query) async {
+        final response = await client.get('/search?q=$query');
+        response
+            .assertStatus(200)
+            .assertJson((json) => json.where('query', query));
+      },
+      PropertyConfig(numTests: 250),
+    );
+
+    final result = await runner.run();
+    expect(result.success, isTrue, reason: result.report);
+  });
+}
+```
+
+### Key takeaways
+
+- `ShelfRequestHandler` keeps property tests fast by avoiding real sockets.
+- `Chaos` generators drive the router with edge-case strings so unexpected code paths surface quickly.
+- `PropertyTestRunner` gives shrinking for free—if an assertion fails, the report highlights the minimal counterexample and the seed to reproduce it.
+
+From here you can add stateful properties (e.g. sequences of admin/user actions) or extend the generator library with domain-specific shapes while still reusing the same testing harness.

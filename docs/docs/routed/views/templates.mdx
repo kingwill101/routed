@@ -1,0 +1,153 @@
+---
+title: Liquid Templates
+description: Render HTML using the built-in Liquid engine
+sidebar_position: 1
+---
+
+# Liquid Templates
+
+Routed bundles a Liquid view engine so you can keep HTML in template files, pass data from handlers, and swap engines or directories without changing route code.
+
+## Configuration
+
+Describe your template location through `storage.*` and `view.*` so the view provider shares disks with the rest of the application:
+
+```yaml title="config/http.yaml"
+storage:
+  default: app
+  disks:
+    app:
+      driver: local
+      root: resources
+
+view:
+  engine: liquid
+  disk: app
+  directory: views
+  cache: true
+```
+
+Or provide the same structure when instantiating the engine:
+
+```dart
+final engine = Engine(
+  configItems: {
+    'storage': {
+      'default': 'app',
+      'disks': {
+        'app': {'driver': 'local', 'root': 'resources'},
+      },
+    },
+    'view': {
+      'engine': 'liquid',
+      'disk': 'app',
+      'directory': 'views',
+      'cache': true,
+    },
+  },
+);
+await engine.initialize();
+```
+
+The `directory` is resolved relative to the selected disk (set it to an empty string to render from the disk root). During development set `view.cache: false` to reload templates on each request; in production prefer `true` for performance. When both a disk and directory are configured, template lookups resolve to `<disk root>/<directory>`. To swap engines or point Liquid at a different file system at runtime—without changing route code—call `engine.useViewEngine`:
+
+```dart
+engine.useViewEngine(
+  LiquidViewEngine(
+    root: LiquidRoot(fileSystem: myFileSystem),
+    directory: 'emails',
+  ),
+);
+```
+
+Place templates under the configured directory (`resources/views/` in this example). When a disk is used the engine reads through the same file abstraction that powers static assets, uploads, and other providers.
+Import `package:routed/template.dart` whenever you reference `LiquidViewEngine` or `LiquidRoot`.
+
+> Validation: The view provider ensures `view` configuration is a map, verifies that `engine`, `directory`, and `disk` are non-empty strings (and that `cache` is a boolean), then throws a `ProviderConfigException` if the manifest supplies the wrong shape. `dart run routed_cli provider:list --config` is a quick way to confirm the active settings and catch mistakes before the engine starts.
+
+## Rendering templates
+
+```dart
+router.get('/welcome', (ctx) async {
+  return await ctx.template(
+    templateName: 'welcome.liquid',
+    data: {
+      'user': {'name': 'Taylor'},
+      'features': ['sessions', 'cache', 'validation'],
+    },
+  );
+});
+```
+
+Liquid templates support the familiar syntax. Values are HTML-escaped by default; use filters (for example, | raw) only when you trust the content:
+
+```liquid
+<!-- views/welcome.liquid -->
+<h1>Hello {{ user.name }}!</h1>
+<ul>
+  {% for feature in features %}
+    <li>{{ feature }}</li>
+  {% endfor %}
+</ul>
+```
+
+## Inline HTML fragments
+
+Use `ctx.html` to render a snippet through the view engine (useful for partials or emails). It supports the same template syntax as files; prefer `ctx.template` for full pages and `ctx.string` for literal HTML without templating:
+
+```dart
+await ctx.html('<p>{{ message }}</p>', data: {'message': 'Success!'});
+```
+
+To customise Liquid with filters or functions, extend `LiquidViewEngine` and integrate with the underlying `liquify` APIs before registering the engine with the `Engine`.
+
+## Error handling
+
+If a template is missing or renders with an error, a `TemplateRenderException` is thrown. You can catch it inside your handler to return a custom error page:
+
+```dart
+router.get('/report', (ctx) async {
+  try {
+    return await ctx.template(templateName: 'report.liquid');
+  } on TemplateRenderException catch (e) {
+    return ctx.json({'error': e.toString()}, statusCode: HttpStatus.internalServerError);
+  }
+});
+```
+
+Import `dart:io` to access `HttpStatus` constants when needed.
+
+## Custom engines
+
+`ViewEngine` is an interface, so you can plug in any renderer you like (`packages/routed/lib/src/view/view_engine.dart:1`). Swap the default engine with your own implementation:
+
+```dart
+class MarkdownViewEngine implements ViewEngine {
+  @override
+  List<String> get extensions => ['.md', '.mdx'];
+
+  @override
+  Future<String> render(String name, [Map<String, dynamic>? data]) async {
+    final template = await loadTemplate(name);
+    return renderMarkdown(template, data ?? {});
+  }
+
+  @override
+  Future<String> renderFile(String filePath, [Map<String, dynamic>? data]) async {
+    final source = await File(filePath).readAsString();
+    return renderMarkdown(source, data ?? {});
+  }
+}
+
+final engine = Engine();
+engine.useViewEngine(MarkdownViewEngine(), directory: 'content');
+```
+
+For projects that need more than one templating language, grab the shared `ViewEngineManager` and register additional engines by extension (`packages/routed/lib/src/view/engine_manager.dart:1`):
+
+```dart
+final manager = engine.container.get<ViewEngineManager>();
+manager.register(MarkdownViewEngine());
+```
+
+After registration you can call `ctx.template(templateName: 'guide.md')` and Routed will route the request to the matching engine based on file extension. Mix and match engines by registering each with the manager before serving requests.

@@ -12,8 +12,9 @@ void main() async {
           uploadDirectory: 'uploads'),
     ),
   );
-
-  engine.useLiquid(directory: 'templates');
+  engine.useViewEngine(LiquidViewEngine(
+    directory: 'templates',
+  ));
 
   // Ensure uploads directory exists
   await Directory('uploads').create(recursive: true);

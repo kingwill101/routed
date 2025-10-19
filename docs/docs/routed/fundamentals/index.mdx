@@ -1,0 +1,29 @@
+---
+title: Fundamentals
+description: Core building blocks for working with Routed
+sidebar_position: 0
+---
+
+# Fundamentals
+
+Start here to understand the core APIs you will use in everyday Routed applications.
+
+- [Routing basics](/docs/routed/fundamentals/routing) – define routes on the engine or routers, create groups, name routes, and configure fallbacks.
+- [Response compression](/docs/routed/fundamentals/compression) – control gzip/Brotli defaults, per-route opt-outs, and validation tips.
+- [HTTP/2 support](/docs/routed/advanced/http2) – enable ALPN negotiation, understand fallback behaviour, and integrate with TLS deployments.
+- [Server-Sent Events](/docs/routed/fundamentals/sse) – stream events with `ctx.sse`, heartbeats, and reconnect-friendly IDs.
+- [Graceful shutdown](/docs/routed/fundamentals/graceful-shutdown) – drain in-flight requests and coordinate signal-driven shutdowns.
+- [Middleware](/docs/routed/fundamentals/middleware) – apply middleware globally, per-group, or per-route, and use the built-in helpers.
+- [Requests](/docs/routed/fundamentals/requests) – read query params, JSON bodies, multipart data, and form submissions.
+- [Responses](/docs/routed/fundamentals/responses) – return JSON, HTML, streams, redirects, and file downloads.
+- [HTTP semantics](/docs/routed/fundamentals/http-semantics) – negotiate representations, honour conditional requests, and serve automatic OPTIONS responses.
+- [Context data](/docs/routed/fundamentals/context-data) – access configuration, request IDs, and per-request state.
+- [Headers and cookies](/docs/routed/fundamentals/headers) – inspect and mutate headers, work with cookies, and set security flags.
+- [Validation](/docs/routed/fundamentals/validation) and [Data binding](/docs/routed/fundamentals/binding) – validate input and map payloads to data structures.
+- [Error handling](/docs/routed/fundamentals/error-handling) – customize exception responses, error pages, and hook into global error handlers.
+- [Structured logging](/docs/routed/fundamentals/logging) – capture contextual logs per request and plug into your observability pipeline.
+- [Observability](/docs/routed/fundamentals/observability) – enable tracing, metrics, health checks, and error observers with centralised configuration.
+
+- [Configuration](/docs/routed/fundamentals/configuration) – use `EngineConfig` and functional options to tailor routing, security, caching, and more.
+- [CLI reference](/docs/routed/fundamentals/cli) – scaffold projects, run the dev server, inspect routes/specs, and manage configuration helpers.
+- [Contracts](/docs/routed/fundamentals/contracts) – plug in custom configuration stores, cache repositories, and distributed locks.

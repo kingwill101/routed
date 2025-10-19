@@ -1,0 +1,102 @@
+---
+title: Pages & Components
+description: Structure browser tests with reusable page objects and components
+sidebar_position: 3
+---
+
+# Pages & Components
+
+`server_testing` includes `Page` and `Component` base classes inspired by the Page Object Model. They wrap a `Browser` instance and expose ergonomic helpers for traversal, assertions, and nested component composition.
+
+## Defining Components
+
+```dart
+class LoginForm extends Component {
+  LoginForm(super.browser, super.selector);
+  String get email => 'input[name="email"]';
+  String get password => 'input[name="password"]';
+  String get submit => 'button[type="submit"]';
+  Future<void> fill(String e, String p) async { await type(email, e); await type(password, p); }
+  Future<void> submitForm() async => click(submit);
+}
+
+class LoginPage extends Page {
+  LoginPage(super.browser);
+  @override
+  String get url => '/';
+  LoginForm get form => LoginForm(browser, '#login');
+}
+```
+
+`Component` requires a `Browser` and a selector that acts as the root. The helpers (`click`, `type`, `assertSeeIn`, etc.) automatically scope themselves to the component root.
+
+## Building a Page
+
+```dart
+class LoginPage extends Page {
+  LoginPage(super.browser);
+
+  @override
+  String get url => '/';
+
+  LoginForm get form => LoginForm(browser, '#login');
+
+  Future<void> navigateAndWait() async {
+    await navigate(); // provided by Page with baseUrl resolution
+    await browser.waiter.waitFor('#login');
+  }
+}
+```
+
+Pages extend `Page`, provide a `url`, and can expose lazy component getters.
+
+## Full Test (Shelf)
+
+```dart
+final app = (shelf.Request req) async => shelf.Response.ok('''
+<html><head><title>Login</title></head>
+<body>
+  <div id="login">
+    <form>
+      <input name="email" />
+      <input name="password" />
+      <button type="submit">Login</button>
+    </form>
+    <div class="flash" style="display:none">OK</div>
+  </div>
+  <script>
+    document.querySelector('form').addEventListener('submit', function(e){
+      e.preventDefault();
+      document.querySelector('.flash').style.display='block';
+      document.title = 'Dashboard';
+    });
+  </script>
+</body>
+</html>
+''', headers: {'content-type': 'text/html'});
+
+final handler = ShelfRequestHandler(app);
+final client = TestClient.ephemeralServer(handler);
+final baseUrl = await client.baseUrlFuture;
+
+browserGroup('Page+Component', baseUrl: baseUrl, define: (getBrowser) {
+  test('login flow', () async {
+    final browser = getBrowser();
+    final page = LoginPage(browser);
+    await page.navigate();
+    await page.form.fill('user@example.com', 'secret');
+    await page.form.submitForm();
+    await browser.assertTitle('Dashboard');
+  });
+  tearDownAll(() async { await client.close(); });
+});
+```
+
+## Tips
+- **Keep selectors centralised.** Put selectors in page/component classes to avoid scattering them across tests.
+- **Expose behaviours, not raw interactions.** Methods like `fill` and `submitForm` keep tests focused on outcomes.
+- **Use `navigate()`** from the base `Page` to respect the configured `baseUrl`.
+- **Compose nested components.** Components can expose other components for complex layouts (e.g. `Sidebar` inside `DashboardPage`).
+- **Share assertions.** Add helper methods like `expectFlashMessage(String text)` to encapsulate repeated checks.
+
+Page objects are optional, but they pay off quickly as your browser suite grows.

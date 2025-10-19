@@ -1,0 +1,83 @@
+---
+id: upload-hardening
+title: Securing file uploads
+sidebar_position: 3
+description: Configure Routed’s uploads provider for safe defaults, extension filtering, and predictable storage.
+---
+
+Routed’s uploads provider streams multipart bodies efficiently, but you still need to guard against unsafe files and runaway disk usage. This guide walks through the hardened defaults landing in the next release and how to adopt them.
+
+> **TL;DR**  
+> Start with a strict extension whitelist, pin uploads to a dedicated storage directory backed by a Routed disk, and let the provider clean up partial files automatically.
+
+## Configure the whitelist
+
+Define the extensions your application accepts in `config/uploads.yaml` (or the equivalent manifest block). Routed normalises values so you can supply `jpg` (config) or `.jpg` (code) interchangeably.
+
+```yaml title="config/uploads.yaml"
+allowed_extensions:
+  - jpg
+  - png
+  - pdf
+```
+
+If a request uploads a file with an extension not on the list, the framework rejects the stream before persisting any bytes and surfaces a 4xx error you can translate to your preferred response shape.
+
+## Pin uploads to a storage directory
+
+Hardened uploads write every accepted file to the directory configured under `uploads.directory`. Point that directory at a storage disk so uploads share permissions, quota configuration, and observability with the rest of your storage layer.
+
+```yaml title="config/uploads.yaml"
+directory: uploads
+file_permissions: 0o640
+disk: app_uploads
+```
+
+```yaml title="config/storage.yaml"
+disks:
+  app_uploads:
+    driver: local
+    root: /srv/app/uploads
+    visibility: private
+```
+
+Key behaviours:
+
+- The provider refuses to use system temp directories once an override is supplied.
+- Files inherit the configured permission mask so web servers cannot accidentally serve private content.
+- Static assets or views can reuse the same disk, keeping IO consistent across subsystems.
+
+## Enforce limits and cleanup
+
+Set per-file and aggregate quotas to prevent exhaustion attacks:
+
+```yaml title="config/uploads.yaml"
+max_file_size: 5242880   # 5 MiB per file
+max_memory: 16777216     # 16 MiB request body buffer
+max_disk_usage: 6291456  # 6 MiB total written to disk per request
+```
+
+Routed streams multipart payloads and enforces these limits as data arrives:
+
+- `max_memory` keeps the overall request size in check.
+- `max_file_size` aborts a single part once it grows beyond the configured size.
+- `max_disk_usage` bounds the bytes written to disk across every file in the request. As soon as the quota is exceeded the framework closes the current stream, deletes partial files, and rejects the upload before it can consume additional storage.
+
+If the client disconnects early or hits any limit, every partially written file is removed immediately—no background sweeps required.
+
+## Operational checklist
+
+- Audit `allowed_extensions` regularly; accept the smallest useful list and prefer content-type validation in business logic where possible.
+- Monitor the upload directory’s disk usage. A simple `du` alert tied to your storage disk catches unexpected growth.
+- Run `dart run routed_cli provider:list --config` to inspect the merged configuration and ensure extensions, directory, and limit values loaded as expected.
+- Combine uploads with [security headers](/docs/routed/security/security#secure-file-uploads) so browsers avoid caching sensitive responses.
+
+## Looking ahead
+
+The hardened defaults in this roadmap milestone pave the way for:
+
+- Drive-by scanning hooks so you can plug in antivirus or content validation filters.
+- Storage driver quotas shared across uploads, static assets, and user-generated content.
+- Operator-facing dashboards (via the CLI) that report rejected uploads and cleanup statistics.
+
+Adopting the settings above keeps you aligned with the upcoming release while leaving room for these future additions.

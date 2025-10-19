@@ -1,0 +1,95 @@
+---
+title: Browser Examples
+description: Real-browser automation patterns with server_testing
+sidebar_position: 2
+---
+
+# Browser Examples
+
+Pair the browser tooling with the same handler logic you use for HTTP tests.
+
+## Shared Handler, Real Browser Flow
+
+Reuse the `TestClient.ephemeralServer` base URL inside `browserGroup`.
+
+```dart
+import 'package:server_testing/server_testing.dart';
+import 'package:test/test.dart';
+
+Future<void> main() async {
+  final handler = RouterHandler(buildRouter());
+  final client = TestClient.ephemeralServer(handler);
+  final baseUrl = await client.baseUrlFuture;
+
+  await testBootstrap(BrowserConfig(browserName: 'firefox', headless: true));
+
+  browserGroup('customer flow', baseUrl: baseUrl, define: (getBrowser) {
+    test('can place order', () async {
+      final browser = getBrowser();
+      await browser.visit('/orders/new');
+      await browser.type('input[name="product"]', 'Widget');
+      await browser.click('button[type="submit"]');
+      await browser.assertSee('Order confirmed');
+    });
+  });
+
+  tearDownAll(() async => client.close());
+}
+```
+
+> Because the same handler serves both HTTP and browser tests, you can seed data through the `TestClient` before visiting the UI.
+
+## Device Emulation Override
+
+Run the same flow with a mobile device profile.
+
+```dart
+import 'package:server_testing/server_testing.dart';
+import 'package:server_testing/src/browser/bootstrap/devices_json_const.dart';
+
+browserTest(
+  'mobile checkout',
+  (browser) async {
+    await browser.visit('/orders/new');
+    await browser.assertSee('Menu');
+  },
+  device: devicesJsonData['Pixel 5'],
+  headless: true,
+);
+```
+
+## Headed Chromium for Debugging
+
+Toggle headless mode off when you need to watch the browser.
+
+```dart
+browserTest(
+  'debug run in chrome',
+  (browser) async {
+    await browser.visit('/');
+    await browser.assertTitleContains('Demo Store');
+  },
+  browserType: ChromiumType(),
+  headless: false,
+  args: ['--auto-open-devtools-for-tabs'],
+);
+```
+
+## Screenshot on Failure
+
+Enable automatic screenshots in the global bootstrap configuration.
+
+```dart
+Future<void> main() async {
+  await testBootstrap(BrowserConfig(
+    browserName: 'chromium',
+    autoScreenshots: true,
+    screenshotDirectory: 'test_screenshots',
+  ));
+
+  browserTest('captures screenshot', (browser) async {
+    await browser.visit('/broken');
+    await browser.assertSee('still reachable'); // fails -> screenshot saved
+  });
+}
+```

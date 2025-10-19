@@ -1,0 +1,196 @@
+---
+title: Error Handling
+description: Handle validation errors, aborts, and uncaught exceptions
+sidebar_position: 10
+---
+
+Routed includes a global error handler that maps common failures to sensible HTTP responses, so you rarely need to wrap handlers in try/catch blocks. You opt into custom handling only when you want a different response shape or additional logging/metrics.
+
+Unmatched routes return 404 by default (or your group/global fallback if configured), and optional routing toggles can surface 405 for method mismatches. The sections below show the defaults and how to extend them safely.
+
+## Global Error Handler
+
+The framework automatically handles:
+
+- ValidationError — 422 Unprocessable Entity with field-level errors
+- EngineError — custom status code and message payload
+- Unmatched routes — 404 Not Found (or your fallback handler’s response)
+- Method not allowed — 405 with an Allow header when handleMethodNotAllowed is enabled
+- Unhandled exceptions — 500 Internal Server Error
+
+## Common Error Types
+
+### ValidationError
+Thrown when request validation fails. Automatically returns a 422 status code with validation details:
+
+```dart
+router.post('/users', (ctx) async {
+  // No try-catch needed - ValidationError is handled automatically
+  await ctx.validate({
+    'email': 'required|email',
+    'password': 'required|min:8'
+  });
+  
+  // Validation passed - continue processing
+  ctx.json({'message': 'User created'});
+});
+```
+
+Response (422):
+```json
+{
+  "errors": {
+    "email": ["Invalid email format"],
+    "password": ["Must be at least 8 characters"]
+  }
+}
+```
+
+### EngineError
+Used for framework-level errors with custom status codes:
+
+```dart
+router.get('/items/{id}', (ctx) {
+  if (itemNotFound) {
+    throw EngineError(
+      message: 'Item not found',
+      code: 404
+    );
+  }
+  ctx.json(item);
+});
+```
+
+Response (404):
+```text
+EngineError(404): Item not found
+```
+
+## Custom Error Types
+
+Create custom error types by implementing `EngineError`:
+
+```dart
+class ResourceError implements EngineError {
+  @override
+  final String message;
+  @override
+  final int code;
+
+  ResourceError.notFound(String resource)
+    : message = '$resource not found',
+      code = 404;
+      
+  ResourceError.conflict(String resource)
+    : message = '$resource already exists',
+      code = 409;
+}
+
+// Usage
+router.post('/projects', (ctx) {
+  if (projectExists) {
+    throw ResourceError.conflict('Project');
+  }
+  // Create project...
+});
+```
+
+## Engine Configuration
+
+The engine can be configured to handle errors and routing defaults:
+
+```dart
+final engine = Engine(
+  config: EngineConfig(
+    // Handle 405 Method Not Allowed responses
+    handleMethodNotAllowed: true,
+    
+    // Redirect trailing slashes
+    redirectTrailingSlash: true
+  )
+);
+```
+
+These toggles are also exposed by the routing provider via configuration (see Routing → Config-driven defaults) so you can change behavior without code changes.
+
+## Aborting early
+
+When you need to stop the pipeline and return a response immediately, use the abort helpers:
+
+```dart
+router.get('/maintenance', (ctx) {
+  ctx.abortWithStatus(HttpStatus.serviceUnavailable, 'Scheduled maintenance');
+  return ctx.response; // always return the response after aborting
+});
+```
+
+- Aborting prevents downstream middleware/handlers from running.
+- Prefer returning the aborted response right away to avoid further writes.
+- Import dart:io for HttpStatus constants in examples.
+
+## Custom Error Handling
+
+The global handler provides good defaults, but you can catch errors when you need custom handling:
+
+```dart
+router.post('/register', (ctx) async {
+  try {
+    await ctx.validate({
+      'email': 'required|email',
+      'password': 'required|min:8'
+    });
+    
+    // Process registration...
+    
+  } on ValidationError catch (e) {
+    // Custom validation error format
+    return ctx.json({
+      'status': 'error',
+      'type': 'validation',
+      'fields': e.errors
+    }, statusCode: 422);
+    
+  } on EngineError catch (e) {
+    // Custom engine error format
+    return ctx.json({
+      'status': 'error',
+      'message': e.message
+    }, statusCode: e.code ?? 500);
+  }
+});
+```
+
+## Hooking into the Global Handler
+
+You can observe or override the engine's default behaviour without wrapping every route by registering error hooks:
+
+```dart
+final engine = Engine();
+
+engine.beforeError((ctx, error, stack) {
+  // Runs before the default handler – perfect for telemetry
+  ctx.logger.error('Unhandled error', {
+    'path': ctx.request.uri.path,
+    'error': error.toString(),
+  });
+});
+
+engine.onError<StateError>((ctx, error, stack) {
+  // Replace the default response for specific error types
+  ctx.json({'message': error.message}, statusCode: 418);
+  return true; // stop further handling
+});
+
+engine.afterError((ctx, error, stack) {
+  // Runs after a response has been generated
+  auditLog(ctx.request.id, ctx.response.statusCode);
+});
+```
+
+Hook semantics:
+
+- Order: beforeError → the first matching `onError<T>` → default handler (if not handled) → afterError.
+- Matching: `onError<T>` matches subtypes too (for example, `onError<StateError>` catches RangeError).
+- Short-circuit: return true from onError to stop further handling (the default handler won’t run).
+- afterError always runs once a response exists (handled or default), making it ideal for auditing/metrics.
+- Register multiple onError hooks carefully—earliest registration wins for a given type when you return true.

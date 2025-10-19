@@ -1,0 +1,138 @@
+---
+title: Responses
+description: Return JSON, templates, files, and streaming responses
+sidebar_position: 4
+---
+
+# Responses
+
+Routed ships with fluent helpers for the most common response types. Each helper returns a `Response`, so you can return the call directly from your handler. Helpers set sensible Content-Type headers (for example, application/json for json/indentedJson); when sending custom data via ctx.data, be explicit with the media type and charset.
+
+## JSON variants
+
+```dart
+ctx.json({'message': 'Hello'});                    // application/json
+ctx.indentedJson({'debug': true});                 // pretty-printed
+ctx.secureJson(data, prefix: ")]}'\n");            // JSON hijacking protection
+ctx.asciiJson({'emoji': '🔥'});                     // escape non-ASCII (use rarely; prefer UTF-8)
+ctx.jsonp(data, callback: 'handleResponse');       // JSONP (legacy; prefer CORS)
+```
+
+## HTML and templates
+
+Use `ctx.string` for small inline responses; for HTML pages prefer a view engine and call `ctx.template` / `ctx.html` to keep markup out of handlers and leverage template caching.
+
+```dart
+// Inline HTML
+ctx.string('<h1>Hello</h1>', statusCode: HttpStatus.ok);
+
+// Render a Liquid template via the view provider
+final engine = Engine(
+  configItems: {
+    'storage': {
+      'default': 'templates',
+      'disks': {
+        'templates': {'driver': 'local', 'root': 'resources'},
+      },
+    },
+    'view': {
+      'engine': 'liquid',
+      'disk': 'templates',
+      'directory': 'views',
+    },
+  },
+);
+await engine.initialize();
+
+router.get('/dashboard', (ctx) async {
+  return await ctx.template(
+    templateName: 'dashboard.liquid',
+    data: {'user': {'name': 'Taylor'}},
+  );
+});
+```
+
+The `ctx.html` helper renders a string through the configured template engine, which is useful for dynamic fragments:
+
+```dart
+await ctx.html('<p>{{ message }}</p>', data: {'message': 'Welcome'});
+```
+
+> The view provider validates its configuration (`view.engine`, `view.directory`, `view.disk`, and `view.cache` types) and throws a `ProviderConfigException` if the manifest supplies the wrong shape. Use `dart run routed_cli provider:list --config` to inspect the active view settings and confirm the provider is enabled.
+
+## Other content types
+
+```dart
+ctx.string('plain text response');
+ctx.xml({'user': {'name': 'Ada'}});
+ctx.yaml({'features': ['cache', 'sessions']});
+ctx.data('application/octet-stream', bytes); // arbitrary bytes
+ctx.data('text/csv; charset=utf-8', csvBytes); // specify charset for text formats
+```
+
+## Files and static assets
+
+Avoid resolving arbitrary absolute paths; prefer managed disks or known directories and use fileAttachment for user downloads to set Content-Disposition safely.
+
+```dart
+await ctx.file('public/manual.pdf');
+await ctx.fileAttachment('reports/q1.pdf', 'report-q1.pdf');
+await ctx.dir('public'); // serve directory listings
+
+router.static('/assets', 'public/assets');
+router.staticFile('/favicon.ico', 'public/favicon.ico');
+```
+
+## Redirects, headers, and status codes
+
+```dart
+await ctx.redirect('/login');
+await ctx.redirect('/moved', statusCode: HttpStatus.movedPermanently);
+
+ctx.setHeader('Cache-Control', 'max-age=3600');
+ctx.setHeader('Location', '/resources/123');       // for 201 Created responses
+ctx.status(HttpStatus.created);
+```
+
+## Streaming
+
+Stream large responses without buffering the whole payload. If you know the total size, set contentLength to enable Content-Length; otherwise omit it and the server will use chunked transfer encoding:
+
+```dart
+await ctx.dataFromReader(
+  statusCode: HttpStatus.ok,
+  contentType: 'text/plain',
+  contentLength: streamLength,
+  reader: myStream, // Stream<List<int>>
+  extraHeaders: {'X-Stream': 'true'},
+);
+```
+
+## Raw socket upgrades
+
+For protocols that need full control over the TCP socket (custom streaming,
+long-poll transports, bespoke wire protocols) use `ctx.upgrade`. It mirrors
+Shelf's “hijack” API but keeps the engine informed so graceful shutdown still
+works:
+
+```dart
+router.get('/raw', (ctx) async {
+  ctx.response
+    ..statusCode = HttpStatus.switchingProtocols
+    ..headers.set('Upgrade', 'custom');
+
+  await ctx.upgrade((socket) async {
+    socket.write('hello\n');
+    await socket.flush();
+    await socket.listen((data) {
+      socket.add(data); // echo
+    }).asFuture();
+  });
+});
+```
+
+Only HTTP/1.1 requests can be upgraded, and an upgrade may happen once per
+request. After detaching you own the socket—be sure to close it inside the
+callback when you are done.
+
+Import `dart:io` to access `HttpStatus` constants used in the examples.

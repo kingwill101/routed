@@ -1,0 +1,89 @@
+---
+title: TestClient
+description: Fluent HTTP client that powers serverTest with in-memory and server transports
+sidebar_position: 1
+slug: /server-testing/test-client
+---
+
+# TestClient
+
+`TestClient` is the workhorse used by `serverTest` and can be constructed manually when you need finer control.
+
+```dart
+import 'package:shelf/shelf.dart' as shelf;
+import 'package:server_testing/server_testing.dart';
+import 'package:server_testing_shelf/server_testing_shelf.dart';
+
+final app = (shelf.Request req) async => shelf.Response.ok('ok');
+final handler = ShelfRequestHandler(app);
+final client = TestClient(handler);            // defaults to in-memory
+final serverClient = TestClient.ephemeralServer(handler);
+
+final res = await client.get('/');
+res.assertStatus(200).assertBody('ok');
+await client.close();       // always close manually when not using serverTest
+await serverClient.close(); // server transport also frees sockets
+```
+
+## Construction Options
+
+- `TestClient(handler)` or `TestClient.inMemory(handler)` – in-memory mode.
+- `TestClient(handler, mode: TransportMode.ephemeralServer)` or `TestClient.ephemeralServer(handler)` – real `HttpServer`.
+- Pass a `TransportOptions` object to tweak defaults (e.g. custom `remoteAddress`).
+- Retrieve the actual base URL in server mode via `await client.baseUrlFuture`.
+
+The client keeps a reference to the `RequestHandler`. When the client is closed it calls `handler.close()` so your adapter can dispose external resources.
+
+## Request Helpers
+
+ - `get`, `post`, `put`, `patch`, `delete`, `head`
+ - JSON variants: `getJson`, `postJson`, `putJson`, `patchJson`, `deleteJson`
+ - Multipart builder: `multipart('/upload', (builder) { ... })`
+ - Low-level custom payload: pass a `String`, bytes, `Map`, or `List` as the `body` argument
+ - Headers: supply `Map<String, List<String>>` via the optional `headers` parameter
+ - Cookies: populate the `cookie` header manually or rely on server-generated `Set-Cookie` headers and capture from the `TestResponse`
+
+```dart
+final create = await client.postJson('/users', {'name': 'Ada'});
+create.assertStatus(201);
+
+final update = await client.put('/users/1', 'name=Grace', headers: {
+  'content-type': ['application/x-www-form-urlencoded'],
+});
+update.assertStatus(200);
+```
+
+## Multipart Builder
+
+`client.multipart` accepts a callback that receives a `MultipartRequestBuilder`:
+
+```dart
+final res = await client.multipart('/upload', (builder) {
+  builder.addField('name', 'fixture');
+  builder.addFileFromBytes(
+    name: 'avatar',
+    filename: 'avatar.png',
+    bytes: pngBytes,
+    contentType: MediaType('image', 'png'),
+  );
+});
+```
+
+The helpers take care of building the boundary, headers, and encoding.
+
+## Response Lifecycle
+
+```dart
+final response = await client.get('/users');
+response
+  .assertStatus(200)
+  .assertJson((json) => json.count('users', 1));
+```
+
+See [TestResponse](/docs/server-testing/test-client/test-response) for the full set of assertion helpers and JSON utilities.
+
+## Tips
+- Wrap the client creation inside `serverTest` unless you have a custom lifecycle to manage.
+- Always close manually when you instantiate the client yourself (`await client.close()`).
+- Reuse a single handler across multiple tests only when it is stateless; otherwise prefer building a fresh handler inside each `serverTest`.
+- Use `baseUrlFuture` to integrate with browser tests or external HTTP clients that expect a real URL.

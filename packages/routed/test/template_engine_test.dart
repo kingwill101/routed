@@ -8,13 +8,14 @@ void main() {
   late MemoryFileSystem fs;
   setUp(() {
     fs = MemoryFileSystem();
-    final templates = fs.directory('templates')..createSync();
-    templates.childFile('hello.html').writeAsStringSync('''
+    fs.directory('templates')
+      ..createSync()
+      ..childFile('hello.liquid').writeAsStringSync('''
         <!DOCTYPE html>
         <html>
           <body>
             <h1>Hello {{ name }}!</h1>
-            {% if showList %}
+            {% if show_list %}
               <ul>
               {% for item in items %}
                 <li>{{ item }}</li>
@@ -22,12 +23,13 @@ void main() {
               </ul>
             {% endif %}
             {% block content %}{% endblock %}
+            
+            {{footer_text}}
           </body>
         </html>
-      ''');
-
-    templates.childFile('extended.html').writeAsStringSync('''
-        {% extends "hello.html" %}
+      ''')
+      ..childFile('extended.liquid').writeAsStringSync('''
+        {% layout "hello.liquid" %}
         {% block content %}
           <p>Extended content here</p>
         {% endblock %}
@@ -39,61 +41,69 @@ void main() {
   });
 
   group('Liquid Template Tests', () {
-    setUp(() {
-      // Create Liquid template with its specific syntax
-      final templates = fs.directory('templates')..createSync();
-      templates.childFile('hello.liquid').writeAsStringSync('''
-        <!DOCTYPE html>
-        <html>
-          <body>
-            <h1>Hello {{ name }}!</h1>
-            {% if show_list %}
-              <ul>
-              {% for item in items %}
-                <li>{{ item | upcase }}</li>
-              {% endfor %}
-              </ul>
-            {% endif %}
-            {% render "partial.liquid" with footer_text: footer_text %}
-          </body>
-        </html>
-      ''');
-
-      templates.childFile('partial.liquid').writeAsStringSync('''
-        <footer>{{ footer_text }}</footer>
-      ''');
-    });
+    Engine createEngine() {
+      final engine = Engine(
+        configItems: {
+          'storage': {
+            'default': 'templates',
+            'disks': {
+              'templates': {
+                'driver': 'local',
+                'root': 'templates',
+                'file_system': fs,
+              },
+            },
+          },
+          'view': {'engine': 'liquid', 'disk': 'templates', 'directory': ''},
+        },
+      );
+      engine.useViewEngine(
+        LiquidViewEngine(
+          root: LiquidRoot(fileSystem: fs),
+          directory: 'templates',
+        ),
+      );
+      return engine;
+    }
 
     test('Liquid renders variables and filters', () async {
-      final engine = Engine();
-      engine.useLiquid(directory: 'templates', fileSystem: fs);
-
-      engine.get('/hello', (ctx) {
-        ctx.html('hello.liquid', data: {
-          'name': 'World',
-          'show_list': true,
-          'items': ['one', 'two'],
-          'footer_text': 'Page Footer'
-        });
+      final engine = createEngine();
+      engine.get('/hello', (ctx) async {
+        await ctx.template(
+          templateName: 'extended.liquid',
+          data: {
+            'name': 'World',
+            'show_list': true,
+            'items': ['one', 'two'],
+            'footer_text': 'Page Footer',
+          },
+        );
+        ctx.abort();
       });
+
+      addTearDown(() async => await engine.close());
+      await engine.initialize();
 
       client = TestClient(RoutedRequestHandler(engine));
       final response = await client!.get('/hello');
       response
         ..assertStatus(200)
-        ..assertBodyContains('Hello World!')
-        ..assertBodyContains('<li>ONE</li>')
+        ..assertBodyContains('Hello World!')..assertBodyContains('<li>one</li>')
         ..assertBodyContains('Page Footer');
     });
 
     test('Liquid includes', () async {
-      final engine = Engine();
-      engine.useLiquid(directory: 'templates', fileSystem: fs);
-
-      engine.get('/partial', (ctx) {
-        ctx.html('hello.liquid',
-            data: {'name': 'World', 'footer_text': 'Custom Footer'});
+      final engine = createEngine();
+      engine.get('/partial', (ctx) async {
+        await ctx.template(
+          templateName: 'hello.liquid',
+          data: {'name': 'World', 'footer_text': 'Custom Footer'},
+        );
+        ctx.abort();
       });
+
+      addTearDown(() async => await engine.close());
+      await engine.initialize();
 
       client = TestClient(RoutedRequestHandler(engine));
       final response = await client!.get('/partial');

@@ -1,40 +1,165 @@
 ---
-title: Routed Framework
-description: High-performance Dart web framework with powerful routing capabilities
+title: Routed Ecosystem
+description: Routing, testing, and property-based tooling for Dart applications
 ---
 
-# Routed Framework
+import Link from '@docusaurus/Link';
+import Heading from '@theme/Heading';
+import CodeBlock from '@theme/CodeBlock';
+import clsx from 'clsx';
 
-Routed is a modern Dart web framework designed for building scalable web applications with powerful routing capabilities, middleware support, and extensive features.
+const featureCards = [
+  {
+    title: 'Production Routing',
+    description:
+      'Declarative routers, controllers, middleware, and view rendering built for real-world HTTP services.',
+    link: '/docs/routed/',
+    linkLabel: 'Explore Routed'
+  },
+  {
+    title: 'Integrated Testing',
+    description:
+      'Ship confidence with fluent HTTP assertions, WebDriver orchestration, and CLI tooling in server_testing.',
+    link: '/docs/server-testing/',
+    linkLabel: 'Server Testing Guides'
+  },
+  {
+    title: 'Generative Quality',
+    description:
+      'Catch edge cases early using property_testing generators, shrinking, chaos suites, and state machines.',
+    link: '/docs/property-testing/',
+    linkLabel: 'Property Testing Guides'
+  },
+];
 
-## Key Features
+const integrationHighlights = [
+  {
+    title: 'Framework-Agnostic',
+    text: 'Adapt Shelf or any custom framework to server_testing with lightweight RequestHandler implementations.'
+  },
+  {
+    title: 'Browser-Aware Testing',
+    text: 'Install browsers and drivers on demand, reuse app handlers, and model UI with Page & Component objects.'
+  },
+  {
+    title: 'First-Class Shrinking',
+    text: 'property_testing ships deterministic shrinking, chaos suites, and stateful runners that plug into test.'
+  },
+];
 
-- **Advanced Routing**: Support for path parameters, query strings, and complex route patterns
-- **Middleware System**: Global, group, and route-specific middleware
-- **Template Engines**: Built-in support for Jinja and Liquid templates
-- **File Handling**: Static file serving and multipart form handling
-- **Session Management**: Robust session handling with multiple storage backends
-- **Request Validation**: Built-in request validation and constraint checking
+const quickLinks = [
+  {label: 'Engine & Middleware', to: '/docs/routed/fundamentals/'},
+  {label: 'Server Test Transports', to: '/docs/server-testing/transports'},
+  {label: 'Browser Page Objects', to: '/docs/server-testing/browser/pages-and-components'},
+  {label: 'Handler Providers', to: '/docs/server-testing/handler-providers'},
+  {label: 'Property Testing Generators', to: '/docs/property-testing/generators'},
+  {label: 'Tutorials & Walkthroughs', to: '/docs/tutorials/routed-rest-api'},
+];
 
-## Basic Example
+<header className="hero hero--primary" style={{padding: '4rem 2rem', textAlign: 'center'}}>
+  <Heading as="h1" style={{marginBottom: '1.25rem'}}>Everything you need for modern Dart backends</Heading>
+  <p style={{fontSize: '1.15rem', maxWidth: '760px', margin: '0 auto'}}>
+    Routed is a modular ecosystem that lets you focus on features, not wiring. Build servers with the core
+    framework, validate behaviour with server_testing, and harden quality using property-based tools—all in one place.
+  </p>
+  <div style={{marginTop: '2.5rem', display: 'flex', justifyContent: 'center', gap: '1rem', flexWrap: 'wrap'}}>
+    <Link className="button button--secondary button--lg" to="/docs/routed/">
+      Get Started with Routed
+    </Link>
+    <Link className="button button--secondary button--lg" to="/docs/server-testing/getting-started">
+      Spin Up Server Tests
+    </Link>
+    <Link className="button button--secondary button--lg" to="/docs/property-testing/getting-started">
+      Try Property Testing
+    </Link>
+    <a className="button button--primary button--lg" href="https://github.com/kingwill101/routed">
+      View on GitHub
+    </a>
+  </div>
+</header>
 
-Here's a simple example to get you started:
+<section className="container margin-vert--xl">
+  <div className="row">
+    {featureCards.map((feature) => (
+      <div key={feature.title} className="col col--4 margin-bottom--lg">
+        <div className="card shadow--md" style={{height: '100%'}}>
+          <div className="card__header">
+            <Heading as="h3">{feature.title}</Heading>
+          </div>
+          <div className="card__body">
+            <p>{feature.description}</p>
+          </div>
+          <div className="card__footer">
+            <Link className="button button--outline button--primary button--sm" to={feature.link}>
+              {feature.linkLabel}
+            </Link>
+          </div>
+        </div>
+      </div>
+    ))}
+  </div>
+</section>
 
-```dart
-import 'package:routed/routed.dart';
+## Install the essentials
 
-void main() async {
-  final engine = Engine();
-  final router = Router();
+<CodeBlock language="bash">
+{`# Runtime framework
+dart pub add routed
 
-  // Basic GET route
-  router.get('/hello/{name}', (ctx) {
-    final name = ctx.param('name');
-    ctx.json({'message': 'Hello, $name!'});
-  });
+# HTTP + browser testing toolkit
+dart pub add --dev server_testing server_testing_shelf
 
-  engine.use(router);
-  await engine.serve(host: '127.0.0.1', port: 8080);
-}
+# Property-based testing utilities
+dart pub add --dev property_testing`}
+</CodeBlock>
 
-```
+## Packages at a glance
+
+| Package | What it does | Start with |
+| --- | --- | --- |
+| `routed` | HTTP engine, routing, controllers, middleware, templating | <Link to="/docs/routed/">Routed docs</Link> |
+| `server_testing` | Fluent HTTP assertions, WebDriver integration, CLI helpers | <Link to="/docs/server-testing/getting-started">Server Testing Getting Started</Link> |
+| `server_testing_shelf` | Shelf adapter for `server_testing` | <Link to="/docs/server-testing/handler-providers">Handler Providers</Link> |
+| `property_testing` | Generators, shrinking, chaos suites, stateful testing | <Link to="/docs/property-testing/getting-started">Property Testing Getting Started</Link> |
+
+## Built to work together
+
+<section className="container margin-vert--xl">
+  <div className="row">
+    {integrationHighlights.map((item) => (
+      <div key={item.title} className="col col--4 margin-bottom--lg">
+        <div className="card">
+          <div className="card__header">
+            <Heading as="h3">{item.title}</Heading>
+          </div>
+          <div className="card__body">
+            <p>{item.text}</p>
+          </div>
+        </div>
+      </div>
+    ))}
+  </div>
+</section>
+
+## Quick links
+
+<section className="container margin-vert--lg">
+  <div className={clsx('row', 'row--no-gutters')}>
+    {quickLinks.map((item) => (
+      <div key={item.label} className="col col--4 padding--sm">
+        <Link className="card" to={item.to}>
+          <div className="card__body">
+            <Heading as="h4" style={{marginBottom: '0.25rem'}}>{item.label}</Heading>
+            <span style={{fontSize: '0.85rem', color: 'var(--ifm-color-primary)'}}>Read more →</span>
+          </div>
+        </Link>
+      </div>
+    ))}
+  </div>
+</section>
+
+## Stay in the loop
+
+- Track releases, RFCs, and roadmaps on GitHub: [github.com/kingwill101/routed](https://github.com/kingwill101/routed)
+- File issues or start discussions if you have ideas, questions, or bug reports.
+- Contributions—docs, tests, code—are always welcome. Check the repository for setup instructions and contribution guidelines.

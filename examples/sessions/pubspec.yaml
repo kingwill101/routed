@@ -1,7 +1,0 @@
-name: sessions
-
-environment:
-  sdk: ">=3.6.0 <4.0.0"
-dependencies:
-  routed:
-    path: ../../packages/routed

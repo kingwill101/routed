@@ -1,0 +1,64 @@
+---
+title: Liquid Page Rendering
+description: Serve an HTML page with the Liquid engine
+sidebar_position: 3
+---
+
+# Liquid Page Rendering
+
+```dart
+import 'package:routed/routed.dart';
+
+Future<void> main() async {
+  final engine = Engine(
+    configItems: {
+      'storage': {
+        'default': 'templates',
+        'disks': {
+          'templates': {'driver': 'local', 'root': 'resources'},
+        },
+      },
+      'view': {
+        'engine': 'liquid',
+        'disk': 'templates',
+        'directory': 'views',
+        'cache': true,
+      },
+    },
+  );
+  await engine.initialize();
+
+  engine.get('/', (ctx) async {
+    return await ctx.template(
+      templateName: 'home.liquid',
+      data: {
+        'title': 'Routed Demo',
+        'features': ['Routing', 'Middleware', 'Testing'],
+      },
+    );
+  });
+
+  await engine.serve(port: 8080);
+}
+```
+
+`views/home.liquid`:
+
+```liquid
+<!doctype html>
+<html>
+  <head>
+    <title>{{ title }}</title>
+  </head>
+  <body>
+    <h1>{{ title }}</h1>
+    <ul>
+      {% for feature in features %}
+        <li>{{ feature }}</li>
+      {% endfor %}
+    </ul>
+  </body>
+</html>
+```
+
+Run `dart run bin/server.dart` and open [http://127.0.0.1:8080/](http://127.0.0.1:8080/) to see the rendered page. The view provider resolves templates through the shared `storage` disk, so you can reuse the same disks for uploads or static assets. If you move the configuration into `config/http.yaml`, `dart run routed_cli provider:list --config` will list the `routed.views` defaults and warn if `view.*` entries have the wrong shape.

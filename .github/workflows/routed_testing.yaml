@@ -8,16 +8,18 @@ on:
     branches: [ master ]
     paths:
       - '.github/workflows/routed_testing.yaml'
-      - 'packages/routed_testing/**'
+      - 'packages/server_testing/server_testing/**'
+      - 'packages/server_testing/routed_testing/**'
   pull_request:
     branches: [ master ]
     paths:
       - '.github/workflows/routed_testing.yaml'
-      - 'packages/routed_testing/**'
+      - 'packages/server_testing/server_testing/**'
+      - 'packages/server_testing/routed_testing/**'
 
 defaults:
   run:
-    working-directory: packages/routed_testing/
+    working-directory: packages/server_testing/routed_testing
 
 jobs:
   build:

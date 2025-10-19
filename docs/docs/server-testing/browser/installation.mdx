@@ -1,0 +1,28 @@
+---
+title: Installation & CI
+description: Install browsers and drivers, version pinning, OS dependencies and CI notes
+---
+
+# Installation & CI
+
+## Version pinning
+
+- server_testing uses an internal registry (browsers.json) that maps platform -> revision.
+- You can pin a specific channel via BrowserConfig.browserName (e.g., chromium, firefox) and set forceReinstall for clean rebuilds.
+- Drivers are managed automatically per browser type.
+
+## OS dependencies
+
+- Linux: ensure common X/GL libraries and fonts are installed. Headless runs still need libX11 and font packages.
+- macOS: no extra deps for headless; permissions may prompt when running headed for the first time.
+- Windows: no exec-bit concerns; ensure .exe binaries are accessible.
+
+## Permissions
+
+- On Linux/macOS, executables are chmod +x after extraction. If using a custom directory, ensure your user can write and execute.
+
+## CI
+
+- Prefer headless. Configure BrowserConfig(headless: true) and autoInstall: true.
+- Cache the registry directory to speed up builds. Default cache: ~/.server_testing (override with SERVER_TESTING_CACHE_DIR)
+- Artifacts: store test_screenshots/ and logs for debugging failures.

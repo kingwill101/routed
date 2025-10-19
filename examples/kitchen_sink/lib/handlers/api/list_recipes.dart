@@ -9,7 +9,7 @@ import 'package:kitchen_sink_example/models/recipe.dart';
 import 'package:kitchen_sink_example/services/recipe_service.dart';
 import 'package:routed/routed.dart';
 
-listRecipes(EngineContext ctx) async {
+Future<Response> listRecipes(EngineContext ctx) async {
   final currentPage = int.tryParse(ctx.query('page') ?? '') ?? 1;
   final limit = 10;
   final offset = (currentPage - 1) * limit;

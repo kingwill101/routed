@@ -6,7 +6,7 @@ import 'package:routed/src/contracts/cache/lock_timeout_exception.dart';
 
 /// An abstract class representing a lock mechanism.
 /// This class implements the [lock_contract.Lock] interface.
-abstract class Lock implements lock_contract.Lock {
+abstract class CacheLock implements lock_contract.Lock {
   /// The name of the lock.
   final String name;
 
@@ -19,10 +19,10 @@ abstract class Lock implements lock_contract.Lock {
   /// The duration in milliseconds to sleep between attempts to acquire the lock.
   int sleepMilliseconds = 250;
 
-  /// Constructs a [Lock] instance with the given [name] and [seconds].
+  /// Constructs a [CacheLock] instance with the given [name] and [seconds].
   /// If [owner] is not provided, a random string is generated as the owner ID.
-  Lock(this.name, this.seconds, [String? owner])
-      : ownerId = owner ?? _generateRandomString();
+  CacheLock(this.name, this.seconds, [String? owner])
+    : ownerId = owner ?? _generateRandomString();
 
   /// Acquires the lock.
   ///
@@ -122,7 +122,9 @@ abstract class Lock implements lock_contract.Lock {
   static String _generateRandomString([int length = 16]) {
     const chars = 'abcdefghijklmnopqrstuvwxyz0123456789';
     final rand = Random();
-    return List.generate(length, (_) => chars[rand.nextInt(chars.length)])
-        .join();
+    return List.generate(
+      length,
+      (_) => chars[rand.nextInt(chars.length)],
+    ).join();
   }
 }

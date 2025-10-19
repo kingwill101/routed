@@ -1,0 +1,65 @@
+---
+title: REST API Skeleton
+description: Minimal users API built with Routed
+sidebar_position: 1
+---
+
+# REST API Skeleton
+
+```dart
+import 'dart:io';
+import 'package:routed/routed.dart';
+
+Future<void> main() async {
+final engine = Engine(
+  options: [withMiddleware([timeoutMiddleware(const Duration(seconds: 10))])],
+);
+
+  final api = Router(path: '/api');
+
+  api.group(path: '/users', builder: (users) {
+    users.get('/', (ctx) => ctx.json({'users': _users.values.toList()}));
+
+    users.post('/', (ctx) async {
+      final payload = <String, dynamic>{};
+      await ctx.bindJSON(payload);
+      await ctx.validate({'name': 'required|string', 'email': 'required|email'});
+
+      final id = _users.length + 1;
+      final user = {'id': id, 'name': payload['name'], 'email': payload['email']};
+      _users[id] = user;
+
+      return ctx.json(user, statusCode: HttpStatus.created);
+    });
+
+    users.get('/{id:int}', (ctx) {
+      final id = ctx.params['id'] as int;
+      final user = _users[id];
+      if (user == null) {
+        return ctx.json({'error': 'User not found'}, statusCode: HttpStatus.notFound);
+      }
+      return ctx.json(user);
+    });
+
+    users.delete('/{id:int}', (ctx) {
+      final id = ctx.params['id'] as int;
+      final removed = _users.remove(id);
+      if (removed == null) {
+        return ctx.json({'error': 'User not found'}, statusCode: HttpStatus.notFound);
+      }
+      ctx.status(HttpStatus.noContent);
+      return ctx.response;
+    });
+  });
+
+  engine.use(api);
+  await engine.serve(host: '127.0.0.1', port: 8080);
+}
+
+final _users = <int, Map<String, dynamic>>{};
+```
+
+- `ctx.bindJSON` + `ctx.validate` guard payloads.
+- `ctx.bindJSON` + `ctx.validate` guard payloads. Remember you can also configure validation defaults (or middleware, sessions, etc.) via `config/http.yaml` so teams can inspect the manifest with `dart run routed_cli provider:list --config`.
+- `ctx.params['id']` returns the cast value thanks to the `:int` constraint.
+- Errors use HTTP status helpers from `dart:io`.

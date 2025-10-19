@@ -4,6 +4,8 @@ import 'package:liquify/liquify.dart';
 import 'package:path/path.dart' as p;
 import 'package:routed/src/render/html/template_engine.dart';
 
+export 'package:routed/src/view/engines/liquid_engine.dart';
+
 /// The `LiquidRoot` class implements the `Root` interface and is responsible
 /// for resolving template file paths and reading their contents.
 class LiquidRoot implements Root {
@@ -14,7 +16,7 @@ class LiquidRoot implements Root {
   ///
   /// If no `fileSystem` is provided, it defaults to `local.LocalFileSystem()`.
   LiquidRoot({FileSystem? fileSystem})
-      : fileSystem = fileSystem ?? const local.LocalFileSystem();
+    : fileSystem = fileSystem ?? const local.LocalFileSystem();
 
   /// Resolves the given relative path to a `Source` object.
   ///
@@ -29,6 +31,7 @@ class LiquidRoot implements Root {
     if (!file.existsSync()) {
       throw Exception('Template file not found: $relPath');
     }
+
     final content = file.readAsStringSync();
     return Source(file.uri, content, this);
   }
@@ -56,9 +59,8 @@ class LiquidTemplateEngine implements TemplateEngine {
   @override
   Map<String, Function> get filterMap => Map.unmodifiable(_filterMap);
 
-  LiquidTemplateEngine({
-    FileSystem? fileSystem,
-  }) : _fileSystem = fileSystem ?? const local.LocalFileSystem() {
+  LiquidTemplateEngine({FileSystem? fileSystem})
+    : _fileSystem = fileSystem ?? const local.LocalFileSystem() {
     _root = LiquidRoot(fileSystem: _fileSystem);
   }
 
@@ -80,13 +82,19 @@ class LiquidTemplateEngine implements TemplateEngine {
   }
 
   @override
-  Future<String> render(String templateName,
-      [Map<String, dynamic> data = const {}]) async {
-    final template = Template.fromFile(templateName, _root!, data: {
-      ...data,
-      // Make functions available in template context
-      ..._funcMap,
-    });
+  Future<String> render(
+    String templateName, [
+    Map<String, dynamic> data = const {},
+  ]) async {
+    final template = Template.fromFile(
+      templateName,
+      _root!,
+      data: {
+        ...data,
+        // Make functions available in template context
+        ..._funcMap,
+      },
+    );
 
     try {
       return template.render();

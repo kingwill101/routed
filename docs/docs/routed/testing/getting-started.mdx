@@ -1,0 +1,109 @@
+---
+title: Getting Started with routed_testing
+description: Use engineTest and engineGroup to exercise your routes
+sidebar_position: 1
+---
+
+# Getting Started with routed_testing
+
+The `routed_testing` package builds on top of `server_testing` to offer a clean testing API for Routed applications. You define routes on an `Engine`, and the helper takes care of wrapping it in a `RoutedRequestHandler` and a `TestClient`.
+
+## 1. Install the testing stack
+
+```bash
+dart pub add --dev routed_testing server_testing server_testing_shelf
+dart pub add --dev test
+```
+
+## 2. Write your first test with `engineTest`
+
+```dart
+import 'package:routed/routed.dart';
+import 'package:routed_testing/routed_testing.dart';
+import 'package:server_testing/server_testing.dart';
+
+void main() {
+  engineTest('creates a user', (engine, client) async {
+    engine.post('/users', (ctx) async {
+      await ctx.validate({'name': 'required'});
+      return ctx.json({'status': 'created'});
+    });
+
+    final res = await client.postJson('/users', {'name': 'Taylor'});
+    res
+      ..assertStatus(200)
+      ..assertJson((json) => json.where('status', 'created'));
+  });
+}
+```
+
+`engineTest` spins up a fresh engine and client for each test. Use `transportMode: TransportMode.ephemeralServer` when you need to exercise the full HTTP stack instead of the default in-memory transport.
+
+## 3. Share setup with `engineGroup`
+
+`engineGroup` lets you reuse an engine/client across multiple tests:
+
+```dart
+void main() {
+  engineGroup('Users API',
+      transportMode: TransportMode.inMemory,
+      define: (engine, client, test) {
+    engine.get('/users', (ctx) => ctx.json({'users': []}));
+    engine.post('/users', (ctx) async {
+      await ctx.validate({'name': 'required'});
+      return ctx.json({'status': 'created'});
+    });
+
+    test('lists users', (engine, client) async {
+      final res = await client.getJson('/users');
+      res.assertStatus(200).assertJson((json) => json.has('users'));
+    });
+
+    test('creates user', (engine, client) async {
+      final res = await client.postJson('/users', {'name': 'Ava'});
+      res.assertJson((json) => json.where('status', 'created'));
+    });
+  });
+}
+```
+
+Each `test` defined inside the group receives a *fresh* engine/client pair, so state does not leak between tests.
+
+## 4. Access the engine inside tests
+
+The engine passed to your callback is the same instance used by the client. You can inspect routes, mount additional routers, or configure middleware inside the test body:
+
+```dart
+engineTest('attaches middleware', (engine, client) async {
+  engine.middlewares.add(timeoutMiddleware(const Duration(seconds: 5)));
+  engine.get('/slow', (ctx) async {
+    await Future<void>.delayed(const Duration(seconds: 10));
+    return ctx.string('done');
+  });
+
+  final res = await client.get('/slow');
+  res.assertStatus(HttpStatus.requestTimeout);
+});
+```
+
+Import `dart:io` when you need `HttpStatus` constants.
+
+## 5. Combine with browser tests
+
+Because `engineTest` uses `server_testing` under the hood, you can share the same handler with browser automation:
+
+```dart
+engineTest('renders home page', (engine, client) async {
+  engine.get('/', (ctx) => ctx.string('<html><title>Home</title></html>'));
+
+  final baseUrl = await client.baseUrlFuture;
+  await testBootstrap();
+
+  await browserTest('home has title', (browser) async {
+    await browser.visit('/', baseUrl: baseUrl);
+    await browser.assertTitle('Home');
+  });
+});
+```
+
+See the [Testing index](/docs/routed/testing/overview) for additional helpers and the [Server Testing docs](/docs/server-testing/) for the full assertion API.

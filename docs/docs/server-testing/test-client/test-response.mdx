@@ -1,0 +1,62 @@
+---
+title: TestResponse
+description: Fluent assertions for status, headers, body, and JSON payloads
+sidebar_position: 2
+---
+
+# TestResponse
+
+All `TestClient` methods return a `TestResponse`. The object contains the raw status, headers, and body as well as a lazily-parsed JSON representation when the `content-type` header contains `application/json`.
+
+```dart
+final response = await client.getJson('/users/1');
+response
+  .assertSuccess()
+  .assertHeaderContains('content-type', 'application/json')
+  .assertJsonPath('id', 1);
+```
+
+## Status Assertions
+- `assertStatus(int expected)`
+- `assertSuccess()` — 200 ≤ status < 300
+- `assertClientError()` — 400 ≤ status < 500
+- `assertServerError()` — 500 ≤ status < 600
+
+## Header Helpers
+- `assertHasHeaders()` / `assertNoHeaders()`
+- `assertHasHeader(String key)`
+- `assertHeader(String key, String value)` — equality match
+- `assertHeaderContains(String key, dynamic value)` — substring or collection contains
+- `assertContentType(String mime)` — shorthand for the common case
+- `header(String key)` — retrieve the raw header list (also triggers `assertHasHeader`)
+
+## Body Assertions
+- `assertBody(String expected)` and `assertBodyEquals(String expected)`
+- `assertBodyContains(String substring)`
+- `assertBodyIsEmpty()` / `assertBodyIsNotEmpty()`
+- `assertNoBody()` when an empty response is expected
+
+## JSON Utilities
+- `json()` returns the decoded payload (throws if content-type is not JSON)
+- `json(path)` drills into dot-delimited keys (`'user.profile.name'`)
+- `assertJsonPath(String path, dynamic expected)`
+- `assertJson(AssertableJsonCallback callback)` leverages the `assertable_json` DSL (`json.has('items').count('items', 2)`)
+- `assertJsonContains(Map<String, dynamic> partial)` for partial map comparisons
+- `assertJsonFilesContain(String key, String filename)` convenience helper for list-of-files structures
+
+> `assertJson` and the fluent DSL ship from the [`assertable_json`](https://pub.dev/packages/assertable_json) package, which `server_testing` re-exports for convenience. Importing `package:server_testing/server_testing.dart` gives you the assertion API without adding another dependency.
+
+## Debugging Helpers
+- `dump()` prints the URI, status line, headers, and body in an HTTP-like format—handy when a test fails unexpectedly.
+
+Because the assertions return `this`, they are chainable. Combine them to keep tests readable:
+
+```dart
+final login = await client.postJson('/login', {
+  'email': 'a@b.test',
+  'password': 'secret',
+});
+login
+  ..assertStatus(200)
+  ..assertJsonContains({'token': 'abc123'});
+```

@@ -1,0 +1,16 @@
+name: config_demo
+description: Example Routed app showcasing configuration loader and CLI integration.
+publish_to: none
+resolution: workspace
+
+environment:
+  sdk: '>=3.9.0 <4.0.0'
+
+dependencies:
+  routed:
+  file: ^7.0.1
+  path: ^1.9.1
+
+dev_dependencies:
+  routed_cli:
+  test: ^1.26.3

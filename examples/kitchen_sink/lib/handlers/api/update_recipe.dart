@@ -1,5 +1,3 @@
-import 'dart:io';
-
 import 'package:kitchen_sink_example/models/recipe.dart';
 import 'package:kitchen_sink_example/services/recipe_service.dart';
 import 'package:routed/routed.dart';
@@ -15,7 +13,7 @@ class RecipeUpdateBinding {
   String? image;
 }
 
-updateRecipe(EngineContext ctx) async {
+Future<Response> updateRecipe(EngineContext ctx) async {
   final id = ctx.mustGetParam('id');
   final existingRecipe = RecipeService.getById(id);
 

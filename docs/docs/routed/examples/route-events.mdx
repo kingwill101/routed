@@ -1,0 +1,71 @@
+---
+title: Route Event Hooks
+description: Listen to Routed's route lifecycle events.
+sidebar_position: 7
+---
+
+# Route Event Hooks
+
+`RoutingServiceProvider` emits a series of events around every request. The
+example under `examples/route_events/` prints them to stdout so you can see the
+order and payloads.
+
+> Custom provider manifests? Make sure `routed.routing` remains in `config/http.yaml` so the event manager is registered. `dart run routed_cli provider:list --config` shows which providers are active when you’re trimming the manifest.
+
+## Available events
+
+- `BeforeRoutingEvent` – fired before route matching begins.
+- `RouteMatchedEvent` – the request matched a route (includes the `EngineRoute`).
+- `RouteNotFoundEvent` – nothing matched; typically results in a 404.
+- `RoutingErrorEvent` – a handler threw; inspect the `error` and `stackTrace`.
+- `AfterRoutingEvent` – always fired after routing (even on errors) with the
+  final response status.
+
+## Example
+
+```dart title="examples/route_events/bin/server.dart"
+import 'package:routed/routed.dart';
+import 'package:routed/src/engine/events/route.dart';
+
+Future<void> main(List<String> args) async {
+  final engine = await Engine.create();
+
+  final events = await engine.make<EventManager>();
+
+  events.listen((BeforeRoutingEvent event) {
+    print('[before] ${event.context.request.method} ${event.context.request.uri}');
+  });
+
+  events.listen((RouteMatchedEvent event) {
+    print('[matched] ${event.route.name ?? '-'}');
+  });
+
+  events.listen((RouteNotFoundEvent event) {
+    print('[not-found] ${event.context.request.path}');
+  });
+
+  events.listen((RoutingErrorEvent event) {
+    print('[error] ${event.error}');
+  });
+
+  events.listen((AfterRoutingEvent event) {
+    print('[after] status ${event.context.response.statusCode}');
+  });
+
+  engine.get('/', (ctx) => ctx.string('hello')).name('home');
+  engine.get('/boom', (ctx) => throw StateError('Boom!'));
+
+  await engine.serve(host: '127.0.0.1', port: 8081);
+}
+```
+
+Run it and hit:
+
+```
+GET /        # triggers before/matched/after
+GET /boom    # triggers before/matched/error/after
+GET /missing # triggers before/not-found/after
+```
+
+Because these events are normal Dart streams you can attach logging,
+instrumentation, tracing, or metrics collectors without modifying your handlers.

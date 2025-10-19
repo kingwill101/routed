@@ -1,0 +1,6 @@
+default: session
+stores:
+  session:
+    driver: in_memory
+    ttl: { { cache.stores.session.ttl | default: 300 } }
+    namespace: "{{ cache.stores.session.namespace | default: 'config-demo:' }}"

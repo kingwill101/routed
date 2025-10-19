@@ -1,0 +1,114 @@
+---
+title: Structured Logging
+description: Capture per-request logs with contextual metadata
+sidebar_position: 11
+---
+
+# Structured Logging
+
+Routed ships with structured logging powered by the [`contextual`](https://pub.dev/packages/contextual) package. Every request gets a scoped logger that automatically includes request metadata (for example, `request_id`, `method`, `path`, `status`, and, when available, `route_name`). Prefer structured fields over string interpolation so logs stay machine-readable and searchable. Avoid logging secrets or PII—log identifiers and counts instead of full payloads.
+
+## Logging from Handlers
+
+```dart
+router.get('/status', (ctx) async {
+  ctx.logger.info('health check passed');
+
+  return ctx.json({
+    'status': 'ok',
+    'request_id': ctx.loggerContext['request_id'],
+  });
+});
+```
+
+`ctx.logger` exposes the full `contextual.Logger` API, so you can call `debug`, `info`, `warning`, `error`, etc. The log context is available through `ctx.loggerContext`.
+
+## Adding Extra Context
+
+Use `LoggingContext.withValues` to temporarily enrich the logger:
+
+```dart
+await LoggingContext.withValues({
+  'job_id': job.id,
+  'user_id': ctx.get<int>('user_id'),
+}, (logger) async {
+  logger.info('job queued');
+  await queueJob(job);
+});
+```
+
+Values passed to `withValues` are merged with the current scope, ensuring downstream logs include the additional metadata. A common pattern is to enrich logs with a correlation ID so you can trace a request across services:
+
+```dart
+// Minimal middleware to surface correlation IDs in logs
+Future<Response> correlationMiddleware(EngineContext ctx, Next next) async {
+  final cid = ctx.requestHeader('X-Correlation-ID') ?? ctx.request.id;
+  return await LoggingContext.withValues({'correlation_id': cid}, (logger) async {
+    logger.debug('correlation id attached', {'correlation_id': cid});
+    return await next();
+  });
+}
+```
+
+Pair this with the logging provider’s `request_headers` option (see below) so the value is also copied from the HTTP header onto the log context automatically.
+
+## Customising the Logger
+
+If you want to forward logs to a different sink or change the formatter, replace the logger factory once at application start:
+
+```dart
+RoutedLogger.configureFactory((context) {
+  final logger = contextual.Logger()
+    ..withContext(context)
+    ..setListener((entry) {
+      sendToObservability(entry.record.toJson());
+    });
+
+  return logger;
+});
+```
+
+Call `RoutedLogger.reset()` in test teardown if you override the factory inside a test suite.
+
+## Runtime configuration
+
+The logging middleware can be enabled/disabled or tuned via configuration:
+
+```yaml title="config/http.yaml"
+logging:
+  enabled: true
+  level: info        # or debug
+  errors_only: false
+  include_stack_traces: false
+  extra_fields:
+    service: api
+    deployment: production
+  request_headers: X-Correlation-ID, X-Request-ID
+```
+
+Those same keys can be mutated at runtime with `EngineOpt.withLogging`, allowing you to reduce noise (set `errors_only: true`) or disable request logging altogether without rebuilding the engine.
+
+`extra_fields` is merged into the structured payload so every request log carries consistent metadata (such as service or deployment identifiers). `request_headers` selects HTTP headers to surface; values are normalised into snake_case keys (for example, `X-Correlation-ID` becomes `header_x_correlation_id`). Set `include_stack_traces: true` temporarily when diagnosing production issues; otherwise stack traces are suppressed from request logs to keep noise down while the browser still receives the generic 500 response.
+
+Best practices:
+- Use `errors_only: true` in noisy environments and add sampling for high-volume endpoints.
+- Put stable identifiers in `extra_fields` (service, deployment, region) so you can slice dashboards consistently.
+- Capture a correlation/request ID (via `request_headers` or middleware) and include it in all logs and external spans.
+- Log payload shapes, not full sensitive bodies; when necessary, redact fields at the edge.
+
+> Validation: The logging provider rejects malformed overrides (for example, non-boolean `enabled` flags or non-string `request_headers` entries) by throwing a `ProviderConfigException` during boot. You can catch mistakes early by running `dart run routed_cli provider:list --config`, which prints each provider’s defaults and surfaces validation errors.
+
+## Error Hooks & Logging
+
+Combine the logging API with the engine's error hooks to capture unhandled exceptions:
+
+```dart
+engine.beforeError((ctx, error, stack) {
+  ctx.logger.error('unhandled error', {
+    'error': error.toString(),
+    'stack_trace': stack.toString(),
+  });
+});
+```
+
+This ensures every failed request surfaces consistent, structured telemetry without adding boilerplate to each route.

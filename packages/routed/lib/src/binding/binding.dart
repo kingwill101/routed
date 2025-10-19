@@ -1,14 +1,14 @@
 import 'dart:async';
 
-import 'package:routed/routed.dart';
 import 'package:routed/src/binding/multipart.dart';
+import 'package:routed/src/context/context.dart';
 
-import 'json.dart' show JsonBinding;
-import 'xml.dart' show XmlBinding;
 import 'form.dart' show FormBinding;
-import 'uri.dart' show UriBinding;
+import 'json.dart' show JsonBinding;
 import 'multipart.dart' show MultipartBinding;
 import 'query.dart' show QueryBinding;
+import 'uri.dart' show UriBinding;
+import 'xml.dart' show XmlBinding;
 
 // For XML parsing you might use a third-party package like `xml`:
 // import 'package:xml/xml.dart';
@@ -36,8 +36,12 @@ abstract class Binding {
   ///
   /// [context] - The context of the engine containing request data.
   /// [data] - A map of data to be validated.
-  Future<void> validate(EngineContext context, Map<String, String> data,
-      {bool bail = false});
+  Future<void> validate(
+    EngineContext context,
+    Map<String, String> data, {
+    bool bail = false,
+    Map<String, String>? messages,
+  });
 }
 
 // Create singleton instances of each binding type.

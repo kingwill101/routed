@@ -1,15 +1,13 @@
 import 'package:routed/routed.dart';
 
-void main() {
-  final engine = Engine();
+Future<void> main() async {
+  final engine = Engine(
+    config: EngineConfig(
+      http2: const Http2Config(enabled: true),
+      tlsCertificatePath: 'cert.pem',
+      tlsKeyPath: 'key.pem',
+    ),
+  )..get('/', (ctx) => ctx.string('Hello World'));
 
-  engine.get("/", (ctx) {
-    ctx.string("Hellow World");
-  });
-
-  engine.serveSecure(
-    port: 4043,
-    certificatePath: 'cert.pem',
-    keyPath: 'key.pem',
-  );
+  await engine.serveSecure(port: 4043);
 }

@@ -1,0 +1,111 @@
+---
+id: sse-counter
+title: SSE counter stream
+sidebar_position: 8
+description: Minimal SSE endpoint that pushes an incrementing counter to the browser.
+---
+
+```dart title="bin/server.dart"
+import 'dart:async';
+import 'dart:io';
+
+import 'package:routed/routed.dart';
+
+Future<void> main() async {
+  final engine = Engine()
+    ..get('/', (ctx) {
+      ctx.response.headers.set(HttpHeaders.contentTypeHeader, 'text/html');
+      return ctx.response
+        ..write('''<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>SSE Counter</title>
+    <style>
+      body { font-family: system-ui, sans-serif; margin: 2rem; }
+      .count { font-size: 2rem; font-weight: 600; }
+      .log { margin-top: 1rem; color: #555; }
+    </style>
+  </head>
+  <body>
+    <h1>SSE Counter</h1>
+    <p class="count" id="count">waiting...</p>
+    <div class="log" id="log">connecting…</div>
+    <script>
+      const countEl = document.getElementById('count');
+      const logEl = document.getElementById('log');
+      const source = new EventSource('/events');
+
+      source.addEventListener('open', () => {
+        logEl.textContent = 'Connected to /events';
+        console.log('SSE connected');
+      });
+
+      source.addEventListener('connected', (event) => {
+        logEl.textContent = 'Connection established: ' + event.data;
+      });
+
+      source.onmessage = (event) => {
+        if (!isNaN(event.data)) {
+          countEl.textContent = event.data;
+          logEl.textContent = 'Last update: ' + new Date().toLocaleTimeString();
+        }
+      };
+
+      source.onerror = () => {
+        logEl.textContent = 'Connection lost; attempting to reconnect...';
+      };
+    </script>
+  </body>
+</html>
+''');
+    })
+    ..get('/events', (ctx) async {
+      ctx.response.headers
+        ..set('Access-Control-Allow-Origin', '*')
+        ..set('Access-Control-Allow-Headers', 'Cache-Control');
+
+      Stream<SseEvent> eventStream() async* {
+        yield SseEvent(
+          id: 'init',
+          event: 'connected',
+          data: 'Connection established',
+          retry: const Duration(seconds: 3),
+        );
+
+        var counter = 0;
+        while (true) {
+          await Future.delayed(const Duration(seconds: 1));
+          yield SseEvent(
+            id: '$counter',
+            data: '$counter',
+            retry: const Duration(seconds: 3),
+          );
+          counter++;
+        }
+      }
+
+      await ctx.sse(
+        eventStream(),
+        heartbeat: const Duration(seconds: 15),
+        heartbeatComment: 'still-alive',
+      );
+    });
+
+  await engine.serve(host: '127.0.0.1', port: 8080);
+}
+```
+
+Launch the example (`dart run bin/server.dart`) and visit
+`http://127.0.0.1:8080/` to watch the counter advance. You can also stream the
+raw events with:
+
+```bash
+curl -v -N http://127.0.0.1:8080/events
+```
+
+The stream begins with a `:ok` priming comment, followed by the `connected`
+control event and then the incrementing counter. On shutdown the route emits
+`event: control` / `data: close` before closing so clients can react quickly.
+Once that frame is sent the request completes, so graceful shutdown drains
+without waiting for the process to exit forcefully.
