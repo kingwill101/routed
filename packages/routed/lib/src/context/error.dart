@@ -88,15 +88,11 @@ class ValidationError implements EngineError {
 
 /// Represents a "Not Found" error in the engine.
 class NotFoundError extends EngineError {
-  NotFoundError({required super.message});
+  NotFoundError({String message = 'Not found.'}) : super(message: message);
 
   /// The error code for "Not Found" errors, which is always 404.
   @override
   int? get code => 404;
-
-  /// The error message for "Not Found" errors, which is always 'Not found.'.
-  @override
-  String get message => 'Not found.';
 }
 
 /// Represents an "Unauthorized" error in the engine.
