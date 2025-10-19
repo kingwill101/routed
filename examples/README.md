@@ -22,6 +22,7 @@ Run any example with: `dart <filename>.dart`
 - **form_widgets.dart** - Form handling examples
 - **forward_proxy.dart** - Basic forward proxy functionality
 - **group.dart** - Route grouping with middleware
+- **haigate.dart** - Haigate gates combined with session auth and guard middleware
 - **jwt_auth.dart** - JWT bearer authentication and IP filtering
 - **multipart_validation.dart** - Multipart form validation with file uploads
 - **query.dart** - Query parameter handling
@@ -29,6 +30,7 @@ Run any example with: `dart <filename>.dart`
 - **route_grouping.dart** - Advanced route grouping patterns
 - **route_matching.dart** - Route matching for different HTTP methods
 - **route_parameter_types.dart** - Parameter type handling in routes
+- **signals.dart** - Demonstrates the SignalHub request lifecycle hooks and error propagation
 - **session_auth_guard.dart** - Session-based authentication with remember-me tokens
 - **sessions.dart** - Session management
 - **sse_counter.dart** - Server-Sent Events streaming
@@ -37,7 +39,7 @@ Run any example with: `dart <filename>.dart`
 - **template_engine_example.dart** - Template rendering (Jinja/Liquid)
 - **timeout_middleware_example.dart** - Request timeout handling
 - **validation.dart** - Request data validation rules
-- **validation_example.dart** - Advanced validation patterns
+- **validation_example.dart** - Advanced validation patterns- **view_shortcuts.dart** - Shows how to use `ctx.requireFound` and `ctx.fetchOr404` to raise 404s when data is missing
 
 ## Directory Examples
 
@@ -55,4 +57,5 @@ These examples require additional assets, configuration, or complex project stru
 - **view_engine/** - View engine integration with view templates
 - **websocket_chat/** - WebSocket chat application with public assets
 
-Each directory example contains its own README with specific setup instructions.
+Each directory example contains its own README with specific setup instructions.- **view_shortcuts.dart** - Shows how to use `ctx.requireFound` and `ctx.fetchOr404` to raise 404s when data is missing
+- **view_shortcuts.dart** - Shows how to use `ctx.requireFound` and `ctx.fetchOr404` to raise 404s when data is missing
