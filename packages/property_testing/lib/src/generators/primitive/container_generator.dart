@@ -13,10 +13,17 @@ class ContainerGenerator<C, T> extends Generator<C> {
   final int? maxLength;
   late final ListGenerator<T> _listGenerator; // Internal list generator
 
-  ContainerGenerator(this.elementGen, this.factory,
-      {this.minLength, this.maxLength}) {
-    _listGenerator = ListGenerator<T>(elementGen,
-        minLength: minLength, maxLength: maxLength);
+  ContainerGenerator(
+    this.elementGen,
+    this.factory, {
+    this.minLength,
+    this.maxLength,
+  }) {
+    _listGenerator = ListGenerator<T>(
+      elementGen,
+      minLength: minLength,
+      maxLength: maxLength,
+    );
     // Validation is handled by ListGenerator constructor
   }
 

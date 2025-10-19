@@ -23,10 +23,7 @@ void main() {
 
     test('Duration arithmetic properties', () async {
       final runner = PropertyTestRunner(
-        Specialized.duration(
-          min: Duration.zero,
-          max: const Duration(days: 30),
-        ),
+        Specialized.duration(min: Duration.zero, max: const Duration(days: 30)),
         (duration) {
           // Test duration arithmetic properties
           expect(duration + Duration.zero, equals(duration));
@@ -80,8 +77,10 @@ void main() {
 
     test('Semantic version ordering properties', () async {
       final runner = PropertyTestRunner(
-        Specialized.semver(prerelease: true, build: true)
-            .list(minLength: 2, maxLength: 2),
+        Specialized.semver(
+          prerelease: true,
+          build: true,
+        ).list(minLength: 2, maxLength: 2),
         (versions) {
           // Parse and compare version strings
           final v1 = _SemVer.parse(versions[0]);

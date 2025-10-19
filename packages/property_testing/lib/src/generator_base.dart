@@ -214,19 +214,16 @@ class FlatMappedGenerator<T, R> extends Generator<R> {
     // Pass the *same* random instance down for consistency within flatMap
     final resultValue = resultGen.generate(random);
 
-    return ShrinkableValue(
-      resultValue.value,
-      () sync* {
-        // Try shrinking the source value
-        for (final shrunkSource in sourceValue.shrinks()) {
-          final shrunkGen = f(shrunkSource.value);
-          // Use the same random instance for shrinks
-          yield shrunkGen.generate(random);
-        }
-        // Try shrinking the result value
-        yield* resultValue.shrinks();
-      },
-    );
+    return ShrinkableValue(resultValue.value, () sync* {
+      // Try shrinking the source value
+      for (final shrunkSource in sourceValue.shrinks()) {
+        final shrunkGen = f(shrunkSource.value);
+        // Use the same random instance for shrinks
+        yield shrunkGen.generate(random);
+      }
+      // Try shrinking the result value
+      yield* resultValue.shrinks();
+    });
   }
 }
 
@@ -263,7 +260,8 @@ class FilteredGenerator<T> extends Generator<T> {
       }
     }
     throw Exception(
-        'Could not generate value matching predicate after $_maxAttempts attempts');
+      'Could not generate value matching predicate after $_maxAttempts attempts',
+    );
   }
 }
 
@@ -304,28 +302,25 @@ class ListGenerator<T> extends Generator<List<T>> {
     // Pass the same random instance to element generators
     final elements = List.generate(length, (_) => elementGen.generate(random));
 
-    return ShrinkableValue(
-      elements.map((e) => e.value).toList(),
-      () sync* {
-        // Try removing elements (if above minLength)
-        if (minLength == null || elements.length > minLength!) {
-          for (var i = 0; i < elements.length; i++) {
-            final shortened = List<T>.from(elements.map((e) => e.value));
-            shortened.removeAt(i);
-            yield ShrinkableValue.leaf(shortened);
-          }
-        }
-
-        // Try shrinking individual elements
+    return ShrinkableValue(elements.map((e) => e.value).toList(), () sync* {
+      // Try removing elements (if above minLength)
+      if (minLength == null || elements.length > minLength!) {
         for (var i = 0; i < elements.length; i++) {
-          for (final shrunkElement in elements[i].shrinks()) {
-            final shrunk = List<T>.from(elements.map((e) => e.value));
-            shrunk[i] = shrunkElement.value;
-            yield ShrinkableValue.leaf(shrunk);
-          }
+          final shortened = List<T>.from(elements.map((e) => e.value));
+          shortened.removeAt(i);
+          yield ShrinkableValue.leaf(shortened);
         }
-      },
-    );
+      }
+
+      // Try shrinking individual elements
+      for (var i = 0; i < elements.length; i++) {
+        for (final shrunkElement in elements[i].shrinks()) {
+          final shrunk = List<T>.from(elements.map((e) => e.value));
+          shrunk[i] = shrunkElement.value;
+          yield ShrinkableValue.leaf(shrunk);
+        }
+      }
+    });
   }
 
   int _generateLength(Random random) {

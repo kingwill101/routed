@@ -11,7 +11,8 @@ class ShelfTranslator {
   /// This method extracts all the necessary information from the HttpRequest
   /// (method, url, headers, body) and creates an equivalent shelf Request.
   static Future<shelf.Request> httpRequestToShelfRequest(
-      HttpRequest httpRequest) async {
+    HttpRequest httpRequest,
+  ) async {
     // Extract method and URL
     final method = httpRequest.method;
     final url = httpRequest.uri;

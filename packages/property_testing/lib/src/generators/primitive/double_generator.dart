@@ -8,8 +8,8 @@ class DoubleGenerator extends Generator<double> {
   final double max;
 
   DoubleGenerator({double? min, double? max})
-      : min = min ?? -1000.0,
-        max = max ?? 1000.0 {
+    : min = min ?? -1000.0,
+      max = max ?? 1000.0 {
     if (this.min > this.max) {
       // Use resolved min/max
       throw ArgumentError('min must be less than or equal to max');
@@ -60,7 +60,7 @@ class DoubleGenerator extends Generator<double> {
         0.1,
         -0.1,
         10.0,
-        -10.0
+        -10.0,
       ];
 
       // 1. Try common values first (especially those near common test boundary thresholds)

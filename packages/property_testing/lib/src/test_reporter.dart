@@ -36,7 +36,8 @@ class PropertyTestReporter {
         // Consider adding logic to PropertyConfig/Result to store the Random instance
         // or a way to represent its state if the integer seed isn't known.
         buffer.writeln(
-            '  Seed: (Not available - Random instance likely provided directly)');
+          '  Seed: (Not available - Random instance likely provided directly)',
+        );
       }
 
       if (result.originalFailingInput != null) {
@@ -46,7 +47,8 @@ class PropertyTestReporter {
 
       if (result.failingInput != null) {
         buffer.writeln(
-            '\nMinimal failing input (after ${result.numShrinks} shrinks):');
+          '\nMinimal failing input (after ${result.numShrinks} shrinks):',
+        );
         buffer.writeln(_formatValue(result.failingInput));
       }
 
@@ -170,11 +172,13 @@ class TestStatisticsCollector {
     if (_failedTests > 0) {
       buffer.writeln('  Total shrinks: $_totalShrinks');
       buffer.writeln(
-          '  Average shrinks per failure: ${(_totalShrinks / _failedTests).toStringAsFixed(1)}');
+        '  Average shrinks per failure: ${(_totalShrinks / _failedTests).toStringAsFixed(1)}',
+      );
     }
 
-    final avgDuration =
-        _totalTests > 0 ? _totalDuration ~/ _totalTests : Duration.zero;
+    final avgDuration = _totalTests > 0
+        ? _totalDuration ~/ _totalTests
+        : Duration.zero;
     buffer.writeln('  Average test duration: ${_formatDuration(avgDuration)}');
 
     if (_failedResults.isNotEmpty) {

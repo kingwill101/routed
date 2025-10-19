@@ -36,10 +36,8 @@ class EmailGenerator extends Generator<String> {
     'example.com',
   ];
 
-  EmailGenerator({
-    List<String>? domains,
-    this.maxLocalPartLength = 64,
-  }) : domains = domains ?? _defaultDomains {
+  EmailGenerator({List<String>? domains, this.maxLocalPartLength = 64})
+    : domains = domains ?? _defaultDomains {
     if (maxLocalPartLength < 1 || maxLocalPartLength > 64) {
       throw ArgumentError.value(
         maxLocalPartLength,
@@ -113,8 +111,9 @@ class EmailGenerator extends Generator<String> {
   bool _isValidLocalPart(String part) {
     if (part.isEmpty || part.length > 64) return false;
     // Slightly relaxed regex to allow single-char local parts generated above
-    if (!RegExp(r'^[a-zA-Z0-9](?:[a-zA-Z0-9._-]*[a-zA-Z0-9])?$')
-        .hasMatch(part)) {
+    if (!RegExp(
+      r'^[a-zA-Z0-9](?:[a-zA-Z0-9._-]*[a-zA-Z0-9])?$',
+    ).hasMatch(part)) {
       return false;
     }
     if (part.contains('..') || part.contains('__') || part.contains('--')) {

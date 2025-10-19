@@ -11,8 +11,10 @@ void main() {
             // Test that special characters are properly encoded
             final decoded = Uri.decodeQueryComponent(entry.value);
             final reEncoded = Uri.encodeQueryComponent(decoded);
-            expect(Uri.parse(uri.toString()).queryParameters[entry.key],
-                equals(decoded));
+            expect(
+              Uri.parse(uri.toString()).queryParameters[entry.key],
+              equals(decoded),
+            );
             expect(decoded, equals(reEncoded));
           }
         },
@@ -23,48 +25,42 @@ void main() {
     });
 
     test('handles special characters in path segments', () async {
-      final runner = PropertyTestRunner(
-        Specialized.uri(),
-        (uri) {
-          for (final segment in uri.pathSegments) {
-            // Test that special characters are properly encoded
-            final decoded = Uri.decodeComponent(segment);
-            final reEncoded = Uri.encodeComponent(decoded);
-            expect(Uri.parse(uri.toString()).pathSegments, contains(decoded));
-            expect(decoded, equals(reEncoded));
-          }
-        },
-      );
+      final runner = PropertyTestRunner(Specialized.uri(), (uri) {
+        for (final segment in uri.pathSegments) {
+          // Test that special characters are properly encoded
+          final decoded = Uri.decodeComponent(segment);
+          final reEncoded = Uri.encodeComponent(decoded);
+          expect(Uri.parse(uri.toString()).pathSegments, contains(decoded));
+          expect(decoded, equals(reEncoded));
+        }
+      });
 
       final result = await runner.run();
       expect(result.success, isTrue);
     });
 
     test('generates valid domain names', () async {
-      final runner = PropertyTestRunner(
-        Specialized.uri(),
-        (uri) {
-          // Test URI host validation
-          final parts = uri.host.split('.');
-          expect(parts.length,
-              greaterThanOrEqualTo(2)); // domain + TLD (subdomain optional)
+      final runner = PropertyTestRunner(Specialized.uri(), (uri) {
+        // Test URI host validation
+        final parts = uri.host.split('.');
+        expect(
+          parts.length,
+          greaterThanOrEqualTo(2),
+        ); // domain + TLD (subdomain optional)
 
-          // Each part should be valid
-          for (final part in parts.take(parts.length - 1)) {
-            // All parts except TLD
-            expect(
-                part,
-                matches(
-                    r'^[a-z0-9-]+$')); // Only lowercase letters, numbers, and hyphens
-            expect(
-                part.length, lessThanOrEqualTo(63)); // Max length per DNS spec
-          }
-
-          // Check TLD
+        // Each part should be valid
+        for (final part in parts.take(parts.length - 1)) {
+          // All parts except TLD
           expect(
-              parts.last, matches(r'^[a-z]+$')); // TLD should be letters only
-        },
-      );
+            part,
+            matches(r'^[a-z0-9-]+$'),
+          ); // Only lowercase letters, numbers, and hyphens
+          expect(part.length, lessThanOrEqualTo(63)); // Max length per DNS spec
+        }
+
+        // Check TLD
+        expect(parts.last, matches(r'^[a-z]+$')); // TLD should be letters only
+      });
 
       final result = await runner.run();
       expect(result.success, isTrue);
@@ -102,10 +98,7 @@ void main() {
 
     test('handles maximum URI length constraints', () async {
       final runner = PropertyTestRunner(
-        Specialized.uri(
-          maxPathSegments: 100,
-          maxQueryParameters: 100,
-        ),
+        Specialized.uri(maxPathSegments: 100, maxQueryParameters: 100),
         (uri) {
           // RFC 7230 suggests a minimum of 8000 octets for HTTP/1.1
           expect(uri.toString().length, lessThan(8000));

@@ -11,12 +11,12 @@ class FrequencyGenerator<T> extends Generator<T> {
   final int totalWeight;
 
   FrequencyGenerator(this.weightedGenerators)
-      : totalWeight = weightedGenerators.fold(0, (sum, item) {
-          if (item.$1 <= 0) {
-            throw ArgumentError('Weights must be positive: ${item.$1}');
-          }
-          return sum + item.$1;
-        }) {
+    : totalWeight = weightedGenerators.fold(0, (sum, item) {
+        if (item.$1 <= 0) {
+          throw ArgumentError('Weights must be positive: ${item.$1}');
+        }
+        return sum + item.$1;
+      }) {
     if (weightedGenerators.isEmpty) {
       throw ArgumentError('weightedGenerators must not be empty');
     }

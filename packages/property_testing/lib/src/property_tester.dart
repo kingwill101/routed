@@ -21,6 +21,8 @@ abstract class PropertyTester {
   /// Verifies that [f1] and [f2] return equal results when called with the same
   /// generated inputs. This is useful for testing implementations against a reference
   /// implementation or testing refactored code against the original version.
-  Future<void> checkEquivalence(Future<dynamic> Function(dynamic input) f1,
-      Future<dynamic> Function(dynamic input) f2);
+  Future<void> checkEquivalence(
+    Future<dynamic> Function(dynamic input) f1,
+    Future<dynamic> Function(dynamic input) f2,
+  );
 }

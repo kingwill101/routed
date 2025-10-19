@@ -7,9 +7,7 @@ class IntGenerator extends Generator<int> {
   final int min;
   final int max;
 
-  IntGenerator({int? min, int? max})
-      : min = min ?? -1000,
-        max = max ?? 1000 {
+  IntGenerator({int? min, int? max}) : min = min ?? -1000, max = max ?? 1000 {
     if (this.min > this.max) {
       // Use resolved min/max
       throw ArgumentError('min must be less than or equal to max');
@@ -27,8 +25,9 @@ class IntGenerator extends Generator<int> {
     // 3. Try small increments/decrements from target.
     // 4. Yield boundaries (min, max).
     return ShrinkableValue(value, () sync* {
-      final int target =
-          (min <= 0 && max >= 0) ? 0 : (min.abs() < max.abs() ? min : max);
+      final int target = (min <= 0 && max >= 0)
+          ? 0
+          : (min.abs() < max.abs() ? min : max);
       var current = value;
       final yielded = <int>{value}; // Track yielded values to avoid duplicates
 

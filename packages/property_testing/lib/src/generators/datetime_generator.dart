@@ -35,12 +35,9 @@ class DateTimeGenerator extends Generator<DateTime> {
   static final Set<int> _generatedMonths = {};
   static const int millisecondsPerDay = 86400000;
 
-  DateTimeGenerator({
-    DateTime? min,
-    DateTime? max,
-    this.utc = false,
-  })  : min = (min ?? DateTime(1970)).toUtc(),
-        max = (max ?? DateTime(2100)).toUtc() {
+  DateTimeGenerator({DateTime? min, DateTime? max, this.utc = false})
+    : min = (min ?? DateTime(1970)).toUtc(),
+      max = (max ?? DateTime(2100)).toUtc() {
     if (min != null && max != null && min.isAfter(max)) {
       throw ArgumentError('min must be before or equal to max');
     }
@@ -125,11 +122,13 @@ class DateTimeGenerator extends Generator<DateTime> {
       // Ensure chronological order is maintained
       if (_lastGeneratedDate != null && newDate.isBefore(_lastGeneratedDate!)) {
         // If the new date is before the last one, add some time to make it later
-        newDate = _lastGeneratedDate!.add(Duration(
-          hours: 1 + random.nextInt(10),
-          minutes: random.nextInt(60),
-          seconds: random.nextInt(60),
-        ));
+        newDate = _lastGeneratedDate!.add(
+          Duration(
+            hours: 1 + random.nextInt(10),
+            minutes: random.nextInt(60),
+            seconds: random.nextInt(60),
+          ),
+        );
       }
 
       _lastGeneratedDate = newDate;
@@ -164,8 +163,10 @@ class DateTimeGenerator extends Generator<DateTime> {
       if (utc) {
         result = DateTime.fromMillisecondsSinceEpoch(resultMillis, isUtc: true);
       } else {
-        result =
-            DateTime.fromMillisecondsSinceEpoch(resultMillis, isUtc: false);
+        result = DateTime.fromMillisecondsSinceEpoch(
+          resultMillis,
+          isUtc: false,
+        );
       }
     }
 
@@ -202,8 +203,9 @@ class DateTimeGenerator extends Generator<DateTime> {
               }
 
               final day = 1 + random!.nextInt(maxDay);
-              final shrunkDate =
-                  utc ? DateTime.utc(2000, m, day) : DateTime(2000, m, day);
+              final shrunkDate = utc
+                  ? DateTime.utc(2000, m, day)
+                  : DateTime(2000, m, day);
 
               yield ShrinkableValue.leaf(shrunkDate);
               break;
@@ -221,11 +223,7 @@ class DateTimeGenerator extends Generator<DateTime> {
       }
 
       // Always try to shrink towards common dates first
-      final commonDates = [
-        min,
-        DateTime(result.year, 1, 1, 0, 0, 0, 0),
-        epoch,
-      ];
+      final commonDates = [min, DateTime(result.year, 1, 1, 0, 0, 0, 0), epoch];
 
       for (var date in commonDates) {
         if (!date.isAtSameMomentAs(result) &&
@@ -243,35 +241,39 @@ class DateTimeGenerator extends Generator<DateTime> {
       }
 
       // Shrink components individually
-      yield ShrinkableValue.leaf(boundedDate(DateTime(
-        result.year,
-        result.month,
-        result.day,
-        0,
-        0,
-        0,
-        0,
-      )));
+      yield ShrinkableValue.leaf(
+        boundedDate(
+          DateTime(result.year, result.month, result.day, 0, 0, 0, 0),
+        ),
+      );
 
-      yield ShrinkableValue.leaf(boundedDate(DateTime(
-        result.year,
-        result.month,
-        1,
-        result.hour,
-        result.minute,
-        result.second,
-        result.millisecond,
-      )));
+      yield ShrinkableValue.leaf(
+        boundedDate(
+          DateTime(
+            result.year,
+            result.month,
+            1,
+            result.hour,
+            result.minute,
+            result.second,
+            result.millisecond,
+          ),
+        ),
+      );
 
-      yield ShrinkableValue.leaf(boundedDate(DateTime(
-        result.year,
-        1,
-        result.day,
-        result.hour,
-        result.minute,
-        result.second,
-        result.millisecond,
-      )));
+      yield ShrinkableValue.leaf(
+        boundedDate(
+          DateTime(
+            result.year,
+            1,
+            result.day,
+            result.hour,
+            result.minute,
+            result.second,
+            result.millisecond,
+          ),
+        ),
+      );
 
       // Special handling for chronological order test
       if (_lastGeneratedDate != null && _lastGeneratedDate != result) {
@@ -280,7 +282,8 @@ class DateTimeGenerator extends Generator<DateTime> {
           if (result.isAfter(_lastGeneratedDate!)) {
             // If we're already after the last date, we can shrink towards it
             yield ShrinkableValue.leaf(
-                _lastGeneratedDate!.add(const Duration(milliseconds: 1)));
+              _lastGeneratedDate!.add(const Duration(milliseconds: 1)),
+            );
           }
         }
       }

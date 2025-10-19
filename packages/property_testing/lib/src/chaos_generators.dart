@@ -130,10 +130,7 @@ class Chaos {
   /// Shrinking attempts to remove characters or replace problematic characters
   /// with spaces while staying within length bounds.
 
-  static Generator<String> string({
-    int? minLength,
-    int? maxLength,
-  }) =>
+  static Generator<String> string({int? minLength, int? maxLength}) =>
       _ChaoticStringGenerator(minLength: minLength, maxLength: maxLength);
 
   /// Creates a generator for chaotic integers.
@@ -146,10 +143,7 @@ class Chaos {
   /// Shrinking targets 0 (if in range) or the `min`/`max` boundary, as well
   /// as the included edge cases.
 
-  static Generator<int> integer({
-    int? min,
-    int? max,
-  }) =>
+  static Generator<int> integer({int? min, int? max}) =>
       _ChaoticIntGenerator(min: min, max: max);
 
   /// Creates a generator for chaotic JSON strings.
@@ -165,10 +159,7 @@ class Chaos {
   /// targets basic valid JSON primitives (`{}`, `[]`, `null`, `""`, `0`, `true`, `false`).
   /// Note: Shrinking might sometimes result in invalid JSON if the original was invalid.
 
-  static Generator<String> json({
-    int maxDepth = 3,
-    int maxLength = 10,
-  }) =>
+  static Generator<String> json({int maxDepth = 3, int maxLength = 10}) =>
       _ChaoticJsonGenerator(maxDepth: maxDepth, maxLength: maxLength);
 
   /// Creates a generator for chaotic byte lists (`List<int>`).
@@ -182,10 +173,7 @@ class Chaos {
   /// Shrinking attempts to remove bytes, replace problematic bytes with 0x00,
   /// and shrink towards the minimum length or an empty list.
 
-  static Generator<List<int>> bytes({
-    int? minLength,
-    int? maxLength,
-  }) =>
+  static Generator<List<int>> bytes({int? minLength, int? maxLength}) =>
       _ChaoticBytesGenerator(minLength: minLength, maxLength: maxLength);
 }
 
@@ -257,11 +245,9 @@ class _ChaoticStringGenerator extends Generator<String> {
     '\uFFFF', // Invalid character
   ];
 
-  _ChaoticStringGenerator({
-    int? minLength,
-    int? maxLength,
-  })  : minLength = minLength ?? 0,
-        maxLength = maxLength ?? 100;
+  _ChaoticStringGenerator({int? minLength, int? maxLength})
+    : minLength = minLength ?? 0,
+      maxLength = maxLength ?? 100;
 
   @override
   ShrinkableValue<String> generate(Random random) {
@@ -271,8 +257,9 @@ class _ChaoticStringGenerator extends Generator<String> {
     for (var i = 0; i < length; i++) {
       if (random.nextBool()) {
         // Use a problematic character
-        buffer
-            .write(_problematicChars[random.nextInt(_problematicChars.length)]);
+        buffer.write(
+          _problematicChars[random.nextInt(_problematicChars.length)],
+        );
       } else {
         // Use a random Unicode character
         // Avoid generating surrogate code points which are invalid alone
@@ -327,11 +314,9 @@ class _ChaoticIntGenerator extends Generator<int> {
     -9223372036854775808, // Minimum 64-bit signed integer
   ];
 
-  _ChaoticIntGenerator({
-    int? min,
-    int? max,
-  })  : min = min ?? -9223372036854775808,
-        max = max ?? 9223372036854775807;
+  _ChaoticIntGenerator({int? min, int? max})
+    : min = min ?? -9223372036854775808,
+      max = max ?? 9223372036854775807;
 
   @override
   ShrinkableValue<int> generate(Random random) {
@@ -396,10 +381,7 @@ class _ChaoticJsonGenerator extends Generator<String> {
   final int maxDepth;
   final int maxLength;
 
-  _ChaoticJsonGenerator({
-    this.maxDepth = 3,
-    this.maxLength = 10,
-  });
+  _ChaoticJsonGenerator({this.maxDepth = 3, this.maxLength = 10});
 
   @override
   ShrinkableValue<String> generate(Random random) {
@@ -422,8 +404,10 @@ class _ChaoticJsonGenerator extends Generator<String> {
               final stringVal = entry.value as String;
               if (stringVal.length > 1) {
                 final tempMap = Map<String, dynamic>.from(map);
-                tempMap[entry.key as String] =
-                    stringVal.substring(0, stringVal.length ~/ 2);
+                tempMap[entry.key as String] = stringVal.substring(
+                  0,
+                  stringVal.length ~/ 2,
+                );
                 yield ShrinkableValue.leaf(json.encode(tempMap));
               }
             }
@@ -531,8 +515,10 @@ class _ChaoticJsonGenerator extends Generator<String> {
     final length = random.nextInt(10);
     final chars = List.generate(
       length,
-      (_) => _ChaoticStringGenerator._problematicChars[
-          random.nextInt(_ChaoticStringGenerator._problematicChars.length)],
+      (_) =>
+          _ChaoticStringGenerator._problematicChars[random.nextInt(
+            _ChaoticStringGenerator._problematicChars.length,
+          )],
     );
     // Basic JSON string escaping
     return _escapeString(chars.join());
@@ -571,11 +557,9 @@ class _ChaoticBytesGenerator extends Generator<List<int>> {
     0xBF, // UTF-8 BOM byte
   ];
 
-  _ChaoticBytesGenerator({
-    int? minLength,
-    int? maxLength,
-  })  : minLength = minLength ?? 0,
-        maxLength = maxLength ?? 100;
+  _ChaoticBytesGenerator({int? minLength, int? maxLength})
+    : minLength = minLength ?? 0,
+      maxLength = maxLength ?? 100;
 
   @override
   ShrinkableValue<List<int>> generate(Random random) {
