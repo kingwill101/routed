@@ -44,6 +44,8 @@ part 'session.dart';
 
 part 'sse.dart';
 
+part 'shortcuts.dart';
+
 /// The EngineContext is loosely inspired by gin.Context in Go.
 /// It wraps [Request] and [Response], holds arbitrary keys/values,
 /// tracks errors, and can control flow in a chain of handlers.
@@ -253,7 +255,6 @@ class EngineContext {
     return _response;
   }
 
-
   /// Helper to start processing the chain from the first handler.
   Future<Response> run() async {
     resetHandlers();
@@ -402,10 +403,7 @@ class EngineContext {
       if (request.pathParameters.isEmpty) {
         return extracted;
       }
-      return {
-        ...request.pathParameters,
-        ...extracted,
-      };
+      return {...request.pathParameters, ...extracted};
     }
     if (request.pathParameters.isEmpty) {
       return const {};

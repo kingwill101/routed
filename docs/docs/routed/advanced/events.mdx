@@ -6,6 +6,9 @@ sidebar_position: 3
 
 # Events
 
+> Looking for Django-style request hooks? See the companion [Signals](./signals.md) guide for the `SignalHub` facade
+> built on top of these events.
+
 Routed exposes an event bus so you can hook into the request lifecycle, provider boot, and your own domain events.
 
 ## Event manager basics
@@ -77,6 +80,71 @@ eventManager.on<RoutingErrorEvent>().listen((event) {
 });
 ```
 
+## Request signals
+
+While the event bus remains the lowest-level primitive, Routed now exposes a higher-level signal API that mirrors Django-style lifecycle hooks. A `Signal<T>` is a thin wrapper around the `EventManager` that keeps an ordered list of handlers, executes them sequentially, and translates handler failures into structured `UnhandledSignalError` events so nothing fails silently.
+
+```dart
+import 'package:routed/routed.dart';
+
+final hub = await engine.container.make<SignalHub>();
+
+hub.requests.started.connect((event) {
+  metrics.increment('requests_started');
+});
+
+hub.requests.routeMatched.connect((event) async {
+  await tracer.attachRoute(event.context, event.route);
+});
+
+// Later, when you no longer need the handler:
+hub.requests.routeMatched.disconnect(myHandler);
+```
+
+> Prefer `package:routed/signals.dart` when you only need the signal types without the full barrel import.
+
+### Accessing the signal hub
+
+- **Engine/container scope** – Resolve `SignalHub` from any container that can resolve `EventManager`. The routing provider registers the hub lazily, so the first `container.make<SignalHub>()` call builds it and subsequent resolutions reuse the same instance.
+- **Within handlers** – `AppZone.signals` exposes the hub inside request scopes without touching the container directly:
+
+  ```dart
+  import 'package:routed/routed.dart';
+
+  router.post('/checkout', (ctx) async {
+    AppZone.signals.requests.finished.connect((event) {
+      audit.logCompletion(event.context.request.id);
+    });
+    // ...
+  });
+  ```
+
+  Disconnect temporary handlers in `finally` blocks if they outlive a single request.
+
+- **Testing** – In integration tests resolve the hub (`await engine.container.make<SignalHub>()`) before issuing requests, attach handlers, and await their completions. Because handlers run synchronously in registration order, you can rely on deterministic sequencing when asserting side effects.
+
+### Error handling and observability
+
+If a handler throws, Routed publishes an `UnhandledSignalError` onto the regular event bus. Attach listeners when you want to log or fail tests on unexpected conditions:
+
+```dart
+final events = await engine.container.make<EventManager>();
+
+events.on<UnhandledSignalError>().listen((event) {
+  logger.error(
+    'Signal ${event.name} failed',
+    event.error,
+    event.stack,
+  );
+});
+```
+
+Because the publish happens synchronously, the originating signal awaits the listener chain before continuing. This guarantees `handled.future` patterns in tests resolve immediately when the failure surfaces.
+
+### Relationship to raw events
+
+Signals are thin facades over the existing routing events—the engine still publishes `BeforeRoutingEvent`, `RouteMatchedEvent`, `AfterRoutingEvent`, and friends. Existing code listening to the raw events keeps working. Prefer signals when you want ergonomic `connect`/`disconnect` semantics, composed hubs (`hub.requests`), or discoverability for downstream packages. Prefer raw events when you need full access to `StreamSubscription` APIs (pause/resume) or when building infrastructure that should not take a dependency on the higher-level convenience layer.
+
 ## System events
 
 The engine also publishes system-level events (`packages/routed/lib/src/events/system_events.dart:4`):
@@ -124,3 +192,22 @@ eventManager.publish(InvoiceGenerated('inv_2024_001'));
 ```
 
 Keep event classes small and serialisable; avoid holding `EngineContext` or other heavy objects. Prefer IDs and minimal payloads so listeners stay decoupled from request state.
+
+## View shortcuts
+
+View handlers often fetch a model and return a 404 when it is missing. Routed's context now provides helpers that mirror Django's `get_object_or_404` pattern:
+
+```dart
+final article = await ctx.fetchOr404(() => articles.findBySlug(slug));
+
+// `article` is guaranteed to be non-null. If the repository returns null,
+// fetchOr404 logs a NotFoundError and throws it so middleware can emit a 404.
+```
+
+If you already have a value, `ctx.requireFound(value)` performs the same check synchronously:
+
+```dart
+final session = ctx.requireFound(await sessionStore.current(ctx));
+```
+
+Both helpers throw `NotFoundError` and append the error to `ctx.errors` when the value is absent, eliminating repetitive null checks in controllers.
