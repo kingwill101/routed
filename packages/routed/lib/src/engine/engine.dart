@@ -16,6 +16,7 @@ import 'package:routed/src/config/registry.dart';
 import 'package:routed/src/engine/config.dart';
 import 'package:routed/src/engine/events/config.dart';
 import 'package:routed/src/engine/events/route.dart';
+import 'package:routed/src/engine/events/request.dart';
 import 'package:routed/src/engine/engine_opt.dart';
 import 'package:routed/src/engine/middleware_registry.dart';
 import 'package:routed/src/engine/provider_manifest.dart';
@@ -192,6 +193,7 @@ class Engine with StaticFileHandler, ContainerMixin {
 
   /// The default router used when no other routers are explicitly mounted.
   final Router _defaultRouter = Router();
+  bool _defaultRouterMounted = false;
 
   /// Tracks active requests by their unique ID.
   final Map<String, Request> _activeRequests = {};
@@ -715,6 +717,7 @@ class Engine with StaticFileHandler, ContainerMixin {
     String prefix = '',
     List<Middleware> middlewares = const [],
   }) {
+    _markRoutesDirty();
     _mounts.add(_EngineMount(prefix, router, middlewares));
     return this;
   }
@@ -731,17 +734,8 @@ class Engine with StaticFileHandler, ContainerMixin {
   /// This method is called automatically before serving requests and should
   /// not typically be called directly.
   void _build({String? parentGroupName}) {
-    if (_routesInitialized) {
-      _engineRoutes.clear();
-    }
-
-    // Build routes if not already done
-    if (_engineRoutes.isEmpty) {
-      use(_defaultRouter);
-    }
-
+    _ensureDefaultRouterMounted();
     _engineRoutes.clear();
-    // Reset caches before rebuilding
     _routesByName = {};
 
     final registry = container.has<MiddlewareRegistry>()
@@ -819,10 +813,13 @@ class Engine with StaticFileHandler, ContainerMixin {
           ...resolvedMountMiddlewares,
           ...ws.finalMiddlewares,
         ];
+        final patternData = EngineRoute._buildUriPattern(combinedPath);
 
         _wsRoutes[combinedPath] = WebSocketEngineRoute(
           path: combinedPath,
           handler: ws.handler,
+          pattern: patternData.pattern,
+          paramInfo: patternData.paramInfo,
           middlewares: allMiddlewares,
         );
       }
@@ -852,6 +849,34 @@ class Engine with StaticFileHandler, ContainerMixin {
     }
   }
 
+  void _markRoutesDirty() {
+    _routesInitialized = false;
+    _engineRoutes.clear();
+    _routesByName = {};
+  }
+
+  List<Middleware> _resolveMiddlewares(
+    Iterable<Middleware> source,
+    Container container,
+  ) {
+    if (source.isEmpty) {
+      return const <Middleware>[];
+    }
+    if (!container.has<MiddlewareRegistry>()) {
+      return List<Middleware>.from(source);
+    }
+    final registry = container.get<MiddlewareRegistry>();
+    return registry.resolveAll(source, container);
+  }
+
+  void _ensureDefaultRouterMounted() {
+    if (_defaultRouterMounted) {
+      return;
+    }
+    _mounts.add(_EngineMount('', _defaultRouter, const <Middleware>[]));
+    _defaultRouterMounted = true;
+  }
+
   /// Returns the set of HTTP methods that are valid for a given [path].
   ///
   /// Useful for building `Allow` headers (e.g. 405 responses, CORS pre-flight).
@@ -860,19 +885,31 @@ class Engine with StaticFileHandler, ContainerMixin {
   Set<String> allowedMethods(String path) {
     _ensureRoutes();
 
-    final pathsToCheck = <String>{path};
+    final normalizedPath = path.isEmpty ? '/' : path;
+    final pathsToCheck = <String>{normalizedPath};
     if (config.redirectTrailingSlash) {
-      final alt = path.endsWith('/')
-          ? path.substring(0, path.length - 1)
-          : '$path/';
-      pathsToCheck.add(alt);
+      final alt = normalizedPath.endsWith('/')
+          ? normalizedPath.substring(0, normalizedPath.length - 1)
+          : '$normalizedPath/';
+      pathsToCheck.add(alt.isEmpty ? '/' : alt);
     }
 
     final methods = <String>{};
     for (final route in _engineRoutes) {
-      if (pathsToCheck.contains(route.path)) {
-        methods.add(route.method);
+      if (route.isFallback) {
+        continue;
       }
+
+      final pattern = route._uriPattern;
+      final matchesPath = pathsToCheck.any(
+        (candidate) =>
+            pattern.hasMatch(candidate) ||
+            pattern.hasMatch(
+              candidate.endsWith('/') ? candidate : '$candidate/',
+            ),
+      );
+      if (!matchesPath) continue;
+      methods.add(route.method);
     }
     return methods;
   }
@@ -932,9 +969,13 @@ class Engine with StaticFileHandler, ContainerMixin {
     WebSocketHandler handler, {
     List<Middleware> middlewares = const [],
   }) {
+    _markRoutesDirty();
+    final patternData = EngineRoute._buildUriPattern(path);
     _wsRoutes[path] = WebSocketEngineRoute(
       path: path,
       handler: handler,
+      pattern: patternData.pattern,
+      paramInfo: patternData.paramInfo,
       middlewares: middlewares,
     );
   }
@@ -1272,12 +1313,29 @@ extension SecureEngine on Engine {
           await _handleHttp2Stream(stream, socket);
         },
         onError: (error, stackTrace) {
+          LoggingContext.withValues({
+            'event': 'engine_runtime_error',
+            'scheme': 'https',
+            'host': address,
+            'port': binding.port,
+            'http2': true,
+            'error_type': error.runtimeType.toString(),
+            'stack_trace': stackTrace.toString(),
+          }, (logger) => logger.error('HTTP/2 server error: $error'));
           stderr.writeln('HTTP/2 server error: $error\n$stackTrace');
         },
       );
 
+      await LoggingContext.withValues({
+        'event': 'engine_started',
+        'scheme': 'https',
+        'host': address,
+        'port': binding.port,
+        'http2': true,
+      }, (logger) => logger.info('Secure engine listening'));
+
       print(
-        'Secure server listening on https://$address:$port (HTTP/2 enabled)',
+        'Secure server listening on https://$address:${binding.port} (HTTP/2 enabled)',
       );
       _setupShutdownController();
       return;
@@ -1296,7 +1354,15 @@ extension SecureEngine on Engine {
 
     _server = server;
 
-    print('Secure server listening on https://$address:$port');
+    await LoggingContext.withValues({
+      'event': 'engine_started',
+      'scheme': 'https',
+      'host': address,
+      'port': server.port,
+      'http2': false,
+    }, (logger) => logger.info('Secure engine listening'));
+
+    print('Secure server listening on https://$address:${server.port}');
 
     _setupShutdownController();
 

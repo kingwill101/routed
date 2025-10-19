@@ -1,6 +1,8 @@
 import 'package:routed/src/container/container.dart';
 import 'package:routed/src/provider/provider.dart';
 import 'package:routed/src/storage/storage_manager.dart';
+import 'package:routed/src/support/named_registry.dart';
+export 'local_storage_driver.dart' show LocalStorageDisk;
 
 typedef StorageDiskBuilder = StorageDisk Function(StorageDriverContext context);
 typedef StorageDriverDocBuilder =
@@ -39,20 +41,22 @@ class StorageDriverDocContext {
 }
 
 class _StorageDriverRegistration {
-  _StorageDriverRegistration({required this.builder, this.documentation});
+  _StorageDriverRegistration({
+    required this.builder,
+    required this.origin,
+    this.documentation,
+  });
 
   final StorageDiskBuilder builder;
+  final StackTrace origin;
   final StorageDriverDocBuilder? documentation;
 }
 
-class StorageDriverRegistry {
+class StorageDriverRegistry extends NamedRegistry<_StorageDriverRegistration> {
   StorageDriverRegistry._internal();
 
   static final StorageDriverRegistry instance =
       StorageDriverRegistry._internal();
-
-  final Map<String, _StorageDriverRegistration> _registrations =
-      <String, _StorageDriverRegistration>{};
 
   void register(
     String driver,
@@ -60,29 +64,32 @@ class StorageDriverRegistry {
     StorageDriverDocBuilder? documentation,
     bool overrideExisting = true,
   }) {
-    if (!overrideExisting && _registrations.containsKey(driver)) {
-      return;
-    }
-    _registrations[driver] = _StorageDriverRegistration(
+    final registration = _StorageDriverRegistration(
       builder: builder,
+      origin: StackTrace.current,
       documentation: documentation,
     );
+    final stored = registerEntry(
+      driver,
+      registration,
+      overrideExisting: overrideExisting,
+    );
+    if (!stored) {
+      return;
+    }
   }
 
-  void unregister(String driver) {
-    _registrations.remove(driver);
-  }
+  void unregister(String driver) => unregisterEntry(driver);
 
-  bool contains(String driver) => _registrations.containsKey(driver);
+  bool contains(String driver) => containsEntry(driver);
 
-  StorageDiskBuilder? builderFor(String driver) =>
-      _registrations[driver]?.builder;
+  StorageDiskBuilder? builderFor(String driver) => getEntry(driver)?.builder;
 
-  List<String> get drivers => _registrations.keys.toList(growable: false);
+  List<String> get drivers => entryNames.toList(growable: false);
 
   List<ConfigDocEntry> documentation({required String pathTemplate}) {
     final docs = <ConfigDocEntry>[];
-    _registrations.forEach((driver, registration) {
+    entries.forEach((driver, registration) {
       final builder = registration.documentation;
       if (builder == null) {
         return;
@@ -101,12 +108,27 @@ class StorageDriverRegistry {
     String driver, {
     required String pathTemplate,
   }) {
-    final registration = _registrations[driver];
+    final registration = getEntry(driver);
     if (registration?.documentation == null) {
       return const <ConfigDocEntry>[];
     }
     return registration!.documentation!(
       StorageDriverDocContext(driver: driver, pathTemplate: pathTemplate),
+    );
+  }
+
+  @override
+  bool onDuplicate(
+    String name,
+    _StorageDriverRegistration existing,
+    bool overrideExisting,
+  ) {
+    if (!overrideExisting) {
+      return false;
+    }
+    throw ProviderConfigException(
+      'Storage driver "$name" is already registered.\n'
+      'Original registration stack trace:\n${existing.origin}',
     );
   }
 }

@@ -7,6 +7,7 @@ import 'package:routed/src/context/context.dart';
 import 'package:routed/src/response.dart';
 import 'package:routed/src/router/types.dart';
 import 'package:routed/src/sessions/session.dart';
+import 'package:routed/src/support/named_registry.dart';
 
 const String authPrincipalAttribute = 'auth.principal';
 const String _sessionPrincipalKey = '__routed.auth.principal';
@@ -327,24 +328,22 @@ class GuardResult {
 
 typedef AuthGuard = FutureOr<GuardResult> Function(EngineContext ctx);
 
-class GuardRegistry {
+class GuardRegistry extends NamedRegistry<AuthGuard> {
   GuardRegistry._();
 
   static final GuardRegistry instance = GuardRegistry._();
 
-  final Map<String, AuthGuard> _guards = <String, AuthGuard>{};
-
   void register(String name, AuthGuard handler) {
-    _guards[name] = handler;
+    registerEntry(name, handler);
   }
 
   void unregister(String name) {
-    _guards.remove(name);
+    unregisterEntry(name);
   }
 
-  AuthGuard? resolve(String name) => _guards[name];
+  AuthGuard? resolve(String name) => getEntry(name);
 
-  Iterable<String> get names => _guards.keys;
+  Iterable<String> get names => entryNames;
 }
 
 Middleware guardMiddleware(List<String> guardNames, {GuardRegistry? registry}) {

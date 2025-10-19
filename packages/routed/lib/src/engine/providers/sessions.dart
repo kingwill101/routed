@@ -13,6 +13,7 @@ import 'package:routed/src/sessions/memory_store.dart';
 import 'package:routed/src/sessions/middleware.dart';
 import 'package:routed/src/sessions/options.dart';
 import 'package:routed/src/sessions/secure_cookie.dart';
+import 'package:routed/src/support/named_registry.dart';
 
 /// Signature for a function that converts a [SessionDriverBuilderContext] to a
 /// fully-formed [SessionConfig] instance.
@@ -128,15 +129,12 @@ class SessionDriverDocContext {
 /// Third-party packages can use [register] and [unregister] to expose their own
 /// drivers at runtime.  The class is a thin singleton wrapper around a map,
 /// deliberately avoiding any global state beyond the registry itself.
-class SessionDriverRegistry {
+class SessionDriverRegistry extends NamedRegistry<_SessionDriverRegistration> {
   SessionDriverRegistry._internal();
 
   /// Singleton accessor.
   static final SessionDriverRegistry instance =
       SessionDriverRegistry._internal();
-
-  final Map<String, _SessionDriverRegistration> _registrations =
-      <String, _SessionDriverRegistration>{};
 
   /// Registers a new session [driver].
   ///
@@ -149,32 +147,35 @@ class SessionDriverRegistry {
     SessionDriverDocBuilder? documentation,
     bool overrideExisting = true,
   }) {
-    if (!overrideExisting && _registrations.containsKey(driver)) {
-      return;
-    }
-    _registrations[driver] = _SessionDriverRegistration(
+    final registration = _SessionDriverRegistration(
       builder: builder,
       documentation: documentation,
+      origin: StackTrace.current,
     );
+    final stored = registerEntry(
+      driver,
+      registration,
+      overrideExisting: overrideExisting,
+    );
+    if (!stored) {
+      return;
+    }
   }
 
   /// Removes the registration associated with [driver] if it exists.
-  void unregister(String driver) {
-    _registrations.remove(driver);
-  }
+  void unregister(String driver) => unregisterEntry(driver);
 
   /// Returns `true` if a registration exists for [driver].
-  bool contains(String driver) => _registrations.containsKey(driver);
+  bool contains(String driver) => containsEntry(driver);
 
   /// Retrieves the builder associated with [driver] or `null` when absent.
-  SessionDriverBuilder? builderFor(String driver) =>
-      _registrations[driver]?.builder;
+  SessionDriverBuilder? builderFor(String driver) => getEntry(driver)?.builder;
 
   /// Returns a sorted list of available driver names, ensuring that [include]
   /// is always present in the result.
   List<String> availableDrivers({Iterable<String> include = const []}) {
     final result = <String>{...include};
-    result.addAll(_registrations.keys);
+    result.addAll(entryNames);
     final list = result.toList()..sort();
     return list;
   }
@@ -182,7 +183,7 @@ class SessionDriverRegistry {
   /// Collates documentation from all registered drivers.
   List<ConfigDocEntry> documentation({required String pathBase}) {
     final docs = <ConfigDocEntry>[];
-    _registrations.forEach((driver, registration) {
+    entries.forEach((driver, registration) {
       final builder = registration.documentation;
       if (builder == null) {
         return;
@@ -196,12 +197,32 @@ class SessionDriverRegistry {
     });
     return docs;
   }
+
+  @override
+  bool onDuplicate(
+    String name,
+    _SessionDriverRegistration existing,
+    bool overrideExisting,
+  ) {
+    if (!overrideExisting) {
+      return false;
+    }
+    throw ProviderConfigException(
+      'Session driver "$name" is already registered.\n'
+      'Original registration stack trace:\n${existing.origin}',
+    );
+  }
 }
 
 class _SessionDriverRegistration {
-  _SessionDriverRegistration({required this.builder, this.documentation});
+  _SessionDriverRegistration({
+    required this.builder,
+    required this.origin,
+    this.documentation,
+  });
 
   final SessionDriverBuilder builder;
+  final StackTrace origin;
   final SessionDriverDocBuilder? documentation;
 }
 
@@ -269,14 +290,14 @@ class SessionServiceProvider extends ServiceProvider
         description: 'Encrypt session payloads when using cookie drivers.',
         defaultValue: true,
       ),
-      ConfigDocEntry(
+      const ConfigDocEntry(
         path: 'session.cookie',
         type: 'string',
         description:
             'Cookie name used for identifying the session when using cookie-based drivers.',
         example: 'routed_app_session',
         defaultValue: "{{ env.SESSION_COOKIE | default: 'routed-session' }}",
-        metadata: const {configDocMetaInheritFromEnv: 'SESSION_COOKIE'},
+        metadata: {configDocMetaInheritFromEnv: 'SESSION_COOKIE'},
       ),
       const ConfigDocEntry(
         path: 'session.path',
@@ -725,18 +746,26 @@ class SessionServiceProvider extends ServiceProvider
       );
     }
 
-    final codecs = <SecureCookie>[
-      SecureCookie(key: keys.first, useEncryption: encrypt, useSigning: true),
-      ...keys
-          .skip(1)
-          .map(
-            (key) => SecureCookie(
-              key: key,
-              useEncryption: encrypt,
-              useSigning: true,
+    late final List<SecureCookie> codecs;
+    try {
+      codecs = <SecureCookie>[
+        SecureCookie(key: keys.first, useEncryption: encrypt, useSigning: true),
+        ...keys
+            .skip(1)
+            .map(
+              (key) => SecureCookie(
+                key: key,
+                useEncryption: encrypt,
+                useSigning: true,
+              ),
             ),
-          ),
-    ];
+      ];
+    } on FormatException catch (error) {
+      throw ProviderConfigException(
+        'session.app_key or app.key must be a valid base64-encoded key: '
+        '${error.message}',
+      );
+    }
 
     _ensureDefaultDriversRegistered();
     final registry = SessionDriverRegistry.instance;

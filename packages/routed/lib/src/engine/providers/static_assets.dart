@@ -12,6 +12,7 @@ import 'package:routed/src/file_handler.dart';
 import 'package:routed/src/provider/config_utils.dart';
 import 'package:routed/src/provider/provider.dart';
 import 'package:routed/src/router/types.dart';
+import 'package:routed/src/storage/local_storage_driver.dart';
 import 'package:routed/src/storage/storage_manager.dart';
 
 /// Serves configured static assets using the storage abstraction.

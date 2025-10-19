@@ -7,6 +7,7 @@ import 'package:routed/src/cache/store_factory.dart';
 import 'package:routed/src/contracts/cache/repository.dart';
 import 'package:routed/src/events/event_manager.dart';
 import 'package:routed/src/provider/provider.dart';
+import 'package:routed/src/support/named_registry.dart';
 
 typedef StoreFactoryBuilder = StoreFactory Function();
 typedef CacheDriverDocBuilder =
@@ -22,19 +23,21 @@ class CacheDriverDocContext {
 }
 
 class _CacheDriverRegistration {
-  _CacheDriverRegistration({required this.builder, this.documentation});
+  _CacheDriverRegistration({
+    required this.builder,
+    required this.origin,
+    this.documentation,
+  });
 
   final StoreFactoryBuilder builder;
+  final StackTrace origin;
   final CacheDriverDocBuilder? documentation;
 }
 
-class CacheDriverRegistry {
+class CacheDriverRegistry extends NamedRegistry<_CacheDriverRegistration> {
   CacheDriverRegistry._internal();
 
   static final CacheDriverRegistry instance = CacheDriverRegistry._internal();
-
-  final Map<String, _CacheDriverRegistration> _registrations =
-      <String, _CacheDriverRegistration>{};
 
   void register(
     String driver,
@@ -42,35 +45,38 @@ class CacheDriverRegistry {
     CacheDriverDocBuilder? documentation,
     bool overrideExisting = true,
   }) {
-    if (!overrideExisting && _registrations.containsKey(driver)) {
-      return;
-    }
-    _registrations[driver] = _CacheDriverRegistration(
+    final registration = _CacheDriverRegistration(
       builder: builder,
+      origin: StackTrace.current,
       documentation: documentation,
     );
+    final stored = registerEntry(
+      driver,
+      registration,
+      overrideExisting: overrideExisting,
+    );
+    if (!stored) {
+      return;
+    }
   }
 
-  void unregister(String driver) {
-    _registrations.remove(driver);
-  }
+  void unregister(String driver) => unregisterEntry(driver);
 
-  bool contains(String driver) => _registrations.containsKey(driver);
+  bool contains(String driver) => containsEntry(driver);
 
-  List<String> get drivers => _registrations.keys.toList(growable: false);
+  List<String> get drivers => entryNames.toList(growable: false);
 
-  StoreFactoryBuilder? builderFor(String driver) =>
-      _registrations[driver]?.builder;
+  StoreFactoryBuilder? builderFor(String driver) => getEntry(driver)?.builder;
 
   void populate(CacheManager manager) {
-    for (final entry in _registrations.entries) {
+    for (final entry in entries.entries) {
       manager.registerStoreFactory(entry.key, entry.value.builder());
     }
   }
 
   List<ConfigDocEntry> documentation({required String pathTemplate}) {
     final docs = <ConfigDocEntry>[];
-    _registrations.forEach((driver, registration) {
+    entries.forEach((driver, registration) {
       final builder = registration.documentation;
       if (builder == null) {
         return;
@@ -83,6 +89,21 @@ class CacheDriverRegistry {
       }
     });
     return docs;
+  }
+
+  @override
+  bool onDuplicate(
+    String name,
+    _CacheDriverRegistration existing,
+    bool overrideExisting,
+  ) {
+    if (!overrideExisting) {
+      return false;
+    }
+    throw ProviderConfigException(
+      'Cache driver "$name" is already registered.\n'
+      'Original registration stack trace:\n${existing.origin}',
+    );
   }
 }
 

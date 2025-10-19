@@ -115,11 +115,13 @@ void main() {
 
     test('custom driver override takes precedence over built-in', () async {
       var invoked = false;
+      CacheManager.unregisterDriver('array');
       CacheManager.registerDriver('array', () {
         invoked = true;
         return ArrayStoreFactory();
       }, overrideExisting: true);
       addTearDown(() {
+        CacheManager.unregisterDriver('array');
         CacheManager.registerDriver(
           'array',
           () => ArrayStoreFactory(),

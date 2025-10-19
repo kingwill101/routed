@@ -1,6 +1,7 @@
 import 'package:routed/src/container/container.dart';
 import 'package:routed/src/router/middleware_reference.dart';
 import 'package:routed/src/router/types.dart';
+import 'package:routed/src/support/named_registry.dart';
 
 /// Creates a [Middleware] using the provided [container].
 ///
@@ -25,9 +26,8 @@ typedef MiddlewareFactory = Middleware Function(Container container);
 /// // Later, resolve a middleware reference
 /// final middleware = registry.build('auth', container);
 /// ```
-class MiddlewareRegistry {
-  final Map<String, MiddlewareFactory> _factories =
-      <String, MiddlewareFactory>{};
+class MiddlewareRegistry extends NamedRegistry<MiddlewareFactory> {
+  MiddlewareRegistry();
 
   /// Registers a new middleware [factory] under [id].
   ///
@@ -41,14 +41,14 @@ class MiddlewareRegistry {
   /// });
   /// ```
   void register(String id, MiddlewareFactory factory) {
-    _factories[id] = factory;
+    registerEntry(id, factory);
   }
 
   /// Whether a factory is registered under [id].
   ///
   /// Returns `true` if a middleware factory has been registered with this
   /// identifier, `false` otherwise.
-  bool has(String id) => _factories.containsKey(id);
+  bool has(String id) => containsEntry(id);
 
   /// Builds a middleware instance using the factory registered under [id].
   ///
@@ -63,7 +63,7 @@ class MiddlewareRegistry {
   /// }
   /// ```
   Middleware? build(String id, Container container) {
-    final factory = _factories[id];
+    final factory = getEntry(id);
     if (factory == null) return null;
     return factory(container);
   }
@@ -72,7 +72,7 @@ class MiddlewareRegistry {
   ///
   /// Returns an iterable of all string identifiers that have been registered
   /// with this registry.
-  Iterable<String> get ids => _factories.keys;
+  Iterable<String> get ids => entryNames;
 
   /// Resolves a single [middleware], handling [MiddlewareReference] placeholders.
   ///

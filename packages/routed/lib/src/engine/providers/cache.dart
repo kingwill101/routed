@@ -14,13 +14,13 @@ class CacheServiceProvider extends ServiceProvider with ProvidesDefaultConfig {
   @override
   ConfigDefaults get defaultConfig => ConfigDefaults(
     docs: <ConfigDocEntry>[
-      ConfigDocEntry(
+      const ConfigDocEntry(
         path: 'cache.default',
         type: 'string',
         description:
             'Name of the cache store to use when none is specified explicitly.',
         defaultValue: 'array',
-        metadata: const {configDocMetaInheritFromEnv: 'CACHE_STORE'},
+        metadata: {configDocMetaInheritFromEnv: 'CACHE_STORE'},
       ),
       const ConfigDocEntry(
         path: 'cache.prefix',
