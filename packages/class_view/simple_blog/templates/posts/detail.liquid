@@ -1,0 +1,148 @@
+{% layout 'base/layout' %}
+
+{% block content %}
+<div class="max-w-4xl mx-auto">
+    <!-- Navigation -->
+    <div class="mb-6">
+        <a href="/posts" class="text-blue-600 hover:text-blue-700 transition-colors">
+            ← Back to Posts
+        </a>
+    </div>
+
+    <!-- Post Header -->
+    <header class="mb-8">
+        <h1 class="text-4xl font-bold text-gray-900 mb-4">
+            {{ post.title }}
+        </h1>
+
+        <!-- Meta Information using reusable component -->
+        {% render 'components/post_meta', post: post, size: 'large', show_updated: true %}
+
+        <!-- Tags -->
+        {% if post.tags.size > 0 %}
+            <div class="flex flex-wrap gap-2 mb-6">
+                {% for tag in post.tags %}
+                    <span class="px-3 py-1 bg-blue-50 text-blue-600 text-sm rounded-full">
+                #{{ tag }}
+            </span>
+                {% endfor %}
+            </div>
+        {% endif %}
+
+        <!-- Actions -->
+        <div class="flex gap-4 pb-6 border-b">
+            <a href="/posts/{{ post.id }}/edit"
+               class="bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700 transition-colors">
+                ✏️ Edit Post
+            </a>
+            <button onclick="confirmDelete('{{ post.id }}', '{{ post.title }}')"
+                    class="bg-red-600 text-white px-4 py-2 rounded-md hover:bg-red-700 transition-colors">
+                🗑️ Delete Post
+            </button>
+            <button onclick="sharePost()"
+                    class="bg-gray-600 text-white px-4 py-2 rounded-md hover:bg-gray-700 transition-colors">
+                📤 Share
+            </button>
+        </div>
+    </header>
+
+    <!-- Post Content -->
+    <article class="prose prose-lg max-w-none mb-12">
+        <div class="markdown text-gray-800 leading-relaxed">
+            {{ post.content }}
+        </div>
+    </article>
+
+    <!-- Post Footer -->
+    <footer class="border-t pt-8">
+        <div class="bg-gray-50 rounded-lg p-6">
+            <h3 class="text-lg font-semibold text-gray-900 mb-3">
+                About the Author
+            </h3>
+            <div class="flex items-center gap-4">
+                <div class="w-12 h-12 bg-blue-600 rounded-full flex items-center justify-center text-white font-semibold text-lg">
+                    {{ post.author | slice: 0 }}
+                </div>
+                <div>
+                    <div class="font-medium text-gray-900">{{ post.author }}</div>
+                    <div class="text-gray-600 text-sm">Blog Author</div>
+                </div>
+            </div>
+        </div>
+    </footer>
+
+    <!-- Related Posts using reusable component -->
+    {% if related_posts and related_posts.size > 0 %}
+        <section class="mt-12">
+            <h3 class="text-2xl font-bold text-gray-900 mb-6">Related Posts</h3>
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                {% for related_post in related_posts %}
+                    {% render 'components/post_card', post: related_post, size: 'small' %}
+                {% endfor %}
+            </div>
+        </section>
+    {% endif %}
+
+    <!-- Comment Form using reusable component -->
+    {% render 'components/comment_form', form: form, success_message: success_message %}
+</div>
+
+<script>
+    function confirmDelete(postId, postTitle) {
+        if (confirm(`Are you sure you want to delete "${postTitle}"?\n\nThis action cannot be undone.`)) {
+            fetch(`/api/posts/${postId}`, {
+                method: 'DELETE',
+                headers: {
+                    'Content-Type': 'application/json',
+                }
+            })
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success) {
+                        showMessage(data.message, 'success');
+                        setTimeout(() => {
+                            window.location.href = '/posts';
+                        }, 1500);
+                    } else {
+                        showMessage('Error deleting post: ' + data.error, 'error');
+                    }
+                })
+                .catch(error => {
+                    showMessage('Error deleting post: ' + error.message, 'error');
+                });
+        }
+    }
+
+    function sharePost() {
+        const url = window.location.href;
+        const title = document.querySelector('h1').textContent;
+
+        if (navigator.share) {
+            navigator.share({
+                title: title,
+                url: url
+            });
+        } else {
+            // Fallback: copy to clipboard
+            navigator.clipboard.writeText(url).then(() => {
+                showMessage('Post URL copied to clipboard!', 'success');
+            });
+        }
+    }
+
+    function showMessage(message, type) {
+        const messageEl = document.createElement('div');
+        messageEl.className = `fixed top-4 right-4 p-4 rounded-md shadow-lg z-50 ${
+            type === 'error' ? 'bg-red-50 text-red-700 border border-red-200' :
+                'bg-green-50 text-green-700 border border-green-200'
+        }`;
+        messageEl.textContent = message;
+
+        document.body.appendChild(messageEl);
+
+        setTimeout(() => {
+            messageEl.remove();
+        }, 5000);
+    }
+</script>
+{% endblock %} 

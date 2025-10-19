@@ -1,0 +1,3 @@
+{% for value in widget.value %}<input type="hidden"
+                                      name="{{ widget.name }}" value="{{ value }}"{% for name, val in widget.attrs %}{% if val != false %} {{ name }}{% if val != true %}="{{ val }}"{% endif %}{% endif %}{% endfor %}>
+{% endfor %} 

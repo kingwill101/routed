@@ -1,7 +1,6 @@
 import 'dart:async';
 
-import 'package:routed/src/context/context.dart';
-import 'package:routed/src/router/types.dart';
+import 'package:routed/routed.dart';
 
 /// Middleware that enforces a timeout on the request processing chain.
 ///
@@ -11,26 +10,51 @@ import 'package:routed/src/router/types.dart';
 /// [duration] specifies the maximum amount of time the request is allowed
 /// to be processed before timing out.
 Middleware timeoutMiddleware(Duration duration) {
-  return (ctx) async {
-    // Print a debug message indicating the middleware has been invoked.
-    print("Timeout middleware invoked with duration: $duration");
-
-    // Start a timer that will trigger after the specified [duration].
-    final timer = Timer(duration, () {
-      // Check if the response context is still open.
-      // If it is, close the response with a 504 Gateway Timeout status code.
+  return (ctx, next) {
+    Response completeWithTimeout() {
+      // Prevent further handlers from writing
+      ctx.abort();
       if (!ctx.isClosed) {
-        ctx.string(statusCode: 504, 'Gateway Timeout');
+        // Write timeout directly to the underlying response to avoid hitting
+        // higher-level render logic which may ignore writes after abort.
+        ctx.response.statusCode = HttpStatus.gatewayTimeout;
+        ctx.response.write('Gateway Timeout');
+        ctx.response.close();
+      }
+      return ctx.response;
+    }
+
+    final elapsed = DateTime.now().difference(ctx.request.startedAt);
+    final remaining = duration - elapsed;
+
+    if (remaining <= Duration.zero) {
+      return Future<Response>.value(completeWithTimeout());
+    }
+
+    final completer = Completer<Response>();
+    late Timer timer;
+
+    Future<Response>.value(next())
+        .then((result) {
+          if (!completer.isCompleted) {
+            timer.cancel();
+            completer.complete(result);
+          }
+        })
+        .catchError((Object error, StackTrace stackTrace) {
+          if (!completer.isCompleted) {
+            timer.cancel();
+            completer.completeError(error, stackTrace);
+          }
+        });
+
+    timer = Timer(remaining, () {
+      if (!ctx.isClosed && !completer.isCompleted) {
+        final response = completeWithTimeout();
+        completer.complete(response);
       }
     });
 
-    try {
-      // Proceed to the next middleware or handler in the chain.
-      await ctx.next();
-    } finally {
-      // Cancel the timer once the request processing is complete,
-      // regardless of whether it completed successfully or with an exception.
-      timer.cancel();
-    }
+    return completer.future;
   };
 }

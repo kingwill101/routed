@@ -1,0 +1,32 @@
+version: "3.8"
+
+services:
+  keycloak:
+    image: quay.io/keycloak/keycloak:24.0.3
+    command:
+      - start-dev
+    environment:
+      KEYCLOAK_ADMIN: admin
+      KEYCLOAK_ADMIN_PASSWORD: admin
+      KC_HTTP_PORT: 8081
+    ports:
+      - "8081:8081"
+    healthcheck:
+      test: [ "CMD", "curl", "-f", "http://localhost:8081/health" ]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+  routed:
+    build:
+      context: ../../
+      dockerfile: examples/oauth_keycloak/routed.Dockerfile
+    environment:
+      KEYCLOAK_REALM: demo
+      KEYCLOAK_CLIENT_ID: routed-resource
+      KEYCLOAK_CLIENT_SECRET: secret
+      KEYCLOAK_BASE_URL: http://keycloak:8081
+    depends_on:
+      keycloak:
+        condition: service_healthy
+    ports:
+      - "8080:8080"

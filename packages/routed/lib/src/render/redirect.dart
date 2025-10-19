@@ -15,10 +15,7 @@ class RedirectRender implements Render {
   ///
   /// The [code] parameter specifies the HTTP status code for the redirect.
   /// The [location] parameter specifies the URL to which the client is redirected.
-  RedirectRender({
-    required this.code,
-    required this.location,
-  });
+  RedirectRender({required this.code, required this.location});
 
   /// Overrides the [writeContentType] method from the [Render] interface.
   ///

@@ -1,20 +1,23 @@
 import 'dart:io' show HttpStatus;
 
-import 'package:routed/src/render/html/template_engine.dart';
 import 'package:routed/src/render/render.dart';
 import 'package:routed/src/response.dart';
+import 'package:routed/src/view/view_engine.dart';
 
 /// The `HTMLRender` class is responsible for rendering HTML content using a specified template and data.
 /// It implements the `Render` interface.
 class HTMLRender implements Render {
   /// The name of the template to be used for rendering.
-  final String templateName;
+  final String? templateName;
+
+  /// The content of the template to be used for rendering.
+  final String? content;
 
   /// The data to be passed to the template for rendering.
   final Map<String, dynamic> data;
 
   /// The template engine used to render the HTML content.
-  final TemplateEngine engine;
+  final ViewEngine engine;
 
   /// Constructs an instance of `HTMLRender`.
   ///
@@ -22,7 +25,8 @@ class HTMLRender implements Render {
   /// The [data] parameter provides the data to be passed to the template.
   /// The [engine] parameter specifies the template engine to be used for rendering.
   HTMLRender({
-    required this.templateName,
+    this.templateName,
+    this.content,
     required this.data,
     required this.engine,
   });
@@ -39,8 +43,16 @@ class HTMLRender implements Render {
   Future<void> render(Response response) async {
     writeContentType(response);
     try {
-      String content = await engine.render(templateName, data);
-      response.write(content);
+      if (content != null) {
+        String contentTemplate = await engine.render(content!, data);
+        response.write(contentTemplate);
+      } else if (templateName != null) {
+        String contentFile = await engine.renderFile(templateName!, data);
+        response.write(contentFile);
+      } else {
+        response.statusCode = HttpStatus.notFound;
+        response.write('');
+      }
     } catch (e) {
       response.statusCode = HttpStatus.internalServerError;
       response.write('Error rendering template: $e');

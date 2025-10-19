@@ -1,7 +1,8 @@
 import 'dart:convert';
-import 'package:routed/routed.dart';
+
 import 'package:routed/src/binding/binding.dart';
 import 'package:routed/src/binding/utils.dart';
+import 'package:routed/src/context/context.dart';
 import 'package:routed/src/validation/validator.dart';
 
 /// A class that handles form binding and validation.
@@ -20,7 +21,8 @@ class FormBinding extends Binding {
     final bodyBytes =
         await ctx.request.bytes; // Read the bytes from the request body.
     return parseUrlEncoded(
-        utf8.decode(bodyBytes)); // Decode and parse the body.
+      utf8.decode(bodyBytes),
+    ); // Decode and parse the body.
   }
 
   /// Validates the request body against the given [rules].
@@ -33,11 +35,18 @@ class FormBinding extends Binding {
   ///
   /// Returns a [Future] that completes when validation is done.
   @override
-  Future<void> validate(EngineContext context, Map<String, String> rules,
-      {bool bail = false}) async {
+  Future<void> validate(
+    EngineContext context,
+    Map<String, String> rules, {
+    bool bail = false,
+    Map<String, String>? messages,
+  }) async {
     final decoded = await _decodedBody(context); // Decode the request body.
-    final validator =
-        Validator.make(rules, bail: bail); // Create a validator with the rules.
+    final validator = Validator.make(
+      rules,
+      bail: bail,
+      messages: messages,
+    ); // Create a validator with the rules.
     final errors = validator.validate(decoded); // Validate the decoded body.
 
     if (errors.isNotEmpty) {

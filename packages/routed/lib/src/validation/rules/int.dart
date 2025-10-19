@@ -21,6 +21,7 @@ class IntRule extends ValidationRule {
   bool validate(dynamic value, [List<String>? options]) {
     if (value == null) return false; // Return false if the value is null.
     return RegExp(r'^\d+$').hasMatch(
-        value.toString()); // Check if the value matches the integer pattern.
+      value.toString(),
+    ); // Check if the value matches the integer pattern.
   }
 }

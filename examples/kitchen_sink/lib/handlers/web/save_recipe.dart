@@ -3,7 +3,7 @@ import 'package:kitchen_sink_example/models/recipe.dart';
 import 'package:kitchen_sink_example/services/recipe_service.dart';
 import 'package:routed/routed.dart';
 
-saveRecipe(EngineContext ctx) async {
+Future<Response> saveRecipe(EngineContext ctx) async {
   Map<String, List<String>> errors = {};
   Map<String, dynamic> oldInput = {};
 
@@ -15,11 +15,11 @@ saveRecipe(EngineContext ctx) async {
       'instructions': 'required|string',
       'prepTime': 'required|numeric|min:0',
       'cookTime': 'required|numeric|min:0',
-      'category': 'required|in:breakfast,lunch,dinner,dessert'
+      'category': 'required|in:breakfast,lunch,dinner,dessert',
     });
 
     final data = await ctx.form();
-    oldInput = Map<String, dynamic>.from(data); // Store the input data
+    oldInput = Map<String, dynamic>.from(data);
 
     // Convert ingredients string to array after validation
     final ingredients = data['ingredients']
@@ -29,34 +29,54 @@ saveRecipe(EngineContext ctx) async {
         .where((e) => e.isNotEmpty)
         .toList();
 
+    final rawId = (data['id'] ?? '').toString().trim();
+    final isUpdate = rawId.isNotEmpty;
+
+    final prepTime = int.tryParse(data['prepTime'].toString()) ?? 0;
+    final cookTime = int.tryParse(data['cookTime'].toString()) ?? 0;
+
     final recipe = Recipe(
-        id: uuid.v4(),
-        name: data['name'],
-        description: data['description'] ?? '',
-        ingredients: ingredients,
-        // Use converted array
-        instructions: data['instructions'],
-        prepTime: int.parse(data['prepTime'].toString()),
-        cookTime: int.parse(data['cookTime'].toString()),
-        category: RecipeCategory.values.byName(data['category']),
-        image: data['image'] ?? '');
+      id: isUpdate ? rawId : uuid.v4(),
+      name: data['name'],
+      description: data['description'] ?? '',
+      ingredients: ingredients,
+      // Use converted array
+      instructions: data['instructions'],
+      prepTime: prepTime,
+      cookTime: cookTime,
+      category: RecipeCategory.values.byName(data['category']),
+      image: data['image'] ?? '',
+    );
 
-    RecipeService.create(recipe);
-    await ctx.flash('success', 'Recipe created successfully!');
-    await ctx.setSession('errors', {});
-    await ctx.setSession('old', {});
+    if (isUpdate) {
+      RecipeService.update(recipe.id, recipe);
+      ctx.flash('Recipe updated successfully!', 'success');
+    } else {
+      RecipeService.create(recipe);
+      ctx.flash('Recipe created successfully!', 'success');
+    }
 
-    ctx.redirect('/');
+    ctx.setSession('errors', {});
+    ctx.setSession('old', {});
+
+    return ctx.redirect(route('web.recipe.home'));
   } catch (e) {
     if (e is ValidationError) {
       errors = e.errors; // Store validation errors
-      oldInput = await ctx.form();
-      await ctx.flash('error', 'Recipe not saved. Please check your input.');
+      ctx.flash('Recipe not saved. Please check your input.', 'error');
     } else {
-      await ctx.flash('error', e.toString());
+      ctx.flash(e.toString(), 'error');
     }
-    await ctx.setSession('errors', errors);
-    await ctx.setSession('old', oldInput);
-    ctx.redirect('/');
+
+    if (oldInput.isEmpty) {
+      try {
+        final formCopy = await ctx.form();
+        oldInput = Map<String, dynamic>.from(formCopy);
+      } catch (_) {}
+    }
+
+    ctx.setSession('errors', errors);
+    ctx.setSession('old', oldInput);
+    return ctx.redirect(route('web.recipe.home'));
   }
 }

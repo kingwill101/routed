@@ -1,5 +1,5 @@
-import 'package:routed/routed.dart';
 import 'package:routed/src/binding/binding.dart';
+import 'package:routed/src/context/context.dart';
 import 'package:routed/src/validation/validator.dart';
 
 /// A class that handles the binding and validation of query parameters.
@@ -18,10 +18,14 @@ class QueryBinding extends Binding {
   ///   - context: The [EngineContext] containing the query parameters to validate.
   ///   - rules: A [Map] of validation rules to apply to the query parameters.
   @override
-  Future<void> validate(EngineContext context, Map<String, String> rules,
-      {bool bail = false}) async {
+  Future<void> validate(
+    EngineContext context,
+    Map<String, String> rules, {
+    bool bail = false,
+    Map<String, String>? messages,
+  }) async {
     // Create a validator with the provided rules.
-    final validator = Validator.make(rules, bail: bail);
+    final validator = Validator.make(rules, bail: bail, messages: messages);
 
     // Validate the query parameters in the context's query cache.
     final errors = validator.validate(context.queryCache);

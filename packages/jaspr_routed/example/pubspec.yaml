@@ -1,0 +1,22 @@
+name: jaspr_routed_example
+description: Routed backend example for Jaspr components.
+publish_to: none
+
+environment:
+  sdk: ">=3.9.0 <4.0.0"
+
+resolution: workspace
+
+dependencies:
+  jaspr: ^0.21.5
+  jaspr_routed:
+    path: ..
+  routed:
+    path: ../../routed
+
+dev_dependencies:
+  build_runner: ^2.9.0
+  build_web_compilers: ^4.3.0
+  jaspr_builder: ^0.21.5
+jaspr:
+  mode: server

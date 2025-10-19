@@ -1,0 +1,5 @@
+enabled: true
+mounts:
+  - route: "{{ static.mounts[0].route | default: '/assets' }}"
+    disk: "{{ static.mounts[0].disk | default: 'assets' }}"
+    path: "{{ static.mounts[0].path | default: '' }}"

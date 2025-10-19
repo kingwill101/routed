@@ -46,9 +46,5 @@ abstract class Store {
   /// ```dart
   /// await store.write(request, response, session);
   /// ```
-  FutureOr<void> write(
-    Request request,
-    Response response,
-    Session session,
-  );
+  FutureOr<void> write(Request request, Response response, Session session);
 }

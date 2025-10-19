@@ -1,0 +1,127 @@
+---
+title: Contracts
+description: Core interfaces for configuration and cache abstractions
+sidebar_position: 12
+---
+
+# Contracts
+
+Routed exposes a small set of lightweight contracts so you can swap in your own configuration sources, cache backends, and tooling without forking the framework. The most common contracts live under `package:routed/src/contracts`. Prefer integrating them through service providers so they participate in the container lifecycle (register/boot/cleanup) and can be configured via the manifest.
+
+## Configuration Contract
+
+The `Config` contract describes a key/value store that the engine and service providers can depend on:
+
+```dart
+abstract class Config {
+  bool has(String key);
+  dynamic get(String key, [dynamic defaultValue]);
+  Map<String, dynamic> all();
+  void set(String key, dynamic value);
+  void prepend(String key, dynamic value);
+  void push(String key, dynamic value);
+}
+```
+
+- Use dot-notation (`app.name`) for keys by convention.
+- `prepend`/`push` let you treat list-valued keys as append-only collections.
+- Implementations should be cheap to clone or snapshot—providers may call `all()` during boot.
+- Avoid heavy I/O in `get()` and keep lookups fast; expensive sources should cache locally and refresh out-of-band.
+
+Provide a custom implementation by binding it into the container before providers boot, or register a service provider so it participates in the register/boot/cleanup lifecycle:
+
+```dart
+engine.registerProvider(
+  CoreServiceProvider(config: EngineConfig(), configItems: myConfig.all()),
+);
+```
+
+## Cache Contracts
+
+Cache abstractions are split into a few small interfaces so you can decide how deep to customize your backend. Choose the layer that matches your needs: implement a `Store` to talk to your cache engine, wrap policy in a `Repository`, or expose multiple stores via a `Factory`.
+
+### Store
+
+`Store` is the low-level driver that actually talks to your cache engine:
+
+```dart
+abstract class Store {
+  FutureOr<dynamic> get(String key);
+  FutureOr<Map<String, dynamic>> many(List<String> keys);
+  FutureOr<bool> put(String key, dynamic value, int seconds);
+  FutureOr<bool> forever(String key, dynamic value);
+  FutureOr<bool> forget(String key);
+  FutureOr<bool> flush();
+  FutureOr<dynamic> increment(String key, [int value = 1]);
+  FutureOr<dynamic> decrement(String key, [int value = 1]);
+  FutureOr<List<String>> getAllKeys();
+  String getPrefix();
+}
+```
+
+- All methods accept `FutureOr` so synchronous in-memory stores and asynchronous network stores share the same surface area.
+- Time-to-live semantics are expressed in seconds at the store level to match typical cache drivers.
+
+### Repository
+
+`Repository` wraps a store with higher-level convenience methods (Durations, callbacks, `remember`, etc.):
+
+```dart
+abstract class Repository {
+  FutureOr<dynamic> pull(dynamic key, [dynamic defaultValue]);
+  FutureOr<bool> put(String key, dynamic value, [Duration? ttl]);
+  FutureOr<bool> add(String key, dynamic value, [Duration? ttl]);
+  FutureOr<dynamic> remember(String key, dynamic ttl, Function callback);
+  FutureOr<dynamic> rememberForever(String key, Function callback);
+  FutureOr<dynamic> increment(String key, [dynamic value = 1]);
+  FutureOr<bool> forget(String key);
+  Store getStore();
+}
+```
+
+If you swap the repository, the rest of Routed’s cache manager continues to work unchanged.
+
+### Factory
+
+`Factory` is a simple selector that returns a repository by name, allowing multi-store setups:
+
+```dart
+abstract class Factory {
+  Repository store([String? name]);
+}
+```
+
+Register your factory or repositories with the container to have them resolved by the cache manager.
+
+### Locks
+
+The cache system also includes optional distributed locking:
+
+```dart
+abstract class Lock {
+  FutureOr<dynamic> get([Function? callback]);
+  FutureOr<bool> acquire();
+  FutureOr<dynamic> block(int seconds, [Function? callback]);
+  FutureOr<bool> release();
+  FutureOr<String?> getCurrentOwner();
+  FutureOr<bool> isOwnedByCurrentProcess();
+  void forceRelease();
+}
+
+abstract class LockProvider {
+  FutureOr<Lock> lock(String name, [int seconds = 0, String? owner]);
+  FutureOr<Lock> restoreLock(String name, String owner);
+}
+```
+
+Use `LockTimeoutException` to signal retries that exceed your patience. Implementors should ensure `forceRelease` is idempotent and safe to call when ownership checks fail.
+
+## Implementation Tips
+
+- Stick to `FutureOr` in your implementations so synchronous and asynchronous drivers interoperate.
+- Always honour TTL arguments—higher-level helpers assume `remember`/`rememberForever` semantics.
+- For configuration, treat `all()` as a snapshot; avoid mutating the returned map in-place unless your implementation can track changes safely.
+- When exposing custom implementations to the engine, bind them through service providers so they benefit from the container lifecycle (`cleanup`, request scopes, etc.).
+- Document key prefixes and namespacing to avoid collisions across modules (“cache.” vs “session.” vs app-specific keys).
+- Test custom stores/drivers under failure (timeouts, partial reads) and add retries or backoff where appropriate.
+- Provide graceful fallbacks (for example, a `null`/no-op store) for local development and tests when external services are unavailable.

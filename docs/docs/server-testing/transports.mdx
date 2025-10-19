@@ -1,0 +1,66 @@
+---
+title: Test Transports
+description: Compare in-memory and ephemeral server transports and pick the right one for each test
+sidebar_position: 3
+---
+
+# Test Transports
+
+`server_testing` offers two transport implementations. Both satisfy the same `TestTransport` interface and are selected by passing a `TransportMode` to the `TestClient` (or to `serverTest`).
+
+| Transport | Description | Typical use | Trade-offs |
+|-----------|-------------|-------------|------------|
+| `TransportMode.inMemory` | Bypasses sockets and calls your `RequestHandler.handleRequest` directly using mock `HttpRequest` objects | Fast feedback for API logic, unit-style testing | Does not exercise the actual HTTP stack; state can leak if handler is reused |
+| `TransportMode.ephemeralServer` | Starts an `HttpServer` and performs real TCP traffic against it | Browser automation, cookie/header correctness, middleware exercising sockets | Slower and slightly more resource-intensive; you must close the client |
+
+## In-Memory Transport
+
+```dart
+final handler = ShelfRequestHandler(app);
+final client = TestClient(handler); // defaults to in-memory
+final response = await client.getJson('/users');
+```
+
+**Strengths**
+- Lightning fast—no sockets or port allocation
+- Simple to debug: failures bubble up synchronously from `handleRequest`
+- Great for validating routing, business logic, and JSON shape
+
+**Caveats**
+- Behaviour that depends on the Dart `HttpServer` implementation (header casing, multi-value headers, cookies, chunked encoding, gzip, etc.) is simulated—validate those with the server transport.
+- Because the same handler instance may be shared across tests, snapshot or cache state can leak. Prefer constructing new handlers per test or use `TransportMode.ephemeralServer` for strict isolation.
+
+```dart
+// Recommended isolation pattern
+serverTest('user flow', (client, _) async {
+  // fresh handler/client per invocation
+  final result = await client.postJson('/users', {'name': 'Ada'});
+  result.assertStatus(201);
+}, handler: ShelfRequestHandler(buildApp()));
+```
+
+## Ephemeral Server Transport
+
+Creates an `HttpServer` and routes requests over a real TCP socket. Each client owns its server instance—call `close()` (or rely on `serverTest`) to release ports promptly.
+
+```dart
+final client = TestClient.ephemeralServer(handler);
+final baseUrl = await client.baseUrlFuture;
+final res = await client.get('/cookies');
+```
+
+**Strengths**
+- Verifies behaviour exactly as your production stack would observe it.
+- Necessary for cookies, redirects, compression, byte streaming, chunked responses, `HttpHeaders` quirks, and anything browser-related.
+- Enables reuse between HTTP and browser tests by sharing `baseUrl`.
+
+**Caveats**
+- Slower than the in-memory transport—keep the server mode for scenarios where it matters.
+- Costs real sockets/ports; always close the client (`await client.close()` or use `serverTest` to do it for you).
+- If your handler holds onto resources in `startServer`, implement `close()` carefully so they are released after each test.
+
+## Switching Modes
+
+- Pass `transportMode` to `serverTest`: `serverTest('...', ..., transportMode: TransportMode.ephemeralServer);`
+- Or construct the client manually: `TestClient(handler, mode: TransportMode.ephemeralServer);`
+- You can also supply `TransportOptions` (remote address, keep-alive behaviour) when creating the client.

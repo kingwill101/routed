@@ -1,0 +1,116 @@
+---
+title: engineGroup Patterns
+description: Share setup across tests with engineGroup
+sidebar_position: 2
+---
+
+# engineGroup Patterns
+
+`engineGroup` creates a `package:test` group that shares configuration but still runs each test with an isolated engine/client pair. Use it when you want to define multiple tests against the same routes or middleware.
+
+## Basic structure
+
+```dart
+void main() {
+  engineGroup('Users API', define: (engine, client, test) {
+    engine.get('/users', (ctx) => ctx.json({'users': []}));
+    engine.post('/users', (ctx) async {
+      await ctx.validate({'name': 'required'});
+      return ctx.json({'status': 'created'});
+    });
+
+    test('lists users', (engine, client) async {
+      final res = await client.getJson('/users');
+      res.assertJson((json) => json.has('users'));
+    });
+
+    test('validates payload', (engine, client) async {
+      final res = await client.postJson('/users', {});
+      res.assertStatus(HttpStatus.unprocessableEntity);
+    });
+  });
+}
+```
+
+Each `test` callback receives two arguments: the fresh engine and its matching `TestClient`.
+
+## Passing configuration
+
+Use the optional parameters to configure every engine created inside the group:
+
+```dart
+engineGroup(
+  'with cache & sessions',
+  configItems: {'app.env': 'testing'},
+  engineConfig: EngineConfig(
+    cacheManager: CacheManager()
+      ..registerStore('array', {'driver': 'array'}),
+    sessionConfig: SessionConfig.cookie(appKey: 'secret'),
+  ),
+  options: [
+    withMiddleware([timeoutMiddleware(const Duration(seconds: 5))]),
+  ],
+  define: (engine, client, test) {
+    // add routes and tests here
+  },
+);
+```
+
+You can also supply a pre-built `Engine` if you need complete control:
+
+```dart
+final sharedEngine = Engine(options: [withMiddleware([requestTrackerMiddleware()])]);
+
+engineGroup(
+  'custom engine',
+  engine: sharedEngine,
+  define: (engine, client, test) {
+    // engine == sharedEngine
+  },
+);
+```
+
+## Setup and teardown inside the group
+
+Because each `test` call inside `engineGroup` is a normal `package:test` test, you can use `setUp`, `tearDown`, or additional `group` calls as usual:
+
+```dart
+engineGroup('database-backed', define: (engine, client, test) {
+  late Database db;
+
+  setUp(() async {
+    db = await createDatabase();
+    await seed(db);
+  });
+
+  tearDown(() async {
+    await db.dispose();
+  });
+
+  test('persists user', (engine, client) async {
+    engine.post('/users', (ctx) async {
+      final id = await db.users.insert({'name': 'Ava'});
+      return ctx.json({'id': id}, statusCode: HttpStatus.created);
+    });
+
+    final res = await client.postJson('/users', {'name': 'Ava'});
+    res.assertStatus(HttpStatus.created);
+  });
+});
+```
+
+Remember to import `dart:io` for `HttpStatus` constants when needed.
+
+## Transport modes
+
+Pass `transportMode: TransportMode.ephemeralServer` to run each test against a real `HttpServer` instead of the default in-memory transport—useful when middleware or proxies rely on actual sockets.
+
+```dart
+engineGroup(
+  'HTTP integration',
+  transportMode: TransportMode.ephemeralServer,
+  define: (engine, client, test) {
+    // tests
+  },
+);
+```

@@ -1,7 +1,7 @@
-import 'package:routed/routed.dart';
-import 'package:routed/src/file_handler.dart';
 import 'package:file/file.dart' as file;
 import 'package:path/path.dart' as p;
+import 'package:routed/routed.dart';
+import 'package:routed/src/file_handler.dart';
 
 mixin StaticFileHandler {
   Router get router {
@@ -16,20 +16,25 @@ mixin StaticFileHandler {
 
   void staticFile(String relativePath, String filePath, [file.FileSystem? fs]) {
     staticFileFS(
-        relativePath, filePath, Dir(p.dirname(filePath), fileSystem: fs));
+      relativePath,
+      filePath,
+      Dir(p.dirname(filePath), fileSystem: fs),
+    );
   }
 
   void staticFileFS(String relativePath, String filePath, Dir fs) {
     if (relativePath.contains(':') || relativePath.contains('*')) {
       throw Exception(
-          'URL parameters cannot be used when serving a static file');
+        'URL parameters cannot be used when serving a static file',
+      );
     }
 
     final fileHandler = FileHandler.fromDir(fs);
     final fileName = p.basename(filePath);
 
-    handler(EngineContext context) async {
-      await fileHandler.serveFile(context.request.httpRequest, fileName);
+    Future<Response> handler(EngineContext context) async {
+      await fileHandler.serveFile(context, fileName);
+      return context.response;
     }
 
     router.get(relativePath, handler);
@@ -43,15 +48,17 @@ mixin StaticFileHandler {
   void staticFS(String relativePath, Dir dir) {
     if (relativePath.contains(':') || relativePath.contains('*')) {
       throw Exception(
-          'URL parameters cannot be used when serving a static folder');
+        'URL parameters cannot be used when serving a static folder',
+      );
     }
 
     final urlPattern = p.join(relativePath, '{*filepath}');
     final fileHandler = FileHandler.fromDir(dir);
 
-    handler(EngineContext context) async {
+    Future<Response> handler(EngineContext context) async {
       final requestPath = context.param('filepath') as String;
-      await fileHandler.serveFile(context.request.httpRequest, requestPath);
+      await fileHandler.serveFile(context, requestPath);
+      return context.response;
     }
 
     router.get(urlPattern, handler);

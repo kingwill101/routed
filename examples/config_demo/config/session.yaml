@@ -1,0 +1,7 @@
+config:
+  driver: cookie
+  cookie_name: "{{ session.config.cookie_name | default: 'config_demo_session' }}"
+  app_key: "{{ session.config.app_key }}"
+  secure: { { session.config.secure | default: false } }
+  http_only: { { session.config.http_only | default: true } }
+  same_site: "{{ session.config.same_site | default: 'lax' }}"

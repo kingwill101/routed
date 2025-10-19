@@ -1,0 +1,108 @@
+---
+title: "Running & Reporting"
+sidebar_position: 7
+---
+
+The runner orchestrates value generation, property execution, shrinking, and reporting. Understanding its knobs helps you tune performance and diagnostics for different scenarios.
+
+## PropertyTestRunner
+
+```dart
+final runner = PropertyTestRunner<T>(
+  generator,
+  (value) async {
+    // throw or fail expectations to signal a counterexample
+  },
+  PropertyConfig(
+    numTests: 500,
+    maxShrinks: 200,
+    timeout: const Duration(seconds: 5),
+    seed: 42,
+  ),
+);
+final result = await runner.run();
+```
+
+- The property function can be synchronous or return `Future<void>`.
+- Any thrown error (including failed `expect` calls) aborts the current run and triggers shrinking.
+- Shrinking stops once no further simplification fails or `maxShrinks` attempts have been made.
+- Setting `seed` deterministically seeds the internal `Random`; you can pass your own `Random` via `random` if you need more control.
+
+Use per-test configuration to balance coverage, shrinking time, and reproducibility. A higher `numTests` catches more bugs but takes longer. A higher `maxShrinks` finds smaller counterexamples but may extend feedback loops.
+
+## Inspecting PropertyResult
+
+`PropertyResult` captures the outcome of `run()`:
+
+```dart
+if (!result.success) {
+  print(result.numTests); // how many cases were executed
+  print(result.failingInput); // already shrunk
+  print(result.originalFailingInput); // first failure before shrinking
+  print(result.error);
+  print(result.stackTrace);
+  print(result.numShrinks);
+  print(result.seed);
+}
+```
+
+Use `PropertyTestReporter.formatResult(result)` when you want to render the report yourself (e.g. custom logging). The `PropertyResultExtensions.report` getter simply delegates to this helper and is perfect for assertions:
+
+```dart
+expect(result.success, isTrue, reason: result.report);
+```
+
+If you supply a custom `Random` without a numeric seed, `result.seed` is `null`. Store the generator instance yourself when you need reproducibility.
+
+## Aggregating statistics
+
+`TestStatisticsCollector` helps analyse many property runs (e.g. in integration suites or CI smoke tests):
+
+```dart
+final collector = TestStatisticsCollector();
+final stopwatch = Stopwatch();
+
+for (final testCase in scenarios) {
+  final runner = PropertyTestRunner(testCase.generator, testCase.property);
+  stopwatch.start();
+  final result = await runner.run();
+  stopwatch.stop();
+  collector.recordResult(result, stopwatch.elapsed);
+  stopwatch.reset();
+}
+
+print(collector.getSummary());
+```
+
+The summary includes pass/fail counts, success rate, total shrinks, and average duration. When there are failures it also appends the full report for each counterexample.
+
+## Integrating with `package:test`
+
+Wrap each property run inside a `test()` or `testWidgets()` call so shrinking failures are surfaced via the standard expectation mechanism. The canonical pattern is:
+
+```dart
+test('property name', () async {
+  final runner = PropertyTestRunner(...);
+  final result = await runner.run();
+  expect(result.success, isTrue, reason: result.report);
+});
+```
+
+Multiple properties can share a single generator when you want to compare behaviours:
+
+```dart
+test('legacy parser matches new parser', () async {
+  final runner = PropertyTestRunner(
+    Gen.string(maxLength: 256),
+    (input) {
+      final expected = legacyParse(input);
+      final actual = newParse(input);
+      expect(actual, equals(expected));
+    },
+  );
+  final result = await runner.run();
+  expect(result.success, isTrue, reason: result.report);
+});
+```
+
+For long-running suites you can plug the `TestStatisticsCollector` into a tearDown or `setUpAll` hook to emit aggregate reports after a group of properties finishes.

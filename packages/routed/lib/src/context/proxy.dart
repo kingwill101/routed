@@ -33,7 +33,7 @@ extension ProxyMethods on EngineContext {
       // Forward request body if it exists
       if (request.contentLength > 0) {
         proxyRequest.contentLength = request.contentLength;
-        await proxyRequest.addStream(request.httpRequest);
+        await proxyRequest.addStream(request.stream);
       }
 
       final proxyResponse = await proxyRequest.close();
@@ -50,7 +50,7 @@ extension ProxyMethods on EngineContext {
       }
 
       // Stream response body
-      await response.httpResponse.addStream(proxyResponse);
+      await response.addStream(proxyResponse);
       return response;
     } finally {
       client.close();

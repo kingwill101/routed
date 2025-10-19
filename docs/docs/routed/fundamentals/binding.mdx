@@ -1,0 +1,141 @@
+---
+title: Data Binding
+description: Bind request payloads to maps or custom models
+sidebar_position: 8
+---
+
+# Data Binding
+
+Routed provides several methods to bind incoming request data to your data structures. Choose the helper that matches your source and desired failure behavior:
+
+- `bind(target)` – auto-detects content type (`application/json`, `application/x-www-form-urlencoded`, `multipart/form-data`, `text/plain`) and merges parsed values into `target`. Existing keys in `target` are preserved unless overwritten by parsed values.
+- `shouldBindWith(target, binder)` – runs a specific binder (for example, `jsonBinding`, `formBinding`, `queryBinding`), useful when you want to be explicit regardless of `Content-Type`.
+- `mustBindWith(target, binder)` – same as above, but fails the request immediately with an error response when binding fails (for example, malformed JSON).
+
+Note: Request bodies are streams. Once a JSON/form body has been consumed by a binder, it cannot be read again. Call only one body binder per request (you can still bind query params separately).
+
+## Basic Binding
+
+```dart
+router.post('/users', (ctx) async {
+  final data = <String, dynamic>{
+    // Pre-seed defaults; bind() merges into this map
+    'role': 'user',
+  };
+
+  // Automatically bind request data based on content type
+  await ctx.bind(data);
+
+  // Or specify binding type (all helpers return Futures)
+  await ctx.bindJSON(data);    // JSON body
+  await ctx.bindQuery(data);   // Query parameters
+
+  // data now contains merged values from the body and/or query
+  // e.g., { "role": "user", "name": "Ada" }
+});
+```
+
+## Specific Binding Types
+
+### JSON Binding
+```dart
+router.post('/api/users', (ctx) async {
+  final userData = <String, dynamic>{};
+  
+  // Bind JSON request body
+  await ctx.shouldBindWith(userData, jsonBinding);
+  
+  // Data is now available in userData
+  print(userData['name']);
+  print(userData['email']);
+});
+```
+
+### Form Data Binding
+```dart
+router.post('/submit-form', (ctx) async {
+  final formData = <String, dynamic>{};
+  
+  // Bind form data
+  await ctx.shouldBindWith(formData, formBinding);
+  
+  // Access form fields
+  print(formData['username']);
+  print(formData['password']);
+});
+```
+
+For file uploads use `ctx.formFile('field')` / `ctx.formFiles('field')` alongside `formBinding`—files are not inserted into the bound map.
+
+### Query Parameter Binding
+```dart
+router.get('/search', (ctx) async {
+  final searchParams = <String, dynamic>{};
+  
+  // Bind query parameters
+  await ctx.shouldBindWith(searchParams, queryBinding);
+  
+  // Access search parameters
+  print(searchParams['q']);
+  print(searchParams['page']);
+});
+```
+
+## Required Binding
+
+When binding must succeed:
+
+```dart
+router.post('/critical', (ctx) async {
+  final data = <String, dynamic>{};
+
+  // Throws and aborts with an error response if binding fails
+  await ctx.mustBindWith(data, jsonBinding);
+});
+```
+
+`mustBindWith`, `bind`, `bindJSON`, and the other helpers all return `Future<void>`—always `await` them so that asynchronous binders (JSON, multipart, etc.) finish before continuing.
+
+Cautions:
+- Binding reads the request body once. Avoid calling multiple body binders (`bindJSON`, `formBinding`, etc.) in the same request.
+- Maps are merged; pre-seeded defaults in your `target` map are kept unless the incoming data supplies the same keys.
+- Prefer explicit binders in endpoints that accept both JSON and forms to avoid ambiguity.
+
+## Binding & Validation Options
+
+Bind first, then validate. All bindings share a common validation pipeline powered by `ctx.validate()`. You can pass options directly to validation:
+
+```dart
+await ctx.validate(
+  {
+    'email': 'required|email',
+    'password': 'required|min:12',
+  },
+  bail: true, // stop at first failure per field
+  messages: {
+    'email.email': 'Please supply a company email address.',
+    'password.min': 'Use a longer password.',
+  },
+);
+```
+
+- `bail: true` short-circuits validation for a field after the first failed rule.
+- `messages` lets you override rule messages globally (`'min'`) or per-field/per-rule (`'password.min'`).
+- When multiple rules fail, Routed accumulates every message in order, so clients receive the full set of violations.
+
+Common pattern:
+
+```dart
+router.post('/signup', (ctx) async {
+  final payload = <String, dynamic>{};
+  await ctx.bind(payload); // auto-detect; or use shouldBindWith(payload, jsonBinding)
+
+  await ctx.validate({
+    'email': 'required|email',
+    'password': 'required|min:12',
+    'name': 'nullable|string|min:2',
+  });
+
+  return ctx.json({'ok': true});
+});
+```

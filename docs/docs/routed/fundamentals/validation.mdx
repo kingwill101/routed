@@ -1,0 +1,163 @@
+---
+title: Validation
+description: Validate incoming data using built-in and custom rules
+sidebar_position: 9
+---
+
+# Validation
+
+Routed provides validation capabilities for request data including JSON, form data, query parameters, and file uploads.
+
+## Basic Validation
+
+The `validate()` method allows validating incoming request data against a set of rules:
+
+```dart
+router.post('/users', (ctx) async {
+  await ctx.validate({
+    'email': 'required|email',
+    'password': 'required|min:8'
+  });
+
+  // Validation passed
+  final data = await ctx.request.body();
+  ctx.json({'message': 'User created'});
+});
+```
+
+## Available Rules
+
+Rules are written as a pipe-delimited string (for example, 'required|min:8|email'). Options follow a colon and accept comma-separated values (for example, 'between:3,10' or 'file_extensions:jpg,png'). Whitespace is ignored around delimiters.
+
+### Core Rules
+- `required` - Field must be present and not empty
+- `nullable` - Field may be null or missing; other rules are evaluated only when a non-null value is present
+
+### Type Validation
+- `string` - Must be a string
+- `numeric` - Must be a number
+- `int` - Must be an integer
+- `double` - Must be a decimal number
+- `array` - Must be an array
+- `boolean` - Must be a boolean value
+
+### Size Rules
+- `min:value` - Minimum length (strings/arrays) or numeric value
+- `max:value` - Maximum length (strings/arrays) or numeric value
+- `between:min,max` - Inclusive bounds for length or numeric value
+- `size:value` - Exact length (strings/arrays) or exact numeric value
+
+### Format Rules
+- `email` - Must be a valid email address
+- `url` - Must be valid URL
+- `date` - Must be valid date (YYYY-MM-DD)
+- `uuid` - Must be valid UUID
+- `ip` - Must be valid IP address
+
+### File Validation
+- `file` - Must be file upload
+- `max_file_size:bytes` - Maximum file size
+- `file_extensions:jpg,png` - Allowed file extensions
+
+Notes:
+- `nullable` allows missing or null values; without `required`, such fields pass validation when unset
+- `file` should appear before file-specific rules like `max_file_size` or `file_extensions`
+- `file_extensions` expects a comma-separated list without leading dots; comparison is based on the uploaded filename's extension
+- Size rules apply to strings/arrays by length; for numeric fields they apply to the numeric value
+
+## Handling Validation Errors
+
+Validation errors throw a `ValidationError` with error details:
+
+```dart
+try {
+  await ctx.validate({
+    'email': 'required|email',
+    'password': 'required|min:8'
+  });
+} on ValidationError catch (e) {
+  return ctx.json({
+    'errors': e.errors  
+  }, statusCode: 422);
+}
+```
+
+## Controlling Error Flow
+
+The validation helpers expose additional knobs:
+
+```dart
+await ctx.validate(
+  {
+    'username': 'required|min:5|alpha',
+  },
+  bail: true, // stop evaluating further rules for a field
+  messages: {
+    'username.min': 'Usernames must be at least five characters long.',
+    'alpha': 'Use only letters in usernames.', // blanket override
+  },
+);
+```
+
+- When `bail` is `true`, subsequent rules for a field are skipped after the first failure.
+- Without `bail`, Routed now accumulates every failing rule message for that field—responses contain an ordered list instead of just the last failure.
+- `messages` lets you swap the default copy globally (by rule name) or per field (`field.rule`).
+
+### Optional fields example
+
+```dart
+await ctx.validate({
+  'nickname': 'nullable|string|min:3'
+});
+// When nickname is missing or null, the string/min rules are skipped.
+// To require a value, drop 'nullable' and add 'required'.
+```
+
+## Custom Validation Rules
+
+Create custom rules by implementing `ValidationRule`:
+
+```dart
+class PhoneRule extends ValidationRule {
+  @override
+  String get name => 'phone';
+
+  @override
+  String message(dynamic value, [List<String>? options]) => 
+    'Must be valid phone number';
+
+  @override
+  bool validate(dynamic value, [List<String>? options]) {
+    if (value == null) return false;
+    return RegExp(r'^\d{3}-\d{3}-\d{4}$').hasMatch(value.toString());
+  }
+}
+
+// Register the rule
+Validator.registerRule(() => PhoneRule());
+
+// Use custom rule
+await ctx.validate({
+  'phone': 'required|phone'  
+});
+```
+
+## Request Context Integration
+
+Validation is integrated with the request context:
+
+```dart
+router.post('/upload', (ctx) async {
+  // Validate form data and files
+  await ctx.validate({
+    'title': 'required|string',
+    'file': 'required|file|max_file_size:5242880'
+  });
+
+  // Access validated data
+  final title = await ctx.postForm('title');
+  final file = await ctx.formFile('file');
+
+  // Process valid data...
+});
+```

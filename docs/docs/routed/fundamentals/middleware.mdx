@@ -1,0 +1,222 @@
+---
+title: Middleware
+description: Intercept requests globally, per group, or per route
+sidebar_position: 2
+---
+
+# Middleware
+
+Middleware run before (and after) a route handler. Each middleware receives the current `EngineContext` and a `Next` callback. Use `await next()` to continue the pipeline, and always return a `Response`. When adding headers or timing information around a handler, wrap `await next()` in a try/finally so your cleanup runs even if the handler throws.
+
+```dart
+Future<Response> loggerMiddleware(EngineContext ctx, Next next) async {
+  final started = DateTime.now();
+  try {
+    return await next();
+  } finally {
+    final elapsed = DateTime.now().difference(started);
+    print('[${ctx.request.method}] ${ctx.request.path} (${elapsed.inMilliseconds}ms)');
+  }
+}
+```
+
+> Import `dart:io` to access the `HttpStatus` constants referenced later in this guide.
+
+## Global middleware
+
+Pass middleware to the engine to run them for every request:
+
+```dart
+final engine = Engine(
+  middlewares: [
+    timeoutMiddleware(const Duration(seconds: 30)),
+    requestTrackerMiddleware(),
+  ],
+);
+```
+
+`package:routed/middlewares.dart` includes helpers such as `timeoutMiddleware`, `basicAuth`, and `requestTrackerMiddleware`.
+
+Prefer configuration? Populate the manifest and let providers merge the stacks:
+
+```yaml title="config/http.yaml"
+http:
+  middleware:
+    global:
+      - routed.logging        # IDs registered by providers (MiddlewareRef.of)
+      - routed.security.csrf
+    groups:
+      api:
+        - auth.ensure_authenticated
+        - rate.limit_api
+```
+
+Global IDs run before every request, while group entries apply when you call `router.group(name: 'api', ...)`. The CLI (`dart run routed_cli provider:list --config`) prints every registered middleware ID and surfaces validation errors (for example, unknown references). Providers contribute defaults via `http.middleware_sources.*`, keeping the manifest declarative.
+
+## Group middleware
+
+Attach middleware to router groups. Group middleware run after global middleware and before route-level middleware.
+
+```dart
+engine.group(
+  path: '/admin',
+  middlewares: [authMiddleware],
+  builder: (admin) {
+    admin.get('/dashboard', dashboardHandler);
+    admin.get('/users', listUsersHandler);
+  },
+);
+```
+
+## Route middleware
+
+Supply middleware when defining a single route:
+
+```dart
+router.get(
+  '/profile',
+  profileHandler,
+  middlewares: [authMiddleware, ensureProfileCompleteMiddleware],
+);
+```
+
+## Named middleware references
+
+Service providers can register middleware with the shared `MiddlewareRegistry`. Routes, groups, and mounts may then reference middleware by name instead of importing the implementation:
+
+```dart title="provider registration"
+class AuthServiceProvider extends ServiceProvider {
+  @override
+  void register(Container container) {
+    final registry = container.get<MiddlewareRegistry>();
+    registry.register('auth', (_) => authMiddleware);
+    registry.register('routed.sessions.start', (_) => sessionMiddleware());
+  }
+}
+```
+
+```dart title="using references"
+router.get(
+  '/admin',
+  dashboardHandler,
+  middlewares: [
+    MiddlewareRef.of('auth'),
+    MiddlewareRef.of('routed.sessions.start'),
+  ],
+);
+```
+
+References are resolved once when the engine builds routes (not per request). If a referenced middleware is not registered, a `StateError` lists the unknown ID and the available middleware, helping you spot configuration issues quickly.
+
+> Import `package:routed/middlewares.dart` to access `MiddlewareRef`.
+
+The built-in providers (`routed.sessions`, `routed.security`, `routed.cors`, etc.) register their middleware IDs in the registry when enabled via the manifest. Run `dart run routed_cli provider:list --config` to inspect which providers are active and which middleware IDs they contribute.
+
+
+## Custom middleware patterns
+
+### Authentication example
+
+```dart
+Future<Response> authMiddleware(EngineContext ctx, Next next) async {
+  final token = ctx.requestHeader('Authorization');
+
+  if (token == null) {
+    ctx.abortWithStatus(HttpStatus.unauthorized, 'Missing token');
+    return ctx.response;
+  }
+
+  try {
+    final user = await validateToken(token);
+    ctx.set('user', user);
+    return await next();
+  } catch (_) {
+    ctx.abortWithStatus(HttpStatus.unauthorized, 'Invalid token');
+    return ctx.response;
+  }
+}
+```
+
+### CORS pre-flight
+
+```dart
+Future<Response> corsMiddleware(EngineContext ctx, Next next) async {
+  ctx.setHeader('Access-Control-Allow-Origin', '*');
+  ctx.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
+  ctx.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
+
+  if (ctx.request.method == 'OPTIONS') {
+    ctx.status(HttpStatus.ok);
+    return ctx.response;
+  }
+
+  return await next();
+}
+```
+
+### Rate limiting with cache
+
+```dart
+Future<Response> rateLimiter(EngineContext ctx, Next next) async {
+  final clientKey = 'rate:${ctx.request.clientIP}';
+  final hits = await ctx.getCache(clientKey) ?? 0;
+
+  if (hits >= 100) {
+    ctx.abortWithStatus(HttpStatus.tooManyRequests, 'Slow down');
+    return ctx.response;
+  }
+
+  await ctx.incrementCache(clientKey, 1);
+  return await next();
+}
+```
+
+> Ensure a cache manager is configured via `withCacheManager` before using the cache helpers.
+
+## Aborting the pipeline
+
+Use `ctx.abortWithStatus` (or related helpers) to stop processing immediately. Always return the response afterwards.
+
+```dart
+Future<Response> maintenanceMiddleware(EngineContext ctx, Next next) async {
+  if (!isOnline) {
+    ctx.abortWithStatus(HttpStatus.serviceUnavailable, 'Scheduled maintenance');
+    return ctx.response;
+  }
+
+  return await next();
+}
+```
+
+## Execution order
+
+Middleware run in the following sequence:
+
+1. Engine-level middleware
+2. Group middleware (outer → inner)
+3. Route middleware
+4. Route handler
+5. Middleware unwind in reverse order
+
+```
+request →
+  engine middleware
+    → group middleware
+      → route middleware
+        → handler
+      ← route middleware cleanup
+    ← group middleware cleanup
+  ← engine middleware cleanup
+response
+```
+
+Understanding the order helps when composing logging, authentication, and post-processing behaviours.
+
+## Best practices
+
+- Keep middleware small and focused; compose multiple middleware instead of handling many unrelated concerns in one.
+- Prefer `try { final res = await next(); } finally { /* cleanup/logging */ }` for logic that must run regardless of handler success.
+- Avoid expensive I/O before `await next()` unless it’s strictly required to admit the request; do it after `next()` when possible.
+- If you abort the pipeline with `ctx.abortWithStatus(...)`, immediately return `ctx.response` and avoid writing additional headers/body later.
+- Use named middleware IDs (via `MiddlewareRef.of('id')`) in config/manifests to decouple routing from implementations and ease swaps.
+- Be mindful of order: engine → group → route → handler, then unwind; put broad cross-cutting concerns (logging, request IDs) early and narrow checks (authorization) later.

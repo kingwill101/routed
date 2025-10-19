@@ -1,0 +1,36 @@
+---
+title: "Stateful Counter Invariant"
+sidebar_position: 3
+---
+
+Stateful properties help validate operations that evolve over time. This example checks that a simple counter never drops below zero when subjected to random increments and decrements that obey a balance constraint.
+
+```dart
+import 'package:property_testing/property_testing.dart';
+import 'package:test/test.dart';
+
+void main() {
+  test('counter never dips below zero', () async {
+    final runner = StatefulPropertyRunner<int, int>(
+      // Commands are +1 or -1.
+      Gen.oneOf([1, -1]),
+      () => 0, // initial state
+      (value) => value >= 0, // invariant
+      (current, command) {
+        final next = current + command;
+        // Clamp negative transitions to simulate guarded business logic.
+        return next >= 0 ? next : current;
+      },
+      StatefulPropertyConfig(
+        numTests: 150,
+        maxCommandSequenceLength: 25,
+      ),
+    );
+
+    final result = await runner.run();
+    expect(result.success, isTrue, reason: result.report);
+  });
+}
+```
+
+Each generated test case applies up to 25 commands. If the invariant ever fails, the runner shrinks the command list until it finds the shortest sequence that still reproduces the faulty state, making it easy to reason about long-running workflows.

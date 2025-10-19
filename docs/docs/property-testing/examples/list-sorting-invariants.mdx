@@ -1,0 +1,47 @@
+---
+title: "List Sorting Invariants"
+sidebar_position: 1
+---
+
+This quick example shows how to test a pure function with property-based techniques. We verify that our `stableSort` helper keeps the length of the list, preserves the elements, and is idempotent.
+
+```dart
+import 'package:collection/collection.dart' show IterableEquality;
+import 'package:property_testing/property_testing.dart';
+import 'package:test/test.dart';
+
+List<int> stableSort(List<int> values) =>
+    [...values]..sort((a, b) => a.compareTo(b));
+
+void main() {
+  test('stableSort preserves list invariants', () async {
+    final listGen = Gen.integer(min: -100, max: 100).list(maxLength: 30);
+
+    final runner = PropertyTestRunner(
+      listGen,
+      (original) {
+        final sorted = stableSort(original);
+
+        expect(sorted.length, equals(original.length),
+            reason: 'length mismatch for $original');
+
+        // Ensure both lists contain the same multiset of elements.
+        final equality = const IterableEquality<int>();
+        final sortedCopy = [...sorted]..sort();
+        final originalCopy = [...original]..sort();
+        expect(equality.equals(sortedCopy, originalCopy), isTrue,
+            reason: 'element mismatch for $original');
+
+        // Sorting twice should produce the same list (idempotence).
+        expect(stableSort(sorted), equals(sorted));
+      },
+      PropertyConfig(numTests: 300),
+    );
+
+    final result = await runner.run();
+    expect(result.success, isTrue, reason: result.report);
+  });
+}
+```
+
+Because the generator exercises thousands of permutations of list sizes and values, subtle regressions (duplicates lost, idempotence broken, etc.) will surface immediately with a shrunk counterexample.

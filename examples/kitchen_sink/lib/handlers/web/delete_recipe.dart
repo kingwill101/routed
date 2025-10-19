@@ -1,21 +1,15 @@
 import 'package:kitchen_sink_example/services/recipe_service.dart';
 import 'package:routed/routed.dart';
 
-Future<void> deleteRecipe(EngineContext ctx) async {
-  // Get recipe ID from route parameters
+Future<Response> deleteRecipe(EngineContext ctx) async {
   final id = ctx.mustGetParam('id');
 
   try {
-    // Delete the recipe
     RecipeService.delete(id);
-
-    // Flash success message
-    await ctx.flash('success', 'Recipe deleted successfully');
+    ctx.flash('Recipe deleted successfully.', 'success');
   } catch (e) {
-    // Flash error message if deletion fails
-    await ctx.flash('error', 'Failed to delete recipe');
+    ctx.flash('Failed to delete recipe.', 'error');
   }
 
-  // Redirect back to recipe list
-  await ctx.redirect(route('web.recipe.home'));
+  return ctx.redirect(route('web.recipe.home'));
 }

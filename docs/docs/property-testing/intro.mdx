@@ -1,0 +1,50 @@
+---
+title: Property Testing Overview
+sidebar_position: 1
+---
+
+Property-based testing lets you validate general behaviours rather than hand-picked example cases. The `property_testing` package is inspired by tools such as Hypothesis and ScalaCheck and brings the approach to Dart with first-class shrinking, rich generators, and stateful scenarios.
+
+- Generate thousands of structured inputs automatically and shrink failures to the minimal counterexample.
+- Compose generators functionally with `map`, `flatMap`, `where`, `list`, `oneOf`, `frequency`, and container helpers.
+- Reach for batteries-included primitives plus specialised data such as `Uri`, `DateTime`, semantic versions, emails, and RGBA colours.
+- Hunt for edge cases with the Chaos suite that targets SQL injection, path traversal, control characters, oversized payloads, and more.
+- Model long-running workflows with state machine tests built from `Command` objects and sequence generators.
+- Capture actionable reports and aggregate statistics to guide debugging in CI.
+
+### Package layout
+
+| Area | APIs | Purpose |
+| --- | --- | --- |
+| Generators | `Generator<T>`, `ShrinkableValue`, `Gen` | Build reusable input factories with shrinking. |
+| Specialised data | `Specialized.*` | Generate higher-level values such as URIs or semantic versions. |
+| Chaos testing | `Chaos.*`, `ChaosConfig`, `ChaosCategory` | Stress endpoints, parsers, and validators with adversarial inputs. |
+| Runner & config | `PropertyTestRunner`, `PropertyConfig`, `PropertyResult` | Execute property functions and tune execution. |
+| Reporting | `PropertyTestReporter`, `PropertyResultExtensions`, `TestStatisticsCollector` | Render human-readable failure reports and aggregate multiple runs. |
+| Stateful testing | `Command`, `CommandSequence`, `StatefulPropertyBuilder`, `StatefulPropertyRunner` | Exercise systems over histories of operations and invariants. |
+
+Everything is exported through `package:property_testing/property_testing.dart`.
+
+### A taste of property-based testing
+
+```dart
+import 'package:property_testing/property_testing.dart';
+import 'package:test/test.dart';
+
+void main() {
+  test('list reversal is an involution', () async {
+    final runner = PropertyTestRunner(
+      Gen.integer(min: -1000, max: 1000).list(maxLength: 50),
+      (values) {
+        expect(values.reversed.toList().reversed.toList(), equals(values));
+      },
+      PropertyConfig(numTests: 500, seed: 1337),
+    );
+
+    final result = await runner.run();
+    expect(result.success, isTrue, reason: result.report);
+  });
+}
+```
+
+The rest of this guide dives into each part of the API and shows how to combine them effectively in real projects.

@@ -1,0 +1,87 @@
+---
+title: Routed CLI Reference
+description: Scaffold projects, run the dev server, inspect manifests, and manage providers with routed_cli
+sidebar_position: 15
+---
+
+# Routed CLI Reference
+
+The `routed_cli` package ships project scaffolding, a hot-reload dev server, route/spec inspection utilities, and manifest helpers. Install it beside your application (recommended) or activate it globally:
+
+```bash
+dart pub add --dev routed_cli
+# or: dart pub global activate routed_cli
+```
+
+Run commands with `dart run routed_cli <command> [...]`. Add `--verbose` to surface extra debug output.
+
+> **Choosing a Dart executable:** The CLI honours the first set environment variable in `ROUTED_CLI_DART`, `DART_BIN`, or `DART_PATH`. Set one of these when you manage multiple SDKs (for example, with FVM) so every command launches the intended runtime.
+
+## `create`
+
+```bash
+dart run routed_cli create --name my_app [--output <dir>] [--force]
+```
+
+Scaffolds a Routed project, writing `bin/server.dart`, config manifests, README, `.env`, analysis options, and storage directories. Options:
+
+- `--name/-n` – project & package name (required when scaffolding into the current directory).
+- `--output/-o` – destination directory (defaults to `.`).
+- `--template/-t` – template to use (`basic` for now).
+- `--force/-f` – overwrite conflicting files.
+
+After generating files, `create` automatically runs `dart pub get` using the resolved Dart executable. If dependency resolution fails the CLI prints the exit code and keeps the “Next steps” list so you can retry manually.
+
+## `dev`
+
+```bash
+dart run routed_cli dev [--entry bin/server.dart] [--host 127.0.0.1] [--port 8080]
+```
+
+Launches a development server with hot-reload support. Highlights:
+
+- Resolves the correct Dart binary (respecting the environment overrides above) and enables the VM service.
+- Generates a bootstrap that wires in [`hotreloader`](https://pub.dev/packages/hotreloader) so file changes trigger reloads.
+- Restarts the process automatically when `--bootstrap=false` (or `--no-bootstrap`).
+- Accepts additional flags: `--bootstrap-path`, `--install-missing/--no-install-missing`, `--no-warn-missing`, and `--watch` for custom directories.
+
+Use this during development; fall back to `dart run bin/server.dart` for single runs or CI pipelines.
+
+## `routes`
+
+```bash
+dart run routed_cli routes [--format table|json] [--entry tool/spec_manifest.dart]
+```
+
+Prints the HTTP and WebSocket routes for your application. The loader tries `lib/app.dart` (expecting a `createEngine()` function) and falls back to `tool/spec_manifest.dart`, or you can point to a custom entry. Use `--format json` together with `--no-pretty` when parsing from scripts.
+
+## `spec:generate`
+
+```bash
+dart run routed_cli spec:generate --output .dart_tool/routed/route_manifest.json
+```
+
+Writes a JSON route manifest to disk. Useful for documentation, contract tests, or code generators. Accepts the same `--entry` and `--pretty/--no-pretty` options as `routes`. The CLI ensures parent directories exist before writing.
+
+## `openapi generate`
+
+```bash
+dart run routed_cli openapi generate [--title "My API"] [--version 1.0.0] [--server https://api.example.com]
+```
+
+Generates an OpenAPI 3.1 document from your routed engine. By default the CLI writes `.dart_tool/routed/openapi.json`; use `--output` to change the destination and `--server` (repeatable) to declare server URLs. Metadata added via `routeBuilder.openApi((op) { ... })` flows into the generated spec.
+
+## Provider & configuration helpers
+
+Additional commands help manage configuration manifests:
+
+- `config:init`, `config:publish`, `config:cache`, `config:clear`
+- `provider:list`, `provider:enable`, `provider:disable`
+
+See [Configuration](/docs/routed/fundamentals/configuration) for details and usage patterns.
+
+## Troubleshooting
+
+- **`dart pub get` failures:** The `create` command forwards the resolver's exit code. Fix dependency constraints, then rerun the command or execute `dart pub get` manually.
+- **Hot reload not available:** The dev server installs `hotreloader` automatically when the project contains a `pubspec.yaml`. Pass `--no-install-missing` to skip installation or `--no-bootstrap` to disable the bootstrap entirely.
+- **Wrong Dart SDK:** Set `ROUTED_CLI_DART` (or `DART_BIN` / `DART_PATH`) to a specific SDK path before running CLI commands.

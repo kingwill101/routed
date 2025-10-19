@@ -1,8 +1,35 @@
 {% layout "base.html" %}
-
-{% block title %}{{ recipe.name }}{% endblock %}
+{% block title %}{{ page.title | default: recipe.name }}{% endblock %}
 
 {% block content %}
-{% include "partials/recipe_card.html" %}
-<a href="/">Back to Recipe List</a>
+<div class="max-w-4xl mx-auto space-y-6">
+    {% render "partials/recipe_card.html" %}
+
+    <div class="bg-white rounded-lg shadow-md p-6 space-y-4">
+        <div>
+            <h2 class="text-xl font-semibold text-gray-800 mb-2">Ingredients</h2>
+            <ul class="list-disc list-inside space-y-1 text-gray-700">
+                {% for ingredient in recipe.ingredients_list %}
+                <li>{{ ingredient }}</li>
+                {% endfor %}
+            </ul>
+        </div>
+
+        <div>
+            <h2 class="text-xl font-semibold text-gray-800 mb-2">Instructions</h2>
+            <p class="text-gray-700 whitespace-pre-line">
+                {{ recipe.instructions }}
+            </p>
+        </div>
+
+        <div class="pt-2">
+            <a
+                    class="inline-block bg-gray-200 hover:bg-gray-300 text-gray-800 px-4 py-2 rounded-lg text-sm transition"
+                    href="{{ routes.home }}"
+            >
+                Back to Recipe List
+            </a>
+        </div>
+    </div>
+</div>
 {% endblock %}

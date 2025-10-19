@@ -38,10 +38,12 @@ class FileStore implements Store, LockProvider {
   ///
   /// The [fileSystem] parameter is optional and specifies the file system
   /// to use for file operations. Defaults to a [LocalFileSystem].
-  FileStore(this.directory,
-      [this.filePermission,
-      this.lockDirectory,
-      this.fileSystem = const LocalFileSystem()]);
+  FileStore(
+    this.directory, [
+    this.filePermission,
+    this.lockDirectory,
+    this.fileSystem = const LocalFileSystem(),
+  ]);
 
   /// Retrieves an item from the cache.
   ///
@@ -63,12 +65,14 @@ class FileStore implements Store, LockProvider {
 
     for (final entity in entities) {
       if (entity is File) {
-        futures.add(Future(() async {
-          final key = entity.path
-              .replaceFirst('${directory.path}/', '')
-              .replaceAll('/', '');
-          keys.add(key);
-        }));
+        futures.add(
+          Future(() async {
+            final key = entity.path
+                .replaceFirst('${directory.path}/', '')
+                .replaceAll('/', '');
+            keys.add(key);
+          }),
+        );
       }
     }
 
@@ -87,7 +91,8 @@ class FileStore implements Store, LockProvider {
     final expiresAt = _calculateExpiryTime(seconds);
     final file = fileSystem.file(path);
     file.writeAsStringSync(
-        _serialize({'value': value, 'expiresAt': expiresAt}));
+      _serialize({'value': value, 'expiresAt': expiresAt}),
+    );
     if (file.existsSync()) {
       try {
         _ensurePermissionsAreCorrect(file);
@@ -131,9 +136,10 @@ class FileStore implements Store, LockProvider {
   /// Returns a [FileLock] instance.
   @override
   Future<Lock> lock(String name, [int seconds = 0, String? owner]) async {
-    _ensureCacheDirectoryExists(lockDirectory?.path ?? directory.path);
+    final targetDirectory = lockDirectory ?? directory;
+    _ensureCacheDirectoryExists(targetDirectory.path);
     return FileLock(
-      FileStore(directory, filePermission, lockDirectory),
+      FileStore(targetDirectory, filePermission, lockDirectory, fileSystem),
       name,
       seconds,
       owner,
@@ -156,7 +162,8 @@ class FileStore implements Store, LockProvider {
     final raw = _getPayload(key);
     final currentValue = raw['data'] ?? 0;
     final num numValue = (value is num) ? value : 1;
-    final newValue = (currentValue is int
+    final newValue =
+        (currentValue is int
             ? currentValue
             : int.parse(currentValue.toString())) +
         numValue;

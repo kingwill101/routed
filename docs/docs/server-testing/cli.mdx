@@ -1,0 +1,66 @@
+---
+title: CLI
+description: Manage browser bundles, WebDriver binaries, and test scaffolding
+sidebar_position: 7
+---
+
+# CLI
+
+The `server_testing` CLI ships with the package and helps prepare the local environment for browser automation. Run commands with:
+
+```bash
+dart run server_testing <command> [args]
+```
+
+## Install Browser Bundles
+
+Download and cache Playwright-style browser builds referenced by `browsers.json`. By default the command installs the browsers flagged with `"installByDefault": true`.
+
+```bash
+dart run server_testing install               # install defaults (e.g. firefox)
+dart run server_testing install chromium      # explicit target
+dart run server_testing install chromium -f   # force re-download
+dart run server_testing install firefox --force
+```
+
+Bundles are stored under `~/.cache/server_testing` (or the platform-specific equivalent).
+
+## Install Driver Servers
+
+Ensure the matching WebDriver binary (e.g. GeckoDriver, ChromeDriver) is present and ready to launch.
+
+```bash
+dart run server_testing install:driver firefox
+dart run server_testing install:driver chrome --force
+```
+
+The command downloads the driver and starts it on demand at runtime; forcing a reinstall removes the cached binary first.
+
+## Bootstrap a Project
+
+`init` sets up a conventional folder layout and example tests:
+
+```bash
+dart run server_testing init
+```
+
+This command:
+- Creates `test/http/` and `test/browser/` directories (if missing)
+- Writes sample HTTP and browser test files
+- Generates a minimal `browsers.json`
+
+## Generate Test Files
+
+Create new stubs that follow the recommended structure:
+
+```bash
+dart run server_testing create:http users_api
+dart run server_testing create:browser home_page
+```
+
+Both commands write a `<name>_test.dart` inside the appropriate directory. Use these as a starting point for larger suites.
+
+## CI Tips
+- Cache `~/.cache/server_testing` (browser bundles) and your driver directory between runs to avoid repeated downloads.
+- Install browsers and drivers during the build step (`dart run server_testing install` and `install:driver`) so test jobs can start immediately.
+- If running in a container with limited permissions, point the cache directories to a writable location via environment variables before calling the CLI.

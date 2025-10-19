@@ -1,60 +1,122 @@
 import 'dart:io';
 
 import 'package:routed/src/context/context.dart';
+import 'package:routed/src/engine/config.dart';
 import 'package:routed/src/router/types.dart';
 
+bool applyCorsHeaders(
+  HttpHeaders requestHeaders,
+  String requestMethod,
+  HttpHeaders responseHeaders,
+  CorsConfig config,
+) {
+  if (!config.enabled) {
+    return true;
+  }
+
+  final origin = requestHeaders.value('Origin');
+  String? allowOrigin;
+
+  if (config.allowedOrigins.contains('*')) {
+    if (config.allowCredentials && origin != null) {
+      allowOrigin = origin;
+      responseHeaders.add(HttpHeaders.varyHeader, 'Origin');
+    } else {
+      allowOrigin = '*';
+    }
+  } else if (origin != null && config.allowedOrigins.contains(origin)) {
+    allowOrigin = origin;
+    responseHeaders.add(HttpHeaders.varyHeader, 'Origin');
+  } else {
+    return false;
+  }
+
+  responseHeaders.set(HttpHeaders.accessControlAllowOriginHeader, allowOrigin);
+
+  if (config.allowCredentials && allowOrigin != '*') {
+    responseHeaders.set(
+      HttpHeaders.accessControlAllowCredentialsHeader,
+      'true',
+    );
+  }
+
+  final requestedMethod = requestHeaders.value(
+    HttpHeaders.accessControlRequestMethodHeader,
+  );
+
+  if (requestedMethod != null &&
+      config.allowedMethods.isNotEmpty &&
+      !config.allowedMethods.contains(requestedMethod)) {
+    return false;
+  }
+
+  responseHeaders.set(
+    HttpHeaders.accessControlAllowMethodsHeader,
+    config.allowedMethods.join(', '),
+  );
+
+  final requestedHeaders =
+      requestHeaders[HttpHeaders.accessControlRequestHeadersHeader];
+
+  if (config.allowedHeaders.isNotEmpty) {
+    responseHeaders.set(
+      HttpHeaders.accessControlAllowHeadersHeader,
+      config.allowedHeaders.join(', '),
+    );
+  } else if (requestedHeaders != null && requestedHeaders.isNotEmpty) {
+    responseHeaders.set(
+      HttpHeaders.accessControlAllowHeadersHeader,
+      requestedHeaders.join(', '),
+    );
+  }
+
+  if (config.maxAge != null) {
+    responseHeaders.set(
+      HttpHeaders.accessControlMaxAgeHeader,
+      config.maxAge!.toString(),
+    );
+  }
+
+  if (config.exposedHeaders.isNotEmpty) {
+    responseHeaders.set(
+      'Access-Control-Expose-Headers',
+      config.exposedHeaders.join(', '),
+    );
+  }
+
+  return true;
+}
+
 Middleware corsMiddleware() {
-  return (EngineContext ctx) async {
+  return (EngineContext ctx, Next next) async {
     final config = ctx.engineConfig.security.cors;
 
     if (!config.enabled) {
-      await ctx.next();
-      return;
+      return next();
     }
 
-    final request = ctx.request.httpRequest;
-    final response = ctx.response;
+    final requestHeaders = ctx.request.headers;
+    final requestMethod = ctx.request.method;
+    final responseHeaders = ctx.response.headers;
 
-    // Origin check.
-    String origin = request.headers.value('Origin') ?? '*';
-    if (config.allowedOrigins.contains('*')) {
-      response.headers.add('Access-Control-Allow-Origin', '*');
-    } else if (config.allowedOrigins.contains(origin)) {
-      response.headers.add('Access-Control-Allow-Origin', origin);
-      // Set Vary: Origin to indicate that the response varies based on the Origin header.
-      response.headers.add('Vary', 'Origin');
-    } else {
-      ctx.abortWithStatus(HttpStatus.forbidden, 'CORS origin check failed.');
-      return;
+    final allowed = applyCorsHeaders(
+      requestHeaders,
+      requestMethod,
+      responseHeaders,
+      config,
+    );
+
+    if (!allowed) {
+      return ctx.string(
+        'CORS origin check failed.',
+        statusCode: HttpStatus.forbidden,
+      );
     }
 
-    // Credentials.
-    if (config.allowCredentials) {
-      response.headers.add('Access-Control-Allow-Credentials', 'true');
+    if (requestMethod == 'OPTIONS') {
+      return ctx.string('', statusCode: HttpStatus.noContent);
     }
 
-    // Method.
-    response.headers
-        .add('Access-Control-Allow-Methods', config.allowedMethods.join(', '));
-
-    // Headers.
-    if (config.allowedHeaders.isNotEmpty) {
-      response.headers.add(
-          'Access-Control-Allow-Headers', config.allowedHeaders.join(', '));
-    }
-
-    // Exposed headers.
-    if (config.exposedHeaders != null) {
-      response.headers
-          .add('Access-Control-Expose-Headers', config.exposedHeaders!);
-    }
-
-    if (request.method == 'OPTIONS') {
-      response.statusCode = HttpStatus.noContent;
-      ctx.abortWithStatus(HttpStatus.noContent);
-      return;
-    }
-
-    await ctx.next();
+    return next();
   };
 }

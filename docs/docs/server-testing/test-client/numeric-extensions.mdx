@@ -1,0 +1,135 @@
+---
+title: Numeric Extensions
+description: Learn about numeric testing utilities in server_testing
+sidebar_position: 8
+---
+
+# Numeric Extensions
+
+server_testing provides powerful numeric extensions for both conditions and assertions when testing numeric values with AssertableJson.
+
+## Numeric Conditions
+
+The `NumericConditions` extension provides boolean methods for checking numeric properties:
+
+```dart
+void main() {
+  final number = 25;
+  
+  // Comparison operations
+  print(number.isGreaterThan(20));     // true
+  print(number.isLessThan(30));        // true
+  print(number.isGreaterOrEqual(25));  // true
+  print(number.isLessOrEqual(25));     // true
+  print(number.isBetween(20, 30));     // true
+  
+  // Mathematical checks
+  print(number.isDivisibleBy(5));      // true
+  print(number.isMultipleOf(5));       // true
+  print(number.isPerfectSquare());     // true (5 * 5 = 25)
+  
+  // Sign checks
+  print(number.isPositive());          // true
+  print(number.isNegative());          // false
+  print(number.isZero());             // false
+  
+  // Number properties
+  print(number.isEven());             // false
+  print(number.isOdd());              // true
+  print(number.isPrime());            // false
+  
+  // Mathematical operations
+  print(number.sqrt());               // 5.0
+  print(number.pow(2));               // 625
+}
+```
+
+## Numeric Assertions
+
+For testing, use the `NumericAssertions` extension to assert numeric conditions:
+
+```dart
+void main() {
+  test('numeric validations', () {
+    final number = 25;
+    
+    // Basic assertions
+    number.assertGreaterThan(20);
+    number.assertLessThan(30);
+    number.assertGreaterOrEqual(25);
+    number.assertLessOrEqual(25);
+    
+    // Range assertions
+    number.assertBetween(20, 30);
+    
+    // Mathematical assertions
+    number.assertDivisibleBy(5);
+    number.assertMultipleOf(5);
+    number.assertPerfectSquare();
+    
+    // Sign assertions
+    number.assertPositive();
+    
+    // Properties
+    number.assertOdd();
+  });
+}
+```
+
+## Custom Error Messages
+
+You can provide custom error messages for assertions:
+
+```dart
+test('custom errors', () {
+  final age = 15;
+  
+  // Custom error message
+  age.assertGreaterThan(
+    18,
+    message: 'Age must be at least 18 years'
+  );
+  
+  // Default message would be:
+  // "Expected 15 to be greater than 18"
+});
+```
+
+## Chaining Assertions
+
+Assertions can be chained using cascade notation:
+
+```dart
+test('chained assertions', () {
+  final number = 25;
+  
+  number
+    ..assertGreaterThan(0)
+    ..assertLessThan(100)
+    ..assertDivisibleBy(5)
+    ..assertOdd()
+    ..assertPerfectSquare();
+});
+```
+
+## Prime Number Testing
+
+Built-in prime number validation:
+
+```dart
+test('prime numbers', () {
+  // Check if numbers are prime
+  17.assertPrime();
+  23.assertPrime();
+  
+  // Will fail for non-prime numbers
+  expect(
+    () => 25.assertPrime(),
+    throwsA(isA<TestFailure>())
+  );
+  
+  // Prime conditions
+  expect(17.isPrime(), isTrue);
+  expect(25.isPrime(), isFalse);
+});
+```

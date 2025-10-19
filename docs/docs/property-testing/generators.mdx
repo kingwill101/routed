@@ -1,0 +1,115 @@
+---
+title: "Core Generators"
+sidebar_position: 3
+---
+
+Generators are the heart of property-based testing. They produce values alongside the strategy for shrinking them toward simpler counterexamples. Every generator implements `Generator<T>` and returns a `ShrinkableValue<T>` from `generate(Random random)`.
+
+## Composing generators fluently
+
+The base `Generator<T>` API provides functional combinators so you can build complex shapes out of primitives:
+
+- `map` transforms values while reusing the source shrinking strategy.
+- `flatMap` (a.k.a. `bind`) switches to another generator based on a previously generated value.
+- `where` filters out values that do not meet a predicate.
+- `list({minLength, maxLength})` lifts any generator into a list generator with element-wise shrinking.
+
+```dart
+final zipcodeGen = Gen.integer(min: 0, max: 99999)
+    .map((n) => n.toString().padLeft(5, '0'));
+
+final usAddressGen = zipcodeGen.flatMap((zip) {
+  return Gen.string(minLength: 4, maxLength: 24).map((street) {
+    return {'street': street, 'zip': zip};
+  });
+}).where((address) => address['street']!.trim().isNotEmpty);
+```
+
+When a property fails, the runner walks the shrink tree provided by each generator (lists shrink by removing elements first, then shrinking individual items, etc.) until the minimal counterexample is found.
+
+## The `Gen` convenience factory
+
+`Gen` exposes a curated catalogue of primitive factories. Combine them freely or feed them into other combinators such as `flatMap` or `list`.
+
+| Generator | Description |
+| --- | --- |
+| `Gen.integer({min, max})` | Inclusive integer range (defaults `-1000..1000`) with progressive shrinking toward 0/bounds. |
+| `Gen.double_({min, max})` | Floating-point range (defaults `-1000.0..1000.0`) that shrinks toward 0 and common boundary values. |
+| `Gen.boolean()` | Booleans that shrink `true → false`. |
+| `Gen.string({minLength, maxLength})` | Alphanumeric strings with character-removal and character-simplification shrinking. |
+| `Gen.constant(value)` | Always yields the provided value. Useful in `oneOf` mixes. |
+| `Gen.oneOf(values)` | Picks from a list of literal values, shrinking toward earlier entries. |
+| `Gen.oneOfGen(generators)` | Picks from several generator strategies. Shrinking tries earlier generators first, then shrinks the chosen value. |
+| `Gen.frequency([(weight, generator), ...])` | Weighted choice between generators. |
+| `Gen.containerOf(elementGen, factory, {minLength, maxLength})` | Builds custom collections (set, map, queue…) by passing generated elements through a factory. |
+| `Gen.pick(n, options)` | Chooses exactly `n` distinct values (unordered) from a list. |
+| `Gen.someOf(options, {min, max})` | Chooses between `min..max` distinct values. |
+| `Gen.atLeastOne(options)` | Shorthand for `someOf` with `min: 1`. |
+
+The `primitive` package also exposes focused helpers such as `SamplingGenerator` if you need to build your own weighted/unique sampling behaviour.
+
+## Lifting generators into richer structures
+
+Because every generator is itself a value, you can express arbitrarily nested data structures:
+
+```dart
+final usernameGen = Gen.string(minLength: 3, maxLength: 20);
+final userGen = usernameGen.flatMap((username) {
+  return Specialized.email(domains: ['work.com']).flatMap((email) {
+    return Gen.integer(min: 18, max: 80).map((age) {
+      return User(username: username, email: email, age: age);
+    });
+  });
+});
+
+final paginatedResponseGen = Gen.integer(min: 0, max: 100).flatMap((page) {
+  return userGen.list(minLength: 1, maxLength: 20).map((items) {
+    return {
+      'page': page,
+      'items': items,
+      'nextPage': page < 99 ? page + 1 : null,
+    };
+  });
+});
+```
+
+Common recipes:
+
+- Use nested `flatMap` calls (or helper functions) to assemble Dart records or domain objects from multiple generators.
+- Wrap a list generator in `Gen.containerOf` to build sets or queues.
+- Balance positive/negative cases with `Gen.frequency`, e.g. 80 % valid values and 20 % invalid ones to test validation.
+
+## Implementing custom generators
+
+Special behaviour is one subclass away. Override `generate(Random)` and return a `ShrinkableValue` with your own shrink ordering:
+
+```dart
+class MoneyGenerator extends Generator<Money> {
+  @override
+  ShrinkableValue<Money> generate(Random random) {
+    final cents = random.nextInt(500_00); // up to $5,000.00
+    final currency = Gen.oneOf(['USD', 'EUR', 'JPY']).generate(random).value;
+    final value = Money.fromCents(currency: currency, cents: cents);
+
+    return ShrinkableValue(value, () sync* {
+      // Remove cents first, then shrink toward zero
+      if (value.cents % 100 != 0) {
+        yield ShrinkableValue.leaf(Money.fromCents(
+          currency: currency,
+          cents: value.cents - (value.cents % 100),
+        ));
+      }
+      if (value.cents > 0) {
+        yield ShrinkableValue.leaf(
+          Money.fromCents(currency: currency, cents: value.cents ~/ 2),
+        );
+        yield ShrinkableValue.leaf(
+          Money.fromCents(currency: currency, cents: 0),
+        );
+      }
+    });
+  }
+}
+```
+
+Because shrinking is under your control, you can encode the shortest path to interesting boundary conditions.

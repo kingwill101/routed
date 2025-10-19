@@ -39,26 +39,26 @@ class ArrayStore extends TaggableStore implements Store, LockProvider {
     if (!storage.containsKey(key)) {
       return null;
     }
-      final item = storage[key];
-      if (item == null) {
-        return null;
-      }
-
-      final num? expiresAt = item['expiresAt'] as num?;
-      if (expiresAt != null &&
-          expiresAt != 0 &&
-          (DateTime.now().millisecondsSinceEpoch / 1000) >= expiresAt) {
-        await forget(key);
-        return null;
-      }
-
-      final value = item['value'];
-      if (value == null) {
-        return null;
-      }
-
-      return serializesValues ? _deserialize(value as String) : value;
+    final item = storage[key];
+    if (item == null) {
+      return null;
     }
+
+    final num? expiresAt = item['expiresAt'] as num?;
+    if (expiresAt != null &&
+        expiresAt != 0 &&
+        (DateTime.now().millisecondsSinceEpoch / 1000) >= expiresAt) {
+      await forget(key);
+      return null;
+    }
+
+    final value = item['value'];
+    if (value == null) {
+      return null;
+    }
+
+    return serializesValues ? _deserialize(value as String) : value;
+  }
 
   /// Stores an item in the store with a time-to-live of [seconds].
   ///
@@ -90,7 +90,8 @@ class ArrayStore extends TaggableStore implements Store, LockProvider {
   Future<dynamic> increment(String key, [int value = 1]) async {
     final item = storage[key];
     final currentValue = item?['value'] ?? 0;
-    final newValue = (currentValue is int
+    final newValue =
+        (currentValue is int
             ? currentValue
             : int.parse(currentValue.toString())) +
         value;

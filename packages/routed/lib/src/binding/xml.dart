@@ -1,5 +1,5 @@
-import 'package:routed/routed.dart';
 import 'package:routed/src/binding/binding.dart';
+import 'package:routed/src/context/context.dart' show EngineContext;
 
 /// A class that handles XML binding for the routing engine.
 ///
@@ -34,8 +34,12 @@ class XmlBinding extends Binding {
   /// [context] - The context of the engine containing the request information.
   /// [rules] - A map of validation rules to apply to the XML data.
   @override
-  Future<void> validate(EngineContext context, Map<String, String> rules,
-      {bool bail = false}) async {
+  Future<void> validate(
+    EngineContext context,
+    Map<String, String> rules, {
+    bool bail = false,
+    Map<String, String>? messages,
+  }) async {
     // XML validation will be implemented later
     throw UnimplementedError('XML validation not yet implemented');
   }

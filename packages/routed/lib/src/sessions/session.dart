@@ -38,10 +38,10 @@ class Session {
     Map<String, dynamic>? values,
     DateTime? createdAt,
     DateTime? lastAccessed,
-  })  : _id = id ?? _generateId(),
-        values = values ?? {},
-        _createdAt = createdAt ?? DateTime.now(),
-        _lastAccessed = lastAccessed ?? DateTime.now();
+  }) : _id = id ?? _generateId(),
+       values = values ?? {},
+       _createdAt = createdAt ?? DateTime.now(),
+       _lastAccessed = lastAccessed ?? DateTime.now();
 
   /// Serializes the session to a JSON string.
   String serialize() => jsonEncode(toMap());
@@ -50,13 +50,13 @@ class Session {
   static Session deserialize(String data) {
     final Map<String, dynamic> map = jsonDecode(data) as Map<String, dynamic>;
     return Session(
-      id: map['id'] as String?,
-      name: map['name'] as String,
-      options: map['options'] as Options,
-      values: Map<String, dynamic>.from(map['values'] as Map),
-      createdAt: DateTime.parse(map['created_at'] as String),
-      lastAccessed: DateTime.parse(map['last_accessed'] as String),
-    )
+        id: map['id'] as String?,
+        name: map['name'] as String,
+        options: Options.fromJson(map['options'] as Map<String, dynamic>),
+        values: Map<String, dynamic>.from(map['values'] as Map),
+        createdAt: DateTime.parse(map['created_at'] as String),
+        lastAccessed: DateTime.parse(map['last_accessed'] as String),
+      )
       .._destroyed = map['destroyed'] as bool? ?? false
       .._isNew = map['is_new'] as bool? ?? false;
   }
@@ -105,30 +105,16 @@ class Session {
   /// Whether this is a new session
   set isNew(bool value) => _isNew = value;
 
-  int get age {
-    final now = DateTime.now();
-    if (_lastCalculation != now) {
-      _cachedAge = now.difference(_createdAt).inSeconds;
-      _lastCalculation = now;
-    }
-    return _cachedAge!;
-  }
+  int get age => DateTime.now().difference(_createdAt).inSeconds;
 
-  int get idleTime {
-    final now = DateTime.now();
-    if (_lastCalculation != now) {
-      _cachedIdleTime = now.difference(_lastAccessed).inSeconds;
-      _lastCalculation = now;
-    }
-    return _cachedIdleTime!;
-  }
+  int get idleTime => DateTime.now().difference(_lastAccessed).inSeconds;
 
   /// Convert session to a map for serialization
   Map<String, dynamic> toMap() {
     return {
       'id': id,
       'name': name,
-      'options': options,
+      'options': options.toJson(),
       'values': values,
       'created_at': _createdAt.toIso8601String(),
       'last_accessed': _lastAccessed.toIso8601String(),
@@ -143,16 +129,16 @@ class Session {
     if (value == null) {
       return null;
     }
-    
+
     if (value is T) {
       return value;
     }
-    
+
     // Handle common type conversions
     if (T == String && value != null) {
       return value.toString() as T;
     }
-    
+
     // For other types, return null if type doesn't match
     return null;
   }
@@ -161,9 +147,4 @@ class Session {
     touch(); // Update access time on writes
     values[key] = value;
   }
-
-  // Cache for age/idle calculations
-  int? _cachedAge;
-  int? _cachedIdleTime;
-  DateTime? _lastCalculation;
 }

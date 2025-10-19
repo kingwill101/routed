@@ -1,0 +1,12 @@
+{% if errors %}
+    <ul
+            class="errorlist text-sm text-red-600 mt-1 space-y-1 list-disc list-inside"
+            {% if errors.field_id %}
+                id="{{ errors.field_id }}_error"
+            {% endif %}
+    >
+        {% for error in errors %}
+            <li class="font-medium">{{ error }}</li>
+        {% endfor %}
+    </ul>
+{% endif %}

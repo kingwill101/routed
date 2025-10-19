@@ -169,11 +169,13 @@ class QueryParamsEncoder extends Converter<Map<String, dynamic>, String> {
     final flattenedMap = _toEncodable(input) as Map<String, dynamic>;
 
     // Then produce the final query string
-    return flattenedMap.entries.map((entry) {
-      final key = Uri.encodeComponent(entry.key);
-      final value = _encodeValue(entry.value);
-      return '$key=$value';
-    }).join('&');
+    return flattenedMap.entries
+        .map((entry) {
+          final key = Uri.encodeComponent(entry.key);
+          final value = _encodeValue(entry.value);
+          return '$key=$value';
+        })
+        .join('&');
   }
 
   /// Encodes the value into a query-friendly string.

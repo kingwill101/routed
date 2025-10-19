@@ -40,10 +40,7 @@ void main() {
       await AppZone.run(
         engine: engine,
         body: () async {
-          expect(
-            route('users.show', {'id': '123'}),
-            equals('/users/123'),
-          );
+          expect(route('users.show', {'id': '123'}), equals('/users/123'));
           expect(
             route('posts.show', {'slug': 'hello-world'}),
             equals('/posts/hello-world'),
@@ -56,10 +53,7 @@ void main() {
       await AppZone.run(
         engine: engine,
         body: () async {
-          expect(
-            () => route('non.existent'),
-            throwsA(isA<Exception>()),
-          );
+          expect(() => route('non.existent'), throwsA(isA<Exception>()));
         },
       );
     });

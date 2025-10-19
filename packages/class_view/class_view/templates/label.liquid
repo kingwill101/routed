@@ -1,0 +1,1 @@
+{% if use_tag %}<{{ tag }}{% for name, value in attrs %}{% if value != false %} {{ name }}{% if value != true %}="{{ value }}"{% endif %}{% endif %}{% endfor %}>{{ label }}</{{ tag }}>{% else %}{{ label }}{% endif %} 

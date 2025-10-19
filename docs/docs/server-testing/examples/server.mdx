@@ -1,0 +1,152 @@
+---
+title: Server Examples
+description: Practical server-side testing scenarios with server_testing
+sidebar_position: 1
+---
+
+# Server Examples
+
+These snippets show how to combine handler providers, transports, and fixtures when writing HTTP-focused tests.
+
+## Basic dart:io Handler
+
+Use the built-in `IoRequestHandler` for simple `HttpServer` applications.
+
+```dart
+import 'dart:io';
+import 'package:server_testing/server_testing.dart';
+
+void main() {
+  Future<void> handleRequest(HttpRequest request) async {
+    final response = request.response;
+    
+    if (request.uri.path == '/ping') {
+      response.statusCode = 200;
+      response.headers.contentType = ContentType.json;
+      response.write('{"message": "pong"}');
+    } else {
+      response.statusCode = 404;
+      response.write('Not found');
+    }
+    
+    await response.close();
+  }
+
+  final handler = IoRequestHandler(handleRequest);
+
+  serverTest('GET /ping -> 200', (client, _) async {
+    final res = await client.getJson('/ping');
+    res.assertSuccess().assertJsonPath('message', 'pong');
+  }, handler: handler);
+}
+```
+
+## In-Memory API Smoke Test with Shelf
+
+Keep things fast by using `TransportMode.inMemory`.
+
+```dart
+import 'dart:convert';
+
+import 'package:shelf/shelf.dart' as shelf;
+import 'package:server_testing/server_testing.dart';
+import 'package:server_testing_shelf/server_testing_shelf.dart';
+
+void main() {
+  final handler = ShelfRequestHandler((shelf.Request req) async {
+    final body = jsonEncode({'message': 'pong'});
+    return shelf.Response.ok(body, headers: {'content-type': 'application/json'});
+  });
+
+  serverTest('GET /ping -> 200', (client, _) async {
+    final res = await client.getJson('/ping');
+    res
+      ..assertSuccess()
+      ..assertJsonPath('message', 'pong');
+  }, handler: handler);
+}
+```
+
+## Ephemeral Server with Shared Fixtures
+
+Spin up a real `HttpServer` per test, share seeded data, and clean up afterwards.
+
+```dart
+import 'package:server_testing/server_testing.dart';
+import 'package:server_testing_shelf/server_testing_shelf.dart';
+import 'package:test/test.dart';
+
+late TestClient client;
+late ShelfRequestHandler handler;
+
+void main() {
+  setUpAll(() async {
+    await seedDatabase(); // your own helper
+    handler = ShelfRequestHandler(buildShelfApp());
+    client = TestClient(handler, mode: TransportMode.ephemeralServer);
+  });
+
+  tearDownAll(() async {
+    await client.close();
+  });
+
+  test('orders index reflects seeded data', () async {
+    final res = await client.get('/orders');
+    res.assertSuccess().assertJson((json) => json.count('orders', 2));
+  });
+}
+```
+
+> Each test hits a live socket, so always `await client.close()` once the suite finishes.
+
+## Custom Framework Adapter
+
+Implement `RequestHandler` to adapt your own framework, then plug it into `serverTest`.
+
+```dart
+class RouterHandler implements RequestHandler {
+  final MyRouter router;
+  HttpServer? _server;
+
+  RouterHandler(this.router);
+
+  @override
+  Future<void> handleRequest(HttpRequest request) {
+    return router.handle(HttpRequestWrapper.from(request));
+  }
+
+  @override
+  Future<int> startServer({int port = 0}) async {
+    _server = await HttpServer.bind(InternetAddress.loopbackIPv4, port);
+    _server!.listen(handleRequest);
+    return _server!.port;
+  }
+
+  @override
+  Future<void> close([bool force = true]) async {
+    await _server?.close(force: force);
+    _server = null;
+  }
+}
+
+void main() {
+  final handler = RouterHandler(buildRouter());
+
+  serverTest('router responds', (client, _) async {
+    final res = await client.get('/health');
+    res.assertStatus(200).assertBody('ok');
+  }, handler: handler);
+}
+```
+
+## CLI Workflow in CI
+
+Use the `server_testing` CLI to provision browsers and drivers before running tests.
+
+```bash
+dart run server_testing install         # download browser bundles
+dart run server_testing install:driver  # ensure WebDriver binary
+dart test                               # execute your suite
+```
+
+Cache `~/.cache/server_testing` between CI runs to avoid repeated downloads.

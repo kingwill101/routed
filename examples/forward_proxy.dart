@@ -2,7 +2,7 @@ import 'package:http/http.dart' as http;
 import 'package:routed/routed.dart';
 
 Middleware routedForwardMiddleware() {
-  return (EngineContext c) async {
+  return (EngineContext c, Next next) async {
     final forwardHeader = c.headers.value('forward');
     if (forwardHeader != null && forwardHeader == 'ok') {
       final client = http.Client();
@@ -13,19 +13,19 @@ Middleware routedForwardMiddleware() {
         });
         final response = await client.send(req);
 
-        c.string(await response.stream.bytesToString(),
-            statusCode: response.statusCode);
-        c.abort();
+        return c.string(
+          await response.stream.bytesToString(),
+          statusCode: response.statusCode,
+        );
       } finally {
         client.close();
       }
-      return;
     }
-    await c.next();
+    return await next();
   };
 }
 
-reverse(EngineContext context) async {
+Future<Response> reverse(EngineContext context) async {
   var remote = Uri.parse('http://xxx.xxx.xxx');
   var client = http.Client();
 
@@ -37,8 +37,7 @@ reverse(EngineContext context) async {
 
     var response = await client.send(proxyRequest);
 
-    context.string(await response.stream.bytesToString());
-    context.abort();
+    return context.string(await response.stream.bytesToString());
   } finally {
     client.close();
   }

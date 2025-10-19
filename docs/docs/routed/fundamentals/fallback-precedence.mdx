@@ -1,0 +1,84 @@
+---
+id: fallback-precedence
+title: Fallback precedence
+sidebar_position: 7
+description: Understand how Routed selects fallback handlers and how to structure overrides per router group.
+---
+
+Fallback handlers bridge the gap between "no match" and "useful response." Routed lets you register fallbacks at the engine level or on any router group, and then chooses the most specific candidate when a request slips past the usual route table. This guide shows the evaluation order, how specificity scoring works, and how to tune the outcome.
+
+## Resolution order
+
+When a request arrives, the engine evaluates candidates in the following order:
+
+| Phase | Candidate | Match criteria |
+| ----- | --------- | -------------- |
+| 1 | Static + parameterised routes | HTTP method, path pattern, and constraints must match. |
+| 2 | Method-only checks | If the path matched but the method did not, the engine can surface a 405 response (when enabled). |
+| 3 | Fallback routes | If no normal route matched, the engine compares every fallback handler and picks the one whose static prefix most closely resembles the request path. |
+
+Only phase 3 is documented here; the earlier phases behave as described in [Routing basics](/docs/routed/fundamentals/routing).
+
+### How specificity scoring works
+
+Every fallback route is compiled down to an internal path that ends with `/{__fallback:*}`. During evaluation, Routed extracts the static prefix (everything before the wildcard) and uses a fuzzy ratio to measure how closely that prefix matches the request path. The fallback with the highest score wins.
+
+```
+Request path:      /api/v1/users/42
+Fallback prefixes: /         -> score 15
+                   /api      -> score 68
+                   /api/v1   -> score 92 (chosen)
+```
+
+Because all fallbacks run through the same scorer, you can influence precedence by:
+
+- Nesting fallbacks closer to the routes they should guard (e.g. define `/api/v1` inside the `/api` group).
+- Using more specific static prefixes (`/console/admin` beats `/console` for admin-only responses).
+- Avoiding catch-all fallbacks inside high-priority groups unless you really want them to override child groups.
+
+## Registering multiple fallbacks
+
+```dart title="Global and group-specific fallbacks"
+final engine = Engine()
+  ..fallback((ctx) => ctx.string('Default 404'))
+  ..group(
+    path: '/api',
+    builder: (router) {
+      router.fallback(
+        (ctx) => ctx.json({
+          'error': 'API route not found',
+          'path': ctx.uri.path,
+        }),
+      );
+
+      router.group(
+        path: '/v1',
+        builder: (v1) {
+          v1.fallback(
+            (ctx) => ctx.json({
+              'error': 'v1 endpoint missing',
+              'path': ctx.uri.path,
+            }),
+          );
+        },
+      );
+    },
+  );
+```
+
+Requests under `/api/v1/...` land in the `v1` fallback. Requests under `/api/...` fall back to the API-wide handler. Everything else gets the default string response.
+
+## Tuning behaviour
+
+- **Short-circuit specific scenarios.** Place a normal route or middleware guard ahead of the fallback when a group needs to emit different responses for authenticated vs anonymous traffic.
+- **Expose overrides through configuration.** Wrap your fallback callbacks in functions that read view names or template paths from config so operations teams can change messaging without rebuilding.
+- **Opt out per route when necessary.** Routes can disable `redirectTrailingSlash` or `methodNotAllowed` handling via options; the fallback selection process respects those knobs.
+- **Plan for explicit priority weights.** The roadmap calls for user-tunable fallback priorities. Until that lands, rely on static prefixes and router nesting to guide the fuzzy scorer. When explicit priorities ship they will layer on top of the current behaviour, so the guidance above will continue to apply.
+
+## Troubleshooting checklist
+
+- Confirm the fallback is registered on the router you expect (engine vs nested group).
+- Inspect static prefixes with logging to verify they line up with the paths you expect to catch.
+- Add request event listeners (`RouteNotFoundEvent`) to observe when no fallback wins—this helps surface typos or incorrect group nesting.
+
+For more on error handling in general, see [Unmatched routes and 404s](/docs/routed/fundamentals/error-handling).

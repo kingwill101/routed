@@ -1,28 +1,31 @@
 import 'package:routed/src/context/context.dart';
 
-import '../../middlewares.dart';
+import 'package:routed/middlewares.dart' show Middleware, Next;
 
 Middleware securityHeadersMiddleware() {
-  return (EngineContext ctx) async {
+  return (EngineContext ctx, Next next) async {
     final config = ctx.engineConfig;
     if (!config.features.enableSecurityFeatures) {
-      await ctx.next();
-      return;
+      return await next();
     }
     if (config.security.csp != null) {
-      ctx.response.headers.add('Content-Security-Policy', config.security.csp!);
+      ctx.response.headers.set('Content-Security-Policy', config.security.csp!);
     }
     if (config.security.xContentTypeOptionsNoSniff) {
-      ctx.response.headers.add('X-Content-Type-Options', 'nosniff');
+      ctx.response.headers.set('X-Content-Type-Options', 'nosniff');
     }
     if (config.security.hstsMaxAge != null) {
-      ctx.response.headers.add('Strict-Transport-Security',
-          'max-age=${config.security.hstsMaxAge}; includeSubDomains; preload');
+      ctx.response.headers.set(
+        'Strict-Transport-Security',
+        'max-age=${config.security.hstsMaxAge}; includeSubDomains; preload',
+      );
     }
     if (config.security.xFrameOptions != null) {
-      ctx.response.headers
-          .add('X-Frame-Options', config.security.xFrameOptions!);
+      ctx.response.headers.set(
+        'X-Frame-Options',
+        config.security.xFrameOptions!,
+      );
     }
-    await ctx.next();
+    return await next();
   };
 }

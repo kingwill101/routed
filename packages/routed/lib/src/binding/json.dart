@@ -1,6 +1,7 @@
 import 'dart:convert';
-import 'package:routed/routed.dart';
+
 import 'package:routed/src/binding/binding.dart';
+import 'package:routed/src/context/context.dart';
 import 'package:routed/src/validation/validator.dart';
 
 /// A class that handles JSON binding and validation for incoming requests.
@@ -33,10 +34,14 @@ class JsonBinding extends Binding {
   ///
   /// Returns a Future that completes when validation is done.
   @override
-  Future<void> validate(EngineContext context, Map<String, String> rules,
-      {bool bail = false}) async {
+  Future<void> validate(
+    EngineContext context,
+    Map<String, String> rules, {
+    bool bail = false,
+    Map<String, String>? messages,
+  }) async {
     final decoded = await _decodedBody(context);
-    final validator = Validator.make(rules, bail: bail);
+    final validator = Validator.make(rules, bail: bail, messages: messages);
     final errors = validator.validate(decoded);
 
     if (errors.isNotEmpty) {
@@ -56,8 +61,11 @@ class JsonBinding extends Binding {
   ///
   /// Returns a Future that completes when binding is done.
   @override
-  Future<void> bind(EngineContext context, dynamic instance,
-      {Map<String, String>? rules}) async {
+  Future<void> bind(
+    EngineContext context,
+    dynamic instance, {
+    Map<String, String>? rules,
+  }) async {
     final decoded = await _decodedBody(context);
     await bindBody(decoded, instance);
   }

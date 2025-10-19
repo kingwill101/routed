@@ -4,7 +4,7 @@ import 'package:routed/routed.dart';
 
 final Engine engine = Engine();
 
-main() {
+void main() {
   Router v1 = Router(path: "/v1");
 
   addUserRoutes(v1);
@@ -20,28 +20,30 @@ main() {
 
 void addPingRoutes(Router r) {
   r.group(
-      path: "/ping",
-      builder: (c) {
-        c.get('/', (EngineContext context) {
-          context.json({'message': 'pong'});
-        });
+    path: "/ping",
+    builder: (c) {
+      c.get('/', (EngineContext context) {
+        context.json({'message': 'pong'});
       });
+    },
+  );
 }
 
 void addUserRoutes(Router r) {
   r.group(
-      path: "/users",
-      builder: (c) {
-        c.get('/', (EngineContext context) {
-          context.string('users');
-        });
-
-        c.get('/comments', (EngineContext context) {
-          context.string('users comments');
-        });
-
-        c.get('/pictures', (EngineContext context) {
-          context.string('users pictures');
-        });
+    path: "/users",
+    builder: (c) {
+      c.get('/', (EngineContext context) {
+        context.string('users');
       });
+
+      c.get('/comments', (EngineContext context) {
+        context.string('users comments');
+      });
+
+      c.get('/pictures', (EngineContext context) {
+        context.string('users pictures');
+      });
+    },
+  );
 }

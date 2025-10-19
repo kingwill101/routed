@@ -1,0 +1,68 @@
+---
+id: http2
+title: HTTP/2 support
+sidebar_position: 9
+description: Enable HTTP/2 in Routed, understand negotiation, fallback behaviour, and TLS requirements.
+---
+
+Routed ships built-in HTTP/2 support when you enable it in the engine configuration. The server negotiates HTTP/2 via ALPN and automatically falls back to HTTP/1.1 for clients that do not support it. Existing middleware, routing, and streaming handlers continue to work transparently.
+
+## Enable HTTP/2
+
+HTTP/2 requires TLS. Provide your certificate and enable the feature flag either in configuration manifests or programmatically:
+
+```yaml title="config/http.yaml"
+http:
+  http2:
+    enabled: true
+    allow_cleartext: false
+    max_concurrent_streams: 256
+    idle_timeout: 30s
+  tls:
+    certificate_path: cert.pem
+    key_path: key.pem
+```
+
+```dart title="main.dart"
+final engine = Engine(
+  config: EngineConfig(
+    http2: const Http2Config(
+      enabled: true,
+      allowCleartext: false,
+      maxConcurrentStreams: 256,
+      idleTimeout: Duration(seconds: 30),
+    ),
+  ),
+)..get('/', (ctx) => ctx.string('Hello, HTTP/2!'));
+
+await engine.serveSecure(
+  address: '0.0.0.0',
+  port: 8443,
+  certificatePath: 'cert.pem', // optional when http.tls.* is configured
+  keyPath: 'key.pem',
+);
+```
+
+Routed registers ALPN protocols `["h2", "http/1.1"]`. HTTP/2-capable clients receive multiplexed responses; others transparently downgrade to HTTP/1.1.
+
+## Streaming and middleware behaviour
+
+- Middleware, routing, SSE, and file downloads continue to operate over HTTP/2 streams.
+- Response compression, request logging, and sessions work without modification.
+- WebSockets remain an HTTP/1.1-only feature; clients attempting to upgrade over HTTP/2 will receive the documented error.
+
+## Graceful shutdown
+
+The existing shutdown controller drains active HTTP/2 streams before closing the listener. Fallback to HTTP/1.1 is handled automatically—no additional steps are required in deployment scripts.
+
+## Testing and tooling
+
+- Use `curl --http2` or `h2load` to verify multiplexer behaviour.
+- The example application at `examples/http2/` includes self-signed certificates for local testing (see the README in that directory for regeneration and curl verification steps).
+- Add your CA bundle to the client `SecurityContext` when writing integration tests (see `packages/routed/test/engine/http2_server_test.dart`).
+
+## Troubleshooting
+
+- **Handshake falls back to HTTP/1.1:** ensure the certificate and ALPN configuration include `"h2"`, and that the client advertises support.
+- **Self-signed certificates:** developers must trust the certificate in their client context; otherwise the TLS handshake will fail.
+- **Proxy termination:** when a reverse proxy terminates TLS, HTTP/2 must be negotiated at the proxy layer. Routed will run in HTTP/1.1 mode behind the proxy.

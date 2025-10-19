@@ -65,7 +65,7 @@ The `examples` directory contains working examples for common use cases:
 ## Packages
 
 - [routed](packages/routed) - Core routing package
-- [routed_testing](packages/routed_testing) - Testing utilities
+- [routed_testing](packages/server_testing/routed_testing) - Testing utilities
 
 ## Contributing
 

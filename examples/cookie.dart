@@ -5,12 +5,12 @@ import 'dart:io';
 import 'package:routed/routed.dart';
 
 Middleware cookieTool() {
-  return (EngineContext ctx) async {
+  return (EngineContext ctx, Next next) async {
     final cookie = ctx.cookie("label");
     if (cookie == null) {
-      ctx.json({"error": "Forbidden with no cookie"});
-      ctx.abort();
+      return ctx.json({"error": "Forbidden with no cookie"});
     }
+    return await next();
   };
 }
 
@@ -18,13 +18,19 @@ void main() {
   final router1 = Router();
 
   router1.get('/login', (c) {
-    c.setCookie("label", "hello",
-        maxAge: 30, path: "/", sameSite: SameSite.none, secure: true);
-    c.string("Login success");
+    c.setCookie(
+      "label",
+      "hello",
+      maxAge: 30,
+      path: "/",
+      sameSite: SameSite.none,
+      secure: true,
+    );
+    return c.string("Login success");
   });
 
   router1.get('/home', (c) {
-    c.json({"data": "Welcome to the home page"});
+    return c.json({"data": "Welcome to the home page"});
   }, middlewares: [cookieTool()]);
   Engine engine = Engine();
   engine.use(router1);

@@ -8,16 +8,16 @@ on:
     branches: [ master ]
     paths:
       - '.github/workflows/server_testing.yaml'
-      - 'packages/server_testing/**'
+      - 'packages/server_testing/server_testing/**'
   pull_request:
     branches: [ master ]
     paths:
       - '.github/workflows/server_testing.yaml'
-      - 'packages/server_testing/**'
+      - 'packages/server_testing/server_testing/**'
 
 defaults:
   run:
-    working-directory: packages/server_testing/
+    working-directory: packages/server_testing/server_testing
 
 jobs:
   build:
@@ -37,5 +37,10 @@ jobs:
         run: dart format --output=none --set-exit-if-changed .
       - name: Analyze project source
         run: dart analyze --fatal-infos
-      - name: Run tests
-        run: dart test
+      - name: Run unit tests (fast)
+        run: dart test --exclude-tags real-browser
+
+      - name: Run real-browser tests (Linux only)
+        if: matrix.os == 'ubuntu-latest'
+        run: |
+          dart test -r expanded -t real-browser

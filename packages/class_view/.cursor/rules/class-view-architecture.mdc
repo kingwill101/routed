@@ -1,0 +1,350 @@
+---
+description: 
+globs: 
+alwaysApply: true
+---
+# Class View Package Architecture Guide
+
+## Design Philosophy
+
+The class_view package provides Django-inspired class-based views for Dart web frameworks. The core design principles are:
+
+1. **Clean Syntax**: Views should use minimal generics - `CreateView<Post>` instead of `CreateView<Post, Context>`
+2. **Framework Agnostic**: Views should work with any web framework through adapters
+3. **Composable Mixins**: Functionality should be composed through mixins, not inheritance
+4. **Django-like Patterns**: Familiar patterns for developers coming from Django
+
+## Current Architecture Issues
+
+The current implementation in [base.dart](mdc:lib/src/view/class_view/base_views/base.dart) and [view_mixin.dart](mdc:lib/src/view/class_view/mixins/view_mixin.dart) has several problems:
+
+- Context generic (`T`) is exposed at the view level, making syntax verbose
+- Adapter interface in [base.dart](mdc:lib/src/adapter/base.dart) has inconsistent method signatures
+- Some methods take context parameters, others don't
+- Views are tightly coupled to framework-specific contexts
+
+## New Architecture Plan
+
+### 1. Framework-Agnostic Base View
+
+The new [base.dart](mdc:lib/src/view/class_view/base_views/base.dart) should:
+
+```dart
+abstract class View with ViewMixin {
+  ViewAdapter? _adapter;
+  
+  void setAdapter(ViewAdapter adapter) => _adapter = adapter;
+  ViewAdapter get adapter => _adapter ?? (throw StateError('No adapter set'));
+  
+  // Clean, context-free API
+  String get method => adapter.method;
+  Uri get uri => adapter.uri;
+  String? getParam(String name) => adapter.getParam(name);
+  void sendJson(Map<String, dynamic> data) => adapter.writeJson(data);
+  
+  Future<void> dispatch() async {
+    // Dispatch logic without exposing context
+  }
+}
+```
+
+### 2. Simplified Adapter Interface
+
+Replace the current [base.dart](mdc:lib/src/adapter/base.dart) with:
+
+```dart
+abstract class ViewAdapter {
+  // Request information
+  String get method;
+  Uri get uri;
+  String? getParam(String name);
+  Map<String, String> getParams();
+  Future<String> getBody();
+  Future<Map<String, dynamic>> getJsonBody();
+  
+  // Response operations
+  void setStatusCode(int code);
+  void setHeader(String name, String value);
+  void write(String body);
+  void writeJson(Map<String, dynamic> data, {int statusCode = 200});
+  void redirect(String url, {int statusCode = 302});
+  
+  // Lifecycle
+  Future<void> setup();
+  Future<void> teardown();
+}
+```
+
+### 3. Updated Mixins (Context-Free)
+
+#### Context Mixin
+Update [context_mixin.dart](mdc:lib/src/view/class_view/mixins/context_mixin.dart):
+
+```dart
+mixin ContextMixin on ViewMixin {
+  Map<String, dynamic> get extraContext => {};
+  
+  Future<Map<String, dynamic>> getExtraContext() async => extraContext;
+  
+  Future<Map<String, dynamic>> getContextData() async {
+    return {'view': this, ...await getExtraContext()};
+  }
+}
+```
+
+#### Single Object Mixin
+Update [single_object_mixin.dart](mdc:lib/src/view/class_view/mixins/single_object_mixin.dart):
+
+```dart
+mixin SingleObjectMixin<T> on ContextMixin {
+  String get lookupParam => 'id';
+  String? get contextObjectName => null;
+  
+  Future<T?> getObject(); // No context parameter
+  Future<T> getObjectOr404() async {
+    final object = await getObject();
+    if (object == null) throw HttpException.notFound('Object not found');
+    return object;
+  }
+  
+  String getContextObjectName() {
+    return contextObjectName ?? T.toString().toLowerCase();
+  }
+  
+  @override
+  Future<Map<String, dynamic>> getContextData() async {
+    final baseContext = await super.getContextData();
+    final object = await getObjectOr404();
+    return {...baseContext, getContextObjectName(): object};
+  }
+}
+```
+
+#### Multiple Object Mixin
+Update [multiple_object_mixin.dart](mdc:lib/src/view/class_view/mixins/multiple_object_mixin.dart):
+
+```dart
+mixin MultipleObjectMixin<T> on ContextMixin {
+  int? get paginate => null;
+  String get pageParam => 'page';
+  String? get contextObjectName => null;
+  
+  Future<({List<T> items, int total})> getObjectList({int page = 1, int pageSize = 10});
+  
+  Future<({List<T> objects, int total, int pages})> getPaginatedResults() async {
+    // Pagination logic without context parameter
+  }
+}
+```
+
+### 4. Clean CRUD Views
+
+#### Detail View
+Update [detail.dart](mdc:lib/src/view/class_view/base_views/crud/detail.dart):
+
+```dart
+abstract class DetailView<T> extends View 
+    with ContextMixin, SingleObjectMixin<T> {
+  
+  @override
+  List<String> get allowedMethods => ['GET'];
+
+  @override
+  Future<void> get() async {
+    final contextData = await getContextData();
+    sendJson(contextData);
+  }
+}
+```
+
+#### Create View
+Update [create.dart](mdc:lib/src/view/class_view/base_views/crud/create.dart):
+
+```dart
+abstract class CreateView<T> extends View 
+    with ContextMixin, SuccessFailureUrlMixin {
+  
+  @override
+  List<String> get allowedMethods => ['GET', 'POST'];
+
+  Future<T> createObject(Map<String, dynamic> data); // No context
+
+  @override
+  Future<void> post() async {
+    try {
+      final data = await getJsonBody();
+      final object = await createObject(data);
+      await onSuccess(object);
+    } catch (e) {
+      await onFailure(e);
+    }
+  }
+}
+```
+
+#### List View
+Update [list.dart](mdc:lib/src/view/class_view/base_views/crud/list.dart):
+
+```dart
+abstract class ListView<T> extends View 
+    with ContextMixin, MultipleObjectMixin<T> {
+  
+  @override
+  List<String> get allowedMethods => ['GET'];
+
+  @override
+  Future<void> get() async {
+    final contextData = await getContextData();
+    sendJson(contextData);
+  }
+}
+```
+
+#### Update View
+Update [update.dart](mdc:lib/src/view/class_view/base_views/crud/update.dart):
+
+```dart
+abstract class UpdateView<T> extends View 
+    with ContextMixin, SingleObjectMixin<T>, SuccessFailureUrlMixin {
+  
+  @override
+  List<String> get allowedMethods => ['GET', 'PUT', 'PATCH'];
+
+  Future<T> updateObject(T object, Map<String, dynamic> data); // No context
+
+  @override
+  Future<void> put() async {
+    try {
+      final object = await getObjectOr404();
+      final data = await getJsonBody();
+      final updated = await updateObject(object, data);
+      await onSuccess(updated);
+    } catch (e) {
+      await onFailure(e);
+    }
+  }
+}
+```
+
+#### Delete View
+Update [delete.dart](mdc:lib/src/view/class_view/base_views/crud/delete.dart):
+
+```dart
+abstract class DeleteView<T> extends View 
+    with ContextMixin, SingleObjectMixin<T>, SuccessFailureUrlMixin {
+  
+  @override
+  List<String> get allowedMethods => ['GET', 'DELETE'];
+
+  Future<void> deleteObject(T object); // No context
+
+  @override
+  Future<void> delete() async {
+    try {
+      final object = await getObjectOr404();
+      await deleteObject(object);
+      await onSuccess(object);
+    } catch (e) {
+      await onFailure(e);
+    }
+  }
+}
+```
+
+## Usage Examples
+
+With the new architecture, views become incredibly clean:
+
+```dart
+// Clean, minimal view definitions!
+class PostCreateView extends CreateView<Post> {
+  @override
+  Future<Post> createObject(Map<String, dynamic> data) async {
+    return Post.fromJson(data);
+  }
+  
+  @override
+  String get successUrl => '/posts';
+}
+
+class PostListView extends ListView<Post> {
+  @override
+  int get paginate => 10;
+  
+  @override
+  Future<({List<Post> items, int total})> getObjectList({int page = 1, int pageSize = 10}) async {
+    return await PostRepository.findAll(page: page, pageSize: pageSize);
+  }
+}
+
+class PostDetailView extends DetailView<Post> {
+  @override
+  Future<Post?> getObject() async {
+    final id = getParam('id');
+    return await PostRepository.findById(id);
+  }
+}
+```
+
+## Framework Integration
+
+### Routed Integration
+```dart
+extension RoutedViewExtension on Engine {
+  void addView<T extends View>(String path, T Function() viewFactory) {
+    route(path, (context) async {
+      final view = viewFactory();
+      view.setAdapter(RoutedAdapter(context));
+      await view.dispatch();
+    });
+  }
+}
+
+// Usage
+app.addView('/posts', () => PostListView());
+```
+
+### Shelf Integration
+```dart
+Handler createShelfHandler<T extends View>(T Function() viewFactory) {
+  return (Request request) async {
+    final view = viewFactory();
+    final adapter = ShelfAdapter(request);
+    view.setAdapter(adapter);
+    await view.dispatch();
+    return adapter.buildResponse();
+  };
+}
+
+// Usage
+router.get('/posts', createShelfHandler(() => PostListView()));
+```
+
+## Migration Strategy
+
+1. **Phase 1**: Update adapter interface to remove context inconsistencies
+2. **Phase 2**: Create new context-free base View class
+3. **Phase 3**: Update mixins to remove context parameters
+4. **Phase 4**: Update CRUD views to use new architecture
+5. **Phase 5**: Update framework integrations
+6. **Phase 6**: Remove old adapter system
+
+## Key Benefits
+
+- ✅ **Clean syntax**: `CreateView<Post>` instead of `CreateView<Post, Context>`
+- ✅ **Framework agnostic**: Same view code works with any framework
+- ✅ **Preserves mixins**: All existing mixin functionality maintained
+- ✅ **Django-like**: Familiar patterns and method names
+- ✅ **Composable**: Mix and match functionality
+- ✅ **Type safe**: Full type safety without verbose generics
+
+## Implementation Rules
+
+1. **Never expose context at view level** - Keep views framework-agnostic
+2. **Always use mixins for composition** - Don't break the mixin architecture
+3. **Delegate everything to adapters** - Views should just orchestrate
+4. **Keep method signatures consistent** - No context parameters in public APIs
+5. **Preserve Django patterns** - Familiar method names and workflows
+6. **Single responsibility** - Each mixin should have one clear purpose
+
+This architecture achieves the goal of clean `CreateView<Post>` syntax while preserving the powerful mixin system and ensuring framework independence.

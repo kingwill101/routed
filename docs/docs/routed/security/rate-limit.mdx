@@ -1,0 +1,152 @@
+---
+id: rate-limit
+title: Rate limiting
+sidebar_position: 3
+description: Configure Routed's rate limiter with token bucket, sliding window, and quota strategies.
+---
+
+Routed ships with a flexible rate limiter that plugs into the existing cache subsystem. Policies can scope by route, HTTP method, and identity (IP address, header value, or custom resolver). Choose between token buckets, strict sliding windows, or rolling quotas according to your workload. Responses use `429 Too Many Requests` with a `Retry-After` header so clients know when to retry, and every decision emits observability events you can feed into metrics.
+
+## Enable the provider
+
+Ensure the `routed.rate_limit` provider is registered (the default manifest already includes it) and flip on the feature toggle:
+
+```yaml title="config/http.yaml"
+http:
+  features:
+    rate_limit: { enabled: true }
+```
+
+If you have removed the default providers array, add the middleware source back manually:
+
+```yaml title="config/http.yaml"
+http:
+  providers:
+    - routed.core
+    - routed.routing
+    - routed.cache
+    # ...
+    - routed.rate_limit
+```
+
+## Configure stores
+
+Policies persist counters in a cache store. The limiter uses `rate_limit.store` when set, otherwise `cache.default`. If neither is configured the provider throws during boot. Register stores under `cache.stores`—for example, an in-memory store for single-node deployments and a Redis store for distributed enforcement:
+
+```yaml title="config/cache.yaml"
+default: file
+stores:
+  array:
+    driver: array
+  redis:
+    driver: redis
+    url: redis://localhost:6379/2
+```
+
+To give the limiter its own store, set `rate_limit.store` to the cache store name.
+
+## Define policies
+
+Policies live in `config/rate-limiting.yaml` (or wherever you prefer) and are merged via the `rate_limit` node. Each policy accepts a matcher (`match` and optional `method`), a key resolver, and strategy parameters. Set `strategy` to control the enforcement algorithm:
+
+- `token_bucket` (default): amortised fairness with burst control.
+- `sliding_window`: strict windows with fixed request counts.
+- `quota`: rolling quotas (daily, weekly, monthly) using longer periods.
+
+```yaml title="config/rate-limiting.yaml"
+rate_limit:
+  enabled: true
+  backend: redis         # memory or redis – must have a corresponding cache store
+  store: redis           # optional: overrides cache.default
+  failover: allow        # allow | block | local when Redis is unavailable
+  policies:
+    - name: api-ip
+      match: GET /api/v1/*
+      strategy: token_bucket
+      key:
+        type: ip
+      capacity: 100          # tokens per interval
+      interval: 60s          # refill window (supports ms,s,m,h)
+      burst: 2               # optional burst multiplier
+
+    - name: api-user
+      match: /api/v1/*
+      method: POST
+      strategy: sliding_window
+      key:
+        type: header
+        header: x-user-id
+      limit: 20              # requests per window
+      window: 1m             # sliding window duration
+
+    - name: invoices-quota
+      match: POST /api/v1/invoices
+      strategy: quota
+      key:
+        type: header
+        header: x-tenant
+      limit: 500             # requests per period
+      period: 30d            # supports ms,s,m,h,d,w,mo,y
+```
+
+Policies are evaluated in declaration order. The first policy that matches and blocks short-circuits the chain. When all policies allow the request, control is passed to the next middleware/handler.
+
+### Strategy reference
+
+| Strategy | Use case | Required fields | Notes |
+| --- | --- | --- | --- |
+| `token_bucket` | General-purpose throttling with bursts | `capacity`, `interval` (optional `burst`) | Allows short spikes by refilling tokens continuously. |
+| `sliding_window` | Strict per-window limits | `limit`, `window` | Enforces a hard cap per window; `Retry-After` is the remaining window time. |
+| `quota` | Long-lived quotas (daily/monthly) | `limit`, `period` | Treats the period as a rolling bucket. Supports `d`, `w`, `mo`, `y` suffixes. |
+
+### Identity resolvers
+
+Built-in resolvers are:
+
+- `ip` – uses `Request.clientIP` or falls back to the remote socket address.
+- `header` – pulls the first value for the configured header (useful for API keys or authenticated user IDs).
+
+Custom resolvers can be registered programmatically if you need to derive keys from sessions or JWT claims.
+
+## Failover behaviour
+
+When the shared backend (for example Redis) is unavailable, the limiter can respond in one of three ways:
+
+- `allow` (default): fail open so traffic continues unabated.
+- `block`: fail closed and emit 429 responses with a 30-second retry hint.
+- `local`: degrade to per-instance, in-memory state while logging the failover mode.
+
+Set the top-level `rate_limit.failover` string or override per policy with `failover`. Local mode maintains enforcement but loses global fairness until the backend recovers.
+
+## Operational tips
+
+- Monitor 429 counts and `Retry-After` values to tune capacities and refill windows.
+- Redis deployments should run with persistence disabled or RDB/AOF trimmed for limiter keys—they are ephemeral.
+- Memory backend requires a configured cache store (typically the array driver) and is single-node only; distributed instances require a shared cache store (Redis driver).
+- Use `dart run routed_cli provider:list --config` to confirm policies merged correctly and catch shape errors early.
+- Subscribe to rate limit events (see below) to build metrics for hits, blocks, and failovers.
+
+## Telemetry and automation
+
+`RateLimitService` publishes `RateLimitAllowedEvent` and `RateLimitBlockedEvent` for every decision. Subscribe via `EventManager` or forward them into your observability stack to drive dashboards and alerts. The `failoverMode` property surfaces whether a decision used a fallback path, helping you detect backend outages quickly.
+
+## Manual enforcement
+
+You can inject `RateLimitService` to run bespoke checks in handlers:
+
+```dart
+import 'dart:io';
+
+import 'package:routed/src/rate_limit/service.dart';
+
+final service = container.get<RateLimitService>();
+final outcome = await service.check(ctx.request);
+if (outcome != null && !outcome.allowed) {
+  return ctx.abortWithStatus(
+    HttpStatus.tooManyRequests,
+    'Retry in ${outcome.retryAfter.inSeconds}s',
+  );
+}
+```
+
+However, most applications should rely on the middleware pipeline rather than ad-hoc checks.

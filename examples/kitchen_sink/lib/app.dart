@@ -9,47 +9,46 @@ Engine buildApp() {
   final appKey = 'base64:AQIDBAUGBwgJCgsMDQ4PEBESExQVFhcYGRobHB0eHyA=';
   env["APP_KEY"] = appKey;
   final engine = Engine(
-      config: EngineConfig(
-        appKey: appKey,
-        multipart: MultipartConfig(
-            maxFileSize: 1024 * 1024, allowedExtensions: {'.jpg', '.png'}),
-        templateDirectory: templateDirectory,
+    config: EngineConfig(
+      appKey: appKey,
+      multipart: MultipartConfig(
+        maxFileSize: 1024 * 1024,
+        allowedExtensions: {'.jpg', '.png'},
       ),
-      options: [
-        withCacheManager(CacheManager()
-          ..registerStore(
-            'file',
-            {
-              'driver': 'file',
-              'path': 'cache',
-            },
-          )),
-        withSessionConfig(SessionConfig(
+      templateDirectory: templateDirectory,
+    ),
+    options: [
+      withCacheManager(
+        CacheManager()
+          ..registerStore('file', {'driver': 'file', 'path': 'cache'}),
+      ),
+      withSessionConfig(
+        SessionConfig(
           store: CookieStore(
             codecs: [
-              SecureCookie(
-                useEncryption: true,
-                useSigning: true,
-                key: appKey,
-              ),
+              SecureCookie(useEncryption: true, useSigning: true, key: appKey),
             ],
           ),
           cookieName: 'kitchen_sink_session',
-        )),
-      ],
-      middlewares: [
-        (ctx) async {
-          print('Request: ${ctx.method} ${ctx.uri.path}');
-          await ctx.next();
-        }
-      ]);
+        ),
+      ),
+    ],
+    middlewares: [
+      (EngineContext ctx, Next next) async {
+        print('Request: ${ctx.method} ${ctx.uri.path}');
+        return await next();
+      },
+    ],
+  );
 
-  engine.useLiquid(
-      directory: templateDirectory, fileSystem: templateFileSystem);
+  engine.useViewEngine(LiquidViewEngine(directory: templateDirectory));
 
   // API Routes
-  final apiRouter =
-      Router(path: '/api', middlewares: [validateApiKey], groupName: 'api');
+  final apiRouter = Router(
+    path: '/api',
+    middlewares: [validateApiKey],
+    groupName: 'api',
+  );
   apiRouter.get('/recipes', api.listRecipes).name("recipe.list");
   apiRouter.post('/recipes', api.createRecipe).name("recipe.create");
   apiRouter.get('/recipes/{id}', api.getRecipe).name("recipe.show");
@@ -63,19 +62,25 @@ Engine buildApp() {
   final webRouter = Router(groupName: "web");
   webRouter.get('/', web.homePage).name("recipe.home");
   webRouter.post('/recipes', web.saveRecipe).name("recipe.save");
-  webRouter.get('/recipes/{id}/edit', web.editRecipe,
-      middlewares: [validateSession]).name("recipe.edit");
-  webRouter.get('/recipes/{id}', web.showRecipe,
-      middlewares: [validateSession]).name("recipe.show");
-  webRouter.delete('/recipes/{id}', web.deleteRecipe,
-      middlewares: [validateSession]).name("recipe.delete");
+  webRouter
+      .get('/recipes/{id}/edit', web.editRecipe, middlewares: [validateSession])
+      .name("recipe.edit");
+  webRouter
+      .get('/recipes/{id}', web.showRecipe, middlewares: [validateSession])
+      .name("recipe.show");
+  webRouter
+      .post(
+        '/recipes/{id}/delete',
+        web.deleteRecipe,
+        middlewares: [validateSession],
+      )
+      .name("recipe.delete");
   webRouter.static('/public', 'public');
-  webRouter.fallback((c) {
-    print('fallback');
-  });
+  webRouter.fallback((c) => c.string('fallback'));
   // Session test routes
   engine.get('/set', (ctx) async {
     ctx.setSession('set_worked', 'it worked!');
+    return ctx.string('ok');
   });
 
   engine.get('/test', (ctx) async {

@@ -23,15 +23,15 @@ class EngineError {
 
   /// Converts this [EngineError] to a JSON-compatible map.
   Map<String, dynamic> toJson() => {
-        'message': message,
-        if (code != null) 'code': code,
-      };
+    'message': message,
+    if (code != null) 'code': code,
+  };
 
   /// Creates an [EngineError] from a JSON-compatible map.
   factory EngineError.fromJson(Map<String, dynamic> json) => EngineError(
-        message: json['message'] as String,
-        code: json['code'] != null ? json['code'] as int? : null,
-      );
+    message: json['message'] as String,
+    code: json['code'] != null ? json['code'] as int? : null,
+  );
 }
 
 /// Represents a validation error in the engine.
@@ -71,16 +71,18 @@ class ValidationError implements EngineError {
   /// Converts this [ValidationError] to a JSON-compatible map.
   @override
   Map<String, dynamic> toJson() => {
-        'errors': errors,
-        'code': code,
-        'message': message,
-      };
+    'errors': errors,
+    'code': code,
+    'message': message,
+  };
 
   /// Creates a [ValidationError] from a JSON-compatible map.
   factory ValidationError.fromJson(Map<String, dynamic> json) =>
       ValidationError(
-        (json['errors'] as Map).map((key, value) =>
-            MapEntry(key as String, (value as List).cast<String>())),
+        (json['errors'] as Map).map(
+          (key, value) =>
+              MapEntry(key as String, (value as List).cast<String>()),
+        ),
       );
 }
 

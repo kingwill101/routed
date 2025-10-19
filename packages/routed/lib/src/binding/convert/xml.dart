@@ -1,4 +1,5 @@
 import 'dart:convert';
+
 import 'package:xml/xml.dart';
 
 /// Interface for objects that can be encoded to XML.
@@ -33,14 +34,16 @@ class XmlMapDecoder extends Converter<String, Map<String, dynamic>> {
     // Process attributes
     if (element.attributes.isNotEmpty) {
       map['@attributes'] = {
-        for (var attr in element.attributes) attr.name.local: attr.value
+        for (var attr in element.attributes) attr.name.local: attr.value,
       };
     }
 
     // Process child elements and text
-    final children = element.children.where((node) =>
-        node is XmlElement ||
-        (node is XmlText && node.value.trim().isNotEmpty));
+    final children = element.children.where(
+      (node) =>
+          node is XmlElement ||
+          (node is XmlText && node.value.trim().isNotEmpty),
+    );
 
     for (var child in children) {
       if (child is XmlElement) {
@@ -94,25 +97,28 @@ class XmlMapEncoder extends Converter<Map<String, dynamic>, String> {
   /// Recursively builds XML elements from the map.
   void _buildElement(XmlBuilder builder, String name, dynamic content) {
     if (content is Map<String, dynamic>) {
-      builder.element(name, nest: () {
-        content.forEach((key, value) {
-          if (key == '@attributes') {
-            if (value is Map<String, dynamic>) {
-              value.forEach((attrKey, attrValue) {
-                builder.attribute(attrKey, attrValue);
-              });
+      builder.element(
+        name,
+        nest: () {
+          content.forEach((key, value) {
+            if (key == '@attributes') {
+              if (value is Map<String, dynamic>) {
+                value.forEach((attrKey, attrValue) {
+                  builder.attribute(attrKey, attrValue);
+                });
+              }
+            } else if (key == '#text') {
+              builder.text(value.toString());
+            } else if (value is List) {
+              for (var item in value) {
+                _buildElement(builder, key, item);
+              }
+            } else {
+              _buildElement(builder, key, value);
             }
-          } else if (key == '#text') {
-            builder.text(value.toString());
-          } else if (value is List) {
-            for (var item in value) {
-              _buildElement(builder, key, item);
-            }
-          } else {
-            _buildElement(builder, key, value);
-          }
-        });
-      });
+          });
+        },
+      );
     } else if (content is List) {
       for (var item in content) {
         _buildElement(builder, name, item);
@@ -228,14 +234,14 @@ void main() {
   );
 
   // Encode User to XML
-  final userMap = {
-    'user': user.toXml(),
-  };
+  final userMap = {'user': user.toXml()};
   final userXml = codec.encode(userMap);
   print('Encoded User XML:\n$userXml\n');
 
   // Decode XML back to User object
   final decodedUserMap = codec.decode(userXml);
-  final userFromXml = User().fromXml(decodedUserMap['user'] as Map<String, dynamic>) ;
+  final userFromXml = User().fromXml(
+    decodedUserMap['user'] as Map<String, dynamic>,
+  );
   print('Decoded User Object:\n$userFromXml');
 }

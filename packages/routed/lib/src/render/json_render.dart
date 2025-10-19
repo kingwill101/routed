@@ -162,8 +162,10 @@ class JsonpRender implements Render {
   /// content being returned is JavaScript encoded in UTF-8.
   @override
   void writeContentType(Response response) {
-    response.headers
-        .set('Content-Type', 'application/javascript; charset=utf-8');
+    response.headers.set(
+      'Content-Type',
+      'application/javascript; charset=utf-8',
+    );
   }
 }
 

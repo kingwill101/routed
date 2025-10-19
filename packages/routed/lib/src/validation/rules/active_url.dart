@@ -14,7 +14,7 @@ class ActiveUrlRule extends ContextAwareValidationRule {
 
     // Basic URL format check
     return RegExp(
-            r'^(https?://)?([\da-z\.-]+)\.([a-z\.]{2,6})([\/\w \.-]*)*\/?$')
-        .hasMatch(value.toString());
+      r'^(https?://)?([\da-z\.-]+)\.([a-z\.]{2,6})([\/\w \.-]*)*\/?$',
+    ).hasMatch(value.toString());
   }
 }

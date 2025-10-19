@@ -1,0 +1,323 @@
+{% layout 'base/layout' %}
+
+{% block content %}
+<div class="max-w-7xl mx-auto">
+    <!-- Success Message -->
+    {% if success == 'true' %}
+        <div class="mb-8 bg-green-50 border-2 border-green-200 rounded-xl p-6 flex items-start gap-4">
+            <div class="flex-shrink-0">
+                <svg class="w-8 h-8 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                          d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                </svg>
+            </div>
+            <div class="flex-1">
+                <h3 class="text-green-900 font-semibold text-lg mb-1">Form Validated Successfully!</h3>
+                <p class="text-green-700">All fields passed validation. The form is ready for submission.</p>
+            </div>
+            <button onclick="this.parentElement.remove()" class="text-green-600 hover:text-green-800">
+                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
+                </svg>
+            </button>
+        </div>
+    {% endif %}
+
+    <!-- Header -->
+    <div class="mb-8">
+        <h1 class="text-4xl font-bold text-gray-900 mb-3">
+            {{ page_title }}
+        </h1>
+        <p class="text-lg text-gray-600 mb-4">
+            {{ page_description }}
+        </p>
+        <div class="flex gap-3">
+            <a href="/api/widgets"
+               class="inline-flex items-center text-blue-600 hover:text-blue-700 font-medium">
+                <svg class="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                          d="M8 9l3 3-3 3m5 0h3M5 20h14a2 2 0 002-2V6a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"/>
+                </svg>
+                View JSON API
+            </a>
+            <a href="/"
+               class="inline-flex items-center text-gray-600 hover:text-gray-700 font-medium">
+                <svg class="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                          d="M10 19l-7-7m0 0l7-7m-7 7h18"/>
+                </svg>
+                Back to Home
+            </a>
+        </div>
+    </div>
+
+    <div class="grid lg:grid-cols-3 gap-8">
+        <!-- Form Section -->
+        <div class="lg:col-span-2">
+            <div class="bg-white rounded-xl shadow-lg border border-gray-100 overflow-hidden">
+                <!-- Form Header -->
+                <div class="bg-gradient-to-r from-purple-50 to-pink-50 px-8 py-6 border-b border-gray-100">
+                    <h2 class="text-2xl font-semibold text-gray-800 mb-2">Interactive Form Demo</h2>
+                    <p class="text-gray-600">Try filling out the form to see validation in action</p>
+                </div>
+
+                <div class="p-8">
+                    <form method="post" class="space-y-0">
+                        {{ form_html }}
+
+                        <!-- Submit Button -->
+                        <div class="pt-8 mt-8 border-t border-gray-200">
+                            <button
+                                    type="submit"
+                                    class="w-full inline-flex items-center justify-center bg-gradient-to-r from-purple-600 to-pink-600 text-white px-8 py-4 rounded-lg hover:from-purple-700 hover:to-pink-700 transition-all duration-200 font-semibold shadow-md hover:shadow-lg transform hover:-translate-y-0.5"
+                            >
+                                <svg class="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                          d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                                </svg>
+                                Test Form Validation
+                            </button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+
+            <!-- Error Display -->
+            {% if validation_errors.size > 0 %}
+                <div class="mt-6 bg-red-50 border-2 border-red-200 rounded-lg p-6">
+                    <h3 class="text-red-800 font-semibold mb-3 flex items-center">
+                        <svg class="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                  d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                        </svg>
+                        Validation Errors
+                    </h3>
+                    <ul class="text-red-700 space-y-1 text-sm">
+                        {% for error in validation_errors %}
+                            <li class="font-medium">• <strong>{{ error.field }}:</strong> {{ error.message }}</li>
+                        {% endfor %}
+                    </ul>
+                </div>
+            {% endif %}
+        </div>
+
+        <!-- Field Reference Sidebar -->
+        <div class="lg:col-span-1">
+            <div class="bg-white rounded-xl shadow-lg border border-gray-100 overflow-hidden sticky top-4">
+                <div class="bg-gradient-to-r from-blue-50 to-indigo-50 px-6 py-4 border-b border-gray-100">
+                    <h3 class="text-lg font-semibold text-gray-800 flex items-center">
+                        <svg class="w-5 h-5 mr-2 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                  d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
+                        </svg>
+                        Field Reference
+                    </h3>
+                </div>
+
+                <div class="p-6 max-h-[800px] overflow-y-auto">
+                    {% for category in categories %}
+                        <div class="mb-6 last:mb-0">
+                            <h4 class="font-semibold text-gray-900 mb-3 text-sm uppercase tracking-wide">
+                                {{ category.name }}
+                            </h4>
+                            <div class="space-y-2">
+                                {% for field in category.fields %}
+                                    <div class="bg-gray-50 rounded-lg p-3 hover:bg-gray-100 transition-colors cursor-pointer"
+                                         onclick="scrollToField('{{ field.name }}')">
+                                        <div class="font-medium text-gray-900 text-sm">{{ field.name }}</div>
+                                        <div class="text-xs text-gray-600 mt-1">{{ field.description }}</div>
+                                    </div>
+                                {% endfor %}
+                            </div>
+                        </div>
+                    {% endfor %}
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<style>
+    /* Form styling */
+    form p {
+        margin-bottom: 2rem;
+        position: relative;
+    }
+
+    form label {
+        display: block;
+        font-size: 0.875rem;
+        font-weight: 600;
+        color: #374151;
+        margin-bottom: 0.5rem;
+    }
+
+    /* Input fields */
+    form input[type="text"],
+    form input[type="email"],
+    form input[type="url"],
+    form input[type="number"],
+    form input[type="date"],
+    form input[type="time"],
+    form input[type="datetime-local"],
+    form textarea,
+    form select {
+        width: 100%;
+        padding: 0.75rem 1rem;
+        border: 2px solid #e5e7eb;
+        border-radius: 0.5rem;
+        font-size: 0.875rem;
+        transition: all 0.2s;
+        background: white;
+    }
+
+    form input:focus,
+    form textarea:focus,
+    form select:focus {
+        outline: none;
+        border-color: #8b5cf6;
+        box-shadow: 0 0 0 3px rgba(139, 92, 246, 0.1);
+    }
+
+    form textarea {
+        min-height: 100px;
+        resize: vertical;
+    }
+
+    /* Checkbox styling */
+    form input[type="checkbox"] {
+        width: 1.25rem;
+        height: 1.25rem;
+        border-radius: 0.375rem;
+        border: 2px solid #d1d5db;
+        cursor: pointer;
+        transition: all 0.2s;
+    }
+
+    form input[type="checkbox"]:checked {
+        background-color: #8b5cf6;
+        border-color: #8b5cf6;
+    }
+
+    form p:has(input[type="checkbox"]) {
+        display: flex;
+        align-items: flex-start;
+        gap: 0.75rem;
+        padding: 1rem;
+        background: #f9fafb;
+        border: 2px dashed #e5e7eb;
+        border-radius: 0.5rem;
+    }
+
+    form p:has(input[type="checkbox"]) label {
+        margin-bottom: 0;
+        flex: 1;
+        cursor: pointer;
+    }
+
+    /* Help text */
+    form p span {
+        display: block;
+        font-size: 0.8125rem;
+        color: #6b7280;
+        margin-top: 0.5rem;
+        font-style: italic;
+    }
+
+    /* Error styling */
+    form p.error input,
+    form p.error textarea,
+    form p.error select,
+    form .field-error input,
+    form .field-error textarea,
+    form .field-error select {
+        border-color: #ef4444 !important;
+        background-color: #fef2f2;
+    }
+
+    form p.error label,
+    form .field-error label {
+        color: #dc2626;
+    }
+
+    /* Error list styling */
+    form ul.errorlist {
+        list-style: disc;
+        list-style-position: inside;
+        color: #dc2626;
+        font-size: 0.875rem;
+        margin-top: 0.5rem;
+        padding-left: 0.5rem;
+    }
+
+    form ul.errorlist li {
+        margin-top: 0.25rem;
+    }
+
+    /* Category colors for different field types */
+    form p:has(input[type="email"])::after {
+        content: "✉️";
+        position: absolute;
+        top: 0;
+        right: 0;
+        font-size: 1rem;
+        opacity: 0.4;
+    }
+
+    form p:has(input[type="url"])::after {
+        content: "🔗";
+        position: absolute;
+        top: 0;
+        right: 0;
+        font-size: 1rem;
+        opacity: 0.4;
+    }
+
+    form p:has(input[type="number"])::after {
+        content: "🔢";
+        position: absolute;
+        top: 0;
+        right: 0;
+        font-size: 1rem;
+        opacity: 0.4;
+    }
+
+    form p:has(input[type="date"])::after,
+    form p:has(input[type="datetime-local"])::after {
+        content: "📅";
+        position: absolute;
+        top: 0;
+        right: 0;
+        font-size: 1rem;
+        opacity: 0.4;
+    }
+
+    form p:has(input[type="time"])::after {
+        content: "⏰";
+        position: absolute;
+        top: 0;
+        right: 0;
+        font-size: 1rem;
+        opacity: 0.4;
+    }
+
+    form p:has(select)::after {
+        content: "📋";
+        position: absolute;
+        top: 0;
+        right: 0;
+        font-size: 1rem;
+        opacity: 0.4;
+    }
+</style>
+
+<script>
+    function scrollToField(fieldName) {
+        const input = document.querySelector(`[name="${fieldName}"]`);
+        if (input) {
+            input.closest('p').scrollIntoView({behavior: 'smooth', block: 'center'});
+            input.focus();
+        }
+    }
+</script>
+{% endblock %}

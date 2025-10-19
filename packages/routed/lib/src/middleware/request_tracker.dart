@@ -6,23 +6,17 @@ import 'package:routed/routed.dart';
 /// to proceed, and then calculates the duration of the request once it completes.
 /// The duration and completion time are stored in the context data for further use.
 Middleware requestTrackerMiddleware() {
-  return (EngineContext ctx) async {
-    // Capture the start time of the request.
+  return (EngineContext ctx, Next next) async {
     final startTime = DateTime.now();
+    ctx.setContextData('_routed_request_duration', Duration.zero);
+    ctx.setContextData('_routed_request_completed', startTime);
 
     try {
-      // Proceed with the next middleware or request handler.
-      await ctx.next();
+      return await next();
     } finally {
-      // Calculate the duration of the request by finding the difference
-      // between the current time and the start time.
       final duration = DateTime.now().difference(startTime);
-
-      // Store the request duration in the context data.
-      ctx.setContextData('request_duration', duration);
-
-      // Store the request completion time in the context data.
-      ctx.setContextData('request_completed', DateTime.now());
+      ctx.setContextData('_routed_request_duration', duration);
+      ctx.setContextData('_routed_request_completed', DateTime.now());
     }
   };
 }

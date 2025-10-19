@@ -1,5 +1,6 @@
 import 'dart:convert';
 import 'dart:io';
+
 import 'package:http/http.dart' as http;
 
 Future<void> main(List<String> args) async {
@@ -51,9 +52,7 @@ Future<void> main(List<String> args) async {
     // Send the request.
     final HttpClientResponse clientResponse = await clientRequest.close();
     final responseBody = await clientResponse.transform(utf8.decoder).join();
-
-    print('Response status: ${clientResponse.statusCode}');
-    print('Response body: $responseBody');
+    print('Upload response (${clientResponse.statusCode}): $responseBody');
   } catch (e) {
     print('Error: $e');
   } finally {

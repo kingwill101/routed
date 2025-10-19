@@ -1,0 +1,18 @@
+{{#user}}
+<h2>Welcome back, {{name}}!</h2>
+<p>Your last visit was {{lastVisit}}</p>
+{{/user}}
+
+{{^user}}
+<h2>Welcome to Routed!</h2>
+<p>Please <a href="/login">log in</a> to continue.</p>
+{{/user}}
+
+<section>
+    <h3>Recent Updates</h3>
+    <ul>
+    {{#updates}}
+        <li>{{message}} - {{date}}</li>
+    {{/updates}}
+    </ul>
+</section> 

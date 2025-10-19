@@ -1,4 +1,7 @@
-/// Dart equivalent of Gorilla's `Options` struct, holding cookie-related config.
+// Dart equivalent of Gorilla's `Options` struct, holding cookie-related config.
+
+import 'dart:io';
+
 class Options {
   /// The cookie path (defaults to "/")
   final String? path;
@@ -15,8 +18,8 @@ class Options {
   /// Whether this cookie is partitioned
   final bool? partitioned;
 
-  /// SameSite policy: "none", "lax", "strict"
-  final String? sameSite;
+  /// Cookie SameSite policy.
+  final SameSite? sameSite;
 
   /// MaxAge = 0 means no expiration set
   /// MaxAge < 0 deletes cookie immediately
@@ -45,7 +48,7 @@ class Options {
     bool? secure,
     bool? httpOnly,
     bool? partitioned,
-    String? sameSite,
+    SameSite? sameSite,
   }) {
     return Options(
       path: path ?? this.path,
@@ -65,34 +68,36 @@ class Options {
 
   /// Converts Options to JSON representation
   Map<String, dynamic> toJson() => {
-        'path': path,
-        'domain': domain,
-        'maxAge': _maxAge,
-        'secure': secure,
-        'httpOnly': httpOnly,
-        'partitioned': partitioned,
-        'sameSite': sameSite,
-      };
+    'path': path,
+    'domain': domain,
+    'maxAge': _maxAge,
+    'secure': secure,
+    'httpOnly': httpOnly,
+    'partitioned': partitioned,
+    'sameSite': sameSite?.name,
+  };
 
   /// Creates Options from JSON representation
   factory Options.fromJson(Map<String, dynamic> json) => Options(
-        path: json['path'] as String?,
-        domain: json['domain'] as String?,
-        maxAge: json['maxAge'] as int?,
-        secure: json['secure'] as bool?,
-        httpOnly: json['httpOnly'] as bool?,
-        partitioned: json['partitioned'] as bool?,
-        sameSite: json['sameSite'] as String?,
-      );
+    path: json['path'] as String?,
+    domain: json['domain'] as String?,
+    maxAge: json['maxAge'] as int?,
+    secure: json['secure'] as bool?,
+    httpOnly: json['httpOnly'] as bool?,
+    partitioned: json['partitioned'] as bool?,
+    sameSite: (json['sameSite'] as String?) != null
+        ? SameSite.values.firstWhere((e) => e.name == json['sameSite'])
+        : null,
+  );
 
   /// Creates a copy of Options with all fields
   Options clone() => Options(
-        path: path,
-        domain: domain,
-        maxAge: _maxAge,
-        secure: secure,
-        httpOnly: httpOnly,
-        partitioned: partitioned,
-        sameSite: sameSite,
-      );
+    path: path,
+    domain: domain,
+    maxAge: _maxAge,
+    secure: secure,
+    httpOnly: httpOnly,
+    partitioned: partitioned,
+    sameSite: sameSite,
+  );
 }

@@ -57,20 +57,18 @@ class EngineRoute {
     this.middlewares = const [],
     this.constraints = const {},
     this.isFallback = false,
-  })  : _uriPattern = _buildUriPattern(path).pattern,
-        _parameterPatterns = _buildUriPattern(path).paramInfo;
+  }) : _uriPattern = _buildUriPattern(path).pattern,
+       _parameterPatterns = _buildUriPattern(path).paramInfo;
 
   /// Creates a fallback route.
-  EngineRoute.fallback({
-    required this.handler,
-    this.middlewares = const [],
-  })  : method = '*',
-        path = '*',
-        name = null,
-        constraints = const {},
-        isFallback = true,
-        _uriPattern = RegExp('.*'),
-        _parameterPatterns = const {};
+  EngineRoute.fallback({required this.handler, this.middlewares = const []})
+    : method = '*',
+      path = '*',
+      name = null,
+      constraints = const {},
+      isFallback = true,
+      _uriPattern = RegExp('.*'),
+      _parameterPatterns = const {};
 
   /// Checks if a request matches this route.
   bool matches(HttpRequest request) {
@@ -88,7 +86,8 @@ class EngineRoute {
     }
 
     // For non-fallback routes, check path and method.
-    final pathMatches = _uriPattern.hasMatch(request.uri.path.split("?")[0]) ||
+    final pathMatches =
+        _uriPattern.hasMatch(request.uri.path.split("?")[0]) ||
         _uriPattern.hasMatch("${request.uri.path}/");
 
     if (!pathMatches) {
@@ -113,7 +112,8 @@ class EngineRoute {
 
   /// Extracts parameters with their type information from a URI.
   List<({String key, dynamic value, ParamInfo info})> paramsWithInfo(
-      String uri) {
+    String uri,
+  ) {
     final match =
         _uriPattern.firstMatch(uri) ?? _uriPattern.firstMatch("$uri/");
     if (match == null) return [];
@@ -140,7 +140,7 @@ class EngineRoute {
       return (
         key: key,
         value: _castParameter(decodedValue, info.type),
-        info: info
+        info: info,
       );
     }).toList();
   }
@@ -179,8 +179,8 @@ class EngineRoute {
   /// Registers a custom casting function for the given type.
   ///
   /// {@macro custom_casting}
-  static void registerCustomCasting(
-      String type, dynamic Function(String?) castingFunction) {
+  static void registerCustomCasting(String type,
+      dynamic Function(String?) castingFunction,) {
     _customCastingFunctions[type] = castingFunction;
   }
 
@@ -258,7 +258,8 @@ class EngineRoute {
   @override
   String toString() {
     final mwCount = middlewares.isEmpty ? 0 : middlewares.length;
-    return '[$method] $path with name ${name ?? "(no name)"} [middlewares: $mwCount]';
+    final name = this.name != null ? "with name \"${this.name}\"" : "";
+    return '[$method] $path $name [middlewares: $mwCount]';
   }
 
   /// Builds a regex pattern for matching URIs.
@@ -274,20 +275,14 @@ class EngineRoute {
     // Handle optional parameters e.g. {param?}
     pattern = pattern.replaceAllMapped(RegExp(r'{(\w+)\?}'), (m) {
       final paramName = m.group(1)!;
-      paramInfo[paramName] = ParamInfo(
-        type: 'string',
-        isOptional: true,
-      );
+      paramInfo[paramName] = ParamInfo(type: 'string', isOptional: true);
       return '(?:/{0,1}(?<$paramName>[^/]+))?';
     });
 
     // Handle wildcard parameters with leading '*' e.g. {*param}
     pattern = pattern.replaceAllMapped(RegExp(r'{[*](\w+)}'), (m) {
       final paramName = m.group(1)!;
-      paramInfo[paramName] = ParamInfo(
-        type: 'string',
-        isWildcard: true,
-      );
+      paramInfo[paramName] = ParamInfo(type: 'string', isWildcard: true);
       return '(?<$paramName>.*)';
     });
 
@@ -298,8 +293,9 @@ class EngineRoute {
 
       // If no explicit type, check for global param pattern
       final globalPattern = getGlobalParamPattern(paramName);
-      final effectivePattern =
-          explicitType != null ? getPattern(explicitType) : globalPattern;
+      final effectivePattern = explicitType != null
+          ? getPattern(explicitType)
+          : globalPattern;
 
       paramInfo[paramName] = ParamInfo(
         type: explicitType ?? 'string',
@@ -331,18 +327,6 @@ class _PatternData {
   final Map<String, ParamInfo> paramInfo;
 
   _PatternData(this.pattern, this.paramInfo);
-}
-
-class RouteMatch {
-  final bool matched;
-  final bool isMethodMismatch;
-  final EngineRoute? route;
-
-  RouteMatch({
-    required this.matched,
-    required this.isMethodMismatch,
-    this.route,
-  });
 }
 
 extension on Engine {

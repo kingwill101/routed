@@ -1,0 +1,170 @@
+---
+title: Cookies
+description: Set, read, and secure cookies in Routed
+sidebar_position: 7
+---
+
+Routed provides helpers to set, read, and delete HTTP cookies. For authenticated state or flash data, prefer [Sessions](/docs/routed/state/sessions) and review [Security](/docs/routed/security) to choose safe defaults.
+
+> Import `dart:io` to access the `SameSite` enum used in the examples below.
+
+## Setting Cookies
+
+```dart
+router.get('/preferences', (ctx) {
+  // Basic cookie
+  ctx.setCookie('theme', 'dark');
+  
+  // Cookie with options
+  ctx.setCookie(
+    'session', 
+    'abc123',
+    maxAge: 3600,          // 1 hour
+    path: '/',             // Available on all paths
+    domain: 'example.com', // Domain scope
+    secure: true,          // HTTPS only
+    httpOnly: true,        // No JavaScript access
+    sameSite: SameSite.strict
+  );
+});
+```
+
+## Reading Cookies
+
+```dart
+router.get('/user', (ctx) {
+  // Get specific cookie
+  final sessionCookie = ctx.cookie('session');
+  if (sessionCookie != null) {
+    print('Value: ${sessionCookie.value}');
+    print('Domain: ${sessionCookie.domain}');
+    print('Expires: ${sessionCookie.expires}');
+  }
+  
+  // Access all cookies
+  ctx.request.cookies.forEach((cookie) {
+    print('${cookie.name}: ${cookie.value}');
+  });
+});
+```
+
+## Deleting Cookies
+
+```dart
+router.get('/logout', (ctx) {
+  // Delete by setting empty value and immediate expiration
+  ctx.setCookie(
+    'session', 
+    '', 
+    maxAge: 0,
+    path: '/'  // Path and domain must match how the cookie was set
+  );
+});
+```
+
+## Cookie Security
+
+Use Secure, HttpOnly, and an appropriate SameSite policy (Lax, Strict, or None) to mitigate CSRF and cross-site data leaks. See [Security](/docs/routed/security) and [Sessions](/docs/routed/state/sessions) for guidance on choosing policies and storing sensitive state.
+
+### Secure Cookies and SameSite
+
+```dart
+// HTTPS-only cookie
+ctx.setCookie(
+  'auth_token',
+  token,
+  secure: true,    // Requires HTTPS
+  httpOnly: true,  // No JavaScript access
+  sameSite: SameSite.strict  // Strict same-site policy
+);
+```
+
+### Domain and Path Restrictions
+
+```dart
+// Subdomain cookie
+ctx.setCookie(
+  'api_key',
+  key,
+  domain: 'api.example.com',
+  path: '/v1'
+);
+
+// Root domain cookie
+ctx.setCookie(
+  'user_id',
+  id,
+  domain: 'example.com',
+  path: '/'
+);
+```
+
+## Common Use Cases
+
+### Remember Me
+
+```dart
+router.post('/login', (ctx) async {
+  if (await authenticate(ctx)) {
+    // Set long-lived, opaque remember token (store and verify server-side)
+    ctx.setCookie(
+      'remember_token',
+      generateToken(),
+      maxAge: 30 * 24 * 3600,  // 30 days
+      secure: true,
+      httpOnly: true
+    );
+  }
+});
+```
+
+### User Preferences
+
+```dart
+router.post('/settings', (ctx) async {
+  // Store user preferences
+  ctx.setCookie('theme', await ctx.postForm('theme'));
+  ctx.setCookie('language', await ctx.postForm('language'));
+  
+  // Store notifications preference with shorter lifetime
+  ctx.setCookie(
+    'notifications',
+    await ctx.postForm('notifications'),
+    maxAge: 7 * 24 * 3600  // 7 days
+  );
+});
+```
+
+
+## Cookie Middleware
+
+```dart
+Future<Response> cookieMiddleware(EngineContext ctx, Next next) async {
+  // Check required cookie
+  final authCookie = ctx.cookie('auth');
+  if (authCookie == null) {
+    return ctx.json({
+      'error': 'Authentication required'
+    }, statusCode: 401);
+  }
+  
+  // Validate cookie (signature/expiry) and rotate tokens when appropriate
+  if (!isValidCookie(authCookie)) {
+    // Clear invalid cookie
+    ctx.setCookie('auth', '', maxAge: 0);
+    return ctx.json({
+      'error': 'Invalid authentication'
+    }, statusCode: 401);
+  }
+  
+  return await next();
+}
+
+router.group(
+  path: '/protected',
+  middlewares: [cookieMiddleware],
+  builder: (router) {
+    // Protected routes...
+  }
+);
+```

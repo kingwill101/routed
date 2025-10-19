@@ -40,14 +40,20 @@ class XMLRender implements Render {
 
     if (data is Map<String, dynamic>) {
       data.forEach((key, value) {
-        builder.element(key, nest: () {
-          _buildXml(value, builder);
-        });
+        builder.element(
+          key,
+          nest: () {
+            _buildXml(value, builder);
+          },
+        );
       });
     } else {
-      builder.element('response', nest: () {
-        _buildXml(data, builder);
-      });
+      builder.element(
+        'response',
+        nest: () {
+          _buildXml(data, builder);
+        },
+      );
     }
 
     return builder.buildDocument();
@@ -61,15 +67,21 @@ class XMLRender implements Render {
   void _buildXml(dynamic data, XmlBuilder builder) {
     if (data is Map<String, dynamic>) {
       data.forEach((key, value) {
-        builder.element(key, nest: () {
-          _buildXml(value, builder);
-        });
+        builder.element(
+          key,
+          nest: () {
+            _buildXml(value, builder);
+          },
+        );
       });
     } else if (data is List) {
       for (var value in data) {
-        builder.element('item', nest: () {
-          _buildXml(value, builder);
-        });
+        builder.element(
+          'item',
+          nest: () {
+            _buildXml(value, builder);
+          },
+        );
       }
     } else {
       builder.text(data?.toString() ?? '');

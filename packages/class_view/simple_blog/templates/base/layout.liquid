@@ -1,0 +1,119 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% if page_title %}{{ page_title }}{% else %}SimpleBlog{% endif %}</title>
+
+    {% if page_description %}
+        <meta name="description" content="{{ page_description }}">
+    {% endif %}
+
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+
+    <!-- Custom styles -->
+    <style>
+        .prose {
+            max-width: none;
+        }
+
+        .markdown h1 {
+            @apply text-3xl font-bold mt-6 mb-4;
+        }
+
+        .markdown h2 {
+            @apply text-2xl font-semibold mt-5 mb-3;
+        }
+
+        .markdown h3 {
+            @apply text-xl font-medium mt-4 mb-2;
+        }
+
+        .markdown p {
+            @apply mb-4 leading-relaxed;
+        }
+
+        .markdown ul {
+            @apply list-disc list-inside mb-4;
+        }
+
+        .markdown ol {
+            @apply list-decimal list-inside mb-4;
+        }
+
+        .markdown code {
+            @apply bg-gray-100 px-2 py-1 rounded text-sm;
+        }
+
+        .markdown pre {
+            @apply bg-gray-100 p-4 rounded-lg overflow-x-auto mb-4;
+        }
+
+        .markdown blockquote {
+            @apply border-l-4 border-blue-500 pl-4 italic text-gray-600 mb-4;
+        }
+
+        .markdown strong {
+            @apply font-semibold;
+        }
+
+        .markdown em {
+            @apply italic;
+        }
+    </style>
+</head>
+<body class="bg-gray-50 min-h-screen">
+<!-- Navigation using reusable component -->
+{% render 'components/navigation', current_page: current_page %}
+
+<!-- Main Content -->
+<main class="max-w-7xl mx-auto py-6 px-4 sm:px-6 lg:px-8">
+    {% if messages %}
+        {% for message in messages %}
+            <div class="mb-4 p-4 rounded-md {% if message.type == 'error' %}bg-red-50 text-red-700 border border-red-200{% elsif message.type == 'success' %}bg-green-50 text-green-700 border border-green-200{% else %}bg-blue-50 text-blue-700 border border-blue-200{% endif %}">
+                {{ message.content }}
+            </div>
+        {% endfor %}
+    {% endif %}
+
+    {% block content %}
+    <!-- Page content goes here -->
+    {% endblock %}
+</main>
+
+<!-- Footer -->
+<footer class="bg-white border-t mt-12">
+    <div class="max-w-7xl mx-auto py-6 px-4 sm:px-6 lg:px-8">
+        <div class="text-center text-gray-600">
+            <p>&copy; 2024 SimpleBlog. Built with
+                <a href="https://pub.dev/packages/class_view" class="text-blue-600 hover:text-blue-700">class_view</a>
+                and <a href="https://pub.dev/packages/drift" class="text-blue-600 hover:text-blue-700">Drift</a>.
+            </p>
+        </div>
+    </div>
+</footer>
+
+<!-- Scripts -->
+<script>
+    // Simple markdown-like rendering for content
+    function renderMarkdown(content) {
+        return content
+            .replace(/^# (.*$)/gim, '<h1>$1</h1>')
+            .replace(/^## (.*$)/gim, '<h2>$1</h2>')
+            .replace(/^### (.*$)/gim, '<h3>$1</h3>')
+            .replace(/\*\*(.*?)\*\*/gim, '<strong>$1</strong>')
+            .replace(/\*(.*?)\*/gim, '<em>$1</em>')
+            .replace(/\n/g, '<br>');
+    }
+
+    // Apply markdown rendering to elements with .markdown class
+    document.addEventListener('DOMContentLoaded', function () {
+        const markdownElements = document.querySelectorAll('.markdown');
+        markdownElements.forEach(el => {
+            el.innerHTML = renderMarkdown(el.textContent || el.innerText);
+        });
+    });
+</script>
+</body>
+</html> 

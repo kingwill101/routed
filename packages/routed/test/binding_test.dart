@@ -1,7 +1,6 @@
 import 'dart:convert';
-import 'dart:io';
+import 'dart:core';
 
-import 'package:http_parser/http_parser.dart';
 import 'package:routed/routed.dart';
 import 'package:routed/src/binding/binding.dart';
 import 'package:routed_testing/routed_testing.dart';
@@ -28,15 +27,17 @@ void main() {
       final response = await client.post('/json', {
         'name': 'test',
         'age': 25,
-        'tags': ['one', 'two']
+        'tags': ['one', 'two'],
       });
 
+      response.dump();
       response
         ..assertStatus(200)
+        ..assertHasHeader("Content-type")
         ..assertJsonContains({
           'name': 'test',
           'age': 25,
-          'tags': ['one', 'two']
+          'tags': ['one', 'two'],
         });
     });
 
@@ -55,7 +56,7 @@ void main() {
         '/form',
         'name=test&age=25',
         headers: {
-          'Content-Type': ['application/x-www-form-urlencoded']
+          'Content-Type': ['application/x-www-form-urlencoded'],
         },
       );
 
@@ -105,10 +106,11 @@ void main() {
           ..addField('pref_theme', 'dark')
           ..addField('pref_lang', 'en')
           ..addFileFromBytes(
-              name: 'document',
-              filename: 'test.txt',
-              bytes: utf8.encode('Hello World'),
-              contentType: MediaType.parse(ContentType.text.value));
+            name: 'document',
+            filename: 'test.pdf',
+            bytes: utf8.encode('Hello World'),
+            contentType: MediaType.parse('application/pdf'),
+          );
       });
 
       response
@@ -120,7 +122,7 @@ void main() {
           'tags': ['one', 'two'],
           'preferences': {'pref_theme': 'dark', 'pref_lang': 'en'},
           'hasFile': true,
-          'fileName': 'test.txt',
+          'fileName': 'test.pdf',
           'fileSize': 11,
         });
     });

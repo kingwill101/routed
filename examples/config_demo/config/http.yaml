@@ -1,0 +1,25 @@
+providers:
+  - routed.core
+  - routed.routing
+  - routed.cache
+  - routed.storage
+  - routed.sessions
+  - routed.uploads
+  - routed.cors
+  - routed.security
+  - routed.logging
+  - routed.static
+  - config_demo.mail
+middleware:
+  global: [ ]
+  groups: { }
+runtime:
+  shutdown:
+    enabled: true
+    grace_period: 5s
+    force_after: 20s
+    exit_code: 0
+    notify_readiness: true
+    signals:
+      - sigint
+      - sigterm

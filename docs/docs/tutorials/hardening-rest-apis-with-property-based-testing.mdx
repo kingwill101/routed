@@ -1,323 +1,301 @@
 ---
-title:  "Hardening REST APIs with Property-Based Testing in Dart: A Comprehensive Guide"
-
+title: Hardening REST APIs with Property-Based Testing
+description: Stress test a Routed API with property_testing chaos generators, then fix the vulnerabilities
+slug: /tutorials/hardening-rest-apis
 ---
 
-## Introduction
+Property-based testing flips traditional testing on its head: instead of hand-picking inputs, you describe the **properties** your code should obey. A runner then generates hundreds of random (often nasty) inputs trying to violate those properties.
 
-When building REST APIs, security is paramount. While traditional testing methods like unit tests and integration tests are essential, they often test only expected scenarios with predefined inputs. Property-based testing offers a powerful complementary approach by generating random, potentially malicious inputs to find edge cases and vulnerabilities that might otherwise go unnoticed.
+In this guide you will:
 
-Let's explore how to combine property-based testing with other security measures to create robust, secure APIs.
+1. Build a deliberately vulnerable albums API with Routed.
+2. Attack it using chaos generators from `property_testing`.
+3. Harden the routes with validation, typed parameters, and safer responses.
+4. Re-run the same property tests to confirm the fixes.
 
-## Understanding Property-Based Testing for APIs
+## Prerequisites
 
-Property-based testing differs from traditional testing in a fundamental way: instead of writing specific test cases, you define properties that should always hold true for your API endpoints, regardless of the input. The testing framework then generates random inputs to try to violate these properties.
+- Dart SDK 3.0+
+- Basic knowledge of Routed (see [Getting Started](/docs/routed/getting-started))
+- `curl` or a similar HTTP client
 
-For example, with an API endpoint, some properties might be:
-- Should never return a 500 error for any input
-- Should reject malformed data with appropriate error codes
-- Should sanitize all inputs before processing
-- Should maintain data integrity regardless of input format
+Create a fresh workspace and add the dependencies we will use:
 
-## Initial Implementation (Vulnerable)
+```bash
+mkdir routed_security_demo
+cd routed_security_demo
+dart create -t console-full .
 
-Let's start with a typical REST API implementation that lacks proper validation. This represents common mistakes developers might make when rushing to get an API working:
+# Runtime
+dart pub add routed
 
-```dart
-void main() {
+# Testing & fuzzing
+dart pub add --dev test server_testing routed_testing property_testing
+```
+
+We will keep the engine definition in `lib/api.dart` so the server and the tests can share it. Replace the generated file with the following naïve implementation.
+
+## Step 1: A naïve albums API
+
+```dart title="lib/api.dart"
+import 'package:routed/routed.dart';
+
+Engine buildInsecureEngine() {
   final engine = Engine();
+  final albums = <String, Map<String, dynamic>>{};
 
-  // Basic routes without validation
-  engine.get('/api/users/{id}', (ctx) async {
-    ctx.json({'id': ctx.param("id")});
+  engine.get('/albums/{id}', (ctx) {
+    return ctx.json({'id': ctx.param('id')});
   });
 
-  engine.post('/api/users', (ctx) async {
-    final data = {};
-    ctx.bindJSON(data);
-    ctx.json(data);
+  engine.post('/albums', (ctx) async {
+    final payload = <String, dynamic>{};
+    await ctx.bindJSON(payload); // No validation!
+    final id = DateTime.now().microsecondsSinceEpoch.toString();
+    albums[id] = payload;
+    return ctx.json(payload);
   });
 
-  engine.get('/api/search', (ctx) async {
-    final query = ctx.query("q");
-    ctx.json({'query': query});
+  engine.get('/search', (ctx) {
+    return ctx.json({'q': ctx.query('q')});
   });
 
-  engine.post('/api/data/{type}', (ctx) async {
-    final type = ctx.param("type");
-    final data = {};
-    ctx.bindJSON(data);
-    ctx.json({'type': type, 'data': data});
-  });
+  return engine;
 }
 ```
 
-This implementation has several security issues:
-- No input validation
-- No type checking
-- No sanitization
-- Direct parameter reflection in responses
+Wire it up in `bin/server.dart`:
 
-## The Chaos Testing Generator
+```dart title="bin/server.dart"
+import 'dart:io';
 
-To test our API's resilience, we'll create a generator that produces potentially malicious inputs:
+import 'package:routed_security_demo/api.dart';
 
-```dart
-class ChaoticString {
-  static Generator<String> chaotic({int maxLength = 100}) {
-    return (random, size) {
-      final attacks = [
-        "' OR '1'='1",           // SQL injection
-        "; DROP TABLE users;",    // SQL injection
-        "../../../etc/passwd",    // Path traversal
-        "<script>alert('xss')</script>", // XSS
-        "🎈🎉🎊🎋🎌🎍🎎🎏",      // Unicode/emoji
-        'A' * random.nextInt(maxLength), // Buffer overflow
-        'before\x00after',       // Null byte injection
-        '%00%01%02%03'          // URL encoding attacks
-      ];
-      return DataShape(attacks[random.nextInt(attacks.length)]);
-    };
-  }
+Future<void> main() async {
+  final engine = buildInsecureEngine();
+  await engine.serve(host: '127.0.0.1', port: 8080);
+  stdout.writeln('Listening on http://127.0.0.1:8080');
 }
 ```
 
-This generator creates strings that attempt various common attack vectors:
-- SQL injection attempts
-- Path traversal attacks
-- Cross-site scripting (XSS)
-- Buffer overflow attempts
-- Character encoding attacks
+This server works for “happy path” requests, but it happily echoes whatever string appears in the URL, accepts any JSON payload, and never validates search queries. Let’s see how quickly property-based testing can break it.
 
-## Testing the Vulnerable Implementation
+## Step 2: Attack the API with chaos generators
 
-Let's write a property test that checks how our API handles these malicious inputs:
+Property tests live in `test/albums_property_test.dart`:
 
-```dart
-test('POST /api/users handles chaotic JSON body', () async {
-  final tester = ForAllTester(
-    ChaoticString.chaotic(maxLength: 200),
-    config: ExploreConfig(numRuns: 500)
-  );
+```dart title="test/albums_property_test.dart"
+import 'dart:io';
 
-  await tester.check((input) async {
-    final client = EngineTestClient.inMemory(engine);
-    final response = await client.postJson('/api/users', {
-      'name': input, 
-      'email': input
+import 'package:property_testing/property_testing.dart';
+import 'package:routed_security_demo/api.dart';
+import 'package:routed_testing/routed_testing.dart';
+import 'package:server_testing/server_testing.dart';
+import 'package:test/test.dart';
+
+Future<TestClient> _clientFromEngine(Engine engine) async {
+  return TestClient.inMemory(RoutedRequestHandler(engine, true));
+}
+
+void main() {
+  group('Vulnerable API', () {
+    test('Non-numeric album IDs should not return 200', () async {
+      final runner = PropertyTestRunner(
+        Chaos.string(maxLength: 120),
+        (id) async {
+          final client = await _clientFromEngine(buildInsecureEngine());
+          final response = await client.get('/albums/$id');
+          await client.close();
+
+          if (!RegExp(r'^\d+
+$').hasMatch(id)) {
+            expect(response.statusCode, isNot(HttpStatus.ok));
+          }
+        },
+        const PropertyConfig(numTests: 200),
+      );
+
+      final result = await runner.run();
+      expect(result.success, isFalse, reason: result.report);
     });
-    expect(response.statusCode, anyOf([400, 401, 403, 404, 422]));
-    expect(response.statusCode, isNot(500));
+
+    test('Suspicious POST payloads should be rejected', () async {
+      final runner = PropertyTestRunner(
+        Chaos.string(maxLength: 120),
+        (chaos) async {
+          final client = await _clientFromEngine(buildInsecureEngine());
+          final response = await client.postJson('/albums', {
+            'title': chaos,
+            'artist': chaos,
+            'price': chaos,
+          });
+          await client.close();
+
+          final looksDangerous = chaos.contains(RegExp(r"['\\/]|\.\.")) || chaos.length > 80;
+          if (looksDangerous) {
+            expect(response.statusCode, isNot(HttpStatus.ok));
+          }
+        },
+        const PropertyConfig(numTests: 120),
+      );
+
+      final result = await runner.run();
+      expect(result.success, isFalse, reason: result.report);
+    });
   });
-});
+}
 ```
 
-Running these tests against our vulnerable implementation reveals concerning results:
+Run the tests:
+
+```bash
+dart test test/albums_property_test.dart
+```
+
+You should see failures similar to:
 
 ```
-00:00 +0: API Chaos Testing GET /api/users/{id} handles chaotic path params
-
-Failed for input: ; DROP TABLE users;%2e%2e%2f%2e%2e%2f🎈🎉🎊🎋🎌🎍🎎🎏
-
-Error: Expected: (<400> or <401> or <403> or <404> or <422>)
+Failure after 5 tests with seed 0xD2C4F3891DF5F991.
+Counterexample: "' OR '1'='1"
+Expected: status code not equal to 200
   Actual: <200>
 ```
 
-## Understanding the Test Failures
+The property runner quickly finds payloads such as SQL injection strings and directory traversal attempts that still return `200 OK`. Time to tighten the engine.
 
-Let's analyze what our test outputs are telling us:
+## Step 3: Harden the routes
 
-### GET /api/users/{id} Endpoint Vulnerabilities
-```
-Failed for input: ; DROP TABLE users;%2e%2e%2f%2e%2e%2f🎈🎉🎊🎋🎌🎍🎎🎏
-```
+Replace the contents of `lib/api.dart` with a secure version:
 
-This failure reveals multiple issues:
-1. SQL injection vulnerability ("; DROP TABLE users;")
-2. Path traversal vulnerability (%2e%2e%2f = "../")
-3. No character encoding validation (emoji characters accepted)
-4. Incorrect response codes (200 OK for malicious input)
+```dart title="lib/api.dart"
+import 'dart:io';
 
-### POST Endpoint Vulnerabilities
+import 'package:routed/middlewares.dart';
+import 'package:routed/routed.dart';
 
-```
-00:00 +0 -2: API Chaos Testing POST /api/users handles chaotic JSON body
-```
+Engine buildSecureEngine() {
+  final engine = Engine(
+    config: EngineConfig(
+      security: const EngineSecurityFeatures(
+        maxRequestSize: 5 * 1024 * 1024,
+        xContentTypeOptionsNoSniff: true,
+        cors: CorsConfig(enabled: true),
+      ),
+    ),
+    options: [withMiddleware([timeoutMiddleware(const Duration(seconds: 10))])],
+  );
 
-The POST endpoint shows similar issues but with higher risk:
-- Unvalidated JSON body parameters
-- SQL injection possibilities in data write operations
-- No input sanitization before database operations
+  final albums = <int, Map<String, dynamic>>{
+    1: {'id': 1, 'title': 'Blue Train', 'artist': 'John Coltrane', 'price': 56.99},
+    2: {'id': 2, 'title': 'Jeru', 'artist': 'Gerry Mulligan', 'price': 17.99},
+  };
+  var nextId = 2;
 
-## Implementing a Hardened Solution
-
-Based on our test results, let's implement proper security measures:
-
-```dart
-void main() {
-  final engine = Engine();
-
-  // UUID validation for IDs
-  engine.get('/api/users/{id:uuid}', (ctx) async {
-    ctx.json({'id': ctx.param("id")});
-  });
-
-  // Strict input validation for user data
-  engine.post('/api/users', (ctx) async {
-    try {
-      await ctx.validate({
-        'name': 'required|string|alpha_dash|max_length:50|not_regex:/[;%]/',
-        'email': 'required|email|ascii|max_length:255'
-      }, bail: true);
-
-      final data = {};
-      await ctx.bindJSON(data);
-      ctx.json(data);
-    } catch (e) {
-      ctx.string('Invalid input', statusCode: 422);
+  engine.get('/albums/{id:int}', (ctx) {
+    final id = int.parse(ctx.param('id')!);
+    final album = albums[id];
+    if (album == null) {
+      return ctx.json({'error': 'Album not found'}, statusCode: HttpStatus.notFound);
     }
+    return ctx.json(album);
   });
 
-  // Regex-constrained search queries
-  engine.get('/api/search/{q:string}', (ctx) async {
-    final query = ctx.param("q");
-    ctx.json({'query': query});
-  }, constraints: {
-    'q': r'^[a-zA-Z0-9\s]{1,100}$'
+  engine.post('/albums', (ctx) async {
+    await ctx.validate({
+      'title': 'required|string|min_length:1|max_length:120|not_regex:/[\\\\]/',
+      'artist': 'required|string|min_length:1|max_length:120|not_regex:/[\\\\]/',
+      'price': 'required|numeric|min:0',
+    }, bail: true);
+
+    final payload = <String, dynamic>{};
+    await ctx.bindJSON(payload);
+    final price = double.parse(payload['price'].toString());
+
+    final result = {
+      'id': ++nextId,
+      'title': payload['title'],
+      'artist': payload['artist'],
+      'price': price,
+    };
+    albums[nextId] = result;
+    return ctx.json(result, statusCode: HttpStatus.created);
   });
 
-  // Type and content validation
-  engine.post('/api/data/{type:word}', (ctx) async {
-    try {
-      await ctx.validate({
-        'type': 'required|alpha|max_length:20|not_regex:/[;%]/',
-        'content': 'required|string|max_length:100|json'
-      }, bail: true);
-
-      final type = ctx.param("type");
-      final data = {};
-      await ctx.bindJSON(data);
-      ctx.json({'type': type, 'data': data});
-    } catch (e) {
-      ctx.string('Invalid input', statusCode: 422);
+  engine.get('/search', (ctx) {
+    final query = ctx.query('q');
+    if (query != null && query.contains(RegExp(r"['\\/]|\.\."))) {
+      return ctx.json({'error': 'Invalid search query'}, statusCode: HttpStatus.badRequest);
     }
+    return ctx.json({'q': query});
   });
+
+  return engine;
 }
 ```
 
-Key security improvements include:
-1. Strong type constraints for path parameters
-2. Comprehensive validation rules for request bodies
-3. Regex patterns for query parameters
-4. Proper error handling with appropriate status codes
-5. Input sanitization before processing
+Key changes:
 
-## Testing the Hardened Implementation
+- `/albums/{id:int}` now relies on a typed route parameter so non-digits never reach the handler.
+- `ctx.validate` rejects malicious JSON before we try to store it.
+- The search endpoint sanity-checks its query.
+- Security features (timeout, CORS, `X-Content-Type-Options`) are enabled in one place.
 
-Running our property tests against the secured implementation shows improvement:
+## Step 4: Update the property tests
 
-```
-00:00 +0: API Chaos Testing GET /api/users/{id}
-Property passed for all 500 inputs.
+Modify the test file so it targets `buildSecureEngine()` and tightens expectations:
 
-00:00 +1: API Chaos Testing POST /api/users
-Property passed for all 500 inputs.
-
-00:00 +2: API Chaos Testing GET /api/search
-Property passed for all 500 inputs.
-
-00:01 +3: API Chaos Testing POST /api/data/{type}
-Property passed for all 500 inputs.
-
-00:01 +4: All tests passed!
-```
-
-## Complementary Security Measures
-
-While property-based testing helps catch input validation issues, a comprehensive security strategy should include:
-
-### 1. Traditional Unit Tests
-```dart
-void main() {
-  group('User API Tests', () {
-    test('creates user with valid data', () async {
-      final response = await client.postJson('/api/users', {
-        'name': 'John Doe',
-        'email': 'john@example.com'
-      });
-      expect(response.statusCode, equals(200));
-    });
-  });
-}
+```dart title="test/albums_property_test.dart" diff
+@@
+-          final client = await _clientFromEngine(buildInsecureEngine());
++          final client = await _clientFromEngine(buildSecureEngine());
+@@
+-          if (!RegExp(r'^\d+$').hasMatch(id)) {
+-            expect(response.statusCode, isNot(HttpStatus.ok));
+-          }
++          if (!RegExp(r'^\d+$').hasMatch(id)) {
++            expect(response.statusCode, isNot(HttpStatus.ok));
++          }
+@@
+-      expect(result.success, isFalse, reason: result.report);
++      expect(result.success, isTrue, reason: result.report);
+@@
+-          final client = await _clientFromEngine(buildInsecureEngine());
++          final client = await _clientFromEngine(buildSecureEngine());
+@@
+-          final looksDangerous = chaos.contains(RegExp(r"['\\/]|\.\.")) || chaos.length > 80;
+-          if (looksDangerous) {
+-            expect(response.statusCode, isNot(HttpStatus.ok));
+-          }
++          final looksDangerous = chaos.contains(RegExp(r"['\\/]|\.\.")) || chaos.length > 80;
++          if (looksDangerous) {
++            expect(response.statusCode, greaterThanOrEqualTo(HttpStatus.badRequest));
++          }
+@@
+-      expect(result.success, isFalse, reason: result.report);
++      expect(result.success, isTrue, reason: result.report);
 ```
 
-### 2. Authentication and Authorization
-```dart
-final auth = AuthMiddleware();
-engine.use(auth.middleware);
+Re-run the tests:
+
+```bash
+dart test test/albums_property_test.dart
 ```
 
-### 3. Rate Limiting
-```dart
-final rateLimiter = RateLimiter();
-engine.use(rateLimiter.middleware);
-```
+This time everything should pass. The same chaotic inputs no longer slip through because we enforce strict typing and validation.
 
-## Security Monitoring and Maintenance
+## Beyond validation
 
-### 1. Logging and Monitoring
-- Implement comprehensive request logging
-- Track error rates and patterns
-- Monitor for suspicious activity
-- Set up alerts for security events
+Property-based tests complement — but do not replace — other security measures. Consider adding:
 
-### 2. Regular Security Reviews
-- Update dependencies regularly
-- Conduct security audits
-- Perform penetration testing
-- Review access patterns
+- Authentication and authorisation around sensitive routes.
+- Logging and rate limiting to catch brute-force attempts.
+- Consistent error handlers so stack traces never leak (see [Error handling](/docs/routed/fundamentals/error-handling)).
+- CSRF, CORS, and security headers (see [Security](/docs/routed/security)).
 
-## Limitations and Considerations
+## Next steps
 
-While our property-based testing approach catches many issues, be aware that:
-1. It focuses primarily on input validation
-2. It can't catch logical security flaws
-3. It's not a replacement for penetration testing
-4. Regular security audits are still necessary
+- Learn more about chaos generators in the [property testing docs](/docs/property-testing/chaos-testing).
+- Explore composing custom generators in [Property-testing fundamentals](/docs/property-testing/generators).
+- Integrate these tests into CI so every change keeps the API hardened.
 
-## Best Practices
-
-1. **Input Validation**
-   - Validate all input parameters
-   - Use strict type checking
-   - Implement length limits
-   - Sanitize special characters
-
-2. **Error Handling**
-   - Return appropriate status codes
-   - Avoid exposing internal errors
-   - Log security events
-   - Maintain audit trails
-
-3. **Security Headers**
-   - Set CORS policies
-   - Use HTTPS
-   - Implement CSP
-   - Add rate limiting headers
-
-## Conclusion
-
-Property-based testing is a powerful tool for identifying API vulnerabilities, but it should be part of a larger security strategy. By combining it with other security measures and following best practices, we can build more robust and secure APIs.
-
-The test results demonstrate that:
-1. Automated testing can find vulnerabilities traditional tests might miss
-2. Input validation is crucial for API security
-3. A layered security approach is most effective
-4. Continuous testing and monitoring are essential
-
-## Resources
-
-- OWASP API Security Top 10
-- Dart Security Best Practices
-- API Security Cheat Sheet
-- Property-Based Testing Patterns
+By combining Routed’s validation layer with property-based testing, you can discover whole classes of bugs and vulnerabilities before they ever reach production.

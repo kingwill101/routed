@@ -1,0 +1,2 @@
+<input type="{{ widget.type }}" name="{{ widget.name }}"{% if widget.value != nil %}
+       value="{{ widget.value }}"{% endif %}{% for name, value in widget.attrs %}{% if value != false %} {{ name }}{% if value != true %}="{{ value }}"{% endif %}{% endif %}{% endfor %}>

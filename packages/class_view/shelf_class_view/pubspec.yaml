@@ -1,0 +1,23 @@
+name: shelf_class_view
+description: Shelf framework adapter for class_view - Django-style class-based views for Shelf
+version: 1.0.0
+# repository: https://github.com/my_org/my_repo
+
+resolution: workspace
+environment:
+  sdk: ">=3.9.0 <4.0.0"
+
+# Add regular dependencies here.
+dependencies:
+  class_view:
+  shelf: ^1.4.2
+  shelf_router: ^1.1.4
+  shelf_multipart: ^2.0.1
+  server_testing: ^0.1.0
+  http_parser: ^4.1.2
+
+dev_dependencies:
+  lints: ^6.0.0
+  test: ^1.26.3
+  server_testing_shelf:
+  todo_test:

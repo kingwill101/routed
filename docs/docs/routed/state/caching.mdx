@@ -1,0 +1,219 @@
+---
+title: Caching
+description: Cache responses and shared data with pluggable stores
+sidebar_position: 1
+---
+
+# Caching
+
+Routed provides a flexible, provider-driven caching system with multiple storage backends. Use it from handlers via `EngineContext` (for example, `ctx.cache`, `ctx.getCache`, and remember helpers).
+
+## Basic Cache Operations
+
+```dart
+router.get('/data', (ctx) async {
+  // Get from cache
+  final value = await ctx.getCache('my-key');
+  
+  if (value != null) {
+    return ctx.json({'data': value, 'from_cache': true});
+  }
+  
+  // Store in cache for 60 seconds
+  final data = await expensiveOperation();
+  await ctx.cache('my-key', data, 60);
+  
+  return ctx.json({'data': data, 'from_cache': false});
+});
+```
+
+## Cache Duration
+
+```dart
+// Cache for 1 hour (TTL in seconds)
+await ctx.cache('hourly-key', value, 3600);
+
+// Cache forever
+await ctx.cacheForever('permanent-key', value);
+
+// Remove from cache
+await ctx.removeCache('my-key');
+```
+
+## Counter Operations
+
+```dart
+// Increment cache value
+await ctx.incrementCache('visits', 1);  // Add 1
+await ctx.incrementCache('score', 5);   // Add 5
+
+// Decrement cache value
+await ctx.decrementCache('stock', 1);   // Subtract 1
+await ctx.decrementCache('points', 10); // Subtract 10
+```
+
+## Remember Pattern
+
+Cache computed values. The callback runs only on a cache miss; subsequent calls return the cached result until it expires:
+
+```dart
+// Cache if not exists
+final value = await ctx.rememberCache(
+  'user-stats', 
+  300,  // 5 minutes 
+  () => computeUserStats()
+);
+
+// Remember forever
+final config = await ctx.rememberCacheForever(
+  'app-config',
+  () => loadAppConfig()
+);
+```
+
+## Cache Stores
+
+Describe cache stores either in configuration files or imperatively. In `config/http.yaml` define stores under `cache.*` (see [Configuration](/docs/routed/fundamentals/configuration)):
+
+```yaml title="config/http.yaml"
+cache:
+  default: file
+  prefix: cache:
+  stores:
+    array:
+      driver: array
+      serialize: false
+    file:
+      driver: file
+      path: storage/cache
+      lock_path: storage/cache/locks
+      permission: 600  # optional octal permissions
+    redis:
+      driver: redis
+      url: {{ env.REDIS_URL }}
+
+app:
+  cache_prefix: myapp
+```
+
+The `routed.cache` provider reads this section, registers the stores, and injects a `CacheManager` instance. Toggle the default store or add new ones by editing the manifest and re-running `provider:list --config` to confirm changes and surface validation errors.
+
+### Built-in drivers
+
+- `array`: process-local, in-memory store. Great for tests and ephemeral caching. Set `serialize: true` if you need values cloned (instead of shared by reference) and remember that locks are scoped to the current process.
+- `file`: persists entries to disk. Requires a `path`, supports an optional `lock_path` for coordinating file locks, and `permission` (octal string or int) for new cache files.
+- `null`: keeps the cache API callable without persisting data. Useful for local development or disabling cache for specific environments.
+- `redis`: connects to a Redis instance. Configure with `url` (or `host`/`port`/`password`/`db`) and reuse the same driver for rate limiting or session backends.
+
+The file driver implements `LockProvider`, so cache locks work out of the box. By default lock files live next to the cache entries; set `lock_path` if you want them elsewhere.
+
+Prefer code? Construct a manager and pass it via `withCacheManager`:
+
+```dart
+final cacheManager = CacheManager()
+  ..registerStore('array', {
+    'driver': 'array',
+    'serialize': false,
+  })
+  ..registerStore('file', {
+    'driver': 'file',
+    'path': 'cache',
+  });
+
+final engine = Engine(
+  options: [
+    withCacheManager(cacheManager),
+  ]
+);
+```
+
+Using specific stores:
+
+```dart
+// Use default store
+await ctx.cache('key', value, 60);
+
+// Use specific store
+await ctx.cache('key', value, 60, store: 'file');
+```
+
+## Custom stores and tagging
+
+Extend caching by registering your own store factories (see [Contracts](/docs/routed/fundamentals/contracts); `packages/routed/lib/src/cache/cache_manager.dart:1`):
+
+Custom stores should implement the `Store` contract (`packages/routed/lib/src/contracts/cache/store.dart`) or extend `TaggableStore` if you want tag-aware invalidation (`packages/routed/lib/src/cache/taggable_store.dart:1`). Once registered, access the store exactly like the built-in array and file drivers.
+
+Prefer configuration when possible: the `routed.cache` provider ships default stores and validates the `cache.*` manifest entries (for example, it rejects non-string `cache.default` values or non-map store definitions with a `ProviderConfigException`). Run `dart run routed_cli provider:list --config` to review the current cache stores and make sure your overrides are well-formed.
+
+Set a global prefix for all cache keys with `cache.prefix`. When omitted, the provider falls back to `app.cache_prefix` so you can keep naming consistent with other frameworks. Clearing the prefix (for instance by setting it to `null`) removes the namespace entirely.
+
+### Driver registry & documentation
+
+Built-in drivers (`array`, `file`, `null`) are now registered through the same registry API that application code uses. Call `CacheManager.registerDriver` to publish additional drivers (before boot or inside a provider) and optionally supply a `documentation` callback that returns `ConfigDocEntry` items. The cache service provider merges those entries into `provider:list --config` output and the docs below, so consumers can discover driver-specific options without reading source code.
+
+```dart
+CacheManager.registerDriver(
+  'dropbox',
+  () => DropboxStoreFactory(),
+  documentation: (ctx) => <ConfigDocEntry>[
+    ConfigDocEntry(
+      path: ctx.path('token'),
+      type: 'string',
+      description: 'OAuth token used when talking to Dropbox.',
+    ),
+    ConfigDocEntry(
+      path: ctx.path('root'),
+      type: 'string',
+      description: 'Remote folder for cached files (defaults to /cache).',
+    ),
+  ],
+);
+```
+
+Any store registered via `registerDriver` is available through configuration (`cache.stores.*.driver`) and shows up in the provider docs under `cache.stores.*`. Use this hook to describe required credentials or optional flags for each driver you publish. See [Driver Registries](/docs/routed/advanced/driver-registries) for a deeper dive.
+
+```bash
+routed provider:driver --type cache my_driver
+```
+
+The CLI scaffolds a starter file in `lib/drivers/cache/`, complete with a `registerDriver` helper and documentation callback so you can focus on the store implementation.
+
+Need a custom provider? Register one and add it to the manifest:
+
+```dart
+class RedisCacheProvider extends ServiceProvider with ProvidesDefaultConfig {
+  @override
+  Map<String, dynamic> get defaultConfig => const {
+    'cache': {
+      'stores': {
+        'redis': {'driver': 'redis', 'url': '{{ env.REDIS_URL }}'},
+      },
+    },
+  };
+}
+
+ProviderRegistry.instance.register(
+  'app.cache.redis',
+  factory: () => RedisCacheProvider(),
+  description: 'Redis cache integration',
+);
+```
+
+## Cache events
+
+The cache manager publishes lifecycle events through the `EventManager` when you interact with the cache API (see [Events](/docs/routed/advanced/events)):
+
+- `CacheHitEvent` / `CacheMissEvent` – emitted when keys are read.
+- `CacheWriteEvent` – emitted after successful writes (`put`, `remember`, increments, etc.). Includes the target store and optional TTL.
+- `CacheForgetEvent` – emitted when entries are evicted (`forget`, `pull`).
+
+Listen to them with:
+
+```dart
+final events = await engine.make<EventManager>();
+events.on<CacheHitEvent>().listen((event) {
+  logger.debug('cache hit', fields: {'store': event.store, 'key': event.key});
+});
+```
+
+Custom `CacheManager` instances can participate by calling `attachEventManager(eventManager)` after construction.

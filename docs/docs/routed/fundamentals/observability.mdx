@@ -1,0 +1,152 @@
+---
+title: Observability
+description: Enable tracing, metrics, health endpoints, and error observers
+sidebar_position: 12
+---
+
+# Observability
+
+Routed ships with an observability service provider that wires together tracing, metrics, health endpoints, error observers, and log formatting. The provider is enabled by default and exposes configuration switches so you can opt into the pieces you need without touching application code.
+
+The defaults live under the `observability` section of your configuration:
+
+```yaml title="config/app.yaml"
+observability:
+  enabled: true
+  tracing:
+    enabled: false
+    exporter: none          # none, console, or otlp
+    service_name: routed-service
+    endpoint: null          # OTLP collector URI when exporter=otlp
+    headers: {}             # Optional OTLP headers (for auth tokens, etc.)
+  metrics:
+    enabled: false
+    path: /metrics
+    buckets: [0.01, 0.05, 0.1, 0.25, 0.5, 1.0, 2.0, 5.0]
+  health:
+    enabled: true
+    readiness_path: /readyz
+    liveness_path: /livez
+  logging:
+    format: json            # json or text
+  errors:
+    enabled: false          # Reserve for future error reporter hooks
+```
+
+When the provider boots it automatically registers tracing and metrics middleware, attaches Prometheus-style routes, and exposes a health service you can extend at runtime. Setting any nested feature flag (for example `observability.tracing.enabled: true`) automatically flips `http.features.observability.enabled` on, so you only need to toggle the sub-feature you care about.
+
+## OpenTelemetry tracing
+
+Set `observability.tracing.enabled: true` to instrument request spans with the [OpenTelemetry](https://opentelemetry.io/) SDK. Routed extracts incoming W3C Trace Context headers and creates server spans named after HTTP method and route label. Each span includes attributes for method, route, target, and status code, and records exceptions automatically.
+
+Supported exporters:
+
+- `none` (default): disables span export while keeping request handling cheap.
+- `console`: prints spans to stdout, useful for local debugging.
+- `otlp`: sends spans to an OTLP collector. Provide `observability.tracing.endpoint` (for example, `http://collector:4318/v1/traces`) and optional `headers` for authentication.
+
+```yaml title="config/app.yaml"
+observability:
+  tracing:
+    enabled: true
+    exporter: otlp
+    service_name: checkout-api
+    endpoint: https://otel.example.com/v1/traces
+    headers:
+      authorization: Bearer ${OTEL_TOKEN}
+```
+
+Routed injects the tracing middleware ahead of other middleware so handlers and downstream middleware all see the active span. If you need to customise ordering, override `http.middleware_sources.routed.observability.global` and reorder the generated IDs (`routed.observability.tracing`, `routed.observability.metrics`, `routed.observability.health`).
+
+## Prometheus metrics
+
+Enable `observability.metrics.enabled` to expose an HTTP `/metrics` endpoint that emits Prometheus exposition format. Metrics collected out of the box:
+
+- `routed_requests_total{method,route,status}` – counter of completed requests.
+- `routed_request_duration_seconds_bucket|sum|count{method,route,status}` – histogram timing data using the configured buckets.
+- `routed_active_requests` – gauge of in-flight requests.
+
+```yaml title="config/app.yaml"
+observability:
+  metrics:
+    enabled: true
+    path: /metrics   # customise the exposure path
+    buckets: [0.05, 0.1, 0.25, 0.5, 1, 2]  # seconds
+```
+
+The metrics middleware runs before handlers, recording timings even when a request throws. You can register additional metrics by pulling the `MetricsService` out of the container during boot.
+
+### Sample dashboards
+
+Start with these PromQL snippets when wiring Grafana:
+
+- **Request throughput:** `sum(rate(routed_requests_total[5m])) by (route)`
+- **Latency percentiles:** `histogram_quantile(0.95, sum(rate(routed_request_duration_seconds_bucket[5m])) by (le, route))`
+- **Error rate:** `sum(rate(routed_requests_total{status=~"5.."}[5m])) / sum(rate(routed_requests_total[5m]))`
+
+Adjust the range window (`[5m]`) to match your traffic profile.
+
+## Health and readiness endpoints
+
+The health service exposes two JSON endpoints:
+
+- `GET /readyz` (readiness) – returns `503` until registered checks report healthy.
+- `GET /livez` (liveness) – returns `200` by default unless you register failing checks.
+
+Register extra checks at runtime via `HealthService`:
+
+```dart
+final health = engine.container.make<HealthService>();
+health.registerReadinessCheck('database', () async {
+  final ok = await db.isHealthy();
+  return ok
+      ? HealthCheckResult.ok({'pong': true})
+      : HealthCheckResult.failure({'error': 'timeout'});
+});
+```
+
+Each check name becomes a key inside the JSON payload, and failures automatically flip the response status to `503 Service Unavailable`. Adjust paths with `observability.health.readiness_path` and `observability.health.liveness_path` when you need to comply with platform probes.
+
+## Error observers
+
+The provider exposes an `ErrorObserverRegistry` you can use to forward unhandled request errors to external systems (error trackers, paging tools, etc.). Observers receive the `EngineContext`, error, and stack trace so they can enrich reports with request metadata.
+
+```dart
+class SentryObserver implements ErrorObserver {
+  @override
+  Future<void> onError(
+    EngineContext context,
+    Object error,
+    StackTrace stackTrace,
+  ) async {
+    await sentry.captureException(
+      error,
+      stackTrace: stackTrace,
+      withScope: (scope) {
+        scope.setContext('request', context.loggerContext);
+      },
+    );
+  }
+}
+
+engine.container.make<ErrorObserverRegistry>().addObserver(SentryObserver());
+```
+
+Observer failures are swallowed so they never break the request pipeline—log them internally if you need to monitor integration health.
+
+## Logging defaults
+
+When `observability.logging.format` is `json` (the default), the provider configures `RoutedLogger` to emit JSON across the application. Switch to `text` for local development or attach your own logger factory for custom sinks.
+
+Combine log formatting with tracing and metrics so each request yields structured telemetry alongside spans and Prometheus counters. All components read from the same configuration scope, making it easy to toggle behaviour per environment (for example, JSON logs with OTLP spans in production, plain text with console spans locally).
+
+## Putting it together
+
+Most deployments start with:
+
+1. Enable tracing with either `console` or `otlp` exporter.
+2. Turn on metrics and point your Prometheus scraper at the exposed path.
+3. Register readiness checks for backing services (databases, queues, external APIs).
+4. Add an error observer that forwards critical errors to your alerting stack.
+
+Because the provider reacts to configuration reloads, you can change options (for example, toggling tracing or metrics) without recreating the engine—handy during incident response when you need deeper visibility temporarily.

@@ -1,0 +1,5 @@
+<label{% if widget.attrs.id %} for="{{ widget.attrs.id }}"{% endif %}><input type="{{ widget.type }}"
+                                                                             name="{{ widget.name }}"
+                                                                             value="{{ widget.value }}"{% if widget.attrs.id %}
+                                                                             id="{{ widget.attrs.id }}"{% endif %}{% for name, value in widget.attrs %}{% unless name == 'id' or name == 'type' %}{% if value != false %} {{ name }}{% if value != true %}="{{ value }}"{% endif %}{% endif %}{% endunless %}{% endfor %}
+    > {{ widget.label }}</label>

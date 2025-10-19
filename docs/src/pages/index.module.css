@@ -16,8 +16,74 @@
   }
 }
 
+.heroTitle {
+    font-size: 3rem;
+    font-weight: 700;
+}
+
+.heroSubtitle {
+    font-size: 1.2rem;
+    max-width: 720px;
+    margin: 0 auto 2rem;
+}
+
 .buttons {
   display: flex;
   align-items: center;
   justify-content: center;
+    flex-wrap: wrap;
+    gap: 1rem;
+}
+
+.quickStart {
+    padding: 4rem 0;
+    background: var(--ifm-background-surface-color);
+}
+
+.packageTable {
+    padding: 3rem 0;
+}
+
+.packageTable table {
+    width: 100%;
+    border-collapse: collapse;
+}
+
+.packageTable .table-responsive {
+    overflow-x: auto;
+}
+
+.packageTable th,
+.packageTable td {
+    border-bottom: 1px solid var(--ifm-table-border-color);
+    padding: 0.75rem 1rem;
+    text-align: left;
+}
+
+.highlights {
+    padding: 3rem 0;
+}
+
+.sectionTitle {
+    text-align: center;
+    margin-bottom: 2rem;
+}
+
+.highlightCard {
+    height: 100%;
+}
+
+.quickLinks {
+    padding: 3rem 0;
+    background: var(--ifm-background-surface-color);
+}
+
+.quickLinkCard {
+    height: 100%;
+    transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+.quickLinkCard:hover {
+    transform: translateY(-4px);
+    box-shadow: 0 8px 20px rgba(0, 0, 0, 0.1);
 }

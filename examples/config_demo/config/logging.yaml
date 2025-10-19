@@ -1,0 +1,6 @@
+extra_fields:
+  service: config_demo
+  deployment: "{{ logging.extra_fields.deployment | default: 'local' }}"
+request_headers:
+  - X-Request-ID
+  - X-Trace-ID

@@ -1,0 +1,105 @@
+---
+id: compression
+title: Response compression
+sidebar_position: 8
+description: Configure Routed's response compression middleware, override defaults, and validate behaviour.
+---
+
+Routed  ships gzip and Brotli response compression through the new
+`routed.compression` provider. The middleware automatically negotiates with the
+client's `Accept-Encoding` header, respects MIME / size allow-lists, and can be
+opted out per route when needed.
+
+## Enablement and defaults
+
+Compression is enabled by default when the engine bootstraps built-in
+providers. The default configuration lives under the `compression.*` namespace
+and can be overridden in `config/http.yaml` (or any manifest override):
+
+```yaml title="config/http.yaml"
+compression:
+  enabled: true
+  min_length: 1024           # bytes before compression kicks in
+  algorithms: [br, gzip]     # priority order
+  mime_allow:
+    - text/*
+    - application/json
+    - application/javascript
+  mime_deny:
+    - image/*
+    - audio/*
+    - video/*
+```
+
+Set `compression.enabled` to `false` (or disable the `http.features.compression`
+flag) to remove the middleware entirely.
+
+## Per-route overrides
+
+Handlers can opt out on demand by calling the helper exposed from
+`routed/middlewares.dart`:
+
+```dart title="Disable compression for a specific route"
+import 'package:routed/middlewares.dart';
+
+engine.get('/stream', (ctx) {
+  disableCompression(ctx);
+  return ctx.stream(somePreCompressedStream);
+});
+```
+
+Routes that return small payloads can also leave compression enabled—the
+middleware tracks `compression.min_length` and simply passes through the response
+when it falls below the threshold.
+
+## Verifying behaviour locally
+
+Use `curl` (or any HTTP client) to confirm headers are present when the client
+advertises support:
+
+```bash
+curl --compressed -I http://127.0.0.1:8080/greet
+# ...
+# content-encoding: br
+# vary: Accept-Encoding
+```
+
+For a quick health check during development, run the benchmark helper that ships
+in the repo:
+
+```bash
+dart run tool/compression_benchmark.dart
+```
+
+Sample output on a MacBook Pro (M1 Pro) shows why the default thresholds favour
+gzip for smaller payloads but keep Brotli enabled for larger responses:
+
+```
+--- json_small ---
+input_bytes=45
+gzip -> bytes=65 avg_us=33.44
+brotli -> bytes=49 avg_us=546.60
+--- json_large ---
+input_bytes=44000
+gzip -> bytes=168 avg_us=110.50
+brotli -> bytes=40 avg_us=2169.45
+--- html_large ---
+input_bytes=58500
+gzip -> bytes=247 avg_us=143.51
+brotli -> bytes=50 avg_us=2766.77
+```
+
+Gzip runs much faster for tiny payloads, while Brotli yields the best size
+reduction for larger documents. Adjust `compression.min_length` or the algorithm
+list if your workload trends heavily toward one side.
+
+## Troubleshooting
+
+- **Unexpected MIME types** – add/remove entries in `compression.mime_allow`
+and `compression.mime_deny` to match your application's content types.
+- **Handlers return pre-compressed data** – call `disableCompression(ctx)` or
+set the `Content-Encoding` header early; the middleware will detect the header
+and avoid double-compressing.
+- **Client still sees plain responses** – confirm the client sends
+`Accept-Encoding` and that your runtime (for example, a reverse proxy or test
+client) does not transparently decompress responses.

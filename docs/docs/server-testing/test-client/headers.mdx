@@ -1,0 +1,55 @@
+---
+title: Header Extensions
+description: Learn about HTTP header utilities in server_testing
+sidebar_position: 4
+---
+
+# Header Extensions
+
+server_testing provides utilities for working with HTTP headers in tests through the HttpHeaderExtension.
+
+## Converting Headers to Map
+
+The `toMap()` extension method converts HttpHeaders to a Map for easier manipulation:
+
+```dart
+test('header manipulation', () {
+  final response = await client.get('/api');
+  
+  // Get headers as map
+  final headerMap = response.headers.toMap();
+  
+  // Access header values
+  final contentType = headerMap['content-type'];
+  final authorization = headerMap['authorization'];
+  
+  // Headers are preserved as lists
+  expect(headerMap['accept'], isList);
+});
+```
+
+## Working with Header Maps
+
+Use the header map for testing and manipulation:
+
+```dart
+test('verify headers', () async {
+  final response = await client.get('/api');
+  final headers = response.headers.toMap();
+  
+  // Check header existence
+  expect(headers.containsKey('content-type'), isTrue);
+  
+  // Check header values
+  expect(
+    headers['content-type']?[0],
+    equals('application/json')
+  );
+  
+  // Check multiple values
+  expect(
+    headers['accept']?.length,
+    greaterThan(1)
+  );
+});
+```

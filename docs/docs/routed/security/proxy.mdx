@@ -1,0 +1,140 @@
+---
+title: Proxy Support
+description: Forward requests and configure trusted proxies
+sidebar_position: 2
+---
+
+# Proxy Support
+
+Routed includes built-in support for forwarding requests to other servers. Use it to build reverse proxies and API gateways, or to delegate specific paths to upstream services. See [Security Features](/docs/routed/security) for trusted proxy/IP resolution and [Request Handling → Trusted proxies](/docs/routed/fundamentals/requests#trusted-proxies) for client IP normalization.
+
+## Basic Forwarding
+
+The `forward` helper relays the incoming method, path, query, headers, and body to the target URL. Override behaviour with `ProxyOptions` when you need to add or filter headers, change timeouts, or adjust redirect handling.
+
+
+```dart
+router.get('/api/*', (ctx) async {
+  // Forward request to another server
+  await ctx.forward('https://api.example.com${ctx.request.path}');
+});
+```
+
+## Proxy Configuration
+
+```dart
+router.get('/proxy', (ctx) async {
+  await ctx.forward('https://target-server.com/path', 
+    options: ProxyOptions(
+      // Forward original headers
+      forwardHeaders: true,
+      
+      // Add custom headers
+      headers: {
+        'X-Proxy-Custom': 'value',
+        'X-Forwarded-Host': 'myapp.com'
+      },
+      
+      // Add proxy identification headers
+      addProxyHeaders: true
+    )
+  );
+});
+```
+
+The trusted proxy resolver reads its configuration from the manifest too. Add ranges and headers once in `config/http.yaml` (see [Security Features](/docs/routed/security#proxy-and-ip-resolution)). When forwarding, avoid relaying hop-by-hop headers (`Connection`, `Keep-Alive`, `Transfer-Encoding`, `TE`, `Trailer`, `Upgrade`, `Proxy-Authorization`, `Proxy-Authenticate`) and only forward a vetted set of headers. Prefer appending to `X-Forwarded-For` rather than replacing it; with trusted proxies configured, Routed will normalize `clientIP` from these headers:
+
+```yaml title="config/http.yaml"
+security:
+  trusted_proxies:
+    enabled: true
+    forward_client_ip: true
+    proxies: ['10.0.0.0/8', '::/0']
+    headers: ['X-Forwarded-For', 'X-Real-IP']
+    platform_header: CF-Connecting-IP
+  ip_filter:
+    enabled: true
+    default_action: deny
+    allow:
+      - 10.10.0.0/16
+      - 203.0.113.5
+    deny:
+      - 0.0.0.0/0
+    respect_trusted_proxies: true
+```
+
+`routed.security` validates the list (each entry must be a non-empty string) and updates the `TrustedProxyResolver` whenever configuration reloads. Run `dart run routed_cli provider:list --config` to check the effective proxy settings and catch mistakes early.
+
+### IP allow/deny lists
+
+The `security.ip_filter` section lets you short-circuit requests before they reach your handlers. Set `default_action` to `deny` and list the CIDR ranges that should be allowed. Entries in `deny` always take precedence, and when `respect_trusted_proxies` is true the filter evaluates the same forwarded headers trusted proxies use. Requests that fail the check receive a `403 Forbidden` before any additional middleware runs.
+
+## Forward with Headers
+
+Forward only the headers you need. Be careful not to leak internal headers or credentials; filter cookies/auth headers unless the upstream expects them. If you terminate TLS at a proxy, set and forward `X-Forwarded-Proto` and `X-Forwarded-Host` so downstream services generate correct absolute URLs.
+
+
+```dart
+router.all('/*', (ctx) async {
+  await ctx.forward('https://backend.example.com', 
+    options: ProxyOptions(
+      headers: {
+        'X-Real-IP': ctx.request.clientIP,
+        'X-Forwarded-For': ctx.request.clientIP,
+        'X-Forwarded-Proto': ctx.request.scheme,
+        'X-Forwarded-Host': ctx.request.host
+      }
+    )
+  );
+});
+```
+
+## API Gateway Example
+
+```dart
+final api = Router(path: '/api');
+
+// Version 1 API
+api.group(
+  path: '/v1',
+  builder: (v1) {
+    v1.all('/*', (ctx) async {
+      await ctx.forward('https://api-v1.example.com${ctx.request.path}');
+    });
+  }
+);
+
+// Version 2 API
+api.group(
+  path: '/v2',
+  builder: (v2) {
+    v2.all('/*', (ctx) async {
+      await ctx.forward('https://api-v2.example.com${ctx.request.path}');
+    });
+  }
+);
+
+engine.use(api);
+```
+
+## Load Balancer Example
+
+Production tip: set connect/read timeouts and add health checks before routing to a backend. Consider circuit breakers or retries with backoff for resilience.
+
+
+```dart
+final backends = [
+  'https://server1.example.com',
+  'https://server2.example.com',
+  'https://server3.example.com'
+];
+var currentBackend = 0;
+
+router.all('/*', (ctx) async {
+  // Round-robin selection
+  final backend = backends[currentBackend];
+  currentBackend = (currentBackend + 1) % backends.length;
+  
+  await ctx.forward('$backend${ctx.request.path}');
+});
+```

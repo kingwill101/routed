@@ -1,0 +1,48 @@
+{{ errors }}
+{% if errors and not fields %}
+    <p>
+        {% for field in hidden_fields -%}
+            {{- field -}}
+        {%- endfor %}
+    </p>
+{% endif %}
+{% for item in fields %}
+    {% assign field = item.field %}
+    {% assign field_errors = item.errors %}
+    {% if field.has_errors %}
+        <ul class="errorlist">
+            {% for error in field_errors %}
+                <li>{{ error }}</li>
+            {% endfor %}
+        </ul>
+    {% endif %}
+    <p
+            {% assign classes = field.css_classes -%}
+            {% if classes %}
+                class="{{ classes }}"
+            {% endif %}
+    >
+        {% if field.label %}{{ field.label_tag }}{% endif %}
+        {{ field }}
+        {% if field.help_text %}
+            <span
+                    class="helptext"
+        {% if field.auto_id %}
+            id="{{ field.auto_id }}_helptext"
+        {% endif %}
+      >
+        {{- field.help_text -}}
+      </span>
+        {% endif %}
+        {% if forloop.last %}
+            {% for field in hidden_fields -%}
+                {{- field -}}
+            {%- endfor %}
+        {% endif %}
+    </p>
+{% endfor %}
+{% if not fields and not errors %}
+    {% for field in hidden_fields -%}
+        {{- field -}}
+    {%- endfor %}
+{% endif %}

@@ -3,8 +3,10 @@ import 'package:routed/routed.dart';
 void main() async {
   final engine = Engine();
 
-  // Configure Liquid template engine
-  engine.useLiquid(directory: 'templates');
+  // Configure template engines
+  engine.useViewEngine(LiquidViewEngine(
+    directory: 'templates',
+  ));
 
   // Home page
   engine.get('/', (ctx) {

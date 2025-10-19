@@ -1,5 +1,6 @@
 import type {ReactNode} from 'react';
 import clsx from 'clsx';
+import Link from '@docusaurus/Link';
 import Heading from '@theme/Heading';
 import styles from './styles.module.css';
 
@@ -7,42 +8,49 @@ type FeatureItem = {
   title: string;
   Svg: React.ComponentType<React.ComponentProps<'svg'>>;
   description: ReactNode;
+    link: string;
+    linkLabel: string;
 };
 
 const FeatureList: FeatureItem[] = [
   {
-    title: 'Easy to Use',
+      title: 'Routed Core',
     Svg: require('@site/static/img/undraw_docusaurus_mountain.svg').default,
     description: (
       <>
-        Docusaurus was designed from the ground up to be easily installed and
-        used to get your website up and running quickly.
+          Compose routers, controllers, middleware, and views with a pragmatic HTTP engine built for production Dart
+          services.
       </>
     ),
+      link: '/docs/routed/',
+      linkLabel: 'Start building',
   },
   {
-    title: 'Focus on What Matters',
+      title: 'Server Testing Toolkit',
     Svg: require('@site/static/img/undraw_docusaurus_tree.svg').default,
     description: (
       <>
-        Docusaurus lets you focus on your docs, and we&apos;ll do the chores. Go
-        ahead and move your docs into the <code>docs</code> directory.
+          Reuse the same handler for fast in-memory tests, real HTTP transports, and full browser automation with CLI
+          support.
       </>
     ),
+      link: '/docs/server-testing/',
+      linkLabel: 'See testing guides',
   },
   {
-    title: 'Powered by React',
+      title: 'Property-Based Confidence',
     Svg: require('@site/static/img/undraw_docusaurus_react.svg').default,
     description: (
       <>
-        Extend or customize your website layout by reusing React. Docusaurus can
-        be extended while reusing the same header and footer.
+          Generate adversarial inputs, shrink failures, and model stateful systems with the property_testing toolkit.
       </>
     ),
+      link: '/docs/property-testing/',
+      linkLabel: 'Explore generators',
   },
 ];
 
-function Feature({title, Svg, description}: FeatureItem) {
+function Feature({title, Svg, description, link, linkLabel}: FeatureItem) {
   return (
     <div className={clsx('col col--4')}>
       <div className="text--center">
@@ -51,6 +59,9 @@ function Feature({title, Svg, description}: FeatureItem) {
       <div className="text--center padding-horiz--md">
         <Heading as="h3">{title}</Heading>
         <p>{description}</p>
+          <Link className="button button--link button--sm" to={link}>
+              {linkLabel} →
+          </Link>
       </div>
     </div>
   );

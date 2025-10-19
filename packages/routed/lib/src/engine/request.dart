@@ -1,5 +1,6 @@
 part of 'engine.dart';
 
+/// Extension methods for handling HTTP server functionality.
 extension ServerExtension on Engine {
   /// Start listening for HTTP requests on the given host/port.
   ///
@@ -12,8 +13,11 @@ extension ServerExtension on Engine {
   ///
   /// Throws:
   /// - [SocketException] if the server cannot bind to the specified host/port.
-  Future<void> serve(
-      {String host = '127.0.0.1', int? port, bool echo = true}) async {
+  Future<void> serve({
+    String host = '127.0.0.1',
+    int? port,
+    bool echo = true,
+  }) async {
     // Build routes if not already done
     if (_engineRoutes.isEmpty) {
       _build();
@@ -24,45 +28,102 @@ extension ServerExtension on Engine {
     }
     if (echo) printRoutes();
 
-    runZonedGuarded(() async {
-      _server = await HttpServer.bind(host, port ?? 0, shared: true);
-      print('Engine listening on http://$host:$port');
+    runZonedGuarded(
+      () async {
+        _server = await HttpServer.bind(host, port ?? 0, shared: true);
+        print('Engine listening on http://$host:$port');
+        print("setup shutdown controller");
+        _setupShutdownController();
 
-      // Handle incoming connections
-      await for (HttpRequest httpRequest in _server!) {
-        await handleRequest(httpRequest);
-      }
-    }, (e, s) {
-      print(e);
-    });
+        // Handle incoming connections
+        await for (HttpRequest httpRequest in _server!) {
+          // Handle each request concurrently
+          // ignore: unawaited_futures
+          handleRequest(httpRequest).catchError((e, s) async {
+            // Best-effort error handling if nothing else catches it
+            try {
+              httpRequest.response.statusCode = HttpStatus.internalServerError;
+              await httpRequest.response.close();
+            } catch (_) {}
+          });
+        }
+      },
+      (e, s) {
+        print(e);
+      },
+    );
   }
 
-  /// Handles an individual HTTP request by matching it to registered routes.
+  bool _isWebSocket(HttpRequest httpRequest) {
+    return WebSocketTransformer.isUpgradeRequest(httpRequest);
+  }
+
+  Future<bool> handleWs(HttpRequest httpRequest) async {
+    if (!WebSocketTransformer.isUpgradeRequest(httpRequest)) {
+      return false;
+    }
+    final route = _wsRoutes[httpRequest.uri.path];
+    if (route == null) {
+      return false;
+    }
+
+    final container = createRequestContainer(httpRequest, httpRequest.response);
+    Request? trackedRequest;
+    try {
+      trackedRequest = await _handleWebSocketRoute(
+        route,
+        httpRequest,
+        container,
+      );
+    } finally {
+      if (trackedRequest != null) {
+        _onRequestFinished(trackedRequest.id);
+      }
+      await cleanupRequestContainer(container);
+    }
+    return true;
+  }
+
+  /// Internal method to handle an individual HTTP request.
   ///
   /// This method implements the routing logic in multiple passes:
-  /// 1. Checks for exact route matches
-  /// 2. Handles trailing slash redirects if enabled
-  /// 3. Handles method not allowed responses if enabled
-  /// 4. Attempts to match a fallback route
-  /// 5. Returns 404 if no matches are found
+  /// 1. Checks for WebSocket upgrade requests
+  /// 2. Checks for exact route matches
+  /// 3. Handles trailing slash redirects if enabled
+  /// 4. Handles method not allowed responses if enabled
+  /// 5. Attempts to match a fallback route
+  /// 6. Returns 404 if no matches are found
   ///
   /// Parameters:
   /// - [httpRequest]: The incoming HTTP request to handle.
-  Future<void> handleRequest(HttpRequest httpRequest) async {
+  Future<Request?> _handleRequest(
+    HttpRequest httpRequest,
+    Container container,
+  ) async {
     _ensureRoutes();
+
+    if (_isWebSocket(httpRequest)) {
+      if (await handleWs(httpRequest)) return null;
+    }
     final path = httpRequest.uri.path;
     final method = httpRequest.method;
 
-    final maxRequestSize = config.security.maxRequestSize;
+    final configMap = container.get<Config>();
+    final maxRequestSizeSetting = configMap.get('security.max_request_size');
+    final maxRequestSize = maxRequestSizeSetting is int
+        ? maxRequestSizeSetting
+        : config.security.maxRequestSize;
 
-    // Wrap the httpRequest in a size-limiting stream
-    final wrappedRequest = WrappedRequest(httpRequest, maxRequestSize);
+    final HttpRequest effectiveRequest = maxRequestSize > 0
+        ? WrappedRequest(httpRequest, maxRequestSize)
+        : httpRequest;
 
     // Handle trailing slash redirects first
     if (config.redirectTrailingSlash) {
       final hasTrailingSlash = path.endsWith('/');
-      final alternativePath =
-          hasTrailingSlash ? path.substring(0, path.length - 1) : '$path/';
+      final alternativePath = hasTrailingSlash
+          ? path.substring(0, path.length - 1)
+          : '$path/';
 
       // Check if alternative path exists
       final alternativeMatch = _engineRoutes
@@ -70,39 +131,109 @@ extension ServerExtension on Engine {
           .firstOrNull;
 
       if (alternativeMatch != null) {
-        _redirectRequest(wrappedRequest, alternativePath, method);
-        await wrappedRequest.response.close();
-        return;
+        final manager = container.has<EventManager>()
+            ? await container.make<EventManager>()
+            : null;
+        if (manager != null) {
+          final nfRequest = Request(effectiveRequest, {}, config);
+          final nfResponse = Response(effectiveRequest.response);
+          manager.publish(
+            RouteNotFoundEvent(
+              EngineContext(
+                request: nfRequest,
+                response: nfResponse,
+                engine: this,
+                container: container,
+              ),
+            ),
+          );
+        }
+        _redirectRequest(effectiveRequest, alternativePath, method);
+        await effectiveRequest.response.close();
+        return null;
       }
     }
 
     // Rest of existing route matching logic...
     final routeMatches = _engineRoutes
-        .map((r) => r.tryMatch(wrappedRequest))
-        .where((match) =>
-            match != null && !(match.route != null && match.route!.isFallback))
+        .map((r) => r.tryMatch(effectiveRequest))
+        .where(
+          (match) =>
+              match != null &&
+              !(match.route != null && match.route!.isFallback),
+        )
         .toList();
 
     final exactMatch = routeMatches.where((m) => m!.matched).firstOrNull;
 
     if (exactMatch != null) {
-      await _handleMatchedRoute(exactMatch.route!, wrappedRequest);
-      return;
+      try {
+        return await _handleMatchedRoute(
+          exactMatch.route!,
+          effectiveRequest,
+          container,
+        );
+      } on HttpException catch (e) {
+        if (e.message == 'Request body exceeds the maximum allowed size.') {
+          effectiveRequest.response.statusCode =
+              HttpStatus.requestEntityTooLarge;
+          effectiveRequest.response.write(
+            'Request body exceeds the maximum allowed size.',
+          );
+          await effectiveRequest.response.close();
+          return null;
+        }
+        rethrow;
+      }
     }
+    // Automatic OPTIONS handling when enabled and no explicit handler was found.
+    if (method == 'OPTIONS' && config.defaultOptionsEnabled) {
+      final allowed = _resolveAllowedMethods(path, effectiveRequest);
+      if (allowed.isNotEmpty) {
+        allowed.add('OPTIONS');
+        if (middlewares.isNotEmpty) {
+          await _runGlobalMiddlewares(
+            effectiveRequest,
+            container,
+            onComplete: (ctx) async {
+              _writeOptionsResponse(ctx.response, allowed);
+              return ctx.response;
+            },
+          );
+        } else {
+          _writeOptionsResponse(effectiveRequest.response, allowed);
+          await effectiveRequest.response.close();
+        }
+        return null;
+      }
+    }
+
     // Third pass: handle method not allowed
     if (config.handleMethodNotAllowed) {
       final methodMismatches = routeMatches.where((m) => m!.isMethodMismatch);
 
       if (methodMismatches.isNotEmpty) {
-        final allowedMethods = _engineRoutes
-            .where((r) => r.path == path)
-            .map((r) => r.method)
-            .toSet();
+        final allowedMethods = _resolveAllowedMethods(path, effectiveRequest);
+        allowedMethods.add('OPTIONS');
 
-        wrappedRequest.response.headers.add('Allow', allowedMethods.join(', '));
-        wrappedRequest.response.statusCode = HttpStatus.methodNotAllowed;
-        await wrappedRequest.response.close();
-        return;
+        if (method == 'OPTIONS' && middlewares.isNotEmpty) {
+          await _runGlobalMiddlewares(
+            effectiveRequest,
+            container,
+            onComplete: (ctx) async {
+              _writeMethodNotAllowedResponse(ctx.response, allowedMethods);
+              return ctx.response;
+            },
+          );
+          return null;
+        }
+
+        _writeMethodNotAllowedResponse(
+          effectiveRequest.response,
+          allowedMethods,
+        );
+        await effectiveRequest.response.close();
+        return null;
       }
     }
 
@@ -118,8 +249,10 @@ extension ServerExtension on Engine {
         final staticPath = _extractStaticPath(fallbackRoute.path);
 
         // Calculate the similarity score between the request path and the static path
-        final similarityScore =
-            fuzzy.ratio(path, staticPath.isNotEmpty ? staticPath : "/");
+        final similarityScore = fuzzy.ratio(
+          path,
+          staticPath.isNotEmpty ? staticPath : "/",
+        );
 
         // Update the most specific fallback route if the similarity score is higher
         if (similarityScore > maxSimilarityScore) {
@@ -129,15 +262,46 @@ extension ServerExtension on Engine {
       }
 
       if (mostSpecificFallback != null) {
-        await _handleMatchedRoute(mostSpecificFallback, wrappedRequest);
-        return;
+        return await _handleMatchedRoute(
+          mostSpecificFallback,
+          effectiveRequest,
+          container,
+        );
       }
     }
 
     // No matches found
-    wrappedRequest.response.statusCode = HttpStatus.notFound;
-    wrappedRequest.response.write('404 Not Found');
-    await wrappedRequest.response.close();
+    final manager = container.has<EventManager>()
+        ? await container.make<EventManager>()
+        : null;
+    if (manager != null) {
+      final nfRequest = Request(effectiveRequest, {}, config);
+      final nfResponse = Response(effectiveRequest.response);
+      manager.publish(
+        RouteNotFoundEvent(
+          EngineContext(
+            request: nfRequest,
+            response: nfResponse,
+            engine: this,
+            container: container,
+          ),
+        ),
+      );
+      manager.publish(
+        AfterRoutingEvent(
+          EngineContext(
+            request: nfRequest,
+            response: nfResponse,
+            engine: this,
+            container: container,
+          ),
+        ),
+      );
+    }
+    effectiveRequest.response.statusCode = HttpStatus.notFound;
+    effectiveRequest.response.write('404 Not Found');
+    await effectiveRequest.response.close();
+    return null;
   }
 
   /// Handles a matched route by creating a context and executing the middleware chain.
@@ -148,47 +312,271 @@ extension ServerExtension on Engine {
   ///
   /// This method creates an [EngineContext] and executes all middleware and the route handler
   /// in the correct order. It also handles any errors that occur during processing.
-  Future<void> _handleMatchedRoute(
-      EngineRoute route, HttpRequest httpRequest) async {
+  Future<Request> _handleMatchedRoute(
+    EngineRoute route,
+    HttpRequest httpRequest,
+    Container container,
+  ) async {
     final request = Request(httpRequest, {}, config);
     final response = Response(httpRequest.response);
+
+    _onRequestStarted(request);
+
+    final List<Middleware> chain = [];
+    for (final m in middlewares) {
+      chain.add((EngineContext c, Next n) => m(c, n));
+    }
+    for (final m in route.middlewares) {
+      chain.add((EngineContext c, Next n) => m(c, n));
+    }
+    chain.add((EngineContext c, Next n) async {
+      final r = await route.handler(c);
+      return r;
+    });
 
     final context = EngineContext(
       request: request,
       response: response,
       route: route,
       engine: this,
-      handlers: [...middlewares, ...route.middlewares, route.handler],
+      handlers: chain,
+      container: container,
     );
+
+    container
+      ..instance<Request>(request)
+      ..instance<Response>(response)
+      ..instance<EngineContext>(context);
+
+    context.set('routed.route_name', route.name ?? route.path);
+    context.set('routed.route_path', route.path);
+
+    final manager = container.has<EventManager>()
+        ? await container.make<EventManager>()
+        : null;
+
+    manager?.publish(BeforeRoutingEvent(context));
 
     try {
       await AppZone.run(
         body: () async {
-          try {
-            await context.run();
-          } catch (err, stack) {
-            // Anything that wasn't caught at a lower level gets caught here.
-            _handleGlobalError(context, err, stack);
-          } finally {
-            print("");
-            // Only close if not already closed
-            if (!response.isClosed) {
-              response.close();
+          await LoggingContext.run(this, context, (logger) async {
+            try {
+              manager?.publish(RouteMatchedEvent(context, route));
+              await context.run();
+            } catch (err, stack) {
+              manager?.publish(RoutingErrorEvent(context, route, err, stack));
+              await _handleGlobalError(context, err, stack);
+            } finally {
+              // Close if our wrapper not yet closed; underlying may already be
+              // closed by direct HttpResponse usage (e.g. static file handler).
+              if (!response.isClosed) {
+                response.close();
+              }
             }
-          }
+          });
         },
         engine: this,
         context: context,
       );
     } catch (err, stack) {
       // Anything that wasn't caught at a lower level gets caught here.
-      _handleGlobalError(context, err, stack);
+      await _handleGlobalError(context, err, stack);
     } finally {
       // Only close if not already closed
       if (!response.isClosed) {
         // response.close();
       }
+      _onRequestFinished(request.id);
+      manager?.publish(AfterRoutingEvent(context, route: route));
     }
+
+    return request;
+  }
+
+  Future<Request> _handleWebSocketRoute(
+    WebSocketEngineRoute route,
+    HttpRequest httpRequest,
+    Container container,
+  ) async {
+    final request = Request(httpRequest, {}, config);
+    final response = Response(httpRequest.response);
+
+    final List<Middleware> chain = [];
+    for (final m in middlewares) {
+      chain.add((EngineContext c, Next n) => m(c, n));
+    }
+    for (final m in route.middlewares) {
+      chain.add((EngineContext c, Next n) => m(c, n));
+    }
+    chain.add((EngineContext ctx, Next next) async {
+      try {
+        // ignore: close_sinks, handed off to the registered WebSocket handler
+        final webSocket = await WebSocketTransformer.upgrade(httpRequest);
+        final wsContext = WebSocketContext(webSocket, ctx);
+
+        await route.handler.onOpen(wsContext);
+
+        webSocket.listen(
+          (message) => route.handler.onMessage(wsContext, message),
+          onDone: () => route.handler.onClose(wsContext),
+          onError: (dynamic error) => route.handler.onError(wsContext, error),
+          cancelOnError: false,
+        );
+      } catch (e) {
+        httpRequest.response
+          ..statusCode = HttpStatus.internalServerError
+          ..write('WebSocket upgrade failed: $e')
+          ..close();
+      }
+      return ctx.response;
+    });
+
+    final context = EngineContext(
+      request: request,
+      response: response,
+      engine: this,
+      handlers: chain,
+      container: container,
+    );
+
+    container
+      ..instance<Request>(request)
+      ..instance<Response>(response)
+      ..instance<EngineContext>(context);
+    _activeRequests[request.id] = request;
+
+    await AppZone.run(
+      engine: this,
+      context: context,
+      body: () async {
+        await LoggingContext.run(this, context, (_) async {
+          try {
+            await context.run();
+          } catch (err, stack) {
+            await _handleGlobalError(context, err, stack);
+          }
+        });
+      },
+    );
+
+    return request;
+  }
+
+  Future<bool> _runGlobalMiddlewares(
+    HttpRequest httpRequest,
+    Container container, {
+    bool closeResponse = true,
+    FutureOr<Response> Function(EngineContext ctx)? onComplete,
+  }) async {
+    if (middlewares.isEmpty) {
+      return false;
+    }
+
+    final request = Request(httpRequest, {}, config);
+    final response = Response(httpRequest.response);
+
+    final handlers = <Middleware>[
+      for (final middleware in middlewares)
+        (EngineContext ctx, Next next) => middleware(ctx, next),
+      (EngineContext ctx, Next next) async =>
+          onComplete != null ? await onComplete(ctx) : ctx.response,
+    ];
+
+    final context = EngineContext(
+      request: request,
+      response: response,
+      engine: this,
+      handlers: handlers,
+      container: container,
+    );
+
+    container
+      ..instance<Request>(request)
+      ..instance<Response>(response)
+      ..instance<EngineContext>(context);
+
+    final manager = container.has<EventManager>()
+        ? await container.make<EventManager>()
+        : null;
+
+    manager?.publish(BeforeRoutingEvent(context));
+
+    try {
+      await AppZone.run(
+        engine: this,
+        context: context,
+        body: () async {
+          await LoggingContext.run(this, context, (logger) async {
+            try {
+              await context.run();
+            } catch (err, stack) {
+              await _handleGlobalError(context, err, stack);
+            } finally {
+              if (closeResponse && !response.isClosed) {
+                response.close();
+              }
+            }
+          });
+        },
+      );
+    } finally {
+      _onRequestFinished(request.id);
+      manager?.publish(AfterRoutingEvent(context));
+    }
+
+    return true;
+  }
+
+  Set<String> _resolveAllowedMethods(String path, HttpRequest request) {
+    final methods = <String>{};
+    for (final route in _engineRoutes) {
+      if (route.isFallback) {
+        continue;
+      }
+
+      final pattern = route._uriPattern;
+      final matchesPath =
+          pattern.hasMatch(path) ||
+          pattern.hasMatch(path.endsWith('/') ? path : '$path/');
+      if (!matchesPath) {
+        continue;
+      }
+
+      if (!route.validateConstraints(request)) {
+        continue;
+      }
+
+      methods.add(route.method);
+    }
+
+    if (methods.contains('GET')) {
+      methods.add('HEAD');
+    }
+
+    return methods;
+  }
+
+  void _writeAllowResponse(Object response, Set<String> methods, int status) {
+    final ordered = methods.toList()..sort();
+    final headerValue = ordered.join(', ');
+    if (response is Response) {
+      response.headers.set(HttpHeaders.allowHeader, headerValue);
+      response.statusCode = status;
+    } else if (response is HttpResponse) {
+      response.headers.set(HttpHeaders.allowHeader, headerValue);
+      response.statusCode = status;
+    } else {
+      throw StateError('Unsupported response type ${response.runtimeType}');
+    }
+  }
+
+  void _writeOptionsResponse(Object response, Set<String> methods) {
+    _writeAllowResponse(response, methods, HttpStatus.noContent);
+  }
+
+  void _writeMethodNotAllowedResponse(Object response, Set<String> methods) {
+    _writeAllowResponse(response, methods, HttpStatus.methodNotAllowed);
   }
 
   /// Handles any uncaught errors that occur during request processing.
@@ -202,37 +590,87 @@ extension ServerExtension on Engine {
   /// - [ValidationError]: Returns a 422 with validation errors
   /// - [EngineError]: Returns the specified error code and message
   /// - Other errors: Returns a 500 Internal Server Error
-  void _handleGlobalError(
+  Future<void> _handleGlobalError(
     EngineContext ctx,
     Object err,
-    StackTrace stack,
-  ) {
-    // For logging—replace with your logging approach (e.g. Sentry, package:logging, etc).
-    stderr.writeln('Global error caught in Engine: $err\n$stack');
-    if (err is EngineError) {
-      // print(jsonEncode(err));
+    StackTrace stack,) async {
+    final logger = LoggingContext.currentLogger();
+    final errorPayload = <String, Object?>{
+      'error_type': err.runtimeType.toString(),
+      'error_message': err.toString(),
+    };
+    if (LoggingServiceProvider.includeStackTraces) {
+      errorPayload['stack_trace'] = stack.toString();
     }
-    if (err is ValidationError) {
-      ctx.json(err.errors,
-          statusCode: err.code ?? HttpStatus.unprocessableEntity);
+    final errorContext = contextual.Context(errorPayload);
+    logger.error('Unhandled exception while processing request', errorContext);
+
+    void reportHookError(Object hookError, StackTrace hookStack) {
+      final hookPayload = <String, Object?>{
+        'error_type': hookError.runtimeType.toString(),
+        'error_message': hookError.toString(),
+      };
+      if (LoggingServiceProvider.includeStackTraces) {
+        hookPayload['stack_trace'] = hookStack.toString();
+      }
+      logger.error(
+        'Error hook threw while handling an exception',
+        contextual.Context(hookPayload),
+      );
+    }
+
+    await errorHooks.runBefore(ctx, err, stack, onHookError: reportHookError);
+
+    var handled = await errorHooks.handle(
+      ctx,
+      err,
+      stack,
+      onHookError: reportHookError,
+    );
+
+    if (!handled &&
+        err is HttpException &&
+        err.message == 'Request body exceeds the maximum allowed size.') {
+      ctx.string(
+        'Request body exceeds the maximum allowed size.',
+        statusCode: HttpStatus.requestEntityTooLarge,
+      );
+      handled = true;
+    }
+
+    if (!handled && err is ValidationError) {
+      ctx.json(
+        err.errors,
+        statusCode: err.code ?? HttpStatus.unprocessableEntity,
+      );
+      handled = true;
+    }
+
+    if (!handled && err is EngineError && err.code != null) {
+      if (!ctx.isClosed) {
+        ctx.string(
+          'EngineError(${err.code}): ${err.message}',
+          statusCode: err.code!,
+        );
+      }
+      handled = true;
+    }
+
+    if (!handled) {
+      if (!ctx.isClosed) {
+        ctx.string(
+          'An unexpected error occurred. Please try again later.',
+          statusCode: HttpStatus.internalServerError,
+        );
+      }
+      handled = true;
+    }
+
+    if (!ctx.isAborted) {
       ctx.abort();
-      return;
-    }
-    if (err is EngineError && err.code != null) {
-      // Known engine-related error with a custom status code.
-
-      // You can return JSON, HTML, plain text, etc. For example:
-      ctx.string('EngineError(${err.code}): ${err.message}',
-          statusCode: err.code!);
-    } else {
-      // Fallback to internal server error for unknown/unhandled
-      // Customize the body for dev, staging, or production:
-      ctx.string('An unexpected error occurred. Please try again later.',
-          statusCode: HttpStatus.internalServerError);
     }
 
-    // Make sure no further processing occurs.
-    ctx.abort();
+    await errorHooks.runAfter(ctx, err, stack, onHookError: reportHookError);
   }
 
   /// Performs a redirect by setting the appropriate status code and Location header.
@@ -245,7 +683,8 @@ extension ServerExtension on Engine {
   /// Uses 301 for GET requests and 307 for all other methods.
   void _redirectRequest(HttpRequest request, String newPath, String method) {
     final statusCode = method == 'GET'
-        ? HttpStatus.movedPermanently // 301
+        ? HttpStatus
+              .movedPermanently // 301
         : HttpStatus.temporaryRedirect; // 307
 
     request.response.statusCode = statusCode;

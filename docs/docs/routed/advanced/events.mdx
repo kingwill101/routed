@@ -1,0 +1,126 @@
+---
+title: Events
+description: Publish, subscribe, and react to Routed lifecycle events
+sidebar_position: 3
+---
+
+# Events
+
+Routed exposes an event bus so you can hook into the request lifecycle, provider boot, and your own domain events.
+
+## Event manager basics
+
+The framework registers an `EventManager` singleton via `RoutingServiceProvider` (`packages/routed/lib/src/engine/providers/routing.dart:1`). Resolve it from the container or the request context when publishing or subscribing:
+
+```dart
+final eventManager = await engine.make<EventManager>();
+
+eventManager.on<UserSignedUp>().listen((event) {
+  analytics.capture('user_signed_up', event.toJson());
+});
+
+eventManager.publish(UserSignedUp(userId: '42'));
+```
+
+Within handlers you can use the request container. For request-scoped listeners prefer one-shot operators (`.first`, `take(1)`) to avoid dangling subscriptions:
+
+```dart
+router.post('/orders', (ctx) async {
+  final eventManager = await ctx.engine!.container.make<EventManager>();
+  final order = await orders.create(ctx.request);
+  eventManager.publish(OrderCreated(order));
+  return ctx.json({'id': order.id});
+});
+```
+
+`EventManager` wraps `package:event_bus/event_bus.dart` and implements `Disposable` so it cleans up on engine shutdown (`packages/routed/lib/src/events/event_manager.dart:1`). Listener lifecycle: keep references to `StreamSubscription`s and cancel them during provider `cleanup()` or test teardown to avoid leaks. For one-shot reactions prefer `.first`/`take(1)` or filter-and-`takeWhile(...)`. Always supply `onError` when listening so failures don't go unobserved.
+
+```dart
+late final StreamSubscription sub;
+
+@override
+Future<void> boot(Container c) async {
+  final events = await c.make<EventManager>();
+  sub = events.on<OrderCreated>().listen((e) {
+    // handle event
+  }, onError: (err, stack) {
+    logger.error('listener failed', err, stack);
+  });
+}
+
+@override
+Future<void> cleanup(Container c) async {
+  await sub.cancel();
+}
+```
+
+## Routing lifecycle events
+
+Routed emits structured events during request processing whenever the routing provider is active (`packages/routed/lib/src/engine/events/route.dart:1`):
+
+- `BeforeRoutingEvent` – just after the `EngineContext` is created.
+- `RouteMatchedEvent` – when a route match is found.
+- `RouteNotFoundEvent` – when no route resolves the request.
+- `AfterRoutingEvent` – after the handler finishes (success or error).
+- `RoutingErrorEvent` – when a handler throws.
+
+Subscribe to these events to implement logging, metrics, or tracing. Keep the returned `StreamSubscription` and cancel it during shutdown to avoid leaks:
+
+```dart
+eventManager.on<RouteMatchedEvent>().listen((event) {
+  final ctx = event.context;
+  log.info('[${ctx.request.method}] ${event.route.path}');
+});
+
+eventManager.on<RoutingErrorEvent>().listen((event) {
+  logger.error('Route failed', event.error, event.stackTrace);
+});
+```
+
+## System events
+
+The engine also publishes system-level events (`packages/routed/lib/src/events/system_events.dart:4`):
+
+- `ProviderRegisteredEvent` / `ProviderBootedEvent` – emitted as providers register and boot.
+- `RequestContainerCreatedEvent` / `RequestContainerDisposedEvent` – wrap request-scoped container lifecycle.
+- `BindingRegisteredEvent` / `InstanceResolvedEvent` – detail container operations.
+- `SystemErrorEvent` – covers unhandled errors surfaced by the framework.
+
+These events are useful for diagnostics and health monitoring—log them (with sampling), increment counters, or feed them into observability pipelines.
+
+## Configuration events
+
+When the configuration loader finishes, Routed publishes:
+
+- `ConfigLoadedEvent` – the initial configuration snapshot after boot.
+- `ConfigReloadedEvent` – any subsequent reload (triggered by watch mode or an explicit `engine.replaceConfig(...)`).
+
+Both events expose the resolved `Config` and optional metadata. Use them to rebuild caches or notify downstream services when configuration changes:
+
+```dart
+final events = await engine.make<EventManager>();
+
+events.on<ConfigLoadedEvent>().listen((event) {
+  logger.info("Config ready for env=${event.config.get('app.env')}");
+});
+
+events.on<ConfigReloadedEvent>().listen((event) {
+  featureFlags.refresh(event.config);
+  metrics.increment('config_reload_count');
+});
+```
+
+## Custom events
+
+Publishing your own events works the same way:
+
+```dart
+class InvoiceGenerated extends Event {
+  InvoiceGenerated(this.invoiceId);
+  final String invoiceId;
+}
+
+eventManager.publish(InvoiceGenerated('inv_2024_001'));
+```
+
+Keep event classes small and serialisable; avoid holding `EngineContext` or other heavy objects. Prefer IDs and minimal payloads so listeners stay decoupled from request state.

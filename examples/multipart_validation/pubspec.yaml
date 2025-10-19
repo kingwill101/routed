@@ -1,7 +1,0 @@
-name: multipart_validation_example
-environment:
-  sdk: ">=3.6.0 <4.0.0"
-dependencies:
-  routed:
-    path: ../../packages/routed
-  path: ^1.8.0

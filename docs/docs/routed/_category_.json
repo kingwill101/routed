@@ -1,0 +1,9 @@
+{
+  "label": "Routed",
+  "position": 10,
+  "collapsed": false,
+  "link": {
+    "type": "doc",
+    "id": "routed/index"
+  }
+}

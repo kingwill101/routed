@@ -1,0 +1,84 @@
+---
+title: Session-backed Login
+description: Cookie sessions with flash messages and validation
+sidebar_position: 2
+---
+
+# Session-backed Login
+
+```dart
+import 'dart:io';
+import 'package:routed/routed.dart';
+
+Future<void> main() async {
+  final engine = Engine(
+    options: [
+      withSessionConfig(SessionConfig.cookie(
+        appKey: 'replace-with-secret',
+        cookieName: 'app_session',
+        maxAge: const Duration(hours: 2),
+      )),
+    ],
+  );
+
+  engine.get('/login', (ctx) async {
+    final message = ctx.hasFlashMessages()
+        ? ctx.getFlashMessages().cast<String>().join('\n')
+        : null;
+
+    return ctx.html('<h1>Login</h1><p>{{ message }}</p>', data: {
+      'message': message ?? '',
+    });
+  });
+
+  engine.post('/login', (ctx) async {
+    await ctx.validate({
+      'email': 'required|email',
+      'password': 'required|min:8',
+    });
+
+    final data = <String, dynamic>{};
+    await ctx.bindJSON(data);
+
+    final user = await _authenticate(data['email'], data['password']);
+    if (user == null) {
+      ctx.flash('Invalid credentials', 'error');
+      return ctx.redirect('/login', statusCode: HttpStatus.found);
+    }
+
+    ctx.setSession('user_id', user['id']);
+    ctx.flash('Welcome back ${user['name']}!', 'success');
+    return ctx.redirect('/dashboard', statusCode: HttpStatus.found);
+  });
+
+  engine.get('/dashboard', (ctx) {
+    if (!ctx.hasSession('user_id')) {
+      ctx.flash('Please sign in first', 'error');
+      return ctx.redirect('/login', statusCode: HttpStatus.found);
+    }
+
+    final userId = ctx.getSession<int>('user_id');
+    final user = _users[userId];
+    return ctx.json({'message': 'Hello ${user?['name']}' });
+  });
+
+  await engine.serve(port: 8080);
+}
+
+Future<Map<String, dynamic>?> _authenticate(String email, String password) async {
+  final match = _users.values.firstWhere(
+    (u) => u['email'] == email && u['password'] == password,
+    orElse: () => <String, dynamic>{},
+  );
+  return match.isEmpty ? null : match;
+}
+
+final _users = <int, Map<String, dynamic>>{
+  1: {'id': 1, 'name': 'Taylor', 'email': 'taylor@example.com', 'password': 'password123'},
+};
+```
+
+- `withSessionConfig` inserts the session middleware so helpers like `ctx.setSession` work.
+- `withSessionConfig` inserts the session middleware so helpers like `ctx.setSession` work. Alternatively, add a `session.config` section to `config/http.yaml` (see [Sessions](/docs/routed/state/sessions)) and run `dart run routed_cli provider:list --config` to verify the provider picked up your defaults.
+- Flash messages are read on the next request via `ctx.getFlashMessages()`.
+- Validation errors throw a `ValidationError`, so make sure a global error handler or middleware converts them into JSON responses during tests.

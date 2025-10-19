@@ -6,13 +6,13 @@ import 'array_store.dart';
 import 'lock.dart';
 
 /// A lock implementation using an in-memory array store.
-class ArrayLock extends Lock {
+class ArrayLock extends CacheLock {
   /// The underlying array store used for locking.
   final ArrayStore store;
 
   /// Creates an [ArrayLock] with the given [store], [name], [seconds], and optional [owner].
   ArrayLock(this.store, String name, int seconds, [String? owner])
-      : super(name, seconds, owner);
+    : super(name, seconds, owner);
 
   /// Acquires the lock if it is not already held by another process.
   ///
@@ -21,8 +21,9 @@ class ArrayLock extends Lock {
   Future<bool> acquire() async {
     final expiration = store.locks[super.name]?['expiresAt'];
     if (expiration != null &&
-        DateTime.now()
-            .isBefore(DateTime.fromMillisecondsSinceEpoch(expiration as int))) {
+        DateTime.now().isBefore(
+          DateTime.fromMillisecondsSinceEpoch(expiration as int),
+        )) {
       return false;
     }
 
@@ -31,8 +32,8 @@ class ArrayLock extends Lock {
       'expiresAt': super.seconds == 0
           ? null
           : DateTime.now()
-              .add(Duration(seconds: super.seconds))
-              .millisecondsSinceEpoch,
+                .add(Duration(seconds: super.seconds))
+                .millisecondsSinceEpoch,
     };
     return true;
   }
@@ -88,7 +89,9 @@ class ArrayLock extends Lock {
         throw LockTimeoutException('Lock timeout');
       }
 
-      await Future<void>.delayed(Duration(milliseconds: super.sleepMilliseconds));
+      await Future<void>.delayed(
+        Duration(milliseconds: super.sleepMilliseconds),
+      );
     }
 
     if (callback != null) {

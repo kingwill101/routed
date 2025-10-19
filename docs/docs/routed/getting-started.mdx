@@ -1,0 +1,158 @@
+---
+title: Getting Started
+description: Install Routed, wire your first engine, and serve HTTP requests
+sidebar_position: 1
+---
+
+# Getting Started
+
+Follow this guide to bootstrap a Routed application, define routes, and serve HTTP traffic.
+
+## 1. Install dependencies
+
+Install the runtime package and add the CLI/testing helpers as dev dependencies:
+
+```bash
+dart pub add routed
+dart pub add --dev routed_cli server_testing server_testing_shelf routed_testing
+```
+
+> `routed_cli` ships the scaffolding, dev server, manifest inspection, and provider utilities used throughout the docs. Keeping it as a dev dependency ensures `dart run routed_cli ...` works in any environment.
+
+## 2. Scaffold (optional) and create an engine
+
+The CLI can bootstrap a project for you:
+
+```bash
+dart run routed_cli create --name hello_world
+cd hello_world
+```
+
+The generator writes the standard `bin/server.dart`, configuration files under `config/`, and project metadata. It also runs `dart pub get` automatically—if dependency resolution fails, the CLI prints the exit code along with the command to rerun manually. Supplying `--output <directory>` lets you scaffold into an existing folder, and `--force` overwrites conflicting files.
+
+Prefer to wire things manually? Create `bin/server.dart` and copy the snippet below.
+
+## 3. Create an engine and router
+
+The engine manages global middleware, configuration, and HTTP/WebSocket servers. Define routes either on the engine directly or through routers that you mount.
+
+```dart title="bin/server.dart"
+import 'package:routed/routed.dart';
+
+Future<void> main() async {
+  final engine = Engine(
+    options: [
+      // Timeout requests after 30s
+      withMiddleware([timeoutMiddleware(const Duration(seconds: 30))]),
+    ],
+  );
+
+  // Define routes directly on the engine
+  engine.get('/', (ctx) => ctx.string('Hello Routed 👋'));
+
+  // Or compose routers and mount them
+  final api = Router(path: '/api', middlewares: [requestTrackerMiddleware()]);
+
+  api.group(path: '/users', builder: (users) {
+    users.get('/', (ctx) => ctx.json({'users': []}));
+    users.post('/', (ctx) async {
+      final payload = await ctx.jsonBody();
+      return ctx.json({'status': 'created', 'data': payload});
+    });
+  });
+
+  engine.use(api);
+
+  await engine.serve(host: '127.0.0.1', port: 8080);
+}
+```
+
+### Running the server
+
+During development the CLI's `dev` command provides a hot-reload loop:
+
+```bash
+dart run routed_cli dev --entry bin/server.dart
+```
+
+The command resolves the right Dart executable (honouring `ROUTED_CLI_DART`, `DART_BIN`, or `DART_PATH` overrides), enables the VM service, generates a bootstrap that wires in `hotreloader`, and restarts or triggers reloads when files change. Customise the experience with flags such as `--host`, `--port`, `--no-bootstrap`, or `--bootstrap-path` for bespoke setups.
+
+For single-run scripts or CI environments you can execute the entrypoint directly:
+
+```bash
+dart run bin/server.dart
+```
+
+Visit [http://127.0.0.1:8080/](http://127.0.0.1:8080/) to see the greeting, or send requests to `/api/users`.
+
+> Tip: Routed ships with a provider manifest (`config/http.yaml`) and a CLI (`dart run routed_cli provider:list --config`) that shows which providers are enabled and the defaults they contribute. If you add caching, sessions, or security features later, the CLI will also surface configuration validation errors before you start the server.
+
+### Inspect routes and generate specs
+
+Use `dart run routed_cli routes` to print the HTTP and WebSocket routes the engine exposes. The command automatically introspects `lib/app.dart` (via `createEngine()`) or falls back to `tool/spec_manifest.dart`. Pass `--format json` with `--no-pretty` when you need machine-readable output.
+
+When you need a persisted snapshot (for documentation, code generation, or contract tests), run:
+
+```bash
+dart run routed_cli spec:generate --output .dart_tool/routed/route_manifest.json
+```
+
+Both commands share the same manifest loader, so toggling providers or adding routes in code stays in sync with the generated spec.
+
+## 4. Work with request data
+
+Handlers receive an `EngineContext` with handy helpers:
+
+```dart
+engine.post('/contact', (ctx) async {
+  final body = await ctx.jsonBody(); // Decodes JSON
+  final name = ctx.input('name');    // Form/query helper
+  final userAgent = ctx.requestHeader('User-Agent');
+
+  return ctx.json({
+    'receivedFrom': name ?? body['email'],
+    'agent': userAgent,
+  });
+});
+```
+
+Learn more in [Requests](/docs/routed/fundamentals/requests) and [Responses](/docs/routed/fundamentals/responses).
+
+## 5. Add middleware
+
+Use global middleware (passed to the engine), group middleware (declared on routers), or route middleware:
+
+```dart
+engine.get(
+  '/secure',
+  (ctx) => ctx.string('Secret'),
+  middlewares: [basicAuth({'admin': 'secret'})],
+);
+```
+
+See [Middleware](/docs/routed/fundamentals/middleware) for the distinction between global, group, and route-level middleware.
+
+## 6. Render views
+
+Routed includes a Liquid template engine. Configure it via `EngineConfig` or the `useViewEngine` helper:
+
+```dart
+final engine = Engine();
+engine.useViewEngine(LiquidViewEngine(directory: 'views'));
+
+engine.get('/welcome', (ctx) async {
+  return await ctx.template(
+    templateName: 'welcome.liquid',
+    data: {'user': 'Taylor'},
+  );
+});
+```
+
+See [Liquid templates](/docs/routed/views/templates) for more.
+
+## 7. Next steps
+
+- Understand the engine lifecycle and configuration options: [Fundamentals](/docs/routed/fundamentals/).
+- Learn routing patterns, parameter constraints, and naming: [Routing basics](/docs/routed/fundamentals/routing).
+- Enable sessions, caching, or security headers: [State](/docs/routed/state/) and [Security](/docs/routed/security).
+- Add tests with `routed_testing`: [Testing Routed apps](/docs/routed/testing/overview).

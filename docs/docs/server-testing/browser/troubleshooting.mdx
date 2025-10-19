@@ -1,0 +1,40 @@
+---
+id: troubleshooting
+title: Browser troubleshooting (CI, Linux deps, ports)
+description: Headless differences, missing dependencies, driver mismatch, proxy issues
+slug: /server-testing/browser/troubleshooting
+---
+
+# Troubleshooting
+
+SessionNotCreatedException: user-data-dir already in use
+
+- Cause: multiple Chrome instances sharing a profile.
+- Fix: server_testing launches Chromium with a unique temporary --user-data-dir. If you pass your own --user-data-dir, it is overridden per launch to a unique temp dir to avoid lock contention.
+
+ChromeDriver is running but cannot connect (wrong port)
+
+- Cause: driver not started or not yet listening.
+- Fix: DriverManager picks a free port, starts the driver, and the launcher connects to that port.
+
+Constant re-downloads of ChromeDriver/browser bundles
+
+- Cause: setup re-downloaded every run.
+- Fix: ChromeDriverManager.setup now skips download when an executable already exists, unless force reinstall is requested. Browser bundles also respect force and cache directories.
+
+Headless vs headed
+
+- Headless can render fonts differently or skip GPU paths. If visual diffs fail locally, try headless: false.
+
+Missing dependencies (Linux)
+
+- Ensure X libs and fonts are installed. Common packages: libX11, libXcomposite, libXcursor, libXi, libXtst, libnss3, libcups, libXrandr, libasound2, fonts-liberation.
+- Use flags like --no-sandbox --disable-dev-shm-usage --use-gl=swiftshader in CI if sandbox/dev-shm is constrained.
+
+Driver mismatch
+
+- If Chrome/Firefox fails to connect, the driver may not match. Use forceReinstall or pin a compatible revision via browsers.json.
+
+Proxy
+
+- Configure BrowserConfig.proxy. Verify your proxy allows localhost when using ephemeral servers.

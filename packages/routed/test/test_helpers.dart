@@ -1,11 +1,13 @@
+import 'dart:async';
+
 import 'package:routed/routed.dart';
 
 final _middlewareIdentityMap = <Middleware, String>{};
 
 Middleware makeMiddleware(String label, List<String> log) {
-  mw(EngineContext c) async {
+  FutureOr<Response> mw(EngineContext c, Next next) async {
     log.add(label);
-    c.next();
+    return await next();
   }
 
   _middlewareIdentityMap[mw] = label;
@@ -21,8 +23,11 @@ Engine engineWithFeatures({
   bool enableTrustedPlatform = false,
 }) {
   return Engine(
-      config: EngineConfig(
-          features: EngineFeatures(
-              enableProxySupport: enableProxySupport,
-              enableTrustedPlatform: enableTrustedPlatform)));
+    config: EngineConfig(
+      features: EngineFeatures(
+        enableProxySupport: enableProxySupport,
+        enableTrustedPlatform: enableTrustedPlatform,
+      ),
+    ),
+  );
 }

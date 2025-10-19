@@ -1,3 +1,4 @@
+import 'package:routed/src/openapi/operation.dart';
 import 'package:routed/src/router/registered_route.dart';
 import 'package:routed/src/router/router.dart';
 import 'package:routed/src/router/types.dart';
@@ -50,5 +51,26 @@ class RouteBuilder {
       middlewares: middlewares,
       builder: builder,
     );
+  }
+
+  /// Attach OpenAPI operation metadata for spec generation.
+  ///
+  /// The provided [configure] callback can populate summaries, tags, responses,
+  /// and other OpenAPI fields. Multiple invocations merge metadata.
+  RouteBuilder openApi(
+    void Function(OpenApiOperationBuilder builder) configure,
+  ) {
+    final builder = OpenApiOperationBuilder();
+    configure(builder);
+    final spec = builder.build();
+    final existing = _route.constraints['openapi'];
+    if (existing is Map<String, Object?>) {
+      final merged = Map<String, Object?>.from(existing);
+      merged.addAll(spec.toJson());
+      _route.constraints['openapi'] = merged;
+    } else {
+      _route.constraints['openapi'] = spec.toJson();
+    }
+    return this;
   }
 }

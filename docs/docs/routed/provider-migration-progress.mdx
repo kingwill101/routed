@@ -1,0 +1,94 @@
+---
+title: Provider Migration Progress
+description: Tracking the decomposition of EngineConfig into manifest-driven service providers.
+sidebar_position: 99
+---
+
+import Tabs from '@theme/Tabs';
+import TabItem from '@theme/TabItem';
+
+## Snapshot
+
+- **Last updated:** October 22, 2025
+- **Owner:** Routing bootstrap workstream
+- **Context:** Continuing the move from `EngineConfig` flags to provider-driven defaults, manifests, and middleware stacks.
+
+## Summary
+
+- Engine bootstrap now returns a fully initialized instance, allowing immediate event hook registration and provider toggles (via `includeDefaultProviders`).
+- Routing lifecycle events (`BeforeRouting`, `RouteMatched`, `RouteNotFound`, `RoutingError`, `AfterRouting`) emit for every request with full context.
+- Routing defaults (`redirectTrailingSlash`, `handleMethodNotAllowed`) now live under `routing.*`; the routing provider applies them on boot/reload via `ConfigReloadedEvent` instead of mutating `EngineConfig`.
+- Providers can advertise defaults with `ProvidesDefaultConfig`; `ConfigRegistry` aggregates them and `ConfigImpl.mergeDefaults` avoids clobbering user overrides.
+- Provider teardown guards optional dependencies (e.g., `EventManager`) so cleanup succeeds even after containers dispose.
+- Upload limits (`max_memory`, `max_file_size`, `allowed_extensions`, directory/permissions) are sourced from `uploads.*`; the uploads provider normalizes legacy paths, reapplies limits on reload, and `withMultipart` now mutates config instead of the engine instance.
+- CORS settings (`enabled`, origins, methods, headers, credentials, cache) now resolve from `cors.*` (with legacy fallbacks) via the CORS provider, and the new `withCors` EngineOpt writes through config for reload-safe updates.
+- Cache manager configuration (default store, store definitions) now flows through `cache.*`; the cache provider rebuilds managed stores on config reload while honoring pre-bound `withCacheManager` overrides.
+- Static assets can be described via `static.*` (enabled flag, mounts with route/directory/index/listing). The static provider short-circuits requests through a middleware, translating legacy `http.features.static` keys during reloads.
+- Logging toggles (`logging.enabled`, `logging.level`, `logging.errors_only`) now live under the logging provider; `withLogging` updates config and the middleware responds to config reloads without restarting the engine.
+- Storage and view providers now share `storage.*` disks; view directories resolve through `StorageManager`, keeping templates aligned with the shared file system layer. Static, storage, and view providers all reuse the shared parsing helpers, so disks can be declared once and referenced safely via `static.mounts[].disk` or `view.disk`.
+- Security, uploads, CORS, view, cache, logging, static, and storage providers now validate config inputs and throw `ProviderConfigException` when the manifest supplies the wrong shape (e.g., non-boolean CSRF flags, malformed trusted proxy headers, non-string view directories). The shared config utilities make that validation consistent across providers.
+- Provider registry coverage is complete for defaults referenced in `config/http.yaml`; example/custom providers register themselves (and publish defaults via `ProvidesDefaultConfig`) so `provider:list --config` can surface accurate descriptions.
+- Config loader pre-processes YAML/JSON/TOML via Liquify, exposing `.env` + process environment values (including double-underscore nested keys) to config templates with `{{ }}` placeholders. Every key is mirrored under `env.*` (`APP_KEY` → `{{ env.APP_KEY }}`), and double underscores add a dotted alias alongside the original.
+- Provider CLI (`provider:list`, `provider:enable`, `provider:disable`) now surfaces validation-friendly defaults and warns when manifests reference unregistered providers; documentation points to the new fail-fast behaviour.
+- Session cookies are now URI-encoded and decoded, keeping values parser-friendly across transports while remaining backward compatible.
+- Middleware stack rebuilds push consolidated IDs back into `http.middleware.*`, ensuring both the engine and config consumers observe manifest-derived defaults; regression tests cover deduplication and order guarantees.
+- Middleware registry supports `MiddlewareRef.of('id')` references; routes/groups/mounts can refer to middleware by name and the engine resolves them against the registry during route build with clear errors for missing IDs.
+- Logging provider now honours `logging.extra_fields` and `logging.request_headers`, letting apps enrich structured payloads without custom middleware.
+- Static asset mounts accept a custom `file_system` + `root`, enabling memory-backed fixtures or virtual file systems without manual handler wiring.
+- `routed_cli` ships configuration tooling (`config:init`, `config:publish`, `config:cache`, `config:clear`) plus runnable examples (`config_demo`, `route_events`) and updated docs.
+- The `config_demo` example now relies on `config/http.yaml` and the manifest/registry flow instead of manual provider registration.
+- Regression tests now cover session flows across in-memory and ephemeral transports, assert manifest-driven middleware ordering/deduplication, verify routing/uploads config sourcing, and assert provider validation errors for security/uploads/cors/cache/view/storage/mail overrides.
+- Removed the pre-routing middleware stage; global middlewares now handle preflight requests (including CORS) directly.
+- Security provider now resolves trusted proxies via config and injects a pre-routing middleware that normalizes client IPs.
+- Sessions now resolve from `Config` (e.g., `session.config`/`session` maps) and the cache manager is provisioned entirely via the cache provider defaults instead of `EngineConfig` fields.
+- Provider registry, manifest loading, and middleware stack rebuilding are wired, and initial CLI provider commands are available.
+
+## In Progress
+
+- Fold the new validation guards into docs/tutorials and cross-link CLI guidance.
+- Backfill helper APIs (`engineTest`, `engineGroup`, provider fixtures) with manifest-aware helpers now that validation is stricter.
+
+## Outstanding Work
+
+<Tabs groupId="outstanding-scope">
+<TabItem value="providers" label="Provider Modules">
+
+- Ship remaining advanced knobs (structured logging formatters, static asset virtual file systems) behind provider config with matching defaults.
+- Audit secondary modules (websocket, websocket session helpers, timeout middleware) for validation gaps and add `ProviderConfigException` coverage where needed.
+- Continue documenting provider defaults/registry expectations so package authors publish `ProvidesDefaultConfig` entries out of the gate.
+- Maintain a compatibility layer that translates legacy `EngineConfig` flags into new provider defaults until the next major release.
+
+</TabItem>
+<TabItem value="middleware" label="Middleware Stacks">
+
+- Finalize the manifest format to declare middleware stacks and groups, similar to Laravel's kernel configuration.
+- Guarantee provider contributions merge without duplicating entries and preserve execution order.
+- Document the middleware stack expectations and how providers extend them.
+
+</TabItem>
+<TabItem value="cli" label="CLI & Tooling">
+
+- Add machine-readable output (JSON/summary) for `provider:list` so CI can audit manifests automatically.
+- Surface validation hints or config paths when `provider:list --config` encounters malformed overrides (mirror runtime errors).
+- Harden project root detection to support temporary directories without side effects.
+
+</TabItem>
+</Tabs>
+
+## Testing Status
+
+- **Passing locally:** `dart test packages/routed`, `dart test packages/routed_cli`, targeted suites for sessions, engine bootstrap, and provider validation.
+- **New coverage:** provider validation suites for security/uploads/cors/cache/view/storage modules, config-demo mail provider adoption tests, and refreshed middleware manifest regression coverage (dedup/order, logging extras, static mounts).
+- **Planned additions:** extend CLI tests for `provider:list --config` (including machine-readable output) and land integration harnesses that assert manifest-derived middleware ordering under provider validation failures.
+
+## Risks & Notes
+
+- Middleware globals can go empty if defaults are not merged prior to stack rebuild; verify contributions before applying them (dedicated tests still pending).
+- Built-in behaviors (CORS, CSRF, etc.) must migrate cleanly into providers without changing defaults.
+- Watch for trusted proxy warnings in tests once configuration defaults move; adjust fixtures accordingly.
+
+## Next Steps
+
+1. Deliver the remaining advanced configuration surfaces (structured logging formatters, static asset virtual file systems) via provider defaults and expose them through the CLI manifest.
+2. Update documentation and tutorials to highlight the new provider validation errors, registry expectations, and CLI inspection workflows.
+3. Extend automated coverage: manifest-order integration tests, CLI machine-readable snapshots, and provider validation failure cases across less-common modules (websocket/timeouts).

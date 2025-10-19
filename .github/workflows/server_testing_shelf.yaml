@@ -8,7 +8,8 @@ on:
     branches: [ master ]
     paths:
       - '.github/workflows/server_testing_shelf.yaml'
-      - 'packages/server_testing_shelf/**'
+      - 'packages/server_testing/server_testing_shelf/**'
+      - 'packages/server_testing/server_testing/**'
   pull_request:
     branches: [ master ]
     paths:
@@ -17,7 +18,7 @@ on:
 
 defaults:
   run:
-    working-directory: packages/server_testing_shelf/
+    working-directory: packages/server_testing/server_testing_shelf
 
 jobs:
   build:

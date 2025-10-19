@@ -2,10 +2,10 @@ import 'package:routed/routed.dart';
 
 void main() async {
   final engine = Engine(middlewares: [
-    (ctx) async {
+    (EngineContext ctx, Next next) async {
       print(
           '[Test Server] Received request: ${ctx.request.method} ${ctx.request.path}');
-      await ctx.next();
+      return await next();
     }
   ]);
 

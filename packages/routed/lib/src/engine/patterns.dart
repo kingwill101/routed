@@ -6,7 +6,7 @@ class TypeDefinition {
   final dynamic Function(String?) cast;
 
   TypeDefinition(this.name, this.pattern, [dynamic Function(String?)? cast])
-      : cast = cast ?? ((String? value) => value);
+    : cast = cast ?? ((String? value) => value);
 }
 
 /// Custom type patterns for route parameters.
@@ -26,39 +26,19 @@ final Map<String, TypeDefinition> _builtInTypes = {
     'uuid',
     r'[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}',
   ),
-  'slug': TypeDefinition(
-    'slug',
-    r'[a-z0-9]+(?:-[a-z0-9]+)*',
-  ),
-  'word': TypeDefinition(
-    'word',
-    r'\w+',
-  ),
-  'string': TypeDefinition(
-    'string',
-    r'[^/]+',
-  ),
-  'date': TypeDefinition(
-    'date',
-    r'\d{4}-\d{2}-\d{2}',
-  ),
+  'slug': TypeDefinition('slug', r'[a-z0-9]+(?:-[a-z0-9]+)*'),
+  'word': TypeDefinition('word', r'\w+'),
+  'string': TypeDefinition('string', r'[^/]+'),
+  'date': TypeDefinition('date', r'\d{4}-\d{2}-\d{2}'),
   'email': TypeDefinition(
     'email',
     r'[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}',
   ),
-  'url': TypeDefinition(
-    'url',
-    r'https?://[^\s/$.?#].[^\s]*',
-  ),
-  'ip': TypeDefinition(
-    'ip',
-    r'\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}',
-  ),
+  'url': TypeDefinition('url', r'https?://[^\s/$.?#].[^\s]*'),
+  'ip': TypeDefinition('ip', r'\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}'),
 };
 
-final Map<String, TypeDefinition> customTypePatterns = {
-  ..._builtInTypes,
-};
+final Map<String, TypeDefinition> customTypePatterns = {..._builtInTypes};
 
 /// Global param patterns: if a route has {id} with NO explicit type,
 /// and we've registered a pattern for 'id', we use that pattern.
@@ -69,8 +49,11 @@ final Map<String, String> _globalParamPatterns = {};
 /// [typeName] The name of the custom type
 /// [pattern] The regular expression pattern
 /// [cast] An optional custom cast function
-void registerCustomType(String typeName, String pattern,
-    [dynamic Function(String?)? cast]) {
+void registerCustomType(
+  String typeName,
+  String pattern, [
+  dynamic Function(String?)? cast,
+]) {
   customTypePatterns[typeName] = TypeDefinition(typeName, pattern, cast);
 }
 
@@ -100,8 +83,11 @@ String? getGlobalParamPattern(String paramName) {
 /// [name] The name of the pattern type
 /// [pattern] The regular expression pattern
 /// [cast] An optional custom cast function
-void registerPattern(String name, String pattern,
-    [dynamic Function(String?)? cast]) {
+void registerPattern(
+  String name,
+  String pattern, [
+  dynamic Function(String?)? cast,
+]) {
   customTypePatterns[name] = TypeDefinition(name, pattern, cast);
 }
 

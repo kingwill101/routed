@@ -1,5 +1,4 @@
 import 'dart:convert';
-import 'dart:io';
 
 import 'package:routed/routed.dart';
 import 'package:routed/src/sessions/cookie_store.dart';
@@ -8,167 +7,232 @@ import 'package:routed_testing/routed_testing.dart';
 import 'package:server_testing/server_testing.dart';
 
 void main() {
-  group('Session Tests', () {
+  void configureSessionRoutes(Engine engine) {
+    engine.get('/session-test', (ctx) async {
+      ctx.setSession('test', 'value');
+      return ctx.string('ok');
+    });
+
+    engine.get('/write', (ctx) async {
+      ctx.setSession('key', 'persisted');
+      return ctx.string('written');
+    });
+
+    engine.get('/read', (ctx) async {
+      final value = ctx.getSession<String>('key');
+      return ctx.string(value ?? '');
+    });
+
+    engine.get('/create-session', (ctx) async {
+      ctx.setSession('foo', 'bar');
+      return ctx.string('ok');
+    });
+
+    engine.get('/initial', (ctx) async {
+      ctx.setSession('foo', 'bar');
+      ctx.setSession('count', '42');
+      return ctx.string('ok');
+    });
+
+    engine.get('/verify', (ctx) async {
+      assert(ctx.getSession<String>('foo') == "bar");
+      assert(ctx.getSession<String>('count') == "42");
+      return ctx.string('ok');
+    });
+
+    engine.get('/regenerate', (ctx) async {
+      ctx.setSession('before', 'old');
+      ctx.regenerateSession();
+      ctx.setSession('after', 'new');
+      return ctx.string('regenerated');
+    });
+
+    engine.get('/destroy', (ctx) async {
+      ctx.setSession('data', 'secret');
+      ctx.destroySession();
+      return ctx.string('destroyed');
+    });
+
+    engine.get('/session-utils', (ctx) async {
+      ctx.setSession('key1', 'value1');
+      ctx.setSession('key2', 'value2');
+
+      assert(ctx.hasSession('key1') == true);
+      assert(ctx.hasSession('nonexistent') == false);
+
+      assert(ctx.getSessionOrDefault('key1', 'default') == 'value1');
+      assert(ctx.getSessionOrDefault('nonexistent', 'default') == 'default');
+
+      ctx.removeSession('key1');
+      assert(ctx.hasSession('key1') == false);
+
+      expect(ctx.sessionData, containsPair('key2', 'value2'));
+
+      ctx.clearSession();
+      assert(ctx.sessionData.isEmpty);
+
+      assert(ctx.sessionAge >= 0);
+      assert(ctx.sessionIdleTime >= 0);
+      assert(ctx.sessionId.isNotEmpty);
+      return ctx.string('ok');
+    });
+  }
+
+  void runSessionSuite(String description, TransportMode transportMode) {
     engineGroup(
-      'Session operations',
+      'Session operations ($description)',
+      transportMode: transportMode,
       options: [
-        withSessionConfig(SessionConfig(
-          store: CookieStore(
-            codecs: [
-              SecureCookie(
-                useEncryption: true,
-                useSigning: true,
-                key:
-                    'base64:${base64.encode(List<int>.generate(32, (i) => i + 1))}',
-              ),
-            ],
+        withSessionConfig(
+          SessionConfig(
+            store: CookieStore(
+              codecs: [
+                SecureCookie(
+                  useEncryption: true,
+                  useSigning: true,
+                  key:
+                      'base64:${base64.encode(List<int>.generate(32, (i) => i + 1))}',
+                ),
+              ],
+            ),
+            cookieName: 'routed_session',
           ),
-          cookieName: 'routed_session',
-        )),
-        (engine) {
-          engine.get('/session-test', (ctx) async {
-            await ctx.setSession('test', 'value');
-            ctx.string('ok');
-          });
-
-          engine.get('/write', (ctx) {
-            ctx.setSession('key', 'persisted');
-            ctx.string('written');
-          });
-
-          engine.get('/read', (ctx) async {
-            final value = ctx.getSession<String>('key');
-            ctx.string(value ?? '');
-          });
-
-          engine.get('/create-session', (ctx) {
-            ctx.setSession('foo', 'bar');
-            ctx.string('ok');
-          });
-
-          engine.get('/initial', (ctx) async {
-            await ctx.setSession('foo', 'bar');
-            await ctx.setSession('count', '42');
-            ctx.string('ok');
-          });
-
-          engine.get('/verify', (ctx) async {
-            assert(ctx.getSession<String>('foo') == "bar");
-            print(ctx.getSession<String>('count'));
-            assert(ctx.getSession<String>('count') == "42");
-            ctx.string('ok');
-          });
-
-          engine.get('/regenerate', (ctx) {
-            ctx.setSession('before', 'old');
-            ctx.regenerateSession();
-            ctx.setSession('after', 'new');
-            ctx.string('regenerated');
-          });
-
-          engine.get('/destroy', (ctx) {
-            ctx.setSession('data', 'secret');
-            ctx.destroySession();
-            ctx.string('destroyed');
-          });
-
-          engine.get('/session-utils', (ctx) async {
-            await ctx.setSession('key1', 'value1');
-            await ctx.setSession('key2', 'value2');
-
-            assert(ctx.hasSession('key1') == true);
-            assert(ctx.hasSession('nonexistent') == false);
-
-            assert(ctx.getSessionOrDefault('key1', 'default') == 'value1');
-            assert(
-                ctx.getSessionOrDefault('nonexistent', 'default') == 'default');
-
-            await ctx.removeSession('key1');
-            assert(ctx.hasSession('key1') == false);
-
-            expect(ctx.sessionData, containsPair('key2', 'value2'));
-
-            await ctx.clearSession();
-            assert(ctx.sessionData.isEmpty);
-
-            assert(ctx.sessionAge >= 0);
-            assert(ctx.sessionIdleTime >= 0);
-            assert(ctx.sessionId.isNotEmpty);
-            ctx.string('ok');
-          });
-        },
+        ),
+        configureSessionRoutes,
       ],
-      define: (engine, client) {
-        test('Session is available when configured in engine', () async {
+      define: (engine, client, tess) {
+        tess('Engine has configured middleware', (
+          Engine engine,
+          TestClient client,
+        ) async {
+          expect(engine.middlewares, isNotEmpty);
+        });
+
+        tess('Session is available when configured in engine', (
+          Engine engine,
+          TestClient client,
+        ) async {
           final response = await client.get('/session-test');
           response
             ..assertStatus(200)
             ..assertHasHeader(HttpHeaders.setCookieHeader)
             ..assertBodyEquals('ok');
 
-          final cookie = response.headers[HttpHeaders.setCookieHeader]?.first;
-          expect(cookie, isNotNull);
-          expect(cookie, contains('routed_session='));
-          expect(cookie, isNot(contains('"test":"value"')));
+          final setCookies =
+              response.headers[HttpHeaders.setCookieHeader] ?? const [];
+          expect(setCookies, isNotEmpty);
+          expect(setCookies.any((c) => c.contains('routed_session=')), isTrue);
+          // Session cookie should not leak raw values
+          expect(setCookies.any((c) => c.contains('"test":"value"')), isFalse);
         });
 
-        test('Session persists between requests', () async {
-          final writeResponse = await client.get('/write');
-          final cookie =
-              writeResponse.headers[HttpHeaders.setCookieHeader]?.first;
+        String? cookieVal(TestResponse res, String key) =>
+            res.cookie(key)?.value;
 
-          final readResponse = await client.get('/read', headers: {
-            HttpHeaders.cookieHeader: [cookie!]
-          });
+        tess('Session persists between requests', (
+          Engine engine,
+          TestClient client,
+        ) async {
+          final writeResponse = await client.get('/write');
+          final cookieHeader = cookieVal(
+            writeResponse,
+            engine.container.get<SessionConfig>().cookieName,
+          );
+
+          final cookieName = engine.container.get<SessionConfig>().cookieName;
+          final readResponse = await client.get(
+            '/read',
+            headers: {
+              if (cookieHeader != null)
+                HttpHeaders.cookieHeader: ['$cookieName=$cookieHeader'],
+            },
+          );
 
           readResponse
             ..assertStatus(200)
             ..assertBodyEquals('persisted');
         });
 
-        test('Session creation and storage', () async {
+        tess('Session creation and storage', (
+          Engine engine,
+          TestClient client,
+        ) async {
           final response = await client.get('/create-session');
           response.assertStatus(200);
 
-          final cookie = response.headers[HttpHeaders.setCookieHeader]?.first;
-          expect(cookie, isNotNull);
-          expect(cookie, contains('routed_session='));
+          final setCookies =
+              response.headers[HttpHeaders.setCookieHeader] ?? const [];
+          expect(setCookies, isNotEmpty);
+          final cookieHeader = cookieVal(
+            response,
+            engine.container.get<SessionConfig>().cookieName,
+          );
+          expect(cookieHeader, isNotNull);
+          expect(cookieHeader, isNotEmpty);
         });
 
-        test('Session loading from cookie', () async {
+        tess('Session loading from cookie', (
+          Engine engine,
+          TestClient client,
+        ) async {
           final initialResponse = await client.get('/initial');
-          final cookie =
-              initialResponse.headers[HttpHeaders.setCookieHeader]?.first;
+          final cookieHeader = cookieVal(
+            initialResponse,
+            engine.container.get<SessionConfig>().cookieName,
+          );
 
-          final verifyResponse = await client.get('/verify', headers: {
-            HttpHeaders.cookieHeader: [cookie!]
-          });
+          final cookieName = engine.container.get<SessionConfig>().cookieName;
+          final verifyResponse = await client.get(
+            '/verify',
+            headers: {
+              if (cookieHeader != null)
+                HttpHeaders.cookieHeader: ['$cookieName=$cookieHeader'],
+            },
+          );
           verifyResponse.assertStatus(200);
         });
 
-        test('Session can be regenerated', () async {
+        tess('Session can be regenerated', (
+          Engine engine,
+          TestClient client,
+        ) async {
           final response = await client.get('/regenerate');
           response.assertStatus(200);
 
-          final cookie = response.headers[HttpHeaders.setCookieHeader]?.first;
-          expect(cookie, isNotNull);
-          expect(cookie,
-              isNot(contains('"id":"${engine.config.sessionConfig!.store}"')));
+          final cookieHeader = cookieVal(
+            response,
+            engine.container.get<SessionConfig>().cookieName,
+          );
+          expect(cookieHeader, isNotNull);
+          expect(cookieHeader, isNotEmpty);
         });
 
-        test('Session can be destroyed', () async {
+        tess('Session can be destroyed', (
+          Engine engine,
+          TestClient client,
+        ) async {
           final response = await client.get('/destroy');
           response.assertStatus(200);
 
-          final cookie = response.headers[HttpHeaders.setCookieHeader]?.first;
-          expect(cookie, contains('Max-Age=0'));
+          final setCookies =
+              response.headers[HttpHeaders.setCookieHeader] ?? const [];
+          expect(
+            setCookies.any((value) => value.contains('Max-Age=0')),
+            isTrue,
+          );
         });
 
-        test('Session utility methods work correctly', () async {
+        tess('Session utility methods work correctly', (
+          Engine engine,
+          TestClient client,
+        ) async {
           final response = await client.get('/session-utils');
           response.assertStatus(200);
         });
       },
     );
-  });
+  }
+
+  runSessionSuite('in-memory transport', TransportMode.inMemory);
+  runSessionSuite('ephemeral transport', TransportMode.ephemeralServer);
 }

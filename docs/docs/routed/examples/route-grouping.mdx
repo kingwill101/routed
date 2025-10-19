@@ -1,0 +1,100 @@
+---
+title: Route Grouping Demo
+description: Organise routes with nested groups, middleware, and parameter constraints
+sidebar_position: 5
+---
+
+[`examples/route_grouping`](https://github.com/kingwill101/routed/tree/main/examples/route_grouping) showcases how routing hierarchies work in Routed. It combines authentication, API versioning, and nested resources in a single file.
+
+## Run the example
+
+```bash
+cd examples/route_grouping
+dart pub get
+dart run bin/server.dart
+```
+
+The example listens on [http://localhost:3000](http://localhost:3000). Key endpoints:
+
+| Route | Description |
+| --- | --- |
+| `GET /admin/dashboard` | Protected admin dashboard (requires `Authorization: admin-token`) |
+| `GET /api/v1/status` | Versioned API status endpoint |
+| `GET /posts` | List posts |
+| `GET /posts/{id}` | Fetch a post by numeric ID |
+| `GET /posts/{post_id}/comments` | Nested comments for a post |
+
+## Admin middleware
+
+```dart
+engine.group(
+  path: '/admin',
+  middlewares: [
+    (ctx, next) async {
+      if (ctx.requestHeader('Authorization') != 'admin-token') {
+        return ctx.json({'error': 'Unauthorized access'}, statusCode: 401);
+      }
+      return next();
+    },
+  ],
+  builder: (router) {
+    router.get('/dashboard', (ctx) => ctx.json({'section': 'dashboard'}));
+    router.get('/users', (ctx) => ctx.json({'section': 'users', 'count': 100}));
+  },
+);
+```
+
+Nested groups inherit parent paths automatically, keeping your URL structure tidy.
+
+## Versioned APIs
+
+The `/api` group injects a header and then nests `/v1` and `/v2` routers:
+
+```dart
+engine.group(
+  path: '/api',
+  middlewares: [
+    (ctx, next) async {
+      ctx.setHeader('X-API-Version', ctx.param('version') ?? 'unknown');
+      return next();
+    },
+  ],
+  builder: (api) {
+    api.group(path: '/v1', builder: (v1) {
+      v1.get('/status', (ctx) => ctx.json({'version': 'v1', 'status': 'active'}));
+    });
+
+    api.group(path: '/v2', builder: (v2) {
+      v2.get('/status', (ctx) => ctx.json({'version': 'v2', 'status': 'beta'}));
+    });
+  },
+);
+```
+
+## Resource-style routes
+
+The example also demonstrates resource-style patterns, including constrained parameters and nested resources:
+
+```dart
+engine.group(path: '/posts', builder: (posts) {
+  posts.get('/', (ctx) => ctx.json({'posts': [/* ... */]}));
+
+  posts.get('/{id:int}', (ctx) {
+    final id = ctx.param('id');
+    return ctx.json({'id': id, 'title': 'Post details'});
+  });
+
+  posts.group(path: '/{post_id:int}/comments', builder: (comments) {
+    comments.get('/', (ctx) {
+      return ctx.json({
+        'post_id': ctx.param('post_id'),
+        'comments': [/* ... */],
+      });
+    });
+  });
+});
+```
+
+Use this example whenever you need to share middleware across a group of routes, build versioned APIs, or structure nested REST resources.
+
+> For production apps, move shared middleware/feature toggles into `config/http.yaml` (for example under `http.middleware.groups.admin`) so the manifest documents your pipeline. `dart run routed_cli provider:list --config` shows the merged defaults and helps you keep provider-driven stacks in sync with code samples like this one.

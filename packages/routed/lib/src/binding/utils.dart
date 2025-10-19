@@ -128,8 +128,9 @@ void _doStore(dynamic current, List<String> segments, String value) {
     if (!current.containsKey(head)) {
       // We create a container for the next segment
       final nextHead = tail.firstOrNull;
-      current[head] =
-          (nextHead?.isEmpty ?? false) ? <dynamic>[] : <String, dynamic>{};
+      current[head] = (nextHead?.isEmpty ?? false)
+          ? <dynamic>[]
+          : <String, dynamic>{};
     } else {
       final existing = current[head];
       // If it was a string, we need to upgrade it to a container
@@ -174,8 +175,8 @@ Map<String, dynamic> _flattenSingles(dynamic value) {
       result[k] = _processValue(v);
     });
     return result;
-  } 
-  
+  }
+
   // If the input wasn't a Map, we need to return an empty map to maintain type
   return <String, dynamic>{};
 }

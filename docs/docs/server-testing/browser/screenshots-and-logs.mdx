@@ -1,0 +1,12 @@
+---
+title: Screenshots & logs
+description: Where screenshots go, naming, deduplication and best practices
+---
+
+# Screenshots & logs
+
+- Default directory: test_screenshots. Override with BrowserConfig.screenshotDirectory.
+- Filenames include ISO timestamps to avoid collisions; you can pass a custom base name.
+- PNG validation: the test suite checks for the PNG signature and non-zero size to detect corruption.
+- Auto screenshots: enable BrowserConfig.autoScreenshots to capture on failures.
+- Store both screenshots and logs as CI artifacts for failed runs.

@@ -1,0 +1,29 @@
+{% comment %}
+  Statistics Cards Component
+  
+  Usage:
+    {% render 'components/stats_cards', stats: stats_array %}
+  
+  Parameters:
+    - stats: Array of stat objects with value, label, and color properties
+    
+  Example stats array:
+    [
+      { value: 10, label: "Total Posts", color: "blue" },
+      { value: 8, label: "Published", color: "green" },
+      { value: 6, label: "Features", color: "purple" }
+    ]
+{% endcomment %}
+
+<div class="grid grid-cols-1 md:grid-cols-{{ stats.size | at_most: 4 }} gap-6">
+    {% for stat in stats %}
+        <div class="bg-white p-6 rounded-lg shadow-sm border">
+            <div class="text-3xl font-bold text-{{ stat.color | default: 'blue' }}-600">
+                {{ stat.value }}
+            </div>
+            <div class="text-gray-600">
+                {{ stat.label }}
+            </div>
+        </div>
+    {% endfor %}
+</div> 

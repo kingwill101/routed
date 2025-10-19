@@ -19,41 +19,44 @@ typedef AuthAccounts = Map<String, String>;
 ///
 /// If the credentials are valid, it sets the username in the context and
 /// proceeds to the next middleware or handler.
-Middleware basicAuth(AuthAccounts accounts) {
-  return (EngineContext ctx) async {
-    // Retrieve the Authorization header from the request.
+Middleware basicAuth(
+  AuthAccounts accounts, {
+  String realm = 'Restricted Area',
+}) {
+  return (EngineContext ctx, Next next) async {
     final authHeader = ctx.headers.value(HttpHeaders.authorizationHeader);
 
-    // Check if the Authorization header is missing or does not start with 'Basic '.
     if (authHeader == null || !authHeader.startsWith('Basic ')) {
-      // Respond with a 401 Unauthorized status and an error message.
-      ctx.json(
-        {"error": "Unauthorized"},
-        statusCode: HttpStatus.unauthorized,
-      );
-      // Abort the request to prevent further processing.
-      ctx.abort();
-      return;
+      ctx.response.headers.set('WWW-Authenticate', 'Basic realm="$realm"');
+      return ctx.json({
+        "error": "Unauthorized",
+      }, statusCode: HttpStatus.unauthorized);
     }
 
-    // Extract the base64 encoded credentials from the Authorization header.
     final encodedCredentials = authHeader.substring(6).trim();
-    // Decode the base64 encoded credentials and split them into username and password.
-    final credentials =
-        utf8.decode(base64.decode(encodedCredentials)).split(':');
+    final credentials = utf8
+        .decode(base64.decode(encodedCredentials))
+        .split(':');
 
-    // Check if the credentials are invalid or do not match the accounts map.
-    if (credentials.length != 2 || accounts[credentials[0]] != credentials[1]) {
-      // Respond with a 401 Unauthorized status and an error message.
-      ctx.json(statusCode: HttpStatus.unauthorized, {"error": "Unauthorized"});
-      // Abort the request to prevent further processing.
-      ctx.abort();
-      return;
+    if (credentials.length != 2 ||
+        !accounts.containsKey(credentials[0]) ||
+        !_timingSafeEquals(accounts[credentials[0]]!, credentials[1])) {
+      ctx.response.headers.set('WWW-Authenticate', 'Basic realm="$realm"');
+      return ctx.json({
+        "error": "Unauthorized",
+      }, statusCode: HttpStatus.unauthorized);
     }
 
-    // Set the username in the context for further use.
     ctx.set('user', credentials[0]);
-    // Proceed to the next middleware or handler.
-    await ctx.next();
+    return await next();
   };
+}
+
+bool _timingSafeEquals(String a, String b) {
+  if (a.length != b.length) return false;
+  var result = 0;
+  for (var i = 0; i < a.length; i++) {
+    result |= a.codeUnitAt(i) ^ b.codeUnitAt(i);
+  }
+  return result == 0;
 }

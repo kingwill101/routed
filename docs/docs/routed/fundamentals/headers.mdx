@@ -1,0 +1,163 @@
+---
+title: Headers
+description: Inspect and mutate request/response headers
+sidebar_position: 6
+---
+
+# HTTP Headers
+
+Routed provides helpers to read and manipulate HTTP headers in both requests and responses. Header names are case-insensitive; prefer the request/response helpers rather than parsing raw maps.
+
+## Reading Request Headers
+
+```dart
+router.get('/info', (ctx) {
+  // Get single header
+  final userAgent = ctx.requestHeader('User-Agent');
+  final contentType = ctx.requestHeader('Content-Type');
+  
+  // Access all headers
+  ctx.request.headers.forEach((name, values) {
+    print('$name: ${values.join(", ")}');
+  });
+});
+```
+
+## Setting Response Headers
+
+```dart
+router.get('/api', (ctx) {
+  // Set single header
+  ctx.setHeader('X-API-Version', 'v1');
+  
+  // Set multiple headers
+  ctx.setHeader('Cache-Control', 'public, max-age=3600');
+  ctx.setHeader('Access-Control-Allow-Origin', '*');
+  
+  ctx.json({'status': 'ok'});
+});
+```
+
+## Common Headers
+
+### CORS Headers
+Prefer configuring CORS via the provider; if you set headers manually, remember to handle OPTIONS preflight requests and avoid wildcard origins with credentials.
+
+```dart
+router.get('/api', (ctx) {
+  ctx.setHeader('Access-Control-Allow-Origin', '*');
+  ctx.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE');
+  ctx.setHeader('Access-Control-Allow-Headers', 'Content-Type');
+  ctx.setHeader('Access-Control-Max-Age', '86400'); // 24 hours
+});
+```
+
+### Cache Control
+
+```dart
+router.get('/static', (ctx) {
+  ctx.setHeader('Cache-Control', 'public, max-age=31536000'); // 1 year
+  ctx.setHeader('ETag', generateETag(content));
+});
+
+router.get('/dynamic', (ctx) {
+  ctx.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
+  ctx.setHeader('Pragma', 'no-cache');
+  ctx.setHeader('Expires', '0');
+});
+```
+
+### Security Headers
+
+```dart
+router.use((ctx, next) async {
+  // Common security headers
+  ctx.setHeader('X-Content-Type-Options', 'nosniff');
+  ctx.setHeader('X-Frame-Options', 'DENY');
+  ctx.setHeader('X-XSS-Protection', '1; mode=block');
+  ctx.setHeader('Strict-Transport-Security', 'max-age=31536000; includeSubDomains');
+  ctx.setHeader('Content-Security-Policy', "default-src 'self'");
+
+  return await next();
+});
+```
+
+Rather not hand-roll them? Configure the security provider once and let it manage header middleware. Note: X-XSS-Protection is deprecated in modern browsers; rely on a strong Content Security Policy (CSP) instead:
+
+```yaml title="config/http.yaml"
+security:
+  headers:
+    X-Content-Type-Options: nosniff
+    X-Frame-Options: DENY
+    Strict-Transport-Security: "max-age=31536000; includeSubDomains"
+    Content-Security-Policy: "default-src 'self'"
+```
+
+`routed.security` validates this section and inserts the corresponding middleware automatically. Use `dart run routed_cli provider:list --config` to review the active headers and spot malformed values before starting the server.
+
+## Content Negotiation
+Accept headers often include multiple types and weights (q-values). The example below is simplified; in production, prefer robust parsing or default to JSON sensibly.
+
+```dart
+router.get('/data', (ctx) {
+  final acceptHeader = ctx.requestHeader('Accept');
+  
+  switch (acceptHeader) {
+    case 'application/json':
+      return ctx.json({'data': 'content'});
+    case 'application/xml':
+      return ctx.xml({'data': 'content'});
+    case 'text/plain':
+      return ctx.string('content');
+    default:
+      return ctx.json({'data': 'content'}); // default to JSON
+  }
+});
+```
+
+## Custom Headers
+
+```dart
+router.group(
+  middlewares: [
+    (ctx, next) async {
+      ctx.setHeader('X-Request-ID', ctx.request.id);
+      final started = DateTime.now();
+
+      final response = await next();
+
+      final duration = DateTime.now().difference(started).inMilliseconds;
+      ctx.setHeader('X-Response-Time', '${duration}ms');
+
+      return response;
+    }
+  ],
+  builder: (router) {
+    // Routes with tracking headers...
+  }
+);
+```
+
+## Header Middleware
+
+```dart
+Future<Response> headerMiddleware(EngineContext ctx, Next next) async {
+  // Validate required headers
+  final apiKey = ctx.requestHeader('X-API-Key');
+  if (apiKey == null) {
+    return ctx.json({
+      'error': 'Missing API key'
+    }, statusCode: 401);
+  }
+  
+  // Add standard headers
+  ctx.setHeader('X-Powered-By', 'Routed');
+  ctx.setHeader('X-Version', '1.0.0');
+  
+  final response = await next();
+
+  // Add post-processing headers
+  ctx.setHeader('X-Processed-By', 'MyApp');
+  return response;
+}
+```

@@ -1,0 +1,107 @@
+---
+title: Browser Testing
+description: Drive real browsers against your handler using WebDriver-backed helpers
+sidebar_position: 1
+---
+
+# Browser Testing
+
+`server_testing` layers an ergonomic browser automation API on top of WebDriver.  
+The flow is:
+
+1. Bootstrap the environment with `testBootstrap` (installs binaries, sets up logging, registers global teardown).
+2. Start your application under test using `TestClient.ephemeralServer` (or any other real server).
+3. Use `browserTest` or `browserGroup` to orchestrate WebDriver sessions and run assertions through the `Browser` interface.
+
+## Minimal Example
+
+```dart
+import 'package:shelf/shelf.dart' as shelf;
+import 'package:server_testing/server_testing.dart';
+import 'package:server_testing_shelf/server_testing_shelf.dart';
+import 'package:test/test.dart';
+
+void main() async {
+  await testBootstrap(BrowserConfig(browserName: 'firefox', headless: true));
+
+  final app = (shelf.Request req) async => shelf.Response.ok(
+    '<html><head><title>Home</title></head><body>Hi</body></html>',
+    headers: {'content-type': 'text/html'},
+  );
+  final handler = ShelfRequestHandler(app);
+  final client = TestClient.ephemeralServer(handler); // real HTTP server
+  final baseUrl = await client.baseUrlFuture;
+
+  browserGroup('real browser', baseUrl: baseUrl, define: (getBrowser) {
+    test('home loads', () async {
+      final browser = getBrowser();
+      await browser.visit('/');
+      await browser.assertTitle('Home');
+    });
+    tearDownAll(() async {
+      await client.close(); // release the HttpServer
+    });
+  });
+}
+```
+
+Key pieces:
+- `testBootstrap` is asynchronous: call it at the top of the test file (before defining groups/tests). It reads `browsers.json`, ensures configured browser bundles are present, and wires up teardown to stop WebDriver drivers.
+- `BrowserConfig` controls the default browser, headless mode, logging, proxy, and device overrides. See [BrowserConfig & Devices](/docs/server-testing/browser/browser-config).
+- `TestClient.ephemeralServer` provides an isolated base URL for the suite; reuse the same handler across HTTP and browser tests when possible.
+- `browserGroup` is analogous to `group` but passes a `getBrowser()` factory that yields a fresh browser per test. Use `browserTest` for single tests outside a group.
+
+## Mixing HTTP and Browser Assertions
+
+Because both HTTP and browser tests can share the same handler, you can prepare state through the `TestClient` before navigating in the UI:
+
+```dart
+late TestClient client;
+late String baseUrl;
+
+setUpAll(() async {
+  client = TestClient.ephemeralServer(handler);
+  baseUrl = await client.baseUrlFuture;
+  await client.postJson('/seed', {'users': [{'id': 1, 'name': 'Ada'}]});
+});
+
+browserTest('user list renders', (browser) async {
+  await browser.visit('/users');
+  await browser.assertSee('Ada');
+}, baseUrl: baseUrl);
+
+tearDownAll(() async {
+  await client.close();
+});
+```
+
+## Controlling the Browser
+
+The `Browser` wrapper exposes high-level helpers:
+- Navigation: `visit`, `reload`, `back`, `forward`
+- Interactions: `click`, `type`, `selectOption`, `check`, `uncheck`
+- Assertions: `assertTitle`, `assertSee`, `assertSeeIn`, `assertSeeNothingIn`, `waiter.waitFor`
+- Screenshot/logging: `captureScreenshot`, automatic screenshots on failure when `BrowserConfig.autoScreenshots` is `true`
+- Window/device APIs: `setViewportSize`, `emulateDevice`, device presets via `devicesJsonData`
+
+Under the hood it keeps a WebDriver instance alive for the duration of the test and disposes it automatically when the test completes.
+
+## Handling Drivers and Logs
+
+- `testBootstrap` registers a global `tearDownAll` to stop any drivers that were started during the run.
+- Logs and screenshots are written under `BrowserConfig.logDir` (defaults to `.server_testing_logs`).
+- Use `BrowserManagement.overrideConfig` to temporarily run a test with a different browser or headless setting:
+
+```dart
+browserTest(
+  'run in headed chrome',
+  (browser) async {
+    await browser.visit('/');
+  },
+  browserType: ChromiumType(),
+  headless: false,
+  baseUrl: baseUrl,
+);
+```
+
+For more granular configuration options, continue to the [BrowserConfig & Devices](/docs/server-testing/browser/browser-config) guide.
