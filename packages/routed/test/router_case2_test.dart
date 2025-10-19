@@ -215,7 +215,7 @@ void main() {
 
       final filename = file.uri.pathSegments.last;
 
-      engine.static('/using_static', dir.path, fs);
+      engine.static('/using_static', dir.path, fileSystem:fs);
       engine.staticFile('/result', file.path, fs);
 
       client = TestClient(
@@ -280,7 +280,7 @@ void main() {
       final engine = Engine();
 
       final dir = fs.directory('nolist')..createSync();
-      engine.static('/', dir.path, fs);
+      engine.static('/', dir.path, fileSystem:fs);
 
       client = TestClient(RoutedRequestHandler(engine));
 

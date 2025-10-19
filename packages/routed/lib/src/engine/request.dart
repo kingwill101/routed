@@ -31,8 +31,19 @@ extension ServerExtension on Engine {
     runZonedGuarded(
       () async {
         _server = await HttpServer.bind(host, port ?? 0, shared: true);
-        print('Engine listening on http://$host:$port');
-        print("setup shutdown controller");
+        final boundPort = _server!.port;
+
+        await LoggingContext.withValues({
+          'event': 'engine_started',
+          'scheme': 'http',
+          'host': host,
+          'port': boundPort,
+        }, (logger) => logger.info('Engine listening'));
+
+        if (echo) {
+          print('Engine listening on http://$host:$boundPort');
+        }
+
         _setupShutdownController();
 
         // Handle incoming connections
@@ -48,8 +59,13 @@ extension ServerExtension on Engine {
           });
         }
       },
-      (e, s) {
-        print(e);
+      (error, stack) {
+        LoggingContext.withValues({
+          'event': 'engine_start_error',
+          'error_type': error.runtimeType.toString(),
+          'stack_trace': stack.toString(),
+        }, (logger) => logger.error('Engine failed to start: $error'));
+        stderr.writeln('Engine failed to start: $error');
       },
     );
   }
@@ -62,7 +78,21 @@ extension ServerExtension on Engine {
     if (!WebSocketTransformer.isUpgradeRequest(httpRequest)) {
       return false;
     }
-    final route = _wsRoutes[httpRequest.uri.path];
+    final requestPath = httpRequest.uri.path;
+    WebSocketEngineRoute? route;
+    Map<String, dynamic> pathParams = const {};
+    for (final candidate in _wsRoutes.values) {
+      if (!candidate.pattern.hasMatch(requestPath) &&
+          !candidate.pattern.hasMatch(
+            requestPath.endsWith('/') ? requestPath : '$requestPath/',
+          )) {
+        continue;
+      }
+      route = candidate;
+      pathParams = candidate.extractParameters(requestPath);
+      break;
+    }
+
     if (route == null) {
       return false;
     }
@@ -74,6 +104,7 @@ extension ServerExtension on Engine {
         route,
         httpRequest,
         container,
+        pathParameters: pathParams,
       );
     } finally {
       if (trackedRequest != null) {
@@ -118,17 +149,48 @@ extension ServerExtension on Engine {
         ? WrappedRequest(httpRequest, maxRequestSize)
         : httpRequest;
 
-    // Handle trailing slash redirects first
-    if (config.redirectTrailingSlash) {
-      final hasTrailingSlash = path.endsWith('/');
-      final alternativePath = hasTrailingSlash
-          ? path.substring(0, path.length - 1)
-          : '$path/';
+    final normalizedPath = path.isEmpty ? '/' : path;
+    final candidateRoutes = _engineRoutes
+        .where((route) {
+          return !route.isFallback && route.method == method;
+        })
+        .toList(growable: false);
 
-      // Check if alternative path exists
-      final alternativeMatch = _engineRoutes
-          .where((r) => r.path == alternativePath && r.method == method)
-          .firstOrNull;
+    bool matchesCurrentPath = false;
+    for (final candidate in candidateRoutes) {
+      final pattern = candidate._uriPattern;
+      if (pattern.hasMatch(normalizedPath) ||
+          pattern.hasMatch(
+            normalizedPath.endsWith('/') ? normalizedPath : '$normalizedPath/',
+          )) {
+        matchesCurrentPath = true;
+        break;
+      }
+    }
+
+    // Handle trailing slash redirects only when the current path does not match.
+    if (config.redirectTrailingSlash && !matchesCurrentPath) {
+      final hasTrailingSlash = normalizedPath.endsWith('/');
+      var alternativePath = hasTrailingSlash
+          ? normalizedPath.substring(0, normalizedPath.length - 1)
+          : '$normalizedPath/';
+
+      if (alternativePath.isEmpty) {
+        alternativePath = '/';
+      }
+
+      EngineRoute? alternativeMatch;
+      if (alternativePath != normalizedPath) {
+        alternativeMatch = candidateRoutes.firstWhereOrNull((candidate) {
+          final pattern = candidate._uriPattern;
+          return pattern.hasMatch(alternativePath) ||
+              pattern.hasMatch(
+                alternativePath.endsWith('/')
+                    ? alternativePath
+                    : '$alternativePath/',
+              );
+        });
+      }
 
       if (alternativeMatch != null) {
         final manager = container.has<EventManager>()
@@ -322,13 +384,15 @@ extension ServerExtension on Engine {
 
     _onRequestStarted(request);
 
-    final List<Middleware> chain = [];
-    for (final m in middlewares) {
-      chain.add((EngineContext c, Next n) => m(c, n));
-    }
-    for (final m in route.middlewares) {
-      chain.add((EngineContext c, Next n) => m(c, n));
-    }
+    final resolvedGlobal = _resolveMiddlewares(middlewares, container);
+    final resolvedRoute = _resolveMiddlewares(route.middlewares, container);
+
+    final List<Middleware> chain = [
+      for (final middleware in resolvedGlobal)
+        (EngineContext ctx, Next next) => middleware(ctx, next),
+      for (final middleware in resolvedRoute)
+        (EngineContext ctx, Next next) => middleware(ctx, next),
+    ];
     chain.add((EngineContext c, Next n) async {
       final r = await route.handler(c);
       return r;
@@ -348,6 +412,7 @@ extension ServerExtension on Engine {
       ..instance<Response>(response)
       ..instance<EngineContext>(context);
 
+    context.set('routed.route_type', 'http');
     context.set('routed.route_name', route.name ?? route.path);
     context.set('routed.route_path', route.path);
 
@@ -356,6 +421,7 @@ extension ServerExtension on Engine {
         : null;
 
     manager?.publish(BeforeRoutingEvent(context));
+    manager?.publish(RequestStartedEvent(context));
 
     try {
       await AppZone.run(
@@ -387,8 +453,9 @@ extension ServerExtension on Engine {
       if (!response.isClosed) {
         // response.close();
       }
-      _onRequestFinished(request.id);
       manager?.publish(AfterRoutingEvent(context, route: route));
+      _onRequestFinished(request.id);
+      manager?.publish(RequestFinishedEvent(context));
     }
 
     return request;
@@ -397,18 +464,25 @@ extension ServerExtension on Engine {
   Future<Request> _handleWebSocketRoute(
     WebSocketEngineRoute route,
     HttpRequest httpRequest,
-    Container container,
-  ) async {
-    final request = Request(httpRequest, {}, config);
+    Container container, {
+    Map<String, dynamic> pathParameters = const <String, dynamic>{},
+  }) async {
+    final request = Request(
+      httpRequest,
+      Map<String, dynamic>.from(pathParameters),
+      config,
+    );
     final response = Response(httpRequest.response);
 
-    final List<Middleware> chain = [];
-    for (final m in middlewares) {
-      chain.add((EngineContext c, Next n) => m(c, n));
-    }
-    for (final m in route.middlewares) {
-      chain.add((EngineContext c, Next n) => m(c, n));
-    }
+    final resolvedGlobal = _resolveMiddlewares(middlewares, container);
+    final resolvedRoute = _resolveMiddlewares(route.middlewares, container);
+
+    final List<Middleware> chain = [
+      for (final middleware in resolvedGlobal)
+        (EngineContext ctx, Next next) => middleware(ctx, next),
+      for (final middleware in resolvedRoute)
+        (EngineContext ctx, Next next) => middleware(ctx, next),
+    ];
     chain.add((EngineContext ctx, Next next) async {
       try {
         // ignore: close_sinks, handed off to the registered WebSocket handler
@@ -444,6 +518,10 @@ extension ServerExtension on Engine {
       ..instance<Request>(request)
       ..instance<Response>(response)
       ..instance<EngineContext>(context);
+    context
+      ..set('routed.route_type', 'websocket')
+      ..set('routed.route_path', route.path)
+      ..set('routed.route_name', route.path);
     _activeRequests[request.id] = request;
 
     await AppZone.run(
@@ -476,8 +554,10 @@ extension ServerExtension on Engine {
     final request = Request(httpRequest, {}, config);
     final response = Response(httpRequest.response);
 
+    final resolvedGlobal = _resolveMiddlewares(middlewares, container);
+
     final handlers = <Middleware>[
-      for (final middleware in middlewares)
+      for (final middleware in resolvedGlobal)
         (EngineContext ctx, Next next) => middleware(ctx, next),
       (EngineContext ctx, Next next) async =>
           onComplete != null ? await onComplete(ctx) : ctx.response,
@@ -593,7 +673,8 @@ extension ServerExtension on Engine {
   Future<void> _handleGlobalError(
     EngineContext ctx,
     Object err,
-    StackTrace stack,) async {
+    StackTrace stack,
+  ) async {
     final logger = LoggingContext.currentLogger();
     final errorPayload = <String, Object?>{
       'error_type': err.runtimeType.toString(),

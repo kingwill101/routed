@@ -1,5 +1,6 @@
 import 'dart:io';
 
+import 'package:routed/providers.dart';
 import 'package:routed/routed.dart';
 import 'package:routed/session.dart';
 import 'package:test/test.dart';
@@ -235,6 +236,7 @@ void main() {
     test(
       'custom driver override takes precedence over built-in cookie',
       () async {
+        SessionServiceProvider.unregisterDriver('cookie');
         SessionServiceProvider.registerDriver('cookie', (context) {
           final options = context.options.copyWith(sameSite: SameSite.strict);
           return SessionConfig.cookie(
@@ -246,6 +248,7 @@ void main() {
           );
         }, overrideExisting: true);
         addTearDown(() {
+          SessionServiceProvider.unregisterDriver('cookie');
           SessionServiceProvider.registerDriver(
             'cookie',
             (context) => SessionConfig.cookie(
@@ -315,6 +318,39 @@ void main() {
           .map((entry) => entry.path)
           .toSet();
       expect(docPaths, contains('session.api_key'));
+    });
+
+    test('registerDriver prevents duplicate registrations', () {
+      SessionConfig builder(SessionDriverBuilderContext context) {
+        return SessionConfig.cookie(
+          appKey: SecureCookie.generateKey(),
+          codecs: context.codecs,
+          cookieName: context.cookieName,
+          maxAge: context.lifetime,
+          expireOnClose: context.expireOnClose,
+          options: context.options,
+        );
+      }
+
+      SessionServiceProvider.registerDriver(
+        'session-dup',
+        builder,
+        overrideExisting: true,
+      );
+      addTearDown(() {
+        SessionServiceProvider.unregisterDriver('session-dup');
+      });
+
+      expect(
+        () => SessionServiceProvider.registerDriver('session-dup', builder),
+        throwsA(
+          isA<ProviderConfigException>().having(
+            (e) => e.message,
+            'message',
+            contains('session-dup'),
+          ),
+        ),
+      );
     });
   });
 }

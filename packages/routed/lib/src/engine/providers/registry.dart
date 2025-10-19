@@ -1,4 +1,5 @@
 import 'package:routed/src/provider/provider.dart';
+import 'package:routed/src/support/named_registry.dart';
 
 import 'cache.dart';
 import 'core.dart';
@@ -30,108 +31,108 @@ class ProviderRegistration {
   final String description;
 }
 
-class ProviderRegistry {
-  ProviderRegistry._();
+class ProviderRegistry extends NamedRegistry<ProviderRegistration> {
+  ProviderRegistry._() {
+    _registerDefaults();
+  }
 
   static final ProviderRegistry instance = ProviderRegistry._();
 
-  final Map<String, ProviderRegistration>
-  _providers = <String, ProviderRegistration>{
-    'routed.core': ProviderRegistration(
-      id: 'routed.core',
+  void _registerDefaults() {
+    register(
+      'routed.core',
       factory: () => CoreServiceProvider(),
       description: 'Core services: config loader, engine bindings.',
-    ),
-    'routed.routing': ProviderRegistration(
-      id: 'routed.routing',
+    );
+    register(
+      'routed.routing',
       factory: () => RoutingServiceProvider(),
       description: 'Routing events and event manager bindings.',
-    ),
-    'routed.cache': ProviderRegistration(
-      id: 'routed.cache',
+    );
+    register(
+      'routed.cache',
       factory: () => CacheServiceProvider(),
       description: 'Cache manager bootstrap and defaults.',
-    ),
-    'routed.sessions': ProviderRegistration(
-      id: 'routed.sessions',
+    );
+    register(
+      'routed.sessions',
       factory: () => SessionServiceProvider(),
       description: 'Session middleware and configuration.',
-    ),
-    'routed.uploads': ProviderRegistration(
-      id: 'routed.uploads',
+    );
+    register(
+      'routed.uploads',
       factory: () => UploadsServiceProvider(),
       description: 'Multipart upload configuration defaults.',
-    ),
-    'routed.cors': ProviderRegistration(
-      id: 'routed.cors',
+    );
+    register(
+      'routed.cors',
       factory: () => CorsServiceProvider(),
       description: 'CORS configuration and middleware defaults.',
-    ),
-    'routed.security': ProviderRegistration(
-      id: 'routed.security',
+    );
+    register(
+      'routed.security',
       factory: () => SecurityServiceProvider(),
       description: 'Security middleware (CSRF, headers, limits).',
-    ),
-    'routed.logging': ProviderRegistration(
-      id: 'routed.logging',
+    );
+    register(
+      'routed.logging',
       factory: () => LoggingServiceProvider(),
       description: 'HTTP logging defaults and helpers.',
-    ),
-    'routed.auth': ProviderRegistration(
-      id: 'routed.auth',
+    );
+    register(
+      'routed.auth',
       factory: () => AuthServiceProvider(),
       description: 'Authentication helpers (JWT middleware, validators).',
-    ),
-    'routed.observability': ProviderRegistration(
-      id: 'routed.observability',
+    );
+    register(
+      'routed.observability',
       factory: () => ObservabilityServiceProvider(),
       description:
           'Tracing, metrics, health endpoints, and error observer hooks.',
-    ),
-    'routed.compression': ProviderRegistration(
-      id: 'routed.compression',
+    );
+    register(
+      'routed.compression',
       factory: () => CompressionServiceProvider(),
       description: 'Response compression defaults and middleware.',
-    ),
-    'routed.rate_limit': ProviderRegistration(
-      id: 'routed.rate_limit',
+    );
+    register(
+      'routed.rate_limit',
       factory: () => RateLimitServiceProvider(),
       description:
           'Rate limiting with token buckets, sliding windows, quotas, and failover modes.',
-    ),
-    'routed.storage': ProviderRegistration(
-      id: 'routed.storage',
+    );
+    register(
+      'routed.storage',
       factory: () => StorageServiceProvider(),
       description: 'Storage disks (local file systems, etc.).',
-    ),
-    'routed.static': ProviderRegistration(
-      id: 'routed.static',
+    );
+    register(
+      'routed.static',
       factory: () => StaticAssetsServiceProvider(),
       description: 'Static asset serving configuration defaults.',
-    ),
-    'routed.views': ProviderRegistration(
-      id: 'routed.views',
+    );
+    register(
+      'routed.views',
       factory: () => ViewServiceProvider(),
       description: 'View template configuration and engines.',
-    ),
-  };
+    );
+  }
 
   Iterable<ProviderRegistration> get registrations =>
-      _providers.values.toList(growable: false);
+      entries.values.toList(growable: false);
 
-  ProviderRegistration? resolve(String id) => _providers[id];
+  ProviderRegistration? resolve(String id) => getEntry(id);
 
-  bool has(String id) => _providers.containsKey(id);
+  bool has(String id) => containsEntry(id);
 
   void register(
     String id, {
     required ServiceProviderFactory factory,
     String description = '',
   }) {
-    _providers[id] = ProviderRegistration(
-      id: id,
-      factory: factory,
-      description: description,
+    registerEntry(
+      id,
+      ProviderRegistration(id: id, factory: factory, description: description),
     );
   }
 }

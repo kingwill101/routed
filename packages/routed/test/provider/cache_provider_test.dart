@@ -1,3 +1,4 @@
+import 'package:routed/providers.dart';
 import 'package:routed/routed.dart';
 import 'package:test/test.dart';
 
@@ -84,6 +85,29 @@ void main() {
 
       final afterReload = await engine.make<CacheManager>();
       expect(identical(afterReload, customManager), isTrue);
+    });
+
+    test('registerDriver prevents duplicate cache drivers', () {
+      CacheManager.registerDriver(
+        'cache-dup',
+        () => ArrayStoreFactory(),
+        overrideExisting: true,
+      );
+      addTearDown(() {
+        CacheManager.unregisterDriver('cache-dup');
+      });
+
+      expect(
+        () =>
+            CacheManager.registerDriver('cache-dup', () => ArrayStoreFactory()),
+        throwsA(
+          isA<ProviderConfigException>().having(
+            (e) => e.message,
+            'message',
+            contains('cache-dup'),
+          ),
+        ),
+      );
     });
 
     test('documents driver specific cache options', () {

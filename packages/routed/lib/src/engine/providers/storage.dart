@@ -58,14 +58,12 @@ class StorageServiceProvider extends ServiceProvider
       documentation: localStorageDriver.documentation,
       overrideExisting: false,
     );
-    for (final driver in const ['s3', 'minio', 'spaces', 'r2']) {
-      registerDriver(
-        driver,
-        cloudStorageDriver.build,
-        documentation: cloudStorageDriver.documentation,
-        overrideExisting: false,
-      );
-    }
+    registerDriver(
+      "s3",
+      cloudStorageDriver.build,
+      documentation: cloudStorageDriver.documentation,
+      overrideExisting: false,
+    );
     _defaultsRegistered = true;
   }
 

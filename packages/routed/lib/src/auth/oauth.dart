@@ -159,6 +159,14 @@ class OAuthIntrospectionResult {
     }
     return null;
   }
+
+  DateTime? get notBefore {
+    final nbf = raw['nbf'];
+    if (nbf is num) {
+      return DateTime.fromMillisecondsSinceEpoch(nbf.toInt() * 1000);
+    }
+    return null;
+  }
 }
 
 typedef OAuthOnValidated =
@@ -174,6 +182,7 @@ class OAuthIntrospectionOptions {
     this.clientSecret,
     this.tokenTypeHint,
     this.cacheTtl = const Duration(seconds: 30),
+    this.clockSkew = const Duration(seconds: 60),
     this.additionalParameters = const <String, String>{},
   });
 
@@ -182,6 +191,7 @@ class OAuthIntrospectionOptions {
   final String? clientSecret;
   final String? tokenTypeHint;
   final Duration cacheTtl;
+  final Duration clockSkew;
   final Map<String, String> additionalParameters;
 }
 
@@ -281,6 +291,24 @@ Middleware oauth2Introspection(
       ctx.response
         ..statusCode = HttpStatus.unauthorized
         ..write('token inactive');
+      return ctx.response;
+    }
+
+    final now = DateTime.now().toUtc();
+    final expiresAt = result.expiresAt?.toUtc();
+    if (expiresAt != null && expiresAt.add(options.clockSkew).isBefore(now)) {
+      ctx.response
+        ..statusCode = HttpStatus.unauthorized
+        ..write('token expired');
+      return ctx.response;
+    }
+
+    final notBefore = result.notBefore?.toUtc();
+    if (notBefore != null &&
+        notBefore.subtract(options.clockSkew).isAfter(now)) {
+      ctx.response
+        ..statusCode = HttpStatus.unauthorized
+        ..write('token not yet valid');
       return ctx.response;
     }
 

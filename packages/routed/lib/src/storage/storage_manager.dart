@@ -1,6 +1,5 @@
 import 'package:file/file.dart' as file;
 import 'package:file/local.dart' as local;
-import 'package:path/path.dart' as p;
 
 /// Represents a configured storage disk.
 abstract class StorageDisk {
@@ -9,37 +8,6 @@ abstract class StorageDisk {
 
   /// Resolves [path] to an absolute path on this disk.
   String resolve(String path);
-}
-
-/// Local file system backed disk.
-class LocalStorageDisk implements StorageDisk {
-  LocalStorageDisk({required String root, file.FileSystem? fileSystem})
-    : _fileSystem = fileSystem ?? const local.LocalFileSystem(),
-      _root = _normalizeRoot(root, fileSystem ?? const local.LocalFileSystem());
-
-  final file.FileSystem _fileSystem;
-  final String _root;
-
-  static String _normalizeRoot(String root, file.FileSystem fileSystem) {
-    final currentDir = p.normalize(fileSystem.currentDirectory.path);
-    final resolved = p.normalize(
-      p.isAbsolute(root) ? root : p.join(currentDir, root),
-    );
-    return resolved;
-  }
-
-  @override
-  file.FileSystem get fileSystem => _fileSystem;
-
-  @override
-  String resolve(String path) {
-    if (path.isEmpty) {
-      return _root;
-    }
-    return p.normalize(p.join(_root, path));
-  }
-
-  String get root => _root;
 }
 
 /// Manages configured storage disks.

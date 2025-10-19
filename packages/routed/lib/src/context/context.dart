@@ -253,12 +253,6 @@ class EngineContext {
     return _response;
   }
 
-  @Deprecated(
-    'Use Next in middleware. This remains for internal compatibility.',
-  )
-  Future<void> next() async {
-    await _nextImpl();
-  }
 
   /// Helper to start processing the chain from the first handler.
   Future<Response> run() async {
@@ -338,10 +332,6 @@ class EngineContext {
 
   /// Retrieve a parameter from the route.
   String? param(String s) {
-    if (_route == null) {
-      return null;
-    }
-    final params = _route.extractParameters(request.path);
     final value = params[s];
     return value?.toString();
   }
@@ -406,8 +396,22 @@ class EngineContext {
   }
 
   /// Retrieve route parameters.
-  Map<String, dynamic> get params =>
-      _route?.extractParameters(request.path) ?? {};
+  Map<String, dynamic> get params {
+    if (_route != null) {
+      final extracted = _route.extractParameters(request.path);
+      if (request.pathParameters.isEmpty) {
+        return extracted;
+      }
+      return {
+        ...request.pathParameters,
+        ...extracted,
+      };
+    }
+    if (request.pathParameters.isEmpty) {
+      return const {};
+    }
+    return Map<String, dynamic>.from(request.pathParameters);
+  }
 
   /// Set a header in the response.
   void setHeader(String s, String t) {

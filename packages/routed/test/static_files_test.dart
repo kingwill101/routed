@@ -26,7 +26,7 @@ void main() {
         final dir = fs.directory('files')..createSync();
         final file = dir.childFile('hello.txt')
           ..writeAsStringSync('hello world');
-        engine.static('/files', dir.path, fs); // exposes /files/{*filepath}
+        engine.static('/files', dir.path, fileSystem:fs); // exposes /files/{*filepath}
         engine.staticFile('/single', file.path, fs);
         client = TestClient(RoutedRequestHandler(engine));
 
@@ -46,7 +46,7 @@ void main() {
     test('Non-existent file returns 404', () async {
       final engine = Engine();
       final dir = fs.directory('empty')..createSync();
-      engine.static('/s', dir.path, fs);
+      engine.static('/s', dir.path, fileSystem:fs);
       client = TestClient(RoutedRequestHandler(engine));
       (await client.get('/s/missing.txt')).assertStatus(404);
       (await client.head('/s/missing.txt')).assertStatus(404);
@@ -55,7 +55,7 @@ void main() {
     test('Path traversal attempt blocked (../)', () async {
       final engine = Engine();
       final dir = fs.directory('secured')..createSync(recursive: true);
-      engine.static('/sec', dir.path, fs);
+      engine.static('/sec', dir.path, fileSystem:fs);
       client = TestClient(RoutedRequestHandler(engine));
       (await client.get(
         '/sec/../../secret.txt',
@@ -65,7 +65,7 @@ void main() {
     test('Directory listing disabled by default (404)', () async {
       final engine = Engine();
       final dir = fs.directory('nolist')..createSync();
-      engine.static('/', dir.path, fs);
+      engine.static('/', dir.path, fileSystem:fs);
       client = TestClient(RoutedRequestHandler(engine));
       (await client.get('/')).assertStatus(404);
     });
@@ -95,7 +95,7 @@ void main() {
       final engine = Engine();
       final dir = fs.directory('rng')..createSync();
       dir.childFile('data.txt').writeAsStringSync('ABCDEFGHIJ');
-      engine.static('/rng', dir.path, fs);
+      engine.static('/rng', dir.path, fileSystem:fs);
       client = TestClient(RoutedRequestHandler(engine));
       final r = await client.get(
         '/rng/data.txt',
@@ -113,7 +113,7 @@ void main() {
       final engine = Engine();
       final dir = fs.directory('rng2')..createSync();
       dir.childFile('data.txt').writeAsStringSync('12345');
-      engine.static('/rng2', dir.path, fs);
+      engine.static('/rng2', dir.path, fileSystem:fs);
       client = TestClient(RoutedRequestHandler(engine));
       final r = await client.get(
         '/rng2/data.txt',
@@ -128,7 +128,7 @@ void main() {
       final engine = Engine();
       final dir = fs.directory('mod')..createSync();
       dir.childFile('data.txt').writeAsStringSync('etag');
-      engine.static('/m', dir.path, fs);
+      engine.static('/m', dir.path, fileSystem:fs);
       client = TestClient(RoutedRequestHandler(engine));
       final first = await client.get('/m/data.txt');
       first.assertStatus(200);
@@ -153,7 +153,7 @@ void main() {
       final engine = Engine();
       final dir = fs.directory('head')..createSync();
       dir.childFile('h.txt').writeAsStringSync('HEADDATA');
-      engine.static('/h', dir.path, fs);
+      engine.static('/h', dir.path, fileSystem:fs);
       client = TestClient(RoutedRequestHandler(engine));
       final r = await client.head('/h/h.txt');
       r.assertStatus(200);
@@ -166,7 +166,7 @@ void main() {
       dir
           .childFile('img.bin')
           .writeAsBytesSync(List<int>.generate(16, (i) => i));
-      engine.static('/bin', dir.path, fs);
+      engine.static('/bin', dir.path, fileSystem:fs);
       client = TestClient(RoutedRequestHandler(engine));
       final r = await client.get('/bin/img.bin');
       r
@@ -178,7 +178,7 @@ void main() {
       final engine = Engine();
       final nested = fs.directory('root/a/b/c')..createSync(recursive: true);
       nested.childFile('deep.txt').writeAsStringSync('deep');
-      engine.static('/r', 'root', fs);
+      engine.static('/r', 'root', fileSystem:fs);
       client = TestClient(RoutedRequestHandler(engine));
       (await client.get(
         '/r/a/b/c/deep.txt',
@@ -204,7 +204,7 @@ void main() {
       final engine = Engine();
       final dir = fs.directory('rng3')..createSync();
       dir.childFile('tail.txt').writeAsStringSync('0123456789');
-      engine.static('/r3', dir.path, fs);
+      engine.static('/r3', dir.path, fileSystem:fs);
       client = TestClient(RoutedRequestHandler(engine));
       final r = await client.get(
         '/r3/tail.txt',
@@ -219,7 +219,7 @@ void main() {
       final engine = Engine();
       final dir = fs.directory('rng4')..createSync();
       dir.childFile('open.txt').writeAsStringSync('abcdefghij');
-      engine.static('/r4', dir.path, fs);
+      engine.static('/r4', dir.path, fileSystem:fs);
       client = TestClient(RoutedRequestHandler(engine));
       final r = await client.get(
         '/r4/open.txt',
@@ -234,7 +234,7 @@ void main() {
       final engine = Engine();
       final dir = fs.directory('mod2')..createSync();
       dir.childFile('d.txt').writeAsStringSync('data');
-      engine.static('/m2', dir.path, fs);
+      engine.static('/m2', dir.path, fileSystem:fs);
       client = TestClient(RoutedRequestHandler(engine));
       (await client.get(
         '/m2/d.txt',
@@ -249,7 +249,7 @@ void main() {
     test('HEAD missing file returns 404 without body', () async {
       final engine = Engine();
       final dir = fs.directory('headmiss')..createSync();
-      engine.static('/hm', dir.path, fs);
+      engine.static('/hm', dir.path, fileSystem:fs);
       client = TestClient(RoutedRequestHandler(engine));
       final r = await client.head('/hm/nofile.txt');
       r.assertStatus(404);

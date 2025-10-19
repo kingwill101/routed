@@ -77,6 +77,31 @@ void main() {
 
       expect(events, ['open', 'close']);
     });
+
+    test('WebSocket routes resolve middleware references', () async {
+      final events = <String>[];
+      final registry = engine.container.get<MiddlewareRegistry>();
+      registry.register('ws.log', (container) {
+        return (EngineContext ctx, Next next) async {
+          events.add('middleware');
+          return await next();
+        };
+      });
+
+      engine.ws(
+        '/with-middleware',
+        TestWebSocketHandler(onOpen: (ctx) => events.add('handler')),
+        middlewares: [MiddlewareRef.of('ws.log')],
+      );
+
+      final ws = await WebSocket.connect(
+        'ws://localhost:${server.port}/with-middleware',
+      );
+      await Future<void>.delayed(const Duration(milliseconds: 50));
+      await ws.close();
+
+      expect(events, ['middleware', 'handler']);
+    });
   });
 }
 

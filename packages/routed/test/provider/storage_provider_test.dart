@@ -2,7 +2,9 @@ import 'dart:io';
 
 import 'package:file/file.dart' as storage_file;
 import 'package:path/path.dart' as p;
+import 'package:routed/providers.dart';
 import 'package:routed/routed.dart';
+import 'package:routed/src/storage/local_storage_driver.dart';
 import 'package:test/test.dart';
 
 void main() {
@@ -80,7 +82,39 @@ void main() {
       );
     });
 
+    test('registerDriver prevents duplicate storage drivers', () {
+      StorageServiceProvider.registerDriver(
+        'storage-dup',
+        (context) => LocalStorageDisk(
+          root: 'dup/${context.diskName}',
+          fileSystem: context.manager.defaultFileSystem,
+        ),
+        overrideExisting: true,
+      );
+      addTearDown(() {
+        StorageServiceProvider.unregisterDriver('storage-dup');
+      });
+
+      expect(
+        () => StorageServiceProvider.registerDriver(
+          'storage-dup',
+          (context) => LocalStorageDisk(
+            root: 'dup/${context.diskName}',
+            fileSystem: context.manager.defaultFileSystem,
+          ),
+        ),
+        throwsA(
+          isA<ProviderConfigException>().having(
+            (e) => e.message,
+            'message',
+            contains('storage-dup'),
+          ),
+        ),
+      );
+    });
+
     test('custom driver override takes precedence over built-in', () async {
+      StorageServiceProvider.unregisterDriver('local');
       StorageServiceProvider.registerDriver(
         'local',
         (context) => LocalStorageDisk(
@@ -90,6 +124,7 @@ void main() {
         overrideExisting: true,
       );
       addTearDown(() {
+        StorageServiceProvider.unregisterDriver('local');
         StorageServiceProvider.registerDriver(
           'local',
           (context) {

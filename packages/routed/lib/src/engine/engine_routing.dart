@@ -33,6 +33,7 @@ extension EngineRouting on Engine {
     List<Middleware> middlewares = const [],
     Map<String, dynamic> constraints = const {},
   }) {
+    _markRoutesDirty();
     return _defaultRouter.get(
       path,
       handler,
@@ -62,6 +63,7 @@ extension EngineRouting on Engine {
     List<Middleware> middlewares = const [],
     Map<String, dynamic> constraints = const {},
   }) {
+    _markRoutesDirty();
     return _defaultRouter.post(
       path,
       handler,
@@ -91,6 +93,7 @@ extension EngineRouting on Engine {
     List<Middleware> middlewares = const [],
     Map<String, dynamic> constraints = const {},
   }) {
+    _markRoutesDirty();
     return _defaultRouter.put(
       path,
       handler,
@@ -119,6 +122,7 @@ extension EngineRouting on Engine {
     List<Middleware> middlewares = const [],
     Map<String, dynamic> constraints = const {},
   }) {
+    _markRoutesDirty();
     return _defaultRouter.delete(
       path,
       handler,
@@ -148,6 +152,7 @@ extension EngineRouting on Engine {
     List<Middleware> middlewares = const [],
     Map<String, dynamic> constraints = const {},
   }) {
+    _markRoutesDirty();
     return _defaultRouter.patch(
       path,
       handler,
@@ -176,6 +181,7 @@ extension EngineRouting on Engine {
     List<Middleware> middlewares = const [],
     Map<String, dynamic> constraints = const {},
   }) {
+    _markRoutesDirty();
     return _defaultRouter.head(
       path,
       handler,
@@ -206,6 +212,7 @@ extension EngineRouting on Engine {
     List<Middleware> middlewares = const [],
     Map<String, dynamic> constraints = const {},
   }) {
+    _markRoutesDirty();
     return _defaultRouter.options(
       path,
       handler,
@@ -225,6 +232,7 @@ extension EngineRouting on Engine {
     RouteHandler handler, {
     List<Middleware> middlewares = const [],
   }) {
+    _markRoutesDirty();
     return _defaultRouter.connect(path, handler, middlewares: middlewares);
   }
 
@@ -250,6 +258,7 @@ extension EngineRouting on Engine {
     List<Middleware> middlewares = const [],
     Map<String, dynamic> constraints = const {},
   }) {
+    _markRoutesDirty();
     return _defaultRouter.handle(
       method,
       path,
@@ -281,6 +290,7 @@ extension EngineRouting on Engine {
     RouteHandler handler, {
     List<Middleware> middlewares = const [],
   }) {
+    _markRoutesDirty();
     // We use a wildcard parameter in the path that will match anything.
     // We also add a flag in constraints so later when building the EngineRoute
     // we know this route is the fallback.
@@ -317,6 +327,7 @@ extension EngineRouting on Engine {
     List<Middleware> middlewares = const [],
     void Function(Router)? builder,
   }) {
+    _markRoutesDirty();
     return _defaultRouter.group(
       path: path,
       middlewares: middlewares,

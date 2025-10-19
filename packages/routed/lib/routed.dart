@@ -25,6 +25,18 @@ export 'src/auth/oauth.dart'
         oauthTokenAttribute,
         oauthClaimsAttribute,
         oauthScopeAttribute;
+export 'src/auth/haigate.dart'
+    show
+        GateCallback,
+        GateEvaluation,
+        GateEvaluationContext,
+        GateObserver,
+        GatePayloadProvider,
+        GateDeniedHandler,
+        GateRegistry,
+        GateRegistrationException,
+        GateViolation,
+        Haigate;
 export 'src/auth/session_auth.dart'
     show
         AuthPrincipal,
@@ -57,26 +69,13 @@ export 'src/engine/config.dart';
 export 'src/engine/engine.dart';
 export 'src/engine/engine_opt.dart';
 export 'src/engine/engine_template.dart';
-export 'src/engine/middleware_registry.dart';
 export 'src/engine/provider_manifest.dart';
-export 'src/engine/providers/auth.dart';
-export 'src/engine/providers/cache.dart';
-export 'src/engine/providers/core.dart';
-export 'src/engine/providers/cors.dart';
-export 'src/engine/providers/logging.dart';
-export 'src/engine/providers/observability.dart';
-export 'src/engine/providers/registry.dart';
-export 'src/engine/providers/routing.dart';
-export 'src/engine/providers/security.dart';
-export 'src/engine/providers/sessions.dart';
-export 'src/engine/providers/static_assets.dart';
-export 'src/engine/providers/storage.dart';
-export 'src/engine/providers/uploads.dart';
-export 'src/engine/providers/views.dart';
+export 'src/engine/middleware_registry.dart';
 export 'src/engine/route_manifest.dart';
 export 'src/openapi/generator.dart';
 export 'src/openapi/operation.dart';
 export 'src/events/events.dart';
+export 'src/events/signals.dart';
 export 'src/http/conditional.dart'
     show
         ConditionalOutcome,
@@ -106,9 +105,8 @@ export 'src/router/middleware_reference.dart';
 export 'src/router/router.dart';
 export 'src/router/types.dart';
 export 'src/runtime/shutdown.dart';
-export 'src/storage/storage_drivers.dart';
 export 'src/storage/storage_manager.dart';
-export 'src/support/helpers.dart';
+export 'src/support/helpers.dart' show config, route;
 export 'src/support/zone.dart';
 export 'src/utils/environment.dart';
 export 'src/utils/request_id.dart';

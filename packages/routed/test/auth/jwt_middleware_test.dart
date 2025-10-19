@@ -200,6 +200,80 @@ void main() {
       );
       expect(res.statusCode, equals(401));
     });
+
+    test('accepts token within configured clock skew window', () async {
+      final now = DateTime.now();
+      final token = _buildToken(
+        _claims(now: now, expiresIn: const Duration(seconds: -20)),
+      );
+
+      final engine = Engine()
+        ..addGlobalMiddleware(
+          jwtAuthentication(
+            JwtOptions(
+              issuer: 'https://issuer.test',
+              audience: const ['api'],
+              inlineKeys: [_testJwk],
+              algorithms: const ['HS256'],
+              clockSkew: const Duration(seconds: 45),
+            ),
+          ),
+        )
+        ..get('/secure', (ctx) => ctx.string('ok'));
+
+      await engine.initialize();
+
+      final client = TestClient(
+        RoutedRequestHandler(engine),
+        mode: TransportMode.ephemeralServer,
+      );
+      addTearDown(() async => await client.close());
+
+      final res = await client.get(
+        '/secure',
+        headers: {
+          'Authorization': ['Bearer $token'],
+        },
+      );
+      res.assertStatus(200);
+    });
+
+    test('rejects token outside configured clock skew window', () async {
+      final now = DateTime.now();
+      final token = _buildToken(
+        _claims(now: now, notBeforeOffset: const Duration(seconds: 45)),
+      );
+
+      final engine = Engine()
+        ..addGlobalMiddleware(
+          jwtAuthentication(
+            JwtOptions(
+              issuer: 'https://issuer.test',
+              audience: const ['api'],
+              inlineKeys: [_testJwk],
+              algorithms: const ['HS256'],
+              clockSkew: const Duration(seconds: 30),
+            ),
+          ),
+        )
+        ..get('/secure', (ctx) => ctx.string('ok'));
+
+      await engine.initialize();
+
+      final client = TestClient(
+        RoutedRequestHandler(engine),
+        mode: TransportMode.ephemeralServer,
+      );
+      addTearDown(() async => await client.close());
+
+      final res = await client.get(
+        '/secure',
+        headers: {
+          'Authorization': ['Bearer $token'],
+        },
+      );
+      expect(res.statusCode, equals(401));
+    });
   });
 
   group('AuthServiceProvider manifest', () {
