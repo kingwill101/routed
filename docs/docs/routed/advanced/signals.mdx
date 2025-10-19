@@ -1,0 +1,184 @@
+---
+title: Signals
+description: React to Routed lifecycle changes using Django-style signal hooks
+sidebar_position: 4
+---
+
+# Signals
+
+Signals provide a lightweight publish/subscribe layer on top of Routed's event bus. They are inspired by Django's
+[`django.dispatch`] signals and let packages announce that “something happened” without tightly coupling senders to
+listeners. A signal owns the list of handlers, runs them in sequence, and forwards failures to the structured
+`UnhandledSignalError` event so problems do not go unnoticed.
+
+Routed exposes request lifecycle signals out of the box (`SignalHub.requests.*`), and you can create your own signals
+when building reusable libraries.
+
+## When to use signals
+
+Prefer signals when:
+
+- You need _hook points_ where multiple consumers can react to a lifecycle change.
+- You want deterministic handler ordering (`connect` preserves registration order).
+- A failing handler should produce an `UnhandledSignalError` that you can observe in tests or logs.
+- You are writing a reusable package and want a narrow dependency surface (`connect` / `disconnect` instead of raw
+  `StreamSubscription`s).
+
+Prefer the event bus directly when you need `Stream` primitives such as `pause`, `resume`, or broadcast fan-out beyond
+ordered handlers.
+
+## Anatomy of a signal
+
+`Signal<T>` is a thin adapter around the `EventManager`:
+
+- Use `connect` to register a handler. It returns a `SignalSubscription` you can `cancel()` later.
+- Provide an optional `key` (similar to Django's `dispatch_uid`) to replace previous registrations and avoid
+  duplicates.
+- Provide an optional `sender` to scope handlers to specific publishers.
+- Signals dispatch the same event instances that the engine publishes.
+- Exceptions thrown by handlers are caught, wrapped inside `UnhandledSignalError` (which now carries `key` and
+  `sender` metadata), and published on the event bus.
+
+```dart
+import 'package:routed/signals.dart';
+
+Future<void> bootMetrics(Engine engine) async {
+  final hub = await engine.container.make<SignalHub>();
+
+  final subscription = hub.requests.routeMatched.connect(
+    (event) {
+      metrics.increment('routes.matched', tags: {
+        'route': event.route.name ?? event.route.path,
+      });
+    },
+    key: 'metrics.route_matched',
+  );
+
+  // Engine exposes the resolved [EngineRoute] instances after routes are built.
+  final dashboardRoute = engine.routes.firstWhere((route) => route.name == 'dashboard');
+  hub.requests.afterRouting.connect(
+    (event) {
+      metrics.increment('routes.completed', tags: {'route': 'dashboard'});
+    },
+    sender: dashboardRoute,
+    key: 'metrics.dashboard.after',
+  );
+
+  engine.onShutdown(() => subscription.cancel());
+}
+```
+
+Handlers run sequentially in the order they were connected. If a handler throws, the signal continues dispatching the
+remaining handlers after emitting `UnhandledSignalError`. Request signals dispatch a `RequestSignalSender` that wraps
+the active `EngineContext` and optional `EngineRoute`, so you can scope handlers to the full request, a particular
+route, or both.
+
+## Built-in request signals
+
+The routing provider wires a `SignalHub` into the container. Resolve it from any scope that can access the engine
+container, or use `AppZone.signals` inside request handlers and middleware.
+
+| Signal | Event | When it fires |
+| --- | --- | --- |
+| `hub.requests.started` | `RequestStartedEvent` | After the request context and container are initialised, before routing begins. |
+| `hub.requests.routeMatched` | `RouteMatchedEvent` | As soon as the router finds a matching route. |
+| `hub.requests.routingError` | `RoutingErrorEvent` | When a handler or middleware throws during request processing. |
+| `hub.requests.afterRouting` | `AfterRoutingEvent` | After the middleware/handler pipeline completes (success or failure). |
+| `hub.requests.finished` | `RequestFinishedEvent` | After routing completes and the engine performs its final bookkeeping. |
+
+Inside request code you can avoid container access entirely:
+
+```dart
+import 'package:routed/routed.dart';
+
+router.get('/checkout', (ctx) async {
+  final signals = AppZone.signals;
+
+  final cleanup = signals.requests.finished.connect(
+    (event) {
+      audit.log('checkout_complete', event.context.request.id);
+    },
+    sender: AppZone.context, // request-scoped
+    key: 'audit.checkout_finished',
+  );
+
+  try {
+    // ...
+  } finally {
+    await cleanup.cancel();
+  }
+
+  return ctx.json({'ok': true});
+});
+```
+
+## Listening for failures
+
+Attach a listener to the event bus when you want visibility into handler errors. The signal publishes immediately,
+allowing tests to await the error synchronously:
+
+```dart
+final events = await engine.container.make<EventManager>();
+
+events.on<UnhandledSignalError>().listen((event) {
+  logger.error(
+    'Signal ${event.name} (key=${event.key}) failed for sender ${event.sender}',
+    event.error,
+    event.stack,
+  );
+});
+```
+
+Because the publish happens synchronously, you can await futures that complete in a handler and still detect failures
+without races.
+
+## Custom signals
+
+You can create your own signals by instantiating `Signal<T>` and calling `dispatch` manually. This is useful when
+authoring packages that want to expose hooks without leaking their internal event classes.
+
+```dart
+final class MailSent extends Event {
+  MailSent(this.messageId);
+  final String messageId;
+}
+
+final Signal<MailSent> mailSent = Signal<MailSent>(
+  name: 'example.mail.sent',
+  manager: eventManager,
+);
+
+Future<void> deliverMail(String to, String body) async {
+  final id = await provider.send(to: to, body: body);
+  await mailSent.dispatch(
+    MailSent(id),
+    sender: provider,
+  );
+}
+```
+
+Choose descriptive signal names (`vendor.domain.action`) so downstream packages can filter them. If you publish signals
+from a service provider, register them in `boot` and clean up the handlers in `cleanup`. When targeting the built-in
+request signals you can also scope to a specific route by registering with `sender: engine.findRoute('dashboard')` (the
+same `EngineRoute` instance the router uses).
+
+## Guidelines and best practices
+
+- **Connect early, disconnect reliably** – retain the function passed to `connect` if you plan to disconnect later. For
+  short-lived handlers wrap them in `try/finally`, or rely on the returned `SignalSubscription`.
+- **Use keys to prevent duplicates** – supply a `key` whenever you register a global handler so repeated bootstraps
+  overwrite the previous handler instead of appending duplicates.
+- **Scope to senders when possible** – filtering by sender keeps handlers tightly focused and reduces unexpected side
+  effects. Handlers can provide an `EngineContext`, an `EngineRoute`, or a custom object when connecting.
+- **Document payload shape** – signals reuse event classes; link to their definitions so consumers know available
+  context.
+- **Avoid side effects in error listeners** – `UnhandledSignalError` handlers should log or emit metrics. Do not throw
+  unless you intend to crash the process.
+- **Unit test signal flows** – Integration tests can attach handlers to `SignalHub` and assert order or error handling,
+  as seen in `packages/routed/test/events/signal_test.dart`.
+
+## Further reading
+
+- [`Events`](./events.md) – the lower-level event bus API that powers signals.
+- [`Request context`](../fundamentals/middleware.mdx) – see how `AppZone` exposes the signal hub.
+- `examples/signals.dart` – runnable sample that logs signal activity and error handling.

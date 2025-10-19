@@ -1,5 +1,6 @@
 import 'package:routed/src/contracts/contracts.dart' show Config;
 import 'package:routed/src/events/event_manager.dart';
+import 'package:routed/src/events/signals.dart';
 
 import '../../container/container.dart' show Container;
 import '../../engine/config.dart' show EtagStrategy;
@@ -74,6 +75,10 @@ class RoutingServiceProvider extends ServiceProvider
 
     final eventManager = await container.make<EventManager>();
 
+    if (!container.has<SignalHub>()) {
+      container.instance<SignalHub>(SignalHub(eventManager));
+    }
+
     // Set up routing event listeners
     eventManager.listen((BeforeRoutingEvent event) {});
 
@@ -88,9 +93,24 @@ class RoutingServiceProvider extends ServiceProvider
 
   @override
   Future<void> cleanup(Container container) async {
-    if (container.has<EventManager>()) {
-      final eventManager = await container.make<EventManager>();
-      eventManager.destroy();
+    final engine = _engine;
+    final isRootContainer =
+        engine != null && identical(container, engine.container);
+    if (!isRootContainer) {
+      return;
+    }
+
+    if (!container.has<EventManager>()) {
+      return;
+    }
+
+    final eventManager = await container.make<EventManager>();
+    eventManager.destroy();
+
+    if (container.has<SignalHub>()) {
+      final hub = container.get<SignalHub>();
+      hub.dispose();
+      container.remove<SignalHub>();
     }
   }
 

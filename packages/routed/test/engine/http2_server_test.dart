@@ -23,9 +23,8 @@ void main() {
       engine.get('/', (ctx) => ctx.string('hello http2'));
       engine.get('/json', (ctx) => ctx.json({'status': 'ok'}));
 
-      final certDir = p.join('examples', 'http2');
-      final certPath = p.join(certDir, 'cert.pem');
-      final keyPath = p.join(certDir, 'key.pem');
+      final certPath = _locateHttp2Asset('cert.pem');
+      final keyPath = _locateHttp2Asset('key.pem');
 
       clientContext = SecurityContext()..setTrustedCertificates(certPath);
 
@@ -69,6 +68,22 @@ void main() {
       expect(decoded['status'], equals('ok'));
     });
   });
+}
+
+String _locateHttp2Asset(String filename) {
+  final candidates = [
+    p.join('examples', 'http2', filename),
+    p.join('..', 'examples', 'http2', filename),
+    p.join('..', '..', 'examples', 'http2', filename),
+  ];
+  for (final candidate in candidates) {
+    if (File(candidate).existsSync()) {
+      return candidate;
+    }
+  }
+  throw StateError(
+    'Unable to locate $filename. Searched in: ${candidates.join(', ')}',
+  );
 }
 
 Future<void> _waitForServer(Engine engine) async {
