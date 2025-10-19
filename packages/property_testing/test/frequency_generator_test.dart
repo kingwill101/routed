@@ -55,13 +55,17 @@ void main() {
     test('throws ArgumentError for non-positive weights', () {
       expect(() => Gen.frequency([(0, Gen.constant(1))]), throwsArgumentError);
       expect(() => Gen.frequency([(-1, Gen.constant(1))]), throwsArgumentError);
-      expect(() => Gen.frequency([(1, Gen.constant(1)), (0, Gen.constant(2))]),
-          throwsArgumentError);
+      expect(
+        () => Gen.frequency([(1, Gen.constant(1)), (0, Gen.constant(2))]),
+        throwsArgumentError,
+      );
     });
 
     test('shrinking delegates to the chosen generator', () async {
-      final failingGen =
-          Gen.integer(min: 10, max: 20).where((x) => x > 15); // Fails if > 15
+      final failingGen = Gen.integer(
+        min: 10,
+        max: 20,
+      ).where((x) => x > 15); // Fails if > 15
       final passingGen = Gen.constant(5);
 
       final freqGen = Gen.frequency([
@@ -69,21 +73,26 @@ void main() {
         (1, passingGen), // This one passes
       ]);
 
-      final runner = PropertyTestRunner(freqGen, (value) {
-        if (value > 15) {
-          fail('Value $value is > 15');
-        }
-        // Property passes for value <= 15 (which includes 5 from passingGen)
-      },
-          PropertyConfig(
-              numTests: 50)); // Run enough to likely hit the failing gen
+      final runner = PropertyTestRunner(
+        freqGen,
+        (value) {
+          if (value > 15) {
+            fail('Value $value is > 15');
+          }
+          // Property passes for value <= 15 (which includes 5 from passingGen)
+        },
+        PropertyConfig(numTests: 50),
+      ); // Run enough to likely hit the failing gen
 
       final result = await runner.run();
 
       expect(result.success, isFalse);
       expect(result.originalFailingInput, greaterThan(15));
-      expect(result.failingInput, greaterThan(15),
-          reason: "Shrunk value must still fail");
+      expect(
+        result.failingInput,
+        greaterThan(15),
+        reason: "Shrunk value must still fail",
+      );
       // Crucially, the shrunk value should still be from the failingGen's domain (>=10),
       // not shrunk towards the passingGen's constant (5).
       expect(result.failingInput, greaterThanOrEqualTo(10));
@@ -93,10 +102,14 @@ void main() {
 
     test('handles complex nested frequency generators', () async {
       final leafGen = Gen.constant('leaf');
-      final nestedFreq =
-          Gen.frequency([(1, leafGen), (1, Gen.constant('nested'))]);
-      final topFreq =
-          Gen.frequency([(1, nestedFreq), (1, Gen.constant('top'))]);
+      final nestedFreq = Gen.frequency([
+        (1, leafGen),
+        (1, Gen.constant('nested')),
+      ]);
+      final topFreq = Gen.frequency([
+        (1, nestedFreq),
+        (1, Gen.constant('top')),
+      ]);
 
       final values = <String>{};
       final runner = PropertyTestRunner(topFreq, (value) {

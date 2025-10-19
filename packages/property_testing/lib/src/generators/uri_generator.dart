@@ -70,18 +70,18 @@ class UriGenerator extends Generator<Uri> {
     return ShrinkableValue(uri, () sync* {
       // Try removing path segments
       if (pathSegments.isNotEmpty) {
-        yield ShrinkableValue.leaf(uri.replace(
-          pathSegments: pathSegments.sublist(0, pathSegments.length - 1),
-        ));
+        yield ShrinkableValue.leaf(
+          uri.replace(
+            pathSegments: pathSegments.sublist(0, pathSegments.length - 1),
+          ),
+        );
       }
 
       // Try removing query parameters
       if (queryParameters.isNotEmpty) {
         final simplified = Map<String, String>.from(queryParameters);
         simplified.remove(simplified.keys.first);
-        yield ShrinkableValue.leaf(uri.replace(
-          queryParameters: simplified,
-        ));
+        yield ShrinkableValue.leaf(uri.replace(queryParameters: simplified));
       }
 
       // Try removing fragment
@@ -95,11 +95,7 @@ class UriGenerator extends Generator<Uri> {
       }
 
       // Try common hosts
-      final commonHosts = [
-        'example.com',
-        'localhost',
-        'test.com',
-      ];
+      final commonHosts = ['example.com', 'localhost', 'test.com'];
 
       for (final host in commonHosts) {
         yield ShrinkableValue.leaf(uri.replace(host: host));
@@ -122,8 +118,9 @@ class UriGenerator extends Generator<Uri> {
 
       // Generate remaining characters
       for (var j = 1; j < length; j++) {
-        buffer
-            .write(_validDomainChars[random.nextInt(_validDomainChars.length)]);
+        buffer.write(
+          _validDomainChars[random.nextInt(_validDomainChars.length)],
+        );
       }
 
       parts.add(buffer.toString());
@@ -137,10 +134,7 @@ class UriGenerator extends Generator<Uri> {
 
   List<String> _generatePathSegments(math.Random random) {
     final count = random.nextInt(maxPathSegments);
-    return List.generate(
-      count,
-      (_) => _generatePathSegment(random),
-    );
+    return List.generate(count, (_) => _generatePathSegment(random));
   }
 
   String _generatePathSegment(math.Random random) {
@@ -149,7 +143,9 @@ class UriGenerator extends Generator<Uri> {
         'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789-._~';
     return String.fromCharCodes(
       List.generate(
-          length, (_) => chars.codeUnitAt(random.nextInt(chars.length))),
+        length,
+        (_) => chars.codeUnitAt(random.nextInt(chars.length)),
+      ),
     );
   }
 
@@ -170,7 +166,9 @@ class UriGenerator extends Generator<Uri> {
         'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789-._~';
     return String.fromCharCodes(
       List.generate(
-          length, (_) => chars.codeUnitAt(random.nextInt(chars.length))),
+        length,
+        (_) => chars.codeUnitAt(random.nextInt(chars.length)),
+      ),
     );
   }
 

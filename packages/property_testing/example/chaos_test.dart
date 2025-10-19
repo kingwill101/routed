@@ -81,15 +81,13 @@ void main() {
     });
 
     test('GET /api/users/{id} handles chaotic path params', () async {
-      final runner = PropertyTestRunner(
-        Chaos.string(maxLength: 200),
-        (input) async {
-          final response = await client.get('/api/users/$input');
-          expect(response.statusCode, anyOf([200, 400, 401, 403, 404, 422]));
-          expect(response.statusCode, isNot(500));
-        },
-        PropertyConfig(numTests: 500),
-      );
+      final runner = PropertyTestRunner(Chaos.string(maxLength: 200), (
+        input,
+      ) async {
+        final response = await client.get('/api/users/$input');
+        expect(response.statusCode, anyOf([200, 400, 401, 403, 404, 422]));
+        expect(response.statusCode, isNot(500));
+      }, PropertyConfig(numTests: 500));
 
       final result = await runner.run();
 
@@ -101,34 +99,28 @@ void main() {
 
     test('POST /api/users handles chaotic JSON body', () async {
       final chaosGen = Chaos.string(maxLength: 200);
-      final jsonGen = chaosGen.flatMap((input) =>
-          chaosGen.map((input2) => {'name': input, 'email': input2}));
-
-      final runner = PropertyTestRunner(
-        jsonGen,
-        (json) async {
-          final response = await client.postJson('/api/users', json);
-          expect(response.statusCode, anyOf([200, 400, 401, 403, 404, 422]));
-          expect(response.statusCode, isNot(500));
-        },
-        PropertyConfig(numTests: 500),
+      final jsonGen = chaosGen.flatMap(
+        (input) => chaosGen.map((input2) => {'name': input, 'email': input2}),
       );
+
+      final runner = PropertyTestRunner(jsonGen, (json) async {
+        final response = await client.postJson('/api/users', json);
+        expect(response.statusCode, anyOf([200, 400, 401, 403, 404, 422]));
+        expect(response.statusCode, isNot(500));
+      }, PropertyConfig(numTests: 500));
 
       final result = await runner.run();
       expect(result.success, isTrue);
     });
 
     test('GET /api/search handles chaotic query params', () async {
-      final runner = PropertyTestRunner(
-        Chaos.string(maxLength: 200),
-        (input) async {
-          final response = await client.get('/api/search?q=$input');
-          expect(
-              response.statusCode, anyOf([200, 400, 401, 403, 404, 413, 422]));
-          expect(response.statusCode, isNot(500));
-        },
-        PropertyConfig(numTests: 500),
-      );
+      final runner = PropertyTestRunner(Chaos.string(maxLength: 200), (
+        input,
+      ) async {
+        final response = await client.get('/api/search?q=$input');
+        expect(response.statusCode, anyOf([200, 400, 401, 403, 404, 413, 422]));
+        expect(response.statusCode, isNot(500));
+      }, PropertyConfig(numTests: 500));
 
       final result = await runner.run();
 
@@ -138,22 +130,21 @@ void main() {
       expect(result.success, isTrue);
     });
 
-    test('POST /api/data/{type} handles chaotic path params and body',
-        () async {
-      final chaosGen = Chaos.string(maxLength: 200);
-      final runner = PropertyTestRunner(
-        chaosGen,
-        (input) async {
-          final response =
-              await client.postJson('/api/data/$input', {'content': input});
+    test(
+      'POST /api/data/{type} handles chaotic path params and body',
+      () async {
+        final chaosGen = Chaos.string(maxLength: 200);
+        final runner = PropertyTestRunner(chaosGen, (input) async {
+          final response = await client.postJson('/api/data/$input', {
+            'content': input,
+          });
           expect(response.statusCode, anyOf([200, 400, 401, 403, 404, 422]));
           expect(response.statusCode, isNot(500));
-        },
-        PropertyConfig(numTests: 1),
-      );
+        }, PropertyConfig(numTests: 1));
 
-      final result = await runner.run();
-      expect(result.success, isTrue);
-    });
+        final result = await runner.run();
+        expect(result.success, isTrue);
+      },
+    );
   });
 }

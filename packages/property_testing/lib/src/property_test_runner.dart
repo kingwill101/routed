@@ -179,7 +179,7 @@ class PropertyTestRunner<T> {
   /// The [property] function should return `void` or `Future<void>`.
   /// An optional [config] can be provided to customize test execution.
   PropertyTestRunner(this.generator, this.property, [PropertyConfig? config])
-      : config = config ?? PropertyConfig();
+    : config = config ?? PropertyConfig();
 
   /// Runs the property test according to the configuration.
   ///

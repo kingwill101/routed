@@ -1,42 +1,38 @@
+import 'dart:math';
+
 import 'package:property_testing/property_testing.dart';
 import 'package:test/test.dart';
-import 'dart:math';
 
 void main() {
   group('SemVer Generator', () {
     test('generates valid semantic versions with default settings', () async {
-      final runner = PropertyTestRunner(
-        Specialized.semver(),
-        (version) {
-          expect(version, matches(r'^\d+\.\d+\.\d+(?:-[\w.]+)?(?:\+[\w.]+)?$'));
-        },
-      );
+      final runner = PropertyTestRunner(Specialized.semver(), (version) {
+        expect(version, matches(r'^\d+\.\d+\.\d+(?:-[\w.]+)?(?:\+[\w.]+)?$'));
+      });
 
       final result = await runner.run();
       expect(result.success, isTrue);
     });
 
     test('generates versions without prerelease when disabled', () async {
-      final runner = PropertyTestRunner(
-        Specialized.semver(prerelease: false),
-        (version) {
-          expect(version, isNot(contains('-')));
-          expect(version, matches(r'^\d+\.\d+\.\d+(?:\+[\w.]+)?$'));
-        },
-      );
+      final runner = PropertyTestRunner(Specialized.semver(prerelease: false), (
+        version,
+      ) {
+        expect(version, isNot(contains('-')));
+        expect(version, matches(r'^\d+\.\d+\.\d+(?:\+[\w.]+)?$'));
+      });
 
       final result = await runner.run();
       expect(result.success, isTrue);
     });
 
     test('generates versions without build metadata when disabled', () async {
-      final runner = PropertyTestRunner(
-        Specialized.semver(build: false),
-        (version) {
-          expect(version, isNot(contains('+')));
-          expect(version, matches(r'^\d+\.\d+\.\d+(?:-[\w.]+)?$'));
-        },
-      );
+      final runner = PropertyTestRunner(Specialized.semver(build: false), (
+        version,
+      ) {
+        expect(version, isNot(contains('+')));
+        expect(version, matches(r'^\d+\.\d+\.\d+(?:-[\w.]+)?$'));
+      });
 
       final result = await runner.run();
       expect(result.success, isTrue);
@@ -103,7 +99,9 @@ void main() {
 
       final shrunkVersion = result.failingInput as String;
       expect(
-          shrunkVersion, matches(r'^\d+\.\d+\.\d+(?:-[\w.]+)?(?:\+[\w.]+)?$'));
+        shrunkVersion,
+        matches(r'^\d+\.\d+\.\d+(?:-[\w.]+)?(?:\+[\w.]+)?$'),
+      );
     });
 
     test('generates reproducible versions from the same seed', () async {

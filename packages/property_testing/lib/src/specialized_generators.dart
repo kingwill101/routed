@@ -42,14 +42,10 @@ class Specialized {
     DateTime? min,
     DateTime? max,
     bool utc = false,
-  }) =>
-      DateTimeGenerator(min: min, max: max, utc: utc);
+  }) => DateTimeGenerator(min: min, max: max, utc: utc);
 
   /// Generate Duration values
-  static Generator<Duration> duration({
-    Duration? min,
-    Duration? max,
-  }) =>
+  static Generator<Duration> duration({Duration? min, Duration? max}) =>
       DurationGenerator(min: min, max: max);
 
   /// Generate URI values
@@ -60,39 +56,29 @@ class Specialized {
     bool includeQueryParameters = true,
     int maxPathSegments = 5,
     int maxQueryParameters = 5,
-  }) =>
-      UriGenerator(
-        schemes: schemes,
-        includeUserInfo: includeUserInfo,
-        includeFragment: includeFragment,
-        includeQueryParameters: includeQueryParameters,
-        maxPathSegments: maxPathSegments,
-        maxQueryParameters: maxQueryParameters,
-      );
+  }) => UriGenerator(
+    schemes: schemes,
+    includeUserInfo: includeUserInfo,
+    includeFragment: includeFragment,
+    includeQueryParameters: includeQueryParameters,
+    maxPathSegments: maxPathSegments,
+    maxQueryParameters: maxQueryParameters,
+  );
 
   /// Generate email addresses
   static Generator<String> email({
     List<String>? domains,
     int maxLocalPartLength = 64,
   }) =>
-      EmailGenerator(
-        domains: domains,
-        maxLocalPartLength: maxLocalPartLength,
-      );
+      EmailGenerator(domains: domains, maxLocalPartLength: maxLocalPartLength);
 
   /// Generate semantic version strings
   static Generator<String> semver({
     bool prerelease = true,
     bool build = true,
-  }) =>
-      SemverGenerator(
-        prerelease: prerelease,
-        build: build,
-      );
+  }) => SemverGenerator(prerelease: prerelease, build: build);
 
   /// Generate color values
-  static Generator<Color> color({
-    bool alpha = false,
-  }) =>
+  static Generator<Color> color({bool alpha = false}) =>
       ColorGenerator(includeAlpha: alpha);
 }

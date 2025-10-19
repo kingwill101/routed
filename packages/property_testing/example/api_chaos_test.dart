@@ -15,27 +15,26 @@ void main() async {
   ).map((duration) => duration.inDays ~/ 365);
 
   // Create a user payload generator that combines different fields
-  final payloadGenerator =
-      nameGenerator.flatMap((name) => ageGenerator.map((age) => {
-            'name': name,
-            'age': age,
-            'registered': DateTime.now().toIso8601String(),
-          }));
-
-  final runner = PropertyTestRunner(
-    payloadGenerator,
-    (payload) async {
-      // Test API endpoint with generated payload
-      final response = await client.postJson('/api/users', payload);
-
-      // Property: API should always return a valid status code
-      expect(response.statusCode, anyOf([200, 400, 404, 422]));
-
-      // Property: Server should never crash with 500 errors
-      expect(response.statusCode, isNot(500));
-    },
-    PropertyConfig(numTests: 100),
+  final payloadGenerator = nameGenerator.flatMap(
+    (name) => ageGenerator.map(
+      (age) => {
+        'name': name,
+        'age': age,
+        'registered': DateTime.now().toIso8601String(),
+      },
+    ),
   );
+
+  final runner = PropertyTestRunner(payloadGenerator, (payload) async {
+    // Test API endpoint with generated payload
+    final response = await client.postJson('/api/users', payload);
+
+    // Property: API should always return a valid status code
+    expect(response.statusCode, anyOf([200, 400, 404, 422]));
+
+    // Property: Server should never crash with 500 errors
+    expect(response.statusCode, isNot(500));
+  }, PropertyConfig(numTests: 100));
 
   await runner.run();
 }

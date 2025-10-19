@@ -10,8 +10,8 @@ class StringGenerator extends Generator<String> {
       'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
 
   StringGenerator({int? minLength, int? maxLength})
-      : minLength = minLength ?? 0,
-        maxLength = maxLength ?? 100 {
+    : minLength = minLength ?? 0,
+      maxLength = maxLength ?? 100 {
     if (this.minLength < 0) {
       throw ArgumentError('minLength must be non-negative');
     }
@@ -28,7 +28,9 @@ class StringGenerator extends Generator<String> {
     final length = minLength + random.nextInt(maxLength - minLength + 1);
     final value = String.fromCharCodes(
       List.generate(
-          length, (_) => _chars.codeUnitAt(random.nextInt(_chars.length))),
+        length,
+        (_) => _chars.codeUnitAt(random.nextInt(_chars.length)),
+      ),
     );
 
     return ShrinkableValue(value, () sync* {

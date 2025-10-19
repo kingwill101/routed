@@ -79,12 +79,7 @@ class ColorGenerator extends Generator<Color> {
         : 1.0; // Correct range 0-100 -> 0.0-1.0
 
     final rgb = _hslToRgb(hue, saturation, lightness);
-    final original = Color(
-      r: rgb.$1,
-      g: rgb.$2,
-      b: rgb.$3,
-      a: alpha,
-    );
+    final original = Color(r: rgb.$1, g: rgb.$2, b: rgb.$3, a: alpha);
 
     return ShrinkableValue(original, () sync* {
       // Try primary colors
@@ -97,8 +92,10 @@ class ColorGenerator extends Generator<Color> {
       ];
 
       // Find closest primary color
-      var closestPrimary = primaryColors.reduce((a, b) =>
-          _colorDistance(original, a) < _colorDistance(original, b) ? a : b);
+      var closestPrimary = primaryColors.reduce(
+        (a, b) =>
+            _colorDistance(original, a) < _colorDistance(original, b) ? a : b,
+      );
 
       yield ShrinkableValue.leaf(closestPrimary);
     });
@@ -135,10 +132,6 @@ class ColorGenerator extends Generator<Color> {
       b = hue2rgb(p, q, h / 360 - 1 / 3);
     }
 
-    return (
-      (r * 255).round(),
-      (g * 255).round(),
-      (b * 255).round(),
-    );
+    return ((r * 255).round(), (g * 255).round(), (b * 255).round());
   }
 }

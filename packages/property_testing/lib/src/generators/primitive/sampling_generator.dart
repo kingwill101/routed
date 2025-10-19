@@ -11,7 +11,8 @@ abstract class SamplingGenerator<T> extends Generator<List<T>> {
       // While technically possible to pick 0 from empty, it's ambiguous
       // for someOf/atLeastOne, so disallow empty options for simplicity.
       throw ArgumentError(
-          'options list cannot be empty for sampling generators');
+        'options list cannot be empty for sampling generators',
+      );
     }
   }
 
@@ -26,8 +27,8 @@ abstract class SamplingGenerator<T> extends Generator<List<T>> {
   }
 
   /// Shrinks a list by removing elements or replacing with earlier elements from options.
-  Iterable<ShrinkableValue<List<T>>> shrinkList(
-      List<T> currentList, int minCount) sync* {
+  Iterable<ShrinkableValue<List<T>>> shrinkList(List<T> currentList,
+      int minCount,) sync* {
     final yielded = <List<T>>{currentList}; // Track yields
 
     bool yieldIfNew(List<T> list) {
@@ -85,7 +86,8 @@ abstract class SamplingGenerator<T> extends Generator<List<T>> {
             nextList[i] = earlierOption;
             // Sorting helps canonicalize for the 'yielded' set
             nextList.sort(
-                (a, b) => options.indexOf(a).compareTo(options.indexOf(b)));
+              (a, b) => options.indexOf(a).compareTo(options.indexOf(b)),
+            );
             if (yieldIfNew(nextList)) {
               yield ShrinkableValue.leaf(nextList);
             }

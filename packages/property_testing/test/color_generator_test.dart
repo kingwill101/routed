@@ -1,47 +1,41 @@
+import 'dart:math' as math;
+
 import 'package:property_testing/property_testing.dart';
 import 'package:test/test.dart';
-import 'dart:math' as math;
 
 void main() {
   group('Color Generator', () {
     test('generates valid RGB colors with default settings', () async {
-      final runner = PropertyTestRunner(
-        Specialized.color(),
-        (color) {
-          expect(color.r, inInclusiveRange(0, 255));
-          expect(color.g, inInclusiveRange(0, 255));
-          expect(color.b, inInclusiveRange(0, 255));
-          expect(color.a, equals(1.0)); // Default alpha
-        },
-      );
+      final runner = PropertyTestRunner(Specialized.color(), (color) {
+        expect(color.r, inInclusiveRange(0, 255));
+        expect(color.g, inInclusiveRange(0, 255));
+        expect(color.b, inInclusiveRange(0, 255));
+        expect(color.a, equals(1.0)); // Default alpha
+      });
 
       final result = await runner.run();
       expect(result.success, isTrue);
     });
 
     test('generates RGBA colors when alpha is enabled', () async {
-      final runner = PropertyTestRunner(
-        Specialized.color(alpha: true),
-        (color) {
-          expect(color.r, inInclusiveRange(0, 255));
-          expect(color.g, inInclusiveRange(0, 255));
-          expect(color.b, inInclusiveRange(0, 255));
-          expect(color.a, inInclusiveRange(0.0, 1.0));
-        },
-      );
+      final runner = PropertyTestRunner(Specialized.color(alpha: true), (
+        color,
+      ) {
+        expect(color.r, inInclusiveRange(0, 255));
+        expect(color.g, inInclusiveRange(0, 255));
+        expect(color.b, inInclusiveRange(0, 255));
+        expect(color.a, inInclusiveRange(0.0, 1.0));
+      });
 
       final result = await runner.run();
       expect(result.success, isTrue);
     });
 
     test('shrinks towards primary colors', () async {
-      final runner = PropertyTestRunner(
-        Specialized.color(),
-        (color) {
-          // Force failure to trigger shrinking
-          fail('Triggering shrink');
-        },
-      );
+      final runner = PropertyTestRunner(Specialized.color(), (color) {
+        // Force failure to trigger shrinking
+        fail('Triggering shrink');
+      });
 
       final result = await runner.run();
       expect(result.success, isFalse);
@@ -49,15 +43,12 @@ void main() {
 
       final shrunkColor = result.failingInput as Color;
       // The shrunk color should be one of the primary colors or black
-      expect(
-        [
-          const Color(r: 255, g: 0, b: 0, a: 1.0), // Red
-          const Color(r: 0, g: 255, b: 0, a: 1.0), // Green
-          const Color(r: 0, g: 0, b: 255, a: 1.0), // Blue
-          const Color(r: 0, g: 0, b: 0, a: 1.0), // Black
-        ],
-        contains(shrunkColor),
-      );
+      expect([
+        const Color(r: 255, g: 0, b: 0, a: 1.0), // Red
+        const Color(r: 0, g: 255, b: 0, a: 1.0), // Green
+        const Color(r: 0, g: 0, b: 255, a: 1.0), // Blue
+        const Color(r: 0, g: 0, b: 0, a: 1.0), // Black
+      ], contains(shrunkColor));
     });
 
     test('generates reproducible colors from the same seed', () async {
@@ -95,16 +86,14 @@ void main() {
       final seenBlue = <int>{};
       final seenAlpha = <double>{};
 
-      final runner = PropertyTestRunner(
-        Specialized.color(alpha: true),
-        (color) {
-          seenRed.add(color.r);
-          seenGreen.add(color.g);
-          seenBlue.add(color.b);
-          seenAlpha.add(color.a);
-        },
-        PropertyConfig(numTests: 1000),
-      );
+      final runner = PropertyTestRunner(Specialized.color(alpha: true), (
+        color,
+      ) {
+        seenRed.add(color.r);
+        seenGreen.add(color.g);
+        seenBlue.add(color.b);
+        seenAlpha.add(color.a);
+      }, PropertyConfig(numTests: 1000));
 
       await runner.run();
 
@@ -137,72 +126,62 @@ void main() {
     });
 
     test('color string representation', () async {
-      final runner = PropertyTestRunner(
-        Specialized.color(alpha: true),
-        (color) {
-          final str = color.toString();
-          if (color.a == 1.0) {
-            expect(str, matches(r'^rgb\(\d+, \d+, \d+\)$'));
-          } else {
-            expect(str, matches(r'^rgba\(\d+, \d+, \d+, \d+\.\d+\)$'));
-          }
-        },
-      );
+      final runner = PropertyTestRunner(Specialized.color(alpha: true), (
+        color,
+      ) {
+        final str = color.toString();
+        if (color.a == 1.0) {
+          expect(str, matches(r'^rgb\(\d+, \d+, \d+\)$'));
+        } else {
+          expect(str, matches(r'^rgba\(\d+, \d+, \d+, \d+\.\d+\)$'));
+        }
+      });
 
       final result = await runner.run();
       expect(result.success, isTrue);
     });
 
     test('generates valid grayscale colors', () async {
-      final runner = PropertyTestRunner(
-        Specialized.color(),
-        (color) {
-          final gray = Color(r: color.r, g: color.r, b: color.r, a: color.a);
-          expect(gray.r, equals(gray.g));
-          expect(gray.g, equals(gray.b));
-          expect(gray.toString(), matches(r'^rgb\(\d+, \d+, \d+\)$'));
-        },
-      );
+      final runner = PropertyTestRunner(Specialized.color(), (color) {
+        final gray = Color(r: color.r, g: color.r, b: color.r, a: color.a);
+        expect(gray.r, equals(gray.g));
+        expect(gray.g, equals(gray.b));
+        expect(gray.toString(), matches(r'^rgb\(\d+, \d+, \d+\)$'));
+      });
 
       final result = await runner.run();
       expect(result.success, isTrue);
     });
 
     test('generates valid HSL conversions', () async {
-      final runner = PropertyTestRunner(
-        Specialized.color(),
-        (color) {
-          final hsl = _rgbToHsl(color.r, color.g, color.b);
-          final rgb = _hslToRgb(hsl.$1, hsl.$2, hsl.$3);
+      final runner = PropertyTestRunner(Specialized.color(), (color) {
+        final hsl = _rgbToHsl(color.r, color.g, color.b);
+        final rgb = _hslToRgb(hsl.$1, hsl.$2, hsl.$3);
 
-          // Allow small differences due to floating point conversion
-          expect((rgb.$1 - color.r).abs(), lessThanOrEqualTo(1));
-          expect((rgb.$2 - color.g).abs(), lessThanOrEqualTo(1));
-          expect((rgb.$3 - color.b).abs(), lessThanOrEqualTo(1));
-        },
-      );
+        // Allow small differences due to floating point conversion
+        expect((rgb.$1 - color.r).abs(), lessThanOrEqualTo(1));
+        expect((rgb.$2 - color.g).abs(), lessThanOrEqualTo(1));
+        expect((rgb.$3 - color.b).abs(), lessThanOrEqualTo(1));
+      });
 
       final result = await runner.run();
       expect(result.success, isTrue);
     });
 
     test('generates valid complementary colors', () async {
-      final runner = PropertyTestRunner(
-        Specialized.color(),
-        (color) {
-          final complement = Color(
-            r: 255 - color.r,
-            g: 255 - color.g,
-            b: 255 - color.b,
-            a: color.a,
-          );
+      final runner = PropertyTestRunner(Specialized.color(), (color) {
+        final complement = Color(
+          r: 255 - color.r,
+          g: 255 - color.g,
+          b: 255 - color.b,
+          a: color.a,
+        );
 
-          // Sum of original and complement should be white
-          expect(color.r + complement.r, equals(255));
-          expect(color.g + complement.g, equals(255));
-          expect(color.b + complement.b, equals(255));
-        },
-      );
+        // Sum of original and complement should be white
+        expect(color.r + complement.r, equals(255));
+        expect(color.g + complement.g, equals(255));
+        expect(color.b + complement.b, equals(255));
+      });
 
       final result = await runner.run();
       expect(result.success, isTrue);
@@ -232,20 +211,16 @@ void main() {
     test('generates perceptually distinct colors', () async {
       final colors = <Color>[];
 
-      final runner = PropertyTestRunner(
-        Specialized.color(),
-        (color) {
-          colors.add(color);
-          if (colors.length >= 2) {
-            for (int i = 0; i < colors.length - 1; i++) {
-              final distance = _colorDistance(colors[i], color);
-              // Ensure colors are perceptually different enough
-              expect(distance, greaterThan(20.0));
-            }
+      final runner = PropertyTestRunner(Specialized.color(), (color) {
+        colors.add(color);
+        if (colors.length >= 2) {
+          for (int i = 0; i < colors.length - 1; i++) {
+            final distance = _colorDistance(colors[i], color);
+            // Ensure colors are perceptually different enough
+            expect(distance, greaterThan(20.0));
           }
-        },
-        PropertyConfig(numTests: 10),
-      );
+        }
+      }, PropertyConfig(numTests: 10));
 
       final result = await runner.run();
       expect(result.success, isTrue);
@@ -271,9 +246,9 @@ T max<T extends num>(T a, T b) => a > b ? a : b;
 
 /// Helper matcher for inclusive range checks
 Matcher inInclusiveRange(num min, num max) => predicate((dynamic value) {
-      final numValue = value as num;
-      return numValue >= min && numValue <= max;
-    }, 'is in range [$min, $max]');
+  final numValue = value as num;
+  return numValue >= min && numValue <= max;
+}, 'is in range [$min, $max]');
 
 /// Helper function to calculate color distance
 double _colorDistance(Color c1, Color c2) {

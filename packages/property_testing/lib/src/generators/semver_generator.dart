@@ -25,10 +25,7 @@ class SemverGenerator extends Generator<String> {
   final bool prerelease;
   final bool build;
 
-  SemverGenerator({
-    this.prerelease = true,
-    this.build = true,
-  });
+  SemverGenerator({this.prerelease = true, this.build = true});
 
   @override
   ShrinkableValue<String> generate(math.Random random) {
@@ -52,16 +49,12 @@ class SemverGenerator extends Generator<String> {
     return ShrinkableValue(version, () sync* {
       // Try removing build metadata
       if (version.contains('+')) {
-        yield ShrinkableValue.leaf(
-          version.substring(0, version.indexOf('+')),
-        );
+        yield ShrinkableValue.leaf(version.substring(0, version.indexOf('+')));
       }
 
       // Try removing prerelease
       if (version.contains('-')) {
-        yield ShrinkableValue.leaf(
-          version.substring(0, version.indexOf('-')),
-        );
+        yield ShrinkableValue.leaf(version.substring(0, version.indexOf('-')));
       }
 
       // Try reducing version numbers
@@ -69,15 +62,12 @@ class SemverGenerator extends Generator<String> {
       final base = parts[0];
       if (base != '0') {
         yield ShrinkableValue.leaf(
-            '0.${parts[1]}.${parts[2].replaceFirst(RegExp(r'[-+].*$'), '')}');
+          '0.${parts[1]}.${parts[2].replaceFirst(RegExp(r'[-+].*$'), '')}',
+        );
       }
 
       // Try common version patterns
-      final commonVersions = [
-        '0.1.0',
-        '1.0.0',
-        '2.0.0',
-      ];
+      final commonVersions = ['0.1.0', '1.0.0', '2.0.0'];
 
       for (final ver in commonVersions) {
         if (ver.compareTo(version) < 0) {

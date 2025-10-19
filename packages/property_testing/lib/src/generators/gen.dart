@@ -29,27 +29,18 @@ import 'primitive/string_generator.dart';
 /// ```
 class Gen {
   /// Generate integer values
-  static Generator<int> integer({
-    int? min,
-    int? max,
-  }) =>
+  static Generator<int> integer({int? min, int? max}) =>
       IntGenerator(min: min, max: max);
 
   /// Generate double values
-  static Generator<double> double_({
-    double? min,
-    double? max,
-  }) =>
+  static Generator<double> double_({double? min, double? max}) =>
       DoubleGenerator(min: min, max: max);
 
   /// Generate boolean values
   static Generator<bool> boolean() => BoolGenerator();
 
   /// Generate string values
-  static Generator<String> string({
-    int? minLength,
-    int? maxLength,
-  }) =>
+  static Generator<String> string({int? minLength, int? maxLength}) =>
       StringGenerator(minLength: minLength, maxLength: maxLength);
 
   /// Choose one value from a list of values
@@ -83,9 +74,12 @@ class Gen {
     C Function(Iterable<T>) factory, {
     int? minLength,
     int? maxLength,
-  }) =>
-      ContainerGenerator(elementGen, factory,
-          minLength: minLength, maxLength: maxLength);
+  }) => ContainerGenerator(
+    elementGen,
+    factory,
+    minLength: minLength,
+    maxLength: maxLength,
+  );
 
   /// Choose one generator from a list based on assigned weights.
   ///
@@ -101,8 +95,8 @@ class Gen {
   /// ]);
   /// ```
   static Generator<T> frequency<T>(
-          List<(int weight, Generator<T> generator)> weightedGenerators) =>
-      FrequencyGenerator(weightedGenerators);
+    List<(int weight, Generator<T> generator)> weightedGenerators,
+  ) => FrequencyGenerator(weightedGenerators);
 
   /// Generate a list containing exactly [n] distinct elements chosen
   /// randomly from the provided [options] list.

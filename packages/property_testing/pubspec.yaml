@@ -10,7 +10,7 @@ environment:
 
 dependencies:
   meta: ^1.17.0
-  server_testing:
+  server_testing: ^0.1.0
 
   test: any
 dev_dependencies:

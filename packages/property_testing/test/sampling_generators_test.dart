@@ -22,8 +22,11 @@ void main() {
         final n = options.length; // Pick all
         final gen = Gen.pick(n, options);
         final runner = PropertyTestRunner(gen, (value) {
-          expect(value.toSet().length, equals(n),
-              reason: 'Elements should be unique');
+          expect(
+            value.toSet().length,
+            equals(n),
+            reason: 'Elements should be unique',
+          );
           for (final item in value) {
             expect(options, contains(item));
           }
@@ -46,7 +49,9 @@ void main() {
       test('throws ArgumentError for invalid n', () {
         expect(() => Gen.pick(-1, options), throwsArgumentError);
         expect(
-            () => Gen.pick(options.length + 1, options), throwsArgumentError);
+          () => Gen.pick(options.length + 1, options),
+          throwsArgumentError,
+        );
       });
 
       test('throws ArgumentError for empty options', () {
@@ -71,12 +76,15 @@ void main() {
 
         expect(shrunk.length, equals(3)); // Size must remain the same for pick
         expect(
-            shrunk.contains(40), isTrue); // Must still contain failing elements
+          shrunk.contains(40),
+          isTrue,
+        ); // Must still contain failing elements
         expect(shrunk.contains(50), isTrue);
 
         // Check if it simplified the *other* element(s)
-        final originalOther =
-            original.where((x) => x != 40 && x != 50).toList();
+        final originalOther = original
+            .where((x) => x != 40 && x != 50)
+            .toList();
         final shrunkOther = shrunk.where((x) => x != 40 && x != 50).toList();
 
         expect(shrunkOther.length, equals(originalOther.length));
@@ -105,8 +113,11 @@ void main() {
       test('generates lists with unique elements from options', () async {
         final gen = Gen.someOf(options); // Default min=0, max=options.length
         final runner = PropertyTestRunner(gen, (value) {
-          expect(value.toSet().length, equals(value.length),
-              reason: 'Elements should be unique');
+          expect(
+            value.toSet().length,
+            equals(value.length),
+            reason: 'Elements should be unique',
+          );
           for (final item in value) {
             expect(options, contains(item));
           }
@@ -131,8 +142,10 @@ void main() {
 
       test('throws ArgumentError for invalid min/max', () {
         expect(() => Gen.someOf(options, min: -1), throwsArgumentError);
-        expect(() => Gen.someOf(options, max: options.length + 1),
-            throwsArgumentError);
+        expect(
+          () => Gen.someOf(options, max: options.length + 1),
+          throwsArgumentError,
+        );
         expect(() => Gen.someOf(options, min: 3, max: 2), throwsArgumentError);
       });
 
@@ -185,20 +198,26 @@ void main() {
         final lengths1 = <int>[];
         final lengths2 = <int>[];
 
-        await PropertyTestRunner(gen1, (v) => lengths1.add(v.length),
-                PropertyConfig(numTests: 100))
-            .run();
-        await PropertyTestRunner(gen2, (v) => lengths2.add(v.length),
-                PropertyConfig(numTests: 100))
-            .run();
+        await PropertyTestRunner(
+          gen1,
+          (v) => lengths1.add(v.length),
+          PropertyConfig(numTests: 100),
+        ).run();
+        await PropertyTestRunner(
+          gen2,
+          (v) => lengths2.add(v.length),
+          PropertyConfig(numTests: 100),
+        ).run();
 
         final avgLen1 = lengths1.fold(0, (s, l) => s + l) / lengths1.length;
         final avgLen2 = lengths2.fold(0, (s, l) => s + l) / lengths2.length;
 
         expect(lengths1, isNot(anyElement(equals(0)))); // No empty lists
         expect(lengths2, isNot(anyElement(equals(0))));
-        expect(avgLen1,
-            closeTo(avgLen2, 0.5)); // Average lengths should be similar
+        expect(
+          avgLen1,
+          closeTo(avgLen2, 0.5),
+        ); // Average lengths should be similar
       });
 
       test('throws ArgumentError for empty options', () {

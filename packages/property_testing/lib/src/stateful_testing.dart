@@ -174,11 +174,11 @@ class StatefulPropertyBuilder<Model, Sut> {
     required Future<void> Function(Sut) teardownSut,
     List<Generator<Command<Model, Sut>>>? commandGenerators,
     StatefulPropertyConfig? config,
-  })  : _initialModel = initialModel,
-        _setupSut = setupSut,
-        _teardownSut = teardownSut,
-        _commandGenerators = commandGenerators ?? [],
-        _config = config ?? StatefulPropertyConfig();
+  }) : _initialModel = initialModel,
+       _setupSut = setupSut,
+       _teardownSut = teardownSut,
+       _commandGenerators = commandGenerators ?? [],
+       _config = config ?? StatefulPropertyConfig();
 
   /// Create a new stateful property test builder
   /// Creates a new builder instance.
@@ -250,8 +250,10 @@ class StatefulPropertyBuilder<Model, Sut> {
 
   Generator<CommandSequence<Model, Sut>> _buildSequenceGenerator() {
     // Generate a random length between 1 and maxCommandSequenceLength
-    final lengthGen =
-        Gen.integer(min: 1, max: _config.maxCommandSequenceLength);
+    final lengthGen = Gen.integer(
+      min: 1,
+      max: _config.maxCommandSequenceLength,
+    );
 
     // Generate a sequence of that length using the command generators
     return lengthGen.flatMap((length) {
@@ -343,7 +345,8 @@ class StatefulPropertyRunner<Model, Command> {
           model = update(model, command);
           if (!invariant(model)) {
             throw Exception(
-                'Command $command led to state violating invariant');
+              'Command $command led to state violating invariant',
+            );
           }
         }
       },
