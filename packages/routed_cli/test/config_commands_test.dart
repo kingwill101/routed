@@ -36,48 +36,48 @@ void main() {
       await _writeFile(memoryFs, projectRoot, 'pubspec.yaml', 'name: demo\n');
     });
 
-    String _read(String relativePath) => memoryFs
+    String read(String relativePath) => memoryFs
         .file(p.join(projectRoot.path, relativePath))
         .readAsStringSync();
 
-    bool _exists(String relativePath) =>
+    bool exists(String relativePath) =>
         memoryFs.file(p.join(projectRoot.path, relativePath)).existsSync();
 
     test('config:init scaffolds base templates', () async {
       await _run(runner, ['config:init']);
 
-      expect(_exists('config/app.yaml'), isTrue);
-      expect(_exists('config/http.yaml'), isTrue);
-      expect(_exists('.env'), isTrue);
+      expect(exists('config/app.yaml'), isTrue);
+      expect(exists('config/http.yaml'), isTrue);
+      expect(exists('.env'), isTrue);
 
-      final appYaml = _read('config/app.yaml');
+      final appYaml = read('config/app.yaml');
       expect(
         appYaml,
         contains("name: \"{{ env.APP_NAME | default: 'Routed App' }}\""),
       );
 
       expect(
-        _read('config/session.yaml'),
+        read('config/session.yaml'),
         contains('# Session configuration quick reference:'),
       );
       expect(
-        _read('config/cache.yaml'),
+        read('config/cache.yaml'),
         contains('# Cache configuration quick reference:'),
       );
       expect(
-        _read('config/storage.yaml'),
+        read('config/storage.yaml'),
         contains('# Storage configuration quick reference:'),
       );
       expect(
-        _read('config/uploads.yaml'),
+        read('config/uploads.yaml'),
         contains('# Uploads configuration quick reference:'),
       );
       expect(
-        _read('config/logging.yaml'),
+        read('config/logging.yaml'),
         contains('# Logging configuration quick reference:'),
       );
 
-      final env = _read('.env');
+      final env = read('.env');
       expect(env, contains('APP_NAME=Routed App'));
       expect(env, contains('APP_ENV=development'));
       expect(env, contains('APP_DEBUG=true'));
@@ -115,8 +115,8 @@ void main() {
 
       await _run(runner, ['config:publish', 'mailer_pkg']);
 
-      expect(_exists('config/mail.yaml'), isTrue);
-      expect(_read('config/mail.yaml'), contains('driver: smtp'));
+      expect(exists('config/mail.yaml'), isTrue);
+      expect(read('config/mail.yaml'), contains('driver: smtp'));
     });
 
     test('config:cache generates cache artifacts', () async {
@@ -130,13 +130,13 @@ void main() {
 
       await _run(runner, ['config:cache']);
 
-      final dartCache = _read('lib/generated/routed_config.dart');
+      final dartCache = read('lib/generated/routed_config.dart');
       expect(dartCache, contains("'Example App'"));
       expect(dartCache, contains('routedConfigEnvironment'));
       expect(dartCache, contains("'testing'"));
 
       final jsonCache =
-          jsonDecode(_read('.dart_tool/routed/config_cache.json'))
+          jsonDecode(read('.dart_tool/routed/config_cache.json'))
               as Map<String, dynamic>;
       expect(jsonCache['app'], containsPair('name', 'Example App'));
     });
@@ -153,8 +153,8 @@ void main() {
       await _run(runner, ['config:cache']);
       await _run(runner, ['config:clear']);
 
-      expect(_exists('lib/generated/routed_config.dart'), isFalse);
-      expect(_exists('.dart_tool/routed/config_cache.json'), isFalse);
+      expect(exists('lib/generated/routed_config.dart'), isFalse);
+      expect(exists('.dart_tool/routed/config_cache.json'), isFalse);
     });
   });
 }

@@ -28,7 +28,7 @@ dart run routed_cli create --name hello_world
 cd hello_world
 ```
 
-The generator writes the standard `bin/server.dart`, configuration files under `config/`, and project metadata. It also runs `dart pub get` automatically—if dependency resolution fails, the CLI prints the exit code along with the command to rerun manually. Supplying `--output <directory>` lets you scaffold into an existing folder, and `--force` overwrites conflicting files.
+The generator writes the standard `bin/server.dart`, configuration files under `config/`, and project metadata. It also runs `dart pub get` automatically—if dependency resolution fails, the CLI prints the exit code along with the command to rerun manually. Choose a template with `--template` (`basic`, `api`, `web`, or `fullstack`), supply `--output <directory>` to scaffold into an existing folder, and pass `--force` to overwrite conflicting files. Every template includes `lib/commands.dart`; populate its `buildProjectCommands()` hook and the Routed CLI will surface your custom commands in `dart run routed_cli --help`.
 
 Prefer to wire things manually? Create `bin/server.dart` and copy the snippet below.
 

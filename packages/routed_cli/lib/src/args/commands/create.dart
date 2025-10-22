@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:collection';
 import 'dart:convert';
 import 'dart:io' as io;
 import 'dart:isolate';
@@ -11,6 +12,7 @@ import 'package:routed/routed.dart' show ConfigDocEntry;
 import 'package:routed_cli/src/args/base_command.dart';
 import 'package:routed_cli/src/config/doc_printer.dart';
 import 'package:routed_cli/src/config/generator.dart';
+import 'package:routed_cli/src/create/templates.dart';
 import 'package:routed_cli/src/util/dart_exec.dart';
 import 'package:yaml/yaml.dart';
 
@@ -31,7 +33,7 @@ typedef PubGetInvoker = Future<int> Function(fs.Directory projectDir);
 /// Options:
 /// - --name/-n: Project name (used for pubspec + folder when writing to current dir)
 /// - --output/-o: Destination directory (defaults to current directory)
-/// - --template/-t: Template to use (currently only "basic")
+/// - --template/-t: Template to use (`basic`, `api`, `web`, `fullstack`)
 /// - --force/-f: Overwrite existing files when the target directory exists
 class CreateCommand extends BaseCommand {
   CreateCommand({super.logger, super.fileSystem, PubGetInvoker? pubGet})
@@ -53,7 +55,7 @@ class CreateCommand extends BaseCommand {
       ..addOption(
         'template',
         abbr: 't',
-        help: 'Application template to scaffold (currently only "basic").',
+        help: 'Application template to scaffold (basic, api, web, fullstack).',
         valueHelp: 'basic',
         defaultsTo: 'basic',
       )
@@ -85,9 +87,12 @@ class CreateCommand extends BaseCommand {
       final template = (results?['template'] as String? ?? 'basic').trim();
       final force = results?['force'] as bool? ?? false;
 
-      if (template != 'basic') {
+      ScaffoldTemplate scaffoldTemplate;
+      try {
+        scaffoldTemplate = Templates.resolve(template);
+      } on ArgumentError {
         throw UsageException(
-          'Unsupported template "$template". Currently only "basic" is available.',
+          'Unsupported template "$template". Available templates: ${Templates.describe()}',
           usage,
         );
       }
@@ -107,6 +112,9 @@ class CreateCommand extends BaseCommand {
           : outputDir;
 
       await _prepareTargetDirectory(targetDir, force: force);
+      logger.info(
+        'Using template "${scaffoldTemplate.id}" (${scaffoldTemplate.description}).',
+      );
 
       final routedVersion = await _resolvePackageVersion(
         'routed',
@@ -127,7 +135,15 @@ class CreateCommand extends BaseCommand {
         createdFiles.add(relativePath);
       }
 
-      await write('pubspec.yaml', _renderPubspec(packageName, routedVersion));
+      final context = TemplateContext(
+        packageName: packageName,
+        humanName: humanName,
+      );
+
+      await write(
+        'pubspec.yaml',
+        _renderPubspec(packageName, routedVersion, scaffoldTemplate),
+      );
 
       await write(
         'analysis_options.yaml',
@@ -136,14 +152,11 @@ class CreateCommand extends BaseCommand {
 
       await write('.gitignore', _gitignoreTemplate);
 
-      await write('README.md', _renderReadme(humanName));
+      await write('README.md', scaffoldTemplate.renderReadme(context));
 
-      await write('lib/app.dart', _renderAppDart(humanName));
-      await write('bin/server.dart', _renderServerDart(packageName));
-      await write(
-        'tool/spec_manifest.dart',
-        _renderSpecManifestScript(packageName),
-      );
+      for (final entry in scaffoldTemplate.fileBuilders.entries) {
+        await write(entry.key, entry.value(context));
+      }
 
       final defaultsByRoot = buildConfigDefaults();
       final configOutputs = generateConfigFiles(
@@ -320,86 +333,42 @@ class CreateCommand extends BaseCommand {
     return null;
   }
 
-  String _renderPubspec(String packageName, String? routedVersion) {
+  String _renderPubspec(
+    String packageName,
+    String? routedVersion,
+    ScaffoldTemplate template,
+  ) {
     final versionConstraint = routedVersion != null ? '^$routedVersion' : 'any';
+    final dependencies = SplayTreeMap<String, String>.from({
+      'routed': versionConstraint,
+      ...template.extraDependencies,
+    });
+    final devDependencies = SplayTreeMap<String, String>.from({
+      'lints': '^6.0.0',
+      'test': '^1.26.3',
+      ...template.extraDevDependencies,
+    });
 
-    return '''
-name: $packageName
-description: A new Routed application.
-version: 0.1.0
-publish_to: 'none'
-
-environment:
-  sdk: ">=3.9.2 <4.0.0"
-
-dependencies:
-  routed: $versionConstraint
-
-dev_dependencies:
-  lints: ^6.0.0
-  test: ^1.26.3
-''';
-  }
-
-  String _renderReadme(String humanName) {
-    return '''
-# $humanName
-
-A new [Routed](https://routed.dev) application.
-
-## Getting started
-
-```bash
-dart pub get
-dart run routed_cli dev
-```
-
-The default route responds with a friendly JSON payload. Edit
-`lib/app.dart` to add additional routes, middleware, and providers.
-''';
-  }
-
-  String _renderAppDart(String humanName) {
-    final message = humanName.isEmpty ? 'Routed' : humanName;
-    return '''
-import 'package:routed/routed.dart';
-
-Future<Engine> createEngine() async {
-  final engine = await Engine.create();
-
-  engine.get('/', (ctx) async {
-    return ctx.json({'message': 'Welcome to $message!'});
-  });
-
-  return engine;
-}
-''';
-  }
-
-  String _renderServerDart(String packageName) {
-    return '''
-import 'package:$packageName/app.dart' as app;
-
-Future<void> main(List<String> args) async {
-  final engine = await app.createEngine();
-  await engine.serve(host: '127.0.0.1', port: 8080);
-}
-''';
-  }
-
-  String _renderSpecManifestScript(String packageName) {
-    return '''
-import 'dart:io';
-
-import 'package:routed/routed.dart';
-import 'package:$packageName/app.dart' as app;
-
-Future<void> main(List<String> args) async {
-  final engine = await app.createEngine();
-  final manifest = engine.buildRouteManifest();
-  stdout.writeln(manifest.toJsonString());
-}
-''';
+    final buffer = StringBuffer()
+      ..writeln('name: $packageName')
+      ..writeln('description: A new Routed application.')
+      ..writeln('version: 0.1.0')
+      ..writeln("publish_to: 'none'")
+      ..writeln()
+      ..writeln('environment:')
+      ..writeln('  sdk: ">=3.9.2 <4.0.0"')
+      ..writeln()
+      ..writeln('dependencies:');
+    dependencies.forEach((name, constraint) {
+      buffer.writeln('  $name: $constraint');
+    });
+    buffer.writeln();
+    buffer.writeln('dev_dependencies:');
+    devDependencies.forEach((name, constraint) {
+      buffer.writeln('  $name: $constraint');
+    });
+    buffer.writeln();
+    return buffer.toString();
   }
 }
 

@@ -1,7 +1,6 @@
 import 'dart:async';
 import 'dart:io' as io;
 
-import 'package:file/file.dart' as fs;
 import 'package:routed_cli/routed_cli.dart' as rc;
 import 'package:routed_cli/src/args/base_command.dart';
 import 'package:routed_cli/src/dev/dev_server_runner.dart' as dev;

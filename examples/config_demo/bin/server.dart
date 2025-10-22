@@ -1,6 +1,8 @@
 import 'package:config_demo/drivers/cache/in_memory_cache_driver.dart';
 import 'package:config_demo/drivers/storage/memory_storage_driver.dart';
 import 'package:config_demo/providers/mail_provider.dart';
+import 'package:routed/providers.dart'
+    show StorageServiceProvider, ProviderRegistry;
 import 'package:routed/routed.dart';
 
 Future<void> main(List<String> args) async {

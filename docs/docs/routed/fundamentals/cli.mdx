@@ -27,7 +27,7 @@ Scaffolds a Routed project, writing `bin/server.dart`, config manifests, README,
 
 - `--name/-n` – project & package name (required when scaffolding into the current directory).
 - `--output/-o` – destination directory (defaults to `.`).
-- `--template/-t` – template to use (`basic` for now).
+- `--template/-t` – template to use (`basic`, `api`, `web`, or `fullstack`).
 - `--force/-f` – overwrite conflicting files.
 
 After generating files, `create` automatically runs `dart pub get` using the resolved Dart executable. If dependency resolution fails the CLI prints the exit code and keeps the “Next steps” list so you can retry manually.
@@ -79,6 +79,43 @@ Additional commands help manage configuration manifests:
 - `provider:list`, `provider:enable`, `provider:disable`
 
 See [Configuration](/docs/routed/fundamentals/configuration) for details and usage patterns.
+
+## Project-defined commands
+
+Every scaffold now includes `lib/commands.dart` exposing a
+`buildProjectCommands()` hook. Return one or more `Command<void>` instances and
+the Routed CLI will load them automatically when you run commands from inside
+the project. Project commands are listed under a "Project" section in
+`dart run routed_cli --help` alongside the built-ins.
+
+```dart title="lib/commands.dart"
+import 'dart:async';
+import 'package:args/command_runner.dart';
+
+class QueueWorkCommand extends Command<void> {
+  @override
+  String get name => 'queue:work';
+
+  @override
+  String get description => 'Run the queue worker for the selected queue.';
+
+  QueueWorkCommand() {
+    argParser.addOption('queue', defaultsTo: 'default');
+  }
+
+  @override
+  Future<void> run() async {
+    final target = argResults?.option('queue') ?? 'default';
+    // TODO: start worker for [target].
+  }
+}
+
+FutureOr<List<Command<void>>> buildProjectCommands() => [QueueWorkCommand()];
+```
+
+If a project command reuses a built-in name (or alias) the CLI exits with a
+descriptive conflict so you can pick a different identifier. Use this hook for
+queue workers, seeders, diagnostic scripts, and other project automation.
 
 ## Troubleshooting
 

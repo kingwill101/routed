@@ -1,6 +1,7 @@
 import 'dart:convert';
 
 import 'package:path/path.dart' as p;
+import 'package:routed/providers.dart' show ProviderRegistry;
 import 'package:routed/routed.dart';
 
 Map<String, List<ConfigDocEntry>> collectConfigDocs() {
@@ -127,7 +128,7 @@ ConfigDocEntry _mergeDocEntries(
   ConfigDocEntry existing,
   ConfigDocEntry incoming,
 ) {
-  String? _betterDescription(String? a, String? b) {
+  String? betterDescription(String? a, String? b) {
     if ((a ?? '').trim().isEmpty && (b ?? '').trim().isEmpty) {
       return null;
     }
@@ -136,12 +137,12 @@ ConfigDocEntry _mergeDocEntries(
     return a!.length >= b!.length ? a : b;
   }
 
-  String? _betterString(String? a, String? b) {
+  String? betterString(String? a, String? b) {
     if (a == null || a.isEmpty) return b;
     return a;
   }
 
-  Object? _betterDefault(Object? a, Object? b) => a ?? b;
+  Object? betterDefault(Object? a, Object? b) => a ?? b;
 
   final mergedMetadata = <String, Object?>{
     ...existing.metadata,
@@ -150,13 +151,13 @@ ConfigDocEntry _mergeDocEntries(
 
   return ConfigDocEntry(
     path: existing.path,
-    type: _betterString(existing.type, incoming.type),
-    description: _betterDescription(existing.description, incoming.description),
-    example: _betterString(existing.example, incoming.example),
+    type: betterString(existing.type, incoming.type),
+    description: betterDescription(existing.description, incoming.description),
+    example: betterString(existing.example, incoming.example),
     deprecated: existing.deprecated || incoming.deprecated,
     options: existing.options ?? incoming.options,
     optionsBuilder: existing.optionsBuilder ?? incoming.optionsBuilder,
     metadata: mergedMetadata,
-    defaultValue: _betterDefault(existing.defaultValue, incoming.defaultValue),
+    defaultValue: betterDefault(existing.defaultValue, incoming.defaultValue),
   );
 }

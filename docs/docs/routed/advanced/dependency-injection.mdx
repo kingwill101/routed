@@ -37,6 +37,10 @@ Key APIs (highlights in `packages/routed/lib/src/container/container.dart:1`):
 
 Use service providers to organize application bindings and their lifecycle (register → boot → cleanup).
 
+```dart title="Importing built-in providers"
+import 'package:routed/providers.dart';
+```
+
 ```dart
 class BillingServiceProvider extends ServiceProvider {
   @override

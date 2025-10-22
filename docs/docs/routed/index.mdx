@@ -15,9 +15,48 @@ Routed is a modular HTTP framework for Dart applications. It combines a lightwei
 - **Context APIs** – expose rich request/response helpers, validation, headers, cookies, and cache/session utilities from within handlers.
 - **View rendering** – render Liquid templates out of the box and plug in custom template engines.
 - **Stateful utilities** – optional cache manager, session middleware, and request-ID helpers.
+- **[Signals & events](/docs/routed/advanced/signals)** – a typed signal hub backed by the event bus so you can hook into request lifecycle changes without manual stream management.
 - **Security & runtime** – built-in CSRF, CORS, security headers, request size limits, trusted proxy support, HTTP/2 negotiation, response compression, and graceful shutdown controls via `EngineConfig`.
 - **Providers & manifest** – each subsystem (cache, sessions, uploads, static assets, security, logging, etc.) ships as a service provider with sensible defaults. The manifest (`config/http.yaml`) controls which providers are active, and the CLI (`dart run routed_cli provider:list --config`) shows active providers, merged defaults, and any validation errors.
 - **CLI tooling** – `routed_cli` scaffolds projects, runs a hot-reload dev server, inspects routes, and generates persisted specs.
+
+## Quick Start
+
+```dart
+import 'package:routed/routed.dart';
+
+Future<void> main() async {
+  final engine = Engine(
+    middlewares: [
+      loggingMiddleware(),
+      timeoutMiddleware(const Duration(seconds: 30)),
+    ],
+  );
+
+  engine.get('/hello/{name}', (ctx) async {
+    final name = ctx.mustGetParam<String>('name');
+    return ctx.json({'message': 'Hello $name'});
+  }).name('hello.show');
+
+  engine.group(
+    path: '/api',
+    middlewares: [requireAuthenticated()],
+    builder: (router) {
+      router.post('/orders', createOrder);
+      router.get('/orders/{id:int}', showOrder);
+    },
+  );
+
+  await engine.serve(port: 8080);
+}
+```
+
+This example highlights the core workflow:
+
+1. Build an `Engine` with global middleware (logging, timeouts, etc.).
+2. Register routes with typed parameters and route names for URL generation.
+3. Group related routes, layering authentication middleware without repeating configuration.
+4. Start the server with HTTP/1.1 or HTTP/2, static assets, sessions, and observability features ready to enable as needs evolve.
 
 ## Where to Start
 

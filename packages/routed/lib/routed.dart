@@ -106,6 +106,7 @@ export 'src/router/router.dart';
 export 'src/router/types.dart';
 export 'src/runtime/shutdown.dart';
 export 'src/storage/storage_manager.dart';
+export 'src/engine/storage_defaults.dart';
 export 'src/support/helpers.dart' show config, route;
 export 'src/support/zone.dart';
 export 'src/utils/environment.dart';

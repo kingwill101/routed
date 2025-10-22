@@ -18,7 +18,7 @@ void main() {
     late RoutedCommandRunner runner;
     late _RecordingLogger logger;
 
-    void _writeFile(String relativePath, String contents) {
+    void writeFile(String relativePath, String contents) {
       final file = memoryFs.file(p.join(projectRoot.path, relativePath));
       file.parent.createSync(recursive: true);
       file.writeAsStringSync(contents);
@@ -30,8 +30,8 @@ void main() {
         ..createSync(recursive: true);
       memoryFs.currentDirectory = projectRoot;
 
-      _writeFile('pubspec.yaml', 'name: demo\n');
-      _writeFile('tool/spec_manifest.dart', '// placeholder\n');
+      writeFile('pubspec.yaml', 'name: demo\n');
+      writeFile('tool/spec_manifest.dart', '// placeholder\n');
 
       logger = _RecordingLogger();
       runner = RoutedCommandRunner(logger: logger)
@@ -96,15 +96,12 @@ Future<void> _run(RoutedCommandRunner runner, List<String> args) async {
 class _FakeManifestLoader extends ManifestLoader {
   _FakeManifestLoader({
     required fs.Directory root,
-    required rc.CliLogger logger,
-    required String usage,
-    required fs.FileSystem fileSystem,
+    required super.logger,
+    required super.usage,
+    required fs.FileSystem super.fileSystem,
     required this.result,
   }) : super(
          projectRoot: root,
-         logger: logger,
-         usage: usage,
-         fileSystem: fileSystem,
        );
 
   final ManifestLoadResult result;

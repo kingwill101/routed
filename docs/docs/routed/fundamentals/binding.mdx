@@ -8,6 +8,10 @@ sidebar_position: 8
 
 Routed provides several methods to bind incoming request data to your data structures. Choose the helper that matches your source and desired failure behavior:
 
+```dart title="Import binding helpers"
+import 'package:routed/bindings.dart';
+```
+
 - `bind(target)` – auto-detects content type (`application/json`, `application/x-www-form-urlencoded`, `multipart/form-data`, `text/plain`) and merges parsed values into `target`. Existing keys in `target` are preserved unless overwritten by parsed values.
 - `shouldBindWith(target, binder)` – runs a specific binder (for example, `jsonBinding`, `formBinding`, `queryBinding`), useful when you want to be explicit regardless of `Content-Type`.
 - `mustBindWith(target, binder)` – same as above, but fails the request immediately with an error response when binding fails (for example, malformed JSON).

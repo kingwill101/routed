@@ -52,6 +52,7 @@ These examples require additional assets, configuration, or complex project stru
 - **kitchen_sink/** - Full-featured application demo with templates, public assets, and lib structure
 - **liquid_template/** - Liquid template engine with template files
 - **multipart/** - Multipart form handling with template files
+- **project_commands_demo/** - Demonstrates custom Routed CLI project commands via `lib/commands.dart`
 - **oauth_keycloak/** - OAuth integration with Keycloak (Docker setup included)
 - **route_events/** - Route lifecycle events with lib structure
 - **view_engine/** - View engine integration with view templates

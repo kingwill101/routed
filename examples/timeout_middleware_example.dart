@@ -1,5 +1,5 @@
+import 'package:routed/middleware.dart';
 import 'package:routed/routed.dart';
-import 'package:routed/src/middleware/timeout.dart';
 
 void main(List<String> args) async {
   final engine = Engine();

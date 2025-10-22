@@ -1,6 +1,6 @@
 import 'package:file/memory.dart';
 import 'package:routed/routed.dart';
-import 'package:routed/src/file_handler.dart';
+import 'package:routed/static_files.dart';
 
 void main(List<String> args) async {
   final engine = Engine();

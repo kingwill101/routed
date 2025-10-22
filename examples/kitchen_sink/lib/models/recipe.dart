@@ -24,16 +24,16 @@ class Recipe {
   });
 
   Map<String, dynamic> toJson() => {
-        'id': id,
-        'name': name,
-        'description': description,
-        'ingredients': ingredients,
-        'instructions': instructions,
-        'prepTime': prepTime,
-        'cookTime': cookTime,
-        'category': category.name,
-        'image': image,
-      };
+    'id': id,
+    'name': name,
+    'description': description,
+    'ingredients': ingredients,
+    'instructions': instructions,
+    'prepTime': prepTime,
+    'cookTime': cookTime,
+    'category': category.name,
+    'image': image,
+  };
 
   factory Recipe.fromJson(Map<String, dynamic> json) {
     return Recipe(

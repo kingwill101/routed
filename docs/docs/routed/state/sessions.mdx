@@ -96,6 +96,10 @@ The `withSessionConfig` engine option applies the same configuration and automat
 
 ### Driver registry & documentation
 
+```dart title="Import registry helpers"
+import 'package:routed/drivers.dart';
+```
+
 `SessionServiceProvider.registerDriver` is the single entrypoint for adding or overriding drivers. The built-ins use this method, so any custom driver you publish rides the same resolution path:
 
 ```dart

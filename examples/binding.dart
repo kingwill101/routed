@@ -1,5 +1,5 @@
 import 'package:routed/routed.dart';
-import 'package:routed/src/binding/binding.dart';
+import 'package:routed/bindings.dart';
 
 void main(List<String> args) async {
   final engine = Engine();

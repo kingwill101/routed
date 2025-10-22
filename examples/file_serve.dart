@@ -19,8 +19,9 @@ void main() {
 
   // Serve an image
   router.get('/image', (c) async {
-    await c
-        .file('/home/kingwill101/code/kmp/untitled1/examples/files/file2.txt');
+    await c.file(
+      '/home/kingwill101/code/kmp/untitled1/examples/files/file2.txt',
+    );
     c.abort();
   });
 

@@ -1,0 +1,85 @@
+---
+title: Project CLI Commands
+description: Use lib/commands.dart to register project-specific routed_cli commands
+sidebar_position: 40
+---
+
+# Project CLI Commands
+
+Routed projects can expose bespoke CLI automation by implementing
+`buildProjectCommands()` in `lib/commands.dart`. Each scaffolded application now
+includes this entrypoint—return one or more `Command<void>` instances and the
+Routed CLI will load them automatically when you run commands inside the
+project.
+
+## Example
+
+The [`project_commands_demo`](https://github.com/routed-dev/routed/tree/main/examples/project_commands_demo)
+example bundles two commands:
+
+- `demo:greet` – prints a configurable greeting and demonstrates reading options
+  from `argParser`.
+- `routes:dump` – boots the application, builds the route manifest, and writes
+  it to `build/routes.json`.
+
+```bash
+cd examples/project_commands_demo
+dart pub get
+
+# List built-in + project commands
+dart run routed_cli --help
+
+# Run a project command
+dart run routed_cli demo:greet --name "Routed fan"
+```
+
+`lib/commands.dart` exports a function similar to:
+
+```dart title="lib/commands.dart"
+import 'dart:async';
+import 'dart:convert';
+import 'dart:io';
+
+import 'package:args/command_runner.dart';
+import 'package:routed/routed.dart';
+
+import 'app.dart' as app;
+
+class RoutesDumpCommand extends Command<void> {
+  RoutesDumpCommand() {
+    argParser
+      ..addOption('output', defaultsTo: 'build/routes.json')
+      ..addFlag('pretty', defaultsTo: true);
+  }
+
+  @override
+  String get name => 'routes:dump';
+
+  @override
+  String get description => 'Write the current route manifest to JSON.';
+
+  @override
+  Future<void> run() async {
+    final engine = await app.createEngine();
+    final manifest = engine.buildRouteManifest();
+    await engine.close();
+
+    final target = argResults?.option('output') ?? 'build/routes.json';
+    final encoder = (argResults?.flag('pretty') ?? true)
+        ? const JsonEncoder.withIndent('  ')
+        : const JsonEncoder();
+
+    final file = File(target)..parent.createSync(recursive: true);
+    file.writeAsStringSync(encoder.convert(manifest.toJson()));
+  }
+}
+
+FutureOr<List<Command<void>>> buildProjectCommands() => [RoutesDumpCommand()];
+```
+
+When you add commands, the CLI groups them under a "Project" heading in
+`dart run routed_cli --help`. If a project command reuses a built-in name the CLI
+exits with a conflict so you can rename it.
+
+Use this hook for queue workers, database seeders, or custom diagnostics without
+forking `routed_cli`.
