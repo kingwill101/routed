@@ -1,5 +1,13 @@
+import 'dart:io';
+
+import 'package:path/path.dart' as p;
 import 'package:routed/providers.dart';
 import 'package:routed/routed.dart';
+import 'package:routed/src/cache/file_store.dart';
+import 'package:routed/src/config/config.dart';
+import 'package:routed/src/container/container.dart';
+import 'package:routed/src/engine/storage_defaults.dart';
+import 'package:routed/src/engine/storage_paths.dart';
 import 'package:test/test.dart';
 
 void main() {
@@ -131,5 +139,91 @@ void main() {
       final docPaths = provider.defaultConfig.docs.map((entry) => entry.path);
       expect(docPaths, contains('cache.stores.*.token'));
     });
+
+    test('file cache store uses StorageDefaults path', () async {
+      final baseDir = Directory.systemTemp.createTempSync(
+        'routed-provider-storage-',
+      );
+      addTearDown(() {
+        if (baseDir.existsSync()) {
+          baseDir.deleteSync(recursive: true);
+        }
+      });
+      final localRoot = p.join(baseDir.path, 'storage', 'app');
+      Directory(localRoot).createSync(recursive: true);
+      final storageDefaults = StorageDefaults.fromLocalRoot(localRoot);
+
+      final container = Container();
+      final config = ConfigImpl({
+        'cache': {
+          'default': 'file',
+          'stores': {
+            'file': {'driver': 'file'},
+          },
+        },
+      });
+      container.instance<Config>(config);
+      container.instance<StorageDefaults>(storageDefaults);
+
+      final provider = CacheServiceProvider();
+      provider.register(container);
+      await provider.boot(container);
+
+      final manager = container.get<CacheManager>();
+      final repository = manager.store('file');
+      final store = repository.getStore();
+
+      expect(store, isA<FileStore>());
+      expect(
+        (store as FileStore).directory.path,
+        equals(storageDefaults.frameworkPath('cache')),
+      );
+    });
+
+    test(
+      'file cache store uses Config fallback when StorageDefaults missing',
+      () async {
+        final baseDir = Directory.systemTemp.createTempSync(
+          'routed-provider-config-',
+        );
+        addTearDown(() {
+          if (baseDir.existsSync()) {
+            baseDir.deleteSync(recursive: true);
+          }
+        });
+        final localRoot = p.join(baseDir.path, 'storage', 'app');
+        Directory(localRoot).createSync(recursive: true);
+
+        final container = Container();
+        final config =
+            ConfigImpl({
+              'cache': {
+                'default': 'file',
+                'stores': {
+                  'file': {'driver': 'file'},
+                },
+              },
+            })..set('storage', {
+              'disks': {
+                'local': {'root': localRoot},
+              },
+            });
+        container.instance<Config>(config);
+
+        final provider = CacheServiceProvider();
+        provider.register(container);
+        await provider.boot(container);
+
+        final manager = container.get<CacheManager>();
+        final repository = manager.store('file');
+        final store = repository.getStore();
+
+        expect(store, isA<FileStore>());
+        expect(
+          (store as FileStore).directory.path,
+          equals(resolveFrameworkStoragePath(config, child: 'cache')),
+        );
+      },
+    );
   });
 }
