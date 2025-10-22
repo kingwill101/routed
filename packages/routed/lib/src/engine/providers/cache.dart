@@ -6,7 +6,6 @@ import 'package:routed/src/contracts/contracts.dart' show Config;
 import 'package:routed/src/events/event_manager.dart';
 import 'package:routed/src/provider/provider.dart';
 import 'package:routed/src/engine/storage_defaults.dart';
-import 'package:routed/src/engine/storage_paths.dart';
 
 /// Provides cache infrastructure and default configuration hooks.
 class CacheServiceProvider extends ServiceProvider with ProvidesDefaultConfig {
@@ -153,10 +152,7 @@ class CacheServiceProvider extends ServiceProvider with ProvidesDefaultConfig {
   }
 
   CacheManager _buildManager(Container container, Config config) {
-    final manager = CacheManager();
-    final storageDefaults = container.has<StorageDefaults>()
-        ? container.get<StorageDefaults>()
-        : null;
+    final manager = CacheManager(container: container);
     final cacheNode = config.get('cache');
     if (cacheNode != null && cacheNode is! Map) {
       throw ProviderConfigException('cache must be a map');
@@ -202,21 +198,7 @@ class CacheServiceProvider extends ServiceProvider with ProvidesDefaultConfig {
     for (final name in ordered) {
       final storeConfig = normalizedStores[name];
       if (storeConfig != null) {
-        final normalized = Map<String, dynamic>.from(storeConfig);
-        final driver = normalized['driver']?.toString();
-        if (driver == 'file') {
-          final pathValue = normalized['path'];
-          if (pathValue is String && pathValue.trim().isNotEmpty) {
-            normalized['path'] = storageDefaults != null
-                ? storageDefaults.resolve(pathValue)
-                : normalizeStoragePath(config, pathValue);
-          } else {
-            normalized['path'] = storageDefaults != null
-                ? storageDefaults.frameworkPath('cache')
-                : resolveFrameworkStoragePath(config, child: 'cache');
-          }
-        }
-        manager.registerStore(name, normalized);
+        manager.registerStore(name, Map<String, dynamic>.from(storeConfig));
       }
     }
 

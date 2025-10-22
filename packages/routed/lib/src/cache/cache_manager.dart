@@ -5,7 +5,11 @@ import 'package:routed/src/cache/redis_store_factory.dart';
 import 'package:routed/src/cache/repository.dart';
 import 'package:routed/src/cache/store_factory.dart';
 import 'package:routed/src/contracts/cache/repository.dart';
+import 'package:routed/src/container/container.dart';
+import 'package:routed/src/contracts/contracts.dart' show Config;
 import 'package:routed/src/events/event_manager.dart';
+import 'package:routed/src/engine/storage_defaults.dart';
+import 'package:routed/src/engine/storage_paths.dart';
 import 'package:routed/src/provider/provider.dart';
 import 'package:routed/src/support/named_registry.dart';
 
@@ -22,16 +26,73 @@ class CacheDriverDocContext {
   String path(String segment) => '$pathTemplate.$segment';
 }
 
+/// Context provided to cache driver configuration builders.
+class DriverConfigContext {
+  DriverConfigContext({
+    required this.userConfig,
+    required this.container,
+    required this.driverName,
+  });
+
+  /// Original configuration supplied by the user/provider.
+  final Map<String, dynamic> userConfig;
+
+  /// Application service container for looking up dependencies.
+  final Container container;
+
+  /// Normalized driver identifier.
+  final String driverName;
+
+  /// Attempts to synchronously resolve [T] from the container.
+  ///
+  /// Returns `null` when the service is unavailable or cannot be resolved
+  /// synchronously.
+  T? get<T>() {
+    if (!container.has<T>()) {
+      return null;
+    }
+    try {
+      return container.get<T>();
+    } catch (_) {
+      return null;
+    }
+  }
+}
+
+/// Builder that constructs the final configuration for a driver.
+typedef DriverConfigBuilder =
+    Map<String, dynamic> Function(DriverConfigContext context);
+
+/// Validator invoked after configuration has been built.
+typedef DriverConfigValidator =
+    void Function(Map<String, dynamic> config, String driverName);
+
+/// Exception raised when driver configuration is invalid.
+class ConfigurationException implements Exception {
+  const ConfigurationException(this.message);
+
+  final String message;
+
+  @override
+  String toString() => 'ConfigurationException: $message';
+}
+
 class _CacheDriverRegistration {
   _CacheDriverRegistration({
     required this.builder,
     required this.origin,
     this.documentation,
+    this.configBuilder,
+    this.validator,
+    this.requiresConfig = const [],
   });
 
   final StoreFactoryBuilder builder;
   final StackTrace origin;
   final CacheDriverDocBuilder? documentation;
+  final DriverConfigBuilder? configBuilder;
+  final DriverConfigValidator? validator;
+  final List<String> requiresConfig;
 }
 
 class CacheDriverRegistry extends NamedRegistry<_CacheDriverRegistration> {
@@ -44,11 +105,17 @@ class CacheDriverRegistry extends NamedRegistry<_CacheDriverRegistration> {
     StoreFactoryBuilder builder, {
     CacheDriverDocBuilder? documentation,
     bool overrideExisting = true,
+    DriverConfigBuilder? configBuilder,
+    DriverConfigValidator? validator,
+    List<String> requiresConfig = const [],
   }) {
     final registration = _CacheDriverRegistration(
       builder: builder,
       origin: StackTrace.current,
       documentation: documentation,
+      configBuilder: configBuilder,
+      validator: validator,
+      requiresConfig: requiresConfig,
     );
     final stored = registerEntry(
       driver,
@@ -91,6 +158,56 @@ class CacheDriverRegistry extends NamedRegistry<_CacheDriverRegistration> {
     return docs;
   }
 
+  /// Builds the final configuration for [driver] using the supplied [container].
+  Map<String, dynamic> buildConfig(
+    String driver,
+    Map<String, dynamic> userConfig,
+    Container container,
+  ) {
+    final registration = getEntry(driver);
+    if (registration == null) {
+      throw ArgumentError('Cache driver "$driver" is not registered');
+    }
+
+    final context = DriverConfigContext(
+      userConfig: Map<String, dynamic>.unmodifiable(userConfig),
+      container: container,
+      driverName: driver,
+    );
+
+    final config =
+        registration.configBuilder?.call(context) ??
+        Map<String, dynamic>.from(userConfig);
+
+    for (final key in registration.requiresConfig) {
+      if (!config.containsKey(key)) {
+        throw ConfigurationException(
+          'Cache driver "$driver" requires configuration key "$key" '
+          'but it was not provided. Please add "$key" to your '
+          'cache.stores.$driver configuration.',
+        );
+      }
+      if (config[key] == null) {
+        throw ConfigurationException(
+          'Cache driver "$driver" requires non-null value for "$key".',
+        );
+      }
+    }
+
+    try {
+      registration.validator?.call(config, driver);
+    } catch (error) {
+      if (error is ConfigurationException) {
+        rethrow;
+      }
+      throw ConfigurationException(
+        'Cache driver "$driver" configuration validation failed: $error',
+      );
+    }
+
+    return config;
+  }
+
   @override
   bool onDuplicate(
     String name,
@@ -121,6 +238,7 @@ class CacheManager {
   /// Optional event manager used for cache events.
   EventManager? _eventManager;
   String _prefix = '';
+  final Container? _container;
 
   /// A registry of store factories.
   /// The key is the driver name, and the value is the corresponding StoreFactory instance.
@@ -128,9 +246,10 @@ class CacheManager {
 
   /// Constructor for CacheManager.
   /// Initializes the CacheManager and registers the default store factories.
-  CacheManager({EventManager? events, String prefix = ''})
+  CacheManager({EventManager? events, String prefix = '', Container? container})
     : _eventManager = events,
-      _prefix = prefix {
+      _prefix = prefix,
+      _container = container {
     _ensureDefaultDriversRegistered();
     CacheDriverRegistry.instance.populate(this);
   }
@@ -156,6 +275,12 @@ class CacheManager {
       _repositories[name] = repository;
     }
   }
+
+  /// Returns `true` if a configuration exists for the cache store [name].
+  bool hasStore(String name) => _configurations.containsKey(name);
+
+  /// Lists the names of all registered cache store configurations.
+  List<String> get storeNames => _configurations.keys.toList(growable: false);
 
   /// Retrieves the repository for the given store [name].
   ///
@@ -211,8 +336,17 @@ class CacheManager {
         'Driver [$driver] is not supported. Supported drivers are: ${_storeFactories.keys.join(", ")}.',
       );
     }
+
+    final resolvedConfig = _container != null
+        ? CacheDriverRegistry.instance.buildConfig(
+            driver.toString(),
+            config,
+            _container!,
+          )
+        : config;
+
     // Create the underlying store using the factory.
-    final storeInstance = factory.create(config);
+    final storeInstance = factory.create(resolvedConfig);
     final repository = RepositoryImpl(storeInstance, name, _prefix);
     if (_eventManager != null) {
       repository.attachEventManager(_eventManager);
@@ -235,12 +369,18 @@ class CacheManager {
     StoreFactoryBuilder builder, {
     CacheDriverDocBuilder? documentation,
     bool overrideExisting = true,
+    DriverConfigBuilder? configBuilder,
+    DriverConfigValidator? validator,
+    List<String> requiresConfig = const [],
   }) {
     CacheDriverRegistry.instance.register(
       driver,
       builder,
       documentation: documentation,
       overrideExisting: overrideExisting,
+      configBuilder: configBuilder,
+      validator: validator,
+      requiresConfig: requiresConfig,
     );
   }
 
@@ -281,6 +421,64 @@ class CacheManager {
       () => FileStoreFactory(),
       documentation: _fileDriverDocs,
       overrideExisting: false,
+      configBuilder: (context) {
+        final config = Map<String, dynamic>.from(context.userConfig);
+        final storageDefaults = context.get<StorageDefaults>();
+        final appConfig = context.get<Config>();
+        final rawPath = config['path'];
+        if (rawPath == null || (rawPath is String && rawPath.trim().isEmpty)) {
+          if (storageDefaults != null) {
+            config['path'] = storageDefaults.frameworkPath('cache');
+          } else if (appConfig != null) {
+            config['path'] = resolveFrameworkStoragePath(
+              appConfig,
+              child: 'cache',
+            );
+          } else {
+            config['path'] = 'storage/framework/cache';
+          }
+        } else if (rawPath is String) {
+          if (storageDefaults != null) {
+            config['path'] = storageDefaults.resolve(rawPath);
+          } else if (appConfig != null) {
+            config['path'] = normalizeStoragePath(appConfig, rawPath);
+          }
+        }
+        return config;
+      },
+      validator: (config, driver) {
+        final path = config['path'];
+        if (path is! String || path.trim().isEmpty) {
+          throw ConfigurationException(
+            'Cache driver "$driver" requires a non-empty "path" '
+            'configuration. Add a valid directory path to '
+            'cache.stores.<name>.path.',
+          );
+        }
+        final permission = config['permission'];
+        if (permission != null && permission is! int) {
+          if (permission is num) {
+            config['permission'] = permission.toInt();
+          } else if (permission is String) {
+            final trimmed = permission.trim();
+            final parsed =
+                int.tryParse(trimmed, radix: 8) ?? int.tryParse(trimmed);
+            if (parsed == null) {
+              throw ConfigurationException(
+                'Cache driver "$driver" permission must be an integer '
+                'value (decimal or octal string). Received "$permission".',
+              );
+            }
+            config['permission'] = parsed;
+          } else {
+            throw ConfigurationException(
+              'Cache driver "$driver" permission must be an integer or '
+              'string value. Received type ${permission.runtimeType}.',
+            );
+          }
+        }
+      },
+      requiresConfig: const ['path'],
     );
     registerDriver(
       'null',
@@ -293,6 +491,72 @@ class CacheManager {
       () => RedisStoreFactory(),
       documentation: _redisDriverDocs,
       overrideExisting: false,
+      validator: (config, driver) {
+        final url = config['url'];
+        if (url != null) {
+          if (url is! String) {
+            throw ConfigurationException(
+              'Cache driver "$driver" url must be a string. '
+              'Received type ${url.runtimeType}.',
+            );
+          }
+          final trimmed = url.trim();
+          if (trimmed.isNotEmpty) {
+            final parsed = Uri.tryParse(trimmed);
+            if (parsed == null || parsed.host.isEmpty) {
+              throw ConfigurationException(
+                'Cache driver "$driver" url must be a valid Redis URL '
+                '(for example redis://localhost:6379/0).',
+              );
+            }
+            config['url'] = trimmed;
+          } else {
+            config.remove('url');
+          }
+        }
+
+        final host = config['host'];
+        if (host != null && host is! String) {
+          throw ConfigurationException(
+            'Cache driver "$driver" host must be a string. '
+            'Received type ${host.runtimeType}.',
+          );
+        }
+
+        void coerceInt(String key) {
+          final value = config[key];
+          if (value == null) {
+            return;
+          }
+          if (value is int) {
+            return;
+          }
+          if (value is num) {
+            config[key] = value.toInt();
+            return;
+          }
+          final parsed = int.tryParse(value.toString());
+          if (parsed == null) {
+            throw ConfigurationException(
+              'Cache driver "$driver" $key must be an integer value. '
+              'Received "$value".',
+            );
+          }
+          config[key] = parsed;
+        }
+
+        coerceInt('port');
+        coerceInt('database');
+        coerceInt('db');
+
+        final password = config['password'];
+        if (password != null && password is! String) {
+          throw ConfigurationException(
+            'Cache driver "$driver" password must be a string. '
+            'Received type ${password.runtimeType}.',
+          );
+        }
+      },
     );
     _defaultsRegistered = true;
   }
@@ -306,13 +570,17 @@ class CacheManager {
         path: context.path('path'),
         type: 'string',
         description:
-            'Directory path where cache files are stored for the file driver.',
+            'Directory where cache files are stored. If omitted, defaults to '
+            'storage/framework/cache based on your storage configuration.',
+        defaultValue: 'computed at runtime',
       ),
       ConfigDocEntry(
         path: context.path('permission'),
         type: 'int',
         description:
-            'File system permission mask applied to created cache files.',
+            'Optional file permission mask (octal or decimal) applied to '
+            'created cache files.',
+        defaultValue: null,
       ),
     ];
   }
@@ -325,27 +593,35 @@ class CacheManager {
         ConfigDocEntry(
           path: context.path('url'),
           type: 'string',
-          description: 'Redis connection URL (e.g. redis://localhost:6379/0).',
+          description:
+              'Optional Redis connection URL. When provided it overrides host '
+              'and port (e.g. redis://localhost:6379/0).',
+          defaultValue: null,
         ),
         ConfigDocEntry(
           path: context.path('host'),
           type: 'string',
           description: 'Redis host when url is not provided.',
+          defaultValue: '127.0.0.1',
         ),
         ConfigDocEntry(
           path: context.path('port'),
           type: 'int',
           description: 'Redis port when url is not provided.',
+          defaultValue: 6379,
         ),
         ConfigDocEntry(
           path: context.path('password'),
           type: 'string',
-          description: 'Redis password if authentication is required.',
+          description: 'Optional Redis password.',
+          defaultValue: null,
         ),
         ConfigDocEntry(
           path: context.path('db'),
           type: 'int',
-          description: 'Database index selected after connecting.',
+          description:
+              'Database index selected after connecting (aliases: database).',
+          defaultValue: 0,
         ),
       ];
 

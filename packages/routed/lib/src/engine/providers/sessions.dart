@@ -30,6 +30,9 @@ typedef SessionDriverBuilder =
 typedef SessionDriverDocBuilder =
     List<ConfigDocEntry> Function(SessionDriverDocContext context);
 
+typedef SessionDriverValidator =
+    void Function(SessionDriverBuilderContext context);
+
 /// Context passed to a [SessionDriverBuilder].
 ///
 /// The object aggregates every bit of information a driver might need to build
@@ -152,10 +155,14 @@ class SessionDriverRegistry extends NamedRegistry<_SessionDriverRegistration> {
     SessionDriverBuilder builder, {
     SessionDriverDocBuilder? documentation,
     bool overrideExisting = true,
+    SessionDriverValidator? validator,
+    List<String> requiresConfig = const [],
   }) {
     final registration = _SessionDriverRegistration(
       builder: builder,
       documentation: documentation,
+      validator: validator,
+      requiresConfig: requiresConfig,
       origin: StackTrace.current,
     );
     final stored = registerEntry(
@@ -175,7 +182,51 @@ class SessionDriverRegistry extends NamedRegistry<_SessionDriverRegistration> {
   bool contains(String driver) => containsEntry(driver);
 
   /// Retrieves the builder associated with [driver] or `null` when absent.
-  SessionDriverBuilder? builderFor(String driver) => getEntry(driver)?.builder;
+  SessionDriverBuilder? builderFor(String driver) =>
+      registrationFor(driver)?.builder;
+
+  _SessionDriverRegistration? registrationFor(String driver) =>
+      getEntry(driver);
+
+  void ensureRequirements(
+    String driver,
+    SessionDriverBuilderContext context,
+    _SessionDriverRegistration registration,
+  ) {
+    for (final key in registration.requiresConfig) {
+      final value = context.raw[key];
+      if (value == null) {
+        throw ProviderConfigException(
+          'Session driver "$driver" requires configuration key "$key".',
+        );
+      }
+      if (value is String && value.trim().isEmpty) {
+        throw ProviderConfigException(
+          'Session driver "$driver" requires configuration key "$key" to be non-empty.',
+        );
+      }
+    }
+  }
+
+  void runValidator(
+    String driver,
+    SessionDriverBuilderContext context,
+    _SessionDriverRegistration registration,
+  ) {
+    final validator = registration.validator;
+    if (validator == null) {
+      return;
+    }
+    try {
+      validator(context);
+    } on ProviderConfigException {
+      rethrow;
+    } catch (error) {
+      throw ProviderConfigException(
+        'Session driver "$driver" validation failed: $error',
+      );
+    }
+  }
 
   /// Returns a sorted list of available driver names, ensuring that [include]
   /// is always present in the result.
@@ -225,11 +276,15 @@ class _SessionDriverRegistration {
     required this.builder,
     required this.origin,
     this.documentation,
+    this.validator,
+    this.requiresConfig = const [],
   });
 
   final SessionDriverBuilder builder;
   final StackTrace origin;
   final SessionDriverDocBuilder? documentation;
+  final SessionDriverValidator? validator;
+  final List<String> requiresConfig;
 }
 
 /// Service provider that wires all session-related services and publishes
@@ -420,6 +475,7 @@ class SessionServiceProvider extends ServiceProvider
         _buildCacheBackedDriver,
         documentation: _cacheBackedDriverDocs,
         overrideExisting: false,
+        validator: _validateCacheBackedDriver,
       );
     }
     _defaultsRegistered = true;
@@ -458,10 +514,20 @@ class SessionServiceProvider extends ServiceProvider
         ) ??
         raw['path']?.toString();
 
-    final storagePath =
-        (configuredPath != null && configuredPath.trim().isNotEmpty)
-        ? normalizeStoragePath(context.rootConfig, configuredPath)
-        : resolveFrameworkStoragePath(context.rootConfig, child: 'sessions');
+    final storageDefaults = context.storageDefaults;
+    final storagePath = () {
+      if (configuredPath != null && configuredPath.trim().isNotEmpty) {
+        final trimmed = configuredPath.trim();
+        if (storageDefaults != null) {
+          return storageDefaults.resolve(trimmed);
+        }
+        return normalizeStoragePath(context.rootConfig, trimmed);
+      }
+      if (storageDefaults != null) {
+        return storageDefaults.frameworkPath('sessions');
+      }
+      return resolveFrameworkStoragePath(context.rootConfig, child: 'sessions');
+    }();
 
     return SessionConfig.file(
       appKey: context.keys.first,
@@ -497,6 +563,17 @@ class SessionServiceProvider extends ServiceProvider
     );
   }
 
+  static String _resolveCacheStoreName(SessionDriverBuilderContext context) {
+    return parseStringLike(
+          context.raw['store'],
+          context: 'session.store',
+          allowEmpty: true,
+          coerceNonString: true,
+          throwOnInvalid: false,
+        ) ??
+        (context.driver == 'database' ? 'database' : context.driver);
+  }
+
   static SessionConfig _buildCacheBackedDriver(
     SessionDriverBuilderContext context,
   ) {
@@ -507,24 +584,8 @@ class SessionServiceProvider extends ServiceProvider
       );
     }
 
-    final storeName =
-        parseStringLike(
-          context.raw['store'],
-          context: 'session.store',
-          allowEmpty: true,
-          coerceNonString: true,
-          throwOnInvalid: false,
-        ) ??
-        (context.driver == 'database' ? 'database' : context.driver);
-
-    cache.Repository repository;
-    try {
-      repository = cacheManager.store(storeName);
-    } catch (_) {
-      throw ProviderConfigException(
-        'Session cache store [$storeName] is not defined.',
-      );
-    }
+    final storeName = _resolveCacheStoreName(context);
+    final repository = cacheManager.store(storeName);
 
     final store = CacheSessionStore(
       repository: repository,
@@ -549,6 +610,25 @@ class SessionServiceProvider extends ServiceProvider
     );
   }
 
+  static void _validateCacheBackedDriver(SessionDriverBuilderContext context) {
+    final cacheManager = context.cacheManager;
+    if (cacheManager == null) {
+      throw ProviderConfigException(
+        'Cache manager is required for cache-backed session drivers.',
+      );
+    }
+    final storeName = _resolveCacheStoreName(context);
+    if (!cacheManager.hasStore(storeName)) {
+      final available = cacheManager.storeNames;
+      final hint = available.isEmpty
+          ? 'No cache stores are configured.'
+          : 'Available stores: ${available.join(", ")}';
+      throw ProviderConfigException(
+        'Session cache store [$storeName] is not defined. $hint',
+      );
+    }
+  }
+
   // ---------------------------------------------------------------------------
   // Driver documentation helpers
   // ---------------------------------------------------------------------------
@@ -571,13 +651,17 @@ class SessionServiceProvider extends ServiceProvider
       ConfigDocEntry(
         path: context.path('files'),
         type: 'string',
-        description: 'Directory path used to persist session files.',
+        description:
+            'Directory path used to persist session files. Defaults to '
+            'storage/framework/sessions based on your storage configuration.',
+        defaultValue: 'computed at runtime',
       ),
       ConfigDocEntry(
         path: context.path('lottery'),
         type: 'list<int>',
         description:
             'Cleanup lottery odds for pruning stale sessions (e.g., [2, 100]).',
+        defaultValue: const [2, 100],
       ),
     ];
   }
@@ -594,7 +678,8 @@ class SessionServiceProvider extends ServiceProvider
         path: context.path('store'),
         type: 'string',
         description:
-            'Cache store name used when persisting sessions via cache-backed drivers.',
+            'Cache store name used when persisting sessions via cache-backed drivers. '
+            'Defaults to the driver name when omitted.',
       ),
     ];
   }
@@ -605,12 +690,16 @@ class SessionServiceProvider extends ServiceProvider
     SessionDriverBuilder builder, {
     SessionDriverDocBuilder? documentation,
     bool overrideExisting = true,
+    SessionDriverValidator? validator,
+    List<String> requiresConfig = const [],
   }) {
     SessionDriverRegistry.instance.register(
       driver,
       builder,
       documentation: documentation,
       overrideExisting: overrideExisting,
+      validator: validator,
+      requiresConfig: requiresConfig,
     );
   }
 
@@ -792,8 +881,8 @@ class SessionServiceProvider extends ServiceProvider
           : null,
     );
 
-    final builder = registry.builderFor(driver);
-    if (builder == null) {
+    final registration = registry.registrationFor(driver);
+    if (registration == null) {
       final available =
           registry.availableDrivers(include: _builtInDrivers).toList()..sort();
       final message = available.isEmpty
@@ -803,6 +892,9 @@ class SessionServiceProvider extends ServiceProvider
         'Unsupported session driver "$driver". $message',
       );
     }
+    final builder = registration.builder;
+    registry.ensureRequirements(driver, context, registration);
+    registry.runValidator(driver, context, registration);
     return builder(context);
   }
 
