@@ -47,15 +47,10 @@ class ServerErrorView extends View {
   Future<void> get() async {
     final errorMsg = await getParam('error') ?? 'An unexpected error occurred';
 
-    // In production, don't expose error details
-    final isDevelopment = true; // TODO: Get from environment
-
     sendJson({
       'error': 'Internal Server Error',
       'status': 500,
-      'message': isDevelopment
-          ? errorMsg
-          : 'An unexpected error occurred. Please try again later.',
+      'message': errorMsg,
       'support': 'Contact support@example.com for assistance',
     }, statusCode: 500);
   }

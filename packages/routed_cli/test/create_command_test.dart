@@ -148,6 +148,12 @@ void main() {
         contains("key: \"{{ env.APP_KEY | default: 'change-me' }}\""),
       );
       expect(appConfig, isNot(contains(envKey)));
+
+      expect(_exists(projectDir, 'lib/commands.dart'), isTrue);
+      expect(
+        _read(projectDir, 'lib/commands.dart'),
+        contains('buildProjectCommands'),
+      );
     });
 
     test('uses output directory when provided', () async {
@@ -175,6 +181,74 @@ void main() {
       );
       expect(logger.infos.contains('  dart pub get'), isTrue);
     });
+
+    test('exposes template names in usage', () {
+      final command = CreateCommand(fileSystem: memoryFs, logger: logger);
+      expect(command.usage, contains('basic, api, web, fullstack'));
+    });
+
+    test('scaffolds API template with tests', () async {
+      await _run(runner, ['create', '--name', 'demo_api', '--template', 'api']);
+
+      final projectDir = memoryFs.directory(p.join(workspace.path, 'demo_api'));
+      final appContent = _read(projectDir, 'lib/app.dart');
+      expect(appContent, contains("'/api/v1'"));
+      expect(appContent, contains("router.get('/users'"));
+      expect(appContent, contains('ctx.fetchOr404'));
+      expect(_exists(projectDir, 'test/api_test.dart'), isTrue);
+
+      final pubspec = loadYaml(_read(projectDir, 'pubspec.yaml')) as YamlMap;
+      final devDeps = pubspec['dev_dependencies'] as YamlMap? ?? YamlMap();
+      expect(devDeps.containsKey('routed_testing'), isTrue);
+    });
+
+    test('scaffolds web template with HTML helpers', () async {
+      await _run(runner, ['create', '--name', 'demo_web', '--template', 'web']);
+
+      final projectDir = memoryFs.directory(p.join(workspace.path, 'demo_web'));
+      final appContent = _read(projectDir, 'lib/app.dart');
+      expect(appContent, contains('LiquidViewEngine'));
+      expect(appContent, contains("engine.static('/assets'"));
+      expect(appContent, contains("templateName: 'home.liquid'"));
+      expect(appContent, contains('ctx.template'));
+      expect(appContent, contains('ctx.requireFound'));
+      expect(_exists(projectDir, 'templates/home.liquid'), isTrue);
+      expect(_exists(projectDir, 'templates/page.liquid'), isTrue);
+      expect(_exists(projectDir, 'public/styles.css'), isTrue);
+      final homeTemplate = _read(projectDir, 'templates/home.liquid');
+      expect(homeTemplate, contains('{{ app_title }}'));
+      expect(homeTemplate, contains('/assets/styles.css'));
+    });
+
+    test('scaffolds fullstack template with API and HTML', () async {
+      await _run(runner, [
+        'create',
+        '--name',
+        'demo_full',
+        '--template',
+        'fullstack',
+      ]);
+
+      final projectDir = memoryFs.directory(
+        p.join(workspace.path, 'demo_full'),
+      );
+      final appContent = _read(projectDir, 'lib/app.dart');
+      expect(appContent, contains("'/api'"));
+      expect(appContent, contains('ctx.html'));
+      expect(_exists(projectDir, 'test/api_test.dart'), isTrue);
+
+      final pubspec = loadYaml(_read(projectDir, 'pubspec.yaml')) as YamlMap;
+      final devDeps = pubspec['dev_dependencies'] as YamlMap? ?? YamlMap();
+      expect(devDeps.containsKey('routed_testing'), isTrue);
+    });
+
+    test('fails fast when template is unknown', () async {
+      await _expectUsageError(runner, [
+        'create',
+        '--template',
+        'unknown',
+      ], 'Unsupported template');
+    });
   });
 }
 
@@ -183,6 +257,19 @@ Future<void> _run(RoutedCommandRunner runner, List<String> args) async {
     await runner.run(args);
   } on UsageException catch (e) {
     fail('Command failed: $e');
+  }
+}
+
+Future<void> _expectUsageError(
+  RoutedCommandRunner runner,
+  List<String> args,
+  String fragment,
+) async {
+  try {
+    await runner.run(args);
+    fail('Expected UsageException for args: $args');
+  } on UsageException catch (e) {
+    expect(e.message, contains(fragment));
   }
 }
 

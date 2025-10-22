@@ -5,9 +5,14 @@ import 'package:routed/src/container/container.dart';
 import 'package:routed/src/contracts/contracts.dart' show Config;
 import 'package:routed/src/events/event_manager.dart';
 import 'package:routed/src/provider/provider.dart';
+import 'package:routed/src/engine/storage_defaults.dart';
+import 'package:routed/src/engine/storage_paths.dart';
 
 /// Provides cache infrastructure and default configuration hooks.
 class CacheServiceProvider extends ServiceProvider with ProvidesDefaultConfig {
+  static final Map<String, Map<String, dynamic> Function(StorageDefaults)>
+  _storageDefaultResolvers = {};
+
   CacheManager? _managedManager;
   bool _ownsManagedManager = false;
 
@@ -19,7 +24,7 @@ class CacheServiceProvider extends ServiceProvider with ProvidesDefaultConfig {
         type: 'string',
         description:
             'Name of the cache store to use when none is specified explicitly.',
-        defaultValue: 'array',
+        defaultValue: 'file',
         metadata: {configDocMetaInheritFromEnv: 'CACHE_STORE'},
       ),
       const ConfigDocEntry(
@@ -40,10 +45,7 @@ class CacheServiceProvider extends ServiceProvider with ProvidesDefaultConfig {
         path: 'cache.stores',
         type: 'map',
         description: 'Configured cache stores keyed by store name.',
-        defaultValue: {
-          'array': <String, Object?>{'driver': 'array'},
-          'file': <String, Object?>{'driver': 'file', 'path': 'cache'},
-        },
+        defaultValue: null,
       ),
       ConfigDocEntry(
         path: 'cache.stores.*.driver',
@@ -71,7 +73,7 @@ class CacheServiceProvider extends ServiceProvider with ProvidesDefaultConfig {
       _ownsManagedManager = false;
       return;
     }
-    final manager = _buildManager(container.get<Config>());
+    final manager = _buildManager(container, container.get<Config>());
     _managedManager = manager;
     container.instance<CacheManager>(manager);
     _ownsManagedManager = true;
@@ -140,7 +142,7 @@ class CacheServiceProvider extends ServiceProvider with ProvidesDefaultConfig {
     Config config, {
     EventManager? eventManager,
   }) {
-    final manager = _buildManager(config);
+    final manager = _buildManager(container, config);
     if (eventManager != null) {
       manager.attachEventManager(eventManager);
     }
@@ -150,8 +152,11 @@ class CacheServiceProvider extends ServiceProvider with ProvidesDefaultConfig {
     return manager;
   }
 
-  CacheManager _buildManager(Config config) {
+  CacheManager _buildManager(Container container, Config config) {
     final manager = CacheManager();
+    final storageDefaults = container.has<StorageDefaults>()
+        ? container.get<StorageDefaults>()
+        : null;
     final cacheNode = config.get('cache');
     if (cacheNode != null && cacheNode is! Map) {
       throw ProviderConfigException('cache must be a map');
@@ -184,9 +189,7 @@ class CacheServiceProvider extends ServiceProvider with ProvidesDefaultConfig {
     });
 
     if (normalizedStores.isEmpty) {
-      manager.registerStore('file', {'driver': 'file', 'path': 'cache'});
-      _applyCachePrefix(manager, config);
-      return manager;
+      normalizedStores['file'] = <String, dynamic>{'driver': 'file'};
     }
 
     final ordered = <String>{};
@@ -199,7 +202,21 @@ class CacheServiceProvider extends ServiceProvider with ProvidesDefaultConfig {
     for (final name in ordered) {
       final storeConfig = normalizedStores[name];
       if (storeConfig != null) {
-        manager.registerStore(name, Map<String, dynamic>.from(storeConfig));
+        final normalized = Map<String, dynamic>.from(storeConfig);
+        final driver = normalized['driver']?.toString();
+        if (driver == 'file') {
+          final pathValue = normalized['path'];
+          if (pathValue is String && pathValue.trim().isNotEmpty) {
+            normalized['path'] = storageDefaults != null
+                ? storageDefaults.resolve(pathValue)
+                : normalizeStoragePath(config, pathValue);
+          } else {
+            normalized['path'] = storageDefaults != null
+                ? storageDefaults.frameworkPath('cache')
+                : resolveFrameworkStoragePath(config, child: 'cache');
+          }
+        }
+        manager.registerStore(name, normalized);
       }
     }
 

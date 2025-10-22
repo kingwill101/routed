@@ -1,76 +1,66 @@
-<!-- 
-This README describes the package. If you publish this package to pub.dev,
-this README's contents appear on the landing page for your package.
-
-For information about how to write a good package README, see the guide for
-[writing package pages](https://dart.dev/tools/pub/writing-package-pages). 
-
-For general information about developing packages, see the Dart guide for
-[creating packages](https://dart.dev/guides/libraries/create-packages)
-and the Flutter guide for
-[developing packages and plugins](https://flutter.dev/to/develop-packages). 
--->
-
 # Routed
 
-A fast, flexible HTTP router for Dart with support for middleware, template engines, and more.
+Routed is a production-ready HTTP engine for Dart. It combines a fast router, composable middleware pipeline, pluggable service providers, and rich configuration primitives so you can ship APIs, dashboards, and realtime services without stitching together half a dozen libraries.
 
-## Features
-
-- 🚀 Fast routing with path parameters and wildcards
-- 🔌 Middleware support (timeout, logging, CORS)
-- 🎨 Template engine support (Jinja and Liquid)
-- 📁 Static file serving with directory listing
-- 🍪 Cookie handling
-- 🔄 Forward proxy support
-- ⚡ Async request handling
+## Highlights
+- Hierarchical routing with typed parameters, trailing-slash management, and automatic OPTIONS and 405 handling.
+- Structured middleware layers (global, group, route) plus a manifest-driven registry that providers can extend.
+- Integrated session, JWT, and OAuth2 authentication helpers, cache/storage abstractions, and file uploads.
+- HTTP/1.1 and HTTP/2 serving, WebSocket handling, SSE helpers, graceful shutdown, and request tracking.
+- Observability hooks for logging, metrics, tracing, and health checks out of the box.
 
 ## Quick Start
-
 ```dart
 import 'package:routed/routed.dart';
 
-void main() async {
-  final engine = Engine();
-  
-  // Basic routing
-  engine.get('/hello/{name}', (ctx) {
-    final name = ctx.param('name');
-    ctx.string('Hello, $name!');
-  });
+Future<void> main() async {
+  final engine = Engine(
+    middlewares: [
+      loggingMiddleware(),
+      timeoutMiddleware(const Duration(seconds: 30)),
+    ],
+  );
 
-  // JSON handling
-  engine.post('/api/users', (ctx) async {
-    final data = await ctx.request.body();
-    ctx.json({'message': 'Created user', 'data': data});
-  });
+  engine.get('/hello/{name}', (ctx) async {
+    final name = ctx.mustGetParam<String>('name');
+    return ctx.json({'message': 'Hello $name'});
+  }).name('hello.show');
+
+  engine.group(
+    path: '/api',
+    middlewares: [requireAuthenticated()],
+    builder: (router) {
+      router.post('/orders', createOrder);
+      router.get('/orders/{id:int}', showOrder);
+    },
+  );
 
   await engine.serve(port: 8080);
 }
 ```
 
-## Examples
+## Configuration
+- **Code first**: pass `EngineConfig` and `EngineOpt` instances directly when constructing the engine.
+- **Manifest driven**: drop YAML/JSON configs in `config/` and let the loader merge environments, override via `.env`, and reload at runtime.
+- **Providers**: register service providers to contribute defaults, middleware, or background services. Custom providers can be scaffolded with `routed_cli`.
 
-The `examples` directory contains working examples for common use cases:
+## Packages in This Repository
+- `packages/routed` – core engine, router, middleware, providers, and utilities.
+- `packages/routed_cli` – project scaffolding, driver generators, and release tooling.
+- `packages/routed_testing` / `packages/server_testing` – HTTP and engine test harnesses.
+- `packages/property_testing`, `packages/class_view`, `packages/jaspr_routed` – integration layers and experimental tooling.
 
-- [Basic Router](examples/basic_router) - Path parameters, query strings, request body
-- [Cookie Handling](examples/cookie_handling) - Setting and reading cookies
-- [Forward Proxy](examples/forward_proxy) - Using as a proxy server
-- [Jinja Template](examples/jinja_template) - Jinja templates with inheritance
-- [Liquid Template](examples/liquid_template) - Liquid templates with partials
-- [Route Parameters](examples/route_parameter_types) - Int, double, UUID, email parameters
-- [Static File](examples/static_file) - File serving and directory listing
-- [Timeout Middleware](examples/timeout_middleware) - Request timeouts
+Examples covering cookies, config hot reloads, template engines, SSE, and more live under `examples/`.
 
-## Packages
-
-- [routed](packages/routed) - Core routing package
-- [routed_testing](packages/server_testing/routed_testing) - Testing utilities
+## Documentation
+Rendered docs are in `docs/` and published to <https://routed.dev>. Run `npm install && npm run dev` inside that directory to preview changes locally.
 
 ## Contributing
+1. Install the Dart SDK (>= 3.9.0) and run `dart pub get` from the repo root.
+2. Format and lint with `dart format .` and `dart analyze`.
+3. Run the full suite with `dart test packages/routed`.
 
-Contributions are welcome! Please read our contributing guidelines before submitting pull requests.
+Bug reports and pull requests are welcome. Please include tests when practical.
 
 ## License
-
-This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+Licensed under the MIT License. See [LICENSE](LICENSE).

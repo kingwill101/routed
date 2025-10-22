@@ -1,3 +1,4 @@
+import 'package:routed/providers.dart';
 import 'package:routed/routed.dart';
 
 extension ProviderMetadata on ServiceProvider {

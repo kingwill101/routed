@@ -1,7 +1,6 @@
 import 'dart:io';
 
 import 'package:routed/routed.dart';
-import 'package:routed/src/file_handler.dart';
 
 void main(List<String> args) async {
   final engine = Engine();
@@ -29,7 +28,7 @@ void main(List<String> args) async {
   router.static('/public', 'public');
 
   // Serve static files with directory listing enabled
-  router.staticFS('/files', Dir('public', listDirectory: true));
+  router.static('/files', 'public', listDirectory: true);
 
   // Serve a single static file
   router.staticFile('/logo', 'public/images/logo.txt');

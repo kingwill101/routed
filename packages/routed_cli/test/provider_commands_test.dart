@@ -2,6 +2,10 @@ import 'package:args/command_runner.dart';
 import 'package:file/file.dart' as fs;
 import 'package:file/memory.dart';
 import 'package:path/path.dart' as p;
+import 'package:routed/providers.dart'
+    show ProviderRegistry, SessionServiceProvider;
+import 'package:routed/routed.dart';
+import 'package:routed/session.dart';
 import 'package:routed_cli/routed_cli.dart' as rc;
 import 'package:routed_cli/src/args/commands/provider.dart';
 import 'package:routed_cli/src/args/commands/provider_driver.dart';
@@ -40,17 +44,17 @@ void main() {
       );
     });
 
-    String _read(String relativePath) => memoryFs
+    String read(String relativePath) => memoryFs
         .file(p.join(projectRoot.path, relativePath))
         .readAsStringSync();
 
-    bool _exists(String relativePath) =>
+    bool exists(String relativePath) =>
         memoryFs.file(p.join(projectRoot.path, relativePath)).existsSync();
 
     test('provider:enable appends provider to manifest', () async {
       await _run(runner, ['provider:enable', 'routed.sessions']);
 
-      final contents = _read('config/http.yaml');
+      final contents = read('config/http.yaml');
       expect(contents, contains('routed.sessions'));
       final yaml = loadYaml(contents) as YamlMap;
       final features = yaml['features'] as YamlMap;
@@ -60,7 +64,7 @@ void main() {
     test('provider:disable removes provider from manifest', () async {
       await _run(runner, ['provider:disable', 'routed.routing']);
 
-      final contents = _read('config/http.yaml');
+      final contents = read('config/http.yaml');
       expect(contents, isNot(contains('routed.routing')));
       final yaml = loadYaml(contents) as YamlMap;
       final features = yaml['features'] as YamlMap;
@@ -78,12 +82,45 @@ void main() {
       expect(output, contains('options=[lax, strict, none]'));
     });
 
+    test('provider:list surfaces duplicate driver errors', () async {
+      final registry = ProviderRegistry.instance;
+      final original = registry.resolve('routed.sessions')!;
+      final originalFactory = original.factory;
+      final originalDescription = original.description;
+
+      registry.register(
+        'routed.sessions',
+        factory: () => _DuplicateDriverProvider(),
+        description: originalDescription,
+      );
+      addTearDown(() {
+        registry.register(
+          'routed.sessions',
+          factory: originalFactory,
+          description: originalDescription,
+        );
+      });
+
+      await expectLater(
+        () async => runner.run(['provider:list', '--config']),
+        throwsA(
+          isA<UsageException>()
+              .having(
+                (e) => e.message,
+                'message',
+                contains('Duplicate driver registration'),
+              )
+              .having((e) => e.message, 'message', contains('cookie')),
+        ),
+      );
+    });
+
     test('provider:driver scaffolds storage driver starter', () async {
       await _run(runner, ['provider:driver', 'storage', 'dropbox']);
 
       final driverPath = 'lib/drivers/storage/dropbox_storage_driver.dart';
-      expect(_exists(driverPath), isTrue);
-      final contents = _read(driverPath);
+      expect(exists(driverPath), isTrue);
+      final contents = read(driverPath);
       expect(contents, contains('registerDropboxStorageDriver'));
       expect(contents, contains('StorageServiceProvider.registerDriver'));
     });
@@ -92,8 +129,8 @@ void main() {
       await _run(runner, ['provider:driver', '--type', 'cache', 'memcached']);
 
       final driverPath = 'lib/drivers/cache/memcached_cache_driver.dart';
-      expect(_exists(driverPath), isTrue);
-      final contents = _read(driverPath);
+      expect(exists(driverPath), isTrue);
+      final contents = read(driverPath);
       expect(contents, contains('registerMemcachedCacheDriver'));
       expect(contents, contains('CacheManager.registerDriver'));
     });
@@ -196,6 +233,28 @@ class _TestProviderDriverCommand extends ProviderDriverCommand {
   }) async {
     return _fs.directory(_rootProvider().path);
   }
+}
+
+class _DuplicateDriverProvider extends ServiceProvider {
+  _DuplicateDriverProvider() {
+    SessionServiceProvider.registerDriver(
+      'cookie',
+      (context) => SessionConfig.cookie(
+        appKey: SecureCookie.generateKey(),
+        codecs: context.codecs,
+        cookieName: context.cookieName,
+        maxAge: context.lifetime,
+        expireOnClose: context.expireOnClose,
+        options: context.options,
+      ),
+    );
+  }
+
+  @override
+  void register(Container container) {}
+
+  @override
+  Future<void> cleanup(Container container) async {}
 }
 
 class _RecordingLogger extends rc.CliLogger {

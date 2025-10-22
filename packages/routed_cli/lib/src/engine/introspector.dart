@@ -1,5 +1,4 @@
 import 'dart:convert';
-import 'dart:io' as io;
 
 import 'package:args/command_runner.dart';
 import 'package:file/file.dart' as fs;
@@ -33,12 +32,11 @@ typedef ManifestLoaderFactory =
 
 class ManifestLoader {
   ManifestLoader({
-    required fs.Directory projectRoot,
+    required this.projectRoot,
     required this.logger,
     required this.usage,
     fs.FileSystem? fileSystem,
-  }) : projectRoot = projectRoot,
-       fileSystem = fileSystem ?? projectRoot.fileSystem;
+  }) : fileSystem = fileSystem ?? projectRoot.fileSystem;
 
   final fs.Directory projectRoot;
   final rc.CliLogger logger;

@@ -333,3 +333,26 @@ engine.ws('/live', LiveUpdatesHandler());
 ```
 
 The `Engine` automatically detects upgrade requests and forwards them to the handler registered for the path, exposing the initial HTTP context through `WebSocketContext`.
+
+WebSocket routes support the same path-pattern features as HTTP handlers:
+
+```dart
+final registry = engine.container.get<MiddlewareRegistry>();
+registry.register('ws.auth', (container) {
+  return (EngineContext ctx, Next next) async {
+    if (ctx.request.param('room') == 'private') {
+      ctx.abortWithStatus(HttpStatus.forbidden);
+      return ctx.response;
+    }
+    return await next();
+  };
+});
+
+engine.ws(
+  '/rooms/{room}',
+  LiveUpdatesHandler(),
+  middlewares: [MiddlewareRef.of('ws.auth')],
+);
+```
+
+Use `ctx.param('room')` (or the new `ctx.params` map) to read path parameters inside your handlers, and `MiddlewareRef` to reuse the same middleware registry you already leverage for HTTP routes. WebSocket handshake logs now include `routed.route_type=websocket`, making it easy to filter structured startup/request logs alongside your HTTP traffic.

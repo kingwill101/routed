@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'package:args/command_runner.dart';
 import 'package:file/file.dart' as fs;
+import 'package:routed/providers.dart' show ProviderRegistry;
 import 'package:routed/routed.dart';
 import 'package:routed_cli/src/args/base_command.dart';
 import 'package:routed_cli/src/args/commands/provider_metadata.dart';
@@ -40,7 +41,17 @@ class ProviderListCommand extends BaseCommand {
       logger.info('Provider Manifest');
       for (final registration in ProviderRegistry.instance.registrations) {
         final enabled = active.contains(registration.id) ? 'yes' : 'no';
-        final provider = registration.factory();
+        ServiceProvider provider;
+        try {
+          provider = registration.factory();
+        } on ProviderConfigException catch (error) {
+          final message =
+              'Duplicate driver registration detected while loading provider '
+              '"${registration.id}". ${error.message}\n'
+              'Unregister the existing driver before registering a replacement, '
+              'then re-run this command.';
+          throw UsageException(message, '');
+        }
         final description = registration.description.isNotEmpty
             ? registration.description
             : provider.describe();

@@ -9,6 +9,7 @@ import 'package:routed/src/storage/cloud_storage_driver.dart';
 import 'package:routed/src/storage/local_storage_driver.dart';
 import 'package:routed/src/storage/storage_drivers.dart';
 import 'package:routed/src/storage/storage_manager.dart';
+import 'package:routed/src/engine/storage_defaults.dart';
 import 'package:storage_fs/storage_fs.dart' as storage_fs;
 
 /// Provides storage disk configuration (local file systems, etc.).
@@ -107,6 +108,8 @@ class StorageServiceProvider extends ServiceProvider
 
     if (container.has<StorageManager>()) {
       _managedManager = null;
+      final existing = container.get<StorageManager>();
+      _registerStorageDefaults(container, existing);
       return;
     }
 
@@ -136,6 +139,7 @@ class StorageServiceProvider extends ServiceProvider
     }
 
     container.instance<StorageManager>(manager);
+    _registerStorageDefaults(container, manager);
   }
 
   @override
@@ -178,6 +182,7 @@ class StorageServiceProvider extends ServiceProvider
         cloudDisk: null,
         disks: facadeDisks,
       );
+      _registerStorageDefaults(container, manager);
       return;
     }
     if (storageNode is! Map && storageNode is! Config) {
@@ -244,6 +249,7 @@ class StorageServiceProvider extends ServiceProvider
       cloudDisk: cloudDisk,
       disks: facadeDisks,
     );
+    _registerStorageDefaults(container, manager);
   }
 
   Map<String, dynamic> _registerDisk(
@@ -300,6 +306,11 @@ class StorageServiceProvider extends ServiceProvider
     }
 
     return sanitized;
+  }
+
+  void _registerStorageDefaults(Container container, StorageManager manager) {
+    final defaults = StorageDefaults.fromManager(manager);
+    container.instance<StorageDefaults>(defaults);
   }
 
   MapEntry<String, Map<String, dynamic>>? _registerDefaultDisk(

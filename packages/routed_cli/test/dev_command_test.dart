@@ -19,7 +19,7 @@ void main() {
     late _RecordingLogger logger;
     late _FakeDevServer fakeServer;
 
-    void _writeFile(String relative, String contents) {
+    void writeFile(String relative, String contents) {
       final file = memoryFs.file(p.join(projectRoot.path, relative));
       file.parent.createSync(recursive: true);
       file.writeAsStringSync(contents);
@@ -31,8 +31,8 @@ void main() {
         ..createSync(recursive: true);
       memoryFs.currentDirectory = projectRoot;
 
-      _writeFile('pubspec.yaml', 'name: dev_sample\n');
-      _writeFile('bin/server.dart', _sampleServer);
+      writeFile('pubspec.yaml', 'name: dev_sample\n');
+      writeFile('bin/server.dart', _sampleServer);
 
       fakeServer = _FakeDevServer();
       logger = _RecordingLogger();

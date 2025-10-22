@@ -24,7 +24,7 @@ void main() async {
         'instructions': 'Do something',
         'prepTime': 10,
         'cookTime': 20,
-        'category': 'dinner'
+        'category': 'dinner',
       }),
     );
     print('Status: ${response.statusCode}');
@@ -47,7 +47,7 @@ void main() async {
         'instructions': 'Do something else',
         'prepTime': 15,
         'cookTime': 25,
-        'category': 'lunch'
+        'category': 'lunch',
       }),
     );
     print('Status: ${response.statusCode}');

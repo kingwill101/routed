@@ -35,7 +35,11 @@ final engine = Engine(
 );
 ```
 
-`package:routed/middlewares.dart` includes helpers such as `timeoutMiddleware`, `basicAuth`, and `requestTrackerMiddleware`.
+```dart title="Import built-in middleware"
+import 'package:routed/middleware.dart';
+```
+
+The barrel exports helpers such as `timeoutMiddleware`, `basicAuth`, and `requestTrackerMiddleware`.
 
 Prefer configuration? Populate the manifest and let providers merge the stacks:
 

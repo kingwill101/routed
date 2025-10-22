@@ -131,6 +131,8 @@ reloads.
 
 > **Toolkit tip:** Routed re-exports the [`jose`](https://pub.dev/packages/jose) primitives from `package:routed/routed.dart`, so you can construct `JsonWebToken`, `JsonWebKey`, or signers/verifiers without adding an extra import.
 
+Use the `clock_skew` option (default `60s`) when your issuer and resource server clocks drift slightly. Tokens remain subject to the normal `exp`/`nbf` checks—values outside the tolerance still produce the same `token_expired` or `token_not_yet_valid` errors.
+
 ## OAuth2 Helpers
 
 ### Token exchange utilities
@@ -169,6 +171,7 @@ engine.addGlobalMiddleware(
       clientId: 'resource-server',
       clientSecret: 'secret',
       cacheTtl: const Duration(seconds: 30),
+      clockSkew: const Duration(seconds: 60),
     ),
     onValidated: (result, ctx) {
       ctx.request.setAttribute('user', result.raw['sub']);
@@ -181,6 +184,8 @@ The middleware stores the access token, introspection payload, and the resolved 
 (`oauthTokenAttribute`, `oauthClaimsAttribute`, `oauthScopeAttribute`). Non-active tokens return
 `401 Unauthorized` automatically. Results are cached for the configured TTL to avoid hammering the
 authorization server.
+
+`clockSkew` mirrors the JWT helper: responses whose `exp`/`nbf` fields fall within the configured tolerance are accepted, while anything outside the window still yields a `401` with a descriptive reason.
 
 ### Manifest configuration
 
@@ -207,6 +212,7 @@ auth:
       client_secret: secret
       token_type_hint: access_token
       cache_ttl: 30s
+      clock_skew: 60s
 ```
 
 Requests validated through the manifest-driven middleware expose the same request attributes as the
@@ -302,7 +308,59 @@ auth:
 
 `requireRoles` defaults to an "all roles" match; set `roles_any` (or `type: roles` plus `mode: any`)
 when any of the listed roles should pass. Guards run before handlers—if they return `GuardResult.deny`
-the middleware short-circuits with the provided `Response` or a default `403 Forbidden`.
+the middleware short-circuits with the provided `Response` or a default `403 Forbidden`. When a
+remember-me token fails validation, the session middleware removes it, issues an expired cookie, and
+lets `requireAuthenticated` challenge the client with `WWW-Authenticate: Bearer realm="..."`.
+
+### Authorization Gates (Haigate)
+
+For action-specific checks, Haigate offers a lightweight gate registry inspired by Laravel's Gate API.
+Register abilities once, then enforce them declaratively via middleware or imperatively inside a
+handler:
+
+```dart title="Registering and enforcing a gate"
+Haigate.register('publish-post', (evaluation) {
+  final principal = evaluation.principal;
+  if (principal == null) return false; // guests prohibited
+  return principal.hasRole('publisher');
+});
+
+router.get(
+  '/posts/publish',
+  (ctx) async {
+    await Haigate.authorize('publish-post', ctx: ctx);
+    return ctx.string('published');
+  },
+  middlewares: [Haigate.middleware(['publish-post'])],
+);
+```
+
+Haigate observers receive every evaluation (ability, principal, allow/deny) so you can plug in audit
+logging or analytics without wrapping handlers.
+
+#### Config-driven abilities
+
+Enable Haigate via `auth.features.haigate.enabled` and declare abilities under `auth.gates`. The
+provider builds matching middleware IDs (`routed.auth.gate.<ability>`) for manifest-driven stacks.
+
+```yaml title="config/auth.yaml"
+auth:
+  features:
+    haigate: { enabled: true }
+  gates:
+    defaults:
+      denied_status: 401
+      denied_message: Gate denied
+    abilities:
+      publish-post:
+        roles: ['publisher']
+      manage-drafts:
+        type: authenticated
+```
+
+With that config you can reference `MiddlewareRef.of('routed.auth.gate.publish-post')` inside route
+definitions, and Haigate will reuse the defaults for denial responses. Declarative abilities support
+`roles`/`roles_any`, `authenticated`, and `guest` types plus an `allow_guest` override.
 
 ## IP Allow/Deny Lists
 

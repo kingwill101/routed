@@ -1,84 +1,187 @@
 ---
-title: Session-backed Login
-description: Cookie sessions with flash messages and validation
+title: Session Auth & Guards
+description: Session-backed login with remember-me tokens and declarative guards
 sidebar_position: 2
 ---
 
-# Session-backed Login
+# Session Auth & Guards
+
+Session-backed auth in Routed combines three pieces:
+
+- `SessionAuthService` keeps the principal in the session (with optional remember-me cookies).
+- `GuardRegistry` provides coarse policies like “authenticated” or “has roles”.
+- **Haigate** adds Laravel-style gates for ability-level checks (`publish-post`, `approve-expense`, …).
+
+The snippet below shows them working together so you can drop the pattern into your app.
 
 ```dart
+import 'dart:convert';
 import 'dart:io';
+
 import 'package:routed/routed.dart';
 
-Future<void> main() async {
-  final engine = Engine(
-    options: [
-      withSessionConfig(SessionConfig.cookie(
-        appKey: 'replace-with-secret',
-        cookieName: 'app_session',
-        maxAge: const Duration(hours: 2),
-      )),
-    ],
-  );
+const _appKey =
+    'base64:MTIzNDU2Nzg5MDEyMzQ1Njc4OTAxMjM0NTY3ODkwMTIzNDU2Nzg5MDEyMzQ1Ng==';
 
-  engine.get('/login', (ctx) async {
-    final message = ctx.hasFlashMessages()
-        ? ctx.getFlashMessages().cast<String>().join('\n')
-        : null;
-
-    return ctx.html('<h1>Login</h1><p>{{ message }}</p>', data: {
-      'message': message ?? '',
-    });
-  });
-
-  engine.post('/login', (ctx) async {
-    await ctx.validate({
-      'email': 'required|email',
-      'password': 'required|min:8',
-    });
-
-    final data = <String, dynamic>{};
-    await ctx.bindJSON(data);
-
-    final user = await _authenticate(data['email'], data['password']);
-    if (user == null) {
-      ctx.flash('Invalid credentials', 'error');
-      return ctx.redirect('/login', statusCode: HttpStatus.found);
-    }
-
-    ctx.setSession('user_id', user['id']);
-    ctx.flash('Welcome back ${user['name']}!', 'success');
-    return ctx.redirect('/dashboard', statusCode: HttpStatus.found);
-  });
-
-  engine.get('/dashboard', (ctx) {
-    if (!ctx.hasSession('user_id')) {
-      ctx.flash('Please sign in first', 'error');
-      return ctx.redirect('/login', statusCode: HttpStatus.found);
-    }
-
-    final userId = ctx.getSession<int>('user_id');
-    final user = _users[userId];
-    return ctx.json({'message': 'Hello ${user?['name']}' });
-  });
-
-  await engine.serve(port: 8080);
-}
-
-Future<Map<String, dynamic>?> _authenticate(String email, String password) async {
-  final match = _users.values.firstWhere(
-    (u) => u['email'] == email && u['password'] == password,
-    orElse: () => <String, dynamic>{},
-  );
-  return match.isEmpty ? null : match;
-}
-
-final _users = <int, Map<String, dynamic>>{
-  1: {'id': 1, 'name': 'Taylor', 'email': 'taylor@example.com', 'password': 'password123'},
+final users = <String, Map<String, Object?>>{
+  'taylor': {
+    'password': 'password123',
+    'roles': ['admin'],
+    'name': 'Taylor',
+  },
+  'sasha': {
+    'password': 'password123',
+    'roles': ['support'],
+    'name': 'Sasha',
+  },
 };
 ```
 
-- `withSessionConfig` inserts the session middleware so helpers like `ctx.setSession` work.
-- `withSessionConfig` inserts the session middleware so helpers like `ctx.setSession` work. Alternatively, add a `session.config` section to `config/http.yaml` (see [Sessions](/docs/routed/state/sessions)) and run `dart run routed_cli provider:list --config` to verify the provider picked up your defaults.
-- Flash messages are read on the next request via `ctx.getFlashMessages()`.
-- Validation errors throw a `ValidationError`, so make sure a global error handler or middleware converts them into JSON responses during tests.
+## 1. Configure the engine
+
+```dart
+final engine = Engine(
+  config: EngineConfig(
+    security: const EngineSecurityFeatures(csrfProtection: false),
+  ),
+  options: [
+    withSessionConfig(
+      SessionConfig.cookie(
+        appKey: _appKey,
+        cookieName: 'example_session',
+      ),
+    ),
+  ],
+);
+
+engine.addGlobalMiddleware(SessionAuth.sessionAuthMiddleware());
+```
+
+- `withSessionConfig` enables cookie sessions so `ctx.session` and `SessionAuth` work.
+- The global middleware hydrates principals on every request and rotates remember tokens.
+
+## 2. Register guards and gates
+
+```dart
+SessionAuth.configure(rememberStore: InMemoryRememberTokenStore());
+
+GuardRegistry.instance
+  ..register('authenticated', requireAuthenticated(realm: 'Example App'))
+  ..register('admin', requireRoles(['admin']))
+  ..register('support-any', requireRoles(['support', 'editor'], any: true));
+
+Haigate.register('reports.publish', (evaluation) {
+  final principal = evaluation.principal;
+  if (principal == null) return false;
+  return principal.hasRole('admin') || principal.hasRole('publisher');
+});
+```
+
+- Guards handle broad route policies; gates focus on individual abilities and receive the full context + principal.
+
+## 3. Build routes
+
+```dart
+engine.post('/login', (ctx) async {
+  final payload =
+      jsonDecode(await ctx.request.body()) as Map<String, Object?>;
+
+  final username = payload['username']?.toString() ?? '';
+  final password = payload['password']?.toString() ?? '';
+  final remember = payload['remember'] == true;
+
+  final record = users[username];
+  if (record == null || record['password'] != password) {
+    ctx.response
+      ..statusCode = HttpStatus.unauthorized
+      ..write('Invalid credentials');
+    return ctx.response;
+  }
+
+  final principal = AuthPrincipal(
+    id: username,
+    roles: List<String>.from(record['roles'] as List),
+    attributes: {'name': record['name']},
+  );
+
+  await SessionAuth.login(ctx, principal, rememberMe: remember);
+  return ctx.json({'id': principal.id, 'roles': principal.roles});
+});
+
+engine.get(
+  '/whoami',
+  (ctx) {
+    final principal = SessionAuth.current(ctx)!;
+    return ctx.json({
+      'id': principal.id,
+      'roles': principal.roles,
+      'attributes': principal.attributes,
+    });
+  },
+  middlewares: [guardMiddleware(['authenticated'])],
+);
+
+engine.get(
+  '/admin',
+  (ctx) => ctx.string('Welcome ${SessionAuth.current(ctx)!.id}'),
+  middlewares: [guardMiddleware(['authenticated', 'admin'])],
+);
+
+engine.post(
+  '/reports/publish',
+  (ctx) async {
+    await Haigate.authorize('reports.publish', ctx: ctx);
+    return ctx.string('published');
+  },
+  middlewares: [Haigate.middleware(['reports.publish'])],
+);
+
+engine.post('/logout', (ctx) async {
+  await SessionAuth.logout(ctx);
+  ctx.destroySession();
+  return ctx.json({'message': 'Signed out'});
+});
+
+await engine.initialize();
+await engine.serve(host: 'localhost', port: 8080);
+```
+
+- Guards short-circuit with their response (or `403`).
+- Gates work both imperatively (`Haigate.authorize`) and declaratively (`Haigate.middleware([...])`) so manifests stay tidy while handlers can still run custom logic before authorization.
+
+## 4. Configuration reference
+
+```yaml title="config/http.yaml"
+auth:
+  session:
+    remember_me:
+      cookie: remember_token
+      duration: 45d
+
+  guards:
+    staff-any:
+      type: roles_any
+      roles: ['support', 'editor']
+
+  features:
+    haigate: { enabled: true }
+  gates:
+    defaults:
+      denied_status: 401
+      denied_message: Gate denied
+    abilities:
+      reports.publish:
+        roles: ['publisher']
+```
+
+- `auth.session.remember_me` houses cookie/timing defaults.
+- `auth.guards` mirrors imperative guard registration for manifest-driven setups.
+- `auth.features.haigate.enabled` toggles provider wiring; entries under `auth.gates.abilities` become middleware IDs (`routed.auth.gate.reports.publish`).
+
+## 5. Migration checklist
+
+1. Replace direct session reads/writes with `SessionAuth.login`, `SessionAuth.current`, and `SessionAuth.logout`.
+2. Attach `SessionAuth.sessionAuthMiddleware()` globally so every request hydrates the principal.
+3. Move coarse checks into guards and register them once (or declare them in config).
+4. Add gates for per-action authorization and reference them through middleware or `Haigate.authorize`.
+5. Provide a durable `RememberTokenStore` implementation if remember-me must survive restarts (the in-memory default is for tests only).

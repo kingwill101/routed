@@ -1,6 +1,5 @@
 import 'dart:async';
 import 'package:args/command_runner.dart';
-import 'package:file/file.dart' as fs;
 import 'package:path/path.dart' as p;
 import 'package:routed_cli/src/args/base_command.dart';
 

@@ -8,6 +8,8 @@ import 'package:routed/src/engine/config.dart' show SessionConfig;
 import 'package:routed/src/engine/middleware_registry.dart';
 import 'package:routed/src/provider/config_utils.dart';
 import 'package:routed/src/provider/provider.dart';
+import 'package:routed/src/engine/storage_defaults.dart';
+import 'package:routed/src/engine/storage_paths.dart';
 import 'package:routed/src/sessions/cache_store.dart';
 import 'package:routed/src/sessions/memory_store.dart';
 import 'package:routed/src/sessions/middleware.dart';
@@ -49,6 +51,7 @@ class SessionDriverBuilderContext {
     required this.keys,
     this.lottery,
     this.cacheManager,
+    this.storageDefaults,
   });
 
   /// Application service container.
@@ -92,6 +95,9 @@ class SessionDriverBuilderContext {
 
   /// Lazily-injected cache manager (may be `null` for non cache drivers).
   final CacheManager? cacheManager;
+
+  /// Storage defaults reported by the storage provider.
+  final StorageDefaults? storageDefaults;
 
   /// Returns the cache [cache.Repository] identified by [name] or throws
   /// [ProviderConfigException] if the cache manager is absent.
@@ -237,10 +243,7 @@ class SessionServiceProvider extends ServiceProvider
     'cookie',
     'file',
     'array',
-    'database',
     'redis',
-    'memcached',
-    'dynamodb',
     'cache',
   ];
 
@@ -347,7 +350,7 @@ class SessionServiceProvider extends ServiceProvider
         path: 'session.files',
         type: 'string',
         description: 'Filesystem path used by file-based session drivers.',
-        defaultValue: 'storage/framework/sessions',
+        defaultValue: null,
       ),
       const ConfigDocEntry(
         path: 'session.lottery',
@@ -411,13 +414,7 @@ class SessionServiceProvider extends ServiceProvider
       documentation: _arrayDriverDocs,
       overrideExisting: false,
     );
-    for (final driver in const [
-      'database',
-      'redis',
-      'memcached',
-      'dynamodb',
-      'cache',
-    ]) {
+    for (final driver in const ['redis', 'cache']) {
       registerDriver(
         driver,
         _buildCacheBackedDriver,
@@ -444,7 +441,7 @@ class SessionServiceProvider extends ServiceProvider
 
   static SessionConfig _buildFileDriver(SessionDriverBuilderContext context) {
     final raw = context.raw;
-    final storagePath =
+    final configuredPath =
         parseStringLike(
           raw['files'],
           context: 'session.files',
@@ -459,8 +456,12 @@ class SessionServiceProvider extends ServiceProvider
           coerceNonString: true,
           throwOnInvalid: false,
         ) ??
-        raw['path']?.toString() ??
-        'storage/framework/sessions';
+        raw['path']?.toString();
+
+    final storagePath =
+        (configuredPath != null && configuredPath.trim().isNotEmpty)
+        ? normalizeStoragePath(context.rootConfig, configuredPath)
+        : resolveFrameworkStoragePath(context.rootConfig, child: 'sessions');
 
     return SessionConfig.file(
       appKey: context.keys.first,
@@ -785,6 +786,9 @@ class SessionServiceProvider extends ServiceProvider
       lottery: lottery,
       cacheManager: container.has<CacheManager>()
           ? container.get<CacheManager>()
+          : null,
+      storageDefaults: container.has<StorageDefaults>()
+          ? container.get<StorageDefaults>()
           : null,
     );
 

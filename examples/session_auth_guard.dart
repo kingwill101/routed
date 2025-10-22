@@ -25,6 +25,12 @@ Future<void> main() async {
     ..register('authenticated', requireAuthenticated(realm: 'Example App'))
     ..register('admin-only', requireRoles(['admin']));
 
+  Haigate.register('reports.publish', (evaluation) {
+    final principal = evaluation.principal;
+    if (principal == null) return false;
+    return principal.hasRole('admin') || principal.hasRole('support');
+  });
+
   final engine = Engine(
     config: EngineConfig(
       security: const EngineSecurityFeatures(csrfProtection: false),
@@ -115,6 +121,14 @@ Future<void> main() async {
     },
     middlewares: [
       guardMiddleware(['authenticated', 'admin-only']),
+    ],
+  );
+
+  engine.post(
+    '/reports/publish',
+    (ctx) => ctx.json({'status': 'published'}),
+    middlewares: [
+      Haigate.middleware(['reports.publish']),
     ],
   );
 

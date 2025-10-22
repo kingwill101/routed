@@ -27,11 +27,64 @@ Map<String, Map<String, dynamic>> buildConfigDefaults() {
     });
   }
 
+  _applyDerivedDefaults(merged);
   return merged;
 }
 
 /// Generates YAML content for each configuration root, keyed by the config path
 /// (e.g. `config/app.yaml`).
+void _applyDerivedDefaults(Map<String, Map<String, dynamic>> defaultsByRoot) {
+  Map<String, dynamic> ensureMap(Map<String, dynamic> target, String key) {
+    final current = target[key];
+    if (current is Map<String, dynamic>) {
+      return current;
+    }
+    if (current is Map) {
+      final converted = _castToStringMap(current);
+      target[key] = converted;
+      return converted;
+    }
+    final created = <String, dynamic>{};
+    target[key] = created;
+    return created;
+  }
+
+  String? stringValue(Object? value) {
+    if (value == null) return null;
+    if (value is String) return value;
+    return value.toString();
+  }
+
+  final storage = defaultsByRoot.putIfAbsent(
+    'storage',
+    () => <String, dynamic>{},
+  );
+  final disks = ensureMap(storage, 'disks');
+  final local = ensureMap(disks, 'local');
+  final localRootValue = stringValue(local['root']) ?? 'storage/app';
+  final storageDefaults = StorageDefaults.fromLocalRoot(localRootValue);
+  local['root'] = storageDefaults.localDiskRoot;
+
+  final session = defaultsByRoot.putIfAbsent(
+    'session',
+    () => <String, dynamic>{},
+  );
+  session.putIfAbsent('driver', () => 'file');
+  session.putIfAbsent('files', () => storageDefaults.frameworkPath('sessions'));
+
+  final cache = defaultsByRoot.putIfAbsent('cache', () => <String, dynamic>{});
+  cache.putIfAbsent('default', () => 'file');
+  final stores = ensureMap(cache, 'stores');
+  final arrayStore = ensureMap(stores, 'array');
+  arrayStore.putIfAbsent('driver', () => 'array');
+  final fileStore = ensureMap(stores, 'file');
+  fileStore.putIfAbsent('driver', () => 'file');
+  final filePath = stringValue(fileStore['path']);
+  fileStore['path'] = (filePath != null && filePath.trim().isNotEmpty)
+      ? storageDefaults.resolve(filePath)
+      : storageDefaults.frameworkPath('cache');
+}
+
 Map<String, String> generateConfigFiles(
   Map<String, Map<String, dynamic>> defaultsByRoot,
   Map<String, List<ConfigDocEntry>> docsByRoot,
@@ -87,13 +140,13 @@ EnvConfig deriveEnvConfig(
   final commented = <String, String?>{};
   final seen = <String>{};
 
-  Iterable<ConfigDocEntry> _allDocs() sync* {
+  Iterable<ConfigDocEntry> allDocs() sync* {
     for (final entries in docsByRoot.values) {
       yield* entries;
     }
   }
 
-  for (final entry in _allDocs()) {
+  for (final entry in allDocs()) {
     final metadataValue = entry.metadata[configDocMetaInheritFromEnv];
     if (metadataValue == null) continue;
     final envKeys = _coerceEnvKeys(metadataValue);

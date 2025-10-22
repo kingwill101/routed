@@ -57,6 +57,64 @@ cd hello_world
 dart pub get
 ```
 
+Prefer a different starter? Choose a template:
+
+```
+# API focused skeleton
+dart run routed_cli create --name demo_api --template api
+
+# HTML-first server-rendered starter
+dart run routed_cli create --name demo_web --template web
+
+# Combined API + HTML hybrid
+dart run routed_cli create --name demo_fullstack --template fullstack
+```
+
+The `api` template adds sample REST routes and a test harness. The `web`
+template renders Liquid files from the `templates/` directory and ships static
+assets under `public/`. The `fullstack` starter combines both.
+
+### Project Commands
+
+Each scaffold ships with `lib/commands.dart`, exposing an empty
+`buildProjectCommands` hook. Populate it with project-specific automation and
+the CLI will make those commands available automatically:
+
+```dart
+import 'dart:async';
+
+import 'package:args/command_runner.dart';
+
+class QueueWorkCommand extends Command<void> {
+  QueueWorkCommand() {
+    argParser.addOption('queue', defaultsTo: 'default');
+  }
+
+  @override
+  String get name => 'queue:work';
+
+  @override
+  String get description => 'Run the queue worker.';
+
+  @override
+  Future<void> run() async {
+    final queue = argResults?.option('queue') ?? 'default';
+    // TODO: enqueue work, start isolates, etc.
+    print('Working queue $queue');
+  }
+}
+
+FutureOr<List<Command<void>>> buildProjectCommands() => [QueueWorkCommand()];
+```
+
+Running `dart run routed_cli queue:work --queue emails` now boots the project
+command. If a project command reuses a built-in name, the CLI exits with a
+conflict so you can pick a new identifier.
+
+> Tip: add `args` to your `pubspec.yaml` so project commands can extend
+> `Command<void>` directly.
+
+
 The scaffold provides `bin/server.dart`, config files, and a starter README. Any existing project with a
 `bin/server.dart` entrypoint works too.
 
@@ -202,7 +260,7 @@ If your app does not parse these flags, the values are simply ignored.
     - Friendly errors with suggested fixes (e.g., missing entry file, invalid flags).
 
 - Generators:
-- `create` and `new` to scaffold apps, routes, middleware, and configs (first pass lands with the basic app template).
+- `create` and `new` to scaffold apps, routes, middleware, and configs (with basic, api, web, and fullstack starters).
 
 - Introspection:
     - `list` to enumerate routes.

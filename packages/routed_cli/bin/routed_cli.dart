@@ -1,11 +1,14 @@
 import 'dart:io';
 
-import 'package:args/command_runner.dart';
+import 'package:args/command_runner.dart' show UsageException;
+import 'package:routed_cli/routed_cli.dart' as rc;
 import 'package:routed_cli/src/args/commands.dart' as cmds;
 import 'package:routed_cli/src/args/runner.dart' as cli;
+import 'package:routed_cli/src/project/commands_loader.dart';
 
 Future<void> main(List<String> args) async {
-  final runner = cli.RoutedCommandRunner()
+  final logger = rc.CliLogger();
+  final runner = cli.RoutedCommandRunner(logger: logger)
     ..register([
       cmds.CreateCommand(),
       cmds.DevCommand(),
@@ -22,7 +25,14 @@ Future<void> main(List<String> args) async {
       cmds.ProviderDriverCommand(),
     ]);
 
+  final commandsLoader = ProjectCommandsLoader(logger: logger);
+
   try {
+    final projectCommands = await commandsLoader.loadProjectCommands(
+      runner.usage,
+    );
+    commandsLoader.registerWithRunner(runner, projectCommands, runner.usage);
+
     await runner.run(args);
   } on UsageException catch (e) {
     stderr.writeln(e);

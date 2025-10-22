@@ -8,6 +8,10 @@ sidebar_position: 4
 
 Routed ships registries for every subsystem that supports pluggable drivers. The framework registers its built-ins through these registries, which means third-party drivers automatically exercise the same code paths. Use them to add new backends, override existing behaviour, or document per-driver configuration.
 
+```dart title="Import driver registries"
+import 'package:routed/drivers.dart';
+```
+
 ## Storage
 
 ```dart
