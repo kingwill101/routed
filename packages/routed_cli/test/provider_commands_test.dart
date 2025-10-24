@@ -133,6 +133,20 @@ void main() {
       final contents = read(driverPath);
       expect(contents, contains('registerMemcachedCacheDriver'));
       expect(contents, contains('CacheManager.registerDriver'));
+      expect(contents, contains('configBuilder:'));
+      expect(contents, contains('ConfigurationException'));
+    });
+
+    test('provider:driver scaffolds session driver starter', () async {
+      await _run(runner, ['provider:driver', '--type', 'session', 'mongo']);
+
+      final driverPath = 'lib/drivers/session/mongo_session_driver.dart';
+      expect(exists(driverPath), isTrue);
+      final contents = read(driverPath);
+      expect(contents, contains('registerMongoSessionDriver'));
+      expect(contents, contains('SessionServiceProvider.registerDriver'));
+      expect(contents, contains('ProviderConfigException'));
+      expect(contents, contains('implements Store'));
     });
   });
 }

@@ -64,6 +64,17 @@ void main() {
         read('config/cache.yaml'),
         contains('# Cache configuration quick reference:'),
       );
+      final cacheYaml = read('config/cache.yaml');
+      expect(
+        cacheYaml,
+        contains(
+          'Default: Computed from storage defaults (storage/framework/cache).',
+        ),
+      );
+      expect(
+        cacheYaml,
+        contains('Validation: Must resolve to a non-empty directory path.'),
+      );
       expect(
         read('config/storage.yaml'),
         contains('# Storage configuration quick reference:'),
@@ -75,6 +86,17 @@ void main() {
       expect(
         read('config/logging.yaml'),
         contains('# Logging configuration quick reference:'),
+      );
+      final sessionYaml = read('config/session.yaml');
+      expect(
+        sessionYaml,
+        contains(
+          'Default: Computed from storage defaults (storage/framework/sessions).',
+        ),
+      );
+      expect(
+        sessionYaml,
+        contains('Validation: Must match a configured cache store name.'),
       );
 
       final env = read('.env');

@@ -654,7 +654,11 @@ class SessionServiceProvider extends ServiceProvider
         description:
             'Directory path used to persist session files. Defaults to '
             'storage/framework/sessions based on your storage configuration.',
-        defaultValue: 'computed at runtime',
+        metadata: const {
+          'default_note':
+              'Computed from storage defaults (storage/framework/sessions).',
+          'validation': 'Must resolve to an accessible directory path.',
+        },
       ),
       ConfigDocEntry(
         path: context.path('lottery'),
@@ -662,6 +666,7 @@ class SessionServiceProvider extends ServiceProvider
         description:
             'Cleanup lottery odds for pruning stale sessions (e.g., [2, 100]).',
         defaultValue: const [2, 100],
+        metadata: const {'validation': 'Provide two integers [wins, total].'},
       ),
     ];
   }
@@ -680,6 +685,9 @@ class SessionServiceProvider extends ServiceProvider
         description:
             'Cache store name used when persisting sessions via cache-backed drivers. '
             'Defaults to the driver name when omitted.',
+        metadata: const {
+          'validation': 'Must match a configured cache store name.',
+        },
       ),
     ];
   }
