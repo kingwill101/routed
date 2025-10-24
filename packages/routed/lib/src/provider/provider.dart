@@ -96,6 +96,9 @@ class ConfigDefaults {
   static Map<String, dynamic> _buildValuesFromDocs(List<ConfigDocEntry> docs) {
     final result = <String, dynamic>{};
     for (final entry in docs) {
+      if (entry.path.contains('*')) {
+        continue;
+      }
       if (entry.defaultValue == null) continue;
       _assignByPath(result, entry.path, deepCopyValue(entry.defaultValue));
     }

@@ -55,6 +55,20 @@ String prependConfigDocComments(
     if (entry.description != null && entry.description!.isNotEmpty) {
       segments.add(entry.description!);
     }
+    final defaultValue = entry.defaultValue;
+    final defaultNote = entry.metadata['default_note'];
+    if (defaultValue != null) {
+      segments.add('Default: ${_formatDefault(defaultValue)}.');
+    } else if (defaultNote is String && defaultNote.isNotEmpty) {
+      segments.add('Default: ${_ensureTrailingPeriod(defaultNote.trim())}');
+    }
+    if (entry.metadata['required'] == true) {
+      segments.add('Required.');
+    }
+    final validation = entry.metadata['validation'];
+    if (validation is String && validation.trim().isNotEmpty) {
+      segments.add('Validation: ${_ensureTrailingPeriod(validation.trim())}');
+    }
     final inheritFromEnv = entry.metadata[configDocMetaInheritFromEnv];
     if (inheritFromEnv is String && inheritFromEnv.isNotEmpty) {
       segments.add('Env override: $inheritFromEnv');
@@ -122,6 +136,33 @@ String _titleCase(String input) {
   if (input.isEmpty) return input;
   if (input.length == 1) return input.toUpperCase();
   return '${input[0].toUpperCase()}${input.substring(1)}';
+}
+
+String _formatDefault(Object value) {
+  if (value is String) {
+    if (value.isEmpty) {
+      return '(empty)';
+    }
+    if (value.contains(' ')) {
+      return '"$value"';
+    }
+    return value;
+  }
+  if (value is num || value is bool) {
+    return value.toString();
+  }
+  if (value is Iterable || value is Map) {
+    return jsonEncode(value);
+  }
+  return value.toString();
+}
+
+String _ensureTrailingPeriod(String value) {
+  if (value.isEmpty) {
+    return value;
+  }
+  final trimmed = value.trimRight();
+  return trimmed.endsWith('.') ? trimmed : '$trimmed.';
 }
 
 ConfigDocEntry _mergeDocEntries(

@@ -572,7 +572,11 @@ class CacheManager {
         description:
             'Directory where cache files are stored. If omitted, defaults to '
             'storage/framework/cache based on your storage configuration.',
-        defaultValue: 'computed at runtime',
+        metadata: const {
+          'default_note':
+              'Computed from storage defaults (storage/framework/cache).',
+          'validation': 'Must resolve to a non-empty directory path.',
+        },
       ),
       ConfigDocEntry(
         path: context.path('permission'),
@@ -580,7 +584,9 @@ class CacheManager {
         description:
             'Optional file permission mask (octal or decimal) applied to '
             'created cache files.',
-        defaultValue: null,
+        metadata: const {
+          'validation': 'Provide octal (e.g. 0644) or decimal file mode.',
+        },
       ),
     ];
   }
@@ -596,25 +602,32 @@ class CacheManager {
           description:
               'Optional Redis connection URL. When provided it overrides host '
               'and port (e.g. redis://localhost:6379/0).',
-          defaultValue: null,
+          metadata: const {
+            'validation': 'Must be a valid redis:// URL including host.',
+          },
         ),
         ConfigDocEntry(
           path: context.path('host'),
           type: 'string',
           description: 'Redis host when url is not provided.',
           defaultValue: '127.0.0.1',
+          metadata: const {'default_note': 'Ignored when url is provided.'},
         ),
         ConfigDocEntry(
           path: context.path('port'),
           type: 'int',
           description: 'Redis port when url is not provided.',
           defaultValue: 6379,
+          metadata: const {
+            'default_note': 'Ignored when url is provided.',
+            'validation': 'Must be an integer.',
+          },
         ),
         ConfigDocEntry(
           path: context.path('password'),
           type: 'string',
           description: 'Optional Redis password.',
-          defaultValue: null,
+          metadata: const {'default_note': 'Optional; omit for no auth.'},
         ),
         ConfigDocEntry(
           path: context.path('db'),
@@ -622,6 +635,10 @@ class CacheManager {
           description:
               'Database index selected after connecting (aliases: database).',
           defaultValue: 0,
+          metadata: const {
+            'default_note': 'Overrides apply when `database` or `db` is set.',
+            'validation': 'Must be an integer.',
+          },
         ),
       ];
 
