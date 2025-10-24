@@ -50,56 +50,112 @@ StorageServiceProvider.registerDriver(
 CacheManager.registerDriver(
   'redis',
   () => RedisStoreFactory(),
+  configBuilder: (context) {
+    final config = Map<String, dynamic>.from(context.userConfig);
+
+    // Provide defaults the user can override later.
+    final defaults = context.get<StorageDefaults>();
+    config['host'] ??= '127.0.0.1';
+    config['port'] = int.tryParse('${config['port'] ?? ''}') ?? 6379;
+    config['url'] ??= 'redis://${config['host']}:${config['port']}/0';
+    if (defaults != null && config['cache_dir'] == null) {
+      config['cache_dir'] = defaults.frameworkPath('cache/redis');
+    }
+    return config;
+  },
+  validator: (config, driver) {
+    final url = Uri.tryParse(config['url'] as String? ?? '');
+    if (url == null || url.host.isEmpty) {
+      throw ConfigurationException(
+        'Cache driver "$driver" requires `url` to include a host.',
+      );
+    }
+    if (config['db'] != null && config['db'] is! int) {
+      throw ConfigurationException(
+        'Cache driver "$driver" expects `db` to be an integer.',
+      );
+    }
+  },
+  requiresConfig: const ['url'],
   documentation: (ctx) => <ConfigDocEntry>[
     ConfigDocEntry(
-      path: ctx.path('endpoint'),
+      path: ctx.path('url'),
       type: 'string',
-      description: 'Redis connection string.',
+      description: 'Redis connection URL (e.g. redis://localhost:6379/0).',
+      metadata: const {
+        'validation': 'Must include host information and an optional database.',
+      },
     ),
     ConfigDocEntry(
-      path: ctx.path('prefix'),
+      path: ctx.path('cache_dir'),
       type: 'string',
-      description: 'Optional key prefix for cache entries.',
+      description: 'Directory used for Redis driver cache files.',
+      metadata: const {
+        'default_note': 'Computed from StorageDefaults when omitted.',
+      },
     ),
   ],
 );
 ```
 
 - **Factories:** Registration wires builders that create `StoreFactory` instances; the provider caches them so every manager sees the same drivers.
-- **Docs:** `CacheServiceProvider` automatically appends the documentation entries under `cache.stores.*`.
+- **Config builders:** `DriverConfigContext` exposes the raw configuration, driver name, and a `get<T>()` helper for container lookups so you can compute defaults based on services such as `StorageDefaults`.
+- **Validation:** Declare `requiresConfig` for mandatory keys and throw `ConfigurationException` inside `validator` for richer diagnostics.
+- **Docs:** `CacheServiceProvider` merges documentation entries under `cache.stores.*` and the CLI surfaces metadata like `default_note`, `validation`, and `required` when generating config files.
 
 ## Sessions
 
 ```dart
 SessionServiceProvider.registerDriver(
   'dropbox',
-  (context) => SessionConfig(
-    cookieName: context.cookieName,
-    store: DropboxSessionStore(
-      token: context.raw['token'] as String,
-      root: context.raw['root']?.toString() ?? '/sessions',
-    ),
-    maxAge: context.lifetime,
-    defaultOptions: context.options,
-    expireOnClose: context.expireOnClose,
-  ),
+  (context) {
+    final root = context.raw['root']?.toString();
+    final resolvedRoot = (root == null || root.trim().isEmpty)
+        ? context.storageDefaults?.frameworkPath('sessions/dropbox')
+        : root;
+
+    return SessionConfig(
+      cookieName: context.cookieName,
+      store: DropboxSessionStore(
+        token: context.raw['token'] as String,
+        root: resolvedRoot ?? '/sessions',
+      ),
+      maxAge: context.lifetime,
+      defaultOptions: context.options,
+      expireOnClose: context.expireOnClose,
+    );
+  },
+  validator: (context) {
+    final token = context.raw['token'];
+    if (token is! String || token.trim().isEmpty) {
+      throw ProviderConfigException(
+        'Session driver "dropbox" requires a non-empty `token` value.',
+      );
+    }
+  },
+  requiresConfig: const ['token'],
   documentation: (ctx) => <ConfigDocEntry>[
     ConfigDocEntry(
       path: ctx.path('token'),
       type: 'string',
       description: 'API token used to authenticate Dropbox requests.',
+      metadata: const {'required': true},
     ),
     ConfigDocEntry(
       path: ctx.path('root'),
       type: 'string',
       description: 'Remote folder for storing session payloads.',
+      metadata: const {
+        'default_note': 'Defaults to storage/framework/sessions/dropbox.',
+      },
     ),
   ],
 );
 ```
 
-- **Cache-backed drivers:** Session builders receive a `SessionDriverBuilderContext` with the resolved cache manager and merged config.
-- **Documentation:** Entries are merged into the `session.*` docs so operators can discover extra keys.
+- **Context:** `SessionDriverBuilderContext` exposes the merged config, resolved cache manager, storage defaults, and container access so builders can derive paths or look up other services.
+- **Validation:** Throw `ProviderConfigException` inside the validator (or rely on `requiresConfig`) to surface actionable boot-time errors.
+- **Documentation:** Metadata follows the same conventions as cache drivers, ensuring CLI scaffolding and `provider:list --config` pick up default notes, validation hints, and required markers automatically.
 
 ## CLI scaffolding
 
@@ -108,9 +164,12 @@ Prefer a starter file? Use the CLI to scaffold the boilerplate and documentation
 ```bash
 routed provider:driver storage dropbox
 routed provider:driver --type cache redis
+routed provider:driver --type session dropbox
 ```
 
 The command writes a driver template under `lib/drivers/<type>/` and wires in the `registerDriver` call plus documentation callback so you can focus on the implementation details.
+
+Need a richer walkthrough? See [`examples/custom_drivers.dart`](../../../examples/custom_drivers.dart) for end-to-end storage, cache, and session samples that apply config builders, validators, and documentation metadata.
 
 ## Tips
 
