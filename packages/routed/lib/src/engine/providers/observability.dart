@@ -1,7 +1,7 @@
 import 'dart:async';
 import 'dart:io';
 
-import 'package:opentelemetry/api.dart' as otel;
+import 'package:dartastic_opentelemetry/dartastic_opentelemetry.dart' as dotel;
 import 'package:routed/src/container/container.dart';
 import 'package:routed/src/context/context.dart';
 import 'package:routed/src/contracts/contracts.dart' show Config;
@@ -210,7 +210,7 @@ class ObservabilityServiceProvider extends ServiceProvider
     final tracingConfig = _resolveTracingConfig(config);
     _tracing = enabled
         ? buildTracingService(tracingConfig)
-        : TracingService(enabled: false);
+        : TracingService.disabled();
     _tracingEnabled = enabled && _tracing.enabled;
 
     final metricsConfig = _resolveMetricsConfig(config);
@@ -303,40 +303,53 @@ class ObservabilityServiceProvider extends ServiceProvider
 
     final parentContext = _tracing.extractContext(headers);
     final routeLabel = _routeLabel(ctx);
-    final attributes = _tracing.attributesFor(
+    final spanAttributes = _tracing.attributesFor(
       method: request.method,
       route: routeLabel,
       uri: request.uri,
     );
+    final tracer = _tracing.tracer!;
 
-    return await otel.trace(
+    final span = tracer.startSpan(
       '${request.method} $routeLabel',
-      () async {
+      context: parentContext,
+      kind: dotel.SpanKind.server,
+      attributes: dotel.OTel.attributesFromList(spanAttributes),
+    );
+
+    try {
+      return await tracer.withSpanAsync(span, () async {
         try {
           final response = await next();
-          final span = otel.spanFromContext(otel.Context.current);
           final statusCode = ctx.response.statusCode;
-          span.setAttribute(
-            otel.Attribute.fromInt('http.status_code', statusCode),
+          span.addAttributes(
+            dotel.OTel.attributes([
+              dotel.OTel.attributeInt('http.status_code', statusCode),
+            ]),
           );
-          if (statusCode >= 500) {
-            span.setStatus(otel.StatusCode.error);
-          } else {
-            span.setStatus(otel.StatusCode.ok);
-          }
+          span.setStatus(
+            statusCode >= 500
+                ? dotel.SpanStatusCode.Error
+                : dotel.SpanStatusCode.Ok,
+          );
           return response;
         } catch (error, stackTrace) {
-          final span = otel.spanFromContext(otel.Context.current);
+          final statusCode = ctx.response.statusCode >= 400
+              ? ctx.response.statusCode
+              : 500;
+          span.addAttributes(
+            dotel.OTel.attributes([
+              dotel.OTel.attributeInt('http.status_code', statusCode),
+            ]),
+          );
           span.recordException(error, stackTrace: stackTrace);
-          span.setStatus(otel.StatusCode.error);
+          span.setStatus(dotel.SpanStatusCode.Error, error.toString());
           rethrow;
         }
-      },
-      context: parentContext,
-      tracer: _tracing.tracer,
-      spanKind: otel.SpanKind.server,
-      spanAttributes: attributes,
-    );
+      });
+    } finally {
+      span.end();
+    }
   }
 
   FutureOr<Response> _metricsMiddleware(EngineContext ctx, Next next) async {

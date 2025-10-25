@@ -14,6 +14,7 @@ Run any example with: `dart <filename>.dart`
 - **constraint_validation.dart** - Route parameter constraints
 - **cookie.dart** - Cookie handling basics
 - **cookie_handling.dart** - Advanced cookie management with attributes
+- **custom_drivers.dart** - Register storage, cache, and session drivers with config builders and validators
 - **engine_config.dart** - Engine configuration options (trailing slash, method not allowed, IP forwarding)
 - **engine_default_router.dart** - Registering routes directly on the engine with middleware
 - **engine_route.dart** - Routes with various parameter types (integer, double, slug, UUID, email, IP, string)
@@ -39,7 +40,7 @@ Run any example with: `dart <filename>.dart`
 - **template_engine_example.dart** - Template rendering (Jinja/Liquid)
 - **timeout_middleware_example.dart** - Request timeout handling
 - **validation.dart** - Request data validation rules
-- **validation_example.dart** - Advanced validation patterns- **view_shortcuts.dart** - Shows how to use `ctx.requireFound` and `ctx.fetchOr404` to raise 404s when data is missing
+- **validation_example.dart** - Advanced validation patterns
 
 ## Directory Examples
 
@@ -58,5 +59,4 @@ These examples require additional assets, configuration, or complex project stru
 - **view_engine/** - View engine integration with view templates
 - **websocket_chat/** - WebSocket chat application with public assets
 
-Each directory example contains its own README with specific setup instructions.- **view_shortcuts.dart** - Shows how to use `ctx.requireFound` and `ctx.fetchOr404` to raise 404s when data is missing
-- **view_shortcuts.dart** - Shows how to use `ctx.requireFound` and `ctx.fetchOr404` to raise 404s when data is missing
+Each directory example contains its own README with specific setup instructions.
