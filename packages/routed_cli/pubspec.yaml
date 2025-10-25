@@ -1,5 +1,5 @@
 name: routed_cli
-description: A sample command-line application.
+description: Command-line tooling for the Routed framework with project scaffolding and management commands.
 version: 0.1.0
 repository: https://github.com/kingwill101/routed/tree/master/packages/routed_cli
 resolution: workspace
