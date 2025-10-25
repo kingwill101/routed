@@ -23,6 +23,7 @@ Future<void> main(List<String> args) async {
       cmds.ProviderEnableCommand(),
       cmds.ProviderDisableCommand(),
       cmds.ProviderDriverCommand(),
+      cmds.StimulusInstallCommand(),
     ]);
 
   final commandsLoader = ProjectCommandsLoader(logger: logger);
