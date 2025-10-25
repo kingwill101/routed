@@ -1,5 +1,5 @@
 name: routed_testing
-description: A starting point for Dart libraries or applications.
+description: Routed-specific testing utilities that extend server_testing for integration tests.
 version: 0.1.0
 repository: https://github.com/kingwill101/routed/tree/master/packages/routed_testing
 

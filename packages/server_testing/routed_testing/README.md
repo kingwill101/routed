@@ -24,9 +24,8 @@ Add to your `pubspec.yaml`:
 
 ```yaml
 dev_dependencies:
-  routed_testing:
-    path: path_to_package/routed_testing
-  test: ^1.25.0
+routed_testing: ^0.1.0
+test: ^1.26.3
 ```
 
 ## Usage
@@ -203,8 +202,8 @@ The assertion utilities are designed to be extensible. Feel free to contribute a
 
 This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
 
-## Additional information
+## Support & Issues
 
-TODO: Tell users more about the package: where to find more information, how to 
-contribute to the package, how to file issues, what response they can expect 
-from the package authors, and more.
+- Report bugs or request features at the [GitHub issue tracker](https://github.com/kingwill101/routed/issues).
+- See the examples in the `example/` directory for quick starts.
+- Pull requests are welcome—please include tests for new behaviours.
