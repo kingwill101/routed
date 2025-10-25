@@ -60,7 +60,6 @@ void main() {
     late Field<String> nameField;
     late Field<String> emailField;
     late Field<int> ageField;
-    final defaultRenderer = DefaultTestRenderer();
 
     setUp(() {
       nameField = TestField<String>(

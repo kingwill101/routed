@@ -8,7 +8,6 @@ import 'package:routed_cli/src/args/runner.dart';
 import 'package:test/test.dart';
 import 'package:yaml/yaml.dart';
 
-@Tags(['serial'])
 void main() {
   group('CreateCommand', () {
     late MemoryFileSystem memoryFs;

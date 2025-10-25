@@ -33,7 +33,7 @@ void main() {
         workingDirectory: tempDir,
         scriptPath: p.join(tempDir.path, 'bin/missing.dart'),
         directoryWatcher: (_) => _FakeDirectoryWatcher(tempDir.path),
-        runProcess: (_, __, {String? workingDirectory}) async =>
+        runProcess: (executable, arguments, {String? workingDirectory}) async =>
             io.ProcessResult(0, 0, '', ''),
       );
 
@@ -84,8 +84,6 @@ void main() {
         hotReloadExpected: true,
         directoryWatcher: (_) => watcher,
         startProcess: startProcess,
-        runProcess: (_, __, {String? workingDirectory}) async =>
-            io.ProcessResult(0, 0, '', ''),
       );
 
       await runner.start(['--host', '127.0.0.1']);
@@ -157,7 +155,7 @@ void main() {
         hotReloadExpected: false,
         directoryWatcher: (_) => watcher,
         startProcess: startProcess,
-        runProcess: (_, __, {String? workingDirectory}) async =>
+        runProcess: (executable, arguments, {String? workingDirectory}) async =>
             io.ProcessResult(0, 0, '', ''),
       );
 
@@ -227,7 +225,7 @@ void main() {
         hotReloadExpected: true,
         directoryWatcher: (_) => watcher,
         startProcess: startProcess,
-        runProcess: (_, __, {String? workingDirectory}) async =>
+        runProcess: (executable, arguments, {String? workingDirectory}) async =>
             io.ProcessResult(0, 0, '', ''),
       );
 
@@ -277,7 +275,7 @@ void main() {
         hotReloadExpected: false,
         directoryWatcher: (_) => watcher,
         startProcess: startProcess,
-        runProcess: (_, __, {String? workingDirectory}) async =>
+        runProcess: (executable, arguments, {String? workingDirectory}) async =>
             io.ProcessResult(0, 0, '', ''),
       );
 

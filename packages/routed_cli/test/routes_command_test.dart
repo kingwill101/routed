@@ -10,7 +10,6 @@ import 'package:routed_cli/src/args/runner.dart';
 import 'package:routed_cli/src/engine/introspector.dart';
 import 'package:test/test.dart';
 
-@Tags(['serial'])
 void main() {
   group('RoutesCommand', () {
     late MemoryFileSystem memoryFs;
@@ -140,9 +139,7 @@ class _FakeManifestLoader extends ManifestLoader {
     required super.usage,
     required fs.FileSystem super.fileSystem,
     required this.result,
-  }) : super(
-         projectRoot: root,
-       );
+  }) : super(projectRoot: root);
 
   final ManifestLoadResult result;
 

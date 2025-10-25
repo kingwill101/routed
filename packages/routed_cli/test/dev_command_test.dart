@@ -10,7 +10,6 @@ import 'package:routed_cli/src/args/runner.dart';
 import 'package:routed_cli/src/dev/dev_server_runner.dart' as dev;
 import 'package:test/test.dart';
 
-@Tags(['serial'])
 void main() {
   group('DevCommand', () {
     late MemoryFileSystem memoryFs;

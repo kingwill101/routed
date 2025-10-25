@@ -49,15 +49,7 @@ class ConditionalRedirectView extends RedirectView {
 
   @override
   Future<String> getRedirectUrl() async {
-    // Example: Redirect to different pages based on authentication
-    // final isAuthenticated = await checkAuth();
-    final isAuthenticated = false; // Placeholder
-
-    if (isAuthenticated) {
-      return '/dashboard';
-    } else {
-      return '/login';
-    }
+    return '/login';
   }
 }
 

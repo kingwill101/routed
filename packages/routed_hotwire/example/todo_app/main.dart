@@ -110,10 +110,6 @@ Future<Response> _renderList(
     repository,
     selectedId: selectedId,
   );
-
-  if (ctx.turbo.isFrameRequest) {
-    return ctx.turboFrame(frameHtml);
-  }
   return ctx.turboHtml(frameHtml);
 }
 
@@ -123,10 +119,6 @@ Future<Response> _renderForm(EngineContext ctx) async {
     values: const {'title': '', 'notes': ''},
     errors: const [],
   );
-
-  if (ctx.turbo.isFrameRequest) {
-    return ctx.turboFrame(frameHtml);
-  }
   return ctx.turboHtml(frameHtml);
 }
 
@@ -137,10 +129,6 @@ Future<Response> _renderDetail(
   final id = int.tryParse('${ctx.params['id'] ?? ''}');
   final todo = id != null ? repository.find(id) : null;
   final frameHtml = await _renderDetailFrame(ctx, todo);
-
-  if (ctx.turbo.isFrameRequest) {
-    return ctx.turboFrame(frameHtml);
-  }
   return ctx.turboHtml(frameHtml);
 }
 
@@ -349,7 +337,7 @@ Future<String> _renderTemplate(
   Map<String, dynamic> data = const {},
 }) async {
   final engine = ctx.engine;
-  if (engine == null || engine.viewEngine == null) {
+  if (engine == null) {
     throw StateError('View engine not available for template rendering');
   }
   return engine.viewEngine.renderFile(templateName, data);

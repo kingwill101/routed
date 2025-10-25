@@ -310,11 +310,11 @@ extension StatefulPropertyTestingExtensions<T> on Generator<T> {
 /// final result = await counterRunner.run();
 /// expect(result.success, isTrue, reason: result.report);
 /// ```
-class StatefulPropertyRunner<Model, Command> {
-  final Generator<Command> commandGen;
+class StatefulPropertyRunner<Model, CommandType> {
+  final Generator<CommandType> commandGen;
   final Model Function() initialState;
   final bool Function(Model) invariant;
-  final Model Function(Model, Command) update;
+  final Model Function(Model, CommandType) update;
   final StatefulPropertyConfig config;
 
   /// Creates a new stateful property runner using the invariant-based approach.

@@ -107,10 +107,12 @@ class RoutedRequestHandler implements RequestHandler {
       shared: true,
     );
 
-    // Set up request handling
     _server!.listen((request) {
+      // ignore: unawaited_futures
       _engine.handleRequest(request);
     });
+
+    // ignore: invalid_use_of_internal_member
     _engine.attachServer(_server!);
 
     return _server!.port;

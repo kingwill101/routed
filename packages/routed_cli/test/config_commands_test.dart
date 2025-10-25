@@ -8,7 +8,6 @@ import 'package:routed_cli/src/args/commands/config.dart';
 import 'package:routed_cli/src/args/runner.dart';
 import 'package:test/test.dart';
 
-@Tags(['serial'])
 void main() {
   group('Config commands', () {
     late MemoryFileSystem memoryFs;
@@ -231,16 +230,16 @@ class _TestConfigInitCommand extends ConfigInitCommand {
 class _TestConfigPublishCommand extends ConfigPublishCommand {
   _TestConfigPublishCommand(
     this._rootProvider,
-    this._packageRootProvider,
+    this.packageRootProvider,
     MemoryFileSystem fs,
   ) : _fs = fs,
       super(
         fileSystem: fs,
-        packageResolver: (root, name) async => _packageRootProvider(),
+        packageResolver: (root, name) async => packageRootProvider(),
       );
 
   final fs.Directory Function() _rootProvider;
-  final fs.Directory Function() _packageRootProvider;
+  final fs.Directory Function() packageRootProvider;
   final MemoryFileSystem _fs;
 
   @override

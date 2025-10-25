@@ -85,12 +85,6 @@ class TestField<T> extends Field<T> {
 
 void main() {
   group('Form Error Rendering Tests', () {
-    late Renderer renderer;
-
-    setUp(() {
-      renderer = TestRenderer();
-    });
-
     test(
       'BoundField.renderErrors() returns empty string when no errors',
       () async {
