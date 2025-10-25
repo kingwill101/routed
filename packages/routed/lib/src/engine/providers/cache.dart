@@ -5,13 +5,9 @@ import 'package:routed/src/container/container.dart';
 import 'package:routed/src/contracts/contracts.dart' show Config;
 import 'package:routed/src/events/event_manager.dart';
 import 'package:routed/src/provider/provider.dart';
-import 'package:routed/src/engine/storage_defaults.dart';
 
 /// Provides cache infrastructure and default configuration hooks.
 class CacheServiceProvider extends ServiceProvider with ProvidesDefaultConfig {
-  static final Map<String, Map<String, dynamic> Function(StorageDefaults)>
-  _storageDefaultResolvers = {};
-
   CacheManager? _managedManager;
   bool _ownsManagedManager = false;
 

@@ -1,3 +1,5 @@
+// ignore_for_file: library_private_types_in_public_api
+
 import 'package:routed/src/cache/array_store_factory.dart';
 import 'package:routed/src/cache/file_store_factory.dart';
 import 'package:routed/src/cache/null_store_factory.dart';
@@ -337,11 +339,12 @@ class CacheManager {
       );
     }
 
-    final resolvedConfig = _container != null
+    final container = _container;
+    final resolvedConfig = container != null
         ? CacheDriverRegistry.instance.buildConfig(
             driver.toString(),
             config,
-            _container!,
+            container,
           )
         : config;
 

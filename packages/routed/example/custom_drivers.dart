@@ -1,4 +1,6 @@
-import 'package:routed/routed.dart' as routed;
+import 'package:routed/drivers.dart';
+import 'package:routed/providers.dart';
+import 'package:routed/routed.dart';
 import 'package:routed/session.dart' as session;
 
 /// Demonstrates how to register custom drivers for storage, cache, and session
@@ -17,21 +19,24 @@ void registerCustomDrivers() {
 const String archiveStorageDriver = 'archive';
 
 void registerArchiveStorageDriver() {
-  routed.StorageServiceProvider.registerDriver(
+  StorageServiceProvider.registerDriver(
     archiveStorageDriver,
-    (context) {
-      final root = context.configuration['root']?.toString();
+    (StorageDriverContext context) {
+      final root = context.configuration['root'];
+      final rootString = root is String ? root : root?.toString();
       final resolvedRoot =
-          (root == null || root.trim().isEmpty) ? 'storage/${context.diskName}.zip' : root;
+          (rootString == null || rootString.trim().isEmpty)
+              ? 'storage/${context.diskName}.zip'
+              : rootString;
 
       // Replace LocalStorageDisk with your own StorageDisk implementation.
-      return routed.LocalStorageDisk(
+      return LocalStorageDisk(
         root: resolvedRoot,
         fileSystem: context.manager.defaultFileSystem,
       );
     },
-    documentation: (ctx) => <routed.ConfigDocEntry>[
-      routed.ConfigDocEntry(
+    documentation: (StorageDriverDocContext ctx) => <ConfigDocEntry>[
+      ConfigDocEntry(
         path: ctx.path('root'),
         type: 'string',
         description: 'Archive path backing the $archiveStorageDriver disk.',
@@ -50,26 +55,27 @@ void registerArchiveStorageDriver() {
 const String filesystemCacheDriver = 'filesystem';
 
 void registerFilesystemCacheDriver() {
-  routed.CacheManager.registerDriver(
+  CacheManager.registerDriver(
     filesystemCacheDriver,
     () => FilesystemCacheStoreFactory(),
-    configBuilder: (context) {
+    configBuilder: (DriverConfigContext context) {
       final config = Map<String, dynamic>.from(context.userConfig);
-      config['cache_dir'] ??=
-          context.get<routed.StorageDefaults>()?.frameworkPath('cache/filesystem') ??
+      config['cache_dir'] ??= context
+              .get<StorageDefaults>()
+              ?.frameworkPath('cache/filesystem') ??
           'storage/framework/cache/filesystem';
       return config;
     },
     validator: (config, driver) {
       final directory = config['cache_dir'];
       if (directory is! String || directory.trim().isEmpty) {
-        throw routed.ConfigurationException(
+        throw ConfigurationException(
           'Cache driver "$driver" requires a non-empty `cache_dir` value.',
         );
       }
     },
-    documentation: (ctx) => <routed.ConfigDocEntry>[
-      routed.ConfigDocEntry(
+    documentation: (CacheDriverDocContext ctx) => <ConfigDocEntry>[
+      ConfigDocEntry(
         path: ctx.path('cache_dir'),
         type: 'string',
         description: 'Directory used to persist $filesystemCacheDriver cache entries.',
@@ -82,9 +88,9 @@ void registerFilesystemCacheDriver() {
   );
 }
 
-class FilesystemCacheStoreFactory extends routed.StoreFactory {
+class FilesystemCacheStoreFactory extends StoreFactory {
   @override
-  routed.Store create(Map<String, dynamic> config) {
+  Store create(Map<String, dynamic> config) {
     final directory = config['cache_dir'] as String;
     // TODO: Return your concrete Store implementation.
     throw UnimplementedError(
@@ -98,15 +104,16 @@ class FilesystemCacheStoreFactory extends routed.StoreFactory {
 // ---------------------------------------------------------------------------
 
 void registerDropboxSessionDriver() {
-  routed.SessionServiceProvider.registerDriver(
+  SessionServiceProvider.registerDriver(
     'dropbox',
-    (context) {
-      final rawRoot = context.raw['root']?.toString();
-      final resolvedRoot = (rawRoot == null || rawRoot.trim().isEmpty)
+    (SessionDriverBuilderContext context) {
+      final rawRoot = context.raw['root'];
+      final rootString = rawRoot is String ? rawRoot : rawRoot?.toString();
+      final resolvedRoot = (rootString == null || rootString.trim().isEmpty)
           ? context.storageDefaults?.frameworkPath('sessions/dropbox')
-          : rawRoot;
+          : rootString;
 
-      return routed.SessionConfig(
+      return SessionConfig(
         cookieName: context.cookieName,
         store: DropboxSessionStore(
           apiKey: context.raw['api_key'] as String,
@@ -117,23 +124,23 @@ void registerDropboxSessionDriver() {
         expireOnClose: context.expireOnClose,
       );
     },
-    validator: (context) {
+    validator: (SessionDriverBuilderContext context) {
       final apiKey = context.raw['api_key'];
       if (apiKey is! String || apiKey.trim().isEmpty) {
-        throw routed.ProviderConfigException(
+        throw ProviderConfigException(
           'Session driver "dropbox" requires an `api_key` string.',
         );
       }
     },
     requiresConfig: const ['api_key'],
-    documentation: (ctx) => <routed.ConfigDocEntry>[
-      routed.ConfigDocEntry(
+    documentation: (SessionDriverDocContext ctx) => <ConfigDocEntry>[
+      ConfigDocEntry(
         path: ctx.path('api_key'),
         type: 'string',
         description: 'API key used to authenticate Dropbox requests.',
         metadata: const {'required': true},
       ),
-      routed.ConfigDocEntry(
+      ConfigDocEntry(
         path: ctx.path('root'),
         type: 'string',
         description: 'Remote folder for storing session payloads.',
@@ -152,15 +159,15 @@ class DropboxSessionStore implements session.Store {
   final String root;
 
   @override
-  Future<session.Session> read(routed.Request request, String name) async {
+  Future<session.Session> read(Request request, String name) async {
     // TODO: Load and return the stored session for [name].
     throw UnimplementedError('Load session "$name" from Dropbox backend.');
   }
 
   @override
   Future<void> write(
-    routed.Request request,
-    routed.Response response,
+    Request request,
+    Response response,
     session.Session session,
   ) async {
     // TODO: Persist the session to your Dropbox backend.

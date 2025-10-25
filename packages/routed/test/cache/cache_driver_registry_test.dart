@@ -344,7 +344,7 @@ void main() {
         () => CacheDriverRegistry.instance.buildConfig('file', const {
           'driver': 'file',
           'path': 'cache',
-          'permission': [],
+          'permission': <Object>[],
         }, container),
         throwsA(
           isA<ConfigurationException>().having(
@@ -581,14 +581,12 @@ class _RecordingStoreFactory implements StoreFactory {
 }
 
 class _NoopStore implements Store {
-  @override
-  FutureOr<bool> add(String key, value, [Duration? ttl]) async => true;
 
   @override
   FutureOr<bool> decrement(String key, [int value = 1]) async => true;
 
   @override
-  FutureOr<bool> forever(String key, value) async => true;
+  FutureOr<bool> forever(String key, dynamic value) async => true;
 
   @override
   FutureOr<bool> forget(String key) async => true;
@@ -613,7 +611,7 @@ class _NoopStore implements Store {
       <String, dynamic>{};
 
   @override
-  FutureOr<bool> put(String key, value, int seconds) async => true;
+  FutureOr<bool> put(String key, dynamic value, int seconds) async => true;
 
   @override
   FutureOr<bool> putMany(Map<String, dynamic> values, int seconds) async =>

@@ -3,10 +3,6 @@ import 'dart:io';
 import 'package:path/path.dart' as p;
 import 'package:routed/providers.dart';
 import 'package:routed/routed.dart';
-import 'package:routed/src/cache/file_store.dart';
-import 'package:routed/src/config/config.dart';
-import 'package:routed/src/container/container.dart';
-import 'package:routed/src/engine/storage_defaults.dart';
 import 'package:routed/src/engine/storage_paths.dart';
 import 'package:test/test.dart';
 

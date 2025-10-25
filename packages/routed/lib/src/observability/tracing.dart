@@ -90,8 +90,9 @@ class TracingService {
   }
 
   void shutdown() {
-    if (_provider != null) {
-      unawaited(_provider!.shutdown());
+    final provider = _provider;
+    if (provider != null) {
+      unawaited(provider.shutdown());
     }
     _exporter?.shutdown();
   }
@@ -151,14 +152,13 @@ class _TracingSdk {
       if (dotel_api.OTelFactory.otelFactory == null) {
         dotel_api.OTelFactory.otelFactory = factory;
       } else if (dotel_api.OTelFactory.otelFactory is dotel.OTelSDKFactory) {
-        final existing =
-            dotel_api.OTelFactory.otelFactory! as dotel.OTelSDKFactory;
+        final existing = dotel_api.OTelFactory.otelFactory!;
         existing.apiEndpoint = factoryEndpoint;
         existing.apiServiceName = config.serviceName;
         existing.apiServiceVersion = '1.0.0';
       }
 
-      final provider = dotel.OTel.tracerProvider() as dotel.TracerProvider;
+      final provider = dotel.OTel.tracerProvider();
       provider.resource ??= dotel.OTel.resource(
         dotel.OTel.attributesFromMap({
           'service.name': config.serviceName,

@@ -1,3 +1,5 @@
+// ignore_for_file: library_private_types_in_public_api
+
 import 'package:routed/src/container/container.dart';
 import 'package:routed/src/provider/provider.dart';
 import 'package:routed/src/storage/storage_manager.dart';

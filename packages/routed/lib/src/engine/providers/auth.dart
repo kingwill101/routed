@@ -26,7 +26,6 @@ class AuthServiceProvider extends ServiceProvider with ProvidesDefaultConfig {
   final Set<String> _managedConfigGuards = <String>{};
   final Set<String> _managedConfigGates = <String>{};
   final Set<String> _managedGateMiddleware = <String>{};
-  _GateMiddlewareDefaults _gateDefaults = const _GateMiddlewareDefaults();
 
   @override
   ConfigDefaults get defaultConfig => const ConfigDefaults(
@@ -411,7 +410,6 @@ class AuthServiceProvider extends ServiceProvider with ProvidesDefaultConfig {
         false;
 
     final defaults = _resolveGateDefaults(config);
-    _gateDefaults = defaults;
 
     final newAbilities = <String>{};
     final newMiddlewareIds = <String>{};
