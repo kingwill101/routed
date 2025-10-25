@@ -1,0 +1,112 @@
+<section class="todo-list">
+  <style>
+    .todo-list h2 {
+      margin: 0 0 1rem;
+      font-size: 1.1rem;
+      letter-spacing: 0.02em;
+      text-transform: uppercase;
+      color: rgba(226, 232, 240, 0.85);
+    }
+    .todo-list ul {
+      list-style: none;
+      margin: 0;
+      padding: 0;
+      display: grid;
+      gap: 0.75rem;
+    }
+    .todo-item {
+      display: grid;
+      gap: 0.75rem;
+      align-items: center;
+      grid-template-columns: auto 1fr auto;
+      padding: 0.9rem 1rem;
+      border-radius: 0.85rem;
+      border: 1px solid rgba(148, 163, 184, 0.25);
+      background: rgba(15, 23, 42, 0.35);
+      transition: border-color 0.2s ease, background 0.2s ease;
+    }
+    .todo-item.is-selected {
+      border-color: rgba(129, 140, 248, 0.8);
+      background: rgba(67, 56, 202, 0.25);
+    }
+    .todo-item.is-done .todo-link .title {
+      text-decoration: line-through;
+      color: rgba(148, 163, 184, 0.7);
+    }
+    .todo-item form {
+      margin: 0;
+    }
+    .toggle-button {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      width: 2.2rem;
+      height: 2.2rem;
+      border-radius: 50%;
+      border: 1px solid rgba(148, 163, 184, 0.6);
+      background: transparent;
+      color: rgba(226, 232, 240, 0.9);
+      font-size: 1rem;
+      cursor: pointer;
+    }
+    .todo-link {
+      color: inherit;
+      text-decoration: none;
+      display: flex;
+      flex-direction: column;
+      gap: 0.35rem;
+    }
+    .todo-link .title {
+      font-weight: 600;
+      letter-spacing: 0.01em;
+    }
+    .todo-link .meta {
+      font-size: 0.85rem;
+      color: rgba(148, 163, 184, 0.8);
+    }
+    .delete {
+      border: none;
+      background: transparent;
+      color: rgba(248, 113, 113, 0.9);
+      font-size: 1.4rem;
+      cursor: pointer;
+    }
+    .empty-state {
+      text-align: center;
+      padding: 2rem 1rem;
+      border-radius: 0.75rem;
+      background: rgba(30, 41, 59, 0.4);
+      color: rgba(148, 163, 184, 0.9);
+    }
+  </style>
+
+  <h2>Your tasks</h2>
+  <ul id="todo_items">
+    {% assign todo_count = todos_list | size %}
+    {% if todo_count > 0 %}
+      {% for todo in todos_list %}
+        <li id="todo_{{ todo.id }}" class="todo-item {% if todo.completed %}is-done{% endif %} {% if todo.is_selected %}is-selected{% endif %}">
+          <form action="/todos/{{ todo.id }}/toggle" method="post">
+            <button class="toggle-button" type="submit" title="Toggle completion">
+              {% if todo.completed %}✓{% else %}○{% endif %}
+            </button>
+          </form>
+          <a class="todo-link" data-turbo-frame="todo_detail" href="/todos/{{ todo.id }}">
+            <span class="title">{{ todo.title }}</span>
+            <span class="meta">
+              {% if todo.completed %}Completed{% else %}Created{% endif %}
+              • {{ todo.formatted_created_at }}
+            </span>
+          </a>
+          <form action="/todos/{{ todo.id }}/delete" method="post" data-confirm-delete="true">
+            <button class="delete" type="submit" title="Delete task">×</button>
+          </form>
+        </li>
+      {% endfor %}
+    {% else %}
+      <li id="todo_empty_state" class="empty-state">
+        No tasks yet. Add your first todo on the right.
+      </li>
+    {% endif %}
+  </ul>
+</section>

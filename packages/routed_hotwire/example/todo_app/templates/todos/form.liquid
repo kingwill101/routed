@@ -1,0 +1,69 @@
+<section class="todo-form-wrapper">
+  <style>
+    .todo-form-wrapper h2 {
+      margin: 0 0 1rem;
+      font-size: 1.1rem;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      color: rgba(226, 232, 240, 0.8);
+    }
+    .todo-form {
+      display: grid;
+      gap: 0.75rem;
+    }
+    .todo-form label {
+      font-size: 0.85rem;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      color: rgba(148, 163, 184, 0.85);
+    }
+    .todo-form input,
+    .todo-form textarea {
+      border-radius: 0.65rem;
+      border: 1px solid rgba(148, 163, 184, 0.3);
+      background: rgba(15, 23, 42, 0.35);
+      color: inherit;
+      padding: 0.75rem;
+      font: inherit;
+      resize: vertical;
+      min-height: 2.75rem;
+    }
+    .todo-form button {
+      margin-top: 0.5rem;
+      border: none;
+      border-radius: 999px;
+      padding: 0.75rem 1.5rem;
+      font-weight: 600;
+      cursor: pointer;
+      background: rgba(34, 197, 94, 0.85);
+      color: #0f172a;
+      justify-self: start;
+    }
+    .todo-errors {
+      margin: 0 0 0.75rem;
+      padding: 0.75rem 1rem;
+      border-radius: 0.65rem;
+      background: rgba(239, 68, 68, 0.18);
+      color: rgba(254, 226, 226, 0.95);
+      list-style: disc;
+    }
+  </style>
+
+  <h2>Add a task</h2>
+  {% if errors.size > 0 %}
+    <ul class="todo-errors">
+      {% for error in errors %}
+        <li>{{ error }}</li>
+      {% endfor %}
+    </ul>
+  {% endif %}
+  <form class="todo-form" action="/todos" method="post">
+    <label for="todo-title">Title</label>
+    <input id="todo-title" name="title" type="text" value="{{ values.title }}" required autocomplete="off">
+
+    <label for="todo-notes">Notes</label>
+    <textarea id="todo-notes" name="notes" rows="3">{{ values.notes }}</textarea>
+
+    <button type="submit">Save task</button>
+  </form>
+</section>
