@@ -1,5 +1,4 @@
 import 'dart:async';
-import 'dart:io' show Platform;
 
 import 'package:routed/routed.dart';
 import 'package:routed_testing/routed_testing.dart';
@@ -32,16 +31,9 @@ Future<void> main() async {
     );
   }
 
-  group(
-    "Ephemeral transport",
-    () {
-      testRunner(TransportMode.ephemeralServer);
-    },
-    skip: Platform.isWindows
-        ? 'Ephemeral server transport not supported on Windows CI '
-            'due to lack of SIGTERM support.'
-        : false,
-  );
+  group("Ephemeral transport", () {
+    testRunner(TransportMode.ephemeralServer);
+  });
   group("In-memory transport", () {
     testRunner(TransportMode.inMemory);
   });

@@ -101,6 +101,8 @@ class ShutdownController {
         });
       } on StateError {
         // Platform does not support this signal.
+      } on SignalException {
+        // Platform does not support this signal.
       }
       if (sub != null) {
         _listeners.add(sub);
