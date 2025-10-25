@@ -3,12 +3,12 @@ import 'package:routed/src/render/render.dart';
 import 'package:routed/src/response.dart';
 
 /// A class that implements the [Render] interface to render data as XML.
-class XMLRender implements Render {
+class XmlRender implements Render {
   /// The data to be rendered as XML.
   final dynamic data;
 
-  /// Constructor to initialize the [XMLRender] with the given data.
-  XMLRender(this.data);
+  /// Constructor to initialize the [XmlRender] with the given data.
+  XmlRender(this.data);
 
   /// Renders the response by converting the data to XML and writing it to the response.
   @override

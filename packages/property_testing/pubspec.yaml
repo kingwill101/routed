@@ -12,7 +12,7 @@ dependencies:
   meta: ^1.17.0
   server_testing: ^0.1.0
 
-  test: any
+  test: ^1.26.3
 dev_dependencies:
   lints: ^6.0.0
   routed: ^0.1.0

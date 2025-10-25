@@ -68,7 +68,7 @@ extension ContextRender on EngineContext {
   }
 
   Response xml(Map<String, dynamic> data, {int statusCode = HttpStatus.ok}) {
-    final r = render(statusCode, XMLRender(data));
+    final r = render(statusCode, XmlRender(data));
     return r is Response ? r : _response;
   }
 
@@ -100,7 +100,7 @@ extension ContextRender on EngineContext {
   }) async {
     return await render(
       statusCode,
-      HTMLRender(content: content, data: data, engine: _engine!.viewEngine),
+      HtmlRender(content: content, data: data, engine: _engine!.viewEngine),
     );
   }
 
@@ -135,7 +135,7 @@ extension ContextRender on EngineContext {
     }
     return await render(
       statusCode,
-      HTMLRender(
+      HtmlRender(
         content: content,
         templateName: templateName,
         data: data,

@@ -1,4 +1,4 @@
-## Unreleased
+## 0.1.0
 
 - Driver registries now throw descriptive `ProviderConfigException`s when the same driver ID is registered twice, and
   the CLI surfaces duplicate registrations through `provider:list --config` with actionable guidance.

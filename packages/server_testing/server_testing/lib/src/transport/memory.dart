@@ -1,5 +1,4 @@
 import 'dart:async';
-import 'dart:convert';
 import 'dart:io';
 import 'dart:typed_data';
 
@@ -66,7 +65,6 @@ class InMemoryTransport extends TestTransport {
 
     // Build the TestResponse using the captured data
     final responseBodyBytes = responseBody.toBytes();
-    final responseBodyString = utf8.decode(responseBodyBytes);
 
     // Build headers map from response only; avoid duplicating Set-Cookie
     final headersMap = _mockResponse!.headers.toMap();
