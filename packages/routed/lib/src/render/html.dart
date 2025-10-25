@@ -4,9 +4,9 @@ import 'package:routed/src/render/render.dart';
 import 'package:routed/src/response.dart';
 import 'package:routed/src/view/view_engine.dart';
 
-/// The `HTMLRender` class is responsible for rendering HTML content using a specified template and data.
+/// The `HtmlRender` class is responsible for rendering HTML content using a specified template and data.
 /// It implements the `Render` interface.
-class HTMLRender implements Render {
+class HtmlRender implements Render {
   /// The name of the template to be used for rendering.
   final String? templateName;
 
@@ -19,12 +19,12 @@ class HTMLRender implements Render {
   /// The template engine used to render the HTML content.
   final ViewEngine engine;
 
-  /// Constructs an instance of `HTMLRender`.
+  /// Constructs an instance of `HtmlRender`.
   ///
   /// The [templateName] parameter specifies the name of the template to be used.
   /// The [data] parameter provides the data to be passed to the template.
   /// The [engine] parameter specifies the template engine to be used for rendering.
-  HTMLRender({
+  HtmlRender({
     this.templateName,
     this.content,
     required this.data,
