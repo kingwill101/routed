@@ -90,7 +90,7 @@ void registerFilesystemCacheDriver() {
 
 class FilesystemCacheStoreFactory extends routed.StoreFactory {
   @override
-  routed.Store create(Map<String, dynamic> config) {
+  CacheStore create(Map<String, dynamic> config) {
     final directory = config['cache_dir'] as String;
     // TODO: Return your concrete Store implementation.
     throw UnimplementedError(
