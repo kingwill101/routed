@@ -5,7 +5,14 @@
 library;
 
 export 'src/cache/cache_manager.dart'
-    show CacheDriverRegistry, CacheDriverDocBuilder, CacheDriverDocContext;
+    show
+        CacheDriverRegistry,
+        CacheDriverDocBuilder,
+        CacheDriverDocContext,
+        DriverConfigContext,
+        DriverConfigBuilder,
+        DriverConfigValidator,
+        ConfigurationException;
 export 'src/storage/storage_drivers.dart'
     show
         StorageDriverRegistry,

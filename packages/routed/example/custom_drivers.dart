@@ -1,6 +1,6 @@
 import 'package:routed/drivers.dart';
 import 'package:routed/providers.dart';
-import 'package:routed/routed.dart';
+import 'package:routed/routed.dart' as routed;
 import 'package:routed/session.dart' as session;
 
 /// Demonstrates how to register custom drivers for storage, cache, and session
@@ -35,8 +35,8 @@ void registerArchiveStorageDriver() {
         fileSystem: context.manager.defaultFileSystem,
       );
     },
-    documentation: (StorageDriverDocContext ctx) => <ConfigDocEntry>[
-      ConfigDocEntry(
+    documentation: (StorageDriverDocContext ctx) => <routed.ConfigDocEntry>[
+      routed.ConfigDocEntry(
         path: ctx.path('root'),
         type: 'string',
         description: 'Archive path backing the $archiveStorageDriver disk.',
@@ -55,13 +55,13 @@ void registerArchiveStorageDriver() {
 const String filesystemCacheDriver = 'filesystem';
 
 void registerFilesystemCacheDriver() {
-  CacheManager.registerDriver(
+  routed.CacheManager.registerDriver(
     filesystemCacheDriver,
     () => FilesystemCacheStoreFactory(),
     configBuilder: (DriverConfigContext context) {
       final config = Map<String, dynamic>.from(context.userConfig);
       config['cache_dir'] ??= context
-              .get<StorageDefaults>()
+              .get<routed.StorageDefaults>()
               ?.frameworkPath('cache/filesystem') ??
           'storage/framework/cache/filesystem';
       return config;
@@ -69,13 +69,13 @@ void registerFilesystemCacheDriver() {
     validator: (config, driver) {
       final directory = config['cache_dir'];
       if (directory is! String || directory.trim().isEmpty) {
-        throw ConfigurationException(
+        throw routed.ConfigurationException(
           'Cache driver "$driver" requires a non-empty `cache_dir` value.',
         );
       }
     },
-    documentation: (CacheDriverDocContext ctx) => <ConfigDocEntry>[
-      ConfigDocEntry(
+    documentation: (CacheDriverDocContext ctx) => <routed.ConfigDocEntry>[
+      routed.ConfigDocEntry(
         path: ctx.path('cache_dir'),
         type: 'string',
         description: 'Directory used to persist $filesystemCacheDriver cache entries.',
@@ -88,9 +88,9 @@ void registerFilesystemCacheDriver() {
   );
 }
 
-class FilesystemCacheStoreFactory extends StoreFactory {
+class FilesystemCacheStoreFactory extends routed.StoreFactory {
   @override
-  Store create(Map<String, dynamic> config) {
+  routed.Store create(Map<String, dynamic> config) {
     final directory = config['cache_dir'] as String;
     // TODO: Return your concrete Store implementation.
     throw UnimplementedError(
@@ -113,7 +113,7 @@ void registerDropboxSessionDriver() {
           ? context.storageDefaults?.frameworkPath('sessions/dropbox')
           : rootString;
 
-      return SessionConfig(
+      return routed.SessionConfig(
         cookieName: context.cookieName,
         store: DropboxSessionStore(
           apiKey: context.raw['api_key'] as String,
@@ -127,20 +127,20 @@ void registerDropboxSessionDriver() {
     validator: (SessionDriverBuilderContext context) {
       final apiKey = context.raw['api_key'];
       if (apiKey is! String || apiKey.trim().isEmpty) {
-        throw ProviderConfigException(
+        throw routed.ProviderConfigException(
           'Session driver "dropbox" requires an `api_key` string.',
         );
       }
     },
     requiresConfig: const ['api_key'],
-    documentation: (SessionDriverDocContext ctx) => <ConfigDocEntry>[
-      ConfigDocEntry(
+    documentation: (SessionDriverDocContext ctx) => <routed.ConfigDocEntry>[
+      routed.ConfigDocEntry(
         path: ctx.path('api_key'),
         type: 'string',
         description: 'API key used to authenticate Dropbox requests.',
         metadata: const {'required': true},
       ),
-      ConfigDocEntry(
+      routed.ConfigDocEntry(
         path: ctx.path('root'),
         type: 'string',
         description: 'Remote folder for storing session payloads.',
@@ -159,15 +159,15 @@ class DropboxSessionStore implements session.Store {
   final String root;
 
   @override
-  Future<session.Session> read(Request request, String name) async {
+  Future<session.Session> read(routed.Request request, String name) async {
     // TODO: Load and return the stored session for [name].
     throw UnimplementedError('Load session "$name" from Dropbox backend.');
   }
 
   @override
   Future<void> write(
-    Request request,
-    Response response,
+    routed.Request request,
+    routed.Response response,
     session.Session session,
   ) async {
     // TODO: Persist the session to your Dropbox backend.
