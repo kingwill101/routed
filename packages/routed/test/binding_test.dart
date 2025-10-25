@@ -66,7 +66,22 @@ void main() {
     });
 
     test('Multipart Form Binding', () async {
-      final engine = Engine();
+      final uploadDir = await Directory.systemTemp.createTemp(
+        'routed-binding-upload-',
+      );
+      addTearDown(() async {
+        if (await uploadDir.exists()) {
+          await uploadDir.delete(recursive: true);
+        }
+      });
+
+      final engine = Engine(
+        configItems: {
+          'uploads': {
+            'directory': uploadDir.path,
+          },
+        },
+      );
 
       engine.post('/upload', (ctx) async {
         // Test form fields

@@ -1,8 +1,7 @@
 name: routed_cli
 description: A sample command-line application.
-version: 1.0.0
-publish_to: none
-# repository: https://github.com/my_org/my_repo
+version: 0.1.0
+repository: https://github.com/kingwill101/routed/tree/master/packages/routed_cli
 resolution: workspace
 environment:
   sdk: '>=3.9.0 <4.0.0'
@@ -16,8 +15,7 @@ dependencies:
   file: ^7.0.1
   yaml: ^3.1.2
   json2yaml: ^3.0.1
-  routed:
-    path: ../routed
+  routed: ^0.1.0
 
 dev_dependencies:
   lints: ^6.0.0

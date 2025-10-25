@@ -3,6 +3,7 @@ publish_to: none
 workspace:
   - packages/routed
   - packages/routed_cli
+  - packages/routed_hotwire
   - packages/class_view/simple_blog
   - packages/class_view/class_view
   - packages/class_view/routed_class_view

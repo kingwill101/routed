@@ -6,6 +6,7 @@ import 'package:routed/src/container/container.dart';
 import 'package:routed/src/context/context.dart';
 import 'package:routed/src/contracts/contracts.dart' show Config;
 import 'package:routed/src/engine/middleware_registry.dart';
+import 'package:routed/src/logging/context.dart';
 import 'package:routed/src/logging/logger.dart';
 import 'package:routed/src/provider/config_utils.dart';
 import 'package:routed/src/provider/provider.dart';
@@ -172,6 +173,11 @@ class LoggingServiceProvider extends ServiceProvider
       'status': status,
       'duration_ms': duration.inMilliseconds,
     };
+
+    final loggingContext = LoggingContext.currentValues();
+    if (!identical(loggingContext, const {})) {
+      payload.addAll(loggingContext);
+    }
 
     for (final header in _headerNames) {
       final value = ctx.request.headers.value(header);

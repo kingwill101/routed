@@ -10,7 +10,7 @@ environment:
 # Add regular dependencies here.
 dependencies:
   meta: ^1.17.0
-  routed: 0.1.0
+  routed: ^0.1.0
   server_testing: ^0.1.0
   test: ^1.26.3
 

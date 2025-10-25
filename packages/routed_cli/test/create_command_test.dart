@@ -63,7 +63,7 @@ void main() {
       expect(_read(projectDir, 'config/http.yaml'), contains('providers:'));
 
       final cacheContent = _read(projectDir, 'config/cache.yaml');
-      expect(cacheContent, contains('default: array'));
+      expect(cacheContent, contains('default: file'));
       expect(cacheContent, contains('# Cache configuration quick reference:'));
       expect(cacheContent, contains('Options: array, file, null'));
 
@@ -183,7 +183,7 @@ void main() {
     });
 
     test('exposes template names in usage', () {
-      final command = CreateCommand(fileSystem: memoryFs, logger: logger);
+      final command = runner.commands['create'] as CreateCommand;
       expect(command.usage, contains('basic, api, web, fullstack'));
     });
 

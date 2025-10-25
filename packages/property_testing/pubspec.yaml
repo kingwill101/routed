@@ -1,7 +1,7 @@
 name: property_testing
 description: A property-based testing framework for Dart with powerful generators and shrinking capabilities
 version: 0.1.0
-homepage: https://github.com/kingwill101/routed/packages/property_testing
+repository: https://github.com/kingwill101/routed/tree/master/packages/property_testing
 
 resolution: workspace
 

@@ -106,7 +106,7 @@ void main() {
       expect(env, contains('APP_KEY=change-me'));
       expect(env, contains('SESSION_COOKIE=routed-session'));
       expect(env, contains('SESSION_DRIVER=cookie'));
-      expect(env, contains('CACHE_STORE=array'));
+      expect(env, contains('CACHE_STORE=file'));
       expect(
         env,
         contains('OBSERVABILITY_TRACING_SERVICE_NAME=routed-service'),

@@ -1,6 +1,6 @@
 import 'dart:async';
 
-import 'package:opentelemetry/api.dart' as otel;
+import 'package:dartastic_opentelemetry/dartastic_opentelemetry.dart' as dotel;
 import 'package:routed/routed.dart';
 import 'package:routed_testing/routed_testing.dart';
 import 'package:server_testing/server_testing.dart';
@@ -20,8 +20,9 @@ void main() {
       addTearDown(() async => await engine.close());
 
       engine.get('/trace', (ctx) {
-        final span = otel.spanFromContext(otel.Context.current);
-        ctx.response.write(span.spanContext.traceId.get());
+        final spanContext = dotel.Context.current.spanContext;
+        final traceId = spanContext?.traceId.hexString ?? '';
+        ctx.response.write(traceId);
         return ctx.response;
       });
 
@@ -31,9 +32,10 @@ void main() {
       final response = await client.get('/trace');
       response.assertStatus(200);
 
+      const zeroTraceId = '00000000000000000000000000000000';
       final traceId = response.body.trim();
-      expect(traceId, isNotEmpty);
-      expect(traceId, isNot(otel.TraceId.invalid().get()));
+      expect(traceId.length, equals(32));
+      expect(traceId, isNot(zeroTraceId));
     });
 
     test('metrics endpoint exposes request counters', () async {
