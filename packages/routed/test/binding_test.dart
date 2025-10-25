@@ -1,5 +1,6 @@
 import 'dart:convert';
 import 'dart:core';
+import 'dart:io' show Directory, FileSystemException;
 
 import 'package:routed/routed.dart';
 import 'package:routed/src/binding/binding.dart';
@@ -71,15 +72,17 @@ void main() {
       );
       addTearDown(() async {
         if (await uploadDir.exists()) {
-          await uploadDir.delete(recursive: true);
+          try {
+            await uploadDir.delete(recursive: true);
+          } on FileSystemException {
+            // Ignore cleanup errors caused by restrictive permissions.
+          }
         }
       });
 
       final engine = Engine(
         configItems: {
-          'uploads': {
-            'directory': uploadDir.path,
-          },
+          'uploads': {'directory': uploadDir.path},
         },
       );
 
