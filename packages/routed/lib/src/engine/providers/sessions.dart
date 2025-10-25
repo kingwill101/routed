@@ -1,5 +1,3 @@
-// ignore_for_file: library_private_types_in_public_api
-
 import 'dart:io';
 
 import 'package:routed/src/cache/cache_manager.dart';
@@ -140,7 +138,7 @@ class SessionDriverDocContext {
 /// Third-party packages can use [register] and [unregister] to expose their own
 /// drivers at runtime.  The class is a thin singleton wrapper around a map,
 /// deliberately avoiding any global state beyond the registry itself.
-class SessionDriverRegistry extends NamedRegistry<_SessionDriverRegistration> {
+class SessionDriverRegistry extends NamedRegistry<SessionDriverRegistration> {
   SessionDriverRegistry._internal();
 
   /// Singleton accessor.
@@ -160,7 +158,7 @@ class SessionDriverRegistry extends NamedRegistry<_SessionDriverRegistration> {
     SessionDriverValidator? validator,
     List<String> requiresConfig = const [],
   }) {
-    final registration = _SessionDriverRegistration(
+    final registration = SessionDriverRegistration(
       builder: builder,
       documentation: documentation,
       validator: validator,
@@ -187,13 +185,13 @@ class SessionDriverRegistry extends NamedRegistry<_SessionDriverRegistration> {
   SessionDriverBuilder? builderFor(String driver) =>
       registrationFor(driver)?.builder;
 
-  _SessionDriverRegistration? registrationFor(String driver) =>
+  SessionDriverRegistration? registrationFor(String driver) =>
       getEntry(driver);
 
   void ensureRequirements(
     String driver,
     SessionDriverBuilderContext context,
-    _SessionDriverRegistration registration,
+    SessionDriverRegistration registration,
   ) {
     for (final key in registration.requiresConfig) {
       final value = context.raw[key];
@@ -213,7 +211,7 @@ class SessionDriverRegistry extends NamedRegistry<_SessionDriverRegistration> {
   void runValidator(
     String driver,
     SessionDriverBuilderContext context,
-    _SessionDriverRegistration registration,
+    SessionDriverRegistration registration,
   ) {
     final validator = registration.validator;
     if (validator == null) {
@@ -260,7 +258,7 @@ class SessionDriverRegistry extends NamedRegistry<_SessionDriverRegistration> {
   @override
   bool onDuplicate(
     String name,
-    _SessionDriverRegistration existing,
+    SessionDriverRegistration existing,
     bool overrideExisting,
   ) {
     if (!overrideExisting) {
@@ -273,8 +271,8 @@ class SessionDriverRegistry extends NamedRegistry<_SessionDriverRegistration> {
   }
 }
 
-class _SessionDriverRegistration {
-  _SessionDriverRegistration({
+class SessionDriverRegistration {
+  SessionDriverRegistration({
     required this.builder,
     required this.origin,
     this.documentation,

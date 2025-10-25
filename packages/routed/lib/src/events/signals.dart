@@ -1,5 +1,3 @@
-// ignore_for_file: library_private_types_in_public_api
-
 import 'dart:async';
 
 import 'package:meta/meta.dart';
@@ -24,18 +22,18 @@ class Signal<T extends Event> {
   final String name;
   final EventManager _manager;
 
-  final Map<_HandlerKey<T>, _HandlerEntry<T>> _handlers = {};
+  final Map<SignalHandlerKey<T>, SignalHandlerEntry<T>> _handlers = {};
 
   SignalSubscription<T> connect(
     FutureOr<void> Function(T event) handler, {
     Object? key,
     Object? sender,
   }) {
-    final handlerKey = _HandlerKey<T>(
+    final handlerKey = SignalHandlerKey<T>(
       handler: key == null ? handler : null,
       key: key,
     );
-    final entry = _HandlerEntry(handler: handler, sender: sender, key: key);
+    final entry = SignalHandlerEntry(handler: handler, sender: sender, key: key);
     final previous = _handlers[handlerKey];
     if (previous != null) {
       previous.active = false;
@@ -50,7 +48,7 @@ class Signal<T extends Event> {
         'Either a handler reference or key must be provided to disconnect.',
       );
     }
-    final handlerKey = _HandlerKey<T>(
+    final handlerKey = SignalHandlerKey<T>(
       handler: key == null ? handler : null,
       key: key,
     );
@@ -59,7 +57,7 @@ class Signal<T extends Event> {
   }
 
   Future<void> dispatch(T event, {Object? sender}) async {
-    final entries = List<_HandlerEntry<T>>.from(_handlers.values);
+    final entries = List<SignalHandlerEntry<T>>.from(_handlers.values);
     for (final entry in entries) {
       if (!entry.active) continue;
       if (!_matchesSender(entry.sender, sender)) {
@@ -207,8 +205,8 @@ bool _matchesSender(Object? expected, Object? actual) {
   return false;
 }
 
-class _HandlerKey<T extends Event> {
-  _HandlerKey({required this.handler, required this.key}) {
+class SignalHandlerKey<T extends Event> {
+  SignalHandlerKey({required this.handler, required this.key}) {
     if (key == null && handler == null) {
       throw ArgumentError('Either handler or key must be provided.');
     }
@@ -219,7 +217,7 @@ class _HandlerKey<T extends Event> {
 
   @override
   bool operator ==(Object other) {
-    if (other is! _HandlerKey<T>) return false;
+    if (other is! SignalHandlerKey<T>) return false;
     if (key != null || other.key != null) {
       return key != null && other.key != null && other.key == key;
     }
@@ -230,8 +228,8 @@ class _HandlerKey<T extends Event> {
   int get hashCode => key?.hashCode ?? identityHashCode(handler);
 }
 
-class _HandlerEntry<T extends Event> {
-  _HandlerEntry({
+class SignalHandlerEntry<T extends Event> {
+  SignalHandlerEntry({
     required this.handler,
     required this.sender,
     required this.key,
@@ -246,9 +244,9 @@ class _HandlerEntry<T extends Event> {
 final class SignalSubscription<T extends Event> {
   SignalSubscription(this._handlers, this._key, this._entry);
 
-  final Map<_HandlerKey<T>, _HandlerEntry<T>> _handlers;
-  final _HandlerKey<T> _key;
-  final _HandlerEntry<T> _entry;
+  final Map<SignalHandlerKey<T>, SignalHandlerEntry<T>> _handlers;
+  final SignalHandlerKey<T> _key;
+  final SignalHandlerEntry<T> _entry;
 
   Object? get key => _entry.key;
   Object? get sender => _entry.sender;

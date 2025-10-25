@@ -1,5 +1,3 @@
-// ignore_for_file: library_private_types_in_public_api
-
 import 'package:routed/src/cache/array_store_factory.dart';
 import 'package:routed/src/cache/file_store_factory.dart';
 import 'package:routed/src/cache/null_store_factory.dart';
@@ -79,8 +77,8 @@ class ConfigurationException implements Exception {
   String toString() => 'ConfigurationException: $message';
 }
 
-class _CacheDriverRegistration {
-  _CacheDriverRegistration({
+class CacheDriverRegistration {
+  CacheDriverRegistration({
     required this.builder,
     required this.origin,
     this.documentation,
@@ -97,7 +95,7 @@ class _CacheDriverRegistration {
   final List<String> requiresConfig;
 }
 
-class CacheDriverRegistry extends NamedRegistry<_CacheDriverRegistration> {
+class CacheDriverRegistry extends NamedRegistry<CacheDriverRegistration> {
   CacheDriverRegistry._internal();
 
   static final CacheDriverRegistry instance = CacheDriverRegistry._internal();
@@ -111,7 +109,7 @@ class CacheDriverRegistry extends NamedRegistry<_CacheDriverRegistration> {
     DriverConfigValidator? validator,
     List<String> requiresConfig = const [],
   }) {
-    final registration = _CacheDriverRegistration(
+    final registration = CacheDriverRegistration(
       builder: builder,
       origin: StackTrace.current,
       documentation: documentation,
@@ -213,7 +211,7 @@ class CacheDriverRegistry extends NamedRegistry<_CacheDriverRegistration> {
   @override
   bool onDuplicate(
     String name,
-    _CacheDriverRegistration existing,
+    CacheDriverRegistration existing,
     bool overrideExisting,
   ) {
     if (!overrideExisting) {

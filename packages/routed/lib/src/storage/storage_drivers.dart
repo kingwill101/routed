@@ -1,5 +1,3 @@
-// ignore_for_file: library_private_types_in_public_api
-
 import 'package:routed/src/container/container.dart';
 import 'package:routed/src/provider/provider.dart';
 import 'package:routed/src/storage/storage_manager.dart';
@@ -42,8 +40,8 @@ class StorageDriverDocContext {
   String path(String segment) => '$pathTemplate.$segment';
 }
 
-class _StorageDriverRegistration {
-  _StorageDriverRegistration({
+class StorageDriverRegistration {
+  StorageDriverRegistration({
     required this.builder,
     required this.origin,
     this.documentation,
@@ -54,7 +52,7 @@ class _StorageDriverRegistration {
   final StorageDriverDocBuilder? documentation;
 }
 
-class StorageDriverRegistry extends NamedRegistry<_StorageDriverRegistration> {
+class StorageDriverRegistry extends NamedRegistry<StorageDriverRegistration> {
   StorageDriverRegistry._internal();
 
   static final StorageDriverRegistry instance =
@@ -66,7 +64,7 @@ class StorageDriverRegistry extends NamedRegistry<_StorageDriverRegistration> {
     StorageDriverDocBuilder? documentation,
     bool overrideExisting = true,
   }) {
-    final registration = _StorageDriverRegistration(
+    final registration = StorageDriverRegistration(
       builder: builder,
       origin: StackTrace.current,
       documentation: documentation,
@@ -122,7 +120,7 @@ class StorageDriverRegistry extends NamedRegistry<_StorageDriverRegistration> {
   @override
   bool onDuplicate(
     String name,
-    _StorageDriverRegistration existing,
+    StorageDriverRegistration existing,
     bool overrideExisting,
   ) {
     if (!overrideExisting) {
