@@ -7,10 +7,8 @@ import 'package:server_testing/src/browser/bootstrap/downloader.dart';
 import 'package:server_testing/src/browser/bootstrap/installation.dart';
 
 import '../../../browser.dart';
-import '../browser_exception.dart';
 import '../interfaces/browser_type.dart' show BrowserType;
 import 'browser_json.dart';
-import 'browser_paths.dart';
 import 'lock.dart';
 import 'platform_info.dart';
 
@@ -294,16 +292,10 @@ class Registry {
   /// Uses [BrowserPaths.downloadPaths] and [BrowserPaths.cdnMirrors] to construct
   /// URLs based on the descriptor's name, revision, and the current platform ID.
   static List<String> _getDownloadUrlsStatic(BrowserDescriptor descriptor) {
-    final paths = BrowserPaths.downloadPaths[descriptor.name];
-    if (paths == null) return [];
-
-    final template = paths[PlatformInfo.platformId];
-    if (template == null) return [];
-
-    final downloadPath = template.replaceAll('%s', descriptor.revision);
-    return BrowserPaths.cdnMirrors
-        .map((mirror) => '$mirror/$downloadPath')
-        .toList();
+    return BrowserPaths.getDownloadUrls(
+      descriptor.name,
+      descriptor.revision,
+    );
   }
 
   /// Returns an unmodifiable list of all known [Executable]s derived from the

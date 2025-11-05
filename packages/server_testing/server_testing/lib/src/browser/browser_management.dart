@@ -19,7 +19,11 @@ class BrowserManagement {
 
   /// Gets or creates a logger instance with appropriate configuration.
   static BrowserLogger get logger {
-    _logger ??= BrowserLogger(logDir: 'test/logs', verbose: false);
+    _logger ??= BrowserLogger(
+      logDir: 'test/logs',
+      verbose: false,
+      enabled: BrowserLogger.defaultEnabled(),
+    );
     return _logger!;
   }
 
@@ -69,6 +73,24 @@ class BrowserManagement {
             'Browser registry not initialized. Call testBootstrap() first.';
         logger.error('$logContext: $error', null, null);
         throw BrowserException(error);
+      }
+
+      // Check for explicit binary override first and skip installation if present.
+      final overridePath =
+          TestBootstrap.getBinaryOverride(browserName) ??
+          TestBootstrap.getBinaryOverride(
+            _mapBrowserNameToRegistryName(browserName),
+          );
+      if (overridePath != null) {
+        logger.info(
+          '$logContext: Binary override configured at $overridePath, skipping installation.',
+        );
+        if (!File(overridePath).existsSync()) {
+          throw BrowserException(
+            'Configured override for "$browserName" points to a missing executable: $overridePath',
+          );
+        }
+        return false;
       }
 
       // Map browser name to registry name

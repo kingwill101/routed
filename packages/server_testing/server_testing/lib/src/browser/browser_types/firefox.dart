@@ -1,11 +1,9 @@
 import 'dart:async';
 import 'dart:io' show Directory, ProcessSignal;
 
-import 'package:path/path.dart' as path;
 import 'package:server_testing/server_testing.dart';
 import 'package:server_testing/src/browser/bootstrap/driver/driver_manager.dart'
     as bootstrap_driver; // Use prefix to avoid conflict if needed elsewhere
-import 'package:server_testing/src/browser/browser_exception.dart';
 import 'package:server_testing/src/browser/interfaces/browser_type.dart';
 import 'package:webdriver/async_io.dart' as wdasync;
 import 'package:webdriver/sync_io.dart' as wdsync;
@@ -17,20 +15,7 @@ class FirefoxType implements BrowserType {
 
   @override
   Future<String> executablePath() async {
-    // Allow specifying executable path via launch options first
-    // final optionsExecutablePath = /* Get from options if added */;
-    // if (optionsExecutablePath != null) return optionsExecutablePath;
-
-    // Otherwise, get from registry
-    final executable = TestBootstrap.registry.getExecutable(name);
-    if (executable?.directory == null || executable?.executablePath == null) {
-      throw BrowserException(
-        'Firefox executable information not found in registry.',
-      );
-    }
-    // Ensure executablePath() is called to get the relative path function result
-    final relativePath = executable!.executablePath();
-    return path.join(executable.directory!, relativePath);
+    return TestBootstrap.resolveExecutablePath(name);
   }
 
   @override

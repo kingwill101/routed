@@ -85,17 +85,25 @@ class BrowserPaths {
   /// current platform.
   ///
   /// Returns an empty list if no download path template exists for the combination.
-  static List<String> getDownloadUrls(String browserName, String revision) {
+  static List<String> getDownloadUrls(
+    String browserName,
+    String revision, {
+    String? platformOverride,
+  }) {
     final paths = downloadPaths[browserName];
     if (paths == null) return [];
 
-    final platformId = PlatformInfo.platformId;
-    final template = paths[platformId];
-    if (template == null) return [];
+    final platformId = platformOverride ?? PlatformInfo.platformId;
 
-    final downloadPath = template.replaceAll('%s', revision);
+    for (final candidate in _candidatePlatformIds(platformId)) {
+      final template = paths[candidate] ?? _stripArchFallback(paths, candidate);
+      if (template == null) continue;
 
-    return cdnMirrors.map((mirror) => '$mirror/$downloadPath').toList();
+      final downloadPath = template.replaceAll('%s', revision);
+      return cdnMirrors.map((mirror) => '$mirror/$downloadPath').toList();
+    }
+
+    return [];
   }
 
   /// Gets the root directory used for storing browser installations and metadata.
@@ -115,10 +123,114 @@ class BrowserPaths {
   /// Gets the specific installation directory path for a given [browserName]
   /// and [revision] within the main registry directory obtained from
   /// [getRegistryDirectory].
-  static String getBrowserInstallDirectory(String browserName,
-      String revision,) {
+  static String getBrowserInstallDirectory(
+    String browserName,
+    String revision,
+  ) {
     final registryDir = getRegistryDirectory();
     browserName = browserName.replaceAll('-', '_');
     return path.join(registryDir, '$browserName-$revision');
+  }
+
+  /// Generates a prioritized list of platform identifiers to try when looking
+  /// up download URLs. Falls back to older but compatible platforms where
+  /// possible (e.g., ubuntu24.04 → ubuntu22.04 → ubuntu20.04).
+  static List<String> _candidatePlatformIds(String platformId) {
+    final seen = <String>{};
+    final result = <String>[];
+
+    String normalize(String id) => id.trim();
+
+    void add(String id) {
+      id = normalize(id);
+      if (id.isEmpty || !seen.add(id)) return;
+      result.add(id);
+    }
+
+    add(platformId);
+
+    final parts = platformId.split('-');
+    if (parts.isEmpty) return result;
+
+    final base = parts.first;
+    final arch = parts.length > 1 ? parts.sublist(1).join('-') : '';
+
+    Iterable<String> linuxFallbacks() sync* {
+      final match = RegExp(r'ubuntu(\d+)\.(\d+)').firstMatch(base);
+      if (match != null) {
+        final major = int.tryParse(match.group(1) ?? '');
+        final minor = match.group(2) ?? '04';
+        if (major != null) {
+          for (
+            var fallbackMajor = major - 2;
+            fallbackMajor >= 20;
+            fallbackMajor -= 2
+          ) {
+            final paddedMajor = fallbackMajor.toString().padLeft(2, '0');
+            yield 'ubuntu$paddedMajor.$minor';
+          }
+          return;
+        }
+      }
+
+      final debianMatch = RegExp(r'debian(\d+)').firstMatch(base);
+      if (debianMatch != null) {
+        final major = int.tryParse(debianMatch.group(1) ?? '');
+        if (major != null) {
+          for (
+            var fallbackMajor = major - 1;
+            fallbackMajor >= 11;
+            fallbackMajor--
+          ) {
+            yield 'debian$fallbackMajor';
+          }
+        }
+      }
+    }
+
+    Iterable<String> macFallbacks() sync* {
+      final match = RegExp(r'mac(\d+)').firstMatch(base);
+      if (match != null) {
+        final major = int.tryParse(match.group(1) ?? '');
+        if (major != null) {
+          for (
+            var fallbackMajor = major - 1;
+            fallbackMajor >= 11;
+            fallbackMajor--
+          ) {
+            yield 'mac$fallbackMajor';
+          }
+        }
+      }
+    }
+
+    if (base.startsWith('ubuntu') ||
+        base.startsWith('debian') ||
+        base.startsWith('linux')) {
+      for (final fallbackBase in linuxFallbacks()) {
+        final fallback = arch.isEmpty ? fallbackBase : '$fallbackBase-$arch';
+        add(fallback);
+      }
+    } else if (base.startsWith('mac')) {
+      for (final fallbackBase in macFallbacks()) {
+        final fallback = arch.isEmpty ? fallbackBase : '$fallbackBase-$arch';
+        add(fallback);
+      }
+    }
+
+    return result;
+  }
+
+  /// Attempts to fall back to an entry that omits the architecture suffix
+  /// (e.g., mac13-x64 → mac13) for maps that encode x64 builds without an arch.
+  static String? _stripArchFallback(
+    Map<String, String> paths,
+    String candidate,
+  ) {
+    final parts = candidate.split('-');
+    if (parts.length <= 1) return null;
+
+    final base = parts.first;
+    return paths[base];
   }
 }

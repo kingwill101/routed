@@ -5,7 +5,6 @@ import 'package:path/path.dart' as path;
 import 'package:server_testing/server_testing.dart';
 import 'package:server_testing/src/browser/bootstrap/driver/driver_manager.dart'
     as bootstrap_driver;
-import 'package:server_testing/src/browser/browser_exception.dart';
 import 'package:server_testing/src/browser/interfaces/browser_type.dart';
 import 'package:webdriver/async_io.dart' as wdasync;
 import 'package:webdriver/sync_io.dart' as wdsync;
@@ -23,21 +22,7 @@ class ChromiumType implements BrowserType {
 
   @override
   Future<String> executablePath() async {
-    // Allow specifying executable path via launch options first
-    // This logic might need refinement depending on how BrowserLaunchOptions.executablePath is intended
-    // final optionsExecutablePath = /* Get from some context if needed */;
-    // if (optionsExecutablePath != null) return optionsExecutablePath;
-
-    // Otherwise, get from registry
-    final executable = TestBootstrap.registry.getExecutable(name);
-    if (executable?.directory == null || executable?.executablePath == null) {
-      throw BrowserException(
-        'Chromium executable information not found in registry.',
-      );
-    }
-    // Ensure executablePath() is called to get the relative path function result
-    final relativePath = executable!.executablePath();
-    return path.join(executable.directory!, relativePath);
+    return TestBootstrap.resolveExecutablePath(name);
   }
 
   @override
@@ -222,13 +207,6 @@ class ChromiumType implements BrowserType {
 
   // Helper to get executable path for a specific name (channel or default)
   Future<String> _executablePathFor(String executableName) async {
-    final executable = TestBootstrap.registry.getExecutable(executableName);
-    if (executable?.directory == null || executable?.executablePath == null) {
-      throw BrowserException(
-        'Executable info for "$executableName" not found in registry.',
-      );
-    }
-    final relativePath = executable!.executablePath();
-    return path.join(executable.directory!, relativePath);
+    return TestBootstrap.resolveExecutablePath(executableName);
   }
 }

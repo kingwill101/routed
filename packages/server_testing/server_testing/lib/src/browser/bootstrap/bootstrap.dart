@@ -1,16 +1,15 @@
 import 'dart:async';
 import 'dart:io';
 
+import 'package:path/path.dart' as p;
 import 'package:server_testing/server_testing.dart';
 import 'package:server_testing/src/browser/bootstrap/browser_json_loader.dart';
 import 'package:server_testing/src/browser/bootstrap/driver/driver_manager.dart'
     as bootstrap_driver; // Use prefix for clarity
 import 'package:server_testing/src/browser/bootstrap/registry.dart';
-import 'package:server_testing/src/browser/browser_exception.dart';
 import 'package:server_testing/src/browser/browser_management.dart'
     as browser_mgmt;
 import 'package:server_testing/src/browser/interfaces/browser_type.dart';
-import 'package:server_testing/src/browser/logger.dart';
 
 /// Configures and initializes the browser testing environment.
 ///
@@ -64,7 +63,12 @@ Future<void> testBootstrap([BrowserConfig? config]) async {
   // Initialize the global config and registry/driver manager singletons first
   await TestBootstrap.initialize(config);
 
-  final logger = BrowserLogger(logDir: config.logDir, verbose: config.verbose);
+  final logger = BrowserLogger(
+    logDir: config.logDir,
+    verbose: config.verbose,
+    enabled: config.loggingEnabled,
+  );
+  BrowserManagement.setLogger(logger);
 
   setUpAll(() async {
     logger.startTestLog('global_setup'); // More descriptive name
@@ -79,7 +83,10 @@ Future<void> testBootstrap([BrowserConfig? config]) async {
       );
 
       // Enhanced browser installation with auto-detection and better error handling
-      if (initialConfig.autoInstall) {
+      final hasOverride =
+          TestBootstrap.getBinaryOverride(initialConfig.browserName) != null;
+
+      if (initialConfig.autoInstall && !hasOverride) {
         logger.info(
           'Auto-install is enabled, checking browser availability...',
         );
@@ -96,6 +103,12 @@ Future<void> testBootstrap([BrowserConfig? config]) async {
             'Failed to auto-install browser, proceeding with manual installation check...',
           );
         }
+      } else if (hasOverride) {
+        logger.info(
+          'Skipping auto-install because a binary override is configured for ${initialConfig.browserName}.',
+        );
+      } else {
+        logger.info('Auto-install disabled via configuration.');
       }
 
       // 1. Ensure the DEFAULT browser binary (from initial config) is installed.
@@ -264,6 +277,19 @@ class TestBootstrap {
     final targetBrowserName = browserName ?? currentConfig.browserName;
     print("Ensuring installation for: $targetBrowserName");
 
+    final overridePath = _binaryOverrideFor(targetBrowserName);
+    if (overridePath != null) {
+      print(
+        'Binary override detected for $targetBrowserName -> $overridePath. Skipping installation.',
+      );
+      if (!File(overridePath).existsSync()) {
+        throw BrowserException(
+          'Browser override for "$targetBrowserName" points to a missing executable: $overridePath',
+        );
+      }
+      return false;
+    }
+
     // Handle potential alias (e.g., 'chrome' -> 'chromium')
     final registryName = _mapBrowserNameToRegistryName(targetBrowserName);
 
@@ -327,6 +353,82 @@ class TestBootstrap {
     };
     return browserMap[browserName.toLowerCase()] ??
         browserName; // Return original if no mapping
+  }
+
+  /// Returns the configured binary override for [browserName], if any.
+  static String? getBinaryOverride(String browserName) {
+    return _binaryOverrideFor(browserName);
+  }
+
+  /// Resolves the executable path for [browserName], honoring overrides when set.
+  static Future<String> resolveExecutablePath(String browserName) async {
+    final override = _binaryOverrideFor(browserName);
+    if (override != null) {
+      final file = File(override);
+      if (!file.existsSync()) {
+        throw BrowserException(
+          'Browser override for "$browserName" points to a missing executable: $override',
+        );
+      }
+      return override;
+    }
+
+    final registryName = _mapBrowserNameToRegistryName(browserName);
+    final executable = registry.getExecutable(registryName);
+    if (executable?.directory == null || executable?.executablePath == null) {
+      throw BrowserException(
+        'Browser definition for "$registryName" (from "$browserName") not found in registry.',
+      );
+    }
+
+    final relative = executable!.executablePath();
+    final resolved = p.join(executable.directory!, relative);
+    if (!File(resolved).existsSync()) {
+      throw BrowserException(
+        'Expected browser binary for "$registryName" at $resolved but it was not found. '
+        'Install the browser or configure a binary override.',
+      );
+    }
+    return resolved;
+  }
+
+  static String? _binaryOverrideFor(String browserName) {
+    final candidates = _overrideCandidateKeys(browserName);
+    for (final key in candidates) {
+      final direct = currentConfig.binaryOverrides[key.toLowerCase()];
+      if (direct != null && direct.isNotEmpty) {
+        return direct;
+      }
+    }
+
+    for (final key in candidates) {
+      final envKey = 'SERVER_TESTING_${_normalizeEnvKeySegment(key)}_BINARY';
+      final envValue = Platform.environment[envKey];
+      if (envValue != null && envValue.trim().isNotEmpty) {
+        return envValue.trim();
+      }
+    }
+
+    return null;
+  }
+
+  static List<String> _overrideCandidateKeys(String browserName) {
+    final normalized = browserName.toLowerCase();
+    final registryName = _mapBrowserNameToRegistryName(
+      browserName,
+    ).toLowerCase();
+    final base = normalized.split('-').first;
+
+    final candidates = <String>{browserName, normalized, registryName, base};
+
+    return candidates
+        .where((value) => value.isNotEmpty)
+        .map((value) => value.toLowerCase())
+        .toList();
+  }
+
+  static String _normalizeEnvKeySegment(String key) {
+    return key.toUpperCase().replaceAll(RegExp('[^A-Z0-9]'), '_');
   }
 }
 
