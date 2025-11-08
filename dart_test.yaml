@@ -1,0 +1,5 @@
+# Workspace-level test configuration so custom tags are recognized when tests
+# are run from the repository root.
+tags:
+  property:
+    timeout: 300s  # Allow property-based tests to run longer everywhere

@@ -3,6 +3,8 @@
 # This configuration specifies which files should be included in testing,
 # limiting the scope to only the example/ and test/ directories.
 
+include: ../../../dart_test.yaml
+
 # Include only files in the example and test directories
 filename: "*_test.dart"
 paths:
