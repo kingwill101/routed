@@ -14,4 +14,6 @@ dependencies:
 
 dev_dependencies:
   http_parser: ^4.1.2
+  property_testing: ^0.1.0
   shelf_router: ^1.1.4
+

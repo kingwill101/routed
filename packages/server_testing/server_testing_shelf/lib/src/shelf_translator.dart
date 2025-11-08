@@ -53,11 +53,11 @@ class ShelfTranslator {
       httpResponse.headers.add(name, value);
     });
 
-    // Write body
-    await shelfResponse
-        .read()
-        .pipe(httpResponse)
-        .then((_) => httpResponse.close());
+    // Write body. Avoid double-closing the response by manually piping chunks.
+    await for (final chunk in shelfResponse.read()) {
+      httpResponse.add(chunk);
+    }
+    await httpResponse.close();
   }
 
   /// Reads the body of an HttpRequest as a list of bytes.
