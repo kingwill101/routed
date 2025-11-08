@@ -1,3 +1,18 @@
+## Unreleased
+
+### Added
+
+- Switched the browser logging stack to the `contextual` package with
+  structured contexts (`logger.info('...', context: Context({...}))`).
+- Toggle browser bootstrap logging via `SERVER_TESTING_DISABLE_LOGS` /
+  `SERVER_TESTING_ENABLE_LOGS` and the new `BrowserConfig.loggingEnabled`
+  flag.
+- Added binary override support (`BrowserConfig.binaryOverrides` and
+  `SERVER_TESTING_<BROWSER>_BINARY` env vars) to reuse existing Chromium/
+  Firefox installations in CI environments.
+- Export `BrowserLogger`, `BrowserException`, and `BrowserPaths` from the
+  public browser surface so downstream packages can reach the full testing API.
+
 ## 0.1.0
 
 ### Features

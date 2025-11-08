@@ -1,115 +1,199 @@
 import 'dart:convert';
 import 'dart:io';
 
+import 'package:contextual/contextual.dart';
 import 'package:path/path.dart' as path;
 
-/// Provides logging capabilities specifically tailored for browser tests.
+/// Structured logger used by the browser bootstrap code.
 ///
-/// Logging utility for browser tests.
-///
-/// Creates structured logs for browser tests, including console output,
-/// test reports, and browser console logs. Manages log files in the
-/// specified directory.
-///
-/// ```dart
-/// final logger = BrowserLogger(logDir: 'test/logs', verbose: true);
-/// logger.startTestLog('login_test');
-/// logger.info('Starting test');
-/// await runTest();
-/// logger.info('Test complete');
-/// await logger.endTestLog();
-/// ```
-///
-/// This logger facilitates creating structured log files for individual tests,
-/// capturing timestamped messages, process ID, log levels (INFO, DEBUG, ERROR),
-/// and potentially browser console output or test reports. It helps in
-/// debugging failed tests by providing a detailed record of actions and events.
-///
-/// ### Example
-///
-/// ```dart
-/// // In test setup (e.g., inside testBootstrap or setUpAll)
-/// final logger = BrowserLogger(logDir: 'test_logs', verbose: true);
-///
-/// // Inside a test or test group setup
-/// logger.startTestLog('my_feature_test');
-/// logger.info('Navigating to homepage...');
-/// try {
-///   // ... perform test actions ...
-///   logger.debug('Intermediate state checked.');
-///   // ... more actions ...
-///   logger.info('Test completed successfully.');
-/// } catch (e, st) {
-///   logger.error('Test failed!', e, st);
-///   rethrow;
-/// } finally {
-///   await logger.endTestLog(); // Close the specific test log file
-///   // Optionally save full report or browser logs here
-///   await logger.saveTestReport('my_feature_test');
-/// }
-///
-/// // In global teardown (e.g., tearDownAll)
-/// await logger.dispose(); // Ensure all resources are released
-/// ```
+/// Wraps the `contextual` logger to provide contextual logging, optional
+/// persistence, and test-scoped metadata while allowing output to be disabled
+/// entirely in noisy CI environments.
 class BrowserLogger {
-  /// The directory where log files will be created.
-  final Directory _logDir;
+  static bool defaultEnabled() {
+    final enable = Platform.environment['SERVER_TESTING_ENABLE_LOGS'];
+    if (enable != null) {
+      if (_isTruthy(enable)) return true;
+      if (_isFalsy(enable)) return false;
+    }
 
-  /// Whether verbose (DEBUG level) logging is enabled.
+    final disable = Platform.environment['SERVER_TESTING_DISABLE_LOGS'];
+    if (disable != null && _isTruthy(disable)) {
+      return false;
+    }
+
+    return true;
+  }
+
+  static bool _isTruthy(String value) {
+    final normalized = value.trim().toLowerCase();
+    return normalized == '1' ||
+        normalized == 'true' ||
+        normalized == 'yes' ||
+        normalized == 'on';
+  }
+
+  static bool _isFalsy(String value) {
+    final normalized = value.trim().toLowerCase();
+    return normalized == '0' ||
+        normalized == 'false' ||
+        normalized == 'no' ||
+        normalized == 'off';
+  }
+
+  final String logDir;
   final bool _verbose;
+  final bool _enabled;
+  final Logger? _logger;
 
-  /// The [IOSink] for the currently active test log file, or `null`.
-  IOSink? _currentTestLog;
-
-  /// An in-memory buffer accumulating all log entries for the entire run,
-  /// potentially used for generating a final report.
   final StringBuffer _memoryLog = StringBuffer();
+  final DateTime _startTime = DateTime.now();
 
-  /// The time when the logger instance was created, used for calculating total test duration.
-  final DateTime _testStartTime = DateTime.now();
+  Context _baseContext = Context();
+  String? _currentTestName;
 
-  /// Creates a [BrowserLogger] instance.
-  ///
-  /// Creates a logger with the specified log directory and verbosity.
-  ///
-  /// Creates the log directory if it doesn't exist.
-  ///
-  /// Configures the logger to store files in [logDir] and enables DEBUG level
-  /// messages if [verbose] is true. Creates the log directory if it doesn't exist.
-  BrowserLogger({String logDir = 'test/logs', bool verbose = false})
-    : _logDir = Directory(logDir),
-      _verbose = verbose {
-    if (!_logDir.existsSync()) {
-      _logDir.createSync(recursive: true);
+  BrowserLogger({
+    this.logDir = 'test/logs',
+    bool verbose = false,
+    bool? enabled,
+  })  : _verbose = verbose,
+        _enabled = enabled ?? BrowserLogger.defaultEnabled(),
+        _logger = (enabled ?? BrowserLogger.defaultEnabled())
+            ? (Logger(
+              environment: verbose ? 'development' : 'test',
+              formatter:
+                  verbose ? PrettyLogFormatter() : PlainTextLogFormatter(),
+            )
+              ..addChannel('console', ConsoleLogDriver()))
+            : null {
+    if (_enabled) {
+      final fileDriver = DailyFileLogDriver(
+        path.join(logDir, 'server_testing'),
+        retentionDays: 7,
+        flushInterval: const Duration(seconds: 1),
+      );
+      _logger?.addChannel('file', fileDriver);
     }
   }
 
-  /// Begins logging for a specific test identified by [testName].
-  ///
-  /// Starts logging for a test with the given name.
-  ///
-  /// Creates a log file with the test name and timestamp.
-  ///
-  /// Creates a uniquely named log file (using [testName] and a timestamp) in
-  /// the configured [logDir]. Subsequent log messages will be written to this
-  /// file (and the console/memory buffer) until [endTestLog] is called.
-  /// Automatically logs initial metadata via [_writeMetadata].
   void startTestLog(String testName) {
-    final sanitizedName = testName.replaceAll(RegExp(r'[^a-zA-Z0-9]'), '_');
-    final timestamp = DateTime.now().toIso8601String().replaceAll(':', '-');
-    final logFile = File(
-      path.join(_logDir.path, '${sanitizedName}_$timestamp.log'),
-    );
-    _currentTestLog = logFile.openWrite();
+    if (!_enabled) return;
+
+    _currentTestName = testName;
+    _setBaseContext(Context({'test': testName}));
     info('Starting test: $testName');
     _writeMetadata();
   }
 
-  /// Writes standard environment metadata to the log at the start of a test log.
+  Future<void> endTestLog() async {
+    if (!_enabled) return;
+
+    if (_currentTestName != null) {
+      info('Completed test: $_currentTestName');
+    }
+
+    _currentTestName = null;
+    _setBaseContext(Context());
+  }
+
+  void info(String message, {Context? context}) {
+    if (!_enabled) return;
+
+    _memoryLog.writeln(_format('INFO', message));
+    _logger?.info(message, _mergeContext(context));
+  }
+
+  void debug(String message, {StackTrace? stackTrace, Context? context}) {
+    if (!_enabled || !_verbose) return;
+
+    final merged = _mergeContext(context);
+    if (stackTrace != null) {
+      merged.add('stackTrace', stackTrace.toString());
+    }
+
+    _memoryLog.writeln(_format('DEBUG', message));
+    _logger?.debug(message, merged);
+  }
+
+  void error(
+    String message, {
+    Object? error,
+    StackTrace? stackTrace,
+    Context? context,
+  }) {
+    if (!_enabled) return;
+
+    final merged = _mergeContext(context);
+    if (error != null) {
+      merged.add('error', error.toString());
+    }
+    if (stackTrace != null) {
+      merged.add('stackTrace', stackTrace.toString());
+    }
+
+    _memoryLog.writeln(_format('ERROR', message));
+    _logger?.error(message, merged);
+  }
+
+  Future<void> saveTestReport(String testName) async {
+    if (!_enabled) return;
+
+    final dir = Directory(logDir);
+    if (!dir.existsSync()) {
+      dir.createSync(recursive: true);
+    }
+
+    final sanitized = _sanitize(testName);
+    final timestamp = DateTime.now().toIso8601String().replaceAll(':', '-');
+    final reportPath = path.join(
+      dir.path,
+      '${sanitized}_report_$timestamp.txt',
+    );
+
+    final report = StringBuffer()
+      ..writeln('Test Report: $testName')
+      ..writeln('Timestamp: ${DateTime.now()}')
+      ..writeln('Duration: ${DateTime.now().difference(_startTime)}')
+      ..writeln('---')
+      ..writeln(_memoryLog.toString());
+
+    await File(reportPath).writeAsString(report.toString());
+  }
+
+  Future<void> saveBrowserLogs(
+    String testName,
+    List<Map<String, dynamic>> logs,
+  ) async {
+    if (!_enabled) return;
+
+    final dir = Directory(logDir);
+    if (!dir.existsSync()) {
+      dir.createSync(recursive: true);
+    }
+
+    final sanitized = _sanitize(testName);
+    final timestamp = DateTime.now().toIso8601String().replaceAll(':', '-');
+    final logPath = path.join(dir.path, '${sanitized}_browser_$timestamp.json');
+
+    final payload = {'timestamp': timestamp, 'test': testName, 'logs': logs};
+
+    await File(
+      logPath,
+    ).writeAsString(const JsonEncoder.withIndent('  ').convert(payload));
+  }
+
+  Future<void> dispose() async {
+    if (!_enabled) return;
+
+    await _logger?.shutdown();
+    _memoryLog.clear();
+  }
+
   void _writeMetadata() {
     info('Test Environment:');
     info(
-      '  Platform: ${Platform.operatingSystem} ${Platform.operatingSystemVersion}',
+      '  Platform: ${Platform.operatingSystem}'
+      ' ${Platform.operatingSystemVersion}',
     );
     info('  Dart: ${Platform.version}');
     info('  Directory: ${Directory.current.path}');
@@ -117,131 +201,25 @@ class BrowserLogger {
     info('---');
   }
 
-  /// Logs an informational [message] at the INFO level.
-  /// Logs an informational message.
-  void info(String message) {
-    final entry = _formatLogEntry('INFO', message);
-    _write(entry);
+  void _setBaseContext(Context context) {
+    _baseContext = context;
+    _logger?.clearSharedContext();
+    _logger?.withContext(_baseContext.all());
   }
 
-  /// Logs a debug [message] at the DEBUG level.
-  ///
-  /// Logs a debug message when verbose logging is enabled.
-  ///
-  /// Includes stack trace if provided.
-  ///
-  /// The message is only logged if verbose mode ([_verbose]) is enabled during
-  /// logger creation. If a [stackTrace] is provided, it is also logged.
-  void debug(String message, [StackTrace? stackTrace]) {
-    if (_verbose) {
-      final entry = _formatLogEntry('DEBUG', message);
-      _write(entry);
-
-      if (stackTrace != null) {
-        _write(_formatLogEntry('DEBUG', 'Stack trace:\n$stackTrace'));
-      }
+  Context _mergeContext(Context? context) {
+    final merged = Context(_baseContext.all());
+    if (context != null) {
+      merged.addAll(context.all());
     }
+    return merged;
   }
 
-  /// Logs an error [message] at the ERROR level.
-  ///
-  /// Logs an error message with optional error object and stack trace.
-  ///
-  /// Optionally includes the string representation of the [error] object and the
-  /// formatted [stackTrace] if provided.
-  void error(String message, [dynamic error, StackTrace? stackTrace]) {
-    final entry = _formatLogEntry('ERROR', message);
-    _write(entry);
-
-    if (error != null) {
-      _write(_formatLogEntry('ERROR', 'Cause: $error'));
-    }
-
-    if (stackTrace != null) {
-      _write(_formatLogEntry('ERROR', 'Stack trace:\n$stackTrace'));
-    }
-  }
-
-  /// Formats a log entry string including timestamp, PID, level, and message.
-  String _formatLogEntry(String level, String message) {
+  String _format(String level, String message) {
     final timestamp = DateTime.now().toIso8601String();
     return '[$timestamp] [$pid] $level: $message';
   }
 
-  /// Writes a formatted log [entry] to the console, the in-memory buffer,
-  /// and the current test log file (if active).
-  void _write(String entry) {
-    print(entry);
-    _memoryLog.writeln(entry);
-    _currentTestLog?.writeln(entry);
-  }
-
-  /// Finalizes and closes the log file for the currently active test.
-  ///
-  /// Ends the current test log and closes the log file.
-  ///
-  /// Flushes any buffered output and closes the [IOSink] associated with the
-  /// log file started by [startTestLog]. Should be called at the end of each test.
-  Future<void> endTestLog() async {
-    await _currentTestLog?.flush();
-    await _currentTestLog?.close();
-    _currentTestLog = null;
-  }
-
-  /// Creates a summary report file for a specific [testName].
-  ///
-  /// Saves a test report with complete log history.
-  ///
-  /// The report includes the full log content accumulated in the memory buffer
-  /// ([_memoryLog]), along with timestamps and total duration. The report is
-  /// saved to a uniquely named file in the [logDir].
-  Future<void> saveTestReport(String testName) async {
-    final sanitizedName = testName.replaceAll(RegExp(r'[^a-zA-Z0-9]'), '_');
-    final timestamp = DateTime.now().toIso8601String().replaceAll(':', '-');
-    final reportFile = File(
-      path.join(_logDir.path, '${sanitizedName}_report_$timestamp.txt'),
-    );
-
-    final report = StringBuffer()
-      ..writeln('Test Report: $testName')
-      ..writeln('Timestamp: ${DateTime.now()}')
-      ..writeln('Duration: ${DateTime.now().difference(_testStartTime)}')
-      ..writeln('---\n')
-      ..writeln('Complete Log:')
-      ..writeln(_memoryLog.toString());
-
-    await reportFile.writeAsString(report.toString());
-  }
-
-  /// Saves captured browser console [logs] to a JSON file for a specific [testName].
-  ///
-  /// Saves browser console logs to a JSON file.
-  ///
-  /// The [logs] are expected to be a list of structured log entries (e.g., maps
-  /// obtained from WebDriver). The file is saved with a unique name in the [logDir].
-  Future<void> saveBrowserLogs(String testName,
-      List<Map<String, dynamic>> logs,) async {
-    final sanitizedName = testName.replaceAll(RegExp(r'[^a-zA-Z0-9]'), '_');
-    final timestamp = DateTime.now().toIso8601String().replaceAll(':', '-');
-    final logFile = File(
-      path.join(_logDir.path, '${sanitizedName}_browser_$timestamp.json'),
-    );
-
-    await logFile.writeAsString(
-      const JsonEncoder.withIndent(
-        '  ',
-      ).convert({'timestamp': timestamp, 'test': testName, 'logs': logs}),
-    );
-  }
-
-  /// Cleans up logger resources.
-  ///
-  /// Releases resources and closes any open logs.
-  ///
-  /// Ensures any currently open test log file is closed and clears the in-memory
-  /// log buffer. Should be called at the very end of the test suite (e.g., in `tearDownAll`).
-  Future<void> dispose() async {
-    await endTestLog();
-    _memoryLog.clear();
-  }
+  String _sanitize(String value) =>
+      value.replaceAll(RegExp(r'[^a-zA-Z0-9]'), '_');
 }

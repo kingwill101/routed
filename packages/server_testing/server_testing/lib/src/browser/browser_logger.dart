@@ -1,201 +1,141 @@
-import 'dart:io';
 
-/// A logger for browser operations that supports verbose logging and debugging.
+import 'package:contextual/contextual.dart';
+import 'package:path/path.dart' as path;
+
+/// Logger used by browser page/component helpers.
 ///
-/// This logger provides structured logging for browser interactions, with support
-/// for different log levels and optional verbose output. It's designed to help
-/// debug browser test failures and understand the sequence of operations.
+/// Wraps the `contextual` Logger to provide structured output while
+/// maintaining the existing convenience API for browser interactions.
 class EnhancedBrowserLogger {
-  /// Whether verbose logging is enabled.
   final bool verboseLogging;
-
-  /// The directory where log files should be written, if any.
   final String? logDirectory;
+  final bool enabled;
+  final Logger? _logger;
 
-  /// Creates a new [EnhancedBrowserLogger] instance.
-  ///
-  /// If [verboseLogging] is true, detailed operation logs will be output.
-  /// If [logDirectory] is provided, logs will also be written to files in that directory.
-  const EnhancedBrowserLogger({this.verboseLogging = false, this.logDirectory});
+  EnhancedBrowserLogger({
+    this.verboseLogging = false,
+    this.logDirectory,
+    this.enabled = true,
+  }) : _logger = enabled
+           ? (Logger(
+               environment: verboseLogging ? 'development' : 'test',
+               formatter: verboseLogging
+                   ? PrettyLogFormatter()
+                   : PlainTextLogFormatter(),
+             )..addChannel('console', ConsoleLogDriver()))
+           : null {
+    if (enabled && logDirectory != null) {
+      final basePath = path.join(logDirectory!, 'browser_test');
+      _logger?.addChannel('file', DailyFileLogDriver(basePath));
+    }
+  }
 
-  /// Logs an informational message about a browser operation.
-  ///
-  /// The [action] describes what operation is being performed.
-  /// The [selector] is the CSS selector being used, if applicable.
-  /// The [details] provides additional context about the operation.
   void logInfo(
     String message, {
     String? action,
     String? selector,
     String? details,
+    Context? context,
   }) {
-    if (!verboseLogging) return;
-
-    final timestamp = DateTime.now().toIso8601String();
-    final buffer = StringBuffer();
-    buffer.write('[$timestamp] INFO: $message');
-
-    if (action != null) {
-      buffer.write(' (action: $action)');
-    }
-
-    if (selector != null) {
-      buffer.write(' (selector: $selector)');
-    }
-
-    if (details != null) {
-      buffer.write(' - $details');
-    }
-
-    final logMessage = buffer.toString();
-    print(logMessage);
-
-    _writeToFile(logMessage);
+    if (!enabled || !verboseLogging) return;
+    _logger?.info(
+      message,
+      _buildContext(action, selector, details, null, null, context: context),
+    );
   }
 
-  /// Logs a warning message about a browser operation.
-  ///
-  /// Warnings are always logged regardless of the verbose setting, as they
-  /// indicate potential issues that should be visible to developers.
   void logWarning(
     String message, {
     String? action,
     String? selector,
     String? details,
+    Context? context,
   }) {
-    final timestamp = DateTime.now().toIso8601String();
-    final buffer = StringBuffer();
-    buffer.write('[$timestamp] WARNING: $message');
-
-    if (action != null) {
-      buffer.write(' (action: $action)');
-    }
-
-    if (selector != null) {
-      buffer.write(' (selector: $selector)');
-    }
-
-    if (details != null) {
-      buffer.write(' - $details');
-    }
-
-    final logMessage = buffer.toString();
-    print(logMessage);
-
-    _writeToFile(logMessage);
+    if (!enabled) return;
+    _logger?.warning(
+      message,
+      _buildContext(action, selector, details, null, null, context: context),
+    );
   }
 
-  /// Logs an error message about a browser operation.
-  ///
-  /// Errors are always logged regardless of the verbose setting.
   void logError(
     String message, {
     String? action,
     String? selector,
     String? details,
     dynamic error,
+    Context? context,
   }) {
-    final timestamp = DateTime.now().toIso8601String();
-    final buffer = StringBuffer();
-    buffer.write('[$timestamp] ERROR: $message');
-
-    if (action != null) {
-      buffer.write(' (action: $action)');
-    }
-
-    if (selector != null) {
-      buffer.write(' (selector: $selector)');
-    }
-
-    if (details != null) {
-      buffer.write(' - $details');
-    }
-
-    if (error != null) {
-      buffer.write('\n  Underlying error: $error');
-    }
-
-    final logMessage = buffer.toString();
-    print(logMessage);
-
-    _writeToFile(logMessage);
+    if (!enabled) return;
+    _logger?.error(
+      message,
+      _buildContext(
+        action,
+        selector,
+        details,
+        null,
+        null,
+        error: error,
+        context: context,
+      ),
+    );
   }
 
-  /// Logs the start of a browser operation.
-  ///
-  /// This is useful for tracking the sequence of operations in verbose mode.
   void logOperationStart(
     String action, {
     String? selector,
     Map<String, dynamic>? parameters,
+    Context? context,
   }) {
-    if (!verboseLogging) return;
-
-    final timestamp = DateTime.now().toIso8601String();
-    final buffer = StringBuffer();
-    buffer.write('[$timestamp] START: $action');
-
-    if (selector != null) {
-      buffer.write(' on $selector');
-    }
-
-    if (parameters != null && parameters.isNotEmpty) {
-      buffer.write(' with parameters: $parameters');
-    }
-
-    final logMessage = buffer.toString();
-    print(logMessage);
-
-    _writeToFile(logMessage);
+    if (!enabled || !verboseLogging) return;
+    _logger?.info(
+      'Starting $action',
+      _buildContext(action, selector, null, parameters, null, context: context),
+    );
   }
 
-  /// Logs the completion of a browser operation.
-  ///
-  /// This is useful for tracking the sequence of operations in verbose mode.
   void logOperationComplete(
     String action, {
     String? selector,
     Duration? duration,
+    Context? context,
   }) {
-    if (!verboseLogging) return;
-
-    final timestamp = DateTime.now().toIso8601String();
-    final buffer = StringBuffer();
-    buffer.write('[$timestamp] COMPLETE: $action');
-
-    if (selector != null) {
-      buffer.write(' on $selector');
-    }
-
-    if (duration != null) {
-      buffer.write(' (took ${duration.inMilliseconds}ms)');
-    }
-
-    final logMessage = buffer.toString();
-    print(logMessage);
-
-    _writeToFile(logMessage);
+    if (!enabled || !verboseLogging) return;
+    _logger?.info(
+      'Completed $action',
+      _buildContext(action, selector, null, null, duration, context: context),
+    );
   }
 
-  /// Writes a log message to a file if a log directory is configured.
-  void _writeToFile(String message) {
-    if (logDirectory == null) return;
+  Context _buildContext(
+    String? action,
+    String? selector,
+    String? details,
+    Map<String, dynamic>? parameters,
+    Duration? duration, {
+    dynamic error,
+    Context? context,
+  }) {
+    final data = <String, dynamic>{};
 
-    try {
-      final logDir = Directory(logDirectory!);
-      if (!logDir.existsSync()) {
-        logDir.createSync(recursive: true);
-      }
-
-      final now = DateTime.now();
-      final dateStr =
-          '${now.year}-${now.month.toString().padLeft(2, '0')}-${now.day.toString().padLeft(2, '0')}';
-      final logFile = File('${logDirectory!}/browser_test_$dateStr.log');
-
-      logFile.writeAsStringSync('$message\n', mode: FileMode.append);
-    } catch (e) {
-      // Don't let logging errors break the tests
-      print('Warning: Failed to write to log file: $e');
+    if (action != null) data['action'] = action;
+    if (selector != null) data['selector'] = selector;
+    if (details != null) data['details'] = details;
+    if (parameters != null && parameters.isNotEmpty) {
+      data['parameters'] = parameters;
     }
+    if (duration != null) {
+      data['durationMs'] = duration.inMilliseconds;
+    }
+    if (error != null) {
+      data['error'] = error.toString();
+    }
+
+    final merged = Context(data);
+    if (context != null) {
+      merged.addAll(context.all());
+    }
+
+    return merged;
   }
 }

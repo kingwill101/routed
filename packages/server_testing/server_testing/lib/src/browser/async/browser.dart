@@ -73,7 +73,8 @@ class AsyncBrowser with AsyncBrowserAssertions implements Browser {
   /// Logger for browser operations and debugging.
   late final EnhancedBrowserLogger _logger = EnhancedBrowserLogger(
     verboseLogging: config.verboseLogging,
-    logDirectory: config.logDir,
+    logDirectory: config.loggingEnabled ? config.logDir : null,
+    enabled: config.loggingEnabled,
   );
 
   /// Manager for screenshot capture and automatic failure screenshots.

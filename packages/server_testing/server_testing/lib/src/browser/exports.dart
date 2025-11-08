@@ -15,9 +15,12 @@ library;
 /// Browser bootstrap and configuration
 export 'bootstrap/bootstrap.dart';
 export 'bootstrap/proxy.dart';
+export 'bootstrap/browser_paths.dart' show BrowserPaths;
 export 'browser_config.dart';
 export 'browser_logger.dart' show EnhancedBrowserLogger;
 export 'browser_management.dart' show BrowserManagement;
+export 'browser_exception.dart';
+export 'logger.dart' show BrowserLogger;
 
 /// Browser testing utilities
 export 'browser_test.dart';

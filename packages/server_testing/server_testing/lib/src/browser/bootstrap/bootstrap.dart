@@ -138,8 +138,8 @@ Future<void> testBootstrap([BrowserConfig? config]) async {
     } catch (e, stack) {
       logger.error(
         'Failed to setup global browser testing environment:',
-        e,
-        stack,
+        error: e,
+        stackTrace: stack,
       );
       rethrow; // Fail setup if critical parts fail
     }
@@ -498,8 +498,6 @@ Future<bool> _autoDetectAndInstallBrowser(
 
   logger.error(
     'Failed to auto-install any browser from preferences: $uniqueBrowsers',
-    null,
-    null,
   );
   return false;
 }

@@ -71,7 +71,7 @@ class BrowserManagement {
       if (!_isRegistryInitialized()) {
         final error =
             'Browser registry not initialized. Call testBootstrap() first.';
-        logger.error('$logContext: $error', null, null);
+        logger.error('$logContext: $error');
         throw BrowserException(error);
       }
 
@@ -106,7 +106,7 @@ class BrowserManagement {
         final error =
             'Browser "$registryName" (mapped from "$browserName") not found in registry. '
             'Available browsers: $availableBrowsers';
-        logger.error('$logContext: $error', null, null);
+        logger.error('$logContext: $error');
         throw BrowserException(error);
       }
 
@@ -151,14 +151,18 @@ class BrowserManagement {
       if (!_isBrowserInstalled(executable)) {
         final error =
             'Installation appeared to succeed but browser is not available';
-        logger.error('$logContext: $error', null, null);
+        logger.error('$logContext: $error');
         throw BrowserException(error);
       }
 
       logger.info('$logContext: Successfully installed ${executable.name}');
       return true;
     } catch (e, stack) {
-      logger.error('$logContext: Failed to install browser', e, stack);
+      logger.error(
+        '$logContext: Failed to install browser',
+        error: e,
+        stackTrace: stack,
+      );
 
       // Provide more helpful error messages for common issues
       if (e is ArgumentError) {
@@ -229,7 +233,11 @@ class BrowserManagement {
       logger.info('$logContext: Update completed successfully');
       return result;
     } catch (e, stack) {
-      logger.error('$logContext: Failed to update browser', e, stack);
+      logger.error(
+        '$logContext: Failed to update browser',
+        error: e,
+        stackTrace: stack,
+      );
       rethrow;
     }
   }
@@ -254,7 +262,7 @@ class BrowserManagement {
       if (!_isRegistryInitialized()) {
         final error =
             'Browser registry not initialized. Call testBootstrap() first.';
-        logger.error('$logContext: $error', null, null);
+        logger.error('$logContext: $error');
         throw BrowserException(error);
       }
 
@@ -266,7 +274,11 @@ class BrowserManagement {
       );
       return browserNames;
     } catch (e, stack) {
-      logger.error('$logContext: Failed to list available browsers', e, stack);
+      logger.error(
+        '$logContext: Failed to list available browsers',
+        error: e,
+        stackTrace: stack,
+      );
       rethrow;
     }
   }
@@ -302,7 +314,7 @@ class BrowserManagement {
       if (!_isRegistryInitialized()) {
         final error =
             'Browser registry not initialized. Call testBootstrap() first.';
-        logger.error('$logContext: $error', null, null);
+        logger.error('$logContext: $error');
         throw BrowserException(error);
       }
 
@@ -338,7 +350,11 @@ class BrowserManagement {
       );
       return versions;
     } catch (e, stack) {
-      logger.error('$logContext: Failed to get browser versions', e, stack);
+      logger.error(
+        '$logContext: Failed to get browser versions',
+        error: e,
+        stackTrace: stack,
+      );
       rethrow;
     }
   }
@@ -390,7 +406,7 @@ class BrowserManagement {
       logger.info('$logContext: Installation status: $isInstalled');
       return isInstalled;
     } catch (e) {
-      logger.error('$logContext: Error checking installation status', e, null);
+      logger.error('$logContext: Error checking installation status', error: e);
       return false;
     }
   }

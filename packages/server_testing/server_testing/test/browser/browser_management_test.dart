@@ -1,5 +1,4 @@
 import 'package:server_testing/server_testing.dart';
-import 'package:server_testing/src/browser/browser_exception.dart';
 
 void main() async {
   // Initialize the browser testing environment before any tests

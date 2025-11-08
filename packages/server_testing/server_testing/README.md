@@ -88,6 +88,62 @@ void main() {
 The CLI command `dart run server_testing install` downloads the required
 WebDriver binaries and keeps them up to date.
 
+#### Logging controls
+
+Browser bootstrap can generate extensive logs. You can disable them globally
+with environment variables:
+
+- `SERVER_TESTING_DISABLE_LOGS=1` disables file creation and console output.
+- `SERVER_TESTING_ENABLE_LOGS=1` re-enables logging even if it was disabled
+  earlier in the process.
+
+Per-suite control is also available via `BrowserConfig`:
+
+```dart
+import 'package:contextual/contextual.dart';
+
+await testBootstrap(
+  BrowserConfig(
+    browserName: 'chromium',
+    loggingEnabled: false,
+  ),
+);
+
+// You can also attach structured metadata to individual log entries.
+final logger = BrowserLogger();
+logger.info(
+  'Startup complete',
+  context: Context({'service': 'dashboard', 'pid': pid}),
+);
+```
+
+#### Overriding browser executables
+
+If your environment already has Chrome/Firefox installed, you can skip the
+auto-downloader by pointing server_testing at existing binaries:
+
+```bash
+export SERVER_TESTING_CHROMIUM_BINARY="/usr/bin/google-chrome"
+export SERVER_TESTING_FIREFOX_BINARY="/usr/bin/firefox"
+```
+
+or directly through `BrowserConfig`:
+
+```dart
+await testBootstrap(
+  BrowserConfig(
+    binaryOverrides: {
+      'chromium': '/usr/bin/google-chrome',
+      'firefox': '/usr/bin/firefox',
+    },
+  ),
+);
+```
+
+When overrides are present the bootstrap is read-only: installation is skipped
+but the paths are validated so you'll get a clear failure if a binary is
+missing.
+
 ## Request handler adapters
 
 Implementing `RequestHandler` lets you wrap any framework:

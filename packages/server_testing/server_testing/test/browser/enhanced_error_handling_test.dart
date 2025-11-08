@@ -156,7 +156,7 @@ void main() {
     });
 
     test('should not log when verbose logging is disabled', () {
-      final logger = const EnhancedBrowserLogger(verboseLogging: false);
+      final logger =  EnhancedBrowserLogger(verboseLogging: false);
 
       // This should not throw or print anything
       logger.logInfo('Test message');
@@ -165,7 +165,7 @@ void main() {
     });
 
     test('should log when verbose logging is enabled', () {
-      final logger = const EnhancedBrowserLogger(verboseLogging: true);
+      final logger = EnhancedBrowserLogger(verboseLogging: true);
 
       // These should not throw (we can't easily test console output in unit tests)
       logger.logInfo('Test message', action: 'test', selector: '#test');
@@ -182,7 +182,7 @@ void main() {
     });
 
     test('should always log warnings and errors', () {
-      final logger = const EnhancedBrowserLogger(verboseLogging: false);
+      final logger = EnhancedBrowserLogger(verboseLogging: false);
 
       // These should not throw even with verbose logging disabled
       logger.logWarning('Test warning', action: 'test', selector: '#test');
@@ -222,7 +222,7 @@ void main() {
 
     test('should handle log file write errors gracefully', () {
       // Use an invalid directory path
-      final logger = const EnhancedBrowserLogger(
+      final logger = EnhancedBrowserLogger(
         verboseLogging: true,
         logDirectory: '/invalid/path/that/does/not/exist',
       );

@@ -2,6 +2,7 @@ import 'package:server_testing/src/browser/bootstrap/browser_paths.dart';
 import 'package:server_testing/src/browser/bootstrap/downloader.dart';
 import 'package:server_testing/src/browser/bootstrap/proxy.dart';
 import 'package:server_testing/src/browser/bootstrap/version.dart';
+import 'package:server_testing/src/browser/logger.dart';
 
 /// Generates a default set of WebDriver capabilities for the specified [browserName].
 ///
@@ -150,6 +151,10 @@ class BrowserConfig {
   /// The directory where test logs should be saved. Defaults to `test/logs`.
   final String logDir;
 
+  /// Whether to emit logger output or create log files.
+  /// Useful in CI runs where log volume should be reduced.
+  final bool loggingEnabled;
+
   /// Whether to enable debug mode.
   /// Whether to enable debug mode, which might enable more detailed logging
   /// or change other behaviors. Defaults to `false`.
@@ -182,6 +187,12 @@ class BrowserConfig {
   /// This is similar to [autoDownload] but provides a more intuitive name
   /// for the Laravel Dusk-inspired API. Defaults to `true`.
   final bool autoInstall;
+
+  /// Absolute paths for browser binaries that should be used instead of the
+  /// bundled installers. Keys are browser names (e.g. 'chromium', 'firefox').
+  /// When an entry is provided, installation is skipped and the provided path
+  /// is used directly.
+  final Map<String, String> binaryOverrides;
 
   /// Creates a new [BrowserConfig] instance.
   ///
@@ -218,7 +229,16 @@ class BrowserConfig {
     this.verboseLogging = false,
     this.screenshotDirectory = 'test_screenshots',
     this.autoInstall = true,
-  }) : capabilities = capabilities ?? _defaultCapabilities(browserName);
+    Map<String, String>? binaryOverrides,
+    bool? loggingEnabled,
+  }) : loggingEnabled = loggingEnabled ?? BrowserLogger.defaultEnabled(),
+       binaryOverrides = Map.unmodifiable({
+         for (final entry
+             in (binaryOverrides ?? const <String, String>{}).entries)
+           if (entry.value.trim().isNotEmpty)
+             entry.key.toLowerCase(): entry.value.trim(),
+       }),
+       capabilities = capabilities ?? _defaultCapabilities(browserName);
 
   /// Creates a new [BrowserConfig] instance with values copied from this
   /// instance, overriding specific fields with the provided non-null values.
@@ -245,6 +265,8 @@ class BrowserConfig {
     bool? verboseLogging,
     String? screenshotDirectory,
     bool? autoInstall,
+    Map<String, String>? binaryOverrides,
+    bool? loggingEnabled,
   }) {
     return BrowserConfig(
       browserName: browserName ?? this.browserName,
@@ -268,6 +290,8 @@ class BrowserConfig {
       verboseLogging: verboseLogging ?? this.verboseLogging,
       screenshotDirectory: screenshotDirectory ?? this.screenshotDirectory,
       autoInstall: autoInstall ?? this.autoInstall,
+      binaryOverrides: binaryOverrides ?? this.binaryOverrides,
+      loggingEnabled: loggingEnabled ?? this.loggingEnabled,
     );
   }
 }
