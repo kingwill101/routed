@@ -34,10 +34,106 @@ void main() {
     for (final mode in TransportMode.values) {
       group('with ${mode.name} transport', () {
         late TestClient client;
+        TransportOptions transportOptions() =>
+            TransportOptions(
+              mode: mode,
+              remoteAddress: InternetAddress.loopbackIPv4,
+            );
 
         tearDown(() async {
           await client.close();
         });
+
+        test(
+          'emits secure CSRF cookie when forwarded HTTPS',
+              () async {
+            final sessionConfig = buildSessionConfig();
+            final engine = Engine(
+              config: EngineConfig(
+                features: const EngineFeatures(enableProxySupport: true),
+              ),
+              middlewares: [csrfMiddleware()],
+              options: [
+                withSessionConfig(sessionConfig),
+                withTrustedProxies(['127.0.0.1/32', '::1/128']),
+              ],
+            )
+              ..get('/form', (ctx) => ctx.string('ok'));
+            client = TestClient(
+              RoutedRequestHandler(engine),
+              mode: mode,
+              options: transportOptions(),
+            );
+
+            final response = await client.get(
+              '/form',
+              headers: {
+                'X-Forwarded-Proto': ['https'],
+              },
+            );
+
+            response.assertStatus(HttpStatus.ok);
+            final csrfCookieName = engine.config.security.csrfCookieName;
+            final setCookies =
+                response.headers[HttpHeaders.setCookieHeader]?.cast<String>() ??
+                    const <String>[];
+            final cookieHeader = setCookies.firstWhere(
+                  (cookie) => cookie.startsWith('$csrfCookieName='),
+              orElse: () => '',
+            );
+            expect(
+              cookieHeader,
+              isNotEmpty,
+              reason: 'expected CSRF cookie to be issued',
+            );
+            expect(cookieHeader.contains('Secure'), isTrue);
+            expect(cookieHeader.contains('SameSite=Strict'), isTrue);
+          },
+        );
+
+        test(
+          'emits secure cookie when Forwarded proto is quoted',
+              () async {
+            final sessionConfig = buildSessionConfig();
+            final engine = Engine(
+              config: EngineConfig(
+                features: const EngineFeatures(enableProxySupport: true),
+              ),
+              middlewares: [csrfMiddleware()],
+              options: [
+                withSessionConfig(sessionConfig),
+                withTrustedProxies(['127.0.0.1/32', '::1/128']),
+              ],
+            )
+              ..get('/form', (ctx) => ctx.string('ok'));
+
+            client = TestClient(
+              RoutedRequestHandler(engine),
+              mode: mode,
+              options: transportOptions(),
+            );
+
+            final response = await client.get(
+              '/form',
+              headers: {
+                'Forwarded': ['for=1.2.3.4;proto="https"'],
+              },
+            );
+
+            response.assertStatus(HttpStatus.ok);
+            final csrfCookieName = engine.config.security.csrfCookieName;
+            final cookies =
+                response.headers[HttpHeaders.setCookieHeader]?.cast<String>() ??
+                    const <String>[];
+            final header = cookies.firstWhere(
+                  (cookie) => cookie.startsWith('$csrfCookieName='),
+              orElse: () => '',
+            );
+            expect(header, isNotEmpty);
+            expect(header.contains('Secure'), isTrue);
+            expect(header.contains('SameSite=Strict'), isTrue);
+          },
+        );
 
         test(
           'issues token once and accepts header-based submissions',
@@ -48,7 +144,11 @@ void main() {
               options: [withSessionConfig(sessionConfig)],
             )..get('/form', (ctx) => ctx.string('ok'));
 
-            client = TestClient(RoutedRequestHandler(engine), mode: mode);
+            client = TestClient(
+              RoutedRequestHandler(engine),
+              mode: mode,
+              options: transportOptions(),
+            );
 
             final first = await client.get('/form');
             first.assertStatus(HttpStatus.ok);
@@ -93,7 +193,11 @@ void main() {
             options: [withSessionConfig(sessionConfig)],
           )..post('/submit', (ctx) => ctx.string('submitted'));
 
-          client = TestClient(RoutedRequestHandler(engine), mode: mode);
+          client = TestClient(
+            RoutedRequestHandler(engine),
+            mode: mode,
+            options: transportOptions(),
+          );
 
           final response = await client.post('/submit', 'data');
           response.assertStatus(HttpStatus.forbidden);
@@ -109,7 +213,11 @@ void main() {
                 ..get('/form', (ctx) => ctx.string('form'))
                 ..post('/submit', (ctx) => ctx.string('submitted'));
 
-          client = TestClient(RoutedRequestHandler(engine), mode: mode);
+          client = TestClient(
+            RoutedRequestHandler(engine),
+            mode: mode,
+            options: transportOptions(),
+          );
 
           // Get CSRF token
           final first = await client.get('/form');
@@ -148,7 +256,11 @@ void main() {
                 ..get('/page2', (ctx) => ctx.string('page2'))
                 ..get('/page3', (ctx) => ctx.string('page3'));
 
-          client = TestClient(RoutedRequestHandler(engine), mode: mode);
+          client = TestClient(
+            RoutedRequestHandler(engine),
+            mode: mode,
+            options: transportOptions(),
+          );
 
           // First request
           final first = await client.get('/page1');
@@ -197,7 +309,11 @@ void main() {
                 ..head('/safe-head', (ctx) => ctx.string('ok'))
                 ..options('/safe-options', (ctx) => ctx.string('ok'));
 
-          client = TestClient(RoutedRequestHandler(engine), mode: mode);
+          client = TestClient(
+            RoutedRequestHandler(engine),
+            mode: mode,
+            options: transportOptions(),
+          );
 
           // GET without token should work
           final getResponse = await client.get('/safe-get');

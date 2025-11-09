@@ -152,6 +152,36 @@ void main() {
       expect(context['nested'], equals({'tier': 'prod'}));
       expect(context['header_x_correlation_id'], equals('corr-123'));
     });
+
+    test('custom log driver from registry is used', () async {
+      RoutedLogger.reset();
+
+      final engine = Engine(
+        configItems: {
+          'logging': {
+            'default': 'custom',
+            'channels': {
+              'custom': {'driver': 'capture'},
+            },
+          },
+        },
+      );
+      addTearDown(() async => await engine.close());
+
+      final registry = engine.container.get<LogDriverRegistry>();
+      final capture = _BufferLogDriver();
+      registry.register('capture', (ctx) => capture, override: true);
+
+      engine.get('/ping', (ctx) => ctx.string('pong'));
+      await engine.initialize();
+
+      client = TestClient(RoutedRequestHandler(engine));
+      final response = await client!.get('/ping');
+      response.assertStatus(200);
+
+      expect(capture.entries, isNotEmpty);
+      expect(capture.entries.any((entry) => entry.contains('/ping')), isTrue);
+    });
   });
 }
 
@@ -168,17 +198,15 @@ class _CapturingLoggerFactory {
         for (final entry in captured.entries) entry.key: entry.value,
       });
 
-    unawaited(
-      logger.setListener((entry) {
-        messages.add(
-          _LogEntry(
-            entry.record.level,
-            entry.record.message,
-            entry.record.context.all(),
-          ),
-        );
-      }),
-    );
+    logger.setListener((entry) {
+      messages.add(
+        _LogEntry(
+          entry.record.level,
+          entry.record.message,
+          entry.record.context.all(),
+        ),
+      );
+    });
 
     return logger;
   }
@@ -190,4 +218,15 @@ class _LogEntry {
   final contextual.Level level;
   final String message;
   final Map<String, dynamic> context;
+}
+
+class _BufferLogDriver extends contextual.LogDriver {
+  _BufferLogDriver() : super('buffer');
+
+  final List<String> entries = [];
+
+  @override
+  Future<void> log(contextual.LogEntry entry) async {
+    entries.add(entry.message);
+  }
 }

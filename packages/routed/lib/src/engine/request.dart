@@ -24,7 +24,7 @@ extension ServerExtension on Engine {
     }
     // Ensure proxy configuration is parsed
     if (config.features.enableProxySupport) {
-      await config.parseTrustedProxies();
+      await config.ensureTrustedProxiesParsed();
     }
     if (echo) printRoutes();
 
@@ -138,6 +138,10 @@ extension ServerExtension on Engine {
     }
     final path = httpRequest.uri.path;
     final method = httpRequest.method;
+
+    if (config.features.enableProxySupport) {
+      await config.ensureTrustedProxiesParsed();
+    }
 
     final configMap = container.get<Config>();
     final maxRequestSizeSetting = configMap.get('security.max_request_size');

@@ -1,16 +1,13 @@
 import 'package:file/memory.dart';
+import 'package:property_testing/property_testing.dart';
 import 'package:routed/routed.dart';
 import 'package:routed/src/file_handler.dart';
 import 'package:routed_testing/routed_testing.dart';
 import 'package:server_testing/server_testing.dart';
 
+import 'test_helpers.dart';
+
 void main() {
-  late TestClient client;
-
-  tearDown(() async {
-    await client.close();
-  });
-
   group('Route Matching Tests', () {
     /// Test suite for verifying route matching and HTTP method handling in the routing engine
     ///
@@ -33,40 +30,29 @@ void main() {
     /// @see Engine
     /// @see RoutedRequestHandler
     /// @see TestClient
-    test('Single route match works for various HTTP methods', () async {
-      final engine = Engine();
+    test('routes respond across random HTTP verb sets (property)', () async {
+      final runner = PropertyTestRunner<Set<String>>(httpMethodSet(), (
+        methods,
+      ) async {
+        final engine = Engine();
+        for (final method in methods) {
+          engine.handle(method, '/test', (ctx) => ctx.string(method));
+        }
 
-      // Define routes for all HTTP methods
-      final methods = [
-        'GET',
-        'POST',
-        'PUT',
-        'PATCH',
-        'HEAD',
-        'OPTIONS',
-        'DELETE',
-        'CONNECT',
-        'TRACE',
-      ];
+        final localClient = TestClient(RoutedRequestHandler(engine));
+        for (final method in methods) {
+          final response = await localClient.request(method, '/test');
+          response
+            ..assertStatus(200)
+            ..assertBodyEquals(method);
+        }
 
-      for (final method in methods) {
-        engine.handle(method, '/test', (ctx) => ctx.string('ok'));
-        engine.handle(method, '/test2', (ctx) => ctx.string('any ok'));
-      }
+        await localClient.close();
+        await engine.close();
+      }, PropertyConfig(numTests: 30, seed: 20250311));
 
-      client = TestClient(RoutedRequestHandler(engine));
-
-      for (final method in methods) {
-        final response = await client.request(method, '/test');
-        response
-          ..assertStatus(200)
-          ..assertBodyEquals('ok');
-
-        final response2 = await client.request(method, '/test2');
-        response2
-          ..assertStatus(200)
-          ..assertBodyEquals('any ok');
-      }
+      final result = await runner.run();
+      expect(result.success, isTrue, reason: result.report);
     });
 
     test('Route mismatch returns 404', () async {
@@ -75,7 +61,9 @@ void main() {
       // Define a single POST route
       engine.post('/test_2', (ctx) => ctx.string('post ok'));
 
-      client = TestClient(RoutedRequestHandler(engine));
+      final client = TestClient(RoutedRequestHandler(engine));
+      addTearDown(client.close);
+      addTearDown(engine.close);
 
       final response = await client.get('/test');
       response.assertStatus(404);
@@ -93,7 +81,9 @@ void main() {
       engine.get('/path', (ctx) => ctx.string('get ok'));
       engine.post('/path2', (ctx) => ctx.string('post ok'));
 
-      client = TestClient(RoutedRequestHandler(engine));
+      final client = TestClient(RoutedRequestHandler(engine));
+      addTearDown(client.close);
+      addTearDown(engine.close);
 
       // Test trailing slash redirects
       var response = await client.get('/path/');
@@ -116,7 +106,9 @@ void main() {
 
       engine.get('/path', (ctx) => ctx.string('ok'));
 
-      client = TestClient(RoutedRequestHandler(engine));
+      final client = TestClient(RoutedRequestHandler(engine));
+      addTearDown(client.close);
+      addTearDown(engine.close);
 
       final response = await client.get('/path/');
       response.assertStatus(404);
@@ -136,7 +128,9 @@ void main() {
         });
       });
 
-      client = TestClient(RoutedRequestHandler(engine));
+      final client = TestClient(RoutedRequestHandler(engine));
+      addTearDown(client.close);
+      addTearDown(engine.close);
 
       final response = await client.get('/test/john/smith/is/super/great');
       response
@@ -161,7 +155,9 @@ void main() {
 
       engine.staticFS('/static', Dir('/thisreallydoesntexist', fileSystem: fs));
 
-      client = TestClient(RoutedRequestHandler(engine));
+      final client = TestClient(RoutedRequestHandler(engine));
+      addTearDown(client.close);
+      addTearDown(engine.close);
 
       final response = await client.get('/static/nonexistent');
       response.assertStatus(404);
@@ -177,7 +173,9 @@ void main() {
 
       engine.staticFS('/static', Dir(dir.path, fileSystem: fs));
 
-      client = TestClient(RoutedRequestHandler(engine));
+      final client = TestClient(RoutedRequestHandler(engine));
+      addTearDown(client.close);
+      addTearDown(engine.close);
 
       final response = await client.get('/static/nonexistent');
       response.assertStatus(404);
@@ -197,7 +195,9 @@ void main() {
       final dir = fs.directory('nonexistent');
       engine.staticFS('/static', Dir(dir.path, fileSystem: fs));
 
-      client = TestClient(RoutedRequestHandler(engine));
+      final client = TestClient(RoutedRequestHandler(engine));
+      addTearDown(client.close);
+      addTearDown(engine.close);
 
       await client.get('/static/file1');
       expect(middlewareCalls, equals(1));
@@ -215,13 +215,15 @@ void main() {
 
       final filename = file.uri.pathSegments.last;
 
-      engine.static('/using_static', dir.path, fileSystem:fs);
+      engine.static('/using_static', dir.path, fileSystem: fs);
       engine.staticFile('/result', file.path, fs);
 
-      client = TestClient(
+      final client = TestClient(
         RoutedRequestHandler(engine),
         mode: TransportMode.inMemory,
       );
+      addTearDown(client.close);
+      addTearDown(engine.close);
 
       // Test GET requests
       final staticResponse = await client.get('/using_static/$filename');
@@ -250,10 +252,12 @@ void main() {
 
       engine.staticFS('/', Dir(dir.path, listDirectory: true, fileSystem: fs));
 
-      client = TestClient(
+      final client = TestClient(
         RoutedRequestHandler(engine),
         mode: TransportMode.inMemory,
       );
+      addTearDown(client.close);
+      addTearDown(engine.close);
 
       final response = await client.get('/');
       response
@@ -270,7 +274,9 @@ void main() {
         ..createSync(recursive: true);
       engine.staticFS('/static', Dir(dir.path, fileSystem: fs));
 
-      client = TestClient(RoutedRequestHandler(engine));
+      final client = TestClient(RoutedRequestHandler(engine));
+      addTearDown(client.close);
+      addTearDown(engine.close);
 
       final response = await client.get('/static/../../somefile');
       response.assertStatus(404);
@@ -280,9 +286,11 @@ void main() {
       final engine = Engine();
 
       final dir = fs.directory('nolist')..createSync();
-      engine.static('/', dir.path, fileSystem:fs);
+      engine.static('/', dir.path, fileSystem: fs);
 
-      client = TestClient(RoutedRequestHandler(engine));
+      final client = TestClient(RoutedRequestHandler(engine));
+      addTearDown(client.close);
+      addTearDown(engine.close);
 
       final response = await client.get('/');
       response.assertStatus(404);
@@ -304,7 +312,9 @@ void main() {
 
       engine.staticFile('/static/{file}', './nonexistent');
 
-      client = TestClient(RoutedRequestHandler(engine));
+      final client = TestClient(RoutedRequestHandler(engine));
+      addTearDown(client.close);
+      addTearDown(engine.close);
 
       (await client.get('/static/file1')).assertStatus(404);
       (await client.get('/static/file2')).assertStatus(404);
@@ -324,7 +334,9 @@ void main() {
       engine.get('/path', (ctx) => ctx.string('get ok'));
       engine.post('/path', (ctx) => ctx.string('post ok'));
 
-      client = TestClient(RoutedRequestHandler(engine));
+      final client = TestClient(RoutedRequestHandler(engine));
+      addTearDown(client.close);
+      addTearDown(engine.close);
 
       final response = await client.put('/path', null);
       response
@@ -341,7 +353,9 @@ void main() {
 
       engine.post('/path', (ctx) => ctx.string('post ok'));
 
-      client = TestClient(RoutedRequestHandler(engine));
+      final client = TestClient(RoutedRequestHandler(engine));
+      addTearDown(client.close);
+      addTearDown(engine.close);
 
       final response = await client.get('/path');
       response.assertStatus(404);

@@ -1,5 +1,6 @@
 import 'dart:convert';
 
+import 'package:property_testing/property_testing.dart';
 import 'package:routed/routed.dart';
 import 'package:routed/src/sessions/cookie_store.dart';
 import 'package:routed/src/sessions/secure_cookie.dart';
@@ -235,4 +236,61 @@ void main() {
 
   runSessionSuite('in-memory transport', TransportMode.inMemory);
   runSessionSuite('ephemeral transport', TransportMode.ephemeralServer);
+
+  test('read-only sessions avoid emitting Set-Cookie headers', () async {
+    const cookieName = 'routed_session';
+    final generator = Gen.integer(min: 0, max: 4);
+    final runner = PropertyTestRunner<int>(generator, (reads) async {
+      final sessionConfig = SessionConfig(
+        cookieName: cookieName,
+        store: CookieStore(
+          codecs: [
+            SecureCookie(
+              useEncryption: true,
+              useSigning: true,
+              key: SecureCookie.generateKey(),
+            ),
+          ],
+        ),
+      );
+
+      final engine = Engine(options: [withSessionConfig(sessionConfig)])
+        ..get('/login', (ctx) {
+          ctx.setSession('user', 'alice');
+          return ctx.string('ok');
+        })
+        ..get('/profile', (ctx) {
+          ctx.getSession<String>('user');
+          return ctx.string('profile');
+        });
+
+      final client = TestClient(RoutedRequestHandler(engine));
+      final loginResponse = await client.get('/login');
+      final cookie = loginResponse.cookie(cookieName);
+      expect(cookie, isNotNull);
+      final cookieHeader = '${cookie!.name}=${cookie.value}';
+
+      for (var i = 0; i < reads; i++) {
+        final response = await client.get(
+          '/profile',
+          headers: {
+            HttpHeaders.cookieHeader: [cookieHeader],
+          },
+        );
+
+        response.assertStatus(200);
+        final List<String>? setCookieHeader =
+            response.headers[HttpHeaders.setCookieHeader];
+        if (setCookieHeader == null || setCookieHeader.isEmpty) {
+          continue;
+        }
+        fail('Unexpected Set-Cookie header(s): $setCookieHeader');
+      }
+
+      await client.close();
+    }, PropertyConfig(numTests: 25, seed: 20250229));
+
+    final result = await runner.run();
+    expect(result.success, isTrue, reason: result.report);
+  });
 }

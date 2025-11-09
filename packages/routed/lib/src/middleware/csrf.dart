@@ -2,10 +2,9 @@ import 'dart:convert';
 import 'dart:io';
 import 'dart:math';
 
+import 'package:routed/middlewares.dart' show Middleware, Next;
 import 'package:routed/src/context/context.dart';
 import 'package:routed/src/engine/config.dart' show SessionConfig;
-
-import 'package:routed/middlewares.dart' show Middleware, Next;
 
 Middleware csrfMiddleware() {
   return (EngineContext ctx, Next next) async {
@@ -32,7 +31,7 @@ Middleware csrfMiddleware() {
 
         // Use a relaxed SameSite policy for non-HTTPS (common in local dev)
         // while keeping `secure:true` & `strict` in production.
-        final isSecure = ctx.request.uri.scheme == 'https';
+        final isSecure = _isSecureRequest(ctx);
         ctx.setCookie(
           config.security.csrfCookieName,
           token,
@@ -74,4 +73,88 @@ String generateCsrfToken() {
   final random = Random.secure();
   final bytes = List<int>.generate(32, (i) => random.nextInt(256));
   return base64Url.encode(bytes);
+}
+
+bool _isSecureRequest(EngineContext ctx) {
+  if (ctx.request.uri.scheme == 'https') {
+    return true;
+  }
+
+  final config = ctx.engineConfig;
+  if (!config.features.enableProxySupport) {
+    return false;
+  }
+
+  final remoteAddress = ctx.request.httpRequest.connectionInfo?.remoteAddress;
+  if (remoteAddress == null) {
+    return false;
+  }
+
+  if (!config.isTrustedProxy(remoteAddress)) {
+    return false;
+  }
+
+  bool matchesHttps(String? value) {
+    if (value == null || value.isEmpty) {
+      return false;
+    }
+    final candidates = value
+        .split(',')
+        .map((entry) => entry.trim().toLowerCase())
+        .where((entry) => entry.isNotEmpty);
+    for (final candidate in candidates) {
+      final normalized = candidate.replaceAll('"', '');
+      if (normalized == 'https' || normalized == 'https://') {
+        return true;
+      }
+    }
+    return false;
+  }
+
+  final forwardedProto = ctx.requestHeader('X-Forwarded-Proto');
+  if (matchesHttps(forwardedProto)) {
+    return true;
+  }
+
+  final forwardedScheme = ctx.requestHeader('X-Forwarded-Scheme');
+  if (matchesHttps(forwardedScheme)) {
+    return true;
+  }
+
+  final cloudFrontProto = ctx.requestHeader('CloudFront-Forwarded-Proto');
+  if (matchesHttps(cloudFrontProto)) {
+    return true;
+  }
+
+  final forwarded = ctx.requestHeader('Forwarded');
+  if (forwarded != null && forwarded.isNotEmpty) {
+    final segments = forwarded
+        .split(',')
+        .expand((segment) => segment.split(';'))
+        .map((pair) => pair.trim().toLowerCase());
+
+    for (final segment in segments) {
+      if (segment.startsWith('proto=')) {
+        final value = segment
+            .substring('proto='.length)
+            .trim()
+            .replaceAll('"', '');
+        if (value == 'https') {
+          return true;
+        }
+      }
+    }
+  }
+
+  final frontEndHttps = ctx.requestHeader('Front-End-Https');
+  if (frontEndHttps != null && frontEndHttps.toLowerCase() == 'on') {
+    return true;
+  }
+
+  final xForwardedSsl = ctx.requestHeader('X-Forwarded-Ssl');
+  if (xForwardedSsl != null && xForwardedSsl.toLowerCase() == 'on') {
+    return true;
+  }
+
+  return false;
 }

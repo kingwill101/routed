@@ -563,16 +563,31 @@ class EngineConfig {
         'Proxy support not enabled. Enable with EngineFeatures.enableProxySupport',
       );
     }
+    if (_parsedProxies.isNotEmpty || _trustedProxies.isEmpty) {
+      return;
+    }
     _parsedProxies = await Future.wait(
       trustedProxies.map((proxy) async {
         final parts = proxy.split('/');
-        final addr = await InternetAddress.lookup(parts[0]);
+        final host = parts[0];
+        final parsed = InternetAddress.tryParse(host);
+        final lookupResult = parsed != null
+            ? <InternetAddress>[parsed]
+            : await InternetAddress.lookup(host);
+        final addr = lookupResult.first;
         final prefix = parts.length > 1
             ? int.parse(parts[1])
-            : (addr.first.type == InternetAddressType.IPv4 ? 32 : 128);
-        return (address: addr.first, prefixLength: prefix);
+            : (addr.type == InternetAddressType.IPv4 ? 32 : 128);
+        return (address: addr, prefixLength: prefix);
       }),
     );
+  }
+
+  Future<void> ensureTrustedProxiesParsed() async {
+    if (!features.enableProxySupport || _parsedProxies.isNotEmpty) {
+      return;
+    }
+    await parseTrustedProxies();
   }
 
   /// Checks if the given `InternetAddress` is a trusted proxy.
@@ -614,6 +629,7 @@ class EngineConfig {
       );
     }
     _trustedProxies = value;
+    _parsedProxies = [];
   }
 
   String? get trustedPlatform => _trustedPlatform;

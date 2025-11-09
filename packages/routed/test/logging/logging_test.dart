@@ -1,4 +1,3 @@
-import 'dart:async';
 
 import 'package:contextual/contextual.dart' as contextual;
 import 'package:routed/routed.dart';
@@ -78,19 +77,15 @@ class _CapturingLoggerFactory {
       ..withContext({
         for (final entry in captured.entries) entry.key: entry.value,
       });
-
-    unawaited(
-      logger.setListener((entry) {
-        messages.add(
-          _LogEntry(
-            entry.record.level,
-            entry.record.message,
-            entry.record.context.all(),
-          ),
-        );
-      }),
-    );
-
+    logger.setListener((entry) {
+      messages.add(
+        _LogEntry(
+          entry.record.level,
+          entry.record.message,
+          entry.record.context.all(),
+        ),
+      );
+    });
     return logger;
   }
 }

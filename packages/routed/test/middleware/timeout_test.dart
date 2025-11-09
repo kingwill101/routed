@@ -1,5 +1,6 @@
-import 'package:routed/routed.dart';
+import 'package:property_testing/property_testing.dart';
 import 'package:routed/middlewares.dart';
+import 'package:routed/routed.dart';
 import 'package:routed_testing/routed_testing.dart';
 import 'package:server_testing/server_testing.dart';
 
@@ -7,12 +8,6 @@ void main() {
   group('timeoutMiddleware', () {
     for (final mode in TransportMode.values) {
       group('with ${mode.name} transport', () {
-        late TestClient client;
-
-        tearDown(() async {
-          await client.close();
-        });
-
         test('returns 504 when handler exceeds allotted time', () async {
           final engine = Engine()
             ..get(
@@ -26,7 +21,7 @@ void main() {
               ],
             );
 
-          client = TestClient(RoutedRequestHandler(engine), mode: mode);
+          final client = _startTimeoutClient(engine, mode);
           final response = await client.get('/slow');
           response
             ..assertStatus(HttpStatus.gatewayTimeout)
@@ -46,7 +41,7 @@ void main() {
               ],
             );
 
-          client = TestClient(RoutedRequestHandler(engine), mode: mode);
+          final client = _startTimeoutClient(engine, mode);
           final response = await client.get('/fast');
           response
             ..assertStatus(HttpStatus.ok)
@@ -63,7 +58,7 @@ void main() {
               ],
             );
 
-          client = TestClient(RoutedRequestHandler(engine), mode: mode);
+          final client = _startTimeoutClient(engine, mode);
           final response = await client.get('/sync');
           response
             ..assertStatus(HttpStatus.ok)
@@ -81,7 +76,7 @@ void main() {
               middlewares: [timeoutMiddleware(const Duration(milliseconds: 5))],
             );
 
-          client = TestClient(RoutedRequestHandler(engine), mode: mode);
+          final client = _startTimeoutClient(engine, mode);
           final response = await client.get('/very-slow');
           response.assertStatus(HttpStatus.gatewayTimeout);
         });
@@ -97,7 +92,7 @@ void main() {
               middlewares: [timeoutMiddleware(const Duration(seconds: 5))],
             );
 
-          client = TestClient(RoutedRequestHandler(engine), mode: mode);
+          final client = _startTimeoutClient(engine, mode);
           final response = await client.get('/reasonable');
           response
             ..assertStatus(HttpStatus.ok)
@@ -127,7 +122,7 @@ void main() {
               ],
             );
 
-          client = TestClient(RoutedRequestHandler(engine), mode: mode);
+          final client = _startTimeoutClient(engine, mode);
 
           final fastResponse = await client.get('/mixed-1');
           fastResponse
@@ -161,7 +156,7 @@ void main() {
               ],
             );
 
-          client = TestClient(RoutedRequestHandler(engine), mode: mode);
+          final client = _startTimeoutClient(engine, mode);
 
           final shortResponse = await client.get('/short-timeout');
           shortResponse.assertStatus(HttpStatus.gatewayTimeout);
@@ -185,7 +180,7 @@ void main() {
               ],
             );
 
-          client = TestClient(RoutedRequestHandler(engine), mode: mode);
+          final client = _startTimeoutClient(engine, mode);
           final response = await client.get('/json-timeout');
           response.assertStatus(HttpStatus.gatewayTimeout);
         });
@@ -206,7 +201,7 @@ void main() {
               ],
             );
 
-          client = TestClient(RoutedRequestHandler(engine), mode: mode);
+          final client = _startTimeoutClient(engine, mode);
           final response = await client.get('/data');
           response
             ..assertStatus(HttpStatus.ok)
@@ -235,7 +230,7 @@ void main() {
               ],
             );
 
-          client = TestClient(RoutedRequestHandler(engine), mode: mode);
+          final client = _startTimeoutClient(engine, mode);
           final response = await client.get('/chained');
           response
             ..assertStatus(HttpStatus.ok)
@@ -260,7 +255,7 @@ void main() {
               ],
             );
 
-          client = TestClient(RoutedRequestHandler(engine), mode: mode);
+          final client = _startTimeoutClient(engine, mode);
           final response = await client.get('/slow-chain');
           response.assertStatus(HttpStatus.gatewayTimeout);
         });
@@ -278,7 +273,7 @@ void main() {
               ],
             );
 
-          client = TestClient(RoutedRequestHandler(engine), mode: mode);
+          final client = _startTimeoutClient(engine, mode);
 
           for (var i = 0; i < 3; i++) {
             final response = await client.get('/timed');
@@ -301,7 +296,7 @@ void main() {
               ],
             );
 
-          client = TestClient(RoutedRequestHandler(engine), mode: mode);
+          final client = _startTimeoutClient(engine, mode);
           final response = await client.get('/timeout-msg');
           response
             ..assertStatus(HttpStatus.gatewayTimeout)
@@ -315,7 +310,7 @@ void main() {
               return ctx.string('ok');
             }, middlewares: [timeoutMiddleware(Duration.zero)]);
 
-          client = TestClient(RoutedRequestHandler(engine), mode: mode);
+          final client = _startTimeoutClient(engine, mode);
           final response = await client.get('/zero');
           response.assertStatus(HttpStatus.gatewayTimeout);
         });
@@ -333,7 +328,7 @@ void main() {
               ],
             );
 
-          client = TestClient(RoutedRequestHandler(engine), mode: mode);
+          final client = _startTimeoutClient(engine, mode);
           final response = await client.post('/upload', {'data': 'test'});
           response
             ..assertStatus(HttpStatus.ok)
@@ -353,7 +348,7 @@ void main() {
               ],
             );
 
-          client = TestClient(RoutedRequestHandler(engine), mode: mode);
+          final client = _startTimeoutClient(engine, mode);
           final response = await client.put('/update', {'id': 1});
           response.assertStatus(HttpStatus.gatewayTimeout);
         });
@@ -371,11 +366,70 @@ void main() {
               ],
             );
 
-          client = TestClient(RoutedRequestHandler(engine), mode: mode);
+          final client = _startTimeoutClient(engine, mode);
           final response = await client.delete('/remove');
           response.assertStatus(HttpStatus.noContent);
+        });
+
+        test('timeouts respond based on latency (property)', () async {
+          final runner = PropertyTestRunner<_TimeoutSample>(
+            _timeoutSampleGen(),
+            (sample) async {
+              final engine = Engine()
+                ..get(
+                  '/prop',
+                  (ctx) async {
+                    await Future<void>.delayed(
+                      Duration(milliseconds: sample.handlerDelayMs),
+                    );
+                    return ctx.string('ok');
+                  },
+                  middlewares: [
+                    timeoutMiddleware(Duration(milliseconds: sample.timeoutMs)),
+                  ],
+                );
+
+              final client = TestClient(
+                RoutedRequestHandler(engine),
+                mode: mode,
+              );
+              final response = await client.get('/prop');
+
+              if (sample.handlerDelayMs >= sample.timeoutMs) {
+                response.assertStatus(HttpStatus.gatewayTimeout);
+              } else {
+                response
+                  ..assertStatus(HttpStatus.ok)
+                  ..assertBodyEquals('ok');
+              }
+
+              await client.close();
+              await engine.close();
+            },
+            PropertyConfig(numTests: 35, seed: 20250317),
+          );
+
+          final result = await runner.run();
+          expect(result.success, isTrue, reason: result.report);
         });
       });
     }
   });
+}
+
+typedef _TimeoutSample = ({int timeoutMs, int handlerDelayMs});
+
+Generator<_TimeoutSample> _timeoutSampleGen() =>
+    Gen.integer(min: 5, max: 120).flatMap(
+      (timeoutMs) => Gen.integer(min: 0, max: 200).map(
+        (handlerDelayMs) =>
+            (timeoutMs: timeoutMs, handlerDelayMs: handlerDelayMs),
+      ),
+    );
+
+TestClient _startTimeoutClient(Engine engine, TransportMode mode) {
+  final client = TestClient(RoutedRequestHandler(engine), mode: mode);
+  addTearDown(client.close);
+  addTearDown(engine.close);
+  return client;
 }

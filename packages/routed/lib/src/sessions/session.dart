@@ -103,6 +103,8 @@ class Session {
   bool get isDestroyed => _destroyed;
 
   /// Whether this is a new session
+  // ignore: unnecessary_getters_setters
+  bool get isNew => _isNew;
   set isNew(bool value) => _isNew = value;
 
   int get age => DateTime.now().difference(_createdAt).inSeconds;

@@ -1,5 +1,6 @@
-import 'package:routed/routed.dart';
+import 'package:property_testing/property_testing.dart';
 import 'package:routed/middlewares.dart';
+import 'package:routed/routed.dart';
 import 'package:routed_testing/routed_testing.dart';
 import 'package:server_testing/server_testing.dart';
 
@@ -455,6 +456,56 @@ void main() {
           response3
             ..assertStatus(HttpStatus.ok)
             ..assertBodyEquals('ok');
+        });
+
+        test('respects limit across varied payload sizes', () async {
+          final generator = Gen.integer(min: 1, max: 256).flatMap(
+            (limit) => Gen.integer(
+              min: 0,
+              max: limit + 64,
+            ).map((size) => (limit: limit, size: size)),
+          );
+
+          final runner = PropertyTestRunner<({int limit, int size})>(
+            generator,
+            (sample) async {
+              final engine = Engine()
+                ..post(
+                  '/prop',
+                  (ctx) => ctx.string('ok'),
+                  middlewares: [limitRequestBody(sample.limit)],
+                );
+
+              final localClient = TestClient(
+                RoutedRequestHandler(engine),
+                mode: mode,
+              );
+              final payload = List<int>.filled(sample.size, 42);
+              final response = await localClient.post(
+                '/prop',
+                payload,
+                headers: {
+                  'Content-Type': ['application/octet-stream'],
+                  HttpHeaders.contentLengthHeader: ['${sample.size}'],
+                },
+              );
+
+              if (sample.size > sample.limit) {
+                response.assertStatus(HttpStatus.requestEntityTooLarge);
+              } else {
+                response
+                  ..assertStatus(HttpStatus.ok)
+                  ..assertBodyEquals('ok');
+              }
+
+              await localClient.close();
+              await engine.close();
+            },
+            PropertyConfig(numTests: 30, seed: 20250301),
+          );
+
+          final result = await runner.run();
+          expect(result.success, isTrue, reason: result.report);
         });
 
         test('limit of zero rejects all non-empty payloads', () async {

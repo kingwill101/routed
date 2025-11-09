@@ -2,6 +2,8 @@ import 'dart:async';
 
 import 'package:routed/routed.dart';
 
+export 'support/property_generators.dart';
+
 final _middlewareIdentityMap = <Middleware, String>{};
 
 Middleware makeMiddleware(String label, List<String> log) {

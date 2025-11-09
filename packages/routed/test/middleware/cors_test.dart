@@ -1,3 +1,4 @@
+import 'package:property_testing/property_testing.dart';
 import 'package:routed/routed.dart';
 import 'package:routed_testing/routed_testing.dart';
 import 'package:server_testing/server_testing.dart';
@@ -6,12 +7,6 @@ void main() {
   group('corsMiddleware', () {
     for (final mode in TransportMode.values) {
       group('with ${mode.name} transport', () {
-        late TestClient client;
-
-        tearDown(() async {
-          await client.close();
-        });
-
         test('echoes wildcard origin when credentials are disabled', () async {
           final engine = Engine(
             config: EngineConfig(
@@ -25,7 +20,9 @@ void main() {
             ),
           )..get('/ping', (ctx) => ctx.string('pong'));
 
-          client = TestClient(RoutedRequestHandler(engine), mode: mode);
+          final client = TestClient(RoutedRequestHandler(engine), mode: mode);
+          addTearDown(client.close);
+          addTearDown(engine.close);
           final response = await client.get(
             '/ping',
             headers: {
@@ -53,7 +50,9 @@ void main() {
               ),
             )..get('/ping', (ctx) => ctx.string('pong'));
 
-            client = TestClient(RoutedRequestHandler(engine), mode: mode);
+            final client = TestClient(RoutedRequestHandler(engine), mode: mode);
+            addTearDown(client.close);
+            addTearDown(engine.close);
             final response = await client.get(
               '/ping',
               headers: {
@@ -83,7 +82,9 @@ void main() {
             ),
           )..get('/ping', (ctx) => ctx.string('pong'));
 
-          client = TestClient(RoutedRequestHandler(engine), mode: mode);
+          final client = TestClient(RoutedRequestHandler(engine), mode: mode);
+          addTearDown(client.close);
+          addTearDown(engine.close);
           final response = await client.get(
             '/ping',
             headers: {
@@ -107,7 +108,9 @@ void main() {
             ),
           )..get('/data', (ctx) => ctx.json({'data': 'ok'}));
 
-          client = TestClient(RoutedRequestHandler(engine), mode: mode);
+          final client = TestClient(RoutedRequestHandler(engine), mode: mode);
+          addTearDown(client.close);
+          addTearDown(engine.close);
 
           // Test allowed origin 1
           final response1 = await client.get(
@@ -132,6 +135,69 @@ void main() {
             ..assertHeader('Access-Control-Allow-Origin', 'https://app2.dev');
         });
 
+        test('origin negotiation respects configuration (property)', () async {
+          final runner = PropertyTestRunner<_CorsSample>(_corsSampleGen(), (
+            sample,
+          ) async {
+            final engine = Engine(
+              config: EngineConfig(
+                security: EngineSecurityFeatures(
+                  cors: CorsConfig(
+                    enabled: true,
+                    allowedOrigins: sample.allowedOrigins,
+                    allowCredentials: sample.allowCredentials,
+                  ),
+                ),
+              ),
+            )..get('/ping', (ctx) => ctx.string('pong'));
+
+            final client = TestClient(RoutedRequestHandler(engine), mode: mode);
+            final response = await client.get(
+              '/ping',
+              headers: {
+                'Origin': [sample.requestOrigin],
+              },
+            );
+
+            if (sample.expectAllowed) {
+              response.assertStatus(HttpStatus.ok);
+              final expectedOrigin =
+                  sample.allowedOrigins.contains('*') &&
+                      !sample.allowCredentials
+                  ? '*'
+                  : sample.requestOrigin;
+              response.assertHeader(
+                'Access-Control-Allow-Origin',
+                expectedOrigin,
+              );
+              if (sample.allowCredentials) {
+                response.assertHeader(
+                  'Access-Control-Allow-Credentials',
+                  'true',
+                );
+                response.assertHeaderContains('Vary', ['Origin']);
+              } else {
+                expect(
+                  response.headers.containsKey(
+                    'Access-Control-Allow-Credentials',
+                  ),
+                  isFalse,
+                );
+              }
+            } else {
+              response
+                ..assertStatus(HttpStatus.forbidden)
+                ..assertBodyContains('CORS origin check failed');
+            }
+
+            await client.close();
+            await engine.close();
+          }, PropertyConfig(numTests: 30, seed: 20250314));
+
+          final result = await runner.run();
+          expect(result.success, isTrue, reason: result.report);
+        });
+
         test('handles preflight OPTIONS request', () async {
           final engine = Engine(
             config: EngineConfig(
@@ -146,7 +212,9 @@ void main() {
             ),
           )..post('/api/resource', (ctx) => ctx.json({'created': true}));
 
-          client = TestClient(RoutedRequestHandler(engine), mode: mode);
+          final client = TestClient(RoutedRequestHandler(engine), mode: mode);
+          addTearDown(client.close);
+          addTearDown(engine.close);
           final response = await client.options(
             '/api/resource',
             headers: {
@@ -170,7 +238,9 @@ void main() {
             ),
           )..get('/data', (ctx) => ctx.string('data'));
 
-          client = TestClient(RoutedRequestHandler(engine), mode: mode);
+          final client = TestClient(RoutedRequestHandler(engine), mode: mode);
+          addTearDown(client.close);
+          addTearDown(engine.close);
           final response = await client.get(
             '/data',
             headers: {
@@ -198,7 +268,9 @@ void main() {
             ),
           )..get('/test', (ctx) => ctx.string('ok'));
 
-          client = TestClient(RoutedRequestHandler(engine), mode: mode);
+          final client = TestClient(RoutedRequestHandler(engine), mode: mode);
+          addTearDown(client.close);
+          addTearDown(engine.close);
           final response = await client.options(
             '/test',
             headers: {
@@ -222,7 +294,9 @@ void main() {
             ),
           )..get('/api', (ctx) => ctx.json({'status': 'ok'}));
 
-          client = TestClient(RoutedRequestHandler(engine), mode: mode);
+          final client = TestClient(RoutedRequestHandler(engine), mode: mode);
+          addTearDown(client.close);
+          addTearDown(engine.close);
           final response = await client.get(
             '/api',
             headers: {
@@ -235,5 +309,80 @@ void main() {
         });
       });
     }
+  });
+}
+
+typedef _CorsSample = ({
+  List<String> allowedOrigins,
+  bool allowCredentials,
+  String requestOrigin,
+  bool expectAllowed,
+});
+
+const _originPool = <String>{
+  'https://app1.dev',
+  'https://app2.dev',
+  'https://client.dev',
+  'https://evil.dev',
+  'https://partner.dev',
+};
+
+Generator<_CorsSample> _corsSampleGen() {
+  final originsList = _originPool.toList();
+  final allCandidates = <String>[...originsList, 'https://unlisted.dev'];
+
+  final specificOrigins = Gen.someOf(
+    originsList,
+    min: 0,
+    max: originsList.length,
+  );
+
+  return Gen.boolean().flatMap((includeWildcard) {
+    return specificOrigins.flatMap((specific) {
+      final allowed = <String>[if (includeWildcard) '*', ...specific];
+
+      return Gen.boolean().flatMap((allowCredentials) {
+        if (includeWildcard) {
+          return Gen.oneOf(originsList).map(
+            (origin) => (
+              allowedOrigins: allowed,
+              allowCredentials: allowCredentials,
+              requestOrigin: origin,
+              expectAllowed: true,
+            ),
+          );
+        }
+
+        final allowedSansWildcard = allowed;
+
+        final hasAllowable = allowedSansWildcard.isNotEmpty;
+
+        return Gen.boolean().flatMap((shouldAllow) {
+          if (shouldAllow && hasAllowable) {
+            return Gen.oneOf(allowedSansWildcard).map(
+              (origin) => (
+                allowedOrigins: allowedSansWildcard,
+                allowCredentials: allowCredentials,
+                requestOrigin: origin,
+                expectAllowed: true,
+              ),
+            );
+          }
+
+          final disallowedCandidates = allCandidates
+              .where((origin) => !allowedSansWildcard.contains(origin))
+              .toList();
+
+          return Gen.oneOf(disallowedCandidates).map(
+            (origin) => (
+              allowedOrigins: allowedSansWildcard,
+              allowCredentials: allowCredentials,
+              requestOrigin: origin,
+              expectAllowed: false,
+            ),
+          );
+        });
+      });
+    });
   });
 }

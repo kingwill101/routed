@@ -1,7 +1,7 @@
 import 'dart:convert';
 import 'dart:core';
-import 'dart:io' show Directory, FileSystemException;
 
+import 'package:file/memory.dart';
 import 'package:routed/routed.dart';
 import 'package:routed/src/binding/binding.dart';
 import 'package:routed_testing/routed_testing.dart';
@@ -67,23 +67,12 @@ void main() {
     });
 
     test('Multipart Form Binding', () async {
-      final uploadDir = await Directory.systemTemp.createTemp(
-        'routed-binding-upload-',
-      );
-      addTearDown(() async {
-        if (await uploadDir.exists()) {
-          try {
-            await uploadDir.delete(recursive: true);
-          } on FileSystemException {
-            // Ignore cleanup errors caused by restrictive permissions.
-          }
-        }
-      });
-
+      final fs = MemoryFileSystem();
       final engine = Engine(
-        configItems: {
-          'uploads': {'directory': uploadDir.path},
-        },
+        config: EngineConfig(
+          fileSystem: fs,
+          multipart: MultipartConfig(uploadDirectory: '/uploads'),
+        ),
       );
 
       engine.post('/upload', (ctx) async {

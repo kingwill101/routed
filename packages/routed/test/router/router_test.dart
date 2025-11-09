@@ -1,4 +1,5 @@
 // test/my_router_test.dart
+import 'package:property_testing/property_testing.dart';
 import 'package:routed/src/context/context.dart';
 import 'package:routed/src/engine/engine.dart';
 import 'package:routed/src/router/router.dart';
@@ -126,6 +127,63 @@ void main() {
           .toList();
       expect(names, equals(['GroupMW1', 'GroupMW2', 'RouteMW']));
     });
+
+    test(
+      'Middleware order remains stable across random stacks (property)',
+      () async {
+        final runner = PropertyTestRunner<_MiddlewareOrderSample>(
+          _middlewareOrderGen(),
+          (sample) async {
+            final log = <String>[];
+            final router = Router(
+              groupName: 'root',
+              path: '/root',
+              middlewares: sample.router
+                  .map((label) => makeMiddleware('router-$label', log))
+                  .toList(),
+            );
+
+            router
+                .group(
+                  path: '/child',
+                  middlewares: sample.group
+                      .map((label) => makeMiddleware('group-$label', log))
+                      .toList(),
+                  builder: (sub) {
+                    sub
+                        .get(
+                          '/endpoint',
+                          (ctx) {},
+                          middlewares: sample.route
+                              .map(
+                                (label) => makeMiddleware('route-$label', log),
+                              )
+                              .toList(),
+                        )
+                        .name('endpoint');
+                  },
+                )
+                .name('child');
+
+            router.build();
+            final route = router.getAllRoutes().first;
+            final names = route.finalMiddlewares
+                .map((mw) => middlewareLabel(mw, log))
+                .toList();
+            final expected = <String>[
+              for (final label in sample.router) 'router-$label',
+              for (final label in sample.group) 'group-$label',
+              for (final label in sample.route) 'route-$label',
+            ];
+            expect(names, equals(expected));
+          },
+          PropertyConfig(numTests: 35, seed: 20250312),
+        );
+
+        final result = await runner.run();
+        expect(result.success, isTrue, reason: result.report);
+      },
+    );
   });
 
   test('Mount multiple routers with engine-level middlewares', () {
@@ -381,6 +439,28 @@ void main() {
         .toList();
     expect(labels, equals(['Mount', 'Router', 'Group', 'Route']));
   });
+}
+
+typedef _MiddlewareOrderSample = ({
+  List<String> router,
+  List<String> group,
+  List<String> route,
+});
+
+Generator<_MiddlewareOrderSample> _middlewareOrderGen() {
+  Generator<List<String>> labels() => Gen.integer(min: 0, max: 3).flatMap(
+    (count) =>
+        slugSegment(min: 3, max: 8).list(minLength: count, maxLength: count),
+  );
+
+  return labels().flatMap(
+    (routerLabels) => labels().flatMap(
+      (groupLabels) => labels().map(
+        (routeLabels) =>
+            (router: routerLabels, group: groupLabels, route: routeLabels),
+      ),
+    ),
+  );
 }
 
 class _NoOpWebSocketHandler implements WebSocketHandler {

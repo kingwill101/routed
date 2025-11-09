@@ -1,8 +1,9 @@
 import 'dart:convert';
-import 'dart:io';
+import 'dart:io' show Platform, Process;
 
+import 'package:file/file.dart' as fs;
+import 'package:file/local.dart' as local_fs;
 import 'package:mime/mime.dart';
-import 'package:path/path.dart' as p;
 import 'package:routed/src/binding/binding.dart';
 import 'package:routed/src/binding/utils.dart';
 import 'package:routed/src/context/context.dart';
@@ -20,6 +21,7 @@ Future<String> storeFileWithLimit({
   required Stream<List<int>> part,
   required String safeFilename,
   required void Function(int chunkSize) onBytesRead,
+  required fs.FileSystem fileSystem,
   num maxFileSize = 20 * 1024 * 1024,
   Set<String> allowedFileExtensions = const {
     'jpg',
@@ -50,20 +52,20 @@ Future<String> storeFileWithLimit({
     );
   }
 
-  final baseDir = uploadDirectory == null || uploadDirectory.isEmpty
-      ? Directory.systemTemp
-      : Directory(uploadDirectory).absolute;
+  final fs.Directory baseDir =
+      uploadDirectory == null || uploadDirectory.isEmpty
+      ? fileSystem.systemTempDirectory
+      : fileSystem.directory(uploadDirectory);
   if (!await baseDir.exists()) {
     await baseDir.create(recursive: true);
   }
   if (filePermissions != null) {
-    await _applyPermissions(baseDir, filePermissions);
+    await _applyPermissions(fileSystem, baseDir, filePermissions);
   }
 
   final uniqueId = DateTime.now().microsecondsSinceEpoch;
-  final outPath = p.join(baseDir.path, 'upload_${uniqueId}_$safeFilename');
-
-  final outFile = File(outPath);
+  final fs.File outFile = baseDir.childFile('upload_${uniqueId}_$safeFilename');
+  final outPath = outFile.path;
   final sink = outFile.openWrite();
 
   var fileBytesSoFar = 0;
@@ -110,13 +112,20 @@ Future<String> storeFileWithLimit({
   }
 
   if (filePermissions != null && await outFile.exists()) {
-    await _applyPermissions(outFile, filePermissions);
+    await _applyPermissions(fileSystem, outFile, filePermissions);
   }
 
   return outPath;
 }
 
-Future<void> _applyPermissions(FileSystemEntity entity, int mode) async {
+Future<void> _applyPermissions(
+  fs.FileSystem fileSystem,
+  fs.FileSystemEntity entity,
+  int mode,
+) async {
+  if (fileSystem is! local_fs.LocalFileSystem) {
+    return;
+  }
   if (!Platform.isWindows && !Platform.isIOS) {
     final octal = mode.toRadixString(8);
     try {
@@ -227,6 +236,7 @@ String getExtension(String filename) {
 Future<MultipartForm> parseMultipartForm(EngineContext context) async {
   final request = context.request;
   final contentType = request.headers.contentType;
+  final fileSystem = context.engineConfig.fileSystem;
 
   if (contentType == null ||
       contentType.primaryType != 'multipart' ||
@@ -268,6 +278,7 @@ Future<MultipartForm> parseMultipartForm(EngineContext context) async {
             quota: quota,
             part: part,
             safeFilename: safeFilename,
+            fileSystem: fileSystem,
             onBytesRead: (chunkSize) {
               totalBytesRead += chunkSize;
               if (totalBytesRead > context.engineConfig.multipart.maxMemory) {
@@ -281,7 +292,7 @@ Future<MultipartForm> parseMultipartForm(EngineContext context) async {
           createdFiles.add(savedPath);
 
           if (files.where((MultipartFile file) => file.name == name).isEmpty) {
-            final savedFile = File(savedPath);
+            final savedFile = fileSystem.file(savedPath);
             files.add(
               MultipartFile(
                 name: name,
@@ -331,7 +342,7 @@ Future<MultipartForm> parseMultipartForm(EngineContext context) async {
     if (!parsingCompleted) {
       for (final path in createdFiles.reversed) {
         try {
-          final file = File(path);
+          final file = fileSystem.file(path);
           if (await file.exists()) {
             quota.release(await file.length());
             await file.delete();
@@ -403,12 +414,13 @@ class MultipartBinding extends Binding {
   }
 
   @override
-  Future<void> validate(EngineContext context,
-      // ignore: avoid_renaming_method_parameters
-      Map<String, String> rules, {
-        bool bail = false,
-        Map<String, String>? messages,
-      }) async {
+  Future<void> validate(
+    EngineContext context,
+    // ignore: avoid_renaming_method_parameters
+    Map<String, String> rules, {
+    bool bail = false,
+    Map<String, String>? messages,
+  }) async {
     final multipartForm = await context.multipartForm;
     final data = multipartForm.fields;
 

@@ -9,7 +9,6 @@ import 'package:routed/src/engine/engine.dart';
 import 'package:routed/src/engine/middleware_registry.dart';
 import 'package:routed/src/events/event.dart';
 import 'package:routed/src/events/event_manager.dart';
-import 'package:routed/src/logging/logger.dart';
 import 'package:routed/src/observability/errors.dart';
 import 'package:routed/src/observability/health.dart';
 import 'package:routed/src/observability/metrics.dart';
@@ -145,13 +144,6 @@ class ObservabilityServiceProvider extends ServiceProvider
         defaultValue: '/livez',
       ),
       ConfigDocEntry(
-        path: 'observability.logging.format',
-        type: 'string',
-        description: 'Default logging format (json or text).',
-        options: ['json', 'text'],
-        defaultValue: 'json',
-      ),
-      ConfigDocEntry(
         path: 'observability.errors.enabled',
         type: 'bool',
         description:
@@ -256,7 +248,6 @@ class ObservabilityServiceProvider extends ServiceProvider
     _attachGlobalMiddleware(engine);
     _registerRoutes(engine);
     _subscribeToEvents(container);
-    _configureLoggingDefaults(config);
   }
 
   void _subscribeToEvents(Container container) {
@@ -276,16 +267,6 @@ class ObservabilityServiceProvider extends ServiceProvider
         );
       }
     });
-  }
-
-  void _configureLoggingDefaults(Config config) {
-    final node = config.get('observability.logging.format');
-    final format = node is String ? node.toLowerCase().trim() : 'json';
-    if (format == 'json') {
-      RoutedLogger.setGlobalFormat(RoutedLogFormat.json);
-    } else {
-      RoutedLogger.setGlobalFormat(RoutedLogFormat.text);
-    }
   }
 
   FutureOr<Response> _tracingMiddleware(EngineContext ctx, Next next) async {

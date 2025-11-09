@@ -1,7 +1,7 @@
 import 'dart:io';
-
 import 'dart:typed_data';
 
+import 'package:file/memory.dart';
 import 'package:routed/routed.dart';
 import 'package:routed_testing/routed_testing.dart';
 import 'package:server_testing/server_testing.dart';
@@ -11,23 +11,21 @@ void main() {
     test(
       'rejects uploads that exceed disk quota and cleans up partial files',
       () async {
-        final uploadDir = await Directory.systemTemp.createTemp(
-          'routed-upload-quota-',
-        );
-        addTearDown(() async {
-          if (await uploadDir.exists()) {
-            await uploadDir.delete(recursive: true);
-          }
-        });
+        final fs = MemoryFileSystem();
+        final uploadDir = fs.directory('/quota')..createSync(recursive: true);
 
         final engine = Engine(
+          config: EngineConfig(
+            fileSystem: fs,
+            multipart: MultipartConfig(uploadDirectory: uploadDir.path),
+          ),
           configItems: {
             'uploads': {
               'max_file_size': 1024,
               'max_disk_usage': 12,
               'directory': uploadDir.path,
               'allowed_extensions': ['gif'],
-              'file_permissions': 448, // 0700 octal
+              'file_permissions': 448,
             },
           },
         );
@@ -69,21 +67,20 @@ void main() {
     );
 
     test('disallowed extensions leave no residual files', () async {
-      final uploadDir = await Directory.systemTemp.createTemp(
-        'routed-upload-ext-',
-      );
-      addTearDown(() async {
-        if (await uploadDir.exists()) {
-          await uploadDir.delete(recursive: true);
-        }
-      });
+      final fs = MemoryFileSystem();
+      final uploadDir = fs.directory('/extensions')
+        ..createSync(recursive: true);
 
       final engine = Engine(
+        config: EngineConfig(
+          fileSystem: fs,
+          multipart: MultipartConfig(uploadDirectory: uploadDir.path),
+        ),
         configItems: {
           'uploads': {
             'directory': uploadDir.path,
             'allowed_extensions': ['jpg'],
-            'file_permissions': 448, // 0700 octal
+            'file_permissions': 448,
           },
         },
       );
@@ -126,23 +123,21 @@ void main() {
     test(
       'accepts whitelisted uploads and leaves artifacts for application',
       () async {
-        final uploadDir = await Directory.systemTemp.createTemp(
-          'routed-upload-accept-',
-        );
-        addTearDown(() async {
-          if (await uploadDir.exists()) {
-            await uploadDir.delete(recursive: true);
-          }
-        });
+        final fs = MemoryFileSystem();
+        final uploadDir = fs.directory('/accept')..createSync(recursive: true);
 
         final engine = Engine(
+          config: EngineConfig(
+            fileSystem: fs,
+            multipart: MultipartConfig(uploadDirectory: uploadDir.path),
+          ),
           configItems: {
             'uploads': {
               'directory': uploadDir.path,
               'allowed_extensions': ['txt'],
               'max_file_size': 1024,
               'max_disk_usage': 4096,
-              'file_permissions': 448, // 0700 octal
+              'file_permissions': 448,
             },
           },
         );
