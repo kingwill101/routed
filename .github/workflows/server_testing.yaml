@@ -37,8 +37,29 @@ jobs:
         run: dart format --output=none --set-exit-if-changed .
       - name: Analyze project source
         run: dart analyze --fatal-infos
+      - name: Install Firefox (Linux)
+        if: matrix.os == 'ubuntu-latest'
+        uses: browser-actions/setup-firefox@v1
+      - name: Verify Firefox binary
+        if: matrix.os == 'ubuntu-latest'
+        run: |
+          firefox --version
+          echo "SERVER_TESTING_FIREFOX_BINARY=$(command -v firefox)" >> "$GITHUB_ENV"
+      - name: Install Chrome (Linux)
+        if: matrix.os == 'ubuntu-latest'
+        id: setup-chrome
+        uses: browser-actions/setup-chrome@v2
+      - name: Verify Chrome binary
+        if: matrix.os == 'ubuntu-latest'
+        run: |
+          CHROME_PATH="${{ steps.setup-chrome.outputs.chrome-path }}"
+          "$CHROME_PATH" --version
+          echo "SERVER_TESTING_CHROMIUM_BINARY=$CHROME_PATH" >> "$GITHUB_ENV"
+          echo "SERVER_TESTING_CHROME_BINARY=$CHROME_PATH" >> "$GITHUB_ENV"
       - name: Run unit tests (fast)
-        run: dart test --exclude-tags real-browser
+        run: dart test --exclude-tags real-browser --exclude-tags property
+      - name: Run property tests
+        run: dart test -t property
 
       - name: Run real-browser tests (Linux only)
         if: matrix.os == 'ubuntu-latest'
