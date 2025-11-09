@@ -82,6 +82,53 @@ void main() {
       );
     });
 
+    test('supports async buildProjectCommands factories', () async {
+      await _writeProject(
+        projectDir: projectDir,
+        cliRoot: cliRoot,
+        commandName: 'asyncHello',
+        commandsSource: '''
+import 'dart:async';
+import 'dart:io';
+
+import 'package:args/command_runner.dart';
+
+class AsyncHelloCommand extends Command<void> {
+  @override
+  String get name => 'async-hello';
+
+  @override
+  String get description => 'Asynchronous project command.';
+
+  @override
+  Future<void> run() async {
+    final file = File('async_output.txt');
+    await file.writeAsString('async greetings');
+  }
+}
+
+Future<List<Command<void>>> buildProjectCommands() async {
+  await Future<void>.delayed(const Duration(milliseconds: 5));
+  return [AsyncHelloCommand()];
+}
+''',
+      );
+
+      final previousCwd = io.Directory.current;
+      io.Directory.current = projectDir;
+      addTearDown(() => io.Directory.current = previousCwd);
+
+      final loader = ProjectCommandsLoader(logger: logger);
+      final infos = await loader.loadProjectCommands('usage');
+      expect(infos.map((info) => info.name), contains('async-hello'));
+
+      final exitCode = await loader.runProjectCommand('async-hello', const []);
+      expect(exitCode, equals(0));
+
+      final output = io.File(p.join(projectDir.path, 'async_output.txt'));
+      expect(await output.readAsString(), contains('async greetings'));
+    });
+
     test('fails when entrypoint returns invalid values', () async {
       await _writeProject(
         projectDir: projectDir,

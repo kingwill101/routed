@@ -410,7 +410,9 @@ Future<void> main(List<String> args) async {
 }
 
 Future<List<Command<void>>> _loadCommands() async {
-  final result = await Future.value(project_commands.buildProjectCommands());
+  final result = await Future.sync(
+    () => project_commands.buildProjectCommands(),
+  );
   if (result is! List) {
     stderr.writeln(
       'Expected buildProjectCommands() to return List<Command<void>>.',

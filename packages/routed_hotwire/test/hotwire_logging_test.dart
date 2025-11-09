@@ -90,7 +90,6 @@ class _CapturingLoggerFactory {
     final logger = contextual.Logger()
       ..withContext({for (final entry in context.entries) entry.key: entry.value});
 
-    unawaited(
       logger.setListener((entry) {
         messages.add(
           _LogEntry(
@@ -98,8 +97,7 @@ class _CapturingLoggerFactory {
             entry.record.context.all(),
           ),
         );
-      }),
-    );
+      });
 
     return logger;
   }
