@@ -2,7 +2,14 @@ import 'dart:collection';
 import 'dart:convert';
 
 import 'package:json2yaml/json2yaml.dart';
-import 'package:routed/routed.dart';
+import 'package:routed/routed.dart'
+    show
+        ConfigDocEntry,
+        configDocMetaInheritFromEnv,
+        deepCopyValue,
+        deepMerge,
+        dot,
+        inspectProviders;
 import 'package:yaml/yaml.dart' as yaml;
 
 import 'doc_printer.dart';
@@ -17,72 +24,18 @@ Map<String, Map<String, dynamic>> buildConfigDefaults() {
     provider.defaults.forEach((root, value) {
       final existing = merged.putIfAbsent(root, () => <String, dynamic>{});
       if (value is Map<String, dynamic>) {
-        _mergeMap(existing, value);
+        deepMerge(existing, value, override: true);
       } else if (value is Map) {
-        _mergeMap(existing, _castToStringMap(value));
+        deepMerge(existing, _stringKeyedClone(value), override: true);
       } else {
-        existing.clear();
-        existing['value'] = _cloneValue(value);
+        existing
+          ..clear()
+          ..['value'] = deepCopyValue(value);
       }
     });
   }
 
-  _applyDerivedDefaults(merged);
   return merged;
-}
-
-/// Generates YAML content for each configuration root, keyed by the config path
-/// (e.g. `config/app.yaml`).
-void _applyDerivedDefaults(Map<String, Map<String, dynamic>> defaultsByRoot) {
-  Map<String, dynamic> ensureMap(Map<String, dynamic> target, String key) {
-    final current = target[key];
-    if (current is Map<String, dynamic>) {
-      return current;
-    }
-    if (current is Map) {
-      final converted = _castToStringMap(current);
-      target[key] = converted;
-      return converted;
-    }
-    final created = <String, dynamic>{};
-    target[key] = created;
-    return created;
-  }
-
-  String? stringValue(Object? value) {
-    if (value == null) return null;
-    if (value is String) return value;
-    return value.toString();
-  }
-
-  final storage = defaultsByRoot.putIfAbsent(
-    'storage',
-    () => <String, dynamic>{},
-  );
-  final disks = ensureMap(storage, 'disks');
-  final local = ensureMap(disks, 'local');
-  final localRootValue = stringValue(local['root']) ?? 'storage/app';
-  final storageDefaults = StorageDefaults.fromLocalRoot(localRootValue);
-  local['root'] = storageDefaults.localDiskRoot;
-
-  final session = defaultsByRoot.putIfAbsent(
-    'session',
-    () => <String, dynamic>{},
-  );
-  session.putIfAbsent('driver', () => 'file');
-  session.putIfAbsent('files', () => storageDefaults.frameworkPath('sessions'));
-
-  final cache = defaultsByRoot.putIfAbsent('cache', () => <String, dynamic>{});
-  cache.putIfAbsent('default', () => 'file');
-  final stores = ensureMap(cache, 'stores');
-  final arrayStore = ensureMap(stores, 'array');
-  arrayStore.putIfAbsent('driver', () => 'array');
-  final fileStore = ensureMap(stores, 'file');
-  fileStore.putIfAbsent('driver', () => 'file');
-  final filePath = stringValue(fileStore['path']);
-  fileStore['path'] = (filePath != null && filePath.trim().isNotEmpty)
-      ? storageDefaults.resolve(filePath)
-      : storageDefaults.frameworkPath('cache');
 }
 
 Map<String, String> generateConfigFiles(
@@ -202,24 +155,11 @@ Object? _lookupConfigValue(
   Map<String, Map<String, dynamic>> defaultsByRoot,
   String path,
 ) {
-  final segments = path.split('.');
-  if (segments.isEmpty) return null;
-  final root = segments.first;
-  dynamic current = defaultsByRoot[root];
-  if (current == null) return null;
-  for (var i = 1; i < segments.length; i++) {
-    final segment = segments[i];
-    if (current is Map<String, dynamic>) {
-      if (!current.containsKey(segment)) return null;
-      current = current[segment];
-    } else if (current is Map) {
-      if (!current.containsKey(segment)) return null;
-      current = current[segment];
-    } else {
-      return null;
-    }
-  }
-  return current;
+  final flattened = <String, dynamic>{};
+  defaultsByRoot.forEach((key, value) {
+    flattened[key] = value;
+  });
+  return dot.get(flattened, path);
 }
 
 String? _stringifyEnvValue(Object? value) {
@@ -233,38 +173,6 @@ String? _stringifyEnvValue(Object? value) {
   return value.toString();
 }
 
-Map<String, dynamic> _castToStringMap(Map<dynamic, dynamic> input) {
-  final result = <String, dynamic>{};
-  input.forEach((key, value) {
-    result[key.toString()] = value;
-  });
-  return result;
-}
-
-void _mergeMap(Map<String, dynamic> target, Map<String, dynamic> source) {
-  for (final entry in source.entries) {
-    final key = entry.key;
-    final value = entry.value;
-    if (!target.containsKey(key)) {
-      target[key] = _cloneValue(value);
-      continue;
-    }
-
-    final existing = target[key];
-    if (existing is Map<String, dynamic> && value is Map<String, dynamic>) {
-      _mergeMap(existing, value);
-    } else if (existing is Map && value is Map) {
-      final existingMap = _castToStringMap(existing);
-      final valueMap = _castToStringMap(value);
-      final typedExisting = <String, dynamic>{}..addAll(existingMap);
-      target[key] = typedExisting;
-      _mergeMap(typedExisting, valueMap);
-    } else {
-      target[key] = _cloneValue(value);
-    }
-  }
-}
-
 Map<String, dynamic> _sortedMap(Map<String, dynamic> input) {
   final sorted = SplayTreeMap<String, dynamic>.of(input);
   final result = <String, dynamic>{};
@@ -273,14 +181,14 @@ Map<String, dynamic> _sortedMap(Map<String, dynamic> input) {
     if (value is Map<String, dynamic>) {
       result[entry.key] = _sortedMap(value);
     } else if (value is Map) {
-      result[entry.key] = _sortedMap(_castToStringMap(value));
+      result[entry.key] = _sortedMap(_stringKeyedClone(value));
     } else if (value is List) {
       result[entry.key] = value
           .map(
             (element) => element is Map<String, dynamic>
                 ? _sortedMap(element)
                 : element is Map
-                ? _sortedMap(_castToStringMap(element))
+                ? _sortedMap(_stringKeyedClone(element))
                 : element,
           )
           .toList();
@@ -291,37 +199,14 @@ Map<String, dynamic> _sortedMap(Map<String, dynamic> input) {
   return result;
 }
 
-Object? _cloneValue(Object? value) {
-  if (value is Map<String, dynamic>) {
-    final clone = <String, dynamic>{};
-    value.forEach((key, element) {
-      clone[key] = _cloneValue(element);
-    });
-    return clone;
-  }
-  if (value is Map) {
-    final clone = <String, dynamic>{};
-    value.forEach((key, element) {
-      clone[key.toString()] = _cloneValue(element);
-    });
-    return clone;
-  }
-  if (value is List) {
-    return value.map(_cloneValue).toList();
-  }
-  return value;
-}
-
 dynamic _prepareForYaml(dynamic value) {
   if (value is Map<String, dynamic>) {
     return value.map((key, element) => MapEntry(key, _prepareForYaml(element)));
   }
   if (value is Map) {
-    final result = <String, dynamic>{};
-    value.forEach((key, dynamic element) {
-      result[key.toString()] = _prepareForYaml(element);
-    });
-    return result;
+    return _stringKeyedClone(
+      value,
+    ).map((key, element) => MapEntry(key, _prepareForYaml(element)));
   }
   if (value is List) {
     return value.map(_prepareForYaml).toList();
@@ -348,4 +233,25 @@ String _quoteTrailingColonValues(String input) {
     }
     return '$prefix"$value"';
   });
+}
+
+Map<String, dynamic> _stringKeyedClone(Map<dynamic, dynamic> input) {
+  final result = <String, dynamic>{};
+  input.forEach((key, value) {
+    result[key.toString()] = _stringKeyedValue(value);
+  });
+  return result;
+}
+
+dynamic _stringKeyedValue(Object? value) {
+  if (value is Map<String, dynamic>) {
+    return _stringKeyedClone(value);
+  }
+  if (value is Map) {
+    return _stringKeyedClone(value);
+  }
+  if (value is List) {
+    return value.map(_stringKeyedValue).toList();
+  }
+  return deepCopyValue(value);
 }

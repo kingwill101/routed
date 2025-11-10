@@ -87,7 +87,11 @@ void main() {
         serverContent,
         contains("import 'package:demo_app/app.dart' as app;"),
       );
-      expect(serverContent, contains('await app.createEngine()'));
+      expect(serverContent, contains("import 'package:routed/routed.dart';"));
+      expect(
+        serverContent,
+        contains('final Engine engine = await app.createEngine();'),
+      );
 
       final appContent = _read(projectDir, 'lib/app.dart');
       expect(appContent, contains('Future<Engine> createEngine() async'));

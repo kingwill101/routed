@@ -1,4 +1,5 @@
 import 'dart:async';
+
 import 'package:args/command_runner.dart';
 import 'package:file/file.dart' as fs;
 import 'package:routed/providers.dart' show ProviderRegistry;
@@ -63,10 +64,10 @@ class ProviderListCommand extends BaseCommand {
 
         if (showConfig) {
           if (provider is ProvidesDefaultConfig) {
-            final defaults = provider.defaultConfig;
+            final snapshot = provider.defaultConfig.snapshot();
             logger.info('    config source: ${provider.configSource}');
-            if (defaults.values.isNotEmpty) {
-              final yaml = _toYaml(defaults.values);
+            if (snapshot.values.isNotEmpty) {
+              final yaml = _toYaml(snapshot.values);
               final indented = yaml
                   .split('\n')
                   .where((line) => line.isNotEmpty)
@@ -76,9 +77,9 @@ class ProviderListCommand extends BaseCommand {
             } else {
               logger.info('    defaults: {}');
             }
-            if (defaults.docs.isNotEmpty) {
+            if (snapshot.docs.isNotEmpty) {
               logger.info('    documented entries:');
-              for (final doc in defaults.docs) {
+              for (final doc in snapshot.docs) {
                 final parts = <String>[doc.path];
                 if (doc.type != null) parts.add('type=${doc.type}');
                 if (doc.description != null && doc.description!.isNotEmpty) {
