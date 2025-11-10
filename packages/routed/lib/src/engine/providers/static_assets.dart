@@ -25,15 +25,6 @@ class StaticAssetsServiceProvider extends ServiceProvider
 
   @override
   ConfigDefaults get defaultConfig => const ConfigDefaults(
-    values: {
-      'http': {
-        'middleware_sources': {
-          'routed.static': {
-            'global': ['routed.static.assets'],
-          },
-        },
-      },
-    },
     docs: [
       ConfigDocEntry(
         path: 'static.enabled',
@@ -102,6 +93,16 @@ class StaticAssetsServiceProvider extends ServiceProvider
         description:
             'Whether the legacy static feature exposes directory listings.',
         defaultValue: false,
+      ),
+      ConfigDocEntry(
+        path: 'http.middleware_sources',
+        type: 'map',
+        description: 'Static asset middleware references registered globally.',
+        defaultValue: <String, Object?>{
+          'routed.static': <String, Object?>{
+            'global': <String>['routed.static.assets'],
+          },
+        },
       ),
     ],
   );

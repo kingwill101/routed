@@ -2,14 +2,14 @@ import 'dart:io';
 
 import 'package:routed/src/cache/cache_manager.dart';
 import 'package:routed/src/container/container.dart';
-import 'package:routed/src/contracts/contracts.dart' show Config;
 import 'package:routed/src/contracts/cache/repository.dart' as cache;
+import 'package:routed/src/contracts/contracts.dart' show Config;
 import 'package:routed/src/engine/config.dart' show SessionConfig;
 import 'package:routed/src/engine/middleware_registry.dart';
-import 'package:routed/src/provider/config_utils.dart';
-import 'package:routed/src/provider/provider.dart';
 import 'package:routed/src/engine/storage_defaults.dart';
 import 'package:routed/src/engine/storage_paths.dart';
+import 'package:routed/src/provider/config_utils.dart';
+import 'package:routed/src/provider/provider.dart';
 import 'package:routed/src/sessions/cache_store.dart';
 import 'package:routed/src/sessions/memory_store.dart';
 import 'package:routed/src/sessions/middleware.dart';
@@ -185,8 +185,7 @@ class SessionDriverRegistry extends NamedRegistry<SessionDriverRegistration> {
   SessionDriverBuilder? builderFor(String driver) =>
       registrationFor(driver)?.builder;
 
-  SessionDriverRegistration? registrationFor(String driver) =>
-      getEntry(driver);
+  SessionDriverRegistration? registrationFor(String driver) => getEntry(driver);
 
   void ensureRequirements(
     String driver,
@@ -308,18 +307,6 @@ class SessionServiceProvider extends ServiceProvider
   /// Default configuration as understood by the framework.
   @override
   ConfigDefaults get defaultConfig => ConfigDefaults(
-    values: const {
-      'http': {
-        'middleware_sources': {
-          'routed.sessions': {
-            'global': ['routed.sessions.start'],
-            'groups': {
-              'web': ['routed.sessions.start'],
-            },
-          },
-        },
-      },
-    },
     docs: <ConfigDocEntry>[
       ConfigDocEntry(
         path: 'session.driver',
@@ -405,7 +392,7 @@ class SessionServiceProvider extends ServiceProvider
         path: 'session.files',
         type: 'string',
         description: 'Filesystem path used by file-based session drivers.',
-        defaultValue: null,
+        defaultValue: 'storage/framework/sessions',
       ),
       const ConfigDocEntry(
         path: 'session.lottery',
@@ -428,6 +415,19 @@ class SessionServiceProvider extends ServiceProvider
         defaultValue: false,
       ),
       ...SessionServiceProvider.driverDocumentation(),
+      const ConfigDocEntry(
+        path: 'http.middleware_sources',
+        type: 'map',
+        description: 'Session middleware references injected globally/groups.',
+        defaultValue: <String, Object?>{
+          'routed.sessions': <String, Object?>{
+            'global': <String>['routed.sessions.start'],
+            'groups': <String, Object?>{
+              'web': <String>['routed.sessions.start'],
+            },
+          },
+        },
+      ),
     ],
   );
 

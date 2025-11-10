@@ -29,27 +29,6 @@ class AuthServiceProvider extends ServiceProvider with ProvidesDefaultConfig {
 
   @override
   ConfigDefaults get defaultConfig => const ConfigDefaults(
-    values: {
-      'http': {
-        'middleware_sources': {
-          'routed.auth': {
-            'global': ['routed.auth.jwt', 'routed.auth.oauth2'],
-          },
-        },
-      },
-      'auth': {
-        'features': {
-          'haigate': {'enabled': false},
-        },
-        'gates': {
-          'defaults': {
-            'denied_status': HttpStatus.forbidden,
-            'denied_message': null,
-          },
-          'abilities': <String, Object?>{},
-        },
-      },
-    },
     docs: <ConfigDocEntry>[
       ConfigDocEntry(
         path: 'auth.jwt.enabled',
@@ -250,6 +229,17 @@ class AuthServiceProvider extends ServiceProvider with ProvidesDefaultConfig {
         type: 'bool',
         description: 'Toggle registration of authentication middleware.',
         defaultValue: false,
+      ),
+      ConfigDocEntry(
+        path: 'http.middleware_sources',
+        type: 'map',
+        description:
+            'Authentication middleware references registered globally.',
+        defaultValue: <String, Object?>{
+          'routed.auth': <String, Object?>{
+            'global': <String>['routed.auth.jwt', 'routed.auth.oauth2'],
+          },
+        },
       ),
     ],
   );

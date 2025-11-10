@@ -16,6 +16,24 @@ import 'package:routed/src/provider/provider.dart';
 import 'package:routed/src/router/types.dart';
 
 /// Registers logging defaults and related middleware identifiers.
+const Map<String, Object?> _defaultLoggingChannels = {
+  'stack': {
+    'driver': 'stack',
+    'channels': ['single', 'stdout'],
+    'ignore_exceptions': false,
+  },
+  'single': {'driver': 'single', 'path': 'storage/logs/routed.log'},
+  'daily': {
+    'driver': 'daily',
+    'path': 'storage/logs/routed',
+    'days': 14,
+    'use_isolate': false,
+  },
+  'stderr': {'driver': 'stderr'},
+  'stdout': {'driver': 'stdout'},
+  'null': {'driver': 'null'},
+};
+
 class LoggingServiceProvider extends ServiceProvider
     with ProvidesDefaultConfig {
   bool _enabled = true;
@@ -29,35 +47,6 @@ class LoggingServiceProvider extends ServiceProvider
 
   @override
   ConfigDefaults get defaultConfig => const ConfigDefaults(
-    values: {
-      'http': {
-        'middleware_sources': {
-          'routed.logging': {
-            'global': ['routed.logging.http'],
-          },
-        },
-      },
-      'logging': {
-        'default': 'stack',
-        'channels': {
-          'stack': {
-            'driver': 'stack',
-            'channels': ['single', 'stdout'],
-            'ignore_exceptions': false,
-          },
-          'single': {'driver': 'single', 'path': 'storage/logs/routed.log'},
-          'daily': {
-            'driver': 'daily',
-            'path': 'storage/logs/routed',
-            'days': 14,
-            'use_isolate': false,
-          },
-          'stderr': {'driver': 'stderr'},
-          'stdout': {'driver': 'stdout'},
-          'null': {'driver': 'null'},
-        },
-      },
-    },
     docs: <ConfigDocEntry>[
       ConfigDocEntry(
         path: 'http.features.logging.enabled',
@@ -86,10 +75,20 @@ class LoggingServiceProvider extends ServiceProvider
         defaultValue: <String>[],
       ),
       ConfigDocEntry(
+        path: 'http.middleware_sources',
+        type: 'map',
+        description: 'Logging middleware references injected globally.',
+        defaultValue: <String, Object?>{
+          'routed.logging': <String, Object?>{
+            'global': <String>['routed.logging.http'],
+          },
+        },
+      ),
+      ConfigDocEntry(
         path: 'logging.default',
         type: 'string',
         description: 'Default log channel name (stack, single, stderr, etc.).',
-        defaultValue: "{{ env.LOG_CHANNEL | default: 'stack' }}",
+        defaultValue: 'stack',
         metadata: {configDocMetaInheritFromEnv: 'LOG_CHANNEL'},
       ),
       ConfigDocEntry(
@@ -97,6 +96,7 @@ class LoggingServiceProvider extends ServiceProvider
         type: 'map',
         description:
             'Map of log channel definitions (stack, single, daily, stderr, null).',
+        defaultValue: _defaultLoggingChannels,
       ),
       ConfigDocEntry(
         path: 'logging.enabled',

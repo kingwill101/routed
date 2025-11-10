@@ -18,21 +18,6 @@ class SecurityServiceProvider extends ServiceProvider
     with ProvidesDefaultConfig {
   @override
   ConfigDefaults get defaultConfig => const ConfigDefaults(
-    values: {
-      'http': {
-        'middleware_sources': {
-          'routed.security': {
-            'global': <String>[
-              'routed.security.trusted_proxy',
-              'routed.security.ip_filter',
-              'routed.security.headers',
-              'routed.security.csrf',
-              'routed.security.request_size',
-            ],
-          },
-        },
-      },
-    },
     docs: [
       ConfigDocEntry(
         path: 'security.max_request_size',
@@ -126,6 +111,22 @@ class SecurityServiceProvider extends ServiceProvider
         description:
             'Feature toggle for core security middleware (headers, CSRF, size limits).',
         defaultValue: true,
+      ),
+      ConfigDocEntry(
+        path: 'http.middleware_sources',
+        type: 'map',
+        description: 'Security middleware references injected globally.',
+        defaultValue: <String, Object?>{
+          'routed.security': <String, Object?>{
+            'global': <String>[
+              'routed.security.trusted_proxy',
+              'routed.security.ip_filter',
+              'routed.security.headers',
+              'routed.security.csrf',
+              'routed.security.request_size',
+            ],
+          },
+        },
       ),
     ],
   );

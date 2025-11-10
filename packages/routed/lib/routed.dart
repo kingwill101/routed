@@ -2,6 +2,18 @@ export 'dart:io' show HttpHeaders, HttpStatus;
 
 export 'package:storage_fs/storage_fs.dart' hide Factory;
 
+export 'src/auth/haigate.dart'
+    show
+        GateCallback,
+        GateEvaluation,
+        GateEvaluationContext,
+        GateObserver,
+        GatePayloadProvider,
+        GateDeniedHandler,
+        GateRegistry,
+        GateRegistrationException,
+        GateViolation,
+        Haigate;
 export 'src/auth/jwt.dart'
     show
         JwtAuthException,
@@ -25,18 +37,6 @@ export 'src/auth/oauth.dart'
         oauthTokenAttribute,
         oauthClaimsAttribute,
         oauthScopeAttribute;
-export 'src/auth/haigate.dart'
-    show
-        GateCallback,
-        GateEvaluation,
-        GateEvaluationContext,
-        GateObserver,
-        GatePayloadProvider,
-        GateDeniedHandler,
-        GateRegistry,
-        GateRegistrationException,
-        GateViolation,
-        Haigate;
 export 'src/auth/session_auth.dart'
     show
         AuthPrincipal,
@@ -69,11 +69,10 @@ export 'src/engine/config.dart';
 export 'src/engine/engine.dart';
 export 'src/engine/engine_opt.dart';
 export 'src/engine/engine_template.dart';
-export 'src/engine/provider_manifest.dart';
 export 'src/engine/middleware_registry.dart';
+export 'src/engine/provider_manifest.dart';
 export 'src/engine/route_manifest.dart';
-export 'src/openapi/generator.dart';
-export 'src/openapi/operation.dart';
+export 'src/engine/storage_defaults.dart';
 export 'src/events/events.dart';
 export 'src/events/signals.dart';
 export 'src/http/conditional.dart'
@@ -97,6 +96,8 @@ export 'src/observability/health.dart'
     show HealthService, HealthCheck, HealthCheckResult, HealthEndpointRegistry;
 export 'src/observability/metrics.dart' show MetricsService;
 export 'src/observability/tracing.dart' show TracingService, TracingConfig;
+export 'src/openapi/generator.dart';
+export 'src/openapi/operation.dart';
 export 'src/provider/config_utils.dart';
 export 'src/provider/provider.dart';
 export 'src/request.dart';
@@ -106,9 +107,11 @@ export 'src/router/router.dart';
 export 'src/router/types.dart';
 export 'src/runtime/shutdown.dart';
 export 'src/storage/storage_manager.dart';
-export 'src/engine/storage_defaults.dart';
 export 'src/support/helpers.dart' show config, route;
 export 'src/support/zone.dart';
+export 'src/utils/deep_copy.dart';
+export 'src/utils/deep_merge.dart';
+export 'src/utils/dot.dart';
 export 'src/utils/environment.dart';
 export 'src/utils/request_id.dart';
 export 'src/view/view.dart';

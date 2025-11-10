@@ -40,7 +40,13 @@ class CacheServiceProvider extends ServiceProvider with ProvidesDefaultConfig {
         path: 'cache.stores',
         type: 'map',
         description: 'Configured cache stores keyed by store name.',
-        defaultValue: null,
+        defaultValue: {
+          'array': {'driver': 'array'},
+          'file': {
+            'driver': 'file',
+            'path': 'storage/framework/cache',
+          },
+        },
       ),
       ConfigDocEntry(
         path: 'cache.stores.*.driver',

@@ -74,7 +74,7 @@ mixin ContainerMixin {
   void registerProvider(ServiceProvider provider) {
     _ensureConfigRegistryRegistered();
     if (provider is ProvidesDefaultConfig) {
-      final defaults = provider.defaultConfig;
+      final defaults = provider.defaultConfig.snapshot();
       _configRegistry.register(
         defaults.values,
         source: provider.configSource,

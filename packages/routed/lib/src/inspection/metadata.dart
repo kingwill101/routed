@@ -84,8 +84,8 @@ List<ProviderMetadata> inspectProviders() {
   for (final registration in ProviderRegistry.instance.registrations) {
     final provider = registration.factory();
     if (provider is ProvidesDefaultConfig) {
-      final defaults = provider.defaultConfig;
-      final fields = defaults.docs
+      final snapshot = provider.defaultConfig.snapshot();
+      final fields = snapshot.docs
           .map((doc) => ConfigFieldMetadata.fromDoc(doc))
           .toList(growable: false);
       providers.add(
@@ -94,7 +94,7 @@ List<ProviderMetadata> inspectProviders() {
           description: registration.description,
           providerType: provider.runtimeType.toString(),
           configSource: provider.configSource,
-          defaults: defaults.values,
+          defaults: snapshot.values,
           fields: fields,
         ),
       );

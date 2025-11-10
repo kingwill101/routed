@@ -48,19 +48,6 @@ class ObservabilityServiceProvider extends ServiceProvider
 
   @override
   ConfigDefaults get defaultConfig => const ConfigDefaults(
-    values: <String, Object?>{
-      'http': <String, Object?>{
-        'middleware_sources': <String, Object?>{
-          'routed.observability': <String, Object?>{
-            'global': <String>[
-              'routed.observability.health',
-              'routed.observability.tracing',
-              'routed.observability.metrics',
-            ],
-          },
-        },
-      },
-    },
     docs: <ConfigDocEntry>[
       ConfigDocEntry(
         path: 'observability.enabled',
@@ -149,6 +136,20 @@ class ObservabilityServiceProvider extends ServiceProvider
         description:
             'Enable error observer notifications (reserve for external error trackers).',
         defaultValue: false,
+      ),
+      ConfigDocEntry(
+        path: 'http.middleware_sources',
+        type: 'map',
+        description: 'Observability middleware automatically registered.',
+        defaultValue: <String, Object?>{
+          'routed.observability': <String, Object?>{
+            'global': <String>[
+              'routed.observability.health',
+              'routed.observability.tracing',
+              'routed.observability.metrics',
+            ],
+          },
+        },
       ),
     ],
   );

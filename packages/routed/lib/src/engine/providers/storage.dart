@@ -3,13 +3,13 @@ import 'dart:async';
 import 'package:routed/src/container/container.dart';
 import 'package:routed/src/contracts/contracts.dart' show Config;
 import 'package:routed/src/engine/config.dart';
+import 'package:routed/src/engine/storage_defaults.dart';
 import 'package:routed/src/provider/config_utils.dart';
 import 'package:routed/src/provider/provider.dart';
 import 'package:routed/src/storage/cloud_storage_driver.dart';
 import 'package:routed/src/storage/local_storage_driver.dart';
 import 'package:routed/src/storage/storage_drivers.dart';
 import 'package:routed/src/storage/storage_manager.dart';
-import 'package:routed/src/engine/storage_defaults.dart';
 import 'package:storage_fs/storage_fs.dart' as storage_fs;
 
 /// Provides storage disk configuration (local file systems, etc.).
@@ -89,7 +89,10 @@ class StorageServiceProvider extends ServiceProvider
         type: 'map',
         description: 'Configured storage disks.',
         defaultValue: {
-          'local': <String, Object?>{'driver': 'local'},
+          'local': <String, Object?>{
+            'driver': 'local',
+            'root': 'storage/app',
+          },
         },
       ),
       const ConfigDocEntry(

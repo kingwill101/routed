@@ -20,15 +20,6 @@ class CompressionServiceProvider extends ServiceProvider
 
   @override
   ConfigDefaults get defaultConfig => const ConfigDefaults(
-    values: {
-      'http': {
-        'middleware_sources': {
-          'routed.compression': {
-            'global': ['routed.compression.middleware'],
-          },
-        },
-      },
-    },
     docs: [
       ConfigDocEntry(
         path: 'compression.enabled',
@@ -65,6 +56,16 @@ class CompressionServiceProvider extends ServiceProvider
         type: 'bool',
         description: 'Feature toggle for the compression middleware.',
         defaultValue: true,
+      ),
+      ConfigDocEntry(
+        path: 'http.middleware_sources',
+        type: 'map',
+        description: 'Compression middleware references registered globally.',
+        defaultValue: <String, Object?>{
+          'routed.compression': <String, Object?>{
+            'global': <String>['routed.compression.middleware'],
+          },
+        },
       ),
     ],
   );

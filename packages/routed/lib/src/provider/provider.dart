@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:routed/src/container/container.dart';
 import 'package:routed/src/contracts/contracts.dart' show Config;
 import 'package:routed/src/utils/deep_copy.dart';
+import 'package:routed/src/utils/dot.dart';
 
 typedef ConfigDocOptionsBuilder = List<String> Function();
 
@@ -21,6 +22,7 @@ class ConfigDocEntry {
     this.optionsBuilder,
     this.metadata = const <String, Object?>{},
     this.defaultValue,
+    this.defaultValueBuilder,
   });
 
   /// Dot-delimited configuration path (e.g. `cache.default`).
@@ -50,6 +52,9 @@ class ConfigDocEntry {
   /// Default value contributed by the provider (if any).
   final Object? defaultValue;
 
+  /// Lazily computed default value, evaluated when defaults are materialised.
+  final Object? Function()? defaultValueBuilder;
+
   /// Resolves the available options, preferring dynamic builders.
   List<String>? resolveOptions() {
     if (optionsBuilder != null) {
@@ -59,117 +64,104 @@ class ConfigDocEntry {
     if (options == null || options!.isEmpty) return null;
     return List<String>.from(options!);
   }
+
+  /// Resolves the default value, evaluating the builder when provided.
+  Object? resolveDefaultValue() {
+    if (defaultValue != null) {
+      return defaultValue;
+    }
+    if (defaultValueBuilder != null) {
+      return defaultValueBuilder!();
+    }
+    return null;
+  }
+
+  bool get hasExplicitDefault =>
+      defaultValue != null || defaultValueBuilder != null;
 }
 
 /// Combined defaults and documentation returned by [ProvidesDefaultConfig].
 class ConfigDefaults {
-  const ConfigDefaults({
-    Map<String, dynamic> values = const {},
-    List<ConfigDocEntry> docs = const <ConfigDocEntry>[],
-  }) : _values = values,
-       _docs = docs;
+  const ConfigDefaults({List<ConfigDocEntry> docs = const <ConfigDocEntry>[]})
+    : _docs = docs;
 
-  final Map<String, dynamic> _values;
   final List<ConfigDocEntry> _docs;
 
   /// Default configuration values keyed by dotted path.
-  Map<String, dynamic> get values {
-    if (_values.isEmpty) {
-      return _buildValuesFromDocs(_docs);
-    }
-    final merged = deepCopyMap(_values);
-    if (_docs.isEmpty) {
-      return merged;
-    }
-    for (final doc in _docs) {
-      final defaultValue = doc.defaultValue;
-      if (defaultValue == null) continue;
-      if (_lookupByPath(merged, doc.path) != null) continue;
-      _assignByPath(merged, doc.path, deepCopyValue(defaultValue));
-    }
-    return merged;
-  }
+  Map<String, dynamic> get values => _computeDefaults(_docs).values;
 
   /// Documentation entries describing configuration fields.
-  List<ConfigDocEntry> get docs => _mergeDefaultValues(values, _docs);
+  List<ConfigDocEntry> get docs {
+    final computed = _computeDefaults(_docs);
+    return _mergeDefaultValues(computed.values, computed.docDefaults, _docs);
+  }
 
-  static Map<String, dynamic> _buildValuesFromDocs(List<ConfigDocEntry> docs) {
+  /// Produces a snapshot containing both values and documentation in one pass.
+  ConfigDefaultsSnapshot snapshot() {
+    final computed = _computeDefaults(_docs);
+    final mergedDocs = _mergeDefaultValues(
+      computed.values,
+      computed.docDefaults,
+      _docs,
+    );
+    return ConfigDefaultsSnapshot(values: computed.values, docs: mergedDocs);
+  }
+
+  static _ComputedDefaults _computeDefaults(List<ConfigDocEntry> docs) {
     final result = <String, dynamic>{};
+    final providedDefaults = <String, Object?>{};
     for (final entry in docs) {
       if (entry.path.contains('*')) {
         continue;
       }
-      if (entry.defaultValue == null) continue;
-      _assignByPath(result, entry.path, deepCopyValue(entry.defaultValue));
+      final resolved = entry.resolveDefaultValue();
+      if (resolved == null) continue;
+      dot.set(result, entry.path, deepCopyValue(resolved));
+      providedDefaults[entry.path] = deepCopyValue(dot.get(result, entry.path));
     }
-    return result;
+    return _ComputedDefaults(result, providedDefaults);
   }
 
   static List<ConfigDocEntry> _mergeDefaultValues(
     Map<String, dynamic> values,
+    Map<String, Object?> docDefaults,
     List<ConfigDocEntry> docs,
   ) {
     return docs
-        .map(
-          (entry) => entry.defaultValue != null
-              ? entry
-              : ConfigDocEntry(
-                  path: entry.path,
-                  type: entry.type,
-                  description: entry.description,
-                  example: entry.example,
-                  deprecated: entry.deprecated,
-                  options: entry.options,
-                  optionsBuilder: entry.optionsBuilder,
-                  metadata: entry.metadata,
-                  defaultValue: _lookupByPath(values, entry.path),
-                ),
-        )
+        .map((entry) {
+          final provided = docDefaults.containsKey(entry.path);
+          final resolvedDefault = provided
+              ? docDefaults[entry.path]
+              : dot.get(values, entry.path);
+          return ConfigDocEntry(
+            path: entry.path,
+            type: entry.type,
+            description: entry.description,
+            example: entry.example,
+            deprecated: entry.deprecated,
+            options: entry.options,
+            optionsBuilder: entry.optionsBuilder,
+            metadata: entry.metadata,
+            defaultValue: resolvedDefault,
+            defaultValueBuilder: entry.defaultValueBuilder,
+          );
+        })
         .toList(growable: false);
   }
+}
 
-  static Object? _lookupByPath(Map<String, dynamic> map, String path) {
-    final segments = path.split('.');
-    dynamic current = map;
-    for (final segment in segments) {
-      if (current is Map<String, dynamic> && current.containsKey(segment)) {
-        current = current[segment];
-      } else {
-        return null;
-      }
-    }
-    return current;
-  }
+class _ComputedDefaults {
+  _ComputedDefaults(this.values, this.docDefaults);
 
-  static void _assignByPath(
-    Map<String, dynamic> target,
-    String path,
-    Object? value,
-  ) {
-    final segments = path.split('.');
-    Map<String, dynamic> current = target;
-    for (var i = 0; i < segments.length; i++) {
-      final segment = segments[i];
-      final isLast = i == segments.length - 1;
-      if (isLast) {
-        current[segment] = value;
-      } else {
-        final next = current[segment];
-        if (next is Map<String, dynamic>) {
-          current = next;
-        } else if (next == null) {
-          final newMap = <String, dynamic>{};
-          current[segment] = newMap;
-          current = newMap;
-        } else {
-          // Overwrite non-map entry to maintain consistency.
-          final newMap = <String, dynamic>{};
-          current[segment] = newMap;
-          current = newMap;
-        }
-      }
-    }
-  }
+  final Map<String, dynamic> values;
+  final Map<String, Object?> docDefaults;
+}
+
+class ConfigDefaultsSnapshot {
+  ConfigDefaultsSnapshot({required this.values, required this.docs});
+
+  final Map<String, dynamic> values;
+  final List<ConfigDocEntry> docs;
 }
 
 /// Base class for service providers that register services with the container.

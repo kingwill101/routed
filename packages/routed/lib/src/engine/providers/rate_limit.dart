@@ -24,15 +24,6 @@ class RateLimitServiceProvider extends ServiceProvider
 
   @override
   ConfigDefaults get defaultConfig => const ConfigDefaults(
-    values: {
-      'http': {
-        'middleware_sources': {
-          'routed.rate_limit': {
-            'global': ['routed.rate_limit.middleware'],
-          },
-        },
-      },
-    },
     docs: [
       ConfigDocEntry(
         path: 'rate_limit.enabled',
@@ -91,6 +82,16 @@ class RateLimitServiceProvider extends ServiceProvider
         type: 'bool',
         description: 'Feature toggle controlling middleware registration.',
         defaultValue: false,
+      ),
+      ConfigDocEntry(
+        path: 'http.middleware_sources',
+        type: 'map',
+        description: 'Rate limiting middleware references registered globally.',
+        defaultValue: <String, Object?>{
+          'routed.rate_limit': <String, Object?>{
+            'global': <String>['routed.rate_limit.middleware'],
+          },
+        },
       ),
     ],
   );

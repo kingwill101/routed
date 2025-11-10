@@ -1,5 +1,4 @@
 import 'package:routed/routed.dart';
-import 'package:routed/src/utils/deep_copy.dart';
 import 'package:test/test.dart';
 
 void main() {
@@ -97,9 +96,12 @@ class _ManifestProviderAlpha extends ServiceProvider
     with ProvidesDefaultConfig {
   @override
   ConfigDefaults get defaultConfig => const ConfigDefaults(
-    values: {
-      'http': {
-        'middleware_sources': {
+    docs: [
+      ConfigDocEntry(
+        path: 'http.middleware_sources',
+        type: 'map',
+        description: 'Alpha provider middleware defaults.',
+        defaultValue: {
           'test.middleware.alpha': {
             'global': ['demo.global.alpha', 'demo.global.shared'],
             'groups': {
@@ -107,8 +109,8 @@ class _ManifestProviderAlpha extends ServiceProvider
             },
           },
         },
-      },
-    },
+      ),
+    ],
   );
 
   @override
@@ -143,9 +145,12 @@ class _ManifestProviderAlpha extends ServiceProvider
 class _ManifestProviderBeta extends ServiceProvider with ProvidesDefaultConfig {
   @override
   ConfigDefaults get defaultConfig => const ConfigDefaults(
-    values: {
-      'http': {
-        'middleware_sources': {
+    docs: [
+      ConfigDocEntry(
+        path: 'http.middleware_sources',
+        type: 'map',
+        description: 'Beta provider middleware defaults.',
+        defaultValue: {
           'test.middleware.beta': {
             'global': ['demo.global.shared', 'demo.global.beta'],
             'groups': {
@@ -153,8 +158,8 @@ class _ManifestProviderBeta extends ServiceProvider with ProvidesDefaultConfig {
             },
           },
         },
-      },
-    },
+      ),
+    ],
   );
 
   @override

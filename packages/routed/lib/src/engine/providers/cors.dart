@@ -17,15 +17,6 @@ class CorsServiceProvider extends ServiceProvider with ProvidesDefaultConfig {
 
   @override
   ConfigDefaults get defaultConfig => const ConfigDefaults(
-    values: {
-      'http': {
-        'middleware_sources': {
-          'routed.cors': {
-            'global': ['routed.cors'],
-          },
-        },
-      },
-    },
     docs: <ConfigDocEntry>[
       ConfigDocEntry(
         path: 'cors.enabled',
@@ -74,6 +65,16 @@ class CorsServiceProvider extends ServiceProvider with ProvidesDefaultConfig {
         type: 'bool',
         description: 'Feature toggle for registering the CORS middleware.',
         defaultValue: false,
+      ),
+      ConfigDocEntry(
+        path: 'http.middleware_sources',
+        type: 'map',
+        description: 'CORS middleware references injected into the pipeline.',
+        defaultValue: <String, Object?>{
+          'routed.cors': <String, Object?>{
+            'global': <String>['routed.cors'],
+          },
+        },
       ),
     ],
   );

@@ -1,7 +1,7 @@
 import 'package:routed/routed.dart' as routed;
 import 'package:routed/src/config/registry.dart';
-import 'package:routed/src/contracts/contracts.dart';
 import 'package:routed/src/container/container.dart';
+import 'package:routed/src/contracts/contracts.dart';
 import 'package:routed/src/provider/provider.dart';
 import 'package:test/test.dart';
 
@@ -9,9 +9,14 @@ class PluginDefaultsProvider extends ServiceProvider
     with ProvidesDefaultConfig {
   @override
   ConfigDefaults get defaultConfig => const ConfigDefaults(
-    values: {
-      'plugin': {'enabled': true},
-    },
+    docs: [
+      ConfigDocEntry(
+        path: 'plugin.enabled',
+        type: 'bool',
+        description: 'Enables the plugin feature.',
+        defaultValue: true,
+      ),
+    ],
   );
 
   @override
@@ -21,9 +26,14 @@ class PluginDefaultsProvider extends ServiceProvider
 class AuditDefaultsProvider extends ServiceProvider with ProvidesDefaultConfig {
   @override
   ConfigDefaults get defaultConfig => const ConfigDefaults(
-    values: {
-      'audit': {'enabled': true},
-    },
+    docs: [
+      ConfigDocEntry(
+        path: 'audit.enabled',
+        type: 'bool',
+        description: 'Enables audit logging.',
+        defaultValue: true,
+      ),
+    ],
   );
 
   @override
