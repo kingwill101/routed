@@ -8,7 +8,8 @@ class RoutedLogger {
 
   static LoggerFactory _factory = _defaultFactory;
   static LoggerFactory _systemFactory = _defaultFactory;
-  static RoutedLogFormat _format = RoutedLogFormat.json;
+  static contextual.LogMessageFormatter _format =
+      contextual.PlainTextLogFormatter();
   static bool _hasCustomFactory = false;
 
   static contextual.Logger _defaultFactory(Map<String, Object?> context) {
@@ -17,11 +18,7 @@ class RoutedLogger {
       initialContext[entry.key] = entry.value;
     }
 
-    final formatter = _format == RoutedLogFormat.json
-        ? contextual.JsonLogFormatter()
-        : contextual.PrettyLogFormatter();
-
-    return contextual.Logger(formatter: formatter)
+    return contextual.Logger(formatter: _format)
       ..addChannel('console', contextual.ConsoleLogDriver())
       ..withContext(initialContext);
   }
@@ -47,13 +44,11 @@ class RoutedLogger {
     _hasCustomFactory = false;
   }
 
-  static void setGlobalFormat(RoutedLogFormat format) {
+  static void setGlobalFormat(contextual.LogMessageFormatter format) {
     _format = format;
     // Refresh the system factory to ensure default output respects new format.
     configureSystemFactory(_systemFactory);
   }
 
-  static RoutedLogFormat get globalFormat => _format;
+  static contextual.LogMessageFormatter get globalFormat => _format;
 }
-
-enum RoutedLogFormat { json, text }

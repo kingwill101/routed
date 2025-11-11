@@ -1,5 +1,4 @@
 import 'dart:async';
-import 'dart:convert';
 import 'dart:io';
 
 import 'package:contextual/contextual.dart' as contextual;
@@ -107,8 +106,8 @@ class LoggingServiceProvider extends ServiceProvider
         path: 'logging.format',
         type: 'string',
         description: 'Log output format (json or text).',
-        options: ['json', 'text'],
-        defaultValue: 'json',
+        options: ["json", "null", "plain", "pretty", "raw"],
+        defaultValue: 'pretty',
       ),
       ConfigDocEntry(
         path: 'logging.request_headers',
@@ -205,10 +204,8 @@ class LoggingServiceProvider extends ServiceProvider
     final message =
         '${ctx.request.method} ${ctx.request.uri.path} -> $status (${duration.inMilliseconds}ms)';
 
-    final levelLabel = error != null ? 'ERROR' : _level.toUpperCase();
     final logEntry = <String, Object?>{
       'timestamp': timestamp.toIso8601String(),
-      'level': levelLabel,
       'message': message,
       ...payload,
     };
@@ -216,27 +213,20 @@ class LoggingServiceProvider extends ServiceProvider
     if (error != null) {
       logEntry['error'] = error.toString();
     }
+
     if (_includeStackTraces && stackTrace != null) {
       logEntry['stack_trace'] = stackTrace.toString();
     }
 
-    final formatted = RoutedLogger.globalFormat == RoutedLogFormat.json
-        ? jsonEncode(logEntry)
-        : message;
-
     if (error != null) {
-      logger.error(formatted);
-      if (RoutedLogger.globalFormat != RoutedLogFormat.json &&
-          _includeStackTraces &&
-          stackTrace != null) {
+      logger.error(message);
+      if (_includeStackTraces && stackTrace != null) {
         logger.error(stackTrace.toString());
       }
       return;
     }
 
-    _level == contextual.Level.debug
-        ? logger.debug(formatted)
-        : logger.info(formatted);
+    logger.log(_level, message);
   }
 
   void _ensureDriverRegistry(Container container) {
@@ -438,10 +428,16 @@ class LoggingServiceProvider extends ServiceProvider
           context: 'logging.format',
           throwOnInvalid: false,
         )?.toLowerCase().trim() ??
-        'json';
-    final format = formatToken == 'text'
-        ? RoutedLogFormat.text
-        : RoutedLogFormat.json;
+        'plain';
+
+    final format = switch (formatToken) {
+      "pretty" => contextual.PrettyLogFormatter(),
+      "raw" => contextual.RawLogFormatter(),
+      "null" => contextual.JsonLogFormatter(),
+      "json" => contextual.JsonLogFormatter(),
+      "plain" => contextual.PlainTextLogFormatter(),
+      _ => contextual.PlainTextLogFormatter(),
+    };
 
     return _LoggingConfig(
       enabled: enabled,
@@ -500,7 +496,7 @@ class _LoggingConfig {
   final Map<String, dynamic> extraFields;
   final List<String> headerNames;
   final bool includeStackTraces;
-  final RoutedLogFormat format;
+  final contextual.LogMessageFormatter format;
 }
 
 void _configureLoggerFactory(Config config, Container container) {
@@ -616,9 +612,7 @@ class _LoggerFactoryBuilder {
   final Set<String> _resolving = {};
 
   contextual.Logger createLogger(Map<String, Object?> context) {
-    final formatter = RoutedLogger.globalFormat == RoutedLogFormat.json
-        ? contextual.JsonLogFormatter()
-        : contextual.PrettyLogFormatter();
+    final formatter = RoutedLogger.globalFormat;
     final logger = contextual.Logger(formatter: formatter)
       ..withContext(context);
 
