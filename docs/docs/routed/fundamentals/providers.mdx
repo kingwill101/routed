@@ -1,0 +1,174 @@
+---
+title: Building Providers
+description: Create custom Routed service providers, wire configuration defaults, and plug them into the CLI + manifest tooling.
+---
+
+Routed’s core features (logging, cache, storage, uploads, etc.) are all implemented as _providers_. A provider boots dependencies into the container, exposes configuration defaults, and participates in reloads + shutdown. You can author your own providers to encapsulate services or framework extensions.
+
+> TL;DR: Implement `ServiceProvider`, register it with `Engine.registerProvider`, and (optionally) mix in `ProvidesDefaultConfig` so the CLI and manifests can surface your documentation.
+
+## Provider lifecycle
+
+Every provider extends the `ServiceProvider` base class:
+
+```dart title="lib/services/email_service_provider.dart"
+import 'package:routed/src/container/container.dart';
+import 'package:routed/src/provider/provider.dart';
+
+class EmailServiceProvider extends ServiceProvider {
+  @override
+  void register(Container container) {
+    container.singleton<Mailer>((c) async {
+      final config = await c.make<Config>();
+      final settings = config.get('mail') as Map<String, dynamic>;
+      return Mailer.fromConfig(settings);
+    });
+  }
+
+  @override
+  Future<void> boot(Container container) async {
+    final mailer = await container.make<Mailer>();
+    await mailer.verifyConnection();
+  }
+
+  @override
+  Future<void> cleanup(Container container) async {
+    if (container.has<Mailer>()) {
+      final mailer = await container.make<Mailer>();
+      await mailer.close();
+    }
+  }
+}
+```
+
+- `register` is synchronous and should only declare bindings (no I/O).
+- `boot` runs after all providers register, so you can resolve other bindings safely.
+- `cleanup` runs when the engine shuts down (or a request-scoped container is disposed).
+
+Register providers before `engine.initialize()`:
+
+```dart
+final engine = Engine();
+engine.registerProvider(EmailServiceProvider());
+await engine.initialize();
+```
+
+## Shipping configuration defaults
+
+Mix in `ProvidesDefaultConfig` to contribute config defaults + documentation. Use `ConfigDefaults` and `ConfigDocEntry` so the CLI (`provider:list --config`) and generator (`config:init`) can surface the metadata.
+
+```dart title="EmailServiceProvider with defaults"
+class EmailServiceProvider extends ServiceProvider with ProvidesDefaultConfig {
+  @override
+  ConfigDefaults get defaultConfig => const ConfigDefaults(
+        docs: [
+          ConfigDocEntry(
+            path: 'mail.default',
+            type: 'string',
+            description: 'Transport used when none is specified.',
+            defaultValue: 'smtp',
+            metadata: {configDocMetaInheritFromEnv: 'MAIL_MAILER'},
+          ),
+          ConfigDocEntry(
+            path: 'mail.mailers.smtp.host',
+            type: 'string',
+            description: 'SMTP server hostname.',
+            defaultValue: "{{ env.MAIL_HOST | default: 'smtp.example.com' }}",
+          ),
+          // …
+        ],
+      );
+
+  @override
+  void register(Container container) {
+    // bindings
+  }
+}
+```
+
+Providers that implement `ProvidesDefaultConfig` must also implement `onConfigReload` if they cache configuration, because the engine calls it whenever `.env` or `config/*.yaml` changes in watch mode.
+
+```dart
+  @override
+  Future<void> onConfigReload(Container container, Config config) async {
+    if (container.has<Mailer>()) {
+      final mailer = await container.make<Mailer>();
+      mailer.updateSettings(config.get('mail'));
+    }
+  }
+```
+
+### Documenting dynamic defaults
+
+If defaults depend on runtime state (e.g., registered drivers), use `defaultValueBuilder` and `optionsBuilder`:
+
+```dart
+ConfigDocEntry(
+  path: 'mail.mailers.*.driver',
+  type: 'string',
+  description: 'Registered mail driver.',
+  optionsBuilder: MailDriverRegistry.instance.names,
+);
+```
+
+### CLI integration
+
+Once the provider ships defaults, the CLI automatically displays them:
+
+```bash
+dart run routed_cli provider:list --config | grep mail
+```
+
+`config:init` also inlines the doc comments above each `config/*.yaml` entry, so `ConfigDocEntry.description` + `metadata` show up in generated files.
+
+## Provider manifests
+
+When you toggle providers in `config/http.yaml` (for example via `providers: [routed.logging, my.custom.email]`), Routed resolves those IDs through `ProviderRegistry`. To make your provider manifest-friendly, export a factory from a package and register it:
+
+```dart title="lib/providers.dart"
+import 'package:routed/src/provider/registry.dart';
+
+void registerProviders() {
+  ProviderRegistry.instance.register(
+    id: 'custom.mail',
+    description: 'Application mailer',
+    factory: () => EmailServiceProvider(),
+  );
+}
+```
+
+Call `registerProviders()` near `main()` before the engine boots. The CLI and `provider:list` will now show `custom.mail` alongside the built-ins, and manifests can reference it by ID.
+
+## Testing providers
+
+Because providers are plain Dart classes, you can spin up an `Engine` (or just a `Container`) inside tests:
+
+```dart title="test/providers/email_provider_test.dart"
+test('Email provider registers Mailer binding', () async {
+  final engine = Engine(configItems: {
+    'mail': {'default': 'log'},
+  });
+  engine.registerProvider(EmailServiceProvider());
+  await engine.initialize();
+
+  final mailer = await engine.make<Mailer>();
+  expect(mailer, isA<Mailer>());
+
+  await engine.close();
+});
+```
+
+If the provider exposes CLI docs, add an assertion against `provider.defaultConfig.docs` to keep paths/descriptions accurate.
+
+## Cheatsheet
+
+| Need | API |
+| --- | --- |
+| Register bindings | Override `register` |
+| Perform async setup | Override `boot` |
+| Release resources | Override `cleanup` |
+| React to config reloads | Implement `onConfigReload` (only when using `ProvidesDefaultConfig`) |
+| Contribute defaults/docs | Return `ConfigDefaults` with `ConfigDocEntry` |
+| Offer CLI/manifest ID | Register with `ProviderRegistry` |
+
+With these building blocks you can package reusable integrations (queues, telemetry, payment gateways) that feel identical to the providers shipped by Routed.***

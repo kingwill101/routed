@@ -4,6 +4,7 @@ description: Tracking the decomposition of EngineConfig into manifest-driven ser
 sidebar_position: 99
 ---
 
+
 import Tabs from '@theme/Tabs';
 import TabItem from '@theme/TabItem';
 
@@ -23,7 +24,7 @@ import TabItem from '@theme/TabItem';
 - Upload limits (`max_memory`, `max_file_size`, `allowed_extensions`, directory/permissions) are sourced from `uploads.*`; the uploads provider normalizes legacy paths, reapplies limits on reload, and `withMultipart` now mutates config instead of the engine instance.
 - CORS settings (`enabled`, origins, methods, headers, credentials, cache) now resolve from `cors.*` (with legacy fallbacks) via the CORS provider, and the new `withCors` EngineOpt writes through config for reload-safe updates.
 - Cache manager configuration (default store, store definitions) now flows through `cache.*`; the cache provider rebuilds managed stores on config reload while honoring pre-bound `withCacheManager` overrides.
-- Static assets can be described via `static.*` (enabled flag, mounts with route/directory/index/listing). The static provider short-circuits requests through a middleware, translating legacy `http.features.static` keys during reloads.
+- Static assets can be described via `static.*` (enabled flag, mounts with route/directory/index/listing). The static provider short-circuits requests through a middleware so you no longer need any legacy HTTP feature toggles.
 - Logging toggles (`logging.enabled`, `logging.level`, `logging.errors_only`) now live under the logging provider; `withLogging` updates config and the middleware responds to config reloads without restarting the engine.
 - Storage and view providers now share `storage.*` disks; view directories resolve through `StorageManager`, keeping templates aligned with the shared file system layer. Static, storage, and view providers all reuse the shared parsing helpers, so disks can be declared once and referenced safely via `static.mounts[].disk` or `view.disk`.
 - Security, uploads, CORS, view, cache, logging, static, and storage providers now validate config inputs and throw `ProviderConfigException` when the manifest supplies the wrong shape (e.g., non-boolean CSRF flags, malformed trusted proxy headers, non-string view directories). The shared config utilities make that validation consistent across providers.

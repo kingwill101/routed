@@ -97,7 +97,7 @@ http:
 ```
 
 - `providers` lists the service providers the engine should register during boot. Disable a provider by removing it (or using `dart run routed_cli provider:disable id`).
-- `http.features.<suffix>.enabled` controls opt-in behaviour. Providers (for example `routed.cors` or `routed.security`) read these flags so you can toggle middleware without editing code.
+- Provider-specific `*.enabled` flags (for example `logging.enabled`, `static.enabled`, `rate_limit.enabled`) control opt-in behaviour so you can toggle middleware without editing code.
 - `http.middleware_sources` (populated by several providers) documents the middleware identifiers they register. Override the arrays when you need to reorder or remove middleware while keeping provider-owned setup logic intact.
 
 ### Inspecting providers from the CLI
@@ -541,7 +541,7 @@ static:
       list_directories: false
 ```
 
-Each mount maps a request prefix (`route`) to a location managed by the storage provider. Provide `disk` to reuse a configured storage disk and set `path` relative to that disk (the legacy `directory` key is still honoured). When `index` is set, requests that land on the mount root (or a directory ending with a trailing slash) will serve that file. Enable `list_directories` to render directory listings when no index is available. Legacy values under `http.features.static` (e.g. `root`, `index`, `prefix`) are still honoured and translated into the same structure.
+Each mount maps a request prefix (`route`) to a location managed by the storage provider. Provide `disk` to reuse a configured storage disk and set `path` relative to that disk (the legacy `directory` key is still honoured). When `index` is set, requests that land on the mount root (or a directory ending with a trailing slash) will serve that file. Enable `list_directories` to render directory listings when no index is available.
 
 You can toggle mounts at runtime via `EngineOpt.withStaticAssets`:
 
@@ -576,10 +576,10 @@ Static mounts, uploads, and other providers rely on the storage subsystem. Confi
 ```yaml title="config/http.yaml"
 storage:
   default: local
+  root: "{{ env.STORAGE_ROOT | default: 'storage/app' }}"
   disks:
     local:
       driver: local
-      root: storage/app
     assets:
       driver: local
       root: public/assets
@@ -594,7 +594,7 @@ final absolutePath = storage.resolve('logo.png', disk: 'assets');
 
 The storage provider feeds other subsystems automatically: set `view.disk` to back templates with a named disk and reference the same disks from static mounts (`static.mounts[].disk`) or uploads.
 
-Providing a `storage` section is optional; if omitted, a default `local` disk rooted at `storage/app` is created.
+Use the top-level `storage.root` key (or the `STORAGE_ROOT` environment variable exposed in new projects) to move the baseline path for the built-in `local` disk without editing every disk entry. If you omit the entire `storage` section the provider still seeds a default `local` disk, but its root now derives from `storage.root` (defaulting to `storage/app`).
 
 Cloud storage is available out of the box through the `s3` driver (and aliases like `minio`, `spaces`, and `r2`). Configure credentials under `options`:
 
@@ -833,15 +833,15 @@ final config = EngineConfig(
 
 | Concern | Configure via `config/http.yaml` | Configure programmatically |
 | --- | --- | --- |
-| Security feature flag | `http.features.security.enabled` | `EngineConfig(features: EngineFeatures(enableSecurityFeatures: true))` |
-| Proxy support | `http.features.proxy.enabled`, `security.trusted_proxies.*` | `EngineConfig(features: EngineFeatures(enableProxySupport: true))`, `withTrustedProxies([...])` |
-| Trusted platform headers | `http.features.trusted_platform.enabled`, `security.trusted_proxies.platform_header` | `EngineConfig(features: EngineFeatures(enableTrustedPlatform: true))` |
+| Security middleware | `security.headers`, `security.csrf.*`, `security.max_request_size`, `security.ip_filter.*` | `EngineConfig(features: EngineFeatures(enableSecurityFeatures: true))` |
+| Proxy support | `security.trusted_proxies.enabled`, `security.trusted_proxies.*` | `EngineConfig(features: EngineFeatures(enableProxySupport: true))`, `withTrustedProxies([...])` |
+| Trusted platform headers | `security.trusted_proxies.platform_header` | `EngineConfig(features: EngineFeatures(enableTrustedPlatform: true))` |
 | Routing booleans | `routing.redirect_trailing_slash`, `routing.handle_method_not_allowed`, `routing.remove_extra_slash`, `routing.use_raw_path`, `routing.unescape_path_values` | `EngineConfig(redirectTrailingSlash: ..., handleMethodNotAllowed: ..., removeExtraSlash: ..., useRawPath: ..., unescapePathValues: ...)` |
 | Routing semantics | `routing.default_options`, `routing.etag.strategy` | `EngineConfig(defaultOptionsEnabled: ..., etagStrategy: ...)` |
 | Multipart limits | `uploads.max_memory`, `uploads.max_file_size`, `uploads.max_disk_usage`, `uploads.allowed_extensions`, `uploads.directory`, `uploads.file_permissions` | `EngineConfig(multipart: MultipartConfig(...))`, `withMultipart(...)` |
 | HTTP/2 | `http.http2.enabled`, `http.http2.allow_cleartext`, `http.http2.max_concurrent_streams`, `http.http2.idle_timeout` | `EngineConfig(http2: Http2Config(enabled: true, allowCleartext: ..., maxConcurrentStreams: ..., idleTimeout: ...))` |
 | TLS certificates | `http.tls.certificate_path`, `http.tls.key_path`, `http.tls.password`, `http.tls.request_client_certificate`, `http.tls.shared`, `http.tls.v6_only` | `EngineConfig(tlsCertificatePath: ..., tlsKeyPath: ..., tlsCertificatePassword: ..., tlsRequestClientCertificate: ..., tlsShared: ..., tlsV6Only: ...)` |
-| Rate limiting | `rate_limit.enabled`, `rate_limit.backend`, `rate_limit.store`, `rate_limit.policies[*].*` | `RateLimitServiceProvider` (middleware auto-registered when `http.features.rate_limit.enabled`); configure policies via config. |
+| Rate limiting | `rate_limit.enabled`, `rate_limit.backend`, `rate_limit.store`, `rate_limit.policies[*].*` | `RateLimitServiceProvider` (middleware auto-registered once enabled); configure policies via config. |
 | View directories/cache | `view.engine`, `view.disk`, `view.directory`, `view.cache` (plus `storage.*` disks) | `EngineConfig(templateDirectory: ..., templateEngine: ...)`, `engine.useViewEngine(...)` |
 | Logging middleware | `logging.*` | `withLogging(...)` |
 | Cache stores | `cache.default`, `cache.stores.*` | `withCacheManager(...)` |
@@ -891,9 +891,9 @@ await engine.serveSecure(
 );
 ```
 
-<Tip>
+:::tip
 If `rate_limit.store` is omitted the provider looks up `cache.default`. Make sure one of those values is present; otherwise the limiter throws during boot because it cannot find a backing cache store.
-</Tip>
+:::
 
 ### Configure rate limiting
 

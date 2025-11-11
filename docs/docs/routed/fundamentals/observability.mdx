@@ -33,7 +33,7 @@ observability:
     enabled: false          # Reserve for future error reporter hooks
 ```
 
-When the provider boots it automatically registers tracing and metrics middleware, attaches Prometheus-style routes, and exposes a health service you can extend at runtime. Setting any nested feature flag (for example `observability.tracing.enabled: true`) automatically flips `http.features.observability.enabled` on, so you only need to toggle the sub-feature you care about.
+When the provider boots it automatically registers tracing and metrics middleware, attaches Prometheus-style routes, and exposes a health service you can extend at runtime. Toggle the granular `observability.*.enabled` flags (for example `observability.tracing.enabled: true`) to switch individual features on or off.
 
 ## OpenTelemetry tracing
 
