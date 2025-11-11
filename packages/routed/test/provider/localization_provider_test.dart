@@ -3,9 +3,14 @@ import 'package:routed/src/config/config.dart';
 import 'package:routed/src/container/container.dart';
 import 'package:routed/src/contracts/contracts.dart';
 import 'package:routed/src/engine/config.dart';
+import 'package:routed/src/engine/middleware_registry.dart';
 import 'package:routed/src/engine/providers/localization.dart';
 import 'package:routed/src/provider/provider.dart';
 import 'package:routed/src/translation/loaders/file_translation_loader.dart';
+import 'package:routed/src/translation/locale_manager.dart';
+import 'package:routed/src/translation/locale_resolver_registry.dart';
+import 'package:routed/src/translation/locale_resolution.dart';
+import 'package:routed/src/translation/resolvers.dart';
 import 'package:test/test.dart';
 
 void main() {
@@ -18,6 +23,7 @@ void main() {
       container = Container();
       fs = MemoryFileSystem();
       container.instance<EngineConfig>(EngineConfig(fileSystem: fs));
+      container.instance<MiddlewareRegistry>(MiddlewareRegistry());
       provider = LocalizationServiceProvider();
     });
 
@@ -43,6 +49,13 @@ void main() {
       final translator = container.get<TranslatorContract>();
       expect(translator.locale, equals('fr'));
       expect(translator.fallbackLocale, equals('en'));
+
+      final manager = container.get<LocaleManager>();
+      expect(manager.defaultLocale, equals('fr'));
+      expect(manager.fallbackLocale, equals('en'));
+
+      final registry = container.get<MiddlewareRegistry>();
+      expect(registry.has('routed.localization'), isTrue);
     });
 
     test('defaults fallback locale to app.locale when absent', () {
@@ -84,6 +97,91 @@ void main() {
       final translator = container.get<TranslatorContract>();
       expect(translator.locale, equals('de'));
       expect(translator.fallbackLocale, equals('en'));
+
+      final manager = container.get<LocaleManager>();
+      expect(manager.defaultLocale, equals('de'));
+      expect(manager.fallbackLocale, equals('en'));
+    });
+
+    test('builds resolver order from configuration', () {
+      final config = ConfigImpl({
+        'app': {'locale': 'en'},
+        'translation': {
+          'resolvers': ['cookie', 'header'],
+          'cookie': {'name': 'preferred'},
+        },
+      });
+      container.instance<Config>(config);
+
+      provider.register(container);
+
+      final manager = container.get<LocaleManager>();
+      expect(
+        manager.resolve(
+          LocaleResolutionContext(
+            header: (_) => 'fr',
+            query: (_) => null,
+            cookie: (_) => 'pt',
+            sessionValue: null,
+          ),
+        ),
+        equals('pt'),
+      );
+    });
+
+    test('supports custom resolver registration via registry', () {
+      LocaleResolverRegistry.instance.register('static-locale', (ctx) {
+        final locale = ctx.option<String>('locale') ?? 'en';
+        return _StaticLocaleResolver(locale);
+      });
+
+      final config = ConfigImpl({
+        'app': {'locale': 'en'},
+        'translation': {
+          'paths': ['lang'],
+          'resolvers': ['static-locale'],
+          'resolver_options': {
+            'static-locale': {'locale': 'es'},
+          },
+        },
+      });
+      container.instance<Config>(config);
+
+      provider.register(container);
+
+      final manager = container.get<LocaleManager>();
+      final locale = manager.resolve(
+        LocaleResolutionContext(
+          header: (_) => null,
+          query: (_) => null,
+          cookie: (_) => null,
+          sessionValue: null,
+        ),
+      );
+      expect(locale, equals('es'));
+    });
+
+    test('throws when resolver id is unknown', () {
+      final config = ConfigImpl({
+        'translation': {
+          'resolvers': ['unknown'],
+        },
+      });
+      container.instance<Config>(config);
+
+      expect(
+        () => provider.register(container),
+        throwsA(isA<ProviderConfigException>()),
+      );
     });
   });
+}
+
+class _StaticLocaleResolver extends LocaleResolver {
+  _StaticLocaleResolver(this.locale);
+
+  final String locale;
+
+  @override
+  String? resolve(LocaleResolutionContext context) => locale;
 }

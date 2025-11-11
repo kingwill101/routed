@@ -12,10 +12,10 @@ class FileTranslationLoader implements TranslationLoader {
     Iterable<String>? paths,
     Iterable<String>? jsonPaths,
     Map<String, String>? namespaces,
-  })  : _fileSystem = fileSystem,
-        _paths = <String>[],
-        _jsonPaths = <String>[],
-        _namespaces = <String, String>{} {
+  }) : _fileSystem = fileSystem,
+       _paths = <String>[],
+       _jsonPaths = <String>[],
+       _namespaces = <String, String>{} {
     setPaths(paths ?? const ['resources/lang']);
     setJsonPaths(jsonPaths ?? const <String>[]);
     setNamespaces(namespaces ?? const <String, String>{});
@@ -36,11 +36,7 @@ class FileTranslationLoader implements TranslationLoader {
   Map<String, String> get namespaces => Map.unmodifiable(_namespaces);
 
   @override
-  Map<String, dynamic> load(
-    String locale,
-    String group, {
-    String? namespace,
-  }) {
+  Map<String, dynamic> load(String locale, String group, {String? namespace}) {
     final normalizedGroup = group.isEmpty ? '*' : group;
     final normalizedNamespace = namespace?.isEmpty ?? true ? '*' : namespace!;
     if (normalizedGroup == '*' && normalizedNamespace == '*') {
@@ -55,7 +51,11 @@ class FileTranslationLoader implements TranslationLoader {
     }
     final base = _loadPaths([hint], locale, normalizedGroup);
     return _loadNamespaceOverrides(
-        base, locale, normalizedGroup, normalizedNamespace);
+      base,
+      locale,
+      normalizedGroup,
+      normalizedNamespace,
+    );
   }
 
   @override
@@ -105,9 +105,9 @@ class FileTranslationLoader implements TranslationLoader {
   void setNamespaces(Map<String, String> namespaces) {
     _namespaces
       ..clear()
-      ..addAll(namespaces.map(
-        (key, value) => MapEntry(key, _normalizePath(value)),
-      ));
+      ..addAll(
+        namespaces.map((key, value) => MapEntry(key, _normalizePath(value))),
+      );
   }
 
   Map<String, dynamic> _loadNamespaceOverrides(

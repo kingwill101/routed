@@ -5,6 +5,7 @@ export 'src/middleware/cors.dart';
 export 'src/middleware/csrf.dart';
 export 'src/middleware/limit_request_body.dart';
 export 'src/middleware/limited_request.dart';
+export 'src/middleware/localization.dart';
 export 'src/middleware/rate_limit.dart';
 export 'src/middleware/recovery.dart';
 export 'src/middleware/request_size_limit.dart';
