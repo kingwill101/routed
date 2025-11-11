@@ -6,10 +6,19 @@ import 'package:http/http.dart' as http;
 import 'package:routed/src/context/context.dart';
 import 'package:routed/src/router/types.dart';
 
+/// Attribute key for storing the OAuth2 access token in the request context.
 const String oauthTokenAttribute = 'auth.oauth.access_token';
+
+/// Attribute key for storing OAuth2 claims in the request context.
 const String oauthClaimsAttribute = 'auth.oauth.claims';
+
+/// Attribute key for storing OAuth2 scopes in the request context.
 const String oauthScopeAttribute = 'auth.oauth.scope';
 
+/// Represents an exception that occurs during OAuth2 operations.
+///
+/// The [message] provides details about the error, and [statusCode] (if available)
+/// indicates the HTTP status code associated with the error.
 class OAuth2Exception implements Exception {
   OAuth2Exception(this.message, [this.statusCode]);
 
@@ -20,6 +29,10 @@ class OAuth2Exception implements Exception {
   String toString() => 'OAuth2Exception($statusCode): $message';
 }
 
+/// Represents the response from an OAuth2 token endpoint.
+///
+/// This class provides access to the access token, token type, expiration time,
+/// and other optional fields such as the refresh token and scope.
 class OAuthTokenResponse {
   OAuthTokenResponse({
     required this.accessToken,
@@ -30,6 +43,7 @@ class OAuthTokenResponse {
     required this.raw,
   });
 
+  /// Creates an instance of [OAuthTokenResponse] from a JSON object.
   factory OAuthTokenResponse.fromJson(Map<String, dynamic> json) {
     return OAuthTokenResponse(
       accessToken: json['access_token'] as String? ?? '',
@@ -43,11 +57,22 @@ class OAuthTokenResponse {
     );
   }
 
+  /// The access token issued by the authorization server.
   final String accessToken;
+
+  /// The type of token issued, typically "Bearer".
   final String tokenType;
+
+  /// The lifetime of the access token in seconds.
   final int? expiresIn;
+
+  /// The refresh token, if issued.
   final String? refreshToken;
+
+  /// The scope of the access token.
   final String? scope;
+
+  /// The raw JSON response from the token endpoint.
   final Map<String, dynamic> raw;
 }
 
@@ -113,6 +138,13 @@ class OAuth2Client {
     return _sendTokenRequest(body);
   }
 
+  /// Sends a token request to the OAuth2 token endpoint.
+  ///
+  /// - [body]: The form-encoded body parameters for the token request.
+  ///
+  /// Returns an [OAuthTokenResponse] containing the access token and other details.
+  ///
+  /// Throws an [OAuth2Exception] if the token endpoint responds with an error.
   Future<OAuthTokenResponse> _sendTokenRequest(Map<String, String> body) async {
     final headers = <String, String>{
       'Content-Type': 'application/x-www-form-urlencoded',
@@ -204,6 +236,28 @@ class _CachedIntrospection {
   bool get isExpired => DateTime.now().isAfter(expiresAt);
 }
 
+/// Creates a middleware for OAuth2 token introspection.
+///
+/// This middleware validates incoming OAuth2 tokens using the provided
+/// [options]. If the token is valid, its claims and attributes are added
+/// to the request context.
+///
+/// - [options]: Configuration options for the introspection.
+/// - [onValidated]: Optional callback invoked after successful validation.
+/// - [httpClient]: Optional HTTP client for making introspection requests.
+///
+/// Returns a middleware function that can be used in the routing pipeline.
+///
+/// Example:
+/// ```dart
+/// final middleware = oauth2Introspection(
+///   OAuthIntrospectionOptions(
+///     endpoint: Uri.parse('https://example.com/introspect'),
+///     clientId: 'my-client-id',
+///     clientSecret: 'my-client-secret',
+///   ),
+/// );
+/// ```
 Middleware oauth2Introspection(
   OAuthIntrospectionOptions options, {
   OAuthOnValidated? onValidated,

@@ -17,7 +17,7 @@ import 'package:routed/src/sessions/memory_store.dart';
 import 'package:routed/src/sessions/middleware.dart';
 import 'package:routed/src/sessions/options.dart';
 import 'package:routed/src/sessions/secure_cookie.dart';
-import 'package:routed/src/support/named_registry.dart';
+import 'package:routed/src/support/driver_registry.dart';
 
 StorageDefaults _sessionBaselineStorage() =>
     StorageDefaults.fromLocalRoot('storage/app');
@@ -143,12 +143,42 @@ class SessionDriverDocContext {
 /// Third-party packages can use [register] and [unregister] to expose their own
 /// drivers at runtime.  The class is a thin singleton wrapper around a map,
 /// deliberately avoiding any global state beyond the registry itself.
-class SessionDriverRegistry extends NamedRegistry<SessionDriverRegistration> {
+class SessionDriverRegistry
+    extends
+        DriverRegistryBase<
+          SessionDriverBuilder,
+          SessionDriverDocContext,
+          SessionDriverValidator,
+          SessionDriverRegistration
+        > {
   SessionDriverRegistry._internal();
 
   /// Singleton accessor.
   static final SessionDriverRegistry instance =
       SessionDriverRegistry._internal();
+
+  @override
+  SessionDriverRegistration createRegistration(
+    SessionDriverBuilder builder, {
+    DriverDocBuilder<SessionDriverDocContext>? documentation,
+    SessionDriverValidator? validator,
+    List<String> requiresConfig = const [],
+  }) {
+    return SessionDriverRegistration(
+      builder: builder,
+      documentation: documentation,
+      validator: validator,
+      requiresConfig: requiresConfig,
+    );
+  }
+
+  @override
+  SessionDriverDocContext buildDocContext(
+    String driver, {
+    required String pathBase,
+  }) {
+    return SessionDriverDocContext(driver: driver, pathBase: pathBase);
+  }
 
   /// Registers a new session [driver].
   ///
@@ -163,21 +193,14 @@ class SessionDriverRegistry extends NamedRegistry<SessionDriverRegistration> {
     SessionDriverValidator? validator,
     List<String> requiresConfig = const [],
   }) {
-    final registration = SessionDriverRegistration(
-      builder: builder,
+    registerDriver(
+      driver,
+      builder,
       documentation: documentation,
       validator: validator,
       requiresConfig: requiresConfig,
-      origin: StackTrace.current,
-    );
-    final stored = registerEntry(
-      driver,
-      registration,
       overrideExisting: overrideExisting,
     );
-    if (!stored) {
-      return;
-    }
   }
 
   /// Removes the registration associated with [driver] if it exists.
@@ -189,8 +212,6 @@ class SessionDriverRegistry extends NamedRegistry<SessionDriverRegistration> {
   /// Retrieves the builder associated with [driver] or `null` when absent.
   SessionDriverBuilder? builderFor(String driver) =>
       registrationFor(driver)?.builder;
-
-  SessionDriverRegistration? registrationFor(String driver) => getEntry(driver);
 
   void ensureRequirements(
     String driver,
@@ -234,30 +255,13 @@ class SessionDriverRegistry extends NamedRegistry<SessionDriverRegistration> {
 
   /// Returns a sorted list of available driver names, ensuring that [include]
   /// is always present in the result.
-  List<String> availableDrivers({Iterable<String> include = const []}) {
-    final result = <String>{...include};
-    result.addAll(entryNames);
-    final list = result.toList()..sort();
-    return list;
-  }
+  List<String> availableDrivers({Iterable<String> include = const []}) =>
+      driverNames(include: include).toList(growable: false);
 
   /// Collates documentation from all registered drivers.
-  List<ConfigDocEntry> documentation({required String pathBase}) {
-    final docs = <ConfigDocEntry>[];
-    entries.forEach((driver, registration) {
-      final builder = registration.documentation;
-      if (builder == null) {
-        return;
-      }
-      final entries = builder(
-        SessionDriverDocContext(driver: driver, pathBase: pathBase),
-      );
-      if (entries.isNotEmpty) {
-        docs.addAll(entries);
-      }
-    });
-    return docs;
-  }
+  @override
+  List<ConfigDocEntry> documentation({required String pathBase}) =>
+      super.documentation(pathBase: pathBase);
 
   @override
   bool onDuplicate(
@@ -269,26 +273,25 @@ class SessionDriverRegistry extends NamedRegistry<SessionDriverRegistration> {
       return false;
     }
     throw ProviderConfigException(
-      'Session driver "$name" is already registered.\n'
-      'Original registration stack trace:\n${existing.origin}',
+      'Session driver "$name" is already registered.'
+      '${duplicateDiagnostics(name)}',
     );
   }
 }
 
-class SessionDriverRegistration {
+class SessionDriverRegistration
+    extends
+        DriverRegistration<
+          SessionDriverBuilder,
+          SessionDriverDocContext,
+          SessionDriverValidator
+        > {
   SessionDriverRegistration({
-    required this.builder,
-    required this.origin,
-    this.documentation,
-    this.validator,
-    this.requiresConfig = const [],
+    required super.builder,
+    super.documentation,
+    super.validator,
+    super.requiresConfig,
   });
-
-  final SessionDriverBuilder builder;
-  final StackTrace origin;
-  final SessionDriverDocBuilder? documentation;
-  final SessionDriverValidator? validator;
-  final List<String> requiresConfig;
 }
 
 /// Service provider that wires all session-related services and publishes

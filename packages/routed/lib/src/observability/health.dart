@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:convert';
 
 import 'package:routed/src/engine/engine.dart';
+import 'package:routed/src/support/named_registry.dart';
 
 typedef HealthCheck = FutureOr<HealthCheckResult> Function();
 
@@ -93,14 +94,16 @@ class HealthResponse {
   final Map<String, HealthCheckResult> checks;
 }
 
-class HealthEndpointRegistry {
-  final Set<String> _paths = <String>{};
-
+class HealthEndpointRegistry extends NamedRegistry<bool> {
   void setPaths(Iterable<String> paths) {
-    _paths
-      ..clear()
-      ..addAll(paths);
+    clearEntries();
+    for (final path in paths) {
+      registerEntry(path, true);
+    }
   }
 
-  bool allows(String path) => _paths.contains(path);
+  bool allows(String path) => containsEntry(path);
+
+  @override
+  String normalizeName(String name) => name;
 }

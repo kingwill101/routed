@@ -1,3 +1,4 @@
+format: pretty
 extra_fields:
   service: config_demo
   deployment: "{{ logging.extra_fields.deployment | default: 'local' }}"

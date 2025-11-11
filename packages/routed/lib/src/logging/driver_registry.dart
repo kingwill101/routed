@@ -1,9 +1,12 @@
 import 'package:contextual/contextual.dart' as contextual;
 import 'package:routed/src/container/container.dart';
 import 'package:routed/src/contracts/contracts.dart' show Config;
+import 'package:routed/src/support/driver_registry.dart';
 
 typedef LogDriverBuilder =
     contextual.LogDriver Function(LogDriverBuilderContext context);
+typedef LogDriverValidator = void Function(LogDriverBuilderContext context);
+typedef LogDriverDocBuilder = DriverDocBuilder<LogDriverDocContext>;
 
 class LogDriverBuilderContext {
   LogDriverBuilderContext({
@@ -23,28 +26,70 @@ class LogDriverBuilderContext {
   final contextual.LogDriver Function(String channelName) resolveChannel;
 }
 
-class LogDriverRegistry {
-  final Map<String, LogDriverBuilder> _builders = {};
+class LogDriverDocContext {
+  LogDriverDocContext({required this.driver, required this.pathBase});
 
-  void register(
-    String name,
+  final String driver;
+  final String pathBase;
+
+  String path(String segment) => '$pathBase.$segment';
+}
+
+class LogDriverRegistration
+    extends
+        DriverRegistration<
+          LogDriverBuilder,
+          LogDriverDocContext,
+          LogDriverValidator
+        > {
+  LogDriverRegistration({
+    required super.builder,
+    super.documentation,
+    super.validator,
+    super.requiresConfig,
+  });
+}
+
+class LogDriverRegistry
+    extends
+        DriverRegistryBase<
+          LogDriverBuilder,
+          LogDriverDocContext,
+          LogDriverValidator,
+          LogDriverRegistration
+        > {
+  @override
+  LogDriverRegistration createRegistration(
     LogDriverBuilder builder, {
-    bool override = false,
+    DriverDocBuilder<LogDriverDocContext>? documentation,
+    LogDriverValidator? validator,
+    List<String> requiresConfig = const [],
   }) {
-    final key = _normalize(name);
-    if (!override && _builders.containsKey(key)) {
-      return;
-    }
-    _builders[key] = builder;
+    return LogDriverRegistration(
+      builder: builder,
+      documentation: documentation,
+      validator: validator,
+      requiresConfig: requiresConfig,
+    );
+  }
+
+  @override
+  LogDriverDocContext buildDocContext(
+    String driver, {
+    required String pathBase,
+  }) {
+    return LogDriverDocContext(driver: driver, pathBase: pathBase);
+  }
+
+  void register(String name, LogDriverBuilder builder, {bool override = true}) {
+    registerDriver(name, builder, overrideExisting: override);
   }
 
   void registerIfAbsent(String name, LogDriverBuilder builder) {
-    register(name, builder, override: false);
+    registerDriverIfAbsent(name, builder);
   }
 
-  bool contains(String name) => _builders.containsKey(_normalize(name));
+  bool contains(String name) => hasDriver(name);
 
-  LogDriverBuilder? builderFor(String name) => _builders[_normalize(name)];
-
-  static String _normalize(String name) => name.trim().toLowerCase();
+  LogDriverBuilder? builderFor(String name) => registrationFor(name)?.builder;
 }

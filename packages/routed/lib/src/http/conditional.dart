@@ -8,6 +8,7 @@ import '../engine/config.dart';
 /// Outcome of evaluating conditional request headers.
 enum ConditionalOutcome { proceed, notModified, preconditionFailed }
 
+/// Represents an ETag candidate with its properties.
 class _EtagCandidate {
   const _EtagCandidate({
     this.value,
@@ -15,13 +16,28 @@ class _EtagCandidate {
     this.isWildcard = false,
   });
 
+  /// The value of the ETag.
   final String? value;
+
+  /// Indicates whether the ETag is weak.
   final bool weak;
+
+  /// Indicates whether the ETag is a wildcard.
   final bool isWildcard;
 
+  /// Returns `true` if the ETag has a value.
   bool get hasValue => value != null;
 }
 
+/// Parses the current ETag value into an [_EtagCandidate].
+///
+/// Returns `null` if the value is `null` or empty.
+///
+/// Example:
+/// ```dart
+/// final etag = _parseCurrentEtag('"abc123"');
+/// print(etag?.value); // Output: abc123
+/// ```
 _EtagCandidate? _parseCurrentEtag(String? value) {
   if (value == null || value.trim().isEmpty) {
     return null;
@@ -29,6 +45,13 @@ _EtagCandidate? _parseCurrentEtag(String? value) {
   return _parseEtag(value);
 }
 
+/// Parses a list of ETag header values into a list of [_EtagCandidate].
+///
+/// Example:
+/// ```dart
+/// final candidates = _parseEtagList(['"abc123", "def456"']);
+/// print(candidates.length); // Output: 2
+/// ```
 List<_EtagCandidate> _parseEtagList(List<String> values) {
   final candidates = <_EtagCandidate>[];
   for (final entry in values) {
@@ -43,6 +66,13 @@ List<_EtagCandidate> _parseEtagList(List<String> values) {
   return candidates;
 }
 
+/// Parses a raw ETag string into an [_EtagCandidate].
+///
+/// Example:
+/// ```dart
+/// final candidate = _parseEtag('W/"abc123"');
+/// print(candidate?.weak); // Output: true
+/// ```
 _EtagCandidate? _parseEtag(String raw) {
   var value = raw.trim();
   if (value.isEmpty) {
@@ -62,6 +92,14 @@ _EtagCandidate? _parseEtag(String raw) {
   return _EtagCandidate(value: value, weak: weak);
 }
 
+/// Checks if a candidate ETag matches the current ETag.
+///
+/// Example:
+/// ```dart
+/// final candidate = _EtagCandidate(value: 'abc123');
+/// final current = _EtagCandidate(value: 'abc123');
+/// print(_matchesCandidate(candidate, current, allowWeak: true)); // Output: true
+/// ```
 bool _matchesCandidate(
   _EtagCandidate candidate,
   _EtagCandidate? current, {
@@ -79,6 +117,15 @@ bool _matchesCandidate(
   return candidate.value == current.value;
 }
 
+/// Parses an HTTP date string into a [DateTime].
+///
+/// Returns `null` if the date string is invalid.
+///
+/// Example:
+/// ```dart
+/// final date = _parseHttpDate('Wed, 21 Oct 2015 07:28:00 GMT');
+/// print(date?.toIso8601String()); // Output: 2015-10-21T07:28:00.000Z
+/// ```
 DateTime? _parseHttpDate(String value) {
   try {
     return HttpDate.parse(value).toUtc();
@@ -87,6 +134,13 @@ DateTime? _parseHttpDate(String value) {
   }
 }
 
+/// Computes a hash digest for the given byte payload using the specified algorithm.
+///
+/// Example:
+/// ```dart
+/// final digest = _hashBytes([1, 2, 3], 'sha256');
+/// print(digest); // Output: Digest with SHA-256 hash
+/// ```
 Digest _hashBytes(List<int> bytes, String algorithm) {
   switch (algorithm.toLowerCase()) {
     case 'sha1':
@@ -100,6 +154,12 @@ Digest _hashBytes(List<int> bytes, String algorithm) {
 }
 
 /// Generates a strong ETag (quoted string) for the provided byte payload.
+///
+/// Example:
+/// ```dart
+/// final etag = generateStrongEtag([1, 2, 3]);
+/// print(etag); // Output: "..."
+/// ```
 String generateStrongEtag(List<int> bytes, {String algorithm = 'sha256'}) {
   final digest = _hashBytes(bytes, algorithm);
   final encoded = base64Url.encode(digest.bytes);
@@ -107,10 +167,22 @@ String generateStrongEtag(List<int> bytes, {String algorithm = 'sha256'}) {
 }
 
 /// Generates a weak ETag (`W/"..."`) for the provided byte payload.
+///
+/// Example:
+/// ```dart
+/// final etag = generateWeakEtag([1, 2, 3]);
+/// print(etag); // Output: W/"..."
+/// ```
 String generateWeakEtag(List<int> bytes, {String algorithm = 'sha256'}) =>
     'W/${generateStrongEtag(bytes, algorithm: algorithm)}';
 
 /// Generates a strong ETag from the provided [value] (UTF-8 encoded).
+///
+/// Example:
+/// ```dart
+/// final etag = generateStrongEtagFromString('example');
+/// print(etag); // Output: "..."
+/// ```
 String generateStrongEtagFromString(
   String value, {
   String algorithm = 'sha256',
@@ -118,6 +190,12 @@ String generateStrongEtagFromString(
 }) => generateStrongEtag(encoding.encode(value), algorithm: algorithm);
 
 /// Generates a weak ETag from the provided [value] (UTF-8 encoded).
+///
+/// Example:
+/// ```dart
+/// final etag = generateWeakEtagFromString('example');
+/// print(etag); // Output: W/"..."
+/// ```
 String generateWeakEtagFromString(
   String value, {
   String algorithm = 'sha256',
@@ -125,6 +203,17 @@ String generateWeakEtagFromString(
 }) => generateWeakEtag(encoding.encode(value), algorithm: algorithm);
 
 /// Evaluates HTTP conditional request headers and returns the desired outcome.
+///
+/// Example:
+/// ```dart
+/// final outcome = evaluateConditionals(
+///   method: 'GET',
+///   headers: HttpHeaders(),
+///   etag: '"abc123"',
+///   lastModified: DateTime.now(),
+/// );
+/// print(outcome); // Output: ConditionalOutcome.proceed
+/// ```
 ConditionalOutcome evaluateConditionals({
   required String method,
   required HttpHeaders headers,
@@ -182,6 +271,12 @@ ConditionalOutcome evaluateConditionals({
 }
 
 /// Resolves a default ETag string based on the configured [strategy].
+///
+/// Example:
+/// ```dart
+/// final etag = resolveDefaultEtag([1, 2, 3], EtagStrategy.strong);
+/// print(etag); // Output: "..."
+/// ```
 String? resolveDefaultEtag(
   List<int> bytes,
   EtagStrategy strategy, {

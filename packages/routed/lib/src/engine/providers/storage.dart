@@ -68,7 +68,7 @@ class StorageServiceProvider extends ServiceProvider
       docs.addAll(
         StorageDriverRegistry.instance.documentationFor(
           driver,
-          pathTemplate: 'storage.disks.$driver',
+          pathBase: 'storage.disks.$driver',
         ),
       );
     }
@@ -292,8 +292,10 @@ class StorageServiceProvider extends ServiceProvider
         if (value is! Map && value is! Config) {
           throw ProviderConfigException('storage.disks.$name must be a map');
         }
-        final diskConfig =
-        stringKeyedMap(value as Object, 'storage.disks.$name');
+        final diskConfig = stringKeyedMap(
+          value as Object,
+          'storage.disks.$name',
+        );
         if (name == 'local') {
           final existingRoot = parseStringLike(
             diskConfig['root'],
@@ -304,8 +306,8 @@ class StorageServiceProvider extends ServiceProvider
           );
           final shouldApplyStorageRoot =
               existingRoot == null ||
-                  existingRoot.isEmpty ||
-                  existingRoot == _defaultStorageRootPath();
+              existingRoot.isEmpty ||
+              existingRoot == _defaultStorageRootPath();
           if (shouldApplyStorageRoot && storageRoot.isNotEmpty) {
             diskConfig['root'] = storageRoot;
           }

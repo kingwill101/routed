@@ -58,7 +58,7 @@ class CacheServiceProvider extends ServiceProvider with ProvidesDefaultConfig {
         description: 'Driver identifier backing the cache store.',
         optionsBuilder: () => CacheManager.registeredDrivers,
       ),
-      ...CacheManager.driverDocumentation(pathTemplate: 'cache.stores.*'),
+      ...CacheManager.driverDocumentation(pathBase: 'cache.stores.*'),
     ],
   );
 

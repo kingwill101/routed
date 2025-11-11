@@ -71,7 +71,7 @@ Future<void> main(List<String> args) async {
         .toList();
 
     final cacheDriverDocs =
-        CacheManager.driverDocumentation(pathTemplate: 'cache.stores.*')
+        CacheManager.driverDocumentation(pathBase: 'cache.stores.*')
             .map(
               (doc) => {
                 'path': doc.path,

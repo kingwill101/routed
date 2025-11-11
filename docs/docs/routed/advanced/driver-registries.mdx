@@ -8,6 +8,13 @@ sidebar_position: 4
 
 Routed ships registries for every subsystem that supports pluggable drivers. The framework registers its built-ins through these registries, which means third-party drivers automatically exercise the same code paths. Use them to add new backends, override existing behaviour, or document per-driver configuration.
 
+All driver registries now share a single implementation (`DriverRegistryBase`) so they behave consistently:
+
+- Keys are normalized (trimmed + lowercased) and duplicate registrations surface a stack trace to the original registration site.
+- `registerDriver` accepts the same optional hooks everywhere (`documentation`, `validator`, `requiresConfig`, plus subsystem-specific builders).
+- Documentation builders receive a context with a `path()` helper rooted at the `pathBase` supplied by the provider, so you never have to concatenate config paths manually.
+- Duplicate registrations throw the same `ProviderConfigException`, so conflicting names are easy to spot regardless of subsystem.
+
 ```dart title="Import driver registries"
 import 'package:routed/drivers.dart';
 ```
@@ -156,6 +163,62 @@ SessionServiceProvider.registerDriver(
 - **Context:** `SessionDriverBuilderContext` exposes the merged config, resolved cache manager, storage defaults, and container access so builders can derive paths or look up other services.
 - **Validation:** Throw `ProviderConfigException` inside the validator (or rely on `requiresConfig`) to surface actionable boot-time errors.
 - **Documentation:** Metadata follows the same conventions as cache drivers, ensuring CLI scaffolding and `provider:list --config` pick up default notes, validation hints, and required markers automatically.
+
+## Logging
+
+```dart
+import 'package:contextual/contextual.dart' as contextual;
+import 'package:routed/drivers.dart'; // exposes LogDriverRegistry
+
+final registry = LogDriverRegistry();
+
+registry.register(
+  'webhook',
+  (ctx) {
+    final url = Uri.parse(ctx.options['url'] as String);
+    final timeout =
+        Duration(milliseconds: ctx.options['timeout_ms'] as int? ?? 5000);
+    final headers = Map<String, String>.from(
+      ctx.options['headers'] as Map? ?? const {},
+    );
+
+    final options = contextual.WebhookOptions(
+      url: url,
+      headers: headers,
+      timeout: timeout,
+      keepAlive: true,
+    );
+    return contextual.WebhookLogDriver.fromOptions(options);
+  },
+  documentation: (ctx) => <ConfigDocEntry>[
+    ConfigDocEntry(
+      path: ctx.path('url'),
+      type: 'string',
+      description: 'Endpoint that receives webhook log payloads.',
+      metadata: const {'required': true},
+    ),
+    ConfigDocEntry(
+      path: ctx.path('timeout_ms'),
+      type: 'int',
+      description: 'HTTP client timeout in milliseconds.',
+      defaultValue: 5000,
+    ),
+  ],
+  validator: (ctx) {
+    final url = ctx.options['url'];
+    if (url is! String || url.trim().isEmpty) {
+      throw ProviderConfigException(
+        'Logging channel "${ctx.name}" must supply a non-empty `url`.',
+      );
+    }
+  },
+);
+```
+
+- **Resolution:** `LoggingServiceProvider` resolves channels through the registry when it builds each `contextual.LogDriver`.
+- **Access:** Resolve `LogDriverRegistry` from the container (`await engine.container.make<LogDriverRegistry>()`) to inspect or override drivers before `Engine.initialize()`.
+- **Documentation:** Provide a `LogDriverDocContext` -> `ConfigDocEntry` builder to surface channel-specific options in `provider:list --config`.
+- **Validation:** Throw from `validator` when the channel-specific options are incomplete or malformed; the engine surfaces the failure during boot.
 
 ## CLI scaffolding
 

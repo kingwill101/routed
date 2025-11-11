@@ -2,7 +2,27 @@ import 'dart:io';
 
 import 'package:routed/src/security/network.dart';
 
+/// A resolver that determines the client IP address, considering trusted proxies
+/// and headers. This is useful for applications deployed behind reverse proxies.
 class TrustedProxyResolver {
+  /// Creates a [TrustedProxyResolver].
+  ///
+  /// - [enabled]: Whether the resolver is active.
+  /// - [forwardClientIp]: Whether to forward the client IP from headers.
+  /// - [proxies]: A list of trusted proxy IPs or CIDR ranges.
+  /// - [headers]: A list of headers to check for forwarded client IPs.
+  /// - [trustedPlatform]: A specific platform header to trust, if any.
+  ///
+  /// Example:
+  /// ```dart
+  /// final resolver = TrustedProxyResolver(
+  ///   enabled: true,
+  ///   forwardClientIp: true,
+  ///   proxies: ['192.168.1.1', '10.0.0.0/8'],
+  ///   headers: ['x-forwarded-for'],
+  ///   trustedPlatform: 'x-custom-platform',
+  /// );
+  /// ```
   TrustedProxyResolver({
     required bool enabled,
     required bool forwardClientIp,
@@ -27,6 +47,22 @@ class TrustedProxyResolver {
   final List<String> _headers;
   List<NetworkMatcher> _networks;
 
+  /// Updates the resolver's configuration.
+  ///
+  /// - [enabled]: Updates whether the resolver is active.
+  /// - [forwardClientIp]: Updates whether to forward the client IP.
+  /// - [trustedPlatform]: Updates the trusted platform header.
+  /// - [proxies]: Updates the list of trusted proxies.
+  /// - [headers]: Updates the list of headers to check.
+  ///
+  /// Example:
+  /// ```dart
+  /// resolver.update(
+  ///   enabled: false,
+  ///   proxies: ['127.0.0.1'],
+  ///   headers: ['x-real-ip'],
+  /// );
+  /// ```
   void update({
     bool? enabled,
     bool? forwardClientIp,
@@ -54,6 +90,19 @@ class TrustedProxyResolver {
     }
   }
 
+  /// Resolves the client IP address from the [HttpRequest].
+  ///
+  /// - If the resolver is disabled or forwarding is disabled, returns the
+  ///   remote address of the request.
+  /// - If the remote address is not a trusted proxy, returns the remote address.
+  /// - Otherwise, checks the trusted platform header and configured headers
+  ///   for the forwarded client IP.
+  ///
+  /// Example:
+  /// ```dart
+  /// final clientIp = resolver.resolve(request);
+  /// print('Client IP: $clientIp');
+  /// ```
   String resolve(HttpRequest request) {
     final remoteAddr = _normalize(request.connectionInfo?.remoteAddress);
     if (!_enabled || !_forwardClientIp) {
@@ -83,6 +132,17 @@ class TrustedProxyResolver {
     return remoteAddr.address;
   }
 
+  /// Checks if the given [address] is a trusted proxy.
+  ///
+  /// - Returns `true` if the address matches any of the configured trusted
+  ///   proxies or CIDR ranges.
+  /// - Returns `false` otherwise.
+  ///
+  /// Example:
+  /// ```dart
+  /// final isTrusted = resolver._isTrustedProxy(InternetAddress('192.168.1.1'));
+  /// print('Is trusted proxy: $isTrusted');
+  /// ```
   bool _isTrustedProxy(InternetAddress address) {
     final normalized = _normalize(address);
     if (normalized == null || _networks.isEmpty) {
@@ -97,6 +157,16 @@ class TrustedProxyResolver {
     return false;
   }
 
+  /// Normalizes an [InternetAddress].
+  ///
+  /// - Converts IPv6-mapped IPv4 addresses to their IPv4 equivalent.
+  /// - Returns the original address if no normalization is needed.
+  ///
+  /// Example:
+  /// ```dart
+  /// final normalized = resolver._normalize(InternetAddress('::ffff:192.168.1.1'));
+  /// print('Normalized address: ${normalized?.address}');
+  /// ```
   InternetAddress? _normalize(InternetAddress? address) {
     if (address == null) {
       return null;

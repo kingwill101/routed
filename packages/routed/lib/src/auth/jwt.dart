@@ -4,41 +4,64 @@ import 'dart:io';
 
 import 'package:http/http.dart' as http;
 import 'package:jose/jose.dart';
-export 'package:jose/jose.dart';
 import 'package:routed/src/context/context.dart';
 import 'package:routed/src/router/types.dart';
 
+export 'package:jose/jose.dart';
+
+/// Attribute key for JWT claims in the request context.
 const String jwtClaimsAttribute = 'auth.jwt.claims';
+
+/// Attribute key for JWT headers in the request context.
 const String jwtHeadersAttribute = 'auth.jwt.headers';
+
+/// Attribute key for the JWT subject in the request context.
 const String jwtSubjectAttribute = 'auth.jwt.subject';
 
+/// Exception thrown when JWT authentication fails.
 class JwtAuthException implements Exception {
+  /// Creates a [JwtAuthException] with the given [message].
   JwtAuthException(this.message);
 
+  /// The error message describing the exception.
   final String message;
 
   @override
   String toString() => 'JwtAuthException: $message';
 }
 
+/// Represents the payload of a verified JWT, including its claims and headers.
 class JwtPayload {
+  /// Creates a [JwtPayload] with the given [token], [claims], and [headers].
   const JwtPayload({
     required this.token,
     required this.claims,
     required this.headers,
   });
 
+  /// The verified JWT token.
   final JsonWebToken token;
+
+  /// The claims extracted from the JWT.
   final Map<String, dynamic> claims;
+
+  /// The headers extracted from the JWT.
   final Map<String, dynamic> headers;
 
+  /// The subject of the JWT, if present.
   String? get subject => token.claims.subject;
 }
 
+/// Callback type for handling a verified JWT.
+///
+/// The [payload] contains the verified JWT details, and [context] provides
+/// the current request context.
 typedef JwtOnVerified =
     FutureOr<void> Function(JwtPayload payload, EngineContext context);
 
+/// Configuration options for JWT verification.
 class JwtOptions {
+  /// Creates a [JwtOptions] instance with the specified parameters.
   const JwtOptions({
     this.enabled = true,
     this.issuer,
@@ -53,18 +76,40 @@ class JwtOptions {
     this.bearerPrefix = 'Bearer ',
   });
 
+  /// Whether JWT verification is enabled.
   final bool enabled;
+
+  /// The expected issuer of the JWT.
   final String? issuer;
+
+  /// The expected audience of the JWT.
   final List<String> audience;
+
+  /// The required claims that must be present in the JWT.
   final List<String> requiredClaims;
+
+  /// The URI for fetching JSON Web Key Sets (JWKS).
   final Uri? jwksUri;
+
+  /// Inline keys for verifying the JWT.
   final List<Map<String, dynamic>> inlineKeys;
+
+  /// The allowed algorithms for JWT verification.
   final List<String> algorithms;
+
+  /// The allowed clock skew for token validation.
   final Duration clockSkew;
+
+  /// The cache time-to-live for JWKS.
   final Duration jwksCacheTtl;
+
+  /// The HTTP header used to pass the JWT.
   final String header;
+
+  /// The prefix for the JWT in the authorization header.
   final String bearerPrefix;
 
+  /// Creates a copy of this [JwtOptions] with the specified overrides.
   JwtOptions copyWith({
     bool? enabled,
     String? issuer,
