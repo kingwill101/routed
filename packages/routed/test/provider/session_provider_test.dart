@@ -13,6 +13,7 @@ void main() {
         configItems: {
           'app': {'name': 'Demo App', 'key': appKey},
           'session': {
+            'enabled': true,
             'driver': 'cookie',
             'cookie': 'demo_session',
             'lifetime': 90,
@@ -47,6 +48,7 @@ void main() {
         configItems: {
           'app': {'key': appKey},
           'session': {
+            'enabled': true,
             'driver': 'file',
             'files': temp.path,
             'lottery': [1, 2],
@@ -79,6 +81,7 @@ void main() {
             },
           },
           'session': {
+            'enabled': true,
             'driver': 'redis',
             'store': 'session',
             'cache_prefix': 'sess:',
@@ -101,7 +104,12 @@ void main() {
       final engine = Engine(
         configItems: {
           'app': {'key': appKey},
-          'session': {'driver': 'array', 'lifetime': 30, 'http_only': true},
+          'session': {
+            'enabled': true,
+            'driver': 'array',
+            'lifetime': 30,
+            'http_only': true,
+          },
         },
       );
       addTearDown(() async => await engine.close());
@@ -117,7 +125,7 @@ void main() {
       expect(
         () => Engine(
           configItems: {
-            'session': {'driver': 'cookie'},
+            'session': {'enabled': true, 'driver': 'cookie'},
           },
         ),
         throwsA(isA<ProviderConfigException>()),
@@ -129,7 +137,12 @@ void main() {
       final engine = Engine(
         configItems: {
           'app': {'key': appKey},
-          'session': {'driver': 'cookie', 'cookie': 'initial', 'lifetime': 45},
+          'session': {
+            'enabled': true,
+            'driver': 'cookie',
+            'cookie': 'initial',
+            'lifetime': 45,
+          },
         },
       );
       addTearDown(() async => await engine.close());
@@ -143,6 +156,7 @@ void main() {
       final override = ConfigImpl();
       override.merge(engine.appConfig.all());
       override.set('session', {
+        'enabled': true,
         'driver': 'array',
         'cookie': 'runtime',
         'lifetime': 10,
@@ -165,7 +179,7 @@ void main() {
         final engine = Engine(
           configItems: {
             'app': {'key': appKey},
-            'session': {'driver': 'cookie'},
+            'session': {'enabled': true, 'driver': 'cookie'},
           },
         );
         addTearDown(() async => await engine.close());
@@ -218,6 +232,7 @@ void main() {
         configItems: {
           'app': {'key': appKey},
           'session': {
+            'enabled': true,
             'driver': 'custom',
             'cookie': 'custom-session',
             'partitioned': false,
@@ -275,6 +290,7 @@ void main() {
           configItems: {
             'app': {'key': appKey},
             'session': {
+              'enabled': true,
               'driver': 'cookie',
               'same_site': 'lax',
               'cookie': 'override-session',

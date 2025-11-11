@@ -55,12 +55,6 @@ class UploadsServiceProvider extends ServiceProvider
         description: 'Permissions to apply to uploaded files.',
         defaultValue: 750,
       ),
-      ConfigDocEntry(
-        path: 'http.features.uploads.enabled',
-        type: 'bool',
-        description: 'Feature toggle controlling multipart upload handling.',
-        defaultValue: true,
-      ),
     ],
   );
 
@@ -122,7 +116,6 @@ class UploadsServiceProvider extends ServiceProvider
     MultipartConfig existing,
   ) {
     final merged = mergeConfigCandidates([
-      ConfigMapCandidate.fromConfig(config, 'http.features.uploads'),
       ConfigMapCandidate.fromConfig(config, 'uploads'),
     ]);
     merged.remove('enabled');

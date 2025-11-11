@@ -1,5 +1,7 @@
+import 'dart:convert';
 import 'dart:io';
 
+import 'package:crypto/crypto.dart' as crypto;
 import 'package:routed/src/cache/cache_manager.dart';
 import 'package:routed/src/container/container.dart';
 import 'package:routed/src/contracts/cache/repository.dart' as cache;
@@ -413,10 +415,11 @@ class SessionServiceProvider extends ServiceProvider
         defaultValue: <String>[],
       ),
       const ConfigDocEntry(
-        path: 'http.features.sessions.enabled',
+        path: 'session.enabled',
         type: 'bool',
-        description: 'Enable the built-in sessions middleware and services.',
-        defaultValue: false,
+        description:
+            'Enable the built-in sessions middleware (defaults to disabled).',
+        defaultValue: null,
       ),
       ...SessionServiceProvider.driverDocumentation(),
       const ConfigDocEntry(
@@ -774,6 +777,13 @@ class SessionServiceProvider extends ServiceProvider
   // ---------------------------------------------------------------------------
 
   SessionConfig? _resolveSessionConfig(Container container, Config config) {
+    final explicitEnabled = parseBoolLike(
+      config.get('session.enabled'),
+      context: 'session.enabled',
+      stringMappings: const {'true': true, 'false': false},
+      throwOnInvalid: false,
+    );
+
     final direct = config.get('session.config');
     if (direct is SessionConfig) {
       return direct;
@@ -787,15 +797,31 @@ class SessionServiceProvider extends ServiceProvider
     }
 
     final sessionNode = config.get('session');
+    bool? mapEnabled;
+    Map<String, dynamic>? sessionMap;
+    if (sessionNode is SessionConfig) {
+      sessionMap = null;
+      mapEnabled = true;
+    } else if (sessionNode is Map) {
+      sessionMap = Map<String, dynamic>.from(sessionNode);
+      mapEnabled = parseBoolLike(
+        sessionMap.remove('enabled'),
+        context: 'session.enabled',
+        stringMappings: const {'true': true, 'false': false},
+        throwOnInvalid: false,
+      );
+    }
+
+    final enabled = explicitEnabled ?? mapEnabled ?? false;
+    if (!enabled) {
+      return null;
+    }
+
     if (sessionNode is SessionConfig) {
       return sessionNode;
     }
-    if (sessionNode is Map) {
-      return _sessionConfigFromMap(
-        container,
-        config,
-        Map<String, dynamic>.from(sessionNode),
-      );
+    if (sessionMap != null) {
+      return _sessionConfigFromMap(container, config, sessionMap);
     }
     return null;
   }
@@ -806,6 +832,16 @@ class SessionServiceProvider extends ServiceProvider
     Map<String, dynamic> raw,
   ) {
     final merged = Map<String, dynamic>.from(raw);
+
+    final specifiedEnabled = parseBoolLike(
+      merged.remove('enabled'),
+      context: 'session.enabled',
+      stringMappings: const {'true': true, 'false': false},
+      throwOnInvalid: false,
+    );
+    if (specifiedEnabled == false) {
+      return null;
+    }
     if (merged.containsKey('config') && merged['config'] is Map) {
       merged.addAll(Map<String, dynamic>.from(merged['config'] as Map));
     }
@@ -936,8 +972,9 @@ class SessionServiceProvider extends ServiceProvider
     ];
     final result = <String>[];
     for (final candidate in candidates) {
-      if (candidate != null && candidate.isNotEmpty) {
-        result.add(candidate);
+      final normalized = _normalizeKey(candidate);
+      if (normalized != null) {
+        result.add(normalized);
         break;
       }
     }
@@ -947,11 +984,29 @@ class SessionServiceProvider extends ServiceProvider
       ..._stringList(root.get('app.previous_keys')),
     ];
     for (final key in additional) {
-      if (key.isNotEmpty && !result.contains(key)) {
-        result.add(key);
+      final normalized = _normalizeKey(key);
+      if (normalized != null && !result.contains(normalized)) {
+        result.add(normalized);
       }
     }
     return result;
+  }
+
+  String? _normalizeKey(String? raw) {
+    if (raw == null) return null;
+    final trimmed = raw.trim();
+    if (trimmed.isEmpty) return null;
+    try {
+      final decoded = base64.decode(trimmed);
+      if (decoded.length >= 32) {
+        return trimmed;
+      }
+      final digest = crypto.sha256.convert(decoded).bytes;
+      return base64.encode(digest);
+    } catch (_) {
+      final digest = crypto.sha256.convert(utf8.encode(trimmed)).bytes;
+      return base64.encode(digest);
+    }
   }
 
   String _defaultCookieName(Config config) {

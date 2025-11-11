@@ -225,12 +225,6 @@ class AuthServiceProvider extends ServiceProvider with ProvidesDefaultConfig {
         },
       ),
       ConfigDocEntry(
-        path: 'http.features.auth.enabled',
-        type: 'bool',
-        description: 'Toggle registration of authentication middleware.',
-        defaultValue: false,
-      ),
-      ConfigDocEntry(
         path: 'http.middleware_sources',
         type: 'map',
         description:

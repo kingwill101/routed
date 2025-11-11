@@ -52,12 +52,6 @@ class CompressionServiceProvider extends ServiceProvider
         defaultValue: _defaultMimeDeny,
       ),
       ConfigDocEntry(
-        path: 'http.features.compression.enabled',
-        type: 'bool',
-        description: 'Feature toggle for the compression middleware.',
-        defaultValue: true,
-      ),
-      ConfigDocEntry(
         path: 'http.middleware_sources',
         type: 'map',
         description: 'Compression middleware references registered globally.',
@@ -114,21 +108,13 @@ class CompressionServiceProvider extends ServiceProvider
   }
 
   CompressionOptions _buildOptions(Config config) {
-    final enabledFeature =
-        parseBoolLike(
-          config.get('http.features.compression.enabled'),
-          context: 'http.features.compression.enabled',
-          stringMappings: const {'true': true, 'false': false},
-        ) ??
-        true;
-
     final enabled =
         parseBoolLike(
           config.get('compression.enabled'),
           context: 'compression.enabled',
           stringMappings: const {'true': true, 'false': false},
         ) ??
-        enabledFeature;
+        true;
 
     final minLength =
         parseIntLike(

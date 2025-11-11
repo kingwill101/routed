@@ -148,8 +148,6 @@ class ProviderEnableCommand extends BaseCommand {
         logger.info('$id already enabled.');
       }
 
-      _toggleFeature(manifest, id, true);
-
       if (added || verbose) {
         await _writeManifest(projectRoot, manifest);
         logger.info('Enabled $id');
@@ -188,7 +186,6 @@ class ProviderDisableCommand extends BaseCommand {
       final manifest = await _loadManifest(projectRoot);
       final providers = (manifest['providers'] as List).cast<String>();
       final removed = providers.remove(id);
-      _toggleFeature(manifest, id, false);
 
       await _writeManifest(projectRoot, manifest);
 
@@ -212,7 +209,6 @@ Future<Map<String, dynamic>> _loadManifest(fs.Directory projectRoot) async {
     manifest = {
       'providers': <String>[],
       'middleware': {'global': <String>[], 'groups': <String, dynamic>{}},
-      'features': <String, dynamic>{},
     };
     return manifest;
   }
@@ -221,7 +217,6 @@ Future<Map<String, dynamic>> _loadManifest(fs.Directory projectRoot) async {
     manifest = {
       'providers': <String>[],
       'middleware': {'global': <String>[], 'groups': <String, dynamic>{}},
-      'features': <String, dynamic>{},
     };
     return manifest;
   }
@@ -232,7 +227,6 @@ Future<Map<String, dynamic>> _loadManifest(fs.Directory projectRoot) async {
     manifest = {
       'providers': <String>[],
       'middleware': {'global': <String>[], 'groups': <String, dynamic>{}},
-      'features': <String, dynamic>{},
     };
   }
   final providers = manifest['providers'];
@@ -240,7 +234,6 @@ Future<Map<String, dynamic>> _loadManifest(fs.Directory projectRoot) async {
       ? providers.map((e) => e.toString()).toList()
       : <String>[];
   manifest['middleware'] = _coerceMiddlewareNode(manifest['middleware']);
-  manifest['features'] = _coerceFeaturesNode(manifest['features']);
   return manifest;
 }
 
@@ -254,19 +247,6 @@ Future<void> _writeManifest(
   final content = _toYaml(manifest);
   await httpFile.parent.create(recursive: true);
   await httpFile.writeAsString('$content\n');
-}
-
-void _toggleFeature(Map<String, dynamic> manifest, String id, bool enable) {
-  final suffix = id.contains('.') ? id.split('.').last : id;
-  final features = manifest['features'] as Map<String, dynamic>;
-  final current = features[suffix];
-  if (current is Map<String, dynamic>) {
-    final mutable = Map<String, dynamic>.from(current);
-    mutable['enabled'] = enable;
-    features[suffix] = mutable;
-  } else {
-    features[suffix] = {'enabled': enable};
-  }
 }
 
 Map<String, dynamic> _yamlToDart(YamlMap map) {
@@ -375,48 +355,4 @@ Map<String, dynamic> _coerceGroupsNode(Object? value) {
     return result;
   }
   return <String, dynamic>{};
-}
-
-Map<String, dynamic> _coerceFeaturesNode(Object? value) {
-  if (value is! Map && value is! Config) {
-    return <String, dynamic>{};
-  }
-
-  final rawMap = stringKeyedMap(value as Object, 'http.features');
-  final result = <String, dynamic>{};
-
-  rawMap.forEach((key, element) {
-    if (element is Map || element is Config) {
-      final feature = stringKeyedMap(element as Object, 'http.features.$key');
-      if (feature.containsKey('enabled')) {
-        final parsed = parseBoolLike(
-          feature['enabled'],
-          context: 'http.features.$key.enabled',
-          stringMappings: const {'true': true, 'false': false},
-          throwOnInvalid: false,
-        );
-        if (parsed != null) {
-          feature['enabled'] = parsed;
-        }
-      }
-      result[key] = feature;
-      return;
-    }
-
-    final parsed = parseBoolLike(
-      element,
-      context: 'http.features.$key',
-      stringMappings: const {'true': true, 'false': false},
-      throwOnInvalid: false,
-    );
-    if (parsed != null) {
-      result[key] = {'enabled': parsed};
-    } else if (element is bool) {
-      result[key] = {'enabled': element};
-    } else {
-      result[key] = {'enabled': element};
-    }
-  });
-
-  return result;
 }

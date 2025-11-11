@@ -4,11 +4,11 @@ import 'dart:io';
 import 'package:path/path.dart' as p;
 import 'package:routed/src/cache/cache_manager.dart';
 import 'package:routed/src/config/config.dart';
-import 'package:routed/src/contracts/contracts.dart' show Config;
 import 'package:routed/src/container/container.dart';
+import 'package:routed/src/contracts/contracts.dart' show Config;
+import 'package:routed/src/engine/config.dart' show SessionConfig;
 import 'package:routed/src/engine/middleware_registry.dart';
 import 'package:routed/src/engine/providers/sessions.dart';
-import 'package:routed/src/engine/config.dart' show SessionConfig;
 import 'package:routed/src/engine/storage_defaults.dart';
 import 'package:routed/src/engine/storage_paths.dart';
 import 'package:routed/src/provider/provider.dart';
@@ -46,7 +46,7 @@ void main() {
           'key':
               'base64:${base64.encode(List<int>.generate(32, (i) => i + 1))}',
         },
-        'session': {'driver': 'file'},
+        'session': {'enabled': true, 'driver': 'file'},
       });
       container.instance<Config>(config);
 
@@ -88,7 +88,7 @@ void main() {
             'local': {'root': localRoot},
           },
         },
-        'session': {'driver': 'file'},
+        'session': {'enabled': true, 'driver': 'file'},
       });
       container.instance<Config>(config);
 
@@ -127,7 +127,11 @@ void main() {
           'key':
               'base64:${base64.encode(List<int>.generate(32, (i) => i + 1))}',
         },
-        'session': {'driver': 'file', 'files': 'sessions/custom'},
+        'session': {
+          'enabled': true,
+          'driver': 'file',
+          'files': 'sessions/custom',
+        },
       });
       container.instance<Config>(config);
 

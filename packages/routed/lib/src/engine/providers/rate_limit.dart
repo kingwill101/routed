@@ -78,12 +78,6 @@ class RateLimitServiceProvider extends ServiceProvider
         description: 'Quota reset interval when using the quota strategy.',
       ),
       ConfigDocEntry(
-        path: 'http.features.rate_limit.enabled',
-        type: 'bool',
-        description: 'Feature toggle controlling middleware registration.',
-        defaultValue: false,
-      ),
-      ConfigDocEntry(
         path: 'http.middleware_sources',
         type: 'map',
         description: 'Rate limiting middleware references registered globally.',
@@ -146,15 +140,7 @@ class RateLimitServiceProvider extends ServiceProvider
         ) ??
         false;
 
-    final featureEnabled =
-        parseBoolLike(
-          config.get('http.features.rate_limit.enabled'),
-          context: 'http.features.rate_limit.enabled',
-          stringMappings: const {'true': true, 'false': false},
-        ) ??
-        enabled;
-
-    if (!(enabled && featureEnabled)) {
+    if (!enabled) {
       return RateLimitService(const []);
     }
 

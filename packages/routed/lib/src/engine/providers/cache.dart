@@ -58,12 +58,6 @@ class CacheServiceProvider extends ServiceProvider with ProvidesDefaultConfig {
         description: 'Driver identifier backing the cache store.',
         optionsBuilder: () => CacheManager.registeredDrivers,
       ),
-      const ConfigDocEntry(
-        path: 'http.features.cache.enabled',
-        type: 'bool',
-        description: 'Enable cache-related middleware and helpers.',
-        defaultValue: true,
-      ),
       ...CacheManager.driverDocumentation(pathTemplate: 'cache.stores.*'),
     ],
   );

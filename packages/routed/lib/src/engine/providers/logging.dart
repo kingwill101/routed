@@ -49,32 +49,6 @@ class LoggingServiceProvider extends ServiceProvider
   ConfigDefaults get defaultConfig => const ConfigDefaults(
     docs: <ConfigDocEntry>[
       ConfigDocEntry(
-        path: 'http.features.logging.enabled',
-        type: 'bool',
-        description: 'Toggles HTTP logging middleware.',
-        defaultValue: true,
-      ),
-      ConfigDocEntry(
-        path: 'http.features.logging.level',
-        type: 'string',
-        description: 'Log verbosity for HTTP middleware.',
-        options: ['debug', 'info'],
-        defaultValue: 'info',
-      ),
-      ConfigDocEntry(
-        path: 'http.features.logging.errors_only',
-        type: 'bool',
-        description: 'Only log requests that throw an error.',
-        defaultValue: false,
-      ),
-      ConfigDocEntry(
-        path: 'http.features.logging.request_headers',
-        type: 'list<string>',
-        description:
-            'Request headers mirrored into the log payload (e.g. correlation IDs).',
-        defaultValue: <String>[],
-      ),
-      ConfigDocEntry(
         path: 'http.middleware_sources',
         type: 'map',
         description: 'Logging middleware references injected globally.',
@@ -404,7 +378,6 @@ class LoggingServiceProvider extends ServiceProvider
 
   _LoggingConfig _resolveLoggingConfig(Config config) {
     final merged = mergeConfigCandidates([
-      ConfigMapCandidate.fromConfig(config, 'http.features.logging'),
       ConfigMapCandidate.fromConfig(config, 'logging'),
     ]);
 

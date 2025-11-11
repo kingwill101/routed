@@ -8,50 +8,50 @@ import 'package:http2/http2.dart' as http2;
 import 'package:meta/meta.dart' show internal, visibleForTesting;
 import 'package:routed/middlewares.dart';
 import 'package:routed/src/config/loader.dart';
-import 'package:routed/src/contracts/contracts.dart';
+import 'package:routed/src/config/registry.dart';
 import 'package:routed/src/container/container.dart';
 import 'package:routed/src/container/container_mixin.dart';
 import 'package:routed/src/context/context.dart';
-import 'package:routed/src/config/registry.dart';
+import 'package:routed/src/contracts/contracts.dart';
 import 'package:routed/src/engine/config.dart';
-import 'package:routed/src/engine/events/config.dart';
-import 'package:routed/src/engine/events/route.dart';
-import 'package:routed/src/engine/events/request.dart';
 import 'package:routed/src/engine/engine_opt.dart';
+import 'package:routed/src/engine/events/config.dart';
+import 'package:routed/src/engine/events/request.dart';
+import 'package:routed/src/engine/events/route.dart';
+import 'package:routed/src/engine/http2_server.dart';
 import 'package:routed/src/engine/middleware_registry.dart';
 import 'package:routed/src/engine/provider_manifest.dart';
 import 'package:routed/src/engine/providers/core.dart';
 import 'package:routed/src/engine/providers/logging.dart';
-import 'package:routed/src/engine/providers/routing.dart';
 import 'package:routed/src/engine/providers/registry.dart';
+import 'package:routed/src/engine/providers/routing.dart';
 import 'package:routed/src/engine/route_match.dart';
 import 'package:routed/src/engine/wrapped_request.dart';
-import 'package:routed/src/engine/http2_server.dart';
 import 'package:routed/src/events/event_manager.dart';
-import 'package:routed/src/runtime/shutdown.dart';
+import 'package:routed/src/logging/logging.dart';
+import 'package:routed/src/observability/health.dart';
+import 'package:routed/src/provider/provider.dart';
 import 'package:routed/src/request.dart';
 import 'package:routed/src/response.dart';
 import 'package:routed/src/router/router.dart';
 import 'package:routed/src/router/router_group_builder.dart';
 import 'package:routed/src/router/types.dart';
+import 'package:routed/src/runtime/shutdown.dart';
 import 'package:routed/src/static_files.dart';
-import 'package:routed/src/websocket/websocket_handler.dart';
-import 'package:routed/src/logging/logging.dart';
-import 'package:routed/src/provider/provider.dart';
 import 'package:routed/src/utils/debug.dart';
-import 'package:routed/src/observability/health.dart';
+import 'package:routed/src/websocket/websocket_handler.dart';
 
 import '../support/zone.dart';
+
 export 'events/events.dart';
+
 part 'engine_route.dart';
 part 'engine_routing.dart';
+part 'error_handling.dart';
 part 'mount.dart';
+part 'param_utils.dart';
 part 'patterns.dart';
 part 'request.dart';
-
-part 'error_handling.dart';
-
-part 'param_utils.dart';
 
 /// The core HTTP engine of the Routed framework.
 ///
@@ -505,75 +505,7 @@ class Engine with StaticFileHandler, ContainerMixin {
   }
 
   bool _shouldActivateProvider(String providerId, Config appConfig) {
-    bool enabled = true;
-    final suffix = providerId.split('.').last;
-    final featureEntry = appConfig.get('http.features.$suffix');
-    if (featureEntry is Map<String, dynamic>) {
-      final toggle = featureEntry['enabled'];
-      if (toggle is bool) {
-        enabled = toggle;
-      }
-    } else if (featureEntry is bool) {
-      enabled = featureEntry;
-    }
-
-    switch (providerId) {
-      case 'routed.security':
-        enabled =
-            (enabled || config.features.enableSecurityFeatures) &&
-            config.features.enableSecurityFeatures;
-        break;
-      case 'routed.cors':
-        enabled =
-            (enabled || config.features.enableSecurityFeatures) ||
-            config.security.cors.enabled;
-        break;
-      case 'routed.static':
-        enabled = enabled || appConfig.get('static.enabled') == true;
-        break;
-      case 'routed.sessions':
-        bool sessionDiffers = false;
-        if (appConfig.has('session')) {
-          final node = appConfig.get('session');
-          if (node is Map) {
-            Map<String, dynamic>? defaultSession;
-            if (container.has<ConfigRegistry>()) {
-              final defaults = container
-                  .get<ConfigRegistry>()
-                  .combinedDefaults();
-              final defaultNode = defaults['session'];
-              if (defaultNode is Map) {
-                defaultSession = Map<String, dynamic>.from(defaultNode);
-              }
-            }
-            if (defaultSession == null) {
-              sessionDiffers = node.isNotEmpty;
-            } else {
-              final equality = const DeepCollectionEquality();
-              sessionDiffers = !equality.equals(
-                Map<String, dynamic>.from(node),
-                defaultSession,
-              );
-            }
-          }
-        }
-        enabled = enabled || sessionDiffers;
-        break;
-      case 'routed.logging':
-        // Keep configured value.
-        break;
-      case 'routed.observability':
-        enabled =
-            enabled ||
-            appConfig.get('observability.enabled') == true ||
-            appConfig.get('observability.tracing.enabled') == true ||
-            appConfig.get('observability.metrics.enabled') == true ||
-            appConfig.get('observability.health.enabled') == true;
-        break;
-      default:
-        break;
-    }
-    return enabled;
+    return true;
   }
 
   /// Creates a new engine instance from an existing engine.

@@ -106,13 +106,6 @@ class SecurityServiceProvider extends ServiceProvider
         defaultValue: true,
       ),
       ConfigDocEntry(
-        path: 'http.features.security.enabled',
-        type: 'bool',
-        description:
-            'Feature toggle for core security middleware (headers, CSRF, size limits).',
-        defaultValue: true,
-      ),
-      ConfigDocEntry(
         path: 'http.middleware_sources',
         type: 'map',
         description: 'Security middleware references injected globally.',

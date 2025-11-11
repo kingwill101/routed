@@ -64,37 +64,6 @@ class StaticAssetsServiceProvider extends ServiceProvider
         description: 'Allow directory listings for this mount.',
       ),
       ConfigDocEntry(
-        path: 'http.features.static.enabled',
-        type: 'bool',
-        description: 'Feature toggle for legacy static asset middleware.',
-        defaultValue: false,
-      ),
-      ConfigDocEntry(
-        path: 'http.features.static.root',
-        type: 'string',
-        description: 'Legacy static asset root directory.',
-        defaultValue: 'public',
-      ),
-      ConfigDocEntry(
-        path: 'http.features.static.prefix',
-        type: 'string',
-        description: 'Legacy prefix for static middleware.',
-        defaultValue: '/',
-      ),
-      ConfigDocEntry(
-        path: 'http.features.static.index',
-        type: 'string',
-        description: 'Fallback index file used by the legacy static feature.',
-        defaultValue: 'index.html',
-      ),
-      ConfigDocEntry(
-        path: 'http.features.static.list_directories',
-        type: 'bool',
-        description:
-            'Whether the legacy static feature exposes directory listings.',
-        defaultValue: false,
-      ),
-      ConfigDocEntry(
         path: 'http.middleware_sources',
         type: 'map',
         description: 'Static asset middleware references registered globally.',
@@ -217,29 +186,6 @@ class StaticAssetsServiceProvider extends ServiceProvider
       }
     } else if (mountsNode != null) {
       throw ProviderConfigException('static.mounts must be a list');
-    }
-
-    final legacyRaw = config.get('http.features.static');
-    if (legacyRaw != null) {
-      final legacy = stringKeyedMap(
-        legacyRaw as Object,
-        'http.features.static',
-      );
-      final legacyEnabled = parseBoolLike(
-        legacy['enabled'],
-        context: 'http.features.static.enabled',
-        stringMappings: const {'true': true, 'false': false},
-        throwOnInvalid: false,
-      );
-      if (legacyEnabled == true) {
-        enabled = true;
-      }
-      addMount({
-        'route': legacy['prefix'] ?? '/',
-        'path': legacy['root'],
-        'index': legacy['index'],
-        'list_directories': legacy['list_directories'],
-      }, mounts.length);
     }
 
     final deduped = <String, _StaticMount>{};

@@ -61,12 +61,6 @@ class CorsServiceProvider extends ServiceProvider with ProvidesDefaultConfig {
         defaultValue: null,
       ),
       ConfigDocEntry(
-        path: 'http.features.cors.enabled',
-        type: 'bool',
-        description: 'Feature toggle for registering the CORS middleware.',
-        defaultValue: false,
-      ),
-      ConfigDocEntry(
         path: 'http.middleware_sources',
         type: 'map',
         description: 'CORS middleware references injected into the pipeline.',
