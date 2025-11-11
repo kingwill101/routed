@@ -10,3 +10,4 @@ pubspec.lock
 .vscode
 openspec
 AGENTS.md
+storage/
