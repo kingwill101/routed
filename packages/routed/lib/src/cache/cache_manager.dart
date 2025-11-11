@@ -4,12 +4,12 @@ import 'package:routed/src/cache/null_store_factory.dart';
 import 'package:routed/src/cache/redis_store_factory.dart';
 import 'package:routed/src/cache/repository.dart';
 import 'package:routed/src/cache/store_factory.dart';
-import 'package:routed/src/container/container.dart';
 import 'package:routed/src/contracts/cache/repository.dart';
+import 'package:routed/src/container/container.dart';
 import 'package:routed/src/contracts/contracts.dart' show Config;
+import 'package:routed/src/events/event_manager.dart';
 import 'package:routed/src/engine/storage_defaults.dart';
 import 'package:routed/src/engine/storage_paths.dart';
-import 'package:routed/src/events/event_manager.dart';
 import 'package:routed/src/provider/provider.dart';
 import 'package:routed/src/support/driver_registry.dart';
 
