@@ -125,6 +125,7 @@ void main() {
       expect(
         () => Engine(
           configItems: {
+            'app': {'key': ''},
             'session': {'enabled': true, 'driver': 'cookie'},
           },
         ),

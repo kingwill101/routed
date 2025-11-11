@@ -163,7 +163,11 @@ void main() {
     }
 
     ConfigImpl baseConfig(Map<String, dynamic> sessionOverrides) {
-      final sessionConfig = {'driver': 'cache', ...sessionOverrides};
+      final sessionConfig = {
+        'enabled': true,
+        'driver': 'cache',
+        ...sessionOverrides,
+      };
       return ConfigImpl({
         'app': {
           'key':

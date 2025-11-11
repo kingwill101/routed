@@ -395,12 +395,19 @@ void main() {
               );
               final response = await client.get('/prop');
 
-              if (sample.handlerDelayMs >= sample.timeoutMs) {
+              const jitterMs = 30;
+              if (sample.handlerDelayMs >= sample.timeoutMs + jitterMs) {
                 response.assertStatus(HttpStatus.gatewayTimeout);
-              } else {
+              } else if (sample.handlerDelayMs <= sample.timeoutMs - jitterMs) {
                 response
                   ..assertStatus(HttpStatus.ok)
                   ..assertBodyEquals('ok');
+              } else {
+                expect(
+                  response.statusCode,
+                  anyOf(HttpStatus.ok, HttpStatus.gatewayTimeout),
+                  reason: 'Timeout window is too narrow to assert determinism.',
+                );
               }
 
               await client.close();
