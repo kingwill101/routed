@@ -150,11 +150,9 @@ final class RoutingErrorEvent extends Event {
   /// Provides access to the request, response, and container for this request.
   final EngineContext context;
 
-  /// The route being handled when the error occurred.
-  ///
-  /// Contains information about the route path, method, and middleware that
-  /// were active when the error was thrown.
-  final EngineRoute route;
+  /// The route being handled when the error occurred, or `null` if no route
+  /// matched (for example, when global middleware threw during a 404).
+  final EngineRoute? route;
 
   /// The error that occurred.
   ///

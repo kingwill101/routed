@@ -337,37 +337,83 @@ extension ServerExtension on Engine {
     }
 
     // No matches found
+    return await _respondWithNotFound(effectiveRequest, container);
+  }
+
+  Future<Request> _respondWithNotFound(
+    HttpRequest httpRequest,
+    Container container,
+  ) async {
+    final request = Request(httpRequest, {}, config);
+    final response = Response(httpRequest.response);
+
+    _onRequestStarted(request);
+
+    final resolvedGlobal = _resolveMiddlewares(middlewares, container);
+    final handlers = <Middleware>[
+      for (final middleware in resolvedGlobal)
+        (EngineContext ctx, Next next) => middleware(ctx, next),
+    ];
+    handlers.add((EngineContext ctx, Next next) async {
+      if (!ctx.response.isClosed) {
+        ctx.response.statusCode = HttpStatus.notFound;
+        ctx.response.write('404 Not Found');
+      }
+      return ctx.response;
+    });
+
+    final context = EngineContext(
+      request: request,
+      response: response,
+      handlers: handlers,
+      engine: this,
+      container: container,
+    );
+
+    container
+      ..instance<Request>(request)
+      ..instance<Response>(response)
+      ..instance<EngineContext>(context);
+
+    context
+      ..set('routed.route_type', 'http')
+      ..set('routed.route_name', 'routed.404')
+      ..set('routed.route_path', httpRequest.uri.path);
+
     final manager = container.has<EventManager>()
         ? await container.make<EventManager>()
         : null;
-    if (manager != null) {
-      final nfRequest = Request(effectiveRequest, {}, config);
-      final nfResponse = Response(effectiveRequest.response);
-      manager.publish(
-        RouteNotFoundEvent(
-          EngineContext(
-            request: nfRequest,
-            response: nfResponse,
-            engine: this,
-            container: container,
-          ),
-        ),
+
+    manager?.publish(BeforeRoutingEvent(context));
+    manager?.publish(RequestStartedEvent(context));
+    manager?.publish(RouteNotFoundEvent(context));
+
+    try {
+      await AppZone.run(
+        body: () async {
+          await LoggingContext.run(this, context, (logger) async {
+            try {
+              await context.run();
+            } catch (err, stack) {
+              manager?.publish(RoutingErrorEvent(context, null, err, stack));
+              await _handleGlobalError(context, err, stack);
+            } finally {
+              if (!response.isClosed) {
+                response.close();
+              }
+            }
+          });
+        },
+        engine: this,
+        context: context,
       );
-      manager.publish(
-        AfterRoutingEvent(
-          EngineContext(
-            request: nfRequest,
-            response: nfResponse,
-            engine: this,
-            container: container,
-          ),
-        ),
-      );
+    } finally {
+      manager?.publish(AfterRoutingEvent(context));
+      _onRequestFinished(request.id);
+      manager?.publish(RequestFinishedEvent(context));
     }
-    effectiveRequest.response.statusCode = HttpStatus.notFound;
-    effectiveRequest.response.write('404 Not Found');
-    await effectiveRequest.response.close();
-    return null;
+
+    return request;
   }
 
   /// Handles a matched route by creating a context and executing the middleware chain.
