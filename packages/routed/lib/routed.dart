@@ -109,6 +109,7 @@ export 'src/runtime/shutdown.dart';
 export 'src/storage/storage_manager.dart';
 export 'src/support/helpers.dart' show config, route;
 export 'src/support/zone.dart';
+export 'src/translation/translator.dart' show Translator;
 export 'src/utils/deep_copy.dart';
 export 'src/utils/deep_merge.dart';
 export 'src/utils/dot.dart';

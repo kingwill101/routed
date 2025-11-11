@@ -88,6 +88,7 @@ providers:
   - routed.logging
   - routed.storage
   - routed.static
+  - routed.localization
   - routed.views
 http:
   features:
@@ -126,6 +127,7 @@ The output includes each provider’s `configSource` and the default configurati
 | `routed.logging` | Controls the HTTP logging middleware and structured logging defaults (`logging.*`). |
 | `routed.storage` | Manages storage disks consumed by static assets, views, and uploads (`storage.*`). |
 | `routed.static` | Serves configured static mounts (`static.*`). |
+| `routed.localization` | Binds the translation loader + translator using the default filesystem and `translation.*` config. |
 | `routed.views` | Resolves view engines/directories using the shared storage layer (`view.*`). |
 
 Custom providers can be added by calling `ProviderRegistry.instance.register('your.id', factory: () => YourProvider(), description: '...')`—this makes them visible to the CLI and eligible for inclusion in the manifest.
