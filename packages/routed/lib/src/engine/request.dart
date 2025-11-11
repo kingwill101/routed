@@ -98,18 +98,14 @@ extension ServerExtension on Engine {
     }
 
     final container = createRequestContainer(httpRequest, httpRequest.response);
-    Request? trackedRequest;
     try {
-      trackedRequest = await _handleWebSocketRoute(
+      await _handleWebSocketRoute(
         route,
         httpRequest,
         container,
         pathParameters: pathParams,
       );
     } finally {
-      if (trackedRequest != null) {
-        _onRequestFinished(trackedRequest.id);
-      }
       await cleanupRequestContainer(container);
     }
     return true;
@@ -523,6 +519,7 @@ extension ServerExtension on Engine {
       config,
     );
     final response = Response(httpRequest.response);
+    _onRequestStarted(request);
 
     final resolvedGlobal = _resolveMiddlewares(middlewares, container);
     final resolvedRoute = _resolveMiddlewares(route.middlewares, container);
@@ -572,21 +569,41 @@ extension ServerExtension on Engine {
       ..set('routed.route_type', 'websocket')
       ..set('routed.route_path', route.path)
       ..set('routed.route_name', route.path);
-    _activeRequests[request.id] = request;
-
-    await AppZone.run(
-      engine: this,
-      context: context,
-      body: () async {
-        await LoggingContext.run(this, context, (_) async {
-          try {
-            await context.run();
-          } catch (err, stack) {
-            await _handleGlobalError(context, err, stack);
-          }
-        });
-      },
+    final manager = container.has<EventManager>()
+        ? await container.make<EventManager>()
+        : null;
+    final eventRoute = EngineRoute(
+      method: 'WEBSOCKET',
+      path: route.path,
+      handler: (ctx) => ctx.response,
     );
+
+    manager?.publish(BeforeRoutingEvent(context));
+    manager?.publish(RequestStartedEvent(context));
+    manager?.publish(RouteMatchedEvent(context, eventRoute));
+
+    try {
+      await AppZone.run(
+        engine: this,
+        context: context,
+        body: () async {
+          await LoggingContext.run(this, context, (_) async {
+            try {
+              await context.run();
+            } catch (err, stack) {
+              manager?.publish(
+                RoutingErrorEvent(context, eventRoute, err, stack),
+              );
+              await _handleGlobalError(context, err, stack);
+            }
+          });
+        },
+      );
+    } finally {
+      manager?.publish(AfterRoutingEvent(context, route: eventRoute));
+      _onRequestFinished(request.id);
+      manager?.publish(RequestFinishedEvent(context));
+    }
 
     return request;
   }

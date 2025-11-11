@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:io';
 
 import 'package:routed/routed.dart';
 import 'package:routed_testing/routed_testing.dart';
@@ -156,4 +157,102 @@ void main() {
       expect(invoked, isTrue);
     });
   });
+
+  group('WebSocket route events', () {
+    late Engine engine;
+    late HttpServer server;
+
+    setUp(() async {
+      engine = Engine();
+      server = await HttpServer.bind(InternetAddress.loopbackIPv4, 0);
+      server.listen((request) => engine.handleRequest(request));
+    });
+
+    tearDown(() async {
+      await server.close();
+      await engine.close();
+    });
+
+    test('fires lifecycle events for WebSocket routes', () async {
+      final manager = await engine.container.make<EventManager>();
+      final events = <String>[];
+      final subs = <StreamSubscription<Event>>[
+        manager.on<BeforeRoutingEvent>().listen((_) => events.add('before')),
+        manager.on<RequestStartedEvent>().listen((_) => events.add('started')),
+        manager.on<RouteMatchedEvent>().listen((_) => events.add('matched')),
+        manager.on<AfterRoutingEvent>().listen((_) => events.add('after')),
+        manager.on<RequestFinishedEvent>().listen(
+          (_) => events.add('finished'),
+        ),
+      ];
+      addTearDown(() async {
+        for (final sub in subs) {
+          await sub.cancel();
+        }
+      });
+
+      engine.ws('/socket', _NoopWebSocketHandler());
+      final ws = await WebSocket.connect(
+        'ws://localhost:${server.port}/socket',
+      );
+      await Future<void>.delayed(const Duration(milliseconds: 50));
+      await ws.close();
+
+      expect(events, containsAllInOrder(['before', 'started', 'matched']));
+      expect(events, contains('after'));
+      expect(events, contains('finished'));
+    });
+
+    test('publishes routing error events for WebSocket failures', () async {
+      final manager = await engine.container.make<EventManager>();
+      final routingError = Completer<RoutingErrorEvent>();
+      final sub = manager.on<RoutingErrorEvent>().listen((event) {
+        if (!routingError.isCompleted) {
+          routingError.complete(event);
+        }
+      });
+      addTearDown(sub.cancel);
+
+      engine.ws('/boom', _ThrowingWebSocketHandler());
+      final ws = await WebSocket.connect('ws://localhost:${server.port}/boom');
+      await Future<void>.delayed(const Duration(milliseconds: 50));
+      await ws.close();
+
+      final event = await routingError.future.timeout(
+        const Duration(seconds: 2),
+      );
+      expect(event.route?.path, equals('/boom'));
+      expect(event.error, isA<StateError>());
+    });
+  });
+}
+
+class _NoopWebSocketHandler extends WebSocketHandler {
+  @override
+  Future<void> onClose(WebSocketContext context) async {}
+
+  @override
+  Future<void> onError(WebSocketContext context, dynamic error) async {}
+
+  @override
+  Future<void> onMessage(WebSocketContext context, dynamic message) async {}
+
+  @override
+  Future<void> onOpen(WebSocketContext context) async {}
+}
+
+class _ThrowingWebSocketHandler extends WebSocketHandler {
+  @override
+  Future<void> onClose(WebSocketContext context) async {}
+
+  @override
+  Future<void> onError(WebSocketContext context, dynamic error) async {}
+
+  @override
+  Future<void> onMessage(WebSocketContext context, dynamic message) async {}
+
+  @override
+  Future<void> onOpen(WebSocketContext context) async {
+    throw StateError('boom');
+  }
 }

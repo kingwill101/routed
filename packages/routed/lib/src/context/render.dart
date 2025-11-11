@@ -9,6 +9,10 @@ extension ContextRender on EngineContext {
       return _response;
     }
 
+    if (_response.statusCode >= 100 && _response.statusCode < 200) {
+      return _response;
+    }
+
     status(statusCode);
 
     if (!_bodyAllowedForStatus(statusCode)) {
