@@ -191,6 +191,7 @@ class CreateCommand extends BaseCommand {
           'APP_DEBUG': true,
           'APP_KEY': appKey,
           'SESSION_COOKIE': '${packageName}_session',
+          'STORAGE_ROOT': 'storage/app',
           'OBSERVABILITY_TRACING_SERVICE_NAME': packageName,
         },
       );

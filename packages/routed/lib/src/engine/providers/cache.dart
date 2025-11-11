@@ -3,8 +3,12 @@ import 'dart:async';
 import 'package:routed/src/cache/cache_manager.dart';
 import 'package:routed/src/container/container.dart';
 import 'package:routed/src/contracts/contracts.dart' show Config;
+import 'package:routed/src/engine/storage_defaults.dart';
 import 'package:routed/src/events/event_manager.dart';
 import 'package:routed/src/provider/provider.dart';
+
+StorageDefaults _cacheBaselineStorage() =>
+    StorageDefaults.fromLocalRoot('storage/app');
 
 /// Provides cache infrastructure and default configuration hooks.
 class CacheServiceProvider extends ServiceProvider with ProvidesDefaultConfig {
@@ -36,16 +40,16 @@ class CacheServiceProvider extends ServiceProvider with ProvidesDefaultConfig {
             'Optional global prefix injected before the generated store prefix.',
         defaultValue: null,
       ),
-      const ConfigDocEntry(
+      ConfigDocEntry(
         path: 'cache.stores',
         type: 'map',
         description: 'Configured cache stores keyed by store name.',
-        defaultValue: {
-          'array': {'driver': 'array'},
-          'file': {
-            'driver': 'file',
-            'path': 'storage/framework/cache',
-          },
+        defaultValueBuilder: () {
+          final defaults = _cacheBaselineStorage();
+          return {
+            'array': {'driver': 'array'},
+            'file': {'driver': 'file', 'path': defaults.frameworkPath('cache')},
+          };
         },
       ),
       ConfigDocEntry(

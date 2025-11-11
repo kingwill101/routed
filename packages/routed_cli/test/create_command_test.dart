@@ -111,6 +111,10 @@ void main() {
         storageContent,
         contains('# Storage configuration quick reference:'),
       );
+      expect(
+        storageContent,
+        contains("root: \"{{ env.STORAGE_ROOT | default: 'storage/app' }}\""),
+      );
       expect(storageContent, contains('Options: local'));
 
       final staticConfig = _read(projectDir, 'config/static.yaml');
@@ -134,6 +138,7 @@ void main() {
       final envContent = _read(projectDir, '.env');
       expect(envContent, isNot(contains('change-me')));
       expect(envContent, contains('SESSION_COOKIE=demo_app_session'));
+      expect(envContent, contains('STORAGE_ROOT=storage/app'));
 
       final envKeyLine = envContent
           .split('\n')

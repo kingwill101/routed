@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io' as io;
+
 import 'package:args/command_runner.dart';
 import 'package:file/file.dart' as fs;
 import 'package:path/path.dart' as p;
@@ -80,6 +81,7 @@ class ConfigInitCommand extends BaseCommand {
           'APP_DEBUG': true,
           'APP_KEY': 'change-me',
           'SESSION_COOKIE': 'routed-session',
+          'STORAGE_ROOT': 'storage/app',
           'OBSERVABILITY_TRACING_SERVICE_NAME': 'routed-service',
         },
       );
@@ -215,6 +217,7 @@ class ConfigPublishCommand extends BaseCommand {
               'APP_DEBUG': true,
               'APP_KEY': 'change-me',
               'SESSION_COOKIE': 'routed-session',
+              'STORAGE_ROOT': 'storage/app',
               'OBSERVABILITY_TRACING_SERVICE_NAME': 'routed-service',
             },
           );

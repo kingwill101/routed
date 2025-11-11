@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:path/path.dart' as p;
 import 'package:routed/src/container/container.dart';
 import 'package:routed/src/contracts/contracts.dart' show Config;
 import 'package:routed/src/engine/config.dart';
@@ -11,6 +12,39 @@ import 'package:routed/src/storage/local_storage_driver.dart';
 import 'package:routed/src/storage/storage_drivers.dart';
 import 'package:routed/src/storage/storage_manager.dart';
 import 'package:storage_fs/storage_fs.dart' as storage_fs;
+
+String _defaultStorageRootPath() =>
+    localStorageDriver.resolveRoot(const <String, dynamic>{}, 'local');
+
+String _storageRootTemplateDefault() {
+  final root = _defaultStorageRootPath().replaceAll("'", r"\'");
+  return "{{ env.STORAGE_ROOT | default: '$root' }}";
+}
+
+bool _looksLikeTemplate(String value) {
+  final trimmed = value.trim();
+  return trimmed.contains('{{') && trimmed.contains('}}');
+}
+
+String _resolveStorageRootValue(String? value) {
+  if (value == null || value.isEmpty) {
+    return _defaultStorageRootPath();
+  }
+  if (_looksLikeTemplate(value)) {
+    return _defaultStorageRootPath();
+  }
+  return value;
+}
+
+String _resolveLocalDiskRoot(String? storageRoot, {required String diskName}) {
+  final baseline = StorageDefaults.fromLocalRoot(
+    storageRoot ?? _defaultStorageRootPath(),
+  );
+  if (diskName == 'local') {
+    return baseline.localDiskRoot;
+  }
+  return p.posix.normalize(p.posix.join(baseline.storageBase, diskName));
+}
 
 /// Provides storage disk configuration (local file systems, etc.).
 class StorageServiceProvider extends ServiceProvider
@@ -44,9 +78,16 @@ class StorageServiceProvider extends ServiceProvider
 
   static List<ConfigDocEntry> driverDocumentation() {
     _ensureDefaultDriversRegistered();
-    return StorageDriverRegistry.instance.documentation(
-      pathTemplate: 'storage.disks.*',
-    );
+    final docs = <ConfigDocEntry>[];
+    for (final driver in StorageDriverRegistry.instance.drivers) {
+      docs.addAll(
+        StorageDriverRegistry.instance.documentationFor(
+          driver,
+          pathTemplate: 'storage.disks.$driver',
+        ),
+      );
+    }
+    return docs;
   }
 
   static void _ensureDefaultDriversRegistered() {
@@ -84,15 +125,27 @@ class StorageServiceProvider extends ServiceProvider
             'Disk name used when a "cloud" disk is required by helpers.',
         defaultValue: null,
       ),
-      const ConfigDocEntry(
+      ConfigDocEntry(
+        path: 'storage.root',
+        type: 'string',
+        description: 'Base filesystem path used by the default local disk.',
+        defaultValue: _storageRootTemplateDefault(),
+        metadata: const {
+          configDocMetaInheritFromEnv: 'STORAGE_ROOT',
+          'default_note': 'Falls back to storage/app when not overridden.',
+        },
+      ),
+      ConfigDocEntry(
         path: 'storage.disks',
         type: 'map',
         description: 'Configured storage disks.',
-        defaultValue: {
-          'local': <String, Object?>{
-            'driver': 'local',
-            'root': 'storage/app',
-          },
+        defaultValueBuilder: () {
+          return {
+            'local': <String, Object?>{
+              'driver': 'local',
+              'root': _storageRootTemplateDefault(),
+            },
+          };
         },
       ),
       const ConfigDocEntry(
@@ -126,7 +179,11 @@ class StorageServiceProvider extends ServiceProvider
     if (container.has<Config>()) {
       _applyConfig(container, manager, container.get<Config>());
     } else {
-      final registered = _registerDefaultDisk(container, manager);
+      final registered = _registerDefaultDisk(
+        container,
+        manager,
+        storageRoot: _defaultStorageRootPath(),
+      );
       final defaultName = manager.defaultDisk;
       final facadeDisks = <String, Map<String, dynamic>>{};
       if (registered != null) {
@@ -172,8 +229,30 @@ class StorageServiceProvider extends ServiceProvider
 
     final facadeDisks = <String, Map<String, dynamic>>{};
     final storageNode = config.get('storage');
-    if (storageNode == null) {
-      final registered = _registerDefaultDisk(container, manager);
+    Map<String, dynamic>? storageMap;
+    if (storageNode != null) {
+      if (storageNode is! Map && storageNode is! Config) {
+        throw ProviderConfigException('storage must be a map');
+      }
+      storageMap = stringKeyedMap(storageNode as Object, 'storage');
+    }
+
+    final storageRootToken = parseStringLike(
+      (storageMap != null ? storageMap['root'] : null) ??
+          config.get('storage.root'),
+      context: 'storage.root',
+      allowEmpty: true,
+      coerceNonString: true,
+      throwOnInvalid: false,
+    );
+    final storageRoot = _resolveStorageRootValue(storageRootToken);
+
+    if (storageMap == null) {
+      final registered = _registerDefaultDisk(
+        container,
+        manager,
+        storageRoot: storageRoot,
+      );
       final defaultName = manager.defaultDisk;
       if (registered != null) {
         facadeDisks[registered.key] = registered.value;
@@ -188,13 +267,11 @@ class StorageServiceProvider extends ServiceProvider
       _registerStorageDefaults(container, manager);
       return;
     }
-    if (storageNode is! Map && storageNode is! Config) {
-      throw ProviderConfigException('storage must be a map');
-    }
-    final storageMap = stringKeyedMap(storageNode as Object, 'storage');
+
+    final resolvedStorageMap = storageMap;
 
     final defaultToken = parseStringLike(
-      storageMap['default'],
+      resolvedStorageMap['default'],
       context: 'storage.default',
       allowEmpty: true,
       coerceNonString: true,
@@ -206,7 +283,7 @@ class StorageServiceProvider extends ServiceProvider
     manager.setDefault(defaultDisk);
 
     final cloudToken = parseStringLike(
-      storageMap['cloud'],
+      resolvedStorageMap['cloud'],
       context: 'storage.cloud',
       allowEmpty: true,
       coerceNonString: true,
@@ -216,7 +293,8 @@ class StorageServiceProvider extends ServiceProvider
         ? null
         : cloudToken;
 
-    final disksNode = storageMap['disks'] ?? config.get('storage.disks');
+    final disksNode =
+        resolvedStorageMap['disks'] ?? config.get('storage.disks');
     if (disksNode != null) {
       if (disksNode is! Map && disksNode is! Config) {
         throw ProviderConfigException('storage.disks must be a map');
@@ -234,12 +312,18 @@ class StorageServiceProvider extends ServiceProvider
           manager,
           name,
           stringKeyedMap(value as Object, 'storage.disks.$name'),
+          storageRoot: storageRoot,
         );
         facadeDisks[name] = registeredConfig;
       });
     }
 
-    final fallback = _registerDefaultDisk(container, manager, defaultDisk);
+    final fallback = _registerDefaultDisk(
+      container,
+      manager,
+      name: defaultDisk,
+      storageRoot: storageRoot,
+    );
     if (fallback != null) {
       facadeDisks[fallback.key] = fallback.value;
     } else if (manager.hasDisk(defaultDisk) &&
@@ -259,11 +343,30 @@ class StorageServiceProvider extends ServiceProvider
     Container container,
     StorageManager manager,
     String name,
-    Map<String, dynamic> rawConfig,
-  ) {
-    final driver = rawConfig['driver']?.toString().toLowerCase() ?? 'local';
+    Map<String, dynamic> rawConfig, {
+    String? storageRoot,
+  }) {
+    final configCopy = Map<String, dynamic>.from(rawConfig);
+    final driver = configCopy['driver']?.toString().toLowerCase() ?? 'local';
     final registry = StorageDriverRegistry.instance;
     final builder = registry.builderFor(driver);
+
+    if (driver == 'local') {
+      final rootToken = parseStringLike(
+        configCopy['root'],
+        context: 'storage.disks.$name.root',
+        allowEmpty: true,
+        coerceNonString: true,
+        throwOnInvalid: false,
+      );
+      if (rootToken == null ||
+          rootToken.isEmpty ||
+          _looksLikeTemplate(rootToken)) {
+        configCopy['root'] = _resolveLocalDiskRoot(storageRoot, diskName: name);
+      } else {
+        configCopy['root'] = rootToken;
+      }
+    }
 
     if (builder == null) {
       final known = registry.drivers..sort();
@@ -280,12 +383,13 @@ class StorageServiceProvider extends ServiceProvider
         container: container,
         manager: manager,
         diskName: name,
-        configuration: rawConfig,
+        configuration: configCopy,
       ),
     );
     manager.registerDisk(name, disk);
 
-    final sanitized = Map<String, dynamic>.from(rawConfig)..['driver'] = driver;
+    final sanitized = Map<String, dynamic>.from(configCopy)
+      ..['driver'] = driver;
 
     if (disk is LocalStorageDisk) {
       sanitized['root'] = disk.root;
@@ -318,9 +422,10 @@ class StorageServiceProvider extends ServiceProvider
 
   MapEntry<String, Map<String, dynamic>>? _registerDefaultDisk(
     Container container,
-    StorageManager manager, [
+    StorageManager manager, {
     String? name,
-  ]) {
+    String? storageRoot,
+  }) {
     final diskName = name ?? manager.defaultDisk;
     if (!manager.hasDisk(diskName)) {
       final config = _registerDisk(
@@ -328,6 +433,7 @@ class StorageServiceProvider extends ServiceProvider
         manager,
         diskName,
         <String, dynamic>{'driver': 'local'},
+        storageRoot: storageRoot,
       );
       return MapEntry(diskName, config);
     }

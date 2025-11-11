@@ -67,7 +67,7 @@ void main() {
       expect(
         cacheYaml,
         contains(
-          'Default: Computed from storage defaults (storage/framework/cache).',
+          'Default: {"array":{"driver":"array"},"file":{"driver":"file","path":"storage/framework/cache"}}.',
         ),
       );
       expect(
@@ -78,6 +78,11 @@ void main() {
         read('config/storage.yaml'),
         contains('# Storage configuration quick reference:'),
       );
+      final storageYaml = read('config/storage.yaml');
+      expect(
+        storageYaml,
+        contains("root: \"{{ env.STORAGE_ROOT | default: 'storage/app' }}\""),
+      );
       expect(
         read('config/uploads.yaml'),
         contains('# Uploads configuration quick reference:'),
@@ -87,12 +92,7 @@ void main() {
         contains('# Logging configuration quick reference:'),
       );
       final sessionYaml = read('config/session.yaml');
-      expect(
-        sessionYaml,
-        contains(
-          'Default: Computed from storage defaults (storage/framework/sessions).',
-        ),
-      );
+      expect(sessionYaml, contains('Default: storage/framework/sessions.'));
       expect(
         sessionYaml,
         contains('Validation: Must match a configured cache store name.'),
@@ -104,6 +104,7 @@ void main() {
       expect(env, contains('APP_DEBUG=true'));
       expect(env, contains('APP_KEY=change-me'));
       expect(env, contains('SESSION_COOKIE=routed-session'));
+      expect(env, contains('STORAGE_ROOT=storage/app'));
       expect(env, contains('SESSION_DRIVER=cookie'));
       expect(env, contains('CACHE_STORE=file'));
       expect(

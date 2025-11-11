@@ -17,6 +17,9 @@ import 'package:routed/src/sessions/options.dart';
 import 'package:routed/src/sessions/secure_cookie.dart';
 import 'package:routed/src/support/named_registry.dart';
 
+StorageDefaults _sessionBaselineStorage() =>
+    StorageDefaults.fromLocalRoot('storage/app');
+
 /// Signature for a function that converts a [SessionDriverBuilderContext] to a
 /// fully-formed [SessionConfig] instance.
 typedef SessionDriverBuilder =
@@ -388,11 +391,12 @@ class SessionServiceProvider extends ServiceProvider
         options: <String>['lax', 'strict', 'none'],
         defaultValue: 'lax',
       ),
-      const ConfigDocEntry(
+      ConfigDocEntry(
         path: 'session.files',
         type: 'string',
         description: 'Filesystem path used by file-based session drivers.',
-        defaultValue: 'storage/framework/sessions',
+        defaultValueBuilder: () =>
+            _sessionBaselineStorage().frameworkPath('sessions'),
       ),
       const ConfigDocEntry(
         path: 'session.lottery',
