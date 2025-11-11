@@ -9,6 +9,7 @@ import 'package:routed/src/contracts/contracts.dart'
     show Config, TranslationLoader, TranslatorContract;
 import 'package:routed/src/engine/config.dart';
 import 'package:routed/src/engine/middleware_registry.dart';
+import 'package:routed/src/provider/config_utils.dart';
 import 'package:routed/src/provider/provider.dart';
 import 'package:routed/src/support/helpers.dart' show trans, transChoice;
 import 'package:routed/src/translation/loaders/file_translation_loader.dart';
@@ -153,33 +154,50 @@ class LocalizationServiceProvider extends ServiceProvider
       throw ProviderConfigException('translation must be a map');
     }
 
-    final paths = _readStringList(
-      config?.get('translation.paths'),
-      defaultValue: const ['resources/lang'],
-      context: 'translation.paths',
-    );
+    final paths =
+        parseStringList(
+          config?.get('translation.paths'),
+          context: 'translation.paths',
+          allowEmptyResult: true,
+        ) ??
+        const ['resources/lang'];
     loader.setPaths(paths);
 
-    final jsonPaths = _readStringList(
-      config?.get('translation.json_paths'),
-      defaultValue: const <String>[],
-      context: 'translation.json_paths',
-    );
+    final jsonPaths =
+        parseStringList(
+          config?.get('translation.json_paths'),
+          context: 'translation.json_paths',
+          allowEmptyResult: true,
+        ) ??
+        const <String>[];
     loader.setJsonPaths(jsonPaths);
 
-    final namespaces = _readStringMap(
-      config?.get('translation.namespaces'),
-      context: 'translation.namespaces',
+    final Object? namespaceNode = config?.get('translation.namespaces');
+    loader.setNamespaces(
+      namespaceNode == null
+          ? <String, String>{}
+          : parseStringMap(
+              namespaceNode,
+              context: 'translation.namespaces',
+            ),
     );
-    loader.setNamespaces(namespaces);
 
     return loader;
   }
 
   _LocaleConfig _resolveLocaleConfig(Config? config) {
-    final defaultLocale = _readLocale(config?.get('app.locale')) ?? 'en';
+    final defaultLocale =
+        parseStringLike(
+          config?.get('app.locale'),
+          context: 'app.locale',
+        ) ??
+        'en';
     final fallback =
-        _readLocale(config?.get('app.fallback_locale')) ?? defaultLocale;
+        parseStringLike(
+          config?.get('app.fallback_locale'),
+          context: 'app.fallback_locale',
+        ) ??
+        defaultLocale;
     return _LocaleConfig(
       defaultLocale: defaultLocale,
       fallbackLocale: fallback,
@@ -201,31 +219,37 @@ class LocalizationServiceProvider extends ServiceProvider
     _LocaleConfig localeConfig,
     Config? config,
   ) {
-    final resolvers = _readStringList(
-      config?.get('translation.resolvers'),
-      defaultValue: _defaultResolvers,
-      context: 'translation.resolvers',
-    );
-    final queryParameter = _readString(
-      config?.get('translation.query.parameter'),
-      defaultValue: 'locale',
-      context: 'translation.query.parameter',
-    );
-    final cookieName = _readString(
-      config?.get('translation.cookie.name'),
-      defaultValue: 'locale',
-      context: 'translation.cookie.name',
-    );
-    final sessionKey = _readString(
-      config?.get('translation.session.key'),
-      defaultValue: 'locale',
-      context: 'translation.session.key',
-    );
-    final headerName = _readString(
-      config?.get('translation.header.name'),
-      defaultValue: 'Accept-Language',
-      context: 'translation.header.name',
-    );
+    final resolvers =
+        parseStringList(
+          config?.get('translation.resolvers'),
+          context: 'translation.resolvers',
+          allowEmptyResult: false,
+        ) ??
+        _defaultResolvers;
+    final queryParameter =
+        parseStringLike(
+          config?.get('translation.query.parameter'),
+          context: 'translation.query.parameter',
+        ) ??
+        'locale';
+    final cookieName =
+        parseStringLike(
+          config?.get('translation.cookie.name'),
+          context: 'translation.cookie.name',
+        ) ??
+        'locale';
+    final sessionKey =
+        parseStringLike(
+          config?.get('translation.session.key'),
+          context: 'translation.session.key',
+        ) ??
+        'locale';
+    final headerName =
+        parseStringLike(
+          config?.get('translation.header.name'),
+          context: 'translation.header.name',
+        ) ??
+        'Accept-Language';
 
     final options = _ResolverOptions(
       queryParameter: queryParameter,
@@ -285,28 +309,20 @@ class LocalizationServiceProvider extends ServiceProvider
     if (value == null) {
       return <String, Map<String, dynamic>>{};
     }
-    if (value is! Map) {
-      throw ProviderConfigException('translation.resolver_options must be a map');
-    }
+    final Object normalizedSource = value;
+    final normalized =
+        stringKeyedMap(normalizedSource, 'translation.resolver_options');
     final result = <String, Map<String, dynamic>>{};
-    value.forEach((key, entry) {
-      if (key is! String) {
-        throw ProviderConfigException(
-          'translation.resolver_options keys must be strings',
-        );
-      }
+    normalized.forEach((key, entry) {
       if (entry == null) {
         result[key.toLowerCase()] = <String, dynamic>{};
-        return;
-      }
-      if (entry is! Map) {
-        throw ProviderConfigException(
-          'translation.resolver_options.$key must be a map',
+      } else {
+        final Object entryObject = entry as Object;
+        result[key.toLowerCase()] = stringKeyedMap(
+          entryObject,
+          'translation.resolver_options.$key',
         );
       }
-      result[key.toLowerCase()] = entry.map(
-        (k, v) => MapEntry(k.toString(), v),
-      );
     });
     return result;
   }
@@ -320,84 +336,6 @@ class LocalizationServiceProvider extends ServiceProvider
       final manager = c.get<LocaleManager>();
       return localizationMiddleware(manager);
     });
-  }
-
-  List<String> _readStringList(
-    Object? value, {
-    required List<String> defaultValue,
-    required String context,
-  }) {
-    if (value == null) {
-      return defaultValue;
-    }
-    if (value is String) {
-      return value.trim().isEmpty ? <String>[] : <String>[value.trim()];
-    }
-    if (value is Iterable) {
-      final result = <String>[];
-      for (final entry in value) {
-        if (entry is! String) {
-          throw ProviderConfigException('$context entries must be strings');
-        }
-        final trimmed = entry.trim();
-        if (trimmed.isNotEmpty) {
-          result.add(trimmed);
-        }
-      }
-      return result;
-    }
-    throw ProviderConfigException('$context must be a string or list');
-  }
-
-  Map<String, String> _readStringMap(Object? value, {required String context}) {
-    if (value == null) {
-      return <String, String>{};
-    }
-    if (value is! Map) {
-      throw ProviderConfigException('$context must be a map');
-    }
-    final result = <String, String>{};
-    value.forEach((key, path) {
-      if (key is! String || path is! String) {
-        throw ProviderConfigException('$context entries must be strings');
-      }
-      final trimmedKey = key.trim();
-      final trimmedPath = path.trim();
-      if (trimmedKey.isEmpty || trimmedPath.isEmpty) {
-        return;
-      }
-      result[trimmedKey] = trimmedPath;
-    });
-    return result;
-  }
-
-  String _readString(
-    Object? value, {
-    required String defaultValue,
-    required String context,
-  }) {
-    if (value == null) {
-      return defaultValue;
-    }
-    if (value is! String) {
-      throw ProviderConfigException('$context must be a string');
-    }
-    final trimmed = value.trim();
-    if (trimmed.isEmpty) {
-      throw ProviderConfigException('$context must not be empty');
-    }
-    return trimmed;
-  }
-
-  String? _readLocale(Object? value) {
-    if (value == null) {
-      return null;
-    }
-    if (value is! String) {
-      throw ProviderConfigException('app locale keys must be strings');
-    }
-    final trimmed = value.trim();
-    return trimmed.isEmpty ? null : trimmed;
   }
 
   void _registerTemplateFilters() {
