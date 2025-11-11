@@ -35,6 +35,28 @@ void main() {
       );
     });
 
+    test('honors storage.root when local disk root not specified', () async {
+      final engine = Engine(
+        configItems: {
+          'storage': {
+            'root': '/var/data',
+            'disks': {
+              'local': {'driver': 'local'},
+            },
+          },
+        },
+      );
+      addTearDown(() async => await engine.close());
+      await engine.initialize();
+
+      final storage = await engine.make<StorageManager>();
+      expect(storage.defaultDisk, equals('local'));
+      expect(
+        storage.resolve('hello.txt'),
+        endsWith(p.normalize('var/data/hello.txt')),
+      );
+    });
+
     test('provides fallback disk when config missing', () async {
       final engine = Engine();
       addTearDown(() async => await engine.close());
@@ -199,7 +221,7 @@ void main() {
 
       final provider = StorageServiceProvider();
       final docPaths = provider.defaultConfig.docs.map((entry) => entry.path);
-      expect(docPaths, contains('storage.disks.*.token'));
+      expect(docPaths, contains('storage.disks.memory-docs.token'));
     });
 
     test('initializes storage facade alongside storage manager', () async {

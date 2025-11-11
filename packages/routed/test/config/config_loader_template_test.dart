@@ -146,5 +146,34 @@ mounts:
       expect(first['disk'], equals('assets'));
       expect(first['path'], equals('public/assets'));
     });
+
+    test('renders defaults containing Liquid expressions', () {
+      final fs = MemoryFileSystem.test();
+      final loader = ConfigLoader(fileSystem: fs);
+      final options = ConfigLoaderOptions(
+        defaults: const {
+          'storage': {
+            'root': "{{ env.STORAGE_ROOT | default: 'storage/app' }}",
+          },
+        },
+        fileSystem: fs,
+        envFiles: const [],
+      );
+
+      final snapshotWithOverride = loader.load(
+        options,
+        overrides: const {'STORAGE_ROOT': '/custom/storage'},
+      );
+      expect(
+        snapshotWithOverride.config.get('storage.root'),
+        equals('/custom/storage'),
+      );
+
+      final snapshotWithDefault = loader.load(options);
+      expect(
+        snapshotWithDefault.config.get('storage.root'),
+        equals('storage/app'),
+      );
+    });
   });
 }

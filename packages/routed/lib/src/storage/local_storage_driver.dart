@@ -11,20 +11,34 @@ class LocalStorageDriver {
   const LocalStorageDriver();
 
   /// Computes the root path for a disk, applying defaults when omitted.
-  String resolveRoot(Map<String, dynamic> configuration, String diskName) {
-    return parseStringLike(
-          configuration['root'],
-          context: 'storage.disks.$diskName.root',
-          allowEmpty: true,
-          coerceNonString: true,
-          throwOnInvalid: false,
-        ) ??
-        _defaultRootFor(diskName);
+  String resolveRoot(
+    Map<String, dynamic> configuration,
+    String diskName, {
+    String? storageRoot,
+  }) {
+    final resolved = parseStringLike(
+      configuration['root'],
+      context: 'storage.disks.$diskName.root',
+      allowEmpty: true,
+      coerceNonString: true,
+      throwOnInvalid: false,
+    );
+    if (resolved != null && resolved.isNotEmpty) {
+      return resolved;
+    }
+    if (storageRoot != null && storageRoot.isNotEmpty && diskName == 'local') {
+      return storageRoot;
+    }
+    return _defaultRootFor(diskName);
   }
 
   /// Produces a `StorageDisk` backed by the local file system.
   StorageDisk build(StorageDriverContext context) {
-    final root = resolveRoot(context.configuration, context.diskName);
+    final root = resolveRoot(
+      context.configuration,
+      context.diskName,
+      storageRoot: context.storageRoot,
+    );
 
     return LocalStorageDisk(
       root: root,

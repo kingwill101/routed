@@ -73,6 +73,10 @@ class ConfigImpl implements Config {
     }
     final list = <dynamic>[];
     dot.set(_items, key, list);
+    final stored = dot.lookup(_items, key);
+    if (stored.exists && stored.value is List<dynamic>) {
+      return stored.value as List<dynamic>;
+    }
     return list;
   }
 }

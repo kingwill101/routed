@@ -2,6 +2,7 @@ import 'package:routed/src/container/container.dart';
 import 'package:routed/src/provider/provider.dart';
 import 'package:routed/src/storage/storage_manager.dart';
 import 'package:routed/src/support/named_registry.dart';
+
 export 'local_storage_driver.dart' show LocalStorageDisk;
 
 typedef StorageDiskBuilder = StorageDisk Function(StorageDriverContext context);
@@ -14,12 +15,14 @@ class StorageDriverContext {
     required this.manager,
     required this.diskName,
     required this.configuration,
+    this.storageRoot,
   });
 
   final Container container;
   final StorageManager manager;
   final String diskName;
   final Map<String, dynamic> configuration;
+  final String? storageRoot;
 
   T? option<T>(String key) {
     final value = configuration[key];

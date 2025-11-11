@@ -395,7 +395,18 @@ class CoreServiceProvider extends ServiceProvider with ProvidesDefaultConfig {
     container.instance<ViewEngineManager>(ViewEngineManager());
     container.instance<MiddlewareRegistry>(MiddlewareRegistry());
     _registryListener = (entry) {
-      snapshot.config.mergeDefaults(entry.defaults);
+      final currentSnapshot = _snapshot;
+      if (currentSnapshot == null) {
+        return;
+      }
+      final rendered = _loader.renderDefaults(
+        entry.defaults,
+        currentSnapshot.templateContext,
+      );
+      if (rendered.isEmpty) {
+        return;
+      }
+      currentSnapshot.config.mergeDefaults(rendered);
     };
     registry.addListener(_registryListener!);
   }

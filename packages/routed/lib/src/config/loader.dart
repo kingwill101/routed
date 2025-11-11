@@ -3,9 +3,10 @@ import 'dart:io';
 
 import 'package:file/file.dart';
 import 'package:file/local.dart' as local;
-import 'package:path/path.dart' as p;
 import 'package:liquify/liquify.dart' as liquid;
+import 'package:path/path.dart' as p;
 import 'package:routed/src/config/config.dart';
+import 'package:routed/src/utils/deep_copy.dart';
 import 'package:yaml/yaml.dart';
 
 class ConfigLoaderOptions {
@@ -64,12 +65,15 @@ class ConfigSnapshot {
   final ConfigImpl config;
   final String environment;
   final Map<String, String> envVariables;
+  final Map<String, dynamic> templateContext;
 
   ConfigSnapshot({
     required this.config,
     required this.environment,
     Map<String, String>? envVariables,
-  }) : envVariables = envVariables ?? const <String, String>{};
+    Map<String, dynamic>? templateContext,
+  }) : envVariables = envVariables ?? const <String, String>{},
+       templateContext = templateContext ?? const <String, dynamic>{};
 }
 
 class ConfigLoader {
@@ -90,11 +94,12 @@ class ConfigLoader {
     Map<String, dynamic>? overrides,
   }) {
     final fs = options.fileSystem ?? _fileSystem;
-    final config = ConfigImpl(options.defaults);
+    final config = ConfigImpl();
     final envVariables = <String, String>{};
 
     var environment = _resolveInitialEnvironment(options, overrides);
 
+    Map<String, dynamic>? envOverrides;
     if (options.loadEnvFiles) {
       final envResult = _loadEnvFiles(
         fs,
@@ -102,9 +107,7 @@ class ConfigLoader {
         seedEnvironment: environment,
       );
       envVariables.addAll(envResult.envVariables);
-      if (envResult.configOverrides.isNotEmpty) {
-        config.merge(envResult.configOverrides);
-      }
+      envOverrides = envResult.configOverrides;
       if (envResult.environment != null && envResult.environment!.isNotEmpty) {
         environment = envResult.environment!;
       }
@@ -140,6 +143,14 @@ class ConfigLoader {
       });
     }
 
+    final renderedDefaults = renderDefaults(options.defaults, templateContext);
+    if (renderedDefaults.isNotEmpty) {
+      config.mergeDefaults(renderedDefaults);
+    }
+    if (envOverrides != null && envOverrides.isNotEmpty) {
+      config.merge(envOverrides);
+    }
+
     _loadDirectoryConfigs(
       fs,
       options,
@@ -160,6 +171,7 @@ class ConfigLoader {
       config: config,
       environment: environment,
       envVariables: envVariables,
+      templateContext: deepCopyMap(templateContext),
     );
   }
 
@@ -167,6 +179,72 @@ class ConfigLoader {
     final ext = p.extension(path).toLowerCase();
     return _supportedExtensions.contains(ext) ||
         p.basename(path).startsWith('.env');
+  }
+
+  Map<String, dynamic> renderDefaults(
+    Map<String, dynamic> defaults,
+    Map<String, dynamic> templateContext,
+  ) {
+    if (defaults.isEmpty) {
+      return const <String, dynamic>{};
+    }
+    return _renderDefaultsWithContext(defaults, templateContext);
+  }
+
+  Map<String, dynamic> _renderDefaultsWithContext(
+    Map<String, dynamic> defaults,
+    Map<String, dynamic> context,
+  ) {
+    if (defaults.isEmpty) {
+      return const <String, dynamic>{};
+    }
+    final result = <String, dynamic>{};
+    defaults.forEach((key, value) {
+      final keyStr = key.toString();
+      result[keyStr] = _renderTemplateNode(
+        value,
+        context,
+        origin: 'defaults.$keyStr',
+      );
+    });
+    return result;
+  }
+
+  dynamic _renderTemplateNode(
+    Object? value,
+    Map<String, dynamic> context, {
+    required String origin,
+  }) {
+    if (value is Map) {
+      final result = <String, dynamic>{};
+      value.forEach((key, inner) {
+        final keyStr = key?.toString() ?? '';
+        if (keyStr.isEmpty) {
+          return;
+        }
+        result[keyStr] = _renderTemplateNode(
+          inner,
+          context,
+          origin: '$origin.$keyStr',
+        );
+      });
+      return result;
+    }
+    if (value is Iterable) {
+      final list = <dynamic>[];
+      var index = 0;
+      for (final entry in value) {
+        list.add(
+          _renderTemplateNode(entry, context, origin: '$origin[$index]'),
+        );
+        index++;
+      }
+      return list;
+    }
+    if (value is String && value.contains('{{')) {
+      return _renderTemplate(value, context, origin);
+    }
+    return deepCopyValue(value);
   }
 
   _EnvLoadResult _loadEnvFiles(
