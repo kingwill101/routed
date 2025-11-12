@@ -1,3 +1,10 @@
+## 0.2.0
+
+- Added property-driven coverage for `RoutedRequestHandler` so route parameters
+  round-trip correctly across in-memory and ephemeral-server transports.
+- Hooked the handler bootstrap into the engine lifecycle with explicit ignores
+  for async server startup, preventing analyzer noise when embedding in tests.
+
 ## 0.1.0
 
 ### Features

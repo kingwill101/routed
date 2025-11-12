@@ -13,7 +13,7 @@ dependencies:
   shelf: ^1.4.2
   shelf_router: ^1.1.4
   shelf_multipart: ^2.0.1
-  server_testing: ^0.1.0
+  server_testing: ^0.2.0
   http_parser: ^4.1.2
 
 dev_dependencies:

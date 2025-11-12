@@ -79,7 +79,7 @@ ScaffoldTemplate _buildApiTemplate() {
       'test/api_test.dart': _apiTest,
     },
     readme: _apiReadme,
-    extraDevDependencies: const {'routed_testing': '^0.1.0'},
+    extraDevDependencies: const {'routed_testing': '^0.2.0'},
   );
 }
 
@@ -108,7 +108,7 @@ ScaffoldTemplate _buildFullstackTemplate() {
       'test/api_test.dart': _fullstackApiTest,
     },
     readme: _fullstackReadme,
-    extraDevDependencies: const {'routed_testing': '^0.1.0'},
+    extraDevDependencies: const {'routed_testing': '^0.2.0'},
   );
 }
 

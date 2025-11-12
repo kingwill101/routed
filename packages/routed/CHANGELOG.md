@@ -1,3 +1,20 @@
+## 0.2.0
+
+- Introduced a full localization stack: translation contracts, registry-driven
+  locale resolvers (query, cookie, session, header, and custom IDs), global
+  middleware, helpers (`trans`, `transChoice`, `currentLocale`), and manifest
+  defaults so apps can ship multilingual responses out of the box.
+- The configuration provider now leans on the shared `config_utils` helpers with
+  deep merge/dot lookups, dynamic defaults for storage/session/cache, and doc
+  snapshots that power `provider:list --config` output in `routed_cli`.
+- Refactored the logging provider to use the new config snapshots, tightening
+  context propagation and keeping structured logger defaults in sync with the
+  rest of the engine.
+- Route lifecycle events now cover 404s and WebSocket handlers, publishing
+  consistent metadata through `SignalHub` for observability hooks.
+- Added Windows shutdown signal support so graceful server drains and CLI
+  commands behave the same across platforms.
+
 ## 0.1.0
 
 - Driver registries now throw descriptive `ProviderConfigException`s when the same driver ID is registered twice, and

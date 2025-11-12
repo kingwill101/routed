@@ -11,10 +11,10 @@ environment:
 dependencies:
   intl: ^0.20.2
   crypto: ^3.0.3
-  routed: ^0.1.0
+  routed: ^0.2.0
 
 dev_dependencies:
   lints: ^6.0.0
-  routed_testing: ^0.1.0
-  server_testing: ^0.1.0
+  routed_testing: ^0.2.0
+  server_testing: ^0.2.0
   test: ^1.26.3

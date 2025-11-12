@@ -1,4 +1,4 @@
-## Unreleased
+## 0.2.0
 
 ### Added
 
@@ -12,6 +12,12 @@
   Firefox installations in CI environments.
 - Export `BrowserLogger`, `BrowserException`, and `BrowserPaths` from the
   public browser surface so downstream packages can reach the full testing API.
+
+### Tests
+
+- Added property-driven coverage for browser cookie persistence, binary
+  overrides, and path resolution so adapters stay in sync across supported
+  transports.
 
 ## 0.1.0
 

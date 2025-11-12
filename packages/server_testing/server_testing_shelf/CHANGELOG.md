@@ -1,3 +1,12 @@
+## 0.2.0
+
+- Fixed the Shelf response translator to stream bytes into the underlying
+  `HttpResponse` without double-closing the sink, eliminating sporadic `StateError`
+  failures under concurrent load.
+- Added property-based adapter tests (tagged `property`) and shared `dart_test.yaml`
+  defaults to keep the Shelf bridge aligned with the latest `server_testing`
+  transports.
+
 ## 0.1.0
 
 ### Features
