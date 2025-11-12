@@ -4,7 +4,6 @@ import 'package:liquify/src/filter_registry.dart' as liquify;
 import 'package:path/path.dart' as p;
 import 'package:routed/routed.dart';
 import 'package:routed/src/translation/locale_manager.dart';
-import 'package:routed/src/translation/locale_resolution.dart';
 import 'package:routed_testing/routed_testing.dart';
 import 'package:server_testing/server_testing.dart';
 

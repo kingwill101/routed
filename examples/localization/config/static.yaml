@@ -1,0 +1,12 @@
+# Static configuration quick reference:
+# enabled – Enable static asset serving. Default: false. Type: bool
+# mounts – List of static mount configurations. Default: []. Type: list<map>
+# mounts[].disk – Storage disk that hosts the assets. Type: string
+# mounts[].index – Default index file served when a directory is requested. Type: string
+# mounts[].list_directories – Allow directory listings for this mount. Type: bool
+# mounts[].path – Optional subdirectory within the disk. Type: string
+# mounts[].route – Route prefix clients use to fetch assets. Type: string
+
+enabled: false
+mounts:
+

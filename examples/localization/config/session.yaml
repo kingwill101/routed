@@ -1,0 +1,36 @@
+# Session configuration quick reference:
+# cache_prefix – Prefix applied to cache keys when using cache-backed session drivers. Default: session:. Type: string
+# cookie – Cookie name used for identifying the session when using cookie-based drivers. Default: "{{ env.SESSION_COOKIE | default: 'routed-session' }}". Env override: SESSION_COOKIE Type: string
+# domain – Cookie domain override for session cookies. Type: string
+# driver – Session backend to use. Default: cookie. Env override: SESSION_DRIVER Options: array, cache, cookie, file, redis Type: string
+# enabled – Enable the built-in sessions middleware (defaults to disabled). Type: bool
+# encrypt – Controls whether cookie-based session payloads are encrypted. Default: true. Type: bool
+# expire_on_close – Expire sessions when the browser closes. Default: false. Type: bool
+# files – Directory path used to persist session files. Defaults to storage/framework/sessions based on your storage configuration. Default: storage/framework/sessions. Validation: Must resolve to an accessible directory path. Type: string
+# http_only – Mark session cookies as HTTP-only. Default: true. Type: bool
+# lifetime – Session lifetime in minutes. Default: 120. Type: int
+# lottery – Odds used by some drivers to trigger garbage collection (numerator, denominator). Default: [2,100]. Validation: Provide two integers [wins, total]. Type: list<int>
+# partitioned – Enable partitioned cookies for session storage. Default: false. Type: bool
+# path – Cookie path scope for the session identifier. Default: /. Type: string
+# previous_keys – Historical keys accepted when rotating session secrets. New sessions always use the current key. Default: []. Type: list<string>
+# same_site – SameSite policy applied to the session cookie. Default: lax. Options: lax, strict, none Type: string
+# secure – Require HTTPS when sending session cookies. Default: false. Type: bool
+# store – Cache store name used when persisting sessions via cache-backed drivers. Defaults to the driver name when omitted. Validation: Must match a configured cache store name. Type: string
+
+cache_prefix: "session:"
+cookie: "{{ env.SESSION_COOKIE | default: 'routed-session' }}"
+driver: cookie
+encrypt: true
+expire_on_close: false
+files: storage/framework/sessions
+http_only: true
+lifetime: 120
+lottery:
+  - 2
+  - 100
+partitioned: false
+path: /
+previous_keys:
+same_site: lax
+secure: false
+

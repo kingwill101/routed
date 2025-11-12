@@ -111,6 +111,9 @@ export 'src/support/helpers.dart'
     show config, route, trans, transChoice, currentLocale;
 export 'src/support/zone.dart';
 export 'src/translation/translator.dart' show Translator;
+export 'src/translation/resolvers.dart' show LocaleResolver;
+export 'src/translation/locale_resolution.dart'
+    show LocaleResolutionContext;
 export 'src/translation/locale_resolver_registry.dart'
     show
         LocaleResolverRegistry,

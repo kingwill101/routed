@@ -161,6 +161,25 @@ void main() {
       expect(locale, equals('es'));
     });
 
+    test('default resolver list reflects registered entries', () {
+      LocaleResolverRegistry.instance.register('default-check', (ctx) {
+        return _StaticLocaleResolver('nl');
+      });
+
+      final defaults = provider.defaultConfig.values;
+      final translationDefaults =
+          defaults['translation'] as Map<String, dynamic>?;
+
+      expect(translationDefaults, isNotNull);
+      final resolverList =
+          translationDefaults!['resolvers'] as List<dynamic>? ?? const [];
+
+      expect(
+        resolverList.map((entry) => entry.toString()),
+        contains('default-check'),
+      );
+    });
+
     test('throws when resolver id is unknown', () {
       final config = ConfigImpl({
         'translation': {

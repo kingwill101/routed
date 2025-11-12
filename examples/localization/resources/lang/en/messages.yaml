@@ -1,0 +1,2 @@
+greeting: "Hello :name!"
+notifications: "{0} You have no notifications.|{1} You have 1 notification.|[2,*] You have :count notifications."

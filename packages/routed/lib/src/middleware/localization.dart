@@ -4,7 +4,6 @@ library;
 import 'package:routed/routed.dart';
 import 'package:routed/src/translation/constants.dart';
 import 'package:routed/src/translation/locale_manager.dart';
-import 'package:routed/src/translation/locale_resolution.dart';
 
 /// Creates middleware that runs the [LocaleManager] before downstream handlers.
 ///

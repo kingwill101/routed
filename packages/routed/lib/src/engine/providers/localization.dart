@@ -26,30 +26,25 @@ class LocalizationServiceProvider extends ServiceProvider
   static bool _filtersRegistered = false;
   static bool _resolversRegistered = false;
 
-  static const List<String> _defaultResolvers = <String>[
-    'query',
-    'cookie',
-    'header',
-  ];
 
   @override
-  ConfigDefaults get defaultConfig => const ConfigDefaults(
+  ConfigDefaults get defaultConfig => ConfigDefaults(
     docs: <ConfigDocEntry>[
-      ConfigDocEntry(
+      const ConfigDocEntry(
         path: 'translation.paths',
         type: 'list<string>',
         description:
             'Directories scanned for `locale/group.(yaml|yml|json)` files.',
         defaultValue: ['resources/lang'],
       ),
-      ConfigDocEntry(
+      const ConfigDocEntry(
         path: 'translation.json_paths',
         type: 'list<string>',
         description:
             'Directories containing flat `<locale>.json` dictionaries.',
         defaultValue: <String>[],
       ),
-      ConfigDocEntry(
+      const ConfigDocEntry(
         path: 'translation.namespaces',
         type: 'map<string,string>',
         description:
@@ -61,40 +56,40 @@ class LocalizationServiceProvider extends ServiceProvider
         type: 'list<string>',
         description:
             'Ordered locale resolvers (query, cookie, header, session).',
-        defaultValue: _defaultResolvers,
+        defaultValueBuilder: () => List<String>.from(_resolverDefaults()),
       ),
-      ConfigDocEntry(
+      const ConfigDocEntry(
         path: 'translation.query.parameter',
         type: 'string',
         description: 'Query parameter consulted for locale overrides.',
         defaultValue: 'locale',
       ),
-      ConfigDocEntry(
+      const ConfigDocEntry(
         path: 'translation.cookie.name',
         type: 'string',
         description: 'Cookie name consulted for locale overrides.',
         defaultValue: 'locale',
       ),
-      ConfigDocEntry(
+      const ConfigDocEntry(
         path: 'translation.session.key',
         type: 'string',
         description: 'Session key consulted for locale overrides.',
         defaultValue: 'locale',
       ),
-      ConfigDocEntry(
+      const ConfigDocEntry(
         path: 'translation.header.name',
         type: 'string',
         description: 'Header inspected for Accept-Language fallbacks.',
         defaultValue: 'Accept-Language',
       ),
-      ConfigDocEntry(
+      const ConfigDocEntry(
         path: 'translation.resolver_options',
         type: 'map',
         description:
             'Resolver-specific options keyed by resolver identifier.',
         defaultValue: <String, Object?>{},
       ),
-      ConfigDocEntry(
+      const ConfigDocEntry(
         path: 'http.middleware_sources',
         type: 'map',
         description:
@@ -225,7 +220,7 @@ class LocalizationServiceProvider extends ServiceProvider
           context: 'translation.resolvers',
           allowEmptyResult: false,
         ) ??
-        _defaultResolvers;
+        _resolverDefaults();
     final queryParameter =
         parseStringLike(
           config?.get('translation.query.parameter'),
@@ -285,8 +280,8 @@ class LocalizationServiceProvider extends ServiceProvider
       if (factory == null) {
         throw ProviderConfigException(
           'translation.resolvers entry "$raw" is not registered. '
-          'Register custom resolvers via LocaleResolverRegistry or stick to '
-          'built-ins (query, cookie, session, header).',
+          'Register custom resolvers via LocaleResolverRegistry or select one '
+          'of the registered options (${_availableResolversForError()}).',
         );
       }
       final ctx = LocaleResolverBuildContext(
@@ -348,6 +343,20 @@ class LocalizationServiceProvider extends ServiceProvider
     FilterRegistry.register('transChoice', _transChoiceFilter);
 
     _filtersRegistered = true;
+  }
+
+  List<String> _resolverDefaults() {
+    _registerDefaultResolvers();
+    return LocaleResolverRegistry.instance.entryNames.toList(growable: false);
+  }
+
+  String _availableResolversForError() {
+    final names =
+        LocaleResolverRegistry.instance.entryNames.toList(growable: false);
+    if (names.isEmpty) {
+      return 'none registered';
+    }
+    return names.join(', ');
   }
 
   void _registerDefaultResolvers() {
