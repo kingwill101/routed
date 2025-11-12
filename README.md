@@ -1,5 +1,10 @@
 # routed_ecosystem
 
+[![CI](https://github.com/kingwill101/routed/actions/workflows/publish.yaml/badge.svg)](https://github.com/kingwill101/routed/actions/workflows/publish.yaml)
+[![Docs](https://img.shields.io/badge/docs-routed.dev-4f46e5)](https://docs.routed.dev)
+[![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
+[![Support](https://img.shields.io/badge/support-Buy%20Me%20a%20Coffee-ff813f?logo=buymeacoffee)](https://www.buymeacoffee.com/kingwill101)
+
 Workspace for the Routed framework, testing utilities, CLI, Hotwire helpers,
 class_view adapters, and runnable examples. The repo uses a Dart monorepo
 layout so packages share tooling, CI, and release notes.
