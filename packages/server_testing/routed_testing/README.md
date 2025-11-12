@@ -43,8 +43,8 @@ import 'package:test/test.dart';
 
 void main() {
   test('GET /ping', () async {
-    final engine = Engine()..get('/ping', (ctx) => ctx.text('pong'));
-    await engine.initialize();
+    final engine = await Engine.create();
+    engine.get('/ping', (ctx) => ctx.text('pong'));
     final handler = RoutedRequestHandler(engine);
     final client = TestClient.inMemory(handler);
 

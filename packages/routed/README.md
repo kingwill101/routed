@@ -35,7 +35,8 @@ Then run `dart pub get`.
 import 'package:routed/routed.dart';
 
 Future<void> main() async {
-  final engine = Engine()
+  final engine = await Engine.create();
+  engine
     ..get('/', (ctx) => ctx.text('Hello routed!'))
     ..get('/json', (ctx) => ctx.json({'ok': true}))
     ..group('/api', (router) {
@@ -45,7 +46,6 @@ Future<void> main() async {
       });
     });
 
-  await engine.initialize();
   await engine.serve(host: '127.0.0.1', port: 8080);
 }
 ```
