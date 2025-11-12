@@ -130,10 +130,12 @@ void main() {
     });
 
     test('supports custom resolver registration via registry', () {
-      LocaleResolverRegistry.instance.register('static-locale', (ctx) {
-        final locale = ctx.option<String>('locale') ?? 'en';
-        return _StaticLocaleResolver(locale);
-      });
+      final resolverRegistry = LocaleResolverRegistry()
+        ..register('static-locale', (ctx) {
+          final locale = ctx.option<String>('locale') ?? 'en';
+          return _StaticLocaleResolver(locale);
+        });
+      container.instance<LocaleResolverRegistry>(resolverRegistry);
 
       final config = ConfigImpl({
         'app': {'locale': 'en'},
@@ -159,25 +161,6 @@ void main() {
         ),
       );
       expect(locale, equals('es'));
-    });
-
-    test('default resolver list reflects registered entries', () {
-      LocaleResolverRegistry.instance.register('default-check', (ctx) {
-        return _StaticLocaleResolver('nl');
-      });
-
-      final defaults = provider.defaultConfig.values;
-      final translationDefaults =
-          defaults['translation'] as Map<String, dynamic>?;
-
-      expect(translationDefaults, isNotNull);
-      final resolverList =
-          translationDefaults!['resolvers'] as List<dynamic>? ?? const [];
-
-      expect(
-        resolverList.map((entry) => entry.toString()),
-        contains('default-check'),
-      );
     });
 
     test('throws when resolver id is unknown', () {

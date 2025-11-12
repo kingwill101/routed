@@ -110,6 +110,24 @@ translation:
 Inside the resolver you can inspect `context.options['fallback']` or the shared
 options (query parameter, cookie name, etc.).
 
+:::info Resolver registration timing
+Register resolvers before the localization provider builds its defaults. The
+simplest pattern is to add an engine option that clones/augments the registry
+before calling `Engine.initialize()`:
+
+```dart
+final engine = await Engine.create(options: [
+  (engine) {
+    final registry = engine.container.get<LocaleResolverRegistry>();
+    registry.register('preview', (context) => PreviewResolver());
+  },
+]);
+```
+
+This ensures your custom IDs are available when `translation.resolvers` is
+validated and when docs default values are generated.
+:::
+
 ## Rendering translations
 
 Use the helper functions exposed from `package:routed/routed.dart` or inject

@@ -24,8 +24,8 @@ class LocalizationServiceProvider extends ServiceProvider
     with ProvidesDefaultConfig {
   file.FileSystem _fallbackFileSystem = const local.LocalFileSystem();
   static bool _filtersRegistered = false;
-  static bool _resolversRegistered = false;
-
+  static final LocaleResolverRegistry _resolverTemplate =
+      _buildResolverTemplate();
 
   @override
   ConfigDefaults get defaultConfig => ConfigDefaults(
@@ -85,8 +85,7 @@ class LocalizationServiceProvider extends ServiceProvider
       const ConfigDocEntry(
         path: 'translation.resolver_options',
         type: 'map',
-        description:
-            'Resolver-specific options keyed by resolver identifier.',
+        description: 'Resolver-specific options keyed by resolver identifier.',
         defaultValue: <String, Object?>{},
       ),
       const ConfigDocEntry(
@@ -110,10 +109,11 @@ class LocalizationServiceProvider extends ServiceProvider
     }
 
     final config = container.has<Config>() ? container.get<Config>() : null;
+    final registry = _ensureResolverRegistry(container);
     final loader = _buildLoader(container, config);
     final localeConfig = _resolveLocaleConfig(config);
     final translator = _buildTranslator(loader, localeConfig);
-    final localeManager = _buildLocaleManager(localeConfig, config);
+    final localeManager = _buildLocaleManager(localeConfig, config, registry);
 
     container
       ..instance<TranslationLoader>(loader)
@@ -126,10 +126,11 @@ class LocalizationServiceProvider extends ServiceProvider
 
   @override
   Future<void> onConfigReload(Container container, Config config) async {
+    final registry = _ensureResolverRegistry(container);
     final loader = _buildLoader(container, config);
     final localeConfig = _resolveLocaleConfig(config);
     final translator = _buildTranslator(loader, localeConfig);
-    final localeManager = _buildLocaleManager(localeConfig, config);
+    final localeManager = _buildLocaleManager(localeConfig, config, registry);
 
     container
       ..instance<TranslationLoader>(loader)
@@ -171,10 +172,7 @@ class LocalizationServiceProvider extends ServiceProvider
     loader.setNamespaces(
       namespaceNode == null
           ? <String, String>{}
-          : parseStringMap(
-              namespaceNode,
-              context: 'translation.namespaces',
-            ),
+          : parseStringMap(namespaceNode, context: 'translation.namespaces'),
     );
 
     return loader;
@@ -182,10 +180,7 @@ class LocalizationServiceProvider extends ServiceProvider
 
   _LocaleConfig _resolveLocaleConfig(Config? config) {
     final defaultLocale =
-        parseStringLike(
-          config?.get('app.locale'),
-          context: 'app.locale',
-        ) ??
+        parseStringLike(config?.get('app.locale'), context: 'app.locale') ??
         'en';
     final fallback =
         parseStringLike(
@@ -213,6 +208,7 @@ class LocalizationServiceProvider extends ServiceProvider
   LocaleManager _buildLocaleManager(
     _LocaleConfig localeConfig,
     Config? config,
+    LocaleResolverRegistry registry,
   ) {
     final resolvers =
         parseStringList(
@@ -253,10 +249,16 @@ class LocalizationServiceProvider extends ServiceProvider
       headerName: headerName,
     );
 
-    final resolverOptions =
-        _readResolverOptions(config?.get('translation.resolver_options'));
-    final builtResolvers =
-        _buildResolvers(resolvers, options, resolverOptions, config);
+    final resolverOptions = _readResolverOptions(
+      config?.get('translation.resolver_options'),
+    );
+    final builtResolvers = _buildResolvers(
+      registry,
+      resolvers,
+      options,
+      resolverOptions,
+      config,
+    );
 
     return LocaleManager(
       defaultLocale: localeConfig.defaultLocale,
@@ -266,13 +268,12 @@ class LocalizationServiceProvider extends ServiceProvider
   }
 
   List<LocaleResolver> _buildResolvers(
+    LocaleResolverRegistry registry,
     List<String> order,
     _ResolverOptions shared,
     Map<String, Map<String, dynamic>> resolverOptions,
     Config? config,
   ) {
-    _registerDefaultResolvers();
-    final registry = LocaleResolverRegistry.instance;
     final resolvers = <LocaleResolver>[];
     for (final raw in order) {
       final key = raw.trim();
@@ -281,7 +282,7 @@ class LocalizationServiceProvider extends ServiceProvider
         throw ProviderConfigException(
           'translation.resolvers entry "$raw" is not registered. '
           'Register custom resolvers via LocaleResolverRegistry or select one '
-          'of the registered options (${_availableResolversForError()}).',
+          'of the registered options (${_availableResolversForError(registry)}).',
         );
       }
       final ctx = LocaleResolverBuildContext(
@@ -292,7 +293,8 @@ class LocalizationServiceProvider extends ServiceProvider
           sessionKey: shared.sessionKey,
           headerName: shared.headerName,
         ),
-        options: resolverOptions[key.toLowerCase()] ?? const <String, dynamic>{},
+        options:
+            resolverOptions[key.toLowerCase()] ?? const <String, dynamic>{},
         config: config,
       );
       resolvers.add(factory(ctx));
@@ -305,8 +307,10 @@ class LocalizationServiceProvider extends ServiceProvider
       return <String, Map<String, dynamic>>{};
     }
     final Object normalizedSource = value;
-    final normalized =
-        stringKeyedMap(normalizedSource, 'translation.resolver_options');
+    final normalized = stringKeyedMap(
+      normalizedSource,
+      'translation.resolver_options',
+    );
     final result = <String, Map<String, dynamic>>{};
     normalized.forEach((key, entry) {
       if (entry == null) {
@@ -346,24 +350,42 @@ class LocalizationServiceProvider extends ServiceProvider
   }
 
   List<String> _resolverDefaults() {
-    _registerDefaultResolvers();
-    return LocaleResolverRegistry.instance.entryNames.toList(growable: false);
+    return _resolverTemplate.identifiers.toList(growable: false);
   }
 
-  String _availableResolversForError() {
-    final names =
-        LocaleResolverRegistry.instance.entryNames.toList(growable: false);
+  String _availableResolversForError(LocaleResolverRegistry registry) {
+    final names = registry.identifiers.toList(growable: false);
     if (names.isEmpty) {
       return 'none registered';
     }
     return names.join(', ');
   }
 
-  void _registerDefaultResolvers() {
-    if (_resolversRegistered) {
-      return;
+  LocaleResolverRegistry _ensureResolverRegistry(Container container) {
+    if (container.has<LocaleResolverRegistry>()) {
+      final registry = container.get<LocaleResolverRegistry>();
+      _seedRegistry(registry);
+      return registry;
     }
-    final registry = LocaleResolverRegistry.instance;
+    final registry = LocaleResolverRegistry.clone(_resolverTemplate);
+    container.instance<LocaleResolverRegistry>(registry);
+    return registry;
+  }
+
+  void _seedRegistry(LocaleResolverRegistry registry) {
+    for (final name in _resolverTemplate.identifiers) {
+      if (registry.contains(name)) {
+        continue;
+      }
+      final factory = _resolverTemplate.resolve(name);
+      if (factory != null) {
+        registry.register(name, factory);
+      }
+    }
+  }
+
+  static LocaleResolverRegistry _buildResolverTemplate() {
+    final registry = LocaleResolverRegistry();
     registry.register('query', (context) {
       return QueryLocaleResolver(
         parameter: context.sharedOptions.queryParameter,
@@ -378,11 +400,9 @@ class LocalizationServiceProvider extends ServiceProvider
       );
     });
     registry.register('header', (context) {
-      return HeaderLocaleResolver(
-        headerName: context.sharedOptions.headerName,
-      );
+      return HeaderLocaleResolver(headerName: context.sharedOptions.headerName);
     });
-    _resolversRegistered = true;
+    return registry;
   }
 }
 

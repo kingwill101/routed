@@ -5,8 +5,14 @@ import 'package:routed/routed.dart';
 
 /// Builds the example [Engine] with translation-enabled routes.
 Future<Engine> createEngine() async {
-  _registerPreviewResolver();
-  final engine = await Engine.create();
+  final engine = await Engine.create(
+    options: [
+      (engine) {
+        final registry = _ensureResolverRegistry(engine);
+        _registerPreviewResolver(registry);
+      },
+    ],
+  );
 
   engine.get('/', (ctx) async {
     final payload = _localizedPayload(ctx, note: 'default resolver order');
@@ -66,14 +72,23 @@ Map<String, Object?> _localizedPayload(EngineContext ctx, {String? note}) {
   };
 }
 
-void _registerPreviewResolver() {
-  LocaleResolverRegistry.instance.register('preview', (context) {
+void _registerPreviewResolver(LocaleResolverRegistry registry) {
+  registry.register('preview', (context) {
     return _PreviewLocaleResolver(
       flagParameter: context.option<String>('flag_parameter') ?? 'preview',
       localeParameter:
           context.option<String>('locale_parameter') ?? 'preview_locale',
     );
   });
+}
+
+LocaleResolverRegistry _ensureResolverRegistry(Engine engine) {
+  if (engine.container.has<LocaleResolverRegistry>()) {
+    return engine.container.get<LocaleResolverRegistry>();
+  }
+  final registry = LocaleResolverRegistry();
+  engine.container.instance<LocaleResolverRegistry>(registry);
+  return registry;
 }
 
 /// Resolves locales when both `preview` and `preview_locale` query params exist.

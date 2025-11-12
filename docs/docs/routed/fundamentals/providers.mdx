@@ -53,6 +53,30 @@ engine.registerProvider(EmailServiceProvider());
 await engine.initialize();
 ```
 
+### Ordering and pre-registration hooks
+
+- Providers run `register` immediately when `Engine.registerProvider` is called.
+  If one provider depends on bindings from another, register them in that order
+  (`engine.registerProvider(CacheProvider())` before
+  `engine.registerProvider(EmailProvider())`, etc.).
+- Built-in providers are registered when the `Engine` constructor runs. To seed
+  registries or add container services _before_ those providers finish wiring
+  defaults, pass an `Engine` option:
+
+```dart
+final engine = Engine(options: [
+  (engine) {
+    final registry = engine.container.get<LocaleResolverRegistry>();
+    registry.register('preview', (_) => PreviewLocaleResolver());
+  },
+]);
+```
+
+Engine options execute right after the engine is created but before
+`engine.initialize()` (and before provider boot hooks fire). Use them when you
+need to ensure something exists in the container—custom locale resolvers,
+driver registrations, feature flags—before providers rely on that state.
+
 ## Shipping configuration defaults
 
 Mix in `ProvidesDefaultConfig` to contribute config defaults + documentation. Use `ConfigDefaults` and `ConfigDocEntry` so the CLI (`provider:list --config`) and generator (`config:init`) can surface the metadata.

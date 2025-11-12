@@ -56,16 +56,21 @@ class LocaleResolverBuildContext {
 }
 
 /// Function signature used when registering locale resolver builders.
-typedef LocaleResolverFactory = LocaleResolver Function(
-  LocaleResolverBuildContext context,
-);
+typedef LocaleResolverFactory =
+    LocaleResolver Function(LocaleResolverBuildContext context);
 
 /// Named registry storing resolver factories addressable by slug.
 class LocaleResolverRegistry extends NamedRegistry<LocaleResolverFactory> {
-  LocaleResolverRegistry._();
+  LocaleResolverRegistry();
 
-  /// Singleton registry instance used by the localization provider.
-  static final LocaleResolverRegistry instance = LocaleResolverRegistry._();
+  LocaleResolverRegistry.clone(LocaleResolverRegistry source) {
+    for (final name in source.entryNames) {
+      final factory = source.getEntry(name);
+      if (factory != null) {
+        registerEntry(name, factory);
+      }
+    }
+  }
 
   /// Registers a resolver factory under [id].
   void register(String id, LocaleResolverFactory factory) {
@@ -74,4 +79,10 @@ class LocaleResolverRegistry extends NamedRegistry<LocaleResolverFactory> {
 
   /// Looks up the resolver factory registered for [id].
   LocaleResolverFactory? resolve(String id) => getEntry(id);
+
+  /// Whether a resolver has already been registered.
+  bool contains(String id) => containsEntry(id);
+
+  /// Returns all resolver identifiers.
+  Iterable<String> get identifiers => entryNames;
 }
