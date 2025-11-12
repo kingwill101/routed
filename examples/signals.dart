@@ -68,7 +68,7 @@ Future<void> main() async {
   }, key: 'logging.route');
 
   signals.requests.routingError.connect((event) {
-    print('[routing-error] ${event.route.name}: ${event.error}');
+    print('[routing-error] ${event.route?.name}: ${event.error}');
   }, key: 'logging.error');
 
   signals.requests.finished.connect((event) {
