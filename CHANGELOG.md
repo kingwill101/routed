@@ -1,3 +1,8 @@
+## 0.2.1
+
+- Added badges, funding links, and richer documentation for `property_testing`,
+  `routed_testing`, `server_testing_shelf`, and `routed_cli`.
+
 ## 0.2.0
 
 - `routed` adds a full localization stack, deep-merge config snapshots, logging

@@ -1,3 +1,7 @@
+## 0.2.1
+
+- Updated the README with badges, sponsor link, and a quick workflow example.
+
 ## 0.2.0
 
 - Rebuilt the config generator on Routed’s config snapshot utilities so derived

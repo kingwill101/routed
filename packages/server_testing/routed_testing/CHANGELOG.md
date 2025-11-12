@@ -1,3 +1,8 @@
+## 0.2.1
+
+- Added README badges, installation details, and funding notes so the package
+  documents match the rest of the ecosystem.
+
 ## 0.2.0
 
 - Added property-driven coverage for `RoutedRequestHandler` so route parameters

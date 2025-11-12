@@ -1,3 +1,7 @@
+## 0.2.1
+
+- Documented the package with badges, funding link, and a runnable Shelf sample.
+
 ## 0.2.0
 
 - Fixed the Shelf response translator to stream bytes into the underlying

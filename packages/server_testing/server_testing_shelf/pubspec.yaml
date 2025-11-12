@@ -1,6 +1,6 @@
 name: server_testing_shelf
 description: Adapter for the Shelf package to use server_testing for HTTP testing.
-version: 0.2.0
+version: 0.2.1
 repository: https://github.com/kingwill101/routed/tree/master/packages/server_testing_shelf
 
 resolution: workspace
@@ -14,5 +14,5 @@ dependencies:
 
 dev_dependencies:
   http_parser: ^4.1.2
-  property_testing: ^0.2.0
+  property_testing: ^0.2.1
   shelf_router: ^1.1.4

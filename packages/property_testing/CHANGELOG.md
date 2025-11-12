@@ -1,3 +1,8 @@
+## 0.2.1
+
+- Expanded the README with badges, funding info, and extra examples covering
+  chaos generators plus the stateful runner.
+
 ## 0.2.0
 
 - `StatefulPropertyRunner` now accepts a distinct `CommandType` generic so
