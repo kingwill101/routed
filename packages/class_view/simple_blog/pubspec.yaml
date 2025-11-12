@@ -2,6 +2,9 @@ name: simple_blog
 description: A simple blog application showcasing class_view features with Drift database.
 version: 1.0.0
 publish_to: none
+funding:
+  - https://www.buymeacoffee.com/kingwill101
+
 environment:
   sdk: ">=3.9.0 <4.0.0"
 

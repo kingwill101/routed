@@ -1,6 +1,9 @@
 name: class_view_image_field
 description: Optional image field support for the class_view package.
 version: 0.1.0
+funding:
+  - https://www.buymeacoffee.com/kingwill101
+
 resolution: workspace
 environment:
   sdk: ">=3.9.0 <4.0.0"

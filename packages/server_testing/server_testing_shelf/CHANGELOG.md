@@ -1,4 +1,4 @@
-## 0.2.1
+## 0.2.1+1
 
 - Documented the package with badges, funding link, and a runnable Shelf sample.
 

@@ -1,4 +1,4 @@
-## 0.2.1
+## 0.2.1+1
 
 - Added README badges, installation details, and funding notes so the package
   documents match the rest of the ecosystem.

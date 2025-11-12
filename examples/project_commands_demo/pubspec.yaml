@@ -3,6 +3,9 @@ description: Example Routed project demonstrating custom CLI commands.
 publish_to: 'none'
 version: 0.1.0
 
+funding:
+  - https://www.buymeacoffee.com/kingwill101
+
 environment:
   sdk: ">=3.9.2 <4.0.0"
 

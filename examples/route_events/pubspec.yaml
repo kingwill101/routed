@@ -2,6 +2,9 @@ name: route_events
 description: Demonstrates Routed route lifecycle events.
 publish_to: none
 
+funding:
+  - https://www.buymeacoffee.com/kingwill101
+
 environment:
   sdk: '>=3.9.0 <4.0.0'
 

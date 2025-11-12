@@ -1,4 +1,4 @@
-## 0.2.1
+## 0.2.1+1
 
 - Expanded the README with badges, funding info, and extra examples covering
   chaos generators plus the stateful runner.

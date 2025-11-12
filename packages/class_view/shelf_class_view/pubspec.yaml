@@ -3,6 +3,9 @@ description: Shelf framework adapter for class_view - Django-style class-based v
 version: 1.0.0
 # repository: https://github.com/my_org/my_repo
 
+funding:
+  - https://www.buymeacoffee.com/kingwill101
+
 resolution: workspace
 environment:
   sdk: ">=3.9.0 <4.0.0"

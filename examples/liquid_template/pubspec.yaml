@@ -1,4 +1,7 @@
 name: liquid_template_example
+funding:
+  - https://www.buymeacoffee.com/kingwill101
+
 environment:
   sdk: ">=3.9.0 <4.0.0"
 dependencies:

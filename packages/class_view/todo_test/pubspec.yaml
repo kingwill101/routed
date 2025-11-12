@@ -1,6 +1,9 @@
 name: todo_test
 description: A starting point for Dart libraries or applications.
 version: 1.0.0
+funding:
+  - https://www.buymeacoffee.com/kingwill101
+
 resolution: workspace
 publish_to: none
 environment:

@@ -2,6 +2,9 @@ name: server_testing
 description: Reusable server testing library for Dart.
 version: 0.2.0
 repository: https://github.com/kingwill101/routed/tree/master/packages/server_testing/server_testing
+funding:
+  - https://www.buymeacoffee.com/kingwill101
+
 tags:
   - server-testing
   - testing

@@ -1,7 +1,10 @@
 name: routed_testing
 description: Routed-specific testing utilities that extend server_testing for integration tests.
-version: 0.2.1
+version: 0.2.1+1
 repository: https://github.com/kingwill101/routed/tree/master/packages/routed_testing
+funding:
+  - https://www.buymeacoffee.com/kingwill101
+
 
 resolution: workspace
 environment:

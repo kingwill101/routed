@@ -2,6 +2,9 @@ name: oauth_keycloak
 version: 0.0.1
 description: Example Routed app showcasing configuration loader and CLI integration.
 publish_to: none
+funding:
+  - https://www.buymeacoffee.com/kingwill101
+
 resolution: workspace
 
 environment:

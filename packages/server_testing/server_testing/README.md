@@ -1,5 +1,10 @@
 # server_testing
 
+[![Pub Version](https://img.shields.io/pub/v/server_testing.svg?label=pub&color=2bb7f6)](https://pub.dev/packages/server_testing)
+[![CI](https://github.com/kingwill101/routed/actions/workflows/server_testing.yaml/badge.svg)](https://github.com/kingwill101/routed/actions/workflows/server_testing.yaml)
+[![License](https://img.shields.io/badge/license-MIT-blue.svg)](../../../LICENSE)
+[![Sponsor](https://img.shields.io/badge/sponsor-❤-ff69b4?logo=github-sponsors)](https://www.buymeacoffee.com/kingwill101)
+
 `server_testing` is a batteries-included test harness for Dart HTTP backends. It
 packages an expressive HTTP test client, fluent response assertions, browser
 automation, request handler adapters, and a CLI for managing browser binaries.
@@ -214,3 +219,8 @@ correct binaries without manual configuration.
 - Issues & feature requests: <https://github.com/kingwill101/routed/issues>
 - Pull requests welcome—please include tests covering new behaviour
 - Licensed under MIT (see `LICENSE`)
+
+## Funding
+
+Help keep browsers, drivers, and adapters maintained by
+[buying me a coffee](https://www.buymeacoffee.com/kingwill101).

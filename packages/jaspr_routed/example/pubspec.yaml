@@ -2,6 +2,9 @@ name: jaspr_routed_example
 description: Routed backend example for Jaspr components.
 publish_to: none
 
+funding:
+  - https://www.buymeacoffee.com/kingwill101
+
 environment:
   sdk: ">=3.9.0 <4.0.0"
 
