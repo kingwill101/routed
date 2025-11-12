@@ -7,8 +7,10 @@ import 'package:routed/src/security/trusted_proxy_resolver.dart';
 /// Function type for engine configuration options.
 ///
 /// Engine options are functions that accept an [Engine] instance and configure
-/// it by modifying its settings. They are typically passed to the [Engine]
-/// constructor and applied in sequence.
+/// it by modifying its settings. They run immediately after the engine is
+/// constructed—before built-in service providers finish booting—so they're a
+/// convenient hook for tasks such as registering custom locale resolvers,
+/// seeding registries, or overriding provider defaults.
 ///
 /// Example:
 /// ```dart
@@ -16,6 +18,17 @@ import 'package:routed/src/security/trusted_proxy_resolver.dart';
 ///   options: [
 ///     withTrustedProxies(['192.168.1.1']),
 ///     withMaxRequestSize(10 * 1024 * 1024),
+///   ],
+/// );
+/// ```
+///
+/// ```dart
+/// final engine = Engine(
+///   options: [
+///     (engine) {
+///       final registry = engine.container.get<LocaleResolverRegistry>();
+///       registry.register('preview', (_) => PreviewResolver());
+///     },
 ///   ],
 /// );
 /// ```

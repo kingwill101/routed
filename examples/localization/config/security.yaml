@@ -1,0 +1,37 @@
+# Security configuration quick reference:
+# csrf.cookie_name – Cookie used to store the CSRF token. Default: csrf_token. Type: string
+# csrf.enabled – Enable CSRF middleware. Default: true. Type: bool
+# headers – Extra security headers applied to every response. Default: {}. Type: map<string,string>
+# ip_filter.allow – CIDR/IP entries explicitly allowed. Default: []. Type: list<string>
+# ip_filter.default_action – Fallback when no rules match (allow or deny). Default: allow. Options: allow, deny Type: string
+# ip_filter.deny – CIDR/IP entries explicitly denied. Default: []. Type: list<string>
+# ip_filter.enabled – Enable IP allow/deny middleware. Default: false. Type: bool
+# ip_filter.respect_trusted_proxies – Use trusted proxy resolution when determining client IP. Default: true. Type: bool
+# max_request_size – Maximum request body size in bytes. Default: 10485760. Type: int
+# trusted_proxies.enabled – Trust proxy headers for client IP resolution. Default: false. Type: bool
+# trusted_proxies.forward_client_ip – Preserve the client IP from the first trusted header. Default: true. Type: bool
+# trusted_proxies.headers – Headers to inspect for client IP addresses. Default: ["X-Forwarded-For","X-Real-IP"]. Type: list<string>
+# trusted_proxies.platform_header – Trusted platform header providing the original client IP (Cloudflare, AWS, etc.). Type: string
+# trusted_proxies.proxies – CIDR ranges considered trusted proxies. Default: ["0.0.0.0/0","::/0"]. Type: list<string>
+
+csrf:
+  cookie_name: csrf_token
+  enabled: true
+headers:
+ip_filter:
+  allow:
+  default_action: allow
+  deny:
+  enabled: false
+  respect_trusted_proxies: true
+max_request_size: 10485760
+trusted_proxies:
+  enabled: false
+  forward_client_ip: true
+  headers:
+    - X-Forwarded-For
+    - X-Real-IP
+  proxies:
+    - 0.0.0.0/0
+    - ::/0
+

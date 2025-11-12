@@ -1,0 +1,40 @@
+# Observability configuration quick reference:
+# enabled – Master toggle that enables or disables all observability features. Default: true. Type: bool
+# errors.enabled – Enable error observer notifications (reserve for external error trackers). Default: false. Type: bool
+# health.enabled – Enable health and readiness endpoints. Default: true. Type: bool
+# health.liveness_path – HTTP path exposed for liveness checks. Default: /livez. Type: string
+# health.readiness_path – HTTP path exposed for readiness checks. Default: /readyz. Type: string
+# metrics.buckets – Latency histogram bucket upper bounds (seconds) for routed_request_duration_seconds. Default: [0.01,0.05,0.1,0.25,0.5,1.0,2.0,5.0]. Type: list<double>
+# metrics.enabled – Enable Prometheus-style metrics endpoint. Default: false. Type: bool
+# metrics.path – Path for metrics exposition. Default: /metrics. Type: string
+# tracing.enabled – Enable OpenTelemetry tracing middleware. Default: false. Type: bool
+# tracing.endpoint – Collector endpoint used when exporter=otlp (e.g. https://otel/v1/traces). Type: string
+# tracing.exporter – Tracing exporter (none, console, otlp). Default: none. Options: none, console, otlp Type: string
+# tracing.headers – Optional headers forwarded to the OTLP collector (authorization, etc.). Default: {}. Type: map
+# tracing.service_name – Logical service.name attribute reported with every span. Default: "{{ env.OBSERVABILITY_TRACING_SERVICE_NAME | default: 'routed-service' }}". Env override: OBSERVABILITY_TRACING_SERVICE_NAME Type: string
+
+enabled: true
+errors:
+  enabled: false
+health:
+  enabled: true
+  liveness_path: /livez
+  readiness_path: /readyz
+metrics:
+  buckets:
+    - 0.01
+    - 0.05
+    - 0.1
+    - 0.25
+    - 0.5
+    - 1.0
+    - 2.0
+    - 5.0
+  enabled: false
+  path: /metrics
+tracing:
+  enabled: false
+  exporter: none
+  headers:
+  service_name: "{{ env.OBSERVABILITY_TRACING_SERVICE_NAME | default: 'routed-service' }}"
+

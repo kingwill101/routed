@@ -16,6 +16,7 @@ import 'compression.dart';
 import 'rate_limit.dart';
 import 'observability.dart';
 import 'auth.dart';
+import 'localization.dart';
 
 typedef ServiceProviderFactory = ServiceProvider Function();
 
@@ -115,6 +116,11 @@ class ProviderRegistry extends NamedRegistry<ProviderRegistration> {
       'routed.views',
       factory: () => ViewServiceProvider(),
       description: 'View template configuration and engines.',
+    );
+    register(
+      'routed.localization',
+      factory: () => LocalizationServiceProvider(),
+      description: 'Translation loader/translator bindings and defaults.',
     );
   }
 

@@ -1,0 +1,70 @@
+import 'dart:io';
+
+import 'package:routed/routed.dart';
+import 'package:routed_testing/routed_testing.dart';
+import 'package:server_testing/server_testing.dart';
+
+void main() {
+  group('Localization end-to-end', () {
+    late Directory tempDir;
+    late TestClient client;
+
+    setUp(() async {
+      tempDir = Directory.systemTemp.createTempSync('routed_translation_test');
+      _writeTranslation(tempDir.path, 'en', 'greeting: "Hello"\n');
+      _writeTranslation(tempDir.path, 'fr', 'greeting: "Bonjour"\n');
+
+      final engine = Engine(
+        configItems: {
+          'app': {'locale': 'en', 'fallback_locale': 'en'},
+          'translation': {
+            'paths': [tempDir.path],
+            'resolvers': ['query', 'header'],
+            'query': {'parameter': 'lang'},
+          },
+        },
+      );
+
+      engine.get('/greet', (ctx) async {
+        final message = trans('messages.greeting')?.toString() ?? '';
+        ctx.response.write(message);
+        return ctx.response;
+      });
+
+      client = TestClient(RoutedRequestHandler(engine));
+    });
+
+    tearDown(() async {
+      await client.close();
+      if (tempDir.existsSync()) {
+        tempDir.deleteSync(recursive: true);
+      }
+    });
+
+    test('resolves locale via query, header, and fallback', () async {
+      final defaultResp = await client.get('/greet');
+      expect(defaultResp.body, equals('Hello'));
+
+      final queryResp = await client.get('/greet?lang=fr');
+      expect(queryResp.body, equals('Bonjour'));
+
+      final headerResp = await client.get(
+        '/greet',
+        headers: {
+          HttpHeaders.acceptLanguageHeader: ['fr'],
+        },
+      );
+      expect(headerResp.body, equals('Bonjour'));
+
+      final fallbackResp = await client.get('/greet?lang=es');
+      expect(fallbackResp.body, equals('Hello'));
+    });
+  });
+}
+
+void _writeTranslation(String root, String locale, String content) {
+  final file = File('$root/$locale/messages.yaml');
+  file
+    ..createSync(recursive: true)
+    ..writeAsStringSync(content);
+}

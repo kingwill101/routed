@@ -1,0 +1,255 @@
+---
+title: Localization
+sidebar_position: 15
+description: Load translations, detect locales, and render messages
+---
+
+# Localization
+
+Routed ships a file-based translation system with query/header/cookie/session
+locale detection, middleware wiring, helpers, and CLI-friendly defaults. This
+page walks through everything you need to get multi-lingual responses online.
+
+import Tabs from '@theme/Tabs';
+import TabItem from '@theme/TabItem';
+
+## Translation files
+
+Translations live under `resources/lang`. For grouped keys place YAML/JSON
+files inside per-locale directories (`resources/lang/en/messages.yaml`). Put
+flat JSON dictionaries at `resources/lang/en.json` for string-only lookups.
+
+```
+resources/
+  lang/
+    en/
+      messages.yaml
+      validation.yaml
+    en.json
+    fr/
+      messages.yaml
+```
+
+```yaml title="resources/lang/en/messages.yaml"
+greeting: "Hello :name"
+notifications:
+  count: "No notifications|{1} One notification|[2,*] :count notifications"
+```
+
+```yaml title="resources/lang/fr/messages.yaml"
+greeting: "Bonjour :name"
+notifications:
+  count: "Aucune notification|{1} Une notification|[2,*] :count notifications"
+```
+
+## Configure translation paths
+
+Add the localization provider to `config/http.yaml` (it's included by default)
+and point `translation.paths` at your `resources/lang` directory.
+
+```yaml title="config/http.yaml"
+providers:
+  - routed.core
+  - routed.localization
+  - routed.views
+
+translation:
+  paths:
+    - resources/lang
+  json_paths: []
+  namespaces: {}
+  resolvers: [query, cookie, header]
+  resolver_options: {}
+  query:
+    parameter: lang
+  cookie:
+    name: locale
+  session:
+    key: locale
+  header:
+    name: Accept-Language
+```
+
+## Locale middleware
+
+`routed.localization` registers global middleware that resolves the locale once
+per request. The resolver order is configurable (query, cookie, session,
+headers, fallback). The resolved locale is stored on the request context and
+used by helpers.
+
+### Resolver order options
+
+- `query`: looks at `?lang=fr` (parameter name configurable)
+- `cookie`: reads a cookie value (defaults to `locale`)
+- `session`: reads the session key you configure (requires sessions)
+- `header`: parses `Accept-Language` with q-factor weighting
+
+### Custom resolvers
+
+Register custom resolvers using the `LocaleResolverRegistry`. Each resolver
+receives a builder context so you can read per-resolver options from
+`translation.resolver_options.<name>`.
+
+```dart
+import 'package:routed/routed.dart';
+
+LocaleResolverRegistry.instance.register('geoip', (context) {
+  final service = context.config?.get('services.geoip');
+  return GeoIpLocaleResolver(service);
+});
+```
+
+```yaml title="config/http.yaml"
+translation:
+  resolvers: [geoip, header]
+  resolver_options:
+    geoip:
+      fallback: en
+```
+
+Inside the resolver you can inspect `context.options['fallback']` or the shared
+options (query parameter, cookie name, etc.).
+
+:::info Resolver registration timing
+Register resolvers before the localization provider builds its defaults. The
+simplest pattern is to add an engine option that clones/augments the registry
+before calling `Engine.initialize()`:
+
+```dart
+final engine = await Engine.create(options: [
+  (engine) {
+    final registry = engine.container.get<LocaleResolverRegistry>();
+    registry.register('preview', (context) => PreviewResolver());
+  },
+]);
+```
+
+This ensures your custom IDs are available when `translation.resolvers` is
+validated and when docs default values are generated.
+:::
+
+## Rendering translations
+
+Use the helper functions exposed from `package:routed/routed.dart` or inject
+`TranslatorContract` manually from the container.
+
+### Controller / middleware usage
+
+```dart
+import 'package:routed/routed.dart';
+
+router.get('/welcome', (ctx) async {
+  final message = trans('messages.greeting', replacements: {'name': 'Jess'});
+  return Response.json({'message': message});
+});
+```
+
+### Pluralization
+
+```dart
+router.get('/notifications', (ctx) async {
+  final count = await ctx.request.notificationsCount();
+  final summary = transChoice('messages.notifications.count', count);
+  return Response.json({'summary': summary});
+});
+```
+
+### Current locale helper
+
+```dart
+router.get('/locale', (ctx) async {
+  return Response.json({'locale': currentLocale()});
+});
+```
+
+## View templates
+
+Translations can be accessed inside Liquid templates via the `trans` filter.
+
+```liquid title="views/home.liquid"
+<p>{{ 'messages.greeting' | trans: name: user.name }}</p>
+<p>{{ "messages.notifications.count" | transChoice: 3 }}</p>
+```
+
+## Validation messages
+
+Validation rules automatically check `validation.<rule>` keys before falling
+back to built-in messages. Provide overrides in `resources/lang/<locale>/validation.yaml`.
+
+```yaml title="resources/lang/en/validation.yaml"
+required: "Please fill out :attribute."
+email: "Provide a valid email."
+```
+
+```dart
+await ctx.validate({
+  'email': 'required|email',
+});
+```
+
+## API usage examples
+
+<Tabs>
+  <TabItem value="dart" label="Dart">
+
+```dart
+final engine = Engine(
+  configItems: {
+    'translation': {
+      'paths': ['resources/lang'],
+      'resolvers': ['query', 'header'],
+    },
+  },
+);
+
+engine.get('/hello', (ctx) async {
+  return Response.json({
+    'message': trans('messages.greeting', replacements: {'name': 'Routed'}),
+    'locale': currentLocale(),
+  });
+});
+```
+
+  </TabItem>
+  <TabItem value="curl" label="curl">
+
+```bash
+curl http://localhost:8080/hello
+# {"message":"Hello Routed","locale":"en"}
+
+curl http://localhost:8080/hello?lang=fr
+# {"message":"Bonjour Routed","locale":"fr"}
+
+curl -H "Accept-Language: fr" http://localhost:8080/hello
+# {"message":"Bonjour Routed","locale":"fr"}
+```
+
+  </TabItem>
+</Tabs>
+
+## Vendor overrides
+
+Package authors can ship translations under `packages/<pkg>/lang/<locale>` and
+register a namespace in `translation.namespaces`. Applications override vendor
+strings by placing files under `resources/lang/vendor/<namespace>/<locale>`.
+
+```yaml title="config/http.yaml"
+translation:
+  namespaces:
+    auth: packages/routed_auth/lang
+```
+
+```
+resources/lang/vendor/auth/fr/messages.yaml
+```
+
+## CLI workflow
+
+You can pre-cache translations or publish vendor files using the CLI (future
+work), but today you only need to add translations to source control and redeploy.
+
+- Add translation files under `resources/lang`
+- Update `translation.resolvers` to match your locale selection strategy
+- Restart the server so the localization provider reloads resources
+
+That’s it—translations resolve automatically for requests and templates.
