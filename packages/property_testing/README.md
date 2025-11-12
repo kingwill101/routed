@@ -3,7 +3,7 @@
 [![Pub Version](https://img.shields.io/pub/v/property_testing.svg?label=pub&color=2bb7f6)](https://pub.dev/packages/property_testing)
 [![CI](https://github.com/kingwill101/routed/actions/workflows/property_testing.yaml/badge.svg)](https://github.com/kingwill101/routed/actions/workflows/property_testing.yaml)
 [![License](https://img.shields.io/badge/license-MIT-blue.svg)](../../LICENSE)
-[![Sponsor](https://img.shields.io/badge/sponsor-❤-ff69b4?logo=github-sponsors)](https://github.com/sponsors/kingwill101)
+[![Sponsor](https://img.shields.io/badge/support-Buy%20Me%20a%20Coffee-ff813f?logo=buymeacoffee)](https://www.buymeacoffee.com/kingwill101)
 
 Property-based testing utilities for Dart with shrinking, chaos generators, and
 stateful test runners. It powers the Routed ecosystem’s reliability tests but
@@ -111,5 +111,5 @@ void main() {
 ## Funding
 
 If this library saves you time, consider
-[sponsoring @kingwill101 on GitHub](https://github.com/sponsors/kingwill101) to
-help keep the Routed ecosystem maintained.***
+[supporting @kingwill101 on Buy Me a Coffee](https://www.buymeacoffee.com/kingwill101)
+to help keep the Routed ecosystem maintained.***

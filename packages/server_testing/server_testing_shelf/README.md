@@ -3,7 +3,7 @@
 [![Pub Version](https://img.shields.io/pub/v/server_testing_shelf.svg?label=pub&color=2bb7f6)](https://pub.dev/packages/server_testing_shelf)
 [![CI](https://github.com/kingwill101/routed/actions/workflows/server_testing_shelf.yaml/badge.svg)](https://github.com/kingwill101/routed/actions/workflows/server_testing_shelf.yaml)
 [![License](https://img.shields.io/badge/license-MIT-blue.svg)](../../LICENSE)
-[![Sponsor](https://img.shields.io/badge/sponsor-❤-ff69b4?logo=github-sponsors)](https://github.com/sponsors/kingwill101)
+[![Sponsor](https://img.shields.io/badge/support-Buy%20Me%20a%20Coffee-ff813f?logo=buymeacoffee)](https://www.buymeacoffee.com/kingwill101)
 
 Shelf adapter for `server_testing`. It translates between Shelf’s `Request` /
 `Response` objects and the test harness’ `RequestHandler` interface so you can
@@ -53,4 +53,4 @@ void main() {
 ## Funding
 
 Help keep these adapters maintained by
-[sponsoring @kingwill101](https://github.com/sponsors/kingwill101).***
+[supporting @kingwill101 on Buy Me a Coffee](https://www.buymeacoffee.com/kingwill101).***

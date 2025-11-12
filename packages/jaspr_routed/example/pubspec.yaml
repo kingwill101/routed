@@ -1,5 +1,10 @@
 name: jaspr_routed_example
 description: Routed backend example for Jaspr components.
+tags:
+  - example
+  - jaspr
+  - routed
+
 publish_to: none
 
 funding:

@@ -1,5 +1,10 @@
 name: jaspr_routed
 description: Jaspr integration for the Routed backend.
+tags:
+  - jaspr
+  - routed
+  - adapter
+
 version: 0.1.0
 publish_to: none
 

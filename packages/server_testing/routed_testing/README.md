@@ -3,7 +3,7 @@
 [![Pub Version](https://img.shields.io/pub/v/routed_testing.svg?label=pub&color=2bb7f6)](https://pub.dev/packages/routed_testing)
 [![CI](https://github.com/kingwill101/routed/actions/workflows/routed_testing.yaml/badge.svg)](https://github.com/kingwill101/routed/actions/workflows/routed_testing.yaml)
 [![License](https://img.shields.io/badge/license-MIT-blue.svg)](../../LICENSE)
-[![Sponsor](https://img.shields.io/badge/sponsor-❤-ff69b4?logo=github-sponsors)](https://github.com/sponsors/kingwill101)
+[![Sponsor](https://img.shields.io/badge/support-Buy%20Me%20a%20Coffee-ff813f?logo=buymeacoffee)](https://www.buymeacoffee.com/kingwill101)
 
 Routed-specific helpers built on top of `server_testing`. It wires the Routed
 engine into the transport abstractions so you can issue HTTP requests against an
@@ -64,4 +64,4 @@ parameters across transports.
 ## Funding
 
 Help sustain the Routed ecosystem by
-[sponsoring @kingwill101](https://github.com/sponsors/kingwill101).***
+[supporting @kingwill101 on Buy Me a Coffee](https://www.buymeacoffee.com/kingwill101).***

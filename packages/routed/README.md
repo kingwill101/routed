@@ -3,7 +3,7 @@
 [![Pub Version](https://img.shields.io/pub/v/routed.svg?label=pub&color=2bb7f6)](https://pub.dev/packages/routed)
 [![CI](https://github.com/kingwill101/routed/actions/workflows/routed.yaml/badge.svg)](https://github.com/kingwill101/routed/actions/workflows/routed.yaml)
 [![License](https://img.shields.io/badge/license-MIT-blue.svg)](../../LICENSE)
-[![Sponsor](https://img.shields.io/badge/sponsor-❤-ff69b4?logo=github-sponsors)](https://www.buymeacoffee.com/kingwill101)
+[![Sponsor](https://img.shields.io/badge/support-Buy%20Me%20a%20Coffee-ff813f?logo=buymeacoffee)](https://www.buymeacoffee.com/kingwill101)
 
 `routed` is a modular HTTP engine for Dart with first-class routing, middleware,
 configuration, localization, logging, signals, and lifecycle management. It is

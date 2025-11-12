@@ -2,6 +2,11 @@ name: routed_testing
 description: Routed-specific testing utilities that extend server_testing for integration tests.
 version: 0.2.1+1
 repository: https://github.com/kingwill101/routed/tree/master/packages/routed_testing
+tags:
+  - testing
+  - routed
+  - server-testing
+
 funding:
   - https://www.buymeacoffee.com/kingwill101
 

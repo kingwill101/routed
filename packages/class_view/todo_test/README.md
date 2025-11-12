@@ -2,7 +2,7 @@
 
 [![CI](https://github.com/kingwill101/routed/actions/workflows/publish.yaml/badge.svg)](https://github.com/kingwill101/routed/actions/workflows/publish.yaml)
 [![License](https://img.shields.io/badge/license-MIT-blue.svg)](../../../LICENSE)
-[![Sponsor](https://img.shields.io/badge/sponsor-❤-ff69b4?logo=github-sponsors)](https://www.buymeacoffee.com/kingwill101)
+[![Sponsor](https://img.shields.io/badge/support-Buy%20Me%20a%20Coffee-ff813f?logo=buymeacoffee)](https://www.buymeacoffee.com/kingwill101)
 
 Acceptance/perf tests for the `class_view` Todo example. This package is kept in
 the workspace to drive CI scenarios—feel free to copy the patterns when writing

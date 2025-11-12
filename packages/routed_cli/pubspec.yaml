@@ -2,6 +2,11 @@ name: routed_cli
 description: Command-line tooling for the Routed framework with project scaffolding and management commands.
 version: 0.2.1+1
 repository: https://github.com/kingwill101/routed/tree/master/packages/routed_cli
+tags:
+  - cli
+  - routed
+  - scaffolding
+
 funding:
   - https://www.buymeacoffee.com/kingwill101
 

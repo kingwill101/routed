@@ -3,7 +3,7 @@
 [![Pub Version](https://img.shields.io/pub/v/jaspr_routed.svg?label=pub&color=2bb7f6)](https://pub.dev/packages/jaspr_routed)
 [![CI](https://github.com/kingwill101/routed/actions/workflows/publish.yaml/badge.svg)](https://github.com/kingwill101/routed/actions/workflows/publish.yaml)
 [![License](https://img.shields.io/badge/license-MIT-blue.svg)](../../LICENSE)
-[![Sponsor](https://img.shields.io/badge/sponsor-❤-ff69b4?logo=github-sponsors)](https://www.buymeacoffee.com/kingwill101)
+[![Sponsor](https://img.shields.io/badge/support-Buy%20Me%20a%20Coffee-ff813f?logo=buymeacoffee)](https://www.buymeacoffee.com/kingwill101)
 
 A bridge between [jaspr](https://github.com/jessecranford/jaspr) components and
 the Routed engine. It lets you mount jaspr views inside Routed routes and share

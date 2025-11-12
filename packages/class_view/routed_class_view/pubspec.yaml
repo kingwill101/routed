@@ -1,5 +1,10 @@
 name: routed_class_view
 description: Routed framework adapter for class_view - Django-style class-based views for Routed
+tags:
+  - class-view
+  - routed
+  - adapter
+
 version: 1.0.0
 # repository: https://github.com/my_org/my_repo
 

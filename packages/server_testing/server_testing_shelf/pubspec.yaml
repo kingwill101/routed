@@ -2,6 +2,11 @@ name: server_testing_shelf
 description: Adapter for the Shelf package to use server_testing for HTTP testing.
 version: 0.2.1+1
 repository: https://github.com/kingwill101/routed/tree/master/packages/server_testing_shelf
+tags:
+  - testing
+  - shelf
+  - adapter
+
 funding:
   - https://www.buymeacoffee.com/kingwill101
 

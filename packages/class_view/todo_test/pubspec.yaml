@@ -1,5 +1,10 @@
 name: todo_test
 description: A starting point for Dart libraries or applications.
+tags:
+  - class-view
+  - example
+  - tests
+
 version: 1.0.0
 funding:
   - https://www.buymeacoffee.com/kingwill101

@@ -8,3 +8,7 @@ dependencies:
   routed:
     path: ../../packages/routed
   http: ^1.1.0
+tags:
+  - example
+  - routed
+

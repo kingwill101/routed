@@ -1,5 +1,10 @@
 name: class_view_image_field
 description: Optional image field support for the class_view package.
+tags:
+  - class-view
+  - forms
+  - images
+
 version: 0.1.0
 funding:
   - https://www.buymeacoffee.com/kingwill101

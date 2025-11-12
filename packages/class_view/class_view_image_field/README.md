@@ -3,7 +3,7 @@
 [![Pub Version](https://img.shields.io/pub/v/class_view_image_field.svg?label=pub&color=2bb7f6)](https://pub.dev/packages/class_view_image_field)
 [![CI](https://github.com/kingwill101/routed/actions/workflows/publish.yaml/badge.svg)](https://github.com/kingwill101/routed/actions/workflows/publish.yaml)
 [![License](https://img.shields.io/badge/license-MIT-blue.svg)](../../../LICENSE)
-[![Sponsor](https://img.shields.io/badge/sponsor-❤-ff69b4?logo=github-sponsors)](https://www.buymeacoffee.com/kingwill101)
+[![Sponsor](https://img.shields.io/badge/support-Buy%20Me%20a%20Coffee-ff813f?logo=buymeacoffee)](https://www.buymeacoffee.com/kingwill101)
 
 Optional image-field decoder & form widgets for `class_view`. Install this
 package when you need the full image upload pipeline (validation, resizing,

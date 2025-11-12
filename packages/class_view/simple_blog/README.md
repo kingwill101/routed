@@ -2,7 +2,7 @@
 
 [![CI](https://github.com/kingwill101/routed/actions/workflows/publish.yaml/badge.svg)](https://github.com/kingwill101/routed/actions/workflows/publish.yaml)
 [![License](https://img.shields.io/badge/license-MIT-blue.svg)](../../../LICENSE)
-[![Sponsor](https://img.shields.io/badge/sponsor-❤-ff69b4?logo=github-sponsors)](https://www.buymeacoffee.com/kingwill101)
+[![Sponsor](https://img.shields.io/badge/support-Buy%20Me%20a%20Coffee-ff813f?logo=buymeacoffee)](https://www.buymeacoffee.com/kingwill101)
 
 Reference blog application that demonstrates `class_view` in practice. It is not
 published to pub.dev—the code lives in this repo so you can explore widgets,

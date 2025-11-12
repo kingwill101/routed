@@ -1,5 +1,9 @@
 name: localization_example
 description: A new Routed application.
+tags:
+  - example
+  - routed
+
 version: 0.1.0
 publish_to: "none"
 

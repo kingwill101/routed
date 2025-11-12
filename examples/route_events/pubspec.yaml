@@ -1,5 +1,9 @@
 name: route_events
 description: Demonstrates Routed route lifecycle events.
+tags:
+  - example
+  - routed
+
 publish_to: none
 
 funding:

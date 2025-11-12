@@ -17,3 +17,7 @@ dependencies:
 dev_dependencies:
   routed_testing:
   server_testing:
+tags:
+  - example
+  - routed
+

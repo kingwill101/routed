@@ -1,5 +1,9 @@
 name: project_commands_demo
 description: Example Routed project demonstrating custom CLI commands.
+tags:
+  - example
+  - routed
+
 publish_to: 'none'
 version: 0.1.0
 

@@ -3,7 +3,7 @@
 [![Pub Version](https://img.shields.io/pub/v/routed_cli.svg?label=pub&color=2bb7f6)](https://pub.dev/packages/routed_cli)
 [![CI](https://github.com/kingwill101/routed/actions/workflows/publish.yaml/badge.svg)](https://github.com/kingwill101/routed/actions/workflows/publish.yaml)
 [![License](https://img.shields.io/badge/license-MIT-blue.svg)](../../LICENSE)
-[![Sponsor](https://img.shields.io/badge/sponsor-❤-ff69b4?logo=github-sponsors)](https://github.com/sponsors/kingwill101)
+[![Sponsor](https://img.shields.io/badge/support-Buy%20Me%20a%20Coffee-ff813f?logo=buymeacoffee)](https://www.buymeacoffee.com/kingwill101)
 
 Command-line tooling for the Routed framework. It scaffolds projects, manages
 providers and middleware, generates configuration defaults, and offers helpers
@@ -53,5 +53,5 @@ See `lib/src/args/commands` and the tests under `test/` for more examples.
 
 ## Funding
 
-Like the tooling? [Sponsor @kingwill101](https://github.com/sponsors/kingwill101)
+Like the tooling? [Sponsor @kingwill101](https://www.buymeacoffee.com/kingwill101)
 to help keep releases and new commands flowing.***

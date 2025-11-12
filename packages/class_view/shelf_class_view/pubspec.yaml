@@ -1,5 +1,10 @@
 name: shelf_class_view
 description: Shelf framework adapter for class_view - Django-style class-based views for Shelf
+tags:
+  - class-view
+  - shelf
+  - adapter
+
 version: 1.0.0
 # repository: https://github.com/my_org/my_repo
 

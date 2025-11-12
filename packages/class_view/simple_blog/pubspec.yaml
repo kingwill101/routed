@@ -1,5 +1,10 @@
 name: simple_blog
 description: A simple blog application showcasing class_view features with Drift database.
+tags:
+  - class-view
+  - example
+  - blog
+
 version: 1.0.0
 publish_to: none
 funding:

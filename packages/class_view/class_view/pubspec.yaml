@@ -1,5 +1,10 @@
 name: class_view
 description: A class-based view system for Dart web frameworks
+tags:
+  - class-view
+  - forms
+  - mvc
+
 version: 0.1.0
 
 # repository: https://github.com/my_org/my_repo
