@@ -687,8 +687,8 @@ class ConfigLoader {
 
   String? _extractEnv(Map<String, dynamic> source) {
     final probe = ConfigImpl(source);
-    final value = probe.get('app.env');
-    if (value is String && value.isNotEmpty) {
+    final value = probe.get<String>('app.env');
+    if (value != null && value.isNotEmpty) {
       return value;
     }
     return null;

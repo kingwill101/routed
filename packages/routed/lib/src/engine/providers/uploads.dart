@@ -120,37 +120,36 @@ class UploadsServiceProvider extends ServiceProvider
     ]);
     merged.remove('enabled');
 
-    final maxMemory =
-        parseIntLike(merged['max_memory'], context: 'uploads.max_memory') ??
-        existing.maxMemory;
-    final maxFileSize =
-        parseIntLike(
-          merged['max_file_size'],
-          context: 'uploads.max_file_size',
-        ) ??
-        existing.maxFileSize;
-    final maxDiskUsage =
-        parseIntLike(
-          merged['max_disk_usage'],
-          context: 'uploads.max_disk_usage',
-        ) ??
-        existing.maxDiskUsage;
-    final allowedExtensions =
-        parseStringSet(
-          merged['allowed_extensions'],
-          context: 'uploads.allowed_extensions',
-          toLowerCase: true,
-        ) ??
-        existing.allowedExtensions;
-    final directory =
-        parseStringLike(merged['directory'], context: 'uploads.directory') ??
-        existing.uploadDirectory;
-    final filePermissions =
-        parseIntLike(
-          merged['file_permissions'],
-          context: 'uploads.file_permissions',
-        ) ??
-        existing.filePermissions;
+    // Strict validation for invalid types
+    final maxMemoryRaw = merged['max_memory'];
+    final maxMemory = maxMemoryRaw == null ? existing.maxMemory :
+                     maxMemoryRaw is int ? maxMemoryRaw :
+                     throw ProviderConfigException('uploads.max_memory must be an integer');
+
+    final maxFileSizeRaw = merged['max_file_size'];
+    final maxFileSize = maxFileSizeRaw == null ? existing.maxFileSize :
+                       maxFileSizeRaw is int ? maxFileSizeRaw :
+                       throw ProviderConfigException('uploads.max_file_size must be an integer');
+
+    final maxDiskUsageRaw = merged['max_disk_usage'];
+    final maxDiskUsage = maxDiskUsageRaw == null ? existing.maxDiskUsage :
+                        maxDiskUsageRaw is int ? maxDiskUsageRaw :
+                        throw ProviderConfigException('uploads.max_disk_usage must be an integer');
+
+    final allowedExtensionsRaw = merged['allowed_extensions'];
+    final allowedExtensions = allowedExtensionsRaw == null ? existing.allowedExtensions :
+                             allowedExtensionsRaw is List ? _validateStringList(allowedExtensionsRaw, 'uploads.allowed_extensions').toSet() :
+                             throw ProviderConfigException('uploads.allowed_extensions must be a list');
+
+    final directoryRaw = merged['directory'];
+    final directory = directoryRaw == null ? existing.uploadDirectory :
+                     directoryRaw is String ? directoryRaw :
+                     throw ProviderConfigException('uploads.directory must be a string');
+
+    final filePermissionsRaw = merged['file_permissions'];
+    final filePermissions = filePermissionsRaw == null ? existing.filePermissions :
+                           filePermissionsRaw is int ? filePermissionsRaw :
+                           throw ProviderConfigException('uploads.file_permissions must be an integer');
 
     return MultipartConfig(
       maxMemory: maxMemory,
@@ -172,5 +171,17 @@ class UploadsServiceProvider extends ServiceProvider
           a.allowedExtensions.map((e) => e.toLowerCase()).toSet(),
           b.allowedExtensions.map((e) => e.toLowerCase()).toSet(),
         );
+  }
+
+  List<String> _validateStringList(List<dynamic> list, String context) {
+    final result = <String>[];
+    for (var i = 0; i < list.length; i++) {
+      final item = list[i];
+      if (item is! String) {
+        throw ProviderConfigException('$context[$i] must be a string');
+      }
+      result.add(item);
+    }
+    return result;
   }
 }

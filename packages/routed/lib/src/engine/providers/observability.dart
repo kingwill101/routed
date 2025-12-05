@@ -192,13 +192,7 @@ class ObservabilityServiceProvider extends ServiceProvider
       return;
     }
 
-    final enabled =
-        parseBoolLike(
-          config.get('observability.enabled'),
-          context: 'observability.enabled',
-          throwOnInvalid: false,
-        ) ??
-        true;
+    final enabled = config.getBool('observability.enabled', defaultValue: true);
 
     final tracingConfig = _resolveTracingConfig(config);
     _tracing = enabled
@@ -232,7 +226,7 @@ class ObservabilityServiceProvider extends ServiceProvider
     container.instance<HealthEndpointRegistry>(_healthRegistry);
 
     final appConfig = container.get<Config>();
-    final existingGlobal = appConfig.get(
+    final existingGlobal = appConfig.get<Object?>(
       'http.middleware_sources.routed.observability.global',
     );
     final merged = <String>{
@@ -369,32 +363,10 @@ class ObservabilityServiceProvider extends ServiceProvider
       tracingNode ?? const <String, Object?>{},
       'observability.tracing',
     );
-    final enabled =
-        parseBoolLike(
-          node['enabled'],
-          context: 'observability.tracing.enabled',
-          throwOnInvalid: false,
-        ) ??
-        false;
-    final exporter =
-        parseStringLike(
-          node['exporter'],
-          context: 'observability.tracing.exporter',
-          throwOnInvalid: false,
-        )?.toLowerCase() ??
-        'none';
-    final serviceName =
-        parseStringLike(
-          node['service_name'],
-          context: 'observability.tracing.service_name',
-          throwOnInvalid: false,
-        ) ??
-        'routed-service';
-    final endpointValue = parseStringLike(
-      node['endpoint'],
-      context: 'observability.tracing.endpoint',
-      throwOnInvalid: false,
-    );
+    final enabled = node.getBool('enabled');
+    final exporter = node.getString('exporter')?.toLowerCase() ?? 'none';
+    final serviceName = node.getString('service_name') ?? 'routed-service';
+    final endpointValue = node.getString('endpoint');
     final headersNode = node['headers'];
     final headers = <String, String>{};
     if (headersNode is Map) {
@@ -420,20 +392,8 @@ class ObservabilityServiceProvider extends ServiceProvider
       metricsNode ?? const <String, Object?>{},
       'observability.metrics',
     );
-    final enabled =
-        parseBoolLike(
-          node['enabled'],
-          context: 'observability.metrics.enabled',
-          throwOnInvalid: false,
-        ) ??
-        false;
-    final path =
-        parseStringLike(
-          node['path'],
-          context: 'observability.metrics.path',
-          throwOnInvalid: false,
-        ) ??
-        '/metrics';
+    final enabled = node.getBool('enabled');
+    final path = node.getString('path') ?? '/metrics';
     final bucketsNode = node['buckets'];
     final buckets = <double>[0.01, 0.05, 0.1, 0.25, 0.5, 1, 2, 5];
     if (bucketsNode is Iterable) {
@@ -461,27 +421,9 @@ class ObservabilityServiceProvider extends ServiceProvider
       healthNode ?? const <String, Object?>{},
       'observability.health',
     );
-    final enabled =
-        parseBoolLike(
-          node['enabled'],
-          context: 'observability.health.enabled',
-          throwOnInvalid: false,
-        ) ??
-        true;
-    final readiness =
-        parseStringLike(
-          node['readiness_path'],
-          context: 'observability.health.readiness_path',
-          throwOnInvalid: false,
-        ) ??
-        '/readyz';
-    final liveness =
-        parseStringLike(
-          node['liveness_path'],
-          context: 'observability.health.liveness_path',
-          throwOnInvalid: false,
-        ) ??
-        '/livez';
+    final enabled = node.getBool('enabled', defaultValue: true);
+    final readiness = node.getString('readiness_path') ?? '/readyz';
+    final liveness = node.getString('liveness_path') ?? '/livez';
     return _HealthConfig(
       enabled: enabled,
       readinessPath: readiness,

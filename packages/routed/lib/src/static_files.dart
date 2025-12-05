@@ -41,8 +41,16 @@ mixin StaticFileHandler {
     router.head(relativePath, handler);
   }
 
-  void static(String relativePath, String rootPath, {file.FileSystem? fileSystem, bool listDirectory = false}) {
-    staticFS(relativePath, Dir(rootPath, fileSystem: fileSystem, listDirectory: listDirectory));
+  void static(
+    String relativePath,
+    String rootPath, {
+    file.FileSystem? fileSystem,
+    bool listDirectory = false,
+  }) {
+    staticFS(
+      relativePath,
+      Dir(rootPath, fileSystem: fileSystem, listDirectory: listDirectory),
+    );
   }
 
   void staticFS(String relativePath, Dir dir) {

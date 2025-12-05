@@ -193,9 +193,11 @@ class FileHandler {
   /// The [request] parameter specifies the HTTP request.
   /// The [filePath] parameter specifies the file path to serve.
   /// The [fileStat] parameter specifies the file statistics.
-  Future<void> _serveFile(EngineContext ctx,
-      String filePath,
-      FileStat fileStat,) async {
+  Future<void> _serveFile(
+    EngineContext ctx,
+    String filePath,
+    FileStat fileStat,
+  ) async {
     final file = fileSystem.file(p.join(rootPath, filePath));
 
     // Conditional request handling

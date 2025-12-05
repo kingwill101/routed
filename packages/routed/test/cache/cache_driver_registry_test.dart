@@ -581,7 +581,6 @@ class _RecordingStoreFactory implements StoreFactory {
 }
 
 class _NoopStore implements Store {
-
   @override
   FutureOr<bool> decrement(String key, [int value = 1]) async => true;
 

@@ -108,29 +108,11 @@ class CompressionServiceProvider extends ServiceProvider
   }
 
   CompressionOptions _buildOptions(Config config) {
-    final enabled =
-        parseBoolLike(
-          config.get('compression.enabled'),
-          context: 'compression.enabled',
-          stringMappings: const {'true': true, 'false': false},
-        ) ??
-        true;
+    final enabled = config.getBool('compression.enabled', defaultValue: true);
 
-    final minLength =
-        parseIntLike(
-          config.get('compression.min_length'),
-          context: 'compression.min_length',
-          nonNegative: true,
-        ) ??
-        1024;
-
-    final algorithmNames =
-        parseStringList(
-          config.get('compression.algorithms'),
-          context: 'compression.algorithms',
-          allowEmptyResult: true,
-        ) ??
-        _defaultAlgorithms;
+    final minLength = config.getInt('compression.min_length', defaultValue: 1024);
+    
+    final algorithmNames = config.getStringListOrNull('compression.algorithms') ?? _defaultAlgorithms;
 
     final algorithms = algorithmNames
         .map(parseCompressionAlgorithm)
@@ -138,21 +120,9 @@ class CompressionServiceProvider extends ServiceProvider
         .where(isAlgorithmSupported)
         .toList(growable: false);
 
-    final allowList =
-        parseStringList(
-          config.get('compression.mime_allow'),
-          context: 'compression.mime_allow',
-          allowEmptyResult: true,
-        ) ??
-        _defaultMimeAllow;
+    final allowList = config.getStringListOrNull('compression.mime_allow') ?? _defaultMimeAllow;
 
-    final denyList =
-        parseStringList(
-          config.get('compression.mime_deny'),
-          context: 'compression.mime_deny',
-          allowEmptyResult: true,
-        ) ??
-        _defaultMimeDeny;
+    final denyList = config.getStringListOrNull('compression.mime_deny') ?? _defaultMimeDeny;
 
     return CompressionOptions(
       enabled: enabled && algorithms.isNotEmpty,

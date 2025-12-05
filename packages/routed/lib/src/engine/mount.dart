@@ -47,10 +47,7 @@ class WebSocketEngineRoute {
         }
       }
 
-      return MapEntry(
-        key,
-        EngineRoute._castParameter(decodedValue, info.type),
-      );
+      return MapEntry(key, EngineRoute._castParameter(decodedValue, info.type));
     });
   }
 }

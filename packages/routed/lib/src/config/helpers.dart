@@ -4,7 +4,7 @@ import 'package:routed/src/contracts/contracts.dart';
 
 /// Retrieves a configuration value using dot notation (e.g. `app.name`).
 T? configValue<T>(String key, [T? defaultValue]) {
-  final value = Config.current.get(key, defaultValue);
+  final value = Config.current.get<T>(key, defaultValue);
   return value == null ? defaultValue : value as T?;
 }
 
@@ -23,7 +23,7 @@ Map<String, dynamic> configNamespace(String? namespace) {
   if (namespace == null || namespace.isEmpty) {
     return Config.current.all();
   }
-  final value = Config.current.get(namespace);
+  final value = Config.current.get<Map<String, dynamic>>(namespace);
   if (value is Map<String, dynamic>) {
     return value;
   }

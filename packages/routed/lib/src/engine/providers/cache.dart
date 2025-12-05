@@ -153,20 +153,20 @@ class CacheServiceProvider extends ServiceProvider with ProvidesDefaultConfig {
 
   CacheManager _buildManager(Container container, Config config) {
     final manager = CacheManager(container: container);
-    final cacheNode = config.get('cache');
+    final cacheNode = config.get<Object?>('cache');
     if (cacheNode != null && cacheNode is! Map) {
       throw ProviderConfigException('cache must be a map');
     }
 
     final storesMap = _readMap(config.get('cache.stores'), 'cache.stores');
 
-    final defaultNode = config.get('cache.default');
+    final defaultRaw = config.get('cache.default');
     String? defaultStoreName;
-    if (defaultNode != null) {
-      if (defaultNode is! String) {
+    if (defaultRaw != null) {
+      if (defaultRaw is! String) {
         throw ProviderConfigException('cache.default must be a string');
       }
-      final trimmed = defaultNode.trim();
+      final trimmed = defaultRaw.trim();
       if (trimmed.isEmpty) {
         throw ProviderConfigException('cache.default must be a string');
       }
@@ -232,7 +232,7 @@ class CacheServiceProvider extends ServiceProvider with ProvidesDefaultConfig {
 
   String? _resolveCachePrefix(Config config) {
     if (config.has('cache.prefix')) {
-      final value = config.get('cache.prefix');
+      final value = config.get<String?>('cache.prefix');
       if (value == null) {
         return '';
       }
@@ -242,7 +242,7 @@ class CacheServiceProvider extends ServiceProvider with ProvidesDefaultConfig {
       throw ProviderConfigException('cache.prefix must be a string');
     }
     if (config.has('cache.key_prefix')) {
-      final value = config.get('cache.key_prefix');
+      final value = config.get<String?>('cache.key_prefix');
       if (value == null) {
         return '';
       }
@@ -252,7 +252,7 @@ class CacheServiceProvider extends ServiceProvider with ProvidesDefaultConfig {
       throw ProviderConfigException('cache.key_prefix must be a string');
     }
     if (config.has('app.cache_prefix')) {
-      final value = config.get('app.cache_prefix');
+      final value = config.get<String?>('app.cache_prefix');
       if (value == null) {
         return '';
       }

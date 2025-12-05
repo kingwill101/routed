@@ -115,9 +115,10 @@ class _LimitedHttpRequestWrapper implements HttpRequest {
 
   @override
   @override
-  Future<S> fold<S>(S initialValue,
-      S Function(S previous, Uint8List element) combine,) =>
-      _limitedStream.cast<Uint8List>().fold(initialValue, combine);
+  Future<S> fold<S>(
+    S initialValue,
+    S Function(S previous, Uint8List element) combine,
+  ) => _limitedStream.cast<Uint8List>().fold(initialValue, combine);
 
   @override
   @override

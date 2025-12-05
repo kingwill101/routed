@@ -154,47 +154,13 @@ class CorsServiceProvider extends ServiceProvider with ProvidesDefaultConfig {
       return existing;
     }
 
-    final enabled =
-        parseBoolLike(
-          merged['enabled'],
-          context: 'cors.enabled',
-          stringMappings: const {'true': true, 'false': false},
-        ) ??
-        existing.enabled;
-    final allowedOrigins =
-        parseStringList(
-          merged['allowed_origins'],
-          context: 'cors.allowed_origins',
-        ) ??
-        existing.allowedOrigins;
-    final allowedMethods =
-        parseStringList(
-          merged['allowed_methods'],
-          context: 'cors.allowed_methods',
-        ) ??
-        existing.allowedMethods;
-    final allowedHeaders =
-        parseStringList(
-          merged['allowed_headers'],
-          context: 'cors.allowed_headers',
-        ) ??
-        existing.allowedHeaders;
-    final allowCredentials =
-        parseBoolLike(
-          merged['allow_credentials'],
-          context: 'cors.allow_credentials',
-          stringMappings: const {'true': true, 'false': false},
-        ) ??
-        existing.allowCredentials;
-    final maxAge =
-        parseIntLike(merged['max_age'], context: 'cors.max_age') ??
-        existing.maxAge;
-    final exposedHeaders =
-        parseStringList(
-          merged['exposed_headers'],
-          context: 'cors.exposed_headers',
-        ) ??
-        existing.exposedHeaders;
+    final enabled = merged.getBool('enabled', defaultValue: existing.enabled);
+    final allowedOrigins = merged.getStringList('allowed_origins') ?? existing.allowedOrigins;
+    final allowedMethods = merged.getStringList('allowed_methods') ?? existing.allowedMethods;
+    final allowedHeaders = merged.getStringList('allowed_headers') ?? existing.allowedHeaders;
+    final allowCredentials = merged.getBool('allow_credentials', defaultValue: existing.allowCredentials);
+    final maxAge = merged.getInt('max_age') ?? existing.maxAge;
+    final exposedHeaders = merged.getStringList('exposed_headers') ?? existing.exposedHeaders;
 
     return CorsConfig(
       enabled: enabled,
@@ -232,67 +198,47 @@ class CorsServiceProvider extends ServiceProvider with ProvidesDefaultConfig {
       final value = entry.value;
       switch (key) {
         case 'enabled':
-          final parsed = parseBoolLike(
-            value,
-            context: 'cors.enabled',
-            stringMappings: const {'true': true, 'false': false},
-          );
-          if (parsed != null && parsed != _defaultCors.enabled) {
+          final parsed = {key: value}.getBool(key);
+          if (parsed != _defaultCors.enabled) {
             return false;
           }
           break;
         case 'allow_credentials':
-          final parsed = parseBoolLike(
-            value,
-            context: 'cors.allow_credentials',
-            stringMappings: const {'true': true, 'false': false},
-          );
-          if (parsed != null && parsed != _defaultCors.allowCredentials) {
+          final parsed = {key: value}.getBool(key);
+          if (parsed != _defaultCors.allowCredentials) {
             return false;
           }
           break;
         case 'allowed_origins':
-          final parsed = parseStringList(
-            value,
-            context: 'cors.allowed_origins',
-          );
+          final parsed = {key: value}.getStringList(key);
           if (parsed != null &&
               !_listEquality.equals(parsed, _defaultCors.allowedOrigins)) {
             return false;
           }
           break;
         case 'allowed_methods':
-          final parsed = parseStringList(
-            value,
-            context: 'cors.allowed_methods',
-          );
+          final parsed = {key: value}.getStringList(key);
           if (parsed != null &&
               !_listEquality.equals(parsed, _defaultCors.allowedMethods)) {
             return false;
           }
           break;
         case 'allowed_headers':
-          final parsed = parseStringList(
-            value,
-            context: 'cors.allowed_headers',
-          );
+          final parsed = {key: value}.getStringList(key);
           if (parsed != null &&
               !_listEquality.equals(parsed, _defaultCors.allowedHeaders)) {
             return false;
           }
           break;
         case 'exposed_headers':
-          final parsed = parseStringList(
-            value,
-            context: 'cors.exposed_headers',
-          );
+          final parsed = {key: value}.getStringList(key);
           if (parsed != null &&
               !_listEquality.equals(parsed, _defaultCors.exposedHeaders)) {
             return false;
           }
           break;
         case 'max_age':
-          final parsed = parseIntLike(value, context: 'cors.max_age');
+          final parsed = {key: value}.getInt(key);
           if (parsed != _defaultCors.maxAge) {
             return false;
           }

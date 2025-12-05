@@ -31,6 +31,7 @@ void main() {
           );
           response
             ..assertStatus(HttpStatus.ok)
+            ..dump()
             ..assertHeader('Access-Control-Allow-Origin', '*')
             ..assertHeaderContains('Access-Control-Allow-Methods', ['GET']);
         });

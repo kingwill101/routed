@@ -145,49 +145,25 @@ class LocalizationServiceProvider extends ServiceProvider
         : null;
     final fs = engineConfig?.fileSystem ?? _fallbackFileSystem;
     final loader = FileTranslationLoader(fileSystem: fs);
-    final translationNode = config?.get('translation');
+    final translationNode = config?.get<Object>('translation');
     if (translationNode != null && translationNode is! Map) {
       throw ProviderConfigException('translation must be a map');
     }
 
-    final paths =
-        parseStringList(
-          config?.get('translation.paths'),
-          context: 'translation.paths',
-          allowEmptyResult: true,
-        ) ??
-        const ['resources/lang'];
+    final paths = config?.getStringListOrNull('translation.paths') ?? const ['resources/lang'];
     loader.setPaths(paths);
 
-    final jsonPaths =
-        parseStringList(
-          config?.get('translation.json_paths'),
-          context: 'translation.json_paths',
-          allowEmptyResult: true,
-        ) ??
-        const <String>[];
+    final jsonPaths = config?.getStringListOrNull('translation.json_paths') ?? const <String>[];
     loader.setJsonPaths(jsonPaths);
 
-    final Object? namespaceNode = config?.get('translation.namespaces');
-    loader.setNamespaces(
-      namespaceNode == null
-          ? <String, String>{}
-          : parseStringMap(namespaceNode, context: 'translation.namespaces'),
-    );
+    loader.setNamespaces(config?.getStringMap('translation.namespaces') ?? const <String, String>{});
 
     return loader;
   }
 
   _LocaleConfig _resolveLocaleConfig(Config? config) {
-    final defaultLocale =
-        parseStringLike(config?.get('app.locale'), context: 'app.locale') ??
-        'en';
-    final fallback =
-        parseStringLike(
-          config?.get('app.fallback_locale'),
-          context: 'app.fallback_locale',
-        ) ??
-        defaultLocale;
+    final defaultLocale = config?.getString('app.locale', defaultValue: 'en') ?? 'en';
+    final fallback = config?.getStringOrNull('app.fallback_locale') ?? defaultLocale;
     return _LocaleConfig(
       defaultLocale: defaultLocale,
       fallbackLocale: fallback,
@@ -210,37 +186,11 @@ class LocalizationServiceProvider extends ServiceProvider
     Config? config,
     LocaleResolverRegistry registry,
   ) {
-    final resolvers =
-        parseStringList(
-          config?.get('translation.resolvers'),
-          context: 'translation.resolvers',
-          allowEmptyResult: false,
-        ) ??
-        _resolverDefaults();
-    final queryParameter =
-        parseStringLike(
-          config?.get('translation.query.parameter'),
-          context: 'translation.query.parameter',
-        ) ??
-        'locale';
-    final cookieName =
-        parseStringLike(
-          config?.get('translation.cookie.name'),
-          context: 'translation.cookie.name',
-        ) ??
-        'locale';
-    final sessionKey =
-        parseStringLike(
-          config?.get('translation.session.key'),
-          context: 'translation.session.key',
-        ) ??
-        'locale';
-    final headerName =
-        parseStringLike(
-          config?.get('translation.header.name'),
-          context: 'translation.header.name',
-        ) ??
-        'Accept-Language';
+    final resolvers = config?.getStringListOrNull('translation.resolvers') ?? _resolverDefaults();
+    final queryParameter = config?.getStringOrNull('translation.query.parameter') ?? 'locale';
+    final cookieName = config?.getStringOrNull('translation.cookie.name') ?? 'locale';
+    final sessionKey = config?.getStringOrNull('translation.session.key') ?? 'locale';
+    final headerName = config?.getStringOrNull('translation.header.name') ?? 'Accept-Language';
 
     final options = _ResolverOptions(
       queryParameter: queryParameter,

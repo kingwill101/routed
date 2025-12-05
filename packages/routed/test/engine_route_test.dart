@@ -180,13 +180,12 @@ Generator<ParameterSample> _parameterSampleGenerator() {
       }
 
       return caseInfo.invalidGen.map(
-                (segment) =>
-            (
-            caseInfo: caseInfo,
-            path: caseInfo.buildPath(segment),
-            shouldMatch: false,
-            expectedValue: null,
-            ),
+        (segment) => (
+          caseInfo: caseInfo,
+          path: caseInfo.buildPath(segment),
+          shouldMatch: false,
+          expectedValue: null,
+        ),
       );
     }),
   );

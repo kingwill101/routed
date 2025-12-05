@@ -146,13 +146,7 @@ class StaticAssetsServiceProvider extends ServiceProvider
   }
 
   _StaticConfig _resolveStaticConfig(Config config) {
-    var enabled =
-        parseBoolLike(
-          config.get('static.enabled'),
-          context: 'static.enabled',
-          stringMappings: const {'true': true, 'false': false},
-        ) ??
-        false;
+    var enabled = config.getBool('static.enabled');
     final mounts = <_StaticMount>[];
 
     void addMount(Map<String, dynamic> node, int index) {
@@ -167,12 +161,12 @@ class StaticAssetsServiceProvider extends ServiceProvider
       }
     }
 
-    final staticNode = config.get('static');
+    final staticNode = config.get<Map<dynamic, dynamic>?>('static');
     if (staticNode != null && staticNode is! Map) {
       throw ProviderConfigException('static must be a map');
     }
 
-    final mountsNode = config.get('static.mounts');
+    final mountsNode = config.get<Iterable<dynamic>?>('static.mounts');
     if (mountsNode is Iterable) {
       var idx = 0;
       for (final entry in mountsNode) {
@@ -231,63 +225,28 @@ class _StaticMount {
     required String contextPath,
   }) {
     final hasRouteKey = node.containsKey('route') || node.containsKey('prefix');
-    final rawRoute =
-        parseStringLike(
-          node.containsKey('route') ? node['route'] : node['prefix'],
-          context: '$contextPath.route',
-          allowEmpty: true,
-          coerceNonString: false,
-          throwOnInvalid: hasRouteKey,
-        ) ??
-        '/';
+    final rawRoute = node.getString('route', allowEmpty: true) ?? node.getString('prefix', allowEmpty: true) ?? '/';
     final route = _normalizeRoute(rawRoute);
 
-    final diskName = parseStringLike(
-      node['disk'],
-      context: '$contextPath.disk',
-      allowEmpty: false,
-      coerceNonString: false,
-      throwOnInvalid: node.containsKey('disk'),
-    );
+    final diskRaw = node['disk'];
+    String? diskName;
+    if (diskRaw != null) {
+      if (diskRaw is! String) {
+        throw ProviderConfigException('$contextPath.disk must be a string');
+      }
+      diskName = diskRaw;
+    }
     final pathValue = node.containsKey('path')
         ? node['path']
         : node['directory'];
-    final relativePath =
-        parseStringLike(
-          pathValue,
-          context: '$contextPath.path',
-          allowEmpty: true,
-          coerceNonString: true,
-          throwOnInvalid: pathValue != null,
-        ) ??
-        '';
+    final relativePath = node.getString('path', allowEmpty: true) ?? '';
 
-    final indexToken = parseStringLike(
-      node['index'],
-      context: '$contextPath.index',
-      allowEmpty: true,
-      coerceNonString: true,
-      throwOnInvalid: false,
-    );
+    final indexToken = node.getString('index', allowEmpty: true);
     final indexFile = indexToken == null || indexToken.isEmpty
         ? null
         : indexToken;
 
-    final listDirectories =
-        (parseBoolLike(
-              node['list_directories'],
-              context: '$contextPath.list_directories',
-              stringMappings: const {'true': true, 'false': false},
-              throwOnInvalid: false,
-            ) ??
-            false) ||
-        (parseBoolLike(
-              node['directory_listing'],
-              context: '$contextPath.directory_listing',
-              stringMappings: const {'true': true, 'false': false},
-              throwOnInvalid: false,
-            ) ??
-            false);
+    final listDirectories = node.getBool('list_directories') || node.getBool('directory_listing');
 
     final normalizedDiskName = diskName == null || diskName.isEmpty
         ? null
@@ -306,15 +265,7 @@ class _StaticMount {
       }
       effectiveFs = customFs;
       final fsPath = effectiveFs.path;
-      final rootValue =
-          parseStringLike(
-            node['root'],
-            context: '$contextPath.root',
-            allowEmpty: true,
-            coerceNonString: true,
-            throwOnInvalid: false,
-          ) ??
-          '';
+      final rootValue = node.getString('root', allowEmpty: true) ?? '';
       final current = effectiveFs.currentDirectory.path;
       final resolvedRoot = rootValue.isEmpty
           ? current

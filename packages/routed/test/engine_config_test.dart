@@ -312,8 +312,8 @@ void main() {
         addTearDown(() async => await engine.close());
         await engine.initialize();
 
-        expect(engine.appConfig.get('uploads.max_memory'), equals(1024));
-        expect(engine.appConfig.get('uploads.max_file_size'), equals(2048));
+        expect(engine.appConfig.getInt('uploads.max_memory'), equals(1024));
+        expect(engine.appConfig.getInt('uploads.max_file_size'), equals(2048));
         final extensions =
             (engine.appConfig.get('uploads.allowed_extensions')
                     as List<dynamic>?)
@@ -359,6 +359,9 @@ void main() {
 
       test('withCors updates config and engine values', () async {
         final engine = Engine(
+          configItems: {
+            'logging': {'enabled': false},
+          },
           options: [
             withCors(
               enabled: true,
@@ -374,23 +377,23 @@ void main() {
         addTearDown(() async => await engine.close());
         await engine.initialize();
 
-        expect(engine.appConfig.get('cors.enabled'), isTrue);
+        expect(engine.appConfig.getBool('cors.enabled'), isTrue);
         expect(
-          engine.appConfig.get('cors.allowed_origins'),
+          engine.appConfig.getStringListOrNull('cors.allowed_origins'),
           equals(['https://foo.dev']),
         );
         expect(
-          engine.appConfig.get('cors.allowed_methods'),
+          engine.appConfig.getStringListOrNull('cors.allowed_methods'),
           equals(['GET', 'PATCH']),
         );
         expect(
-          engine.appConfig.get('cors.allowed_headers'),
+          engine.appConfig.getStringListOrNull('cors.allowed_headers'),
           equals(['Content-Type']),
         );
-        expect(engine.appConfig.get('cors.allow_credentials'), isTrue);
-        expect(engine.appConfig.get('cors.max_age'), equals(900));
+        expect(engine.appConfig.getBool('cors.allow_credentials'), isTrue);
+        expect(engine.appConfig.getInt('cors.max_age'), equals(900));
         expect(
-          engine.appConfig.get('cors.exposed_headers'),
+          engine.appConfig.getStringListOrNull('cors.exposed_headers'),
           equals(['X-Custom']),
         );
 
@@ -563,7 +566,10 @@ void main() {
   group('Engine options', () {
     test('withMaxRequestSize updates security config', () {
       final engine = Engine(options: [withMaxRequestSize(2048)]);
-      expect(engine.appConfig.get('security.max_request_size'), equals(2048));
+      expect(
+        engine.appConfig.getInt('security.max_request_size'),
+        equals(2048),
+      );
     });
   });
 
@@ -640,7 +646,9 @@ void main() {
     final engine = Engine();
     withTrustedProxies(['10.0.0.0/8'])(engine);
 
-    final proxies = engine.appConfig.get('security.trusted_proxies.proxies');
+    final proxies = engine.appConfig.getStringListOrNull(
+      'security.trusted_proxies.proxies',
+    );
     expect(proxies, contains('10.0.0.0/8'));
   });
 

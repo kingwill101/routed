@@ -161,52 +161,20 @@ class SecurityServiceProvider extends ServiceProvider
   ) {
     _validateSecurityConfig(config);
 
-    final trustedNode = config.get('security.trusted_proxies');
+    final trustedNode = config.get<Object?>('security.trusted_proxies');
     if (trustedNode != null && trustedNode is! Map && trustedNode is! Config) {
       throw ProviderConfigException('security.trusted_proxies must be a map');
     }
 
     final engineConfig = container.get<EngineConfig>();
 
-    final enabled =
-        parseBoolLike(
-          config.get('security.trusted_proxies.enabled'),
-          context: 'security.trusted_proxies.enabled',
-          stringMappings: const {'true': true, 'false': false},
-        ) ??
-        engineConfig.features.enableProxySupport;
+    final enabled = config.getBool('security.trusted_proxies.enabled', defaultValue: engineConfig.features.enableProxySupport);
 
-    final forward =
-        parseBoolLike(
-          config.get('security.trusted_proxies.forward_client_ip'),
-          context: 'security.trusted_proxies.forward_client_ip',
-          stringMappings: const {'true': true, 'false': false},
-        ) ??
-        engineConfig.forwardedByClientIP;
+    final forward = config.getBool('security.trusted_proxies.forward_client_ip', defaultValue: engineConfig.forwardedByClientIP);
 
-    final proxies =
-        parseStringList(
-          config.get('security.trusted_proxies.proxies'),
-          context: 'security.trusted_proxies.proxies',
-          allowEmptyResult: true,
-          coerceNonStringEntries: false,
-        ) ??
-        const [];
-    final headers =
-        parseStringList(
-          config.get('security.trusted_proxies.headers'),
-          context: 'security.trusted_proxies.headers',
-          allowEmptyResult: true,
-          coerceNonStringEntries: false,
-        ) ??
-        const [];
-    final platform = parseStringLike(
-      config.get('security.trusted_proxies.platform_header'),
-      context: 'security.trusted_proxies.platform_header',
-      allowEmpty: true,
-      coerceNonString: true,
-      throwOnInvalid: false,
-    );
+    final proxies = config.getStringListOrNull('security.trusted_proxies.proxies') ?? const [];
+    final headers = config.getStringListOrNull('security.trusted_proxies.headers') ?? const [];
+    final platform = config.getStringOrNull('security.trusted_proxies.platform_header', allowEmpty: true);
 
     return TrustedProxyResolver(
       enabled: enabled,
@@ -250,28 +218,17 @@ class SecurityServiceProvider extends ServiceProvider
   }
 
   IpFilter _buildIpFilter(Config config) {
-    final node = config.get('security.ip_filter');
+    final node = config.get<Object?>('security.ip_filter');
     if (node == null) {
       return IpFilter.disabled();
     }
 
-    final enabled =
-        parseBoolLike(
-          config.get('security.ip_filter.enabled'),
-          context: 'security.ip_filter.enabled',
-          stringMappings: const {'true': true, 'false': false},
-        ) ??
-        false;
+    final enabled = config.getBool('security.ip_filter.enabled');
     if (!enabled) {
       return IpFilter.disabled();
     }
 
-    final actionRaw = parseStringLike(
-      config.get('security.ip_filter.default_action'),
-      context: 'security.ip_filter.default_action',
-      allowEmpty: false,
-      throwOnInvalid: false,
-    )?.toLowerCase();
+    final actionRaw = config.getStringOrNull('security.ip_filter.default_action')?.toLowerCase();
     final defaultAction = actionRaw == 'deny'
         ? IpFilterAction.deny
         : IpFilterAction.allow;
@@ -281,31 +238,11 @@ class SecurityServiceProvider extends ServiceProvider
       );
     }
 
-    final allowEntries =
-        parseStringList(
-          config.get('security.ip_filter.allow'),
-          context: 'security.ip_filter.allow',
-          allowEmptyResult: true,
-          coerceNonStringEntries: false,
-        ) ??
-        const <String>[];
+    final allowEntries = config.getStringListOrNull('security.ip_filter.allow') ?? const <String>[];
 
-    final denyEntries =
-        parseStringList(
-          config.get('security.ip_filter.deny'),
-          context: 'security.ip_filter.deny',
-          allowEmptyResult: true,
-          coerceNonStringEntries: false,
-        ) ??
-        const <String>[];
+    final denyEntries = config.getStringListOrNull('security.ip_filter.deny') ?? const <String>[];
 
-    final respectProxies =
-        parseBoolLike(
-          config.get('security.ip_filter.respect_trusted_proxies'),
-          context: 'security.ip_filter.respect_trusted_proxies',
-          stringMappings: const {'true': true, 'false': false},
-        ) ??
-        true;
+    final respectProxies = config.getBool('security.ip_filter.respect_trusted_proxies', defaultValue: true);
 
     List<NetworkMatcher> parseNetworks(List<String> entries, String context) {
       final result = <NetworkMatcher>[];
@@ -337,58 +274,56 @@ class SecurityServiceProvider extends ServiceProvider
   }
 
   void _validateSecurityConfig(Config config) {
-    final securityNode = config.get('security');
-    if (securityNode == null) {
+    final securityRaw = config.get('security');
+    if (securityRaw == null) {
       return;
     }
-    if (securityNode is! Map) {
+    if (securityRaw is! Map) {
       throw ProviderConfigException('security must be a map');
     }
 
-    final maxRequestSize = config.get('security.max_request_size');
-    if (maxRequestSize != null) {
-      final parsed = parseIntLike(
-        maxRequestSize,
-        context: 'security.max_request_size',
-        nonNegative: true,
-      );
-      config.set('security.max_request_size', parsed);
+    final maxRequestSizeRaw = config.get('security.max_request_size');
+    if (maxRequestSizeRaw != null) {
+      if (maxRequestSizeRaw is! int) {
+        throw ProviderConfigException('security.max_request_size must be an integer');
+      }
+      if (maxRequestSizeRaw < 0) {
+        throw ProviderConfigException('security.max_request_size must be zero or positive');
+      }
+      config.set('security.max_request_size', maxRequestSizeRaw);
     }
 
-    final headersNode = config.get('security.headers');
-    if (headersNode != null) {
-      final sanitized = parseStringMap(
-        headersNode as Object,
-        context: 'security.headers',
-      );
+    final headersRaw = config.get('security.headers');
+    if (headersRaw != null) {
+      if (headersRaw is! Map) {
+        throw ProviderConfigException('security.headers must be a map');
+      }
+      final sanitized = {for (final entry in (headersRaw as Map).entries) entry.key.toString(): entry.value.toString()};
       config.set('security.headers', sanitized);
     }
 
-    final csrfNode = config.get('security.csrf');
-    if (csrfNode == null) {
+    final csrfRaw = config.get('security.csrf');
+    if (csrfRaw == null) {
       return;
     }
-    if (csrfNode is! Map) {
+    if (csrfRaw is! Map) {
       throw ProviderConfigException('security.csrf must be a map');
     }
 
-    final enabledNode = config.get('security.csrf.enabled');
-    if (enabledNode != null) {
-      final enabled = parseBoolLike(
-        enabledNode,
-        context: 'security.csrf.enabled',
-        stringMappings: const {'true': true, 'false': false},
-      );
-      config.set('security.csrf.enabled', enabled ?? true);
+    final enabledRaw = config.get('security.csrf.enabled');
+    if (enabledRaw != null) {
+      if (enabledRaw is! bool) {
+        throw ProviderConfigException('security.csrf.enabled must be a boolean');
+      }
+      config.set('security.csrf.enabled', enabledRaw);
     }
 
-    final cookieNode = config.get('security.csrf.cookie_name');
-    if (cookieNode != null) {
-      final cookieName = parseStringLike(
-        cookieNode,
-        context: 'security.csrf.cookie_name',
-      );
-      config.set('security.csrf.cookie_name', cookieName);
+    final cookieRaw = config.get('security.csrf.cookie_name');
+    if (cookieRaw != null) {
+      if (cookieRaw is! String) {
+        throw ProviderConfigException('security.csrf.cookie_name must be a string');
+      }
+      config.set('security.csrf.cookie_name', cookieRaw);
     }
   }
 }

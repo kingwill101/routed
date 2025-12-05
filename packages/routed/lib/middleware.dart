@@ -3,6 +3,7 @@
 /// Import this file to wire middleware individually instead of pulling the
 /// entire framework barrel.
 library;
+
 export 'src/middleware/basic_auth.dart';
 export 'src/middleware/compression.dart';
 export 'src/middleware/cors.dart';

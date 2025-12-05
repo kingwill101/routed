@@ -33,7 +33,11 @@ class Signal<T extends Event> {
       handler: key == null ? handler : null,
       key: key,
     );
-    final entry = SignalHandlerEntry(handler: handler, sender: sender, key: key);
+    final entry = SignalHandlerEntry(
+      handler: handler,
+      sender: sender,
+      key: key,
+    );
     final previous = _handlers[handlerKey];
     if (previous != null) {
       previous.active = false;

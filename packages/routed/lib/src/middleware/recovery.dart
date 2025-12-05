@@ -60,9 +60,11 @@ Middleware recoveryMiddleware({RecoveryHandler? handler}) {
 ///
 /// This function sends a JSON response with a 500 Internal Server Error status code
 /// if the context is not already closed.
-void _defaultRecoveryHandler(EngineContext ctx,
-    Object error,
-    StackTrace stack,) {
+void _defaultRecoveryHandler(
+  EngineContext ctx,
+  Object error,
+  StackTrace stack,
+) {
   // Default handler intentionally left blank. The middleware will emit
   // the fallback response when the handler does not override it.
 }

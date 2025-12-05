@@ -8,7 +8,8 @@ import 'package:routed_testing/routed_testing.dart';
 import 'package:server_testing/server_testing.dart';
 import 'package:path/path.dart' as p;
 
-import '../example/todo_app/main.dart' as todo_app;
+// ignore: avoid_relative_lib_imports
+import '../example/todo_app/lib/app.dart' as todo_app show createTodoApp;
 
 Future<void> main() async {
   final chatEngine = await _createChatEngine();
@@ -17,11 +18,7 @@ Future<void> main() async {
   final chatBaseUrl = 'http://127.0.0.1:$chatPort';
 
   final exampleRoot = Directory(
-    p.join(
-      Directory.current.path,
-      'example',
-      'todo_app',
-    ),
+    p.join(Directory.current.path, 'example', 'todo_app'),
   );
   if (!exampleRoot.existsSync()) {
     throw StateError('Todo example assets missing at ${exampleRoot.path}');

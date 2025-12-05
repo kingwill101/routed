@@ -22,7 +22,7 @@ abstract class Config {
   /// Gets the specified configuration value.
   ///
   /// Returns the value associated with [key], or [defaultValue] if the key does not exist.
-  dynamic get(String key, [dynamic defaultValue]);
+  T? get<T>(String key, [T? defaultValue]);
 
   /// Gets the specified configuration value, throwing if the key does not exist.
   T getOrThrow<T>(String key, {String? message});

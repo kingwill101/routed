@@ -24,10 +24,9 @@ void registerArchiveStorageDriver() {
     (StorageDriverContext context) {
       final root = context.configuration['root'];
       final rootString = root is String ? root : root?.toString();
-      final resolvedRoot =
-          (rootString == null || rootString.trim().isEmpty)
-              ? 'storage/${context.diskName}.zip'
-              : rootString;
+      final resolvedRoot = (rootString == null || rootString.trim().isEmpty)
+          ? 'storage/${context.diskName}.zip'
+          : rootString;
 
       // Replace LocalStorageDisk with your own StorageDisk implementation.
       return LocalStorageDisk(
@@ -60,9 +59,10 @@ void registerFilesystemCacheDriver() {
     () => FilesystemCacheStoreFactory(),
     configBuilder: (DriverConfigContext context) {
       final config = Map<String, dynamic>.from(context.userConfig);
-      config['cache_dir'] ??= context
-              .get<routed.StorageDefaults>()
-              ?.frameworkPath('cache/filesystem') ??
+      config['cache_dir'] ??=
+          context.get<routed.StorageDefaults>()?.frameworkPath(
+            'cache/filesystem',
+          ) ??
           'storage/framework/cache/filesystem';
       return config;
     },
@@ -78,7 +78,8 @@ void registerFilesystemCacheDriver() {
       routed.ConfigDocEntry(
         path: ctx.path('cache_dir'),
         type: 'string',
-        description: 'Directory used to persist $filesystemCacheDriver cache entries.',
+        description:
+            'Directory used to persist $filesystemCacheDriver cache entries.',
         metadata: const {
           'default_note': 'Computed from StorageDefaults when omitted.',
           'validation': 'Must point to a writable directory.',
@@ -145,7 +146,8 @@ void registerDropboxSessionDriver() {
         type: 'string',
         description: 'Remote folder for storing session payloads.',
         metadata: const {
-          'default_note': 'Defaults to storage/framework/sessions/dropbox when omitted.',
+          'default_note':
+              'Defaults to storage/framework/sessions/dropbox when omitted.',
         },
       ),
     ],

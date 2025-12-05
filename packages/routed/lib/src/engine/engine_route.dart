@@ -179,8 +179,10 @@ class EngineRoute {
   /// Registers a custom casting function for the given type.
   ///
   /// {@macro custom_casting}
-  static void registerCustomCasting(String type,
-      dynamic Function(String?) castingFunction,) {
+  static void registerCustomCasting(
+    String type,
+    dynamic Function(String?) castingFunction,
+  ) {
     _customCastingFunctions[type] = castingFunction;
   }
 

@@ -213,7 +213,7 @@ class StorageServiceProvider extends ServiceProvider
     manager.clear();
 
     final facadeDisks = <String, Map<String, dynamic>>{};
-    final storageNode = config.get('storage');
+    final storageNode = config.get<Object?>('storage');
     Map<String, dynamic>? storageMap;
     if (storageNode != null) {
       if (storageNode is! Map && storageNode is! Config) {
@@ -222,14 +222,7 @@ class StorageServiceProvider extends ServiceProvider
       storageMap = stringKeyedMap(storageNode as Object, 'storage');
     }
 
-    final storageRootToken = parseStringLike(
-      (storageMap != null ? storageMap['root'] : null) ??
-          config.get('storage.root'),
-      context: 'storage.root',
-      allowEmpty: true,
-      coerceNonString: true,
-      throwOnInvalid: false,
-    );
+    final storageRootToken = config.getStringOrNull('storage.root', allowEmpty: true);
     final storageRoot = _resolveStorageRootValue(storageRootToken);
 
     if (storageMap == null) {
@@ -255,31 +248,19 @@ class StorageServiceProvider extends ServiceProvider
 
     final resolvedStorageMap = storageMap;
 
-    final defaultToken = parseStringLike(
-      resolvedStorageMap['default'],
-      context: 'storage.default',
-      allowEmpty: true,
-      coerceNonString: true,
-      throwOnInvalid: false,
-    );
+    final defaultToken = resolvedStorageMap.getString('default', allowEmpty: true);
     final defaultDisk = defaultToken == null || defaultToken.isEmpty
         ? 'local'
         : defaultToken;
     manager.setDefault(defaultDisk);
 
-    final cloudToken = parseStringLike(
-      resolvedStorageMap['cloud'],
-      context: 'storage.cloud',
-      allowEmpty: true,
-      coerceNonString: true,
-      throwOnInvalid: false,
-    );
+    final cloudToken = resolvedStorageMap.getString('cloud', allowEmpty: true);
     final cloudDisk = cloudToken == null || cloudToken.isEmpty
         ? null
         : cloudToken;
 
     final disksNode =
-        resolvedStorageMap['disks'] ?? config.get('storage.disks');
+        resolvedStorageMap['disks'] ?? config.get<Map<dynamic, dynamic>?>('storage.disks');
     if (disksNode != null) {
       if (disksNode is! Map && disksNode is! Config) {
         throw ProviderConfigException('storage.disks must be a map');
@@ -297,13 +278,7 @@ class StorageServiceProvider extends ServiceProvider
           'storage.disks.$name',
         );
         if (name == 'local') {
-          final existingRoot = parseStringLike(
-            diskConfig['root'],
-            context: 'storage.disks.$name.root',
-            allowEmpty: true,
-            coerceNonString: true,
-            throwOnInvalid: false,
-          );
+          final existingRoot = diskConfig.getString('root', allowEmpty: true);
           final shouldApplyStorageRoot =
               existingRoot == null ||
               existingRoot.isEmpty ||

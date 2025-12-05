@@ -1,4 +1,3 @@
-
 import 'package:contextual/contextual.dart' as contextual;
 import 'package:routed/routed.dart';
 import 'package:routed_testing/routed_testing.dart';

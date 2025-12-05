@@ -10,11 +10,7 @@ abstract class TranslationLoader {
   /// When both [group] and [namespace] are `*`, implementations MUST return
   /// flat key/value pairs sourced from locale JSON dictionaries. This mirrors
   /// Laravel's loader contract so JSON-only helpers behave consistently.
-  Map<String, dynamic> load(
-    String locale,
-    String group, {
-    String? namespace,
-  });
+  Map<String, dynamic> load(String locale, String group, {String? namespace});
 
   /// Adds or replaces the directory hints for vendor namespaces.
   ///

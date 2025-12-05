@@ -132,13 +132,7 @@ class RateLimitServiceProvider extends ServiceProvider
     Container container,
     Config config,
   ) async {
-    final enabled =
-        parseBoolLike(
-          config.get('rate_limit.enabled'),
-          context: 'rate_limit.enabled',
-          stringMappings: const {'true': true, 'false': false},
-        ) ??
-        false;
+    final enabled = config.getBool('rate_limit.enabled');
 
     if (!enabled) {
       return RateLimitService(const []);
@@ -162,19 +156,11 @@ class RateLimitServiceProvider extends ServiceProvider
   Future<RateLimiterBackend> _createBackend(Config config) async {
     final manager = _cacheManager ??= CacheManager();
 
-    final configuredStore = parseStringLike(
-      config.get('rate_limit.store'),
-      context: 'rate_limit.store',
-      throwOnInvalid: false,
-    );
+    final configuredStore = config.getStringOrNull('rate_limit.store');
 
     final defaultStoreName =
         configuredStore ??
-        parseStringLike(
-          config.get('cache.default'),
-          context: 'cache.default',
-          throwOnInvalid: false,
-        );
+        config.getStringOrNull('cache.default');
 
     if (defaultStoreName == null || defaultStoreName.isEmpty) {
       throw ProviderConfigException(
@@ -221,36 +207,14 @@ class RateLimitServiceProvider extends ServiceProvider
     final name = map['name']?.toString() ?? map['match']?.toString() ?? '*';
     final match = map['match']?.toString() ?? '*';
     final method = map['method']?.toString();
-    final capacity =
-        parseIntLike(
-          map['limit'],
-          context: '$name.limit',
-          throwOnInvalid: false,
-        ) ??
-        parseIntLike(
-          map['capacity'],
-          context: '$name.capacity',
-          throwOnInvalid: false,
-        ) ??
-        parseIntLike(
-          map['requests'],
-          context: '$name.requests',
-          throwOnInvalid: false,
-        ) ??
-        100;
+    final capacity = map.getInt('limit') ?? map.getInt('capacity') ?? map.getInt('requests') ?? 100;
     final intervalValue = map['interval'] ?? map['refill'];
     final strategy = _parseStrategy(map['strategy']);
     final RateLimitAlgorithmConfig algorithm;
     switch (strategy) {
       case RateLimitStrategy.slidingWindow:
         final limit = capacity;
-        final window =
-            parseDurationLike(
-              map['window'] ?? intervalValue,
-              context: '$name.window',
-              throwOnInvalid: false,
-            ) ??
-            const Duration(minutes: 1);
+        final window = map.getDuration('window') ?? map.getDuration('interval') ?? map.getDuration('refill') ?? const Duration(minutes: 1);
         algorithm = SlidingWindowConfig(limit: max(1, limit), window: window);
         break;
       case RateLimitStrategy.quota:
@@ -265,13 +229,7 @@ class RateLimitServiceProvider extends ServiceProvider
         algorithm = QuotaConfig(limit: max(1, limit), period: period);
         break;
       case RateLimitStrategy.tokenBucket:
-        final interval =
-            parseDurationLike(
-              intervalValue,
-              context: '$name.interval',
-              throwOnInvalid: false,
-            ) ??
-            const Duration(minutes: 1);
+        final interval = map.getDuration('interval') ?? map.getDuration('refill') ?? const Duration(minutes: 1);
         final burst = map['burst'] is num
             ? (map['burst'] as num).toDouble()
             : double.tryParse(map['burst']?.toString() ?? '');

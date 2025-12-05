@@ -98,16 +98,17 @@ class ProviderManifest {
   /// print('Providers: ${manifest.providers}');
   /// ```
   factory ProviderManifest.fromConfig(Config config) {
-    final providers = List<String>.from(
-      config.get('http.providers', const <String>[]) as List<dynamic>,
-    );
+    final rawProviders = config.get('http.providers') ?? const <String>[];
+    final providers = rawProviders is List<String>
+        ? rawProviders
+        : List<String>.from(rawProviders as List);
     final sources = <String, ProviderMiddlewareContribution>{};
     final rawSources = config.get(
       'http.middleware_sources',
       const <String, dynamic>{},
     );
     if (rawSources is Map) {
-      rawSources.forEach((key, value) {
+      rawSources?.forEach((key, value) {
         if (key is! String || value is! Map) return;
         sources[key] = ProviderMiddlewareContribution(
           global: _stringList(value['global']),

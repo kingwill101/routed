@@ -200,8 +200,10 @@ class WrappedRequest implements HttpRequest {
   }
 
   @override
-  Future<S> fold<S>(S initialValue,
-      S Function(S previous, Uint8List element) combine,) async {
+  Future<S> fold<S>(
+    S initialValue,
+    S Function(S previous, Uint8List element) combine,
+  ) async {
     return _limitedStreamController.stream.cast<Uint8List>().fold(
       initialValue,
       combine,

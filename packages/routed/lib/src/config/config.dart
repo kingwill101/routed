@@ -17,10 +17,10 @@ class ConfigImpl implements Config {
   }
 
   @override
-  dynamic get(String key, [dynamic defaultValue]) {
+  T? get<T>(String key, [T? defaultValue]) {
     final lookup = dot.lookup(_items, key);
     if (lookup.exists) {
-      return lookup.value;
+      return lookup.value as T;
     }
     return defaultValue;
   }

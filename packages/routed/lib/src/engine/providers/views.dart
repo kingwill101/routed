@@ -7,6 +7,7 @@ import 'package:routed/src/container/container.dart';
 import 'package:routed/src/contracts/contracts.dart' show Config;
 import 'package:routed/src/engine/config.dart';
 import 'package:routed/src/engine/engine.dart';
+import 'package:routed/src/provider/config_utils.dart';
 import 'package:routed/src/provider/provider.dart';
 import 'package:routed/src/storage/storage_manager.dart';
 import 'package:routed/src/view/engines/liquid_engine.dart';
@@ -110,8 +111,8 @@ class ViewServiceProvider extends ServiceProvider with ProvidesDefaultConfig {
   }
 
   _ResolvedViewConfig _resolveViewConfig(Config config, EngineConfig current) {
-    final viewNode = config.get('view');
-    if (viewNode != null && viewNode is! Map) {
+    final viewRaw = config.get('view');
+    if (viewRaw != null && viewRaw is! Map) {
       throw ProviderConfigException('view must be a map');
     }
 
@@ -120,39 +121,52 @@ class ViewServiceProvider extends ServiceProvider with ProvidesDefaultConfig {
     String? engineName;
     String? diskName;
 
-    final directoryNode = config.get('view.directory');
-    if (directoryNode != null) {
-      if (directoryNode is! String) {
+    final directoryRaw = config.get('view.directory');
+    if (directoryRaw != null) {
+      if (directoryRaw is! String) {
         throw ProviderConfigException('view.directory must be a string');
       }
-      if (directoryNode.isNotEmpty) {
-        configuredDirectory = directoryNode;
+      if (directoryRaw.isNotEmpty) {
+        configuredDirectory = directoryRaw;
       }
     }
 
-    final cacheNode = config.get('view.cache');
-    if (cacheNode != null) {
-      cache = _readBool(cacheNode as Object, 'view.cache');
+    final cacheRaw = config.get('view.cache');
+    if (cacheRaw != null) {
+      if (cacheRaw is bool) {
+        cache = cacheRaw;
+      } else if (cacheRaw is String) {
+        final normalized = cacheRaw.trim().toLowerCase();
+        if (normalized == 'true') {
+          cache = true;
+        } else if (normalized == 'false') {
+          cache = false;
+        } else {
+          throw ProviderConfigException('view.cache must be a boolean');
+        }
+      } else {
+        throw ProviderConfigException('view.cache must be a boolean');
+      }
     }
 
-    final engineNode = config.get('view.engine');
-    if (engineNode != null) {
-      if (engineNode is! String) {
+    final engineRaw = config.get('view.engine');
+    if (engineRaw != null) {
+      if (engineRaw is! String) {
         throw ProviderConfigException('view.engine must be a string');
       }
-      final trimmed = engineNode.trim();
+      final trimmed = engineRaw.trim();
       if (trimmed.isEmpty) {
         throw ProviderConfigException('view.engine must be a string');
       }
       engineName = trimmed;
     }
 
-    final diskNode = config.get('view.disk');
-    if (diskNode != null) {
-      if (diskNode is! String) {
+    final diskRaw = config.get('view.disk');
+    if (diskRaw != null) {
+      if (diskRaw is! String) {
         throw ProviderConfigException('view.disk must be a string');
       }
-      final trimmed = diskNode.trim();
+      final trimmed = diskRaw.trim();
       if (trimmed.isEmpty) {
         throw ProviderConfigException('view.disk must be a string');
       }
@@ -182,21 +196,6 @@ class ViewServiceProvider extends ServiceProvider with ProvidesDefaultConfig {
     );
   }
 
-  bool _readBool(Object value, String context) {
-    if (value is bool) {
-      return value;
-    }
-    if (value is String) {
-      final normalized = value.trim().toLowerCase();
-      if (normalized == 'true') {
-        return true;
-      }
-      if (normalized == 'false') {
-        return false;
-      }
-    }
-    throw ProviderConfigException('$context must be a boolean');
-  }
 
   StorageDisk? _tryResolveDisk(StorageManager manager, String? name) {
     if (name == null || name.isEmpty) {

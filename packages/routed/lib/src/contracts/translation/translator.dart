@@ -17,11 +17,7 @@ abstract class TranslatorContract {
   set fallbackLocale(String? value);
 
   /// Determines whether a translation exists.
-  bool has(
-    String key, {
-    String? locale,
-    bool fallback = true,
-  });
+  bool has(String key, {String? locale, bool fallback = true});
 
   /// Determines whether a translation exists for a specific locale without
   /// considering fallbacks.

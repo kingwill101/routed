@@ -507,21 +507,7 @@ class SessionServiceProvider extends ServiceProvider
 
   static SessionConfig _buildFileDriver(SessionDriverBuilderContext context) {
     final raw = context.raw;
-    final configuredPath =
-        parseStringLike(
-          raw['files'],
-          context: 'session.files',
-          allowEmpty: true,
-          coerceNonString: true,
-          throwOnInvalid: false,
-        ) ??
-        parseStringLike(
-          raw['storage_path'],
-          context: 'session.storage_path',
-          allowEmpty: true,
-          coerceNonString: true,
-          throwOnInvalid: false,
-        ) ??
+    final configuredPath = raw.getString('files', allowEmpty: true) ?? raw.getString('storage_path', allowEmpty: true) ??
         raw['path']?.toString();
 
     final storageDefaults = context.storageDefaults;
@@ -574,14 +560,7 @@ class SessionServiceProvider extends ServiceProvider
   }
 
   static String _resolveCacheStoreName(SessionDriverBuilderContext context) {
-    return parseStringLike(
-          context.raw['store'],
-          context: 'session.store',
-          allowEmpty: true,
-          coerceNonString: true,
-          throwOnInvalid: false,
-        ) ??
-        (context.driver == 'database' ? 'database' : context.driver);
+    return context.raw.getString('store', allowEmpty: true) ?? (context.driver == 'database' ? 'database' : context.driver);
   }
 
   static SessionConfig _buildCacheBackedDriver(
@@ -780,14 +759,9 @@ class SessionServiceProvider extends ServiceProvider
   // ---------------------------------------------------------------------------
 
   SessionConfig? _resolveSessionConfig(Container container, Config config) {
-    final explicitEnabled = parseBoolLike(
-      config.get('session.enabled'),
-      context: 'session.enabled',
-      stringMappings: const {'true': true, 'false': false},
-      throwOnInvalid: false,
-    );
+    final explicitEnabled = config.getBoolOrNull('session.enabled');
 
-    final direct = config.get('session.config');
+    final direct = config.get<Object?>('session.config');
     if (direct is SessionConfig) {
       return direct;
     }
@@ -799,7 +773,7 @@ class SessionServiceProvider extends ServiceProvider
       );
     }
 
-    final sessionNode = config.get('session');
+    final sessionNode = config.get<Object?>('session');
     bool? mapEnabled;
     Map<String, dynamic>? sessionMap;
     if (sessionNode is SessionConfig) {
@@ -807,15 +781,10 @@ class SessionServiceProvider extends ServiceProvider
       mapEnabled = true;
     } else if (sessionNode is Map) {
       sessionMap = Map<String, dynamic>.from(sessionNode);
-      mapEnabled = parseBoolLike(
-        sessionMap.remove('enabled'),
-        context: 'session.enabled',
-        stringMappings: const {'true': true, 'false': false},
-        throwOnInvalid: false,
-      );
+      mapEnabled = {for (final entry in sessionMap.entries) entry.key: entry.value}.getBool('enabled');
     }
 
-    final enabled = explicitEnabled ?? mapEnabled ?? false;
+    final enabled = explicitEnabled ?? mapEnabled ?? true;
     if (!enabled) {
       return null;
     }
@@ -836,12 +805,7 @@ class SessionServiceProvider extends ServiceProvider
   ) {
     final merged = Map<String, dynamic>.from(raw);
 
-    final specifiedEnabled = parseBoolLike(
-      merged.remove('enabled'),
-      context: 'session.enabled',
-      stringMappings: const {'true': true, 'false': false},
-      throwOnInvalid: false,
-    );
+    final specifiedEnabled = merged.getBool('enabled', defaultValue: false);
     if (specifiedEnabled == false) {
       return null;
     }
@@ -849,26 +813,29 @@ class SessionServiceProvider extends ServiceProvider
       merged.addAll(Map<String, dynamic>.from(merged['config'] as Map));
     }
 
-    final driver = _string(merged['driver'])?.toLowerCase() ?? 'cookie';
+    final driver =
+        merged.getString('driver', allowEmpty: true)?.toLowerCase() ?? 'cookie';
 
     final cookieName =
-        _string(merged['cookie']) ??
-        _string(merged['cookie_name']) ??
-        _string(merged['name']) ??
+        merged.getString('cookie', allowEmpty: true) ??
+        merged.getString('cookie_name', allowEmpty: true) ??
+        merged.getString('name', allowEmpty: true) ??
         _defaultCookieName(root);
 
     final lifetime = _resolveLifetime(merged);
-    final expireOnClose = _bool(merged['expire_on_close']) ?? false;
-    final encrypt = _bool(merged['encrypt']) ?? (driver == 'cookie');
-    final cookiePath = _string(merged['path']) ?? '/';
+    final expireOnClose = merged.getBoolOrNull('expire_on_close') ?? false;
+    final encrypt = merged.getBoolOrNull('encrypt') ?? (driver == 'cookie');
+    final cookiePath = merged.getString('path', allowEmpty: true) ?? '/';
     final domain =
-        _string(merged['domain']) ?? _string(merged['cookie_domain']);
-    final secure = _boolNullable(merged['secure']);
-    final httpOnly = _bool(merged['http_only']) ?? true;
+        merged.getString('domain', allowEmpty: true) ??
+        merged.getString('cookie_domain', allowEmpty: true);
+    final secure = merged.getBoolOrNull('secure');
+    final httpOnly = merged.getBoolOrNull('http_only') ?? true;
     final sameSite = _parseSameSite(merged['same_site']);
-    final partitioned = _bool(merged['partitioned']);
+    final partitioned = merged.getBoolOrNull('partitioned');
     final lottery = _parseLottery(merged['lottery']);
-    final cachePrefix = _string(merged['cache_prefix']) ?? 'session:';
+    final cachePrefix =
+        merged.getString('cache_prefix', allowEmpty: true) ?? 'session:';
 
     final options = Options(
       path: cookiePath,
@@ -954,11 +921,11 @@ class SessionServiceProvider extends ServiceProvider
   // ---------------------------------------------------------------------------
 
   Duration _resolveLifetime(Map<String, dynamic> source) {
-    final lifetimeMinutes = _int(source['lifetime']);
+    final lifetimeMinutes = source.getInt('lifetime');
     if (lifetimeMinutes != null) {
       return Duration(minutes: lifetimeMinutes);
     }
-    final maxAgeSeconds = _int(source['max_age']);
+    final maxAgeSeconds = source.getInt('max_age');
     if (maxAgeSeconds != null) {
       return Duration(seconds: maxAgeSeconds);
     }
@@ -967,11 +934,11 @@ class SessionServiceProvider extends ServiceProvider
 
   List<String> _resolveKeys(Map<String, dynamic> map, Config root) {
     final candidates = <String?>[
-      _string(map['key']),
-      _string(map['app_key']),
-      _string(map['secret']),
-      _string(root.get('session.app_key')),
-      _string(root.get('app.key')),
+      map.getString('key', allowEmpty: true),
+      map.getString('app_key', allowEmpty: true),
+      map.getString('secret', allowEmpty: true),
+      root.getStringOrNull('session.app_key', allowEmpty: true),
+      root.getStringOrNull('app.key', allowEmpty: true),
     ];
     final result = <String>[];
     for (final candidate in candidates) {
@@ -982,9 +949,9 @@ class SessionServiceProvider extends ServiceProvider
       }
     }
     final additional = <String>[
-      ..._stringList(map['previous_keys']),
-      ..._stringList(root.get('session.previous_keys')),
-      ..._stringList(root.get('app.previous_keys')),
+      ...?map.getStringList('previous_keys'),
+      ...?root.getStringListOrNull('session.previous_keys'),
+      ...?root.getStringListOrNull('app.previous_keys'),
     ];
     for (final key in additional) {
       final normalized = _normalizeKey(key);
@@ -1013,7 +980,8 @@ class SessionServiceProvider extends ServiceProvider
   }
 
   String _defaultCookieName(Config config) {
-    final appName = _string(config.get('app.name')) ?? 'routed';
+    final appName =
+        config.getStringOrNull('app.name', allowEmpty: true) ?? 'routed';
     final slug = appName
         .toLowerCase()
         .replaceAll(RegExp(r'[^a-z0-9]+'), '-')
@@ -1023,7 +991,7 @@ class SessionServiceProvider extends ServiceProvider
   }
 
   SameSite? _parseSameSite(dynamic value) {
-    final normalized = _string(value)?.toLowerCase();
+    final normalized = value?.toString().toLowerCase();
     switch (normalized) {
       case null:
       case '':
@@ -1047,7 +1015,7 @@ class SessionServiceProvider extends ServiceProvider
     final list = <int>[];
     if (value is List) {
       for (final entry in value) {
-        final parsed = _int(entry);
+        final parsed = entry is int ? entry : int.tryParse(entry.toString());
         if (parsed != null) {
           list.add(parsed);
         }
@@ -1055,7 +1023,7 @@ class SessionServiceProvider extends ServiceProvider
     } else if (value is String) {
       final parts = value
           .split(',')
-          .map((part) => _int(part.trim()))
+          .map((part) => int.tryParse(part.trim()))
           .whereType<int>()
           .toList();
       list.addAll(parts);
@@ -1067,39 +1035,5 @@ class SessionServiceProvider extends ServiceProvider
       return null;
     }
     throw ProviderConfigException('session.lottery must contain two integers.');
-  }
-
-  bool? _boolNullable(dynamic value) {
-    return parseBoolLike(value, context: 'session', throwOnInvalid: false);
-  }
-
-  bool? _bool(dynamic value) {
-    return parseBoolLike(value, context: 'session', throwOnInvalid: false);
-  }
-
-  int? _int(dynamic value) {
-    return parseIntLike(value, context: 'session', throwOnInvalid: false);
-  }
-
-  String? _string(dynamic value) {
-    return parseStringLike(
-      value,
-      context: 'session',
-      allowEmpty: true,
-      coerceNonString: true,
-      throwOnInvalid: false,
-    );
-  }
-
-  List<String> _stringList(dynamic value) {
-    return parseStringList(
-          value,
-          context: 'session',
-          allowCommaSeparated: true,
-          allowEmptyResult: true,
-          coerceNonStringEntries: true,
-          throwOnInvalid: false,
-        ) ??
-        const [];
   }
 }

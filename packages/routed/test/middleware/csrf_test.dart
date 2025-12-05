@@ -34,106 +34,97 @@ void main() {
     for (final mode in TransportMode.values) {
       group('with ${mode.name} transport', () {
         late TestClient client;
-        TransportOptions transportOptions() =>
-            TransportOptions(
-              mode: mode,
-              remoteAddress: InternetAddress.loopbackIPv4,
-            );
+        TransportOptions transportOptions() => TransportOptions(
+          mode: mode,
+          remoteAddress: InternetAddress.loopbackIPv4,
+        );
 
         tearDown(() async {
           await client.close();
         });
 
-        test(
-          'emits secure CSRF cookie when forwarded HTTPS',
-              () async {
-            final sessionConfig = buildSessionConfig();
-            final engine = Engine(
-              config: EngineConfig(
-                features: const EngineFeatures(enableProxySupport: true),
-              ),
-              middlewares: [csrfMiddleware()],
-              options: [
-                withSessionConfig(sessionConfig),
-                withTrustedProxies(['127.0.0.1/32', '::1/128']),
-              ],
-            )
-              ..get('/form', (ctx) => ctx.string('ok'));
-            client = TestClient(
-              RoutedRequestHandler(engine),
-              mode: mode,
-              options: transportOptions(),
-            );
+        test('emits secure CSRF cookie when forwarded HTTPS', () async {
+          final sessionConfig = buildSessionConfig();
+          final engine = Engine(
+            config: EngineConfig(
+              features: const EngineFeatures(enableProxySupport: true),
+            ),
+            middlewares: [csrfMiddleware()],
+            options: [
+              withSessionConfig(sessionConfig),
+              withTrustedProxies(['127.0.0.1/32', '::1/128']),
+            ],
+          )..get('/form', (ctx) => ctx.string('ok'));
+          client = TestClient(
+            RoutedRequestHandler(engine),
+            mode: mode,
+            options: transportOptions(),
+          );
 
-            final response = await client.get(
-              '/form',
-              headers: {
-                'X-Forwarded-Proto': ['https'],
-              },
-            );
+          final response = await client.get(
+            '/form',
+            headers: {
+              'X-Forwarded-Proto': ['https'],
+            },
+          );
 
-            response.assertStatus(HttpStatus.ok);
-            final csrfCookieName = engine.config.security.csrfCookieName;
-            final setCookies =
-                response.headers[HttpHeaders.setCookieHeader]?.cast<String>() ??
-                    const <String>[];
-            final cookieHeader = setCookies.firstWhere(
-                  (cookie) => cookie.startsWith('$csrfCookieName='),
-              orElse: () => '',
-            );
-            expect(
-              cookieHeader,
-              isNotEmpty,
-              reason: 'expected CSRF cookie to be issued',
-            );
-            expect(cookieHeader.contains('Secure'), isTrue);
-            expect(cookieHeader.contains('SameSite=Strict'), isTrue);
-          },
-        );
+          response.assertStatus(HttpStatus.ok);
+          final csrfCookieName = engine.config.security.csrfCookieName;
+          final setCookies =
+              response.headers[HttpHeaders.setCookieHeader]?.cast<String>() ??
+              const <String>[];
+          final cookieHeader = setCookies.firstWhere(
+            (cookie) => cookie.startsWith('$csrfCookieName='),
+            orElse: () => '',
+          );
+          expect(
+            cookieHeader,
+            isNotEmpty,
+            reason: 'expected CSRF cookie to be issued',
+          );
+          expect(cookieHeader.contains('Secure'), isTrue);
+          expect(cookieHeader.contains('SameSite=Strict'), isTrue);
+        });
 
-        test(
-          'emits secure cookie when Forwarded proto is quoted',
-              () async {
-            final sessionConfig = buildSessionConfig();
-            final engine = Engine(
-              config: EngineConfig(
-                features: const EngineFeatures(enableProxySupport: true),
-              ),
-              middlewares: [csrfMiddleware()],
-              options: [
-                withSessionConfig(sessionConfig),
-                withTrustedProxies(['127.0.0.1/32', '::1/128']),
-              ],
-            )
-              ..get('/form', (ctx) => ctx.string('ok'));
+        test('emits secure cookie when Forwarded proto is quoted', () async {
+          final sessionConfig = buildSessionConfig();
+          final engine = Engine(
+            config: EngineConfig(
+              features: const EngineFeatures(enableProxySupport: true),
+            ),
+            middlewares: [csrfMiddleware()],
+            options: [
+              withSessionConfig(sessionConfig),
+              withTrustedProxies(['127.0.0.1/32', '::1/128']),
+            ],
+          )..get('/form', (ctx) => ctx.string('ok'));
 
-            client = TestClient(
-              RoutedRequestHandler(engine),
-              mode: mode,
-              options: transportOptions(),
-            );
+          client = TestClient(
+            RoutedRequestHandler(engine),
+            mode: mode,
+            options: transportOptions(),
+          );
 
-            final response = await client.get(
-              '/form',
-              headers: {
-                'Forwarded': ['for=1.2.3.4;proto="https"'],
-              },
-            );
+          final response = await client.get(
+            '/form',
+            headers: {
+              'Forwarded': ['for=1.2.3.4;proto="https"'],
+            },
+          );
 
-            response.assertStatus(HttpStatus.ok);
-            final csrfCookieName = engine.config.security.csrfCookieName;
-            final cookies =
-                response.headers[HttpHeaders.setCookieHeader]?.cast<String>() ??
-                    const <String>[];
-            final header = cookies.firstWhere(
-                  (cookie) => cookie.startsWith('$csrfCookieName='),
-              orElse: () => '',
-            );
-            expect(header, isNotEmpty);
-            expect(header.contains('Secure'), isTrue);
-            expect(header.contains('SameSite=Strict'), isTrue);
-          },
-        );
+          response.assertStatus(HttpStatus.ok);
+          final csrfCookieName = engine.config.security.csrfCookieName;
+          final cookies =
+              response.headers[HttpHeaders.setCookieHeader]?.cast<String>() ??
+              const <String>[];
+          final header = cookies.firstWhere(
+            (cookie) => cookie.startsWith('$csrfCookieName='),
+            orElse: () => '',
+          );
+          expect(header, isNotEmpty);
+          expect(header.contains('Secure'), isTrue);
+          expect(header.contains('SameSite=Strict'), isTrue);
+        });
 
         test(
           'issues token once and accepts header-based submissions',

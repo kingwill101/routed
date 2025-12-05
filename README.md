@@ -71,4 +71,4 @@ its own changelog and versioned tags (e.g. `routed_cli-0.2.1+1`).
 ## Funding
 
 Keep the ecosystem healthy by
-[buying Glenford a coffee](https://www.buymeacoffee.com/kingwill101).
+[buying me a coffee](https://www.buymeacoffee.com/kingwill101).

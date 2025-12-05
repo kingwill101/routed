@@ -262,13 +262,8 @@ class LoggingServiceProvider extends ServiceProvider
         ctx.options['flushInterval'] ?? ctx.options['flush_interval'],
         fallback: const Duration(milliseconds: 500),
       );
-      final useIsolate =
-          parseBoolLike(
-            ctx.options['useIsolate'] ?? ctx.options['use_isolate'],
-            context: '${ctx.configPath}.use_isolate',
-            throwOnInvalid: false,
-          ) ??
-          false;
+      final optionsMap = {for (final entry in ctx.options.entries) entry.key.toString(): entry.value};
+      final useIsolate = optionsMap.getBool('useIsolate') || optionsMap.getBool('use_isolate');
       final options = contextual.DailyFileOptions(
         path: path,
         retentionDays: retention,
@@ -280,29 +275,19 @@ class LoggingServiceProvider extends ServiceProvider
       );
     });
     registry.registerIfAbsent('stack', (ctx) {
-      final channels =
-          parseStringList(
-            ctx.options['channels'],
-            context: '${ctx.configPath}.channels',
-            allowEmptyResult: false,
-          ) ??
-          const <String>[];
+      final optionsMap = {for (final entry in ctx.options.entries) entry.key.toString(): entry.value};
+      final channels = optionsMap.getStringList('channels') ?? const <String>[];
       if (channels.isEmpty) {
         throw ProviderConfigException(
           'logging channel "${ctx.name}" must specify at least one entry in ${ctx.configPath}.channels',
         );
       }
-      final ignore =
-          parseBoolLike(
-            ctx.options['ignore_exceptions'],
-            context: '${ctx.configPath}.ignore_exceptions',
-            throwOnInvalid: false,
-          ) ??
-          false;
+      final ignore = optionsMap.getBool('ignore_exceptions');
       final drivers = channels.map(ctx.resolveChannel).toList();
       return contextual.StackLogDriver(drivers, ignoreExceptions: ignore);
     });
     registry.registerIfAbsent('webhook', (ctx) {
+      final optionsMap = {for (final entry in ctx.options.entries) entry.key.toString(): entry.value};
       final rawUrl =
           _stringOption(ctx.options, ['url', 'endpoint', 'uri']) ?? '';
       late Uri uri;
@@ -318,13 +303,7 @@ class LoggingServiceProvider extends ServiceProvider
         ctx.options['timeout'] ?? ctx.options['timeout_ms'],
         fallback: const Duration(seconds: 5),
       );
-      final keepAlive =
-          parseBoolLike(
-            ctx.options['keep_alive'] ?? ctx.options['keepAlive'],
-            context: '${ctx.configPath}.keep_alive',
-            throwOnInvalid: false,
-          ) ??
-          true;
+      final keepAlive = optionsMap.getBool('keep_alive', defaultValue: true) || optionsMap.getBool('keepAlive', defaultValue: true);
       final options = contextual.WebhookOptions(
         url: uri,
         headers: headers,
@@ -371,29 +350,10 @@ class LoggingServiceProvider extends ServiceProvider
       ConfigMapCandidate.fromConfig(config, 'logging'),
     ]);
 
-    final enabled =
-        parseBoolLike(
-          merged['enabled'],
-          context: 'logging.enabled',
-          stringMappings: const {'true': true, 'false': false},
-          throwOnInvalid: false,
-        ) ??
-        true;
-    final errorsOnly =
-        parseBoolLike(
-          merged['errors_only'],
-          context: 'logging.errors_only',
-          stringMappings: const {'true': true, 'false': false},
-          throwOnInvalid: false,
-        ) ??
-        false;
+    final enabled = merged.getBool('enabled', defaultValue: true);
+    final errorsOnly = merged.getBool('errors_only');
 
-    final levelToken = parseStringLike(
-      merged['level'],
-      context: 'logging.level',
-      coerceNonString: true,
-      throwOnInvalid: false,
-    );
+    final levelToken = merged.getString('level');
     final level = _parseLevel(levelToken);
 
     final extraFields =
@@ -404,31 +364,27 @@ class LoggingServiceProvider extends ServiceProvider
           )
         : const <String, dynamic>{};
 
-    final headerNames =
-        parseStringList(
-          merged['request_headers'],
-          context: 'logging.request_headers',
-          allowEmptyResult: true,
-          coerceNonStringEntries: false,
-        ) ??
-        const [];
+    final headerNamesRaw = merged['request_headers'];
+    List<String> headerNames;
+    if (headerNamesRaw != null) {
+      if (headerNamesRaw is! List) {
+        throw ProviderConfigException('logging.request_headers must be a list');
+      }
+      headerNames = [];
+      for (var i = 0; i < headerNamesRaw.length; i++) {
+        final item = headerNamesRaw[i];
+        if (item is! String) {
+          throw ProviderConfigException('logging.request_headers[$i] must be a string');
+        }
+        headerNames.add(item);
+      }
+    } else {
+      headerNames = const [];
+    }
 
-    final includeStackTraces =
-        parseBoolLike(
-          merged['include_stack_traces'],
-          context: 'logging.include_stack_traces',
-          stringMappings: const {'true': true, 'false': false},
-          throwOnInvalid: false,
-        ) ??
-        false;
+    final includeStackTraces = merged.getBool('include_stack_traces');
 
-    final formatToken =
-        parseStringLike(
-          merged['format'],
-          context: 'logging.format',
-          throwOnInvalid: false,
-        )?.toLowerCase().trim() ??
-        'plain';
+    final formatToken = merged.getString('format')?.toLowerCase().trim() ?? 'plain';
 
     final format = switch (formatToken) {
       "pretty" => contextual.PrettyLogFormatter(),
@@ -513,15 +469,11 @@ void _configureLoggerFactory(Config config, Container container) {
 }
 
 _ChannelSettings _resolveChannelSettings(Config config) {
-  final configValue = parseStringLike(
-    config.get('logging.default'),
-    context: 'logging.default',
-    throwOnInvalid: false,
-  )?.trim();
+  final configValue = config.getStringOrNull('logging.default')?.trim();
   final defaultChannel = _coerceChannelName(configValue);
   final envChannel = _coerceChannelName(Platform.environment['LOG_CHANNEL']);
 
-  final node = config.get('logging.channels');
+  final node = config.get<Map<String, Object?>>('logging.channels');
   final channels = <String, _ChannelConfig>{};
   if (node is Map<String, Object?>) {
     final map = stringKeyedMap(node, 'logging.channels');
@@ -530,13 +482,7 @@ _ChannelSettings _resolveChannelSettings(Config config) {
       final channelMap = value is Map<String, Object?>
           ? stringKeyedMap(value, contextPath)
           : const <String, Object?>{};
-      final rawDriver =
-          parseStringLike(
-            channelMap['driver'],
-            context: '$contextPath.driver',
-            throwOnInvalid: false,
-          )?.toLowerCase().trim() ??
-          'stack';
+      final rawDriver = channelMap.getString('driver')?.toLowerCase().trim() ?? 'stack';
       channels[name] = _ChannelConfig(
         name: name,
         driver: rawDriver,

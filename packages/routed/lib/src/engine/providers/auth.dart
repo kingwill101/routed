@@ -328,19 +328,9 @@ class AuthServiceProvider extends ServiceProvider with ProvidesDefaultConfig {
   }
 
   SessionAuthService _configureSessionAuth(Container container, Config config) {
-    final cookieName =
-        parseStringLike(
-          config.get('auth.session.remember_me.cookie'),
-          context: 'auth.session.remember_me.cookie',
-          allowEmpty: true,
-          throwOnInvalid: false,
-        ) ??
-        '';
+    final cookieName = config.getString('auth.session.remember_me.cookie', defaultValue: '', allowEmpty: true);
 
-    final rememberDuration = parseDurationLike(
-      config.get('auth.session.remember_me.duration'),
-      context: 'auth.session.remember_me.duration',
-    );
+    final rememberDuration = config.getDurationOrNull('auth.session.remember_me.duration');
 
     RememberTokenStore? rememberStore;
     if (container.has<RememberTokenStore>()) {
@@ -366,7 +356,7 @@ class AuthServiceProvider extends ServiceProvider with ProvidesDefaultConfig {
     SessionAuthService sessionAuth,
   ) {
     final managed = <String>{};
-    final node = config.get('auth.guards');
+    final node = config.get<Map<dynamic, dynamic>>('auth.guards');
     if (node is Map) {
       node.forEach((key, value) {
         final guardName = key.toString();
@@ -385,13 +375,7 @@ class AuthServiceProvider extends ServiceProvider with ProvidesDefaultConfig {
     GateRegistry registry,
     MiddlewareRegistry middlewareRegistry,
   ) {
-    final enabled =
-        parseBoolLike(
-          config.get('auth.features.haigate.enabled'),
-          context: 'auth.features.haigate.enabled',
-          throwOnInvalid: false,
-        ) ??
-        false;
+    final enabled = config.getBool('auth.features.haigate.enabled');
 
     final defaults = _resolveGateDefaults(config);
 
@@ -399,7 +383,7 @@ class AuthServiceProvider extends ServiceProvider with ProvidesDefaultConfig {
     final newMiddlewareIds = <String>{};
 
     if (enabled) {
-      final abilitiesNode = config.get('auth.gates.abilities');
+      final abilitiesNode = config.get<Map<dynamic, dynamic>>('auth.gates.abilities');
       if (abilitiesNode is Map) {
         abilitiesNode.forEach((key, value) {
           final ability = key.toString().trim();
@@ -458,7 +442,7 @@ class AuthServiceProvider extends ServiceProvider with ProvidesDefaultConfig {
   }
 
   _GateMiddlewareDefaults _resolveGateDefaults(Config config) {
-    final defaultsNode = config.get('auth.gates.defaults');
+    final defaultsNode = config.get<Map<dynamic, dynamic>>('auth.gates.defaults');
     var statusCode = HttpStatus.forbidden;
     String? message;
 
@@ -472,25 +456,12 @@ class AuthServiceProvider extends ServiceProvider with ProvidesDefaultConfig {
 
     if (map != null) {
       final statusValue = map['denied_status'] ?? map['status'] ?? map['code'];
-      final parsedStatus =
-          parseIntLike(
-            statusValue,
-            context: 'auth.gates.defaults.denied_status',
-            throwOnInvalid: false,
-          ) ??
-          statusCode;
+      final parsedStatus = map.getInt('denied_status') ?? map.getInt('status') ?? map.getInt('code') ?? statusCode;
       if (parsedStatus > 0) {
         statusCode = parsedStatus;
       }
 
-      final rawMessage =
-          parseStringLike(
-            map['denied_message'] ?? map['message'],
-            context: 'auth.gates.defaults.denied_message',
-            allowEmpty: true,
-            throwOnInvalid: false,
-          ) ??
-          '';
+      final rawMessage = map.getString('denied_message', allowEmpty: true) ?? map.getString('message', allowEmpty: true) ?? '';
       final trimmed = rawMessage.trim();
       message = trimmed.isEmpty ? null : trimmed;
     }
@@ -565,28 +536,16 @@ class AuthServiceProvider extends ServiceProvider with ProvidesDefaultConfig {
       if (mode == 'any') {
         any = true;
       }
-      final anyFlag =
-          parseBoolLike(
-            normalized['any'],
-            context: 'auth.gates.abilities.$ability.any',
-            throwOnInvalid: false,
-          ) ??
-          false;
+      final anyFlag = normalized.getBool('any');
       if (anyFlag) {
         any = true;
       }
 
-      allowGuest =
-          parseBoolLike(
-            normalized['allow_guest'] ??
-                normalized['allowguests'] ??
-                normalized['allowguest'] ??
-                normalized['guest'] ??
-                normalized['guests'],
-            context: 'auth.gates.abilities.$ability.allow_guest',
-            throwOnInvalid: false,
-          ) ??
-          false;
+      allowGuest = normalized.getBool('allow_guest') ||
+                   normalized.getBool('allowguests') ||
+                   normalized.getBool('allowguest') ||
+                   normalized.getBool('guest') ||
+                   normalized.getBool('guests');
     } else {
       return null;
     }
@@ -742,89 +701,33 @@ class AuthServiceProvider extends ServiceProvider with ProvidesDefaultConfig {
   FutureOr<Response> _passthrough(EngineContext ctx, Next next) => next();
 
   JwtVerifier? _buildJwtVerifier(Config config) {
-    final enabled =
-        parseBoolLike(
-          config.get('auth.jwt.enabled'),
-          context: 'auth.jwt.enabled',
-          stringMappings: const {'true': true, 'false': false},
-        ) ??
-        false;
+    final enabled = config.getBool('auth.jwt.enabled');
     if (!enabled) {
       return null;
     }
 
-    final issuer = parseStringLike(
-      config.get('auth.jwt.issuer'),
-      context: 'auth.jwt.issuer',
-      allowEmpty: true,
-      throwOnInvalid: false,
-    );
+    final issuer = config.getStringOrNull('auth.jwt.issuer', allowEmpty: true);
 
-    final audience =
-        parseStringList(
-          config.get('auth.jwt.audience'),
-          context: 'auth.jwt.audience',
-          allowEmptyResult: true,
-        ) ??
-        const <String>[];
+    final audience = config.getStringListOrNull('auth.jwt.audience') ?? const <String>[];
 
-    final requiredClaims =
-        parseStringList(
-          config.get('auth.jwt.required_claims'),
-          context: 'auth.jwt.required_claims',
-          allowEmptyResult: true,
-        ) ??
-        const <String>[];
+    final requiredClaims = config.getStringListOrNull('auth.jwt.required_claims') ?? const <String>[];
 
-    final algorithms =
-        parseStringList(
-          config.get('auth.jwt.algorithms'),
-          context: 'auth.jwt.algorithms',
-          allowEmptyResult: true,
-        ) ??
-        const <String>['RS256'];
+    final algorithms = config.getStringListOrNull('auth.jwt.algorithms') ?? const <String>['RS256'];
 
-    final jwksUrl = parseStringLike(
-      config.get('auth.jwt.jwks_url'),
-      context: 'auth.jwt.jwks_url',
-      allowEmpty: true,
-      throwOnInvalid: false,
-    );
+    final jwksUrl = config.getStringOrNull('auth.jwt.jwks_url', allowEmpty: true);
     final jwksUri = jwksUrl == null || jwksUrl.isEmpty
         ? null
         : Uri.parse(jwksUrl);
 
-    final cacheTtl =
-        parseDurationLike(
-          config.get('auth.jwt.jwks_cache_ttl'),
-          context: 'auth.jwt.jwks_cache_ttl',
-        ) ??
-        const Duration(minutes: 5);
+    final cacheTtl = config.getDuration('auth.jwt.jwks_cache_ttl', defaultValue: const Duration(minutes: 5));
 
-    final clockSkew =
-        parseDurationLike(
-          config.get('auth.jwt.clock_skew'),
-          context: 'auth.jwt.clock_skew',
-        ) ??
-        const Duration(seconds: 60);
+    final clockSkew = config.getDuration('auth.jwt.clock_skew', defaultValue: const Duration(seconds: 60));
 
-    final header =
-        parseStringLike(
-          config.get('auth.jwt.header'),
-          context: 'auth.jwt.header',
-          allowEmpty: false,
-        ) ??
-        'Authorization';
+    final header = config.getString('auth.jwt.header', defaultValue: 'Authorization');
 
-    final prefix =
-        parseStringLike(
-          config.get('auth.jwt.bearer_prefix'),
-          context: 'auth.jwt.bearer_prefix',
-          allowEmpty: false,
-        ) ??
-        'Bearer ';
+    final prefix = config.getString('auth.jwt.bearer_prefix', defaultValue: 'Bearer ');
 
-    final keysNode = config.get('auth.jwt.keys');
+    final keysNode = config.get<Object?>('auth.jwt.keys');
     final inlineKeys = <Map<String, dynamic>>[];
     if (keysNode is Iterable) {
       for (final entry in keysNode) {
@@ -854,65 +757,30 @@ class AuthServiceProvider extends ServiceProvider with ProvidesDefaultConfig {
   }
 
   Middleware? _buildOAuthMiddleware(Config config) {
-    final enabled =
-        parseBoolLike(
-          config.get('auth.oauth2.introspection.enabled'),
-          context: 'auth.oauth2.introspection.enabled',
-          stringMappings: const {'true': true, 'false': false},
-        ) ??
-        false;
+    final enabled = config.getBool('auth.oauth2.introspection.enabled');
     if (!enabled) {
       return null;
     }
 
-    final endpoint = parseStringLike(
-      config.get('auth.oauth2.introspection.endpoint'),
-      context: 'auth.oauth2.introspection.endpoint',
-      allowEmpty: false,
-    );
-    if (endpoint == null || endpoint.isEmpty) {
+    final endpoint = config.getString('auth.oauth2.introspection.endpoint');
+    if (endpoint.isEmpty) {
       throw ProviderConfigException(
         'auth.oauth2.introspection.endpoint is required when enabled',
       );
     }
 
-    final clientId = parseStringLike(
-      config.get('auth.oauth2.introspection.client_id'),
-      context: 'auth.oauth2.introspection.client_id',
-      allowEmpty: true,
-      throwOnInvalid: false,
-    );
+    final clientId = config.getStringOrNull('auth.oauth2.introspection.client_id', allowEmpty: true);
 
-    final clientSecret = parseStringLike(
-      config.get('auth.oauth2.introspection.client_secret'),
-      context: 'auth.oauth2.introspection.client_secret',
-      allowEmpty: true,
-      throwOnInvalid: false,
-    );
+    final clientSecret = config.getStringOrNull('auth.oauth2.introspection.client_secret', allowEmpty: true);
 
-    final tokenTypeHint = parseStringLike(
-      config.get('auth.oauth2.introspection.token_type_hint'),
-      context: 'auth.oauth2.introspection.token_type_hint',
-      allowEmpty: true,
-      throwOnInvalid: false,
-    );
+    final tokenTypeHint = config.getStringOrNull('auth.oauth2.introspection.token_type_hint', allowEmpty: true);
 
-    final cacheTtl =
-        parseDurationLike(
-          config.get('auth.oauth2.introspection.cache_ttl'),
-          context: 'auth.oauth2.introspection.cache_ttl',
-        ) ??
-        const Duration(seconds: 30);
+    final cacheTtl = config.getDuration('auth.oauth2.introspection.cache_ttl', defaultValue: const Duration(seconds: 30));
 
-    final clockSkew =
-        parseDurationLike(
-          config.get('auth.oauth2.introspection.clock_skew'),
-          context: 'auth.oauth2.introspection.clock_skew',
-        ) ??
-        const Duration(seconds: 60);
+    final clockSkew = config.getDuration('auth.oauth2.introspection.clock_skew', defaultValue: const Duration(seconds: 60));
 
     final additional = <String, String>{};
-    final additionalNode = config.get('auth.oauth2.introspection.additional');
+    final additionalNode = config.get<Map<dynamic, dynamic>>('auth.oauth2.introspection.additional');
     if (additionalNode is Map) {
       additionalNode.forEach((key, value) {
         if (value != null) {

@@ -1,4 +1,3 @@
-
 import 'package:routed/routed.dart';
 import 'package:routed/src/auth/session_auth.dart';
 import 'package:routed_testing/routed_testing.dart';

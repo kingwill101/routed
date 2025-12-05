@@ -111,9 +111,11 @@ class CookieStore implements Store {
   }
 
   @override
-  Future<void> write(Request request,
-      Response response,
-      Session session,) async {
+  Future<void> write(
+    Request request,
+    Response response,
+    Session session,
+  ) async {
     if (session.isDestroyed) {
       response.setCookie(
         session.name,

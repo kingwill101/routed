@@ -3,6 +3,7 @@
 /// Import this when you need to bind request payloads (JSON, forms, query
 /// parameters) to data classes.
 library;
+
 export 'src/binding/binding.dart'
     show
         Binding,

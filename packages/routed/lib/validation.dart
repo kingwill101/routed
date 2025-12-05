@@ -3,6 +3,7 @@
 /// Import this when you need access to the validator, rule definitions, or
 /// validation errors without pulling the entire framework barrel.
 library;
+
 export 'src/validation/validator.dart'
     show
         ValidationRuleFactory,

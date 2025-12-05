@@ -88,7 +88,8 @@ void main() {
       final response = await client!.get('/hello');
       response
         ..assertStatus(200)
-        ..assertBodyContains('Hello World!')..assertBodyContains('<li>one</li>')
+        ..assertBodyContains('Hello World!')
+        ..assertBodyContains('<li>one</li>')
         ..assertBodyContains('Page Footer');
     });
 
