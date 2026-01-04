@@ -341,9 +341,7 @@ class BrowserManagement {
 
       for (final executable in executables) {
         try {
-          final overridePath = TestBootstrap.getBinaryOverride(
-            executable.name,
-          );
+          final overridePath = TestBootstrap.getBinaryOverride(executable.name);
           if (overridePath != null) {
             final overrideFile = File(overridePath);
             if (overrideFile.existsSync()) {
