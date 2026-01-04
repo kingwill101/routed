@@ -142,7 +142,7 @@ class GeckoDriverManager extends WebDriverManager {
   @override
   Future<void> start(int port) async {
     final targetDir = BrowserPaths.getRegistryDirectory();
-    final driverPath = path.join(targetDir, 'drivers', 'geckodriver');
+    final driverPath = path.join(targetDir, 'drivers', driverBinaryName());
 
     if (!await File(driverPath).exists()) {
       throw Exception('GeckoDriver not found at: $driverPath');
