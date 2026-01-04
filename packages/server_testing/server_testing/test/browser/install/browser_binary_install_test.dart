@@ -1,6 +1,5 @@
 import 'dart:io';
 
-import 'package:path/path.dart' as p;
 import 'package:server_testing/src/browser/bootstrap/browsers_json_const.dart';
 import 'package:server_testing/src/browser/bootstrap/registry.dart';
 import 'package:test/test.dart';
