@@ -197,15 +197,18 @@ class ServerTestingCli {
     final fileName = '${_sanitize(name)}_test.dart';
     final file = File(
       p.join(_workingDirectory.path, 'test', 'browser', fileName),
-    )..createSync(recursive: true);
+    );
+    file.parent.createSync(recursive: true);
+    file.createSync();
     await file.writeAsString(_exampleBrowserTest);
     _stdout.writeln('Created ${file.path}');
   }
 
   Future<void> _createHttpTest(String name) async {
     final fileName = '${_sanitize(name)}_test.dart';
-    final file = File(p.join(_workingDirectory.path, 'test', 'http', fileName))
-      ..createSync(recursive: true);
+    final file = File(p.join(_workingDirectory.path, 'test', 'http', fileName));
+    file.parent.createSync(recursive: true);
+    file.createSync();
     await file.writeAsString(_exampleHttpTest);
     _stdout.writeln('Created ${file.path}');
   }
