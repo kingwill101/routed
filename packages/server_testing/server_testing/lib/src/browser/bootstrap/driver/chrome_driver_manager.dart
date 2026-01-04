@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 
@@ -146,16 +147,29 @@ class ChromeDriverManager extends WebDriverManager {
   }
 
   Future<int?> _detectChromeMajorFromBinary() async {
+    const timeout = Duration(seconds: 5);
     for (final candidate in _chromeBinaryCandidates()) {
       if (!await File(candidate).exists()) continue;
+      Process? process;
       try {
-        final out = await Process.run(candidate, ['--version']);
-        if (out.exitCode != 0) continue;
-        final match = RegExp(r'(\d+)\.').firstMatch(out.stdout.toString());
+        process = await Process.start(candidate, ['--version']);
+        final stdoutFuture = process.stdout.transform(utf8.decoder).join();
+        final stderrFuture = process.stderr.transform(utf8.decoder).join();
+        final exitCode = await process.exitCode.timeout(timeout);
+        if (exitCode != 0) continue;
+        final output = await stdoutFuture;
+        await stderrFuture;
+        final match = RegExp(r'(\d+)\.').firstMatch(output);
         if (match != null) {
           return int.tryParse(match.group(1) ?? '');
         }
+      } on TimeoutException {
+        process?.kill();
+        print(
+          'Timed out probing Chrome version for $candidate; skipping version detection.',
+        );
       } catch (_) {
+        process?.kill();
         // Ignore and continue searching.
       }
     }
