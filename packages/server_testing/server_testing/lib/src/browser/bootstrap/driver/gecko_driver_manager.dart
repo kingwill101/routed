@@ -63,7 +63,14 @@ class GeckoDriverManager extends WebDriverManager {
     await _extractDriver(archivePath, targetDir);
 
     print('Cleaning up temporary files...');
-    await File(archivePath).delete();
+    try {
+      final archiveFile = File(archivePath);
+      if (await archiveFile.exists()) {
+        await archiveFile.delete();
+      }
+    } catch (e) {
+      print('Warning: failed to delete GeckoDriver archive: $e');
+    }
 
     print('GeckoDriver setup complete');
   }

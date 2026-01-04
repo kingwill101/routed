@@ -20,8 +20,10 @@ class InstallationLock {
   File? _lock;
 
   /// Creates an installation lock manager targeting the specified [lockDir].
-  InstallationLock(this.lockDir)
-    : lockFile = path.join(lockDir, 'install.lock');
+  ///
+  /// [name] allows for more granular locking (e.g., per-browser).
+  InstallationLock(this.lockDir, {String name = 'install'})
+    : lockFile = path.join(lockDir, '$name.lock');
 
   /// Acquires the installation lock, waiting if necessary.
   ///
@@ -31,31 +33,40 @@ class InstallationLock {
   /// stale, it waits and retries periodically.
   ///
   /// Throws an exception if the lock cannot be acquired after multiple attempts.
-  Future<void> acquire() async {
+  Future<void> acquire({Duration timeout = const Duration(minutes: 10)}) async {
     final dir = Directory(lockDir);
     if (!dir.existsSync()) {
       await dir.create(recursive: true);
     }
 
-    int attempts = 0;
-    const maxAttempts = 60; // 1 minute with 1-second intervals
+    final stopWatch = Stopwatch()..start();
+    final interval = const Duration(seconds: 1);
 
-    while (attempts < maxAttempts) {
+    while (stopWatch.elapsed < timeout) {
       try {
         _lock = File(lockFile)..createSync(exclusive: true);
         await _lock!.writeAsString(pid.toString());
         return;
       } catch (e) {
         if (await _isStale()) {
-          await File(lockFile).delete();
+          try {
+            final file = File(lockFile);
+            if (await file.exists()) {
+              await file.delete();
+            }
+          } catch (_) {
+            // Ignore deletion errors, might be a race condition
+          }
           continue;
         }
-        attempts++;
-        await Future<void>.delayed(const Duration(seconds: 1));
+        await Future<void>.delayed(interval);
       }
     }
 
-    throw Exception('Could not acquire lock after $maxAttempts attempts');
+    throw Exception(
+      'Could not acquire lock "$lockFile" after ${timeout.inSeconds} seconds. '
+      'If you are sure no other process is installing browsers, delete this file manually.',
+    );
   }
 
   /// Releases the acquired installation lock.
@@ -69,18 +80,30 @@ class InstallationLock {
 
   /// Checks if the existing lock file points to a process that is no longer running.
   ///
-  /// Reads the PID from the lock file and uses `kill -0 <pid>` (on non-Windows)
-  /// to check if the process exists. Returns `true` if the lock file doesn't exist,
-  /// cannot be read, contains an invalid PID, or the process is gone. Returns
-  /// `false` if the process appears to be running.
-  ///
-  /// Note: Process check is platform-dependent and currently only implemented
-  /// for Unix-like systems. On Windows, it might always return true if reading fails.
+  /// Reads the PID from the lock file and checks if the process exists.
+  /// Returns `true` if the lock file doesn't exist, cannot be read, contains
+  /// an invalid PID, or the process is gone. Returns `false` if the process
+  /// appears to be running.
   Future<bool> _isStale() async {
     try {
-      final lockPid = int.parse(await File(lockFile).readAsString());
-      final result = await Process.run('kill', ['-0', '$lockPid']);
-      return result.exitCode != 0;
+      final file = File(lockFile);
+      if (!await file.exists()) return true;
+
+      final content = await file.readAsString();
+      final lockPid = int.tryParse(content.trim());
+      if (lockPid == null) return true;
+
+      if (Platform.isWindows) {
+        final result = await Process.run('tasklist', [
+          '/FI',
+          'PID eq $lockPid',
+          '/NH',
+        ]);
+        return !result.stdout.toString().contains('$lockPid');
+      } else {
+        final result = await Process.run('kill', ['-0', '$lockPid']);
+        return result.exitCode != 0;
+      }
     } catch (_) {
       return true;
     }

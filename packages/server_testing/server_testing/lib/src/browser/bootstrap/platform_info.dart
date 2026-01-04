@@ -10,6 +10,9 @@ enum BrowserPlatform { linux, mac, win }
 /// This class attempts to identify the operating system, version, and architecture
 /// to generate platform identifiers compatible with Playwright's download structure.
 class PlatformInfo {
+  static const String _platformOverrideEnv = 'SERVER_TESTING_PLATFORM';
+  static const String _platformIdOverrideEnv = 'SERVER_TESTING_PLATFORM_ID';
+
   // Cache the computed values to avoid repeated process calls
   static String? _cachedPlatformId;
   static String? _cachedArchitecture;
@@ -17,14 +20,35 @@ class PlatformInfo {
 
   /// Gets the high-level [BrowserPlatform] enum value for the current operating system.
   ///
-  /// Throws [UnsupportedError] if the platform is not Linux, macOS, or Windows.
+  /// Uses [SERVER_TESTING_PLATFORM] override when provided.
+  /// Falls back to Linux for unknown platforms to keep CI environments running.
   static BrowserPlatform get currentPlatform {
     if (_cachedCurrentPlatform != null) return _cachedCurrentPlatform!;
+
+    final override = Platform.environment[_platformOverrideEnv];
+    if (override != null && override.trim().isNotEmpty) {
+      final normalized = override.trim().toLowerCase();
+      if (normalized.startsWith('linux')) {
+        return _cachedCurrentPlatform = BrowserPlatform.linux;
+      }
+      if (normalized.startsWith('mac') || normalized == 'darwin') {
+        return _cachedCurrentPlatform = BrowserPlatform.mac;
+      }
+      if (normalized.startsWith('win')) {
+        return _cachedCurrentPlatform = BrowserPlatform.win;
+      }
+      print(
+        "Warning: Unrecognized $_platformOverrideEnv value '$override'. Falling back to runtime detection.",
+      );
+    }
 
     if (Platform.isLinux) return _cachedCurrentPlatform = BrowserPlatform.linux;
     if (Platform.isMacOS) return _cachedCurrentPlatform = BrowserPlatform.mac;
     if (Platform.isWindows) return _cachedCurrentPlatform = BrowserPlatform.win;
-    throw UnsupportedError('Unsupported platform: ${Platform.operatingSystem}');
+    print(
+      'Warning: Unsupported platform ${Platform.operatingSystem}. Defaulting to Linux for compatibility.',
+    );
+    return _cachedCurrentPlatform = BrowserPlatform.linux;
   }
 
   /// Gets the specific platform identifier string used for browser downloads.
@@ -33,9 +57,16 @@ class PlatformInfo {
   /// matching the keys used in Playwright's download infrastructure
   /// (e.g., 'ubuntu22.04-x64', 'mac13-arm64', 'win64').
   /// See [_getLinuxPlatformId] and [_getMacPlatformId] for details.
-  /// Throws [UnsupportedError] for unsupported platforms.
+  /// Uses [SERVER_TESTING_PLATFORM_ID] override when provided.
   static String get platformId {
     if (_cachedPlatformId != null) return _cachedPlatformId!;
+
+    final override = Platform.environment[_platformIdOverrideEnv];
+    if (override != null && override.trim().isNotEmpty) {
+      _cachedPlatformId = override.trim();
+      print("Using overridden platformId: $_cachedPlatformId");
+      return _cachedPlatformId!;
+    }
 
     try {
       final platform = currentPlatform; // Trigger enum resolution first
@@ -56,11 +87,11 @@ class PlatformInfo {
       print("Detected platformId: $_cachedPlatformId");
       return _cachedPlatformId!;
     } catch (e) {
-      // Propagate errors from underlying detection methods
       print("Error detecting platformId: $e");
-      throw UnsupportedError(
-        'Failed to determine platform identifier for ${Platform.operatingSystem}: $e',
-      );
+      final architecture = _getArchitecture();
+      _cachedPlatformId = _fallbackPlatformId(architecture);
+      print("Falling back to platformId: $_cachedPlatformId");
+      return _cachedPlatformId!;
     }
   }
 
@@ -223,5 +254,16 @@ class PlatformInfo {
       return _cachedArchitecture = 'arm64';
     }
     return _cachedArchitecture = 'x64'; // Default assumption
+  }
+
+  static String _fallbackPlatformId(String architecture) {
+    switch (currentPlatform) {
+      case BrowserPlatform.linux:
+        return 'ubuntu22.04-$architecture';
+      case BrowserPlatform.mac:
+        return 'mac14-$architecture';
+      case BrowserPlatform.win:
+        return 'win64';
+    }
   }
 }

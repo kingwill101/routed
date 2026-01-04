@@ -186,6 +186,13 @@ class BrowserPaths {
           }
         }
       }
+
+      if (base == 'linux') {
+        yield 'ubuntu22.04';
+        yield 'ubuntu20.04';
+        yield 'debian12';
+        yield 'debian11';
+      }
     }
 
     Iterable<String> macFallbacks() sync* {

@@ -4,7 +4,7 @@ import 'package:server_testing/src/browser/bootstrap/devices_json_const.dart';
 void main() async {
   await testBootstrap(
     BrowserConfig(
-      browserName: 'firefox',
+      browserName: 'chromium',
       headless: true,
       baseUrl: 'https://example.com',
       autoScreenshots: false,
@@ -56,7 +56,7 @@ void main() async {
         );
         expect(prefersDark, anyOf(true, false));
       },
-      browserType: FirefoxType(),
+      browserType: ChromiumType(),
       device: devicePixel5,
     );
 

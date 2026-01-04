@@ -247,7 +247,10 @@ class Registry {
     BrowserDescriptor descriptor,
     String registryDir,
   ) async {
-    final lock = InstallationLock(registryDir);
+    final lock = InstallationLock(
+      registryDir,
+      name: 'install_${descriptor.name}_${descriptor.revision}',
+    );
     await lock.acquire();
 
     try {

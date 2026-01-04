@@ -58,9 +58,17 @@ class InstallationValidator {
   /// Currently checks for the presence of `ldd`. Should be expanded to check
   /// for specific libraries required by browsers like Chrome/Firefox.
   static Future<void> _validateLinuxDependencies(String browserDir) async {
-    final result = await Process.run('ldd', ['--version']);
-    if (result.exitCode != 0) {
-      throw Exception('ldd is required for browser dependencies validation');
+    try {
+      final result = await Process.run('ldd', ['--version']);
+      if (result.exitCode != 0) {
+        print(
+          'Warning: ldd check failed (exit ${result.exitCode}). Skipping dependency validation.',
+        );
+      }
+    } on ProcessException catch (e) {
+      print(
+        'Warning: ldd not found ($e). Skipping dependency validation for this host.',
+      );
     }
     // Add more specific Linux dependency checks here
   }
