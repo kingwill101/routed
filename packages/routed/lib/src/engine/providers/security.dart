@@ -168,13 +168,26 @@ class SecurityServiceProvider extends ServiceProvider
 
     final engineConfig = container.get<EngineConfig>();
 
-    final enabled = config.getBool('security.trusted_proxies.enabled', defaultValue: engineConfig.features.enableProxySupport);
+    final enabled = config.getBool(
+      'security.trusted_proxies.enabled',
+      defaultValue: engineConfig.features.enableProxySupport,
+    );
 
-    final forward = config.getBool('security.trusted_proxies.forward_client_ip', defaultValue: engineConfig.forwardedByClientIP);
+    final forward = config.getBool(
+      'security.trusted_proxies.forward_client_ip',
+      defaultValue: engineConfig.forwardedByClientIP,
+    );
 
-    final proxies = config.getStringListOrNull('security.trusted_proxies.proxies') ?? const [];
-    final headers = config.getStringListOrNull('security.trusted_proxies.headers') ?? const [];
-    final platform = config.getStringOrNull('security.trusted_proxies.platform_header', allowEmpty: true);
+    final proxies =
+        config.getStringListOrNull('security.trusted_proxies.proxies') ??
+        const [];
+    final headers =
+        config.getStringListOrNull('security.trusted_proxies.headers') ??
+        const [];
+    final platform = config.getStringOrNull(
+      'security.trusted_proxies.platform_header',
+      allowEmpty: true,
+    );
 
     return TrustedProxyResolver(
       enabled: enabled,
@@ -228,7 +241,9 @@ class SecurityServiceProvider extends ServiceProvider
       return IpFilter.disabled();
     }
 
-    final actionRaw = config.getStringOrNull('security.ip_filter.default_action')?.toLowerCase();
+    final actionRaw = config
+        .getStringOrNull('security.ip_filter.default_action')
+        ?.toLowerCase();
     final defaultAction = actionRaw == 'deny'
         ? IpFilterAction.deny
         : IpFilterAction.allow;
@@ -238,11 +253,18 @@ class SecurityServiceProvider extends ServiceProvider
       );
     }
 
-    final allowEntries = config.getStringListOrNull('security.ip_filter.allow') ?? const <String>[];
+    final allowEntries =
+        config.getStringListOrNull('security.ip_filter.allow') ??
+        const <String>[];
 
-    final denyEntries = config.getStringListOrNull('security.ip_filter.deny') ?? const <String>[];
+    final denyEntries =
+        config.getStringListOrNull('security.ip_filter.deny') ??
+        const <String>[];
 
-    final respectProxies = config.getBool('security.ip_filter.respect_trusted_proxies', defaultValue: true);
+    final respectProxies = config.getBool(
+      'security.ip_filter.respect_trusted_proxies',
+      defaultValue: true,
+    );
 
     List<NetworkMatcher> parseNetworks(List<String> entries, String context) {
       final result = <NetworkMatcher>[];
@@ -274,7 +296,7 @@ class SecurityServiceProvider extends ServiceProvider
   }
 
   void _validateSecurityConfig(Config config) {
-    final securityRaw = config.get('security');
+    final securityRaw = config.get<Object?>('security');
     if (securityRaw == null) {
       return;
     }
@@ -282,27 +304,38 @@ class SecurityServiceProvider extends ServiceProvider
       throw ProviderConfigException('security must be a map');
     }
 
-    final maxRequestSizeRaw = config.get('security.max_request_size');
-    if (maxRequestSizeRaw != null) {
-      if (maxRequestSizeRaw is! int) {
-        throw ProviderConfigException('security.max_request_size must be an integer');
+    // Validate max_request_size if present
+    if (config.get<Object?>('security.max_request_size') != null) {
+      final parsed = config.getIntOrThrow('security.max_request_size');
+      if (parsed < 0) {
+        throw ProviderConfigException(
+          'security.max_request_size must be zero or positive',
+        );
       }
-      if (maxRequestSizeRaw < 0) {
-        throw ProviderConfigException('security.max_request_size must be zero or positive');
-      }
-      config.set('security.max_request_size', maxRequestSizeRaw);
+      config.set('security.max_request_size', parsed);
     }
 
-    final headersRaw = config.get('security.headers');
-    if (headersRaw != null) {
-      if (headersRaw is! Map) {
-        throw ProviderConfigException('security.headers must be a map');
-      }
-      final sanitized = {for (final entry in (headersRaw as Map).entries) entry.key.toString(): entry.value.toString()};
-      config.set('security.headers', sanitized);
+    // Validate headers map if present
+    if (config.get<Object?>('security.headers') != null) {
+      final parsed = config.getStringMapOrThrow('security.headers');
+      config.set('security.headers', parsed);
     }
 
-    final csrfRaw = config.get('security.csrf');
+    // Validate trusted_proxies if present
+    if (config.get<Object?>('security.trusted_proxies') != null) {
+      // Validate proxies list if present
+      if (config.get<Object?>('security.trusted_proxies.proxies') != null) {
+        config.getStringListOrThrow('security.trusted_proxies.proxies');
+      }
+
+      // Validate headers list if present
+      if (config.get<Object?>('security.trusted_proxies.headers') != null) {
+        config.getStringListOrThrow('security.trusted_proxies.headers');
+      }
+    }
+
+    // Validate CSRF config if present
+    final csrfRaw = config.get<Object?>('security.csrf');
     if (csrfRaw == null) {
       return;
     }
@@ -310,20 +343,16 @@ class SecurityServiceProvider extends ServiceProvider
       throw ProviderConfigException('security.csrf must be a map');
     }
 
-    final enabledRaw = config.get('security.csrf.enabled');
-    if (enabledRaw != null) {
-      if (enabledRaw is! bool) {
-        throw ProviderConfigException('security.csrf.enabled must be a boolean');
-      }
-      config.set('security.csrf.enabled', enabledRaw);
+    // Validate csrf.enabled if present
+    if (config.get<Object?>('security.csrf.enabled') != null) {
+      final parsed = config.getBoolOrThrow('security.csrf.enabled');
+      config.set('security.csrf.enabled', parsed);
     }
 
-    final cookieRaw = config.get('security.csrf.cookie_name');
-    if (cookieRaw != null) {
-      if (cookieRaw is! String) {
-        throw ProviderConfigException('security.csrf.cookie_name must be a string');
-      }
-      config.set('security.csrf.cookie_name', cookieRaw);
+    // Validate csrf.cookie_name if present
+    if (config.get<Object?>('security.csrf.cookie_name') != null) {
+      final parsed = config.getStringOrThrow('security.csrf.cookie_name');
+      config.set('security.csrf.cookie_name', parsed);
     }
   }
 }

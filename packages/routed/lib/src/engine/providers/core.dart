@@ -483,12 +483,19 @@ class CoreServiceProvider extends ServiceProvider with ProvidesDefaultConfig {
   EngineConfig _resolveEngineConfig(Config config, EngineConfig base) {
     final shutdown = resolveShutdownConfig(config, base.shutdown);
     final http2Enabled = config.getBoolOrNull('http.http2.enabled');
-    final http2AllowCleartext = config.getBoolOrNull('http.http2.allow_cleartext');
-    int? http2MaxStreams = config.getIntOrNull('http.http2.max_concurrent_streams');
+    final http2AllowCleartext = config.getBoolOrNull(
+      'http.http2.allow_cleartext',
+    );
+    int? http2MaxStreams = config.getIntOrNull(
+      'http.http2.max_concurrent_streams',
+    );
     if (http2MaxStreams != null && http2MaxStreams <= 0) {
       http2MaxStreams = null;
     }
-    final http2IdleTimeout = config.getDuration('http.http2.idle_timeout', defaultValue: const Duration(seconds: 30));
+    final http2IdleTimeout = config.getDuration(
+      'http.http2.idle_timeout',
+      defaultValue: const Duration(seconds: 30),
+    );
 
     final http2 = base.http2.copyWith(
       enabled: http2Enabled,
@@ -497,10 +504,17 @@ class CoreServiceProvider extends ServiceProvider with ProvidesDefaultConfig {
       idleTimeout: http2IdleTimeout,
     );
 
-    final tlsCertificatePath = config.getStringOrNull('http.tls.certificate_path');
+    final tlsCertificatePath = config.getStringOrNull(
+      'http.tls.certificate_path',
+    );
     final tlsKeyPath = config.getStringOrNull('http.tls.key_path');
-    final tlsPassword = config.getStringOrNull('http.tls.password', allowEmpty: true);
-    final tlsRequestClientCertificate = config.getBoolOrNull('http.tls.request_client_certificate');
+    final tlsPassword = config.getStringOrNull(
+      'http.tls.password',
+      allowEmpty: true,
+    );
+    final tlsRequestClientCertificate = config.getBoolOrNull(
+      'http.tls.request_client_certificate',
+    );
     final tlsShared = config.getBoolOrNull('http.tls.shared');
     final tlsV6Only = config.getBoolOrNull('http.tls.v6_only');
 

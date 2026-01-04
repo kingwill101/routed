@@ -27,8 +27,10 @@ abstract class SamplingGenerator<T> extends Generator<List<T>> {
   }
 
   /// Shrinks a list by removing elements or replacing with earlier elements from options.
-  Iterable<ShrinkableValue<List<T>>> shrinkList(List<T> currentList,
-      int minCount,) sync* {
+  Iterable<ShrinkableValue<List<T>>> shrinkList(
+    List<T> currentList,
+    int minCount,
+  ) sync* {
     final yielded = <List<T>>{currentList}; // Track yields
 
     bool yieldIfNew(List<T> list) {

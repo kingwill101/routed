@@ -159,8 +159,7 @@ class RateLimitServiceProvider extends ServiceProvider
     final configuredStore = config.getStringOrNull('rate_limit.store');
 
     final defaultStoreName =
-        configuredStore ??
-        config.getStringOrNull('cache.default');
+        configuredStore ?? config.getStringOrNull('cache.default');
 
     if (defaultStoreName == null || defaultStoreName.isEmpty) {
       throw ProviderConfigException(
@@ -185,9 +184,11 @@ class RateLimitServiceProvider extends ServiceProvider
     RateLimiterBackend backend,
     RateLimitFailoverMode defaultFailover,
   ) {
-    final rawPolicies =
-        config.get('rate_limit.policies') as List<dynamic>? ?? const [];
-    if (rawPolicies.isEmpty) {
+    final rawPolicies = config.get<Object?>('rate_limit.policies');
+    if (rawPolicies == null) {
+      return const [];
+    }
+    if (rawPolicies is! List) {
       return const [];
     }
 
@@ -207,14 +208,22 @@ class RateLimitServiceProvider extends ServiceProvider
     final name = map['name']?.toString() ?? map['match']?.toString() ?? '*';
     final match = map['match']?.toString() ?? '*';
     final method = map['method']?.toString();
-    final capacity = map.getInt('limit') ?? map.getInt('capacity') ?? map.getInt('requests') ?? 100;
+    final capacity =
+        map.getInt('limit') ??
+        map.getInt('capacity') ??
+        map.getInt('requests') ??
+        100;
     final intervalValue = map['interval'] ?? map['refill'];
     final strategy = _parseStrategy(map['strategy']);
     final RateLimitAlgorithmConfig algorithm;
     switch (strategy) {
       case RateLimitStrategy.slidingWindow:
         final limit = capacity;
-        final window = map.getDuration('window') ?? map.getDuration('interval') ?? map.getDuration('refill') ?? const Duration(minutes: 1);
+        final window =
+            map.getDuration('window') ??
+            map.getDuration('interval') ??
+            map.getDuration('refill') ??
+            const Duration(minutes: 1);
         algorithm = SlidingWindowConfig(limit: max(1, limit), window: window);
         break;
       case RateLimitStrategy.quota:
@@ -229,7 +238,10 @@ class RateLimitServiceProvider extends ServiceProvider
         algorithm = QuotaConfig(limit: max(1, limit), period: period);
         break;
       case RateLimitStrategy.tokenBucket:
-        final interval = map.getDuration('interval') ?? map.getDuration('refill') ?? const Duration(minutes: 1);
+        final interval =
+            map.getDuration('interval') ??
+            map.getDuration('refill') ??
+            const Duration(minutes: 1);
         final burst = map['burst'] is num
             ? (map['burst'] as num).toDouble()
             : double.tryParse(map['burst']?.toString() ?? '');
@@ -325,11 +337,8 @@ Duration? _parseExtendedDuration(
   required String context,
   bool throwOnInvalid = true,
 }) {
-  final base = parseDurationLike(
-    value,
-    context: context,
-    throwOnInvalid: false,
-  );
+  // Try standard duration parsing first via a temporary map
+  final base = {context: value}.getDuration(context);
   if (base != null) {
     return base;
   }

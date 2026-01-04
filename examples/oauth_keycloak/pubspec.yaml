@@ -24,7 +24,3 @@ dev_dependencies:
   routed_cli:
     path: ../../packages/routed_cli
   test: ^1.26.3
-
-dependency_overrides:
-  class_view:
-    path: ../../packages/class_view

@@ -38,8 +38,8 @@ void main() {
         'service': {'enabled': false},
       });
 
-    expect(config.get('service.enabled'), isFalse);
-    expect(config.get('service.endpoint'), 'http://local');
+    expect(config.getOrThrow<bool>('service.enabled'), isFalse);
+    expect(config.getOrThrow<String>('service.endpoint'), 'http://local');
   });
 
   test('merges map defaults contributed at the same path', () {

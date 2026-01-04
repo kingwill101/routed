@@ -1,0 +1,23 @@
+# Cache configuration quick reference:
+# default – Name of the cache store to use when none is specified explicitly. Default: file. Env override: CACHE_STORE Type: string
+# key_prefix – Optional global prefix injected before the generated store prefix. Type: string
+# prefix – Prefix prepended to every cache key. Useful when sharing stores. Default: (empty). Type: string
+# stores – Configured cache stores keyed by store name. Default: {"array":{"driver":"array"},"file":{"driver":"file","path":"storage/framework/cache"}}. Type: map
+# stores.*.db – The Redis database index to select after connecting. This setting can also be specified using the `database` alias. Default: Overrides apply when `database` or `db` is set. Validation: Must be an integer. Type: int
+# stores.*.driver – Driver identifier backing the cache store. Options: array, file, null, redis Type: string
+# stores.*.host – The Redis host to connect to when [url] is not provided. Default: Ignored when [url] is provided. Type: string
+# stores.*.password – An optional Redis password for authentication. Default: Optional; omit for no authentication. Type: string
+# stores.*.path – The directory where cache files are stored. If omitted, defaults to storage/framework/cache based on your application's storage configuration. Default: Computed from storage defaults (storage/framework/cache). Validation: Must resolve to a non-empty directory path. Type: string
+# stores.*.permission – An optional file permission mask (octal or decimal) applied to created cache files. For example, `0644` for read/write by owner, read-only by group/others. Validation: Provide octal (e.g. 0644) or decimal file mode. Type: int
+# stores.*.port – The Redis port to connect to when [url] is not provided. Default: Ignored when [url] is provided. Validation: Must be an integer. Type: int
+# stores.*.url – An optional Redis connection URL. When provided, this URL overrides the [host], [port], [password], and [db] configurations. Example: `redis://username:password@localhost:6379/0`. Validation: Must be a valid redis:// URL including host. Type: string
+
+default: file
+prefix:
+stores:
+  array:
+    driver: array
+  file:
+    driver: file
+    path: storage/framework/cache
+

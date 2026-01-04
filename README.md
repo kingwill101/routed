@@ -6,7 +6,7 @@
 [![Support](https://img.shields.io/badge/support-Buy%20Me%20a%20Coffee-ff813f?logo=buymeacoffee)](https://www.buymeacoffee.com/kingwill101)
 
 Workspace for the Routed framework, testing utilities, CLI, Hotwire helpers,
-class_view adapters, and runnable examples. The repo uses a Dart monorepo
+server testing adapters, and runnable examples. The repo uses a Dart monorepo
 layout so packages share tooling, CI, and release notes.
 
 ## Packages
@@ -25,19 +25,6 @@ layout so packages share tooling, CI, and release notes.
   Routed transport adapter for `server_testing`.
 - [packages/server_testing/server_testing_shelf](packages/server_testing/server_testing_shelf) –
   Shelf adapter for `server_testing`.
-- [packages/class_view/class_view](packages/class_view/class_view) – Django-style
-  class-based views plus tooling.
-- [packages/class_view/routed_class_view](packages/class_view/routed_class_view) –
-  Routed adapter for class_view.
-- [packages/class_view/shelf_class_view](packages/class_view/shelf_class_view) –
-  Shelf adapter for class_view.
-- [packages/class_view/class_view_image_field](packages/class_view/class_view_image_field) –
-  optional image field extensions.
-- [packages/class_view/simple_blog](packages/class_view/simple_blog) &
-  [packages/class_view/todo_test](packages/class_view/todo_test) – end-to-end
-  samples and acceptance tests.
-- [packages/jaspr_routed](packages/jaspr_routed) – jaspr adapter plus
-  [example](packages/jaspr_routed/example).
 
 ## Examples
 
@@ -45,6 +32,7 @@ Each example lives under `examples/` so you can run it locally:
 
 - [examples/config_demo](examples/config_demo) – configuration + CLI walkthrough.
 - [examples/kitchen_sink](examples/kitchen_sink) – broad feature sampler.
+- [examples/openapi](examples/openapi) – OpenAPI manifest generation example.
 - [examples/localization](examples/localization) – translation provider demo.
 - [examples/multipart](examples/multipart) – upload + binding helpers.
 - [examples/liquid_template](examples/liquid_template) – template rendering.

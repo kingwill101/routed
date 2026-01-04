@@ -50,7 +50,7 @@ void main() {
       final eventManager = await engine.make<EventManager>();
       final reloadCompleter = Completer<ConfigReloadedEvent>();
       eventManager.on<ConfigReloadedEvent>().listen((event) {
-        if (event.config.get('app.name') == 'Updated') {
+        if (event.config.get<String>('app.name') == 'Updated') {
           if (!reloadCompleter.isCompleted) {
             reloadCompleter.complete(event);
           }
@@ -69,7 +69,7 @@ void main() {
 
       expect(event.metadata['source'], isNotEmpty);
       final config = await engine.make<Config>();
-      expect(config.get('app.name'), equals('Updated'));
+      expect(config.get<String>('app.name'), equals('Updated'));
     });
   });
 }

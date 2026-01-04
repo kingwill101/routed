@@ -507,7 +507,9 @@ class SessionServiceProvider extends ServiceProvider
 
   static SessionConfig _buildFileDriver(SessionDriverBuilderContext context) {
     final raw = context.raw;
-    final configuredPath = raw.getString('files', allowEmpty: true) ?? raw.getString('storage_path', allowEmpty: true) ??
+    final configuredPath =
+        raw.getString('files', allowEmpty: true) ??
+        raw.getString('storage_path', allowEmpty: true) ??
         raw['path']?.toString();
 
     final storageDefaults = context.storageDefaults;
@@ -560,7 +562,8 @@ class SessionServiceProvider extends ServiceProvider
   }
 
   static String _resolveCacheStoreName(SessionDriverBuilderContext context) {
-    return context.raw.getString('store', allowEmpty: true) ?? (context.driver == 'database' ? 'database' : context.driver);
+    return context.raw.getString('store', allowEmpty: true) ??
+        (context.driver == 'database' ? 'database' : context.driver);
   }
 
   static SessionConfig _buildCacheBackedDriver(
@@ -781,7 +784,9 @@ class SessionServiceProvider extends ServiceProvider
       mapEnabled = true;
     } else if (sessionNode is Map) {
       sessionMap = Map<String, dynamic>.from(sessionNode);
-      mapEnabled = {for (final entry in sessionMap.entries) entry.key: entry.value}.getBool('enabled');
+      mapEnabled = {
+        for (final entry in sessionMap.entries) entry.key: entry.value,
+      }.getBool('enabled');
     }
 
     final enabled = explicitEnabled ?? mapEnabled ?? true;

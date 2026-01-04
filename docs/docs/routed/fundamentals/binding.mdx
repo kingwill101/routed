@@ -12,7 +12,7 @@ Routed provides several methods to bind incoming request data to your data struc
 import 'package:routed/bindings.dart';
 ```
 
-- `bind(target)` – auto-detects content type (`application/json`, `application/x-www-form-urlencoded`, `multipart/form-data`, `text/plain`) and merges parsed values into `target`. Existing keys in `target` are preserved unless overwritten by parsed values.
+- `bind(target)` – auto-detects content type (`application/json`, `application/x-www-form-urlencoded`, `multipart/form-data`, `text/plain`) and merges parsed values into `target`. `target` can be a `Map` or implement `Bindable`. Existing keys in a map are preserved unless overwritten by parsed values.
 - `shouldBindWith(target, binder)` – runs a specific binder (for example, `jsonBinding`, `formBinding`, `queryBinding`), useful when you want to be explicit regardless of `Content-Type`.
 - `mustBindWith(target, binder)` – same as above, but fails the request immediately with an error response when binding fails (for example, malformed JSON).
 
@@ -30,12 +30,32 @@ router.post('/users', (ctx) async {
   // Automatically bind request data based on content type
   await ctx.bind(data);
 
-  // Or specify binding type (all helpers return Futures)
+  // Or specify binding type (all helpers return the bound target)
   await ctx.bindJSON(data);    // JSON body
   await ctx.bindQuery(data);   // Query parameters
 
   // data now contains merged values from the body and/or query
   // e.g., { "role": "user", "name": "Ada" }
+});
+```
+
+### Binding into models
+
+```dart
+class CreateUserRequest implements Bindable {
+  String name = '';
+  String email = '';
+
+  @override
+  void bind(Map<String, dynamic> data) {
+    name = data['name'] as String? ?? '';
+    email = data['email'] as String? ?? '';
+  }
+}
+
+router.post('/users', (ctx) async {
+  final request = await ctx.bind(CreateUserRequest());
+  return ctx.json({'name': request.name, 'email': request.email});
 });
 ```
 
@@ -98,7 +118,7 @@ router.post('/critical', (ctx) async {
 });
 ```
 
-`mustBindWith`, `bind`, `bindJSON`, and the other helpers all return `Future<void>`—always `await` them so that asynchronous binders (JSON, multipart, etc.) finish before continuing.
+`mustBindWith`, `bind`, `bindJSON`, and the other helpers all return `Future<T>` (the same target instance). Always `await` them so that asynchronous binders (JSON, multipart, etc.) finish before continuing.
 
 Cautions:
 - Binding reads the request body once. Avoid calling multiple body binders (`bindJSON`, `formBinding`, etc.) in the same request.

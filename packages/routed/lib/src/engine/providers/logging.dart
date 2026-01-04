@@ -262,8 +262,12 @@ class LoggingServiceProvider extends ServiceProvider
         ctx.options['flushInterval'] ?? ctx.options['flush_interval'],
         fallback: const Duration(milliseconds: 500),
       );
-      final optionsMap = {for (final entry in ctx.options.entries) entry.key.toString(): entry.value};
-      final useIsolate = optionsMap.getBool('useIsolate') || optionsMap.getBool('use_isolate');
+      final optionsMap = {
+        for (final entry in ctx.options.entries)
+          entry.key.toString(): entry.value,
+      };
+      final useIsolate =
+          optionsMap.getBool('useIsolate') || optionsMap.getBool('use_isolate');
       final options = contextual.DailyFileOptions(
         path: path,
         retentionDays: retention,
@@ -275,7 +279,10 @@ class LoggingServiceProvider extends ServiceProvider
       );
     });
     registry.registerIfAbsent('stack', (ctx) {
-      final optionsMap = {for (final entry in ctx.options.entries) entry.key.toString(): entry.value};
+      final optionsMap = {
+        for (final entry in ctx.options.entries)
+          entry.key.toString(): entry.value,
+      };
       final channels = optionsMap.getStringList('channels') ?? const <String>[];
       if (channels.isEmpty) {
         throw ProviderConfigException(
@@ -287,7 +294,10 @@ class LoggingServiceProvider extends ServiceProvider
       return contextual.StackLogDriver(drivers, ignoreExceptions: ignore);
     });
     registry.registerIfAbsent('webhook', (ctx) {
-      final optionsMap = {for (final entry in ctx.options.entries) entry.key.toString(): entry.value};
+      final optionsMap = {
+        for (final entry in ctx.options.entries)
+          entry.key.toString(): entry.value,
+      };
       final rawUrl =
           _stringOption(ctx.options, ['url', 'endpoint', 'uri']) ?? '';
       late Uri uri;
@@ -303,7 +313,9 @@ class LoggingServiceProvider extends ServiceProvider
         ctx.options['timeout'] ?? ctx.options['timeout_ms'],
         fallback: const Duration(seconds: 5),
       );
-      final keepAlive = optionsMap.getBool('keep_alive', defaultValue: true) || optionsMap.getBool('keepAlive', defaultValue: true);
+      final keepAlive =
+          optionsMap.getBool('keep_alive', defaultValue: true) ||
+          optionsMap.getBool('keepAlive', defaultValue: true);
       final options = contextual.WebhookOptions(
         url: uri,
         headers: headers,
@@ -374,7 +386,9 @@ class LoggingServiceProvider extends ServiceProvider
       for (var i = 0; i < headerNamesRaw.length; i++) {
         final item = headerNamesRaw[i];
         if (item is! String) {
-          throw ProviderConfigException('logging.request_headers[$i] must be a string');
+          throw ProviderConfigException(
+            'logging.request_headers[$i] must be a string',
+          );
         }
         headerNames.add(item);
       }
@@ -384,7 +398,8 @@ class LoggingServiceProvider extends ServiceProvider
 
     final includeStackTraces = merged.getBool('include_stack_traces');
 
-    final formatToken = merged.getString('format')?.toLowerCase().trim() ?? 'plain';
+    final formatToken =
+        merged.getString('format')?.toLowerCase().trim() ?? 'plain';
 
     final format = switch (formatToken) {
       "pretty" => contextual.PrettyLogFormatter(),
@@ -482,7 +497,8 @@ _ChannelSettings _resolveChannelSettings(Config config) {
       final channelMap = value is Map<String, Object?>
           ? stringKeyedMap(value, contextPath)
           : const <String, Object?>{};
-      final rawDriver = channelMap.getString('driver')?.toLowerCase().trim() ?? 'stack';
+      final rawDriver =
+          channelMap.getString('driver')?.toLowerCase().trim() ?? 'stack';
       channels[name] = _ChannelConfig(
         name: name,
         driver: rawDriver,

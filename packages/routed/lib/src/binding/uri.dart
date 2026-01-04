@@ -8,6 +8,9 @@ class UriBinding extends Binding {
   @override
   String get name => 'uri';
 
+  @override
+  MimeType? get mimeType => null;
+
   /// Binds URI parameters from the [context] to the [instance].
   ///
   /// If the [instance] is a [Map], it iterates over the entries in [context.params]
@@ -17,13 +20,21 @@ class UriBinding extends Binding {
   /// [context] - The engine context containing the parameters to bind.
   /// [instance] - The instance to which the parameters will be bound.
   @override
-  Future<void> bind(EngineContext context, dynamic instance) async {
+  Future<T> bind<T>(EngineContext context, T instance) async {
     if (instance is Map) {
       for (final entry in context.params.entries) {
         final values = entry.value as List;
         instance[entry.key] = values.isEmpty ? null : values.first;
       }
+    } else if (instance is Bindable) {
+      final data = <String, dynamic>{};
+      for (final entry in context.params.entries) {
+        final values = entry.value as List;
+        data[entry.key] = values.isEmpty ? null : values.first;
+      }
+      instance.bind(data);
     }
+    return instance;
   }
 
   /// Validates the URI parameters in the [context] against the provided [rules].

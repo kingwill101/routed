@@ -4,20 +4,13 @@ workspace:
   - packages/routed
   - packages/routed_cli
   - packages/routed_hotwire
-  - packages/class_view/simple_blog
-  - packages/class_view/class_view
-  - packages/class_view/routed_class_view
-  - packages/class_view/shelf_class_view
-  - packages/class_view/todo_test
-  - packages/class_view/class_view_image_field
   - packages/server_testing/server_testing
   - packages/server_testing/routed_testing
   - packages/server_testing/server_testing_shelf
   - packages/property_testing
   - examples/kitchen_sink
   - examples/config_demo
-  - packages/jaspr_routed/example
-  - packages/jaspr_routed
+  - examples/openapi
 
 funding:
   - https://www.buymeacoffee.com/kingwill101

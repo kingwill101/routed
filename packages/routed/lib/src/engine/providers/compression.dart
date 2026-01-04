@@ -110,9 +110,14 @@ class CompressionServiceProvider extends ServiceProvider
   CompressionOptions _buildOptions(Config config) {
     final enabled = config.getBool('compression.enabled', defaultValue: true);
 
-    final minLength = config.getInt('compression.min_length', defaultValue: 1024);
-    
-    final algorithmNames = config.getStringListOrNull('compression.algorithms') ?? _defaultAlgorithms;
+    final minLength = config.getInt(
+      'compression.min_length',
+      defaultValue: 1024,
+    );
+
+    final algorithmNames =
+        config.getStringListOrNull('compression.algorithms') ??
+        _defaultAlgorithms;
 
     final algorithms = algorithmNames
         .map(parseCompressionAlgorithm)
@@ -120,9 +125,12 @@ class CompressionServiceProvider extends ServiceProvider
         .where(isAlgorithmSupported)
         .toList(growable: false);
 
-    final allowList = config.getStringListOrNull('compression.mime_allow') ?? _defaultMimeAllow;
+    final allowList =
+        config.getStringListOrNull('compression.mime_allow') ??
+        _defaultMimeAllow;
 
-    final denyList = config.getStringListOrNull('compression.mime_deny') ?? _defaultMimeDeny;
+    final denyList =
+        config.getStringListOrNull('compression.mime_deny') ?? _defaultMimeDeny;
 
     return CompressionOptions(
       enabled: enabled && algorithms.isNotEmpty,

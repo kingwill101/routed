@@ -39,8 +39,9 @@ void main() {
       await _writeFile(
         projectRoot,
         'config/http.yaml',
-        'providers:\n  - routed.core\n  - routed.routing\nfeatures:\n  routing:\n    enabled: true\n  sessions:\n    enabled: false\n',
+        'providers:\n  - routed.core\n  - routed.routing\n',
       );
+      await _writeFile(projectRoot, 'config/session.yaml', 'enabled: false\n');
     });
 
     String read(String relativePath) => memoryFs
@@ -55,9 +56,8 @@ void main() {
 
       final contents = read('config/http.yaml');
       expect(contents, contains('routed.sessions'));
-      final yaml = loadYaml(contents) as YamlMap;
-      final features = yaml['features'] as YamlMap;
-      expect((features['sessions'] as YamlMap)['enabled'], isTrue);
+      final sessionYaml = loadYaml(read('config/session.yaml')) as YamlMap;
+      expect(sessionYaml['enabled'], isTrue);
     });
 
     test('provider:disable removes provider from manifest', () async {
@@ -65,9 +65,6 @@ void main() {
 
       final contents = read('config/http.yaml');
       expect(contents, isNot(contains('routed.routing')));
-      final yaml = loadYaml(contents) as YamlMap;
-      final features = yaml['features'] as YamlMap;
-      expect((features['routing'] as YamlMap)['enabled'], isFalse);
     });
 
     test('provider:list --config prints defaults', () async {
@@ -76,7 +73,7 @@ void main() {
       expect(output, contains('routed.core'));
       expect(output, contains('defaults:'));
       expect(output, contains('http:'));
-      expect(output, contains('storage.disks.*.file_system'));
+      expect(output, contains('storage.disks.local.file_system'));
       expect(output, contains('session.same_site'));
       expect(output, contains('options=[lax, strict, none]'));
     });

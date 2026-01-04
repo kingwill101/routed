@@ -150,20 +150,29 @@ class LocalizationServiceProvider extends ServiceProvider
       throw ProviderConfigException('translation must be a map');
     }
 
-    final paths = config?.getStringListOrNull('translation.paths') ?? const ['resources/lang'];
+    final paths =
+        config?.getStringListOrNull('translation.paths') ??
+        const ['resources/lang'];
     loader.setPaths(paths);
 
-    final jsonPaths = config?.getStringListOrNull('translation.json_paths') ?? const <String>[];
+    final jsonPaths =
+        config?.getStringListOrNull('translation.json_paths') ??
+        const <String>[];
     loader.setJsonPaths(jsonPaths);
 
-    loader.setNamespaces(config?.getStringMap('translation.namespaces') ?? const <String, String>{});
+    loader.setNamespaces(
+      config?.getStringMap('translation.namespaces') ??
+          const <String, String>{},
+    );
 
     return loader;
   }
 
   _LocaleConfig _resolveLocaleConfig(Config? config) {
-    final defaultLocale = config?.getString('app.locale', defaultValue: 'en') ?? 'en';
-    final fallback = config?.getStringOrNull('app.fallback_locale') ?? defaultLocale;
+    final defaultLocale =
+        config?.getString('app.locale', defaultValue: 'en') ?? 'en';
+    final fallback =
+        config?.getStringOrNull('app.fallback_locale') ?? defaultLocale;
     return _LocaleConfig(
       defaultLocale: defaultLocale,
       fallbackLocale: fallback,
@@ -186,11 +195,17 @@ class LocalizationServiceProvider extends ServiceProvider
     Config? config,
     LocaleResolverRegistry registry,
   ) {
-    final resolvers = config?.getStringListOrNull('translation.resolvers') ?? _resolverDefaults();
-    final queryParameter = config?.getStringOrNull('translation.query.parameter') ?? 'locale';
-    final cookieName = config?.getStringOrNull('translation.cookie.name') ?? 'locale';
-    final sessionKey = config?.getStringOrNull('translation.session.key') ?? 'locale';
-    final headerName = config?.getStringOrNull('translation.header.name') ?? 'Accept-Language';
+    final resolvers =
+        config?.getStringListOrNull('translation.resolvers') ??
+        _resolverDefaults();
+    final queryParameter =
+        config?.getStringOrNull('translation.query.parameter') ?? 'locale';
+    final cookieName =
+        config?.getStringOrNull('translation.cookie.name') ?? 'locale';
+    final sessionKey =
+        config?.getStringOrNull('translation.session.key') ?? 'locale';
+    final headerName =
+        config?.getStringOrNull('translation.header.name') ?? 'Accept-Language';
 
     final options = _ResolverOptions(
       queryParameter: queryParameter,
@@ -199,9 +214,11 @@ class LocalizationServiceProvider extends ServiceProvider
       headerName: headerName,
     );
 
-    final resolverOptions = _readResolverOptions(
-      config?.get('translation.resolver_options'),
+    final rOpts = config?.get<Map<String, dynamic>?>(
+      'translation.resolver_options',
+      {},
     );
+    final resolverOptions = _readResolverOptions(rOpts);
     final builtResolvers = _buildResolvers(
       registry,
       resolvers,

@@ -219,10 +219,13 @@ class StorageServiceProvider extends ServiceProvider
       if (storageNode is! Map && storageNode is! Config) {
         throw ProviderConfigException('storage must be a map');
       }
-      storageMap = stringKeyedMap(storageNode as Object, 'storage');
+      storageMap = stringKeyedMap(storageNode, 'storage');
     }
 
-    final storageRootToken = config.getStringOrNull('storage.root', allowEmpty: true);
+    final storageRootToken = config.getStringOrNull(
+      'storage.root',
+      allowEmpty: true,
+    );
     final storageRoot = _resolveStorageRootValue(storageRootToken);
 
     if (storageMap == null) {
@@ -248,7 +251,10 @@ class StorageServiceProvider extends ServiceProvider
 
     final resolvedStorageMap = storageMap;
 
-    final defaultToken = resolvedStorageMap.getString('default', allowEmpty: true);
+    final defaultToken = resolvedStorageMap.getString(
+      'default',
+      allowEmpty: true,
+    );
     final defaultDisk = defaultToken == null || defaultToken.isEmpty
         ? 'local'
         : defaultToken;
@@ -260,7 +266,7 @@ class StorageServiceProvider extends ServiceProvider
         : cloudToken;
 
     final disksNode =
-        resolvedStorageMap['disks'] ?? config.get<Map<dynamic, dynamic>?>('storage.disks');
+        resolvedStorageMap['disks'] ?? config.get<Object?>('storage.disks');
     if (disksNode != null) {
       if (disksNode is! Map && disksNode is! Config) {
         throw ProviderConfigException('storage.disks must be a map');

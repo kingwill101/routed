@@ -31,23 +31,28 @@ void main() {
       });
 
       client = TestClient(RoutedRequestHandler(engine));
-      final response = await client!.get('/frame', headers: {
-        'Turbo-Frame': ['demo'],
-        'X-Turbo-Request-Id': ['abc123'],
-      });
+      final response = await client!.get(
+        '/frame',
+        headers: {
+          'Turbo-Frame': ['demo'],
+          'X-Turbo-Request-Id': ['abc123'],
+        },
+      );
       response.assertStatus(HttpStatus.ok);
       await Future<void>.delayed(Duration.zero);
 
-      final marker = factory.messages
-          .firstWhere((entry) => entry.message.contains('marker'));
+      final marker = factory.messages.firstWhere(
+        (entry) => entry.message.contains('marker'),
+      );
       final markerContext = marker.context;
       expect(markerContext['hotwire.kind'], equals('frame'));
       expect(markerContext['hotwire.frame_id'], equals('demo'));
       expect(markerContext['hotwire.request_id'], equals('abc123'));
       expect(markerContext.containsKey('hotwire.stream_request'), isFalse);
 
-      final requestLog = factory.messages
-          .firstWhere((entry) => entry.message.contains('GET /frame'));
+      final requestLog = factory.messages.firstWhere(
+        (entry) => entry.message.contains('GET /frame'),
+      );
       final requestContext = requestLog.context;
       expect(requestContext['hotwire.kind'], equals('frame'));
       expect(requestContext['hotwire.frame_id'], equals('demo'));
@@ -73,8 +78,9 @@ void main() {
       response.assertStatus(HttpStatus.ok);
       await Future<void>.delayed(Duration.zero);
 
-      final marker = factory.messages
-          .firstWhere((entry) => entry.message.contains('stream handler'));
+      final marker = factory.messages.firstWhere(
+        (entry) => entry.message.contains('stream handler'),
+      );
       final markerContext = marker.context;
       expect(markerContext['hotwire.kind'], equals('stream'));
       expect(markerContext['hotwire.stream_request'], isTrue);
@@ -88,16 +94,13 @@ class _CapturingLoggerFactory {
 
   contextual.Logger create(Map<String, Object?> context) {
     final logger = contextual.Logger()
-      ..withContext({for (final entry in context.entries) entry.key: entry.value});
-
-      logger.setListener((entry) {
-        messages.add(
-          _LogEntry(
-            entry.record.message,
-            entry.record.context.all(),
-          ),
-        );
+      ..withContext({
+        for (final entry in context.entries) entry.key: entry.value,
       });
+
+    logger.setListener((entry) {
+      messages.add(_LogEntry(entry.record.message, entry.record.context.all()));
+    });
 
     return logger;
   }

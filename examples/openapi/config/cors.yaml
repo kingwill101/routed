@@ -1,0 +1,23 @@
+# Cors configuration quick reference:
+# allow_credentials – Whether cookies/credentials can be shared cross-origin. Default: false. Type: bool
+# allowed_headers – Request headers accepted for CORS requests. Default: []. Type: list<string>
+# allowed_methods – HTTP methods permitted for CORS requests. Default: ["GET","POST","PUT","DELETE","PATCH","OPTIONS"]. Type: list<string>
+# allowed_origins – Origins allowed to access this application. Default: ["*"]. Type: list<string>
+# enabled – Enables CORS middleware. Default: false. Type: bool
+# exposed_headers – Response headers exposed to the browser. Default: []. Type: list<string>
+# max_age – Preflight cache duration in seconds. Type: int|null
+
+allow_credentials: false
+allowed_headers:
+allowed_methods:
+  - GET
+  - POST
+  - PUT
+  - DELETE
+  - PATCH
+  - OPTIONS
+allowed_origins:
+  - "*"
+enabled: false
+exposed_headers:
+

@@ -156,7 +156,7 @@ void main() {
     });
 
     test('should not log when verbose logging is disabled', () {
-      final logger =  EnhancedBrowserLogger(verboseLogging: false);
+      final logger = EnhancedBrowserLogger(verboseLogging: false);
 
       // This should not throw or print anything
       logger.logInfo('Test message');

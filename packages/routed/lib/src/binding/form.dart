@@ -11,6 +11,9 @@ class FormBinding extends Binding {
   @override
   String get name => 'form';
 
+  @override
+  MimeType get mimeType => MimeType.postForm;
+
   /// Decodes the body of the request from the given [EngineContext].
   ///
   /// This method reads the bytes from the request body, decodes them using UTF-8,
@@ -63,14 +66,15 @@ class FormBinding extends Binding {
   ///
   /// Returns a [Future] that completes when binding is done.
   @override
-  Future<void> bind(EngineContext context, dynamic instance) async {
+  Future<T> bind<T>(EngineContext context, T instance) async {
     final decoded = await _decodedBody(context); // Decode the request body.
     await bindBody(decoded, instance); // Bind the decoded body to the instance.
+    return instance;
   }
 
   /// Binds the decoded body to the given [instance].
   ///
-  /// This method adds all key-value pairs from the decoded body to the instance if it is a [Map].
+  /// This method adds all key-value pairs from the decoded body to the instance if it is a [Map] or [Bindable].
   ///
   /// [decoded] is the [Map] containing the decoded body.
   /// [instance] is the object to bind the decoded body to.
@@ -79,6 +83,8 @@ class FormBinding extends Binding {
   Future<void> bindBody(Map<String, dynamic> decoded, dynamic instance) async {
     if (instance is Map) {
       instance.addAll(decoded); // Add all key-value pairs to the instance.
+    } else if (instance is Bindable) {
+      instance.bind(decoded);
     }
   }
 }

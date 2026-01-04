@@ -56,16 +56,16 @@ class BrowserLogger {
     this.logDir = 'test/logs',
     bool verbose = false,
     bool? enabled,
-  })  : _verbose = verbose,
-        _enabled = enabled ?? BrowserLogger.defaultEnabled(),
-        _logger = (enabled ?? BrowserLogger.defaultEnabled())
-            ? (Logger(
-              environment: verbose ? 'development' : 'test',
-              formatter:
-                  verbose ? PrettyLogFormatter() : PlainTextLogFormatter(),
-            )
-              ..addChannel('console', ConsoleLogDriver()))
-            : null {
+  }) : _verbose = verbose,
+       _enabled = enabled ?? BrowserLogger.defaultEnabled(),
+       _logger = (enabled ?? BrowserLogger.defaultEnabled())
+           ? (Logger(
+               environment: verbose ? 'development' : 'test',
+               formatter: verbose
+                   ? PrettyLogFormatter()
+                   : PlainTextLogFormatter(),
+             )..addChannel('console', ConsoleLogDriver()))
+           : null {
     if (_enabled) {
       final fileDriver = DailyFileLogDriver(
         path.join(logDir, 'server_testing'),

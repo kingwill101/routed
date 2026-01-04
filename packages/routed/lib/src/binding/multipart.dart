@@ -397,9 +397,12 @@ class MultipartBinding extends Binding {
   String get name => 'multipart';
 
   @override
-  Future<void> bind(
+  MimeType get mimeType => MimeType.multipartPostForm;
+
+  @override
+  Future<T> bind<T>(
     EngineContext context,
-    dynamic instance, {
+    T instance, {
     Map<String, String>? rules,
   }) async {
     final multipartForm = await context.multipartForm;
@@ -410,7 +413,10 @@ class MultipartBinding extends Binding {
         if (entry.value is MultipartFile) continue;
         instance[entry.key] = entry.value;
       }
+    } else if (instance is Bindable) {
+      instance.bind(data);
     }
+    return instance;
   }
 
   @override

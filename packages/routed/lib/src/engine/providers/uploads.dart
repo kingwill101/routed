@@ -122,34 +122,59 @@ class UploadsServiceProvider extends ServiceProvider
 
     // Strict validation for invalid types
     final maxMemoryRaw = merged['max_memory'];
-    final maxMemory = maxMemoryRaw == null ? existing.maxMemory :
-                     maxMemoryRaw is int ? maxMemoryRaw :
-                     throw ProviderConfigException('uploads.max_memory must be an integer');
+    final maxMemory = maxMemoryRaw == null
+        ? existing.maxMemory
+        : maxMemoryRaw is int
+        ? maxMemoryRaw
+        : throw ProviderConfigException(
+            'uploads.max_memory must be an integer',
+          );
 
     final maxFileSizeRaw = merged['max_file_size'];
-    final maxFileSize = maxFileSizeRaw == null ? existing.maxFileSize :
-                       maxFileSizeRaw is int ? maxFileSizeRaw :
-                       throw ProviderConfigException('uploads.max_file_size must be an integer');
+    final maxFileSize = maxFileSizeRaw == null
+        ? existing.maxFileSize
+        : maxFileSizeRaw is int
+        ? maxFileSizeRaw
+        : throw ProviderConfigException(
+            'uploads.max_file_size must be an integer',
+          );
 
     final maxDiskUsageRaw = merged['max_disk_usage'];
-    final maxDiskUsage = maxDiskUsageRaw == null ? existing.maxDiskUsage :
-                        maxDiskUsageRaw is int ? maxDiskUsageRaw :
-                        throw ProviderConfigException('uploads.max_disk_usage must be an integer');
+    final maxDiskUsage = maxDiskUsageRaw == null
+        ? existing.maxDiskUsage
+        : maxDiskUsageRaw is int
+        ? maxDiskUsageRaw
+        : throw ProviderConfigException(
+            'uploads.max_disk_usage must be an integer',
+          );
 
     final allowedExtensionsRaw = merged['allowed_extensions'];
-    final allowedExtensions = allowedExtensionsRaw == null ? existing.allowedExtensions :
-                             allowedExtensionsRaw is List ? _validateStringList(allowedExtensionsRaw, 'uploads.allowed_extensions').toSet() :
-                             throw ProviderConfigException('uploads.allowed_extensions must be a list');
+    final allowedExtensions = allowedExtensionsRaw == null
+        ? existing.allowedExtensions
+        : allowedExtensionsRaw is List
+        ? _validateStringList(
+            allowedExtensionsRaw,
+            'uploads.allowed_extensions',
+          ).toSet()
+        : throw ProviderConfigException(
+            'uploads.allowed_extensions must be a list',
+          );
 
     final directoryRaw = merged['directory'];
-    final directory = directoryRaw == null ? existing.uploadDirectory :
-                     directoryRaw is String ? directoryRaw :
-                     throw ProviderConfigException('uploads.directory must be a string');
+    final directory = directoryRaw == null
+        ? existing.uploadDirectory
+        : directoryRaw is String
+        ? directoryRaw
+        : throw ProviderConfigException('uploads.directory must be a string');
 
     final filePermissionsRaw = merged['file_permissions'];
-    final filePermissions = filePermissionsRaw == null ? existing.filePermissions :
-                           filePermissionsRaw is int ? filePermissionsRaw :
-                           throw ProviderConfigException('uploads.file_permissions must be an integer');
+    final filePermissions = filePermissionsRaw == null
+        ? existing.filePermissions
+        : filePermissionsRaw is int
+        ? filePermissionsRaw
+        : throw ProviderConfigException(
+            'uploads.file_permissions must be an integer',
+          );
 
     return MultipartConfig(
       maxMemory: maxMemory,

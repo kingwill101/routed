@@ -56,13 +56,14 @@ export 'src/binding/multipart.dart'
         FileTooLargeException,
         FileExtensionNotAllowedException,
         FileQuotaExceededException;
+export 'src/binding/binding.dart' show Binding, Bindable, MimeType;
 export 'src/cache/cache.dart';
 export 'src/config/config.dart';
 export 'src/config/helpers.dart';
 export 'src/config/loader.dart';
 export 'src/config/registry.dart';
 export 'src/config/runtime.dart';
-export 'src/container/container.dart';
+export 'src/container/container.dart' hide Binding;
 export 'src/context/context.dart';
 export 'src/contracts/contracts.dart';
 export 'src/engine/config.dart';
@@ -98,12 +99,14 @@ export 'src/observability/metrics.dart' show MetricsService;
 export 'src/observability/tracing.dart' show TracingService, TracingConfig;
 export 'src/openapi/generator.dart';
 export 'src/openapi/operation.dart';
+export 'src/openapi/annotations.dart';
 export 'src/provider/config_utils.dart';
 export 'src/provider/provider.dart';
 export 'src/request.dart';
 export 'src/response.dart';
 export 'src/router/middleware_reference.dart';
 export 'src/router/router.dart';
+export 'src/router/controller.dart';
 export 'src/router/types.dart';
 export 'src/runtime/shutdown.dart';
 export 'src/storage/storage_manager.dart';

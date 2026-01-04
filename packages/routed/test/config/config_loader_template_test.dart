@@ -22,7 +22,10 @@ void main() {
       );
 
       final snapshot = loader.load(options);
-      expect(snapshot.config.get('app.greeting'), equals('Hello Routed!'));
+      expect(
+        snapshot.config.get<String>('app.greeting'),
+        equals('Hello Routed!'),
+      );
     });
 
     test('renders {{ env.VAR }} placeholders using .env values', () {
@@ -43,7 +46,10 @@ void main() {
       );
 
       final snapshot = loader.load(options);
-      expect(snapshot.config.get('app.greeting'), equals('Hello Platform!'));
+      expect(
+        snapshot.config.get<String>('app.greeting'),
+        equals('Hello Platform!'),
+      );
     });
 
     test(
@@ -67,7 +73,10 @@ void main() {
           overrides: const {'APP_SECRET': 'inline-secret'},
         );
 
-        expect(snapshot.config.get('app.secret'), equals('inline-secret'));
+        expect(
+          snapshot.config.get<String>('app.secret'),
+          equals('inline-secret'),
+        );
       },
     );
 
@@ -89,7 +98,10 @@ void main() {
       );
 
       final snapshot = loader.load(options);
-      expect(snapshot.config.get('session.app_key'), equals('liquid-key'));
+      expect(
+        snapshot.config.get<String>('session.app_key'),
+        equals('liquid-key'),
+      );
     });
 
     test('applies liquid filters before decoding config files', () {
@@ -107,7 +119,7 @@ void main() {
       );
 
       final snapshot = loader.load(options);
-      expect(snapshot.config.get('app.greeting'), equals('Hello'));
+      expect(snapshot.config.get<String>('app.greeting'), equals('Hello'));
     });
 
     test('renders list entries with double-underscore env keys', () {
@@ -139,7 +151,9 @@ mounts:
       );
 
       final snapshot = loader.load(options);
-      final mounts = snapshot.config.get('static.mounts') as List;
+      final mounts =
+          snapshot.config.get<List<dynamic>>('static.mounts') ??
+          const <dynamic>[];
       expect(mounts, hasLength(1));
       final first = Map<String, dynamic>.from(mounts.first as Map);
       expect(first['route'], equals('/assets'));
@@ -165,13 +179,13 @@ mounts:
         overrides: const {'STORAGE_ROOT': '/custom/storage'},
       );
       expect(
-        snapshotWithOverride.config.get('storage.root'),
+        snapshotWithOverride.config.get<String>('storage.root'),
         equals('/custom/storage'),
       );
 
       final snapshotWithDefault = loader.load(options);
       expect(
-        snapshotWithDefault.config.get('storage.root'),
+        snapshotWithDefault.config.get<String>('storage.root'),
         equals('storage/app'),
       );
     });

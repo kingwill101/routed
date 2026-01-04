@@ -13,11 +13,9 @@ export 'src/binding/binding.dart'
         jsonBinding,
         multipartBinding,
         queryBinding,
-        uriBinding,
-        xmlBinding;
+        uriBinding;
 export 'src/binding/json.dart' show JsonBinding;
 export 'src/binding/form.dart' show FormBinding;
 export 'src/binding/query.dart' show QueryBinding;
 export 'src/binding/uri.dart' show UriBinding;
-export 'src/binding/xml.dart' show XmlBinding;
 export 'src/binding/multipart.dart' show MultipartBinding;

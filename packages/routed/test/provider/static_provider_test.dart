@@ -44,8 +44,10 @@ void main() {
       await engine.initialize();
       await Future<void>.delayed(Duration.zero);
 
-      expect(engine.appConfig.get('static.enabled'), isTrue);
-      final mounts = engine.appConfig.get('static.mounts') as List;
+      expect(engine.appConfig.getOrThrow<bool>('static.enabled'), isTrue);
+      final mounts = engine.appConfig.getOrThrow<List<dynamic>>(
+        'static.mounts',
+      );
       expect(mounts.first['disk'], equals('assets'));
 
       final storage = await engine.make<StorageManager>();

@@ -1,3 +1,4 @@
+import 'dart:io';
 
 import 'package:contextual/contextual.dart';
 import 'package:path/path.dart' as path;
@@ -42,6 +43,7 @@ class EnhancedBrowserLogger {
       message,
       _buildContext(action, selector, details, null, null, context: context),
     );
+    _writeToFile(message);
   }
 
   void logWarning(
@@ -56,6 +58,7 @@ class EnhancedBrowserLogger {
       message,
       _buildContext(action, selector, details, null, null, context: context),
     );
+    _writeToFile(message);
   }
 
   void logError(
@@ -79,6 +82,7 @@ class EnhancedBrowserLogger {
         context: context,
       ),
     );
+    _writeToFile(message);
   }
 
   void logOperationStart(
@@ -137,5 +141,20 @@ class EnhancedBrowserLogger {
     }
 
     return merged;
+  }
+
+  void _writeToFile(String message) {
+    if (!enabled || logDirectory == null) return;
+    try {
+      final dir = Directory(logDirectory!);
+      if (!dir.existsSync()) {
+        dir.createSync(recursive: true);
+      }
+      final date = DateTime.now().toIso8601String().split('T').first;
+      final filePath = path.join(dir.path, 'browser_test-$date.log');
+      File(filePath).writeAsStringSync('$message\n', mode: FileMode.append);
+    } catch (_) {
+      // Ignore log write failures to keep tests resilient.
+    }
   }
 }

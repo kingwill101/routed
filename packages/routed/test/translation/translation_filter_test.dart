@@ -78,7 +78,7 @@ notifications:
 
   test('translation config', () async {
     expect(
-      engine.appConfig.get<List<String>>('translation.resolvers'),
+      engine.appConfig.getStringListOrNull('translation.resolvers'),
       equals(['query', 'header']),
     );
 

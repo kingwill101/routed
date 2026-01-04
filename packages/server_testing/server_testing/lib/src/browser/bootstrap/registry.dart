@@ -292,10 +292,7 @@ class Registry {
   /// Uses [BrowserPaths.downloadPaths] and [BrowserPaths.cdnMirrors] to construct
   /// URLs based on the descriptor's name, revision, and the current platform ID.
   static List<String> _getDownloadUrlsStatic(BrowserDescriptor descriptor) {
-    return BrowserPaths.getDownloadUrls(
-      descriptor.name,
-      descriptor.revision,
-    );
+    return BrowserPaths.getDownloadUrls(descriptor.name, descriptor.revision);
   }
 
   /// Returns an unmodifiable list of all known [Executable]s derived from the
@@ -349,21 +346,52 @@ class Registry {
           'Installation not supported for ${executable.name}',
         );
       }
-      // When forcing, remove existing browser dir to guarantee a clean install
+      Directory? backupDir;
+      // When forcing, move the existing browser dir aside so we can restore it
+      // if the reinstall fails (e.g., offline environments).
       if (force && executable.directory != null) {
         final dir = Directory(executable.directory!);
         if (await dir.exists()) {
-          print(
-            'Force reinstall: deleting existing browser directory: ${dir.path}',
-          );
+          final backupPath = '${dir.path}.bak';
+          final backup = Directory(backupPath);
           try {
-            await dir.delete(recursive: true);
+            if (await backup.exists()) {
+              await backup.delete(recursive: true);
+            }
+            print(
+              'Force reinstall: backing up existing browser directory: ${dir.path}',
+            );
+            await dir.rename(backupPath);
+            backupDir = backup;
           } catch (e) {
-            print('Warning: failed to delete ${dir.path}: $e');
+            print('Warning: failed to backup ${dir.path}: $e');
           }
         }
       }
-      await executable.install!();
+      try {
+        await executable.install!();
+        if (backupDir != null && await backupDir.exists()) {
+          await backupDir.delete(recursive: true);
+        }
+      } catch (e) {
+        if (backupDir != null) {
+          final restoreDir = Directory(executable.directory!);
+          try {
+            if (await restoreDir.exists()) {
+              await restoreDir.delete(recursive: true);
+            }
+            await backupDir.rename(executable.directory!);
+            print(
+              'Force reinstall failed; restored previous browser directory: ${executable.directory}',
+            );
+          } catch (restoreError) {
+            print(
+              'Warning: failed to restore browser directory: $restoreError',
+            );
+          }
+        }
+        rethrow;
+      }
     }
   }
 }

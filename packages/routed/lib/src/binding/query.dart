@@ -8,6 +8,9 @@ class QueryBinding extends Binding {
   @override
   String get name => 'query';
 
+  @override
+  MimeType? get mimeType => null;
+
   /// Validates the query parameters against the provided rules.
   ///
   /// This method uses a [Validator] to check the query parameters stored in
@@ -45,7 +48,7 @@ class QueryBinding extends Binding {
   ///   - context: The [EngineContext] containing the query parameters to bind.
   ///   - instance: The instance to which the query parameters will be bound.
   @override
-  Future<void> bind(EngineContext context, dynamic instance) async {
+  Future<T> bind<T>(EngineContext context, T instance) async {
     // Check if the instance is a Map.
     if (instance is Map) {
       // Iterate over the entries in the context's query cache.
@@ -53,6 +56,9 @@ class QueryBinding extends Binding {
         // Bind each query parameter to the instance.
         instance[entry.key] = entry.value;
       }
+    } else if (instance is Bindable) {
+      instance.bind(context.queryCache);
     }
+    return instance;
   }
 }

@@ -9,9 +9,9 @@ void main() {
       config.set('app.debug', true);
 
       expect(config.has('app.name'), isTrue);
-      expect(config.get('app.name'), equals('Test App'));
-      expect(config.get('app.debug'), isTrue);
-      expect(config.get('app.missing', 'default'), equals('default'));
+      expect(config.get<String>('app.name'), equals('Test App'));
+      expect(config.get<bool>('app.debug'), isTrue);
+      expect(config.get<String>('app.missing', 'default'), equals('default'));
     });
 
     test('merge handles dotted keys and nested maps', () {
@@ -28,11 +28,14 @@ void main() {
         'db': {'host': 'localhost'},
       });
 
-      expect(config.get('app.name'), equals('Override App'));
-      expect(config.get('app.features.a'), isTrue);
-      expect(config.get('app.features.b'), isFalse);
-      expect(config.get('db.host'), equals('localhost'));
-      expect(config.get('db'), isA<Map<String, dynamic>>());
+      expect(config.get<String>('app.name'), equals('Override App'));
+      expect(config.get<bool>('app.features.a'), isTrue);
+      expect(config.get<bool>('app.features.b'), isFalse);
+      expect(config.get<String>('db.host'), equals('localhost'));
+      expect(
+        config.get<Map<String, dynamic>>('db'),
+        isA<Map<String, dynamic>>(),
+      );
     });
 
     test('list helpers create and manipulate arrays', () {
@@ -41,7 +44,10 @@ void main() {
       config.push('services', 'second');
       config.prepend('services', 'zero');
 
-      expect(config.get('services'), equals(['zero', 'first', 'second']));
+      expect(
+        config.get<List<dynamic>>('services'),
+        equals(['zero', 'first', 'second']),
+      );
     });
 
     test('getOrThrow throws with helpful error', () {

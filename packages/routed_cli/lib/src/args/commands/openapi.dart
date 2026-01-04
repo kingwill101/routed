@@ -7,6 +7,8 @@ import 'package:routed/routed.dart' as routed;
 import 'package:routed_cli/routed_cli.dart' as rc;
 import 'package:routed_cli/src/args/base_command.dart';
 import 'package:routed_cli/src/engine/introspector.dart';
+import 'package:routed_cli/src/engine/schema_enricher.dart';
+import 'package:routed_cli/src/args/commands/openapi_make.dart';
 
 class OpenApiCommand extends Command<void> {
   OpenApiCommand({
@@ -21,6 +23,7 @@ class OpenApiCommand extends Command<void> {
         loaderFactory: loaderFactory,
       ),
     );
+    addSubcommand(OpenApiMakeCommand(logger: logger, fileSystem: fileSystem));
   }
 
   @override
@@ -121,6 +124,25 @@ class OpenApiGenerateCommand extends BaseCommand {
 
       final manifest = routed.RouteManifest.fromJson(manifestResult.manifest);
 
+      // Enrich manifest with schemas from static analysis
+      final entrypoint =
+          results?['entry'] as String? ?? manifestResult.sourceDescription;
+      final enricher = SchemaEnricher(
+        projectRoot: projectRoot.path,
+        entrypoint: entrypoint,
+      );
+      final enrichedManifest = await enricher.enrich(manifest);
+
+      // Extract components from the enriched manifest
+      Map<String, Object?> components = {};
+      if (enrichedManifest.routes.isNotEmpty &&
+          enrichedManifest.routes.first.constraints.containsKey('components')) {
+        final comps = enrichedManifest.routes.first.constraints['components'];
+        if (comps is Map<String, Object?>) {
+          components = comps;
+        }
+      }
+
       final info = routed.OpenApiDocumentInfo(
         title: (results?['title'] as String?)?.trim().isNotEmpty == true
             ? (results?['title'] as String).trim()
@@ -152,9 +174,10 @@ class OpenApiGenerateCommand extends BaseCommand {
       }
 
       final document = routed.generateOpenApiDocument(
-        manifest,
+        enrichedManifest,
         info: info,
         servers: servers,
+        components: components,
       );
 
       final outputArg =

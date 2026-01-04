@@ -11,3 +11,6 @@ pubspec.lock
 openspec
 AGENTS.md
 storage/
+
+# Test artifacts
+**/templates/test/logs/

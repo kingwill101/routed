@@ -150,17 +150,27 @@ class CorsServiceProvider extends ServiceProvider with ProvidesDefaultConfig {
       ),
     ]);
 
+    // Validate config values first - throw on invalid types before any other checks
+    _validateCorsConfig(merged);
+
     if (merged.isNotEmpty && _matchesDefaultCors(merged)) {
       return existing;
     }
 
     final enabled = merged.getBool('enabled', defaultValue: existing.enabled);
-    final allowedOrigins = merged.getStringList('allowed_origins') ?? existing.allowedOrigins;
-    final allowedMethods = merged.getStringList('allowed_methods') ?? existing.allowedMethods;
-    final allowedHeaders = merged.getStringList('allowed_headers') ?? existing.allowedHeaders;
-    final allowCredentials = merged.getBool('allow_credentials', defaultValue: existing.allowCredentials);
+    final allowedOrigins =
+        merged.getStringList('allowed_origins') ?? existing.allowedOrigins;
+    final allowedMethods =
+        merged.getStringList('allowed_methods') ?? existing.allowedMethods;
+    final allowedHeaders =
+        merged.getStringList('allowed_headers') ?? existing.allowedHeaders;
+    final allowCredentials = merged.getBool(
+      'allow_credentials',
+      defaultValue: existing.allowCredentials,
+    );
     final maxAge = merged.getInt('max_age') ?? existing.maxAge;
-    final exposedHeaders = merged.getStringList('exposed_headers') ?? existing.exposedHeaders;
+    final exposedHeaders =
+        merged.getStringList('exposed_headers') ?? existing.exposedHeaders;
 
     return CorsConfig(
       enabled: enabled,
@@ -258,5 +268,43 @@ class CorsServiceProvider extends ServiceProvider with ProvidesDefaultConfig {
         a.allowCredentials == b.allowCredentials &&
         a.maxAge == b.maxAge &&
         _listEquality.equals(a.exposedHeaders, b.exposedHeaders);
+  }
+
+  /// Validates CORS config values, throwing if types are wrong.
+  void _validateCorsConfig(Map<String, dynamic> merged) {
+    // Re-key with 'cors.' prefix for error messages
+    final prefixed = merged.map((k, v) => MapEntry('cors.$k', v));
+
+    // Validate 'enabled' if present
+    if (merged.containsKey('enabled')) {
+      prefixed.getBoolOrThrow('cors.enabled');
+    }
+
+    // Validate 'allow_credentials' if present
+    if (merged.containsKey('allow_credentials')) {
+      prefixed.getBoolOrThrow('cors.allow_credentials');
+    }
+
+    // Validate list fields if present
+    if (merged.containsKey('allowed_origins')) {
+      prefixed.getStringListOrThrow('cors.allowed_origins');
+    }
+
+    if (merged.containsKey('allowed_methods')) {
+      prefixed.getStringListOrThrow('cors.allowed_methods');
+    }
+
+    if (merged.containsKey('allowed_headers')) {
+      prefixed.getStringListOrThrow('cors.allowed_headers');
+    }
+
+    if (merged.containsKey('exposed_headers')) {
+      prefixed.getStringListOrThrow('cors.exposed_headers');
+    }
+
+    // Validate 'max_age' if present
+    if (merged.containsKey('max_age')) {
+      prefixed.getIntOrThrow('cors.max_age');
+    }
   }
 }

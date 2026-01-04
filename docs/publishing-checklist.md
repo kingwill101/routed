@@ -23,8 +23,6 @@ Packages:
 5. `packages/property_testing`
 6. `packages/routed_cli`
 
-All six packages currently pass the dry-run checks (only analyzer warnings remain for `routed` and `routed_testing`).
-
 ## Publish Order
 When you are ready to publish for real, follow the dependency-aware order:
 1. `server_testing`

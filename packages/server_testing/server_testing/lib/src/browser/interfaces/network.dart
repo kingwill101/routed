@@ -4,8 +4,10 @@ import 'request.dart';
 import 'response.dart';
 
 abstract class Network {
-  FutureOr<void> route(String url,
-      FutureOr<Response> Function(Request) handler,);
+  FutureOr<void> route(
+    String url,
+    FutureOr<Response> Function(Request) handler,
+  );
 
   FutureOr<void> unroute(String url);
 

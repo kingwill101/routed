@@ -535,8 +535,10 @@ class TestClient {
   ///   );
   /// });
   /// ```
-  Future<TestResponse> multipart(String path,
-      void Function(MultipartRequestBuilder) builder,) async {
+  Future<TestResponse> multipart(
+    String path,
+    void Function(MultipartRequestBuilder) builder,
+  ) async {
     final requestBuilder = MultipartRequestBuilder();
 
     builder(requestBuilder);

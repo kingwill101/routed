@@ -21,7 +21,7 @@ void main() {
 
     expect(events, hasLength(1));
     final event = events.first;
-    expect(event.config.get('app.name'), equals('Test App'));
+    expect(event.config.get<String>('app.name'), equals('Test App'));
 
     await sub.cancel();
   });

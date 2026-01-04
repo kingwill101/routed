@@ -1,7 +1,6 @@
 @Tags(['property'])
 library;
 
-
 import 'package:property_testing/property_testing.dart';
 import 'package:routed/routed.dart';
 import 'package:routed_testing/routed_testing.dart';

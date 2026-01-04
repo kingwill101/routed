@@ -187,51 +187,25 @@ class ShutdownController {
 /// [current] when values are not supplied.
 ShutdownConfig resolveShutdownConfig(Config config, ShutdownConfig current) {
   final enabled =
-      parseBoolLike(
-        config.get('runtime.shutdown.enabled'),
-        context: 'runtime.shutdown.enabled',
-        stringMappings: const {'true': true, 'false': false},
-      ) ??
-      current.enabled;
+      config.getBoolOrNull('runtime.shutdown.enabled') ?? current.enabled;
 
   final grace =
-      parseDurationLike(
-        config.get('runtime.shutdown.grace_period'),
-        context: 'runtime.shutdown.grace_period',
-      ) ??
+      config.getDurationOrNull('runtime.shutdown.grace_period') ??
       current.gracePeriod;
 
   final force =
-      parseDurationLike(
-        config.get('runtime.shutdown.force_after'),
-        context: 'runtime.shutdown.force_after',
-      ) ??
+      config.getDurationOrNull('runtime.shutdown.force_after') ??
       current.forceAfter;
 
   final exitCode =
-      parseIntLike(
-        config.get('runtime.shutdown.exit_code'),
-        context: 'runtime.shutdown.exit_code',
-        throwOnInvalid: false,
-      ) ??
-      current.exitCode;
+      config.getIntOrNull('runtime.shutdown.exit_code') ?? current.exitCode;
 
   final notify =
-      parseBoolLike(
-        config.get('runtime.shutdown.notify_readiness'),
-        context: 'runtime.shutdown.notify_readiness',
-        stringMappings: const {'true': true, 'false': false},
-      ) ??
+      config.getBoolOrNull('runtime.shutdown.notify_readiness') ??
       current.notifyReadiness;
 
   final signalNames =
-      parseStringList(
-        config.get('runtime.shutdown.signals'),
-        context: 'runtime.shutdown.signals',
-        allowEmptyResult: true,
-        allowCommaSeparated: true,
-      ) ??
-      const [];
+      config.getStringListOrNull('runtime.shutdown.signals') ?? const [];
 
   final resolvedSignals = signalNames.isEmpty
       ? current.signals

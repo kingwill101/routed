@@ -112,8 +112,10 @@ class BrowserManagement {
 
       logger.info('$logContext: Found executable for ${executable.name}');
 
+      final wasInstalled = _isBrowserInstalled(executable);
+
       // Check if already installed and not forcing
-      if (!force && _isBrowserInstalled(executable)) {
+      if (!force && wasInstalled) {
         logger.info(
           '$logContext: Browser ${executable.name} is already installed, skipping',
         );
@@ -133,9 +135,21 @@ class BrowserManagement {
         raf.lockSync(FileLock.exclusive);
         // Install the browser
         logger.info('$logContext: Installing ${executable.name}...');
-        await TestBootstrap.registry.installExecutables([
-          executable,
-        ], force: force);
+        try {
+          await TestBootstrap.registry.installExecutables([
+            executable,
+          ], force: force);
+        } catch (e, stack) {
+          if (force && wasInstalled && _isBrowserInstalled(executable)) {
+            logger.error(
+              '$logContext: Reinstall failed, keeping existing installation',
+              error: e,
+              stackTrace: stack,
+            );
+            return true;
+          }
+          rethrow;
+        }
 
         // Validate installation
         logger.info('$logContext: Validating installation...');

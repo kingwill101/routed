@@ -107,8 +107,10 @@ abstract class AsyncDataStoreCommand
     implements Command<AsyncDataStoreModel, AsyncDataStore> {
   // Postcondition: Wait until loading is false before checking state
   @override
-  FutureOr<void> postcondition(AsyncDataStoreModel model,
-      AsyncDataStore sut,) async {
+  FutureOr<void> postcondition(
+    AsyncDataStoreModel model,
+    AsyncDataStore sut,
+  ) async {
     while (sut.loading) {
       await Future<void>.delayed(const Duration(milliseconds: 1));
     }

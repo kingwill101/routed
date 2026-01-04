@@ -350,6 +350,36 @@ Map<String, String> parseStringMap(
   return result;
 }
 
+/// Coerces [value] into a map of string lists.
+Map<String, List<String>> parseStringListMap(
+  Object? value, {
+  required String context,
+  bool throwOnInvalid = true,
+}) {
+  if (value == null) {
+    return {};
+  }
+  if (value is! Map) {
+    if (throwOnInvalid) {
+      throw ProviderConfigException('$context must be a map');
+    }
+    return {};
+  }
+  final result = <String, List<String>>{};
+  value.forEach((key, dynamic raw) {
+    final entryKey = key.toString();
+    final list = parseStringList(
+      raw,
+      context: '$context.$entryKey',
+      throwOnInvalid: throwOnInvalid,
+    );
+    if (list != null) {
+      result[entryKey] = list;
+    }
+  });
+  return result;
+}
+
 /// Helper for comparing order-agnostic lists in providers.
 const ListEquality<String> stringListEquality = ListEquality<String>();
 
@@ -366,12 +396,13 @@ extension ConfigUtils on Config {
   ///
   /// Supports string values like 'true', 'false', '1', '0', 'yes', 'no', 'on', 'off'.
   /// Returns [defaultValue] if the key doesn't exist or can't be converted.
-  bool getBool(String path, {
+  bool getBool(
+    String path, {
     bool defaultValue = false,
     Map<String, bool>? stringMappings,
   }) {
     try {
-      final rawValue = get(path);
+      final rawValue = get<Object?>(path);
       if (rawValue == null) return defaultValue;
 
       final parsed = parseBoolLike(
@@ -391,7 +422,7 @@ extension ConfigUtils on Config {
   /// Returns null if the key doesn't exist or can't be converted to a boolean.
   bool? getBoolOrNull(String path, {Map<String, bool>? stringMappings}) {
     try {
-      final rawValue = get(path);
+      final rawValue = get<Object?>(path);
       if (rawValue == null) return null;
 
       return parseBoolLike(
@@ -410,10 +441,14 @@ extension ConfigUtils on Config {
   /// Supports numeric strings and returns [defaultValue] if conversion fails.
   int getInt(String path, {int defaultValue = 0}) {
     try {
-      final rawValue = get(path);
+      final rawValue = get<Object?>(path);
       if (rawValue == null) return defaultValue;
 
-      final parsed = parseIntLike(rawValue, context: path, throwOnInvalid: false);
+      final parsed = parseIntLike(
+        rawValue,
+        context: path,
+        throwOnInvalid: false,
+      );
       return parsed ?? defaultValue;
     } catch (_) {
       return defaultValue;
@@ -425,7 +460,7 @@ extension ConfigUtils on Config {
   /// Returns null if the key doesn't exist or can't be converted to an integer.
   int? getIntOrNull(String path) {
     try {
-      final rawValue = get(path);
+      final rawValue = get<Object?>(path);
       if (rawValue == null) return null;
 
       return parseIntLike(rawValue, context: path, throwOnInvalid: false);
@@ -438,12 +473,13 @@ extension ConfigUtils on Config {
   ///
   /// Returns [defaultValue] if the key doesn't exist.
   /// If [allowEmpty] is false, returns [defaultValue] for empty/whitespace strings.
-  String getString(String path, {
+  String getString(
+    String path, {
     String defaultValue = '',
     bool allowEmpty = true,
   }) {
     try {
-      final rawValue = get(path);
+      final rawValue = get<Object?>(path);
       if (rawValue == null) return defaultValue;
 
       final parsed = parseStringLike(
@@ -464,7 +500,7 @@ extension ConfigUtils on Config {
   /// If [allowEmpty] is false, returns null for empty/whitespace strings.
   String? getStringOrNull(String path, {bool allowEmpty = true}) {
     try {
-      final rawValue = get(path);
+      final rawValue = get<Object?>(path);
       if (rawValue == null) return null;
 
       return parseStringLike(
@@ -483,7 +519,7 @@ extension ConfigUtils on Config {
   /// Returns null if the key doesn't exist or can't be converted to a string list.
   List<String>? getStringListOrNull(String path) {
     try {
-      final rawValue = get(path);
+      final rawValue = get<Object?>(path);
       if (rawValue == null) return null;
 
       return parseStringList(rawValue, context: path, throwOnInvalid: false);
@@ -499,10 +535,14 @@ extension ConfigUtils on Config {
   /// Returns [defaultValue] if the key doesn't exist or can't be converted.
   Duration getDuration(String path, {Duration defaultValue = Duration.zero}) {
     try {
-      final rawValue = get(path);
+      final rawValue = get<Object?>(path);
       if (rawValue == null) return defaultValue;
 
-      final parsed = parseDurationLike(rawValue, context: path, throwOnInvalid: false);
+      final parsed = parseDurationLike(
+        rawValue,
+        context: path,
+        throwOnInvalid: false,
+      );
       return parsed ?? defaultValue;
     } catch (_) {
       return defaultValue;
@@ -514,7 +554,7 @@ extension ConfigUtils on Config {
   /// Returns null if the key doesn't exist or can't be converted.
   Duration? getDurationOrNull(String path) {
     try {
-      final rawValue = get(path);
+      final rawValue = get<Object?>(path);
       if (rawValue == null) return null;
 
       return parseDurationLike(rawValue, context: path, throwOnInvalid: false);
@@ -524,15 +564,107 @@ extension ConfigUtils on Config {
   }
 
   /// Gets a string map from the config.
-  Map<String, String> getStringMap(String path, {Map<String, String> defaultValue = const {}}) {
+  Map<String, String> getStringMap(
+    String path, {
+    Map<String, String> defaultValue = const {},
+  }) {
     try {
-      final rawValue = get(path);
+      final rawValue = get<Object?>(path);
       if (rawValue == null) return defaultValue;
 
-      return parseStringMap(rawValue as Object, context: path);
+      return parseStringMap(rawValue, context: path);
     } catch (_) {
       return defaultValue;
     }
+  }
+
+  /// Gets a map of string lists from the config.
+  Map<String, List<String>> getStringListMap(String path) {
+    try {
+      final rawValue = get<Object?>(path);
+      if (rawValue == null) return {};
+      return parseStringListMap(rawValue, context: path, throwOnInvalid: false);
+    } catch (_) {
+      return {};
+    }
+  }
+
+  /// Gets a boolean value from config, throwing if not found or invalid.
+  bool getBoolOrThrow(String path, {Map<String, bool>? stringMappings}) {
+    final rawValue = get<Object?>(path);
+    if (rawValue == null) {
+      throw ProviderConfigException('$path is required');
+    }
+    return parseBoolLike(
+      rawValue,
+      context: path,
+      stringMappings: stringMappings ?? const {'true': true, 'false': false},
+      throwOnInvalid: true,
+    )!;
+  }
+
+  /// Gets an integer value from config, throwing if not found or invalid.
+  int getIntOrThrow(String path) {
+    final rawValue = get<Object?>(path);
+    if (rawValue == null) {
+      throw ProviderConfigException('$path is required');
+    }
+    return parseIntLike(rawValue, context: path, throwOnInvalid: true)!;
+  }
+
+  /// Gets a string value from config, throwing if not found or invalid.
+  String getStringOrThrow(String path, {bool allowEmpty = true}) {
+    final rawValue = get<Object?>(path);
+    if (rawValue == null) {
+      throw ProviderConfigException('$path is required');
+    }
+    return parseStringLike(
+      rawValue,
+      context: path,
+      allowEmpty: allowEmpty,
+      throwOnInvalid: true,
+    )!;
+  }
+
+  /// Gets a string list from config, throwing if not found or invalid.
+  List<String> getStringListOrThrow(String path) {
+    final rawValue = get<Object?>(path);
+    if (rawValue == null) {
+      throw ProviderConfigException('$path is required');
+    }
+    return parseStringList(
+      rawValue,
+      context: path,
+      throwOnInvalid: true,
+      allowEmptyResult: true,
+    )!;
+  }
+
+  /// Gets a Duration value from config, throwing if not found or invalid.
+  Duration getDurationOrThrow(String path) {
+    final rawValue = get<Object?>(path);
+    if (rawValue == null) {
+      throw ProviderConfigException('$path is required');
+    }
+    return parseDurationLike(rawValue, context: path, throwOnInvalid: true)!;
+  }
+
+  /// Gets a string map from config, throwing if not found or invalid.
+  Map<String, String> getStringMapOrThrow(String path) {
+    final rawValue = get<Object?>(path);
+    if (rawValue == null) {
+      throw ProviderConfigException('$path is required');
+    }
+    return parseStringMap(rawValue, context: path);
+  }
+
+  /// Gets a map of string lists from config, throwing if not found or invalid.
+  Map<String, List<String>> getStringListMapOrThrow(String path) {
+    final rawValue = get<Object?>(path);
+    if (rawValue == null) {
+      throw ProviderConfigException('$path is required');
+    }
+    return parseStringListMap(rawValue, context: path, throwOnInvalid: true);
   }
 }
 
@@ -541,7 +673,8 @@ extension MergedConfigUtils on Map<String, dynamic> {
   /// Gets a boolean value from a merged config map.
   ///
   /// Returns [defaultValue] if the key doesn't exist or can't be converted.
-  bool getBool(String key, {
+  bool getBool(
+    String key, {
     bool defaultValue = false,
     Map<String, bool>? stringMappings,
   }) {
@@ -641,5 +774,85 @@ extension MergedConfigUtils on Map<String, dynamic> {
     } catch (_) {
       return null;
     }
+  }
+
+  /// Gets a boolean value from a merged config map, throwing if not found or invalid.
+  ///
+  /// Supports string values like 'true', 'false', '1', '0', 'yes', 'no', 'on', 'off'.
+  bool getBoolOrThrow(String key, {Map<String, bool>? stringMappings}) {
+    final rawValue = this[key];
+    if (rawValue == null) {
+      throw ProviderConfigException('$key is required');
+    }
+    return parseBoolLike(
+      rawValue,
+      context: key,
+      stringMappings: stringMappings ?? const {'true': true, 'false': false},
+      throwOnInvalid: true,
+    )!;
+  }
+
+  /// Gets an integer value from a merged config map, throwing if not found or invalid.
+  int getIntOrThrow(String key) {
+    final rawValue = this[key];
+    if (rawValue == null) {
+      throw ProviderConfigException('$key is required');
+    }
+    return parseIntLike(rawValue, context: key, throwOnInvalid: true)!;
+  }
+
+  /// Gets a string value from a merged config map, throwing if not found or invalid.
+  String getStringOrThrow(String key, {bool allowEmpty = true}) {
+    final rawValue = this[key];
+    if (rawValue == null) {
+      throw ProviderConfigException('$key is required');
+    }
+    return parseStringLike(
+      rawValue,
+      context: key,
+      allowEmpty: allowEmpty,
+      throwOnInvalid: true,
+    )!;
+  }
+
+  /// Gets a string list from a merged config map, throwing if not found or invalid.
+  List<String> getStringListOrThrow(String key) {
+    final rawValue = this[key];
+    if (rawValue == null) {
+      throw ProviderConfigException('$key is required');
+    }
+    return parseStringList(
+      rawValue,
+      context: key,
+      throwOnInvalid: true,
+      allowEmptyResult: true,
+    )!;
+  }
+
+  /// Gets a Duration value from a merged config map, throwing if not found or invalid.
+  Duration getDurationOrThrow(String key) {
+    final rawValue = this[key];
+    if (rawValue == null) {
+      throw ProviderConfigException('$key is required');
+    }
+    return parseDurationLike(rawValue, context: key, throwOnInvalid: true)!;
+  }
+
+  /// Gets a string map from a merged config map, throwing if not found or invalid.
+  Map<String, String> getStringMapOrThrow(String key) {
+    final rawValue = this[key];
+    if (rawValue == null) {
+      throw ProviderConfigException('$key is required');
+    }
+    return parseStringMap(rawValue as Object, context: key);
+  }
+
+  /// Gets a map of string lists from a merged config map, throwing if not found or invalid.
+  Map<String, List<String>> getStringListMapOrThrow(String key) {
+    final rawValue = this[key];
+    if (rawValue == null) {
+      throw ProviderConfigException('$key is required');
+    }
+    return parseStringListMap(rawValue, context: key, throwOnInvalid: true);
   }
 }

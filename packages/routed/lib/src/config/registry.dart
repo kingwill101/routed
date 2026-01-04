@@ -73,6 +73,10 @@ class ConfigRegistry {
   }) {
     for (final doc in entry.docs) {
       if (!_shouldValidatePath(doc.path)) continue;
+      // Skip validation if the doc entry doesn't provide a default value.
+      // It's valid to document a key that doesn't have a default.
+      if (!doc.hasExplicitDefault) continue;
+
       if (_docPathExists(entry.defaults, doc.path)) continue;
       developer.log(
         'Config documentation path "${doc.path}" declared by $source does '

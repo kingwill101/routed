@@ -17,7 +17,7 @@ void main() {
     late io.Directory projectDir;
 
     setUpAll(() {
-      cliRoot = io.Directory.current.path;
+      cliRoot = _resolveCliRoot();
     });
 
     setUp(() async {
@@ -154,7 +154,7 @@ FutureOr<List<Command<void>>> buildProjectCommands() async {
         throwsA(isA<UsageException>()),
       );
     });
-  });
+  }, timeout: Timeout(Duration(minutes: 2)));
 }
 
 Future<void> _writeProject({
@@ -240,4 +240,35 @@ String _escapePath(String path) {
     return path.replaceAll(r'\', r'\\');
   }
   return path;
+}
+
+String _resolveCliRoot() {
+  final current = io.Directory.current;
+  final direct = _findCliRoot(current);
+  if (direct != null) {
+    return direct;
+  }
+  final nested = io.Directory(p.join(current.path, 'packages', 'routed_cli'));
+  if (nested.existsSync()) {
+    return nested.path;
+  }
+  return current.path;
+}
+
+String? _findCliRoot(io.Directory start) {
+  var dir = start;
+  while (true) {
+    final pubspec = io.File(p.join(dir.path, 'pubspec.yaml'));
+    if (pubspec.existsSync()) {
+      final contents = pubspec.readAsStringSync();
+      if (contents.contains('name: routed_cli')) {
+        return dir.path;
+      }
+    }
+    final parent = dir.parent;
+    if (parent.path == dir.path) {
+      return null;
+    }
+    dir = parent;
+  }
 }

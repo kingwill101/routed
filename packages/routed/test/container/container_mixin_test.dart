@@ -74,8 +74,8 @@ void main() {
               rootConfig != null && identical(scopedConfig, rootConfig);
 
           return ctx.json({
-            'requestOnly': scopedConfig.get('request.only'),
-            'zoneAppName': Config.current.get('app.name'),
+            'requestOnly': scopedConfig.get<String>('request.only'),
+            'zoneAppName': Config.current.get<String>('app.name'),
             'isSameAsRoot': isSameAsRoot,
           });
         });

@@ -20,6 +20,11 @@ class ConfigImpl implements Config {
   T? get<T>(String key, [T? defaultValue]) {
     final lookup = dot.lookup(_items, key);
     if (lookup.exists) {
+      if (lookup.value is! T) {
+        throw StateError(
+          'Configuration key "$key" is not of type ${T.toString()}, got ${lookup.value.runtimeType}',
+        );
+      }
       return lookup.value as T;
     }
     return defaultValue;
@@ -30,6 +35,12 @@ class ConfigImpl implements Config {
     final lookup = dot.lookup(_items, key);
     if (!lookup.exists) {
       throw StateError(message ?? 'Configuration key "$key" is missing');
+    }
+
+    if (lookup.value is! T) {
+      throw StateError(
+        'Configuration key "$key" is not of type ${T.toString()}, got ${lookup.value.runtimeType}',
+      );
     }
     return lookup.value as T;
   }

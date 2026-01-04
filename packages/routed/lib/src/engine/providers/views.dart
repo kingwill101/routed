@@ -111,7 +111,8 @@ class ViewServiceProvider extends ServiceProvider with ProvidesDefaultConfig {
   }
 
   _ResolvedViewConfig _resolveViewConfig(Config config, EngineConfig current) {
-    final viewRaw = config.get('view');
+    // Validate 'view' is a map if present
+    final viewRaw = config.get<Object?>('view');
     if (viewRaw != null && viewRaw is! Map) {
       throw ProviderConfigException('view must be a map');
     }
@@ -121,52 +122,33 @@ class ViewServiceProvider extends ServiceProvider with ProvidesDefaultConfig {
     String? engineName;
     String? diskName;
 
-    final directoryRaw = config.get('view.directory');
-    if (directoryRaw != null) {
-      if (directoryRaw is! String) {
-        throw ProviderConfigException('view.directory must be a string');
-      }
-      if (directoryRaw.isNotEmpty) {
-        configuredDirectory = directoryRaw;
+    // Resolve 'view.directory' - validate type if present
+    if (config.get<Object?>('view.directory') != null) {
+      final parsed = config.getStringOrThrow('view.directory');
+      if (parsed.isNotEmpty) {
+        configuredDirectory = parsed;
       }
     }
 
-    final cacheRaw = config.get('view.cache');
-    if (cacheRaw != null) {
-      if (cacheRaw is bool) {
-        cache = cacheRaw;
-      } else if (cacheRaw is String) {
-        final normalized = cacheRaw.trim().toLowerCase();
-        if (normalized == 'true') {
-          cache = true;
-        } else if (normalized == 'false') {
-          cache = false;
-        } else {
-          throw ProviderConfigException('view.cache must be a boolean');
-        }
-      } else {
-        throw ProviderConfigException('view.cache must be a boolean');
-      }
+    // Resolve 'view.cache' - validate type if present
+    if (config.get<Object?>('view.cache') != null) {
+      cache = config.getBoolOrThrow('view.cache');
     }
 
-    final engineRaw = config.get('view.engine');
-    if (engineRaw != null) {
-      if (engineRaw is! String) {
-        throw ProviderConfigException('view.engine must be a string');
-      }
-      final trimmed = engineRaw.trim();
+    // Resolve 'view.engine' - validate type if present
+    if (config.get<Object?>('view.engine') != null) {
+      final parsed = config.getStringOrThrow('view.engine');
+      final trimmed = parsed.trim();
       if (trimmed.isEmpty) {
         throw ProviderConfigException('view.engine must be a string');
       }
       engineName = trimmed;
     }
 
-    final diskRaw = config.get('view.disk');
-    if (diskRaw != null) {
-      if (diskRaw is! String) {
-        throw ProviderConfigException('view.disk must be a string');
-      }
-      final trimmed = diskRaw.trim();
+    // Resolve 'view.disk' - validate type if present
+    if (config.get<Object?>('view.disk') != null) {
+      final parsed = config.getStringOrThrow('view.disk');
+      final trimmed = parsed.trim();
       if (trimmed.isEmpty) {
         throw ProviderConfigException('view.disk must be a string');
       }
@@ -195,7 +177,6 @@ class ViewServiceProvider extends ServiceProvider with ProvidesDefaultConfig {
       viewConfig: viewConfig,
     );
   }
-
 
   StorageDisk? _tryResolveDisk(StorageManager manager, String? name) {
     if (name == null || name.isEmpty) {

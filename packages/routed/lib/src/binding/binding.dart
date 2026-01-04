@@ -8,7 +8,6 @@ import 'json.dart' show JsonBinding;
 import 'multipart.dart' show MultipartBinding;
 import 'query.dart' show QueryBinding;
 import 'uri.dart' show UriBinding;
-import 'xml.dart' show XmlBinding;
 
 // For XML parsing you might use a third-party package like `xml`:
 // import 'package:xml/xml.dart';
@@ -20,17 +19,26 @@ import 'xml.dart' show XmlBinding;
 //   - queryParameters (Map<String, String>): A map of query parameters from the request URL.
 //   - etc.
 
+/// Interface for objects that can be bound from a map of data.
+abstract class Bindable {
+  /// Binds the object properties from the given [data].
+  void bind(Map<String, dynamic> data);
+}
+
 /// The `Binding` interface, analogous to Gin's "Binding".
 /// This interface defines the contract for binding and validating request data.
 abstract class Binding {
   /// The name of the binding.
   String get name;
 
+  /// The MIME type associated with this binding.
+  MimeType? get mimeType;
+
   /// Binds data from the request context to the given instance.
   ///
   /// [context] - The context of the engine containing request data.
   /// [instance] - The instance to which the data should be bound.
-  Future<void> bind(EngineContext context, dynamic instance);
+  Future<T> bind<T>(EngineContext context, T instance);
 
   /// Validates the data from the request context.
   ///
@@ -46,7 +54,6 @@ abstract class Binding {
 
 // Create singleton instances of each binding type.
 final jsonBinding = JsonBinding();
-final xmlBinding = XmlBinding();
 final formBinding = FormBinding();
 final uriBinding = UriBinding();
 final multipartBinding = MultipartBinding();
@@ -97,7 +104,7 @@ Binding defaultBinding(String method, String contentType) {
       return jsonBinding;
     case MimeType.xml:
     case MimeType.xml2:
-      return xmlBinding;
+      throw UnimplementedError('XML binding not yet supported.');
     case MimeType.multipartPostForm:
       return multipartBinding;
     case MimeType.postForm:

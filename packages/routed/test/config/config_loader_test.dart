@@ -51,11 +51,11 @@ features:
       final config = snapshot.config;
 
       expect(snapshot.environment, equals('testing'));
-      expect(config.get('app.name'), equals('File App'));
-      expect(config.get('app.debug'), isFalse);
-      expect(config.get('app.features.enabled'), isTrue);
-      expect(config.get('app.tagline'), equals('Runtime'));
-      expect(config.get('database.host'), equals('file-host'));
+      expect(config.get<String>('app.name'), equals('File App'));
+      expect(config.get<bool>('app.debug'), isFalse);
+      expect(config.get<bool>('app.features.enabled'), isTrue);
+      expect(config.get<String>('app.tagline'), equals('Runtime'));
+      expect(config.get<String>('database.host'), equals('file-host'));
     });
 
     test('normalizes environment keys with double underscores', () {
@@ -71,7 +71,7 @@ features:
       );
 
       final snapshot = loader.load(options);
-      expect(snapshot.config.get('database.host'), equals('env-host'));
+      expect(snapshot.config.get<String>('database.host'), equals('env-host'));
     });
   });
 }

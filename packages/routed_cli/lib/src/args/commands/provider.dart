@@ -154,6 +154,8 @@ class ProviderEnableCommand extends BaseCommand {
       } else {
         await _writeManifest(projectRoot, manifest);
       }
+
+      await _syncProviderEnabledFlag(projectRoot, id, enabled: true);
     });
   }
 }
@@ -196,6 +198,8 @@ class ProviderDisableCommand extends BaseCommand {
           'Provider "$id" is not currently enabled in config/http.yaml.',
         );
       }
+
+      await _syncProviderEnabledFlag(projectRoot, id, enabled: false);
     });
   }
 }
@@ -247,6 +251,68 @@ Future<void> _writeManifest(
   final content = _toYaml(manifest);
   await httpFile.parent.create(recursive: true);
   await httpFile.writeAsString('$content\n');
+}
+
+Future<void> _syncProviderEnabledFlag(
+  fs.Directory projectRoot,
+  String providerId, {
+  required bool enabled,
+}) async {
+  final root = _resolveEnabledConfigRoot(providerId);
+  if (root == null || root.isEmpty) {
+    return;
+  }
+
+  final configFile = projectRoot.fileSystem.file(
+    projectRoot.uri.resolve('config/$root.yaml').toFilePath(),
+  );
+  Map<String, dynamic> config = <String, dynamic>{};
+  if (await configFile.exists()) {
+    final raw = await configFile.readAsString();
+    if (raw.trim().isNotEmpty) {
+      final yaml = loadYaml(raw);
+      if (yaml is YamlMap) {
+        config = _yamlToDart(yaml);
+      }
+    }
+  }
+  config['enabled'] = enabled;
+
+  final content = _toYaml(config);
+  await configFile.parent.create(recursive: true);
+  await configFile.writeAsString('$content\n');
+}
+
+String? _resolveEnabledConfigRoot(String providerId) {
+  final registration = ProviderRegistry.instance.resolve(providerId);
+  if (registration == null) {
+    return null;
+  }
+  final provider = registration.factory();
+  if (provider is! ProvidesDefaultConfig) {
+    return null;
+  }
+
+  final docs = provider.defaultConfig.snapshot().docs;
+  final roots = <String>{};
+  for (final doc in docs) {
+    final path = doc.path;
+    if (!path.endsWith('.enabled')) {
+      continue;
+    }
+    final parts = path.split('.');
+    if (parts.length == 2 && parts[1] == 'enabled') {
+      roots.add(parts.first);
+    }
+  }
+  if (roots.isEmpty) {
+    return null;
+  }
+  if (roots.length == 1) {
+    return roots.first;
+  }
+  final sorted = roots.toList()..sort((a, b) => a.length.compareTo(b.length));
+  return sorted.first;
 }
 
 Map<String, dynamic> _yamlToDart(YamlMap map) {

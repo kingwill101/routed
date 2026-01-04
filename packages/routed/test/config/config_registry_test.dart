@@ -51,7 +51,7 @@ void main() {
     final config = await engine.make<Config>();
     final registry = await engine.make<ConfigRegistry>();
 
-    expect(config.get('plugin.enabled'), isFalse);
+    expect(config.get<bool>('plugin.enabled'), isFalse);
     expect(
       registry.combinedDefaults()['plugin'],
       containsPair('enabled', true),
@@ -59,6 +59,6 @@ void main() {
 
     engine.registerProvider(AuditDefaultsProvider());
 
-    expect(config.get('audit.enabled'), isTrue);
+    expect(config.get<bool>('audit.enabled'), isTrue);
   });
 }

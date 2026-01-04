@@ -31,6 +31,7 @@ import 'package:routed/src/events/event_manager.dart';
 import 'package:routed/src/logging/logging.dart';
 import 'package:routed/src/observability/health.dart';
 import 'package:routed/src/provider/provider.dart';
+import 'package:routed/src/provider/config_utils.dart';
 import 'package:routed/src/request.dart';
 import 'package:routed/src/response.dart';
 import 'package:routed/src/router/router.dart';
@@ -389,9 +390,9 @@ class Engine with StaticFileHandler, ContainerMixin {
 
     appendUnique(
       globalIds,
-      _stringList(appConfig.get('http.middleware.global')),
+      appConfig.getStringListOrNull('http.middleware.global') ?? [],
     );
-    final baseGroups = _groupMap(appConfig.get('http.middleware.groups'));
+    final baseGroups = appConfig.getStringListMap('http.middleware.groups');
     groupIds.addAll(
       baseGroups,
     ); // shallow copy is fine as lists recreated below.
@@ -464,7 +465,13 @@ class Engine with StaticFileHandler, ContainerMixin {
             () => _MutableContribution(),
           );
           target.addGlobal(_stringList(value['global']));
-          target.addGroups(_groupMap(value['groups']));
+          target.addGroups(
+            parseStringListMap(
+              value['groups'],
+              context: 'middleware_sources.groups',
+              throwOnInvalid: false,
+            ),
+          );
         });
       }
     }
@@ -477,7 +484,7 @@ class Engine with StaticFileHandler, ContainerMixin {
       }
     }
 
-    merge(appConfig.get('http.middleware_sources'));
+    merge(appConfig.get<Object?>('http.middleware_sources'));
 
     return contributions.map(
       (key, value) => MapEntry(key, value.toImmutable()),
@@ -489,19 +496,6 @@ class Engine with StaticFileHandler, ContainerMixin {
       return value.map((e) => e.toString()).toList();
     }
     return const <String>[];
-  }
-
-  static Map<String, List<String>> _groupMap(Object? value) {
-    if (value is Map) {
-      final result = <String, List<String>>{};
-      value.forEach((key, items) {
-        if (key is String && items is Iterable) {
-          result[key] = items.map((e) => e.toString()).toList();
-        }
-      });
-      return result;
-    }
-    return const <String, List<String>>{};
   }
 
   bool _shouldActivateProvider(String providerId, Config appConfig) {

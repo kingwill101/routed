@@ -140,7 +140,9 @@ extension ServerExtension on Engine {
     }
 
     final configMap = container.get<Config>();
-    final maxRequestSizeSetting = configMap.get('security.max_request_size');
+    final maxRequestSizeSetting = configMap.get<Object?>(
+      'security.max_request_size',
+    );
     final maxRequestSize = maxRequestSizeSetting is int
         ? maxRequestSizeSetting
         : config.security.maxRequestSize;

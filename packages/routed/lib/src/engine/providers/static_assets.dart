@@ -161,11 +161,6 @@ class StaticAssetsServiceProvider extends ServiceProvider
       }
     }
 
-    final staticNode = config.get<Map<dynamic, dynamic>?>('static');
-    if (staticNode != null && staticNode is! Map) {
-      throw ProviderConfigException('static must be a map');
-    }
-
     final mountsNode = config.get<Iterable<dynamic>?>('static.mounts');
     if (mountsNode is Iterable) {
       var idx = 0;
@@ -178,10 +173,7 @@ class StaticAssetsServiceProvider extends ServiceProvider
         }
         idx++;
       }
-    } else if (mountsNode != null) {
-      throw ProviderConfigException('static.mounts must be a list');
     }
-
     final deduped = <String, _StaticMount>{};
     for (final mount in mounts) {
       deduped[mount.route] = mount;
@@ -224,8 +216,10 @@ class _StaticMount {
     required file.FileSystem fallbackFileSystem,
     required String contextPath,
   }) {
-    final hasRouteKey = node.containsKey('route') || node.containsKey('prefix');
-    final rawRoute = node.getString('route', allowEmpty: true) ?? node.getString('prefix', allowEmpty: true) ?? '/';
+    final rawRoute =
+        node.getString('route', allowEmpty: true) ??
+        node.getString('prefix', allowEmpty: true) ??
+        '/';
     final route = _normalizeRoute(rawRoute);
 
     final diskRaw = node['disk'];
@@ -236,9 +230,6 @@ class _StaticMount {
       }
       diskName = diskRaw;
     }
-    final pathValue = node.containsKey('path')
-        ? node['path']
-        : node['directory'];
     final relativePath = node.getString('path', allowEmpty: true) ?? '';
 
     final indexToken = node.getString('index', allowEmpty: true);
@@ -246,7 +237,8 @@ class _StaticMount {
         ? null
         : indexToken;
 
-    final listDirectories = node.getBool('list_directories') || node.getBool('directory_listing');
+    final listDirectories =
+        node.getBool('list_directories') || node.getBool('directory_listing');
 
     final normalizedDiskName = diskName == null || diskName.isEmpty
         ? null

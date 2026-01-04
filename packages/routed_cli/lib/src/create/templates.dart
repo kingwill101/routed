@@ -118,6 +118,9 @@ Map<String, FileBuilder> _commonFiles() {
     'lib/commands.dart': (_) => _commandsEntry(),
     'tool/spec_manifest.dart': (context) =>
         _specManifestScript(context.packageName),
+    'Dockerfile': (_) => _dockerfile(),
+    '.dockerignore': (_) => _dockerignore(),
+    'docker-compose.yml': (context) => _dockerCompose(context.packageName),
   };
 }
 
@@ -626,12 +629,18 @@ in Dart.
 
 String _serverDart(String packageName) {
   return '''
+import 'dart:io';
+
 import 'package:routed/routed.dart';
 import 'package:$packageName/app.dart' as app;
 
 Future<void> main(List<String> args) async {
+  // Read configuration from environment variables (Docker-friendly)
+  final host = Platform.environment['HOST'] ?? '127.0.0.1';
+  final port = int.tryParse(Platform.environment['PORT'] ?? '8080') ?? 8080;
+
   final Engine engine = await app.createEngine();
-  await engine.serve(host: '127.0.0.1', port: 8080);
+  await engine.serve(host: host, port: port);
 }
 ''';
 }
@@ -664,5 +673,243 @@ FutureOr<List<Command<void>>> buildProjectCommands() {
   // Add project-specific CLI commands (for example, maintenance scripts) here.
   return const [];
 }
+''';
+}
+
+String _dockerfile() {
+  return r'''
+# ============================================================================
+# Routed Backend Dockerfile
+# Multi-stage build for optimized production deployment
+# ============================================================================
+
+# Build Arguments
+ARG DART_VERSION=3.9
+ARG APP_NAME=server
+
+# ============================================================================
+# Stage 1: Dependencies
+# Cache dependencies separately for faster rebuilds
+# ============================================================================
+FROM dart:${DART_VERSION} AS dependencies
+
+WORKDIR /app
+
+# Copy only dependency files first (for better layer caching)
+COPY pubspec.* ./
+
+# Get dependencies
+RUN dart pub get
+
+# ============================================================================
+# Stage 2: Build
+# Compile the application to a native executable
+# ============================================================================
+FROM dart:${DART_VERSION} AS build
+
+WORKDIR /app
+
+# Copy cached dependencies from previous stage
+COPY --from=dependencies /app/.dart_tool /app/.dart_tool
+COPY --from=dependencies /app/pubspec.lock /app/pubspec.lock
+
+# Copy pubspec files
+COPY pubspec.* ./
+
+# Get dependencies (will use cache from pubspec.lock)
+RUN dart pub get --offline || dart pub get
+
+# Copy source code
+COPY . .
+
+# Compile to native executable for best performance
+# AOT compilation produces a single, fast-starting executable
+RUN dart compile exe bin/${APP_NAME}.dart -o bin/${APP_NAME}
+
+# ============================================================================
+# Stage 3: Runtime
+# Minimal production image
+# ============================================================================
+FROM debian:bookworm-slim AS runtime
+
+# Install runtime dependencies
+# - ca-certificates: For HTTPS connections
+# - tzdata: For timezone support
+# - curl: For health checks
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    ca-certificates \
+    tzdata \
+    curl \
+    && rm -rf /var/lib/apt/lists/*
+
+# Create non-root user for security
+RUN groupadd --gid 1000 appuser \
+    && useradd --uid 1000 --gid appuser --shell /bin/bash --create-home appuser
+
+WORKDIR /app
+
+# Copy the compiled executable
+ARG APP_NAME=server
+COPY --from=build /app/bin/${APP_NAME} /app/server
+
+# Copy configuration files (if they exist)
+COPY --from=build /app/config/ /app/config/
+
+# Copy static files and templates (if they exist)
+# Note: Add/remove these lines based on your project structure
+# COPY --from=build /app/public/ /app/public/
+# COPY --from=build /app/templates/ /app/templates/
+# COPY --from=build /app/resources/ /app/resources/
+
+# Create storage directories with proper permissions
+RUN mkdir -p /app/storage/logs /app/storage/cache /app/storage/sessions \
+    && chown -R appuser:appuser /app
+
+# Switch to non-root user
+USER appuser
+
+# Environment variables
+ENV APP_ENV=production
+ENV APP_DEBUG=false
+ENV HOST=0.0.0.0
+ENV PORT=8080
+
+# Expose the application port
+EXPOSE 8080
+
+# Health check
+HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
+    CMD curl -f http://localhost:8080/api/v1/health || exit 1
+
+# Run the server
+ENTRYPOINT ["/app/server"]
+''';
+}
+
+String _dockerignore() {
+  return '''
+# ============================================================================
+# Docker Ignore File for Routed Backend
+# Excludes files that shouldn't be included in the Docker build context
+# ============================================================================
+
+# Dart/Flutter specific
+.dart_tool/
+.packages
+.pub/
+build/
+
+# IDE and editor files
+.idea/
+.vscode/
+*.iml
+*.ipr
+*.iws
+
+# Git
+.git/
+.gitignore
+.gitattributes
+
+# Docker files (avoid recursive builds)
+Dockerfile*
+docker-compose*.yml
+.dockerignore
+
+# Documentation
+docs/
+*.md
+
+# Test files
+test/
+*_test.dart
+coverage/
+
+# Development files
+.env.local
+.env.development
+.env.*.local
+
+# Logs and temp files
+*.log
+logs/
+storage/logs/*
+storage/cache/*
+storage/sessions/*
+tmp/
+temp/
+
+# OS files
+.DS_Store
+Thumbs.db
+*.swp
+*.swo
+*~
+
+# CI/CD
+.github/
+.gitlab-ci.yml
+.circleci/
+Jenkinsfile
+
+# Misc
+*.bak
+*.tmp
+.editorconfig
+tool/
+''';
+}
+
+String _dockerCompose(String packageName) {
+  return '''
+# ============================================================================
+# Docker Compose for Routed Backend
+# Development and production configurations
+# ============================================================================
+
+services:
+  # ==========================================================================
+  # Main Application
+  # ==========================================================================
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        DART_VERSION: "3.9"
+        APP_NAME: "server"
+    container_name: $packageName
+    restart: unless-stopped
+    ports:
+      - "\${PORT:-8080}:8080"
+    environment:
+      - APP_ENV=\${APP_ENV:-production}
+      - APP_DEBUG=\${APP_DEBUG:-false}
+      - HOST=0.0.0.0
+      - PORT=8080
+    volumes:
+      # Persist storage data
+      - app-storage:/app/storage
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/api/v1/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+    networks:
+      - routed-network
+
+# =============================================================================
+# Networks
+# =============================================================================
+networks:
+  routed-network:
+    driver: bridge
+
+# =============================================================================
+# Volumes
+# =============================================================================
+volumes:
+  app-storage:
 ''';
 }

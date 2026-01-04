@@ -1,0 +1,59 @@
+# Justfile for routed_testing package
+
+# Default recipe - shows available commands
+default:
+    @just --list
+
+# Install dependencies
+get:
+    dart pub get
+
+# Run tests
+test:
+    dart test
+
+# Run tests with coverage
+test-coverage:
+    dart test --coverage=coverage
+    dart pub global run coverage:format_coverage --lcov --in=coverage --out=coverage/lcov.info --report-on=lib
+
+# Analyze code
+analyze:
+    dart analyze
+
+# Format code
+format:
+    dart format .
+
+# Check formatting (for CI)
+format-check:
+    dart format --output=none --set-exit-if-changed .
+
+# Apply fixes
+fix:
+    dart fix --apply
+
+# Upgrade dependencies
+upgrade:
+    dart pub upgrade
+
+# Check outdated dependencies
+outdated:
+    dart pub outdated
+
+# Clean build artifacts
+clean:
+    rm -rf .dart_tool build coverage
+
+# Run example
+example FILE:
+    dart run example/{{FILE}}
+
+# List examples
+examples:
+    @echo "Available examples:"
+    @ls -1 example/*.dart 2>/dev/null | sed 's/example\///' | sed 's/\.dart//' || echo "No examples found"
+
+# Full CI check
+ci: format-check analyze test
+    @echo "✅ CI checks passed"

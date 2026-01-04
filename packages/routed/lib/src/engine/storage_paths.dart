@@ -23,7 +23,7 @@ String normalizeStoragePath(Config config, String path) {
 
 String _storageRoot(Config config) {
   final raw = config.has('storage.disks.local.root')
-      ? config.get('storage.disks.local.root')
+      ? config.get<Object?>('storage.disks.local.root')
       : null;
   String root;
   if (raw is String && raw.trim().isNotEmpty) {

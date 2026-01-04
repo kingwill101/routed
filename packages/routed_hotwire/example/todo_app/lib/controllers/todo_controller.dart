@@ -226,16 +226,22 @@ Future<String> _renderListFrame(
   int? selectedId,
 }) async {
   final todos = repository.all();
-  final html = await _renderTemplate(
+  final content = await _renderTemplate(
     ctx,
     'todos/list.liquid',
     data: {
-      'todos': todos.map((todo) => todo.toMap(selectedId: selectedId)).toList(),
+      'todos_list': todos
+          .map((todo) => todo.toMap(selectedId: selectedId))
+          .toList(),
       'selected_id': selectedId,
     },
   );
 
-  return html;
+  return _renderTemplate(
+    ctx,
+    'todos/list_frame.liquid',
+    data: {'content': content},
+  );
 }
 
 Future<String> _renderDetailFrame(EngineContext ctx, Todo? todo) async {
@@ -251,11 +257,17 @@ Future<String> _renderFormFrame(
   EngineContext ctx, {
   required Map<String, String> values,
   required List<String> errors,
-}) {
-  return _renderTemplate(
+}) async {
+  final content = await _renderTemplate(
     ctx,
     'todos/form.liquid',
     data: {'values': values, 'errors': errors},
+  );
+
+  return _renderTemplate(
+    ctx,
+    'todos/form_frame.liquid',
+    data: {'content': content},
   );
 }
 

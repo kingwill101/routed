@@ -158,9 +158,12 @@ class CacheServiceProvider extends ServiceProvider with ProvidesDefaultConfig {
       throw ProviderConfigException('cache must be a map');
     }
 
-    final storesMap = _readMap(config.get('cache.stores'), 'cache.stores');
+    final storesMap = _readMap(
+      config.get<Object?>('cache.stores'),
+      'cache.stores',
+    );
 
-    final defaultRaw = config.get('cache.default');
+    final defaultRaw = config.get<Object?>('cache.default');
     String? defaultStoreName;
     if (defaultRaw != null) {
       if (defaultRaw is! String) {
@@ -232,7 +235,7 @@ class CacheServiceProvider extends ServiceProvider with ProvidesDefaultConfig {
 
   String? _resolveCachePrefix(Config config) {
     if (config.has('cache.prefix')) {
-      final value = config.get<String?>('cache.prefix');
+      final value = config.get<Object?>('cache.prefix');
       if (value == null) {
         return '';
       }
@@ -242,7 +245,7 @@ class CacheServiceProvider extends ServiceProvider with ProvidesDefaultConfig {
       throw ProviderConfigException('cache.prefix must be a string');
     }
     if (config.has('cache.key_prefix')) {
-      final value = config.get<String?>('cache.key_prefix');
+      final value = config.get<Object?>('cache.key_prefix');
       if (value == null) {
         return '';
       }
@@ -252,7 +255,7 @@ class CacheServiceProvider extends ServiceProvider with ProvidesDefaultConfig {
       throw ProviderConfigException('cache.key_prefix must be a string');
     }
     if (config.has('app.cache_prefix')) {
-      final value = config.get<String?>('app.cache_prefix');
+      final value = config.get<Object?>('app.cache_prefix');
       if (value == null) {
         return '';
       }

@@ -10,6 +10,9 @@ class JsonBinding extends Binding {
   @override
   String get name => 'json';
 
+  @override
+  MimeType get mimeType => MimeType.json;
+
   /// Decodes the body of the request from JSON format.
   ///
   /// This method reads the bytes from the request body, decodes them into a UTF-8 string,
@@ -61,19 +64,20 @@ class JsonBinding extends Binding {
   ///
   /// Returns a Future that completes when binding is done.
   @override
-  Future<void> bind(
+  Future<T> bind<T>(
     EngineContext context,
-    dynamic instance, {
+    T instance, {
     Map<String, String>? rules,
   }) async {
     final decoded = await _decodedBody(context);
     await bindBody(decoded, instance);
+    return instance;
   }
 
   /// Binds the decoded JSON body to an instance.
   ///
   /// This method adds all key-value pairs from the decoded JSON to the provided instance
-  /// if the instance is a Map.
+  /// if the instance is a Map or implements Bindable.
   ///
   /// [decoded] - The decoded JSON body as a Map.
   /// [instance] - The instance to bind the JSON data to.
@@ -82,6 +86,8 @@ class JsonBinding extends Binding {
   Future<void> bindBody(Map<String, dynamic> decoded, dynamic instance) async {
     if (instance is Map) {
       instance.addAll(decoded);
+    } else if (instance is Bindable) {
+      instance.bind(decoded);
     }
   }
 }
