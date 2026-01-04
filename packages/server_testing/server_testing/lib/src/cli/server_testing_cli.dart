@@ -87,8 +87,7 @@ class ServerTestingCli {
   }) async {
     final effectiveTargets = targets.isNotEmpty
         ? targets
-        : (await _ensureRegistry())
-              .defaultExecutables
+        : (await _ensureRegistry()).defaultExecutables
               .map((e) => e.name)
               .toList();
 
@@ -179,8 +178,9 @@ class ServerTestingCli {
       final percent = total > 0 ? progress.received / total : 0.0;
       final bar = progressBar.viewAs(percent);
       final mb = (progress.received / 1024 / 1024).toStringAsFixed(1);
-      final totalMb =
-          total > 0 ? (total / 1024 / 1024).toStringAsFixed(1) : '?';
+      final totalMb = total > 0
+          ? (total / 1024 / 1024).toStringAsFixed(1)
+          : '?';
       final mbps = (progress.speed / 1024 / 1024).toStringAsFixed(1);
       stdout.write('\r$bar $mb/$totalMb MB @ $mbps MB/s'.padRight(80));
     };
@@ -205,8 +205,9 @@ class ServerTestingCli {
 
     final content = await file.readAsString();
     _stdout.writeln('Loaded browsers.json from $jsonPath');
-    _loadedBrowsersJson =
-        BrowserJson.fromJson(json.decode(content) as Map<String, dynamic>);
+    _loadedBrowsersJson = BrowserJson.fromJson(
+      json.decode(content) as Map<String, dynamic>,
+    );
     return _loadedBrowsersJson!;
   }
 

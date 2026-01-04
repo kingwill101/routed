@@ -247,9 +247,7 @@ class Registry {
       );
       throw BrowserException(
         'No executable path mapping for "${descriptor.name}" on ${PlatformInfo.platformId}.',
-        candidates.isEmpty
-            ? null
-            : 'Candidates: ${candidates.join(', ')}',
+        candidates.isEmpty ? null : 'Candidates: ${candidates.join(', ')}',
       );
     }
     final expectedPath = path.join(descriptor.dir, relPath);

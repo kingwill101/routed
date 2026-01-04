@@ -222,10 +222,7 @@ class BrowserPaths {
   ///
   /// Returns the first existing candidate. If nothing exists yet, returns the
   /// default candidate (or `null` if unsupported).
-  static String? resolveExecutablePath(
-    String browserName,
-    String installDir,
-  ) {
+  static String? resolveExecutablePath(String browserName, String installDir) {
     final candidates = getExecutablePathCandidates(browserName);
     for (final candidate in candidates) {
       final fullPath = path.join(installDir, candidate);
