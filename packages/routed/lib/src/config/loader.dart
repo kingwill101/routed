@@ -94,6 +94,7 @@ class ConfigLoader {
     Map<String, dynamic>? overrides,
   }) {
     final fs = options.fileSystem ?? _fileSystem;
+    final pathContext = fs.path;
     final config = ConfigImpl();
     final envVariables = <String, String>{};
 
@@ -157,6 +158,7 @@ class ConfigLoader {
       config,
       environment: environment,
       templateContext: templateContext,
+      pathContext: pathContext,
     );
 
     if (overrides != null && overrides.isNotEmpty) {
@@ -300,22 +302,26 @@ class ConfigLoader {
     ConfigImpl config, {
     required String environment,
     required Map<String, dynamic> templateContext,
+    required p.Context pathContext,
   }) {
     final baseDir = fs.directory(options.configDirectory);
-    _mergeDirectory(config, baseDir, templateContext);
+    _mergeDirectory(config, baseDir, templateContext, pathContext);
 
     if (!options.includeEnvironmentSubdirectory || environment.isEmpty) {
       return;
     }
 
-    final envDir = fs.directory(p.join(options.configDirectory, environment));
-    _mergeDirectory(config, envDir, templateContext);
+    final envDir = fs.directory(
+      pathContext.join(options.configDirectory, environment),
+    );
+    _mergeDirectory(config, envDir, templateContext, pathContext);
   }
 
   void _mergeDirectory(
     ConfigImpl config,
     Directory directory,
     Map<String, dynamic> templateContext,
+    p.Context pathContext,
   ) {
     if (!directory.existsSync()) {
       return;
@@ -327,15 +333,15 @@ class ConfigLoader {
             .whereType<File>()
             .where(
               (file) => _supportedExtensions.contains(
-                p.extension(file.path).toLowerCase(),
+                pathContext.extension(file.path).toLowerCase(),
               ),
             )
             .toList()
           ..sort((a, b) => a.path.compareTo(b.path));
 
     for (final file in files) {
-      final namespace = p.basenameWithoutExtension(file.path);
-      final content = _parseFile(file, templateContext);
+      final namespace = pathContext.basenameWithoutExtension(file.path);
+      final content = _parseFile(file, templateContext, pathContext);
       if (content == null) continue;
       config.merge({namespace: content});
     }
@@ -344,8 +350,9 @@ class ConfigLoader {
   Map<String, dynamic>? _parseFile(
     File file,
     Map<String, dynamic> templateContext,
+    p.Context pathContext,
   ) {
-    final ext = p.extension(file.path).toLowerCase();
+    final ext = pathContext.extension(file.path).toLowerCase();
     try {
       final rawContents = file.readAsStringSync();
       final contents = _renderTemplate(rawContents, templateContext, file.path);

@@ -93,12 +93,15 @@ class ShutdownController {
     if (!config.enabled || _listeners.isNotEmpty) return;
 
     for (final signal in config.signals) {
+      if (!_isSignalSupported(signal)) {
+        continue;
+      }
       StreamSubscription<ProcessSignal>? sub;
       try {
         sub = signal.watch().listen((sig) {
           onTriggered?.call(sig);
           trigger(sig);
-        });
+        }, onError: (_, __) {});
       } on StateError {
         // Platform does not support this signal.
       } on SignalException {
@@ -108,6 +111,11 @@ class ShutdownController {
         _listeners.add(sub);
       }
     }
+  }
+
+  bool _isSignalSupported(ProcessSignal signal) {
+    if (!Platform.isWindows) return true;
+    return signal == ProcessSignal.sigint;
   }
 
   Future<void> trigger([ProcessSignal? signal]) async {
