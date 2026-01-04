@@ -14,6 +14,8 @@ import 'package:webdriver/sync_io.dart' as wdsync;
 class ChromiumType implements BrowserType {
   // Assume Registry is accessible via TestBootstrap singleton
   // DriverManager is accessed statically
+  static final Map<String, _ChromeVersionCache> _versionCache = {};
+  static const Duration _versionCacheTtl = Duration(minutes: 10);
 
   @override
   String get name => 'chromium'; // Use the internal registry name
@@ -245,26 +247,41 @@ class ChromiumType implements BrowserType {
 
   static Future<int?> _detectChromeMajor(String chromeBin) async {
     const timeout = Duration(seconds: 5);
+    final cached = _versionCache[chromeBin];
+    if (cached != null &&
+        DateTime.now().difference(cached.timestamp) < _versionCacheTtl) {
+      return cached.major;
+    }
     Process? process;
     try {
       process = await Process.start(chromeBin, ['--version']);
       final stdoutFuture = process.stdout.transform(utf8.decoder).join();
       final stderrFuture = process.stderr.transform(utf8.decoder).join();
       final exitCode = await process.exitCode.timeout(timeout);
-      if (exitCode != 0) return null;
+      if (exitCode != 0) {
+        _versionCache[chromeBin] = _ChromeVersionCache(null);
+        return null;
+      }
       final output = await stdoutFuture;
       await stderrFuture;
       final match = RegExp(r'(\d+)\.').firstMatch(output);
-      if (match == null) return null;
-      return int.tryParse(match.group(1) ?? '');
+      if (match == null) {
+        _versionCache[chromeBin] = _ChromeVersionCache(null);
+        return null;
+      }
+      final major = int.tryParse(match.group(1) ?? '');
+      _versionCache[chromeBin] = _ChromeVersionCache(major);
+      return major;
     } on TimeoutException {
       process?.kill();
       print(
         '[ChromiumType] Timed out probing Chromium version; skipping version detection.',
       );
+      _versionCache[chromeBin] = _ChromeVersionCache(null);
       return null;
     } catch (_) {
       process?.kill();
+      _versionCache[chromeBin] = _ChromeVersionCache(null);
       return null;
     }
   }
@@ -284,4 +301,11 @@ class ChromiumType implements BrowserType {
     final dir = await Directory.systemTemp.createTemp('st_chrome_profile_');
     return dir.path;
   }
+}
+
+class _ChromeVersionCache {
+  _ChromeVersionCache(this.major) : timestamp = DateTime.now();
+
+  final int? major;
+  final DateTime timestamp;
 }

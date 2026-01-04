@@ -17,6 +17,8 @@ import 'driver_interface.dart';
 class ChromeDriverManager extends WebDriverManager {
   /// The running ChromeDriver process instance, or `null` if not started.
   Process? _driverProcess;
+  static final Map<String, _VersionProbeCache> _versionProbeCache = {};
+  static const Duration _versionProbeCacheTtl = Duration(minutes: 10);
 
   /// Sets up ChromeDriver by downloading and extracting the correct version.
   @override
@@ -150,26 +152,40 @@ class ChromeDriverManager extends WebDriverManager {
     const timeout = Duration(seconds: 5);
     for (final candidate in _chromeBinaryCandidates()) {
       if (!await File(candidate).exists()) continue;
+      final cached = _versionProbeCache[candidate];
+      if (cached != null &&
+          DateTime.now().difference(cached.timestamp) <
+              _versionProbeCacheTtl) {
+        return cached.major;
+      }
       Process? process;
       try {
         process = await Process.start(candidate, ['--version']);
         final stdoutFuture = process.stdout.transform(utf8.decoder).join();
         final stderrFuture = process.stderr.transform(utf8.decoder).join();
         final exitCode = await process.exitCode.timeout(timeout);
-        if (exitCode != 0) continue;
+        if (exitCode != 0) {
+          _versionProbeCache[candidate] = _VersionProbeCache(null);
+          continue;
+        }
         final output = await stdoutFuture;
         await stderrFuture;
         final match = RegExp(r'(\d+)\.').firstMatch(output);
         if (match != null) {
-          return int.tryParse(match.group(1) ?? '');
+          final major = int.tryParse(match.group(1) ?? '');
+          _versionProbeCache[candidate] = _VersionProbeCache(major);
+          return major;
         }
+        _versionProbeCache[candidate] = _VersionProbeCache(null);
       } on TimeoutException {
         process?.kill();
         print(
           'Timed out probing Chrome version for $candidate; skipping version detection.',
         );
+        _versionProbeCache[candidate] = _VersionProbeCache(null);
       } catch (_) {
         process?.kill();
+        _versionProbeCache[candidate] = _VersionProbeCache(null);
         // Ignore and continue searching.
       }
     }
@@ -396,4 +412,11 @@ class ChromeDriverManager extends WebDriverManager {
       return false;
     }
   }
+}
+
+class _VersionProbeCache {
+  _VersionProbeCache(this.major) : timestamp = DateTime.now();
+
+  final int? major;
+  final DateTime timestamp;
 }
