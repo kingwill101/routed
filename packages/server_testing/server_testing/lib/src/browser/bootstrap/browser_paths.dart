@@ -32,6 +32,20 @@ class BrowserPaths {
         ['chrome-linux', 'chrome'],
       ],
       'mac': [
+        [
+          'chrome-mac-arm64',
+          'Google Chrome for Testing.app',
+          'Contents',
+          'MacOS',
+          'Google Chrome for Testing',
+        ],
+        [
+          'chrome-mac-x64',
+          'Google Chrome for Testing.app',
+          'Contents',
+          'MacOS',
+          'Google Chrome for Testing',
+        ],
         ['chrome-mac', 'Chromium.app', 'Contents', 'MacOS', 'Chromium'],
       ],
       'win': [
