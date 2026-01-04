@@ -22,7 +22,9 @@ dependencies:
   routed: ^0.2.0
 
 dev_dependencies:
+  contextual: ^2.0.0
   lints: ^6.0.0
+  path: ^1.9.1
   routed_testing: ^0.2.1
   server_testing: ^0.2.0
   test: ^1.26.3
