@@ -269,18 +269,8 @@ class Registry {
       await extractArchiveToDisk(archive, descriptor.dir);
 
       if (!Platform.isWindows) {
-        final executablePath = path.join(
-          descriptor.dir,
-          BrowserPaths.getExecutablePath(descriptor.name),
-        );
-
-        //verify binary exists
-        if (!File(executablePath).existsSync()) {
-          throw BrowserException(
-            'Browser ${descriptor.name} is not installed. Run installation command.',
-          );
-        }
-        await Process.run('chmod', ['+x', executablePath]);
+        // Recursively apply chmod +x to the entire directory to ensure all binaries (like glxtest) are executable
+        await Process.run('chmod', ['-R', '+x', descriptor.dir]);
       }
 
       await _initializeExecutable(descriptor, lock);

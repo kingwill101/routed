@@ -41,10 +41,7 @@ void main() {
               reason: 'Firefox override binary should exist at $override',
             );
           } else {
-            final pathStr = p.join(
-              firefox.directory!,
-              firefox.executablePath(),
-            );
+            final pathStr = firefox.executablePath();
             expect(
               await File(pathStr).exists(),
               isTrue,
@@ -61,10 +58,7 @@ void main() {
               reason: 'Chromium override binary should exist at $override',
             );
           } else {
-            final pathStr = p.join(
-              chromium.directory!,
-              chromium.executablePath(),
-            );
+            final pathStr = chromium.executablePath();
             expect(
               await File(pathStr).exists(),
               isTrue,

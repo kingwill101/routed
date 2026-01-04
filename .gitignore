@@ -14,3 +14,4 @@ storage/
 
 # Test artifacts
 **/templates/test/logs/
+packages/server_testing/server_testing/test_screenshots/

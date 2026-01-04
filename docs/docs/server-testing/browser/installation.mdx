@@ -11,6 +11,27 @@ description: Install browsers and drivers, version pinning, OS dependencies and 
 - You can pin a specific channel via BrowserConfig.browserName (e.g., chromium, firefox) and set forceReinstall for clean rebuilds.
 - Drivers are managed automatically per browser type.
 
+## Updating bundled browser + driver versions (maintainers)
+
+The Playwright browser revisions and ChromeDriver version are generated from upstream sources. To refresh them:
+
+```bash
+cd packages/server_testing/server_testing
+dart run build_runner build -d
+```
+
+This regenerates:
+- `lib/src/browser/bootstrap/browsers_json_const.dart` (Playwright browsers.json)
+- `lib/src/browser/bootstrap/devices_json_const.dart`
+- `lib/src/browser/bootstrap/driver/chrome_driver_version.dart`
+- `lib/src/browser/bootstrap/driver/gecko_driver_version.dart`
+
+Verify the updates:
+- `dart run server_testing install` (downloads updated browser bundles)
+- `dart run server_testing install:driver chrome --force` (refresh ChromeDriver)
+- `dart run server_testing install:driver firefox --force` (refresh GeckoDriver)
+- Run browser-focused tests in this package after updating.
+
 ## OS dependencies
 
 - Linux: ensure common X/GL libraries and fonts are installed. Headless runs still need libX11 and font packages.
@@ -26,3 +47,6 @@ description: Install browsers and drivers, version pinning, OS dependencies and 
 - Prefer headless. Configure BrowserConfig(headless: true) and autoInstall: true.
 - Cache the registry directory to speed up builds. Default cache: ~/.server_testing (override with SERVER_TESTING_CACHE_DIR)
 - Artifacts: store test_screenshots/ and logs for debugging failures.
+- For unusual Linux distros or custom CI images, you can override platform detection with:
+  - `SERVER_TESTING_PLATFORM` (linux, mac, win)
+  - `SERVER_TESTING_PLATFORM_ID` (e.g., ubuntu22.04-x64, mac13-arm64, win64)

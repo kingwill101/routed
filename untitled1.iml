@@ -141,6 +141,36 @@
       <excludeFolder url="file://$MODULE_DIR$/packages/routed_cli/.dart_tool" />
       <excludeFolder url="file://$MODULE_DIR$/packages/routed_cli/.pub" />
       <excludeFolder url="file://$MODULE_DIR$/packages/routed_cli/build" />
+      <excludeFolder url="file://$MODULE_DIR$/examples/config_demo/.dart_tool" />
+      <excludeFolder url="file://$MODULE_DIR$/examples/config_demo/.pub" />
+      <excludeFolder url="file://$MODULE_DIR$/examples/config_demo/build" />
+      <excludeFolder url="file://$MODULE_DIR$/examples/oauth_keycloak/.dart_tool" />
+      <excludeFolder url="file://$MODULE_DIR$/examples/oauth_keycloak/.pub" />
+      <excludeFolder url="file://$MODULE_DIR$/examples/oauth_keycloak/build" />
+      <excludeFolder url="file://$MODULE_DIR$/examples/project_commands_demo/.dart_tool" />
+      <excludeFolder url="file://$MODULE_DIR$/examples/project_commands_demo/.pub" />
+      <excludeFolder url="file://$MODULE_DIR$/examples/project_commands_demo/build" />
+      <excludeFolder url="file://$MODULE_DIR$/examples/route_events/.dart_tool" />
+      <excludeFolder url="file://$MODULE_DIR$/examples/route_events/.pub" />
+      <excludeFolder url="file://$MODULE_DIR$/examples/route_events/build" />
+      <excludeFolder url="file://$MODULE_DIR$/packages/class_view/class_view_image_field/.dart_tool" />
+      <excludeFolder url="file://$MODULE_DIR$/packages/class_view/class_view_image_field/.pub" />
+      <excludeFolder url="file://$MODULE_DIR$/packages/class_view/class_view_image_field/build" />
+      <excludeFolder url="file://$MODULE_DIR$/packages/jaspr_routed/.dart_tool" />
+      <excludeFolder url="file://$MODULE_DIR$/packages/jaspr_routed/.pub" />
+      <excludeFolder url="file://$MODULE_DIR$/packages/jaspr_routed/build" />
+      <excludeFolder url="file://$MODULE_DIR$/packages/jaspr_routed/example/.dart_tool" />
+      <excludeFolder url="file://$MODULE_DIR$/packages/jaspr_routed/example/.pub" />
+      <excludeFolder url="file://$MODULE_DIR$/packages/jaspr_routed/example/build" />
+      <excludeFolder url="file://$MODULE_DIR$/packages/routed_hotwire/.dart_tool" />
+      <excludeFolder url="file://$MODULE_DIR$/packages/routed_hotwire/.pub" />
+      <excludeFolder url="file://$MODULE_DIR$/packages/routed_hotwire/build" />
+      <excludeFolder url="file://$MODULE_DIR$/.apps/routed_app1/routed_app1/.dart_tool" />
+      <excludeFolder url="file://$MODULE_DIR$/.apps/routed_app1/routed_app1/.pub" />
+      <excludeFolder url="file://$MODULE_DIR$/.apps/routed_app1/routed_app1/build" />
+      <excludeFolder url="file://$MODULE_DIR$/examples/localization/.dart_tool" />
+      <excludeFolder url="file://$MODULE_DIR$/examples/localization/.pub" />
+      <excludeFolder url="file://$MODULE_DIR$/examples/localization/build" />
     </content>
     <orderEntry type="sourceFolder" forTests="false" />
     <orderEntry type="library" name="Dart SDK" level="project" />
