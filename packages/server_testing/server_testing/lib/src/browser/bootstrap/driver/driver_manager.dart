@@ -48,9 +48,24 @@ class DriverManager {
       raf = lockFile.openSync(mode: FileMode.write);
       raf.lockSync(FileLock.exclusive);
 
-      // If not forcing and binary exists, skip setup
-      if (!force && await existing.exists()) {
-        print('$bin already present at: ${existing.path}');
+      final exists = await existing.exists();
+      if (!force && exists) {
+        final needsUpdate = await _driverNeedsUpdate(
+          browser,
+          existing,
+          driverMajor: driverMajor,
+          driverExact: driverExact,
+        );
+        if (needsUpdate) {
+          force = true;
+          print('Driver version mismatch detected, forcing reinstall.');
+        } else {
+          print('$bin already present at: ${existing.path}');
+        }
+      }
+
+      if (!force && exists) {
+        // no-op, driver already present and matches requested version
       } else {
         if (force && await existing.exists()) {
           print(
@@ -137,5 +152,54 @@ class DriverManager {
     }
 
     return port;
+  }
+
+  static Future<bool> _driverNeedsUpdate(
+    String browser,
+    File existing, {
+    int? driverMajor,
+    String? driverExact,
+  }) async {
+    if (browser != 'chrome') return false;
+    if (driverMajor == null && driverExact == null) return false;
+
+    final output = await _readDriverVersion(existing.path);
+    if (output == null) return true;
+
+    final currentFull = _extractFullVersion(output);
+    final currentMajor = _extractMajorVersion(output);
+
+    if (driverExact != null && driverExact.isNotEmpty) {
+      if (currentFull == null) return true;
+      return currentFull != driverExact;
+    }
+
+    if (driverMajor != null) {
+      if (currentMajor == null) return true;
+      return currentMajor != driverMajor;
+    }
+
+    return false;
+  }
+
+  static Future<String?> _readDriverVersion(String path) async {
+    try {
+      final result = await Process.run(path, ['--version']);
+      if (result.exitCode != 0) return null;
+      return result.stdout.toString().trim();
+    } catch (_) {
+      return null;
+    }
+  }
+
+  static String? _extractFullVersion(String output) {
+    final match = RegExp(r'(\d+\.\d+\.\d+\.\d+)').firstMatch(output);
+    return match?.group(1);
+  }
+
+  static int? _extractMajorVersion(String output) {
+    final match = RegExp(r'(\d+)\.').firstMatch(output);
+    if (match == null) return null;
+    return int.tryParse(match.group(1) ?? '');
   }
 }

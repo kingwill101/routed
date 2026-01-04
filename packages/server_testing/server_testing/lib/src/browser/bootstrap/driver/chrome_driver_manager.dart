@@ -63,6 +63,7 @@ class ChromeDriverManager extends WebDriverManager {
     final envMajor = Platform.environment['SERVER_TESTING_CHROMEDRIVER_MAJOR'];
     final resolvedExact = envExact ?? exactVersion;
     final resolvedMajor = int.tryParse(envMajor ?? '') ?? major;
+    final detectedMajor = await _detectChromeMajorFromBinary();
 
     String versionPath;
     if (resolvedExact != null) {
@@ -71,23 +72,9 @@ class ChromeDriverManager extends WebDriverManager {
       versionPath =
           await _fetchLatestForMajor(resolvedMajor) ?? chromeDriverVersion;
     } else {
-      // Try to detect from bundled chromium binary
-      final chromiumBin = path.join(
-        BrowserPaths.getRegistryDirectory(),
-        'chromium-1194',
-        'chrome-linux',
-        'chrome',
-      );
-      String? detected;
-      try {
-        final out = await Process.run(chromiumBin, ['--version']);
-        final m = RegExp(r'(\d+)\.').firstMatch(out.stdout.toString());
-        if (m != null) detected = m.group(1);
-      } catch (_) {}
-      if (detected != null) {
+      if (detectedMajor != null) {
         versionPath =
-            await _fetchLatestForMajor(int.parse(detected)) ??
-            chromeDriverVersion;
+            await _fetchLatestForMajor(detectedMajor) ?? chromeDriverVersion;
       } else {
         versionPath = chromeDriverVersion;
       }
@@ -155,6 +142,52 @@ class ChromeDriverManager extends WebDriverManager {
       return v;
     } catch (_) {
       return null;
+    }
+  }
+
+  Future<int?> _detectChromeMajorFromBinary() async {
+    for (final candidate in _chromeBinaryCandidates()) {
+      if (!await File(candidate).exists()) continue;
+      try {
+        final out = await Process.run(candidate, ['--version']);
+        if (out.exitCode != 0) continue;
+        final match = RegExp(r'(\d+)\.').firstMatch(out.stdout.toString());
+        if (match != null) {
+          return int.tryParse(match.group(1) ?? '');
+        }
+      } catch (_) {
+        // Ignore and continue searching.
+      }
+    }
+    return null;
+  }
+
+  Iterable<String> _chromeBinaryCandidates() sync* {
+    final envOverrides = <String>[
+      'SERVER_TESTING_CHROME_BINARY',
+      'SERVER_TESTING_CHROMIUM_BINARY',
+    ];
+    for (final key in envOverrides) {
+      final value = Platform.environment[key];
+      if (value != null && value.trim().isNotEmpty) {
+        yield value.trim();
+      }
+    }
+
+    final registryDir = BrowserPaths.getRegistryDirectory();
+    final relPath = BrowserPaths.getExecutablePath('chromium');
+    if (relPath == null) return;
+
+    final registry = Directory(registryDir);
+    if (!registry.existsSync()) return;
+
+    for (final entity in registry.listSync()) {
+      if (entity is! Directory) continue;
+      final name = path.basename(entity.path);
+      if (!name.startsWith('chromium-') && !name.startsWith('chrome-')) {
+        continue;
+      }
+      yield path.join(entity.path, relPath);
     }
   }
 

@@ -1,5 +1,5 @@
 import 'dart:async';
-import 'dart:io' show Platform, File, Process;
+import 'dart:io' show Directory, File, Platform, Process;
 
 import 'package:path/path.dart' as path;
 import 'package:server_testing/server_testing.dart';
@@ -40,11 +40,15 @@ class ChromiumType implements BrowserType {
       force: TestBootstrap.currentConfig.forceReinstall,
     );
 
+    final chromeBin = await _executablePathFor(executableName);
+    final detectedMajor = await _detectChromeMajor(chromeBin);
+
     // 2. Ensure ChromeDriver server is running
     //    ChromeDriver itself usually corresponds to the base 'chrome' name.
 
     // Resolve driver hint from options/env
-    final driverMajor = options.extraCapabilities?['driver:major'] as int?;
+    final driverMajor =
+        (options.extraCapabilities?['driver:major'] as int?) ?? detectedMajor;
     final driverExact = options.extraCapabilities?['driver:version'] as String?;
     final port = await bootstrap_driver.DriverManager.ensureDriver(
       _webDriverBrowserName,
@@ -61,7 +65,7 @@ class ChromiumType implements BrowserType {
         options.baseUrl ?? config.baseUrl; // Prioritize launch option override
 
     // Ensure browser binary and crashpad handler are executable (Linux)
-    final chromeBin = await _executablePathFor(executableName);
+    final userDataDir = await _resolveUserDataDir(options);
     try {
       if (Platform.isLinux) {
         await Process.run('chmod', ['+x', chromeBin]);
@@ -93,10 +97,10 @@ class ChromiumType implements BrowserType {
         if (options.args != null) {
           args.addAll(options.args!);
         }
-        // Do not force a user-data-dir; let ChromeDriver decide. Respect explicit user value only.
-        if (options.userDataDir != null &&
-            !args.any((a) => a.startsWith('--user-data-dir'))) {
-          args.add('--user-data-dir=${options.userDataDir}');
+        final hasUserDataArg = _hasUserDataDirArg(args);
+        // Ensure per-launch profile isolation unless the caller specified one.
+        if (!hasUserDataArg && userDataDir != null) {
+          args.add('--user-data-dir=$userDataDir');
         }
         return args;
       })(),
@@ -208,5 +212,40 @@ class ChromiumType implements BrowserType {
   // Helper to get executable path for a specific name (channel or default)
   Future<String> _executablePathFor(String executableName) async {
     return TestBootstrap.resolveExecutablePath(executableName);
+  }
+
+  static bool _hasUserDataDirArg(List<String> args) {
+    return args.any(
+      (arg) => arg == '--user-data-dir' || arg.startsWith('--user-data-dir='),
+    );
+  }
+
+  static Future<int?> _detectChromeMajor(String chromeBin) async {
+    try {
+      final result = await Process.run(chromeBin, ['--version']);
+      if (result.exitCode != 0) return null;
+      final output = result.stdout.toString();
+      final match = RegExp(r'(\d+)\.').firstMatch(output);
+      if (match == null) return null;
+      return int.tryParse(match.group(1) ?? '');
+    } catch (_) {
+      return null;
+    }
+  }
+
+  static Future<String?> _resolveUserDataDir(
+    BrowserLaunchOptions options,
+  ) async {
+    if (options.userDataDir != null && options.userDataDir!.isNotEmpty) {
+      return options.userDataDir;
+    }
+
+    final args = options.args ?? const <String>[];
+    if (_hasUserDataDirArg(args)) {
+      return null;
+    }
+
+    final dir = await Directory.systemTemp.createTemp('st_chrome_profile_');
+    return dir.path;
   }
 }
