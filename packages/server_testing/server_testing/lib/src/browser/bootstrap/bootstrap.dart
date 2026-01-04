@@ -3,6 +3,7 @@ import 'dart:io';
 
 import 'package:path/path.dart' as p;
 import 'package:server_testing/server_testing.dart';
+import 'package:server_testing/src/browser/bootstrap/browser_json.dart';
 import 'package:server_testing/src/browser/bootstrap/browser_json_loader.dart';
 import 'package:server_testing/src/browser/bootstrap/driver/driver_manager.dart'
     as bootstrap_driver; // Use prefix for clarity
@@ -300,17 +301,27 @@ class TestBootstrap {
       );
     }
 
+    bool hasExecutable(Executable executable) {
+      final rawPath = executable.executablePath();
+      final resolved = p.isAbsolute(rawPath)
+          ? rawPath
+          : (executable.directory != null
+                ? p.join(executable.directory!, rawPath)
+                : rawPath);
+      return File(resolved).existsSync();
+    }
+
     // Check if installation is needed
     bool needsInstall = force;
-    if (!force && executable.directory != null) {
-      needsInstall = !Directory(executable.directory!).existsSync();
-      // Could add more checks here, e.g., using InstallationValidator.isValid
-    } else if (!force) {
-      // If directory is null, we might assume it doesn't need install or handle differently
-      needsInstall = false; // Or perhaps throw? Depends on Executable contract
-      print(
-        "Warning: Executable for $registryName has no directory, skipping installation check.",
-      );
+    if (!force) {
+      if (hasExecutable(executable)) {
+        needsInstall = false;
+      } else {
+        needsInstall = true;
+        print(
+          "Executable for $registryName is missing, forcing installation check.",
+        );
+      }
     }
 
     bool installedNow = false;
@@ -381,8 +392,10 @@ class TestBootstrap {
       );
     }
 
-    final relative = executable!.executablePath();
-    final resolved = p.join(executable.directory!, relative);
+    final rawPath = executable!.executablePath();
+    final resolved = p.isAbsolute(rawPath)
+        ? rawPath
+        : p.join(executable.directory!, rawPath);
     if (!File(resolved).existsSync()) {
       throw BrowserException(
         'Expected browser binary for "$registryName" at $resolved but it was not found. '

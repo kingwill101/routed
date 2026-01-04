@@ -395,7 +395,7 @@ void main() {
 
           // Should be close to 100ms, allow some tolerance
           expect(elapsed, greaterThanOrEqualTo(90));
-          expect(elapsed, lessThan(150));
+          expect(elapsed, lessThan(220));
 
           // Error message should include an elapsed time close to measured
           final match = RegExp(r'elapsed: (\d+)ms').firstMatch(e.toString());

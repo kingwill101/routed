@@ -319,11 +319,11 @@ class ChromeDriverManager extends WebDriverManager {
     }
     print('Starting ChromeDriver from: $driverPath');
 
-    print('Waiting for ChromeDriver to be ready...');
-    // await waitForPort(port);
     _driverProcess = await startProcess(driverPath, args);
 
     print('ChromeDriver process started with PID: ${_driverProcess!.pid}');
+    print('Waiting for ChromeDriver to be ready...');
+    await waitForPort(port);
     print('ChromeDriver listening on port: $port');
   }
 
@@ -375,7 +375,7 @@ class ChromeDriverManager extends WebDriverManager {
   @override
   Future<bool> isRunning(int port) async {
     try {
-      final socket = await Socket.connect('localhost', port);
+      final socket = await Socket.connect(InternetAddress.loopbackIPv4, port);
       await socket.close();
       return true;
     } catch (_) {

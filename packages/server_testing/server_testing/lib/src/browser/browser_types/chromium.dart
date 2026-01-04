@@ -153,7 +153,7 @@ class ChromiumType implements BrowserType {
     // capabilities.remove('goog:chromeOptions');
 
     // 6. Determine Driver URL
-    final driverUri = Uri.parse('http://localhost:$port');
+    final driverUri = Uri.parse('http://127.0.0.1:$port');
 
     // 7. Create WebDriver instance (async or sync)
     Object webDriver; // Use Object to hold either type

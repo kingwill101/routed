@@ -44,7 +44,7 @@ abstract class WebDriverManager {
     final stopwatch = Stopwatch()..start();
     while (stopwatch.elapsed < duration) {
       try {
-        final socket = await Socket.connect('localhost', port);
+        final socket = await Socket.connect(InternetAddress.loopbackIPv4, port);
         await socket.close();
         return;
       } catch (_) {

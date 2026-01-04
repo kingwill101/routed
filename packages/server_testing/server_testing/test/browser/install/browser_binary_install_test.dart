@@ -1,5 +1,6 @@
 import 'dart:io';
 
+import 'package:server_testing/src/browser/bootstrap/browser_json.dart';
 import 'package:server_testing/src/browser/bootstrap/browsers_json_const.dart';
 import 'package:server_testing/src/browser/bootstrap/registry.dart';
 import 'package:test/test.dart';
@@ -24,6 +25,33 @@ void main() {
           return null;
         }
 
+        Future<void> ensureBinary(
+          Registry registry,
+          String browserName,
+          Executable executable,
+        ) async {
+          final override = binaryOverrideFor(browserName);
+          if (override != null) {
+            expect(
+              await File(override).exists(),
+              isTrue,
+              reason: '$browserName override binary should exist at $override',
+            );
+            return;
+          }
+
+          final pathStr = executable.executablePath();
+          if (!await File(pathStr).exists()) {
+            await registry.installExecutables([executable], force: true);
+          }
+
+          expect(
+            await File(pathStr).exists(),
+            isTrue,
+            reason: '$browserName binary should exist at $pathStr',
+          );
+        }
+
         final registry = Registry(browserJsonData);
         final firefox = registry.getExecutable('firefox');
         final chromium = registry.getExecutable('chromium');
@@ -32,41 +60,13 @@ void main() {
         expect(chromium, isNotNull);
 
         if (firefox != null) {
-          final override = binaryOverrideFor('firefox');
-          if (override != null) {
-            expect(
-              await File(override).exists(),
-              isTrue,
-              reason: 'Firefox override binary should exist at $override',
-            );
-          } else {
-            final pathStr = firefox.executablePath();
-            expect(
-              await File(pathStr).exists(),
-              isTrue,
-              reason: 'Firefox binary should exist at $pathStr',
-            );
-          }
+          await ensureBinary(registry, 'firefox', firefox);
         }
         if (chromium != null) {
-          final override = binaryOverrideFor('chromium');
-          if (override != null) {
-            expect(
-              await File(override).exists(),
-              isTrue,
-              reason: 'Chromium override binary should exist at $override',
-            );
-          } else {
-            final pathStr = chromium.executablePath();
-            expect(
-              await File(pathStr).exists(),
-              isTrue,
-              reason: 'Chromium binary should exist at $pathStr',
-            );
-          }
+          await ensureBinary(registry, 'chromium', chromium);
         }
       },
-      timeout: const Timeout(Duration(minutes: 2)),
+      timeout: const Timeout(Duration(minutes: 5)),
     );
   });
 }

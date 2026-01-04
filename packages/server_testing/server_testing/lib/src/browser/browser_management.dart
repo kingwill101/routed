@@ -473,7 +473,16 @@ class BrowserManagement {
       return false;
     }
 
-    return Directory(executable.directory!).existsSync();
+    final directory = Directory(executable.directory!);
+    if (!directory.existsSync()) {
+      return false;
+    }
+
+    final rawPath = executable.executablePath();
+    final resolved = path.isAbsolute(rawPath)
+        ? rawPath
+        : path.join(executable.directory!, rawPath);
+    return File(resolved).existsSync();
   }
 
   static Future<String?> _readBrowserVersion(String binaryPath) async {
