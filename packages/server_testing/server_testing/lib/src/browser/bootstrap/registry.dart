@@ -223,12 +223,28 @@ class Registry {
   /// Validates system dependencies using [InstallationValidator.validateDependencies],
   /// marks the installation as complete using [InstallationValidator.markInstalled],
   /// and releases the installation [lock].
+  static void _assertExecutablePresent(BrowserDescriptor descriptor) {
+    final relPath = BrowserPaths.getExecutablePath(descriptor.name);
+    if (relPath == null || relPath.isEmpty) {
+      throw BrowserException(
+        'No executable path mapping for "${descriptor.name}" on ${PlatformInfo.platformId}.',
+      );
+    }
+    final expectedPath = path.join(descriptor.dir, relPath);
+    if (!File(expectedPath).existsSync()) {
+      throw BrowserException(
+        'Expected browser binary for "${descriptor.name}" at $expectedPath was not found after extraction.',
+      );
+    }
+  }
+
   static Future<void> _initializeExecutable(
     BrowserDescriptor descriptor,
     InstallationLock lock,
   ) async {
     try {
       await InstallationValidator.validateDependencies(descriptor.dir);
+      _assertExecutablePresent(descriptor);
       await InstallationValidator.markInstalled(descriptor.dir);
     } finally {
       await lock.release();

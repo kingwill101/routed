@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:convert';
 import 'dart:io' show Directory, File, Platform, Process;
 
 import 'package:path/path.dart' as path;
@@ -30,18 +31,34 @@ class ChromiumType implements BrowserType {
     BrowserLaunchOptions options, {
     bool useAsync = true,
   }) async {
+    final stopwatch = Stopwatch()..start();
+    void logStep(String message) {
+      final elapsed = stopwatch.elapsed;
+      print('[ChromiumType][+${elapsed.inMilliseconds}ms] $message');
+    }
+
     // 1. Determine the target executable name (handle channel override)
     final executableName = options.channel ?? name;
+    logStep(
+      'Launch requested (executable=$executableName, useAsync=$useAsync, headless=${options.headless ?? TestBootstrap.currentConfig.headless}).',
+    );
 
     // 1b. Ensure the correct Chromium binary (potentially a specific channel) is installed.
     //     Pass the force flag from the *current* effective configuration.
+    logStep('Ensuring browser is installed...');
     await TestBootstrap.ensureBrowserInstalled(
       executableName,
       force: TestBootstrap.currentConfig.forceReinstall,
     );
+    logStep('Browser installation check complete.');
 
+    logStep('Resolving executable path...');
     final chromeBin = await _executablePathFor(executableName);
+    logStep('Executable path resolved: $chromeBin');
+
+    logStep('Detecting Chromium major version...');
     final detectedMajor = await _detectChromeMajor(chromeBin);
+    logStep('Detected Chromium major version: $detectedMajor');
 
     // 2. Ensure ChromeDriver server is running
     //    ChromeDriver itself usually corresponds to the base 'chrome' name.
@@ -50,12 +67,16 @@ class ChromiumType implements BrowserType {
     final driverMajor =
         (options.extraCapabilities?['driver:major'] as int?) ?? detectedMajor;
     final driverExact = options.extraCapabilities?['driver:version'] as String?;
+    logStep(
+      'Ensuring ChromeDriver (driverMajor=$driverMajor, driverExact=$driverExact)...',
+    );
     final port = await bootstrap_driver.DriverManager.ensureDriver(
       _webDriverBrowserName,
       force: TestBootstrap.currentConfig.forceReinstall,
       driverMajor: driverMajor,
       driverExact: driverExact,
     );
+    logStep('ChromeDriver ready on port $port');
 
     // 3. Determine final launch parameters from effective configuration
     final config =
@@ -158,6 +179,7 @@ class ChromiumType implements BrowserType {
     // 7. Create WebDriver instance (async or sync)
     Object webDriver; // Use Object to hold either type
     try {
+      logStep('Creating WebDriver session...');
       if (useAsync) {
         webDriver = await wdasync.createDriver(
           uri: driverUri,
@@ -171,6 +193,7 @@ class ChromiumType implements BrowserType {
           // TODO: Incorporate options.timeout (launchTimeout) for connection?
         );
       }
+      logStep('WebDriver session created.');
     } catch (e, s) {
       print("Capabilities sent: $capabilities");
       throw BrowserException(
@@ -221,14 +244,27 @@ class ChromiumType implements BrowserType {
   }
 
   static Future<int?> _detectChromeMajor(String chromeBin) async {
+    const timeout = Duration(seconds: 5);
+    Process? process;
     try {
-      final result = await Process.run(chromeBin, ['--version']);
-      if (result.exitCode != 0) return null;
-      final output = result.stdout.toString();
+      process = await Process.start(chromeBin, ['--version']);
+      final stdoutFuture = process.stdout.transform(utf8.decoder).join();
+      final stderrFuture = process.stderr.transform(utf8.decoder).join();
+      final exitCode = await process.exitCode.timeout(timeout);
+      if (exitCode != 0) return null;
+      final output = await stdoutFuture;
+      await stderrFuture;
       final match = RegExp(r'(\d+)\.').firstMatch(output);
       if (match == null) return null;
       return int.tryParse(match.group(1) ?? '');
+    } on TimeoutException {
+      process?.kill();
+      print(
+        '[ChromiumType] Timed out probing Chromium version; skipping version detection.',
+      );
+      return null;
     } catch (_) {
+      process?.kill();
       return null;
     }
   }
