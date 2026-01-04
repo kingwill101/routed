@@ -1,5 +1,5 @@
 // GENERATED CODE - DO NOT MODIFY BY HAND
-// Generated at: 2025-10-13T16:48:22.739486
+// Generated at: 2026-01-04T11:28:24.479624
 
 import 'browser_json.dart';
 
@@ -8,49 +8,49 @@ final browserJsonData = BrowserJson(
   browsers: [
     BrowserEntry(
       name: 'chromium',
-      revision: '1194',
-      browserVersion: '141.0.7390.37',
+      revision: '1205',
+      browserVersion: '144.0.7559.20',
       installByDefault: true,
       revisionOverrides: null,
     ),
     BrowserEntry(
       name: 'chromium-headless-shell',
-      revision: '1194',
-      browserVersion: '141.0.7390.37',
+      revision: '1205',
+      browserVersion: '144.0.7559.20',
       installByDefault: true,
       revisionOverrides: null,
     ),
     BrowserEntry(
       name: 'chromium-tip-of-tree',
-      revision: '1371',
-      browserVersion: '142.0.7430.0',
+      revision: '1392',
+      browserVersion: '144.0.7559.20',
       installByDefault: false,
       revisionOverrides: null,
     ),
     BrowserEntry(
       name: 'chromium-tip-of-tree-headless-shell',
-      revision: '1371',
-      browserVersion: '142.0.7430.0',
+      revision: '1392',
+      browserVersion: '144.0.7559.20',
       installByDefault: false,
       revisionOverrides: null,
     ),
     BrowserEntry(
       name: 'firefox',
-      revision: '1495',
-      browserVersion: '142.0.1',
+      revision: '1507',
+      browserVersion: '145.0.2',
       installByDefault: true,
       revisionOverrides: null,
     ),
     BrowserEntry(
       name: 'firefox-beta',
-      revision: '1490',
-      browserVersion: '143.0b10',
+      revision: '1502',
+      browserVersion: '146.0b8',
       installByDefault: false,
       revisionOverrides: null,
     ),
     BrowserEntry(
       name: 'webkit',
-      revision: '2215',
+      revision: '2242',
       browserVersion: '26.0',
       installByDefault: true,
       revisionOverrides: {

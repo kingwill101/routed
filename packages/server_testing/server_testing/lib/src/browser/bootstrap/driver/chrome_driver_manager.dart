@@ -154,8 +154,7 @@ class ChromeDriverManager extends WebDriverManager {
       if (!await File(candidate).exists()) continue;
       final cached = _versionProbeCache[candidate];
       if (cached != null &&
-          DateTime.now().difference(cached.timestamp) <
-              _versionProbeCacheTtl) {
+          DateTime.now().difference(cached.timestamp) < _versionProbeCacheTtl) {
         return cached.major;
       }
       Process? process;

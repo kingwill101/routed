@@ -378,7 +378,12 @@ void main() {
       installDriver: installers.installDriver,
     );
 
-    final exit = await cli.run(['install:driver', 'chrome', 'firefox', '--force']);
+    final exit = await cli.run([
+      'install:driver',
+      'chrome',
+      'firefox',
+      '--force',
+    ]);
 
     expect(exit, 0);
     expect(installers.driverCalls, hasLength(2));

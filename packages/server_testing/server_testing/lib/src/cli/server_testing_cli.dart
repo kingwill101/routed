@@ -243,8 +243,7 @@ class _InstallDriverCommand extends Command<int> {
   String get name => 'install:driver';
 
   @override
-  String get description =>
-      'Setup WebDriver binaries (default: firefox).';
+  String get description => 'Setup WebDriver binaries (default: firefox).';
 
   @override
   Future<int> run() async {
@@ -259,8 +258,7 @@ class _InstallDriverCommand extends Command<int> {
 }
 
 class _InitCommand extends Command<int> {
-  _InitCommand(this._cli) {
-  }
+  _InitCommand(this._cli) {}
 
   final ServerTestingCli _cli;
 
@@ -268,8 +266,7 @@ class _InitCommand extends Command<int> {
   String get name => 'init';
 
   @override
-  String get description =>
-      'Scaffold test config (browsers.json, test dirs).';
+  String get description => 'Scaffold test config (browsers.json, test dirs).';
 
   @override
   Future<int> run() async {
@@ -284,8 +281,7 @@ class _InitCommand extends Command<int> {
 
 class _CreateBrowserCommand extends Command<int> {
   _CreateBrowserCommand(this._cli)
-    : super(aliases: const ['create:browser-test']) {
-  }
+    : super(aliases: const ['create:browser-test']) {}
 
   final ServerTestingCli _cli;
 
@@ -315,9 +311,7 @@ class _CreateBrowserCommand extends Command<int> {
 }
 
 class _CreateHttpCommand extends Command<int> {
-  _CreateHttpCommand(this._cli)
-    : super(aliases: const ['create:http-test']) {
-  }
+  _CreateHttpCommand(this._cli) : super(aliases: const ['create:http-test']) {}
 
   final ServerTestingCli _cli;
 
@@ -336,7 +330,9 @@ class _CreateHttpCommand extends Command<int> {
     }
     final name = _joinedName(argResults?.rest ?? const <String>[]);
     if (name.isEmpty) {
-      _cli._stderr.writeln('Please provide a test name, e.g. create:http users_api');
+      _cli._stderr.writeln(
+        'Please provide a test name, e.g. create:http users_api',
+      );
       return 64;
     }
     await _cli._createHttpTest(name);
