@@ -2,7 +2,6 @@ import 'dart:async';
 
 import 'package:file/file.dart' as file;
 import 'package:file/local.dart' as local;
-import 'package:path/path.dart' as p;
 import 'package:routed/src/container/container.dart';
 import 'package:routed/src/context/context.dart';
 import 'package:routed/src/contracts/contracts.dart' show Config;
@@ -300,6 +299,7 @@ class _StaticMount {
   }
 
   Future<bool> tryServe(EngineContext ctx, String requestPath) async {
+    final pathContext = _dir.fileSystem.path;
     final match = _match(requestPath);
     if (match == null) {
       return false;
@@ -311,7 +311,7 @@ class _StaticMount {
     if (isDirectoryRequest && indexFile != null) {
       final indexTarget = relative.isEmpty
           ? indexFile!
-          : p.join(relative, indexFile!);
+          : pathContext.join(relative, indexFile!);
       if (await _entityExists(indexTarget)) {
         await _handler.serveFile(ctx, indexTarget);
         return true;
@@ -373,7 +373,7 @@ class _StaticMount {
   Future<bool> _entityExists(String relativePath) async {
     final fullPath = relativePath.isEmpty
         ? _rootPath
-        : p.join(_rootPath, relativePath);
+        : _dir.fileSystem.path.join(_rootPath, relativePath);
     try {
       final stat = await _dir.fileSystem.stat(fullPath);
       return stat.type != file.FileSystemEntityType.notFound;
@@ -411,9 +411,12 @@ class _StaticMount {
 
   static String _resolveRootPath(Dir dir) {
     final fs = dir.fileSystem;
-    final currentDir = p.normalize(fs.currentDirectory.path);
-    return p.normalize(
-      p.isAbsolute(dir.path) ? dir.path : p.join(currentDir, dir.path),
+    final pathContext = fs.path;
+    final currentDir = pathContext.normalize(fs.currentDirectory.path);
+    return pathContext.normalize(
+      pathContext.isAbsolute(dir.path)
+          ? dir.path
+          : pathContext.join(currentDir, dir.path),
     );
   }
 }

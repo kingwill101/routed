@@ -41,8 +41,11 @@ void main() {
       await engine.replaceConfig(override);
       await Future<void>.delayed(Duration.zero);
 
-      expect(engine.config.templateDirectory, endsWith('shared/views'));
-      expect(engine.config.views.viewPath, endsWith('shared/views'));
+      expect(
+        engine.config.templateDirectory,
+        endsWith(p.join('shared', 'views')),
+      );
+      expect(engine.config.views.viewPath, endsWith(p.join('shared', 'views')));
     });
 
     test('resolves directory via storage disk', () async {

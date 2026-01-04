@@ -4,7 +4,6 @@ import 'dart:io';
 import 'package:file/file.dart' as file;
 import 'package:file/local.dart' as local;
 import 'package:mime/mime.dart';
-import 'package:path/path.dart' as p;
 import 'package:routed/src/context/context.dart';
 
 /// Represents a directory in the file system.
@@ -59,9 +58,12 @@ class FileHandler {
     file.FileSystem fileSystem = const local.LocalFileSystem(),
     bool allowDirectoryListing = false,
   }) {
-    final currentDir = p.normalize(fileSystem.currentDirectory.path);
-    final normalizedPath = p.normalize(
-      p.isAbsolute(rootPath) ? rootPath : p.join(currentDir, rootPath),
+    final pathContext = fileSystem.path;
+    final currentDir = pathContext.normalize(fileSystem.currentDirectory.path);
+    final normalizedPath = pathContext.normalize(
+      pathContext.isAbsolute(rootPath)
+          ? rootPath
+          : pathContext.join(currentDir, rootPath),
     );
 
     return FileHandler._(
@@ -75,9 +77,14 @@ class FileHandler {
   ///
   /// The [dir] parameter specifies the directory from which files are served.
   factory FileHandler.fromDir(Dir dir) {
-    final currentDir = p.normalize(dir.fileSystem.currentDirectory.path);
-    final normalizedPath = p.normalize(
-      p.isAbsolute(dir.path) ? dir.path : p.join(currentDir, dir.path),
+    final pathContext = dir.fileSystem.path;
+    final currentDir = pathContext.normalize(
+      dir.fileSystem.currentDirectory.path,
+    );
+    final normalizedPath = pathContext.normalize(
+      pathContext.isAbsolute(dir.path)
+          ? dir.path
+          : pathContext.join(currentDir, dir.path),
     );
 
     return FileHandler._(
@@ -94,10 +101,11 @@ class FileHandler {
   Future<void> serveFile(EngineContext ctx, String file) async {
     // removed direct request reference
     try {
-      final filePath = p.normalize(p.join(rootPath, file));
+      final pathContext = fileSystem.path;
+      final filePath = pathContext.normalize(pathContext.join(rootPath, file));
 
       // Robust security check to prevent directory traversal
-      if (rootPath != filePath && !p.isWithin(rootPath, filePath)) {
+      if (rootPath != filePath && !pathContext.isWithin(rootPath, filePath)) {
         ctx.abortWithStatus(
           HttpStatus.forbidden,
           ctx.method == 'HEAD' ? '' : 'Access denied',
@@ -134,8 +142,12 @@ class FileHandler {
     String dirPath, [
     String parent = '',
   ]) async {
+    final pathContext = fileSystem.path;
+    final baseDir = pathContext.isAbsolute(dirPath)
+        ? dirPath
+        : pathContext.join(rootPath, dirPath);
     // First try to serve index.html if it exists
-    final indexPath = p.join(p.join(rootPath, dirPath), 'index.html');
+    final indexPath = pathContext.join(baseDir, 'index.html');
 
     try {
       final indexFileStat = await fileSystem.stat(indexPath);
@@ -168,7 +180,8 @@ class FileHandler {
     String dirPath, [
     String? parent,
   ]) async {
-    final directory = fileSystem.directory(p.join(rootPath, dirPath));
+    final pathContext = fileSystem.path;
+    final directory = fileSystem.directory(pathContext.join(rootPath, dirPath));
     final entities = await directory.list().toList();
 
     // Directory listing should explicitly send text/html with utf-8 charset
@@ -176,8 +189,9 @@ class FileHandler {
     ctx.response.write('<!DOCTYPE html><html><body><ul>');
 
     for (var entity in entities) {
-      final name = p.basename(entity.path);
-      final isDir = await FileSystemEntity.isDirectory(entity.path);
+      final name = pathContext.basename(entity.path);
+      final stat = await entity.stat();
+      final isDir = stat.type == file.FileSystemEntityType.directory;
       final displayName = isDir ? '${entity.parent.basename}/$name/' : name;
       final prefix = (parent != null && parent.isNotEmpty) ? '$parent/' : '';
       final encodedName = Uri.encodeComponent("$prefix$name");
@@ -198,7 +212,7 @@ class FileHandler {
     String filePath,
     FileStat fileStat,
   ) async {
-    final file = fileSystem.file(p.join(rootPath, filePath));
+    final file = fileSystem.file(filePath);
 
     // Conditional request handling
     if (_handleIfModifiedSince(ctx, fileStat.modified)) {

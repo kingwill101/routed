@@ -2,7 +2,6 @@ import 'dart:async';
 
 import 'package:file/file.dart' as file;
 import 'package:file/local.dart' as local;
-import 'package:path/path.dart' as p;
 import 'package:routed/src/container/container.dart';
 import 'package:routed/src/contracts/contracts.dart' show Config;
 import 'package:routed/src/engine/config.dart';
@@ -202,11 +201,14 @@ class ViewServiceProvider extends ServiceProvider with ProvidesDefaultConfig {
   }
 
   String _normalizePath(file.FileSystem fs, String value) {
-    final base = fs.currentDirectory.path;
+    final pathContext = fs.path;
+    final base = pathContext.normalize(fs.currentDirectory.path);
     if (value.isEmpty) {
-      return p.normalize(base);
+      return base;
     }
-    return p.normalize(p.isAbsolute(value) ? value : p.join(base, value));
+    return pathContext.normalize(
+      pathContext.isAbsolute(value) ? value : pathContext.join(base, value),
+    );
   }
 
   ViewEngine _createEngine(

@@ -1,7 +1,6 @@
 import 'package:file/file.dart';
 import 'package:file/memory.dart';
 import 'package:liquify/src/filter_registry.dart' as liquify;
-import 'package:path/path.dart' as p;
 import 'package:routed/routed.dart';
 import 'package:routed/src/translation/locale_manager.dart';
 import 'package:routed_testing/routed_testing.dart';
@@ -38,11 +37,11 @@ notifications:
       config: EngineConfig(fileSystem: fs),
       configItems: {
         'translation': {
-          'paths': [p.join(rootDir, 'resources', 'lang')],
+          'paths': [fs.path.join(rootDir, 'resources', 'lang')],
           'resolvers': ['query', 'header'],
           'query': {'parameter': 'lang'},
         },
-        'view': {'directory': p.join(rootDir, 'views')},
+        'view': {'directory': fs.path.join(rootDir, 'views')},
       },
     );
 
@@ -119,7 +118,7 @@ notifications:
 
 void _writeTranslation(FileSystem fs, String root, String locale, String yaml) {
   final file = fs.file(
-    p.join(root, 'resources', 'lang', locale, 'messages.yaml'),
+    fs.path.join(root, 'resources', 'lang', locale, 'messages.yaml'),
   );
   file
     ..createSync(recursive: true)
@@ -127,7 +126,7 @@ void _writeTranslation(FileSystem fs, String root, String locale, String yaml) {
 }
 
 void _writeTemplate(FileSystem fs, String root, String content) {
-  final file = fs.file(p.join(root, 'views', 'welcome.liquid'));
+  final file = fs.file(fs.path.join(root, 'views', 'welcome.liquid'));
   file
     ..createSync(recursive: true)
     ..writeAsStringSync(content.trim());
