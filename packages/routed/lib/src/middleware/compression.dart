@@ -125,6 +125,9 @@ _NegotiatedEncoding? _negotiateEncoding(
     if (algorithm == null) {
       continue;
     }
+    if (!isAlgorithmSupported(algorithm)) {
+      continue;
+    }
     if (!options.algorithms.contains(algorithm)) {
       continue;
     }
@@ -210,9 +213,26 @@ bool isAlgorithmSupported(CompressionAlgorithm algorithm) {
     case CompressionAlgorithm.gzip:
       return true;
     case CompressionAlgorithm.brotli:
-      return true;
+      return _isBrotliSupported();
   }
 }
+
+bool _isBrotliSupported() {
+  if (_brotliSupportChecked) {
+    return _brotliSupported;
+  }
+  _brotliSupportChecked = true;
+  try {
+    es_brotli.brotli.encode(const [0]);
+    _brotliSupported = true;
+  } catch (_) {
+    _brotliSupported = false;
+  }
+  return _brotliSupported;
+}
+
+bool _brotliSupportChecked = false;
+bool _brotliSupported = false;
 
 class CompressionOptions {
   CompressionOptions({

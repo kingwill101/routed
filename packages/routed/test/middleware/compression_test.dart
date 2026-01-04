@@ -10,6 +10,7 @@ import 'package:server_testing/server_testing.dart';
 
 void main() {
   group('compressionMiddleware', () {
+    final brotliSupported = isAlgorithmSupported(CompressionAlgorithm.brotli);
     final modes = TransportMode.values
         .where((mode) => mode != TransportMode.inMemory)
         .toList();
@@ -43,37 +44,43 @@ void main() {
           },
         );
 
-        test('prefers brotli when weighted higher by the client', () async {
-          final body = 'Brotli beats gzip when the client prefers it.' * 10;
-          String? seenAcceptEncoding;
-          final engine =
-              Engine(
-                configItems: {
-                  'compression': {'min_length': 8},
-                },
-              )..get('/br', (ctx) {
-                seenAcceptEncoding = ctx.request.headers.value(
-                  HttpHeaders.acceptEncodingHeader,
-                );
-                return ctx.string(body);
-              });
+        test(
+          'prefers brotli when weighted higher by the client',
+          () async {
+            final body = 'Brotli beats gzip when the client prefers it.' * 10;
+            String? seenAcceptEncoding;
+            final engine =
+                Engine(
+                  configItems: {
+                    'compression': {'min_length': 8},
+                  },
+                )..get('/br', (ctx) {
+                  seenAcceptEncoding = ctx.request.headers.value(
+                    HttpHeaders.acceptEncodingHeader,
+                  );
+                  return ctx.string(body);
+                });
 
-          final client = _startCompressionClient(engine, mode);
-          final response = await client.get(
-            '/br',
-            headers: {
-              HttpHeaders.acceptEncodingHeader: ['br;q=1.0, gzip;q=0.5'],
-            },
-          );
+            final client = _startCompressionClient(engine, mode);
+            final response = await client.get(
+              '/br',
+              headers: {
+                HttpHeaders.acceptEncodingHeader: ['br;q=1.0, gzip;q=0.5'],
+              },
+            );
 
-          expect(seenAcceptEncoding, isNotNull);
-          response.assertHeaderContains(
-            HttpHeaders.contentEncodingHeader,
-            'br',
-          );
-          final decoded = es_brotli.brotli.decode(response.bodyBytes);
-          expect(utf8.decode(decoded), equals(body));
-        });
+            expect(seenAcceptEncoding, isNotNull);
+            response.assertHeaderContains(
+              HttpHeaders.contentEncodingHeader,
+              'br',
+            );
+            final decoded = es_brotli.brotli.decode(response.bodyBytes);
+            expect(utf8.decode(decoded), equals(body));
+          },
+          skip: brotliSupported
+              ? false
+              : 'Brotli not supported on this platform',
+        );
 
         test('skips compression for disallowed mime types', () async {
           final body = 'PNG data but represented as text for the test.' * 10;
@@ -200,7 +207,9 @@ void main() {
                   !sample.disableRoute;
 
               if (expectsCompression) {
-                final expectedEncoding = sample.preferBrotli ? 'br' : 'gzip';
+                final expectedEncoding = sample.preferBrotli && brotliSupported
+                    ? 'br'
+                    : 'gzip';
                 response.assertHeaderContains(
                   HttpHeaders.contentEncodingHeader,
                   expectedEncoding,
