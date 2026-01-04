@@ -6,16 +6,8 @@ on:
     - cron: '0 0 * * 0'
   push:
     branches: [ master ]
-    paths:
-      - '.github/workflows/routed_testing.yaml'
-      - 'packages/server_testing/server_testing/**'
-      - 'packages/server_testing/routed_testing/**'
   pull_request:
     branches: [ master ]
-    paths:
-      - '.github/workflows/routed_testing.yaml'
-      - 'packages/server_testing/server_testing/**'
-      - 'packages/server_testing/routed_testing/**'
 
 defaults:
   run:

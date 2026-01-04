@@ -6,14 +6,8 @@ on:
     - cron: '0 0 * * 0'
   push:
     branches: [ master ]
-    paths:
-      - '.github/workflows/routed.yaml'
-      - 'packages/routed/**'
   pull_request:
     branches: [ master ]
-    paths:
-      - '.github/workflows/routed.yaml'
-      - 'packages/routed/**'
 
 defaults:
   run:
