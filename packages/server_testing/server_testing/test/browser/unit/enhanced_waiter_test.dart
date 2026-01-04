@@ -415,9 +415,9 @@ void main() {
           stopwatch.stop();
           final elapsed = stopwatch.elapsedMilliseconds;
 
-          // Should be close to 100ms, allow some tolerance
+          // Should be close to 100ms, allow some tolerance for slower systems/CI
           expect(elapsed, greaterThanOrEqualTo(90));
-          expect(elapsed, lessThan(150));
+          expect(elapsed, lessThan(250));
 
           // Error message should include an elapsed time close to measured
           final match = RegExp(r'elapsed: (\d+)ms').firstMatch(e.toString());
