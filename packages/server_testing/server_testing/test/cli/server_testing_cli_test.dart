@@ -340,7 +340,7 @@ void main() {
       installDriver: installers.installDriver,
     );
 
-    final exit = await cli.run(['install']);
+    final exit = await cli.run(['install', 'bad', 'firefox']);
 
     expect(exit, 1);
     expect(installers.browserCalls, hasLength(2));

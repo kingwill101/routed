@@ -1,9 +1,13 @@
+import 'dart:convert';
 import 'dart:io';
 
 import 'package:artisanal/args.dart';
+import 'package:artisanal/tui.dart';
 import 'package:path/path.dart' as p;
 import 'package:server_testing/src/browser/bootstrap/browser_json.dart';
+import 'package:server_testing/src/browser/bootstrap/browser_paths.dart';
 import 'package:server_testing/src/browser/bootstrap/browsers_json_const.dart';
+import 'package:server_testing/src/browser/bootstrap/downloader.dart';
 import 'package:server_testing/src/browser/bootstrap/driver/driver_manager.dart'
     as bootstrap_driver;
 import 'package:server_testing/src/browser/bootstrap/registry.dart';
@@ -19,7 +23,7 @@ class ServerTestingCli {
     StringSink? stdoutSink,
     StringSink? stderrSink,
     Directory? workingDirectory,
-  }) : _browsersJson = browsersJson ?? browserJsonData,
+  }) : _browsersJson = browsersJson,
        _stdout = stdoutSink ?? stdout,
        _stderr = stderrSink ?? stderr,
        _workingDirectory = workingDirectory ?? Directory.current {
@@ -27,7 +31,7 @@ class ServerTestingCli {
     _installDriver = installDriver ?? _defaultInstallDriver;
   }
 
-  final BrowserJson _browsersJson;
+  final BrowserJson? _browsersJson;
   final StringSink _stdout;
   final StringSink _stderr;
   final Directory _workingDirectory;
@@ -35,9 +39,10 @@ class ServerTestingCli {
   late final BrowserInstaller _installBrowser;
   late final DriverInstaller _installDriver;
   Registry? _registry;
+  BrowserJson? _loadedBrowsersJson;
 
   Future<void> _defaultInstallBrowser(String name, {bool force = false}) async {
-    _registry ??= Registry(_browsersJson);
+    _registry ??= await _ensureRegistry();
     final exec = _registry!.getExecutable(name);
     if (exec == null) {
       throw Exception('Unknown browser executable: $name');
@@ -82,9 +87,9 @@ class ServerTestingCli {
   }) async {
     final effectiveTargets = targets.isNotEmpty
         ? targets
-        : _browsersJson.browsers
-              .where((b) => b.installByDefault)
-              .map((b) => b.name)
+        : (await _ensureRegistry())
+              .defaultExecutables
+              .map((e) => e.name)
               .toList();
 
     var exitCode = 0;
@@ -143,6 +148,66 @@ class ServerTestingCli {
       ..addCommand(_CreateBrowserCommand(this))
       ..addCommand(_CreateHttpCommand(this));
     return runner;
+  }
+
+  Future<Registry> _ensureRegistry() async {
+    if (_registry != null) return _registry!;
+    _configureProgressRenderer();
+    final browsersJson = await _loadBrowsersJson();
+    _stdout.writeln(
+      'Using browser cache directory: ${BrowserPaths.getRegistryDirectory()}',
+    );
+    _registry = Registry(browsersJson);
+    return _registry!;
+  }
+
+  void _configureProgressRenderer() {
+    if (_stdout != stdout || !stdout.hasTerminal) return;
+    if (Platform.environment['SERVER_TESTING_TUI'] == '0') return;
+    if (Registry.progressRenderer != null) return;
+
+    final progressBar = ProgressModel(
+      width: 28,
+      full: '=',
+      empty: '-',
+      showPercentage: false,
+      useGradient: false,
+    );
+
+    Registry.progressRenderer = (DownloadProgress progress) {
+      final total = progress.total;
+      final percent = total > 0 ? progress.received / total : 0.0;
+      final bar = progressBar.viewAs(percent);
+      final mb = (progress.received / 1024 / 1024).toStringAsFixed(1);
+      final totalMb =
+          total > 0 ? (total / 1024 / 1024).toStringAsFixed(1) : '?';
+      final mbps = (progress.speed / 1024 / 1024).toStringAsFixed(1);
+      stdout.write('\r$bar $mb/$totalMb MB @ $mbps MB/s'.padRight(80));
+    };
+  }
+
+  Future<BrowserJson> _loadBrowsersJson() async {
+    if (_loadedBrowsersJson != null) return _loadedBrowsersJson!;
+    if (_browsersJson != null) {
+      _loadedBrowsersJson = _browsersJson;
+      return _loadedBrowsersJson!;
+    }
+
+    final jsonPath = p.join(_workingDirectory.path, 'browsers.json');
+    final file = File(jsonPath);
+    if (!await file.exists()) {
+      _stdout.writeln(
+        'No browsers.json found at $jsonPath, using embedded defaults.',
+      );
+      _loadedBrowsersJson = browserJsonData;
+      return _loadedBrowsersJson!;
+    }
+
+    final content = await file.readAsString();
+    _stdout.writeln('Loaded browsers.json from $jsonPath');
+    _loadedBrowsersJson =
+        BrowserJson.fromJson(json.decode(content) as Map<String, dynamic>);
+    return _loadedBrowsersJson!;
   }
 
   Future<void> _initProject() async {

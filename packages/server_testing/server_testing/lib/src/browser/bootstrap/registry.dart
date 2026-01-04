@@ -19,6 +19,8 @@ Map<String, BrowserType> browserTypes = {
   // 'webkit': WebkitType(),
 };
 
+typedef ProgressRenderer = void Function(DownloadProgress progress);
+
 /// Helper function to create an [Executable] instance from a [BrowserDescriptor].
 ///
 /// Populates the [Executable] fields based on the descriptor, including
@@ -27,13 +29,20 @@ Executable? _createExecutableStatic(
   BrowserDescriptor descriptor,
   String registryDir,
 ) {
-  String executablePath = BrowserPaths.getExecutablePath(descriptor.name) ?? "";
-  if (executablePath.isEmpty) return null;
-  executablePath = path.join(descriptor.dir, executablePath);
+  String? resolveExecutableRelPath() =>
+      BrowserPaths.resolveExecutablePath(descriptor.name, descriptor.dir);
+  final initialRelPath = resolveExecutableRelPath();
+  if (initialRelPath == null || initialRelPath.isEmpty) return null;
+
+  String resolveExecutablePath() {
+    final relPath = resolveExecutableRelPath() ?? initialRelPath;
+    return path.join(descriptor.dir, relPath);
+  }
 
   final urls = BrowserPaths.getDownloadUrls(
     descriptor.name,
     descriptor.revision,
+    browserVersion: descriptor.browserVersion,
   );
   return Executable(
     type: ExecutableType.browser,
@@ -45,20 +54,21 @@ Executable? _createExecutableStatic(
         : InstallType.downloadOnDemand,
     downloadURLs: urls,
     browserVersion: descriptor.browserVersion,
-    executablePath: () => executablePath,
+    executablePath: resolveExecutablePath,
     executablePathOrDie: (String sdkLanguage) {
-      if (!File(executablePath).existsSync()) {
+      final resolvedPath = resolveExecutablePath();
+      if (!File(resolvedPath).existsSync()) {
         throw BrowserException(
           'Browser ${descriptor.name} is not installed. Run installation command.',
         );
       }
-      return executablePath;
+      return resolvedPath;
     },
     validateHostRequirements: (String r) async {
       // Platform-specific validation implementation
     },
     install: () async {
-      if (File(executablePath).existsSync()) {
+      if (File(resolveExecutablePath()).existsSync()) {
         print('${descriptor.name} is already installed.');
         return;
       } else {
@@ -111,6 +121,9 @@ Future<void> _downloadExecutableStatic(
 /// Provides access to [BrowserDescriptor]s and [Executable] objects, handling
 /// platform-specific details, download URLs, installation paths, and locking.
 class Registry {
+  /// Optional progress renderer hook for download progress.
+  static ProgressRenderer? progressRenderer;
+
   /// The root directory where browsers are installed and managed.
   final String registryDir;
 
@@ -224,10 +237,19 @@ class Registry {
   /// marks the installation as complete using [InstallationValidator.markInstalled],
   /// and releases the installation [lock].
   static void _assertExecutablePresent(BrowserDescriptor descriptor) {
-    final relPath = BrowserPaths.getExecutablePath(descriptor.name);
+    final relPath = BrowserPaths.resolveExecutablePath(
+      descriptor.name,
+      descriptor.dir,
+    );
     if (relPath == null || relPath.isEmpty) {
+      final candidates = BrowserPaths.getExecutablePathCandidates(
+        descriptor.name,
+      );
       throw BrowserException(
         'No executable path mapping for "${descriptor.name}" on ${PlatformInfo.platformId}.',
+        candidates.isEmpty
+            ? null
+            : 'Candidates: ${candidates.join(', ')}',
       );
     }
     final expectedPath = path.join(descriptor.dir, relPath);
@@ -271,13 +293,23 @@ class Registry {
 
     try {
       final tempFile = File('${descriptor.dir}.tmp');
+      final renderer = progressRenderer;
+      var wroteProgress = false;
       await BrowserDownloader.downloadWithProgress(
         url,
         tempFile.path,
         onProgress: (progress) {
-          stdout.write('\r${progress.toString().padRight(60)}');
+          wroteProgress = true;
+          if (renderer != null) {
+            renderer(progress);
+          } else {
+            stdout.write('\r${progress.toString().padRight(60)}');
+          }
         },
       );
+      if (wroteProgress) {
+        stdout.writeln();
+      }
 
       final bytes = await tempFile.readAsBytes();
       await tempFile.delete();
@@ -301,7 +333,11 @@ class Registry {
   /// Uses [BrowserPaths.downloadPaths] and [BrowserPaths.cdnMirrors] to construct
   /// URLs based on the descriptor's name, revision, and the current platform ID.
   static List<String> _getDownloadUrlsStatic(BrowserDescriptor descriptor) {
-    return BrowserPaths.getDownloadUrls(descriptor.name, descriptor.revision);
+    return BrowserPaths.getDownloadUrls(
+      descriptor.name,
+      descriptor.revision,
+      browserVersion: descriptor.browserVersion,
+    );
   }
 
   /// Returns an unmodifiable list of all known [Executable]s derived from the

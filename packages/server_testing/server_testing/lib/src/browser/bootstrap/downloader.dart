@@ -58,33 +58,77 @@ class BrowserDownloader {
   }) async {
     print('Starting download from: $url');
 
-    final response = await http.get(Uri.parse(url));
-    if (response.statusCode != 200) {
-      throw BrowserException(
-        'Download failed with status ${response.statusCode}',
-        'Response: ${response.body}',
-      );
-    }
-
-    final bytes = response.bodyBytes;
-    if (bytes.isEmpty) {
-      throw BrowserException('Downloaded file is empty');
-    }
-
-    print('Downloaded ${bytes.length} bytes');
-
-    // Verify ZIP structure
+    final client = http.Client();
     try {
-      final archive = ZipDecoder().decodeBytes(bytes);
-      print('Archive contains ${archive.files.length} files');
+      final request = http.Request('GET', Uri.parse(url));
+      final response = await client.send(request);
+      if (response.statusCode != 200) {
+        final errorBody = await response.stream.bytesToString();
+        throw BrowserException(
+          'Download failed with status ${response.statusCode}',
+          'Response: $errorBody',
+        );
+      }
 
-      // List some files for verification
-      final fileNames = archive.files.take(5).map((f) => f.name).join(', ');
-      print('Sample files: $fileNames');
-    } catch (e) {
-      throw BrowserException('Invalid ZIP file format', e);
+      final totalBytes = response.contentLength ?? 0;
+      final outFile = File(outputPath);
+      final sink = outFile.openWrite();
+      final stopwatch = Stopwatch()..start();
+      var received = 0;
+      var lastEmit = DateTime.fromMillisecondsSinceEpoch(0);
+
+      await for (final chunk in response.stream) {
+        sink.add(chunk);
+        received += chunk.length;
+
+        if (onProgress != null) {
+          final now = DateTime.now();
+          final shouldEmit =
+              now.difference(lastEmit).inMilliseconds >= 200 ||
+              (totalBytes > 0 && received >= totalBytes);
+          if (shouldEmit) {
+            final elapsed = stopwatch.elapsedMilliseconds / 1000.0;
+            final speed = elapsed > 0 ? received / elapsed : 0.0;
+            final percent = totalBytes > 0
+                ? (received / totalBytes) * 100
+                : 0.0;
+            onProgress(
+              DownloadProgress(
+                received: received,
+                total: totalBytes,
+                percent: percent,
+                speed: speed,
+              ),
+            );
+            lastEmit = now;
+          }
+        }
+      }
+
+      await sink.flush();
+      await sink.close();
+
+      if (received == 0) {
+        throw BrowserException('Downloaded file is empty');
+      }
+
+      print('Downloaded $received bytes');
+
+      final bytes = await outFile.readAsBytes();
+
+      // Verify ZIP structure
+      try {
+        final archive = ZipDecoder().decodeBytes(bytes);
+        print('Archive contains ${archive.files.length} files');
+
+        // List some files for verification
+        final fileNames = archive.files.take(5).map((f) => f.name).join(', ');
+        print('Sample files: $fileNames');
+      } catch (e) {
+        throw BrowserException('Invalid ZIP file format', e);
+      }
+    } finally {
+      client.close();
     }
-
-    await File(outputPath).writeAsBytes(bytes);
   }
 }

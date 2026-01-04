@@ -204,8 +204,8 @@ class ChromeDriverManager extends WebDriverManager {
     }
 
     final registryDir = BrowserPaths.getRegistryDirectory();
-    final relPath = BrowserPaths.getExecutablePath('chromium');
-    if (relPath == null) return;
+    final relPaths = BrowserPaths.getExecutablePathCandidates('chromium');
+    if (relPaths.isEmpty) return;
 
     final registry = Directory(registryDir);
     if (!registry.existsSync()) return;
@@ -216,7 +216,9 @@ class ChromeDriverManager extends WebDriverManager {
       if (!name.startsWith('chromium-') && !name.startsWith('chrome-')) {
         continue;
       }
-      yield path.join(entity.path, relPath);
+      for (final relPath in relPaths) {
+        yield path.join(entity.path, relPath);
+      }
     }
   }
 

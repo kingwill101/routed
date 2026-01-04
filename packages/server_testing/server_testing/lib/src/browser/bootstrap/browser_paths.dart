@@ -13,22 +13,65 @@ class BrowserPaths {
     'https://cdn.playwright.dev',
   ];
 
-  /// Defines the platform-specific relative path segments to the main browser
-  /// executable within its installation directory.
+  /// Base URL for Chrome for Testing downloads.
+  static const _chromeForTestingBaseUrl =
+      'https://storage.googleapis.com/chrome-for-testing-public';
+
+  /// Defines platform-specific candidate paths to the main browser executable
+  /// within its installation directory.
   ///
-  /// Keys are browser names ('chromium', 'firefox'), values are maps where keys
-  /// are platform identifiers ('linux', 'mac', 'win') and values are lists of
-  /// path segments.
-  static const executablePaths = {
+  /// Keys are browser names ('chromium', 'firefox', 'webkit',
+  /// 'chromium-headless-shell'). Values are maps where keys are platform
+  /// identifiers ('linux', 'mac', 'win') and values are ordered lists of
+  /// path-segment lists. The first existing candidate is chosen at runtime; the
+  /// first entry is used as the default when nothing exists yet.
+  static const executablePathCandidates = {
     'chromium': {
-      'linux': ['chrome-linux', 'chrome'],
-      'mac': ['chrome-mac', 'Chromium.app', 'Contents', 'MacOS', 'Chromium'],
-      'win': ['chrome-win', 'chrome.exe'],
+      'linux': [
+        ['chrome-linux64', 'chrome'],
+        ['chrome-linux', 'chrome'],
+      ],
+      'mac': [
+        ['chrome-mac', 'Chromium.app', 'Contents', 'MacOS', 'Chromium'],
+      ],
+      'win': [
+        ['chrome-win', 'chrome.exe'],
+      ],
+    },
+    'chromium-headless-shell': {
+      'linux': [
+        ['chrome-headless-shell-linux64', 'chrome-headless-shell'],
+        ['chrome-linux', 'headless_shell'],
+      ],
+      'mac': [
+        ['chrome-headless-shell-mac-x64', 'chrome-headless-shell'],
+        ['chrome-headless-shell-mac-arm64', 'chrome-headless-shell'],
+      ],
+      'win': [
+        ['chrome-headless-shell-win64', 'chrome-headless-shell.exe'],
+      ],
     },
     'firefox': {
-      'linux': ['firefox', 'firefox'],
-      'mac': ['firefox', 'Nightly.app', 'Contents', 'MacOS', 'firefox'],
-      'win': ['firefox', 'firefox.exe'],
+      'linux': [
+        ['firefox', 'firefox'],
+      ],
+      'mac': [
+        ['firefox', 'Nightly.app', 'Contents', 'MacOS', 'firefox'],
+      ],
+      'win': [
+        ['firefox', 'firefox.exe'],
+      ],
+    },
+    'webkit': {
+      'linux': [
+        ['pw_run.sh'],
+      ],
+      'mac': [
+        ['pw_run.sh'],
+      ],
+      'win': [
+        ['Playwright.exe'],
+      ],
     },
   };
 
@@ -43,24 +86,107 @@ class BrowserPaths {
     'chromium': {
       'ubuntu20.04-x64': 'builds/chromium/%s/chromium-linux.zip',
       'ubuntu22.04-x64': 'builds/chromium/%s/chromium-linux.zip',
+      'ubuntu24.04-x64': 'builds/chromium/%s/chromium-linux.zip',
       'mac11': 'builds/chromium/%s/chromium-mac.zip',
       'mac11-arm64': 'builds/chromium/%s/chromium-mac-arm64.zip',
       'mac12': 'builds/chromium/%s/chromium-mac.zip',
       'mac12-arm64': 'builds/chromium/%s/chromium-mac-arm64.zip',
       'mac13': 'builds/chromium/%s/chromium-mac.zip',
       'mac13-arm64': 'builds/chromium/%s/chromium-mac-arm64.zip',
+      'mac14': 'builds/chromium/%s/chromium-mac.zip',
+      'mac14-arm64': 'builds/chromium/%s/chromium-mac-arm64.zip',
+      'mac15': 'builds/chromium/%s/chromium-mac.zip',
+      'mac15-arm64': 'builds/chromium/%s/chromium-mac-arm64.zip',
       'win64': 'builds/chromium/%s/chromium-win64.zip',
+    },
+    'chromium-headless-shell': {
+      'ubuntu20.04-x64':
+          '$_chromeForTestingBaseUrl/%s/linux64/chrome-headless-shell-linux64.zip',
+      'ubuntu22.04-x64':
+          '$_chromeForTestingBaseUrl/%s/linux64/chrome-headless-shell-linux64.zip',
+      'ubuntu24.04-x64':
+          '$_chromeForTestingBaseUrl/%s/linux64/chrome-headless-shell-linux64.zip',
+      'ubuntu20.04-arm64':
+          'builds/chromium/%s/chromium-headless-shell-linux-arm64.zip',
+      'ubuntu22.04-arm64':
+          'builds/chromium/%s/chromium-headless-shell-linux-arm64.zip',
+      'ubuntu24.04-arm64':
+          'builds/chromium/%s/chromium-headless-shell-linux-arm64.zip',
+      'debian11-x64':
+          '$_chromeForTestingBaseUrl/%s/linux64/chrome-headless-shell-linux64.zip',
+      'debian11-arm64':
+          'builds/chromium/%s/chromium-headless-shell-linux-arm64.zip',
+      'debian12-x64':
+          '$_chromeForTestingBaseUrl/%s/linux64/chrome-headless-shell-linux64.zip',
+      'debian12-arm64':
+          'builds/chromium/%s/chromium-headless-shell-linux-arm64.zip',
+      'debian13-x64':
+          '$_chromeForTestingBaseUrl/%s/linux64/chrome-headless-shell-linux64.zip',
+      'debian13-arm64':
+          'builds/chromium/%s/chromium-headless-shell-linux-arm64.zip',
+      'mac11':
+          '$_chromeForTestingBaseUrl/%s/mac-x64/chrome-headless-shell-mac-x64.zip',
+      'mac11-arm64':
+          '$_chromeForTestingBaseUrl/%s/mac-arm64/chrome-headless-shell-mac-arm64.zip',
+      'mac12':
+          '$_chromeForTestingBaseUrl/%s/mac-x64/chrome-headless-shell-mac-x64.zip',
+      'mac12-arm64':
+          '$_chromeForTestingBaseUrl/%s/mac-arm64/chrome-headless-shell-mac-arm64.zip',
+      'mac13':
+          '$_chromeForTestingBaseUrl/%s/mac-x64/chrome-headless-shell-mac-x64.zip',
+      'mac13-arm64':
+          '$_chromeForTestingBaseUrl/%s/mac-arm64/chrome-headless-shell-mac-arm64.zip',
+      'mac14':
+          '$_chromeForTestingBaseUrl/%s/mac-x64/chrome-headless-shell-mac-x64.zip',
+      'mac14-arm64':
+          '$_chromeForTestingBaseUrl/%s/mac-arm64/chrome-headless-shell-mac-arm64.zip',
+      'mac15':
+          '$_chromeForTestingBaseUrl/%s/mac-x64/chrome-headless-shell-mac-x64.zip',
+      'mac15-arm64':
+          '$_chromeForTestingBaseUrl/%s/mac-arm64/chrome-headless-shell-mac-arm64.zip',
+      'win64':
+          '$_chromeForTestingBaseUrl/%s/win64/chrome-headless-shell-win64.zip',
     },
     'firefox': {
       'ubuntu20.04-x64': 'builds/firefox/%s/firefox-ubuntu-20.04.zip',
       'ubuntu22.04-x64': 'builds/firefox/%s/firefox-ubuntu-22.04.zip',
+      'ubuntu24.04-x64': 'builds/firefox/%s/firefox-ubuntu-24.04.zip',
       'mac11': 'builds/firefox/%s/firefox-mac.zip',
       'mac11-arm64': 'builds/firefox/%s/firefox-mac-arm64.zip',
       'mac12': 'builds/firefox/%s/firefox-mac.zip',
       'mac12-arm64': 'builds/firefox/%s/firefox-mac-arm64.zip',
       'mac13': 'builds/firefox/%s/firefox-mac.zip',
       'mac13-arm64': 'builds/firefox/%s/firefox-mac-arm64.zip',
+      'mac14': 'builds/firefox/%s/firefox-mac.zip',
+      'mac14-arm64': 'builds/firefox/%s/firefox-mac-arm64.zip',
+      'mac15': 'builds/firefox/%s/firefox-mac.zip',
+      'mac15-arm64': 'builds/firefox/%s/firefox-mac-arm64.zip',
       'win64': 'builds/firefox/%s/firefox-win64.zip',
+    },
+    'webkit': {
+      'ubuntu20.04-x64': 'builds/webkit/%s/webkit-ubuntu-20.04.zip',
+      'ubuntu22.04-x64': 'builds/webkit/%s/webkit-ubuntu-22.04.zip',
+      'ubuntu24.04-x64': 'builds/webkit/%s/webkit-ubuntu-24.04.zip',
+      'ubuntu20.04-arm64': 'builds/webkit/%s/webkit-ubuntu-20.04-arm64.zip',
+      'ubuntu22.04-arm64': 'builds/webkit/%s/webkit-ubuntu-22.04-arm64.zip',
+      'ubuntu24.04-arm64': 'builds/webkit/%s/webkit-ubuntu-24.04-arm64.zip',
+      'debian11-x64': 'builds/webkit/%s/webkit-debian-11.zip',
+      'debian11-arm64': 'builds/webkit/%s/webkit-debian-11-arm64.zip',
+      'debian12-x64': 'builds/webkit/%s/webkit-debian-12.zip',
+      'debian12-arm64': 'builds/webkit/%s/webkit-debian-12-arm64.zip',
+      'debian13-x64': 'builds/webkit/%s/webkit-debian-13.zip',
+      'debian13-arm64': 'builds/webkit/%s/webkit-debian-13-arm64.zip',
+      'mac11': 'builds/webkit/%s/webkit-mac-11.zip',
+      'mac11-arm64': 'builds/webkit/%s/webkit-mac-11-arm64.zip',
+      'mac12': 'builds/webkit/%s/webkit-mac-12.zip',
+      'mac12-arm64': 'builds/webkit/%s/webkit-mac-12-arm64.zip',
+      'mac13': 'builds/webkit/%s/webkit-mac-13.zip',
+      'mac13-arm64': 'builds/webkit/%s/webkit-mac-13-arm64.zip',
+      'mac14': 'builds/webkit/%s/webkit-mac-14.zip',
+      'mac14-arm64': 'builds/webkit/%s/webkit-mac-14-arm64.zip',
+      'mac15': 'builds/webkit/%s/webkit-mac-15.zip',
+      'mac15-arm64': 'builds/webkit/%s/webkit-mac-15-arm64.zip',
+      'win64': 'builds/webkit/%s/webkit-win64.zip',
     },
   };
 
@@ -69,15 +195,46 @@ class BrowserPaths {
   ///
   /// Returns `null` if the browser name or current platform is not defined in
   /// [executablePaths].
-  static String? getExecutablePath(String browserName) {
-    final paths = executablePaths[browserName];
-    if (paths == null) return null;
+  static List<String> getExecutablePathCandidates(String browserName) {
+    final paths = executablePathCandidates[browserName];
+    if (paths == null) return const [];
 
     final platformKey = PlatformInfo.currentPlatform.toString().split('.').last;
-    final segments = paths[platformKey];
-    if (segments == null) return null;
+    final candidates = paths[platformKey];
+    if (candidates == null) return const [];
 
-    return path.joinAll(segments);
+    return candidates.map(path.joinAll).toList(growable: false);
+  }
+
+  /// Gets the default platform-specific relative path for the [browserName]'s
+  /// executable within its installation folder.
+  ///
+  /// Returns `null` if the browser name or current platform is not defined in
+  /// [executablePathCandidates].
+  static String? getExecutablePath(String browserName) {
+    final candidates = getExecutablePathCandidates(browserName);
+    if (candidates.isEmpty) return null;
+    return candidates.first;
+  }
+
+  /// Resolves the most likely executable path for an installed browser by
+  /// checking candidate paths under [installDir].
+  ///
+  /// Returns the first existing candidate. If nothing exists yet, returns the
+  /// default candidate (or `null` if unsupported).
+  static String? resolveExecutablePath(
+    String browserName,
+    String installDir,
+  ) {
+    final candidates = getExecutablePathCandidates(browserName);
+    for (final candidate in candidates) {
+      final fullPath = path.join(installDir, candidate);
+      if (File(fullPath).existsSync()) {
+        return candidate;
+      }
+    }
+    if (candidates.isEmpty) return null;
+    return candidates.first;
   }
 
   /// Gets a list of potential full download URLs for a specific [browserName]
@@ -88,6 +245,7 @@ class BrowserPaths {
   static List<String> getDownloadUrls(
     String browserName,
     String revision, {
+    String? browserVersion,
     String? platformOverride,
   }) {
     final paths = downloadPaths[browserName];
@@ -99,11 +257,29 @@ class BrowserPaths {
       final template = paths[candidate] ?? _stripArchFallback(paths, candidate);
       if (template == null) continue;
 
-      final downloadPath = template.replaceAll('%s', revision);
+      final token = _selectDownloadVersion(template, revision, browserVersion);
+      final downloadPath = template.replaceAll('%s', token);
+      if (downloadPath.startsWith('http://') ||
+          downloadPath.startsWith('https://')) {
+        return [downloadPath];
+      }
       return cdnMirrors.map((mirror) => '$mirror/$downloadPath').toList();
     }
 
     return [];
+  }
+
+  static String _selectDownloadVersion(
+    String template,
+    String revision,
+    String? browserVersion,
+  ) {
+    if (browserVersion != null &&
+        browserVersion.isNotEmpty &&
+        template.contains(_chromeForTestingBaseUrl)) {
+      return browserVersion;
+    }
+    return revision;
   }
 
   /// Gets the root directory used for storing browser installations and metadata.
