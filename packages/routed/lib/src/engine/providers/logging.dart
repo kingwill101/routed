@@ -6,6 +6,7 @@ import 'package:routed/src/container/container.dart';
 import 'package:routed/src/context/context.dart';
 import 'package:routed/src/contracts/contracts.dart' show Config;
 import 'package:routed/src/engine/middleware_registry.dart';
+import 'package:routed/src/config/specs/logging.dart';
 import 'package:routed/src/logging/channel_drivers.dart';
 import 'package:routed/src/logging/context.dart';
 import 'package:routed/src/logging/driver_registry.dart';
@@ -14,27 +15,9 @@ import 'package:routed/src/provider/config_utils.dart';
 import 'package:routed/src/provider/provider.dart';
 import 'package:routed/src/router/types.dart';
 
-/// Registers logging defaults and related middleware identifiers.
-const Map<String, Object?> _defaultLoggingChannels = {
-  'stack': {
-    'driver': 'stack',
-    'channels': ['single', 'stdout'],
-    'ignore_exceptions': false,
-  },
-  'single': {'driver': 'single', 'path': 'storage/logs/routed.log'},
-  'daily': {
-    'driver': 'daily',
-    'path': 'storage/logs/routed',
-    'days': 14,
-    'use_isolate': false,
-  },
-  'stderr': {'driver': 'stderr'},
-  'stdout': {'driver': 'stdout'},
-  'null': {'driver': 'null'},
-};
-
 class LoggingServiceProvider extends ServiceProvider
     with ProvidesDefaultConfig {
+  static const LoggingConfigSpec spec = LoggingConfigSpec();
   bool _enabled = true;
   bool _logSuccess = true;
   contextual.Level _level = contextual.Level.info;
@@ -45,78 +28,32 @@ class LoggingServiceProvider extends ServiceProvider
   static bool includeStackTraces = false;
 
   @override
-  ConfigDefaults get defaultConfig => const ConfigDefaults(
-    docs: <ConfigDocEntry>[
-      ConfigDocEntry(
-        path: 'http.middleware_sources',
-        type: 'map',
-        description: 'Logging middleware references injected globally.',
-        defaultValue: <String, Object?>{
-          'routed.logging': <String, Object?>{
-            'global': <String>['routed.logging.http'],
-          },
+  ConfigDefaults get defaultConfig {
+    final values = spec.defaultsWithRoot();
+    values['http'] = {
+      'middleware_sources': {
+        'routed.logging': {
+          'global': ['routed.logging.http'],
         },
-      ),
-      ConfigDocEntry(
-        path: 'logging.default',
-        type: 'string',
-        description: 'Default log channel name (stack, single, stderr, etc.).',
-        defaultValue: 'stack',
-        metadata: {configDocMetaInheritFromEnv: 'LOG_CHANNEL'},
-      ),
-      ConfigDocEntry(
-        path: 'logging.channels',
-        type: 'map',
-        description:
-            'Map of log channel definitions (stack, single, daily, stderr, null).',
-        defaultValue: _defaultLoggingChannels,
-      ),
-      ConfigDocEntry(
-        path: 'logging.enabled',
-        type: 'bool',
-        description: 'Enable structured application logging.',
-        defaultValue: true,
-      ),
-      ConfigDocEntry(
-        path: 'logging.level',
-        type: 'string',
-        description: 'Default log level for application logging.',
-        options: ['debug', 'info'],
-        defaultValue: 'info',
-      ),
-      ConfigDocEntry(
-        path: 'logging.errors_only',
-        type: 'bool',
-        description: 'Only emit logs for failing requests when true.',
-        defaultValue: false,
-      ),
-      ConfigDocEntry(
-        path: 'logging.extra_fields',
-        type: 'map',
-        description: 'Additional fields appended to every log entry.',
-        defaultValue: <String, Object?>{},
-      ),
-      ConfigDocEntry(
-        path: 'logging.include_stack_traces',
-        type: 'bool',
-        description: 'Include stack traces in request error logs when enabled.',
-        defaultValue: false,
-      ),
-      ConfigDocEntry(
-        path: 'logging.format',
-        type: 'string',
-        description: 'Log output format (json or text).',
-        options: ["json", "null", "plain", "pretty", "raw"],
-        defaultValue: 'pretty',
-      ),
-      ConfigDocEntry(
-        path: 'logging.request_headers',
-        type: 'list<string>',
-        description: 'Headers captured globally on every log entry.',
-        defaultValue: <String>[],
-      ),
-    ],
-  );
+      },
+    };
+    return ConfigDefaults(
+      docs: [
+        const ConfigDocEntry(
+          path: 'http.middleware_sources',
+          type: 'map',
+          description: 'Logging middleware references injected globally.',
+          defaultValue: <String, Object?>{
+            'routed.logging': <String, Object?>{
+              'global': <String>['routed.logging.http'],
+            },
+          },
+        ),
+        ...spec.docs(),
+      ],
+      values: values,
+    );
+  }
 
   @override
   void register(Container container) {
@@ -345,98 +282,16 @@ class LoggingServiceProvider extends ServiceProvider
   }
 
   void _applyConfig(Config config, Container container) {
-    final resolved = _resolveLoggingConfig(config);
+    final resolved = spec.resolve(config);
     _enabled = resolved.enabled;
     _logSuccess = resolved.logSuccess;
     _level = resolved.level;
     _extraFields = resolved.extraFields;
-    _headerNames = resolved.headerNames;
+    _headerNames = resolved.requestHeaders;
     _includeStackTraces = resolved.includeStackTraces;
     includeStackTraces = resolved.includeStackTraces;
-    RoutedLogger.setGlobalFormat(resolved.format);
-    _configureLoggerFactory(config, container);
-  }
-
-  _LoggingConfig _resolveLoggingConfig(Config config) {
-    final merged = mergeConfigCandidates([
-      ConfigMapCandidate.fromConfig(config, 'logging'),
-    ]);
-
-    final enabled = merged.getBool('enabled', defaultValue: true);
-    final errorsOnly = merged.getBool('errors_only');
-
-    final levelToken = merged.getString('level');
-    final level = _parseLevel(levelToken);
-
-    final extraFields =
-        merged.containsKey('extra_fields') && merged['extra_fields'] != null
-        ? stringKeyedMap(
-            merged['extra_fields']! as Object,
-            'logging.extra_fields',
-          )
-        : const <String, dynamic>{};
-
-    final headerNamesRaw = merged['request_headers'];
-    List<String> headerNames;
-    if (headerNamesRaw != null) {
-      if (headerNamesRaw is! List) {
-        throw ProviderConfigException('logging.request_headers must be a list');
-      }
-      headerNames = [];
-      for (var i = 0; i < headerNamesRaw.length; i++) {
-        final item = headerNamesRaw[i];
-        if (item is! String) {
-          throw ProviderConfigException(
-            'logging.request_headers[$i] must be a string',
-          );
-        }
-        headerNames.add(item);
-      }
-    } else {
-      headerNames = const [];
-    }
-
-    final includeStackTraces = merged.getBool('include_stack_traces');
-
-    final formatToken =
-        merged.getString('format')?.toLowerCase().trim() ?? 'plain';
-
-    final format = switch (formatToken) {
-      "pretty" => contextual.PrettyLogFormatter(),
-      "raw" => contextual.RawLogFormatter(),
-      "null" => contextual.JsonLogFormatter(),
-      "json" => contextual.JsonLogFormatter(),
-      "plain" => contextual.PlainTextLogFormatter(),
-      _ => contextual.PlainTextLogFormatter(),
-    };
-
-    return _LoggingConfig(
-      enabled: enabled,
-      logSuccess: !errorsOnly,
-      level: level,
-      extraFields: extraFields,
-      headerNames: headerNames,
-      includeStackTraces: includeStackTraces,
-      format: format,
-    );
-  }
-
-  contextual.Level _parseLevel(String? raw) {
-    final token = raw?.trim();
-    if (token == null || token.isEmpty) {
-      return contextual.Level.info;
-    }
-    final needle = token.toLowerCase();
-    for (final level in contextual.Level.levels) {
-      if (level.name.toLowerCase() == needle ||
-          level.toString().toLowerCase() == needle) {
-        return level;
-      }
-    }
-    throw ProviderConfigException(
-      'logging.level must be one of: '
-      '${contextual.Level.levels.map((l) => l.name).join(', ')}',
-    );
+    RoutedLogger.setGlobalFormat(resolved.format.formatter);
+    _configureLoggerFactory(config, container, resolved);
   }
 
   String _headerKey(String name) {
@@ -450,32 +305,16 @@ class LoggingServiceProvider extends ServiceProvider
   }
 }
 
-class _LoggingConfig {
-  const _LoggingConfig({
-    required this.enabled,
-    required this.logSuccess,
-    required this.level,
-    required this.extraFields,
-    required this.headerNames,
-    required this.includeStackTraces,
-    required this.format,
-  });
-
-  final bool enabled;
-  final bool logSuccess;
-  final contextual.Level level;
-  final Map<String, dynamic> extraFields;
-  final List<String> headerNames;
-  final bool includeStackTraces;
-  final contextual.LogMessageFormatter format;
-}
-
-void _configureLoggerFactory(Config config, Container container) {
-  final settings = _resolveChannelSettings(config);
+void _configureLoggerFactory(
+  Config config,
+  Container container,
+  LoggingConfig settings,
+) {
+  final resolved = _resolveChannelSettings(settings);
   final registry = container.get<LogDriverRegistry>();
   final builder = _LoggerFactoryBuilder(
-    defaultChannel: settings.defaultChannel,
-    channels: settings.channels,
+    defaultChannel: resolved.defaultChannel,
+    channels: resolved.channels,
     registry: registry,
     config: config,
     container: container,
@@ -483,30 +322,20 @@ void _configureLoggerFactory(Config config, Container container) {
   RoutedLogger.configureSystemFactory(builder.createLogger);
 }
 
-_ChannelSettings _resolveChannelSettings(Config config) {
-  final configValue = config.getStringOrNull('logging.default')?.trim();
-  final defaultChannel = _coerceChannelName(configValue);
+_ChannelSettings _resolveChannelSettings(LoggingConfig config) {
+  final defaultChannel = _coerceChannelName(config.defaultChannel);
   final envChannel = _coerceChannelName(Platform.environment['LOG_CHANNEL']);
 
-  final node = config.get<Map<String, Object?>>('logging.channels');
   final channels = <String, _ChannelConfig>{};
-  if (node is Map<String, Object?>) {
-    final map = stringKeyedMap(node, 'logging.channels');
-    map.forEach((name, value) {
-      final contextPath = 'logging.channels.$name';
-      final channelMap = value is Map<String, Object?>
-          ? stringKeyedMap(value, contextPath)
-          : const <String, Object?>{};
-      final rawDriver =
-          channelMap.getString('driver')?.toLowerCase().trim() ?? 'stack';
-      channels[name] = _ChannelConfig(
-        name: name,
-        driver: rawDriver,
-        options: channelMap,
-        contextPath: contextPath,
-      );
-    });
-  }
+  config.channels.forEach((name, channel) {
+    final contextPath = 'logging.channels.$name';
+    channels[name] = _ChannelConfig(
+      name: name,
+      driver: channel.driver,
+      options: channel.toMap(),
+      contextPath: contextPath,
+    );
+  });
 
   final resolvedDefault =
       defaultChannel ??
