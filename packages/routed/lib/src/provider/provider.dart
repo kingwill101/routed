@@ -82,29 +82,40 @@ class ConfigDocEntry {
 
 /// Combined defaults and documentation returned by [ProvidesDefaultConfig].
 class ConfigDefaults {
-  const ConfigDefaults({List<ConfigDocEntry> docs = const <ConfigDocEntry>[]})
-    : _docs = docs;
+  const ConfigDefaults({
+    List<ConfigDocEntry> docs = const <ConfigDocEntry>[],
+    Map<String, dynamic>? values,
+  }) : _docs = docs,
+       _values = values;
 
   final List<ConfigDocEntry> _docs;
+  final Map<String, dynamic>? _values;
 
   /// Default configuration values keyed by dotted path.
-  Map<String, dynamic> get values => _computeDefaults(_docs).values;
+  Map<String, dynamic> get values {
+    final values = _values;
+    return values != null ? deepCopyMap(values) : _computeDefaults(_docs).values;
+  }
 
   /// Documentation entries describing configuration fields.
   List<ConfigDocEntry> get docs {
     final computed = _computeDefaults(_docs);
-    return _mergeDefaultValues(computed.values, computed.docDefaults, _docs);
+    final values = _values;
+    final resolvedValues = values != null ? deepCopyMap(values) : computed.values;
+    return _mergeDefaultValues(resolvedValues, computed.docDefaults, _docs);
   }
 
   /// Produces a snapshot containing both values and documentation in one pass.
   ConfigDefaultsSnapshot snapshot() {
     final computed = _computeDefaults(_docs);
+    final values = _values;
+    final resolvedValues = values != null ? deepCopyMap(values) : computed.values;
     final mergedDocs = _mergeDefaultValues(
-      computed.values,
+      resolvedValues,
       computed.docDefaults,
       _docs,
     );
-    return ConfigDefaultsSnapshot(values: computed.values, docs: mergedDocs);
+    return ConfigDefaultsSnapshot(values: resolvedValues, docs: mergedDocs);
   }
 
   static _ComputedDefaults _computeDefaults(List<ConfigDocEntry> docs) {

@@ -63,6 +63,8 @@ export 'src/config/helpers.dart';
 export 'src/config/loader.dart';
 export 'src/config/registry.dart';
 export 'src/config/runtime.dart';
+export 'src/config/spec.dart';
+export 'src/config/specs/cache.dart';
 export 'src/container/container.dart' hide Binding;
 export 'src/context/context.dart';
 export 'src/contracts/contracts.dart';
