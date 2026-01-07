@@ -5,7 +5,7 @@ import 'package:routed/src/storage/local_storage_driver.dart';
 import '../spec.dart';
 
 String defaultStorageRootPath() =>
-    localStorageDriver.resolveRoot(const <String, dynamic>{}, 'local');
+    localStorageDriver.resolveRoot(null, 'local');
 
 String storageRootTemplateDefault() {
   final root = defaultStorageRootPath().replaceAll("'", r"\'");

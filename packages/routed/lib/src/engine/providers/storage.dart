@@ -313,7 +313,7 @@ class StorageServiceProvider extends ServiceProvider
     if (disks.isEmpty) {
       disks[defaultDisk] = {
         'driver': 'local',
-        'root': localStorageDriver.resolveRoot(const {}, defaultDisk),
+        'root': localStorageDriver.resolveRoot(null, defaultDisk),
       };
     }
 
