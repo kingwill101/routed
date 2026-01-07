@@ -1,4 +1,5 @@
 import 'package:contextual/contextual.dart' as contextual;
+import 'package:routed/src/provider/config_utils.dart';
 import 'package:routed/src/provider/provider.dart';
 
 import '../spec.dart';
@@ -38,11 +39,14 @@ class LoggingChannelConfig {
     required String context,
   }) {
     final rawDriver = map['driver'];
-    if (rawDriver != null && rawDriver is! String) {
-      throw ProviderConfigException('$context.driver must be a string');
-    }
-    final driver = (rawDriver as String?)?.trim().toLowerCase();
-    final resolvedDriver = (driver == null || driver.isEmpty) ? 'stack' : driver;
+    final driver = parseStringLike(
+      rawDriver,
+      context: '$context.driver',
+      allowEmpty: true,
+      throwOnInvalid: true,
+    );
+    final resolvedDriver =
+        (driver == null || driver.isEmpty) ? 'stack' : driver.toLowerCase();
     final options = <String, dynamic>{};
     map.forEach((key, value) {
       options[key.toString()] = value;
@@ -185,146 +189,120 @@ class LoggingConfigSpec extends ConfigSpec<LoggingConfig> {
 
   @override
   LoggingConfig fromMap(Map<String, dynamic> map, {ConfigSpecContext? context}) {
-    final enabledValue = map['enabled'];
-    final enabled = switch (enabledValue) {
-      null => true,
-      bool value => value,
-      _ => throw ProviderConfigException('logging.enabled must be a boolean'),
-    };
+    final enabled =
+        parseBoolLike(
+          map['enabled'],
+          context: 'logging.enabled',
+          throwOnInvalid: true,
+        ) ??
+        true;
 
-    final errorsOnlyValue = map['errors_only'];
-    final errorsOnly = switch (errorsOnlyValue) {
-      null => false,
-      bool value => value,
-      _ => throw ProviderConfigException('logging.errors_only must be a boolean'),
-    };
+    final errorsOnly =
+        parseBoolLike(
+          map['errors_only'],
+          context: 'logging.errors_only',
+          throwOnInvalid: true,
+        ) ??
+        false;
 
-    final includeStackTracesValue = map['include_stack_traces'];
-    final includeStackTraces = switch (includeStackTracesValue) {
-      null => false,
-      bool value => value,
-      _ => throw ProviderConfigException(
-          'logging.include_stack_traces must be a boolean',
-        ),
-    };
+    final includeStackTraces =
+        parseBoolLike(
+          map['include_stack_traces'],
+          context: 'logging.include_stack_traces',
+          throwOnInvalid: true,
+        ) ??
+        false;
 
-    final defaultChannelValue = map['default'];
     String? defaultChannel;
-    if (defaultChannelValue != null) {
-      if (defaultChannelValue is! String) {
-        throw ProviderConfigException('logging.default must be a string');
-      }
-      final trimmed = defaultChannelValue.trim();
-      if (trimmed.isNotEmpty) {
-        defaultChannel = trimmed;
-      }
+    final defaultChannelValue = parseStringLike(
+      map['default'],
+      context: 'logging.default',
+      allowEmpty: true,
+      throwOnInvalid: true,
+    );
+    if (defaultChannelValue != null && defaultChannelValue.isNotEmpty) {
+      defaultChannel = defaultChannelValue;
     }
 
     final extraFieldsValue = map['extra_fields'];
-    Map<String, dynamic> extraFields;
+    final Map<String, dynamic> extraFields;
     if (extraFieldsValue == null) {
       extraFields = const <String, dynamic>{};
     } else {
-      if (extraFieldsValue is! Map) {
-        throw ProviderConfigException('logging.extra_fields must be a map');
-      }
-      extraFields = <String, dynamic>{};
-      extraFieldsValue.forEach((key, value) {
-        extraFields[key.toString()] = value;
-      });
+      extraFields =
+          stringKeyedMap(extraFieldsValue as Object, 'logging.extra_fields');
     }
 
-    final headerNamesValue = map['request_headers'];
-    List<String> headerNames;
-    if (headerNamesValue == null) {
-      headerNames = const [];
-    } else {
-      if (headerNamesValue is! List) {
-        throw ProviderConfigException('logging.request_headers must be a list');
-      }
-      headerNames = <String>[];
-      for (var i = 0; i < headerNamesValue.length; i += 1) {
-        final entry = headerNamesValue[i];
-        if (entry is! String) {
-          throw ProviderConfigException(
-            'logging.request_headers[$i] must be a string',
-          );
-        }
-        headerNames.add(entry);
-      }
-    }
+    final headerNames =
+        parseStringList(
+          map['request_headers'],
+          context: 'logging.request_headers',
+          allowEmptyResult: true,
+          throwOnInvalid: true,
+        ) ??
+        const <String>[];
 
-    final levelValue = map['level'];
+    final levelValue = parseStringLike(
+      map['level'],
+      context: 'logging.level',
+      allowEmpty: true,
+      throwOnInvalid: true,
+    );
     final contextual.Level level;
-    if (levelValue == null) {
+    if (levelValue == null || levelValue.isEmpty) {
       level = contextual.Level.info;
-    } else if (levelValue is! String) {
-      throw ProviderConfigException('logging.level must be a string');
     } else {
-      final token = levelValue.trim();
-      if (token.isEmpty) {
-        level = contextual.Level.info;
-      } else {
-        final needle = token.toLowerCase();
-        contextual.Level? resolved;
-        for (final candidate in contextual.Level.levels) {
-          if (candidate.name.toLowerCase() == needle ||
-              candidate.toString().toLowerCase() == needle) {
-            resolved = candidate;
-            break;
-          }
+      final needle = levelValue.toLowerCase();
+      contextual.Level? resolved;
+      for (final candidate in contextual.Level.levels) {
+        if (candidate.name.toLowerCase() == needle ||
+            candidate.toString().toLowerCase() == needle) {
+          resolved = candidate;
+          break;
         }
-        if (resolved == null) {
-          throw ProviderConfigException(
-            'logging.level must be one of: '
-            '${contextual.Level.levels.map((l) => l.name).join(', ')}',
-          );
-        }
-        level = resolved;
       }
+      if (resolved == null) {
+        throw ProviderConfigException(
+          'logging.level must be one of: '
+          '${contextual.Level.levels.map((l) => l.name).join(', ')}',
+        );
+      }
+      level = resolved;
     }
 
-    final formatValue = map['format'];
+    final formatValue = parseStringLike(
+      map['format'],
+      context: 'logging.format',
+      allowEmpty: true,
+      throwOnInvalid: true,
+    );
     final LoggingFormatConfig format;
-    if (formatValue == null) {
+    if (formatValue == null || formatValue.isEmpty) {
       format = LoggingFormatConfig('pretty', contextual.PrettyLogFormatter());
-    } else if (formatValue is! String) {
-      throw ProviderConfigException('logging.format must be a string');
     } else {
-      final token = formatValue.trim().toLowerCase();
-      if (token.isEmpty) {
-        format = LoggingFormatConfig('pretty', contextual.PrettyLogFormatter());
-      } else {
-        format = switch (token) {
-          'pretty' => LoggingFormatConfig(
-              'pretty',
-              contextual.PrettyLogFormatter(),
-            ),
-          'raw' => LoggingFormatConfig('raw', contextual.RawLogFormatter()),
-          'null' => LoggingFormatConfig('null', contextual.JsonLogFormatter()),
-          'json' => LoggingFormatConfig('json', contextual.JsonLogFormatter()),
-          'plain' =>
-            LoggingFormatConfig('plain', contextual.PlainTextLogFormatter()),
-          _ => LoggingFormatConfig('plain', contextual.PlainTextLogFormatter()),
-        };
-      }
+      final token = formatValue.toLowerCase();
+      format = switch (token) {
+        'pretty' =>
+          LoggingFormatConfig('pretty', contextual.PrettyLogFormatter()),
+        'raw' => LoggingFormatConfig('raw', contextual.RawLogFormatter()),
+        'null' => LoggingFormatConfig('null', contextual.JsonLogFormatter()),
+        'json' => LoggingFormatConfig('json', contextual.JsonLogFormatter()),
+        'plain' =>
+          LoggingFormatConfig('plain', contextual.PlainTextLogFormatter()),
+        _ => LoggingFormatConfig('plain', contextual.PlainTextLogFormatter()),
+      };
     }
 
     final channels = <String, LoggingChannelConfig>{};
     final rawChannels = map['channels'];
     if (rawChannels != null) {
-      if (rawChannels is! Map) {
-        throw ProviderConfigException('logging.channels must be a map');
-      }
-      rawChannels.forEach((key, value) {
-        final name = key.toString();
-        if (value == null || value is! Map) {
-          throw ProviderConfigException('logging.channels.$name must be a map');
-        }
-        final channelMap = value.map(
-          (entryKey, entryValue) =>
-              MapEntry(entryKey.toString(), entryValue),
-        );
+      final channelDefs = parseNestedMap(
+        rawChannels,
+        context: 'logging.channels',
+        throwOnInvalid: true,
+        allowNullEntries: false,
+      );
+      channelDefs.forEach((name, channelMap) {
         channels[name] = LoggingChannelConfig.fromMap(
           name,
           Map<String, dynamic>.from(channelMap),

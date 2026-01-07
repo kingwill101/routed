@@ -58,7 +58,7 @@ class CacheServiceProvider extends ServiceProvider with ProvidesDefaultConfig {
               ? await container.make<CacheManager>()
               : null);
       if (manager != null) {
-        _applyCachePrefix(manager, config);
+        _applyCachePrefixFromConfig(manager, config);
       }
       if (_managedManager != null &&
           _ownsManagedManager &&
@@ -89,7 +89,7 @@ class CacheServiceProvider extends ServiceProvider with ProvidesDefaultConfig {
     }
     if (container.has<CacheManager>()) {
       final manager = await container.make<CacheManager>();
-      _applyCachePrefix(manager, config);
+      _applyCachePrefixFromConfig(manager, config);
     }
   }
 
@@ -126,12 +126,12 @@ class CacheServiceProvider extends ServiceProvider with ProvidesDefaultConfig {
       }
     }
 
-    _applyCachePrefix(manager, config);
+    _applyCachePrefix(manager, resolved);
     return manager;
   }
 
-  void _applyCachePrefix(CacheManager manager, Config config) {
-    final prefix = _resolveCachePrefix(config);
+  void _applyCachePrefix(CacheManager manager, CacheConfig config) {
+    final prefix = config.resolvePrefix();
     if (prefix != null) {
       manager.setPrefix(prefix);
       return;
@@ -141,37 +141,8 @@ class CacheServiceProvider extends ServiceProvider with ProvidesDefaultConfig {
     }
   }
 
-  String? _resolveCachePrefix(Config config) {
-    if (config.has('cache.prefix')) {
-      final value = config.get<Object?>('cache.prefix');
-      if (value == null) {
-        return '';
-      }
-      if (value is String) {
-        return value;
-      }
-      throw ProviderConfigException('cache.prefix must be a string');
-    }
-    if (config.has('cache.key_prefix')) {
-      final value = config.get<Object?>('cache.key_prefix');
-      if (value == null) {
-        return '';
-      }
-      if (value is String) {
-        return value;
-      }
-      throw ProviderConfigException('cache.key_prefix must be a string');
-    }
-    if (config.has('app.cache_prefix')) {
-      final value = config.get<Object?>('app.cache_prefix');
-      if (value == null) {
-        return '';
-      }
-      if (value is String) {
-        return value;
-      }
-      throw ProviderConfigException('app.cache_prefix must be a string');
-    }
-    return null;
+  void _applyCachePrefixFromConfig(CacheManager manager, Config config) {
+    final resolved = spec.resolve(config);
+    _applyCachePrefix(manager, resolved);
   }
 }

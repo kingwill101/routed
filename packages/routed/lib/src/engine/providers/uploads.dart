@@ -27,7 +27,13 @@ class UploadsServiceProvider extends ServiceProvider
     }
     final appConfig = container.get<Config>();
     final engineConfig = container.get<EngineConfig>();
-    final resolved = spec.resolve(appConfig);
+    final resolved = spec.resolve(
+      appConfig,
+      context: UploadsConfigContext(
+        config: appConfig,
+        engineConfig: engineConfig,
+      ),
+    );
 
     if (_multipartEquals(engineConfig.multipart, resolved)) {
       return;
@@ -66,7 +72,13 @@ class UploadsServiceProvider extends ServiceProvider
 
   void _applyMultipartConfig(Engine engine, Config config) {
     final current = engine.config;
-    final resolved = spec.resolve(config);
+    final resolved = spec.resolve(
+      config,
+      context: UploadsConfigContext(
+        config: config,
+        engineConfig: current,
+      ),
+    );
     if (_multipartEquals(current.multipart, resolved)) {
       return;
     }

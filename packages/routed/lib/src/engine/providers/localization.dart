@@ -4,12 +4,12 @@ import 'package:file/file.dart' as file;
 import 'package:file/local.dart' as local;
 import 'package:liquify/liquify.dart' show FilterRegistry;
 import 'package:routed/middlewares.dart' show localizationMiddleware;
+import 'package:routed/src/config/specs/localization.dart';
 import 'package:routed/src/container/container.dart';
 import 'package:routed/src/contracts/contracts.dart'
     show Config, TranslationLoader, TranslatorContract;
 import 'package:routed/src/engine/config.dart';
 import 'package:routed/src/engine/middleware_registry.dart';
-import 'package:routed/src/provider/config_utils.dart';
 import 'package:routed/src/provider/provider.dart';
 import 'package:routed/src/support/helpers.dart' show trans, transChoice;
 import 'package:routed/src/translation/loaders/file_translation_loader.dart';
@@ -24,83 +24,39 @@ class LocalizationServiceProvider extends ServiceProvider
     with ProvidesDefaultConfig {
   file.FileSystem _fallbackFileSystem = const local.LocalFileSystem();
   static bool _filtersRegistered = false;
+  static const LocalizationConfigSpec spec = LocalizationConfigSpec();
   static final LocaleResolverRegistry _resolverTemplate =
       _buildResolverTemplate();
 
   @override
-  ConfigDefaults get defaultConfig => ConfigDefaults(
-    docs: <ConfigDocEntry>[
-      const ConfigDocEntry(
-        path: 'translation.paths',
-        type: 'list<string>',
-        description:
-            'Directories scanned for `locale/group.(yaml|yml|json)` files.',
-        defaultValue: ['resources/lang'],
-      ),
-      const ConfigDocEntry(
-        path: 'translation.json_paths',
-        type: 'list<string>',
-        description:
-            'Directories containing flat `<locale>.json` dictionaries.',
-        defaultValue: <String>[],
-      ),
-      const ConfigDocEntry(
-        path: 'translation.namespaces',
-        type: 'map<string,string>',
-        description:
-            'Vendor namespace hints mapping namespace => absolute directory.',
-        defaultValue: <String, String>{},
-      ),
-      ConfigDocEntry(
-        path: 'translation.resolvers',
-        type: 'list<string>',
-        description:
-            'Ordered locale resolvers (query, cookie, header, session).',
-        defaultValueBuilder: () => List<String>.from(_resolverDefaults()),
-      ),
-      const ConfigDocEntry(
-        path: 'translation.query.parameter',
-        type: 'string',
-        description: 'Query parameter consulted for locale overrides.',
-        defaultValue: 'locale',
-      ),
-      const ConfigDocEntry(
-        path: 'translation.cookie.name',
-        type: 'string',
-        description: 'Cookie name consulted for locale overrides.',
-        defaultValue: 'locale',
-      ),
-      const ConfigDocEntry(
-        path: 'translation.session.key',
-        type: 'string',
-        description: 'Session key consulted for locale overrides.',
-        defaultValue: 'locale',
-      ),
-      const ConfigDocEntry(
-        path: 'translation.header.name',
-        type: 'string',
-        description: 'Header inspected for Accept-Language fallbacks.',
-        defaultValue: 'Accept-Language',
-      ),
-      const ConfigDocEntry(
-        path: 'translation.resolver_options',
-        type: 'map',
-        description: 'Resolver-specific options keyed by resolver identifier.',
-        defaultValue: <String, Object?>{},
-      ),
-      const ConfigDocEntry(
-        path: 'http.middleware_sources',
-        type: 'map',
-        description:
-            'Localization middleware references injected into the pipeline.',
-        defaultValue: <String, Object?>{
-          'routed.localization': <String, Object?>{
-            'global': <String>['routed.localization'],
-          },
+  ConfigDefaults get defaultConfig {
+    final values = spec.defaultsWithRoot();
+    values['http'] = {
+      'middleware_sources': {
+        'routed.localization': {
+          'global': ['routed.localization'],
         },
-      ),
-    ],
-  );
+      },
+    };
+
+    return ConfigDefaults(
+      docs: <ConfigDocEntry>[
+        const ConfigDocEntry(
+          path: 'http.middleware_sources',
+          type: 'map',
+          description:
+              'Localization middleware references injected into the pipeline.',
+          defaultValue: <String, Object?>{
+            'routed.localization': <String, Object?>{
+              'global': <String>['routed.localization'],
+            },
+          },
+        ),
+        ...spec.docs(),
+      ],
+      values: values,
+    );
+  }
 
   @override
   void register(Container container) {
@@ -110,10 +66,10 @@ class LocalizationServiceProvider extends ServiceProvider
 
     final config = container.has<Config>() ? container.get<Config>() : null;
     final registry = _ensureResolverRegistry(container);
-    final loader = _buildLoader(container, config);
-    final localeConfig = _resolveLocaleConfig(config);
-    final translator = _buildTranslator(loader, localeConfig);
-    final localeManager = _buildLocaleManager(localeConfig, config, registry);
+    final resolved = _resolveLocalizationConfig(config);
+    final loader = _buildLoader(container, resolved);
+    final translator = _buildTranslator(loader, resolved);
+    final localeManager = _buildLocaleManager(resolved, config, registry);
 
     container
       ..instance<TranslationLoader>(loader)
@@ -127,10 +83,10 @@ class LocalizationServiceProvider extends ServiceProvider
   @override
   Future<void> onConfigReload(Container container, Config config) async {
     final registry = _ensureResolverRegistry(container);
-    final loader = _buildLoader(container, config);
-    final localeConfig = _resolveLocaleConfig(config);
-    final translator = _buildTranslator(loader, localeConfig);
-    final localeManager = _buildLocaleManager(localeConfig, config, registry);
+    final resolved = _resolveLocalizationConfig(config);
+    final loader = _buildLoader(container, resolved);
+    final translator = _buildTranslator(loader, resolved);
+    final localeManager = _buildLocaleManager(resolved, config, registry);
 
     container
       ..instance<TranslationLoader>(loader)
@@ -139,49 +95,25 @@ class LocalizationServiceProvider extends ServiceProvider
     _registerTemplateFilters();
   }
 
-  TranslationLoader _buildLoader(Container container, Config? config) {
+  TranslationLoader _buildLoader(
+    Container container,
+    LocalizationConfig config,
+  ) {
     final engineConfig = container.has<EngineConfig>()
         ? container.get<EngineConfig>()
         : null;
     final fs = engineConfig?.fileSystem ?? _fallbackFileSystem;
     final loader = FileTranslationLoader(fileSystem: fs);
-    final translationNode = config?.get<Object>('translation');
-    if (translationNode != null && translationNode is! Map) {
-      throw ProviderConfigException('translation must be a map');
-    }
-
-    final paths =
-        config?.getStringListOrNull('translation.paths') ??
-        const ['resources/lang'];
-    loader.setPaths(paths);
-
-    final jsonPaths =
-        config?.getStringListOrNull('translation.json_paths') ??
-        const <String>[];
-    loader.setJsonPaths(jsonPaths);
-
-    loader.setNamespaces(
-      config?.getStringMap('translation.namespaces') ??
-          const <String, String>{},
-    );
+    loader.setPaths(config.paths);
+    loader.setJsonPaths(config.jsonPaths);
+    loader.setNamespaces(config.namespaces);
 
     return loader;
   }
 
-  _LocaleConfig _resolveLocaleConfig(Config? config) {
-    final defaultLocale =
-        config?.getString('app.locale', defaultValue: 'en') ?? 'en';
-    final fallback =
-        config?.getStringOrNull('app.fallback_locale') ?? defaultLocale;
-    return _LocaleConfig(
-      defaultLocale: defaultLocale,
-      fallbackLocale: fallback,
-    );
-  }
-
   TranslatorContract _buildTranslator(
     TranslationLoader loader,
-    _LocaleConfig localeConfig,
+    LocalizationConfig localeConfig,
   ) {
     return routed.Translator(
       loader: loader,
@@ -191,39 +123,16 @@ class LocalizationServiceProvider extends ServiceProvider
   }
 
   LocaleManager _buildLocaleManager(
-    _LocaleConfig localeConfig,
+    LocalizationConfig localeConfig,
     Config? config,
     LocaleResolverRegistry registry,
   ) {
-    final resolvers =
-        config?.getStringListOrNull('translation.resolvers') ??
-        _resolverDefaults();
-    final queryParameter =
-        config?.getStringOrNull('translation.query.parameter') ?? 'locale';
-    final cookieName =
-        config?.getStringOrNull('translation.cookie.name') ?? 'locale';
-    final sessionKey =
-        config?.getStringOrNull('translation.session.key') ?? 'locale';
-    final headerName =
-        config?.getStringOrNull('translation.header.name') ?? 'Accept-Language';
-
-    final options = _ResolverOptions(
-      queryParameter: queryParameter,
-      cookieName: cookieName,
-      sessionKey: sessionKey,
-      headerName: headerName,
-    );
-
-    final rOpts = config?.get<Map<String, dynamic>?>(
-      'translation.resolver_options',
-      {},
-    );
-    final resolverOptions = _readResolverOptions(rOpts);
+    final resolvers = localeConfig.resolvers;
     final builtResolvers = _buildResolvers(
       registry,
       resolvers,
-      options,
-      resolverOptions,
+      localeConfig,
+      localeConfig.resolverOptions,
       config,
     );
 
@@ -237,7 +146,7 @@ class LocalizationServiceProvider extends ServiceProvider
   List<LocaleResolver> _buildResolvers(
     LocaleResolverRegistry registry,
     List<String> order,
-    _ResolverOptions shared,
+    LocalizationConfig shared,
     Map<String, Map<String, dynamic>> resolverOptions,
     Config? config,
   ) {
@@ -269,30 +178,6 @@ class LocalizationServiceProvider extends ServiceProvider
     return resolvers;
   }
 
-  Map<String, Map<String, dynamic>> _readResolverOptions(Object? value) {
-    if (value == null) {
-      return <String, Map<String, dynamic>>{};
-    }
-    final Object normalizedSource = value;
-    final normalized = stringKeyedMap(
-      normalizedSource,
-      'translation.resolver_options',
-    );
-    final result = <String, Map<String, dynamic>>{};
-    normalized.forEach((key, entry) {
-      if (entry == null) {
-        result[key.toLowerCase()] = <String, dynamic>{};
-      } else {
-        final Object entryObject = entry as Object;
-        result[key.toLowerCase()] = stringKeyedMap(
-          entryObject,
-          'translation.resolver_options.$key',
-        );
-      }
-    });
-    return result;
-  }
-
   void _registerMiddleware(Container container) {
     if (!container.has<MiddlewareRegistry>()) {
       return;
@@ -314,10 +199,6 @@ class LocalizationServiceProvider extends ServiceProvider
     FilterRegistry.register('transChoice', _transChoiceFilter);
 
     _filtersRegistered = true;
-  }
-
-  List<String> _resolverDefaults() {
-    return _resolverTemplate.identifiers.toList(growable: false);
   }
 
   String _availableResolversForError(LocaleResolverRegistry registry) {
@@ -370,6 +251,14 @@ class LocalizationServiceProvider extends ServiceProvider
       return HeaderLocaleResolver(headerName: context.sharedOptions.headerName);
     });
     return registry;
+  }
+
+  LocalizationConfig _resolveLocalizationConfig(Config? config) {
+    if (config == null) {
+      final defaults = spec.defaults();
+      return spec.fromMap(defaults);
+    }
+    return spec.resolve(config);
   }
 }
 
@@ -444,25 +333,4 @@ num? _asNum(dynamic input) {
     return num.tryParse(input);
   }
   return null;
-}
-
-class _LocaleConfig {
-  _LocaleConfig({required this.defaultLocale, required this.fallbackLocale});
-
-  final String defaultLocale;
-  final String fallbackLocale;
-}
-
-class _ResolverOptions {
-  _ResolverOptions({
-    required this.queryParameter,
-    required this.cookieName,
-    required this.sessionKey,
-    required this.headerName,
-  });
-
-  final String queryParameter;
-  final String cookieName;
-  final String sessionKey;
-  final String headerName;
 }

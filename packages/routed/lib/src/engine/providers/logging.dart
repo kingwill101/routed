@@ -478,9 +478,15 @@ String? _stringOption(Map<String, Object?> options, List<String> keys) {
   for (final key in keys) {
     final value = options[key];
     if (value != null) {
-      final text = value.toString().trim();
-      if (text.isNotEmpty) {
-        return text;
+      final parsed = parseStringLike(
+        value,
+        context: key,
+        allowEmpty: false,
+        coerceNonString: true,
+        throwOnInvalid: false,
+      );
+      if (parsed != null && parsed.isNotEmpty) {
+        return parsed;
       }
     }
   }
@@ -491,19 +497,17 @@ int? _intFrom(Map<String, Object?> options, List<String> keys) {
   for (final key in keys) {
     final value = options[key];
     if (value != null) {
-      final parsed = _intFromValue(value);
+      final parsed = parseIntLike(
+        value,
+        context: key,
+        throwOnInvalid: false,
+      );
       if (parsed != null) {
         return parsed;
       }
     }
   }
   return null;
-}
-
-int? _intFromValue(Object? value) {
-  if (value == null) return null;
-  if (value is num) return value.toInt();
-  return int.tryParse(value.toString());
 }
 
 double? _doubleFromValue(Object? value) {
@@ -519,43 +523,46 @@ Duration _durationFrom(Object? value, {Duration? fallback}) {
   if (value is Duration) {
     return value;
   }
-  if (value is num) {
-    return Duration(milliseconds: value.toInt());
-  }
-  final text = value.toString().trim().toLowerCase();
-  if (text.isEmpty) {
-    return fallback ?? const Duration(milliseconds: 500);
-  }
-  if (text.endsWith('ms')) {
-    final amount = int.tryParse(text.substring(0, text.length - 2).trim());
-    if (amount != null) {
-      return Duration(milliseconds: amount);
-    }
-  }
-  if (text.endsWith('s')) {
-    final amount = double.tryParse(text.substring(0, text.length - 1).trim());
-    if (amount != null) {
-      return Duration(milliseconds: (amount * 1000).round());
-    }
-  }
-  final numeric = double.tryParse(text);
-  if (numeric != null) {
-    return Duration(milliseconds: numeric.round());
+  final parsed = value is num
+      ? parseDurationLike(
+        '${value}ms',
+        context: 'duration',
+        throwOnInvalid: false,
+      )
+      : parseDurationLike(
+        value,
+        context: 'duration',
+        throwOnInvalid: false,
+      );
+  if (parsed != null) {
+    return parsed;
   }
   return fallback ?? const Duration(milliseconds: 500);
 }
 
 Map<String, String>? _stringMap(Object? value) {
-  if (value is Map) {
-    final result = <String, String>{};
-    value.forEach((key, entryValue) {
-      if (key != null && entryValue != null) {
-        result[key.toString()] = entryValue.toString();
-      }
-    });
-    return result.isEmpty ? null : result;
+  if (value == null) {
+    return null;
   }
-  return null;
+  if (value is! Map) {
+    return null;
+  }
+  final filtered = <String, dynamic>{};
+  value.forEach((key, entryValue) {
+    if (entryValue != null) {
+      filtered[key.toString()] = entryValue;
+    }
+  });
+  if (filtered.isEmpty) {
+    return null;
+  }
+  final parsed = parseStringMap(
+    filtered,
+    context: 'logging.headers',
+    allowEmptyValues: true,
+    coerceValues: true,
+  );
+  return parsed.isEmpty ? null : parsed;
 }
 
 contextual.Level? _levelFromName(String name) {

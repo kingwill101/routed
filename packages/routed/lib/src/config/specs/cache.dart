@@ -1,4 +1,5 @@
 import 'package:routed/src/cache/cache_manager.dart';
+import 'package:routed/src/provider/config_utils.dart';
 import 'package:routed/src/provider/provider.dart';
 
 import '../spec.dart';
@@ -14,13 +15,15 @@ class CacheStoreConfig {
     Map<String, dynamic> map, {
     required String context,
   }) {
-    final driverValue = map['driver'];
-    if (driverValue != null && driverValue is! String) {
-      throw ProviderConfigException('$context.driver must be a string');
-    }
+    final driverValue = parseStringLike(
+      map['driver'],
+      context: '$context.driver',
+      allowEmpty: true,
+      throwOnInvalid: true,
+    );
     final options = Map<String, dynamic>.from(map)..remove('driver');
     return CacheStoreConfig(
-      driver: driverValue as String?,
+      driver: driverValue,
       options: options,
     );
   }
@@ -127,63 +130,82 @@ class CacheConfigSpec extends ConfigSpec<CacheConfig> {
 
   @override
   CacheConfig fromMap(Map<String, dynamic> map, {ConfigSpecContext? context}) {
-    final defaultValue = map['default'];
-    if (defaultValue != null && defaultValue is! String) {
-      throw ProviderConfigException('cache.default must be a string');
-    }
+    final defaultValue = parseStringLike(
+      map['default'],
+      context: 'cache.default',
+      allowEmpty: true,
+      throwOnInvalid: true,
+    );
 
     String? prefix;
-    if (map.containsKey('prefix')) {
-      final value = map['prefix'];
+    final config = context?.config;
+    final hasPrefix = config?.has('cache.prefix') ?? map.containsKey('prefix');
+    if (hasPrefix) {
+      final value =
+          config != null ? config.get<Object?>('cache.prefix') : map['prefix'];
       if (value == null) {
         prefix = '';
-      } else if (value is String) {
-        prefix = value;
       } else {
-        throw ProviderConfigException('cache.prefix must be a string');
+        prefix =
+            parseStringLike(
+              value,
+              context: 'cache.prefix',
+              allowEmpty: true,
+              throwOnInvalid: true,
+            ) ??
+            '';
       }
     }
 
     String? keyPrefix;
-    if (map.containsKey('key_prefix')) {
-      final value = map['key_prefix'];
+    final hasKeyPrefix =
+        config?.has('cache.key_prefix') ?? map.containsKey('key_prefix');
+    if (hasKeyPrefix) {
+      final value =
+          config != null
+              ? config.get<Object?>('cache.key_prefix')
+              : map['key_prefix'];
       if (value == null) {
         keyPrefix = '';
-      } else if (value is String) {
-        keyPrefix = value;
       } else {
-        throw ProviderConfigException('cache.key_prefix must be a string');
+        keyPrefix =
+            parseStringLike(
+              value,
+              context: 'cache.key_prefix',
+              allowEmpty: true,
+              throwOnInvalid: true,
+            ) ??
+            '';
       }
     }
 
     String? appPrefix;
-    final config = context?.config;
     if (config != null && config.has('app.cache_prefix')) {
       final value = config.get<Object?>('app.cache_prefix');
       if (value == null) {
         appPrefix = '';
-      } else if (value is String) {
-        appPrefix = value;
       } else {
-        throw ProviderConfigException('app.cache_prefix must be a string');
+        appPrefix =
+            parseStringLike(
+              value,
+              context: 'app.cache_prefix',
+              allowEmpty: true,
+              throwOnInvalid: true,
+            ) ??
+            '';
       }
     }
 
     final stores = <String, CacheStoreConfig>{};
     final rawStores = map['stores'];
     if (rawStores != null) {
-      if (rawStores is! Map) {
-        throw ProviderConfigException('cache.stores must be a map');
-      }
-      rawStores.forEach((key, value) {
-        final storeName = key.toString();
-        if (value == null || value is! Map) {
-          throw ProviderConfigException('cache.stores.$storeName must be a map');
-        }
-        final storeMap = value.map(
-          (entryKey, entryValue) =>
-              MapEntry(entryKey.toString(), entryValue),
-        );
+      final storeEntries = parseNestedMap(
+        rawStores,
+        context: 'cache.stores',
+        throwOnInvalid: true,
+        allowNullEntries: false,
+      );
+      storeEntries.forEach((storeName, storeMap) {
         stores[storeName] = CacheStoreConfig.fromMap(
           Map<String, dynamic>.from(storeMap),
           context: 'cache.stores.$storeName',
@@ -192,7 +214,7 @@ class CacheConfigSpec extends ConfigSpec<CacheConfig> {
     }
     return CacheConfig(
       stores: stores,
-      defaultStore: defaultValue as String?,
+      defaultStore: defaultValue,
       prefix: prefix,
       keyPrefix: keyPrefix,
       appPrefix: appPrefix,

@@ -124,6 +124,7 @@ int? parseIntLike(
   Object? value, {
   required String context,
   bool nonNegative = false,
+  bool allowEmpty = true,
   bool throwOnInvalid = true,
 }) {
   if (value == null) {
@@ -137,6 +138,12 @@ int? parseIntLike(
   } else if (value is String) {
     final trimmed = value.trim();
     if (trimmed.isEmpty) {
+      if (!allowEmpty) {
+        if (throwOnInvalid) {
+          throw ProviderConfigException('$context must be an integer');
+        }
+        return null;
+      }
       return null;
     }
     parsed = int.tryParse(trimmed);
@@ -149,6 +156,43 @@ int? parseIntLike(
   }
   if (nonNegative && parsed < 0) {
     throw ProviderConfigException('$context must be zero or positive');
+  }
+  return parsed;
+}
+
+/// Parses [value] into a double, accepting numeric strings.
+double? parseDoubleLike(
+  Object? value, {
+  required String context,
+  bool allowEmpty = true,
+  bool throwOnInvalid = true,
+}) {
+  if (value == null) {
+    return null;
+  }
+  double? parsed;
+  if (value is double) {
+    parsed = value;
+  } else if (value is num) {
+    parsed = value.toDouble();
+  } else if (value is String) {
+    final trimmed = value.trim();
+    if (trimmed.isEmpty) {
+      if (!allowEmpty) {
+        if (throwOnInvalid) {
+          throw ProviderConfigException('$context must be a number');
+        }
+        return null;
+      }
+      return null;
+    }
+    parsed = double.tryParse(trimmed);
+  }
+  if (parsed == null) {
+    if (throwOnInvalid) {
+      throw ProviderConfigException('$context must be a number');
+    }
+    return null;
   }
   return parsed;
 }
@@ -241,6 +285,129 @@ List<String>? parseStringList(
   return collected;
 }
 
+/// Parses [value] into a list of integers.
+List<int>? parseIntList(
+  Object? value, {
+  required String context,
+  bool allowEmptyResult = false,
+  bool allowCommaSeparated = true,
+  bool allowInvalidStringEntries = false,
+  bool throwOnInvalid = true,
+}) {
+  if (value == null) {
+    return null;
+  }
+  final collected = <int>[];
+  if (value is Iterable) {
+    var index = 0;
+    for (final entry in value) {
+      final parsed = parseIntLike(
+        entry,
+        context: '$context[$index]',
+        throwOnInvalid: throwOnInvalid,
+      );
+      if (parsed == null) {
+        if (throwOnInvalid) {
+          throw ProviderConfigException('$context[$index] must be an integer');
+        }
+        return null;
+      }
+      collected.add(parsed);
+      index += 1;
+    }
+  } else if (value is String && allowCommaSeparated) {
+    final parts = value.split(',');
+    for (final part in parts) {
+      final trimmed = part.trim();
+      if (trimmed.isEmpty) {
+        continue;
+      }
+      final parsed = int.tryParse(trimmed);
+      if (parsed == null) {
+        if (allowInvalidStringEntries) {
+          continue;
+        }
+        if (throwOnInvalid) {
+          throw ProviderConfigException('$context must be a list of ints');
+        }
+        return null;
+      }
+      collected.add(parsed);
+    }
+  } else {
+    if (throwOnInvalid) {
+      throw ProviderConfigException('$context must be a list or string');
+    }
+    return null;
+  }
+  if (collected.isEmpty && !allowEmptyResult) {
+    return null;
+  }
+  return collected;
+}
+
+/// Parses [value] into a list of doubles.
+List<double>? parseDoubleList(
+  Object? value, {
+  required String context,
+  bool allowEmptyResult = false,
+  bool allowCommaSeparated = true,
+  bool allowInvalidStringEntries = false,
+  bool throwOnInvalid = true,
+}) {
+  if (value == null) {
+    return null;
+  }
+  final collected = <double>[];
+  if (value is Iterable) {
+    var index = 0;
+    for (final entry in value) {
+      double? parsed;
+      if (entry is num) {
+        parsed = entry.toDouble();
+      } else if (entry is String) {
+        parsed = double.tryParse(entry.trim());
+      }
+      if (parsed == null) {
+        if (throwOnInvalid) {
+          throw ProviderConfigException('$context[$index] must be a number');
+        }
+        return null;
+      }
+      collected.add(parsed);
+      index += 1;
+    }
+  } else if (value is String && allowCommaSeparated) {
+    final parts = value.split(',');
+    for (final part in parts) {
+      final trimmed = part.trim();
+      if (trimmed.isEmpty) {
+        continue;
+      }
+      final parsed = double.tryParse(trimmed);
+      if (parsed == null) {
+        if (allowInvalidStringEntries) {
+          continue;
+        }
+        if (throwOnInvalid) {
+          throw ProviderConfigException('$context must be a list of numbers');
+        }
+        return null;
+      }
+      collected.add(parsed);
+    }
+  } else {
+    if (throwOnInvalid) {
+      throw ProviderConfigException('$context must be a list or string');
+    }
+    return null;
+  }
+  if (collected.isEmpty && !allowEmptyResult) {
+    return null;
+  }
+  return collected;
+}
+
 /// Parses [value] into a [Duration]. Strings may use `ms`, `s`, `m`, or `h`
 /// suffixes. Numeric values are treated as seconds.
 Duration? parseDurationLike(
@@ -263,7 +430,7 @@ Duration? parseDurationLike(
       return null;
     }
     final match = RegExp(
-      r'^(?<amount>-?\d+(?:\.\d+)?)(?<unit>ms|s|m|h|d|w|mo|y)?$',
+      r'^(?<amount>-?\d+(?:\.\d+)?)(?<unit>ms|s|m|h|d|day|days|w|week|weeks|mo|month|months|y|year|years)?$',
     ).firstMatch(trimmed);
     if (match == null) {
       if (throwOnInvalid) {
@@ -280,15 +447,16 @@ Duration? parseDurationLike(
       }
       return null;
     }
+    const dayMs = 24 * 60 * 60 * 1000;
     final milliseconds = switch (unit) {
       'ms' => amount,
       's' => amount * 1000,
       'm' => amount * 60 * 1000,
       'h' => amount * 60 * 60 * 1000,
-      'd' => amount * 24 * 60 * 60 * 1000,
-      'w' => amount * 7 * 24 * 60 * 60 * 1000,
-      'mo' => amount * 30 * 24 * 60 * 60 * 1000,
-      'y' => amount * 365 * 24 * 60 * 60 * 1000,
+      'd' || 'day' || 'days' => amount * dayMs,
+      'w' || 'week' || 'weeks' => amount * dayMs * 7,
+      'mo' || 'month' || 'months' => amount * dayMs * 30,
+      'y' || 'year' || 'years' => amount * dayMs * 365,
       _ => amount * 1000,
     };
     return Duration(milliseconds: milliseconds.round());
@@ -350,6 +518,41 @@ Map<String, String> parseStringMap(
   return result;
 }
 
+/// Coerces [value] into a string map, skipping null entries.
+Map<String, String> parseStringMapAllowNulls(
+  Object? value, {
+  required String context,
+  bool allowEmptyValues = false,
+  bool coerceValues = false,
+  bool throwOnInvalid = true,
+}) {
+  if (value == null) {
+    return const <String, String>{};
+  }
+  if (value is! Map && value is! Config) {
+    if (throwOnInvalid) {
+      throw ProviderConfigException('$context must be a map');
+    }
+    return const <String, String>{};
+  }
+  final source = stringKeyedMap(value, context);
+  final filtered = <String, dynamic>{};
+  source.forEach((key, entry) {
+    if (entry != null) {
+      filtered[key] = entry;
+    }
+  });
+  if (filtered.isEmpty) {
+    return const <String, String>{};
+  }
+  return parseStringMap(
+    filtered,
+    context: context,
+    allowEmptyValues: allowEmptyValues,
+    coerceValues: coerceValues,
+  );
+}
+
 /// Coerces [value] into a map of string lists.
 Map<String, List<String>> parseStringListMap(
   Object? value, {
@@ -376,6 +579,77 @@ Map<String, List<String>> parseStringListMap(
     if (list != null) {
       result[entryKey] = list;
     }
+  });
+  return result;
+}
+
+/// Coerces [value] into a list of string-keyed maps.
+List<Map<String, dynamic>> parseMapList(
+  Object? value, {
+  required String context,
+  bool throwOnInvalid = true,
+}) {
+  if (value == null) {
+    return const <Map<String, dynamic>>[];
+  }
+  if (value is! Iterable) {
+    if (throwOnInvalid) {
+      throw ProviderConfigException('$context must be a list');
+    }
+    return const <Map<String, dynamic>>[];
+  }
+  final result = <Map<String, dynamic>>[];
+  var index = 0;
+  for (final entry in value) {
+    if (entry == null) {
+      if (throwOnInvalid) {
+        throw ProviderConfigException('$context[$index] must be a map');
+      }
+      return const <Map<String, dynamic>>[];
+    }
+    result.add(stringKeyedMap(entry as Object, '$context[$index]'));
+    index += 1;
+  }
+  return result;
+}
+
+/// Coerces [value] into a nested string-keyed map.
+Map<String, Map<String, dynamic>> parseNestedMap(
+  Object? value, {
+  required String context,
+  bool throwOnInvalid = true,
+  bool allowNullEntries = true,
+}) {
+  if (value == null) {
+    return <String, Map<String, dynamic>>{};
+  }
+  if (value is! Map && value is! Config) {
+    if (throwOnInvalid) {
+      throw ProviderConfigException('$context must be a map');
+    }
+    return <String, Map<String, dynamic>>{};
+  }
+  final source = stringKeyedMap(value, context);
+  final result = <String, Map<String, dynamic>>{};
+  source.forEach((key, entry) {
+    final entryKey = key.toString();
+    if (entry == null) {
+      if (!allowNullEntries) {
+        if (throwOnInvalid) {
+          throw ProviderConfigException('$context.$entryKey must be a map');
+        }
+        return;
+      }
+      result[entryKey] = <String, dynamic>{};
+      return;
+    }
+    if (entry is! Map && entry is! Config) {
+      if (throwOnInvalid) {
+        throw ProviderConfigException('$context.$entryKey must be a map');
+      }
+      return;
+    }
+    result[entryKey] = stringKeyedMap(entry as Object, '$context.$entryKey');
   });
   return result;
 }

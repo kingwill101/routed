@@ -1,8 +1,6 @@
-import 'dart:convert';
-import 'dart:io';
-
-import 'package:crypto/crypto.dart' as crypto;
 import 'package:routed/src/cache/cache_manager.dart';
+import 'package:routed/src/config/specs/session.dart';
+import 'package:routed/src/config/spec.dart';
 import 'package:routed/src/container/container.dart';
 import 'package:routed/src/contracts/cache/repository.dart' as cache;
 import 'package:routed/src/contracts/contracts.dart' show Config;
@@ -18,9 +16,6 @@ import 'package:routed/src/sessions/middleware.dart';
 import 'package:routed/src/sessions/options.dart';
 import 'package:routed/src/sessions/secure_cookie.dart';
 import 'package:routed/src/support/driver_registry.dart';
-
-StorageDefaults _sessionBaselineStorage() =>
-    StorageDefaults.fromLocalRoot('storage/app');
 
 /// Signature for a function that converts a [SessionDriverBuilderContext] to a
 /// fully-formed [SessionConfig] instance.
@@ -311,135 +306,61 @@ class SessionServiceProvider extends ServiceProvider
 
   static bool _defaultsRegistered = false;
   bool _managesConfig = false;
+  static const SessionConfigSpec spec = SessionConfigSpec();
 
   /// Default configuration as understood by the framework.
   @override
-  ConfigDefaults get defaultConfig => ConfigDefaults(
-    docs: <ConfigDocEntry>[
-      ConfigDocEntry(
-        path: 'session.driver',
-        type: 'string',
-        description: 'Session backend to use.',
-        optionsBuilder: () =>
-            SessionServiceProvider.availableDriverNames(includeBuiltIns: true),
-        defaultValue: 'cookie',
-        metadata: const {configDocMetaInheritFromEnv: 'SESSION_DRIVER'},
-      ),
-      const ConfigDocEntry(
-        path: 'session.lifetime',
-        type: 'int',
-        description: 'Session lifetime in minutes.',
-        defaultValue: 120,
-      ),
-      const ConfigDocEntry(
-        path: 'session.expire_on_close',
-        type: 'bool',
-        description: 'Expire sessions when the browser closes.',
-        defaultValue: false,
-      ),
-      const ConfigDocEntry(
-        path: 'session.encrypt',
-        type: 'bool',
-        description: 'Encrypt session payloads when using cookie drivers.',
-        defaultValue: true,
-      ),
-      const ConfigDocEntry(
-        path: 'session.cookie',
-        type: 'string',
-        description:
-            'Cookie name used for identifying the session when using cookie-based drivers.',
-        example: 'routed_app_session',
-        defaultValue: "{{ env.SESSION_COOKIE | default: 'routed-session' }}",
-        metadata: {configDocMetaInheritFromEnv: 'SESSION_COOKIE'},
-      ),
-      const ConfigDocEntry(
-        path: 'session.path',
-        type: 'string',
-        description: 'Cookie path scope for the session identifier.',
-        defaultValue: '/',
-      ),
-      const ConfigDocEntry(
-        path: 'session.domain',
-        type: 'string',
-        description: 'Cookie domain override for session cookies.',
-        defaultValue: null,
-      ),
-      const ConfigDocEntry(
-        path: 'session.secure',
-        type: 'bool',
-        description: 'Require HTTPS when sending session cookies.',
-        defaultValue: false,
-      ),
-      const ConfigDocEntry(
-        path: 'session.http_only',
-        type: 'bool',
-        description: 'Mark session cookies as HTTP-only.',
-        defaultValue: true,
-      ),
-      const ConfigDocEntry(
-        path: 'session.partitioned',
-        type: 'bool',
-        description: 'Enable partitioned cookies for session storage.',
-        defaultValue: false,
-      ),
-      const ConfigDocEntry(
-        path: 'session.cache_prefix',
-        type: 'string',
-        description:
-            'Prefix applied to cache keys when using cache-backed session drivers.',
-        defaultValue: 'session:',
-      ),
-      const ConfigDocEntry(
-        path: 'session.same_site',
-        type: 'string',
-        description: 'SameSite policy applied to the session cookie.',
-        options: <String>['lax', 'strict', 'none'],
-        defaultValue: 'lax',
-      ),
-      ConfigDocEntry(
-        path: 'session.files',
-        type: 'string',
-        description: 'Filesystem path used by file-based session drivers.',
-        defaultValueBuilder: () =>
-            _sessionBaselineStorage().frameworkPath('sessions'),
-      ),
-      const ConfigDocEntry(
-        path: 'session.lottery',
-        type: 'list<int>',
-        description:
-            'Odds used by some drivers to trigger garbage collection (numerator, denominator).',
-        defaultValue: [2, 100],
-      ),
-      const ConfigDocEntry(
-        path: 'session.previous_keys',
-        type: 'list<string>',
-        description:
-            'Historical keys accepted when rotating session secrets. New sessions always use the current key.',
-        defaultValue: <String>[],
-      ),
-      const ConfigDocEntry(
-        path: 'session.enabled',
-        type: 'bool',
-        description:
-            'Enable the built-in sessions middleware (defaults to disabled).',
-        defaultValue: null,
-      ),
-      ...SessionServiceProvider.driverDocumentation(),
-      const ConfigDocEntry(
-        path: 'http.middleware_sources',
-        type: 'map',
-        description: 'Session middleware references injected globally/groups.',
-        defaultValue: <String, Object?>{
-          'routed.sessions': <String, Object?>{
-            'global': <String>['routed.sessions.start'],
-            'groups': <String, Object?>{
-              'web': <String>['routed.sessions.start'],
-            },
+  ConfigDefaults get defaultConfig {
+    final values = spec.defaultsWithRoot();
+    values['http'] = {
+      'middleware_sources': {
+        'routed.sessions': {
+          'global': ['routed.sessions.start'],
+          'groups': {
+            'web': ['routed.sessions.start'],
           },
         },
-      ),
-    ],
-  );
+      },
+    };
+    return ConfigDefaults(
+      docs: <ConfigDocEntry>[
+        ...spec.docs().map((entry) {
+          if (entry.path == 'session.driver') {
+            return ConfigDocEntry(
+              path: entry.path,
+              type: entry.type,
+              description: entry.description,
+              example: entry.example,
+              deprecated: entry.deprecated,
+              optionsBuilder: () =>
+                  SessionServiceProvider.availableDriverNames(
+                    includeBuiltIns: true,
+                  ),
+              metadata: entry.metadata,
+              defaultValue: entry.defaultValue,
+              defaultValueBuilder: entry.defaultValueBuilder,
+            );
+          }
+          return entry;
+        }),
+        ...SessionServiceProvider.driverDocumentation(),
+        const ConfigDocEntry(
+          path: 'http.middleware_sources',
+          type: 'map',
+          description: 'Session middleware references injected globally/groups.',
+          defaultValue: <String, Object?>{
+            'routed.sessions': <String, Object?>{
+              'global': <String>['routed.sessions.start'],
+              'groups': <String, Object?>{
+                'web': <String>['routed.sessions.start'],
+              },
+            },
+          },
+        ),
+      ],
+      values: values,
+    );
+  }
 
   /// Returns a list of registered driver names, with optional built-ins.
   static List<String> availableDriverNames({bool includeBuiltIns = false}) {
@@ -508,9 +429,27 @@ class SessionServiceProvider extends ServiceProvider
   static SessionConfig _buildFileDriver(SessionDriverBuilderContext context) {
     final raw = context.raw;
     final configuredPath =
-        raw.getString('files', allowEmpty: true) ??
-        raw.getString('storage_path', allowEmpty: true) ??
-        raw['path']?.toString();
+        parseStringLike(
+          raw['files'],
+          context: 'session.files',
+          allowEmpty: true,
+          coerceNonString: true,
+          throwOnInvalid: false,
+        ) ??
+        parseStringLike(
+          raw['storage_path'],
+          context: 'session.storage_path',
+          allowEmpty: true,
+          coerceNonString: true,
+          throwOnInvalid: false,
+        ) ??
+        parseStringLike(
+          raw['path'],
+          context: 'session.path',
+          allowEmpty: true,
+          coerceNonString: true,
+          throwOnInvalid: false,
+        );
 
     final storageDefaults = context.storageDefaults;
     final storagePath = () {
@@ -562,8 +501,16 @@ class SessionServiceProvider extends ServiceProvider
   }
 
   static String _resolveCacheStoreName(SessionDriverBuilderContext context) {
-    return context.raw.getString('store', allowEmpty: true) ??
-        (context.driver == 'database' ? 'database' : context.driver);
+    final store = context.raw['store'];
+    if (store == null) {
+      return context.driver == 'database' ? 'database' : context.driver;
+    }
+    return parseStringLike(
+      store,
+      context: 'session.store',
+      allowEmpty: true,
+      throwOnInvalid: true,
+    )!;
   }
 
   static SessionConfig _buildCacheBackedDriver(
@@ -762,140 +709,57 @@ class SessionServiceProvider extends ServiceProvider
   // ---------------------------------------------------------------------------
 
   SessionConfig? _resolveSessionConfig(Container container, Config config) {
-    final explicitEnabled = config.getBoolOrNull('session.enabled');
-
     final direct = config.get<Object?>('session.config');
     if (direct is SessionConfig) {
       return direct;
     }
-    if (direct is Map) {
-      return _sessionConfigFromMap(
-        container,
-        config,
-        Map<String, dynamic>.from(direct),
-      );
+    if (direct is Map || direct is Config) {
+      final resolved = _resolveSessionProviderConfigFromMap(direct, config);
+      if (!resolved.enabled) {
+        return null;
+      }
+      return _buildSessionConfig(container, config, resolved);
     }
 
     final sessionNode = config.get<Object?>('session');
-    bool? mapEnabled;
-    Map<String, dynamic>? sessionMap;
-    if (sessionNode is SessionConfig) {
-      sessionMap = null;
-      mapEnabled = true;
-    } else if (sessionNode is Map) {
-      sessionMap = Map<String, dynamic>.from(sessionNode);
-      mapEnabled = {
-        for (final entry in sessionMap.entries) entry.key: entry.value,
-      }.getBool('enabled');
-    }
-
-    final enabled = explicitEnabled ?? mapEnabled ?? true;
-    if (!enabled) {
-      return null;
-    }
-
     if (sessionNode is SessionConfig) {
       return sessionNode;
+    } else if (sessionNode is Map) {
+      // handled via spec.resolve below
+    } else if (sessionNode is Config) {
+      // handled via spec.resolve below
+    } else if (sessionNode != null) {
+      throw ProviderConfigException('session must be a map');
     }
-    if (sessionMap != null) {
-      return _sessionConfigFromMap(container, config, sessionMap);
-    }
-    return null;
-  }
 
-  SessionConfig? _sessionConfigFromMap(
-    Container container,
-    Config root,
-    Map<String, dynamic> raw,
-  ) {
-    final merged = Map<String, dynamic>.from(raw);
-
-    final specifiedEnabled = merged.getBool('enabled', defaultValue: false);
-    if (specifiedEnabled == false) {
+    final resolved = spec.resolve(config);
+    if (!resolved.enabled) {
       return null;
     }
-    if (merged.containsKey('config') && merged['config'] is Map) {
-      merged.addAll(Map<String, dynamic>.from(merged['config'] as Map));
-    }
+    return _buildSessionConfig(container, config, resolved);
+  }
 
-    final driver =
-        merged.getString('driver', allowEmpty: true)?.toLowerCase() ?? 'cookie';
-
-    final cookieName =
-        merged.getString('cookie', allowEmpty: true) ??
-        merged.getString('cookie_name', allowEmpty: true) ??
-        merged.getString('name', allowEmpty: true) ??
-        _defaultCookieName(root);
-
-    final lifetime = _resolveLifetime(merged);
-    final expireOnClose = merged.getBoolOrNull('expire_on_close') ?? false;
-    final encrypt = merged.getBoolOrNull('encrypt') ?? (driver == 'cookie');
-    final cookiePath = merged.getString('path', allowEmpty: true) ?? '/';
-    final domain =
-        merged.getString('domain', allowEmpty: true) ??
-        merged.getString('cookie_domain', allowEmpty: true);
-    final secure = merged.getBoolOrNull('secure');
-    final httpOnly = merged.getBoolOrNull('http_only') ?? true;
-    final sameSite = _parseSameSite(merged['same_site']);
-    final partitioned = merged.getBoolOrNull('partitioned');
-    final lottery = _parseLottery(merged['lottery']);
-    final cachePrefix =
-        merged.getString('cache_prefix', allowEmpty: true) ?? 'session:';
-
-    final options = Options(
-      path: cookiePath,
-      domain: domain,
-      maxAge: expireOnClose ? null : lifetime.inSeconds,
-      secure: secure,
-      httpOnly: httpOnly,
-      sameSite: sameSite,
-      partitioned: partitioned,
-    );
-
-    final keys = _resolveKeys(merged, root);
-    if (keys.isEmpty) {
-      throw ProviderConfigException(
-        'session.app_key or app.key is required for session cookies.',
-      );
-    }
-
-    late final List<SecureCookie> codecs;
-    try {
-      codecs = <SecureCookie>[
-        SecureCookie(key: keys.first, useEncryption: encrypt, useSigning: true),
-        ...keys
-            .skip(1)
-            .map(
-              (key) => SecureCookie(
-                key: key,
-                useEncryption: encrypt,
-                useSigning: true,
-              ),
-            ),
-      ];
-    } on FormatException catch (error) {
-      throw ProviderConfigException(
-        'session.app_key or app.key must be a valid base64-encoded key: '
-        '${error.message}',
-      );
-    }
-
+  SessionConfig _buildSessionConfig(
+    Container container,
+    Config root,
+    SessionProviderConfig resolved,
+  ) {
     _ensureDefaultDriversRegistered();
     final registry = SessionDriverRegistry.instance;
     final context = SessionDriverBuilderContext(
       container: container,
       rootConfig: root,
-      raw: merged,
-      driver: driver,
-      cookieName: cookieName,
-      lifetime: lifetime,
-      expireOnClose: expireOnClose,
-      encrypt: encrypt,
-      options: options,
-      codecs: codecs,
-      cachePrefix: cachePrefix,
-      keys: keys,
-      lottery: lottery,
+      raw: resolved.raw,
+      driver: resolved.driver,
+      cookieName: resolved.cookieName,
+      lifetime: resolved.lifetime,
+      expireOnClose: resolved.expireOnClose,
+      encrypt: resolved.encrypt,
+      options: resolved.options,
+      codecs: resolved.codecs,
+      cachePrefix: resolved.cachePrefix,
+      keys: resolved.keys,
+      lottery: resolved.lottery,
       cacheManager: container.has<CacheManager>()
           ? container.get<CacheManager>()
           : null,
@@ -904,7 +768,7 @@ class SessionServiceProvider extends ServiceProvider
           : null,
     );
 
-    final registration = registry.registrationFor(driver);
+    final registration = registry.registrationFor(resolved.driver);
     if (registration == null) {
       final available =
           registry.availableDrivers(include: _builtInDrivers).toList()..sort();
@@ -912,133 +776,22 @@ class SessionServiceProvider extends ServiceProvider
           ? 'No session drivers are registered.'
           : 'Registered drivers: ${available.join(", ")}.';
       throw ProviderConfigException(
-        'Unsupported session driver "$driver". $message',
+        'Unsupported session driver "${resolved.driver}". $message',
       );
     }
     final builder = registration.builder;
-    registry.ensureRequirements(driver, context, registration);
-    registry.runValidator(driver, context, registration);
+    registry.ensureRequirements(resolved.driver, context, registration);
+    registry.runValidator(resolved.driver, context, registration);
     return builder(context);
   }
 
-  // ---------------------------------------------------------------------------
-  // Primitive helpers
-  // ---------------------------------------------------------------------------
-
-  Duration _resolveLifetime(Map<String, dynamic> source) {
-    final lifetimeMinutes = source.getInt('lifetime');
-    if (lifetimeMinutes != null) {
-      return Duration(minutes: lifetimeMinutes);
-    }
-    final maxAgeSeconds = source.getInt('max_age');
-    if (maxAgeSeconds != null) {
-      return Duration(seconds: maxAgeSeconds);
-    }
-    return const Duration(minutes: 120);
-  }
-
-  List<String> _resolveKeys(Map<String, dynamic> map, Config root) {
-    final candidates = <String?>[
-      map.getString('key', allowEmpty: true),
-      map.getString('app_key', allowEmpty: true),
-      map.getString('secret', allowEmpty: true),
-      root.getStringOrNull('session.app_key', allowEmpty: true),
-      root.getStringOrNull('app.key', allowEmpty: true),
-    ];
-    final result = <String>[];
-    for (final candidate in candidates) {
-      final normalized = _normalizeKey(candidate);
-      if (normalized != null) {
-        result.add(normalized);
-        break;
-      }
-    }
-    final additional = <String>[
-      ...?map.getStringList('previous_keys'),
-      ...?root.getStringListOrNull('session.previous_keys'),
-      ...?root.getStringListOrNull('app.previous_keys'),
-    ];
-    for (final key in additional) {
-      final normalized = _normalizeKey(key);
-      if (normalized != null && !result.contains(normalized)) {
-        result.add(normalized);
-      }
-    }
-    return result;
-  }
-
-  String? _normalizeKey(String? raw) {
-    if (raw == null) return null;
-    final trimmed = raw.trim();
-    if (trimmed.isEmpty) return null;
-    try {
-      final decoded = base64.decode(trimmed);
-      if (decoded.length >= 32) {
-        return trimmed;
-      }
-      final digest = crypto.sha256.convert(decoded).bytes;
-      return base64.encode(digest);
-    } catch (_) {
-      final digest = crypto.sha256.convert(utf8.encode(trimmed)).bytes;
-      return base64.encode(digest);
-    }
-  }
-
-  String _defaultCookieName(Config config) {
-    final appName =
-        config.getStringOrNull('app.name', allowEmpty: true) ?? 'routed';
-    final slug = appName
-        .toLowerCase()
-        .replaceAll(RegExp(r'[^a-z0-9]+'), '-')
-        .replaceAll(RegExp(r'-{2,}'), '-')
-        .replaceAll(RegExp(r'^-+|-+$'), '');
-    return '${slug.isEmpty ? 'routed' : slug}-session';
-  }
-
-  SameSite? _parseSameSite(dynamic value) {
-    final normalized = value?.toString().toLowerCase();
-    switch (normalized) {
-      case null:
-      case '':
-      case 'null':
-        return null;
-      case 'lax':
-        return SameSite.lax;
-      case 'strict':
-        return SameSite.strict;
-      case 'none':
-        return SameSite.none;
-      default:
-        throw ProviderConfigException(
-          'session.same_site must be "lax", "strict", "none", or null',
-        );
-    }
-  }
-
-  List<int>? _parseLottery(dynamic value) {
-    if (value == null) return null;
-    final list = <int>[];
-    if (value is List) {
-      for (final entry in value) {
-        final parsed = entry is int ? entry : int.tryParse(entry.toString());
-        if (parsed != null) {
-          list.add(parsed);
-        }
-      }
-    } else if (value is String) {
-      final parts = value
-          .split(',')
-          .map((part) => int.tryParse(part.trim()))
-          .whereType<int>()
-          .toList();
-      list.addAll(parts);
-    }
-    if (list.length == 2) {
-      return list;
-    }
-    if (list.isEmpty) {
-      return null;
-    }
-    throw ProviderConfigException('session.lottery must contain two integers.');
+  SessionProviderConfig _resolveSessionProviderConfigFromMap(
+    Object? raw,
+    Config root,
+  ) {
+    final map = stringKeyedMap(raw as Object, 'session.config');
+    final specContext = ConfigSpecContext(config: root);
+    final merged = spec.mergeDefaults(map, context: specContext);
+    return spec.fromMap(merged, context: specContext);
   }
 }

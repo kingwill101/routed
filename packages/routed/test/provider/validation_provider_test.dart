@@ -86,6 +86,33 @@ void main() {
       );
     });
 
+    test('surface descriptive error for rate limit policies', () async {
+      await expectLater(
+        () async {
+          final engine = Engine(
+            configItems: {
+              'rate_limit': {
+                'enabled': false,
+                'policies': ['bad'],
+              },
+            },
+          );
+          try {
+            await engine.initialize();
+          } finally {
+            await engine.close();
+          }
+        },
+        throwsA(
+          isA<ProviderConfigException>().having(
+            (e) => e.message,
+            'message',
+            contains('rate_limit.policies[0] must be a map'),
+          ),
+        ),
+      );
+    });
+
     test('surface descriptive error for uploads max memory', () async {
       await expectLater(
         () => Engine(

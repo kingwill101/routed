@@ -1,68 +1,43 @@
 import 'package:routed/src/container/container.dart';
+import 'package:routed/src/config/specs/compression.dart';
 import 'package:routed/src/contracts/contracts.dart' show Config;
 import 'package:routed/src/engine/middleware_registry.dart';
-import 'package:routed/src/provider/config_utils.dart';
 import 'package:routed/src/provider/provider.dart';
 
 import '../../middleware/compression.dart';
 
-const _defaultAlgorithms = ['br', 'gzip'];
-const _defaultMimeAllow = [
-  'text/*',
-  'application/json',
-  'application/javascript',
-];
-const _defaultMimeDeny = ['image/*', 'audio/*', 'video/*'];
-
 class CompressionServiceProvider extends ServiceProvider
     with ProvidesDefaultConfig {
   CompressionOptions? _options;
+  static const CompressionConfigSpec spec = CompressionConfigSpec();
 
   @override
-  ConfigDefaults get defaultConfig => const ConfigDefaults(
-    docs: [
-      ConfigDocEntry(
-        path: 'compression.enabled',
-        type: 'bool',
-        description: 'Enable automatic response compression.',
-        defaultValue: true,
-      ),
-      ConfigDocEntry(
-        path: 'compression.min_length',
-        type: 'int',
-        description: 'Minimum body size (bytes) before compression applies.',
-        defaultValue: 1024,
-      ),
-      ConfigDocEntry(
-        path: 'compression.algorithms',
-        type: 'list<string>',
-        description: 'Preferred compression algorithms (gzip, br).',
-        defaultValue: _defaultAlgorithms,
-      ),
-      ConfigDocEntry(
-        path: 'compression.mime_allow',
-        type: 'list<string>',
-        description: 'MIME prefixes eligible for compression.',
-        defaultValue: _defaultMimeAllow,
-      ),
-      ConfigDocEntry(
-        path: 'compression.mime_deny',
-        type: 'list<string>',
-        description: 'MIME prefixes excluded from compression.',
-        defaultValue: _defaultMimeDeny,
-      ),
-      ConfigDocEntry(
-        path: 'http.middleware_sources',
-        type: 'map',
-        description: 'Compression middleware references registered globally.',
-        defaultValue: <String, Object?>{
-          'routed.compression': <String, Object?>{
-            'global': <String>['routed.compression.middleware'],
-          },
+  ConfigDefaults get defaultConfig {
+    final values = spec.defaultsWithRoot();
+    values['http'] = {
+      'middleware_sources': {
+        'routed.compression': {
+          'global': ['routed.compression.middleware'],
         },
-      ),
-    ],
-  );
+      },
+    };
+    return ConfigDefaults(
+      docs: [
+        const ConfigDocEntry(
+          path: 'http.middleware_sources',
+          type: 'map',
+          description: 'Compression middleware references registered globally.',
+          defaultValue: <String, Object?>{
+            'routed.compression': <String, Object?>{
+              'global': <String>['routed.compression.middleware'],
+            },
+          },
+        ),
+        ...spec.docs(),
+      ],
+      values: values,
+    );
+  }
 
   @override
   void register(Container container) {
@@ -108,36 +83,7 @@ class CompressionServiceProvider extends ServiceProvider
   }
 
   CompressionOptions _buildOptions(Config config) {
-    final enabled = config.getBool('compression.enabled', defaultValue: true);
-
-    final minLength = config.getInt(
-      'compression.min_length',
-      defaultValue: 1024,
-    );
-
-    final algorithmNames =
-        config.getStringListOrNull('compression.algorithms') ??
-        _defaultAlgorithms;
-
-    final algorithms = algorithmNames
-        .map(parseCompressionAlgorithm)
-        .whereType<CompressionAlgorithm>()
-        .where(isAlgorithmSupported)
-        .toList(growable: false);
-
-    final allowList =
-        config.getStringListOrNull('compression.mime_allow') ??
-        _defaultMimeAllow;
-
-    final denyList =
-        config.getStringListOrNull('compression.mime_deny') ?? _defaultMimeDeny;
-
-    return CompressionOptions(
-      enabled: enabled && algorithms.isNotEmpty,
-      minLength: minLength,
-      algorithms: algorithms,
-      mimeAllow: allowList,
-      mimeDeny: denyList,
-    );
+    final resolved = spec.resolve(config);
+    return resolved.toOptions();
   }
 }

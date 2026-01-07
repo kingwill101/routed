@@ -1,4 +1,5 @@
 import 'package:routed/src/engine/config.dart';
+import 'package:routed/src/provider/config_utils.dart';
 import 'package:routed/src/provider/provider.dart';
 
 import '../spec.dart';
@@ -24,13 +25,28 @@ class UploadsConfigSpec extends ConfigSpec<MultipartConfig> {
 
   @override
   Map<String, dynamic> defaults({ConfigSpecContext? context}) {
+    var maxMemory = _defaultMaxMemory;
+    var maxFileSize = _defaultMaxFileSize;
+    var maxDiskUsage = _defaultMaxDiskUsage;
+    var allowedExtensions = _defaultAllowedExtensions;
+    var directory = _defaultDirectory;
+    var filePermissions = _defaultFilePermissions;
+    if (context is UploadsConfigContext) {
+      final multipart = context.engineConfig.multipart;
+      maxMemory = multipart.maxMemory;
+      maxFileSize = multipart.maxFileSize;
+      maxDiskUsage = multipart.maxDiskUsage;
+      allowedExtensions = multipart.allowedExtensions.toList(growable: false);
+      directory = multipart.uploadDirectory;
+      filePermissions = multipart.filePermissions;
+    }
     return {
-      'max_memory': _defaultMaxMemory,
-      'max_file_size': _defaultMaxFileSize,
-      'max_disk_usage': _defaultMaxDiskUsage,
-      'allowed_extensions': _defaultAllowedExtensions,
-      'directory': _defaultDirectory,
-      'file_permissions': _defaultFilePermissions,
+      'max_memory': maxMemory,
+      'max_file_size': maxFileSize,
+      'max_disk_usage': maxDiskUsage,
+      'allowed_extensions': allowedExtensions,
+      'directory': directory,
+      'file_permissions': filePermissions,
     };
   }
 
@@ -85,81 +101,57 @@ class UploadsConfigSpec extends ConfigSpec<MultipartConfig> {
     Map<String, dynamic> map, {
     ConfigSpecContext? context,
   }) {
-    final maxMemoryValue = map['max_memory'];
-    final int maxMemory;
-    if (maxMemoryValue == null) {
-      maxMemory = _defaultMaxMemory;
-    } else if (maxMemoryValue is int) {
-      maxMemory = maxMemoryValue;
-    } else {
-      throw ProviderConfigException('uploads.max_memory must be an integer');
-    }
+    final maxMemory =
+        parseIntLike(
+          map['max_memory'],
+          context: 'uploads.max_memory',
+          throwOnInvalid: true,
+        ) ??
+        _defaultMaxMemory;
 
-    final maxFileSizeValue = map['max_file_size'];
-    final int maxFileSize;
-    if (maxFileSizeValue == null) {
-      maxFileSize = _defaultMaxFileSize;
-    } else if (maxFileSizeValue is int) {
-      maxFileSize = maxFileSizeValue;
-    } else {
-      throw ProviderConfigException(
-        'uploads.max_file_size must be an integer',
-      );
-    }
+    final maxFileSize =
+        parseIntLike(
+          map['max_file_size'],
+          context: 'uploads.max_file_size',
+          throwOnInvalid: true,
+        ) ??
+        _defaultMaxFileSize;
 
-    final maxDiskUsageValue = map['max_disk_usage'];
-    final int maxDiskUsage;
-    if (maxDiskUsageValue == null) {
-      maxDiskUsage = _defaultMaxDiskUsage;
-    } else if (maxDiskUsageValue is int) {
-      maxDiskUsage = maxDiskUsageValue;
-    } else {
-      throw ProviderConfigException(
-        'uploads.max_disk_usage must be an integer',
-      );
-    }
+    final maxDiskUsage =
+        parseIntLike(
+          map['max_disk_usage'],
+          context: 'uploads.max_disk_usage',
+          throwOnInvalid: true,
+        ) ??
+        _defaultMaxDiskUsage;
 
-    final allowedExtensionsValue = map['allowed_extensions'];
-    final Set<String> allowedExtensions;
-    if (allowedExtensionsValue == null) {
-      allowedExtensions = _defaultAllowedExtensions.toSet();
-    } else if (allowedExtensionsValue is List) {
-      final collected = <String>[];
-      for (var i = 0; i < allowedExtensionsValue.length; i += 1) {
-        final entry = allowedExtensionsValue[i];
-        if (entry is! String) {
-          throw ProviderConfigException(
-            'uploads.allowed_extensions[$i] must be a string',
-          );
-        }
-        collected.add(entry);
-      }
-      allowedExtensions = collected.toSet();
-    } else {
-      throw ProviderConfigException('uploads.allowed_extensions must be a list');
-    }
+    final allowedExtensions =
+        (parseStringList(
+              map['allowed_extensions'],
+              context: 'uploads.allowed_extensions',
+              allowEmptyResult: true,
+              throwOnInvalid: true,
+            ) ??
+            _defaultAllowedExtensions)
+            .map((entry) => entry.toLowerCase())
+            .toSet();
 
-    final directoryValue = map['directory'];
-    final String directory;
-    if (directoryValue == null) {
-      directory = _defaultDirectory;
-    } else if (directoryValue is String) {
-      directory = directoryValue;
-    } else {
-      throw ProviderConfigException('uploads.directory must be a string');
-    }
+    final directory =
+        parseStringLike(
+          map['directory'],
+          context: 'uploads.directory',
+          allowEmpty: true,
+          throwOnInvalid: true,
+        ) ??
+        _defaultDirectory;
 
-    final filePermissionsValue = map['file_permissions'];
-    final int filePermissions;
-    if (filePermissionsValue == null) {
-      filePermissions = _defaultFilePermissions;
-    } else if (filePermissionsValue is int) {
-      filePermissions = filePermissionsValue;
-    } else {
-      throw ProviderConfigException(
-        'uploads.file_permissions must be an integer',
-      );
-    }
+    final filePermissions =
+        parseIntLike(
+          map['file_permissions'],
+          context: 'uploads.file_permissions',
+          throwOnInvalid: true,
+        ) ??
+        _defaultFilePermissions;
 
     return MultipartConfig(
       maxMemory: maxMemory,
@@ -182,4 +174,13 @@ class UploadsConfigSpec extends ConfigSpec<MultipartConfig> {
       'file_permissions': value.filePermissions,
     };
   }
+}
+
+class UploadsConfigContext extends ConfigSpecContext {
+  const UploadsConfigContext({
+    required this.engineConfig,
+    super.config,
+  });
+
+  final EngineConfig engineConfig;
 }
