@@ -14,10 +14,13 @@ String normalizeStoragePath(Config config, String path) {
   if (p.isAbsolute(trimmed)) {
     return p.normalize(trimmed);
   }
-  if (trimmed.startsWith('storage')) {
-    return p.normalize(trimmed);
-  }
   final base = _storageRoot(config);
+  if (trimmed == 'storage') {
+    return p.normalize(base);
+  }
+  if (trimmed.startsWith('storage/')) {
+    return p.normalize(p.join(base, trimmed.substring('storage/'.length)));
+  }
   return p.normalize(p.join(base, trimmed));
 }
 

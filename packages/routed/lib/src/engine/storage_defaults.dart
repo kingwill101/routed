@@ -35,6 +35,14 @@ class StorageDefaults {
     if (p.isAbsolute(trimmed)) {
       return p.normalize(trimmed);
     }
+    if (trimmed == 'storage') {
+      return storageBase;
+    }
+    if (trimmed.startsWith('storage/')) {
+      return p.normalize(
+        p.join(storageBase, trimmed.substring('storage/'.length)),
+      );
+    }
     return p.normalize(p.join(storageBase, trimmed));
   }
 }
