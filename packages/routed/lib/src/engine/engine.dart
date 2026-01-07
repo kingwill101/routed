@@ -39,7 +39,9 @@ import 'package:routed/src/router/router_group_builder.dart';
 import 'package:routed/src/router/types.dart';
 import 'package:routed/src/runtime/shutdown.dart';
 import 'package:routed/src/static_files.dart';
+import 'package:routed/src/support/named_registry.dart';
 import 'package:routed/src/utils/debug.dart';
+import 'package:routed/src/validation/validator.dart';
 import 'package:routed/src/websocket/websocket_handler.dart';
 
 import '../support/zone.dart';
@@ -521,6 +523,18 @@ class Engine with StaticFileHandler, ContainerMixin {
       errorHandling: other.errorHooks,
       configOptions: other._configOptions,
     );
+    if (other.container.has<RoutePatternRegistry>()) {
+      final registry = other.container.get<RoutePatternRegistry>();
+      engine.container.instance<RoutePatternRegistry>(
+        RoutePatternRegistry.clone(registry),
+      );
+    }
+    if (other.container.has<ValidationRuleRegistry>()) {
+      final registry = other.container.get<ValidationRuleRegistry>();
+      engine.container.instance<ValidationRuleRegistry>(
+        ValidationRuleRegistry.clone(registry),
+      );
+    }
     engine._mounts.addAll(other._mounts);
     engine._engineRoutes.addAll(other._engineRoutes);
     engine.middlewares.addAll(other.middlewares);
@@ -663,6 +677,7 @@ class Engine with StaticFileHandler, ContainerMixin {
     _ensureDefaultRouterMounted();
     _engineRoutes.clear();
     _routesByName = {};
+    final patternRegistry = _resolveRoutePatterns();
 
     final registry = container.has<MiddlewareRegistry>()
         ? container.get<MiddlewareRegistry>()
@@ -706,6 +721,7 @@ class Engine with StaticFileHandler, ContainerMixin {
             final v = await r.handler(ctx);
             return v is Response ? v : ctx.response;
           },
+          patternRegistry: patternRegistry,
           name: r.name,
           middlewares: allMiddlewares,
           constraints: r.constraints,
@@ -739,7 +755,10 @@ class Engine with StaticFileHandler, ContainerMixin {
           ...resolvedMountMiddlewares,
           ...ws.finalMiddlewares,
         ];
-        final patternData = EngineRoute._buildUriPattern(combinedPath);
+        final patternData = EngineRoute._buildUriPattern(
+          combinedPath,
+          patternRegistry,
+        );
 
         _wsRoutes[combinedPath] = WebSocketEngineRoute(
           path: combinedPath,
@@ -747,6 +766,7 @@ class Engine with StaticFileHandler, ContainerMixin {
           pattern: patternData.pattern,
           paramInfo: patternData.paramInfo,
           middlewares: allMiddlewares,
+          patternRegistry: patternRegistry,
         );
       }
     }
@@ -779,6 +799,10 @@ class Engine with StaticFileHandler, ContainerMixin {
     _routesInitialized = false;
     _engineRoutes.clear();
     _routesByName = {};
+  }
+
+  RoutePatternRegistry _resolveRoutePatterns() {
+    return requireRoutePatternRegistry(container);
   }
 
   List<Middleware> _resolveMiddlewares(
@@ -896,13 +920,17 @@ class Engine with StaticFileHandler, ContainerMixin {
     List<Middleware> middlewares = const [],
   }) {
     _markRoutesDirty();
-    final patternData = EngineRoute._buildUriPattern(path);
+    final patternData = EngineRoute._buildUriPattern(
+      path,
+      _resolveRoutePatterns(),
+    );
     _wsRoutes[path] = WebSocketEngineRoute(
       path: path,
       handler: handler,
       pattern: patternData.pattern,
       paramInfo: patternData.paramInfo,
       middlewares: middlewares,
+      patternRegistry: _resolveRoutePatterns(),
     );
   }
 

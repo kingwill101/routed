@@ -33,10 +33,12 @@ class EngineRoute {
   final List<Middleware> middlewares;
 
   /// Compiled regex pattern for matching URLs.
-  final RegExp _uriPattern;
+  late final RegExp _uriPattern;
 
   /// Map of parameter names to their type info.
-  final Map<String, ParamInfo> _parameterPatterns;
+  late final Map<String, ParamInfo> _parameterPatterns;
+
+  final RoutePatternRegistry _patternRegistry;
 
   /// Route constraints for additional matching rules.
   ///
@@ -53,22 +55,31 @@ class EngineRoute {
     required this.method,
     required this.path,
     required this.handler,
+    required RoutePatternRegistry patternRegistry,
     this.name,
     this.middlewares = const [],
     this.constraints = const {},
     this.isFallback = false,
-  }) : _uriPattern = _buildUriPattern(path).pattern,
-       _parameterPatterns = _buildUriPattern(path).paramInfo;
+  }) : _patternRegistry = patternRegistry {
+    final patternData = _buildUriPattern(path, _patternRegistry);
+    _uriPattern = patternData.pattern;
+    _parameterPatterns = patternData.paramInfo;
+  }
 
   /// Creates a fallback route.
-  EngineRoute.fallback({required this.handler, this.middlewares = const []})
-    : method = '*',
-      path = '*',
-      name = null,
-      constraints = const {},
-      isFallback = true,
-      _uriPattern = RegExp('.*'),
-      _parameterPatterns = const {};
+  EngineRoute.fallback({
+    required this.handler,
+    required RoutePatternRegistry patternRegistry,
+    this.middlewares = const [],
+  }) : method = '*',
+       path = '*',
+       name = null,
+       constraints = const {},
+       isFallback = true,
+       _patternRegistry = patternRegistry {
+    _uriPattern = RegExp('.*');
+    _parameterPatterns = const {};
+  }
 
   /// Checks if a request matches this route.
   bool matches(HttpRequest request) {
@@ -172,54 +183,11 @@ class EngineRoute {
     });
   }
 
-  /// A map of custom casting functions that can be registered for specific types.
-  static final Map<String, dynamic Function(String?)> _customCastingFunctions =
-      {};
-
-  /// Registers a custom casting function for the given type.
-  ///
-  /// {@macro custom_casting}
-  static void registerCustomCasting(
-    String type,
-    dynamic Function(String?) castingFunction,
-  ) {
-    _customCastingFunctions[type] = castingFunction;
-  }
-
-  /// Unregisters a custom casting function for the given type.
-  static void unregisterCustomCasting(String type) {
-    _customCastingFunctions.remove(type);
-  }
-
   /// Casts a parameter value to the correct type.
-  static dynamic _castParameter(String? value, String type) {
-    if (value == null) return null;
-
-    final aType = getTypeDefinition(type);
-
-    if (aType != null) {
-      return aType.cast(value);
-    }
-
-    // Check for custom casting function
-    if (_customCastingFunctions.containsKey(type)) {
-      return _customCastingFunctions[type]!(value);
-    }
-
-    return value;
+  dynamic _castParameter(String? value, String type) {
+    return _patternRegistry.cast(value, type);
   }
 
-  /// {@template custom_casting}
-  /// To register a custom casting type you must use [EngineRoute.registerCustomCasting].
-  ///
-  /// This allows you to define how route parameters are converted from their
-  /// string representation to a specific Dart type.
-  ///
-  /// Example:
-  /// ```dart
-  /// EngineRoute.registerCustomCasting('bool', (String? value) => value == 'true');
-  /// ```
-  /// {@endtemplate}
   /// Validates route constraints against a request.
   bool validateConstraints(HttpRequest request) {
     // Get route params extracted at runtime
@@ -240,7 +208,6 @@ class EngineRoute {
       }
 
       // Otherwise, treat constraint as a regex pattern for the same-named path param
-      /// {@macro custom_casting}
       final paramValue = routeParams[key];
       if (paramValue == null) {
         // If the param doesn't exist, decide how to handle
@@ -265,7 +232,10 @@ class EngineRoute {
   }
 
   /// Builds a regex pattern for matching URIs.
-  static _PatternData _buildUriPattern(String uri) {
+  static _PatternData _buildUriPattern(
+    String uri,
+    RoutePatternRegistry patternRegistry,
+  ) {
     // If this is the fallback route, return a regex that matches everything.
     if (uri == '*' || uri == '/{__fallback:*}') {
       return _PatternData(RegExp('.*'), {});
@@ -294,9 +264,9 @@ class EngineRoute {
       final explicitType = m.group(2);
 
       // If no explicit type, check for global param pattern
-      final globalPattern = getGlobalParamPattern(paramName);
+      final globalPattern = patternRegistry.resolveParamPattern(paramName);
       final effectivePattern = explicitType != null
-          ? getPattern(explicitType)
+          ? patternRegistry.resolveTypePattern(explicitType)
           : globalPattern;
 
       paramInfo[paramName] = ParamInfo(

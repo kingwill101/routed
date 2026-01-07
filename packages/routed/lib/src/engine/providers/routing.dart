@@ -1,9 +1,10 @@
+import 'package:routed/src/config/specs/routing.dart';
 import 'package:routed/src/contracts/contracts.dart' show Config;
 import 'package:routed/src/events/event_manager.dart';
 import 'package:routed/src/events/signals.dart';
+import 'package:routed/src/validation/validator.dart';
 
 import '../../container/container.dart' show Container;
-import '../../engine/config.dart' show EtagStrategy;
 import '../../engine/engine.dart';
 import '../../provider/provider.dart';
 
@@ -22,42 +23,22 @@ import '../../provider/provider.dart';
 class RoutingServiceProvider extends ServiceProvider
     with ProvidesDefaultConfig {
   Engine? _engine;
+  static const RoutingConfigSpec spec = RoutingConfigSpec();
 
   @override
-  ConfigDefaults get defaultConfig => const ConfigDefaults(
-    docs: [
-      ConfigDocEntry(
-        path: 'routing.redirect_trailing_slash',
-        type: 'bool',
-        description: 'Automatically redirect /path/ to /path.',
-        defaultValue: true,
-      ),
-      ConfigDocEntry(
-        path: 'routing.handle_method_not_allowed',
-        type: 'bool',
-        description:
-            'Return 405 responses when a route exists but the method does not.',
-        defaultValue: true,
-      ),
-      ConfigDocEntry(
-        path: 'routing.default_options',
-        type: 'bool',
-        description:
-            'Serve automatic OPTIONS responses enumerating allowed methods when no handler is defined.',
-        defaultValue: true,
-      ),
-      ConfigDocEntry(
-        path: 'routing.etag.strategy',
-        type: 'string',
-        description:
-            'Default ETag strategy used by conditional request helpers (disabled, strong, weak).',
-        defaultValue: 'disabled',
-      ),
-    ],
-  );
+  ConfigDefaults get defaultConfig =>
+      ConfigDefaults(docs: spec.docs(), values: spec.defaultsWithRoot());
 
   @override
   void register(Container container) {
+    if (!container.has<RoutePatternRegistry>()) {
+      container.instance<RoutePatternRegistry>(RoutePatternRegistry.defaults());
+    }
+    if (!container.has<ValidationRuleRegistry>()) {
+      container.instance<ValidationRuleRegistry>(
+        ValidationRuleRegistry.defaults(),
+      );
+    }
     // Register event manager as a singleton
     container.singleton<EventManager>((c) async => EventManager());
   }
@@ -126,69 +107,23 @@ class RoutingServiceProvider extends ServiceProvider
 
   void _applyRoutingConfig(Engine engine, Config config) {
     final current = engine.config;
-    final redirectTrailingSlash = _resolveFlag(
-      config.get('routing.redirect_trailing_slash'),
-      fallback: current.redirectTrailingSlash,
-    );
-    final handleMethodNotAllowed = _resolveFlag(
-      config.get('routing.handle_method_not_allowed'),
-      fallback: current.handleMethodNotAllowed,
-    );
-    final defaultOptionsEnabled = _resolveFlag(
-      config.get('routing.default_options'),
-      fallback: current.defaultOptionsEnabled,
-    );
-    final etagStrategy = _parseEtagStrategy(
-      config.get('routing.etag.strategy'),
-      current.etagStrategy,
+    final resolved = spec.resolve(
+      config,
+      context: RoutingConfigContext(config: config, engineConfig: current),
     );
 
-    if (redirectTrailingSlash != current.redirectTrailingSlash ||
-        handleMethodNotAllowed != current.handleMethodNotAllowed ||
-        defaultOptionsEnabled != current.defaultOptionsEnabled ||
-        etagStrategy != current.etagStrategy) {
+    if (resolved.redirectTrailingSlash != current.redirectTrailingSlash ||
+        resolved.handleMethodNotAllowed != current.handleMethodNotAllowed ||
+        resolved.defaultOptionsEnabled != current.defaultOptionsEnabled ||
+        resolved.etagStrategy != current.etagStrategy) {
       engine.updateConfig(
         current.copyWith(
-          redirectTrailingSlash: redirectTrailingSlash,
-          handleMethodNotAllowed: handleMethodNotAllowed,
-          defaultOptionsEnabled: defaultOptionsEnabled,
-          etagStrategy: etagStrategy,
+          redirectTrailingSlash: resolved.redirectTrailingSlash,
+          handleMethodNotAllowed: resolved.handleMethodNotAllowed,
+          defaultOptionsEnabled: resolved.defaultOptionsEnabled,
+          etagStrategy: resolved.etagStrategy,
         ),
       );
     }
-  }
-
-  bool _resolveFlag(Object? value, {required bool fallback}) {
-    if (value is bool) {
-      return value;
-    }
-    if (value is String) {
-      final normalized = value.toLowerCase();
-      if (normalized == 'true') {
-        return true;
-      }
-      if (normalized == 'false') {
-        return false;
-      }
-    }
-    return fallback;
-  }
-
-  EtagStrategy _parseEtagStrategy(Object? value, EtagStrategy fallback) {
-    if (value is EtagStrategy) {
-      return value;
-    }
-    if (value is String) {
-      switch (value.toLowerCase()) {
-        case 'disabled':
-        case 'none':
-          return EtagStrategy.disabled;
-        case 'weak':
-          return EtagStrategy.weak;
-        case 'strong':
-          return EtagStrategy.strong;
-      }
-    }
-    return fallback;
   }
 }

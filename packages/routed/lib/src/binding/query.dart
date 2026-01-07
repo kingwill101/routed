@@ -27,8 +27,13 @@ class QueryBinding extends Binding {
     bool bail = false,
     Map<String, String>? messages,
   }) async {
-    // Create a validator with the provided rules.
-    final validator = Validator.make(rules, bail: bail, messages: messages);
+    final registry = requireValidationRegistry(context.container);
+    final validator = Validator.make(
+      rules,
+      registry: registry,
+      bail: bail,
+      messages: messages,
+    );
 
     // Validate the query parameters in the context's query cache.
     final errors = validator.validate(context.queryCache);

@@ -67,20 +67,25 @@ Built-in types include `int`, `double`, `string`, `uuid`, `slug`, `word`, `date`
 
 Register reusable patterns and casts. The cast function transforms the matched string into the value stored in `ctx.params` (and `ctx.param<T>` respects it):
 
+> Note: `RoutePatternRegistry` is registered by `RoutingServiceProvider`. If you construct `Engine(includeDefaultProviders: false)`, register that provider (or register the registry manually) before calling `engine.container.get<RoutePatternRegistry>()`.
+
 ```dart
-registerCustomType(
+final engine = Engine();
+final patterns = engine.container.get<RoutePatternRegistry>();
+
+patterns.registerType(
   'bool',
   r'true|false',
-  (value) => value == 'true',
+  cast: (value) => value == 'true',
 );
 
-registerParamPattern('token', r'[A-Z0-9]{32}');
+patterns.registerParamPattern('token', r'[A-Z0-9]{32}');
 
-router.get('/features/{enabled:bool}', (ctx) {
+engine.get('/features/{enabled:bool}', (ctx) {
   final enabled = ctx.params['enabled'] as bool;
 });
 
-router.get('/invite/{token}', (ctx) {
+engine.get('/invite/{token}', (ctx) {
   // Matches registered token pattern
   final token = ctx.params['token'] as String?;
 });

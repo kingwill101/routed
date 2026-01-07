@@ -430,7 +430,13 @@ class MultipartBinding extends Binding {
     final multipartForm = await context.multipartForm;
     final data = multipartForm.fields;
 
-    final validator = Validator.make(rules, bail: bail, messages: messages);
+    final registry = requireValidationRegistry(context.container);
+    final validator = Validator.make(
+      rules,
+      registry: registry,
+      bail: bail,
+      messages: messages,
+    );
 
     for (final file in multipartForm.files) {
       data[file.name] = file;

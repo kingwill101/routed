@@ -45,8 +45,10 @@ class FormBinding extends Binding {
     Map<String, String>? messages,
   }) async {
     final decoded = await _decodedBody(context); // Decode the request body.
+    final registry = requireValidationRegistry(context.container);
     final validator = Validator.make(
       rules,
+      registry: registry,
       bail: bail,
       messages: messages,
     ); // Create a validator with the rules.

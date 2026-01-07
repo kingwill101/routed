@@ -578,6 +578,7 @@ extension ServerExtension on Engine {
       method: 'WEBSOCKET',
       path: route.path,
       handler: (ctx) => ctx.response,
+      patternRegistry: _resolveRoutePatterns(),
     );
 
     manager?.publish(BeforeRoutingEvent(context));

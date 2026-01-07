@@ -7,9 +7,9 @@ library;
 export 'src/validation/validator.dart'
     show
         ValidationRuleFactory,
+        ValidationRuleRegistry,
         RuleWithOptions,
-        parseRules,
-        kKnownRuleFactories;
+        parseRules;
 export 'src/validation/validation_error.dart';
 export 'src/validation/rule.dart' show ValidationRule;
 export 'src/validation/context_aware_rule.dart';
