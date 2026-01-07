@@ -1,6 +1,7 @@
 import 'package:routed/src/cache/cache_manager.dart';
-import 'package:routed/src/config/specs/session.dart';
 import 'package:routed/src/config/spec.dart';
+import 'package:routed/src/config/specs/session.dart';
+import 'package:routed/src/config/specs/session_drivers.dart';
 import 'package:routed/src/container/container.dart';
 import 'package:routed/src/contracts/cache/repository.dart' as cache;
 import 'package:routed/src/contracts/contracts.dart' show Config;
@@ -307,6 +308,10 @@ class SessionServiceProvider extends ServiceProvider
   static bool _defaultsRegistered = false;
   bool _managesConfig = false;
   static const SessionConfigSpec spec = SessionConfigSpec();
+  static const SessionCookieDriverSpec _cookieSpec = SessionCookieDriverSpec();
+  static const SessionFileDriverSpec _fileSpec = SessionFileDriverSpec();
+  static const SessionArrayDriverSpec _arraySpec = SessionArrayDriverSpec();
+  static const SessionCacheDriverSpec _cacheSpec = SessionCacheDriverSpec();
 
   /// Default configuration as understood by the framework.
   @override
@@ -427,29 +432,13 @@ class SessionServiceProvider extends ServiceProvider
   }
 
   static SessionConfig _buildFileDriver(SessionDriverBuilderContext context) {
-    final raw = context.raw;
-    final configuredPath =
-        parseStringLike(
-          raw['files'],
-          context: 'session.files',
-          allowEmpty: true,
-          coerceNonString: true,
-          throwOnInvalid: false,
-        ) ??
-        parseStringLike(
-          raw['storage_path'],
-          context: 'session.storage_path',
-          allowEmpty: true,
-          coerceNonString: true,
-          throwOnInvalid: false,
-        ) ??
-        parseStringLike(
-          raw['path'],
-          context: 'session.path',
-          allowEmpty: true,
-          coerceNonString: true,
-          throwOnInvalid: false,
-        );
+    final specContext = SessionDriverSpecContext(
+      driver: context.driver,
+      pathBase: 'session',
+      config: context.rootConfig,
+    );
+    final resolved = _fileSpec.fromMap(context.raw, context: specContext);
+    final configuredPath = resolved.storagePath;
 
     final storageDefaults = context.storageDefaults;
     final storagePath = () {
@@ -474,7 +463,7 @@ class SessionServiceProvider extends ServiceProvider
       maxAge: context.lifetime,
       expireOnClose: context.expireOnClose,
       options: context.options,
-      lottery: context.lottery,
+      lottery: resolved.lottery ?? context.lottery,
     );
   }
 
@@ -500,19 +489,6 @@ class SessionServiceProvider extends ServiceProvider
     );
   }
 
-  static String _resolveCacheStoreName(SessionDriverBuilderContext context) {
-    final store = context.raw['store'];
-    if (store == null) {
-      return context.driver == 'database' ? 'database' : context.driver;
-    }
-    return parseStringLike(
-      store,
-      context: 'session.store',
-      allowEmpty: true,
-      throwOnInvalid: true,
-    )!;
-  }
-
   static SessionConfig _buildCacheBackedDriver(
     SessionDriverBuilderContext context,
   ) {
@@ -523,7 +499,13 @@ class SessionServiceProvider extends ServiceProvider
       );
     }
 
-    final storeName = _resolveCacheStoreName(context);
+    final specContext = SessionDriverSpecContext(
+      driver: context.driver,
+      pathBase: 'session',
+      config: context.rootConfig,
+    );
+    final resolved = _cacheSpec.fromMap(context.raw, context: specContext);
+    final storeName = resolved.resolveStoreName(context.driver);
     final repository = cacheManager.store(storeName);
 
     final store = CacheSessionStore(
@@ -556,7 +538,13 @@ class SessionServiceProvider extends ServiceProvider
         'Cache manager is required for cache-backed session drivers.',
       );
     }
-    final storeName = _resolveCacheStoreName(context);
+    final specContext = SessionDriverSpecContext(
+      driver: context.driver,
+      pathBase: 'session',
+      config: context.rootConfig,
+    );
+    final resolved = _cacheSpec.fromMap(context.raw, context: specContext);
+    final storeName = resolved.resolveStoreName(context.driver);
     if (!cacheManager.hasStore(storeName)) {
       final available = cacheManager.storeNames;
       final hint = available.isEmpty
@@ -575,60 +563,22 @@ class SessionServiceProvider extends ServiceProvider
   static List<ConfigDocEntry> _cookieDriverDocs(
     SessionDriverDocContext context,
   ) {
-    return <ConfigDocEntry>[
-      ConfigDocEntry(
-        path: context.path('encrypt'),
-        type: 'bool',
-        description:
-            'Controls whether cookie-based session payloads are encrypted.',
-      ),
-    ];
+    return _cookieSpec.docs(pathBase: context.pathBase);
   }
 
   static List<ConfigDocEntry> _fileDriverDocs(SessionDriverDocContext context) {
-    return <ConfigDocEntry>[
-      ConfigDocEntry(
-        path: context.path('files'),
-        type: 'string',
-        description:
-            'Directory path used to persist session files. Defaults to '
-            'storage/framework/sessions based on your storage configuration.',
-        metadata: const {
-          'default_note':
-              'Computed from storage defaults (storage/framework/sessions).',
-          'validation': 'Must resolve to an accessible directory path.',
-        },
-      ),
-      ConfigDocEntry(
-        path: context.path('lottery'),
-        type: 'list<int>',
-        description:
-            'Cleanup lottery odds for pruning stale sessions (e.g., [2, 100]).',
-        defaultValue: const [2, 100],
-        metadata: const {'validation': 'Provide two integers [wins, total].'},
-      ),
-    ];
+    return _fileSpec.docs(pathBase: context.pathBase);
   }
 
   static List<ConfigDocEntry> _arrayDriverDocs(
     SessionDriverDocContext context,
-  ) => const <ConfigDocEntry>[];
+  ) =>
+      _arraySpec.docs(pathBase: context.pathBase);
 
   static List<ConfigDocEntry> _cacheBackedDriverDocs(
     SessionDriverDocContext context,
   ) {
-    return <ConfigDocEntry>[
-      ConfigDocEntry(
-        path: context.path('store'),
-        type: 'string',
-        description:
-            'Cache store name used when persisting sessions via cache-backed drivers. '
-            'Defaults to the driver name when omitted.',
-        metadata: const {
-          'validation': 'Must match a configured cache store name.',
-        },
-      ),
-    ];
+    return _cacheSpec.docs(pathBase: context.pathBase);
   }
 
   /// Convenience wrapper around [SessionDriverRegistry.register].
