@@ -42,9 +42,10 @@ void main() {
         final localClient = TestClient(RoutedRequestHandler(engine));
         for (final method in methods) {
           final response = await localClient.request(method, '/test');
-          response
-            ..assertStatus(200)
-            ..assertBodyEquals(method);
+          response.assertStatus(200);
+          if (method != 'HEAD') {
+            response.assertBodyEquals(method);
+          }
         }
 
         await localClient.close();

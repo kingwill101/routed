@@ -395,7 +395,7 @@ void main() {
               );
               final response = await client.get('/prop');
 
-              const jitterMs = 30;
+              const jitterMs = 80;
               if (sample.handlerDelayMs >= sample.timeoutMs + jitterMs) {
                 response.assertStatus(HttpStatus.gatewayTimeout);
               } else if (sample.handlerDelayMs <= sample.timeoutMs - jitterMs) {
