@@ -3,7 +3,7 @@ import 'dart:io';
 
 import 'package:args/args.dart';
 import 'package:args/command_runner.dart';
-import 'package:routed/console.dart' ;
+import 'package:routed/console.dart';
 
 /// RoutedCommandRunner centralizes global flags and command registration.
 ///

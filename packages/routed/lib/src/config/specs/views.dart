@@ -36,40 +36,36 @@ class ViewConfigSpec extends ConfigSpec<ViewSettings> {
   String get root => 'view';
 
   @override
-  Schema? get schema =>
-      ConfigSchema.object(
-        title: 'View Configuration',
-        description: 'Template engine and view rendering settings.',
-        properties: {
-          'engine': ConfigSchema.string(
+  Schema? get schema => ConfigSchema.object(
+    title: 'View Configuration',
+    description: 'Template engine and view rendering settings.',
+    properties: {
+      'engine': ConfigSchema.string(
         description: 'View engine identifier (e.g. liquid).',
         defaultValue: _defaultViewEngine,
       ),
-          'directory': ConfigSchema.string(
+      'directory': ConfigSchema.string(
         description: 'Path to templates relative to app root or disk.',
         defaultValue: _defaultViewDirectory,
       ),
-          'cache': ConfigSchema.boolean(
+      'cache': ConfigSchema.boolean(
         description: 'Enable template caching in production environments.',
         defaultValue: _defaultViewCache,
       ),
-          'disk': ConfigSchema.string(
+      'disk': ConfigSchema.string(
         description: 'Optional storage disk to source templates from.',
       ),
-        },
-      );
+    },
+  );
 
   @override
-  ViewSettings fromMap(
-    Map<String, dynamic> map, {
-    ConfigSpecContext? context,
-  }) {
+  ViewSettings fromMap(Map<String, dynamic> map, {ConfigSpecContext? context}) {
     final defaultsMap = defaults(context: context);
-    final defaultEngine = defaultsMap['engine'] as String? ?? _defaultViewEngine;
+    final defaultEngine =
+        defaultsMap['engine'] as String? ?? _defaultViewEngine;
     final defaultDirectory =
         defaultsMap['directory'] as String? ?? _defaultViewDirectory;
-    final defaultCache =
-        defaultsMap['cache'] as bool? ?? _defaultViewCache;
+    final defaultCache = defaultsMap['cache'] as bool? ?? _defaultViewCache;
 
     final directoryRaw = parseStringLike(
       map['directory'],
@@ -77,10 +73,9 @@ class ViewConfigSpec extends ConfigSpec<ViewSettings> {
       allowEmpty: true,
       throwOnInvalid: true,
     );
-    final directory =
-        (directoryRaw == null || directoryRaw.isEmpty)
-            ? defaultDirectory
-            : directoryRaw;
+    final directory = (directoryRaw == null || directoryRaw.isEmpty)
+        ? defaultDirectory
+        : directoryRaw;
 
     final cache =
         parseBoolLike(

@@ -16,40 +16,35 @@ enum RateLimitKeyType { ip, header }
 class RateLimitKeyConfig {
   const RateLimitKeyConfig.ip() : type = RateLimitKeyType.ip, header = null;
 
-  const RateLimitKeyConfig.header(this.header)
-    : type = RateLimitKeyType.header;
+  const RateLimitKeyConfig.header(this.header) : type = RateLimitKeyType.header;
 
-  factory RateLimitKeyConfig.fromMap(
-    Object? raw, {
-    required String context,
-  }) {
+  factory RateLimitKeyConfig.fromMap(Object? raw, {required String context}) {
     if (raw == null) {
       return const RateLimitKeyConfig.ip();
     }
     final map = stringKeyedMap(raw, context);
-    final typeRaw =
-        parseStringLike(
-          map['type'],
-          context: '$context.type',
-          allowEmpty: true,
-          coerceNonString: true,
-          throwOnInvalid: true,
-        );
-    final type =
-        (typeRaw == null || typeRaw.isEmpty) ? 'ip' : typeRaw.toLowerCase();
+    final typeRaw = parseStringLike(
+      map['type'],
+      context: '$context.type',
+      allowEmpty: true,
+      coerceNonString: true,
+      throwOnInvalid: true,
+    );
+    final type = (typeRaw == null || typeRaw.isEmpty)
+        ? 'ip'
+        : typeRaw.toLowerCase();
 
     switch (type) {
       case 'ip':
         return const RateLimitKeyConfig.ip();
       case 'header':
-        final header =
-            parseStringLike(
-              map['header'],
-              context: '$context.header',
-              allowEmpty: false,
-              coerceNonString: true,
-              throwOnInvalid: true,
-            );
+        final header = parseStringLike(
+          map['header'],
+          context: '$context.header',
+          allowEmpty: false,
+          coerceNonString: true,
+          throwOnInvalid: true,
+        );
         if (header == null || header.isEmpty) {
           throw ProviderConfigException('$context.header must be a string');
         }
@@ -95,57 +90,52 @@ class RateLimitPolicyConfig {
     if (!map.containsKey('match')) {
       match = '*';
     } else {
-      final raw =
-          parseStringLike(
-            map['match'],
-            context: '$contextPath.match',
-            allowEmpty: true,
-            throwOnInvalid: true,
-          );
+      final raw = parseStringLike(
+        map['match'],
+        context: '$contextPath.match',
+        allowEmpty: true,
+        throwOnInvalid: true,
+      );
       match = (raw == null || raw.isEmpty) ? '*' : raw;
     }
 
     String? name;
     if (map.containsKey('name')) {
-      final raw =
-          parseStringLike(
-            map['name'],
-            context: '$contextPath.name',
-            allowEmpty: true,
-            throwOnInvalid: true,
-          );
+      final raw = parseStringLike(
+        map['name'],
+        context: '$contextPath.name',
+        allowEmpty: true,
+        throwOnInvalid: true,
+      );
       name = (raw == null || raw.isEmpty) ? null : raw;
     }
     name ??= match.isEmpty ? '*' : match;
 
     String? method;
     if (map.containsKey('method')) {
-      final raw =
-          parseStringLike(
-            map['method'],
-            context: '$contextPath.method',
-            allowEmpty: true,
-            throwOnInvalid: true,
-          );
+      final raw = parseStringLike(
+        map['method'],
+        context: '$contextPath.method',
+        allowEmpty: true,
+        throwOnInvalid: true,
+      );
       method = (raw == null || raw.isEmpty) ? null : raw;
     }
 
-    int? intFrom(String key) =>
-        map.containsKey(key)
-            ? parseIntLike(
-              map[key],
-              context: '$contextPath.$key',
-              throwOnInvalid: true,
-            )
-            : null;
-    Duration? durationFrom(String key) =>
-        map.containsKey(key)
-            ? parseDurationLike(
-              map[key],
-              context: '$contextPath.$key',
-              throwOnInvalid: true,
-            )
-            : null;
+    int? intFrom(String key) => map.containsKey(key)
+        ? parseIntLike(
+            map[key],
+            context: '$contextPath.$key',
+            throwOnInvalid: true,
+          )
+        : null;
+    Duration? durationFrom(String key) => map.containsKey(key)
+        ? parseDurationLike(
+            map[key],
+            context: '$contextPath.$key',
+            throwOnInvalid: true,
+          )
+        : null;
 
     final capacity =
         intFrom('limit') ??
@@ -179,9 +169,9 @@ class RateLimitPolicyConfig {
 
     final failover = map.containsKey('failover')
         ? RateLimitConfig.parseFailover(
-              map['failover'],
-              context: '$contextPath.failover',
-            )
+            map['failover'],
+            context: '$contextPath.failover',
+          )
         : null;
 
     return RateLimitPolicyConfig(
@@ -280,15 +270,15 @@ class RateLimitConfig {
         ) ??
         false;
 
-    final backendRaw =
-        parseStringLike(
-          map['backend'],
-          context: 'rate_limit.backend',
-          allowEmpty: true,
-          throwOnInvalid: true,
-        );
-    final backend =
-        (backendRaw == null || backendRaw.isEmpty) ? 'memory' : backendRaw;
+    final backendRaw = parseStringLike(
+      map['backend'],
+      context: 'rate_limit.backend',
+      allowEmpty: true,
+      throwOnInvalid: true,
+    );
+    final backend = (backendRaw == null || backendRaw.isEmpty)
+        ? 'memory'
+        : backendRaw;
 
     final failover =
         parseFailover(map['failover'], context: 'rate_limit.failover') ??
@@ -296,13 +286,12 @@ class RateLimitConfig {
 
     String? store;
     if (map.containsKey('store')) {
-      final storeRaw =
-          parseStringLike(
-            map['store'],
-            context: 'rate_limit.store',
-            allowEmpty: true,
-            throwOnInvalid: true,
-          );
+      final storeRaw = parseStringLike(
+        map['store'],
+        context: 'rate_limit.store',
+        allowEmpty: true,
+        throwOnInvalid: true,
+      );
       store = (storeRaw == null || storeRaw.isEmpty) ? null : storeRaw;
     }
 
@@ -355,14 +344,13 @@ class RateLimitConfig {
     required String context,
   }) {
     if (raw == null) return null;
-    final value =
-        parseStringLike(
-          raw,
-          context: context,
-          allowEmpty: true,
-          coerceNonString: true,
-          throwOnInvalid: true,
-        )?.toLowerCase().trim();
+    final value = parseStringLike(
+      raw,
+      context: context,
+      allowEmpty: true,
+      coerceNonString: true,
+      throwOnInvalid: true,
+    )?.toLowerCase().trim();
     if (value == null || value.isEmpty) {
       return null;
     }
@@ -401,75 +389,74 @@ class RateLimitConfigSpec extends ConfigSpec<RateLimitConfig> {
   String get root => 'rate_limit';
 
   @override
-  Schema? get schema =>
-      ConfigSchema.object(
-        title: 'Rate Limit Configuration',
-        description: 'HTTP rate limiting and throttling settings.',
-        properties: {
-          'enabled': ConfigSchema.boolean(
+  Schema? get schema => ConfigSchema.object(
+    title: 'Rate Limit Configuration',
+    description: 'HTTP rate limiting and throttling settings.',
+    properties: {
+      'enabled': ConfigSchema.boolean(
         description: 'Enable rate limiting middleware.',
         defaultValue: false,
       ),
-          'backend': ConfigSchema.string(
+      'backend': ConfigSchema.string(
         description:
             'Backend hint ("memory" uses array store, "redis" expects a Redis-backed cache store).',
         defaultValue: 'memory',
       ),
-          'failover': ConfigSchema.string(
+      'failover': ConfigSchema.string(
         description:
             'Failover mode when the backing store is unavailable (allow, block, local).',
         options: ['allow', 'block', 'local'],
         defaultValue: 'allow',
       ),
-          'store': ConfigSchema.string(
+      'store': ConfigSchema.string(
         description:
             'Cache store name to use for rate limit counters (defaults to cache.default).',
       ),
-          'policies': ConfigSchema.list(
+      'policies': ConfigSchema.list(
         description: 'Array of rate limit policies (match, capacity, key).',
-            items: ConfigSchema.object(
-              properties: {
-                'name': ConfigSchema.string(),
-                'match': ConfigSchema.string(defaultValue: '*'),
-                'method': ConfigSchema.string(),
-                'strategy': ConfigSchema.string(
-                  description:
+        items: ConfigSchema.object(
+          properties: {
+            'name': ConfigSchema.string(),
+            'match': ConfigSchema.string(defaultValue: '*'),
+            'method': ConfigSchema.string(),
+            'strategy': ConfigSchema.string(
+              description:
                   'Enforcement strategy (token_bucket, sliding_window, quota).',
-                  options: ['token_bucket', 'sliding_window', 'quota'],
-                  defaultValue: 'token_bucket',
-                ),
-                'limit': ConfigSchema.integer(),
-                'capacity': ConfigSchema.integer(),
-                'requests': ConfigSchema.integer(),
-                'interval': ConfigSchema.duration(),
-                'refill': ConfigSchema.duration(),
-                'window': ConfigSchema.duration(
-                  description:
+              options: ['token_bucket', 'sliding_window', 'quota'],
+              defaultValue: 'token_bucket',
+            ),
+            'limit': ConfigSchema.integer(),
+            'capacity': ConfigSchema.integer(),
+            'requests': ConfigSchema.integer(),
+            'interval': ConfigSchema.duration(),
+            'refill': ConfigSchema.duration(),
+            'window': ConfigSchema.duration(
+              description:
                   'Sliding window duration when using the sliding_window strategy.',
-                ),
-                'period': ConfigSchema.duration(
-                  description:
+            ),
+            'period': ConfigSchema.duration(
+              description:
                   'Quota reset interval when using the quota strategy.',
+            ),
+            'burst': ConfigSchema.number(),
+            'key': ConfigSchema.object(
+              properties: {
+                'type': ConfigSchema.string(
+                  options: ['ip', 'header'],
+                  defaultValue: 'ip',
                 ),
-                'burst': ConfigSchema.number(),
-                'key': ConfigSchema.object(
-                  properties: {
-                    'type': ConfigSchema.string(
-                      options: ['ip', 'header'],
-                      defaultValue: 'ip',
-                    ),
-                    'header': ConfigSchema.string(),
-                  },
-                ),
-                'failover': ConfigSchema.string(
-                  options: ['allow', 'block', 'local'],
-                ),
+                'header': ConfigSchema.string(),
               },
             ),
-            defaultValue: const [],
-          ),
-        },
-      );
+            'failover': ConfigSchema.string(
+              options: ['allow', 'block', 'local'],
+            ),
+          },
+        ),
+        defaultValue: const [],
+      ),
+    },
+  );
 
   @override
   RateLimitConfig fromMap(

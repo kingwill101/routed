@@ -19,5 +19,4 @@ dependencies:
   path: ^1.9.1
 
 dev_dependencies:
-  routed_cli:
-  test: ^1.26.3
+  test: ^1.29.0

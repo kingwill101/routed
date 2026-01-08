@@ -9,7 +9,6 @@ import 'package:file/local.dart';
 import 'package:path/path.dart' as p;
 import 'package:routed/console.dart' show CliLogger;
 
-
 import '../util/dart_exec.dart';
 import '../util/pubspec.dart';
 

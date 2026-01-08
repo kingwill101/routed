@@ -278,12 +278,9 @@ class AuthServiceProvider extends ServiceProvider with ProvidesDefaultConfig {
       case GuardType.authenticated:
         final realm =
             definition.realm == null || definition.realm!.trim().isEmpty
-                ? 'Restricted'
-                : definition.realm!;
-        return requireAuthenticated(
-          realm: realm,
-          sessionAuth: sessionAuth,
-        );
+            ? 'Restricted'
+            : definition.realm!;
+        return requireAuthenticated(realm: realm, sessionAuth: sessionAuth);
       case GuardType.roles:
         if (definition.roles.isEmpty) {
           return null;
@@ -311,10 +308,9 @@ class AuthServiceProvider extends ServiceProvider with ProvidesDefaultConfig {
       requiredClaims: settings.requiredClaims,
       jwksUri: settings.jwksUri,
       inlineKeys: settings.inlineKeys,
-      algorithms:
-          settings.algorithms.isEmpty
-              ? const <String>['RS256']
-              : settings.algorithms,
+      algorithms: settings.algorithms.isEmpty
+          ? const <String>['RS256']
+          : settings.algorithms,
       clockSkew: settings.clockSkew,
       jwksCacheTtl: settings.jwksCacheTtl,
       header: settings.header,

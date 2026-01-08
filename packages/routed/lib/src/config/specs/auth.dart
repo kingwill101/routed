@@ -56,7 +56,10 @@ class AuthConfig {
         false;
 
     final gatesMap = _mapOrEmpty(map['gates'], 'auth.gates');
-    final defaultsMap = _mapOrEmpty(gatesMap['defaults'], 'auth.gates.defaults');
+    final defaultsMap = _mapOrEmpty(
+      gatesMap['defaults'],
+      'auth.gates.defaults',
+    );
     final gateDefaults = GateDefaults.fromMap(
       defaultsMap,
       context: 'auth.gates.defaults',
@@ -122,13 +125,12 @@ class AuthJwtConfig {
           throwOnInvalid: true,
         ) ??
         false;
-    final issuer =
-        parseStringLike(
-          map['issuer'],
-          context: '$context.issuer',
-          allowEmpty: true,
-          throwOnInvalid: true,
-        );
+    final issuer = parseStringLike(
+      map['issuer'],
+      context: '$context.issuer',
+      allowEmpty: true,
+      throwOnInvalid: true,
+    );
     final audience =
         parseStringList(
           map['audience'],
@@ -147,15 +149,15 @@ class AuthJwtConfig {
           throwOnInvalid: true,
         ) ??
         const <String>[];
-    final jwksUrl =
-        parseStringLike(
-          map['jwks_url'],
-          context: '$context.jwks_url',
-          allowEmpty: true,
-          throwOnInvalid: true,
-        );
-    final jwksUri =
-        jwksUrl == null || jwksUrl.isEmpty ? null : Uri.parse(jwksUrl);
+    final jwksUrl = parseStringLike(
+      map['jwks_url'],
+      context: '$context.jwks_url',
+      allowEmpty: true,
+      throwOnInvalid: true,
+    );
+    final jwksUri = jwksUrl == null || jwksUrl.isEmpty
+        ? null
+        : Uri.parse(jwksUrl);
     final jwksCacheTtl =
         parseDurationLike(
           map['jwks_cache_ttl'],
@@ -179,8 +181,9 @@ class AuthJwtConfig {
           throwOnInvalid: true,
         ) ??
         _defaultJwtAlgorithms;
-    final normalizedAlgorithms =
-        algorithms.isEmpty ? _defaultJwtAlgorithms : algorithms;
+    final normalizedAlgorithms = algorithms.isEmpty
+        ? _defaultJwtAlgorithms
+        : algorithms;
     final inlineKeys = parseMapList(map['keys'], context: '$context.keys');
     final header =
         parseStringLike(
@@ -302,7 +305,9 @@ class OAuthIntrospectionConfig {
 
     return OAuthIntrospectionConfig(
       enabled: enabled,
-      endpoint: endpoint == null || endpoint.isEmpty ? null : Uri.parse(endpoint),
+      endpoint: endpoint == null || endpoint.isEmpty
+          ? null
+          : Uri.parse(endpoint),
       clientId: clientId,
       clientSecret: clientSecret,
       tokenTypeHint: tokenTypeHint,
@@ -340,8 +345,9 @@ class SessionRememberMeConfig {
           throwOnInvalid: true,
         ) ??
         'remember_token';
-    final resolvedCookie =
-        cookieName.trim().isEmpty ? 'remember_token' : cookieName;
+    final resolvedCookie = cookieName.trim().isEmpty
+        ? 'remember_token'
+        : cookieName;
     final duration =
         parseDurationLike(
           map['duration'],
@@ -468,10 +474,7 @@ class GateDefinition {
     return abilities;
   }
 
-  static GateDefinition? fromSpec(
-    Object? spec, {
-    required String context,
-  }) {
+  static GateDefinition? fromSpec(Object? spec, {required String context}) {
     if (spec == null) {
       return null;
     }
@@ -499,16 +502,10 @@ class GateDefinition {
           lower.startsWith('roles-any:')) {
         type = 'roles';
         any = true;
-        assignRoles(
-          value.substring(lower.indexOf(':') + 1),
-          '$context.roles',
-        );
+        assignRoles(value.substring(lower.indexOf(':') + 1), '$context.roles');
       } else if (lower.startsWith('roles:') || lower.startsWith('role:')) {
         type = 'roles';
-        assignRoles(
-          value.substring(lower.indexOf(':') + 1),
-          '$context.roles',
-        );
+        assignRoles(value.substring(lower.indexOf(':') + 1), '$context.roles');
       } else {
         type = 'roles';
         assignRoles(value, '$context.roles');
@@ -536,13 +533,12 @@ class GateDefinition {
         type = 'roles';
       }
 
-      final mode =
-          parseStringLike(
-            normalized['mode'],
-            context: '$context.mode',
-            allowEmpty: true,
-            throwOnInvalid: true,
-          )?.toLowerCase();
+      final mode = parseStringLike(
+        normalized['mode'],
+        context: '$context.mode',
+        allowEmpty: true,
+        throwOnInvalid: true,
+      )?.toLowerCase();
       if (mode == 'any') {
         any = true;
       }
@@ -615,11 +611,11 @@ class GateDefinition {
       GateType.authenticated => const {'type': 'authenticated'},
       GateType.guest => const {'type': 'guest'},
       GateType.roles => {
-          'type': any ? 'roles_any' : 'roles',
-          'roles': roles,
-          if (any) 'any': true,
-          if (allowGuest) 'allow_guest': true,
-        },
+        'type': any ? 'roles_any' : 'roles',
+        'roles': roles,
+        if (any) 'any': true,
+        if (allowGuest) 'allow_guest': true,
+      },
     };
   }
 }
@@ -632,11 +628,9 @@ class GuardDefinition {
       roles = const [],
       any = false;
 
-  const GuardDefinition.roles({
-    required this.roles,
-    this.any = false,
-  }) : type = GuardType.roles,
-       realm = null;
+  const GuardDefinition.roles({required this.roles, this.any = false})
+    : type = GuardType.roles,
+      realm = null;
 
   final GuardType type;
   final List<String> roles;
@@ -664,10 +658,7 @@ class GuardDefinition {
     return guards;
   }
 
-  static GuardDefinition? fromSpec(
-    Object? spec, {
-    required String context,
-  }) {
+  static GuardDefinition? fromSpec(Object? spec, {required String context}) {
     if (spec == null) {
       return null;
     }
@@ -723,13 +714,12 @@ class GuardDefinition {
       } else if (options.containsKey('role')) {
         assignRoles(options['role'], '$context.roles');
       }
-      final mode =
-          parseStringLike(
-            options['mode'],
-            context: '$context.mode',
-            allowEmpty: true,
-            throwOnInvalid: true,
-          )?.toLowerCase();
+      final mode = parseStringLike(
+        options['mode'],
+        context: '$context.mode',
+        allowEmpty: true,
+        throwOnInvalid: true,
+      )?.toLowerCase();
       if (mode == 'any') {
         any = true;
       }
@@ -741,13 +731,12 @@ class GuardDefinition {
           false) {
         any = true;
       }
-      realm =
-          parseStringLike(
-            options['realm'],
-            context: '$context.realm',
-            allowEmpty: true,
-            throwOnInvalid: true,
-          );
+      realm = parseStringLike(
+        options['realm'],
+        context: '$context.realm',
+        allowEmpty: true,
+        throwOnInvalid: true,
+      );
     } else {
       return null;
     }
@@ -759,8 +748,9 @@ class GuardDefinition {
     switch (type) {
       case 'authenticated':
       case 'auth':
-        final resolvedRealm =
-            realm == null || realm.trim().isEmpty ? 'Restricted' : realm.trim();
+        final resolvedRealm = realm == null || realm.trim().isEmpty
+            ? 'Restricted'
+            : realm.trim();
         return GuardDefinition.authenticated(realm: resolvedRealm);
       case 'roles':
       case 'role':
@@ -779,14 +769,14 @@ class GuardDefinition {
   Map<String, dynamic> toMap() {
     return switch (type) {
       GuardType.authenticated => {
-          'type': 'authenticated',
-          if (realm != null) 'realm': realm,
-        },
+        'type': 'authenticated',
+        if (realm != null) 'realm': realm,
+      },
       GuardType.roles => {
-          'type': any ? 'roles_any' : 'roles',
-          'roles': roles,
-          if (any) 'any': true,
-        },
+        'type': any ? 'roles_any' : 'roles',
+        'roles': roles,
+        if (any) 'any': true,
+      },
     };
   }
 }
@@ -798,176 +788,173 @@ class AuthConfigSpec extends ConfigSpec<AuthConfig> {
   String get root => 'auth';
 
   @override
-  Schema? get schema =>
-      ConfigSchema.object(
-        title: 'Authentication Configuration',
-        description: 'JWT, OAuth2, and session-based authentication settings.',
+  Schema? get schema => ConfigSchema.object(
+    title: 'Authentication Configuration',
+    description: 'JWT, OAuth2, and session-based authentication settings.',
+    properties: {
+      'jwt': ConfigSchema.object(
+        description: 'JWT Bearer authentication settings.',
         properties: {
-          'jwt': ConfigSchema.object(
-            description: 'JWT Bearer authentication settings.',
+          'enabled': ConfigSchema.boolean(
+            description: 'Enable JWT Bearer authentication middleware.',
+            defaultValue: false,
+          ),
+          'issuer': ConfigSchema.string(
+            description: 'Required issuer claim value.',
+          ),
+          'audience': ConfigSchema.list(
+            description: 'Allowed audience values (any match passes).',
+            items: ConfigSchema.string(),
+            defaultValue: const [],
+          ),
+          'required_claims': ConfigSchema.list(
+            description: 'Claims that must be present in every token.',
+            items: ConfigSchema.string(),
+            defaultValue: const [],
+          ),
+          'jwks_url': ConfigSchema.string(
+            description: 'JWKS endpoint used to resolve signing keys.',
+          ),
+          'jwks_cache_ttl': ConfigSchema.duration(
+            description: 'How long JWKS responses are cached.',
+            defaultValue: '5m',
+          ),
+          'algorithms': ConfigSchema.list(
+            description: 'Allowed signing algorithms (e.g. RS256).',
+            items: ConfigSchema.string(),
+            defaultValue: _defaultJwtAlgorithms,
+          ),
+          'clock_skew': ConfigSchema.duration(
+            description: 'Clock skew allowance for exp/nbf validation.',
+            defaultValue: '60s',
+          ),
+          'keys': ConfigSchema.list(
+            description: 'Inline JWK set used in addition to remote JWKS.',
+            items: ConfigSchema.object(additionalProperties: true),
+            defaultValue: const [],
+          ),
+          'header': ConfigSchema.string(
+            description: 'Header name inspected for bearer tokens.',
+            defaultValue: 'Authorization',
+          ),
+          'bearer_prefix': ConfigSchema.string(
+            description:
+                'Expected prefix for bearer tokens (default "Bearer ").',
+            defaultValue: 'Bearer ',
+          ),
+        },
+      ),
+      'oauth2': ConfigSchema.object(
+        description: 'OAuth2 authentication settings.',
+        properties: {
+          'introspection': ConfigSchema.object(
+            description: 'RFC 7662 token introspection middleware settings.',
             properties: {
               'enabled': ConfigSchema.boolean(
-                description: 'Enable JWT Bearer authentication middleware.',
+                description: 'Enable RFC 7662 token introspection middleware.',
                 defaultValue: false,
               ),
-              'issuer': ConfigSchema.string(
-                description: 'Required issuer claim value.',
+              'endpoint': ConfigSchema.string(
+                description: 'OAuth2 introspection endpoint URL.',
               ),
-              'audience': ConfigSchema.list(
-                description: 'Allowed audience values (any match passes).',
-                items: ConfigSchema.string(),
-                defaultValue: const [],
+              'client_id': ConfigSchema.string(
+                description:
+                    'Client identifier used when calling the introspection endpoint.',
               ),
-              'required_claims': ConfigSchema.list(
-                description: 'Claims that must be present in every token.',
-                items: ConfigSchema.string(),
-                defaultValue: const [],
+              'client_secret': ConfigSchema.string(
+                description: 'Client secret used for introspection requests.',
               ),
-              'jwks_url': ConfigSchema.string(
-                description: 'JWKS endpoint used to resolve signing keys.',
+              'token_type_hint': ConfigSchema.string(
+                description:
+                    'Optional token type hint passed to the introspection endpoint.',
               ),
-              'jwks_cache_ttl': ConfigSchema.duration(
-                description: 'How long JWKS responses are cached.',
-                defaultValue: '5m',
-              ),
-              'algorithms': ConfigSchema.list(
-                description: 'Allowed signing algorithms (e.g. RS256).',
-                items: ConfigSchema.string(),
-                defaultValue: _defaultJwtAlgorithms,
+              'cache_ttl': ConfigSchema.duration(
+                description: 'How long introspection results are cached.',
+                defaultValue: '30s',
               ),
               'clock_skew': ConfigSchema.duration(
-                description: 'Clock skew allowance for exp/nbf validation.',
+                description:
+                    'Clock skew allowance for introspection timestamps.',
                 defaultValue: '60s',
               ),
-              'keys': ConfigSchema.list(
-                description: 'Inline JWK set used in addition to remote JWKS.',
-                items: ConfigSchema.object(additionalProperties: true),
-                defaultValue: const [],
-              ),
-              'header': ConfigSchema.string(
-                description: 'Header name inspected for bearer tokens.',
-                defaultValue: 'Authorization',
-              ),
-              'bearer_prefix': ConfigSchema.string(
+              'additional': ConfigSchema.object(
                 description:
-                'Expected prefix for bearer tokens (default "Bearer ").',
-                defaultValue: 'Bearer ',
-              ),
-            },
-          ),
-          'oauth2': ConfigSchema.object(
-            description: 'OAuth2 authentication settings.',
-            properties: {
-              'introspection': ConfigSchema.object(
-                description: 'RFC 7662 token introspection middleware settings.',
-                properties: {
-                  'enabled': ConfigSchema.boolean(
-                    description: 'Enable RFC 7662 token introspection middleware.',
-                    defaultValue: false,
-                  ),
-                  'endpoint': ConfigSchema.string(
-                    description: 'OAuth2 introspection endpoint URL.',
-                  ),
-                  'client_id': ConfigSchema.string(
-                    description:
-                    'Client identifier used when calling the introspection endpoint.',
-                  ),
-                  'client_secret': ConfigSchema.string(
-                    description: 'Client secret used for introspection requests.',
-                  ),
-                  'token_type_hint': ConfigSchema.string(
-                    description:
-                    'Optional token type hint passed to the introspection endpoint.',
-                  ),
-                  'cache_ttl': ConfigSchema.duration(
-                    description: 'How long introspection results are cached.',
-                    defaultValue: '30s',
-                  ),
-                  'clock_skew': ConfigSchema.duration(
-                    description:
-                    'Clock skew allowance for introspection timestamps.',
-                    defaultValue: '60s',
-                  ),
-                  'additional': ConfigSchema.object(
-                    description:
                     'Additional form parameters appended to introspection requests.',
-                    additionalProperties: true,
-                  ).withDefault(const {}),
-                },
-              ),
-            },
-          ),
-          'session': ConfigSchema.object(
-            description: 'Session-based authentication settings.',
-            properties: {
-              'remember_me': ConfigSchema.object(
-                description: 'Remember-me token settings.',
-                properties: {
-                  'cookie': ConfigSchema.string(
-                    description: 'Cookie name used for remember-me tokens.',
-                    defaultValue: 'remember_token',
-                  ),
-                  'duration': ConfigSchema.duration(
-                    description:
-                    'Default lifetime applied to remember-me tokens when issued.',
-                    defaultValue: '30d',
-                  ),
-                },
-              ),
-            },
-          ),
-          'features': ConfigSchema.object(
-            description: 'Authentication feature flags.',
-            properties: {
-              'haigate': ConfigSchema.object(
-                properties: {
-                  'enabled': ConfigSchema.boolean(
-                    description:
-                    'Enable Haigate authorization registry and middleware.',
-                    defaultValue: false,
-                  ),
-                },
-              ),
-            },
-          ),
-          'gates': ConfigSchema.object(
-            description: 'Haigate authorization settings.',
-            properties: {
-              'defaults': ConfigSchema.object(
-                properties: {
-                  'denied_status': ConfigSchema.integer(
-                    description:
-                    'HTTP status returned when a gate denies access (used by default middleware).',
-                    defaultValue: HttpStatus.forbidden,
-                  ),
-                  'denied_message': ConfigSchema.string(
-                    description:
-                    'Optional body message returned when a gate denies access (used by default middleware).',
-                  ),
-                },
-              ),
-              'abilities': ConfigSchema.object(
-                description:
-                'Declarative Haigate abilities. Entries map ability names to role or authentication checks.',
                 additionalProperties: true,
               ).withDefault(const {}),
             },
+          ),
+        },
       ),
-          'guards': ConfigSchema.object(
-        description:
-            'Named guard definitions consumed by guard middleware (e.g. authenticated, roles).',
+      'session': ConfigSchema.object(
+        description: 'Session-based authentication settings.',
+        properties: {
+          'remember_me': ConfigSchema.object(
+            description: 'Remember-me token settings.',
+            properties: {
+              'cookie': ConfigSchema.string(
+                description: 'Cookie name used for remember-me tokens.',
+                defaultValue: 'remember_token',
+              ),
+              'duration': ConfigSchema.duration(
+                description:
+                    'Default lifetime applied to remember-me tokens when issued.',
+                defaultValue: '30d',
+              ),
+            },
+          ),
+        },
+      ),
+      'features': ConfigSchema.object(
+        description: 'Authentication feature flags.',
+        properties: {
+          'haigate': ConfigSchema.object(
+            properties: {
+              'enabled': ConfigSchema.boolean(
+                description:
+                    'Enable Haigate authorization registry and middleware.',
+                defaultValue: false,
+              ),
+            },
+          ),
+        },
+      ),
+      'gates': ConfigSchema.object(
+        description: 'Haigate authorization settings.',
+        properties: {
+          'defaults': ConfigSchema.object(
+            properties: {
+              'denied_status': ConfigSchema.integer(
+                description:
+                    'HTTP status returned when a gate denies access (used by default middleware).',
+                defaultValue: HttpStatus.forbidden,
+              ),
+              'denied_message': ConfigSchema.string(
+                description:
+                    'Optional body message returned when a gate denies access (used by default middleware).',
+              ),
+            },
+          ),
+          'abilities': ConfigSchema.object(
+            description:
+                'Declarative Haigate abilities. Entries map ability names to role or authentication checks.',
+            additionalProperties: true,
+          ).withDefault(const {}),
+        },
+      ),
+      'guards':
+          ConfigSchema.object(
+            description:
+                'Named guard definitions consumed by guard middleware (e.g. authenticated, roles).',
             additionalProperties: true,
           ).withDefault(const {
             'authenticated': {'type': 'authenticated', 'realm': 'Restricted'},
           }),
-        },
-      );
+    },
+  );
 
   @override
-  AuthConfig fromMap(
-    Map<String, dynamic> map, {
-    ConfigSpecContext? context,
-  }) {
+  AuthConfig fromMap(Map<String, dynamic> map, {ConfigSpecContext? context}) {
     return AuthConfig.fromMap(map);
   }
 

@@ -119,10 +119,9 @@ class RuntimeConfigSpec extends ConfigSpec<RuntimeConfig> {
     ConfigSpecContext? context,
   }) {
     final shutdownMap = map['shutdown'];
-    final shutdown =
-        shutdownMap == null
-            ? const <String, dynamic>{}
-            : stringKeyedMap(shutdownMap as Object, 'runtime.shutdown');
+    final shutdown = shutdownMap == null
+        ? const <String, dynamic>{}
+        : stringKeyedMap(shutdownMap as Object, 'runtime.shutdown');
 
     final enabled =
         parseBoolLike(
@@ -173,8 +172,10 @@ class RuntimeConfigSpec extends ConfigSpec<RuntimeConfig> {
         ) ??
         const <String>[];
 
-    final signals =
-        signalNames.map(_signalFromName).whereType<ProcessSignal>().toSet();
+    final signals = signalNames
+        .map(_signalFromName)
+        .whereType<ProcessSignal>()
+        .toSet();
 
     final normalizedGrace = grace < Duration.zero ? Duration.zero : grace;
     final normalizedForce = force < Duration.zero ? Duration.zero : force;
@@ -353,18 +354,18 @@ ShutdownConfig resolveShutdownConfig(Config config, ShutdownConfig current) {
   final hasNotify = config.has('runtime.shutdown.notify_readiness');
   final hasSignals = config.has('runtime.shutdown.signals');
 
-  final signals =
-      hasSignals
-          ? (resolved.signals.isNotEmpty ? resolved.signals : current.signals)
-          : current.signals;
+  final signals = hasSignals
+      ? (resolved.signals.isNotEmpty ? resolved.signals : current.signals)
+      : current.signals;
 
   return current.copyWith(
     enabled: hasEnabled ? resolved.enabled : current.enabled,
     gracePeriod: hasGrace ? resolved.gracePeriod : current.gracePeriod,
     forceAfter: hasForce ? resolved.forceAfter : current.forceAfter,
     exitCode: hasExitCode ? resolved.exitCode : current.exitCode,
-    notifyReadiness:
-        hasNotify ? resolved.notifyReadiness : current.notifyReadiness,
+    notifyReadiness: hasNotify
+        ? resolved.notifyReadiness
+        : current.notifyReadiness,
     signals: signals,
   );
 }

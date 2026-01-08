@@ -14,10 +14,8 @@ class CacheServiceProvider extends ServiceProvider with ProvidesDefaultConfig {
   bool _ownsManagedManager = false;
 
   @override
-  ConfigDefaults get defaultConfig => ConfigDefaults(
-    docs: spec.docs(),
-    schemas: spec.schemaWithRoot(),
-  );
+  ConfigDefaults get defaultConfig =>
+      ConfigDefaults(docs: spec.docs(), schemas: spec.schemaWithRoot());
 
   @override
   void register(Container container) {

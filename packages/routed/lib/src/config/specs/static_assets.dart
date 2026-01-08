@@ -40,14 +40,15 @@ class StaticMountConfig {
     }
     routeValue = routeValue == null || routeValue.isEmpty ? '/' : routeValue;
 
-    final diskRaw =
-        parseStringLike(
-          map['disk'],
-          context: '$contextPath.disk',
-          allowEmpty: true,
-          throwOnInvalid: true,
-        );
-    final diskName = (diskRaw == null || diskRaw.isEmpty) ? null : diskRaw.trim();
+    final diskRaw = parseStringLike(
+      map['disk'],
+      context: '$contextPath.disk',
+      allowEmpty: true,
+      throwOnInvalid: true,
+    );
+    final diskName = (diskRaw == null || diskRaw.isEmpty)
+        ? null
+        : diskRaw.trim();
 
     final pathValue =
         parseStringLike(
@@ -58,13 +59,12 @@ class StaticMountConfig {
         ) ??
         '';
 
-    final indexRaw =
-        parseStringLike(
-          map['index'],
-          context: '$contextPath.index',
-          allowEmpty: true,
-          throwOnInvalid: true,
-        );
+    final indexRaw = parseStringLike(
+      map['index'],
+      context: '$contextPath.index',
+      allowEmpty: true,
+      throwOnInvalid: true,
+    );
     final indexValue = (indexRaw == null || indexRaw.isEmpty) ? null : indexRaw;
 
     final listDirectories =
@@ -93,13 +93,12 @@ class StaticMountConfig {
       fileSystem = customFs;
     }
 
-    final rootValue =
-        parseStringLike(
-          map['root'],
-          context: '$contextPath.root',
-          allowEmpty: true,
-          throwOnInvalid: true,
-        );
+    final rootValue = parseStringLike(
+      map['root'],
+      context: '$contextPath.root',
+      allowEmpty: true,
+      throwOnInvalid: true,
+    );
 
     return StaticMountConfig(
       route: routeValue,
@@ -135,54 +134,51 @@ class StaticAssetsConfigSpec extends ConfigSpec<StaticAssetsConfig> {
   String get root => 'static';
 
   @override
-  Schema? get schema =>
-      ConfigSchema.object(
-        title: 'Static Assets Configuration',
-        description: 'Static file serving and mount point settings.',
-        properties: {
-          'enabled': ConfigSchema.boolean(
+  Schema? get schema => ConfigSchema.object(
+    title: 'Static Assets Configuration',
+    description: 'Static file serving and mount point settings.',
+    properties: {
+      'enabled': ConfigSchema.boolean(
         description: 'Enable static asset serving.',
         defaultValue: false,
       ),
-          'mounts': ConfigSchema.list(
+      'mounts': ConfigSchema.list(
         description: 'List of static mount configurations.',
-            items: ConfigSchema.object(
-              properties: {
-                'route': ConfigSchema.string(
-                  description: 'Route prefix clients use to fetch assets.',
-                  defaultValue: '/',
-                ),
-                'prefix': ConfigSchema.string(
-                  description: 'Alias for "route".',
-                ),
-                'disk': ConfigSchema.string(
-                  description: 'Storage disk that hosts the assets.',
-                ),
-                'path': ConfigSchema.string(
-                  description: 'Optional subdirectory within the disk.',
-                  defaultValue: '',
-                ),
-                'index': ConfigSchema.string(
-                  description:
-                  'Default index file served when a directory is requested.',
-                ),
-                'list_directories': ConfigSchema.boolean(
-                  description: 'Allow directory listings for this mount.',
-                  defaultValue: false,
-                ),
-                'directory_listing': ConfigSchema.boolean(
-                  description: 'Alias for "list_directories".',
-                ),
-                'root': ConfigSchema.string(
-                  description:
-                  'Absolute root directory for this mount (bypasses disks).',
-                ),
-              },
+        items: ConfigSchema.object(
+          properties: {
+            'route': ConfigSchema.string(
+              description: 'Route prefix clients use to fetch assets.',
+              defaultValue: '/',
             ),
-            defaultValue: const [],
-          ),
-        },
-      );
+            'prefix': ConfigSchema.string(description: 'Alias for "route".'),
+            'disk': ConfigSchema.string(
+              description: 'Storage disk that hosts the assets.',
+            ),
+            'path': ConfigSchema.string(
+              description: 'Optional subdirectory within the disk.',
+              defaultValue: '',
+            ),
+            'index': ConfigSchema.string(
+              description:
+                  'Default index file served when a directory is requested.',
+            ),
+            'list_directories': ConfigSchema.boolean(
+              description: 'Allow directory listings for this mount.',
+              defaultValue: false,
+            ),
+            'directory_listing': ConfigSchema.boolean(
+              description: 'Alias for "list_directories".',
+            ),
+            'root': ConfigSchema.string(
+              description:
+                  'Absolute root directory for this mount (bypasses disks).',
+            ),
+          },
+        ),
+        defaultValue: const [],
+      ),
+    },
+  );
 
   @override
   StaticAssetsConfig fromMap(

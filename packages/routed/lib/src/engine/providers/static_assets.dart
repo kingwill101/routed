@@ -39,7 +39,8 @@ class StaticAssetsServiceProvider extends ServiceProvider
         const ConfigDocEntry(
           path: 'http.middleware_sources',
           type: 'map',
-          description: 'Static asset middleware references registered globally.',
+          description:
+              'Static asset middleware references registered globally.',
           defaultValue: <String, Object?>{
             'routed.static': <String, Object?>{
               'global': <String>['routed.static.assets'],
@@ -162,8 +163,9 @@ class _StaticMount {
     required file.FileSystem fallbackFileSystem,
   }) {
     final route = _normalizeRoute(config.route);
-    final normalizedDiskName =
-        config.disk == null || config.disk!.isEmpty ? null : config.disk;
+    final normalizedDiskName = config.disk == null || config.disk!.isEmpty
+        ? null
+        : config.disk;
     final relativePath = config.path;
     final indexFile = config.index;
     final listDirectories = config.listDirectories;

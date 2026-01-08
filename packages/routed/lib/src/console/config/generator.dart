@@ -33,7 +33,9 @@ Map<String, Map<String, dynamic>> buildConfigDefaults() {
         if (schemaDefaults.isNotEmpty) {
           // Merge defaults into the specific root
           final rootDefaults = defaults.putIfAbsent(
-              root, () => <String, dynamic>{});
+            root,
+            () => <String, dynamic>{},
+          );
           if (rootDefaults is Map<String, dynamic>) {
             deepMerge(rootDefaults, schemaDefaults, override: true);
           }

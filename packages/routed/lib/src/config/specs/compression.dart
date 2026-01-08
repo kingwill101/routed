@@ -143,8 +143,9 @@ class CompressionConfigSpec extends ConfigSpec<CompressionConfig> {
     return {
       'enabled': value.enabled,
       'min_length': value.minLength,
-      'algorithms':
-          value.algorithms.map(_algorithmToken).toList(growable: false),
+      'algorithms': value.algorithms
+          .map(_algorithmToken)
+          .toList(growable: false),
       'mime_allow': value.mimeAllow,
       'mime_deny': value.mimeDeny,
     };

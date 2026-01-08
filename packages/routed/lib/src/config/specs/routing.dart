@@ -106,10 +106,7 @@ class RoutingConfig {
 }
 
 class RoutingConfigContext extends ConfigSpecContext {
-  const RoutingConfigContext({
-    required this.engineConfig,
-    super.config,
-  });
+  const RoutingConfigContext({required this.engineConfig, super.config});
 
   final EngineConfig engineConfig;
 }
@@ -121,34 +118,35 @@ class RoutingConfigSpec extends ConfigSpec<RoutingConfig> {
   String get root => 'routing';
 
   @override
-  Schema? get schema =>
-      ConfigSchema.object(
-        title: 'Routing Configuration',
-        description: 'Core routing behavior configuration.',
-        properties: {
-          'redirect_trailing_slash': ConfigSchema.boolean(
+  Schema? get schema => ConfigSchema.object(
+    title: 'Routing Configuration',
+    description: 'Core routing behavior configuration.',
+    properties: {
+      'redirect_trailing_slash': ConfigSchema.boolean(
         description: 'Automatically redirect /path/ to /path.',
         defaultValue: true,
       ),
-          'handle_method_not_allowed': ConfigSchema.boolean(
-            description: 'Return 405 responses when a route exists but the method does not.',
+      'handle_method_not_allowed': ConfigSchema.boolean(
+        description:
+            'Return 405 responses when a route exists but the method does not.',
         defaultValue: true,
       ),
-          'default_options': ConfigSchema.boolean(
-            description: 'Serve automatic OPTIONS responses enumerating allowed methods when no handler is defined.',
+      'default_options': ConfigSchema.boolean(
+        description:
+            'Serve automatic OPTIONS responses enumerating allowed methods when no handler is defined.',
         defaultValue: true,
       ),
-          'etag': ConfigSchema.object(
-            description: 'ETag generation settings.',
-            properties: {
-              'strategy': ConfigSchema.string(
-                description: 'Default ETag strategy (disabled, strong, weak).',
-                defaultValue: 'disabled',
-              ),
-            },
+      'etag': ConfigSchema.object(
+        description: 'ETag generation settings.',
+        properties: {
+          'strategy': ConfigSchema.string(
+            description: 'Default ETag strategy (disabled, strong, weak).',
+            defaultValue: 'disabled',
           ),
         },
-      );
+      ),
+    },
+  );
 
   @override
   RoutingConfig fromMap(

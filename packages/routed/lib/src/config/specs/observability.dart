@@ -85,93 +85,94 @@ class ObservabilityConfigSpec extends ConfigSpec<ObservabilityConfig> {
   String get root => 'observability';
 
   @override
-  Schema? get schema =>
-      ConfigSchema.object(
-        title: 'Observability Configuration',
-        description: 'Tracing, metrics, and health check settings.',
-        properties: {
-          'enabled': ConfigSchema.boolean(
+  Schema? get schema => ConfigSchema.object(
+    title: 'Observability Configuration',
+    description: 'Tracing, metrics, and health check settings.',
+    properties: {
+      'enabled': ConfigSchema.boolean(
         description:
             'Master toggle that enables or disables all observability features.',
         defaultValue: true,
       ),
-          'tracing': ConfigSchema.object(
-            description: 'OpenTelemetry tracing settings.',
-            properties: {
-              'enabled': ConfigSchema.boolean(
-                description: 'Enable OpenTelemetry tracing middleware.',
-                defaultValue: false,
-              ),
-              'service_name': ConfigSchema.string(
+      'tracing': ConfigSchema.object(
+        description: 'OpenTelemetry tracing settings.',
+        properties: {
+          'enabled': ConfigSchema.boolean(
+            description: 'Enable OpenTelemetry tracing middleware.',
+            defaultValue: false,
+          ),
+          'service_name':
+              ConfigSchema.string(
                 description:
-                'Logical service.name attribute reported with every span.',
+                    'Logical service.name attribute reported with every span.',
                 defaultValue: 'routed-service',
               ).withMetadata({
-                configDocMetaInheritFromEnv: 'OBSERVABILITY_TRACING_SERVICE_NAME',
+                configDocMetaInheritFromEnv:
+                    'OBSERVABILITY_TRACING_SERVICE_NAME',
               }),
-              'exporter': ConfigSchema.string(
-                description: 'Tracing exporter (none, console, otlp).',
-                options: ['none', 'console', 'otlp'],
-                defaultValue: 'none',
-              ),
-              'endpoint': ConfigSchema.string(
-                description:
+          'exporter': ConfigSchema.string(
+            description: 'Tracing exporter (none, console, otlp).',
+            options: ['none', 'console', 'otlp'],
+            defaultValue: 'none',
+          ),
+          'endpoint': ConfigSchema.string(
+            description:
                 'Collector endpoint used when exporter=otlp (e.g. https://otel/v1/traces).',
-              ),
-              'headers': ConfigSchema.object(
-                description:
+          ),
+          'headers': ConfigSchema.object(
+            description:
                 'Optional headers forwarded to the OTLP collector (authorization, etc.).',
-                additionalProperties: true,
-              ).withDefault(const {}),
-            },
+            additionalProperties: true,
+          ).withDefault(const {}),
+        },
       ),
-          'metrics': ConfigSchema.object(
-            description: 'Prometheus metrics settings.',
-            properties: {
-              'enabled': ConfigSchema.boolean(
-                description: 'Enable Prometheus-style metrics endpoint.',
-                defaultValue: false,
-              ),
-              'path': ConfigSchema.string(
-                description: 'Path for metrics exposition.',
-                defaultValue: '/metrics',
-              ),
-              'buckets': ConfigSchema.list(
-                description:
+      'metrics': ConfigSchema.object(
+        description: 'Prometheus metrics settings.',
+        properties: {
+          'enabled': ConfigSchema.boolean(
+            description: 'Enable Prometheus-style metrics endpoint.',
+            defaultValue: false,
+          ),
+          'path': ConfigSchema.string(
+            description: 'Path for metrics exposition.',
+            defaultValue: '/metrics',
+          ),
+          'buckets': ConfigSchema.list(
+            description:
                 'Latency histogram bucket upper bounds (seconds) for routed_request_duration_seconds.',
-                items: ConfigSchema.number(),
-                defaultValue: _defaultBuckets,
-              ),
-            },
-          ),
-          'health': ConfigSchema.object(
-            description: 'Health and readiness check settings.',
-            properties: {
-              'enabled': ConfigSchema.boolean(
-                description: 'Enable health and readiness endpoints.',
-                defaultValue: true,
-              ),
-              'readiness_path': ConfigSchema.string(
-                description: 'HTTP path exposed for readiness checks.',
-                defaultValue: '/readyz',
-              ),
-              'liveness_path': ConfigSchema.string(
-                description: 'HTTP path exposed for liveness checks.',
-                defaultValue: '/livez',
-              ),
-            },
-          ),
-          'errors': ConfigSchema.object(
-            properties: {
-              'enabled': ConfigSchema.boolean(
-                description:
-                'Enable error observer notifications (reserve for external error trackers).',
-                defaultValue: false,
-              ),
-            },
+            items: ConfigSchema.number(),
+            defaultValue: _defaultBuckets,
           ),
         },
-      );
+      ),
+      'health': ConfigSchema.object(
+        description: 'Health and readiness check settings.',
+        properties: {
+          'enabled': ConfigSchema.boolean(
+            description: 'Enable health and readiness endpoints.',
+            defaultValue: true,
+          ),
+          'readiness_path': ConfigSchema.string(
+            description: 'HTTP path exposed for readiness checks.',
+            defaultValue: '/readyz',
+          ),
+          'liveness_path': ConfigSchema.string(
+            description: 'HTTP path exposed for liveness checks.',
+            defaultValue: '/livez',
+          ),
+        },
+      ),
+      'errors': ConfigSchema.object(
+        properties: {
+          'enabled': ConfigSchema.boolean(
+            description:
+                'Enable error observer notifications (reserve for external error trackers).',
+            defaultValue: false,
+          ),
+        },
+      ),
+    },
+  );
 
   @override
   ObservabilityConfig fromMap(
@@ -188,10 +189,7 @@ class ObservabilityConfigSpec extends ConfigSpec<ObservabilityConfig> {
 
     final tracingMap = map['tracing'] == null
         ? const <String, dynamic>{}
-        : stringKeyedMap(
-          map['tracing'] as Object,
-          'observability.tracing',
-        );
+        : stringKeyedMap(map['tracing'] as Object, 'observability.tracing');
     final tracingEnabled =
         parseBoolLike(
           tracingMap['enabled'],
@@ -211,12 +209,12 @@ class ObservabilityConfigSpec extends ConfigSpec<ObservabilityConfig> {
     final exporterRaw = tracingMap['exporter'];
     final exporter =
         (parseStringLike(
-              exporterRaw,
-              context: 'observability.tracing.exporter',
-              allowEmpty: true,
-              throwOnInvalid: true,
-            ) ??
-            'none')
+                  exporterRaw,
+                  context: 'observability.tracing.exporter',
+                  allowEmpty: true,
+                  throwOnInvalid: true,
+                ) ??
+                'none')
             .toLowerCase();
 
     Uri? endpoint;
@@ -233,22 +231,18 @@ class ObservabilityConfigSpec extends ConfigSpec<ObservabilityConfig> {
       }
     }
 
-    final headers =
-        tracingMap['headers'] == null
-            ? const <String, String>{}
-            : parseStringMap(
-              tracingMap['headers'] as Object,
-              context: 'observability.tracing.headers',
-              allowEmptyValues: true,
-              coerceValues: true,
-            );
+    final headers = tracingMap['headers'] == null
+        ? const <String, String>{}
+        : parseStringMap(
+            tracingMap['headers'] as Object,
+            context: 'observability.tracing.headers',
+            allowEmptyValues: true,
+            coerceValues: true,
+          );
 
     final metricsMap = map['metrics'] == null
         ? const <String, dynamic>{}
-        : stringKeyedMap(
-          map['metrics'] as Object,
-          'observability.metrics',
-        );
+        : stringKeyedMap(map['metrics'] as Object, 'observability.metrics');
     final metricsEnabled =
         parseBoolLike(
           metricsMap['enabled'],
@@ -276,8 +270,9 @@ class ObservabilityConfigSpec extends ConfigSpec<ObservabilityConfig> {
           throwOnInvalid: true,
         ) ??
         const <double>[];
-    final buckets =
-        parsedBuckets.isEmpty ? List<double>.from(_defaultBuckets) : parsedBuckets;
+    final buckets = parsedBuckets.isEmpty
+        ? List<double>.from(_defaultBuckets)
+        : parsedBuckets;
     for (var i = 0; i < buckets.length; i += 1) {
       if (buckets[i] <= 0) {
         throw ProviderConfigException(
@@ -288,10 +283,7 @@ class ObservabilityConfigSpec extends ConfigSpec<ObservabilityConfig> {
 
     final healthMap = map['health'] == null
         ? const <String, dynamic>{}
-        : stringKeyedMap(
-          map['health'] as Object,
-          'observability.health',
-        );
+        : stringKeyedMap(map['health'] as Object, 'observability.health');
     final healthEnabled =
         parseBoolLike(
           healthMap['enabled'],
@@ -320,10 +312,7 @@ class ObservabilityConfigSpec extends ConfigSpec<ObservabilityConfig> {
 
     final errorsMap = map['errors'] == null
         ? const <String, dynamic>{}
-        : stringKeyedMap(
-          map['errors'] as Object,
-          'observability.errors',
-        );
+        : stringKeyedMap(map['errors'] as Object, 'observability.errors');
     final errorsEnabled =
         parseBoolLike(
           errorsMap['enabled'],
@@ -376,9 +365,7 @@ class ObservabilityConfigSpec extends ConfigSpec<ObservabilityConfig> {
         'readiness_path': value.health.readinessPath,
         'liveness_path': value.health.livenessPath,
       },
-      'errors': {
-        'enabled': value.errors.enabled,
-      },
+      'errors': {'enabled': value.errors.enabled},
     };
   }
 }

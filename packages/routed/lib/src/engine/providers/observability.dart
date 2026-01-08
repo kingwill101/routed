@@ -295,7 +295,6 @@ class ObservabilityServiceProvider extends ServiceProvider
     return next();
   }
 
-
   String _routeLabel(EngineContext ctx) {
     final name = ctx.get<String>('routed.route_name');
     final path = ctx.get<String>('routed.route_path');

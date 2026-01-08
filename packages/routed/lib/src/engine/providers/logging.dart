@@ -22,9 +22,9 @@ class LoggingServiceProvider extends ServiceProvider
   static const LoggingDailyDriverSpec _dailySpec = LoggingDailyDriverSpec();
   static const LoggingStackDriverSpec _stackSpec = LoggingStackDriverSpec();
   static const LoggingWebhookDriverSpec _webhookSpec =
-  LoggingWebhookDriverSpec();
+      LoggingWebhookDriverSpec();
   static const LoggingSamplingDriverSpec _samplingSpec =
-  LoggingSamplingDriverSpec();
+      LoggingSamplingDriverSpec();
   bool _enabled = true;
   bool _logSuccess = true;
   contextual.Level _level = contextual.Level.info;
@@ -199,9 +199,7 @@ class LoggingServiceProvider extends ServiceProvider
           config: ctx.config,
         ),
       );
-      return SingleFileLogDriver(
-        resolved.path,
-      );
+      return SingleFileLogDriver(resolved.path);
     });
     registry.registerIfAbsent('daily', (ctx) {
       final resolved = _dailySpec.fromMap(

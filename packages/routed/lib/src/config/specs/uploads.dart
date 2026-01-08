@@ -25,39 +25,38 @@ class UploadsConfigSpec extends ConfigSpec<MultipartConfig> {
   String get root => 'uploads';
 
   @override
-  Schema? get schema =>
-      ConfigSchema.object(
-        title: 'Uploads Configuration',
-        description: 'Multipart request and file upload settings.',
-        properties: {
-          'max_memory': ConfigSchema.integer(
+  Schema? get schema => ConfigSchema.object(
+    title: 'Uploads Configuration',
+    description: 'Multipart request and file upload settings.',
+    properties: {
+      'max_memory': ConfigSchema.integer(
         description: 'Maximum in-memory bytes before buffering to disk.',
         defaultValue: _defaultMaxMemory,
       ),
-          'max_file_size': ConfigSchema.integer(
+      'max_file_size': ConfigSchema.integer(
         description: 'Maximum accepted upload size in bytes.',
         defaultValue: _defaultMaxFileSize,
       ),
-          'max_disk_usage': ConfigSchema.integer(
+      'max_disk_usage': ConfigSchema.integer(
         description:
             'Maximum cumulative bytes written to disk per request before uploads are rejected.',
         defaultValue: _defaultMaxDiskUsage,
       ),
-          'allowed_extensions': ConfigSchema.list(
+      'allowed_extensions': ConfigSchema.list(
         description: 'Whitelisted file extensions for uploads.',
-            items: ConfigSchema.string(),
+        items: ConfigSchema.string(),
         defaultValue: _defaultAllowedExtensions,
       ),
-          'directory': ConfigSchema.string(
+      'directory': ConfigSchema.string(
         description: 'Directory where uploaded files are stored.',
         defaultValue: _defaultDirectory,
       ),
-          'file_permissions': ConfigSchema.integer(
+      'file_permissions': ConfigSchema.integer(
         description: 'Permissions to apply to uploaded files.',
         defaultValue: _defaultFilePermissions,
       ),
-        },
-      );
+    },
+  );
 
   @override
   MultipartConfig fromMap(
@@ -90,12 +89,12 @@ class UploadsConfigSpec extends ConfigSpec<MultipartConfig> {
 
     final allowedExtensions =
         (parseStringList(
-              map['allowed_extensions'],
-              context: 'uploads.allowed_extensions',
-              allowEmptyResult: true,
-              throwOnInvalid: true,
-            ) ??
-            _defaultAllowedExtensions)
+                  map['allowed_extensions'],
+                  context: 'uploads.allowed_extensions',
+                  allowEmptyResult: true,
+                  throwOnInvalid: true,
+                ) ??
+                _defaultAllowedExtensions)
             .map((entry) => entry.toLowerCase())
             .toSet();
 
@@ -140,10 +139,7 @@ class UploadsConfigSpec extends ConfigSpec<MultipartConfig> {
 }
 
 class UploadsConfigContext extends ConfigSpecContext {
-  const UploadsConfigContext({
-    required this.engineConfig,
-    super.config,
-  });
+  const UploadsConfigContext({required this.engineConfig, super.config});
 
   final EngineConfig engineConfig;
 }

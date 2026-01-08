@@ -52,17 +52,16 @@ class LoggingSingleDriverSpec extends ConfigSpec<LoggingSingleDriverConfig> {
   String get root => 'logging.channels.*';
 
   @override
-  Schema? get schema =>
-      ConfigSchema.object(
-        title: 'Single Log Channel',
-        description: 'Logs to a single file.',
-        properties: {
-          'path': ConfigSchema.string(
-            description: 'Path to the log file.',
-            defaultValue: 'storage/logs/routed.log',
-          ),
-        },
-      );
+  Schema? get schema => ConfigSchema.object(
+    title: 'Single Log Channel',
+    description: 'Logs to a single file.',
+    properties: {
+      'path': ConfigSchema.string(
+        description: 'Path to the log file.',
+        defaultValue: 'storage/logs/routed.log',
+      ),
+    },
+  );
 
   @override
   LoggingSingleDriverConfig fromMap(
@@ -107,29 +106,28 @@ class LoggingDailyDriverSpec extends ConfigSpec<LoggingDailyDriverConfig> {
   String get root => 'logging.channels.*';
 
   @override
-  Schema? get schema =>
-      ConfigSchema.object(
-        title: 'Daily Log Channel',
-        description: 'Logs to daily rotating files.',
-        properties: {
-          'path': ConfigSchema.string(
-            description: 'Directory path for log files.',
-            defaultValue: 'storage/logs/routed',
-          ),
-          'retention_days': ConfigSchema.integer(
-            description: 'Number of days to keep logs.',
-            defaultValue: 14,
-          ),
-          'flush_interval': ConfigSchema.integer(
-            description: 'Interval in milliseconds to flush logs.',
-            defaultValue: 500,
-          ),
-          'use_isolate': ConfigSchema.boolean(
-            description: 'Use a separate isolate for file I/O.',
-            defaultValue: false,
-          ),
-        },
-      );
+  Schema? get schema => ConfigSchema.object(
+    title: 'Daily Log Channel',
+    description: 'Logs to daily rotating files.',
+    properties: {
+      'path': ConfigSchema.string(
+        description: 'Directory path for log files.',
+        defaultValue: 'storage/logs/routed',
+      ),
+      'retention_days': ConfigSchema.integer(
+        description: 'Number of days to keep logs.',
+        defaultValue: 14,
+      ),
+      'flush_interval': ConfigSchema.integer(
+        description: 'Interval in milliseconds to flush logs.',
+        defaultValue: 500,
+      ),
+      'use_isolate': ConfigSchema.boolean(
+        description: 'Use a separate isolate for file I/O.',
+        defaultValue: false,
+      ),
+    },
+  );
 
   @override
   LoggingDailyDriverConfig fromMap(
@@ -196,22 +194,21 @@ class LoggingStackDriverSpec extends ConfigSpec<LoggingStackDriverConfig> {
   String get root => 'logging.channels.*';
 
   @override
-  Schema? get schema =>
-      ConfigSchema.object(
-        title: 'Stack Log Channel',
-        description: 'Combines multiple channels.',
-        properties: {
-          'channels': ConfigSchema.list(
-            description: 'List of channel names to include in the stack.',
-            items: ConfigSchema.string(),
-            defaultValue: const <String>[],
-          ),
-          'ignore_exceptions': ConfigSchema.boolean(
-            description: 'Ignore exceptions from underlying channels.',
-            defaultValue: false,
-          ),
-        },
-      );
+  Schema? get schema => ConfigSchema.object(
+    title: 'Stack Log Channel',
+    description: 'Combines multiple channels.',
+    properties: {
+      'channels': ConfigSchema.list(
+        description: 'List of channel names to include in the stack.',
+        items: ConfigSchema.string(),
+        defaultValue: const <String>[],
+      ),
+      'ignore_exceptions': ConfigSchema.boolean(
+        description: 'Ignore exceptions from underlying channels.',
+        defaultValue: false,
+      ),
+    },
+  );
 
   @override
   LoggingStackDriverConfig fromMap(
@@ -280,29 +277,28 @@ class LoggingWebhookDriverSpec extends ConfigSpec<LoggingWebhookDriverConfig> {
   String get root => 'logging.channels.*';
 
   @override
-  Schema? get schema =>
-      ConfigSchema.object(
-        title: 'Webhook Log Channel',
-        description: 'Sends logs to a webhook URL.',
-        properties: {
-          'url': ConfigSchema.string(
-            description: 'The webhook URL.',
-            defaultValue: '',
-          ),
-          'headers': ConfigSchema.object(
-            description: 'HTTP headers to include in the request.',
-            additionalProperties: true,
-          ),
-          'timeout': ConfigSchema.integer(
-            description: 'Request timeout in milliseconds.',
-            defaultValue: 5000,
-          ),
-          'keep_alive': ConfigSchema.boolean(
-            description: 'Use persistent connections.',
-            defaultValue: true,
-          ),
-        },
-      );
+  Schema? get schema => ConfigSchema.object(
+    title: 'Webhook Log Channel',
+    description: 'Sends logs to a webhook URL.',
+    properties: {
+      'url': ConfigSchema.string(
+        description: 'The webhook URL.',
+        defaultValue: '',
+      ),
+      'headers': ConfigSchema.object(
+        description: 'HTTP headers to include in the request.',
+        additionalProperties: true,
+      ),
+      'timeout': ConfigSchema.integer(
+        description: 'Request timeout in milliseconds.',
+        defaultValue: 5000,
+      ),
+      'keep_alive': ConfigSchema.boolean(
+        description: 'Use persistent connections.',
+        defaultValue: true,
+      ),
+    },
+  );
 
   @override
   LoggingWebhookDriverConfig fromMap(
@@ -378,20 +374,17 @@ class LoggingSamplingDriverSpec
   String get root => 'logging.channels.*';
 
   @override
-  Schema? get schema =>
-      ConfigSchema.object(
-        title: 'Sampling Log Channel',
-        description: 'Samples logs at configured rates.',
-        properties: {
-          'wrapped': ConfigSchema.string(
-            description: 'The channel to wrap.',
-          ),
-          'rates': ConfigSchema.object(
-            description: 'Sampling rates per log level (0.0 to 1.0).',
-            additionalProperties: true,
-          ),
-        },
-      );
+  Schema? get schema => ConfigSchema.object(
+    title: 'Sampling Log Channel',
+    description: 'Samples logs at configured rates.',
+    properties: {
+      'wrapped': ConfigSchema.string(description: 'The channel to wrap.'),
+      'rates': ConfigSchema.object(
+        description: 'Sampling rates per log level (0.0 to 1.0).',
+        additionalProperties: true,
+      ),
+    },
+  );
 
   @override
   LoggingSamplingDriverConfig fromMap(

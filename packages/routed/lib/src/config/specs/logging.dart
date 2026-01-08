@@ -47,8 +47,9 @@ class LoggingChannelConfig {
       allowEmpty: true,
       throwOnInvalid: true,
     );
-    final resolvedDriver =
-        (driver == null || driver.isEmpty) ? 'stack' : driver.toLowerCase();
+    final resolvedDriver = (driver == null || driver.isEmpty)
+        ? 'stack'
+        : driver.toLowerCase();
     final options = <String, dynamic>{};
     map.forEach((key, value) {
       options[key.toString()] = value;
@@ -108,51 +109,54 @@ class LoggingConfigSpec extends ConfigSpec<LoggingConfig> {
   String get root => 'logging';
 
   @override
-  Schema? get schema =>
-      ConfigSchema.object(
-        title: 'Logging Configuration',
-        description: 'Configuration for structured application logging.',
-        properties: {
-          'default': ConfigSchema.string(
+  Schema? get schema => ConfigSchema.object(
+    title: 'Logging Configuration',
+    description: 'Configuration for structured application logging.',
+    properties: {
+      'default': ConfigSchema.string(
         description: 'Default log channel name (stack, single, stderr, etc.).',
         defaultValue: 'stack',
-          ).withMetadata({configDocMetaInheritFromEnv: 'LOG_CHANNEL'}),
-          'channels': ConfigSchema.object(
-            description: 'Map of log channel definitions (stack, single, daily, stderr, null).',
-            additionalProperties: true,
-          ).withDefault(_defaultLoggingChannels),
-          'enabled': ConfigSchema.boolean(
+      ).withMetadata({configDocMetaInheritFromEnv: 'LOG_CHANNEL'}),
+      'channels': ConfigSchema.object(
+        description:
+            'Map of log channel definitions (stack, single, daily, stderr, null).',
+        additionalProperties: true,
+      ).withDefault(_defaultLoggingChannels),
+      'enabled': ConfigSchema.boolean(
         description: 'Enable structured application logging.',
         defaultValue: true,
       ),
-          'level': ConfigSchema.string(
+      'level': ConfigSchema.string(
         description: 'Default log level for application logging.',
         defaultValue: 'info',
-            // Note: Schema enum support is available via `enumValues` but ConfigSchema helper doesn't expose it directly yet.
-            // We can add it to ConfigSchema or just rely on validation in fromMap for now.
-            // Or access .withEnum() if we add it.
+        // Note: Schema enum support is available via `enumValues` but ConfigSchema helper doesn't expose it directly yet.
+        // We can add it to ConfigSchema or just rely on validation in fromMap for now.
+        // Or access .withEnum() if we add it.
       ),
-          'errors_only': ConfigSchema.boolean(
+      'errors_only': ConfigSchema.boolean(
         description: 'Only emit logs for failing requests when true.',
         defaultValue: false,
       ),
-          'extra_fields': ConfigSchema.object(
+      'extra_fields': ConfigSchema.object(
         description: 'Additional fields appended to every log entry.',
-            additionalProperties: true,
-          ).withDefault(const <String, Object?>{}),
-          'include_stack_traces': ConfigSchema.boolean(
+        additionalProperties: true,
+      ).withDefault(const <String, Object?>{}),
+      'include_stack_traces': ConfigSchema.boolean(
         description: 'Include stack traces in request error logs when enabled.',
         defaultValue: false,
       ),
-          'format': ConfigSchema.string(
+      'format': ConfigSchema.string(
         description: 'Log output format (json or text).',
         defaultValue: 'pretty',
       ),
-        },
-      );
+    },
+  );
 
   @override
-  LoggingConfig fromMap(Map<String, dynamic> map, {ConfigSpecContext? context}) {
+  LoggingConfig fromMap(
+    Map<String, dynamic> map, {
+    ConfigSpecContext? context,
+  }) {
     final enabled =
         parseBoolLike(
           map['enabled'],
@@ -193,8 +197,10 @@ class LoggingConfigSpec extends ConfigSpec<LoggingConfig> {
     if (extraFieldsValue == null) {
       extraFields = const <String, dynamic>{};
     } else {
-      extraFields =
-          stringKeyedMap(extraFieldsValue as Object, 'logging.extra_fields');
+      extraFields = stringKeyedMap(
+        extraFieldsValue as Object,
+        'logging.extra_fields',
+      );
     }
 
     final headerNames =
@@ -246,13 +252,17 @@ class LoggingConfigSpec extends ConfigSpec<LoggingConfig> {
     } else {
       final token = formatValue.toLowerCase();
       format = switch (token) {
-        'pretty' =>
-          LoggingFormatConfig('pretty', contextual.PrettyLogFormatter()),
+        'pretty' => LoggingFormatConfig(
+          'pretty',
+          contextual.PrettyLogFormatter(),
+        ),
         'raw' => LoggingFormatConfig('raw', contextual.RawLogFormatter()),
         'null' => LoggingFormatConfig('null', contextual.JsonLogFormatter()),
         'json' => LoggingFormatConfig('json', contextual.JsonLogFormatter()),
-        'plain' =>
-          LoggingFormatConfig('plain', contextual.PlainTextLogFormatter()),
+        'plain' => LoggingFormatConfig(
+          'plain',
+          contextual.PlainTextLogFormatter(),
+        ),
         _ => LoggingFormatConfig('plain', contextual.PlainTextLogFormatter()),
       };
     }

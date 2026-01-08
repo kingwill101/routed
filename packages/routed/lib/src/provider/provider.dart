@@ -89,8 +89,8 @@ class ConfigDefaults {
     Map<String, dynamic>? values,
     Map<String, Schema> schemas = const {},
   }) : _docs = docs,
-        _values = values,
-        _schemas = schemas;
+       _values = values,
+       _schemas = schemas;
 
   final List<ConfigDocEntry> _docs;
   final Map<String, dynamic>? _values;
@@ -130,9 +130,14 @@ class ConfigDefaults {
 
     final computed = _computeDefaults(effectiveDocs);
     final values = _values;
-    final resolvedValues = values != null ? deepCopyMap(values) : computed.values;
+    final resolvedValues = values != null
+        ? deepCopyMap(values)
+        : computed.values;
     return _mergeDefaultValues(
-        resolvedValues, computed.docDefaults, effectiveDocs);
+      resolvedValues,
+      computed.docDefaults,
+      effectiveDocs,
+    );
   }
 
   /// Produces a snapshot containing both values and documentation in one pass.

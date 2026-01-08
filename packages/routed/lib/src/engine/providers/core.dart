@@ -16,10 +16,7 @@ import '../../engine/engine.dart';
 import '../../engine/middleware_registry.dart';
 import '../../provider/config_utils.dart';
 import '../../provider/provider.dart'
-    show
-        ConfigDefaults,
-        ProvidesDefaultConfig,
-        ServiceProvider;
+    show ConfigDefaults, ProvidesDefaultConfig, ServiceProvider;
 import '../../utils/deep_copy.dart';
 import '../../view/engine_manager.dart';
 
@@ -29,11 +26,7 @@ ConfigDefaults _coreDefaults() {
   const runtimeSpec = RuntimeConfigSpec();
 
   return ConfigDefaults(
-    docs: [
-      ...coreSpec.docs(),
-      ...httpSpec.docs(),
-      ...runtimeSpec.docs(),
-    ],
+    docs: [...coreSpec.docs(), ...httpSpec.docs(), ...runtimeSpec.docs()],
     values: {
       ...coreSpec.defaultsWithRoot(),
       ...httpSpec.defaultsWithRoot(),

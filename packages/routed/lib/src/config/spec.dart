@@ -85,8 +85,9 @@ abstract class ConfigSpec<T> {
   T resolve(Config config, {ConfigSpecContext? context}) {
     final resolvedContext = context ?? ConfigSpecContext(config: config);
     final rawValue = config.get<Object?>(root);
-    final raw =
-        rawValue == null ? const <String, dynamic>{} : _stringKeyedMap(rawValue, root);
+    final raw = rawValue == null
+        ? const <String, dynamic>{}
+        : _stringKeyedMap(rawValue, root);
     final merged = mergeDefaults(raw, context: resolvedContext);
     return fromMap(merged, context: resolvedContext);
   }

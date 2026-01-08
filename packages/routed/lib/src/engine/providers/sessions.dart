@@ -337,10 +337,9 @@ class SessionServiceProvider extends ServiceProvider
               description: entry.description,
               example: entry.example,
               deprecated: entry.deprecated,
-              optionsBuilder: () =>
-                  SessionServiceProvider.availableDriverNames(
-                    includeBuiltIns: true,
-                  ),
+              optionsBuilder: () => SessionServiceProvider.availableDriverNames(
+                includeBuiltIns: true,
+              ),
               metadata: entry.metadata,
               defaultValue: entry.defaultValue,
               defaultValueBuilder: entry.defaultValueBuilder,
@@ -352,7 +351,8 @@ class SessionServiceProvider extends ServiceProvider
         const ConfigDocEntry(
           path: 'http.middleware_sources',
           type: 'map',
-          description: 'Session middleware references injected globally/groups.',
+          description:
+              'Session middleware references injected globally/groups.',
           defaultValue: <String, Object?>{
             'routed.sessions': <String, Object?>{
               'global': <String>['routed.sessions.start'],
@@ -573,8 +573,7 @@ class SessionServiceProvider extends ServiceProvider
 
   static List<ConfigDocEntry> _arrayDriverDocs(
     SessionDriverDocContext context,
-  ) =>
-      _arraySpec.docs(pathBase: context.pathBase);
+  ) => _arraySpec.docs(pathBase: context.pathBase);
 
   static List<ConfigDocEntry> _cacheBackedDriverDocs(
     SessionDriverDocContext context,

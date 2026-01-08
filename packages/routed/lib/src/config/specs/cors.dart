@@ -33,59 +33,59 @@ class CorsConfigSpec extends ConfigSpec<CorsConfig> {
   Map<String, dynamic> defaults({ConfigSpecContext? context}) => const {};
 
   @override
-  Schema? get schema =>
-      ConfigSchema.object(
-        title: 'CORS Configuration',
-        description: 'Configuration for Cross-Origin Resource Sharing (CORS).',
-        properties: {
-          'enabled': ConfigSchema.boolean(
+  Schema? get schema => ConfigSchema.object(
+    title: 'CORS Configuration',
+    description: 'Configuration for Cross-Origin Resource Sharing (CORS).',
+    properties: {
+      'enabled': ConfigSchema.boolean(
         description: 'Enables CORS middleware.',
         defaultValue: _defaultCors.enabled,
       ),
-          'allowed_origins': ConfigSchema.list(
+      'allowed_origins': ConfigSchema.list(
         description: 'Origins allowed to access this application.',
-            items: ConfigSchema.string(),
+        items: ConfigSchema.string(),
         defaultValue: _defaultAllowedOrigins,
       ),
-          'allowed_methods': ConfigSchema.list(
+      'allowed_methods': ConfigSchema.list(
         description: 'HTTP methods permitted for CORS requests.',
-            items: ConfigSchema.string(),
+        items: ConfigSchema.string(),
         defaultValue: _defaultAllowedMethods,
       ),
-          'allowed_headers': ConfigSchema.list(
+      'allowed_headers': ConfigSchema.list(
         description: 'Request headers accepted for CORS requests.',
-            items: ConfigSchema.string(),
+        items: ConfigSchema.string(),
         defaultValue: _defaultAllowedHeaders,
       ),
-          'exposed_headers': ConfigSchema.list(
+      'exposed_headers': ConfigSchema.list(
         description: 'Response headers exposed to the browser.',
-            items: ConfigSchema.string(),
+        items: ConfigSchema.string(),
         defaultValue: _defaultExposedHeaders,
       ),
-          'allow_credentials': ConfigSchema.boolean(
+      'allow_credentials': ConfigSchema.boolean(
         description: 'Whether cookies/credentials can be shared cross-origin.',
         defaultValue: _defaultCors.allowCredentials,
       ),
-          'max_age': ConfigSchema.integer(
+      'max_age': ConfigSchema.integer(
         description: 'Preflight cache duration in seconds.',
         defaultValue: _defaultCors.maxAge,
       ),
-        },
-      );
+    },
+  );
 
-  CorsConfig resolveFromConfig(
-    Config config, {
-    CorsConfig? existing,
-  }) {
+  CorsConfig resolveFromConfig(Config config, {CorsConfig? existing}) {
     final overrides = _mergeOverrides(config);
     if (existing != null && overrides.isEmpty) {
       return existing;
     }
-    if (existing != null && overrides.isNotEmpty && _matchesDefault(overrides)) {
+    if (existing != null &&
+        overrides.isNotEmpty &&
+        _matchesDefault(overrides)) {
       return existing;
     }
     final context = ConfigSpecContext(config: config);
-    final base = existing != null ? toMap(existing) : defaults(context: context);
+    final base = existing != null
+        ? toMap(existing)
+        : defaults(context: context);
     final merged = <String, dynamic>{};
     deepMerge(merged, base, override: true);
     if (overrides.isNotEmpty) {
@@ -106,11 +106,7 @@ class CorsConfigSpec extends ConfigSpec<CorsConfig> {
     }
     final corsNode = config.get<Object?>('cors');
     if (corsNode != null) {
-      deepMerge(
-        merged,
-        _corsNodeToMap(corsNode, 'cors'),
-        override: true,
-      );
+      deepMerge(merged, _corsNodeToMap(corsNode, 'cors'), override: true);
     }
     return merged;
   }
@@ -223,37 +219,37 @@ class CorsConfigSpec extends ConfigSpec<CorsConfig> {
     final allowedOrigins = allowedOriginsValue == null
         ? _defaultCors.allowedOrigins
         : (parseStringList(
-              allowedOriginsValue,
-              context: 'cors.allowed_origins',
-              allowEmptyResult: true,
-              allowCommaSeparated: false,
-              throwOnInvalid: true,
-            ) ??
-            const <String>[]);
+                allowedOriginsValue,
+                context: 'cors.allowed_origins',
+                allowEmptyResult: true,
+                allowCommaSeparated: false,
+                throwOnInvalid: true,
+              ) ??
+              const <String>[]);
 
     final allowedMethodsValue = map['allowed_methods'];
     final allowedMethods = allowedMethodsValue == null
         ? _defaultCors.allowedMethods
         : (parseStringList(
-              allowedMethodsValue,
-              context: 'cors.allowed_methods',
-              allowEmptyResult: true,
-              allowCommaSeparated: false,
-              throwOnInvalid: true,
-            ) ??
-            const <String>[]);
+                allowedMethodsValue,
+                context: 'cors.allowed_methods',
+                allowEmptyResult: true,
+                allowCommaSeparated: false,
+                throwOnInvalid: true,
+              ) ??
+              const <String>[]);
 
     final allowedHeadersValue = map['allowed_headers'];
     final allowedHeaders = allowedHeadersValue == null
         ? _defaultCors.allowedHeaders
         : (parseStringList(
-              allowedHeadersValue,
-              context: 'cors.allowed_headers',
-              allowEmptyResult: true,
-              allowCommaSeparated: false,
-              throwOnInvalid: true,
-            ) ??
-            const <String>[]);
+                allowedHeadersValue,
+                context: 'cors.allowed_headers',
+                allowEmptyResult: true,
+                allowCommaSeparated: false,
+                throwOnInvalid: true,
+              ) ??
+              const <String>[]);
 
     final allowCredentials =
         parseBoolLike(
@@ -280,13 +276,13 @@ class CorsConfigSpec extends ConfigSpec<CorsConfig> {
     final exposedHeaders = exposedHeadersValue == null
         ? _defaultCors.exposedHeaders
         : (parseStringList(
-              exposedHeadersValue,
-              context: 'cors.exposed_headers',
-              allowEmptyResult: true,
-              allowCommaSeparated: false,
-              throwOnInvalid: true,
-            ) ??
-            const <String>[]);
+                exposedHeadersValue,
+                context: 'cors.exposed_headers',
+                allowEmptyResult: true,
+                allowCommaSeparated: false,
+                throwOnInvalid: true,
+              ) ??
+              const <String>[]);
 
     return CorsConfig(
       enabled: enabled,

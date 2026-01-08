@@ -46,72 +46,71 @@ class LocalizationConfigSpec extends ConfigSpec<LocalizationConfig> {
   String get root => 'translation';
 
   @override
-  Schema? get schema =>
-      ConfigSchema.object(
-        title: 'Localization Configuration',
-        description: 'Internationalization and translation settings.',
-        properties: {
-          'paths': ConfigSchema.list(
+  Schema? get schema => ConfigSchema.object(
+    title: 'Localization Configuration',
+    description: 'Internationalization and translation settings.',
+    properties: {
+      'paths': ConfigSchema.list(
         description:
             'Directories scanned for `locale/group.(yaml|yml|json)` files.',
-            items: ConfigSchema.string(),
-            defaultValue: const ['resources/lang'],
+        items: ConfigSchema.string(),
+        defaultValue: const ['resources/lang'],
       ),
-          'json_paths': ConfigSchema.list(
-            description:
+      'json_paths': ConfigSchema.list(
+        description:
             'Directories containing flat `<locale>.json` dictionaries.',
-            items: ConfigSchema.string(),
-            defaultValue: const [],
-          ),
-          'namespaces': ConfigSchema.object(
+        items: ConfigSchema.string(),
+        defaultValue: const [],
+      ),
+      'namespaces': ConfigSchema.object(
         description:
             'Vendor namespace hints mapping namespace => absolute directory.',
-            additionalProperties: true,
-          ).withDefault(const {}),
-          'resolvers': ConfigSchema.list(
+        additionalProperties: true,
+      ).withDefault(const {}),
+      'resolvers': ConfigSchema.list(
         description:
             'Ordered locale resolvers (query, cookie, header, session).',
-            items: ConfigSchema.string(),
-            defaultValue: kLocalizationResolverDefaults,
+        items: ConfigSchema.string(),
+        defaultValue: kLocalizationResolverDefaults,
       ),
-          'query': ConfigSchema.object(
-            properties: {
-              'parameter': ConfigSchema.string(
-                description: 'Query parameter consulted for locale overrides.',
-                defaultValue: 'locale',
-              ),
-            },
+      'query': ConfigSchema.object(
+        properties: {
+          'parameter': ConfigSchema.string(
+            description: 'Query parameter consulted for locale overrides.',
+            defaultValue: 'locale',
           ),
-          'cookie': ConfigSchema.object(
-            properties: {
-              'name': ConfigSchema.string(
-                description: 'Cookie name consulted for locale overrides.',
-                defaultValue: 'locale',
-              ),
-            },
-          ),
-          'session': ConfigSchema.object(
-            properties: {
-              'key': ConfigSchema.string(
-                description: 'Session key consulted for locale overrides.',
-                defaultValue: 'locale',
-              ),
-            },
-          ),
-          'header': ConfigSchema.object(
-            properties: {
-              'name': ConfigSchema.string(
-                description: 'Header inspected for Accept-Language fallbacks.',
-                defaultValue: 'Accept-Language',
-              ),
-            },
-          ),
-          'resolver_options': ConfigSchema.object(
-        description: 'Resolver-specific options keyed by resolver identifier.',
-            additionalProperties: true,
-          ).withDefault(const {}),
         },
-      );
+      ),
+      'cookie': ConfigSchema.object(
+        properties: {
+          'name': ConfigSchema.string(
+            description: 'Cookie name consulted for locale overrides.',
+            defaultValue: 'locale',
+          ),
+        },
+      ),
+      'session': ConfigSchema.object(
+        properties: {
+          'key': ConfigSchema.string(
+            description: 'Session key consulted for locale overrides.',
+            defaultValue: 'locale',
+          ),
+        },
+      ),
+      'header': ConfigSchema.object(
+        properties: {
+          'name': ConfigSchema.string(
+            description: 'Header inspected for Accept-Language fallbacks.',
+            defaultValue: 'Accept-Language',
+          ),
+        },
+      ),
+      'resolver_options': ConfigSchema.object(
+        description: 'Resolver-specific options keyed by resolver identifier.',
+        additionalProperties: true,
+      ).withDefault(const {}),
+    },
+  );
 
   @override
   LocalizationConfig fromMap(
@@ -119,10 +118,7 @@ class LocalizationConfigSpec extends ConfigSpec<LocalizationConfig> {
     ConfigSpecContext? context,
   }) {
     final paths =
-        parseStringList(
-          map['paths'],
-          context: 'translation.paths',
-        ) ??
+        parseStringList(map['paths'], context: 'translation.paths') ??
         const ['resources/lang'];
     final jsonPaths =
         parseStringList(
@@ -132,40 +128,32 @@ class LocalizationConfigSpec extends ConfigSpec<LocalizationConfig> {
         ) ??
         const <String>[];
     final namespacesRaw = map['namespaces'];
-    final namespaces =
-        namespacesRaw == null
-            ? const <String, String>{}
-            : parseStringMap(
-              namespacesRaw as Object,
-              context: 'translation.namespaces',
-            );
+    final namespaces = namespacesRaw == null
+        ? const <String, String>{}
+        : parseStringMap(
+            namespacesRaw as Object,
+            context: 'translation.namespaces',
+          );
     final resolvers =
-        parseStringList(
-          map['resolvers'],
-          context: 'translation.resolvers',
-        ) ??
+        parseStringList(map['resolvers'], context: 'translation.resolvers') ??
         List<String>.from(kLocalizationResolverDefaults);
 
     final queryRaw = map.containsKey('query') ? map['query'] : null;
-    final queryMap =
-        queryRaw == null
-            ? const <String, dynamic>{}
-            : stringKeyedMap(queryRaw as Object, 'translation.query');
+    final queryMap = queryRaw == null
+        ? const <String, dynamic>{}
+        : stringKeyedMap(queryRaw as Object, 'translation.query');
     final cookieRaw = map.containsKey('cookie') ? map['cookie'] : null;
-    final cookieMap =
-        cookieRaw == null
-            ? const <String, dynamic>{}
-            : stringKeyedMap(cookieRaw as Object, 'translation.cookie');
+    final cookieMap = cookieRaw == null
+        ? const <String, dynamic>{}
+        : stringKeyedMap(cookieRaw as Object, 'translation.cookie');
     final sessionRaw = map.containsKey('session') ? map['session'] : null;
-    final sessionMap =
-        sessionRaw == null
-            ? const <String, dynamic>{}
-            : stringKeyedMap(sessionRaw as Object, 'translation.session');
+    final sessionMap = sessionRaw == null
+        ? const <String, dynamic>{}
+        : stringKeyedMap(sessionRaw as Object, 'translation.session');
     final headerRaw = map.containsKey('header') ? map['header'] : null;
-    final headerMap =
-        headerRaw == null
-            ? const <String, dynamic>{}
-            : stringKeyedMap(headerRaw as Object, 'translation.header');
+    final headerMap = headerRaw == null
+        ? const <String, dynamic>{}
+        : stringKeyedMap(headerRaw as Object, 'translation.header');
 
     final queryParameter =
         parseStringLike(
@@ -210,23 +198,21 @@ class LocalizationConfigSpec extends ConfigSpec<LocalizationConfig> {
     var fallbackLocale = defaultLocale;
     final config = context?.config;
     if (config != null) {
-      final rawDefault =
-          parseStringLike(
-            config.get<Object?>('app.locale'),
-            context: 'app.locale',
-            allowEmpty: true,
-            throwOnInvalid: true,
-          );
+      final rawDefault = parseStringLike(
+        config.get<Object?>('app.locale'),
+        context: 'app.locale',
+        allowEmpty: true,
+        throwOnInvalid: true,
+      );
       if (rawDefault != null) {
         defaultLocale = rawDefault;
       }
-      final rawFallback =
-          parseStringLike(
-            config.get<Object?>('app.fallback_locale'),
-            context: 'app.fallback_locale',
-            allowEmpty: true,
-            throwOnInvalid: true,
-          );
+      final rawFallback = parseStringLike(
+        config.get<Object?>('app.fallback_locale'),
+        context: 'app.fallback_locale',
+        allowEmpty: true,
+        throwOnInvalid: true,
+      );
       fallbackLocale = rawFallback ?? defaultLocale;
     }
 

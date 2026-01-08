@@ -150,9 +150,7 @@ class RateLimitServiceProvider extends ServiceProvider
     }
     final defaultFailover = config.failover;
     return config.policies
-        .map(
-          (policy) => _compilePolicy(policy, backend, defaultFailover),
-        )
+        .map((policy) => _compilePolicy(policy, backend, defaultFailover))
         .toList(growable: false);
   }
 

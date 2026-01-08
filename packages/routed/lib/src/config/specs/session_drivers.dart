@@ -19,9 +19,14 @@ class SessionDriverSpecContext extends ConfigSpecContext {
       pathBase.isEmpty ? segment : '$pathBase.$segment';
 }
 
-String _pathFor(ConfigSpecContext? context, String fallbackBase, String segment) {
-  final base =
-      context is SessionDriverSpecContext ? context.pathBase : fallbackBase;
+String _pathFor(
+  ConfigSpecContext? context,
+  String fallbackBase,
+  String segment,
+) {
+  final base = context is SessionDriverSpecContext
+      ? context.pathBase
+      : fallbackBase;
   return base.isEmpty ? segment : '$base.$segment';
 }
 
@@ -36,16 +41,16 @@ class SessionCookieDriverSpec extends ConfigSpec<SessionCookieDriverConfig> {
   String get root => 'session';
 
   @override
-  Schema? get schema =>
-      ConfigSchema.object(
-        title: 'Cookie Session Driver',
-        description: 'Cookie-based session storage.',
-        properties: {
-          'encrypt': ConfigSchema.boolean(
-            description: 'Controls whether cookie-based session payloads are encrypted.',
+  Schema? get schema => ConfigSchema.object(
+    title: 'Cookie Session Driver',
+    description: 'Cookie-based session storage.',
+    properties: {
+      'encrypt': ConfigSchema.boolean(
+        description:
+            'Controls whether cookie-based session payloads are encrypted.',
       ),
-        },
-      );
+    },
+  );
 
   @override
   SessionCookieDriverConfig fromMap(
@@ -75,26 +80,26 @@ class SessionFileDriverSpec extends ConfigSpec<SessionFileDriverConfig> {
   String get root => 'session';
 
   @override
-  Schema? get schema =>
-      ConfigSchema.object(
-        title: 'File Session Driver',
-        description: 'File-based session storage.',
-        properties: {
-          'files': ConfigSchema.string(
+  Schema? get schema => ConfigSchema.object(
+    title: 'File Session Driver',
+    description: 'File-based session storage.',
+    properties: {
+      'files':
+          ConfigSchema.string(
             description: 'Directory path used to persist session files.',
           ).withMetadata({
             'default_note':
-            'Computed from storage defaults (storage/framework/sessions).',
+                'Computed from storage defaults (storage/framework/sessions).',
             'validation': 'Must resolve to an accessible directory path.',
           }),
-          'lottery': ConfigSchema.list(
+      'lottery': ConfigSchema.list(
         description:
             'Cleanup lottery odds for pruning stale sessions (e.g., [2, 100]).',
-            items: ConfigSchema.integer(),
+        items: ConfigSchema.integer(),
         defaultValue: const [2, 100],
-          ).withMetadata({'validation': 'Provide two integers [wins, total].'}),
-        },
-      );
+      ).withMetadata({'validation': 'Provide two integers [wins, total].'}),
+    },
+  );
 
   @override
   SessionFileDriverConfig fromMap(
@@ -173,11 +178,10 @@ class SessionArrayDriverSpec extends ConfigSpec<SessionArrayDriverConfig> {
   String get root => 'session';
 
   @override
-  Schema? get schema =>
-      ConfigSchema.object(
-        title: 'Array Session Driver',
-        description: 'In-memory array session storage.',
-      );
+  Schema? get schema => ConfigSchema.object(
+    title: 'Array Session Driver',
+    description: 'In-memory array session storage.',
+  );
 
   @override
   SessionArrayDriverConfig fromMap(
@@ -213,17 +217,18 @@ class SessionCacheDriverSpec extends ConfigSpec<SessionCacheDriverConfig> {
   String get root => 'session';
 
   @override
-  Schema? get schema =>
-      ConfigSchema.object(
-        title: 'Cache Session Driver',
-        description: 'Cache-backed session storage.',
-        properties: {
-          'store': ConfigSchema.string(
+  Schema? get schema => ConfigSchema.object(
+    title: 'Cache Session Driver',
+    description: 'Cache-backed session storage.',
+    properties: {
+      'store':
+          ConfigSchema.string(
             description: 'Cache store name used when persisting sessions.',
-          ).withMetadata(
-              {'validation': 'Must match a configured cache store name.'}),
-        },
-      );
+          ).withMetadata({
+            'validation': 'Must match a configured cache store name.',
+          }),
+    },
+  );
 
   @override
   SessionCacheDriverConfig fromMap(

@@ -24,10 +24,7 @@ class CacheStoreConfig {
       throwOnInvalid: true,
     );
     final options = Map<String, dynamic>.from(map)..remove('driver');
-    return CacheStoreConfig(
-      driver: driverValue,
-      options: options,
-    );
+    return CacheStoreConfig(driver: driverValue, options: options);
   }
 
   Map<String, dynamic> toMap() {
@@ -69,32 +66,34 @@ class CacheConfigSpec extends ConfigSpec<CacheConfig> {
   String get root => 'cache';
 
   @override
-  Schema? get schema =>
-      ConfigSchema.object(
-        title: 'Cache Configuration',
-        description: 'Configuration for caching stores and default settings.',
-        properties: {
-          'default': ConfigSchema.string(
-            description: 'Name of the cache store to use when none is specified explicitly.',
-            defaultValue: 'file',
-          ).withMetadata({configDocMetaInheritFromEnv: 'CACHE_STORE'}),
-          'prefix': ConfigSchema.string(
-            description: 'Prefix prepended to every cache key.',
-            defaultValue: '',
-          ),
-          'key_prefix': ConfigSchema.string(
-            description: 'Optional global prefix injected before the generated store prefix.',
-          ),
-          'stores': ConfigSchema.object(
+  Schema? get schema => ConfigSchema.object(
+    title: 'Cache Configuration',
+    description: 'Configuration for caching stores and default settings.',
+    properties: {
+      'default': ConfigSchema.string(
+        description:
+            'Name of the cache store to use when none is specified explicitly.',
+        defaultValue: 'file',
+      ).withMetadata({configDocMetaInheritFromEnv: 'CACHE_STORE'}),
+      'prefix': ConfigSchema.string(
+        description: 'Prefix prepended to every cache key.',
+        defaultValue: '',
+      ),
+      'key_prefix': ConfigSchema.string(
+        description:
+            'Optional global prefix injected before the generated store prefix.',
+      ),
+      'stores':
+          ConfigSchema.object(
             description: 'Configured cache stores keyed by store name.',
             additionalProperties: true, // Stores are dynamic
             // Provide default value for documentation
           ).withDefault({
-        'array': {'driver': 'array'},
+            'array': {'driver': 'array'},
             'file': {'driver': 'file', 'path': 'storage/framework/cache'},
           }),
-        },
-      );
+    },
+  );
 
   @override
   List<ConfigDocEntry> docs({String? pathBase, ConfigSpecContext? context}) {
@@ -120,8 +119,9 @@ class CacheConfigSpec extends ConfigSpec<CacheConfig> {
     final config = context?.config;
     final hasPrefix = config?.has('cache.prefix') ?? map.containsKey('prefix');
     if (hasPrefix) {
-      final value =
-          config != null ? config.get<Object?>('cache.prefix') : map['prefix'];
+      final value = config != null
+          ? config.get<Object?>('cache.prefix')
+          : map['prefix'];
       if (value == null) {
         prefix = '';
       } else {
@@ -140,10 +140,9 @@ class CacheConfigSpec extends ConfigSpec<CacheConfig> {
     final hasKeyPrefix =
         config?.has('cache.key_prefix') ?? map.containsKey('key_prefix');
     if (hasKeyPrefix) {
-      final value =
-          config != null
-              ? config.get<Object?>('cache.key_prefix')
-              : map['key_prefix'];
+      final value = config != null
+          ? config.get<Object?>('cache.key_prefix')
+          : map['key_prefix'];
       if (value == null) {
         keyPrefix = '';
       } else {

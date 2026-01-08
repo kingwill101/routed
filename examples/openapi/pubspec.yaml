@@ -13,7 +13,5 @@ dependencies:
 
 dev_dependencies:
   lints: ^6.0.0
-  test: ^1.26.3
-  routed_cli:
-    path: ../../packages/routed_cli
+  test: ^1.29.0
   hotreloader: ^4.3.0

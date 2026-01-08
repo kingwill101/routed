@@ -15,7 +15,8 @@ Map<String, List<ConfigDocEntry>> collectConfigDocs() {
       if (provider.schemas.isNotEmpty) {
         for (final entry in provider.schemas.entries) {
           allDocs.addAll(
-              ConfigSchema.toDocEntries(entry.value, pathBase: entry.key));
+            ConfigSchema.toDocEntries(entry.value, pathBase: entry.key),
+          );
         }
       }
 

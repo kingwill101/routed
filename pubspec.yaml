@@ -2,7 +2,6 @@ name: routed_ecosystem
 publish_to: none
 workspace:
   - packages/routed
-  - packages/routed_cli
   - packages/routed_hotwire
   - packages/server_testing/server_testing
   - packages/server_testing/routed_testing

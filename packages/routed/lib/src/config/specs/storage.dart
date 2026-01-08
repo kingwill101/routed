@@ -48,8 +48,9 @@ class StorageDiskConfig {
       throwOnInvalid: true,
     );
     final normalized = rawDriver?.toLowerCase();
-    final driver =
-        normalized == null || normalized.isEmpty ? 'local' : normalized;
+    final driver = normalized == null || normalized.isEmpty
+        ? 'local'
+        : normalized;
     final options = Map<String, dynamic>.from(map);
     options['driver'] = driver;
     return StorageDiskConfig(name: name, driver: driver, options: options);
@@ -83,36 +84,35 @@ class StorageConfigSpec extends ConfigSpec<StorageProviderConfig> {
   String get root => 'storage';
 
   @override
-  Schema? get schema =>
-      ConfigSchema.object(
-        title: 'Storage Configuration',
-        description: 'Filesystem and cloud storage configuration.',
-        properties: {
-          'default': ConfigSchema.string(
+  Schema? get schema => ConfigSchema.object(
+    title: 'Storage Configuration',
+    description: 'Filesystem and cloud storage configuration.',
+    properties: {
+      'default': ConfigSchema.string(
         description: 'Name of the disk to use when none is specified.',
         defaultValue: 'local',
       ),
-          'cloud': ConfigSchema.string(
-            description: 'Disk name used when a "cloud" disk is required by helpers.',
+      'cloud': ConfigSchema.string(
+        description:
+            'Disk name used when a "cloud" disk is required by helpers.',
       ),
-          'root': ConfigSchema.string(
-        description: 'Base filesystem path used by the default local disk.',
-        defaultValue: storageRootTemplateDefault(),
+      'root':
+          ConfigSchema.string(
+            description: 'Base filesystem path used by the default local disk.',
+            defaultValue: storageRootTemplateDefault(),
           ).withMetadata({
             configDocMetaInheritFromEnv: 'STORAGE_ROOT',
             'default_note': 'Falls back to storage/app when not overridden.',
           }),
-          'disks': ConfigSchema.object(
-        description: 'Configured storage disks.',
+      'disks':
+          ConfigSchema.object(
+            description: 'Configured storage disks.',
             additionalProperties: true,
           ).withDefault({
-            'local': {
-              'driver': 'local',
-              'root': storageRootTemplateDefault(),
-            },
+            'local': {'driver': 'local', 'root': storageRootTemplateDefault()},
           }),
-        },
-      );
+    },
+  );
 
   @override
   StorageProviderConfig fromMap(
@@ -125,8 +125,9 @@ class StorageConfigSpec extends ConfigSpec<StorageProviderConfig> {
       allowEmpty: true,
       throwOnInvalid: true,
     );
-    final defaultDisk =
-        defaultRaw == null || defaultRaw.isEmpty ? 'local' : defaultRaw;
+    final defaultDisk = defaultRaw == null || defaultRaw.isEmpty
+        ? 'local'
+        : defaultRaw;
 
     String? cloudDisk;
     if (map.containsKey('cloud')) {
@@ -177,9 +178,7 @@ class StorageConfigSpec extends ConfigSpec<StorageProviderConfig> {
       'default': value.defaultDisk,
       'cloud': value.cloudDisk,
       'root': value.root,
-      'disks': value.disks.map(
-        (key, disk) => MapEntry(key, disk.toMap()),
-      ),
+      'disks': value.disks.map((key, disk) => MapEntry(key, disk.toMap())),
     };
   }
 }

@@ -39,9 +39,9 @@ class CloudStorageDriver {
 
   StorageDisk build(StorageDriverContext context) {
     final resolved = _resolveConfig(context);
-    final adapter =
-        CloudAdapter.fromConfig(DiskConfig.fromMap(resolved.toMap()))
-            .diskName(context.diskName);
+    final adapter = CloudAdapter.fromConfig(
+      DiskConfig.fromMap(resolved.toMap()),
+    ).diskName(context.diskName);
     return CloudStorageDisk(adapter: adapter, diskName: context.diskName);
   }
 

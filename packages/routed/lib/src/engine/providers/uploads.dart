@@ -17,12 +17,11 @@ class UploadsServiceProvider extends ServiceProvider
   static const UploadsConfigSpec spec = UploadsConfigSpec();
 
   @override
-  ConfigDefaults get defaultConfig =>
-      ConfigDefaults(
-        docs: spec.docs(),
-        values: spec.defaultsWithRoot(),
-        schemas: spec.schemaWithRoot(),
-      );
+  ConfigDefaults get defaultConfig => ConfigDefaults(
+    docs: spec.docs(),
+    values: spec.defaultsWithRoot(),
+    schemas: spec.schemaWithRoot(),
+  );
 
   @override
   void register(Container container) {
@@ -78,10 +77,7 @@ class UploadsServiceProvider extends ServiceProvider
     final current = engine.config;
     final resolved = spec.resolve(
       config,
-      context: UploadsConfigContext(
-        config: config,
-        engineConfig: current,
-      ),
+      context: UploadsConfigContext(config: config, engineConfig: current),
     );
     if (_multipartEquals(current.multipart, resolved)) {
       return;

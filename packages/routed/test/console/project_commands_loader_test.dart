@@ -3,7 +3,6 @@ import 'dart:io' as io;
 
 import 'package:args/command_runner.dart' show UsageException;
 import 'package:path/path.dart' as p;
-
 import 'package:routed/console.dart' show CliLogger;
 import 'package:routed/src/console/args/commands.dart' as cmds;
 import 'package:routed/src/console/args/runner.dart';
@@ -262,7 +261,10 @@ String? _findCliRoot(io.Directory start) {
     final pubspec = io.File(p.join(dir.path, 'pubspec.yaml'));
     if (pubspec.existsSync()) {
       final contents = pubspec.readAsStringSync();
-      if (RegExp(r'^\s*name:\s*routed\s*$', multiLine: true).hasMatch(contents)) {
+      if (RegExp(
+        r'^\s*name:\s*routed\s*$',
+        multiLine: true,
+      ).hasMatch(contents)) {
         return dir.path;
       }
     }
