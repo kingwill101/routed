@@ -48,20 +48,20 @@ class LocalStorageDiskSpec extends ConfigSpec<LocalStorageDiskConfig> {
   const LocalStorageDiskSpec();
 
   @override
-  String get root => 'storage.disks.*';
+  String get root => 'storage.disks.*';;
 
-  @overridee
+  @override
   Schema? get schema => ConfigSchema.object(
     title: 'Local Storage Disk',
     description: 'Stores files on the local filesystem.',
     properties: {
-      'root': ConfigSchema.stringdescription:
-            'Filesystem path used as the disk root (defaults to storage/app for the local disk, or storage/<name> for other disks).',
-      ),
-          'file_system': ConfigSchema.object(
+      'root': ConfigSchema.string(
         description:
+            'Filesystem path used as the disk root (defaults to storage/app for the local disk, or storage/<name> for other disks).',
+      )'file_system': ConfigSchema.object(
+            description:
             'Optional file system override used when operating the local disk.',
-      ),
+          ),
         },
       );
 
