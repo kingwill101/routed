@@ -16,6 +16,9 @@ resolution: workspace
 environment:
   sdk: ">=3.9.0 <4.0.0"
 
+executables:
+  routed: routed
+
 # Add regular dependencies here.
 dependencies:
   acanthis: ^1.5.1

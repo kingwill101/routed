@@ -6,7 +6,7 @@
   defaults so apps can ship multilingual responses out of the box.
 - The configuration provider now leans on the shared `config_utils` helpers with
   deep merge/dot lookups, dynamic defaults for storage/session/cache, and doc
-  snapshots that power `provider:list --config` output in `routed_cli`.
+  snapshots that power `provider:list --config` output in `routed`.
 - Refactored the logging provider to use the new config snapshots, tightening
   context propagation and keeping structured logger defaults in sync with the
   rest of the engine.
