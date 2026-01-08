@@ -90,6 +90,7 @@ class StorageServiceProvider extends ServiceProvider
       ...StorageServiceProvider.driverDocumentation(),
     ],
     values: spec.defaultsWithRoot(),
+    schemas: spec.schemaWithRoot(),
   );
 
   @override

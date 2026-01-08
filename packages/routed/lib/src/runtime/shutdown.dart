@@ -1,7 +1,9 @@
 import 'dart:async';
 import 'dart:io';
 
+import 'package:json_schema_builder/json_schema_builder.dart';
 import 'package:meta/meta.dart';
+import 'package:routed/src/config/schema.dart';
 import 'package:routed/src/contracts/contracts.dart' show Config;
 import 'package:routed/src/provider/config_utils.dart';
 import 'package:routed/src/provider/provider.dart';
@@ -73,64 +75,43 @@ class RuntimeConfigSpec extends ConfigSpec<RuntimeConfig> {
   String get root => 'runtime';
 
   @override
-  Map<String, dynamic> defaults({ConfigSpecContext? context}) {
-    return {
-      'shutdown': {
-        'enabled': true,
-        'grace_period': '20s',
-        'force_after': '1m',
-        'exit_code': 0,
-        'notify_readiness': true,
-        'signals': const ['sigint', 'sigterm'],
-      },
-    };
-  }
-
-  @override
-  List<ConfigDocEntry> docs({String? pathBase, ConfigSpecContext? context}) {
-    final base = pathBase ?? root;
-    String path(String segment) => base.isEmpty ? segment : '$base.$segment';
-
-    return <ConfigDocEntry>[
-      ConfigDocEntry(
-        path: path('shutdown.enabled'),
-        type: 'bool',
-        description: 'Enable graceful shutdown signal handling.',
-        defaultValue: true,
+  Schema? get schema => ConfigSchema.object(
+    title: 'Runtime Configuration',
+    description: 'Process runtime and shutdown settings.',
+    properties: {
+      'shutdown': ConfigSchema.object(
+        description: 'Graceful shutdown settings.',
+        properties: {
+          'enabled': ConfigSchema.boolean(
+            description: 'Enable graceful shutdown signal handling.',
+            defaultValue: true,
+          ),
+          'grace_period': ConfigSchema.duration(
+            description:
+                'Time to wait for in-flight requests before forcing close.',
+            defaultValue: '20s',
+          ),
+          'force_after': ConfigSchema.duration(
+            description: 'Absolute time limit before shutdown completes.',
+            defaultValue: '1m',
+          ),
+          'exit_code': ConfigSchema.integer(
+            description: 'Process exit code returned after graceful shutdown.',
+            defaultValue: 0,
+          ),
+          'notify_readiness': ConfigSchema.boolean(
+            description: 'Mark readiness probes unhealthy while draining.',
+            defaultValue: true,
+          ),
+          'signals': ConfigSchema.list(
+            description: 'Signals that trigger graceful shutdown.',
+            items: ConfigSchema.string(),
+            defaultValue: const ['sigint', 'sigterm'],
+          ),
+        },
       ),
-      ConfigDocEntry(
-        path: path('shutdown.grace_period'),
-        type: 'duration',
-        description:
-            'Time to wait for in-flight requests before forcing close.',
-        defaultValue: '20s',
-      ),
-      ConfigDocEntry(
-        path: path('shutdown.force_after'),
-        type: 'duration',
-        description: 'Absolute time limit before shutdown completes.',
-        defaultValue: '1m',
-      ),
-      ConfigDocEntry(
-        path: path('shutdown.exit_code'),
-        type: 'int',
-        description: 'Process exit code returned after graceful shutdown.',
-        defaultValue: 0,
-      ),
-      ConfigDocEntry(
-        path: path('shutdown.notify_readiness'),
-        type: 'bool',
-        description: 'Mark readiness probes unhealthy while draining.',
-        defaultValue: true,
-      ),
-      ConfigDocEntry(
-        path: path('shutdown.signals'),
-        type: 'list<string>',
-        description: 'Signals that trigger graceful shutdown.',
-        defaultValue: const ['sigint', 'sigterm'],
-      ),
-    ];
-  }
+    },
+  );
 
   @override
   RuntimeConfig fromMap(

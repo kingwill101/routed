@@ -5,6 +5,7 @@ import 'package:json2yaml/json2yaml.dart';
 import 'package:routed/routed.dart'
     show
         ConfigDocEntry,
+        ConfigSchema,
         configDocMetaInheritFromEnv,
         deepCopyValue,
         deepMerge,
@@ -21,7 +22,26 @@ Map<String, Map<String, dynamic>> buildConfigDefaults() {
   final merged = <String, Map<String, dynamic>>{};
 
   for (final provider in providers) {
-    provider.defaults.forEach((root, value) {
+    final Map<String, dynamic> defaults = Map.from(provider.defaults);
+
+    // If schemas are available, use them to augment or provide defaults
+    if (provider.schemas.isNotEmpty) {
+      for (final entry in provider.schemas.entries) {
+        final root = entry.key;
+        final schema = entry.value;
+        final schemaDefaults = ConfigSchema.extractDefaults(schema);
+        if (schemaDefaults.isNotEmpty) {
+          // Merge defaults into the specific root
+          final rootDefaults = defaults.putIfAbsent(
+              root, () => <String, dynamic>{});
+          if (rootDefaults is Map<String, dynamic>) {
+            deepMerge(rootDefaults, schemaDefaults, override: true);
+          }
+        }
+      }
+    }
+
+    defaults.forEach((root, value) {
       final existing = merged.putIfAbsent(root, () => <String, dynamic>{});
       if (value is Map<String, dynamic>) {
         deepMerge(existing, value, override: true);

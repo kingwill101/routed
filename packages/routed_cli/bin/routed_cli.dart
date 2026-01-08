@@ -15,6 +15,7 @@ Future<void> main(List<String> args) async {
       cmds.ConfigInitCommand(),
       cmds.ConfigPublishCommand(),
       cmds.ConfigCacheCommand(),
+      cmds.ConfigSchemaCommand(),
       cmds.ConfigClearCommand(),
       cmds.RoutesCommand(),
       cmds.OpenApiCommand(),

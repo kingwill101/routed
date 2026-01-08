@@ -364,6 +364,7 @@ class SessionServiceProvider extends ServiceProvider
         ),
       ],
       values: values,
+      schemas: spec.schemaWithRoot(),
     );
   }
 

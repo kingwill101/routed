@@ -1,0 +1,1549 @@
+{
+  "$id": "https://raw.githubusercontent.com/kingwill101/routed/master/packages/routed/schemas/config.schema.json",
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Routed Configuration",
+  "type": "object",
+  "properties": {
+    "app": {
+      "type": "object",
+      "title": "Application Configuration",
+      "description": "Core application settings.",
+      "properties": {
+        "name": {
+          "type": "string",
+          "description": "Application display name.",
+          "default": "{{ env.APP_NAME | default: 'Routed App' }}",
+          "metadata": {
+            "inheritFromEnv": "APP_NAME"
+          }
+        },
+        "env": {
+          "type": "string",
+          "description": "Runtime environment identifier (development, production, etc.).",
+          "default": "production",
+          "metadata": {
+            "inheritFromEnv": "APP_ENV"
+          }
+        },
+        "debug": {
+          "type": "boolean",
+          "description": "Enables verbose application debugging.",
+          "default": false,
+          "metadata": {
+            "inheritFromEnv": "APP_DEBUG"
+          }
+        },
+        "key": {
+          "type": "string",
+          "description": "Application encryption key used for signed payloads.",
+          "default": "{{ env.APP_KEY | default: 'change-me' }}",
+          "metadata": {
+            "inheritFromEnv": "APP_KEY"
+          }
+        },
+        "url": {
+          "type": "string",
+          "description": "Base URL used in generated links.",
+          "default": "http://localhost"
+        },
+        "timezone": {
+          "type": "string",
+          "description": "Default timezone applied to dates.",
+          "default": "UTC"
+        },
+        "locale": {
+          "type": "string",
+          "description": "Primary locale identifier used for localized content.",
+          "default": "en"
+        },
+        "fallback_locale": {
+          "type": "string",
+          "description": "Locale used when a translation key is missing.",
+          "default": "en"
+        },
+        "faker_locale": {
+          "type": "string",
+          "description": "Locale applied to Faker-generated seed data.",
+          "default": "en_US"
+        },
+        "cipher": {
+          "type": "string",
+          "description": "Default cipher used for encrypted payloads.",
+          "default": "AES-256-CBC"
+        },
+        "cache_prefix": {
+          "type": "string",
+          "description": "Prefix applied to cache keys for array and simple stores.",
+          "default": ""
+        },
+        "previous_keys": {
+          "type": "array",
+          "description": "Previous APP_KEY values accepted during key rotation.",
+          "items": {
+            "type": "string"
+          },
+          "uniqueItems": false,
+          "default": []
+        },
+        "maintenance": {
+          "type": "object",
+          "properties": {
+            "driver": {
+              "type": "string",
+              "description": "Driver responsible for toggling maintenance mode.",
+              "default": "file"
+            },
+            "store": {
+              "type": "string",
+              "description": "Backing store used by the maintenance driver.",
+              "default": "database"
+            }
+          },
+          "additionalProperties": false
+        }
+      },
+      "additionalProperties": false
+    },
+    "http": {
+      "type": "object",
+      "title": "HTTP Configuration",
+      "description": "Global HTTP and server settings.",
+      "properties": {
+        "providers": {
+          "type": "array",
+          "description": "Service providers registered for the HTTP pipeline.",
+          "items": {
+            "type": "string"
+          },
+          "uniqueItems": false,
+          "default": [
+            "routed.core",
+            "routed.routing",
+            "routed.cache",
+            "routed.sessions",
+            "routed.uploads",
+            "routed.cors",
+            "routed.security",
+            "routed.auth",
+            "routed.logging",
+            "routed.observability",
+            "routed.compression",
+            "routed.rate_limit",
+            "routed.storage",
+            "routed.static",
+            "routed.localization",
+            "routed.views"
+          ]
+        },
+        "middleware": {
+          "type": "object",
+          "properties": {
+            "global": {
+              "type": "array",
+              "description": "Middleware executed for every HTTP request.",
+              "items": {
+                "type": "string"
+              },
+              "uniqueItems": false,
+              "default": []
+            },
+            "groups": {
+              "type": "object",
+              "description": "Named middleware groups applied to route collections.",
+              "additionalProperties": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                },
+                "uniqueItems": false
+              },
+              "default": {}
+            }
+          },
+          "additionalProperties": false
+        },
+        "middleware_sources": {
+          "type": "object",
+          "description": "Declarative middleware mappings contributed by service providers.",
+          "additionalProperties": {
+            "type": "object",
+            "properties": {
+              "global": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                },
+                "uniqueItems": false
+              },
+              "groups": {
+                "type": "object",
+                "additionalProperties": {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  },
+                  "uniqueItems": false
+                }
+              }
+            },
+            "additionalProperties": false
+          },
+          "default": {}
+        },
+        "http2": {
+          "type": "object",
+          "properties": {
+            "enabled": {
+              "type": "boolean",
+              "description": "Enable HTTP/2 (ALPN h2) on secure listeners."
+            },
+            "allow_cleartext": {
+              "type": "boolean",
+              "description": "Allow HTTP/2 without TLS (h2c). Typically false in production."
+            },
+            "max_concurrent_streams": {
+              "type": "integer",
+              "description": "Advertised max concurrent streams per HTTP/2 connection."
+            },
+            "idle_timeout": {
+              "type": "string",
+              "description": "Optional idle timeout applied to HTTP/2 connections.",
+              "format": "duration"
+            }
+          },
+          "additionalProperties": false
+        },
+        "tls": {
+          "type": "object",
+          "properties": {
+            "certificate_path": {
+              "type": "string",
+              "description": "Path to the PEM certificate chain used for TLS."
+            },
+            "key_path": {
+              "type": "string",
+              "description": "Path to the private key corresponding to the TLS certificate."
+            },
+            "password": {
+              "type": "string",
+              "description": "Optional password protecting the certificate/key files."
+            },
+            "request_client_certificate": {
+              "type": "boolean",
+              "description": "Request client certificates during TLS handshakes."
+            },
+            "shared": {
+              "type": "boolean",
+              "description": "Allow multiple isolates/processes to share the TLS listener."
+            },
+            "v6_only": {
+              "type": "boolean",
+              "description": "Restrict TLS listener to IPv6 only (disables IPv4 dual stack)."
+            }
+          },
+          "additionalProperties": false
+        }
+      },
+      "additionalProperties": false
+    },
+    "runtime": {
+      "type": "object",
+      "title": "Runtime Configuration",
+      "description": "Process runtime and shutdown settings.",
+      "properties": {
+        "shutdown": {
+          "type": "object",
+          "description": "Graceful shutdown settings.",
+          "properties": {
+            "enabled": {
+              "type": "boolean",
+              "description": "Enable graceful shutdown signal handling.",
+              "default": true
+            },
+            "grace_period": {
+              "type": "string",
+              "description": "Time to wait for in-flight requests before forcing close.",
+              "format": "duration",
+              "default": "20s"
+            },
+            "force_after": {
+              "type": "string",
+              "description": "Absolute time limit before shutdown completes.",
+              "format": "duration",
+              "default": "1m"
+            },
+            "exit_code": {
+              "type": "integer",
+              "description": "Process exit code returned after graceful shutdown.",
+              "default": 0
+            },
+            "notify_readiness": {
+              "type": "boolean",
+              "description": "Mark readiness probes unhealthy while draining.",
+              "default": true
+            },
+            "signals": {
+              "type": "array",
+              "description": "Signals that trigger graceful shutdown.",
+              "items": {
+                "type": "string"
+              },
+              "uniqueItems": false,
+              "default": [
+                "sigint",
+                "sigterm"
+              ]
+            }
+          },
+          "additionalProperties": false
+        }
+      },
+      "additionalProperties": false
+    },
+    "routing": {
+      "type": "object",
+      "title": "Routing Configuration",
+      "description": "Core routing behavior configuration.",
+      "properties": {
+        "redirect_trailing_slash": {
+          "type": "boolean",
+          "description": "Automatically redirect /path/ to /path.",
+          "default": true
+        },
+        "handle_method_not_allowed": {
+          "type": "boolean",
+          "description": "Return 405 responses when a route exists but the method does not.",
+          "default": true
+        },
+        "default_options": {
+          "type": "boolean",
+          "description": "Serve automatic OPTIONS responses enumerating allowed methods when no handler is defined.",
+          "default": true
+        },
+        "etag": {
+          "type": "object",
+          "description": "ETag generation settings.",
+          "properties": {
+            "strategy": {
+              "type": "string",
+              "description": "Default ETag strategy (disabled, strong, weak).",
+              "default": "disabled"
+            }
+          },
+          "additionalProperties": false
+        }
+      },
+      "additionalProperties": false
+    },
+    "cache": {
+      "type": "object",
+      "title": "Cache Configuration",
+      "description": "Configuration for caching stores and default settings.",
+      "properties": {
+        "default": {
+          "type": "string",
+          "description": "Name of the cache store to use when none is specified explicitly.",
+          "default": "file",
+          "metadata": {
+            "inheritFromEnv": "CACHE_STORE"
+          }
+        },
+        "prefix": {
+          "type": "string",
+          "description": "Prefix prepended to every cache key.",
+          "default": ""
+        },
+        "key_prefix": {
+          "type": "string",
+          "description": "Optional global prefix injected before the generated store prefix."
+        },
+        "stores": {
+          "type": "object",
+          "description": "Configured cache stores keyed by store name.",
+          "additionalProperties": true,
+          "default": {
+            "array": {
+              "driver": "array"
+            },
+            "file": {
+              "driver": "file",
+              "path": "storage/framework/cache"
+            }
+          }
+        }
+      },
+      "additionalProperties": false
+    },
+    "session": {
+      "type": "object",
+      "title": "Session Configuration",
+      "description": "HTTP session management settings.",
+      "properties": {
+        "enabled": {
+          "type": "boolean",
+          "description": "Enable the built-in sessions middleware (defaults to disabled)."
+        },
+        "driver": {
+          "type": "string",
+          "description": "Session backend to use.",
+          "default": "cookie",
+          "metadata": {
+            "inheritFromEnv": "SESSION_DRIVER"
+          }
+        },
+        "lifetime": {
+          "type": "integer",
+          "description": "Session lifetime in minutes.",
+          "default": 120
+        },
+        "expire_on_close": {
+          "type": "boolean",
+          "description": "Expire sessions when the browser closes.",
+          "default": false
+        },
+        "encrypt": {
+          "type": "boolean",
+          "description": "Encrypt session payloads when using cookie drivers.",
+          "default": true
+        },
+        "cookie": {
+          "type": "string",
+          "description": "Cookie name used for identifying the session when using cookie-based drivers.",
+          "default": "{{ env.SESSION_COOKIE | default: 'routed-session' }}",
+          "metadata": {
+            "inheritFromEnv": "SESSION_COOKIE"
+          }
+        },
+        "path": {
+          "type": "string",
+          "description": "Cookie path scope for the session identifier.",
+          "default": "/"
+        },
+        "domain": {
+          "type": "string",
+          "description": "Cookie domain override for session cookies."
+        },
+        "secure": {
+          "type": "boolean",
+          "description": "Require HTTPS when sending session cookies.",
+          "default": false
+        },
+        "http_only": {
+          "type": "boolean",
+          "description": "Mark session cookies as HTTP-only.",
+          "default": true
+        },
+        "partitioned": {
+          "type": "boolean",
+          "description": "Enable partitioned cookies for session storage.",
+          "default": false
+        },
+        "cache_prefix": {
+          "type": "string",
+          "description": "Prefix applied to cache keys when using cache-backed session drivers.",
+          "default": "session:"
+        },
+        "same_site": {
+          "type": "string",
+          "description": "SameSite policy applied to the session cookie.",
+          "default": "lax",
+          "enum": [
+            "lax",
+            "strict",
+            "none"
+          ]
+        },
+        "files": {
+          "type": "string",
+          "description": "Filesystem path used by file-based session drivers.",
+          "default": "storage/framework/sessions"
+        },
+        "lottery": {
+          "type": "array",
+          "description": "Odds used by some drivers to trigger garbage collection (numerator, denominator).",
+          "items": {
+            "type": "integer"
+          },
+          "uniqueItems": false,
+          "default": [
+            2,
+            100
+          ]
+        },
+        "previous_keys": {
+          "type": "array",
+          "description": "Historical keys accepted when rotating session secrets. New sessions always use the current key.",
+          "items": {
+            "type": "string"
+          },
+          "uniqueItems": false,
+          "default": []
+        }
+      },
+      "additionalProperties": false
+    },
+    "uploads": {
+      "type": "object",
+      "title": "Uploads Configuration",
+      "description": "Multipart request and file upload settings.",
+      "properties": {
+        "max_memory": {
+          "type": "integer",
+          "description": "Maximum in-memory bytes before buffering to disk.",
+          "default": 33554432
+        },
+        "max_file_size": {
+          "type": "integer",
+          "description": "Maximum accepted upload size in bytes.",
+          "default": 10485760
+        },
+        "max_disk_usage": {
+          "type": "integer",
+          "description": "Maximum cumulative bytes written to disk per request before uploads are rejected.",
+          "default": 33554432
+        },
+        "allowed_extensions": {
+          "type": "array",
+          "description": "Whitelisted file extensions for uploads.",
+          "items": {
+            "type": "string"
+          },
+          "uniqueItems": false,
+          "default": [
+            "jpg",
+            "jpeg",
+            "png",
+            "gif",
+            "pdf"
+          ]
+        },
+        "directory": {
+          "type": "string",
+          "description": "Directory where uploaded files are stored.",
+          "default": "uploads"
+        },
+        "file_permissions": {
+          "type": "integer",
+          "description": "Permissions to apply to uploaded files.",
+          "default": 750
+        }
+      },
+      "additionalProperties": false
+    },
+    "cors": {
+      "type": "object",
+      "title": "CORS Configuration",
+      "description": "Configuration for Cross-Origin Resource Sharing (CORS).",
+      "properties": {
+        "enabled": {
+          "type": "boolean",
+          "description": "Enables CORS middleware.",
+          "default": false
+        },
+        "allowed_origins": {
+          "type": "array",
+          "description": "Origins allowed to access this application.",
+          "items": {
+            "type": "string"
+          },
+          "uniqueItems": false,
+          "default": [
+            "*"
+          ]
+        },
+        "allowed_methods": {
+          "type": "array",
+          "description": "HTTP methods permitted for CORS requests.",
+          "items": {
+            "type": "string"
+          },
+          "uniqueItems": false,
+          "default": [
+            "GET",
+            "POST",
+            "PUT",
+            "DELETE",
+            "PATCH",
+            "OPTIONS"
+          ]
+        },
+        "allowed_headers": {
+          "type": "array",
+          "description": "Request headers accepted for CORS requests.",
+          "items": {
+            "type": "string"
+          },
+          "uniqueItems": false,
+          "default": []
+        },
+        "exposed_headers": {
+          "type": "array",
+          "description": "Response headers exposed to the browser.",
+          "items": {
+            "type": "string"
+          },
+          "uniqueItems": false,
+          "default": []
+        },
+        "allow_credentials": {
+          "type": "boolean",
+          "description": "Whether cookies/credentials can be shared cross-origin.",
+          "default": false
+        },
+        "max_age": {
+          "type": "integer",
+          "description": "Preflight cache duration in seconds."
+        }
+      },
+      "additionalProperties": false
+    },
+    "security": {
+      "type": "object",
+      "title": "Security Configuration",
+      "description": "CSRF, trusted proxies, and IP filtering settings.",
+      "properties": {
+        "max_request_size": {
+          "type": "integer",
+          "description": "Maximum request body size in bytes.",
+          "default": 10485760
+        },
+        "headers": {
+          "type": "object",
+          "description": "Extra security headers applied to every response.",
+          "additionalProperties": true,
+          "default": {}
+        },
+        "csrf": {
+          "type": "object",
+          "description": "CSRF protection settings.",
+          "properties": {
+            "enabled": {
+              "type": "boolean",
+              "description": "Enable CSRF middleware.",
+              "default": true
+            },
+            "cookie_name": {
+              "type": "string",
+              "description": "Cookie used to store the CSRF token.",
+              "default": "csrf_token"
+            }
+          },
+          "additionalProperties": false
+        },
+        "trusted_proxies": {
+          "type": "object",
+          "description": "Trusted proxy settings.",
+          "properties": {
+            "enabled": {
+              "type": "boolean",
+              "description": "Trust proxy headers for client IP resolution.",
+              "default": false
+            },
+            "proxies": {
+              "type": "array",
+              "description": "CIDR ranges considered trusted proxies.",
+              "items": {
+                "type": "string"
+              },
+              "uniqueItems": false,
+              "default": [
+                "0.0.0.0/0",
+                "::/0"
+              ]
+            },
+            "headers": {
+              "type": "array",
+              "description": "Headers to inspect for client IP addresses.",
+              "items": {
+                "type": "string"
+              },
+              "uniqueItems": false,
+              "default": [
+                "X-Forwarded-For",
+                "X-Real-IP"
+              ]
+            },
+            "forward_client_ip": {
+              "type": "boolean",
+              "description": "Preserve the client IP from the first trusted header.",
+              "default": true
+            },
+            "platform_header": {
+              "type": "string",
+              "description": "Trusted platform header providing the original client IP (Cloudflare, AWS, etc.)."
+            }
+          },
+          "additionalProperties": false
+        },
+        "ip_filter": {
+          "type": "object",
+          "description": "IP allow/deny settings.",
+          "properties": {
+            "enabled": {
+              "type": "boolean",
+              "description": "Enable IP allow/deny middleware.",
+              "default": false
+            },
+            "default_action": {
+              "type": "string",
+              "description": "Fallback when no rules match (allow or deny).",
+              "default": "allow",
+              "enum": [
+                "allow",
+                "deny"
+              ]
+            },
+            "allow": {
+              "type": "array",
+              "description": "CIDR/IP entries explicitly allowed.",
+              "items": {
+                "type": "string"
+              },
+              "uniqueItems": false,
+              "default": []
+            },
+            "deny": {
+              "type": "array",
+              "description": "CIDR/IP entries explicitly denied.",
+              "items": {
+                "type": "string"
+              },
+              "uniqueItems": false,
+              "default": []
+            },
+            "respect_trusted_proxies": {
+              "type": "boolean",
+              "description": "Use trusted proxy resolution when determining client IP.",
+              "default": true
+            }
+          },
+          "additionalProperties": false
+        }
+      },
+      "additionalProperties": false
+    },
+    "logging": {
+      "type": "object",
+      "title": "Logging Configuration",
+      "description": "Configuration for structured application logging.",
+      "properties": {
+        "default": {
+          "type": "string",
+          "description": "Default log channel name (stack, single, stderr, etc.).",
+          "default": "stack",
+          "metadata": {
+            "inheritFromEnv": "LOG_CHANNEL"
+          }
+        },
+        "channels": {
+          "type": "object",
+          "description": "Map of log channel definitions (stack, single, daily, stderr, null).",
+          "additionalProperties": true,
+          "default": {
+            "stack": {
+              "driver": "stack",
+              "channels": [
+                "single",
+                "stdout"
+              ],
+              "ignore_exceptions": false
+            },
+            "single": {
+              "driver": "single",
+              "path": "storage/logs/routed.log"
+            },
+            "daily": {
+              "driver": "daily",
+              "path": "storage/logs/routed",
+              "days": 14,
+              "use_isolate": false
+            },
+            "stderr": {
+              "driver": "stderr"
+            },
+            "stdout": {
+              "driver": "stdout"
+            },
+            "null": {
+              "driver": "null"
+            }
+          }
+        },
+        "enabled": {
+          "type": "boolean",
+          "description": "Enable structured application logging.",
+          "default": true
+        },
+        "level": {
+          "type": "string",
+          "description": "Default log level for application logging.",
+          "default": "info"
+        },
+        "errors_only": {
+          "type": "boolean",
+          "description": "Only emit logs for failing requests when true.",
+          "default": false
+        },
+        "extra_fields": {
+          "type": "object",
+          "description": "Additional fields appended to every log entry.",
+          "additionalProperties": true,
+          "default": {}
+        },
+        "include_stack_traces": {
+          "type": "boolean",
+          "description": "Include stack traces in request error logs when enabled.",
+          "default": false
+        },
+        "format": {
+          "type": "string",
+          "description": "Log output format (json or text).",
+          "default": "pretty"
+        }
+      },
+      "additionalProperties": false
+    },
+    "auth": {
+      "type": "object",
+      "title": "Authentication Configuration",
+      "description": "JWT, OAuth2, and session-based authentication settings.",
+      "properties": {
+        "jwt": {
+          "type": "object",
+          "description": "JWT Bearer authentication settings.",
+          "properties": {
+            "enabled": {
+              "type": "boolean",
+              "description": "Enable JWT Bearer authentication middleware.",
+              "default": false
+            },
+            "issuer": {
+              "type": "string",
+              "description": "Required issuer claim value."
+            },
+            "audience": {
+              "type": "array",
+              "description": "Allowed audience values (any match passes).",
+              "items": {
+                "type": "string"
+              },
+              "uniqueItems": false,
+              "default": []
+            },
+            "required_claims": {
+              "type": "array",
+              "description": "Claims that must be present in every token.",
+              "items": {
+                "type": "string"
+              },
+              "uniqueItems": false,
+              "default": []
+            },
+            "jwks_url": {
+              "type": "string",
+              "description": "JWKS endpoint used to resolve signing keys."
+            },
+            "jwks_cache_ttl": {
+              "type": "string",
+              "description": "How long JWKS responses are cached.",
+              "format": "duration",
+              "default": "5m"
+            },
+            "algorithms": {
+              "type": "array",
+              "description": "Allowed signing algorithms (e.g. RS256).",
+              "items": {
+                "type": "string"
+              },
+              "uniqueItems": false,
+              "default": [
+                "RS256"
+              ]
+            },
+            "clock_skew": {
+              "type": "string",
+              "description": "Clock skew allowance for exp/nbf validation.",
+              "format": "duration",
+              "default": "60s"
+            },
+            "keys": {
+              "type": "array",
+              "description": "Inline JWK set used in addition to remote JWKS.",
+              "items": {
+                "type": "object",
+                "additionalProperties": true
+              },
+              "uniqueItems": false,
+              "default": []
+            },
+            "header": {
+              "type": "string",
+              "description": "Header name inspected for bearer tokens.",
+              "default": "Authorization"
+            },
+            "bearer_prefix": {
+              "type": "string",
+              "description": "Expected prefix for bearer tokens (default \"Bearer \").",
+              "default": "Bearer "
+            }
+          },
+          "additionalProperties": false
+        },
+        "oauth2": {
+          "type": "object",
+          "description": "OAuth2 authentication settings.",
+          "properties": {
+            "introspection": {
+              "type": "object",
+              "description": "RFC 7662 token introspection middleware settings.",
+              "properties": {
+                "enabled": {
+                  "type": "boolean",
+                  "description": "Enable RFC 7662 token introspection middleware.",
+                  "default": false
+                },
+                "endpoint": {
+                  "type": "string",
+                  "description": "OAuth2 introspection endpoint URL."
+                },
+                "client_id": {
+                  "type": "string",
+                  "description": "Client identifier used when calling the introspection endpoint."
+                },
+                "client_secret": {
+                  "type": "string",
+                  "description": "Client secret used for introspection requests."
+                },
+                "token_type_hint": {
+                  "type": "string",
+                  "description": "Optional token type hint passed to the introspection endpoint."
+                },
+                "cache_ttl": {
+                  "type": "string",
+                  "description": "How long introspection results are cached.",
+                  "format": "duration",
+                  "default": "30s"
+                },
+                "clock_skew": {
+                  "type": "string",
+                  "description": "Clock skew allowance for introspection timestamps.",
+                  "format": "duration",
+                  "default": "60s"
+                },
+                "additional": {
+                  "type": "object",
+                  "description": "Additional form parameters appended to introspection requests.",
+                  "additionalProperties": true,
+                  "default": {}
+                }
+              },
+              "additionalProperties": false
+            }
+          },
+          "additionalProperties": false
+        },
+        "session": {
+          "type": "object",
+          "description": "Session-based authentication settings.",
+          "properties": {
+            "remember_me": {
+              "type": "object",
+              "description": "Remember-me token settings.",
+              "properties": {
+                "cookie": {
+                  "type": "string",
+                  "description": "Cookie name used for remember-me tokens.",
+                  "default": "remember_token"
+                },
+                "duration": {
+                  "type": "string",
+                  "description": "Default lifetime applied to remember-me tokens when issued.",
+                  "format": "duration",
+                  "default": "30d"
+                }
+              },
+              "additionalProperties": false
+            }
+          },
+          "additionalProperties": false
+        },
+        "features": {
+          "type": "object",
+          "description": "Authentication feature flags.",
+          "properties": {
+            "haigate": {
+              "type": "object",
+              "properties": {
+                "enabled": {
+                  "type": "boolean",
+                  "description": "Enable Haigate authorization registry and middleware.",
+                  "default": false
+                }
+              },
+              "additionalProperties": false
+            }
+          },
+          "additionalProperties": false
+        },
+        "gates": {
+          "type": "object",
+          "description": "Haigate authorization settings.",
+          "properties": {
+            "defaults": {
+              "type": "object",
+              "properties": {
+                "denied_status": {
+                  "type": "integer",
+                  "description": "HTTP status returned when a gate denies access (used by default middleware).",
+                  "default": 403
+                },
+                "denied_message": {
+                  "type": "string",
+                  "description": "Optional body message returned when a gate denies access (used by default middleware)."
+                }
+              },
+              "additionalProperties": false
+            },
+            "abilities": {
+              "type": "object",
+              "description": "Declarative Haigate abilities. Entries map ability names to role or authentication checks.",
+              "additionalProperties": true,
+              "default": {}
+            }
+          },
+          "additionalProperties": false
+        },
+        "guards": {
+          "type": "object",
+          "description": "Named guard definitions consumed by guard middleware (e.g. authenticated, roles).",
+          "additionalProperties": true,
+          "default": {
+            "authenticated": {
+              "type": "authenticated",
+              "realm": "Restricted"
+            }
+          }
+        }
+      },
+      "additionalProperties": false
+    },
+    "observability": {
+      "type": "object",
+      "title": "Observability Configuration",
+      "description": "Tracing, metrics, and health check settings.",
+      "properties": {
+        "enabled": {
+          "type": "boolean",
+          "description": "Master toggle that enables or disables all observability features.",
+          "default": true
+        },
+        "tracing": {
+          "type": "object",
+          "description": "OpenTelemetry tracing settings.",
+          "properties": {
+            "enabled": {
+              "type": "boolean",
+              "description": "Enable OpenTelemetry tracing middleware.",
+              "default": false
+            },
+            "service_name": {
+              "type": "string",
+              "description": "Logical service.name attribute reported with every span.",
+              "default": "routed-service",
+              "metadata": {
+                "inheritFromEnv": "OBSERVABILITY_TRACING_SERVICE_NAME"
+              }
+            },
+            "exporter": {
+              "type": "string",
+              "description": "Tracing exporter (none, console, otlp).",
+              "default": "none",
+              "enum": [
+                "none",
+                "console",
+                "otlp"
+              ]
+            },
+            "endpoint": {
+              "type": "string",
+              "description": "Collector endpoint used when exporter=otlp (e.g. https://otel/v1/traces)."
+            },
+            "headers": {
+              "type": "object",
+              "description": "Optional headers forwarded to the OTLP collector (authorization, etc.).",
+              "additionalProperties": true,
+              "default": {}
+            }
+          },
+          "additionalProperties": false
+        },
+        "metrics": {
+          "type": "object",
+          "description": "Prometheus metrics settings.",
+          "properties": {
+            "enabled": {
+              "type": "boolean",
+              "description": "Enable Prometheus-style metrics endpoint.",
+              "default": false
+            },
+            "path": {
+              "type": "string",
+              "description": "Path for metrics exposition.",
+              "default": "/metrics"
+            },
+            "buckets": {
+              "type": "array",
+              "description": "Latency histogram bucket upper bounds (seconds) for routed_request_duration_seconds.",
+              "items": {
+                "type": "number"
+              },
+              "uniqueItems": false,
+              "default": [
+                0.01,
+                0.05,
+                0.1,
+                0.25,
+                0.5,
+                1.0,
+                2.0,
+                5.0
+              ]
+            }
+          },
+          "additionalProperties": false
+        },
+        "health": {
+          "type": "object",
+          "description": "Health and readiness check settings.",
+          "properties": {
+            "enabled": {
+              "type": "boolean",
+              "description": "Enable health and readiness endpoints.",
+              "default": true
+            },
+            "readiness_path": {
+              "type": "string",
+              "description": "HTTP path exposed for readiness checks.",
+              "default": "/readyz"
+            },
+            "liveness_path": {
+              "type": "string",
+              "description": "HTTP path exposed for liveness checks.",
+              "default": "/livez"
+            }
+          },
+          "additionalProperties": false
+        },
+        "errors": {
+          "type": "object",
+          "properties": {
+            "enabled": {
+              "type": "boolean",
+              "description": "Enable error observer notifications (reserve for external error trackers).",
+              "default": false
+            }
+          },
+          "additionalProperties": false
+        }
+      },
+      "additionalProperties": false
+    },
+    "compression": {
+      "type": "object",
+      "title": "Compression Configuration",
+      "description": "Automatic response compression settings.",
+      "properties": {
+        "enabled": {
+          "type": "boolean",
+          "description": "Enable automatic response compression.",
+          "default": true
+        },
+        "min_length": {
+          "type": "integer",
+          "description": "Minimum body size (bytes) before compression applies.",
+          "default": 1024
+        },
+        "algorithms": {
+          "type": "array",
+          "description": "Preferred compression algorithms (gzip, br).",
+          "items": {
+            "type": "string"
+          },
+          "uniqueItems": false,
+          "default": [
+            "br",
+            "gzip"
+          ]
+        },
+        "mime_allow": {
+          "type": "array",
+          "description": "MIME prefixes eligible for compression.",
+          "items": {
+            "type": "string"
+          },
+          "uniqueItems": false,
+          "default": [
+            "text/*",
+            "application/json",
+            "application/javascript"
+          ]
+        },
+        "mime_deny": {
+          "type": "array",
+          "description": "MIME prefixes excluded from compression.",
+          "items": {
+            "type": "string"
+          },
+          "uniqueItems": false,
+          "default": [
+            "image/*",
+            "audio/*",
+            "video/*"
+          ]
+        }
+      },
+      "additionalProperties": false
+    },
+    "rate_limit": {
+      "type": "object",
+      "title": "Rate Limit Configuration",
+      "description": "HTTP rate limiting and throttling settings.",
+      "properties": {
+        "enabled": {
+          "type": "boolean",
+          "description": "Enable rate limiting middleware.",
+          "default": false
+        },
+        "backend": {
+          "type": "string",
+          "description": "Backend hint (\"memory\" uses array store, \"redis\" expects a Redis-backed cache store).",
+          "default": "memory"
+        },
+        "failover": {
+          "type": "string",
+          "description": "Failover mode when the backing store is unavailable (allow, block, local).",
+          "default": "allow",
+          "enum": [
+            "allow",
+            "block",
+            "local"
+          ]
+        },
+        "store": {
+          "type": "string",
+          "description": "Cache store name to use for rate limit counters (defaults to cache.default)."
+        },
+        "policies": {
+          "type": "array",
+          "description": "Array of rate limit policies (match, capacity, key).",
+          "items": {
+            "type": "object",
+            "properties": {
+              "name": {
+                "type": "string"
+              },
+              "match": {
+                "type": "string",
+                "default": "*"
+              },
+              "method": {
+                "type": "string"
+              },
+              "strategy": {
+                "type": "string",
+                "description": "Enforcement strategy (token_bucket, sliding_window, quota).",
+                "default": "token_bucket",
+                "enum": [
+                  "token_bucket",
+                  "sliding_window",
+                  "quota"
+                ]
+              },
+              "limit": {
+                "type": "integer"
+              },
+              "capacity": {
+                "type": "integer"
+              },
+              "requests": {
+                "type": "integer"
+              },
+              "interval": {
+                "type": "string",
+                "format": "duration"
+              },
+              "refill": {
+                "type": "string",
+                "format": "duration"
+              },
+              "window": {
+                "type": "string",
+                "description": "Sliding window duration when using the sliding_window strategy.",
+                "format": "duration"
+              },
+              "period": {
+                "type": "string",
+                "description": "Quota reset interval when using the quota strategy.",
+                "format": "duration"
+              },
+              "burst": {
+                "type": "number"
+              },
+              "key": {
+                "type": "object",
+                "properties": {
+                  "type": {
+                    "type": "string",
+                    "default": "ip",
+                    "enum": [
+                      "ip",
+                      "header"
+                    ]
+                  },
+                  "header": {
+                    "type": "string"
+                  }
+                },
+                "additionalProperties": false
+              },
+              "failover": {
+                "type": "string",
+                "enum": [
+                  "allow",
+                  "block",
+                  "local"
+                ]
+              }
+            },
+            "additionalProperties": false
+          },
+          "uniqueItems": false,
+          "default": []
+        }
+      },
+      "additionalProperties": false
+    },
+    "storage": {
+      "type": "object",
+      "title": "Storage Configuration",
+      "description": "Filesystem and cloud storage configuration.",
+      "properties": {
+        "default": {
+          "type": "string",
+          "description": "Name of the disk to use when none is specified.",
+          "default": "local"
+        },
+        "cloud": {
+          "type": "string",
+          "description": "Disk name used when a \"cloud\" disk is required by helpers."
+        },
+        "root": {
+          "type": "string",
+          "description": "Base filesystem path used by the default local disk.",
+          "default": "{{ env.STORAGE_ROOT | default: 'storage/app' }}",
+          "metadata": {
+            "inheritFromEnv": "STORAGE_ROOT",
+            "default_note": "Falls back to storage/app when not overridden."
+          }
+        },
+        "disks": {
+          "type": "object",
+          "description": "Configured storage disks.",
+          "additionalProperties": true,
+          "default": {
+            "local": {
+              "driver": "local",
+              "root": "{{ env.STORAGE_ROOT | default: 'storage/app' }}"
+            }
+          }
+        }
+      },
+      "additionalProperties": false
+    },
+    "static": {
+      "type": "object",
+      "title": "Static Assets Configuration",
+      "description": "Static file serving and mount point settings.",
+      "properties": {
+        "enabled": {
+          "type": "boolean",
+          "description": "Enable static asset serving.",
+          "default": false
+        },
+        "mounts": {
+          "type": "array",
+          "description": "List of static mount configurations.",
+          "items": {
+            "type": "object",
+            "properties": {
+              "route": {
+                "type": "string",
+                "description": "Route prefix clients use to fetch assets.",
+                "default": "/"
+              },
+              "prefix": {
+                "type": "string",
+                "description": "Alias for \"route\"."
+              },
+              "disk": {
+                "type": "string",
+                "description": "Storage disk that hosts the assets."
+              },
+              "path": {
+                "type": "string",
+                "description": "Optional subdirectory within the disk.",
+                "default": ""
+              },
+              "index": {
+                "type": "string",
+                "description": "Default index file served when a directory is requested."
+              },
+              "list_directories": {
+                "type": "boolean",
+                "description": "Allow directory listings for this mount.",
+                "default": false
+              },
+              "directory_listing": {
+                "type": "boolean",
+                "description": "Alias for \"list_directories\"."
+              },
+              "root": {
+                "type": "string",
+                "description": "Absolute root directory for this mount (bypasses disks)."
+              }
+            },
+            "additionalProperties": false
+          },
+          "uniqueItems": false,
+          "default": []
+        }
+      },
+      "additionalProperties": false
+    },
+    "view": {
+      "type": "object",
+      "title": "View Configuration",
+      "description": "Template engine and view rendering settings.",
+      "properties": {
+        "engine": {
+          "type": "string",
+          "description": "View engine identifier (e.g. liquid).",
+          "default": "liquid"
+        },
+        "directory": {
+          "type": "string",
+          "description": "Path to templates relative to app root or disk.",
+          "default": "views"
+        },
+        "cache": {
+          "type": "boolean",
+          "description": "Enable template caching in production environments.",
+          "default": true
+        },
+        "disk": {
+          "type": "string",
+          "description": "Optional storage disk to source templates from."
+        }
+      },
+      "additionalProperties": false
+    },
+    "translation": {
+      "type": "object",
+      "title": "Localization Configuration",
+      "description": "Internationalization and translation settings.",
+      "properties": {
+        "paths": {
+          "type": "array",
+          "description": "Directories scanned for `locale/group.(yaml|yml|json)` files.",
+          "items": {
+            "type": "string"
+          },
+          "uniqueItems": false,
+          "default": [
+            "resources/lang"
+          ]
+        },
+        "json_paths": {
+          "type": "array",
+          "description": "Directories containing flat `<locale>.json` dictionaries.",
+          "items": {
+            "type": "string"
+          },
+          "uniqueItems": false,
+          "default": []
+        },
+        "namespaces": {
+          "type": "object",
+          "description": "Vendor namespace hints mapping namespace => absolute directory.",
+          "additionalProperties": true,
+          "default": {}
+        },
+        "resolvers": {
+          "type": "array",
+          "description": "Ordered locale resolvers (query, cookie, header, session).",
+          "items": {
+            "type": "string"
+          },
+          "uniqueItems": false,
+          "default": [
+            "query",
+            "cookie",
+            "session",
+            "header"
+          ]
+        },
+        "query": {
+          "type": "object",
+          "properties": {
+            "parameter": {
+              "type": "string",
+              "description": "Query parameter consulted for locale overrides.",
+              "default": "locale"
+            }
+          },
+          "additionalProperties": false
+        },
+        "cookie": {
+          "type": "object",
+          "properties": {
+            "name": {
+              "type": "string",
+              "description": "Cookie name consulted for locale overrides.",
+              "default": "locale"
+            }
+          },
+          "additionalProperties": false
+        },
+        "session": {
+          "type": "object",
+          "properties": {
+            "key": {
+              "type": "string",
+              "description": "Session key consulted for locale overrides.",
+              "default": "locale"
+            }
+          },
+          "additionalProperties": false
+        },
+        "header": {
+          "type": "object",
+          "properties": {
+            "name": {
+              "type": "string",
+              "description": "Header inspected for Accept-Language fallbacks.",
+              "default": "Accept-Language"
+            }
+          },
+          "additionalProperties": false
+        },
+        "resolver_options": {
+          "type": "object",
+          "description": "Resolver-specific options keyed by resolver identifier.",
+          "additionalProperties": true,
+          "default": {}
+        }
+      },
+      "additionalProperties": false
+    }
+  }
+}

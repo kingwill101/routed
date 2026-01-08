@@ -30,7 +30,7 @@ dev_dependencies:
 ```
 
 > Tip: `dart pub add --dev property_testing` will update your manifest
-automatically.
+> automatically.
 
 ## Quick start
 

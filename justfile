@@ -116,3 +116,9 @@ list-packages:
     @for pkg in {{PACKAGES}}; do \
         echo "  • $pkg"; \
     done
+
+# Generate JSON Schema for configuration
+generate-schema:
+    @echo "📜 Generating master JSON Schema..."
+    @dart packages/routed_cli/bin/routed_cli.dart config:schema --output packages/routed/schemas/config.schema.json
+    @echo "✅ Schema generated at packages/routed/schemas/config.schema.json"

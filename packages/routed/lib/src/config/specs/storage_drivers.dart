@@ -1,4 +1,6 @@
 import 'package:file/file.dart' as file;
+import 'package:json_schema_builder/json_schema_builder.dart';
+import 'package:routed/src/config/schema.dart';
 import 'package:routed/src/provider/config_utils.dart';
 import 'package:routed/src/provider/provider.dart';
 
@@ -48,35 +50,20 @@ class LocalStorageDiskSpec extends ConfigSpec<LocalStorageDiskConfig> {
   @override
   String get root => 'storage.disks.*';
 
-  @override
-  Map<String, dynamic> defaults({ConfigSpecContext? context}) {
-    return {
-      'root': null,
-      'file_system': null,
-    };
-  }
-
-  @override
-  List<ConfigDocEntry> docs({String? pathBase, ConfigSpecContext? context}) {
-    final base = pathBase ?? root;
-    String path(String segment) =>
-        base.isEmpty ? segment : '$base.$segment';
-
-    return <ConfigDocEntry>[
-      ConfigDocEntry(
-        path: path('root'),
-        type: 'string',
-        description:
+  @overridee
+  Schema? get schema => ConfigSchema.object(
+    title: 'Local Storage Disk',
+    description: 'Stores files on the local filesystem.',
+    properties: {
+      'root': ConfigSchema.stringdescription:
             'Filesystem path used as the disk root (defaults to storage/app for the local disk, or storage/<name> for other disks).',
       ),
-      ConfigDocEntry(
-        path: path('file_system'),
-        type: 'FileSystem',
+          'file_system': ConfigSchema.object(
         description:
             'Optional file system override used when operating the local disk.',
       ),
-    ];
-  }
+        },
+      );
 
   @override
   LocalStorageDiskConfig fromMap(
@@ -195,92 +182,64 @@ class CloudStorageDiskSpec extends ConfigSpec<CloudStorageDiskConfig> {
   String get root => 'storage.disks.*';
 
   @override
-  Map<String, dynamic> defaults({ConfigSpecContext? context}) {
-    return {
-      'driver': 's3',
-      'options': const <String, Object?>{},
-      'prefix': null,
-      'visibility': null,
-      'url': null,
-      'throw': null,
-      'report': null,
-      'directory_separator': null,
-    };
-  }
-
-  @override
-  List<ConfigDocEntry> docs({String? pathBase, ConfigSpecContext? context}) {
-    final base = pathBase ?? root;
-    String path(String segment) =>
-        base.isEmpty ? segment : '$base.$segment';
-
-    return <ConfigDocEntry>[
-      ConfigDocEntry(
-        path: path('options.endpoint'),
-        type: 'string',
-        description:
-            'Hostname of the S3-compatible endpoint (e.g. s3.amazonaws.com).',
-      ),
-      ConfigDocEntry(
-        path: path('options.key'),
-        type: 'string',
-        description: 'Access key for the S3-compatible account.',
-      ),
-      ConfigDocEntry(
-        path: path('options.secret'),
-        type: 'string',
-        description: 'Secret key for the S3-compatible account.',
-      ),
-      ConfigDocEntry(
-        path: path('options.bucket'),
-        type: 'string',
-        description: 'Bucket name used for storing files.',
-      ),
-      ConfigDocEntry(
-        path: path('options.region'),
-        type: 'string',
-        description:
-            'Optional region (defaults to us-east-1 for most providers).',
-      ),
-      ConfigDocEntry(
-        path: path('options.use_ssl'),
-        type: 'bool',
-        description:
-            'Enable HTTPS connections to the provider (defaults true).',
-      ),
-      ConfigDocEntry(
-        path: path('prefix'),
-        type: 'string',
+  Schema? get schema =>
+      ConfigSchema.object(
+        title: 'Cloud Storage Disk',
+        description: 'Stores files on a cloud provider (S3 compatible).',
+        properties: {
+          'driver': ConfigSchema.string(
+            description: 'Storage driver name.',
+            defaultValue: 's3',
+          ),
+          'options': ConfigSchema.object(
+            description: 'S3 connection options.',
+            properties: {
+              'endpoint': ConfigSchema.string(
+                description:
+                'Hostname of the S3-compatible endpoint (e.g. s3.amazonaws.com).',
+              ),
+              'key': ConfigSchema.string(
+                description: 'Access key for the S3-compatible account.',
+              ),
+              'secret': ConfigSchema.string(
+                description: 'Secret key for the S3-compatible account.',
+              ),
+              'bucket': ConfigSchema.string(
+                description: 'Bucket name used for storing files.',
+              ),
+              'region': ConfigSchema.string(
+                description:
+                'Optional region (defaults to us-east-1 for most providers).',
+              ),
+              'use_ssl': ConfigSchema.boolean(
+                description:
+                'Enable HTTPS connections to the provider (defaults true).',
+                defaultValue: true, // Note: manual logic used true default if missing
+              ),
+            },
+            required: ['endpoint', 'key', 'secret', 'bucket'],
+          ),
+          'prefix': ConfigSchema.string(
         description:
             'Optional key prefix applied to all stored objects (no leading slash).',
       ),
-      ConfigDocEntry(
-        path: path('visibility'),
-        type: 'string',
+          'visibility': ConfigSchema.string(
         description: 'Default visibility applied to objects on this disk.',
       ),
-      ConfigDocEntry(
-        path: path('url'),
-        type: 'string',
+          'url': ConfigSchema.string(
         description: 'Public base URL used when generating links.',
       ),
-      ConfigDocEntry(
-        path: path('throw'),
-        type: 'bool',
+          'throw': ConfigSchema.boolean(
         description: 'Throw exceptions on storage errors when enabled.',
       ),
-      ConfigDocEntry(
-        path: path('report'),
-        type: 'bool',
+          'report': ConfigSchema.boolean(
         description: 'Report storage errors when enabled.',
       ),
-      ConfigDocEntry(
-        path: path('directory_separator'),
-        type: 'string',
+          'directory_separator': ConfigSchema.string(
         description: 'Directory separator used when joining storage paths.',
       ),
-    ];
-  }
+        },
+      );
 
   @override
   CloudStorageDiskConfig fromMap(

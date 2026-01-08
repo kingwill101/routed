@@ -1,3 +1,5 @@
+import 'package:json_schema_builder/json_schema_builder.dart';
+import 'package:routed/src/config/schema.dart';
 import 'package:routed/src/provider/config_utils.dart';
 import 'package:routed/src/provider/provider.dart';
 import 'package:routed/src/storage/local_storage_driver.dart';
@@ -81,59 +83,36 @@ class StorageConfigSpec extends ConfigSpec<StorageProviderConfig> {
   String get root => 'storage';
 
   @override
-  Map<String, dynamic> defaults({ConfigSpecContext? context}) {
-    return {
-      'default': 'local',
-      'cloud': null,
-      'root': null,
-      'disks': const <String, Object?>{},
-    };
-  }
-
-  @override
-  List<ConfigDocEntry> docs({String? pathBase, ConfigSpecContext? context}) {
-    final base = pathBase ?? root;
-    String path(String segment) => base.isEmpty ? segment : '$base.$segment';
-
-    return <ConfigDocEntry>[
-      ConfigDocEntry(
-        path: path('default'),
-        type: 'string',
+  Schema? get schema =>
+      ConfigSchema.object(
+        title: 'Storage Configuration',
+        description: 'Filesystem and cloud storage configuration.',
+        properties: {
+          'default': ConfigSchema.string(
         description: 'Name of the disk to use when none is specified.',
         defaultValue: 'local',
       ),
-      ConfigDocEntry(
-        path: path('cloud'),
-        type: 'string',
-        description:
-            'Disk name used when a "cloud" disk is required by helpers.',
-        defaultValue: null,
+          'cloud': ConfigSchema.string(
+            description: 'Disk name used when a "cloud" disk is required by helpers.',
       ),
-      ConfigDocEntry(
-        path: path('root'),
-        type: 'string',
+          'root': ConfigSchema.string(
         description: 'Base filesystem path used by the default local disk.',
         defaultValue: storageRootTemplateDefault(),
-        metadata: const {
-          configDocMetaInheritFromEnv: 'STORAGE_ROOT',
-          'default_note': 'Falls back to storage/app when not overridden.',
-        },
-      ),
-      ConfigDocEntry(
-        path: path('disks'),
-        type: 'map',
+          ).withMetadata({
+            configDocMetaInheritFromEnv: 'STORAGE_ROOT',
+            'default_note': 'Falls back to storage/app when not overridden.',
+          }),
+          'disks': ConfigSchema.object(
         description: 'Configured storage disks.',
-        defaultValueBuilder: () {
-          return {
-            'local': <String, Object?>{
+            additionalProperties: true,
+          ).withDefault({
+            'local': {
               'driver': 'local',
               'root': storageRootTemplateDefault(),
             },
-          };
+          }),
         },
-      ),
-    ];
-  }
+      );
 
   @override
   StorageProviderConfig fromMap(

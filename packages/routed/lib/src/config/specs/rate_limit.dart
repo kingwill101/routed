@@ -1,3 +1,5 @@
+import 'package:json_schema_builder/json_schema_builder.dart';
+import 'package:routed/src/config/schema.dart';
 import 'package:routed/src/provider/config_utils.dart';
 import 'package:routed/src/provider/provider.dart';
 import 'package:routed/src/rate_limit/policy.dart';
@@ -399,76 +401,75 @@ class RateLimitConfigSpec extends ConfigSpec<RateLimitConfig> {
   String get root => 'rate_limit';
 
   @override
-  Map<String, dynamic> defaults({ConfigSpecContext? context}) {
-    return {
-      'enabled': false,
-      'backend': 'memory',
-      'failover': 'allow',
-      'store': null,
-      'policies': const <Map<String, dynamic>>[],
-    };
-  }
-
-  @override
-  List<ConfigDocEntry> docs({String? pathBase, ConfigSpecContext? context}) {
-    final base = pathBase ?? root;
-    String path(String segment) => base.isEmpty ? segment : '$base.$segment';
-
-    return <ConfigDocEntry>[
-      ConfigDocEntry(
-        path: path('enabled'),
-        type: 'bool',
+  Schema? get schema =>
+      ConfigSchema.object(
+        title: 'Rate Limit Configuration',
+        description: 'HTTP rate limiting and throttling settings.',
+        properties: {
+          'enabled': ConfigSchema.boolean(
         description: 'Enable rate limiting middleware.',
         defaultValue: false,
       ),
-      ConfigDocEntry(
-        path: path('backend'),
-        type: 'string',
+          'backend': ConfigSchema.string(
         description:
             'Backend hint ("memory" uses array store, "redis" expects a Redis-backed cache store).',
         defaultValue: 'memory',
       ),
-      ConfigDocEntry(
-        path: path('failover'),
-        type: 'string',
+          'failover': ConfigSchema.string(
         description:
             'Failover mode when the backing store is unavailable (allow, block, local).',
         options: ['allow', 'block', 'local'],
         defaultValue: 'allow',
       ),
-      ConfigDocEntry(
-        path: path('store'),
-        type: 'string',
+          'store': ConfigSchema.string(
         description:
             'Cache store name to use for rate limit counters (defaults to cache.default).',
-        defaultValue: null,
       ),
-      ConfigDocEntry(
-        path: path('policies'),
-        type: 'list<object>',
+          'policies': ConfigSchema.list(
         description: 'Array of rate limit policies (match, capacity, key).',
-        defaultValue: const <Map<String, dynamic>>[],
-      ),
-      ConfigDocEntry(
-        path: path('policies[].strategy'),
-        type: 'string',
-        description:
-            'Enforcement strategy (token_bucket, sliding_window, quota).',
-        options: ['token_bucket', 'sliding_window', 'quota'],
-      ),
-      ConfigDocEntry(
-        path: path('policies[].window'),
-        type: 'duration',
-        description:
-            'Sliding window duration when using the sliding_window strategy.',
-      ),
-      ConfigDocEntry(
-        path: path('policies[].period'),
-        type: 'duration',
-        description: 'Quota reset interval when using the quota strategy.',
-      ),
-    ];
-  }
+            items: ConfigSchema.object(
+              properties: {
+                'name': ConfigSchema.string(),
+                'match': ConfigSchema.string(defaultValue: '*'),
+                'method': ConfigSchema.string(),
+                'strategy': ConfigSchema.string(
+                  description:
+                  'Enforcement strategy (token_bucket, sliding_window, quota).',
+                  options: ['token_bucket', 'sliding_window', 'quota'],
+                  defaultValue: 'token_bucket',
+                ),
+                'limit': ConfigSchema.integer(),
+                'capacity': ConfigSchema.integer(),
+                'requests': ConfigSchema.integer(),
+                'interval': ConfigSchema.duration(),
+                'refill': ConfigSchema.duration(),
+                'window': ConfigSchema.duration(
+                  description:
+                  'Sliding window duration when using the sliding_window strategy.',
+                ),
+                'period': ConfigSchema.duration(
+                  description:
+                  'Quota reset interval when using the quota strategy.',
+                ),
+                'burst': ConfigSchema.number(),
+                'key': ConfigSchema.object(
+                  properties: {
+                    'type': ConfigSchema.string(
+                      options: ['ip', 'header'],
+                      defaultValue: 'ip',
+                    ),
+                    'header': ConfigSchema.string(),
+                  },
+                ),
+                'failover': ConfigSchema.string(
+                  options: ['allow', 'block', 'local'],
+                ),
+              },
+            ),
+            defaultValue: const [],
+          ),
+        },
+      );
 
   @override
   RateLimitConfig fromMap(

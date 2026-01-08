@@ -1,5 +1,6 @@
+import 'package:json_schema_builder/json_schema_builder.dart';
+import 'package:routed/src/config/schema.dart';
 import 'package:routed/src/provider/config_utils.dart';
-import 'package:routed/src/provider/provider.dart';
 
 import '../spec.dart';
 
@@ -45,86 +46,72 @@ class LocalizationConfigSpec extends ConfigSpec<LocalizationConfig> {
   String get root => 'translation';
 
   @override
-  Map<String, dynamic> defaults({ConfigSpecContext? context}) {
-    return {
-      'paths': const ['resources/lang'],
-      'json_paths': const <String>[],
-      'namespaces': const <String, String>{},
-      'resolvers': kLocalizationResolverDefaults,
-      'query': {'parameter': 'locale'},
-      'cookie': {'name': 'locale'},
-      'session': {'key': 'locale'},
-      'header': {'name': 'Accept-Language'},
-      'resolver_options': const <String, Object?>{},
-    };
-  }
-
-  @override
-  List<ConfigDocEntry> docs({String? pathBase, ConfigSpecContext? context}) {
-    final base = pathBase ?? root;
-    String path(String segment) => base.isEmpty ? segment : '$base.$segment';
-
-    return <ConfigDocEntry>[
-      ConfigDocEntry(
-        path: path('paths'),
-        type: 'list<string>',
+  Schema? get schema =>
+      ConfigSchema.object(
+        title: 'Localization Configuration',
+        description: 'Internationalization and translation settings.',
+        properties: {
+          'paths': ConfigSchema.list(
         description:
             'Directories scanned for `locale/group.(yaml|yml|json)` files.',
-        defaultValue: ['resources/lang'],
+            items: ConfigSchema.string(),
+            defaultValue: const ['resources/lang'],
       ),
-      ConfigDocEntry(
-        path: path('json_paths'),
-        type: 'list<string>',
-        description: 'Directories containing flat `<locale>.json` dictionaries.',
-        defaultValue: <String>[],
-      ),
-      ConfigDocEntry(
-        path: path('namespaces'),
-        type: 'map<string,string>',
+          'json_paths': ConfigSchema.list(
+            description:
+            'Directories containing flat `<locale>.json` dictionaries.',
+            items: ConfigSchema.string(),
+            defaultValue: const [],
+          ),
+          'namespaces': ConfigSchema.object(
         description:
             'Vendor namespace hints mapping namespace => absolute directory.',
-        defaultValue: <String, String>{},
-      ),
-      ConfigDocEntry(
-        path: path('resolvers'),
-        type: 'list<string>',
+            additionalProperties: true,
+          ).withDefault(const {}),
+          'resolvers': ConfigSchema.list(
         description:
             'Ordered locale resolvers (query, cookie, header, session).',
-        defaultValueBuilder: () =>
-            List<String>.from(kLocalizationResolverDefaults),
+            items: ConfigSchema.string(),
+            defaultValue: kLocalizationResolverDefaults,
       ),
-      ConfigDocEntry(
-        path: path('query.parameter'),
-        type: 'string',
-        description: 'Query parameter consulted for locale overrides.',
-        defaultValue: 'locale',
-      ),
-      ConfigDocEntry(
-        path: path('cookie.name'),
-        type: 'string',
-        description: 'Cookie name consulted for locale overrides.',
-        defaultValue: 'locale',
-      ),
-      ConfigDocEntry(
-        path: path('session.key'),
-        type: 'string',
-        description: 'Session key consulted for locale overrides.',
-        defaultValue: 'locale',
-      ),
-      ConfigDocEntry(
-        path: path('header.name'),
-        type: 'string',
-        description: 'Header inspected for Accept-Language fallbacks.',
-        defaultValue: 'Accept-Language',
-      ),
-      ConfigDocEntry(
-        path: path('resolver_options'),
-        type: 'map',
+          'query': ConfigSchema.object(
+            properties: {
+              'parameter': ConfigSchema.string(
+                description: 'Query parameter consulted for locale overrides.',
+                defaultValue: 'locale',
+              ),
+            },
+          ),
+          'cookie': ConfigSchema.object(
+            properties: {
+              'name': ConfigSchema.string(
+                description: 'Cookie name consulted for locale overrides.',
+                defaultValue: 'locale',
+              ),
+            },
+          ),
+          'session': ConfigSchema.object(
+            properties: {
+              'key': ConfigSchema.string(
+                description: 'Session key consulted for locale overrides.',
+                defaultValue: 'locale',
+              ),
+            },
+          ),
+          'header': ConfigSchema.object(
+            properties: {
+              'name': ConfigSchema.string(
+                description: 'Header inspected for Accept-Language fallbacks.',
+                defaultValue: 'Accept-Language',
+              ),
+            },
+          ),
+          'resolver_options': ConfigSchema.object(
         description: 'Resolver-specific options keyed by resolver identifier.',
-        defaultValue: <String, Object?>{},
-      ),
-    ];
-  }
+            additionalProperties: true,
+          ).withDefault(const {}),
+        },
+      );
 
   @override
   LocalizationConfig fromMap(

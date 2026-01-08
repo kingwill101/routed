@@ -1,4 +1,6 @@
+import 'package:json_schema_builder/json_schema_builder.dart';
 import 'package:routed/src/cache/cache_manager.dart';
+import 'package:routed/src/config/schema.dart';
 import 'package:routed/src/provider/config_utils.dart';
 import 'package:routed/src/provider/provider.dart';
 
@@ -67,63 +69,40 @@ class CacheConfigSpec extends ConfigSpec<CacheConfig> {
   String get root => 'cache';
 
   @override
-  Map<String, dynamic> defaults({ConfigSpecContext? context}) {
-    return {
-      'default': 'file',
-      'prefix': '',
-      'key_prefix': null,
-      'stores': {
+  Schema? get schema =>
+      ConfigSchema.object(
+        title: 'Cache Configuration',
+        description: 'Configuration for caching stores and default settings.',
+        properties: {
+          'default': ConfigSchema.string(
+            description: 'Name of the cache store to use when none is specified explicitly.',
+            defaultValue: 'file',
+          ).withMetadata({configDocMetaInheritFromEnv: 'CACHE_STORE'}),
+          'prefix': ConfigSchema.string(
+            description: 'Prefix prepended to every cache key.',
+            defaultValue: '',
+          ),
+          'key_prefix': ConfigSchema.string(
+            description: 'Optional global prefix injected before the generated store prefix.',
+          ),
+          'stores': ConfigSchema.object(
+            description: 'Configured cache stores keyed by store name.',
+            additionalProperties: true, // Stores are dynamic
+            // Provide default value for documentation
+          ).withDefault({
         'array': {'driver': 'array'},
-        'file': {'driver': 'file'},
-      },
-    };
-  }
+            'file': {'driver': 'file', 'path': 'storage/framework/cache'},
+          }),
+        },
+      );
 
   @override
   List<ConfigDocEntry> docs({String? pathBase, ConfigSpecContext? context}) {
     final base = pathBase ?? root;
     String path(String segment) => base.isEmpty ? segment : '$base.$segment';
 
-    return <ConfigDocEntry>[
-      ConfigDocEntry(
-        path: path('default'),
-        type: 'string',
-        description:
-            'Name of the cache store to use when none is specified explicitly.',
-        defaultValue: 'file',
-        metadata: {configDocMetaInheritFromEnv: 'CACHE_STORE'},
-      ),
-      ConfigDocEntry(
-        path: path('prefix'),
-        type: 'string',
-        description:
-            'Prefix prepended to every cache key. Useful when sharing stores.',
-        defaultValue: '',
-      ),
-      ConfigDocEntry(
-        path: path('key_prefix'),
-        type: 'string',
-        description:
-            'Optional global prefix injected before the generated store prefix.',
-        defaultValue: null,
-      ),
-      ConfigDocEntry(
-        path: path('stores'),
-        type: 'map',
-        description: 'Configured cache stores keyed by store name.',
-        defaultValueBuilder: () {
-          return {
-            'array': {'driver': 'array'},
-            'file': {'driver': 'file'},
-          };
-        },
-      ),
-      ConfigDocEntry(
-        path: path('stores.*.driver'),
-        type: 'string',
-        description: 'Driver identifier backing the cache store.',
-        optionsBuilder: () => CacheManager.registeredDrivers,
-      ),
+    return [
+      ...super.docs(pathBase: base, context: context),
       ...CacheManager.driverDocumentation(pathBase: path('stores.*')),
     ];
   }

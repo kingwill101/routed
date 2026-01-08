@@ -1,3 +1,4 @@
+import 'package:json_schema_builder/json_schema_builder.dart';
 import 'package:routed/src/provider/provider.dart';
 
 import '../engine/providers/registry.dart';
@@ -57,6 +58,7 @@ class ProviderMetadata {
     required this.configSource,
     required this.defaults,
     required this.fields,
+    this.schemas = const {},
   });
 
   final String id;
@@ -65,6 +67,7 @@ class ProviderMetadata {
   final String configSource;
   final Map<String, dynamic> defaults;
   final List<ConfigFieldMetadata> fields;
+  final Map<String, Schema> schemas;
 
   Map<String, Object?> toJson() {
     return <String, Object?>{
@@ -74,6 +77,8 @@ class ProviderMetadata {
       'configSource': configSource,
       'defaults': defaults,
       'fields': fields.map((field) => field.toJson()).toList(),
+      if (schemas.isNotEmpty)
+        'schemas': schemas.map((k, v) => MapEntry(k, v.value)),
     };
   }
 }
@@ -96,6 +101,7 @@ List<ProviderMetadata> inspectProviders() {
           configSource: provider.configSource,
           defaults: snapshot.values,
           fields: fields,
+          schemas: snapshot.schemas,
         ),
       );
     } else {

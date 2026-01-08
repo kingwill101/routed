@@ -3,6 +3,8 @@ import 'dart:io';
 
 import 'package:path/path.dart' as p;
 import 'package:routed/routed.dart' show EngineConfig;
+import 'package:routed/src/config/specs/core.dart';
+import 'package:routed/src/config/specs/http.dart';
 import 'package:routed/src/runtime/shutdown.dart';
 
 import '../../config/config.dart' show ConfigImpl;
@@ -16,246 +18,34 @@ import '../../provider/config_utils.dart';
 import '../../provider/provider.dart'
     show
         ConfigDefaults,
-        ConfigDocEntry,
         ProvidesDefaultConfig,
-        ServiceProvider,
-        configDocMetaInheritFromEnv;
+        ServiceProvider;
 import '../../utils/deep_copy.dart';
 import '../../view/engine_manager.dart';
 
-ConfigDefaults _coreDefaults() => const ConfigDefaults(
-  docs: <ConfigDocEntry>[
-    ConfigDocEntry(
-      path: 'app.name',
-      type: 'string',
-      description: 'Application display name.',
-      defaultValue: "{{ env.APP_NAME | default: 'Routed App' }}",
-      metadata: {configDocMetaInheritFromEnv: 'APP_NAME'},
-    ),
-    ConfigDocEntry(
-      path: 'app.env',
-      type: 'string',
-      description:
-          'Runtime environment identifier (development, production, etc.).',
-      defaultValue: 'production',
-      metadata: {configDocMetaInheritFromEnv: 'APP_ENV'},
-    ),
-    ConfigDocEntry(
-      path: 'app.debug',
-      type: 'bool',
-      description: 'Enables verbose application debugging.',
-      defaultValue: false,
-      metadata: {configDocMetaInheritFromEnv: 'APP_DEBUG'},
-    ),
-    ConfigDocEntry(
-      path: 'app.key',
-      type: 'string',
-      description: 'Application encryption key used for signed payloads.',
-      defaultValue: "{{ env.APP_KEY | default: 'change-me' }}",
-      metadata: {configDocMetaInheritFromEnv: 'APP_KEY'},
-    ),
-    ConfigDocEntry(
-      path: 'app.url',
-      type: 'string',
-      description: 'Base URL used in generated links.',
-      defaultValue: 'http://localhost',
-    ),
-    ConfigDocEntry(
-      path: 'app.timezone',
-      type: 'string',
-      description: 'Default timezone applied to dates.',
-      defaultValue: 'UTC',
-    ),
-    ConfigDocEntry(
-      path: 'app.locale',
-      type: 'string',
-      description: 'Primary locale identifier used for localized content.',
-      defaultValue: 'en',
-    ),
-    ConfigDocEntry(
-      path: 'app.fallback_locale',
-      type: 'string',
-      description: 'Locale used when a translation key is missing.',
-      defaultValue: 'en',
-    ),
-    ConfigDocEntry(
-      path: 'app.faker_locale',
-      type: 'string',
-      description: 'Locale applied to Faker-generated seed data.',
-      defaultValue: 'en_US',
-    ),
-    ConfigDocEntry(
-      path: 'app.cipher',
-      type: 'string',
-      description: 'Default cipher used for encrypted payloads.',
-      defaultValue: 'AES-256-CBC',
-    ),
-    ConfigDocEntry(
-      path: 'app.cache_prefix',
-      type: 'string',
-      description: 'Prefix applied to cache keys for array and simple stores.',
-      defaultValue: '',
-    ),
-    ConfigDocEntry(
-      path: 'app.previous_keys',
-      type: 'list<string>',
-      description: 'Previous APP_KEY values accepted during key rotation.',
-      defaultValue: <String>[],
-    ),
-    ConfigDocEntry(
-      path: 'app.maintenance.driver',
-      type: 'string',
-      description: 'Driver responsible for toggling maintenance mode.',
-      defaultValue: 'file',
-    ),
-    ConfigDocEntry(
-      path: 'app.maintenance.store',
-      type: 'string',
-      description: 'Backing store used by the maintenance driver.',
-      defaultValue: 'database',
-    ),
-    ConfigDocEntry(
-      path: 'runtime.shutdown.enabled',
-      type: 'bool',
-      description: 'Enable graceful shutdown signal handling.',
-      defaultValue: true,
-    ),
-    ConfigDocEntry(
-      path: 'runtime.shutdown.grace_period',
-      type: 'duration',
-      description: 'Time to wait for in-flight requests before forcing close.',
-      defaultValue: '20s',
-    ),
-    ConfigDocEntry(
-      path: 'runtime.shutdown.force_after',
-      type: 'duration',
-      description: 'Absolute time limit before shutdown completes.',
-      defaultValue: '1m',
-    ),
-    ConfigDocEntry(
-      path: 'runtime.shutdown.exit_code',
-      type: 'int',
-      description: 'Process exit code returned after graceful shutdown.',
-      defaultValue: 0,
-    ),
-    ConfigDocEntry(
-      path: 'runtime.shutdown.notify_readiness',
-      type: 'bool',
-      description: 'Mark readiness probes unhealthy while draining.',
-      defaultValue: true,
-    ),
-    ConfigDocEntry(
-      path: 'runtime.shutdown.signals',
-      type: 'list<string>',
-      description: 'Signals that trigger graceful shutdown.',
-      defaultValue: ['sigint', 'sigterm'],
-    ),
-    ConfigDocEntry(
-      path: 'http.providers',
-      type: 'list<string>',
-      description: 'Service providers registered for the HTTP pipeline.',
-      defaultValue: [
-        'routed.core',
-        'routed.routing',
-        'routed.cache',
-        'routed.sessions',
-        'routed.uploads',
-        'routed.cors',
-        'routed.security',
-        'routed.auth',
-        'routed.logging',
-        'routed.observability',
-        'routed.compression',
-        'routed.rate_limit',
-        'routed.storage',
-        'routed.static',
-        'routed.localization',
-        'routed.views',
-      ],
-    ),
-    ConfigDocEntry(
-      path: 'http.middleware.global',
-      type: 'list<string>',
-      description: 'Middleware executed for every HTTP request.',
-      defaultValue: <String>[],
-    ),
-    ConfigDocEntry(
-      path: 'http.middleware.groups',
-      type: 'map<string, list<string>>',
-      description: 'Named middleware groups applied to route collections.',
-      defaultValue: <String, List<String>>{},
-    ),
-    ConfigDocEntry(
-      path: 'http.middleware_sources',
-      type: 'map',
-      description:
-          'Automatically registered observability middleware references.',
-      defaultValue: <String, Object?>{
-        'routed.observability': <String, Object?>{
-          'global': <String>[
-            'routed.observability.health',
-            'routed.observability.tracing',
-            'routed.observability.metrics',
-          ],
-        },
-      },
-    ),
-    ConfigDocEntry(
-      path: 'http.http2.enabled',
-      type: 'bool',
-      description: 'Enable HTTP/2 (ALPN h2) on secure listeners.',
-    ),
-    ConfigDocEntry(
-      path: 'http.http2.allow_cleartext',
-      type: 'bool',
-      description:
-          'Allow HTTP/2 without TLS (h2c). Typically false in production.',
-    ),
-    ConfigDocEntry(
-      path: 'http.http2.max_concurrent_streams',
-      type: 'int',
-      description: 'Advertised max concurrent streams per HTTP/2 connection.',
-    ),
-    ConfigDocEntry(
-      path: 'http.http2.idle_timeout',
-      type: 'duration',
-      description: 'Optional idle timeout applied to HTTP/2 connections.',
-    ),
-    ConfigDocEntry(
-      path: 'http.tls.certificate_path',
-      type: 'string',
-      description: 'Path to the PEM certificate chain used for TLS.',
-    ),
-    ConfigDocEntry(
-      path: 'http.tls.key_path',
-      type: 'string',
-      description:
-          'Path to the private key corresponding to the TLS certificate.',
-    ),
-    ConfigDocEntry(
-      path: 'http.tls.password',
-      type: 'string',
-      description: 'Optional password protecting the certificate/key files.',
-    ),
-    ConfigDocEntry(
-      path: 'http.tls.request_client_certificate',
-      type: 'bool',
-      description: 'Request client certificates during TLS handshakes.',
-    ),
-    ConfigDocEntry(
-      path: 'http.tls.shared',
-      type: 'bool',
-      description:
-          'Allow multiple isolates/processes to share the TLS listener.',
-    ),
-    ConfigDocEntry(
-      path: 'http.tls.v6_only',
-      type: 'bool',
-      description:
-          'Restrict TLS listener to IPv6 only (disables IPv4 dual stack).',
-    ),
-  ],
-);
+ConfigDefaults _coreDefaults() {
+  const coreSpec = CoreConfigSpec();
+  const httpSpec = HttpConfigSpec();
+  const runtimeSpec = RuntimeConfigSpec();
+
+  return ConfigDefaults(
+    docs: [
+      ...coreSpec.docs(),
+      ...httpSpec.docs(),
+      ...runtimeSpec.docs(),
+    ],
+    values: {
+      ...coreSpec.defaultsWithRoot(),
+      ...httpSpec.defaultsWithRoot(),
+      ...runtimeSpec.defaultsWithRoot(),
+    },
+    schemas: {
+      ...coreSpec.schemaWithRoot(),
+      ...httpSpec.schemaWithRoot(),
+      ...runtimeSpec.schemaWithRoot(),
+    },
+  );
+}
 
 /// A service provider that registers core framework services and manages
 /// configuration loading.

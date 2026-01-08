@@ -1,6 +1,7 @@
+import 'package:json_schema_builder/json_schema_builder.dart';
+import 'package:routed/src/config/schema.dart';
 import 'package:routed/src/engine/config.dart';
 import 'package:routed/src/provider/config_utils.dart';
-import 'package:routed/src/provider/provider.dart';
 
 import '../spec.dart';
 
@@ -24,77 +25,39 @@ class UploadsConfigSpec extends ConfigSpec<MultipartConfig> {
   String get root => 'uploads';
 
   @override
-  Map<String, dynamic> defaults({ConfigSpecContext? context}) {
-    var maxMemory = _defaultMaxMemory;
-    var maxFileSize = _defaultMaxFileSize;
-    var maxDiskUsage = _defaultMaxDiskUsage;
-    var allowedExtensions = _defaultAllowedExtensions;
-    var directory = _defaultDirectory;
-    var filePermissions = _defaultFilePermissions;
-    if (context is UploadsConfigContext) {
-      final multipart = context.engineConfig.multipart;
-      maxMemory = multipart.maxMemory;
-      maxFileSize = multipart.maxFileSize;
-      maxDiskUsage = multipart.maxDiskUsage;
-      allowedExtensions = multipart.allowedExtensions.toList(growable: false);
-      directory = multipart.uploadDirectory;
-      filePermissions = multipart.filePermissions;
-    }
-    return {
-      'max_memory': maxMemory,
-      'max_file_size': maxFileSize,
-      'max_disk_usage': maxDiskUsage,
-      'allowed_extensions': allowedExtensions,
-      'directory': directory,
-      'file_permissions': filePermissions,
-    };
-  }
-
-  @override
-  List<ConfigDocEntry> docs({String? pathBase, ConfigSpecContext? context}) {
-    final base = pathBase ?? root;
-    String path(String segment) => base.isEmpty ? segment : '$base.$segment';
-
-    return <ConfigDocEntry>[
-      ConfigDocEntry(
-        path: path('max_memory'),
-        type: 'int',
+  Schema? get schema =>
+      ConfigSchema.object(
+        title: 'Uploads Configuration',
+        description: 'Multipart request and file upload settings.',
+        properties: {
+          'max_memory': ConfigSchema.integer(
         description: 'Maximum in-memory bytes before buffering to disk.',
         defaultValue: _defaultMaxMemory,
       ),
-      ConfigDocEntry(
-        path: path('max_file_size'),
-        type: 'int',
+          'max_file_size': ConfigSchema.integer(
         description: 'Maximum accepted upload size in bytes.',
         defaultValue: _defaultMaxFileSize,
       ),
-      ConfigDocEntry(
-        path: path('max_disk_usage'),
-        type: 'int',
+          'max_disk_usage': ConfigSchema.integer(
         description:
             'Maximum cumulative bytes written to disk per request before uploads are rejected.',
         defaultValue: _defaultMaxDiskUsage,
       ),
-      ConfigDocEntry(
-        path: path('allowed_extensions'),
-        type: 'list<string>',
+          'allowed_extensions': ConfigSchema.list(
         description: 'Whitelisted file extensions for uploads.',
+            items: ConfigSchema.string(),
         defaultValue: _defaultAllowedExtensions,
       ),
-      ConfigDocEntry(
-        path: path('directory'),
-        type: 'string',
+          'directory': ConfigSchema.string(
         description: 'Directory where uploaded files are stored.',
         defaultValue: _defaultDirectory,
       ),
-      ConfigDocEntry(
-        path: path('file_permissions'),
-        type: 'int',
+          'file_permissions': ConfigSchema.integer(
         description: 'Permissions to apply to uploaded files.',
         defaultValue: _defaultFilePermissions,
       ),
-    ];
-  }
+        },
+      );
 
   @override
   MultipartConfig fromMap(

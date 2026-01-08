@@ -1,6 +1,7 @@
+import 'package:json_schema_builder/json_schema_builder.dart';
+import 'package:routed/src/config/schema.dart';
 import 'package:routed/src/engine/config.dart';
 import 'package:routed/src/provider/config_utils.dart';
-import 'package:routed/src/provider/provider.dart';
 
 import '../spec.dart';
 
@@ -35,54 +36,28 @@ class ViewConfigSpec extends ConfigSpec<ViewSettings> {
   String get root => 'view';
 
   @override
-  Map<String, dynamic> defaults({ConfigSpecContext? context}) {
-    var directory = _defaultViewDirectory;
-    var cache = _defaultViewCache;
-    if (context is ViewConfigContext) {
-      directory = context.engineConfig.templateDirectory;
-      cache = context.engineConfig.views.cache;
-    }
-
-    return {
-      'engine': _defaultViewEngine,
-      'directory': directory,
-      'cache': cache,
-      'disk': null,
-    };
-  }
-
-  @override
-  List<ConfigDocEntry> docs({String? pathBase, ConfigSpecContext? context}) {
-    final base = pathBase ?? root;
-    String path(String segment) => base.isEmpty ? segment : '$base.$segment';
-
-    return <ConfigDocEntry>[
-      ConfigDocEntry(
-        path: path('engine'),
-        type: 'string',
+  Schema? get schema =>
+      ConfigSchema.object(
+        title: 'View Configuration',
+        description: 'Template engine and view rendering settings.',
+        properties: {
+          'engine': ConfigSchema.string(
         description: 'View engine identifier (e.g. liquid).',
         defaultValue: _defaultViewEngine,
       ),
-      ConfigDocEntry(
-        path: path('directory'),
-        type: 'string',
+          'directory': ConfigSchema.string(
         description: 'Path to templates relative to app root or disk.',
         defaultValue: _defaultViewDirectory,
       ),
-      ConfigDocEntry(
-        path: path('cache'),
-        type: 'bool',
+          'cache': ConfigSchema.boolean(
         description: 'Enable template caching in production environments.',
         defaultValue: _defaultViewCache,
       ),
-      ConfigDocEntry(
-        path: path('disk'),
-        type: 'string|null',
+          'disk': ConfigSchema.string(
         description: 'Optional storage disk to source templates from.',
-        defaultValue: null,
       ),
-    ];
-  }
+        },
+      );
 
   @override
   ViewSettings fromMap(

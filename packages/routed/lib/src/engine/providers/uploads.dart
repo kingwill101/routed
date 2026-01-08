@@ -18,7 +18,11 @@ class UploadsServiceProvider extends ServiceProvider
 
   @override
   ConfigDefaults get defaultConfig =>
-      ConfigDefaults(docs: spec.docs(), values: spec.defaultsWithRoot());
+      ConfigDefaults(
+        docs: spec.docs(),
+        values: spec.defaultsWithRoot(),
+        schemas: spec.schemaWithRoot(),
+      );
 
   @override
   void register(Container container) {

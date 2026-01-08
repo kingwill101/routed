@@ -18,6 +18,13 @@ import 'package:routed/src/router/types.dart';
 class LoggingServiceProvider extends ServiceProvider
     with ProvidesDefaultConfig {
   static const LoggingConfigSpec spec = LoggingConfigSpec();
+  static const LoggingSingleDriverSpec _singleSpec = LoggingSingleDriverSpec();
+  static const LoggingDailyDriverSpec _dailySpec = LoggingDailyDriverSpec();
+  static const LoggingStackDriverSpec _stackSpec = LoggingStackDriverSpec();
+  static const LoggingWebhookDriverSpec _webhookSpec =
+  LoggingWebhookDriverSpec();
+  static const LoggingSamplingDriverSpec _samplingSpec =
+  LoggingSamplingDriverSpec();
   bool _enabled = true;
   bool _logSuccess = true;
   contextual.Level _level = contextual.Level.info;
@@ -52,6 +59,7 @@ class LoggingServiceProvider extends ServiceProvider
         ...spec.docs(),
       ],
       values: values,
+      schemas: spec.schemaWithRoot(),
     );
   }
 

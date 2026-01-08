@@ -16,32 +16,18 @@ class CorsServiceProvider extends ServiceProvider with ProvidesDefaultConfig {
   static const CorsConfigSpec spec = CorsConfigSpec();
 
   @override
-  ConfigDefaults get defaultConfig {
-    final values = spec.defaultsWithRoot();
-    values['http'] = {
-      'middleware_sources': {
-        'routed.cors': {
-          'global': ['routed.cors'],
+  ConfigDefaults get defaultConfig => ConfigDefaults(
+    values: const {
+      'http': {
+        'middleware_sources': {
+          'routed.cors': {
+            'global': ['routed.cors'],
+          },
         },
       },
-    };
-    return ConfigDefaults(
-      docs: [
-        const ConfigDocEntry(
-          path: 'http.middleware_sources',
-          type: 'map',
-          description: 'CORS middleware references injected into the pipeline.',
-          defaultValue: <String, Object?>{
-            'routed.cors': <String, Object?>{
-              'global': <String>['routed.cors'],
-            },
-          },
-        ),
-        ...spec.docs(),
-      ],
-      values: values,
-    );
-  }
+    },
+    schemas: spec.schemaWithRoot(),
+  );
 
   @override
   void register(Container container) {

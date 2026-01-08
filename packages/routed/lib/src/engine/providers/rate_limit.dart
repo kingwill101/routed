@@ -52,6 +52,7 @@ class RateLimitServiceProvider extends ServiceProvider
         ...spec.docs(),
       ],
       values: values,
+      schemas: spec.schemaWithRoot(),
     );
   }
 

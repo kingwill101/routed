@@ -53,6 +53,7 @@ class AuthServiceProvider extends ServiceProvider with ProvidesDefaultConfig {
         ...spec.docs(),
       ],
       values: values,
+      schemas: spec.schemaWithRoot(),
     );
   }
 

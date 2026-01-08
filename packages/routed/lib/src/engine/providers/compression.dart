@@ -36,6 +36,7 @@ class CompressionServiceProvider extends ServiceProvider
         ...spec.docs(),
       ],
       values: values,
+      schemas: spec.schemaWithRoot(),
     );
   }
 

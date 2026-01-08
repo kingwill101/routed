@@ -1,8 +1,9 @@
 import 'package:collection/collection.dart';
+import 'package:json_schema_builder/json_schema_builder.dart';
+import 'package:routed/src/config/schema.dart';
 import 'package:routed/src/contracts/contracts.dart' show Config;
 import 'package:routed/src/engine/config.dart';
 import 'package:routed/src/provider/config_utils.dart';
-import 'package:routed/src/provider/provider.dart';
 import 'package:routed/src/utils/deep_merge.dart';
 
 import '../spec.dart';
@@ -29,68 +30,48 @@ class CorsConfigSpec extends ConfigSpec<CorsConfig> {
   String get root => 'cors';
 
   @override
-  Map<String, dynamic> defaults({ConfigSpecContext? context}) {
-    return {
-      'enabled': _defaultCors.enabled,
-      'allowed_origins': _defaultAllowedOrigins,
-      'allowed_methods': _defaultAllowedMethods,
-      'allowed_headers': _defaultAllowedHeaders,
-      'exposed_headers': _defaultExposedHeaders,
-      'allow_credentials': _defaultCors.allowCredentials,
-      'max_age': _defaultCors.maxAge,
-    };
-  }
+  Map<String, dynamic> defaults({ConfigSpecContext? context}) => const {};
 
   @override
-  List<ConfigDocEntry> docs({String? pathBase, ConfigSpecContext? context}) {
-    final base = pathBase ?? root;
-    String path(String segment) => base.isEmpty ? segment : '$base.$segment';
-
-    return <ConfigDocEntry>[
-      ConfigDocEntry(
-        path: path('enabled'),
-        type: 'bool',
+  Schema? get schema =>
+      ConfigSchema.object(
+        title: 'CORS Configuration',
+        description: 'Configuration for Cross-Origin Resource Sharing (CORS).',
+        properties: {
+          'enabled': ConfigSchema.boolean(
         description: 'Enables CORS middleware.',
         defaultValue: _defaultCors.enabled,
       ),
-      ConfigDocEntry(
-        path: path('allowed_origins'),
-        type: 'list<string>',
+          'allowed_origins': ConfigSchema.list(
         description: 'Origins allowed to access this application.',
+            items: ConfigSchema.string(),
         defaultValue: _defaultAllowedOrigins,
       ),
-      ConfigDocEntry(
-        path: path('allowed_methods'),
-        type: 'list<string>',
+          'allowed_methods': ConfigSchema.list(
         description: 'HTTP methods permitted for CORS requests.',
+            items: ConfigSchema.string(),
         defaultValue: _defaultAllowedMethods,
       ),
-      ConfigDocEntry(
-        path: path('allowed_headers'),
-        type: 'list<string>',
+          'allowed_headers': ConfigSchema.list(
         description: 'Request headers accepted for CORS requests.',
+            items: ConfigSchema.string(),
         defaultValue: _defaultAllowedHeaders,
       ),
-      ConfigDocEntry(
-        path: path('exposed_headers'),
-        type: 'list<string>',
+          'exposed_headers': ConfigSchema.list(
         description: 'Response headers exposed to the browser.',
+            items: ConfigSchema.string(),
         defaultValue: _defaultExposedHeaders,
       ),
-      ConfigDocEntry(
-        path: path('allow_credentials'),
-        type: 'bool',
+          'allow_credentials': ConfigSchema.boolean(
         description: 'Whether cookies/credentials can be shared cross-origin.',
         defaultValue: _defaultCors.allowCredentials,
       ),
-      ConfigDocEntry(
-        path: path('max_age'),
-        type: 'int|null',
+          'max_age': ConfigSchema.integer(
         description: 'Preflight cache duration in seconds.',
         defaultValue: _defaultCors.maxAge,
       ),
-    ];
-  }
+        },
+      );
 
   CorsConfig resolveFromConfig(
     Config config, {

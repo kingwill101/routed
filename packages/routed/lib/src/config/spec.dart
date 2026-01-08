@@ -1,4 +1,5 @@
 import 'package:json_schema_builder/json_schema_builder.dart';
+import 'package:routed/src/config/schema.dart';
 import 'package:routed/src/contracts/contracts.dart' show Config;
 import 'package:routed/src/provider/provider.dart';
 import 'package:routed/src/utils/deep_merge.dart';
@@ -22,7 +23,13 @@ abstract class ConfigSpec<T> {
   String get root;
 
   /// Default values expressed as a map rooted at [root].
-  Map<String, dynamic> defaults({ConfigSpecContext? context});
+  Map<String, dynamic> defaults({ConfigSpecContext? context}) {
+    final s = schema;
+    if (s != null) {
+      return ConfigSchema.extractDefaults(s);
+    }
+    return const {};
+  }
 
   /// Default values wrapped in the top-level [root] key.
   Map<String, dynamic> defaultsWithRoot({ConfigSpecContext? context}) {
@@ -34,12 +41,23 @@ abstract class ConfigSpec<T> {
   }
 
   /// Documentation entries for the spec, rooted at [pathBase] or [root].
-  List<ConfigDocEntry> docs({String? pathBase, ConfigSpecContext? context});
+  List<ConfigDocEntry> docs({String? pathBase, ConfigSpecContext? context}) {
+    final s = schema;
+    if (s == null) return const [];
+    return ConfigSchema.toDocEntries(s, pathBase: pathBase ?? root);
+  }
 
   /// The JSON Schema for this configuration.
   ///
   /// If provided, this schema can be used for validation and documentation generation.
   Schema? get schema => null;
+
+  /// Returns the schema wrapped in the root key.
+  Map<String, Schema> schemaWithRoot() {
+    final s = schema;
+    if (s == null) return const {};
+    return {root: s};
+  }
 
   /// Parse a typed model from a config map scoped to the spec's root.
   T fromMap(Map<String, dynamic> map, {ConfigSpecContext? context});

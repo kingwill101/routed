@@ -2,6 +2,8 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:crypto/crypto.dart' as crypto;
+import 'package:json_schema_builder/json_schema_builder.dart';
+import 'package:routed/src/config/schema.dart';
 import 'package:routed/src/contracts/contracts.dart' show Config;
 import 'package:routed/src/engine/storage_defaults.dart';
 import 'package:routed/src/provider/config_utils.dart';
@@ -411,139 +413,82 @@ class SessionConfigSpec extends ConfigSpec<SessionProviderConfig> {
   String get root => 'session';
 
   @override
-  Map<String, dynamic> defaults({ConfigSpecContext? context}) {
-    return {
-      'driver': 'cookie',
-      'lifetime': 120,
-      'expire_on_close': false,
-      'encrypt': true,
-      'cookie': "{{ env.SESSION_COOKIE | default: 'routed-session' }}",
-      'path': '/',
-      'secure': false,
-      'http_only': true,
-      'partitioned': false,
-      'cache_prefix': 'session:',
-      'same_site': 'lax',
-      'files': _sessionBaselineStorage().frameworkPath('sessions'),
-      'lottery': const [2, 100],
-      'previous_keys': const <String>[],
-    };
-  }
-
-  @override
-  List<ConfigDocEntry> docs({String? pathBase, ConfigSpecContext? context}) {
-    final base = pathBase ?? root;
-    String path(String segment) => base.isEmpty ? segment : '$base.$segment';
-
-    return <ConfigDocEntry>[
-      ConfigDocEntry(
-        path: path('driver'),
-        type: 'string',
+  Schema? get schema => ConfigSchema.object(
+    title: 'Session Configuration',
+    description: 'HTTP session management settings.',
+    properties: {
+      'enabled': ConfigSchema.boolean(
+        description:
+            'Enable the built-in sessions middleware (defaults to disabled).',
+      ),
+      'driver': ConfigSchema.string(
         description: 'Session backend to use.',
         defaultValue: 'cookie',
-        metadata: const {configDocMetaInheritFromEnv: 'SESSION_DRIVER'},
-      ),
-      ConfigDocEntry(
-        path: path('lifetime'),
-        type: 'int',
+      ).withMetadata({configDocMetaInheritFromEnv: 'SESSION_DRIVER'}),
+      'lifetime': ConfigSchema.integer(
         description: 'Session lifetime in minutes.',
         defaultValue: 120,
       ),
-      ConfigDocEntry(
-        path: path('expire_on_close'),
-        type: 'bool',
+      'expire_on_close': ConfigSchema.boolean(
         description: 'Expire sessions when the browser closes.',
         defaultValue: false,
       ),
-      ConfigDocEntry(
-        path: path('encrypt'),
-        type: 'bool',
+      'encrypt': ConfigSchema.boolean(
         description: 'Encrypt session payloads when using cookie drivers.',
         defaultValue: true,
       ),
-      ConfigDocEntry(
-        path: path('cookie'),
-        type: 'string',
+      'cookie': ConfigSchema.string(
         description:
             'Cookie name used for identifying the session when using cookie-based drivers.',
-        example: 'routed_app_session',
         defaultValue: "{{ env.SESSION_COOKIE | default: 'routed-session' }}",
-        metadata: {configDocMetaInheritFromEnv: 'SESSION_COOKIE'},
-      ),
-      ConfigDocEntry(
-        path: path('path'),
-        type: 'string',
+      ).withMetadata({configDocMetaInheritFromEnv: 'SESSION_COOKIE'}),
+      'path': ConfigSchema.string(
         description: 'Cookie path scope for the session identifier.',
         defaultValue: '/',
       ),
-      ConfigDocEntry(
-        path: path('domain'),
-        type: 'string',
+      'domain': ConfigSchema.string(
         description: 'Cookie domain override for session cookies.',
-        defaultValue: null,
       ),
-      ConfigDocEntry(
-        path: path('secure'),
-        type: 'bool',
+      'secure': ConfigSchema.boolean(
         description: 'Require HTTPS when sending session cookies.',
         defaultValue: false,
       ),
-      ConfigDocEntry(
-        path: path('http_only'),
-        type: 'bool',
+      'http_only': ConfigSchema.boolean(
         description: 'Mark session cookies as HTTP-only.',
         defaultValue: true,
       ),
-      ConfigDocEntry(
-        path: path('partitioned'),
-        type: 'bool',
+      'partitioned': ConfigSchema.boolean(
         description: 'Enable partitioned cookies for session storage.',
         defaultValue: false,
       ),
-      ConfigDocEntry(
-        path: path('cache_prefix'),
-        type: 'string',
+      'cache_prefix': ConfigSchema.string(
         description:
             'Prefix applied to cache keys when using cache-backed session drivers.',
         defaultValue: 'session:',
       ),
-      ConfigDocEntry(
-        path: path('same_site'),
-        type: 'string',
+      'same_site': ConfigSchema.string(
         description: 'SameSite policy applied to the session cookie.',
-        options: <String>['lax', 'strict', 'none'],
+        options: ['lax', 'strict', 'none'],
         defaultValue: 'lax',
       ),
-      ConfigDocEntry(
-        path: path('files'),
-        type: 'string',
+      'files': ConfigSchema.string(
         description: 'Filesystem path used by file-based session drivers.',
-        defaultValueBuilder: () =>
-            _sessionBaselineStorage().frameworkPath('sessions'),
+        defaultValue: _sessionBaselineStorage().frameworkPath('sessions'),
       ),
-      ConfigDocEntry(
-        path: path('lottery'),
-        type: 'list<int>',
+      'lottery': ConfigSchema.list(
         description:
             'Odds used by some drivers to trigger garbage collection (numerator, denominator).',
-        defaultValue: [2, 100],
+        items: ConfigSchema.integer(),
+        defaultValue: const [2, 100],
       ),
-      ConfigDocEntry(
-        path: path('previous_keys'),
-        type: 'list<string>',
+      'previous_keys': ConfigSchema.list(
         description:
             'Historical keys accepted when rotating session secrets. New sessions always use the current key.',
-        defaultValue: <String>[],
+        items: ConfigSchema.string(),
+        defaultValue: const [],
       ),
-      ConfigDocEntry(
-        path: path('enabled'),
-        type: 'bool',
-        description:
-            'Enable the built-in sessions middleware (defaults to disabled).',
-        defaultValue: null,
-      ),
-    ];
-  }
+    },
+  );
 
   @override
   SessionProviderConfig fromMap(

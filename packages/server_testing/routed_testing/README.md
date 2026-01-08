@@ -29,7 +29,7 @@ dev_dependencies:
 ```
 
 > `dart pub add --dev routed_testing server_testing routed` will update your
-pubspec automatically.
+> pubspec automatically.
 
 ## Usage
 

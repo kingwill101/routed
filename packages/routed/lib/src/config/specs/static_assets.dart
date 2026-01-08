@@ -1,4 +1,6 @@
 import 'package:file/file.dart' as file;
+import 'package:json_schema_builder/json_schema_builder.dart';
+import 'package:routed/src/config/schema.dart';
 import 'package:routed/src/provider/config_utils.dart';
 import 'package:routed/src/provider/provider.dart';
 
@@ -133,55 +135,54 @@ class StaticAssetsConfigSpec extends ConfigSpec<StaticAssetsConfig> {
   String get root => 'static';
 
   @override
-  Map<String, dynamic> defaults({ConfigSpecContext? context}) {
-    return {'enabled': false, 'mounts': const <Map<String, dynamic>>[]};
-  }
-
-  @override
-  List<ConfigDocEntry> docs({String? pathBase, ConfigSpecContext? context}) {
-    final base = pathBase ?? root;
-    String path(String segment) => base.isEmpty ? segment : '$base.$segment';
-
-    return <ConfigDocEntry>[
-      ConfigDocEntry(
-        path: path('enabled'),
-        type: 'bool',
+  Schema? get schema =>
+      ConfigSchema.object(
+        title: 'Static Assets Configuration',
+        description: 'Static file serving and mount point settings.',
+        properties: {
+          'enabled': ConfigSchema.boolean(
         description: 'Enable static asset serving.',
         defaultValue: false,
       ),
-      ConfigDocEntry(
-        path: path('mounts'),
-        type: 'list<map>',
+          'mounts': ConfigSchema.list(
         description: 'List of static mount configurations.',
-        defaultValue: const <Map<String, dynamic>>[],
-      ),
-      ConfigDocEntry(
-        path: path('mounts[].route'),
-        type: 'string',
-        description: 'Route prefix clients use to fetch assets.',
-      ),
-      ConfigDocEntry(
-        path: path('mounts[].disk'),
-        type: 'string',
-        description: 'Storage disk that hosts the assets.',
-      ),
-      ConfigDocEntry(
-        path: path('mounts[].path'),
-        type: 'string',
-        description: 'Optional subdirectory within the disk.',
-      ),
-      ConfigDocEntry(
-        path: path('mounts[].index'),
-        type: 'string',
-        description: 'Default index file served when a directory is requested.',
-      ),
-      ConfigDocEntry(
-        path: path('mounts[].list_directories'),
-        type: 'bool',
-        description: 'Allow directory listings for this mount.',
-      ),
-    ];
-  }
+            items: ConfigSchema.object(
+              properties: {
+                'route': ConfigSchema.string(
+                  description: 'Route prefix clients use to fetch assets.',
+                  defaultValue: '/',
+                ),
+                'prefix': ConfigSchema.string(
+                  description: 'Alias for "route".',
+                ),
+                'disk': ConfigSchema.string(
+                  description: 'Storage disk that hosts the assets.',
+                ),
+                'path': ConfigSchema.string(
+                  description: 'Optional subdirectory within the disk.',
+                  defaultValue: '',
+                ),
+                'index': ConfigSchema.string(
+                  description:
+                  'Default index file served when a directory is requested.',
+                ),
+                'list_directories': ConfigSchema.boolean(
+                  description: 'Allow directory listings for this mount.',
+                  defaultValue: false,
+                ),
+                'directory_listing': ConfigSchema.boolean(
+                  description: 'Alias for "list_directories".',
+                ),
+                'root': ConfigSchema.string(
+                  description:
+                  'Absolute root directory for this mount (bypasses disks).',
+                ),
+              },
+            ),
+            defaultValue: const [],
+          ),
+        },
+      );
 
   @override
   StaticAssetsConfig fromMap(

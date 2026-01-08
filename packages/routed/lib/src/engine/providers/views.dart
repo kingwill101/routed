@@ -19,8 +19,11 @@ class ViewServiceProvider extends ServiceProvider with ProvidesDefaultConfig {
   static const ViewConfigSpec spec = ViewConfigSpec();
 
   @override
-  ConfigDefaults get defaultConfig =>
-      ConfigDefaults(docs: spec.docs(), values: spec.defaultsWithRoot());
+  ConfigDefaults get defaultConfig => ConfigDefaults(
+    docs: spec.docs(),
+    values: spec.defaultsWithRoot(),
+    schemas: spec.schemaWithRoot(),
+  );
 
   @override
   void register(Container container) {

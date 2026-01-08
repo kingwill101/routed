@@ -16,7 +16,7 @@ class CacheServiceProvider extends ServiceProvider with ProvidesDefaultConfig {
   @override
   ConfigDefaults get defaultConfig => ConfigDefaults(
     docs: spec.docs(),
-    values: spec.defaultsWithRoot(),
+    schemas: spec.schemaWithRoot(),
   );
 
   @override

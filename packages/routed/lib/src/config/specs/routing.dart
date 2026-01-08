@@ -1,3 +1,5 @@
+import 'package:json_schema_builder/json_schema_builder.dart';
+import 'package:routed/src/config/schema.dart';
 import 'package:routed/src/engine/config.dart' show EngineConfig, EtagStrategy;
 import 'package:routed/src/provider/config_utils.dart';
 import 'package:routed/src/provider/provider.dart';
@@ -119,61 +121,34 @@ class RoutingConfigSpec extends ConfigSpec<RoutingConfig> {
   String get root => 'routing';
 
   @override
-  Map<String, dynamic> defaults({ConfigSpecContext? context}) {
-    var redirectTrailingSlash = true;
-    var handleMethodNotAllowed = true;
-    var defaultOptionsEnabled = true;
-    var etagStrategy = EtagStrategy.disabled;
-    if (context is RoutingConfigContext) {
-      final engineConfig = context.engineConfig;
-      redirectTrailingSlash = engineConfig.redirectTrailingSlash;
-      handleMethodNotAllowed = engineConfig.handleMethodNotAllowed;
-      defaultOptionsEnabled = engineConfig.defaultOptionsEnabled;
-      etagStrategy = engineConfig.etagStrategy;
-    }
-    return {
-      'redirect_trailing_slash': redirectTrailingSlash,
-      'handle_method_not_allowed': handleMethodNotAllowed,
-      'default_options': defaultOptionsEnabled,
-      'etag': {'strategy': RoutingConfig.etagToString(etagStrategy)},
-    };
-  }
-
-  @override
-  List<ConfigDocEntry> docs({String? pathBase, ConfigSpecContext? context}) {
-    final base = pathBase ?? root;
-    String path(String segment) => base.isEmpty ? segment : '$base.$segment';
-
-    return <ConfigDocEntry>[
-      ConfigDocEntry(
-        path: path('redirect_trailing_slash'),
-        type: 'bool',
+  Schema? get schema =>
+      ConfigSchema.object(
+        title: 'Routing Configuration',
+        description: 'Core routing behavior configuration.',
+        properties: {
+          'redirect_trailing_slash': ConfigSchema.boolean(
         description: 'Automatically redirect /path/ to /path.',
         defaultValue: true,
       ),
-      ConfigDocEntry(
-        path: path('handle_method_not_allowed'),
-        type: 'bool',
-        description:
-            'Return 405 responses when a route exists but the method does not.',
+          'handle_method_not_allowed': ConfigSchema.boolean(
+            description: 'Return 405 responses when a route exists but the method does not.',
         defaultValue: true,
       ),
-      ConfigDocEntry(
-        path: path('default_options'),
-        type: 'bool',
-        description:
-            'Serve automatic OPTIONS responses enumerating allowed methods when no handler is defined.',
+          'default_options': ConfigSchema.boolean(
+            description: 'Serve automatic OPTIONS responses enumerating allowed methods when no handler is defined.',
         defaultValue: true,
       ),
-      ConfigDocEntry(
-        path: path('etag.strategy'),
-        type: 'string',
-        description:
-            'Default ETag strategy used by conditional request helpers (disabled, strong, weak).',
-        defaultValue: 'disabled',
-      ),
-    ];
-  }
+          'etag': ConfigSchema.object(
+            description: 'ETag generation settings.',
+            properties: {
+              'strategy': ConfigSchema.string(
+                description: 'Default ETag strategy (disabled, strong, weak).',
+                defaultValue: 'disabled',
+              ),
+            },
+          ),
+        },
+      );
 
   @override
   RoutingConfig fromMap(

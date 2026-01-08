@@ -1,5 +1,7 @@
 import 'dart:io';
 
+import 'package:json_schema_builder/json_schema_builder.dart';
+import 'package:routed/src/config/schema.dart';
 import 'package:routed/src/provider/config_utils.dart';
 import 'package:routed/src/provider/provider.dart';
 
@@ -796,257 +798,170 @@ class AuthConfigSpec extends ConfigSpec<AuthConfig> {
   String get root => 'auth';
 
   @override
-  Map<String, dynamic> defaults({ConfigSpecContext? context}) {
-    return {
-      'jwt': {
-        'enabled': false,
-        'issuer': null,
-        'audience': const <String>[],
-        'required_claims': const <String>[],
-        'jwks_url': null,
-        'jwks_cache_ttl': '5m',
-        'algorithms': _defaultJwtAlgorithms,
-        'clock_skew': '60s',
-        'keys': const <Map<String, Object?>>[],
-        'header': 'Authorization',
-        'bearer_prefix': 'Bearer ',
-      },
-      'oauth2': {
-        'introspection': {
-          'enabled': false,
-          'endpoint': null,
-          'client_id': null,
-          'client_secret': null,
-          'token_type_hint': null,
-          'cache_ttl': '30s',
-          'clock_skew': '60s',
-          'additional': const <String, String>{},
-        },
-      },
-      'session': {
-        'remember_me': {
-          'cookie': 'remember_token',
-          'duration': '30d',
-        },
-      },
-      'features': {
-        'haigate': {'enabled': false},
-      },
-      'gates': {
-        'defaults': {
-          'denied_status': HttpStatus.forbidden,
-          'denied_message': null,
-        },
-        'abilities': const <String, Object?>{},
-      },
-      'guards': const {
-        'authenticated': {'type': 'authenticated', 'realm': 'Restricted'},
-      },
-    };
-  }
-
-  @override
-  List<ConfigDocEntry> docs({String? pathBase, ConfigSpecContext? context}) {
-    final base = pathBase ?? root;
-    String path(String segment) => base.isEmpty ? segment : '$base.$segment';
-
-    return <ConfigDocEntry>[
-      ConfigDocEntry(
-        path: path('jwt.enabled'),
-        type: 'bool',
-        description: 'Enable JWT Bearer authentication middleware.',
-        defaultValue: false,
+  Schema? get schema =>
+      ConfigSchema.object(
+        title: 'Authentication Configuration',
+        description: 'JWT, OAuth2, and session-based authentication settings.',
+        properties: {
+          'jwt': ConfigSchema.object(
+            description: 'JWT Bearer authentication settings.',
+            properties: {
+              'enabled': ConfigSchema.boolean(
+                description: 'Enable JWT Bearer authentication middleware.',
+                defaultValue: false,
+              ),
+              'issuer': ConfigSchema.string(
+                description: 'Required issuer claim value.',
+              ),
+              'audience': ConfigSchema.list(
+                description: 'Allowed audience values (any match passes).',
+                items: ConfigSchema.string(),
+                defaultValue: const [],
+              ),
+              'required_claims': ConfigSchema.list(
+                description: 'Claims that must be present in every token.',
+                items: ConfigSchema.string(),
+                defaultValue: const [],
+              ),
+              'jwks_url': ConfigSchema.string(
+                description: 'JWKS endpoint used to resolve signing keys.',
+              ),
+              'jwks_cache_ttl': ConfigSchema.duration(
+                description: 'How long JWKS responses are cached.',
+                defaultValue: '5m',
+              ),
+              'algorithms': ConfigSchema.list(
+                description: 'Allowed signing algorithms (e.g. RS256).',
+                items: ConfigSchema.string(),
+                defaultValue: _defaultJwtAlgorithms,
+              ),
+              'clock_skew': ConfigSchema.duration(
+                description: 'Clock skew allowance for exp/nbf validation.',
+                defaultValue: '60s',
+              ),
+              'keys': ConfigSchema.list(
+                description: 'Inline JWK set used in addition to remote JWKS.',
+                items: ConfigSchema.object(additionalProperties: true),
+                defaultValue: const [],
+              ),
+              'header': ConfigSchema.string(
+                description: 'Header name inspected for bearer tokens.',
+                defaultValue: 'Authorization',
+              ),
+              'bearer_prefix': ConfigSchema.string(
+                description:
+                'Expected prefix for bearer tokens (default "Bearer ").',
+                defaultValue: 'Bearer ',
+              ),
+            },
+          ),
+          'oauth2': ConfigSchema.object(
+            description: 'OAuth2 authentication settings.',
+            properties: {
+              'introspection': ConfigSchema.object(
+                description: 'RFC 7662 token introspection middleware settings.',
+                properties: {
+                  'enabled': ConfigSchema.boolean(
+                    description: 'Enable RFC 7662 token introspection middleware.',
+                    defaultValue: false,
+                  ),
+                  'endpoint': ConfigSchema.string(
+                    description: 'OAuth2 introspection endpoint URL.',
+                  ),
+                  'client_id': ConfigSchema.string(
+                    description:
+                    'Client identifier used when calling the introspection endpoint.',
+                  ),
+                  'client_secret': ConfigSchema.string(
+                    description: 'Client secret used for introspection requests.',
+                  ),
+                  'token_type_hint': ConfigSchema.string(
+                    description:
+                    'Optional token type hint passed to the introspection endpoint.',
+                  ),
+                  'cache_ttl': ConfigSchema.duration(
+                    description: 'How long introspection results are cached.',
+                    defaultValue: '30s',
+                  ),
+                  'clock_skew': ConfigSchema.duration(
+                    description:
+                    'Clock skew allowance for introspection timestamps.',
+                    defaultValue: '60s',
+                  ),
+                  'additional': ConfigSchema.object(
+                    description:
+                    'Additional form parameters appended to introspection requests.',
+                    additionalProperties: true,
+                  ).withDefault(const {}),
+                },
+              ),
+            },
+          ),
+          'session': ConfigSchema.object(
+            description: 'Session-based authentication settings.',
+            properties: {
+              'remember_me': ConfigSchema.object(
+                description: 'Remember-me token settings.',
+                properties: {
+                  'cookie': ConfigSchema.string(
+                    description: 'Cookie name used for remember-me tokens.',
+                    defaultValue: 'remember_token',
+                  ),
+                  'duration': ConfigSchema.duration(
+                    description:
+                    'Default lifetime applied to remember-me tokens when issued.',
+                    defaultValue: '30d',
+                  ),
+                },
+              ),
+            },
+          ),
+          'features': ConfigSchema.object(
+            description: 'Authentication feature flags.',
+            properties: {
+              'haigate': ConfigSchema.object(
+                properties: {
+                  'enabled': ConfigSchema.boolean(
+                    description:
+                    'Enable Haigate authorization registry and middleware.',
+                    defaultValue: false,
+                  ),
+                },
+              ),
+            },
+          ),
+          'gates': ConfigSchema.object(
+            description: 'Haigate authorization settings.',
+            properties: {
+              'defaults': ConfigSchema.object(
+                properties: {
+                  'denied_status': ConfigSchema.integer(
+                    description:
+                    'HTTP status returned when a gate denies access (used by default middleware).',
+                    defaultValue: HttpStatus.forbidden,
+                  ),
+                  'denied_message': ConfigSchema.string(
+                    description:
+                    'Optional body message returned when a gate denies access (used by default middleware).',
+                  ),
+                },
+              ),
+              'abilities': ConfigSchema.object(
+                description:
+                'Declarative Haigate abilities. Entries map ability names to role or authentication checks.',
+                additionalProperties: true,
+              ).withDefault(const {}),
+            },
       ),
-      ConfigDocEntry(
-        path: path('jwt.issuer'),
-        type: 'string',
-        description: 'Required issuer claim value.',
-        defaultValue: null,
-      ),
-      ConfigDocEntry(
-        path: path('jwt.audience'),
-        type: 'list<string>',
-        description: 'Allowed audience values (any match passes).',
-        defaultValue: const <String>[],
-      ),
-      ConfigDocEntry(
-        path: path('jwt.required_claims'),
-        type: 'list<string>',
-        description: 'Claims that must be present in every token.',
-        defaultValue: const <String>[],
-      ),
-      ConfigDocEntry(
-        path: path('jwt.jwks_url'),
-        type: 'string',
-        description: 'JWKS endpoint used to resolve signing keys.',
-        defaultValue: null,
-      ),
-      ConfigDocEntry(
-        path: path('jwt.jwks_cache_ttl'),
-        type: 'duration',
-        description: 'How long JWKS responses are cached.',
-        defaultValue: '5m',
-      ),
-      ConfigDocEntry(
-        path: path('jwt.algorithms'),
-        type: 'list<string>',
-        description: 'Allowed signing algorithms (e.g. RS256).',
-        defaultValue: _defaultJwtAlgorithms,
-      ),
-      ConfigDocEntry(
-        path: path('jwt.clock_skew'),
-        type: 'duration',
-        description: 'Clock skew allowance for exp/nbf validation.',
-        defaultValue: '60s',
-      ),
-      ConfigDocEntry(
-        path: path('jwt.keys'),
-        type: 'list<map>',
-        description: 'Inline JWK set used in addition to remote JWKS.',
-        defaultValue: const <Map<String, Object?>>[],
-      ),
-      ConfigDocEntry(
-        path: path('jwt.header'),
-        type: 'string',
-        description: 'Header name inspected for bearer tokens.',
-        defaultValue: 'Authorization',
-      ),
-      ConfigDocEntry(
-        path: path('jwt.bearer_prefix'),
-        type: 'string',
-        description: 'Expected prefix for bearer tokens (default "Bearer ").',
-        defaultValue: 'Bearer ',
-      ),
-      ConfigDocEntry(
-        path: path('oauth2.introspection.enabled'),
-        type: 'bool',
-        description: 'Enable RFC 7662 token introspection middleware.',
-        defaultValue: false,
-      ),
-      ConfigDocEntry(
-        path: path('oauth2.introspection.endpoint'),
-        type: 'string',
-        description: 'OAuth2 introspection endpoint URL.',
-        defaultValue: null,
-      ),
-      ConfigDocEntry(
-        path: path('oauth2.introspection.client_id'),
-        type: 'string',
-        description:
-            'Client identifier used when calling the introspection endpoint.',
-        defaultValue: null,
-      ),
-      ConfigDocEntry(
-        path: path('oauth2.introspection.client_secret'),
-        type: 'string',
-        description: 'Client secret used for introspection requests.',
-        defaultValue: null,
-      ),
-      ConfigDocEntry(
-        path: path('oauth2.introspection.token_type_hint'),
-        type: 'string',
-        description:
-            'Optional token type hint passed to the introspection endpoint.',
-        defaultValue: null,
-      ),
-      ConfigDocEntry(
-        path: path('oauth2.introspection.cache_ttl'),
-        type: 'duration',
-        description: 'How long introspection results are cached.',
-        defaultValue: '30s',
-      ),
-      ConfigDocEntry(
-        path: path('oauth2.introspection.clock_skew'),
-        type: 'duration',
-        description: 'Clock skew allowance for introspection timestamps.',
-        defaultValue: '60s',
-      ),
-      ConfigDocEntry(
-        path: path('oauth2.introspection.additional'),
-        type: 'map<string,string>',
-        description:
-            'Additional form parameters appended to introspection requests.',
-        defaultValue: const <String, String>{},
-      ),
-      ConfigDocEntry(
-        path: path('session.remember_me.cookie'),
-        type: 'string',
-        description: 'Cookie name used for remember-me tokens.',
-        defaultValue: 'remember_token',
-      ),
-      ConfigDocEntry(
-        path: path('session.remember_me.duration'),
-        type: 'duration',
-        description:
-            'Default lifetime applied to remember-me tokens when issued.',
-        defaultValue: '30d',
-      ),
-      ConfigDocEntry(
-        path: path('features.haigate.enabled'),
-        type: 'bool',
-        description: 'Enable Haigate authorization registry and middleware.',
-        defaultValue: false,
-      ),
-      ConfigDocEntry(
-        path: path('gates.defaults.denied_status'),
-        type: 'int',
-        description:
-            'HTTP status returned when a gate denies access (used by default middleware).',
-        defaultValue: HttpStatus.forbidden,
-      ),
-      ConfigDocEntry(
-        path: path('gates.defaults.denied_message'),
-        type: 'string',
-        description:
-            'Optional body message returned when a gate denies access (used by default middleware).',
-        defaultValue: null,
-      ),
-      ConfigDocEntry(
-        path: path('gates.abilities'),
-        type: 'map',
-        description:
-            'Declarative Haigate abilities. Entries map ability names to role or authentication checks.',
-        defaultValue: const <String, Object?>{},
-      ),
-      ConfigDocEntry(
-        path: path('gates.abilities[].type'),
-        type: 'string',
-        description:
-            'Ability type. Supported values: authenticated, guest, roles, roles_any.',
-        options: ['authenticated', 'guest', 'roles', 'roles_any'],
-      ),
-      ConfigDocEntry(
-        path: path('gates.abilities[].roles'),
-        type: 'list<string>',
-        description:
-            'Roles required for the ability (used when type is roles or roles_any).',
-        defaultValue: const <String>[],
-      ),
-      ConfigDocEntry(
-        path: path('gates.abilities[].any'),
-        type: 'bool',
-        description:
-            'If true, any listed role passes (defaults to requiring all roles).',
-        defaultValue: false,
-      ),
-      ConfigDocEntry(
-        path: path('gates.abilities[].allow_guest'),
-        type: 'bool',
-        description:
-            'Allow guests (no principal) to pass the gate (defaults to false).',
-        defaultValue: false,
-      ),
-      ConfigDocEntry(
-        path: path('guards'),
-        type: 'map',
+          'guards': ConfigSchema.object(
         description:
             'Named guard definitions consumed by guard middleware (e.g. authenticated, roles).',
-        defaultValue: const {
-          'authenticated': {'type': 'authenticated', 'realm': 'Restricted'},
+            additionalProperties: true,
+          ).withDefault(const {
+            'authenticated': {'type': 'authenticated', 'realm': 'Restricted'},
+          }),
         },
-      ),
-    ];
-  }
+      );
 
   @override
   AuthConfig fromMap(

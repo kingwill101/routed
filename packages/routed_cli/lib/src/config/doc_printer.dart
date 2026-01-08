@@ -10,7 +10,16 @@ Map<String, List<ConfigDocEntry>> collectConfigDocs() {
     final provider = registration.factory();
     if (provider is ProvidesDefaultConfig) {
       final defaults = provider.defaultConfig;
-      for (final entry in defaults.docs) {
+      final allDocs = List<ConfigDocEntry>.from(defaults.docs);
+
+      if (provider.schemas.isNotEmpty) {
+        for (final entry in provider.schemas.entries) {
+          allDocs.addAll(
+              ConfigSchema.toDocEntries(entry.value, pathBase: entry.key));
+        }
+      }
+
+      for (final entry in allDocs) {
         final root = _rootFromPath(entry.path);
         if (root == null) continue;
         final existing = mergedByPath[entry.path];

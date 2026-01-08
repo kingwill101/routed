@@ -63,6 +63,7 @@ export 'src/config/helpers.dart';
 export 'src/config/loader.dart';
 export 'src/config/registry.dart';
 export 'src/config/runtime.dart';
+export 'src/config/schema.dart';
 export 'src/config/spec.dart';
 export 'src/config/specs/cache.dart';
 export 'src/config/specs/compression.dart';

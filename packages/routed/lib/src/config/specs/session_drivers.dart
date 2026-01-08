@@ -1,3 +1,5 @@
+import 'package:json_schema_builder/json_schema_builder.dart';
+import 'package:routed/src/config/schema.dart';
 import 'package:routed/src/provider/config_utils.dart';
 import 'package:routed/src/provider/provider.dart';
 
@@ -34,25 +36,16 @@ class SessionCookieDriverSpec extends ConfigSpec<SessionCookieDriverConfig> {
   String get root => 'session';
 
   @override
-  Map<String, dynamic> defaults({ConfigSpecContext? context}) {
-    return const <String, dynamic>{};
-  }
-
-  @override
-  List<ConfigDocEntry> docs({String? pathBase, ConfigSpecContext? context}) {
-    final base = pathBase ?? root;
-    String path(String segment) =>
-        base.isEmpty ? segment : '$base.$segment';
-
-    return <ConfigDocEntry>[
-      ConfigDocEntry(
-        path: path('encrypt'),
-        type: 'bool',
-        description:
-            'Controls whether cookie-based session payloads are encrypted.',
+  Schema? get schema =>
+      ConfigSchema.object(
+        title: 'Cookie Session Driver',
+        description: 'Cookie-based session storage.',
+        properties: {
+          'encrypt': ConfigSchema.boolean(
+            description: 'Controls whether cookie-based session payloads are encrypted.',
       ),
-    ];
-  }
+        },
+      );
 
   @override
   SessionCookieDriverConfig fromMap(
@@ -82,39 +75,26 @@ class SessionFileDriverSpec extends ConfigSpec<SessionFileDriverConfig> {
   String get root => 'session';
 
   @override
-  Map<String, dynamic> defaults({ConfigSpecContext? context}) {
-    return const <String, dynamic>{};
-  }
-
-  @override
-  List<ConfigDocEntry> docs({String? pathBase, ConfigSpecContext? context}) {
-    final base = pathBase ?? root;
-    String path(String segment) =>
-        base.isEmpty ? segment : '$base.$segment';
-
-    return <ConfigDocEntry>[
-      ConfigDocEntry(
-        path: path('files'),
-        type: 'string',
-        description:
-            'Directory path used to persist session files. Defaults to '
-            'storage/framework/sessions based on your storage configuration.',
-        metadata: const {
-          'default_note':
-              'Computed from storage defaults (storage/framework/sessions).',
-          'validation': 'Must resolve to an accessible directory path.',
-        },
-      ),
-      ConfigDocEntry(
-        path: path('lottery'),
-        type: 'list<int>',
+  Schema? get schema =>
+      ConfigSchema.object(
+        title: 'File Session Driver',
+        description: 'File-based session storage.',
+        properties: {
+          'files': ConfigSchema.string(
+            description: 'Directory path used to persist session files.',
+          ).withMetadata({
+            'default_note':
+            'Computed from storage defaults (storage/framework/sessions).',
+            'validation': 'Must resolve to an accessible directory path.',
+          }),
+          'lottery': ConfigSchema.list(
         description:
             'Cleanup lottery odds for pruning stale sessions (e.g., [2, 100]).',
+            items: ConfigSchema.integer(),
         defaultValue: const [2, 100],
-        metadata: const {'validation': 'Provide two integers [wins, total].'},
-      ),
-    ];
-  }
+          ).withMetadata({'validation': 'Provide two integers [wins, total].'}),
+        },
+      );
 
   @override
   SessionFileDriverConfig fromMap(
@@ -193,14 +173,11 @@ class SessionArrayDriverSpec extends ConfigSpec<SessionArrayDriverConfig> {
   String get root => 'session';
 
   @override
-  Map<String, dynamic> defaults({ConfigSpecContext? context}) {
-    return const <String, dynamic>{};
-  }
-
-  @override
-  List<ConfigDocEntry> docs({String? pathBase, ConfigSpecContext? context}) {
-    return const <ConfigDocEntry>[];
-  }
+  Schema? get schema =>
+      ConfigSchema.object(
+        title: 'Array Session Driver',
+        description: 'In-memory array session storage.',
+      );
 
   @override
   SessionArrayDriverConfig fromMap(
@@ -236,29 +213,17 @@ class SessionCacheDriverSpec extends ConfigSpec<SessionCacheDriverConfig> {
   String get root => 'session';
 
   @override
-  Map<String, dynamic> defaults({ConfigSpecContext? context}) {
-    return const <String, dynamic>{};
-  }
-
-  @override
-  List<ConfigDocEntry> docs({String? pathBase, ConfigSpecContext? context}) {
-    final base = pathBase ?? root;
-    String path(String segment) =>
-        base.isEmpty ? segment : '$base.$segment';
-
-    return <ConfigDocEntry>[
-      ConfigDocEntry(
-        path: path('store'),
-        type: 'string',
-        description:
-            'Cache store name used when persisting sessions via cache-backed drivers. '
-            'Defaults to the driver name when omitted.',
-        metadata: const {
-          'validation': 'Must match a configured cache store name.',
+  Schema? get schema =>
+      ConfigSchema.object(
+        title: 'Cache Session Driver',
+        description: 'Cache-backed session storage.',
+        properties: {
+          'store': ConfigSchema.string(
+            description: 'Cache store name used when persisting sessions.',
+          ).withMetadata(
+              {'validation': 'Must match a configured cache store name.'}),
         },
-      ),
-    ];
-  }
+      );
 
   @override
   SessionCacheDriverConfig fromMap(

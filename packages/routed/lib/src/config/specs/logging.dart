@@ -1,4 +1,6 @@
 import 'package:contextual/contextual.dart' as contextual;
+import 'package:json_schema_builder/json_schema_builder.dart';
+import 'package:routed/src/config/schema.dart';
 import 'package:routed/src/provider/config_utils.dart';
 import 'package:routed/src/provider/provider.dart';
 
@@ -106,86 +108,48 @@ class LoggingConfigSpec extends ConfigSpec<LoggingConfig> {
   String get root => 'logging';
 
   @override
-  Map<String, dynamic> defaults({ConfigSpecContext? context}) {
-    return {
-      'default': 'stack',
-      'channels': _defaultLoggingChannels,
-      'enabled': true,
-      'level': 'info',
-      'errors_only': false,
-      'extra_fields': const <String, Object?>{},
-      'include_stack_traces': false,
-      'format': 'pretty',
-      'request_headers': const <String>[],
-    };
-  }
-
-  @override
-  List<ConfigDocEntry> docs({String? pathBase, ConfigSpecContext? context}) {
-    final base = pathBase ?? root;
-    String path(String segment) => base.isEmpty ? segment : '$base.$segment';
-
-    return <ConfigDocEntry>[
-      ConfigDocEntry(
-        path: path('default'),
-        type: 'string',
+  Schema? get schema =>
+      ConfigSchema.object(
+        title: 'Logging Configuration',
+        description: 'Configuration for structured application logging.',
+        properties: {
+          'default': ConfigSchema.string(
         description: 'Default log channel name (stack, single, stderr, etc.).',
         defaultValue: 'stack',
-        metadata: {configDocMetaInheritFromEnv: 'LOG_CHANNEL'},
-      ),
-      ConfigDocEntry(
-        path: path('channels'),
-        type: 'map',
-        description:
-            'Map of log channel definitions (stack, single, daily, stderr, null).',
-        defaultValue: _defaultLoggingChannels,
-      ),
-      ConfigDocEntry(
-        path: path('enabled'),
-        type: 'bool',
+          ).withMetadata({configDocMetaInheritFromEnv: 'LOG_CHANNEL'}),
+          'channels': ConfigSchema.object(
+            description: 'Map of log channel definitions (stack, single, daily, stderr, null).',
+            additionalProperties: true,
+          ).withDefault(_defaultLoggingChannels),
+          'enabled': ConfigSchema.boolean(
         description: 'Enable structured application logging.',
         defaultValue: true,
       ),
-      ConfigDocEntry(
-        path: path('level'),
-        type: 'string',
+          'level': ConfigSchema.string(
         description: 'Default log level for application logging.',
-        options: ['debug', 'info'],
         defaultValue: 'info',
+            // Note: Schema enum support is available via `enumValues` but ConfigSchema helper doesn't expose it directly yet.
+            // We can add it to ConfigSchema or just rely on validation in fromMap for now.
+            // Or access .withEnum() if we add it.
       ),
-      ConfigDocEntry(
-        path: path('errors_only'),
-        type: 'bool',
+          'errors_only': ConfigSchema.boolean(
         description: 'Only emit logs for failing requests when true.',
         defaultValue: false,
       ),
-      ConfigDocEntry(
-        path: path('extra_fields'),
-        type: 'map',
+          'extra_fields': ConfigSchema.object(
         description: 'Additional fields appended to every log entry.',
-        defaultValue: const <String, Object?>{},
-      ),
-      ConfigDocEntry(
-        path: path('include_stack_traces'),
-        type: 'bool',
+            additionalProperties: true,
+          ).withDefault(const <String, Object?>{}),
+          'include_stack_traces': ConfigSchema.boolean(
         description: 'Include stack traces in request error logs when enabled.',
         defaultValue: false,
       ),
-      ConfigDocEntry(
-        path: path('format'),
-        type: 'string',
+          'format': ConfigSchema.string(
         description: 'Log output format (json or text).',
-        options: ["json", "null", "plain", "pretty", "raw"],
         defaultValue: 'pretty',
       ),
-      ConfigDocEntry(
-        path: path('request_headers'),
-        type: 'list<string>',
-        description: 'Headers captured globally on every log entry.',
-        defaultValue: const <String>[],
-      ),
-    ];
-  }
+        },
+      );
 
   @override
   LoggingConfig fromMap(Map<String, dynamic> map, {ConfigSpecContext? context}) {

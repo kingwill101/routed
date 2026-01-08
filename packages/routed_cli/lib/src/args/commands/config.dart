@@ -107,6 +107,69 @@ class ConfigInitCommand extends BaseCommand {
   }
 }
 
+class ConfigSchemaCommand extends BaseCommand {
+  ConfigSchemaCommand({super.logger, super.fileSystem}) {
+    argParser.addOption(
+      'output',
+      abbr: 'o',
+      help: 'Path to the generated JSON Schema file.',
+      defaultsTo: 'schemas/config.schema.json',
+      valueHelp: 'path',
+    );
+  }
+
+  @override
+  String get name => 'config:schema';
+
+  @override
+  String get description =>
+      'Generate a master JSON Schema for configuration validation.';
+
+  @override
+  String get category => 'Configuration';
+
+  @override
+  Future<void> run() async {
+    return guarded(() async {
+      final projectRoot = await findProjectRoot();
+      final output = results?['output'] as String;
+      final target = fileSystem.file(
+        projectRoot != null ? p.join(projectRoot.path, output) : output,
+      );
+
+      logger.debug('Inspecting providers...');
+      final providers = inspectProviders();
+      final registry = ConfigRegistry();
+
+      for (final provider in providers) {
+        if (provider.schemas.isNotEmpty) {
+          registry.register(
+            provider.defaults,
+            source: provider.id,
+            schemas: provider.schemas,
+          );
+        }
+      }
+
+      logger.debug('Generating schema...');
+      final schema = registry.generateJsonSchema(
+        title: 'Routed Configuration',
+        id: 'https://raw.githubusercontent.com/kingwill101/routed/master/packages/routed/schemas/config.schema.json',
+      );
+
+      final json = const JsonEncoder.withIndent('  ').convert(schema);
+      await target.parent.create(recursive: true);
+      await target.writeAsString(json);
+
+      if (projectRoot != null) {
+        logger.info('Created ${_relative(projectRoot, target)}');
+      } else {
+        logger.info('Created ${target.path}');
+      }
+    });
+  }
+}
+
 typedef PackageResolver =
     Future<fs.Directory?> Function(
       fs.Directory projectRoot,

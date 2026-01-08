@@ -1,3 +1,5 @@
+import 'package:json_schema_builder/json_schema_builder.dart';
+import 'package:routed/src/config/schema.dart';
 import 'package:routed/src/provider/config_utils.dart';
 import 'package:routed/src/provider/provider.dart';
 
@@ -83,127 +85,93 @@ class ObservabilityConfigSpec extends ConfigSpec<ObservabilityConfig> {
   String get root => 'observability';
 
   @override
-  Map<String, dynamic> defaults({ConfigSpecContext? context}) {
-    return {
-      'enabled': true,
-      'tracing': {
-        'enabled': false,
-        'service_name': 'routed-service',
-        'exporter': 'none',
-        'endpoint': null,
-        'headers': const <String, String>{},
-      },
-      'metrics': {
-        'enabled': false,
-        'path': '/metrics',
-        'buckets': _defaultBuckets,
-      },
-      'health': {
-        'enabled': true,
-        'readiness_path': '/readyz',
-        'liveness_path': '/livez',
-      },
-      'errors': {
-        'enabled': false,
-      },
-    };
-  }
-
-  @override
-  List<ConfigDocEntry> docs({String? pathBase, ConfigSpecContext? context}) {
-    final base = pathBase ?? root;
-    String path(String segment) => base.isEmpty ? segment : '$base.$segment';
-
-    return <ConfigDocEntry>[
-      ConfigDocEntry(
-        path: path('enabled'),
-        type: 'bool',
+  Schema? get schema =>
+      ConfigSchema.object(
+        title: 'Observability Configuration',
+        description: 'Tracing, metrics, and health check settings.',
+        properties: {
+          'enabled': ConfigSchema.boolean(
         description:
             'Master toggle that enables or disables all observability features.',
         defaultValue: true,
       ),
-      ConfigDocEntry(
-        path: path('tracing.enabled'),
-        type: 'bool',
-        description: 'Enable OpenTelemetry tracing middleware.',
-        defaultValue: false,
+          'tracing': ConfigSchema.object(
+            description: 'OpenTelemetry tracing settings.',
+            properties: {
+              'enabled': ConfigSchema.boolean(
+                description: 'Enable OpenTelemetry tracing middleware.',
+                defaultValue: false,
+              ),
+              'service_name': ConfigSchema.string(
+                description:
+                'Logical service.name attribute reported with every span.',
+                defaultValue: 'routed-service',
+              ).withMetadata({
+                configDocMetaInheritFromEnv: 'OBSERVABILITY_TRACING_SERVICE_NAME',
+              }),
+              'exporter': ConfigSchema.string(
+                description: 'Tracing exporter (none, console, otlp).',
+                options: ['none', 'console', 'otlp'],
+                defaultValue: 'none',
+              ),
+              'endpoint': ConfigSchema.string(
+                description:
+                'Collector endpoint used when exporter=otlp (e.g. https://otel/v1/traces).',
+              ),
+              'headers': ConfigSchema.object(
+                description:
+                'Optional headers forwarded to the OTLP collector (authorization, etc.).',
+                additionalProperties: true,
+              ).withDefault(const {}),
+            },
       ),
-      ConfigDocEntry(
-        path: path('tracing.service_name'),
-        type: 'string',
-        description: 'Logical service.name attribute reported with every span.',
-        defaultValue: 'routed-service',
-        metadata: {
-          configDocMetaInheritFromEnv: 'OBSERVABILITY_TRACING_SERVICE_NAME',
+          'metrics': ConfigSchema.object(
+            description: 'Prometheus metrics settings.',
+            properties: {
+              'enabled': ConfigSchema.boolean(
+                description: 'Enable Prometheus-style metrics endpoint.',
+                defaultValue: false,
+              ),
+              'path': ConfigSchema.string(
+                description: 'Path for metrics exposition.',
+                defaultValue: '/metrics',
+              ),
+              'buckets': ConfigSchema.list(
+                description:
+                'Latency histogram bucket upper bounds (seconds) for routed_request_duration_seconds.',
+                items: ConfigSchema.number(),
+                defaultValue: _defaultBuckets,
+              ),
+            },
+          ),
+          'health': ConfigSchema.object(
+            description: 'Health and readiness check settings.',
+            properties: {
+              'enabled': ConfigSchema.boolean(
+                description: 'Enable health and readiness endpoints.',
+                defaultValue: true,
+              ),
+              'readiness_path': ConfigSchema.string(
+                description: 'HTTP path exposed for readiness checks.',
+                defaultValue: '/readyz',
+              ),
+              'liveness_path': ConfigSchema.string(
+                description: 'HTTP path exposed for liveness checks.',
+                defaultValue: '/livez',
+              ),
+            },
+          ),
+          'errors': ConfigSchema.object(
+            properties: {
+              'enabled': ConfigSchema.boolean(
+                description:
+                'Enable error observer notifications (reserve for external error trackers).',
+                defaultValue: false,
+              ),
+            },
+          ),
         },
-      ),
-      ConfigDocEntry(
-        path: path('tracing.exporter'),
-        type: 'string',
-        description: 'Tracing exporter (none, console, otlp).',
-        options: ['none', 'console', 'otlp'],
-        defaultValue: 'none',
-      ),
-      ConfigDocEntry(
-        path: path('tracing.endpoint'),
-        type: 'string',
-        description:
-            'Collector endpoint used when exporter=otlp (e.g. https://otel/v1/traces).',
-        defaultValue: null,
-      ),
-      ConfigDocEntry(
-        path: path('tracing.headers'),
-        type: 'map',
-        description:
-            'Optional headers forwarded to the OTLP collector (authorization, etc.).',
-        defaultValue: const <String, String>{},
-      ),
-      ConfigDocEntry(
-        path: path('metrics.enabled'),
-        type: 'bool',
-        description: 'Enable Prometheus-style metrics endpoint.',
-        defaultValue: false,
-      ),
-      ConfigDocEntry(
-        path: path('metrics.path'),
-        type: 'string',
-        description: 'Path for metrics exposition.',
-        defaultValue: '/metrics',
-      ),
-      ConfigDocEntry(
-        path: path('metrics.buckets'),
-        type: 'list<double>',
-        description:
-            'Latency histogram bucket upper bounds (seconds) for routed_request_duration_seconds.',
-        defaultValue: _defaultBuckets,
-      ),
-      ConfigDocEntry(
-        path: path('health.enabled'),
-        type: 'bool',
-        description: 'Enable health and readiness endpoints.',
-        defaultValue: true,
-      ),
-      ConfigDocEntry(
-        path: path('health.readiness_path'),
-        type: 'string',
-        description: 'HTTP path exposed for readiness checks.',
-        defaultValue: '/readyz',
-      ),
-      ConfigDocEntry(
-        path: path('health.liveness_path'),
-        type: 'string',
-        description: 'HTTP path exposed for liveness checks.',
-        defaultValue: '/livez',
-      ),
-      ConfigDocEntry(
-        path: path('errors.enabled'),
-        type: 'bool',
-        description:
-            'Enable error observer notifications (reserve for external error trackers).',
-        defaultValue: false,
-      ),
-    ];
-  }
+      );
 
   @override
   ObservabilityConfig fromMap(

@@ -1,3 +1,5 @@
+import 'package:json_schema_builder/json_schema_builder.dart';
+import 'package:routed/src/config/schema.dart';
 import 'package:routed/src/engine/config.dart';
 import 'package:routed/src/provider/config_utils.dart';
 import 'package:routed/src/provider/provider.dart';
@@ -360,9 +362,11 @@ class SecurityProviderConfig {
         ) ??
         maxRequestDefault;
 
-    final headersDefault =
-        (defaults['headers'] as Map<String, String>?) ??
-        const <String, String>{};
+    final headersDefaultRaw = defaults['headers'];
+    final Map<String, String> headersDefault =
+    headersDefaultRaw is Map
+        ? parseStringMap(headersDefaultRaw, context: 'security.headers')
+        : const <String, String>{};
     final headersRaw = map['headers'];
     final Map<String, String> headers;
     if (headersRaw == null) {
@@ -450,138 +454,91 @@ class SecurityConfigSpec extends ConfigSpec<SecurityProviderConfig> {
   String get root => 'security';
 
   @override
-  Map<String, dynamic> defaults({ConfigSpecContext? context}) {
-    var maxRequestSize = _defaultMaxRequestSize;
-    var csrfEnabled = true;
-    var csrfCookieName = _defaultCsrfCookieName;
-    var proxyEnabled = false;
-    var forwardClientIp = true;
-    if (context is SecurityConfigContext) {
-      maxRequestSize = context.engineConfig.security.maxRequestSize;
-      csrfEnabled = context.engineConfig.security.csrfProtection;
-      csrfCookieName = context.engineConfig.security.csrfCookieName;
-      proxyEnabled = context.engineConfig.features.enableProxySupport;
-      forwardClientIp = context.engineConfig.forwardedByClientIP;
-    }
-
-    return {
-      'max_request_size': maxRequestSize,
-      'headers': const <String, String>{},
-      'csrf': {
-        'enabled': csrfEnabled,
-        'cookie_name': csrfCookieName,
-      },
-      'trusted_proxies': {
-        'enabled': proxyEnabled,
-        'proxies': _defaultTrustedProxies,
-        'headers': _defaultTrustedProxyHeaders,
-        'forward_client_ip': forwardClientIp,
-        'platform_header': null,
-      },
-      'ip_filter': {
-        'enabled': false,
-        'default_action': 'allow',
-        'allow': const <String>[],
-        'deny': const <String>[],
-        'respect_trusted_proxies': true,
-      },
-    };
-  }
-
-  @override
-  List<ConfigDocEntry> docs({String? pathBase, ConfigSpecContext? context}) {
-    final base = pathBase ?? root;
-    String path(String segment) => base.isEmpty ? segment : '$base.$segment';
-
-    return <ConfigDocEntry>[
-      ConfigDocEntry(
-        path: path('max_request_size'),
-        type: 'int',
+  Schema? get schema =>
+      ConfigSchema.object(
+        title: 'Security Configuration',
+        description: 'CSRF, trusted proxies, and IP filtering settings.',
+        properties: {
+          'max_request_size': ConfigSchema.integer(
         description: 'Maximum request body size in bytes.',
         defaultValue: _defaultMaxRequestSize,
       ),
-      ConfigDocEntry(
-        path: path('headers'),
-        type: 'map<string,string>',
+          'headers': ConfigSchema.object(
         description: 'Extra security headers applied to every response.',
-        defaultValue: const <String, String>{},
-      ),
-      ConfigDocEntry(
-        path: path('csrf.enabled'),
-        type: 'bool',
-        description: 'Enable CSRF middleware.',
-        defaultValue: true,
-      ),
-      ConfigDocEntry(
-        path: path('csrf.cookie_name'),
-        type: 'string',
-        description: 'Cookie used to store the CSRF token.',
-        defaultValue: _defaultCsrfCookieName,
-      ),
-      ConfigDocEntry(
-        path: path('trusted_proxies.enabled'),
-        type: 'bool',
-        description: 'Trust proxy headers for client IP resolution.',
-        defaultValue: false,
-      ),
-      ConfigDocEntry(
-        path: path('trusted_proxies.proxies'),
-        type: 'list<string>',
-        description: 'CIDR ranges considered trusted proxies.',
-        defaultValue: _defaultTrustedProxies,
-      ),
-      ConfigDocEntry(
-        path: path('trusted_proxies.headers'),
-        type: 'list<string>',
-        description: 'Headers to inspect for client IP addresses.',
-        defaultValue: _defaultTrustedProxyHeaders,
-      ),
-      ConfigDocEntry(
-        path: path('trusted_proxies.forward_client_ip'),
-        type: 'bool',
-        description: 'Preserve the client IP from the first trusted header.',
-        defaultValue: true,
-      ),
-      ConfigDocEntry(
-        path: path('trusted_proxies.platform_header'),
-        type: 'string',
-        description:
-            'Trusted platform header providing the original client IP (Cloudflare, AWS, etc.).',
-        defaultValue: null,
-      ),
-      ConfigDocEntry(
-        path: path('ip_filter.enabled'),
-        type: 'bool',
-        description: 'Enable IP allow/deny middleware.',
-        defaultValue: false,
-      ),
-      ConfigDocEntry(
-        path: path('ip_filter.default_action'),
-        type: 'string',
-        description: 'Fallback when no rules match (allow or deny).',
-        options: ['allow', 'deny'],
-        defaultValue: 'allow',
-      ),
-      ConfigDocEntry(
-        path: path('ip_filter.allow'),
-        type: 'list<string>',
-        description: 'CIDR/IP entries explicitly allowed.',
-        defaultValue: const <String>[],
-      ),
-      ConfigDocEntry(
-        path: path('ip_filter.deny'),
-        type: 'list<string>',
-        description: 'CIDR/IP entries explicitly denied.',
-        defaultValue: const <String>[],
-      ),
-      ConfigDocEntry(
-        path: path('ip_filter.respect_trusted_proxies'),
-        type: 'bool',
-        description: 'Use trusted proxy resolution when determining client IP.',
-        defaultValue: true,
-      ),
-    ];
-  }
+            additionalProperties: true,
+          ).withDefault(const {}),
+          'csrf': ConfigSchema.object(
+            description: 'CSRF protection settings.',
+            properties: {
+              'enabled': ConfigSchema.boolean(
+                description: 'Enable CSRF middleware.',
+                defaultValue: true,
+              ),
+              'cookie_name': ConfigSchema.string(
+                description: 'Cookie used to store the CSRF token.',
+                defaultValue: _defaultCsrfCookieName,
+              ),
+            },
+          ),
+          'trusted_proxies': ConfigSchema.object(
+            description: 'Trusted proxy settings.',
+            properties: {
+              'enabled': ConfigSchema.boolean(
+                description: 'Trust proxy headers for client IP resolution.',
+                defaultValue: false,
+              ),
+              'proxies': ConfigSchema.list(
+                description: 'CIDR ranges considered trusted proxies.',
+                items: ConfigSchema.string(),
+                defaultValue: _defaultTrustedProxies,
+              ),
+              'headers': ConfigSchema.list(
+                description: 'Headers to inspect for client IP addresses.',
+                items: ConfigSchema.string(),
+                defaultValue: _defaultTrustedProxyHeaders,
+              ),
+              'forward_client_ip': ConfigSchema.boolean(
+                description:
+                'Preserve the client IP from the first trusted header.',
+                defaultValue: true,
+              ),
+              'platform_header': ConfigSchema.string(
+                description:
+                'Trusted platform header providing the original client IP (Cloudflare, AWS, etc.).',
+              ),
+            },
+          ),
+          'ip_filter': ConfigSchema.object(
+            description: 'IP allow/deny settings.',
+            properties: {
+              'enabled': ConfigSchema.boolean(
+                description: 'Enable IP allow/deny middleware.',
+                defaultValue: false,
+              ),
+              'default_action': ConfigSchema.string(
+                description: 'Fallback when no rules match (allow or deny).',
+                options: ['allow', 'deny'],
+                defaultValue: 'allow',
+              ),
+              'allow': ConfigSchema.list(
+                description: 'CIDR/IP entries explicitly allowed.',
+                items: ConfigSchema.string(),
+                defaultValue: const [],
+              ),
+              'deny': ConfigSchema.list(
+                description: 'CIDR/IP entries explicitly denied.',
+                items: ConfigSchema.string(),
+                defaultValue: const [],
+              ),
+              'respect_trusted_proxies': ConfigSchema.boolean(
+                description:
+                'Use trusted proxy resolution when determining client IP.',
+                defaultValue: true,
+              ),
+            },
+          ),
+        },
+      );
 
   @override
   SecurityProviderConfig fromMap(

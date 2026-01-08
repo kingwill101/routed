@@ -1,6 +1,7 @@
+import 'package:json_schema_builder/json_schema_builder.dart';
+import 'package:routed/src/config/schema.dart';
 import 'package:routed/src/middleware/compression.dart';
 import 'package:routed/src/provider/config_utils.dart';
-import 'package:routed/src/provider/provider.dart';
 
 import '../spec.dart';
 
@@ -45,54 +46,35 @@ class CompressionConfigSpec extends ConfigSpec<CompressionConfig> {
   String get root => 'compression';
 
   @override
-  Map<String, dynamic> defaults({ConfigSpecContext? context}) {
-    return {
-      'enabled': true,
-      'min_length': 1024,
-      'algorithms': _defaultAlgorithms,
-      'mime_allow': _defaultMimeAllow,
-      'mime_deny': _defaultMimeDeny,
-    };
-  }
-
-  @override
-  List<ConfigDocEntry> docs({String? pathBase, ConfigSpecContext? context}) {
-    final base = pathBase ?? root;
-    String path(String segment) => base.isEmpty ? segment : '$base.$segment';
-
-    return <ConfigDocEntry>[
-      ConfigDocEntry(
-        path: path('enabled'),
-        type: 'bool',
+  Schema? get schema => ConfigSchema.object(
+    title: 'Compression Configuration',
+    description: 'Automatic response compression settings.',
+    properties: {
+      'enabled': ConfigSchema.boolean(
         description: 'Enable automatic response compression.',
         defaultValue: true,
       ),
-      ConfigDocEntry(
-        path: path('min_length'),
-        type: 'int',
+      'min_length': ConfigSchema.integer(
         description: 'Minimum body size (bytes) before compression applies.',
         defaultValue: 1024,
       ),
-      ConfigDocEntry(
-        path: path('algorithms'),
-        type: 'list<string>',
+      'algorithms': ConfigSchema.list(
         description: 'Preferred compression algorithms (gzip, br).',
+        items: ConfigSchema.string(),
         defaultValue: _defaultAlgorithms,
       ),
-      ConfigDocEntry(
-        path: path('mime_allow'),
-        type: 'list<string>',
+      'mime_allow': ConfigSchema.list(
         description: 'MIME prefixes eligible for compression.',
+        items: ConfigSchema.string(),
         defaultValue: _defaultMimeAllow,
       ),
-      ConfigDocEntry(
-        path: path('mime_deny'),
-        type: 'list<string>',
+      'mime_deny': ConfigSchema.list(
         description: 'MIME prefixes excluded from compression.',
+        items: ConfigSchema.string(),
         defaultValue: _defaultMimeDeny,
       ),
-    ];
-  }
+    },
+  );
 
   @override
   CompressionConfig fromMap(

@@ -26,8 +26,11 @@ class RoutingServiceProvider extends ServiceProvider
   static const RoutingConfigSpec spec = RoutingConfigSpec();
 
   @override
-  ConfigDefaults get defaultConfig =>
-      ConfigDefaults(docs: spec.docs(), values: spec.defaultsWithRoot());
+  ConfigDefaults get defaultConfig => ConfigDefaults(
+    docs: spec.docs(),
+    values: spec.defaultsWithRoot(),
+    schemas: spec.schemaWithRoot(),
+  );
 
   @override
   void register(Container container) {

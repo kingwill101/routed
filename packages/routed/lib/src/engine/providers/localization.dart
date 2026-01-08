@@ -55,6 +55,7 @@ class LocalizationServiceProvider extends ServiceProvider
         ...spec.docs(),
       ],
       values: values,
+      schemas: spec.schemaWithRoot(),
     );
   }
 
