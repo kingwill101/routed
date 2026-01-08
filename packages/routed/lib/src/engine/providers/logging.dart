@@ -7,11 +7,11 @@ import 'package:routed/src/context/context.dart';
 import 'package:routed/src/contracts/contracts.dart' show Config;
 import 'package:routed/src/engine/middleware_registry.dart';
 import 'package:routed/src/config/specs/logging.dart';
+import 'package:routed/src/config/specs/logging_drivers.dart';
 import 'package:routed/src/logging/channel_drivers.dart';
 import 'package:routed/src/logging/context.dart';
 import 'package:routed/src/logging/driver_registry.dart';
 import 'package:routed/src/logging/logger.dart';
-import 'package:routed/src/provider/config_utils.dart';
 import 'package:routed/src/provider/provider.dart';
 import 'package:routed/src/router/types.dart';
 
@@ -183,101 +183,83 @@ class LoggingServiceProvider extends ServiceProvider
     registry.registerIfAbsent('stderr', (ctx) => StderrLogDriver());
     registry.registerIfAbsent('null', (ctx) => NullLogDriver());
     registry.registerIfAbsent('single', (ctx) {
-      final path = _stringOption(ctx.options, ['path', 'file']);
+      final resolved = _singleSpec.fromMap(
+        loggingDriverOptions(ctx.options),
+        context: LoggingDriverSpecContext(
+          name: ctx.name,
+          pathBase: ctx.configPath,
+          config: ctx.config,
+        ),
+      );
       return SingleFileLogDriver(
-        (path == null || path.isEmpty) ? 'storage/logs/routed.log' : path,
+        resolved.path,
       );
     });
     registry.registerIfAbsent('daily', (ctx) {
-      final path =
-          _stringOption(ctx.options, ['path', 'directory']) ??
-          'storage/logs/routed';
-      final retention =
-          _intFrom(ctx.options, ['retentionDays', 'retention_days', 'days']) ??
-          14;
-      final flushInterval = _durationFrom(
-        ctx.options['flushInterval'] ?? ctx.options['flush_interval'],
-        fallback: const Duration(milliseconds: 500),
+      final resolved = _dailySpec.fromMap(
+        loggingDriverOptions(ctx.options),
+        context: LoggingDriverSpecContext(
+          name: ctx.name,
+          pathBase: ctx.configPath,
+          config: ctx.config,
+        ),
       );
-      final optionsMap = {
-        for (final entry in ctx.options.entries)
-          entry.key.toString(): entry.value,
-      };
-      final useIsolate =
-          optionsMap.getBool('useIsolate') || optionsMap.getBool('use_isolate');
       final options = contextual.DailyFileOptions(
-        path: path,
-        retentionDays: retention,
-        flushInterval: flushInterval,
+        path: resolved.path,
+        retentionDays: resolved.retentionDays,
+        flushInterval: resolved.flushInterval,
       );
       return contextual.DailyFileLogDriver.fromOptions(
         options,
-        useIsolate: useIsolate,
+        useIsolate: resolved.useIsolate,
       );
     });
     registry.registerIfAbsent('stack', (ctx) {
-      final optionsMap = {
-        for (final entry in ctx.options.entries)
-          entry.key.toString(): entry.value,
-      };
-      final channels = optionsMap.getStringList('channels') ?? const <String>[];
-      if (channels.isEmpty) {
-        throw ProviderConfigException(
-          'logging channel "${ctx.name}" must specify at least one entry in ${ctx.configPath}.channels',
-        );
-      }
-      final ignore = optionsMap.getBool('ignore_exceptions');
-      final drivers = channels.map(ctx.resolveChannel).toList();
-      return contextual.StackLogDriver(drivers, ignoreExceptions: ignore);
+      final resolved = _stackSpec.fromMap(
+        loggingDriverOptions(ctx.options),
+        context: LoggingDriverSpecContext(
+          name: ctx.name,
+          pathBase: ctx.configPath,
+          config: ctx.config,
+        ),
+      );
+      final drivers = resolved.channels.map(ctx.resolveChannel).toList();
+      return contextual.StackLogDriver(
+        drivers,
+        ignoreExceptions: resolved.ignoreExceptions,
+      );
     });
     registry.registerIfAbsent('webhook', (ctx) {
-      final optionsMap = {
-        for (final entry in ctx.options.entries)
-          entry.key.toString(): entry.value,
-      };
-      final rawUrl =
-          _stringOption(ctx.options, ['url', 'endpoint', 'uri']) ?? '';
-      late Uri uri;
-      try {
-        uri = Uri.parse(rawUrl);
-      } catch (_) {
-        throw ProviderConfigException(
-          'logging channel "${ctx.name}" has an invalid webhook url: $rawUrl',
-        );
-      }
-      final headers = _stringMap(ctx.options['headers']);
-      final timeout = _durationFrom(
-        ctx.options['timeout'] ?? ctx.options['timeout_ms'],
-        fallback: const Duration(seconds: 5),
+      final resolved = _webhookSpec.fromMap(
+        loggingDriverOptions(ctx.options),
+        context: LoggingDriverSpecContext(
+          name: ctx.name,
+          pathBase: ctx.configPath,
+          config: ctx.config,
+        ),
       );
-      final keepAlive =
-          optionsMap.getBool('keep_alive', defaultValue: true) ||
-          optionsMap.getBool('keepAlive', defaultValue: true);
       final options = contextual.WebhookOptions(
-        url: uri,
-        headers: headers,
-        timeout: timeout,
-        keepAlive: keepAlive,
+        url: resolved.url,
+        headers: resolved.headers,
+        timeout: resolved.timeout,
+        keepAlive: resolved.keepAlive,
       );
       return contextual.WebhookLogDriver.fromOptions(options);
     });
     registry.registerIfAbsent('sampling', (ctx) {
-      final wrapped = _stringOption(ctx.options, [
-        'wrapped',
-        'wrapped_channel',
-        'channel',
-      ]);
-      if (wrapped == null || wrapped.isEmpty) {
-        throw ProviderConfigException(
-          'logging channel "${ctx.name}" must specify a wrapped channel (${ctx.configPath}.wrapped_channel)',
-        );
-      }
-      final rates = _parseSamplingRates(
-        ctx.options['rates'],
-        contextPath: '${ctx.configPath}.rates',
+      final resolved = _samplingSpec.fromMap(
+        loggingDriverOptions(ctx.options),
+        context: LoggingDriverSpecContext(
+          name: ctx.name,
+          pathBase: ctx.configPath,
+          config: ctx.config,
+        ),
       );
-      final wrappedDriver = ctx.resolveChannel(wrapped);
-      return contextual.SamplingLogDriver.fromOptions(wrappedDriver, rates);
+      final wrappedDriver = ctx.resolveChannel(resolved.wrapped);
+      return contextual.SamplingLogDriver.fromOptions(
+        wrappedDriver,
+        resolved.rates,
+      );
     });
   }
 
@@ -455,125 +437,4 @@ class _LoggerFactoryBuilder {
       ),
     );
   }
-}
-
-Map<contextual.Level, double> _parseSamplingRates(
-  Object? value, {
-  required String contextPath,
-}) {
-  final result = <contextual.Level, double>{};
-  if (value is Map) {
-    value.forEach((key, rateValue) {
-      final level = _levelFromName(key?.toString() ?? '');
-      final rate = _doubleFromValue(rateValue);
-      if (level != null && rate != null) {
-        result[level] = rate.clamp(0.0, 1.0);
-      }
-    });
-  }
-  return result;
-}
-
-String? _stringOption(Map<String, Object?> options, List<String> keys) {
-  for (final key in keys) {
-    final value = options[key];
-    if (value != null) {
-      final parsed = parseStringLike(
-        value,
-        context: key,
-        allowEmpty: false,
-        coerceNonString: true,
-        throwOnInvalid: false,
-      );
-      if (parsed != null && parsed.isNotEmpty) {
-        return parsed;
-      }
-    }
-  }
-  return null;
-}
-
-int? _intFrom(Map<String, Object?> options, List<String> keys) {
-  for (final key in keys) {
-    final value = options[key];
-    if (value != null) {
-      final parsed = parseIntLike(
-        value,
-        context: key,
-        throwOnInvalid: false,
-      );
-      if (parsed != null) {
-        return parsed;
-      }
-    }
-  }
-  return null;
-}
-
-double? _doubleFromValue(Object? value) {
-  if (value == null) return null;
-  if (value is num) return value.toDouble();
-  return double.tryParse(value.toString());
-}
-
-Duration _durationFrom(Object? value, {Duration? fallback}) {
-  if (value == null) {
-    return fallback ?? const Duration(milliseconds: 500);
-  }
-  if (value is Duration) {
-    return value;
-  }
-  final parsed = value is num
-      ? parseDurationLike(
-        '${value}ms',
-        context: 'duration',
-        throwOnInvalid: false,
-      )
-      : parseDurationLike(
-        value,
-        context: 'duration',
-        throwOnInvalid: false,
-      );
-  if (parsed != null) {
-    return parsed;
-  }
-  return fallback ?? const Duration(milliseconds: 500);
-}
-
-Map<String, String>? _stringMap(Object? value) {
-  if (value == null) {
-    return null;
-  }
-  if (value is! Map) {
-    return null;
-  }
-  final filtered = <String, dynamic>{};
-  value.forEach((key, entryValue) {
-    if (entryValue != null) {
-      filtered[key.toString()] = entryValue;
-    }
-  });
-  if (filtered.isEmpty) {
-    return null;
-  }
-  final parsed = parseStringMap(
-    filtered,
-    context: 'logging.headers',
-    allowEmptyValues: true,
-    coerceValues: true,
-  );
-  return parsed.isEmpty ? null : parsed;
-}
-
-contextual.Level? _levelFromName(String name) {
-  final needle = name.trim().toLowerCase();
-  if (needle.isEmpty) {
-    return null;
-  }
-  for (final level in contextual.Level.values) {
-    if (level.name.toLowerCase() == needle) {
-      return level;
-    }
-  }
-  return null;
 }

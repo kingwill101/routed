@@ -1,11 +1,11 @@
 import 'dart:async';
 
 import 'package:routed/src/config/specs/storage.dart';
+import 'package:routed/src/config/specs/storage_drivers.dart';
 import 'package:routed/src/container/container.dart';
 import 'package:routed/src/contracts/contracts.dart' show Config;
 import 'package:routed/src/engine/config.dart';
 import 'package:routed/src/engine/storage_defaults.dart';
-import 'package:routed/src/provider/config_utils.dart';
 import 'package:routed/src/provider/provider.dart';
 import 'package:routed/src/storage/cloud_storage_driver.dart';
 import 'package:routed/src/storage/local_storage_driver.dart';
@@ -173,13 +173,16 @@ class StorageServiceProvider extends ServiceProvider
       resolved.disks.forEach((name, disk) {
         final diskConfig = Map<String, dynamic>.from(disk.toMap());
         if (name == 'local') {
-          final existingRoot = parseStringLike(
-            diskConfig['root'],
-            context: 'storage.disks.$name.root',
-            allowEmpty: true,
-            coerceNonString: true,
-            throwOnInvalid: false,
+          final specContext = StorageDriverSpecContext(
+            diskName: name,
+            pathBase: 'storage.disks.$name',
+            config: config,
           );
+          final resolved = LocalStorageDriver.spec.fromMap(
+            diskConfig,
+            context: specContext,
+          );
+          final existingRoot = resolved.root;
           final shouldApplyStorageRoot =
               existingRoot == null ||
               existingRoot.isEmpty ||

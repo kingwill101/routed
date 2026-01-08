@@ -23,7 +23,7 @@ in-memory engine or launch an ephemeral server without writing glue code.
 ```yaml
 dev_dependencies:
   routed_testing: ^0.2.1
-  server_testing: ^0.2.0
+  server_testing: ^0.3.0
   routed: ^0.2.0
   test: ^1.26.0
 ```
