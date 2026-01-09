@@ -121,8 +121,7 @@ abstract class BaseCommand extends Command<void> {
 
   /// Joins [parts] into a platform-appropriate path and normalizes repeated separators.
   String joinPath(List<String> parts) {
-    return parts
-        .join(Platform.pathSeparator)
-        .replaceAll(RegExp(r'[/\\]+'), Platform.pathSeparator);
+    final joined = fileSystem.path.joinAll(parts);
+    return fileSystem.path.normalize(joined);
   }
 }
