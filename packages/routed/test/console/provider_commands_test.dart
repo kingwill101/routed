@@ -49,8 +49,9 @@ void main() {
         .file(memoryFs.path.join(projectRoot.path, relativePath))
         .readAsStringSync();
 
-    bool exists(String relativePath) =>
-        memoryFs.file(memoryFs.path.join(projectRoot.path, relativePath)).existsSync();
+    bool exists(String relativePath) => memoryFs
+        .file(memoryFs.path.join(projectRoot.path, relativePath))
+        .existsSync();
 
     test('provider:enable appends provider to manifest', () async {
       await _run(runner, ['provider:enable', 'routed.sessions']);

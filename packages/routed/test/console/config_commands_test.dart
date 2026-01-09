@@ -39,8 +39,9 @@ void main() {
         .file(memoryFs.path.join(projectRoot.path, relativePath))
         .readAsStringSync();
 
-    bool exists(String relativePath) =>
-        memoryFs.file(memoryFs.path.join(projectRoot.path, relativePath)).existsSync();
+    bool exists(String relativePath) => memoryFs
+        .file(memoryFs.path.join(projectRoot.path, relativePath))
+        .existsSync();
 
     test('config:init scaffolds base templates', () async {
       await _run(runner, ['config:init']);
