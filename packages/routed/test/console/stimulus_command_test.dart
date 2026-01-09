@@ -30,7 +30,7 @@ void main() {
       memoryFs = MemoryFileSystem();
       final projectRoot = memoryFs.directory('/workspace/demo')
         ..createSync(recursive: true);
-      memoryFs.file(p.join(projectRoot.path, 'pubspec.yaml'))
+      memoryFs.file(memoryFs.path.join(projectRoot.path, 'pubspec.yaml'))
         ..createSync(recursive: true)
         ..writeAsStringSync('name: demo');
       memoryFs.currentDirectory = projectRoot;

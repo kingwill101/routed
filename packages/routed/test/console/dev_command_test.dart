@@ -19,7 +19,7 @@ void main() {
     late _FakeDevServer fakeServer;
 
     void writeFile(String relative, String contents) {
-      final file = memoryFs.file(p.join(projectRoot.path, relative));
+      final file = memoryFs.file(memoryFs.path.join(projectRoot.path, relative));
       file.parent.createSync(recursive: true);
       file.writeAsStringSync(contents);
     }
@@ -87,7 +87,7 @@ void main() {
       expect(fakeServer.port, equals('4242'));
       expect(
         fakeServer.scriptPath,
-        equals(p.join(projectRoot.path, 'bin/server.dart')),
+        equals(memoryFs.path.join(projectRoot.path, 'bin/server.dart')),
       );
       expect(fakeServer.hotReloadExpected, isFalse);
       expect(fakeServer.additionalWatchPaths, isEmpty);

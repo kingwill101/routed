@@ -19,7 +19,7 @@ void main() {
     late _RecordingLogger logger;
 
     void writeFile(String relative, String contents) {
-      final file = memoryFs.file(p.join(projectRoot.path, relative));
+      final file = memoryFs.file(memoryFs.path.join(projectRoot.path, relative));
       file.parent.createSync(recursive: true);
       file.writeAsStringSync(contents);
     }

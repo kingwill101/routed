@@ -42,11 +42,11 @@ void main() {
     test('scaffolds a new project with defaults', () async {
       await _run(runner, ['create', '--name', 'demo_app']);
 
-      final projectDir = memoryFs.directory(p.join(workspace.path, 'demo_app'));
+      final projectDir = memoryFs.directory(memoryFs.path.join(workspace.path, 'demo_app'));
       expect(projectDir.existsSync(), isTrue);
       expect(
-        pubGetInvocations.map((d) => p.normalize(d.path)),
-        contains(p.normalize(projectDir.path)),
+        pubGetInvocations.map((d) => memoryFs.path.normalize(d.path)),
+        contains(memoryFs.path.normalize(projectDir.path)),
       );
       expect(logger.infos, contains('Dependencies installed successfully.'));
       expect(logger.infos.contains('  dart pub get'), isFalse);
@@ -166,14 +166,14 @@ void main() {
     });
 
     test('uses output directory when provided', () async {
-      final outputPath = p.join(workspace.path, 'sandbox');
+      final outputPath = memoryFs.path.join(workspace.path, 'sandbox');
       await _run(runner, ['create', '--output', outputPath]);
 
       final projectDir = memoryFs.directory(outputPath);
       expect(projectDir.existsSync(), isTrue);
       expect(
-        pubGetInvocations.map((d) => p.normalize(d.path)),
-        contains(p.normalize(projectDir.path)),
+        pubGetInvocations.map((d) => memoryFs.path.normalize(d.path)),
+        contains(memoryFs.path.normalize(projectDir.path)),
       );
     });
 
@@ -199,7 +199,7 @@ void main() {
     test('scaffolds API template with tests', () async {
       await _run(runner, ['create', '--name', 'demo_api', '--template', 'api']);
 
-      final projectDir = memoryFs.directory(p.join(workspace.path, 'demo_api'));
+      final projectDir = memoryFs.directory(memoryFs.path.join(workspace.path, 'demo_api'));
       final appContent = _read(projectDir, 'lib/app.dart');
       expect(appContent, contains("'/api/v1'"));
       expect(appContent, contains("router.get('/users'"));
@@ -214,7 +214,7 @@ void main() {
     test('scaffolds web template with HTML helpers', () async {
       await _run(runner, ['create', '--name', 'demo_web', '--template', 'web']);
 
-      final projectDir = memoryFs.directory(p.join(workspace.path, 'demo_web'));
+      final projectDir = memoryFs.directory(memoryFs.path.join(workspace.path, 'demo_web'));
       final appContent = _read(projectDir, 'lib/app.dart');
       expect(appContent, contains('LiquidViewEngine'));
       expect(appContent, contains("engine.static('/assets'"));
@@ -239,7 +239,7 @@ void main() {
       ]);
 
       final projectDir = memoryFs.directory(
-        p.join(workspace.path, 'demo_full'),
+        memoryFs.path.join(workspace.path, 'demo_full'),
       );
       final appContent = _read(projectDir, 'lib/app.dart');
       expect(appContent, contains("'/api'"));
@@ -283,12 +283,12 @@ Future<void> _expectUsageError(
 }
 
 bool _exists(fs.Directory root, String relativePath) {
-  return root.fileSystem.file(p.join(root.path, relativePath)).existsSync();
+  return root.fileSystem.file(root.fileSystem.path.join(root.path, relativePath)).existsSync();
 }
 
 String _read(fs.Directory root, String relativePath) {
   return root.fileSystem
-      .file(p.join(root.path, relativePath))
+      .file(root.fileSystem.path.join(root.path, relativePath))
       .readAsStringSync();
 }
 

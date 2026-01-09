@@ -19,7 +19,7 @@ void main() {
     late _RecordingLogger logger;
 
     void writeFile(String relativePath, String contents) {
-      final file = memoryFs.file(p.join(projectRoot.path, relativePath));
+      final file = memoryFs.file(memoryFs.path.join(projectRoot.path, relativePath));
       file.parent.createSync(recursive: true);
       file.writeAsStringSync(contents);
     }
@@ -70,7 +70,7 @@ void main() {
       ]);
 
       final manifestFile = memoryFs.file(
-        p.join(projectRoot.path, '.dart_tool', 'routed', 'route_manifest.json'),
+        memoryFs.path.join(projectRoot.path, '.dart_tool', 'routed', 'route_manifest.json'),
       );
       expect(manifestFile.existsSync(), isTrue);
 
