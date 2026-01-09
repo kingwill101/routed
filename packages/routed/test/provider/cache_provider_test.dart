@@ -1,6 +1,4 @@
-import 'dart:io';
-
-import 'package:path/path.dart' as p;
+import 'package:file/memory.dart';
 import 'package:routed/providers.dart';
 import 'package:routed/routed.dart';
 import 'package:routed/src/engine/storage_paths.dart';
@@ -8,6 +6,12 @@ import 'package:test/test.dart';
 
 void main() {
   group('CacheServiceProvider', () {
+    late MemoryFileSystem fs;
+
+    setUp(() {
+      fs = MemoryFileSystem();
+    });
+
     test('configures cache manager from cache config', () async {
       final engine = Engine(
         configItems: {
@@ -137,7 +141,7 @@ void main() {
     });
 
     test('file cache store uses StorageDefaults path', () async {
-      final baseDir = Directory.systemTemp.createTempSync(
+      final baseDir = fs.systemTempDirectory.createTempSync(
         'routed-provider-storage-',
       );
       addTearDown(() {
@@ -145,8 +149,8 @@ void main() {
           baseDir.deleteSync(recursive: true);
         }
       });
-      final localRoot = p.join(baseDir.path, 'storage', 'app');
-      Directory(localRoot).createSync(recursive: true);
+      final localRoot = fs.path.join(baseDir.path, 'storage', 'app');
+      fs.directory(localRoot).createSync(recursive: true);
       final storageDefaults = StorageDefaults.fromLocalRoot(localRoot);
 
       final container = Container();
@@ -154,7 +158,10 @@ void main() {
         'cache': {
           'default': 'file',
           'stores': {
-            'file': {'driver': 'file'},
+            'file': {
+              'driver': 'file',
+              'file_system': fs,
+            },
           },
         },
       });
@@ -179,7 +186,7 @@ void main() {
     test(
       'file cache store uses Config fallback when StorageDefaults missing',
       () async {
-        final baseDir = Directory.systemTemp.createTempSync(
+        final baseDir = fs.systemTempDirectory.createTempSync(
           'routed-provider-config-',
         );
         addTearDown(() {
@@ -187,8 +194,8 @@ void main() {
             baseDir.deleteSync(recursive: true);
           }
         });
-        final localRoot = p.join(baseDir.path, 'storage', 'app');
-        Directory(localRoot).createSync(recursive: true);
+        final localRoot = fs.path.join(baseDir.path, 'storage', 'app');
+        fs.directory(localRoot).createSync(recursive: true);
 
         final container = Container();
         final config =
@@ -196,7 +203,10 @@ void main() {
               'cache': {
                 'default': 'file',
                 'stores': {
-                  'file': {'driver': 'file'},
+                  'file': {
+                    'driver': 'file',
+                    'file_system': fs,
+                  },
                 },
               },
             })..set('storage', {

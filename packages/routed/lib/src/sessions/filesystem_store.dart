@@ -1,8 +1,9 @@
 import 'dart:convert';
-import 'dart:io';
+import 'dart:io' show Cookie;
 import 'dart:math';
 
-import 'package:path/path.dart' as p;
+import 'package:file/file.dart' as file;
+import 'package:file/local.dart' as local;
 import 'package:routed/src/request.dart';
 import 'package:routed/src/response.dart';
 import 'package:routed/src/sessions/options.dart';
@@ -28,6 +29,9 @@ class FilesystemStore implements Store {
   /// Lottery configuration for opportunistic pruning (e.g. [2, 100]).
   final List<int>? lottery;
 
+  /// File system used to manage session files.
+  final file.FileSystem fileSystem;
+
   final Random _random = Random.secure();
 
   /// Constructor for FilesystemStore.
@@ -38,6 +42,7 @@ class FilesystemStore implements Store {
     Options? defaultOptions,
     bool useEncryption = false,
     bool useSigning = false,
+    file.FileSystem? fileSystem,
     this.pruneOnStartup = false,
     this.lottery,
   }) : codecs =
@@ -49,8 +54,9 @@ class FilesystemStore implements Store {
                useSigning: useSigning,
              ),
            ],
-       defaultOptions = defaultOptions ?? Options() {
-    final dir = Directory(storageDir);
+       defaultOptions = defaultOptions ?? Options(),
+       fileSystem = fileSystem ?? const local.LocalFileSystem() {
+    final dir = this.fileSystem.directory(storageDir);
     if (!dir.existsSync()) {
       dir.createSync(recursive: true);
     }
@@ -143,16 +149,16 @@ class FilesystemStore implements Store {
   /// Saves session data to a file.
   Future<void> _saveToFile(String? sid, Map<String, dynamic> data) async {
     if (sid == null || sid.isEmpty) return;
-    final filePath = p.join(storageDir, 'session_$sid');
-    final file = File(filePath);
+    final filePath = fileSystem.path.join(storageDir, 'session_$sid');
+    final file = fileSystem.file(filePath);
     final jsonStr = jsonEncode(data);
     await file.writeAsString(jsonStr);
   }
 
   /// Loads session data from a file.
   Future<Map<String, dynamic>?> _loadFromFile(String sid) async {
-    final filePath = p.join(storageDir, 'session_$sid');
-    final file = File(filePath);
+    final filePath = fileSystem.path.join(storageDir, 'session_$sid');
+    final file = fileSystem.file(filePath);
     if (!await file.exists()) return null;
     final contents = await file.readAsString();
 
@@ -162,8 +168,8 @@ class FilesystemStore implements Store {
   /// Erases session data file.
   Future<void> _eraseFile(String? sid) async {
     if (sid == null || sid.isEmpty) return;
-    final filePath = p.join(storageDir, 'session_$sid');
-    final file = File(filePath);
+    final filePath = fileSystem.path.join(storageDir, 'session_$sid');
+    final file = fileSystem.file(filePath);
     if (await file.exists()) {
       await file.delete();
     }
@@ -175,9 +181,10 @@ class FilesystemStore implements Store {
   Future<void> _pruneExpiredFiles() async {
     final maxAge = defaultOptions.maxAge;
     if (maxAge == null || maxAge <= 0) return;
-    final dir = Directory(storageDir);
+    final dir = fileSystem.directory(storageDir);
     await for (final entity in dir.list(followLinks: false)) {
-      if (entity is File && p.basename(entity.path).startsWith('session_')) {
+      if (entity is file.File &&
+          fileSystem.path.basename(entity.path).startsWith('session_')) {
         try {
           final stat = await entity.stat();
           final ageSeconds = DateTime.now().difference(stat.modified).inSeconds;

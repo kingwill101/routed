@@ -1,6 +1,5 @@
-import 'dart:io';
-
 import 'package:file/file.dart' as storage_file;
+import 'package:file/memory.dart';
 import 'package:path/path.dart' as p;
 import 'package:routed/providers.dart';
 import 'package:routed/routed.dart';
@@ -225,7 +224,8 @@ void main() {
     });
 
     test('initializes storage facade alongside storage manager', () async {
-      final tempDir = Directory.systemTemp.createTempSync('routed_storage');
+      final fs = MemoryFileSystem();
+      final tempDir = fs.systemTempDirectory.createTempSync('routed_storage');
       addTearDown(() {
         if (tempDir.existsSync()) {
           tempDir.deleteSync(recursive: true);
@@ -233,14 +233,20 @@ void main() {
       });
 
       final engine = Engine(
+        config: EngineConfig(fileSystem: fs),
         configItems: {
           'storage': {
             'default': 'local',
             'disks': {
-              'local': {'driver': 'local', 'root': tempDir.path},
+              'local': {
+                'driver': 'local',
+                'root': tempDir.path,
+                'file_system': fs,
+              },
               'secondary': {
                 'driver': 'local',
-                'root': p.join(tempDir.path, 'secondary'),
+                'root': fs.path.join(tempDir.path, 'secondary'),
+                'file_system': fs,
               },
             },
           },
@@ -251,16 +257,25 @@ void main() {
 
       await Storage.put('hello.txt', 'facade');
       expect(
-        File(p.join(tempDir.path, 'hello.txt')).readAsStringSync(),
+        fs
+            .file(fs.path.join(tempDir.path, 'hello.txt'))
+            .readAsStringSync(),
         equals('facade'),
       );
 
       final secondary = Storage.disk('secondary');
       await secondary.put('nested/world.txt', 'routing');
       expect(
-        File(
-          p.join(tempDir.path, 'secondary', 'nested', 'world.txt'),
-        ).readAsStringSync(),
+        fs
+            .file(
+              fs.path.join(
+                tempDir.path,
+                'secondary',
+                'nested',
+                'world.txt',
+              ),
+            )
+            .readAsStringSync(),
         equals('routing'),
       );
     });

@@ -5,7 +5,7 @@ import 'package:routed/src/config/specs/session_drivers.dart';
 import 'package:routed/src/container/container.dart';
 import 'package:routed/src/contracts/cache/repository.dart' as cache;
 import 'package:routed/src/contracts/contracts.dart' show Config;
-import 'package:routed/src/engine/config.dart' show SessionConfig;
+import 'package:routed/src/engine/config.dart' show EngineConfig, SessionConfig;
 import 'package:routed/src/engine/middleware_registry.dart';
 import 'package:routed/src/engine/storage_defaults.dart';
 import 'package:routed/src/engine/storage_paths.dart';
@@ -456,6 +456,10 @@ class SessionServiceProvider extends ServiceProvider
       return resolveFrameworkStoragePath(context.rootConfig, child: 'sessions');
     }();
 
+    final engineConfig = context.container.has<EngineConfig>()
+        ? context.container.get<EngineConfig>()
+        : null;
+
     return SessionConfig.file(
       appKey: context.keys.first,
       codecs: context.codecs,
@@ -465,6 +469,7 @@ class SessionServiceProvider extends ServiceProvider
       expireOnClose: context.expireOnClose,
       options: context.options,
       lottery: resolved.lottery ?? context.lottery,
+      fileSystem: engineConfig?.fileSystem,
     );
   }
 

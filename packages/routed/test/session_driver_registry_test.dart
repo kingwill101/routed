@@ -1,12 +1,11 @@
 import 'dart:convert';
-import 'dart:io';
 
-import 'package:path/path.dart' as p;
+import 'package:file/memory.dart';
 import 'package:routed/src/cache/cache_manager.dart';
 import 'package:routed/src/config/config.dart';
 import 'package:routed/src/container/container.dart';
 import 'package:routed/src/contracts/contracts.dart' show Config;
-import 'package:routed/src/engine/config.dart' show SessionConfig;
+import 'package:routed/src/engine/config.dart' show EngineConfig, SessionConfig;
 import 'package:routed/src/engine/middleware_registry.dart';
 import 'package:routed/src/engine/providers/sessions.dart';
 import 'package:routed/src/engine/storage_defaults.dart';
@@ -25,7 +24,8 @@ void main() {
 
   group('Session file driver', () {
     test('uses StorageDefaults when available', () {
-      final baseDir = Directory.systemTemp.createTempSync(
+      final fs = MemoryFileSystem();
+      final baseDir = fs.systemTempDirectory.createTempSync(
         'session-storage-defaults-',
       );
       addTearDown(() {
@@ -33,12 +33,13 @@ void main() {
           baseDir.deleteSync(recursive: true);
         }
       });
-      final localRoot = p.join(baseDir.path, 'storage', 'app');
-      Directory(localRoot).createSync(recursive: true);
+      final localRoot = fs.path.join(baseDir.path, 'storage', 'app');
+      fs.directory(localRoot).createSync(recursive: true);
       final storageDefaults = StorageDefaults.fromLocalRoot(localRoot);
 
       final container = Container()
         ..instance<MiddlewareRegistry>(MiddlewareRegistry())
+        ..instance<EngineConfig>(EngineConfig(fileSystem: fs))
         ..instance<StorageDefaults>(storageDefaults);
 
       final config = ConfigImpl({
@@ -64,7 +65,8 @@ void main() {
     });
 
     test('falls back to Config when StorageDefaults missing', () {
-      final baseDir = Directory.systemTemp.createTempSync(
+      final fs = MemoryFileSystem();
+      final baseDir = fs.systemTempDirectory.createTempSync(
         'session-storage-config-',
       );
       addTearDown(() {
@@ -72,11 +74,12 @@ void main() {
           baseDir.deleteSync(recursive: true);
         }
       });
-      final localRoot = p.join(baseDir.path, 'storage', 'app');
-      Directory(localRoot).createSync(recursive: true);
+      final localRoot = fs.path.join(baseDir.path, 'storage', 'app');
+      fs.directory(localRoot).createSync(recursive: true);
 
       final container = Container()
-        ..instance<MiddlewareRegistry>(MiddlewareRegistry());
+        ..instance<MiddlewareRegistry>(MiddlewareRegistry())
+        ..instance<EngineConfig>(EngineConfig(fileSystem: fs));
 
       final config = ConfigImpl({
         'app': {
@@ -106,7 +109,8 @@ void main() {
     });
 
     test('normalizes user-provided paths with StorageDefaults', () {
-      final baseDir = Directory.systemTemp.createTempSync(
+      final fs = MemoryFileSystem();
+      final baseDir = fs.systemTempDirectory.createTempSync(
         'session-storage-custom-',
       );
       addTearDown(() {
@@ -114,12 +118,13 @@ void main() {
           baseDir.deleteSync(recursive: true);
         }
       });
-      final localRoot = p.join(baseDir.path, 'storage', 'app');
-      Directory(localRoot).createSync(recursive: true);
+      final localRoot = fs.path.join(baseDir.path, 'storage', 'app');
+      fs.directory(localRoot).createSync(recursive: true);
       final storageDefaults = StorageDefaults.fromLocalRoot(localRoot);
 
       final container = Container()
         ..instance<MiddlewareRegistry>(MiddlewareRegistry())
+        ..instance<EngineConfig>(EngineConfig(fileSystem: fs))
         ..instance<StorageDefaults>(storageDefaults);
 
       final config = ConfigImpl({

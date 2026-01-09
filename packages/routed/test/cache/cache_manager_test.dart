@@ -2,7 +2,7 @@ import 'package:routed/src/cache/cache_manager.dart';
 import 'package:routed/src/cache/array_store_factory.dart';
 import 'package:routed/src/cache/file_store_factory.dart';
 import 'package:test/test.dart';
-import 'dart:io';
+import 'package:file/memory.dart';
 
 void main() {
   group('CacheManager Tests', () {
@@ -23,11 +23,13 @@ void main() {
     });
 
     test('store and retrieve from file store', () async {
-      final tempDir = Directory.systemTemp.createTempSync();
+      final fs = MemoryFileSystem();
+      final tempDir = fs.systemTempDirectory.createTempSync();
       cacheManager.registerStore('file', {
         'driver': 'file',
         'path': tempDir.path,
         'permission': null,
+        'file_system': fs,
       });
       final repository = cacheManager.store('file');
       await repository.put('key', 'value', const Duration(seconds: 60));
@@ -51,11 +53,13 @@ void main() {
     });
 
     test('increment and decrement in file store', () async {
-      final tempDir = Directory.systemTemp.createTempSync();
+      final fs = MemoryFileSystem();
+      final tempDir = fs.systemTempDirectory.createTempSync();
       cacheManager.registerStore('file', {
         'driver': 'file',
         'path': tempDir.path,
         'permission': null,
+        'file_system': fs,
       });
       final repository = cacheManager.store('file');
       await repository.put('counter', 1, const Duration(seconds: 60));
@@ -83,11 +87,13 @@ void main() {
     });
 
     test('flush all items in file store', () async {
-      final tempDir = Directory.systemTemp.createTempSync();
+      final fs = MemoryFileSystem();
+      final tempDir = fs.systemTempDirectory.createTempSync();
       cacheManager.registerStore('file', {
         'driver': 'file',
         'path': tempDir.path,
         'permission': null,
+        'file_system': fs,
       });
       final repository = cacheManager.store('file');
       await repository.put('key1', 'value1', const Duration(seconds: 60));

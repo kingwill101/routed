@@ -1,14 +1,13 @@
 import 'dart:async';
-import 'dart:io';
 
-import 'package:path/path.dart' as p;
+import 'package:file/memory.dart';
 import 'package:routed/src/cache/cache_manager.dart';
 import 'package:routed/src/cache/file_store.dart';
 import 'package:routed/src/cache/store_factory.dart';
 import 'package:routed/src/config/config.dart';
-import 'package:routed/src/contracts/contracts.dart' show Config;
 import 'package:routed/src/container/container.dart';
 import 'package:routed/src/contracts/cache/store.dart';
+import 'package:routed/src/contracts/contracts.dart' show Config;
 import 'package:routed/src/engine/storage_defaults.dart';
 import 'package:routed/src/engine/storage_paths.dart';
 import 'package:test/test.dart';
@@ -224,7 +223,8 @@ void main() {
     });
 
     test('file driver computes default path using StorageDefaults', () {
-      final baseDir = Directory.systemTemp.createTempSync(
+      final fs = MemoryFileSystem();
+      final baseDir = fs.systemTempDirectory.createTempSync(
         'routed-cache-storage-',
       );
       addTearDown(() {
@@ -232,8 +232,8 @@ void main() {
           baseDir.deleteSync(recursive: true);
         }
       });
-      final localRoot = p.join(baseDir.path, 'storage', 'app');
-      Directory(localRoot).createSync(recursive: true);
+      final localRoot = fs.path.join(baseDir.path, 'storage', 'app');
+      fs.directory(localRoot).createSync(recursive: true);
       final storageDefaults = StorageDefaults.fromLocalRoot(localRoot);
       final container = Container()..instance<StorageDefaults>(storageDefaults);
 
@@ -245,14 +245,17 @@ void main() {
     });
 
     test('file driver normalizes user path via StorageDefaults', () {
-      final baseDir = Directory.systemTemp.createTempSync('routed-cache-path-');
+      final fs = MemoryFileSystem();
+      final baseDir = fs.systemTempDirectory.createTempSync(
+        'routed-cache-path-',
+      );
       addTearDown(() {
         if (baseDir.existsSync()) {
           baseDir.deleteSync(recursive: true);
         }
       });
-      final localRoot = p.join(baseDir.path, 'storage', 'app');
-      Directory(localRoot).createSync(recursive: true);
+      final localRoot = fs.path.join(baseDir.path, 'storage', 'app');
+      fs.directory(localRoot).createSync(recursive: true);
       final storageDefaults = StorageDefaults.fromLocalRoot(localRoot);
       final container = Container()..instance<StorageDefaults>(storageDefaults);
 
@@ -265,7 +268,8 @@ void main() {
     });
 
     test('file driver uses Config fallback when StorageDefaults missing', () {
-      final baseDir = Directory.systemTemp.createTempSync(
+      final fs = MemoryFileSystem();
+      final baseDir = fs.systemTempDirectory.createTempSync(
         'routed-cache-config-',
       );
       addTearDown(() {
@@ -273,8 +277,8 @@ void main() {
           baseDir.deleteSync(recursive: true);
         }
       });
-      final localRoot = p.join(baseDir.path, 'storage', 'app');
-      Directory(localRoot).createSync(recursive: true);
+      final localRoot = fs.path.join(baseDir.path, 'storage', 'app');
+      fs.directory(localRoot).createSync(recursive: true);
       final appConfig = ConfigImpl({
         'storage': {
           'disks': {
@@ -511,7 +515,8 @@ void main() {
     });
 
     test('file driver resolves path using StorageDefaults in manager', () {
-      final baseDir = Directory.systemTemp.createTempSync(
+      final fs = MemoryFileSystem();
+      final baseDir = fs.systemTempDirectory.createTempSync(
         'routed-cache-manager-sd-',
       );
       addTearDown(() {
@@ -519,12 +524,15 @@ void main() {
           baseDir.deleteSync(recursive: true);
         }
       });
-      final localRoot = p.join(baseDir.path, 'storage', 'app');
-      Directory(localRoot).createSync(recursive: true);
+      final localRoot = fs.path.join(baseDir.path, 'storage', 'app');
+      fs.directory(localRoot).createSync(recursive: true);
       final storageDefaults = StorageDefaults.fromLocalRoot(localRoot);
       final container = Container()..instance<StorageDefaults>(storageDefaults);
       final manager = CacheManager(container: container);
-      manager.registerStore('file-store', const {'driver': 'file'});
+      manager.registerStore('file-store', {
+        'driver': 'file',
+        'file_system': fs,
+      });
 
       final repository = manager.store('file-store');
       final store = repository.getStore();
@@ -537,7 +545,8 @@ void main() {
     });
 
     test('file driver resolves path using Config fallback in manager', () {
-      final baseDir = Directory.systemTemp.createTempSync(
+      final fs = MemoryFileSystem();
+      final baseDir = fs.systemTempDirectory.createTempSync(
         'routed-cache-manager-config-',
       );
       addTearDown(() {
@@ -545,8 +554,8 @@ void main() {
           baseDir.deleteSync(recursive: true);
         }
       });
-      final localRoot = p.join(baseDir.path, 'storage', 'app');
-      Directory(localRoot).createSync(recursive: true);
+      final localRoot = fs.path.join(baseDir.path, 'storage', 'app');
+      fs.directory(localRoot).createSync(recursive: true);
       final appConfig = ConfigImpl({
         'storage': {
           'disks': {
@@ -556,7 +565,10 @@ void main() {
       });
       final container = Container()..instance<Config>(appConfig);
       final manager = CacheManager(container: container);
-      manager.registerStore('file-store', const {'driver': 'file'});
+      manager.registerStore('file-store', {
+        'driver': 'file',
+        'file_system': fs,
+      });
 
       final repository = manager.store('file-store');
       final store = repository.getStore();

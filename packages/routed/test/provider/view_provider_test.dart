@@ -1,13 +1,18 @@
-import 'dart:io';
-
-import 'package:path/path.dart' as p;
+import 'package:file/memory.dart';
 import 'package:routed/routed.dart';
 import 'package:test/test.dart';
 
 void main() {
   group('ViewServiceProvider', () {
+    late MemoryFileSystem fs;
+
+    setUp(() {
+      fs = MemoryFileSystem();
+    });
+
     test('applies directory and engine from config', () async {
       final engine = Engine(
+        config: EngineConfig(fileSystem: fs),
         configItems: {
           'view': {
             'engine': 'liquid',
@@ -27,6 +32,7 @@ void main() {
 
     test('config reload updates template directory', () async {
       final engine = Engine(
+        config: EngineConfig(fileSystem: fs),
         configItems: {
           'view': {'directory': 'views'},
         },
@@ -43,25 +49,29 @@ void main() {
 
       expect(
         engine.config.templateDirectory,
-        endsWith(p.join('shared', 'views')),
+        endsWith(fs.path.join('shared', 'views')),
       );
-      expect(engine.config.views.viewPath, endsWith(p.join('shared', 'views')));
+      expect(
+        engine.config.views.viewPath,
+        endsWith(fs.path.join('shared', 'views')),
+      );
     });
 
     test('resolves directory via storage disk', () async {
-      final tempDir = Directory.systemTemp.createTempSync('routed_view_disk');
-      addTearDown(() {
-        if (tempDir.existsSync()) {
-          tempDir.deleteSync(recursive: true);
-        }
-      });
+      final tempDir = fs.systemTempDirectory.createTempSync('routed_view_disk');
+      addTearDown(() => tempDir.deleteSync(recursive: true));
 
       final engine = Engine(
+        config: EngineConfig(fileSystem: fs),
         configItems: {
           'storage': {
             'default': 'templates',
             'disks': {
-              'templates': {'driver': 'local', 'root': tempDir.path},
+              'templates': {
+                'driver': 'local',
+                'root': tempDir.path,
+                'file_system': fs,
+              },
             },
           },
           'view': {
@@ -76,11 +86,11 @@ void main() {
 
       expect(
         engine.config.templateDirectory,
-        equals(p.normalize('${tempDir.path}/emails')),
+        equals(fs.path.normalize('${tempDir.path}/emails')),
       );
       expect(
         engine.config.views.viewPath,
-        equals(p.normalize('${tempDir.path}/emails')),
+        equals(fs.path.normalize('${tempDir.path}/emails')),
       );
     });
   });

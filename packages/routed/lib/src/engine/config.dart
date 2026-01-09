@@ -849,6 +849,7 @@ class SessionConfig {
     bool expireOnClose = false,
     Options? options,
     List<int>? lottery,
+    FileSystem? fileSystem,
   }) {
     final resolvedCodecs = (codecs != null && codecs.isNotEmpty)
         ? codecs
@@ -867,6 +868,7 @@ class SessionConfig {
         storageDir: storagePath,
         codecs: resolvedCodecs,
         defaultOptions: resolvedOptions,
+        fileSystem: fileSystem,
         lottery: lottery,
       ),
       maxAge: maxAge,

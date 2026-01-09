@@ -1,5 +1,6 @@
-import 'dart:io';
+import 'dart:io' show SameSite;
 
+import 'package:file/memory.dart';
 import 'package:routed/providers.dart';
 import 'package:routed/routed.dart';
 import 'package:routed/session.dart';
@@ -7,6 +8,12 @@ import 'package:test/test.dart';
 
 void main() {
   group('SessionServiceProvider', () {
+    late MemoryFileSystem fs;
+
+    setUp(() {
+      fs = MemoryFileSystem();
+    });
+
     test('configures cookie driver with extended options', () async {
       final appKey = SecureCookie.generateKey();
       final engine = Engine(
@@ -39,12 +46,13 @@ void main() {
 
     test('configures file driver with lottery', () async {
       final appKey = SecureCookie.generateKey();
-      final temp = Directory.systemTemp.createTempSync('session_store');
+      final temp = fs.systemTempDirectory.createTempSync('session_store');
       addTearDown(() {
         if (temp.existsSync()) temp.deleteSync(recursive: true);
       });
 
       final engine = Engine(
+        config: EngineConfig(fileSystem: fs),
         configItems: {
           'app': {'key': appKey},
           'session': {

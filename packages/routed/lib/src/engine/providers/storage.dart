@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:file/file.dart' as file;
 import 'package:routed/src/config/specs/storage.dart';
 import 'package:routed/src/config/specs/storage_drivers.dart';
 import 'package:routed/src/container/container.dart';
@@ -121,15 +122,25 @@ class StorageServiceProvider extends ServiceProvider
       );
       final defaultName = manager.defaultDisk;
       final facadeDisks = <String, Map<String, dynamic>>{};
+      final localFileSystems = <String, file.FileSystem>{};
       if (registered != null) {
         facadeDisks[registered.key] = registered.value;
+        final disk = manager.disk(registered.key);
+        if (disk is LocalStorageDisk) {
+          localFileSystems[registered.key] = disk.fileSystem;
+        }
       } else if (manager.hasDisk(defaultName)) {
         facadeDisks[defaultName] = _configFromDisk(manager.disk(defaultName));
+        final disk = manager.disk(defaultName);
+        if (disk is LocalStorageDisk) {
+          localFileSystems[defaultName] = disk.fileSystem;
+        }
       }
       _initializeStorageFacade(
         defaultDisk: defaultName,
         cloudDisk: null,
         disks: facadeDisks,
+        localFileSystems: localFileSystems,
       );
     }
 
@@ -163,6 +174,7 @@ class StorageServiceProvider extends ServiceProvider
     manager.clear();
 
     final facadeDisks = <String, Map<String, dynamic>>{};
+    final localFileSystems = <String, file.FileSystem>{};
     final resolved = spec.resolve(config);
     final storageRoot = resolveStorageRootValue(resolved.root);
     final defaultDisk = resolved.defaultDisk;
@@ -171,8 +183,8 @@ class StorageServiceProvider extends ServiceProvider
     final cloudDisk = resolved.cloudDisk;
 
     if (resolved.disks.isNotEmpty) {
-      resolved.disks.forEach((name, disk) {
-        final diskConfig = Map<String, dynamic>.from(disk.toMap());
+      resolved.disks.forEach((name, diskConfigEntry) {
+        final diskConfig = Map<String, dynamic>.from(diskConfigEntry.toMap());
         if (name == 'local') {
           final specContext = StorageDriverSpecContext(
             diskName: name,
@@ -200,6 +212,10 @@ class StorageServiceProvider extends ServiceProvider
           storageRoot: storageRoot,
         );
         facadeDisks[name] = registeredConfig;
+        final diskInstance = manager.disk(name);
+        if (diskInstance is LocalStorageDisk) {
+          localFileSystems[name] = diskInstance.fileSystem;
+        }
       });
     }
 
@@ -211,15 +227,24 @@ class StorageServiceProvider extends ServiceProvider
     );
     if (fallback != null) {
       facadeDisks[fallback.key] = fallback.value;
+      final disk = manager.disk(fallback.key);
+      if (disk is LocalStorageDisk) {
+        localFileSystems[fallback.key] = disk.fileSystem;
+      }
     } else if (manager.hasDisk(defaultDisk) &&
         !facadeDisks.containsKey(defaultDisk)) {
       facadeDisks[defaultDisk] = _configFromDisk(manager.disk(defaultDisk));
+      final disk = manager.disk(defaultDisk);
+      if (disk is LocalStorageDisk) {
+        localFileSystems[defaultDisk] = disk.fileSystem;
+      }
     }
 
     _initializeStorageFacade(
       defaultDisk: defaultDisk,
       cloudDisk: cloudDisk,
       disks: facadeDisks,
+      localFileSystems: localFileSystems,
     );
     _registerStorageDefaults(container, manager);
   }
@@ -313,6 +338,7 @@ class StorageServiceProvider extends ServiceProvider
     required String defaultDisk,
     String? cloudDisk,
     required Map<String, Map<String, dynamic>> disks,
+    Map<String, file.FileSystem>? localFileSystems,
   }) {
     if (disks.isEmpty) {
       disks[defaultDisk] = {
@@ -332,6 +358,28 @@ class StorageServiceProvider extends ServiceProvider
     }
 
     storage_fs.Storage.initialize(facadeConfig);
+
+    if (localFileSystems == null || localFileSystems.isEmpty) {
+      return;
+    }
+
+    for (final entry in localFileSystems.entries) {
+      final name = entry.key;
+      final fs = entry.value;
+      final config = disks[name];
+      if (config == null) {
+        continue;
+      }
+      final driver = (config['driver'] ?? 'local').toString().toLowerCase();
+      if (driver != 'local') {
+        continue;
+      }
+      final adapter = storage_fs.FilesystemAdapter(
+        storage_fs.DiskConfig.fromMap(config),
+        fileSystem: fs,
+      ).diskName(name);
+      storage_fs.Storage.set(name, adapter);
+    }
   }
 
   Map<String, dynamic> _configFromDisk(StorageDisk disk) {
