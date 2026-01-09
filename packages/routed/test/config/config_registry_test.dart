@@ -1,9 +1,9 @@
-import 'package:routed/routed.dart' as routed;
 import 'package:routed/src/config/registry.dart';
 import 'package:routed/src/container/container.dart';
 import 'package:routed/src/contracts/contracts.dart';
 import 'package:routed/src/provider/provider.dart';
 import 'package:test/test.dart';
+
 import '../test_engine.dart';
 
 class PluginDefaultsProvider extends ServiceProvider
