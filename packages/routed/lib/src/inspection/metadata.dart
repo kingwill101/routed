@@ -80,29 +80,29 @@ class ProviderMetadata {
   });
 
   factory ProviderMetadata.fromJson(Map<String, Object?> json) {
-    final rawDefaults = json['defaults'] as Map?;
+    final rawDefaults = json['defaults'] as Map<String, Object?>?;
     final defaults =
-        rawDefaults?.map((key, value) => MapEntry('$key', value)) ??
+        rawDefaults?.map((key, value) => MapEntry(key, value)) ??
         const <String, dynamic>{};
-    final rawFields = json['fields'] as List?;
+    final rawFields = json['fields'] as List<dynamic>?;
     final fields =
         rawFields
-            ?.whereType<Map>()
+            ?.whereType<Map<String, Object?>>()
             .map(
               (entry) => ConfigFieldMetadata.fromJson(
-                entry.map((key, value) => MapEntry('$key', value)),
+                entry.map((key, value) => MapEntry(key, value)),
               ),
             )
             .toList() ??
         const <ConfigFieldMetadata>[];
-    final rawSchemas = json['schemas'] as Map?;
+    final rawSchemas = json['schemas'] as Map<String, Object?>?;
     final schemas = <String, Schema>{};
     if (rawSchemas != null) {
       for (final entry in rawSchemas.entries) {
         final value = entry.value;
-        if (value is Map) {
-          schemas[entry.key.toString()] = Schema.fromMap(
-            value.map((key, schemaValue) => MapEntry('$key', schemaValue)),
+        if (value is Map<String, Object?>) {
+          schemas[entry.key] = Schema.fromMap(
+            value.map((key, schemaValue) => MapEntry(key, schemaValue)),
           );
         }
       }

@@ -243,10 +243,10 @@ Future<void> main(List<String> args) async {
       }
       final providersRaw = decoded['providers'] as List<dynamic>? ?? const [];
       return providersRaw
-          .whereType<Map>()
+          .whereType<Map<String, dynamic>>()
           .map(
             (entry) => ProviderMetadata.fromJson(
-              entry.map((key, value) => MapEntry('$key', value)),
+              entry.map((key, value) => MapEntry(key, value)),
             ),
           )
           .toList();
