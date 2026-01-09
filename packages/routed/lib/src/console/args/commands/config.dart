@@ -9,6 +9,8 @@ import 'package:routed/routed.dart';
 import 'package:routed/src/console/args/base_command.dart';
 import 'package:routed/src/console/config/doc_printer.dart';
 import 'package:routed/src/console/config/generator.dart';
+import 'package:routed/src/console/util/dart_exec.dart';
+import 'package:routed/src/console/util/pubspec.dart';
 
 class ConfigInitCommand extends BaseCommand {
   ConfigInitCommand({super.logger, super.fileSystem}) {
@@ -128,6 +130,10 @@ class ConfigSchemaCommand extends BaseCommand {
   @override
   String get category => 'Configuration';
 
+  static const String _schemaTitle = 'Routed Configuration';
+  static const String _schemaId =
+      'https://raw.githubusercontent.com/kingwill101/routed/master/packages/routed/schemas/config.schema.json';
+
   @override
   Future<void> run() async {
     return guarded(() async {
@@ -138,7 +144,9 @@ class ConfigSchemaCommand extends BaseCommand {
       );
 
       logger.debug('Inspecting providers...');
-      final providers = inspectProviders();
+      final providers = projectRoot == null
+          ? inspectProviders()
+          : await _inspectProjectProviders(projectRoot) ?? inspectProviders();
       final registry = ConfigRegistry();
 
       for (final provider in providers) {
@@ -153,8 +161,8 @@ class ConfigSchemaCommand extends BaseCommand {
 
       logger.debug('Generating schema...');
       final schema = registry.generateJsonSchema(
-        title: 'Routed Configuration',
-        id: 'https://raw.githubusercontent.com/kingwill101/routed/master/packages/routed/schemas/config.schema.json',
+        title: _schemaTitle,
+        id: _schemaId,
       );
 
       final json = const JsonEncoder.withIndent('  ').convert(schema);
@@ -168,6 +176,130 @@ class ConfigSchemaCommand extends BaseCommand {
       }
     });
   }
+
+  Future<List<ProviderMetadata>?> _inspectProjectProviders(
+    fs.Directory projectRoot,
+  ) async {
+    final appFile = fileSystem.file(
+      joinPath([projectRoot.path, 'lib', 'app.dart']),
+    );
+    if (!await appFile.exists()) {
+      return null;
+    }
+
+    final packageName = await readPackageName(projectRoot);
+    if (packageName == null || packageName.isEmpty) {
+      return null;
+    }
+
+    final scriptRelativePath = p.join(
+      '.dart_tool',
+      'routed',
+      'inspect_providers.dart',
+    );
+    final scriptFile = fileSystem.file(
+      joinPath([projectRoot.path, scriptRelativePath]),
+    );
+    await scriptFile.parent.create(recursive: true);
+
+    final rootLiteral = jsonEncode(projectRoot.path);
+    final scriptContents =
+        '''
+import 'dart:convert';
+import 'dart:io';
+
+import 'package:routed/routed.dart';
+import 'package:$packageName/app.dart' as app;
+
+Future<void> main(List<String> args) async {
+  Directory.current = Directory($rootLiteral);
+  final engine = await app.createEngine();
+  final providers = inspectProviders();
+  await engine.close();
+  stdout.write(jsonEncode({
+    'providers': providers.map((provider) => provider.toJson()).toList(),
+  }));
+}
+''';
+    await scriptFile.writeAsString(scriptContents);
+
+    final result = await _runInspector(projectRoot, scriptRelativePath);
+    if (result.exitCode != 0) {
+      final message = result.stderr.trim().isNotEmpty
+          ? result.stderr.trim()
+          : 'Provider inspection failed with exit code ${result.exitCode}.';
+      throw UsageException(message, usage);
+    }
+
+    final output = result.stdout.trim();
+    if (output.isEmpty) {
+      throw UsageException('Provider inspector produced no output.', usage);
+    }
+
+    try {
+      final decoded = jsonDecode(output);
+      if (decoded is! Map<String, Object?>) {
+        throw const FormatException('Inspector output must be a JSON object.');
+      }
+      final providersRaw = decoded['providers'] as List<dynamic>? ?? const [];
+      return providersRaw
+          .whereType<Map>()
+          .map(
+            (entry) => ProviderMetadata.fromJson(
+              entry.map((key, value) => MapEntry('$key', value)),
+            ),
+          )
+          .toList();
+    } on FormatException catch (error) {
+      throw UsageException(
+        'Failed to parse provider inspector JSON: ${error.message}',
+        usage,
+      );
+    }
+  }
+}
+
+class _ProcessResult {
+  _ProcessResult({
+    required this.exitCode,
+    required this.stdout,
+    required this.stderr,
+  });
+
+  final int exitCode;
+  final String stdout;
+  final String stderr;
+}
+
+Future<_ProcessResult> _runInspector(
+  fs.Directory projectRoot,
+  String entry,
+) async {
+  final process = await startDartProcess([
+    'run',
+    entry,
+  ], workingDirectory: projectRoot.path);
+
+  final stdoutBuffer = StringBuffer();
+  final stderrBuffer = StringBuffer();
+
+  await Future.wait([
+    process.stdout
+        .transform(utf8.decoder)
+        .listen(stdoutBuffer.write)
+        .asFuture<void>(),
+    process.stderr
+        .transform(utf8.decoder)
+        .listen(stderrBuffer.write)
+        .asFuture<void>(),
+  ]);
+
+  final exitCode = await process.exitCode;
+  return _ProcessResult(
+    exitCode: exitCode,
+    stdout: stdoutBuffer.toString(),
+    stderr: stderrBuffer.toString(),
+  );
 }
 
 typedef PackageResolver =

@@ -1,3 +1,3 @@
 driver: smtp
 host: "{{ mail.host | default: 'localhost' }}"
-port: { { mail.port | default: 1025 } }
+port: {{ mail.port | default: 1025 }}

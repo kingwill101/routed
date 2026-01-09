@@ -1,5 +1,4 @@
 import 'package:routed/routed.dart';
-import 'package:routed/src/config/schema.dart';
 
 class MailService {
   MailService(this.host, this.port);

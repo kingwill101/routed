@@ -28,6 +28,24 @@ class ConfigFieldMetadata {
     );
   }
 
+  factory ConfigFieldMetadata.fromJson(Map<String, Object?> json) {
+    final options = (json['options'] as List?)
+        ?.map((value) => value.toString())
+        .toList();
+    final rawMetadata = json['metadata'] as Map?;
+    return ConfigFieldMetadata(
+      path: json['path']?.toString() ?? '',
+      type: json['type']?.toString(),
+      description: json['description']?.toString(),
+      defaultValue: json['default'],
+      deprecated: json['deprecated'] as bool? ?? false,
+      options: options ?? const <String>[],
+      metadata:
+          rawMetadata?.map((key, value) => MapEntry('$key', value)) ??
+          const <String, Object?>{},
+    );
+  }
+
   final String path;
   final String? type;
   final String? description;
@@ -60,6 +78,45 @@ class ProviderMetadata {
     required this.fields,
     this.schemas = const {},
   });
+
+  factory ProviderMetadata.fromJson(Map<String, Object?> json) {
+    final rawDefaults = json['defaults'] as Map?;
+    final defaults =
+        rawDefaults?.map((key, value) => MapEntry('$key', value)) ??
+        const <String, dynamic>{};
+    final rawFields = json['fields'] as List?;
+    final fields =
+        rawFields
+            ?.whereType<Map>()
+            .map(
+              (entry) => ConfigFieldMetadata.fromJson(
+                entry.map((key, value) => MapEntry('$key', value)),
+              ),
+            )
+            .toList() ??
+        const <ConfigFieldMetadata>[];
+    final rawSchemas = json['schemas'] as Map?;
+    final schemas = <String, Schema>{};
+    if (rawSchemas != null) {
+      for (final entry in rawSchemas.entries) {
+        final value = entry.value;
+        if (value is Map) {
+          schemas[entry.key.toString()] = Schema.fromMap(
+            value.map((key, schemaValue) => MapEntry('$key', schemaValue)),
+          );
+        }
+      }
+    }
+    return ProviderMetadata(
+      id: json['id']?.toString() ?? '',
+      description: json['description']?.toString() ?? '',
+      providerType: json['providerType']?.toString() ?? '',
+      configSource: json['configSource']?.toString() ?? '',
+      defaults: defaults,
+      fields: fields,
+      schemas: schemas,
+    );
+  }
 
   final String id;
   final String description;
