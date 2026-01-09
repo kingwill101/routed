@@ -3,7 +3,6 @@ import 'dart:convert';
 import 'package:args/command_runner.dart';
 import 'package:file/file.dart' as fs;
 import 'package:file/memory.dart';
-import 'package:path/path.dart' as p;
 import 'package:routed/console.dart' show CliLogger;
 import 'package:routed/routed.dart' as routed;
 
