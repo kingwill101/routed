@@ -28,12 +28,14 @@ void main() async {
       final targetUrl = 'http://localhost:3001$path';
 
       // Forward the request
-      await ctx.forward(targetUrl,
-          options: ProxyOptions(
-            forwardHeaders: true,
-            headers: {'X-Custom-Proxy': 'Example'},
-            addProxyHeaders: true,
-          ));
+      await ctx.forward(
+        targetUrl,
+        options: ProxyOptions(
+          forwardHeaders: true,
+          headers: {'X-Custom-Proxy': 'Example'},
+          addProxyHeaders: true,
+        ),
+      );
     } catch (e) {
       errorCount++;
       return ctx.json({

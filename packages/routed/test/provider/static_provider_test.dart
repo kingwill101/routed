@@ -21,8 +21,7 @@ void main() {
     });
 
     test('resolves mounts using storage disk', () async {
-      fs
-          .file(fs.path.join(tempDir.path, 'greeting.txt'))
+      fs.file(fs.path.join(tempDir.path, 'greeting.txt'))
         ..createSync(recursive: true)
         ..writeAsStringSync('hello');
 
@@ -98,8 +97,7 @@ void main() {
     });
 
     test('updates disks after config reload', () async {
-      fs
-          .file(fs.path.join(tempDir.path, 'old.txt'))
+      fs.file(fs.path.join(tempDir.path, 'old.txt'))
         ..createSync(recursive: true)
         ..writeAsStringSync('old');
 
@@ -139,8 +137,7 @@ void main() {
           newDir.deleteSync(recursive: true);
         }
       });
-      fs
-          .file(fs.path.join(newDir.path, 'fresh.txt'))
+      fs.file(fs.path.join(newDir.path, 'fresh.txt'))
         ..createSync(recursive: true)
         ..writeAsStringSync('fresh');
 
@@ -149,11 +146,7 @@ void main() {
       override.set('storage', {
         'default': 'assets',
         'disks': {
-          'assets': {
-            'driver': 'local',
-            'root': newDir.path,
-            'file_system': fs,
-          },
+          'assets': {'driver': 'local', 'root': newDir.path, 'file_system': fs},
         },
       });
       override.set('static', {
@@ -173,9 +166,7 @@ void main() {
     test('supports explicit file system mounts', () async {
       final explicitFs = MemoryFileSystem();
       explicitFs.directory('assets').createSync(recursive: true);
-      explicitFs
-          .file('assets/index.html')
-          .writeAsStringSync('<h1>Hello</h1>');
+      explicitFs.file('assets/index.html').writeAsStringSync('<h1>Hello</h1>');
 
       final engine = testEngine(
         config: EngineConfig(fileSystem: explicitFs),

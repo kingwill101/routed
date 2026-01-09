@@ -159,10 +159,7 @@ void main() {
         'cache': {
           'default': 'file',
           'stores': {
-            'file': {
-              'driver': 'file',
-              'file_system': fs,
-            },
+            'file': {'driver': 'file', 'file_system': fs},
           },
         },
       });
@@ -204,10 +201,7 @@ void main() {
               'cache': {
                 'default': 'file',
                 'stores': {
-                  'file': {
-                    'driver': 'file',
-                    'file_system': fs,
-                  },
+                  'file': {'driver': 'file', 'file_system': fs},
                 },
               },
             })..set('storage', {

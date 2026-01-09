@@ -259,9 +259,7 @@ void main() {
 
       await Storage.put('hello.txt', 'facade');
       expect(
-        fs
-            .file(fs.path.join(tempDir.path, 'hello.txt'))
-            .readAsStringSync(),
+        fs.file(fs.path.join(tempDir.path, 'hello.txt')).readAsStringSync(),
         equals('facade'),
       );
 
@@ -270,12 +268,7 @@ void main() {
       expect(
         fs
             .file(
-              fs.path.join(
-                tempDir.path,
-                'secondary',
-                'nested',
-                'world.txt',
-              ),
+              fs.path.join(tempDir.path, 'secondary', 'nested', 'world.txt'),
             )
             .readAsStringSync(),
         equals('routing'),

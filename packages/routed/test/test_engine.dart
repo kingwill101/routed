@@ -18,12 +18,11 @@ Engine testEngine({
       config?.fileSystem ??
       configOptions?.fileSystem ??
       MemoryFileSystem();
-  final resolvedConfig =
-      (config ?? EngineConfig()).copyWith(fileSystem: resolvedFileSystem);
-  final resolvedOptions =
-      (configOptions ?? const ConfigLoaderOptions()).copyWith(
-        fileSystem: resolvedFileSystem,
-      );
+  final resolvedConfig = (config ?? EngineConfig()).copyWith(
+    fileSystem: resolvedFileSystem,
+  );
+  final resolvedOptions = (configOptions ?? const ConfigLoaderOptions())
+      .copyWith(fileSystem: resolvedFileSystem);
 
   return Engine(
     config: resolvedConfig,

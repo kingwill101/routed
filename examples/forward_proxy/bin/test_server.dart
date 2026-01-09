@@ -1,13 +1,16 @@
 import 'package:routed/routed.dart';
 
 void main() async {
-  final engine = Engine(middlewares: [
-    (EngineContext ctx, Next next) async {
-      print(
-          '[Test Server] Received request: ${ctx.request.method} ${ctx.request.path}');
-      return await next();
-    }
-  ]);
+  final engine = Engine(
+    middlewares: [
+      (EngineContext ctx, Next next) async {
+        print(
+          '[Test Server] Received request: ${ctx.request.method} ${ctx.request.path}',
+        );
+        return await next();
+      },
+    ],
+  );
 
   // Test endpoints
   engine.get('/hello', (ctx) {
@@ -22,10 +25,7 @@ void main() async {
     ctx.request.headers.forEach((name, values) {
       headers[name] = values.join(',');
     });
-    return ctx.json({
-      'headers': headers,
-      'client_ip': ctx.request.clientIP,
-    });
+    return ctx.json({'headers': headers, 'client_ip': ctx.request.clientIP});
   });
 
   engine.post('/echo', (ctx) async {

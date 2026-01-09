@@ -7,25 +7,27 @@ void main() async {
   final engine = Engine(
     config: EngineConfig(
       multipart: MultipartConfig(
-          maxFileSize: 10 * 1024 * 1024, // 10MB
-          allowedExtensions: {'.jpg', '.png', '.pdf'},
-          uploadDirectory: 'uploads'),
+        maxFileSize: 10 * 1024 * 1024, // 10MB
+        allowedExtensions: {'.jpg', '.png', '.pdf'},
+        uploadDirectory: 'uploads',
+      ),
     ),
   );
-  engine.useViewEngine(LiquidViewEngine(
-    directory: 'templates',
-  ));
+  engine.useViewEngine(LiquidViewEngine(directory: 'templates'));
 
   // Ensure uploads directory exists
   await Directory('uploads').create(recursive: true);
 
   // Serve upload form
   engine.get('/', (ctx) {
-    return ctx.html('upload_form.liquid', data: {
-      'page_title': 'File Upload Example',
-      'max_size': '10MB',
-      'allowed_types': 'JPG, PNG, PDF'
-    });
+    return ctx.html(
+      'upload_form.liquid',
+      data: {
+        'page_title': 'File Upload Example',
+        'max_size': '10MB',
+        'allowed_types': 'JPG, PNG, PDF',
+      },
+    );
   });
 
   // Handle file upload
@@ -42,8 +44,10 @@ void main() async {
 
       // Save file with original name
       final fileName = file.filename;
-      final savePath =
-          ctx.engineConfig.fileSystem.path.join('uploads', fileName);
+      final savePath = ctx.engineConfig.fileSystem.path.join(
+        'uploads',
+        fileName,
+      );
       await ctx.saveUploadedFile(file, savePath);
 
       return ctx.json({
@@ -51,11 +55,12 @@ void main() async {
         'filename': fileName,
         'size': file.size,
         'type': file.contentType,
-        'description': description
+        'description': description,
       });
     } catch (e) {
-      return ctx
-          .json({'error': 'Upload failed: ${e.toString()}'}, statusCode: 500);
+      return ctx.json({
+        'error': 'Upload failed: ${e.toString()}',
+      }, statusCode: 500);
     }
   });
 
@@ -65,15 +70,19 @@ void main() async {
     final files = dir
         .listSync()
         .whereType<File>()
-        .map((f) => {
-              'name': path.basename(f.path),
-              'size': f.lengthSync(),
-              'modified': f.lastModifiedSync().toIso8601String()
-            })
+        .map(
+          (f) => {
+            'name': path.basename(f.path),
+            'size': f.lengthSync(),
+            'modified': f.lastModifiedSync().toIso8601String(),
+          },
+        )
         .toList();
 
-    return ctx.html('file_list.liquid',
-        data: {'page_title': 'Uploaded Files', 'files': files});
+    return ctx.html(
+      'file_list.liquid',
+      data: {'page_title': 'Uploaded Files', 'files': files},
+    );
   });
 
   // Serve uploaded files
