@@ -3,6 +3,7 @@ import 'package:routed/providers.dart';
 import 'package:routed/routed.dart';
 import 'package:routed/src/engine/storage_paths.dart';
 import 'package:test/test.dart';
+import '../test_engine.dart';
 
 void main() {
   group('CacheServiceProvider', () {
@@ -13,7 +14,7 @@ void main() {
     });
 
     test('configures cache manager from cache config', () async {
-      final engine = Engine(
+      final engine = testEngine(
         configItems: {
           'cache': {
             'default': 'memory',
@@ -36,7 +37,7 @@ void main() {
     });
 
     test('rebuilds managed cache manager on config reload', () async {
-      final engine = Engine(
+      final engine = testEngine(
         configItems: {
           'cache': {
             'default': 'memory',
@@ -72,7 +73,7 @@ void main() {
 
     test('respects pre-bound cache manager', () async {
       final customManager = CacheManager();
-      final engine = Engine(options: [withCacheManager(customManager)]);
+      final engine = testEngine(options: [withCacheManager(customManager)]);
       addTearDown(() async => await engine.close());
       await engine.initialize();
 

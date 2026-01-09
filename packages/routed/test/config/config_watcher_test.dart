@@ -5,6 +5,7 @@ import 'package:file/local.dart' as local;
 import 'package:path/path.dart' as p;
 import 'package:routed/routed.dart';
 import 'package:test/test.dart';
+import '../test_engine.dart';
 
 void main() {
   group('Config watcher', () {
@@ -29,7 +30,7 @@ void main() {
     });
 
     test('reloads configuration when tracked files change', () async {
-      final engine = Engine(
+      final engine = testEngine(
         configOptions: ConfigLoaderOptions(
           defaults: const {
             'app': {'name': 'Default App', 'env': 'development'},

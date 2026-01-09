@@ -5,6 +5,7 @@ import 'package:routed/routed.dart';
 import 'package:routed/src/sessions/options.dart';
 import 'package:routed_testing/routed_testing.dart';
 import 'package:server_testing/server_testing.dart';
+import '../test_engine.dart';
 
 SessionConfig _sessionConfig() {
   final key = base64.encode(List<int>.generate(32, (i) => i + 1));
@@ -83,7 +84,7 @@ void main() {
       () async {
         SessionAuth.configure(rememberStore: InMemoryRememberTokenStore());
 
-        final engine = Engine(
+        final engine = testEngine(
           config: EngineConfig(
             security: const EngineSecurityFeatures(csrfProtection: false),
           ),
@@ -163,7 +164,7 @@ void main() {
     test('guard middleware denies principals missing required roles', () async {
       SessionAuth.configure(rememberStore: InMemoryRememberTokenStore());
 
-      final engine = Engine(
+      final engine = testEngine(
         config: EngineConfig(
           security: const EngineSecurityFeatures(csrfProtection: false),
         ),
@@ -218,7 +219,7 @@ void main() {
       final store = TrackingRememberStore();
       SessionAuth.configure(rememberStore: store);
 
-      final engine = Engine(
+      final engine = testEngine(
         config: EngineConfig(
           security: const EngineSecurityFeatures(csrfProtection: false),
         ),
@@ -323,7 +324,7 @@ void main() {
         final store = MissingRememberStore();
         SessionAuth.configure(rememberStore: store);
 
-        final engine = Engine(
+        final engine = testEngine(
           config: EngineConfig(
             security: const EngineSecurityFeatures(csrfProtection: false),
           ),
@@ -379,7 +380,7 @@ void main() {
       final store = TrackingRememberStore();
       SessionAuth.configure(rememberStore: store);
 
-      final engine = Engine(
+      final engine = testEngine(
         config: EngineConfig(
           security: const EngineSecurityFeatures(csrfProtection: false),
         ),
@@ -470,7 +471,7 @@ void main() {
     test('guard can short-circuit with custom response', () async {
       SessionAuth.configure(rememberStore: InMemoryRememberTokenStore());
 
-      final engine = Engine(
+      final engine = testEngine(
         config: EngineConfig(
           security: const EngineSecurityFeatures(csrfProtection: false),
         ),

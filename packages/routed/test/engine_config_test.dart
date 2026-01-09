@@ -4,6 +4,7 @@ import 'package:routed/routed.dart';
 import 'package:routed/src/security/trusted_proxy_resolver.dart';
 import 'package:routed_testing/routed_testing.dart';
 import 'package:server_testing/server_testing.dart';
+import 'test_engine.dart';
 
 void main() {
   late TestClient client;
@@ -15,7 +16,7 @@ void main() {
   group('Engine Configuration Tests', () {
     group('RedirectTrailingSlash', () {
       test('enabled - redirects GET requests with 301', () async {
-        final engine = Engine(
+        final engine = testEngine(
           configItems: {
             'routing': {'redirect_trailing_slash': true},
           },
@@ -30,7 +31,7 @@ void main() {
       });
 
       test('enabled - redirects POST requests with 307', () async {
-        final engine = Engine(
+        final engine = testEngine(
           configItems: {
             'routing': {'redirect_trailing_slash': true},
           },
@@ -45,7 +46,7 @@ void main() {
       });
 
       test('disabled - returns 404 for trailing slash', () async {
-        final engine = Engine(
+        final engine = testEngine(
           configItems: {
             'routing': {'redirect_trailing_slash': false},
           },
@@ -60,7 +61,7 @@ void main() {
 
     group('HandleMethodNotAllowed', () {
       test('enabled - returns 405 with Allow header', () async {
-        final engine = Engine(
+        final engine = testEngine(
           configItems: {
             'routing': {'handle_method_not_allowed': true},
           },
@@ -76,7 +77,7 @@ void main() {
       });
 
       test('disabled - returns 404 for wrong method', () async {
-        final engine = Engine(
+        final engine = testEngine(
           configItems: {
             'routing': {'handle_method_not_allowed': false},
           },
@@ -91,7 +92,7 @@ void main() {
 
     group('ForwardedByClientIP', () {
       test('processes X-Forwarded-For header', () async {
-        final engine = Engine(
+        final engine = testEngine(
           configItems: {
             'security': {
               'trusted_proxies': {
@@ -125,7 +126,7 @@ void main() {
       });
 
       test('processes X-Real-IP header', () async {
-        final engine = Engine(
+        final engine = testEngine(
           configItems: {
             'security': {
               'trusted_proxies': {
@@ -156,7 +157,7 @@ void main() {
       });
 
       test('respects forwardedByClientIP setting when disabled', () async {
-        final engine = Engine(
+        final engine = testEngine(
           configItems: {
             'security': {
               'trusted_proxies': {
@@ -189,7 +190,7 @@ void main() {
       test(
         'falls back to remote address when proxy support disabled',
         () async {
-          final engine = Engine(
+          final engine = testEngine(
             configItems: {
               'security': {
                 'trusted_proxies': {'enabled': false},
@@ -222,7 +223,7 @@ void main() {
 
     group('Combined Configuration', () {
       test('multiple options work together', () async {
-        final engine = Engine(
+        final engine = testEngine(
           configItems: {
             'routing': {
               'redirect_trailing_slash': true,
@@ -279,7 +280,7 @@ void main() {
 
     group('UploadsConfig', () {
       test('reads limits from config map', () async {
-        final engine = Engine(
+        final engine = testEngine(
           configItems: {
             'uploads': {
               'max_memory': 2 * 1024,
@@ -300,7 +301,7 @@ void main() {
       });
 
       test('withMultipart updates config and engine values', () async {
-        final engine = Engine(
+        final engine = testEngine(
           options: [
             withMultipart(
               maxMemory: 1024,
@@ -331,7 +332,7 @@ void main() {
 
     group('CorsConfig', () {
       test('reads settings from cors map', () async {
-        final engine = Engine(
+        final engine = testEngine(
           configItems: {
             'cors': {
               'enabled': true,
@@ -358,7 +359,7 @@ void main() {
       });
 
       test('withCors updates config and engine values', () async {
-        final engine = Engine(
+        final engine = testEngine(
           configItems: {
             'logging': {'enabled': false},
           },
@@ -411,7 +412,7 @@ void main() {
 
   group('Proxy Trust Tests', () {
     test('default configuration trusts all proxies', () async {
-      final engine = Engine(
+      final engine = testEngine(
         configItems: {
           'security': {
             'trusted_proxies': {
@@ -442,7 +443,7 @@ void main() {
     });
 
     test('restricted proxy list only trusts specified IPs', () async {
-      final engine = Engine(
+      final engine = testEngine(
         configItems: {
           'security': {
             'trusted_proxies': {
@@ -471,7 +472,7 @@ void main() {
     });
 
     test('untrusted proxy returns immediate client IP', () async {
-      final engine = Engine(
+      final engine = testEngine(
         configItems: {
           'security': {
             'trusted_proxies': {
@@ -502,7 +503,7 @@ void main() {
     });
 
     test('trusted platform headers take precedence', () async {
-      final engine = Engine(
+      final engine = testEngine(
         configItems: {
           'security': {
             'trusted_proxies': {
@@ -533,7 +534,7 @@ void main() {
     });
 
     test('header order is respected', () async {
-      final engine = Engine(
+      final engine = testEngine(
         configItems: {
           'security': {
             'trusted_proxies': {
@@ -565,7 +566,7 @@ void main() {
 
   group('Engine options', () {
     test('withMaxRequestSize updates security config', () {
-      final engine = Engine(options: [withMaxRequestSize(2048)]);
+      final engine = testEngine(options: [withMaxRequestSize(2048)]);
       expect(
         engine.appConfig.getInt('security.max_request_size'),
         equals(2048),
@@ -578,7 +579,7 @@ void main() {
     late TestClient client;
 
     setUp(() {
-      engine = Engine();
+      engine = testEngine();
       client = TestClient(RoutedRequestHandler(engine));
     });
 
@@ -604,7 +605,7 @@ void main() {
 
     test('request size limits return 413 when exceeded', () async {
       engine =
-          Engine(
+          testEngine(
             configItems: {
               'security': {'max_request_size': 8},
             },
@@ -622,7 +623,7 @@ void main() {
 
     test('request size limits can be disabled with zero', () async {
       engine =
-          Engine(
+          testEngine(
             configItems: {
               'security': {'max_request_size': 0},
             },
@@ -643,7 +644,7 @@ void main() {
   });
 
   test('withTrustedProxies updates security config', () {
-    final engine = Engine();
+    final engine = testEngine();
     withTrustedProxies(['10.0.0.0/8'])(engine);
 
     final proxies = engine.appConfig.getStringListOrNull(
@@ -653,7 +654,7 @@ void main() {
   });
 
   test('trusted platform can be configured via security config', () async {
-    final engine = Engine(
+    final engine = testEngine(
       configItems: {
         'security': {
           'trusted_proxies': {

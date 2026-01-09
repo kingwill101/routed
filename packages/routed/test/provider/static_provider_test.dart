@@ -2,6 +2,7 @@ import 'package:file/file.dart';
 import 'package:file/memory.dart';
 import 'package:routed/routed.dart';
 import 'package:test/test.dart';
+import '../test_engine.dart';
 
 void main() {
   group('StaticAssetsServiceProvider', () {
@@ -25,8 +26,9 @@ void main() {
         ..createSync(recursive: true)
         ..writeAsStringSync('hello');
 
-      final engine = Engine(
+      final engine = testEngine(
         config: EngineConfig(fileSystem: fs),
+        fileSystem: fs,
         configItems: {
           'storage': {
             'default': 'assets',
@@ -62,8 +64,9 @@ void main() {
     });
 
     test('storage resolution unaffected when path missing', () async {
-      final engine = Engine(
+      final engine = testEngine(
         config: EngineConfig(fileSystem: fs),
+        fileSystem: fs,
         configItems: {
           'storage': {
             'default': 'assets',
@@ -100,8 +103,9 @@ void main() {
         ..createSync(recursive: true)
         ..writeAsStringSync('old');
 
-      final engine = Engine(
+      final engine = testEngine(
         config: EngineConfig(fileSystem: fs),
+        fileSystem: fs,
         configItems: {
           'storage': {
             'default': 'assets',
@@ -173,8 +177,9 @@ void main() {
           .file('assets/index.html')
           .writeAsStringSync('<h1>Hello</h1>');
 
-      final engine = Engine(
+      final engine = testEngine(
         config: EngineConfig(fileSystem: explicitFs),
+        fileSystem: explicitFs,
         configItems: {
           'storage': {
             'default': 'assets',

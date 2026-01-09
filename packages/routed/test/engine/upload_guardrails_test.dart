@@ -1,10 +1,12 @@
-import 'dart:io';
+import 'dart:io' show HttpStatus;
 import 'dart:typed_data';
 
+import 'package:file/file.dart' as file;
 import 'package:file/memory.dart';
 import 'package:routed/routed.dart';
 import 'package:routed_testing/routed_testing.dart';
 import 'package:server_testing/server_testing.dart';
+import '../test_engine.dart';
 
 void main() {
   group('upload guardrails', () {
@@ -14,7 +16,7 @@ void main() {
         final fs = MemoryFileSystem();
         final uploadDir = fs.directory('/quota')..createSync(recursive: true);
 
-        final engine = Engine(
+        final engine = testEngine(
           config: EngineConfig(
             fileSystem: fs,
             multipart: MultipartConfig(uploadDirectory: uploadDir.path),
@@ -59,7 +61,7 @@ void main() {
         response.assertStatus(HttpStatus.requestEntityTooLarge);
         final files = uploadDir
             .listSync(recursive: true)
-            .whereType<File>()
+            .whereType<file.File>()
             .where((file) => file.existsSync())
             .toList();
         expect(files, isEmpty);
@@ -71,7 +73,7 @@ void main() {
       final uploadDir = fs.directory('/extensions')
         ..createSync(recursive: true);
 
-      final engine = Engine(
+      final engine = testEngine(
         config: EngineConfig(
           fileSystem: fs,
           multipart: MultipartConfig(uploadDirectory: uploadDir.path),
@@ -114,7 +116,7 @@ void main() {
       response.assertStatus(HttpStatus.unsupportedMediaType);
       final files = uploadDir
           .listSync(recursive: true)
-          .whereType<File>()
+          .whereType<file.File>()
           .where((file) => file.existsSync())
           .toList();
       expect(files, isEmpty);
@@ -126,7 +128,7 @@ void main() {
         final fs = MemoryFileSystem();
         final uploadDir = fs.directory('/accept')..createSync(recursive: true);
 
-        final engine = Engine(
+        final engine = testEngine(
           config: EngineConfig(
             fileSystem: fs,
             multipart: MultipartConfig(uploadDirectory: uploadDir.path),
@@ -162,7 +164,7 @@ void main() {
         response.assertStatus(HttpStatus.ok);
         final files = uploadDir
             .listSync(recursive: true)
-            .whereType<File>()
+            .whereType<file.File>()
             .where((file) => file.existsSync())
             .toList();
         expect(files.length, 1);

@@ -6,6 +6,7 @@ import 'package:routed/src/sessions/cookie_store.dart';
 import 'package:routed/src/sessions/secure_cookie.dart';
 import 'package:routed_testing/routed_testing.dart';
 import 'package:server_testing/server_testing.dart';
+import 'test_engine.dart';
 
 void main() {
   void configureSessionRoutes(Engine engine) {
@@ -254,7 +255,7 @@ void main() {
         ),
       );
 
-      final engine = Engine(options: [withSessionConfig(sessionConfig)])
+      final engine = testEngine(options: [withSessionConfig(sessionConfig)])
         ..get('/login', (ctx) {
           ctx.setSession('user', 'alice');
           return ctx.string('ok');

@@ -6,6 +6,7 @@ import 'package:routed/middlewares.dart';
 import 'package:routed/session.dart';
 import 'package:routed_testing/routed_testing.dart';
 import 'package:server_testing/server_testing.dart';
+import '../test_engine.dart';
 
 void main() {
   TestClient? client;
@@ -16,7 +17,7 @@ void main() {
 
   group('basicAuth middleware', () {
     TestClient buildClient() {
-      final engine = Engine();
+      final engine = testEngine();
       engine.get(
         '/secret',
         (ctx) async {
@@ -71,7 +72,7 @@ void main() {
 
   group('corsMiddleware', () {
     test('echoes wildcard origin when credentials are disabled', () async {
-      final engine = Engine(
+      final engine = testEngine(
         config: EngineConfig(
           security: const EngineSecurityFeatures(
             cors: CorsConfig(
@@ -97,7 +98,7 @@ void main() {
     });
 
     test('reflects origin when credentials enabled with wildcard', () async {
-      final engine = Engine(
+      final engine = testEngine(
         config: EngineConfig(
           security: const EngineSecurityFeatures(
             cors: CorsConfig(
@@ -124,7 +125,7 @@ void main() {
     });
 
     test('rejects disallowed origins', () async {
-      final engine = Engine(
+      final engine = testEngine(
         config: EngineConfig(
           security: const EngineSecurityFeatures(
             cors: CorsConfig(
@@ -176,7 +177,7 @@ void main() {
 
     test('issues token once and accepts header-based submissions', () async {
       final sessionConfig = buildSessionConfig();
-      final engine = Engine(
+      final engine = testEngine(
         middlewares: [csrfMiddleware()],
         options: [withSessionConfig(sessionConfig)],
       )..get('/form', (ctx) => ctx.string('ok'));
@@ -253,7 +254,7 @@ void main() {
 
   group('recoveryMiddleware', () {
     test('respects custom handler response without overriding body', () async {
-      final engine = Engine()
+      final engine = testEngine()
         ..middlewares.add(
           recoveryMiddleware(
             handler: (ctx, error, stack) {
@@ -297,7 +298,7 @@ void main() {
         return res;
       }
 
-      final engine = Engine()
+      final engine = testEngine()
         ..get('/tracked', (ctx) async {
           await Future<void>.delayed(const Duration(milliseconds: 5));
           return ctx.string('ok');
@@ -314,7 +315,7 @@ void main() {
 
   group('securityHeadersMiddleware', () {
     test('sets configured security headers exactly once', () async {
-      final engine = Engine(
+      final engine = testEngine(
         config: EngineConfig(
           security: const EngineSecurityFeatures(
             csp: "default-src 'self'",
@@ -340,7 +341,7 @@ void main() {
 
   group('timeoutMiddleware', () {
     test('returns 504 when handler exceeds allotted time', () async {
-      final engine = Engine()
+      final engine = testEngine()
         ..get('/slow', (ctx) async {
           await Future<void>.delayed(const Duration(milliseconds: 100));
           return ctx.string('late');
@@ -354,7 +355,7 @@ void main() {
     });
 
     test('allows fast handler to complete within timeout', () async {
-      final engine = Engine()
+      final engine = testEngine()
         ..get(
           '/fast',
           (ctx) async {
@@ -374,7 +375,7 @@ void main() {
 
   group('limitRequestBody middleware', () {
     test('rejects payloads larger than configured limit', () async {
-      final engine = Engine()
+      final engine = testEngine()
         ..post(
           '/upload',
           (ctx) => ctx.string('ok'),
@@ -394,7 +395,7 @@ void main() {
     });
 
     test('allows payloads within the limit', () async {
-      final engine = Engine()
+      final engine = testEngine()
         ..post(
           '/upload',
           (ctx) => ctx.string('ok'),

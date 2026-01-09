@@ -4,6 +4,7 @@ import 'package:routed/routed.dart';
 import 'package:routed/src/translation/constants.dart';
 import 'package:server_testing/mock.dart';
 import 'package:test/test.dart';
+import '../test_engine.dart';
 
 class StubTranslator implements TranslatorContract {
   StubTranslator(this.locale, this.fallbackLocale);
@@ -72,7 +73,7 @@ EngineContext _context(Container container) {
 void main() {
   group('translation helpers', () {
     test('trans uses request locale override', () async {
-      final engine = Engine(includeDefaultProviders: false);
+      final engine = testEngine(includeDefaultProviders: false);
       engine.container
         ..instance<Config>(
           ConfigImpl({
@@ -95,7 +96,7 @@ void main() {
     });
 
     test('currentLocale falls back to translator locale', () async {
-      final engine = Engine(includeDefaultProviders: false);
+      final engine = testEngine(includeDefaultProviders: false);
       engine.container
         ..instance<Config>(
           ConfigImpl({

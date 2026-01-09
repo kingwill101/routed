@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:routed/routed.dart';
+import 'test_engine.dart';
 
 export 'support/property_generators.dart';
 
@@ -24,7 +25,7 @@ Engine engineWithFeatures({
   bool enableProxySupport = false,
   bool enableTrustedPlatform = false,
 }) {
-  return Engine(
+  return testEngine(
     config: EngineConfig(
       features: EngineFeatures(
         enableProxySupport: enableProxySupport,

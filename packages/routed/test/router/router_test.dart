@@ -8,6 +8,7 @@ import 'package:routed_testing/routed_testing.dart';
 import 'package:server_testing/server_testing.dart';
 
 import '../test_helpers.dart';
+import '../test_engine.dart';
 
 void main() {
   group('MyRouter Tests', () {
@@ -214,7 +215,7 @@ void main() {
         )
         .name('create');
 
-    final engine = Engine();
+    final engine = testEngine();
 
     final engineMW1 = makeMiddleware('Engine-MW1', log);
     final engineMW2 = makeMiddleware('Engine-MW2', log);
@@ -286,7 +287,7 @@ void main() {
         )
         .name('admin');
 
-    final engine = Engine();
+    final engine = testEngine();
     engine.use(
       prefix: '/api/v3',
       router3,
@@ -328,7 +329,7 @@ void main() {
     });
 
     test('mustGetParam returns captured route parameter', () async {
-      final engine = Engine();
+      final engine = testEngine();
       engine.get('/users/{id}', (ctx) {
         final id = ctx.mustGetParam<String>('id');
         return ctx.string(id);
@@ -343,7 +344,7 @@ void main() {
     });
 
     test('mustGetParam throws when parameter missing', () async {
-      final engine = Engine();
+      final engine = testEngine();
       engine.get('/users', (ctx) {
         expect(() => ctx.mustGetParam<String>('id'), throwsStateError);
         return ctx.string('ok');
@@ -368,7 +369,7 @@ void main() {
         constraints: {'value': r'^[A-Za-z]+$'},
       );
 
-      final engine = Engine();
+      final engine = testEngine();
       engine.use(router);
       final routes = engine.getAllRoutes();
       expect(routes.length, 1);
@@ -386,7 +387,7 @@ void main() {
         constraints: {'slug': r'^[a-zA-Z]+$'},
       );
 
-      final engine = Engine()..use(router);
+      final engine = testEngine()..use(router);
       final routes = engine.getAllRoutes();
       expect(routes.length, 2);
 
@@ -404,7 +405,7 @@ void main() {
 
   test('WebSocket routes inherit prefixes and middlewares', () {
     final log = <String>[];
-    final engine = Engine(middlewares: [makeMiddleware('Engine', log)]);
+    final engine = testEngine(middlewares: [makeMiddleware('Engine', log)]);
     final router = Router(
       path: '/api',
       middlewares: [makeMiddleware('Router', log)],

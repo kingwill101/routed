@@ -5,6 +5,7 @@ import 'package:routed/routed.dart';
 import 'package:routed/src/translation/locale_manager.dart';
 import 'package:routed_testing/routed_testing.dart';
 import 'package:server_testing/server_testing.dart';
+import '../test_engine.dart';
 
 void main() {
   late FileSystem fs;
@@ -33,8 +34,9 @@ notifications:
 <p>{{ "messages.notifications.count" | trans_choice: user.count }}</p>
 ''');
 
-    engine = Engine(
+    engine = testEngine(
       config: EngineConfig(fileSystem: fs),
+      fileSystem: fs,
       configItems: {
         'translation': {
           'paths': [fs.path.join(rootDir, 'resources', 'lang')],

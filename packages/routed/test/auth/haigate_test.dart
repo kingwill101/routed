@@ -2,6 +2,7 @@ import 'package:routed/routed.dart';
 import 'package:routed/src/auth/session_auth.dart';
 import 'package:routed_testing/routed_testing.dart';
 import 'package:server_testing/server_testing.dart';
+import '../test_engine.dart';
 
 final Set<String> _baselineAbilities = Set<String>.from(
   GateRegistry.instance.abilities,
@@ -34,7 +35,7 @@ void main() {
 
       GateViolation? capturedViolation;
 
-      final engine = Engine();
+      final engine = testEngine();
       engine.get('/authorize', (ctx) async {
         try {
           await Haigate.authorize('deny', ctx: ctx);
@@ -78,7 +79,7 @@ void main() {
       addTearDown(() => Haigate.removeObserver(observer));
 
       bool? allowedResult;
-      final engine = Engine();
+      final engine = testEngine();
       engine.get('/check', (ctx) async {
         allowedResult = await Haigate.can('observer-demo', ctx: ctx);
         return ctx.string('ok');
@@ -108,7 +109,7 @@ void main() {
       Haigate.register('edit-post', (_) => false);
       addTearDown(() => Haigate.unregister('edit-post'));
 
-      final engine = Engine();
+      final engine = testEngine();
       engine.get(
         '/edit',
         (ctx) => ctx.string('ok'),
@@ -142,7 +143,7 @@ void main() {
       });
       addTearDown(() => Haigate.unregister('manage-posts'));
 
-      final engine = Engine();
+      final engine = testEngine();
       engine.addGlobalMiddleware((ctx, next) {
         final roleHeader = ctx.request.headers.value('x-user-roles');
         if (roleHeader != null) {
@@ -191,7 +192,7 @@ void main() {
 
   group('Haigate provider integration', () {
     test('registers config-defined gates and middleware', () async {
-      final engine = Engine(
+      final engine = testEngine(
         includeDefaultProviders: true,
         configItems: {
           'http': {

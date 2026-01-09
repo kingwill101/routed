@@ -2,9 +2,10 @@ import 'dart:async';
 
 import 'package:routed/routed.dart';
 import 'package:routed_testing/routed_testing.dart';
+import 'test_engine.dart';
 
 Future<void> main() async {
-  final engine = Engine()
+  final engine = testEngine()
     ..get("/hello", (c) => c.string("world")).name("hello")
     ..get("/world", (c) => c.string("hello"));
 

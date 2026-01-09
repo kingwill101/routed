@@ -7,6 +7,7 @@ import 'package:routed/middlewares.dart';
 import 'package:routed/routed.dart';
 import 'package:routed_testing/routed_testing.dart';
 import 'package:server_testing/server_testing.dart';
+import '../test_engine.dart';
 
 void main() {
   group('compressionMiddleware', () {
@@ -21,7 +22,7 @@ void main() {
           'compresses eligible text responses when client accepts gzip',
           () async {
             final body = 'Hello world! ' * 20;
-            final engine = Engine(
+            final engine = testEngine(
               configItems: {
                 'compression': {'min_length': 8},
               },
@@ -50,7 +51,7 @@ void main() {
             final body = 'Brotli beats gzip when the client prefers it.' * 10;
             String? seenAcceptEncoding;
             final engine =
-                Engine(
+                testEngine(
                   configItems: {
                     'compression': {'min_length': 8},
                   },
@@ -85,7 +86,7 @@ void main() {
         test('skips compression for disallowed mime types', () async {
           final body = 'PNG data but represented as text for the test.' * 10;
           final engine =
-              Engine(
+              testEngine(
                 configItems: {
                   'compression': {
                     'min_length': 8,
@@ -116,7 +117,7 @@ void main() {
           () async {
             final body = 'Do not compress this response.' * 10;
             final engine =
-                Engine(
+                testEngine(
                   configItems: {
                     'compression': {'min_length': 8},
                   },
@@ -142,7 +143,7 @@ void main() {
           'skips compression when body is smaller than the configured minimum',
           () async {
             const body = 'tiny';
-            final engine = Engine(
+            final engine = testEngine(
               configItems: {
                 'compression': {'min_length': 1024},
               },
@@ -167,7 +168,7 @@ void main() {
             (sample) async {
               final body = 'x' * sample.payloadLength;
               final engine =
-                  Engine(
+                  testEngine(
                     configItems: {
                       'compression': {
                         'min_length': sample.minLength,

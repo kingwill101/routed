@@ -5,11 +5,12 @@ import 'package:routed/providers.dart';
 import 'package:routed/routed.dart';
 import 'package:routed/src/storage/local_storage_driver.dart';
 import 'package:test/test.dart';
+import '../test_engine.dart';
 
 void main() {
   group('StorageServiceProvider', () {
     test('registers disks from config', () async {
-      final engine = Engine(
+      final engine = testEngine(
         configItems: {
           'storage': {
             'default': 'assets',
@@ -35,7 +36,7 @@ void main() {
     });
 
     test('honors storage.root when local disk root not specified', () async {
-      final engine = Engine(
+      final engine = testEngine(
         configItems: {
           'storage': {
             'root': '/var/data',
@@ -57,7 +58,7 @@ void main() {
     });
 
     test('provides fallback disk when config missing', () async {
-      final engine = Engine();
+      final engine = testEngine();
       addTearDown(() async => await engine.close());
       await engine.initialize();
 
@@ -83,7 +84,7 @@ void main() {
         StorageServiceProvider.unregisterDriver('memory');
       });
 
-      final engine = Engine(
+      final engine = testEngine(
         configItems: {
           'storage': {
             'default': 'memory',
@@ -178,7 +179,7 @@ void main() {
         );
       });
 
-      final engine = Engine(
+      final engine = testEngine(
         configItems: {
           'storage': {
             'default': 'local',
@@ -232,8 +233,9 @@ void main() {
         }
       });
 
-      final engine = Engine(
+      final engine = testEngine(
         config: EngineConfig(fileSystem: fs),
+        fileSystem: fs,
         configItems: {
           'storage': {
             'default': 'local',

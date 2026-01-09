@@ -3,11 +3,12 @@ import 'dart:async';
 import 'package:routed/routed.dart';
 import 'package:routed_testing/routed_testing.dart';
 import 'package:server_testing/server_testing.dart';
+import '../test_engine.dart';
 
 void main() {
   group('SignalHub', () {
     test('request lifecycle signals fire in order', () async {
-      final engine = Engine();
+      final engine = testEngine();
       engine.get('/ok', (ctx) => ctx.string('ok'));
       await engine.initialize();
 
@@ -35,7 +36,7 @@ void main() {
     });
 
     test('AppZone exposes signal hub inside request', () async {
-      final engine = Engine();
+      final engine = testEngine();
       engine.get('/check', (ctx) async {
         final hub = AppZone.signals;
         expect(hub.requests.started, isNotNull);
@@ -58,7 +59,7 @@ void main() {
     });
 
     test('handler errors surface as UnhandledSignalError', () async {
-      final engine = Engine();
+      final engine = testEngine();
       engine.get('/ok', (ctx) => ctx.string('ok'));
       await engine.initialize();
 
@@ -99,7 +100,7 @@ void main() {
     });
 
     test('signal handlers can scope to EngineContext sender', () async {
-      final engine = Engine();
+      final engine = testEngine();
       final completions = <String>[];
       engine.get('/one', (ctx) async {
         final hub = AppZone.signals;

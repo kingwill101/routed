@@ -1,10 +1,11 @@
 import 'package:routed/routed.dart';
 import 'package:test/test.dart';
+import '../test_engine.dart';
 
 void main() {
   group('Cache events', () {
     test('publishes hit, miss, write, and forget events', () async {
-      final engine = Engine(
+      final engine = testEngine(
         configItems: {
           'cache': {
             'default': 'array',

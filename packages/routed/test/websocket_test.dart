@@ -2,6 +2,7 @@ import 'dart:io';
 
 import 'package:routed/routed.dart';
 import 'package:test/test.dart';
+import 'test_engine.dart';
 
 void main() {
   group('WebSocket Tests', () {
@@ -9,7 +10,7 @@ void main() {
     late HttpServer server;
 
     setUp(() async {
-      engine = Engine();
+      engine = testEngine();
       server = await HttpServer.bind(InternetAddress.loopbackIPv4, 0);
       server.listen((request) => engine.handleRequest(request));
     });

@@ -4,6 +4,7 @@ import 'package:routed/src/container/container.dart';
 import 'package:routed/src/contracts/contracts.dart';
 import 'package:routed/src/provider/provider.dart';
 import 'package:test/test.dart';
+import '../test_engine.dart';
 
 class PluginDefaultsProvider extends ServiceProvider
     with ProvidesDefaultConfig {
@@ -42,7 +43,7 @@ class AuditDefaultsProvider extends ServiceProvider with ProvidesDefaultConfig {
 
 void main() {
   test('registry aggregates defaults and applies missing keys', () async {
-    final engine = routed.Engine(configItems: {'plugin.enabled': false});
+    final engine = testEngine(configItems: {'plugin.enabled': false});
 
     engine.registerProvider(PluginDefaultsProvider());
 

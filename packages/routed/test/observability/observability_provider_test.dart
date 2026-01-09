@@ -4,11 +4,12 @@ import 'package:dartastic_opentelemetry/dartastic_opentelemetry.dart' as dotel;
 import 'package:routed/routed.dart';
 import 'package:routed_testing/routed_testing.dart';
 import 'package:server_testing/server_testing.dart';
+import '../test_engine.dart';
 
 void main() {
   group('ObservabilityServiceProvider', () {
     test('tracing middleware attaches span context', () async {
-      final engine = Engine(
+      final engine = testEngine(
         configItems: {
           'observability': {
             'tracing': {'enabled': true, 'exporter': 'console'},
@@ -39,7 +40,7 @@ void main() {
     });
 
     test('metrics endpoint exposes request counters', () async {
-      final engine = Engine(
+      final engine = testEngine(
         configItems: {
           'observability': {
             'tracing': {'enabled': false},
@@ -66,7 +67,7 @@ void main() {
     });
 
     test('health endpoint supports custom readiness checks', () async {
-      final engine = Engine(
+      final engine = testEngine(
         configItems: {
           'observability': {
             'tracing': {'enabled': false},
@@ -101,7 +102,7 @@ void main() {
     });
 
     test('readiness reports unhealthy during graceful shutdown', () async {
-      final engine = Engine(
+      final engine = testEngine(
         configItems: {
           'observability': {
             'tracing': {'enabled': false},

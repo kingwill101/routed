@@ -5,6 +5,7 @@ import 'package:http/testing.dart';
 import 'package:routed/routed.dart';
 import 'package:routed_testing/routed_testing.dart';
 import 'package:server_testing/server_testing.dart';
+import '../test_engine.dart';
 
 void main() {
   group('OAuth2Client', () {
@@ -79,7 +80,7 @@ void main() {
         }),
       );
 
-      final engine = Engine()
+      final engine = testEngine()
         ..addGlobalMiddleware(middleware)
         ..get('/secure', (ctx) {
           final claims = ctx.request.getAttribute<Map<String, dynamic>>(
@@ -116,7 +117,7 @@ void main() {
         }),
       );
 
-      final engine = Engine()
+      final engine = testEngine()
         ..addGlobalMiddleware(middleware)
         ..get('/secure', (ctx) => ctx.string('ok'));
 
@@ -156,7 +157,7 @@ void main() {
         }),
       );
 
-      final engine = Engine()
+      final engine = testEngine()
         ..addGlobalMiddleware(middleware)
         ..get('/secure', (ctx) => ctx.string('ok'));
 
@@ -196,7 +197,7 @@ void main() {
         }),
       );
 
-      final engine = Engine()
+      final engine = testEngine()
         ..addGlobalMiddleware(middleware)
         ..get('/secure', (ctx) => ctx.string('ok'));
 

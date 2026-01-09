@@ -2,6 +2,7 @@ import 'package:contextual/contextual.dart' as contextual;
 import 'package:routed/routed.dart';
 import 'package:routed_testing/routed_testing.dart';
 import 'package:server_testing/server_testing.dart';
+import '../test_engine.dart';
 
 void main() {
   group('Logging integration', () {
@@ -19,7 +20,7 @@ void main() {
     });
 
     test('attaches request context to logger', () async {
-      final engine = Engine();
+      final engine = testEngine();
       engine.get('/hello', (ctx) async {
         final engineFromContainer = await ctx.container.make<Engine>();
         expect(identical(engineFromContainer, ctx.engine), isTrue);
@@ -43,7 +44,7 @@ void main() {
     });
 
     test('logs unhandled errors through contextual logger', () async {
-      final engine = Engine();
+      final engine = testEngine();
       engine.get('/boom', (ctx) async {
         throw StateError('boom');
       });

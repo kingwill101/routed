@@ -1,6 +1,7 @@
 import 'package:file/memory.dart';
 import 'package:routed/routed.dart';
 import 'package:test/test.dart';
+import '../test_engine.dart';
 
 void main() {
   group('ViewServiceProvider', () {
@@ -11,8 +12,9 @@ void main() {
     });
 
     test('applies directory and engine from config', () async {
-      final engine = Engine(
+      final engine = testEngine(
         config: EngineConfig(fileSystem: fs),
+        fileSystem: fs,
         configItems: {
           'view': {
             'engine': 'liquid',
@@ -31,8 +33,9 @@ void main() {
     });
 
     test('config reload updates template directory', () async {
-      final engine = Engine(
+      final engine = testEngine(
         config: EngineConfig(fileSystem: fs),
+        fileSystem: fs,
         configItems: {
           'view': {'directory': 'views'},
         },
@@ -61,8 +64,9 @@ void main() {
       final tempDir = fs.systemTempDirectory.createTempSync('routed_view_disk');
       addTearDown(() => tempDir.deleteSync(recursive: true));
 
-      final engine = Engine(
+      final engine = testEngine(
         config: EngineConfig(fileSystem: fs),
+        fileSystem: fs,
         configItems: {
           'storage': {
             'default': 'templates',

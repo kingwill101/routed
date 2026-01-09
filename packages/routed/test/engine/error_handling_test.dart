@@ -1,13 +1,14 @@
 import 'package:routed/routed.dart';
 import 'package:routed_testing/routed_testing.dart';
 import 'package:server_testing/server_testing.dart';
+import '../test_engine.dart';
 
 void main() {
   group('Engine error hooks', () {
     const teapotStatus = 418;
 
     test('custom handler can replace default error response', () async {
-      final engine = Engine();
+      final engine = testEngine();
       final events = <String>[];
 
       engine.beforeError((ctx, error, stack) {
@@ -39,7 +40,7 @@ void main() {
     });
 
     test('observers fire when default handlers run', () async {
-      final engine = Engine();
+      final engine = testEngine();
       final events = <String>[];
 
       engine.beforeError((ctx, error, stack) {

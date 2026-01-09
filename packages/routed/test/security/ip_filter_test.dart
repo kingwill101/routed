@@ -1,11 +1,12 @@
 import 'package:routed/routed.dart';
 import 'package:routed_testing/routed_testing.dart';
 import 'package:server_testing/server_testing.dart';
+import '../test_engine.dart';
 
 void main() {
   group('IP filter middleware', () {
     test('denies requests outside allow list', () async {
-      final engine = Engine(
+      final engine = testEngine(
         configItems: {
           'security': {
             'ip_filter': {
@@ -33,7 +34,7 @@ void main() {
     test(
       'allows whitelisted forwarded addresses when respecting proxies',
       () async {
-        final engine = Engine(
+        final engine = testEngine(
           configItems: {
             'security': {
               'trusted_proxies': {
@@ -71,7 +72,7 @@ void main() {
     );
 
     test('deny list takes precedence over allow list', () async {
-      final engine = Engine(
+      final engine = testEngine(
         configItems: {
           'security': {
             'ip_filter': {

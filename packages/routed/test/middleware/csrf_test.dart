@@ -6,6 +6,7 @@ import 'package:routed/routed.dart';
 import 'package:routed/session.dart';
 import 'package:routed_testing/routed_testing.dart';
 import 'package:server_testing/server_testing.dart';
+import '../test_engine.dart';
 
 void main() {
   group('csrfMiddleware', () {
@@ -45,7 +46,7 @@ void main() {
 
         test('emits secure CSRF cookie when forwarded HTTPS', () async {
           final sessionConfig = buildSessionConfig();
-          final engine = Engine(
+          final engine = testEngine(
             config: EngineConfig(
               features: const EngineFeatures(enableProxySupport: true),
             ),
@@ -88,7 +89,7 @@ void main() {
 
         test('emits secure cookie when Forwarded proto is quoted', () async {
           final sessionConfig = buildSessionConfig();
-          final engine = Engine(
+          final engine = testEngine(
             config: EngineConfig(
               features: const EngineFeatures(enableProxySupport: true),
             ),
@@ -130,7 +131,7 @@ void main() {
           'issues token once and accepts header-based submissions',
           () async {
             final sessionConfig = buildSessionConfig();
-            final engine = Engine(
+            final engine = testEngine(
               middlewares: [csrfMiddleware()],
               options: [withSessionConfig(sessionConfig)],
             )..get('/form', (ctx) => ctx.string('ok'));
@@ -179,7 +180,7 @@ void main() {
 
         test('rejects POST without CSRF token', () async {
           final sessionConfig = buildSessionConfig();
-          final engine = Engine(
+          final engine = testEngine(
             middlewares: [csrfMiddleware()],
             options: [withSessionConfig(sessionConfig)],
           )..post('/submit', (ctx) => ctx.string('submitted'));
@@ -197,7 +198,7 @@ void main() {
         test('accepts POST with valid CSRF token in header', () async {
           final sessionConfig = buildSessionConfig();
           final engine =
-              Engine(
+              testEngine(
                   middlewares: [csrfMiddleware()],
                   options: [withSessionConfig(sessionConfig)],
                 )
@@ -239,7 +240,7 @@ void main() {
         test('token persists across multiple requests', () async {
           final sessionConfig = buildSessionConfig();
           final engine =
-              Engine(
+              testEngine(
                   middlewares: [csrfMiddleware()],
                   options: [withSessionConfig(sessionConfig)],
                 )
@@ -292,7 +293,7 @@ void main() {
         test('safe methods bypass CSRF check', () async {
           final sessionConfig = buildSessionConfig();
           final engine =
-              Engine(
+              testEngine(
                   middlewares: [csrfMiddleware()],
                   options: [withSessionConfig(sessionConfig)],
                 )
