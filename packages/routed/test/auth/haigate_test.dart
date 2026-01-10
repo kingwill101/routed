@@ -29,6 +29,13 @@ void main() {
       );
     });
 
+    test('register rejects empty ability names', () {
+      expect(
+        () => Haigate.register(' ', (_) => true),
+        throwsA(isA<GateRegistrationException>()),
+      );
+    });
+
     test('authorize throws GateViolation when denied', () async {
       Haigate.register('deny', (_) => false);
       addTearDown(() => Haigate.unregister('deny'));
@@ -104,6 +111,41 @@ void main() {
     });
   });
 
+  group('Haigate evaluation helpers', () {
+    test('any and all evaluate multiple abilities', () async {
+      Haigate.register('any.allow', (_) => true);
+      Haigate.register('all.deny', (_) => false);
+      addTearDown(() {
+        Haigate.unregister('any.allow');
+        Haigate.unregister('all.deny');
+      });
+
+      bool? anyResult;
+      bool? allResult;
+      final engine = testEngine();
+      engine.get('/check', (ctx) async {
+        anyResult = await Haigate.any(['all.deny', 'any.allow'], ctx: ctx);
+        allResult = await Haigate.all(['all.deny', 'any.allow'], ctx: ctx);
+        return ctx.string('ok');
+      });
+
+      await engine.initialize();
+      final client = TestClient(
+        RoutedRequestHandler(engine),
+        mode: TransportMode.ephemeralServer,
+      );
+      addTearDown(() async {
+        await client.close();
+        await engine.close();
+      });
+
+      final res = await client.get('/check');
+      res.assertStatus(200);
+      expect(anyResult, isTrue);
+      expect(allResult, isFalse);
+    });
+  });
+
   group('Haigate middleware', () {
     test('denies when gate callback returns false', () async {
       Haigate.register('edit-post', (_) => false);
@@ -131,6 +173,55 @@ void main() {
       final res = await client.get('/edit');
       expect(res.statusCode, equals(HttpStatus.forbidden));
       expect(res.body, contains('edit-post'));
+    });
+
+    test('supports custom denied responses and payload providers', () async {
+      Haigate.register('with-payload', (ctx) {
+        return ctx.payload == 42;
+      });
+      Haigate.register('custom-deny', (_) => false);
+      addTearDown(() {
+        Haigate.unregister('with-payload');
+        Haigate.unregister('custom-deny');
+      });
+
+      final engine = testEngine();
+      engine.get(
+        '/payload',
+        (ctx) => ctx.string('ok'),
+        middlewares: [
+          Haigate.middleware(['with-payload'], payloadProvider: (_, _) => 42),
+        ],
+      );
+      engine.get(
+        '/custom',
+        (ctx) => ctx.string('ok'),
+        middlewares: [
+          Haigate.middleware(
+            ['custom-deny'],
+            onDenied: (violation, ctx) async {
+              return ctx.json({'error': violation.ability}, statusCode: 418);
+            },
+          ),
+        ],
+      );
+
+      await engine.initialize();
+      final client = TestClient(
+        RoutedRequestHandler(engine),
+        mode: TransportMode.ephemeralServer,
+      );
+      addTearDown(() async {
+        await client.close();
+        await engine.close();
+      });
+
+      final payload = await client.get('/payload');
+      payload.assertStatus(200);
+
+      final denied = await client.get('/custom');
+      expect(denied.statusCode, equals(418));
+      expect(denied.json()['error'], equals('custom-deny'));
     });
 
     test('allows when principal satisfies role-based gate', () async {

@@ -122,6 +122,58 @@ void main() {
       expect(res.statusCode, equals(401));
     });
 
+    test('rejects tokens with unexpected prefix', () async {
+      final now = DateTime.now();
+      final token = _buildToken(_claims(now: now));
+
+      final engine = testEngine()
+        ..addGlobalMiddleware(
+          jwtAuthentication(
+            JwtOptions(
+              inlineKeys: [_testJwk],
+              algorithms: const ['HS256'],
+              bearerPrefix: 'Token ',
+            ),
+          ),
+        )
+        ..get('/secure', (ctx) => ctx.string('secure'));
+
+      await engine.initialize();
+
+      final client = TestClient(
+        RoutedRequestHandler(engine),
+        mode: TransportMode.ephemeralServer,
+      );
+      addTearDown(() async => await client.close());
+
+      final res = await client.get(
+        '/secure',
+        headers: {
+          'Authorization': ['Bearer $token'],
+        },
+      );
+      expect(res.statusCode, equals(401));
+    });
+
+    test('skips verification when disabled', () async {
+      final engine = testEngine()
+        ..addGlobalMiddleware(
+          jwtAuthentication(const JwtOptions(enabled: false)),
+        )
+        ..get('/secure', (ctx) => ctx.string('secure'));
+
+      await engine.initialize();
+
+      final client = TestClient(
+        RoutedRequestHandler(engine),
+        mode: TransportMode.ephemeralServer,
+      );
+      addTearDown(() async => await client.close());
+
+      final res = await client.get('/secure');
+      res.assertStatus(200);
+    });
+
     test('custom validator can reject tokens', () async {
       final now = DateTime.now();
       final invalidToken = _buildToken(

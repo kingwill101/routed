@@ -107,6 +107,262 @@ void main() {
       expect(res.json()['sub'], equals('user-1'));
     });
 
+    test('rejects requests missing authorization headers', () async {
+      final middleware = oauth2Introspection(
+        OAuthIntrospectionOptions(
+          endpoint: Uri.parse('https://auth.test/introspect'),
+        ),
+        httpClient: MockClient((request) async {
+          return http.Response(json.encode({'active': true}), 200);
+        }),
+      );
+
+      final engine = testEngine()
+        ..addGlobalMiddleware(middleware)
+        ..get('/secure', (ctx) => ctx.string('ok'));
+
+      await engine.initialize();
+
+      final client = TestClient(
+        RoutedRequestHandler(engine),
+        mode: TransportMode.ephemeralServer,
+      );
+      addTearDown(() async => await client.close());
+
+      final res = await client.get('/secure');
+      expect(res.statusCode, equals(401));
+    });
+
+    test('rejects empty bearer tokens', () async {
+      final middleware = oauth2Introspection(
+        OAuthIntrospectionOptions(
+          endpoint: Uri.parse('https://auth.test/introspect'),
+        ),
+        httpClient: MockClient((request) async {
+          return http.Response(json.encode({'active': true}), 200);
+        }),
+      );
+
+      final engine = testEngine()
+        ..addGlobalMiddleware(middleware)
+        ..get('/secure', (ctx) => ctx.string('ok'));
+
+      await engine.initialize();
+
+      final client = TestClient(
+        RoutedRequestHandler(engine),
+        mode: TransportMode.ephemeralServer,
+      );
+      addTearDown(() async => await client.close());
+
+      final res = await client.get(
+        '/secure',
+        headers: {
+          'Authorization': ['Bearer '],
+        },
+      );
+      expect(res.statusCode, equals(401));
+    });
+
+    test('rejects non-bearer authorization schemes', () async {
+      final middleware = oauth2Introspection(
+        OAuthIntrospectionOptions(
+          endpoint: Uri.parse('https://auth.test/introspect'),
+        ),
+        httpClient: MockClient((request) async {
+          return http.Response(json.encode({'active': true}), 200);
+        }),
+      );
+
+      final engine = testEngine()
+        ..addGlobalMiddleware(middleware)
+        ..get('/secure', (ctx) => ctx.string('ok'));
+
+      await engine.initialize();
+
+      final client = TestClient(
+        RoutedRequestHandler(engine),
+        mode: TransportMode.ephemeralServer,
+      );
+      addTearDown(() async => await client.close());
+
+      final res = await client.get(
+        '/secure',
+        headers: {
+          'Authorization': ['Basic abc'],
+        },
+      );
+      expect(res.statusCode, equals(401));
+    });
+
+    test('applies client credentials and token type hints', () async {
+      final middleware = oauth2Introspection(
+        OAuthIntrospectionOptions(
+          endpoint: Uri.parse('https://auth.test/introspect'),
+          clientId: 'client-id',
+          clientSecret: 'client-secret',
+          tokenTypeHint: 'access_token',
+          additionalParameters: const {'audience': 'api'},
+        ),
+        httpClient: MockClient((request) async {
+          expect(request.headers['authorization'], isNotNull);
+          expect(request.bodyFields['token_type_hint'], equals('access_token'));
+          expect(request.bodyFields['audience'], equals('api'));
+          return http.Response(json.encode({'active': true}), 200);
+        }),
+      );
+
+      final engine = testEngine()
+        ..addGlobalMiddleware(middleware)
+        ..get('/secure', (ctx) => ctx.string('ok'));
+
+      await engine.initialize();
+
+      final client = TestClient(
+        RoutedRequestHandler(engine),
+        mode: TransportMode.ephemeralServer,
+      );
+      addTearDown(() async => await client.close());
+
+      final res = await client.get(
+        '/secure',
+        headers: {
+          'Authorization': ['Bearer token'],
+        },
+      );
+      res.assertStatus(200);
+    });
+
+    test('handles introspection errors gracefully', () async {
+      final middleware = oauth2Introspection(
+        OAuthIntrospectionOptions(
+          endpoint: Uri.parse('https://auth.test/introspect'),
+        ),
+        httpClient: MockClient((request) async {
+          return http.Response('nope', 500);
+        }),
+      );
+
+      final engine = testEngine()
+        ..addGlobalMiddleware(middleware)
+        ..get('/secure', (ctx) => ctx.string('ok'));
+
+      await engine.initialize();
+
+      final client = TestClient(
+        RoutedRequestHandler(engine),
+        mode: TransportMode.ephemeralServer,
+      );
+      addTearDown(() async => await client.close());
+
+      final res = await client.get(
+        '/secure',
+        headers: {
+          'Authorization': ['Bearer bad'],
+        },
+      );
+      expect(res.statusCode, equals(401));
+    });
+
+    test('invokes onValidated callback and caches responses', () async {
+      var requestCount = 0;
+      var validated = false;
+      final middleware = oauth2Introspection(
+        OAuthIntrospectionOptions(
+          endpoint: Uri.parse('https://auth.test/introspect'),
+          cacheTtl: const Duration(minutes: 5),
+        ),
+        onValidated: (result, ctx) {
+          validated = true;
+          ctx.request.setAttribute('user', result.subject);
+        },
+        httpClient: MockClient((request) async {
+          requestCount += 1;
+          return http.Response(
+            json.encode({'active': true, 'sub': 'user-1'}),
+            200,
+          );
+        }),
+      );
+
+      final engine = testEngine()
+        ..addGlobalMiddleware(middleware)
+        ..get('/secure', (ctx) {
+          return ctx.json({'user': ctx.request.getAttribute<String>('user')});
+        });
+
+      await engine.initialize();
+
+      final client = TestClient(
+        RoutedRequestHandler(engine),
+        mode: TransportMode.ephemeralServer,
+      );
+      addTearDown(() async => await client.close());
+
+      final first = await client.get(
+        '/secure',
+        headers: {
+          'Authorization': ['Bearer cached'],
+        },
+      );
+      first.assertStatus(200);
+      expect(first.json()['user'], equals('user-1'));
+      expect(validated, isTrue);
+
+      final second = await client.get(
+        '/secure',
+        headers: {
+          'Authorization': ['Bearer cached'],
+        },
+      );
+      second.assertStatus(200);
+      expect(requestCount, equals(1));
+    });
+
+    test('refreshes cached introspection when expired', () async {
+      var requestCount = 0;
+      final middleware = oauth2Introspection(
+        OAuthIntrospectionOptions(
+          endpoint: Uri.parse('https://auth.test/introspect'),
+          cacheTtl: Duration.zero,
+        ),
+        httpClient: MockClient((request) async {
+          requestCount += 1;
+          return http.Response(
+            json.encode({'active': true, 'sub': 'user-1'}),
+            200,
+          );
+        }),
+      );
+
+      final engine = testEngine()
+        ..addGlobalMiddleware(middleware)
+        ..get('/secure', (ctx) => ctx.string('ok'));
+
+      await engine.initialize();
+
+      final client = TestClient(
+        RoutedRequestHandler(engine),
+        mode: TransportMode.ephemeralServer,
+      );
+      addTearDown(() async => await client.close());
+
+      await client.get(
+        '/secure',
+        headers: {
+          'Authorization': ['Bearer refresh'],
+        },
+      );
+      await client.get(
+        '/secure',
+        headers: {
+          'Authorization': ['Bearer refresh'],
+        },
+      );
+
+      expect(requestCount, equals(2));
+    });
+
     test('rejects inactive tokens', () async {
       final middleware = oauth2Introspection(
         OAuthIntrospectionOptions(
@@ -176,6 +432,46 @@ void main() {
         },
       );
       res.assertStatus(200);
+    });
+
+    test('rejects expired tokens', () async {
+      final nowSeconds = DateTime.now().toUtc().millisecondsSinceEpoch ~/ 1000;
+      final middleware = oauth2Introspection(
+        OAuthIntrospectionOptions(
+          endpoint: Uri.parse('https://auth.test/introspect'),
+          clockSkew: Duration.zero,
+        ),
+        httpClient: MockClient((request) async {
+          return http.Response(
+            json.encode({
+              'active': true,
+              'sub': 'user-2',
+              'exp': nowSeconds - 120,
+            }),
+            200,
+          );
+        }),
+      );
+
+      final engine = testEngine()
+        ..addGlobalMiddleware(middleware)
+        ..get('/secure', (ctx) => ctx.string('ok'));
+
+      await engine.initialize();
+
+      final client = TestClient(
+        RoutedRequestHandler(engine),
+        mode: TransportMode.ephemeralServer,
+      );
+      addTearDown(() async => await client.close());
+
+      final res = await client.get(
+        '/secure',
+        headers: {
+          'Authorization': ['Bearer expired'],
+        },
+      );
+      expect(res.statusCode, equals(401));
     });
 
     test('rejects tokens outside clock skew tolerance', () async {
