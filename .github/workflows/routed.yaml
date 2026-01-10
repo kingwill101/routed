@@ -35,7 +35,7 @@ jobs:
         if: matrix.os == 'ubuntu-latest' && matrix.sdk == 'stable'
         run: |
           dart test --coverage=coverage
-          dart pub run coverage:format_coverage --lcov --in=coverage --out=coverage/lcov.info --packages=../.dart_tool/package_config.json --report-on=lib
+          dart pub run coverage:format_coverage --lcov --in=coverage --out=coverage/lcov.info --package=. --report-on=lib
       - name: Upload coverage artifact
         if: matrix.os == 'ubuntu-latest' && matrix.sdk == 'stable'
         uses: actions/upload-artifact@v4
