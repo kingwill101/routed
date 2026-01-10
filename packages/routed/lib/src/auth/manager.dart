@@ -10,6 +10,7 @@ import 'package:routed/src/auth/models.dart';
 import 'package:routed/src/auth/providers.dart';
 import 'package:routed/src/auth/jwt.dart';
 import 'package:routed/src/auth/oauth.dart';
+import 'package:routed/src/auth/policies.dart';
 import 'package:routed/src/auth/rbac.dart';
 import 'package:routed/src/auth/session_auth.dart';
 import 'package:routed/src/context/context.dart';
@@ -59,6 +60,7 @@ class AuthOptions {
     this.tokenStore,
     this.enforceCsrf = true,
     this.rbac = const RbacOptions(),
+    this.policies = const PolicyOptions(),
   });
 
   /// List of configured auth providers.
@@ -103,6 +105,9 @@ class AuthOptions {
   /// Role-based access control mappings.
   final RbacOptions rbac;
 
+  /// Policy bindings for resource-level authorization.
+  final PolicyOptions policies;
+
   AuthOptions copyWith({
     List<AuthProvider>? providers,
     AuthAdapter? adapter,
@@ -118,6 +123,7 @@ class AuthOptions {
     AuthVerificationTokenStore? tokenStore,
     bool? enforceCsrf,
     RbacOptions? rbac,
+    PolicyOptions? policies,
   }) {
     return AuthOptions(
       providers: providers ?? this.providers,
@@ -134,6 +140,7 @@ class AuthOptions {
       tokenStore: tokenStore ?? this.tokenStore,
       enforceCsrf: enforceCsrf ?? this.enforceCsrf,
       rbac: rbac ?? this.rbac,
+      policies: policies ?? this.policies,
     );
   }
 }

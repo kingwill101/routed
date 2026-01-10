@@ -40,6 +40,16 @@ export 'src/auth/rbac.dart'
         registerRbacAbilitiesSafely,
         registerRbacWithHaigate,
         rbacGate;
+export 'src/auth/policies.dart'
+    show
+        Policy,
+        PolicyAction,
+        PolicyBinding,
+        PolicyOptions,
+        policyGate,
+        registerPolicyBindings,
+        registerPolicyBindingsSafely,
+        registerPoliciesWithHaigate;
 
 export 'src/auth/oauth.dart'
     show
