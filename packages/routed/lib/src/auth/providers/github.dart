@@ -2,8 +2,8 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:http/http.dart' as http;
-import 'package:routed/src/auth/auth_models.dart';
-import 'package:routed/src/auth/auth_providers.dart';
+import 'package:routed/src/auth/models.dart';
+import 'package:routed/src/auth/providers.dart';
 import 'package:routed/src/context/context.dart';
 
 /// GitHub email payload returned by `/user/emails`.

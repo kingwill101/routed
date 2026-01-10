@@ -5,9 +5,9 @@ import 'dart:math';
 
 import 'package:crypto/crypto.dart';
 import 'package:http/http.dart' as http;
-import 'package:routed/src/auth/auth_adapter.dart';
-import 'package:routed/src/auth/auth_models.dart';
-import 'package:routed/src/auth/auth_providers.dart';
+import 'package:routed/src/auth/adapter.dart';
+import 'package:routed/src/auth/models.dart';
+import 'package:routed/src/auth/providers.dart';
 import 'package:routed/src/auth/jwt.dart';
 import 'package:routed/src/auth/oauth.dart';
 import 'package:routed/src/auth/session_auth.dart';

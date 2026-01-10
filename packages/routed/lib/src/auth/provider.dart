@@ -1,9 +1,9 @@
 import 'dart:async';
 
 import 'package:http/http.dart' as http;
-import 'package:routed/src/auth/auth_adapter.dart';
-import 'package:routed/src/auth/auth_manager.dart';
-import 'package:routed/src/auth/auth_routes.dart';
+import 'package:routed/src/auth/adapter.dart';
+import 'package:routed/src/auth/manager.dart';
+import 'package:routed/src/auth/routes.dart';
 import 'package:routed/src/auth/haigate.dart';
 import 'package:routed/src/auth/jwt.dart';
 import 'package:routed/src/auth/oauth.dart';

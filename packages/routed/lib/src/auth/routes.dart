@@ -1,9 +1,9 @@
 import 'dart:convert';
 import 'dart:io';
 
-import 'package:routed/src/auth/auth_manager.dart';
-import 'package:routed/src/auth/auth_models.dart';
-import 'package:routed/src/auth/auth_providers.dart';
+import 'package:routed/src/auth/manager.dart';
+import 'package:routed/src/auth/models.dart';
+import 'package:routed/src/auth/providers.dart';
 import 'package:routed/src/context/context.dart';
 import 'package:routed/src/response.dart';
 import 'package:routed/src/router/router.dart';

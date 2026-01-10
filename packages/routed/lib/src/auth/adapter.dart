@@ -1,6 +1,6 @@
 import 'dart:async';
 
-import 'package:routed/src/auth/auth_models.dart';
+import 'package:routed/src/auth/models.dart';
 
 /// Base adapter for persisting auth data.
 ///

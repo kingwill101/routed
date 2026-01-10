@@ -1,8 +1,8 @@
-export 'src/auth/auth_adapter.dart';
-export 'src/auth/auth_manager.dart';
-export 'src/auth/auth_models.dart';
-export 'src/auth/auth_providers.dart';
-export 'src/auth/auth_routes.dart';
+export 'src/auth/adapter.dart';
+export 'src/auth/manager.dart';
+export 'src/auth/models.dart';
+export 'src/auth/providers.dart';
+export 'src/auth/routes.dart';
 export 'src/auth/basic_auth.dart';
 export 'src/auth/csrf.dart';
 export 'src/auth/haigate.dart'
