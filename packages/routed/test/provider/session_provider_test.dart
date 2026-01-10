@@ -74,11 +74,8 @@ void main() {
       final config = await engine.make<SessionConfig>();
       expect(config.store, isA<FilesystemStore>());
       final store = config.store as FilesystemStore;
-      final pathContext = store.fileSystem.path;
-      expect(
-        pathContext.normalize(store.storageDir),
-        equals(pathContext.normalize(temp.path)),
-      );
+      String normalizePath(String value) => value.replaceAll('\\', '/');
+      expect(normalizePath(store.storageDir), equals(normalizePath(temp.path)));
       expect(store.lottery, equals([1, 2]));
       expect(config.defaultOptions.path, equals('/app'));
       expect(config.defaultOptions.secure, isTrue);

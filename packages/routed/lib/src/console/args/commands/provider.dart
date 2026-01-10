@@ -206,7 +206,7 @@ class ProviderDisableCommand extends BaseCommand {
 
 Future<Map<String, dynamic>> _loadManifest(fs.Directory projectRoot) async {
   final httpFile = projectRoot.fileSystem.file(
-    projectRoot.uri.resolve('config/http.yaml').toFilePath(),
+    projectRoot.fileSystem.path.join(projectRoot.path, 'config', 'http.yaml'),
   );
   Map<String, dynamic> manifest;
   if (!await httpFile.exists()) {
@@ -246,7 +246,7 @@ Future<void> _writeManifest(
   Map<String, dynamic> manifest,
 ) async {
   final httpFile = projectRoot.fileSystem.file(
-    projectRoot.uri.resolve('config/http.yaml').toFilePath(),
+    projectRoot.fileSystem.path.join(projectRoot.path, 'config', 'http.yaml'),
   );
   final content = _toYaml(manifest);
   await httpFile.parent.create(recursive: true);
@@ -264,7 +264,7 @@ Future<void> _syncProviderEnabledFlag(
   }
 
   final configFile = projectRoot.fileSystem.file(
-    projectRoot.uri.resolve('config/$root.yaml').toFilePath(),
+    projectRoot.fileSystem.path.join(projectRoot.path, 'config', '$root.yaml'),
   );
   Map<String, dynamic> config = <String, dynamic>{};
   if (await configFile.exists()) {

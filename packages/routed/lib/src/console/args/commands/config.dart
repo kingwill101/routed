@@ -659,7 +659,7 @@ Future<fs.Directory?> _resolveStubsDirectory(
 ) async {
   final fsInstance = packageRoot.fileSystem;
   final stubs = fsInstance.directory(
-    p.join(packageRoot.path, 'config', 'stubs'),
+    fsInstance.path.join(packageRoot.path, 'config', 'stubs'),
   );
   if (!await stubs.exists()) {
     return null;
@@ -667,7 +667,7 @@ Future<fs.Directory?> _resolveStubsDirectory(
   if (tag == null) {
     return stubs;
   }
-  final tagDir = fsInstance.directory(p.join(stubs.path, tag));
+  final tagDir = fsInstance.directory(fsInstance.path.join(stubs.path, tag));
   return await tagDir.exists() ? tagDir : stubs;
 }
 
@@ -694,7 +694,7 @@ Future<fs.Directory?> _resolvePackageRoot(
     final rootUri = entry['rootUri'];
     if (rootUri is! String) continue;
     final resolved = packageConfig.parent.uri.resolve(rootUri);
-    final path = resolved.toFilePath();
+    final path = fsInstance.path.fromUri(resolved);
     return fsInstance.directory(path);
   }
   return null;

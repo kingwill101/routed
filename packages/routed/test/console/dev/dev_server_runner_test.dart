@@ -153,6 +153,7 @@ void main() {
         workingDirectory: tempDir,
         scriptPath: scriptFile.path,
         hotReloadExpected: false,
+        isWindows: false,
         directoryWatcher: (_) => watcher,
         startProcess: startProcess,
         runProcess: (executable, arguments, {String? workingDirectory}) async =>
