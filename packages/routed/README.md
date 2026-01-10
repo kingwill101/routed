@@ -52,6 +52,8 @@ Future<void> main() async {
 
 ## Coverage
 
+Latest local coverage: 61.9% line coverage.
+
 ```bash
 dart test --coverage=coverage
 dart pub run coverage:format_coverage --lcov --in=coverage --out=coverage/lcov.info --package=. --report-on=lib
