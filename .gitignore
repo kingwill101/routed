@@ -8,6 +8,7 @@ pubspec.lock
 .idea/
 .cursor/
 .vscode
+*.iml
 openspec
 AGENTS.md
 storage/
