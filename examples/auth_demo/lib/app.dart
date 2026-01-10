@@ -1,6 +1,5 @@
 import 'dart:io';
 
-import 'package:routed/auth.dart';
 import 'package:routed/auth/providers/github.dart';
 import 'package:routed/routed.dart';
 
