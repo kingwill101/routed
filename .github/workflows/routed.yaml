@@ -31,5 +31,17 @@ jobs:
         run: dart format --output=none --set-exit-if-changed .
       - name: Analyze project source
         run: dart analyze --fatal-infos
+      - name: Run tests (coverage)
+        if: matrix.os == 'ubuntu-latest' && matrix.sdk == 'stable'
+        run: |
+          dart test --coverage=coverage
+          dart pub run coverage:format_coverage --lcov --in=coverage --out=coverage/lcov.info --packages=../.dart_tool/package_config.json --report-on=lib
+      - name: Upload coverage artifact
+        if: matrix.os == 'ubuntu-latest' && matrix.sdk == 'stable'
+        uses: actions/upload-artifact@v4
+        with:
+          name: routed-coverage-lcov
+          path: packages/routed/coverage/lcov.info
       - name: Run tests
+        if: matrix.os != 'ubuntu-latest' || matrix.sdk != 'stable'
         run: dart test
