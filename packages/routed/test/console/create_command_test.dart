@@ -1,8 +1,6 @@
 import 'package:args/command_runner.dart';
 import 'package:file/file.dart' as fs;
 import 'package:file/memory.dart';
-import 'package:path/path.dart' as p;
-
 import 'package:routed/console.dart' show CliLogger;
 import 'package:routed/src/console/args/commands/create.dart';
 import 'package:routed/src/console/args/runner.dart';
@@ -54,7 +52,7 @@ void main() {
       expect(logger.infos.contains('  dart pub get'), isFalse);
 
       final pubspecFile = memoryFs.file(
-        p.join(projectDir.path, 'pubspec.yaml'),
+        memoryFs.path.join(projectDir.path, 'pubspec.yaml'),
       );
       final pubspec = loadYaml(pubspecFile.readAsStringSync()) as YamlMap;
       expect(pubspec['name'], equals('demo_app'));

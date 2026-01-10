@@ -1,13 +1,11 @@
 import 'package:args/command_runner.dart';
 import 'package:file/file.dart' as fs;
 import 'package:file/memory.dart';
-import 'package:path/path.dart' as p;
 import 'package:routed/console.dart' show CliLogger;
 import 'package:routed/providers.dart'
     show ProviderRegistry, SessionServiceProvider;
 import 'package:routed/routed.dart';
 import 'package:routed/session.dart';
-
 import 'package:routed/src/console/args/commands/provider.dart';
 import 'package:routed/src/console/args/commands/provider_driver.dart';
 import 'package:routed/src/console/args/runner.dart';
@@ -162,7 +160,9 @@ Future<void> _writeFile(
   String relativePath,
   String contents,
 ) async {
-  final file = root.fileSystem.file(p.join(root.path, relativePath));
+  final file = root.fileSystem.file(
+    root.fileSystem.path.join(root.path, relativePath),
+  );
   await file.parent.create(recursive: true);
   await file.writeAsString(contents);
 }

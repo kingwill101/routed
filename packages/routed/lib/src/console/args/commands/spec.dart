@@ -1,9 +1,9 @@
 import 'dart:convert';
+
 import 'package:args/command_runner.dart';
 import 'package:file/file.dart' as fs;
 import 'package:path/path.dart' as p;
 import 'package:routed/console.dart';
-
 import 'package:routed/src/console/args/base_command.dart';
 import 'package:routed/src/console/engine/introspector.dart';
 
@@ -24,7 +24,11 @@ class SpecGenerateCommand extends BaseCommand {
         help:
             'Target path for the generated manifest (relative to project root).',
         valueHelp: 'file',
-        defaultsTo: p.join('.dart_tool', 'routed', 'route_manifest.json'),
+        defaultsTo: this.fileSystem.path.join(
+          '.dart_tool',
+          'routed',
+          'route_manifest.json',
+        ),
       )
       ..addFlag(
         'pretty',
@@ -74,7 +78,7 @@ class SpecGenerateCommand extends BaseCommand {
 
       final outputArg = results?['output'] as String?;
       final outputPath = outputArg == null || outputArg.isEmpty
-          ? p.join('.dart_tool', 'routed', 'route_manifest.json')
+          ? fileSystem.path.join('.dart_tool', 'routed', 'route_manifest.json')
           : outputArg;
       final manifestFile = fileSystem.file(
         joinPath([projectRoot.path, outputPath]),

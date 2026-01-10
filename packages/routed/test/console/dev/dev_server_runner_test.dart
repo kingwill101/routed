@@ -218,11 +218,12 @@ void main() {
       final runner = DevServerRunner(
         logger: logger,
         port: '4242',
-        address: null,
+        address: io.InternetAddress.loopbackIPv4,
         dartVmServicePort: '8181',
         workingDirectory: tempDir,
         scriptPath: scriptFile.path,
-        hotReloadExpected: true,
+        hotReloadExpected: false,
+        isWindows: false,
         directoryWatcher: (_) => watcher,
         startProcess: startProcess,
         runProcess: (executable, arguments, {String? workingDirectory}) async =>
@@ -273,6 +274,7 @@ void main() {
         workingDirectory: tempDir,
         scriptPath: scriptFile.path,
         hotReloadExpected: false,
+        isWindows: false,
         directoryWatcher: (_) => watcher,
         startProcess: startProcess,
         runProcess: (executable, arguments, {String? workingDirectory}) async =>

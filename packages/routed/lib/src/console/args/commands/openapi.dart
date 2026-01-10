@@ -6,9 +6,9 @@ import 'package:path/path.dart' as p;
 import 'package:routed/console.dart' show CliLogger;
 import 'package:routed/routed.dart' as routed;
 import 'package:routed/src/console/args/base_command.dart';
+import 'package:routed/src/console/args/commands/openapi_make.dart';
 import 'package:routed/src/console/engine/introspector.dart';
 import 'package:routed/src/console/engine/schema_enricher.dart';
-import 'package:routed/src/console/args/commands/openapi_make.dart';
 
 class OpenApiCommand extends Command<void> {
   OpenApiCommand({
@@ -53,7 +53,11 @@ class OpenApiGenerateCommand extends BaseCommand {
       ..addOption(
         'output',
         help: 'Target path for the generated OpenAPI document.',
-        defaultsTo: p.join('.dart_tool', 'routed', 'openapi.json'),
+        defaultsTo: this.fileSystem.path.join(
+          '.dart_tool',
+          'routed',
+          'openapi.json',
+        ),
         valueHelp: 'file',
       )
       ..addOption(
@@ -182,7 +186,7 @@ class OpenApiGenerateCommand extends BaseCommand {
 
       final outputArg =
           results?['output'] as String? ??
-          p.join('.dart_tool', 'routed', 'openapi.json');
+          fileSystem.path.join('.dart_tool', 'routed', 'openapi.json');
       final outputFile = fileSystem.file(
         joinPath([projectRoot.path, outputArg]),
       );

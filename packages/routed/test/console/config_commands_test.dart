@@ -3,7 +3,6 @@ import 'dart:convert';
 import 'package:args/command_runner.dart';
 import 'package:file/file.dart' as fs;
 import 'package:file/memory.dart';
-import 'package:path/path.dart' as p;
 import 'package:routed/src/console/args/commands/config.dart';
 import 'package:routed/src/console/args/runner.dart';
 import 'package:test/test.dart';
@@ -120,7 +119,7 @@ void main() {
       await _writeFile(
         memoryFs,
         pkgRoot,
-        p.join('config', 'stubs', 'mail.yaml'),
+        memoryFs.path.join('config', 'stubs', 'mail.yaml'),
         'driver: smtp\n',
       );
 
@@ -196,7 +195,7 @@ Future<void> _writeFile(
   String relativePath,
   String contents,
 ) async {
-  final file = fs.file(p.join(root.path, relativePath));
+  final file = fs.file(fs.path.join(root.path, relativePath));
   await file.parent.create(recursive: true);
   await file.writeAsString(contents);
 }
@@ -206,7 +205,9 @@ Future<void> _writePackageConfig(
   fs.Directory root, {
   required List<Map<String, dynamic>> packages,
 }) async {
-  final file = fs.file(p.join(root.path, '.dart_tool', 'package_config.json'));
+  final file = fs.file(
+    fs.path.join(root.path, '.dart_tool', 'package_config.json'),
+  );
   await file.parent.create(recursive: true);
   final data = <String, dynamic>{'configVersion': 2, 'packages': packages};
   await file.writeAsString(const JsonEncoder.withIndent('  ').convert(data));

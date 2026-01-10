@@ -27,10 +27,15 @@ class SchemaEnricher {
     );
     final entryDir = p.dirname(absoluteEntry);
 
-    final collection = AnalysisContextCollection(
-      includedPaths: [projectRoot, entryDir],
-      resourceProvider: PhysicalResourceProvider.INSTANCE,
-    );
+    late final AnalysisContextCollection collection;
+    try {
+      collection = AnalysisContextCollection(
+        includedPaths: [projectRoot, entryDir],
+        resourceProvider: PhysicalResourceProvider.INSTANCE,
+      );
+    } catch (_) {
+      return manifest;
+    }
 
     // Build a map of (METHOD, PATH) -> handler schemas
     final handlerSchemas = <String, Map<String, Object?>>{};

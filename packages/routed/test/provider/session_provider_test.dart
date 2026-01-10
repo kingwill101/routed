@@ -5,6 +5,7 @@ import 'package:routed/providers.dart';
 import 'package:routed/routed.dart';
 import 'package:routed/session.dart';
 import 'package:test/test.dart';
+
 import '../test_engine.dart';
 
 void main() {
@@ -73,7 +74,11 @@ void main() {
       final config = await engine.make<SessionConfig>();
       expect(config.store, isA<FilesystemStore>());
       final store = config.store as FilesystemStore;
-      expect(store.storageDir, equals(temp.path));
+      final pathContext = store.fileSystem.path;
+      expect(
+        pathContext.normalize(store.storageDir),
+        equals(pathContext.normalize(temp.path)),
+      );
       expect(store.lottery, equals([1, 2]));
       expect(config.defaultOptions.path, equals('/app'));
       expect(config.defaultOptions.secure, isTrue);

@@ -58,9 +58,12 @@ void main() {
       final store = sessionConfig.store;
 
       expect(store, isA<FilesystemStore>());
+      final pathContext = fs.path;
       expect(
-        (store as FilesystemStore).storageDir,
-        equals(storageDefaults.frameworkPath('sessions')),
+        pathContext.normalize((store as FilesystemStore).storageDir),
+        equals(
+          pathContext.normalize(storageDefaults.frameworkPath('sessions')),
+        ),
       );
     });
 
@@ -102,9 +105,14 @@ void main() {
       final store = sessionConfig.store;
 
       expect(store, isA<FilesystemStore>());
+      final pathContext = fs.path;
       expect(
-        (store as FilesystemStore).storageDir,
-        equals(resolveFrameworkStoragePath(config, child: 'sessions')),
+        pathContext.normalize((store as FilesystemStore).storageDir),
+        equals(
+          pathContext.normalize(
+            resolveFrameworkStoragePath(config, child: 'sessions'),
+          ),
+        ),
       );
     });
 
@@ -147,9 +155,12 @@ void main() {
       final store = sessionConfig.store;
 
       expect(store, isA<FilesystemStore>());
+      final pathContext = fs.path;
       expect(
-        (store as FilesystemStore).storageDir,
-        equals(storageDefaults.resolve('sessions/custom')),
+        pathContext.normalize((store as FilesystemStore).storageDir),
+        equals(
+          pathContext.normalize(storageDefaults.resolve('sessions/custom')),
+        ),
       );
     });
   });

@@ -1,10 +1,10 @@
 import 'package:file/file.dart' as storage_file;
 import 'package:file/memory.dart';
-import 'package:path/path.dart' as p;
 import 'package:routed/providers.dart';
 import 'package:routed/routed.dart';
 import 'package:routed/src/storage/local_storage_driver.dart';
 import 'package:test/test.dart';
+
 import '../test_engine.dart';
 
 void main() {
@@ -27,11 +27,15 @@ void main() {
       final storage = await engine.make<StorageManager>();
       expect(storage.defaultDisk, equals('assets'));
 
+      final pathContext = storage.disk().fileSystem.path;
       final resolved = storage.resolve('logo.png');
-      expect(resolved, endsWith(p.normalize('public/assets/logo.png')));
+      expect(
+        resolved,
+        endsWith(pathContext.join('public', 'assets', 'logo.png')),
+      );
       expect(
         storage.resolve('cache/data.json', disk: 'local'),
-        endsWith(p.normalize('storage/app/cache/data.json')),
+        endsWith(pathContext.join('storage', 'app', 'cache', 'data.json')),
       );
     });
 
@@ -50,10 +54,11 @@ void main() {
       await engine.initialize();
 
       final storage = await engine.make<StorageManager>();
+      final pathContext = storage.disk().fileSystem.path;
       expect(storage.defaultDisk, equals('local'));
       expect(
         storage.resolve('hello.txt'),
-        endsWith(p.normalize('var/data/hello.txt')),
+        endsWith(pathContext.join('var', 'data', 'hello.txt')),
       );
     });
 
@@ -63,10 +68,11 @@ void main() {
       await engine.initialize();
 
       final storage = await engine.make<StorageManager>();
+      final pathContext = storage.disk().fileSystem.path;
       expect(storage.defaultDisk, equals('local'));
       expect(
         storage.resolve('foo.txt'),
-        endsWith(p.normalize('storage/app/foo.txt')),
+        endsWith(pathContext.join('storage', 'app', 'foo.txt')),
       );
     });
 
@@ -98,9 +104,10 @@ void main() {
       await engine.initialize();
 
       final storage = await engine.make<StorageManager>();
+      final pathContext = storage.disk().fileSystem.path;
       expect(
         storage.resolve('item.txt'),
-        endsWith(p.normalize('custom/storage/item.txt')),
+        endsWith(pathContext.join('custom', 'storage', 'item.txt')),
       );
     });
 
@@ -193,9 +200,10 @@ void main() {
       await engine.initialize();
 
       final storage = await engine.make<StorageManager>();
+      final pathContext = storage.disk().fileSystem.path;
       expect(
         storage.resolve('foo.txt'),
-        endsWith(p.normalize('override/local/foo.txt')),
+        endsWith(pathContext.join('override', 'local', 'foo.txt')),
       );
     });
 
