@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'dart:io';
 
 import 'package:jose/jose.dart';
 import 'package:routed/routed.dart';
@@ -120,6 +121,11 @@ void main() {
 
       final res = await client.get('/secure');
       expect(res.statusCode, equals(401));
+      expect(
+        res.header(HttpHeaders.wwwAuthenticateHeader).first,
+        contains('invalid_token'),
+      );
+      expect(res.body, contains('Unauthorized'));
     });
 
     test('rejects tokens with unexpected prefix', () async {

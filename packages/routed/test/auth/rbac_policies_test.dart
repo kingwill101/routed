@@ -58,12 +58,35 @@ void main() {
       final abilityAny = RbacAbility.any(['admin', 'editor']);
       final abilityAll = RbacAbility.all(['admin', 'editor']);
       final abilityGuest = RbacAbility.role('guest', allowGuest: true);
+      final abilityStrict = RbacAbility.role('member');
 
       expect(abilityAny.evaluate(_principal('1', ['editor'])), isTrue);
       expect(abilityAny.evaluate(_principal('1', ['viewer'])), isFalse);
       expect(abilityAll.evaluate(_principal('1', ['admin', 'editor'])), isTrue);
       expect(abilityAll.evaluate(_principal('1', ['admin'])), isFalse);
       expect(abilityGuest.evaluate(null), isTrue);
+      expect(abilityStrict.evaluate(null), isFalse);
+    });
+
+    test('registerRbacWithHaigate applies abilities', () async {
+      final abilities = registerRbacWithHaigate({
+        'rbac.haigate': RbacAbility.role('admin'),
+      });
+      addTearDown(() {
+        for (final ability in abilities) {
+          Haigate.unregister(ability);
+        }
+      });
+
+      final allowed = await _withContext((ctx) async {
+        return Haigate.can(
+          'rbac.haigate',
+          ctx: ctx,
+          principal: _principal('1', ['admin']),
+        );
+      });
+
+      expect(allowed, isTrue);
     });
 
     test('does not override existing gates', () async {

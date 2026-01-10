@@ -36,6 +36,27 @@ void main() {
     expect(token.accessToken, equals('abc'));
   });
 
+  test('OAuth2Client uses basic auth when enabled', () async {
+    final client = MockClient((request) async {
+      final header = request.headers[HttpHeaders.authorizationHeader];
+      final expected = base64Encode(utf8.encode('id:secret'));
+      expect(header, equals('Basic $expected'));
+      final parsed = Uri.splitQueryString(request.body);
+      expect(parsed['client_id'], equals('id'));
+      return http.Response(jsonEncode({'access_token': 'abc'}), 200);
+    });
+
+    final oauth = OAuth2Client(
+      tokenEndpoint: Uri.parse('https://auth.test/token'),
+      clientId: 'id',
+      clientSecret: 'secret',
+      httpClient: client,
+    );
+
+    final token = await oauth.clientCredentials();
+    expect(token.accessToken, equals('abc'));
+  });
+
   test('OAuth2Client includes credentials when basic auth disabled', () async {
     final client = MockClient((request) async {
       final body = request.body;
@@ -58,6 +79,25 @@ void main() {
       redirectUri: Uri.parse('https://app/callback'),
     );
 
+    expect(token.accessToken, equals('abc'));
+  });
+
+  test('OAuth2Client skips auth header without secret', () async {
+    final client = MockClient((request) async {
+      expect(request.headers[HttpHeaders.authorizationHeader], isNull);
+      final parsed = Uri.splitQueryString(request.body);
+      expect(parsed['client_id'], equals('id'));
+      expect(parsed.containsKey('client_secret'), isFalse);
+      return http.Response(jsonEncode({'access_token': 'abc'}), 200);
+    });
+
+    final oauth = OAuth2Client(
+      tokenEndpoint: Uri.parse('https://auth.test/token'),
+      clientId: 'id',
+      httpClient: client,
+    );
+
+    final token = await oauth.clientCredentials();
     expect(token.accessToken, equals('abc'));
   });
 
@@ -225,6 +265,11 @@ void main() {
     final token = OAuthTokenResponse.fromJson({});
     expect(token.accessToken, equals(''));
     expect(token.tokenType, equals('Bearer'));
+    expect(token.expiresIn, isNull);
+  });
+
+  test('OAuthTokenResponse ignores non-numeric expiry', () {
+    final token = OAuthTokenResponse.fromJson({'expires_in': 'soon'});
     expect(token.expiresIn, isNull);
   });
 

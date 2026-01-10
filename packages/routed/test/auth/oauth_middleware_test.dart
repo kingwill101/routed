@@ -474,6 +474,46 @@ void main() {
       expect(res.statusCode, equals(401));
     });
 
+    test('rejects tokens not yet valid', () async {
+      final nowSeconds = DateTime.now().toUtc().millisecondsSinceEpoch ~/ 1000;
+      final middleware = oauth2Introspection(
+        OAuthIntrospectionOptions(
+          endpoint: Uri.parse('https://auth.test/introspect'),
+          clockSkew: Duration.zero,
+        ),
+        httpClient: MockClient((request) async {
+          return http.Response(
+            json.encode({
+              'active': true,
+              'sub': 'user-2',
+              'nbf': nowSeconds + 120,
+            }),
+            200,
+          );
+        }),
+      );
+
+      final engine = testEngine()
+        ..addGlobalMiddleware(middleware)
+        ..get('/secure', (ctx) => ctx.string('ok'));
+
+      await engine.initialize();
+
+      final client = TestClient(
+        RoutedRequestHandler(engine),
+        mode: TransportMode.ephemeralServer,
+      );
+      addTearDown(() async => await client.close());
+
+      final res = await client.get(
+        '/secure',
+        headers: {
+          'Authorization': ['Bearer future'],
+        },
+      );
+      expect(res.statusCode, equals(401));
+    });
+
     test('rejects tokens outside clock skew tolerance', () async {
       final nowSeconds = DateTime.now().toUtc().millisecondsSinceEpoch ~/ 1000;
       final middleware = oauth2Introspection(
