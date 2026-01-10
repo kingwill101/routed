@@ -693,8 +693,15 @@ Future<fs.Directory?> _resolvePackageRoot(
     if (entry['name'] != packageName) continue;
     final rootUri = entry['rootUri'];
     if (rootUri is! String) continue;
-    final resolved = packageConfig.parent.uri.resolve(rootUri);
-    final path = fsInstance.path.fromUri(resolved);
+    final uri = Uri.parse(rootUri);
+    String path;
+    if (uri.hasScheme) {
+      path = fsInstance.path.fromUri(uri);
+    } else {
+      path = fsInstance.path.normalize(
+        fsInstance.path.join(packageConfig.parent.path, rootUri),
+      );
+    }
     return fsInstance.directory(path);
   }
   return null;
