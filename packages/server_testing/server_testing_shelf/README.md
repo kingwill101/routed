@@ -23,7 +23,7 @@ drive Shelf apps with the fluent assertions from `server_testing`.
 
 ```yaml
 dev_dependencies:
-  server_testing: ^0.2.0
+  server_testing: ^0.3.0
   server_testing_shelf: ^0.2.1
   test: ^1.26.0
 ```

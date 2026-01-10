@@ -1,8 +1,20 @@
 import 'package:routed/src/validation/rule.dart';
 import 'package:routed/src/validation/rules/array.dart';
 import 'package:routed/src/validation/rules/rules.dart';
+import 'package:routed/src/container/container.dart';
+import 'package:routed/src/support/named_registry.dart';
 
 typedef ValidationRuleFactory = ValidationRule Function();
+
+ValidationRuleRegistry requireValidationRegistry(Container container) {
+  if (!container.has<ValidationRuleRegistry>()) {
+    throw StateError(
+      'ValidationRuleRegistry is not registered. '
+      'Register RoutingServiceProvider to use validation features.',
+    );
+  }
+  return container.get<ValidationRuleRegistry>();
+}
 
 final List<ValidationRuleFactory> _defaultRuleFactories = [
   () => NullableRule(),
@@ -76,9 +88,39 @@ final List<ValidationRuleFactory> _defaultRuleFactories = [
   () => FileExtensionsRule(),
 ];
 
-final Map<String, ValidationRuleFactory> kKnownRuleFactories = {
-  for (final factory in _defaultRuleFactories) factory().name: factory,
-};
+class ValidationRuleRegistry extends NamedRegistry<ValidationRuleFactory> {
+  ValidationRuleRegistry();
+
+  ValidationRuleRegistry.defaults() {
+    _registerDefaults();
+  }
+
+  ValidationRuleRegistry.clone(ValidationRuleRegistry source) {
+    for (final name in source.entryNames) {
+      final factory = source.getEntry(name);
+      if (factory != null) {
+        registerEntry(name, factory);
+      }
+    }
+  }
+
+  void register(ValidationRuleFactory factory) {
+    final rule = factory();
+    registerEntry(rule.name, factory);
+  }
+
+  ValidationRuleFactory? resolve(String name) => getEntry(name);
+
+  bool contains(String name) => containsEntry(name);
+
+  Iterable<String> get names => entryNames;
+
+  void _registerDefaults() {
+    for (final factory in _defaultRuleFactories) {
+      register(factory);
+    }
+  }
+}
 
 /// A type definition for a validation rule with optional parameters.
 typedef RuleWithOptions = ({ValidationRule rule, List<String>? options});
@@ -89,8 +131,13 @@ typedef RuleWithOptions = ({ValidationRule rule, List<String>? options});
 /// Each rule string can contain multiple rules separated by '|', and each rule
 /// can have options separated by ':'.
 ///
+/// Uses [registry] to resolve rule factories by name.
+///
 /// Returns a map where each field name is associated with a list of [RuleWithOptions].
-Map<String, List<RuleWithOptions>> parseRules(Map<String, String> rules) {
+Map<String, List<RuleWithOptions>> parseRules(
+  Map<String, String> rules,
+  ValidationRuleRegistry registry,
+) {
   final parsedRules = <String, List<RuleWithOptions>>{};
 
   rules.forEach((field, ruleString) {
@@ -104,7 +151,7 @@ Map<String, List<RuleWithOptions>> parseRules(Map<String, String> rules) {
           ? ruleAndOptions[1].split(',')
           : null;
 
-      final factory = kKnownRuleFactories[ruleName];
+      final factory = registry.resolve(ruleName);
       if (factory != null) {
         fieldRules.add((rule: factory(), options: options));
       } else {
@@ -121,6 +168,7 @@ Map<String, List<RuleWithOptions>> parseRules(Map<String, String> rules) {
 /// A class responsible for validating data against a set of rules.
 class Validator {
   final Map<String, List<RuleWithOptions>> _rules;
+  final ValidationRuleRegistry registry;
 
   /// Indicates if the validator should stop on the first rule failure.
   final bool bail;
@@ -128,23 +176,12 @@ class Validator {
   final Map<String, String>? _messages;
 
   /// Constructs a [Validator] with a map of parsed rules.
-  Validator(this._rules, {this.bail = false, Map<String, String>? messages})
-    : _messages = messages;
-
-  /// Registers a new validation rule to the global validation system
-  ///
-  /// This static method adds or updates custom validation rules in
-  /// [kKnownRuleFactories].
-  /// When registering a rule with a name that already exists, the new rule replaces the old one.
-  ///
-  /// Example:
-  ///
-  /// Validator.registerRule(() => CustomPhoneRule());
-  ///
-  static void registerRule(ValidationRuleFactory factory) {
-    final rule = factory();
-    kKnownRuleFactories[rule.name] = factory;
-  }
+  Validator(
+    this._rules, {
+    required this.registry,
+    this.bail = false,
+    Map<String, String>? messages,
+  }) : _messages = messages;
 
   /// Factory method to create a [Validator] from a map of string rules.
   ///
@@ -152,11 +189,17 @@ class Validator {
   /// This method parses the rules and constructs a [Validator] instance.
   static Validator make(
     Map<String, String> rules, {
+    required ValidationRuleRegistry registry,
     bool bail = false,
     Map<String, String>? messages,
   }) {
-    final parsedRules = parseRules(rules);
-    return Validator(parsedRules, bail: bail, messages: messages);
+    final parsedRules = parseRules(rules, registry);
+    return Validator(
+      parsedRules,
+      registry: registry,
+      bail: bail,
+      messages: messages,
+    );
   }
 
   /// Validates the input [data] against the validation rules.

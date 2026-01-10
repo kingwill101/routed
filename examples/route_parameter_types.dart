@@ -77,7 +77,8 @@ void main() async {
   });
 
   // Custom type pattern example
-  registerCustomType('phone', r'\d{3}-\d{3}-\d{4}');
+  final patterns = engine.container.get<RoutePatternRegistry>();
+  patterns.registerType('phone', r'\d{3}-\d{3}-\d{4}');
   engine.get('/contact/{phone:phone}', (ctx) {
     final phone = ctx.param('phone');
     return ctx.json({
@@ -88,7 +89,7 @@ void main() async {
   });
 
   // Global parameter pattern example
-  registerParamPattern('code', r'[A-Z]{2}\d{4}');
+  patterns.registerParamPattern('code', r'[A-Z]{2}\d{4}');
   engine.get('/products/{code}', (ctx) {
     final code = ctx.param('code');
     return ctx.json({

@@ -3,6 +3,7 @@
 import 'package:routed/routed.dart';
 import 'package:routed_testing/routed_testing.dart';
 import 'package:server_testing/server_testing.dart';
+import 'test_engine.dart';
 
 void main() {
   group('Engine Default Router Tests', () {
@@ -10,7 +11,7 @@ void main() {
     late Engine engine;
 
     setUp(() {
-      engine = Engine();
+      engine = testEngine();
       client = TestClient.inMemory(RoutedRequestHandler(engine));
     });
 

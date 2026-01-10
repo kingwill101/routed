@@ -1,5 +1,6 @@
 import 'dart:async';
-import 'dart:io' show Platform, File, Process;
+import 'dart:convert';
+import 'dart:io' show Directory, File, Platform, Process;
 
 import 'package:path/path.dart' as path;
 import 'package:server_testing/server_testing.dart';
@@ -13,6 +14,8 @@ import 'package:webdriver/sync_io.dart' as wdsync;
 class ChromiumType implements BrowserType {
   // Assume Registry is accessible via TestBootstrap singleton
   // DriverManager is accessed statically
+  static final Map<String, _ChromeVersionCache> _versionCache = {};
+  static const Duration _versionCacheTtl = Duration(minutes: 10);
 
   @override
   String get name => 'chromium'; // Use the internal registry name
@@ -30,28 +33,52 @@ class ChromiumType implements BrowserType {
     BrowserLaunchOptions options, {
     bool useAsync = true,
   }) async {
+    final stopwatch = Stopwatch()..start();
+    void logStep(String message) {
+      final elapsed = stopwatch.elapsed;
+      print('[ChromiumType][+${elapsed.inMilliseconds}ms] $message');
+    }
+
     // 1. Determine the target executable name (handle channel override)
     final executableName = options.channel ?? name;
+    logStep(
+      'Launch requested (executable=$executableName, useAsync=$useAsync, headless=${options.headless ?? TestBootstrap.currentConfig.headless}).',
+    );
 
     // 1b. Ensure the correct Chromium binary (potentially a specific channel) is installed.
     //     Pass the force flag from the *current* effective configuration.
+    logStep('Ensuring browser is installed...');
     await TestBootstrap.ensureBrowserInstalled(
       executableName,
       force: TestBootstrap.currentConfig.forceReinstall,
     );
+    logStep('Browser installation check complete.');
+
+    logStep('Resolving executable path...');
+    final chromeBin = await _executablePathFor(executableName);
+    logStep('Executable path resolved: $chromeBin');
+
+    logStep('Detecting Chromium major version...');
+    final detectedMajor = await _detectChromeMajor(chromeBin);
+    logStep('Detected Chromium major version: $detectedMajor');
 
     // 2. Ensure ChromeDriver server is running
     //    ChromeDriver itself usually corresponds to the base 'chrome' name.
 
     // Resolve driver hint from options/env
-    final driverMajor = options.extraCapabilities?['driver:major'] as int?;
+    final driverMajor =
+        (options.extraCapabilities?['driver:major'] as int?) ?? detectedMajor;
     final driverExact = options.extraCapabilities?['driver:version'] as String?;
+    logStep(
+      'Ensuring ChromeDriver (driverMajor=$driverMajor, driverExact=$driverExact)...',
+    );
     final port = await bootstrap_driver.DriverManager.ensureDriver(
       _webDriverBrowserName,
       force: TestBootstrap.currentConfig.forceReinstall,
       driverMajor: driverMajor,
       driverExact: driverExact,
     );
+    logStep('ChromeDriver ready on port $port');
 
     // 3. Determine final launch parameters from effective configuration
     final config =
@@ -61,7 +88,7 @@ class ChromiumType implements BrowserType {
         options.baseUrl ?? config.baseUrl; // Prioritize launch option override
 
     // Ensure browser binary and crashpad handler are executable (Linux)
-    final chromeBin = await _executablePathFor(executableName);
+    final userDataDir = await _resolveUserDataDir(options);
     try {
       if (Platform.isLinux) {
         await Process.run('chmod', ['+x', chromeBin]);
@@ -93,10 +120,10 @@ class ChromiumType implements BrowserType {
         if (options.args != null) {
           args.addAll(options.args!);
         }
-        // Do not force a user-data-dir; let ChromeDriver decide. Respect explicit user value only.
-        if (options.userDataDir != null &&
-            !args.any((a) => a.startsWith('--user-data-dir'))) {
-          args.add('--user-data-dir=${options.userDataDir}');
+        final hasUserDataArg = _hasUserDataDirArg(args);
+        // Ensure per-launch profile isolation unless the caller specified one.
+        if (!hasUserDataArg && userDataDir != null) {
+          args.add('--user-data-dir=$userDataDir');
         }
         return args;
       })(),
@@ -149,11 +176,12 @@ class ChromiumType implements BrowserType {
     // capabilities.remove('goog:chromeOptions');
 
     // 6. Determine Driver URL
-    final driverUri = Uri.parse('http://localhost:$port');
+    final driverUri = Uri.parse('http://127.0.0.1:$port');
 
     // 7. Create WebDriver instance (async or sync)
     Object webDriver; // Use Object to hold either type
     try {
+      logStep('Creating WebDriver session...');
       if (useAsync) {
         webDriver = await wdasync.createDriver(
           uri: driverUri,
@@ -167,6 +195,7 @@ class ChromiumType implements BrowserType {
           // TODO: Incorporate options.timeout (launchTimeout) for connection?
         );
       }
+      logStep('WebDriver session created.');
     } catch (e, s) {
       print("Capabilities sent: $capabilities");
       throw BrowserException(
@@ -209,4 +238,74 @@ class ChromiumType implements BrowserType {
   Future<String> _executablePathFor(String executableName) async {
     return TestBootstrap.resolveExecutablePath(executableName);
   }
+
+  static bool _hasUserDataDirArg(List<String> args) {
+    return args.any(
+      (arg) => arg == '--user-data-dir' || arg.startsWith('--user-data-dir='),
+    );
+  }
+
+  static Future<int?> _detectChromeMajor(String chromeBin) async {
+    const timeout = Duration(seconds: 5);
+    final cached = _versionCache[chromeBin];
+    if (cached != null &&
+        DateTime.now().difference(cached.timestamp) < _versionCacheTtl) {
+      return cached.major;
+    }
+    Process? process;
+    try {
+      process = await Process.start(chromeBin, ['--version']);
+      final stdoutFuture = process.stdout.transform(utf8.decoder).join();
+      final stderrFuture = process.stderr.transform(utf8.decoder).join();
+      final exitCode = await process.exitCode.timeout(timeout);
+      if (exitCode != 0) {
+        _versionCache[chromeBin] = _ChromeVersionCache(null);
+        return null;
+      }
+      final output = await stdoutFuture;
+      await stderrFuture;
+      final match = RegExp(r'(\d+)\.').firstMatch(output);
+      if (match == null) {
+        _versionCache[chromeBin] = _ChromeVersionCache(null);
+        return null;
+      }
+      final major = int.tryParse(match.group(1) ?? '');
+      _versionCache[chromeBin] = _ChromeVersionCache(major);
+      return major;
+    } on TimeoutException {
+      process?.kill();
+      print(
+        '[ChromiumType] Timed out probing Chromium version; skipping version detection.',
+      );
+      _versionCache[chromeBin] = _ChromeVersionCache(null);
+      return null;
+    } catch (_) {
+      process?.kill();
+      _versionCache[chromeBin] = _ChromeVersionCache(null);
+      return null;
+    }
+  }
+
+  static Future<String?> _resolveUserDataDir(
+    BrowserLaunchOptions options,
+  ) async {
+    if (options.userDataDir != null && options.userDataDir!.isNotEmpty) {
+      return options.userDataDir;
+    }
+
+    final args = options.args ?? const <String>[];
+    if (_hasUserDataDirArg(args)) {
+      return null;
+    }
+
+    final dir = await Directory.systemTemp.createTemp('st_chrome_profile_');
+    return dir.path;
+  }
+}
+
+class _ChromeVersionCache {
+  _ChromeVersionCache(this.major) : timestamp = DateTime.now();
+
+  final int? major;
+  final DateTime timestamp;
 }

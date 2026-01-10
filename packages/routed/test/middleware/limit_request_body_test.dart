@@ -3,6 +3,7 @@ import 'package:routed/middlewares.dart';
 import 'package:routed/routed.dart';
 import 'package:routed_testing/routed_testing.dart';
 import 'package:server_testing/server_testing.dart';
+import '../test_engine.dart';
 
 void main() {
   group('limitRequestBody middleware', () {
@@ -15,7 +16,7 @@ void main() {
         });
 
         test('rejects payloads larger than configured limit', () async {
-          final engine = Engine()
+          final engine = testEngine()
             ..post(
               '/upload',
               (ctx) => ctx.string('ok'),
@@ -35,7 +36,7 @@ void main() {
         });
 
         test('allows payloads within the limit', () async {
-          final engine = Engine()
+          final engine = testEngine()
             ..post(
               '/upload',
               (ctx) => ctx.string('ok'),
@@ -57,7 +58,7 @@ void main() {
         });
 
         test('allows payloads exactly at the limit', () async {
-          final engine = Engine()
+          final engine = testEngine()
             ..post(
               '/exact',
               (ctx) => ctx.string('ok'),
@@ -79,7 +80,7 @@ void main() {
         });
 
         test('rejects when Content-Length exceeds limit', () async {
-          final engine = Engine()
+          final engine = testEngine()
             ..post(
               '/size-check',
               (ctx) => ctx.string('ok'),
@@ -99,7 +100,7 @@ void main() {
         });
 
         test('handles zero-byte payloads', () async {
-          final engine = Engine()
+          final engine = testEngine()
             ..post(
               '/empty',
               (ctx) => ctx.string('empty ok'),
@@ -121,7 +122,7 @@ void main() {
         });
 
         test('works with very small limits', () async {
-          final engine = Engine()
+          final engine = testEngine()
             ..post(
               '/tiny',
               (ctx) => ctx.string('ok'),
@@ -156,7 +157,7 @@ void main() {
         });
 
         test('works with large limits', () async {
-          final engine = Engine()
+          final engine = testEngine()
             ..post(
               '/large',
               (ctx) => ctx.string('ok'),
@@ -178,7 +179,7 @@ void main() {
         });
 
         test('different routes can have different limits', () async {
-          final engine = Engine()
+          final engine = testEngine()
             ..post(
               '/small-limit',
               (ctx) => ctx.string('small ok'),
@@ -219,7 +220,7 @@ void main() {
         });
 
         test('applies to PUT requests', () async {
-          final engine = Engine()
+          final engine = testEngine()
             ..put(
               '/update',
               (ctx) => ctx.string('updated'),
@@ -252,7 +253,7 @@ void main() {
         });
 
         test('applies to PATCH requests', () async {
-          final engine = Engine()
+          final engine = testEngine()
             ..patch(
               '/partial',
               (ctx) => ctx.string('patched'),
@@ -285,7 +286,7 @@ void main() {
         });
 
         test('handles JSON payloads', () async {
-          final engine = Engine()
+          final engine = testEngine()
             ..post(
               '/json',
               (ctx) => ctx.json({'received': true}),
@@ -329,7 +330,7 @@ void main() {
             return next();
           }
 
-          final engine = Engine()
+          final engine = testEngine()
             ..post(
               '/chained',
               (ctx) => ctx.string('ok'),
@@ -355,7 +356,7 @@ void main() {
         test('short-circuits middleware chain when limit exceeded', () async {
           var handlerExecuted = false;
 
-          final engine = Engine()
+          final engine = testEngine()
             ..post('/short-circuit', (ctx) {
               handlerExecuted = true;
               return ctx.string('ok');
@@ -376,7 +377,7 @@ void main() {
         });
 
         test('does not affect GET requests', () async {
-          final engine = Engine()
+          final engine = testEngine()
             ..get(
               '/get-test',
               (ctx) => ctx.string('ok'),
@@ -391,7 +392,7 @@ void main() {
         });
 
         test('handles requests without Content-Length header', () async {
-          final engine = Engine()
+          final engine = testEngine()
             ..post(
               '/no-length',
               (ctx) => ctx.string('ok'),
@@ -411,7 +412,7 @@ void main() {
         });
 
         test('sequential requests maintain independent limits', () async {
-          final engine = Engine()
+          final engine = testEngine()
             ..post(
               '/sequential',
               (ctx) => ctx.string('ok'),
@@ -469,7 +470,7 @@ void main() {
           final runner = PropertyTestRunner<({int limit, int size})>(
             generator,
             (sample) async {
-              final engine = Engine()
+              final engine = testEngine()
                 ..post(
                   '/prop',
                   (ctx) => ctx.string('ok'),
@@ -509,7 +510,7 @@ void main() {
         });
 
         test('limit of zero rejects all non-empty payloads', () async {
-          final engine = Engine()
+          final engine = testEngine()
             ..post(
               '/zero-limit',
               (ctx) => ctx.string('ok'),
@@ -530,7 +531,7 @@ void main() {
         });
 
         test('handles multipart form data within limit', () async {
-          final engine = Engine()
+          final engine = testEngine()
             ..post(
               '/multipart',
               (ctx) => ctx.string('uploaded'),

@@ -4,6 +4,7 @@ import 'package:routed/routed.dart';
 import 'package:routed/middlewares.dart';
 import 'package:routed_testing/routed_testing.dart';
 import 'package:server_testing/server_testing.dart';
+import '../test_engine.dart';
 
 void main() {
   group('recoveryMiddleware', () {
@@ -18,7 +19,7 @@ void main() {
         test(
           'respects custom handler response without overriding body',
           () async {
-            final engine = Engine()
+            final engine = testEngine()
               ..middlewares.add(
                 recoveryMiddleware(
                   handler: (ctx, error, stack) {
@@ -42,7 +43,7 @@ void main() {
         );
 
         test('catches and handles exceptions with default handler', () async {
-          final engine = Engine()
+          final engine = testEngine()
             ..middlewares.add(recoveryMiddleware())
             ..get('/error', (ctx) {
               throw Exception('Something went wrong');
@@ -54,7 +55,7 @@ void main() {
         });
 
         test('allows normal requests to proceed', () async {
-          final engine = Engine()
+          final engine = testEngine()
             ..middlewares.add(recoveryMiddleware())
             ..get('/ok', (ctx) => ctx.string('success'));
 
@@ -66,7 +67,7 @@ void main() {
         });
 
         test('catches errors from async handlers', () async {
-          final engine = Engine()
+          final engine = testEngine()
             ..middlewares.add(recoveryMiddleware())
             ..get('/async-error', (ctx) async {
               await Future<void>.delayed(const Duration(milliseconds: 10));
@@ -79,7 +80,7 @@ void main() {
         });
 
         test('custom handler can set specific status codes', () async {
-          final engine = Engine()
+          final engine = testEngine()
             ..middlewares.add(
               recoveryMiddleware(
                 handler: (ctx, error, stack) {
@@ -115,7 +116,7 @@ void main() {
         });
 
         test('custom handler can return JSON error responses', () async {
-          final engine = Engine()
+          final engine = testEngine()
             ..middlewares.add(
               recoveryMiddleware(
                 handler: (ctx, error, stack) {
@@ -146,7 +147,7 @@ void main() {
             return next();
           }
 
-          final engine = Engine()
+          final engine = testEngine()
             ..middlewares.addAll([recoveryMiddleware(), testMiddleware])
             ..get('/test', (ctx) => ctx.string('ok'));
 
@@ -164,7 +165,7 @@ void main() {
             throw StateError('Middleware error');
           }
 
-          final engine = Engine()
+          final engine = testEngine()
             ..middlewares.addAll([recoveryMiddleware(), errorMiddleware])
             ..get('/test', (ctx) => ctx.string('ok'));
 
@@ -174,7 +175,7 @@ void main() {
         });
 
         test('handles FormatException appropriately', () async {
-          final engine = Engine()
+          final engine = testEngine()
             ..middlewares.add(
               recoveryMiddleware(
                 handler: (ctx, error, stack) {
@@ -203,7 +204,7 @@ void main() {
         test('stack trace is available to custom handler', () async {
           StackTrace? capturedStack;
 
-          final engine = Engine()
+          final engine = testEngine()
             ..middlewares.add(
               recoveryMiddleware(
                 handler: (ctx, error, stack) {

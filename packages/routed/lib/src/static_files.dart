@@ -60,7 +60,7 @@ mixin StaticFileHandler {
       );
     }
 
-    final urlPattern = p.join(relativePath, '{*filepath}');
+    final urlPattern = p.posix.join(relativePath, '{*filepath}');
     final fileHandler = FileHandler.fromDir(dir);
 
     Future<Response> handler(EngineContext context) async {

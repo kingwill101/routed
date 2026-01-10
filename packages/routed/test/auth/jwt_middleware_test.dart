@@ -4,6 +4,7 @@ import 'package:jose/jose.dart';
 import 'package:routed/routed.dart';
 import 'package:routed_testing/routed_testing.dart';
 import 'package:server_testing/server_testing.dart';
+import '../test_engine.dart';
 
 typedef ConfigMap = Map<String, Object?>;
 
@@ -54,7 +55,7 @@ void main() {
         final now = DateTime.now();
         final token = _buildToken(_claims(now: now));
 
-        final engine = Engine();
+        final engine = testEngine();
         engine.addGlobalMiddleware(
           jwtAuthentication(
             JwtOptions(
@@ -101,7 +102,7 @@ void main() {
     );
 
     test('rejects missing tokens', () async {
-      final engine = Engine()
+      final engine = testEngine()
         ..addGlobalMiddleware(
           jwtAuthentication(
             JwtOptions(inlineKeys: [_testJwk], algorithms: const ['HS256']),
@@ -127,7 +128,7 @@ void main() {
         _claims(now: now, scope: 'write:orders'),
       );
 
-      final engine = Engine()
+      final engine = testEngine()
         ..addGlobalMiddleware(
           jwtAuthentication(
             JwtOptions(
@@ -170,7 +171,7 @@ void main() {
         _claims(now: now, expiresIn: const Duration(minutes: -2)),
       );
 
-      final engine = Engine()
+      final engine = testEngine()
         ..addGlobalMiddleware(
           jwtAuthentication(
             JwtOptions(
@@ -207,7 +208,7 @@ void main() {
         _claims(now: now, expiresIn: const Duration(seconds: -20)),
       );
 
-      final engine = Engine()
+      final engine = testEngine()
         ..addGlobalMiddleware(
           jwtAuthentication(
             JwtOptions(
@@ -244,7 +245,7 @@ void main() {
         _claims(now: now, notBeforeOffset: const Duration(seconds: 45)),
       );
 
-      final engine = Engine()
+      final engine = testEngine()
         ..addGlobalMiddleware(
           jwtAuthentication(
             JwtOptions(
@@ -278,7 +279,7 @@ void main() {
 
   group('AuthServiceProvider manifest', () {
     Engine buildEngine({required ConfigMap authConfig}) {
-      return Engine(
+      return testEngine(
         configItems: {
           'http': {
             'features': {

@@ -1,20 +1,27 @@
-import 'dart:io';
-
+import 'package:file/file.dart';
+import 'package:file/memory.dart';
 import 'package:routed/routed.dart';
 import 'package:routed_testing/routed_testing.dart';
 import 'package:server_testing/server_testing.dart';
+import '../test_engine.dart';
 
 void main() {
   group('Localization end-to-end', () {
+    late MemoryFileSystem fs;
     late Directory tempDir;
     late TestClient client;
 
     setUp(() async {
-      tempDir = Directory.systemTemp.createTempSync('routed_translation_test');
-      _writeTranslation(tempDir.path, 'en', 'greeting: "Hello"\n');
-      _writeTranslation(tempDir.path, 'fr', 'greeting: "Bonjour"\n');
+      fs = MemoryFileSystem();
+      tempDir = fs.systemTempDirectory.createTempSync(
+        'routed_translation_test',
+      );
+      _writeTranslation(fs, tempDir.path, 'en', 'greeting: "Hello"\n');
+      _writeTranslation(fs, tempDir.path, 'fr', 'greeting: "Bonjour"\n');
 
-      final engine = Engine(
+      final engine = testEngine(
+        config: EngineConfig(fileSystem: fs),
+        fileSystem: fs,
         configItems: {
           'app': {'locale': 'en', 'fallback_locale': 'en'},
           'translation': {
@@ -62,8 +69,13 @@ void main() {
   });
 }
 
-void _writeTranslation(String root, String locale, String content) {
-  final file = File('$root/$locale/messages.yaml');
+void _writeTranslation(
+  FileSystem fileSystem,
+  String root,
+  String locale,
+  String content,
+) {
+  final file = fileSystem.file('$root/$locale/messages.yaml');
   file
     ..createSync(recursive: true)
     ..writeAsStringSync(content);

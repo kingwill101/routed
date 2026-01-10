@@ -1,5 +1,6 @@
 import 'package:routed/routed.dart';
 import 'package:test/test.dart';
+import '../test_engine.dart';
 
 void main() {
   group('Provider configuration validation', () {
@@ -7,7 +8,7 @@ void main() {
       'surface descriptive error for static provider invalid mount',
       () async {
         await expectLater(
-          () => Engine(
+          () => testEngine(
             configItems: {
               'static': {
                 'enabled': true,
@@ -33,7 +34,7 @@ void main() {
 
     test('surface descriptive error for logging request headers', () async {
       await expectLater(
-        () => Engine(
+        () => testEngine(
           configItems: {
             'logging': {
               'request_headers': ['X-Valid', 123],
@@ -52,7 +53,7 @@ void main() {
 
     test('surface descriptive error for cors allowed origins', () async {
       await expectLater(
-        () => Engine(
+        () => testEngine(
           configItems: {
             'cors': {
               'allowed_origins': ['https://ok', 123],
@@ -71,7 +72,7 @@ void main() {
 
     test('surface descriptive error for cors enabled flag', () async {
       await expectLater(
-        () => Engine(
+        () => testEngine(
           configItems: {
             'cors': {'enabled': 'maybe'},
           },
@@ -86,9 +87,36 @@ void main() {
       );
     });
 
+    test('surface descriptive error for rate limit policies', () async {
+      await expectLater(
+        () async {
+          final engine = testEngine(
+            configItems: {
+              'rate_limit': {
+                'enabled': false,
+                'policies': ['bad'],
+              },
+            },
+          );
+          try {
+            await engine.initialize();
+          } finally {
+            await engine.close();
+          }
+        },
+        throwsA(
+          isA<ProviderConfigException>().having(
+            (e) => e.message,
+            'message',
+            contains('rate_limit.policies[0] must be a map'),
+          ),
+        ),
+      );
+    });
+
     test('surface descriptive error for uploads max memory', () async {
       await expectLater(
-        () => Engine(
+        () => testEngine(
           configItems: {
             'uploads': {'max_memory': 'abc'},
           },
@@ -105,7 +133,7 @@ void main() {
 
     test('surface descriptive error for uploads allowed extensions', () async {
       await expectLater(
-        () => Engine(
+        () => testEngine(
           configItems: {
             'uploads': {
               'allowed_extensions': ['png', 123],
@@ -124,7 +152,7 @@ void main() {
 
     test('surface descriptive error for security trusted proxies', () async {
       await expectLater(
-        () => Engine(
+        () => testEngine(
           configItems: {
             'security': {
               'trusted_proxies': {
@@ -147,7 +175,7 @@ void main() {
       'surface descriptive error for security trusted proxies type',
       () async {
         await expectLater(
-          () => Engine(
+          () => testEngine(
             configItems: {
               'security': {'trusted_proxies': 'invalid'},
             },
@@ -167,7 +195,7 @@ void main() {
       'surface descriptive error for security max_request_size type',
       () async {
         await expectLater(
-          () => Engine(
+          () => testEngine(
             configItems: {
               'security': {'max_request_size': 'abc'},
             },
@@ -187,7 +215,7 @@ void main() {
       'surface descriptive error for security max_request_size negative',
       () async {
         await expectLater(
-          () => Engine(
+          () => testEngine(
             configItems: {
               'security': {'max_request_size': -1},
             },
@@ -205,7 +233,7 @@ void main() {
 
     test('surface descriptive error for security headers map values', () async {
       await expectLater(
-        () => Engine(
+        () => testEngine(
           configItems: {
             'security': {
               'headers': {'Referrer-Policy': 123},
@@ -224,7 +252,7 @@ void main() {
 
     test('surface descriptive error for security csrf map type', () async {
       await expectLater(
-        () => Engine(
+        () => testEngine(
           configItems: {
             'security': {'csrf': 'enabled'},
           },
@@ -241,7 +269,7 @@ void main() {
 
     test('surface descriptive error for security csrf enabled type', () async {
       await expectLater(
-        () => Engine(
+        () => testEngine(
           configItems: {
             'security': {
               'csrf': {'enabled': 'maybe'},
@@ -260,7 +288,7 @@ void main() {
 
     test('surface descriptive error for security csrf cookie_name', () async {
       await expectLater(
-        () => Engine(
+        () => testEngine(
           configItems: {
             'security': {
               'csrf': {'cookie_name': 123},
@@ -279,7 +307,7 @@ void main() {
 
     test('surface descriptive error when security root is not a map', () async {
       await expectLater(
-        () => Engine(configItems: {'security': 'invalid'}),
+        () => testEngine(configItems: {'security': 'invalid'}),
         throwsA(
           isA<ProviderConfigException>().having(
             (e) => e.message,
@@ -292,7 +320,7 @@ void main() {
 
     test('surface descriptive error for view directory type', () async {
       await expectLater(
-        () => Engine(
+        () => testEngine(
           configItems: {
             'view': {'directory': 42},
           },
@@ -309,7 +337,7 @@ void main() {
 
     test('surface descriptive error for view cache type', () async {
       await expectLater(
-        () => Engine(
+        () => testEngine(
           configItems: {
             'view': {'cache': 'maybe'},
           },
@@ -326,7 +354,7 @@ void main() {
 
     test('surface descriptive error for view engine type', () async {
       await expectLater(
-        () => Engine(
+        () => testEngine(
           configItems: {
             'view': {'engine': 123},
           },
@@ -343,7 +371,7 @@ void main() {
 
     test('surface descriptive error for view disk type', () async {
       await expectLater(
-        () => Engine(
+        () => testEngine(
           configItems: {
             'view': {'disk': 123},
           },
@@ -360,7 +388,7 @@ void main() {
 
     test('surface descriptive error when view node is not a map', () async {
       await expectLater(
-        () => Engine(configItems: {'view': 'invalid'}),
+        () => testEngine(configItems: {'view': 'invalid'}),
         throwsA(
           isA<ProviderConfigException>().having(
             (e) => e.message,
@@ -373,7 +401,7 @@ void main() {
 
     test('surface descriptive error when cache root is not a map', () async {
       await expectLater(
-        () => Engine(configItems: {'cache': 'invalid'}),
+        () => testEngine(configItems: {'cache': 'invalid'}),
         throwsA(
           isA<ProviderConfigException>().having(
             (e) => e.message,
@@ -386,7 +414,7 @@ void main() {
 
     test('surface descriptive error for cache default type', () async {
       await expectLater(
-        () => Engine(
+        () => testEngine(
           configItems: {
             'cache': {
               'default': 42,
@@ -408,7 +436,7 @@ void main() {
 
     test('surface descriptive error for cache store type', () async {
       await expectLater(
-        () => Engine(
+        () => testEngine(
           configItems: {
             'cache': {
               'stores': {'file': 'invalid'},

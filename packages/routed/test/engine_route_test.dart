@@ -4,6 +4,7 @@ import 'package:routed_testing/routed_testing.dart';
 import 'package:server_testing/server_testing.dart';
 
 import 'test_helpers.dart';
+import 'test_engine.dart';
 
 void main() {
   group('Engine route parameter patterns', () {
@@ -15,7 +16,7 @@ void main() {
         final runner = PropertyTestRunner<ParameterSample>(parameterSampleGen, (
           sample,
         ) async {
-          final engine = Engine()
+          final engine = testEngine()
             ..get(sample.caseInfo.route, (ctx) async {
               final dynamic value = ctx.params[sample.caseInfo.paramKey];
               ctx.json(<String, dynamic>{

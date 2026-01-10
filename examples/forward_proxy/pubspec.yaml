@@ -1,4 +1,5 @@
 name: forward_proxy_example
+publish_to: none
 funding:
   - https://www.buymeacoffee.com/kingwill101
 
@@ -11,4 +12,3 @@ dependencies:
 tags:
   - example
   - routed
-

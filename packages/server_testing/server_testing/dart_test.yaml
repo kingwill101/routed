@@ -9,8 +9,8 @@ paths:
   - test/
 
 # Configure test behaviors
-concurrency: 4
-timeout: 120s
+concurrency: 1
+timeout: 180s
 
 # Platform configuration
 platforms:

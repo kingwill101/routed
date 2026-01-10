@@ -142,7 +142,7 @@ class GeckoDriverManager extends WebDriverManager {
   @override
   Future<void> start(int port) async {
     final targetDir = BrowserPaths.getRegistryDirectory();
-    final driverPath = path.join(targetDir, 'drivers', 'geckodriver');
+    final driverPath = path.join(targetDir, 'drivers', driverBinaryName());
 
     if (!await File(driverPath).exists()) {
       throw Exception('GeckoDriver not found at: $driverPath');
@@ -150,10 +150,10 @@ class GeckoDriverManager extends WebDriverManager {
     print('Starting GeckoDriver from: $driverPath');
     final args = ['--port', port.toString()];
 
-    print('Waiting for GeckoDriver to be ready...');
-    // await waitForPort(port);
     _driverProcess = await startProcess(driverPath, args);
     print('GeckoDriver process started with PID: ${_driverProcess!.pid}');
+    print('Waiting for GeckoDriver to be ready...');
+    await waitForPort(port);
     print('GeckoDriver listening on port: $port');
   }
 
@@ -185,7 +185,7 @@ class GeckoDriverManager extends WebDriverManager {
   @override
   Future<bool> isRunning(int port) async {
     try {
-      final socket = await Socket.connect('localhost', port);
+      final socket = await Socket.connect(InternetAddress.loopbackIPv4, port);
       await socket.close();
       return true;
     } catch (_) {

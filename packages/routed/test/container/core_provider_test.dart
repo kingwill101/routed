@@ -1,12 +1,13 @@
 import 'package:routed/routed.dart';
 import 'package:test/test.dart';
+import '../test_engine.dart';
 
 void main() {
   group('CoreServiceProvider Tests', () {
     late Engine engine;
 
     setUp(() async {
-      engine = Engine(
+      engine = testEngine(
         configItems: {
           'app.name': 'Test App',
           'app.env': 'testing',

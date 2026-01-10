@@ -6,6 +6,7 @@ import 'package:routed/routed.dart';
 import 'package:routed/src/binding/binding.dart';
 import 'package:routed_testing/routed_testing.dart';
 import 'package:server_testing/server_testing.dart';
+import 'test_engine.dart';
 
 void main() {
   late TestClient client;
@@ -16,7 +17,7 @@ void main() {
 
   group('Binding Tests', () {
     test('JSON Binding', () async {
-      final engine = Engine();
+      final engine = testEngine();
       engine.post('/json', (ctx) async {
         final data = <String, dynamic>{};
         await ctx.shouldBindWith(data, jsonBinding);
@@ -43,7 +44,7 @@ void main() {
     });
 
     test('Form URL Encoded Binding', () async {
-      final engine = Engine();
+      final engine = testEngine();
 
       engine.post('/form', (ctx) async {
         final data = <String, dynamic>{};
@@ -68,7 +69,7 @@ void main() {
 
     test('Multipart Form Binding', () async {
       final fs = MemoryFileSystem();
-      final engine = Engine(
+      final engine = testEngine(
         config: EngineConfig(
           fileSystem: fs,
           multipart: MultipartConfig(uploadDirectory: '/uploads'),
@@ -135,7 +136,7 @@ void main() {
     });
 
     test('Query Binding', () async {
-      final engine = Engine();
+      final engine = testEngine();
 
       engine.get('/search', (ctx) async {
         final Map<String, dynamic> data = {};

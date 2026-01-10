@@ -8,35 +8,45 @@ class MailService {
 }
 
 class MailProvider extends ServiceProvider with ProvidesDefaultConfig {
-  @override
-  ConfigDefaults get defaultConfig => ConfigDefaults(
-    docs: const [
-      ConfigDocEntry(
-        path: 'mail.driver',
-        type: 'string',
+  static final _schema = ConfigSchema.object(
+    title: 'Mail Configuration',
+    description: 'Mail transport settings for the config demo.',
+    properties: {
+      'driver': ConfigSchema.string(
         description: 'Mail transport identifier (e.g. smtp).',
         defaultValue: 'smtp',
       ),
-      ConfigDocEntry(
-        path: 'mail.host',
-        type: 'string',
+      'host': ConfigSchema.string(
         description: 'SMTP host used for outbound mail.',
         defaultValue: 'localhost',
       ),
-      ConfigDocEntry(
-        path: 'mail.port',
-        type: 'int',
+      'port': ConfigSchema.integer(
         description: 'SMTP port (defaults to 2525 for the demo).',
         defaultValue: 2525,
       ),
-      ConfigDocEntry(
-        path: 'mail.from',
-        type: 'string',
+      'from': ConfigSchema.string(
         description: 'Sender address applied to outbound messages.',
         defaultValue: 'noreply@example.dev',
       ),
-    ],
+      'credentials': ConfigSchema.object(
+        description: 'Optional mail credentials.',
+        properties: {
+          'username': ConfigSchema.string(
+            description: 'SMTP username.',
+            defaultValue: 'demo',
+          ),
+          'password': ConfigSchema.string(
+            description: 'SMTP password.',
+            defaultValue: 'secret',
+          ),
+        },
+      ),
+    },
   );
+
+  @override
+  ConfigDefaults get defaultConfig =>
+      ConfigDefaults(schemas: {'mail': _schema});
 
   @override
   String get configSource => 'config_demo.mail';

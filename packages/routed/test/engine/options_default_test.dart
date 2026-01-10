@@ -1,6 +1,7 @@
 import 'package:routed/routed.dart';
 import 'package:routed_testing/routed_testing.dart';
 import 'package:server_testing/server_testing.dart';
+import '../test_engine.dart';
 
 void main() {
   group('Default OPTIONS handler', () {
@@ -8,7 +9,7 @@ void main() {
     late TestClient client;
 
     setUp(() async {
-      engine = Engine();
+      engine = testEngine();
       engine
         ..get('/items', (ctx) => ctx.string('index'))
         ..post('/items', (ctx) => ctx.string('created'));

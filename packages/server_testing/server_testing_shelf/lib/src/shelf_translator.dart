@@ -20,7 +20,7 @@ class ShelfTranslator {
     // Convert headers
     final headers = <String, String>{};
     httpRequest.headers.forEach((name, values) {
-      headers[name] = values.join(',');
+      headers[name.toLowerCase()] = values.join(',');
     });
 
     // Read the request body

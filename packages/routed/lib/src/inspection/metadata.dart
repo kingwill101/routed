@@ -1,3 +1,4 @@
+import 'package:json_schema_builder/json_schema_builder.dart';
 import 'package:routed/src/provider/provider.dart';
 
 import '../engine/providers/registry.dart';
@@ -24,6 +25,24 @@ class ConfigFieldMetadata {
       deprecated: entry.deprecated,
       options: options,
       metadata: entry.metadata,
+    );
+  }
+
+  factory ConfigFieldMetadata.fromJson(Map<String, Object?> json) {
+    final options = (json['options'] as List?)
+        ?.map((value) => value.toString())
+        .toList();
+    final rawMetadata = json['metadata'] as Map?;
+    return ConfigFieldMetadata(
+      path: json['path']?.toString() ?? '',
+      type: json['type']?.toString(),
+      description: json['description']?.toString(),
+      defaultValue: json['default'],
+      deprecated: json['deprecated'] as bool? ?? false,
+      options: options ?? const <String>[],
+      metadata:
+          rawMetadata?.map((key, value) => MapEntry('$key', value)) ??
+          const <String, Object?>{},
     );
   }
 
@@ -57,7 +76,47 @@ class ProviderMetadata {
     required this.configSource,
     required this.defaults,
     required this.fields,
+    this.schemas = const {},
   });
+
+  factory ProviderMetadata.fromJson(Map<String, Object?> json) {
+    final rawDefaults = json['defaults'] as Map<String, Object?>?;
+    final defaults =
+        rawDefaults?.map((key, value) => MapEntry(key, value)) ??
+        const <String, dynamic>{};
+    final rawFields = json['fields'] as List<dynamic>?;
+    final fields =
+        rawFields
+            ?.whereType<Map<String, Object?>>()
+            .map(
+              (entry) => ConfigFieldMetadata.fromJson(
+                entry.map((key, value) => MapEntry(key, value)),
+              ),
+            )
+            .toList() ??
+        const <ConfigFieldMetadata>[];
+    final rawSchemas = json['schemas'] as Map<String, Object?>?;
+    final schemas = <String, Schema>{};
+    if (rawSchemas != null) {
+      for (final entry in rawSchemas.entries) {
+        final value = entry.value;
+        if (value is Map<String, Object?>) {
+          schemas[entry.key] = Schema.fromMap(
+            value.map((key, schemaValue) => MapEntry(key, schemaValue)),
+          );
+        }
+      }
+    }
+    return ProviderMetadata(
+      id: json['id']?.toString() ?? '',
+      description: json['description']?.toString() ?? '',
+      providerType: json['providerType']?.toString() ?? '',
+      configSource: json['configSource']?.toString() ?? '',
+      defaults: defaults,
+      fields: fields,
+      schemas: schemas,
+    );
+  }
 
   final String id;
   final String description;
@@ -65,6 +124,7 @@ class ProviderMetadata {
   final String configSource;
   final Map<String, dynamic> defaults;
   final List<ConfigFieldMetadata> fields;
+  final Map<String, Schema> schemas;
 
   Map<String, Object?> toJson() {
     return <String, Object?>{
@@ -74,6 +134,8 @@ class ProviderMetadata {
       'configSource': configSource,
       'defaults': defaults,
       'fields': fields.map((field) => field.toJson()).toList(),
+      if (schemas.isNotEmpty)
+        'schemas': schemas.map((k, v) => MapEntry(k, v.value)),
     };
   }
 }
@@ -96,6 +158,7 @@ List<ProviderMetadata> inspectProviders() {
           configSource: provider.configSource,
           defaults: snapshot.values,
           fields: fields,
+          schemas: snapshot.schemas,
         ),
       );
     } else {

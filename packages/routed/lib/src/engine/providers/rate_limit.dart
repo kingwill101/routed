@@ -2,11 +2,12 @@ import 'dart:async';
 import 'dart:math';
 
 import 'package:routed/src/cache/cache_manager.dart';
+import 'package:routed/src/config/specs/cache.dart';
+import 'package:routed/src/config/specs/rate_limit.dart';
 import 'package:routed/src/container/container.dart';
 import 'package:routed/src/contracts/cache/repository.dart';
 import 'package:routed/src/contracts/contracts.dart' show Config;
 import 'package:routed/src/engine/middleware_registry.dart';
-import 'package:routed/src/provider/config_utils.dart';
 import 'package:routed/src/provider/provider.dart';
 
 import '../../events/event_manager.dart';
@@ -21,74 +22,39 @@ class RateLimitServiceProvider extends ServiceProvider
 
   RateLimitService _service = RateLimitService(const []);
   CacheManager? _cacheManager;
+  static const RateLimitConfigSpec spec = RateLimitConfigSpec();
+  static const CacheConfigSpec cacheSpec = CacheConfigSpec();
 
   @override
-  ConfigDefaults get defaultConfig => const ConfigDefaults(
-    docs: [
-      ConfigDocEntry(
-        path: 'rate_limit.enabled',
-        type: 'bool',
-        description: 'Enable rate limiting middleware.',
-        defaultValue: false,
-      ),
-      ConfigDocEntry(
-        path: 'rate_limit.backend',
-        type: 'string',
-        description:
-            'Backend hint ("memory" uses array store, "redis" expects a Redis-backed cache store).',
-        defaultValue: 'memory',
-      ),
-      ConfigDocEntry(
-        path: 'rate_limit.failover',
-        type: 'string',
-        description:
-            'Failover mode when the backing store is unavailable (allow, block, local).',
-        options: ['allow', 'block', 'local'],
-        defaultValue: 'allow',
-      ),
-      ConfigDocEntry(
-        path: 'rate_limit.store',
-        type: 'string',
-        description:
-            'Cache store name to use for rate limit counters (defaults to cache.default).',
-        defaultValue: null,
-      ),
-      ConfigDocEntry(
-        path: 'rate_limit.policies',
-        type: 'list<object>',
-        description: 'Array of rate limit policies (match, capacity, key).',
-        defaultValue: <Map<String, dynamic>>[],
-      ),
-      ConfigDocEntry(
-        path: 'rate_limit.policies[].strategy',
-        type: 'string',
-        description:
-            'Enforcement strategy (token_bucket, sliding_window, quota).',
-        options: ['token_bucket', 'sliding_window', 'quota'],
-      ),
-      ConfigDocEntry(
-        path: 'rate_limit.policies[].window',
-        type: 'duration',
-        description:
-            'Sliding window duration when using the sliding_window strategy.',
-      ),
-      ConfigDocEntry(
-        path: 'rate_limit.policies[].period',
-        type: 'duration',
-        description: 'Quota reset interval when using the quota strategy.',
-      ),
-      ConfigDocEntry(
-        path: 'http.middleware_sources',
-        type: 'map',
-        description: 'Rate limiting middleware references registered globally.',
-        defaultValue: <String, Object?>{
-          'routed.rate_limit': <String, Object?>{
-            'global': <String>['routed.rate_limit.middleware'],
-          },
+  ConfigDefaults get defaultConfig {
+    final values = spec.defaultsWithRoot();
+    values['http'] = {
+      'middleware_sources': {
+        'routed.rate_limit': {
+          'global': ['routed.rate_limit.middleware'],
         },
-      ),
-    ],
-  );
+      },
+    };
+
+    return ConfigDefaults(
+      docs: [
+        const ConfigDocEntry(
+          path: 'http.middleware_sources',
+          type: 'map',
+          description:
+              'Rate limiting middleware references registered globally.',
+          defaultValue: <String, Object?>{
+            'routed.rate_limit': <String, Object?>{
+              'global': <String>['routed.rate_limit.middleware'],
+            },
+          },
+        ),
+        ...spec.docs(),
+      ],
+      values: values,
+      schemas: spec.schemaWithRoot(),
+    );
+  }
 
   @override
   void register(Container container) {
@@ -132,20 +98,14 @@ class RateLimitServiceProvider extends ServiceProvider
     Container container,
     Config config,
   ) async {
-    final enabled = config.getBool('rate_limit.enabled');
+    final resolved = spec.resolve(config);
 
-    if (!enabled) {
+    if (!resolved.enabled) {
       return RateLimitService(const []);
     }
 
-    final backend = await _createBackend(config);
-    final defaultFailover =
-        _parseFailover(
-          config.get('rate_limit.failover'),
-          context: 'rate_limit.failover',
-        ) ??
-        RateLimitFailoverMode.allow;
-    final policies = _compilePolicies(config, backend, defaultFailover);
+    final backend = await _createBackend(resolved, config);
+    final policies = _compilePolicies(resolved, backend);
     EventManager? events;
     if (container.has<EventManager>()) {
       events = await container.make<EventManager>();
@@ -153,13 +113,15 @@ class RateLimitServiceProvider extends ServiceProvider
     return RateLimitService(policies, events: events);
   }
 
-  Future<RateLimiterBackend> _createBackend(Config config) async {
+  Future<RateLimiterBackend> _createBackend(
+    RateLimitConfig resolved,
+    Config config,
+  ) async {
     final manager = _cacheManager ??= CacheManager();
 
-    final configuredStore = config.getStringOrNull('rate_limit.store');
-
-    final defaultStoreName =
-        configuredStore ?? config.getStringOrNull('cache.default');
+    final configuredStore = resolved.store;
+    final cacheConfig = cacheSpec.resolve(config);
+    final defaultStoreName = configuredStore ?? cacheConfig.defaultStore;
 
     if (defaultStoreName == null || defaultStoreName.isEmpty) {
       throw ProviderConfigException(
@@ -180,204 +142,70 @@ class RateLimitServiceProvider extends ServiceProvider
   }
 
   List<CompiledRateLimitPolicy> _compilePolicies(
-    Config config,
+    RateLimitConfig config,
     RateLimiterBackend backend,
-    RateLimitFailoverMode defaultFailover,
   ) {
-    final rawPolicies = config.get<Object?>('rate_limit.policies');
-    if (rawPolicies == null) {
+    if (config.policies.isEmpty) {
       return const [];
     }
-    if (rawPolicies is! List) {
-      return const [];
-    }
-
-    return rawPolicies
-        .map((raw) => _parsePolicy(raw, backend, defaultFailover))
-        .whereType<CompiledRateLimitPolicy>()
+    final defaultFailover = config.failover;
+    return config.policies
+        .map((policy) => _compilePolicy(policy, backend, defaultFailover))
         .toList(growable: false);
   }
 
-  CompiledRateLimitPolicy? _parsePolicy(
-    dynamic raw,
+  CompiledRateLimitPolicy _compilePolicy(
+    RateLimitPolicyConfig policy,
     RateLimiterBackend backend,
     RateLimitFailoverMode defaultFailover,
   ) {
-    if (raw is! Map) return null;
-    final map = stringKeyedMap(raw, 'rate_limit.policy');
-    final name = map['name']?.toString() ?? map['match']?.toString() ?? '*';
-    final match = map['match']?.toString() ?? '*';
-    final method = map['method']?.toString();
-    final capacity =
-        map.getInt('limit') ??
-        map.getInt('capacity') ??
-        map.getInt('requests') ??
-        100;
-    final intervalValue = map['interval'] ?? map['refill'];
-    final strategy = _parseStrategy(map['strategy']);
     final RateLimitAlgorithmConfig algorithm;
-    switch (strategy) {
+    switch (policy.strategy) {
       case RateLimitStrategy.slidingWindow:
-        final limit = capacity;
-        final window =
-            map.getDuration('window') ??
-            map.getDuration('interval') ??
-            map.getDuration('refill') ??
-            const Duration(minutes: 1);
-        algorithm = SlidingWindowConfig(limit: max(1, limit), window: window);
+        algorithm = SlidingWindowConfig(
+          limit: max(1, policy.capacity),
+          window: policy.window,
+        );
         break;
       case RateLimitStrategy.quota:
-        final limit = capacity;
-        final period =
-            _parseExtendedDuration(
-              map['period'] ?? intervalValue,
-              context: '$name.period',
-              throwOnInvalid: false,
-            ) ??
-            const Duration(hours: 24);
-        algorithm = QuotaConfig(limit: max(1, limit), period: period);
+        algorithm = QuotaConfig(
+          limit: max(1, policy.capacity),
+          period: policy.period,
+        );
         break;
       case RateLimitStrategy.tokenBucket:
-        final interval =
-            map.getDuration('interval') ??
-            map.getDuration('refill') ??
-            const Duration(minutes: 1);
-        final burst = map['burst'] is num
-            ? (map['burst'] as num).toDouble()
-            : double.tryParse(map['burst']?.toString() ?? '');
         algorithm = buildBucketConfig(
-          capacity: capacity,
-          refillInterval: interval,
-          burstMultiplier: burst,
+          capacity: policy.capacity,
+          refillInterval: policy.interval,
+          burstMultiplier: policy.burstMultiplier,
         );
         break;
     }
 
-    final keySource = map['key'] ?? <String, dynamic>{'type': 'ip'};
-    final keyConfig = stringKeyedMap(keySource as Object, '$name.key');
-    final resolver = _buildKeyResolver(name, keyConfig);
-    if (resolver == null) return null;
-
-    final matcher = RequestMatcher(method: method, pattern: match);
-    final failover = map.containsKey('failover')
-        ? _parseFailover(map['failover'], context: '$name.failover') ??
-              defaultFailover
-        : defaultFailover;
+    final keyResolver = _buildKeyResolver(policy.key);
+    final matcher = RequestMatcher(
+      method: policy.method,
+      pattern: policy.match,
+    );
+    final failover = policy.failover ?? defaultFailover;
 
     return CompiledRateLimitPolicy(
-      name: name,
+      name: policy.name,
       matcher: matcher,
-      keyResolver: resolver,
+      keyResolver: keyResolver,
       algorithm: algorithm,
       backend: backend,
       failover: failover,
     );
   }
 
-  RateLimitKeyResolver? _buildKeyResolver(
-    String name,
-    Map<String, dynamic> config,
-  ) {
-    final type = config['type']?.toString().toLowerCase() ?? 'ip';
-    switch (type) {
-      case 'ip':
+  RateLimitKeyResolver _buildKeyResolver(RateLimitKeyConfig key) {
+    switch (key.type) {
+      case RateLimitKeyType.ip:
         return const IpKeyResolver();
-      case 'header':
-        final header = config['header']?.toString();
-        if (header == null || header.isEmpty) {
-          return null;
-        }
+      case RateLimitKeyType.header:
+        final header = key.header ?? '';
         return HeaderKeyResolver(header);
-      default:
-        return null;
     }
   }
-
-  RateLimitStrategy _parseStrategy(Object? raw) {
-    final value = raw?.toString().toLowerCase().trim();
-    return switch (value) {
-      'sliding_window' => RateLimitStrategy.slidingWindow,
-      'sliding-window' => RateLimitStrategy.slidingWindow,
-      'slidingwindow' => RateLimitStrategy.slidingWindow,
-      'window' => RateLimitStrategy.slidingWindow,
-      'quota' => RateLimitStrategy.quota,
-      'quotas' => RateLimitStrategy.quota,
-      _ => RateLimitStrategy.tokenBucket,
-    };
-  }
-
-  RateLimitFailoverMode? _parseFailover(
-    Object? raw, {
-    required String context,
-  }) {
-    if (raw == null) return null;
-    final value = raw.toString().toLowerCase().trim();
-    return switch (value) {
-      'allow' ||
-      'open' ||
-      'fail_open' ||
-      'fail-open' => RateLimitFailoverMode.allow,
-      'block' ||
-      'closed' ||
-      'fail_closed' ||
-      'fail-closed' => RateLimitFailoverMode.block,
-      'local' ||
-      'isolate' ||
-      'per_instance' ||
-      'per-instance' => RateLimitFailoverMode.local,
-      _ => throw ProviderConfigException(
-        '$context must be one of allow, block, or local',
-      ),
-    };
-  }
-}
-
-Duration? _parseExtendedDuration(
-  Object? value, {
-  required String context,
-  bool throwOnInvalid = true,
-}) {
-  // Try standard duration parsing first via a temporary map
-  final base = {context: value}.getDuration(context);
-  if (base != null) {
-    return base;
-  }
-  if (value == null) {
-    return null;
-  }
-
-  final raw = value.toString().trim().toLowerCase();
-  if (raw.isEmpty) {
-    return null;
-  }
-
-  final match = RegExp(
-    r'^(?<amount>-?\d+(?:\.\d+)?)(?<unit>d|day|days|w|week|weeks|mo|month|months|y|year|years)$',
-  ).firstMatch(raw);
-  if (match == null) {
-    if (throwOnInvalid) {
-      throw ProviderConfigException(
-        '$context must be a duration (supports ms, s, m, h, d, w, mo, y)',
-      );
-    }
-    return null;
-  }
-
-  final amount = double.tryParse(match.namedGroup('amount') ?? '');
-  if (amount == null) {
-    if (throwOnInvalid) {
-      throw ProviderConfigException('$context must be a duration value');
-    }
-    return null;
-  }
-  final unit = match.namedGroup('unit')!;
-  const dayMs = 24 * 60 * 60 * 1000;
-  final milliseconds = switch (unit) {
-    'd' || 'day' || 'days' => amount * dayMs,
-    'w' || 'week' || 'weeks' => amount * dayMs * 7,
-    'mo' || 'month' || 'months' => amount * dayMs * 30,
-    'y' || 'year' || 'years' => amount * dayMs * 365,
-    _ => amount * 1000,
-  };
-  return Duration(milliseconds: milliseconds.round());
 }

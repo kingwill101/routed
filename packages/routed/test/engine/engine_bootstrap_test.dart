@@ -1,5 +1,6 @@
 import 'package:routed/routed.dart';
 import 'package:test/test.dart';
+import '../test_engine.dart';
 
 class StubService {}
 
@@ -16,7 +17,7 @@ class StubProvider extends ServiceProvider {
 void main() {
   test('Engine constructor registers additional providers', () async {
     final provider = StubProvider();
-    final engine = Engine(providers: [provider]);
+    final engine = testEngine(providers: [provider]);
     await engine.initialize();
 
     expect(provider.registered, isTrue);

@@ -6,35 +6,25 @@ import 'package:routed/src/container/container.dart';
 import 'package:routed/src/context/context.dart';
 import 'package:routed/src/contracts/contracts.dart' show Config;
 import 'package:routed/src/engine/middleware_registry.dart';
+import 'package:routed/src/config/specs/logging.dart';
+import 'package:routed/src/config/specs/logging_drivers.dart';
 import 'package:routed/src/logging/channel_drivers.dart';
 import 'package:routed/src/logging/context.dart';
 import 'package:routed/src/logging/driver_registry.dart';
 import 'package:routed/src/logging/logger.dart';
-import 'package:routed/src/provider/config_utils.dart';
 import 'package:routed/src/provider/provider.dart';
 import 'package:routed/src/router/types.dart';
 
-/// Registers logging defaults and related middleware identifiers.
-const Map<String, Object?> _defaultLoggingChannels = {
-  'stack': {
-    'driver': 'stack',
-    'channels': ['single', 'stdout'],
-    'ignore_exceptions': false,
-  },
-  'single': {'driver': 'single', 'path': 'storage/logs/routed.log'},
-  'daily': {
-    'driver': 'daily',
-    'path': 'storage/logs/routed',
-    'days': 14,
-    'use_isolate': false,
-  },
-  'stderr': {'driver': 'stderr'},
-  'stdout': {'driver': 'stdout'},
-  'null': {'driver': 'null'},
-};
-
 class LoggingServiceProvider extends ServiceProvider
     with ProvidesDefaultConfig {
+  static const LoggingConfigSpec spec = LoggingConfigSpec();
+  static const LoggingSingleDriverSpec _singleSpec = LoggingSingleDriverSpec();
+  static const LoggingDailyDriverSpec _dailySpec = LoggingDailyDriverSpec();
+  static const LoggingStackDriverSpec _stackSpec = LoggingStackDriverSpec();
+  static const LoggingWebhookDriverSpec _webhookSpec =
+      LoggingWebhookDriverSpec();
+  static const LoggingSamplingDriverSpec _samplingSpec =
+      LoggingSamplingDriverSpec();
   bool _enabled = true;
   bool _logSuccess = true;
   contextual.Level _level = contextual.Level.info;
@@ -45,78 +35,33 @@ class LoggingServiceProvider extends ServiceProvider
   static bool includeStackTraces = false;
 
   @override
-  ConfigDefaults get defaultConfig => const ConfigDefaults(
-    docs: <ConfigDocEntry>[
-      ConfigDocEntry(
-        path: 'http.middleware_sources',
-        type: 'map',
-        description: 'Logging middleware references injected globally.',
-        defaultValue: <String, Object?>{
-          'routed.logging': <String, Object?>{
-            'global': <String>['routed.logging.http'],
-          },
+  ConfigDefaults get defaultConfig {
+    final values = spec.defaultsWithRoot();
+    values['http'] = {
+      'middleware_sources': {
+        'routed.logging': {
+          'global': ['routed.logging.http'],
         },
-      ),
-      ConfigDocEntry(
-        path: 'logging.default',
-        type: 'string',
-        description: 'Default log channel name (stack, single, stderr, etc.).',
-        defaultValue: 'stack',
-        metadata: {configDocMetaInheritFromEnv: 'LOG_CHANNEL'},
-      ),
-      ConfigDocEntry(
-        path: 'logging.channels',
-        type: 'map',
-        description:
-            'Map of log channel definitions (stack, single, daily, stderr, null).',
-        defaultValue: _defaultLoggingChannels,
-      ),
-      ConfigDocEntry(
-        path: 'logging.enabled',
-        type: 'bool',
-        description: 'Enable structured application logging.',
-        defaultValue: true,
-      ),
-      ConfigDocEntry(
-        path: 'logging.level',
-        type: 'string',
-        description: 'Default log level for application logging.',
-        options: ['debug', 'info'],
-        defaultValue: 'info',
-      ),
-      ConfigDocEntry(
-        path: 'logging.errors_only',
-        type: 'bool',
-        description: 'Only emit logs for failing requests when true.',
-        defaultValue: false,
-      ),
-      ConfigDocEntry(
-        path: 'logging.extra_fields',
-        type: 'map',
-        description: 'Additional fields appended to every log entry.',
-        defaultValue: <String, Object?>{},
-      ),
-      ConfigDocEntry(
-        path: 'logging.include_stack_traces',
-        type: 'bool',
-        description: 'Include stack traces in request error logs when enabled.',
-        defaultValue: false,
-      ),
-      ConfigDocEntry(
-        path: 'logging.format',
-        type: 'string',
-        description: 'Log output format (json or text).',
-        options: ["json", "null", "plain", "pretty", "raw"],
-        defaultValue: 'pretty',
-      ),
-      ConfigDocEntry(
-        path: 'logging.request_headers',
-        type: 'list<string>',
-        description: 'Headers captured globally on every log entry.',
-        defaultValue: <String>[],
-      ),
-    ],
-  );
+      },
+    };
+    return ConfigDefaults(
+      docs: [
+        const ConfigDocEntry(
+          path: 'http.middleware_sources',
+          type: 'map',
+          description: 'Logging middleware references injected globally.',
+          defaultValue: <String, Object?>{
+            'routed.logging': <String, Object?>{
+              'global': <String>['routed.logging.http'],
+            },
+          },
+        ),
+        ...spec.docs(),
+      ],
+      values: values,
+      schemas: spec.schemaWithRoot(),
+    );
+  }
 
   @override
   void register(Container container) {
@@ -246,197 +191,95 @@ class LoggingServiceProvider extends ServiceProvider
     registry.registerIfAbsent('stderr', (ctx) => StderrLogDriver());
     registry.registerIfAbsent('null', (ctx) => NullLogDriver());
     registry.registerIfAbsent('single', (ctx) {
-      final path = _stringOption(ctx.options, ['path', 'file']);
-      return SingleFileLogDriver(
-        (path == null || path.isEmpty) ? 'storage/logs/routed.log' : path,
+      final resolved = _singleSpec.fromMap(
+        loggingDriverOptions(ctx.options),
+        context: LoggingDriverSpecContext(
+          name: ctx.name,
+          pathBase: ctx.configPath,
+          config: ctx.config,
+        ),
       );
+      return SingleFileLogDriver(resolved.path);
     });
     registry.registerIfAbsent('daily', (ctx) {
-      final path =
-          _stringOption(ctx.options, ['path', 'directory']) ??
-          'storage/logs/routed';
-      final retention =
-          _intFrom(ctx.options, ['retentionDays', 'retention_days', 'days']) ??
-          14;
-      final flushInterval = _durationFrom(
-        ctx.options['flushInterval'] ?? ctx.options['flush_interval'],
-        fallback: const Duration(milliseconds: 500),
+      final resolved = _dailySpec.fromMap(
+        loggingDriverOptions(ctx.options),
+        context: LoggingDriverSpecContext(
+          name: ctx.name,
+          pathBase: ctx.configPath,
+          config: ctx.config,
+        ),
       );
-      final optionsMap = {
-        for (final entry in ctx.options.entries)
-          entry.key.toString(): entry.value,
-      };
-      final useIsolate =
-          optionsMap.getBool('useIsolate') || optionsMap.getBool('use_isolate');
       final options = contextual.DailyFileOptions(
-        path: path,
-        retentionDays: retention,
-        flushInterval: flushInterval,
+        path: resolved.path,
+        retentionDays: resolved.retentionDays,
+        flushInterval: resolved.flushInterval,
       );
       return contextual.DailyFileLogDriver.fromOptions(
         options,
-        useIsolate: useIsolate,
+        useIsolate: resolved.useIsolate,
       );
     });
     registry.registerIfAbsent('stack', (ctx) {
-      final optionsMap = {
-        for (final entry in ctx.options.entries)
-          entry.key.toString(): entry.value,
-      };
-      final channels = optionsMap.getStringList('channels') ?? const <String>[];
-      if (channels.isEmpty) {
-        throw ProviderConfigException(
-          'logging channel "${ctx.name}" must specify at least one entry in ${ctx.configPath}.channels',
-        );
-      }
-      final ignore = optionsMap.getBool('ignore_exceptions');
-      final drivers = channels.map(ctx.resolveChannel).toList();
-      return contextual.StackLogDriver(drivers, ignoreExceptions: ignore);
+      final resolved = _stackSpec.fromMap(
+        loggingDriverOptions(ctx.options),
+        context: LoggingDriverSpecContext(
+          name: ctx.name,
+          pathBase: ctx.configPath,
+          config: ctx.config,
+        ),
+      );
+      final drivers = resolved.channels.map(ctx.resolveChannel).toList();
+      return contextual.StackLogDriver(
+        drivers,
+        ignoreExceptions: resolved.ignoreExceptions,
+      );
     });
     registry.registerIfAbsent('webhook', (ctx) {
-      final optionsMap = {
-        for (final entry in ctx.options.entries)
-          entry.key.toString(): entry.value,
-      };
-      final rawUrl =
-          _stringOption(ctx.options, ['url', 'endpoint', 'uri']) ?? '';
-      late Uri uri;
-      try {
-        uri = Uri.parse(rawUrl);
-      } catch (_) {
-        throw ProviderConfigException(
-          'logging channel "${ctx.name}" has an invalid webhook url: $rawUrl',
-        );
-      }
-      final headers = _stringMap(ctx.options['headers']);
-      final timeout = _durationFrom(
-        ctx.options['timeout'] ?? ctx.options['timeout_ms'],
-        fallback: const Duration(seconds: 5),
+      final resolved = _webhookSpec.fromMap(
+        loggingDriverOptions(ctx.options),
+        context: LoggingDriverSpecContext(
+          name: ctx.name,
+          pathBase: ctx.configPath,
+          config: ctx.config,
+        ),
       );
-      final keepAlive =
-          optionsMap.getBool('keep_alive', defaultValue: true) ||
-          optionsMap.getBool('keepAlive', defaultValue: true);
       final options = contextual.WebhookOptions(
-        url: uri,
-        headers: headers,
-        timeout: timeout,
-        keepAlive: keepAlive,
+        url: resolved.url,
+        headers: resolved.headers,
+        timeout: resolved.timeout,
+        keepAlive: resolved.keepAlive,
       );
       return contextual.WebhookLogDriver.fromOptions(options);
     });
     registry.registerIfAbsent('sampling', (ctx) {
-      final wrapped = _stringOption(ctx.options, [
-        'wrapped',
-        'wrapped_channel',
-        'channel',
-      ]);
-      if (wrapped == null || wrapped.isEmpty) {
-        throw ProviderConfigException(
-          'logging channel "${ctx.name}" must specify a wrapped channel (${ctx.configPath}.wrapped_channel)',
-        );
-      }
-      final rates = _parseSamplingRates(
-        ctx.options['rates'],
-        contextPath: '${ctx.configPath}.rates',
+      final resolved = _samplingSpec.fromMap(
+        loggingDriverOptions(ctx.options),
+        context: LoggingDriverSpecContext(
+          name: ctx.name,
+          pathBase: ctx.configPath,
+          config: ctx.config,
+        ),
       );
-      final wrappedDriver = ctx.resolveChannel(wrapped);
-      return contextual.SamplingLogDriver.fromOptions(wrappedDriver, rates);
+      final wrappedDriver = ctx.resolveChannel(resolved.wrapped);
+      return contextual.SamplingLogDriver.fromOptions(
+        wrappedDriver,
+        resolved.rates,
+      );
     });
   }
 
   void _applyConfig(Config config, Container container) {
-    final resolved = _resolveLoggingConfig(config);
+    final resolved = spec.resolve(config);
     _enabled = resolved.enabled;
     _logSuccess = resolved.logSuccess;
     _level = resolved.level;
     _extraFields = resolved.extraFields;
-    _headerNames = resolved.headerNames;
+    _headerNames = resolved.requestHeaders;
     _includeStackTraces = resolved.includeStackTraces;
     includeStackTraces = resolved.includeStackTraces;
-    RoutedLogger.setGlobalFormat(resolved.format);
-    _configureLoggerFactory(config, container);
-  }
-
-  _LoggingConfig _resolveLoggingConfig(Config config) {
-    final merged = mergeConfigCandidates([
-      ConfigMapCandidate.fromConfig(config, 'logging'),
-    ]);
-
-    final enabled = merged.getBool('enabled', defaultValue: true);
-    final errorsOnly = merged.getBool('errors_only');
-
-    final levelToken = merged.getString('level');
-    final level = _parseLevel(levelToken);
-
-    final extraFields =
-        merged.containsKey('extra_fields') && merged['extra_fields'] != null
-        ? stringKeyedMap(
-            merged['extra_fields']! as Object,
-            'logging.extra_fields',
-          )
-        : const <String, dynamic>{};
-
-    final headerNamesRaw = merged['request_headers'];
-    List<String> headerNames;
-    if (headerNamesRaw != null) {
-      if (headerNamesRaw is! List) {
-        throw ProviderConfigException('logging.request_headers must be a list');
-      }
-      headerNames = [];
-      for (var i = 0; i < headerNamesRaw.length; i++) {
-        final item = headerNamesRaw[i];
-        if (item is! String) {
-          throw ProviderConfigException(
-            'logging.request_headers[$i] must be a string',
-          );
-        }
-        headerNames.add(item);
-      }
-    } else {
-      headerNames = const [];
-    }
-
-    final includeStackTraces = merged.getBool('include_stack_traces');
-
-    final formatToken =
-        merged.getString('format')?.toLowerCase().trim() ?? 'plain';
-
-    final format = switch (formatToken) {
-      "pretty" => contextual.PrettyLogFormatter(),
-      "raw" => contextual.RawLogFormatter(),
-      "null" => contextual.JsonLogFormatter(),
-      "json" => contextual.JsonLogFormatter(),
-      "plain" => contextual.PlainTextLogFormatter(),
-      _ => contextual.PlainTextLogFormatter(),
-    };
-
-    return _LoggingConfig(
-      enabled: enabled,
-      logSuccess: !errorsOnly,
-      level: level,
-      extraFields: extraFields,
-      headerNames: headerNames,
-      includeStackTraces: includeStackTraces,
-      format: format,
-    );
-  }
-
-  contextual.Level _parseLevel(String? raw) {
-    final token = raw?.trim();
-    if (token == null || token.isEmpty) {
-      return contextual.Level.info;
-    }
-    final needle = token.toLowerCase();
-    for (final level in contextual.Level.levels) {
-      if (level.name.toLowerCase() == needle ||
-          level.toString().toLowerCase() == needle) {
-        return level;
-      }
-    }
-    throw ProviderConfigException(
-      'logging.level must be one of: '
-      '${contextual.Level.levels.map((l) => l.name).join(', ')}',
-    );
+    RoutedLogger.setGlobalFormat(resolved.format.formatter);
+    _configureLoggerFactory(config, container, resolved);
   }
 
   String _headerKey(String name) {
@@ -450,32 +293,16 @@ class LoggingServiceProvider extends ServiceProvider
   }
 }
 
-class _LoggingConfig {
-  const _LoggingConfig({
-    required this.enabled,
-    required this.logSuccess,
-    required this.level,
-    required this.extraFields,
-    required this.headerNames,
-    required this.includeStackTraces,
-    required this.format,
-  });
-
-  final bool enabled;
-  final bool logSuccess;
-  final contextual.Level level;
-  final Map<String, dynamic> extraFields;
-  final List<String> headerNames;
-  final bool includeStackTraces;
-  final contextual.LogMessageFormatter format;
-}
-
-void _configureLoggerFactory(Config config, Container container) {
-  final settings = _resolveChannelSettings(config);
+void _configureLoggerFactory(
+  Config config,
+  Container container,
+  LoggingConfig settings,
+) {
+  final resolved = _resolveChannelSettings(settings);
   final registry = container.get<LogDriverRegistry>();
   final builder = _LoggerFactoryBuilder(
-    defaultChannel: settings.defaultChannel,
-    channels: settings.channels,
+    defaultChannel: resolved.defaultChannel,
+    channels: resolved.channels,
     registry: registry,
     config: config,
     container: container,
@@ -483,30 +310,20 @@ void _configureLoggerFactory(Config config, Container container) {
   RoutedLogger.configureSystemFactory(builder.createLogger);
 }
 
-_ChannelSettings _resolveChannelSettings(Config config) {
-  final configValue = config.getStringOrNull('logging.default')?.trim();
-  final defaultChannel = _coerceChannelName(configValue);
+_ChannelSettings _resolveChannelSettings(LoggingConfig config) {
+  final defaultChannel = _coerceChannelName(config.defaultChannel);
   final envChannel = _coerceChannelName(Platform.environment['LOG_CHANNEL']);
 
-  final node = config.get<Map<String, Object?>>('logging.channels');
   final channels = <String, _ChannelConfig>{};
-  if (node is Map<String, Object?>) {
-    final map = stringKeyedMap(node, 'logging.channels');
-    map.forEach((name, value) {
-      final contextPath = 'logging.channels.$name';
-      final channelMap = value is Map<String, Object?>
-          ? stringKeyedMap(value, contextPath)
-          : const <String, Object?>{};
-      final rawDriver =
-          channelMap.getString('driver')?.toLowerCase().trim() ?? 'stack';
-      channels[name] = _ChannelConfig(
-        name: name,
-        driver: rawDriver,
-        options: channelMap,
-        contextPath: contextPath,
-      );
-    });
-  }
+  config.channels.forEach((name, channel) {
+    final contextPath = 'logging.channels.$name';
+    channels[name] = _ChannelConfig(
+      name: name,
+      driver: channel.driver,
+      options: channel.toMap(),
+      contextPath: contextPath,
+    );
+  });
 
   final resolvedDefault =
       defaultChannel ??
@@ -626,118 +443,4 @@ class _LoggerFactoryBuilder {
       ),
     );
   }
-}
-
-Map<contextual.Level, double> _parseSamplingRates(
-  Object? value, {
-  required String contextPath,
-}) {
-  final result = <contextual.Level, double>{};
-  if (value is Map) {
-    value.forEach((key, rateValue) {
-      final level = _levelFromName(key?.toString() ?? '');
-      final rate = _doubleFromValue(rateValue);
-      if (level != null && rate != null) {
-        result[level] = rate.clamp(0.0, 1.0);
-      }
-    });
-  }
-  return result;
-}
-
-String? _stringOption(Map<String, Object?> options, List<String> keys) {
-  for (final key in keys) {
-    final value = options[key];
-    if (value != null) {
-      final text = value.toString().trim();
-      if (text.isNotEmpty) {
-        return text;
-      }
-    }
-  }
-  return null;
-}
-
-int? _intFrom(Map<String, Object?> options, List<String> keys) {
-  for (final key in keys) {
-    final value = options[key];
-    if (value != null) {
-      final parsed = _intFromValue(value);
-      if (parsed != null) {
-        return parsed;
-      }
-    }
-  }
-  return null;
-}
-
-int? _intFromValue(Object? value) {
-  if (value == null) return null;
-  if (value is num) return value.toInt();
-  return int.tryParse(value.toString());
-}
-
-double? _doubleFromValue(Object? value) {
-  if (value == null) return null;
-  if (value is num) return value.toDouble();
-  return double.tryParse(value.toString());
-}
-
-Duration _durationFrom(Object? value, {Duration? fallback}) {
-  if (value == null) {
-    return fallback ?? const Duration(milliseconds: 500);
-  }
-  if (value is Duration) {
-    return value;
-  }
-  if (value is num) {
-    return Duration(milliseconds: value.toInt());
-  }
-  final text = value.toString().trim().toLowerCase();
-  if (text.isEmpty) {
-    return fallback ?? const Duration(milliseconds: 500);
-  }
-  if (text.endsWith('ms')) {
-    final amount = int.tryParse(text.substring(0, text.length - 2).trim());
-    if (amount != null) {
-      return Duration(milliseconds: amount);
-    }
-  }
-  if (text.endsWith('s')) {
-    final amount = double.tryParse(text.substring(0, text.length - 1).trim());
-    if (amount != null) {
-      return Duration(milliseconds: (amount * 1000).round());
-    }
-  }
-  final numeric = double.tryParse(text);
-  if (numeric != null) {
-    return Duration(milliseconds: numeric.round());
-  }
-  return fallback ?? const Duration(milliseconds: 500);
-}
-
-Map<String, String>? _stringMap(Object? value) {
-  if (value is Map) {
-    final result = <String, String>{};
-    value.forEach((key, entryValue) {
-      if (key != null && entryValue != null) {
-        result[key.toString()] = entryValue.toString();
-      }
-    });
-    return result.isEmpty ? null : result;
-  }
-  return null;
-}
-
-contextual.Level? _levelFromName(String name) {
-  final needle = name.trim().toLowerCase();
-  if (needle.isEmpty) {
-    return null;
-  }
-  for (final level in contextual.Level.values) {
-    if (level.name.toLowerCase() == needle) {
-      return level;
-    }
-  }
-  return null;
 }

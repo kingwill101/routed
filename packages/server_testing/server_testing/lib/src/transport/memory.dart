@@ -34,8 +34,6 @@ class InMemoryTransport extends TestTransport {
   }) async {
     final uriObj = setupUri(uri);
     final responseBody = BytesBuilder();
-    var responseHeaders = headers ?? {};
-
     final requestHeaders = <String, List<String>>{...?headers};
     if (_cookieStore.isNotEmpty) {
       requestHeaders[HttpHeaders.cookieHeader] = [
@@ -46,7 +44,10 @@ class InMemoryTransport extends TestTransport {
     }
 
     // Use setupResponse helper
-    _mockResponse = setupResponse(headers: responseHeaders, body: responseBody);
+    _mockResponse = setupResponse(
+      headers: <String, List<String>>{},
+      body: responseBody,
+    );
 
     // Use setupRequest helper
     final mockRequest = setupRequest(

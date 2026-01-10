@@ -4,6 +4,7 @@ import 'package:contextual/contextual.dart' as contextual;
 import 'package:routed/routed.dart';
 import 'package:routed_testing/routed_testing.dart';
 import 'package:server_testing/server_testing.dart';
+import '../test_engine.dart';
 
 void main() {
   group('LoggingServiceProvider', () {
@@ -21,7 +22,7 @@ void main() {
     });
 
     test('respects logging.enabled false', () async {
-      final engine = Engine(
+      final engine = testEngine(
         configItems: {
           'logging': {'enabled': false},
         },
@@ -38,7 +39,7 @@ void main() {
     });
 
     test('errors_only logs only failures', () async {
-      final engine = Engine(
+      final engine = testEngine(
         configItems: {
           'logging': {'errors_only': true},
         },
@@ -64,7 +65,7 @@ void main() {
     });
 
     test('level debug uses debug channel for successful requests', () async {
-      final engine = Engine(
+      final engine = testEngine(
         configItems: {
           'logging': {'level': 'debug'},
         },
@@ -84,7 +85,7 @@ void main() {
     });
 
     test('withLogging helper mutates config', () async {
-      final engine = Engine(options: [withLogging(enabled: false)]);
+      final engine = testEngine(options: [withLogging(enabled: false)]);
       addTearDown(() async => await engine.close());
       engine.get('/ping', (ctx) => ctx.string('pong'));
       await engine.initialize();
@@ -96,7 +97,7 @@ void main() {
     });
 
     test('config reload applies logging changes', () async {
-      final engine = Engine(
+      final engine = testEngine(
         configItems: {
           'logging': {'enabled': false},
         },
@@ -122,7 +123,7 @@ void main() {
     });
 
     test('extra fields and request headers appear in log context', () async {
-      final engine = Engine(
+      final engine = testEngine(
         configItems: {
           'logging': {
             'extra_fields': {
@@ -156,7 +157,7 @@ void main() {
     test('custom log driver from registry is used', () async {
       RoutedLogger.reset();
 
-      final engine = Engine(
+      final engine = testEngine(
         configItems: {
           'logging': {
             'default': 'custom',

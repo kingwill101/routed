@@ -10,7 +10,9 @@ void registerFilesystemCacheDriver() {
     configBuilder: (drivers.DriverConfigContext context) {
       final config = Map<String, dynamic>.from(context.userConfig);
       config['cache_dir'] ??=
-          context.get<routed.StorageDefaults>()?.frameworkPath('cache/filesystem') ??
+          context.get<routed.StorageDefaults>()?.frameworkPath(
+            'cache/filesystem',
+          ) ??
           'storage/framework/cache/filesystem';
       return config;
     },
@@ -22,17 +24,18 @@ void registerFilesystemCacheDriver() {
         );
       }
     },
-    documentation: (drivers.CacheDriverDocContext ctx) => <routed.ConfigDocEntry>[
-      routed.ConfigDocEntry(
-        path: ctx.path('cache_dir'),
-        type: 'string',
-        description: 'Directory used to persist filesystem cache entries.',
-        metadata: const {
-          'default_note': 'Computed from StorageDefaults when omitted.',
-          'validation': 'Must point to a writable directory.',
-        },
-      ),
-    ],
+    documentation: (drivers.CacheDriverDocContext ctx) =>
+        <routed.ConfigDocEntry>[
+          routed.ConfigDocEntry(
+            path: ctx.path('cache_dir'),
+            type: 'string',
+            description: 'Directory used to persist filesystem cache entries.',
+            metadata: const {
+              'default_note': 'Computed from StorageDefaults when omitted.',
+              'validation': 'Must point to a writable directory.',
+            },
+          ),
+        ],
   );
 }
 

@@ -3,64 +3,19 @@ import 'dart:async';
 import 'package:routed/src/cache/cache_manager.dart';
 import 'package:routed/src/container/container.dart';
 import 'package:routed/src/contracts/contracts.dart' show Config;
-import 'package:routed/src/engine/storage_defaults.dart';
+import 'package:routed/src/config/specs/cache.dart';
 import 'package:routed/src/events/event_manager.dart';
 import 'package:routed/src/provider/provider.dart';
 
-StorageDefaults _cacheBaselineStorage() =>
-    StorageDefaults.fromLocalRoot('storage/app');
-
 /// Provides cache infrastructure and default configuration hooks.
 class CacheServiceProvider extends ServiceProvider with ProvidesDefaultConfig {
+  static const CacheConfigSpec spec = CacheConfigSpec();
   CacheManager? _managedManager;
   bool _ownsManagedManager = false;
 
   @override
-  ConfigDefaults get defaultConfig => ConfigDefaults(
-    docs: <ConfigDocEntry>[
-      const ConfigDocEntry(
-        path: 'cache.default',
-        type: 'string',
-        description:
-            'Name of the cache store to use when none is specified explicitly.',
-        defaultValue: 'file',
-        metadata: {configDocMetaInheritFromEnv: 'CACHE_STORE'},
-      ),
-      const ConfigDocEntry(
-        path: 'cache.prefix',
-        type: 'string',
-        description:
-            'Prefix prepended to every cache key. Useful when sharing stores.',
-        defaultValue: '',
-      ),
-      const ConfigDocEntry(
-        path: 'cache.key_prefix',
-        type: 'string',
-        description:
-            'Optional global prefix injected before the generated store prefix.',
-        defaultValue: null,
-      ),
-      ConfigDocEntry(
-        path: 'cache.stores',
-        type: 'map',
-        description: 'Configured cache stores keyed by store name.',
-        defaultValueBuilder: () {
-          final defaults = _cacheBaselineStorage();
-          return {
-            'array': {'driver': 'array'},
-            'file': {'driver': 'file', 'path': defaults.frameworkPath('cache')},
-          };
-        },
-      ),
-      ConfigDocEntry(
-        path: 'cache.stores.*.driver',
-        type: 'string',
-        description: 'Driver identifier backing the cache store.',
-        optionsBuilder: () => CacheManager.registeredDrivers,
-      ),
-      ...CacheManager.driverDocumentation(pathBase: 'cache.stores.*'),
-    ],
-  );
+  ConfigDefaults get defaultConfig =>
+      ConfigDefaults(docs: spec.docs(), schemas: spec.schemaWithRoot());
 
   @override
   void register(Container container) {
@@ -101,7 +56,7 @@ class CacheServiceProvider extends ServiceProvider with ProvidesDefaultConfig {
               ? await container.make<CacheManager>()
               : null);
       if (manager != null) {
-        _applyCachePrefix(manager, config);
+        _applyCachePrefixFromConfig(manager, config);
       }
       if (_managedManager != null &&
           _ownsManagedManager &&
@@ -132,7 +87,7 @@ class CacheServiceProvider extends ServiceProvider with ProvidesDefaultConfig {
     }
     if (container.has<CacheManager>()) {
       final manager = await container.make<CacheManager>();
-      _applyCachePrefix(manager, config);
+      _applyCachePrefixFromConfig(manager, config);
     }
   }
 
@@ -153,77 +108,28 @@ class CacheServiceProvider extends ServiceProvider with ProvidesDefaultConfig {
 
   CacheManager _buildManager(Container container, Config config) {
     final manager = CacheManager(container: container);
-    final cacheNode = config.get<Object?>('cache');
-    if (cacheNode != null && cacheNode is! Map) {
-      throw ProviderConfigException('cache must be a map');
-    }
-
-    final storesMap = _readMap(
-      config.get<Object?>('cache.stores'),
-      'cache.stores',
-    );
-
-    final defaultRaw = config.get<Object?>('cache.default');
-    String? defaultStoreName;
-    if (defaultRaw != null) {
-      if (defaultRaw is! String) {
-        throw ProviderConfigException('cache.default must be a string');
-      }
-      final trimmed = defaultRaw.trim();
-      if (trimmed.isEmpty) {
-        throw ProviderConfigException('cache.default must be a string');
-      }
-      defaultStoreName = trimmed;
-    }
-
-    final normalizedStores = <String, Map<String, dynamic>>{};
-    storesMap.forEach((key, value) {
-      if (value is Map<String, dynamic>) {
-        normalizedStores[key] = Map<String, dynamic>.from(value);
-      } else if (value is Map) {
-        normalizedStores[key] = value.map((k, v) => MapEntry(k.toString(), v));
-      } else {
-        throw ProviderConfigException('cache.stores.$key must be a map');
-      }
-    });
-
-    if (normalizedStores.isEmpty) {
-      normalizedStores['file'] = <String, dynamic>{'driver': 'file'};
-    }
-
+    final resolved = spec.resolve(config);
     final ordered = <String>{};
+    final defaultStoreName = resolved.defaultStore;
     if (defaultStoreName != null &&
-        normalizedStores.containsKey(defaultStoreName)) {
+        resolved.stores.containsKey(defaultStoreName)) {
       ordered.add(defaultStoreName);
     }
-    ordered.addAll(normalizedStores.keys);
+    ordered.addAll(resolved.stores.keys);
 
     for (final name in ordered) {
-      final storeConfig = normalizedStores[name];
+      final storeConfig = resolved.stores[name];
       if (storeConfig != null) {
-        manager.registerStore(name, Map<String, dynamic>.from(storeConfig));
+        manager.registerStore(name, storeConfig.toMap());
       }
     }
 
-    _applyCachePrefix(manager, config);
+    _applyCachePrefix(manager, resolved);
     return manager;
   }
 
-  Map<String, dynamic> _readMap(Object? source, String context) {
-    if (source == null) {
-      return const {};
-    }
-    if (source is Map<String, dynamic>) {
-      return Map<String, dynamic>.from(source);
-    }
-    if (source is Map) {
-      return source.map((key, value) => MapEntry(key.toString(), value));
-    }
-    throw ProviderConfigException('$context must be a map');
-  }
-
-  void _applyCachePrefix(CacheManager manager, Config config) {
-    final prefix = _resolveCachePrefix(config);
+  void _applyCachePrefix(CacheManager manager, CacheConfig config) {
+    final prefix = config.resolvePrefix();
     if (prefix != null) {
       manager.setPrefix(prefix);
       return;
@@ -233,37 +139,8 @@ class CacheServiceProvider extends ServiceProvider with ProvidesDefaultConfig {
     }
   }
 
-  String? _resolveCachePrefix(Config config) {
-    if (config.has('cache.prefix')) {
-      final value = config.get<Object?>('cache.prefix');
-      if (value == null) {
-        return '';
-      }
-      if (value is String) {
-        return value;
-      }
-      throw ProviderConfigException('cache.prefix must be a string');
-    }
-    if (config.has('cache.key_prefix')) {
-      final value = config.get<Object?>('cache.key_prefix');
-      if (value == null) {
-        return '';
-      }
-      if (value is String) {
-        return value;
-      }
-      throw ProviderConfigException('cache.key_prefix must be a string');
-    }
-    if (config.has('app.cache_prefix')) {
-      final value = config.get<Object?>('app.cache_prefix');
-      if (value == null) {
-        return '';
-      }
-      if (value is String) {
-        return value;
-      }
-      throw ProviderConfigException('app.cache_prefix must be a string');
-    }
-    return null;
+  void _applyCachePrefixFromConfig(CacheManager manager, Config config) {
+    final resolved = spec.resolve(config);
+    _applyCachePrefix(manager, resolved);
   }
 }

@@ -9,94 +9,131 @@ class TypeDefinition {
     : cast = cast ?? ((String? value) => value);
 }
 
-/// Custom type patterns for route parameters.
-/// Maps type names to regular expression patterns.
-final Map<String, TypeDefinition> _builtInTypes = {
-  'int': TypeDefinition(
-    'int',
-    r'\d+',
-    (String? value) => int.tryParse(value ?? ''),
-  ),
-  'double': TypeDefinition(
-    'double',
-    r'\d+(\.\d+)?',
-    (String? value) => double.tryParse(value ?? ''),
-  ),
-  'uuid': TypeDefinition(
-    'uuid',
-    r'[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}',
-  ),
-  'slug': TypeDefinition('slug', r'[a-z0-9]+(?:-[a-z0-9]+)*'),
-  'word': TypeDefinition('word', r'\w+'),
-  'string': TypeDefinition('string', r'[^/]+'),
-  'date': TypeDefinition('date', r'\d{4}-\d{2}-\d{2}'),
-  'email': TypeDefinition(
-    'email',
-    r'[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}',
-  ),
-  'url': TypeDefinition('url', r'https?://[^\s/$.?#].[^\s]*'),
-  'ip': TypeDefinition('ip', r'\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}'),
-};
-
-final Map<String, TypeDefinition> customTypePatterns = {..._builtInTypes};
-
-/// Global param patterns: if a route has {id} with NO explicit type,
-/// and we've registered a pattern for 'id', we use that pattern.
-final Map<String, String> _globalParamPatterns = {};
-
-/// Register a custom type, e.g. `registerCustomType('slug', r'[a-z0-9]+(?:-[a-z0-9]+)*')`.
-/// Then any route with `{foo:slug}` uses that pattern.
-/// [typeName] The name of the custom type
-/// [pattern] The regular expression pattern
-/// [cast] An optional custom cast function
-void registerCustomType(
-  String typeName,
-  String pattern, [
-  dynamic Function(String?)? cast,
-]) {
-  customTypePatterns[typeName] = TypeDefinition(typeName, pattern, cast);
+RoutePatternRegistry requireRoutePatternRegistry(Container container) {
+  if (!container.has<RoutePatternRegistry>()) {
+    throw StateError(
+      'RoutePatternRegistry is not registered. '
+      'Register RoutingServiceProvider to use routing features.',
+    );
+  }
+  return container.get<RoutePatternRegistry>();
 }
 
-/// Register a global param pattern, e.g. `registerParamPattern('id', r'\d+')`.
-/// Then any route placeholder `{id}` (no type) uses that pattern.
-/// [paramName] The name of the parameter
-/// [pattern] The regular expression pattern
-void registerParamPattern(String paramName, String pattern) {
-  _globalParamPatterns[paramName] = pattern;
+class RouteTypeRegistry extends NamedRegistry<TypeDefinition> {
+  RouteTypeRegistry();
+
+  RouteTypeRegistry.defaults() {
+    _registerDefaults();
+  }
+
+  RouteTypeRegistry.clone(RouteTypeRegistry source) {
+    for (final name in source.entryNames) {
+      final definition = source.getEntry(name);
+      if (definition != null) {
+        registerEntry(name, definition);
+      }
+    }
+  }
+
+  void register(
+    String name,
+    String pattern, {
+    dynamic Function(String?)? cast,
+  }) {
+    final key = normalizeName(name);
+    registerEntry(key, TypeDefinition(key, pattern, cast));
+  }
+
+  TypeDefinition? resolve(String name) => getEntry(name);
+
+  String? patternFor(String name) => getEntry(name)?.pattern;
+
+  Iterable<String> get names => entryNames;
+
+  void _registerDefaults() {
+    register('int', r'\d+', cast: (String? value) => int.tryParse(value ?? ''));
+    register(
+      'double',
+      r'\d+(\.\d+)?',
+      cast: (String? value) => double.tryParse(value ?? ''),
+    );
+    register(
+      'uuid',
+      r'[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}',
+    );
+    register('slug', r'[a-z0-9]+(?:-[a-z0-9]+)*');
+    register('word', r'\w+');
+    register('string', r'[^/]+');
+    register('date', r'\d{4}-\d{2}-\d{2}');
+    register('email', r'[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}');
+    register('url', r'https?://[^\s/$.?#].[^\s]*');
+    register('ip', r'\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}');
+  }
 }
 
-/// Gets the pattern for a given type
-/// [type] The type name to look up
-/// Returns the pattern string or null if not found
-String? getPattern(String? type) {
-  return customTypePatterns[type]?.pattern;
+class RouteParamPatternRegistry extends NamedRegistry<String> {
+  RouteParamPatternRegistry();
+
+  RouteParamPatternRegistry.clone(RouteParamPatternRegistry source) {
+    for (final name in source.entryNames) {
+      final pattern = source.getEntry(name);
+      if (pattern != null) {
+        registerEntry(name, pattern);
+      }
+    }
+  }
+
+  void register(String name, String pattern) {
+    registerEntry(name, pattern);
+  }
+
+  String? resolve(String name) => getEntry(name);
+
+  Iterable<String> get names => entryNames;
 }
 
-/// Gets the global parameter pattern for a given parameter name
-/// [paramName] The parameter name to look up
-/// Returns the pattern string or null if not found
-String? getGlobalParamPattern(String paramName) {
-  return _globalParamPatterns[paramName];
-}
+class RoutePatternRegistry {
+  RoutePatternRegistry({
+    RouteTypeRegistry? types,
+    RouteParamPatternRegistry? params,
+  }) : types = types ?? RouteTypeRegistry.defaults(),
+       params = params ?? RouteParamPatternRegistry();
 
-/// Adds a custom type pattern to the patterns map
-/// [name] The name of the pattern type
-/// [pattern] The regular expression pattern
-/// [cast] An optional custom cast function
-void registerPattern(
-  String name,
-  String pattern, [
-  dynamic Function(String?)? cast,
-]) {
-  customTypePatterns[name] = TypeDefinition(name, pattern, cast);
-}
+  RoutePatternRegistry.defaults()
+    : types = RouteTypeRegistry.defaults(),
+      params = RouteParamPatternRegistry();
 
-TypeDefinition? getTypeDefinition(String name) {
-  return customTypePatterns[name];
-}
+  RoutePatternRegistry.clone(RoutePatternRegistry source)
+    : types = RouteTypeRegistry.clone(source.types),
+      params = RouteParamPatternRegistry.clone(source.params);
 
-@visibleForTesting
-void clearCustomPatterns() {
-  customTypePatterns.clear();
-  _globalParamPatterns.clear();
+  final RouteTypeRegistry types;
+  final RouteParamPatternRegistry params;
+
+  void registerType(
+    String name,
+    String pattern, {
+    dynamic Function(String?)? cast,
+  }) {
+    types.register(name, pattern, cast: cast);
+  }
+
+  void registerParamPattern(String name, String pattern) {
+    params.register(name, pattern);
+  }
+
+  TypeDefinition? resolveType(String name) => types.resolve(name);
+
+  String? resolveTypePattern(String name) => types.patternFor(name);
+
+  String? resolveParamPattern(String name) => params.resolve(name);
+
+  dynamic cast(String? value, String type) {
+    if (value == null) return null;
+    final definition = resolveType(type);
+    if (definition != null) {
+      return definition.cast(value);
+    }
+    return value;
+  }
 }

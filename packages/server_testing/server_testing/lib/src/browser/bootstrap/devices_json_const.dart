@@ -1,5 +1,5 @@
 // GENERATED CODE - DO NOT MODIFY BY HAND
-// Generated at: 2025-10-13T16:48:22.025486
+// Generated at: 2026-01-04T11:28:23.373313
 
 import 'device_json.dart';
 
@@ -96,7 +96,7 @@ final devicesJsonData = {
   ),
   'Galaxy S5': Device(
     userAgent:
-        'Mozilla/5.0 (Linux; Android 5.0; SM-G900P Build/LRX21T) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/141.0.7390.37 Mobile Safari/537.36',
+        'Mozilla/5.0 (Linux; Android 5.0; SM-G900P Build/LRX21T) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/144.0.7559.20 Mobile Safari/537.36',
     viewport: Viewport(width: 360, height: 640),
     deviceScaleFactor: 3,
     isMobile: true,
@@ -105,7 +105,7 @@ final devicesJsonData = {
   ),
   'Galaxy S5 landscape': Device(
     userAgent:
-        'Mozilla/5.0 (Linux; Android 5.0; SM-G900P Build/LRX21T) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/141.0.7390.37 Mobile Safari/537.36',
+        'Mozilla/5.0 (Linux; Android 5.0; SM-G900P Build/LRX21T) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/144.0.7559.20 Mobile Safari/537.36',
     viewport: Viewport(width: 640, height: 360),
     deviceScaleFactor: 3,
     isMobile: true,
@@ -114,7 +114,7 @@ final devicesJsonData = {
   ),
   'Galaxy S8': Device(
     userAgent:
-        'Mozilla/5.0 (Linux; Android 7.0; SM-G950U Build/NRD90M) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/141.0.7390.37 Mobile Safari/537.36',
+        'Mozilla/5.0 (Linux; Android 7.0; SM-G950U Build/NRD90M) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/144.0.7559.20 Mobile Safari/537.36',
     viewport: Viewport(width: 360, height: 740),
     deviceScaleFactor: 3,
     isMobile: true,
@@ -123,7 +123,7 @@ final devicesJsonData = {
   ),
   'Galaxy S8 landscape': Device(
     userAgent:
-        'Mozilla/5.0 (Linux; Android 7.0; SM-G950U Build/NRD90M) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/141.0.7390.37 Mobile Safari/537.36',
+        'Mozilla/5.0 (Linux; Android 7.0; SM-G950U Build/NRD90M) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/144.0.7559.20 Mobile Safari/537.36',
     viewport: Viewport(width: 740, height: 360),
     deviceScaleFactor: 3,
     isMobile: true,
@@ -132,7 +132,7 @@ final devicesJsonData = {
   ),
   'Galaxy S9+': Device(
     userAgent:
-        'Mozilla/5.0 (Linux; Android 8.0.0; SM-G965U Build/R16NW) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/141.0.7390.37 Mobile Safari/537.36',
+        'Mozilla/5.0 (Linux; Android 8.0.0; SM-G965U Build/R16NW) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/144.0.7559.20 Mobile Safari/537.36',
     viewport: Viewport(width: 320, height: 658),
     deviceScaleFactor: 4.5,
     isMobile: true,
@@ -141,7 +141,7 @@ final devicesJsonData = {
   ),
   'Galaxy S9+ landscape': Device(
     userAgent:
-        'Mozilla/5.0 (Linux; Android 8.0.0; SM-G965U Build/R16NW) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/141.0.7390.37 Mobile Safari/537.36',
+        'Mozilla/5.0 (Linux; Android 8.0.0; SM-G965U Build/R16NW) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/144.0.7559.20 Mobile Safari/537.36',
     viewport: Viewport(width: 658, height: 320),
     deviceScaleFactor: 4.5,
     isMobile: true,
@@ -150,7 +150,7 @@ final devicesJsonData = {
   ),
   'Galaxy S24': Device(
     userAgent:
-        'Mozilla/5.0 (Linux; Android 14; SM-S921U) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/141.0.7390.37 Mobile Safari/537.36',
+        'Mozilla/5.0 (Linux; Android 14; SM-S921U) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/144.0.7559.20 Mobile Safari/537.36',
     viewport: Viewport(width: 360, height: 780),
     deviceScaleFactor: 3,
     isMobile: true,
@@ -159,7 +159,7 @@ final devicesJsonData = {
   ),
   'Galaxy S24 landscape': Device(
     userAgent:
-        'Mozilla/5.0 (Linux; Android 14; SM-S921U) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/141.0.7390.37 Mobile Safari/537.36',
+        'Mozilla/5.0 (Linux; Android 14; SM-S921U) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/144.0.7559.20 Mobile Safari/537.36',
     viewport: Viewport(width: 780, height: 360),
     deviceScaleFactor: 3,
     isMobile: true,
@@ -168,7 +168,7 @@ final devicesJsonData = {
   ),
   'Galaxy A55': Device(
     userAgent:
-        'Mozilla/5.0 (Linux; Android 14; SM-A556B) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/141.0.7390.37 Mobile Safari/537.36',
+        'Mozilla/5.0 (Linux; Android 14; SM-A556B) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/144.0.7559.20 Mobile Safari/537.36',
     viewport: Viewport(width: 480, height: 1040),
     deviceScaleFactor: 2.25,
     isMobile: true,
@@ -177,7 +177,7 @@ final devicesJsonData = {
   ),
   'Galaxy A55 landscape': Device(
     userAgent:
-        'Mozilla/5.0 (Linux; Android 14; SM-A556B) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/141.0.7390.37 Mobile Safari/537.36',
+        'Mozilla/5.0 (Linux; Android 14; SM-A556B) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/144.0.7559.20 Mobile Safari/537.36',
     viewport: Viewport(width: 1040, height: 480),
     deviceScaleFactor: 2.25,
     isMobile: true,
@@ -186,7 +186,7 @@ final devicesJsonData = {
   ),
   'Galaxy Tab S4': Device(
     userAgent:
-        'Mozilla/5.0 (Linux; Android 8.1.0; SM-T837A) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/141.0.7390.37 Safari/537.36',
+        'Mozilla/5.0 (Linux; Android 8.1.0; SM-T837A) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/144.0.7559.20 Safari/537.36',
     viewport: Viewport(width: 712, height: 1138),
     deviceScaleFactor: 2.25,
     isMobile: true,
@@ -195,7 +195,7 @@ final devicesJsonData = {
   ),
   'Galaxy Tab S4 landscape': Device(
     userAgent:
-        'Mozilla/5.0 (Linux; Android 8.1.0; SM-T837A) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/141.0.7390.37 Safari/537.36',
+        'Mozilla/5.0 (Linux; Android 8.1.0; SM-T837A) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/144.0.7559.20 Safari/537.36',
     viewport: Viewport(width: 1138, height: 712),
     deviceScaleFactor: 2.25,
     isMobile: true,
@@ -204,7 +204,7 @@ final devicesJsonData = {
   ),
   'Galaxy Tab S9': Device(
     userAgent:
-        'Mozilla/5.0 (Linux; Android 14; SM-X710) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/141.0.7390.37 Safari/537.36',
+        'Mozilla/5.0 (Linux; Android 14; SM-X710) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/144.0.7559.20 Safari/537.36',
     viewport: Viewport(width: 640, height: 1024),
     deviceScaleFactor: 2.5,
     isMobile: true,
@@ -213,7 +213,7 @@ final devicesJsonData = {
   ),
   'Galaxy Tab S9 landscape': Device(
     userAgent:
-        'Mozilla/5.0 (Linux; Android 14; SM-X710) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/141.0.7390.37 Safari/537.36',
+        'Mozilla/5.0 (Linux; Android 14; SM-X710) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/144.0.7559.20 Safari/537.36',
     viewport: Viewport(width: 1024, height: 640),
     deviceScaleFactor: 2.5,
     isMobile: true,
@@ -870,7 +870,7 @@ final devicesJsonData = {
   ),
   'LG Optimus L70': Device(
     userAgent:
-        'Mozilla/5.0 (Linux; U; Android 4.4.2; en-us; LGMS323 Build/KOT49I.MS32310c) AppleWebKit/537.36 (KHTML, like Gecko) Version/4.0 Chrome/141.0.7390.37 Mobile Safari/537.36',
+        'Mozilla/5.0 (Linux; U; Android 4.4.2; en-us; LGMS323 Build/KOT49I.MS32310c) AppleWebKit/537.36 (KHTML, like Gecko) Version/4.0 Chrome/144.0.7559.20 Mobile Safari/537.36',
     viewport: Viewport(width: 384, height: 640),
     deviceScaleFactor: 1.25,
     isMobile: true,
@@ -879,7 +879,7 @@ final devicesJsonData = {
   ),
   'LG Optimus L70 landscape': Device(
     userAgent:
-        'Mozilla/5.0 (Linux; U; Android 4.4.2; en-us; LGMS323 Build/KOT49I.MS32310c) AppleWebKit/537.36 (KHTML, like Gecko) Version/4.0 Chrome/141.0.7390.37 Mobile Safari/537.36',
+        'Mozilla/5.0 (Linux; U; Android 4.4.2; en-us; LGMS323 Build/KOT49I.MS32310c) AppleWebKit/537.36 (KHTML, like Gecko) Version/4.0 Chrome/144.0.7559.20 Mobile Safari/537.36',
     viewport: Viewport(width: 640, height: 384),
     deviceScaleFactor: 1.25,
     isMobile: true,
@@ -888,7 +888,7 @@ final devicesJsonData = {
   ),
   'Microsoft Lumia 550': Device(
     userAgent:
-        'Mozilla/5.0 (Windows Phone 10.0; Android 4.2.1; Microsoft; Lumia 550) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/141.0.7390.37 Mobile Safari/537.36 Edge/14.14263',
+        'Mozilla/5.0 (Windows Phone 10.0; Android 4.2.1; Microsoft; Lumia 550) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/144.0.7559.20 Mobile Safari/537.36 Edge/14.14263',
     viewport: Viewport(width: 360, height: 640),
     deviceScaleFactor: 2,
     isMobile: true,
@@ -897,7 +897,7 @@ final devicesJsonData = {
   ),
   'Microsoft Lumia 550 landscape': Device(
     userAgent:
-        'Mozilla/5.0 (Windows Phone 10.0; Android 4.2.1; Microsoft; Lumia 550) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/141.0.7390.37 Mobile Safari/537.36 Edge/14.14263',
+        'Mozilla/5.0 (Windows Phone 10.0; Android 4.2.1; Microsoft; Lumia 550) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/144.0.7559.20 Mobile Safari/537.36 Edge/14.14263',
     viewport: Viewport(width: 640, height: 360),
     deviceScaleFactor: 2,
     isMobile: true,
@@ -906,7 +906,7 @@ final devicesJsonData = {
   ),
   'Microsoft Lumia 950': Device(
     userAgent:
-        'Mozilla/5.0 (Windows Phone 10.0; Android 4.2.1; Microsoft; Lumia 950) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/141.0.7390.37 Mobile Safari/537.36 Edge/14.14263',
+        'Mozilla/5.0 (Windows Phone 10.0; Android 4.2.1; Microsoft; Lumia 950) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/144.0.7559.20 Mobile Safari/537.36 Edge/14.14263',
     viewport: Viewport(width: 360, height: 640),
     deviceScaleFactor: 4,
     isMobile: true,
@@ -915,7 +915,7 @@ final devicesJsonData = {
   ),
   'Microsoft Lumia 950 landscape': Device(
     userAgent:
-        'Mozilla/5.0 (Windows Phone 10.0; Android 4.2.1; Microsoft; Lumia 950) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/141.0.7390.37 Mobile Safari/537.36 Edge/14.14263',
+        'Mozilla/5.0 (Windows Phone 10.0; Android 4.2.1; Microsoft; Lumia 950) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/144.0.7559.20 Mobile Safari/537.36 Edge/14.14263',
     viewport: Viewport(width: 640, height: 360),
     deviceScaleFactor: 4,
     isMobile: true,
@@ -924,7 +924,7 @@ final devicesJsonData = {
   ),
   'Nexus 10': Device(
     userAgent:
-        'Mozilla/5.0 (Linux; Android 6.0.1; Nexus 10 Build/MOB31T) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/141.0.7390.37 Safari/537.36',
+        'Mozilla/5.0 (Linux; Android 6.0.1; Nexus 10 Build/MOB31T) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/144.0.7559.20 Safari/537.36',
     viewport: Viewport(width: 800, height: 1280),
     deviceScaleFactor: 2,
     isMobile: true,
@@ -933,7 +933,7 @@ final devicesJsonData = {
   ),
   'Nexus 10 landscape': Device(
     userAgent:
-        'Mozilla/5.0 (Linux; Android 6.0.1; Nexus 10 Build/MOB31T) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/141.0.7390.37 Safari/537.36',
+        'Mozilla/5.0 (Linux; Android 6.0.1; Nexus 10 Build/MOB31T) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/144.0.7559.20 Safari/537.36',
     viewport: Viewport(width: 1280, height: 800),
     deviceScaleFactor: 2,
     isMobile: true,
@@ -942,7 +942,7 @@ final devicesJsonData = {
   ),
   'Nexus 4': Device(
     userAgent:
-        'Mozilla/5.0 (Linux; Android 4.4.2; Nexus 4 Build/KOT49H) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/141.0.7390.37 Mobile Safari/537.36',
+        'Mozilla/5.0 (Linux; Android 4.4.2; Nexus 4 Build/KOT49H) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/144.0.7559.20 Mobile Safari/537.36',
     viewport: Viewport(width: 384, height: 640),
     deviceScaleFactor: 2,
     isMobile: true,
@@ -951,7 +951,7 @@ final devicesJsonData = {
   ),
   'Nexus 4 landscape': Device(
     userAgent:
-        'Mozilla/5.0 (Linux; Android 4.4.2; Nexus 4 Build/KOT49H) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/141.0.7390.37 Mobile Safari/537.36',
+        'Mozilla/5.0 (Linux; Android 4.4.2; Nexus 4 Build/KOT49H) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/144.0.7559.20 Mobile Safari/537.36',
     viewport: Viewport(width: 640, height: 384),
     deviceScaleFactor: 2,
     isMobile: true,
@@ -960,7 +960,7 @@ final devicesJsonData = {
   ),
   'Nexus 5': Device(
     userAgent:
-        'Mozilla/5.0 (Linux; Android 6.0; Nexus 5 Build/MRA58N) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/141.0.7390.37 Mobile Safari/537.36',
+        'Mozilla/5.0 (Linux; Android 6.0; Nexus 5 Build/MRA58N) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/144.0.7559.20 Mobile Safari/537.36',
     viewport: Viewport(width: 360, height: 640),
     deviceScaleFactor: 3,
     isMobile: true,
@@ -969,7 +969,7 @@ final devicesJsonData = {
   ),
   'Nexus 5 landscape': Device(
     userAgent:
-        'Mozilla/5.0 (Linux; Android 6.0; Nexus 5 Build/MRA58N) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/141.0.7390.37 Mobile Safari/537.36',
+        'Mozilla/5.0 (Linux; Android 6.0; Nexus 5 Build/MRA58N) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/144.0.7559.20 Mobile Safari/537.36',
     viewport: Viewport(width: 640, height: 360),
     deviceScaleFactor: 3,
     isMobile: true,
@@ -978,7 +978,7 @@ final devicesJsonData = {
   ),
   'Nexus 5X': Device(
     userAgent:
-        'Mozilla/5.0 (Linux; Android 8.0.0; Nexus 5X Build/OPR4.170623.006) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/141.0.7390.37 Mobile Safari/537.36',
+        'Mozilla/5.0 (Linux; Android 8.0.0; Nexus 5X Build/OPR4.170623.006) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/144.0.7559.20 Mobile Safari/537.36',
     viewport: Viewport(width: 412, height: 732),
     deviceScaleFactor: 2.625,
     isMobile: true,
@@ -987,7 +987,7 @@ final devicesJsonData = {
   ),
   'Nexus 5X landscape': Device(
     userAgent:
-        'Mozilla/5.0 (Linux; Android 8.0.0; Nexus 5X Build/OPR4.170623.006) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/141.0.7390.37 Mobile Safari/537.36',
+        'Mozilla/5.0 (Linux; Android 8.0.0; Nexus 5X Build/OPR4.170623.006) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/144.0.7559.20 Mobile Safari/537.36',
     viewport: Viewport(width: 732, height: 412),
     deviceScaleFactor: 2.625,
     isMobile: true,
@@ -996,7 +996,7 @@ final devicesJsonData = {
   ),
   'Nexus 6': Device(
     userAgent:
-        'Mozilla/5.0 (Linux; Android 7.1.1; Nexus 6 Build/N6F26U) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/141.0.7390.37 Mobile Safari/537.36',
+        'Mozilla/5.0 (Linux; Android 7.1.1; Nexus 6 Build/N6F26U) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/144.0.7559.20 Mobile Safari/537.36',
     viewport: Viewport(width: 412, height: 732),
     deviceScaleFactor: 3.5,
     isMobile: true,
@@ -1005,7 +1005,7 @@ final devicesJsonData = {
   ),
   'Nexus 6 landscape': Device(
     userAgent:
-        'Mozilla/5.0 (Linux; Android 7.1.1; Nexus 6 Build/N6F26U) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/141.0.7390.37 Mobile Safari/537.36',
+        'Mozilla/5.0 (Linux; Android 7.1.1; Nexus 6 Build/N6F26U) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/144.0.7559.20 Mobile Safari/537.36',
     viewport: Viewport(width: 732, height: 412),
     deviceScaleFactor: 3.5,
     isMobile: true,
@@ -1014,7 +1014,7 @@ final devicesJsonData = {
   ),
   'Nexus 6P': Device(
     userAgent:
-        'Mozilla/5.0 (Linux; Android 8.0.0; Nexus 6P Build/OPP3.170518.006) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/141.0.7390.37 Mobile Safari/537.36',
+        'Mozilla/5.0 (Linux; Android 8.0.0; Nexus 6P Build/OPP3.170518.006) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/144.0.7559.20 Mobile Safari/537.36',
     viewport: Viewport(width: 412, height: 732),
     deviceScaleFactor: 3.5,
     isMobile: true,
@@ -1023,7 +1023,7 @@ final devicesJsonData = {
   ),
   'Nexus 6P landscape': Device(
     userAgent:
-        'Mozilla/5.0 (Linux; Android 8.0.0; Nexus 6P Build/OPP3.170518.006) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/141.0.7390.37 Mobile Safari/537.36',
+        'Mozilla/5.0 (Linux; Android 8.0.0; Nexus 6P Build/OPP3.170518.006) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/144.0.7559.20 Mobile Safari/537.36',
     viewport: Viewport(width: 732, height: 412),
     deviceScaleFactor: 3.5,
     isMobile: true,
@@ -1032,7 +1032,7 @@ final devicesJsonData = {
   ),
   'Nexus 7': Device(
     userAgent:
-        'Mozilla/5.0 (Linux; Android 6.0.1; Nexus 7 Build/MOB30X) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/141.0.7390.37 Safari/537.36',
+        'Mozilla/5.0 (Linux; Android 6.0.1; Nexus 7 Build/MOB30X) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/144.0.7559.20 Safari/537.36',
     viewport: Viewport(width: 600, height: 960),
     deviceScaleFactor: 2,
     isMobile: true,
@@ -1041,7 +1041,7 @@ final devicesJsonData = {
   ),
   'Nexus 7 landscape': Device(
     userAgent:
-        'Mozilla/5.0 (Linux; Android 6.0.1; Nexus 7 Build/MOB30X) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/141.0.7390.37 Safari/537.36',
+        'Mozilla/5.0 (Linux; Android 6.0.1; Nexus 7 Build/MOB30X) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/144.0.7559.20 Safari/537.36',
     viewport: Viewport(width: 960, height: 600),
     deviceScaleFactor: 2,
     isMobile: true,
@@ -1086,7 +1086,7 @@ final devicesJsonData = {
   ),
   'Pixel 2': Device(
     userAgent:
-        'Mozilla/5.0 (Linux; Android 8.0; Pixel 2 Build/OPD3.170816.012) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/141.0.7390.37 Mobile Safari/537.36',
+        'Mozilla/5.0 (Linux; Android 8.0; Pixel 2 Build/OPD3.170816.012) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/144.0.7559.20 Mobile Safari/537.36',
     viewport: Viewport(width: 411, height: 731),
     deviceScaleFactor: 2.625,
     isMobile: true,
@@ -1095,7 +1095,7 @@ final devicesJsonData = {
   ),
   'Pixel 2 landscape': Device(
     userAgent:
-        'Mozilla/5.0 (Linux; Android 8.0; Pixel 2 Build/OPD3.170816.012) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/141.0.7390.37 Mobile Safari/537.36',
+        'Mozilla/5.0 (Linux; Android 8.0; Pixel 2 Build/OPD3.170816.012) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/144.0.7559.20 Mobile Safari/537.36',
     viewport: Viewport(width: 731, height: 411),
     deviceScaleFactor: 2.625,
     isMobile: true,
@@ -1104,7 +1104,7 @@ final devicesJsonData = {
   ),
   'Pixel 2 XL': Device(
     userAgent:
-        'Mozilla/5.0 (Linux; Android 8.0.0; Pixel 2 XL Build/OPD1.170816.004) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/141.0.7390.37 Mobile Safari/537.36',
+        'Mozilla/5.0 (Linux; Android 8.0.0; Pixel 2 XL Build/OPD1.170816.004) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/144.0.7559.20 Mobile Safari/537.36',
     viewport: Viewport(width: 411, height: 823),
     deviceScaleFactor: 3.5,
     isMobile: true,
@@ -1113,7 +1113,7 @@ final devicesJsonData = {
   ),
   'Pixel 2 XL landscape': Device(
     userAgent:
-        'Mozilla/5.0 (Linux; Android 8.0.0; Pixel 2 XL Build/OPD1.170816.004) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/141.0.7390.37 Mobile Safari/537.36',
+        'Mozilla/5.0 (Linux; Android 8.0.0; Pixel 2 XL Build/OPD1.170816.004) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/144.0.7559.20 Mobile Safari/537.36',
     viewport: Viewport(width: 823, height: 411),
     deviceScaleFactor: 3.5,
     isMobile: true,
@@ -1122,7 +1122,7 @@ final devicesJsonData = {
   ),
   'Pixel 3': Device(
     userAgent:
-        'Mozilla/5.0 (Linux; Android 9; Pixel 3 Build/PQ1A.181105.017.A1) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/141.0.7390.37 Mobile Safari/537.36',
+        'Mozilla/5.0 (Linux; Android 9; Pixel 3 Build/PQ1A.181105.017.A1) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/144.0.7559.20 Mobile Safari/537.36',
     viewport: Viewport(width: 393, height: 786),
     deviceScaleFactor: 2.75,
     isMobile: true,
@@ -1131,7 +1131,7 @@ final devicesJsonData = {
   ),
   'Pixel 3 landscape': Device(
     userAgent:
-        'Mozilla/5.0 (Linux; Android 9; Pixel 3 Build/PQ1A.181105.017.A1) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/141.0.7390.37 Mobile Safari/537.36',
+        'Mozilla/5.0 (Linux; Android 9; Pixel 3 Build/PQ1A.181105.017.A1) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/144.0.7559.20 Mobile Safari/537.36',
     viewport: Viewport(width: 786, height: 393),
     deviceScaleFactor: 2.75,
     isMobile: true,
@@ -1140,7 +1140,7 @@ final devicesJsonData = {
   ),
   'Pixel 4': Device(
     userAgent:
-        'Mozilla/5.0 (Linux; Android 10; Pixel 4) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/141.0.7390.37 Mobile Safari/537.36',
+        'Mozilla/5.0 (Linux; Android 10; Pixel 4) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/144.0.7559.20 Mobile Safari/537.36',
     viewport: Viewport(width: 353, height: 745),
     deviceScaleFactor: 3,
     isMobile: true,
@@ -1149,7 +1149,7 @@ final devicesJsonData = {
   ),
   'Pixel 4 landscape': Device(
     userAgent:
-        'Mozilla/5.0 (Linux; Android 10; Pixel 4) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/141.0.7390.37 Mobile Safari/537.36',
+        'Mozilla/5.0 (Linux; Android 10; Pixel 4) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/144.0.7559.20 Mobile Safari/537.36',
     viewport: Viewport(width: 745, height: 353),
     deviceScaleFactor: 3,
     isMobile: true,
@@ -1158,7 +1158,7 @@ final devicesJsonData = {
   ),
   'Pixel 4a (5G)': Device(
     userAgent:
-        'Mozilla/5.0 (Linux; Android 11; Pixel 4a (5G)) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/141.0.7390.37 Mobile Safari/537.36',
+        'Mozilla/5.0 (Linux; Android 11; Pixel 4a (5G)) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/144.0.7559.20 Mobile Safari/537.36',
     viewport: Viewport(width: 412, height: 765),
     deviceScaleFactor: 2.63,
     isMobile: true,
@@ -1167,7 +1167,7 @@ final devicesJsonData = {
   ),
   'Pixel 4a (5G) landscape': Device(
     userAgent:
-        'Mozilla/5.0 (Linux; Android 11; Pixel 4a (5G)) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/141.0.7390.37 Mobile Safari/537.36',
+        'Mozilla/5.0 (Linux; Android 11; Pixel 4a (5G)) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/144.0.7559.20 Mobile Safari/537.36',
     viewport: Viewport(width: 840, height: 312),
     deviceScaleFactor: 2.63,
     isMobile: true,
@@ -1176,7 +1176,7 @@ final devicesJsonData = {
   ),
   'Pixel 5': Device(
     userAgent:
-        'Mozilla/5.0 (Linux; Android 11; Pixel 5) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/141.0.7390.37 Mobile Safari/537.36',
+        'Mozilla/5.0 (Linux; Android 11; Pixel 5) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/144.0.7559.20 Mobile Safari/537.36',
     viewport: Viewport(width: 393, height: 727),
     deviceScaleFactor: 2.75,
     isMobile: true,
@@ -1185,7 +1185,7 @@ final devicesJsonData = {
   ),
   'Pixel 5 landscape': Device(
     userAgent:
-        'Mozilla/5.0 (Linux; Android 11; Pixel 5) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/141.0.7390.37 Mobile Safari/537.36',
+        'Mozilla/5.0 (Linux; Android 11; Pixel 5) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/144.0.7559.20 Mobile Safari/537.36',
     viewport: Viewport(width: 802, height: 293),
     deviceScaleFactor: 2.75,
     isMobile: true,
@@ -1194,7 +1194,7 @@ final devicesJsonData = {
   ),
   'Pixel 7': Device(
     userAgent:
-        'Mozilla/5.0 (Linux; Android 14; Pixel 7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/141.0.7390.37 Mobile Safari/537.36',
+        'Mozilla/5.0 (Linux; Android 14; Pixel 7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/144.0.7559.20 Mobile Safari/537.36',
     viewport: Viewport(width: 412, height: 839),
     deviceScaleFactor: 2.625,
     isMobile: true,
@@ -1203,7 +1203,7 @@ final devicesJsonData = {
   ),
   'Pixel 7 landscape': Device(
     userAgent:
-        'Mozilla/5.0 (Linux; Android 14; Pixel 7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/141.0.7390.37 Mobile Safari/537.36',
+        'Mozilla/5.0 (Linux; Android 14; Pixel 7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/144.0.7559.20 Mobile Safari/537.36',
     viewport: Viewport(width: 863, height: 360),
     deviceScaleFactor: 2.625,
     isMobile: true,
@@ -1212,7 +1212,7 @@ final devicesJsonData = {
   ),
   'Moto G4': Device(
     userAgent:
-        'Mozilla/5.0 (Linux; Android 7.0; Moto G (4)) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/141.0.7390.37 Mobile Safari/537.36',
+        'Mozilla/5.0 (Linux; Android 7.0; Moto G (4)) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/144.0.7559.20 Mobile Safari/537.36',
     viewport: Viewport(width: 360, height: 640),
     deviceScaleFactor: 3,
     isMobile: true,
@@ -1221,7 +1221,7 @@ final devicesJsonData = {
   ),
   'Moto G4 landscape': Device(
     userAgent:
-        'Mozilla/5.0 (Linux; Android 7.0; Moto G (4)) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/141.0.7390.37 Mobile Safari/537.36',
+        'Mozilla/5.0 (Linux; Android 7.0; Moto G (4)) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/144.0.7559.20 Mobile Safari/537.36',
     viewport: Viewport(width: 640, height: 360),
     deviceScaleFactor: 3,
     isMobile: true,
@@ -1230,7 +1230,7 @@ final devicesJsonData = {
   ),
   'Desktop Chrome HiDPI': Device(
     userAgent:
-        'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/141.0.7390.37 Safari/537.36',
+        'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/144.0.7559.20 Safari/537.36',
     viewport: Viewport(width: 1280, height: 720),
     deviceScaleFactor: 2,
     isMobile: false,
@@ -1239,7 +1239,7 @@ final devicesJsonData = {
   ),
   'Desktop Edge HiDPI': Device(
     userAgent:
-        'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/141.0.7390.37 Safari/537.36 Edg/141.0.7390.37',
+        'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/144.0.7559.20 Safari/537.36 Edg/144.0.7559.20',
     viewport: Viewport(width: 1280, height: 720),
     deviceScaleFactor: 2,
     isMobile: false,
@@ -1248,7 +1248,7 @@ final devicesJsonData = {
   ),
   'Desktop Firefox HiDPI': Device(
     userAgent:
-        'Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:142.0.1) Gecko/20100101 Firefox/142.0.1',
+        'Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:145.0.2) Gecko/20100101 Firefox/145.0.2',
     viewport: Viewport(width: 1280, height: 720),
     deviceScaleFactor: 2,
     isMobile: false,
@@ -1266,7 +1266,7 @@ final devicesJsonData = {
   ),
   'Desktop Chrome': Device(
     userAgent:
-        'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/141.0.7390.37 Safari/537.36',
+        'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/144.0.7559.20 Safari/537.36',
     viewport: Viewport(width: 1280, height: 720),
     deviceScaleFactor: 1,
     isMobile: false,
@@ -1275,7 +1275,7 @@ final devicesJsonData = {
   ),
   'Desktop Edge': Device(
     userAgent:
-        'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/141.0.7390.37 Safari/537.36 Edg/141.0.7390.37',
+        'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/144.0.7559.20 Safari/537.36 Edg/144.0.7559.20',
     viewport: Viewport(width: 1280, height: 720),
     deviceScaleFactor: 1,
     isMobile: false,
@@ -1284,7 +1284,7 @@ final devicesJsonData = {
   ),
   'Desktop Firefox': Device(
     userAgent:
-        'Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:142.0.1) Gecko/20100101 Firefox/142.0.1',
+        'Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:145.0.2) Gecko/20100101 Firefox/145.0.2',
     viewport: Viewport(width: 1280, height: 720),
     deviceScaleFactor: 1,
     isMobile: false,

@@ -1,8 +1,8 @@
 @Tags(['real-browser'])
 library;
 
-import 'package:routed/routed.dart';
-import 'package:routed_testing/routed_testing.dart';
+import 'dart:io';
+
 import 'package:server_testing/server_testing.dart';
 
 class LoginForm extends Component {
@@ -32,9 +32,13 @@ void main() async {
     ),
   );
 
-  final engine = Engine()
-    ..get('/', (ctx) async {
-      await ctx.html('''
+  // Minimal server that renders a simple login page using dart:io
+  Future<void> handleRequest(HttpRequest request) async {
+    if (request.uri.path == '/' && request.method == 'GET') {
+      request.response
+        ..statusCode = HttpStatus.ok
+        ..headers.contentType = ContentType.html
+        ..write('''
       <html><head><title>Login</title></head>
       <body>
         <div id="login">
@@ -55,10 +59,17 @@ void main() async {
       </body>
       </html>
     ''');
-    });
+      await request.response.close();
+    } else {
+      request.response
+        ..statusCode = HttpStatus.notFound
+        ..write('Not Found');
+      await request.response.close();
+    }
+  }
 
-  // Start a real HTTP server for the engine and get its base URL before launching browser
-  final handler = RoutedRequestHandler(engine);
+  // Start a real HTTP server and get its base URL before launching browser
+  final handler = IoRequestHandler(handleRequest);
   final client = TestClient.ephemeralServer(handler);
   final baseUrl = await client.baseUrlFuture;
 

@@ -3,6 +3,7 @@ import 'package:routed/routed.dart';
 import 'package:routed/middlewares.dart';
 import 'package:routed_testing/routed_testing.dart';
 import 'package:server_testing/server_testing.dart';
+import '../test_engine.dart';
 
 void main() {
   group('basicAuth middleware', () {
@@ -11,7 +12,7 @@ void main() {
         late TestClient client;
 
         setUp(() {
-          final engine = Engine();
+          final engine = testEngine();
           engine.get(
             '/secret',
             (ctx) async {
@@ -65,7 +66,7 @@ void main() {
         });
 
         test('supports custom realm', () async {
-          final customEngine = Engine();
+          final customEngine = testEngine();
           customEngine.get(
             '/protected',
             (ctx) => ctx.json({'message': 'ok'}),
@@ -112,7 +113,7 @@ void main() {
         });
 
         test('supports multiple users', () async {
-          final multiUserEngine = Engine();
+          final multiUserEngine = testEngine();
           multiUserEngine.get(
             '/data',
             (ctx) async {

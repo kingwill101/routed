@@ -6,6 +6,7 @@ import 'package:routed_testing/routed_testing.dart';
 import 'package:server_testing/server_testing.dart';
 
 import 'test_helpers.dart';
+import 'test_engine.dart';
 
 void main() {
   group('Route Matching Tests', () {
@@ -34,7 +35,7 @@ void main() {
       final runner = PropertyTestRunner<Set<String>>(httpMethodSet(), (
         methods,
       ) async {
-        final engine = Engine();
+        final engine = testEngine();
         for (final method in methods) {
           engine.handle(method, '/test', (ctx) => ctx.string(method));
         }
@@ -42,9 +43,10 @@ void main() {
         final localClient = TestClient(RoutedRequestHandler(engine));
         for (final method in methods) {
           final response = await localClient.request(method, '/test');
-          response
-            ..assertStatus(200)
-            ..assertBodyEquals(method);
+          response.assertStatus(200);
+          if (method != 'HEAD') {
+            response.assertBodyEquals(method);
+          }
         }
 
         await localClient.close();
@@ -56,7 +58,7 @@ void main() {
     });
 
     test('Route mismatch returns 404', () async {
-      final engine = Engine();
+      final engine = testEngine();
 
       // Define a single POST route
       engine.post('/test_2', (ctx) => ctx.string('post ok'));
@@ -72,7 +74,7 @@ void main() {
 
   group('Trailing Slash Redirect Tests', () {
     test('Redirects for trailing slashes with 301 or 307', () async {
-      final engine = Engine(
+      final engine = testEngine(
         configItems: {
           'routing': {'redirect_trailing_slash': true},
         },
@@ -98,7 +100,7 @@ void main() {
     });
 
     test('Disables trailing slash redirects when configured', () async {
-      final engine = Engine(
+      final engine = testEngine(
         configItems: {
           'routing': {'redirect_trailing_slash': false},
         },
@@ -117,7 +119,7 @@ void main() {
 
   group('Path Parameters Tests', () {
     test('Correctly parses path parameters', () async {
-      final engine = Engine();
+      final engine = testEngine();
 
       engine.get('/test/{name}/{last_name}/{*wild}', (ctx) {
         final params = ctx.params;
@@ -151,7 +153,7 @@ void main() {
     });
 
     test('StaticFS returns 404 for non-existent directory', () async {
-      final engine = Engine();
+      final engine = testEngine();
 
       engine.staticFS('/static', Dir('/thisreallydoesntexist', fileSystem: fs));
 
@@ -167,7 +169,7 @@ void main() {
     });
 
     test('StaticFS handles file not found gracefully', () async {
-      final engine = Engine();
+      final engine = testEngine();
 
       final dir = fs.directory('testdir')..createSync();
 
@@ -183,7 +185,7 @@ void main() {
 
     test('Middleware called once per request for static files', () async {
       int middlewareCalls = 0;
-      final engine = Engine(
+      final engine = testEngine(
         middlewares: [
           (EngineContext ctx, Next next) async {
             middlewareCalls++;
@@ -207,7 +209,7 @@ void main() {
     });
 
     test('Static file serving works correctly', () async {
-      final engine = Engine();
+      final engine = testEngine();
 
       final dir = fs.directory("files")..createSync();
       final file = dir.childFile('test_file.txt')
@@ -244,7 +246,7 @@ void main() {
     });
 
     test('Directory listing works when enabled', () async {
-      final engine = Engine();
+      final engine = testEngine();
 
       final dir = fs.directory('listingtest')..createSync();
       dir.childFile('testfile1.txt').createSync();
@@ -268,7 +270,7 @@ void main() {
     });
 
     test('StaticFS returns 403 for path traversal attempts', () async {
-      final engine = Engine();
+      final engine = testEngine();
 
       final dir = fs.directory('file/is/very/secured')
         ..createSync(recursive: true);
@@ -283,7 +285,7 @@ void main() {
     });
 
     test('Directory listing disabled by default', () async {
-      final engine = Engine();
+      final engine = testEngine();
 
       final dir = fs.directory('nolist')..createSync();
       engine.static('/', dir.path, fileSystem: fs);
@@ -301,7 +303,7 @@ void main() {
     test('Middleware is applied once per request', () async {
       int middlewareCalls = 0;
 
-      final engine = Engine(
+      final engine = testEngine(
         middlewares: [
           (EngineContext ctx, Next next) async {
             middlewareCalls++;
@@ -325,7 +327,7 @@ void main() {
 
   group('Method Not Allowed Tests', () {
     test('Returns 405 with allowed methods when enabled', () async {
-      final engine = Engine(
+      final engine = testEngine(
         configItems: {
           'routing': {'handle_method_not_allowed': true},
         },
@@ -345,7 +347,7 @@ void main() {
     });
 
     test('Returns 404 for wrong methods when disabled', () async {
-      final engine = Engine(
+      final engine = testEngine(
         configItems: {
           'routing': {'handle_method_not_allowed': false},
         },

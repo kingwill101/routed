@@ -1,5 +1,7 @@
 import 'dart:async';
 
+import 'package:json_schema_builder/json_schema_builder.dart';
+import 'package:routed/src/config/schema.dart';
 import 'package:routed/src/container/container.dart';
 import 'package:routed/src/contracts/contracts.dart' show Config;
 import 'package:routed/src/utils/deep_copy.dart';
@@ -82,29 +84,99 @@ class ConfigDocEntry {
 
 /// Combined defaults and documentation returned by [ProvidesDefaultConfig].
 class ConfigDefaults {
-  const ConfigDefaults({List<ConfigDocEntry> docs = const <ConfigDocEntry>[]})
-    : _docs = docs;
+  const ConfigDefaults({
+    List<ConfigDocEntry> docs = const <ConfigDocEntry>[],
+    Map<String, dynamic>? values,
+    Map<String, Schema> schemas = const {},
+  }) : _docs = docs,
+       _values = values,
+       _schemas = schemas;
 
   final List<ConfigDocEntry> _docs;
+  final Map<String, dynamic>? _values;
+  final Map<String, Schema> _schemas;
+
+  /// The JSON Schemas for this configuration, keyed by root path.
+  Map<String, Schema> get schemas => Map.unmodifiable(_schemas);
 
   /// Default configuration values keyed by dotted path.
-  Map<String, dynamic> get values => _computeDefaults(_docs).values;
+  Map<String, dynamic> get values {
+    if (_values != null) {
+      return deepCopyMap(_values);
+    }
+
+    if (_schemas.isNotEmpty) {
+      final result = <String, dynamic>{};
+      for (final entry in _schemas.entries) {
+        result[entry.key] = ConfigSchema.extractDefaults(entry.value);
+      }
+      return result;
+    }
+
+    return _computeDefaults(_docs).values;
+  }
 
   /// Documentation entries describing configuration fields.
   List<ConfigDocEntry> get docs {
-    final computed = _computeDefaults(_docs);
-    return _mergeDefaultValues(computed.values, computed.docDefaults, _docs);
+    var effectiveDocs = _docs;
+    if (effectiveDocs.isEmpty && _schemas.isNotEmpty) {
+      effectiveDocs = [];
+      for (final entry in _schemas.entries) {
+        effectiveDocs.addAll(
+          ConfigSchema.toDocEntries(entry.value, pathBase: entry.key),
+        );
+      }
+    }
+
+    final computed = _computeDefaults(effectiveDocs);
+    final values = _values;
+    final resolvedValues = values != null
+        ? deepCopyMap(values)
+        : computed.values;
+    return _mergeDefaultValues(
+      resolvedValues,
+      computed.docDefaults,
+      effectiveDocs,
+    );
   }
 
   /// Produces a snapshot containing both values and documentation in one pass.
   ConfigDefaultsSnapshot snapshot() {
-    final computed = _computeDefaults(_docs);
+    var effectiveDocs = _docs;
+    if (effectiveDocs.isEmpty && _schemas.isNotEmpty) {
+      effectiveDocs = [];
+      for (final entry in _schemas.entries) {
+        effectiveDocs.addAll(
+          ConfigSchema.toDocEntries(entry.value, pathBase: entry.key),
+        );
+      }
+    }
+
+    final computed = _computeDefaults(effectiveDocs);
+
+    Map<String, dynamic> resolvedValues;
+    if (_values != null) {
+      resolvedValues = deepCopyMap(_values);
+    } else if (_schemas.isNotEmpty) {
+      resolvedValues = <String, dynamic>{};
+      for (final entry in _schemas.entries) {
+        resolvedValues[entry.key] = ConfigSchema.extractDefaults(entry.value);
+      }
+    } else {
+      resolvedValues = computed.values;
+    }
+
     final mergedDocs = _mergeDefaultValues(
-      computed.values,
+      resolvedValues,
       computed.docDefaults,
-      _docs,
+      effectiveDocs,
     );
-    return ConfigDefaultsSnapshot(values: computed.values, docs: mergedDocs);
+
+    return ConfigDefaultsSnapshot(
+      values: resolvedValues,
+      docs: mergedDocs,
+      schemas: schemas,
+    );
   }
 
   static _ComputedDefaults _computeDefaults(List<ConfigDocEntry> docs) {
@@ -158,10 +230,15 @@ class _ComputedDefaults {
 }
 
 class ConfigDefaultsSnapshot {
-  ConfigDefaultsSnapshot({required this.values, required this.docs});
+  ConfigDefaultsSnapshot({
+    required this.values,
+    required this.docs,
+    this.schemas = const {},
+  });
 
   final Map<String, dynamic> values;
   final List<ConfigDocEntry> docs;
+  final Map<String, Schema> schemas;
 }
 
 /// Base class for service providers that register services with the container.
@@ -210,6 +287,9 @@ abstract class ServiceProvider {
 mixin ProvidesDefaultConfig on ServiceProvider {
   /// Default configuration (values + documentation) contributed by this provider.
   ConfigDefaults get defaultConfig;
+
+  /// The JSON Schemas for this configuration.
+  Map<String, Schema> get schemas => defaultConfig.schemas;
 
   /// Optional identifier used when tracking config contributions.
   String get configSource => runtimeType.toString();

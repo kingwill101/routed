@@ -18,11 +18,13 @@ environment:
 
 dependencies:
   intl: ^0.20.2
-  crypto: ^3.0.3
-  routed: ^0.2.0
+  crypto: ^3.0.7
+  routed: ^0.3.0
 
 dev_dependencies:
+  contextual: ^2.1.0
   lints: ^6.0.0
-  routed_testing: ^0.2.1
-  server_testing: ^0.2.0
-  test: ^1.26.3
+  path: ^1.9.1
+  routed_testing: ^0.3.0
+  server_testing: ^0.3.0
+  test: ^1.29.0

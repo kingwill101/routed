@@ -4,6 +4,9 @@ void main() async {
   // Initialize the browser testing environment before any tests
   await testBootstrap(BrowserConfig(verbose: true, autoInstall: true));
 
+  bool hasOverride(String browserName) =>
+      TestBootstrap.getBinaryOverride(browserName) != null;
+
   group('Browser Management', () {
     group('listAvailableBrowsers', () {
       test('should return a list of available browsers', () async {
@@ -131,6 +134,7 @@ void main() async {
       });
 
       test('should install chromium if not already installed', () async {
+        final override = hasOverride('chromium');
         final wasInstalled = await BrowserManagement.isBrowserInstalled(
           'chromium',
         );
@@ -139,7 +143,7 @@ void main() async {
           print('Installing chromium...');
           final result = await BrowserManagement.installBrowser('chromium');
 
-          expect(result, isTrue);
+          expect(result, override ? isFalse : isTrue);
 
           // Verify installation
           final isNowInstalled = await BrowserManagement.isBrowserInstalled(
@@ -156,7 +160,7 @@ void main() async {
             'chromium',
             force: true,
           );
-          expect(result, isTrue);
+          expect(result, override ? isFalse : isTrue);
 
           print('Chromium force reinstall successful');
         }
@@ -209,7 +213,7 @@ void main() async {
         print('Updating chromium...');
         final result = await BrowserManagement.updateBrowser('chromium');
 
-        expect(result, isTrue);
+        expect(result, hasOverride('chromium') ? isFalse : isTrue);
 
         // Verify browser is still installed after update
         final isInstalled = await BrowserManagement.isBrowserInstalled(
@@ -226,7 +230,7 @@ void main() async {
         print('Updating firefox (may install if not present)...');
 
         final result = await BrowserManagement.updateBrowser('firefox');
-        expect(result, isA<bool>());
+        expect(result, hasOverride('firefox') ? isFalse : isA<bool>());
 
         // Verify browser is installed after update
         final isInstalled = await BrowserManagement.isBrowserInstalled(

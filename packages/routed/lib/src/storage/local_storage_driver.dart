@@ -1,7 +1,6 @@
 import 'package:file/file.dart' as file;
 import 'package:file/local.dart' as local;
-import 'package:path/path.dart' as p;
-import 'package:routed/src/provider/config_utils.dart';
+import 'package:routed/src/config/specs/storage_drivers.dart';
 import 'package:routed/src/provider/provider.dart';
 import 'package:routed/src/storage/storage_drivers.dart';
 import 'package:routed/src/storage/storage_manager.dart';
@@ -10,19 +9,15 @@ import 'package:routed/src/storage/storage_manager.dart';
 class LocalStorageDriver {
   const LocalStorageDriver();
 
+  static const LocalStorageDiskSpec spec = LocalStorageDiskSpec();
+
   /// Computes the root path for a disk, applying defaults when omitted.
   String resolveRoot(
-    Map<String, dynamic> configuration,
+    String? configuredRoot,
     String diskName, {
     String? storageRoot,
   }) {
-    final resolved = parseStringLike(
-      configuration['root'],
-      context: 'storage.disks.$diskName.root',
-      allowEmpty: true,
-      coerceNonString: true,
-      throwOnInvalid: false,
-    );
+    final resolved = configuredRoot?.trim();
     if (resolved != null && resolved.isNotEmpty) {
       return resolved;
     }
@@ -34,45 +29,34 @@ class LocalStorageDriver {
 
   /// Produces a `StorageDisk` backed by the local file system.
   StorageDisk build(StorageDriverContext context) {
+    final config = _resolveConfig(context);
     final root = resolveRoot(
-      context.configuration,
+      config.root,
       context.diskName,
       storageRoot: context.storageRoot,
     );
 
     return LocalStorageDisk(
       root: root,
-      fileSystem: _resolveFileSystem(context.configuration, context.manager),
+      fileSystem: config.fileSystem ?? context.manager.defaultFileSystem,
     );
   }
 
   /// Documents the configuration accepted by the local driver.
   List<ConfigDocEntry> documentation(StorageDriverDocContext context) {
-    return <ConfigDocEntry>[
-      ConfigDocEntry(
-        path: context.path('root'),
-        type: 'string',
-        description:
-            'Filesystem path used as the disk root (defaults to storage/app for the local disk, or storage/<name> for other disks).',
-      ),
-      ConfigDocEntry(
-        path: context.path('file_system'),
-        type: 'FileSystem',
-        description:
-            'Optional file system override used when operating the local disk.',
-      ),
-    ];
+    return spec.docs(pathBase: context.pathBase);
   }
 
-  file.FileSystem _resolveFileSystem(
-    Map<String, dynamic> rawConfig,
-    StorageManager manager,
-  ) {
-    final fs = rawConfig['file_system'];
-    if (fs is file.FileSystem) {
-      return fs;
-    }
-    return manager.defaultFileSystem;
+  LocalStorageDiskConfig _resolveConfig(StorageDriverContext context) {
+    final specContext = StorageDriverSpecContext(
+      diskName: context.diskName,
+      pathBase: 'storage.disks.${context.diskName}',
+    );
+    final merged = spec.mergeDefaults(
+      context.configuration,
+      context: specContext,
+    );
+    return spec.fromMap(merged, context: specContext);
   }
 
   String _defaultRootFor(String diskName) {
@@ -93,9 +77,10 @@ class LocalStorageDisk implements StorageDisk {
   final String _root;
 
   static String _normalizeRoot(String root, file.FileSystem fileSystem) {
-    final currentDir = p.normalize(fileSystem.currentDirectory.path);
-    final resolved = p.normalize(
-      p.isAbsolute(root) ? root : p.join(currentDir, root),
+    final pathContext = fileSystem.path;
+    final currentDir = pathContext.normalize(fileSystem.currentDirectory.path);
+    final resolved = pathContext.normalize(
+      pathContext.isAbsolute(root) ? root : pathContext.join(currentDir, root),
     );
     return resolved;
   }
@@ -108,7 +93,8 @@ class LocalStorageDisk implements StorageDisk {
     if (path.isEmpty) {
       return _root;
     }
-    return p.normalize(p.join(_root, path));
+    final pathContext = _fileSystem.path;
+    return pathContext.normalize(pathContext.join(_root, path));
   }
 
   String get root => _root;

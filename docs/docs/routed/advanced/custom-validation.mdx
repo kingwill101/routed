@@ -124,13 +124,15 @@ class PhoneNumberRule implements ValidationRule {
 
 First, register your custom rules (pass a factory; rule names must be unique):
 
+> Note: `ValidationRuleRegistry` is registered by `RoutingServiceProvider`. If you construct `Engine(includeDefaultProviders: false)`, register that provider (or register the registry manually) before calling `engine.container.get<ValidationRuleRegistry>()`.
+
 ```dart
 void main() {
-  Validator.registerRule(() => PasswordStrengthRule());
-  Validator.registerRule(() => CreditCardRule());
-  Validator.registerRule(() => PhoneNumberRule());
-
   final engine = Engine();
+  final rules = engine.container.get<ValidationRuleRegistry>();
+  rules.register(() => PasswordStrengthRule());
+  rules.register(() => CreditCardRule());
+  rules.register(() => PhoneNumberRule());
   // ... rest of setup
 }
 ```

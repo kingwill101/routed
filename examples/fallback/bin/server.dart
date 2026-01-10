@@ -11,11 +11,13 @@ void main() async {
     path: '/api',
     builder: (api) {
       // General API fallback
-      api.fallback((ctx) => ctx.json({
-            'error': 'API route not found',
-            'scope': 'api',
-            'path': ctx.uri.path,
-          }));
+      api.fallback(
+        (ctx) => ctx.json({
+          'error': 'API route not found',
+          'scope': 'api',
+          'path': ctx.uri.path,
+        }),
+      );
 
       api.group(
         path: '/v1',
@@ -24,11 +26,13 @@ void main() async {
           v1.get('/users', (ctx) => ctx.json({'users': []}));
 
           // V1-specific fallback
-          v1.fallback((ctx) => ctx.json({
-                'error': 'V1 API route not found',
-                'scope': 'v1',
-                'path': ctx.uri.path,
-              }));
+          v1.fallback(
+            (ctx) => ctx.json({
+              'error': 'V1 API route not found',
+              'scope': 'v1',
+              'path': ctx.uri.path,
+            }),
+          );
         },
       );
     },
@@ -46,10 +50,12 @@ void main() async {
       },
     ],
     builder: (router) {
-      router.fallback((ctx) => ctx.json({
-            'error': 'Secured route not found',
-            'path': ctx.uri.path,
-          }));
+      router.fallback(
+        (ctx) => ctx.json({
+          'error': 'Secured route not found',
+          'path': ctx.uri.path,
+        }),
+      );
     },
   );
 

@@ -19,14 +19,17 @@ class WebSocketEngineRoute {
     required this.handler,
     required this.pattern,
     required this.paramInfo,
+    required RoutePatternRegistry patternRegistry,
     List<Middleware>? middlewares,
-  }) : middlewares = List<Middleware>.from(middlewares ?? const []);
+  }) : _patternRegistry = patternRegistry,
+       middlewares = List<Middleware>.from(middlewares ?? const []);
 
   final String path;
   final RegExp pattern;
   final Map<String, ParamInfo> paramInfo;
   final WebSocketHandler handler;
   final List<Middleware> middlewares;
+  final RoutePatternRegistry _patternRegistry;
 
   Map<String, dynamic> extractParameters(String uri) {
     final match = pattern.firstMatch(uri) ?? pattern.firstMatch('$uri/');
@@ -47,7 +50,7 @@ class WebSocketEngineRoute {
         }
       }
 
-      return MapEntry(key, EngineRoute._castParameter(decodedValue, info.type));
+      return MapEntry(key, _patternRegistry.cast(decodedValue, info.type));
     });
   }
 }

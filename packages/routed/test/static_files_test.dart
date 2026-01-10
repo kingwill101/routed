@@ -2,11 +2,11 @@ import 'dart:io';
 
 import 'package:file/memory.dart';
 import 'package:property_testing/property_testing.dart';
-import 'package:routed/routed.dart';
 import 'package:routed/src/file_handler.dart';
 import 'package:routed_testing/routed_testing.dart';
 import 'package:server_testing/server_testing.dart';
 
+import 'test_engine.dart';
 import 'test_helpers.dart';
 
 void main() {
@@ -20,7 +20,7 @@ void main() {
     test(
       'Serve existing file (GET + HEAD) with correct headers/body',
       () async {
-        final engine = Engine();
+        final engine = testEngine();
         addTearDown(engine.close);
         final dir = fs.directory('files')..createSync();
         final file = dir.childFile('hello.txt')
@@ -52,7 +52,7 @@ void main() {
         _staticRangeSampleGen(),
         (sample) async {
           final fs = MemoryFileSystem();
-          final engine = Engine();
+          final engine = testEngine();
           final dir = fs.directory('rng')..createSync();
           dir.childFile('data.txt').writeAsStringSync(sample.content);
 
@@ -87,7 +87,7 @@ void main() {
     });
 
     test('Non-existent file returns 404', () async {
-      final engine = Engine();
+      final engine = testEngine();
       addTearDown(engine.close);
       final dir = fs.directory('empty')..createSync();
       engine.static('/s', dir.path, fileSystem: fs);
@@ -98,7 +98,7 @@ void main() {
     });
 
     test('Path traversal attempt blocked (../)', () async {
-      final engine = Engine();
+      final engine = testEngine();
       addTearDown(engine.close);
       final dir = fs.directory('secured')..createSync(recursive: true);
       engine.static('/sec', dir.path, fileSystem: fs);
@@ -110,7 +110,7 @@ void main() {
     });
 
     test('Directory listing disabled by default (404)', () async {
-      final engine = Engine();
+      final engine = testEngine();
       addTearDown(engine.close);
       final dir = fs.directory('nolist')..createSync();
       engine.static('/', dir.path, fileSystem: fs);
@@ -122,7 +122,7 @@ void main() {
     test(
       'Directory listing enabled shows entries & html content-type',
       () async {
-        final engine = Engine();
+        final engine = testEngine();
         addTearDown(engine.close);
         final dir = fs.directory('list')..createSync();
         dir.childFile('a.txt').createSync();
@@ -143,7 +143,7 @@ void main() {
     );
 
     test('Range request single-part 206 with correct Content-Range', () async {
-      final engine = Engine();
+      final engine = testEngine();
       addTearDown(engine.close);
       final dir = fs.directory('rng')..createSync();
       dir.childFile('data.txt').writeAsStringSync('ABCDEFGHIJ');
@@ -163,7 +163,7 @@ void main() {
     });
 
     test('Range request invalid -> 416', () async {
-      final engine = Engine();
+      final engine = testEngine();
       addTearDown(engine.close);
       final dir = fs.directory('rng2')..createSync();
       dir.childFile('data.txt').writeAsStringSync('12345');
@@ -180,7 +180,7 @@ void main() {
     });
 
     test('If-Modified-Since -> 304', () async {
-      final engine = Engine();
+      final engine = testEngine();
       addTearDown(engine.close);
       final dir = fs.directory('mod')..createSync();
       dir.childFile('data.txt').writeAsStringSync('etag');
@@ -207,7 +207,7 @@ void main() {
     });
 
     test('HEAD request does not include body bytes', () async {
-      final engine = Engine();
+      final engine = testEngine();
       addTearDown(engine.close);
       final dir = fs.directory('head')..createSync();
       dir.childFile('h.txt').writeAsStringSync('HEADDATA');
@@ -220,7 +220,7 @@ void main() {
     });
 
     test('Serving binary file sets octet-stream', () async {
-      final engine = Engine();
+      final engine = testEngine();
       addTearDown(engine.close);
       final dir = fs.directory('bin')..createSync();
       dir
@@ -236,7 +236,7 @@ void main() {
     });
 
     test('Deep nested path resolves correctly', () async {
-      final engine = Engine();
+      final engine = testEngine();
       addTearDown(engine.close);
       final nested = fs.directory('root/a/b/c')..createSync(recursive: true);
       nested.childFile('deep.txt').writeAsStringSync('deep');
@@ -249,7 +249,7 @@ void main() {
     });
 
     test('Directory listing excludes parent directory navigation', () async {
-      final engine = Engine();
+      final engine = testEngine();
       addTearDown(engine.close);
       final dir = fs.directory('list2')..createSync();
       dir.childFile('x.txt').createSync();
@@ -266,7 +266,7 @@ void main() {
     });
 
     test('Range request suffix bytes=-4', () async {
-      final engine = Engine();
+      final engine = testEngine();
       addTearDown(engine.close);
       final dir = fs.directory('rng3')..createSync();
       dir.childFile('tail.txt').writeAsStringSync('0123456789');
@@ -283,7 +283,7 @@ void main() {
     });
 
     test('Range request open-ended bytes=3-', () async {
-      final engine = Engine();
+      final engine = testEngine();
       addTearDown(engine.close);
       final dir = fs.directory('rng4')..createSync();
       dir.childFile('open.txt').writeAsStringSync('abcdefghij');
@@ -300,7 +300,7 @@ void main() {
     });
 
     test('If-Modified-Since older date returns 200', () async {
-      final engine = Engine();
+      final engine = testEngine();
       addTearDown(engine.close);
       final dir = fs.directory('mod2')..createSync();
       dir.childFile('d.txt').writeAsStringSync('data');
@@ -318,7 +318,7 @@ void main() {
     });
 
     test('HEAD missing file returns 404 without body', () async {
-      final engine = Engine();
+      final engine = testEngine();
       addTearDown(engine.close);
       final dir = fs.directory('headmiss')..createSync();
       engine.static('/hm', dir.path, fileSystem: fs);
@@ -330,7 +330,7 @@ void main() {
     });
 
     test('StaticFile single file mapping works', () async {
-      final engine = Engine();
+      final engine = testEngine();
       addTearDown(engine.close);
       final dir = fs.directory('one')..createSync();
       final f = dir.childFile('only.txt')..writeAsStringSync('only');

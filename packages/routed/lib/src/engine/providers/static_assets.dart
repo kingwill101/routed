@@ -2,14 +2,13 @@ import 'dart:async';
 
 import 'package:file/file.dart' as file;
 import 'package:file/local.dart' as local;
-import 'package:path/path.dart' as p;
+import 'package:routed/src/config/specs/static_assets.dart';
 import 'package:routed/src/container/container.dart';
 import 'package:routed/src/context/context.dart';
 import 'package:routed/src/contracts/contracts.dart' show Config;
 import 'package:routed/src/engine/config.dart';
 import 'package:routed/src/engine/middleware_registry.dart';
 import 'package:routed/src/file_handler.dart';
-import 'package:routed/src/provider/config_utils.dart';
 import 'package:routed/src/provider/provider.dart';
 import 'package:routed/src/router/types.dart';
 import 'package:routed/src/storage/local_storage_driver.dart';
@@ -22,59 +21,38 @@ class StaticAssetsServiceProvider extends ServiceProvider
   List<_StaticMount> _mounts = const [];
   late file.FileSystem _fallbackFileSystem;
   StorageManager? _storageManager;
+  static const StaticAssetsConfigSpec spec = StaticAssetsConfigSpec();
 
   @override
-  ConfigDefaults get defaultConfig => const ConfigDefaults(
-    docs: [
-      ConfigDocEntry(
-        path: 'static.enabled',
-        type: 'bool',
-        description: 'Enable static asset serving.',
-        defaultValue: false,
-      ),
-      ConfigDocEntry(
-        path: 'static.mounts',
-        type: 'list<map>',
-        description: 'List of static mount configurations.',
-        defaultValue: <Map<String, dynamic>>[],
-      ),
-      ConfigDocEntry(
-        path: 'static.mounts[].route',
-        type: 'string',
-        description: 'Route prefix clients use to fetch assets.',
-      ),
-      ConfigDocEntry(
-        path: 'static.mounts[].disk',
-        type: 'string',
-        description: 'Storage disk that hosts the assets.',
-      ),
-      ConfigDocEntry(
-        path: 'static.mounts[].path',
-        type: 'string',
-        description: 'Optional subdirectory within the disk.',
-      ),
-      ConfigDocEntry(
-        path: 'static.mounts[].index',
-        type: 'string',
-        description: 'Default index file served when a directory is requested.',
-      ),
-      ConfigDocEntry(
-        path: 'static.mounts[].list_directories',
-        type: 'bool',
-        description: 'Allow directory listings for this mount.',
-      ),
-      ConfigDocEntry(
-        path: 'http.middleware_sources',
-        type: 'map',
-        description: 'Static asset middleware references registered globally.',
-        defaultValue: <String, Object?>{
-          'routed.static': <String, Object?>{
-            'global': <String>['routed.static.assets'],
-          },
+  ConfigDefaults get defaultConfig {
+    final values = spec.defaultsWithRoot();
+    values['http'] = {
+      'middleware_sources': {
+        'routed.static': {
+          'global': ['routed.static.assets'],
         },
-      ),
-    ],
-  );
+      },
+    };
+
+    return ConfigDefaults(
+      docs: [
+        const ConfigDocEntry(
+          path: 'http.middleware_sources',
+          type: 'map',
+          description:
+              'Static asset middleware references registered globally.',
+          defaultValue: <String, Object?>{
+            'routed.static': <String, Object?>{
+              'global': <String>['routed.static.assets'],
+            },
+          },
+        ),
+        ...spec.docs(),
+      ],
+      values: values,
+      schemas: spec.schemaWithRoot(),
+    );
+  }
 
   @override
   void register(Container container) {
@@ -140,57 +118,26 @@ class StaticAssetsServiceProvider extends ServiceProvider
   }
 
   void _applyConfig(Config config) {
-    final resolved = _resolveStaticConfig(config);
-    _enabled = resolved.enabled && resolved.mounts.isNotEmpty;
-    _mounts = resolved.mounts;
-  }
-
-  _StaticConfig _resolveStaticConfig(Config config) {
-    var enabled = config.getBool('static.enabled');
+    final resolved = spec.resolve(config);
     final mounts = <_StaticMount>[];
-
-    void addMount(Map<String, dynamic> node, int index) {
-      final mount = _StaticMount.fromConfig(
-        node,
-        contextPath: 'static.mounts[$index]',
-        storage: _storageManager,
-        fallbackFileSystem: _fallbackFileSystem,
+    for (final mount in resolved.mounts) {
+      mounts.add(
+        _StaticMount.fromSpec(
+          mount,
+          storage: _storageManager,
+          fallbackFileSystem: _fallbackFileSystem,
+        ),
       );
-      if (mount != null) {
-        mounts.add(mount);
-      }
     }
 
-    final mountsNode = config.get<Iterable<dynamic>?>('static.mounts');
-    if (mountsNode is Iterable) {
-      var idx = 0;
-      for (final entry in mountsNode) {
-        if (entry is Map || entry is Config) {
-          final mountSource = entry as Object;
-          addMount(stringKeyedMap(mountSource, 'static.mounts[$idx]'), idx);
-        } else {
-          throw ProviderConfigException('static.mounts[$idx] must be a map');
-        }
-        idx++;
-      }
-    }
     final deduped = <String, _StaticMount>{};
     for (final mount in mounts) {
       deduped[mount.route] = mount;
     }
 
-    return _StaticConfig(
-      enabled: enabled,
-      mounts: deduped.values.toList(growable: false),
-    );
+    _enabled = resolved.enabled && deduped.isNotEmpty;
+    _mounts = deduped.values.toList(growable: false);
   }
-}
-
-class _StaticConfig {
-  const _StaticConfig({required this.enabled, required this.mounts});
-
-  final bool enabled;
-  final List<_StaticMount> mounts;
 }
 
 class _StaticMount {
@@ -210,54 +157,27 @@ class _StaticMount {
   final String? indexFile;
   final String _rootPath;
 
-  static _StaticMount? fromConfig(
-    Map<String, dynamic> node, {
+  static _StaticMount fromSpec(
+    StaticMountConfig config, {
     StorageManager? storage,
     required file.FileSystem fallbackFileSystem,
-    required String contextPath,
   }) {
-    final rawRoute =
-        node.getString('route', allowEmpty: true) ??
-        node.getString('prefix', allowEmpty: true) ??
-        '/';
-    final route = _normalizeRoute(rawRoute);
-
-    final diskRaw = node['disk'];
-    String? diskName;
-    if (diskRaw != null) {
-      if (diskRaw is! String) {
-        throw ProviderConfigException('$contextPath.disk must be a string');
-      }
-      diskName = diskRaw;
-    }
-    final relativePath = node.getString('path', allowEmpty: true) ?? '';
-
-    final indexToken = node.getString('index', allowEmpty: true);
-    final indexFile = indexToken == null || indexToken.isEmpty
+    final route = _normalizeRoute(config.route);
+    final normalizedDiskName = config.disk == null || config.disk!.isEmpty
         ? null
-        : indexToken;
+        : config.disk;
+    final relativePath = config.path;
+    final indexFile = config.index;
+    final listDirectories = config.listDirectories;
 
-    final listDirectories =
-        node.getBool('list_directories') || node.getBool('directory_listing');
-
-    final normalizedDiskName = diskName == null || diskName.isEmpty
-        ? null
-        : diskName;
-
-    final customFs = node['file_system'];
+    final customFs = config.fileSystem;
     file.FileSystem effectiveFs;
     String absolutePath;
-    String rootPath;
 
     if (customFs != null) {
-      if (customFs is! file.FileSystem) {
-        throw ProviderConfigException(
-          '$contextPath.file_system must implement FileSystem',
-        );
-      }
       effectiveFs = customFs;
       final fsPath = effectiveFs.path;
-      final rootValue = node.getString('root', allowEmpty: true) ?? '';
+      final rootValue = config.root ?? '';
       final current = effectiveFs.currentDirectory.path;
       final resolvedRoot = rootValue.isEmpty
           ? current
@@ -266,7 +186,6 @@ class _StaticMount {
                   ? rootValue
                   : fsPath.join(current, rootValue),
             );
-      rootPath = resolvedRoot;
       absolutePath = relativePath.isEmpty
           ? resolvedRoot
           : fsPath.normalize(fsPath.join(resolvedRoot, relativePath));
@@ -278,7 +197,6 @@ class _StaticMount {
       );
       effectiveFs = disk.fileSystem;
       absolutePath = disk.resolve(relativePath);
-      rootPath = disk.resolve('');
     }
 
     final dir = Dir(
@@ -287,7 +205,7 @@ class _StaticMount {
       fileSystem: effectiveFs,
     );
     final handler = FileHandler.fromDir(dir);
-    rootPath = _resolveRootPath(dir);
+    final rootPath = _resolveRootPath(dir);
 
     return _StaticMount._(
       route,
@@ -300,6 +218,7 @@ class _StaticMount {
   }
 
   Future<bool> tryServe(EngineContext ctx, String requestPath) async {
+    final pathContext = _dir.fileSystem.path;
     final match = _match(requestPath);
     if (match == null) {
       return false;
@@ -311,7 +230,7 @@ class _StaticMount {
     if (isDirectoryRequest && indexFile != null) {
       final indexTarget = relative.isEmpty
           ? indexFile!
-          : p.join(relative, indexFile!);
+          : pathContext.join(relative, indexFile!);
       if (await _entityExists(indexTarget)) {
         await _handler.serveFile(ctx, indexTarget);
         return true;
@@ -373,7 +292,7 @@ class _StaticMount {
   Future<bool> _entityExists(String relativePath) async {
     final fullPath = relativePath.isEmpty
         ? _rootPath
-        : p.join(_rootPath, relativePath);
+        : _dir.fileSystem.path.join(_rootPath, relativePath);
     try {
       final stat = await _dir.fileSystem.stat(fullPath);
       return stat.type != file.FileSystemEntityType.notFound;
@@ -411,9 +330,12 @@ class _StaticMount {
 
   static String _resolveRootPath(Dir dir) {
     final fs = dir.fileSystem;
-    final currentDir = p.normalize(fs.currentDirectory.path);
-    return p.normalize(
-      p.isAbsolute(dir.path) ? dir.path : p.join(currentDir, dir.path),
+    final pathContext = fs.path;
+    final currentDir = pathContext.normalize(fs.currentDirectory.path);
+    return pathContext.normalize(
+      pathContext.isAbsolute(dir.path)
+          ? dir.path
+          : pathContext.join(currentDir, dir.path),
     );
   }
 }

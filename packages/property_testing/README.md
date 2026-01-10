@@ -25,12 +25,12 @@ or your own HTTP clients.
 
 ```yaml
 dev_dependencies:
-  property_testing: ^0.2.1
+  property_testing: ^0.3.0
   test: ^1.26.0
 ```
 
 > Tip: `dart pub add --dev property_testing` will update your manifest
-automatically.
+> automatically.
 
 ## Quick start
 

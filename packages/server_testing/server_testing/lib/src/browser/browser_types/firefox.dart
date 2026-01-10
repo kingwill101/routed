@@ -120,7 +120,7 @@ class FirefoxType implements BrowserType {
     };
 
     // 5. Determine Driver URL (GeckoDriver uses root)
-    final driverUri = Uri.parse('http://localhost:$port');
+    final driverUri = Uri.parse('http://127.0.0.1:$port');
 
     // 6. Create WebDriver instance (async or sync)
     Object webDriver; // Use Object to hold either type

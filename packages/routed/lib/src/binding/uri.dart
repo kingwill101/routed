@@ -51,7 +51,13 @@ class UriBinding extends Binding {
     bool bail = false,
     Map<String, String>? messages,
   }) async {
-    final validator = Validator.make(rules, bail: bail, messages: messages);
+    final registry = requireValidationRegistry(context.container);
+    final validator = Validator.make(
+      rules,
+      registry: registry,
+      bail: bail,
+      messages: messages,
+    );
     final errors = validator.validate(context.params);
 
     if (errors.isNotEmpty) {

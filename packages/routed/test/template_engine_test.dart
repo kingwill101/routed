@@ -2,6 +2,7 @@ import 'package:file/memory.dart';
 import 'package:routed/routed.dart';
 import 'package:routed_testing/routed_testing.dart';
 import 'package:server_testing/server_testing.dart';
+import 'test_engine.dart';
 
 void main() {
   TestClient? client;
@@ -42,7 +43,7 @@ void main() {
 
   group('Liquid Template Tests', () {
     Engine createEngine() {
-      final engine = Engine(
+      final engine = testEngine(
         configItems: {
           'storage': {
             'default': 'templates',

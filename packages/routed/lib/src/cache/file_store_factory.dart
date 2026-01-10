@@ -50,7 +50,10 @@ class FileStoreFactory implements StoreFactory {
   /// ```
   @override
   Store create(Map<String, dynamic> config) {
-    final fileSystem = const LocalFileSystem();
+    final override = config['file_system'];
+    final fileSystem = override is FileSystem
+        ? override
+        : const LocalFileSystem();
     final path = config['path'];
     if (path is! String || path.isEmpty) {
       throw ArgumentError('file cache store requires a non-empty "path"');

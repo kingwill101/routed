@@ -79,6 +79,7 @@ mixin ContainerMixin {
         defaults.values,
         source: provider.configSource,
         docs: defaults.docs,
+        schemas: defaults.schemas,
       );
     }
     _providers.add(provider);

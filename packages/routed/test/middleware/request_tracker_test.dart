@@ -2,6 +2,7 @@ import 'package:routed/routed.dart';
 import 'package:routed/middlewares.dart';
 import 'package:routed_testing/routed_testing.dart';
 import 'package:server_testing/server_testing.dart';
+import '../test_engine.dart';
 
 void main() {
   group('requestTrackerMiddleware', () {
@@ -35,7 +36,7 @@ void main() {
               return res;
             }
 
-            final engine = Engine()
+            final engine = testEngine()
               ..get('/tracked', (ctx) async {
                 await Future<void>.delayed(const Duration(milliseconds: 5));
                 return ctx.string('ok');
@@ -61,7 +62,7 @@ void main() {
             return res;
           }
 
-          final engine = Engine()
+          final engine = testEngine()
             ..get('/slow', (ctx) async {
               await Future<void>.delayed(const Duration(milliseconds: 50));
               return ctx.string('done');
@@ -88,7 +89,7 @@ void main() {
             return res;
           }
 
-          final engine = Engine()
+          final engine = testEngine()
             ..get('/timed', (ctx) async {
               await Future<void>.delayed(const Duration(milliseconds: 10));
               return ctx.string('ok');
@@ -121,7 +122,7 @@ void main() {
             return res;
           }
 
-          final engine = Engine()
+          final engine = testEngine()
             ..get('/req1', (ctx) async {
               await Future<void>.delayed(const Duration(milliseconds: 10));
               return ctx.string('req1');
@@ -158,7 +159,7 @@ void main() {
             return res;
           }
 
-          final engine = Engine()
+          final engine = testEngine()
             ..get(
               '/fast',
               (ctx) => ctx.string('instant'),
@@ -188,7 +189,7 @@ void main() {
             return res;
           }
 
-          final engine = Engine()
+          final engine = testEngine()
             ..get(
               '/check',
               (ctx) => ctx.string('ok'),
@@ -217,7 +218,7 @@ void main() {
             }
           }
 
-          final engine = Engine()
+          final engine = testEngine()
             ..middlewares.add(
               recoveryMiddleware(
                 handler: (ctx, error, stack) {
@@ -258,7 +259,7 @@ void main() {
             return res;
           }
 
-          final engine = Engine()
+          final engine = testEngine()
             ..get(
               '/chain',
               (ctx) => ctx.string('ok'),
@@ -291,7 +292,7 @@ void main() {
             return res;
           }
 
-          final engine = Engine()
+          final engine = testEngine()
             ..get('/logged', (ctx) async {
               await Future<void>.delayed(const Duration(milliseconds: 5));
               return ctx.string('ok');

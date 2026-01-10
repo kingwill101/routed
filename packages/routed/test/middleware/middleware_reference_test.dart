@@ -1,6 +1,7 @@
 import 'package:routed/routed.dart';
 import 'package:routed_testing/routed_testing.dart';
 import 'package:server_testing/server_testing.dart';
+import '../test_engine.dart';
 
 void main() {
   TestClient? client;
@@ -13,7 +14,7 @@ void main() {
     test(
       'resolve to registered middleware for mounts, groups, and routes',
       () async {
-        final engine = Engine();
+        final engine = testEngine();
         final registry = engine.container.get<MiddlewareRegistry>();
 
         registry
@@ -72,7 +73,7 @@ void main() {
     );
 
     test('throws descriptive error for unknown middleware reference', () async {
-      final engine = Engine()
+      final engine = testEngine()
         ..get(
           '/oops',
           (ctx) => ctx.string('ok'),

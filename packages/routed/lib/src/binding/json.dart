@@ -44,7 +44,13 @@ class JsonBinding extends Binding {
     Map<String, String>? messages,
   }) async {
     final decoded = await _decodedBody(context);
-    final validator = Validator.make(rules, bail: bail, messages: messages);
+    final registry = requireValidationRegistry(context.container);
+    final validator = Validator.make(
+      rules,
+      registry: registry,
+      bail: bail,
+      messages: messages,
+    );
     final errors = validator.validate(decoded);
 
     if (errors.isNotEmpty) {

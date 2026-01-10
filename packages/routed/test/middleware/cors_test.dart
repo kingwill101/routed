@@ -2,13 +2,14 @@ import 'package:property_testing/property_testing.dart';
 import 'package:routed/routed.dart';
 import 'package:routed_testing/routed_testing.dart';
 import 'package:server_testing/server_testing.dart';
+import '../test_engine.dart';
 
 void main() {
   group('corsMiddleware', () {
     for (final mode in TransportMode.values) {
       group('with ${mode.name} transport', () {
         test('echoes wildcard origin when credentials are disabled', () async {
-          final engine = Engine(
+          final engine = testEngine(
             config: EngineConfig(
               security: const EngineSecurityFeatures(
                 cors: CorsConfig(
@@ -39,7 +40,7 @@ void main() {
         test(
           'reflects origin when credentials enabled with wildcard',
           () async {
-            final engine = Engine(
+            final engine = testEngine(
               config: EngineConfig(
                 security: const EngineSecurityFeatures(
                   cors: CorsConfig(
@@ -72,7 +73,7 @@ void main() {
         );
 
         test('rejects disallowed origins', () async {
-          final engine = Engine(
+          final engine = testEngine(
             config: EngineConfig(
               security: const EngineSecurityFeatures(
                 cors: CorsConfig(
@@ -98,7 +99,7 @@ void main() {
         });
 
         test('allows specific origins', () async {
-          final engine = Engine(
+          final engine = testEngine(
             config: EngineConfig(
               security: const EngineSecurityFeatures(
                 cors: CorsConfig(
@@ -140,7 +141,7 @@ void main() {
           final runner = PropertyTestRunner<_CorsSample>(_corsSampleGen(), (
             sample,
           ) async {
-            final engine = Engine(
+            final engine = testEngine(
               config: EngineConfig(
                 security: EngineSecurityFeatures(
                   cors: CorsConfig(
@@ -200,7 +201,7 @@ void main() {
         });
 
         test('handles preflight OPTIONS request', () async {
-          final engine = Engine(
+          final engine = testEngine(
             config: EngineConfig(
               security: const EngineSecurityFeatures(
                 cors: CorsConfig(
@@ -231,7 +232,7 @@ void main() {
         });
 
         test('does not set CORS headers when CORS is disabled', () async {
-          final engine = Engine(
+          final engine = testEngine(
             config: EngineConfig(
               security: const EngineSecurityFeatures(
                 cors: CorsConfig(enabled: false),
@@ -257,7 +258,7 @@ void main() {
         });
 
         test('sets max age for preflight cache', () async {
-          final engine = Engine(
+          final engine = testEngine(
             config: EngineConfig(
               security: const EngineSecurityFeatures(
                 cors: CorsConfig(
@@ -283,7 +284,7 @@ void main() {
         });
 
         test('exposes custom headers', () async {
-          final engine = Engine(
+          final engine = testEngine(
             config: EngineConfig(
               security: const EngineSecurityFeatures(
                 cors: CorsConfig(

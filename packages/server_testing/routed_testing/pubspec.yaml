@@ -1,6 +1,6 @@
 name: routed_testing
 description: Routed-specific testing utilities that extend server_testing for integration tests.
-version: 0.2.1+1
+version: 0.3.0
 repository: https://github.com/kingwill101/routed/tree/master/packages/routed_testing
 tags:
   - testing
@@ -19,13 +19,13 @@ environment:
 # Add regular dependencies here.
 dependencies:
   meta: ^1.17.0
-  routed: ^0.2.0
-  server_testing: ^0.2.0
-  test: ^1.26.3
+  routed: ^0.3.0
+  server_testing: ^0.3.0
+  test: ^1.29.0
 
 dev_dependencies:
   build_config: ^1.2.0
-  build_runner: ^2.9.0
+  build_runner: ^2.10.4
   lints: ^6.0.0
-  property_testing: ^0.2.1
+  property_testing: ^0.3.0
   very_good_analysis: ^10.0.0

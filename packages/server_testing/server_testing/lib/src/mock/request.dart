@@ -53,21 +53,23 @@ MockHttpRequest setupRequest(
 
   // Add cookies to headers if provided
   if (cookies != null && cookies.isNotEmpty) {
-    requestHeaders[HttpHeaders.cookieHeader] = cookies
-        .map((cookie) => '${cookie.name}=${cookie.value}')
-        .toList();
-  }
-
-  //check if header has cookie header
-  if (requestHeaders.containsKey(HttpHeaders.cookieHeader)) {
-    final cookieHeader = requestHeaders[HttpHeaders.cookieHeader]!.first;
-    //append to cookies variable
-    cookies = [
-      ...cookies ?? [],
-      ...cookieHeader
-          .split(',')
-          .map((cookie) => Cookie.fromSetCookieValue(cookie)),
+    requestHeaders[HttpHeaders.cookieHeader] = [
+      cookies.map((cookie) => '${cookie.name}=${cookie.value}').join('; '),
     ];
+  } else if (requestHeaders.containsKey(HttpHeaders.cookieHeader)) {
+    // Parse cookies from header if not provided but header exists
+    final cookieHeader = requestHeaders[HttpHeaders.cookieHeader]!.first;
+    cookies = cookieHeader
+        .split(';')
+        .map((c) {
+          final parts = c.split('=');
+          if (parts.length >= 2) {
+            return Cookie(parts[0].trim(), parts.sublist(1).join('=').trim());
+          }
+          return null;
+        })
+        .whereType<Cookie>()
+        .toList();
   }
 
   mockRequestHeaders ??= setupHeaders(requestHeaders);

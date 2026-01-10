@@ -38,3 +38,10 @@ Driver mismatch
 Proxy
 
 - Configure BrowserConfig.proxy. Verify your proxy allows localhost when using ephemeral servers.
+
+Unknown Linux distro / CI image
+
+- server_testing defaults to Ubuntu-style Playwright downloads for Linux.
+- If your distro is not detected or uses a custom /etc/os-release, set:
+  - `SERVER_TESTING_PLATFORM=linux`
+  - `SERVER_TESTING_PLATFORM_ID=ubuntu22.04-x64` (adjust arch/version as needed)

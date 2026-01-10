@@ -341,6 +341,26 @@ class BrowserManagement {
 
       for (final executable in executables) {
         try {
+          final overridePath = TestBootstrap.getBinaryOverride(executable.name);
+          if (overridePath != null) {
+            final overrideFile = File(overridePath);
+            if (overrideFile.existsSync()) {
+              final version =
+                  await _readBrowserVersion(overridePath) ??
+                  executable.browserVersion ??
+                  'unknown';
+              versions[executable.name] = version;
+              logger.info(
+                '$logContext: Found override for ${executable.name} version $version',
+              );
+            } else {
+              logger.info(
+                '$logContext: Override for ${executable.name} not found at $overridePath',
+              );
+            }
+            continue;
+          }
+
           if (_isBrowserInstalled(executable)) {
             // Use browserVersion from the executable if available
             final version = executable.browserVersion ?? 'unknown';
@@ -405,6 +425,16 @@ class BrowserManagement {
       }
 
       final registryName = _mapBrowserNameToRegistryName(browserName);
+      final overridePath =
+          TestBootstrap.getBinaryOverride(browserName) ??
+          TestBootstrap.getBinaryOverride(registryName);
+      if (overridePath != null) {
+        final exists = File(overridePath).existsSync();
+        logger.info(
+          '$logContext: Binary override configured at $overridePath (exists=$exists)',
+        );
+        return exists;
+      }
       logger.info(
         '$logContext: Mapped "$browserName" to registry name "$registryName"',
       );
@@ -443,7 +473,26 @@ class BrowserManagement {
       return false;
     }
 
-    return Directory(executable.directory!).existsSync();
+    final directory = Directory(executable.directory!);
+    if (!directory.existsSync()) {
+      return false;
+    }
+
+    final rawPath = executable.executablePath();
+    final resolved = path.isAbsolute(rawPath)
+        ? rawPath
+        : path.join(executable.directory!, rawPath);
+    return File(resolved).existsSync();
+  }
+
+  static Future<String?> _readBrowserVersion(String binaryPath) async {
+    try {
+      final result = await Process.run(binaryPath, ['--version']);
+      if (result.exitCode != 0) return null;
+      return result.stdout.toString().trim();
+    } catch (_) {
+      return null;
+    }
   }
 
   /// Maps common user-facing browser names to internal registry names.

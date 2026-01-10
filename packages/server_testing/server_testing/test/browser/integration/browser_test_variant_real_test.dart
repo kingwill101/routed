@@ -1,8 +1,8 @@
 @Tags(['real-browser'])
 library;
 
-import 'package:routed/routed.dart';
-import 'package:routed_testing/routed_testing.dart';
+import 'dart:io';
+
 import 'package:server_testing/server_testing.dart';
 
 // Single-test variant using browserTest helper
@@ -16,16 +16,24 @@ void main() async {
     ),
   );
 
-  final engine = Engine()
-    ..get(
-      '/',
-      (ctx) async => ctx.html(
-        '<html><head><title>Home</title></head><body>Hi</body></html>',
-      ),
-    );
+  // Minimal server that renders a simple home page using dart:io
+  Future<void> handleRequest(HttpRequest request) async {
+    if (request.uri.path == '/' && request.method == 'GET') {
+      request.response
+        ..statusCode = HttpStatus.ok
+        ..headers.contentType = ContentType.html
+        ..write('<html><head><title>Home</title></head><body>Hi</body></html>');
+      await request.response.close();
+    } else {
+      request.response
+        ..statusCode = HttpStatus.notFound
+        ..write('Not Found');
+      await request.response.close();
+    }
+  }
 
   // Start ephemeral server and compute baseUrl then run a single browserTest
-  final handler = RoutedRequestHandler(engine);
+  final handler = IoRequestHandler(handleRequest);
   final client = TestClient.ephemeralServer(handler);
   final baseUrl = await client.baseUrlFuture;
 

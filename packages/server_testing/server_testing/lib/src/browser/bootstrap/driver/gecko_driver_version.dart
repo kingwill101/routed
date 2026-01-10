@@ -1,5 +1,5 @@
 // GENERATED CODE - DO NOT MODIFY BY HAND
-// Generated at: 2025-10-13T16:48:21.785953
+// Generated at: 2026-01-04T11:28:23.074831
 
 /// The latest version of GeckoDriver
 const geckoDriverVersion = 'v0.36.0';

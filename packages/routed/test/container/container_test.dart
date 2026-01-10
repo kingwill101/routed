@@ -6,6 +6,7 @@ import 'package:routed/src/engine/engine.dart';
 import 'package:routed/src/provider/provider.dart';
 import 'package:routed/src/view/engine_manager.dart';
 import 'package:test/test.dart';
+import '../test_engine.dart';
 
 abstract class ServiceInterface {
   String get value;
@@ -164,7 +165,7 @@ void main() {
     late Engine engine;
 
     setUp(() async {
-      engine = Engine(
+      engine = testEngine(
         configItems: {
           'app.name': 'Test App',
           'app.env': 'testing',

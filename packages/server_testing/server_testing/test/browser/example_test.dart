@@ -71,8 +71,8 @@ void main() async {
   // Run a specific test in Chromium instead of the default Firefox.
   // Use the top-level 'chromium' instance.
   browserTest('Run specifically in Chromium', (browser) async {
-    await browser.visit('https://google.com'); // Visit a different site
-    await browser.assertTitleContains('Google');
+    await browser.visit('/'); // Use baseUrl for stability in CI
+    await browser.assertTitle('Example Domain');
   }, browserType: chromium); // Override browser type
 
   // Run a specific test visibly (overriding default headless: true).

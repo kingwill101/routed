@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 
@@ -16,6 +17,8 @@ import 'driver_interface.dart';
 class ChromeDriverManager extends WebDriverManager {
   /// The running ChromeDriver process instance, or `null` if not started.
   Process? _driverProcess;
+  static final Map<String, _VersionProbeCache> _versionProbeCache = {};
+  static const Duration _versionProbeCacheTtl = Duration(minutes: 10);
 
   /// Sets up ChromeDriver by downloading and extracting the correct version.
   @override
@@ -63,6 +66,7 @@ class ChromeDriverManager extends WebDriverManager {
     final envMajor = Platform.environment['SERVER_TESTING_CHROMEDRIVER_MAJOR'];
     final resolvedExact = envExact ?? exactVersion;
     final resolvedMajor = int.tryParse(envMajor ?? '') ?? major;
+    final detectedMajor = await _detectChromeMajorFromBinary();
 
     String versionPath;
     if (resolvedExact != null) {
@@ -71,23 +75,9 @@ class ChromeDriverManager extends WebDriverManager {
       versionPath =
           await _fetchLatestForMajor(resolvedMajor) ?? chromeDriverVersion;
     } else {
-      // Try to detect from bundled chromium binary
-      final chromiumBin = path.join(
-        BrowserPaths.getRegistryDirectory(),
-        'chromium-1194',
-        'chrome-linux',
-        'chrome',
-      );
-      String? detected;
-      try {
-        final out = await Process.run(chromiumBin, ['--version']);
-        final m = RegExp(r'(\d+)\.').firstMatch(out.stdout.toString());
-        if (m != null) detected = m.group(1);
-      } catch (_) {}
-      if (detected != null) {
+      if (detectedMajor != null) {
         versionPath =
-            await _fetchLatestForMajor(int.parse(detected)) ??
-            chromeDriverVersion;
+            await _fetchLatestForMajor(detectedMajor) ?? chromeDriverVersion;
       } else {
         versionPath = chromeDriverVersion;
       }
@@ -155,6 +145,80 @@ class ChromeDriverManager extends WebDriverManager {
       return v;
     } catch (_) {
       return null;
+    }
+  }
+
+  Future<int?> _detectChromeMajorFromBinary() async {
+    const timeout = Duration(seconds: 5);
+    for (final candidate in _chromeBinaryCandidates()) {
+      if (!await File(candidate).exists()) continue;
+      final cached = _versionProbeCache[candidate];
+      if (cached != null &&
+          DateTime.now().difference(cached.timestamp) < _versionProbeCacheTtl) {
+        return cached.major;
+      }
+      Process? process;
+      try {
+        process = await Process.start(candidate, ['--version']);
+        final stdoutFuture = process.stdout.transform(utf8.decoder).join();
+        final stderrFuture = process.stderr.transform(utf8.decoder).join();
+        final exitCode = await process.exitCode.timeout(timeout);
+        if (exitCode != 0) {
+          _versionProbeCache[candidate] = _VersionProbeCache(null);
+          continue;
+        }
+        final output = await stdoutFuture;
+        await stderrFuture;
+        final match = RegExp(r'(\d+)\.').firstMatch(output);
+        if (match != null) {
+          final major = int.tryParse(match.group(1) ?? '');
+          _versionProbeCache[candidate] = _VersionProbeCache(major);
+          return major;
+        }
+        _versionProbeCache[candidate] = _VersionProbeCache(null);
+      } on TimeoutException {
+        process?.kill();
+        print(
+          'Timed out probing Chrome version for $candidate; skipping version detection.',
+        );
+        _versionProbeCache[candidate] = _VersionProbeCache(null);
+      } catch (_) {
+        process?.kill();
+        _versionProbeCache[candidate] = _VersionProbeCache(null);
+        // Ignore and continue searching.
+      }
+    }
+    return null;
+  }
+
+  Iterable<String> _chromeBinaryCandidates() sync* {
+    final envOverrides = <String>[
+      'SERVER_TESTING_CHROME_BINARY',
+      'SERVER_TESTING_CHROMIUM_BINARY',
+    ];
+    for (final key in envOverrides) {
+      final value = Platform.environment[key];
+      if (value != null && value.trim().isNotEmpty) {
+        yield value.trim();
+      }
+    }
+
+    final registryDir = BrowserPaths.getRegistryDirectory();
+    final relPaths = BrowserPaths.getExecutablePathCandidates('chromium');
+    if (relPaths.isEmpty) return;
+
+    final registry = Directory(registryDir);
+    if (!registry.existsSync()) return;
+
+    for (final entity in registry.listSync()) {
+      if (entity is! Directory) continue;
+      final name = path.basename(entity.path);
+      if (!name.startsWith('chromium-') && !name.startsWith('chrome-')) {
+        continue;
+      }
+      for (final relPath in relPaths) {
+        yield path.join(entity.path, relPath);
+      }
     }
   }
 
@@ -286,11 +350,11 @@ class ChromeDriverManager extends WebDriverManager {
     }
     print('Starting ChromeDriver from: $driverPath');
 
-    print('Waiting for ChromeDriver to be ready...');
-    // await waitForPort(port);
     _driverProcess = await startProcess(driverPath, args);
 
     print('ChromeDriver process started with PID: ${_driverProcess!.pid}');
+    print('Waiting for ChromeDriver to be ready...');
+    await waitForPort(port);
     print('ChromeDriver listening on port: $port');
   }
 
@@ -342,11 +406,18 @@ class ChromeDriverManager extends WebDriverManager {
   @override
   Future<bool> isRunning(int port) async {
     try {
-      final socket = await Socket.connect('localhost', port);
+      final socket = await Socket.connect(InternetAddress.loopbackIPv4, port);
       await socket.close();
       return true;
     } catch (_) {
       return false;
     }
   }
+}
+
+class _VersionProbeCache {
+  _VersionProbeCache(this.major) : timestamp = DateTime.now();
+
+  final int? major;
+  final DateTime timestamp;
 }

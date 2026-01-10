@@ -3,6 +3,7 @@ import 'package:routed/src/engine/engine.dart';
 import 'package:routed/src/support/helpers.dart';
 import 'package:routed/src/support/zone.dart';
 import 'package:test/test.dart';
+import '../test_engine.dart';
 
 void main() {
   group('Zone Helpers', () {
@@ -10,7 +11,7 @@ void main() {
 
     setUp(() {
       // Create engine with mock config
-      engine = Engine(
+      engine = testEngine(
         configItems: {
           'app.name': 'Test App',
           'app.env': 'testing',

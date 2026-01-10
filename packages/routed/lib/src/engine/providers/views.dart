@@ -2,12 +2,11 @@ import 'dart:async';
 
 import 'package:file/file.dart' as file;
 import 'package:file/local.dart' as local;
-import 'package:path/path.dart' as p;
 import 'package:routed/src/container/container.dart';
 import 'package:routed/src/contracts/contracts.dart' show Config;
+import 'package:routed/src/config/specs/views.dart';
 import 'package:routed/src/engine/config.dart';
 import 'package:routed/src/engine/engine.dart';
-import 'package:routed/src/provider/config_utils.dart';
 import 'package:routed/src/provider/provider.dart';
 import 'package:routed/src/storage/storage_manager.dart';
 import 'package:routed/src/view/engines/liquid_engine.dart';
@@ -17,35 +16,13 @@ import 'package:routed/src/view/view_engine.dart';
 class ViewServiceProvider extends ServiceProvider with ProvidesDefaultConfig {
   StorageManager? _storageManager;
   file.FileSystem _fallbackFileSystem = const local.LocalFileSystem();
+  static const ViewConfigSpec spec = ViewConfigSpec();
 
   @override
-  ConfigDefaults get defaultConfig => const ConfigDefaults(
-    docs: [
-      ConfigDocEntry(
-        path: 'view.engine',
-        type: 'string',
-        description: 'View engine identifier (e.g. liquid).',
-        defaultValue: 'liquid',
-      ),
-      ConfigDocEntry(
-        path: 'view.directory',
-        type: 'string',
-        description: 'Path to templates relative to app root or disk.',
-        defaultValue: 'views',
-      ),
-      ConfigDocEntry(
-        path: 'view.cache',
-        type: 'bool',
-        description: 'Enable template caching in production environments.',
-        defaultValue: true,
-      ),
-      ConfigDocEntry(
-        path: 'view.disk',
-        type: 'string|null',
-        description: 'Optional storage disk to source templates from.',
-        defaultValue: null,
-      ),
-    ],
+  ConfigDefaults get defaultConfig => ConfigDefaults(
+    docs: spec.docs(),
+    values: spec.defaultsWithRoot(),
+    schemas: spec.schemaWithRoot(),
   );
 
   @override
@@ -111,49 +88,15 @@ class ViewServiceProvider extends ServiceProvider with ProvidesDefaultConfig {
   }
 
   _ResolvedViewConfig _resolveViewConfig(Config config, EngineConfig current) {
-    // Validate 'view' is a map if present
-    final viewRaw = config.get<Object?>('view');
-    if (viewRaw != null && viewRaw is! Map) {
-      throw ProviderConfigException('view must be a map');
-    }
+    final resolved = spec.resolve(
+      config,
+      context: ViewConfigContext(config: config, engineConfig: current),
+    );
 
-    String configuredDirectory = current.templateDirectory;
-    bool cache = current.views.cache;
-    String? engineName;
-    String? diskName;
-
-    // Resolve 'view.directory' - validate type if present
-    if (config.get<Object?>('view.directory') != null) {
-      final parsed = config.getStringOrThrow('view.directory');
-      if (parsed.isNotEmpty) {
-        configuredDirectory = parsed;
-      }
-    }
-
-    // Resolve 'view.cache' - validate type if present
-    if (config.get<Object?>('view.cache') != null) {
-      cache = config.getBoolOrThrow('view.cache');
-    }
-
-    // Resolve 'view.engine' - validate type if present
-    if (config.get<Object?>('view.engine') != null) {
-      final parsed = config.getStringOrThrow('view.engine');
-      final trimmed = parsed.trim();
-      if (trimmed.isEmpty) {
-        throw ProviderConfigException('view.engine must be a string');
-      }
-      engineName = trimmed;
-    }
-
-    // Resolve 'view.disk' - validate type if present
-    if (config.get<Object?>('view.disk') != null) {
-      final parsed = config.getStringOrThrow('view.disk');
-      final trimmed = parsed.trim();
-      if (trimmed.isEmpty) {
-        throw ProviderConfigException('view.disk must be a string');
-      }
-      diskName = trimmed;
-    }
+    final configuredDirectory = resolved.directory;
+    final cache = resolved.cache;
+    final engineName = resolved.engine;
+    final diskName = resolved.disk;
 
     final disk = _storageManager != null
         ? _tryResolveDisk(_storageManager!, diskName)
@@ -202,11 +145,14 @@ class ViewServiceProvider extends ServiceProvider with ProvidesDefaultConfig {
   }
 
   String _normalizePath(file.FileSystem fs, String value) {
-    final base = fs.currentDirectory.path;
+    final pathContext = fs.path;
+    final base = pathContext.normalize(fs.currentDirectory.path);
     if (value.isEmpty) {
-      return p.normalize(base);
+      return base;
     }
-    return p.normalize(p.isAbsolute(value) ? value : p.join(base, value));
+    return pathContext.normalize(
+      pathContext.isAbsolute(value) ? value : pathContext.join(base, value),
+    );
   }
 
   ViewEngine _createEngine(

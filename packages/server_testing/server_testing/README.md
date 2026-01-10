@@ -31,7 +31,7 @@ automation, request handler adapters, and a CLI for managing browser binaries.
 ```yaml
 # pubspec.yaml
 dev_dependencies:
-  server_testing: ^0.2.0
+  server_testing: ^0.3.0
   test: ^1.26.3
 ```
 

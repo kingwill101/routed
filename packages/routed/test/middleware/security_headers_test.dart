@@ -2,13 +2,14 @@ import 'package:property_testing/property_testing.dart';
 import 'package:routed/routed.dart';
 import 'package:routed_testing/routed_testing.dart';
 import 'package:server_testing/server_testing.dart';
+import '../test_engine.dart';
 
 void main() {
   group('securityHeadersMiddleware', () {
     for (final mode in TransportMode.values) {
       group('with ${mode.name} transport', () {
         test('sets configured security headers exactly once', () async {
-          final engine = Engine(
+          final engine = testEngine(
             config: EngineConfig(
               security: const EngineSecurityFeatures(
                 csp: "default-src 'self'",
@@ -32,7 +33,7 @@ void main() {
         });
 
         test('sets only CSP when other headers are disabled', () async {
-          final engine = Engine(
+          final engine = testEngine(
             config: EngineConfig(
               security: const EngineSecurityFeatures(
                 csp: "default-src 'self'; script-src 'self' 'unsafe-inline'",
@@ -63,7 +64,7 @@ void main() {
         });
 
         test('sets X-Frame-Options to SAMEORIGIN', () async {
-          final engine = Engine(
+          final engine = testEngine(
             config: EngineConfig(
               security: const EngineSecurityFeatures(
                 xFrameOptions: 'SAMEORIGIN',
@@ -77,7 +78,7 @@ void main() {
         });
 
         test('sets HSTS with custom max age', () async {
-          final engine = Engine(
+          final engine = testEngine(
             config: EngineConfig(
               security: const EngineSecurityFeatures(
                 hstsMaxAge: 7776000, // 90 days
@@ -94,7 +95,7 @@ void main() {
         });
 
         test('sets X-Content-Type-Options when enabled', () async {
-          final engine = Engine(
+          final engine = testEngine(
             config: EngineConfig(
               security: const EngineSecurityFeatures(
                 xContentTypeOptionsNoSniff: true,
@@ -117,7 +118,7 @@ void main() {
               "connect-src 'self' https://api.example.com; "
               "frame-ancestors 'none'";
 
-          final engine = Engine(
+          final engine = testEngine(
             config: EngineConfig(
               security: const EngineSecurityFeatures(csp: complexCSP),
             ),
@@ -135,7 +136,7 @@ void main() {
               _securityHeaderSampleGen(),
               (sample) async {
                 final engine =
-                    Engine(
+                    testEngine(
                       config: EngineConfig(
                         security: EngineSecurityFeatures(
                           csp: sample.csp,
@@ -220,7 +221,7 @@ void main() {
 
         test('does not override existing security headers', () async {
           final engine =
-              Engine(
+              testEngine(
                 config: EngineConfig(
                   security: const EngineSecurityFeatures(
                     csp: "default-src 'self'",
@@ -245,7 +246,7 @@ void main() {
 
         test('applies headers to all routes consistently', () async {
           final engine =
-              Engine(
+              testEngine(
                   config: EngineConfig(
                     security: const EngineSecurityFeatures(
                       xContentTypeOptionsNoSniff: true,
@@ -276,7 +277,7 @@ void main() {
         });
 
         test('works with no security features configured', () async {
-          final engine = Engine(
+          final engine = testEngine(
             config: EngineConfig(security: const EngineSecurityFeatures()),
           )..get('/none', (ctx) => ctx.string('ok'));
 
@@ -302,7 +303,7 @@ void main() {
 
         test('headers are applied before response is sent', () async {
           final engine =
-              Engine(
+              testEngine(
                 config: EngineConfig(
                   security: const EngineSecurityFeatures(
                     csp: "default-src 'self'",
@@ -322,7 +323,7 @@ void main() {
         });
 
         test('combines all enabled security features', () async {
-          final engine = Engine(
+          final engine = testEngine(
             config: EngineConfig(
               security: const EngineSecurityFeatures(
                 csp: "default-src 'self'; script-src 'self'",
@@ -351,7 +352,7 @@ void main() {
 
         test('does not affect response body or status code', () async {
           final engine =
-              Engine(
+              testEngine(
                 config: EngineConfig(
                   security: const EngineSecurityFeatures(
                     csp: "default-src 'self'",

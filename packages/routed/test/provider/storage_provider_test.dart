@@ -1,16 +1,16 @@
-import 'dart:io';
-
 import 'package:file/file.dart' as storage_file;
-import 'package:path/path.dart' as p;
+import 'package:file/memory.dart';
 import 'package:routed/providers.dart';
 import 'package:routed/routed.dart';
 import 'package:routed/src/storage/local_storage_driver.dart';
 import 'package:test/test.dart';
 
+import '../test_engine.dart';
+
 void main() {
   group('StorageServiceProvider', () {
     test('registers disks from config', () async {
-      final engine = Engine(
+      final engine = testEngine(
         configItems: {
           'storage': {
             'default': 'assets',
@@ -27,16 +27,20 @@ void main() {
       final storage = await engine.make<StorageManager>();
       expect(storage.defaultDisk, equals('assets'));
 
+      final pathContext = storage.disk().fileSystem.path;
       final resolved = storage.resolve('logo.png');
-      expect(resolved, endsWith(p.normalize('public/assets/logo.png')));
+      expect(
+        resolved,
+        endsWith(pathContext.join('public', 'assets', 'logo.png')),
+      );
       expect(
         storage.resolve('cache/data.json', disk: 'local'),
-        endsWith(p.normalize('storage/app/cache/data.json')),
+        endsWith(pathContext.join('storage', 'app', 'cache', 'data.json')),
       );
     });
 
     test('honors storage.root when local disk root not specified', () async {
-      final engine = Engine(
+      final engine = testEngine(
         configItems: {
           'storage': {
             'root': '/var/data',
@@ -50,23 +54,25 @@ void main() {
       await engine.initialize();
 
       final storage = await engine.make<StorageManager>();
+      final pathContext = storage.disk().fileSystem.path;
       expect(storage.defaultDisk, equals('local'));
       expect(
         storage.resolve('hello.txt'),
-        endsWith(p.normalize('var/data/hello.txt')),
+        endsWith(pathContext.join('var', 'data', 'hello.txt')),
       );
     });
 
     test('provides fallback disk when config missing', () async {
-      final engine = Engine();
+      final engine = testEngine();
       addTearDown(() async => await engine.close());
       await engine.initialize();
 
       final storage = await engine.make<StorageManager>();
+      final pathContext = storage.disk().fileSystem.path;
       expect(storage.defaultDisk, equals('local'));
       expect(
         storage.resolve('foo.txt'),
-        endsWith(p.normalize('storage/app/foo.txt')),
+        endsWith(pathContext.join('storage', 'app', 'foo.txt')),
       );
     });
 
@@ -84,7 +90,7 @@ void main() {
         StorageServiceProvider.unregisterDriver('memory');
       });
 
-      final engine = Engine(
+      final engine = testEngine(
         configItems: {
           'storage': {
             'default': 'memory',
@@ -98,9 +104,10 @@ void main() {
       await engine.initialize();
 
       final storage = await engine.make<StorageManager>();
+      final pathContext = storage.disk().fileSystem.path;
       expect(
         storage.resolve('item.txt'),
-        endsWith(p.normalize('custom/storage/item.txt')),
+        endsWith(pathContext.join('custom', 'storage', 'item.txt')),
       );
     });
 
@@ -179,7 +186,7 @@ void main() {
         );
       });
 
-      final engine = Engine(
+      final engine = testEngine(
         configItems: {
           'storage': {
             'default': 'local',
@@ -193,9 +200,10 @@ void main() {
       await engine.initialize();
 
       final storage = await engine.make<StorageManager>();
+      final pathContext = storage.disk().fileSystem.path;
       expect(
         storage.resolve('foo.txt'),
-        endsWith(p.normalize('override/local/foo.txt')),
+        endsWith(pathContext.join('override', 'local', 'foo.txt')),
       );
     });
 
@@ -225,22 +233,30 @@ void main() {
     });
 
     test('initializes storage facade alongside storage manager', () async {
-      final tempDir = Directory.systemTemp.createTempSync('routed_storage');
+      final fs = MemoryFileSystem();
+      final tempDir = fs.systemTempDirectory.createTempSync('routed_storage');
       addTearDown(() {
         if (tempDir.existsSync()) {
           tempDir.deleteSync(recursive: true);
         }
       });
 
-      final engine = Engine(
+      final engine = testEngine(
+        config: EngineConfig(fileSystem: fs),
+        fileSystem: fs,
         configItems: {
           'storage': {
             'default': 'local',
             'disks': {
-              'local': {'driver': 'local', 'root': tempDir.path},
+              'local': {
+                'driver': 'local',
+                'root': tempDir.path,
+                'file_system': fs,
+              },
               'secondary': {
                 'driver': 'local',
-                'root': p.join(tempDir.path, 'secondary'),
+                'root': fs.path.join(tempDir.path, 'secondary'),
+                'file_system': fs,
               },
             },
           },
@@ -251,16 +267,18 @@ void main() {
 
       await Storage.put('hello.txt', 'facade');
       expect(
-        File(p.join(tempDir.path, 'hello.txt')).readAsStringSync(),
+        fs.file(fs.path.join(tempDir.path, 'hello.txt')).readAsStringSync(),
         equals('facade'),
       );
 
       final secondary = Storage.disk('secondary');
       await secondary.put('nested/world.txt', 'routing');
       expect(
-        File(
-          p.join(tempDir.path, 'secondary', 'nested', 'world.txt'),
-        ).readAsStringSync(),
+        fs
+            .file(
+              fs.path.join(tempDir.path, 'secondary', 'nested', 'world.txt'),
+            )
+            .readAsStringSync(),
         equals('routing'),
       );
     });

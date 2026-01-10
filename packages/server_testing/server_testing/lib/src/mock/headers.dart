@@ -51,8 +51,10 @@ MockHttpHeaders setupHeaders(Map<String, List<String>> requestHeaders) {
     for (final cookieHeader in cookieValues) {
       for (final singleCookie in cookieHeader.split(';')) {
         final parts = singleCookie.trim().split('=');
-        if (parts.length == 2) {
-          cookies.add(Cookie(parts[0].trim(), parts[1].trim()));
+        if (parts.length >= 2) {
+          cookies.add(
+            Cookie(parts[0].trim(), parts.sublist(1).join('=').trim()),
+          );
         }
       }
     }

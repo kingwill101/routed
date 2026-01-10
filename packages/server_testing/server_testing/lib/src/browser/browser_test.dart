@@ -1,3 +1,5 @@
+import 'dart:io' show Platform;
+
 import 'package:meta/meta.dart';
 import 'package:server_testing/src/browser/bootstrap/device_json.dart';
 import 'package:server_testing/src/browser/interfaces/browser_type.dart';
@@ -5,6 +7,29 @@ import 'package:test/test.dart';
 
 import '../../browser.dart';
 import 'bootstrap/driver/driver_manager.dart';
+
+bool _hasHeadfulDisplay() {
+  if (!Platform.isLinux) return true;
+  final display = Platform.environment['DISPLAY'];
+  if (display != null && display.trim().isNotEmpty) return true;
+  final wayland = Platform.environment['WAYLAND_DISPLAY'];
+  return wayland != null && wayland.trim().isNotEmpty;
+}
+
+bool _effectiveHeadless(bool? headless) {
+  if (headless != null) return headless;
+  try {
+    return TestBootstrap.currentConfig.headless;
+  } catch (_) {
+    return true;
+  }
+}
+
+String? _headfulSkipReason(bool? headless) {
+  if (_effectiveHeadless(headless)) return null;
+  if (_hasHeadfulDisplay()) return null;
+  return 'Headful browser tests require a display. Set DISPLAY/WAYLAND_DISPLAY or run headless.';
+}
 
 /// Defines an individual browser test case using the `package:test` framework.
 ///
@@ -58,6 +83,7 @@ Future<void> browserTest(
     print("Tearing down browser test: $description");
     await DriverManager.stopAll();
   });
+  final skipReason = _headfulSkipReason(headless);
   test(description, () async {
     bool configOverridden = false;
     // Apply configuration overrides for this test if provided
@@ -132,7 +158,7 @@ Future<void> browserTest(
         TestBootstrap.popConfigOverride();
       }
     }
-  });
+  }, skip: skipReason);
 }
 
 /// Defines a group of related browser test cases that share a single browser instance.
@@ -181,6 +207,7 @@ void browserGroup(
   bool useAsync = true,
   Device? device,
 }) {
+  final skipReason = _headfulSkipReason(headless);
   group(description, () {
     Browser? browser;
     bool configOverridden =
@@ -272,5 +299,5 @@ void browserGroup(
     if (browser != null) {
       define(() => browser!);
     }
-  });
+  }, skip: skipReason);
 }

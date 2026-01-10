@@ -121,6 +121,8 @@ await ctx.validate({
 
 Create custom rules by implementing `ValidationRule`:
 
+> Note: `ValidationRuleRegistry` is registered by `RoutingServiceProvider`. If you construct `Engine(includeDefaultProviders: false)`, register that provider (or register the registry manually) before calling `engine.container.get<ValidationRuleRegistry>()`.
+
 ```dart
 class PhoneRule extends ValidationRule {
   @override
@@ -138,7 +140,8 @@ class PhoneRule extends ValidationRule {
 }
 
 // Register the rule
-Validator.registerRule(() => PhoneRule());
+final engine = Engine();
+engine.container.get<ValidationRuleRegistry>().register(() => PhoneRule());
 
 // Use custom rule
 await ctx.validate({

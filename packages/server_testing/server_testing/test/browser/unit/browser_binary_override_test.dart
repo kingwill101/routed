@@ -20,7 +20,8 @@ void main() {
 
   test('ensureBrowserInstalled skips install when override exists', () async {
     final fakeBinary = File('${tempDir.path}/chromium');
-    fakeBinary.createSync(recursive: true);
+    fakeBinary.parent.createSync(recursive: true);
+    fakeBinary.createSync();
 
     await TestBootstrap.initialize(
       BrowserConfig(
@@ -54,7 +55,8 @@ void main() {
 
   test('aliases like chrome honor overrides', () async {
     final fakeBinary = File('${tempDir.path}/chrome-bin');
-    fakeBinary.createSync(recursive: true);
+    fakeBinary.parent.createSync(recursive: true);
+    fakeBinary.createSync();
 
     await TestBootstrap.initialize(
       BrowserConfig(

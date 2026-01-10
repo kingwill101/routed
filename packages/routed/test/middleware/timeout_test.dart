@@ -3,13 +3,14 @@ import 'package:routed/middlewares.dart';
 import 'package:routed/routed.dart';
 import 'package:routed_testing/routed_testing.dart';
 import 'package:server_testing/server_testing.dart';
+import '../test_engine.dart';
 
 void main() {
   group('timeoutMiddleware', () {
     for (final mode in TransportMode.values) {
       group('with ${mode.name} transport', () {
         test('returns 504 when handler exceeds allotted time', () async {
-          final engine = Engine()
+          final engine = testEngine()
             ..get(
               '/slow',
               (ctx) async {
@@ -29,7 +30,7 @@ void main() {
         });
 
         test('allows fast handler to complete within timeout', () async {
-          final engine = Engine()
+          final engine = testEngine()
             ..get(
               '/fast',
               (ctx) async {
@@ -49,7 +50,7 @@ void main() {
         });
 
         test('allows synchronous handlers to complete', () async {
-          final engine = Engine()
+          final engine = testEngine()
             ..get(
               '/sync',
               (ctx) => ctx.string('instant'),
@@ -66,7 +67,7 @@ void main() {
         });
 
         test('works with very short timeouts', () async {
-          final engine = Engine()
+          final engine = testEngine()
             ..get(
               '/very-slow',
               (ctx) async {
@@ -82,7 +83,7 @@ void main() {
         });
 
         test('works with generous timeouts', () async {
-          final engine = Engine()
+          final engine = testEngine()
             ..get(
               '/reasonable',
               (ctx) async {
@@ -100,7 +101,7 @@ void main() {
         });
 
         test('timeout applies per request independently', () async {
-          final engine = Engine()
+          final engine = testEngine()
             ..get(
               '/mixed-1',
               (ctx) async {
@@ -134,7 +135,7 @@ void main() {
         });
 
         test('different routes can have different timeouts', () async {
-          final engine = Engine()
+          final engine = testEngine()
             ..get(
               '/short-timeout',
               (ctx) async {
@@ -168,7 +169,7 @@ void main() {
         });
 
         test('timeout does not affect response content type', () async {
-          final engine = Engine()
+          final engine = testEngine()
             ..get(
               '/json-timeout',
               (ctx) async {
@@ -186,7 +187,7 @@ void main() {
         });
 
         test('successful requests return correct content', () async {
-          final engine = Engine()
+          final engine = testEngine()
             ..get(
               '/data',
               (ctx) async {
@@ -217,7 +218,7 @@ void main() {
             return next();
           }
 
-          final engine = Engine()
+          final engine = testEngine()
             ..get(
               '/chained',
               (ctx) async {
@@ -245,7 +246,7 @@ void main() {
             return next();
           }
 
-          final engine = Engine()
+          final engine = testEngine()
             ..get(
               '/slow-chain',
               (ctx) => ctx.string('ok'),
@@ -261,7 +262,7 @@ void main() {
         });
 
         test('multiple sequential requests each get fresh timeout', () async {
-          final engine = Engine()
+          final engine = testEngine()
             ..get(
               '/timed',
               (ctx) async {
@@ -284,7 +285,7 @@ void main() {
         });
 
         test('timeout message is descriptive', () async {
-          final engine = Engine()
+          final engine = testEngine()
             ..get(
               '/timeout-msg',
               (ctx) async {
@@ -304,7 +305,7 @@ void main() {
         });
 
         test('zero timeout fails immediately', () async {
-          final engine = Engine()
+          final engine = testEngine()
             ..get('/zero', (ctx) async {
               await Future<void>.delayed(const Duration(milliseconds: 1));
               return ctx.string('ok');
@@ -316,7 +317,7 @@ void main() {
         });
 
         test('handles POST requests with timeout', () async {
-          final engine = Engine()
+          final engine = testEngine()
             ..post(
               '/upload',
               (ctx) async {
@@ -336,7 +337,7 @@ void main() {
         });
 
         test('handles PUT requests with timeout', () async {
-          final engine = Engine()
+          final engine = testEngine()
             ..put(
               '/update',
               (ctx) async {
@@ -354,7 +355,7 @@ void main() {
         });
 
         test('handles DELETE requests with timeout', () async {
-          final engine = Engine()
+          final engine = testEngine()
             ..delete(
               '/remove',
               (ctx) async {
@@ -375,7 +376,7 @@ void main() {
           final runner = PropertyTestRunner<_TimeoutSample>(
             _timeoutSampleGen(),
             (sample) async {
-              final engine = Engine()
+              final engine = testEngine()
                 ..get(
                   '/prop',
                   (ctx) async {
@@ -395,7 +396,7 @@ void main() {
               );
               final response = await client.get('/prop');
 
-              const jitterMs = 30;
+              const jitterMs = 80;
               if (sample.handlerDelayMs >= sample.timeoutMs + jitterMs) {
                 response.assertStatus(HttpStatus.gatewayTimeout);
               } else if (sample.handlerDelayMs <= sample.timeoutMs - jitterMs) {

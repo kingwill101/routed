@@ -9,6 +9,7 @@ import 'package:http2/transport.dart'
 import 'package:path/path.dart' as p;
 import 'package:routed/routed.dart';
 import 'package:test/test.dart';
+import '../test_engine.dart';
 
 void main() {
   group('HTTP/2 server', () {
@@ -16,7 +17,7 @@ void main() {
     late SecurityContext clientContext;
 
     setUp(() async {
-      engine = Engine(
+      engine = testEngine(
         config: EngineConfig(http2: const Http2Config(enabled: true)),
       );
 

@@ -1,5 +1,4 @@
 import 'package:file/memory.dart';
-import 'package:path/path.dart' as p;
 import 'package:routed/src/config/loader.dart';
 import 'package:test/test.dart';
 
@@ -20,17 +19,19 @@ void main() {
 
     test('applies precedence defaults < env < files < overrides', () {
       fs.file(envFile).writeAsStringSync('APP__NAME=Env App\nAPP__ENV=testing');
-      fs.file(p.join(configDir, 'app.yaml')).writeAsStringSync('''
+      fs.file(fs.path.join(configDir, 'app.yaml')).writeAsStringSync('''
 name: File App
 features:
   enabled: true
 ''');
-      fs.directory(p.join(configDir, 'testing')).createSync(recursive: true);
       fs
-          .file(p.join(configDir, 'testing', 'app.toml'))
+          .directory(fs.path.join(configDir, 'testing'))
+          .createSync(recursive: true);
+      fs
+          .file(fs.path.join(configDir, 'testing', 'app.toml'))
           .writeAsStringSync('debug = false');
       fs
-          .file(p.join(configDir, 'database.json'))
+          .file(fs.path.join(configDir, 'database.json'))
           .writeAsStringSync('{"host": "file-host"}');
 
       final options = ConfigLoaderOptions(

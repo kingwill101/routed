@@ -1,15 +1,24 @@
-import 'dart:io';
+import 'dart:io' show SameSite;
 
+import 'package:file/memory.dart';
 import 'package:routed/providers.dart';
 import 'package:routed/routed.dart';
 import 'package:routed/session.dart';
 import 'package:test/test.dart';
 
+import '../test_engine.dart';
+
 void main() {
   group('SessionServiceProvider', () {
+    late MemoryFileSystem fs;
+
+    setUp(() {
+      fs = MemoryFileSystem();
+    });
+
     test('configures cookie driver with extended options', () async {
       final appKey = SecureCookie.generateKey();
-      final engine = Engine(
+      final engine = testEngine(
         configItems: {
           'app': {'name': 'Demo App', 'key': appKey},
           'session': {
@@ -39,12 +48,14 @@ void main() {
 
     test('configures file driver with lottery', () async {
       final appKey = SecureCookie.generateKey();
-      final temp = Directory.systemTemp.createTempSync('session_store');
+      final temp = fs.systemTempDirectory.createTempSync('session_store');
       addTearDown(() {
         if (temp.existsSync()) temp.deleteSync(recursive: true);
       });
 
-      final engine = Engine(
+      final engine = testEngine(
+        config: EngineConfig(fileSystem: fs),
+        fileSystem: fs,
         configItems: {
           'app': {'key': appKey},
           'session': {
@@ -63,7 +74,8 @@ void main() {
       final config = await engine.make<SessionConfig>();
       expect(config.store, isA<FilesystemStore>());
       final store = config.store as FilesystemStore;
-      expect(store.storageDir, equals(temp.path));
+      String normalizePath(String value) => value.replaceAll('\\', '/');
+      expect(normalizePath(store.storageDir), equals(normalizePath(temp.path)));
       expect(store.lottery, equals([1, 2]));
       expect(config.defaultOptions.path, equals('/app'));
       expect(config.defaultOptions.secure, isTrue);
@@ -71,7 +83,7 @@ void main() {
 
     test('configures cache-backed driver using cache store', () async {
       final appKey = SecureCookie.generateKey();
-      final engine = Engine(
+      final engine = testEngine(
         configItems: {
           'app': {'key': appKey},
           'cache': {
@@ -101,7 +113,7 @@ void main() {
 
     test('configures array driver with in-memory store', () async {
       final appKey = SecureCookie.generateKey();
-      final engine = Engine(
+      final engine = testEngine(
         configItems: {
           'app': {'key': appKey},
           'session': {
@@ -123,7 +135,7 @@ void main() {
 
     test('throws when no key is configured', () {
       expect(
-        () => Engine(
+        () => testEngine(
           configItems: {
             'app': {'key': ''},
             'session': {'enabled': true, 'driver': 'cookie'},
@@ -135,7 +147,7 @@ void main() {
 
     test('rebuilds session config on config reload', () async {
       final appKey = SecureCookie.generateKey();
-      final engine = Engine(
+      final engine = testEngine(
         configItems: {
           'app': {'key': appKey},
           'session': {
@@ -177,7 +189,7 @@ void main() {
       'removes managed session config when session config removed',
       () async {
         final appKey = SecureCookie.generateKey();
-        final engine = Engine(
+        final engine = testEngine(
           configItems: {
             'app': {'key': appKey},
             'session': {'enabled': true, 'driver': 'cookie'},
@@ -229,7 +241,7 @@ void main() {
       });
 
       final appKey = SecureCookie.generateKey();
-      final engine = Engine(
+      final engine = testEngine(
         configItems: {
           'app': {'key': appKey},
           'session': {
@@ -287,7 +299,7 @@ void main() {
         });
 
         final appKey = SecureCookie.generateKey();
-        final engine = Engine(
+        final engine = testEngine(
           configItems: {
             'app': {'key': appKey},
             'session': {

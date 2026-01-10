@@ -5,6 +5,7 @@ import 'package:property_testing/property_testing.dart';
 import 'package:routed/routed.dart';
 import 'package:routed_testing/routed_testing.dart';
 import 'package:server_testing/server_testing.dart';
+import 'test_engine.dart';
 
 TestClient useClient(Engine engine) =>
     TestClient(RoutedRequestHandler(engine), mode: TransportMode.inMemory);
@@ -31,7 +32,7 @@ String synthUsername(
 void main() {
   group('Validation Tests', () {
     test('JSON Binding Validation', () async {
-      final engine = Engine();
+      final engine = testEngine();
 
       engine.post('/json', (ctx) async {
         final data = <String, dynamic>{};
@@ -58,7 +59,7 @@ void main() {
     });
 
     test('Form URL Encoded Binding Validation', () async {
-      final engine = Engine();
+      final engine = testEngine();
       engine.post('/form', (ctx) async {
         final data = <String, dynamic>{};
 
@@ -100,7 +101,7 @@ void main() {
       final runner = PropertyTestRunner<({bool nameValid, bool ageValid})>(
         generator,
         (sample) async {
-          final engine = Engine();
+          final engine = testEngine();
           engine.post('/form-prop', (ctx) async {
             final data = <String, dynamic>{};
             try {
@@ -159,7 +160,7 @@ void main() {
     });
 
     test('Query Binding Validation', () async {
-      final engine = Engine();
+      final engine = testEngine();
 
       engine.get('/search', (ctx) async {
         final data = <String, dynamic>{};
@@ -197,7 +198,7 @@ void main() {
           PropertyTestRunner<({bool qValid, bool pageValid, bool sortValid})>(
             generator,
             (sample) async {
-              final engine = Engine();
+              final engine = testEngine();
               engine.get('/search-prop', (ctx) async {
                 final data = <String, dynamic>{};
                 try {
@@ -265,7 +266,7 @@ void main() {
       timeout: const Timeout(Duration(seconds: 100)),
       () async {
         final fs = MemoryFileSystem();
-        final engine = Engine(
+        final engine = testEngine(
           config: EngineConfig(
             fileSystem: fs,
             multipart: MultipartConfig(uploadDirectory: '/uploads'),
@@ -326,7 +327,7 @@ void main() {
           PropertyTestRunner<({bool ageValid, bool tagsValid, bool hasFile})>(
             generator,
             (sample) async {
-              final engine = Engine(
+              final engine = testEngine(
                 config: EngineConfig(
                   fileSystem: MemoryFileSystem(),
                   multipart: MultipartConfig(uploadDirectory: '/uploads'),
@@ -426,7 +427,7 @@ void main() {
     });
 
     test('Validation Error Handling', () async {
-      final engine = Engine();
+      final engine = testEngine();
 
       engine.post('/json2', (ctx) async {
         final data = <String, dynamic>{};
@@ -466,7 +467,7 @@ void main() {
     test(
       'Validation accumulates errors and supports custom messages',
       () async {
-        final engine = Engine();
+        final engine = testEngine();
 
         engine.post('/multi', (ctx) async {
           try {
@@ -509,7 +510,7 @@ void main() {
       final runner = PropertyTestRunner<({int length, bool alphaOnly})>(
         generator,
         (sample) async {
-          final engine = Engine();
+          final engine = testEngine();
           engine.post('/multi-prop', (ctx) async {
             try {
               await ctx.validate(
@@ -573,7 +574,7 @@ void main() {
     });
 
     test('Validation bail stops after first failure', () async {
-      final engine = Engine();
+      final engine = testEngine();
 
       engine.post('/bail', (ctx) async {
         try {
@@ -613,7 +614,7 @@ void main() {
       final runner = PropertyTestRunner<({int length, bool alphaOnly})>(
         generator,
         (sample) async {
-          final engine = Engine();
+          final engine = testEngine();
           engine.post('/bail-prop', (ctx) async {
             try {
               await ctx.validate(
@@ -695,7 +696,7 @@ void main() {
           PropertyTestRunner<({bool nameValid, bool ageValid, bool tagsValid})>(
             generator,
             (sample) async {
-              final engine = Engine();
+              final engine = testEngine();
               engine.post('/json-prop', (ctx) async {
                 final data = <String, dynamic>{};
                 try {

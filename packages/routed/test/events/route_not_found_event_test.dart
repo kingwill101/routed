@@ -4,11 +4,12 @@ import 'dart:io';
 import 'package:routed/routed.dart';
 import 'package:routed_testing/routed_testing.dart';
 import 'package:server_testing/server_testing.dart';
+import '../test_engine.dart';
 
 void main() {
   group('Route lifecycle events', () {
     test('publishes lifecycle events for 404 responses', () async {
-      final engine = Engine();
+      final engine = testEngine();
       await engine.initialize();
       addTearDown(engine.close);
 
@@ -53,7 +54,7 @@ void main() {
     });
 
     test('fires lifecycle events for successful routes', () async {
-      final engine = Engine()..get('/ping', (ctx) => ctx.string('pong'));
+      final engine = testEngine()..get('/ping', (ctx) => ctx.string('pong'));
       await engine.initialize();
       addTearDown(engine.close);
 
@@ -87,7 +88,7 @@ void main() {
     });
 
     test('emits routing error events when handlers throw', () async {
-      final engine = Engine()
+      final engine = testEngine()
         ..get('/boom', (ctx) {
           throw StateError('boom');
         });
@@ -116,7 +117,7 @@ void main() {
     });
 
     test('active request tracking cleans up for 404 responses', () async {
-      final engine = Engine();
+      final engine = testEngine();
       await engine.initialize();
       addTearDown(engine.close);
 
@@ -133,7 +134,7 @@ void main() {
 
     test('runs global middleware for 404 responses', () async {
       var invoked = false;
-      final engine = Engine(
+      final engine = testEngine(
         middlewares: [
           (ctx, next) async {
             invoked = true;
@@ -163,7 +164,7 @@ void main() {
     late HttpServer server;
 
     setUp(() async {
-      engine = Engine();
+      engine = testEngine();
       server = await HttpServer.bind(InternetAddress.loopbackIPv4, 0);
       server.listen((request) => engine.handleRequest(request));
     });
