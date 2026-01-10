@@ -13,6 +13,7 @@ class SpecGenerateCommand extends BaseCommand {
     super.fileSystem,
     ManifestLoaderFactory? loaderFactory,
   }) : _loaderFactory = loaderFactory ?? _defaultLoaderFactory {
+    final resolvedFileSystem = super.fileSystem;
     argParser
       ..addOption(
         'entry',
@@ -24,7 +25,7 @@ class SpecGenerateCommand extends BaseCommand {
         help:
             'Target path for the generated manifest (relative to project root).',
         valueHelp: 'file',
-        defaultsTo: this.fileSystem.path.join(
+        defaultsTo: resolvedFileSystem.path.join(
           '.dart_tool',
           'routed',
           'route_manifest.json',

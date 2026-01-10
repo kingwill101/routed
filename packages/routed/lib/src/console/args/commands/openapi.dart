@@ -44,6 +44,7 @@ class OpenApiGenerateCommand extends BaseCommand {
     super.fileSystem,
     ManifestLoaderFactory? loaderFactory,
   }) : _loaderFactory = loaderFactory ?? _defaultLoaderFactory {
+    final fs.FileSystem resolvedFileSystem = super.fileSystem;
     argParser
       ..addOption(
         'entry',
@@ -53,7 +54,7 @@ class OpenApiGenerateCommand extends BaseCommand {
       ..addOption(
         'output',
         help: 'Target path for the generated OpenAPI document.',
-        defaultsTo: this.fileSystem.path.join(
+        defaultsTo: resolvedFileSystem.path.join(
           '.dart_tool',
           'routed',
           'openapi.json',
