@@ -1,10 +1,7 @@
-import 'package:routed/auth.dart';
 import 'package:routed/routed.dart';
-import 'package:routed/src/context/context.dart';
-import 'package:routed/src/request.dart';
+import 'package:routed_testing/routed_testing.dart';
 import 'package:server_testing/server_testing.dart';
-import 'package:server_testing/src/mock/request.dart';
-import 'package:test/test.dart';
+import '../test_engine.dart';
 
 class Project {
   Project({required this.id, required this.ownerId});
@@ -32,11 +29,23 @@ class ProjectPolicy extends Policy<Project> {
       true;
 }
 
-EngineContext _context() {
-  final request = setupRequest('GET', '/rbac');
-  final response = Response(request.response);
-  final routedRequest = Request(request, {}, EngineConfig());
-  return EngineContext(request: routedRequest, response: response);
+Future<T> _withContext<T>(Future<T> Function(EngineContext ctx) action) async {
+  final engine = testEngine();
+  late T result;
+  engine.get('/rbac', (ctx) async {
+    result = await action(ctx);
+    return ctx.json({'ok': true});
+  });
+
+  await engine.initialize();
+  final client = TestClient(
+    RoutedRequestHandler(engine),
+    mode: TransportMode.ephemeralServer,
+  );
+  await client.get('/rbac');
+  await client.close();
+  await engine.close();
+  return result;
 }
 
 AuthPrincipal _principal(String id, List<String> roles) {
@@ -57,7 +66,7 @@ void main() {
       expect(abilityGuest.evaluate(null), isTrue);
     });
 
-    test('does not override existing gates', () {
+    test('does not override existing gates', () async {
       final registry = GateRegistry.instance;
       const ability = 'rbac.keep';
       var originalCalled = false;
@@ -74,13 +83,78 @@ void main() {
 
       final callback = registry.resolve(ability);
       expect(callback, isNotNull);
-      callback!(
-        GateEvaluationContext(
-          context: _context(),
-          principal: _principal('1', ['admin']),
-        ),
-      );
+
+      await _withContext((ctx) async {
+        callback!(
+          GateEvaluationContext(
+            context: ctx,
+            principal: _principal('1', ['admin']),
+          ),
+        );
+        return true;
+      });
+
       expect(originalCalled, isTrue);
+    });
+
+    test('registers and overrides managed abilities', () async {
+      final registry = GateRegistry.instance;
+      const ability = 'rbac.swap';
+      var firstCalled = false;
+      registry.register(ability, (_) {
+        firstCalled = true;
+        return false;
+      });
+
+      addTearDown(() => registry.unregister(ability));
+
+      registerRbacAbilitiesSafely(
+        registry,
+        {ability: RbacAbility.role('admin')},
+        managed: {ability},
+      );
+
+      final callback = registry.resolve(ability);
+      expect(callback, isNotNull);
+
+      final allowed = await _withContext((ctx) async {
+        return await Future.value(
+          callback!(
+            GateEvaluationContext(
+              context: ctx,
+              principal: _principal('1', ['admin']),
+            ),
+          ),
+        );
+      });
+
+      expect(firstCalled, isFalse);
+      expect(allowed, isTrue);
+    });
+
+    test('registers abilities and skips empty keys', () {
+      final registry = GateRegistry.instance;
+      const ability = 'rbac.trim';
+      addTearDown(() => registry.unregister(ability));
+
+      final registered = registerRbacAbilities(registry, {
+        '  $ability  ': RbacAbility.role('admin'),
+        ' ': RbacAbility.role('guest'),
+      });
+
+      expect(registered, contains(ability));
+      expect(registry.resolve(ability), isNotNull);
+    });
+
+    test('returns true when roles are empty', () {
+      const ability = RbacAbility(roles: []);
+      expect(ability.evaluate(_principal('1', ['user'])), isTrue);
+      expect(ability.evaluate(null), isFalse);
+    });
+
+    test('reports empty options', () {
+      const options = RbacOptions();
+      expect(options.isEmpty, isTrue);
     });
   });
 
@@ -100,7 +174,6 @@ void main() {
         }
       });
 
-      final context = _context();
       final owner = _principal('owner-1', ['user']);
       final other = _principal('user-2', ['user']);
       final project = Project(id: 'p1', ownerId: 'owner-1');
@@ -115,56 +188,55 @@ void main() {
       expect(deleteGate, isNotNull);
       expect(createGate, isNotNull);
 
-      expect(
-        await Future.value(
+      final results = await _withContext((ctx) async {
+        final updateOwner = await Future.value(
           updateGate!(
             GateEvaluationContext(
-              context: context,
+              context: ctx,
               principal: owner,
               payload: project,
             ),
           ),
-        ),
-        isTrue,
-      );
-      expect(
-        await Future.value(
+        );
+        final updateOther = await Future.value(
           updateGate(
             GateEvaluationContext(
-              context: context,
+              context: ctx,
               principal: other,
               payload: project,
             ),
           ),
-        ),
-        isFalse,
-      );
-      expect(
-        await Future.value(
+        );
+        final deleteOwner = await Future.value(
           deleteGate!(
             GateEvaluationContext(
-              context: context,
+              context: ctx,
               principal: owner,
               payload: project,
             ),
           ),
-        ),
-        isTrue,
-      );
-      expect(
-        await Future.value(
-          createGate!(
-            GateEvaluationContext(context: context, principal: owner),
-          ),
-        ),
-        isTrue,
-      );
-      expect(
-        await Future.value(
-          createGate(GateEvaluationContext(context: context, principal: null)),
-        ),
-        isFalse,
-      );
+        );
+        final createOwner = await Future.value(
+          createGate!(GateEvaluationContext(context: ctx, principal: owner)),
+        );
+        final createGuest = await Future.value(
+          createGate(GateEvaluationContext(context: ctx, principal: null)),
+        );
+
+        return {
+          'updateOwner': updateOwner,
+          'updateOther': updateOther,
+          'deleteOwner': deleteOwner,
+          'createOwner': createOwner,
+          'createGuest': createGuest,
+        };
+      });
+
+      expect(results['updateOwner'], isTrue);
+      expect(results['updateOther'], isFalse);
+      expect(results['deleteOwner'], isTrue);
+      expect(results['createOwner'], isTrue);
+      expect(results['createGuest'], isFalse);
     });
   });
 }

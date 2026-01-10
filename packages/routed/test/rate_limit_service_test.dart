@@ -1,15 +1,12 @@
 import 'dart:async';
 
-import 'package:routed/src/cache/cache_manager.dart';
-import 'package:routed/src/engine/config.dart';
-import 'package:routed/src/events/event_manager.dart';
-import 'package:routed/src/events/rate_limit/rate_limit_events.dart';
+import 'package:routed/routed.dart';
 import 'package:routed/src/rate_limit/backend.dart';
 import 'package:routed/src/rate_limit/policy.dart';
 import 'package:routed/src/rate_limit/service.dart';
-import 'package:routed/src/request.dart';
-import 'package:server_testing/mock.dart';
-import 'package:test/test.dart';
+import 'package:routed_testing/routed_testing.dart';
+import 'package:server_testing/server_testing.dart';
+import 'test_engine.dart';
 
 void main() {
   test('emits events for allowed and blocked outcomes', () async {
@@ -37,22 +34,42 @@ void main() {
     final subscriptions = <RateLimitEvent>[];
     final sub = events.on<RateLimitEvent>().listen(subscriptions.add);
 
-    final mockRequest = setupRequest(
-      'GET',
+    final engine = testEngine();
+    engine.get('/resource', (ctx) async {
+      final result = await service.check(ctx.request);
+      if (result == null || result.allowed) {
+        return ctx.string('ok');
+      }
+      return ctx.json({
+        'error': 'rate_limited',
+      }, statusCode: HttpStatus.tooManyRequests);
+    });
+
+    await engine.initialize();
+    final client = TestClient(
+      RoutedRequestHandler(engine),
+      mode: TransportMode.ephemeralServer,
+    );
+    addTearDown(() async {
+      await client.close();
+      await engine.close();
+    });
+
+    final first = await client.get(
       '/resource',
-      requestHeaders: {
+      headers: {
         'x-user-id': ['user-123'],
       },
     );
+    first.assertStatus(HttpStatus.ok);
 
-    final request = Request(mockRequest, const {}, EngineConfig());
-
-    final first = await service.check(request);
-    expect(first, isNull); // allowed
-
-    final second = await service.check(request);
-    expect(second, isNotNull);
-    expect(second!.allowed, isFalse);
+    final second = await client.get(
+      '/resource',
+      headers: {
+        'x-user-id': ['user-123'],
+      },
+    );
+    second.assertStatus(HttpStatus.tooManyRequests);
 
     await Future<void>.delayed(const Duration(milliseconds: 10));
 

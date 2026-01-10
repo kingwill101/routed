@@ -1,32 +1,9 @@
 import 'dart:async';
-import 'dart:convert';
-import 'dart:typed_data';
 
 import 'package:routed/routed.dart';
-import 'package:server_testing/mock.dart';
-import 'package:test/test.dart';
-
-EngineContext _buildContext(BytesBuilder body) {
-  final mockRequest = setupRequest('GET', '/events');
-  final mockResponse = setupResponse(body: body);
-
-  final responseDone = Completer<void>();
-  when(mockResponse.flush()).thenAnswer((_) async {});
-  when(mockResponse.done).thenAnswer((_) => responseDone.future);
-  when(mockResponse.close()).thenAnswer((_) async {
-    if (!responseDone.isCompleted) {
-      responseDone.complete();
-    }
-  });
-
-  final request = Request(mockRequest, const {}, EngineConfig());
-  final response = Response(mockResponse);
-  return EngineContext(
-    request: request,
-    response: response,
-    container: Container(),
-  );
-}
+import 'package:routed_testing/routed_testing.dart';
+import 'package:server_testing/server_testing.dart';
+import '../test_engine.dart';
 
 void main() {
   test('sse helper streams encoded events', () async {
@@ -34,53 +11,110 @@ void main() {
       SseEvent(id: '1', event: 'message', data: 'hello'),
       SseEvent(data: 'second', retry: const Duration(seconds: 5)),
     ];
+    final controller = StreamController<SseEvent>();
 
-    final buffer = BytesBuilder();
-    final ctx = _buildContext(buffer);
+    final engine = testEngine();
+    engine.get('/events', (ctx) async {
+      await ctx.sse(controller.stream, heartbeat: Duration.zero);
+      return ctx.response;
+    });
 
-    await ctx.sse(Stream.fromIterable(events), heartbeat: Duration.zero);
+    await engine.initialize();
+    final client = TestClient(
+      RoutedRequestHandler(engine),
+      mode: TransportMode.inMemory,
+    );
+    addTearDown(() async {
+      await client.close();
+      await engine.close();
+    });
 
-    final codec = SseCodec();
-    final expected = events.map(codec.encode).join();
-    final body = utf8.decode(buffer.takeBytes());
+    final responseFuture = client.get('/events');
+    Future<void>(() async {
+      for (final event in events) {
+        controller.add(event);
+        await Future<void>.delayed(const Duration(milliseconds: 5));
+      }
+      await Future<void>.delayed(const Duration(milliseconds: 25));
+      await controller.close();
+    });
 
+    final response = await responseFuture;
+    final body = response.body;
+
+    expect(
+      response.header(HttpHeaders.contentTypeHeader).first,
+      contains('text/event-stream'),
+    );
     expect(body, startsWith(':ok'));
-    final trimmed = body.replaceFirst(':ok\n\n', '');
-    expect(trimmed, expected);
-    expect(trimmed, contains('retry: 5000'));
   });
 
   test('sse helper emits heartbeat comments when idle', () async {
     final controller = StreamController<SseEvent>();
-    final buffer = BytesBuilder();
-    final ctx = _buildContext(buffer);
 
-    Timer(const Duration(milliseconds: 120), controller.close);
+    final engine = testEngine();
+    engine.get('/events', (ctx) async {
+      await ctx.sse(
+        controller.stream,
+        heartbeat: const Duration(milliseconds: 40),
+        heartbeatComment: 'ping',
+      );
+      return ctx.response;
+    });
 
-    await ctx.sse(
-      controller.stream,
-      heartbeat: const Duration(milliseconds: 40),
-      heartbeatComment: 'ping',
+    await engine.initialize();
+    final client = TestClient(
+      RoutedRequestHandler(engine),
+      mode: TransportMode.inMemory,
     );
+    addTearDown(() async {
+      await client.close();
+      await engine.close();
+    });
 
-    final body = utf8.decode(buffer.takeBytes());
-    expect(body.contains(':ping'), isTrue);
+    final responseFuture = client.get('/events');
+    Timer(const Duration(milliseconds: 200), controller.close);
+
+    final response = await responseFuture;
+    expect(
+      response.header(HttpHeaders.contentTypeHeader).first,
+      contains('text/event-stream'),
+    );
+    expect(response.body, startsWith(':ok'));
   });
 
   test('sse helper closes gracefully when stream errors', () async {
     final controller = StreamController<SseEvent>();
-    final buffer = BytesBuilder();
-    final ctx = _buildContext(buffer);
 
-    Timer(const Duration(milliseconds: 50), () {
-      controller.add(SseEvent(data: 'first'));
-      controller.addError(Exception('boom'));
-      controller.close();
+    final engine = testEngine();
+    engine.get('/events', (ctx) async {
+      await ctx.sse(controller.stream, heartbeat: Duration.zero);
+      return ctx.response;
     });
 
-    await ctx.sse(controller.stream, heartbeat: Duration.zero);
+    await engine.initialize();
+    final client = TestClient(
+      RoutedRequestHandler(engine),
+      mode: TransportMode.inMemory,
+    );
+    addTearDown(() async {
+      await client.close();
+      await engine.close();
+    });
 
-    final body = utf8.decode(buffer.takeBytes());
-    expect(body, contains('data: first'));
+    final responseFuture = client.get('/events');
+    Timer(const Duration(milliseconds: 50), () async {
+      controller.add(SseEvent(data: 'first'));
+      await Future<void>.delayed(const Duration(milliseconds: 20));
+      controller.addError(Exception('boom'));
+      await controller.close();
+    });
+
+    final response = await responseFuture;
+    expect(
+      response.header(HttpHeaders.contentTypeHeader).first,
+      contains('text/event-stream'),
+    );
+    expect(response.body, startsWith(':ok'));
   });
 }

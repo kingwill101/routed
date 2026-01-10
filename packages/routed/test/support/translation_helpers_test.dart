@@ -1,9 +1,8 @@
-import 'dart:async';
 
 import 'package:routed/routed.dart';
 import 'package:routed/src/translation/constants.dart';
-import 'package:server_testing/mock.dart';
-import 'package:test/test.dart';
+import 'package:routed_testing/routed_testing.dart';
+import 'package:server_testing/server_testing.dart';
 import '../test_engine.dart';
 
 class StubTranslator implements TranslatorContract {
@@ -54,26 +53,10 @@ class StubTranslator implements TranslatorContract {
   ) {}
 }
 
-EngineContext _context(Container container) {
-  final mockRequest = setupRequest('GET', '/');
-  final mockResponse = setupResponse();
-  when(mockResponse.flush()).thenAnswer((_) async {});
-  when(mockResponse.close()).thenAnswer((_) async {});
-  when(mockResponse.done).thenAnswer((_) => Future.value());
-
-  final request = Request(mockRequest, const {}, EngineConfig());
-  final response = Response(mockResponse);
-  return EngineContext(
-    request: request,
-    response: response,
-    container: container,
-  );
-}
-
 void main() {
   group('translation helpers', () {
     test('trans uses request locale override', () async {
-      final engine = testEngine(includeDefaultProviders: false);
+      final engine = testEngine();
       engine.container
         ..instance<Config>(
           ConfigImpl({
@@ -82,21 +65,40 @@ void main() {
         )
         ..instance<TranslatorContract>(StubTranslator('en', 'en'));
 
-      final ctx = _context(engine.container)
-        ..set(kRequestLocaleAttribute, 'es');
+      engine.get('/trans', (ctx) async {
+        ctx.set(kRequestLocaleAttribute, 'es');
+        Object? greeting;
+        Object? choice;
 
-      await AppZone.run(
-        engine: engine,
-        context: ctx,
-        body: () async {
-          expect(trans('messages.greeting'), equals('value-es'));
-          expect(transChoice('messages.count', 2), equals('choice-es-2'));
-        },
+        await AppZone.run(
+          engine: engine,
+          context: ctx,
+          body: () async {
+            greeting = trans('messages.greeting');
+            choice = transChoice('messages.count', 2);
+          },
+        );
+
+        return ctx.json({'greeting': greeting, 'choice': choice});
+      });
+
+      await engine.initialize();
+      final client = TestClient(
+        RoutedRequestHandler(engine),
+        mode: TransportMode.ephemeralServer,
       );
+      addTearDown(() async {
+        await client.close();
+        await engine.close();
+      });
+
+      final response = await client.get('/trans');
+      expect(response.json()['greeting'], equals('value-es'));
+      expect(response.json()['choice'], equals('choice-es-2'));
     });
 
     test('currentLocale falls back to translator locale', () async {
-      final engine = testEngine(includeDefaultProviders: false);
+      final engine = testEngine();
       engine.container
         ..instance<Config>(
           ConfigImpl({
@@ -105,15 +107,30 @@ void main() {
         )
         ..instance<TranslatorContract>(StubTranslator('fr', 'en'));
 
-      final ctx = _context(engine.container);
+      engine.get('/locale', (ctx) async {
+        String? locale;
+        await AppZone.run(
+          engine: engine,
+          context: ctx,
+          body: () async {
+            locale = currentLocale();
+          },
+        );
+        return ctx.json({'locale': locale});
+      });
 
-      await AppZone.run(
-        engine: engine,
-        context: ctx,
-        body: () async {
-          expect(currentLocale(), equals('fr'));
-        },
+      await engine.initialize();
+      final client = TestClient(
+        RoutedRequestHandler(engine),
+        mode: TransportMode.ephemeralServer,
       );
+      addTearDown(() async {
+        await client.close();
+        await engine.close();
+      });
+
+      final response = await client.get('/locale');
+      expect(response.json()['locale'], equals('fr'));
     });
   });
 }
