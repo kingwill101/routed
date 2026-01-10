@@ -49,6 +49,7 @@ class BrowserPaths {
         ['chrome-mac', 'Chromium.app', 'Contents', 'MacOS', 'Chromium'],
       ],
       'win': [
+        ['chrome-win64', 'chrome.exe'],
         ['chrome-win', 'chrome.exe'],
       ],
     },
