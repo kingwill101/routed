@@ -2,54 +2,7 @@ export 'dart:io' show HttpHeaders, HttpStatus;
 
 export 'package:storage_fs/storage_fs.dart' hide Factory;
 
-export 'src/auth/haigate.dart'
-    show
-        GateCallback,
-        GateEvaluation,
-        GateEvaluationContext,
-        GateObserver,
-        GatePayloadProvider,
-        GateDeniedHandler,
-        GateRegistry,
-        GateRegistrationException,
-        GateViolation,
-        Haigate;
-export 'src/auth/jwt.dart'
-    show
-        JwtAuthException,
-        JwtOptions,
-        JwtPayload,
-        JwtVerifier,
-        JwtOnVerified,
-        jwtAuthentication,
-        jwtClaimsAttribute,
-        jwtHeadersAttribute,
-        jwtSubjectAttribute;
-export 'src/auth/oauth.dart'
-    show
-        OAuth2Client,
-        OAuth2Exception,
-        OAuthTokenResponse,
-        OAuthIntrospectionOptions,
-        OAuthIntrospectionResult,
-        OAuthOnValidated,
-        oauth2Introspection,
-        oauthTokenAttribute,
-        oauthClaimsAttribute,
-        oauthScopeAttribute;
-export 'src/auth/session_auth.dart'
-    show
-        AuthPrincipal,
-        RememberTokenStore,
-        InMemoryRememberTokenStore,
-        SessionAuthService,
-        SessionAuth,
-        GuardResult,
-        AuthGuard,
-        GuardRegistry,
-        guardMiddleware,
-        requireAuthenticated,
-        requireRoles;
+export 'auth.dart';
 export 'src/binding/convert/sse.dart' show SseEvent, SseCodec;
 export 'src/binding/multipart.dart'
     show

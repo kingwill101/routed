@@ -74,6 +74,7 @@ class JwtOptions {
     this.jwksCacheTtl = const Duration(minutes: 5),
     this.header = 'Authorization',
     this.bearerPrefix = 'Bearer ',
+    this.cookieName = 'routed_auth_token',
   });
 
   /// Whether JWT verification is enabled.
@@ -109,6 +110,9 @@ class JwtOptions {
   /// The prefix for the JWT in the authorization header.
   final String bearerPrefix;
 
+  /// Cookie name to read/write JWT tokens.
+  final String cookieName;
+
   /// Creates a copy of this [JwtOptions] with the specified overrides.
   JwtOptions copyWith({
     bool? enabled,
@@ -122,6 +126,7 @@ class JwtOptions {
     Duration? jwksCacheTtl,
     String? header,
     String? bearerPrefix,
+    String? cookieName,
   }) {
     return JwtOptions(
       enabled: enabled ?? this.enabled,
@@ -135,7 +140,77 @@ class JwtOptions {
       jwksCacheTtl: jwksCacheTtl ?? this.jwksCacheTtl,
       header: header ?? this.header,
       bearerPrefix: bearerPrefix ?? this.bearerPrefix,
+      cookieName: cookieName ?? this.cookieName,
     );
+  }
+}
+
+/// Builds a symmetric JsonWebKey from a secret.
+JsonWebKey jwtSecretKey(String secret) {
+  return JsonWebKey.fromJson({
+    'kty': 'oct',
+    'k': base64UrlEncode(utf8.encode(secret)),
+  });
+}
+
+/// JWT configuration used for auth session issuance.
+class JwtSessionOptions {
+  const JwtSessionOptions({
+    required this.secret,
+    this.issuer,
+    this.audience,
+    this.maxAge = const Duration(hours: 1),
+    this.algorithm = 'HS256',
+    this.cookieName = 'routed_auth_token',
+    this.header = HttpHeaders.authorizationHeader,
+    this.bearerPrefix = 'Bearer ',
+  });
+
+  final String secret;
+  final String? issuer;
+  final List<String>? audience;
+  final Duration maxAge;
+  final String algorithm;
+  final String cookieName;
+  final String header;
+  final String bearerPrefix;
+
+  JwtOptions toVerifierOptions() {
+    return JwtOptions(
+      issuer: issuer,
+      audience: audience ?? const <String>[],
+      algorithms: [algorithm],
+      inlineKeys: [jwtSecretKey(secret).toJson()],
+      header: header,
+      bearerPrefix: bearerPrefix,
+      cookieName: cookieName,
+    );
+  }
+}
+
+/// Issues signed JWTs for auth sessions.
+class JwtIssuer {
+  JwtIssuer(this.options);
+
+  final JwtSessionOptions options;
+
+  DateTime get expiry => DateTime.now().add(options.maxAge);
+
+  String issue(Map<String, dynamic> claims) {
+    final now = DateTime.now();
+    final exp = now.add(options.maxAge).millisecondsSinceEpoch ~/ 1000;
+
+    final key = jwtSecretKey(options.secret);
+    final builder = JsonWebSignatureBuilder()
+      ..jsonContent = {
+        ...claims,
+        'iat': now.millisecondsSinceEpoch ~/ 1000,
+        'exp': exp,
+        if (options.issuer != null) 'iss': options.issuer,
+        if (options.audience != null) 'aud': options.audience,
+      };
+    builder.addRecipient(key, algorithm: options.algorithm);
+    return builder.build().toCompactSerialization();
   }
 }
 
@@ -152,6 +227,9 @@ class JwtVerifier {
 
   JwtOptions get options => _options;
 
+  /// Verifies a JWT token and returns its payload.
+  Future<JwtPayload> verifyToken(String token) => _verify(token);
+
   Middleware middleware({JwtOnVerified? onVerified}) {
     return (EngineContext ctx, Next next) async {
       if (!_options.enabled) {
@@ -166,7 +244,7 @@ class JwtVerifier {
       }
 
       try {
-        final payload = await _verify(token);
+        final payload = await verifyToken(token);
         ctx.request
           ..setAttribute(jwtClaimsAttribute, payload.claims)
           ..setAttribute(jwtHeadersAttribute, payload.headers)

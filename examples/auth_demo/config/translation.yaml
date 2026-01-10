@@ -1,0 +1,34 @@
+# Translation configuration quick reference:
+# cookie – Default: {"name":"locale"}. Type: object
+# cookie.name – Cookie name consulted for locale overrides. Default: locale. Type: string
+# header – Default: {"name":"Accept-Language"}. Type: object
+# header.name – Header inspected for Accept-Language fallbacks. Default: Accept-Language. Type: string
+# json_paths – Directories containing flat `<locale>.json` dictionaries. Default: []. Type: array
+# namespaces – Vendor namespace hints mapping namespace => absolute directory. Default: {}. Type: object
+# paths – Directories scanned for `locale/group.(yaml|yml|json)` files. Default: ["resources/lang"]. Type: array
+# query – Default: {"parameter":"locale"}. Type: object
+# query.parameter – Query parameter consulted for locale overrides. Default: locale. Type: string
+# resolver_options – Resolver-specific options keyed by resolver identifier. Default: {}. Type: object
+# resolvers – Ordered locale resolvers (query, cookie, header, session). Default: ["query","cookie","session","header"]. Type: array
+# session – Default: {"key":"locale"}. Type: object
+# session.key – Session key consulted for locale overrides. Default: locale. Type: string
+
+cookie:
+  name: locale
+header:
+  name: Accept-Language
+json_paths:
+namespaces:
+paths:
+  - resources/lang
+query:
+  parameter: locale
+resolver_options:
+resolvers:
+  - query
+  - cookie
+  - session
+  - header
+session:
+  key: locale
+

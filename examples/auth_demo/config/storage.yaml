@@ -1,0 +1,30 @@
+# Storage configuration quick reference:
+# cloud – Disk name used when a "cloud" disk is required by helpers. Type: string
+# default – Name of the disk to use when none is specified. Default: local. Type: string
+# disks – Configured storage disks. Default: {"local":{"driver":"local","root":"{{ env.STORAGE_ROOT | default: 'storage/app' }}"}}. Type: object
+# disks.*.driver – Storage backend for this disk. Options: local, s3 Type: string
+# disks.local.file_system – Optional file system override used when operating the local disk. Type: object
+# disks.local.root – Filesystem path used as the disk root (defaults to storage/app for the local disk, or storage/<name> for other disks). Default: "{{ env.STORAGE_ROOT | default: 'storage/app' }}". Type: string
+# disks.s3.directory_separator – Directory separator used when joining storage paths. Type: string
+# disks.s3.driver – Storage driver name. Default: s3. Type: string
+# disks.s3.options – S3 connection options. Type: object
+# disks.s3.options.bucket – Bucket name used for storing files. Type: string
+# disks.s3.options.endpoint – Hostname of the S3-compatible endpoint (e.g. s3.amazonaws.com). Type: string
+# disks.s3.options.key – Access key for the S3-compatible account. Type: string
+# disks.s3.options.region – Optional region (defaults to us-east-1 for most providers). Type: string
+# disks.s3.options.secret – Secret key for the S3-compatible account. Type: string
+# disks.s3.options.use_ssl – Enable HTTPS connections to the provider (defaults true). Default: true. Type: boolean
+# disks.s3.prefix – Optional key prefix applied to all stored objects (no leading slash). Type: string
+# disks.s3.report – Report storage errors when enabled. Type: boolean
+# disks.s3.throw – Throw exceptions on storage errors when enabled. Type: boolean
+# disks.s3.url – Public base URL used when generating links. Type: string
+# disks.s3.visibility – Default visibility applied to objects on this disk. Type: string
+# root – Base filesystem path used by the default local disk. Default: "{{ env.STORAGE_ROOT | default: 'storage/app' }}". Env override: STORAGE_ROOT Type: string
+
+default: local
+disks:
+  local:
+    driver: local
+    root: "{{ env.STORAGE_ROOT | default: 'storage/app' }}"
+root: "{{ env.STORAGE_ROOT | default: 'storage/app' }}"
+

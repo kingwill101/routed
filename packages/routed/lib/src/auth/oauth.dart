@@ -82,13 +82,20 @@ class OAuth2Client {
     this.clientId,
     this.clientSecret,
     this.defaultHeaders = const <String, String>{},
+    this.useBasicAuth = true,
     http.Client? httpClient,
   }) : _httpClient = httpClient ?? http.Client();
 
   final Uri tokenEndpoint;
   final String? clientId;
   final String? clientSecret;
+
+  /// Headers applied to OAuth requests.
   final Map<String, String> defaultHeaders;
+
+  /// Whether to use HTTP Basic auth for token exchange.
+  final bool useBasicAuth;
+
   final http.Client _httpClient;
 
   Future<OAuthTokenResponse> exchangeAuthorizationCode({
@@ -150,9 +157,17 @@ class OAuth2Client {
       'Content-Type': 'application/x-www-form-urlencoded',
       ...defaultHeaders,
     };
-    if (clientSecret != null && clientId != null) {
+    if (clientId != null && clientSecret != null && useBasicAuth) {
       final credentials = base64Encode(utf8.encode('$clientId:$clientSecret'));
       headers['Authorization'] = 'Basic $credentials';
+    }
+    if (!useBasicAuth) {
+      if (clientId != null) {
+        body['client_id'] = clientId!;
+      }
+      if (clientSecret != null) {
+        body['client_secret'] = clientSecret!;
+      }
     }
 
     final response = await _httpClient.post(
@@ -168,9 +183,43 @@ class OAuth2Client {
       );
     }
 
-    final Map<String, dynamic> jsonResponse =
-        json.decode(response.body) as Map<String, dynamic>;
+    final responseBody = response.body.trim();
+    if (responseBody.isEmpty) {
+      throw OAuth2Exception('Token endpoint returned empty response');
+    }
+
+    final contentType =
+        response.headers[HttpHeaders.contentTypeHeader]?.toLowerCase() ?? '';
+    Map<String, dynamic> jsonResponse;
+    if (contentType.contains('application/json') ||
+        responseBody.startsWith('{')) {
+      jsonResponse = json.decode(responseBody) as Map<String, dynamic>;
+    } else {
+      final parsed = Uri.splitQueryString(responseBody);
+      jsonResponse = parsed.map((key, value) => MapEntry(key, value));
+    }
     return OAuthTokenResponse.fromJson(jsonResponse);
+  }
+
+  /// Loads profile data from the provider userinfo endpoint.
+  Future<Map<String, dynamic>> fetchUserInfo(
+    Uri endpoint,
+    String accessToken,
+  ) async {
+    final response = await _httpClient.get(
+      endpoint,
+      headers: {
+        HttpHeaders.authorizationHeader: 'Bearer $accessToken',
+        ...defaultHeaders,
+      },
+    );
+    if (response.statusCode < 200 || response.statusCode >= 300) {
+      throw OAuth2Exception(
+        'Userinfo endpoint responded with ${response.statusCode}',
+        response.statusCode,
+      );
+    }
+    return json.decode(response.body) as Map<String, dynamic>;
   }
 }
 
