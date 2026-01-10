@@ -720,8 +720,10 @@ Future<int> _copyDirectory({
     if (entity is! fs.File) {
       continue;
     }
-    final relative = p.relative(entity.path, from: source.path);
-    final target = fileSystem.file(p.join(destination.path, relative));
+    final relative = fileSystem.path.relative(entity.path, from: source.path);
+    final target = fileSystem.file(
+      fileSystem.path.join(destination.path, relative),
+    );
     if (!force && await target.exists()) {
       continue;
     }
