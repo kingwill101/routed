@@ -10,6 +10,7 @@ import 'package:routed/src/auth/models.dart';
 import 'package:routed/src/auth/providers.dart';
 import 'package:routed/src/auth/jwt.dart';
 import 'package:routed/src/auth/oauth.dart';
+import 'package:routed/src/auth/rbac.dart';
 import 'package:routed/src/auth/session_auth.dart';
 import 'package:routed/src/context/context.dart';
 
@@ -57,6 +58,7 @@ class AuthOptions {
     this.httpClient,
     this.tokenStore,
     this.enforceCsrf = true,
+    this.rbac = const RbacOptions(),
   });
 
   /// List of configured auth providers.
@@ -98,6 +100,9 @@ class AuthOptions {
   /// Whether to enforce CSRF checks on sign-in/sign-out.
   final bool enforceCsrf;
 
+  /// Role-based access control mappings.
+  final RbacOptions rbac;
+
   AuthOptions copyWith({
     List<AuthProvider>? providers,
     AuthAdapter? adapter,
@@ -112,6 +117,7 @@ class AuthOptions {
     http.Client? httpClient,
     AuthVerificationTokenStore? tokenStore,
     bool? enforceCsrf,
+    RbacOptions? rbac,
   }) {
     return AuthOptions(
       providers: providers ?? this.providers,
@@ -127,6 +133,7 @@ class AuthOptions {
       httpClient: httpClient ?? this.httpClient,
       tokenStore: tokenStore ?? this.tokenStore,
       enforceCsrf: enforceCsrf ?? this.enforceCsrf,
+      rbac: rbac ?? this.rbac,
     );
   }
 }

@@ -7,6 +7,7 @@ import 'package:routed/src/auth/routes.dart';
 import 'package:routed/src/auth/haigate.dart';
 import 'package:routed/src/auth/jwt.dart';
 import 'package:routed/src/auth/oauth.dart';
+import 'package:routed/src/auth/rbac.dart';
 import 'package:routed/src/auth/session_auth.dart';
 import 'package:routed/src/config/specs/auth.dart';
 import 'package:routed/src/container/container.dart';
@@ -36,6 +37,7 @@ class AuthServiceProvider extends ServiceProvider with ProvidesDefaultConfig {
   final Set<String> _managedConfigGuards = <String>{};
   final Set<String> _managedConfigGates = <String>{};
   final Set<String> _managedGateMiddleware = <String>{};
+  final Set<String> _managedRbacAbilities = <String>{};
   static const AuthConfigSpec spec = AuthConfigSpec();
 
   @override
@@ -165,6 +167,8 @@ class AuthServiceProvider extends ServiceProvider with ProvidesDefaultConfig {
     _managedAuthManager = manager;
     container.instance<AuthManager>(manager);
     _ownsAuthManager = true;
+
+    _configureRbac(container, resolvedOptions);
   }
 
   AuthAdapter _resolveAuthAdapter(Container container, AuthOptions options) {
@@ -318,6 +322,30 @@ class AuthServiceProvider extends ServiceProvider with ProvidesDefaultConfig {
     _managedGateMiddleware
       ..clear()
       ..addAll(newMiddlewareIds);
+  }
+
+  void _configureRbac(Container container, AuthOptions options) {
+    final registry = _resolveGateRegistry(container);
+    if (options.rbac.isEmpty) {
+      for (final ability in _managedRbacAbilities) {
+        registry.unregister(ability);
+      }
+      _managedRbacAbilities.clear();
+      return;
+    }
+
+    final newAbilities = registerRbacAbilitiesSafely(
+      registry,
+      options.rbac.abilities,
+      managed: _managedRbacAbilities,
+    );
+
+    for (final ability in _managedRbacAbilities.difference(newAbilities)) {
+      registry.unregister(ability);
+    }
+    _managedRbacAbilities
+      ..clear()
+      ..addAll(newAbilities);
   }
 
   GateCallback? _buildGateFromDefinition(GateDefinition definition) {

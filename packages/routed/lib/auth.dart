@@ -32,6 +32,14 @@ export 'src/auth/jwt.dart'
         jwtSecretKey,
         jwtSubjectAttribute;
 export 'src/auth/provider.dart' show AuthServiceProvider;
+export 'src/auth/rbac.dart'
+    show
+        RbacAbility,
+        RbacOptions,
+        registerRbacAbilities,
+        registerRbacAbilitiesSafely,
+        registerRbacWithHaigate,
+        rbacGate;
 
 export 'src/auth/oauth.dart'
     show
