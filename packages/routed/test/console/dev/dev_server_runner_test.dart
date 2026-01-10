@@ -222,7 +222,7 @@ void main() {
         dartVmServicePort: '8181',
         workingDirectory: tempDir,
         scriptPath: scriptFile.path,
-        hotReloadExpected: false,
+        hotReloadExpected: true,
         isWindows: false,
         directoryWatcher: (_) => watcher,
         startProcess: startProcess,
