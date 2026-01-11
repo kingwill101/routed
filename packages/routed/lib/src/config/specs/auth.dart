@@ -1,6 +1,7 @@
 import 'dart:io';
 
 import 'package:json_schema_builder/json_schema_builder.dart';
+import 'package:routed/src/auth/models.dart';
 import 'package:routed/src/config/schema.dart';
 import 'package:routed/src/provider/config_utils.dart';
 import 'package:routed/src/provider/provider.dart';
@@ -13,7 +14,10 @@ class AuthConfig {
   const AuthConfig({
     required this.jwt,
     required this.oauth2Introspection,
+    required this.session,
     required this.sessionRememberMe,
+    required this.callbacks,
+    required this.events,
     required this.haigate,
     required this.guards,
   });
@@ -33,14 +37,20 @@ class AuthConfig {
     );
 
     final sessionMap = _mapOrEmpty(map['session'], 'auth.session');
-    final rememberMap = _mapOrEmpty(
-      sessionMap['remember_me'],
-      'auth.session.remember_me',
+    final sessionConfig = AuthSessionConfig.fromMap(
+      sessionMap,
+      context: 'auth.session',
     );
-    final rememberConfig = SessionRememberMeConfig.fromMap(
-      rememberMap,
-      context: 'auth.session.remember_me',
+    final rememberConfig = sessionConfig.rememberMe;
+
+    final callbacksMap = _mapOrEmpty(map['callbacks'], 'auth.callbacks');
+    final callbacks = AuthCallbackConfig.fromMap(
+      callbacksMap,
+      context: 'auth.callbacks',
     );
+
+    final eventsMap = _mapOrEmpty(map['events'], 'auth.events');
+    final events = AuthEventConfig.fromMap(eventsMap, context: 'auth.events');
 
     final featuresMap = _mapOrEmpty(map['features'], 'auth.features');
     final haigateFeature = _mapOrEmpty(
@@ -82,7 +92,10 @@ class AuthConfig {
     return AuthConfig(
       jwt: jwtConfig,
       oauth2Introspection: oauthConfig,
+      session: sessionConfig,
       sessionRememberMe: rememberConfig,
+      callbacks: callbacks,
+      events: events,
       haigate: HaigateConfig(
         enabled: haigateEnabled,
         defaults: gateDefaults,
@@ -94,7 +107,10 @@ class AuthConfig {
 
   final AuthJwtConfig jwt;
   final OAuthIntrospectionConfig oauth2Introspection;
+  final AuthSessionConfig session;
   final SessionRememberMeConfig sessionRememberMe;
+  final AuthCallbackConfig callbacks;
+  final AuthEventConfig events;
   final HaigateConfig haigate;
   final Map<String, GuardDefinition> guards;
 }
@@ -363,6 +379,182 @@ class SessionRememberMeConfig {
 
   final String? cookieName;
   final Duration duration;
+}
+
+class AuthSessionConfig {
+  const AuthSessionConfig({
+    required this.strategy,
+    required this.maxAge,
+    required this.updateAge,
+    required this.rememberMe,
+  });
+
+  factory AuthSessionConfig.fromMap(
+    Map<String, dynamic> map, {
+    required String context,
+  }) {
+    final rawStrategy = parseStringLike(
+      map['strategy'],
+      context: '$context.strategy',
+      allowEmpty: true,
+      throwOnInvalid: true,
+    );
+    final normalized = rawStrategy?.trim().toLowerCase();
+    final strategy = switch (normalized) {
+      'session' => AuthSessionStrategy.session,
+      'jwt' => AuthSessionStrategy.jwt,
+      _ => null,
+    };
+
+    final maxAge = parseDurationLike(
+      map['max_age'],
+      context: '$context.max_age',
+      throwOnInvalid: true,
+    );
+    final updateAge = parseDurationLike(
+      map['update_age'],
+      context: '$context.update_age',
+      throwOnInvalid: true,
+    );
+
+    final rememberMap = _mapOrEmpty(map['remember_me'], '$context.remember_me');
+    final remember = SessionRememberMeConfig.fromMap(
+      rememberMap,
+      context: '$context.remember_me',
+    );
+
+    return AuthSessionConfig(
+      strategy: strategy,
+      maxAge: maxAge,
+      updateAge: updateAge,
+      rememberMe: remember,
+    );
+  }
+
+  final AuthSessionStrategy? strategy;
+  final Duration? maxAge;
+  final Duration? updateAge;
+  final SessionRememberMeConfig rememberMe;
+}
+
+class AuthCallbackConfig {
+  const AuthCallbackConfig({
+    this.signIn,
+    this.redirect,
+    this.jwt,
+    this.session,
+  });
+
+  factory AuthCallbackConfig.fromMap(
+    Map<String, dynamic> map, {
+    required String context,
+  }) {
+    return AuthCallbackConfig(
+      signIn: parseStringLike(
+        map['sign_in'],
+        context: '$context.sign_in',
+        allowEmpty: true,
+        throwOnInvalid: true,
+      ),
+      redirect: parseStringLike(
+        map['redirect'],
+        context: '$context.redirect',
+        allowEmpty: true,
+        throwOnInvalid: true,
+      ),
+      jwt: parseStringLike(
+        map['jwt'],
+        context: '$context.jwt',
+        allowEmpty: true,
+        throwOnInvalid: true,
+      ),
+      session: parseStringLike(
+        map['session'],
+        context: '$context.session',
+        allowEmpty: true,
+        throwOnInvalid: true,
+      ),
+    );
+  }
+
+  final String? signIn;
+  final String? redirect;
+  final String? jwt;
+  final String? session;
+}
+
+class AuthEventConfig {
+  const AuthEventConfig({
+    required this.signIn,
+    required this.signOut,
+    required this.createUser,
+    required this.updateUser,
+    required this.linkAccount,
+    required this.session,
+  });
+
+  factory AuthEventConfig.fromMap(
+    Map<String, dynamic> map, {
+    required String context,
+  }) {
+    return AuthEventConfig(
+      signIn:
+          parseStringList(
+            map['sign_in'],
+            context: '$context.sign_in',
+            allowEmptyResult: true,
+            throwOnInvalid: true,
+          ) ??
+          const [],
+      signOut:
+          parseStringList(
+            map['sign_out'],
+            context: '$context.sign_out',
+            allowEmptyResult: true,
+            throwOnInvalid: true,
+          ) ??
+          const [],
+      createUser:
+          parseStringList(
+            map['create_user'],
+            context: '$context.create_user',
+            allowEmptyResult: true,
+            throwOnInvalid: true,
+          ) ??
+          const [],
+      updateUser:
+          parseStringList(
+            map['update_user'],
+            context: '$context.update_user',
+            allowEmptyResult: true,
+            throwOnInvalid: true,
+          ) ??
+          const [],
+      linkAccount:
+          parseStringList(
+            map['link_account'],
+            context: '$context.link_account',
+            allowEmptyResult: true,
+            throwOnInvalid: true,
+          ) ??
+          const [],
+      session:
+          parseStringList(
+            map['session'],
+            context: '$context.session',
+            allowEmptyResult: true,
+            throwOnInvalid: true,
+          ) ??
+          const [],
+    );
+  }
+
+  final List<String> signIn;
+  final List<String> signOut;
+  final List<String> createUser;
+  final List<String> updateUser;
+  final List<String> linkAccount;
+  final List<String> session;
 }
 
 class HaigateConfig {
@@ -889,6 +1081,16 @@ class AuthConfigSpec extends ConfigSpec<AuthConfig> {
       'session': ConfigSchema.object(
         description: 'Session-based authentication settings.',
         properties: {
+          'strategy': ConfigSchema.string(
+            description: 'Preferred session strategy (session or jwt).',
+            options: const ['session', 'jwt'],
+          ),
+          'max_age': ConfigSchema.duration(
+            description: 'Maximum lifetime for sessions.',
+          ),
+          'update_age': ConfigSchema.duration(
+            description: 'How often session state should be refreshed.',
+          ),
           'remember_me': ConfigSchema.object(
             description: 'Remember-me token settings.',
             properties: {
@@ -905,6 +1107,53 @@ class AuthConfigSpec extends ConfigSpec<AuthConfig> {
           ),
         },
       ),
+      'callbacks': ConfigSchema.object(
+        description:
+            'Auth callback hooks (sign_in, redirect, jwt, session) backed by the event system.',
+        properties: {
+          'sign_in': ConfigSchema.string(
+            description: 'Event handler name for sign-in callbacks.',
+          ),
+          'redirect': ConfigSchema.string(
+            description: 'Event handler name for redirect callbacks.',
+          ),
+          'jwt': ConfigSchema.string(
+            description: 'Event handler name for JWT callbacks.',
+          ),
+          'session': ConfigSchema.string(
+            description: 'Event handler name for session callbacks.',
+          ),
+        },
+      ).withDefault(const {}),
+      'events': ConfigSchema.object(
+        description: 'Auth lifecycle events emitted via the event system.',
+        properties: {
+          'sign_in': ConfigSchema.list(
+            description: 'Handlers invoked after successful sign-in.',
+            items: ConfigSchema.string(),
+          ),
+          'sign_out': ConfigSchema.list(
+            description: 'Handlers invoked after sign-out.',
+            items: ConfigSchema.string(),
+          ),
+          'create_user': ConfigSchema.list(
+            description: 'Handlers invoked when users are created.',
+            items: ConfigSchema.string(),
+          ),
+          'update_user': ConfigSchema.list(
+            description: 'Handlers invoked when users are updated.',
+            items: ConfigSchema.string(),
+          ),
+          'link_account': ConfigSchema.list(
+            description: 'Handlers invoked when accounts are linked.',
+            items: ConfigSchema.string(),
+          ),
+          'session': ConfigSchema.list(
+            description: 'Handlers invoked when sessions are checked.',
+            items: ConfigSchema.string(),
+          ),
+        },
+      ).withDefault(const {}),
       'features': ConfigSchema.object(
         description: 'Authentication feature flags.',
         properties: {
@@ -987,10 +1236,27 @@ class AuthConfigSpec extends ConfigSpec<AuthConfig> {
         },
       },
       'session': {
+        'strategy': value.session.strategy?.name,
+        'max_age': value.session.maxAge,
+        'update_age': value.session.updateAge,
         'remember_me': {
           'cookie': value.sessionRememberMe.cookieName,
           'duration': value.sessionRememberMe.duration,
         },
+      },
+      'callbacks': {
+        'sign_in': value.callbacks.signIn,
+        'redirect': value.callbacks.redirect,
+        'jwt': value.callbacks.jwt,
+        'session': value.callbacks.session,
+      },
+      'events': {
+        'sign_in': value.events.signIn,
+        'sign_out': value.events.signOut,
+        'create_user': value.events.createUser,
+        'update_user': value.events.updateUser,
+        'link_account': value.events.linkAccount,
+        'session': value.events.session,
       },
       'features': {
         'haigate': {'enabled': value.haigate.enabled},

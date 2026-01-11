@@ -53,6 +53,9 @@ class AuthAdapter {
     String identifier,
     String token,
   ) => null;
+
+  /// Deletes verification tokens for an identifier.
+  FutureOr<void> deleteVerificationTokens(String identifier) {}
 }
 
 /// Adapter implementation backed by callbacks.
@@ -71,6 +74,7 @@ class CallbackAuthAdapter extends AuthAdapter {
     this.onDeleteSession,
     this.onSaveVerificationToken,
     this.onUseVerificationToken,
+    this.onDeleteVerificationTokens,
   });
 
   final FutureOr<AuthUser?> Function(String id)? onGetUserById;
@@ -97,6 +101,7 @@ class CallbackAuthAdapter extends AuthAdapter {
     String token,
   )?
   onUseVerificationToken;
+  final FutureOr<void> Function(String identifier)? onDeleteVerificationTokens;
 
   @override
   FutureOr<AuthUser?> getUserById(String id) {
@@ -167,6 +172,11 @@ class CallbackAuthAdapter extends AuthAdapter {
     String token,
   ) {
     return onUseVerificationToken?.call(identifier, token);
+  }
+
+  @override
+  FutureOr<void> deleteVerificationTokens(String identifier) {
+    return onDeleteVerificationTokens?.call(identifier);
   }
 }
 
@@ -291,5 +301,10 @@ class InMemoryAuthAdapter extends AuthAdapter {
       return null;
     }
     return record;
+  }
+
+  @override
+  Future<void> deleteVerificationTokens(String identifier) async {
+    _tokens.removeWhere((key, _) => key.startsWith('$identifier::'));
   }
 }

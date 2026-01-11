@@ -8,6 +8,117 @@ import 'package:routed/src/context/context.dart';
 import 'package:routed/src/response.dart';
 import 'package:routed/src/router/router.dart';
 
+const Map<String, Object?> _authProviderSchema = {
+  'type': 'object',
+  'properties': {
+    'id': {'type': 'string'},
+    'name': {'type': 'string'},
+    'type': {
+      'type': 'string',
+      'enum': ['oauth', 'email', 'credentials'],
+    },
+  },
+  'required': ['id', 'name', 'type'],
+};
+
+const Map<String, Object?> _authUserSchema = {
+  'type': 'object',
+  'properties': {
+    'id': {'type': 'string'},
+    'email': {
+      'type': ['string', 'null'],
+    },
+    'name': {
+      'type': ['string', 'null'],
+    },
+    'image': {
+      'type': ['string', 'null'],
+    },
+    'roles': {
+      'type': 'array',
+      'items': {'type': 'string'},
+    },
+    'attributes': {'type': 'object', 'additionalProperties': true},
+  },
+  'required': ['id'],
+};
+
+const Map<String, Object?> _authSessionSchema = {
+  'type': 'object',
+  'properties': {
+    'user': _authUserSchema,
+    'expires': {
+      'type': ['string', 'null'],
+      'format': 'date-time',
+    },
+    'strategy': {
+      'type': ['string', 'null'],
+      'enum': ['session', 'jwt', null],
+    },
+    'token': {
+      'type': ['string', 'null'],
+    },
+  },
+  'required': ['user'],
+};
+
+const Map<String, Object?> _nullableSessionSchema = {
+  'oneOf': [
+    _authSessionSchema,
+    {'type': 'null'},
+  ],
+};
+
+const Map<String, Object?> _authProvidersResponseSchema = {
+  'type': 'object',
+  'properties': {
+    'providers': {'type': 'array', 'items': _authProviderSchema},
+  },
+  'required': ['providers'],
+};
+
+const Map<String, Object?> _authCsrfSchema = {
+  'type': 'object',
+  'properties': {
+    'csrfToken': {'type': 'string'},
+  },
+  'required': ['csrfToken'],
+};
+
+const Map<String, Object?> _authErrorSchema = {
+  'type': 'object',
+  'properties': {
+    'error': {'type': 'string'},
+  },
+  'required': ['error'],
+};
+
+const Map<String, Object?> _authPayloadSchema = {
+  'type': 'object',
+  'properties': {
+    'email': {'type': 'string'},
+    'username': {'type': 'string'},
+    'password': {'type': 'string'},
+    'callbackUrl': {'type': 'string'},
+    'redirect': {'type': 'string'},
+    '_csrf': {'type': 'string'},
+  },
+  'additionalProperties': true,
+};
+
+const Map<String, Object?> _authSignOutSchema = {
+  'type': 'object',
+  'properties': {
+    'ok': {'type': 'boolean'},
+  },
+  'required': ['ok'],
+};
+
+const Map<String, Object?> _authRedirectHeaderSchema = {
+  'description': 'Redirect target URL',
+  'schema': {'type': 'string'},
+};
+
 /// Auth HTTP routes for routed.
 ///
 /// ## Routes
@@ -34,14 +145,207 @@ class AuthRoutes {
     router.group(
       path: root,
       builder: (auth) {
-        auth.get('/providers', _providers);
-        auth.get('/csrf', _csrf);
-        auth.get('/session', _session);
-        auth.post('/signin/{provider}', _signIn);
-        auth.get('/signin/{provider}', _signIn);
-        auth.post('/register/{provider}', _register);
-        auth.get('/callback/{provider}', _callback);
-        auth.post('/signout', _signOut);
+        auth.get('/providers', _providers).openApi((spec) {
+          spec
+            ..summary = 'List configured auth providers'
+            ..tags(['auth'])
+            ..jsonResponse(
+              status: '200',
+              description: 'Provider metadata returned by auth providers.',
+              schema: _authProvidersResponseSchema,
+            );
+        });
+        auth.get('/csrf', _csrf).openApi((spec) {
+          spec
+            ..summary = 'Fetch CSRF token'
+            ..tags(['auth'])
+            ..jsonResponse(
+              status: '200',
+              description: 'CSRF token payload.',
+              schema: _authCsrfSchema,
+            );
+        });
+        auth.get('/session', _session).openApi((spec) {
+          spec
+            ..summary = 'Fetch current session'
+            ..tags(['auth'])
+            ..jsonResponse(
+              status: '200',
+              description: 'Current auth session or null.',
+              schema: _nullableSessionSchema,
+            );
+        });
+        auth.post('/signin/{provider}', _signIn).openApi((spec) {
+          spec
+            ..summary = 'Sign in with a provider'
+            ..tags(['auth'])
+            ..jsonRequestBody(
+              schema: _authPayloadSchema,
+              description:
+                  'Credentials, email, or callback parameters for sign-in.',
+              required: false,
+            )
+            ..jsonResponse(
+              status: '200',
+              description: 'Authenticated session payload.',
+              schema: _authSessionSchema,
+            )
+            ..jsonResponse(
+              status: '400',
+              description: 'Missing provider or invalid payload.',
+              schema: _authErrorSchema,
+            )
+            ..jsonResponse(
+              status: '401',
+              description: 'Unauthorized or invalid credentials.',
+              schema: _authErrorSchema,
+            )
+            ..jsonResponse(
+              status: '403',
+              description: 'Invalid CSRF token.',
+              schema: _authErrorSchema,
+            )
+            ..jsonResponse(
+              status: '404',
+              description: 'Unknown provider.',
+              schema: _authErrorSchema,
+            );
+        });
+        auth.get('/signin/{provider}', _signIn).openApi((spec) {
+          spec
+            ..summary = 'Begin OAuth sign-in'
+            ..tags(['auth'])
+            ..parameter(
+              name: 'callbackUrl',
+              location: 'query',
+              description: 'Optional redirect destination after sign-in.',
+            )
+            ..response(
+              status: '302',
+              description: 'Redirect to the provider authorize URL.',
+              headers: {'Location': _authRedirectHeaderSchema},
+            )
+            ..jsonResponse(
+              status: '405',
+              description: 'Method not allowed for non-OAuth providers.',
+              schema: _authErrorSchema,
+            )
+            ..jsonResponse(
+              status: '404',
+              description: 'Unknown provider.',
+              schema: _authErrorSchema,
+            );
+        });
+        auth.post('/register/{provider}', _register).openApi((spec) {
+          spec
+            ..summary = 'Register credentials'
+            ..tags(['auth'])
+            ..jsonRequestBody(
+              schema: _authPayloadSchema,
+              description: 'Credential payload and CSRF token.',
+              required: false,
+            )
+            ..jsonResponse(
+              status: '200',
+              description: 'Authenticated session payload.',
+              schema: _authSessionSchema,
+            )
+            ..jsonResponse(
+              status: '400',
+              description: 'Missing provider or unsupported flow.',
+              schema: _authErrorSchema,
+            )
+            ..jsonResponse(
+              status: '401',
+              description: 'Unauthorized or invalid credentials.',
+              schema: _authErrorSchema,
+            )
+            ..jsonResponse(
+              status: '403',
+              description: 'Invalid CSRF token.',
+              schema: _authErrorSchema,
+            )
+            ..jsonResponse(
+              status: '404',
+              description: 'Unknown provider.',
+              schema: _authErrorSchema,
+            );
+        });
+        auth.get('/callback/{provider}', _callback).openApi((spec) {
+          spec
+            ..summary = 'Complete provider callback'
+            ..tags(['auth'])
+            ..parameter(
+              name: 'code',
+              location: 'query',
+              description: 'OAuth authorization code.',
+            )
+            ..parameter(
+              name: 'state',
+              location: 'query',
+              description: 'OAuth state value.',
+            )
+            ..parameter(
+              name: 'token',
+              location: 'query',
+              description: 'Email verification token.',
+            )
+            ..parameter(
+              name: 'email',
+              location: 'query',
+              description: 'Email identifier for magic link sign-in.',
+            )
+            ..parameter(
+              name: 'identifier',
+              location: 'query',
+              description: 'Alternate email identifier field.',
+            )
+            ..response(
+              status: '302',
+              description: 'Redirect to stored callback URL.',
+              headers: {'Location': _authRedirectHeaderSchema},
+            )
+            ..jsonResponse(
+              status: '200',
+              description: 'Authenticated session payload.',
+              schema: _authSessionSchema,
+            )
+            ..jsonResponse(
+              status: '400',
+              description: 'Missing required callback parameters.',
+              schema: _authErrorSchema,
+            )
+            ..jsonResponse(
+              status: '401',
+              description: 'Unauthorized callback.',
+              schema: _authErrorSchema,
+            )
+            ..jsonResponse(
+              status: '404',
+              description: 'Unknown provider.',
+              schema: _authErrorSchema,
+            );
+        });
+        auth.post('/signout', _signOut).openApi((spec) {
+          spec
+            ..summary = 'Sign out'
+            ..tags(['auth'])
+            ..jsonRequestBody(
+              schema: _authPayloadSchema,
+              description: 'CSRF token payload.',
+              required: false,
+            )
+            ..jsonResponse(
+              status: '200',
+              description: 'Signed out response.',
+              schema: _authSignOutSchema,
+            )
+            ..jsonResponse(
+              status: '403',
+              description: 'Invalid CSRF token.',
+              schema: _authErrorSchema,
+            );
+        });
       },
     );
   }
@@ -56,7 +360,11 @@ class AuthRoutes {
 
   Future<Response> _session(EngineContext ctx) async {
     final session = await manager.resolveSession(ctx);
-    return ctx.json(session?.toJson());
+    if (session == null) {
+      return ctx.json(null);
+    }
+    final payload = await manager.buildSessionPayload(ctx, session);
+    return ctx.json(payload);
   }
 
   Future<Response> _signIn(EngineContext ctx) async {
@@ -75,7 +383,7 @@ class AuthRoutes {
     }
 
     final payload = await _payload(ctx);
-    final callbackUrl = _callbackUrl(ctx, payload);
+    final callbackUrl = await _callbackUrl(ctx, payload, provider: provider);
 
     if (provider is OAuthProvider) {
       final redirectUri = await manager.beginOAuth(
@@ -123,7 +431,7 @@ class AuthRoutes {
           provider,
           credentials,
         );
-        return await _respond(ctx, result);
+        return await _respond(ctx, result, provider: provider);
       } on AuthFlowException catch (error) {
         return ctx.json({
           'error': error.code,
@@ -166,7 +474,7 @@ class AuthRoutes {
           provider,
           credentials,
         );
-        return await _respond(ctx, result);
+        return await _respond(ctx, result, provider: provider);
       } on AuthFlowException catch (error) {
         return ctx.json({
           'error': error.code,
@@ -204,7 +512,7 @@ class AuthRoutes {
       }
       try {
         final result = await manager.finishOAuth(ctx, provider, code, state);
-        return await _respond(ctx, result);
+        return await _respond(ctx, result, provider: provider);
       } on AuthFlowException catch (error) {
         return ctx.json({
           'error': error.code,
@@ -224,7 +532,7 @@ class AuthRoutes {
       }
       try {
         final result = await manager.verifyEmail(ctx, provider, email, token);
-        return await _respond(ctx, result);
+        return await _respond(ctx, result, provider: provider);
       } on AuthFlowException catch (error) {
         return ctx.json({
           'error': error.code,
@@ -245,6 +553,8 @@ class AuthRoutes {
       }, statusCode: HttpStatus.forbidden);
     }
 
+    final session = await manager.resolveSession(ctx);
+
     switch (manager.options.sessionStrategy) {
       case AuthSessionStrategy.session:
         await manager.sessionAuth.logout(ctx);
@@ -257,6 +567,7 @@ class AuthRoutes {
         break;
     }
 
+    await manager.emitSignOut(ctx, session: session);
     return ctx.json({'ok': true});
   }
 
@@ -281,12 +592,22 @@ class AuthRoutes {
     return Map<String, dynamic>.from(ctx.queryCache);
   }
 
-  String? _callbackUrl(EngineContext ctx, Map<String, dynamic> payload) {
+  Future<String?> _callbackUrl(
+    EngineContext ctx,
+    Map<String, dynamic> payload, {
+    AuthProvider? provider,
+  }) async {
     final candidate =
         payload['callbackUrl']?.toString() ??
         payload['redirect']?.toString() ??
         ctx.request.queryParameters['callbackUrl'];
-    return _sanitizeRedirect(ctx, candidate);
+    final sanitized = _sanitizeRedirect(ctx, candidate);
+    final resolved = await manager.resolveRedirect(
+      ctx,
+      sanitized,
+      provider: provider,
+    );
+    return _sanitizeRedirect(ctx, resolved ?? sanitized);
   }
 
   String? _sanitizeRedirect(EngineContext ctx, String? value) {
@@ -314,10 +635,20 @@ class AuthRoutes {
     return null;
   }
 
-  Future<Response> _respond(EngineContext ctx, AuthResult result) async {
-    if (result.redirectUrl != null && result.redirectUrl!.isNotEmpty) {
-      return await ctx.redirect(result.redirectUrl!);
+  Future<Response> _respond(
+    EngineContext ctx,
+    AuthResult result, {
+    AuthProvider? provider,
+  }) async {
+    final redirectUrl = _sanitizeRedirect(ctx, result.redirectUrl);
+    if (redirectUrl != null && redirectUrl.isNotEmpty) {
+      return await ctx.redirect(redirectUrl);
     }
-    return ctx.json(result.session.toJson());
+    final payload = await manager.buildSessionPayload(
+      ctx,
+      result.session,
+      provider: provider,
+    );
+    return ctx.json(payload);
   }
 }

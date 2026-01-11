@@ -45,6 +45,7 @@ export 'src/engine/middleware_registry.dart';
 export 'src/engine/provider_manifest.dart';
 export 'src/engine/route_manifest.dart';
 export 'src/engine/storage_defaults.dart';
+export 'src/events/event.dart';
 export 'src/events/events.dart';
 export 'src/events/signals.dart';
 export 'src/http/conditional.dart'

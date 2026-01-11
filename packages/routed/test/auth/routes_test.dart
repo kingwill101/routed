@@ -230,6 +230,71 @@ void main() {
       );
     });
 
+    test('email flow invalidates previous verification tokens', () async {
+      final requests = <AuthEmailRequest>[];
+      final manager = AuthManager(
+        AuthOptions(
+          providers: [
+            EmailProvider(
+              sendVerificationRequest: (ctx, provider, request) async {
+                requests.add(request);
+              },
+            ),
+          ],
+          enforceCsrf: false,
+        ),
+      );
+
+      final engine = _authEngine(manager);
+      await engine.initialize();
+
+      final client = TestClient(RoutedRequestHandler(engine));
+      addTearDown(() async => await client.close());
+
+      final csrfResponse = await client.get('/auth/csrf');
+      final csrfToken = csrfResponse.json()['csrfToken'] as String;
+      var sessionCookie = csrfResponse.cookie('test_session');
+      expect(sessionCookie, isNotNull);
+
+      final firstSignIn = await client.postJson(
+        '/auth/signin/email',
+        {'email': 'mail@example.com', '_csrf': csrfToken},
+        headers: {
+          HttpHeaders.cookieHeader: [_cookieHeader(sessionCookie!)],
+        },
+      );
+      sessionCookie = firstSignIn.cookie('test_session') ?? sessionCookie;
+
+      final secondSignIn = await client.postJson(
+        '/auth/signin/email',
+        {'email': 'mail@example.com', '_csrf': csrfToken},
+        headers: {
+          HttpHeaders.cookieHeader: [_cookieHeader(sessionCookie!)],
+        },
+      );
+      sessionCookie = secondSignIn.cookie('test_session') ?? sessionCookie;
+
+      expect(requests.length, equals(2));
+
+      final invalidResponse = await client.get(
+        '/auth/callback/email?token=${requests.first.token}&email=${requests.first.email}',
+        headers: {
+          HttpHeaders.cookieHeader: [_cookieHeader(sessionCookie)],
+        },
+      );
+      invalidResponse.assertStatus(HttpStatus.unauthorized);
+      expect(invalidResponse.json()['error'], equals('invalid_token'));
+
+      final validResponse = await client.get(
+        '/auth/callback/email?token=${requests.last.token}&email=${requests.last.email}',
+        headers: {
+          HttpHeaders.cookieHeader: [_cookieHeader(sessionCookie)],
+        },
+      );
+      validResponse.assertStatus(HttpStatus.ok);
+      expect(validResponse.json()['user']['email'], equals('mail@example.com'));
+    });
+
     test('oauth flow exchanges code and establishes session', () async {
       final httpClient = MockClient((request) async {
         if (request.url.path.endsWith('/token')) {
@@ -365,6 +430,109 @@ void main() {
       sessionResponse.assertStatus(HttpStatus.ok);
       expect(sessionResponse.json()['strategy'], equals('jwt'));
       expect(sessionResponse.json()['user']['id'], equals('jwt-user'));
+    });
+
+    test('session update age refreshes session cookie', () async {
+      final manager = AuthManager(
+        AuthOptions(
+          providers: [
+            CredentialsProvider(
+              authorize: (ctx, provider, credentials) async {
+                return AuthUser(id: 'user-2', email: credentials.email);
+              },
+            ),
+          ],
+          sessionStrategy: AuthSessionStrategy.session,
+          sessionUpdateAge: Duration.zero,
+          enforceCsrf: false,
+        ),
+      );
+
+      final engine = _authEngine(manager);
+      await engine.initialize();
+
+      final client = TestClient(RoutedRequestHandler(engine));
+      addTearDown(() async => await client.close());
+
+      final csrfResponse = await client.get('/auth/csrf');
+      final csrfToken = csrfResponse.json()['csrfToken'] as String;
+      final sessionCookie = csrfResponse.cookie('test_session');
+
+      final signInResponse = await client.postJson(
+        '/auth/signin/credentials',
+        {'email': 'user@example.com', 'password': 'any', '_csrf': csrfToken},
+        headers: {
+          HttpHeaders.cookieHeader: [_cookieHeader(sessionCookie!)],
+        },
+      );
+      signInResponse.assertStatus(HttpStatus.ok);
+      var authCookie = signInResponse.cookie('test_session');
+      expect(authCookie, isNotNull);
+
+      await Future<void>.delayed(const Duration(milliseconds: 5));
+
+      final sessionResponse = await client.get(
+        '/auth/session',
+        headers: {
+          HttpHeaders.cookieHeader: [_cookieHeader(authCookie!)],
+        },
+      );
+      sessionResponse.assertStatus(HttpStatus.ok);
+      final refreshedCookie = sessionResponse.cookie('test_session');
+      expect(refreshedCookie, isNotNull);
+      expect(refreshedCookie!.value, isNot(authCookie.value));
+    });
+
+    test('jwt update age refreshes token cookie', () async {
+      final manager = AuthManager(
+        AuthOptions(
+          providers: [
+            CredentialsProvider(
+              authorize: (ctx, provider, credentials) async {
+                return AuthUser(id: 'jwt-user', email: credentials.email);
+              },
+            ),
+          ],
+          sessionStrategy: AuthSessionStrategy.jwt,
+          sessionUpdateAge: Duration.zero,
+          jwtOptions: const JwtSessionOptions(secret: 'super-secret'),
+          enforceCsrf: false,
+        ),
+      );
+
+      final engine = _authEngine(manager);
+      await engine.initialize();
+
+      final client = TestClient(RoutedRequestHandler(engine));
+      addTearDown(() async => await client.close());
+
+      final csrfResponse = await client.get('/auth/csrf');
+      final csrfToken = csrfResponse.json()['csrfToken'] as String;
+      final sessionCookie = csrfResponse.cookie('test_session');
+
+      final signInResponse = await client.postJson(
+        '/auth/signin/credentials',
+        {'email': 'jwt@example.com', 'password': 'any', '_csrf': csrfToken},
+        headers: {
+          HttpHeaders.cookieHeader: [_cookieHeader(sessionCookie!)],
+        },
+      );
+      signInResponse.assertStatus(HttpStatus.ok);
+      final tokenCookie = signInResponse.cookie('routed_auth_token');
+      expect(tokenCookie, isNotNull);
+
+      await Future<void>.delayed(const Duration(milliseconds: 1100));
+
+      final sessionResponse = await client.get(
+        '/auth/session',
+        headers: {
+          HttpHeaders.cookieHeader: [_cookieHeader(tokenCookie!)],
+        },
+      );
+      sessionResponse.assertStatus(HttpStatus.ok);
+      final refreshedCookie = sessionResponse.cookie('routed_auth_token');
+      expect(refreshedCookie, isNotNull);
+      expect(refreshedCookie!.value, isNot(tokenCookie.value));
     });
   });
 }

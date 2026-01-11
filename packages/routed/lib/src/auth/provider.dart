@@ -32,6 +32,7 @@ class AuthServiceProvider extends ServiceProvider with ProvidesDefaultConfig {
   JwtVerifier? _jwtVerifier;
   Middleware? _oauthMiddleware;
   SessionAuthService? _sessionAuth;
+  AuthConfig? _resolvedConfig;
   // ignore: unused_field
   AuthManager? _managedAuthManager;
   bool _ownsAuthManager = false;
@@ -111,6 +112,7 @@ class AuthServiceProvider extends ServiceProvider with ProvidesDefaultConfig {
 
   void _applyConfig(Container container, Config config) {
     final resolved = spec.resolve(config);
+    _resolvedConfig = resolved;
 
     _jwtVerifier = _buildJwtVerifier(resolved);
     _oauthMiddleware = _buildOAuthMiddleware(resolved);
@@ -158,11 +160,15 @@ class AuthServiceProvider extends ServiceProvider with ProvidesDefaultConfig {
     final options = container.get<AuthOptions>();
     final adapter = _resolveAuthAdapter(container, options);
     final tokenStore = _resolveTokenStore(container, options);
+    final configSession = _resolvedConfig?.session;
     final resolvedOptions = options.copyWith(
       adapter: adapter,
       sessionAuth: options.sessionAuth ?? _sessionAuth,
       httpClient: options.httpClient ?? _httpClient,
       tokenStore: tokenStore,
+      sessionStrategy: configSession?.strategy ?? options.sessionStrategy,
+      sessionMaxAge: options.sessionMaxAge ?? configSession?.maxAge,
+      sessionUpdateAge: options.sessionUpdateAge ?? configSession?.updateAge,
     );
 
     final manager = AuthManager(resolvedOptions);

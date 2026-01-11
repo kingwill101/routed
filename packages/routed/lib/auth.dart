@@ -1,6 +1,7 @@
 export 'src/auth/adapter.dart';
 export 'src/auth/manager.dart';
 export 'src/auth/models.dart';
+export 'src/auth/hooks.dart';
 export 'src/auth/providers.dart';
 export 'src/auth/routes.dart';
 export 'src/auth/basic_auth.dart';

@@ -64,7 +64,14 @@ oauth2:
     clock_skew: 60s
     enabled: false
 session:
+  strategy: session
+  max_age: 30d
+  update_age: 1d
   remember_me:
     cookie: remember_token
     duration: 30d
-
+callbacks:
+  sign_in:
+  redirect:
+  jwt:
+  session:
