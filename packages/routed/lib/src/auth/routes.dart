@@ -625,10 +625,16 @@ class AuthRoutes {
       return value;
     }
 
-    final requestUri = ctx.request.uri;
-    final sameHost = uri.host == requestUri.host;
+    final requestUri = ctx.requestedUri;
+    final requestHost = requestUri.host.isNotEmpty ? requestUri.host : ctx.host;
+    final requestScheme = requestUri.scheme.isNotEmpty
+        ? requestUri.scheme
+        : ctx.scheme;
+    final sameHost = requestHost.isNotEmpty && uri.host == requestHost;
     final sameScheme =
-        uri.scheme.isEmpty || uri.scheme.toLowerCase() == requestUri.scheme;
+        uri.scheme.isEmpty ||
+        (requestScheme.isNotEmpty &&
+            uri.scheme.toLowerCase() == requestScheme.toLowerCase());
     if (sameHost && sameScheme) {
       return uri.toString();
     }

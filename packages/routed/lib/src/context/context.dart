@@ -230,6 +230,15 @@ class EngineContext {
   /// Retrieve the request URI.
   Uri get uri => request.uri;
 
+  /// Retrieve the requested URI for the request.
+  Uri get requestedUri => request.requestedUri;
+
+  /// Retrieve the request host.
+  String get host => request.host;
+
+  /// Retrieve the request scheme.
+  String get scheme => request.scheme;
+
   /// Retrieve the response object.
   Response get response => _response;
 
