@@ -15,6 +15,7 @@ void main() {
     late String cliRoot;
     late CliLogger logger;
     late io.Directory projectDir;
+    late io.Directory previousCwd;
 
     setUpAll(() {
       cliRoot = _resolveCliRoot();
@@ -22,12 +23,14 @@ void main() {
 
     setUp(() async {
       logger = CliLogger(verbose: true);
+      previousCwd = io.Directory.current;
       projectDir = await io.Directory.systemTemp.createTemp(
         'routed_project_commands_test_',
       );
     });
 
     tearDown(() async {
+      io.Directory.current = previousCwd;
       if (await projectDir.exists()) {
         await projectDir.delete(recursive: true);
       }
@@ -40,9 +43,7 @@ void main() {
         commandName: 'hello',
       );
 
-      final previousCwd = io.Directory.current;
       io.Directory.current = projectDir;
-      addTearDown(() => io.Directory.current = previousCwd);
 
       final loader = ProjectCommandsLoader(logger: logger);
       final infos = await loader.loadProjectCommands('usage');
@@ -66,9 +67,7 @@ void main() {
         commandName: 'dev',
       );
 
-      final previousCwd = io.Directory.current;
       io.Directory.current = projectDir;
-      addTearDown(() => io.Directory.current = previousCwd);
 
       final loader = ProjectCommandsLoader(logger: logger);
       final infos = await loader.loadProjectCommands('usage');
@@ -114,9 +113,7 @@ Future<List<Command<void>>> buildProjectCommands() async {
 ''',
       );
 
-      final previousCwd = io.Directory.current;
       io.Directory.current = projectDir;
-      addTearDown(() => io.Directory.current = previousCwd);
 
       final loader = ProjectCommandsLoader(logger: logger);
       final infos = await loader.loadProjectCommands('usage');
@@ -144,9 +141,7 @@ FutureOr<List<Command<void>>> buildProjectCommands() async {
 ''',
       );
 
-      final previousCwd = io.Directory.current;
       io.Directory.current = projectDir;
-      addTearDown(() => io.Directory.current = previousCwd);
 
       final loader = ProjectCommandsLoader(logger: logger);
       expect(
