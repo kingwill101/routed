@@ -10,6 +10,7 @@ workspace:
   - examples/kitchen_sink
   - examples/config_demo
   - examples/openapi
+  - examples/policy_demo/policy_demo
 
 funding:
   - https://www.buymeacoffee.com/kingwill101
@@ -20,6 +21,10 @@ dependencies:
   contextual: ^2.1.0
   liquify: ^1.4.2
   uuid: ^4.5.2
+
+dev_dependencies:
+  lints: ^6.0.0
+
 tags:
   - workspace
 
