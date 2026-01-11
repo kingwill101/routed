@@ -635,6 +635,7 @@ class AuthRoutes {
         uri.scheme.isEmpty ||
         (requestScheme.isNotEmpty &&
             uri.scheme.toLowerCase() == requestScheme.toLowerCase());
+
     if (sameHost && sameScheme) {
       return uri.toString();
     }
