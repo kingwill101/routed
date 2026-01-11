@@ -2,6 +2,7 @@ import 'dart:io';
 
 import 'package:json_schema_builder/json_schema_builder.dart';
 import 'package:routed/src/auth/models.dart';
+import 'package:routed/src/auth/provider_registry.dart';
 import 'package:routed/src/config/schema.dart';
 import 'package:routed/src/provider/config_utils.dart';
 import 'package:routed/src/provider/provider.dart';
@@ -14,6 +15,7 @@ class AuthConfig {
   const AuthConfig({
     required this.jwt,
     required this.oauth2Introspection,
+    required this.providers,
     required this.session,
     required this.sessionRememberMe,
     required this.callbacks,
@@ -35,6 +37,8 @@ class AuthConfig {
       introspectionMap,
       context: 'auth.oauth2.introspection',
     );
+
+    final providers = _mapOrEmpty(map['providers'], 'auth.providers');
 
     final sessionMap = _mapOrEmpty(map['session'], 'auth.session');
     final sessionConfig = AuthSessionConfig.fromMap(
@@ -92,6 +96,7 @@ class AuthConfig {
     return AuthConfig(
       jwt: jwtConfig,
       oauth2Introspection: oauthConfig,
+      providers: providers,
       session: sessionConfig,
       sessionRememberMe: rememberConfig,
       callbacks: callbacks,
@@ -107,6 +112,7 @@ class AuthConfig {
 
   final AuthJwtConfig jwt;
   final OAuthIntrospectionConfig oauth2Introspection;
+  final Map<String, dynamic> providers;
   final AuthSessionConfig session;
   final SessionRememberMeConfig sessionRememberMe;
   final AuthCallbackConfig callbacks;
@@ -1078,6 +1084,7 @@ class AuthConfigSpec extends ConfigSpec<AuthConfig> {
           ),
         },
       ),
+      'providers': _providersSchema(),
       'session': ConfigSchema.object(
         description: 'Session-based authentication settings.',
         properties: {
@@ -1202,6 +1209,15 @@ class AuthConfigSpec extends ConfigSpec<AuthConfig> {
     },
   );
 
+  Schema _providersSchema() {
+    final registry = AuthProviderRegistry.instance;
+    return ConfigSchema.object(
+      description: 'OAuth provider configurations for auth routes.',
+      properties: registry.schemaEntries(),
+      additionalProperties: true,
+    ).withDefault(const {});
+  }
+
   @override
   AuthConfig fromMap(Map<String, dynamic> map, {ConfigSpecContext? context}) {
     return AuthConfig.fromMap(map);
@@ -1235,6 +1251,7 @@ class AuthConfigSpec extends ConfigSpec<AuthConfig> {
           'additional': value.oauth2Introspection.additionalParameters,
         },
       },
+      'providers': value.providers,
       'session': {
         'strategy': value.session.strategy?.name,
         'max_age': value.session.maxAge,

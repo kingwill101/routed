@@ -8,6 +8,9 @@ import 'package:routed/src/auth/haigate.dart';
 import 'package:routed/src/auth/jwt.dart';
 import 'package:routed/src/auth/oauth.dart';
 import 'package:routed/src/auth/policies.dart';
+import 'package:routed/src/auth/provider_registry.dart';
+import 'package:routed/src/auth/providers.dart';
+import 'package:routed/src/auth/providers/github.dart';
 import 'package:routed/src/auth/rbac.dart';
 import 'package:routed/src/auth/session_auth.dart';
 import 'package:routed/src/config/specs/auth.dart';
@@ -26,7 +29,11 @@ import 'package:routed/src/router/types.dart';
 /// `AuthManager` when `AuthOptions` is available in the container.
 class AuthServiceProvider extends ServiceProvider with ProvidesDefaultConfig {
   AuthServiceProvider({http.Client? httpClient})
-    : _httpClient = httpClient ?? http.Client();
+    : _httpClient = httpClient ?? http.Client() {
+    _registerDefaultProviders();
+  }
+
+  static bool _defaultProvidersRegistered = false;
 
   final http.Client _httpClient;
   JwtVerifier? _jwtVerifier;
@@ -42,6 +49,17 @@ class AuthServiceProvider extends ServiceProvider with ProvidesDefaultConfig {
   final Set<String> _managedRbacAbilities = <String>{};
   final Set<String> _managedPolicyAbilities = <String>{};
   static const AuthConfigSpec spec = AuthConfigSpec();
+
+  void _registerDefaultProviders() {
+    if (_defaultProvidersRegistered) {
+      return;
+    }
+    registerGitHubAuthProvider(
+      AuthProviderRegistry.instance,
+      overrideExisting: false,
+    );
+    _defaultProvidersRegistered = true;
+  }
 
   @override
   ConfigDefaults get defaultConfig {
@@ -161,7 +179,15 @@ class AuthServiceProvider extends ServiceProvider with ProvidesDefaultConfig {
     final adapter = _resolveAuthAdapter(container, options);
     final tokenStore = _resolveTokenStore(container, options);
     final configSession = _resolvedConfig?.session;
+    final configuredProviders = AuthProviderRegistry.instance.buildProviders(
+      _resolvedConfig?.providers ?? const <String, dynamic>{},
+    );
+    final mergedProviders = _mergeProviders(
+      options.providers,
+      configuredProviders,
+    );
     final resolvedOptions = options.copyWith(
+      providers: mergedProviders,
       adapter: adapter,
       sessionAuth: options.sessionAuth ?? _sessionAuth,
       httpClient: options.httpClient ?? _httpClient,
@@ -201,6 +227,24 @@ class AuthServiceProvider extends ServiceProvider with ProvidesDefaultConfig {
       return container.get<AuthVerificationTokenStore>();
     }
     return null;
+  }
+
+  List<AuthProvider> _mergeProviders(
+    List<AuthProvider> base,
+    List<AuthProvider> configured,
+  ) {
+    if (configured.isEmpty) {
+      return base;
+    }
+    final merged = <AuthProvider>[...base];
+    final ids = base.map((provider) => provider.id).toSet();
+    for (final provider in configured) {
+      if (!ids.contains(provider.id)) {
+        merged.add(provider);
+        ids.add(provider.id);
+      }
+    }
+    return merged;
   }
 
   GuardRegistry _resolveGuardRegistry(Container container) {

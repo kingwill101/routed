@@ -3,8 +3,12 @@ import 'dart:io';
 
 import 'package:http/http.dart' as http;
 import 'package:routed/src/auth/models.dart';
+import 'package:routed/src/auth/oauth.dart';
+import 'package:routed/src/auth/provider_registry.dart';
 import 'package:routed/src/auth/providers.dart';
-import 'package:routed/src/context/context.dart';
+import 'package:routed/src/config/schema.dart';
+import 'package:routed/src/provider/config_utils.dart';
+import 'package:routed/src/provider/provider.dart';
 
 /// GitHub email payload returned by `/user/emails`.
 class GitHubEmail {
@@ -238,6 +242,51 @@ class GitHubProfile {
     'two_factor_authentication': twoFactorAuthentication,
     'plan': plan?.toJson(),
   };
+
+  GitHubProfile copyWith({String? email}) {
+    return GitHubProfile(
+      login: login,
+      id: id,
+      nodeId: nodeId,
+      avatarUrl: avatarUrl,
+      gravatarId: gravatarId,
+      url: url,
+      htmlUrl: htmlUrl,
+      followersUrl: followersUrl,
+      followingUrl: followingUrl,
+      gistsUrl: gistsUrl,
+      starredUrl: starredUrl,
+      subscriptionsUrl: subscriptionsUrl,
+      organizationsUrl: organizationsUrl,
+      reposUrl: reposUrl,
+      eventsUrl: eventsUrl,
+      receivedEventsUrl: receivedEventsUrl,
+      type: type,
+      siteAdmin: siteAdmin,
+      name: name,
+      company: company,
+      blog: blog,
+      location: location,
+      email: email ?? this.email,
+      hireable: hireable,
+      bio: bio,
+      twitterUsername: twitterUsername,
+      publicRepos: publicRepos,
+      publicGists: publicGists,
+      followers: followers,
+      following: following,
+      createdAt: createdAt,
+      updatedAt: updatedAt,
+      privateGists: privateGists,
+      totalPrivateRepos: totalPrivateRepos,
+      ownedPrivateRepos: ownedPrivateRepos,
+      diskUsage: diskUsage,
+      suspendedAt: suspendedAt,
+      collaborators: collaborators,
+      twoFactorAuthentication: twoFactorAuthentication,
+      plan: plan,
+    );
+  }
 }
 
 /// Configuration for the GitHub OAuth provider.
@@ -338,101 +387,157 @@ OAuthProvider<GitHubProfile> githubProvider(GitHubProviderOptions options) {
         attributes: profile.toJson(),
       );
     },
-    profileRequest: (ctx, provider, token, client, profile) async {
+    profileRequest: (_, _, token, httpClient, profile) async {
       if (profile.email != null && profile.email!.isNotEmpty) {
         return profile;
       }
-
-      final emailProfile = await _fetchPrimaryEmail(
-        ctx,
-        client,
-        apiBaseUrl,
-        token.accessToken,
+      final emails = await _loadGitHubEmails(token, httpClient, apiBaseUrl);
+      if (emails.isEmpty) return profile;
+      final primary = emails.firstWhere(
+        (entry) => entry.primary && entry.verified,
+        orElse: () => emails.first,
       );
-      if (emailProfile == null) {
-        return profile;
-      }
-
-      return GitHubProfile(
-        login: profile.login,
-        id: profile.id,
-        nodeId: profile.nodeId,
-        avatarUrl: profile.avatarUrl,
-        gravatarId: profile.gravatarId,
-        url: profile.url,
-        htmlUrl: profile.htmlUrl,
-        followersUrl: profile.followersUrl,
-        followingUrl: profile.followingUrl,
-        gistsUrl: profile.gistsUrl,
-        starredUrl: profile.starredUrl,
-        subscriptionsUrl: profile.subscriptionsUrl,
-        organizationsUrl: profile.organizationsUrl,
-        reposUrl: profile.reposUrl,
-        eventsUrl: profile.eventsUrl,
-        receivedEventsUrl: profile.receivedEventsUrl,
-        type: profile.type,
-        siteAdmin: profile.siteAdmin,
-        name: profile.name,
-        company: profile.company,
-        blog: profile.blog,
-        location: profile.location,
-        email: emailProfile,
-        hireable: profile.hireable,
-        bio: profile.bio,
-        twitterUsername: profile.twitterUsername,
-        publicRepos: profile.publicRepos,
-        publicGists: profile.publicGists,
-        followers: profile.followers,
-        following: profile.following,
-        createdAt: profile.createdAt,
-        updatedAt: profile.updatedAt,
-        privateGists: profile.privateGists,
-        totalPrivateRepos: profile.totalPrivateRepos,
-        ownedPrivateRepos: profile.ownedPrivateRepos,
-        diskUsage: profile.diskUsage,
-        suspendedAt: profile.suspendedAt,
-        collaborators: profile.collaborators,
-        twoFactorAuthentication: profile.twoFactorAuthentication,
-        plan: profile.plan,
-      );
+      return profile.copyWith(email: primary.email);
     },
   );
 }
 
-Future<String?> _fetchPrimaryEmail(
-  EngineContext ctx,
-  http.Client client,
+const List<String> _defaultGitHubScopes = ['read:user', 'user:email'];
+
+AuthProviderRegistration _githubRegistration() {
+  return AuthProviderRegistration(
+    id: 'github',
+    schema: ConfigSchema.object(
+      description: 'GitHub OAuth provider settings.',
+      properties: {
+        'enabled': ConfigSchema.boolean(
+          description: 'Enable the GitHub provider.',
+          defaultValue: false,
+        ),
+        'client_id': ConfigSchema.string(
+          description: 'GitHub OAuth client ID.',
+          defaultValue: "{{ env.GITHUB_CLIENT_ID | default: '' }}",
+        ),
+        'client_secret': ConfigSchema.string(
+          description: 'GitHub OAuth client secret.',
+          defaultValue: "{{ env.GITHUB_CLIENT_SECRET | default: '' }}",
+        ),
+        'redirect_uri': ConfigSchema.string(
+          description: 'OAuth redirect URI for GitHub callbacks.',
+          defaultValue: "{{ env.GITHUB_REDIRECT_URI | default: '' }}",
+        ),
+        'enterprise_base_url': ConfigSchema.string(
+          description: 'Optional GitHub Enterprise base URL.',
+          defaultValue: "{{ env.GITHUB_ENTERPRISE_URL | default: '' }}",
+        ),
+        'scopes': ConfigSchema.list(
+          description: 'OAuth scopes requested from GitHub.',
+          items: ConfigSchema.string(),
+          defaultValue: _defaultGitHubScopes,
+        ),
+      },
+    ),
+    builder: _buildGithubProvider,
+  );
+}
+
+AuthProvider? _buildGithubProvider(Map<String, dynamic> config) {
+  final enabled =
+      parseBoolLike(
+        config['enabled'],
+        context: 'auth.providers.github.enabled',
+        throwOnInvalid: true,
+      ) ??
+      false;
+  if (!enabled) {
+    return null;
+  }
+  final clientId = _requireString(
+    config['client_id'],
+    'auth.providers.github.client_id',
+  );
+  final clientSecret = _requireString(
+    config['client_secret'],
+    'auth.providers.github.client_secret',
+  );
+  final redirectUri = _requireString(
+    config['redirect_uri'],
+    'auth.providers.github.redirect_uri',
+  );
+  final enterpriseBaseUrl = parseStringLike(
+    config['enterprise_base_url'],
+    context: 'auth.providers.github.enterprise_base_url',
+    allowEmpty: true,
+    throwOnInvalid: true,
+  );
+  final scopes =
+      parseStringList(
+        config['scopes'],
+        context: 'auth.providers.github.scopes',
+        allowEmptyResult: true,
+        coerceNonStringEntries: true,
+        throwOnInvalid: true,
+      ) ??
+      _defaultGitHubScopes;
+  return githubProvider(
+    GitHubProviderOptions(
+      clientId: clientId,
+      clientSecret: clientSecret,
+      redirectUri: redirectUri,
+      enterpriseBaseUrl:
+          enterpriseBaseUrl == null || enterpriseBaseUrl.trim().isEmpty
+          ? null
+          : enterpriseBaseUrl,
+      scopes: scopes.isEmpty ? _defaultGitHubScopes : scopes,
+    ),
+  );
+}
+
+String _requireString(Object? value, String context) {
+  final resolved = parseStringLike(
+    value,
+    context: context,
+    allowEmpty: true,
+    throwOnInvalid: true,
+  );
+  if (resolved == null || resolved.trim().isEmpty) {
+    throw ProviderConfigException('$context is required');
+  }
+  return resolved.trim();
+}
+
+void registerGitHubAuthProvider(
+  AuthProviderRegistry registry, {
+  bool overrideExisting = true,
+}) {
+  registry.register(_githubRegistration(), overrideExisting: overrideExisting);
+}
+
+Future<List<GitHubEmail>> _loadGitHubEmails(
+  OAuthTokenResponse token,
+  http.Client httpClient,
   String apiBaseUrl,
-  String accessToken,
 ) async {
   try {
-    final response = await client.get(
+    final response = await httpClient.get(
       Uri.parse('$apiBaseUrl/user/emails'),
       headers: {
-        HttpHeaders.authorizationHeader: 'Bearer $accessToken',
+        HttpHeaders.authorizationHeader: 'Bearer ${token.accessToken}',
         HttpHeaders.userAgentHeader: 'routed',
       },
     );
     if (response.statusCode < 200 || response.statusCode >= 300) {
-      return null;
+      return const <GitHubEmail>[];
     }
     final decoded = jsonDecode(response.body);
     if (decoded is! List) {
-      return null;
+      return const <GitHubEmail>[];
     }
-    final emails = decoded
+    return decoded
         .whereType<Map<String, dynamic>>()
         .map(GitHubEmail.fromJson)
         .toList();
-    if (emails.isEmpty) {
-      return null;
-    }
-    final primary = emails.firstWhere(
-      (email) => email.primary,
-      orElse: () => emails.first,
-    );
-    return primary.email;
   } catch (_) {
-    return null;
+    return const <GitHubEmail>[];
   }
 }
