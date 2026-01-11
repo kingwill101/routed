@@ -1,4 +1,20 @@
+## 0.3.0
+
 ## 0.2.0
+
+### Added
+
+- Expanded browser bootstrap and driver readiness checks, including updated
+  device user agents and driver version metadata.
+- Improved CLI and browser management ergonomics with richer path resolution and
+  executable validation.
+
+### Fixed
+
+- Ensure mocked HTTP requests expose `requestedUri` so absolute callback URLs
+  resolve correctly in auth redirect tests.
+
+## 0.2.1
 
 ### Added
 
