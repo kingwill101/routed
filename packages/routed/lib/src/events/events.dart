@@ -1,5 +1,4 @@
 export 'event.dart';
-export 'event.dart';
 export 'event_manager.dart';
 export 'system_events.dart';
 export 'cache/cache_events.dart';

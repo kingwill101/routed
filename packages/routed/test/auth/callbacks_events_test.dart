@@ -1,5 +1,4 @@
 import 'dart:convert';
-import 'dart:convert';
 import 'dart:io';
 
 import 'package:routed/routed.dart';
@@ -7,7 +6,6 @@ import 'package:routed/session.dart';
 import 'package:routed/src/sessions/middleware.dart';
 import 'package:routed_testing/routed_testing.dart';
 import 'package:server_testing/server_testing.dart';
-import 'package:test/test.dart';
 
 import '../test_engine.dart';
 
@@ -60,7 +58,7 @@ void main() {
           ],
           sessionStrategy: AuthSessionStrategy.session,
           enforceCsrf: false,
-          callbacks: AuthCallbacks(signIn: _denySignIn),
+          callbacks: const AuthCallbacks(signIn: _denySignIn),
         ),
       );
       final engine = _authEngine(manager);

@@ -1,7 +1,5 @@
 import 'dart:async';
 
-import 'dart:async';
-
 import 'package:routed/src/auth/models.dart';
 import 'package:routed/src/auth/providers.dart';
 import 'package:routed/src/context/context.dart';
@@ -40,8 +38,6 @@ class AuthCallbacks {
 
 /// Result of a sign-in callback decision.
 class AuthSignInResult {
-  const AuthSignInResult._(this.allowed, this.redirectUrl);
-
   const AuthSignInResult.allow({this.redirectUrl}) : allowed = true;
 
   const AuthSignInResult.deny() : allowed = false, redirectUrl = null;

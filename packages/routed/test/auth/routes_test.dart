@@ -269,7 +269,7 @@ void main() {
         '/auth/signin/email',
         {'email': 'mail@example.com', '_csrf': csrfToken},
         headers: {
-          HttpHeaders.cookieHeader: [_cookieHeader(sessionCookie!)],
+          HttpHeaders.cookieHeader: [_cookieHeader(sessionCookie)],
         },
       );
       sessionCookie = secondSignIn.cookie('test_session') ?? sessionCookie;

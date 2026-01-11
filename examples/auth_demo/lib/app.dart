@@ -6,17 +6,15 @@ import 'package:routed/routed.dart';
 Future<void> _registerAuthEvents(Engine engine) async {
   final eventManager = await engine.container.make<EventManager>();
   eventManager.listen<Event>((event) {
-    if (event is AuthSignInEvent) {
-      final signInEvent = event as AuthSignInEvent;
-      stdout.writeln('Sign-in: ${signInEvent.user.id}');
-    }
-    if (event is AuthSignOutEvent) {
-      final signOutEvent = event as AuthSignOutEvent;
-      stdout.writeln('Sign-out: ${signOutEvent.user?.id}');
-    }
-    if (event is AuthSessionEvent) {
-      final sessionEvent = event as AuthSessionEvent;
-      stdout.writeln('Session: ${sessionEvent.session.user.id}');
+    switch (event) {
+      case AuthSignInEvent signInEvent:
+        stdout.writeln('Sign-in: ${signInEvent.user.id}');
+      case AuthSignOutEvent signOutEvent:
+        stdout.writeln('Sign-out: ${signOutEvent.user?.id}');
+      case AuthSessionEvent sessionEvent:
+        stdout.writeln('Session: ${sessionEvent.session.user.id}');
+      default:
+        break;
     }
   });
 }
