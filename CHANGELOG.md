@@ -1,4 +1,17 @@
+## 0.3.0
+
 ## 0.2.1+1
+
+- `routed` introduces a full auth stack (providers, callbacks/events, RBAC,
+  policies, and session/JWT refresh) with expanded docs and examples.
+- `server_testing` refreshes browser/driver bootstrapping, CLI ergonomics, and
+  mocks `requestedUri` so auth redirect tests accept absolute callback URLs.
+- `server_testing_shelf` updates Shelf translation behavior and aligns
+  dependencies with the latest transport APIs.
+- `routed_testing` and `property_testing` refresh docs and metadata for the
+  0.3.0 release.
+
+## 0.2.1
 
 - Added badges, funding links, and richer documentation for `property_testing`,
   `routed_testing`, `server_testing_shelf`, and `routed_cli`.

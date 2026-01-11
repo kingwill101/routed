@@ -1,4 +1,11 @@
+## 0.3.0
+
 ## 0.2.1+1
+
+- Refreshed documentation and package metadata to align with the routed
+  ecosystem release.
+
+## 0.2.1
 
 - Expanded the README with badges, funding info, and extra examples covering
   chaos generators plus the stateful runner.

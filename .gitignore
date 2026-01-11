@@ -8,9 +8,12 @@ pubspec.lock
 .idea/
 .cursor/
 .vscode
+*.iml
 openspec
 AGENTS.md
 storage/
+!packages/routed/lib/src/storage/
+!packages/routed/lib/src/storage/**
 
 # Test artifacts
 **/templates/test/logs/

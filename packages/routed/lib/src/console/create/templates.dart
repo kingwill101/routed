@@ -79,7 +79,10 @@ ScaffoldTemplate _buildApiTemplate() {
       'test/api_test.dart': _apiTest,
     },
     readme: _apiReadme,
-    extraDevDependencies: const {'routed_testing': '^0.2.1'},
+    extraDevDependencies: const {
+      'routed_testing': '^0.2.1',
+      'server_testing': '^0.3.0',
+    },
   );
 }
 
@@ -108,7 +111,10 @@ ScaffoldTemplate _buildFullstackTemplate() {
       'test/api_test.dart': _fullstackApiTest,
     },
     readme: _fullstackReadme,
-    extraDevDependencies: const {'routed_testing': '^0.2.1'},
+    extraDevDependencies: const {
+      'routed_testing': '^0.2.1',
+      'server_testing': '^0.3.0',
+    },
   );
 }
 
@@ -130,7 +136,13 @@ String _basicApp(String humanName) {
 import 'package:routed/routed.dart';
 
 Future<Engine> createEngine() async {
-  final engine = await Engine.create();
+  final engine = await Engine.create(
+    configOptions: const ConfigLoaderOptions(
+      configDirectory: 'config',
+      loadEnvFiles: false,
+      includeEnvironmentSubdirectory: false,
+    ),
+  );
 
   engine.get('/', (ctx) async {
     return ctx.json({'message': 'Welcome to $message!'});
@@ -166,7 +178,13 @@ import 'dart:io';
 import 'package:routed/routed.dart';
 
 Future<Engine> createEngine() async {
-  final engine = await Engine.create();
+  final engine = await Engine.create(
+    configOptions: const ConfigLoaderOptions(
+      configDirectory: 'config',
+      loadEnvFiles: false,
+      includeEnvironmentSubdirectory: false,
+    ),
+  );
 
   final users = <String, Map<String, dynamic>>{
     '1': {'id': '1', 'name': 'Ada Lovelace', 'email': 'ada@example.com'},
@@ -182,7 +200,7 @@ Future<Engine> createEngine() async {
       return ctx.json({'data': users.values.toList()});
     });
 
-    router.get('/users/:id', (ctx) async {
+    router.get('/users/{id}', (ctx) async {
       final id = ctx.mustGetParam<String>('id');
       final user = await ctx.fetchOr404(
         () async => users[id],
@@ -193,7 +211,7 @@ Future<Engine> createEngine() async {
 
     router.post('/users', (ctx) async {
       final payload =
-          await ctx.request.json() as Map<String, dynamic>? ?? {};
+          Map<String, dynamic>.from(await ctx.bindJSON({}) as Map? ?? const {});
       final id = (users.length + 1).toString();
       final created = {
         'id': id,
@@ -213,6 +231,7 @@ Future<Engine> createEngine() async {
 String _apiTest(TemplateContext context) {
   return '''
 import 'package:routed_testing/routed_testing.dart';
+import 'package:server_testing/server_testing.dart';
 import 'package:test/test.dart';
 
 import 'package:${context.packageName}/app.dart' as app;
@@ -233,9 +252,8 @@ void main() {
     test('lists users', () async {
       final response = await client.get('/api/v1/users');
       response.assertStatus(200);
-      response.expectJsonBody((json) {
-        expect(json['data'], isA<List>());
-      });
+      final json = response.json() as Map<String, dynamic>;
+      expect(json['data'], isA<List>());
     });
   });
 }
@@ -276,7 +294,13 @@ String _webApp(TemplateContext context) {
 import 'package:routed/routed.dart';
 
 Future<Engine> createEngine() async {
-  final engine = await Engine.create();
+  final engine = await Engine.create(
+    configOptions: const ConfigLoaderOptions(
+      configDirectory: 'config',
+      loadEnvFiles: false,
+      includeEnvironmentSubdirectory: false,
+    ),
+  );
 
   engine.useViewEngine(
     LiquidViewEngine(directory: 'templates'),
@@ -315,7 +339,7 @@ Future<Engine> createEngine() async {
     );
   });
 
-  engine.get('/pages/:slug', (ctx) async {
+  engine.get('/pages/{slug}', (ctx) async {
     final slug = ctx.mustGetParam<String>('slug');
     final page = ctx.requireFound(
       pages[slug],
@@ -487,7 +511,13 @@ import 'dart:io';
 import 'package:routed/routed.dart';
 
 Future<Engine> createEngine() async {
-  final engine = await Engine.create();
+  final engine = await Engine.create(
+    configOptions: const ConfigLoaderOptions(
+      configDirectory: 'config',
+      loadEnvFiles: false,
+      includeEnvironmentSubdirectory: false,
+    ),
+  );
 
   final todos = <Map<String, dynamic>>[
     {'id': 1, 'title': 'Ship Routed starter', 'completed': false},
@@ -496,7 +526,7 @@ Future<Engine> createEngine() async {
   engine.group(path: '/api', builder: (router) {
     router.get('/todos', (ctx) async => ctx.json({'data': todos}));
 
-    router.patch('/todos/:id', (ctx) async {
+    router.patch('/todos/{id}', (ctx) async {
       final id = ctx.mustGetParam<String>('id');
       final todo = await ctx.fetchOr404(
         () async => todos.firstWhere(
@@ -506,7 +536,8 @@ Future<Engine> createEngine() async {
         message: 'Todo not found',
       );
 
-      final payload = await ctx.request.json() as Map<String, dynamic>? ?? {};
+      final payload =
+          Map<String, dynamic>.from(await ctx.bindJSON({}) as Map? ?? const {});
       todo['completed'] = payload['completed'] ?? todo['completed'];
       todo['title'] = payload['title'] ?? todo['title'];
 
@@ -580,6 +611,7 @@ Future<Engine> createEngine() async {
 String _fullstackApiTest(TemplateContext context) {
   return '''
 import 'package:routed_testing/routed_testing.dart';
+import 'package:server_testing/server_testing.dart';
 import 'package:test/test.dart';
 
 import 'package:${context.packageName}/app.dart' as app;
@@ -591,10 +623,9 @@ void main() {
 
     final response = await client.get('/api/todos');
     response.assertStatus(200);
-    response.expectJsonBody((json) {
-      expect(json['data'], isA<List>());
-      expect(json['data'], isNotEmpty);
-    });
+    final json = response.json() as Map<String, dynamic>;
+    expect(json['data'], isA<List>());
+    expect(json['data'], isNotEmpty);
 
     await client.close();
   });

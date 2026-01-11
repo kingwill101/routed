@@ -50,6 +50,36 @@ Future<void> main() async {
 }
 ```
 
+## Auth
+
+Use `package:routed/auth.dart` for auth providers, routes, and middleware.
+
+```dart
+import 'package:routed/auth.dart';
+import 'package:routed/routed.dart';
+
+Future<void> main() async {
+  final engine = await Engine.create();
+  engine.container.instance<AuthOptions>(
+    AuthOptions(
+      providers: [
+        CredentialsProvider(
+          authorize: (ctx, provider, credentials) async {
+            if (credentials.password == 'secret') {
+              return AuthUser(id: 'user-1', email: credentials.email);
+            }
+            return null;
+          },
+        ),
+      ],
+      sessionStrategy: AuthSessionStrategy.session,
+    ),
+  );
+
+  await engine.serve(host: '127.0.0.1', port: 8080);
+}
+```
+
 ## Coverage
 
 Latest local coverage: 61.9% line coverage.

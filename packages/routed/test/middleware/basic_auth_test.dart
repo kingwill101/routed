@@ -1,6 +1,5 @@
 import 'dart:convert';
 import 'package:routed/routed.dart';
-import 'package:routed/middlewares.dart';
 import 'package:routed_testing/routed_testing.dart';
 import 'package:server_testing/server_testing.dart';
 import '../test_engine.dart';

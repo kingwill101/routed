@@ -1,0 +1,96 @@
+set shell := ["bash", "-eu", "-o", "pipefail", "-c"]
+
+BASE_URL := "http://127.0.0.1:8080"
+COOKIE_JAR := "cookies.txt"
+CSRF_JSON := "csrf.json"
+
+# List demo commands
+_default:
+    @just --list
+
+# Wait for the demo server to respond
+wait:
+    @for _ in {1..20}; do \
+        if curl -sSf {{BASE_URL}}/ > /dev/null; then exit 0; fi; \
+        sleep 0.2; \
+    done; \
+    echo "Server not ready at {{BASE_URL}}" >&2; exit 1
+
+# Fetch CSRF token and cache cookies
+csrf: wait
+    @curl -s -c {{COOKIE_JAR}} {{BASE_URL}}/auth/csrf > {{CSRF_JSON}}
+    @python -c 'import json; print(json.load(open("{{CSRF_JSON}}")).get("csrfToken", ""))'
+
+# List configured auth providers
+providers:
+    @curl -s {{BASE_URL}}/auth/providers
+
+# Inspect current session
+session:
+    @curl -s -b {{COOKIE_JAR}} {{BASE_URL}}/auth/session
+
+# Register a credentials user
+register email="new@example.com" password="secret":
+    @csrf=$(just csrf | tail -n 1); \
+    curl -s -b {{COOKIE_JAR}} -c {{COOKIE_JAR}} \
+      -H "Content-Type: application/json" \
+      -d "{\"email\":\"{{email}}\",\"password\":\"{{password}}\",\"_csrf\":\"$csrf\"}" \
+      {{BASE_URL}}/auth/register/credentials
+
+# Sign in with credentials
+signin email="new@example.com" password="secret":
+    @csrf=$(just csrf | tail -n 1); \
+    curl -s -b {{COOKIE_JAR}} -c {{COOKIE_JAR}} \
+      -H "Content-Type: application/json" \
+      -d "{\"email\":\"{{email}}\",\"password\":\"{{password}}\",\"_csrf\":\"$csrf\"}" \
+      {{BASE_URL}}/auth/signin/credentials
+
+# Start email magic-link sign-in (logs link to server stdout)
+email_signin email="mail@example.com":
+    @csrf=$(just csrf | tail -n 1); \
+    curl -s -b {{COOKIE_JAR}} -c {{COOKIE_JAR}} \
+      -H "Content-Type: application/json" \
+      -d "{\"email\":\"{{email}}\",\"_csrf\":\"$csrf\"}" \
+      {{BASE_URL}}/auth/signin/email
+
+# Complete email sign-in using a token from logs
+email_callback token email:
+    @curl -s -b {{COOKIE_JAR}} "{{BASE_URL}}/auth/callback/email?token={{token}}&email={{email}}"
+
+# Sign out
+signout:
+    @csrf=$(just csrf | tail -n 1); \
+    curl -s -b {{COOKIE_JAR}} \
+      -H "Content-Type: application/json" \
+      -d "{\"_csrf\":\"$csrf\"}" \
+      {{BASE_URL}}/auth/signout
+
+# Run a full demo flow (credentials + email start)
+all:
+    @csrf=$(just csrf | tail -n 1); \
+    echo "Providers:"; \
+    curl -s {{BASE_URL}}/auth/providers; echo; \
+    echo "Session (anon):"; \
+    curl -s -b {{COOKIE_JAR}} {{BASE_URL}}/auth/session; echo; \
+    echo "Register:"; \
+    curl -s -b {{COOKIE_JAR}} -c {{COOKIE_JAR}} \
+      -H "Content-Type: application/json" \
+      -d "{\"email\":\"new@example.com\",\"password\":\"secret\",\"_csrf\":\"$csrf\"}" \
+      {{BASE_URL}}/auth/register/credentials; echo; \
+    echo "Session (after register):"; \
+    curl -s -b {{COOKIE_JAR}} {{BASE_URL}}/auth/session; echo; \
+    echo "Signin:"; \
+    curl -s -b {{COOKIE_JAR}} -c {{COOKIE_JAR}} \
+      -H "Content-Type: application/json" \
+      -d "{\"email\":\"new@example.com\",\"password\":\"secret\",\"_csrf\":\"$csrf\"}" \
+      {{BASE_URL}}/auth/signin/credentials; echo; \
+    echo "Email signin:"; \
+    curl -s -b {{COOKIE_JAR}} -c {{COOKIE_JAR}} \
+      -H "Content-Type: application/json" \
+      -d "{\"email\":\"mail@example.com\",\"_csrf\":\"$csrf\"}" \
+      {{BASE_URL}}/auth/signin/email; echo; \
+    echo "Signout:"; \
+    curl -s -b {{COOKIE_JAR}} \
+      -H "Content-Type: application/json" \
+      -d "{\"_csrf\":\"$csrf\"}" \
+      {{BASE_URL}}/auth/signout; echo

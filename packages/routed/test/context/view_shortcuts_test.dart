@@ -1,76 +1,118 @@
-import 'dart:async';
-
 import 'package:routed/routed.dart';
-import 'package:server_testing/mock.dart';
-import 'package:test/test.dart';
-
-EngineContext _context() {
-  final mockRequest = setupRequest('GET', '/shortcut');
-  final mockResponse = setupResponse();
-  when(mockResponse.flush()).thenAnswer((_) async {});
-  when(mockResponse.close()).thenAnswer((_) async {});
-  when(mockResponse.done).thenAnswer((_) => Future.value());
-
-  final request = Request(mockRequest, const {}, EngineConfig());
-  final response = Response(mockResponse);
-  return EngineContext(
-    request: request,
-    response: response,
-    container: Container(),
-  );
-}
+import 'package:routed_testing/routed_testing.dart';
+import 'package:server_testing/server_testing.dart';
+import '../test_engine.dart';
 
 void main() {
   group('requireFound', () {
-    test('returns value when present', () {
-      final ctx = _context();
-      final result = ctx.requireFound<int>(42);
+    test('returns value when present', () async {
+      final engine = testEngine();
+      engine.get('/present', (ctx) {
+        final result = ctx.requireFound<int>(42);
+        return ctx.json({'value': result, 'errors': ctx.errors.length});
+      });
 
-      expect(result, equals(42));
-      expect(ctx.errors, isEmpty);
+      await engine.initialize();
+      final client = TestClient(
+        RoutedRequestHandler(engine),
+        mode: TransportMode.ephemeralServer,
+      );
+      addTearDown(() async {
+        await client.close();
+        await engine.close();
+      });
+
+      final response = await client.get('/present');
+      expect(response.json()['value'], equals(42));
+      expect(response.json()['errors'], equals(0));
     });
 
-    test('throws NotFoundError and records error when null', () {
-      final ctx = _context();
+    test('throws NotFoundError and records error when null', () async {
+      final engine = testEngine();
+      engine.get('/missing', (ctx) {
+        try {
+          ctx.requireFound<Object?>(null, message: 'user missing');
+          return ctx.json({'error': 'none'});
+        } catch (error) {
+          if (error is NotFoundError) {
+            return ctx.json({
+              'message': error.message,
+              'errors': ctx.errors.length,
+            });
+          }
+          rethrow;
+        }
+      });
 
-      expect(
-        () => ctx.requireFound<Object?>(null, message: 'user missing'),
-        throwsA(
-          isA<NotFoundError>().having(
-            (e) => e.message,
-            'message',
-            'user missing',
-          ),
-        ),
+      await engine.initialize();
+      final client = TestClient(
+        RoutedRequestHandler(engine),
+        mode: TransportMode.ephemeralServer,
       );
+      addTearDown(() async {
+        await client.close();
+        await engine.close();
+      });
 
-      expect(ctx.errors, hasLength(1));
-      expect(ctx.errors.first, isA<NotFoundError>());
-      expect(ctx.errors.first.message, equals('user missing'));
+      final response = await client.get('/missing');
+      expect(response.json()['errors'], equals(1));
+      expect(response.json()['message'], equals('user missing'));
     });
   });
 
   group('fetchOr404', () {
     test('awaits callback and returns value', () async {
-      final ctx = _context();
+      final engine = testEngine();
+      engine.get('/fetch', (ctx) async {
+        final result = await ctx.fetchOr404(() async => 'item');
+        return ctx.json({'value': result, 'errors': ctx.errors.length});
+      });
 
-      final result = await ctx.fetchOr404(() async => 'item');
-      expect(result, equals('item'));
-      expect(ctx.errors, isEmpty);
+      await engine.initialize();
+      final client = TestClient(
+        RoutedRequestHandler(engine),
+        mode: TransportMode.ephemeralServer,
+      );
+      addTearDown(() async {
+        await client.close();
+        await engine.close();
+      });
+
+      final response = await client.get('/fetch');
+      expect(response.json()['value'], equals('item'));
+      expect(response.json()['errors'], equals(0));
     });
 
     test('awaits callback and throws NotFoundError', () async {
-      final ctx = _context();
+      final engine = testEngine();
+      engine.get('/fetch-missing', (ctx) async {
+        try {
+          await ctx.fetchOr404(() async => null, message: 'not here');
+          return ctx.json({'error': 'none'});
+        } catch (error) {
+          if (error is NotFoundError) {
+            return ctx.json({
+              'message': error.message,
+              'errors': ctx.errors.length,
+            });
+          }
+          rethrow;
+        }
+      });
 
-      await expectLater(
-        ctx.fetchOr404(() async => null, message: 'not here'),
-        throwsA(
-          isA<NotFoundError>().having((e) => e.message, 'message', 'not here'),
-        ),
+      await engine.initialize();
+      final client = TestClient(
+        RoutedRequestHandler(engine),
+        mode: TransportMode.ephemeralServer,
       );
+      addTearDown(() async {
+        await client.close();
+        await engine.close();
+      });
 
-      expect(ctx.errors, hasLength(1));
-      expect(ctx.errors.first.message, equals('not here'));
+      final response = await client.get('/fetch-missing');
+      expect(response.json()['errors'], equals(1));
+      expect(response.json()['message'], equals('not here'));
     });
   });
 }

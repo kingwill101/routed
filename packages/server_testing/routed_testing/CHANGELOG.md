@@ -1,4 +1,10 @@
+## 0.3.0
+
 ## 0.2.1+1
+
+- Refresh docs and metadata to match the latest routed ecosystem templates.
+
+## 0.2.1
 
 - Added README badges, installation details, and funding notes so the package
   documents match the rest of the ecosystem.

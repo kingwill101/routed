@@ -1,4 +1,11 @@
+## 0.3.0
+
 ## 0.2.1+1
+
+- Updated the Shelf translator and dependencies to stay in sync with the latest
+  server_testing transport behavior.
+
+## 0.2.1
 
 - Documented the package with badges, funding link, and a runnable Shelf sample.
 

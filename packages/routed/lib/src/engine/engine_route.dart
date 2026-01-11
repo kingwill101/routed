@@ -197,6 +197,10 @@ class EngineRoute {
       final key = entry.key;
       final constraint = entry.value;
 
+      if (key == 'openapi' || key == 'components') {
+        return true;
+      }
+
       // Special-case: domain constraint
       if (key == 'domain' && constraint is String) {
         return RegExp(constraint).hasMatch(request.headers.host ?? '');

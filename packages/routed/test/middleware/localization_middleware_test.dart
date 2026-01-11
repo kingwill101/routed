@@ -1,40 +1,11 @@
-import 'dart:async';
-import 'dart:io';
-
 import 'package:routed/routed.dart';
 import 'package:routed/src/middleware/localization.dart';
 import 'package:routed/src/translation/constants.dart';
 import 'package:routed/src/translation/locale_manager.dart';
 import 'package:routed/src/translation/resolvers.dart';
-import 'package:server_testing/mock.dart';
-import 'package:test/test.dart';
-
-EngineContext _buildContext(
-  String uri, {
-  Map<String, List<String>>? headers,
-  List<Cookie>? cookies,
-}) {
-  final mockRequest = setupRequest(
-    'GET',
-    uri,
-    requestHeaders: headers,
-    cookies: cookies,
-  );
-  final mockResponse = setupResponse();
-  when(mockResponse.flush()).thenAnswer((_) async {});
-  when(mockResponse.close()).thenAnswer((_) async {});
-  when(mockResponse.done).thenAnswer((_) => Future.value());
-
-  final request = Request(mockRequest, const {}, EngineConfig());
-  final response = Response(mockResponse);
-  final container = Container()..instance<Config>(ConfigImpl());
-
-  return EngineContext(
-    request: request,
-    response: response,
-    container: container,
-  );
-}
+import 'package:routed_testing/routed_testing.dart';
+import 'package:server_testing/server_testing.dart';
+import '../test_engine.dart';
 
 void main() {
   group('localizationMiddleware', () {
@@ -48,20 +19,31 @@ void main() {
         ],
       );
 
-      final ctx = _buildContext(
+      final engine = testEngine();
+      engine.addGlobalMiddleware(localizationMiddleware(manager));
+      engine.get('/welcome', (ctx) {
+        return ctx.json({'locale': ctx.get<String>(kRequestLocaleAttribute)});
+      });
+
+      await engine.initialize();
+      final client = TestClient(
+        RoutedRequestHandler(engine),
+        mode: TransportMode.ephemeralServer,
+      );
+      addTearDown(() async {
+        await client.close();
+        await engine.close();
+      });
+
+      final response = await client.get(
         '/welcome?lang=es',
         headers: {
           HttpHeaders.acceptLanguageHeader: ['fr-CA'],
         },
       );
 
-      final response = await localizationMiddleware(manager)(
-        ctx,
-        () async => ctx.response,
-      );
-
-      expect(response.statusCode, equals(HttpStatus.ok));
-      expect(ctx.get<String>(kRequestLocaleAttribute), equals('es'));
+      response.assertStatus(HttpStatus.ok);
+      expect(response.json()['locale'], equals('es'));
     });
 
     test('falls back to header resolver when query missing', () async {
@@ -71,16 +53,30 @@ void main() {
         resolvers: [HeaderLocaleResolver()],
       );
 
-      final ctx = _buildContext(
+      final engine = testEngine();
+      engine.addGlobalMiddleware(localizationMiddleware(manager));
+      engine.get('/', (ctx) {
+        return ctx.json({'locale': ctx.get<String>(kRequestLocaleAttribute)});
+      });
+
+      await engine.initialize();
+      final client = TestClient(
+        RoutedRequestHandler(engine),
+        mode: TransportMode.ephemeralServer,
+      );
+      addTearDown(() async {
+        await client.close();
+        await engine.close();
+      });
+
+      final response = await client.get(
         '/',
         headers: {
           HttpHeaders.acceptLanguageHeader: ['de-DE,de;q=0.7'],
         },
       );
 
-      await localizationMiddleware(manager)(ctx, () async => ctx.response);
-
-      expect(ctx.get<String>(kRequestLocaleAttribute), equals('de-DE'));
+      expect(response.json()['locale'], equals('de-DE'));
     });
   });
 }

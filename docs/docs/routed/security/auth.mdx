@@ -8,8 +8,172 @@ sidebar_position: 3
 # Authentication & Authorization
 
 Routed ships with dedicated providers for authentication concerns. Start with JWT bearer tokens
-and tighten ingress with IP filters. Future phases will layer in OAuth2 helpers and guard/RBAC
-abstractions, but the building blocks are available today.
+and tighten ingress with IP filters. The auth provider now includes session-based flows, email
+magic links, OAuth callbacks, and NextAuth-inspired hooks while still leaning on Routed's
+container-driven conventions.
+
+## Auth flows and hooks
+
+The auth routes (`/auth/*`) support credential, email, and OAuth sign-in flows. Session responses
+can be customized with callbacks, and lifecycle events are emitted through the global
+`EventManager` to match Routed's Laravel-style event system.
+
+```dart
+engine.container.instance<AuthOptions>(
+  AuthOptions(
+    providers: [CredentialsProvider()],
+    sessionStrategy: AuthSessionStrategy.session,
+    sessionMaxAge: const Duration(days: 30),
+    sessionUpdateAge: const Duration(days: 1),
+    callbacks: AuthCallbacks(
+      signIn: (context) async => const AuthSignInResult.allow(),
+      session: (context) async => {
+        ...context.payload,
+        'role': 'member',
+      },
+      redirect: (context) async => context.url,
+    ),
+  ),
+);
+
+final eventManager = await engine.container.make<EventManager>();
+eventManager.listen<AuthSignInEvent>(
+  (event) => logger.info('signed in ${event.user.id}'),
+);
+```
+
+Session refresh behavior mirrors NextAuth's `updateAge` concept. When `sessionUpdateAge` is
+reached, session cookies are refreshed (and JWTs are reissued) on the next request to `/auth/session`.
+Email verification tokens are also rotated: issuing a new magic link invalidates previous tokens
+for that identifier.
+
+```yaml title="config/auth.yaml"
+session:
+  strategy: session
+  max_age: 30d
+  update_age: 1d
+```
+
+## Auth routes
+
+Use the built-in routes when you enable the auth provider (or register `AuthRoutes` directly).
+Each endpoint is mounted under `basePath` (defaults to `/auth`).
+
+- `GET /auth/providers`: list configured providers.
+- `GET /auth/csrf`: issue a CSRF token for sign-in/sign-out calls.
+- `GET /auth/session`: return the current session payload.
+- `POST /auth/signin/{provider}`: credential/email sign-in entrypoint.
+- `POST /auth/register/{provider}`: credential registration flow.
+- `GET /auth/signin/{provider}`: OAuth provider redirect.
+- `GET /auth/callback/{provider}`: OAuth/email callback handler.
+- `POST /auth/signout`: sign out and clear cookies.
+
+## Provider config
+
+Auth providers can be configured via config files so secrets stay in env vars.
+For per-provider docs and custom provider/adapter guidance, see
+[Auth Providers & Adapters](/docs/routed/security/auth-providers).
+
+```yaml title="config/auth.yaml"
+providers:
+  github:
+    enabled: true
+    client_id: "{{ env.GITHUB_CLIENT_ID | default: '' }}"
+    client_secret: "{{ env.GITHUB_CLIENT_SECRET | default: '' }}"
+    redirect_uri: "{{ env.GITHUB_REDIRECT_URI | default: '' }}"
+    enterprise_base_url: "{{ env.GITHUB_ENTERPRISE_URL | default: '' }}"
+    scopes:
+      - read:user
+      - user:email
+```
+
+## Callbacks
+
+Callbacks let you mutate or gate auth behavior. They run during the auth flow and can be used to
+control redirects or decorate session/JWT data.
+
+- `signIn`: return `AuthSignInResult.deny()` to block sign-in.
+- `redirect`: sanitize or override redirect URLs.
+- `jwt`: mutate JWT claims before issuing tokens.
+- `session`: enrich the session payload returned to clients.
+
+## Events
+
+Auth lifecycle events flow through the global `EventManager`, so you can subscribe with the same
+pattern used for route events:
+
+```dart
+final events = await engine.container.make<EventManager>();
+events.listen<AuthSignInEvent>((event) {
+  logger.info('auth sign in: ${event.user.id}');
+});
+```
+
+Emitted events include: `AuthSignInEvent`, `AuthSignOutEvent`, `AuthCreateUserEvent`,
+`AuthUpdateUserEvent`, `AuthLinkAccountEvent`, and `AuthSessionEvent`.
+
+## Session strategy
+
+Use `sessionStrategy` to pick session storage.
+
+- `session`: server-side sessions via `SessionAuthService`.
+- `jwt`: issue a signed JWT stored in a cookie.
+
+`sessionMaxAge` controls how long sessions persist. `sessionUpdateAge` acts like NextAuth
+`updateAge`: once the duration elapses, the next `/auth/session` request refreshes the cookie
+(and reissues JWTs).
+
+## Policy bindings
+
+Policies wrap authorization decisions for a resource and register Haigate abilities like
+`project.view` or `project.update`.
+
+```dart
+class ProjectPolicy extends Policy<Project> {
+  const ProjectPolicy();
+
+  @override
+  Future<bool> canView(AuthPrincipal? principal, Project project) async {
+    return principal?.roles.contains('admin') ?? false;
+  }
+
+  @override
+  Future<bool> canCreate(AuthPrincipal? principal) async =>
+      principal?.roles.contains('editor') ?? false;
+
+  @override
+  Future<bool> canUpdate(AuthPrincipal? principal, Project project) async {
+    return principal?.roles.contains('editor') ?? false;
+  }
+
+  @override
+  Future<bool> canDelete(AuthPrincipal? principal, Project project) async {
+    return principal?.roles.contains('admin') ?? false;
+  }
+}
+
+engine.container.instance<AuthOptions>(
+  AuthOptions(
+    providers: [CredentialsProvider()],
+    policies: PolicyOptions(
+      bindings: [
+        PolicyBinding<Project>(
+          policy: const ProjectPolicy(),
+          abilityPrefix: 'project',
+        ),
+      ],
+    ),
+  ),
+);
+
+Haigate.registry.authorize('project.update', principal, project);
+```
+
+## Email verification tokens
+
+Email magic links are rotated by default. Issuing a new token for the same identifier removes
+previous tokens in both the adapter and the in-memory fallback. Implement the optional
+`AuthAdapter.deleteVerificationTokens` method if you persist tokens yourself.
 
 ## JWT Bearer Middleware
 

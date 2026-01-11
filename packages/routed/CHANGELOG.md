@@ -1,4 +1,20 @@
+## 0.3.0
+
 ## 0.2.0
+
+- Introduced a full auth stack with `AuthManager`, built-in credentials/email/OAuth
+  providers, session + JWT strategies, and first-class auth routes.
+- Added auth callbacks/events for sign-in, sign-out, session, and JWT lifecycles,
+  along with event hooks that align with routed observability signals.
+- Added RBAC helpers and policy-based authorization with Haigate integration for
+  ability checks and middleware wiring.
+- Providers are now registry-driven with config-backed schemas, enabling dynamic
+  auth provider configuration without hardcoding provider defaults.
+- Auth sessions now support refresh windows via `sessionUpdateAge` and JWT update
+  age refreshes for long-lived client sessions.
+- Updated CLI scaffolding/templates to align with the new auth config defaults
+  and testing helpers.
+- Expanded auth docs and examples, including policy and JWT demo flows.
 
 - Introduced a full localization stack: translation contracts, registry-driven
   locale resolvers (query, cookie, session, header, and custom IDs), global

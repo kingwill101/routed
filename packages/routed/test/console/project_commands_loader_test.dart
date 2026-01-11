@@ -15,6 +15,7 @@ void main() {
     late String cliRoot;
     late CliLogger logger;
     late io.Directory projectDir;
+    late io.Directory previousCwd;
 
     setUpAll(() {
       cliRoot = _resolveCliRoot();
@@ -22,14 +23,16 @@ void main() {
 
     setUp(() async {
       logger = CliLogger(verbose: true);
+      previousCwd = io.Directory.current;
       projectDir = await io.Directory.systemTemp.createTemp(
         'routed_project_commands_test_',
       );
     });
 
     tearDown(() async {
+      io.Directory.current = previousCwd;
       if (await projectDir.exists()) {
-        await projectDir.delete(recursive: true);
+        await _deleteDirectory(projectDir);
       }
     });
 
@@ -40,9 +43,7 @@ void main() {
         commandName: 'hello',
       );
 
-      final previousCwd = io.Directory.current;
       io.Directory.current = projectDir;
-      addTearDown(() => io.Directory.current = previousCwd);
 
       final loader = ProjectCommandsLoader(logger: logger);
       final infos = await loader.loadProjectCommands('usage');
@@ -66,9 +67,7 @@ void main() {
         commandName: 'dev',
       );
 
-      final previousCwd = io.Directory.current;
       io.Directory.current = projectDir;
-      addTearDown(() => io.Directory.current = previousCwd);
 
       final loader = ProjectCommandsLoader(logger: logger);
       final infos = await loader.loadProjectCommands('usage');
@@ -114,9 +113,7 @@ Future<List<Command<void>>> buildProjectCommands() async {
 ''',
       );
 
-      final previousCwd = io.Directory.current;
       io.Directory.current = projectDir;
-      addTearDown(() => io.Directory.current = previousCwd);
 
       final loader = ProjectCommandsLoader(logger: logger);
       final infos = await loader.loadProjectCommands('usage');
@@ -144,9 +141,7 @@ FutureOr<List<Command<void>>> buildProjectCommands() async {
 ''',
       );
 
-      final previousCwd = io.Directory.current;
       io.Directory.current = projectDir;
-      addTearDown(() => io.Directory.current = previousCwd);
 
       final loader = ProjectCommandsLoader(logger: logger);
       expect(
@@ -155,6 +150,26 @@ FutureOr<List<Command<void>>> buildProjectCommands() async {
       );
     });
   }, timeout: const Timeout(Duration(minutes: 2)));
+}
+
+Future<void> _deleteDirectory(io.Directory directory) async {
+  if (!io.Platform.isWindows) {
+    await directory.delete(recursive: true);
+    return;
+  }
+
+  const maxAttempts = 5;
+  for (var attempt = 0; attempt < maxAttempts; attempt += 1) {
+    try {
+      await directory.delete(recursive: true);
+      return;
+    } on io.FileSystemException {
+      if (attempt == maxAttempts - 1) {
+        rethrow;
+      }
+      await Future<void>.delayed(Duration(milliseconds: 200 * (attempt + 1)));
+    }
+  }
 }
 
 Future<void> _writeProject({

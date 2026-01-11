@@ -75,6 +75,10 @@ MockHttpRequest setupRequest(
   mockRequestHeaders ??= setupHeaders(requestHeaders);
 
   final mockUri = setupUri(uri);
+  final parsedUri = Uri.parse(uri);
+  final requestedUri = parsedUri.isAbsolute
+      ? parsedUri
+      : parsedUri.replace(scheme: 'http', host: 'server_testing.internal');
 
   final mockRequest = MockHttpRequest();
 
@@ -83,6 +87,7 @@ MockHttpRequest setupRequest(
 
   when(mockRequest.method).thenReturn(method);
   when(mockRequest.uri).thenReturn(mockUri);
+  when(mockRequest.requestedUri).thenReturn(requestedUri);
   when(mockRequest.headers).thenReturn(mockRequestHeaders);
   when(mockRequest.contentLength).thenAnswer((c) {
     return (body?.length ?? 0) as int;

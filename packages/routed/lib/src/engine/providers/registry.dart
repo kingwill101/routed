@@ -15,7 +15,7 @@ import 'views.dart';
 import 'compression.dart';
 import 'rate_limit.dart';
 import 'observability.dart';
-import 'auth.dart';
+import '../../auth/provider.dart';
 import 'localization.dart';
 
 typedef ServiceProviderFactory = ServiceProvider Function();
