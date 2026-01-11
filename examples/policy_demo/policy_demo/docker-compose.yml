@@ -1,0 +1,49 @@
+# ============================================================================
+# Docker Compose for Routed Backend
+# Development and production configurations
+# ============================================================================
+
+services:
+  # ==========================================================================
+  # Main Application
+  # ==========================================================================
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        DART_VERSION: "3.9"
+        APP_NAME: "server"
+    container_name: policy_demo
+    restart: unless-stopped
+    ports:
+      - "${PORT:-8080}:8080"
+    environment:
+      - APP_ENV=${APP_ENV:-production}
+      - APP_DEBUG=${APP_DEBUG:-false}
+      - HOST=0.0.0.0
+      - PORT=8080
+    volumes:
+      # Persist storage data
+      - app-storage:/app/storage
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/api/v1/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+    networks:
+      - routed-network
+
+# =============================================================================
+# Networks
+# =============================================================================
+networks:
+  routed-network:
+    driver: bridge
+
+# =============================================================================
+# Volumes
+# =============================================================================
+volumes:
+  app-storage:

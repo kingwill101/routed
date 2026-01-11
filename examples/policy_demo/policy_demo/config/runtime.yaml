@@ -1,0 +1,19 @@
+# Runtime configuration quick reference:
+# shutdown – Graceful shutdown settings. Default: {"enabled":true,"grace_period":"20s","force_after":"1m","exit_code":0,"notify_readiness":true,"signals":["sigint","sigterm"]}. Type: object
+# shutdown.enabled – Enable graceful shutdown signal handling. Default: true. Type: boolean
+# shutdown.exit_code – Process exit code returned after graceful shutdown. Default: 0. Type: integer
+# shutdown.force_after – Absolute time limit before shutdown completes. Default: 1m. Type: string
+# shutdown.grace_period – Time to wait for in-flight requests before forcing close. Default: 20s. Type: string
+# shutdown.notify_readiness – Mark readiness probes unhealthy while draining. Default: true. Type: boolean
+# shutdown.signals – Signals that trigger graceful shutdown. Default: ["sigint","sigterm"]. Type: array
+
+shutdown:
+  enabled: true
+  exit_code: 0
+  force_after: 1m
+  grace_period: 20s
+  notify_readiness: true
+  signals:
+    - sigint
+    - sigterm
+

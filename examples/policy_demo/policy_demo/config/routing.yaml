@@ -1,0 +1,13 @@
+# Routing configuration quick reference:
+# default_options – Serve automatic OPTIONS responses enumerating allowed methods when no handler is defined. Default: true. Type: boolean
+# etag – ETag generation settings. Default: {"strategy":"disabled"}. Type: object
+# etag.strategy – Default ETag strategy (disabled, strong, weak). Default: disabled. Type: string
+# handle_method_not_allowed – Return 405 responses when a route exists but the method does not. Default: true. Type: boolean
+# redirect_trailing_slash – Automatically redirect /path/ to /path. Default: true. Type: boolean
+
+default_options: true
+etag:
+  strategy: disabled
+handle_method_not_allowed: true
+redirect_trailing_slash: true
+

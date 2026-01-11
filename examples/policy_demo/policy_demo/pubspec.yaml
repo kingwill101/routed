@@ -1,0 +1,23 @@
+name: policy_demo
+description: A new Routed application.
+version: 0.1.0
+publish_to: 'none'
+
+environment:
+  sdk: ">=3.9.2 <4.0.0"
+
+resolution: workspace
+
+dependencies:
+  args: ^2.5.0
+  routed:
+    path: ../../../packages/routed
+
+dev_dependencies:
+  lints: ^6.0.0
+  routed_testing:
+    path: ../../../packages/server_testing/routed_testing
+  server_testing:
+    path: ../../../packages/server_testing/server_testing
+  test: ^1.26.3
+

@@ -1,0 +1,82 @@
+# Http configuration quick reference:
+# http2 – Type: object
+# http2.allow_cleartext – Allow HTTP/2 without TLS (h2c). Typically false in production. Type: boolean
+# http2.enabled – Enable HTTP/2 (ALPN h2) on secure listeners. Type: boolean
+# http2.idle_timeout – Optional idle timeout applied to HTTP/2 connections. Type: string
+# http2.max_concurrent_streams – Advertised max concurrent streams per HTTP/2 connection. Type: integer
+# middleware – Default: {"global":[],"groups":{}}. Type: object
+# middleware.global – Middleware executed for every HTTP request. Default: []. Type: array
+# middleware.groups – Named middleware groups applied to route collections. Default: {}. Type: object
+# middleware_sources – Declarative middleware mappings contributed by service providers. Default: {}. Type: object
+# providers – Service providers registered for the HTTP pipeline. Default: ["routed.core","routed.routing","routed.cache","routed.sessions","routed.uploads","routed.cors","routed.security","routed.auth","routed.logging","routed.observability","routed.compression","routed.rate_limit","routed.storage","routed.static","routed.localization","routed.views"]. Type: array
+# tls – Type: object
+# tls.certificate_path – Path to the PEM certificate chain used for TLS. Type: string
+# tls.key_path – Path to the private key corresponding to the TLS certificate. Type: string
+# tls.password – Optional password protecting the certificate/key files. Type: string
+# tls.request_client_certificate – Request client certificates during TLS handshakes. Type: boolean
+# tls.shared – Allow multiple isolates/processes to share the TLS listener. Type: boolean
+# tls.v6_only – Restrict TLS listener to IPv6 only (disables IPv4 dual stack). Type: boolean
+
+middleware:
+  global:
+  groups:
+middleware_sources:
+  routed:
+    auth:
+      global:
+        - routed.auth.jwt
+        - routed.auth.oauth2
+    compression:
+      global:
+        - routed.compression.middleware
+    cors:
+      global:
+        - routed.cors
+    localization:
+      global:
+        - routed.localization
+    logging:
+      global:
+        - routed.logging.http
+    observability:
+      global:
+        - routed.observability.health
+        - routed.observability.tracing
+        - routed.observability.metrics
+    rate_limit:
+      global:
+        - routed.rate_limit.middleware
+    security:
+      global:
+        - routed.security.trusted_proxy
+        - routed.security.ip_filter
+        - routed.security.headers
+        - routed.security.csrf
+        - routed.security.request_size
+    sessions:
+      global:
+        - routed.sessions.start
+      groups:
+        web:
+          - routed.sessions.start
+    static:
+      global:
+        - routed.static.assets
+providers:
+  - routed.core
+  - routed.routing
+  - routed.cache
+  - routed.sessions
+  - routed.uploads
+  - routed.cors
+  - routed.security
+  - routed.auth
+  - routed.logging
+  - routed.observability
+  - routed.compression
+  - routed.rate_limit
+  - routed.storage
+  - routed.static
+  - routed.localization
+  - routed.views
+
