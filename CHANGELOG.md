@@ -8,8 +8,8 @@
   mocks `requestedUri` so auth redirect tests accept absolute callback URLs.
 - `server_testing_shelf` updates Shelf translation behavior and aligns
   dependencies with the latest transport APIs.
-- `routed_testing`, `property_testing`, and `routed_hotwire` refresh docs and
-  metadata, with routed_hotwire modularizing the todo example.
+- `routed_testing` and `property_testing` refresh docs and metadata for the
+  0.3.0 release.
 
 ## 0.2.1
 
