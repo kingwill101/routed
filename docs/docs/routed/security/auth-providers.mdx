@@ -1,0 +1,212 @@
+---
+title: Auth Providers & Adapters
+description: Configure built-in providers and build custom auth integrations
+authors: routed
+sidebar_position: 4
+---
+
+# Auth Providers & Adapters
+
+This page documents how auth providers are configured, registered, and wired into the
+`AuthManager`, plus how to implement a custom `AuthAdapter` for persistence.
+
+## Built-in providers
+
+Routed ships with a GitHub OAuth provider. Configuration is registry-driven and only
+registered providers are loaded from config.
+
+```yaml title="config/auth.yaml"
+providers:
+  github:
+    enabled: true
+    client_id: "{{ env.GITHUB_CLIENT_ID | default: '' }}"
+    client_secret: "{{ env.GITHUB_CLIENT_SECRET | default: '' }}"
+    redirect_uri: "{{ env.GITHUB_REDIRECT_URI | default: '' }}"
+    scopes:
+      - read:user
+      - user:email
+```
+
+Providers are registered at boot (for example, `registerGitHubAuthProvider`), and the
+registry contributes defaults and schema metadata to your config docs.
+
+## Registering custom providers
+
+Custom providers register a schema plus a builder that turns config into an
+`AuthProvider`. The builder should return `null` when the provider is disabled.
+
+```dart
+class ExampleProviderOptions {
+  const ExampleProviderOptions({
+    required this.clientId,
+    required this.clientSecret,
+    required this.redirectUri,
+  });
+
+  final String clientId;
+  final String clientSecret;
+  final String redirectUri;
+}
+
+AuthProviderRegistration exampleRegistration() {
+  return AuthProviderRegistration(
+    id: 'example',
+    schema: ConfigSchema.object(
+      description: 'Example OAuth provider settings.',
+      properties: {
+        'enabled': ConfigSchema.boolean(defaultValue: false),
+        'client_id': ConfigSchema.string(),
+        'client_secret': ConfigSchema.string(),
+        'redirect_uri': ConfigSchema.string(),
+      },
+    ),
+    builder: (config) {
+      final enabled =
+          parseBoolLike(config['enabled'], context: 'auth.providers.example.enabled') ??
+          false;
+      if (!enabled) return null;
+
+      final clientId = _requireString(
+        config['client_id'],
+        'auth.providers.example.client_id',
+      );
+      final clientSecret = _requireString(
+        config['client_secret'],
+        'auth.providers.example.client_secret',
+      );
+      final redirectUri = _requireString(
+        config['redirect_uri'],
+        'auth.providers.example.redirect_uri',
+      );
+
+      return OAuthProvider(
+        id: 'example',
+        name: 'Example',
+        clientId: clientId,
+        clientSecret: clientSecret,
+        authorizationEndpoint: Uri.parse('https://example.com/oauth/authorize'),
+        tokenEndpoint: Uri.parse('https://example.com/oauth/token'),
+        userInfoEndpoint: Uri.parse('https://example.com/me'),
+        redirectUri: redirectUri,
+        profile: (profile) => AuthUser(
+          id: profile['id'].toString(),
+          email: profile['email']?.toString(),
+          name: profile['name']?.toString(),
+          attributes: profile,
+        ),
+      );
+    },
+  );
+}
+
+void registerExampleProvider() {
+  AuthProviderRegistry.instance.register(exampleRegistration());
+}
+
+String _requireString(Object? value, String context) {
+  final resolved = parseStringLike(
+    value,
+    context: context,
+    allowEmpty: true,
+    throwOnInvalid: true,
+  );
+  if (resolved == null || resolved.trim().isEmpty) {
+    throw ProviderConfigException('$context is required');
+  }
+  return resolved.trim();
+}
+```
+
+## Wiring provider config
+
+Provider config lives under `auth.providers`. Each registered provider contributes its
+schema and defaults, and only registered providers are constructed at runtime.
+
+```yaml title="config/auth.yaml"
+providers:
+  example:
+    enabled: true
+    client_id: "{{ env.EXAMPLE_CLIENT_ID | default: '' }}"
+    client_secret: "{{ env.EXAMPLE_CLIENT_SECRET | default: '' }}"
+    redirect_uri: "{{ env.EXAMPLE_REDIRECT_URI | default: '' }}"
+```
+
+## Building custom adapters
+
+Adapters persist users, accounts, sessions, and verification tokens. The base
+`AuthAdapter` is a no-op implementation; override the methods your flow needs.
+
+```dart
+class MyAuthAdapter extends AuthAdapter {
+  @override
+  Future<AuthUser?> getUserByEmail(String email) async {
+    return db.users.findByEmail(email);
+  }
+
+  @override
+  Future<AuthUser> createUser(AuthUser user) async {
+    return db.users.insert(user);
+  }
+
+  @override
+  Future<AuthAccount?> getAccount(
+    String providerId,
+    String providerAccountId,
+  ) async {
+    return db.accounts.find(providerId, providerAccountId);
+  }
+
+  @override
+  Future<void> linkAccount(AuthAccount account) async {
+    await db.accounts.insert(account);
+  }
+
+  @override
+  Future<AuthSession?> getSession(String sessionToken) async {
+    return db.sessions.findByToken(sessionToken);
+  }
+
+  @override
+  Future<AuthSession> createSession(AuthSession session) async {
+    return db.sessions.insert(session);
+  }
+
+  @override
+  Future<void> deleteSession(String sessionToken) async {
+    await db.sessions.delete(sessionToken);
+  }
+
+  @override
+  Future<void> saveVerificationToken(AuthVerificationToken token) async {
+    await db.verificationTokens.upsert(token);
+  }
+
+  @override
+  Future<AuthVerificationToken?> useVerificationToken(
+    String identifier,
+    String token,
+  ) async {
+    return db.verificationTokens.consume(identifier, token);
+  }
+
+  @override
+  Future<void> deleteVerificationTokens(String identifier) async {
+    await db.verificationTokens.deleteForIdentifier(identifier);
+  }
+}
+```
+
+Register the adapter in `AuthOptions` or the container:
+
+```dart
+engine.container.instance<AuthOptions>(
+  AuthOptions(adapter: MyAuthAdapter()),
+);
+```
+
+## Adapter tips
+
+- Implement `verifyCredentials` and `registerCredentials` for credentials flows.
+- Implement `saveVerificationToken`/`useVerificationToken`/`deleteVerificationTokens`
+  for email magic links.
+- Implement account/session methods when using OAuth + session strategy.

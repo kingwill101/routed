@@ -68,6 +68,25 @@ Each endpoint is mounted under `basePath` (defaults to `/auth`).
 - `GET /auth/callback/{provider}`: OAuth/email callback handler.
 - `POST /auth/signout`: sign out and clear cookies.
 
+## Provider config
+
+Auth providers can be configured via config files so secrets stay in env vars.
+For per-provider docs and custom provider/adapter guidance, see
+[Auth Providers & Adapters](/docs/routed/security/auth-providers).
+
+```yaml title="config/auth.yaml"
+providers:
+  github:
+    enabled: true
+    client_id: "{{ env.GITHUB_CLIENT_ID | default: '' }}"
+    client_secret: "{{ env.GITHUB_CLIENT_SECRET | default: '' }}"
+    redirect_uri: "{{ env.GITHUB_REDIRECT_URI | default: '' }}"
+    enterprise_base_url: "{{ env.GITHUB_ENTERPRISE_URL | default: '' }}"
+    scopes:
+      - read:user
+      - user:email
+```
+
 ## Callbacks
 
 Callbacks let you mutate or gate auth behavior. They run during the auth flow and can be used to
@@ -103,6 +122,52 @@ Use `sessionStrategy` to pick session storage.
 `sessionMaxAge` controls how long sessions persist. `sessionUpdateAge` acts like NextAuth
 `updateAge`: once the duration elapses, the next `/auth/session` request refreshes the cookie
 (and reissues JWTs).
+
+## Policy bindings
+
+Policies wrap authorization decisions for a resource and register Haigate abilities like
+`project.view` or `project.update`.
+
+```dart
+class ProjectPolicy extends Policy<Project> {
+  const ProjectPolicy();
+
+  @override
+  Future<bool> canView(AuthPrincipal? principal, Project project) async {
+    return principal?.roles.contains('admin') ?? false;
+  }
+
+  @override
+  Future<bool> canCreate(AuthPrincipal? principal) async =>
+      principal?.roles.contains('editor') ?? false;
+
+  @override
+  Future<bool> canUpdate(AuthPrincipal? principal, Project project) async {
+    return principal?.roles.contains('editor') ?? false;
+  }
+
+  @override
+  Future<bool> canDelete(AuthPrincipal? principal, Project project) async {
+    return principal?.roles.contains('admin') ?? false;
+  }
+}
+
+engine.container.instance<AuthOptions>(
+  AuthOptions(
+    providers: [CredentialsProvider()],
+    policies: PolicyOptions(
+      bindings: [
+        PolicyBinding<Project>(
+          policy: const ProjectPolicy(),
+          abilityPrefix: 'project',
+        ),
+      ],
+    ),
+  ),
+);
+
+Haigate.registry.authorize('project.update', principal, project);
+```
 
 ## Email verification tokens
 
