@@ -1,4 +1,3 @@
-
 import 'package:routed/routed.dart';
 import 'package:routed/src/middleware/localization.dart';
 import 'package:routed/src/translation/constants.dart';
