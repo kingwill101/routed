@@ -60,6 +60,6 @@ final _users = <int, Map<String, dynamic>>{};
 ```
 
 - `ctx.bindJSON` + `ctx.validate` guard payloads.
-- `ctx.bindJSON` + `ctx.validate` guard payloads. Remember you can also configure validation defaults (or middleware, sessions, etc.) via `config/http.yaml` so teams can inspect the manifest with `dart run routed_cli provider:list --config`.
+- `ctx.bindJSON` + `ctx.validate` guard payloads. Remember you can also configure validation defaults (or middleware, sessions, etc.) via `config/http.yaml` so teams can inspect the manifest with `dart run routed provider:list --config`.
 - `ctx.params['id']` returns the cast value thanks to the `:int` constraint.
 - Errors use HTTP status helpers from `dart:io`.

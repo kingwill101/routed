@@ -97,4 +97,4 @@ engine.group(path: '/posts', builder: (posts) {
 
 Use this example whenever you need to share middleware across a group of routes, build versioned APIs, or structure nested REST resources.
 
-> For production apps, move shared middleware/feature toggles into `config/http.yaml` (for example under `http.middleware.groups.admin`) so the manifest documents your pipeline. `dart run routed_cli provider:list --config` shows the merged defaults and helps you keep provider-driven stacks in sync with code samples like this one.
+> For production apps, move shared middleware/feature toggles into `config/http.yaml` (for example under `http.middleware.groups.admin`) so the manifest documents your pipeline. `dart run routed provider:list --config` shows the merged defaults and helps you keep provider-driven stacks in sync with code samples like this one.

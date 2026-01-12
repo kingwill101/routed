@@ -113,7 +113,7 @@ Key takeaways:
 - `ctx.validate()` uses Routed’s built-in validation rules. It runs before we mutate the data.
 - `ctx.bindJSON()` copies decoded JSON into the supplied map so you can work with strongly typed objects if desired.
 
-> In a larger app you can move the timeout middleware—and other feature toggles—into `config/http.yaml` (for example under `http.middleware.global`). Running `dart run routed_cli provider:list --config` shows the active providers/middleware and surfaces validation errors before booting the server.
+> In a larger app you can move the timeout middleware—and other feature toggles—into `config/http.yaml` (for example under `http.middleware.global`). Running `dart run routed provider:list --config` shows the active providers/middleware and surfaces validation errors before booting the server.
 
 ## 3. Run the server
 

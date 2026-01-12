@@ -58,7 +58,7 @@ The `ctx.html` helper renders a string through the configured template engine, w
 await ctx.html('<p>{{ message }}</p>', data: {'message': 'Welcome'});
 ```
 
-> The view provider validates its configuration (`view.engine`, `view.directory`, `view.disk`, and `view.cache` types) and throws a `ProviderConfigException` if the manifest supplies the wrong shape. Use `dart run routed_cli provider:list --config` to inspect the active view settings and confirm the provider is enabled.
+> The view provider validates its configuration (`view.engine`, `view.directory`, `view.disk`, and `view.cache` types) and throws a `ProviderConfigException` if the manifest supplies the wrong shape. Use `dart run routed provider:list --config` to inspect the active view settings and confirm the provider is enabled.
 
 ## Other content types
 

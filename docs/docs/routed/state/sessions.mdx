@@ -39,7 +39,7 @@ app:
   fallback_locale: en
   faker_locale: en_US
   cipher: AES-256-CBC
-  key: "{{ env.APP_KEY }}"                     # generate with `dart run routed_cli key:generate`
+  key: "{{ env.APP_KEY }}"                     # generate with `dart run routed key:generate`
   previous_keys: {{ env.APP_PREVIOUS_KEYS | split: ',' }}
   maintenance:
     driver: "{{ env.APP_MAINTENANCE_DRIVER | default: 'file' }}"
@@ -81,9 +81,9 @@ final engine = Engine(
 
 The `withSessionConfig` engine option applies the same configuration and automatically inserts the session middleware as the first global middleware.
 
-> The `routed.sessions` provider validates manifest overrides for `session.*`. If a value has the wrong shape (for example, an unknown cache store) a `ProviderConfigException` is thrown during boot. Use `dart run routed_cli provider:list --config` to inspect the merged config before deploying.
+> The `routed.sessions` provider validates manifest overrides for `session.*`. If a value has the wrong shape (for example, an unknown cache store) a `ProviderConfigException` is thrown during boot. Use `dart run routed provider:list --config` to inspect the merged config before deploying.
 
-> **Keys & rotation:** Every driver still needs `app.key` (or `session.app_key`). Keep it secret, rotate it with `dart run routed_cli key:generate`, then append the previous value to `APP_PREVIOUS_KEYS` so existing cookies continue to decode while new ones are issued with the replacement key.
+> **Keys & rotation:** Every driver still needs `app.key` (or `session.app_key`). Keep it secret, rotate it with `dart run routed key:generate`, then append the previous value to `APP_PREVIOUS_KEYS` so existing cookies continue to decode while new ones are issued with the replacement key.
 
 ### Supported drivers
 

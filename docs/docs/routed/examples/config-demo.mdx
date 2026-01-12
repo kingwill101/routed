@@ -16,7 +16,7 @@ cache files.
 - Provider manifests via `config/http.yaml` with a custom `config_demo.mail` entry.
 - Service providers that advertise defaults via `ProvidesDefaultConfig`.
 - Request-scoped overrides using `Config.runWith`.
-- The `routed_cli` commands (`config:init`, `config:publish`, `config:cache`, `config:clear`, `provider:list`, `provider:enable`, `provider:disable`).
+- The `routed` commands (`config:init`, `config:publish`, `config:cache`, `config:clear`, `provider:list`, `provider:enable`, `provider:disable`).
 
 ## Running the example
 
@@ -72,25 +72,25 @@ From the example directory:
 
 ```sh
 # Scaffold config/ and .env (already checked in for this sample)
-dart run routed_cli config:init
+dart run routed config:init
 
 # Publish stubs from dependencies (no-op unless a package ships config/stubs/)
-dart run routed_cli config:publish routed
+dart run routed config:publish routed
 
 # Generate Dart + JSON caches for production builds
-dart run routed_cli config:cache
+dart run routed config:cache
 
 # Also write configuration metadata (JSON) for tooling
-dart run routed_cli config:cache --docs --docs-output build/config_docs.json
+dart run routed config:cache --docs --docs-output build/config_docs.json
 
 # Remove generated cache artifacts
-dart run routed_cli config:clear
+dart run routed config:clear
 
 # Inspect or modify the provider manifest in config/http.yaml
-dart run routed_cli provider:list
-dart run routed_cli provider:list --config
-dart run routed_cli provider:disable config_demo.mail
-dart run routed_cli provider:enable config_demo.mail
+dart run routed provider:list
+dart run routed provider:list --config
+dart run routed provider:disable config_demo.mail
+dart run routed provider:enable config_demo.mail
 
 Sample output from `provider:list --config`:
 

@@ -36,7 +36,7 @@ import TabItem from '@theme/TabItem';
 - Middleware registry supports `MiddlewareRef.of('id')` references; routes/groups/mounts can refer to middleware by name and the engine resolves them against the registry during route build with clear errors for missing IDs.
 - Logging provider now honours `logging.extra_fields` and `logging.request_headers`, letting apps enrich structured payloads without custom middleware.
 - Static asset mounts accept a custom `file_system` + `root`, enabling memory-backed fixtures or virtual file systems without manual handler wiring.
-- `routed_cli` ships configuration tooling (`config:init`, `config:publish`, `config:cache`, `config:clear`) plus runnable examples (`config_demo`, `route_events`) and updated docs.
+- `routed` ships configuration tooling (`config:init`, `config:publish`, `config:cache`, `config:clear`) plus runnable examples (`config_demo`, `route_events`) and updated docs.
 - The `config_demo` example now relies on `config/http.yaml` and the manifest/registry flow instead of manual provider registration.
 - Regression tests now cover session flows across in-memory and ephemeral transports, assert manifest-driven middleware ordering/deduplication, verify routing/uploads config sourcing, and assert provider validation errors for security/uploads/cors/cache/view/storage/mail overrides.
 - Removed the pre-routing middleware stage; global middlewares now handle preflight requests (including CORS) directly.
@@ -78,7 +78,7 @@ import TabItem from '@theme/TabItem';
 
 ## Testing Status
 
-- **Passing locally:** `dart test packages/routed`, `dart test packages/routed_cli`, targeted suites for sessions, engine bootstrap, and provider validation.
+- **Passing locally:** `dart test packages/routed`, `dart test packages/routed`, targeted suites for sessions, engine bootstrap, and provider validation.
 - **New coverage:** provider validation suites for security/uploads/cors/cache/view/storage modules, config-demo mail provider adoption tests, and refreshed middleware manifest regression coverage (dedup/order, logging extras, static mounts).
 - **Planned additions:** extend CLI tests for `provider:list --config` (including machine-readable output) and land integration harnesses that assert manifest-derived middleware ordering under provider validation failures.
 

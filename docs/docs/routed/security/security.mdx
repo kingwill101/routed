@@ -29,7 +29,7 @@ security:
     headers: ['X-Forwarded-For', 'X-Real-IP']
 ```
 
-The `routed.security` provider validates these entries and applies them to `EngineConfig.security`. Run `dart run routed_cli provider:list --config` to confirm the active defaults and catch malformed overrides. If you enable a strict Content Security Policy (CSP), confirm your templates, inline scripts, and assets comply; see [Views & Templates](/docs/routed/views/).
+The `routed.security` provider validates these entries and applies them to `EngineConfig.security`. Run `dart run routed provider:list --config` to confirm the active defaults and catch malformed overrides. If you enable a strict Content Security Policy (CSP), confirm your templates, inline scripts, and assets comply; see [Views & Templates](/docs/routed/views/).
 
 ### Rate limiting
 
@@ -111,7 +111,7 @@ final engine = Engine(
 );
 ```
 
-> Validation: Security and CORS providers validate their inputs during boot. Non-boolean flags (for example `security.csrf.enabled: "yes"`), negative `security.max_request_size` values, malformed trusted proxy lists, or non-string CORS origins/methods trigger a `ProviderConfigException` with an explicit config path so you can fix the override before requests start flowing. Use `dart run routed_cli provider:list --config` to inspect the merged security/CORS defaults.
+> Validation: Security and CORS providers validate their inputs during boot. Non-boolean flags (for example `security.csrf.enabled: "yes"`), negative `security.max_request_size` values, malformed trusted proxy lists, or non-string CORS origins/methods trigger a `ProviderConfigException` with an explicit config path so you can fix the override before requests start flowing. Use `dart run routed provider:list --config` to inspect the merged security/CORS defaults.
 
 ## TLS & HTTPS
 

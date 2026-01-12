@@ -72,7 +72,7 @@ Stores come from the cache subsystem. Define them under `cache.stores` (for exam
 
 - **Middleware ordering:** The limiter should run after auth (so user identity is available) but before expensive handlers or compression. We will add an ordering helper similar to other middleware helpers.
 - **Telemetry:** Emit `RateLimitAllowedEvent` and `RateLimitBlockedEvent` (with `failoverMode`) so observability systems can collect metrics. The Redis adapter will expose hit/miss counters, and the memory adapter will surface an in-process snapshot for dashboards.
-- **CLI support:** Extend `routed_cli provider:list` and new `provider:rate-limiter` commands to inspect policies, effective configuration, and backend health.
+- **CLI support:** Extend `routed provider:list` and new `provider:rate-limiter` commands to inspect policies, effective configuration, and backend health.
 - **Testing utilities:** Ship helpers in `routed_testing` to simulate bursts and verify that limits trigger as expected without waiting for real time.
 
 ## Future enhancements

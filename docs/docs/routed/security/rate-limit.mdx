@@ -123,7 +123,7 @@ Set the top-level `rate_limit.failover` string or override per policy with `fail
 - Monitor 429 counts and `Retry-After` values to tune capacities and refill windows.
 - Redis deployments should run with persistence disabled or RDB/AOF trimmed for limiter keys—they are ephemeral.
 - Memory backend requires a configured cache store (typically the array driver) and is single-node only; distributed instances require a shared cache store (Redis driver).
-- Use `dart run routed_cli provider:list --config` to confirm policies merged correctly and catch shape errors early.
+- Use `dart run routed provider:list --config` to confirm policies merged correctly and catch shape errors early.
 - Subscribe to rate limit events (see below) to build metrics for hits, blocks, and failovers.
 
 ## Telemetry and automation

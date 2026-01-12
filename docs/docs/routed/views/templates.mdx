@@ -63,7 +63,7 @@ engine.useViewEngine(
 Place templates under the configured directory (`resources/views/` in this example). When a disk is used the engine reads through the same file abstraction that powers static assets, uploads, and other providers.
 Import `package:routed/template.dart` whenever you reference `LiquidViewEngine` or `LiquidRoot`.
 
-> Validation: The view provider ensures `view` configuration is a map, verifies that `engine`, `directory`, and `disk` are non-empty strings (and that `cache` is a boolean), then throws a `ProviderConfigException` if the manifest supplies the wrong shape. `dart run routed_cli provider:list --config` is a quick way to confirm the active settings and catch mistakes before the engine starts.
+> Validation: The view provider ensures `view` configuration is a map, verifies that `engine`, `directory`, and `disk` are non-empty strings (and that `cache` is a boolean), then throws a `ProviderConfigException` if the manifest supplies the wrong shape. `dart run routed provider:list --config` is a quick way to confirm the active settings and catch mistakes before the engine starts.
 
 ## Rendering templates
 

@@ -69,7 +69,7 @@ If the client disconnects early or hits any limit, every partially written file 
 
 - Audit `allowed_extensions` regularly; accept the smallest useful list and prefer content-type validation in business logic where possible.
 - Monitor the upload directory’s disk usage. A simple `du` alert tied to your storage disk catches unexpected growth.
-- Run `dart run routed_cli provider:list --config` to inspect the merged configuration and ensure extensions, directory, and limit values loaded as expected.
+- Run `dart run routed provider:list --config` to inspect the merged configuration and ensure extensions, directory, and limit values loaded as expected.
 - Combine uploads with [security headers](/docs/routed/security#security-headers) so browsers avoid caching sensitive responses.
 
 ## Looking ahead
