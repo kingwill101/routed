@@ -9,7 +9,6 @@ import 'package:routed/src/contracts/cache/repository.dart' as cache;
 import 'package:routed/src/contracts/cache/store.dart' as cache_store;
 import 'package:routed_testing/routed_testing.dart';
 import 'package:server_testing/server_testing.dart';
-import 'package:test/test.dart';
 
 class _InMemoryRepository implements cache.Repository {
   final Map<String, dynamic> entries = {};

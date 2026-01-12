@@ -12,6 +12,7 @@ import 'package:routed/src/engine/engine.dart';
 import 'package:routed/src/engine/middleware_registry.dart';
 import 'package:routed/src/file_handler.dart';
 import 'package:routed/src/provider/provider.dart';
+import 'package:routed/src/response.dart';
 import 'package:routed/src/router/types.dart';
 import 'package:routed/src/storage/local_storage_driver.dart';
 import 'package:routed/src/storage/storage_manager.dart';
@@ -169,7 +170,7 @@ class StaticAssetsServiceProvider extends ServiceProvider
           return mount.canServeSync(request.uri.path);
         },
       };
-      final handler = (EngineContext ctx) async {
+      FutureOr<Response> handler(EngineContext ctx) async {
         final served = await mount.tryServe(ctx, ctx.request.uri.path);
         if (!served && !ctx.response.isClosed) {
           ctx.abortWithStatus(
@@ -178,7 +179,8 @@ class StaticAssetsServiceProvider extends ServiceProvider
           );
         }
         return ctx.response;
-      };
+      }
+
       final baseName = 'routed.static.mount:${mount.route}';
       router.get(pattern, handler, constraints: constraints).name(baseName);
       router

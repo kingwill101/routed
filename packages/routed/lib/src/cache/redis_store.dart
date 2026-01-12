@@ -114,7 +114,7 @@ class RedisStore extends TaggableStore implements Store, LockProvider {
     _connecting = true;
     try {
       final command = await _connection.connect(host, port);
-      if (password != null && password!.isNotEmpty) {
+      if (password?.isNotEmpty == true) {
         await command.send_object(['AUTH', password]);
       }
       if (db != null) {

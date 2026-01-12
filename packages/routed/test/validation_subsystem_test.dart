@@ -1,5 +1,4 @@
 import 'package:routed/src/container/container.dart';
-import 'package:routed/src/validation/context_aware_rule.dart';
 import 'package:routed/src/validation/rule.dart';
 import 'package:routed/src/validation/rules/required.dart';
 import 'package:routed/src/validation/validator.dart';
@@ -43,7 +42,7 @@ class _MatchesFieldRule extends ContextAwareValidationRule {
     if (otherField == null) {
       return false;
     }
-    return contextValues?[otherField] == value;
+    return contextValues[otherField] == value;
   }
 }
 

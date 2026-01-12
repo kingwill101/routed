@@ -4,7 +4,6 @@ import 'dart:io';
 import 'package:routed/routed.dart';
 import 'package:routed_testing/routed_testing.dart';
 import 'package:server_testing/server_testing.dart';
-import 'package:test/test.dart';
 
 Future<({Engine engine, TestClient client})> _setupClient({
   EngineConfig? config,

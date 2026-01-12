@@ -1,5 +1,4 @@
 import 'dart:convert';
-import 'dart:io';
 import 'dart:typed_data';
 
 import 'package:routed/middlewares.dart';
@@ -7,7 +6,6 @@ import 'package:routed/routed.dart';
 import 'package:routed/src/engine/providers/request.dart';
 import 'package:routed_testing/routed_testing.dart';
 import 'package:server_testing/server_testing.dart';
-import 'package:test/test.dart';
 
 void main() {
   group('Request limits', () {

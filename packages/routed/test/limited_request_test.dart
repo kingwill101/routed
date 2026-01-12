@@ -1,13 +1,11 @@
 import 'dart:async';
 import 'dart:convert';
-import 'dart:io';
 import 'dart:typed_data';
 
 import 'package:routed/middlewares.dart';
 import 'package:routed/routed.dart';
 import 'package:routed_testing/routed_testing.dart';
 import 'package:server_testing/server_testing.dart';
-import 'package:test/test.dart';
 
 void main() {
   group('LimitedHttpRequestWrapper', () {
@@ -180,6 +178,7 @@ void main() {
               .expand((chunk) => chunk)
               .toList();
           await pipeFuture;
+          await pipeController.close();
           final pipeValue = utf8.decode(pipeBytes);
 
           final reducedValue = decodeBytes(
