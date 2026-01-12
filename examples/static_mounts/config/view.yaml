@@ -1,0 +1,10 @@
+# View configuration quick reference:
+# cache – Enable template caching in production environments. Default: true. Type: boolean
+# directory – Path to templates relative to app root or disk. Default: views. Type: string
+# disk – Optional storage disk to source templates from. Type: string
+# engine – View engine identifier (e.g. liquid). Default: liquid. Type: string
+
+cache: true
+directory: views
+engine: liquid
+
