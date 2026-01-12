@@ -12,7 +12,7 @@ Routed now mirrors Laravel's manifest, so the same `.env` switches carry straigh
 
 ```yaml title="config/http.yaml"
 session:
-  driver: cookie                    # cookie, file, array, database, redis, memcached, dynamodb
+  driver: cookie                    # cookie, file, array, redis, cache
   lifetime: 120                     # minutes
   expire_on_close: false
   encrypt: true                     # AES-GCM + HMAC
@@ -92,7 +92,7 @@ The `withSessionConfig` engine option applies the same configuration and automat
 - `cookie` – stores the entire payload in the cookie using layered `SecureCookie` codecs when `encrypt: true`.
 - `file` – persists JSON blobs under `session.files`. Use `session.lottery` or `FilesystemStore.pruneOnStartup` to clear expired sessions opportunistically.
 - `array` – process-local, in-memory storage that resets on every restart.
-- `database`, `redis`, `memcached`, `dynamodb` – delegate to the cache manager and respect both `session.cache_prefix` and the global `cache.prefix`.
+- `redis` and `cache` – delegate to the cache manager and respect both `session.cache_prefix` and the global `cache.prefix`.
 
 `partitioned` is accepted for forward compatibility (the current `dart:io` `Cookie` API does not emit the Partitioned attribute yet).
 

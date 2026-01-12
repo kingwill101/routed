@@ -6,7 +6,7 @@ sidebar_position: 1
 
 # Liquid Templates
 
-Routed bundles a Liquid view engine so you can keep HTML in template files, pass data from handlers, and swap engines or directories without changing route code.
+Routed bundles a Liquid view engine so you can keep HTML in template files, pass data from handlers, and swap engines or directories without changing route code. If `view.engine` is omitted or unrecognised, Routed falls back to Liquid.
 
 ## Configuration
 
@@ -49,7 +49,7 @@ final engine = Engine(
 await engine.initialize();
 ```
 
-The `directory` is resolved relative to the selected disk (set it to an empty string to render from the disk root). During development set `view.cache: false` to reload templates on each request; in production prefer `true` for performance. When both a disk and directory are configured, template lookups resolve to `<disk root>/<directory>`. To swap engines or point Liquid at a different file system at runtime—without changing route code—call `engine.useViewEngine`:
+The `directory` is resolved relative to the selected disk (set it to an empty string to render from the disk root). The default directory is `views`, but some templates (including the web scaffold) set it to `templates`. During development set `view.cache: false` to reload templates on each request; in production prefer `true` for performance. When both a disk and directory are configured, template lookups resolve to `<disk root>/<directory>`. To swap engines or point Liquid at a different file system at runtime—without changing route code—call `engine.useViewEngine`:
 
 ```dart
 engine.useViewEngine(

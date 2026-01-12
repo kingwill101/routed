@@ -253,13 +253,13 @@ if (ctx.sessionAge > maxSessionAge ||
 ## Implementation Details
 
 ### Security Middleware Order
-The security features are applied in this order:
+The security provider inserts middleware in this order (request-size limits are enforced before middleware when `security.max_request_size` is set):
 
-1. Request size limits
-2. CORS headers
+1. Trusted proxies
+2. IP filters
 3. Security headers
 4. CSRF protection
-5. Session handling
+5. Request size middleware
 
 ### IP Resolution Logic
 Client IP resolution follows this order:
