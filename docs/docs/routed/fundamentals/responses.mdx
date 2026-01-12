@@ -70,6 +70,18 @@ ctx.data('application/octet-stream', bytes); // arbitrary bytes
 ctx.data('text/csv; charset=utf-8', csvBytes); // specify charset for text formats
 ```
 
+## Renderers
+
+The helpers above are small wrappers around `Render` implementations in `packages/routed/lib/src/render/*`. If you need explicit control, call `ctx.render` with a renderer instance or build a custom `Render` subclass.
+
+```dart
+import 'package:routed/src/render/json_render.dart';
+
+router.get('/status', (ctx) {
+  ctx.render(HttpStatus.ok, JsonRender({'status': 'ok'}));
+});
+```
+
 ## Files and static assets
 
 Avoid resolving arbitrary absolute paths; prefer managed disks or known directories and use fileAttachment for user downloads to set Content-Disposition safely.

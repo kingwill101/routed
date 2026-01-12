@@ -151,3 +151,7 @@ manager.register(MarkdownViewEngine());
 ```
 
 After registration you can call `ctx.template(templateName: 'guide.md')` and Routed will route the request to the matching engine based on file extension. Mix and match engines by registering each with the manager before serving requests.
+
+### View engine manager
+
+`ViewEngineManager` routes `render` and `renderFile` calls based on the file extension of the template name. If no engine matches the extension, it throws an exception immediately so you can catch misconfigured template names during development.
