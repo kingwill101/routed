@@ -9,7 +9,6 @@ import 'package:routed/src/context/context.dart';
 import 'package:routed/src/contracts/contracts.dart' show Config;
 import 'package:routed/src/engine/config.dart';
 import 'package:routed/src/engine/engine.dart';
-import 'package:routed/src/engine/events/route_cache.dart';
 import 'package:routed/src/engine/middleware_registry.dart';
 import 'package:routed/src/events/event_manager.dart';
 import 'package:routed/src/file_handler.dart';

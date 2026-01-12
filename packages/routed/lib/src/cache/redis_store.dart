@@ -128,8 +128,9 @@ class RedisStore extends TaggableStore implements Store, LockProvider {
   }
 
   Future<dynamic> _send(List<dynamic> args) async {
-    if (_sendOverride != null) {
-      return _sendOverride!(args);
+    final sendOverride = _sendOverride;
+    if (sendOverride != null) {
+      return sendOverride(args);
     }
     final cmd = await _ensureCommand();
     try {

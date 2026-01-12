@@ -557,8 +557,8 @@ class _TestRedisCommand extends Command {
   final RedisConnection connection;
   final FutureOr<dynamic> Function(List<dynamic>) onSend;
 
-  // ignore: non_constant_identifier_names
   @override
+  // ignore: non_constant_identifier_names
   Future<dynamic> send_object(Object obj) {
     final args = obj is List ? List<dynamic>.from(obj) : <dynamic>[obj];
     return Future.sync(() => onSend(args));
