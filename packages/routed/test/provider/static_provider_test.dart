@@ -1,6 +1,8 @@
 import 'package:file/file.dart';
 import 'package:file/memory.dart';
 import 'package:routed/routed.dart';
+import 'package:routed_testing/routed_testing.dart';
+import 'package:server_testing/server_testing.dart';
 import 'package:test/test.dart';
 import '../test_engine.dart';
 
@@ -202,6 +204,45 @@ void main() {
 
       final global = engine.appConfig.get('http.middleware.global') as List;
       expect(global, contains('routed.static.assets'));
+    });
+
+    test('serves mounted directories via static assets provider', () async {
+      final mountDir = fs.directory(fs.path.join(tempDir.path, 'public'))
+        ..createSync(recursive: true);
+      mountDir.childFile('hello.txt').writeAsStringSync('hello from provider');
+
+      final engine = testEngine(
+        config: EngineConfig(fileSystem: fs),
+        fileSystem: fs,
+        configItems: {
+          'storage': {
+            'default': 'assets',
+            'disks': {
+              'assets': {
+                'driver': 'local',
+                'root': tempDir.path,
+                'file_system': fs,
+              },
+            },
+          },
+          'static': {
+            'enabled': true,
+            'mounts': [
+              {'route': '/assets', 'disk': 'assets', 'path': 'public'},
+            ],
+          },
+        },
+      );
+      addTearDown(() async => await engine.close());
+      await engine.initialize();
+
+      final client = TestClient(RoutedRequestHandler(engine));
+      addTearDown(() async => await client.close());
+
+      final response = await client.get('/assets/hello.txt');
+      response
+        ..assertStatus(200)
+        ..assertBodyEquals('hello from provider');
     });
   });
 }

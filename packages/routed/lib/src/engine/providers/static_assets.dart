@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:io';
 
 import 'package:file/file.dart' as file;
 import 'package:file/local.dart' as local;
@@ -7,6 +8,7 @@ import 'package:routed/src/container/container.dart';
 import 'package:routed/src/context/context.dart';
 import 'package:routed/src/contracts/contracts.dart' show Config;
 import 'package:routed/src/engine/config.dart';
+import 'package:routed/src/engine/engine.dart';
 import 'package:routed/src/engine/middleware_registry.dart';
 import 'package:routed/src/file_handler.dart';
 import 'package:routed/src/provider/provider.dart';
@@ -21,6 +23,7 @@ class StaticAssetsServiceProvider extends ServiceProvider
   List<_StaticMount> _mounts = const [];
   late file.FileSystem _fallbackFileSystem;
   StorageManager? _storageManager;
+  final Set<String> _registeredRouteNames = <String>{};
   static const StaticAssetsConfigSpec spec = StaticAssetsConfigSpec();
 
   @override
@@ -86,12 +89,14 @@ class StaticAssetsServiceProvider extends ServiceProvider
       _storageManager = container.get<StorageManager>();
     }
 
-    _applyConfig(container.get<Config>());
+    final engine = container.has<Engine>() ? container.get<Engine>() : null;
+    _applyConfig(container.get<Config>(), engine: engine);
   }
 
   @override
   Future<void> onConfigReload(Container container, Config config) async {
-    _applyConfig(config);
+    final engine = container.has<Engine>() ? container.get<Engine>() : null;
+    _applyConfig(config, engine: engine);
   }
 
   Middleware get _staticMiddleware {
@@ -117,7 +122,7 @@ class StaticAssetsServiceProvider extends ServiceProvider
     };
   }
 
-  void _applyConfig(Config config) {
+  void _applyConfig(Config config, {Engine? engine}) {
     final resolved = spec.resolve(config);
     final mounts = <_StaticMount>[];
     for (final mount in resolved.mounts) {
@@ -137,6 +142,52 @@ class StaticAssetsServiceProvider extends ServiceProvider
 
     _enabled = resolved.enabled && deduped.isNotEmpty;
     _mounts = deduped.values.toList(growable: false);
+
+    if (engine != null) {
+      _registerRoutes(engine);
+    }
+  }
+
+  void _registerRoutes(Engine engine) {
+    final router = engine.defaultRouter;
+    router.routes.removeWhere((route) {
+      final name = route.name;
+      return name != null && _registeredRouteNames.contains(name);
+    });
+    _registeredRouteNames.clear();
+
+    if (!_enabled) {
+      return;
+    }
+
+    for (final mount in _mounts) {
+      final pattern = mount.route == '/'
+          ? '/{*filepath}'
+          : '${mount.route}/{*filepath}';
+      final constraints = <String, dynamic>{
+        'staticMount': (HttpRequest request) {
+          return mount.canServeSync(request.uri.path);
+        },
+      };
+      final handler = (EngineContext ctx) async {
+        final served = await mount.tryServe(ctx, ctx.request.uri.path);
+        if (!served && !ctx.response.isClosed) {
+          ctx.abortWithStatus(
+            HttpStatus.notFound,
+            ctx.method == 'HEAD' ? '' : 'Not Found',
+          );
+        }
+        return ctx.response;
+      };
+      final baseName = 'routed.static.mount:${mount.route}';
+      router.get(pattern, handler, constraints: constraints).name(baseName);
+      router
+          .head(pattern, handler, constraints: constraints)
+          .name('$baseName.head');
+      _registeredRouteNames
+        ..add(baseName)
+        ..add('$baseName.head');
+    }
   }
 }
 
@@ -257,6 +308,36 @@ class _StaticMount {
     return true;
   }
 
+  bool canServeSync(String requestPath) {
+    final pathContext = _dir.fileSystem.path;
+    final match = _match(requestPath);
+    if (match == null) {
+      return false;
+    }
+
+    final relative = match.relativePath;
+    final isDirectoryRequest = match.isDirectory;
+
+    if (isDirectoryRequest && indexFile != null) {
+      final indexTarget = relative.isEmpty
+          ? indexFile!
+          : pathContext.join(relative, indexFile!);
+      if (_entityExistsSync(indexTarget)) {
+        return true;
+      }
+    }
+
+    if (relative.isEmpty) {
+      return _listDirectories;
+    }
+
+    if (!_entityExistsSync(relative)) {
+      return isDirectoryRequest && _listDirectories;
+    }
+
+    return true;
+  }
+
   _MatchResult? _match(String path) {
     if (!path.startsWith('/')) {
       path = '/$path';
@@ -295,6 +376,18 @@ class _StaticMount {
         : _dir.fileSystem.path.join(_rootPath, relativePath);
     try {
       final stat = await _dir.fileSystem.stat(fullPath);
+      return stat.type != file.FileSystemEntityType.notFound;
+    } catch (_) {
+      return false;
+    }
+  }
+
+  bool _entityExistsSync(String relativePath) {
+    final fullPath = relativePath.isEmpty
+        ? _rootPath
+        : _dir.fileSystem.path.join(_rootPath, relativePath);
+    try {
+      final stat = _dir.fileSystem.statSync(fullPath);
       return stat.type != file.FileSystemEntityType.notFound;
     } catch (_) {
       return false;
