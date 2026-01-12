@@ -45,7 +45,7 @@ Launches a development server with hot-reload support. Highlights:
 - Restarts the process automatically when `--bootstrap=false` (or `--no-bootstrap`).
 - Accepts additional flags: `--bootstrap-path`, `--install-missing/--no-install-missing`, `--no-warn-missing`, and `--watch` for custom directories.
 
-Use this during development; fall back to `dart run bin/server.dart` for single runs or CI pipelines.
+Use this during development; fall back to `dart run bin/server.dart` for single runs or CI pipelines. If you see "Entry file not found" errors, pass `--entry` to point at your server file.
 
 ## `routes`
 
@@ -106,7 +106,8 @@ class QueueWorkCommand extends Command<void> {
   @override
   Future<void> run() async {
     final target = argResults?.option('queue') ?? 'default';
-    // TODO: start worker for [target].
+    // Insert your worker startup logic here.
+    print('Starting worker for $target');
   }
 }
 

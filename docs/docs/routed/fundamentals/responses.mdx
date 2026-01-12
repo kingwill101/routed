@@ -95,6 +95,17 @@ router.static('/assets', 'public/assets');
 router.staticFile('/favicon.ico', 'public/favicon.ico');
 ```
 
+Prefer configuration-driven mounts for larger apps (or when you want storage disks to back assets):
+
+```yaml title="config/static.yaml"
+static:
+  enabled: true
+  mounts:
+    - route: /assets
+      disk: assets
+      path: ''
+```
+
 ## Redirects, headers, and status codes
 
 ```dart
