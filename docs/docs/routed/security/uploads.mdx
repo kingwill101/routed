@@ -25,27 +25,23 @@ If a request uploads a file with an extension not on the list, the framework rej
 
 ## Pin uploads to a storage directory
 
-Hardened uploads write every accepted file to the directory configured under `uploads.directory`. Point that directory at a storage disk so uploads share permissions, quota configuration, and observability with the rest of your storage layer.
+Hardened uploads write every accepted file to the directory configured under `uploads.directory`. Keep it under your storage root so uploads share permissions, quota configuration, and observability with the rest of your storage layer.
 
 ```yaml title="config/uploads.yaml"
 directory: uploads
-file_permissions: 0o640
-disk: app_uploads
+permissions: 0o640
 ```
 
 ```yaml title="config/storage.yaml"
-disks:
-  app_uploads:
-    driver: local
-    root: /srv/app/uploads
-    visibility: private
+storage:
+  root: /srv/app
 ```
 
 Key behaviours:
 
 - The provider refuses to use system temp directories once an override is supplied.
 - Files inherit the configured permission mask so web servers cannot accidentally serve private content.
-- Static assets or views can reuse the same disk, keeping IO consistent across subsystems.
+- Static assets or views can reuse the same storage root, keeping IO consistent across subsystems.
 
 ## Enforce limits and cleanup
 

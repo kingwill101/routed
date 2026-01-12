@@ -6,7 +6,38 @@ sidebar_position: 22
 
 # Uploads
 
-Uploads are configured via the `uploads.*` namespace and backed by storage disks. Use the uploads provider to enforce size limits, allowed extensions, and storage locations.
+Uploads are controlled via the `uploads.*` namespace and enforced during multipart parsing. Configure limits, allowed extensions, and upload directories in the manifest.
+
+## Configuration
+
+```yaml title="config/uploads.yaml"
+uploads:
+  max_memory: 33554432
+  max_file_size: 10485760
+  max_disk_usage: 33554432
+  allowed_extensions:
+    - jpg
+    - jpeg
+    - png
+    - pdf
+  directory: uploads
+  permissions: 750
+```
+
+## Behavior
+
+- Limits are enforced during multipart parsing; oversized parts are skipped and cleaned up.
+- File names are sanitized and saved under the configured upload directory.
+- When `uploads.directory` is empty, the engine falls back to the temp directory.
+
+## Handling uploads
+
+```dart
+final file = ctx.formFile('avatar');
+if (file != null) {
+  await ctx.saveUploadedFile(file, 'uploads/${file.filename}');
+}
+```
 
 ## Next steps
 

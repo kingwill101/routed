@@ -6,7 +6,44 @@ sidebar_position: 25
 
 # Cache
 
-Routed ships with cache providers and drivers that plug into `cache.*` configuration. Configure stores in your manifest and validate with `routed provider:list --config`.
+Routed ships with cache providers and drivers that plug into `cache.*` configuration. Define stores, pick a default, and use the context helpers to read/write data.
+
+## Configuration
+
+```yaml title="config/cache.yaml"
+cache:
+  default: array
+  prefix: my-app
+  stores:
+    array:
+      driver: array
+    file:
+      driver: file
+      path: storage/cache
+    redis:
+      driver: redis
+      url: redis://localhost:6379/0
+```
+
+## Drivers & options
+
+- `array`: in-memory store, optional `serialize` in programmatic config.
+- `file`: `path`, optional `permission` and `lock_path`.
+- `redis`: `url` or `host`/`port`/`password`/`db`.
+- `null`: no-op store for development.
+
+## Locks & tags
+
+- `CacheLock.block()` retries until acquired or timeout.
+- Tagged caches use `TagSet` and `TaggedCache` for grouped invalidation.
+
+## Context helpers
+
+```dart
+final value = await ctx.rememberCache('key', Duration(minutes: 5), () async {
+  return fetchValue();
+});
+```
 
 ## Next steps
 
