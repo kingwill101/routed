@@ -1,7 +1,6 @@
 import 'package:file/file.dart';
 import 'package:file/local.dart' as local;
 import 'package:liquify/liquify.dart';
-import 'package:path/path.dart' as p;
 import 'package:routed/src/render/html/template_engine.dart';
 
 export 'package:routed/src/view/engines/liquid_engine.dart';
@@ -27,7 +26,7 @@ class LiquidRoot implements Root {
   /// Throws an exception if the file does not exist.
   @override
   Source resolve(String relPath) {
-    final file = fileSystem.file(p.normalize(relPath));
+    final file = fileSystem.file(fileSystem.path.normalize(relPath));
     if (!file.existsSync()) {
       throw Exception('Template file not found: $relPath');
     }
@@ -38,7 +37,7 @@ class LiquidRoot implements Root {
 
   @override
   Future<Source> resolveAsync(String relPath) async {
-    final file = fileSystem.file(p.normalize(relPath));
+    final file = fileSystem.file(fileSystem.path.normalize(relPath));
     if (!await file.exists()) {
       throw Exception('Template file not found: $relPath');
     }
