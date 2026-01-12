@@ -9,7 +9,9 @@ import 'package:routed/src/context/context.dart';
 import 'package:routed/src/contracts/contracts.dart' show Config;
 import 'package:routed/src/engine/config.dart';
 import 'package:routed/src/engine/engine.dart';
+import 'package:routed/src/engine/events/route_cache.dart';
 import 'package:routed/src/engine/middleware_registry.dart';
+import 'package:routed/src/events/event_manager.dart';
 import 'package:routed/src/file_handler.dart';
 import 'package:routed/src/provider/provider.dart';
 import 'package:routed/src/response.dart';
@@ -24,6 +26,7 @@ class StaticAssetsServiceProvider extends ServiceProvider
   List<_StaticMount> _mounts = const [];
   late file.FileSystem _fallbackFileSystem;
   StorageManager? _storageManager;
+  EventManager? _eventManager;
   final Set<String> _registeredRouteNames = <String>{};
   static const StaticAssetsConfigSpec spec = StaticAssetsConfigSpec();
 
@@ -90,14 +93,25 @@ class StaticAssetsServiceProvider extends ServiceProvider
       _storageManager = container.get<StorageManager>();
     }
 
+    if (container.has<EventManager>()) {
+      _eventManager = await container.make<EventManager>();
+    }
+
     final engine = container.has<Engine>() ? container.get<Engine>() : null;
-    _applyConfig(container.get<Config>(), engine: engine);
+    _applyConfig(
+      container.get<Config>(),
+      engine: engine,
+      eventManager: _eventManager,
+    );
   }
 
   @override
   Future<void> onConfigReload(Container container, Config config) async {
+    if (container.has<EventManager>()) {
+      _eventManager = await container.make<EventManager>();
+    }
     final engine = container.has<Engine>() ? container.get<Engine>() : null;
-    _applyConfig(config, engine: engine);
+    _applyConfig(config, engine: engine, eventManager: _eventManager);
   }
 
   Middleware get _staticMiddleware {
@@ -123,7 +137,11 @@ class StaticAssetsServiceProvider extends ServiceProvider
     };
   }
 
-  void _applyConfig(Config config, {Engine? engine}) {
+  void _applyConfig(
+    Config config, {
+    Engine? engine,
+    EventManager? eventManager,
+  }) {
     final resolved = spec.resolve(config);
     final mounts = <_StaticMount>[];
     for (final mount in resolved.mounts) {
@@ -146,6 +164,7 @@ class StaticAssetsServiceProvider extends ServiceProvider
 
     if (engine != null) {
       _registerRoutes(engine);
+      eventManager?.publish(RouteCacheInvalidatedEvent());
     }
   }
 
@@ -156,6 +175,7 @@ class StaticAssetsServiceProvider extends ServiceProvider
       return name != null && _registeredRouteNames.contains(name);
     });
     _registeredRouteNames.clear();
+    engine.invalidateRoutes();
 
     if (!_enabled) {
       return;
