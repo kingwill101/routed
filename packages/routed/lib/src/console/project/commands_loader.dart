@@ -250,7 +250,7 @@ class ProjectCommandsLoader {
       throw UsageException(errorMessage, usage);
     }
 
-    final decoded = jsonDecode(result.stdout) as Map<String, Object?>;
+    final decoded = _decodeDescribeOutput(result.stdout, usage);
     final commands =
         (decoded['commands'] as List<dynamic>? ?? const <dynamic>[])
             .map(
@@ -327,6 +327,44 @@ class ProjectCommandsLoader {
       existingNames.add(command.name);
       existingNames.addAll(command.aliases);
     }
+  }
+
+  Map<String, Object?> _decodeDescribeOutput(String output, String usage) {
+    final trimmed = output.trim();
+    if (trimmed.isEmpty) {
+      throw UsageException('Project command runner produced no output.', usage);
+    }
+
+    Map<String, Object?>? decoded;
+    try {
+      final json = jsonDecode(trimmed);
+      if (json is Map<String, Object?>) {
+        decoded = json;
+      }
+    } on FormatException {
+      // Fall back to extracting the last JSON object from mixed output.
+    }
+
+    if (decoded == null) {
+      final start = trimmed.lastIndexOf('{');
+      final end = trimmed.lastIndexOf('}');
+      if (start != -1 && end != -1 && end > start) {
+        final slice = trimmed.substring(start, end + 1);
+        final json = jsonDecode(slice);
+        if (json is Map<String, Object?>) {
+          decoded = json;
+        }
+      }
+    }
+
+    if (decoded == null) {
+      throw UsageException(
+        'Failed to parse project command metadata output.',
+        usage,
+      );
+    }
+
+    return decoded;
   }
 
   Future<_ProcessResult> _runDescribe(fs.Directory projectRoot) async {
