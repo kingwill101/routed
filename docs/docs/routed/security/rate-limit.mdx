@@ -43,7 +43,7 @@ stores:
     url: redis://localhost:6379/2
 ```
 
-To give the limiter its own store, set `rate_limit.store` to the cache store name.
+The limiter always uses a cache store. Set `rate_limit.store` to the cache store name (or rely on `cache.default`).
 
 ## Define policies
 
@@ -56,7 +56,6 @@ Policies live in `config/rate-limiting.yaml` (or wherever you prefer) and are me
 ```yaml title="config/rate-limiting.yaml"
 rate_limit:
   enabled: true
-  backend: redis         # memory or redis – must have a corresponding cache store
   store: redis           # optional: overrides cache.default
   failover: allow        # allow | block | local when Redis is unavailable
   policies:

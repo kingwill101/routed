@@ -56,7 +56,7 @@ final engine = Engine(
       // Type sniffing protection
       xContentTypeOptionsNoSniff: true,
       
-      // Request size limit
+      // Request size limit (0 disables the guardrail)
       maxRequestSize: 10 * 1024 * 1024 // 10MB
     )
   )
@@ -64,7 +64,7 @@ final engine = Engine(
 ```
 
 ### CSRF Protection
-Use the built-in token-based protection. Pair it with `SameSite` and `HttpOnly` cookies; see [Sessions](/docs/routed/state/sessions).
+Use the built-in token-based protection. CSRF requires sessions (the middleware issues tokens on safe methods and stores them in the session). Pair it with `SameSite` and `HttpOnly` cookies; see [Sessions](/docs/routed/state/sessions).
 ```dart
 final engine = Engine(
   config: EngineConfig(
@@ -78,7 +78,7 @@ final engine = Engine(
 
 ### CORS Configuration
 
-Configure CORS via the manifest so defaults survive restarts:
+Configure CORS via the manifest so defaults survive restarts (you can place the block under `cors` or `security.cors`; the provider merges both):
 
 ```yaml title="config/http.yaml"
 cors:

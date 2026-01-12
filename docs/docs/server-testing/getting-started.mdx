@@ -75,7 +75,7 @@ If your framework is not covered, implement `RequestHandler` yourself—see [Han
 
 ## 4. Write Your First Test
 
-`serverTest` is a thin wrapper around `test()` that wires up a `TestClient`, passes the handler into your callback, and disposes everything for you.
+`serverTest` is a thin wrapper around `test()` that wires up a `TestClient`, passes the handler into your callback, and disposes everything for you. It accepts the same `timeout`, `skip`, `tags`, `retry`, and `onPlatform` options you can pass to `test()`.
 
 ### Example with `IoRequestHandler`
 

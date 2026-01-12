@@ -23,6 +23,8 @@ session:
   http_only: true
   same_site: lax                    # lax, strict, none, or null
   partitioned: ${SESSION_PARTITIONED_COOKIE:false}
+  app_key: "{{ env.APP_KEY }}"     # overrides app.key for session encryption
+  secret: "{{ env.SESSION_SECRET | default: '' }}"
 
   files: storage/framework/sessions # file driver storage path
   store: session                    # cache-backed drivers resolve via cache.stores

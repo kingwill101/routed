@@ -282,11 +282,10 @@ The routing provider reads defaults from the `routing.*` namespace. Configure `r
 routing:
   redirect_trailing_slash: true
   handle_method_not_allowed: true
-  remove_extra_slash: false
-
-http:
-  features:
-    routing: { enabled: true }
+  default_options:
+    cache_max_age: 300
+  etag:
+    strategy: weak
 ```
 
 At runtime you can still override behaviour with `EngineConfig` or helper options (`withRedirectTrailingSlash`, `withHandleMethodNotAllowed`). Run `dart run routed provider:list --config` to confirm the routing provider is active and to review the merged defaults.

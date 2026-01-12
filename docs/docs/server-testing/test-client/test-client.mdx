@@ -36,10 +36,11 @@ The client keeps a reference to the `RequestHandler`. When the client is closed 
 
 ## Request Helpers
 
- - `get`, `post`, `put`, `patch`, `delete`, `head`
+ - `get`, `post`, `put`, `patch`, `delete`, `head`, `options`
  - JSON variants: `getJson`, `postJson`, `putJson`, `patchJson`, `deleteJson`
  - Multipart builder: `multipart('/upload', (builder) { ... })`
  - Low-level custom payload: pass a `String`, bytes, `Map`, or `List` as the `body` argument
+- `request` for custom method/URL combinations
  - Headers: supply `Map<String, List<String>>` via the optional `headers` parameter
  - Cookies: populate the `cookie` header manually or rely on server-generated `Set-Cookie` headers and capture from the `TestResponse`
 
