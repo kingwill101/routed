@@ -7,9 +7,10 @@ void main() {
   group('LiquidRoot', () {
     test('resolves existing templates', () {
       final fileSystem = MemoryFileSystem();
-      final file = fileSystem.file('/templates/welcome.liquid')
-        ..createSync(recursive: true)
-        ..writeAsStringSync('Hello');
+      final file =
+          fileSystem.file(fileSystem.path.join('templates', 'welcome.liquid'))
+            ..createSync(recursive: true)
+            ..writeAsStringSync('Hello');
 
       final root = LiquidRoot(fileSystem: fileSystem);
       final source = root.resolve(file.path);
@@ -25,9 +26,10 @@ void main() {
 
     test('resolves templates asynchronously', () async {
       final fileSystem = MemoryFileSystem();
-      final file = fileSystem.file('/templates/async.liquid')
-        ..createSync(recursive: true)
-        ..writeAsStringSync('Hi');
+      final file =
+          fileSystem.file(fileSystem.path.join('templates', 'async.liquid'))
+            ..createSync(recursive: true)
+            ..writeAsStringSync('Hi');
 
       final root = LiquidRoot(fileSystem: fileSystem);
       final source = await root.resolveAsync(file.path);
