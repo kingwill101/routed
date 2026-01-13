@@ -166,22 +166,10 @@ class ViewServiceProvider extends ServiceProvider with ProvidesDefaultConfig {
       case '':
       case 'liquid':
         final root = LiquidRoot(fileSystem: fs);
-        _setCurrentDirectory(fs, directory);
-        return LiquidViewEngine(root: root);
+        return LiquidViewEngine(root: root, directory: directory);
       default:
         return fallback ?? LiquidViewEngine();
     }
-  }
-
-  void _setCurrentDirectory(file.FileSystem fs, String directory) {
-    if (directory.isEmpty) return;
-    final dir = fs.directory(directory);
-    if (!dir.existsSync()) {
-      return;
-    }
-    try {
-      fs.currentDirectory = dir.path;
-    } catch (_) {}
   }
 }
 

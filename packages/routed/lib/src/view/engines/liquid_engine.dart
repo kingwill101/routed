@@ -24,9 +24,10 @@ class LiquidViewEngine implements ViewEngine {
     : _root = root ?? LiquidRoot() {
     if (directory != null) {
       if (_root is LiquidRoot) {
-        (_root).fileSystem.currentDirectory = directory;
+        (_root as LiquidRoot).setBaseDirectory(directory);
       } else if (_root is liquid.FileSystemRoot) {
-        (_root).fileSystem.currentDirectory = directory;
+        (_root as liquid.FileSystemRoot).fileSystem.currentDirectory =
+            directory;
       }
     }
   }
