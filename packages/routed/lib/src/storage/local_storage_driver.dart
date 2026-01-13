@@ -1,3 +1,5 @@
+import 'dart:io' as io;
+
 import 'package:file/file.dart' as file;
 import 'package:file/local.dart' as local;
 import 'package:routed/src/config/specs/storage_drivers.dart';
@@ -78,10 +80,15 @@ class LocalStorageDisk implements StorageDisk {
 
   static String _normalizeRoot(String root, file.FileSystem fileSystem) {
     final pathContext = fileSystem.path;
-    final currentDir = pathContext.normalize(fileSystem.currentDirectory.path);
-    final resolved = pathContext.normalize(
-      pathContext.isAbsolute(root) ? root : pathContext.join(currentDir, root),
-    );
+    if (pathContext.isAbsolute(root)) {
+      return pathContext.normalize(root);
+    }
+
+    final envPwd = io.Platform.environment['PWD'];
+    final base = (envPwd != null && envPwd.isNotEmpty)
+        ? envPwd
+        : fileSystem.currentDirectory.path;
+    final resolved = pathContext.normalize(pathContext.join(base, root));
     return resolved;
   }
 
