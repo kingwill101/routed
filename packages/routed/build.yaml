@@ -1,0 +1,24 @@
+targets:
+  $default:
+    sources:
+      - "$package$"
+      - "lib/$lib$"
+      - "lib/**"
+      - "bin/**"
+      - "test/**"
+      - "example/**"
+      - "tool/**"
+      - "web/**"
+      - "templates/**"
+    builders:
+      routed|scaffold_template_embed:
+        generate_for:
+          - "$package$"
+
+builders:
+  scaffold_template_embed:
+    import: "package:routed/src/console/create/template_embed_builder.dart"
+    builder_factories: ["scaffoldTemplateEmbedBuilder"]
+    build_extensions: {"$package$": ["lib/src/console/create/templates_embedded.dart"]}
+    auto_apply: root_package
+    build_to: source

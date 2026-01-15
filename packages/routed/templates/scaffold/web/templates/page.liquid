@@ -1,0 +1,59 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>{{ page.title }} - {{ app_title }}</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Fraunces:wght@600;700&family=Space+Grotesk:wght@400;500;600&display=swap"
+      rel="stylesheet"
+    />
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+      tailwind.config = {
+        theme: {
+          extend: {
+            fontFamily: {
+              display: ["Fraunces", "serif"],
+              sans: ["Space Grotesk", "ui-sans-serif", "system-ui"],
+            },
+            colors: {
+              ink: "#1A1A1A",
+              paper: "#F6F3EE",
+              clay: "#E7DFD5",
+              moss: "#2F6B4F",
+              ember: "#C2602D",
+            },
+          },
+        },
+      };
+    </script>
+  </head>
+  <body class="min-h-screen bg-paper text-ink antialiased">
+    <main class="mx-auto max-w-5xl px-6 py-14">
+      <header class="mb-10 space-y-3">
+        <p class="text-xs uppercase tracking-[0.3em] text-ember">Web starter</p>
+        <h1 class="font-display text-4xl md:text-5xl">{{ page.title }}</h1>
+        <p class="text-sm text-ink/60">Served with Routed templates.</p>
+      </header>
+      <nav class="mb-10">
+        <ul class="flex flex-wrap gap-3 text-sm font-semibold uppercase tracking-[0.2em]">
+          {% for item in pages %}
+            <li>
+              <a class="rounded-full border border-ink/10 px-4 py-2 hover:border-ink/40" href="{{ item.slug }}">
+                {{ item.title }}
+              </a>
+            </li>
+          {% endfor %}
+        </ul>
+      </nav>
+      <section class="rounded-3xl border border-ink/10 bg-white/80 p-6 shadow-[0_30px_80px_-60px_rgba(0,0,0,0.4)] md:p-8">
+        <p class="text-base text-ink/80">{{ page.body }}</p>
+        <p class="mt-4 text-xs uppercase tracking-[0.2em] text-ink/60">
+          Edit <code class="rounded bg-clay px-2 py-0.5">templates/page.liquid</code> to customise.
+        </p>
+      </section>
+    </main>
+  </body>
+</html>

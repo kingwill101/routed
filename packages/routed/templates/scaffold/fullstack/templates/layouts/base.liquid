@@ -1,0 +1,47 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>{{ app_title }}</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Fraunces:wght@600;700&family=Space+Grotesk:wght@400;500;600&display=swap"
+      rel="stylesheet"
+    />
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+      tailwind.config = {
+        theme: {
+          extend: {
+            fontFamily: {
+              display: ["Fraunces", "serif"],
+              sans: ["Space Grotesk", "ui-sans-serif", "system-ui"],
+            },
+            colors: {
+              ink: "#1A1A1A",
+              paper: "#F6F3EE",
+              clay: "#E7DFD5",
+              moss: "#2F6B4F",
+              ember: "#C2602D",
+            },
+          },
+        },
+      };
+    </script>
+    <style>
+      .grain {
+        background-image:
+          radial-gradient(circle at 1px 1px, rgba(0, 0, 0, 0.08) 1px, transparent 0);
+        background-size: 24px 24px;
+      }
+    </style>
+  </head>
+  <body class="min-h-screen bg-paper text-ink antialiased">
+    <div class="grain min-h-screen">
+      <main class="mx-auto max-w-4xl px-6 py-12 md:py-16">
+        {% block content %}{% endblock %}
+      </main>
+    </div>
+  </body>
+</html>

@@ -145,13 +145,6 @@ class CreateCommand extends BaseCommand {
         _renderPubspec(packageName, routedVersion, scaffoldTemplate),
       );
 
-      await write(
-        'analysis_options.yaml',
-        'include: package:lints/recommended.yaml\n',
-      );
-
-      await write('.gitignore', _gitignoreTemplate);
-
       await write('README.md', scaffoldTemplate.renderReadme(context));
 
       for (final entry in scaffoldTemplate.fileBuilders.entries) {
@@ -373,22 +366,6 @@ class CreateCommand extends BaseCommand {
     return buffer.toString();
   }
 }
-
-const String _gitignoreTemplate = '''
-.dart_tool/
-.dart_tool/routed/
-.packages
-
-# Build and temporary outputs
-build/
-
-# Environment secrets
-.env
-.env.*
-
-# Generated sources
-lib/generated/
-''';
 
 String _generateAppKey() {
   final random = Random.secure();
