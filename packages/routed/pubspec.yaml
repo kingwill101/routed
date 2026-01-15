@@ -68,5 +68,5 @@ dev_dependencies:
   lints: ^6.0.0
   property_testing: ^0.3.1
   routed_testing: ^0.3.1
-  server_testing: ^0.3.0
+  server_testing: ^0.3.1
   test: ^1.29.0

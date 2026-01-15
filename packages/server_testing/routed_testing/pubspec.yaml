@@ -20,7 +20,7 @@ environment:
 dependencies:
   meta: ^1.17.0
   routed: ^0.3.1
-  server_testing: ^0.3.0
+  server_testing: ^0.3.1
   test: ^1.29.0
 
 dev_dependencies:
