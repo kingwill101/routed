@@ -1,3 +1,4 @@
+@Tags(['real-browser'])
 import 'dart:io';
 
 // ignore_for_file: avoid_print

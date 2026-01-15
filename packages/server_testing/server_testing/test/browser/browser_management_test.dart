@@ -1,3 +1,4 @@
+@Tags(['real-browser'])
 import 'package:server_testing/server_testing.dart';
 
 import '_support/real_browser_bootstrap.dart';
