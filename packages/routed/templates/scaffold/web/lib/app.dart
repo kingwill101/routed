@@ -9,9 +9,7 @@ Future<Engine> createEngine() async {
     ),
   );
 
-  engine.useViewEngine(
-    LiquidViewEngine(directory: 'templates'),
-  );
+  engine.useViewEngine(LiquidViewEngine(directory: 'templates'));
 
   engine.static('/assets', 'public');
 

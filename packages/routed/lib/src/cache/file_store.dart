@@ -67,7 +67,9 @@ class FileStore implements Store, LockProvider {
     if (!directory.existsSync()) {
       return keys;
     }
-    final List<FileSystemEntity> entities = await directory.list(recursive: true).toList();
+    final List<FileSystemEntity> entities = await directory
+        .list(recursive: true)
+        .toList();
 
     for (final entity in entities) {
       if (entity is File) {

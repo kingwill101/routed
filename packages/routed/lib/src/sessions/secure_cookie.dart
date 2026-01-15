@@ -243,11 +243,7 @@ class SecureCookie {
     return List<int>.generate(length, (_) => rng.nextInt(256));
   }
 
-  List<int> _encryptAesGcm(
-    Uint8List key,
-    List<int> iv,
-    List<int> plaintext,
-  ) {
+  List<int> _encryptAesGcm(Uint8List key, List<int> iv, List<int> plaintext) {
     final cipher = GCMBlockCipher(AESEngine());
     final params = AEADParameters(
       KeyParameter(key),
@@ -259,11 +255,7 @@ class SecureCookie {
     return cipher.process(Uint8List.fromList(plaintext));
   }
 
-  String _decryptAesGcm(
-    Uint8List key,
-    List<int> iv,
-    List<int> ciphertext,
-  ) {
+  String _decryptAesGcm(Uint8List key, List<int> iv, List<int> ciphertext) {
     final cipher = GCMBlockCipher(AESEngine());
     final params = AEADParameters(
       KeyParameter(key),

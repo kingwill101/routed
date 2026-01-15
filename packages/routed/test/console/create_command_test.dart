@@ -260,27 +260,19 @@ void main() {
       const templates = <String, _TemplateExpectation>{
         'basic': _TemplateExpectation(
           expectedFiles: ['lib/app.dart', 'config/http.yaml'],
-          contentChecks: {
-            'lib/app.dart': 'Welcome to',
-          },
+          contentChecks: {'lib/app.dart': 'Welcome to'},
         ),
         'api': _TemplateExpectation(
           expectedFiles: ['test/api_test.dart'],
-          contentChecks: {
-            'lib/app.dart': "router.get('/users'",
-          },
+          contentChecks: {'lib/app.dart': "router.get('/users'"},
         ),
         'web': _TemplateExpectation(
           expectedFiles: ['templates/home.liquid'],
-          contentChecks: {
-            'templates/home.liquid': 'cdn.tailwindcss.com',
-          },
+          contentChecks: {'templates/home.liquid': 'cdn.tailwindcss.com'},
         ),
         'fullstack': _TemplateExpectation(
           expectedFiles: ['templates/todos.liquid'],
-          contentChecks: {
-            'lib/app.dart': "templateName: 'todos.liquid'",
-          },
+          contentChecks: {'lib/app.dart': "templateName: 'todos.liquid'"},
         ),
       };
 

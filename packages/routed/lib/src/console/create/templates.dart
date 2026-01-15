@@ -128,7 +128,8 @@ Map<String, FileBuilder> _buildFileBuilders(String templateId) {
   }
 
   return sources.map(
-    (dest, source) => MapEntry(dest, (context) => _renderTemplateFile(source, context)),
+    (dest, source) =>
+        MapEntry(dest, (context) => _renderTemplateFile(source, context)),
   );
 }
 
@@ -140,8 +141,7 @@ FileBuilder _resolveReadme(String templateId) {
   return _defaultReadme;
 }
 
-String _defaultReadme(TemplateContext context) =>
-    '# ${context.humanName}\n';
+String _defaultReadme(TemplateContext context) => '# ${context.humanName}\n';
 
 String _renderTemplateFile(String sourcePath, TemplateContext context) {
   final bytes = scaffoldTemplateBytes[sourcePath];

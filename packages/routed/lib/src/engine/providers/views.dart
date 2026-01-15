@@ -145,11 +145,7 @@ class ViewServiceProvider extends ServiceProvider with ProvidesDefaultConfig {
     return _normalizePath(fs, pathValue, config);
   }
 
-  String _normalizePath(
-    file.FileSystem fs,
-    String value,
-    Config config,
-  ) {
+  String _normalizePath(file.FileSystem fs, String value, Config config) {
     final pathContext = fs.path;
     final appRoot = config.has('app.root')
         ? config.get<Object?>('app.root')
@@ -209,7 +205,6 @@ class _ScopedFileSystem extends file.ForwardingFileSystem {
     }
     throw ArgumentError('Invalid type for "path": ${path?.runtimeType}');
   }
-
 }
 
 String _normalizePath(file.FileSystem fs, String value) {
