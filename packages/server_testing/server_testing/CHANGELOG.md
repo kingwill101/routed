@@ -1,6 +1,7 @@
 ## 0.3.1
 
 - Synced server_testing dependency constraints.
+- Tagged real browser tests for exclusion from fast CI runs.
 
 ## 0.3.0
 

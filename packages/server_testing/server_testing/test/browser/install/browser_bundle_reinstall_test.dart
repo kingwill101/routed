@@ -37,5 +37,5 @@ void main() {
       },
       timeout: const Timeout(Duration(minutes: 3)),
     );
-  });
+  }, tags: ['real-browser']);
 }
