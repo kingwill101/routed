@@ -6,17 +6,15 @@ void main() {
   bool hasOverride(String browserName) =>
       TestBootstrap.getBinaryOverride(browserName) != null;
 
-  group(
-    'Browser Management',
-    () {
-      setUpAll(() async {
-        // Initialize the browser testing environment before any tests
-        await realBrowserBootstrap(
-          BrowserConfig(verbose: true, autoInstall: true),
-        );
-      });
+  group('Browser Management', () {
+    setUpAll(() async {
+      // Initialize the browser testing environment before any tests
+      await realBrowserBootstrap(
+        BrowserConfig(verbose: true, autoInstall: true),
+      );
+    });
 
-      tearDownAll(realBrowserCleanup);
+    tearDownAll(realBrowserCleanup);
 
     group('listAvailableBrowsers', () {
       test('should return a list of available browsers', () async {
@@ -407,7 +405,5 @@ void main() {
         print('Error handling structure verified');
       });
     });
-    },
-    tags: ['real-browser'],
-  );
+  }, tags: ['real-browser']);
 }

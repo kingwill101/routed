@@ -35,19 +35,17 @@ class LoginPage extends Page {
 }
 
 void main() {
-  group(
-    'Page + Component real browser',
-    () {
-      late TestClient client;
-      late String baseUrl;
+  group('Page + Component real browser', () {
+    late TestClient client;
+    late String baseUrl;
 
-      // Minimal server that renders a simple login page using dart:io
-      Future<void> handleRequest(HttpRequest request) async {
-        if (request.uri.path == '/' && request.method == 'GET') {
-          request.response
-            ..statusCode = HttpStatus.ok
-            ..headers.contentType = ContentType.html
-            ..write('''
+    // Minimal server that renders a simple login page using dart:io
+    Future<void> handleRequest(HttpRequest request) async {
+      if (request.uri.path == '/' && request.method == 'GET') {
+        request.response
+          ..statusCode = HttpStatus.ok
+          ..headers.contentType = ContentType.html
+          ..write('''
       <html><head><title>Login</title></head>
       <body>
         <div id="login">
@@ -68,47 +66,45 @@ void main() {
       </body>
       </html>
       ''');
-          await request.response.close();
-        } else {
-          request.response
-            ..statusCode = HttpStatus.notFound
-            ..write('Not Found');
-          await request.response.close();
-        }
+        await request.response.close();
+      } else {
+        request.response
+          ..statusCode = HttpStatus.notFound
+          ..write('Not Found');
+        await request.response.close();
       }
+    }
 
-      setUpAll(() async {
-        // Bootstrap the browser environment once
-        await realBrowserBootstrap(
-          BrowserConfig(
-            browserName: 'firefox',
-            headless: true,
-            baseUrl: 'http://127.0.0.1:0',
-            // will be overridden with ephemeral server port
-            autoScreenshots: false,
-          ),
-        );
+    setUpAll(() async {
+      // Bootstrap the browser environment once
+      await realBrowserBootstrap(
+        BrowserConfig(
+          browserName: 'firefox',
+          headless: true,
+          baseUrl: 'http://127.0.0.1:0',
+          // will be overridden with ephemeral server port
+          autoScreenshots: false,
+        ),
+      );
 
-        // Start ephemeral HTTP server and extract baseUrl before launching browser
-        final handler = IoRequestHandler(handleRequest);
-        client = TestClient.ephemeralServer(handler);
-        baseUrl = await client.baseUrlFuture;
-      });
+      // Start ephemeral HTTP server and extract baseUrl before launching browser
+      final handler = IoRequestHandler(handleRequest);
+      client = TestClient.ephemeralServer(handler);
+      baseUrl = await client.baseUrlFuture;
+    });
 
-      tearDownAll(() async {
-        await client.close();
-        await realBrowserCleanup();
-      });
+    tearDownAll(() async {
+      await client.close();
+      await realBrowserCleanup();
+    });
 
-      browserTest('login flow works using Page + Component', (browser) async {
-        final page = LoginPage(browser);
-        await browser.visit(baseUrl);
-        await browser.assertTitle('Login');
-        await page.form.fill('user@example.com', 'secret');
-        await page.form.submitForm();
-        await browser.assertTitle('Dashboard');
-      });
-    },
-    tags: ['real-browser'],
-  );
+    browserTest('login flow works using Page + Component', (browser) async {
+      final page = LoginPage(browser);
+      await browser.visit(baseUrl);
+      await browser.assertTitle('Login');
+      await page.form.fill('user@example.com', 'secret');
+      await page.form.submitForm();
+      await browser.assertTitle('Dashboard');
+    });
+  }, tags: ['real-browser']);
 }
