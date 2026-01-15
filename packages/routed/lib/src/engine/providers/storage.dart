@@ -213,12 +213,12 @@ class StorageServiceProvider extends ServiceProvider
               : defaultFs;
           final storageRootForDisk =
               storageRoot.isNotEmpty && diskFs != defaultFs
-                  ? _normalizeStorageRoot(
-                      resolveStorageRootValue(resolvedConfig.root),
-                      config,
-                      diskFs,
-                    )
-                  : storageRoot;
+              ? _normalizeStorageRoot(
+                  resolveStorageRootValue(resolvedConfig.root),
+                  config,
+                  diskFs,
+                )
+              : storageRoot;
           final specContext = StorageDriverSpecContext(
             diskName: name,
             pathBase: 'storage.disks.$name',
@@ -296,11 +296,7 @@ class StorageServiceProvider extends ServiceProvider
   }
 
   /// {@macro storage_provider_resolution}
-  String _normalizeStorageRoot(
-    String root,
-    Config config,
-    file.FileSystem fs,
-  ) {
+  String _normalizeStorageRoot(String root, Config config, file.FileSystem fs) {
     final trimmed = root.trim();
     if (trimmed.isEmpty) {
       return trimmed;
@@ -321,17 +317,15 @@ class StorageServiceProvider extends ServiceProvider
         ? config.get<Object?>('app.root')
         : null;
     if (appRoot is String && appRoot.trim().isNotEmpty) {
-      return pathContext.normalize(pathContext.join(appRoot.trim(), normalized));
+      return pathContext.normalize(
+        pathContext.join(appRoot.trim(), normalized),
+      );
     }
     return normalized;
   }
 
   /// {@macro storage_provider_resolution}
-  String? _normalizeDiskRoot(
-    Object? root,
-    Config config,
-    file.FileSystem fs,
-  ) {
+  String? _normalizeDiskRoot(Object? root, Config config, file.FileSystem fs) {
     if (root is! String) {
       return null;
     }
