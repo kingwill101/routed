@@ -1,9 +1,12 @@
 import 'dart:convert';
+
 import 'package:file/file.dart';
 import 'package:file/local.dart';
-import 'package:routed/src/contracts/cache/store.dart';
-import 'package:routed/src/contracts/cache/lock_provider.dart';
 import 'package:routed/src/cache/file_lock.dart';
+import 'package:routed/src/contracts/cache/lock_provider.dart';
+import 'package:routed/src/contracts/cache/store.dart';
+import 'package:routed/src/crypto/crypto.dart';
+
 import '../contracts/cache/lock.dart';
 
 /// Implements the [Store] and [LockProvider] contracts using files for storage.
@@ -56,27 +59,31 @@ class FileStore implements Store, LockProvider {
 
   /// Retrieves all keys from the store.
   ///
-  /// This method reads all files in the directory and returns their keys.
+  /// This method reads all cache files and extracts the original keys
+  /// stored within each file's metadata.
   @override
   Future<List<String>> getAllKeys() async {
     final List<String> keys = [];
-    final List<FileSystemEntity> entities = directory.listSync(recursive: true);
-    final List<Future<void>> futures = [];
+    if (!directory.existsSync()) {
+      return keys;
+    }
+    final List<FileSystemEntity> entities = await directory.list(recursive: true).toList();
 
     for (final entity in entities) {
       if (entity is File) {
-        futures.add(
-          Future(() async {
-            final key = entity.path
-                .replaceFirst('${directory.path}/', '')
-                .replaceAll('/', '');
+        try {
+          final contents = await entity.readAsString();
+          final data = _deserialize(contents);
+          final key = data['key'];
+          if (key is String && key.isNotEmpty) {
             keys.add(key);
-          }),
-        );
+          }
+        } catch (_) {
+          // Skip files that can't be read or parsed
+        }
       }
     }
 
-    await Future.wait(futures);
     return keys;
   }
 
@@ -91,7 +98,7 @@ class FileStore implements Store, LockProvider {
     final expiresAt = _calculateExpiryTime(seconds);
     final file = fileSystem.file(path);
     file.writeAsStringSync(
-      _serialize({'value': value, 'expiresAt': expiresAt}),
+      _serialize({'key': key, 'value': value, 'expiresAt': expiresAt}),
     );
     if (file.existsSync()) {
       try {
@@ -296,10 +303,19 @@ class FileStore implements Store, LockProvider {
 
   /// Generates the file path for a given cache key.
   ///
+  /// Uses SHA-1 hash of the key to create a balanced directory structure
+  /// with 2 levels of 2-character directories, followed by the full hash
+  /// as the filename. This prevents creating excessively deep directory
+  /// trees while still distributing cache files evenly.
+  ///
   /// Returns the file path.
   String _path(String key) {
-    final parts = key.split('');
-    return '${directory.path}/${parts.join('/')}';
+    final hash = hexFromBytes(sha1Digest(utf8.encode(key)));
+    // Create 2 levels of 2-character directories for balanced distribution
+    final dir1 = hash.substring(0, 2);
+    final dir2 = hash.substring(2, 4);
+    final pathContext = directory.fileSystem.path;
+    return pathContext.join(directory.path, dir1, dir2, hash);
   }
 
   /// Ensures that the cache directory exists.

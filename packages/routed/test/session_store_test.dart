@@ -1,12 +1,12 @@
 import 'dart:convert';
 import 'dart:io';
 
-import 'package:crypto/crypto.dart';
 import 'package:file/memory.dart';
 import 'package:routed/routed.dart';
 import 'package:routed/session.dart';
 import 'package:routed/src/contracts/cache/repository.dart' as cache;
 import 'package:routed/src/contracts/cache/store.dart' as cache_store;
+import 'package:routed/src/crypto/crypto.dart';
 import 'package:routed_testing/routed_testing.dart';
 import 'package:server_testing/server_testing.dart';
 
@@ -167,10 +167,10 @@ void main() {
 
       final payload = jsonEncode(['one', 'two']);
       final signature = base64Url.encode(
-        Hmac(
-          sha256,
+        hmacSha256(
           base64.decode(key.replaceFirst('base64:', '')),
-        ).convert(utf8.encode(payload)).bytes,
+          utf8.encode(payload),
+        ),
       );
       final custom = base64Url.encode(utf8.encode('$payload|$signature'));
       final decodedList = cookie.decode('session', custom);
