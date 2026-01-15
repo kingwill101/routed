@@ -19,7 +19,7 @@ environment:
 dependencies:
   intl: ^0.20.2
   crypto: ^3.0.7
-  routed: ^0.3.0
+  routed: ^0.3.1
 
 dev_dependencies:
   contextual: ^2.1.0
