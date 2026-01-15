@@ -1,0 +1,147 @@
+{% layout "layouts/base.liquid" %}
+
+{% block title %}Todos · Full Stack{% endblock %}
+
+{% block content %}
+  <header class="mb-10 space-y-4">
+    <p class="text-sm uppercase tracking-[0.3em] text-ember">Full Stack Demo</p>
+    <div class="flex flex-col gap-6 md:flex-row md:items-end md:justify-between">
+      <div class="space-y-3">
+        <h1 class="font-display text-4xl leading-tight md:text-5xl">
+          Ship a todo list
+          <span class="text-moss">with real persistence</span>
+        </h1>
+        <p class="max-w-xl text-base text-ink/70">
+          This page hydrates data from <code class="rounded bg-clay px-2 py-0.5 text-sm">/api/todos</code>
+          and writes changes through Ormed.
+        </p>
+      </div>
+      <div class="rounded-2xl border border-ink/10 bg-white/70 px-5 py-4 shadow-[0_20px_60px_-40px_rgba(0,0,0,0.45)]">
+        <p class="text-xs uppercase tracking-[0.25em] text-ink/60">Open tasks</p>
+        <p id="todo-count" class="font-display text-3xl text-ink">0</p>
+      </div>
+    </div>
+  </header>
+
+  <section class="space-y-8 rounded-3xl border border-ink/10 bg-white/80 p-6 shadow-[0_30px_80px_-60px_rgba(0,0,0,0.4)] md:p-8">
+    <form id="todo-form" class="flex flex-col gap-3 md:flex-row">
+      <input
+        id="todo-title"
+        type="text"
+        placeholder="Add a todo"
+        autocomplete="off"
+        required
+        class="flex-1 rounded-2xl border border-ink/15 bg-white px-4 py-3 text-base shadow-inner focus:border-moss/60 focus:outline-none focus:ring-2 focus:ring-moss/20"
+      />
+      <button
+        type="submit"
+        class="rounded-2xl bg-ink px-6 py-3 text-sm font-semibold uppercase tracking-[0.2em] text-paper transition hover:-translate-y-0.5 hover:bg-ink/90"
+      >
+        Add todo
+      </button>
+    </form>
+    <ul id="todo-list" class="space-y-3"></ul>
+  </section>
+
+  <script>
+    let currentTodos = [];
+
+    function updateCount(items) {
+      const count = items.filter((todo) => !todo.completed).length;
+      document.getElementById('todo-count').textContent = count;
+    }
+
+    async function refresh() {
+      const response = await fetch('/api/todos');
+      const json = await response.json();
+      currentTodos = Array.isArray(json.data) ? json.data : [];
+      render(currentTodos);
+    }
+
+    function render(items) {
+      const list = document.getElementById('todo-list');
+      list.innerHTML = '';
+      updateCount(items);
+      items.forEach((todo) => {
+        const item = document.createElement('li');
+        item.className =
+          'flex flex-col gap-3 rounded-2xl border border-ink/10 bg-paper/60 p-4 md:flex-row md:items-center md:justify-between';
+
+        const label = document.createElement('div');
+        label.className = 'space-y-1';
+        const title = document.createElement('p');
+        title.className = `text-base font-semibold ${todo.completed ? 'line-through text-ink/40' : 'text-ink'}`;
+        title.textContent = todo.title;
+        const meta = document.createElement('p');
+        meta.className = 'text-xs uppercase tracking-[0.22em] text-ink/50';
+        meta.textContent = todo.completed ? 'Completed' : 'In progress';
+        label.appendChild(title);
+        label.appendChild(meta);
+
+        const toggle = document.createElement('button');
+        toggle.type = 'button';
+        toggle.textContent = todo.completed ? 'Mark open' : 'Mark done';
+        toggle.className =
+          'rounded-full border border-ink/15 px-4 py-2 text-xs font-semibold uppercase tracking-[0.2em] text-ink transition hover:border-ink/40';
+        toggle.addEventListener('click', () => updateTodo(todo.id, {
+          completed: !todo.completed,
+        }));
+
+        const edit = document.createElement('button');
+        edit.type = 'button';
+        edit.textContent = 'Rename';
+        edit.className =
+          'rounded-full border border-ember/30 px-4 py-2 text-xs font-semibold uppercase tracking-[0.2em] text-ember transition hover:border-ember';
+        edit.addEventListener('click', () => {
+          const nextTitle = prompt('Update todo title', todo.title);
+          if (nextTitle && nextTitle.trim()) {
+            updateTodo(todo.id, { title: nextTitle.trim() });
+          }
+        });
+
+        const actions = document.createElement('div');
+        actions.className = 'flex flex-wrap gap-2';
+        actions.appendChild(toggle);
+        actions.appendChild(edit);
+
+        item.appendChild(label);
+        item.appendChild(actions);
+        list.appendChild(item);
+      });
+    }
+
+    async function createTodo(title) {
+      const response = await fetch('/api/todos', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ title }),
+      });
+      if (response.ok) {
+        await refresh();
+      }
+    }
+
+    async function updateTodo(id, updates) {
+      const response = await fetch(`/api/todos/${id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(updates),
+      });
+      if (response.ok) {
+        await refresh();
+      }
+    }
+
+    document.getElementById('todo-form').addEventListener('submit', async (event) => {
+      event.preventDefault();
+      const input = document.getElementById('todo-title');
+      const title = input.value.trim();
+      if (!title) return;
+      await createTodo(title);
+      input.value = '';
+      input.focus();
+    });
+
+    refresh();
+  </script>
+{% endblock %}
