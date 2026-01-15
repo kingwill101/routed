@@ -4,8 +4,6 @@ import '_support/real_browser_bootstrap.dart';
 import 'package:server_testing/src/browser/bootstrap/devices_json_const.dart';
 
 // Import device definitions explicitly
-import 'package:server_testing/src/browser/bootstrap/registry.dart';
-
 // Example Page Object (Optional but good practice)
 class ExamplePage extends Page {
   ExamplePage(super.browser) : super();

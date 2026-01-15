@@ -3,12 +3,12 @@ import 'dart:convert';
 import 'package:ormed/migrations.dart';
 
 // <ORM-MIGRATION-IMPORTS>
-import 'migrations/m_20260115140013_CreateTodoTable.dart';// </ORM-MIGRATION-IMPORTS>
+import 'migrations/m_20260115140013_create_todo_table.dart';// </ORM-MIGRATION-IMPORTS>
 
 final List<MigrationEntry> _entries = [
   // <ORM-MIGRATION-REGISTRY>
   MigrationEntry(
-    id: MigrationId.parse('m_20260115140013_CreateTodoTable'),
+    id: MigrationId.parse('m_20260115140013_create_todo_table'),
     migration: const CreateTodoTable(),
   ),// </ORM-MIGRATION-REGISTRY>
 ];
