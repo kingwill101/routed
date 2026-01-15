@@ -1,4 +1,3 @@
-@Tags(['real-browser'])
 library;
 
 import 'dart:io';

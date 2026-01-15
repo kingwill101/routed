@@ -81,7 +81,7 @@ void main() {
       setUp(() {
         originalConfig = BrowserConfig(
           browserName: 'firefox',
-          headless: false,
+          headless: true,
           autoScreenshots: true,
           defaultWaitTimeout: const Duration(seconds: 15),
           verboseLogging: true,
@@ -209,7 +209,7 @@ void main() {
         // This simulates existing code that uses copyWith with original properties only
         final newConfig = originalConfig.copyWith(
           browserName: 'firefox',
-          headless: false,
+          headless: true,
           timeout: const Duration(seconds: 60),
         );
 
@@ -234,7 +234,7 @@ void main() {
       test('should support Laravel Dusk-like configuration patterns', () {
         final config = BrowserConfig(
           browserName: 'chromium',
-          headless: false,
+          headless: true,
           autoScreenshots: true,
           defaultWaitTimeout: const Duration(seconds: 15),
           verboseLogging: true,

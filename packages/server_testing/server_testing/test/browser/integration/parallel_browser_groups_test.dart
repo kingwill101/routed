@@ -1,4 +1,5 @@
-@Tags(['real-browser'])
+library;
+
 import 'dart:io';
 
 import 'package:server_testing/server_testing.dart';
@@ -40,7 +41,7 @@ void main() {
     if (!isCi || hasDisplay) {
       browserGroup(
         'Group B (visible override)',
-        headless: false,
+        headless: true,
         define: (getBrowser) {
           test('B: different config still works', () async {
             final b = getBrowser();

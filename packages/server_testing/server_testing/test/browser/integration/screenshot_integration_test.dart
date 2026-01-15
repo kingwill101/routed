@@ -1,4 +1,5 @@
-@Tags(['real-browser'])
+library;
+
 import 'dart:io';
 
 import 'package:path/path.dart' as p;

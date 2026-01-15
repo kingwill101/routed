@@ -1,4 +1,5 @@
-@Tags(['real-browser'])
+library;
+
 import 'package:server_testing/server_testing.dart';
 import 'package:server_testing/src/browser/bootstrap/devices_json_const.dart';
 

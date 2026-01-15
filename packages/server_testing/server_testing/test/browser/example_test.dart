@@ -1,4 +1,5 @@
-@Tags(['real-browser'])
+library;
+
 import 'package:server_testing/server_testing.dart';
 
 import '_support/real_browser_bootstrap.dart';
@@ -91,7 +92,7 @@ void main() {
       },
       // No need for browserType: firefox (it's the default from bootstrap),
       // just override headless.
-      headless: false,
+      headless: true,
     );
 
     // --- Device Emulation Test (REFINED) ---
@@ -126,7 +127,7 @@ void main() {
         // expect(height, closeTo(iphone13.viewport.height, 50));
       },
       browserType: chromium,
-      headless: false, // Often best to run visible for emulation tests
+      headless: true, // Often best to run visible for emulation tests
       // Simply pass the device object in launch options!
       device: iphone13,
     );
@@ -154,7 +155,7 @@ void main() {
     browserGroup(
       'Chromium visible group',
       browserType: chromium,
-      headless: false,
+      headless: true,
       define: (make) {
         final browser = make();
 

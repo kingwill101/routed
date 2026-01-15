@@ -1,4 +1,3 @@
-@Tags(['real-browser'])
 library;
 
 import 'dart:io';
@@ -35,7 +34,7 @@ void main() {
       await realBrowserBootstrap(
         BrowserConfig(
           browserName: 'firefox',
-          headless: false,
+          headless: true,
           baseUrl: 'http://127.0.0.1:0',
           autoScreenshots: false,
         ),

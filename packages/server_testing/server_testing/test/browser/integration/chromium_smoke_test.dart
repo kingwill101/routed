@@ -1,4 +1,5 @@
-@Tags(['real-browser'])
+library;
+
 import 'package:server_testing/server_testing.dart';
 
 import '../_support/real_browser_bootstrap.dart';
@@ -9,7 +10,7 @@ void main() {
       await realBrowserBootstrap(
         BrowserConfig(
           browserName: 'chromium',
-          headless: false,
+          headless: true,
           baseUrl: 'https://example.com',
           autoScreenshots: false,
         ),

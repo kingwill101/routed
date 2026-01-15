@@ -48,7 +48,7 @@ void main() {
         // Development configuration - visible browser with debugging features
         final devConfig = BrowserConfig(
           browserName: 'chromium',
-          headless: false,
+          headless: true,
           autoScreenshots: true,
           defaultWaitTimeout: const Duration(seconds: 20),
           verboseLogging: true,
@@ -96,7 +96,7 @@ void main() {
 
       // Override for debugging
       final debugConfig = baseConfig.copyWith(
-        headless: false,
+        headless: true,
         autoScreenshots: true,
         verboseLogging: true,
         screenshotDirectory: 'debug_screenshots',
@@ -155,7 +155,7 @@ void main() {
         // Legacy copyWith should still work
         final modifiedConfig = legacyConfig.copyWith(
           browserName: 'firefox',
-          headless: false,
+          headless: true,
         );
 
         expect(modifiedConfig.browserName, equals('firefox'));
@@ -173,7 +173,7 @@ void main() {
       final duskLikeConfig = BrowserConfig(
         // Browser setup
         browserName: 'chromium',
-        headless: false,
+        headless: true,
         // Show browser for development
 
         // Enhanced debugging
