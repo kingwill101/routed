@@ -90,11 +90,11 @@ void main() {
 
       expect(
         engine.config.templateDirectory,
-        equals(fs.path.normalize('${tempDir.path}/emails')),
+        equals(fs.path.normalize(fs.path.join(tempDir.path, 'emails'))),
       );
       expect(
         engine.config.views.viewPath,
-        equals(fs.path.normalize('${tempDir.path}/emails')),
+        equals(fs.path.normalize(fs.path.join(tempDir.path, 'emails'))),
       );
     });
   });

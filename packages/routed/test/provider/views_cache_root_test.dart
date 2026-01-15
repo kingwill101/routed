@@ -49,6 +49,13 @@ void main() {
     expect(store, isA<FileStore>());
 
     final cacheDir = (store as FileStore).directory.path;
-    expect(cacheDir, equals('${tempDir.path}/storage/framework/cache'));
+    expect(
+      cacheDir,
+      equals(
+        fs.path.normalize(
+          fs.path.join(tempDir.path, 'storage', 'framework', 'cache'),
+        ),
+      ),
+    );
   });
 }

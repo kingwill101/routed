@@ -189,43 +189,63 @@ class StorageServiceProvider extends ServiceProvider
 
     final facadeDisks = <String, Map<String, dynamic>>{};
     final localFileSystems = <String, file.FileSystem>{};
-    final resolved = spec.resolve(config);
+    final resolvedConfig = spec.resolve(config);
+    final defaultFs = manager.defaultFileSystem;
     final storageRoot = _normalizeStorageRoot(
-      resolveStorageRootValue(resolved.root),
+      resolveStorageRootValue(resolvedConfig.root),
       config,
+      defaultFs,
     );
 
-    final defaultDisk = resolved.defaultDisk;
+    final defaultDisk = resolvedConfig.defaultDisk;
     manager.setDefault(defaultDisk);
 
-    final cloudDisk = resolved.cloudDisk;
+    final cloudDisk = resolvedConfig.cloudDisk;
 
-    if (resolved.disks.isNotEmpty) {
-      resolved.disks.forEach((name, diskConfigEntry) {
+    if (resolvedConfig.disks.isNotEmpty) {
+      resolvedConfig.disks.forEach((name, diskConfigEntry) {
         final diskConfig = Map<String, dynamic>.from(diskConfigEntry.toMap());
         final driverName =
             (diskConfig['driver']?.toString().toLowerCase() ?? 'local');
         if (name == 'local') {
+          final diskFs = diskConfig['file_system'] is file.FileSystem
+              ? diskConfig['file_system'] as file.FileSystem
+              : defaultFs;
+          final storageRootForDisk =
+              storageRoot.isNotEmpty && diskFs != defaultFs
+                  ? _normalizeStorageRoot(
+                      resolveStorageRootValue(resolvedConfig.root),
+                      config,
+                      diskFs,
+                    )
+                  : storageRoot;
           final specContext = StorageDriverSpecContext(
             diskName: name,
             pathBase: 'storage.disks.$name',
             config: config,
           );
-          final resolved = LocalStorageDriver.spec.fromMap(
+          final localResolved = LocalStorageDriver.spec.fromMap(
             diskConfig,
             context: specContext,
           );
-          final existingRoot = resolved.root;
+          final existingRoot = localResolved.root;
           final shouldApplyStorageRoot =
               existingRoot == null ||
               existingRoot.isEmpty ||
               existingRoot == defaultStorageRootPath();
-          if (shouldApplyStorageRoot && storageRoot.isNotEmpty) {
-            diskConfig['root'] = storageRoot;
+          if (shouldApplyStorageRoot && storageRootForDisk.isNotEmpty) {
+            diskConfig['root'] = storageRootForDisk;
           }
         }
         if (driverName == 'local') {
-          final normalizedRoot = _normalizeDiskRoot(diskConfig['root'], config);
+          final diskFs = diskConfig['file_system'] is file.FileSystem
+              ? diskConfig['file_system'] as file.FileSystem
+              : defaultFs;
+          final normalizedRoot = _normalizeDiskRoot(
+            diskConfig['root'],
+            config,
+            diskFs,
+          );
           if (normalizedRoot != null) {
             diskConfig['root'] = normalizedRoot;
           }
@@ -276,30 +296,42 @@ class StorageServiceProvider extends ServiceProvider
   }
 
   /// {@macro storage_provider_resolution}
-  String _normalizeStorageRoot(String root, Config config) {
+  String _normalizeStorageRoot(
+    String root,
+    Config config,
+    file.FileSystem fs,
+  ) {
     final trimmed = root.trim();
     if (trimmed.isEmpty) {
       return trimmed;
     }
-    return _resolveAgainstAppRoot(config, trimmed);
+    return _resolveAgainstAppRoot(config, trimmed, fs.path);
   }
 
-  String _resolveAgainstAppRoot(Config config, String path) {
-    final normalized = p.normalize(path);
-    if (p.isAbsolute(normalized)) {
+  String _resolveAgainstAppRoot(
+    Config config,
+    String path,
+    p.Context pathContext,
+  ) {
+    final normalized = pathContext.normalize(path);
+    if (pathContext.isAbsolute(normalized)) {
       return normalized;
     }
     final appRoot = config.has('app.root')
         ? config.get<Object?>('app.root')
         : null;
     if (appRoot is String && appRoot.trim().isNotEmpty) {
-      return p.normalize(p.join(appRoot.trim(), normalized));
+      return pathContext.normalize(pathContext.join(appRoot.trim(), normalized));
     }
     return normalized;
   }
 
   /// {@macro storage_provider_resolution}
-  String? _normalizeDiskRoot(Object? root, Config config) {
+  String? _normalizeDiskRoot(
+    Object? root,
+    Config config,
+    file.FileSystem fs,
+  ) {
     if (root is! String) {
       return null;
     }
@@ -310,7 +342,7 @@ class StorageServiceProvider extends ServiceProvider
     if (trimmed == defaultStorageRootPath()) {
       return null;
     }
-    return _resolveAgainstAppRoot(config, trimmed);
+    return _resolveAgainstAppRoot(config, trimmed, fs.path);
   }
 
   Map<String, dynamic> _registerDisk(
