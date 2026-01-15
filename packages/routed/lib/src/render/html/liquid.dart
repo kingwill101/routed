@@ -5,8 +5,19 @@ import 'package:routed/src/render/html/template_engine.dart';
 
 export 'package:routed/src/view/engines/liquid_engine.dart';
 
+/// {@template liquid_root_base_directory}
+/// `LiquidRoot` resolves templates relative to `baseDirectory` without
+/// mutating the underlying file system's current directory.
+///
+/// Example:
+/// ```dart
+/// final root = LiquidRoot(baseDirectory: '/templates');
+/// ```
+/// {@endtemplate}
+
 /// The `LiquidRoot` class implements the `Root` interface and is responsible
 /// for resolving template file paths and reading their contents.
+/// {@macro liquid_root_base_directory}
 class LiquidRoot implements Root {
   /// The file system to be used for file operations.
   final FileSystem fileSystem;
@@ -133,13 +144,22 @@ class LiquidTemplateEngine implements TemplateEngine {
     }
   }
 
+  /// {@macro liquid_root_base_directory}
   @override
   void loadTemplates(String path) {
     final directory = _fileSystem.directory(path);
     if (!directory.existsSync()) {
       throw Exception('Directory not found: $path');
     }
-    _fileSystem.currentDirectory = directory.path;
+    final root = _root;
+    if (root is LiquidRoot) {
+      root.setBaseDirectory(directory.path);
+      return;
+    }
+    if (root is FileSystemRoot) {
+      _root = FileSystemRoot(directory.path, fileSystem: root.fileSystem);
+      return;
+    }
   }
 
   @override

@@ -18,18 +18,28 @@ class LiquidViewEngine implements ViewEngine {
   /// The [root] parameter specifies the root object to use for rendering templates.
   /// If not provided, the default root object is used.
   ///
-  /// The [fileSystem] parameter specifies which file system implementation to use
-  /// for loading templates. If not provided, the local file system is used.
+  /// The [directory] parameter scopes template resolution without mutating the
+  /// underlying file system's current directory.
   LiquidViewEngine({String? directory, liquid.Root? root})
-    : _root = root ?? LiquidRoot() {
-    if (directory != null) {
-      if (_root is LiquidRoot) {
-        (_root as LiquidRoot).setBaseDirectory(directory);
-      } else if (_root is liquid.FileSystemRoot) {
-        (_root as liquid.FileSystemRoot).fileSystem.currentDirectory =
-            directory;
-      }
+    : _root = _resolveRoot(root, directory);
+
+  static liquid.Root _resolveRoot(liquid.Root? root, String? directory) {
+    final resolvedRoot = root ?? LiquidRoot();
+    final baseDirectory = directory?.trim();
+    if (baseDirectory == null || baseDirectory.isEmpty) {
+      return resolvedRoot;
     }
+    if (resolvedRoot is LiquidRoot) {
+      resolvedRoot.setBaseDirectory(baseDirectory);
+      return resolvedRoot;
+    }
+    if (resolvedRoot is liquid.FileSystemRoot) {
+      return liquid.FileSystemRoot(
+        baseDirectory,
+        fileSystem: resolvedRoot.fileSystem,
+      );
+    }
+    return resolvedRoot;
   }
 
   @override

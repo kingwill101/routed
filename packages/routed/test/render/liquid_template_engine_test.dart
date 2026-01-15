@@ -51,6 +51,7 @@ void main() {
         return value.toString().toUpperCase();
       });
       engine.addFunc('noop', () {});
+      final originalCwd = fileSystem.currentDirectory.path;
       engine.loadTemplates('/templates');
 
       final result = await engine.render('greeting.liquid', {'name': 'routed'});
@@ -58,7 +59,7 @@ void main() {
       expect(result, equals('Hello ROUTED'));
       expect(engine.filterMap.keys, contains('upper'));
       expect(engine.funcMap, isEmpty);
-      expect(fileSystem.currentDirectory.path, equals('/templates'));
+      expect(fileSystem.currentDirectory.path, equals(originalCwd));
     });
 
     test('throws when loading missing template directory', () {

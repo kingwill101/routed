@@ -82,18 +82,16 @@ void main() {
       );
     });
 
-    test('sets directory for file system roots', () async {
+    test('does not mutate file system roots', () async {
       final fileSystem = MemoryFileSystem();
       fileSystem.directory('/templates').createSync();
       fileSystem.directory('/custom').createSync();
       final root = liquid.FileSystemRoot('/templates', fileSystem: fileSystem);
+      final originalCurrent = root.fileSystem.currentDirectory.path;
 
       LiquidViewEngine(directory: '/custom', root: root);
 
-      expect(
-        root.fileSystem.currentDirectory.path,
-        equals(fileSystem.path.normalize('/custom')),
-      );
+      expect(root.fileSystem.currentDirectory.path, equals(originalCurrent));
     });
   });
 }

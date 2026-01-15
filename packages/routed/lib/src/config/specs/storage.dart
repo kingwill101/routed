@@ -63,20 +63,40 @@ class StorageDiskConfig {
   }
 }
 
+/// {@template storage_config_fields}
+/// Storage configuration for disks and helper paths.
+///
+/// `storage.base` controls helper paths (for example `storage_path()`), while
+/// `storage.root` configures the default local disk root.
+///
+/// Example:
+/// ```yaml
+/// storage:
+///   base: "{{ env.APP_ROOT }}/storage"
+///   root: "storage/app"
+///   disks:
+///     local: { driver: local }
+/// ```
+/// {@endtemplate}
+
+/// {@macro storage_config_fields}
 class StorageProviderConfig {
   const StorageProviderConfig({
     required this.defaultDisk,
     required this.cloudDisk,
     required this.root,
+    required this.base,
     required this.disks,
   });
 
   final String defaultDisk;
   final String? cloudDisk;
   final String? root;
+  final String? base;
   final Map<String, StorageDiskConfig> disks;
 }
 
+/// {@macro storage_config_fields}
 class StorageConfigSpec extends ConfigSpec<StorageProviderConfig> {
   const StorageConfigSpec();
 
@@ -95,6 +115,10 @@ class StorageConfigSpec extends ConfigSpec<StorageProviderConfig> {
       'cloud': ConfigSchema.string(
         description:
             'Disk name used when a "cloud" disk is required by helpers.',
+      ),
+      'base': ConfigSchema.string(
+        description:
+            'Base storage path used by helpers like storage_path (defaults to app.root/storage when available).',
       ),
       'root':
           ConfigSchema.string(
@@ -140,6 +164,13 @@ class StorageConfigSpec extends ConfigSpec<StorageProviderConfig> {
       cloudDisk = (cloudRaw == null || cloudRaw.isEmpty) ? null : cloudRaw;
     }
 
+    final baseValue = parseStringLike(
+      map['base'],
+      context: 'storage.base',
+      allowEmpty: true,
+      throwOnInvalid: true,
+    );
+
     final rootValue = parseStringLike(
       map['root'],
       context: 'storage.root',
@@ -168,6 +199,7 @@ class StorageConfigSpec extends ConfigSpec<StorageProviderConfig> {
       defaultDisk: defaultDisk,
       cloudDisk: cloudDisk,
       root: rootValue,
+      base: baseValue,
       disks: disks,
     );
   }
@@ -177,6 +209,7 @@ class StorageConfigSpec extends ConfigSpec<StorageProviderConfig> {
     return {
       'default': value.defaultDisk,
       'cloud': value.cloudDisk,
+      'base': value.base,
       'root': value.root,
       'disks': value.disks.map((key, disk) => MapEntry(key, disk.toMap())),
     };

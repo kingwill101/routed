@@ -103,7 +103,7 @@ class ViewServiceProvider extends ServiceProvider with ProvidesDefaultConfig {
         : null;
 
     final fs = disk?.fileSystem ?? _fallbackFileSystem;
-    final directory = _resolveDirectory(configuredDirectory, disk, fs);
+    final directory = _resolveDirectory(configuredDirectory, disk, fs, config);
 
     final viewEngine = _createEngine(
       engineName,
@@ -136,17 +136,27 @@ class ViewServiceProvider extends ServiceProvider with ProvidesDefaultConfig {
     String configured,
     StorageDisk? disk,
     file.FileSystem fs,
+    Config config,
   ) {
     final pathValue = configured.isEmpty ? '' : configured;
     if (disk != null) {
       return disk.resolve(pathValue);
     }
-    return _normalizePath(fs, pathValue);
+    return _normalizePath(fs, pathValue, config);
   }
 
-  String _normalizePath(file.FileSystem fs, String value) {
+  String _normalizePath(
+    file.FileSystem fs,
+    String value,
+    Config config,
+  ) {
     final pathContext = fs.path;
-    final base = pathContext.normalize(fs.currentDirectory.path);
+    final appRoot = config.has('app.root')
+        ? config.get<Object?>('app.root')
+        : null;
+    final base = (appRoot is String && appRoot.trim().isNotEmpty)
+        ? pathContext.normalize(appRoot.trim())
+        : pathContext.normalize(fs.currentDirectory.path);
     if (value.isEmpty) {
       return base;
     }
@@ -165,12 +175,52 @@ class ViewServiceProvider extends ServiceProvider with ProvidesDefaultConfig {
     switch (name) {
       case '':
       case 'liquid':
-        final root = LiquidRoot(fileSystem: fs);
+        final scopedFs = _viewFileSystem(fs, directory);
+        final root = LiquidRoot(fileSystem: scopedFs);
         return LiquidViewEngine(root: root, directory: directory);
       default:
         return fallback ?? LiquidViewEngine();
     }
   }
+
+  file.FileSystem _viewFileSystem(file.FileSystem fs, String directory) {
+    return _ScopedFileSystem(fs, directory);
+  }
+}
+
+class _ScopedFileSystem extends file.ForwardingFileSystem {
+  _ScopedFileSystem(super.delegate, String initialDirectory)
+    : _currentDirectory = _normalizePath(delegate, initialDirectory);
+
+  String _currentDirectory;
+
+  @override
+  file.Directory get currentDirectory => delegate.directory(_currentDirectory);
+
+  @override
+  set currentDirectory(dynamic path) {
+    if (path is file.Directory) {
+      _currentDirectory = _normalizePath(delegate, path.path);
+      return;
+    }
+    if (path is String) {
+      _currentDirectory = _normalizePath(delegate, path);
+      return;
+    }
+    throw ArgumentError('Invalid type for "path": ${path?.runtimeType}');
+  }
+
+}
+
+String _normalizePath(file.FileSystem fs, String value) {
+  if (value.isEmpty) return fs.currentDirectory.path;
+  final pathContext = fs.path;
+  if (pathContext.isAbsolute(value)) {
+    return pathContext.normalize(value);
+  }
+  return pathContext.normalize(
+    pathContext.join(fs.currentDirectory.path, value),
+  );
 }
 
 class _ResolvedViewConfig {
