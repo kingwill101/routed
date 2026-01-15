@@ -6,7 +6,7 @@ sidebar_position: 2
 
 # Proxy Support
 
-Routed includes built-in support for forwarding requests to other servers. Use it to build reverse proxies and API gateways, or to delegate specific paths to upstream services. See [Security Features](/docs/routed/security) for trusted proxy/IP resolution and [Request Handling → Trusted proxies](/docs/routed/fundamentals/requests#trusted-proxies) for client IP normalization.
+Routed includes built-in support for forwarding requests to other servers. Use it to build reverse proxies and API gateways, or to delegate specific paths to upstream services. See [Security Features](/docs/routed/security/) for trusted proxy/IP resolution and [Request Handling → Trusted proxies](/docs/routed/fundamentals/requests#trusted-proxies) for client IP normalization.
 
 ## Basic Forwarding
 
@@ -42,7 +42,7 @@ router.get('/proxy', (ctx) async {
 });
 ```
 
-The trusted proxy resolver reads its configuration from the manifest too. Add ranges and headers once in `config/http.yaml` (see [Security Features](/docs/routed/security#proxy-and-ip-resolution)). When forwarding, avoid relaying hop-by-hop headers (`Connection`, `Keep-Alive`, `Transfer-Encoding`, `TE`, `Trailer`, `Upgrade`, `Proxy-Authorization`, `Proxy-Authenticate`) and only forward a vetted set of headers. Prefer appending to `X-Forwarded-For` rather than replacing it; with trusted proxies configured, Routed will normalize `clientIP` from these headers:
+The trusted proxy resolver reads its configuration from the manifest too. Add ranges and headers once in `config/http.yaml` (see [Security Features](/docs/routed/security/#proxy-and-ip-resolution)). When forwarding, avoid relaying hop-by-hop headers (`Connection`, `Keep-Alive`, `Transfer-Encoding`, `TE`, `Trailer`, `Upgrade`, `Proxy-Authorization`, `Proxy-Authenticate`) and only forward a vetted set of headers. Prefer appending to `X-Forwarded-For` rather than replacing it; with trusted proxies configured, Routed will normalize `clientIP` from these headers:
 
 ```yaml title="config/http.yaml"
 security:

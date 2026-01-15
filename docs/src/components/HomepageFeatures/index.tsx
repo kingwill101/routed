@@ -26,16 +26,37 @@ const FeatureList: FeatureItem[] = [
       linkLabel: 'Start building',
   },
   {
-      title: 'Server Testing Toolkit',
+      title: 'Routed Hotwire',
     Svg: require('@site/static/img/undraw_docusaurus_tree.svg').default,
     description: (
       <>
-          Reuse the same handler for fast in-memory tests, real HTTP transports, and full browser automation with CLI
-          support.
+          Bring Turbo Streams, Turbo Frames, and Stimulus helpers into Routed without leaving Dart.
       </>
     ),
-      link: '/docs/server-testing/',
+      link: '/docs/routed_hotwire/',
+      linkLabel: 'See Hotwire guides',
+  },
+  {
+      title: 'Server Testing',
+    Svg: require('@site/static/img/undraw_docusaurus_react.svg').default,
+    description: (
+      <>
+          Reuse handlers across in-memory HTTP tests, ephemeral servers, and browser automation flows.
+      </>
+    ),
+      link: '/docs/server_testing/',
       linkLabel: 'See testing guides',
+  },
+  {
+      title: 'Routed Testing',
+    Svg: require('@site/static/img/undraw_docusaurus_react.svg').default,
+    description: (
+      <>
+          Routed-specific helpers for engine-first tests built on server_testing.
+      </>
+    ),
+      link: '/docs/routed_testing/',
+      linkLabel: 'Explore Routed testing',
   },
   {
       title: 'Property-Based Confidence',
@@ -45,7 +66,7 @@ const FeatureList: FeatureItem[] = [
           Generate adversarial inputs, shrink failures, and model stateful systems with the property_testing toolkit.
       </>
     ),
-      link: '/docs/property-testing/',
+      link: '/docs/property_testing/',
       linkLabel: 'Explore generators',
   },
 ];

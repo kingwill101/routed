@@ -40,14 +40,73 @@ const config: Config = {
     [
       'classic',
       {
-        docs: {
-          sidebarPath: './sidebars.ts',
-            editUrl: 'https://github.com/kingwill101/routed/tree/main/docs/',
-        },
+        docs: false,
         theme: {
           customCss: './src/css/custom.css',
         },
       } satisfies Preset.Options,
+    ],
+  ],
+  plugins: [
+    [
+      '@docusaurus/plugin-content-docs',
+      {
+        id: 'routed',
+        path: 'docs/routed',
+        routeBasePath: 'docs/routed',
+        sidebarPath: './sidebars/routed.ts',
+        editUrl: 'https://github.com/kingwill101/routed/tree/main/docs/',
+      },
+    ],
+    [
+      '@docusaurus/plugin-content-docs',
+      {
+        id: 'routed_hotwire',
+        path: 'docs/routed_hotwire',
+        routeBasePath: 'docs/routed_hotwire',
+        sidebarPath: './sidebars/routed_hotwire.ts',
+        editUrl: 'https://github.com/kingwill101/routed/tree/main/docs/',
+      },
+    ],
+    [
+      '@docusaurus/plugin-content-docs',
+      {
+        id: 'server_testing',
+        path: 'docs/server-testing',
+        routeBasePath: 'docs/server_testing',
+        sidebarPath: './sidebars/server_testing.ts',
+        editUrl: 'https://github.com/kingwill101/routed/tree/main/docs/',
+      },
+    ],
+    [
+      '@docusaurus/plugin-content-docs',
+      {
+        id: 'server_testing_shelf',
+        path: 'docs/server_testing_shelf',
+        routeBasePath: 'docs/server_testing_shelf',
+        sidebarPath: './sidebars/server_testing_shelf.ts',
+        editUrl: 'https://github.com/kingwill101/routed/tree/main/docs/',
+      },
+    ],
+    [
+      '@docusaurus/plugin-content-docs',
+      {
+        id: 'routed_testing',
+        path: 'docs/routed_testing',
+        routeBasePath: 'docs/routed_testing',
+        sidebarPath: './sidebars/routed_testing.ts',
+        editUrl: 'https://github.com/kingwill101/routed/tree/main/docs/',
+      },
+    ],
+    [
+      '@docusaurus/plugin-content-docs',
+      {
+        id: 'property_testing',
+        path: 'docs/property-testing',
+        routeBasePath: 'docs/property_testing',
+        sidebarPath: './sidebars/property_testing.ts',
+        editUrl: 'https://github.com/kingwill101/routed/tree/main/docs/',
+      },
     ],
   ],
 
@@ -63,9 +122,45 @@ const config: Config = {
       items: [
         {
           type: 'docSidebar',
-          sidebarId: 'tutorialSidebar',
+          sidebarId: 'routedSidebar',
+          docsPluginId: 'routed',
           position: 'left',
-          label: 'Docs',
+          label: 'Routed',
+        },
+        {
+          type: 'docSidebar',
+          sidebarId: 'routedHotwireSidebar',
+          docsPluginId: 'routed_hotwire',
+          position: 'left',
+          label: 'Routed Hotwire',
+        },
+        {
+          type: 'docSidebar',
+          sidebarId: 'serverTestingSidebar',
+          docsPluginId: 'server_testing',
+          position: 'left',
+          label: 'Server Testing',
+        },
+        {
+          type: 'docSidebar',
+          sidebarId: 'serverTestingShelfSidebar',
+          docsPluginId: 'server_testing_shelf',
+          position: 'left',
+          label: 'Server Testing Shelf',
+        },
+        {
+          type: 'docSidebar',
+          sidebarId: 'routedTestingSidebar',
+          docsPluginId: 'routed_testing',
+          position: 'left',
+          label: 'Routed Testing',
+        },
+        {
+          type: 'docSidebar',
+          sidebarId: 'propertyTestingSidebar',
+          docsPluginId: 'property_testing',
+          position: 'left',
+          label: 'Property Testing',
         },
         {
             href: 'https://github.com/kingwill101/routed',
@@ -80,9 +175,12 @@ const config: Config = {
         {
           title: 'Docs',
           items: [
-              {label: 'Server Testing', to: '/docs/server-testing/'},
-              {label: 'Property Testing', to: '/docs/property-testing/'},
-              {label: 'Routed', to: '/docs/routed/'},
+            {label: 'Routed', to: '/docs/routed/'},
+            {label: 'Routed Hotwire', to: '/docs/routed_hotwire/'},
+            {label: 'Server Testing', to: '/docs/server_testing/'},
+            {label: 'Server Testing Shelf', to: '/docs/server_testing_shelf/'},
+            {label: 'Routed Testing', to: '/docs/routed_testing/'},
+            {label: 'Property Testing', to: '/docs/property_testing/'},
           ],
         },
         {

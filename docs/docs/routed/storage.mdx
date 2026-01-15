@@ -13,6 +13,9 @@ Storage disks provide the shared file abstraction for uploads, static mounts, an
 ```yaml title="config/storage.yaml"
 storage:
   default: local
+  # Base used by storage helpers (cache/session/storage_path).
+  base: "{{ env.APP_ROOT }}/storage"
+  # Root used for the default local disk when not overridden.
   root: storage/app
   disks:
     local:
@@ -36,10 +39,20 @@ storage:
 - **Local**: `root`, optional `file_system` (programmatic only).
 - **S3/Cloud**: `endpoint`, `bucket`, `key`, `secret`, `region`, optional `prefix`, `visibility`, `url`, `throw`, `report`, `directory_separator`.
 
-## Behavior
+## Storage base vs disk roots
 
-- `storage.root` seeds the default local disk when `storage.disks.local.root` is omitted.
-- Paths resolve relative to each disk’s root and are normalized.
+- `storage.base` anchors helper paths like `storage_path()` and framework cache/session storage.
+- `storage.root` only seeds the default local disk if `storage.disks.local.root` is missing.
+- When `app.root` is available, relative storage paths resolve against it.
+
+## Helper paths
+
+Use the `StorageDefaults` helper to build framework paths when you need absolute locations:
+
+```dart
+final defaults = await engine.make<StorageDefaults>();
+final cachePath = defaults.frameworkPath('cache');
+```
 
 ## StorageManager usage
 
@@ -50,6 +63,6 @@ final logoPath = storage.resolve('logo.png', disk: 'assets');
 
 ## Next steps
 
-- [Configuration: Storage](/docs/routed/fundamentals/configuration#storage)
+- [Configuration: Storage](/docs/routed/fundamentals/configuration#storage-disks)
 - [Views & Templates](/docs/routed/views/)
 - [Static Assets](/docs/routed/static-assets)

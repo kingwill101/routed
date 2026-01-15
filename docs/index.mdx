@@ -17,29 +17,43 @@ const featureCards = [
     linkLabel: 'Explore Routed'
   },
   {
-    title: 'Integrated Testing',
+    title: 'Hotwire Helpers',
     description:
-      'Ship confidence with fluent HTTP assertions, WebDriver orchestration, and CLI tooling in server_testing.',
-    link: '/docs/server-testing/',
+      'Turbo Streams, Stimulus controllers, and response helpers for interactive hybrid apps.',
+    link: '/docs/routed_hotwire/',
+    linkLabel: 'Routed Hotwire Guides'
+  },
+  {
+    title: 'Server Testing',
+    description:
+      'Fluent HTTP assertions, WebDriver automation, and transport helpers for Dart services.',
+    link: '/docs/server_testing/',
     linkLabel: 'Server Testing Guides'
+  },
+  {
+    title: 'Routed Testing',
+    description:
+      'Routed-first testing helpers built atop server_testing primitives.',
+    link: '/docs/routed_testing/',
+    linkLabel: 'Routed Testing Guides'
   },
   {
     title: 'Generative Quality',
     description:
       'Catch edge cases early using property_testing generators, shrinking, chaos suites, and state machines.',
-    link: '/docs/property-testing/',
+    link: '/docs/property_testing/',
     linkLabel: 'Property Testing Guides'
   },
 ];
 
 const integrationHighlights = [
   {
-    title: 'Framework-Agnostic',
-    text: 'Adapt Shelf or any custom framework to server_testing with lightweight RequestHandler implementations.'
+    title: 'Turbo Ready',
+    text: 'routed_hotwire makes Turbo Streams and Stimulus controllers feel native to your Dart backend.'
   },
   {
-    title: 'Browser-Aware Testing',
-    text: 'Install browsers and drivers on demand, reuse app handlers, and model UI with Page & Component objects.'
+    title: 'Testing Toolkit',
+    text: 'server_testing unifies in-memory HTTP tests and browser automation with shared handlers.'
   },
   {
     title: 'First-Class Shrinking',
@@ -49,27 +63,27 @@ const integrationHighlights = [
 
 const quickLinks = [
   {label: 'Engine & Middleware', to: '/docs/routed/fundamentals/'},
-  {label: 'Server Test Transports', to: '/docs/server-testing/transports'},
-  {label: 'Browser Page Objects', to: '/docs/server-testing/browser/pages-and-components'},
-  {label: 'Handler Providers', to: '/docs/server-testing/handler-providers'},
-  {label: 'Property Testing Generators', to: '/docs/property-testing/generators'},
-  {label: 'Tutorials & Walkthroughs', to: '/docs/tutorials/routed-rest-api'},
+  {label: 'Storage & Caching', to: '/docs/routed/state/caching'},
+  {label: 'Turbo Stream Responses', to: '/docs/routed_hotwire/'},
+  {label: 'Test Transports', to: '/docs/server_testing/transports'},
+  {label: 'Routed Testing', to: '/docs/routed_testing/'},
+  {label: 'Property Testing Generators', to: '/docs/property_testing/'},
 ];
 
 <header className="hero hero--primary" style={{padding: '4rem 2rem', textAlign: 'center'}}>
   <Heading as="h1" style={{marginBottom: '1.25rem'}}>Everything you need for modern Dart backends</Heading>
   <p style={{fontSize: '1.15rem', maxWidth: '760px', margin: '0 auto'}}>
     Routed is a modular ecosystem that lets you focus on features, not wiring. Build servers with the core
-    framework, validate behaviour with server_testing, and harden quality using property-based tools—all in one place.
+    framework, enhance interactivity with routed_hotwire, and harden quality using property-based tools—all in one place.
   </p>
   <div style={{marginTop: '2.5rem', display: 'flex', justifyContent: 'center', gap: '1rem', flexWrap: 'wrap'}}>
     <Link className="button button--secondary button--lg" to="/docs/routed/">
       Get Started with Routed
     </Link>
-    <Link className="button button--secondary button--lg" to="/docs/server-testing/getting-started">
-      Spin Up Server Tests
+    <Link className="button button--secondary button--lg" to="/docs/routed_hotwire/">
+      Explore Routed Hotwire
     </Link>
-    <Link className="button button--secondary button--lg" to="/docs/property-testing/getting-started">
+    <Link className="button button--secondary button--lg" to="/docs/property_testing/">
       Try Property Testing
     </Link>
     <a className="button button--primary button--lg" href="https://github.com/kingwill101/routed">
@@ -106,7 +120,10 @@ const quickLinks = [
 {`# Runtime framework
 dart pub add routed
 
-# HTTP + browser testing toolkit
+# Hotwire helpers
+dart pub add routed_hotwire
+
+# Server testing toolkit
 dart pub add --dev server_testing server_testing_shelf
 
 # Property-based testing utilities
@@ -118,9 +135,11 @@ dart pub add --dev property_testing`}
 | Package | What it does | Start with |
 | --- | --- | --- |
 | `routed` | HTTP engine, routing, controllers, middleware, templating | <Link to="/docs/routed/">Routed docs</Link> |
-| `server_testing` | Fluent HTTP assertions, WebDriver integration, CLI helpers | <Link to="/docs/server-testing/getting-started">Server Testing Getting Started</Link> |
-| `server_testing_shelf` | Shelf adapter for `server_testing` | <Link to="/docs/server-testing/handler-providers">Handler Providers</Link> |
-| `property_testing` | Generators, shrinking, chaos suites, stateful testing | <Link to="/docs/property-testing/getting-started">Property Testing Getting Started</Link> |
+| `routed_hotwire` | Turbo Streams, frames, and Stimulus helpers | <Link to="/docs/routed_hotwire/">Routed Hotwire docs</Link> |
+| `server_testing` | Fluent HTTP assertions, WebDriver integration, CLI helpers | <Link to="/docs/server_testing/">Server Testing docs</Link> |
+| `server_testing_shelf` | Shelf adapter for `server_testing` | <Link to="/docs/server_testing_shelf/">Server Testing Shelf docs</Link> |
+| `routed_testing` | Routed-specific testing helpers | <Link to="/docs/routed_testing/">Routed Testing docs</Link> |
+| `property_testing` | Generators, shrinking, chaos suites, stateful testing | <Link to="/docs/property_testing/">Property Testing docs</Link> |
 
 ## Built to work together
 

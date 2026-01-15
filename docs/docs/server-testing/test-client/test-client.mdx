@@ -2,7 +2,6 @@
 title: TestClient
 description: Fluent HTTP client that powers serverTest with in-memory and server transports
 sidebar_position: 1
-slug: /server-testing/test-client
 ---
 
 # TestClient
@@ -81,7 +80,7 @@ response
   .assertJson((json) => json.count('users', 1));
 ```
 
-See [TestResponse](/docs/server-testing/test-client/test-response) for the full set of assertion helpers and JSON utilities.
+See [TestResponse](/docs/server_testing/test-client/test-response) for the full set of assertion helpers and JSON utilities.
 
 ## Tips
 - Wrap the client creation inside `serverTest` unless you have a custom lifecycle to manage.

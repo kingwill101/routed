@@ -4,7 +4,7 @@ description: Set, read, and secure cookies in Routed
 sidebar_position: 7
 ---
 
-Routed provides helpers to set, read, and delete HTTP cookies. For authenticated state or flash data, prefer [Sessions](/docs/routed/state/sessions) and review [Security](/docs/routed/security) to choose safe defaults.
+Routed provides helpers to set, read, and delete HTTP cookies. For authenticated state or flash data, prefer [Sessions](/docs/routed/state/sessions) and review [Security](/docs/routed/security/) to choose safe defaults.
 
 > Import `dart:io` to access the `SameSite` enum used in the examples below.
 
@@ -64,7 +64,7 @@ router.get('/logout', (ctx) {
 
 ## Cookie Security
 
-Use Secure, HttpOnly, and an appropriate SameSite policy (Lax, Strict, or None) to mitigate CSRF and cross-site data leaks. See [Security](/docs/routed/security) and [Sessions](/docs/routed/state/sessions) for guidance on choosing policies and storing sensitive state.
+Use Secure, HttpOnly, and an appropriate SameSite policy (Lax, Strict, or None) to mitigate CSRF and cross-site data leaks. See [Security](/docs/routed/security/) and [Sessions](/docs/routed/state/sessions) for guidance on choosing policies and storing sensitive state.
 
 ### Secure Cookies and SameSite
 
