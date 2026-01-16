@@ -303,7 +303,9 @@ class ObservabilityServiceProvider extends ServiceProvider
 
   void _attachGlobalMiddleware(Engine engine) {
     engine.middlewares.removeWhere((middleware) {
-      final name = MiddlewareReference.lookup(middleware);
+      final name =
+          MiddlewareReference.lookupTag(middleware) ??
+          MiddlewareReference.lookup(middleware);
       return name == 'routed.observability.tracing' ||
           name == 'routed.observability.metrics';
     });

@@ -99,6 +99,7 @@ class LoggingServiceProvider extends ServiceProvider
         final response = await next();
         if (_logSuccess) {
           _log(ctx, response.statusCode, DateTime.now().difference(startedAt));
+          await _flushLogs();
         }
         return response;
       } catch (error, stackTrace) {
@@ -109,6 +110,7 @@ class LoggingServiceProvider extends ServiceProvider
           error: error,
           stackTrace: stackTrace,
         );
+        await _flushLogs();
         rethrow;
       }
     };
@@ -172,6 +174,10 @@ class LoggingServiceProvider extends ServiceProvider
     }
 
     logger.log(_level, message);
+  }
+
+  Future<void> _flushLogs() async {
+    await Future<void>.delayed(Duration.zero);
   }
 
   void _ensureDriverRegistry(Container container) {

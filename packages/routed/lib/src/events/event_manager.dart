@@ -32,8 +32,9 @@ class EventManager implements Disposable {
 
   /// Creates a new event manager with an optional custom event bus.
   ///
-  /// If no event bus is provided, a new one will be created.
-  EventManager([EventBus? eventBus]) : _eventBus = eventBus ?? EventBus();
+  /// If no event bus is provided, a new synchronous one will be created.
+  EventManager([EventBus? eventBus])
+    : _eventBus = eventBus ?? EventBus(sync: true);
 
   /// Publishes an event to all subscribers.
   ///

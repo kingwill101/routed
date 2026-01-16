@@ -9,6 +9,7 @@ class MiddlewareReference {
   MiddlewareReference._();
 
   static final Expando<String> _names = Expando<String>('middlewareRef');
+  static final Expando<String> _tags = Expando<String>('middlewareTag');
 
   /// Creates a placeholder middleware that must be resolved before execution.
   static Middleware create(String name) {
@@ -27,11 +28,17 @@ class MiddlewareReference {
 
   /// Tags a middleware with a registry name.
   static void tag(Middleware middleware, String name) {
-    _names[middleware] = name;
+    _tags[middleware] = name;
   }
 
   /// Clears the marker for [middleware].
-  static void clear(Middleware middleware) => _names[middleware] = null;
+  static void clear(Middleware middleware) {
+    _names[middleware] = null;
+    _tags[middleware] = null;
+  }
+
+  /// Returns the tagged name for a resolved middleware.
+  static String? lookupTag(Middleware middleware) => _tags[middleware];
 }
 
 /// Convenience factory for constructing middleware references.

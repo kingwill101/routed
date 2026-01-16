@@ -38,7 +38,9 @@ class MiddlewareExclusions {
     if (_middlewares.contains(middleware)) {
       return true;
     }
-    final name = MiddlewareReference.lookup(middleware);
+    final name =
+        MiddlewareReference.lookupTag(middleware) ??
+        MiddlewareReference.lookup(middleware);
     return name != null && _ids.contains(name);
   }
 
@@ -56,7 +58,9 @@ class MiddlewareExclusions {
       return;
     }
     if (middleware is Middleware) {
-      final name = MiddlewareReference.lookup(middleware);
+      final name =
+          MiddlewareReference.lookupTag(middleware) ??
+          MiddlewareReference.lookup(middleware);
       if (name != null && name.isNotEmpty) {
         _ids.add(name);
       } else {
