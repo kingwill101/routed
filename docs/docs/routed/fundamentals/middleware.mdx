@@ -84,6 +84,27 @@ router.get(
 );
 ```
 
+### Skipping middleware
+
+Routes and groups can opt out of specific middleware with `withoutMiddleware`.
+Pass middleware identifiers (recommended) or middleware instances:
+
+```dart
+router.get('/public', publicHandler)
+  .withoutMiddleware(['routed.rate_limit.middleware']);
+
+router.group(
+  path: '/api',
+  middlewares: [MiddlewareRef.of('routed.rate_limit.middleware')],
+  builder: (api) {
+    api.get('/status', statusHandler);
+  },
+).withoutMiddleware(['routed.rate_limit.middleware']);
+```
+
+This removes matching middleware from the route/group stack. Named middleware
+can be excluded even when it is registered globally.
+
 ## Named middleware references
 
 Service providers can register middleware with the shared `MiddlewareRegistry`. Routes, groups, and mounts may then reference middleware by name instead of importing the implementation:

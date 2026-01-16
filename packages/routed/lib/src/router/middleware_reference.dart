@@ -25,6 +25,11 @@ class MiddlewareReference {
   /// Returns the registered name for [middleware] if it is a reference.
   static String? lookup(Middleware middleware) => _names[middleware];
 
+  /// Tags a middleware with a registry name.
+  static void tag(Middleware middleware, String name) {
+    _names[middleware] = name;
+  }
+
   /// Clears the marker for [middleware].
   static void clear(Middleware middleware) => _names[middleware] = null;
 }

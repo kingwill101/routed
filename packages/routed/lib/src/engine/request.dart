@@ -435,10 +435,13 @@ extension ServerExtension on Engine {
     final resolvedGlobal = _resolveMiddlewares(middlewares, container);
     final resolvedRoute = _resolveMiddlewares(route.middlewares, container);
 
+    final filteredGlobal = route.exclusions.filter(resolvedGlobal);
+    final filteredRoute = route.exclusions.filter(resolvedRoute);
+
     final List<Middleware> chain = [
-      for (final middleware in resolvedGlobal)
+      for (final middleware in filteredGlobal)
         (EngineContext ctx, Next next) => middleware(ctx, next),
-      for (final middleware in resolvedRoute)
+      for (final middleware in filteredRoute)
         (EngineContext ctx, Next next) => middleware(ctx, next),
     ];
     chain.add((EngineContext c, Next n) async {
@@ -526,10 +529,13 @@ extension ServerExtension on Engine {
     final resolvedGlobal = _resolveMiddlewares(middlewares, container);
     final resolvedRoute = _resolveMiddlewares(route.middlewares, container);
 
+    final filteredGlobal = route.exclusions.filter(resolvedGlobal);
+    final filteredRoute = route.exclusions.filter(resolvedRoute);
+
     final List<Middleware> chain = [
-      for (final middleware in resolvedGlobal)
+      for (final middleware in filteredGlobal)
         (EngineContext ctx, Next next) => middleware(ctx, next),
-      for (final middleware in resolvedRoute)
+      for (final middleware in filteredRoute)
         (EngineContext ctx, Next next) => middleware(ctx, next),
     ];
     chain.add((EngineContext ctx, Next next) async {

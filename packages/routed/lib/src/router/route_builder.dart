@@ -35,6 +35,12 @@ class RouteBuilder {
     return this;
   }
 
+  /// Excludes middleware from this route.
+  RouteBuilder withoutMiddleware(Iterable<Object> middlewares) {
+    _route.excludeMiddlewares(middlewares);
+    return this;
+  }
+
   /// Creates a new router group with the specified path, middlewares, and builder function.
   ///
   /// The [path] parameter specifies the base path for the group.

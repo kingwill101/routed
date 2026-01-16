@@ -26,4 +26,10 @@ class RouterGroupBuilder {
     _router.groupName = groupName;
     return this;
   }
+
+  /// Excludes middleware from this group.
+  RouterGroupBuilder withoutMiddleware(Iterable<Object> middlewares) {
+    _router.excludeMiddlewares(middlewares);
+    return this;
+  }
 }

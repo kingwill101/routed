@@ -90,6 +90,28 @@ rate_limit:
 
 Policies are evaluated in declaration order. The first policy that matches and blocks short-circuits the chain. When all policies allow the request, control is passed to the next middleware/handler.
 
+### Exempt routes
+
+If no policy matches a request, it is exempt from rate limiting. You can scope
+policies to specific methods and paths, or remove the middleware from selected
+routes/groups:
+
+```yaml title="config/rate-limiting.yaml"
+rate_limit:
+  enabled: true
+  policies:
+    - name: api
+      match: /api/v1/*
+      method: GET
+      capacity: 100
+      interval: 60s
+```
+
+```dart title="route exclusion"
+router.get('/public', handler)
+  .withoutMiddleware(['routed.rate_limit.middleware']);
+```
+
 ### Strategy reference
 
 | Strategy | Use case | Required fields | Notes |

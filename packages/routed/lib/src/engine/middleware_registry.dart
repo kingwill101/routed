@@ -65,7 +65,9 @@ class MiddlewareRegistry extends NamedRegistry<MiddlewareFactory> {
   Middleware? build(String id, Container container) {
     final factory = getEntry(id);
     if (factory == null) return null;
-    return factory(container);
+    final middleware = factory(container);
+    MiddlewareReference.tag(middleware, id);
+    return middleware;
   }
 
   /// All registered middleware identifiers.

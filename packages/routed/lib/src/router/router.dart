@@ -1,5 +1,6 @@
 import 'package:routed/routed.dart';
 import 'package:routed/src/router/registered_route.dart';
+import 'package:routed/src/router/middleware_exclusions.dart';
 import 'package:routed/src/router/router_group_builder.dart';
 import 'package:routed/src/static_files.dart';
 export 'route_builder.dart';
@@ -20,6 +21,9 @@ class Router with StaticFileHandler {
   /// Middlewares *declared for this router group only*.
   /// (We do not manually copy the parent's middlewares here.)
   final List<Middleware> groupMiddlewares = [];
+
+  /// Middleware exclusions applied to this router group.
+  final MiddlewareExclusions exclusions = MiddlewareExclusions();
 
   /// Direct routes defined at this level
   final List<RegisteredRoute> _routes = [];
@@ -346,6 +350,11 @@ class Router with StaticFileHandler {
     return RouteBuilder(route, this);
   }
 
+  /// Excludes middleware from this router group and its descendants.
+  void excludeMiddlewares(Iterable<Object> middlewares) {
+    exclusions.addAll(middlewares);
+  }
+
   //
   // /// Register a class-based view with the router.
   // ///
@@ -389,29 +398,44 @@ class Router with StaticFileHandler {
   void build({
     String? parentGroupName,
     List<Middleware> inheritedMiddlewares = const [],
+    MiddlewareExclusions? inheritedExclusions,
     String parentPrefix = '', // Add this parameter
   }) {
     // Combine parent's name and ours => effective name
     final effectiveGroupName = _joinNames(parentGroupName, groupName);
 
-    // Combine parent's middlewares and ours
+    final mergedExclusions =
+        (inheritedExclusions ?? MiddlewareExclusions()).merged(exclusions);
+
+    // Combine parent's middlewares and ours, then apply exclusions.
     final combinedMW = [...inheritedMiddlewares, ...groupMiddlewares];
+    final filteredCombinedMW = mergedExclusions.filter(combinedMW);
 
     // Update direct routes
     for (final route in _routes) {
+      final routeExclusions = mergedExclusions.merged(route.exclusions);
       // Merge route name
       if (route.name != null && route.name!.isNotEmpty) {
         route.name = _joinNames(effectiveGroupName, route.name);
       }
-      // Merge route-level middlewares
-      route.finalMiddlewares = [...combinedMW, ...route.routeMiddlewares];
+      // Merge route-level middlewares and apply exclusions
+      route.finalMiddlewares = routeExclusions.filter([
+        ...filteredCombinedMW,
+        ...route.routeMiddlewares,
+      ]);
+      route.finalExclusions = routeExclusions;
       if (!route.path.startsWith(_prefix)) {
         route.path = _joinPaths(_prefix, route.path);
       }
     }
 
     for (final wsRoute in _wsRoutes) {
-      wsRoute.finalMiddlewares = [...combinedMW, ...wsRoute.routeMiddlewares];
+      final routeExclusions = mergedExclusions.merged(wsRoute.exclusions);
+      wsRoute.finalMiddlewares = routeExclusions.filter([
+        ...filteredCombinedMW,
+        ...wsRoute.routeMiddlewares,
+      ]);
+      wsRoute.finalExclusions = routeExclusions;
       if (!wsRoute.path.startsWith(_prefix)) {
         wsRoute.path = _joinPaths(_prefix, wsRoute.path);
       }
@@ -421,7 +445,8 @@ class Router with StaticFileHandler {
     for (final child in _children) {
       child.build(
         parentGroupName: effectiveGroupName,
-        inheritedMiddlewares: combinedMW,
+        inheritedMiddlewares: filteredCombinedMW,
+        inheritedExclusions: mergedExclusions,
         parentPrefix: _joinPaths(parentPrefix, _prefix), // Propagate the prefix
       );
     }
@@ -527,4 +552,10 @@ class RouterWebSocketRoute {
   final WebSocketHandler handler;
   final List<Middleware> routeMiddlewares;
   List<Middleware> finalMiddlewares = [];
+  final MiddlewareExclusions exclusions = MiddlewareExclusions();
+  late MiddlewareExclusions finalExclusions;
+
+  void excludeMiddlewares(Iterable<Object> middlewares) {
+    exclusions.addAll(middlewares);
+  }
 }

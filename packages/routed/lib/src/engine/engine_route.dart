@@ -32,6 +32,9 @@ class EngineRoute {
   /// These middlewares are executed in order before the route's handler.
   final List<Middleware> middlewares;
 
+  /// Middleware exclusions for this route.
+  final MiddlewareExclusions exclusions;
+
   /// Compiled regex pattern for matching URLs.
   late final RegExp _uriPattern;
 
@@ -58,9 +61,11 @@ class EngineRoute {
     required RoutePatternRegistry patternRegistry,
     this.name,
     this.middlewares = const [],
+    MiddlewareExclusions? exclusions,
     this.constraints = const {},
     this.isFallback = false,
-  }) : _patternRegistry = patternRegistry {
+  }) : _patternRegistry = patternRegistry,
+       exclusions = exclusions ?? MiddlewareExclusions() {
     final patternData = _buildUriPattern(path, _patternRegistry);
     _uriPattern = patternData.pattern;
     _parameterPatterns = patternData.paramInfo;
@@ -71,12 +76,14 @@ class EngineRoute {
     required this.handler,
     required RoutePatternRegistry patternRegistry,
     this.middlewares = const [],
+    MiddlewareExclusions? exclusions,
   }) : method = '*',
        path = '*',
        name = null,
        constraints = const {},
        isFallback = true,
-       _patternRegistry = patternRegistry {
+       _patternRegistry = patternRegistry,
+       exclusions = exclusions ?? MiddlewareExclusions() {
     _uriPattern = RegExp('.*');
     _parameterPatterns = const {};
   }

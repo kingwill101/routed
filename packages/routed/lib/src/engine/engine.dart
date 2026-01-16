@@ -34,6 +34,7 @@ import 'package:routed/src/provider/provider.dart';
 import 'package:routed/src/provider/config_utils.dart';
 import 'package:routed/src/request.dart';
 import 'package:routed/src/response.dart';
+import 'package:routed/src/router/middleware_exclusions.dart';
 import 'package:routed/src/router/router.dart';
 import 'package:routed/src/router/router_group_builder.dart';
 import 'package:routed/src/router/types.dart';
@@ -724,6 +725,7 @@ class Engine with StaticFileHandler, ContainerMixin {
           patternRegistry: patternRegistry,
           name: r.name,
           middlewares: allMiddlewares,
+          exclusions: r.finalExclusions,
           constraints: r.constraints,
           isFallback: r.constraints['isFallback'] == true,
         );
@@ -766,6 +768,7 @@ class Engine with StaticFileHandler, ContainerMixin {
           pattern: patternData.pattern,
           paramInfo: patternData.paramInfo,
           middlewares: allMiddlewares,
+          exclusions: ws.finalExclusions,
           patternRegistry: patternRegistry,
         );
       }

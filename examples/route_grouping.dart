@@ -3,18 +3,20 @@ import 'package:routed/routed.dart';
 void main() async {
   final engine = Engine();
 
+  final adminAuth = (EngineContext ctx, Next next) async {
+    final token = ctx.requestHeader('Authorization');
+    if (token != 'admin-token') {
+      return ctx.json({'error': 'Unauthorized access'}, statusCode: 401);
+    }
+    return await next();
+  };
+
   // Basic route group
   engine.group(
     path: '/admin',
     middlewares: [
       // Auth middleware
-      (EngineContext ctx, Next next) async {
-        final token = ctx.requestHeader('Authorization');
-        if (token != 'admin-token') {
-          return ctx.json({'error': 'Unauthorized access'}, statusCode: 401);
-        }
-        return await next();
-      },
+      adminAuth,
     ],
     builder: (router) {
       router.get('/dashboard', (ctx) {
@@ -24,6 +26,10 @@ void main() async {
       router.get('/users', (ctx) {
         return ctx.json({'section': 'users', 'count': 100});
       });
+
+      router
+          .get('/health', (ctx) => ctx.json({'status': 'ok'}))
+          .withoutMiddleware([adminAuth]);
     },
   );
 
@@ -108,6 +114,7 @@ void main() async {
   print('Admin routes (requires Authorization: admin-token header):');
   print('  GET /admin/dashboard');
   print('  GET /admin/users');
+  print('  GET /admin/health (no auth required)');
   print('\nAPI routes:');
   print('  GET /api/v1/status');
   print('  GET /api/v2/status');

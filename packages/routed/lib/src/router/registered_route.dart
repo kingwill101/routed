@@ -1,3 +1,4 @@
+import 'package:routed/src/router/middleware_exclusions.dart';
 import 'package:routed/src/router/types.dart';
 
 /// Represents a route that has been registered in the Router.
@@ -13,6 +14,12 @@ class RegisteredRoute {
   /// The final list of middlewares after merging parent group + route.
   late List<Middleware> finalMiddlewares;
 
+  /// Middleware exclusions configured on this route.
+  final MiddlewareExclusions exclusions = MiddlewareExclusions();
+
+  /// Final exclusions after merging group/route exclusions.
+  late MiddlewareExclusions finalExclusions;
+
   /// Name of the route, used for "named route" features.
   String? name;
 
@@ -26,6 +33,10 @@ class RegisteredRoute {
     this.name,
     Map<String, dynamic>? constraints,
   }) : constraints = Map<String, dynamic>.from(constraints ?? const {});
+
+  void excludeMiddlewares(Iterable<Object> middlewares) {
+    exclusions.addAll(middlewares);
+  }
 
   @override
   String toString() {

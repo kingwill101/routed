@@ -5,6 +5,8 @@
   request.
 - Request containers now advertise request scope, and `RequestServiceProvider`
   is marked request-scoped by default.
+- Added `withoutMiddleware` for routes and groups to opt out of named middleware,
+  plus expanded rate limiting coverage to validate matcher behavior.
 
 ## 0.3.1
 

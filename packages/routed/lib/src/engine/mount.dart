@@ -21,14 +21,17 @@ class WebSocketEngineRoute {
     required this.paramInfo,
     required RoutePatternRegistry patternRegistry,
     List<Middleware>? middlewares,
+    MiddlewareExclusions? exclusions,
   }) : _patternRegistry = patternRegistry,
-       middlewares = List<Middleware>.from(middlewares ?? const []);
+       middlewares = List<Middleware>.from(middlewares ?? const []),
+       exclusions = exclusions ?? MiddlewareExclusions();
 
   final String path;
   final RegExp pattern;
   final Map<String, ParamInfo> paramInfo;
   final WebSocketHandler handler;
   final List<Middleware> middlewares;
+  final MiddlewareExclusions exclusions;
   final RoutePatternRegistry _patternRegistry;
 
   Map<String, dynamic> extractParameters(String uri) {
