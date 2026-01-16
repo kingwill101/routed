@@ -1,0 +1,1 @@
+"use strict";(globalThis.webpackChunkrouted=globalThis.webpackChunkrouted||[]).push([[4719],{4044:e=>{e.exports=JSON.parse('{"name":"docusaurus-plugin-content-docs","id":"routed_hotwire"}')}}]);
