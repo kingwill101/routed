@@ -19,83 +19,80 @@ Future<Engine> createEngine() async {
 
   engine.container.instance<DataSource>(dataSource);
 
-  engine.group(path: '/api', builder: (router) {
-    router.get('/todos', (ctx) async {
-      final items = await dataSource.query<Todo>().orderBy('id').get();
-      return ctx.json({
-        'data': items.map(_serializeTodo).toList(),
+  engine.group(
+    path: '/api',
+    builder: (router) {
+      router.get('/todos', (ctx) async {
+        final items = await dataSource.query<Todo>().orderBy('id').get();
+        return ctx.json({'data': items.map(_serializeTodo).toList()});
       });
-    });
 
-    router.post('/todos', (ctx) async {
-      final payload =
-          Map<String, dynamic>.from(await ctx.bindJSON({}) as Map? ?? const {});
-      final title = payload['title']?.toString().trim() ?? '';
-      if (title.isEmpty) {
-        return ctx.json(
-          {'message': 'Title is required.'},
-          statusCode: HttpStatus.unprocessableEntity,
+      router.post('/todos', (ctx) async {
+        final payload = Map<String, dynamic>.from(
+          await ctx.bindJSON({}) as Map? ?? const {},
         );
-      }
-
-      final completed = payload['completed'] == true;
-      final created = await dataSource.repo<Todo>().insert({
-        'title': title,
-        'completed': completed,
-      });
-      return ctx.json(
-        _serializeTodo(created),
-        statusCode: HttpStatus.created,
-      );
-    });
-
-    router.patch('/todos/{id}', (ctx) async {
-      final idValue = int.tryParse(ctx.mustGetParam<String>('id'));
-      if (idValue == null) {
-        return ctx.json(
-          {'message': 'Invalid todo id.'},
-          statusCode: HttpStatus.badRequest,
-        );
-      }
-
-      final payload =
-          Map<String, dynamic>.from(await ctx.bindJSON({}) as Map? ?? const {});
-      final updates = <String, Object?>{};
-      if (payload.containsKey('title')) {
-        final title = payload['title']?.toString().trim();
-        if (title == null || title.isEmpty) {
-          return ctx.json(
-            {'message': 'Title cannot be empty.'},
-            statusCode: HttpStatus.unprocessableEntity,
-          );
+        final title = payload['title']?.toString().trim() ?? '';
+        if (title.isEmpty) {
+          return ctx.json({
+            'message': 'Title is required.',
+          }, statusCode: HttpStatus.unprocessableEntity);
         }
-        updates['title'] = title;
-      }
-      if (payload.containsKey('completed')) {
-        updates['completed'] = payload['completed'] == true;
-      }
-      if (updates.isEmpty) {
+
+        final completed = payload['completed'] == true;
+        final created = await dataSource.repo<Todo>().insert({
+          'title': title,
+          'completed': completed,
+        });
         return ctx.json(
-          {'message': 'No updates provided.'},
-          statusCode: HttpStatus.unprocessableEntity,
+          _serializeTodo(created),
+          statusCode: HttpStatus.created,
         );
-      }
+      });
 
-      final existing = await dataSource
-          .query<Todo>()
-          .whereEquals('id', idValue)
-          .first();
-      await ctx.fetchOr404(
-        () async => existing,
-        message: 'Todo not found',
-      );
+      router.patch('/todos/{id}', (ctx) async {
+        final idValue = int.tryParse(ctx.mustGetParam<String>('id'));
+        if (idValue == null) {
+          return ctx.json({
+            'message': 'Invalid todo id.',
+          }, statusCode: HttpStatus.badRequest);
+        }
 
-      final updated = await dataSource
-          .repo<Todo>()
-          .update(updates, where: {'id': idValue});
-      return ctx.json(_serializeTodo(updated));
-    });
-  });
+        final payload = Map<String, dynamic>.from(
+          await ctx.bindJSON({}) as Map? ?? const {},
+        );
+        final updates = <String, Object?>{};
+        if (payload.containsKey('title')) {
+          final title = payload['title']?.toString().trim();
+          if (title == null || title.isEmpty) {
+            return ctx.json({
+              'message': 'Title cannot be empty.',
+            }, statusCode: HttpStatus.unprocessableEntity);
+          }
+          updates['title'] = title;
+        }
+        if (payload.containsKey('completed')) {
+          updates['completed'] = payload['completed'] == true;
+        }
+        if (updates.isEmpty) {
+          return ctx.json({
+            'message': 'No updates provided.',
+          }, statusCode: HttpStatus.unprocessableEntity);
+        }
+
+        final existing = await dataSource
+            .query<Todo>()
+            .whereEquals('id', idValue)
+            .first();
+        await ctx.fetchOr404(() async => existing, message: 'Todo not found');
+
+        final updated = await dataSource.repo<Todo>().update(
+          updates,
+          where: {'id': idValue},
+        );
+        return ctx.json(_serializeTodo(updated));
+      });
+    },
+  );
 
   engine.get('/', (ctx) async {
     return await ctx.template(templateName: 'todos.liquid');

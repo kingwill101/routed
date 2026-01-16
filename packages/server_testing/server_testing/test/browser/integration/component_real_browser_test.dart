@@ -94,5 +94,5 @@ void main() {
       await page.submitForm();
       await browser.assertTitle('Dashboard');
     });
-  }, tags: ['real-browser']);
+  });
 }

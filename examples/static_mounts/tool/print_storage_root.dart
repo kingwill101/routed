@@ -2,6 +2,7 @@ import 'dart:io';
 
 import 'package:routed/routed.dart';
 import 'package:routed/src/storage/local_storage_driver.dart';
+
 Future<void> main() async {
   print('cwd: ${Directory.current.path}');
   final engine = await Engine.create(
@@ -17,5 +18,7 @@ Future<void> main() async {
   } else {
     print('assets.disk: $disk');
   }
-  print('fs.currentDirectory: ${engine.container.get<EngineConfig>().fileSystem.currentDirectory.path}');
+  print(
+    'fs.currentDirectory: ${engine.container.get<EngineConfig>().fileSystem.currentDirectory.path}',
+  );
 }

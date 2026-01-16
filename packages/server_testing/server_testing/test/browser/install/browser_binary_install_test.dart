@@ -70,5 +70,5 @@ void main() {
       },
       timeout: const Timeout(Duration(minutes: 5)),
     );
-  }, tags: ['real-browser']);
+  });
 }

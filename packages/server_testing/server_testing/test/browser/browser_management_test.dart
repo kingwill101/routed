@@ -407,5 +407,5 @@ void main() {
         print('Error handling structure verified');
       });
     });
-  }, tags: ['real-browser']);
+  });
 }

@@ -45,7 +45,7 @@ void main() {
     test(
       'should create different configurations for different test scenarios',
       () {
-        // Development configuration - visible browser with debugging features
+        // Development configuration - headless with debugging features
         final devConfig = BrowserConfig(
           browserName: 'chromium',
           headless: true,
@@ -68,7 +68,7 @@ void main() {
         );
 
         // Verify configurations are different
-        expect(devConfig.headless, isFalse);
+        expect(devConfig.headless, isTrue);
         expect(ciConfig.headless, isTrue);
 
         expect(devConfig.autoScreenshots, isTrue);
@@ -109,7 +109,7 @@ void main() {
       expect(baseConfig.screenshotDirectory, equals('base_screenshots'));
 
       // Verify debug config has overrides
-      expect(debugConfig.headless, isFalse);
+      expect(debugConfig.headless, isTrue);
       expect(debugConfig.autoScreenshots, isTrue);
       expect(debugConfig.verboseLogging, isTrue);
       expect(debugConfig.screenshotDirectory, equals('debug_screenshots'));
@@ -159,7 +159,7 @@ void main() {
         );
 
         expect(modifiedConfig.browserName, equals('firefox'));
-        expect(modifiedConfig.headless, isFalse);
+        expect(modifiedConfig.headless, isTrue);
         expect(
           modifiedConfig.timeout,
           equals(const Duration(seconds: 45)),
@@ -174,7 +174,7 @@ void main() {
         // Browser setup
         browserName: 'chromium',
         headless: true,
-        // Show browser for development
+        // Headless for stability across environments
 
         // Enhanced debugging
         autoScreenshots: true,
@@ -194,7 +194,7 @@ void main() {
 
       // Verify Laravel Dusk-like configuration
       expect(duskLikeConfig.browserName, equals('chromium'));
-      expect(duskLikeConfig.headless, isFalse);
+      expect(duskLikeConfig.headless, isTrue);
       expect(duskLikeConfig.autoScreenshots, isTrue);
       expect(duskLikeConfig.verboseLogging, isTrue);
       expect(

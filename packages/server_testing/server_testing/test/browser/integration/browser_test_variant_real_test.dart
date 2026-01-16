@@ -56,5 +56,5 @@ void main() {
       await browser.visit(baseUrl);
       await browser.assertTitle('Home');
     });
-  }, tags: ['real-browser']);
+  });
 }

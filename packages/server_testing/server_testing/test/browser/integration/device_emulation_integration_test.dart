@@ -69,5 +69,5 @@ void main() {
     );
 
     // Galaxy S9 check is flaky across engines; covered by Pixel 5 smoke above.
-  }, tags: ['real-browser']);
+  });
 }

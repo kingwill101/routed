@@ -54,5 +54,5 @@ void main() {
       // Avoid headful launches on CI without a display server.
       print('Skipping headful browser group (no DISPLAY in CI).');
     }
-  }, tags: ['real-browser']);
+  });
 }

@@ -106,5 +106,5 @@ void main() {
       await page.form.submitForm();
       await browser.assertTitle('Dashboard');
     });
-  }, tags: ['real-browser']);
+  });
 }

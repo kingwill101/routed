@@ -1,3 +1,7 @@
+## 0.3.2
+
+- Removed the `real-browser` test tag and aligned browser tests with headless defaults.
+
 ## 0.3.1
 
 - Synced server_testing dependency constraints.

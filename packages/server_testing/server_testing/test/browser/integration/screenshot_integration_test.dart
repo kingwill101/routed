@@ -74,5 +74,5 @@ void main() {
         reason: 'Custom-named screenshot missing',
       );
     });
-  }, tags: ['real-browser']);
+  });
 }

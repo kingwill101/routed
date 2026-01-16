@@ -24,5 +24,5 @@ void main() {
       await browser.assertTitle('Example Domain');
       await browser.waiter.wait(const Duration(seconds: 4));
     }, browserType: ChromiumType());
-  }, tags: ['real-browser']);
+  });
 }

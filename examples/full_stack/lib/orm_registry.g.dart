@@ -9,8 +9,7 @@ final List<ModelDefinition<OrmEntity>> _$ormModelDefinitions = [
 
 ModelRegistry buildOrmRegistry() => ModelRegistry()
   ..registerAll(_$ormModelDefinitions)
-  ..registerTypeAlias<Todo>(_$ormModelDefinitions[0])
-  ;
+  ..registerTypeAlias<Todo>(_$ormModelDefinitions[0]);
 
 List<ModelDefinition<OrmEntity>> get generatedOrmModelDefinitions =>
     List.unmodifiable(_$ormModelDefinitions);
@@ -47,7 +46,14 @@ void registerModelScopes({ScopeRegistry? scopeRegistry}) {
 }
 
 /// Bootstraps generated ORM pieces: registry, factories, event handlers, and scopes.
-ModelRegistry bootstrapOrm({ModelRegistry? registry, EventBus? bus, ScopeRegistry? scopes, bool registerFactories = true, bool registerEventHandlers = true, bool registerScopes = true}) {
+ModelRegistry bootstrapOrm({
+  ModelRegistry? registry,
+  EventBus? bus,
+  ScopeRegistry? scopes,
+  bool registerFactories = true,
+  bool registerEventHandlers = true,
+  bool registerScopes = true,
+}) {
   final reg = registry ?? buildOrmRegistry();
   if (registry != null) {
     reg.registerGeneratedModels();

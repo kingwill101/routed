@@ -178,5 +178,5 @@ void main() {
       },
       useAsync: false, // Explicitly choose sync driver
     );
-  }, tags: ['real-browser']);
+  });
 }
