@@ -199,7 +199,7 @@ class FileHandler {
     }
 
     ctx.response.write('</ul></body></html>');
-    ctx.response.close();
+    await ctx.close();
   }
 
   /// Serves a file over HTTP.
@@ -244,7 +244,7 @@ class FileHandler {
     } else {
       // Serve entire file efficiently
       await ctx.response.addStream(file.openRead());
-      ctx.response.close();
+      await ctx.close();
     }
   }
 
@@ -262,7 +262,7 @@ class FileHandler {
           ifModifiedSince.toUtc().millisecondsSinceEpoch ~/ 1000;
       if (lastModifiedTruncated <= imsTruncated) {
         ctx.response.statusCode = HttpStatus.notModified;
-        ctx.response.close();
+        unawaited(ctx.close());
         return true;
       }
     }
@@ -304,7 +304,7 @@ class FileHandler {
       );
 
       await ctx.response.addStream(file.openRead(range.start, range.end + 1));
-      ctx.response.close();
+      await ctx.close();
     } else {
       ctx.abortWithStatus(
         HttpStatus.notImplemented,

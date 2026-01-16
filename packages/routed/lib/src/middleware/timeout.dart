@@ -19,7 +19,7 @@ Middleware timeoutMiddleware(Duration duration) {
         // higher-level render logic which may ignore writes after abort.
         ctx.response.statusCode = HttpStatus.gatewayTimeout;
         ctx.response.write('Gateway Timeout');
-        ctx.response.close();
+        unawaited(ctx.response.close());
       }
       return ctx.response;
     }

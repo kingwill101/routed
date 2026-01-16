@@ -213,6 +213,7 @@ extension ServerExtension on Engine {
           );
         }
         _redirectRequest(effectiveRequest, alternativePath, method);
+        await _drainHttpRequestIfNeeded(effectiveRequest);
         await effectiveRequest.response.close();
         return null;
       }
@@ -244,6 +245,7 @@ extension ServerExtension on Engine {
           effectiveRequest.response.write(
             'Request body exceeds the maximum allowed size.',
           );
+          await _drainHttpRequestIfNeeded(effectiveRequest);
           await effectiveRequest.response.close();
           return null;
         }
@@ -266,6 +268,7 @@ extension ServerExtension on Engine {
           );
         } else {
           _writeOptionsResponse(effectiveRequest.response, allowed);
+          await _drainHttpRequestIfNeeded(effectiveRequest);
           await effectiveRequest.response.close();
         }
         return null;
@@ -296,6 +299,7 @@ extension ServerExtension on Engine {
           effectiveRequest.response,
           allowedMethods,
         );
+        await _drainHttpRequestIfNeeded(effectiveRequest);
         await effectiveRequest.response.close();
         return null;
       }
@@ -396,8 +400,9 @@ extension ServerExtension on Engine {
               manager?.publish(RoutingErrorEvent(context, null, err, stack));
               await _handleGlobalError(context, err, stack);
             } finally {
+              await _drainRequestIfNeeded(request, context);
               if (!response.isClosed) {
-                response.close();
+                await response.close();
               }
             }
           });
@@ -482,10 +487,11 @@ extension ServerExtension on Engine {
               manager?.publish(RoutingErrorEvent(context, route, err, stack));
               await _handleGlobalError(context, err, stack);
             } finally {
+              await _drainRequestIfNeeded(request, context);
               // Close if our wrapper not yet closed; underlying may already be
               // closed by direct HttpResponse usage (e.g. static file handler).
               if (!response.isClosed) {
-                response.close();
+                await response.close();
               }
             }
           });
@@ -663,8 +669,9 @@ extension ServerExtension on Engine {
             } catch (err, stack) {
               await _handleGlobalError(context, err, stack);
             } finally {
+              await _drainRequestIfNeeded(request, context);
               if (closeResponse && !response.isClosed) {
-                response.close();
+                await response.close();
               }
             }
           });
@@ -840,6 +847,26 @@ extension ServerExtension on Engine {
 
     request.response.statusCode = statusCode;
     request.response.headers.add('Location', newPath);
+  }
+
+  Future<void> _drainHttpRequestIfNeeded(HttpRequest request) async {
+    final length = request.contentLength;
+    if (length == 0) return;
+    if (length < 0 && !request.headers.chunkedTransferEncoding) return;
+    try {
+      await request.drain();
+    } catch (_) {
+      // Ignore: request may already be listened to.
+    }
+  }
+
+  Future<void> _drainRequestIfNeeded(
+    Request request,
+    EngineContext context,
+  ) async {
+    if (context.isUpgraded) return;
+    if (!request.hasBody || request.bodyConsumed) return;
+    await request.drain();
   }
 
   /// Stops the HTTP server and releases all resources.

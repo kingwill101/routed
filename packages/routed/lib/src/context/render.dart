@@ -2,7 +2,7 @@ part of 'context.dart';
 
 extension ContextRender on EngineContext {
   /// Renders the response using the provided renderer and returns the Response.
-  FutureOr<Response> render(int statusCode, Render renderer) async {
+  FutureOr<Response> render(int statusCode, Render renderer) {
     // If the response has already been finalized or the context was aborted
     // (e.g. by a timeout), ignore subsequent render attempts.
     if (isAborted || _response.isClosed) {
@@ -22,7 +22,14 @@ extension ContextRender on EngineContext {
     }
 
     try {
-      await renderer.render(_response);
+      final result = renderer.render(_response);
+      if (result is Future<void>) {
+        return result.then((_) => _response).catchError((err) {
+          addError('Render error: $err');
+          abort();
+          return _response;
+        });
+      }
     } catch (err) {
       addError('Render error: $err');
       abort();

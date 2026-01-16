@@ -149,7 +149,7 @@ extension EngineContextSse on EngineContext {
       }
       if (!response.isClosed) {
         try {
-          response.close();
+          await response.close();
         } catch (_) {}
       }
       if (!completion.isCompleted) {

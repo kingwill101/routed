@@ -2,14 +2,14 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 import 'dart:typed_data';
-
+import 'package:meta/meta.dart' show internal;
 typedef ResponseBodyFilter = List<int> Function(List<int> body);
 
 /// A class that represents an HTTP response.
 class Response {
   /// The underlying [HttpResponse] object.
   ///
-  /// @deprecated Use the public API methods instead of accessing httpResponse directly.
+  /// Use the public API methods instead of accessing httpResponse directly.
   /// This field will be made private in a future version.
   final HttpResponse _httpResponse;
   final _buffer = BytesBuilder();
@@ -133,6 +133,10 @@ class Response {
         _bodyFilter = null;
       }
     }
+    if (_httpResponse.contentLength < 0 &&
+        !_httpResponse.headers.chunkedTransferEncoding) {
+      _httpResponse.contentLength = bytes.length;
+    }
     _httpResponse.add(bytes);
     _bodyStarted = true;
   }
@@ -140,14 +144,15 @@ class Response {
   /// Closes the response.
   /// If the body has not started, it writes the buffered data first.
   /// Safe for underlying HttpResponse already being closed (e.g. file/dir handlers).
-  void close() {
+  Future<void> close() async {
     if (_isClosed) return;
     if (!_bodyStarted) {
       writeNow();
     }
     _isClosed = true;
     try {
-      _httpResponse.close();
+      await _httpResponse.flush();
+      await _httpResponse.close();
     } catch (_) {
       // Ignore: underlying already closed (in-memory/mock may throw)
     }

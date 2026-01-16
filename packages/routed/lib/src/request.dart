@@ -32,6 +32,7 @@ class Request {
 
   /// Cached body bytes of the request.
   Uint8List? _bodyBytes;
+  bool _bodyConsumed = false;
 
   EngineConfig config;
   String? _overrideClientIp;
@@ -116,7 +117,7 @@ class Request {
   /// Returns the body of the request as bytes.
   Future<Uint8List> get bytes async {
     if (_bodyBytes != null) return _bodyBytes!;
-
+    _bodyConsumed = true;
     BytesBuilder bytes = BytesBuilder();
     await for (final chunk in httpRequest) {
       bytes.add(chunk);
@@ -182,5 +183,58 @@ class Request {
   ///
   /// This allows consuming the request body as a stream without directly
   /// accessing the underlying HttpRequest object.
-  Stream<List<int>> get stream => httpRequest;
+  Stream<List<int>> get stream => _BodyStreamWrapper(
+    httpRequest,
+    onListen: () => _bodyConsumed = true,
+  );
+
+  /// Returns whether the request body has been consumed.
+  bool get bodyConsumed => _bodyConsumed;
+
+  /// Returns whether the request has a body.
+  ///
+  /// For HTTP/1.1, a body is present when content-length > 0 or when
+  /// transfer-encoding is chunked. If content-length is unknown and
+  /// not chunked, treat it as no body to avoid hanging drains.
+  bool get hasBody {
+    final length = httpRequest.contentLength;
+    if (length > 0) return true;
+    if (length == 0) return false;
+    return httpRequest.headers.chunkedTransferEncoding;
+  }
+
+  /// Drain the request body to allow keep-alive reuse when handlers
+  /// don't read it. Safe to call multiple times.
+  Future<void> drain() async {
+    if (_bodyConsumed || !hasBody) return;
+    _bodyConsumed = true;
+    try {
+      await httpRequest.drain();
+    } catch (_) {
+      // Ignore: request may already be listened to.
+    }
+  }
+}
+
+class _BodyStreamWrapper extends Stream<List<int>> {
+  _BodyStreamWrapper(this._source, {required this.onListen});
+
+  final Stream<List<int>> _source;
+  final void Function() onListen;
+
+  @override
+  StreamSubscription<List<int>> listen(
+    void Function(List<int> event)? onData, {
+    Function? onError,
+    void Function()? onDone,
+    bool? cancelOnError,
+  }) {
+    onListen();
+    return _source.listen(
+      onData,
+      onError: onError,
+      onDone: onDone,
+      cancelOnError: cancelOnError,
+    );
+  }
 }

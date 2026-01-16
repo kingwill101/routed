@@ -129,8 +129,7 @@ mixin ContainerMixin {
 
     if (_container.has<Config>()) {
       final parentConfig = _container.get<Config>();
-      final scoped = ConfigImpl(Map<String, dynamic>.from(parentConfig.all()));
-      container.instance<Config>(scoped);
+      container.instance<Config>(ScopedConfig(parentConfig));
     }
     return container;
   }

@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 
+import 'package:meta/meta.dart' show internal;
 import 'package:path/path.dart' as p;
 import 'package:routed/src/binding/binding.dart';
 import 'package:routed/src/binding/convert/sse.dart';
@@ -51,6 +52,7 @@ part 'shortcuts.dart';
 /// tracks errors, and can control flow in a chain of handlers.
 class EngineContext {
   /// The current HTTP request data.
+  @internal
   final Request request;
 
   /// The current HTTP response writer.
@@ -240,7 +242,11 @@ class EngineContext {
   String get scheme => request.scheme;
 
   /// Retrieve the response object.
+  @internal
   Response get response => _response;
+
+  /// Close the response and await the underlying HttpResponse completion.
+  Future<void> close() => _response.close();
 
   /// Reset the chain index so we can re-run (uncommon).
   void resetHandlers() {
