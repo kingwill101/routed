@@ -1,6 +1,6 @@
 name: routed_hotwire
 description: Turbo and Stimulus helpers for the routed backend framework.
-version: 0.1.1
+version: 0.1.2
 repository: https://github.com/kingwill101/routed/tree/master/packages/routed_hotwire
 tags:
   - routed
@@ -19,12 +19,12 @@ environment:
 dependencies:
   intl: ^0.20.2
   crypto: ^3.0.7
-  routed: ^0.3.1
+  routed: ^0.3.2
 
 dev_dependencies:
   contextual: ^2.1.0
   lints: ^6.0.0
   path: ^1.9.1
-  routed_testing: ^0.3.1
+  routed_testing: ^0.3.2
   server_testing: ^0.3.1
   test: ^1.29.0

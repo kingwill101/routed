@@ -1,3 +1,7 @@
+## 0.3.2
+
+- Synced routed ecosystem dependency constraints.
+
 ## 0.3.1
 
 - Synced routed ecosystem dependency constraints.
