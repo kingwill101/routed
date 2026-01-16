@@ -129,7 +129,7 @@ class LoggingServiceProvider extends ServiceProvider
       'duration_ms': duration.inMilliseconds,
     };
 
-    final loggingContext = LoggingContext.currentValues();
+    final loggingContext = LoggingContext.currentValues(ctx);
     if (!identical(loggingContext, const {})) {
       payload.addAll(loggingContext);
     }

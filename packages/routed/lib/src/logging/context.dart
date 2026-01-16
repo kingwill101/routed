@@ -17,6 +17,8 @@ class LoggingContext {
   LoggingContext._();
 
   static const _scopeKey = #routed_logger_scope;
+  static const _loggerKey = '__routed.logger';
+  static const _loggerContextKey = '__routed.logger_context';
 
   static FutureOr<T> run<T>(
     Engine engine,
@@ -29,8 +31,11 @@ class LoggingContext {
       'path': context.request.uri.path,
     };
 
-    final scope = _LoggerScope(RoutedLogger.create(baseContext), baseContext);
-    return _runWithScope(scope, () => body(scope.logger));
+    final logger = RoutedLogger.create(baseContext);
+    context
+      ..set(_loggerKey, logger)
+      ..set(_loggerContextKey, baseContext);
+    return body(logger);
   }
 
   static FutureOr<T> withValues<T>(
@@ -45,12 +50,24 @@ class LoggingContext {
     return _runWithScope(scope, () => body(scope.logger));
   }
 
-  static contextual.Logger currentLogger() {
+  static contextual.Logger currentLogger([EngineContext? context]) {
+    if (context != null) {
+      final stored = context.get<contextual.Logger>(_loggerKey);
+      if (stored != null) {
+        return stored;
+      }
+    }
     final scope = Zone.current[_scopeKey] as _LoggerScope?;
     return scope?.logger ?? RoutedLogger.create({'context': 'routed'});
   }
 
-  static Map<String, Object?> currentValues() {
+  static Map<String, Object?> currentValues([EngineContext? context]) {
+    if (context != null) {
+      final stored = context.get<Map<String, Object?>>(_loggerContextKey);
+      if (stored != null) {
+        return stored;
+      }
+    }
     final scope = Zone.current[_scopeKey] as _LoggerScope?;
     return scope?.context ?? const {};
   }

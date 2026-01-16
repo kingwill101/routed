@@ -1,10 +1,15 @@
 import 'package:routed/src/container/container.dart';
+import 'package:routed/src/context/context.dart';
 import 'package:routed/src/contracts/translation/translator.dart';
 import 'package:routed/src/translation/constants.dart';
 
 import 'zone.dart';
 
 T config<T>(String key, [T? defaultValue]) {
+  final ctx = _contextOrNull();
+  if (ctx != null) {
+    return ctx.config<T>(key, defaultValue);
+  }
   final value = AppZone.config.get(key, defaultValue);
   return value is T ? value : defaultValue as T;
 }
@@ -14,6 +19,10 @@ T config<T>(String key, [T? defaultValue]) {
 // EngineConfig get engineConfig => AppZone.engineConfig;
 
 String route(String name, [Map<String, dynamic>? parameters]) {
+  final ctx = _contextOrNull();
+  if (ctx != null) {
+    return ctx.route(name, parameters);
+  }
   return AppZone.route(name, parameters);
 }
 
@@ -28,6 +37,15 @@ Object? trans(
   String? locale,
   bool fallback = true,
 }) {
+  final ctx = _contextOrNull();
+  if (ctx != null) {
+    return ctx.trans(
+      key,
+      replacements: replacements,
+      locale: locale,
+      fallback: fallback,
+    );
+  }
   final translator = _translatorOrNull();
   if (translator == null) {
     return key;
@@ -51,6 +69,15 @@ String transChoice(
   Map<String, dynamic>? replacements,
   String? locale,
 }) {
+  final ctx = _contextOrNull();
+  if (ctx != null) {
+    return ctx.transChoice(
+      key,
+      count,
+      replacements: replacements,
+      locale: locale,
+    );
+  }
   final translator = _translatorOrNull();
   if (translator == null) {
     return key;
@@ -69,6 +96,10 @@ String transChoice(
 ///
 /// When the middleware is unavailable, [defaultLocale] (or `'en'`) is used.
 String currentLocale([String? defaultLocale]) {
+  final ctx = _contextOrNull();
+  if (ctx != null) {
+    return ctx.currentLocale(defaultLocale);
+  }
   final override = _currentLocaleOverride();
   if (override != null) {
     return override;
@@ -103,6 +134,14 @@ TranslatorContract? _translatorFromContainer(Container container) {
   }
   try {
     return container.get<TranslatorContract>();
+  } catch (_) {
+    return null;
+  }
+}
+
+EngineContext? _contextOrNull() {
+  try {
+    return AppZone.context;
   } catch (_) {
     return null;
   }

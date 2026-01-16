@@ -4,7 +4,7 @@ import '../context/context.dart';
 import 'context.dart';
 
 extension EngineContextLogging on EngineContext {
-  contextual.Logger get logger => LoggingContext.currentLogger();
+  contextual.Logger get logger => LoggingContext.currentLogger(this);
 
-  Map<String, Object?> get loggerContext => LoggingContext.currentValues();
+  Map<String, Object?> get loggerContext => LoggingContext.currentValues(this);
 }

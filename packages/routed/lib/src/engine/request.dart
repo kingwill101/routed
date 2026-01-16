@@ -391,7 +391,8 @@ extension ServerExtension on Engine {
     manager?.publish(RouteNotFoundEvent(context));
 
     try {
-      await AppZone.run(
+      await _runInRequestZone(
+        context: context,
         body: () async {
           await LoggingContext.run(this, context, (logger) async {
             try {
@@ -407,8 +408,6 @@ extension ServerExtension on Engine {
             }
           });
         },
-        engine: this,
-        context: context,
       );
     } finally {
       manager?.publish(AfterRoutingEvent(context));
@@ -477,7 +476,8 @@ extension ServerExtension on Engine {
     manager?.publish(RequestStartedEvent(context));
 
     try {
-      await AppZone.run(
+      await _runInRequestZone(
+        context: context,
         body: () async {
           await LoggingContext.run(this, context, (logger) async {
             try {
@@ -496,8 +496,6 @@ extension ServerExtension on Engine {
             }
           });
         },
-        engine: this,
-        context: context,
       );
     } catch (err, stack) {
       // Anything that wasn't caught at a lower level gets caught here.
@@ -592,8 +590,7 @@ extension ServerExtension on Engine {
     manager?.publish(RouteMatchedEvent(context, eventRoute));
 
     try {
-      await AppZone.run(
-        engine: this,
+      await _runInRequestZone(
         context: context,
         body: () async {
           await LoggingContext.run(this, context, (_) async {
@@ -659,8 +656,7 @@ extension ServerExtension on Engine {
     manager?.publish(BeforeRoutingEvent(context));
 
     try {
-      await AppZone.run(
-        engine: this,
+      await _runInRequestZone(
         context: context,
         body: () async {
           await LoggingContext.run(this, context, (logger) async {
@@ -752,7 +748,7 @@ extension ServerExtension on Engine {
     Object err,
     StackTrace stack,
   ) async {
-    final logger = LoggingContext.currentLogger();
+    final logger = LoggingContext.currentLogger(ctx);
     final errorPayload = <String, Object?>{
       'error_type': err.runtimeType.toString(),
       'error_message': err.toString(),
@@ -865,8 +861,20 @@ extension ServerExtension on Engine {
     EngineContext context,
   ) async {
     if (context.isUpgraded) return;
-    if (!request.hasBody || request.bodyConsumed) return;
+    if (request.bodyConsumed) return;
+    if (!request.hasBody) return;
     await request.drain();
+  }
+
+  Future<void> _runInRequestZone({
+    required EngineContext context,
+    required Future<void> Function() body,
+  }) async {
+    if (!config.features.enableRequestZones) {
+      await body();
+      return;
+    }
+    await AppZone.run(body: body, engine: this, context: context);
   }
 
   /// Stops the HTTP server and releases all resources.

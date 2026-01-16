@@ -239,11 +239,18 @@ class EngineFeatures {
   /// security measures.
   final bool enableSecurityFeatures;
 
+  /// Whether to wrap each request in its own AppZone.
+  ///
+  /// Disabling this can improve performance but prevents use of AppZone helpers
+  /// and zone-based lookups during request handling.
+  final bool enableRequestZones;
+
   /// Creates an engine features configuration with the given flags.
   const EngineFeatures({
     this.enableTrustedPlatform = false,
     this.enableProxySupport = false,
     this.enableSecurityFeatures = true,
+    this.enableRequestZones = true,
   });
 }
 
