@@ -6,7 +6,7 @@ sidebar_position: 12
 
 # Observability
 
-Routed ships with an observability service provider that wires together tracing, metrics, health endpoints, error observers, and log formatting. The provider is enabled by default and exposes configuration switches so you can opt into the pieces you need without touching application code.
+Routed ships with an observability service provider that wires together tracing, metrics, health endpoints, and error observers. The provider is enabled by default and exposes configuration switches so you can opt into the pieces you need without touching application code.
 
 The defaults live under the `observability` section of your configuration:
 
@@ -27,8 +27,6 @@ observability:
     enabled: true
     readiness_path: /readyz
     liveness_path: /livez
-  logging:
-    format: json            # json or text
   errors:
     enabled: false          # Reserve for future error reporter hooks
 ```

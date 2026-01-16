@@ -1,6 +1,6 @@
 name: property_testing
 description: A property-based testing framework for Dart with powerful generators and shrinking capabilities
-version: 0.3.0
+version: 0.3.1
 repository: https://github.com/kingwill101/routed/tree/master/packages/property_testing
 tags:
   - testing
@@ -18,10 +18,10 @@ environment:
 
 dependencies:
   meta: ^1.17.0
-  server_testing: ^0.3.0
+  server_testing: ^0.3.1
   test: ^1.29.0
 
 dev_dependencies:
   lints: ^6.0.0
-  routed: ^0.3.0
-  routed_testing: ^0.3.0
+  routed: ^0.3.1
+  routed_testing: ^0.3.1

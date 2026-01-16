@@ -93,7 +93,7 @@ security:
     Content-Security-Policy: "default-src 'self'"
 ```
 
-`routed.security` validates this section and inserts the corresponding middleware automatically. Use `dart run routed_cli provider:list --config` to review the active headers and spot malformed values before starting the server.
+`routed.security` validates this section and inserts the corresponding middleware automatically. Use `dart run routed provider:list --config` to review the active headers and spot malformed values before starting the server.
 
 ## Content Negotiation
 Accept headers often include multiple types and weights (q-values). The example below is simplified; in production, prefer robust parsing or default to JSON sensibly.

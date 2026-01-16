@@ -1,0 +1,40 @@
+# Security configuration quick reference:
+# csrf – CSRF protection settings. Default: {"enabled":true,"cookie_name":"csrf_token"}. Type: object
+# csrf.cookie_name – Cookie used to store the CSRF token. Default: csrf_token. Type: string
+# csrf.enabled – Enable CSRF middleware. Default: true. Type: boolean
+# headers – Extra security headers applied to every response. Default: {}. Type: object
+# ip_filter – IP allow/deny settings. Default: {"enabled":false,"default_action":"allow","allow":[],"deny":[],"respect_trusted_proxies":true}. Type: object
+# ip_filter.allow – CIDR/IP entries explicitly allowed. Default: []. Type: array
+# ip_filter.default_action – Fallback when no rules match (allow or deny). Default: allow. Type: string
+# ip_filter.deny – CIDR/IP entries explicitly denied. Default: []. Type: array
+# ip_filter.enabled – Enable IP allow/deny middleware. Default: false. Type: boolean
+# ip_filter.respect_trusted_proxies – Use trusted proxy resolution when determining client IP. Default: true. Type: boolean
+# max_request_size – Maximum request body size in bytes. Default: 10485760. Type: integer
+# trusted_proxies – Trusted proxy settings. Default: {"enabled":false,"proxies":["0.0.0.0/0","::/0"],"headers":["X-Forwarded-For","X-Real-IP"],"forward_client_ip":true}. Type: object
+# trusted_proxies.enabled – Trust proxy headers for client IP resolution. Default: false. Type: boolean
+# trusted_proxies.forward_client_ip – Preserve the client IP from the first trusted header. Default: true. Type: boolean
+# trusted_proxies.headers – Headers to inspect for client IP addresses. Default: ["X-Forwarded-For","X-Real-IP"]. Type: array
+# trusted_proxies.platform_header – Trusted platform header providing the original client IP (Cloudflare, AWS, etc.). Type: string
+# trusted_proxies.proxies – CIDR ranges considered trusted proxies. Default: ["0.0.0.0/0","::/0"]. Type: array
+
+csrf:
+  cookie_name: csrf_token
+  enabled: true
+headers:
+ip_filter:
+  allow:
+  default_action: allow
+  deny:
+  enabled: false
+  respect_trusted_proxies: true
+max_request_size: 10485760
+trusted_proxies:
+  enabled: false
+  forward_client_ip: true
+  headers:
+    - X-Forwarded-For
+    - X-Real-IP
+  proxies:
+    - 0.0.0.0/0
+    - ::/0
+

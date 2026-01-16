@@ -73,6 +73,10 @@ class RoutingServiceProvider extends ServiceProvider
     eventManager.listen((RoutingErrorEvent event) {});
 
     eventManager.listen((AfterRoutingEvent event) {});
+
+    eventManager.listen<RouteCacheInvalidatedEvent>((_) {
+      _engine?.invalidateRoutes();
+    });
   }
 
   @override

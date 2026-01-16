@@ -172,7 +172,7 @@ router
 Every call merges into the existing metadata so you can build the description incrementally (for example, set tags in a group helper and add responses alongside the handler). Use the CLI to turn the manifest plus metadata into a spec:
 
 ```bash
-dart run routed_cli openapi generate --output openapi.json
+dart run routed openapi generate --output openapi.json
 ```
 
 The generator infers tags and parameter definitions from route declarations, so even minimal metadata (summary/response schema) results in a usable document.
@@ -242,7 +242,7 @@ router.static('/assets', 'public/assets');
 
 The same helpers are available on the engine. When using `staticFile`/`static`, paths are resolved relative to the current working directory—never interpolate untrusted input into these paths. For index files and directory listings (or to isolate paths to a storage disk), prefer configuring the static provider via `config/http.yaml`.
 
-Prefer configuration? Enable the static provider and describe mounts in `config/http.yaml`:
+Prefer configuration? Enable the static provider and describe mounts in `config/http.yaml` (older manifests) or `config/static.yaml` (current scaffolds):
 
 ```yaml
 static:
@@ -257,7 +257,7 @@ static:
 
 Each mount references a storage disk (`static.mounts[].disk`), so the static provider serves files through the same file-system abstraction as the rest of your app. The `path` is resolved relative to that disk’s root (falls back to `directory` for legacy configs). Directory listings are disabled by default unless you set `list_directories: true`. For safety, the provider normalises and rejects paths that escape the disk root (for example, via `../`); avoid mounting sensitive folders and prefer a dedicated assets disk.
 
-Run `dart run routed_cli provider:list --config` to confirm the static provider is enabled and to inspect the mounts after merging defaults—misconfigured mounts emit `ProviderConfigException` during boot.
+Run `dart run routed provider:list --config` to confirm the static provider is enabled and to inspect the mounts after merging defaults—misconfigured mounts emit `ProviderConfigException` during boot. When enabled, mounts also appear in `dart run routed routes` as `/{*filepath}` routes.
 
 ## Method Not Allowed (405)
 
@@ -282,14 +282,13 @@ The routing provider reads defaults from the `routing.*` namespace. Configure `r
 routing:
   redirect_trailing_slash: true
   handle_method_not_allowed: true
-  remove_extra_slash: false
-
-http:
-  features:
-    routing: { enabled: true }
+  default_options:
+    cache_max_age: 300
+  etag:
+    strategy: weak
 ```
 
-At runtime you can still override behaviour with `EngineConfig` or helper options (`withRedirectTrailingSlash`, `withHandleMethodNotAllowed`). Run `dart run routed_cli provider:list --config` to confirm the routing provider is active and to review the merged defaults.
+At runtime you can still override behaviour with `EngineConfig` or helper options (`withRedirectTrailingSlash`, `withHandleMethodNotAllowed`). Run `dart run routed provider:list --config` to confirm the routing provider is active and to review the merged defaults.
 
 ## Fallback routes
 

@@ -61,4 +61,4 @@ Future<void> main() async {
 </html>
 ```
 
-Run `dart run bin/server.dart` and open [http://127.0.0.1:8080/](http://127.0.0.1:8080/) to see the rendered page. The view provider resolves templates through the shared `storage` disk, so you can reuse the same disks for uploads or static assets. If you move the configuration into `config/http.yaml`, `dart run routed_cli provider:list --config` will list the `routed.views` defaults and warn if `view.*` entries have the wrong shape.
+Run `dart run bin/server.dart` and open [http://127.0.0.1:8080/](http://127.0.0.1:8080/) to see the rendered page. The view provider resolves templates through the shared `storage` disk, so you can reuse the same disks for uploads or static assets. If you move the configuration into `config/http.yaml`, `dart run routed provider:list --config` will list the `routed.views` defaults and warn if `view.*` entries have the wrong shape.

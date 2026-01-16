@@ -56,19 +56,7 @@ engineGroup(
 );
 ```
 
-You can also supply a pre-built `Engine` if you need complete control:
-
-```dart
-final sharedEngine = Engine(options: [withMiddleware([requestTrackerMiddleware()])]);
-
-engineGroup(
-  'custom engine',
-  engine: sharedEngine,
-  define: (engine, client, test) {
-    // engine == sharedEngine
-  },
-);
-```
+If you need full control, pass `engineConfig` and `options` to shape every engine created by the group. (Each test still receives a fresh engine instance.)
 
 ## Setup and teardown inside the group
 

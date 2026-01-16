@@ -1,7 +1,6 @@
 import 'dart:convert';
 import 'dart:io';
 
-import 'package:crypto/crypto.dart' as crypto;
 import 'package:json_schema_builder/json_schema_builder.dart';
 import 'package:routed/src/config/schema.dart';
 import 'package:routed/src/contracts/contracts.dart' show Config;
@@ -10,6 +9,7 @@ import 'package:routed/src/provider/config_utils.dart';
 import 'package:routed/src/provider/provider.dart';
 import 'package:routed/src/sessions/options.dart';
 import 'package:routed/src/sessions/secure_cookie.dart';
+import 'package:routed/src/crypto/crypto.dart';
 
 import '../spec.dart';
 
@@ -342,10 +342,10 @@ class SessionProviderConfig {
       if (decoded.length >= 32) {
         return trimmed;
       }
-      final digest = crypto.sha256.convert(decoded).bytes;
+      final digest = sha256Digest(decoded);
       return base64.encode(digest);
     } catch (_) {
-      final digest = crypto.sha256.convert(utf8.encode(trimmed)).bytes;
+      final digest = sha256Digest(utf8.encode(trimmed));
       return base64.encode(digest);
     }
   }

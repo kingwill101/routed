@@ -1,0 +1,34 @@
+---
+title: Routed Testing
+description: Routed-specific helpers built on server_testing
+sidebar_position: 0
+---
+
+# Routed Testing
+
+`routed_testing` provides convenience wrappers that plug `server_testing` into Routed engines. It ships helpers like `engineTest` and prebuilt handler providers so you can focus on test logic instead of wiring.
+
+## Install
+
+```yaml
+dev_dependencies:
+  routed_testing: ^0.2.0
+```
+
+## Quick start
+
+```dart
+import 'package:routed/routed.dart';
+import 'package:routed_testing/routed_testing.dart';
+
+engineTest('GET /health', (engine, client) async {
+  engine.get('/health', (ctx) => ctx.string('ok'));
+  final res = await client.get('/health');
+  res.assertStatus(200).assertBody('ok');
+});
+```
+
+## Next steps
+
+- Learn about the [Routed testing overview](/docs/routed/testing/overview)
+- Explore server-side tooling in [Server Testing](/docs/server_testing/intro)

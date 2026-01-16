@@ -97,7 +97,7 @@ http:
     security: { enabled: true }
 ```
 
-- `providers` lists the service providers the engine should register during boot. Disable a provider by removing it (or using `dart run routed_cli provider:disable id`).
+- `providers` lists the service providers the engine should register during boot. Disable a provider by removing it (or using `dart run routed provider:disable id`).
 - Provider-specific `*.enabled` flags (for example `logging.enabled`, `static.enabled`, `rate_limit.enabled`) control opt-in behaviour so you can toggle middleware without editing code.
 - `http.middleware_sources` (populated by several providers) documents the middleware identifiers they register. Override the arrays when you need to reorder or remove middleware while keeping provider-owned setup logic intact.
 
@@ -106,12 +106,12 @@ http:
 Run the CLI to see which providers are active, their descriptions, and the defaults they contribute:
 
 ```bash
-dart run routed_cli provider:list --config
+dart run routed provider:list --config
 ```
 
 The output includes each provider’s `configSource` and the default configuration it publishes. If the manifest includes malformed overrides (wrong types, missing maps, etc.), Routed throws a `ProviderConfigException` and the CLI shows the failing path so you can fix it before starting the server.
 
-> **Tip:** Whenever the CLI writes a config file it prepends a short "configuration quick reference" comment. These comments mirror the provider docs (covering key paths, types, and supported options) so you can discover configuration knobs without leaving the file. If you prefer machine-readable metadata, run `dart run routed_cli config:cache --docs` (optionally with `--docs-output path/to/docs.json`) to emit the same information as JSON. That file is ideal for editor tooling, lint rules, or internal dashboards that want to surface config hints.
+> **Tip:** Whenever the CLI writes a config file it prepends a short "configuration quick reference" comment. These comments mirror the provider docs (covering key paths, types, and supported options) so you can discover configuration knobs without leaving the file. If you prefer machine-readable metadata, run `dart run routed config:cache --docs` (optionally with `--docs-output path/to/docs.json`) to emit the same information as JSON. That file is ideal for editor tooling, lint rules, or internal dashboards that want to surface config hints.
 
 ### Built-in provider catalogue
 
@@ -264,7 +264,7 @@ session:
 ```
 
 ```dotenv title=".env"
-SESSION__CONFIG__APP_KEY=base64:Z0x2...   # generate with `dart run routed_cli key:generate`
+SESSION__CONFIG__APP_KEY=base64:Z0x2...   # generate with `dart run routed key:generate`
 ```
 
 Keep the actual value in `.env`/deployment secrets. The loader exposes both `SESSION__CONFIG__APP_KEY` and `session.config.app_key`, so providers can reference whichever shape is most convenient. The core provider merges `app.key` into `EngineConfig.appKey` so other services can reuse it.
@@ -690,7 +690,7 @@ final config = EngineConfig(
 );
 ```
 
-> Store secrets in the manifest via Liquid placeholders (for example `session.config.app_key: "{{ session.config.app_key }}"` and `app.key: "{{ session.config.app_key }}"`). Keep the actual key in `.env` as `SESSION__CONFIG__APP_KEY` and generate it with `dart run routed_cli key:generate`.
+> Store secrets in the manifest via Liquid placeholders (for example `session.config.app_key: "{{ session.config.app_key }}"` and `app.key: "{{ session.config.app_key }}"`). Keep the actual key in `.env` as `SESSION__CONFIG__APP_KEY` and generate it with `dart run routed key:generate`.
 
 ### Custom template engines
 
@@ -853,7 +853,7 @@ final config = EngineConfig(
 | File system | -- (inherits from environment) | `EngineConfig(fileSystem: ...)` |
 | App key | `app.key`/`env.APP_KEY` | `EngineConfig(appKey: ...)` |
 
-`dart run routed_cli provider:list --config` is a quick way to verify the manifest-driven configuration after edits.
+`dart run routed provider:list --config` is a quick way to verify the manifest-driven configuration after edits.
 
 ### Enable HTTP/2
 

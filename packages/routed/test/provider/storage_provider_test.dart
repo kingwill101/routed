@@ -62,6 +62,31 @@ void main() {
       );
     });
 
+    test('storage base config sets StorageDefaults', () async {
+      final fs = MemoryFileSystem();
+      final engine = testEngine(
+        fileSystem: fs,
+        configItems: {
+          'app': {'root': '/srv/app'},
+          'storage': {
+            'base': 'custom/storage',
+            'disks': {
+              'local': {'driver': 'local'},
+            },
+          },
+        },
+      );
+      addTearDown(() async => await engine.close());
+      await engine.initialize();
+
+      final defaults = await engine.make<StorageDefaults>();
+      final pathContext = fs.path;
+      expect(
+        pathContext.normalize(defaults.storageBase),
+        equals(pathContext.normalize('/srv/app/custom/storage')),
+      );
+    });
+
     test('provides fallback disk when config missing', () async {
       final engine = testEngine();
       addTearDown(() async => await engine.close());

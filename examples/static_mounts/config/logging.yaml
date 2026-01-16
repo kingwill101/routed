@@ -1,0 +1,39 @@
+# Logging configuration quick reference:
+# channels – Map of log channel definitions (stack, single, daily, stderr, null). Default: {"stack":{"driver":"stack","channels":["single","stdout"],"ignore_exceptions":false},"single":{"driver":"single","path":"storage/logs/routed.log"},"daily":{"driver":"daily","path":"storage/logs/routed","days":14,"use_isolate":false},"stderr":{"driver":"stderr"},"stdout":{"driver":"stdout"},"null":{"driver":"null"}}. Type: object
+# default – Default log channel name (stack, single, stderr, etc.). Default: stack. Env override: LOG_CHANNEL Type: string
+# enabled – Enable structured application logging. Default: true. Type: boolean
+# errors_only – Only emit logs for failing requests when true. Default: false. Type: boolean
+# extra_fields – Additional fields appended to every log entry. Default: {}. Type: object
+# format – Log output format (json or text). Default: pretty. Type: string
+# include_stack_traces – Include stack traces in request error logs when enabled. Default: false. Type: boolean
+# level – Default log level for application logging. Default: info. Type: string
+
+channels:
+  daily:
+    days: 14
+    driver: daily
+    path: storage/logs/routed
+    use_isolate: false
+  null:
+    driver: null
+  single:
+    driver: single
+    path: storage/logs/routed.log
+  stack:
+    channels:
+      - single
+      - stdout
+    driver: stack
+    ignore_exceptions: false
+  stderr:
+    driver: stderr
+  stdout:
+    driver: stdout
+default: stack
+enabled: true
+errors_only: false
+extra_fields:
+format: pretty
+include_stack_traces: false
+level: info
+

@@ -1,0 +1,41 @@
+---
+title: Observability
+description: Health, readiness, metrics, and diagnostics
+sidebar_position: 24
+---
+
+# Observability
+
+The observability provider publishes health, readiness, and metrics endpoints, and wires tracing/metrics middleware into the request pipeline.
+
+## Configuration
+
+```yaml title="config/observability.yaml"
+observability:
+  enabled: true
+  tracing:
+    enabled: true
+    service_name: routed-api
+  metrics:
+    enabled: true
+    route: /metrics
+  health:
+    enabled: true
+    ready_route: /readyz
+    live_route: /livez
+```
+
+## Routes & metrics
+
+- `/metrics` exposes Prometheus metrics (`routed_requests_total`, `routed_request_duration_seconds_*`, `routed_active_requests`).
+- `/readyz` and `/livez` are health probes for orchestration.
+
+## Behavior
+
+- Middleware IDs: `routed.observability.tracing` and `routed.observability.metrics`.
+- Use `routed routes` to confirm endpoints are registered.
+
+## Next steps
+
+- [Fundamentals: Observability](/docs/routed/fundamentals/observability)
+- [Examples: Route events](/docs/routed/examples/route-events)

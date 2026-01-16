@@ -55,7 +55,7 @@ http:
         - rate.limit_api
 ```
 
-Global IDs run before every request, while group entries apply when you call `router.group(name: 'api', ...)`. The CLI (`dart run routed_cli provider:list --config`) prints every registered middleware ID and surfaces validation errors (for example, unknown references). Providers contribute defaults via `http.middleware_sources.*`, keeping the manifest declarative.
+Global IDs run before every request, while group entries apply when you call `router.group(name: 'api', ...)`. The CLI (`dart run routed provider:list --config`) prints every registered middleware ID and surfaces validation errors (for example, unknown references). Providers contribute defaults via `http.middleware_sources.*`, keeping the manifest declarative.
 
 ## Group middleware
 
@@ -114,7 +114,7 @@ References are resolved once when the engine builds routes (not per request). If
 
 > Import `package:routed/middlewares.dart` to access `MiddlewareRef`.
 
-The built-in providers (`routed.sessions`, `routed.security`, `routed.cors`, etc.) register their middleware IDs in the registry when enabled via the manifest. Run `dart run routed_cli provider:list --config` to inspect which providers are active and which middleware IDs they contribute.
+The built-in providers (`routed.sessions`, `routed.security`, `routed.cors`, etc.) register their middleware IDs in the registry when enabled via the manifest. Run `dart run routed provider:list --config` to inspect which providers are active and which middleware IDs they contribute.
 
 
 ## Custom middleware patterns

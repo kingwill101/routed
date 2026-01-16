@@ -1,0 +1,12 @@
+driver:
+  type: sqlite
+  options:
+    database: database/full_stack.sqlite
+migrations:
+  directory: lib/src/database/migrations
+  registry: lib/src/database/migrations.dart
+  ledger_table: orm_migrations
+  schema_dump: database/schema.sql
+seeds:
+  directory: lib/src/database/seeders
+  registry: lib/src/database/seeders.dart

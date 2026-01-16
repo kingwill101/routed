@@ -89,6 +89,12 @@ class ConfigLoader {
     '.toml',
   };
 
+  /// {@template config_root_template_context}
+  /// Loads configuration files and builds a template context.
+  ///
+  /// Adds `app.root` and `env.APP_ROOT` so config templates can anchor paths
+  /// (for example, `storage.base: "{{ env.APP_ROOT }}/storage"`).
+  /// {@endtemplate}
   ConfigSnapshot load(
     ConfigLoaderOptions options, {
     Map<String, dynamic>? overrides,
@@ -97,6 +103,8 @@ class ConfigLoader {
     final pathContext = fs.path;
     final config = ConfigImpl();
     final envVariables = <String, String>{};
+
+    final configRoot = _resolveConfigRoot(fs, options, pathContext);
 
     var environment = _resolveInitialEnvironment(options, overrides);
 
@@ -115,6 +123,10 @@ class ConfigLoader {
     }
 
     final templateContext = <String, dynamic>{};
+    if (configRoot.isNotEmpty) {
+      _addToTemplateContext(templateContext, 'app.root', configRoot);
+      _addToTemplateContext(templateContext, 'env.APP_ROOT', configRoot);
+    }
     void addEnvEntry(String key, String value) {
       _addToTemplateContext(templateContext, key, value);
       _addToTemplateContext(templateContext, 'env.$key', value);
@@ -167,6 +179,10 @@ class ConfigLoader {
 
     if (!config.has('app.env') && environment.isNotEmpty) {
       config.set('app.env', environment);
+    }
+
+    if (configRoot.isNotEmpty && !config.has('app.root')) {
+      config.set('app.root', configRoot);
     }
 
     return ConfigSnapshot(
@@ -247,6 +263,24 @@ class ConfigLoader {
       return _renderTemplate(value, context, origin);
     }
     return deepCopyValue(value);
+  }
+
+  /// {@macro config_root_template_context}
+  String _resolveConfigRoot(
+    FileSystem fs,
+    ConfigLoaderOptions options,
+    p.Context pathContext,
+  ) {
+    final configDir = fs.directory(options.configDirectory);
+    if (configDir.existsSync()) {
+      final absolute = configDir.absolute.path;
+      final basename = pathContext.basename(absolute).toLowerCase();
+      if (basename == 'config') {
+        return pathContext.normalize(pathContext.dirname(absolute));
+      }
+      return pathContext.normalize(absolute);
+    }
+    return pathContext.normalize(fs.currentDirectory.path);
   }
 
   _EnvLoadResult _loadEnvFiles(

@@ -143,7 +143,7 @@ Extend caching by registering your own store factories (see [Contracts](/docs/ro
 
 Custom stores should implement the `Store` contract (`packages/routed/lib/src/contracts/cache/store.dart`) or extend `TaggableStore` if you want tag-aware invalidation (`packages/routed/lib/src/cache/taggable_store.dart:1`). Once registered, access the store exactly like the built-in array and file drivers.
 
-Prefer configuration when possible: the `routed.cache` provider ships default stores and validates the `cache.*` manifest entries (for example, it rejects non-string `cache.default` values or non-map store definitions with a `ProviderConfigException`). Run `dart run routed_cli provider:list --config` to review the current cache stores and make sure your overrides are well-formed.
+Prefer configuration when possible: the `routed.cache` provider ships default stores and validates the `cache.*` manifest entries (for example, it rejects non-string `cache.default` values or non-map store definitions with a `ProviderConfigException`). Run `dart run routed provider:list --config` to review the current cache stores and make sure your overrides are well-formed.
 
 Set a global prefix for all cache keys with `cache.prefix`. When omitted, the provider falls back to `app.cache_prefix` so you can keep naming consistent with other frameworks. Clearing the prefix (for instance by setting it to `null`) removes the namespace entirely.
 

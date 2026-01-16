@@ -1,3 +1,7 @@
+## 0.3.1
+
+- Synced server_testing dependency constraints.
+
 ## 0.3.0
 
 ## 0.2.1+1

@@ -14,21 +14,21 @@ Install the runtime package and add the CLI/testing helpers as dev dependencies:
 
 ```bash
 dart pub add routed
-dart pub add --dev routed_cli server_testing server_testing_shelf routed_testing
+dart pub add --dev routed server_testing server_testing_shelf routed_testing
 ```
 
-> `routed_cli` ships the scaffolding, dev server, manifest inspection, and provider utilities used throughout the docs. Keeping it as a dev dependency ensures `dart run routed_cli ...` works in any environment.
+> `routed` ships the scaffolding, dev server, manifest inspection, and provider utilities used throughout the docs. Keeping it as a dev dependency ensures `dart run routed ...` works in any environment.
 
 ## 2. Scaffold (optional) and create an engine
 
 The CLI can bootstrap a project for you:
 
 ```bash
-dart run routed_cli create --name hello_world
+dart run routed create --name hello_world
 cd hello_world
 ```
 
-The generator writes the standard `bin/server.dart`, configuration files under `config/`, and project metadata. It also runs `dart pub get` automatically—if dependency resolution fails, the CLI prints the exit code along with the command to rerun manually. Choose a template with `--template` (`basic`, `api`, `web`, or `fullstack`), supply `--output <directory>` to scaffold into an existing folder, and pass `--force` to overwrite conflicting files. Every template includes `lib/commands.dart`; populate its `buildProjectCommands()` hook and the Routed CLI will surface your custom commands in `dart run routed_cli --help`.
+The generator writes the standard `bin/server.dart`, configuration files under `config/`, and project metadata. It also runs `dart pub get` automatically—if dependency resolution fails, the CLI prints the exit code along with the command to rerun manually. Choose a template with `--template` (`basic`, `api`, `web`, or `fullstack`), supply `--output <directory>` to scaffold into an existing folder, and pass `--force` to overwrite conflicting files. Every template includes `lib/commands.dart`; populate its `buildProjectCommands()` hook and the Routed CLI will surface your custom commands in `dart run routed --help`.
 
 Prefer to wire things manually? Create `bin/server.dart` and copy the snippet below.
 
@@ -72,7 +72,7 @@ Future<void> main() async {
 During development the CLI's `dev` command provides a hot-reload loop:
 
 ```bash
-dart run routed_cli dev --entry bin/server.dart
+dart run routed dev --entry bin/server.dart
 ```
 
 The command resolves the right Dart executable (honouring `ROUTED_CLI_DART`, `DART_BIN`, or `DART_PATH` overrides), enables the VM service, generates a bootstrap that wires in `hotreloader`, and restarts or triggers reloads when files change. Customise the experience with flags such as `--host`, `--port`, `--no-bootstrap`, or `--bootstrap-path` for bespoke setups.
@@ -85,16 +85,16 @@ dart run bin/server.dart
 
 Visit [http://127.0.0.1:8080/](http://127.0.0.1:8080/) to see the greeting, or send requests to `/api/users`.
 
-> Tip: Routed ships with a provider manifest (`config/http.yaml`) and a CLI (`dart run routed_cli provider:list --config`) that shows which providers are enabled and the defaults they contribute. If you add caching, sessions, or security features later, the CLI will also surface configuration validation errors before you start the server.
+> Tip: Routed ships with a provider manifest (`config/http.yaml`) and a CLI (`dart run routed provider:list --config`) that shows which providers are enabled and the defaults they contribute. If you add caching, sessions, or security features later, the CLI will also surface configuration validation errors before you start the server.
 
 ### Inspect routes and generate specs
 
-Use `dart run routed_cli routes` to print the HTTP and WebSocket routes the engine exposes. The command automatically introspects `lib/app.dart` (via `createEngine()`) or falls back to `tool/spec_manifest.dart`. Pass `--format json` with `--no-pretty` when you need machine-readable output.
+Use `dart run routed routes` to print the HTTP and WebSocket routes the engine exposes. The command automatically introspects `lib/app.dart` (via `createEngine()`) or falls back to `tool/spec_manifest.dart`. Pass `--format json` with `--no-pretty` when you need machine-readable output.
 
 When you need a persisted snapshot (for documentation, code generation, or contract tests), run:
 
 ```bash
-dart run routed_cli spec:generate --output .dart_tool/routed/route_manifest.json
+dart run routed spec:generate --output .dart_tool/routed/route_manifest.json
 ```
 
 Both commands share the same manifest loader, so toggling providers or adding routes in code stays in sync with the generated spec.
@@ -154,5 +154,5 @@ See [Liquid templates](/docs/routed/views/templates) for more.
 
 - Understand the engine lifecycle and configuration options: [Fundamentals](/docs/routed/fundamentals/).
 - Learn routing patterns, parameter constraints, and naming: [Routing basics](/docs/routed/fundamentals/routing).
-- Enable sessions, caching, or security headers: [State](/docs/routed/state/) and [Security](/docs/routed/security).
+- Enable sessions, caching, or security headers: [State](/docs/routed/state/) and [Security](/docs/routed/security/).
 - Add tests with `routed_testing`: [Testing Routed apps](/docs/routed/testing/overview).

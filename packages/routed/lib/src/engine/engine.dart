@@ -795,6 +795,11 @@ class Engine with StaticFileHandler, ContainerMixin {
     }
   }
 
+  /// Clears the built route cache so it can be rebuilt.
+  void invalidateRoutes() {
+    _markRoutesDirty();
+  }
+
   void _markRoutesDirty() {
     _routesInitialized = false;
     _engineRoutes.clear();

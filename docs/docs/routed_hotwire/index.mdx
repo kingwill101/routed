@@ -1,0 +1,41 @@
+---
+title: Routed Hotwire
+description: Turbo Streams and Stimulus helpers for Routed apps
+sidebar_position: 0
+---
+
+# Routed Hotwire
+
+Routed Hotwire brings Turbo Streams, Turbo Frames, and Stimulus helpers into the Routed ecosystem so you can build interactive hybrid applications without leaving Dart.
+
+## Features
+
+- Turbo Stream response helpers for append, replace, and remove operations.
+- Turbo Frame helpers for incremental updates.
+- Stimulus controller scaffolds and asset registration middleware.
+- Test utilities built on top of `routed_testing` and `server_testing`.
+
+## Install
+
+```yaml
+dependencies:
+  routed_hotwire: ^0.1.0
+```
+
+## Quick start
+
+```dart
+import 'package:routed_hotwire/routed_hotwire.dart';
+
+router.post('/notes', (ctx) async {
+  final note = await notes.create(ctx.input('content'));
+  return turboStream((streams) {
+    streams.append('#notes', renderNote(note));
+  });
+});
+```
+
+## Next steps
+
+- Review the Turbo helpers in the `example/` directory.
+- Pair Hotwire responses with Routed templates under `view.directory`.

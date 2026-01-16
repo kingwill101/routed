@@ -1,13 +1,23 @@
+library;
+
 import 'package:server_testing/server_testing.dart';
 
-void main() async {
-  // Initialize the browser testing environment before any tests
-  await testBootstrap(BrowserConfig(verbose: true, autoInstall: true));
+import '_support/real_browser_bootstrap.dart';
 
+void main() {
   bool hasOverride(String browserName) =>
       TestBootstrap.getBinaryOverride(browserName) != null;
 
   group('Browser Management', () {
+    setUpAll(() async {
+      // Initialize the browser testing environment before any tests
+      await realBrowserBootstrap(
+        BrowserConfig(verbose: true, autoInstall: true),
+      );
+    });
+
+    tearDownAll(realBrowserCleanup);
+
     group('listAvailableBrowsers', () {
       test('should return a list of available browsers', () async {
         final browsers = await BrowserManagement.listAvailableBrowsers();

@@ -1,5 +1,7 @@
 import 'dart:convert';
 
+import 'package:routed/src/console/create/templates_embedded.dart';
+
 typedef FileBuilder = String Function(TemplateContext context);
 
 class TemplateContext {
@@ -7,6 +9,16 @@ class TemplateContext {
 
   final String packageName;
   final String humanName;
+
+  String get sampleTodosJson => jsonEncode(<Map<String, dynamic>>[
+    {'id': 1, 'title': 'Ship Routed starter', 'completed': false},
+  ]);
+
+  Map<String, String> get replacements => {
+    '{{{routed:packageName}}}': packageName,
+    '{{{routed:humanName}}}': humanName,
+    '{{{routed:sampleTodosJson}}}': sampleTodosJson,
+  };
 }
 
 class ScaffoldTemplate {
@@ -36,10 +48,30 @@ class Templates {
   Templates._();
 
   static final Map<String, ScaffoldTemplate> _templates = {
-    'basic': _buildBasicTemplate(),
-    'api': _buildApiTemplate(),
-    'web': _buildWebTemplate(),
-    'fullstack': _buildFullstackTemplate(),
+    'basic': _buildTemplate(
+      id: 'basic',
+      description: 'Minimal JSON welcome route and config files.',
+    ),
+    'api': _buildTemplate(
+      id: 'api',
+      description: 'JSON-first API skeleton with sample routes and tests.',
+      extraDevDependencies: const {
+        'routed_testing': '^0.2.1',
+        'server_testing': '^0.3.0',
+      },
+    ),
+    'web': _buildTemplate(
+      id: 'web',
+      description: 'Server-rendered pages with HTML helpers.',
+    ),
+    'fullstack': _buildTemplate(
+      id: 'fullstack',
+      description: 'Combined HTML + JSON starter, handy for SPAs or HTMX.',
+      extraDevDependencies: const {
+        'routed_testing': '^0.2.1',
+        'server_testing': '^0.3.0',
+      },
+    ),
   };
 
   static ScaffoldTemplate resolve(String id) {
@@ -57,890 +89,73 @@ class Templates {
       all.map((template) => '"${template.id}"').join(', ');
 }
 
-ScaffoldTemplate _buildBasicTemplate() {
+ScaffoldTemplate _buildTemplate({
+  required String id,
+  required String description,
+  Map<String, String>? extraDependencies,
+  Map<String, String>? extraDevDependencies,
+}) {
+  final files = _buildFileBuilders(id);
+  final readmeBuilder = _resolveReadme(id);
   return ScaffoldTemplate(
-    id: 'basic',
-    description: 'Minimal JSON welcome route and config files.',
-    files: {
-      ..._commonFiles(),
-      'lib/app.dart': (context) => _basicApp(context.humanName),
-    },
-    readme: (context) => _basicReadme(context.humanName),
+    id: id,
+    description: description,
+    files: files,
+    readme: readmeBuilder,
+    extraDependencies: extraDependencies,
+    extraDevDependencies: extraDevDependencies,
   );
 }
 
-ScaffoldTemplate _buildApiTemplate() {
-  return ScaffoldTemplate(
-    id: 'api',
-    description: 'JSON-first API skeleton with sample routes and tests.',
-    files: {
-      ..._commonFiles(),
-      'lib/app.dart': _apiApp,
-      'test/api_test.dart': _apiTest,
-    },
-    readme: _apiReadme,
-    extraDevDependencies: const {
-      'routed_testing': '^0.2.1',
-      'server_testing': '^0.3.0',
-    },
-  );
-}
+Map<String, FileBuilder> _buildFileBuilders(String templateId) {
+  final sources = <String, String>{};
 
-ScaffoldTemplate _buildWebTemplate() {
-  return ScaffoldTemplate(
-    id: 'web',
-    description: 'Server-rendered pages with HTML helpers.',
-    files: {
-      ..._commonFiles(),
-      'lib/app.dart': _webApp,
-      'templates/home.liquid': _webHomeTemplate,
-      'templates/page.liquid': _webPageTemplate,
-      'public/styles.css': _webStylesheet,
-    },
-    readme: _webReadme,
-  );
-}
-
-ScaffoldTemplate _buildFullstackTemplate() {
-  return ScaffoldTemplate(
-    id: 'fullstack',
-    description: 'Combined HTML + JSON starter, handy for SPAs or HTMX.',
-    files: {
-      ..._commonFiles(),
-      'lib/app.dart': _fullstackApp,
-      'test/api_test.dart': _fullstackApiTest,
-    },
-    readme: _fullstackReadme,
-    extraDevDependencies: const {
-      'routed_testing': '^0.2.1',
-      'server_testing': '^0.3.0',
-    },
-  );
-}
-
-Map<String, FileBuilder> _commonFiles() {
-  return {
-    'bin/server.dart': (context) => _serverDart(context.packageName),
-    'lib/commands.dart': (_) => _commandsEntry(),
-    'tool/spec_manifest.dart': (context) =>
-        _specManifestScript(context.packageName),
-    'Dockerfile': (_) => _dockerfile(),
-    '.dockerignore': (_) => _dockerignore(),
-    'docker-compose.yml': (context) => _dockerCompose(context.packageName),
-  };
-}
-
-String _basicApp(String humanName) {
-  final message = humanName.isEmpty ? 'Routed' : humanName;
-  return '''
-import 'package:routed/routed.dart';
-
-Future<Engine> createEngine() async {
-  final engine = await Engine.create(
-    configOptions: const ConfigLoaderOptions(
-      configDirectory: 'config',
-      loadEnvFiles: false,
-      includeEnvironmentSubdirectory: false,
-    ),
-  );
-
-  engine.get('/', (ctx) async {
-    return ctx.json({'message': 'Welcome to $message!'});
-  });
-
-  return engine;
-}
-''';
-}
-
-String _basicReadme(String humanName) {
-  return '''
-# $humanName
-
-A new [Routed](https://routed.dev) application.
-
-## Getting started
-
-```bash
-dart pub get
-dart run routed dev
-```
-
-The default route responds with a friendly JSON payload. Edit
-`lib/app.dart` to add additional routes, middleware, and providers.
-''';
-}
-
-String _apiApp(TemplateContext context) {
-  return '''
-import 'dart:io';
-
-import 'package:routed/routed.dart';
-
-Future<Engine> createEngine() async {
-  final engine = await Engine.create(
-    configOptions: const ConfigLoaderOptions(
-      configDirectory: 'config',
-      loadEnvFiles: false,
-      includeEnvironmentSubdirectory: false,
-    ),
-  );
-
-  final users = <String, Map<String, dynamic>>{
-    '1': {'id': '1', 'name': 'Ada Lovelace', 'email': 'ada@example.com'},
-    '2': {'id': '2', 'name': 'Alan Turing', 'email': 'alan@example.com'},
-  };
-
-  engine.group(path: '/api/v1', builder: (router) {
-    router.get('/health', (ctx) async {
-      return ctx.json({'status': 'ok'});
-    });
-
-    router.get('/users', (ctx) async {
-      return ctx.json({'data': users.values.toList()});
-    });
-
-    router.get('/users/{id}', (ctx) async {
-      final id = ctx.mustGetParam<String>('id');
-      final user = await ctx.fetchOr404(
-        () async => users[id],
-        message: 'User not found',
-      );
-      return ctx.json(user);
-    });
-
-    router.post('/users', (ctx) async {
-      final payload =
-          Map<String, dynamic>.from(await ctx.bindJSON({}) as Map? ?? const {});
-      final id = (users.length + 1).toString();
-      final created = {
-        'id': id,
-        'name': payload['name'] ?? 'user-\$id',
-        'email': payload['email'] ?? 'user\$id@example.com',
-      };
-      users[id] = created;
-      return ctx.json(created, statusCode: HttpStatus.created);
-    });
-  });
-
-  return engine;
-}
-''';
-}
-
-String _apiTest(TemplateContext context) {
-  return '''
-import 'package:routed_testing/routed_testing.dart';
-import 'package:server_testing/server_testing.dart';
-import 'package:test/test.dart';
-
-import 'package:${context.packageName}/app.dart' as app;
-
-void main() {
-  group('API', () {
-    late TestClient client;
-
-    setUpAll(() async {
-      final engine = await app.createEngine();
-      client = TestClient(RoutedRequestHandler(engine));
-    });
-
-    tearDownAll(() async {
-      await client.close();
-    });
-
-    test('lists users', () async {
-      final response = await client.get('/api/v1/users');
-      response.assertStatus(200);
-      final json = response.json() as Map<String, dynamic>;
-      expect(json['data'], isA<List>());
-    });
-  });
-}
-''';
-}
-
-String _apiReadme(TemplateContext context) {
-  return '''
-# ${context.humanName}
-
-This project exposes a JSON API using [Routed](https://routed.dev).
-
-## Useful scripts
-
-```bash
-dart pub get
-```
-
-```
-# Run the API locally on port 8080
-dart run routed dev
-```
-
-### Example requests
-
-```
-curl http://localhost:8080/api/v1/health
-curl http://localhost:8080/api/v1/users
-```
-
-See `lib/app.dart` for the complete route definitions. `test/api_test.dart`
-shows how to exercise the engine with `routed_testing`.
-''';
-}
-
-String _webApp(TemplateContext context) {
-  return '''
-import 'package:routed/routed.dart';
-
-Future<Engine> createEngine() async {
-  final engine = await Engine.create(
-    configOptions: const ConfigLoaderOptions(
-      configDirectory: 'config',
-      loadEnvFiles: false,
-      includeEnvironmentSubdirectory: false,
-    ),
-  );
-
-  engine.useViewEngine(
-    LiquidViewEngine(directory: 'templates'),
-  );
-
-  engine.static('/assets', 'public');
-
-  final pages = <String, Map<String, String>>{
-    'about': {
-      'title': 'About',
-      'body': 'Built with Routed and Liquid templates.',
-    },
-    'contact': {
-      'title': 'Contact',
-      'body': 'Update this copy to match your project.',
-    },
-  };
-
-  List<Map<String, String>> buildNavigation() {
-    return [
-      {'slug': '/', 'title': 'Home'},
-      for (final entry in pages.entries)
-        {'slug': '/pages/\${entry.key}', 'title': entry.value['title']!},
-    ];
+  for (final entry in scaffoldTemplateBytes.entries) {
+    final path = entry.key;
+    if (path.startsWith('common/')) {
+      final dest = path.substring('common/'.length);
+      sources[dest] = path;
+    }
   }
 
-  engine.get('/', (ctx) async {
-    return ctx.template(
-      templateName: 'home.liquid',
-      data: {
-        'app_title': '${context.humanName}',
-        'lead':
-            'This starter renders HTML on the server and ships a static assets folder.',
-        'pages': buildNavigation(),
-      },
-    );
-  });
+  final templatePrefix = '$templateId/';
+  for (final entry in scaffoldTemplateBytes.entries) {
+    final path = entry.key;
+    if (path.startsWith(templatePrefix)) {
+      final dest = path.substring(templatePrefix.length);
+      sources[dest] = path;
+    }
+  }
 
-  engine.get('/pages/{slug}', (ctx) async {
-    final slug = ctx.mustGetParam<String>('slug');
-    final page = ctx.requireFound(
-      pages[slug],
-      message: 'Page "\$slug" not found',
-    );
-
-    return ctx.template(
-      templateName: 'page.liquid',
-      data: {
-        'app_title': '${context.humanName}',
-        'page': page,
-        'pages': buildNavigation(),
-      },
-    );
-  });
-
-  return engine;
-}
-''';
-}
-
-String _webHomeTemplate(TemplateContext context) {
-  return '''
-<!DOCTYPE html>
-<html lang="en">
-  <head>
-    <meta charset="utf-8" />
-    <title>{{ app_title }}</title>
-    <link rel="stylesheet" href="/assets/styles.css" />
-  </head>
-  <body>
-    <header>
-      <h1>{{ app_title }}</h1>
-      <p>{{ lead }}</p>
-    </header>
-    <nav>
-      <ul class="nav">
-        {% for item in pages %}
-          <li><a href="{{ item.slug }}">{{ item.title }}</a></li>
-        {% endfor %}
-      </ul>
-    </nav>
-    <main>
-      <section class="card">
-        <h2>Customise your starter</h2>
-        <p>Update <code>templates/home.liquid</code> to change this page.</p>
-      </section>
-    </main>
-  </body>
-</html>
-''';
-}
-
-String _webPageTemplate(TemplateContext context) {
-  return '''
-<!DOCTYPE html>
-<html lang="en">
-  <head>
-    <meta charset="utf-8" />
-    <title>{{ page.title }} - {{ app_title }}</title>
-    <link rel="stylesheet" href="/assets/styles.css" />
-  </head>
-  <body>
-    <header>
-      <h1>{{ page.title }}</h1>
-      <p class="lead">Served with Routed templates.</p>
-    </header>
-    <nav>
-      <ul class="nav">
-        {% for item in pages %}
-          <li><a href="{{ item.slug }}">{{ item.title }}</a></li>
-        {% endfor %}
-      </ul>
-    </nav>
-    <main>
-      <section class="card">
-        <p>{{ page.body }}</p>
-        <p class="note">Edit <code>templates/page.liquid</code> to customise this content.</p>
-      </section>
-    </main>
-  </body>
-</html>
-''';
-}
-
-String _webStylesheet(TemplateContext context) {
-  return '''
-:root {
-  color-scheme: light;
-}
-
-body {
-  font-family: system-ui, sans-serif;
-  margin: 2rem;
-  background: #f8fafc;
-  color: #1f2933;
-}
-
-header {
-  margin-bottom: 1.5rem;
-}
-
-.lead {
-  color: #475569;
-}
-
-.nav {
-  list-style: none;
-  padding: 0;
-  display: flex;
-  gap: 0.75rem;
-}
-
-.nav a {
-  color: #2563eb;
-  text-decoration: none;
-  font-weight: 600;
-}
-
-.nav a:hover {
-  text-decoration: underline;
-}
-
-main {
-  max-width: 720px;
-}
-
-.card {
-  background: #ffffff;
-  border-radius: 0.5rem;
-  padding: 1.5rem;
-  box-shadow: 0 12px 30px -12px rgba(15, 23, 42, 0.35);
-}
-
-.note {
-  margin-top: 1rem;
-  font-style: italic;
-  color: #64748b;
-}
-''';
-}
-
-String _webReadme(TemplateContext context) {
-  return '''
-# ${context.humanName}
-
-Server-rendered pages powered by [Routed](https://routed.dev).
-
-## Run locally
-
-```bash
-dart pub get
-dart run routed dev
-```
-
-Visit `http://localhost:8080` to see the landing page. Edit
-`lib/app.dart` to customise HTML output or introduce templating.
-''';
-}
-
-String _fullstackApp(TemplateContext context) {
-  final sampleTodos = jsonEncode(<Map<String, dynamic>>[
-    {'id': 1, 'title': 'Ship Routed starter', 'completed': false},
-  ]);
-  return """
-import 'dart:convert';
-import 'dart:io';
-
-import 'package:routed/routed.dart';
-
-Future<Engine> createEngine() async {
-  final engine = await Engine.create(
-    configOptions: const ConfigLoaderOptions(
-      configDirectory: 'config',
-      loadEnvFiles: false,
-      includeEnvironmentSubdirectory: false,
-    ),
+  return sources.map(
+    (dest, source) =>
+        MapEntry(dest, (context) => _renderTemplateFile(source, context)),
   );
-
-  final todos = <Map<String, dynamic>>[
-    {'id': 1, 'title': 'Ship Routed starter', 'completed': false},
-  ];
-
-  engine.group(path: '/api', builder: (router) {
-    router.get('/todos', (ctx) async => ctx.json({'data': todos}));
-
-    router.patch('/todos/{id}', (ctx) async {
-      final id = ctx.mustGetParam<String>('id');
-      final todo = await ctx.fetchOr404(
-        () async => todos.firstWhere(
-          (item) => item['id'].toString() == id,
-          orElse: () => null,
-        ),
-        message: 'Todo not found',
-      );
-
-      final payload =
-          Map<String, dynamic>.from(await ctx.bindJSON({}) as Map? ?? const {});
-      todo['completed'] = payload['completed'] ?? todo['completed'];
-      todo['title'] = payload['title'] ?? todo['title'];
-
-      return ctx.json(todo);
-    });
-  });
-
-  engine.get('/', (ctx) async {
-    return ctx.html('''
-<!DOCTYPE html>
-<html lang="en">
-  <head>
-    <meta charset="utf-8" />
-    <title>${context.humanName}</title>
-    <style>
-      body { font-family: system-ui, sans-serif; margin: 2rem; }
-      button { cursor: pointer; }
-      li { margin-bottom: .5rem; }
-    </style>
-  </head>
-  <body>
-    <main>
-      <h1>${context.humanName}</h1>
-      <p>This page hydrates data from <code>/api/todos</code>.</p>
-      <ul id="todo-list"></ul>
-      <button id="toggle-first">Toggle first todo</button>
-    </main>
-    <script>
-      const todos = $sampleTodos;
-
-      async function refresh() {
-        const response = await fetch('/api/todos');
-        const json = await response.json();
-        render(json.data);
-      }
-
-      function render(items) {
-        const list = document.getElementById('todo-list');
-        list.innerHTML = '';
-        items.forEach((todo) => {
-          const item = document.createElement('li');
-          item.textContent = `\${todo.title} (\${todo.completed ? '✅' : '⬜️'})`;
-          list.appendChild(item);
-        });
-      }
-
-      document.getElementById('toggle-first').addEventListener('click', async () => {
-        const response = await fetch('/api/todos/1', {
-          method: 'PATCH',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ completed: true }),
-        });
-        if (response.ok) {
-          await refresh();
-        }
-      });
-
-      render(todos);
-      refresh();
-    </script>
-  </body>
-</html>
-''');
-  });
-
-  return engine;
-}
-""";
 }
 
-String _fullstackApiTest(TemplateContext context) {
-  return '''
-import 'package:routed_testing/routed_testing.dart';
-import 'package:server_testing/server_testing.dart';
-import 'package:test/test.dart';
-
-import 'package:${context.packageName}/app.dart' as app;
-
-void main() {
-  test('GET /api/todos returns seeded data', () async {
-    final engine = await app.createEngine();
-    final client = TestClient(RoutedRequestHandler(engine));
-
-    final response = await client.get('/api/todos');
-    response.assertStatus(200);
-    final json = response.json() as Map<String, dynamic>;
-    expect(json['data'], isA<List>());
-    expect(json['data'], isNotEmpty);
-
-    await client.close();
-  });
-}
-''';
+FileBuilder _resolveReadme(String templateId) {
+  final path = '$templateId/README.md';
+  if (scaffoldTemplateBytes.containsKey(path)) {
+    return (context) => _renderTemplateFile(path, context);
+  }
+  return _defaultReadme;
 }
 
-String _fullstackReadme(TemplateContext context) {
-  return '''
-# ${context.humanName}
+String _defaultReadme(TemplateContext context) => '# ${context.humanName}\n';
 
-A Routed starter that serves HTML and JSON in the same application.
-
-## Commands
-
-```bash
-dart pub get
-```
-
-```
-dart run routed dev
-```
-
-- Visit http://localhost:8080 for the web UI.
-- Call http://localhost:8080/api/todos for JSON responses.
-
-The app renders vanilla HTML and exposes a simple REST API. Swap the front end
-for HTMX, a SPA framework, or your favourite renderer while keeping the API layer
-in Dart.
-''';
+String _renderTemplateFile(String sourcePath, TemplateContext context) {
+  final bytes = scaffoldTemplateBytes[sourcePath];
+  if (bytes == null) {
+    throw ArgumentError('Template not found: $sourcePath');
+  }
+  final content = utf8.decode(bytes);
+  return _applyReplacements(content, context.replacements);
 }
 
-String _serverDart(String packageName) {
-  return '''
-import 'dart:io';
-
-import 'package:routed/routed.dart';
-import 'package:$packageName/app.dart' as app;
-
-Future<void> main(List<String> args) async {
-  // Read configuration from environment variables (Docker-friendly)
-  final host = Platform.environment['HOST'] ?? '127.0.0.1';
-  final port = int.tryParse(Platform.environment['PORT'] ?? '8080') ?? 8080;
-
-  final Engine engine = await app.createEngine();
-  await engine.serve(host: host, port: port);
-}
-''';
-}
-
-String _specManifestScript(String packageName) {
-  return '''
-import 'dart:io';
-
-import 'package:routed/routed.dart';
-import 'package:$packageName/app.dart' as app;
-
-Future<void> main(List<String> args) async {
-  final engine = await app.createEngine();
-  final manifest = engine.buildRouteManifest();
-  stdout.writeln(manifest.toJsonString());
-}
-''';
-}
-
-String _defaultReadme(TemplateContext context) =>
-    _basicReadme(context.humanName);
-
-String _commandsEntry() {
-  return '''
-import 'dart:async';
-
-import 'package:args/command_runner.dart';
-
-FutureOr<List<Command<void>>> buildProjectCommands() {
-  // Add project-specific CLI commands (for example, maintenance scripts) here.
-  return const [];
-}
-''';
-}
-
-String _dockerfile() {
-  return r'''
-# ============================================================================
-# Routed Backend Dockerfile
-# Multi-stage build for optimized production deployment
-# ============================================================================
-
-# Build Arguments
-ARG DART_VERSION=3.9
-ARG APP_NAME=server
-
-# ============================================================================
-# Stage 1: Dependencies
-# Cache dependencies separately for faster rebuilds
-# ============================================================================
-FROM dart:${DART_VERSION} AS dependencies
-
-WORKDIR /app
-
-# Copy only dependency files first (for better layer caching)
-COPY pubspec.* ./
-
-# Get dependencies
-RUN dart pub get
-
-# ============================================================================
-# Stage 2: Build
-# Compile the application to a native executable
-# ============================================================================
-FROM dart:${DART_VERSION} AS build
-
-WORKDIR /app
-
-# Copy cached dependencies from previous stage
-COPY --from=dependencies /app/.dart_tool /app/.dart_tool
-COPY --from=dependencies /app/pubspec.lock /app/pubspec.lock
-
-# Copy pubspec files
-COPY pubspec.* ./
-
-# Get dependencies (will use cache from pubspec.lock)
-RUN dart pub get --offline || dart pub get
-
-# Copy source code
-COPY . .
-
-# Compile to native executable for best performance
-# AOT compilation produces a single, fast-starting executable
-RUN dart compile exe bin/${APP_NAME}.dart -o bin/${APP_NAME}
-
-# ============================================================================
-# Stage 3: Runtime
-# Minimal production image
-# ============================================================================
-FROM debian:bookworm-slim AS runtime
-
-# Install runtime dependencies
-# - ca-certificates: For HTTPS connections
-# - tzdata: For timezone support
-# - curl: For health checks
-RUN apt-get update && apt-get install -y --no-install-recommends \
-    ca-certificates \
-    tzdata \
-    curl \
-    && rm -rf /var/lib/apt/lists/*
-
-# Create non-root user for security
-RUN groupadd --gid 1000 appuser \
-    && useradd --uid 1000 --gid appuser --shell /bin/bash --create-home appuser
-
-WORKDIR /app
-
-# Copy the compiled executable
-ARG APP_NAME=server
-COPY --from=build /app/bin/${APP_NAME} /app/server
-
-# Copy configuration files (if they exist)
-COPY --from=build /app/config/ /app/config/
-
-# Copy static files and templates (if they exist)
-# Note: Add/remove these lines based on your project structure
-# COPY --from=build /app/public/ /app/public/
-# COPY --from=build /app/templates/ /app/templates/
-# COPY --from=build /app/resources/ /app/resources/
-
-# Create storage directories with proper permissions
-RUN mkdir -p /app/storage/logs /app/storage/cache /app/storage/sessions \
-    && chown -R appuser:appuser /app
-
-# Switch to non-root user
-USER appuser
-
-# Environment variables
-ENV APP_ENV=production
-ENV APP_DEBUG=false
-ENV HOST=0.0.0.0
-ENV PORT=8080
-
-# Expose the application port
-EXPOSE 8080
-
-# Health check
-HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
-    CMD curl -f http://localhost:8080/api/v1/health || exit 1
-
-# Run the server
-ENTRYPOINT ["/app/server"]
-''';
-}
-
-String _dockerignore() {
-  return '''
-# ============================================================================
-# Docker Ignore File for Routed Backend
-# Excludes files that shouldn't be included in the Docker build context
-# ============================================================================
-
-# Dart/Flutter specific
-.dart_tool/
-.packages
-.pub/
-build/
-
-# IDE and editor files
-.idea/
-.vscode/
-*.iml
-*.ipr
-*.iws
-
-# Git
-.git/
-.gitignore
-.gitattributes
-
-# Docker files (avoid recursive builds)
-Dockerfile*
-docker-compose*.yml
-.dockerignore
-
-# Documentation
-docs/
-*.md
-
-# Test files
-test/
-*_test.dart
-coverage/
-
-# Development files
-.env.local
-.env.development
-.env.*.local
-
-# Logs and temp files
-*.log
-logs/
-storage/logs/*
-storage/cache/*
-storage/sessions/*
-tmp/
-temp/
-
-# OS files
-.DS_Store
-Thumbs.db
-*.swp
-*.swo
-*~
-
-# CI/CD
-.github/
-.gitlab-ci.yml
-.circleci/
-Jenkinsfile
-
-# Misc
-*.bak
-*.tmp
-.editorconfig
-tool/
-''';
-}
-
-String _dockerCompose(String packageName) {
-  return '''
-# ============================================================================
-# Docker Compose for Routed Backend
-# Development and production configurations
-# ============================================================================
-
-services:
-  # ==========================================================================
-  # Main Application
-  # ==========================================================================
-  app:
-    build:
-      context: .
-      dockerfile: Dockerfile
-      args:
-        DART_VERSION: "3.9"
-        APP_NAME: "server"
-    container_name: $packageName
-    restart: unless-stopped
-    ports:
-      - "\${PORT:-8080}:8080"
-    environment:
-      - APP_ENV=\${APP_ENV:-production}
-      - APP_DEBUG=\${APP_DEBUG:-false}
-      - HOST=0.0.0.0
-      - PORT=8080
-    volumes:
-      # Persist storage data
-      - app-storage:/app/storage
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8080/api/v1/health"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-      start_period: 10s
-    networks:
-      - routed-network
-
-# =============================================================================
-# Networks
-# =============================================================================
-networks:
-  routed-network:
-    driver: bridge
-
-# =============================================================================
-# Volumes
-# =============================================================================
-volumes:
-  app-storage:
-''';
+String _applyReplacements(String content, Map<String, String> replacements) {
+  var output = content;
+  for (final entry in replacements.entries) {
+    output = output.replaceAll(entry.key, entry.value);
+  }
+  return output;
 }

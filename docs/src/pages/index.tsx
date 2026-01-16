@@ -11,14 +11,19 @@ import styles from './index.module.css';
 
 const highlightCards = [
     {
-        title: 'Framework Agnostic',
+        title: 'Turbo Ready',
         description:
-            'Adapt Shelf or any custom stack to the server_testing toolkit with a lightweight RequestHandler implementation.',
+            'routed_hotwire makes Turbo Streams and Stimulus controllers feel native to your Dart backend.',
     },
     {
-        title: 'Integrated Tooling',
+        title: 'Server Testing',
         description:
-            'Install browsers and drivers, scaffold tests, and manage fixtures with a CLI designed for Dart workflows.',
+            'server_testing reuses handlers across in-memory, real HTTP, and browser automation flows.',
+    },
+    {
+        title: 'Routed Testing',
+        description:
+            'routed_testing layers engine-first helpers on server_testing transports.',
     },
     {
         title: 'Deterministic Generators',
@@ -29,11 +34,11 @@ const highlightCards = [
 
 const quickLinks = [
     {label: 'Engine & Middleware', to: '/docs/routed/fundamentals/'},
-    {label: 'Server Test Transports', to: '/docs/server-testing/transports'},
-    {label: 'Browser Page Objects', to: '/docs/server-testing/browser/pages-and-components'},
-    {label: 'Handler Providers', to: '/docs/server-testing/handler-providers'},
-    {label: 'Property Testing Generators', to: '/docs/property-testing/generators'},
-    {label: 'Tutorials & Walkthroughs', to: '/docs/tutorials/routed-rest-api'},
+    {label: 'Storage & Caching', to: '/docs/routed/state/caching'},
+    {label: 'Turbo Stream Responses', to: '/docs/routed_hotwire/'},
+    {label: 'Test Transports', to: '/docs/server_testing/transports'},
+    {label: 'Routed Testing', to: '/docs/routed_testing/'},
+    {label: 'Property Testing Generators', to: '/docs/property_testing/'},
 ];
 
 function HomepageHeader() {
@@ -49,10 +54,13 @@ function HomepageHeader() {
             <Link className="button button--secondary button--lg" to="/docs/routed/">
                 Explore Routed
             </Link>
-            <Link className="button button--secondary button--lg" to="/docs/server-testing/getting-started">
+            <Link className="button button--secondary button--lg" to="/docs/routed_hotwire/">
+                Routed Hotwire Guides
+            </Link>
+            <Link className="button button--secondary button--lg" to="/docs/server_testing/">
                 Server Testing Guides
             </Link>
-            <Link className="button button--secondary button--lg" to="/docs/property-testing/getting-started">
+            <Link className="button button--secondary button--lg" to="/docs/property_testing/">
                 Property Testing Guides
           </Link>
             <a className="button button--primary button--lg" href="https://github.com/kingwill101/routed">
@@ -80,13 +88,20 @@ function QuickStartSection() {
                     <div className="col col--7">
                         <CodeBlock language="bash">
                             {`# Runtime framework
-dart pub add routed
+ dart pub add routed
 
-# HTTP + browser testing toolkit
-dart pub add --dev server_testing server_testing_shelf
+# Hotwire helpers
+ dart pub add routed_hotwire
+
+# Server testing toolkit
+ dart pub add --dev server_testing server_testing_shelf
+
+# Routed testing helpers
+ dart pub add --dev routed_testing
 
 # Property-based testing utilities
-dart pub add --dev property_testing`}
+ dart pub add --dev property_testing`}
+
                         </CodeBlock>
                     </div>
                 </div>
@@ -116,21 +131,29 @@ function PackagesTable() {
                             <td><Link to="/docs/routed/">Routed docs</Link></td>
                         </tr>
                         <tr>
+                            <td><code>routed_hotwire</code></td>
+                            <td>Turbo Streams, frames, and Stimulus helpers</td>
+                            <td><Link to="/docs/routed_hotwire/">Routed Hotwire docs</Link></td>
+                        </tr>
+                        <tr>
                             <td><code>server_testing</code></td>
                             <td>Fluent HTTP assertions, WebDriver integration, CLI helpers</td>
-                            <td><Link to="/docs/server-testing/getting-started">Server Testing Getting Started</Link>
-                            </td>
+                            <td><Link to="/docs/server_testing/">Server Testing docs</Link></td>
                         </tr>
                         <tr>
                             <td><code>server_testing_shelf</code></td>
                             <td>Shelf adapter for <code>server_testing</code></td>
-                            <td><Link to="/docs/server-testing/handler-providers">Handler Providers</Link></td>
+                            <td><Link to="/docs/server_testing_shelf/">Server Testing Shelf docs</Link></td>
+                        </tr>
+                        <tr>
+                            <td><code>routed_testing</code></td>
+                            <td>Routed-specific testing helpers</td>
+                            <td><Link to="/docs/routed_testing/">Routed Testing docs</Link></td>
                         </tr>
                         <tr>
                             <td><code>property_testing</code></td>
                             <td>Generators, shrinking, chaos suites, stateful testing</td>
-                            <td><Link to="/docs/property-testing/getting-started">Property Testing Getting
-                                Started</Link></td>
+                            <td><Link to="/docs/property_testing/">Property Testing docs</Link></td>
                         </tr>
                         </tbody>
                     </table>

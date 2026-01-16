@@ -1,3 +1,5 @@
+library;
+
 import 'dart:io';
 
 import 'package:server_testing/src/browser/bootstrap/browser_json.dart';

@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:file/file.dart' as file;
+import 'package:path/path.dart' as p;
 import 'package:routed/src/config/specs/storage.dart';
 import 'package:routed/src/config/specs/storage_drivers.dart';
 import 'package:routed/src/container/container.dart';
@@ -14,7 +15,20 @@ import 'package:routed/src/storage/storage_drivers.dart';
 import 'package:routed/src/storage/storage_manager.dart';
 import 'package:storage_fs/storage_fs.dart' as storage_fs;
 
-/// Provides storage disk configuration (local file systems, etc.).
+/// {@template storage_provider_resolution}
+/// Applies storage configuration to disk registrations.
+///
+/// Disk roots are normalized against `app.root`, and `StorageDefaults` is
+/// registered so helper functions can resolve framework paths consistently.
+///
+/// Example:
+/// ```dart
+/// final defaults = container.get<StorageDefaults>();
+/// final cachePath = defaults.frameworkPath('cache');
+/// ```
+/// {@endtemplate}
+
+/// {@macro storage_provider_resolution}
 class StorageServiceProvider extends ServiceProvider
     with ProvidesDefaultConfig {
   StorageManager? _managedManager;
@@ -175,33 +189,65 @@ class StorageServiceProvider extends ServiceProvider
 
     final facadeDisks = <String, Map<String, dynamic>>{};
     final localFileSystems = <String, file.FileSystem>{};
-    final resolved = spec.resolve(config);
-    final storageRoot = resolveStorageRootValue(resolved.root);
-    final defaultDisk = resolved.defaultDisk;
+    final resolvedConfig = spec.resolve(config);
+    final defaultFs = manager.defaultFileSystem;
+    final storageRoot = _normalizeStorageRoot(
+      resolveStorageRootValue(resolvedConfig.root),
+      config,
+      defaultFs,
+    );
+
+    final defaultDisk = resolvedConfig.defaultDisk;
     manager.setDefault(defaultDisk);
 
-    final cloudDisk = resolved.cloudDisk;
+    final cloudDisk = resolvedConfig.cloudDisk;
 
-    if (resolved.disks.isNotEmpty) {
-      resolved.disks.forEach((name, diskConfigEntry) {
+    if (resolvedConfig.disks.isNotEmpty) {
+      resolvedConfig.disks.forEach((name, diskConfigEntry) {
         final diskConfig = Map<String, dynamic>.from(diskConfigEntry.toMap());
+        final driverName =
+            (diskConfig['driver']?.toString().toLowerCase() ?? 'local');
         if (name == 'local') {
+          final diskFs = diskConfig['file_system'] is file.FileSystem
+              ? diskConfig['file_system'] as file.FileSystem
+              : defaultFs;
+          final storageRootForDisk =
+              storageRoot.isNotEmpty && diskFs != defaultFs
+              ? _normalizeStorageRoot(
+                  resolveStorageRootValue(resolvedConfig.root),
+                  config,
+                  diskFs,
+                )
+              : storageRoot;
           final specContext = StorageDriverSpecContext(
             diskName: name,
             pathBase: 'storage.disks.$name',
             config: config,
           );
-          final resolved = LocalStorageDriver.spec.fromMap(
+          final localResolved = LocalStorageDriver.spec.fromMap(
             diskConfig,
             context: specContext,
           );
-          final existingRoot = resolved.root;
+          final existingRoot = localResolved.root;
           final shouldApplyStorageRoot =
               existingRoot == null ||
               existingRoot.isEmpty ||
               existingRoot == defaultStorageRootPath();
-          if (shouldApplyStorageRoot && storageRoot.isNotEmpty) {
-            diskConfig['root'] = storageRoot;
+          if (shouldApplyStorageRoot && storageRootForDisk.isNotEmpty) {
+            diskConfig['root'] = storageRootForDisk;
+          }
+        }
+        if (driverName == 'local') {
+          final diskFs = diskConfig['file_system'] is file.FileSystem
+              ? diskConfig['file_system'] as file.FileSystem
+              : defaultFs;
+          final normalizedRoot = _normalizeDiskRoot(
+            diskConfig['root'],
+            config,
+            diskFs,
+          );
+          if (normalizedRoot != null) {
+            diskConfig['root'] = normalizedRoot;
           }
         }
         final registeredConfig = _registerDisk(
@@ -246,7 +292,51 @@ class StorageServiceProvider extends ServiceProvider
       disks: facadeDisks,
       localFileSystems: localFileSystems,
     );
-    _registerStorageDefaults(container, manager);
+    _registerStorageDefaults(container, manager, config: config);
+  }
+
+  /// {@macro storage_provider_resolution}
+  String _normalizeStorageRoot(String root, Config config, file.FileSystem fs) {
+    final trimmed = root.trim();
+    if (trimmed.isEmpty) {
+      return trimmed;
+    }
+    return _resolveAgainstAppRoot(config, trimmed, fs.path);
+  }
+
+  String _resolveAgainstAppRoot(
+    Config config,
+    String path,
+    p.Context pathContext,
+  ) {
+    final normalized = pathContext.normalize(path);
+    if (pathContext.isAbsolute(normalized)) {
+      return normalized;
+    }
+    final appRoot = config.has('app.root')
+        ? config.get<Object?>('app.root')
+        : null;
+    if (appRoot is String && appRoot.trim().isNotEmpty) {
+      return pathContext.normalize(
+        pathContext.join(appRoot.trim(), normalized),
+      );
+    }
+    return normalized;
+  }
+
+  /// {@macro storage_provider_resolution}
+  String? _normalizeDiskRoot(Object? root, Config config, file.FileSystem fs) {
+    if (root is! String) {
+      return null;
+    }
+    final trimmed = root.trim();
+    if (trimmed.isEmpty) {
+      return null;
+    }
+    if (trimmed == defaultStorageRootPath()) {
+      return null;
+    }
+    return _resolveAgainstAppRoot(config, trimmed, fs.path);
   }
 
   Map<String, dynamic> _registerDisk(
@@ -309,8 +399,17 @@ class StorageServiceProvider extends ServiceProvider
     return sanitized;
   }
 
-  void _registerStorageDefaults(Container container, StorageManager manager) {
-    final defaults = StorageDefaults.fromManager(manager);
+  /// {@macro storage_provider_resolution}
+  void _registerStorageDefaults(
+    Container container,
+    StorageManager manager, {
+    Config? config,
+  }) {
+    final effectiveConfig =
+        config ?? (container.has<Config>() ? container.get<Config>() : null);
+    final defaults = effectiveConfig != null
+        ? StorageDefaults.fromConfig(effectiveConfig, manager)
+        : StorageDefaults.fromManager(manager);
     container.instance<StorageDefaults>(defaults);
   }
 

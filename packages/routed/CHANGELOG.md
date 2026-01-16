@@ -1,3 +1,14 @@
+## 0.3.1
+
+- Removed the `crypto` dependency and replaced secure cookie encryption with a
+  pointycastle-backed AES-GCM implementation plus internal hash/HMAC helpers.
+- Scaffold templates now live on disk and are embedded via build_runner, keeping
+  template sources out of inline Dart strings.
+- Web and fullstack scaffolds default to Tailwind; fullstack now renders Liquid
+  layout + view files instead of inline HTML.
+- Config loading now preserves `app.root` when `configDirectory` points at the
+  project root.
+
 ## 0.3.0
 
 ## 0.2.0

@@ -1,22 +1,39 @@
 import 'package:file/file.dart';
 import 'package:file/local.dart' as local;
 import 'package:liquify/liquify.dart';
-import 'package:path/path.dart' as p;
 import 'package:routed/src/render/html/template_engine.dart';
 
 export 'package:routed/src/view/engines/liquid_engine.dart';
 
+/// {@template liquid_root_base_directory}
+/// `LiquidRoot` resolves templates relative to `baseDirectory` without
+/// mutating the underlying file system's current directory.
+///
+/// Example:
+/// ```dart
+/// final root = LiquidRoot(baseDirectory: '/templates');
+/// ```
+/// {@endtemplate}
+
 /// The `LiquidRoot` class implements the `Root` interface and is responsible
 /// for resolving template file paths and reading their contents.
+/// {@macro liquid_root_base_directory}
 class LiquidRoot implements Root {
   /// The file system to be used for file operations.
-  FileSystem fileSystem;
+  final FileSystem fileSystem;
+
+  /// Base directory used when resolving relative templates.
+  String baseDirectory;
 
   /// Constructor for `LiquidRoot`.
   ///
   /// If no `fileSystem` is provided, it defaults to `local.LocalFileSystem()`.
-  LiquidRoot({FileSystem? fileSystem})
-    : fileSystem = fileSystem ?? const local.LocalFileSystem();
+  LiquidRoot({FileSystem? fileSystem, String? baseDirectory})
+    : fileSystem = fileSystem ?? const local.LocalFileSystem(),
+      baseDirectory = _resolveBase(
+        fileSystem ?? const local.LocalFileSystem(),
+        baseDirectory,
+      );
 
   /// Resolves the given relative path to a `Source` object.
   ///
@@ -27,7 +44,7 @@ class LiquidRoot implements Root {
   /// Throws an exception if the file does not exist.
   @override
   Source resolve(String relPath) {
-    final file = fileSystem.file(p.normalize(relPath));
+    final file = fileSystem.file(_resolvePath(relPath));
     if (!file.existsSync()) {
       throw Exception('Template file not found: $relPath');
     }
@@ -38,12 +55,35 @@ class LiquidRoot implements Root {
 
   @override
   Future<Source> resolveAsync(String relPath) async {
-    final file = fileSystem.file(p.normalize(relPath));
+    final file = fileSystem.file(_resolvePath(relPath));
     if (!await file.exists()) {
       throw Exception('Template file not found: $relPath');
     }
     final content = await file.readAsString();
     return Source(file.uri, content, this);
+  }
+
+  void setBaseDirectory(String? value) {
+    baseDirectory = _resolveBase(fileSystem, value);
+  }
+
+  String _resolvePath(String relPath) {
+    final pathContext = fileSystem.path;
+    final normalized = pathContext.normalize(relPath);
+    if (pathContext.isAbsolute(normalized)) {
+      return normalized;
+    }
+    return pathContext.normalize(pathContext.join(baseDirectory, normalized));
+  }
+
+  static String _resolveBase(FileSystem fs, String? base) {
+    final pathContext = fs.path;
+    final current = pathContext.normalize(fs.currentDirectory.path);
+    final baseValue = (base == null || base.isEmpty) ? current : base;
+    final resolved = pathContext.isAbsolute(baseValue)
+        ? baseValue
+        : pathContext.join(current, baseValue);
+    return pathContext.normalize(resolved);
   }
 }
 
@@ -104,13 +144,22 @@ class LiquidTemplateEngine implements TemplateEngine {
     }
   }
 
+  /// {@macro liquid_root_base_directory}
   @override
   void loadTemplates(String path) {
     final directory = _fileSystem.directory(path);
     if (!directory.existsSync()) {
       throw Exception('Directory not found: $path');
     }
-    _fileSystem.currentDirectory = directory.path;
+    final root = _root;
+    if (root is LiquidRoot) {
+      root.setBaseDirectory(directory.path);
+      return;
+    }
+    if (root is FileSystemRoot) {
+      _root = FileSystemRoot(directory.path, fileSystem: root.fileSystem);
+      return;
+    }
   }
 
   @override

@@ -37,7 +37,7 @@ void main() {
 }
 ```
 
-`engineTest` spins up a fresh engine and client for each test. Use `transportMode: TransportMode.ephemeralServer` when you need to exercise the full HTTP stack instead of the default in-memory transport.
+`engineTest` spins up a fresh engine and client for each test. You can pass `engine`, `configItems`, `engineConfig`, `options`, or `autoCloseEngine` when you need to customize the engine lifecycle. Use `transportMode: TransportMode.ephemeralServer` when you need to exercise the full HTTP stack instead of the default in-memory transport.
 
 ## 3. Share setup with `engineGroup`
 
@@ -90,20 +90,24 @@ Import `dart:io` when you need `HttpStatus` constants.
 
 ## 5. Combine with browser tests
 
-Because `engineTest` uses `server_testing` under the hood, you can share the same handler with browser automation:
+Because `engineTest` uses `server_testing` under the hood, you can share the same handler with browser automation (use the ephemeral server transport so a real URL is available):
 
 ```dart
-engineTest('renders home page', (engine, client) async {
-  engine.get('/', (ctx) => ctx.string('<html><title>Home</title></html>'));
+engineTest(
+  'renders home page',
+  (engine, client) async {
+    engine.get('/', (ctx) => ctx.string('<html><title>Home</title></html>'));
 
-  final baseUrl = await client.baseUrlFuture;
-  await testBootstrap();
+    final baseUrl = await client.baseUrlFuture;
+    await testBootstrap();
 
-  await browserTest('home has title', (browser) async {
-    await browser.visit('/', baseUrl: baseUrl);
-    await browser.assertTitle('Home');
-  });
-});
+    await browserTest('home has title', (browser) async {
+      await browser.visit('/', baseUrl: baseUrl);
+      await browser.assertTitle('Home');
+    });
+  },
+  transportMode: TransportMode.ephemeralServer,
+);
 ```
 
-See the [Testing index](/docs/routed/testing/overview) for additional helpers and the [Server Testing docs](/docs/server-testing/) for the full assertion API.
+See the [Testing index](/docs/routed/testing/overview) for additional helpers.

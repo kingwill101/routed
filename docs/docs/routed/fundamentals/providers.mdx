@@ -140,7 +140,7 @@ ConfigDocEntry(
 Once the provider ships defaults, the CLI automatically displays them:
 
 ```bash
-dart run routed_cli provider:list --config | grep mail
+dart run routed provider:list --config | grep mail
 ```
 
 `config:init` also inlines the doc comments above each `config/*.yaml` entry, so `ConfigDocEntry.description` + `metadata` show up in generated files.

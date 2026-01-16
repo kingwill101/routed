@@ -1,6 +1,8 @@
 include: package:lints/recommended.yaml
 
 analyzer:
+  exclude:
+    - templates/scaffold/**
   errors:
     depend_on_referenced_packages: ignore
     invalid_use_of_visible_for_testing_member: ignore

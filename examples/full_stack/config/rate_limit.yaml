@@ -1,0 +1,12 @@
+# Rate_limit configuration quick reference:
+# backend – Backend hint ("memory" uses array store, "redis" expects a Redis-backed cache store). Default: memory. Type: string
+# enabled – Enable rate limiting middleware. Default: false. Type: boolean
+# failover – Failover mode when the backing store is unavailable (allow, block, local). Default: allow. Type: string
+# policies – Array of rate limit policies (match, capacity, key). Default: []. Type: array
+# store – Cache store name to use for rate limit counters (defaults to cache.default). Type: string
+
+backend: memory
+enabled: false
+failover: allow
+policies:
+

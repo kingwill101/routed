@@ -1,0 +1,72 @@
+---
+title: Static Assets
+description: Serve files and directories through routed static mounts
+sidebar_position: 20
+---
+
+# Static Assets
+
+Static mounts expose files and directories through declarative configuration. They sit in the request pipeline as middleware and are also registered as `GET`/`HEAD` routes (so they appear in `routed routes`).
+
+## Configuration
+
+Define mounts under `static.mounts` and back them with storage disks:
+
+```yaml title="config/static.yaml"
+static:
+  enabled: true
+  mounts:
+    - route: /assets
+      disk: assets
+      path: ''
+      index: index.html
+      list_directories: false
+```
+
+```yaml title="config/storage.yaml"
+storage:
+  default: assets
+  disks:
+    assets:
+      driver: local
+      root: public
+```
+
+## Mount options
+
+Each mount supports:
+
+- `route` (or `prefix`): URL prefix to match.
+- `disk`: storage disk name to resolve files.
+- `path`: subdirectory within the disk root.
+- `root`: explicit file system root (bypasses disks).
+- `index`: default file for directory requests.
+- `list_directories` / `directory_listing`: enable directory listings.
+
+Programmatic configuration can also supply `file_system` when mounting assets.
+
+## Behavior
+
+- Missing files do **not** match the mount route; requests fall through to normal routing.
+- Directory requests use `index` if configured, otherwise fall back to listing (when enabled).
+- Paths are normalized and rejected if they escape the disk root.
+
+## Programmatic helpers
+
+You can still register assets directly in code:
+
+```dart
+router.static('/assets', 'public/assets');
+router.staticFile('/favicon.ico', 'public/favicon.ico');
+```
+
+## Troubleshooting
+
+- If mounts 404, confirm the storage disk root matches your project `public` directory.
+- Use `routed provider:list --config` to see merged mount config and `routed routes` to verify the mount routes are registered.
+
+## Next steps
+
+- [Routing: Static assets](/docs/routed/fundamentals/routing#static-assets)
+- [Configuration: Static assets](/docs/routed/fundamentals/configuration#static-assets)
+- [Responses: Files and static assets](/docs/routed/fundamentals/responses#files-and-static-assets)

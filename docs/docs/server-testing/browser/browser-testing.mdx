@@ -47,7 +47,7 @@ void main() async {
 
 Key pieces:
 - `testBootstrap` is asynchronous: call it at the top of the test file (before defining groups/tests). It reads `browsers.json`, ensures configured browser bundles are present, and wires up teardown to stop WebDriver drivers.
-- `BrowserConfig` controls the default browser, headless mode, logging, proxy, and device overrides. See [BrowserConfig & Devices](/docs/server-testing/browser/browser-config).
+- `BrowserConfig` controls the default browser, headless mode, logging, proxy, and device overrides. See [BrowserConfig & Devices](/docs/server_testing/browser/browser-config).
 - `TestClient.ephemeralServer` provides an isolated base URL for the suite; reuse the same handler across HTTP and browser tests when possible.
 - `browserGroup` is analogous to `group` but passes a `getBrowser()` factory that yields a fresh browser per test. Use `browserTest` for single tests outside a group.
 
@@ -104,4 +104,4 @@ browserTest(
 );
 ```
 
-For more granular configuration options, continue to the [BrowserConfig & Devices](/docs/server-testing/browser/browser-config) guide.
+For more granular configuration options, continue to the [BrowserConfig & Devices](/docs/server_testing/browser/browser-config) guide.

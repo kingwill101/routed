@@ -81,7 +81,7 @@ void main() {
       setUp(() {
         originalConfig = BrowserConfig(
           browserName: 'firefox',
-          headless: false,
+          headless: true,
           autoScreenshots: true,
           defaultWaitTimeout: const Duration(seconds: 15),
           verboseLogging: true,
@@ -125,7 +125,7 @@ void main() {
       test('should copy autoInstall', () {
         final newConfig = originalConfig.copyWith(autoInstall: true);
         expect(newConfig.autoInstall, isTrue);
-        expect(newConfig.headless, isFalse); // Other values preserved
+        expect(newConfig.headless, isTrue); // Other values preserved
       });
 
       test('should copy multiple new properties at once', () {
@@ -148,7 +148,7 @@ void main() {
 
         // Verify original values are preserved for unchanged properties
         expect(newConfig.browserName, equals('firefox'));
-        expect(newConfig.headless, isFalse);
+        expect(newConfig.headless, isTrue);
       });
 
       test('should preserve original values when no parameters provided', () {
@@ -209,13 +209,13 @@ void main() {
         // This simulates existing code that uses copyWith with original properties only
         final newConfig = originalConfig.copyWith(
           browserName: 'firefox',
-          headless: false,
+          headless: true,
           timeout: const Duration(seconds: 60),
         );
 
         // Original properties should be updated
         expect(newConfig.browserName, equals('firefox'));
-        expect(newConfig.headless, isFalse);
+        expect(newConfig.headless, isTrue);
         expect(newConfig.timeout, equals(const Duration(seconds: 60)));
 
         // New properties should retain their default values
@@ -234,7 +234,7 @@ void main() {
       test('should support Laravel Dusk-like configuration patterns', () {
         final config = BrowserConfig(
           browserName: 'chromium',
-          headless: false,
+          headless: true,
           autoScreenshots: true,
           defaultWaitTimeout: const Duration(seconds: 15),
           verboseLogging: true,
@@ -243,7 +243,7 @@ void main() {
         );
 
         expect(config.browserName, equals('chromium'));
-        expect(config.headless, isFalse);
+        expect(config.headless, isTrue);
         expect(config.autoScreenshots, isTrue);
         expect(config.defaultWaitTimeout, equals(const Duration(seconds: 15)));
         expect(config.verboseLogging, isTrue);

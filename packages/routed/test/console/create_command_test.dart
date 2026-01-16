@@ -230,7 +230,7 @@ void main() {
       expect(_exists(projectDir, 'public/styles.css'), isTrue);
       final homeTemplate = _read(projectDir, 'templates/home.liquid');
       expect(homeTemplate, contains('{{ app_title }}'));
-      expect(homeTemplate, contains('/assets/styles.css'));
+      expect(homeTemplate, contains('cdn.tailwindcss.com'));
     });
 
     test('scaffolds fullstack template with API and HTML', () async {
@@ -247,12 +247,51 @@ void main() {
       );
       final appContent = _read(projectDir, 'lib/app.dart');
       expect(appContent, contains("'/api'"));
-      expect(appContent, contains('ctx.html'));
+      expect(appContent, contains('ctx.template'));
+      expect(_exists(projectDir, 'templates/todos.liquid'), isTrue);
       expect(_exists(projectDir, 'test/api_test.dart'), isTrue);
 
       final pubspec = loadYaml(_read(projectDir, 'pubspec.yaml')) as YamlMap;
       final devDeps = pubspec['dev_dependencies'] as YamlMap? ?? YamlMap();
       expect(devDeps.containsKey('routed_testing'), isTrue);
+    });
+
+    test('supports all template options', () async {
+      const templates = <String, _TemplateExpectation>{
+        'basic': _TemplateExpectation(
+          expectedFiles: ['lib/app.dart', 'config/http.yaml'],
+          contentChecks: {'lib/app.dart': 'Welcome to'},
+        ),
+        'api': _TemplateExpectation(
+          expectedFiles: ['test/api_test.dart'],
+          contentChecks: {'lib/app.dart': "router.get('/users'"},
+        ),
+        'web': _TemplateExpectation(
+          expectedFiles: ['templates/home.liquid'],
+          contentChecks: {'templates/home.liquid': 'cdn.tailwindcss.com'},
+        ),
+        'fullstack': _TemplateExpectation(
+          expectedFiles: ['templates/todos.liquid'],
+          contentChecks: {'lib/app.dart': "templateName: 'todos.liquid'"},
+        ),
+      };
+
+      for (final entry in templates.entries) {
+        final name = 'demo_${entry.key}';
+        await _run(runner, ['create', '--name', name, '--template', entry.key]);
+
+        final projectDir = memoryFs.directory(
+          memoryFs.path.join(workspace.path, name),
+        );
+        expect(projectDir.existsSync(), isTrue);
+
+        for (final path in entry.value.expectedFiles) {
+          expect(_exists(projectDir, path), isTrue);
+        }
+        for (final check in entry.value.contentChecks.entries) {
+          expect(_read(projectDir, check.key), contains(check.value));
+        }
+      }
     });
 
     test('fails fast when template is unknown', () async {
@@ -263,6 +302,16 @@ void main() {
       ], 'Unsupported template');
     });
   });
+}
+
+class _TemplateExpectation {
+  const _TemplateExpectation({
+    required this.expectedFiles,
+    required this.contentChecks,
+  });
+
+  final List<String> expectedFiles;
+  final Map<String, String> contentChecks;
 }
 
 Future<void> _run(RoutedCommandRunner runner, List<String> args) async {

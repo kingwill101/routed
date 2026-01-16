@@ -71,11 +71,11 @@ final app = (shelf.Request req) async => shelf.Response.ok('ok');
 final handler = ShelfRequestHandler(app);
 ```
 
-If your framework is not covered, implement `RequestHandler` yourself—see [Handler Providers](/docs/server-testing/handler-providers).
+If your framework is not covered, implement `RequestHandler` yourself—see [Handler Providers](/docs/server_testing/handler-providers).
 
 ## 4. Write Your First Test
 
-`serverTest` is a thin wrapper around `test()` that wires up a `TestClient`, passes the handler into your callback, and disposes everything for you.
+`serverTest` is a thin wrapper around `test()` that wires up a `TestClient`, passes the handler into your callback, and disposes everything for you. It accepts the same `timeout`, `skip`, `tags`, `retry`, and `onPlatform` options you can pass to `test()`.
 
 ### Example with `IoRequestHandler`
 
@@ -137,4 +137,4 @@ dart test -t real-browser -r expanded
 
 By default `serverTest` uses the in-memory transport. Pass `transportMode: TransportMode.ephemeralServer` when you need the full HTTP stack or want to share the ephemeral server with browser tests.
 
-Next, dive into [HTTP Testing](/docs/server-testing/http-testing) to explore the client API, or [Browser Testing](/docs/server-testing/browser/browser-testing) to wire a UI flow on top of the same handler.
+Next, dive into [HTTP Testing](/docs/server_testing/http-testing) to explore the client API, or [Browser Testing](/docs/server_testing/browser/browser-testing) to wire a UI flow on top of the same handler.

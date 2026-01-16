@@ -3,7 +3,6 @@ import 'dart:convert';
 import 'dart:io';
 import 'dart:math';
 
-import 'package:crypto/crypto.dart';
 import 'package:http/http.dart' as http;
 import 'package:routed/src/auth/adapter.dart';
 import 'package:routed/src/auth/hooks.dart';
@@ -17,6 +16,7 @@ import 'package:routed/src/auth/session_auth.dart';
 import 'package:routed/src/context/context.dart';
 import 'package:routed/src/events/event.dart';
 import 'package:routed/src/events/event_manager.dart';
+import 'package:routed/src/crypto/crypto.dart';
 
 /// {@template routed_auth_manager}
 /// High-level auth coordinator for routed.
@@ -1056,8 +1056,7 @@ class AuthManager {
 
   List<int> sha256Bytes(String value) {
     final data = utf8.encode(value);
-    final digest = sha256.convert(data);
-    return digest.bytes;
+    return sha256Digest(data);
   }
 
   String _base64Url(List<int> bytes) {

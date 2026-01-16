@@ -1,26 +1,26 @@
 ---
 title: Routed CLI Reference
-description: Scaffold projects, run the dev server, inspect manifests, and manage providers with routed_cli
+description: Scaffold projects, run the dev server, inspect manifests, and manage providers with routed
 sidebar_position: 15
 ---
 
 # Routed CLI Reference
 
-The `routed_cli` package ships project scaffolding, a hot-reload dev server, route/spec inspection utilities, and manifest helpers. Install it beside your application (recommended) or activate it globally:
+The `routed` package ships project scaffolding, a hot-reload dev server, route/spec inspection utilities, and manifest helpers. Install it beside your application (recommended) or activate it globally:
 
 ```bash
-dart pub add --dev routed_cli
-# or: dart pub global activate routed_cli
+dart pub add --dev routed
+# or: dart pub global activate routed
 ```
 
-Run commands with `dart run routed_cli <command> [...]`. Add `--verbose` to surface extra debug output.
+Run commands with `dart run routed <command> [...]`. Add `--verbose` to surface extra debug output.
 
 > **Choosing a Dart executable:** The CLI honours the first set environment variable in `ROUTED_CLI_DART`, `DART_BIN`, or `DART_PATH`. Set one of these when you manage multiple SDKs (for example, with FVM) so every command launches the intended runtime.
 
 ## `create`
 
 ```bash
-dart run routed_cli create --name my_app [--output <dir>] [--force]
+dart run routed create --name my_app [--output <dir>] [--force]
 ```
 
 Scaffolds a Routed project, writing `bin/server.dart`, config manifests, README, `.env`, analysis options, and storage directories. Options:
@@ -35,7 +35,7 @@ After generating files, `create` automatically runs `dart pub get` using the res
 ## `dev`
 
 ```bash
-dart run routed_cli dev [--entry bin/server.dart] [--host 127.0.0.1] [--port 8080]
+dart run routed dev [--entry bin/server.dart] [--host 127.0.0.1] [--port 8080]
 ```
 
 Launches a development server with hot-reload support. Highlights:
@@ -45,12 +45,12 @@ Launches a development server with hot-reload support. Highlights:
 - Restarts the process automatically when `--bootstrap=false` (or `--no-bootstrap`).
 - Accepts additional flags: `--bootstrap-path`, `--install-missing/--no-install-missing`, `--no-warn-missing`, and `--watch` for custom directories.
 
-Use this during development; fall back to `dart run bin/server.dart` for single runs or CI pipelines.
+Use this during development; fall back to `dart run bin/server.dart` for single runs or CI pipelines. If you see "Entry file not found" errors, pass `--entry` to point at your server file.
 
 ## `routes`
 
 ```bash
-dart run routed_cli routes [--format table|json] [--entry tool/spec_manifest.dart]
+dart run routed routes [--format table|json] [--entry tool/spec_manifest.dart]
 ```
 
 Prints the HTTP and WebSocket routes for your application. The loader tries `lib/app.dart` (expecting a `createEngine()` function) and falls back to `tool/spec_manifest.dart`, or you can point to a custom entry. Use `--format json` together with `--no-pretty` when parsing from scripts.
@@ -58,7 +58,7 @@ Prints the HTTP and WebSocket routes for your application. The loader tries `lib
 ## `spec:generate`
 
 ```bash
-dart run routed_cli spec:generate --output .dart_tool/routed/route_manifest.json
+dart run routed spec:generate --output .dart_tool/routed/route_manifest.json
 ```
 
 Writes a JSON route manifest to disk. Useful for documentation, contract tests, or code generators. Accepts the same `--entry` and `--pretty/--no-pretty` options as `routes`. The CLI ensures parent directories exist before writing.
@@ -66,7 +66,7 @@ Writes a JSON route manifest to disk. Useful for documentation, contract tests, 
 ## `openapi generate`
 
 ```bash
-dart run routed_cli openapi generate [--title "My API"] [--version 1.0.0] [--server https://api.example.com]
+dart run routed openapi generate [--title "My API"] [--version 1.0.0] [--server https://api.example.com]
 ```
 
 Generates an OpenAPI 3.1 document from your routed engine. By default the CLI writes `.dart_tool/routed/openapi.json`; use `--output` to change the destination and `--server` (repeatable) to declare server URLs. Metadata added via `routeBuilder.openApi((op) { ... })` flows into the generated spec.
@@ -86,7 +86,7 @@ Every scaffold now includes `lib/commands.dart` exposing a
 `buildProjectCommands()` hook. Return one or more `Command<void>` instances and
 the Routed CLI will load them automatically when you run commands from inside
 the project. Project commands are listed under a "Project" section in
-`dart run routed_cli --help` alongside the built-ins.
+`dart run routed --help` alongside the built-ins.
 
 ```dart title="lib/commands.dart"
 import 'dart:async';
@@ -106,7 +106,8 @@ class QueueWorkCommand extends Command<void> {
   @override
   Future<void> run() async {
     final target = argResults?.option('queue') ?? 'default';
-    // TODO: start worker for [target].
+    // Insert your worker startup logic here.
+    print('Starting worker for $target');
   }
 }
 

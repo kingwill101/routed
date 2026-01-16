@@ -1,34 +1,74 @@
 import 'package:path/path.dart' as p;
+import 'package:routed/src/contracts/contracts.dart' show Config;
+import 'package:routed/src/engine/storage_paths.dart';
 import 'package:routed/src/storage/storage_manager.dart';
 
+/// {@template storage_defaults}
+/// Derives normalized defaults for storage helpers.
+///
+/// `storageBase` prefers `storage.base` (or `app.root/storage`), while
+/// `localDiskRoot` reflects the default disk root when available.
+///
+/// Example:
+/// ```dart
+/// final defaults = StorageDefaults.fromConfig(config, manager);
+/// final cachePath = defaults.frameworkPath('cache');
+/// ```
+/// {@endtemplate}
+
+/// {@macro storage_defaults}
 class StorageDefaults {
   StorageDefaults._(this.localDiskRoot, this.storageBase, this._path);
 
-  factory StorageDefaults.fromManager(StorageManager manager) {
+  /// Builds defaults from the storage manager, optionally overriding the base.
+  factory StorageDefaults.fromManager(
+    StorageManager manager, {
+    String? storageBase,
+  }) {
     String localRoot;
     try {
       localRoot = manager.disk().resolve('');
     } catch (_) {
       localRoot = 'storage/app';
     }
-    return StorageDefaults.fromLocalRoot(localRoot);
+    return StorageDefaults.fromRoots(localRoot, storageBase: storageBase);
   }
 
+  /// {@macro storage_defaults}
+  factory StorageDefaults.fromConfig(Config config, StorageManager manager) {
+    final base = resolveStorageBasePath(config);
+    return StorageDefaults.fromManager(manager, storageBase: base);
+  }
+
+  /// Builds defaults directly from a local disk root.
   factory StorageDefaults.fromLocalRoot(String root) {
-    final pathContext = _contextFor(root);
-    final normalized = pathContext.normalize(root);
-    final base = _deriveStorageBase(normalized, pathContext);
-    return StorageDefaults._(normalized, base, pathContext);
+    return StorageDefaults.fromRoots(root);
+  }
+
+  /// {@macro storage_defaults}
+  factory StorageDefaults.fromRoots(String localRoot, {String? storageBase}) {
+    final baseValue = storageBase?.trim();
+    final contextSeed = (baseValue != null && baseValue.isNotEmpty)
+        ? baseValue
+        : localRoot;
+    final pathContext = _contextFor(contextSeed);
+    final normalizedLocal = pathContext.normalize(localRoot);
+    final resolvedBase = (baseValue != null && baseValue.isNotEmpty)
+        ? pathContext.normalize(baseValue)
+        : _deriveStorageBase(normalizedLocal, pathContext);
+    return StorageDefaults._(normalizedLocal, resolvedBase, pathContext);
   }
 
   final String localDiskRoot;
   final String storageBase;
   final p.Context _path;
 
+  /// Resolves a `storage/framework/<child>` path from the base.
   String frameworkPath(String child) {
     return _path.normalize(_path.join(storageBase, 'framework', child));
   }
 
+  /// Normalizes a storage-relative path against the base.
   String resolve(String path) {
     final trimmed = path.trim();
     if (trimmed.isEmpty) {

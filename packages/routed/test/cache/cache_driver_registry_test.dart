@@ -298,6 +298,21 @@ void main() {
       );
     });
 
+    test('storage.base influences framework cache path', () {
+      final fs = MemoryFileSystem();
+      final appConfig = ConfigImpl({
+        'app': {'root': '/srv/app'},
+        'storage': {'base': 'custom/storage'},
+      });
+
+      final resolved = resolveFrameworkStoragePath(appConfig, child: 'cache');
+
+      expect(
+        fs.path.normalize(resolved),
+        equals(fs.path.normalize('/srv/app/custom/storage/framework/cache')),
+      );
+    });
+
     test(
       'file driver falls back to literal path when no services available',
       () {

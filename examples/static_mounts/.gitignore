@@ -1,0 +1,13 @@
+.dart_tool/
+.dart_tool/routed/
+.packages
+
+# Build and temporary outputs
+build/
+
+# Environment secrets
+.env
+.env.*
+
+# Generated sources
+lib/generated/

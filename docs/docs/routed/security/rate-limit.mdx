@@ -43,7 +43,7 @@ stores:
     url: redis://localhost:6379/2
 ```
 
-To give the limiter its own store, set `rate_limit.store` to the cache store name.
+The limiter always uses a cache store. Set `rate_limit.store` to the cache store name (or rely on `cache.default`).
 
 ## Define policies
 
@@ -56,7 +56,6 @@ Policies live in `config/rate-limiting.yaml` (or wherever you prefer) and are me
 ```yaml title="config/rate-limiting.yaml"
 rate_limit:
   enabled: true
-  backend: redis         # memory or redis – must have a corresponding cache store
   store: redis           # optional: overrides cache.default
   failover: allow        # allow | block | local when Redis is unavailable
   policies:
@@ -123,7 +122,7 @@ Set the top-level `rate_limit.failover` string or override per policy with `fail
 - Monitor 429 counts and `Retry-After` values to tune capacities and refill windows.
 - Redis deployments should run with persistence disabled or RDB/AOF trimmed for limiter keys—they are ephemeral.
 - Memory backend requires a configured cache store (typically the array driver) and is single-node only; distributed instances require a shared cache store (Redis driver).
-- Use `dart run routed_cli provider:list --config` to confirm policies merged correctly and catch shape errors early.
+- Use `dart run routed provider:list --config` to confirm policies merged correctly and catch shape errors early.
 - Subscribe to rate limit events (see below) to build metrics for hits, blocks, and failovers.
 
 ## Telemetry and automation

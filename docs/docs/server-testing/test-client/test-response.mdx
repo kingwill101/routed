@@ -29,6 +29,7 @@ response
 - `assertHeaderContains(String key, dynamic value)` — substring or collection contains
 - `assertContentType(String mime)` — shorthand for the common case
 - `header(String key)` — retrieve the raw header list (also triggers `assertHasHeader`)
+- `cookie(String name)` — retrieve a parsed cookie from `set-cookie`
 
 ## Body Assertions
 - `assertBody(String expected)` and `assertBodyEquals(String expected)`

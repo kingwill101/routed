@@ -10,8 +10,15 @@ import 'package:routed/src/contracts/cache/store.dart';
 import 'redis_lock.dart';
 
 class RedisStore extends TaggableStore implements Store, LockProvider {
-  RedisStore(this.host, this.port, {this.password, this.db})
-    : _connection = RedisConnection();
+  RedisStore(
+    this.host,
+    this.port, {
+    this.password,
+    this.db,
+    RedisConnection? connection,
+    Future<dynamic> Function(List<dynamic>)? sendOverride,
+  }) : _connection = connection ?? RedisConnection(),
+       _sendOverride = sendOverride;
 
   factory RedisStore.fromConfig(Map<String, dynamic> config) {
     String? url;
@@ -88,6 +95,7 @@ class RedisStore extends TaggableStore implements Store, LockProvider {
   final int? db;
 
   final RedisConnection _connection;
+  final Future<dynamic> Function(List<dynamic>)? _sendOverride;
   Command? _command;
   bool _connecting = false;
 
@@ -106,7 +114,7 @@ class RedisStore extends TaggableStore implements Store, LockProvider {
     _connecting = true;
     try {
       final command = await _connection.connect(host, port);
-      if (password != null && password!.isNotEmpty) {
+      if (password?.isNotEmpty == true) {
         await command.send_object(['AUTH', password]);
       }
       if (db != null) {
@@ -120,6 +128,10 @@ class RedisStore extends TaggableStore implements Store, LockProvider {
   }
 
   Future<dynamic> _send(List<dynamic> args) async {
+    final sendOverride = _sendOverride;
+    if (sendOverride != null) {
+      return sendOverride(args);
+    }
     final cmd = await _ensureCommand();
     try {
       return await cmd.send_object(args);

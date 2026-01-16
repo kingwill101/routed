@@ -1,0 +1,13 @@
+# Static configuration quick reference:
+# enabled – Enable static asset serving. Default: false. Type: boolean
+# mounts – List of static mount configurations. Default: []. Type: array
+
+enabled: true
+mounts:
+  - route: /css
+    disk: assets
+    path: css
+  - route: /assets
+    disk: assets
+    path: ''
+

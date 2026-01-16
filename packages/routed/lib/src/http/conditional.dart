@@ -1,7 +1,7 @@
 import 'dart:convert';
 import 'dart:io';
 
-import 'package:crypto/crypto.dart';
+import 'package:routed/src/crypto/crypto.dart';
 
 import '../engine/config.dart';
 
@@ -141,15 +141,15 @@ DateTime? _parseHttpDate(String value) {
 /// final digest = _hashBytes([1, 2, 3], 'sha256');
 /// print(digest); // Output: Digest with SHA-256 hash
 /// ```
-Digest _hashBytes(List<int> bytes, String algorithm) {
+List<int> _hashBytes(List<int> bytes, String algorithm) {
   switch (algorithm.toLowerCase()) {
     case 'sha1':
-      return sha1.convert(bytes);
+      return sha1Digest(bytes);
     case 'md5':
-      return md5.convert(bytes);
+      return md5Digest(bytes);
     case 'sha256':
     default:
-      return sha256.convert(bytes);
+      return sha256Digest(bytes);
   }
 }
 
@@ -162,7 +162,7 @@ Digest _hashBytes(List<int> bytes, String algorithm) {
 /// ```
 String generateStrongEtag(List<int> bytes, {String algorithm = 'sha256'}) {
   final digest = _hashBytes(bytes, algorithm);
-  final encoded = base64Url.encode(digest.bytes);
+  final encoded = base64Url.encode(digest);
   return '"$encoded"';
 }
 

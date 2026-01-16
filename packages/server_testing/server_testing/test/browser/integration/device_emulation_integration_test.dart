@@ -1,21 +1,29 @@
+library;
+
 import 'package:server_testing/server_testing.dart';
 import 'package:server_testing/src/browser/bootstrap/devices_json_const.dart';
 
-void main() async {
-  await testBootstrap(
-    BrowserConfig(
-      browserName: 'chromium',
-      headless: true,
-      baseUrl: 'https://example.com',
-      autoScreenshots: false,
-    ),
-  );
+import '../_support/real_browser_bootstrap.dart';
 
+void main() {
   // Use generated constants for devices to avoid fragile map lookups
   final devicePixel5 = pixel5;
   // final deviceGalaxyS9 = galaxyS9Plus; // available if needed
 
   group('Device emulation', () {
+    setUpAll(() async {
+      await realBrowserBootstrap(
+        BrowserConfig(
+          browserName: 'chromium',
+          headless: true,
+          baseUrl: 'https://example.com',
+          autoScreenshots: false,
+        ),
+      );
+    });
+
+    tearDownAll(realBrowserCleanup);
+
     browserTest(
       'Pixel 5 UA/viewport/touch/media',
       (browser) async {

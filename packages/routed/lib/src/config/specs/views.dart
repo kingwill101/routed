@@ -73,9 +73,7 @@ class ViewConfigSpec extends ConfigSpec<ViewSettings> {
       allowEmpty: true,
       throwOnInvalid: true,
     );
-    final directory = (directoryRaw == null || directoryRaw.isEmpty)
-        ? defaultDirectory
-        : directoryRaw;
+    final directory = directoryRaw ?? defaultDirectory;
 
     final cache =
         parseBoolLike(

@@ -96,7 +96,7 @@ Best practices:
 - Capture a correlation/request ID (via `request_headers` or middleware) and include it in all logs and external spans.
 - Log payload shapes, not full sensitive bodies; when necessary, redact fields at the edge.
 
-> Validation: The logging provider rejects malformed overrides (for example, non-boolean `enabled` flags or non-string `request_headers` entries) by throwing a `ProviderConfigException` during boot. You can catch mistakes early by running `dart run routed_cli provider:list --config`, which prints each provider’s defaults and surfaces validation errors.
+> Validation: The logging provider rejects malformed overrides (for example, non-boolean `enabled` flags or non-string `request_headers` entries) by throwing a `ProviderConfigException` during boot. You can catch mistakes early by running `dart run routed provider:list --config`, which prints each provider’s defaults and surfaces validation errors.
 
 ## Error Hooks & Logging
 

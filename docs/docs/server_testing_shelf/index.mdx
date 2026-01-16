@@ -1,0 +1,38 @@
+---
+title: Server Testing Shelf
+description: Shelf adapter for server_testing request handlers
+sidebar_position: 0
+---
+
+# Server Testing Shelf
+
+`server_testing_shelf` bridges Shelf handlers to the `server_testing` runtime. Use it when your application is already built on `package:shelf` and you want to reuse the same handler in HTTP and browser tests.
+
+## Install
+
+```yaml
+dev_dependencies:
+  server_testing: ^0.3.0
+  server_testing_shelf: ^0.2.1
+```
+
+## Quick start
+
+```dart
+import 'package:shelf/shelf.dart' as shelf;
+import 'package:server_testing/server_testing.dart';
+import 'package:server_testing_shelf/server_testing_shelf.dart';
+
+final app = (shelf.Request req) async => shelf.Response.ok('ok');
+final handler = ShelfRequestHandler(app);
+
+serverTest('GET /', (client, _) async {
+  final response = await client.get('/');
+  response.assertStatus(200).assertBody('ok');
+}, handler: handler);
+```
+
+## Next steps
+
+- Learn about [Test Transports](/docs/server_testing/transports)
+- Review the [Server Testing overview](/docs/server_testing/intro)

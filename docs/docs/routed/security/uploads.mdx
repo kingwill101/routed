@@ -25,27 +25,23 @@ If a request uploads a file with an extension not on the list, the framework rej
 
 ## Pin uploads to a storage directory
 
-Hardened uploads write every accepted file to the directory configured under `uploads.directory`. Point that directory at a storage disk so uploads share permissions, quota configuration, and observability with the rest of your storage layer.
+Hardened uploads write every accepted file to the directory configured under `uploads.directory`. Keep it under your storage root so uploads share permissions, quota configuration, and observability with the rest of your storage layer.
 
 ```yaml title="config/uploads.yaml"
 directory: uploads
-file_permissions: 0o640
-disk: app_uploads
+permissions: 0o640
 ```
 
 ```yaml title="config/storage.yaml"
-disks:
-  app_uploads:
-    driver: local
-    root: /srv/app/uploads
-    visibility: private
+storage:
+  root: /srv/app
 ```
 
 Key behaviours:
 
 - The provider refuses to use system temp directories once an override is supplied.
 - Files inherit the configured permission mask so web servers cannot accidentally serve private content.
-- Static assets or views can reuse the same disk, keeping IO consistent across subsystems.
+- Static assets or views can reuse the same storage root, keeping IO consistent across subsystems.
 
 ## Enforce limits and cleanup
 
@@ -69,8 +65,8 @@ If the client disconnects early or hits any limit, every partially written file 
 
 - Audit `allowed_extensions` regularly; accept the smallest useful list and prefer content-type validation in business logic where possible.
 - Monitor the upload directory’s disk usage. A simple `du` alert tied to your storage disk catches unexpected growth.
-- Run `dart run routed_cli provider:list --config` to inspect the merged configuration and ensure extensions, directory, and limit values loaded as expected.
-- Combine uploads with [security headers](/docs/routed/security#security-headers) so browsers avoid caching sensitive responses.
+- Run `dart run routed provider:list --config` to inspect the merged configuration and ensure extensions, directory, and limit values loaded as expected.
+- Combine uploads with [security headers](/docs/routed/security/#security-headers) so browsers avoid caching sensitive responses.
 
 ## Looking ahead
 

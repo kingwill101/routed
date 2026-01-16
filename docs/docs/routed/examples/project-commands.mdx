@@ -1,6 +1,6 @@
 ---
 title: Project CLI Commands
-description: Use lib/commands.dart to register project-specific routed_cli commands
+description: Use lib/commands.dart to register project-specific routed commands
 sidebar_position: 40
 ---
 
@@ -27,10 +27,10 @@ cd examples/project_commands_demo
 dart pub get
 
 # List built-in + project commands
-dart run routed_cli --help
+dart run routed --help
 
 # Run a project command
-dart run routed_cli demo:greet --name "Routed fan"
+dart run routed demo:greet --name "Routed fan"
 ```
 
 `lib/commands.dart` exports a function similar to:
@@ -78,8 +78,8 @@ FutureOr<List<Command<void>>> buildProjectCommands() => [RoutesDumpCommand()];
 ```
 
 When you add commands, the CLI groups them under a "Project" heading in
-`dart run routed_cli --help`. If a project command reuses a built-in name the CLI
+`dart run routed --help`. If a project command reuses a built-in name the CLI
 exits with a conflict so you can rename it.
 
 Use this hook for queue workers, database seeders, or custom diagnostics without
-forking `routed_cli`.
+forking `routed`.

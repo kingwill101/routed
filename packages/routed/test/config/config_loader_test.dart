@@ -74,5 +74,43 @@ features:
       final snapshot = loader.load(options);
       expect(snapshot.config.get<String>('database.host'), equals('env-host'));
     });
+
+    test(
+      'uses config directory parent when configDirectory is config folder',
+      () {
+        fs
+            .file(fs.path.join(configDir, 'app.yaml'))
+            .writeAsStringSync('name: Demo');
+
+        final options = ConfigLoaderOptions(
+          defaults: const {
+            'app': {'name': 'Default'},
+          },
+          configDirectory: configDir,
+          fileSystem: fs,
+        );
+
+        final snapshot = loader.load(options);
+        expect(snapshot.config.get<String>('app.root'), equals('/project'));
+      },
+    );
+
+    test('uses config directory itself when it is the project root', () {
+      final rootDir = '/project';
+      fs
+          .file(fs.path.join(rootDir, 'app.yaml'))
+          .writeAsStringSync('name: Root App');
+
+      final options = ConfigLoaderOptions(
+        defaults: const {
+          'app': {'name': 'Default'},
+        },
+        configDirectory: rootDir,
+        fileSystem: fs,
+      );
+
+      final snapshot = loader.load(options);
+      expect(snapshot.config.get<String>('app.root'), equals(rootDir));
+    });
   });
 }
