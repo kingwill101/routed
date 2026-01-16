@@ -1,6 +1,6 @@
 name: routed
 description: A modular HTTP engine and routing framework for Dart with middleware, configuration, sessions, and observability built in.
-version: 0.3.1
+version: 0.3.2
 repository: https://github.com/kingwill101/routed/tree/master/packages/routed
 tags:
   - routing

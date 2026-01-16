@@ -122,7 +122,7 @@ mixin ContainerMixin {
   ///
   /// Returns a new container with request-scoped bindings.
   Container createRequestContainer(HttpRequest request, HttpResponse response) {
-    final container = _container.createChild();
+    final container = _container.createChild(scope: ContainerScope.request);
     container.instance<ConfigRegistry>(_configRegistry);
     final provider = RequestServiceProvider(request, response);
     provider.register(container);
@@ -138,21 +138,25 @@ mixin ContainerMixin {
   /// Cleans up a request-scoped container.
   ///
   /// This method:
-  /// 1. Calls cleanup on all service providers
+  /// 1. Calls cleanup on request-scoped service providers
   /// 2. Allows providers to perform any necessary resource cleanup
   ///
   /// This should be called after the request has been handled, typically
   /// in a finally block.
   Future<void> cleanupRequestContainer(Container container) async {
     for (final provider in _providers) {
-      await provider.cleanup(container);
+      if (provider.scope == ContainerScope.request) {
+        await provider.cleanup(container);
+      }
     }
   }
 
   /// Cleans up all registered service providers using the root container.
   Future<void> cleanupProviders() async {
     for (final provider in _providers) {
-      await provider.cleanup(_container);
+      if (provider.scope == ContainerScope.root) {
+        await provider.cleanup(_container);
+      }
     }
   }
 

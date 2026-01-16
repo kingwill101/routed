@@ -27,6 +27,9 @@ class RequestServiceProvider extends ServiceProvider {
   RequestServiceProvider(this.request, this.response);
 
   @override
+  ContainerScope get scope => ContainerScope.request;
+
+  @override
   void register(Container container) {
     // Register request-scoped services
     container.instance<HttpRequest>(request);

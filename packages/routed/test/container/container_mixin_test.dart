@@ -12,11 +12,15 @@ class TestService {
 
 class LifecycleProvider extends ServiceProvider {
   final String value;
+  final ContainerScope lifecycleScope;
   int registerCalls = 0;
   int bootCalls = 0;
   int cleanupCalls = 0;
 
-  LifecycleProvider(this.value);
+  LifecycleProvider(this.value, {this.lifecycleScope = ContainerScope.root});
+
+  @override
+  ContainerScope get scope => lifecycleScope;
 
   @override
   void register(Container container) {
@@ -118,12 +122,35 @@ void main() {
         Engine engine,
         TestClient client,
       ) async {
-        final cleanupProbe = LifecycleProvider('cleanup-probe');
-        engine.registerProvider(cleanupProbe);
+        final rootProbe = LifecycleProvider('root-probe');
+        final cleanupProbe = LifecycleProvider(
+          'cleanup-probe',
+          lifecycleScope: ContainerScope.request,
+        );
+        final childProbe = LifecycleProvider(
+          'child-probe',
+          lifecycleScope: ContainerScope.child,
+        );
+        engine
+          ..registerProvider(rootProbe)
+          ..registerProvider(cleanupProbe)
+          ..registerProvider(childProbe);
 
-        await engine.cleanupRequestContainer(engine.container);
+        final request = setupRequest('GET', '/cleanup');
+        final requestContainer =
+            engine.createRequestContainer(request, request.response);
 
+        await engine.cleanupRequestContainer(requestContainer);
+
+        expect(rootProbe.cleanupCalls, equals(0));
         expect(cleanupProbe.cleanupCalls, equals(1));
+        expect(childProbe.cleanupCalls, equals(0));
+
+        await engine.cleanupProviders();
+
+        expect(rootProbe.cleanupCalls, equals(1));
+        expect(cleanupProbe.cleanupCalls, equals(1));
+        expect(childProbe.cleanupCalls, equals(0));
       });
 
       engineTest(

@@ -43,7 +43,8 @@ class EmailServiceProvider extends ServiceProvider {
 
 - `register` is synchronous and should only declare bindings (no I/O).
 - `boot` runs after all providers register, so you can resolve other bindings safely.
-- `cleanup` runs when the engine shuts down (or a request-scoped container is disposed).
+- `cleanup` runs when the engine shuts down for root-scoped providers, or after a
+  request finishes for request-scoped providers.
 
 Register providers before `engine.initialize()`:
 
@@ -76,6 +77,29 @@ Engine options execute right after the engine is created but before
 `engine.initialize()` (and before provider boot hooks fire). Use them when you
 need to ensure something exists in the container—custom locale resolvers,
 driver registrations, feature flags—before providers rely on that state.
+
+### Provider scopes
+
+Providers now declare a lifecycle scope. The engine uses this to decide when a
+provider's `cleanup` hook should run.
+
+- `ContainerScope.root` (default): cleaned up when the engine shuts down.
+- `ContainerScope.request`: cleaned up after each request container is disposed.
+- `ContainerScope.child`: for advanced use; not cleaned up automatically by the engine.
+
+Mark request-scoped providers explicitly:
+
+```dart title="Request-scoped provider"
+class RequestMetricsProvider extends ServiceProvider {
+  @override
+  ContainerScope get scope => ContainerScope.request;
+
+  @override
+  Future<void> cleanup(Container container) async {
+    // release per-request resources
+  }
+}
+```
 
 ## Shipping configuration defaults
 

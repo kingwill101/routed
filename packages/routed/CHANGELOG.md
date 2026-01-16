@@ -1,3 +1,11 @@
+## 0.3.2
+
+- Added provider lifecycle scopes so request cleanup only disposes request-scoped
+  providers, preventing application singletons from being torn down after each
+  request.
+- Request containers now advertise request scope, and `RequestServiceProvider`
+  is marked request-scoped by default.
+
 ## 0.3.1
 
 - Removed the `crypto` dependency and replaced secure cookie encryption with a

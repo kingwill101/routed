@@ -1,5 +1,21 @@
 import 'dart:async';
 
+/// Describes the lifecycle scope of a container instance.
+///
+/// Root containers live for the application lifetime, while request
+/// containers are created per request/connection and should be cleaned up
+/// after each request.
+enum ContainerScope {
+  /// Application-level container.
+  root,
+
+  /// Request/connection scoped container.
+  request,
+
+  /// A child container with no explicit lifecycle semantics.
+  child,
+}
+
 /// Represents a binding for a type, including its factory and singleton status.
 ///
 /// A [Binding] manages the creation and lifecycle of a dependency within the container,
@@ -112,8 +128,24 @@ class Container {
   /// Optional parent container for hierarchical DI
   final Container? _parent;
 
+  /// The lifecycle scope for this container.
+  final ContainerScope _scope;
+
   /// Creates a new container, optionally with a parent container.
-  Container({Container? parent}) : _parent = parent;
+  Container({Container? parent, ContainerScope? scope})
+    : _parent = parent,
+      _scope = scope ?? (parent == null
+          ? ContainerScope.root
+          : ContainerScope.child);
+
+  /// The lifecycle scope for this container.
+  ContainerScope get scope => _scope;
+
+  /// Whether this container represents an application root scope.
+  bool get isRootScope => _scope == ContainerScope.root;
+
+  /// Whether this container represents a request scope.
+  bool get isRequestScope => _scope == ContainerScope.request;
 
   /// Binds a factory function for type [T].
   ///
@@ -356,8 +388,8 @@ class Container {
   /// Creates a child container that inherits bindings from this container.
   ///
   /// The child container can override bindings while maintaining access to parent bindings.
-  Container createChild() {
-    return Container(parent: this);
+  Container createChild({ContainerScope scope = ContainerScope.child}) {
+    return Container(parent: this, scope: scope);
   }
 
   /// Resolves multiple dependencies in parallel.

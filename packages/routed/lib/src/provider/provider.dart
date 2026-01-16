@@ -263,6 +263,13 @@ class ConfigDefaultsSnapshot {
 /// }
 /// ```
 abstract class ServiceProvider {
+  /// The lifecycle scope this provider is intended to live in.
+  ///
+  /// Providers with [ContainerScope.root] should only be cleaned up when
+  /// the application shuts down. Providers with [ContainerScope.request]
+  /// can be cleaned up after each request.
+  ContainerScope get scope => ContainerScope.root;
+
   /// Register services with the container.
   ///
   /// This method is called when the provider is registered with the container.
