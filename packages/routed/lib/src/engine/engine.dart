@@ -84,7 +84,7 @@ part 'request.dart';
 ///   return Response.ok('Hello, World!');
 /// });
 ///
-/// engine.get('/users/:id', (req) {
+/// engine.get('/users/{id}', (req) {
 ///   final id = req.params['id'];
 ///   return Response.ok('User $id');
 /// });
@@ -161,7 +161,17 @@ class Engine with StaticFileHandler, ContainerMixin {
   EngineConfig get config => container.get();
 
   /// The application configuration, providing access to application-level settings.
-  Config get appConfig => container.get();
+  ///
+  /// In bare mode this is not available unless you register a Config binding.
+  Config get appConfig {
+    if (!container.has<Config>()) {
+      throw StateError(
+        'Config is not available in bare mode. '
+        'Use Engine.full(...) or register CoreServiceProvider/Config manually.',
+      );
+    }
+    return container.get<Config>();
+  }
 
   /// A list of [_EngineMount] objects, representing the mounted routers and their prefixes.
   final List<_EngineMount> _mounts = [];
@@ -169,11 +179,25 @@ class Engine with StaticFileHandler, ContainerMixin {
   /// A list of [EngineRoute] objects, representing the flattened route table.
   final List<EngineRoute> _engineRoutes = [];
 
+  /// Routes indexed by HTTP method for faster lookup.
+  final Map<String, List<EngineRoute>> _routesByMethod = {};
+
+  /// Static routes indexed by method and path for O(1) lookup.
+  final Map<String, Map<String, EngineRoute>> _staticRoutesByMethod = {};
+
+  /// Fallback routes collected during build.
+  final List<EngineRoute> _fallbackRoutes = [];
+
   /// Map for quick lookup of routes by their name once the routing table is frozen.
   Map<String, EngineRoute> _routesByName = {};
 
   /// A list of global middlewares that are applied to all routes handled by this engine.
   List<Middleware> middlewares;
+
+  /// Cached resolved global middlewares built with the routing table.
+  List<Middleware> _cachedGlobalMiddlewares = const <Middleware>[];
+
+  EventManager? _cachedEventManager;
 
   /// Registry of configurable error handling hooks.
   final ErrorHandlingRegistry errorHooks;
@@ -263,7 +287,8 @@ class Engine with StaticFileHandler, ContainerMixin {
   /// These providers can register services, middleware, and perform initialization.
   ///
   /// The [includeDefaultProviders] parameter controls whether built-in service
-  /// providers (core, routing, logging) are automatically registered. Default is `true`.
+  /// providers (core, routing, logging) are automatically registered. Default is `false`.
+  /// Use [Engine.full] or [Engine.createFull] for the full provider boot sequence.
   ///
   /// Example:
   /// ```dart
@@ -287,14 +312,18 @@ class Engine with StaticFileHandler, ContainerMixin {
     ErrorHandlingRegistry? errorHandling,
     ConfigLoaderOptions? configOptions,
     List<ServiceProvider>? providers,
-    bool includeDefaultProviders = true,
+    bool includeDefaultProviders = false,
   }) : middlewares = middlewares ?? [],
        errorHooks = errorHandling?.clone() ?? ErrorHandlingRegistry(),
        _includeDefaultProviders = includeDefaultProviders,
        _configOptions = configOptions ?? const ConfigLoaderOptions() {
     if (includeDefaultProviders) {
-      // Register built-in service providers first
+      // Always install bare essentials first, then layer providers on top.
+      _registerBareDefaults(config: config);
+      // Register built-in service providers.
       _registerBuiltInProviders(config: config, configItems: configItems);
+    } else {
+      _registerBareDefaults(config: config);
     }
 
     if (providers != null && providers.isNotEmpty) {
@@ -306,6 +335,24 @@ class Engine with StaticFileHandler, ContainerMixin {
     options?.forEach((opt) => opt(this));
     _loadManifestProviders();
     _rebuildMiddlewareStacks();
+  }
+
+  void _registerBareDefaults({EngineConfig? config}) {
+    final engineConfig = config ?? EngineConfig();
+    if (!container.has<EngineConfig>()) {
+      container.instance<EngineConfig>(engineConfig);
+    }
+    if (!container.has<RoutePatternRegistry>()) {
+      container.instance<RoutePatternRegistry>(RoutePatternRegistry.defaults());
+    }
+    if (!container.has<ValidationRuleRegistry>()) {
+      container.instance<ValidationRuleRegistry>(
+        ValidationRuleRegistry.defaults(),
+      );
+    }
+    if (!container.has<MiddlewareRegistry>()) {
+      container.instance<MiddlewareRegistry>(MiddlewareRegistry());
+    }
   }
 
   /// Registers the built-in service providers that come with the framework
@@ -449,6 +496,7 @@ class Engine with StaticFileHandler, ContainerMixin {
       }
       _configuredMiddlewareGroups[group] = stack;
     });
+    _markRoutesDirty();
   }
 
   Map<String, ProviderMiddlewareContribution> _collectMiddlewareSources(
@@ -522,6 +570,7 @@ class Engine with StaticFileHandler, ContainerMixin {
       config: other.config,
       errorHandling: other.errorHooks,
       configOptions: other._configOptions,
+      includeDefaultProviders: other._includeDefaultProviders,
     );
     if (other.container.has<RoutePatternRegistry>()) {
       final registry = other.container.get<RoutePatternRegistry>();
@@ -560,6 +609,7 @@ class Engine with StaticFileHandler, ContainerMixin {
       config: config ?? EngineConfig(),
       middlewares: [timeoutMiddleware(const Duration(seconds: 30))],
       options: options,
+      includeDefaultProviders: true,
     );
   }
 
@@ -571,7 +621,7 @@ class Engine with StaticFileHandler, ContainerMixin {
   ///
   /// Example:
   /// ```dart
-  /// engine.get('/users/:id/posts/:postId', handler).name('user.posts');
+  /// engine.get('/users/{id}/posts/{postId}', handler).name('user.posts');
   ///
   /// final url = engine.route('user.posts', {
   ///   'id': 123,
@@ -676,12 +726,16 @@ class Engine with StaticFileHandler, ContainerMixin {
   void _build({String? parentGroupName}) {
     _ensureDefaultRouterMounted();
     _engineRoutes.clear();
+    _routesByMethod.clear();
+    _staticRoutesByMethod.clear();
+    _fallbackRoutes.clear();
     _routesByName = {};
     final patternRegistry = _resolveRoutePatterns();
 
     final registry = container.has<MiddlewareRegistry>()
         ? container.get<MiddlewareRegistry>()
         : null;
+    _cachedGlobalMiddlewares = _resolveMiddlewares(middlewares, container);
 
     for (final mount in _mounts) {
       // Let the child router finish its group & route merges
@@ -746,6 +800,21 @@ class Engine with StaticFileHandler, ContainerMixin {
         }
 
         _engineRoutes.add(engineRoute);
+        if (engineRoute.isFallback) {
+          _fallbackRoutes.add(engineRoute);
+        } else {
+          _routesByMethod
+              .putIfAbsent(engineRoute.method, () => <EngineRoute>[])
+              .add(engineRoute);
+          if (engineRoute.isStatic) {
+            final methodRoutes = _staticRoutesByMethod.putIfAbsent(
+              engineRoute.method,
+              () => <String, EngineRoute>{},
+            );
+            methodRoutes[engineRoute.staticPath] = engineRoute;
+          }
+        }
+        engineRoute.cacheHandlers(_cachedGlobalMiddlewares);
       }
 
       final childWebSockets = mount.router.getAllWebSocketRoutes();
@@ -755,6 +824,10 @@ class Engine with StaticFileHandler, ContainerMixin {
           ...resolvedMountMiddlewares,
           ...ws.finalMiddlewares,
         ];
+        final resolvedWsMiddlewares = _resolveMiddlewares(
+          allMiddlewares,
+          container,
+        );
         final patternData = EngineRoute._buildUriPattern(
           combinedPath,
           patternRegistry,
@@ -765,7 +838,7 @@ class Engine with StaticFileHandler, ContainerMixin {
           handler: ws.handler,
           pattern: patternData.pattern,
           paramInfo: patternData.paramInfo,
-          middlewares: allMiddlewares,
+          middlewares: resolvedWsMiddlewares,
           patternRegistry: patternRegistry,
         );
       }
@@ -803,7 +876,11 @@ class Engine with StaticFileHandler, ContainerMixin {
   void _markRoutesDirty() {
     _routesInitialized = false;
     _engineRoutes.clear();
+    _routesByMethod.clear();
+    _staticRoutesByMethod.clear();
+    _fallbackRoutes.clear();
     _routesByName = {};
+    _cachedGlobalMiddlewares = const <Middleware>[];
   }
 
   RoutePatternRegistry _resolveRoutePatterns() {
@@ -822,6 +899,19 @@ class Engine with StaticFileHandler, ContainerMixin {
     }
     final registry = container.get<MiddlewareRegistry>();
     return registry.resolveAll(source, container);
+  }
+
+  Future<EventManager?> _resolveEventManager(Container container) async {
+    final cached = _cachedEventManager;
+    if (cached != null) {
+      return cached;
+    }
+    if (!container.has<EventManager>()) {
+      return null;
+    }
+    final manager = await container.make<EventManager>();
+    _cachedEventManager = manager;
+    return manager;
   }
 
   void _ensureDefaultRouterMounted() {
@@ -929,12 +1019,13 @@ class Engine with StaticFileHandler, ContainerMixin {
       path,
       _resolveRoutePatterns(),
     );
+    final resolvedMiddlewares = _resolveMiddlewares(middlewares, container);
     _wsRoutes[path] = WebSocketEngineRoute(
       path: path,
       handler: handler,
       pattern: patternData.pattern,
       paramInfo: patternData.paramInfo,
-      middlewares: middlewares,
+      middlewares: resolvedMiddlewares,
       patternRegistry: _resolveRoutePatterns(),
     );
   }
@@ -960,18 +1051,27 @@ class Engine with StaticFileHandler, ContainerMixin {
     }
     if (!_providersBooted) await initialize();
     _ensureRoutes();
-    final requestContainer = createRequestContainer(
-      httpRequest,
-      httpRequest.response,
-    );
+    Container? requestContainer;
+    Container ensureRequestContainer() {
+      return requestContainer ??= createRequestContainer(
+        httpRequest,
+        httpRequest.response,
+      );
+    }
     Request? trackedRequest;
     try {
-      trackedRequest = await _handleRequest(httpRequest, requestContainer);
+      trackedRequest = await _handleRequest(
+        httpRequest,
+        container,
+        ensureRequestContainer,
+      );
     } finally {
       if (trackedRequest != null) {
         _onRequestFinished(trackedRequest.id);
       }
-      await cleanupRequestContainer(requestContainer);
+      if (requestContainer != null) {
+        await cleanupRequestContainer(requestContainer!);
+      }
     }
   }
 
@@ -1133,11 +1233,38 @@ class Engine with StaticFileHandler, ContainerMixin {
     _loadManifestProviders();
     await bootProviders();
     _rebuildMiddlewareStacks();
+    _cachedEventManager = await _resolveEventManager(container);
     _providersBooted = true;
     await _emitConfigLoaded();
   }
 
+  /// Creates an initialized engine with the full provider boot sequence.
+  static Future<Engine> createFull({
+    EngineConfig? config,
+    List<Middleware>? middlewares,
+    List<EngineOpt>? options,
+    Map<String, dynamic>? configItems,
+    ErrorHandlingRegistry? errorHandling,
+    ConfigLoaderOptions? configOptions,
+    List<ServiceProvider>? providers,
+  }) async {
+    final engine = Engine.full(
+      config: config,
+      middlewares: middlewares,
+      options: options,
+      configItems: configItems,
+      errorHandling: errorHandling,
+      configOptions: configOptions,
+      providers: providers,
+    );
+    await engine.initialize();
+    return engine;
+  }
+
   /// Creates an initialized engine.
+  ///
+  /// By default this uses the bare-bones boot profile. Use [createFull] to
+  /// load configuration and boot built-in providers.
   static Future<Engine> create({
     EngineConfig? config,
     List<Middleware>? middlewares,
@@ -1146,7 +1273,7 @@ class Engine with StaticFileHandler, ContainerMixin {
     ErrorHandlingRegistry? errorHandling,
     ConfigLoaderOptions? configOptions,
     List<ServiceProvider>? providers,
-    bool includeDefaultProviders = true,
+    bool includeDefaultProviders = false,
   }) async {
     final engine = Engine(
       config: config,
@@ -1162,8 +1289,31 @@ class Engine with StaticFileHandler, ContainerMixin {
     return engine;
   }
 
+  /// Creates an engine pre-configured with built-in providers and config loading.
+  factory Engine.full({
+    EngineConfig? config,
+    List<Middleware>? middlewares,
+    List<EngineOpt>? options,
+    Map<String, dynamic>? configItems,
+    ErrorHandlingRegistry? errorHandling,
+    ConfigLoaderOptions? configOptions,
+    List<ServiceProvider>? providers,
+  }) {
+    return Engine(
+      config: config,
+      middlewares: middlewares,
+      options: options,
+      configItems: configItems,
+      errorHandling: errorHandling,
+      configOptions: configOptions,
+      providers: providers,
+      includeDefaultProviders: true,
+    );
+  }
+
   void addGlobalMiddleware(Middleware middleware) {
     middlewares.add(middleware);
+    _markRoutesDirty();
   }
 
   List<Middleware> middlewareGroup(String name) {

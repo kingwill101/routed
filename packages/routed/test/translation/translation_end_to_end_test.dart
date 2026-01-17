@@ -33,7 +33,7 @@ void main() {
       );
 
       engine.get('/greet', (ctx) async {
-        final message = trans('messages.greeting')?.toString() ?? '';
+        final message = ctx.trans('messages.greeting')?.toString() ?? '';
         ctx.response.write(message);
         return ctx.response;
       });

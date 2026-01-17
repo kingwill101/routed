@@ -155,10 +155,10 @@ EngineOpt withLogging({
     if (enabled != null) {
       engine.appConfig.set('logging.enabled', enabled);
     }
-    if (level != null) {
+    if (level != null && enabled == true) {
       engine.appConfig.set('logging.level', level);
     }
-    if (errorsOnly != null) {
+    if (errorsOnly != null && enabled == true) {
       engine.appConfig.set('logging.errors_only', errorsOnly);
     }
     if (extraFields != null) {

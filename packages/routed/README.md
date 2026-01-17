@@ -35,7 +35,7 @@ Then run `dart pub get`.
 import 'package:routed/routed.dart';
 
 Future<void> main() async {
-  final engine = await Engine.create();
+  final engine = await Engine.createFull();
   engine
     ..get('/', (ctx) => ctx.text('Hello routed!'))
     ..get('/json', (ctx) => ctx.json({'ok': true}))
@@ -59,7 +59,7 @@ import 'package:routed/auth.dart';
 import 'package:routed/routed.dart';
 
 Future<void> main() async {
-  final engine = await Engine.create();
+  final engine = await Engine.createFull();
   engine.container.instance<AuthOptions>(
     AuthOptions(
       providers: [

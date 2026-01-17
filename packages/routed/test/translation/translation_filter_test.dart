@@ -58,13 +58,13 @@ notifications:
 
     engine.get('/raw', (ctx) async {
       return ctx.json({
-        'message': trans('messages.greeting', replacements: {'name': 'Jess'}),
+        'message': ctx.trans('messages.greeting', replacements: {'name': 'Jess'}),
       });
     });
 
     engine.get('/current', (ctx) async {
       return ctx.json({
-        'locale': currentLocale(),
+        'locale': ctx.currentLocale(),
         'param': ctx.request.queryParameters['lang'],
       });
     });

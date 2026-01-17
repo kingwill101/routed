@@ -53,7 +53,7 @@ void engineTest(
 
     final testEngine =
         engine ??
-        Engine(
+        Engine.full(
           configItems:
               configItems ?? {'app.name': 'Test App', 'app.env': 'testing'},
           config: engineConfig,
@@ -66,12 +66,8 @@ void engineTest(
         : TestClient.ephemeralServer(handler);
 
     try {
-      await AppZone.run(
-        engine: testEngine,
-        body: () async {
-          await callback(testEngine, client);
-        },
-      );
+      // TEMP: avoid AppZone wrapping to surface zone dependencies.
+      await callback(testEngine, client);
     } finally {
       await client.close();
       if (shouldCloseEngine) {
@@ -112,7 +108,7 @@ void engineGroup(
     final ownsGroupEngine = engine == null;
     final groupEngine =
         engine ??
-        Engine(
+        Engine.full(
           configItems:
               configItems ?? {'app.name': 'Test App', 'app.env': 'testing'},
           config: engineConfig,

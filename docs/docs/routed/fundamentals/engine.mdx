@@ -1,73 +1,53 @@
 ---
 title: Engine Lifecycle
-description: Understand how the Engine boots providers, when to call initialize, and the trade-offs between `Engine()` and `Engine.create()`.
+description: Understand bare vs full boot profiles, when to call initialize, and how Engine.full differs from Engine().
 sidebar_position: 2
 ---
 
 # Engine Lifecycle
 
 The `Engine` owns the container, service providers, middleware stacks, and HTTP
-servers. You can spin it up manually with `Engine()` or use the async helper
-`Engine.create()`. This guide explains what each path does so you can choose the
-right trade-off for your app or tests.
+servers. Routed now supports **two boot profiles**:
 
-## `Engine()` – minimal constructor
+- **Bare** (default): minimal routing + middleware, no config loader, no provider manifest.
+- **Full**: config loading + provider registration + manifest discovery (the previous default).
 
-Calling `Engine()` returns a fully configured instance, but nothing has been
-booted yet. You are responsible for:
+Use the profile that matches your workload, especially for benchmarks and tiny
+services.
 
-1. Registering custom providers (optional).
-2. Running `await engine.initialize()` to boot built-in providers, rebuild
-   middleware, and emit the `ConfigLoaded` event.
-3. Calling `await engine.close()` when you’re done.
+## `Engine()` – bare by default
 
-```dart title="Manual lifecycle"
-final engine = Engine(
-  configItems: {'app': {'name': 'Manual Demo'}},
-);
+Calling `Engine()` returns a bare-bones instance. No config files are loaded and
+no providers are auto-registered. You are responsible for any providers you want
+to boot.
 
-engine.registerProvider(MyFeatureProvider());
-await engine.initialize();
+```dart title="Bare engine"
+final engine = Engine();
+engine.get('/ping', (ctx) => ctx.text('pong'));
 
-// ... register routes, handle requests, run tests ...
-
-await engine.close();
+await engine.serve(address: '127.0.0.1', port: 8080);
 ```
 
-**When to prefer it**
+**What you still get in bare mode**
+- Route matching (including parameter patterns)
+- Middleware execution
+- The standard request/response helpers
 
-- Tests that want to register fake providers before boot.
-- CLIs or scripts that need to tweak the container before any provider runs.
-- Microbenchmarks where you want to skip config I/O until the last possible
-  moment.
+**What you do NOT get by default**
+- Config loader / `.env` processing
+- Provider manifest discovery (`http.providers`)
+- Built-in providers (logging, cache, sessions, etc.)
 
-There is almost zero overhead until you call `initialize()`, so `Engine()` is
-the lightest entry point.
+If you need those, use full mode.
 
-## `Engine.create()` – convenience helper
+## `Engine.full()` – explicit full mode
 
-`Engine.create()` wraps the pattern above: it constructs the engine (using the
-exact same constructor), applies options, boots providers by calling
-`initialize()`, rebuilds middleware, and returns the ready-to-serve instance.
+`Engine.full()` preserves the previous behavior: built-in providers are
+registered, config defaults are merged, and the provider manifest is eligible
+for loading.
 
-In other words:
-
-```dart
-final engine = Engine(/* params */);
-await engine.initialize();
-```
-
-is equivalent to:
-
-```dart
-final engine = await Engine.create(/* params */);
-```
-
-`create` just saves you from writing the boilerplate when you do want the full
-provider boot sequence.
-
-```dart title="Convenience helper"
-final engine = await Engine.create(
+```dart title="Full mode constructor"
+final engine = Engine.full(
   configOptions: ConfigLoaderOptions(
     configDirectory: 'config',
     watch: true,
@@ -76,71 +56,38 @@ final engine = await Engine.create(
     withTrustedProxies(['127.0.0.1']),
   ],
 );
+
+await engine.initialize();
 ```
 
-**What it does in addition to the constructor**
+## `Engine.create()` vs `Engine.createFull()`
 
-- Loads configuration via `ConfigLoaderOptions` (including `.env` templating).
-- Registers/boots all manifest providers immediately.
-- Starts config watchers when `watch: true` (default for CLI/dev flows).
-- Publishes the `ConfigLoaded` event right away.
+`Engine.create()` is still the async convenience helper, but it now defaults to
+**bare mode**:
 
-**When to prefer it**
+```dart
+final engine = await Engine.create(); // bare + initialized
+```
 
-- HTTP entrypoints that just need a ready-to-serve engine.
-- CLI commands (`routes`, `dev`, etc.) that want consistent config loading.
-- Apps that rely on config watching without wiring it manually.
+If you want the full boot sequence (config + providers), use
+`Engine.createFull()`:
 
-The trade-off is startup work: `Engine.create()` performs disk I/O (reading
-config + `.env`), provider registration, and optional filesystem watching before
-it returns.
+```dart
+final engine = await Engine.createFull(); // full + initialized
+```
 
 ## Choosing between them
 
 | Scenario | Recommended API | Notes |
 | --- | --- | --- |
-| Integration / production boot | `Engine.create()` | Less boilerplate, config + providers boot automatically. |
-| Unit tests or scripts | `Engine()` | You control when providers boot, and can swap bindings before `initialize()`. |
-| Custom registry seeding before built-ins | `Engine(options: [...])` or `Engine.create(options: [...])` | Engine options run immediately after construction (before providers boot). |
+| Microbenchmarks / tiny services | `Engine()` or `Engine.create()` | Bare by default. Minimal overhead. |
+| Integration / production boot | `Engine.full()` or `Engine.createFull()` | Config + providers boot automatically. |
+| Unit tests that need providers | `Engine.full()` + `initialize()` | Matches previous defaults. |
+| Custom registry seeding before built-ins | `Engine.full(options: [...])` | Options run immediately after construction. |
 
-Remember: both approaches end up with the same engine once `initialize()` runs.
-Pick the constructor that matches your lifecycle needs and adjust
-`ConfigLoaderOptions` (watching, directories, defaults) to control the associated
-overhead.
+## Notes for config-driven features
 
-## Minimal routing without provider boot
-
-If you only need raw routing (for example, a tiny service without caching,
-views, sessions, etc.) you can skip `initialize()` and even opt out of the
-default providers entirely:
-
-```dart
-final engine = Engine(includeDefaultProviders: false);
-engine.get('/ping', (ctx) => ctx.text('pong'));
-
-await engine.serve(address: '127.0.0.1', port: 8080);
-```
-
-Built-in providers that you _do_ register typically defer connection/setup work
-until their bindings are resolved, so the base engine stays cheap. Reach for
-`initialize()` only when you need the middleware registry, config watchers, or
-provider boot hooks. For tiny scripts or benchmarks, staying on the bare engine
-keeps startup overhead close to zero.
-
-You can also provide configuration manually through the `configItems` argument
-when constructing the engine. Most built-in providers simply merge defaults into
-the engine config, so if you already know the values you need (`app.locale`,
-`http.middleware`, etc.), pass them directly and skip the provider entirely:
-
-```dart
-final engine = Engine(
-  includeDefaultProviders: false,
-  configItems: {
-    'app': {'locale': 'en'},
-    'http': {'middleware': []},
-  },
-);
-```
-
-This pattern is handy for tests where you need predictable config without
-booting the real providers.
+Most `EngineOpt` helpers and provider-backed features depend on `Config`. In
+bare mode, `Config` is not bound unless you register `CoreServiceProvider` or
+bind a `Config` instance yourself. If you need config-driven middleware or
+provider defaults, switch to full mode.

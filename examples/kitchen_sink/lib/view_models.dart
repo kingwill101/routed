@@ -20,8 +20,8 @@ Map<String, dynamic> buildViewData(
   final flashes = _extractFlashes(ctx);
 
   final baseRoutes = <String, String>{
-    'home': route('web.recipe.home'),
-    'save': route('web.recipe.save'),
+    'home': ctx.route('web.recipe.home'),
+    'save': ctx.route('web.recipe.save'),
   };
 
   final base = <String, dynamic>{
@@ -48,7 +48,7 @@ Map<String, dynamic> buildViewData(
   return merged;
 }
 
-Map<String, dynamic> recipeView(Recipe recipe) {
+Map<String, dynamic> recipeView(EngineContext ctx, Recipe recipe) {
   final data = recipe.toJson();
   final id = data['id'] as String;
   final ingredients = (data['ingredients'] as List)
@@ -59,9 +59,9 @@ Map<String, dynamic> recipeView(Recipe recipe) {
     ...data,
     'ingredients': ingredients.join(', '),
     'ingredients_list': ingredients,
-    'show_url': route('web.recipe.show', {'id': id}),
-    'edit_url': route('web.recipe.edit', {'id': id}),
-    'delete_url': route('web.recipe.delete', {'id': id}),
+    'show_url': ctx.route('web.recipe.show', {'id': id}),
+    'edit_url': ctx.route('web.recipe.edit', {'id': id}),
+    'delete_url': ctx.route('web.recipe.delete', {'id': id}),
   };
 }
 

@@ -15,7 +15,7 @@ Future<Response> editRecipe(EngineContext ctx) async {
       'page': {'title': 'Edit ${recipe.name}', 'heading': 'Edit Recipe'},
     });
 
-    final recipeData = recipeView(recipe);
+    final recipeData = recipeView(ctx, recipe);
     final routes = base['routes'] as Map<String, String>;
 
     final oldValues = Map<String, String>.from(

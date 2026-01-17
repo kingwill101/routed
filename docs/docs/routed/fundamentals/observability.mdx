@@ -29,6 +29,11 @@ observability:
     liveness_path: /livez
   errors:
     enabled: false          # Reserve for future error reporter hooks
+  sentry:
+    enabled: false
+    dsn: null               # Sentry DSN
+    send_default_pii: false
+    traces_sample_rate: 0.0
 ```
 
 When the provider boots it automatically registers tracing and metrics middleware, attaches Prometheus-style routes, and exposes a health service you can extend at runtime. Toggle the granular `observability.*.enabled` flags (for example `observability.tracing.enabled: true`) to switch individual features on or off.
@@ -131,6 +136,21 @@ engine.container.make<ErrorObserverRegistry>().addObserver(SentryObserver());
 ```
 
 Observer failures are swallowed so they never break the request pipeline—log them internally if you need to monitor integration health.
+
+## Sentry integration
+
+Enable `observability.sentry.enabled` to initialize the Sentry SDK and forward routing errors automatically. This is wired through the observability provider, so you only need to supply the DSN and (optionally) enable tracing.
+
+```yaml title="config/app.yaml"
+observability:
+  sentry:
+    enabled: true
+    dsn: https://examplePublicKey@o0.ingest.sentry.io/0
+    send_default_pii: true
+    traces_sample_rate: 0.2
+```
+
+When enabled, routed will call `Sentry.captureException` for `RoutingErrorEvent` failures. Use `traces_sample_rate` to enable Sentry performance sampling if you want transaction visibility.
 
 ## Logging defaults
 

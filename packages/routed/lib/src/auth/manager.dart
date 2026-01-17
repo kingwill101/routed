@@ -23,7 +23,7 @@ import 'package:routed/src/crypto/crypto.dart';
 ///
 /// ## Basic usage
 /// ```dart
-/// final engine = await Engine.create();
+/// final engine = await Engine.createFull();
 /// engine.container.instance<AuthOptions>(
 ///   AuthOptions(
 ///     providers: [

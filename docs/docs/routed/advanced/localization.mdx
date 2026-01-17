@@ -116,7 +116,7 @@ simplest pattern is to add an engine option that clones/augments the registry
 before calling `Engine.initialize()`:
 
 ```dart
-final engine = await Engine.create(options: [
+final engine = await Engine.createFull(options: [
   (engine) {
     final registry = engine.container.get<LocaleResolverRegistry>();
     registry.register('preview', (context) => PreviewResolver());

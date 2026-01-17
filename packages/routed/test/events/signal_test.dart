@@ -35,10 +35,10 @@ void main() {
       await engine.close();
     });
 
-    test('AppZone exposes signal hub inside request', () async {
+    test('SignalHub is available via request container', () async {
       final engine = testEngine();
       engine.get('/check', (ctx) async {
-        final hub = AppZone.signals;
+        final hub = ctx.container.get<SignalHub>();
         expect(hub.requests.started, isNotNull);
         return ctx.string('done');
       });
@@ -103,20 +103,20 @@ void main() {
       final engine = testEngine();
       final completions = <String>[];
       engine.get('/one', (ctx) async {
-        final hub = AppZone.signals;
+        final hub = ctx.container.get<SignalHub>();
         late final SignalSubscription<RequestFinishedEvent> subscription;
         subscription = hub.requests.finished.connect(
           (_) async {
             completions.add('one');
             await subscription.cancel();
           },
-          sender: AppZone.context,
+          sender: ctx,
           key: 'ctx-hit',
         );
         return ctx.string('first');
       });
       engine.get('/two', (ctx) async {
-        final hub = AppZone.signals;
+        final hub = ctx.container.get<SignalHub>();
         late final SignalSubscription<RequestFinishedEvent> subscription;
         subscription = hub.requests.finished.connect((_) async {
           completions.add('two');

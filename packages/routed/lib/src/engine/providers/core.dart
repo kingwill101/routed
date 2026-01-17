@@ -13,12 +13,10 @@ import '../../config/registry.dart';
 import '../../container/container.dart';
 import '../../contracts/contracts.dart' show Config;
 import '../../engine/engine.dart';
-import '../../engine/middleware_registry.dart';
 import '../../provider/config_utils.dart';
 import '../../provider/provider.dart'
     show ConfigDefaults, ProvidesDefaultConfig, ServiceProvider;
 import '../../utils/deep_copy.dart';
-import '../../view/engine_manager.dart';
 
 ConfigDefaults _coreDefaults() {
   const coreSpec = CoreConfigSpec();
@@ -104,8 +102,6 @@ class CoreServiceProvider extends ServiceProvider with ProvidesDefaultConfig {
     );
     container.instance<EngineConfig>(initialEngineConfig);
     container.instance<Config>(snapshot.config);
-    container.instance<ViewEngineManager>(ViewEngineManager());
-    container.instance<MiddlewareRegistry>(MiddlewareRegistry());
     _registryListener = (entry) {
       final currentSnapshot = _snapshot;
       if (currentSnapshot == null) {

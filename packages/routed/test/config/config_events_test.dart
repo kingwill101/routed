@@ -48,7 +48,8 @@ void main() {
     final event = reloads.first;
     expect(event.config, same(override));
     expect(event.metadata['source'], equals('test'));
-    expect(Config.current, same(override));
+    final resolved = await engine.make<Config>();
+    expect(resolved, same(override));
 
     await sub.cancel();
   });

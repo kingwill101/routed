@@ -1,7 +1,7 @@
 import 'package:routed/routed.dart';
 
 Future<void> main(List<String> args) async {
-  final engine = await Engine.create();
+  final engine = await Engine.createFull();
 
   final events = await engine.make<EventManager>();
 

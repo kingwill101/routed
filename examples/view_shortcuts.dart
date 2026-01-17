@@ -9,7 +9,7 @@ Future<void> main() async {
     '2': {'id': '2', 'name': 'Alan Turing'},
   };
 
-  engine.get('/users/:id', (ctx) async {
+  engine.get('/users/{id}', (ctx) async {
     final id = ctx.mustGetParam<String>('id');
 
     final user = await ctx.fetchOr404(() async => users[id]);

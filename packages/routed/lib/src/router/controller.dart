@@ -14,7 +14,7 @@ import 'types.dart';
 ///   @override
 ///   void routes() {
 ///     router.get('/', _index);
-///     router.get('/:id', _show);
+///     router.get('/{id}', _show);
 ///     router.post('/', _store);
 ///   }
 ///

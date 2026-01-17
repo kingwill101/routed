@@ -151,7 +151,6 @@ class Response {
     }
     _isClosed = true;
     try {
-      await _httpResponse.flush();
       await _httpResponse.close();
     } catch (_) {
       // Ignore: underlying already closed (in-memory/mock may throw)

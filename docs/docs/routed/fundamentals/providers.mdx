@@ -59,12 +59,12 @@ await engine.initialize();
   If one provider depends on bindings from another, register them in that order
   (`engine.registerProvider(CacheProvider())` before
   `engine.registerProvider(EmailProvider())`, etc.).
-- Built-in providers are registered when the `Engine` constructor runs. To seed
-  registries or add container services _before_ those providers finish wiring
-  defaults, pass an `Engine` option:
+- Built-in providers are registered only in **full mode** (`Engine.full()` or
+  `includeDefaultProviders: true`). To seed registries or add container services
+  _before_ those providers finish wiring defaults, pass an `Engine` option:
 
 ```dart
-final engine = Engine(options: [
+final engine = Engine.full(options: [
   (engine) {
     final registry = engine.container.get<LocaleResolverRegistry>();
     registry.register('preview', (_) => PreviewLocaleResolver());

@@ -8,7 +8,7 @@ Future<Response> homePage(EngineContext ctx) async {
   });
 
   final recipes = RecipeService.getAll()
-      .map(recipeView)
+      .map((recipe) => recipeView(ctx, recipe))
       .toList(growable: false);
 
   final oldValues = Map<String, String>.from(

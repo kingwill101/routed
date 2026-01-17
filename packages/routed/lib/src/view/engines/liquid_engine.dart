@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:liquify/liquify.dart' as liquid;
 import 'package:routed/src/render/html/liquid.dart';
+import 'package:routed/src/context/context.dart';
 import 'package:routed/src/view/view_engine.dart';
 
 export 'package:routed/src/render/html/liquid.dart';
@@ -45,7 +46,14 @@ class LiquidViewEngine implements ViewEngine {
   @override
   Future<String> render(String name, [Map<String, dynamic>? data]) async {
     try {
-      final parsed = liquid.Template.parse(name, data: data ?? {}, root: _root);
+      final scopedData = Map<String, dynamic>.from(data ?? {});
+      final ctx = scopedData.remove(kViewEngineContextKey);
+      final parsed = liquid.Template.parse(
+        name,
+        data: scopedData,
+        root: _root,
+        environmentSetup: _environmentSetup(ctx),
+      );
       return await parsed.renderAsync();
     } catch (e) {
       throw TemplateRenderException(name, e.toString());
@@ -58,15 +66,93 @@ class LiquidViewEngine implements ViewEngine {
     Map<String, dynamic>? data,
   ]) async {
     try {
+      final scopedData = Map<String, dynamic>.from(data ?? {});
+      final ctx = scopedData.remove(kViewEngineContextKey);
       final parsed = liquid.Template.fromFile(
         filePath,
         _root!,
-        data: data ?? {},
+        data: scopedData,
+        environmentSetup: _environmentSetup(ctx),
       );
       return await parsed.renderAsync();
     } catch (e) {
       throw TemplateRenderException(filePath, e.toString());
     }
+  }
+
+  void Function(liquid.Environment)? _environmentSetup(Object? ctx) {
+    if (ctx is! EngineContext) {
+      return null;
+    }
+    return (env) {
+      env.registerLocalFilter('trans', (value, args, named) {
+        final key = _coerceString(value) ??
+            (args.isNotEmpty ? _coerceString(args.first) : null);
+        if (key == null) return value;
+
+        final replacements = Map<String, dynamic>.from(named);
+        final locale = replacements.remove('locale') ??
+            replacements.remove('lang');
+
+        final resolved = ctx.trans(
+          key,
+          replacements: replacements.isEmpty ? null : replacements,
+          locale: locale?.toString(),
+        );
+        return (resolved ?? key).toString();
+      });
+
+      env.registerLocalFilter('trans_choice', (value, args, named) {
+        final key = _coerceString(value) ??
+            (args.isNotEmpty ? _coerceString(args.first) : null);
+        if (key == null) return value;
+
+        final replacements = Map<String, dynamic>.from(named);
+        final locale = replacements.remove('locale') ??
+            replacements.remove('lang');
+        final dynamic countSource = replacements.remove('count') ??
+            (args.length > 1
+                ? args[1]
+                : (args.isNotEmpty ? args.last : null));
+        final num? count = _asNum(countSource);
+        if (count == null) {
+          final resolved = ctx.trans(
+            key,
+            replacements: replacements.isEmpty ? null : replacements,
+            locale: locale?.toString(),
+          );
+          return (resolved ?? key).toString();
+        }
+
+        return ctx
+            .transChoice(
+              key,
+              count,
+              replacements: replacements.isEmpty ? null : replacements,
+              locale: locale?.toString(),
+            )
+            .toString();
+      });
+
+      env.registerLocalFilter('transChoice', (value, args, named) {
+        return env.getFilter('trans_choice')!(value, args, named);
+      });
+    };
+  }
+
+  String? _coerceString(dynamic input) {
+    if (input == null) return null;
+    if (input is String) return input;
+    return input.toString();
+  }
+
+  num? _asNum(dynamic input) {
+    if (input == null) return null;
+    if (input is num) return input;
+    if (input is String) {
+      return num.tryParse(input);
+    }
+    return null;
   }
 }
 

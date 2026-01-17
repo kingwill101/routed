@@ -149,7 +149,10 @@ extension ContextRender on EngineContext {
       HtmlRender(
         content: content,
         templateName: templateName,
-        data: data,
+        data: {
+          ...data,
+          kViewEngineContextKey: this,
+        },
         engine: _engine!.viewEngine,
       ),
     );

@@ -16,6 +16,6 @@ Future<Object> showRecipe(EngineContext ctx) async {
 
   return await ctx.template(
     templateName: 'show_recipe.html',
-    data: {...base, 'recipe': recipeView(recipe)},
+    data: {...base, 'recipe': recipeView(ctx, recipe)},
   );
 }

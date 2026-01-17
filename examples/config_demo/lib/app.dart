@@ -15,7 +15,7 @@ Future<Engine> createEngine() async {
     description: 'Mail service provider for the config demo',
   );
 
-  final engine = await Engine.create(
+  final engine = await Engine.createFull(
     configOptions: ConfigLoaderOptions(
       configDirectory: 'config',
       envFiles: ['.env', '.env.local'],

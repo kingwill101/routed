@@ -20,7 +20,7 @@ Future<void> _registerAuthEvents(Engine engine) async {
 }
 
 Future<Engine> createEngine() async {
-  final engine = await Engine.create(
+  final engine = await Engine.createFull(
     config: EngineConfig(
       security: const EngineSecurityFeatures(csrfProtection: false),
     ),

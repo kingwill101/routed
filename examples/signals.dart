@@ -14,7 +14,7 @@ Future<void> main() async {
   final scopedInvocations = <String>[];
   engine
       .get('/scoped', (ctx) async {
-        final hub = AppZone.signals;
+        final hub = ctx.container.get<SignalHub>();
 
         late final SignalSubscription<RequestFinishedEvent> subscription;
         subscription = hub.requests.finished.connect(
@@ -22,7 +22,7 @@ Future<void> main() async {
             scopedInvocations.add(event.context.request.id);
             await subscription.cancel();
           },
-          sender: AppZone.context,
+          sender: ctx,
           key: 'scoped-finished',
         );
 

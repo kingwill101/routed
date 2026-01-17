@@ -12,7 +12,7 @@ void main() async {
         final id = ctx.param('id');
         return ctx.json({
           'id': id,
-          'url': route('users.show', {'id': id}),
+          'url': ctx.route('users.show', {'id': id}),
         });
       })
       .name('users.show');

@@ -86,7 +86,7 @@ void main() async {
   });
 
   // Serve uploaded files
-  engine.get('/files/:filename', (ctx) async {
+  engine.get('/files/{filename}', (ctx) async {
     final filename = ctx.param('filename');
     final filePath = path.join('uploads', filename);
 

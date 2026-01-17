@@ -75,7 +75,7 @@ void main() {
 
           return ctx.json({
             'requestOnly': scopedConfig.get<String>('request.only'),
-            'zoneAppName': Config.current.get<String>('app.name'),
+            'zoneAppName': scopedConfig.get<String>('app.name'),
             'isSameAsRoot': isSameAsRoot,
           });
         });
@@ -163,23 +163,28 @@ void main() {
         Engine engine,
         TestClient client,
       ) async {
-        final original = await engine.make<Config>();
-        expect(Config.current, same(original));
+        await AppZone.run(
+          engine: engine,
+          body: () async {
+            final original = await engine.make<Config>();
+            expect(Config.current, same(original));
 
-        final override = ConfigImpl({
-          'app.name': 'Override App',
-          'app.env': 'testing',
-        });
+            final override = ConfigImpl({
+              'app.name': 'Override App',
+              'app.env': 'testing',
+            });
 
-        await Config.runWith(override, () async {
-          expect(Config.current, same(override));
-          final resolved = await engine.make<Config>();
-          expect(identical(resolved, override), isTrue);
-        });
+            await Config.runWith(override, () async {
+              expect(Config.current, same(override));
+              final resolved = await engine.make<Config>();
+              expect(identical(resolved, override), isTrue);
+            });
 
-        final restored = await engine.make<Config>();
-        expect(restored, same(original));
-        expect(Config.current, same(original));
+            final restored = await engine.make<Config>();
+            expect(restored, same(original));
+            expect(Config.current, same(original));
+          },
+        );
       });
     },
   );

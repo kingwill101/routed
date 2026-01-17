@@ -62,6 +62,20 @@ class ObservabilityErrorsConfig {
   final bool enabled;
 }
 
+class ObservabilitySentryConfig {
+  const ObservabilitySentryConfig({
+    required this.enabled,
+    required this.dsn,
+    required this.sendDefaultPii,
+    required this.tracesSampleRate,
+  });
+
+  final bool enabled;
+  final String? dsn;
+  final bool sendDefaultPii;
+  final double tracesSampleRate;
+}
+
 class ObservabilityConfig {
   const ObservabilityConfig({
     required this.enabled,
@@ -69,6 +83,7 @@ class ObservabilityConfig {
     required this.metrics,
     required this.health,
     required this.errors,
+    required this.sentry,
   });
 
   final bool enabled;
@@ -76,6 +91,7 @@ class ObservabilityConfig {
   final ObservabilityMetricsConfig metrics;
   final ObservabilityHealthConfig health;
   final ObservabilityErrorsConfig errors;
+  final ObservabilitySentryConfig sentry;
 }
 
 class ObservabilityConfigSpec extends ConfigSpec<ObservabilityConfig> {
@@ -168,6 +184,29 @@ class ObservabilityConfigSpec extends ConfigSpec<ObservabilityConfig> {
             description:
                 'Enable error observer notifications (reserve for external error trackers).',
             defaultValue: false,
+          ),
+        },
+      ),
+      'sentry': ConfigSchema.object(
+        description: 'Sentry SDK settings for error reporting and tracing.',
+        properties: {
+          'enabled': ConfigSchema.boolean(
+            description: 'Enable Sentry integration.',
+            defaultValue: false,
+          ),
+          'dsn': ConfigSchema.string(
+            description: 'Sentry DSN.',
+          ).withMetadata({
+            configDocMetaInheritFromEnv: 'SENTRY_DSN',
+          }),
+          'send_default_pii': ConfigSchema.boolean(
+            description: 'Send default PII (request headers, IP, etc.).',
+            defaultValue: false,
+          ),
+          'traces_sample_rate': ConfigSchema.number(
+            description:
+                'Fraction of transactions to sample for performance monitoring (0.0 - 1.0).',
+            defaultValue: 0.0,
           ),
         },
       ),
@@ -321,6 +360,49 @@ class ObservabilityConfigSpec extends ConfigSpec<ObservabilityConfig> {
         ) ??
         false;
 
+    final sentryMap = map['sentry'] == null
+        ? const <String, dynamic>{}
+        : stringKeyedMap(map['sentry'] as Object, 'observability.sentry');
+    final sentryEnabled =
+        parseBoolLike(
+          sentryMap['enabled'],
+          context: 'observability.sentry.enabled',
+          throwOnInvalid: true,
+        ) ??
+        false;
+    final sentryDsn =
+        parseStringLike(
+          sentryMap['dsn'],
+          context: 'observability.sentry.dsn',
+          allowEmpty: true,
+          throwOnInvalid: true,
+        ) ??
+        '';
+    if (sentryEnabled && sentryDsn.trim().isEmpty) {
+      throw ProviderConfigException(
+        'observability.sentry.dsn must be set when Sentry is enabled',
+      );
+    }
+    final sentrySendDefaultPii =
+        parseBoolLike(
+          sentryMap['send_default_pii'],
+          context: 'observability.sentry.send_default_pii',
+          throwOnInvalid: true,
+        ) ??
+        false;
+    final sentryTracesSampleRate =
+        parseDoubleLike(
+          sentryMap['traces_sample_rate'],
+          context: 'observability.sentry.traces_sample_rate',
+          throwOnInvalid: true,
+        ) ??
+        0.0;
+    if (sentryTracesSampleRate < 0 || sentryTracesSampleRate > 1) {
+      throw ProviderConfigException(
+        'observability.sentry.traces_sample_rate must be between 0.0 and 1.0',
+      );
+    }
+
     return ObservabilityConfig(
       enabled: enabled,
       tracing: ObservabilityTracingConfig(
@@ -341,6 +423,12 @@ class ObservabilityConfigSpec extends ConfigSpec<ObservabilityConfig> {
         livenessPath: livenessPath,
       ),
       errors: ObservabilityErrorsConfig(enabled: errorsEnabled),
+      sentry: ObservabilitySentryConfig(
+        enabled: sentryEnabled,
+        dsn: sentryDsn.isEmpty ? null : sentryDsn,
+        sendDefaultPii: sentrySendDefaultPii,
+        tracesSampleRate: sentryTracesSampleRate,
+      ),
     );
   }
 
@@ -366,6 +454,12 @@ class ObservabilityConfigSpec extends ConfigSpec<ObservabilityConfig> {
         'liveness_path': value.health.livenessPath,
       },
       'errors': {'enabled': value.errors.enabled},
+      'sentry': {
+        'enabled': value.sentry.enabled,
+        'dsn': value.sentry.dsn,
+        'send_default_pii': value.sentry.sendDefaultPii,
+        'traces_sample_rate': value.sentry.tracesSampleRate,
+      },
     };
   }
 }

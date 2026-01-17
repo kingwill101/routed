@@ -19,7 +19,7 @@ extension EngineRouting on Engine {
   ///
   /// Example:
   /// ```dart
-  /// engine.get('/users/:id', (req) {
+  /// engine.get('/users/{id}', (req) {
   ///   final id = req.params['id'];
   ///   return Response.ok('User $id');
   /// });
@@ -34,6 +34,7 @@ extension EngineRouting on Engine {
     Map<String, dynamic> constraints = const {},
   }) {
     _markRoutesDirty();
+    _ensureDefaultRouterMounted();
     return _defaultRouter.get(
       path,
       handler,
@@ -64,6 +65,7 @@ extension EngineRouting on Engine {
     Map<String, dynamic> constraints = const {},
   }) {
     _markRoutesDirty();
+    _ensureDefaultRouterMounted();
     return _defaultRouter.post(
       path,
       handler,
@@ -78,7 +80,7 @@ extension EngineRouting on Engine {
   ///
   /// Example:
   /// ```dart
-  /// engine.put('/users/:id', (req) async {
+  /// engine.put('/users/{id}', (req) async {
   ///   final id = req.params['id'];
   ///   final data = await req.json();
   ///   return Response.ok('Updated user $id');
@@ -94,6 +96,7 @@ extension EngineRouting on Engine {
     Map<String, dynamic> constraints = const {},
   }) {
     _markRoutesDirty();
+    _ensureDefaultRouterMounted();
     return _defaultRouter.put(
       path,
       handler,
@@ -108,7 +111,7 @@ extension EngineRouting on Engine {
   ///
   /// Example:
   /// ```dart
-  /// engine.delete('/users/:id', (req) {
+  /// engine.delete('/users/{id}', (req) {
   ///   final id = req.params['id'];
   ///   return Response.ok('Deleted user $id');
   /// });
@@ -123,6 +126,7 @@ extension EngineRouting on Engine {
     Map<String, dynamic> constraints = const {},
   }) {
     _markRoutesDirty();
+    _ensureDefaultRouterMounted();
     return _defaultRouter.delete(
       path,
       handler,
@@ -137,7 +141,7 @@ extension EngineRouting on Engine {
   ///
   /// Example:
   /// ```dart
-  /// engine.patch('/users/:id', (req) async {
+  /// engine.patch('/users/{id}', (req) async {
   ///   final id = req.params['id'];
   ///   final updates = await req.json();
   ///   return Response.ok('Patched user $id');
@@ -153,6 +157,7 @@ extension EngineRouting on Engine {
     Map<String, dynamic> constraints = const {},
   }) {
     _markRoutesDirty();
+    _ensureDefaultRouterMounted();
     return _defaultRouter.patch(
       path,
       handler,
@@ -168,7 +173,7 @@ extension EngineRouting on Engine {
   ///
   /// Example:
   /// ```dart
-  /// engine.head('/users/:id', (req) {
+  /// engine.head('/users/{id}', (req) {
   ///   return Response.ok('', headers: {'X-User-Exists': 'true'});
   /// });
   /// ```
@@ -182,6 +187,7 @@ extension EngineRouting on Engine {
     Map<String, dynamic> constraints = const {},
   }) {
     _markRoutesDirty();
+    _ensureDefaultRouterMounted();
     return _defaultRouter.head(
       path,
       handler,
@@ -213,6 +219,7 @@ extension EngineRouting on Engine {
     Map<String, dynamic> constraints = const {},
   }) {
     _markRoutesDirty();
+    _ensureDefaultRouterMounted();
     return _defaultRouter.options(
       path,
       handler,
@@ -233,6 +240,7 @@ extension EngineRouting on Engine {
     List<Middleware> middlewares = const [],
   }) {
     _markRoutesDirty();
+    _ensureDefaultRouterMounted();
     return _defaultRouter.connect(path, handler, middlewares: middlewares);
   }
 
@@ -243,7 +251,7 @@ extension EngineRouting on Engine {
   ///
   /// Example:
   /// ```dart
-  /// engine.handle('PURGE', '/cache/:key', (req) {
+  /// engine.handle('PURGE', '/cache/{key}', (req) {
   ///   final key = req.params['key'];
   ///   return Response.ok('Purged cache key $key');
   /// });
@@ -259,6 +267,7 @@ extension EngineRouting on Engine {
     Map<String, dynamic> constraints = const {},
   }) {
     _markRoutesDirty();
+    _ensureDefaultRouterMounted();
     return _defaultRouter.handle(
       method,
       path,
@@ -291,6 +300,7 @@ extension EngineRouting on Engine {
     List<Middleware> middlewares = const [],
   }) {
     _markRoutesDirty();
+    _ensureDefaultRouterMounted();
     // We use a wildcard parameter in the path that will match anything.
     // We also add a flag in constraints so later when building the EngineRoute
     // we know this route is the fallback.
@@ -328,6 +338,7 @@ extension EngineRouting on Engine {
     void Function(Router)? builder,
   }) {
     _markRoutesDirty();
+    _ensureDefaultRouterMounted();
     return _defaultRouter.group(
       path: path,
       middlewares: middlewares,

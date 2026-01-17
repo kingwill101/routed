@@ -29,7 +29,7 @@ class ProjectPolicy extends Policy<Project> {
 
 void main() {
   test('AuthServiceProvider registers RBAC and policy abilities', () async {
-    final engine = await Engine.create(
+    final engine = await Engine.createFull(
       options: [
         (engine) {
           engine.container.instance<AuthOptions>(

@@ -74,8 +74,8 @@ Future<void> main() async {
     );
 
     final tokenResponse = await oauthClient.clientCredentials(scope: 'profile');
-    ctx.request.setAttribute(oauthTokenAttribute, tokenResponse.accessToken);
-    ctx.request.setAttribute(oauthScopeAttribute, tokenResponse.scope);
+    ctx.set(oauthTokenAttribute, tokenResponse.accessToken);
+    ctx.set(oauthScopeAttribute, tokenResponse.scope);
 
     return ctx.json({
       'access_token': tokenResponse.accessToken,

@@ -125,7 +125,8 @@ extension ServerExtension on Engine {
   /// - [httpRequest]: The incoming HTTP request to handle.
   Future<Request?> _handleRequest(
     HttpRequest httpRequest,
-    Container container,
+    Container rootContainer,
+    Container Function() ensureRequestContainer,
   ) async {
     _ensureRoutes();
 
@@ -139,10 +140,13 @@ extension ServerExtension on Engine {
       await config.ensureTrustedProxiesParsed();
     }
 
-    final configMap = container.get<Config>();
-    final maxRequestSizeSetting = configMap.get<Object?>(
-      'security.max_request_size',
-    );
+    Object? maxRequestSizeSetting;
+    if (rootContainer.has<Config>()) {
+      final configMap = rootContainer.get<Config>();
+      maxRequestSizeSetting = configMap.get<Object?>(
+        'security.max_request_size',
+      );
+    }
     final maxRequestSize = maxRequestSizeSetting is int
         ? maxRequestSizeSetting
         : config.security.maxRequestSize;
@@ -152,53 +156,48 @@ extension ServerExtension on Engine {
         : httpRequest;
 
     final normalizedPath = path.isEmpty ? '/' : path;
-    final candidateRoutes = _engineRoutes
-        .where((route) {
-          return !route.isFallback && route.method == method;
-        })
-        .toList(growable: false);
+    final candidateRoutes = _routesByMethod[method] ?? const <EngineRoute>[];
 
     bool matchesCurrentPath = false;
-    for (final candidate in candidateRoutes) {
-      final pattern = candidate._uriPattern;
-      if (pattern.hasMatch(normalizedPath) ||
-          pattern.hasMatch(
-            normalizedPath.endsWith('/') ? normalizedPath : '$normalizedPath/',
-          )) {
+    EngineRoute? matchedRoute;
+
+    final staticRoutes = _staticRoutesByMethod[method];
+    final staticMatch = staticRoutes?[normalizedPath];
+    if (staticMatch != null) {
+      matchesCurrentPath = true;
+      if (staticMatch.validateConstraints(effectiveRequest)) {
+        matchedRoute = staticMatch;
+      }
+    }
+
+    if (matchedRoute == null) {
+      for (final candidate in candidateRoutes) {
+        if (!candidate.matchesPath(normalizedPath, allowTrailingSlash: false)) {
+          continue;
+        }
         matchesCurrentPath = true;
-        break;
+        if (candidate.validateConstraints(effectiveRequest)) {
+          matchedRoute = candidate;
+          break;
+        }
       }
     }
 
     // Handle trailing slash redirects only when the current path does not match.
     if (config.redirectTrailingSlash && !matchesCurrentPath) {
-      final hasTrailingSlash = normalizedPath.endsWith('/');
-      var alternativePath = hasTrailingSlash
-          ? normalizedPath.substring(0, normalizedPath.length - 1)
-          : '$normalizedPath/';
-
-      if (alternativePath.isEmpty) {
-        alternativePath = '/';
-      }
-
+      final alternativePath = EngineRoute._alternatePath(normalizedPath);
       EngineRoute? alternativeMatch;
       if (alternativePath != normalizedPath) {
-        alternativeMatch = candidateRoutes.firstWhereOrNull((candidate) {
-          final pattern = candidate._uriPattern;
-          return pattern.hasMatch(alternativePath) ||
-              pattern.hasMatch(
-                alternativePath.endsWith('/')
-                    ? alternativePath
-                    : '$alternativePath/',
-              );
-        });
+        alternativeMatch = staticRoutes?[alternativePath];
+        alternativeMatch ??= candidateRoutes.firstWhereOrNull(
+          (candidate) => candidate.matchesPath(alternativePath),
+        );
       }
 
       if (alternativeMatch != null) {
-        final manager = container.has<EventManager>()
-            ? await container.make<EventManager>()
-            : null;
+        final manager = await _resolveEventManager(rootContainer);
         if (manager != null) {
+          final container = ensureRequestContainer();
           final nfRequest = Request(effectiveRequest, {}, config);
           final nfResponse = Response(effectiveRequest.response);
           manager.publish(
@@ -219,24 +218,12 @@ extension ServerExtension on Engine {
       }
     }
 
-    // Rest of existing route matching logic...
-    final routeMatches = _engineRoutes
-        .map((r) => r.tryMatch(effectiveRequest))
-        .where(
-          (match) =>
-              match != null &&
-              !(match.route != null && match.route!.isFallback),
-        )
-        .toList();
-
-    final exactMatch = routeMatches.where((m) => m!.matched).firstOrNull;
-
-    if (exactMatch != null) {
+    if (matchedRoute != null) {
       try {
         return await _handleMatchedRoute(
-          exactMatch.route!,
+          matchedRoute,
           effectiveRequest,
-          container,
+          ensureRequestContainer(),
         );
       } on HttpException catch (e) {
         if (e.message == 'Request body exceeds the maximum allowed size.') {
@@ -254,13 +241,13 @@ extension ServerExtension on Engine {
     }
     // Automatic OPTIONS handling when enabled and no explicit handler was found.
     if (method == 'OPTIONS' && config.defaultOptionsEnabled) {
-      final allowed = _resolveAllowedMethods(path, effectiveRequest);
+      final allowed = _resolveAllowedMethods(normalizedPath, effectiveRequest);
       if (allowed.isNotEmpty) {
         allowed.add('OPTIONS');
-        if (middlewares.isNotEmpty) {
+        if (_cachedGlobalMiddlewares.isNotEmpty) {
           await _runGlobalMiddlewares(
             effectiveRequest,
-            container,
+            ensureRequestContainer(),
             onComplete: (ctx) async {
               _writeOptionsResponse(ctx.response, allowed);
               return ctx.response;
@@ -277,16 +264,18 @@ extension ServerExtension on Engine {
 
     // Third pass: handle method not allowed
     if (config.handleMethodNotAllowed) {
-      final methodMismatches = routeMatches.where((m) => m!.isMethodMismatch);
+      final allowedMethods = _resolveAllowedMethods(
+        normalizedPath,
+        effectiveRequest,
+      );
 
-      if (methodMismatches.isNotEmpty) {
-        final allowedMethods = _resolveAllowedMethods(path, effectiveRequest);
+      if (allowedMethods.isNotEmpty) {
         allowedMethods.add('OPTIONS');
 
-        if (method == 'OPTIONS' && middlewares.isNotEmpty) {
+        if (method == 'OPTIONS' && _cachedGlobalMiddlewares.isNotEmpty) {
           await _runGlobalMiddlewares(
             effectiveRequest,
-            container,
+            ensureRequestContainer(),
             onComplete: (ctx) async {
               _writeMethodNotAllowedResponse(ctx.response, allowedMethods);
               return ctx.response;
@@ -306,13 +295,12 @@ extension ServerExtension on Engine {
     }
 
     // Fourth pass: check for fallback routes if no other match was found
-    final fallbackRoutes = _engineRoutes.where((r) => r.isFallback).toList();
-    if (fallbackRoutes.isNotEmpty) {
+    if (_fallbackRoutes.isNotEmpty) {
       // Find the most specific fallback route using fuzzy matching
       EngineRoute? mostSpecificFallback;
       int maxSimilarityScore = 0;
 
-      for (final fallbackRoute in fallbackRoutes) {
+      for (final fallbackRoute in _fallbackRoutes) {
         // Extract the static part of the fallback route's path
         final staticPath = _extractStaticPath(fallbackRoute.path);
 
@@ -333,13 +321,16 @@ extension ServerExtension on Engine {
         return await _handleMatchedRoute(
           mostSpecificFallback,
           effectiveRequest,
-          container,
+          ensureRequestContainer(),
         );
       }
     }
 
     // No matches found
-    return await _respondWithNotFound(effectiveRequest, container);
+    return await _respondWithNotFound(
+      effectiveRequest,
+      ensureRequestContainer(),
+    );
   }
 
   Future<Request> _respondWithNotFound(
@@ -351,10 +342,8 @@ extension ServerExtension on Engine {
 
     _onRequestStarted(request);
 
-    final resolvedGlobal = _resolveMiddlewares(middlewares, container);
     final handlers = <Middleware>[
-      for (final middleware in resolvedGlobal)
-        (EngineContext ctx, Next next) => middleware(ctx, next),
+      ..._cachedGlobalMiddlewares,
     ];
     handlers.add((EngineContext ctx, Next next) async {
       if (!ctx.response.isClosed) {
@@ -382,9 +371,7 @@ extension ServerExtension on Engine {
       ..set('routed.route_name', 'routed.404')
       ..set('routed.route_path', httpRequest.uri.path);
 
-    final manager = container.has<EventManager>()
-        ? await container.make<EventManager>()
-        : null;
+    final manager = await _resolveEventManager(container);
 
     manager?.publish(BeforeRoutingEvent(context));
     manager?.publish(RequestStartedEvent(context));
@@ -436,26 +423,12 @@ extension ServerExtension on Engine {
 
     _onRequestStarted(request);
 
-    final resolvedGlobal = _resolveMiddlewares(middlewares, container);
-    final resolvedRoute = _resolveMiddlewares(route.middlewares, container);
-
-    final List<Middleware> chain = [
-      for (final middleware in resolvedGlobal)
-        (EngineContext ctx, Next next) => middleware(ctx, next),
-      for (final middleware in resolvedRoute)
-        (EngineContext ctx, Next next) => middleware(ctx, next),
-    ];
-    chain.add((EngineContext c, Next n) async {
-      final r = await route.handler(c);
-      return r;
-    });
-
     final context = EngineContext(
       request: request,
       response: response,
       route: route,
       engine: this,
-      handlers: chain,
+      handlers: route.cachedHandlers,
       container: container,
     );
 
@@ -468,9 +441,7 @@ extension ServerExtension on Engine {
     context.set('routed.route_name', route.name ?? route.path);
     context.set('routed.route_path', route.path);
 
-    final manager = container.has<EventManager>()
-        ? await container.make<EventManager>()
-        : null;
+    final manager = await _resolveEventManager(container);
 
     manager?.publish(BeforeRoutingEvent(context));
     manager?.publish(RequestStartedEvent(context));
@@ -527,14 +498,9 @@ extension ServerExtension on Engine {
     final response = Response(httpRequest.response);
     _onRequestStarted(request);
 
-    final resolvedGlobal = _resolveMiddlewares(middlewares, container);
-    final resolvedRoute = _resolveMiddlewares(route.middlewares, container);
-
     final List<Middleware> chain = [
-      for (final middleware in resolvedGlobal)
-        (EngineContext ctx, Next next) => middleware(ctx, next),
-      for (final middleware in resolvedRoute)
-        (EngineContext ctx, Next next) => middleware(ctx, next),
+      ..._cachedGlobalMiddlewares,
+      ...route.middlewares,
     ];
     chain.add((EngineContext ctx, Next next) async {
       try {
@@ -575,9 +541,7 @@ extension ServerExtension on Engine {
       ..set('routed.route_type', 'websocket')
       ..set('routed.route_path', route.path)
       ..set('routed.route_name', route.path);
-    final manager = container.has<EventManager>()
-        ? await container.make<EventManager>()
-        : null;
+    final manager = await _resolveEventManager(container);
     final eventRoute = EngineRoute(
       method: 'WEBSOCKET',
       path: route.path,
@@ -620,18 +584,15 @@ extension ServerExtension on Engine {
     bool closeResponse = true,
     FutureOr<Response> Function(EngineContext ctx)? onComplete,
   }) async {
-    if (middlewares.isEmpty) {
+    if (_cachedGlobalMiddlewares.isEmpty) {
       return false;
     }
 
     final request = Request(httpRequest, {}, config);
     final response = Response(httpRequest.response);
 
-    final resolvedGlobal = _resolveMiddlewares(middlewares, container);
-
     final handlers = <Middleware>[
-      for (final middleware in resolvedGlobal)
-        (EngineContext ctx, Next next) => middleware(ctx, next),
+      ..._cachedGlobalMiddlewares,
       (EngineContext ctx, Next next) async =>
           onComplete != null ? await onComplete(ctx) : ctx.response,
     ];
@@ -649,9 +610,7 @@ extension ServerExtension on Engine {
       ..instance<Response>(response)
       ..instance<EngineContext>(context);
 
-    final manager = container.has<EventManager>()
-        ? await container.make<EventManager>()
-        : null;
+    final manager = await _resolveEventManager(container);
 
     manager?.publish(BeforeRoutingEvent(context));
 
@@ -683,24 +642,39 @@ extension ServerExtension on Engine {
 
   Set<String> _resolveAllowedMethods(String path, HttpRequest request) {
     final methods = <String>{};
-    for (final route in _engineRoutes) {
-      if (route.isFallback) {
+    final normalizedPath = path.isEmpty ? '/' : path;
+    final allowTrailingSlash = config.redirectTrailingSlash;
+    final altPath = allowTrailingSlash
+        ? EngineRoute._alternatePath(normalizedPath)
+        : normalizedPath;
+
+    for (final entry in _routesByMethod.entries) {
+      final method = entry.key;
+      final routes = entry.value;
+
+      final staticRoutes = _staticRoutesByMethod[method];
+      var staticRoute = staticRoutes?[normalizedPath];
+      if (staticRoute == null && allowTrailingSlash) {
+        staticRoute = staticRoutes?[altPath];
+      }
+      if (staticRoute != null && staticRoute.validateConstraints(request)) {
+        methods.add(method);
         continue;
       }
 
-      final pattern = route._uriPattern;
-      final matchesPath =
-          pattern.hasMatch(path) ||
-          pattern.hasMatch(path.endsWith('/') ? path : '$path/');
-      if (!matchesPath) {
-        continue;
+      for (final route in routes) {
+        if (!route.matchesPath(
+          normalizedPath,
+          allowTrailingSlash: allowTrailingSlash,
+        )) {
+          continue;
+        }
+        if (!route.validateConstraints(request)) {
+          continue;
+        }
+        methods.add(method);
+        break;
       }
-
-      if (!route.validateConstraints(request)) {
-        continue;
-      }
-
-      methods.add(route.method);
     }
 
     if (methods.contains('GET')) {
@@ -870,11 +844,9 @@ extension ServerExtension on Engine {
     required EngineContext context,
     required Future<void> Function() body,
   }) async {
-    if (!config.features.enableRequestZones) {
-      await body();
-      return;
-    }
-    await AppZone.run(body: body, engine: this, context: context);
+    // TEMP: disable AppZone wrapping to identify zone dependencies.
+    // await AppZone.run(body: body, engine: this, context: context);
+    await body();
   }
 
   /// Stops the HTTP server and releases all resources.

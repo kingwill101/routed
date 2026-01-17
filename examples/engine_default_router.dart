@@ -53,7 +53,7 @@ void main() async {
         final slug = ctx.param('slug');
         return ctx.json({
           'article': {'slug': slug, 'title': 'Article about $slug'},
-          'url': route('articles.show', {'slug': slug}),
+          'url': ctx.route('articles.show', {'slug': slug}),
         });
       })
       .name('articles.show');

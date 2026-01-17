@@ -5,7 +5,7 @@ import 'package:routed/src/storage/local_storage_driver.dart';
 
 Future<void> main() async {
   print('cwd: ${Directory.current.path}');
-  final engine = await Engine.create(
+  final engine = await Engine.createFull(
     configOptions: const ConfigLoaderOptions(
       loadEnvFiles: false,
       includeEnvironmentSubdirectory: false,

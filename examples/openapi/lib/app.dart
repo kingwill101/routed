@@ -60,7 +60,7 @@ Router v1Routes() {
               .name("store.index");
 
           store
-              .get("/:id", (ctx) async {
+              .get("/{id}", (ctx) async {
                 final id = ctx.param("id");
                 return ctx.json(Store("Store $id", "Address $id"));
               })
@@ -92,7 +92,7 @@ class StoreController extends Controller {
     /// @Summary Get store by ID
     /// @Tags stores
     /// @Response 404 Store not found
-    router.get('/:id', _show);
+    router.get('/{id}', _show);
 
     /// @Summary Create a store
     /// @Tags stores
@@ -130,7 +130,7 @@ Future<Response> searchProducts(EngineContext ctx) async {
 }
 
 Future<Engine> createEngine() async {
-  final engine = await Engine.create();
+  final engine = await Engine.createFull();
   engine.use(v1Routes());
 
   /// Health check endpoint for container orchestration
@@ -176,7 +176,7 @@ Future<Engine> createEngine() async {
       /// @Response 200 Product found
       /// @Response 404 Product not found
       products
-          .get('/:id', (ctx) async {
+          .get('/{id}', (ctx) async {
             final id = ctx.param('id');
             return ctx.json(Product(id!, 'Product $id', 100.0));
           })
@@ -188,7 +188,7 @@ Future<Engine> createEngine() async {
       /// @Response 200 Product updated successfully
       /// @Response 404 Product not found
       products
-          .put('/:id', (ctx) async {
+          .put('/{id}', (ctx) async {
             final id = ctx.param('id');
             final req = await ctx.bind(CreateProductRequest());
             return ctx.json(Product(id!, req.name, req.price));
@@ -198,11 +198,11 @@ Future<Engine> createEngine() async {
       // @Summary Delete a product
       // @Description Permanently removes a product from the catalog.
       // @Tags products
-      // @Deprecated Use DELETE /v2/products/:id instead
+      // @Deprecated Use DELETE /v2/products/{id} instead
       // @Response 204 Product deleted successfully
       // @Response 404 Product not found
       products
-          .delete('/:id', (ctx) async {
+          .delete('/{id}', (ctx) async {
             final id = ctx.param('id');
             return ctx.json({'deleted': id}, statusCode: 204);
           })

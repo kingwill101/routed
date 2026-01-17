@@ -4,6 +4,9 @@
 /// templating language or format. Each view engine implementation must provide
 /// methods for loading templates, adding custom functions and filters, and
 /// rendering templates with data.
+///
+/// Internal reserved key for passing EngineContext into template rendering.
+const String kViewEngineContextKey = '__routed_context';
 abstract class ViewEngine {
   /// The file extensions this engine handles (e.g. ['.liquid', '.jinja'])
   List<String> get extensions;

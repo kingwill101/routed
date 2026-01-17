@@ -9,7 +9,7 @@ Future<Engine> createEngine() async {
   await dataSource.init();
   DataSource.setDefault(dataSource);
 
-  final engine = await Engine.create(
+  final engine = await Engine.createFull(
     configOptions: const ConfigLoaderOptions(
       configDirectory: 'config',
       loadEnvFiles: true,

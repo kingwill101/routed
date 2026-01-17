@@ -16,7 +16,7 @@ Future<Engine> createTodoApp({
   final templatesPath = p.join(baseDir.path, 'templates');
   final assetsPath = p.join(baseDir.path, 'public');
 
-  final engine = await Engine.create(
+  final engine = await Engine.createFull(
     config: EngineConfig(
       security: const EngineSecurityFeatures(csrfProtection: false),
     ),

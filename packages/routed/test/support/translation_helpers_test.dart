@@ -66,19 +66,10 @@ void main() {
 
       engine.get('/trans', (ctx) async {
         ctx.set(kRequestLocaleAttribute, 'es');
-        Object? greeting;
-        Object? choice;
-
-        await AppZone.run(
-          engine: engine,
-          context: ctx,
-          body: () async {
-            greeting = trans('messages.greeting');
-            choice = transChoice('messages.count', 2);
-          },
-        );
-
-        return ctx.json({'greeting': greeting, 'choice': choice});
+        return ctx.json({
+          'greeting': ctx.trans('messages.greeting'),
+          'choice': ctx.transChoice('messages.count', 2),
+        });
       });
 
       await engine.initialize();
@@ -107,15 +98,7 @@ void main() {
         ..instance<TranslatorContract>(StubTranslator('fr', 'en'));
 
       engine.get('/locale', (ctx) async {
-        String? locale;
-        await AppZone.run(
-          engine: engine,
-          context: ctx,
-          body: () async {
-            locale = currentLocale();
-          },
-        );
-        return ctx.json({'locale': locale});
+        return ctx.json({'locale': ctx.currentLocale()});
       });
 
       await engine.initialize();

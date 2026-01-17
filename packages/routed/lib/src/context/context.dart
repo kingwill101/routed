@@ -30,6 +30,7 @@ import 'package:routed/src/request.dart';
 import 'package:routed/src/response.dart';
 import 'package:routed/src/sessions/session.dart';
 import 'package:routed/src/translation/constants.dart';
+import 'package:routed/src/view/view_engine.dart';
 
 import '../../middlewares.dart' show Middleware, disableCompression;
 

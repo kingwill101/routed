@@ -9,16 +9,21 @@ void main() {
   ) async {
     await engine.initialize();
 
-    final override = ConfigImpl({
-      'app': {'name': 'Helper App'},
-    });
+    await AppZone.run(
+      engine: engine,
+      body: () async {
+        final override = ConfigImpl({
+          'app': {'name': 'Helper App'},
+        });
 
-    await withConfig(override, () async {
-      expect(configValue<String>('app.name'), equals('Helper App'));
-      expect(configValueOrThrow<String>('app.name'), equals('Helper App'));
-      expect(configNamespace('app'), containsPair('name', 'Helper App'));
-    });
+        await withConfig(override, () async {
+          expect(configValue<String>('app.name'), equals('Helper App'));
+          expect(configValueOrThrow<String>('app.name'), equals('Helper App'));
+          expect(configNamespace('app'), containsPair('name', 'Helper App'));
+        });
 
-    expect(configValue<String>('app.name'), equals('Test App'));
+        expect(configValue<String>('app.name'), equals('Test App'));
+      },
+    );
   });
 }

@@ -11,5 +11,5 @@ Future<Response> deleteRecipe(EngineContext ctx) async {
     ctx.flash('Failed to delete recipe.', 'error');
   }
 
-  return ctx.redirect(route('web.recipe.home'));
+  return ctx.redirect(ctx.route('web.recipe.home'));
 }

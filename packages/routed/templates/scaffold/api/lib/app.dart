@@ -3,7 +3,7 @@ import 'dart:io';
 import 'package:routed/routed.dart';
 
 Future<Engine> createEngine() async {
-  final engine = await Engine.create(
+  final engine = await Engine.createFull(
     configOptions: const ConfigLoaderOptions(
       configDirectory: 'config',
       loadEnvFiles: false,

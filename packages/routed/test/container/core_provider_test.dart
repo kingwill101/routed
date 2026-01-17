@@ -21,7 +21,7 @@ void main() {
       // Verify core services are available
       expect(await engine.make<Engine>(), isNotNull);
       expect(await engine.make<EngineConfig>(), isNotNull);
-      expect(await engine.make<ViewEngineManager>(), isNotNull);
+      expect(await engine.make<MiddlewareRegistry>(), isNotNull);
       expect(await engine.make<CacheManager>(), isNotNull);
     });
 

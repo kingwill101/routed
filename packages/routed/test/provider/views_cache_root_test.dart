@@ -22,7 +22,7 @@ void main() {
     fs.currentDirectory = viewsDir.path;
     final storageRoot = '${tempDir.path}/storage/app';
 
-    final engine = await Engine.create(
+    final engine = await Engine.createFull(
       configOptions: ConfigLoaderOptions(
         loadEnvFiles: false,
         includeEnvironmentSubdirectory: false,

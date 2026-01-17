@@ -8,7 +8,7 @@ import 'package:server_testing/server_testing.dart';
 Future<({Engine engine, TestClient client})> _setupClient({
   EngineConfig? config,
 }) async {
-  final engine = await Engine.create(
+  final engine = await Engine.createFull(
     config: config,
     configItems: const {'app.name': 'Test App', 'app.env': 'testing'},
   );

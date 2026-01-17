@@ -50,6 +50,15 @@ class EngineRoute {
   /// Fallback routes match any request that doesn't match any other route.
   final bool isFallback;
 
+  /// Whether this route has a static path without params or wildcards.
+  late final bool isStatic;
+
+  /// Static path for fast lookup when [isStatic] is true.
+  late final String staticPath;
+
+  late final Middleware _handlerMiddleware;
+  List<Middleware> _cachedHandlers = const <Middleware>[];
+
   /// Creates a new route with the given properties.
   EngineRoute({
     required this.method,
@@ -64,6 +73,9 @@ class EngineRoute {
     final patternData = _buildUriPattern(path, _patternRegistry);
     _uriPattern = patternData.pattern;
     _parameterPatterns = patternData.paramInfo;
+    isStatic = _isStaticPath(path) && !isFallback;
+    staticPath = path.isEmpty ? '/' : path;
+    _handlerMiddleware = (EngineContext ctx, Next _) => handler(ctx);
   }
 
   /// Creates a fallback route.
@@ -79,12 +91,53 @@ class EngineRoute {
        _patternRegistry = patternRegistry {
     _uriPattern = RegExp('.*');
     _parameterPatterns = const {};
+    isStatic = false;
+    staticPath = '*';
+    _handlerMiddleware = (EngineContext ctx, Next _) => handler(ctx);
   }
 
   /// Checks if a request matches this route.
   bool matches(HttpRequest request) {
     final match = tryMatch(request);
     return match?.matched ?? false;
+  }
+
+  List<Middleware> get cachedHandlers => _cachedHandlers;
+
+  void cacheHandlers(List<Middleware> globalMiddlewares) {
+    if (globalMiddlewares.isEmpty && middlewares.isEmpty) {
+      _cachedHandlers = <Middleware>[_handlerMiddleware];
+      return;
+    }
+    _cachedHandlers = [
+      ...globalMiddlewares,
+      ...middlewares,
+      _handlerMiddleware,
+    ];
+  }
+
+  bool matchesPath(String path, {bool allowTrailingSlash = true}) {
+    if (isFallback) {
+      return true;
+    }
+    if (isStatic) {
+      if (path == staticPath) {
+        return true;
+      }
+      if (!allowTrailingSlash) {
+        return false;
+      }
+      final altPath = _alternatePath(path);
+      return altPath == staticPath;
+    }
+    if (_uriPattern.hasMatch(path)) {
+      return true;
+    }
+    if (!allowTrailingSlash) {
+      return false;
+    }
+    final altPath = _alternatePath(path);
+    return altPath != path && _uriPattern.hasMatch(altPath);
   }
 
   /// Attempts to match a request to this route.
@@ -97,16 +150,17 @@ class EngineRoute {
     }
 
     // For non-fallback routes, check path and method.
-    final pathMatches =
-        _uriPattern.hasMatch(request.uri.path.split("?")[0]) ||
-        _uriPattern.hasMatch("${request.uri.path}/");
-
+    final pathMatches = matchesPath(request.uri.path);
     if (!pathMatches) {
-      return RouteMatch(matched: false, isMethodMismatch: false);
+      return null;
     }
 
     if (method != request.method) {
-      return RouteMatch(matched: false, isMethodMismatch: true);
+      return RouteMatch(
+        matched: false,
+        isMethodMismatch: true,
+        route: this,
+      );
     }
 
     if (checkMethodOnly) {
@@ -283,6 +337,21 @@ class EngineRoute {
     });
 
     return _PatternData(RegExp('^$pattern\$'), paramInfo);
+  }
+
+  static bool _isStaticPath(String path) {
+    return !path.contains('{') && !path.contains('*');
+  }
+
+  static String _alternatePath(String path) {
+    if (path.isEmpty) {
+      return '/';
+    }
+    if (path.endsWith('/')) {
+      final trimmed = path.substring(0, path.length - 1);
+      return trimmed.isEmpty ? '/' : trimmed;
+    }
+    return '$path/';
   }
 }
 

@@ -11,6 +11,7 @@ import 'package:routed/src/provider/provider.dart';
 import 'package:routed/src/storage/storage_manager.dart';
 import 'package:routed/src/view/engines/liquid_engine.dart';
 import 'package:routed/src/view/view_engine.dart';
+import 'package:routed/src/view/engine_manager.dart';
 
 /// Configures view engine defaults driven by configuration/disks.
 class ViewServiceProvider extends ServiceProvider with ProvidesDefaultConfig {
@@ -29,6 +30,10 @@ class ViewServiceProvider extends ServiceProvider with ProvidesDefaultConfig {
   void register(Container container) {
     if (!container.has<EngineConfig>()) {
       return;
+    }
+
+    if (!container.has<ViewEngineManager>()) {
+      container.instance<ViewEngineManager>(ViewEngineManager());
     }
 
     _fallbackFileSystem = container.get<EngineConfig>().fileSystem;

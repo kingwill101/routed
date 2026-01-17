@@ -27,7 +27,7 @@ Later sources always win when keys overlap.
 
 ```dart
 // Inside an async bootstrap function
-final engine = await Engine.create(
+final engine = await Engine.createFull(
   configOptions: ConfigLoaderOptions(
     defaults: const {
       'app': {'name': 'Routed App', 'env': 'development', 'debug': true},
@@ -43,9 +43,9 @@ final engine = await Engine.create(
 );
 ```
 
-`Engine.create` constructs an engine, boots service providers, and returns the
-initialized instance. If you need finer control (for example, registering
-listeners before boot), you can still instantiate `Engine()` and call
+`Engine.createFull` constructs an engine, boots service providers, and returns
+the initialized instance. If you need finer control (for example, registering
+listeners before boot), you can instantiate `Engine.full()` and call
 `await engine.initialize()` manually.
 
 The loader pushes a resolved `ConfigImpl` instance into the container. It is automatically cloned for every
@@ -56,7 +56,7 @@ request so per-request mutations do not leak.
 Use `ConfigLoaderOptions` to tweak directories, environment files, or enable hot reloading during development:
 
 ```dart
-final engine = Engine(
+final engine = Engine.full(
   configOptions: ConfigLoaderOptions(
     configDirectory: 'config',
     envFiles: ['.env', '.env.${Platform.environment['APP_ENV'] ?? 'dev'}'],
