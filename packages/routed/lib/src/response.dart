@@ -172,19 +172,24 @@ class Response {
   Future<void> string(String content, {int statusCode = HttpStatus.ok}) async {
     _ensureNotClosed();
     _httpResponse.statusCode = statusCode;
+    final bytes = utf8.encode(content);
+    _httpResponse.contentLength = bytes.length;
     write(content);
     await close();
   }
 
   /// Sends a JSON [data] as the response body with an optional [statusCode].
   Future<void> json(
-    Map<String, dynamic> data, {
+    Object? data, {
     int statusCode = HttpStatus.ok,
   }) async {
     _ensureNotClosed();
     _httpResponse.statusCode = statusCode;
     _headers['Content-Type'] = ['application/json; charset=utf-8'];
-    write(jsonEncode(data));
+    final encoded = jsonEncode(data);
+    final bytes = utf8.encode(encoded);
+    _httpResponse.contentLength = bytes.length;
+    write(encoded);
     await close();
   }
 
