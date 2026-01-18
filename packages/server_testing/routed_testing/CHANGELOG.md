@@ -1,3 +1,9 @@
+## 0.3.2
+
+- Added `providers` parameter to `engineTest` and `engineGroup` for explicit
+  provider composition.
+- Updated to support routed 0.3.2 Engine API changes.
+
 ## 0.3.1
 
 - Synced routed ecosystem dependency constraints.

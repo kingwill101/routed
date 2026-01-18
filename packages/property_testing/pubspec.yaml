@@ -23,5 +23,5 @@ dependencies:
 
 dev_dependencies:
   lints: ^6.0.0
-  routed: ^0.3.1
-  routed_testing: ^0.3.1
+  routed: ^0.3.2
+  routed_testing: ^0.3.2
