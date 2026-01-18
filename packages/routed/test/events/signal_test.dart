@@ -5,6 +5,20 @@ import 'package:routed_testing/routed_testing.dart';
 import 'package:server_testing/server_testing.dart';
 import '../test_engine.dart';
 
+Future<void> _waitForLength(
+  List<Object?> list,
+  int length, {
+  Duration timeout = const Duration(seconds: 5),
+}) async {
+  final deadline = DateTime.now().add(timeout);
+  while (list.length < length) {
+    if (DateTime.now().isAfter(deadline)) {
+      fail('Timed out waiting for list length $length (actual ${list.length}).');
+    }
+    await Future<void>.delayed(const Duration(milliseconds: 10));
+  }
+}
+
 void main() {
   group('SignalHub', () {
     test('request lifecycle signals fire in order', () async {
@@ -29,6 +43,7 @@ void main() {
 
       final response = await client.get('/ok');
       response.assertStatus(200);
+      await _waitForLength(events, 4);
       expect(events, equals(['started', 'matched', 'after', 'finished']));
 
       await client.close();
@@ -137,6 +152,7 @@ void main() {
       final second = await client.get('/two');
       first.assertStatus(200);
       second.assertStatus(200);
+      await _waitForLength(completions, 2);
       expect(completions, equals(['one', 'two']));
 
       await client.close();
