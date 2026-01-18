@@ -1,0 +1,2 @@
+Element not found
+time=2026-01-18T13:43:45.176-05:00 level=error msg="Element not found" action=findElement selector=#message_1 error="NoSuchElementException (404): no such element: Unable to locate element: {\"method\":\"css selector\",\"selector\":\"#message_1\"}\n  (Session info: chrome=144.0.7559.20)" logger=root

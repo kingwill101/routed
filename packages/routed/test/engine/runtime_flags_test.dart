@@ -23,9 +23,7 @@ void main() {
   });
 
   test('logging gating respects config', () async {
-    final engine = testEngine(
-      configItems: const {'logging.enabled': false},
-    );
+    final engine = testEngine(configItems: const {'logging.enabled': false});
     await engine.initialize();
     addTearDown(() async {
       await engine.close();

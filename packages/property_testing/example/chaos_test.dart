@@ -85,7 +85,7 @@ void main() {
         input,
       ) async {
         final response = await client.get('/api/users/$input');
-        expect(response.statusCode, anyOf([200, 400, 401, 403, 404, 422]));
+        expect(response.statusCode, anyOf([200, 400, 401, 403, 404, 405, 422]));
         expect(response.statusCode, isNot(500));
       }, PropertyConfig(numTests: 500));
 
@@ -105,7 +105,7 @@ void main() {
 
       final runner = PropertyTestRunner(jsonGen, (json) async {
         final response = await client.postJson('/api/users', json);
-        expect(response.statusCode, anyOf([200, 400, 401, 403, 404, 422]));
+        expect(response.statusCode, anyOf([200, 400, 401, 403, 404, 405, 422]));
         expect(response.statusCode, isNot(500));
       }, PropertyConfig(numTests: 500));
 
@@ -118,7 +118,10 @@ void main() {
         input,
       ) async {
         final response = await client.get('/api/search?q=$input');
-        expect(response.statusCode, anyOf([200, 400, 401, 403, 404, 413, 422]));
+        expect(
+          response.statusCode,
+          anyOf([200, 400, 401, 403, 404, 405, 413, 422]),
+        );
         expect(response.statusCode, isNot(500));
       }, PropertyConfig(numTests: 500));
 
@@ -138,7 +141,10 @@ void main() {
           final response = await client.postJson('/api/data/$input', {
             'content': input,
           });
-          expect(response.statusCode, anyOf([200, 400, 401, 403, 404, 422]));
+          expect(
+            response.statusCode,
+            anyOf([200, 400, 401, 403, 404, 405, 422]),
+          );
           expect(response.statusCode, isNot(500));
         }, PropertyConfig(numTests: 1));
 

@@ -15,5 +15,6 @@ class RequestScope {
   final EngineContext context;
 }
 
-final Expando<RequestScope> requestScopeExpando =
-    Expando<RequestScope>('routed.request_scope');
+final Expando<RequestScope> requestScopeExpando = Expando<RequestScope>(
+  'routed.request_scope',
+);

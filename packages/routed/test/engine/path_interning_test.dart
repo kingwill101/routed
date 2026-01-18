@@ -5,9 +5,7 @@ String _fresh(String value) => String.fromCharCodes(value.codeUnits);
 
 void main() {
   test('interns normalized paths with LRU eviction', () {
-    final engine = Engine(
-      config: EngineConfig(pathInternCacheSize: 2),
-    );
+    final engine = Engine(config: EngineConfig(pathInternCacheSize: 2));
 
     final firstA = engine.debugNormalizePath(_fresh('/a'));
     final firstB = engine.debugNormalizePath(_fresh('/b'));

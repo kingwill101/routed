@@ -110,7 +110,10 @@ class EngineRoute {
 
   List<Middleware> get cachedHandlers => _cachedHandlers;
 
-  void cacheHandlers(List<Middleware> globalMiddlewares, {bool cacheable = true}) {
+  void cacheHandlers(
+    List<Middleware> globalMiddlewares, {
+    bool cacheable = true,
+  }) {
     if (!cacheable || hasMiddlewareReference) {
       _cachedHandlers = const <Middleware>[];
       return;
@@ -133,11 +136,7 @@ class EngineRoute {
     if (globalMiddlewares.isEmpty && routeMiddlewares.isEmpty) {
       return <Middleware>[_handlerMiddleware];
     }
-    return [
-      ...globalMiddlewares,
-      ...routeMiddlewares,
-      _handlerMiddleware,
-    ];
+    return [...globalMiddlewares, ...routeMiddlewares, _handlerMiddleware];
   }
 
   bool matchesPath(String path, {bool allowTrailingSlash = true}) {
@@ -180,11 +179,7 @@ class EngineRoute {
     }
 
     if (method != request.method) {
-      return RouteMatch(
-        matched: false,
-        isMethodMismatch: true,
-        route: this,
-      );
+      return RouteMatch(matched: false, isMethodMismatch: true, route: this);
     }
 
     if (checkMethodOnly) {

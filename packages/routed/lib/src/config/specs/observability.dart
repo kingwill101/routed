@@ -196,9 +196,7 @@ class ObservabilityConfigSpec extends ConfigSpec<ObservabilityConfig> {
           ),
           'dsn': ConfigSchema.string(
             description: 'Sentry DSN.',
-          ).withMetadata({
-            configDocMetaInheritFromEnv: 'SENTRY_DSN',
-          }),
+          ).withMetadata({configDocMetaInheritFromEnv: 'SENTRY_DSN'}),
           'send_default_pii': ConfigSchema.boolean(
             description: 'Send default PII (request headers, IP, etc.).',
             defaultValue: false,

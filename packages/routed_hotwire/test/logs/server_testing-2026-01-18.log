@@ -1,0 +1,25 @@
+time=2026-01-18T13:43:43.413-05:00 level=info msg="Starting test: global_setup" test=global_setup logger=root
+time=2026-01-18T13:43:43.443-05:00 level=info msg="Test Environment:" test=global_setup logger=root
+time=2026-01-18T13:43:43.445-05:00 level=info msg="  Platform: linux Linux 6.17.13-1-MANJARO #1 SMP PREEMPT_DYNAMIC Thu, 18 Dec 2025 13:50:32 +0000" test=global_setup logger=root
+time=2026-01-18T13:43:43.446-05:00 level=info msg="  Dart: 3.10.4 (stable) (Tue Dec 9 00:01:55 2025 -0800) on \"linux_x64\"" test=global_setup logger=root
+time=2026-01-18T13:43:43.448-05:00 level=info msg="  Directory: /run/media/kingwill101/disk2/code/code/dart_packages/routed_ecosystem/packages/routed_hotwire" test=global_setup logger=root
+time=2026-01-18T13:43:43.449-05:00 level=info msg="  PID: 256060" test=global_setup logger=root
+time=2026-01-18T13:43:43.450-05:00 level=info msg=--- test=global_setup logger=root
+time=2026-01-18T13:43:43.451-05:00 level=info msg="Setting up global browser test environment..." test=global_setup logger=root
+time=2026-01-18T13:43:43.452-05:00 level=info msg="Initial default browser from config: chromium" test=global_setup logger=root
+time=2026-01-18T13:43:43.455-05:00 level=info msg="Auto-install is enabled, checking browser availability..." test=global_setup logger=root
+time=2026-01-18T13:43:43.459-05:00 level=info msg="Attempting to auto-install browsers in order: [chromium, firefox, webkit]" test=global_setup logger=root
+time=2026-01-18T13:43:43.461-05:00 level=info msg="Trying to install: chromium" test=global_setup logger=root
+time=2026-01-18T13:43:43.465-05:00 level=info msg="listAvailableBrowsers(): Listing available browsers..." test=global_setup logger=root
+time=2026-01-18T13:43:43.469-05:00 level=info msg="listAvailableBrowsers(): Found 4 available browsers: [chromium, chromium-headless-shell, firefox, webkit]" test=global_setup logger=root
+time=2026-01-18T13:43:43.482-05:00 level=info msg="installBrowser(chromium, force: false): Starting installation..." test=global_setup logger=root
+time=2026-01-18T13:43:43.484-05:00 level=info msg="installBrowser(chromium, force: false): Mapped \"chromium\" to registry name \"chromium\"" test=global_setup logger=root
+time=2026-01-18T13:43:43.485-05:00 level=info msg="installBrowser(chromium, force: false): Found executable for chromium" test=global_setup logger=root
+time=2026-01-18T13:43:43.487-05:00 level=info msg="installBrowser(chromium, force: false): Browser chromium is already installed, skipping" test=global_setup logger=root
+time=2026-01-18T13:43:43.490-05:00 level=info msg="isBrowserInstalled(chromium): Checking installation status..." test=global_setup logger=root
+time=2026-01-18T13:43:43.492-05:00 level=info msg="isBrowserInstalled(chromium): Mapped \"chromium\" to registry name \"chromium\"" test=global_setup logger=root
+time=2026-01-18T13:43:43.493-05:00 level=info msg="isBrowserInstalled(chromium): Installation status: true" test=global_setup logger=root
+time=2026-01-18T13:43:43.495-05:00 level=info msg="Successfully installed/verified browser: chromium" test=global_setup logger=root
+time=2026-01-18T13:43:43.496-05:00 level=info msg="Ensuring default browser binary (chromium) is installed..." test=global_setup logger=root
+time=2026-01-18T13:43:43.501-05:00 level=info msg="Default browser binary check complete." test=global_setup logger=root
+time=2026-01-18T13:43:43.505-05:00 level=info msg="Ensuring WebDriver server for default browser (chromium) is running..." test=global_setup logger=root
