@@ -74,6 +74,8 @@ export 'src/openapi/operation.dart';
 export 'src/openapi/annotations.dart';
 export 'src/provider/config_utils.dart';
 export 'src/provider/provider.dart';
+export 'src/engine/providers/core.dart' show CoreServiceProvider;
+export 'src/engine/providers/routing.dart' show RoutingServiceProvider;
 export 'src/request.dart';
 export 'src/response.dart';
 export 'src/router/middleware_reference.dart';

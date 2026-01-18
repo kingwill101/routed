@@ -46,17 +46,16 @@ Future<void> main() async {
   engine.addGlobalMiddleware(SessionAuth.sessionAuthMiddleware());
 
   engine.post('/login', (ctx) async {
-    final body = jsonDecode(await ctx.request.body()) as Map<String, Object?>;
+    final body = jsonDecode(await ctx.body()) as Map<String, Object?>;
 
     final username = body['username']?.toString() ?? '';
     final password = body['password']?.toString() ?? '';
 
     final record = users[username];
     if (record == null || record['password'] != password) {
-      ctx.response
-        ..statusCode = HttpStatus.unauthorized
-        ..write('Invalid credentials');
-      return ctx.response;
+      ctx.status(HttpStatus.unauthorized);
+      ctx.write('Invalid credentials');
+      return ctx.string('');
     }
 
     final principal = AuthPrincipal(

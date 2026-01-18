@@ -2,8 +2,11 @@ import 'dart:math';
 
 /// A class that generates unique request IDs.
 class RequestId {
-  /// A secure random number generator.
-  static final _random = Random.secure();
+  /// Fast random number generator for request IDs.
+  static final _random = Random();
+
+  /// Secure random number generator for opt-in secure IDs.
+  static final _secureRandom = Random.secure();
 
   /// A constant string containing all possible characters for the random part of the ID.
   static const _chars =
@@ -24,16 +27,25 @@ class RequestId {
   /// String requestId = RequestId.generate();
   /// ```
   static String generate([int length = 16]) {
+    return _generate(length, _random);
+  }
+
+  /// Generates a secure request ID using a cryptographic RNG.
+  static String generateSecure([int length = 16]) {
+    return _generate(length, _secureRandom);
+  }
+
+  static String _generate(int length, Random random) {
     // Get the current timestamp in microseconds since epoch and convert it to a base-36 string.
     final timestamp = DateTime.now().microsecondsSinceEpoch.toRadixString(36);
 
     // Generate a random string of the required length minus the length of the timestamp.
-    final random = List.generate(
+    final randomPart = List.generate(
       length - timestamp.length,
-      (index) => _chars[_random.nextInt(_chars.length)],
+      (index) => _chars[random.nextInt(_chars.length)],
     ).join();
 
     // Combine the timestamp and the random string to form the final ID.
-    return '$timestamp$random';
+    return '$timestamp$randomPart';
   }
 }

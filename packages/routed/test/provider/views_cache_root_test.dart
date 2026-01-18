@@ -22,26 +22,31 @@ void main() {
     fs.currentDirectory = viewsDir.path;
     final storageRoot = '${tempDir.path}/storage/app';
 
-    final engine = await Engine.createFull(
-      configOptions: ConfigLoaderOptions(
-        loadEnvFiles: false,
-        includeEnvironmentSubdirectory: false,
-        fileSystem: fs,
-        defaults: {
-          'app': {'root': tempDir.path},
-          'storage': {
-            'disks': {
-              'local': {'driver': 'local', 'root': storageRoot},
+    final engine = await Engine.create(
+      providers: [
+        CoreServiceProvider.withLoader(
+          ConfigLoaderOptions(
+            loadEnvFiles: false,
+            includeEnvironmentSubdirectory: false,
+            fileSystem: fs,
+            defaults: {
+              'app': {'root': tempDir.path},
+              'storage': {
+                'disks': {
+                  'local': {'driver': 'local', 'root': storageRoot},
+                },
+              },
+              'views': {'path': viewsDir.path},
+              'cache': {
+                'stores': {
+                  'file': {'driver': 'file', 'path': 'storage/framework/cache'},
+                },
+              },
             },
-          },
-          'views': {'path': viewsDir.path},
-          'cache': {
-            'stores': {
-              'file': {'driver': 'file', 'path': 'storage/framework/cache'},
-            },
-          },
-        },
-      ),
+          ),
+        ),
+        RoutingServiceProvider(),
+      ],
     );
 
     final cacheManager = engine.container.get<CacheManager>();

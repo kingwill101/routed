@@ -1,0 +1,17 @@
+FROM dart:stable AS build
+
+WORKDIR /app
+COPY benchmarks/servers/relic/pubspec.yaml ./
+COPY benchmarks/servers/relic/bin ./bin
+
+RUN dart pub get
+RUN dart compile exe bin/server.dart -o /app/server
+
+FROM debian:bookworm-slim
+WORKDIR /app
+COPY --from=build /app/server /app/server
+
+ENV PORT=8007
+EXPOSE 8007
+
+CMD ["/app/server"]

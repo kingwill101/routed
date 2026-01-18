@@ -1,0 +1,17 @@
+FROM dart:stable AS build
+
+WORKDIR /app
+COPY benchmarks/servers/dart_io/pubspec.yaml ./
+COPY benchmarks/servers/dart_io/bin ./bin
+
+RUN dart pub get
+RUN dart compile exe bin/server.dart -o /app/server
+
+FROM debian:bookworm-slim
+WORKDIR /app
+COPY --from=build /app/server /app/server
+
+ENV PORT=8001
+EXPOSE 8001
+
+CMD ["/app/server"]

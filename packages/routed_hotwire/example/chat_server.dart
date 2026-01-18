@@ -25,7 +25,7 @@ Future<void> main() async {
 }
 
 Future<Response> showRoom(EngineContext ctx) async {
-  final roomId = ctx.request.pathParameters['id']?.toString() ?? 'lobby';
+  final roomId = ctx.param('id') ?? 'lobby';
   final messages = rooms.putIfAbsent(roomId, () => <ChatMessage>[]);
   final turbo = ctx.turbo;
 
@@ -50,7 +50,7 @@ Future<Response> showRoom(EngineContext ctx) async {
 }
 
 Future<Response> createMessage(EngineContext ctx) async {
-  final roomId = ctx.request.pathParameters['id']?.toString() ?? 'lobby';
+  final roomId = ctx.param('id') ?? 'lobby';
   final messages = rooms.putIfAbsent(roomId, () => <ChatMessage>[]);
   final text = (await ctx.postForm('text')).trim();
 
@@ -107,7 +107,7 @@ String renderPage(
   } catch (_) {
     csrfToken = '';
   }
-  final wsProtocol = ctx.request.uri.scheme == 'https' ? 'wss' : 'ws';
+  final wsProtocol = ctx.scheme == 'https' ? 'wss' : 'ws';
   return '''
 <!doctype html>
 <html data-turbo="true">

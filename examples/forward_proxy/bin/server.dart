@@ -20,8 +20,8 @@ void main() async {
   // Forward proxy handler
   engine.get('/{*path}', (ctx) async {
     requestCount++;
-    final path = ctx.request.path;
-    print('[Proxy Server] Forwarding request: ${ctx.request.method} $path');
+    final path = ctx.path;
+    print('[Proxy Server] Forwarding request: ${ctx.method} $path');
 
     try {
       // Target URL (test server)
@@ -40,7 +40,7 @@ void main() async {
       errorCount++;
       return ctx.json({
         'error': 'Proxy error: ${e.toString()}',
-        'target_path': ctx.request.path,
+        'target_path': ctx.path,
       }, statusCode: 502);
     }
   });

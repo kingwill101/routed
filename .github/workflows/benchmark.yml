@@ -1,0 +1,96 @@
+name: Benchmark Suite
+
+on:
+  push:
+    branches:
+      - master
+      - feat/**
+    paths:
+      - 'benchmarks/**'
+      - 'packages/routed/**'
+      - '.github/workflows/benchmark.yml'
+  pull_request:
+    branches:
+      - master
+    paths:
+      - 'benchmarks/**'
+      - 'packages/routed/**'
+  workflow_dispatch:
+    inputs:
+      mode:
+        description: 'Benchmark mode (aot, jit, both)'
+        required: false
+        default: 'aot'
+        type: choice
+        options:
+          - aot
+          - jit
+          - both
+      runs:
+        description: 'Number of runs per endpoint'
+        required: false
+        default: '3'
+
+jobs:
+  benchmark:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Dart
+        uses: dart-lang/setup-dart@v1
+        with:
+          sdk: stable
+
+      - name: Get dependencies
+        run: dart pub get
+
+      - name: Get benchmark dependencies
+        run: |
+          cd benchmarks/servers/dart_io && dart pub get
+          cd ../relic && dart pub get
+          cd ../serinus && dart pub get
+          cd ../shelf && dart pub get
+          cd ../routed && dart pub get
+
+      - name: Install wrk
+        run: sudo apt-get update && sudo apt-get install -y wrk
+
+      - name: Run benchmark (AOT mode)
+        run: |
+          cd benchmarks
+          MODE=aot RUNS=1 DURATION=10s ./scripts/full_benchmark.sh
+        shell: bash
+
+      - name: Run benchmark (JIT mode)
+        run: |
+          cd benchmarks
+          MODE=jit RUNS=1 DURATION=10s ./scripts/full_benchmark.sh
+        shell: bash
+
+      - name: Generate summary
+        if: always()
+        run: |
+          echo "# Benchmark Results" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "Benchmark runs completed on Ubuntu Linux." >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**Results:**" >> $GITHUB_STEP_SUMMARY
+
+          if [ -d "benchmarks/results" ] && [ "$(ls -A benchmarks/results)" ]; then
+            echo "" >> $GITHUB_STEP_SUMMARY
+            ls -1 benchmarks/results/*.md 2>/dev/null | while read file; do
+              echo "- $(basename "$file")" >> $GITHUB_STEP_SUMMARY
+            done
+          else
+            echo "No benchmark results found" >> $GITHUB_STEP_SUMMARY
+          fi
+
+      - name: Upload benchmark results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: benchmark-results
+          path: benchmarks/results/
+          if-no-files-found: ignore
+          retention-days: 30

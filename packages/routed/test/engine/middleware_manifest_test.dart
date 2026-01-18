@@ -1,16 +1,12 @@
 import 'package:routed/routed.dart';
 import 'package:test/test.dart';
-import '../test_engine.dart';
 
 void main() {
   test(
     'manifest-derived middleware preserves order and removes duplicates',
     () async {
       final baseConfig = _baseConfig();
-      final engine = testEngine(
-        includeDefaultProviders: false,
-        providers: [_TestBootstrapProvider(baseConfig)],
-      );
+      final engine = Engine(providers: [_TestBootstrapProvider(baseConfig)]);
 
       engine.registerProvider(_ManifestProviderAlpha());
       engine.registerProvider(_ManifestProviderBeta());

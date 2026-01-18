@@ -245,12 +245,30 @@ class EngineFeatures {
   /// and zone-based lookups during request handling.
   final bool enableRequestZones;
 
+  /// Whether to disable request-scoped containers and use a read-only root.
+  ///
+  /// When enabled, request-scoped bindings are not registered.
+  final bool enableRequestContainerFastPath;
+
+  /// Whether to enable the optional segment-trie router.
+  ///
+  /// When disabled, the engine uses the default matcher.
+  final bool enableTrieRouting;
+
+  /// Whether to use cryptographically secure request IDs.
+  ///
+  /// Defaults to `false` for faster request ID generation.
+  final bool enableSecureRequestIds;
+
   /// Creates an engine features configuration with the given flags.
   const EngineFeatures({
     this.enableTrustedPlatform = false,
     this.enableProxySupport = false,
     this.enableSecurityFeatures = true,
     this.enableRequestZones = true,
+    this.enableRequestContainerFastPath = false,
+    this.enableTrieRouting = false,
+    this.enableSecureRequestIds = false,
   });
 }
 
@@ -451,6 +469,7 @@ class EngineConfig {
   final bool removeExtraSlash;
   final bool useRawPath;
   final bool unescapePathValues;
+  final int pathInternCacheSize;
 
   // IP and forwarding
   final bool forwardedByClientIP;
@@ -491,6 +510,7 @@ class EngineConfig {
     bool? removeExtraSlash,
     bool? useRawPath,
     bool? unescapePathValues,
+    int? pathInternCacheSize,
     bool? forwardedByClientIP,
     List<String>? remoteIPHeaders,
     List<String>? trustedProxies,
@@ -529,6 +549,7 @@ class EngineConfig {
        removeExtraSlash = removeExtraSlash ?? false,
        useRawPath = useRawPath ?? false,
        unescapePathValues = unescapePathValues ?? true,
+       pathInternCacheSize = pathInternCacheSize ?? 1000,
        forwardedByClientIP = forwardedByClientIP ?? true,
        remoteIPHeaders =
            remoteIPHeaders ?? const ['X-Forwarded-For', 'X-Real-IP'],
@@ -661,6 +682,7 @@ class EngineConfig {
     bool? removeExtraSlash,
     bool? useRawPath,
     bool? unescapePathValues,
+    int? pathInternCacheSize,
     bool? forwardedByClientIP,
     List<String>? remoteIPHeaders,
     List<String>? trustedProxies,
@@ -694,6 +716,7 @@ class EngineConfig {
       removeExtraSlash: removeExtraSlash ?? this.removeExtraSlash,
       useRawPath: useRawPath ?? this.useRawPath,
       unescapePathValues: unescapePathValues ?? this.unescapePathValues,
+      pathInternCacheSize: pathInternCacheSize ?? this.pathInternCacheSize,
       forwardedByClientIP: forwardedByClientIP ?? this.forwardedByClientIP,
       remoteIPHeaders: remoteIPHeaders ?? this.remoteIPHeaders,
       trustedProxies: trustedProxies ?? this.trustedProxies,

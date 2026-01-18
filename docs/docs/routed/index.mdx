@@ -26,12 +26,8 @@ Routed is a modular HTTP framework for Dart applications. It combines a lightwei
 import 'package:routed/routed.dart';
 
 Future<void> main() async {
-  final engine = Engine(
-    middlewares: [
-      loggingMiddleware(),
-      timeoutMiddleware(const Duration(seconds: 30)),
-    ],
-  );
+  // Create a fully-featured engine with all built-in providers
+  final engine = await Engine.create();
 
   engine.get('/hello/{name}', (ctx) async {
     final name = ctx.mustGetParam<String>('name');
@@ -53,10 +49,12 @@ Future<void> main() async {
 
 This example highlights the core workflow:
 
-1. Build an `Engine` with global middleware (logging, timeouts, etc.).
+1. Build an `Engine` using `Engine.create()` which loads all built-in providers (config, routing, sessions, cache, logging, etc.).
 2. Register routes with typed parameters and route names for URL generation.
 3. Group related routes, layering authentication middleware without repeating configuration.
 4. Start the server with HTTP/1.1 or HTTP/2, static assets, sessions, and observability features ready to enable as needs evolve.
+
+For minimal applications or benchmarks, use `Engine()` (bare mode) or `Engine.create(providers: Engine.defaultProviders)` (core + routing only).
 
 ## Where to Start
 

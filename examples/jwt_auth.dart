@@ -15,17 +15,22 @@ Map<String, dynamic> get _inlineHmacKey => <String, dynamic>{
 
 Future<void> main() async {
   final engine = Engine(
-    configItems: {
-      'security': {
-        'ip_filter': {
-          'enabled': true,
-          'default_action': 'deny',
-          'allow': ['127.0.0.1/32', '::1/128'],
-          'deny': ['0.0.0.0/0'],
-          'respect_trusted_proxies': false,
+    providers: [
+      CoreServiceProvider(
+        configItems: {
+          'security': {
+            'ip_filter': {
+              'enabled': true,
+              'default_action': 'deny',
+              'allow': ['127.0.0.1/32', '::1/128'],
+              'deny': ['0.0.0.0/0'],
+              'respect_trusted_proxies': false,
+            },
+          },
         },
-      },
-    },
+      ),
+      RoutingServiceProvider(),
+    ],
   );
 
   engine.addGlobalMiddleware(
@@ -40,21 +45,18 @@ Future<void> main() async {
         if (!(payload.claims['scope'] as String).contains('profile:read')) {
           throw JwtAuthException('insufficient_scope');
         }
-        ctx.request.setAttribute('user', payload.claims['sub']);
+        ctx.set('user', payload.claims['sub']);
       },
     ),
   );
 
   engine.get('/profile', (ctx) {
-    final claims = ctx.request.getAttribute<Map<String, dynamic>>(
-      jwtClaimsAttribute,
-    );
-    final user = ctx.request.getAttribute<String>('user');
+    final claims = ctx.get<Map<String, dynamic>>(jwtClaimsAttribute);
+    final user = ctx.get<String>('user');
     if (claims == null || user == null) {
-      ctx.response
-        ..statusCode = HttpStatus.unauthorized
-        ..write('missing token');
-      return ctx.response;
+      ctx.status(HttpStatus.unauthorized);
+      ctx.write('missing token');
+      return ctx.string('');
     }
     return ctx.json({'sub': user, 'scope': claims['scope']});
   });

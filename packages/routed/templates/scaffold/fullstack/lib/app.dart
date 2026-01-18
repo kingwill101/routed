@@ -1,12 +1,17 @@
 import 'package:routed/routed.dart';
 
 Future<Engine> createEngine() async {
-  final engine = await Engine.createFull(
-    configOptions: const ConfigLoaderOptions(
-      configDirectory: 'config',
-      loadEnvFiles: false,
-      includeEnvironmentSubdirectory: false,
-    ),
+  final engine = await Engine.create(
+    providers: [
+      CoreServiceProvider.withLoader(
+        const ConfigLoaderOptions(
+          configDirectory: 'config',
+          loadEnvFiles: false,
+          includeEnvironmentSubdirectory: false,
+        ),
+      ),
+      RoutingServiceProvider(),
+    ],
   );
 
   final todos = <Map<String, dynamic>>[

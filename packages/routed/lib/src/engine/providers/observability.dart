@@ -680,10 +680,7 @@ class ObservabilityServiceProvider extends ServiceProvider
       if (value == null) {
         return;
       }
-      if (value is String ||
-          value is int ||
-          value is double ||
-          value is bool) {
+      if (value is String || value is int || value is double || value is bool) {
         cleaned[key] = value;
       } else {
         cleaned[key] = value.toString();

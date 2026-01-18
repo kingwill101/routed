@@ -27,25 +27,25 @@ Later sources always win when keys overlap.
 
 ```dart
 // Inside an async bootstrap function
-final engine = await Engine.createFull(
-  configOptions: ConfigLoaderOptions(
-    defaults: const {
-      'app': {'name': 'Routed App', 'env': 'development', 'debug': true},
-      'database': {'host': '127.0.0.1', 'port': 5432},
-    },
-    configDirectory: 'config',
-    envFiles: ['.env', '.env.local'],
-  ),
-  configItems: {
-    // Runtime overrides (e.g. tests)
-    'database.host': 'db.internal',
-  },
+final engine = await Engine.create(
+  providers: [
+    CoreServiceProvider.withLoader(ConfigLoaderOptions(
+      defaults: const {
+        'app': {'name': 'Routed App', 'env': 'development', 'debug': true},
+        'database': {'host': '127.0.0.1', 'port': 5432},
+      },
+      configDirectory: 'config',
+      envFiles: ['.env', '.env.local'],
+    )),
+    ...Engine.builtins,
+  ],
 );
 ```
 
-`Engine.createFull` constructs an engine, boots service providers, and returns
-the initialized instance. If you need finer control (for example, registering
-listeners before boot), you can instantiate `Engine.full()` and call
+`Engine.create` constructs an engine with all built-in providers by default,
+boots service providers, and returns the initialized instance. Pass a custom
+`providers` list to override. If you need finer control (for example, registering
+listeners before boot), you can instantiate `Engine(providers: [...])` and call
 `await engine.initialize()` manually.
 
 The loader pushes a resolved `ConfigImpl` instance into the container. It is automatically cloned for every
@@ -56,13 +56,16 @@ request so per-request mutations do not leak.
 Use `ConfigLoaderOptions` to tweak directories, environment files, or enable hot reloading during development:
 
 ```dart
-final engine = Engine.full(
-  configOptions: ConfigLoaderOptions(
-    configDirectory: 'config',
-    envFiles: ['.env', '.env.${Platform.environment['APP_ENV'] ?? 'dev'}'],
-    watch: true,
-    watchDebounce: const Duration(milliseconds: 200),
-  ),
+final engine = Engine(
+  providers: [
+    CoreServiceProvider.withLoader(ConfigLoaderOptions(
+      configDirectory: 'config',
+      envFiles: ['.env', '.env.${Platform.environment['APP_ENV'] ?? 'dev'}'],
+      watch: true,
+      watchDebounce: const Duration(milliseconds: 200),
+    )),
+    ...Engine.builtins,
+  ],
 );
 ```
 
@@ -452,20 +455,23 @@ Bootstrap the engine with the same structure when supplying configuration impera
 
 ```dart
 final engine = Engine(
-  configItems: {
-    'storage': {
-      'default': 'app',
-      'disks': {
-        'app': {'driver': 'local', 'root': 'resources'},
+  providers: [
+    CoreServiceProvider(configItems: {
+      'storage': {
+        'default': 'app',
+        'disks': {
+          'app': {'driver': 'local', 'root': 'resources'},
+        },
       },
-    },
-    'view': {
-      'engine': 'liquid',
-      'disk': 'app',
-      'directory': 'views',
-      'cache': true,
-    },
-  },
+      'view': {
+        'engine': 'liquid',
+        'disk': 'app',
+        'directory': 'views',
+        'cache': true,
+      },
+    }),
+    ...Engine.builtins,
+  ],
 );
 await engine.initialize();
 ```
@@ -697,10 +703,23 @@ final config = EngineConfig(
 Swap out Liquid entirely by registering your own `ViewEngine` implementation:
 
 ```dart
-engine.useViewEngine(
-  JinjaTemplateEngine(fileSystem: myFileSystem),
-  directory: 'templates',
-);
+test('Email provider registers Mailer binding', () async {
+  final engine = Engine(
+    providers: [
+      CoreServiceProvider(configItems: {
+        'mail': {'default': 'log'},
+      }),
+      ...Engine.builtins,
+      EmailServiceProvider(),
+    ],
+  );
+  await engine.initialize();
+
+  final mailer = await engine.make<Mailer>();
+  expect(mailer, isA<Mailer>());
+
+  await engine.close();
+});
 ```
 
 Pair this with the `view.*` config (or `withStaticAssets`/`storage.*`) so the rest of the ecosystem keeps using the same disks and cache settings.
@@ -714,6 +733,7 @@ All providers share the same file system. Swap it out during tests:
 ```dart
 final engine = Engine(
   config: EngineConfig(fileSystem: memory.MemoryFileSystem.test()),
+  providers: Engine.builtins,
 );
 ```
 
@@ -1012,10 +1032,13 @@ EngineConfig createConfig() {
 
 final engine = Engine(
   config: createConfig(),
-  configItems: {
-    'app.env': Platform.environment['APP_ENV'] ?? 'development',
-    'app.debug': Platform.environment['APP_DEBUG'] == 'true'
-  }
+  providers: [
+    CoreServiceProvider(configItems: {
+      'app.env': Platform.environment['APP_ENV'] ?? 'development',
+      'app.debug': Platform.environment['APP_DEBUG'] == 'true'
+    }),
+    ...Engine.builtins,
+  ],
 );
 ```
 
@@ -1058,7 +1081,10 @@ class AppConfig {
 final appConfig = AppConfig.fromEnv();
 final engine = Engine(
   config: appConfig.toEngineConfig(),
-  configItems: appConfig.toMap()
+  providers: [
+    CoreServiceProvider(configItems: appConfig.toMap()),
+    ...Engine.builtins,
+  ],
 );
 ```
 
@@ -1069,7 +1095,8 @@ final engine = Engine(
   config: EngineConfig(
     appKey: Platform.environment['APP_KEY'],
     templateDirectory: Platform.environment['TEMPLATE_DIR'] ?? 'templates'
-  )
+  ),
+  providers: Engine.builtins,
 );
 ```
 

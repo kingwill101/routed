@@ -7,10 +7,14 @@ void main() {
     test('throws descriptive error when port is invalid', () {
       expect(
         () => Engine(
-          providers: [MailProvider()],
-          configItems: {
-            'mail': {'port': 'abc'},
-          },
+          providers: [
+            CoreServiceProvider(
+              configItems: {
+                'mail': {'port': 'abc'},
+              },
+            ),
+            MailProvider(),
+          ],
         ),
         throwsA(
           isA<ProviderConfigException>().having(

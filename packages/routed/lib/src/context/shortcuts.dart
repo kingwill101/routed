@@ -10,7 +10,7 @@ extension ContextShortcuts on EngineContext {
       return value;
     }
     final error = NotFoundError(message: message ?? 'Not found.');
-    _errors.add(error);
+    (_errors ??= <EngineError>[]).add(error);
     throw error;
   }
 

@@ -20,10 +20,11 @@ Future<void> _registerAuthEvents(Engine engine) async {
 }
 
 Future<Engine> createEngine() async {
-  final engine = await Engine.createFull(
+  final engine = await Engine.create(
     config: EngineConfig(
       security: const EngineSecurityFeatures(csrfProtection: false),
     ),
+    providers: Engine.defaultProviders,
     options: [
       (engine) {
         final providers = <AuthProvider>[

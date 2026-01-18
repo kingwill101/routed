@@ -13,7 +13,7 @@ void main() async {
   );
 
   engine.post('/users', (ctx) async {
-    final body = await ctx.request.body();
+    final body = await ctx.body();
     return ctx.json({'message': 'User created', 'data': body});
   });
 

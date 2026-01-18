@@ -1,0 +1,9 @@
+results/
+**/.dart_tool/
+**/.packages
+**/build/
+**/.venv/
+**/__pycache__/
+**/*.exe
+**/bin/server
+**/bin/*.exe

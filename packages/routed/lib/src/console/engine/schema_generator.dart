@@ -37,7 +37,8 @@ class SchemaGenerator {
 
       final properties = <String, Map<String, Object?>>{};
       for (final field in element.fields) {
-        if (field.isStatic || field.isSynthetic) continue;
+        // Skip static fields and synthetic fields (not explicitly declared)
+        if (field.isStatic || !field.isOriginDeclaration) continue;
         properties[field.name ?? 'unknown'] = generate(field.type);
       }
 

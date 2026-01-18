@@ -39,58 +39,208 @@ ConfigDefaults _coreDefaults() {
 }
 
 /// A service provider that registers core framework services and manages
-/// configuration loading.
+/// configuration.
+///
+/// There are two modes of operation:
+///
+/// **In-memory mode (default):** Creates an in-memory [Config] with framework
+/// defaults. No file I/O is performed. This is suitable for testing, benchmarks,
+/// and applications that don't need file-based configuration.
+///
+/// ```dart
+/// // In-memory config with defaults only
+/// CoreServiceProvider()
+///
+/// // In-memory config with custom values
+/// CoreServiceProvider(configItems: {'app.name': 'MyApp'})
+/// ```
+///
+/// **Loader mode:** Loads configuration from YAML/JSON files on disk,
+/// environment variables, and .env files. Use this for production applications
+/// that need file-based configuration.
+///
+/// ```dart
+/// // Load from default 'config/' directory
+/// CoreServiceProvider.withLoader()
+///
+/// // Load with custom options
+/// CoreServiceProvider.withLoader(
+///   ConfigLoaderOptions(
+///     configDirectory: 'settings',
+///     watch: true,
+///   ),
+/// )
+/// ```
 class CoreServiceProvider extends ServiceProvider with ProvidesDefaultConfig {
-  CoreServiceProvider({
-    EngineConfig? config,
+  /// Creates a CoreServiceProvider that uses in-memory configuration only.
+  ///
+  /// No file I/O is performed. The [Config] is populated with framework
+  /// defaults and any values provided in [configItems].
+  ///
+  /// Use [CoreServiceProvider.withLoader] if you need to load configuration
+  /// from disk.
+  CoreServiceProvider({EngineConfig? config, Map<String, dynamic>? configItems})
+    : _config = config,
+      _configItems = configItems,
+      _configOptions = null,
+      _useLoader = false;
+
+  /// Creates a CoreServiceProvider that loads configuration from disk.
+  ///
+  /// This enables loading from YAML/JSON files, environment variables,
+  /// and .env files. Use [options] to customize the loading behavior.
+  ///
+  /// ```dart
+  /// CoreServiceProvider.withLoader(
+  ///   ConfigLoaderOptions(
+  ///     configDirectory: 'config',
+  ///     watch: true,
+  ///     envFiles: ['.env', '.env.local'],
+  ///   ),
+  /// )
+  /// ```
+  CoreServiceProvider.withLoader([
+    ConfigLoaderOptions options = const ConfigLoaderOptions(),
     Map<String, dynamic>? configItems,
-    ConfigLoaderOptions? configOptions,
-    ConfigLoader? loader,
-  }) : _config = config,
+    EngineConfig? config,
+  ]) : _config = config,
        _configItems = configItems,
-       _configOptions = _resolveOptions(configOptions) {
-    _loader = loader ?? ConfigLoader(fileSystem: _configOptions.fileSystem);
-  }
+       _configOptions = options,
+       _useLoader = true;
 
   @override
   ConfigDefaults get defaultConfig => _coreDefaults();
 
   final EngineConfig? _config;
   final Map<String, dynamic>? _configItems;
-  final ConfigLoaderOptions _configOptions;
-  late final ConfigLoader _loader;
+  final ConfigLoaderOptions? _configOptions;
+  final bool _useLoader;
 
+  // Mutable state for loader mode - initialized lazily in register()
+  ConfigLoader? _loader;
   ConfigSnapshot? _snapshot;
   Container? _rootContainer;
   StreamSubscription<FileSystemEvent>? _directoryWatcher;
-  final List<StreamSubscription<FileSystemEvent>> _envFileWatchers = [];
+  List<StreamSubscription<FileSystemEvent>>? _envFileWatchers;
   Timer? _debounce;
   ConfigRegistryListener? _registryListener;
 
-  static ConfigLoaderOptions _resolveOptions(ConfigLoaderOptions? provided) {
-    final base = provided ?? const ConfigLoaderOptions();
-    final defaultsImpl = ConfigImpl(_coreDefaults().values);
-    if (base.defaults.isNotEmpty) {
-      defaultsImpl.merge(base.defaults);
-    }
-    return base.copyWith(defaults: deepCopyMap(defaultsImpl.all()));
-  }
+  ConfigLoaderOptions get _effectiveOptions =>
+      _configOptions ?? const ConfigLoaderOptions();
 
   @override
   void register(Container container) {
     _rootContainer = container;
 
+    if (_useLoader) {
+      _registerWithLoader(container);
+    } else {
+      _registerInMemory(container);
+    }
+  }
+
+  void _registerInMemory(Container container) {
     final registry = container.get<ConfigRegistry>();
-    final defaultsImpl = ConfigImpl(registry.combinedDefaults());
-    if (_configOptions.defaults.isNotEmpty) {
-      defaultsImpl.merge(_configOptions.defaults);
+
+    // Build template context from environment variables (same as ConfigLoader)
+    final templateContext = _buildTemplateContext();
+
+    // Create a ConfigLoader to render templates
+    final loader = ConfigLoader();
+
+    // Get and render combined defaults from registry
+    final rawDefaults = registry.combinedDefaults();
+    final renderedDefaults = loader.renderDefaults(
+      rawDefaults,
+      templateContext,
+    );
+    final defaults = ConfigImpl(renderedDefaults);
+
+    // Apply and render core defaults
+    final coreDefaults = _coreDefaults();
+    final renderedCoreDefaults = loader.renderDefaults(
+      coreDefaults.values,
+      templateContext,
+    );
+    defaults.mergeDefaults(renderedCoreDefaults);
+
+    // Apply any custom config items (these are already concrete values)
+    if (_configItems != null && _configItems.isNotEmpty) {
+      defaults.merge(_configItems);
     }
 
-    final effectiveOptions = _configOptions.copyWith(
+    // Update EngineConfig if provided
+    final engineConfig = _config ?? container.get<EngineConfig>();
+    final resolvedEngineConfig = _resolveEngineConfig(defaults, engineConfig);
+    container.instance<EngineConfig>(resolvedEngineConfig);
+
+    // Register the in-memory Config
+    container.instance<Config>(defaults);
+
+    // Listen for new provider defaults and render them before merging
+    _registryListener = (entry) {
+      if (entry.defaults.isEmpty) return;
+      final rendered = loader.renderDefaults(entry.defaults, templateContext);
+      defaults.mergeDefaults(rendered);
+    };
+    registry.addListener(_registryListener!);
+  }
+
+  /// Builds a template context from environment variables.
+  ///
+  /// This mirrors the logic in [ConfigLoader.load] to ensure Liquid templates
+  /// like `{{ env.APP_NAME | default: 'MyApp' }}` are properly resolved.
+  Map<String, dynamic> _buildTemplateContext() {
+    final context = <String, dynamic>{};
+
+    void addEntry(String key, String value) {
+      _addToContext(context, key, value);
+      _addToContext(context, 'env.$key', value);
+      // Handle double-underscore notation (e.g., APP__DB__HOST -> app.db.host)
+      if (key.contains('__')) {
+        final normalized = key.toLowerCase().replaceAll('__', '.');
+        if (normalized != key) {
+          _addToContext(context, normalized, value);
+          _addToContext(context, 'env.$normalized', value);
+        }
+      }
+    }
+
+    // Add all platform environment variables
+    Platform.environment.forEach(addEntry);
+
+    return context;
+  }
+
+  /// Adds a value to the template context, creating nested maps as needed.
+  void _addToContext(Map<String, dynamic> context, String key, dynamic value) {
+    final parts = key.split('.');
+    var current = context;
+    for (var i = 0; i < parts.length - 1; i++) {
+      final part = parts[i];
+      if (current[part] is! Map) {
+        current[part] = <String, dynamic>{};
+      }
+      current = current[part] as Map<String, dynamic>;
+    }
+    current[parts.last] = value;
+  }
+
+  void _registerWithLoader(Container container) {
+    final options = _resolveLoaderOptions(_configOptions);
+    _loader = ConfigLoader(fileSystem: options.fileSystem);
+
+    final registry = container.get<ConfigRegistry>();
+    final defaultsImpl = ConfigImpl(registry.combinedDefaults());
+    if (options.defaults.isNotEmpty) {
+      defaultsImpl.merge(options.defaults);
+    }
+
+    final effectiveOptions = options.copyWith(
       defaults: deepCopyMap(defaultsImpl.all()),
     );
 
-    final snapshot = _loader.load(
+    final snapshot = _loader!.load(
       effectiveOptions,
       overrides: _configItems ?? const {},
     );
@@ -102,28 +252,37 @@ class CoreServiceProvider extends ServiceProvider with ProvidesDefaultConfig {
     );
     container.instance<EngineConfig>(initialEngineConfig);
     container.instance<Config>(snapshot.config);
+
     _registryListener = (entry) {
       final currentSnapshot = _snapshot;
-      if (currentSnapshot == null) {
-        return;
-      }
-      final rendered = _loader.renderDefaults(
+      if (currentSnapshot == null) return;
+      final rendered = _loader!.renderDefaults(
         entry.defaults,
         currentSnapshot.templateContext,
       );
-      if (rendered.isEmpty) {
-        return;
-      }
+      if (rendered.isEmpty) return;
       currentSnapshot.config.mergeDefaults(rendered);
     };
     registry.addListener(_registryListener!);
   }
 
+  static ConfigLoaderOptions _resolveLoaderOptions(
+    ConfigLoaderOptions? provided,
+  ) {
+    final base = provided ?? const ConfigLoaderOptions();
+    final defaultsImpl = ConfigImpl(_coreDefaults().values);
+    if (base.defaults.isNotEmpty) {
+      defaultsImpl.merge(base.defaults);
+    }
+    return base.copyWith(defaults: deepCopyMap(defaultsImpl.all()));
+  }
+
   @override
   Future<void> boot(Container container) async {
-    if (!_configOptions.watch) {
-      return;
-    }
+    if (!_useLoader) return;
+    final options = _effectiveOptions;
+    if (!options.watch) return;
+
     final engine = await container.make<Engine>();
     await _startWatchers(container, engine);
   }
@@ -149,8 +308,9 @@ class CoreServiceProvider extends ServiceProvider with ProvidesDefaultConfig {
   Future<void> _startWatchers(Container container, Engine engine) async {
     await _disposeWatchers();
 
-    final fs = _configOptions.resolvedFileSystem;
-    final directory = fs.directory(_configOptions.configDirectory);
+    final options = _effectiveOptions;
+    final fs = options.resolvedFileSystem;
+    final directory = fs.directory(options.configDirectory);
     if (directory.existsSync()) {
       _directoryWatcher = directory
           .watch(recursive: true)
@@ -170,7 +330,7 @@ class CoreServiceProvider extends ServiceProvider with ProvidesDefaultConfig {
     FileSystemEvent event,
   ) {
     if (event.isDirectory) return;
-    if (!_loader.isWatchedFile(event.path)) return;
+    if (_loader == null || !_loader!.isWatchedFile(event.path)) return;
     _scheduleReload(container, engine, source: event.path);
   }
 
@@ -179,16 +339,18 @@ class CoreServiceProvider extends ServiceProvider with ProvidesDefaultConfig {
     Engine engine, {
     required String environment,
   }) {
-    for (final watcher in _envFileWatchers) {
+    _envFileWatchers ??= [];
+    for (final watcher in _envFileWatchers!) {
       watcher.cancel();
     }
-    _envFileWatchers.clear();
+    _envFileWatchers!.clear();
 
-    final fs = _configOptions.resolvedFileSystem;
-    final files = <String>{..._configOptions.envFiles};
+    final options = _effectiveOptions;
+    final fs = options.resolvedFileSystem;
+    final files = <String>{...options.envFiles};
     if (environment.isNotEmpty) {
       files.addAll(
-        _configOptions.envFiles.map(
+        options.envFiles.map(
           (file) => file.endsWith('.env')
               ? '$file.$environment'
               : '$file.$environment',
@@ -207,7 +369,7 @@ class CoreServiceProvider extends ServiceProvider with ProvidesDefaultConfig {
         }
         _scheduleReload(container, engine, source: normalizedPath);
       });
-      _envFileWatchers.add(watcher);
+      _envFileWatchers!.add(watcher);
     }
   }
 
@@ -217,7 +379,8 @@ class CoreServiceProvider extends ServiceProvider with ProvidesDefaultConfig {
     required String source,
   }) {
     _debounce?.cancel();
-    _debounce = Timer(_configOptions.watchDebounce, () {
+    final options = _effectiveOptions;
+    _debounce = Timer(options.watchDebounce, () {
       _reload(container, engine, source: source);
     });
   }
@@ -227,8 +390,10 @@ class CoreServiceProvider extends ServiceProvider with ProvidesDefaultConfig {
     Engine engine, {
     required String source,
   }) async {
-    final snapshot = _loader.load(
-      _configOptions,
+    if (_loader == null) return;
+    final options = _effectiveOptions;
+    final snapshot = _loader!.load(
+      options,
       overrides: _configItems ?? const {},
     );
     _snapshot = snapshot;
@@ -251,10 +416,12 @@ class CoreServiceProvider extends ServiceProvider with ProvidesDefaultConfig {
   Future<void> _disposeWatchers() async {
     await _directoryWatcher?.cancel();
     _directoryWatcher = null;
-    for (final watcher in _envFileWatchers) {
-      await watcher.cancel();
+    if (_envFileWatchers != null) {
+      for (final watcher in _envFileWatchers!) {
+        await watcher.cancel();
+      }
+      _envFileWatchers!.clear();
     }
-    _envFileWatchers.clear();
     _debounce?.cancel();
     _debounce = null;
   }

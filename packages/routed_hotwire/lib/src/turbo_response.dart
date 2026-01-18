@@ -68,13 +68,12 @@ class TurboResponse {
     String location, {
     Map<String, String>? headers,
   }) {
-    final response = ctx.response;
-    if (response.isClosed) return response;
-    response.statusCode = HttpStatus.seeOther;
-    response.setHeader(HttpHeaders.locationHeader, location);
-    headers?.forEach(response.setHeader);
-    response.close();
-    return response;
+    if (ctx.isClosed) return ctx.string('');
+    ctx.status(HttpStatus.seeOther);
+    ctx.setHeader(HttpHeaders.locationHeader, location);
+    headers?.forEach(ctx.setHeader);
+    ctx.close();
+    return ctx.string('');
   }
 
   static Response _write(
@@ -84,14 +83,13 @@ class TurboResponse {
     int statusCode,
     Map<String, String>? headers,
   ) {
-    final response = ctx.response;
-    if (response.isClosed) return response;
-    response.statusCode = statusCode;
-    response.setHeader(HttpHeaders.contentTypeHeader, contentType);
-    headers?.forEach(response.setHeader);
-    response.write(body);
-    response.close();
-    return response;
+    if (ctx.isClosed) return ctx.string('');
+    ctx.status(statusCode);
+    ctx.setHeader(HttpHeaders.contentTypeHeader, contentType);
+    headers?.forEach(ctx.setHeader);
+    ctx.write(body);
+    ctx.close();
+    return ctx.string('');
   }
 }
 

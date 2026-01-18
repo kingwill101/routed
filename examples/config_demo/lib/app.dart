@@ -15,13 +15,18 @@ Future<Engine> createEngine() async {
     description: 'Mail service provider for the config demo',
   );
 
-  final engine = await Engine.createFull(
-    configOptions: ConfigLoaderOptions(
-      configDirectory: 'config',
-      envFiles: ['.env', '.env.local'],
-      watch: true,
-    ),
-    configItems: {'features.beta_banner': true},
+  final engine = await Engine.create(
+    providers: [
+      CoreServiceProvider.withLoader(
+        ConfigLoaderOptions(
+          configDirectory: 'config',
+          envFiles: ['.env', '.env.local'],
+          watch: true,
+          defaults: {'features.beta_banner': true},
+        ),
+      ),
+      RoutingServiceProvider(),
+    ],
   );
 
   engine.get('/', (ctx) async {
@@ -141,12 +146,10 @@ Future<Engine> createEngine() async {
     };
 
     await Config.runWith(ConfigImpl(snapshot), () async {
-      ctx.response.write(
-        'Scoped app.name -> ${Config.current.get('app.name')}',
-      );
+      ctx.write('Scoped app.name -> ${Config.current.get('app.name')}');
     });
 
-    return ctx.response;
+    return ctx.string('');
   });
 
   return engine;

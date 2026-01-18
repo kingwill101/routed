@@ -5,7 +5,8 @@ import 'package:routed/routed.dart';
 
 /// Builds the example [Engine] with translation-enabled routes.
 Future<Engine> createEngine() async {
-  final engine = await Engine.createFull(
+  final engine = await Engine.create(
+    providers: Engine.defaultProviders,
     options: [
       (engine) {
         final registry = _ensureResolverRegistry(engine);
@@ -32,7 +33,7 @@ Future<Engine> createEngine() async {
 
   engine.get('/header', (ctx) async {
     final header =
-        ctx.request.headers.value(HttpHeaders.acceptLanguageHeader) ?? 'unset';
+        ctx.headers.value(HttpHeaders.acceptLanguageHeader) ?? 'unset';
     final payload = _localizedPayload(
       ctx,
       note: 'Resolved from Accept-Language header: $header',

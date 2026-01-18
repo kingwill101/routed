@@ -58,7 +58,10 @@ notifications:
 
     engine.get('/raw', (ctx) async {
       return ctx.json({
-        'message': ctx.trans('messages.greeting', replacements: {'name': 'Jess'}),
+        'message': ctx.trans(
+          'messages.greeting',
+          replacements: {'name': 'Jess'},
+        ),
       });
     });
 

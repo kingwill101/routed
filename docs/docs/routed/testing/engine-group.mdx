@@ -36,11 +36,14 @@ Each `test` callback receives two arguments: the fresh engine and its matching `
 
 ## Passing configuration
 
-Use the optional parameters to configure every engine created inside the group:
+Use the optional parameters to configure every engine created inside the group.
+By default, engines are created with `Engine.defaultProviders` (core + routing).
+Pass `providers` to use a different set:
 
 ```dart
 engineGroup(
   'with cache & sessions',
+  providers: Engine.builtins,  // Use all providers
   configItems: {'app.env': 'testing'},
   engineConfig: EngineConfig(
     cacheManager: CacheManager()
@@ -50,6 +53,18 @@ engineGroup(
   options: [
     withMiddleware([timeoutMiddleware(const Duration(seconds: 5))]),
   ],
+  define: (engine, client, test) {
+    // add routes and tests here
+  },
+);
+```
+
+For minimal tests that don't need providers:
+
+```dart
+engineGroup(
+  'bare engine tests',
+  providers: [],  // No providers, bare engine
   define: (engine, client, test) {
     // add routes and tests here
   },

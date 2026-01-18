@@ -1,3 +1,7 @@
+## 0.3.2
+
+- Updated dependency constraints to align with routed 0.3.2 and property_testing 0.3.2.
+
 ## 0.3.1
 
 - Synced server_testing dependency constraints.

@@ -12,6 +12,7 @@ void main() {
     setUp(() {
       // Create engine with mock config
       engine = testEngine(
+        providers: Engine.defaultProviders,
         configItems: {
           'app.name': 'Test App',
           'app.env': 'testing',

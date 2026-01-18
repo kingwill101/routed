@@ -1,25 +1,68 @@
 ---
 title: Engine Lifecycle
-description: Understand bare vs full boot profiles, when to call initialize, and how Engine.full differs from Engine().
+description: Understand bare vs full boot profiles, explicit provider composition, and how to initialize the Engine.
 sidebar_position: 2
 ---
 
 # Engine Lifecycle
 
 The `Engine` owns the container, service providers, middleware stacks, and HTTP
-servers. Routed now supports **two boot profiles**:
+servers. Routed uses **explicit provider composition** with convenient defaults:
 
-- **Bare** (default): minimal routing + middleware, no config loader, no provider manifest.
-- **Full**: config loading + provider registration + manifest discovery (the previous default).
+- **Bare**: minimal routing + middleware, no config loader, no provider manifest.
+- **Full** (recommended): config loading + provider registration + manifest discovery.
 
-Use the profile that matches your workload, especially for benchmarks and tiny
-services.
+Use the profile that matches your workload.
 
-## `Engine()` – bare by default
+## Quick Start
 
-Calling `Engine()` returns a bare-bones instance. No config files are loaded and
-no providers are auto-registered. You are responsible for any providers you want
-to boot.
+For most applications, use `Engine.create()` which loads all built-in providers:
+
+```dart title="Recommended: Full-featured engine"
+final engine = await Engine.create();
+
+engine.get('/ping', (ctx) => ctx.text('pong'));
+
+await engine.serve(address: '127.0.0.1', port: 8080);
+```
+
+This gives you all 16 built-in providers: core, routing, cache, sessions, uploads,
+cors, security, logging, auth, observability, compression, rate limiting, storage,
+static assets, views, and localization.
+
+## `Engine.create()` – async convenience (recommended)
+
+`Engine.create()` is the recommended way to create an engine. It constructs an
+engine with all built-in providers and initializes it in one call:
+
+```dart
+// Full-featured engine with all builtins (default)
+final engine = await Engine.create();
+
+// Minimal engine with just core + routing
+final engine = await Engine.create(providers: Engine.defaultProviders);
+
+// Bare engine (no providers)
+final engine = await Engine.create(providers: []);
+
+// Custom configuration with builtins
+final engine = await Engine.create(
+  providers: [
+    CoreServiceProvider(configItems: {'app.name': 'MyApp'}),
+    ...Engine.builtins,
+  ],
+);
+```
+
+## `Engine()` – manual construction
+
+When you need finer control over the boot process, construct the engine manually
+and call `initialize()`:
+
+### Bare mode
+
+Calling `Engine()` with no providers returns a bare-bones instance. No config
+files are loaded and no providers are auto-registered:
 
 ```dart title="Bare engine"
 final engine = Engine();
@@ -28,66 +71,126 @@ engine.get('/ping', (ctx) => ctx.text('pong'));
 await engine.serve(address: '127.0.0.1', port: 8080);
 ```
 
-**What you still get in bare mode**
+**What you get in bare mode**
 - Route matching (including parameter patterns)
 - Middleware execution
 - The standard request/response helpers
 
-**What you do NOT get by default**
+**What you do NOT get**
 - Config loader / `.env` processing
 - Provider manifest discovery (`http.providers`)
 - Built-in providers (logging, cache, sessions, etc.)
 
-If you need those, use full mode.
+### Full mode with `Engine.builtins`
 
-## `Engine.full()` – explicit full mode
+Use `Engine.builtins` to get all framework providers:
 
-`Engine.full()` preserves the previous behavior: built-in providers are
-registered, config defaults are merged, and the provider manifest is eligible
-for loading.
+```dart title="Full mode with all providers"
+final engine = Engine(providers: Engine.builtins);
 
-```dart title="Full mode constructor"
-final engine = Engine.full(
-  configOptions: ConfigLoaderOptions(
-    configDirectory: 'config',
-    watch: true,
-  ),
-  options: [
-    withTrustedProxies(['127.0.0.1']),
+await engine.initialize();
+```
+
+This includes all providers from the `ProviderRegistry`: core, routing, cache,
+sessions, uploads, cors, security, logging, auth, observability, compression,
+rate limiting, storage, static assets, views, and localization.
+
+### Minimal mode with `Engine.defaultProviders`
+
+Use `Engine.defaultProviders` to get just the essential providers:
+
+```dart title="Minimal mode with core + routing"
+final engine = Engine(providers: Engine.defaultProviders);
+
+await engine.initialize();
+```
+
+This gives you:
+- In-memory configuration with sensible defaults
+- Router registration
+- Event manager
+
+### Custom configuration
+
+For custom configuration values without file I/O:
+
+```dart title="Custom in-memory configuration"
+final engine = Engine(
+  providers: [
+    CoreServiceProvider(configItems: {
+      'app.name': 'My Application',
+      'app.env': 'production',
+      'database.host': 'db.internal',
+    }),
+    RoutingServiceProvider(),
   ],
 );
 
 await engine.initialize();
 ```
 
-## `Engine.create()` vs `Engine.createFull()`
+### Loading configuration from disk
 
-`Engine.create()` is still the async convenience helper, but it now defaults to
-**bare mode**:
+To load configuration from files, use `CoreServiceProvider.withLoader`:
 
-```dart
-final engine = await Engine.create(); // bare + initialized
+```dart title="File-based configuration"
+final engine = Engine(
+  providers: [
+    CoreServiceProvider.withLoader(ConfigLoaderOptions(
+      configDirectory: 'config',
+      envFiles: ['.env', '.env.local'],
+      watch: true,
+    )),
+    RoutingServiceProvider(),
+  ],
+);
+
+await engine.initialize();
 ```
 
-If you want the full boot sequence (config + providers), use
-`Engine.createFull()`:
+### Lazy provider loading via config
 
-```dart
-final engine = await Engine.createFull(); // full + initialized
+You can also configure providers in your `config/http.yaml` and they will be
+lazily loaded from the `ProviderRegistry`. This allows you to use a minimal
+provider set in code while still enabling additional providers via config:
+
+```dart title="Minimal code, config-driven providers"
+final engine = Engine(
+  providers: [
+    CoreServiceProvider.withLoader(ConfigLoaderOptions(
+      configDirectory: 'config',
+    )),
+    RoutingServiceProvider(),
+  ],
+);
+
+await engine.initialize();
 ```
+
+```yaml title="config/http.yaml"
+providers:
+  - routed.uploads
+  - routed.cors
+  - routed.logging
+```
+
+The providers listed in `http.providers` will be auto-registered from the
+`ProviderRegistry` during initialization.
 
 ## Choosing between them
 
 | Scenario | Recommended API | Notes |
 | --- | --- | --- |
-| Microbenchmarks / tiny services | `Engine()` or `Engine.create()` | Bare by default. Minimal overhead. |
-| Integration / production boot | `Engine.full()` or `Engine.createFull()` | Config + providers boot automatically. |
-| Unit tests that need providers | `Engine.full()` + `initialize()` | Matches previous defaults. |
-| Custom registry seeding before built-ins | `Engine.full(options: [...])` | Options run immediately after construction. |
+| Standard applications | `Engine.create()` | All builtins, fully featured. |
+| Minimal applications | `Engine.create(providers: Engine.defaultProviders)` | Just core + routing. |
+| Microbenchmarks / tiny services | `Engine()` or `Engine.create(providers: [])` | Bare mode. Minimal overhead. |
+| Custom provider configuration | `Engine(providers: [...])` + `initialize()` | Explicit provider control. |
+| Config-driven provider loading | `Engine(providers: [CoreServiceProvider.withLoader(...), ...])` | Lazy loading via manifest. |
+| Unit tests | `Engine(providers: [...])` + `initialize()` | Explicit provider control. |
 
 ## Notes for config-driven features
 
 Most `EngineOpt` helpers and provider-backed features depend on `Config`. In
 bare mode, `Config` is not bound unless you register `CoreServiceProvider` or
 bind a `Config` instance yourself. If you need config-driven middleware or
-provider defaults, switch to full mode.
+provider defaults, include `CoreServiceProvider` in your providers list.

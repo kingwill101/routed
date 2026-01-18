@@ -4,9 +4,7 @@ void main() async {
   final engine = Engine(
     middlewares: [
       (EngineContext ctx, Next next) async {
-        print(
-          '[Test Server] Received request: ${ctx.request.method} ${ctx.request.path}',
-        );
+        print('[Test Server] Received request: ${ctx.method} ${ctx.path}');
         return await next();
       },
     ],
@@ -22,19 +20,15 @@ void main() async {
 
   engine.get('/headers', (ctx) {
     final headers = <String, String>{};
-    ctx.request.headers.forEach((name, values) {
+    ctx.headers.forEach((name, values) {
       headers[name] = values.join(',');
     });
-    return ctx.json({'headers': headers, 'client_ip': ctx.request.clientIP});
+    return ctx.json({'headers': headers, 'client_ip': ctx.clientIP});
   });
 
   engine.post('/echo', (ctx) async {
-    final body = await ctx.request.body();
-    return ctx.json({
-      'method': ctx.request.method,
-      'path': ctx.request.path,
-      'body': body,
-    });
+    final body = await ctx.body();
+    return ctx.json({'method': ctx.method, 'path': ctx.path, 'body': body});
   });
 
   // Start the test server

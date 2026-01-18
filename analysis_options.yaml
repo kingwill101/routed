@@ -16,7 +16,9 @@ analyzer:
   errors:
     depend_on_referenced_packages: ignore
     invalid_use_of_visible_for_testing_member: ignore
-
+  
+  exclude: 
+    - benchmarks/**
 # Uncomment the following section to specify additional rules.
 
 # linter:

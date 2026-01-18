@@ -86,13 +86,14 @@ class LiquidViewEngine implements ViewEngine {
     }
     return (env) {
       env.registerLocalFilter('trans', (value, args, named) {
-        final key = _coerceString(value) ??
+        final key =
+            _coerceString(value) ??
             (args.isNotEmpty ? _coerceString(args.first) : null);
         if (key == null) return value;
 
         final replacements = Map<String, dynamic>.from(named);
-        final locale = replacements.remove('locale') ??
-            replacements.remove('lang');
+        final locale =
+            replacements.remove('locale') ?? replacements.remove('lang');
 
         final resolved = ctx.trans(
           key,
@@ -103,17 +104,17 @@ class LiquidViewEngine implements ViewEngine {
       });
 
       env.registerLocalFilter('trans_choice', (value, args, named) {
-        final key = _coerceString(value) ??
+        final key =
+            _coerceString(value) ??
             (args.isNotEmpty ? _coerceString(args.first) : null);
         if (key == null) return value;
 
         final replacements = Map<String, dynamic>.from(named);
-        final locale = replacements.remove('locale') ??
-            replacements.remove('lang');
-        final dynamic countSource = replacements.remove('count') ??
-            (args.length > 1
-                ? args[1]
-                : (args.isNotEmpty ? args.last : null));
+        final locale =
+            replacements.remove('locale') ?? replacements.remove('lang');
+        final dynamic countSource =
+            replacements.remove('count') ??
+            (args.length > 1 ? args[1] : (args.isNotEmpty ? args.last : null));
         final num? count = _asNum(countSource);
         if (count == null) {
           final resolved = ctx.trans(

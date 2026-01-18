@@ -40,15 +40,11 @@ The engine manages global middleware, configuration, and HTTP/WebSocket servers.
 import 'package:routed/routed.dart';
 
 Future<void> main() async {
-  final engine = Engine(
-    options: [
-      // Timeout requests after 30s
-      withMiddleware([timeoutMiddleware(const Duration(seconds: 30))]),
-    ],
-  );
+  // Create a fully-featured engine with all built-in providers
+  final engine = await Engine.create();
 
   // Define routes directly on the engine
-  engine.get('/', (ctx) => ctx.string('Hello Routed 👋'));
+  engine.get('/', (ctx) => ctx.string('Hello Routed!'));
 
   // Or compose routers and mount them
   final api = Router(path: '/api', middlewares: [requestTrackerMiddleware()]);
@@ -66,6 +62,34 @@ Future<void> main() async {
   await engine.serve(host: '127.0.0.1', port: 8080);
 }
 ```
+
+### Engine creation options
+
+Routed provides several ways to create an engine:
+
+```dart
+// Full-featured engine with all builtins (recommended for most apps)
+final engine = await Engine.create();
+
+// Minimal engine with just core + routing
+final engine = await Engine.create(providers: Engine.defaultProviders);
+
+// Bare engine for benchmarks/microservices (no providers)
+final engine = await Engine.create(providers: []);
+
+// Custom configuration
+final engine = await Engine.create(
+  providers: [
+    CoreServiceProvider(configItems: {
+      'app.name': 'My App',
+      'app.env': 'production',
+    }),
+    ...Engine.builtins,
+  ],
+);
+```
+
+See [Engine Lifecycle](/docs/routed/fundamentals/engine) for details on the different boot profiles.
 
 ### Running the server
 
@@ -134,11 +158,20 @@ See [Middleware](/docs/routed/fundamentals/middleware) for the distinction betwe
 
 ## 6. Render views
 
-Routed includes a Liquid template engine. Configure it via `EngineConfig` or the `useViewEngine` helper:
+Routed includes a Liquid template engine. With `Engine.create()`, the view provider is already loaded. Just configure the view directory:
 
 ```dart
-final engine = Engine();
-engine.useViewEngine(LiquidViewEngine(directory: 'views'));
+final engine = await Engine.create(
+  providers: [
+    CoreServiceProvider(configItems: {
+      'view': {
+        'engine': 'liquid',
+        'directory': 'views',
+      },
+    }),
+    ...Engine.builtins,
+  ],
+);
 
 engine.get('/welcome', (ctx) async {
   return await ctx.template(
@@ -146,6 +179,15 @@ engine.get('/welcome', (ctx) async {
     data: {'user': 'Taylor'},
   );
 });
+```
+
+Or configure via `config/http.yaml`:
+
+```yaml
+view:
+  engine: liquid
+  directory: views
+  cache: true
 ```
 
 See [Liquid templates](/docs/routed/views/templates) for more.

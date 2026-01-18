@@ -17,7 +17,7 @@ void main(List<String> args) async {
   router.post('/users', (ctx) => ctx.string('created'));
 
   // Route to demonstrate IP forwarding
-  router.get('/ip', (ctx) => ctx.string(ctx.request.clientIP));
+  router.get('/ip', (ctx) => ctx.string(ctx.clientIP));
 
   engine.use(router);
 

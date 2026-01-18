@@ -116,12 +116,15 @@ simplest pattern is to add an engine option that clones/augments the registry
 before calling `Engine.initialize()`:
 
 ```dart
-final engine = await Engine.createFull(options: [
-  (engine) {
-    final registry = engine.container.get<LocaleResolverRegistry>();
-    registry.register('preview', (context) => PreviewResolver());
-  },
-]);
+final engine = await Engine.create(
+  providers: Engine.defaultProviders,
+  options: [
+    (engine) {
+      final registry = engine.container.get<LocaleResolverRegistry>();
+      registry.register('preview', (context) => PreviewResolver());
+    },
+  ],
+);
 ```
 
 This ensures your custom IDs are available when `translation.resolvers` is
