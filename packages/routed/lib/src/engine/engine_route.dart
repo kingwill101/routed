@@ -56,6 +56,9 @@ class EngineRoute {
   /// Static path for fast lookup when [isStatic] is true.
   late final String staticPath;
 
+  /// Whether this route has unresolved middleware references.
+  late final bool hasMiddlewareReference;
+
   late final Middleware _handlerMiddleware;
   List<Middleware> _cachedHandlers = const <Middleware>[];
 
@@ -75,6 +78,9 @@ class EngineRoute {
     _parameterPatterns = patternData.paramInfo;
     isStatic = _isStaticPath(path) && !isFallback;
     staticPath = path.isEmpty ? '/' : path;
+    hasMiddlewareReference = middlewares.any(
+      (middleware) => MiddlewareReference.lookup(middleware) != null,
+    );
     _handlerMiddleware = (EngineContext ctx, Next _) => handler(ctx);
   }
 
@@ -104,7 +110,11 @@ class EngineRoute {
 
   List<Middleware> get cachedHandlers => _cachedHandlers;
 
-  void cacheHandlers(List<Middleware> globalMiddlewares) {
+  void cacheHandlers(List<Middleware> globalMiddlewares, {bool cacheable = true}) {
+    if (!cacheable || hasMiddlewareReference) {
+      _cachedHandlers = const <Middleware>[];
+      return;
+    }
     if (globalMiddlewares.isEmpty && middlewares.isEmpty) {
       _cachedHandlers = <Middleware>[_handlerMiddleware];
       return;
@@ -112,6 +122,20 @@ class EngineRoute {
     _cachedHandlers = [
       ...globalMiddlewares,
       ...middlewares,
+      _handlerMiddleware,
+    ];
+  }
+
+  List<Middleware> composeHandlers(
+    List<Middleware> globalMiddlewares,
+    List<Middleware> routeMiddlewares,
+  ) {
+    if (globalMiddlewares.isEmpty && routeMiddlewares.isEmpty) {
+      return <Middleware>[_handlerMiddleware];
+    }
+    return [
+      ...globalMiddlewares,
+      ...routeMiddlewares,
       _handlerMiddleware,
     ];
   }
