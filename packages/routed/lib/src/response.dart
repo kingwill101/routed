@@ -172,11 +172,7 @@ class Response {
   Future<void> string(String content, {int statusCode = HttpStatus.ok}) async {
     _ensureNotClosed();
     _httpResponse.statusCode = statusCode;
-    final bytes = utf8.encode(content);
-    _httpResponse.contentLength = bytes.length;
-    writeHeaderNow();
-    _httpResponse.add(bytes);
-    _bodyStarted = true;
+    write(content);
     await close();
   }
 
@@ -188,11 +184,7 @@ class Response {
     _ensureNotClosed();
     _httpResponse.statusCode = statusCode;
     _headers['Content-Type'] = ['application/json; charset=utf-8'];
-    final bytes = utf8.encode(jsonEncode(data));
-    _httpResponse.contentLength = bytes.length;
-    writeHeaderNow();
-    _httpResponse.add(bytes);
-    _bodyStarted = true;
+    write(jsonEncode(data));
     await close();
   }
 
