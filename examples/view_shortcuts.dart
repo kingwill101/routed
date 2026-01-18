@@ -18,7 +18,7 @@ Future<void> main() async {
 
   engine.get('/sessions/current', (ctx) async {
     final session = ctx.requireFound(
-      ctx.request.headers.value('x-session-id'),
+      ctx.headers.value('x-session-id'),
       message: 'Session missing',
     );
     return ctx.json({'sessionId': session});

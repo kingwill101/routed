@@ -8,6 +8,7 @@ import 'package:routed/session.dart';
 Engine buildApp() {
   final appKey = 'base64:AQIDBAUGBwgJCgsMDQ4PEBESExQVFhcYGRobHB0eHyA=';
   env["APP_KEY"] = appKey;
+  // Use bare Engine with explicit options for fine-grained control
   final engine = Engine(
     config: EngineConfig(
       appKey: appKey,

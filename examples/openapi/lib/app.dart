@@ -130,7 +130,7 @@ Future<Response> searchProducts(EngineContext ctx) async {
 }
 
 Future<Engine> createEngine() async {
-  final engine = await Engine.createFull();
+  final engine = await Engine.create(providers: Engine.defaultProviders);
   engine.use(v1Routes());
 
   /// Health check endpoint for container orchestration

@@ -60,12 +60,11 @@ Future<void> main() async {
   engine.post('/login', (ctx) async {
     Map<String, dynamic> payload;
     try {
-      payload = jsonDecode(await ctx.request.body()) as Map<String, dynamic>;
+      payload = jsonDecode(await ctx.body()) as Map<String, dynamic>;
     } catch (_) {
-      ctx.response
-        ..statusCode = HttpStatus.badRequest
-        ..write('Invalid JSON payload');
-      return ctx.response;
+      ctx.status(HttpStatus.badRequest);
+      ctx.write('Invalid JSON payload');
+      return ctx.string('');
     }
 
     final username = payload['username']?.toString() ?? '';
@@ -74,10 +73,9 @@ Future<void> main() async {
 
     final record = _users[username];
     if (record == null || record['password'] != password) {
-      ctx.response
-        ..statusCode = HttpStatus.unauthorized
-        ..write('Invalid credentials');
-      return ctx.response;
+      ctx.status(HttpStatus.unauthorized);
+      ctx.write('Invalid credentials');
+      return ctx.string('');
     }
 
     final principal = AuthPrincipal(

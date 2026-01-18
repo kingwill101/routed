@@ -56,7 +56,7 @@ void main() async {
   engine.get('/admin', (ctx) {
     return ctx.json({
       'message': 'Admin route with domain constraint',
-      'host': ctx.request.host,
+      'host': ctx.host,
     });
   }, constraints: {'domain': r'^admin\.localhost$'});
 
@@ -95,7 +95,7 @@ void main() async {
   engine.fallback((ctx) {
     return ctx.json({
       'error': 'Route not found',
-      'path': ctx.request.path,
+      'path': ctx.path,
     }, statusCode: 404);
   });
 

@@ -46,7 +46,8 @@ void main() async {
       (ctx, next) async {
         middlewareCalled++;
         print('Middleware called: $middlewareCalled times');
-        return ctx.response;
+        ctx.status(200);
+        return ctx.string('Middleware intercepted');
       },
     ],
     builder: (router) {

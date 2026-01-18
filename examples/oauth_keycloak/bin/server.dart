@@ -23,44 +23,49 @@ Future<void> main() async {
   );
 
   final engine = Engine(
-    configItems: {
-      'http': {
-        'features': {
-          'auth': {'enabled': true},
-        },
-      },
-      'auth': {
-        'oauth2': {
-          'introspection': {
-            'enabled': true,
-            'endpoint': introspectionEndpoint.toString(),
-            'client_id': clientId,
-            'client_secret': clientSecret,
-            'token_type_hint': 'access_token',
-            'cache_ttl': '30s',
+    providers: [
+      CoreServiceProvider(
+        configItems: {
+          'http': {
+            'features': {
+              'auth': {'enabled': true},
+            },
+          },
+          'auth': {
+            'oauth2': {
+              'introspection': {
+                'enabled': true,
+                'endpoint': introspectionEndpoint.toString(),
+                'client_id': clientId,
+                'client_secret': clientSecret,
+                'token_type_hint': 'access_token',
+                'cache_ttl': '30s',
+              },
+            },
+            'jwt': {
+              'enabled': true,
+              'issuer': '$baseUrl/realms/$realm',
+              'audience': ['account'],
+              'jwks_url': jwksUri.toString(),
+              'algorithms': ['RS256'],
+            },
           },
         },
-        'jwt': {
-          'enabled': true,
-          'issuer': '$baseUrl/realms/$realm',
-          'audience': ['account'],
-          'jwks_url': jwksUri.toString(),
-          'algorithms': ['RS256'],
-        },
-      },
-    },
+      ),
+      RoutingServiceProvider(),
+    ],
   );
 
   engine.get('/healthz', (ctx) => ctx.string('ok'));
 
   engine.get('/profile', (ctx) {
     final claims =
-        ctx.request.getAttribute<Map<String, dynamic>>(jwtClaimsAttribute) ??
-        ctx.request.getAttribute<Map<String, dynamic>>(oauthClaimsAttribute);
+        ctx.get<Map<String, dynamic>>(jwtClaimsAttribute) ??
+        ctx.get<Map<String, dynamic>>(oauthClaimsAttribute);
     if (claims == null) {
-      ctx.response.statusCode = HttpStatus.unauthorized;
-      ctx.response.write('missing token');
-      return ctx.response;
+      ctx.status(HttpStatus.unauthorized);
+      ctx.write('missing token');
+      return ctx.string('');
     }
     return ctx.json({'sub': claims['sub'], 'scope': claims['scope']});
   });

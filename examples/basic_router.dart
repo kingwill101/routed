@@ -17,7 +17,7 @@ void main(List<String> args) async {
 
   // POST route with JSON body
   router.post('/users', (ctx) async {
-    final body = await ctx.request.body();
+    final body = await ctx.body();
     ctx.json({'message': 'Created user', 'data': body});
   });
 
@@ -37,7 +37,7 @@ void main(List<String> args) async {
       });
 
       group.post('/data', (ctx) async {
-        final body = await ctx.request.body();
+        final body = await ctx.body();
         ctx.json({'received': body});
       });
     },

@@ -1,6 +1,7 @@
 import 'package:routed/routed.dart';
 
 void main() async {
+  // Use bare Engine for this simple template demo - no config loading needed
   final engine = Engine();
 
   // Configure template engines
@@ -70,9 +71,9 @@ void main() async {
         'items': [
           'Welcome $name',
           'Current time: ${DateTime.now()}',
-          'Your IP: ${ctx.request.clientIP}',
+          'Your IP: ${ctx.clientIP}',
         ],
-        'ip_address': ctx.request.clientIP,
+        'ip_address': ctx.clientIP,
       },
     );
   });

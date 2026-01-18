@@ -36,7 +36,7 @@ void main() async {
 
   // Form validation example
   engine.post('/users', (ctx) async {
-    final body = await ctx.request.body();
+    final body = await ctx.body();
 
     final errors = <String, List<String>>{};
 

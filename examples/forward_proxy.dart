@@ -7,7 +7,7 @@ Middleware routedForwardMiddleware() {
     if (forwardHeader != null && forwardHeader == 'ok') {
       final client = http.Client();
       try {
-        var req = http.Request(c.method, c.request.uri);
+        var req = http.Request(c.method, c.uri);
         c.headers.forEach((k, v) {
           req.headers.addAll({k: v.toString()});
         });

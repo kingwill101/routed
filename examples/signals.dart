@@ -19,7 +19,7 @@ Future<void> main() async {
         late final SignalSubscription<RequestFinishedEvent> subscription;
         subscription = hub.requests.finished.connect(
           (event) async {
-            scopedInvocations.add(event.context.request.id);
+            scopedInvocations.add(event.context.id);
             await subscription.cancel();
           },
           sender: ctx,
@@ -54,8 +54,8 @@ Future<void> main() async {
   });
 
   signals.requests.started.connect((event) {
-    final request = event.context.request;
-    print('[started] ${request.method} ${request.uri.path}');
+    final ctx = event.context;
+    print('[started] ${ctx.method} ${ctx.uri.path}');
   }, key: 'logging.started');
   signals.requests.routeMatched.connect((event) {
     print('[matched] ${event.route.name ?? event.route.path}');
@@ -74,8 +74,8 @@ Future<void> main() async {
   signals.requests.finished.connect((event) {
     final context = event.context;
     print(
-      '[finished] ${context.request.method} ${context.request.uri.path} '
-      '-> ${context.response.statusCode}',
+      '[finished] ${context.method} ${context.uri.path} '
+      '-> ${context.statusCode}',
     );
   }, key: 'logging.finished');
 
@@ -86,7 +86,7 @@ Future<void> main() async {
   // Route-specific listener using EngineRoute sender scoping.
   signals.requests.afterRouting.connect(
     (event) {
-      print('[dashboard-after] completed ${event.context.request.path}');
+      print('[dashboard-after] completed ${event.context.path}');
     },
     sender: dashboardRoute,
     key: 'logging.dashboard.after',

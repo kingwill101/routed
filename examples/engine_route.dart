@@ -49,14 +49,14 @@ void main() async {
 
   // Route with domain constraint
   engine.get('/admin', (ctx) {
-    return ctx.json({'section': 'admin', 'host': ctx.request.host});
+    return ctx.json({'section': 'admin', 'host': ctx.host});
   }, constraints: {'domain': r'admin\.localhost'});
 
   // Fallback route
   engine.fallback((ctx) {
     return ctx.json({
       'error': 'Route not found',
-      'path': ctx.request.path,
+      'path': ctx.path,
     }, statusCode: 404);
   });
 

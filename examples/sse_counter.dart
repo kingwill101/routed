@@ -5,8 +5,8 @@ import 'package:routed/routed.dart';
 Future<void> main() async {
   final engine = Engine()
     ..get('/', (ctx) {
-      ctx.response.headers.set(HttpHeaders.contentTypeHeader, 'text/html');
-      return ctx.response..write('''<!DOCTYPE html>
+      ctx.setHeader(HttpHeaders.contentTypeHeader, 'text/html');
+      ctx.write('''<!DOCTYPE html>
 <html lang="en">
   <head>
     <meta charset="utf-8" />
@@ -55,16 +55,17 @@ Future<void> main() async {
   </body>
 </html>
 ''');
+      return ctx.string('');
     })
     ..get('/events', (ctx) async {
       print(
         '[example] accepted SSE connection from '
-        '${ctx.request.httpRequest.connectionInfo?.remoteAddress.address}',
+        '${ctx.clientIP}',
       );
 
       // Add CORS headers for cross-origin requests
-      ctx.response.headers.set('Access-Control-Allow-Origin', '*');
-      ctx.response.headers.set('Access-Control-Allow-Headers', 'Cache-Control');
+      ctx.setHeader('Access-Control-Allow-Origin', '*');
+      ctx.setHeader('Access-Control-Allow-Headers', 'Cache-Control');
 
       // Create an async stream generator instead of using StreamController
       Stream<SseEvent> eventStream() async* {

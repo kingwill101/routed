@@ -5,11 +5,16 @@ import 'package:routed/src/storage/local_storage_driver.dart';
 
 Future<void> main() async {
   print('cwd: ${Directory.current.path}');
-  final engine = await Engine.createFull(
-    configOptions: const ConfigLoaderOptions(
-      loadEnvFiles: false,
-      includeEnvironmentSubdirectory: false,
-    ),
+  final engine = await Engine.create(
+    providers: [
+      CoreServiceProvider.withLoader(
+        const ConfigLoaderOptions(
+          loadEnvFiles: false,
+          includeEnvironmentSubdirectory: false,
+        ),
+      ),
+      RoutingServiceProvider(),
+    ],
   );
   final manager = engine.container.get<StorageManager>();
   final disk = manager.disk('assets');
