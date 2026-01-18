@@ -59,13 +59,13 @@ jobs:
       - name: Run benchmark (AOT mode)
         run: |
           cd benchmarks
-          MODE=aot RUNS=5 DURATION=10s ./scripts/full_benchmark.sh
+          MODE=aot RUNS=1 DURATION=10s ./scripts/full_benchmark.sh
         shell: bash
 
       - name: Run benchmark (JIT mode)
         run: |
           cd benchmarks
-          MODE=jit RUNS=5 DURATION=10s ./scripts/full_benchmark.sh
+          MODE=jit RUNS=1 DURATION=10s ./scripts/full_benchmark.sh
         shell: bash
 
       - name: Generate summary

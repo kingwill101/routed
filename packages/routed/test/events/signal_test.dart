@@ -13,7 +13,9 @@ Future<void> _waitForLength(
   final deadline = DateTime.now().add(timeout);
   while (list.length < length) {
     if (DateTime.now().isAfter(deadline)) {
-      fail('Timed out waiting for list length $length (actual ${list.length}).');
+      fail(
+        'Timed out waiting for list length $length (actual ${list.length}).',
+      );
     }
     await Future<void>.delayed(const Duration(milliseconds: 10));
   }
