@@ -19,20 +19,22 @@ typedef EngineTestFunction =
 
 /// Defines a single test that runs with a dedicated `Engine` and `TestClient`.
 ///
-/// This helper ensures that the test callback is executed within an `AppZone`,
-/// providing the correct context for `routed` operations.
+/// This helper ensures that the test callback is executed with full provider
+/// support, providing the correct context for `routed` operations.
 ///
 /// - `description`: The description of the test.
 /// - `callback`: The async function containing the test logic. It receives the
 ///   `Engine` and `TestClient` instances.
 /// - `engine`: An optional existing `Engine` instance to use. If not provided,
-///   a new one is created.
+///   a new one is created with default providers.
 /// - `client`: An optional existing `TestClient` instance to use. If not provided,
 ///   a new one is created based on `transportMode`.
 /// - `transportMode`: The transport mode for the `TestClient` (defaults to `inMemory`).
 /// - `configItems`: Initial configuration items for the `Engine` if a new one is created.
+///   These are passed to `CoreServiceProvider`.
 /// - `engineConfig`: An `EngineConfig` instance for the `Engine` if a new one is created.
 /// - `options`: A list of `EngineOpt` for the `Engine` if a new one is created.
+/// - `providers`: Custom providers to use instead of default providers.
 /// - `autoCloseEngine`: Close the provided engine after the test finishes. Engines
 ///   created by this helper are always closed automatically.
 @visibleForTesting
@@ -45,6 +47,7 @@ void engineTest(
   Map<String, dynamic>? configItems,
   EngineConfig? engineConfig,
   List<EngineOpt>? options,
+  List<ServiceProvider>? providers,
   bool autoCloseEngine = false,
 }) {
   test_package.test(description, () async {
@@ -53,11 +56,11 @@ void engineTest(
 
     final testEngine =
         engine ??
-        Engine.full(
-          configItems:
-              configItems ?? {'app.name': 'Test App', 'app.env': 'testing'},
-          config: engineConfig,
+        _createTestEngine(
+          configItems: configItems,
+          engineConfig: engineConfig,
           options: options,
+          providers: providers,
         );
 
     final handler = RoutedRequestHandler(testEngine);
@@ -92,6 +95,7 @@ void engineGroup(
   Map<String, dynamic>? configItems,
   EngineConfig? engineConfig,
   List<EngineOpt>? options,
+  List<ServiceProvider>? providers,
 }) {
   test_package.group(description, () {
     void testWrapper(String testDescription, TestCallback callback) {
@@ -102,17 +106,18 @@ void engineGroup(
         configItems: configItems,
         engineConfig: engineConfig,
         options: options,
+        providers: providers,
       );
     }
 
     final ownsGroupEngine = engine == null;
     final groupEngine =
         engine ??
-        Engine.full(
-          configItems:
-              configItems ?? {'app.name': 'Test App', 'app.env': 'testing'},
-          config: engineConfig,
+        _createTestEngine(
+          configItems: configItems,
+          engineConfig: engineConfig,
           options: options,
+          providers: providers,
         );
 
     final handler = RoutedRequestHandler(groupEngine);
@@ -133,4 +138,31 @@ void engineGroup(
       }
     });
   });
+}
+
+/// Creates a test engine with the given configuration.
+///
+/// If [providers] is null, uses [Engine.defaultProviders] with a
+/// [CoreServiceProvider] configured with the test [configItems].
+Engine _createTestEngine({
+  Map<String, dynamic>? configItems,
+  EngineConfig? engineConfig,
+  List<EngineOpt>? options,
+  List<ServiceProvider>? providers,
+}) {
+  final effectiveConfigItems =
+      configItems ?? {'app.name': 'Test App', 'app.env': 'testing'};
+
+  final effectiveProviders =
+      providers ??
+      [
+        CoreServiceProvider(configItems: effectiveConfigItems),
+        RoutingServiceProvider(),
+      ];
+
+  return Engine(
+    config: engineConfig,
+    options: options,
+    providers: effectiveProviders,
+  );
 }

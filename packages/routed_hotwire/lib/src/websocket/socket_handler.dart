@@ -2,7 +2,7 @@ import 'package:routed/routed.dart';
 import 'package:routed_hotwire/routed_hotwire.dart';
 
 Iterable<String> _defaultTopicResolver(WebSocketContext context) {
-  final uri = context.initialContext.request.uri;
+  final uri = context.initialContext.uri;
   final rawValues = <String>[];
   final multi = uri.queryParametersAll['topic'];
   if (multi != null && multi.isNotEmpty) {

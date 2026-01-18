@@ -16,10 +16,11 @@ Future<Engine> createTodoApp({
   final templatesPath = p.join(baseDir.path, 'templates');
   final assetsPath = p.join(baseDir.path, 'public');
 
-  final engine = await Engine.createFull(
+  final engine = await Engine.create(
     config: EngineConfig(
       security: const EngineSecurityFeatures(csrfProtection: false),
     ),
+    providers: Engine.defaultProviders,
   );
 
   engine.useViewEngine(LiquidViewEngine(directory: templatesPath));

@@ -126,6 +126,18 @@ class TestResponse {
     return this;
   }
 
+  /// Asserts that a header is NOT present by its key.
+  ///
+  /// Throws a [TestFailure] if the header is present.
+  TestResponse assertMissingHeader(String key) {
+    if (_headerExists(key)) {
+      throw TestFailure(
+        'Expected header "$key" to be absent, but it was present with value: ${_headerEntry(key)}',
+      );
+    }
+    return this;
+  }
+
   /// Asserts that the header identified by [key] contains the specified [value].
   ///
   /// If the header is a string or a list, it checks if the header contains the [value].

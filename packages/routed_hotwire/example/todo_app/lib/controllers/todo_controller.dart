@@ -29,7 +29,7 @@ Future<Response> _renderHome(
   TodoRepository repository,
 ) async {
   final todos = repository.all();
-  final selectedId = int.tryParse(ctx.request.queryParameters['todo'] ?? '');
+  final selectedId = int.tryParse(ctx.query('todo')?.toString() ?? '');
   final selected = selectedId != null
       ? repository.find(selectedId)
       : (todos.isNotEmpty ? todos.first : null);
@@ -67,7 +67,7 @@ Future<Response> _renderList(
   EngineContext ctx,
   TodoRepository repository,
 ) async {
-  final selectedId = int.tryParse(ctx.request.queryParameters['todo'] ?? '');
+  final selectedId = int.tryParse(ctx.query('todo')?.toString() ?? '');
   final frameHtml = await _renderListFrame(
     ctx,
     repository,
