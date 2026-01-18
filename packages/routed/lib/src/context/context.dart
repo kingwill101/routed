@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
+import 'dart:typed_data';
 
 import 'package:meta/meta.dart' show internal;
 import 'package:path/path.dart' as p;
@@ -66,7 +67,7 @@ class EngineContext {
 
   /// Track errors that occur during request handling.
   /// Similar to gin.Context.Errors.
-  final List<EngineError> _errors = [];
+  List<EngineError>? _errors;
 
   /// Handlers/middlewares chain returning Response via Next.
   List<Middleware>? _handlers;
@@ -216,12 +217,18 @@ class EngineContext {
   /// Add an error to this context, optionally specifying a type or other metadata.
   EngineError addError(String message, {int? code}) {
     final err = EngineError(message: message, code: code);
-    _errors.add(err);
+    (_errors ??= <EngineError>[]).add(err);
     return err;
   }
 
   /// Retrieve all errors attached to this context.
-  List<EngineError> get errors => List.unmodifiable(_errors);
+  List<EngineError> get errors {
+    final errors = _errors;
+    if (errors == null || errors.isEmpty) {
+      return const <EngineError>[];
+    }
+    return List.unmodifiable(errors);
+  }
 
   /// Check if the response is closed.
   bool get isClosed => _response.isClosed;
@@ -246,6 +253,36 @@ class EngineContext {
 
   /// Retrieve the request scheme.
   String get scheme => request.scheme;
+
+  /// Retrieve the IP address of the client making the request.
+  ///
+  /// This method respects proxy headers and trusted proxy configuration
+  /// from the engine config.
+  String get clientIP => request.clientIP;
+
+  /// Retrieve the remote address of the direct connection.
+  ///
+  /// Unlike [clientIP], this always returns the direct connection address
+  /// without considering forwarded headers.
+  String get remoteAddr => request.remoteAddr;
+
+  /// Retrieve the request body as a UTF-8 decoded string.
+  ///
+  /// The body is cached after the first read, so subsequent calls
+  /// return the same content.
+  FutureOr<String> body() => request.body();
+
+  /// Retrieve the request body as raw bytes.
+  ///
+  /// The body is cached after the first read, so subsequent calls
+  /// return the same content.
+  Future<Uint8List> get bodyBytes => request.bytes;
+
+  /// Returns the content length of the request body.
+  int get contentLength => request.contentLength;
+
+  /// Returns the request path.
+  String get path => request.path;
 
   /// Retrieve the response object.
   @internal
@@ -409,6 +446,9 @@ class EngineContext {
   void status(int code) {
     _response.statusCode = code;
   }
+
+  /// Returns the current HTTP status code of the response.
+  int get statusCode => _response.statusCode;
 
   /// Helper method to determine if a body is allowed for the given status code.
   bool _bodyAllowedForStatus(int statusCode) {

@@ -24,7 +24,7 @@ extension ContextRender on EngineContext {
     try {
       final result = renderer.render(_response);
       if (result is Future<void>) {
-        return result.then((_) => _response).catchError((err) {
+        return result.then((_) => _response).catchError((Object err) {
           addError('Render error: $err');
           abort();
           return _response;
@@ -149,10 +149,7 @@ extension ContextRender on EngineContext {
       HtmlRender(
         content: content,
         templateName: templateName,
-        data: {
-          ...data,
-          kViewEngineContextKey: this,
-        },
+        data: {...data, kViewEngineContextKey: this},
         engine: _engine!.viewEngine,
       ),
     );
