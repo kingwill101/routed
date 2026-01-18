@@ -1,0 +1,137 @@
+name: routed-benchmarks
+
+services:
+  dart_io_jit:
+    profiles: ["jit"]
+    build:
+      context: ..
+      dockerfile: benchmarks/servers/dart_io/Dockerfile.jit
+    environment:
+      PORT: "8001"
+    ports:
+      - "8001:8001"
+
+  dart_io_aot:
+    profiles: ["aot"]
+    build:
+      context: ..
+      dockerfile: benchmarks/servers/dart_io/Dockerfile.aot
+    environment:
+      PORT: "8001"
+    ports:
+      - "8001:8001"
+
+  shelf_jit:
+    profiles: ["jit"]
+    build:
+      context: ..
+      dockerfile: benchmarks/servers/shelf/Dockerfile.jit
+    environment:
+      PORT: "8002"
+    ports:
+      - "8002:8002"
+
+  shelf_aot:
+    profiles: ["aot"]
+    build:
+      context: ..
+      dockerfile: benchmarks/servers/shelf/Dockerfile.aot
+    environment:
+      PORT: "8002"
+    ports:
+      - "8002:8002"
+
+  serinus_jit:
+    profiles: ["jit"]
+    build:
+      context: ..
+      dockerfile: benchmarks/servers/serinus/Dockerfile.jit
+    environment:
+      PORT: "8003"
+    ports:
+      - "8003:8003"
+
+  relic_jit:
+    profiles: ["jit"]
+    build:
+      context: ..
+      dockerfile: benchmarks/servers/relic/Dockerfile.jit
+    environment:
+      PORT: "8007"
+    ports:
+      - "8007:8007"
+
+  routed_jit:
+    profiles: ["jit"]
+    build:
+      context: ..
+      dockerfile: benchmarks/servers/routed/Dockerfile.jit
+    environment:
+      PORT: "8006"
+    ports:
+      - "8006:8006"
+    networks:
+      default:
+        aliases:
+          - routedjit
+
+  serinus_aot:
+    profiles: ["aot"]
+    build:
+      context: ..
+      dockerfile: benchmarks/servers/serinus/Dockerfile.aot
+    environment:
+      PORT: "8003"
+    ports:
+      - "8003:8003"
+
+  relic_aot:
+    profiles: ["aot"]
+    build:
+      context: ..
+      dockerfile: benchmarks/servers/relic/Dockerfile.aot
+    environment:
+      PORT: "8007"
+    ports:
+      - "8007:8007"
+
+  routed_aot:
+    profiles: ["aot"]
+    build:
+      context: ..
+      dockerfile: benchmarks/servers/routed/Dockerfile.aot
+    environment:
+      PORT: "8006"
+    ports:
+      - "8006:8006"
+
+  go_server:
+    profiles: ["other"]
+    build:
+      context: ..
+      dockerfile: benchmarks/servers/go/Dockerfile
+    environment:
+      PORT: "8004"
+    ports:
+      - "8004:8004"
+
+  fastapi:
+    profiles: ["other"]
+    build:
+      context: ..
+      dockerfile: benchmarks/servers/fastapi/Dockerfile
+    environment:
+      PORT: "8005"
+    ports:
+      - "8005:8005"
+
+  bench:
+    profiles: ["bench"]
+    build:
+      context: ..
+      dockerfile: benchmarks/bench.Dockerfile
+    environment:
+      DURATION: "15s"
+      CONCURRENCY: "100"
+      THREADS: "4"
+      WAIT_TIMEOUT: "10"

@@ -1,0 +1,14 @@
+FROM dart:stable
+
+WORKDIR /workspace
+COPY pubspec.yaml ./pubspec.yaml
+COPY packages/routed ./packages/routed
+COPY benchmarks/servers/routed ./benchmarks/servers/routed
+
+WORKDIR /workspace/benchmarks/servers/routed
+RUN dart pub get
+
+ENV PORT=8006
+EXPOSE 8006
+
+CMD ["dart", "run", "bin/server.dart"]

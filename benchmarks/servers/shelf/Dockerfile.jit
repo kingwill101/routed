@@ -1,0 +1,12 @@
+FROM dart:stable
+
+WORKDIR /app
+COPY benchmarks/servers/shelf/pubspec.yaml ./
+COPY benchmarks/servers/shelf/bin ./bin
+
+RUN dart pub get
+
+ENV PORT=8002
+EXPOSE 8002
+
+CMD ["dart", "run", "bin/server.dart"]

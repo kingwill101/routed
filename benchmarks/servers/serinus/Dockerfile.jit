@@ -1,0 +1,13 @@
+FROM dart:stable
+
+WORKDIR /app
+COPY benchmarks/servers/serinus/pubspec.yaml ./
+COPY benchmarks/servers/serinus/lib ./lib
+COPY benchmarks/servers/serinus/bin ./bin
+
+RUN dart pub get
+
+ENV PORT=8003
+EXPOSE 8003
+
+CMD ["dart", "run", "bin/server.dart"]
