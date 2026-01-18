@@ -24,12 +24,9 @@ void main() {
     expect(await engine.make<StubService>(), isA<StubService>());
   });
 
-  test('Engine.create accepts providers and skips defaults', () async {
+  test('Engine.create accepts providers (bare mode)', () async {
     final provider = StubProvider();
-    final engine = await Engine.create(
-      includeDefaultProviders: false,
-      providers: [provider],
-    );
+    final engine = await Engine.create(providers: [provider]);
 
     expect(await engine.make<StubService>(), isA<StubService>());
   });

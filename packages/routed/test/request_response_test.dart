@@ -8,9 +8,14 @@ import 'package:server_testing/server_testing.dart';
 Future<({Engine engine, TestClient client})> _setupClient({
   EngineConfig? config,
 }) async {
-  final engine = await Engine.createFull(
+  final engine = await Engine.create(
     config: config,
-    configItems: const {'app.name': 'Test App', 'app.env': 'testing'},
+    providers: [
+      CoreServiceProvider(
+        configItems: const {'app.name': 'Test App', 'app.env': 'testing'},
+      ),
+      RoutingServiceProvider(),
+    ],
   );
   final client = TestClient(
     RoutedRequestHandler(engine),
@@ -52,6 +57,38 @@ void main() {
       expect(response.json()['body'], equals('hello'));
       expect(response.json()['cached'], isTrue);
       expect(response.json()['header'], equals('one, two'));
+    });
+
+    test('does not consume body when handler does not read it', () async {
+      final setup = await _setupClient();
+      final engine = setup.engine;
+      final client = setup.client;
+      bool? consumed;
+
+      engine.post('/no-read', (ctx) {
+        consumed = ctx.request.bodyConsumed;
+        return ctx.string('ok');
+      });
+
+      final response = await client.post('/no-read', 'payload');
+      response.assertStatus(HttpStatus.ok);
+
+      expect(consumed, isFalse);
+    });
+
+    test('marks body as consumed after reading bytes', () async {
+      final setup = await _setupClient();
+      final engine = setup.engine;
+      final client = setup.client;
+
+      engine.post('/read', (ctx) async {
+        await ctx.request.bytes;
+        return ctx.json({'consumed': ctx.request.bodyConsumed});
+      });
+
+      final response = await client.post('/read', 'payload');
+
+      expect(response.json()['consumed'], isTrue);
     });
 
     test('overrides client IP from trusted platform header', () async {
@@ -182,6 +219,30 @@ void main() {
   });
 
   group('Response', () {
+    test(
+      'string/json responses set content-length without chunked encoding',
+      () async {
+        final setup = await _setupClient();
+        final engine = setup.engine;
+        final client = setup.client;
+
+        engine.get('/plain', (ctx) => ctx.string('ok'));
+        engine.get('/json', (ctx) => ctx.json({'ok': true}));
+
+        final plain = await client.get('/plain');
+        plain
+          ..assertStatus(HttpStatus.ok)
+          ..assertHeader('content-length', '2')
+          ..assertMissingHeader('transfer-encoding');
+
+        final jsonResponse = await client.get('/json');
+        jsonResponse
+          ..assertStatus(HttpStatus.ok)
+          ..assertMissingHeader('transfer-encoding');
+        expect(jsonResponse.header('content-length'), isNotEmpty);
+      },
+    );
+
     test('writes headers, cookies, and filtered body', () async {
       final setup = await _setupClient();
       final engine = setup.engine;
