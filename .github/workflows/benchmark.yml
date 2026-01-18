@@ -33,19 +33,14 @@ on:
 
 jobs:
   benchmark:
-    runs-on: ${{ matrix.os }}
-    strategy:
-      fail-fast: false
-      matrix:
-        os: [ubuntu-latest, macos-latest, windows-latest]
-        dart-version: ['stable']
+    runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
 
       - name: Set up Dart
         uses: dart-lang/setup-dart@v1
         with:
-          sdk: ${{ matrix.dart-version }}
+          sdk: stable
 
       - name: Get dependencies
         run: dart pub get
@@ -59,24 +54,15 @@ jobs:
           cd ../routed && dart pub get
 
       - name: Install wrk
-        if: runner.os != 'Windows'
-        run: |
-          if [ "$RUNNER_OS" = "Linux" ]; then
-            sudo apt-get update && sudo apt-get install -y wrk
-          elif [ "$RUNNER_OS" = "macOS" ]; then
-            brew install wrk
-          fi
-        shell: bash
+        run: sudo apt-get update && sudo apt-get install -y wrk
 
-      - name: Run benchmark (AOT mode - Ubuntu only)
-        if: runner.os == 'Linux'
+      - name: Run benchmark (AOT mode)
         run: |
           cd benchmarks
           MODE=aot RUNS=2 DURATION=5s ./scripts/full_benchmark.sh
         shell: bash
 
       - name: Run benchmark (JIT mode)
-        if: runner.os != 'Windows'
         run: |
           cd benchmarks
           MODE=jit RUNS=2 DURATION=5s ./scripts/full_benchmark.sh
@@ -86,7 +72,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: benchmark-results-${{ matrix.os }}-${{ matrix.dart-version }}
+          name: benchmark-results
           path: benchmarks/results/
           if-no-files-found: ignore
           retention-days: 30
@@ -98,24 +84,26 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Download all results
+      - name: Download results
         uses: actions/download-artifact@v4
         with:
-          path: all-results
+          name: benchmark-results
+          path: benchmark-results
 
       - name: Generate summary
         run: |
           echo "# Benchmark Results" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
-          echo "Benchmark runs completed across multiple platforms." >> $GITHUB_STEP_SUMMARY
+          echo "Benchmark runs completed on Ubuntu Linux." >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
-          echo "**Artifacts:**" >> $GITHUB_STEP_SUMMARY
+          echo "**Results:**" >> $GITHUB_STEP_SUMMARY
           
-          if [ -d "all-results" ]; then
-            for dir in all-results/benchmark-results-*/; do
-              platform=$(basename "$dir" | sed 's/benchmark-results-//')
-              echo "- [$platform]()" >> $GITHUB_STEP_SUMMARY
+          if [ -d "benchmark-results" ] && [ "$(ls -A benchmark-results)" ]; then
+            echo "" >> $GITHUB_STEP_SUMMARY
+            ls -1 benchmark-results/*.md 2>/dev/null | while read file; do
+              echo "- [$(basename "$file")]()" >> $GITHUB_STEP_SUMMARY
             done
           else
-            echo "No benchmark results found (wrk may not be available on this platform)" >> $GITHUB_STEP_SUMMARY
+            echo "No benchmark results found" >> $GITHUB_STEP_SUMMARY
           fi
+
