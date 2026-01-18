@@ -121,19 +121,26 @@ class LoggingServiceProvider extends ServiceProvider
     Object? error,
     StackTrace? stackTrace,
   }) {
+    final method = ctx.request.method;
+    final path = ctx.request.uri.path;
+    final durationMs = duration.inMilliseconds;
+
+    // Build structured context with all the details
     final payload = <String, Object?>{
       'request_id': ctx.id,
-      'method': ctx.request.method,
-      'path': ctx.request.uri.path,
+      'method': method,
+      'path': path,
       'status': status,
-      'duration_ms': duration.inMilliseconds,
+      'duration_ms': durationMs,
     };
 
+    // Add any custom logging context from the request
     final loggingContext = LoggingContext.currentValues(ctx);
     if (!identical(loggingContext, const {})) {
       payload.addAll(loggingContext);
     }
 
+    // Add configured request headers
     for (final header in _headerNames) {
       final value = ctx.request.headers.value(header);
       if (value != null) {
@@ -141,37 +148,21 @@ class LoggingServiceProvider extends ServiceProvider
       }
     }
 
+    // Add any extra fields from config
     payload.addAll(_extraFields);
 
     final logger = RoutedLogger.create(payload);
 
-    final timestamp = DateTime.now().toUtc();
-    final message =
-        '${ctx.request.method} ${ctx.request.uri.path} -> $status (${duration.inMilliseconds}ms)';
-
-    final logEntry = <String, Object?>{
-      'timestamp': timestamp.toIso8601String(),
-      'message': message,
-      ...payload,
-    };
-
     if (error != null) {
-      logEntry['error'] = error.toString();
-    }
-
-    if (_includeStackTraces && stackTrace != null) {
-      logEntry['stack_trace'] = stackTrace.toString();
-    }
-
-    if (error != null) {
-      logger.error(message);
+      payload['error'] = error.toString();
       if (_includeStackTraces && stackTrace != null) {
-        logger.error(stackTrace.toString());
+        payload['stack_trace'] = stackTrace.toString();
       }
+      logger.error('Request failed');
       return;
     }
 
-    logger.log(_level, message);
+    logger.log(_level, 'Request completed');
   }
 
   void _ensureDriverRegistry(Container container) {
@@ -215,6 +206,7 @@ class LoggingServiceProvider extends ServiceProvider
         retentionDays: resolved.retentionDays,
         flushInterval: resolved.flushInterval,
       );
+      // contextual 2.2.0+ defaults file drivers to PlainTextLogFormatter
       return contextual.DailyFileLogDriver.fromOptions(
         options,
         useIsolate: resolved.useIsolate,

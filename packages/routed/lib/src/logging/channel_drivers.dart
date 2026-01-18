@@ -22,18 +22,26 @@ class NullLogDriver extends LogDriver {
 }
 
 /// Persists logs to a single file without rotation.
+///
+/// Uses [PlainTextLogFormatter] by default to avoid ANSI color codes in file output.
 class SingleFileLogDriver extends LogDriver {
-  SingleFileLogDriver(String path) : _file = File(path), super('single') {
+  SingleFileLogDriver(String path, {LogMessageFormatter? formatter})
+    : _file = File(path),
+      _formatter = formatter ?? PlainTextLogFormatter(),
+      super('single') {
     _file.parent.createSync(recursive: true);
     _sink = _file.openWrite(mode: FileMode.append);
   }
 
   final File _file;
+  final LogMessageFormatter _formatter;
   IOSink? _sink;
 
   @override
   Future<void> log(LogEntry entry) async {
-    _sink?.writeln(entry.message);
+    // Re-format using plain text formatter to avoid ANSI codes in file output
+    final message = _formatter.format(entry.record);
+    _sink?.writeln(message);
   }
 
   @override

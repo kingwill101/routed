@@ -14,15 +14,15 @@ enum TurboRequestKind {
 
 /// Parsed view of the headers Turbo adds to requests.
 class TurboRequestInfo {
-  TurboRequestInfo._(this.request, this._headers, this.method);
+  TurboRequestInfo._(this._headers, this.method);
 
-  /// Construct from a routed [request].
-  factory TurboRequestInfo.fromRequest(Request request) {
+  /// Construct from a routed [EngineContext].
+  factory TurboRequestInfo.fromContext(EngineContext ctx) {
     final headers = <String, List<String>>{};
-    request.headers.forEach((name, values) {
+    ctx.headers.forEach((name, values) {
       headers[name.toLowerCase()] = List.unmodifiable(values);
     });
-    return TurboRequestInfo._(request, headers, request.method.toUpperCase());
+    return TurboRequestInfo._(headers, ctx.method.toUpperCase());
   }
 
   /// Construct from a raw header map. Useful for tests or tooling.
@@ -34,10 +34,9 @@ class TurboRequestInfo {
     headers.forEach((name, values) {
       normalized[name.toLowerCase()] = List.unmodifiable(values);
     });
-    return TurboRequestInfo._(null, normalized, method.toUpperCase());
+    return TurboRequestInfo._(normalized, method.toUpperCase());
   }
 
-  final Request? request;
   final Map<String, List<String>> _headers;
   final String method;
 
@@ -100,23 +99,12 @@ class TurboRequestInfo {
 
 const _turboInfoKey = '__routed_hotwire.turbo_request';
 
-/// Convenient access to [TurboRequestInfo] on the routed [Request].
-extension TurboRequestExtensions on Request {
-  TurboRequestInfo get turbo {
-    final cached = getAttribute<TurboRequestInfo>(_turboInfoKey);
-    if (cached != null) return cached;
-    final info = TurboRequestInfo.fromRequest(this);
-    setAttribute(_turboInfoKey, info);
-    return info;
-  }
-}
-
 /// Shortcut for retrieving [TurboRequestInfo] directly from the context.
 extension TurboContextExtensions on EngineContext {
   TurboRequestInfo get turbo {
     final cached = get<TurboRequestInfo>(_turboInfoKey);
     if (cached != null) return cached;
-    final info = TurboRequestInfo.fromRequest(request);
+    final info = TurboRequestInfo.fromContext(this);
     set(_turboInfoKey, info);
     _attachLoggingContext(this, info);
     return info;
@@ -136,12 +124,31 @@ void _attachLoggingContext(EngineContext ctx, TurboRequestInfo info) {
     return;
   }
 
-  ctx.logger.withContext({
-    for (final entry in additions.entries) entry.key: entry.value,
-  });
+  // Get or create the logger and ensure it's stored in the context.
+  // This is important because ctx.logger may create a new logger each time
+  // if one isn't already stored.
+  const loggerKey = '__routed.logger';
+  const loggerContextKey = '__routed.logger_context';
 
-  final context = ctx.loggerContext;
-  if (!identical(context, const {})) {
-    context.addAll(additions);
+  var logger = ctx.get<dynamic>(loggerKey);
+  var currentContext =
+      ctx.get<Map<String, Object?>>(loggerContextKey) ?? <String, Object?>{};
+
+  if (logger == null) {
+    // No logger stored yet - create one with request context and store it
+    currentContext = <String, Object?>{
+      'request_id': ctx.id,
+      'method': ctx.method,
+      'path': ctx.path,
+    };
+    logger = ctx.logger; // This creates a fallback logger
+    ctx.set(loggerKey, logger);
   }
+
+  // Add hotwire context to the logger
+  (logger as dynamic).withContext(additions);
+
+  // Merge additions into existing context and store the new map.
+  final merged = <String, Object?>{...currentContext, ...additions};
+  ctx.set(loggerContextKey, merged);
 }
