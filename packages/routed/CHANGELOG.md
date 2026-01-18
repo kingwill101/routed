@@ -1,3 +1,10 @@
+## 0.3.2
+
+- Request logger now outputs clean structured logs with `msg="Request completed"`
+  and separate key=value pairs for method, path, status, duration_ms, request_id.
+- `SingleFileLogDriver` now uses `PlainTextLogFormatter` by default to avoid
+  ANSI escape codes in file output.
+
 ## 0.3.1
 
 - Removed the `crypto` dependency and replaced secure cookie encryption with a

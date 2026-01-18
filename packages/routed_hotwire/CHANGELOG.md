@@ -1,3 +1,8 @@
+## 0.1.2
+
+- Fixed "Cannot modify unmodifiable map" error in `_attachLoggingContext` when
+  accessing `ctx.turbo` - now properly creates and stores logger instances.
+
 ## 0.1.1
 
 - Synced routed ecosystem dependency constraints.
