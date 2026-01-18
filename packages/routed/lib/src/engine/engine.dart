@@ -7,10 +7,10 @@ import 'package:fuzzywuzzy/fuzzywuzzy.dart' as fuzzy;
 import 'package:http2/http2.dart' as http2;
 import 'package:meta/meta.dart' show internal, visibleForTesting;
 import 'package:routed/middlewares.dart';
-import 'package:routed/src/config/loader.dart';
 import 'package:routed/src/config/registry.dart';
 import 'package:routed/src/container/container.dart';
 import 'package:routed/src/container/container_mixin.dart';
+import 'package:routed/src/container/read_only_container.dart';
 import 'package:routed/src/context/context.dart';
 import 'package:routed/src/contracts/contracts.dart';
 import 'package:routed/src/engine/config.dart';
@@ -26,6 +26,7 @@ import 'package:routed/src/engine/providers/logging.dart';
 import 'package:routed/src/engine/providers/registry.dart';
 import 'package:routed/src/engine/providers/routing.dart';
 import 'package:routed/src/engine/route_match.dart';
+import 'package:routed/src/engine/request_scope.dart';
 import 'package:routed/src/engine/wrapped_request.dart';
 import 'package:routed/src/events/event_manager.dart';
 import 'package:routed/src/logging/logging.dart';
@@ -36,6 +37,7 @@ import 'package:routed/src/request.dart';
 import 'package:routed/src/response.dart';
 import 'package:routed/src/router/router.dart';
 import 'package:routed/src/router/router_group_builder.dart';
+import 'package:routed/src/router/middleware_reference.dart';
 import 'package:routed/src/router/types.dart';
 import 'package:routed/src/runtime/shutdown.dart';
 import 'package:routed/src/static_files.dart';
@@ -43,8 +45,6 @@ import 'package:routed/src/support/named_registry.dart';
 import 'package:routed/src/utils/debug.dart';
 import 'package:routed/src/validation/validator.dart';
 import 'package:routed/src/websocket/websocket_handler.dart';
-
-import '../support/zone.dart';
 
 export 'events/events.dart';
 
@@ -54,6 +54,7 @@ part 'error_handling.dart';
 part 'mount.dart';
 part 'param_utils.dart';
 part 'patterns.dart';
+part 'route_trie.dart';
 part 'request.dart';
 
 /// The core HTTP engine of the Routed framework.
@@ -75,63 +76,57 @@ part 'request.dart';
 /// - **HTTP/2 Support**: Optional HTTP/2 protocol support with multiplexing
 /// - **Graceful Shutdown**: Handle shutdown signals with configurable grace periods
 ///
-/// ## Basic Usage
+/// ## Basic Usage (Bare Mode)
 ///
 /// ```dart
+/// // Minimal engine - no providers, no file I/O
 /// final engine = Engine();
 ///
-/// engine.get('/hello', (req) {
-///   return Response.ok('Hello, World!');
-/// });
-///
-/// engine.get('/users/{id}', (req) {
-///   final id = req.params['id'];
-///   return Response.ok('User $id');
-/// });
-///
-/// await engine.listen();
+/// engine.get('/hello', (ctx) => ctx.string('Hello, World!'));
+/// await engine.serve();
 /// ```
 ///
-/// ## With Configuration
+/// ## With Default Providers
 ///
 /// ```dart
+/// // Full-featured engine with Config and EventManager
+/// final engine = Engine(providers: Engine.defaultProviders);
+///
+/// engine.get('/users/{id}', (ctx) {
+///   final id = ctx.params['id'];
+///   return ctx.json({'user': id});
+/// });
+///
+/// await engine.initialize();
+/// await engine.serve();
+/// ```
+///
+/// ## With File-Based Configuration
+///
+/// ```dart
+/// // Load configuration from disk
 /// final engine = Engine(
-///   config: EngineConfig(
-///     security: EngineSecurityFeatures(
-///       maxRequestSize: 10 * 1024 * 1024,
-///       cors: CorsConfig(enabled: true),
+///   providers: [
+///     CoreServiceProvider.withLoader(
+///       ConfigLoaderOptions(configDirectory: 'config', watch: true),
 ///     ),
-///   ),
-///   options: [
-///     withTrustedProxies(['192.168.1.1']),
-///     withLogging(enabled: true, level: 'info'),
+///     RoutingServiceProvider(),
 ///   ],
 /// );
 /// ```
 ///
-/// ## Mounting Routers
-///
-/// Multiple routers can be mounted at different path prefixes:
+/// ## Custom Provider Composition
 ///
 /// ```dart
-/// final apiRouter = Router();
-/// apiRouter.get('/users', listUsers);
-///
-/// engine.route('/api/v1', apiRouter, middlewares: [AuthMiddleware()]);
-/// ```
-///
-/// ## Route Groups
-///
-/// Organize related routes with shared configuration:
-///
-/// ```dart
-/// engine.group(
-///   path: '/admin',
-///   middlewares: [AuthMiddleware(), AdminMiddleware()],
-///   builder: (router) {
-///     router.get('/dashboard', showDashboard);
-///     router.get('/users', listUsers);
-///   },
+/// final engine = Engine(
+///   providers: [
+///     ...Engine.defaultProviders,
+///     DatabaseServiceProvider(),
+///     CacheServiceProvider(),
+///   ],
+///   options: [
+///     withTrustedProxies(['192.168.1.1']),
+///   ],
 /// );
 /// ```
 ///
@@ -142,19 +137,70 @@ part 'request.dart';
 /// ```dart
 /// class DatabaseServiceProvider extends ServiceProvider {
 ///   @override
-///   void register() {
-///     container.singleton<Database>((c) => Database());
+///   void register(Container container) {
+///     container.singleton<Database>((c) async => Database());
 ///   }
 ///
 ///   @override
-///   void boot() {
-///     // Initialize database connection
+///   Future<void> boot(Container container) async {
+///     final db = await container.make<Database>();
+///     await db.connect();
 ///   }
 /// }
 ///
 /// final engine = Engine(providers: [DatabaseServiceProvider()]);
 /// ```
 class Engine with StaticFileHandler, ContainerMixin {
+  /// The default providers for a full-featured engine.
+  ///
+  /// Includes:
+  /// - [CoreServiceProvider] - In-memory configuration with framework defaults
+  /// - [RoutingServiceProvider] - Event manager, signals, and routing config
+  ///
+  /// Use this for most applications:
+  /// ```dart
+  /// final engine = Engine(providers: Engine.defaultProviders);
+  /// ```
+  ///
+  /// For file-based configuration, construct providers explicitly:
+  /// ```dart
+  /// final engine = Engine(
+  ///   providers: [
+  ///     CoreServiceProvider.withLoader(ConfigLoaderOptions(...)),
+  ///     RoutingServiceProvider(),
+  ///   ],
+  /// );
+  /// ```
+  static List<ServiceProvider> get defaultProviders => [
+    CoreServiceProvider(),
+    RoutingServiceProvider(),
+  ];
+
+  /// Returns all built-in service providers registered with the framework.
+  ///
+  /// This includes all providers from the [ProviderRegistry]: core, routing,
+  /// cache, sessions, uploads, cors, security, logging, auth, observability,
+  /// compression, rate limiting, storage, static assets, views, and localization.
+  ///
+  /// Use this when you want a fully-featured engine with all framework capabilities:
+  ///
+  /// ```dart
+  /// final engine = Engine(providers: Engine.builtins);
+  /// await engine.initialize();
+  /// ```
+  ///
+  /// For most applications, [defaultProviders] (core + routing) is sufficient.
+  /// Use [builtins] when you need the complete feature set without manually
+  /// listing each provider.
+  ///
+  /// See also:
+  /// - [defaultProviders] for minimal setup (core + routing only)
+  /// - [ProviderRegistry] for the full list of registered providers
+  static List<ServiceProvider> get builtins => ProviderRegistry
+      .instance
+      .registrations
+      .map((r) => r.factory())
+      .toList(growable: false);
   bool _closed = false;
 
   /// The configuration settings for this engine.
@@ -162,12 +208,23 @@ class Engine with StaticFileHandler, ContainerMixin {
 
   /// The application configuration, providing access to application-level settings.
   ///
-  /// In bare mode this is not available unless you register a Config binding.
+  /// This is only available if [CoreServiceProvider] is registered. In bare mode
+  /// (no providers), this will throw a [StateError].
+  ///
+  /// ```dart
+  /// // With default providers - appConfig is available
+  /// final engine = Engine(providers: Engine.defaultProviders);
+  /// print(engine.appConfig.getString('app.name'));
+  ///
+  /// // Bare mode - appConfig throws
+  /// final bareEngine = Engine();
+  /// bareEngine.appConfig; // throws StateError
+  /// ```
   Config get appConfig {
     if (!container.has<Config>()) {
       throw StateError(
-        'Config is not available in bare mode. '
-        'Use Engine.full(...) or register CoreServiceProvider/Config manually.',
+        'Config is not available. '
+        'Register CoreServiceProvider or use Engine(providers: Engine.defaultProviders).',
       );
     }
     return container.get<Config>();
@@ -185,8 +242,12 @@ class Engine with StaticFileHandler, ContainerMixin {
   /// Static routes indexed by method and path for O(1) lookup.
   final Map<String, Map<String, EngineRoute>> _staticRoutesByMethod = {};
 
+  /// Optional segment-trie routers indexed by HTTP method.
+  final Map<String, RouteTrie> _trieByMethod = {};
+
   /// Fallback routes collected during build.
   final List<EngineRoute> _fallbackRoutes = [];
+  final Map<String, List<EngineRoute>> _fallbackRoutesByMethod = {};
 
   /// Map for quick lookup of routes by their name once the routing table is frozen.
   Map<String, EngineRoute> _routesByName = {};
@@ -196,12 +257,15 @@ class Engine with StaticFileHandler, ContainerMixin {
 
   /// Cached resolved global middlewares built with the routing table.
   List<Middleware> _cachedGlobalMiddlewares = const <Middleware>[];
+  bool _globalHasMiddlewareReferences = false;
 
   EventManager? _cachedEventManager;
+  bool _eventManagerChecked = false;
+
+  final Map<String, String> _pathInternCache = {};
 
   /// Registry of configurable error handling hooks.
   final ErrorHandlingRegistry errorHooks;
-  final ConfigLoaderOptions _configOptions;
 
   /// The HTTP server instance used to listen for incoming requests.
   HttpServer? _server;
@@ -213,7 +277,6 @@ class Engine with StaticFileHandler, ContainerMixin {
   bool _configLoadedEmitted = false;
   ProviderManifest? _providerManifest;
   final List<String> _unresolvedProviderIds = [];
-  final bool _includeDefaultProviders;
   final Set<Middleware> _configuredGlobalSet = {};
   final Map<String, List<Middleware>> _configuredMiddlewareGroups = {};
   final Set<Type> _registeredProviderTypes = {};
@@ -255,6 +318,22 @@ class Engine with StaticFileHandler, ContainerMixin {
   @visibleForTesting
   Map<String, WebSocketEngineRoute> get debugWebSocketRoutes => _wsRoutes;
 
+  @visibleForTesting
+  List<EngineRoute> get debugEngineRoutes => _engineRoutes;
+
+  @visibleForTesting
+  int get debugPathInternCacheSize => _pathInternCache.length;
+
+  @visibleForTesting
+  String debugNormalizePath(String path) => _normalizePath(path);
+
+  @visibleForTesting
+  bool get debugEventManagerChecked => _eventManagerChecked;
+
+  @visibleForTesting
+  bool debugIsLoggingEnabled(Container container) =>
+      _isLoggingEnabled(container);
+
   /// Stores WebSocket route handlers mapped by path.
   final Map<String, WebSocketEngineRoute> _wsRoutes = {};
 
@@ -262,75 +341,77 @@ class Engine with StaticFileHandler, ContainerMixin {
   ///
   /// All parameters are optional and have sensible defaults for typical applications.
   ///
-  /// The [config] parameter provides an [EngineConfig] object to customize
-  /// core engine behavior including security, routing, and TLS settings.
+  /// ## Parameters
   ///
-  /// The [middlewares] parameter specifies global middleware applied to all
-  /// routes. These execute before any route-specific middleware.
+  /// - [config]: An [EngineConfig] object to customize core engine behavior
+  ///   including security, routing, and TLS settings.
   ///
-  /// The [options] parameter accepts a list of [EngineOpt] functions for
-  /// additional configuration. These are applied in sequence after the main
-  /// configuration.
+  /// - [middlewares]: Global middleware applied to all routes. These execute
+  ///   before any route-specific middleware.
   ///
-  /// The [configItems] parameter provides a map of additional configuration
-  /// values accessible via the [appConfig] property. Useful for storing
-  /// application-specific settings.
+  /// - [options]: A list of [EngineOpt] functions for additional configuration.
+  ///   These are applied in sequence after providers are registered.
   ///
-  /// The [errorHandling] parameter allows customizing error handling behavior
-  /// through an [ErrorHandlingRegistry]. If not provided, a default registry
-  /// is used.
+  /// - [errorHandling]: Customize error handling behavior through an
+  ///   [ErrorHandlingRegistry]. If not provided, a default registry is used.
   ///
-  /// The [configOptions] parameter controls how configuration files are loaded
-  /// and processed from the filesystem.
+  /// - [providers]: Service providers to register. Use [Engine.defaultProviders]
+  ///   for a full-featured engine with [Config] and [EventManager].
   ///
-  /// The [providers] parameter specifies custom service providers to register.
-  /// These providers can register services, middleware, and perform initialization.
+  /// ## Examples
   ///
-  /// The [includeDefaultProviders] parameter controls whether built-in service
-  /// providers (core, routing, logging) are automatically registered. Default is `false`.
-  /// Use [Engine.full] or [Engine.createFull] for the full provider boot sequence.
+  /// Bare engine (minimal, no providers):
+  /// ```dart
+  /// final engine = Engine();
+  /// engine.get('/hello', (ctx) => ctx.string('Hello'));
+  /// ```
   ///
-  /// Example:
+  /// Full-featured engine with default providers:
+  /// ```dart
+  /// final engine = Engine(providers: Engine.defaultProviders);
+  /// await engine.initialize();
+  /// ```
+  ///
+  /// Custom provider composition:
   /// ```dart
   /// final engine = Engine(
   ///   config: EngineConfig(
   ///     security: EngineSecurityFeatures(maxRequestSize: 5 * 1024 * 1024),
   ///   ),
-  ///   middlewares: [LoggingMiddleware()],
+  ///   providers: [
+  ///     CoreServiceProvider.withLoader(ConfigLoaderOptions(watch: true)),
+  ///     RoutingServiceProvider(),
+  ///     DatabaseServiceProvider(),
+  ///   ],
   ///   options: [
   ///     withCors(enabled: true),
   ///     withTrustedProxies(['10.0.0.0/8']),
   ///   ],
-  ///   providers: [DatabaseServiceProvider()],
   /// );
   /// ```
   Engine({
     EngineConfig? config,
     List<Middleware>? middlewares,
     List<EngineOpt>? options,
-    Map<String, dynamic>? configItems,
     ErrorHandlingRegistry? errorHandling,
-    ConfigLoaderOptions? configOptions,
     List<ServiceProvider>? providers,
-    bool includeDefaultProviders = false,
   }) : middlewares = middlewares ?? [],
-       errorHooks = errorHandling?.clone() ?? ErrorHandlingRegistry(),
-       _includeDefaultProviders = includeDefaultProviders,
-       _configOptions = configOptions ?? const ConfigLoaderOptions() {
-    if (includeDefaultProviders) {
-      // Always install bare essentials first, then layer providers on top.
-      _registerBareDefaults(config: config);
-      // Register built-in service providers.
-      _registerBuiltInProviders(config: config, configItems: configItems);
-    } else {
-      _registerBareDefaults(config: config);
-    }
+       errorHooks = errorHandling?.clone() ?? ErrorHandlingRegistry() {
+    _registerBareDefaults(config: config);
 
     if (providers != null && providers.isNotEmpty) {
       for (final provider in providers) {
+        // Skip duplicate provider types to prevent overwriting config
+        if (_registeredProviderTypes.contains(provider.runtimeType)) {
+          continue;
+        }
         registerProvider(provider);
+        // Track registered types to prevent _loadManifestProviders from
+        // creating duplicate instances of the same provider type
+        _registeredProviderTypes.add(provider.runtimeType);
       }
     }
+
     // Apply options in order
     options?.forEach((opt) => opt(this));
     _loadManifestProviders();
@@ -355,30 +436,7 @@ class Engine with StaticFileHandler, ContainerMixin {
     }
   }
 
-  /// Registers the built-in service providers that come with the framework
-  void _registerBuiltInProviders({
-    EngineConfig? config,
-    Map<String, dynamic>? configItems,
-  }) {
-    // Register core services
-    final coreProvider = CoreServiceProvider(
-      config: config,
-      configItems: configItems,
-      configOptions: _configOptions,
-    );
-    registerProvider(coreProvider);
-    _registeredProviderTypes.add(coreProvider.runtimeType);
-
-    // Register routing services
-    final routingProvider = RoutingServiceProvider();
-    registerProvider(routingProvider);
-    _registeredProviderTypes.add(routingProvider.runtimeType);
-  }
-
   void _loadManifestProviders() {
-    if (!_includeDefaultProviders) {
-      return;
-    }
     if (_providerManifest != null) {
       return;
     }
@@ -558,6 +616,9 @@ class Engine with StaticFileHandler, ContainerMixin {
   /// routes, middlewares, and error handling settings. Useful for creating
   /// variations of an engine with modified settings.
   ///
+  /// Note: Providers are not copied. If you need the same providers, pass them
+  /// explicitly or copy them from the source engine's container.
+  ///
   /// Example:
   /// ```dart
   /// final baseEngine = Engine(
@@ -569,8 +630,6 @@ class Engine with StaticFileHandler, ContainerMixin {
     final engine = Engine(
       config: other.config,
       errorHandling: other.errorHooks,
-      configOptions: other._configOptions,
-      includeDefaultProviders: other._includeDefaultProviders,
     );
     if (other.container.has<RoutePatternRegistry>()) {
       final registry = other.container.get<RoutePatternRegistry>();
@@ -592,8 +651,9 @@ class Engine with StaticFileHandler, ContainerMixin {
 
   /// Creates a default engine instance with common production settings.
   ///
-  /// This factory creates an engine with a 30-second timeout middleware
-  /// pre-configured, which is suitable for most production applications.
+  /// This factory creates an engine with default providers and a 30-second
+  /// timeout middleware pre-configured, which is suitable for most production
+  /// applications.
   ///
   /// Example:
   /// ```dart
@@ -609,7 +669,7 @@ class Engine with StaticFileHandler, ContainerMixin {
       config: config ?? EngineConfig(),
       middlewares: [timeoutMiddleware(const Duration(seconds: 30))],
       options: options,
-      includeDefaultProviders: true,
+      providers: Engine.defaultProviders,
     );
   }
 
@@ -729,6 +789,7 @@ class Engine with StaticFileHandler, ContainerMixin {
     _routesByMethod.clear();
     _staticRoutesByMethod.clear();
     _fallbackRoutes.clear();
+    _fallbackRoutesByMethod.clear();
     _routesByName = {};
     final patternRegistry = _resolveRoutePatterns();
 
@@ -736,6 +797,9 @@ class Engine with StaticFileHandler, ContainerMixin {
         ? container.get<MiddlewareRegistry>()
         : null;
     _cachedGlobalMiddlewares = _resolveMiddlewares(middlewares, container);
+    _globalHasMiddlewareReferences = _cachedGlobalMiddlewares.any(
+      (middleware) => MiddlewareReference.lookup(middleware) != null,
+    );
 
     for (final mount in _mounts) {
       // Let the child router finish its group & route merges
@@ -802,6 +866,9 @@ class Engine with StaticFileHandler, ContainerMixin {
         _engineRoutes.add(engineRoute);
         if (engineRoute.isFallback) {
           _fallbackRoutes.add(engineRoute);
+          _fallbackRoutesByMethod
+              .putIfAbsent(engineRoute.method, () => <EngineRoute>[])
+              .add(engineRoute);
         } else {
           _routesByMethod
               .putIfAbsent(engineRoute.method, () => <EngineRoute>[])
@@ -814,7 +881,10 @@ class Engine with StaticFileHandler, ContainerMixin {
             methodRoutes[engineRoute.staticPath] = engineRoute;
           }
         }
-        engineRoute.cacheHandlers(_cachedGlobalMiddlewares);
+        engineRoute.cacheHandlers(
+          _cachedGlobalMiddlewares,
+          cacheable: !_globalHasMiddlewareReferences,
+        );
       }
 
       final childWebSockets = mount.router.getAllWebSocketRoutes();
@@ -841,6 +911,13 @@ class Engine with StaticFileHandler, ContainerMixin {
           middlewares: resolvedWsMiddlewares,
           patternRegistry: patternRegistry,
         );
+      }
+    }
+
+    if (config.features.enableTrieRouting) {
+      _trieByMethod.clear();
+      for (final entry in _routesByMethod.entries) {
+        _trieByMethod[entry.key] = RouteTrie.fromRoutes(entry.value);
       }
     }
 
@@ -878,9 +955,12 @@ class Engine with StaticFileHandler, ContainerMixin {
     _engineRoutes.clear();
     _routesByMethod.clear();
     _staticRoutesByMethod.clear();
+    _trieByMethod.clear();
     _fallbackRoutes.clear();
+    _fallbackRoutesByMethod.clear();
     _routesByName = {};
     _cachedGlobalMiddlewares = const <Middleware>[];
+    _globalHasMiddlewareReferences = false;
   }
 
   RoutePatternRegistry _resolveRoutePatterns() {
@@ -901,17 +981,98 @@ class Engine with StaticFileHandler, ContainerMixin {
     return registry.resolveAll(source, container);
   }
 
+  List<Middleware> _resolveGlobalMiddlewares(Container container) {
+    if (!_globalHasMiddlewareReferences) {
+      return _cachedGlobalMiddlewares;
+    }
+    if (!container.has<MiddlewareRegistry>()) {
+      return _cachedGlobalMiddlewares;
+    }
+    final registry = container.get<MiddlewareRegistry>();
+    return registry.resolveAll(middlewares, container);
+  }
+
+  List<Middleware> _resolveRouteMiddlewares(
+    EngineRoute route,
+    Container container,
+  ) {
+    if (!route.hasMiddlewareReference) {
+      return route.middlewares;
+    }
+    if (!container.has<MiddlewareRegistry>()) {
+      return route.middlewares;
+    }
+    final registry = container.get<MiddlewareRegistry>();
+    return registry.resolveAll(route.middlewares, container);
+  }
+
   Future<EventManager?> _resolveEventManager(Container container) async {
     final cached = _cachedEventManager;
     if (cached != null) {
       return cached;
     }
+    if (_eventManagerChecked) {
+      return null;
+    }
     if (!container.has<EventManager>()) {
+      _eventManagerChecked = true;
       return null;
     }
     final manager = await container.make<EventManager>();
     _cachedEventManager = manager;
+    _eventManagerChecked = true;
     return manager;
+  }
+
+  bool _isLoggingEnabled(Container container) {
+    if (!container.has<Config>()) {
+      return false;
+    }
+    return container.get<Config>().get<bool>('logging.enabled', false) ?? false;
+  }
+
+  String _normalizePath(String rawPath) {
+    var normalized = rawPath.isEmpty ? '/' : rawPath;
+    if (config.removeExtraSlash && normalized.contains('//')) {
+      normalized = _collapseSlashes(normalized);
+    }
+    return _internPath(normalized);
+  }
+
+  String _collapseSlashes(String path) {
+    final buffer = StringBuffer();
+    var previousSlash = false;
+    for (var i = 0; i < path.length; i++) {
+      final char = path[i];
+      if (char == '/') {
+        if (previousSlash) {
+          continue;
+        }
+        previousSlash = true;
+      } else {
+        previousSlash = false;
+      }
+      buffer.write(char);
+    }
+    final collapsed = buffer.toString();
+    return collapsed.isEmpty ? '/' : collapsed;
+  }
+
+  String _internPath(String path) {
+    final capacity = config.pathInternCacheSize;
+    if (capacity <= 0) {
+      return path;
+    }
+    final cached = _pathInternCache.remove(path);
+    if (cached != null) {
+      _pathInternCache[path] = cached;
+      return cached;
+    }
+    _pathInternCache[path] = path;
+    if (_pathInternCache.length > capacity) {
+      _pathInternCache.remove(_pathInternCache.keys.first);
+    }
+    return path;
   }
 
   void _ensureDefaultRouterMounted() {
@@ -1052,17 +1213,27 @@ class Engine with StaticFileHandler, ContainerMixin {
     if (!_providersBooted) await initialize();
     _ensureRoutes();
     Container? requestContainer;
+    final Container rootContainer = container;
+    final bool fastPathContainers =
+        config.features.enableRequestContainerFastPath;
+    final Container readOnlyRoot = fastPathContainers
+        ? ReadOnlyContainer(rootContainer)
+        : rootContainer;
     Container ensureRequestContainer() {
+      if (fastPathContainers) {
+        return readOnlyRoot;
+      }
       return requestContainer ??= createRequestContainer(
         httpRequest,
         httpRequest.response,
       );
     }
+
     Request? trackedRequest;
     try {
       trackedRequest = await _handleRequest(
         httpRequest,
-        container,
+        rootContainer,
         ensureRequestContainer,
       );
     } finally {
@@ -1238,77 +1409,49 @@ class Engine with StaticFileHandler, ContainerMixin {
     await _emitConfigLoaded();
   }
 
-  /// Creates an initialized engine with the full provider boot sequence.
-  static Future<Engine> createFull({
-    EngineConfig? config,
-    List<Middleware>? middlewares,
-    List<EngineOpt>? options,
-    Map<String, dynamic>? configItems,
-    ErrorHandlingRegistry? errorHandling,
-    ConfigLoaderOptions? configOptions,
-    List<ServiceProvider>? providers,
-  }) async {
-    final engine = Engine.full(
-      config: config,
-      middlewares: middlewares,
-      options: options,
-      configItems: configItems,
-      errorHandling: errorHandling,
-      configOptions: configOptions,
-      providers: providers,
-    );
-    await engine.initialize();
-    return engine;
-  }
-
-  /// Creates an initialized engine.
+  /// Creates an initialized engine with all built-in providers.
   ///
-  /// By default this uses the bare-bones boot profile. Use [createFull] to
-  /// load configuration and boot built-in providers.
+  /// This is a convenience method that creates an engine with [builtins] and
+  /// calls [initialize]. Use this for a fully-featured engine with all
+  /// framework capabilities.
+  ///
+  /// Example:
+  /// ```dart
+  /// // Full-featured engine with all builtins
+  /// final engine = await Engine.create();
+  ///
+  /// // With custom providers (overrides builtins default)
+  /// final engine = await Engine.create(providers: Engine.defaultProviders);
+  ///
+  /// // Bare engine (no providers)
+  /// final engine = await Engine.create(providers: []);
+  /// ```
+  ///
+  /// To configure specific providers, pass them before the builtins:
+  /// ```dart
+  /// final engine = await Engine.create(
+  ///   providers: [
+  ///     CoreServiceProvider(configItems: {'app.name': 'MyApp'}),
+  ///     ...Engine.builtins,
+  ///   ],
+  /// );
+  /// ```
   static Future<Engine> create({
     EngineConfig? config,
     List<Middleware>? middlewares,
     List<EngineOpt>? options,
-    Map<String, dynamic>? configItems,
     ErrorHandlingRegistry? errorHandling,
-    ConfigLoaderOptions? configOptions,
     List<ServiceProvider>? providers,
-    bool includeDefaultProviders = false,
   }) async {
     final engine = Engine(
       config: config,
       middlewares: middlewares,
       options: options,
-      configItems: configItems,
       errorHandling: errorHandling,
-      configOptions: configOptions,
-      providers: providers,
-      includeDefaultProviders: includeDefaultProviders,
+      providers: providers ?? builtins,
     );
     await engine.initialize();
     return engine;
-  }
-
-  /// Creates an engine pre-configured with built-in providers and config loading.
-  factory Engine.full({
-    EngineConfig? config,
-    List<Middleware>? middlewares,
-    List<EngineOpt>? options,
-    Map<String, dynamic>? configItems,
-    ErrorHandlingRegistry? errorHandling,
-    ConfigLoaderOptions? configOptions,
-    List<ServiceProvider>? providers,
-  }) {
-    return Engine(
-      config: config,
-      middlewares: middlewares,
-      options: options,
-      configItems: configItems,
-      errorHandling: errorHandling,
-      configOptions: configOptions,
-      providers: providers,
-      includeDefaultProviders: true,
-    );
   }
 
   void addGlobalMiddleware(Middleware middleware) {

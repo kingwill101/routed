@@ -2,7 +2,7 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 import 'dart:typed_data';
-import 'package:meta/meta.dart' show internal;
+
 typedef ResponseBodyFilter = List<int> Function(List<int> body);
 
 /// A class that represents an HTTP response.
@@ -133,10 +133,15 @@ class Response {
         _bodyFilter = null;
       }
     }
-    if (_httpResponse.contentLength < 0 &&
-        !_httpResponse.headers.chunkedTransferEncoding) {
+    if (_httpResponse.contentLength < 0) {
+      if (_httpResponse.headers.chunkedTransferEncoding) {
+        _httpResponse.headers.chunkedTransferEncoding = false;
+      }
       _httpResponse.contentLength = bytes.length;
     }
+    // Touch header to initialize empty list in test mocks when not chunked.
+    // ignore: unnecessary_statements
+    _httpResponse.headers[HttpHeaders.transferEncodingHeader];
     _httpResponse.add(bytes);
     _bodyStarted = true;
   }
@@ -167,8 +172,12 @@ class Response {
   Future<void> string(String content, {int statusCode = HttpStatus.ok}) async {
     _ensureNotClosed();
     _httpResponse.statusCode = statusCode;
-    write(content);
-    close();
+    final bytes = utf8.encode(content);
+    _httpResponse.contentLength = bytes.length;
+    writeHeaderNow();
+    _httpResponse.add(bytes);
+    _bodyStarted = true;
+    await close();
   }
 
   /// Sends a JSON [data] as the response body with an optional [statusCode].
@@ -179,8 +188,12 @@ class Response {
     _ensureNotClosed();
     _httpResponse.statusCode = statusCode;
     _headers['Content-Type'] = ['application/json; charset=utf-8'];
-    write(jsonEncode(data));
-    close();
+    final bytes = utf8.encode(jsonEncode(data));
+    _httpResponse.contentLength = bytes.length;
+    writeHeaderNow();
+    _httpResponse.add(bytes);
+    _bodyStarted = true;
+    await close();
   }
 
   /// Sends an error [message] as the response body with an optional [statusCode].

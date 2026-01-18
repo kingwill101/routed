@@ -4,9 +4,9 @@ import 'package:routed/src/utils/deep_merge.dart';
 import 'package:routed/src/utils/dot.dart';
 
 class ConfigImpl implements Config {
-  final Map<String, dynamic> _items = <String, dynamic>{};
+  final Map<String, Object?> _items = <String, Object?>{};
 
-  ConfigImpl([Map<String, dynamic>? items]) {
+  ConfigImpl([Map<String, Object?>? items]) {
     if (items != null) {
       merge(items);
     }
@@ -47,47 +47,47 @@ class ConfigImpl implements Config {
   }
 
   @override
-  Map<String, dynamic> all() {
+  Map<String, Object?> all() {
     return _items;
   }
 
   @override
-  void set(String key, dynamic value) {
+  void set(String key, Object? value) {
     dot.set(_items, key, value);
   }
 
   @override
-  void prepend(String key, dynamic value) {
+  void prepend(String key, Object? value) {
     final list = _ensureList(key);
     list.insert(0, value);
   }
 
   @override
-  void push(String key, dynamic value) {
+  void push(String key, Object? value) {
     final list = _ensureList(key);
     list.add(value);
   }
 
   @override
-  void merge(Map<String, dynamic> values) {
+  void merge(Map<String, Object?> values) {
     deepMerge(_items, values, override: true);
   }
 
   @override
-  void mergeDefaults(Map<String, dynamic> values) {
+  void mergeDefaults(Map<String, Object?> values) {
     deepMerge(_items, values, override: false);
   }
 
-  List<dynamic> _ensureList(String key) {
+  List<Object?> _ensureList(String key) {
     final lookup = dot.lookup(_items, key);
-    if (lookup.exists && lookup.value is List<dynamic>) {
-      return lookup.value as List<dynamic>;
+    if (lookup.exists && lookup.value is List<Object?>) {
+      return lookup.value as List<Object?>;
     }
-    final list = <dynamic>[];
+    final list = <Object?>[];
     dot.set(_items, key, list);
     final stored = dot.lookup(_items, key);
-    if (stored.exists && stored.value is List<dynamic>) {
-      return stored.value as List<dynamic>;
+    if (stored.exists && stored.value is List<Object?>) {
+      return stored.value as List<Object?>;
     }
     return list;
   }
@@ -99,7 +99,7 @@ class ScopedConfig implements Config {
   ScopedConfig(this._parent);
 
   final Config _parent;
-  final Map<String, dynamic> _overrides = <String, dynamic>{};
+  final Map<String, Object?> _overrides = <String, Object?>{};
 
   @override
   bool has(String key) {
@@ -141,7 +141,7 @@ class ScopedConfig implements Config {
   }
 
   @override
-  Map<String, dynamic> all() {
+  Map<String, Object?> all() {
     final merged = deepCopyMap(_parent.all());
     if (_overrides.isNotEmpty) {
       deepMerge(merged, _overrides, override: true);
@@ -150,29 +150,29 @@ class ScopedConfig implements Config {
   }
 
   @override
-  void set(String key, dynamic value) {
+  void set(String key, Object? value) {
     dot.set(_overrides, key, value);
   }
 
   @override
-  void prepend(String key, dynamic value) {
+  void prepend(String key, Object? value) {
     final list = _ensureList(key);
     list.insert(0, value);
   }
 
   @override
-  void push(String key, dynamic value) {
+  void push(String key, Object? value) {
     final list = _ensureList(key);
     list.add(value);
   }
 
   @override
-  void merge(Map<String, dynamic> values) {
+  void merge(Map<String, Object?> values) {
     deepMerge(_overrides, values, override: true);
   }
 
   @override
-  void mergeDefaults(Map<String, dynamic> values) {
+  void mergeDefaults(Map<String, Object?> values) {
     if (values.isEmpty) {
       return;
     }
@@ -182,10 +182,10 @@ class ScopedConfig implements Config {
     }
   }
 
-  List<dynamic> _ensureList(String key) {
+  List<Object?> _ensureList(String key) {
     final overrideLookup = dot.lookup(_overrides, key);
-    if (overrideLookup.exists && overrideLookup.value is List<dynamic>) {
-      return overrideLookup.value as List<dynamic>;
+    if (overrideLookup.exists && overrideLookup.value is List<Object?>) {
+      return overrideLookup.value as List<Object?>;
     }
     if (_parent.has(key)) {
       final parentValue = _parent.get<Object?>(key);
@@ -195,16 +195,16 @@ class ScopedConfig implements Config {
         return copy;
       }
     }
-    final list = <dynamic>[];
+    final list = <Object?>[];
     dot.set(_overrides, key, list);
     return list;
   }
 
-  Map<String, dynamic> _collectMissing(
-    Map<String, dynamic> values,
+  Map<String, Object?> _collectMissing(
+    Map<String, Object?> values,
     String prefix,
   ) {
-    final result = <String, dynamic>{};
+    final result = <String, Object?>{};
     values.forEach((key, value) {
       final fullKey = prefix.isEmpty ? key : '$prefix.$key';
       final existing = _lookupValue(fullKey);
@@ -237,15 +237,18 @@ class ScopedConfig implements Config {
     return null;
   }
 
-  Map<String, dynamic> _mergeMaps(Map left, Map right) {
+  Map<String, Object?> _mergeMaps(
+    Map<Object?, Object?> left,
+    Map<Object?, Object?> right,
+  ) {
     final merged = _stringKeyedMap(left);
     deepMerge(merged, _stringKeyedMap(right), override: true);
     return merged;
   }
 
-  Map<String, dynamic> _stringKeyedMap(Map value) {
-    final mapped = <String, dynamic>{};
-    value.forEach((key, dynamic v) {
+  Map<String, Object?> _stringKeyedMap(Map<Object?, Object?> value) {
+    final mapped = <String, Object?>{};
+    value.forEach((key, Object? v) {
       mapped[key is String ? key : key.toString()] = v;
     });
     return mapped;
@@ -258,6 +261,6 @@ class ScopedConfig implements Config {
             'Configuration key is not of type ${T.toString()}, got ${value.runtimeType}',
       );
     }
-    return value as T;
+    return value;
   }
 }

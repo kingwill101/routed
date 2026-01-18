@@ -155,8 +155,10 @@ extension ServerExtension on Engine {
         ? WrappedRequest(httpRequest, maxRequestSize)
         : httpRequest;
 
-    final normalizedPath = path.isEmpty ? '/' : path;
+    final normalizedPath = _normalizePath(path);
     final candidateRoutes = _routesByMethod[method] ?? const <EngineRoute>[];
+    final bool useTrie = config.features.enableTrieRouting;
+    final RouteTrie? trie = useTrie ? _trieByMethod[method] : null;
 
     bool matchesCurrentPath = false;
     EngineRoute? matchedRoute;
@@ -170,7 +172,15 @@ extension ServerExtension on Engine {
       }
     }
 
-    if (matchedRoute == null) {
+    if (matchedRoute == null && trie != null) {
+      final trieResult = trie.match(normalizedPath, effectiveRequest);
+      if (trieResult.pathMatched) {
+        matchesCurrentPath = true;
+      }
+      matchedRoute = trieResult.route;
+    }
+
+    if (matchedRoute == null && trie == null) {
       for (final candidate in candidateRoutes) {
         if (!candidate.matchesPath(normalizedPath, allowTrailingSlash: false)) {
           continue;
@@ -189,6 +199,11 @@ extension ServerExtension on Engine {
       EngineRoute? alternativeMatch;
       if (alternativePath != normalizedPath) {
         alternativeMatch = staticRoutes?[alternativePath];
+        if (alternativeMatch == null && trie != null) {
+          alternativeMatch = trie
+              .match(alternativePath, effectiveRequest)
+              .route;
+        }
         alternativeMatch ??= candidateRoutes.firstWhereOrNull(
           (candidate) => candidate.matchesPath(alternativePath),
         );
@@ -198,8 +213,13 @@ extension ServerExtension on Engine {
         final manager = await _resolveEventManager(rootContainer);
         if (manager != null) {
           final container = ensureRequestContainer();
-          final nfRequest = Request(effectiveRequest, {}, config);
+          final nfRequest = Request(
+            effectiveRequest,
+            const <String, dynamic>{},
+            config,
+          );
           final nfResponse = Response(effectiveRequest.response);
+          _bindRequestScope(container, nfRequest, nfResponse);
           manager.publish(
             RouteNotFoundEvent(
               EngineContext(
@@ -295,12 +315,16 @@ extension ServerExtension on Engine {
     }
 
     // Fourth pass: check for fallback routes if no other match was found
-    if (_fallbackRoutes.isNotEmpty) {
+    final fallbackCandidates = <EngineRoute>[
+      ...?_fallbackRoutesByMethod[method],
+      ...?_fallbackRoutesByMethod['*'],
+    ];
+    if (fallbackCandidates.isNotEmpty) {
       // Find the most specific fallback route using fuzzy matching
       EngineRoute? mostSpecificFallback;
       int maxSimilarityScore = 0;
 
-      for (final fallbackRoute in _fallbackRoutes) {
+      for (final fallbackRoute in fallbackCandidates) {
         // Extract the static part of the fallback route's path
         final staticPath = _extractStaticPath(fallbackRoute.path);
 
@@ -337,14 +361,12 @@ extension ServerExtension on Engine {
     HttpRequest httpRequest,
     Container container,
   ) async {
-    final request = Request(httpRequest, {}, config);
+    final request = Request(httpRequest, const <String, dynamic>{}, config);
     final response = Response(httpRequest.response);
 
     _onRequestStarted(request);
 
-    final handlers = <Middleware>[
-      ..._cachedGlobalMiddlewares,
-    ];
+    final handlers = <Middleware>[..._resolveGlobalMiddlewares(container)];
     handlers.add((EngineContext ctx, Next next) async {
       if (!ctx.response.isClosed) {
         ctx.response.statusCode = HttpStatus.notFound;
@@ -361,10 +383,7 @@ extension ServerExtension on Engine {
       container: container,
     );
 
-    container
-      ..instance<Request>(request)
-      ..instance<Response>(response)
-      ..instance<EngineContext>(context);
+    _bindRequestScope(container, request, response, context);
 
     context
       ..set('routed.route_type', 'http')
@@ -381,7 +400,7 @@ extension ServerExtension on Engine {
       await _runInRequestZone(
         context: context,
         body: () async {
-          await LoggingContext.run(this, context, (logger) async {
+          await _runWithLogging(container, context, () async {
             try {
               await context.run();
             } catch (err, stack) {
@@ -418,24 +437,29 @@ extension ServerExtension on Engine {
     HttpRequest httpRequest,
     Container container,
   ) async {
-    final request = Request(httpRequest, {}, config);
+    final request = Request(httpRequest, const <String, dynamic>{}, config);
     final response = Response(httpRequest.response);
 
     _onRequestStarted(request);
+
+    final handlers =
+        (_globalHasMiddlewareReferences || route.hasMiddlewareReference)
+        ? route.composeHandlers(
+            _resolveGlobalMiddlewares(container),
+            _resolveRouteMiddlewares(route, container),
+          )
+        : route.cachedHandlers;
 
     final context = EngineContext(
       request: request,
       response: response,
       route: route,
       engine: this,
-      handlers: route.cachedHandlers,
+      handlers: handlers,
       container: container,
     );
 
-    container
-      ..instance<Request>(request)
-      ..instance<Response>(response)
-      ..instance<EngineContext>(context);
+    _bindRequestScope(container, request, response, context);
 
     context.set('routed.route_type', 'http');
     context.set('routed.route_name', route.name ?? route.path);
@@ -450,7 +474,7 @@ extension ServerExtension on Engine {
       await _runInRequestZone(
         context: context,
         body: () async {
-          await LoggingContext.run(this, context, (logger) async {
+          await _runWithLogging(container, context, () async {
             try {
               manager?.publish(RouteMatchedEvent(context, route));
               await context.run();
@@ -492,7 +516,9 @@ extension ServerExtension on Engine {
   }) async {
     final request = Request(
       httpRequest,
-      Map<String, dynamic>.from(pathParameters),
+      pathParameters.isEmpty
+          ? const <String, dynamic>{}
+          : Map<String, dynamic>.from(pathParameters),
       config,
     );
     final response = Response(httpRequest.response);
@@ -533,10 +559,7 @@ extension ServerExtension on Engine {
       container: container,
     );
 
-    container
-      ..instance<Request>(request)
-      ..instance<Response>(response)
-      ..instance<EngineContext>(context);
+    _bindRequestScope(container, request, response, context);
     context
       ..set('routed.route_type', 'websocket')
       ..set('routed.route_path', route.path)
@@ -557,7 +580,7 @@ extension ServerExtension on Engine {
       await _runInRequestZone(
         context: context,
         body: () async {
-          await LoggingContext.run(this, context, (_) async {
+          await _runWithLogging(container, context, () async {
             try {
               await context.run();
             } catch (err, stack) {
@@ -588,11 +611,11 @@ extension ServerExtension on Engine {
       return false;
     }
 
-    final request = Request(httpRequest, {}, config);
+    final request = Request(httpRequest, const <String, dynamic>{}, config);
     final response = Response(httpRequest.response);
 
     final handlers = <Middleware>[
-      ..._cachedGlobalMiddlewares,
+      ..._resolveGlobalMiddlewares(container),
       (EngineContext ctx, Next next) async =>
           onComplete != null ? await onComplete(ctx) : ctx.response,
     ];
@@ -605,10 +628,7 @@ extension ServerExtension on Engine {
       container: container,
     );
 
-    container
-      ..instance<Request>(request)
-      ..instance<Response>(response)
-      ..instance<EngineContext>(context);
+    _bindRequestScope(container, request, response, context);
 
     final manager = await _resolveEventManager(container);
 
@@ -618,7 +638,7 @@ extension ServerExtension on Engine {
       await _runInRequestZone(
         context: context,
         body: () async {
-          await LoggingContext.run(this, context, (logger) async {
+          await _runWithLogging(container, context, () async {
             try {
               await context.run();
             } catch (err, stack) {
@@ -642,7 +662,7 @@ extension ServerExtension on Engine {
 
   Set<String> _resolveAllowedMethods(String path, HttpRequest request) {
     final methods = <String>{};
-    final normalizedPath = path.isEmpty ? '/' : path;
+    final normalizedPath = _normalizePath(path);
     final allowTrailingSlash = config.redirectTrailingSlash;
     final altPath = allowTrailingSlash
         ? EngineRoute._alternatePath(normalizedPath)
@@ -823,11 +843,7 @@ extension ServerExtension on Engine {
     final length = request.contentLength;
     if (length == 0) return;
     if (length < 0 && !request.headers.chunkedTransferEncoding) return;
-    try {
-      await request.drain();
-    } catch (_) {
-      // Ignore: request may already be listened to.
-    }
+    request.response.headers.set(HttpHeaders.connectionHeader, 'close');
   }
 
   Future<void> _drainRequestIfNeeded(
@@ -835,9 +851,67 @@ extension ServerExtension on Engine {
     EngineContext context,
   ) async {
     if (context.isUpgraded) return;
-    if (request.bodyConsumed) return;
+    if (request.bodyConsumed) return; // Already consumed, nothing to drain
     if (!request.hasBody) return;
-    await request.drain();
+    // Body exists but wasn't consumed - drain it or close connection
+    try {
+      await request.drain();
+    } catch (_) {
+      // If drain fails, signal connection close
+      context.response.headers.set(HttpHeaders.connectionHeader, 'close');
+    }
+  }
+
+  bool _isReadOnlyContainer(Container container) {
+    return container is ReadOnlyContainer;
+  }
+
+  void _bindRequestScope(
+    Container container,
+    Request request,
+    Response response, [
+    EngineContext? context,
+  ]) {
+    if (_isReadOnlyContainer(container)) {
+      final engineContext =
+          context ??
+          EngineContext(
+            request: request,
+            response: response,
+            engine: this,
+            container: container,
+          );
+      requestScopeExpando[request.httpRequest] = RequestScope(
+        request: request,
+        response: response,
+        context: engineContext,
+      );
+      return;
+    }
+    if (context != null) {
+      container
+        ..instance<Request>(request)
+        ..instance<Response>(response)
+        ..instance<EngineContext>(context);
+    } else {
+      container
+        ..instance<Request>(request)
+        ..instance<Response>(response);
+    }
+  }
+
+  Future<void> _runWithLogging(
+    Container container,
+    EngineContext context,
+    Future<void> Function() body,
+  ) async {
+    if (_isLoggingEnabled(container)) {
+      await LoggingContext.run(this, context, (_) async {
+        await body();
+      });
+      return;
+    }
+    await body();
   }
 
   Future<void> _runInRequestZone({

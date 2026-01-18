@@ -44,7 +44,9 @@ class Request {
   Request(this.httpRequest, this.pathParameters, this.config)
     : queryParameters = _safeQueryParameters(httpRequest.uri),
       _attributes = {},
-      id = RequestId.generate(),
+      id = config.features.enableSecureRequestIds
+          ? RequestId.generateSecure()
+          : RequestId.generate(),
       startedAt = DateTime.now();
 
   /// Safely extracts query parameters from a URI, handling invalid encodings
@@ -53,7 +55,7 @@ class Request {
       return uri.queryParameters;
     } catch (e) {
       // Return empty map if query parameter parsing fails
-      return <String, String>{};
+      return const <String, String>{};
     }
   }
 
@@ -183,10 +185,8 @@ class Request {
   ///
   /// This allows consuming the request body as a stream without directly
   /// accessing the underlying HttpRequest object.
-  Stream<List<int>> get stream => _BodyStreamWrapper(
-    httpRequest,
-    onListen: () => _bodyConsumed = true,
-  );
+  Stream<List<int>> get stream =>
+      _BodyStreamWrapper(httpRequest, onListen: () => _bodyConsumed = true);
 
   /// Returns whether the request body has been consumed.
   bool get bodyConsumed => _bodyConsumed;
@@ -209,7 +209,7 @@ class Request {
     if (_bodyConsumed || !hasBody) return;
     _bodyConsumed = true;
     try {
-      await httpRequest.drain();
+      await httpRequest.drain<void>();
     } catch (_) {
       // Ignore: request may already be listened to.
     }
