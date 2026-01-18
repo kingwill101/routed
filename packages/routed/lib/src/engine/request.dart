@@ -411,14 +411,15 @@ extension ServerExtension on Engine {
               if (!response.isClosed) {
                 await response.close();
               }
+              // Publish after-request events before the response is fully transmitted
+              manager?.publish(AfterRoutingEvent(context));
+              manager?.publish(RequestFinishedEvent(context));
             }
           });
         },
       );
     } finally {
-      manager?.publish(AfterRoutingEvent(context));
       _onRequestFinished(request.id);
-      manager?.publish(RequestFinishedEvent(context));
     }
 
     return request;
@@ -488,6 +489,9 @@ extension ServerExtension on Engine {
               if (!response.isClosed) {
                 await response.close();
               }
+              // Publish after-request events before the response is fully transmitted
+              manager?.publish(AfterRoutingEvent(context, route: route));
+              manager?.publish(RequestFinishedEvent(context));
             }
           });
         },
@@ -496,13 +500,7 @@ extension ServerExtension on Engine {
       // Anything that wasn't caught at a lower level gets caught here.
       await _handleGlobalError(context, err, stack);
     } finally {
-      // Only close if not already closed
-      if (!response.isClosed) {
-        // response.close();
-      }
-      manager?.publish(AfterRoutingEvent(context, route: route));
       _onRequestFinished(request.id);
-      manager?.publish(RequestFinishedEvent(context));
     }
 
     return request;
