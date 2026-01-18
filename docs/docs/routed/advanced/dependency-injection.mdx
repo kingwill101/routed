@@ -72,11 +72,14 @@ Attach providers to the engine via `registerProvider` (see `packages/routed/lib/
 2. `boot` – invoked once when the engine initialises (`Engine.initialize()`); safe to resolve other bindings.
 3. `cleanup` – called for each request container and during engine shutdown.
 
-The built-in `CoreServiceProvider` wires `EngineConfig` + `Config` via the config loader, while `RoutingServiceProvider` configures routing events (`packages/routed/lib/src/engine/providers/core.dart:1`, `packages/routed/lib/src/engine/providers/routing.dart:1`). Caching and view engines live in the `routed.cache` and `routed.views` providers. These built-ins are registered in **full mode**. Providers can also opt into `ProvidesDefaultConfig` to advertise defaults to the global `ConfigRegistry`, allowing the loader to merge them automatically. If you want to control which providers boot, pass them when constructing the engine:
+The built-in `CoreServiceProvider` wires `EngineConfig` + `Config` via the config loader, while `RoutingServiceProvider` configures routing events (`packages/routed/lib/src/engine/providers/core.dart:1`, `packages/routed/lib/src/engine/providers/routing.dart:1`). Caching and view engines live in the `routed.cache` and `routed.views` providers. These built-ins are available via `Engine.defaultProviders`. Providers can also opt into `ProvidesDefaultConfig` to advertise defaults to the global `ConfigRegistry`, allowing the loader to merge them automatically. If you want to control which providers boot, pass them when constructing the engine:
 
 ```dart
-final engine = await Engine.createFull(
-  providers: [AnalyticsProvider()],
+final engine = await Engine.create(
+  providers: [
+    ...Engine.defaultProviders,
+    AnalyticsProvider(),
+  ],
 );
 
 // or stay bare and only boot the providers you choose
@@ -102,6 +105,21 @@ Future<void> handle(HttpRequest raw) async {
 ```
 
 `RequestServiceProvider` (`packages/routed/lib/src/engine/providers/request.dart:1`) registers the HTTP request/response, the `Request`/`Response` wrappers, and `EngineContext`. Any binding marked with `container.scoped()` will be disposed when the request completes.
+
+### Fast-path containers (performance mode)
+
+If you enable `EngineFeatures.enableRequestContainerFastPath`, Routed skips
+creating per-request child containers. Instead it exposes a **read-only**
+view of the root container and stores `Request`, `Response`, and
+`EngineContext` in an internal request scope.
+
+Implications:
+- `container.bind`, `container.instance`, `container.scoped`, and similar
+  mutations will throw a `StateError`.
+- Request-scoped state should live on `EngineContext` (or your own middleware
+  state), not in the container.
+- This mode is intended for benchmarks or ultra-low-latency services where
+  dependency injection per request is unnecessary.
 
 ## AppZone helpers
 

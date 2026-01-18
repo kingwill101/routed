@@ -45,12 +45,30 @@ class EmailServiceProvider extends ServiceProvider {
 - `boot` runs after all providers register, so you can resolve other bindings safely.
 - `cleanup` runs when the engine shuts down (or a request-scoped container is disposed).
 
-Register providers before `engine.initialize()`:
+Register providers via the constructor or before `engine.initialize()`:
 
 ```dart
-final engine = Engine();
+// Option 1: Pass providers to the constructor (recommended)
+final engine = Engine(
+  providers: [
+    ...Engine.builtins,
+    EmailServiceProvider(),
+  ],
+);
+await engine.initialize();
+
+// Option 2: Register after construction
+final engine = Engine(providers: Engine.builtins);
 engine.registerProvider(EmailServiceProvider());
 await engine.initialize();
+
+// Option 3: Use Engine.create() for convenience
+final engine = await Engine.create(
+  providers: [
+    ...Engine.builtins,
+    EmailServiceProvider(),
+  ],
+);
 ```
 
 ### Ordering and pre-registration hooks
@@ -59,17 +77,22 @@ await engine.initialize();
   If one provider depends on bindings from another, register them in that order
   (`engine.registerProvider(CacheProvider())` before
   `engine.registerProvider(EmailProvider())`, etc.).
-- Built-in providers are registered only in **full mode** (`Engine.full()` or
-  `includeDefaultProviders: true`). To seed registries or add container services
-  _before_ those providers finish wiring defaults, pass an `Engine` option:
+- Built-in providers are registered when you pass them to the `providers` parameter.
+  To seed registries or add container services _before_ those providers finish
+  wiring defaults, pass an `Engine` option:
 
 ```dart
-final engine = Engine.full(options: [
-  (engine) {
-    final registry = engine.container.get<LocaleResolverRegistry>();
-    registry.register('preview', (_) => PreviewLocaleResolver());
-  },
-]);
+final engine = Engine(
+  providers: [
+    ...Engine.builtins,
+  ],
+  options: [
+    (engine) {
+      final registry = engine.container.get<LocaleResolverRegistry>();
+      registry.register('preview', (_) => PreviewLocaleResolver());
+    },
+  ],
+);
 ```
 
 Engine options execute right after the engine is created but before
@@ -169,10 +192,15 @@ Because providers are plain Dart classes, you can spin up an `Engine` (or just a
 
 ```dart title="test/providers/email_provider_test.dart"
 test('Email provider registers Mailer binding', () async {
-  final engine = Engine(configItems: {
-    'mail': {'default': 'log'},
-  });
-  engine.registerProvider(EmailServiceProvider());
+  final engine = Engine(
+    providers: [
+      CoreServiceProvider(configItems: {
+        'mail': {'default': 'log'},
+      }),
+      RoutingServiceProvider(),
+      EmailServiceProvider(),
+    ],
+  );
   await engine.initialize();
 
   final mailer = await engine.make<Mailer>();

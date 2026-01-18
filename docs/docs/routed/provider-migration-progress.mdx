@@ -16,7 +16,7 @@ import TabItem from '@theme/TabItem';
 
 ## Summary
 
-- Engine bootstrap now returns a fully initialized instance, allowing immediate event hook registration and provider toggles (via `includeDefaultProviders`).
+- Engine bootstrap now returns a fully initialized instance, allowing immediate event hook registration. Use `Engine.defaultProviders` or pass custom providers via the `providers` parameter.
 - Routing lifecycle events (`BeforeRouting`, `RouteMatched`, `RouteNotFound`, `RoutingError`, `AfterRouting`) emit for every request with full context.
 - Routing defaults (`redirectTrailingSlash`, `handleMethodNotAllowed`) now live under `routing.*`; the routing provider applies them on boot/reload via `ConfigReloadedEvent` instead of mutating `EngineConfig`.
 - Providers can advertise defaults with `ProvidesDefaultConfig`; `ConfigRegistry` aggregates them and `ConfigImpl.mergeDefaults` avoids clobbering user overrides.
