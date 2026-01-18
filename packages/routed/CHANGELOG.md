@@ -1,5 +1,28 @@
 ## 0.3.2
 
+### Performance Optimizations
+- Added `EngineFeatures.enableRequestContainerFastPath` for high-throughput scenarios
+  that skips per-request container creation and uses a read-only root container.
+- Added `EngineFeatures.enableTrieRouting` for optional trie-based route matching.
+- Added path interning with LRU cache (`pathInternCacheSize` config option) to reduce
+  string allocations during routing.
+- Middleware chains are now cached per-route and invalidated when global middleware changes.
+- Lazy initialization of error lists and other context state to reduce allocations.
+- Added `EngineFeatures.enableSecureRequestIds` option (defaults to fast non-secure IDs).
+
+### EngineContext Convenience Helpers
+- Added `ctx.clientIP`, `ctx.remoteAddr`, `ctx.path`, `ctx.host`, `ctx.uri` shortcuts.
+- Added `ctx.body()`, `ctx.bodyBytes`, `ctx.contentLength` for request body access.
+- Added `ctx.statusCode` getter and `ctx.write()` for response manipulation.
+
+### Engine API Changes
+- `Engine.create()` now loads all built-in providers by default (`Engine.builtins`).
+- Added `Engine.defaultProviders` for minimal core + routing setup.
+- Explicit provider composition via `providers` parameter replaces `includeDefaultProviders`.
+- `CoreServiceProvider` now accepts `configItems` for in-memory configuration.
+- `CoreServiceProvider.withLoader()` factory for file-based configuration loading.
+
+### Logging Improvements
 - Request logger now outputs clean structured logs with `msg="Request completed"`
   and separate key=value pairs for method, path, status, duration_ms, request_id.
 - `SingleFileLogDriver` now uses `PlainTextLogFormatter` by default to avoid
