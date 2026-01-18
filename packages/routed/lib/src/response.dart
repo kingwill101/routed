@@ -179,10 +179,7 @@ class Response {
   }
 
   /// Sends a JSON [data] as the response body with an optional [statusCode].
-  Future<void> json(
-    Object? data, {
-    int statusCode = HttpStatus.ok,
-  }) async {
+  Future<void> json(Object? data, {int statusCode = HttpStatus.ok}) async {
     _ensureNotClosed();
     _httpResponse.statusCode = statusCode;
     _headers['Content-Type'] = ['application/json; charset=utf-8'];
