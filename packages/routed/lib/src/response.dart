@@ -285,10 +285,13 @@ class Response {
     final cookie = Cookie(name, stringValue)
       ..maxAge = maxAge
       ..path = path
-      ..domain = domain
       ..secure = secure
       ..httpOnly = httpOnly
       ..sameSite = sameSite;
+    // Only set domain if non-empty to avoid invalid "Domain=;" in cookie header
+    if (domain.isNotEmpty) {
+      cookie.domain = domain;
+    }
 
     // Remove existing cookies with same name
     _httpResponse.cookies.removeWhere((c) => c.name == name);

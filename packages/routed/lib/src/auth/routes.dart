@@ -1,4 +1,3 @@
-import 'dart:convert';
 import 'dart:io';
 
 import 'package:routed/src/auth/manager.dart';
@@ -488,7 +487,7 @@ class AuthRoutes {
   }
 
   Future<Response> _callback(EngineContext ctx) async {
-    final providerId = ctx.params['provider']?.toString();
+    final providerId = ctx.param('provider');
     if (providerId == null || providerId.isEmpty) {
       return ctx.json({
         'error': 'missing_provider',
@@ -503,8 +502,8 @@ class AuthRoutes {
     }
 
     if (provider is OAuthProvider) {
-      final code = ctx.request.queryParameters['code'];
-      final state = ctx.request.queryParameters['state'];
+      final code = ctx.query('code') as String?;
+      final state = ctx.query("state") as String?;
       if (code == null || code.isEmpty) {
         return ctx.json({
           'error': 'missing_code',
@@ -521,10 +520,9 @@ class AuthRoutes {
     }
 
     if (provider is EmailProvider) {
-      final token = ctx.request.queryParameters['token'];
+      final token = ctx.query('token') as String?;
       final email =
-          ctx.request.queryParameters['email'] ??
-          ctx.request.queryParameters['identifier'];
+          (ctx.query('email') ?? ctx.query('identifier')) as String?;
       if (token == null || token.isEmpty || email == null || email.isEmpty) {
         return ctx.json({
           'error': 'missing_token',
@@ -537,6 +535,38 @@ class AuthRoutes {
         return ctx.json({
           'error': error.code,
         }, statusCode: HttpStatus.unauthorized);
+      }
+    }
+
+    // Handle custom callback providers (e.g., Telegram)
+    if (provider is CallbackProvider) {
+      try {
+        final params = ctx.request.queryParameters;
+        final callbackResult = await provider.handleCallback(ctx, params);
+        
+        if (!callbackResult.isSuccess) {
+          return ctx.json({
+            'error': callbackResult.error ?? 'callback_failed',
+          }, statusCode: HttpStatus.unauthorized);
+        }
+
+        final result = await manager.completeCustomCallback(
+          ctx,
+          provider,
+          callbackResult.user!,
+          redirectUrl: callbackResult.redirect,
+        );
+        
+        return await _respond(ctx, result, provider: provider);
+      } on AuthFlowException catch (error) {
+        return ctx.json({
+          'error': error.code,
+        }, statusCode: HttpStatus.unauthorized);
+      } catch (error) {
+        return ctx.json({
+          'error': 'callback_error',
+          'message': error.toString(),
+        }, statusCode: HttpStatus.badRequest);
       }
     }
 
@@ -574,15 +604,8 @@ class AuthRoutes {
   Future<Map<String, dynamic>> _payload(EngineContext ctx) async {
     final contentType = ctx.request.contentType?.mimeType ?? '';
     if (contentType.contains('application/json')) {
-      final body = await ctx.request.body();
-      if (body.trim().isEmpty) {
-        return <String, dynamic>{};
-      }
-      final decoded = jsonDecode(body);
-      if (decoded is Map<String, dynamic>) {
-        return decoded;
-      }
-      return <String, dynamic>{'value': decoded};
+      final decoded = await ctx.bindJSON(<String, Object?>{});
+      return Map<String, dynamic>.from(decoded);
     }
     if (contentType.contains('application/x-www-form-urlencoded') ||
         contentType.contains('multipart/form-data')) {

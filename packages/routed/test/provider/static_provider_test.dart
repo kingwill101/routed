@@ -243,5 +243,150 @@ void main() {
         ..assertStatus(200)
         ..assertBodyEquals('hello from provider');
     });
+
+    test('serves entire directory tree with path: empty string', () async {
+      // Create a directory structure like:
+      // public/
+      //   css/
+      //     style.css
+      //   js/
+      //     app.js
+      //   images/
+      //     logo.png
+      //   index.html
+      final publicDir = fs.directory(fs.path.join(tempDir.path, 'public'))
+        ..createSync(recursive: true);
+
+      // Create subdirectories and files
+      final cssDir = publicDir.childDirectory('css')..createSync();
+      cssDir.childFile('style.css').writeAsStringSync('body { color: red; }');
+
+      final jsDir = publicDir.childDirectory('js')..createSync();
+      jsDir.childFile('app.js').writeAsStringSync('console.log("hello");');
+
+      final imagesDir = publicDir.childDirectory('images')..createSync();
+      imagesDir.childFile('logo.png').writeAsStringSync('PNG_DATA');
+
+      publicDir.childFile('index.html').writeAsStringSync('<html>index</html>');
+
+      // Deep nested directory
+      final deepDir = publicDir.childDirectory('a/b/c')
+        ..createSync(recursive: true);
+      deepDir.childFile('deep.txt').writeAsStringSync('deeply nested');
+
+      final engine = testEngine(
+        config: EngineConfig(fileSystem: fs),
+        fileSystem: fs,
+        configItems: {
+          'storage': {
+            'default': 'assets',
+            'disks': {
+              'assets': {
+                'driver': 'local',
+                'root': publicDir.path,
+                'file_system': fs,
+              },
+            },
+          },
+          'static': {
+            'enabled': true,
+            'mounts': [
+              // Single mount with path: '' should serve ALL subdirectories
+              {'route': '/assets', 'disk': 'assets', 'path': ''},
+            ],
+          },
+        },
+      );
+      addTearDown(() async => await engine.close());
+      await engine.initialize();
+
+      final client = TestClient(RoutedRequestHandler(engine));
+      addTearDown(() async => await client.close());
+
+      // Test root level file
+      (await client.get('/assets/index.html'))
+        ..assertStatus(200)
+        ..assertBodyEquals('<html>index</html>');
+
+      // Test css subdirectory
+      (await client.get('/assets/css/style.css'))
+        ..assertStatus(200)
+        ..assertBodyEquals('body { color: red; }');
+
+      // Test js subdirectory
+      (await client.get('/assets/js/app.js'))
+        ..assertStatus(200)
+        ..assertBodyEquals('console.log("hello");');
+
+      // Test images subdirectory
+      (await client.get('/assets/images/logo.png'))
+        ..assertStatus(200)
+        ..assertBodyEquals('PNG_DATA');
+
+      // Test deeply nested path
+      (await client.get('/assets/a/b/c/deep.txt'))
+        ..assertStatus(200)
+        ..assertBodyEquals('deeply nested');
+
+      // Test non-existent file returns 404
+      (await client.get('/assets/nonexistent.txt')).assertStatus(404);
+
+      // Test non-existent subdirectory returns 404
+      (await client.get('/assets/fake/file.txt')).assertStatus(404);
+    });
+
+    test('serves entire directory when path is omitted', () async {
+      final publicDir = fs.directory(fs.path.join(tempDir.path, 'public'))
+        ..createSync(recursive: true);
+
+      publicDir.childDirectory('css').createSync();
+      publicDir
+          .childDirectory('css')
+          .childFile('style.css')
+          .writeAsStringSync('body {}');
+
+      publicDir.childDirectory('js').createSync();
+      publicDir
+          .childDirectory('js')
+          .childFile('app.js')
+          .writeAsStringSync('alert(1)');
+
+      final engine = testEngine(
+        config: EngineConfig(fileSystem: fs),
+        fileSystem: fs,
+        configItems: {
+          'storage': {
+            'default': 'assets',
+            'disks': {
+              'assets': {
+                'driver': 'local',
+                'root': publicDir.path,
+                'file_system': fs,
+              },
+            },
+          },
+          'static': {
+            'enabled': true,
+            'mounts': [
+              // No 'path' key at all - should default to '' and serve entire disk
+              {'route': '/assets', 'disk': 'assets'},
+            ],
+          },
+        },
+      );
+      addTearDown(() async => await engine.close());
+      await engine.initialize();
+
+      final client = TestClient(RoutedRequestHandler(engine));
+      addTearDown(() async => await client.close());
+
+      (await client.get('/assets/css/style.css'))
+        ..assertStatus(200)
+        ..assertBodyEquals('body {}');
+
+      (await client.get('/assets/js/app.js'))
+        ..assertStatus(200)
+        ..assertBodyEquals('alert(1)');
+    });
   });
 }

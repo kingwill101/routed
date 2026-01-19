@@ -18,12 +18,28 @@ class JsonBinding extends Binding {
   /// This method reads the bytes from the request body, decodes them into a UTF-8 string,
   /// and then parses that string into a `Map<String, dynamic>` using jsonDecode.
   ///
+  /// Throws [JsonParseError] if the JSON is malformed or not an object.
+  ///
   /// [ctx] - The EngineContext containing the request information.
   ///
   /// Returns a Future that completes with the decoded JSON body as a Map.
   Future<Map<String, dynamic>> _decodedBody(EngineContext ctx) async {
     final bodyBytes = await ctx.request.bytes;
-    return jsonDecode(utf8.decode(bodyBytes)) as Map<String, dynamic>;
+    final bodyString = utf8.decode(bodyBytes);
+    
+    if (bodyString.trim().isEmpty) {
+      return <String, dynamic>{};
+    }
+    
+    try {
+      final decoded = jsonDecode(bodyString);
+      if (decoded is! Map<String, dynamic>) {
+        throw JsonParseError(details: 'Expected JSON object, got ${decoded.runtimeType}');
+      }
+      return decoded;
+    } on FormatException catch (e) {
+      throw JsonParseError(details: e.message);
+    }
   }
 
   /// Validates the JSON body of the request against a set of rules.

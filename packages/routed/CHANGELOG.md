@@ -1,5 +1,10 @@
 ## 0.3.2
 
+### OAuth Improvements
+- Added `userInfoRequest` callback to `OAuthProvider` for providers that require
+  custom userinfo fetching (e.g., POST instead of GET). Matches NextAuth's pattern
+  for handling non-standard OAuth endpoints like Dropbox.
+
 ### Performance Optimizations
 - Added `EngineFeatures.enableRequestContainerFastPath` for high-throughput scenarios
   that skips per-request container creation and uses a read-only root container.

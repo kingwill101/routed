@@ -143,6 +143,32 @@ class BadRequestError extends EngineError {
   int? get code => 400;
 }
 
+/// Represents a JSON parsing error in the engine.
+///
+/// Thrown when the request body contains malformed JSON or JSON that
+/// cannot be parsed into the expected type (e.g., array instead of object).
+class JsonParseError extends EngineError {
+  /// The original parsing error message.
+  final String details;
+
+  JsonParseError({this.details = ''})
+      : super(message: 'Invalid JSON payload.');
+
+  @override
+  int? get code => 400;
+
+  @override
+  String get message =>
+      details.isEmpty ? 'Invalid JSON payload.' : 'Invalid JSON payload: $details';
+
+  @override
+  Map<String, dynamic> toJson() => {
+        'error': 'invalid_json',
+        'message': message,
+        'code': code,
+      };
+}
+
 /// Represents a "Conflict" error in the engine.
 class ConflictError extends EngineError {
   ConflictError({required super.message});

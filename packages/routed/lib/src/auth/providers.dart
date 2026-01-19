@@ -49,7 +49,28 @@ import 'package:routed/src/context/context.dart';
 /// {@endtemplate}
 
 /// Supported provider kinds.
-enum AuthProviderType { oauth, email, credentials }
+///
+/// - [oauth] - Standard OAuth 2.0 authorization code flow.
+/// - [oidc] - OpenID Connect (extends OAuth 2.0 with identity layer).
+/// - [email] - Magic link / passwordless email authentication.
+/// - [credentials] - Username/password or custom credential authentication.
+/// - [webauthn] - Passkeys, biometric, and hardware key authentication.
+enum AuthProviderType {
+  /// Standard OAuth 2.0 authorization code flow.
+  oauth,
+
+  /// OpenID Connect (extends OAuth 2.0 with identity layer).
+  oidc,
+
+  /// Magic link / passwordless email authentication.
+  email,
+
+  /// Username/password or custom credential authentication.
+  credentials,
+
+  /// Passkeys, biometric, and hardware key authentication.
+  webauthn,
+}
 
 /// Maps a provider profile payload to an `AuthUser`.
 typedef AuthProfileMapper<TProfile extends Object> =
@@ -87,6 +108,18 @@ typedef OAuthProfileRequest<TProfile extends Object> =
       OAuthTokenResponse token,
       http.Client httpClient,
       TProfile profile,
+    );
+
+/// Custom userinfo request callback for providers that require non-standard
+/// userinfo fetching (e.g., POST instead of GET, custom headers, etc.).
+///
+/// Returns the raw profile data as a map. This is called instead of the
+/// default GET request to `userInfoEndpoint` when provided.
+typedef OAuthUserInfoRequest =
+    FutureOr<Map<String, dynamic>> Function(
+      OAuthTokenResponse token,
+      http.Client httpClient,
+      Uri endpoint,
     );
 
 /// Sends a verification token for email flows.
@@ -147,7 +180,9 @@ class OAuthProvider<TProfile extends Object> extends AuthProvider {
     required this.tokenEndpoint,
     required this.profile,
     required this.redirectUri,
+    super.type = AuthProviderType.oauth,
     this.userInfoEndpoint,
+    this.userInfoRequest,
     this.scopes = const <String>[],
     this.authorizationParams = const <String, String>{},
     this.tokenParams = const <String, String>{},
@@ -158,7 +193,7 @@ class OAuthProvider<TProfile extends Object> extends AuthProvider {
     this.onStateGenerated,
     this.onProfile,
     this.profileRequest,
-  }) : super(type: AuthProviderType.oauth);
+  });
 
   /// OAuth client identifier.
   final String clientId;
@@ -174,6 +209,14 @@ class OAuthProvider<TProfile extends Object> extends AuthProvider {
 
   /// Userinfo endpoint (optional if ID token contains claims).
   final Uri? userInfoEndpoint;
+
+  /// Custom userinfo request callback for providers that require non-standard
+  /// userinfo fetching (e.g., POST instead of GET).
+  ///
+  /// When provided alongside `userInfoEndpoint`, this callback is used instead
+  /// of the default GET request. This is useful for providers like Dropbox
+  /// that require POST requests to their userinfo endpoint.
+  final OAuthUserInfoRequest? userInfoRequest;
 
   /// OAuth scopes to request.
   final List<String> scopes;
@@ -311,4 +354,296 @@ class AuthEmailRequest {
 
   /// Expiration timestamp for the token.
   final DateTime expiresAt;
+}
+
+/// Relying party configuration for WebAuthn.
+///
+/// The relying party represents your application/domain to the authenticator.
+class WebAuthnRelyingParty {
+  const WebAuthnRelyingParty({
+    required this.id,
+    required this.name,
+    required this.origin,
+  });
+
+  /// Relying party ID (typically the domain name).
+  final String id;
+
+  /// Human-readable name of the relying party.
+  final String name;
+
+  /// Origin URL (protocol + domain).
+  final String origin;
+}
+
+/// Authenticator device stored for a user.
+class WebAuthnAuthenticator {
+  const WebAuthnAuthenticator({
+    required this.credentialId,
+    required this.publicKey,
+    required this.counter,
+    this.userId,
+    this.transports,
+    this.createdAt,
+    this.lastUsedAt,
+    this.name,
+  });
+
+  /// Unique credential identifier.
+  final String credentialId;
+
+  /// COSE public key bytes (base64 encoded).
+  final String publicKey;
+
+  /// Signature counter for replay protection.
+  final int counter;
+
+  /// Associated user ID.
+  final String? userId;
+
+  /// Supported transports (usb, nfc, ble, internal).
+  final List<String>? transports;
+
+  /// When the authenticator was registered.
+  final DateTime? createdAt;
+
+  /// When the authenticator was last used.
+  final DateTime? lastUsedAt;
+
+  /// Optional friendly name for the authenticator.
+  final String? name;
+
+  Map<String, dynamic> toJson() => {
+    'credential_id': credentialId,
+    'public_key': publicKey,
+    'counter': counter,
+    'user_id': userId,
+    'transports': transports,
+    'created_at': createdAt?.toIso8601String(),
+    'last_used_at': lastUsedAt?.toIso8601String(),
+    'name': name,
+  };
+
+  factory WebAuthnAuthenticator.fromJson(Map<String, dynamic> json) {
+    return WebAuthnAuthenticator(
+      credentialId: json['credential_id']?.toString() ?? '',
+      publicKey: json['public_key']?.toString() ?? '',
+      counter: json['counter'] as int? ?? 0,
+      userId: json['user_id']?.toString(),
+      transports: (json['transports'] as List?)?.cast<String>(),
+      createdAt: json['created_at'] != null
+          ? DateTime.parse(json['created_at'].toString())
+          : null,
+      lastUsedAt: json['last_used_at'] != null
+          ? DateTime.parse(json['last_used_at'].toString())
+          : null,
+      name: json['name']?.toString(),
+    );
+  }
+}
+
+/// Callback to retrieve user info for WebAuthn registration/authentication.
+typedef WebAuthnGetUserInfo =
+    FutureOr<WebAuthnUserInfo?> Function(
+      EngineContext context,
+      WebAuthnProvider provider,
+      Map<String, dynamic> request,
+    );
+
+/// Callback to get the relying party configuration.
+typedef WebAuthnGetRelyingParty =
+    WebAuthnRelyingParty Function(
+      EngineContext context,
+      WebAuthnProvider provider,
+    );
+
+/// User info returned by WebAuthn getUserInfo callback.
+class WebAuthnUserInfo {
+  const WebAuthnUserInfo({required this.user, required this.exists});
+
+  /// The user (new or existing).
+  final AuthUser user;
+
+  /// Whether the user already exists in the database.
+  final bool exists;
+}
+
+/// {@template routed_auth_webauthn_provider}
+/// WebAuthn (Passkey) provider configuration.
+///
+/// Enables passwordless authentication using passkeys, biometrics, and
+/// hardware security keys following the WebAuthn standard.
+///
+/// ## Required callbacks
+/// - [getUserInfo] retrieves user information for registration/authentication.
+/// - [getRelyingParty] returns the relying party (domain) configuration.
+///
+/// ## Configuration
+/// - [timeout] controls the authentication ceremony timeout.
+/// - [enableConditionalUI] enables autofill-assisted sign-in.
+/// - [formFields] defines fields shown in the default sign-in form.
+/// {@endtemplate}
+class WebAuthnProvider extends AuthProvider {
+  WebAuthnProvider({
+    super.id = 'webauthn',
+    super.name = 'Passkey',
+    required this.getUserInfo,
+    required this.getRelyingParty,
+    this.timeout = const Duration(minutes: 5),
+    this.enableConditionalUI = true,
+    this.formFields = const {
+      'email': WebAuthnFormField(label: 'Email', required: true),
+    },
+    this.registrationOptions = const WebAuthnRegistrationOptions(),
+    this.authenticationOptions = const WebAuthnAuthenticationOptions(),
+  }) : super(type: AuthProviderType.webauthn);
+
+  /// Retrieves user info for the WebAuthn ceremony.
+  final WebAuthnGetUserInfo getUserInfo;
+
+  /// Returns the relying party configuration.
+  final WebAuthnGetRelyingParty getRelyingParty;
+
+  /// Timeout for WebAuthn ceremonies.
+  final Duration timeout;
+
+  /// Whether to enable conditional UI (autofill-assisted passkeys).
+  final bool enableConditionalUI;
+
+  /// Form fields displayed in the default sign-in form.
+  final Map<String, WebAuthnFormField> formFields;
+
+  /// Registration-specific options.
+  final WebAuthnRegistrationOptions registrationOptions;
+
+  /// Authentication-specific options.
+  final WebAuthnAuthenticationOptions authenticationOptions;
+}
+
+/// Form field configuration for WebAuthn sign-in forms.
+class WebAuthnFormField {
+  const WebAuthnFormField({
+    this.label,
+    this.required = false,
+    this.type = 'text',
+    this.autocomplete,
+  });
+
+  /// Label shown in the form.
+  final String? label;
+
+  /// Whether the field is required.
+  final bool required;
+
+  /// HTML input type.
+  final String type;
+
+  /// Autocomplete attribute value.
+  final String? autocomplete;
+}
+
+/// Options for WebAuthn registration ceremonies.
+class WebAuthnRegistrationOptions {
+  const WebAuthnRegistrationOptions({
+    this.attestation = 'none',
+    this.authenticatorSelection,
+    this.excludeCredentials = true,
+  });
+
+  /// Attestation conveyance preference (none, indirect, direct).
+  final String attestation;
+
+  /// Authenticator selection criteria.
+  final WebAuthnAuthenticatorSelection? authenticatorSelection;
+
+  /// Whether to exclude existing credentials during registration.
+  final bool excludeCredentials;
+}
+
+/// Options for WebAuthn authentication ceremonies.
+class WebAuthnAuthenticationOptions {
+  const WebAuthnAuthenticationOptions({this.userVerification = 'preferred'});
+
+  /// User verification requirement (required, preferred, discouraged).
+  final String userVerification;
+}
+
+/// Authenticator selection criteria for registration.
+class WebAuthnAuthenticatorSelection {
+  const WebAuthnAuthenticatorSelection({
+    this.authenticatorAttachment,
+    this.residentKey = 'preferred',
+    this.userVerification = 'preferred',
+  });
+
+  /// Attachment type (platform, cross-platform).
+  final String? authenticatorAttachment;
+
+  /// Resident key requirement (required, preferred, discouraged).
+  final String residentKey;
+
+  /// User verification requirement.
+  final String userVerification;
+}
+
+/// Result from a custom callback provider's handleCallback method.
+class CallbackResult {
+  const CallbackResult({required this.user, this.redirect, this.error});
+
+  /// Successfully authenticated user.
+  final AuthUser? user;
+
+  /// Optional redirect URL after authentication.
+  final String? redirect;
+
+  /// Error message if authentication failed.
+  final String? error;
+
+  /// Creates a successful result.
+  const CallbackResult.success(AuthUser this.user, {this.redirect})
+    : error = null;
+
+  /// Creates an error result.
+  const CallbackResult.failure(String this.error)
+    : user = null,
+      redirect = null;
+
+  /// Whether authentication succeeded.
+  bool get isSuccess => user != null && error == null;
+}
+
+/// Mixin for auth providers that handle custom callback flows.
+///
+/// Implement this mixin on custom providers (like Telegram) that don't follow
+/// standard OAuth or email flows. The [handleCallback] method will be called
+/// by [AuthRoutes] when the callback URL is accessed.
+///
+/// ## Example
+///
+/// ```dart
+/// class TelegramProvider extends AuthProvider with CallbackProvider {
+///   @override
+///   Future<CallbackResult> handleCallback(
+///     EngineContext ctx,
+///     Map<String, String> params,
+///   ) async {
+///     // Verify HMAC signature from Telegram
+///     final profile = verifyAndParseCallback(params);
+///     final user = mapProfile(profile);
+///     return CallbackResult.success(user, redirect: '/profile');
+///   }
+/// }
+/// ```
+mixin CallbackProvider on AuthProvider {
+  /// Handles the callback request from the external provider.
+  ///
+  /// [ctx] is the engine context for the request.
+  /// [params] contains query parameters from the callback URL.
+  ///
+  /// Returns a [CallbackResult] with either the authenticated user
+  /// or an error message.
+  FutureOr<CallbackResult> handleCallback(
+    EngineContext ctx,
+    Map<String, String> params,
+  );
 }

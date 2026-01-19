@@ -3,6 +3,7 @@ export 'src/auth/manager.dart';
 export 'src/auth/models.dart';
 export 'src/auth/hooks.dart';
 export 'src/auth/providers.dart';
+export 'src/auth/provider_registry.dart';
 export 'src/auth/routes.dart';
 export 'src/auth/basic_auth.dart';
 export 'src/auth/csrf.dart';
