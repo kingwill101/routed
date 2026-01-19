@@ -70,21 +70,34 @@ Each endpoint is mounted under `basePath` (defaults to `/auth`).
 
 ## Provider config
 
-Auth providers can be configured via config files so secrets stay in env vars.
+The `routed_auth` package provides 13+ pre-built OAuth providers (Google, Discord, Microsoft,
+Apple, Twitter, Facebook, GitLab, Dropbox, Slack, LinkedIn, Spotify, Twitch, Telegram).
 For per-provider docs and custom provider/adapter guidance, see
 [Auth Providers & Adapters](/docs/routed/security/auth-providers).
 
+```dart
+import 'package:routed_auth/routed_auth.dart';
+
+final options = AuthOptions(
+  providers: [
+    googleProvider(GoogleProviderOptions(
+      clientId: env('GOOGLE_CLIENT_ID'),
+      clientSecret: env('GOOGLE_CLIENT_SECRET'),
+      redirectUri: 'https://example.com/auth/callback/google',
+    )),
+  ],
+);
+```
+
+Or configure via YAML with config-driven registration:
+
 ```yaml title="config/auth.yaml"
 providers:
-  github:
+  google:
     enabled: true
-    client_id: "{{ env.GITHUB_CLIENT_ID | default: '' }}"
-    client_secret: "{{ env.GITHUB_CLIENT_SECRET | default: '' }}"
-    redirect_uri: "{{ env.GITHUB_REDIRECT_URI | default: '' }}"
-    enterprise_base_url: "{{ env.GITHUB_ENTERPRISE_URL | default: '' }}"
-    scopes:
-      - read:user
-      - user:email
+    client_id: "{{ env.GOOGLE_CLIENT_ID | default: '' }}"
+    client_secret: "{{ env.GOOGLE_CLIENT_SECRET | default: '' }}"
+    redirect_uri: "{{ env.GOOGLE_REDIRECT_URI | default: '' }}"
 ```
 
 ## Callbacks

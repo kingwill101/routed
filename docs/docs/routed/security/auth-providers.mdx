@@ -10,27 +10,190 @@ sidebar_position: 4
 This page documents how auth providers are configured, registered, and wired into the
 `AuthManager`, plus how to implement a custom `AuthAdapter` for persistence.
 
-## Built-in providers
+## Built-in Providers (routed_auth)
 
-Routed ships with a GitHub OAuth provider. Configuration is registry-driven and only
-registered providers are loaded from config.
+The `routed_auth` package provides pre-built OAuth providers following the NextAuth.js pattern.
+
+### Installation
+
+```yaml title="pubspec.yaml"
+dependencies:
+  routed:
+    git:
+      url: https://github.com/kingwill101/routed.git
+      path: packages/routed
+  routed_auth:
+    git:
+      url: https://github.com/kingwill101/routed.git
+      path: packages/routed_auth
+```
+
+### Available Providers
+
+| Category | Provider | Factory | Options Class |
+|----------|----------|---------|---------------|
+| **Social** | Google | `googleProvider()` | `GoogleProviderOptions` |
+| | Discord | `discordProvider()` | `DiscordProviderOptions` |
+| | Twitter/X | `twitterProvider()` | `TwitterProviderOptions` |
+| | Facebook | `facebookProvider()` | `FacebookProviderOptions` |
+| **Enterprise** | Microsoft Entra | `microsoftEntraProvider()` | `MicrosoftEntraProviderOptions` |
+| | Apple | `appleProvider()` | `AppleProviderOptions` |
+| **Developer** | GitLab | `gitlabProvider()` | `GitLabProviderOptions` |
+| | Dropbox | `dropboxProvider()` | `DropboxProviderOptions` |
+| **Business** | Slack | `slackProvider()` | `SlackProviderOptions` |
+| | LinkedIn | `linkedInProvider()` | `LinkedInProviderOptions` |
+| **Entertainment** | Spotify | `spotifyProvider()` | `SpotifyProviderOptions` |
+| | Twitch | `twitchProvider()` | `TwitchProviderOptions` |
+| **Messaging** | Telegram | `telegramProvider()` | `TelegramProviderOptions` |
+
+### Quick Start
+
+```dart
+import 'package:routed/routed.dart';
+import 'package:routed_auth/routed_auth.dart';
+
+final engine = await Engine.create(
+  providers: [
+    ...Engine.builtins,
+    AuthServiceProvider(
+      AuthOptions(
+        providers: [
+          googleProvider(GoogleProviderOptions(
+            clientId: env('GOOGLE_CLIENT_ID'),
+            clientSecret: env('GOOGLE_CLIENT_SECRET'),
+            redirectUri: 'https://example.com/auth/callback/google',
+          )),
+          discordProvider(DiscordProviderOptions(
+            clientId: env('DISCORD_CLIENT_ID'),
+            clientSecret: env('DISCORD_CLIENT_SECRET'),
+            redirectUri: 'https://example.com/auth/callback/discord',
+          )),
+        ],
+      ),
+    ),
+  ],
+);
+```
+
+### Typed Profiles
+
+Each provider includes a typed profile class with full field coverage:
+
+```dart
+final provider = googleProvider(options);
+
+// Access typed fields from the profile
+final profile = GoogleProfile.fromJson(rawData);
+print(profile.email);
+print(profile.name);
+print(profile.picture);
+print(profile.emailVerified);
+```
+
+### Config-Driven Registration
+
+For config-driven setups, register providers with the registry:
+
+```dart
+import 'package:routed_auth/routed_auth.dart';
+
+// Register all providers at once
+registerAllAuthProviders(AuthProviderRegistry.instance);
+
+// Or register individual providers
+registerGoogleAuthProvider(AuthProviderRegistry.instance);
+registerDiscordAuthProvider(AuthProviderRegistry.instance);
+```
+
+Then configure via YAML:
 
 ```yaml title="config/auth.yaml"
 providers:
-  github:
+  google:
     enabled: true
-    client_id: "{{ env.GITHUB_CLIENT_ID | default: '' }}"
-    client_secret: "{{ env.GITHUB_CLIENT_SECRET | default: '' }}"
-    redirect_uri: "{{ env.GITHUB_REDIRECT_URI | default: '' }}"
-    scopes:
-      - read:user
-      - user:email
+    client_id: "{{ env.GOOGLE_CLIENT_ID | default: '' }}"
+    client_secret: "{{ env.GOOGLE_CLIENT_SECRET | default: '' }}"
+    redirect_uri: "{{ env.GOOGLE_REDIRECT_URI | default: '' }}"
+  discord:
+    enabled: true
+    client_id: "{{ env.DISCORD_CLIENT_ID | default: '' }}"
+    client_secret: "{{ env.DISCORD_CLIENT_SECRET | default: '' }}"
+    redirect_uri: "{{ env.DISCORD_REDIRECT_URI | default: '' }}"
 ```
 
-Providers are registered at boot (for example, `registerGitHubAuthProvider`), and the
-registry contributes defaults and schema metadata to your config docs.
+## Custom userInfoRequest
 
-## Registering custom providers
+Some OAuth providers require non-standard userinfo requests (e.g., POST instead of GET).
+Use the `userInfoRequest` callback:
+
+```dart
+OAuthProvider<MyProfile>(
+  id: 'custom',
+  name: 'Custom Provider',
+  clientId: clientId,
+  clientSecret: clientSecret,
+  authorizationEndpoint: Uri.parse('https://api.example.com/oauth/authorize'),
+  tokenEndpoint: Uri.parse('https://api.example.com/oauth/token'),
+  userInfoEndpoint: Uri.parse('https://api.example.com/userinfo'),
+  redirectUri: redirectUri,
+  // Custom userinfo request for POST-based endpoints
+  userInfoRequest: (token, httpClient, endpoint) async {
+    final response = await httpClient.post(
+      endpoint,
+      headers: {
+        'Authorization': 'Bearer ${token.accessToken}',
+        'Content-Type': 'application/json',
+      },
+      body: '{}',
+    );
+    return json.decode(response.body) as Map<String, dynamic>;
+  },
+  profile: (data) => AuthUser(
+    id: data['id'].toString(),
+    email: data['email']?.toString(),
+  ),
+);
+```
+
+The Dropbox provider in `routed_auth` demonstrates this pattern.
+
+## CallbackProvider for Non-OAuth Flows
+
+For providers that don't follow standard OAuth (like Telegram's widget-based login),
+use the `CallbackProvider` mixin:
+
+```dart
+class TelegramProvider extends AuthProvider with CallbackProvider {
+  TelegramProvider({
+    required this.botToken,
+    required this.redirectUri,
+  }) : super(id: 'telegram', name: 'Telegram', type: AuthProviderType.oauth);
+
+  final String botToken;
+  final String redirectUri;
+
+  @override
+  Future<CallbackResult> handleCallback(
+    EngineContext ctx,
+    Map<String, String> params,
+  ) async {
+    // Verify HMAC signature from Telegram
+    if (!_verifyTelegramHash(params, botToken)) {
+      return CallbackResult.failure('invalid_signature');
+    }
+
+    final user = AuthUser(
+      id: params['id']!,
+      name: '${params['first_name']} ${params['last_name'] ?? ''}'.trim(),
+      image: params['photo_url'],
+    );
+
+    return CallbackResult.success(user, redirect: '/dashboard');
+  }
+}
+```
+
+## Registering Custom Providers
 
 Custom providers register a schema plus a builder that turns config into an
 `AuthProvider`. The builder should return `null` when the provider is disabled.
@@ -117,21 +280,7 @@ String _requireString(Object? value, String context) {
 }
 ```
 
-## Wiring provider config
-
-Provider config lives under `auth.providers`. Each registered provider contributes its
-schema and defaults, and only registered providers are constructed at runtime.
-
-```yaml title="config/auth.yaml"
-providers:
-  example:
-    enabled: true
-    client_id: "{{ env.EXAMPLE_CLIENT_ID | default: '' }}"
-    client_secret: "{{ env.EXAMPLE_CLIENT_SECRET | default: '' }}"
-    redirect_uri: "{{ env.EXAMPLE_REDIRECT_URI | default: '' }}"
-```
-
-## Building custom adapters
+## Building Custom Adapters
 
 Adapters persist users, accounts, sessions, and verification tokens. The base
 `AuthAdapter` is a no-op implementation; override the methods your flow needs.
@@ -204,7 +353,7 @@ engine.container.instance<AuthOptions>(
 );
 ```
 
-## Adapter tips
+## Adapter Tips
 
 - Implement `verifyCredentials` and `registerCredentials` for credentials flows.
 - Implement `saveVerificationToken`/`useVerificationToken`/`deleteVerificationTokens`
