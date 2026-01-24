@@ -1,0 +1,38 @@
+# Justfile for routed_inertia package
+
+default:
+    @just --list
+
+get:
+    dart pub get
+
+test:
+    dart test
+
+test-coverage:
+    dart test --coverage=coverage
+    dart run coverage:format_coverage --lcov --in=coverage --out=coverage/lcov.info --report-on=lib
+
+analyze:
+    dart analyze
+
+format:
+    dart format .
+
+format-check:
+    dart format --output=none --set-exit-if-changed .
+
+fix:
+    dart fix --apply
+
+upgrade:
+    dart pub upgrade
+
+outdated:
+    dart pub outdated
+
+clean:
+    rm -rf .dart_tool build coverage
+
+ci: format-check analyze test
+    @echo "✅ CI checks passed"
