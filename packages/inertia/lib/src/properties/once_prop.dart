@@ -1,32 +1,52 @@
+library;
+
 import '../property_context.dart';
 import 'inertia_prop.dart';
+import 'prop_mixins.dart';
 
-/// Property that is resolved once per instance and cached
-class OnceProp<T> implements InertiaProp {
-  OnceProp(this.resolver, {this.ttl});
-  final T Function() resolver;
-  final Duration? ttl;
-  T? _cachedValue;
-  DateTime? _expiresAt;
-
-  @override
-  bool shouldInclude(String key, PropertyContext context) => true;
-
-  @override
-  T resolve(String key, PropertyContext context) {
-    if (_cachedValue != null && !_isExpired()) {
-      return _cachedValue!;
-    }
-
-    _cachedValue = resolver();
-    if (ttl != null) {
-      _expiresAt = DateTime.now().add(ttl!);
-    }
-    return _cachedValue!;
+/// Defines a prop that resolves once and caches on the client.
+///
+/// ```dart
+/// final props = {
+///   'token': OnceProp(() => token, ttl: Duration(hours: 1)),
+/// };
+/// ```
+class OnceProp<T> with ResolvesOnce implements InertiaProp, OnceableProp {
+  /// Creates a once prop backed by [resolver].
+  OnceProp(this.resolver, {Duration? ttl, String? key, bool refresh = false}) {
+    configureOnce(once: true, ttl: ttl, key: key, refresh: refresh);
   }
 
-  bool _isExpired() {
-    if (_expiresAt == null) return false;
-    return DateTime.now().isAfter(_expiresAt!);
+  /// The resolver that produces the prop value.
+  final T Function() resolver;
+
+  @override
+  /// Whether this prop should be included for the current [context].
+  bool shouldInclude(String key, PropertyContext context) {
+    return context.shouldIncludeProp(key);
+  }
+
+  @override
+  /// Resolves the prop value.
+  T resolve(String key, PropertyContext context) {
+    return resolver();
+  }
+
+  /// Marks this prop to resolve once, optionally keyed and time-limited.
+  OnceProp<T> once({String? key, Duration? ttl}) {
+    configureOnce(once: true, key: key, ttl: ttl);
+    return this;
+  }
+
+  /// Enables or disables refresh behavior for once props.
+  OnceProp<T> fresh([bool value = true]) {
+    refresh(value);
+    return this;
+  }
+
+  /// Sets a stable once key for this prop.
+  OnceProp<T> withKey(String key) {
+    as(key);
+    return this;
   }
 }

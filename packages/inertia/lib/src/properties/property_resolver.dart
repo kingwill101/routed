@@ -1,23 +1,67 @@
+library;
+
 import '../property_context.dart';
 import '../inertia_serializable.dart';
-import 'deferred_prop.dart';
+import 'always_prop.dart';
 import 'inertia_prop.dart';
-import 'merge_prop.dart';
+import 'scroll_prop.dart';
 
-/// Result of resolving Inertia props
+/// Result of resolving Inertia props and merge metadata.
 class PropertyResolutionResult {
+  /// Creates a resolution result with resolved values and metadata.
   const PropertyResolutionResult({
     required this.props,
     required this.deferredProps,
     required this.mergeProps,
+    required this.deepMergeProps,
+    required this.prependProps,
+    required this.matchPropsOn,
+    required this.scrollProps,
+    required this.onceProps,
   });
+
+  /// The resolved props ready for JSON serialization.
   final Map<String, dynamic> props;
+
+  /// Deferred props grouped by deferred group name.
   final Map<String, List<String>> deferredProps;
+
+  /// Prop keys to merge shallowly on the client.
   final List<String> mergeProps;
+
+  /// Prop keys to merge deeply on the client.
+  final List<String> deepMergeProps;
+
+  /// Prop keys to prepend on merge.
+  final List<String> prependProps;
+
+  /// Prop keys to match on during merge.
+  final List<String> matchPropsOn;
+
+  /// Scroll prop metadata keyed by prop name.
+  final Map<String, Map<String, dynamic>> scrollProps;
+
+  /// Once prop metadata keyed by once key.
+  final Map<String, Map<String, dynamic>> onceProps;
 }
 
-/// Resolves Inertia props based on context and prop types
+/// Resolves Inertia props into payload data and merge metadata.
+///
+/// ```dart
+/// final result = PropertyResolver.resolve(props, context);
+/// final payload = result.props;
+/// ```
 class PropertyResolver {
+  static final Object _notFound = Object();
+
+  /// Resolves [props] for the given [context] and returns merge metadata.
+  ///
+  /// ```dart
+  /// final result = PropertyResolver.resolve(
+  ///   {'user': user, 'stats': LazyProp(() => loadStats())},
+  ///   context,
+  /// );
+  /// ```
   static PropertyResolutionResult resolve(
     Map<String, dynamic> props,
     PropertyContext context,
@@ -25,40 +69,108 @@ class PropertyResolver {
     final resolvedProps = <String, dynamic>{};
     final deferredProps = <String, List<String>>{};
     final mergeProps = <String>[];
+    final deepMergeProps = <String>[];
+    final prependProps = <String>[];
+    final matchPropsOn = <String>[];
+    final scrollProps = <String, Map<String, dynamic>>{};
+    final onceProps = <String, Map<String, dynamic>>{};
 
-    props.forEach((key, value) {
-      if (!context.shouldIncludeProp(key)) {
-        return;
+    final alwaysProps = _extractAlwaysProps(props);
+    final filteredProps = _applyPartialFilters(props, context);
+    final workingProps = <String, dynamic>{...alwaysProps, ...filteredProps};
+
+    final now = DateTime.now();
+    final shouldApplyOnceExclusions =
+        context.isInertiaRequest && !context.isPartialReload;
+
+    for (final entry in workingProps.entries) {
+      final key = entry.key;
+      final value = entry.value;
+
+      if (value is ScrollProp) {
+        value.configureMergeIntent(context.mergeIntent);
       }
 
-      if (value is InertiaProp) {
-        if (value is DeferredProp) {
-          final group = value.group;
-          if (value.shouldInclude(key, context)) {
-            resolvedProps[key] = value.resolve(key, context);
-            if (value.shouldMerge && !context.resetKeys.contains(key)) {
+      if (value is OnceableProp && value.shouldResolveOnce) {
+        final onceKey = value.onceKey ?? key;
+        final expiresAt = value.ttl == null
+            ? null
+            : now.add(value.ttl!).millisecondsSinceEpoch;
+        onceProps[onceKey] = {'prop': key, 'expiresAt': expiresAt};
+      }
+
+      if (value is MergeableProp && value.shouldMerge) {
+        if (!context.resetKeys.contains(key)) {
+          if (value.shouldDeepMerge) {
+            deepMergeProps.add(key);
+          } else {
+            if (value.appendsAtRoot) {
               mergeProps.add(key);
             }
-          } else {
-            deferredProps.putIfAbsent(group, () => []).add(key);
+            for (final path in value.appendsAtPaths) {
+              mergeProps.add('$key.$path');
+            }
+            if (value.prependsAtRoot) {
+              prependProps.add(key);
+            }
+            for (final path in value.prependsAtPaths) {
+              prependProps.add('$key.$path');
+            }
           }
-          return;
+          for (final matchOn in value.matchesOn) {
+            matchPropsOn.add('$key.$matchOn');
+          }
+        }
+
+        if (value is ScrollProp) {
+          final shouldSkip = !context.isPartialReload && value.shouldDefer;
+          if (!shouldSkip) {
+            scrollProps[key] = {
+              ...value.metadata().toJson(),
+              'reset': context.resetKeys.contains(key),
+            };
+          }
+        }
+      }
+    }
+
+    for (final entry in workingProps.entries) {
+      final key = entry.key;
+      final value = entry.value;
+
+      if (value is InertiaProp) {
+        final deferrable = value is DeferrableProp
+            ? value as DeferrableProp
+            : null;
+        final onceable = value is OnceableProp ? value as OnceableProp : null;
+
+        if (deferrable != null && deferrable.shouldDefer) {
+          if (!context.isPartialReload) {
+            if (!(shouldApplyOnceExclusions &&
+                onceable != null &&
+                _shouldExcludeOnce(context, onceable, key))) {
+              deferredProps.putIfAbsent(deferrable.group, () => []).add(key);
+            }
+            continue;
+          }
+        }
+
+        if (shouldApplyOnceExclusions &&
+            onceable != null &&
+            _shouldExcludeOnce(context, onceable, key)) {
+          continue;
         }
 
         if (!value.shouldInclude(key, context)) {
-          return;
+          continue;
         }
 
         resolvedProps[key] = value.resolve(key, context);
-
-        if (value is MergeProp && !context.resetKeys.contains(key)) {
-          mergeProps.add(key);
-        }
-        return;
+        continue;
       }
 
       resolvedProps[key] = value;
-    });
+    }
 
     final resolvedWithCallables =
         _deepResolveCallables(resolvedProps) as Map<String, dynamic>;
@@ -67,9 +179,135 @@ class PropertyResolver {
       props: resolvedWithCallables,
       deferredProps: deferredProps,
       mergeProps: mergeProps,
+      deepMergeProps: deepMergeProps,
+      prependProps: prependProps,
+      matchPropsOn: matchPropsOn,
+      scrollProps: scrollProps,
+      onceProps: onceProps,
     );
   }
 
+  /// Extracts [AlwaysProp] instances to include in all responses.
+  static Map<String, dynamic> _extractAlwaysProps(Map<String, dynamic> props) {
+    final alwaysProps = <String, dynamic>{};
+    props.forEach((key, value) {
+      if (value is AlwaysProp) {
+        alwaysProps[key] = value;
+      }
+    });
+    return alwaysProps;
+  }
+
+  /// Applies partial reload filters based on [context].
+  static Map<String, dynamic> _applyPartialFilters(
+    Map<String, dynamic> props,
+    PropertyContext context,
+  ) {
+    if (!context.isPartialReload) {
+      return Map<String, dynamic>.from(props);
+    }
+
+    var filtered = Map<String, dynamic>.from(props);
+    if (context.requestedProps.isNotEmpty) {
+      filtered = _filterOnlyProps(filtered, context.requestedProps);
+    }
+    if (context.requestedExceptProps.isNotEmpty) {
+      for (final path in context.requestedExceptProps) {
+        _removePath(filtered, path);
+      }
+    }
+    return filtered;
+  }
+
+  /// Filters [props] down to the requested prop paths.
+  static Map<String, dynamic> _filterOnlyProps(
+    Map<String, dynamic> props,
+    List<String> requestedProps,
+  ) {
+    final filtered = <String, dynamic>{};
+    for (final path in requestedProps) {
+      final value = _getPath(props, path);
+      if (!identical(value, _notFound)) {
+        _setPath(filtered, path, value);
+      }
+    }
+    return filtered;
+  }
+
+  /// Reads a dotted [path] from a nested map.
+  static dynamic _getPath(Map<String, dynamic> props, String path) {
+    final segments = path.split('.');
+    dynamic current = props;
+    for (final segment in segments) {
+      if (current is Map<String, dynamic> && current.containsKey(segment)) {
+        current = current[segment];
+      } else {
+        return _notFound;
+      }
+    }
+    return current;
+  }
+
+  /// Writes a dotted [path] into a nested map, creating nodes as needed.
+  static void _setPath(
+    Map<String, dynamic> target,
+    String path,
+    dynamic value,
+  ) {
+    final segments = path.split('.');
+    var current = target;
+    for (var i = 0; i < segments.length; i++) {
+      final segment = segments[i];
+      if (i == segments.length - 1) {
+        current[segment] = value;
+        return;
+      }
+      final next = current[segment];
+      if (next is Map<String, dynamic>) {
+        current = next;
+      } else {
+        final created = <String, dynamic>{};
+        current[segment] = created;
+        current = created;
+      }
+    }
+  }
+
+  /// Removes a dotted [path] from a nested map, if present.
+  static void _removePath(Map<String, dynamic> target, String path) {
+    final segments = path.split('.');
+    Map<String, dynamic> current = target;
+    for (var i = 0; i < segments.length; i++) {
+      final segment = segments[i];
+      if (!current.containsKey(segment)) {
+        return;
+      }
+      if (i == segments.length - 1) {
+        current.remove(segment);
+        return;
+      }
+      final next = current[segment];
+      if (next is Map<String, dynamic>) {
+        current = next;
+      } else {
+        return;
+      }
+    }
+  }
+
+  /// Returns `true` when a once prop should be excluded for [context].
+  static bool _shouldExcludeOnce(
+    PropertyContext context,
+    OnceableProp prop,
+    String key,
+  ) {
+    if (!prop.shouldResolveOnce) return false;
+    if (prop.shouldRefresh) return false;
+    final onceKey = prop.onceKey ?? key;
+    return context.exceptOnceProps.contains(onceKey);
+  }
+
+  /// Resolves nested callables and serializable objects to plain data.
   static dynamic _deepResolveCallables(dynamic value) {
     if (value is InertiaSerializable) {
       return _deepResolveCallables(value.toInertia());

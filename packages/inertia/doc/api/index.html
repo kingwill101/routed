@@ -1,0 +1,252 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta http-equiv="X-UA-Compatible" content="IE=edge">
+  <meta name="viewport" content="width=device-width, height=device-height, initial-scale=1, user-scalable=no">
+  <meta name="description" content="inertia_dart API docs, for the Dart programming language.">
+  <title>inertia_dart - Dart API docs</title>
+
+
+  
+  <link rel="preconnect" href="https://fonts.gstatic.com">
+  <link href="https://fonts.googleapis.com/css2?family=Roboto+Mono:ital,wght@0,300;0,400;0,500;0,700;1,400&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@24,400,0,0" rel="stylesheet">
+  
+  <link rel="stylesheet" href="static-assets/github.css?v1">
+  <link rel="stylesheet" href="static-assets/styles.css?v1">
+  <link rel="icon" href="static-assets/favicon.png?v1">
+  
+</head>
+
+<body data-base-href="" data-using-base-href="false" class="light-theme">
+<div id="overlay-under-drawer"></div>
+<header id="title">
+  <span id="sidenav-left-toggle" class="material-symbols-outlined" role="button" tabindex="0">menu</span>
+  <ol class="breadcrumbs gt-separated dark hidden-xs">
+    <li class="self-crumb">inertia_dart package</li>
+  </ol>
+  <div class="self-name">inertia_dart</div>
+  <form class="search navbar-right" role="search">
+    <input type="text" id="search-box" autocomplete="off" disabled class="form-control typeahead" placeholder="Loading search...">
+  </form>
+  <button class="toggle" id="theme-button" title="Toggle between light and dark mode" aria-label="Light and dark mode toggle">
+    <span id="dark-theme-button" class="material-symbols-outlined" aria-hidden="true">
+      dark_mode
+    </span>
+    <span id="light-theme-button" class="material-symbols-outlined" aria-hidden="true">
+      light_mode
+    </span>
+  </button>
+</header>
+<main>
+  <div id="dartdoc-main-content" class="main-content">
+      
+<section class="desc markdown">
+  <h1 id="inertia-dart">Inertia Dart</h1>
+<p>Build single page apps without building an API. This package implements the
+server-side Inertia protocol for Dart and provides property helpers, SSR
+support, and testing utilities. Pair it with a client adapter like
+<code>@inertiajs/react</code>, <code>@inertiajs/vue3</code>, or <code>@inertiajs/svelte</code>.</p>
+<h2 id="install">Install</h2>
+<pre class="language-bash"><code class="language-bash">dart pub add inertia_dart
+</code></pre>
+<h2 id="cli">CLI</h2>
+<p>Scaffold a Vite client with Inertia already wired:</p>
+<pre class="language-bash"><code class="language-bash">dart run inertia_dart:inertia create my-app --framework react
+</code></pre>
+<p>Install Inertia into an existing Vite project:</p>
+<pre class="language-bash"><code class="language-bash">dart run inertia_dart:inertia install --framework react --path ./web
+</code></pre>
+<h2 id="quickstart">Quickstart</h2>
+<p>Create a page payload and return an Inertia JSON response from your server
+handler.</p>
+<pre class="language-dart"><code class="language-dart">import 'package:inertia_dart/inertia.dart';
+
+final context = PropertyContext(headers: requestHeaders);
+
+final page = InertiaResponseFactory().buildPageData(
+  component: 'Dashboard',
+  props: {
+    'user': {'name': 'Ada'},
+    'stats': LazyProp(() =&gt; loadStats()),
+  },
+  url: '/dashboard',
+  context: context,
+  version: '1.0.0',
+);
+
+final response = InertiaResponse.json(page);
+</code></pre>
+<p>For a full framework integration, see <code>packages/routed_inertia</code>.</p>
+<h2 id="props">Props</h2>
+<p>Property helpers let you control when data resolves and how it merges.</p>
+<ul>
+<li><code>LazyProp</code> and <code>OptionalProp</code> are excluded from the first load and only
+resolve on partial reloads.</li>
+<li><code>DeferredProp</code> defers evaluation until the client requests the group.</li>
+<li><code>MergeProp</code> supports deep merge, append/prepend paths, and match-on keys.</li>
+<li><code>ScrollProp</code> adds pagination metadata for infinite scroll behavior.</li>
+<li><code>OnceProp</code> adds once metadata with optional TTL and keys.</li>
+</ul>
+<pre class="language-dart"><code class="language-dart">final props = {
+  'user': () =&gt; user,
+  'stats': OptionalProp(() =&gt; expensiveStats()),
+  'feed': DeferredProp(() =&gt; loadFeed(), group: 'feed', merge: true)
+      .append('items', 'id'),
+  'cursor': ScrollProp(() =&gt; pageData),
+  'token': OnceProp(() =&gt; token, ttl: Duration(hours: 1)),
+};
+</code></pre>
+<h2 id="partial-reloads">Partial Reloads</h2>
+<p>The request helpers parse advanced Inertia headers:</p>
+<ul>
+<li><code>X-Inertia-Partial-Data</code></li>
+<li><code>X-Inertia-Partial-Except</code></li>
+<li><code>X-Inertia-Reset</code></li>
+<li><code>X-Inertia-Except-Once-Props</code></li>
+<li><code>X-Inertia-Infinite-Scroll-Merge-Intent</code></li>
+<li><code>X-Inertia-Error-Bag</code></li>
+</ul>
+<p>Use <code>InertiaHeaderUtils</code> or <code>InertiaRequest</code> to build the correct
+<code>PropertyContext</code> for your server.</p>
+<h2 id="history-flags">History Flags</h2>
+<p><code>PageData</code> supports history flags:</p>
+<ul>
+<li><code>encryptHistory</code></li>
+<li><code>clearHistory</code></li>
+</ul>
+<h2 id="ssr">SSR</h2>
+<p>Use <code>SsrGateway</code> to call your SSR server and render HTML:</p>
+<pre class="language-dart"><code class="language-dart">final gateway = HttpSsrGateway(Uri.parse('http://localhost:13714'));
+final ssr = await gateway.render(jsonPage);
+</code></pre>
+<p>Control SSR behavior in code with <code>InertiaSsrSettings</code>:</p>
+<pre class="language-dart"><code class="language-dart">final settings = InertiaSsrSettings(
+  enabled: true,
+  endpoint: Uri.parse('http://127.0.0.1:13714/render'),
+  bundle: 'bootstrap/ssr/ssr.mjs',
+  runtime: 'node',
+  runtimeArgs: ['--trace-warnings'],
+);
+</code></pre>
+<p>You can also start/stop/check a local SSR process:</p>
+<pre class="language-dart"><code class="language-dart">final process = await startSsrServer(
+  SsrServerConfig.fromSettings(settings),
+);
+final healthy = await checkSsrServer(endpoint: settings.endpoint!);
+await stopSsrServer(endpoint: settings.endpoint!);
+process.kill();
+</code></pre>
+<p>CLI helpers for SSR bundles:</p>
+<pre class="language-bash"><code class="language-bash">dart run inertia_dart:inertia ssr:start --runtime node
+dart run inertia_dart:inertia ssr:check --url http://127.0.0.1:13714
+dart run inertia_dart:inertia ssr:stop --url http://127.0.0.1:13714
+</code></pre>
+<h2 id="asset-manifest-helper">Asset Manifest Helper</h2>
+<p><code>InertiaAssetManifest</code> loads a Vite-style <code>manifest.json</code> and renders tags.</p>
+<pre class="language-dart"><code class="language-dart">final manifest = await InertiaAssetManifest.load('build/manifest.json');
+final tags = manifest.renderTags('resources/js/app.js', baseUrl: '/');
+</code></pre>
+<h2 id="vite-asset-helper">Vite Asset Helper</h2>
+<p><code>InertiaViteAssets</code> reads a dev hot file or a production manifest and returns
+script/style tags.</p>
+<pre class="language-dart"><code class="language-dart">final assets = InertiaViteAssets(
+  entry: 'src/main.jsx',
+  hotFile: 'client/public/hot',
+  manifestPath: 'client/dist/.vite/manifest.json',
+  includeReactRefresh: true,
+);
+
+final tags = await assets.resolve();
+final htmlTags = tags.renderAll();
+</code></pre>
+<h2 id="dartio-httpserver-helper">dart:io HttpServer Helper</h2>
+<p>If you are using <code>dart:io</code> directly, you can build requests and write responses
+without a framework wrapper.</p>
+<pre class="language-dart"><code class="language-dart">final request = inertiaRequestFromHttp(httpRequest);
+final context = request.createContext();
+final page = InertiaResponseFactory().buildPageData(
+  component: 'Home',
+  props: {'title': 'Inertia + HttpServer'},
+  url: request.url,
+  context: context,
+);
+
+final response = InertiaResponse.json(page);
+await writeInertiaResponse(httpRequest.response, response);
+</code></pre>
+<h2 id="vite-hot-file-helper">Vite Hot File Helper</h2>
+<p>The package ships a small Vite plugin to generate a <code>public/hot</code> file (Laravel
+style). Copy <code>assets/vite/inertia_hot_file.js</code> into your project and import it
+from your Vite config. A full template is available at
+<code>assets/vite/vite.config.js</code>.</p>
+<pre class="language-js"><code class="language-js">import { defineConfig } from 'vite'
+import { inertiaHotFile } from './inertia_hot_file.js'
+
+export default defineConfig({
+  plugins: [inertiaHotFile()],
+})
+</code></pre>
+<h2 id="testing">Testing</h2>
+<p>Use <code>AssertableInertia</code> and <code>InertiaTestExtensions</code> for response assertions.</p>
+<pre class="language-dart"><code class="language-dart">response.assertInertia((page) {
+  page.component('Dashboard').has('user.name');
+});
+</code></pre>
+<h2 id="learn-more">Learn More</h2>
+<ul>
+<li>Inertia core docs: <a href="https://inertiajs.com">https://inertiajs.com</a></li>
+</ul>
+</section>
+
+
+      <section class="summary">
+          <h2>Libraries</h2>
+        <dl>
+          <dt id="inertia">
+  <span class="name"><a href="inertia/">inertia</a></span> 
+
+</dt>
+<dd>Public entry point for the Inertia Dart package.
+</dd>
+
+        </dl>
+      </section>
+  </div> <!-- /.main-content -->
+  <div id="dartdoc-sidebar-left" class="sidebar sidebar-offcanvas-left">
+    <!-- The search input and breadcrumbs below are only responsively visible at low resolutions. -->
+<header id="header-search-sidebar" class="hidden-l">
+  <form class="search-sidebar" role="search">
+    <input type="text" id="search-sidebar" autocomplete="off" disabled class="form-control typeahead" placeholder="Loading search...">
+  </form>
+</header>
+<ol class="breadcrumbs gt-separated dark hidden-l" id="sidebar-nav">
+    <li class="self-crumb">inertia_dart package</li>
+</ol>
+
+    <h5 class="hidden-xs"><span class="package-name">inertia_dart</span> <span class="package-kind">package</span></h5>
+    <ol>
+      <li class="section-title">Libraries</li>
+      <li><a href="inertia/">inertia</a></li>
+</ol>
+
+  </div>
+  <div id="dartdoc-sidebar-right" class="sidebar sidebar-offcanvas-right">
+  </div>
+</main>
+<footer>
+  <span class="no-break">
+    inertia_dart
+      1.0.0
+  </span>
+  
+</footer>
+
+
+<script src="static-assets/highlight.pack.js?v1"></script>
+<script src="static-assets/docs.dart.js"></script>
+
+</body>
+</html>
+

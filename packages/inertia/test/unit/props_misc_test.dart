@@ -1,6 +1,9 @@
+/// Tests for assorted prop helpers.
+library;
 import 'package:test/test.dart';
 import 'package:inertia_dart/inertia.dart';
 
+/// Runs miscellaneous prop unit tests.
 void main() {
   group('Misc Props', () {
     test('AlwaysProp resolves once', () {
@@ -16,7 +19,7 @@ void main() {
       expect(count, equals(1));
     });
 
-    test('OnceProp honors ttl', () async {
+    test('OnceProp resolves each time', () {
       var count = 0;
       final prop = OnceProp(() {
         count += 1;
@@ -25,7 +28,6 @@ void main() {
 
       final context = PropertyContext(headers: {});
       expect(prop.resolve('once', context), equals(1));
-      await Future<void>.delayed(const Duration(milliseconds: 10));
       expect(prop.resolve('once', context), equals(2));
     });
 

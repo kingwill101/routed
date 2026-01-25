@@ -1,14 +1,28 @@
+library;
+
 import '../core/inertia_request.dart';
 import '../core/inertia_response.dart';
 import 'inertia_middleware.dart';
 
-/// Middleware that checks Inertia asset version
+/// Provides middleware to enforce asset version checks.
+///
+/// ```dart
+/// final middleware = VersionMiddleware(
+///   versionResolver: () => '1.0.0',
+/// );
+/// ```
 class VersionMiddleware extends InertiaMiddleware {
+  /// Creates a version-checking middleware.
   VersionMiddleware({required this.versionResolver, this.locationResolver});
+
+  /// Resolves the current asset version.
   final String Function() versionResolver;
+
+  /// Resolves the redirect location on version mismatch.
   final String Function(InertiaRequest request)? locationResolver;
 
   @override
+  /// Returns a location response when the version mismatches.
   Future<InertiaResponse> handle(
     InertiaRequest request,
     InertiaHandler next,

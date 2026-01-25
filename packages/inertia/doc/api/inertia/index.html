@@ -1,0 +1,580 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta http-equiv="X-UA-Compatible" content="IE=edge">
+  <meta name="viewport" content="width=device-width, height=device-height, initial-scale=1, user-scalable=no">
+  <meta name="description" content="inertia library API docs, for the Dart programming language.">
+  <title>inertia library - Dart API</title>
+
+
+  
+  <link rel="preconnect" href="https://fonts.gstatic.com">
+  <link href="https://fonts.googleapis.com/css2?family=Roboto+Mono:ital,wght@0,300;0,400;0,500;0,700;1,400&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@24,400,0,0" rel="stylesheet">
+  
+  <link rel="stylesheet" href="../static-assets/github.css?v1">
+  <link rel="stylesheet" href="../static-assets/styles.css?v1">
+  <link rel="icon" href="../static-assets/favicon.png?v1">
+  
+</head>
+
+<body data-base-href="../" data-using-base-href="false" class="light-theme">
+<div id="overlay-under-drawer"></div>
+<header id="title">
+  <span id="sidenav-left-toggle" class="material-symbols-outlined" role="button" tabindex="0">menu</span>
+  <ol class="breadcrumbs gt-separated dark hidden-xs">
+    <li><a href="../index.html">inertia_dart</a></li>
+    <li class="self-crumb">inertia.dart</li>
+  </ol>
+  <div class="self-name">inertia</div>
+  <form class="search navbar-right" role="search">
+    <input type="text" id="search-box" autocomplete="off" disabled class="form-control typeahead" placeholder="Loading search...">
+  </form>
+  <button class="toggle" id="theme-button" title="Toggle between light and dark mode" aria-label="Light and dark mode toggle">
+    <span id="dark-theme-button" class="material-symbols-outlined" aria-hidden="true">
+      dark_mode
+    </span>
+    <span id="light-theme-button" class="material-symbols-outlined" aria-hidden="true">
+      light_mode
+    </span>
+  </button>
+</header>
+<main>
+<div
+    id="dartdoc-main-content"
+    class="main-content"
+    data-above-sidebar=""
+    data-below-sidebar="inertia&#47;inertia-library-sidebar.html">
+  
+    <div>
+      
+
+      <h1>
+        <span class="kind-library">inertia</span>
+        library 
+ 
+
+      </h1>
+    </div>
+
+    
+<section class="desc markdown">
+  <p>Public entry point for the Inertia Dart package.</p>
+<p>Exports the primary server-side APIs, property helpers, SSR utilities,
+middleware, asset helpers, and testing utilities.</p>
+</section>
+
+
+    <section class="summary offset-anchor" id="classes">
+      <h2>Classes</h2>
+      <dl>
+          <dt id="AlwaysProp">
+  <span class="name "><a href="../inertia/AlwaysProp-class.html">AlwaysProp</a><span class="signature">&lt;<wbr><span class="type-parameter">T</span>&gt;</span></span> 
+
+</dt>
+<dd>
+  Defines a prop that always resolves for every response.
+</dd>
+
+          <dt id="AssertableInertia">
+  <span class="name "><a href="../inertia/AssertableInertia-class.html">AssertableInertia</a></span> 
+
+</dt>
+<dd>
+  Provides fluent assertions for Inertia page payloads.
+</dd>
+
+          <dt id="DeferrableProp">
+  <span class="name "><a href="../inertia/DeferrableProp-class.html">DeferrableProp</a></span> 
+
+</dt>
+<dd>
+  Marker interface for props that resolve on deferred requests.
+</dd>
+
+          <dt id="DeferredProp">
+  <span class="name "><a href="../inertia/DeferredProp-class.html">DeferredProp</a><span class="signature">&lt;<wbr><span class="type-parameter">T</span>&gt;</span></span> 
+
+</dt>
+<dd>
+  Defines a prop that resolves only when its deferred group is requested.
+</dd>
+
+          <dt id="ErrorHandlingMiddleware">
+  <span class="name "><a href="../inertia/ErrorHandlingMiddleware-class.html">ErrorHandlingMiddleware</a></span> 
+
+</dt>
+<dd>
+  Provides error handling for Inertia middleware chains.
+</dd>
+
+          <dt id="HttpSsrGateway">
+  <span class="name "><a href="../inertia/HttpSsrGateway-class.html">HttpSsrGateway</a></span> 
+
+</dt>
+<dd>
+  Provides an HTTP-based SSR gateway implementation.
+</dd>
+
+          <dt id="InertiaAssetManifest">
+  <span class="name "><a href="../inertia/InertiaAssetManifest-class.html">InertiaAssetManifest</a></span> 
+
+</dt>
+<dd>
+  Loads and resolves Vite-style asset manifests for Inertia apps.
+</dd>
+
+          <dt id="InertiaAssetManifestEntry">
+  <span class="name "><a href="../inertia/InertiaAssetManifestEntry-class.html">InertiaAssetManifestEntry</a></span> 
+
+</dt>
+<dd>
+  Defines a single entry from a Vite asset manifest.
+</dd>
+
+          <dt id="InertiaAssetResolution">
+  <span class="name "><a href="../inertia/InertiaAssetResolution-class.html">InertiaAssetResolution</a></span> 
+
+</dt>
+<dd>
+  Represents resolved assets for a manifest entry.
+</dd>
+
+          <dt id="InertiaHeaders">
+  <span class="name "><a href="../inertia/InertiaHeaders-class.html">InertiaHeaders</a></span> 
+
+</dt>
+<dd>
+  Defines canonical HTTP header names used by the Inertia protocol.
+</dd>
+
+          <dt id="InertiaHeaderUtils">
+  <span class="name "><a href="../inertia/InertiaHeaderUtils-class.html">InertiaHeaderUtils</a></span> 
+
+</dt>
+<dd>
+  Parses Inertia-specific request headers into strongly typed values.
+</dd>
+
+          <dt id="InertiaMiddleware">
+  <span class="name "><a href="../inertia/InertiaMiddleware-class.html">InertiaMiddleware</a></span> 
+
+</dt>
+<dd>
+  Defines middleware interfaces for Inertia request handling.
+</dd>
+
+          <dt id="InertiaProp">
+  <span class="name "><a href="../inertia/InertiaProp-class.html">InertiaProp</a></span> 
+
+</dt>
+<dd>
+  Defines the core property interfaces used by Inertia props.
+</dd>
+
+          <dt id="InertiaRequest">
+  <span class="name "><a href="../inertia/InertiaRequest-class.html">InertiaRequest</a></span> 
+
+</dt>
+<dd>
+  Defines a parsed request wrapper for Inertia headers and context helpers.
+</dd>
+
+          <dt id="InertiaResponse">
+  <span class="name "><a href="../inertia/InertiaResponse-class.html">InertiaResponse</a></span> 
+
+</dt>
+<dd>
+  Defines the response payload for Inertia requests.
+</dd>
+
+          <dt id="InertiaResponseFactory">
+  <span class="name "><a href="../inertia/InertiaResponseFactory-class.html">InertiaResponseFactory</a></span> 
+
+</dt>
+<dd>
+  Builds Inertia page payloads and responses.
+</dd>
+
+          <dt id="InertiaSerializable">
+  <span class="name "><a href="../inertia/InertiaSerializable-class.html">InertiaSerializable</a></span> 
+
+</dt>
+<dd>
+  Defines an object that can serialize itself for Inertia props.
+</dd>
+
+          <dt id="InertiaSettings">
+  <span class="name "><a href="../inertia/InertiaSettings-class.html">InertiaSettings</a></span> 
+
+</dt>
+<dd>
+  Defines configuration settings for the Inertia core package.
+</dd>
+
+          <dt id="InertiaSharedProps">
+  <span class="name "><a href="../inertia/InertiaSharedProps-class.html">InertiaSharedProps</a></span> 
+
+</dt>
+<dd>
+  Stores shared props applied to every Inertia response.
+</dd>
+
+          <dt id="InertiaSsrSettings">
+  <span class="name "><a href="../inertia/InertiaSsrSettings-class.html">InertiaSsrSettings</a></span> 
+
+</dt>
+<dd>
+  Defines SSR configuration and helpers for Inertia.
+</dd>
+
+          <dt id="InertiaViteAssets">
+  <span class="name "><a href="../inertia/InertiaViteAssets-class.html">InertiaViteAssets</a></span> 
+
+</dt>
+<dd>
+  Resolves Vite assets for development and production builds.
+</dd>
+
+          <dt id="InertiaViteAssetTags">
+  <span class="name "><a href="../inertia/InertiaViteAssetTags-class.html">InertiaViteAssetTags</a></span> 
+
+</dt>
+<dd>
+  Represents resolved Vite asset tags for rendering.
+</dd>
+
+          <dt id="LazyProp">
+  <span class="name "><a href="../inertia/LazyProp-class.html">LazyProp</a><span class="signature">&lt;<wbr><span class="type-parameter">T</span>&gt;</span></span> 
+
+</dt>
+<dd>
+  Defines a prop that resolves only on partial reloads.
+</dd>
+
+          <dt id="MergeableProp">
+  <span class="name "><a href="../inertia/MergeableProp-class.html">MergeableProp</a></span> 
+
+</dt>
+<dd>
+  Marker interface for props that participate in client-side merging.
+</dd>
+
+          <dt id="MergeProp">
+  <span class="name "><a href="../inertia/MergeProp-class.html">MergeProp</a><span class="signature">&lt;<wbr><span class="type-parameter">T</span>&gt;</span></span> 
+
+</dt>
+<dd>
+  Defines a prop that merges into existing props on the client.
+</dd>
+
+          <dt id="OnceableProp">
+  <span class="name "><a href="../inertia/OnceableProp-class.html">OnceableProp</a></span> 
+
+</dt>
+<dd>
+  Marker interface for props that resolve once.
+</dd>
+
+          <dt id="OnceProp">
+  <span class="name "><a href="../inertia/OnceProp-class.html">OnceProp</a><span class="signature">&lt;<wbr><span class="type-parameter">T</span>&gt;</span></span> 
+
+</dt>
+<dd>
+  Defines a prop that resolves once and caches on the client.
+</dd>
+
+          <dt id="OptionalProp">
+  <span class="name "><a href="../inertia/OptionalProp-class.html">OptionalProp</a><span class="signature">&lt;<wbr><span class="type-parameter">T</span>&gt;</span></span> 
+
+</dt>
+<dd>
+  Defines a prop excluded on the first load that resolves on partial reloads.
+</dd>
+
+          <dt id="PageData">
+  <span class="name "><a href="../inertia/PageData-class.html">PageData</a></span> 
+
+</dt>
+<dd>
+  Defines the Inertia page payload structure.
+</dd>
+
+          <dt id="PropertyContext">
+  <span class="name "><a href="../inertia/PropertyContext-class.html">PropertyContext</a></span> 
+
+</dt>
+<dd>
+  Defines the property resolution context for Inertia requests.
+</dd>
+
+          <dt id="PropertyResolutionResult">
+  <span class="name "><a href="../inertia/PropertyResolutionResult-class.html">PropertyResolutionResult</a></span> 
+
+</dt>
+<dd>
+  Result of resolving Inertia props and merge metadata.
+</dd>
+
+          <dt id="PropertyResolver">
+  <span class="name "><a href="../inertia/PropertyResolver-class.html">PropertyResolver</a></span> 
+
+</dt>
+<dd>
+  Resolves Inertia props into payload data and merge metadata.
+</dd>
+
+          <dt id="RedirectMiddleware">
+  <span class="name "><a href="../inertia/RedirectMiddleware-class.html">RedirectMiddleware</a></span> 
+
+</dt>
+<dd>
+  Normalizes redirect status codes for Inertia requests.
+</dd>
+
+          <dt id="ScrollMetadata">
+  <span class="name "><a href="../inertia/ScrollMetadata-class.html">ScrollMetadata</a></span> 
+
+</dt>
+<dd>
+  Pagination metadata for scroll props.
+</dd>
+
+          <dt id="ScrollProp">
+  <span class="name "><a href="../inertia/ScrollProp-class.html">ScrollProp</a><span class="signature">&lt;<wbr><span class="type-parameter">T</span>&gt;</span></span> 
+
+</dt>
+<dd>
+  Defines props and metadata for infinite scroll style pagination.
+</dd>
+
+          <dt id="SharedDataMiddleware">
+  <span class="name "><a href="../inertia/SharedDataMiddleware-class.html">SharedDataMiddleware</a></span> 
+
+</dt>
+<dd>
+  Injects shared props into every Inertia response.
+</dd>
+
+          <dt id="SsrBundleDetector">
+  <span class="name "><a href="../inertia/SsrBundleDetector-class.html">SsrBundleDetector</a></span> 
+
+</dt>
+<dd>
+  Detects the SSR bundle path from configured candidates.
+</dd>
+
+          <dt id="SsrGateway">
+  <span class="name "><a href="../inertia/SsrGateway-class.html">SsrGateway</a></span> 
+
+</dt>
+<dd>
+  Defines the interface for SSR gateways.
+</dd>
+
+          <dt id="SsrResponse">
+  <span class="name "><a href="../inertia/SsrResponse-class.html">SsrResponse</a></span> 
+
+</dt>
+<dd>
+  Defines the response payload from an SSR gateway.
+</dd>
+
+          <dt id="SsrServerConfig">
+  <span class="name "><a href="../inertia/SsrServerConfig-class.html">SsrServerConfig</a></span> 
+
+</dt>
+<dd>
+  Defines configuration needed to start a local SSR server process.
+</dd>
+
+          <dt id="VersionMiddleware">
+  <span class="name "><a href="../inertia/VersionMiddleware-class.html">VersionMiddleware</a></span> 
+
+</dt>
+<dd>
+  Provides middleware to enforce asset version checks.
+</dd>
+
+      </dl>
+    </section>
+
+
+
+
+    <section class="summary offset-anchor" id="extensions">
+      <h2>Extensions</h2>
+      <dl>
+          <dt id="InertiaTestExtensions">
+  <span class="name "><a href="../inertia/InertiaTestExtensions.html">InertiaTestExtensions</a></span>
+  on TestResponse
+  
+
+</dt>
+<dd>
+  Adds Inertia assertions to <code>TestResponse</code>.
+</dd>
+
+      </dl>
+    </section>
+
+
+
+    <section class="summary offset-anchor" id="functions">
+      <h2>Functions</h2>
+      <dl class="callables">
+          <dt id="checkSsrServer" class="callable">
+  <span class="name"><a href="../inertia/checkSsrServer.html">checkSsrServer</a></span><span class="signature">(<wbr>{<span class="parameter" id="checkSsrServer-param-endpoint"><span>required</span> <span class="type-annotation"><a href="https://api.flutter.dev/flutter/dart-core/Uri-class.html">Uri</a></span> <span class="parameter-name">endpoint</span>, </span><span class="parameter" id="checkSsrServer-param-healthEndpoint"><span class="type-annotation"><a href="https://api.flutter.dev/flutter/dart-core/Uri-class.html">Uri</a>?</span> <span class="parameter-name">healthEndpoint</span>, </span><span class="parameter" id="checkSsrServer-param-client"><span class="type-annotation"><a href="https://pub.dev/documentation/http/1.6.0/http/Client-class.html">Client</a>?</span> <span class="parameter-name">client</span></span>})
+    <span class="returntype parameter">&#8594; <a href="https://api.flutter.dev/flutter/dart-core/Future-class.html">Future</a><span class="signature">&lt;<wbr><span class="type-parameter"><a href="https://api.flutter.dev/flutter/dart-core/bool-class.html">bool</a></span>&gt;</span></span>
+  </span>
+  
+
+</dt>
+<dd>
+  Checks the SSR server health endpoint and returns <code>true</code> on success.
+  
+
+</dd>
+
+          <dt id="inertiaRequestFromHttp" class="callable">
+  <span class="name"><a href="../inertia/inertiaRequestFromHttp.html">inertiaRequestFromHttp</a></span><span class="signature">(<wbr><span class="parameter" id="inertiaRequestFromHttp-param-request"><span class="type-annotation"><a href="https://api.flutter.dev/flutter/universal_io/HttpRequest-class.html">HttpRequest</a></span> <span class="parameter-name">request</span></span>)
+    <span class="returntype parameter">&#8594; <a href="../inertia/InertiaRequest-class.html">InertiaRequest</a></span>
+  </span>
+  
+
+</dt>
+<dd>
+  Provides dart:io helpers for Inertia requests and responses.
+  
+
+</dd>
+
+          <dt id="pipeSsrProcess" class="callable">
+  <span class="name"><a href="../inertia/pipeSsrProcess.html">pipeSsrProcess</a></span><span class="signature">(<wbr><span class="parameter" id="pipeSsrProcess-param-process"><span class="type-annotation"><a href="https://api.flutter.dev/flutter/universal_io/Process-class.html">Process</a></span> <span class="parameter-name">process</span>, {</span><span class="parameter" id="pipeSsrProcess-param-stdoutSink"><span class="type-annotation"><a href="https://api.flutter.dev/flutter/dart-core/StringSink-class.html">StringSink</a>?</span> <span class="parameter-name">stdoutSink</span>, </span><span class="parameter" id="pipeSsrProcess-param-stderrSink"><span class="type-annotation"><a href="https://api.flutter.dev/flutter/dart-core/StringSink-class.html">StringSink</a>?</span> <span class="parameter-name">stderrSink</span></span>})
+    <span class="returntype parameter">&#8594; <a href="https://api.flutter.dev/flutter/dart-core/Future-class.html">Future</a><span class="signature">&lt;<wbr><span class="type-parameter"><a href="https://api.flutter.dev/flutter/dart-core/int-class.html">int</a></span>&gt;</span></span>
+  </span>
+  
+
+</dt>
+<dd>
+  Pipes an SSR process stdout/stderr to <code>stdoutSink</code> and <code>stderrSink</code>.
+  
+
+</dd>
+
+          <dt id="startSsrServer" class="callable">
+  <span class="name"><a href="../inertia/startSsrServer.html">startSsrServer</a></span><span class="signature">(<wbr><span class="parameter" id="startSsrServer-param-config"><span class="type-annotation"><a href="../inertia/SsrServerConfig-class.html">SsrServerConfig</a></span> <span class="parameter-name">config</span>, {</span><span class="parameter" id="startSsrServer-param-inheritStdio"><span class="type-annotation"><a href="https://api.flutter.dev/flutter/dart-core/bool-class.html">bool</a></span> <span class="parameter-name">inheritStdio</span> = <span class="default-value">false</span></span>})
+    <span class="returntype parameter">&#8594; <a href="https://api.flutter.dev/flutter/dart-core/Future-class.html">Future</a><span class="signature">&lt;<wbr><span class="type-parameter"><a href="https://api.flutter.dev/flutter/universal_io/Process-class.html">Process</a></span>&gt;</span></span>
+  </span>
+  
+
+</dt>
+<dd>
+  Starts, monitors, and stops a local SSR server process.
+  
+
+</dd>
+
+          <dt id="stopSsrServer" class="callable">
+  <span class="name"><a href="../inertia/stopSsrServer.html">stopSsrServer</a></span><span class="signature">(<wbr>{<span class="parameter" id="stopSsrServer-param-endpoint"><span>required</span> <span class="type-annotation"><a href="https://api.flutter.dev/flutter/dart-core/Uri-class.html">Uri</a></span> <span class="parameter-name">endpoint</span>, </span><span class="parameter" id="stopSsrServer-param-shutdownEndpoint"><span class="type-annotation"><a href="https://api.flutter.dev/flutter/dart-core/Uri-class.html">Uri</a>?</span> <span class="parameter-name">shutdownEndpoint</span>, </span><span class="parameter" id="stopSsrServer-param-client"><span class="type-annotation"><a href="https://pub.dev/documentation/http/1.6.0/http/Client-class.html">Client</a>?</span> <span class="parameter-name">client</span></span>})
+    <span class="returntype parameter">&#8594; <a href="https://api.flutter.dev/flutter/dart-core/Future-class.html">Future</a><span class="signature">&lt;<wbr><span class="type-parameter"><a href="https://api.flutter.dev/flutter/dart-core/bool-class.html">bool</a></span>&gt;</span></span>
+  </span>
+  
+
+</dt>
+<dd>
+  Sends a shutdown request to the SSR server and returns <code>true</code> on success.
+  
+
+</dd>
+
+          <dt id="writeInertiaResponse" class="callable">
+  <span class="name"><a href="../inertia/writeInertiaResponse.html">writeInertiaResponse</a></span><span class="signature">(<wbr><span class="parameter" id="writeInertiaResponse-param-response"><span class="type-annotation"><a href="https://api.flutter.dev/flutter/universal_io/HttpResponse-class.html">HttpResponse</a></span> <span class="parameter-name">response</span>, </span><span class="parameter" id="writeInertiaResponse-param-inertiaResponse"><span class="type-annotation"><a href="../inertia/InertiaResponse-class.html">InertiaResponse</a></span> <span class="parameter-name">inertiaResponse</span></span>)
+    <span class="returntype parameter">&#8594; <a href="https://api.flutter.dev/flutter/dart-core/Future-class.html">Future</a><span class="signature">&lt;<wbr><span class="type-parameter">void</span>&gt;</span></span>
+  </span>
+  
+
+</dt>
+<dd>
+  Writes an <a href="../inertia/InertiaResponse-class.html">InertiaResponse</a> to a <code>dart:io</code> <a href="https://api.flutter.dev/flutter/universal_io/HttpResponse-class.html">HttpResponse</a>.
+  
+
+</dd>
+
+      </dl>
+    </section>
+
+    <section class="summary offset-anchor" id="typedefs">
+      <h2>Typedefs</h2>
+      <dl>
+          
+  <dt id="InertiaHandler" class="callable">
+    <span class="name"><a href="../inertia/InertiaHandler.html">InertiaHandler</a></span><span class="signature">
+      <span class="returntype parameter">= <a href="https://api.flutter.dev/flutter/dart-core/Future-class.html">Future</a><span class="signature">&lt;<wbr><span class="type-parameter"><a href="../inertia/InertiaResponse-class.html">InertiaResponse</a></span>&gt;</span> Function<span class="signature">(<span class="parameter" id="param-request"><span class="type-annotation"><a href="../inertia/InertiaRequest-class.html">InertiaRequest</a></span> <span class="parameter-name">request</span></span>)</span></span>
+    </span>
+    
+
+  </dt>
+  <dd>
+    Handler signature for Inertia middleware chains.
+    
+
+  </dd>
+
+          
+  <dt id="ScrollMetadataResolver" class="callable">
+    <span class="name"><a href="../inertia/ScrollMetadataResolver.html">ScrollMetadataResolver</a></span>&lt;<wbr><span class="type-parameter">T</span>&gt;<span class="signature">
+      <span class="returntype parameter">= <a href="../inertia/ScrollMetadata-class.html">ScrollMetadata</a> Function<span class="signature">(<span class="parameter" id="param-value"><span class="type-annotation">T</span> <span class="parameter-name">value</span></span>)</span></span>
+    </span>
+    
+
+  </dt>
+  <dd>
+    Resolves <a href="../inertia/ScrollMetadata-class.html">ScrollMetadata</a> from a resolved scroll value.
+    
+
+  </dd>
+
+      </dl>
+    </section>
+
+  </div> <!-- /.main-content -->
+  <div id="dartdoc-sidebar-left" class="sidebar sidebar-offcanvas-left">
+    <!-- The search input and breadcrumbs below are only responsively visible at low resolutions. -->
+<header id="header-search-sidebar" class="hidden-l">
+  <form class="search-sidebar" role="search">
+    <input type="text" id="search-sidebar" autocomplete="off" disabled class="form-control typeahead" placeholder="Loading search...">
+  </form>
+</header>
+<ol class="breadcrumbs gt-separated dark hidden-l" id="sidebar-nav">
+    <li><a href="../index.html">inertia_dart</a></li>
+    <li class="self-crumb">inertia.dart</li>
+</ol>
+
+    <h5><span class="package-name">inertia_dart</span> <span class="package-kind">package</span></h5>
+    <ol>
+      <li class="section-title">Libraries</li>
+      <li><a href="../inertia/">inertia</a></li>
+</ol>
+
+  </div>
+  <div id="dartdoc-sidebar-right" class="sidebar sidebar-offcanvas-right">
+    <h5>inertia library</h5>
+  </div><!--/sidebar-offcanvas-right-->
+</main>
+<footer>
+  <span class="no-break">
+    inertia_dart
+      1.0.0
+  </span>
+  
+</footer>
+
+
+<script src="../static-assets/highlight.pack.js?v1"></script>
+<script src="../static-assets/docs.dart.js"></script>
+
+</body>
+</html>
+

@@ -1,6 +1,9 @@
+/// Tests for [InertiaResponse] factories and metadata.
+library;
 import 'package:test/test.dart';
 import 'package:inertia_dart/inertia.dart';
 
+/// Runs Inertia response unit tests.
 void main() {
   group('InertiaResponse', () {
     test('builds json response with headers', () {

@@ -1,3 +1,5 @@
+/// Tests for [HttpSsrGateway] behavior.
+library;
 import 'dart:convert';
 
 import 'package:test/test.dart';
@@ -5,6 +7,7 @@ import 'package:http/testing.dart';
 import 'package:http/http.dart' as http;
 import 'package:inertia_dart/inertia.dart';
 
+/// Runs HTTP SSR gateway unit tests.
 void main() {
   group('HttpSsrGateway', () {
     test('renders SSR response', () async {

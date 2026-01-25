@@ -1,9 +1,11 @@
+/// Tests for testing helpers and extensions.
+library;
 import 'dart:convert';
 
-import 'package:test/test.dart';
 import 'package:server_testing/server_testing.dart';
 import 'package:inertia_dart/inertia.dart';
 
+/// Runs testing helper unit tests.
 void main() {
   group('AssertableInertia', () {
     test('asserts component and props', () {

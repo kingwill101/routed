@@ -1,9 +1,15 @@
+/// Test helpers for Inertia responses and headers.
+///
+/// ```dart
+/// final headers = InertiaTestHelpers.createInertiaHeaders(version: '1.0.0');
+/// ```
+library;
 import 'dart:convert';
 import 'package:server_testing/server_testing.dart';
 
-/// Utility class for Inertia testing with server_testing integration
+/// Utility helpers for Inertia tests using `server_testing`.
 class InertiaTestHelpers {
-  /// Create basic Inertia headers for testing
+  /// Creates basic Inertia headers for testing.
   static Map<String, String> createInertiaHeaders({
     String version = '',
     List<String>? partialData,
@@ -27,7 +33,7 @@ class InertiaTestHelpers {
     return headers;
   }
 
-  /// Create a mock JSON response for testing
+  /// Creates a mock JSON response for testing.
   static TestResponse createMockInertiaResponse({
     required String component,
     Map<String, dynamic>? props,
@@ -55,7 +61,7 @@ class InertiaTestHelpers {
     );
   }
 
-  /// Assert that response is an Inertia response
+  /// Asserts that [response] is an Inertia response.
   static void assertIsInertia(TestResponse response) {
     final values = response.headers['X-Inertia'] ?? const [];
     expect(
@@ -65,7 +71,7 @@ class InertiaTestHelpers {
     );
   }
 
-  /// Assert Inertia component
+  /// Asserts that [response] uses [expectedComponent].
   static void assertComponent(TestResponse response, String expectedComponent) {
     assertIsInertia(response);
 
@@ -79,7 +85,7 @@ class InertiaTestHelpers {
     );
   }
 
-  /// Assert Inertia props contain expected values
+  /// Asserts that [response] includes the expected props.
   static void assertProps(
     TestResponse response,
     Map<String, dynamic> expectedProps,
@@ -100,7 +106,7 @@ class InertiaTestHelpers {
     });
   }
 
-  /// Assert response status code
+  /// Asserts that [response] has [expectedStatus].
   static void assertStatus(TestResponse response, int expectedStatus) {
     expect(
       response.statusCode,

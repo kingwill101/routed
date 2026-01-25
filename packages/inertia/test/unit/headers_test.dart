@@ -1,6 +1,9 @@
+/// Tests for header utilities and property context helpers.
+library;
 import 'package:test/test.dart';
 import 'package:inertia_dart/inertia.dart';
 
+/// Runs header and context unit tests.
 void main() {
   group('Inertia Core', () {
     group('Header Utilities', () {
@@ -28,6 +31,31 @@ void main() {
 
         expect(partialData, isNotNull);
         expect(partialData, orderedEquals(['prop1', 'prop2']));
+      });
+
+      test('extracts partial except data', () {
+        final headers = {'X-Inertia-Partial-Except': 'prop1,prop2'};
+        final partialExcept = InertiaHeaderUtils.getPartialExcept(headers);
+
+        expect(partialExcept, orderedEquals(['prop1', 'prop2']));
+      });
+
+      test('extracts error bag header', () {
+        final headers = {'X-Inertia-Error-Bag': 'login'};
+        expect(InertiaHeaderUtils.getErrorBag(headers), equals('login'));
+      });
+
+      test('extracts merge intent header', () {
+        final headers = {'X-Inertia-Infinite-Scroll-Merge-Intent': 'prepend'};
+        expect(InertiaHeaderUtils.getMergeIntent(headers), equals('prepend'));
+      });
+
+      test('extracts except-once props', () {
+        final headers = {'X-Inertia-Except-Once-Props': 'a,b'};
+        expect(
+          InertiaHeaderUtils.getExceptOnceProps(headers),
+          orderedEquals(['a', 'b']),
+        );
       });
     });
 

@@ -1,10 +1,20 @@
+library;
+
 import 'dart:convert';
 
-import 'headers.dart';
+import 'inertia_headers.dart';
 import 'page_data.dart';
 
-/// Represents an Inertia response payload
+/// Defines the response payload for Inertia requests.
+///
+/// Use [InertiaResponse.json] for JSON responses and
+/// [InertiaResponse.html] for initial HTML visits.
+///
+/// ```dart
+/// final response = InertiaResponse.json(page);
+/// ```
 class InertiaResponse {
+  /// Creates a response with the given [page] and metadata.
   const InertiaResponse({
     required this.page,
     this.statusCode = 200,
@@ -12,7 +22,11 @@ class InertiaResponse {
     this.html,
   });
 
-  /// Create a JSON response for Inertia requests
+  /// Creates a JSON response for Inertia requests.
+  ///
+  /// ```dart
+  /// final response = InertiaResponse.json(page, statusCode: 201);
+  /// ```
   factory InertiaResponse.json(PageData page, {int statusCode = 200}) {
     return InertiaResponse(
       page: page,
@@ -25,7 +39,11 @@ class InertiaResponse {
     );
   }
 
-  /// Create an HTML response for initial visits
+  /// Creates an HTML response for initial visits.
+  ///
+  /// ```dart
+  /// final response = InertiaResponse.html(page, '<div id="app"></div>');
+  /// ```
   factory InertiaResponse.html(
     PageData page,
     String html, {
@@ -39,7 +57,11 @@ class InertiaResponse {
     );
   }
 
-  /// Create a location response for version mismatches
+  /// Creates a location response for version mismatches.
+  ///
+  /// ```dart
+  /// final response = InertiaResponse.location('/login');
+  /// ```
   factory InertiaResponse.location(String url) {
     return InertiaResponse(
       page: PageData(component: '', props: {}, url: url),
@@ -48,24 +70,24 @@ class InertiaResponse {
     );
   }
 
-  /// The page data for the response
+  /// The page data for this response.
   final PageData page;
 
-  /// Response status code
+  /// The HTTP status code for the response.
   final int statusCode;
 
-  /// Response headers
+  /// The headers to include in the response.
   final Map<String, String> headers;
 
-  /// Optional HTML template content for initial visits
+  /// The optional HTML body for initial visits.
   final String? html;
 
-  /// Convert the page data to JSON map
+  /// Converts [page] to a JSON-serializable map.
   Map<String, dynamic> toJson() => page.toJson();
 
-  /// Encode the page data as JSON string
+  /// Encodes [page] to a JSON string.
   String toJsonString() => jsonEncode(page.toJson());
 
-  /// Whether this is an Inertia JSON response
+  /// Whether this response is an Inertia JSON response.
   bool get isInertia => headers[InertiaHeaders.inertia] == 'true';
 }

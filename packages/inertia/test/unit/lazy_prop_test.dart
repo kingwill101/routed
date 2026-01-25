@@ -1,11 +1,17 @@
+/// Tests for [LazyProp] behavior.
+library;
 import 'package:test/test.dart';
 import 'package:inertia_dart/inertia.dart';
 
+/// Runs lazy prop unit tests.
 void main() {
   group('LazyProp', () {
-    test('resolves value when requested', () {
+    test('resolves value when requested on partial reload', () {
       final prop = LazyProp(() => 'lazy-value');
-      final context = PropertyContext(headers: {});
+      final context = PropertyContext.partial(
+        headers: {},
+        requestedProps: ['lazy'],
+      );
 
       final value = prop.resolve('lazy', context);
       expect(value, equals('lazy-value'));
@@ -17,6 +23,13 @@ void main() {
         headers: {},
         requestedProps: ['other'],
       );
+
+      expect(() => prop.resolve('lazy', context), throwsException);
+    });
+
+    test('skips value on initial load', () {
+      final prop = LazyProp(() => 'lazy-value');
+      final context = PropertyContext(headers: {});
 
       expect(() => prop.resolve('lazy', context), throwsException);
     });

@@ -1,6 +1,9 @@
+/// Tests for [InertiaSettings] behavior.
+library;
 import 'package:test/test.dart';
 import 'package:inertia_dart/inertia.dart';
 
+/// Runs Inertia settings unit tests.
 void main() {
   test('InertiaSettings copyWith overrides values', () {
     final settings = InertiaSettings(

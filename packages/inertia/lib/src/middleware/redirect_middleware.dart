@@ -1,10 +1,17 @@
+library;
+
 import '../core/inertia_request.dart';
 import '../core/inertia_response.dart';
 import 'inertia_middleware.dart';
 
-/// Middleware that adjusts redirect status codes for Inertia requests
+/// Normalizes redirect status codes for Inertia requests.
+///
+/// ```dart
+/// final middleware = RedirectMiddleware();
+/// ```
 class RedirectMiddleware extends InertiaMiddleware {
   @override
+  /// Rewrites 302 redirects to 303 for non-GET Inertia requests.
   Future<InertiaResponse> handle(
     InertiaRequest request,
     InertiaHandler next,

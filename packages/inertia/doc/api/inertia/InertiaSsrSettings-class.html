@@ -1,0 +1,404 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta http-equiv="X-UA-Compatible" content="IE=edge">
+  <meta name="viewport" content="width=device-width, height=device-height, initial-scale=1, user-scalable=no">
+  <meta name="description" content="API docs for the InertiaSsrSettings class from the inertia library, for the Dart programming language.">
+  <title>InertiaSsrSettings class - inertia library - Dart API</title>
+
+
+  
+  <link rel="preconnect" href="https://fonts.gstatic.com">
+  <link href="https://fonts.googleapis.com/css2?family=Roboto+Mono:ital,wght@0,300;0,400;0,500;0,700;1,400&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@24,400,0,0" rel="stylesheet">
+  
+  <link rel="stylesheet" href="../static-assets/github.css?v1">
+  <link rel="stylesheet" href="../static-assets/styles.css?v1">
+  <link rel="icon" href="../static-assets/favicon.png?v1">
+  
+</head>
+
+<body data-base-href="../" data-using-base-href="false" class="light-theme">
+<div id="overlay-under-drawer"></div>
+<header id="title">
+  <span id="sidenav-left-toggle" class="material-symbols-outlined" role="button" tabindex="0">menu</span>
+  <ol class="breadcrumbs gt-separated dark hidden-xs">
+    <li><a href="../index.html">inertia_dart</a></li>
+    <li><a href="../inertia/">inertia.dart</a></li>
+    <li class="self-crumb">InertiaSsrSettings class</li>
+  </ol>
+  <div class="self-name">InertiaSsrSettings</div>
+  <form class="search navbar-right" role="search">
+    <input type="text" id="search-box" autocomplete="off" disabled class="form-control typeahead" placeholder="Loading search...">
+  </form>
+  <button class="toggle" id="theme-button" title="Toggle between light and dark mode" aria-label="Light and dark mode toggle">
+    <span id="dark-theme-button" class="material-symbols-outlined" aria-hidden="true">
+      dark_mode
+    </span>
+    <span id="light-theme-button" class="material-symbols-outlined" aria-hidden="true">
+      light_mode
+    </span>
+  </button>
+</header>
+<main>
+<div
+    id="dartdoc-main-content"
+    class="main-content"
+    data-above-sidebar="inertia&#47;inertia-library-sidebar.html"
+    data-below-sidebar="inertia&#47;InertiaSsrSettings-class-sidebar.html">
+    <div>
+<h1><span class="kind-class">InertiaSsrSettings</span> class 
+ 
+</h1></div>
+
+    
+<section class="desc markdown">
+  <p>Defines SSR configuration and helpers for Inertia.</p>
+<pre class="language-dart"><code class="language-dart">final settings = InertiaSsrSettings(
+  enabled: true,
+  endpoint: Uri.parse('http://127.0.0.1:13714/render'),
+  bundle: 'bootstrap/ssr/ssr.mjs',
+);
+</code></pre>
+</section>
+
+
+
+    
+  <section class="summary offset-anchor" id="constructors">
+    <h2>Constructors</h2>
+    <dl class="constructor-summary-list">
+        <dt id="InertiaSsrSettings.new" class="callable">
+          <span class="name"><a href="../inertia/InertiaSsrSettings/InertiaSsrSettings.html">InertiaSsrSettings</a></span><span class="signature">({<span class="parameter" id="-param-enabled"><span class="type-annotation"><a href="https://api.flutter.dev/flutter/dart-core/bool-class.html">bool</a></span> <span class="parameter-name">enabled</span> = <span class="default-value">false</span>, </span><span class="parameter" id="-param-endpoint"><span class="type-annotation"><a href="https://api.flutter.dev/flutter/dart-core/Uri-class.html">Uri</a>?</span> <span class="parameter-name">endpoint</span>, </span><span class="parameter" id="-param-healthEndpoint"><span class="type-annotation"><a href="https://api.flutter.dev/flutter/dart-core/Uri-class.html">Uri</a>?</span> <span class="parameter-name">healthEndpoint</span>, </span><span class="parameter" id="-param-shutdownEndpoint"><span class="type-annotation"><a href="https://api.flutter.dev/flutter/dart-core/Uri-class.html">Uri</a>?</span> <span class="parameter-name">shutdownEndpoint</span>, </span><span class="parameter" id="-param-bundle"><span class="type-annotation"><a href="https://api.flutter.dev/flutter/dart-core/String-class.html">String</a>?</span> <span class="parameter-name">bundle</span>, </span><span class="parameter" id="-param-ensureBundleExists"><span class="type-annotation"><a href="https://api.flutter.dev/flutter/dart-core/bool-class.html">bool</a></span> <span class="parameter-name">ensureBundleExists</span> = <span class="default-value">true</span>, </span><span class="parameter" id="-param-runtime"><span class="type-annotation"><a href="https://api.flutter.dev/flutter/dart-core/String-class.html">String</a></span> <span class="parameter-name">runtime</span> = <span class="default-value">&#39;node&#39;</span>, </span><span class="parameter" id="-param-runtimeArgs"><span class="type-annotation"><a href="https://api.flutter.dev/flutter/dart-core/List-class.html">List</a><span class="signature">&lt;<wbr><span class="type-parameter"><a href="https://api.flutter.dev/flutter/dart-core/String-class.html">String</a></span>&gt;</span></span> <span class="parameter-name">runtimeArgs</span> = <span class="default-value">const []</span>, </span><span class="parameter" id="-param-bundleCandidates"><span class="type-annotation"><a href="https://api.flutter.dev/flutter/dart-core/List-class.html">List</a><span class="signature">&lt;<wbr><span class="type-parameter"><a href="https://api.flutter.dev/flutter/dart-core/String-class.html">String</a></span>&gt;</span></span> <span class="parameter-name">bundleCandidates</span> = <span class="default-value">const []</span>, </span><span class="parameter" id="-param-workingDirectory"><span class="type-annotation"><a href="https://api.flutter.dev/flutter/universal_io/Directory-class.html">Directory</a>?</span> <span class="parameter-name">workingDirectory</span>, </span><span class="parameter" id="-param-environment"><span class="type-annotation"><a href="https://api.flutter.dev/flutter/dart-core/Map-class.html">Map</a><span class="signature">&lt;<wbr><span class="type-parameter"><a href="https://api.flutter.dev/flutter/dart-core/String-class.html">String</a></span>, <span class="type-parameter"><a href="https://api.flutter.dev/flutter/dart-core/String-class.html">String</a></span>&gt;</span></span> <span class="parameter-name">environment</span> = <span class="default-value">const {}</span></span>})</span>
+        </dt>
+        <dd>
+          Creates SSR settings with optional overrides.
+            <div class="constructor-modifier features">const</div>
+        </dd>
+    </dl>
+  </section>
+    
+  <section
+      class="summary offset-anchor"
+      id="instance-properties">
+    <h2>Properties</h2>
+    <dl class="properties">
+        <dt id="bundle" class="property">
+  <span class="name"><a href="../inertia/InertiaSsrSettings/bundle.html">bundle</a></span>
+  <span class="signature">&#8594; <a href="https://api.flutter.dev/flutter/dart-core/String-class.html">String</a>?</span>
+  
+
+</dt>
+<dd>
+  The SSR bundle path, if configured.
+  <div class="features"><span class="feature">final</span></div>
+
+</dd>
+
+        <dt id="bundleCandidates" class="property">
+  <span class="name"><a href="../inertia/InertiaSsrSettings/bundleCandidates.html">bundleCandidates</a></span>
+  <span class="signature">&#8594; <a href="https://api.flutter.dev/flutter/dart-core/List-class.html">List</a><span class="signature">&lt;<wbr><span class="type-parameter"><a href="https://api.flutter.dev/flutter/dart-core/String-class.html">String</a></span>&gt;</span></span>
+  
+
+</dt>
+<dd>
+  Candidate bundle paths used by <a href="../inertia/SsrBundleDetector-class.html">SsrBundleDetector</a>.
+  <div class="features"><span class="feature">final</span></div>
+
+</dd>
+
+        <dt id="enabled" class="property">
+  <span class="name"><a href="../inertia/InertiaSsrSettings/enabled.html">enabled</a></span>
+  <span class="signature">&#8594; <a href="https://api.flutter.dev/flutter/dart-core/bool-class.html">bool</a></span>
+  
+
+</dt>
+<dd>
+  Whether SSR is enabled.
+  <div class="features"><span class="feature">final</span></div>
+
+</dd>
+
+        <dt id="endpoint" class="property">
+  <span class="name"><a href="../inertia/InertiaSsrSettings/endpoint.html">endpoint</a></span>
+  <span class="signature">&#8594; <a href="https://api.flutter.dev/flutter/dart-core/Uri-class.html">Uri</a>?</span>
+  
+
+</dt>
+<dd>
+  The SSR render endpoint, if configured.
+  <div class="features"><span class="feature">final</span></div>
+
+</dd>
+
+        <dt id="ensureBundleExists" class="property">
+  <span class="name"><a href="../inertia/InertiaSsrSettings/ensureBundleExists.html">ensureBundleExists</a></span>
+  <span class="signature">&#8594; <a href="https://api.flutter.dev/flutter/dart-core/bool-class.html">bool</a></span>
+  
+
+</dt>
+<dd>
+  Whether to ensure the bundle exists on startup.
+  <div class="features"><span class="feature">final</span></div>
+
+</dd>
+
+        <dt id="environment" class="property">
+  <span class="name"><a href="../inertia/InertiaSsrSettings/environment.html">environment</a></span>
+  <span class="signature">&#8594; <a href="https://api.flutter.dev/flutter/dart-core/Map-class.html">Map</a><span class="signature">&lt;<wbr><span class="type-parameter"><a href="https://api.flutter.dev/flutter/dart-core/String-class.html">String</a></span>, <span class="type-parameter"><a href="https://api.flutter.dev/flutter/dart-core/String-class.html">String</a></span>&gt;</span></span>
+  
+
+</dt>
+<dd>
+  Environment variables passed to the SSR process.
+  <div class="features"><span class="feature">final</span></div>
+
+</dd>
+
+        <dt id="hashCode" class="property inherited">
+  <span class="name"><a href="https://api.flutter.dev/flutter/dart-core/Object/hashCode.html">hashCode</a></span>
+  <span class="signature">&#8594; <a href="https://api.flutter.dev/flutter/dart-core/int-class.html">int</a></span>
+  
+
+</dt>
+<dd class="inherited">
+  The hash code for this object.
+  <div class="features"><span class="feature">no setter</span><span class="feature">inherited</span></div>
+
+</dd>
+
+        <dt id="healthEndpoint" class="property">
+  <span class="name"><a href="../inertia/InertiaSsrSettings/healthEndpoint.html">healthEndpoint</a></span>
+  <span class="signature">&#8594; <a href="https://api.flutter.dev/flutter/dart-core/Uri-class.html">Uri</a>?</span>
+  
+
+</dt>
+<dd>
+  Optional health check endpoint override.
+  <div class="features"><span class="feature">final</span></div>
+
+</dd>
+
+        <dt id="runtime" class="property">
+  <span class="name"><a href="../inertia/InertiaSsrSettings/runtime.html">runtime</a></span>
+  <span class="signature">&#8594; <a href="https://api.flutter.dev/flutter/dart-core/String-class.html">String</a></span>
+  
+
+</dt>
+<dd>
+  The runtime used to execute the SSR bundle.
+  <div class="features"><span class="feature">final</span></div>
+
+</dd>
+
+        <dt id="runtimeArgs" class="property">
+  <span class="name"><a href="../inertia/InertiaSsrSettings/runtimeArgs.html">runtimeArgs</a></span>
+  <span class="signature">&#8594; <a href="https://api.flutter.dev/flutter/dart-core/List-class.html">List</a><span class="signature">&lt;<wbr><span class="type-parameter"><a href="https://api.flutter.dev/flutter/dart-core/String-class.html">String</a></span>&gt;</span></span>
+  
+
+</dt>
+<dd>
+  Arguments passed to the SSR runtime.
+  <div class="features"><span class="feature">final</span></div>
+
+</dd>
+
+        <dt id="runtimeType" class="property inherited">
+  <span class="name"><a href="https://api.flutter.dev/flutter/dart-core/Object/runtimeType.html">runtimeType</a></span>
+  <span class="signature">&#8594; <a href="https://api.flutter.dev/flutter/dart-core/Type-class.html">Type</a></span>
+  
+
+</dt>
+<dd class="inherited">
+  A representation of the runtime type of the object.
+  <div class="features"><span class="feature">no setter</span><span class="feature">inherited</span></div>
+
+</dd>
+
+        <dt id="shutdownEndpoint" class="property">
+  <span class="name"><a href="../inertia/InertiaSsrSettings/shutdownEndpoint.html">shutdownEndpoint</a></span>
+  <span class="signature">&#8594; <a href="https://api.flutter.dev/flutter/dart-core/Uri-class.html">Uri</a>?</span>
+  
+
+</dt>
+<dd>
+  Optional shutdown endpoint override.
+  <div class="features"><span class="feature">final</span></div>
+
+</dd>
+
+        <dt id="workingDirectory" class="property">
+  <span class="name"><a href="../inertia/InertiaSsrSettings/workingDirectory.html">workingDirectory</a></span>
+  <span class="signature">&#8594; <a href="https://api.flutter.dev/flutter/universal_io/Directory-class.html">Directory</a>?</span>
+  
+
+</dt>
+<dd>
+  Working directory used by the SSR process.
+  <div class="features"><span class="feature">final</span></div>
+
+</dd>
+
+    </dl>
+  </section>
+
+    
+  <section
+      class="summary offset-anchor"
+      id="instance-methods">
+    <h2>Methods</h2>
+    <dl class="callables">
+        <dt id="bundleDetector" class="callable">
+  <span class="name"><a href="../inertia/InertiaSsrSettings/bundleDetector.html">bundleDetector</a></span><span class="signature">(<wbr>)
+    <span class="returntype parameter">&#8594; <a href="../inertia/SsrBundleDetector-class.html">SsrBundleDetector</a></span>
+  </span>
+  
+
+</dt>
+<dd>
+  Returns a bundle detector based on this configuration.
+  
+
+</dd>
+
+        <dt id="copyWith" class="callable">
+  <span class="name"><a href="../inertia/InertiaSsrSettings/copyWith.html">copyWith</a></span><span class="signature">(<wbr>{<span class="parameter" id="copyWith-param-enabled"><span class="type-annotation"><a href="https://api.flutter.dev/flutter/dart-core/bool-class.html">bool</a>?</span> <span class="parameter-name">enabled</span>, </span><span class="parameter" id="copyWith-param-endpoint"><span class="type-annotation"><a href="https://api.flutter.dev/flutter/dart-core/Uri-class.html">Uri</a>?</span> <span class="parameter-name">endpoint</span>, </span><span class="parameter" id="copyWith-param-healthEndpoint"><span class="type-annotation"><a href="https://api.flutter.dev/flutter/dart-core/Uri-class.html">Uri</a>?</span> <span class="parameter-name">healthEndpoint</span>, </span><span class="parameter" id="copyWith-param-shutdownEndpoint"><span class="type-annotation"><a href="https://api.flutter.dev/flutter/dart-core/Uri-class.html">Uri</a>?</span> <span class="parameter-name">shutdownEndpoint</span>, </span><span class="parameter" id="copyWith-param-bundle"><span class="type-annotation"><a href="https://api.flutter.dev/flutter/dart-core/String-class.html">String</a>?</span> <span class="parameter-name">bundle</span>, </span><span class="parameter" id="copyWith-param-ensureBundleExists"><span class="type-annotation"><a href="https://api.flutter.dev/flutter/dart-core/bool-class.html">bool</a>?</span> <span class="parameter-name">ensureBundleExists</span>, </span><span class="parameter" id="copyWith-param-runtime"><span class="type-annotation"><a href="https://api.flutter.dev/flutter/dart-core/String-class.html">String</a>?</span> <span class="parameter-name">runtime</span>, </span><span class="parameter" id="copyWith-param-runtimeArgs"><span class="type-annotation"><a href="https://api.flutter.dev/flutter/dart-core/List-class.html">List</a><span class="signature">&lt;<wbr><span class="type-parameter"><a href="https://api.flutter.dev/flutter/dart-core/String-class.html">String</a></span>&gt;</span>?</span> <span class="parameter-name">runtimeArgs</span>, </span><span class="parameter" id="copyWith-param-bundleCandidates"><span class="type-annotation"><a href="https://api.flutter.dev/flutter/dart-core/List-class.html">List</a><span class="signature">&lt;<wbr><span class="type-parameter"><a href="https://api.flutter.dev/flutter/dart-core/String-class.html">String</a></span>&gt;</span>?</span> <span class="parameter-name">bundleCandidates</span>, </span><span class="parameter" id="copyWith-param-workingDirectory"><span class="type-annotation"><a href="https://api.flutter.dev/flutter/universal_io/Directory-class.html">Directory</a>?</span> <span class="parameter-name">workingDirectory</span>, </span><span class="parameter" id="copyWith-param-environment"><span class="type-annotation"><a href="https://api.flutter.dev/flutter/dart-core/Map-class.html">Map</a><span class="signature">&lt;<wbr><span class="type-parameter"><a href="https://api.flutter.dev/flutter/dart-core/String-class.html">String</a></span>, <span class="type-parameter"><a href="https://api.flutter.dev/flutter/dart-core/String-class.html">String</a></span>&gt;</span>?</span> <span class="parameter-name">environment</span></span>})
+    <span class="returntype parameter">&#8594; <a href="../inertia/InertiaSsrSettings-class.html">InertiaSsrSettings</a></span>
+  </span>
+  
+
+</dt>
+<dd>
+  Returns a copy of these settings with updated values.
+  
+
+</dd>
+
+        <dt id="noSuchMethod" class="callable inherited">
+  <span class="name"><a href="https://api.flutter.dev/flutter/dart-core/Object/noSuchMethod.html">noSuchMethod</a></span><span class="signature">(<wbr><span class="parameter" id="noSuchMethod-param-invocation"><span class="type-annotation"><a href="https://api.flutter.dev/flutter/dart-core/Invocation-class.html">Invocation</a></span> <span class="parameter-name">invocation</span></span>)
+    <span class="returntype parameter">&#8594; dynamic</span>
+  </span>
+  
+
+</dt>
+<dd class="inherited">
+  Invoked when a nonexistent method or property is accessed.
+  <div class="features"><span class="feature">inherited</span></div>
+
+</dd>
+
+        <dt id="resolveHealthEndpoint" class="callable">
+  <span class="name"><a href="../inertia/InertiaSsrSettings/resolveHealthEndpoint.html">resolveHealthEndpoint</a></span><span class="signature">(<wbr>)
+    <span class="returntype parameter">&#8594; <a href="https://api.flutter.dev/flutter/dart-core/Uri-class.html">Uri</a>?</span>
+  </span>
+  
+
+</dt>
+<dd>
+  Resolves the health endpoint based on <a href="../inertia/InertiaSsrSettings/endpoint.html">endpoint</a>.
+  
+
+</dd>
+
+        <dt id="resolveRenderEndpoint" class="callable">
+  <span class="name"><a href="../inertia/InertiaSsrSettings/resolveRenderEndpoint.html">resolveRenderEndpoint</a></span><span class="signature">(<wbr>)
+    <span class="returntype parameter">&#8594; <a href="https://api.flutter.dev/flutter/dart-core/Uri-class.html">Uri</a>?</span>
+  </span>
+  
+
+</dt>
+<dd>
+  Resolves the render endpoint, appending <code>/render</code> when needed.
+  
+
+</dd>
+
+        <dt id="resolveShutdownEndpoint" class="callable">
+  <span class="name"><a href="../inertia/InertiaSsrSettings/resolveShutdownEndpoint.html">resolveShutdownEndpoint</a></span><span class="signature">(<wbr>)
+    <span class="returntype parameter">&#8594; <a href="https://api.flutter.dev/flutter/dart-core/Uri-class.html">Uri</a>?</span>
+  </span>
+  
+
+</dt>
+<dd>
+  Resolves the shutdown endpoint based on <a href="../inertia/InertiaSsrSettings/endpoint.html">endpoint</a>.
+  
+
+</dd>
+
+        <dt id="toString" class="callable inherited">
+  <span class="name"><a href="https://api.flutter.dev/flutter/dart-core/Object/toString.html">toString</a></span><span class="signature">(<wbr>)
+    <span class="returntype parameter">&#8594; <a href="https://api.flutter.dev/flutter/dart-core/String-class.html">String</a></span>
+  </span>
+  
+
+</dt>
+<dd class="inherited">
+  A string representation of this object.
+  <div class="features"><span class="feature">inherited</span></div>
+
+</dd>
+
+    </dl>
+  </section>
+    
+  <section
+      class="summary offset-anchor inherited"
+      id="operators">
+    <h2>Operators</h2>
+    <dl class="callables">
+        <dt id="operator ==" class="callable inherited">
+  <span class="name"><a href="https://api.flutter.dev/flutter/dart-core/Object/operator_equals.html">operator ==</a></span><span class="signature">(<wbr><span class="parameter" id="==-param-other"><span class="type-annotation"><a href="https://api.flutter.dev/flutter/dart-core/Object-class.html">Object</a></span> <span class="parameter-name">other</span></span>)
+    <span class="returntype parameter">&#8594; <a href="https://api.flutter.dev/flutter/dart-core/bool-class.html">bool</a></span>
+  </span>
+  
+
+</dt>
+<dd class="inherited">
+  The equality operator.
+  <div class="features"><span class="feature">inherited</span></div>
+
+</dd>
+
+    </dl>
+  </section>
+    
+    
+    
+
+  </div> <!-- /.main-content -->
+  <div id="dartdoc-sidebar-left" class="sidebar sidebar-offcanvas-left">
+    <!-- The search input and breadcrumbs below are only responsively visible at low resolutions. -->
+<header id="header-search-sidebar" class="hidden-l">
+  <form class="search-sidebar" role="search">
+    <input type="text" id="search-sidebar" autocomplete="off" disabled class="form-control typeahead" placeholder="Loading search...">
+  </form>
+</header>
+<ol class="breadcrumbs gt-separated dark hidden-l" id="sidebar-nav">
+    <li><a href="../index.html">inertia_dart</a></li>
+    <li><a href="../inertia/">inertia</a></li>
+    <li class="self-crumb">InertiaSsrSettings class</li>
+</ol>
+
+    <h5>inertia library</h5>
+    <div id="dartdoc-sidebar-left-content"></div>
+  </div>
+  <div id="dartdoc-sidebar-right" class="sidebar sidebar-offcanvas-right">
+  </div><!--/.sidebar-offcanvas-->
+</main>
+<footer>
+  <span class="no-break">
+    inertia_dart
+      1.0.0
+  </span>
+  
+</footer>
+
+
+<script src="../static-assets/highlight.pack.js?v1"></script>
+<script src="../static-assets/docs.dart.js"></script>
+
+</body>
+</html>
+

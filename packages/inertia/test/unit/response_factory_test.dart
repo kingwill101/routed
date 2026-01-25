@@ -1,6 +1,9 @@
+/// Tests for [InertiaResponseFactory] behavior.
+library;
 import 'package:test/test.dart';
 import 'package:inertia_dart/inertia.dart';
 
+/// Runs response factory unit tests.
 void main() {
   group('InertiaResponseFactory', () {
     test('ignores partial reload for mismatched component', () {
@@ -21,7 +24,7 @@ void main() {
       );
 
       expect(page.props['name'], equals('Ada'));
-      expect(page.props['lazy'], equals('Lazy'));
+      expect(page.props.containsKey('lazy'), isFalse);
     });
   });
 }

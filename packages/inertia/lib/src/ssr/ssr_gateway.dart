@@ -1,10 +1,16 @@
+library;
+
 import 'ssr_response.dart';
 
-/// Interface for Inertia SSR gateways
+/// Defines the interface for SSR gateways.
+///
+/// ```dart
+/// final response = await gateway.render(pageJson);
+/// ```
 abstract class SsrGateway {
-  /// Render the page payload and return SSR response
+  /// Renders [pageJson] and returns the SSR response.
   Future<SsrResponse> render(String pageJson);
 
-  /// Perform a health check against the SSR server
+  /// Performs a health check against the SSR server.
   Future<bool> healthCheck();
 }

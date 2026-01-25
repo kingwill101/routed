@@ -1,13 +1,26 @@
+library;
+
 import 'package:test/test.dart';
 
-/// Fluent assertions for Inertia responses
+/// Provides fluent assertions for Inertia page payloads.
+///
+/// ```dart
+/// response.assertInertia((page) {
+///   page.component('Dashboard').has('user.name');
+/// });
+/// ```
 class AssertableInertia {
+  /// Creates an assertion helper for an Inertia page payload.
   AssertableInertia(this.page);
+
+  /// The raw page payload.
   final Map<String, dynamic> page;
 
+  /// The props map extracted from [page].
   Map<String, dynamic> get props =>
       (page['props'] as Map<String, dynamic>?) ?? <String, dynamic>{};
 
+  /// Asserts the page component matches [expected].
   AssertableInertia component(String expected) {
     expect(
       page['component'],
@@ -17,6 +30,7 @@ class AssertableInertia {
     return this;
   }
 
+  /// Asserts the page URL matches [expected].
   AssertableInertia url(String expected) {
     expect(
       page['url'],
@@ -26,6 +40,7 @@ class AssertableInertia {
     return this;
   }
 
+  /// Asserts the asset version matches [expected].
   AssertableInertia version(String expected) {
     expect(
       page['version'],
@@ -35,24 +50,28 @@ class AssertableInertia {
     return this;
   }
 
+  /// Asserts the prop at [path] matches [expected].
   AssertableInertia where(String path, dynamic expected) {
     final actual = _getPathValue(props, path);
     expect(actual, equals(expected), reason: 'Unexpected value for $path.');
     return this;
   }
 
+  /// Asserts that a prop exists at [path].
   AssertableInertia has(String path) {
     final actual = _getPathValue(props, path, allowMissing: true);
     expect(actual != null, isTrue, reason: 'Missing prop $path.');
     return this;
   }
 
+  /// Asserts that a prop is missing at [path].
   AssertableInertia missing(String path) {
     final actual = _getPathValue(props, path, allowMissing: true);
     expect(actual == null, isTrue, reason: 'Prop $path should be missing.');
     return this;
   }
 
+  /// Returns the nested value at [path], or fails the test if missing.
   dynamic _getPathValue(
     Map<String, dynamic> data,
     String path, {

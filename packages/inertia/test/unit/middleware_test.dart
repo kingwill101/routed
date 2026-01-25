@@ -1,6 +1,9 @@
+/// Tests for middleware behavior.
+library;
 import 'package:test/test.dart';
 import 'package:inertia_dart/inertia.dart';
 
+/// Runs middleware unit tests.
 void main() {
   group('Middleware', () {
     test('VersionMiddleware returns location on mismatch', () async {
