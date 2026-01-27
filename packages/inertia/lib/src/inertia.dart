@@ -3,7 +3,7 @@
 /// Import this library to access the core API surface in one place.
 ///
 /// ```dart
-/// import 'package:inertia_dart/inertia.dart';
+/// import 'package:inertia_dart/inertia_dart.dart';
 /// ```
 library;
 

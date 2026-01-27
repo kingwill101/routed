@@ -4,7 +4,7 @@ library;
 import 'dart:async';
 
 import 'package:test/test.dart';
-import 'package:inertia_dart/inertia.dart';
+import 'package:inertia_dart/inertia_dart.dart';
 
 /// Runs response factory unit tests.
 void main() {

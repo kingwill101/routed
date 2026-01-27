@@ -3,7 +3,7 @@ library;
 
 import 'dart:io';
 
-import 'package:inertia_dart/inertia.dart';
+import 'package:inertia_dart/inertia_dart.dart';
 import 'package:test/test.dart';
 
 void main() {

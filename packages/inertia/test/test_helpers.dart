@@ -4,6 +4,7 @@
 /// final headers = InertiaTestHelpers.createInertiaHeaders(version: '1.0.0');
 /// ```
 library;
+
 import 'dart:convert';
 import 'package:server_testing/server_testing.dart';
 

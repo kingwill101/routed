@@ -1,7 +1,8 @@
 /// Tests for [InertiaResponse] factories and metadata.
 library;
+
 import 'package:test/test.dart';
-import 'package:inertia_dart/inertia.dart';
+import 'package:inertia_dart/inertia_dart.dart';
 
 /// Runs Inertia response unit tests.
 void main() {

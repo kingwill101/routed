@@ -1,7 +1,8 @@
 /// Tests for [InertiaRequest] parsing and context helpers.
 library;
+
 import 'package:test/test.dart';
-import 'package:inertia_dart/inertia.dart';
+import 'package:inertia_dart/inertia_dart.dart';
 
 /// Runs Inertia request unit tests.
 void main() {

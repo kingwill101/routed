@@ -1,7 +1,8 @@
 /// Tests for [PageData] construction and serialization.
 library;
+
 import 'package:test/test.dart';
-import 'package:inertia_dart/inertia.dart';
+import 'package:inertia_dart/inertia_dart.dart';
 
 /// Runs page data unit tests.
 void main() {

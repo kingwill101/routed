@@ -1,7 +1,8 @@
 /// Tests for [InertiaSettings] behavior.
 library;
+
 import 'package:test/test.dart';
-import 'package:inertia_dart/inertia.dart';
+import 'package:inertia_dart/inertia_dart.dart';
 
 /// Runs Inertia settings unit tests.
 void main() {

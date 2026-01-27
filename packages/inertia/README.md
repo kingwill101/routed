@@ -31,7 +31,7 @@ Create a page payload and return an Inertia JSON response from your server
 handler.
 
 ```dart
-import 'package:inertia_dart/inertia.dart';
+import 'package:inertia_dart/inertia_dart.dart';
 
 final context = PropertyContext(headers: requestHeaders);
 

@@ -1,8 +1,9 @@
 /// Tests for [InertiaAssetManifest] resolution and tag rendering.
 library;
+
 import 'dart:convert';
 
-import 'package:inertia_dart/inertia.dart';
+import 'package:inertia_dart/inertia_dart.dart';
 import 'package:test/test.dart';
 
 /// Runs asset manifest unit tests.

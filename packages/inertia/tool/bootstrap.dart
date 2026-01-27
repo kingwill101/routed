@@ -5,7 +5,7 @@ import 'dart:io';
 
 import 'package:artisanal/artisanal.dart';
 import 'package:artisanal/args.dart';
-import 'package:inertia_dart/inertia.dart';
+import 'package:inertia_dart/inertia_dart.dart';
 import 'package:inertia_dart/src/cli/inertia_cli.dart';
 import 'package:path/path.dart' as p;
 

@@ -1,7 +1,8 @@
 /// Tests for header utilities and property context helpers.
 library;
+
 import 'package:test/test.dart';
-import 'package:inertia_dart/inertia.dart';
+import 'package:inertia_dart/inertia_dart.dart';
 
 /// Runs header and context unit tests.
 void main() {
