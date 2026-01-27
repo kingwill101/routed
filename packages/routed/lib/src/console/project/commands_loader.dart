@@ -2,8 +2,7 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:io' as io;
 
-import 'package:args/args.dart';
-import 'package:args/command_runner.dart';
+import 'package:artisanal/args.dart';
 import 'package:file/file.dart' as fs;
 import 'package:file/local.dart';
 import 'package:path/path.dart' as p;

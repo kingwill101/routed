@@ -1,6 +1,6 @@
 import 'dart:io';
 
-import 'package:args/command_runner.dart' show UsageException;
+import 'package:artisanal/args.dart' show UsageException;
 import 'package:routed/console.dart';
 import 'package:routed/src/console/args/commands.dart' as cmds;
 import 'package:routed/src/console/args/runner.dart';
@@ -34,6 +34,12 @@ Future<void> main(List<String> args) async {
       runner.usage,
     );
     commandsLoader.registerWithRunner(runner, projectCommands, runner.usage);
+
+    registerProviderCommands(
+      runner,
+      ProviderCommandRegistry.instance.registrations,
+      runner.usage,
+    );
 
     await runner.run(args);
   } on UsageException catch (e) {

@@ -1,298 +1,209 @@
-import 'package:args/command_runner.dart';
-import 'package:file/file.dart' as fs;
-import 'package:file/memory.dart';
-import 'package:routed/console.dart' show CliLogger;
-import 'package:routed/providers.dart'
-    show ProviderRegistry, SessionServiceProvider;
-import 'package:routed/routed.dart';
-import 'package:routed/session.dart';
-import 'package:routed/src/console/args/commands/provider.dart';
-import 'package:routed/src/console/args/commands/provider_driver.dart';
-import 'package:routed/src/console/args/runner.dart';
+import 'package:artisanal/args.dart';
+import 'package:routed/console.dart';
 import 'package:test/test.dart';
-import 'package:yaml/yaml.dart';
+
+class _DemoCommand extends Command<void> {
+  @override
+  String get name => 'demo:run';
+
+  @override
+  String get description => 'Runs a demo command.';
+}
+
+class _ConflictCommand extends Command<void> {
+  @override
+  String get name => 'dev';
+
+  @override
+  String get description => 'Conflicts with built-in dev.';
+}
+
+class _NamedCommand extends Command<void> {
+  _NamedCommand(this._name, {List<String> aliases = const []})
+    : _aliases = List<String>.from(aliases);
+
+  final String _name;
+  final List<String> _aliases;
+
+  @override
+  String get name => _name;
+
+  @override
+  List<String> get aliases => _aliases;
+
+  @override
+  String get description => 'Named command $_name.';
+}
+
+class _ArtisanalCommand extends Command<void> {
+  @override
+  String get name => 'artisan:run';
+
+  @override
+  String get description => 'Runs an artisanal command.';
+}
 
 void main() {
-  group('Provider commands', () {
-    late MemoryFileSystem memoryFs;
-    late fs.Directory projectRoot;
-    late RoutedCommandRunner runner;
-    late _RecordingLogger logger;
+  test('registerProviderCommands adds provider commands to runner', () {
+    final registry = ProviderCommandRegistry.instance;
+    registry.register('demo', factory: () => _DemoCommand());
+    addTearDown(() => registry.unregister('demo'));
 
-    setUp(() async {
-      memoryFs = MemoryFileSystem();
-      projectRoot = memoryFs.directory('/workspace/project')
-        ..createSync(recursive: true);
-      memoryFs.currentDirectory = projectRoot;
+    final runner = CommandRunner<void>('routed', 'desc');
 
-      logger = _RecordingLogger();
-      runner = RoutedCommandRunner(logger: logger)
-        ..register([
-          _TestProviderListCommand(() => projectRoot, logger, memoryFs),
-          _TestProviderEnableCommand(() => projectRoot, logger, memoryFs),
-          _TestProviderDisableCommand(() => projectRoot, logger, memoryFs),
-          _TestProviderDriverCommand(() => projectRoot, logger, memoryFs),
-        ]);
+    registerProviderCommands(runner, registry.registrations, runner.usage);
 
-      await _writeFile(projectRoot, 'pubspec.yaml', 'name: demo\n');
-      await _writeFile(
-        projectRoot,
-        'config/http.yaml',
-        'providers:\n  - routed.core\n  - routed.routing\n',
-      );
-      await _writeFile(projectRoot, 'config/session.yaml', 'enabled: false\n');
-    });
-
-    String read(String relativePath) => memoryFs
-        .file(memoryFs.path.join(projectRoot.path, relativePath))
-        .readAsStringSync();
-
-    bool exists(String relativePath) => memoryFs
-        .file(memoryFs.path.join(projectRoot.path, relativePath))
-        .existsSync();
-
-    test('provider:enable appends provider to manifest', () async {
-      await _run(runner, ['provider:enable', 'routed.sessions']);
-
-      final contents = read('config/http.yaml');
-      expect(contents, contains('routed.sessions'));
-      final sessionYaml = loadYaml(read('config/session.yaml')) as YamlMap;
-      expect(sessionYaml['enabled'], isTrue);
-    });
-
-    test('provider:disable removes provider from manifest', () async {
-      await _run(runner, ['provider:disable', 'routed.routing']);
-
-      final contents = read('config/http.yaml');
-      expect(contents, isNot(contains('routed.routing')));
-    });
-
-    test('provider:list --config prints defaults', () async {
-      await _run(runner, ['provider:list', '--config']);
-      final output = logger.infos.join('\n');
-      expect(output, contains('routed.core'));
-      expect(output, contains('defaults:'));
-      expect(output, contains('http:'));
-      expect(output, contains('storage.disks.local.file_system'));
-      expect(output, contains('session.same_site'));
-      expect(output, contains('session.same_site'));
-    });
-
-    test('provider:list surfaces duplicate driver errors', () async {
-      final registry = ProviderRegistry.instance;
-      final original = registry.resolve('routed.sessions')!;
-      final originalFactory = original.factory;
-      final originalDescription = original.description;
-
-      registry.register(
-        'routed.sessions',
-        factory: () => _DuplicateDriverProvider(),
-        description: originalDescription,
-      );
-      addTearDown(() {
-        registry.register(
-          'routed.sessions',
-          factory: originalFactory,
-          description: originalDescription,
-        );
-      });
-
-      await expectLater(
-        () async => runner.run(['provider:list', '--config']),
-        throwsA(
-          isA<UsageException>()
-              .having(
-                (e) => e.message,
-                'message',
-                contains('Duplicate driver registration'),
-              )
-              .having((e) => e.message, 'message', contains('cookie')),
-        ),
-      );
-    });
-
-    test('provider:driver scaffolds storage driver starter', () async {
-      await _run(runner, ['provider:driver', 'storage', 'dropbox']);
-
-      final driverPath = 'lib/drivers/storage/dropbox_storage_driver.dart';
-      expect(exists(driverPath), isTrue);
-      final contents = read(driverPath);
-      expect(contents, contains('registerDropboxStorageDriver'));
-      expect(contents, contains('StorageServiceProvider.registerDriver'));
-    });
-
-    test('provider:driver scaffolds cache driver starter', () async {
-      await _run(runner, ['provider:driver', '--type', 'cache', 'memcached']);
-
-      final driverPath = 'lib/drivers/cache/memcached_cache_driver.dart';
-      expect(exists(driverPath), isTrue);
-      final contents = read(driverPath);
-      expect(contents, contains('registerMemcachedCacheDriver'));
-      expect(contents, contains('CacheManager.registerDriver'));
-      expect(contents, contains('configBuilder:'));
-      expect(contents, contains('ConfigurationException'));
-    });
-
-    test('provider:driver scaffolds session driver starter', () async {
-      await _run(runner, ['provider:driver', '--type', 'session', 'mongo']);
-
-      final driverPath = 'lib/drivers/session/mongo_session_driver.dart';
-      expect(exists(driverPath), isTrue);
-      final contents = read(driverPath);
-      expect(contents, contains('registerMongoSessionDriver'));
-      expect(contents, contains('SessionServiceProvider.registerDriver'));
-      expect(contents, contains('ProviderConfigException'));
-      expect(contents, contains('implements Store'));
-    });
+    expect(runner.commands.containsKey('demo:run'), isTrue);
   });
-}
 
-Future<void> _run(RoutedCommandRunner runner, List<String> args) async {
-  try {
-    await runner.run(args);
-  } on UsageException catch (e) {
-    fail('Command failed: $e');
-  }
-}
+  test('registerProviderCommands detects name conflicts', () {
+    final registry = ProviderCommandRegistry.instance;
+    registry.register('conflict', factory: () => _ConflictCommand());
+    addTearDown(() => registry.unregister('conflict'));
 
-Future<void> _writeFile(
-  fs.Directory root,
-  String relativePath,
-  String contents,
-) async {
-  final file = root.fileSystem.file(
-    root.fileSystem.path.join(root.path, relativePath),
-  );
-  await file.parent.create(recursive: true);
-  await file.writeAsString(contents);
-}
+    final runner = CommandRunner<void>('routed', 'desc');
+    runner.addCommand(_ConflictCommand());
 
-class _TestProviderListCommand extends ProviderListCommand {
-  _TestProviderListCommand(
-    this._rootProvider,
-    CliLogger logger,
-    MemoryFileSystem fs,
-  ) : _fs = fs,
-      super(logger: logger, fileSystem: fs);
+    expect(
+      () => registerProviderCommands(
+        runner,
+        registry.registrations,
+        runner.usage,
+      ),
+      throwsA(isA<UsageException>()),
+    );
+  });
 
-  final fs.Directory Function() _rootProvider;
-  final MemoryFileSystem _fs;
+  test('registerProviderCommands detects alias conflicts', () {
+    final registry = ProviderCommandRegistry.instance;
+    registry.register('alias-conflict', factory: () => _NamedCommand('ship'));
+    addTearDown(() => registry.unregister('alias-conflict'));
 
-  @override
-  Future<fs.Directory?> findProjectRoot({
-    fs.Directory? start,
-    int maxLevels = 10,
-  }) async {
-    return _fs.directory(_rootProvider().path);
-  }
-}
+    final runner = CommandRunner<void>('routed', 'desc')
+      ..addCommand(_NamedCommand('existing:cmd', aliases: ['ship']));
 
-class _TestProviderEnableCommand extends ProviderEnableCommand {
-  _TestProviderEnableCommand(
-    this._rootProvider,
-    CliLogger logger,
-    MemoryFileSystem fs,
-  ) : _fs = fs,
-      super(logger: logger, fileSystem: fs);
+    expect(
+      () => registerProviderCommands(
+        runner,
+        registry.registrations,
+        runner.usage,
+      ),
+      throwsA(isA<UsageException>()),
+    );
+  });
 
-  final fs.Directory Function() _rootProvider;
-  final MemoryFileSystem _fs;
+  test('registerProviderCommands detects alias collisions from providers', () {
+    final registry = ProviderCommandRegistry.instance;
+    registry.register(
+      'alias-provider',
+      factory: () => _NamedCommand('maintenance:run', aliases: ['deploy']),
+    );
+    addTearDown(() => registry.unregister('alias-provider'));
 
-  @override
-  Future<fs.Directory?> findProjectRoot({
-    fs.Directory? start,
-    int maxLevels = 10,
-  }) async {
-    return _fs.directory(_rootProvider().path);
-  }
-}
+    final runner = CommandRunner<void>('routed', 'desc')
+      ..addCommand(_NamedCommand('deploy'));
 
-class _TestProviderDisableCommand extends ProviderDisableCommand {
-  _TestProviderDisableCommand(
-    this._rootProvider,
-    CliLogger logger,
-    MemoryFileSystem fs,
-  ) : _fs = fs,
-      super(logger: logger, fileSystem: fs);
+    expect(
+      () => registerProviderCommands(
+        runner,
+        registry.registrations,
+        runner.usage,
+      ),
+      throwsA(isA<UsageException>()),
+    );
+  });
 
-  final fs.Directory Function() _rootProvider;
-  final MemoryFileSystem _fs;
+  test('registerProviderCommands throws when factory fails', () {
+    final registry = ProviderCommandRegistry.instance;
+    registry.register('factory-fails', factory: () => throw StateError('boom'));
+    addTearDown(() => registry.unregister('factory-fails'));
 
-  @override
-  Future<fs.Directory?> findProjectRoot({
-    fs.Directory? start,
-    int maxLevels = 10,
-  }) async {
-    return _fs.directory(_rootProvider().path);
-  }
-}
+    final runner = CommandRunner<void>('routed', 'desc');
 
-class _TestProviderDriverCommand extends ProviderDriverCommand {
-  _TestProviderDriverCommand(
-    this._rootProvider,
-    CliLogger logger,
-    MemoryFileSystem fs,
-  ) : _fs = fs,
-      super(logger: logger, fileSystem: fs);
-
-  final fs.Directory Function() _rootProvider;
-  final MemoryFileSystem _fs;
-
-  @override
-  Future<fs.Directory?> findProjectRoot({
-    fs.Directory? start,
-    int maxLevels = 10,
-  }) async {
-    return _fs.directory(_rootProvider().path);
-  }
-}
-
-class _DuplicateDriverProvider extends ServiceProvider {
-  _DuplicateDriverProvider() {
-    SessionServiceProvider.registerDriver(
-      'cookie',
-      (context) => SessionConfig.cookie(
-        appKey: SecureCookie.generateKey(),
-        codecs: context.codecs,
-        cookieName: context.cookieName,
-        maxAge: context.lifetime,
-        expireOnClose: context.expireOnClose,
-        options: context.options,
+    expect(
+      () => registerProviderCommands(
+        runner,
+        registry.registrations,
+        runner.usage,
+      ),
+      throwsA(
+        isA<UsageException>().having(
+          (error) => error.message,
+          'message',
+          contains('Failed to load provider command'),
+        ),
       ),
     );
-  }
+  });
 
-  @override
-  void register(Container container) {}
+  test('registerProviderCommands detects provider-to-provider conflicts', () {
+    final registry = ProviderCommandRegistry.instance;
+    registry.register(
+      'first',
+      factory: () => _NamedCommand('alpha', aliases: ['shared']),
+    );
+    registry.register('second', factory: () => _NamedCommand('shared'));
+    addTearDown(() {
+      registry.unregister('first');
+      registry.unregister('second');
+    });
 
-  @override
-  Future<void> cleanup(Container container) async {}
-}
+    final runner = CommandRunner<void>('routed', 'desc');
 
-class _RecordingLogger extends CliLogger {
-  _RecordingLogger() : super(verbose: true);
+    expect(
+      () => registerProviderCommands(
+        runner,
+        registry.registrations,
+        runner.usage,
+      ),
+      throwsA(isA<UsageException>()),
+    );
+  });
 
-  final List<String> infos = [];
-  final List<String> warnings = [];
-  final List<String> errors = [];
+  test('provider registry honors overrideExisting flag', () {
+    final registry = ProviderCommandRegistry.instance;
+    registry.register('override', factory: () => _DemoCommand());
+    addTearDown(() => registry.unregister('override'));
 
-  @override
-  void info(Object? message) {
-    infos.add(message.toString());
-  }
+    final didOverride = registry.register(
+      'override',
+      factory: () => _ConflictCommand(),
+      overrideExisting: false,
+    );
 
-  @override
-  void warn(Object? message) {
-    warnings.add(message.toString());
-  }
+    expect(didOverride, isFalse);
+    final registration = registry.registrations.firstWhere(
+      (entry) => entry.id == 'override',
+    );
+    expect(registration.factory(), isA<_DemoCommand>());
+  });
 
-  @override
-  void error(Object? message) {
-    errors.add(message.toString());
-  }
+  test('artisanal command registry tracks registrations', () {
+    final registry = ProviderArtisanalCommandRegistry.instance;
+    registry.register('artisan', factory: () => _ArtisanalCommand());
+    addTearDown(() => registry.unregister('artisan'));
 
-  @override
-  void debug(Object? message) {
-    infos.add('DEBUG: ${message.toString()}');
-  }
+    final registrations = registry.registrations.toList();
+    expect(registrations, hasLength(1));
+    expect(registrations.first.id, equals('artisan'));
+  });
+
+  test(
+    'registerProviderArtisanalCommands adds provider commands to runner',
+    () {
+      final registry = ProviderArtisanalCommandRegistry.instance;
+      registry.register('artisan', factory: () => _ArtisanalCommand());
+      addTearDown(() => registry.unregister('artisan'));
+
+      final runner = CommandRunner<void>('routed', 'desc');
+
+      registerProviderArtisanalCommands(
+        runner,
+        registry.registrations,
+        runner.usage,
+      );
+
+      expect(runner.commands.containsKey('artisan:run'), isTrue);
+    },
+  );
 }

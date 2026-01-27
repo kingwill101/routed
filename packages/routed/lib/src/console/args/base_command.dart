@@ -1,8 +1,7 @@
 import 'dart:async';
 import 'dart:io';
 
-import 'package:args/args.dart';
-import 'package:args/command_runner.dart';
+import 'package:artisanal/args.dart';
 import 'package:file/file.dart' as fs;
 import 'package:file/local.dart' as local;
 import 'package:routed/console.dart' show CliLogger;

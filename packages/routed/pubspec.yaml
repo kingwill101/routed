@@ -24,6 +24,7 @@ dependencies:
   acanthis: ^1.5.1
   analyzer: ^10.0.1
   args: ^2.7.0
+  artisanal: ^0.1.2
   build: ^4.0.4
   collection: ^1.19.1
   contextual: ^2.2.0

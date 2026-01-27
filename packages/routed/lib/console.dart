@@ -1,5 +1,14 @@
 library;
 
+export 'src/console/args/provider_commands.dart'
+    show
+        ProviderCommandRegistry,
+        ProviderCommandRegistration,
+        ProviderArtisanalCommandRegistry,
+        ProviderArtisanalCommandRegistration,
+        registerProviderCommands,
+        registerProviderArtisanalCommands;
+
 import 'dart:async';
 import 'dart:io';
 
