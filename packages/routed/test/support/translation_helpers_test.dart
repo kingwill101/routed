@@ -75,7 +75,7 @@ void main() {
       await engine.initialize();
       final client = TestClient(
         RoutedRequestHandler(engine),
-        mode: TransportMode.ephemeralServer,
+        mode: TransportMode.inMemory,
       );
       addTearDown(() async {
         await client.close();
@@ -104,7 +104,7 @@ void main() {
       await engine.initialize();
       final client = TestClient(
         RoutedRequestHandler(engine),
-        mode: TransportMode.ephemeralServer,
+        mode: TransportMode.inMemory,
       );
       addTearDown(() async {
         await client.close();

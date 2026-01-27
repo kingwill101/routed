@@ -400,6 +400,7 @@ void main() {
         expect(payload['any'], isTrue);
       },
       transportMode: TransportMode.ephemeralServer,
+      configItems: const {'logging.enabled': false},
     );
   });
 }

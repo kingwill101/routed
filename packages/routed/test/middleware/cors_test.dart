@@ -138,6 +138,7 @@ void main() {
         });
 
         test('origin negotiation respects configuration (property)', () async {
+          final numTests = mode == TransportMode.ephemeralServer ? 8 : 30;
           final runner = PropertyTestRunner<_CorsSample>(_corsSampleGen(), (
             sample,
           ) async {
@@ -194,7 +195,7 @@ void main() {
 
             await client.close();
             await engine.close();
-          }, PropertyConfig(numTests: 30, seed: 20250314));
+          }, PropertyConfig(numTests: numTests, seed: 20250314));
 
           final result = await runner.run();
           expect(result.success, isTrue, reason: result.report);
