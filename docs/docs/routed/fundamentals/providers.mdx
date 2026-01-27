@@ -100,6 +100,37 @@ Engine options execute right after the engine is created but before
 need to ensure something exists in the container—custom locale resolvers,
 driver registrations, feature flags—before providers rely on that state.
 
+### Dependency-driven booting
+
+When a provider depends on container bindings that might not exist at
+registration time, mix in `ProvidesDependencies`. The engine defers the
+provider's `boot` until all dependency types are available in the container.
+
+```dart title="Provider dependencies"
+class SearchProvider extends ServiceProvider with ProvidesDependencies {
+  @override
+  List<Type> get dependencies => [Config, StorageManager];
+
+  @override
+  void register(Container container) {
+    container.singleton<SearchClient>((c) async {
+      final config = await c.make<Config>();
+      return SearchClient.fromConfig(config.get('search'));
+    });
+  }
+
+  @override
+  Future<void> boot(Container container) async {
+    final client = await container.make<SearchClient>();
+    await client.warm();
+  }
+}
+```
+
+Dependencies are plain container types (not only other providers). If any
+dependencies remain unresolved when the engine initializes, Routed emits a
+warning listing the missing types.
+
 ## Shipping configuration defaults
 
 Mix in `ProvidesDefaultConfig` to contribute config defaults + documentation. Use `ConfigDefaults` and `ConfigDocEntry` so the CLI (`provider:list --config`) and generator (`config:init`) can surface the metadata.
@@ -185,6 +216,28 @@ void registerProviders() {
 ```
 
 Call `registerProviders()` near `main()` before the engine boots. The CLI and `provider:list` will now show `custom.mail` alongside the built-ins, and manifests can reference it by ID.
+
+## Provider CLI commands
+
+Providers can also register CLI commands so any application including the
+provider gains the associated tooling. Use `ProviderCommandRegistry` to expose
+args-based commands and keep factories lazy:
+
+```dart title="Provider command registration"
+class ReportsProvider extends ServiceProvider {
+  @override
+  void register(Container container) {
+    ProviderCommandRegistry.instance.register(
+      'reports:refresh',
+      factory: () => ReportsRefreshCommand(),
+      description: 'Rebuild reporting caches',
+    );
+  }
+}
+```
+
+Routed loads provider commands alongside built-ins and project commands. Name
+or alias collisions raise a usage error so you can rename the command.
 
 ## Testing providers
 

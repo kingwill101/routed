@@ -118,6 +118,50 @@ If a project command reuses a built-in name (or alias) the CLI exits with a
 descriptive conflict so you can pick a different identifier. Use this hook for
 queue workers, seeders, diagnostic scripts, and other project automation.
 
+## Provider-defined commands
+
+Providers can register CLI commands so every app that includes the provider
+automatically gains the associated tooling. Register commands with
+`ProviderCommandRegistry` and return a factory so the CLI can instantiate them
+only when it builds the command list.
+
+```dart title="lib/providers/my_provider.dart"
+import 'package:args/command_runner.dart';
+import 'package:routed/console.dart';
+import 'package:routed/routed.dart';
+
+class MyProviderCommand extends Command<void> {
+  @override
+  String get name => 'my:task';
+
+  @override
+  String get description => 'Run provider maintenance.';
+
+  @override
+  Future<void> run() async {
+    // command logic
+  }
+}
+
+class MyProvider extends ServiceProvider {
+  @override
+  void register(Container container) {
+    ProviderCommandRegistry.instance.register(
+      'my:task',
+      factory: () => MyProviderCommand(),
+      description: 'Provider maintenance command',
+    );
+  }
+}
+```
+
+Provider commands are loaded alongside built-ins and project commands. If a
+provider command conflicts with an existing name or alias the CLI exits with a
+usage error so you can rename it.
+
+> For artisanal runners, use `ProviderArtisanalCommandRegistry` to expose
+> provider command factories to application-specific tooling.
+
 ## Troubleshooting
 
 - **`dart pub get` failures:** The `create` command forwards the resolver's exit code. Fix dependency constraints, then rerun the command or execute `dart pub get` manually.
