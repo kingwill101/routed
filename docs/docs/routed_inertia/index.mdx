@@ -22,6 +22,68 @@ helpers, and SSR support so you can serve SPA-like pages from a Dart backend.
 dart pub add routed_inertia
 ```
 
+`routed_inertia` re-exports the core server helpers from
+`package:inertia_dart/inertia_dart.dart`, so you can keep a single import in
+most apps. The inertia_dart package provides the Inertia protocol helpers,
+asset manifest reader, SSR gateways, and middleware used under the hood.
+
+## Start a project
+
+1) Scaffold a Routed app (optional but recommended):
+
+```bash
+dart run routed create --name inertia_app --template web
+cd inertia_app
+```
+
+2) Add Inertia server dependencies:
+
+```bash
+dart pub add routed_inertia
+```
+
+3) Add a frontend client (example uses React + Vite):
+
+```bash
+mkdir client
+cd client
+npm init -y
+npm install @inertiajs/core @inertiajs/react react react-dom
+npm install -D vite @vitejs/plugin-react
+```
+
+4) Configure the server to read Inertia settings:
+
+```yaml
+# config/http.yaml
+providers:
+  - routed.inertia
+```
+
+```yaml
+# config/inertia.yaml
+version: "1.0.0"
+root_view: "inertia/app"
+assets:
+  manifest_path: "client/dist/.vite/manifest.json"
+  entry: "src/main.jsx"
+  base_url: "/"
+  hot_file: "client/public/hot"
+```
+
+5) Run dev servers:
+
+```bash
+# client
+npm run dev
+
+# server (from app root)
+dart run routed dev
+```
+
+The example app in `packages/routed_inertia/example` includes a working Vite
+setup, hot file wiring, and server integration if you want a full reference.
+
 ## Quick start
 
 ```dart
