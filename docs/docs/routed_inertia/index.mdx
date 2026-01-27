@@ -42,7 +42,19 @@ cd inertia_app
 dart pub add routed_inertia
 ```
 
-3) Add a frontend client (example uses React + Vite):
+3) Scaffold the frontend with the inertia_dart CLI (recommended):
+
+```bash
+dart run inertia_dart:inertia create client --framework react --package-manager npm
+```
+
+If you already have a Vite project, run:
+
+```bash
+dart run inertia_dart:inertia install --framework react --package-manager npm --path client
+```
+
+4) Add a frontend client manually (optional):
 
 ```bash
 mkdir client
@@ -52,7 +64,7 @@ npm install @inertiajs/core @inertiajs/react react react-dom
 npm install -D vite @vitejs/plugin-react
 ```
 
-4) Configure the server to read Inertia settings:
+5) Configure the server to read Inertia settings:
 
 ```yaml
 # config/http.yaml
@@ -71,7 +83,7 @@ assets:
   hot_file: "client/public/hot"
 ```
 
-5) Run dev servers:
+6) Run dev servers:
 
 ```bash
 # client
@@ -83,6 +95,14 @@ dart run routed dev
 
 The example app in `packages/routed_inertia/example` includes a working Vite
 setup, hot file wiring, and server integration if you want a full reference.
+
+To manage the SSR worker, use the CLI commands:
+
+```bash
+dart run inertia_dart:inertia ssr:start
+dart run inertia_dart:inertia ssr:check
+dart run inertia_dart:inertia ssr:stop
+```
 
 ## Quick start
 
