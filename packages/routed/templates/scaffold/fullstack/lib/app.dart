@@ -1,7 +1,7 @@
 import 'package:routed/routed.dart';
 
-Future<Engine> createEngine() async {
-  final engine = await Engine.create(
+Future<Engine> createEngine({bool initialize = true}) async {
+  final engine = Engine(
     providers: [
       CoreServiceProvider.withLoader(
         const ConfigLoaderOptions(
@@ -13,6 +13,10 @@ Future<Engine> createEngine() async {
       RoutingServiceProvider(),
     ],
   );
+
+  if (initialize) {
+    await engine.initialize();
+  }
 
   final todos = <Map<String, dynamic>>[
     {'id': 1, 'title': 'Ship Routed starter', 'completed': false},
