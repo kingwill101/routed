@@ -1,7 +1,7 @@
 name: routed_inertia
-description: Inertia.js integration for the Routed framework
-version: 1.0.0
-repository: https://github.com/kingwill101/routed_ecosystem/tree/master/packages/routed_inertia
+description: Inertia.js integration for Routed that adds middleware, EngineContext helpers, SSR gateway wiring, and asset manifest support for hybrid apps.
+version: 0.1.0
+homepage: https://kingwill101.github.io/docs/routed_inertia
 tags:
   - routed
   - inertia

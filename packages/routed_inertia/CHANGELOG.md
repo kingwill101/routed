@@ -1,4 +1,4 @@
-## 1.0.0
+## 0.1.0
 
 - Initial release of Routed Inertia integration.
 - Adds middleware, EngineContext helpers, and config-driven defaults.

@@ -71,6 +71,16 @@ const config: Config = {
     [
       '@docusaurus/plugin-content-docs',
       {
+        id: 'routed_inertia',
+        path: 'docs/routed_inertia',
+        routeBasePath: 'docs/routed_inertia',
+        sidebarPath: './sidebars/routed_inertia.ts',
+        editUrl: 'https://github.com/kingwill101/routed/tree/main/docs/',
+      },
+    ],
+    [
+      '@docusaurus/plugin-content-docs',
+      {
         id: 'server_testing',
         path: 'docs/server-testing',
         routeBasePath: 'docs/server_testing',

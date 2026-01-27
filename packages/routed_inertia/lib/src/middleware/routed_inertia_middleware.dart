@@ -1,5 +1,3 @@
-import 'dart:io';
-
 import 'package:inertia_dart/inertia_dart.dart';
 import 'package:routed/routed.dart';
 
@@ -17,12 +15,11 @@ class RoutedInertiaMiddleware {
     if (isInertia &&
         currentVersion.isNotEmpty &&
         requestVersion != currentVersion) {
-      ctx.status(HttpStatus.conflict);
       ctx.setHeader(
         InertiaHeaders.inertiaLocation,
         ctx.requestedUri.toString(),
       );
-      return ctx.response;
+      return ctx.string('', statusCode: HttpStatus.conflict);
     }
 
     final response = await next();
