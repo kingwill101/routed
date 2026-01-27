@@ -1,22 +1,25 @@
 import 'dart:convert';
 import 'dart:io';
 
-import 'package:inertia_dart/inertia.dart';
+import 'package:inertia_dart/inertia_dart.dart';
 import 'package:routed/routed.dart';
+import 'package:routed/providers.dart';
 import 'package:routed_inertia/routed_inertia.dart';
 
 void main() async {
-  final version = 'dev';
-  final devServer = Platform.environment['INERTIA_DEV'] != 'false';
-  final assets = devServer ? ViteAssetLinks.dev() : _loadViteAssets();
-  final htmlBuilder = (PageData page, SsrResponse? ssr) =>
-      _renderHtml(page, assets: assets);
+  registerRoutedInertiaProvider(ProviderRegistry.instance);
 
+  final devServer = Platform.environment['INERTIA_DEV'] != 'false';
   final engine = Engine(
+    providers: [
+      CoreServiceProvider.withLoader(
+        ConfigLoaderOptions(
+          configDirectory: 'packages/routed_inertia/example/config',
+        ),
+      ),
+      RoutingServiceProvider(),
+    ],
     options: [
-      withMiddleware([
-        RoutedInertiaMiddleware(versionResolver: () => version).call,
-      ]),
       if (!devServer)
         withStaticAssets(
           enabled: true,
@@ -25,6 +28,13 @@ void main() async {
         ),
     ],
   );
+
+  final config = _resolveInertiaConfig(engine);
+  final assets = devServer
+      ? _devAssetTags(_resolveDevServerOrigin(config?.assets))
+      : await _loadManifestAssets(config?.assets);
+  String htmlBuilder(PageData page, SsrResponse? ssr) =>
+      _renderHtml(page, assets: assets);
 
   engine.get('/', (ctx) {
     return ctx.inertia(
@@ -37,7 +47,6 @@ void main() async {
           {'label': 'Users', 'href': '/users'},
         ],
       },
-      version: version,
       htmlBuilder: htmlBuilder,
     );
   });
@@ -57,7 +66,6 @@ void main() async {
           {'label': 'Users', 'href': '/users'},
         ],
       },
-      version: version,
       htmlBuilder: htmlBuilder,
     );
   });
@@ -65,32 +73,12 @@ void main() async {
   await engine.serve(port: 8080);
 }
 
-String _renderHtml(PageData page, {required ViteAssetLinks assets}) {
+String _renderHtml(PageData page, {required AssetTags assets}) {
   final title = page.props['title']?.toString() ?? 'Routed Inertia';
   final pageJson = jsonEncode(page.toJson());
   final escaped = _escapeHtml(pageJson);
-  final scriptTags = StringBuffer();
-  if (assets.viteClient != null) {
-    scriptTags.writeln(
-      '<script type="module" src="${assets.viteClient}"></script>',
-    );
-    scriptTags.writeln('''<script type="module">
-  import RefreshRuntime from 'http://localhost:5173/@react-refresh'
-  RefreshRuntime.injectIntoGlobalHook(window)
-  window.
-    \$RefreshReg\$ = () => {}
-  window.
-    \$RefreshSig\$ = () => (type) => type
-  window.
-    __vite_plugin_react_preamble_installed__ = true
-</script>''');
-  }
-  scriptTags.writeln(
-    '<script type="module" src="${assets.scriptSrc}"></script>',
-  );
-  final styleTags = assets.styleHrefs
-      .map((href) => '<link rel="stylesheet" href="$href" />')
-      .join('\n    ');
+  final styleTags = assets.styles.join('\n    ');
+  final scriptTags = assets.scripts.join('\n    ');
 
   return '''<!doctype html>
 <html lang="en">
@@ -102,7 +90,7 @@ String _renderHtml(PageData page, {required ViteAssetLinks assets}) {
   </head>
   <body>
     <div id="app" data-page="$escaped"></div>
-    ${scriptTags.toString().trim()}
+    ${scriptTags.trim()}
   </body>
 </html>
 ''';
@@ -117,42 +105,103 @@ String _escapeHtml(String value) {
       .replaceAll("'", '&#x27;');
 }
 
-class ViteAssetLinks {
-  final String scriptSrc;
-  final List<String> styleHrefs;
-  final String? viteClient;
+class AssetTags {
+  const AssetTags({this.styles = const [], this.scripts = const []});
 
-  const ViteAssetLinks({
-    required this.scriptSrc,
-    this.styleHrefs = const [],
-    this.viteClient,
-  });
+  final List<String> styles;
+  final List<String> scripts;
+}
 
-  factory ViteAssetLinks.dev() {
-    return const ViteAssetLinks(
-      scriptSrc: 'http://localhost:5173/src/main.jsx',
-      viteClient: 'http://localhost:5173/@vite/client',
+AssetTags _devAssetTags(String devOrigin) {
+  final scripts = <String>[
+    '<script type="module" src="$devOrigin/@vite/client"></script>',
+    '''<script type="module">
+  import RefreshRuntime from '$devOrigin/@react-refresh'
+  RefreshRuntime.injectIntoGlobalHook(window)
+  window.
+    \$RefreshReg\$ = () => {}
+  window.
+    \$RefreshSig\$ = () => (type) => type
+  window.
+    __vite_plugin_react_preamble_installed__ = true
+</script>''',
+    '<script type="module" src="$devOrigin/src/main.jsx"></script>',
+  ];
+
+  return AssetTags(scripts: scripts);
+}
+
+String _resolveDevServerOrigin(InertiaAssetsConfig? assets) {
+  final env = Platform.environment;
+  final direct = env['INERTIA_DEV_SERVER_URL'] ?? env['VITE_DEV_SERVER_URL'];
+  if (direct != null && direct.trim().isNotEmpty) {
+    return _trimTrailingSlash(direct.trim());
+  }
+
+  final configUrl = assets?.resolveDevServerUrl();
+  if (configUrl != null && configUrl.isNotEmpty) {
+    return _trimTrailingSlash(configUrl);
+  }
+
+  final hotFile = File('packages/routed_inertia/example/client/public/hot');
+  if (hotFile.existsSync()) {
+    final contents = hotFile.readAsStringSync().trim();
+    if (contents.isNotEmpty) {
+      return _trimTrailingSlash(contents);
+    }
+  }
+
+  final host = env['INERTIA_DEV_SERVER_HOST'] ?? env['VITE_DEV_SERVER_HOST'];
+  final port = env['INERTIA_DEV_SERVER_PORT'] ?? env['VITE_DEV_SERVER_PORT'];
+  if (host == null || host.trim().isEmpty || port == null || port.isEmpty) {
+    throw StateError(
+      'Set INERTIA_DEV_SERVER_URL (or VITE_DEV_SERVER_URL), provide '
+      'INERTIA_DEV_SERVER_HOST and INERTIA_DEV_SERVER_PORT, or start Vite '
+      'with the hot file enabled for dev mode.',
     );
+  }
+
+  final scheme =
+      env['INERTIA_DEV_SERVER_SCHEME'] ??
+      env['VITE_DEV_SERVER_SCHEME'] ??
+      'http';
+  return _trimTrailingSlash('$scheme://${host.trim()}:${port.trim()}');
+}
+
+Future<AssetTags> _loadManifestAssets(InertiaAssetsConfig? assets) async {
+  final manifestPath =
+      assets?.manifestPath ??
+      'packages/routed_inertia/example/client/dist/.vite/manifest.json';
+  final entry = assets?.entry ?? 'src/main.jsx';
+  final baseUrl = assets?.baseUrl ?? '/';
+  final manifestFile = File(manifestPath);
+
+  if (!manifestFile.existsSync()) {
+    return const AssetTags(
+      scripts: ['<script type="module" src="/assets/main.js"></script>'],
+    );
+  }
+
+  final manifest = await InertiaAssetManifest.load(manifestPath);
+  final styles = manifest.styleTags(entry, baseUrl: baseUrl);
+  final scripts = manifest.scriptTags(entry, baseUrl: baseUrl);
+  return AssetTags(styles: styles, scripts: scripts);
+}
+
+InertiaConfig? _resolveInertiaConfig(Engine engine) {
+  if (!engine.container.has<InertiaConfig>()) {
+    return null;
+  }
+  try {
+    return engine.container.get<InertiaConfig>();
+  } catch (_) {
+    return null;
   }
 }
 
-ViteAssetLinks _loadViteAssets() {
-  final manifestFile = File(
-    'packages/routed_inertia/example/client/dist/.vite/manifest.json',
-  );
-
-  if (!manifestFile.existsSync()) {
-    return const ViteAssetLinks(scriptSrc: '/assets/main.js');
+String _trimTrailingSlash(String value) {
+  if (value.endsWith('/')) {
+    return value.substring(0, value.length - 1);
   }
-
-  final manifest =
-      jsonDecode(manifestFile.readAsStringSync()) as Map<String, dynamic>;
-  final entry = manifest['src/main.jsx'] as Map<String, dynamic>?;
-  final scriptFile = entry?['file'] as String?;
-  final cssFiles = (entry?['css'] as List?)?.cast<String>() ?? const [];
-
-  return ViteAssetLinks(
-    scriptSrc: scriptFile == null ? '/assets/main.js' : '/$scriptFile',
-    styleHrefs: cssFiles.map((file) => '/$file').toList(),
-  );
+  return value;
 }

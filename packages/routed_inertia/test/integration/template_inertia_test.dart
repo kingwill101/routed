@@ -1,5 +1,5 @@
 import 'package:file/memory.dart';
-import 'package:inertia_dart/inertia.dart';
+import 'package:inertia_dart/inertia_dart.dart';
 import 'package:routed/routed.dart';
 import 'package:routed_inertia/routed_inertia.dart';
 import 'package:routed_testing/routed_testing.dart';
@@ -72,6 +72,42 @@ void main() {
           .assertBodyContains('data-page=');
     });
 
+    engineTest('default html includes request url', (engine, client) async {
+      engine.get('/users/', (ctx) {
+        return ctx.inertia('Users', props: const {});
+      });
+
+      final response = await client.get('/users/?page=2&filter=a');
+
+      response
+          .assertStatus(200)
+          .assertHeaderContains('content-type', 'text/html')
+          .assertBodyContains(
+            '&quot;url&quot;:&quot;/users/?page=2&amp;filter=a&quot;',
+          );
+    });
+
+    engineTest('SSR head and body render once', (engine, client) async {
+      final gateway = _CountingGateway();
+      engine.get('/ssr-head', (ctx) {
+        return ctx.inertia(
+          'Ssr',
+          props: const {'name': 'Ada'},
+          ssrEnabled: true,
+          ssrGateway: gateway,
+        );
+      });
+
+      final response = await client.get('/ssr-head');
+
+      response
+          .assertStatus(200)
+          .assertHeaderContains('content-type', 'text/html')
+          .assertBodyContains('<title>SSR</title>')
+          .assertBodyContains('<div>SSR body</div>');
+      expect(gateway.calls, equals(1));
+    });
+
     engineTest('SSR errors trigger callback', (engine, client) async {
       var called = false;
       engine.get('/ssr-error', (ctx) {
@@ -101,5 +137,21 @@ class _ThrowingGateway implements SsrGateway {
   @override
   Future<SsrResponse> render(String pageJson) async {
     throw StateError('SSR failed');
+  }
+}
+
+class _CountingGateway implements SsrGateway {
+  int calls = 0;
+
+  @override
+  Future<bool> healthCheck() async => true;
+
+  @override
+  Future<SsrResponse> render(String pageJson) async {
+    calls += 1;
+    return const SsrResponse(
+      body: '<div>SSR body</div>',
+      head: '<title>SSR</title>',
+    );
   }
 }

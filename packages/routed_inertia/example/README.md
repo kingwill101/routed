@@ -31,11 +31,24 @@ cd packages/routed_inertia/example/client
 npm run dev
 ```
 
-Start the Routed server in another terminal:
+The Vite dev server writes `packages/routed_inertia/example/client/public/hot`.
+If you want to override the URL, set `INERTIA_DEV_SERVER_URL` (or
+`VITE_DEV_SERVER_URL`):
 
 ```bash
-dart run packages/routed_inertia/example/server.dart
+export INERTIA_DEV_SERVER_URL="http://localhost:5173"
 ```
+
+Start the Routed app in another terminal:
+
+```bash
+cd packages/routed_inertia/example/routed_app/routed_inertia_example
+dart run routed dev
+```
+
+The example app loads config from `packages/routed_inertia/example/routed_app/`
+`routed_inertia_example/config`. Update `config/inertia.yaml` to change the
+version, SSR, or asset settings.
 
 Visit:
 - http://localhost:8080
@@ -49,7 +62,6 @@ engine.get('/', (ctx) {
   return ctx.inertia(
     'Home',
     props: {'title': 'Routed + Inertia'},
-    version: version,
     htmlBuilder: htmlBuilder,
   );
 });

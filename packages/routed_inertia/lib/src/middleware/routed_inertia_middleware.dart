@@ -1,6 +1,6 @@
 import 'dart:io';
 
-import 'package:inertia_dart/inertia.dart';
+import 'package:inertia_dart/inertia_dart.dart';
 import 'package:routed/routed.dart';
 
 /// Routed middleware for Inertia request handling

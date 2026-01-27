@@ -13,8 +13,9 @@ environment:
 resolution: workspace
 
 dependencies:
-  inertia_dart: ^1.0.0
+  inertia_dart: ^0.1.0
   routed: ^0.3.2
+  json_schema_builder: ^0.1.3
   meta: ^1.18.0
 
 dev_dependencies:

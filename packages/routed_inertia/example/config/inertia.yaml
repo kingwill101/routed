@@ -1,0 +1,14 @@
+version: "dev"
+root_view: ""
+history:
+  encrypt: false
+ssr:
+  enabled: false
+  url: "http://127.0.0.1:13714"
+  ensure_bundle_exists: true
+  runtime: "node"
+assets:
+  manifest_path: "packages/routed_inertia/example/client/dist/.vite/manifest.json"
+  entry: "src/main.jsx"
+  base_url: "/"
+  hot_file: "packages/routed_inertia/example/client/public/hot"
