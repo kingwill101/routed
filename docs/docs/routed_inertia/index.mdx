@@ -1,0 +1,143 @@
+---
+title: Routed Inertia
+description: Inertia.js middleware, SSR, and assets for Routed apps
+sidebar_position: 0
+---
+
+# Routed Inertia
+
+Routed Inertia wires Inertia.js into Routed with middleware, `EngineContext`
+helpers, and SSR support so you can serve SPA-like pages from a Dart backend.
+
+## Features
+
+- `ctx.inertia` response helpers for JSON + HTML payloads.
+- Shared props, flash messages, and error bags.
+- Config-driven SSR, asset manifests, and Vite hot reload support.
+- Testing helpers for Inertia responses.
+
+## Install
+
+```bash
+dart pub add routed_inertia
+```
+
+## Quick start
+
+```dart
+import 'package:routed/routed.dart';
+import 'package:routed_inertia/routed_inertia.dart';
+
+final engine = Engine(
+  options: [
+    withMiddleware([
+      RoutedInertiaMiddleware(versionResolver: () => '1.0.0').call,
+    ]),
+  ],
+);
+
+engine.get('/dashboard', (ctx) {
+  return ctx.inertia(
+    'Dashboard',
+    props: {'user': {'name': 'Ada'}},
+  );
+});
+```
+
+## Provider + config setup
+
+Register the provider and enable it in `http.yaml`.
+
+```dart
+import 'package:routed/routed.dart';
+import 'package:routed_inertia/routed_inertia.dart';
+
+registerRoutedInertiaProvider(ProviderRegistry.instance);
+```
+
+```yaml
+# config/http.yaml
+providers:
+  - routed.inertia
+```
+
+```yaml
+# config/inertia.yaml
+version: "1.0.0"
+root_view: "inertia/app"
+history:
+  encrypt: false
+ssr:
+  enabled: false
+  url: "http://127.0.0.1:13714"
+assets:
+  manifest_path: "build/manifest.json"
+  entry: "resources/js/app.js"
+  base_url: "/"
+  hot_file: "public/hot"
+```
+
+If you need a custom version resolver, register the provider directly:
+
+```dart
+final engine = Engine(
+  providers: [
+    CoreServiceProvider.withLoader(
+      ConfigLoader.yaml(configDirectory: 'config'),
+    ),
+    InertiaServiceProvider(versionResolver: () => '1.0.0'),
+  ],
+);
+```
+
+## Shared props + errors
+
+```dart
+engine.get('/shared', (ctx) {
+  ctx.inertiaShare({'appName': 'Routed'});
+  return ctx.inertia('Shared', props: {'user': 'Ada'});
+});
+
+engine.post('/save', (ctx) {
+  ctx.inertiaFlash('notice', 'Saved');
+  ctx.inertiaErrors({'email': 'Required'});
+  return ctx.redirect('/form');
+});
+```
+
+Select error bags with `X-Inertia-Error-Bag` from the client.
+
+## SSR + templates
+
+```dart
+engine.get('/', (ctx) {
+  return ctx.inertia(
+    'Home',
+    props: {'title': 'Hello'},
+    templateName: 'inertia/app',
+    ssrEnabled: true,
+    ssrGateway: HttpSsrGateway(Uri.parse('http://localhost:13714')),
+  );
+});
+```
+
+## Asset manifest helper
+
+```dart
+final manifest = await InertiaAssetManifest.load('build/manifest.json');
+final tags = manifest.renderTags('resources/js/app.js', baseUrl: '/');
+```
+
+Inject the tags in your template or HTML builder.
+
+## Testing
+
+```dart
+response.assertInertia((page) {
+  page.component('Dashboard').has('user.name');
+});
+```
+
+## Example app
+
+See `packages/routed_inertia/example/README.md` for a full React + Routed demo.
