@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:io';
 
 import 'package:routed/src/config/config.dart';
@@ -48,6 +49,10 @@ mixin ContainerMixin {
   /// in the container.
   final List<ServiceProvider> _providers = [];
 
+  final Set<ServiceProvider> _bootedProviders = {};
+  final Map<ServiceProvider, List<Type>> _pendingProviders = {};
+  final Set<Type> _dependencyWatchers = {};
+
   final ConfigRegistry _configRegistry = ConfigRegistry();
   bool _configRegistryBound = false;
 
@@ -85,7 +90,7 @@ mixin ContainerMixin {
     _providers.add(provider);
     provider.register(_container);
     if (_booted) {
-      provider.boot(_container);
+      _scheduleProviderBoot(provider);
     }
   }
 
@@ -103,10 +108,24 @@ mixin ContainerMixin {
       return;
     }
     for (final provider in _providers) {
-      await provider.boot(_container);
+      await _bootProviderIfReady(provider);
     }
 
+    await _attemptBootPending();
+
     _booted = true;
+  }
+
+  /// Returns providers that are still waiting on unresolved dependencies.
+  Map<ServiceProvider, List<Type>> get unresolvedProviderDependencies {
+    if (_pendingProviders.isEmpty) {
+      return const <ServiceProvider, List<Type>>{};
+    }
+    final snapshot = <ServiceProvider, List<Type>>{};
+    _pendingProviders.forEach((provider, deps) {
+      snapshot[provider] = List<Type>.from(deps);
+    });
+    return Map.unmodifiable(snapshot);
   }
 
   /// Creates a new container scoped to a specific HTTP request.
@@ -193,5 +212,86 @@ mixin ContainerMixin {
     }
     _container.instance<ConfigRegistry>(_configRegistry);
     _configRegistryBound = true;
+  }
+
+  List<Type> _resolveDependencies(ServiceProvider provider) {
+    if (provider is ProvidesDependencies) {
+      return List<Type>.from(provider.dependencies);
+    }
+    return const <Type>[];
+  }
+
+  bool _dependenciesSatisfied(List<Type> dependencies) {
+    for (final dependency in dependencies) {
+      if (!_container.hasType(dependency)) {
+        return false;
+      }
+    }
+    return true;
+  }
+
+  Future<void> _bootProvider(ServiceProvider provider) async {
+    if (_bootedProviders.contains(provider)) {
+      return;
+    }
+    await provider.boot(_container);
+    _bootedProviders.add(provider);
+  }
+
+  Future<void> _bootProviderIfReady(ServiceProvider provider) async {
+    if (_bootedProviders.contains(provider)) {
+      return;
+    }
+    final dependencies = _resolveDependencies(provider);
+    if (_dependenciesSatisfied(dependencies)) {
+      await _bootProvider(provider);
+      return;
+    }
+    _pendingProviders[provider] = dependencies;
+    _watchDependencies(dependencies);
+  }
+
+  void _scheduleProviderBoot(ServiceProvider provider) {
+    if (_bootedProviders.contains(provider)) {
+      return;
+    }
+    final dependencies = _resolveDependencies(provider);
+    if (_dependenciesSatisfied(dependencies)) {
+      unawaited(_bootProvider(provider));
+      return;
+    }
+    _pendingProviders[provider] = dependencies;
+    _watchDependencies(dependencies);
+  }
+
+  void _watchDependencies(List<Type> dependencies) {
+    for (final dependency in dependencies) {
+      if (_dependencyWatchers.contains(dependency)) {
+        continue;
+      }
+      _dependencyWatchers.add(dependency);
+      _container.whenAvailable(dependency, (_) {
+        unawaited(_attemptBootPending());
+      });
+    }
+  }
+
+  Future<void> _attemptBootPending() async {
+    if (_pendingProviders.isEmpty) {
+      return;
+    }
+    var progress = true;
+    while (progress) {
+      progress = false;
+      final pending = Map<ServiceProvider, List<Type>>.from(_pendingProviders);
+      for (final entry in pending.entries) {
+        if (!_dependenciesSatisfied(entry.value)) {
+          continue;
+        }
+        _pendingProviders.remove(entry.key);
+        await _bootProvider(entry.key);
+        progress = true;
+      }
+    }
   }
 }

@@ -1403,10 +1403,28 @@ class Engine with StaticFileHandler, ContainerMixin {
     container.instance<Engine>(this);
     _loadManifestProviders();
     await bootProviders();
+    _warnUnresolvedProviderDependencies();
     _rebuildMiddlewareStacks();
     _cachedEventManager = await _resolveEventManager(container);
     _providersBooted = true;
     await _emitConfigLoaded();
+  }
+
+  void _warnUnresolvedProviderDependencies() {
+    final unresolved = unresolvedProviderDependencies;
+    if (unresolved.isEmpty) {
+      return;
+    }
+    final details = unresolved.entries
+        .map((entry) {
+          final providerName = entry.key.runtimeType.toString();
+          final deps = entry.value.map((type) => type.toString()).join(', ');
+          return '$providerName -> [$deps]';
+        })
+        .join('; ');
+    debugPrintWarning(
+      'Unresolved provider dependencies during initialization: $details',
+    );
   }
 
   /// Creates an initialized engine with all built-in providers.

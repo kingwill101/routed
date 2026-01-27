@@ -283,6 +283,15 @@ abstract class ServiceProvider {
   Future<void> cleanup(Container container) async {}
 }
 
+/// Implement on a [ServiceProvider] to declare dependencies by type.
+///
+/// Providers declaring dependencies will only boot once all dependency types
+/// are available in the container.
+mixin ProvidesDependencies on ServiceProvider {
+  /// Types that must be registered before this provider boots.
+  List<Type> get dependencies => const <Type>[];
+}
+
 /// Implement on a [ServiceProvider] to advertise default configuration values.
 mixin ProvidesDefaultConfig on ServiceProvider {
   /// Default configuration (values + documentation) contributed by this provider.

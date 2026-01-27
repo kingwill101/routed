@@ -100,6 +100,13 @@ class Container {
   /// Map of contextual bindings
   final Map<Type, Map<Type, dynamic>> _contextual = {};
 
+  /// Callbacks to run when a type becomes available.
+  final Map<Type, List<void Function(Container)>> _availabilityCallbacks = {};
+
+  /// Callbacks to run when a type should be resolved.
+  final Map<Type, List<FutureOr<void> Function(dynamic, Container)>>
+  _whenCallbacks = {};
+
   /// Callbacks to run before resolving a type
   final Map<Type, List<Function>> _resolvingCallbacks = {};
 
@@ -129,6 +136,7 @@ class Container {
     bool singleton = false,
   }) {
     _bindings[T] = Binding<T>(factory, singleton: singleton);
+    _notifyTypeAvailable(T);
   }
 
   /// Binds a singleton using a factory function.
@@ -184,6 +192,7 @@ class Container {
       singleton: true,
       instance: instance,
     );
+    _notifyTypeAvailable(T);
   }
 
   /// Removes the binding and cached instance for type [T].
@@ -270,6 +279,33 @@ class Container {
     });
   }
 
+  /// Executes [callback] once when [T] becomes available.
+  ///
+  /// If [T] is already available, the callback runs immediately after resolving
+  /// the instance.
+  void when<T>(
+    FutureOr<void> Function(T instance, Container container) callback,
+  ) {
+    if (has<T>()) {
+      _resolveWhenCallback(T, (instance, container) {
+        return callback(instance as T, container);
+      });
+      return;
+    }
+    _whenCallbacks.putIfAbsent(T, () => []).add((instance, container) {
+      return callback(instance as T, container);
+    });
+  }
+
+  /// Executes [callback] once when [type] becomes available without resolving it.
+  void whenAvailable(Type type, void Function(Container container) callback) {
+    if (hasType(type)) {
+      callback(this);
+      return;
+    }
+    _availabilityCallbacks.putIfAbsent(type, () => []).add(callback);
+  }
+
   /// Makes an instance of type [T].
   ///
   /// This will:
@@ -353,6 +389,17 @@ class Container {
         (_parent?.has<T>() ?? false);
   }
 
+  /// Checks if a binding exists for [type].
+  bool hasType(Type type) {
+    return _bindings.containsKey(type) ||
+        _instances.containsKey(type) ||
+        _aliases.containsKey(type) ||
+        (_parent?.hasType(type) ?? false);
+  }
+
+  /// Returns true if [T] has been resolved to an instance.
+  bool resolved<T>() => _resolvedType(T);
+
   /// Creates a child container that inherits bindings from this container.
   ///
   /// The child container can override bindings while maintaining access to parent bindings.
@@ -417,6 +464,89 @@ class Container {
 
     _instances.clear();
     _bindings.clear();
+  }
+
+  bool _resolvedType(Type type) {
+    if (_instances.containsKey(type)) {
+      return true;
+    }
+    final binding = _bindings[type] ?? _parent?._bindings[type];
+    if (binding != null && binding.instance != null) {
+      return true;
+    }
+    final aliasType = _aliases[type];
+    if (aliasType != null) {
+      return _resolvedType(aliasType);
+    }
+    return _parent?._resolvedType(type) ?? false;
+  }
+
+  void _notifyTypeAvailable(Type type) {
+    final availabilityCallbacks = _availabilityCallbacks.remove(type);
+    if (availabilityCallbacks != null) {
+      for (final callback in availabilityCallbacks) {
+        callback(this);
+      }
+    }
+    final whenCallbacks = _whenCallbacks.remove(type);
+    if (whenCallbacks == null) {
+      return;
+    }
+    for (final callback in whenCallbacks) {
+      _resolveWhenCallback(type, callback);
+    }
+  }
+
+  void _resolveWhenCallback(
+    Type type,
+    FutureOr<void> Function(dynamic instance, Container container) callback,
+  ) {
+    unawaited(
+      Future<void>.sync(() async {
+        final instance = await _makeByType(type);
+        await Future.sync(() => callback(instance, this));
+      }),
+    );
+  }
+
+  Future<dynamic> _makeByType(Type type) async {
+    final existingInstance = _instances[type];
+    if (existingInstance != null) {
+      return existingInstance;
+    }
+
+    if (_contextual.containsKey(type)) {
+      final contextualImpl = _contextual[type]![type];
+      if (contextualImpl != null) {
+        return await _resolve(
+          contextualImpl as Future<dynamic> Function(Container),
+        );
+      }
+    }
+
+    if (_aliases.containsKey(type)) {
+      final aliasType = _aliases[type]!;
+      final binding = _bindings[aliasType] ?? _parent?._bindings[aliasType];
+      if (binding != null) {
+        final instance = await binding.resolve(this);
+        if (binding.singleton) {
+          _instances[type] = instance;
+        }
+        return instance;
+      }
+      throw StateError('No binding found for aliased type $aliasType');
+    }
+
+    final binding = _bindings[type] ?? _parent?._bindings[type];
+    if (binding == null) {
+      throw StateError('No binding found for type $type');
+    }
+
+    final instance = await binding.resolve(this);
+    if (binding.singleton) {
+      _instances[type] = instance;
+    }
+    return instance;
   }
 }
 
