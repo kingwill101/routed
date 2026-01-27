@@ -53,15 +53,15 @@ class LinkedInProfile {
   }
 
   Map<String, dynamic> toJson() => {
-        'sub': sub,
-        'email': email,
-        'email_verified': emailVerified,
-        'name': name,
-        'picture': picture,
-        'given_name': givenName,
-        'family_name': familyName,
-        'locale': locale,
-      };
+    'sub': sub,
+    'email': email,
+    'email_verified': emailVerified,
+    'name': name,
+    'picture': picture,
+    'given_name': givenName,
+    'family_name': familyName,
+    'locale': locale,
+  };
 }
 
 /// Configuration for the LinkedIn OAuth provider.
@@ -180,7 +180,8 @@ AuthProviderRegistration _linkedInRegistration() {
 }
 
 AuthProvider? _buildLinkedInProvider(Map<String, dynamic> config) {
-  final enabled = parseBoolLike(
+  final enabled =
+      parseBoolLike(
         config['enabled'],
         context: 'auth.providers.linkedin.enabled',
         throwOnInvalid: true,
@@ -200,7 +201,8 @@ AuthProvider? _buildLinkedInProvider(Map<String, dynamic> config) {
     config['redirect_uri'],
     'auth.providers.linkedin.redirect_uri',
   );
-  final scopes = parseStringList(
+  final scopes =
+      parseStringList(
         config['scopes'],
         context: 'auth.providers.linkedin.scopes',
         allowEmptyResult: true,
@@ -237,5 +239,8 @@ void registerLinkedInAuthProvider(
   AuthProviderRegistry registry, {
   bool overrideExisting = true,
 }) {
-  registry.register(_linkedInRegistration(), overrideExisting: overrideExisting);
+  registry.register(
+    _linkedInRegistration(),
+    overrideExisting: overrideExisting,
+  );
 }

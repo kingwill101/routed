@@ -24,22 +24,25 @@ import 'package:server_testing/server_testing.dart';
 Generator<String> chaoticUsername({int maxLength = 100}) {
   return Gen.frequency([
     (3, Chaos.string(minLength: 1, maxLength: maxLength)),
-    (2, Gen.oneOf([
-      "admin'--",
-      "admin' OR '1'='1",
-      "admin\"; DROP TABLE users; --",
-      "<script>alert('xss')</script>",
-      "../../../etc/passwd",
-      "admin%00",
-      "admin\x00hidden",
-      "admin\r\nX-Injected: header",
-      "admin' UNION SELECT * FROM passwords--",
-      "${'\$'}{process.env.SECRET}",
-      "{{constructor.constructor('return this')()}}",
-      "admin|cat /etc/passwd",
-      "admin; ls -la",
-      "admin\nX-Forwarded-For: attacker",
-    ])),
+    (
+      2,
+      Gen.oneOf([
+        "admin'--",
+        "admin' OR '1'='1",
+        "admin\"; DROP TABLE users; --",
+        "<script>alert('xss')</script>",
+        "../../../etc/passwd",
+        "admin%00",
+        "admin\x00hidden",
+        "admin\r\nX-Injected: header",
+        "admin' UNION SELECT * FROM passwords--",
+        "${'\$'}{process.env.SECRET}",
+        "{{constructor.constructor('return this')()}}",
+        "admin|cat /etc/passwd",
+        "admin; ls -la",
+        "admin\nX-Forwarded-For: attacker",
+      ]),
+    ),
     (1, Gen.string(minLength: 1, maxLength: 50)),
   ]);
 }
@@ -48,21 +51,24 @@ Generator<String> chaoticUsername({int maxLength = 100}) {
 Generator<String> chaoticPassword({int maxLength = 100}) {
   return Gen.frequency([
     (3, Chaos.string(minLength: 0, maxLength: maxLength)),
-    (2, Gen.oneOf([
-      "", // Empty password
-      " ", // Single space
-      "   ", // Multiple spaces
-      "\t\n\r", // Whitespace only
-      "a" * 10000, // Very long password
-      "\x00password", // Null byte prefix
-      "pass\x00word", // Null byte middle
-      "password\x00", // Null byte suffix
-      "пароль", // Cyrillic
-      "密码", // Chinese
-      "🔐🔑🔒", // Emoji
-      "pass\u200Bword", // Zero-width space
-      "pass\u202Eword", // Right-to-left override
-    ])),
+    (
+      2,
+      Gen.oneOf([
+        "", // Empty password
+        " ", // Single space
+        "   ", // Multiple spaces
+        "\t\n\r", // Whitespace only
+        "a" * 10000, // Very long password
+        "\x00password", // Null byte prefix
+        "pass\x00word", // Null byte middle
+        "password\x00", // Null byte suffix
+        "пароль", // Cyrillic
+        "密码", // Chinese
+        "🔐🔑🔒", // Emoji
+        "pass\u200Bword", // Zero-width space
+        "pass\u202Eword", // Right-to-left override
+      ]),
+    ),
     (1, Gen.string(minLength: 1, maxLength: 50)),
   ]);
 }
@@ -71,27 +77,30 @@ Generator<String> chaoticPassword({int maxLength = 100}) {
 Generator<String> chaoticEmail({int maxLength = 100}) {
   return Gen.frequency([
     (3, Chaos.string(minLength: 0, maxLength: maxLength)),
-    (2, Gen.oneOf([
-      "", // Empty
-      "notanemail", // No @
-      "@", // Just @
-      "user@", // No domain
-      "@domain.com", // No local part
-      "user@@domain.com", // Double @
-      "user@domain@evil.com", // Double @
-      "user@domain.com@attacker.com",
-      "user+tag@domain.com",
-      "user@[127.0.0.1]",
-      "user@localhost",
-      "user@.com",
-      ".user@domain.com",
-      "user.@domain.com",
-      "user..test@domain.com",
-      "<script>@evil.com",
-      "user@domain.com\r\nBcc: attacker@evil.com",
-      "\"user\"@domain.com",
-      "user@domain.com%00attacker@evil.com",
-    ])),
+    (
+      2,
+      Gen.oneOf([
+        "", // Empty
+        "notanemail", // No @
+        "@", // Just @
+        "user@", // No domain
+        "@domain.com", // No local part
+        "user@@domain.com", // Double @
+        "user@domain@evil.com", // Double @
+        "user@domain.com@attacker.com",
+        "user+tag@domain.com",
+        "user@[127.0.0.1]",
+        "user@localhost",
+        "user@.com",
+        ".user@domain.com",
+        "user.@domain.com",
+        "user..test@domain.com",
+        "<script>@evil.com",
+        "user@domain.com\r\nBcc: attacker@evil.com",
+        "\"user\"@domain.com",
+        "user@domain.com%00attacker@evil.com",
+      ]),
+    ),
     (1, Specialized.email()),
   ]);
 }
@@ -100,17 +109,20 @@ Generator<String> chaoticEmail({int maxLength = 100}) {
 Generator<String> chaoticOAuthState({int maxLength = 200}) {
   return Gen.frequency([
     (3, Chaos.string(minLength: 0, maxLength: maxLength)),
-    (2, Gen.oneOf([
-      "", // Empty
-      "valid-state-token",
-      "a" * 10000, // Very long
-      "state%00injected",
-      "state\r\nLocation: http://evil.com",
-      "state<script>",
-      "../../../.env",
-      "state|cat /etc/passwd",
-      "eyJhbGciOiJub25lIn0.eyJ1c2VyIjoiYWRtaW4ifQ.", // JWT with alg:none
-    ])),
+    (
+      2,
+      Gen.oneOf([
+        "", // Empty
+        "valid-state-token",
+        "a" * 10000, // Very long
+        "state%00injected",
+        "state\r\nLocation: http://evil.com",
+        "state<script>",
+        "../../../.env",
+        "state|cat /etc/passwd",
+        "eyJhbGciOiJub25lIn0.eyJ1c2VyIjoiYWRtaW4ifQ.", // JWT with alg:none
+      ]),
+    ),
     (1, Gen.string(minLength: 10, maxLength: 64)),
   ]);
 }
@@ -119,16 +131,19 @@ Generator<String> chaoticOAuthState({int maxLength = 200}) {
 Generator<String> chaoticOAuthCode({int maxLength = 200}) {
   return Gen.frequency([
     (3, Chaos.string(minLength: 0, maxLength: maxLength)),
-    (2, Gen.oneOf([
-      "", // Empty
-      "valid-code",
-      "a" * 10000, // Very long
-      "code%00injected",
-      "code\r\nX-Injected: header",
-      "code<script>alert(1)</script>",
-      "code' OR '1'='1",
-      "code; DROP TABLE tokens;--",
-    ])),
+    (
+      2,
+      Gen.oneOf([
+        "", // Empty
+        "valid-code",
+        "a" * 10000, // Very long
+        "code%00injected",
+        "code\r\nX-Injected: header",
+        "code<script>alert(1)</script>",
+        "code' OR '1'='1",
+        "code; DROP TABLE tokens;--",
+      ]),
+    ),
     (1, Gen.string(minLength: 10, maxLength: 64)),
   ]);
 }
@@ -137,21 +152,24 @@ Generator<String> chaoticOAuthCode({int maxLength = 200}) {
 Generator<String> chaoticCallbackUrl({int maxLength = 500}) {
   return Gen.frequency([
     (3, Chaos.string(minLength: 0, maxLength: maxLength)),
-    (2, Gen.oneOf([
-      "", // Empty
-      "javascript:alert(1)",
-      "data:text/html,<script>alert(1)</script>",
-      "//evil.com/steal-token",
-      "https://evil.com/callback",
-      "http://localhost/../../../etc/passwd",
-      "/callback?redirect=http://evil.com",
-      "https://legit.com@evil.com/",
-      "https://evil.com#legit.com",
-      "https://evil.com%00legit.com",
-      "\r\nLocation: http://evil.com",
-      "file:///etc/passwd",
-      "ftp://evil.com",
-    ])),
+    (
+      2,
+      Gen.oneOf([
+        "", // Empty
+        "javascript:alert(1)",
+        "data:text/html,<script>alert(1)</script>",
+        "//evil.com/steal-token",
+        "https://evil.com/callback",
+        "http://localhost/../../../etc/passwd",
+        "/callback?redirect=http://evil.com",
+        "https://legit.com@evil.com/",
+        "https://evil.com#legit.com",
+        "https://evil.com%00legit.com",
+        "\r\nLocation: http://evil.com",
+        "file:///etc/passwd",
+        "ftp://evil.com",
+      ]),
+    ),
     (1, Gen.oneOf(["/callback", "/profile", "/dashboard"])),
   ]);
 }
@@ -159,15 +177,21 @@ Generator<String> chaoticCallbackUrl({int maxLength = 500}) {
 /// Generates chaotic CSRF tokens
 Generator<String?> chaoticCsrfToken({int maxLength = 100}) {
   return Gen.frequency<String?>([
-    (2, Chaos.string(minLength: 0, maxLength: maxLength).map((s) => s as String?)),
-    (2, Gen.oneOf<String?>([
-      null,
-      "",
-      "invalid-csrf",
-      "a" * 10000,
-      "csrf%00injected",
-      "\r\nX-Injected: header",
-    ])),
+    (
+      2,
+      Chaos.string(minLength: 0, maxLength: maxLength).map((s) => s as String?),
+    ),
+    (
+      2,
+      Gen.oneOf<String?>([
+        null,
+        "",
+        "invalid-csrf",
+        "a" * 10000,
+        "csrf%00injected",
+        "\r\nX-Injected: header",
+      ]),
+    ),
     (1, Gen.string(minLength: 32, maxLength: 64).map((s) => s as String?)),
   ]);
 }
@@ -176,48 +200,59 @@ Generator<String?> chaoticCsrfToken({int maxLength = 100}) {
 Generator<Map<String, dynamic>> chaoticAuthPayload() {
   return Gen.frequency([
     // Chaotic string values
-    (3, chaoticUsername().flatMap((username) {
-      return chaoticPassword().flatMap((password) {
-        return chaoticEmail().map((email) {
-          return <String, dynamic>{
-            'username': username,
-            'password': password,
-            'email': email,
-          };
+    (
+      3,
+      chaoticUsername().flatMap((username) {
+        return chaoticPassword().flatMap((password) {
+          return chaoticEmail().map((email) {
+            return <String, dynamic>{
+              'username': username,
+              'password': password,
+              'email': email,
+            };
+          });
         });
-      });
-    })),
+      }),
+    ),
     // Nested injection attempts
-    (2, Gen.oneOf([
-      <String, dynamic>{
-        '__proto__': {'isAdmin': true},
-        'username': 'admin',
-      },
-      <String, dynamic>{
-        'constructor': {'prototype': {'isAdmin': true}},
-      },
-      <String, dynamic>{
-        'username': {'toString': 'admin'},
-      },
-      <String, dynamic>{
-        'username': [1, 2, 3], // Array instead of string
-      },
-      <String, dynamic>{
-        'username': 123, // Number instead of string
-      },
-      <String, dynamic>{
-        'username': true, // Boolean instead of string
-      },
-      <String, dynamic>{
-        'username': null, // Null value
-      },
-    ])),
+    (
+      2,
+      Gen.oneOf([
+        <String, dynamic>{
+          '__proto__': {'isAdmin': true},
+          'username': 'admin',
+        },
+        <String, dynamic>{
+          'constructor': {
+            'prototype': {'isAdmin': true},
+          },
+        },
+        <String, dynamic>{
+          'username': {'toString': 'admin'},
+        },
+        <String, dynamic>{
+          'username': [1, 2, 3], // Array instead of string
+        },
+        <String, dynamic>{
+          'username': 123, // Number instead of string
+        },
+        <String, dynamic>{
+          'username': true, // Boolean instead of string
+        },
+        <String, dynamic>{
+          'username': null, // Null value
+        },
+      ]),
+    ),
     // Normal payloads
-    (1, Gen.constant(<String, dynamic>{
-      'username': 'testuser',
-      'password': 'testpass',
-      'email': 'test@example.com',
-    })),
+    (
+      1,
+      Gen.constant(<String, dynamic>{
+        'username': 'testuser',
+        'password': 'testpass',
+        'email': 'test@example.com',
+      }),
+    ),
   ]);
 }
 
@@ -225,14 +260,17 @@ Generator<Map<String, dynamic>> chaoticAuthPayload() {
 Generator<String> chaoticHeaderValue({int maxLength = 200}) {
   return Gen.frequency([
     (3, Chaos.string(minLength: 0, maxLength: maxLength)),
-    (2, Gen.oneOf([
-      "", // Empty
-      "value\r\nX-Injected: header",
-      "value\r\n\r\n<html>",
-      "a" * 10000,
-      "\x00value",
-      "value%00injected",
-    ])),
+    (
+      2,
+      Gen.oneOf([
+        "", // Empty
+        "value\r\nX-Injected: header",
+        "value\r\n\r\n<html>",
+        "a" * 10000,
+        "\x00value",
+        "value%00injected",
+      ]),
+    ),
     (1, Gen.string(minLength: 1, maxLength: 50)),
   ]);
 }
@@ -323,35 +361,31 @@ void main() {
 
       test('server never crashes with chaotic usernames', () async {
         final config = PropertyConfig(numTests: 100, seed: 42);
-        final runner = PropertyTestRunner(
-          chaoticUsername(),
-          (username) async {
-            final csrfResponse = await client.get('/auth/csrf');
-            final sessionCookie = csrfResponse.cookie('test_session');
+        final runner = PropertyTestRunner(chaoticUsername(), (username) async {
+          final csrfResponse = await client.get('/auth/csrf');
+          final sessionCookie = csrfResponse.cookie('test_session');
 
-            final response = await client.postJson(
-              '/auth/signin/credentials',
-              {'username': username, 'password': 'anypassword'},
-              headers: {
-                HttpHeaders.cookieHeader: [_cookieHeader(sessionCookie!)],
-              },
-            );
+          final response = await client.postJson(
+            '/auth/signin/credentials',
+            {'username': username, 'password': 'anypassword'},
+            headers: {
+              HttpHeaders.cookieHeader: [_cookieHeader(sessionCookie!)],
+            },
+          );
 
-            // Server must NOT crash (500 error)
-            expect(
-              response.statusCode,
-              lessThan(500),
-              reason: 'Server crashed with username: $username',
-            );
-            // Must return a valid response
-            expect(
-              response.statusCode,
-              anyOf([200, 400, 401, 403, 404]),
-              reason: 'Unexpected status for username: $username',
-            );
-          },
-          config,
-        );
+          // Server must NOT crash (500 error)
+          expect(
+            response.statusCode,
+            lessThan(500),
+            reason: 'Server crashed with username: $username',
+          );
+          // Must return a valid response
+          expect(
+            response.statusCode,
+            anyOf([200, 400, 401, 403, 404]),
+            reason: 'Unexpected status for username: $username',
+          );
+        }, config);
 
         final result = await runner.run();
         expect(result.success, isTrue, reason: _formatResult(result));
@@ -359,28 +393,24 @@ void main() {
 
       test('server never crashes with chaotic passwords', () async {
         final config = PropertyConfig(numTests: 100, seed: 42);
-        final runner = PropertyTestRunner(
-          chaoticPassword(),
-          (password) async {
-            final csrfResponse = await client.get('/auth/csrf');
-            final sessionCookie = csrfResponse.cookie('test_session');
+        final runner = PropertyTestRunner(chaoticPassword(), (password) async {
+          final csrfResponse = await client.get('/auth/csrf');
+          final sessionCookie = csrfResponse.cookie('test_session');
 
-            final response = await client.postJson(
-              '/auth/signin/credentials',
-              {'username': 'anyuser', 'password': password},
-              headers: {
-                HttpHeaders.cookieHeader: [_cookieHeader(sessionCookie!)],
-              },
-            );
+          final response = await client.postJson(
+            '/auth/signin/credentials',
+            {'username': 'anyuser', 'password': password},
+            headers: {
+              HttpHeaders.cookieHeader: [_cookieHeader(sessionCookie!)],
+            },
+          );
 
-            expect(
-              response.statusCode,
-              lessThan(500),
-              reason: 'Server crashed with password: ${_sanitize(password)}',
-            );
-          },
-          config,
-        );
+          expect(
+            response.statusCode,
+            lessThan(500),
+            reason: 'Server crashed with password: ${_sanitize(password)}',
+          );
+        }, config);
 
         final result = await runner.run();
         expect(result.success, isTrue, reason: _formatResult(result));
@@ -388,28 +418,26 @@ void main() {
 
       test('server never crashes with chaotic payloads', () async {
         final config = PropertyConfig(numTests: 100, seed: 42);
-        final runner = PropertyTestRunner(
-          chaoticAuthPayload(),
-          (payload) async {
-            final csrfResponse = await client.get('/auth/csrf');
-            final sessionCookie = csrfResponse.cookie('test_session');
+        final runner = PropertyTestRunner(chaoticAuthPayload(), (
+          payload,
+        ) async {
+          final csrfResponse = await client.get('/auth/csrf');
+          final sessionCookie = csrfResponse.cookie('test_session');
 
-            final response = await client.postJson(
-              '/auth/signin/credentials',
-              payload,
-              headers: {
-                HttpHeaders.cookieHeader: [_cookieHeader(sessionCookie!)],
-              },
-            );
+          final response = await client.postJson(
+            '/auth/signin/credentials',
+            payload,
+            headers: {
+              HttpHeaders.cookieHeader: [_cookieHeader(sessionCookie!)],
+            },
+          );
 
-            expect(
-              response.statusCode,
-              lessThan(500),
-              reason: 'Server crashed with payload: $payload',
-            );
-          },
-          config,
-        );
+          expect(
+            response.statusCode,
+            lessThan(500),
+            reason: 'Server crashed with payload: $payload',
+          );
+        }, config);
 
         final result = await runner.run();
         expect(result.success, isTrue, reason: _formatResult(result));
@@ -441,7 +469,8 @@ void main() {
             expect(
               response.statusCode,
               isNot(200),
-              reason: 'Chaotic credentials authenticated: $username / ${_sanitize(password)}',
+              reason:
+                  'Chaotic credentials authenticated: $username / ${_sanitize(password)}',
             );
           },
           config,
@@ -490,28 +519,24 @@ void main() {
 
       test('server never crashes with chaotic email addresses', () async {
         final config = PropertyConfig(numTests: 100, seed: 42);
-        final runner = PropertyTestRunner(
-          chaoticEmail(),
-          (email) async {
-            final csrfResponse = await client.get('/auth/csrf');
-            final sessionCookie = csrfResponse.cookie('test_session');
+        final runner = PropertyTestRunner(chaoticEmail(), (email) async {
+          final csrfResponse = await client.get('/auth/csrf');
+          final sessionCookie = csrfResponse.cookie('test_session');
 
-            final response = await client.postJson(
-              '/auth/signin/email',
-              {'email': email},
-              headers: {
-                HttpHeaders.cookieHeader: [_cookieHeader(sessionCookie!)],
-              },
-            );
+          final response = await client.postJson(
+            '/auth/signin/email',
+            {'email': email},
+            headers: {
+              HttpHeaders.cookieHeader: [_cookieHeader(sessionCookie!)],
+            },
+          );
 
-            expect(
-              response.statusCode,
-              lessThan(500),
-              reason: 'Server crashed with email: $email',
-            );
-          },
-          config,
-        );
+          expect(
+            response.statusCode,
+            lessThan(500),
+            reason: 'Server crashed with email: $email',
+          );
+        }, config);
 
         final result = await runner.run();
         expect(result.success, isTrue, reason: _formatResult(result));
@@ -580,7 +605,9 @@ void main() {
                 clientId: 'test-client-id',
                 clientSecret: 'test-client-secret',
                 redirectUri: 'http://localhost:8080/auth/callback/test-oauth',
-                authorizationEndpoint: Uri.parse('https://oauth.example.com/authorize'),
+                authorizationEndpoint: Uri.parse(
+                  'https://oauth.example.com/authorize',
+                ),
                 tokenEndpoint: Uri.parse('https://oauth.example.com/token'),
                 scopes: ['openid', 'profile', 'email'],
                 profile: (data) => AuthUser(
@@ -603,27 +630,23 @@ void main() {
 
       test('server never crashes with chaotic OAuth codes', () async {
         final config = PropertyConfig(numTests: 100, seed: 42);
-        final runner = PropertyTestRunner(
-          chaoticOAuthCode(),
-          (code) async {
-            final csrfResponse = await client.get('/auth/csrf');
-            final sessionCookie = csrfResponse.cookie('test_session');
+        final runner = PropertyTestRunner(chaoticOAuthCode(), (code) async {
+          final csrfResponse = await client.get('/auth/csrf');
+          final sessionCookie = csrfResponse.cookie('test_session');
 
-            final response = await client.get(
-              '/auth/callback/test-oauth?code=${Uri.encodeComponent(code)}&state=test-state',
-              headers: {
-                HttpHeaders.cookieHeader: [_cookieHeader(sessionCookie!)],
-              },
-            );
+          final response = await client.get(
+            '/auth/callback/test-oauth?code=${Uri.encodeComponent(code)}&state=test-state',
+            headers: {
+              HttpHeaders.cookieHeader: [_cookieHeader(sessionCookie!)],
+            },
+          );
 
-            expect(
-              response.statusCode,
-              lessThan(500),
-              reason: 'Server crashed with OAuth code: ${_sanitize(code)}',
-            );
-          },
-          config,
-        );
+          expect(
+            response.statusCode,
+            lessThan(500),
+            reason: 'Server crashed with OAuth code: ${_sanitize(code)}',
+          );
+        }, config);
 
         final result = await runner.run();
         expect(result.success, isTrue, reason: _formatResult(result));
@@ -631,27 +654,23 @@ void main() {
 
       test('server never crashes with chaotic OAuth states', () async {
         final config = PropertyConfig(numTests: 100, seed: 42);
-        final runner = PropertyTestRunner(
-          chaoticOAuthState(),
-          (state) async {
-            final csrfResponse = await client.get('/auth/csrf');
-            final sessionCookie = csrfResponse.cookie('test_session');
+        final runner = PropertyTestRunner(chaoticOAuthState(), (state) async {
+          final csrfResponse = await client.get('/auth/csrf');
+          final sessionCookie = csrfResponse.cookie('test_session');
 
-            final response = await client.get(
-              '/auth/callback/test-oauth?code=test-code&state=${Uri.encodeComponent(state)}',
-              headers: {
-                HttpHeaders.cookieHeader: [_cookieHeader(sessionCookie!)],
-              },
-            );
+          final response = await client.get(
+            '/auth/callback/test-oauth?code=test-code&state=${Uri.encodeComponent(state)}',
+            headers: {
+              HttpHeaders.cookieHeader: [_cookieHeader(sessionCookie!)],
+            },
+          );
 
-            expect(
-              response.statusCode,
-              lessThan(500),
-              reason: 'Server crashed with OAuth state: ${_sanitize(state)}',
-            );
-          },
-          config,
-        );
+          expect(
+            response.statusCode,
+            lessThan(500),
+            reason: 'Server crashed with OAuth state: ${_sanitize(state)}',
+          );
+        }, config);
 
         final result = await runner.run();
         expect(result.success, isTrue, reason: _formatResult(result));
@@ -659,28 +678,24 @@ void main() {
 
       test('chaotic states never validate successfully', () async {
         final config = PropertyConfig(numTests: 100, seed: 42);
-        final runner = PropertyTestRunner(
-          chaoticOAuthState(),
-          (state) async {
-            final csrfResponse = await client.get('/auth/csrf');
-            final sessionCookie = csrfResponse.cookie('test_session');
+        final runner = PropertyTestRunner(chaoticOAuthState(), (state) async {
+          final csrfResponse = await client.get('/auth/csrf');
+          final sessionCookie = csrfResponse.cookie('test_session');
 
-            final response = await client.get(
-              '/auth/callback/test-oauth?code=test-code&state=${Uri.encodeComponent(state)}',
-              headers: {
-                HttpHeaders.cookieHeader: [_cookieHeader(sessionCookie!)],
-              },
-            );
+          final response = await client.get(
+            '/auth/callback/test-oauth?code=test-code&state=${Uri.encodeComponent(state)}',
+            headers: {
+              HttpHeaders.cookieHeader: [_cookieHeader(sessionCookie!)],
+            },
+          );
 
-            // Chaotic states should NEVER succeed (200 or redirect)
-            expect(
-              response.statusCode,
-              anyOf([400, 401, 403, 404]),
-              reason: 'Chaotic state succeeded: ${_sanitize(state)}',
-            );
-          },
-          config,
-        );
+          // Chaotic states should NEVER succeed (200 or redirect)
+          expect(
+            response.statusCode,
+            anyOf([400, 401, 403, 404]),
+            reason: 'Chaotic state succeeded: ${_sanitize(state)}',
+          );
+        }, config);
 
         final result = await runner.run();
         expect(result.success, isTrue, reason: _formatResult(result));
@@ -703,10 +718,7 @@ void main() {
                 authorize: (ctx, provider, credentials) async {
                   if (credentials.username == 'validuser' &&
                       credentials.password == 'validpass') {
-                    return AuthUser(
-                      id: 'user-1',
-                      email: 'valid@example.com',
-                    );
+                    return AuthUser(id: 'user-1', email: 'valid@example.com');
                   }
                   return null;
                 },
@@ -725,32 +737,30 @@ void main() {
 
       test('server never crashes with chaotic callback URLs', () async {
         final config = PropertyConfig(numTests: 100, seed: 42);
-        final runner = PropertyTestRunner(
-          chaoticCallbackUrl(),
-          (callbackUrl) async {
-            final csrfResponse = await client.get('/auth/csrf');
-            final sessionCookie = csrfResponse.cookie('test_session');
+        final runner = PropertyTestRunner(chaoticCallbackUrl(), (
+          callbackUrl,
+        ) async {
+          final csrfResponse = await client.get('/auth/csrf');
+          final sessionCookie = csrfResponse.cookie('test_session');
 
-            final response = await client.postJson(
-              '/auth/signin/credentials',
-              {
-                'username': 'validuser',
-                'password': 'validpass',
-                'callbackUrl': callbackUrl,
-              },
-              headers: {
-                HttpHeaders.cookieHeader: [_cookieHeader(sessionCookie!)],
-              },
-            );
+          final response = await client.postJson(
+            '/auth/signin/credentials',
+            {
+              'username': 'validuser',
+              'password': 'validpass',
+              'callbackUrl': callbackUrl,
+            },
+            headers: {
+              HttpHeaders.cookieHeader: [_cookieHeader(sessionCookie!)],
+            },
+          );
 
-            expect(
-              response.statusCode,
-              lessThan(500),
-              reason: 'Server crashed with callbackUrl: $callbackUrl',
-            );
-          },
-          config,
-        );
+          expect(
+            response.statusCode,
+            lessThan(500),
+            reason: 'Server crashed with callbackUrl: $callbackUrl',
+          );
+        }, config);
 
         final result = await runner.run();
         expect(result.success, isTrue, reason: _formatResult(result));
@@ -836,32 +846,30 @@ void main() {
 
       test('server never crashes with chaotic CSRF tokens', () async {
         final config = PropertyConfig(numTests: 100, seed: 42);
-        final runner = PropertyTestRunner(
-          chaoticCsrfToken(),
-          (csrfToken) async {
-            final csrfResponse = await client.get('/auth/csrf');
-            final sessionCookie = csrfResponse.cookie('test_session');
+        final runner = PropertyTestRunner(chaoticCsrfToken(), (
+          csrfToken,
+        ) async {
+          final csrfResponse = await client.get('/auth/csrf');
+          final sessionCookie = csrfResponse.cookie('test_session');
 
-            final response = await client.postJson(
-              '/auth/signin/credentials',
-              {
-                'username': 'test',
-                'password': 'test',
-                if (csrfToken != null) '_csrf': csrfToken,
-              },
-              headers: {
-                HttpHeaders.cookieHeader: [_cookieHeader(sessionCookie!)],
-              },
-            );
+          final response = await client.postJson(
+            '/auth/signin/credentials',
+            {
+              'username': 'test',
+              'password': 'test',
+              if (csrfToken != null) '_csrf': csrfToken,
+            },
+            headers: {
+              HttpHeaders.cookieHeader: [_cookieHeader(sessionCookie!)],
+            },
+          );
 
-            expect(
-              response.statusCode,
-              lessThan(500),
-              reason: 'Server crashed with CSRF token: ${_sanitize(csrfToken)}',
-            );
-          },
-          config,
-        );
+          expect(
+            response.statusCode,
+            lessThan(500),
+            reason: 'Server crashed with CSRF token: ${_sanitize(csrfToken)}',
+          );
+        }, config);
 
         final result = await runner.run();
         expect(result.success, isTrue, reason: _formatResult(result));
@@ -911,12 +919,7 @@ void main() {
 
       setUp(() async {
         manager = AuthManager(
-          AuthOptions(
-            providers: [
-              CredentialsProvider(),
-            ],
-            enforceCsrf: false,
-          ),
+          AuthOptions(providers: [CredentialsProvider()], enforceCsrf: false),
         );
         engine = _authEngine(manager);
         await engine.initialize();
@@ -927,58 +930,59 @@ void main() {
 
       test('server never crashes with chaotic provider IDs', () async {
         final config = PropertyConfig(numTests: 100, seed: 42);
-        final runner = PropertyTestRunner(
-          Chaos.string(minLength: 0, maxLength: 100),
-          (providerId) async {
-            final csrfResponse = await client.get('/auth/csrf');
-            final sessionCookie = csrfResponse.cookie('test_session');
+        final runner = PropertyTestRunner(Chaos.string(minLength: 0, maxLength: 100), (
+          providerId,
+        ) async {
+          final csrfResponse = await client.get('/auth/csrf');
+          final sessionCookie = csrfResponse.cookie('test_session');
 
-            // Test signin
-            final signinResponse = await client.postJson(
-              '/auth/signin/${Uri.encodeComponent(providerId)}',
-              {'username': 'test', 'password': 'test'},
-              headers: {
-                HttpHeaders.cookieHeader: [_cookieHeader(sessionCookie!)],
-              },
-            );
+          // Test signin
+          final signinResponse = await client.postJson(
+            '/auth/signin/${Uri.encodeComponent(providerId)}',
+            {'username': 'test', 'password': 'test'},
+            headers: {
+              HttpHeaders.cookieHeader: [_cookieHeader(sessionCookie!)],
+            },
+          );
 
-            expect(
-              signinResponse.statusCode,
-              lessThan(500),
-              reason: 'Server crashed with provider ID in signin: ${_sanitize(providerId)}',
-            );
+          expect(
+            signinResponse.statusCode,
+            lessThan(500),
+            reason:
+                'Server crashed with provider ID in signin: ${_sanitize(providerId)}',
+          );
 
-            // Test callback
-            final callbackResponse = await client.get(
-              '/auth/callback/${Uri.encodeComponent(providerId)}?code=test&state=test',
-              headers: {
-                HttpHeaders.cookieHeader: [_cookieHeader(sessionCookie!)],
-              },
-            );
+          // Test callback
+          final callbackResponse = await client.get(
+            '/auth/callback/${Uri.encodeComponent(providerId)}?code=test&state=test',
+            headers: {
+              HttpHeaders.cookieHeader: [_cookieHeader(sessionCookie!)],
+            },
+          );
 
-            expect(
-              callbackResponse.statusCode,
-              lessThan(500),
-              reason: 'Server crashed with provider ID in callback: ${_sanitize(providerId)}',
-            );
+          expect(
+            callbackResponse.statusCode,
+            lessThan(500),
+            reason:
+                'Server crashed with provider ID in callback: ${_sanitize(providerId)}',
+          );
 
-            // Test register
-            final registerResponse = await client.postJson(
-              '/auth/register/${Uri.encodeComponent(providerId)}',
-              {'username': 'test', 'password': 'test'},
-              headers: {
-                HttpHeaders.cookieHeader: [_cookieHeader(sessionCookie!)],
-              },
-            );
+          // Test register
+          final registerResponse = await client.postJson(
+            '/auth/register/${Uri.encodeComponent(providerId)}',
+            {'username': 'test', 'password': 'test'},
+            headers: {
+              HttpHeaders.cookieHeader: [_cookieHeader(sessionCookie!)],
+            },
+          );
 
-            expect(
-              registerResponse.statusCode,
-              lessThan(500),
-              reason: 'Server crashed with provider ID in register: ${_sanitize(providerId)}',
-            );
-          },
-          config,
-        );
+          expect(
+            registerResponse.statusCode,
+            lessThan(500),
+            reason:
+                'Server crashed with provider ID in register: ${_sanitize(providerId)}',
+          );
+        }, config);
 
         final result = await runner.run();
         expect(result.success, isTrue, reason: _formatResult(result));
@@ -1021,7 +1025,7 @@ void main() {
           (jsonString) async {
             // Skip extremely large payloads (these test DoS, not correctness)
             if (jsonString.length > 10000) return;
-            
+
             final csrfResponse = await client.get('/auth/csrf');
             final sessionCookie = csrfResponse.cookie('test_session');
 
@@ -1103,10 +1107,7 @@ void main() {
                 authorize: (ctx, provider, credentials) async {
                   if (credentials.username == 'user' &&
                       credentials.password == 'pass') {
-                    return AuthUser(
-                      id: 'user-1',
-                      email: 'user@example.com',
-                    );
+                    return AuthUser(id: 'user-1', email: 'user@example.com');
                   }
                   return null;
                 },
@@ -1123,40 +1124,48 @@ void main() {
 
       tearDown(() => client.close());
 
-      test('session invariant: session only exists after successful login', () async {
-        // Model: whether user is logged in
-        // Commands: login, logout, check session
-        final commands = Gen.oneOf(['login_valid', 'login_invalid', 'logout', 'check_session']);
+      test(
+        'session invariant: session only exists after successful login',
+        () async {
+          // Model: whether user is logged in
+          // Commands: login, logout, check session
+          final commands = Gen.oneOf([
+            'login_valid',
+            'login_invalid',
+            'logout',
+            'check_session',
+          ]);
 
-        final config = StatefulPropertyConfig(
-          numTests: 50,
-          maxCommandSequenceLength: 20,
-        );
+          final config = StatefulPropertyConfig(
+            numTests: 50,
+            maxCommandSequenceLength: 20,
+          );
 
-        final runner = StatefulPropertyRunner<bool, String>(
-          commands,
-          () => false, // Initial state: not logged in
-          (model) => true, // Invariant always holds (we check behavior)
-          (model, command) {
-            switch (command) {
-              case 'login_valid':
-                return true;
-              case 'login_invalid':
-                return model; // Invalid login doesn't change state
-              case 'logout':
-                return false;
-              case 'check_session':
-                return model; // Check doesn't change state
-              default:
-                return model;
-            }
-          },
-          config,
-        );
+          final runner = StatefulPropertyRunner<bool, String>(
+            commands,
+            () => false, // Initial state: not logged in
+            (model) => true, // Invariant always holds (we check behavior)
+            (model, command) {
+              switch (command) {
+                case 'login_valid':
+                  return true;
+                case 'login_invalid':
+                  return model; // Invalid login doesn't change state
+                case 'logout':
+                  return false;
+                case 'check_session':
+                  return model; // Check doesn't change state
+                default:
+                  return model;
+              }
+            },
+            config,
+          );
 
-        final result = await runner.run();
-        expect(result.success, isTrue, reason: _formatResult(result));
-      });
+          final result = await runner.run();
+          expect(result.success, isTrue, reason: _formatResult(result));
+        },
+      );
     });
 
     // ========================================================================
@@ -1208,7 +1217,8 @@ void main() {
             expect(
               response.statusCode,
               lessThan(500),
-              reason: 'Server crashed with header injection: ${_sanitize(injection)}',
+              reason:
+                  'Server crashed with header injection: ${_sanitize(injection)}',
             );
 
             // Check that the injection didn't succeed
@@ -1224,7 +1234,11 @@ void main() {
             );
           } catch (e) {
             // Some injections may be rejected at HTTP level, that's fine
-            expect(e, isNot(isA<Error>()), reason: 'Fatal error with: ${_sanitize(injection)}');
+            expect(
+              e,
+              isNot(isA<Error>()),
+              reason: 'Fatal error with: ${_sanitize(injection)}',
+            );
           }
         }
       });
@@ -1262,71 +1276,89 @@ void main() {
 
       tearDown(() => client.close());
 
-      test('response time variance is acceptable for different failure modes', () async {
-        final csrfResponse = await client.get('/auth/csrf');
-        final sessionCookie = csrfResponse.cookie('test_session');
+      test(
+        'response time variance is acceptable for different failure modes',
+        () async {
+          final csrfResponse = await client.get('/auth/csrf');
+          final sessionCookie = csrfResponse.cookie('test_session');
 
-        // Measure times for different failure modes
-        final measurements = <String, List<int>>{
-          'nonexistent_user': [],
-          'wrong_password': [],
-          'empty_credentials': [],
-        };
+          // Measure times for different failure modes
+          final measurements = <String, List<int>>{
+            'nonexistent_user': [],
+            'wrong_password': [],
+            'empty_credentials': [],
+          };
 
-        const numSamples = 10;
+          const numSamples = 10;
 
-        for (var i = 0; i < numSamples; i++) {
-          // Non-existent user
-          var sw = Stopwatch()..start();
-          await client.postJson(
-            '/auth/signin/credentials',
-            {'username': 'nonexistentuser$i', 'password': 'anypass'},
-            headers: {HttpHeaders.cookieHeader: [_cookieHeader(sessionCookie!)]},
+          for (var i = 0; i < numSamples; i++) {
+            // Non-existent user
+            var sw = Stopwatch()..start();
+            await client.postJson(
+              '/auth/signin/credentials',
+              {'username': 'nonexistentuser$i', 'password': 'anypass'},
+              headers: {
+                HttpHeaders.cookieHeader: [_cookieHeader(sessionCookie!)],
+              },
+            );
+            sw.stop();
+            measurements['nonexistent_user']!.add(sw.elapsedMicroseconds);
+
+            // Wrong password (existing user)
+            sw = Stopwatch()..start();
+            await client.postJson(
+              '/auth/signin/credentials',
+              {'username': 'existinguser', 'password': 'wrongpass$i'},
+              headers: {
+                HttpHeaders.cookieHeader: [_cookieHeader(sessionCookie)],
+              },
+            );
+            sw.stop();
+            measurements['wrong_password']!.add(sw.elapsedMicroseconds);
+
+            // Empty credentials
+            sw = Stopwatch()..start();
+            await client.postJson(
+              '/auth/signin/credentials',
+              {'username': '', 'password': ''},
+              headers: {
+                HttpHeaders.cookieHeader: [_cookieHeader(sessionCookie)],
+              },
+            );
+            sw.stop();
+            measurements['empty_credentials']!.add(sw.elapsedMicroseconds);
+          }
+
+          // Calculate averages
+          double average(List<int> values) =>
+              values.reduce((a, b) => a + b) / values.length;
+
+          final avgNonexistent = average(measurements['nonexistent_user']!);
+          final avgWrongPass = average(measurements['wrong_password']!);
+          final avgEmpty = average(measurements['empty_credentials']!);
+
+          // The timing difference should be within 50% (this is a rough check)
+          // In a real timing attack test, you'd need much more sophisticated analysis
+          final maxTime = [
+            avgNonexistent,
+            avgWrongPass,
+            avgEmpty,
+          ].reduce((a, b) => a > b ? a : b);
+          final minTime = [
+            avgNonexistent,
+            avgWrongPass,
+            avgEmpty,
+          ].reduce((a, b) => a < b ? a : b);
+
+          // Allow 10x variance (very lenient - timing attacks need much more precision)
+          expect(
+            maxTime / minTime,
+            lessThan(10),
+            reason:
+                'Large timing variance detected: nonexistent=$avgNonexistent, wrongPass=$avgWrongPass, empty=$avgEmpty',
           );
-          sw.stop();
-          measurements['nonexistent_user']!.add(sw.elapsedMicroseconds);
-
-          // Wrong password (existing user)
-          sw = Stopwatch()..start();
-          await client.postJson(
-            '/auth/signin/credentials',
-            {'username': 'existinguser', 'password': 'wrongpass$i'},
-            headers: {HttpHeaders.cookieHeader: [_cookieHeader(sessionCookie)]},
-          );
-          sw.stop();
-          measurements['wrong_password']!.add(sw.elapsedMicroseconds);
-
-          // Empty credentials
-          sw = Stopwatch()..start();
-          await client.postJson(
-            '/auth/signin/credentials',
-            {'username': '', 'password': ''},
-            headers: {HttpHeaders.cookieHeader: [_cookieHeader(sessionCookie)]},
-          );
-          sw.stop();
-          measurements['empty_credentials']!.add(sw.elapsedMicroseconds);
-        }
-
-        // Calculate averages
-        double average(List<int> values) =>
-            values.reduce((a, b) => a + b) / values.length;
-
-        final avgNonexistent = average(measurements['nonexistent_user']!);
-        final avgWrongPass = average(measurements['wrong_password']!);
-        final avgEmpty = average(measurements['empty_credentials']!);
-
-        // The timing difference should be within 50% (this is a rough check)
-        // In a real timing attack test, you'd need much more sophisticated analysis
-        final maxTime = [avgNonexistent, avgWrongPass, avgEmpty].reduce((a, b) => a > b ? a : b);
-        final minTime = [avgNonexistent, avgWrongPass, avgEmpty].reduce((a, b) => a < b ? a : b);
-
-        // Allow 10x variance (very lenient - timing attacks need much more precision)
-        expect(
-          maxTime / minTime,
-          lessThan(10),
-          reason: 'Large timing variance detected: nonexistent=$avgNonexistent, wrongPass=$avgWrongPass, empty=$avgEmpty',
-        );
-      });
+        },
+      );
     });
   });
 }

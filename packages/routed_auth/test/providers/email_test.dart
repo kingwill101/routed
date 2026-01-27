@@ -6,9 +6,7 @@ import 'package:test/test.dart';
 void main() {
   group('EmailProvider', () {
     test('creates provider with default id and name', () {
-      final provider = EmailProvider(
-        sendVerificationRequest: (_, __, ___) {},
-      );
+      final provider = EmailProvider(sendVerificationRequest: (_, __, ___) {});
 
       expect(provider.id, equals('email'));
       expect(provider.name, equals('Email'));
@@ -37,7 +35,8 @@ void main() {
       final request = AuthEmailRequest(
         email: 'user@example.com',
         token: 'verify-token-123',
-        callbackUrl: 'https://example.com/auth/callback/email?token=verify-token-123',
+        callbackUrl:
+            'https://example.com/auth/callback/email?token=verify-token-123',
         expiresAt: DateTime.now().add(const Duration(minutes: 15)),
       );
 
@@ -54,9 +53,7 @@ void main() {
     });
 
     test('default token expiry is 15 minutes', () {
-      final provider = EmailProvider(
-        sendVerificationRequest: (_, __, ___) {},
-      );
+      final provider = EmailProvider(sendVerificationRequest: (_, __, ___) {});
 
       expect(provider.tokenExpiry, equals(const Duration(minutes: 15)));
     });
@@ -89,9 +86,7 @@ void main() {
     });
 
     test('tokenGenerator is null by default', () {
-      final provider = EmailProvider(
-        sendVerificationRequest: (_, __, ___) {},
-      );
+      final provider = EmailProvider(sendVerificationRequest: (_, __, ___) {});
 
       expect(provider.tokenGenerator, isNull);
     });
@@ -182,7 +177,8 @@ void main() {
       final emailRequest = AuthEmailRequest(
         email: email,
         token: token,
-        callbackUrl: 'https://example.com/auth/callback/email?token=$token&email=$email',
+        callbackUrl:
+            'https://example.com/auth/callback/email?token=$token&email=$email',
         expiresAt: expiresAt,
       );
       await provider.sendVerificationRequest(
@@ -261,29 +257,42 @@ void main() {
       expect(result, isNull);
     });
 
-    test('deleteVerificationTokens removes all tokens for identifier', () async {
-      final adapter = InMemoryAuthAdapter();
+    test(
+      'deleteVerificationTokens removes all tokens for identifier',
+      () async {
+        final adapter = InMemoryAuthAdapter();
 
-      await adapter.saveVerificationToken(AuthVerificationToken(
-        identifier: 'user@example.com',
-        token: 'token-1',
-        expiresAt: DateTime.now().add(const Duration(minutes: 15)),
-      ));
+        await adapter.saveVerificationToken(
+          AuthVerificationToken(
+            identifier: 'user@example.com',
+            token: 'token-1',
+            expiresAt: DateTime.now().add(const Duration(minutes: 15)),
+          ),
+        );
 
-      await adapter.saveVerificationToken(AuthVerificationToken(
-        identifier: 'user@example.com',
-        token: 'token-2',
-        expiresAt: DateTime.now().add(const Duration(minutes: 15)),
-      ));
+        await adapter.saveVerificationToken(
+          AuthVerificationToken(
+            identifier: 'user@example.com',
+            token: 'token-2',
+            expiresAt: DateTime.now().add(const Duration(minutes: 15)),
+          ),
+        );
 
-      await adapter.deleteVerificationTokens('user@example.com');
+        await adapter.deleteVerificationTokens('user@example.com');
 
-      final result1 = await adapter.useVerificationToken('user@example.com', 'token-1');
-      final result2 = await adapter.useVerificationToken('user@example.com', 'token-2');
+        final result1 = await adapter.useVerificationToken(
+          'user@example.com',
+          'token-1',
+        );
+        final result2 = await adapter.useVerificationToken(
+          'user@example.com',
+          'token-2',
+        );
 
-      expect(result1, isNull);
-      expect(result2, isNull);
-    });
+        expect(result1, isNull);
+        expect(result2, isNull);
+      },
+    );
 
     test('createUser on first email sign-in', () async {
       final adapter = InMemoryAuthAdapter();
@@ -307,10 +316,9 @@ void main() {
       expect(user, isNull);
 
       // Create user on first sign-in (like NextAuth does)
-      user = await adapter.createUser(AuthUser(
-        id: 'auto-generated-id',
-        email: 'newuser@example.com',
-      ));
+      user = await adapter.createUser(
+        AuthUser(id: 'auto-generated-id', email: 'newuser@example.com'),
+      );
 
       expect(user.email, equals('newuser@example.com'));
 

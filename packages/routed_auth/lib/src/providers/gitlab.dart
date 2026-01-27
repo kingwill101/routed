@@ -93,23 +93,23 @@ class GitLabProfile {
   }
 
   Map<String, dynamic> toJson() => {
-        'id': id,
-        'username': username,
-        'email': email,
-        'name': name,
-        'avatar_url': avatarUrl,
-        'web_url': webUrl,
-        'state': state,
-        'bio': bio,
-        'location': location,
-        'public_email': publicEmail,
-        'website_url': websiteUrl,
-        'organization': organization,
-        'job_title': jobTitle,
-        'two_factor_enabled': twoFactorEnabled,
-        'is_admin': isAdmin,
-        'created_at': createdAt,
-      };
+    'id': id,
+    'username': username,
+    'email': email,
+    'name': name,
+    'avatar_url': avatarUrl,
+    'web_url': webUrl,
+    'state': state,
+    'bio': bio,
+    'location': location,
+    'public_email': publicEmail,
+    'website_url': websiteUrl,
+    'organization': organization,
+    'job_title': jobTitle,
+    'two_factor_enabled': twoFactorEnabled,
+    'is_admin': isAdmin,
+    'created_at': createdAt,
+  };
 }
 
 /// Configuration for the GitLab OAuth provider.
@@ -233,7 +233,8 @@ AuthProviderRegistration _gitlabRegistration() {
 }
 
 AuthProvider? _buildGitLabProvider(Map<String, dynamic> config) {
-  final enabled = parseBoolLike(
+  final enabled =
+      parseBoolLike(
         config['enabled'],
         context: 'auth.providers.gitlab.enabled',
         throwOnInvalid: true,
@@ -253,13 +254,16 @@ AuthProvider? _buildGitLabProvider(Map<String, dynamic> config) {
     config['redirect_uri'],
     'auth.providers.gitlab.redirect_uri',
   );
-  final baseUrl = _nullIfEmpty(parseStringLike(
-    config['base_url'],
-    context: 'auth.providers.gitlab.base_url',
-    allowEmpty: true,
-    throwOnInvalid: true,
-  ));
-  final scopes = parseStringList(
+  final baseUrl = _nullIfEmpty(
+    parseStringLike(
+      config['base_url'],
+      context: 'auth.providers.gitlab.base_url',
+      allowEmpty: true,
+      throwOnInvalid: true,
+    ),
+  );
+  final scopes =
+      parseStringList(
         config['scopes'],
         context: 'auth.providers.gitlab.scopes',
         allowEmptyResult: true,

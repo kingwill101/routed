@@ -70,18 +70,18 @@ class TwitterProfile {
   }
 
   Map<String, dynamic> toJson() => {
-        'id': id,
-        'name': name,
-        'username': username,
-        'description': description,
-        'profile_image_url': profileImageUrl,
-        'location': location,
-        'url': url,
-        'verified': verified,
-        'protected': protected,
-        'created_at': createdAt,
-        'pinned_tweet_id': pinnedTweetId,
-      };
+    'id': id,
+    'name': name,
+    'username': username,
+    'description': description,
+    'profile_image_url': profileImageUrl,
+    'location': location,
+    'url': url,
+    'verified': verified,
+    'protected': protected,
+    'created_at': createdAt,
+    'pinned_tweet_id': pinnedTweetId,
+  };
 }
 
 /// Configuration for the Twitter/X OAuth provider.
@@ -216,7 +216,8 @@ AuthProviderRegistration _twitterRegistration() {
 }
 
 AuthProvider? _buildTwitterProvider(Map<String, dynamic> config) {
-  final enabled = parseBoolLike(
+  final enabled =
+      parseBoolLike(
         config['enabled'],
         context: 'auth.providers.twitter.enabled',
         throwOnInvalid: true,
@@ -236,7 +237,8 @@ AuthProvider? _buildTwitterProvider(Map<String, dynamic> config) {
     config['redirect_uri'],
     'auth.providers.twitter.redirect_uri',
   );
-  final scopes = parseStringList(
+  final scopes =
+      parseStringList(
         config['scopes'],
         context: 'auth.providers.twitter.scopes',
         allowEmptyResult: true,

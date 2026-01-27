@@ -58,16 +58,16 @@ class GoogleProfile {
   }
 
   Map<String, dynamic> toJson() => {
-        'sub': sub,
-        'email': email,
-        'email_verified': emailVerified,
-        'name': name,
-        'picture': picture,
-        'given_name': givenName,
-        'family_name': familyName,
-        'locale': locale,
-        'hd': hd,
-      };
+    'sub': sub,
+    'email': email,
+    'email_verified': emailVerified,
+    'name': name,
+    'picture': picture,
+    'given_name': givenName,
+    'family_name': familyName,
+    'locale': locale,
+    'hd': hd,
+  };
 }
 
 /// Configuration for the Google OAuth provider.
@@ -219,7 +219,8 @@ AuthProviderRegistration _googleRegistration() {
           defaultValue: _defaultGoogleScopes,
         ),
         'access_type': ConfigSchema.string(
-          description: 'Access type (online/offline). Set offline for refresh tokens.',
+          description:
+              'Access type (online/offline). Set offline for refresh tokens.',
           defaultValue: '',
         ),
         'prompt': ConfigSchema.string(
@@ -237,7 +238,8 @@ AuthProviderRegistration _googleRegistration() {
 }
 
 AuthProvider? _buildGoogleProvider(Map<String, dynamic> config) {
-  final enabled = parseBoolLike(
+  final enabled =
+      parseBoolLike(
         config['enabled'],
         context: 'auth.providers.google.enabled',
         throwOnInvalid: true,
@@ -257,7 +259,8 @@ AuthProvider? _buildGoogleProvider(Map<String, dynamic> config) {
     config['redirect_uri'],
     'auth.providers.google.redirect_uri',
   );
-  final scopes = parseStringList(
+  final scopes =
+      parseStringList(
         config['scopes'],
         context: 'auth.providers.google.scopes',
         allowEmptyResult: true,
@@ -265,24 +268,30 @@ AuthProvider? _buildGoogleProvider(Map<String, dynamic> config) {
         throwOnInvalid: true,
       ) ??
       _defaultGoogleScopes;
-  final accessType = _nullIfEmpty(parseStringLike(
-    config['access_type'],
-    context: 'auth.providers.google.access_type',
-    allowEmpty: true,
-    throwOnInvalid: true,
-  ));
-  final prompt = _nullIfEmpty(parseStringLike(
-    config['prompt'],
-    context: 'auth.providers.google.prompt',
-    allowEmpty: true,
-    throwOnInvalid: true,
-  ));
-  final hostedDomain = _nullIfEmpty(parseStringLike(
-    config['hosted_domain'],
-    context: 'auth.providers.google.hosted_domain',
-    allowEmpty: true,
-    throwOnInvalid: true,
-  ));
+  final accessType = _nullIfEmpty(
+    parseStringLike(
+      config['access_type'],
+      context: 'auth.providers.google.access_type',
+      allowEmpty: true,
+      throwOnInvalid: true,
+    ),
+  );
+  final prompt = _nullIfEmpty(
+    parseStringLike(
+      config['prompt'],
+      context: 'auth.providers.google.prompt',
+      allowEmpty: true,
+      throwOnInvalid: true,
+    ),
+  );
+  final hostedDomain = _nullIfEmpty(
+    parseStringLike(
+      config['hosted_domain'],
+      context: 'auth.providers.google.hosted_domain',
+      allowEmpty: true,
+      throwOnInvalid: true,
+    ),
+  );
 
   return googleProvider(
     GoogleProviderOptions(

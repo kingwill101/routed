@@ -50,23 +50,18 @@ class FacebookProfile {
   }
 
   Map<String, dynamic> toJson() => {
-        'id': id,
-        'email': email,
-        'name': name,
-        'first_name': firstName,
-        'last_name': lastName,
-        'picture': picture?.toJson(),
-      };
+    'id': id,
+    'email': email,
+    'name': name,
+    'first_name': firstName,
+    'last_name': lastName,
+    'picture': picture?.toJson(),
+  };
 }
 
 /// Facebook profile picture data.
 class FacebookPicture {
-  const FacebookPicture({
-    this.url,
-    this.width,
-    this.height,
-    this.isSilhouette,
-  });
+  const FacebookPicture({this.url, this.width, this.height, this.isSilhouette});
 
   final String? url;
   final int? width;
@@ -83,11 +78,11 @@ class FacebookPicture {
   }
 
   Map<String, dynamic> toJson() => {
-        'url': url,
-        'width': width,
-        'height': height,
-        'is_silhouette': isSilhouette,
-      };
+    'url': url,
+    'width': width,
+    'height': height,
+    'is_silhouette': isSilhouette,
+  };
 }
 
 /// Configuration for the Facebook OAuth provider.
@@ -208,7 +203,8 @@ AuthProviderRegistration _facebookRegistration() {
 }
 
 AuthProvider? _buildFacebookProvider(Map<String, dynamic> config) {
-  final enabled = parseBoolLike(
+  final enabled =
+      parseBoolLike(
         config['enabled'],
         context: 'auth.providers.facebook.enabled',
         throwOnInvalid: true,
@@ -228,7 +224,8 @@ AuthProvider? _buildFacebookProvider(Map<String, dynamic> config) {
     config['redirect_uri'],
     'auth.providers.facebook.redirect_uri',
   );
-  final scopes = parseStringList(
+  final scopes =
+      parseStringList(
         config['scopes'],
         context: 'auth.providers.facebook.scopes',
         allowEmptyResult: true,
@@ -265,5 +262,8 @@ void registerFacebookAuthProvider(
   AuthProviderRegistry registry, {
   bool overrideExisting = true,
 }) {
-  registry.register(_facebookRegistration(), overrideExisting: overrideExisting);
+  registry.register(
+    _facebookRegistration(),
+    overrideExisting: overrideExisting,
+  );
 }

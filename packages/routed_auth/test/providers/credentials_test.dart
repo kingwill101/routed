@@ -105,10 +105,7 @@ void main() {
       final result2 = await provider.register?.call(
         _MockEngineContext(),
         provider,
-        AuthCredentials(
-          email: 'another@example.com',
-          password: 'pass456',
-        ),
+        AuthCredentials(email: 'another@example.com', password: 'pass456'),
       );
 
       expect(registeredUsers.length, equals(2));
@@ -151,10 +148,7 @@ void main() {
     });
 
     test('toJson returns provider metadata', () {
-      final provider = CredentialsProvider(
-        id: 'login',
-        name: 'Login',
-      );
+      final provider = CredentialsProvider(id: 'login', name: 'Login');
 
       final json = provider.toJson();
 

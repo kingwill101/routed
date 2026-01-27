@@ -76,17 +76,17 @@ class SpotifyProfile {
   }
 
   Map<String, dynamic> toJson() => {
-        'id': id,
-        'display_name': displayName,
-        'email': email,
-        'images': images?.map((i) => i.toJson()).toList(),
-        'country': country,
-        'href': href,
-        'uri': uri,
-        'product': product,
-        'explicit_content': explicitContent,
-        'followers': followers?.toJson(),
-      };
+    'id': id,
+    'display_name': displayName,
+    'email': email,
+    'images': images?.map((i) => i.toJson()).toList(),
+    'country': country,
+    'href': href,
+    'uri': uri,
+    'product': product,
+    'explicit_content': explicitContent,
+    'followers': followers?.toJson(),
+  };
 
   /// Returns the URL of the first profile image.
   String? get imageUrl => images?.isNotEmpty == true ? images!.first.url : null;
@@ -109,10 +109,10 @@ class SpotifyImage {
   }
 
   Map<String, dynamic> toJson() => {
-        'url': url,
-        'width': width,
-        'height': height,
-      };
+    'url': url,
+    'width': width,
+    'height': height,
+  };
 }
 
 /// Spotify followers object.
@@ -238,7 +238,8 @@ AuthProviderRegistration _spotifyRegistration() {
 }
 
 AuthProvider? _buildSpotifyProvider(Map<String, dynamic> config) {
-  final enabled = parseBoolLike(
+  final enabled =
+      parseBoolLike(
         config['enabled'],
         context: 'auth.providers.spotify.enabled',
         throwOnInvalid: true,
@@ -258,7 +259,8 @@ AuthProvider? _buildSpotifyProvider(Map<String, dynamic> config) {
     config['redirect_uri'],
     'auth.providers.spotify.redirect_uri',
   );
-  final scopes = parseStringList(
+  final scopes =
+      parseStringList(
         config['scopes'],
         context: 'auth.providers.spotify.scopes',
         allowEmptyResult: true,

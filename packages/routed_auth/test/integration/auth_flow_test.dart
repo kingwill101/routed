@@ -913,10 +913,7 @@ void main() {
               session: (context) async {
                 sessionCallbackCalled = true;
                 // Add custom data to session payload
-                return {
-                  ...context.payload,
-                  'customField': 'customValue',
-                };
+                return {...context.payload, 'customField': 'customValue'};
               },
             ),
           ),

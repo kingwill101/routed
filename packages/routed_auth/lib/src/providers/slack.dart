@@ -73,19 +73,19 @@ class SlackProfile {
   }
 
   Map<String, dynamic> toJson() => {
-        'sub': sub,
-        'email': email,
-        'email_verified': emailVerified,
-        'name': name,
-        'picture': picture,
-        'given_name': givenName,
-        'family_name': familyName,
-        'locale': locale,
-        'https://slack.com/team_id': slackTeamId,
-        'https://slack.com/team_name': slackTeamName,
-        'https://slack.com/team_domain': slackTeamDomain,
-        'https://slack.com/team_image_230': slackTeamImage,
-      };
+    'sub': sub,
+    'email': email,
+    'email_verified': emailVerified,
+    'name': name,
+    'picture': picture,
+    'given_name': givenName,
+    'family_name': familyName,
+    'locale': locale,
+    'https://slack.com/team_id': slackTeamId,
+    'https://slack.com/team_name': slackTeamName,
+    'https://slack.com/team_domain': slackTeamDomain,
+    'https://slack.com/team_image_230': slackTeamImage,
+  };
 }
 
 /// Configuration for the Slack OAuth provider.
@@ -145,9 +145,13 @@ OAuthProvider<SlackProfile> slackProvider(SlackProviderOptions options) {
     type: AuthProviderType.oidc,
     clientId: options.clientId,
     clientSecret: options.clientSecret,
-    authorizationEndpoint: Uri.parse('https://slack.com/openid/connect/authorize'),
+    authorizationEndpoint: Uri.parse(
+      'https://slack.com/openid/connect/authorize',
+    ),
     tokenEndpoint: Uri.parse('https://slack.com/api/openid.connect.token'),
-    userInfoEndpoint: Uri.parse('https://slack.com/api/openid.connect.userInfo'),
+    userInfoEndpoint: Uri.parse(
+      'https://slack.com/api/openid.connect.userInfo',
+    ),
     redirectUri: options.redirectUri,
     scopes: options.scopes,
     profileParser: SlackProfile.fromJson,
@@ -200,7 +204,8 @@ AuthProviderRegistration _slackRegistration() {
 }
 
 AuthProvider? _buildSlackProvider(Map<String, dynamic> config) {
-  final enabled = parseBoolLike(
+  final enabled =
+      parseBoolLike(
         config['enabled'],
         context: 'auth.providers.slack.enabled',
         throwOnInvalid: true,
@@ -220,7 +225,8 @@ AuthProvider? _buildSlackProvider(Map<String, dynamic> config) {
     config['redirect_uri'],
     'auth.providers.slack.redirect_uri',
   );
-  final scopes = parseStringList(
+  final scopes =
+      parseStringList(
         config['scopes'],
         context: 'auth.providers.slack.scopes',
         allowEmptyResult: true,

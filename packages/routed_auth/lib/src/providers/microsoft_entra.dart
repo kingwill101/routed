@@ -58,16 +58,16 @@ class MicrosoftEntraProfile {
   }
 
   Map<String, dynamic> toJson() => {
-        'sub': sub,
-        'email': email,
-        'name': name,
-        'preferred_username': preferredUsername,
-        'picture': picture,
-        'given_name': givenName,
-        'family_name': familyName,
-        'oid': oid,
-        'tid': tid,
-      };
+    'sub': sub,
+    'email': email,
+    'name': name,
+    'preferred_username': preferredUsername,
+    'picture': picture,
+    'given_name': givenName,
+    'family_name': familyName,
+    'oid': oid,
+    'tid': tid,
+  };
 }
 
 /// Tenant type for Microsoft Entra ID.
@@ -253,7 +253,8 @@ AuthProviderRegistration _microsoftEntraRegistration() {
 }
 
 AuthProvider? _buildMicrosoftEntraProvider(Map<String, dynamic> config) {
-  final enabled = parseBoolLike(
+  final enabled =
+      parseBoolLike(
         config['enabled'],
         context: 'auth.providers.microsoft-entra-id.enabled',
         throwOnInvalid: true,
@@ -273,19 +274,22 @@ AuthProvider? _buildMicrosoftEntraProvider(Map<String, dynamic> config) {
     config['redirect_uri'],
     'auth.providers.microsoft-entra-id.redirect_uri',
   );
-  final tenantId = _nullIfEmpty(parseStringLike(
-    config['tenant_id'],
-    context: 'auth.providers.microsoft-entra-id.tenant_id',
-    allowEmpty: true,
-    throwOnInvalid: true,
-  ));
+  final tenantId = _nullIfEmpty(
+    parseStringLike(
+      config['tenant_id'],
+      context: 'auth.providers.microsoft-entra-id.tenant_id',
+      allowEmpty: true,
+      throwOnInvalid: true,
+    ),
+  );
   final tenantTypeStr = parseStringLike(
     config['tenant_type'],
     context: 'auth.providers.microsoft-entra-id.tenant_type',
     allowEmpty: true,
     throwOnInvalid: true,
   );
-  final scopes = parseStringList(
+  final scopes =
+      parseStringList(
         config['scopes'],
         context: 'auth.providers.microsoft-entra-id.scopes',
         allowEmptyResult: true,

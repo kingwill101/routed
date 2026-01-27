@@ -106,7 +106,10 @@ void main() {
       );
 
       expect(provider.formFields.containsKey('username'), isTrue);
-      expect(provider.formFields['username']?.autocomplete, equals('username webauthn'));
+      expect(
+        provider.formFields['username']?.autocomplete,
+        equals('username webauthn'),
+      );
     });
 
     test('getRelyingParty returns configuration', () {
@@ -327,8 +330,14 @@ void main() {
       expect(authenticator.counter, equals(25));
       expect(authenticator.userId, equals('user-99'));
       expect(authenticator.transports, equals(['ble', 'usb']));
-      expect(authenticator.createdAt, equals(DateTime.parse('2024-02-01T08:00:00.000Z')));
-      expect(authenticator.lastUsedAt, equals(DateTime.parse('2024-02-10T14:30:00.000Z')));
+      expect(
+        authenticator.createdAt,
+        equals(DateTime.parse('2024-02-01T08:00:00.000Z')),
+      );
+      expect(
+        authenticator.lastUsedAt,
+        equals(DateTime.parse('2024-02-10T14:30:00.000Z')),
+      );
       expect(authenticator.name, equals('Security Key'));
     });
 
@@ -395,7 +404,10 @@ void main() {
       );
 
       expect(options.attestation, equals('direct'));
-      expect(options.authenticatorSelection?.authenticatorAttachment, equals('platform'));
+      expect(
+        options.authenticatorSelection?.authenticatorAttachment,
+        equals('platform'),
+      );
       expect(options.authenticatorSelection?.residentKey, equals('required'));
       expect(options.excludeCredentials, isFalse);
     });

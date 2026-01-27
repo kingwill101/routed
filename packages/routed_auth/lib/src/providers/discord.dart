@@ -93,23 +93,23 @@ class DiscordProfile {
   }
 
   Map<String, dynamic> toJson() => {
-        'id': id,
-        'username': username,
-        'discriminator': discriminator,
-        'global_name': globalName,
-        'avatar': avatar,
-        'bot': bot,
-        'system': system,
-        'mfa_enabled': mfaEnabled,
-        'banner': banner,
-        'accent_color': accentColor,
-        'locale': locale,
-        'verified': verified,
-        'email': email,
-        'flags': flags,
-        'premium_type': premiumType,
-        'public_flags': publicFlags,
-      };
+    'id': id,
+    'username': username,
+    'discriminator': discriminator,
+    'global_name': globalName,
+    'avatar': avatar,
+    'bot': bot,
+    'system': system,
+    'mfa_enabled': mfaEnabled,
+    'banner': banner,
+    'accent_color': accentColor,
+    'locale': locale,
+    'verified': verified,
+    'email': email,
+    'flags': flags,
+    'premium_type': premiumType,
+    'public_flags': publicFlags,
+  };
 
   /// Returns the URL for the user's avatar.
   String? get avatarUrl {
@@ -246,7 +246,8 @@ AuthProviderRegistration _discordRegistration() {
 }
 
 AuthProvider? _buildDiscordProvider(Map<String, dynamic> config) {
-  final enabled = parseBoolLike(
+  final enabled =
+      parseBoolLike(
         config['enabled'],
         context: 'auth.providers.discord.enabled',
         throwOnInvalid: true,
@@ -266,7 +267,8 @@ AuthProvider? _buildDiscordProvider(Map<String, dynamic> config) {
     config['redirect_uri'],
     'auth.providers.discord.redirect_uri',
   );
-  final scopes = parseStringList(
+  final scopes =
+      parseStringList(
         config['scopes'],
         context: 'auth.providers.discord.scopes',
         allowEmptyResult: true,

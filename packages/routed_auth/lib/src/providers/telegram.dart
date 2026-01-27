@@ -57,14 +57,14 @@ class TelegramProfile {
   }
 
   Map<String, dynamic> toJson() => {
-        'id': id,
-        'auth_date': authDate,
-        'first_name': firstName,
-        'last_name': lastName,
-        'username': username,
-        'photo_url': photoUrl,
-        'hash': hash,
-      };
+    'id': id,
+    'auth_date': authDate,
+    'first_name': firstName,
+    'last_name': lastName,
+    'username': username,
+    'photo_url': photoUrl,
+    'hash': hash,
+  };
 
   static int? _parseInt(dynamic value) {
     if (value is int) return value;
@@ -163,10 +163,10 @@ class TelegramProvider extends AuthProvider with CallbackProvider {
     this.authDateMaxAge = const Duration(minutes: 5),
     this.successRedirect = '/profile',
   }) : super(
-          id: 'telegram',
-          name: 'Telegram',
-          type: AuthProviderType.oauth, // Closest match
-        );
+         id: 'telegram',
+         name: 'Telegram',
+         type: AuthProviderType.oauth, // Closest match
+       );
 
   /// Bot token from @BotFather.
   final String botToken;
@@ -268,9 +268,7 @@ class TelegramProvider extends AuthProvider with CallbackProvider {
       }
     }
 
-    return TelegramProfile.fromJson(
-      params.map((k, v) => MapEntry(k, v)),
-    );
+    return TelegramProfile.fromJson(params.map((k, v) => MapEntry(k, v)));
   }
 
   /// Maps the verified profile to an AuthUser.
@@ -346,7 +344,8 @@ AuthProviderRegistration _telegramRegistration() {
 }
 
 AuthProvider? _buildTelegramProvider(Map<String, dynamic> config) {
-  final enabled = parseBoolLike(
+  final enabled =
+      parseBoolLike(
         config['enabled'],
         context: 'auth.providers.telegram.enabled',
         throwOnInvalid: true,

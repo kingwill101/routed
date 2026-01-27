@@ -35,21 +35,22 @@ class AppleProfile {
     return AppleProfile(
       sub: json['sub']?.toString() ?? '',
       email: json['email']?.toString(),
-      emailVerified: json['email_verified'] == true ||
-          json['email_verified'] == 'true',
-      isPrivateEmail: json['is_private_email'] == true ||
+      emailVerified:
+          json['email_verified'] == true || json['email_verified'] == 'true',
+      isPrivateEmail:
+          json['is_private_email'] == true ||
           json['is_private_email'] == 'true',
       name: name,
     );
   }
 
   Map<String, dynamic> toJson() => {
-        'sub': sub,
-        'email': email,
-        'email_verified': emailVerified,
-        'is_private_email': isPrivateEmail,
-        'name': name?.toJson(),
-      };
+    'sub': sub,
+    'email': email,
+    'email_verified': emailVerified,
+    'is_private_email': isPrivateEmail,
+    'name': name?.toJson(),
+  };
 
   /// Returns the full name from the Apple profile.
   String? get fullName {
@@ -63,10 +64,7 @@ class AppleProfile {
 
 /// Apple user name structure.
 class AppleName {
-  const AppleName({
-    this.firstName,
-    this.lastName,
-  });
+  const AppleName({this.firstName, this.lastName});
 
   final String? firstName;
   final String? lastName;
@@ -79,9 +77,9 @@ class AppleName {
   }
 
   Map<String, dynamic> toJson() => {
-        'firstName': firstName,
-        'lastName': lastName,
-      };
+    'firstName': firstName,
+    'lastName': lastName,
+  };
 }
 
 /// Configuration for the Apple OAuth provider.
@@ -167,9 +165,7 @@ OAuthProvider<AppleProfile> appleProvider(AppleProviderOptions options) {
     tokenEndpoint: Uri.parse('https://appleid.apple.com/auth/token'),
     redirectUri: options.redirectUri,
     scopes: options.scopes,
-    authorizationParams: {
-      'response_mode': 'form_post',
-    },
+    authorizationParams: {'response_mode': 'form_post'},
     useBasicAuth: false,
     profileParser: AppleProfile.fromJson,
     profileSerializer: (profile) => profile.toJson(),
@@ -221,7 +217,8 @@ AuthProviderRegistration _appleRegistration() {
 }
 
 AuthProvider? _buildAppleProvider(Map<String, dynamic> config) {
-  final enabled = parseBoolLike(
+  final enabled =
+      parseBoolLike(
         config['enabled'],
         context: 'auth.providers.apple.enabled',
         throwOnInvalid: true,
@@ -241,7 +238,8 @@ AuthProvider? _buildAppleProvider(Map<String, dynamic> config) {
     config['redirect_uri'],
     'auth.providers.apple.redirect_uri',
   );
-  final scopes = parseStringList(
+  final scopes =
+      parseStringList(
         config['scopes'],
         context: 'auth.providers.apple.scopes',
         allowEmptyResult: true,

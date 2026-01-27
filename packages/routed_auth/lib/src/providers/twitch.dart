@@ -43,13 +43,13 @@ class TwitchProfile {
   }
 
   Map<String, dynamic> toJson() => {
-        'sub': sub,
-        'email': email,
-        'email_verified': emailVerified,
-        'preferred_username': preferredUsername,
-        'picture': picture,
-        'updated_at': updatedAt,
-      };
+    'sub': sub,
+    'email': email,
+    'email_verified': emailVerified,
+    'preferred_username': preferredUsername,
+    'picture': picture,
+    'updated_at': updatedAt,
+  };
 }
 
 /// Configuration for the Twitch OAuth provider.
@@ -165,7 +165,8 @@ AuthProviderRegistration _twitchRegistration() {
 }
 
 AuthProvider? _buildTwitchProvider(Map<String, dynamic> config) {
-  final enabled = parseBoolLike(
+  final enabled =
+      parseBoolLike(
         config['enabled'],
         context: 'auth.providers.twitch.enabled',
         throwOnInvalid: true,
@@ -185,7 +186,8 @@ AuthProvider? _buildTwitchProvider(Map<String, dynamic> config) {
     config['redirect_uri'],
     'auth.providers.twitch.redirect_uri',
   );
-  final scopes = parseStringList(
+  final scopes =
+      parseStringList(
         config['scopes'],
         context: 'auth.providers.twitch.scopes',
         allowEmptyResult: true,
