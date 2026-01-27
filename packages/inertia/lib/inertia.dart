@@ -4,4 +4,4 @@
 /// middleware, asset helpers, and testing utilities.
 library;
 
-export 'src/inertia.dart';
+export 'inertia_dart.dart';

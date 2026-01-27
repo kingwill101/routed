@@ -79,6 +79,9 @@ Future<bool> checkSsrServer({
   http.Client? client,
 }) async {
   final uri = healthEndpoint ?? endpoint.resolve('/health');
+  if (uri.scheme != 'http' && uri.scheme != 'https') {
+    throw UnsupportedError('The SSR gateway does not support health checks.');
+  }
   final httpClient = client ?? http.Client();
   try {
     final response = await httpClient.get(uri);

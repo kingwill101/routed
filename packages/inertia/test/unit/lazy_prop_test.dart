@@ -1,5 +1,6 @@
 /// Tests for [LazyProp] behavior.
 library;
+
 import 'package:test/test.dart';
 import 'package:inertia_dart/inertia.dart';
 
@@ -15,6 +16,17 @@ void main() {
 
       final value = prop.resolve('lazy', context);
       expect(value, equals('lazy-value'));
+    });
+
+    test('resolves string values', () {
+      final prop = LazyProp(() => 'date');
+      final context = PropertyContext.partial(
+        headers: {},
+        requestedProps: ['lazy'],
+      );
+
+      final value = prop.resolve('lazy', context);
+      expect(value, equals('date'));
     });
 
     test('skips value on partial reload when not requested', () {

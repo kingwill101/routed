@@ -1,5 +1,6 @@
 /// Tests for [DeferredProp] behavior.
 library;
+
 import 'package:test/test.dart';
 import 'package:inertia_dart/inertia.dart';
 
@@ -32,6 +33,34 @@ void main() {
       final context = PropertyContext(headers: {});
 
       expect(prop.shouldInclude('deferred', context), isFalse);
+    });
+
+    test('configures merge and deep merge options', () {
+      final prop = DeferredProp(() => 'value', merge: true, deepMerge: true);
+
+      expect(prop.shouldMerge, isTrue);
+      expect(prop.shouldDeepMerge, isTrue);
+    });
+
+    test('configures once options', () {
+      final prop = DeferredProp(
+        () => 'value',
+        once: true,
+        ttl: Duration(seconds: 5),
+        onceKey: 'custom',
+        refresh: true,
+      );
+
+      expect(prop.shouldResolveOnce, isTrue);
+      expect(prop.ttl, equals(Duration(seconds: 5)));
+      expect(prop.onceKey, equals('custom'));
+      expect(prop.shouldRefresh, isTrue);
+    });
+
+    test('uses provided group', () {
+      final prop = DeferredProp(() => 'value', group: 'custom');
+
+      expect(prop.group, equals('custom'));
     });
   });
 }

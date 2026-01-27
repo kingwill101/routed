@@ -44,11 +44,10 @@ class HttpSsrGateway implements SsrGateway {
     }
 
     final data = jsonDecode(response.body) as Map<String, dynamic>;
-    return SsrResponse(
-      body: data['body'] as String? ?? '',
-      head: data['head'] as String? ?? '',
-      statusCode: response.statusCode,
-    );
+    final body = data['body'] as String? ?? '';
+    final headValue = data['head'];
+    final head = _normalizeHead(headValue);
+    return SsrResponse(body: body, head: head, statusCode: response.statusCode);
   }
 
   @override
@@ -58,4 +57,12 @@ class HttpSsrGateway implements SsrGateway {
     final response = await _client.get(checkUri);
     return response.statusCode >= 200 && response.statusCode < 300;
   }
+}
+
+String _normalizeHead(dynamic head) {
+  if (head is String) return head;
+  if (head is Iterable) {
+    return head.map((item) => item?.toString() ?? '').join('');
+  }
+  return '';
 }

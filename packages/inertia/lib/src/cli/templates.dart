@@ -138,6 +138,25 @@ createInertiaApp({
 })
 """;
 
+/// SSR entry template for a React + Inertia app.
+const String inertiaReactSsr =
+    """import { createInertiaApp } from '@inertiajs/react'
+import createServer from '@inertiajs/react/server'
+import ReactDOMServer from 'react-dom/server'
+
+createServer(page =>
+  createInertiaApp({
+    page,
+    render: ReactDOMServer.renderToString,
+    resolve: (name) => {
+      const pages = import.meta.glob('./Pages/**/*.jsx', { eager: true })
+      return pages[`./Pages/\${name}.jsx`]
+    },
+    setup: ({ App, props }) => <App {...props} />,
+  }),
+)
+""";
+
 /// Main entry template for a Vue + Inertia app.
 const String inertiaVueMain = """import { createApp, h } from 'vue'
 import { createInertiaApp } from '@inertiajs/vue3'
@@ -154,6 +173,28 @@ createInertiaApp({
 })
 """;
 
+/// SSR entry template for a Vue + Inertia app.
+const String inertiaVueSsr =
+    """import { createInertiaApp } from '@inertiajs/vue3'
+import createServer from '@inertiajs/vue3/server'
+import { renderToString } from '@vue/server-renderer'
+import { createSSRApp, h } from 'vue'
+
+createServer(page =>
+  createInertiaApp({
+    page,
+    render: renderToString,
+    resolve: (name) => {
+      const pages = import.meta.glob('./Pages/**/*.vue', { eager: true })
+      return pages[`./Pages/\${name}.vue`]
+    },
+    setup({ App, props, plugin }) {
+      return createSSRApp({ render: () => h(App, props) }).use(plugin)
+    },
+  }),
+)
+""";
+
 /// Main entry template for a Svelte + Inertia app.
 const String inertiaSvelteMain =
     """import { createInertiaApp } from '@inertiajs/svelte'
@@ -168,6 +209,25 @@ createInertiaApp({
     new App({ target: el, props })
   },
 })
+""";
+
+/// SSR entry template for a Svelte + Inertia app.
+const String inertiaSvelteSsr =
+    """import { createInertiaApp } from '@inertiajs/svelte'
+import createServer from '@inertiajs/svelte/server'
+
+createServer(page =>
+  createInertiaApp({
+    page,
+    resolve: (name) => {
+      const pages = import.meta.glob('./Pages/**/*.svelte', { eager: true })
+      return pages[`./Pages/\${name}.svelte`]
+    },
+    setup({ App, props }) {
+      return App.render(props)
+    },
+  }),
+)
 """;
 
 /// Starter page template for a React + Inertia app.

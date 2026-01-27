@@ -1,5 +1,7 @@
 library;
 
+import 'dart:async';
+
 import '../property_context.dart';
 import '../properties/property_resolver.dart';
 import 'inertia_response.dart';
@@ -72,6 +74,55 @@ class InertiaResponseFactory {
     );
   }
 
+  /// Builds a [PageData] payload with resolved props asynchronously.
+  Future<PageData> buildPageDataAsync({
+    required String component,
+    required Map<String, dynamic> props,
+    required String url,
+    required PropertyContext context,
+    String version = '',
+    bool encryptHistory = false,
+    bool clearHistory = false,
+    Map<String, dynamic>? flash,
+    List<int>? cache,
+  }) async {
+    final isPartialForComponent =
+        context.isPartialReload && context.partialComponent == component;
+    final effectiveContext = isPartialForComponent
+        ? context
+        : PropertyContext(
+            headers: context.headers,
+            isPartialReload: false,
+            requestedProps: const [],
+            requestedDeferredGroups: const [],
+            resetKeys: const [],
+            onceKey: context.onceKey,
+            shouldIncludeProp: context.shouldIncludeProp,
+          );
+
+    final result = await PropertyResolver.resolveAsync(props, effectiveContext);
+
+    return PageData(
+      component: component,
+      props: result.props,
+      url: url,
+      version: version,
+      encryptHistory: encryptHistory,
+      clearHistory: clearHistory,
+      deferredProps: result.deferredProps.isEmpty ? null : result.deferredProps,
+      mergeProps: result.mergeProps.isEmpty ? null : result.mergeProps,
+      deepMergeProps: result.deepMergeProps.isEmpty
+          ? null
+          : result.deepMergeProps,
+      prependProps: result.prependProps.isEmpty ? null : result.prependProps,
+      matchPropsOn: result.matchPropsOn.isEmpty ? null : result.matchPropsOn,
+      scrollProps: result.scrollProps.isEmpty ? null : result.scrollProps,
+      onceProps: result.onceProps.isEmpty ? null : result.onceProps,
+      flash: flash,
+      cache: cache,
+    );
+  }
+
   /// Builds an Inertia JSON response with resolved props.
   ///
   /// ```dart
@@ -95,6 +146,34 @@ class InertiaResponseFactory {
     int statusCode = 200,
   }) {
     final page = buildPageData(
+      component: component,
+      props: props,
+      url: url,
+      context: context,
+      version: version,
+      encryptHistory: encryptHistory,
+      clearHistory: clearHistory,
+      flash: flash,
+      cache: cache,
+    );
+
+    return InertiaResponse.json(page, statusCode: statusCode);
+  }
+
+  /// Builds an Inertia JSON response with resolved props asynchronously.
+  Future<InertiaResponse> jsonResponseAsync({
+    required String component,
+    required Map<String, dynamic> props,
+    required String url,
+    required PropertyContext context,
+    String version = '',
+    bool encryptHistory = false,
+    bool clearHistory = false,
+    Map<String, dynamic>? flash,
+    List<int>? cache,
+    int statusCode = 200,
+  }) async {
+    final page = await buildPageDataAsync(
       component: component,
       props: props,
       url: url,

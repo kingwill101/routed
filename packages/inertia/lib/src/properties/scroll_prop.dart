@@ -1,5 +1,7 @@
 library;
 
+import 'dart:async';
+
 import '../property_context.dart';
 import 'inertia_prop.dart';
 import 'prop_mixins.dart';
@@ -43,7 +45,7 @@ class ScrollMetadata {
 }
 
 /// Resolves [ScrollMetadata] from a resolved scroll value.
-typedef ScrollMetadataResolver<T> = ScrollMetadata Function(T value);
+typedef ScrollMetadataResolver<T> = FutureOr<ScrollMetadata> Function(T value);
 
 /// Defines props and metadata for infinite scroll style pagination.
 ///
@@ -76,10 +78,10 @@ class ScrollProp<T>
   }
 
   /// The resolver that produces the prop value.
-  final T Function() resolver;
+  final FutureOr<T> Function() resolver;
   final String _wrapper;
   final ScrollMetadataResolver<T>? _metadataResolver;
-  T? _resolved;
+  FutureOr<T>? _resolved;
 
   /// Configures merge paths based on the client intent.
   void configureMergeIntent(String? intent) {
@@ -93,9 +95,33 @@ class ScrollProp<T>
   /// Resolves scroll metadata for the current value.
   ScrollMetadata metadata() {
     final value = _resolveValue();
+    if (value is Future<T>) {
+      throw StateError('Async scroll metadata requires metadataAsync().');
+    }
     final resolver = _metadataResolver;
     if (resolver != null) {
-      return resolver(value);
+      final resolved = resolver(value);
+      if (resolved is Future<ScrollMetadata>) {
+        throw StateError('Async scroll metadata requires metadataAsync().');
+      }
+      return resolved;
+    }
+    if (value is ScrollMetadata) {
+      return value;
+    }
+    return ScrollMetadata.empty();
+  }
+
+  /// Resolves scroll metadata for the current value asynchronously.
+  Future<ScrollMetadata> metadataAsync() async {
+    final value = await _resolveValueAsync();
+    final resolver = _metadataResolver;
+    if (resolver != null) {
+      final resolved = resolver(value);
+      if (resolved is Future<ScrollMetadata>) {
+        return await resolved;
+      }
+      return resolved;
     }
     if (value is ScrollMetadata) {
       return value;
@@ -104,9 +130,20 @@ class ScrollProp<T>
   }
 
   /// Resolves and caches the underlying value.
-  T _resolveValue() {
+  FutureOr<T> _resolveValue() {
     _resolved ??= resolver();
-    return _resolved as T;
+    return _resolved as FutureOr<T>;
+  }
+
+  /// Resolves and caches the underlying value asynchronously.
+  Future<T> _resolveValueAsync() async {
+    final resolved = _resolved ??= resolver();
+    if (resolved is Future<T>) {
+      final value = await resolved;
+      _resolved = value;
+      return value;
+    }
+    return resolved;
   }
 
   @override
@@ -117,7 +154,7 @@ class ScrollProp<T>
 
   @override
   /// Resolves the prop value.
-  T resolve(String key, PropertyContext context) => _resolveValue();
+  FutureOr<T> resolve(String key, PropertyContext context) => _resolveValue();
 
   /// Marks this prop as deferred, optionally setting a [group].
   ScrollProp<T> defer([String? group]) {

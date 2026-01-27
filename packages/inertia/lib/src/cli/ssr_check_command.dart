@@ -43,16 +43,21 @@ class InertiaSsrCheckCommand extends Command<int> {
     io.title('Checking Inertia SSR');
     io.twoColumnDetail('URL', baseUri.toString());
 
-    final healthy = await checkSsrServer(
-      endpoint: baseUri,
-      healthEndpoint: health == null ? null : Uri.parse(health),
-    );
-    if (healthy) {
-      io.success('Inertia SSR server is running.');
-      return 0;
-    }
+    try {
+      final healthy = await checkSsrServer(
+        endpoint: baseUri,
+        healthEndpoint: health == null ? null : Uri.parse(health),
+      );
+      if (healthy) {
+        io.success('Inertia SSR server is running.');
+        return 0;
+      }
 
-    io.error('Inertia SSR server is not running.');
-    return 1;
+      io.error('Inertia SSR server is not running.');
+      return 1;
+    } on UnsupportedError {
+      io.error('The SSR gateway does not support health checks.');
+      return 1;
+    }
   }
 }

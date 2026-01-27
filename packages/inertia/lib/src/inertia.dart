@@ -37,6 +37,7 @@ export 'middleware/version_middleware.dart';
 export 'middleware/redirect_middleware.dart';
 export 'middleware/shared_data_middleware.dart';
 export 'middleware/error_handling_middleware.dart';
+export 'middleware/encrypt_history_middleware.dart';
 
 // SSR
 export 'ssr/ssr_gateway.dart';
@@ -65,3 +66,4 @@ export 'ssr/ssr_server.dart';
 // Testing
 export 'testing/assertable_inertia.dart';
 export 'testing/inertia_test_extensions.dart';
+export 'testing/inertia_testing_settings.dart';

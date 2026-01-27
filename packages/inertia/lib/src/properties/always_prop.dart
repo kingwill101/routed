@@ -1,5 +1,7 @@
 library;
 
+import 'dart:async';
+
 import '../property_context.dart';
 import 'inertia_prop.dart';
 
@@ -15,8 +17,8 @@ class AlwaysProp<T> implements InertiaProp {
   AlwaysProp(this.resolver);
 
   /// The resolver that produces the prop value.
-  final T Function() resolver;
-  T? _resolvedValue;
+  final FutureOr<T> Function() resolver;
+  FutureOr<T>? _resolvedValue;
 
   @override
   /// Whether this prop should be included.
@@ -24,11 +26,12 @@ class AlwaysProp<T> implements InertiaProp {
 
   @override
   /// Resolves the prop and caches the value for reuse.
-  T resolve(String key, PropertyContext context) {
+  FutureOr<T> resolve(String key, PropertyContext context) {
     // Return cached value if already resolved
-    if (_resolvedValue != null) return _resolvedValue!;
+    final resolved = _resolvedValue;
+    if (resolved != null) return resolved;
 
     _resolvedValue = resolver();
-    return _resolvedValue!;
+    return _resolvedValue as FutureOr<T>;
   }
 }

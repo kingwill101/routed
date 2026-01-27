@@ -1,0 +1,13 @@
+.dart_tool/
+pubspec.lock
+.idea/
+.cursor/
+.vscode/
+*.iml
+openspec
+AGENTS.md
+storage/
+coverage/
+doc/
+**/templates/test/logs/
+packages/server_testing/server_testing/test_screenshots/

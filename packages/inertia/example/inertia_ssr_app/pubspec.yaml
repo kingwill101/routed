@@ -1,0 +1,11 @@
+name: inertia_ssr_app
+description: Inertia dart:io SSR example.
+version: 0.1.0
+publish_to: 'none'
+
+environment:
+  sdk: ">=3.9.2 <4.0.0"
+
+dependencies:
+  inertia_dart:
+    path: ../..

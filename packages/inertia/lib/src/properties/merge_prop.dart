@@ -1,5 +1,7 @@
 library;
 
+import 'dart:async';
+
 import '../property_context.dart';
 import 'inertia_prop.dart';
 import 'prop_mixins.dart';
@@ -35,7 +37,7 @@ class MergeProp<T>
   }
 
   /// The resolver that produces the prop value.
-  final T Function() resolver;
+  final FutureOr<T> Function() resolver;
 
   @override
   /// Whether this prop should be included for the current [context].
@@ -48,7 +50,7 @@ class MergeProp<T>
   ///
   /// #### Throws
   /// - [Exception] when the prop is accessed without being requested.
-  T resolve(String key, PropertyContext context) {
+  FutureOr<T> resolve(String key, PropertyContext context) {
     if (shouldInclude(key, context)) {
       return resolver();
     }

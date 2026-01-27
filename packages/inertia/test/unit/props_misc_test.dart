@@ -1,5 +1,6 @@
 /// Tests for assorted prop helpers.
 library;
+
 import 'package:test/test.dart';
 import 'package:inertia_dart/inertia.dart';
 
@@ -19,6 +20,13 @@ void main() {
       expect(count, equals(1));
     });
 
+    test('AlwaysProp returns string values', () {
+      final prop = AlwaysProp(() => 'date');
+      final context = PropertyContext(headers: {});
+
+      expect(prop.resolve('always', context), equals('date'));
+    });
+
     test('OnceProp resolves each time', () {
       var count = 0;
       final prop = OnceProp(() {
@@ -35,6 +43,20 @@ void main() {
       final prop = ScrollProp(() => {'y': 120});
       final context = PropertyContext(headers: {});
       expect(prop.resolve('scroll', context), equals({'y': 120}));
+    });
+
+    test('ScrollProp resolves once', () {
+      var count = 0;
+      final prop = ScrollProp(() {
+        count += 1;
+        return ['item'];
+      });
+      final context = PropertyContext(headers: {});
+
+      prop.resolve('scroll', context);
+      prop.resolve('scroll', context);
+
+      expect(count, equals(1));
     });
   });
 

@@ -1,5 +1,7 @@
 library;
 
+import 'dart:async';
+
 import '../property_context.dart';
 import 'inertia_prop.dart';
 import 'prop_mixins.dart';
@@ -29,8 +31,8 @@ class OptionalProp<T> with ResolvesOnce implements InertiaProp, OnceableProp {
   }
 
   /// The resolver that produces the prop value.
-  final T Function() resolver;
-  T? _resolvedValue;
+  final FutureOr<T> Function() resolver;
+  FutureOr<T>? _resolvedValue;
 
   @override
   /// Whether this prop should be included for the current [context].
@@ -45,9 +47,10 @@ class OptionalProp<T> with ResolvesOnce implements InertiaProp, OnceableProp {
   ///
   /// #### Throws
   /// - [Exception] when the prop is accessed outside a requested partial reload.
-  T resolve(String key, PropertyContext context) {
+  FutureOr<T> resolve(String key, PropertyContext context) {
     // Return cached value if already resolved
-    if (_resolvedValue != null) return _resolvedValue!;
+    final cached = _resolvedValue;
+    if (cached != null) return cached;
 
     // Only resolve on partial reloads if requested
     if (!shouldInclude(key, context)) {
@@ -55,7 +58,7 @@ class OptionalProp<T> with ResolvesOnce implements InertiaProp, OnceableProp {
     }
 
     _resolvedValue = resolver();
-    return _resolvedValue!;
+    return _resolvedValue as FutureOr<T>;
   }
 
   /// Marks this prop to resolve once, optionally keyed and time-limited.

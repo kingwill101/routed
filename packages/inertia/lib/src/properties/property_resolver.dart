@@ -1,5 +1,7 @@
 library;
 
+import 'dart:async';
+
 import '../property_context.dart';
 import '../inertia_serializable.dart';
 import 'always_prop.dart';
@@ -174,9 +176,138 @@ class PropertyResolver {
 
     final resolvedWithCallables =
         _deepResolveCallables(resolvedProps) as Map<String, dynamic>;
+    final unpacked = _unpackTopLevelDotProps(resolvedWithCallables);
 
     return PropertyResolutionResult(
-      props: resolvedWithCallables,
+      props: unpacked,
+      deferredProps: deferredProps,
+      mergeProps: mergeProps,
+      deepMergeProps: deepMergeProps,
+      prependProps: prependProps,
+      matchPropsOn: matchPropsOn,
+      scrollProps: scrollProps,
+      onceProps: onceProps,
+    );
+  }
+
+  /// Resolves [props] asynchronously for the given [context].
+  static Future<PropertyResolutionResult> resolveAsync(
+    Map<String, dynamic> props,
+    PropertyContext context,
+  ) async {
+    final resolvedProps = <String, dynamic>{};
+    final deferredProps = <String, List<String>>{};
+    final mergeProps = <String>[];
+    final deepMergeProps = <String>[];
+    final prependProps = <String>[];
+    final matchPropsOn = <String>[];
+    final scrollProps = <String, Map<String, dynamic>>{};
+    final onceProps = <String, Map<String, dynamic>>{};
+
+    final alwaysProps = _extractAlwaysProps(props);
+    final filteredProps = _applyPartialFilters(props, context);
+    final workingProps = <String, dynamic>{...alwaysProps, ...filteredProps};
+
+    final now = DateTime.now();
+    final shouldApplyOnceExclusions =
+        context.isInertiaRequest && !context.isPartialReload;
+
+    for (final entry in workingProps.entries) {
+      final key = entry.key;
+      final value = entry.value;
+
+      if (value is ScrollProp) {
+        value.configureMergeIntent(context.mergeIntent);
+      }
+
+      if (value is OnceableProp && value.shouldResolveOnce) {
+        final onceKey = value.onceKey ?? key;
+        final expiresAt = value.ttl == null
+            ? null
+            : now.add(value.ttl!).millisecondsSinceEpoch;
+        onceProps[onceKey] = {'prop': key, 'expiresAt': expiresAt};
+      }
+
+      if (value is MergeableProp && value.shouldMerge) {
+        if (!context.resetKeys.contains(key)) {
+          if (value.shouldDeepMerge) {
+            deepMergeProps.add(key);
+          } else {
+            if (value.appendsAtRoot) {
+              mergeProps.add(key);
+            }
+            for (final path in value.appendsAtPaths) {
+              mergeProps.add('$key.$path');
+            }
+            if (value.prependsAtRoot) {
+              prependProps.add(key);
+            }
+            for (final path in value.prependsAtPaths) {
+              prependProps.add('$key.$path');
+            }
+          }
+          for (final matchOn in value.matchesOn) {
+            matchPropsOn.add('$key.$matchOn');
+          }
+        }
+
+        if (value is ScrollProp) {
+          final shouldSkip = !context.isPartialReload && value.shouldDefer;
+          if (!shouldSkip) {
+            final metadata = await value.metadataAsync();
+            scrollProps[key] = {
+              ...metadata.toJson(),
+              'reset': context.resetKeys.contains(key),
+            };
+          }
+        }
+      }
+    }
+
+    for (final entry in workingProps.entries) {
+      final key = entry.key;
+      final value = entry.value;
+
+      if (value is InertiaProp) {
+        final deferrable = value is DeferrableProp
+            ? value as DeferrableProp
+            : null;
+        final onceable = value is OnceableProp ? value as OnceableProp : null;
+
+        if (deferrable != null && deferrable.shouldDefer) {
+          if (!context.isPartialReload) {
+            if (!(shouldApplyOnceExclusions &&
+                onceable != null &&
+                _shouldExcludeOnce(context, onceable, key))) {
+              deferredProps.putIfAbsent(deferrable.group, () => []).add(key);
+            }
+            continue;
+          }
+        }
+
+        if (shouldApplyOnceExclusions &&
+            onceable != null &&
+            _shouldExcludeOnce(context, onceable, key)) {
+          continue;
+        }
+
+        if (!value.shouldInclude(key, context)) {
+          continue;
+        }
+
+        resolvedProps[key] = value.resolve(key, context);
+        continue;
+      }
+
+      resolvedProps[key] = value;
+    }
+
+    final resolvedWithCallables =
+        await _deepResolveCallablesAsync(resolvedProps) as Map<String, dynamic>;
+    final unpacked = _unpackTopLevelDotProps(resolvedWithCallables);
+
+    return PropertyResolutionResult(
+      props: unpacked,
       deferredProps: deferredProps,
       mergeProps: mergeProps,
       deepMergeProps: deepMergeProps,
@@ -330,5 +461,58 @@ class PropertyResolver {
     }
 
     return value;
+  }
+
+  /// Resolves nested callables, futures, and serializable objects to plain data.
+  static Future<dynamic> _deepResolveCallablesAsync(dynamic value) async {
+    if (value is Future) {
+      final resolved = await value;
+      return _deepResolveCallablesAsync(resolved);
+    }
+
+    if (value is InertiaSerializable) {
+      return _deepResolveCallablesAsync(value.toInertia());
+    }
+
+    if (value is Map) {
+      final resolved = <String, dynamic>{};
+      for (final entry in value.entries) {
+        resolved[entry.key.toString()] = await _deepResolveCallablesAsync(
+          entry.value,
+        );
+      }
+      return resolved;
+    }
+
+    if (value is Iterable) {
+      final items = <dynamic>[];
+      for (final item in value) {
+        items.add(await _deepResolveCallablesAsync(item));
+      }
+      return items;
+    }
+
+    if (value is Function) {
+      final resolved = value();
+      return _deepResolveCallablesAsync(resolved);
+    }
+
+    return value;
+  }
+
+  static Map<String, dynamic> _unpackTopLevelDotProps(
+    Map<String, dynamic> props,
+  ) {
+    final unpacked = <String, dynamic>{};
+    for (final entry in props.entries) {
+      final key = entry.key;
+      final value = entry.value;
+      if (key.contains('.')) {
+        _setPath(unpacked, key, value);
+      } else {
+        unpacked[key] = value;
+      }
+    }
+    return unpacked;
   }
 }

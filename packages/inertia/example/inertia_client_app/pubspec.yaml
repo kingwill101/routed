@@ -1,0 +1,11 @@
+name: inertia_client_app
+description: Inertia dart:io client example.
+version: 0.1.0
+publish_to: 'none'
+
+environment:
+  sdk: ">=3.9.2 <4.0.0"
+
+dependencies:
+  inertia_dart:
+    path: ../..

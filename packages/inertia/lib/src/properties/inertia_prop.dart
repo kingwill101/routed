@@ -1,5 +1,7 @@
 library;
 
+import 'dart:async';
+
 import '../property_context.dart';
 
 /// Defines the core property interfaces used by Inertia props.
@@ -13,7 +15,7 @@ import '../property_context.dart';
 ///   final T value;
 ///
 ///   @override
-///   T resolve(String key, PropertyContext context) => value;
+///   FutureOr<T> resolve(String key, PropertyContext context) => value;
 ///
 ///   @override
 ///   bool shouldInclude(String key, PropertyContext context) => true;
@@ -21,7 +23,7 @@ import '../property_context.dart';
 /// ```
 abstract class InertiaProp {
   /// Resolves the property value based on the [context].
-  dynamic resolve(String key, PropertyContext context);
+  FutureOr<dynamic> resolve(String key, PropertyContext context);
 
   /// Whether this property should be included in the response.
   bool shouldInclude(String key, PropertyContext context);

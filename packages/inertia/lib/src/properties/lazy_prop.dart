@@ -1,5 +1,7 @@
 library;
 
+import 'dart:async';
+
 import '../property_context.dart';
 import 'inertia_prop.dart';
 
@@ -15,8 +17,8 @@ class LazyProp<T> implements InertiaProp {
   LazyProp(this.resolver);
 
   /// The resolver that produces the prop value.
-  final T Function() resolver;
-  T? _cachedValue;
+  final FutureOr<T> Function() resolver;
+  FutureOr<T>? _cachedValue;
 
   @override
   /// Whether this prop should be included for the current [context].
@@ -30,13 +32,14 @@ class LazyProp<T> implements InertiaProp {
   ///
   /// #### Throws
   /// - [Exception] when the prop is accessed outside a requested partial reload.
-  T resolve(String key, PropertyContext context) {
+  FutureOr<T> resolve(String key, PropertyContext context) {
     // Return cached value if already resolved
-    if (_cachedValue != null) return _cachedValue!;
+    final cached = _cachedValue;
+    if (cached != null) return cached;
 
     if (shouldInclude(key, context)) {
       _cachedValue = resolver();
-      return _cachedValue!;
+      return _cachedValue as FutureOr<T>;
     }
 
     throw Exception('Lazy property accessed without being requested');

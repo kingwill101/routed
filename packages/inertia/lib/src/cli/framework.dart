@@ -17,9 +17,11 @@ class InertiaFramework {
     required this.viteTemplate,
     required this.dependencies,
     required this.mainFile,
+    required this.ssrFile,
     required this.pageFile,
     required this.configTemplate,
     required this.mainTemplate,
+    required this.ssrTemplate,
     required this.pageTemplate,
   });
 
@@ -38,6 +40,9 @@ class InertiaFramework {
   /// Main entry file path.
   final String mainFile;
 
+  /// SSR entry file path.
+  final String ssrFile;
+
   /// Initial page file path.
   final String pageFile;
 
@@ -46,6 +51,9 @@ class InertiaFramework {
 
   /// Main entry template content.
   final String mainTemplate;
+
+  /// SSR entry template content.
+  final String ssrTemplate;
 
   /// Page template content.
   final String pageTemplate;
@@ -57,9 +65,11 @@ class InertiaFramework {
     viteTemplate: 'react',
     dependencies: ['@inertiajs/react'],
     mainFile: 'src/main.jsx',
+    ssrFile: 'src/ssr.jsx',
     pageFile: 'src/Pages/Home.jsx',
     configTemplate: inertiaReactConfig,
     mainTemplate: inertiaReactMain,
+    ssrTemplate: inertiaReactSsr,
     pageTemplate: inertiaReactPage,
   );
 
@@ -68,11 +78,13 @@ class InertiaFramework {
     key: 'vue',
     label: 'Vue',
     viteTemplate: 'vue',
-    dependencies: ['@inertiajs/vue3'],
+    dependencies: ['@inertiajs/vue3', '@vue/server-renderer'],
     mainFile: 'src/main.js',
+    ssrFile: 'src/ssr.js',
     pageFile: 'src/Pages/Home.vue',
     configTemplate: inertiaVueConfig,
     mainTemplate: inertiaVueMain,
+    ssrTemplate: inertiaVueSsr,
     pageTemplate: inertiaVuePage,
   );
 
@@ -83,9 +95,11 @@ class InertiaFramework {
     viteTemplate: 'svelte',
     dependencies: ['@inertiajs/svelte'],
     mainFile: 'src/main.js',
+    ssrFile: 'src/ssr.js',
     pageFile: 'src/Pages/Home.svelte',
     configTemplate: inertiaSvelteConfig,
     mainTemplate: inertiaSvelteMain,
+    ssrTemplate: inertiaSvelteSsr,
     pageTemplate: inertiaSveltePage,
   );
 

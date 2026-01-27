@@ -49,7 +49,10 @@ final page = InertiaResponseFactory().buildPageData(
 final response = InertiaResponse.json(page);
 ```
 
-For a full framework integration, see `packages/routed_inertia`.
+For a full framework integration, see [`packages/routed_inertia`](../routed_inertia).
+For working server/client samples, see:
+- [`packages/inertia/example/inertia_client_app`](example/inertia_client_app)
+- [`packages/inertia/example/inertia_ssr_app`](example/inertia_ssr_app)
 
 ## Props
 
@@ -93,6 +96,17 @@ Use `InertiaHeaderUtils` or `InertiaRequest` to build the correct
 
 - `encryptHistory`
 - `clearHistory`
+
+## Middleware
+
+Enable history encryption for every response with the built-in middleware:
+
+```dart
+final middleware = EncryptHistoryMiddleware();
+final response = await middleware.handle(request, (req) async {
+  return next(req);
+});
+```
 
 ## SSR
 
@@ -182,9 +196,9 @@ await writeInertiaResponse(httpRequest.response, response);
 ## Vite Hot File Helper
 
 The package ships a small Vite plugin to generate a `public/hot` file (Laravel
-style). Copy `assets/vite/inertia_hot_file.js` into your project and import it
-from your Vite config. A full template is available at
-`assets/vite/vite.config.js`.
+style). Copy [`assets/vite/inertia_hot_file.js`](assets/vite/inertia_hot_file.js)
+into your project and import it from your Vite config. A full template is
+available at [`assets/vite/vite.config.js`](assets/vite/vite.config.js).
 
 ```js
 import { defineConfig } from 'vite'
@@ -207,4 +221,4 @@ response.assertInertia((page) {
 
 ## Learn More
 
-- Inertia core docs: https://inertiajs.com
+- [Inertia core docs](https://inertiajs.com)

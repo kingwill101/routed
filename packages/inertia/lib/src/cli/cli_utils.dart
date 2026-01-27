@@ -50,6 +50,10 @@ Future<void> configureInertiaProject(
   await mainFile.create(recursive: true);
   await mainFile.writeAsString(framework.mainTemplate);
 
+  final ssrFile = File(p.join(projectDir.path, framework.ssrFile));
+  await ssrFile.create(recursive: true);
+  await ssrFile.writeAsString(framework.ssrTemplate);
+
   final pageFile = File(p.join(projectDir.path, framework.pageFile));
   await pageFile.create(recursive: true);
   await pageFile.writeAsString(framework.pageTemplate);

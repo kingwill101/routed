@@ -1,5 +1,6 @@
 /// Tests for middleware behavior.
 library;
+
 import 'package:test/test.dart';
 import 'package:inertia_dart/inertia.dart';
 
@@ -60,6 +61,45 @@ void main() {
 
       expect(response.page.props['app'], equals('Routed'));
       expect(response.page.props['user'], equals('Ada'));
+    });
+
+    test('EncryptHistoryMiddleware enables history encryption', () async {
+      final middleware = EncryptHistoryMiddleware();
+      final request = InertiaRequest(
+        headers: {'X-Inertia': 'true'},
+        url: '/secure',
+        method: 'GET',
+      );
+
+      final response = await middleware.handle(request, (req) async {
+        return InertiaResponse.json(
+          PageData(component: 'Secure', props: const {}, url: '/secure'),
+        );
+      });
+
+      expect(response.page.encryptHistory, isTrue);
+    });
+
+    test('EncryptHistoryMiddleware preserves existing flag', () async {
+      final middleware = EncryptHistoryMiddleware();
+      final request = InertiaRequest(
+        headers: {'X-Inertia': 'true'},
+        url: '/secure',
+        method: 'GET',
+      );
+
+      final response = await middleware.handle(request, (req) async {
+        return InertiaResponse.json(
+          PageData(
+            component: 'Secure',
+            props: const {},
+            url: '/secure',
+            encryptHistory: true,
+          ),
+        );
+      });
+
+      expect(response.page.encryptHistory, isTrue);
     });
 
     test('ErrorHandlingMiddleware uses onError handler', () async {
