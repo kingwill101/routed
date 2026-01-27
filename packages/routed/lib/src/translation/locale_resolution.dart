@@ -1,5 +1,3 @@
-/// Utilities for exposing header, query, cookie, and session lookups when
-/// resolving locales.
 library;
 
 import 'package:routed/src/context/context.dart';
@@ -7,6 +5,9 @@ import 'package:routed/src/context/context.dart';
 /// Looks up a value by [name] from a particular source (headers, query, etc.).
 typedef LocaleLookup = String? Function(String name);
 
+/// Utilities for exposing header, query, cookie, and session lookups when
+/// resolving locales.
+///
 /// Encapsulates the data available to locale resolvers.
 class LocaleResolutionContext {
   /// Creates a context with individual lookups for each source.

@@ -1,4 +1,3 @@
-/// Registry for locale resolver factories referenceable from configuration.
 library;
 
 import 'package:routed/src/contracts/contracts.dart' show Config;
@@ -59,6 +58,8 @@ class LocaleResolverBuildContext {
 typedef LocaleResolverFactory =
     LocaleResolver Function(LocaleResolverBuildContext context);
 
+/// Registry for locale resolver factories referenceable from configuration.
+///
 /// Named registry storing resolver factories addressable by slug.
 class LocaleResolverRegistry extends NamedRegistry<LocaleResolverFactory> {
   LocaleResolverRegistry();

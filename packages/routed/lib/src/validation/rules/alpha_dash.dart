@@ -1,9 +1,9 @@
-/// Validation rule that checks if the value contains only alphabetic characters,
-/// as well as dashes and underscores.
 library;
 
 import 'package:routed/src/validation/abstract_rule.dart';
 
+/// Validation rule that checks if the value contains only alphabetic characters,
+/// as well as dashes and underscores.
 class AlphaDashRule extends AbstractValidationRule {
   @override
   String get name => 'alpha_dash';

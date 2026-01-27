@@ -151,22 +151,22 @@ class JsonParseError extends EngineError {
   /// The original parsing error message.
   final String details;
 
-  JsonParseError({this.details = ''})
-      : super(message: 'Invalid JSON payload.');
+  JsonParseError({this.details = ''}) : super(message: 'Invalid JSON payload.');
 
   @override
   int? get code => 400;
 
   @override
-  String get message =>
-      details.isEmpty ? 'Invalid JSON payload.' : 'Invalid JSON payload: $details';
+  String get message => details.isEmpty
+      ? 'Invalid JSON payload.'
+      : 'Invalid JSON payload: $details';
 
   @override
   Map<String, dynamic> toJson() => {
-        'error': 'invalid_json',
-        'message': message,
-        'code': code,
-      };
+    'error': 'invalid_json',
+    'message': message,
+    'code': code,
+  };
 }
 
 /// Represents a "Conflict" error in the engine.

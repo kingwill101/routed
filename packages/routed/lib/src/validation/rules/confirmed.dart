@@ -1,8 +1,8 @@
-/// Validation rule that checks if the value matches its confirmation field.
 library;
 
 import 'package:routed/src/validation/context_aware_rule.dart';
 
+/// Validation rule that checks if the value matches its confirmation field.
 class ConfirmedRule extends ContextAwareValidationRule {
   @override
   String get name => 'confirmed';

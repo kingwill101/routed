@@ -1,4 +1,3 @@
-/// Shared infrastructure for Routed driver registries.
 library;
 
 import 'package:routed/src/provider/provider.dart';
@@ -30,6 +29,8 @@ class DriverRegistration<TBuilder, TDocContext, TValidator> {
   final List<String> requiresConfig;
 }
 
+/// Shared infrastructure for Routed driver registries.
+///
 /// Base class for string-keyed driver registries.
 abstract class DriverRegistryBase<
   TBuilder,

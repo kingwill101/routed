@@ -1,4 +1,3 @@
-
 import 'package:http/http.dart' as http;
 import 'package:routed/src/auth/adapter.dart';
 import 'package:routed/src/auth/hooks.dart';

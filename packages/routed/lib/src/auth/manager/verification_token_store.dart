@@ -2,7 +2,6 @@ import 'dart:async';
 
 import 'package:routed/src/auth/models.dart';
 
-
 abstract class AuthVerificationTokenStore {
   FutureOr<void> save(AuthVerificationToken token);
 

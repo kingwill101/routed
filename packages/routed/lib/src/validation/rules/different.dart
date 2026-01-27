@@ -1,8 +1,8 @@
-/// Validation rule that checks if the value is different from another field.
 library;
 
 import 'package:routed/src/validation/context_aware_rule.dart';
 
+/// Validation rule that checks if the value is different from another field.
 class DifferentRule extends ContextAwareValidationRule {
   @override
   String get name => 'different';

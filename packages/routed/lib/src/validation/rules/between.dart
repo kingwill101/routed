@@ -1,8 +1,8 @@
-/// Validation rule that checks if a value is between a given range.
 library;
 
 import 'package:routed/src/validation/abstract_rule.dart';
 
+/// Validation rule that checks if a value is between a given range.
 class BetweenRule extends AbstractValidationRule {
   @override
   String get name => 'between';

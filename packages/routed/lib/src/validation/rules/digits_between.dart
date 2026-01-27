@@ -1,8 +1,8 @@
-/// Validation rule that checks if the value has a number of digits within a range.
 library;
 
 import 'package:routed/src/validation/abstract_rule.dart';
 
+/// Validation rule that checks if the value has a number of digits within a range.
 class DigitsBetweenRule extends AbstractValidationRule {
   @override
   String get name => 'digits_between';

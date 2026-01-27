@@ -1,8 +1,8 @@
-/// Validation rule that checks if the value is a boolean.
 library;
 
 import 'package:routed/src/validation/abstract_rule.dart';
 
+/// Validation rule that checks if the value is a boolean.
 class BooleanRule extends AbstractValidationRule {
   @override
   String get name => 'boolean';

@@ -521,8 +521,7 @@ class AuthRoutes {
 
     if (provider is EmailProvider) {
       final token = ctx.query('token') as String?;
-      final email =
-          (ctx.query('email') ?? ctx.query('identifier')) as String?;
+      final email = (ctx.query('email') ?? ctx.query('identifier')) as String?;
       if (token == null || token.isEmpty || email == null || email.isEmpty) {
         return ctx.json({
           'error': 'missing_token',
@@ -543,7 +542,7 @@ class AuthRoutes {
       try {
         final params = ctx.request.queryParameters;
         final callbackResult = await provider.handleCallback(ctx, params);
-        
+
         if (!callbackResult.isSuccess) {
           return ctx.json({
             'error': callbackResult.error ?? 'callback_failed',
@@ -556,7 +555,7 @@ class AuthRoutes {
           callbackResult.user!,
           redirectUrl: callbackResult.redirect,
         );
-        
+
         return await _respond(ctx, result, provider: provider);
       } on AuthFlowException catch (error) {
         return ctx.json({

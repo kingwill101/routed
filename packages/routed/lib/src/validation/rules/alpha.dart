@@ -1,8 +1,8 @@
-/// Validation rule that checks if the value contains only alphabetic characters.
 library;
 
 import 'package:routed/src/validation/abstract_rule.dart';
 
+/// Validation rule that checks if the value contains only alphabetic characters.
 class AlphaRule extends AbstractValidationRule {
   @override
   String get name => 'alpha';

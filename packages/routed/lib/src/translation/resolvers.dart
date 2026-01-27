@@ -1,11 +1,12 @@
-/// Built-in locale resolvers backed by query params, cookies, sessions, and
-/// headers.
 library;
 
 import 'dart:io';
 
 import 'package:routed/src/translation/locale_resolution.dart';
 
+/// Built-in locale resolvers backed by query params, cookies, sessions, and
+/// headers.
+///
 /// Contract implemented by all locale resolvers.
 abstract class LocaleResolver {
   /// Attempts to resolve a locale from the provided [context].

@@ -1,3 +1,5 @@
+library;
+
 /// OpenAPI annotations for handler functions.
 ///
 /// These annotations can be placed on handler functions to provide
@@ -12,8 +14,7 @@
 /// @ApiResponse(404, description: 'Not found')
 /// Future<Response> getProducts(EngineContext ctx) async { ... }
 /// ```
-library;
-
+///
 /// Provides a short summary for the OpenAPI operation.
 class Summary {
   final String value;

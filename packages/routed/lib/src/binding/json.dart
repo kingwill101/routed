@@ -26,15 +26,17 @@ class JsonBinding extends Binding {
   Future<Map<String, dynamic>> _decodedBody(EngineContext ctx) async {
     final bodyBytes = await ctx.request.bytes;
     final bodyString = utf8.decode(bodyBytes);
-    
+
     if (bodyString.trim().isEmpty) {
       return <String, dynamic>{};
     }
-    
+
     try {
       final decoded = jsonDecode(bodyString);
       if (decoded is! Map<String, dynamic>) {
-        throw JsonParseError(details: 'Expected JSON object, got ${decoded.runtimeType}');
+        throw JsonParseError(
+          details: 'Expected JSON object, got ${decoded.runtimeType}',
+        );
       }
       return decoded;
     } on FormatException catch (e) {

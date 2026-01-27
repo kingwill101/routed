@@ -1,8 +1,8 @@
-/// A validation rule that checks if a given value is a valid email address.
 library;
 
 import 'package:routed/src/validation/abstract_rule.dart';
 
+/// A validation rule that checks if a given value is a valid email address.
 class EmailRule extends AbstractValidationRule {
   @override
   String get name => 'email';

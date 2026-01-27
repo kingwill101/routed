@@ -1,8 +1,8 @@
-/// Validation rule that checks if a date is before a given date.
 library;
 
 import 'package:routed/src/validation/abstract_rule.dart';
 
+/// Validation rule that checks if a date is before a given date.
 class BeforeRule extends AbstractValidationRule {
   @override
   String get name => 'before';

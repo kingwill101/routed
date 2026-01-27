@@ -1,13 +1,12 @@
-/// Coordinates locale resolution across configured resolvers.
-///
-/// The manager evaluates resolvers in order until one yields a non-empty
-/// locale. When every resolver fails, the default locale is returned.
 library;
 
 import 'package:routed/src/translation/locale_resolution.dart';
 import 'package:routed/src/translation/resolvers.dart';
 
-/// Chooses the active locale for each request.
+/// Coordinates locale resolution across configured resolvers.
+///
+/// The manager evaluates resolvers in order until one yields a non-empty
+/// locale. When every resolver fails, the default locale is returned.
 class LocaleManager {
   /// Creates a manager with the provided [resolvers].
   ///

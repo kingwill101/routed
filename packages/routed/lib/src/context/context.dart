@@ -285,7 +285,6 @@ class EngineContext {
   String get path => request.path;
 
   /// Retrieve the response object.
-  @internal
   Response get response => _response;
 
   /// Close the response and await the underlying HttpResponse completion.
