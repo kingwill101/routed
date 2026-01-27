@@ -1,0 +1,123 @@
+import 'dart:io';
+
+import 'package:artisanal/args.dart';
+import 'package:routed/console.dart';
+import 'package:{{{routed:packageName}}}/app.dart' as app;
+import 'package:{{{routed:packageName}}}/commands.dart' as project_commands;
+
+Future<int> runCli(List<String> args) async {
+  await app.createEngine(initialize: false);
+
+  final runner = CommandRunner<void>(
+    '{{{routed:packageName}}}',
+    'Command line interface for {{{routed:humanName}}}.',
+  );
+
+  runner.addCommand(ServeCommand());
+
+  final projectCommands = await _loadProjectCommands();
+  for (final command in projectCommands) {
+    runner.addCommand(command);
+  }
+
+  registerProviderCommands(
+    runner,
+    ProviderCommandRegistry.instance.registrations,
+    runner.usage,
+  );
+  registerProviderArtisanalCommands(
+    runner,
+    ProviderArtisanalCommandRegistry.instance.registrations,
+    runner.usage,
+  );
+
+  if (args.isEmpty || _isHelp(args)) {
+    stdout.writeln(runner.usage);
+    return 0;
+  }
+
+  try {
+    await runner.run(args);
+    return 0;
+  } on UsageException catch (error) {
+    stderr.writeln(error);
+    return 64;
+  } catch (error, stack) {
+    stderr
+      ..writeln('Unhandled error: $error')
+      ..writeln(stack);
+    return 70;
+  }
+}
+
+class ServeCommand extends Command<void> {
+  ServeCommand()
+    : _defaultHost = Platform.environment['HOST'] ?? '127.0.0.1',
+      _defaultPort = Platform.environment['PORT'] ?? '8080' {
+    argParser
+      ..addOption(
+        'host',
+        help: 'Host to bind the HTTP server.',
+        defaultsTo: _defaultHost,
+      )
+      ..addOption(
+        'port',
+        help: 'Port to bind the HTTP server.',
+        defaultsTo: _defaultPort,
+      );
+  }
+
+  final String _defaultHost;
+  final String _defaultPort;
+
+  @override
+  String get name => 'serve';
+
+  @override
+  String get description => 'Start the HTTP server.';
+
+  @override
+  Future<void> run() async {
+    final host = (argResults?['host'] as String?)?.trim() ?? _defaultHost;
+    final portText = argResults?['port'] as String? ?? _defaultPort;
+    final port = int.tryParse(portText);
+    if (host.isEmpty) {
+      throw UsageException('Host must be provided.', usage);
+    }
+    if (port == null || port <= 0) {
+      throw UsageException('Port must be a positive integer.', usage);
+    }
+
+    final engine = await app.createEngine();
+    await engine.serve(host: host, port: port);
+  }
+}
+
+bool _isHelp(List<String> args) {
+  return args.length == 1 && (args[0] == '--help' || args[0] == '-h');
+}
+
+Future<List<Command<void>>> _loadProjectCommands() async {
+  final result = await Future.sync(project_commands.buildProjectCommands);
+  if (result is! List) {
+    throw UsageException(
+      'Expected buildProjectCommands() to return List<Command<void>>.',
+      '',
+    );
+  }
+
+  final commands = <Command<void>>[];
+  for (final entry in result) {
+    if (entry is Command<void>) {
+      commands.add(entry);
+    } else if (entry is Command) {
+      commands.add(entry as Command<void>);
+    } else {
+      throw UsageException(
+        'Invalid command returned from buildProjectCommands(): ${entry.runtimeType}.',
+        '',
+      );
+    }
+  }
+  return commands;
+}
