@@ -24,3 +24,4 @@ dev_dependencies:
   lints: ^6.0.0
   routed_testing: ^0.3.2
   server_testing: ^0.3.1
+  file: ^7.0.1
