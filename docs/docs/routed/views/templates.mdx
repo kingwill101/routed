@@ -99,7 +99,34 @@ Use `ctx.html` to render a snippet through the view engine (useful for partials 
 await ctx.html('<p>{{ message }}</p>', data: {'message': 'Success!'});
 ```
 
-To customise Liquid with filters or functions, extend `LiquidViewEngine` and integrate with the underlying `liquify` APIs before registering the engine with the `Engine`.
+## View extension registry
+
+Providers can register view extensions without coupling to a specific engine
+API. The registry stores engine-specific callbacks and applies them during
+rendering, so you can register filters or tags lazily and still see them on
+subsequent renders.
+
+```dart title="Register Liquid extensions"
+import 'package:liquify/liquify.dart' as liquid;
+import 'package:routed/routed.dart';
+
+ViewExtensionRegistry.instance.registerFor('liquid', (target) {
+  final env = target as liquid.Environment;
+  env.registerLocalFilter('markdown', (value, args, named) {
+    return renderMarkdown(value.toString());
+  });
+  env.registerLocalTag('asset', (content, filters) {
+    return AssetTag(content, filters);
+  });
+});
+```
+
+Each view engine defines its own extension surface. Use the correct engine name
+(`liquid`, `mustache`, etc.) and cast the `target` to the engine-specific type
+inside the callback.
+
+To customise Liquid more deeply, extend `LiquidViewEngine` and integrate with
+the underlying `liquify` APIs before registering the engine with the `Engine`.
 
 ## Error handling
 

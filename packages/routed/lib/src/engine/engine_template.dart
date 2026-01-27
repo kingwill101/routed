@@ -5,7 +5,7 @@ import 'package:routed/src/view/engines/liquid_engine.dart'
 import 'package:routed/src/view/view_engine.dart';
 
 /// Extension on the Engine class to provide view engine functionalities.
-extension ViewEngineExtension on Engine {
+extension EngineViewEngineExtension on Engine {
   /// Gets the current view engine from the configuration.
   ///
   /// Returns null if no view engine has been configured.

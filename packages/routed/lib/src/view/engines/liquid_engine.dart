@@ -4,6 +4,7 @@ import 'package:liquify/liquify.dart' as liquid;
 import 'package:routed/src/render/html/liquid.dart';
 import 'package:routed/src/context/context.dart';
 import 'package:routed/src/view/view_engine.dart';
+import 'package:routed/src/view/view_extensions.dart';
 
 export 'package:routed/src/render/html/liquid.dart';
 
@@ -81,10 +82,17 @@ class LiquidViewEngine implements ViewEngine {
   }
 
   void Function(liquid.Environment)? _environmentSetup(Object? ctx) {
-    if (ctx is! EngineContext) {
+    final registry = ViewExtensionRegistry.instance;
+    final hasExtensions = registry.hasExtensions('liquid');
+    if (ctx is! EngineContext && !hasExtensions) {
       return null;
     }
     return (env) {
+      registry.applyExtensions('liquid', env);
+
+      if (ctx is! EngineContext) {
+        return;
+      }
       env.registerLocalFilter('trans', (value, args, named) {
         final key =
             _coerceString(value) ??
