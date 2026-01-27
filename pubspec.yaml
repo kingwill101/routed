@@ -6,7 +6,6 @@ workspace:
   - packages/routed_hotwire
   - packages/inertia
   - packages/routed_inertia
-  - packages/routed_inertia/example/routed_app/routed_inertia_example
   - packages/server_testing/server_testing
   - packages/server_testing/routed_testing
   - packages/server_testing/server_testing_shelf
