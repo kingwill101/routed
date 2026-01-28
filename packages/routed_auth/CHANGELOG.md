@@ -1,3 +1,7 @@
+## 0.1.1
+
+- Reformatted provider implementations and aligned tests without behavior changes.
+
 ## 0.1.0
 
 ### OAuth Providers

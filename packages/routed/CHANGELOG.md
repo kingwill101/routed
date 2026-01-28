@@ -1,3 +1,24 @@
+## 0.3.3
+
+### Auth and Provider Updates
+- Added `userInfoRequest` to `OAuthProvider` for non-standard userinfo flows.
+- Introduced `CallbackProvider` for custom auth callbacks (ex: Telegram).
+- Added WebAuthn provider types and configuration classes.
+- Split auth manager internals into focused modules for options and token storage.
+- Provider booting now defers until required dependency types are available and
+  warns when dependencies remain unresolved.
+
+### CLI and Scaffolding
+- Generated apps now include a CLI entrypoint with a built-in `serve` command.
+- CLI command discovery can build engines without initialization via
+  `createEngine(initialize: false)`.
+- Provider and artisanal command registries are merged into generated CLI
+  runners for `dart run <app>:cli`.
+
+### Views
+- Added a view extension registry so providers can register view engine
+  extensions; Liquid applies registered extensions during rendering.
+
 ## 0.3.2
 
 ### OAuth Improvements
