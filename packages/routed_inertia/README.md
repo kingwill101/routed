@@ -4,6 +4,10 @@ Routed integration for Inertia.js. This package wires the Inertia protocol into
 the Routed framework with middleware, `EngineContext` helpers, SSR support, and
 template rendering.
 
+> **New here?** Follow the [Build a Todo App](https://kingwill101.github.io/docs/routed_inertia/tutorial) tutorial for a hands-on walkthrough.
+>
+> **Using dart:io without Routed?** See [`inertia_dart`](../inertia) for the standalone package and its [Contacts App tutorial](https://kingwill101.github.io/docs/inertia_dart/tutorial).
+
 ## Install
 
 ```bash
@@ -77,10 +81,10 @@ ssr:
   ensure_bundle_exists: true
   runtime: "node"
 assets:
-  manifest_path: "build/manifest.json"
-  entry: "resources/js/app.js"
+  manifest_path: "client/dist/.vite/manifest.json"
+  entry: "index.html"
   base_url: "/"
-  hot_file: "public/hot"
+  hot_file: "client/public/hot"
 ```
 
 When configured, `ctx.inertia` will pull defaults for `version`, `root_view`,
@@ -132,8 +136,8 @@ engine.get('/', (ctx) {
 Use the core manifest helper to render asset tags.
 
 ```dart
-final manifest = await InertiaAssetManifest.load('build/manifest.json');
-final tags = manifest.renderTags('resources/js/app.js', baseUrl: '/');
+final manifest = await InertiaAssetManifest.load('client/dist/.vite/manifest.json');
+final tags = manifest.renderTags('index.html', baseUrl: '/');
 ```
 
 Inject the tags in your template or HTML builder.
@@ -151,3 +155,9 @@ response.assertInertia((page) {
 ## Example App
 
 See `packages/routed_inertia/example/README.md` for a full React + Routed demo.
+
+## Learn More
+
+- [Routed Inertia docs](https://kingwill101.github.io/docs/routed_inertia/) -- full reference and tutorial
+- [Inertia Dart docs](https://kingwill101.github.io/docs/inertia_dart/) -- standalone package API and dart:io tutorial
+- [Inertia.js docs](https://inertiajs.com) -- protocol specification and client adapters

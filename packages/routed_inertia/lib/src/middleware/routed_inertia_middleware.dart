@@ -1,20 +1,23 @@
 import 'package:inertia_dart/inertia_dart.dart';
 import 'package:routed/routed.dart';
 
-/// Routed middleware for Inertia request handling
+/// Routed middleware for Inertia request handling.
 class RoutedInertiaMiddleware {
   RoutedInertiaMiddleware({required this.versionResolver});
   final String Function() versionResolver;
 
   Future<Response> call(EngineContext ctx, Next next) async {
-    final headers = _extractHeaders(ctx.headers);
-    final isInertia = InertiaHeaderUtils.isInertiaRequest(headers);
-    final requestVersion = headers[InertiaHeaders.inertiaVersion] ?? '';
+    final flatHeaders = extractHttpHeaders(ctx.headers);
+    final request = InertiaRequest(
+      headers: flatHeaders,
+      url: ctx.requestedUri.toString(),
+      method: ctx.method,
+    );
     final currentVersion = versionResolver();
 
-    if (isInertia &&
+    if (request.isInertia &&
         currentVersion.isNotEmpty &&
-        requestVersion != currentVersion) {
+        (request.version ?? '') != currentVersion) {
       ctx.setHeader(
         InertiaHeaders.inertiaLocation,
         ctx.requestedUri.toString(),
@@ -23,7 +26,7 @@ class RoutedInertiaMiddleware {
     }
 
     final response = await next();
-    if (!isInertia) return response;
+    if (!request.isInertia) return response;
 
     final method = ctx.method.toUpperCase();
     final shouldRewrite =
@@ -34,15 +37,5 @@ class RoutedInertiaMiddleware {
     }
 
     return response;
-  }
-
-  static Map<String, String> _extractHeaders(HttpHeaders headers) {
-    final result = <String, String>{};
-    headers.forEach((name, values) {
-      if (values.isNotEmpty) {
-        result[name] = values.first;
-      }
-    });
-    return result;
   }
 }

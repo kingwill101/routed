@@ -9,6 +9,6 @@ ssr:
   runtime: "node"
 assets:
   manifest_path: "packages/routed_inertia/example/client/dist/.vite/manifest.json"
-  entry: "src/main.jsx"
+  entry: "index.html"
   base_url: "/"
   hot_file: "packages/routed_inertia/example/client/public/hot"

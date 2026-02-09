@@ -172,7 +172,7 @@ Future<AssetTags> _loadManifestAssets(InertiaAssetsConfig? assets) async {
   final manifestPath =
       assets?.manifestPath ??
       'packages/routed_inertia/example/client/dist/.vite/manifest.json';
-  final entry = assets?.entry ?? 'src/main.jsx';
+  final entry = assets?.entry ?? 'index.html';
   final baseUrl = assets?.baseUrl ?? '/';
   final manifestFile = File(manifestPath);
 
