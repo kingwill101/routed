@@ -1,11 +1,3 @@
-## 0.1.1
-
-- Added comprehensive dartdoc to all public API exports (125 items across 13 provider files).
-- Fixed library dartdoc: added missing Telegram and Dropbox providers to the documented provider list.
-- Fixed registry dartdoc: added missing Telegram to `registerAllAuthProviders()` provider list.
-- Updated README with pub.dev installation instructions.
-- Prepared pubspec.yaml for pub.dev publishing (version constraints, repository URL, tags).
-
 ## 0.1.0
 
 ### OAuth Providers
@@ -43,5 +35,6 @@ Initial release with pre-built OAuth providers following the NextAuth.js pattern
 - Config-driven registration via `AuthProviderRegistry`
 - `registerAllAuthProviders()` for bulk registration
 - Individual registration functions (e.g., `registerGoogleAuthProvider()`)
+- Comprehensive dartdoc on all public API exports
 - Dropbox provider demonstrates `userInfoRequest` callback for POST-based endpoints
 - Telegram provider demonstrates `CallbackProvider` mixin for non-OAuth flows
