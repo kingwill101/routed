@@ -1,4 +1,4 @@
-## 0.3.4
+## 0.3.3
 
 ### Configuration
 - `ConfigLoaderOptions` gains a `resolveEnvTemplates` flag. When `false`,
@@ -33,8 +33,19 @@
 - `create` command supports Inertia scaffolding via `--inertia`,
   `--inertia-framework`, `--inertia-package-manager`, and `--inertia-output`
   flags. Entry key defaults to `index.html` for Vite 7 compatibility.
+- Generated apps now include a CLI entrypoint with a built-in `serve` command.
+- CLI command discovery can build engines without initialization via
+  `createEngine(initialize: false)`.
+- Provider and artisanal command registries are merged into generated CLI
+  runners for `dart run <app>:cli`.
 
 ### Auth
+- Added `userInfoRequest` to `OAuthProvider` for non-standard userinfo flows.
+- Introduced `CallbackProvider` for custom auth callbacks (ex: Telegram).
+- Added WebAuthn provider types and configuration classes.
+- Split auth manager internals into focused modules for options and token storage.
+- Provider booting now defers until required dependency types are available and
+  warns when dependencies remain unresolved.
 - `AuthManager.updateSession()` replaces the authenticated identity in-place
   for both session and JWT strategies (reissues JWT cookie for JWT strategy).
 - `SessionAuth.updateSession()` provides a static convenience API that
@@ -52,33 +63,16 @@
 - Fixed post-response write guard to use `ctx.isClosed` instead of
   `ctx.response.isClosed`.
 
+### Views
+- Added a view extension registry so providers can register view engine
+  extensions; Liquid applies registered extensions during rendering.
+
 ### Logging
 - `RoutedLogger.createForChannel()` creates a logger with a channel override
   key merged into the context.
 - `LoggingServiceProvider` reads channel-specific log levels from
   `logging.channels.*` config keys and respects the `LOG_CHANNEL` environment
   variable for default channel selection.
-
-## 0.3.3
-
-### Auth and Provider Updates
-- Added `userInfoRequest` to `OAuthProvider` for non-standard userinfo flows.
-- Introduced `CallbackProvider` for custom auth callbacks (ex: Telegram).
-- Added WebAuthn provider types and configuration classes.
-- Split auth manager internals into focused modules for options and token storage.
-- Provider booting now defers until required dependency types are available and
-  warns when dependencies remain unresolved.
-
-### CLI and Scaffolding
-- Generated apps now include a CLI entrypoint with a built-in `serve` command.
-- CLI command discovery can build engines without initialization via
-  `createEngine(initialize: false)`.
-- Provider and artisanal command registries are merged into generated CLI
-  runners for `dart run <app>:cli`.
-
-### Views
-- Added a view extension registry so providers can register view engine
-  extensions; Liquid applies registered extensions during rendering.
 
 ## 0.3.2
 
