@@ -6,14 +6,8 @@ OAuth providers for [routed](https://pub.dev/packages/routed) - includes Google,
 
 ```yaml
 dependencies:
-  routed:
-    git:
-      url: https://github.com/kingwill101/routed.git
-      path: packages/routed
-  routed_auth:
-    git:
-      url: https://github.com/kingwill101/routed.git
-      path: packages/routed_auth
+  routed: ^0.3.3
+  routed_auth: ^0.1.0
 ```
 
 ## Quick Start

@@ -18,6 +18,7 @@
 ///
 /// **Developer Platforms:**
 /// - [gitlabProvider] - GitLab OAuth
+/// - [dropboxProvider] - Dropbox OAuth
 ///
 /// **Business/Communication:**
 /// - [slackProvider] - Slack OAuth with OIDC
@@ -26,6 +27,9 @@
 /// **Entertainment:**
 /// - [spotifyProvider] - Spotify OAuth
 /// - [twitchProvider] - Twitch OAuth with OIDC
+///
+/// **Messaging:**
+/// - [telegramProvider] - Telegram Login Widget
 ///
 /// ## Usage
 ///

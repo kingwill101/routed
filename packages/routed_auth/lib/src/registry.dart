@@ -42,6 +42,7 @@ import 'providers/telegram.dart';
 /// - Slack (OIDC)
 /// - LinkedIn (OIDC)
 /// - Twitch (OIDC)
+/// - Telegram (Login Widget)
 /// - Dropbox
 void registerAllAuthProviders(
   AuthProviderRegistry registry, {

@@ -1,6 +1,10 @@
 ## 0.1.1
 
-- Reformatted provider implementations and aligned tests without behavior changes.
+- Added comprehensive dartdoc to all public API exports (125 items across 13 provider files).
+- Fixed library dartdoc: added missing Telegram and Dropbox providers to the documented provider list.
+- Fixed registry dartdoc: added missing Telegram to `registerAllAuthProviders()` provider list.
+- Updated README with pub.dev installation instructions.
+- Prepared pubspec.yaml for pub.dev publishing (version constraints, repository URL, tags).
 
 ## 0.1.0
 
