@@ -1,3 +1,43 @@
+## 0.3.4
+
+### Configuration
+- `ConfigLoaderOptions` gains a `resolveEnvTemplates` flag. When `false`,
+  `{{ env.* }}` Liquid expressions are preserved as raw placeholders through
+  template rendering, enabling `config:cache` to generate Dart files with
+  deferred environment resolution.
+- New `buildEnvTemplateContext()` public function builds the Liquid template
+  context from `Platform.environment` at runtime.
+- `CoreServiceProvider.withCachedConfig()` named constructor accepts a
+  `ConfigSnapshot` for zero-I/O startup from a pre-built config cache.
+
+### CLI and Scaffolding
+- `config:publish` simplified -- generates config stubs directly from
+  `buildConfigDefaults()` / `collectConfigDocs()` instead of resolving
+  package roots. Added `--only` option for selective stub generation.
+- `create` command supports Inertia scaffolding via `--inertia`,
+  `--inertia-framework`, `--inertia-package-manager`, and `--inertia-output`
+  flags. Entry key defaults to `index.html` for Vite 7 compatibility.
+
+### Auth
+- `AuthManager.updateSession()` replaces the authenticated identity in-place
+  for both session and JWT strategies (reissues JWT cookie for JWT strategy).
+- `SessionAuth.updateSession()` provides a static convenience API that
+  delegates to the manager when wired by `AuthServiceProvider`.
+
+### Container
+- Added `waitFor<T>()`, `waitForType()`, and `makeWhenAvailable<T>()` with
+  optional timeout for awaiting lazily-registered dependencies.
+
+### Sessions
+- `sessionMiddleware()` resolves `SessionConfig` from the request container
+  at runtime when no explicit `store`/`name` is provided.
+- Fixed post-response write guard to use `ctx.isClosed` instead of
+  `ctx.response.isClosed`.
+
+### Logging
+- `RoutedLogger.createForChannel()` creates a logger with a channel override
+  key merged into the context.
+
 ## 0.3.3
 
 ### Auth and Provider Updates
