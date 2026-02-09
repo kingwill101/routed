@@ -302,18 +302,8 @@ Future<_ProcessResult> _runInspector(
   );
 }
 
-typedef PackageResolver =
-    Future<fs.Directory?> Function(
-      fs.Directory projectRoot,
-      String packageName,
-    );
-
 class ConfigPublishCommand extends BaseCommand {
-  ConfigPublishCommand({
-    super.logger,
-    super.fileSystem,
-    PackageResolver? packageResolver,
-  }) : _packageResolver = packageResolver ?? _resolvePackageRoot {
+  ConfigPublishCommand({super.logger, super.fileSystem}) {
     argParser
       ..addFlag(
         'force',
@@ -323,20 +313,19 @@ class ConfigPublishCommand extends BaseCommand {
         defaultsTo: false,
       )
       ..addOption(
-        'tag',
-        help: 'Copy templates from config/stubs/<tag> when available.',
-        valueHelp: 'tag',
+        'only',
+        help:
+            'Comma-separated list of config stubs to publish (e.g. app,cache).',
+        valueHelp: 'name[,name]',
       );
   }
-
-  final PackageResolver _packageResolver;
 
   @override
   String get name => 'config:publish';
 
   @override
   String get description =>
-      'Copy configuration stubs from a dependency into config/.';
+      'Generate configuration stubs into config/ (optionally a subset).';
 
   @override
   String get category => 'Configuration';
@@ -344,12 +333,12 @@ class ConfigPublishCommand extends BaseCommand {
   @override
   Future<void> run() async {
     return guarded(() async {
-      final packageName = results?.rest.isNotEmpty == true
-          ? results!.rest.first
-          : null;
-      if (packageName == null) {
-        throw UsageException('Specify a package name.', usage);
-      }
+      final rest = results?.rest ?? const <String>[];
+      final onlyArg = results?['only'] as String?;
+      final selection = _parseSelectionValues([
+        if (onlyArg != null && onlyArg.trim().isNotEmpty) onlyArg,
+        ...rest,
+      ]);
 
       final projectRoot = await findProjectRoot();
       if (projectRoot == null) {
@@ -359,112 +348,71 @@ class ConfigPublishCommand extends BaseCommand {
         throw UsageException('Not a Routed project.', usage);
       }
 
-      final packageRoot = await _packageResolver(projectRoot, packageName);
-      if (packageRoot == null || !await packageRoot.exists()) {
-        logger.error(
-          'Package "$packageName" not found. Run `dart pub get` first.',
-        );
-        io.exitCode = 66;
-        return;
-      }
-
-      final tag = results?['tag'] as String?;
-      final stubsDir = await _resolveStubsDirectory(packageRoot, tag);
       Map<String, List<ConfigDocEntry>> docsByRoot;
       try {
         docsByRoot = collectConfigDocs();
       } catch (_) {
         docsByRoot = const <String, List<ConfigDocEntry>>{};
       }
-
-      if (stubsDir == null) {
-        final force = results?['force'] as bool? ?? false;
-        if (packageName == 'routed') {
-          logger.info(
-            'No stubs found for routed; generating default templates.',
-          );
-          final defaultsByRoot = buildConfigDefaults();
-          final outputs = generateConfigFiles(defaultsByRoot, docsByRoot);
-          final configRoot = fileSystem.directory(
-            joinPath([projectRoot.path, 'config']),
-          );
-          await ensureDir(configRoot);
-
-          for (final entry
-              in outputs.entries.toList()
-                ..sort((a, b) => a.key.compareTo(b.key))) {
-            final target = fileSystem.file(
-              joinPath([projectRoot.path, entry.key]),
-            );
-            if (!force && await target.exists()) {
-              continue;
-            }
-            await writeTextFile(target, entry.value);
-            logger.info('Created ${_relative(projectRoot, target)}');
-          }
-
-          final envConfig = deriveEnvConfig(
-            defaultsByRoot,
-            docsByRoot,
-            overrides: {
-              'APP_NAME': 'Routed App',
-              'APP_ENV': 'development',
-              'APP_DEBUG': true,
-              'APP_KEY': 'change-me',
-              'SESSION_COOKIE': 'routed-session',
-              'STORAGE_ROOT': 'storage/app',
-              'OBSERVABILITY_TRACING_SERVICE_NAME': 'routed-service',
-            },
-          );
-          final envContents = renderEnvFile(
-            envConfig.values,
-            extras: envConfig.commented,
-          );
-
-          final envPath = fileSystem.file(joinPath([projectRoot.path, '.env']));
-          if (force || !await envPath.exists()) {
-            await writeTextFile(envPath, envContents);
-            logger.info('Created ${_relative(projectRoot, envPath)}');
-          }
-
-          final envExamplePath = fileSystem.file(
-            joinPath([projectRoot.path, '.env.example']),
-          );
-          if (force || !await envExamplePath.exists()) {
-            await writeTextFile(envExamplePath, envContents);
-            logger.info('Created ${_relative(projectRoot, envExamplePath)}');
-          }
-          return;
-        }
-        logger.error(
-          'Package "$packageName" does not expose config stubs under config/stubs${tag != null ? '/$tag' : ''}.',
-        );
-        io.exitCode = 66;
-        return;
-      }
-
+      logger.info('Generating configuration templates.');
+      final force = results?['force'] as bool? ?? false;
+      final defaultsByRoot = buildConfigDefaults();
+      final filteredDefaults = _filterDefaultsBySelection(
+        defaultsByRoot,
+        selection,
+      );
+      final filteredDocs = _filterDocsBySelection(docsByRoot, selection);
+      final outputs = generateConfigFiles(filteredDefaults, filteredDocs);
       final configRoot = fileSystem.directory(
         joinPath([projectRoot.path, 'config']),
       );
       await ensureDir(configRoot);
-      final force = results?['force'] as bool? ?? false;
 
-      final totalCopied = await _copyDirectory(
-        source: stubsDir,
-        destination: configRoot,
-        projectRoot: projectRoot,
-        force: force,
-        fileSystem: fileSystem,
+      for (final entry
+          in outputs.entries.toList()..sort((a, b) => a.key.compareTo(b.key))) {
+        final target = fileSystem.file(joinPath([projectRoot.path, entry.key]));
+        if (!force && await target.exists()) {
+          continue;
+        }
+        await writeTextFile(target, entry.value);
+        logger.info('Created ${_relative(projectRoot, target)}');
+      }
+
+      if (outputs.isEmpty) {
+        logger.info('No matching defaults for selection.');
+        return;
+      }
+
+      final envConfig = deriveEnvConfig(
+        filteredDefaults,
+        filteredDocs,
+        overrides: {
+          'APP_NAME': 'Routed App',
+          'APP_ENV': 'development',
+          'APP_DEBUG': true,
+          'APP_KEY': 'change-me',
+          'SESSION_COOKIE': 'routed-session',
+          'STORAGE_ROOT': 'storage/app',
+          'OBSERVABILITY_TRACING_SERVICE_NAME': 'routed-service',
+        },
+      );
+      final envContents = renderEnvFile(
+        envConfig.values,
+        extras: envConfig.commented,
       );
 
-      if (totalCopied == 0) {
-        logger.info(
-          'No files copied from ${_relative(projectRoot, stubsDir)}.',
-        );
-      } else {
-        logger.info(
-          'Copied $totalCopied file(s) from ${_relative(projectRoot, stubsDir)}.',
-        );
+      final envPath = fileSystem.file(joinPath([projectRoot.path, '.env']));
+      if (force || !await envPath.exists()) {
+        await writeTextFile(envPath, envContents);
+        logger.info('Created ${_relative(projectRoot, envPath)}');
+      }
+
+      final envExamplePath = fileSystem.file(
+        joinPath([projectRoot.path, '.env.example']),
+      );
+      if (force || !await envExamplePath.exists()) {
+        await writeTextFile(envExamplePath, envContents);
+        logger.info('Created ${_relative(projectRoot, envExamplePath)}');
       }
     });
   }
@@ -538,7 +486,7 @@ class ConfigCacheCommand extends BaseCommand {
       }
 
       final envPath = joinPath([projectRoot.path, '.env']);
-      final options = ConfigLoaderOptions(
+      final baseOptions = ConfigLoaderOptions(
         defaults: const {
           'app': {'name': 'Routed App', 'env': 'development', 'debug': true},
         },
@@ -550,7 +498,16 @@ class ConfigCacheCommand extends BaseCommand {
       );
 
       final loader = ConfigLoader(fileSystem: fileSystem);
-      final snapshot = loader.load(options);
+
+      // Load with full expansion for JSON cache (tooling, backwards compat).
+      final snapshot = loader.load(baseOptions);
+
+      // Load again with env templates preserved for the Dart cache so that
+      // {{ env.* }} placeholders survive into the generated const map and
+      // can be resolved at runtime via ConfigLoader.renderDefaults.
+      final rawSnapshot = loader.load(
+        baseOptions.copyWith(resolveEnvTemplates: false),
+      );
 
       final outputPath = joinPath([
         projectRoot.path,
@@ -568,7 +525,7 @@ class ConfigCacheCommand extends BaseCommand {
       ]);
 
       final dartOutput = fileSystem.file(outputPath);
-      await _writeDartCache(dartOutput, snapshot);
+      await _writeDartCache(dartOutput, rawSnapshot);
 
       final jsonOutput = fileSystem.file(jsonOutputPath);
       await _writeJsonCache(jsonOutput, snapshot, pretty: pretty);
@@ -653,85 +610,63 @@ class ConfigClearCommand extends BaseCommand {
   }
 }
 
-Future<fs.Directory?> _resolveStubsDirectory(
-  fs.Directory packageRoot,
-  String? tag,
-) async {
-  final fsInstance = packageRoot.fileSystem;
-  final stubs = fsInstance.directory(
-    fsInstance.path.join(packageRoot.path, 'config', 'stubs'),
-  );
-  if (!await stubs.exists()) {
-    return null;
+Set<String> _parseSelectionValues(Iterable<String> rawValues) {
+  final selection = <String>{};
+  for (final raw in rawValues) {
+    final parts = raw.split(',');
+    for (final part in parts) {
+      final normalized = _normalizeConfigKey(part);
+      if (normalized.isNotEmpty) {
+        selection.add(normalized);
+      }
+    }
   }
-  if (tag == null) {
-    return stubs;
-  }
-  final tagDir = fsInstance.directory(fsInstance.path.join(stubs.path, tag));
-  return await tagDir.exists() ? tagDir : stubs;
+  return selection;
 }
 
-Future<fs.Directory?> _resolvePackageRoot(
-  fs.Directory projectRoot,
-  String packageName,
-) async {
-  final fsInstance = projectRoot.fileSystem;
-  final packageConfig = fsInstance.file(
-    p.join(projectRoot.path, '.dart_tool', 'package_config.json'),
-  );
-  if (!await packageConfig.exists()) {
-    return null;
+String _normalizeConfigKey(String value) {
+  var normalized = value.trim();
+  if (normalized.isEmpty) return '';
+  normalized = normalized.replaceAll('\\', '/');
+  if (normalized.startsWith('config/')) {
+    normalized = normalized.substring('config/'.length);
   }
-
-  final decoded = jsonDecode(await packageConfig.readAsString());
-  if (decoded is! Map) return null;
-  final packages = decoded['packages'];
-  if (packages is! List) return null;
-
-  for (final entry in packages) {
-    if (entry is! Map) continue;
-    if (entry['name'] != packageName) continue;
-    final rootUri = entry['rootUri'];
-    if (rootUri is! String) continue;
-    final uri = Uri.parse(rootUri);
-    String path;
-    if (uri.hasScheme) {
-      path = fsInstance.path.fromUri(uri);
-    } else {
-      path = fsInstance.path.normalize(
-        fsInstance.path.join(packageConfig.parent.path, rootUri),
-      );
-    }
-    return fsInstance.directory(path);
+  if (normalized.endsWith('.yaml')) {
+    normalized = normalized.substring(0, normalized.length - 5);
+  } else if (normalized.endsWith('.yml')) {
+    normalized = normalized.substring(0, normalized.length - 4);
   }
-  return null;
+  return normalized.toLowerCase();
 }
 
-Future<int> _copyDirectory({
-  required fs.Directory source,
-  required fs.Directory destination,
-  required fs.Directory projectRoot,
-  required bool force,
-  required fs.FileSystem fileSystem,
-}) async {
-  var count = 0;
-
-  await for (final entity in source.list(recursive: true, followLinks: false)) {
-    if (entity is! fs.File) {
-      continue;
+Map<String, Map<String, dynamic>> _filterDefaultsBySelection(
+  Map<String, Map<String, dynamic>> defaultsByRoot,
+  Set<String> selection,
+) {
+  if (selection.isEmpty) return defaultsByRoot;
+  final filtered = <String, Map<String, dynamic>>{};
+  for (final entry in defaultsByRoot.entries) {
+    final key = _normalizeConfigKey(entry.key);
+    if (selection.contains(key)) {
+      filtered[entry.key] = entry.value;
     }
-    final relative = fileSystem.path.relative(entity.path, from: source.path);
-    final target = fileSystem.file(
-      fileSystem.path.join(destination.path, relative),
-    );
-    if (!force && await target.exists()) {
-      continue;
-    }
-    await target.parent.create(recursive: true);
-    await entity.copy(target.path);
-    count++;
   }
-  return count;
+  return filtered;
+}
+
+Map<String, List<ConfigDocEntry>> _filterDocsBySelection(
+  Map<String, List<ConfigDocEntry>> docsByRoot,
+  Set<String> selection,
+) {
+  if (selection.isEmpty) return docsByRoot;
+  final filtered = <String, List<ConfigDocEntry>>{};
+  for (final entry in docsByRoot.entries) {
+    final key = _normalizeConfigKey(entry.key);
+    if (selection.contains(key)) {
+      filtered[entry.key] = entry.value;
+    }
+  }
+  return filtered;
 }
 
 Future<void> _writeJsonCache(
@@ -753,13 +688,31 @@ Future<void> _writeDartCache(fs.File file, ConfigSnapshot snapshot) async {
     ..writeln('// GENERATED CODE - DO NOT MODIFY BY HAND.')
     ..writeln('// Environment: ${snapshot.environment}')
     ..writeln()
+    ..writeln("import 'package:routed/routed.dart';")
+    ..writeln()
     ..writeln(
       'const String routedConfigEnvironment = '
       "'${_escapeString(snapshot.environment)}';",
     )
     ..writeln('const Map<String, dynamic> routedConfig = <String, dynamic>{');
   _writeMapLiteral(buffer, snapshot.config.all(), 1);
-  buffer.writeln('};');
+  buffer
+    ..writeln('};')
+    ..writeln()
+    ..writeln('/// Resolves any `{{ env.* }}` placeholders left in')
+    ..writeln('/// [routedConfig] using the current process environment and')
+    ..writeln('/// returns a ready-to-use [ConfigSnapshot].')
+    ..writeln('ConfigSnapshot resolveRoutedConfig() {')
+    ..writeln('  final loader = ConfigLoader();')
+    ..writeln('  final context = buildEnvTemplateContext();')
+    ..writeln(
+      '  final resolved = loader.renderDefaults(routedConfig, context);',
+    )
+    ..writeln('  return ConfigSnapshot(')
+    ..writeln('    config: ConfigImpl(resolved),')
+    ..writeln('    environment: routedConfigEnvironment,')
+    ..writeln('  );')
+    ..writeln('}');
 
   await file.writeAsString(buffer.toString());
 }

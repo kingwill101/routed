@@ -1,209 +1,71 @@
-import 'package:artisanal/args.dart';
-import 'package:routed/console.dart';
+import 'package:args/command_runner.dart';
+import 'package:file/file.dart' as fs;
+import 'package:file/memory.dart';
+import 'package:routed/console.dart' show CliLogger;
+import 'package:routed/src/console/args/commands/provider.dart';
+import 'package:routed/src/console/args/runner.dart';
 import 'package:test/test.dart';
 
-class _DemoCommand extends Command<void> {
-  @override
-  String get name => 'demo:run';
-
-  @override
-  String get description => 'Runs a demo command.';
-}
-
-class _ConflictCommand extends Command<void> {
-  @override
-  String get name => 'dev';
-
-  @override
-  String get description => 'Conflicts with built-in dev.';
-}
-
-class _NamedCommand extends Command<void> {
-  _NamedCommand(this._name, {List<String> aliases = const []})
-    : _aliases = List<String>.from(aliases);
-
-  final String _name;
-  final List<String> _aliases;
-
-  @override
-  String get name => _name;
-
-  @override
-  List<String> get aliases => _aliases;
-
-  @override
-  String get description => 'Named command $_name.';
-}
-
-class _ArtisanalCommand extends Command<void> {
-  @override
-  String get name => 'artisan:run';
-
-  @override
-  String get description => 'Runs an artisanal command.';
-}
-
 void main() {
-  test('registerProviderCommands adds provider commands to runner', () {
-    final registry = ProviderCommandRegistry.instance;
-    registry.register('demo', factory: () => _DemoCommand());
-    addTearDown(() => registry.unregister('demo'));
+  group('Provider commands', () {
+    late MemoryFileSystem memoryFs;
+    late fs.Directory projectRoot;
+    late RoutedCommandRunner runner;
+    late _RecordingLogger logger;
 
-    final runner = CommandRunner<void>('routed', 'desc');
+    void writeFile(String relativePath, String contents) {
+      final file = memoryFs.file(
+        memoryFs.path.join(projectRoot.path, relativePath),
+      );
+      file.parent.createSync(recursive: true);
+      file.writeAsStringSync(contents);
+    }
 
-    registerProviderCommands(runner, registry.registrations, runner.usage);
+    setUp(() {
+      memoryFs = MemoryFileSystem();
+      projectRoot = memoryFs.directory('/workspace/project')
+        ..createSync(recursive: true);
+      memoryFs.currentDirectory = projectRoot;
 
-    expect(runner.commands.containsKey('demo:run'), isTrue);
-  });
+      writeFile('pubspec.yaml', 'name: demo\n');
+      writeFile('config/http.yaml', '''providers:
+  - routed.logging
+  - routed.cache
+''');
 
-  test('registerProviderCommands detects name conflicts', () {
-    final registry = ProviderCommandRegistry.instance;
-    registry.register('conflict', factory: () => _ConflictCommand());
-    addTearDown(() => registry.unregister('conflict'));
-
-    final runner = CommandRunner<void>('routed', 'desc');
-    runner.addCommand(_ConflictCommand());
-
-    expect(
-      () => registerProviderCommands(
-        runner,
-        registry.registrations,
-        runner.usage,
-      ),
-      throwsA(isA<UsageException>()),
-    );
-  });
-
-  test('registerProviderCommands detects alias conflicts', () {
-    final registry = ProviderCommandRegistry.instance;
-    registry.register('alias-conflict', factory: () => _NamedCommand('ship'));
-    addTearDown(() => registry.unregister('alias-conflict'));
-
-    final runner = CommandRunner<void>('routed', 'desc')
-      ..addCommand(_NamedCommand('existing:cmd', aliases: ['ship']));
-
-    expect(
-      () => registerProviderCommands(
-        runner,
-        registry.registrations,
-        runner.usage,
-      ),
-      throwsA(isA<UsageException>()),
-    );
-  });
-
-  test('registerProviderCommands detects alias collisions from providers', () {
-    final registry = ProviderCommandRegistry.instance;
-    registry.register(
-      'alias-provider',
-      factory: () => _NamedCommand('maintenance:run', aliases: ['deploy']),
-    );
-    addTearDown(() => registry.unregister('alias-provider'));
-
-    final runner = CommandRunner<void>('routed', 'desc')
-      ..addCommand(_NamedCommand('deploy'));
-
-    expect(
-      () => registerProviderCommands(
-        runner,
-        registry.registrations,
-        runner.usage,
-      ),
-      throwsA(isA<UsageException>()),
-    );
-  });
-
-  test('registerProviderCommands throws when factory fails', () {
-    final registry = ProviderCommandRegistry.instance;
-    registry.register('factory-fails', factory: () => throw StateError('boom'));
-    addTearDown(() => registry.unregister('factory-fails'));
-
-    final runner = CommandRunner<void>('routed', 'desc');
-
-    expect(
-      () => registerProviderCommands(
-        runner,
-        registry.registrations,
-        runner.usage,
-      ),
-      throwsA(
-        isA<UsageException>().having(
-          (error) => error.message,
-          'message',
-          contains('Failed to load provider command'),
-        ),
-      ),
-    );
-  });
-
-  test('registerProviderCommands detects provider-to-provider conflicts', () {
-    final registry = ProviderCommandRegistry.instance;
-    registry.register(
-      'first',
-      factory: () => _NamedCommand('alpha', aliases: ['shared']),
-    );
-    registry.register('second', factory: () => _NamedCommand('shared'));
-    addTearDown(() {
-      registry.unregister('first');
-      registry.unregister('second');
+      logger = _RecordingLogger();
+      runner = RoutedCommandRunner(logger: logger)
+        ..register([ProviderListCommand(logger: logger, fileSystem: memoryFs)]);
     });
 
-    final runner = CommandRunner<void>('routed', 'desc');
+    test('provider:list filters by id', () async {
+      await runner.run(['provider:list', 'routed.logging', '--config']);
 
-    expect(
-      () => registerProviderCommands(
-        runner,
-        registry.registrations,
-        runner.usage,
-      ),
-      throwsA(isA<UsageException>()),
-    );
-  });
+      expect(_hasProviderLine(logger, 'routed.logging'), isTrue);
+      expect(_hasProviderLine(logger, 'routed.cache'), isFalse);
+    });
 
-  test('provider registry honors overrideExisting flag', () {
-    final registry = ProviderCommandRegistry.instance;
-    registry.register('override', factory: () => _DemoCommand());
-    addTearDown(() => registry.unregister('override'));
-
-    final didOverride = registry.register(
-      'override',
-      factory: () => _ConflictCommand(),
-      overrideExisting: false,
-    );
-
-    expect(didOverride, isFalse);
-    final registration = registry.registrations.firstWhere(
-      (entry) => entry.id == 'override',
-    );
-    expect(registration.factory(), isA<_DemoCommand>());
-  });
-
-  test('artisanal command registry tracks registrations', () {
-    final registry = ProviderArtisanalCommandRegistry.instance;
-    registry.register('artisan', factory: () => _ArtisanalCommand());
-    addTearDown(() => registry.unregister('artisan'));
-
-    final registrations = registry.registrations.toList();
-    expect(registrations, hasLength(1));
-    expect(registrations.first.id, equals('artisan'));
-  });
-
-  test(
-    'registerProviderArtisanalCommands adds provider commands to runner',
-    () {
-      final registry = ProviderArtisanalCommandRegistry.instance;
-      registry.register('artisan', factory: () => _ArtisanalCommand());
-      addTearDown(() => registry.unregister('artisan'));
-
-      final runner = CommandRunner<void>('routed', 'desc');
-
-      registerProviderArtisanalCommands(
-        runner,
-        registry.registrations,
-        runner.usage,
+    test('provider:list rejects unknown ids', () async {
+      await expectLater(
+        runner.run(['provider:list', 'routed.unknown']),
+        throwsA(isA<UsageException>()),
       );
+    });
+  });
+}
 
-      expect(runner.commands.containsKey('artisan:run'), isTrue);
-    },
-  );
+bool _hasProviderLine(_RecordingLogger logger, String id) {
+  return logger.infos.any((line) => line.startsWith(id));
+}
+
+class _RecordingLogger extends CliLogger {
+  _RecordingLogger() : super(verbose: true);
+
+  final List<String> infos = [];
+
+  @override
+  void info(Object? message) {
+    super.info(message);
+    infos.add(message.toString());
+  }
 }

@@ -31,6 +31,14 @@ class ProviderListCommand extends BaseCommand {
   Future<void> run() async {
     return guarded(() async {
       final showConfig = (results?['config'] as bool? ?? false) || verbose;
+      final rest = results?.rest ?? const <String>[];
+      if (rest.length > 1) {
+        throw UsageException('Specify at most one provider id.', usage);
+      }
+      final filterId = rest.isEmpty ? null : rest.first;
+      if (filterId != null && !ProviderRegistry.instance.has(filterId)) {
+        throw UsageException('Provider "$filterId" is not registered.', usage);
+      }
       final projectRoot = await findProjectRoot();
       if (projectRoot == null) {
         throw UsageException('Not a Routed project.', usage);
@@ -41,6 +49,9 @@ class ProviderListCommand extends BaseCommand {
 
       logger.info('Provider Manifest');
       for (final registration in ProviderRegistry.instance.registrations) {
+        if (filterId != null && registration.id != filterId) {
+          continue;
+        }
         final enabled = active.contains(registration.id) ? 'yes' : 'no';
         ServiceProvider provider;
         try {
@@ -102,7 +113,7 @@ class ProviderListCommand extends BaseCommand {
       final unknown = active
           .where((id) => !ProviderRegistry.instance.has(id))
           .toList();
-      if (unknown.isNotEmpty) {
+      if (filterId == null && unknown.isNotEmpty) {
         logger.warn('Unknown providers: ${unknown.join(', ')}');
       }
     });

@@ -161,6 +161,153 @@ mounts:
       expect(first['path'], equals('public/assets'));
     });
 
+    test('resolveEnvTemplates false preserves env placeholders in YAML', () {
+      final fs = MemoryFileSystem.test();
+      fs.file('.env')
+        ..createSync(recursive: true)
+        ..writeAsStringSync('APP_NAME=FromEnv');
+      fs.directory('config').createSync();
+      fs.file('config/app.yaml')
+        ..createSync()
+        ..writeAsStringSync(
+          'name: "{{ env.APP_NAME | default: \'My App\' }}"\n'
+          'debug: {{ env.APP_DEBUG | default: true }}\n',
+        );
+
+      final loader = ConfigLoader(fileSystem: fs);
+      final options = ConfigLoaderOptions(
+        configDirectory: 'config',
+        envFiles: ['.env'],
+        fileSystem: fs,
+        resolveEnvTemplates: false,
+      );
+
+      final snapshot = loader.load(options);
+      // The env templates should survive as raw strings.
+      expect(
+        snapshot.config.get<String>('app.name'),
+        equals("{{ env.APP_NAME | default: 'My App' }}"),
+      );
+      expect(
+        snapshot.config.get<String>('app.debug'),
+        equals('{{ env.APP_DEBUG | default: true }}'),
+      );
+    });
+
+    test('resolveEnvTemplates false still expands non-env templates', () {
+      final fs = MemoryFileSystem.test();
+      fs.file('.env')
+        ..createSync(recursive: true)
+        ..writeAsStringSync('MAIL__HOST=smtp.test');
+      fs.directory('config').createSync();
+      fs.file('config/mail.yaml')
+        ..createSync()
+        ..writeAsStringSync(
+          'host: "{{ mail.host | default: \'localhost\' }}"\n'
+          'from: "{{ env.MAIL_FROM | default: \'a@b.c\' }}"\n',
+        );
+
+      final loader = ConfigLoader(fileSystem: fs);
+      final options = ConfigLoaderOptions(
+        configDirectory: 'config',
+        envFiles: ['.env'],
+        fileSystem: fs,
+        resolveEnvTemplates: false,
+      );
+
+      final snapshot = loader.load(options);
+      // Non-env template should be expanded using the template context.
+      expect(snapshot.config.get<String>('mail.host'), equals('smtp.test'));
+      // Env template should be preserved.
+      expect(
+        snapshot.config.get<String>('mail.from'),
+        equals("{{ env.MAIL_FROM | default: 'a@b.c' }}"),
+      );
+    });
+
+    test('resolveEnvTemplates false preserves env refs in defaults map', () {
+      final fs = MemoryFileSystem.test();
+      final loader = ConfigLoader(fileSystem: fs);
+      final options = ConfigLoaderOptions(
+        defaults: const {
+          'storage': {
+            'root': "{{ env.STORAGE_ROOT | default: 'storage/app' }}",
+          },
+        },
+        fileSystem: fs,
+        envFiles: const [],
+        resolveEnvTemplates: false,
+      );
+
+      final snapshot = loader.load(options);
+      expect(
+        snapshot.config.get<String>('storage.root'),
+        equals("{{ env.STORAGE_ROOT | default: 'storage/app' }}"),
+      );
+    });
+
+    test(
+      'resolveEnvTemplates false placeholders resolve via renderDefaults',
+      () {
+        final fs = MemoryFileSystem.test();
+        fs.directory('config').createSync();
+        fs.file('config/app.yaml')
+          ..createSync()
+          ..writeAsStringSync(
+            'name: "{{ env.APP_NAME | default: \'Fallback\' }}"\n',
+          );
+
+        final loader = ConfigLoader(fileSystem: fs);
+        final raw = loader.load(
+          ConfigLoaderOptions(
+            configDirectory: 'config',
+            envFiles: const [],
+            fileSystem: fs,
+            resolveEnvTemplates: false,
+          ),
+        );
+
+        // The raw snapshot has the placeholder.
+        expect(
+          raw.config.get<String>('app.name'),
+          equals("{{ env.APP_NAME | default: 'Fallback' }}"),
+        );
+
+        // Resolving via renderDefaults with an env context should expand it.
+        final ctx = buildEnvTemplateContext();
+        final resolved = loader.renderDefaults(raw.config.all(), ctx);
+        final appMap = resolved['app'] as Map<String, dynamic>;
+        // The default kicks in when the env var is absent.
+        expect(appMap['name'], isA<String>());
+        expect((appMap['name'] as String).length, greaterThan(0));
+      },
+    );
+
+    test('resolveEnvTemplates false handles interpolated env strings', () {
+      final fs = MemoryFileSystem.test();
+      fs.directory('config').createSync();
+      fs.file('config/app.yaml')
+        ..createSync()
+        ..writeAsStringSync(
+          'greeting: "Hello {{ env.USER_NAME | default: \'world\' }}!"\n',
+        );
+
+      final loader = ConfigLoader(fileSystem: fs);
+      final snapshot = loader.load(
+        ConfigLoaderOptions(
+          configDirectory: 'config',
+          envFiles: const [],
+          fileSystem: fs,
+          resolveEnvTemplates: false,
+        ),
+      );
+
+      expect(
+        snapshot.config.get<String>('app.greeting'),
+        equals("Hello {{ env.USER_NAME | default: 'world' }}!"),
+      );
+    });
+
     test('renders defaults containing Liquid expressions', () {
       final fs = MemoryFileSystem.test();
       final loader = ConfigLoader(fileSystem: fs);

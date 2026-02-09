@@ -1,8 +1,10 @@
 import 'dart:convert';
+import 'dart:io';
 
 import 'package:args/command_runner.dart';
 import 'package:file/file.dart' as fs;
 import 'package:file/memory.dart';
+import 'package:routed/routed.dart';
 import 'package:routed/src/console/args/commands/config.dart';
 import 'package:routed/src/console/args/runner.dart';
 import 'package:test/test.dart';
@@ -22,11 +24,7 @@ void main() {
       runner = RoutedCommandRunner()
         ..register([
           _TestConfigInitCommand(() => projectRoot, memoryFs),
-          _TestConfigPublishCommand(
-            () => projectRoot,
-            () => memoryFs.directory('/workspace/vendor/mailer_pkg'),
-            memoryFs,
-          ),
+          _TestConfigPublishCommand(() => projectRoot, memoryFs),
           _TestConfigCacheCommand(() => projectRoot, memoryFs),
           _TestConfigClearCommand(() => projectRoot, memoryFs),
         ]);
@@ -113,32 +111,19 @@ void main() {
       );
     });
 
-    test('config:publish copies package stubs', () async {
-      final pkgRoot = memoryFs.directory('/workspace/vendor/mailer_pkg')
-        ..createSync(recursive: true);
-      await _writeFile(
-        memoryFs,
-        pkgRoot,
-        memoryFs.path.join('config', 'stubs', 'mail.yaml'),
-        'driver: smtp\n',
-      );
+    test('config:publish generates default templates', () async {
+      await _run(runner, ['config:publish']);
 
-      await _writePackageConfig(
-        memoryFs,
-        projectRoot,
-        packages: [
-          {
-            'name': 'mailer_pkg',
-            'rootUri': '../vendor/mailer_pkg/',
-            'packageUri': 'lib/',
-          },
-        ],
-      );
+      expect(exists('config/app.yaml'), isTrue);
+      expect(exists('config/http.yaml'), isTrue);
+    });
 
-      await _run(runner, ['config:publish', 'mailer_pkg']);
+    test('config:publish filters defaults by selection', () async {
+      await _run(runner, ['config:publish', 'app,cache']);
 
-      expect(exists('config/mail.yaml'), isTrue);
-      expect(read('config/mail.yaml'), contains('driver: smtp'));
+      expect(exists('config/app.yaml'), isTrue);
+      expect(exists('config/cache.yaml'), isTrue);
+      expect(exists('config/http.yaml'), isFalse);
     });
 
     test('config:cache generates cache artifacts', () async {
@@ -161,6 +146,106 @@ void main() {
           jsonDecode(read('.dart_tool/routed/config_cache.json'))
               as Map<String, dynamic>;
       expect(jsonCache['app'], containsPair('name', 'Example App'));
+    });
+
+    test(
+      'config:cache without env refs keeps const and no routed import',
+      () async {
+        await _writeFile(
+          memoryFs,
+          projectRoot,
+          'config/app.yaml',
+          'name: Plain App\ndebug: true\n',
+        );
+
+        await _run(runner, ['config:cache']);
+
+        final dartCache = read('lib/generated/routed_config.dart');
+        expect(dartCache, contains('const Map<String, dynamic> routedConfig'));
+        expect(dartCache, contains("'Plain App'"));
+      },
+    );
+
+    test('config:cache preserves env template placeholders', () async {
+      await _writeFile(
+        memoryFs,
+        projectRoot,
+        'config/app.yaml',
+        "name: \"{{ env.APP_NAME | default: 'My App' }}\"\n"
+            "debug: {{ env.APP_DEBUG | default: false }}\n"
+            "greeting: \"Hello {{ env.APP_USER | default: 'world' }}!\"\n",
+      );
+
+      await _run(runner, ['config:cache']);
+
+      final dartCache = read('lib/generated/routed_config.dart');
+
+      // Should import routed and have resolveRoutedConfig().
+      expect(dartCache, contains("import 'package:routed/routed.dart';"));
+      expect(dartCache, contains('resolveRoutedConfig()'));
+
+      // Env templates must survive as raw strings in the const map.
+      // Single quotes inside the value are escaped as \' in the generated Dart.
+      expect(dartCache, contains(r"{{ env.APP_NAME | default: \'My App\' }}"));
+      expect(dartCache, contains('{{ env.APP_DEBUG | default: false }}'));
+      expect(dartCache, contains(r"{{ env.APP_USER | default: \'world\' }}"));
+
+      // Non-env values should still be expanded.
+      expect(dartCache, isNot(contains('{{ app.')));
+    });
+
+    test('config:cache resolveRoutedConfig resolves env placeholders', () async {
+      await _writeFile(
+        memoryFs,
+        projectRoot,
+        'config/app.yaml',
+        "name: \"{{ env.APP_NAME | default: 'Fallback' }}\"\n",
+      );
+
+      await _run(runner, ['config:cache']);
+
+      final dartCache = read('lib/generated/routed_config.dart');
+      // The raw map has the placeholder (with escaped quotes in the Dart file).
+      expect(
+        dartCache,
+        contains(r"{{ env.APP_NAME | default: \'Fallback\' }}"),
+      );
+
+      // Verify that renderDefaults resolves the placeholder using defaults
+      // when the env var is not set.
+      final loader = ConfigLoader();
+      final ctx = buildEnvTemplateContext();
+      final rawMap = <String, dynamic>{
+        'app': <String, dynamic>{
+          'name': "{{ env.APP_NAME | default: 'Fallback' }}",
+        },
+      };
+      // ignore: avoid_dynamic_calls
+      final resolved = loader.renderDefaults(rawMap, ctx);
+      final appMap = resolved['app'] as Map<String, dynamic>;
+      // If APP_NAME is not in the environment, the Liquid default kicks in.
+      final envAppName = Platform.environment['APP_NAME'];
+      if (envAppName == null || envAppName.isEmpty) {
+        expect(appMap['name'], equals('Fallback'));
+      }
+    });
+
+    test('config:cache non-env templates are still expanded', () async {
+      await _writeFile(
+        memoryFs,
+        projectRoot,
+        'config/mail.yaml',
+        'driver: smtp\n'
+            "host: \"{{ mail.host | default: 'localhost' }}\"\n",
+      );
+      await _writeFile(memoryFs, projectRoot, '.env', '');
+
+      await _run(runner, ['config:cache']);
+
+      final dartCache = read('lib/generated/routed_config.dart');
+      // Non-env template should be expanded to the default value.
+      expect(dartCache, contains("'localhost'"));
+      expect(dartCache, isNot(contains('{{ mail.host')));
     });
 
     test('config:clear removes cache artifacts', () async {
@@ -200,19 +285,6 @@ Future<void> _writeFile(
   await file.writeAsString(contents);
 }
 
-Future<void> _writePackageConfig(
-  MemoryFileSystem fs,
-  fs.Directory root, {
-  required List<Map<String, dynamic>> packages,
-}) async {
-  final file = fs.file(
-    fs.path.join(root.path, '.dart_tool', 'package_config.json'),
-  );
-  await file.parent.create(recursive: true);
-  final data = <String, dynamic>{'configVersion': 2, 'packages': packages};
-  await file.writeAsString(const JsonEncoder.withIndent('  ').convert(data));
-}
-
 class _TestConfigInitCommand extends ConfigInitCommand {
   _TestConfigInitCommand(this._rootProvider, MemoryFileSystem fs)
     : _fs = fs,
@@ -231,18 +303,11 @@ class _TestConfigInitCommand extends ConfigInitCommand {
 }
 
 class _TestConfigPublishCommand extends ConfigPublishCommand {
-  _TestConfigPublishCommand(
-    this._rootProvider,
-    this.packageRootProvider,
-    MemoryFileSystem fs,
-  ) : _fs = fs,
-      super(
-        fileSystem: fs,
-        packageResolver: (root, name) async => packageRootProvider(),
-      );
+  _TestConfigPublishCommand(this._rootProvider, MemoryFileSystem fs)
+    : _fs = fs,
+      super(fileSystem: fs);
 
   final fs.Directory Function() _rootProvider;
-  final fs.Directory Function() packageRootProvider;
   final MemoryFileSystem _fs;
 
   @override

@@ -20,6 +20,16 @@ class ConfigLoaderOptions {
   final bool includeEnvironmentSubdirectory;
   final FileSystem? fileSystem;
 
+  /// When `false`, Liquid template expressions that reference `env.*` variables
+  /// (e.g. `{{ env.APP_NAME | default: 'MyApp' }}`) are preserved as raw
+  /// strings instead of being expanded.  All other template expressions are
+  /// still rendered normally.
+  ///
+  /// This is used by `config:cache` so the generated Dart file keeps
+  /// placeholders that can be resolved at runtime via
+  /// [ConfigLoader.renderDefaults].
+  final bool resolveEnvTemplates;
+
   const ConfigLoaderOptions({
     this.defaults = const <String, dynamic>{},
     this.configDirectory = 'config',
@@ -30,6 +40,7 @@ class ConfigLoaderOptions {
     this.environment,
     this.includeEnvironmentSubdirectory = true,
     this.fileSystem,
+    this.resolveEnvTemplates = true,
   });
 
   ConfigLoaderOptions copyWith({
@@ -42,6 +53,7 @@ class ConfigLoaderOptions {
     String? environment,
     bool? includeEnvironmentSubdirectory,
     FileSystem? fileSystem,
+    bool? resolveEnvTemplates,
   }) {
     return ConfigLoaderOptions(
       defaults: defaults ?? this.defaults,
@@ -54,8 +66,12 @@ class ConfigLoaderOptions {
       includeEnvironmentSubdirectory:
           includeEnvironmentSubdirectory ?? this.includeEnvironmentSubdirectory,
       fileSystem: fileSystem ?? this.fileSystem,
+      resolveEnvTemplates: resolveEnvTemplates ?? this.resolveEnvTemplates,
     );
   }
+
+  /// Pattern matching `{{ env.XXXX ... }}` Liquid expressions.
+  static final envPlaceholderPattern = RegExp(r'\{\{-?\s*env\.\w+[^}]*-?\}\}');
 
   FileSystem get resolvedFileSystem =>
       fileSystem ?? const local.LocalFileSystem();
@@ -103,6 +119,7 @@ class ConfigLoader {
     final pathContext = fs.path;
     final config = ConfigImpl();
     final envVariables = <String, String>{};
+    final resolveEnv = options.resolveEnvTemplates;
 
     final configRoot = _resolveConfigRoot(fs, options, pathContext);
 
@@ -156,7 +173,11 @@ class ConfigLoader {
       });
     }
 
-    final renderedDefaults = renderDefaults(options.defaults, templateContext);
+    final renderedDefaults = renderDefaults(
+      options.defaults,
+      templateContext,
+      resolveEnvTemplates: resolveEnv,
+    );
     if (renderedDefaults.isNotEmpty) {
       config.mergeDefaults(renderedDefaults);
     }
@@ -171,6 +192,7 @@ class ConfigLoader {
       environment: environment,
       templateContext: templateContext,
       pathContext: pathContext,
+      resolveEnvTemplates: resolveEnv,
     );
 
     if (overrides != null && overrides.isNotEmpty) {
@@ -201,18 +223,24 @@ class ConfigLoader {
 
   Map<String, dynamic> renderDefaults(
     Map<String, dynamic> defaults,
-    Map<String, dynamic> templateContext,
-  ) {
+    Map<String, dynamic> templateContext, {
+    bool resolveEnvTemplates = true,
+  }) {
     if (defaults.isEmpty) {
       return const <String, dynamic>{};
     }
-    return _renderDefaultsWithContext(defaults, templateContext);
+    return _renderDefaultsWithContext(
+      defaults,
+      templateContext,
+      resolveEnvTemplates: resolveEnvTemplates,
+    );
   }
 
   Map<String, dynamic> _renderDefaultsWithContext(
     Map<String, dynamic> defaults,
-    Map<String, dynamic> context,
-  ) {
+    Map<String, dynamic> context, {
+    bool resolveEnvTemplates = true,
+  }) {
     if (defaults.isEmpty) {
       return const <String, dynamic>{};
     }
@@ -223,6 +251,7 @@ class ConfigLoader {
         value,
         context,
         origin: 'defaults.$keyStr',
+        resolveEnvTemplates: resolveEnvTemplates,
       );
     });
     return result;
@@ -232,6 +261,7 @@ class ConfigLoader {
     Object? value,
     Map<String, dynamic> context, {
     required String origin,
+    bool resolveEnvTemplates = true,
   }) {
     if (value is Map) {
       final result = <String, dynamic>{};
@@ -244,6 +274,7 @@ class ConfigLoader {
           inner,
           context,
           origin: '$origin.$keyStr',
+          resolveEnvTemplates: resolveEnvTemplates,
         );
       });
       return result;
@@ -253,13 +284,40 @@ class ConfigLoader {
       var index = 0;
       for (final entry in value) {
         list.add(
-          _renderTemplateNode(entry, context, origin: '$origin[$index]'),
+          _renderTemplateNode(
+            entry,
+            context,
+            origin: '$origin[$index]',
+            resolveEnvTemplates: resolveEnvTemplates,
+          ),
         );
         index++;
       }
       return list;
     }
     if (value is String && value.contains('{{')) {
+      // For individual values (not file content), we can safely preserve
+      // {{ env.* }} in-place: swap → render → restore.
+      if (!resolveEnvTemplates) {
+        final preserved = <String, String>{};
+        var idx = 0;
+        var swapped = value.replaceAllMapped(
+          ConfigLoaderOptions.envPlaceholderPattern,
+          (m) {
+            final key = '__ROUTED_ENV_PRESERVE_${idx}__';
+            preserved[key] = m.group(0)!;
+            idx++;
+            return key;
+          },
+        );
+        if (preserved.isNotEmpty) {
+          swapped = _renderTemplate(swapped, context, origin);
+          preserved.forEach((key, original) {
+            swapped = swapped.replaceAll(key, original);
+          });
+          return swapped;
+        }
+      }
       return _renderTemplate(value, context, origin);
     }
     return deepCopyValue(value);
@@ -337,9 +395,16 @@ class ConfigLoader {
     required String environment,
     required Map<String, dynamic> templateContext,
     required p.Context pathContext,
+    bool resolveEnvTemplates = true,
   }) {
     final baseDir = fs.directory(options.configDirectory);
-    _mergeDirectory(config, baseDir, templateContext, pathContext);
+    _mergeDirectory(
+      config,
+      baseDir,
+      templateContext,
+      pathContext,
+      resolveEnvTemplates: resolveEnvTemplates,
+    );
 
     if (!options.includeEnvironmentSubdirectory || environment.isEmpty) {
       return;
@@ -348,15 +413,22 @@ class ConfigLoader {
     final envDir = fs.directory(
       pathContext.join(options.configDirectory, environment),
     );
-    _mergeDirectory(config, envDir, templateContext, pathContext);
+    _mergeDirectory(
+      config,
+      envDir,
+      templateContext,
+      pathContext,
+      resolveEnvTemplates: resolveEnvTemplates,
+    );
   }
 
   void _mergeDirectory(
     ConfigImpl config,
     Directory directory,
     Map<String, dynamic> templateContext,
-    p.Context pathContext,
-  ) {
+    p.Context pathContext, {
+    bool resolveEnvTemplates = true,
+  }) {
     if (!directory.existsSync()) {
       return;
     }
@@ -375,7 +447,12 @@ class ConfigLoader {
 
     for (final file in files) {
       final namespace = pathContext.basenameWithoutExtension(file.path);
-      final content = _parseFile(file, templateContext, pathContext);
+      final content = _parseFile(
+        file,
+        templateContext,
+        pathContext,
+        resolveEnvTemplates: resolveEnvTemplates,
+      );
       if (content == null) continue;
       config.merge({namespace: content});
     }
@@ -384,25 +461,62 @@ class ConfigLoader {
   Map<String, dynamic>? _parseFile(
     File file,
     Map<String, dynamic> templateContext,
-    p.Context pathContext,
-  ) {
+    p.Context pathContext, {
+    bool resolveEnvTemplates = true,
+  }) {
     final ext = pathContext.extension(file.path).toLowerCase();
     try {
       final rawContents = file.readAsStringSync();
-      final contents = _renderTemplate(rawContents, templateContext, file.path);
+
+      // When env expansion is disabled, swap {{ env.* }} expressions with
+      // YAML-safe placeholders BEFORE Liquid rendering so the Liquid engine
+      // doesn't touch them.  We restore the originals AFTER YAML/JSON/TOML
+      // parsing so that `{{` in an unquoted YAML value doesn't break the
+      // parser.
+      Map<String, String>? preserved;
+      var contentsToRender = rawContents;
+      if (!resolveEnvTemplates) {
+        preserved = <String, String>{};
+        var idx = 0;
+        contentsToRender = rawContents.replaceAllMapped(
+          ConfigLoaderOptions.envPlaceholderPattern,
+          (m) {
+            final key = '__ROUTED_ENV_PRESERVE_${idx}__';
+            preserved![key] = m.group(0)!;
+            idx++;
+            return key;
+          },
+        );
+      }
+
+      final contents = _renderTemplate(
+        contentsToRender,
+        templateContext,
+        file.path,
+      );
+      Map<String, dynamic>? parsed;
       switch (ext) {
         case '.json':
           final decoded = jsonDecode(contents);
-          return _coerceToMap(decoded);
+          parsed = _coerceToMap(decoded);
         case '.yaml':
         case '.yml':
           final yaml = loadYaml(contents);
-          return _coerceToMap(yaml);
+          parsed = _coerceToMap(yaml);
         case '.toml':
-          return _parseToml(contents);
+          parsed = _parseToml(contents);
         default:
           return null;
       }
+
+      // Restore original {{ env.* }} expressions in the parsed tree.
+      if (preserved != null && preserved.isNotEmpty && parsed != null) {
+        parsed =
+            _restorePreservedEnvRefs(parsed, preserved)
+                as Map<String, dynamic>?;
+      }
+
+      return parsed;
     } catch (error) {
       if (error is FormatException) {
         rethrow;
@@ -640,6 +754,32 @@ class ConfigLoader {
     }
   }
 
+  /// Recursively walks a parsed config tree and replaces placeholder strings
+  /// with their original `{{ env.* }}` Liquid expressions.
+  static dynamic _restorePreservedEnvRefs(
+    dynamic value,
+    Map<String, String> preserved,
+  ) {
+    if (value is Map) {
+      final result = <String, dynamic>{};
+      value.forEach((key, inner) {
+        result[key.toString()] = _restorePreservedEnvRefs(inner, preserved);
+      });
+      return result;
+    }
+    if (value is Iterable) {
+      return value.map((e) => _restorePreservedEnvRefs(e, preserved)).toList();
+    }
+    if (value is String) {
+      var restored = value;
+      for (final entry in preserved.entries) {
+        restored = restored.replaceAll(entry.key, entry.value);
+      }
+      return restored;
+    }
+    return value;
+  }
+
   Map<String, dynamic> _parseTomlInlineTable(String raw) {
     final result = <String, dynamic>{};
     final inner = raw.substring(1, raw.length - 1).trim();
@@ -781,4 +921,50 @@ class _EnvLoadResult {
     required this.configOverrides,
     required this.environment,
   });
+}
+
+/// Builds a Liquid template context from [Platform.environment] so that
+/// `{{ env.VAR }}` expressions can be resolved at runtime.
+///
+/// This is the same logic used internally by [ConfigLoader.load] and
+/// [CoreServiceProvider] to populate the `env.*` namespace.  It is exposed
+/// as a public API so that generated config caches can call
+/// [ConfigLoader.renderDefaults] with a freshly-built context:
+///
+/// ```dart
+/// final loader = ConfigLoader();
+/// final ctx = buildEnvTemplateContext();
+/// final resolved = loader.renderDefaults(cachedMap, ctx);
+/// ```
+Map<String, dynamic> buildEnvTemplateContext() {
+  final context = <String, dynamic>{};
+
+  void addEntry(String key, String value) {
+    _setNestedValue(context, key, value);
+    _setNestedValue(context, 'env.$key', value);
+    if (key.contains('__')) {
+      final normalized = key.toLowerCase().replaceAll('__', '.');
+      if (normalized != key) {
+        _setNestedValue(context, normalized, value);
+        _setNestedValue(context, 'env.$normalized', value);
+      }
+    }
+  }
+
+  Platform.environment.forEach(addEntry);
+  return context;
+}
+
+/// Sets a value in a nested map using a dotted key path.
+void _setNestedValue(Map<String, dynamic> context, String key, dynamic value) {
+  final parts = key.split('.');
+  var current = context;
+  for (var i = 0; i < parts.length - 1; i++) {
+    final part = parts[i];
+    if (current[part] is! Map) {
+      current[part] = <String, dynamic>{};
+    }
+    current = current[part] as Map<String, dynamic>;
+  }
+  current[parts.last] = value;
 }

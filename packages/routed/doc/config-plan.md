@@ -74,7 +74,7 @@ Milestones (incremental):
 
 5) DX/CLI
     - Implementation
-        - `routed config:publish <package>` copies package stubs into `config/`.
+        - `routed config:publish` generates config stubs in `config/` (use `--only app,cache` or `app,cache` to publish a subset).
         - `routed config:cache` generates a merged Dart file for fast boot and registers it as a service.
         - `routed config:clear` removes cached artifacts.
         - `routed provider:list`, `provider:enable`, `provider:disable` expose manifest state (with `--config` surfacing
