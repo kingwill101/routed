@@ -25,6 +25,8 @@ The loader resolves configuration in the following order:
 
 Later sources always win when keys overlap.
 
+When you publish a trimmed config file (for example via `config:publish app,cache`), any omitted keys continue to resolve from provider defaults. Only keys present in `config/` (or runtime overrides) replace the defaults.
+
 ```dart
 // Inside an async bootstrap function
 final engine = await Engine.create(
@@ -41,6 +43,139 @@ final engine = await Engine.create(
   ],
 );
 ```
+
+## YAML files are optional
+
+You do **not** need a `config/` directory, YAML files, or `.env` files to use Routed's
+configuration system. Both `Engine()` and `Engine.create()` accept a `configItems`
+parameter that is merged directly on top of the framework defaults — no file I/O happens
+at all. This is the simplest way to get started and is perfectly valid for production use:
+
+```dart
+// One-liner — all builtins are included by Engine.create() automatically
+final engine = await Engine.create(
+  configItems: {
+    'app.name': 'My App',
+    'app.env': 'production',
+    'logging.enabled': true,
+    'session.driver': 'cookie',
+    'session.config.app_key': 'base64:abc123...',
+  },
+);
+```
+
+The same works with the synchronous constructor:
+
+```dart
+final engine = Engine(
+  providers: Engine.builtins,
+  configItems: {
+    'app.name': 'My App',
+    'app.env': 'production',
+  },
+);
+await engine.initialize();
+```
+
+Under the hood, `configItems` creates a `CoreServiceProvider` with those values and
+prepends it to the providers list. The engine deduplicates providers by type, so any
+`CoreServiceProvider` in `Engine.builtins` is automatically skipped.
+
+### When you need more control
+
+If you need the file-based loader or a cached config snapshot, construct the
+`CoreServiceProvider` explicitly:
+
+| Constructor | File I/O | Use case |
+| --- | --- | --- |
+| `Engine(configItems: {...})` | None | Inline config only — no YAML, no `.env` |
+| `CoreServiceProvider.withLoader(options)` | Reads `config/` and `.env` | Full loader with file watching, Liquid templates, etc. |
+| `CoreServiceProvider.withCachedConfig(snapshot)` | None | Pre-compiled snapshot from `config:cache` for zero-I/O startup |
+
+All three approaches accept `configItems` as an optional override map that is always
+merged last (highest priority). Even when using the loader, you can pass `configItems` to
+override specific keys without touching any file on disk.
+
+### Dot-notation keys in `configItems`
+
+`configItems` accepts both nested maps and flat **dot-notation** keys. The framework
+automatically expands dotted keys into nested structures, so these two forms are
+equivalent:
+
+```dart
+// Dot notation — flat and concise
+final engine = await Engine.create(
+  configItems: {
+    'jwt.enabled': true,
+    'jwt.secret': 's3cret',
+    'jwt.expiration': 3600,
+    'security.csrf.enabled': false,
+  },
+);
+
+// Nested maps — mirrors the YAML structure
+final engine = await Engine.create(
+  configItems: {
+    'jwt': {
+      'enabled': true,
+      'secret': 's3cret',
+      'expiration': 3600,
+    },
+    'security': {
+      'csrf': {'enabled': false},
+    },
+  },
+);
+```
+
+Dot notation is especially useful when you only need to flip a handful of flags without
+constructing deeply nested maps:
+
+```dart
+final engine = await Engine.create(
+  configItems: {
+    'app.name': 'My API',
+    'app.env': 'production',
+    'app.debug': false,
+    'logging.enabled': true,
+    'logging.level': 'info',
+    'static.enabled': false,
+    'rate_limit.enabled': true,
+  },
+);
+```
+
+:::tip
+When a dotted key and a nested map target the same path, they are deep-merged — not
+overwritten. You can safely combine them in a single `configItems` map.
+:::
+
+### Late overrides with `withConfigItems`
+
+The `withConfigItems` engine option lets you override config values *after* providers
+have registered their defaults. This is handy when you want to combine it with other
+engine options:
+
+```dart
+final engine = Engine(
+  providers: Engine.builtins,
+  options: [
+    withConfigItems({
+      'app.name': 'My App',
+      'logging.level': 'debug',
+    }),
+    withCors(enabled: true),
+    withTrustedProxies(['10.0.0.0/8']),
+  ],
+);
+```
+
+:::note
+The `configItems` constructor parameter and `withConfigItems` option serve different
+timing needs. The constructor parameter is available *during* provider registration
+(before boot), while `withConfigItems` runs *after* all providers have registered but
+*before* boot.
+:::
 
 `Engine.create` constructs an engine with all built-in providers by default,
 boots service providers, and returns the initialized instance. Pass a custom
@@ -75,32 +210,19 @@ final engine = Engine(
 
 If you prefer to skip `.env` parsing entirely, set `loadEnvFiles: false` and rely on defaults or external configuration.
 
-## Provider manifest & CLI tooling
+## Provider features & CLI tooling
 
-Every Routed project ships with a manifest under `config/http.yaml`. Two keys drive the provider system:
+Every Routed project uses `config/http.yaml` to toggle provider-driven features. The engine reads these flags during boot, and the CLI uses the same config to surface defaults and validation errors.
 
 ```yaml title="config/http.yaml"
-providers:
-  - routed.core
-  - routed.routing
-  - routed.cache
-  - routed.sessions
-  - routed.uploads
-  - routed.cors
-  - routed.security
-  - routed.logging
-  - routed.storage
-  - routed.static
-  - routed.localization
-  - routed.views
-http:
-  features:
-    uploads: { enabled: true }
-    cors:    { enabled: false }
-    security: { enabled: true }
+logging:
+  enabled: true
+static:
+  enabled: true
+security:
+  enabled: true
 ```
 
-- `providers` lists the service providers the engine should register during boot. Disable a provider by removing it (or using `dart run routed provider:disable id`).
 - Provider-specific `*.enabled` flags (for example `logging.enabled`, `static.enabled`, `rate_limit.enabled`) control opt-in behaviour so you can toggle middleware without editing code.
 - `http.middleware_sources` (populated by several providers) documents the middleware identifiers they register. Override the arrays when you need to reorder or remove middleware while keeping provider-owned setup logic intact.
 
@@ -112,9 +234,24 @@ Run the CLI to see which providers are active, their descriptions, and the defau
 dart run routed provider:list --config
 ```
 
-The output includes each provider’s `configSource` and the default configuration it publishes. If the manifest includes malformed overrides (wrong types, missing maps, etc.), Routed throws a `ProviderConfigException` and the CLI shows the failing path so you can fix it before starting the server.
+The output includes each provider’s `configSource` and the default configuration it publishes. Add a provider id (for example `dart run routed provider:list routed.logging --config`) to filter to a single provider. If the manifest includes malformed overrides (wrong types, missing maps, etc.), Routed throws a `ProviderConfigException` and the CLI shows the failing path so you can fix it before starting the server.
 
 > **Tip:** Whenever the CLI writes a config file it prepends a short "configuration quick reference" comment. These comments mirror the provider docs (covering key paths, types, and supported options) so you can discover configuration knobs without leaving the file. If you prefer machine-readable metadata, run `dart run routed config:cache --docs` (optionally with `--docs-output path/to/docs.json`) to emit the same information as JSON. That file is ideal for editor tooling, lint rules, or internal dashboards that want to surface config hints.
+
+### Publishing config templates
+
+Use `config:publish` to generate the default templates into `config/`:
+
+```bash
+dart run routed config:publish
+```
+
+To publish only a subset, pass a comma-separated list (or the `--only` flag). The CLI generates only the matching `config/<name>.yaml` files and limits `.env`/`.env.example` entries to the selected roots:
+
+```bash
+dart run routed config:publish app,cache
+dart run routed config:publish --only app,cache
+```
 
 ### Built-in provider catalogue
 
@@ -455,23 +592,21 @@ Bootstrap the engine with the same structure when supplying configuration impera
 
 ```dart
 final engine = Engine(
-  providers: [
-    CoreServiceProvider(configItems: {
-      'storage': {
-        'default': 'app',
-        'disks': {
-          'app': {'driver': 'local', 'root': 'resources'},
-        },
+  providers: Engine.builtins,
+  configItems: {
+    'storage': {
+      'default': 'app',
+      'disks': {
+        'app': {'driver': 'local', 'root': 'resources'},
       },
-      'view': {
-        'engine': 'liquid',
-        'disk': 'app',
-        'directory': 'views',
-        'cache': true,
-      },
-    }),
-    ...Engine.builtins,
-  ],
+    },
+    'view': {
+      'engine': 'liquid',
+      'disk': 'app',
+      'directory': 'views',
+      'cache': true,
+    },
+  },
 );
 await engine.initialize();
 ```
@@ -706,12 +841,12 @@ Swap out Liquid entirely by registering your own `ViewEngine` implementation:
 test('Email provider registers Mailer binding', () async {
   final engine = Engine(
     providers: [
-      CoreServiceProvider(configItems: {
-        'mail': {'default': 'log'},
-      }),
       ...Engine.builtins,
       EmailServiceProvider(),
     ],
+    configItems: {
+      'mail': {'default': 'log'},
+    },
   );
   await engine.initialize();
 
@@ -1032,13 +1167,11 @@ EngineConfig createConfig() {
 
 final engine = Engine(
   config: createConfig(),
-  providers: [
-    CoreServiceProvider(configItems: {
-      'app.env': Platform.environment['APP_ENV'] ?? 'development',
-      'app.debug': Platform.environment['APP_DEBUG'] == 'true'
-    }),
-    ...Engine.builtins,
-  ],
+  providers: Engine.builtins,
+  configItems: {
+    'app.env': Platform.environment['APP_ENV'] ?? 'development',
+    'app.debug': Platform.environment['APP_DEBUG'] == 'true',
+  },
 );
 ```
 
@@ -1081,10 +1214,8 @@ class AppConfig {
 final appConfig = AppConfig.fromEnv();
 final engine = Engine(
   config: appConfig.toEngineConfig(),
-  providers: [
-    CoreServiceProvider(configItems: appConfig.toMap()),
-    ...Engine.builtins,
-  ],
+  providers: Engine.builtins,
+  configItems: appConfig.toMap(),
 );
 ```
 
