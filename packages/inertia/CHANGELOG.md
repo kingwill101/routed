@@ -1,4 +1,4 @@
-## 0.1.2
+## 0.1.1
 
 - Fixed case-sensitive header lookups -- `InertiaHeaderUtils` now performs
   case-insensitive matching via a new `_get()` helper, fixing compatibility
@@ -13,9 +13,6 @@
   `manifestPath` defaults to `client/dist/.vite/manifest.json`, `hotFile` to
   `client/public/hot`, and `entry` examples use `index.html` instead of
   `src/main.jsx`.
-
-## 0.1.1
-
 - Updated docs/examples/tests to import `package:inertia_dart/inertia_dart.dart`.
 - Removed the legacy `inertia.dart` shim entrypoint.
 

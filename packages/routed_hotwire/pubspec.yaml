@@ -19,12 +19,12 @@ environment:
 dependencies:
   intl: ^0.20.2
   crypto: ^3.0.7
-  routed: ^0.3.2
+  routed: ^0.3.3
 
 dev_dependencies:
   contextual: ^2.2.0
   lints: ^6.0.0
   path: ^1.9.1
-  routed_testing: ^0.3.2
+  routed_testing: ^0.3.3
   server_testing: ^0.3.2
   test: ^1.29.0

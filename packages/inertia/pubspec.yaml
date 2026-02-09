@@ -1,6 +1,6 @@
 name: inertia_dart
 description: Dart implementation of Inertia.js protocol
-version: 0.1.0
+version: 0.1.1
 repository: https://github.com/kingwill101/routed_ecosystem/tree/master/packages/inertia
 tags:
   - inertia
