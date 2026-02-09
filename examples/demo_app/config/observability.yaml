@@ -1,0 +1,53 @@
+# Observability configuration quick reference:
+# enabled – Master toggle that enables or disables all observability features. Default: true. Type: boolean
+# errors – Default: {"enabled":false}. Type: object
+# errors.enabled – Enable error observer notifications (reserve for external error trackers). Default: false. Type: boolean
+# health – Health and readiness check settings. Default: {"enabled":true,"readiness_path":"/readyz","liveness_path":"/livez"}. Type: object
+# health.enabled – Enable health and readiness endpoints. Default: true. Type: boolean
+# health.liveness_path – HTTP path exposed for liveness checks. Default: /livez. Type: string
+# health.readiness_path – HTTP path exposed for readiness checks. Default: /readyz. Type: string
+# metrics – Prometheus metrics settings. Default: {"enabled":false,"path":"/metrics","buckets":[0.01,0.05,0.1,0.25,0.5,1.0,2.0,5.0]}. Type: object
+# metrics.buckets – Latency histogram bucket upper bounds (seconds) for routed_request_duration_seconds. Default: [0.01,0.05,0.1,0.25,0.5,1.0,2.0,5.0]. Type: array
+# metrics.enabled – Enable Prometheus-style metrics endpoint. Default: false. Type: boolean
+# metrics.path – Path for metrics exposition. Default: /metrics. Type: string
+# sentry – Sentry SDK settings for error reporting and tracing. Default: {"enabled":false,"send_default_pii":false,"traces_sample_rate":0.0}. Type: object
+# sentry.dsn – Sentry DSN. Env override: SENTRY_DSN Type: string
+# sentry.enabled – Enable Sentry integration. Default: false. Type: boolean
+# sentry.send_default_pii – Send default PII (request headers, IP, etc.). Default: false. Type: boolean
+# sentry.traces_sample_rate – Fraction of transactions to sample for performance monitoring (0.0 - 1.0). Default: 0.0. Type: number
+# tracing – OpenTelemetry tracing settings. Default: {"enabled":false,"service_name":"routed-service","exporter":"none","headers":{}}. Type: object
+# tracing.enabled – Enable OpenTelemetry tracing middleware. Default: false. Type: boolean
+# tracing.endpoint – Collector endpoint used when exporter=otlp (e.g. https://otel/v1/traces). Type: string
+# tracing.exporter – Tracing exporter (none, console, otlp). Default: none. Type: string
+# tracing.headers – Optional headers forwarded to the OTLP collector (authorization, etc.). Default: {}. Type: object
+# tracing.service_name – Logical service.name attribute reported with every span. Default: routed-service. Env override: OBSERVABILITY_TRACING_SERVICE_NAME Type: string
+
+enabled: true
+errors:
+  enabled: false
+health:
+  enabled: true
+  liveness_path: /livez
+  readiness_path: /readyz
+metrics:
+  buckets:
+    - 0.01
+    - 0.05
+    - 0.1
+    - 0.25
+    - 0.5
+    - 1.0
+    - 2.0
+    - 5.0
+  enabled: false
+  path: /metrics
+sentry:
+  enabled: false
+  send_default_pii: false
+  traces_sample_rate: 0.0
+tracing:
+  enabled: false
+  exporter: none
+  headers:
+  service_name: routed-service
+

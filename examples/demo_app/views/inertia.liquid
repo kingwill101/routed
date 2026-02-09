@@ -1,0 +1,18 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>{{ props.title | default: "Routed App" }}</title>
+    {{ ssrHead }}
+    {{ inertia_styles }}
+  </head>
+  <body>
+    {% if ssrBody != blank %}
+      <div id="app" data-page="{{ pageJsonEscaped }}">{{ ssrBody }}</div>
+    {% else %}
+      <div id="app" data-page="{{ pageJsonEscaped }}"></div>
+    {% endif %}
+    {{ inertia_scripts }}
+  </body>
+</html>
