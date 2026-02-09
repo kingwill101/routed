@@ -372,6 +372,18 @@ class Engine with StaticFileHandler, ContainerMixin {
   /// await engine.initialize();
   /// ```
   ///
+  /// Inline configuration without YAML files:
+  /// ```dart
+  /// final engine = Engine(
+  ///   providers: Engine.builtins,
+  ///   configItems: {
+  ///     'app.name': 'My App',
+  ///     'logging.enabled': true,
+  ///     'jwt.enabled': true,
+  ///   },
+  /// );
+  /// ```
+  ///
   /// Custom provider composition:
   /// ```dart
   /// final engine = Engine(
@@ -395,12 +407,22 @@ class Engine with StaticFileHandler, ContainerMixin {
     List<EngineOpt>? options,
     ErrorHandlingRegistry? errorHandling,
     List<ServiceProvider>? providers,
+    Map<String, dynamic>? configItems,
   }) : middlewares = middlewares ?? [],
        errorHooks = errorHandling?.clone() ?? ErrorHandlingRegistry() {
     _registerBareDefaults(config: config);
 
-    if (providers != null && providers.isNotEmpty) {
-      for (final provider in providers) {
+    // When configItems is provided, prepend a CoreServiceProvider with those
+    // items so users don't need to manually construct one. The dedup logic
+    // below ensures only the first CoreServiceProvider instance is used.
+    final effectiveProviders = <ServiceProvider>[
+      if (configItems != null && configItems.isNotEmpty)
+        CoreServiceProvider(configItems: configItems, config: config),
+      ...?providers,
+    ];
+
+    if (effectiveProviders.isNotEmpty) {
+      for (final provider in effectiveProviders) {
         // Skip duplicate provider types to prevent overwriting config
         if (_registeredProviderTypes.contains(provider.runtimeType)) {
           continue;
@@ -1443,6 +1465,15 @@ class Engine with StaticFileHandler, ContainerMixin {
   ///
   /// // Bare engine (no providers)
   /// final engine = await Engine.create(providers: []);
+  ///
+  /// // Inline configuration — no YAML files needed
+  /// final engine = await Engine.create(
+  ///   configItems: {
+  ///     'app.name': 'My App',
+  ///     'app.env': 'production',
+  ///     'logging.enabled': true,
+  ///   },
+  /// );
   /// ```
   ///
   /// To configure specific providers, pass them before the builtins:
@@ -1460,6 +1491,7 @@ class Engine with StaticFileHandler, ContainerMixin {
     List<EngineOpt>? options,
     ErrorHandlingRegistry? errorHandling,
     List<ServiceProvider>? providers,
+    Map<String, dynamic>? configItems,
   }) async {
     final engine = Engine(
       config: config,
@@ -1467,6 +1499,7 @@ class Engine with StaticFileHandler, ContainerMixin {
       options: options,
       errorHandling: errorHandling,
       providers: providers ?? builtins,
+      configItems: configItems,
     );
     await engine.initialize();
     return engine;

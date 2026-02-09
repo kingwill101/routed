@@ -401,3 +401,35 @@ EngineOpt withSessionConfig(SessionConfig config) {
     engine.container.instance<SessionConfig>(config);
   };
 }
+
+/// Merges arbitrary configuration key-value pairs into the application config.
+///
+/// This is useful for late overrides that should be applied after providers
+/// have registered their defaults. Keys can use **dot notation** to target
+/// nested paths without building deeply nested maps.
+///
+/// For configuration that should be available *during* provider registration
+/// (before boot), prefer the `configItems` parameter on the [Engine]
+/// constructor instead.
+///
+/// Example:
+/// ```dart
+/// final engine = Engine(
+///   providers: Engine.builtins,
+///   options: [
+///     withConfigItems({
+///       'app.name': 'My App',
+///       'app.env': 'production',
+///       'logging.enabled': true,
+///       'jwt.enabled': true,
+///     }),
+///   ],
+/// );
+/// ```
+EngineOpt withConfigItems(Map<String, dynamic> items) {
+  return (Engine engine) {
+    for (final entry in items.entries) {
+      engine.appConfig.set(entry.key, entry.value);
+    }
+  };
+}
