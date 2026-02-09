@@ -302,12 +302,7 @@ Engine _authEngine(AuthManager manager, {SessionConfig? sessionConfig}) {
     providers: Engine.defaultProviders,
     options: [withSessionConfig(sessionConfig)],
   );
-  engine.addGlobalMiddleware(
-    sessionMiddleware(
-      store: sessionConfig.store,
-      name: sessionConfig.cookieName,
-    ),
-  );
+  engine.addGlobalMiddleware(sessionMiddleware());
   engine.addGlobalMiddleware(SessionAuth.sessionAuthMiddleware());
   AuthRoutes(manager).register(engine.defaultRouter);
   return engine;
@@ -489,6 +484,7 @@ void main() {
       late Engine engine;
       late TestClient client;
       String? capturedToken;
+      // ignore: unused_local_variable
       String? capturedEmail;
 
       setUp(() async {
@@ -564,7 +560,7 @@ void main() {
             final response = await client.get(
               '/auth/callback/email?token=${Uri.encodeComponent(chaoticToken)}&email=valid@example.com',
               headers: {
-                HttpHeaders.cookieHeader: [_cookieHeader(sessionCookie!)],
+                HttpHeaders.cookieHeader: [_cookieHeader(sessionCookie)],
               },
             );
 
@@ -956,7 +952,7 @@ void main() {
           final callbackResponse = await client.get(
             '/auth/callback/${Uri.encodeComponent(providerId)}?code=test&state=test',
             headers: {
-              HttpHeaders.cookieHeader: [_cookieHeader(sessionCookie!)],
+              HttpHeaders.cookieHeader: [_cookieHeader(sessionCookie)],
             },
           );
 
@@ -972,7 +968,7 @@ void main() {
             '/auth/register/${Uri.encodeComponent(providerId)}',
             {'username': 'test', 'password': 'test'},
             headers: {
-              HttpHeaders.cookieHeader: [_cookieHeader(sessionCookie!)],
+              HttpHeaders.cookieHeader: [_cookieHeader(sessionCookie)],
             },
           );
 

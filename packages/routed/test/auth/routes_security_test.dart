@@ -30,12 +30,7 @@ Engine _authEngine(AuthManager manager) {
     ),
     options: [withSessionConfig(sessionConfig)],
   );
-  engine.addGlobalMiddleware(
-    sessionMiddleware(
-      store: sessionConfig.store,
-      name: sessionConfig.cookieName,
-    ),
-  );
+  engine.addGlobalMiddleware(sessionMiddleware());
   AuthRoutes(manager).register(engine.defaultRouter);
   return engine;
 }

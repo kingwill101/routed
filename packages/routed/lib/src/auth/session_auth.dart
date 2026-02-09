@@ -330,6 +330,62 @@ class SessionAuth {
     return _service.current(ctx);
   }
 
+  /// Callback wired by [AuthServiceProvider] when it creates an
+  /// [AuthManager].  When set, [updateSession] delegates to it so that
+  /// both server-side sessions and JWT cookies are handled transparently.
+  static Future<void> Function(EngineContext ctx, AuthPrincipal principal)?
+  _sessionUpdater;
+
+  /// Registers the strategy-aware session updater.
+  ///
+  /// Called by [AuthServiceProvider] during setup — application code should
+  /// not need to call this directly.
+  static void setSessionUpdater(
+    Future<void> Function(EngineContext ctx, AuthPrincipal principal)? updater,
+  ) {
+    _sessionUpdater = updater;
+  }
+
+  /// Updates the current auth session with the given [principal].
+  ///
+  /// This is the recommended way to refresh the authenticated identity after
+  /// changing user attributes, roles, or other profile data that should be
+  /// reflected in the session immediately.
+  ///
+  /// When [AuthServiceProvider] has booted, the call is delegated to
+  /// [AuthManager.updateSession] — handling both server-side sessions
+  /// **and** JWT reissuance transparently.
+  ///
+  /// When no updater has been wired (e.g. a minimal setup without
+  /// [AuthServiceProvider]), the method falls back to
+  /// [SessionAuth.login], which replaces the session principal directly.
+  ///
+  /// ## Example
+  ///
+  /// ```dart
+  /// engine.post('/update-profile', (ctx) async {
+  ///   final principal = SessionAuth.current(ctx)!;
+  ///   final updated = AuthPrincipal(
+  ///     id: principal.id,
+  ///     roles: principal.roles,
+  ///     attributes: {...principal.attributes, 'theme': 'dark'},
+  ///   );
+  ///   await SessionAuth.updateSession(ctx, updated);
+  ///   return ctx.json({'ok': true});
+  /// });
+  /// ```
+  static Future<void> updateSession(
+    EngineContext ctx,
+    AuthPrincipal principal,
+  ) async {
+    final updater = _sessionUpdater;
+    if (updater != null) {
+      return updater(ctx, principal);
+    }
+    // No strategy-aware updater wired — session-only fallback.
+    return _service.login(ctx, principal);
+  }
+
   static Middleware sessionAuthMiddleware({
     RememberTokenStore? rememberStore,
     String? rememberCookieName,

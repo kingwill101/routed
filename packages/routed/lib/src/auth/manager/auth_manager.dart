@@ -384,6 +384,75 @@ class AuthManager {
     );
   }
 
+  /// Updates the current auth session with the given [principal].
+  ///
+  /// This method replaces the authenticated identity stored in the current
+  /// request context. Use it after changing user attributes, roles, or other
+  /// profile data that should be reflected in the session immediately.
+  ///
+  /// **Session strategy:** replaces the session principal via
+  /// [SessionAuthService.login] and resets the session issued-at timestamp.
+  ///
+  /// **JWT strategy:** builds new claims from the principal, invokes the
+  /// configured JWT callback (if any), issues a fresh token, and attaches
+  /// it as an HTTP-only cookie.
+  ///
+  /// Returns an [AuthSession] reflecting the updated state.
+  ///
+  /// Throws [AuthFlowException] with code `missing_jwt_secret` when using
+  /// the JWT strategy and no secret is configured.
+  ///
+  /// ## Example
+  ///
+  /// ```dart
+  /// // Preferred: use the SessionAuth convenience method which delegates
+  /// // to this automatically:
+  /// await SessionAuth.updateSession(ctx, updatedPrincipal);
+  ///
+  /// // Or call directly when you need the returned AuthSession:
+  /// final manager = ctx.container.get<AuthManager>();
+  /// final session = await manager.updateSession(ctx, updated);
+  /// ```
+  Future<AuthSession> updateSession(
+    EngineContext ctx,
+    AuthPrincipal principal,
+  ) async {
+    final user = AuthUser.fromPrincipal(principal);
+    switch (options.sessionStrategy) {
+      case AuthSessionStrategy.session:
+        _applySessionMaxAge(ctx);
+        await sessionAuth.login(ctx, principal);
+        _setSessionIssuedAt(ctx, DateTime.now().toUtc());
+        final expires = _sessionExpiry(ctx);
+        return AuthSession(
+          user: user,
+          expiresAt: expires,
+          strategy: AuthSessionStrategy.session,
+        );
+      case AuthSessionStrategy.jwt:
+        if (options.jwtOptions.secret.isEmpty) {
+          throw AuthFlowException('missing_jwt_secret');
+        }
+        final issuer = _jwtIssuer();
+        final claims = await _applyJwtCallback(
+          AuthJwtCallbackContext(
+            context: ctx,
+            token: _jwtClaimsForUser(user),
+            user: user,
+            strategy: AuthSessionStrategy.jwt,
+          ),
+        );
+        final token = issuer.issue(claims);
+        _attachJwtCookie(ctx, token, issuer.expiry);
+        return AuthSession(
+          user: user,
+          expiresAt: issuer.expiry,
+          strategy: AuthSessionStrategy.jwt,
+          token: token,
+        );
+    }
+  }
+
   Future<AuthSession?> resolveSession(EngineContext ctx) async {
     switch (options.sessionStrategy) {
       case AuthSessionStrategy.session:

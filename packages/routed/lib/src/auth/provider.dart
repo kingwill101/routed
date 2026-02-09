@@ -165,6 +165,7 @@ class AuthServiceProvider extends ServiceProvider with ProvidesDefaultConfig {
     if (!container.has<AuthOptions>()) {
       if (_ownsAuthManager) {
         container.remove<AuthManager>();
+        SessionAuth.setSessionUpdater(null);
         _managedAuthManager = null;
         _ownsAuthManager = false;
       }
@@ -201,6 +202,8 @@ class AuthServiceProvider extends ServiceProvider with ProvidesDefaultConfig {
     _managedAuthManager = manager;
     container.instance<AuthManager>(manager);
     _ownsAuthManager = true;
+
+    SessionAuth.setSessionUpdater(manager.updateSession);
 
     _configureRbac(container, resolvedOptions);
     _configurePolicies(container, resolvedOptions);
