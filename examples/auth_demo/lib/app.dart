@@ -96,7 +96,46 @@ Future<Engine> createEngine() async {
         'callback': '/auth/callback/{provider}',
         'session': '/auth/session',
         'signout': '/auth/signout',
+        'update_profile': '/update-profile',
       },
+    });
+  });
+
+  // ── Example: updating the current session after a profile change ──
+  //
+  // SessionAuth.updateSession() is the recommended way to refresh the
+  // session (or reissue the JWT) after modifying user attributes.
+  // It delegates to AuthManager when available, handling both session
+  // and JWT strategies transparently — no container lookup needed.
+  engine.post('/update-profile', (ctx) async {
+    final principal = SessionAuth.current(ctx);
+    if (principal == null) {
+      return ctx.json({
+        'error': 'not_authenticated',
+      }, statusCode: HttpStatus.unauthorized);
+    }
+
+    final form = await ctx.formCache;
+    final newName = form['name']?.toString().trim();
+    final newTheme = form['theme']?.toString().trim();
+
+    // Build an updated principal with the changed attributes.
+    final updated = AuthPrincipal(
+      id: principal.id,
+      roles: principal.roles,
+      attributes: {
+        ...principal.attributes,
+        if (newName != null && newName.isNotEmpty) 'name': newName,
+        if (newTheme != null && newTheme.isNotEmpty) 'theme': newTheme,
+      },
+    );
+
+    // Single call — works for both session and JWT strategies.
+    await SessionAuth.updateSession(ctx, updated);
+
+    return ctx.json({
+      'message': 'Profile updated',
+      'principal': updated.toJson(),
     });
   });
 

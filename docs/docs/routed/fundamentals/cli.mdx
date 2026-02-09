@@ -73,12 +73,33 @@ Generates an OpenAPI 3.1 document from your routed engine. By default the CLI wr
 
 ## Provider & configuration helpers
 
-Additional commands help manage configuration manifests:
+Additional commands help manage provider configuration:
 
 - `config:init`, `config:publish`, `config:cache`, `config:clear`
 - `provider:list`, `provider:enable`, `provider:disable`
 
 See [Configuration](/docs/routed/fundamentals/configuration) for details and usage patterns.
+
+`provider:list` accepts an optional provider id to filter output:
+
+```bash
+dart run routed provider:list routed.logging --config
+```
+
+### Publishing config templates
+
+Generate the default config templates into `config/`:
+
+```bash
+dart run routed config:publish
+```
+
+Publish only a subset by passing a comma-separated list (or `--only`):
+
+```bash
+dart run routed config:publish app,cache
+dart run routed config:publish --only app,cache
+```
 
 ## Project-defined commands
 

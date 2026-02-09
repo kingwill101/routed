@@ -107,12 +107,7 @@ void main() async {
   );
 
   // Add middleware
-  engine.addGlobalMiddleware(
-    sessionMiddleware(
-      store: sessionConfig.store,
-      name: sessionConfig.cookieName,
-    ),
-  );
+  engine.addGlobalMiddleware(sessionMiddleware());
   engine.addGlobalMiddleware(SessionAuth.sessionAuthMiddleware());
 
   // Register auth routes - handles /auth/callback/telegram automatically!

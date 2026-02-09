@@ -30,6 +30,8 @@ cd hello_world
 
 The generator writes the standard `bin/server.dart`, configuration files under `config/`, and project metadata. It also runs `dart pub get` automatically—if dependency resolution fails, the CLI prints the exit code along with the command to rerun manually. Choose a template with `--template` (`basic`, `api`, `web`, or `fullstack`), supply `--output <directory>` to scaffold into an existing folder, and pass `--force` to overwrite conflicting files. Every template includes `lib/commands.dart`; populate its `buildProjectCommands()` hook and the Routed CLI will surface your custom commands in `dart run routed --help`.
 
+> Tip: Need to regenerate config stubs later? Use `dart run routed config:publish` to recreate the defaults, or `dart run routed config:publish app,cache` to publish a smaller subset.
+
 Prefer to wire things manually? Create `bin/server.dart` and copy the snippet below.
 
 ## 3. Create an engine and router
@@ -109,7 +111,7 @@ dart run bin/server.dart
 
 Visit [http://127.0.0.1:8080/](http://127.0.0.1:8080/) to see the greeting, or send requests to `/api/users`.
 
-> Tip: Routed ships with a provider manifest (`config/http.yaml`) and a CLI (`dart run routed provider:list --config`) that shows which providers are enabled and the defaults they contribute. If you add caching, sessions, or security features later, the CLI will also surface configuration validation errors before you start the server.
+> Tip: Routed ships feature toggles in each provider config file  and a CLI (`dart run routed provider:list --config`) that shows provider defaults and configuration validation errors. Use it any time you adjust caching, sessions, or security settings.
 
 ### Inspect routes and generate specs
 
