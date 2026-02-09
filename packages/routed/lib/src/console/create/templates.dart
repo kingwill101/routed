@@ -56,8 +56,8 @@ class Templates {
       id: 'api',
       description: 'JSON-first API skeleton with sample routes and tests.',
       extraDevDependencies: const {
-        'routed_testing': '^0.2.1',
-        'server_testing': '^0.3.0',
+        'routed_testing': '^0.3.2',
+        'server_testing': '^0.3.2',
       },
     ),
     'web': _buildTemplate(
@@ -68,8 +68,8 @@ class Templates {
       id: 'fullstack',
       description: 'Combined HTML + JSON starter, handy for SPAs or HTMX.',
       extraDevDependencies: const {
-        'routed_testing': '^0.2.1',
-        'server_testing': '^0.3.0',
+        'routed_testing': '^0.3.2',
+        'server_testing': '^0.3.2',
       },
     ),
   };

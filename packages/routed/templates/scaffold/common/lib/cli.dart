@@ -1,7 +1,7 @@
 import 'dart:io';
 
 import 'package:artisanal/args.dart';
-import 'package:routed/console.dart';
+import 'package:routed/routed.dart';
 import 'package:{{{routed:packageName}}}/app.dart' as app;
 import 'package:{{{routed:packageName}}}/commands.dart' as project_commands;
 
@@ -19,17 +19,6 @@ Future<int> runCli(List<String> args) async {
   for (final command in projectCommands) {
     runner.addCommand(command);
   }
-
-  registerProviderCommands(
-    runner,
-    ProviderCommandRegistry.instance.registrations,
-    runner.usage,
-  );
-  registerProviderArtisanalCommands(
-    runner,
-    ProviderArtisanalCommandRegistry.instance.registrations,
-    runner.usage,
-  );
 
   if (args.isEmpty || _isHelp(args)) {
     stdout.writeln(runner.usage);
@@ -99,25 +88,5 @@ bool _isHelp(List<String> args) {
 
 Future<List<Command<void>>> _loadProjectCommands() async {
   final result = await Future.sync(project_commands.buildProjectCommands);
-  if (result is! List) {
-    throw UsageException(
-      'Expected buildProjectCommands() to return List<Command<void>>.',
-      '',
-    );
-  }
-
-  final commands = <Command<void>>[];
-  for (final entry in result) {
-    if (entry is Command<void>) {
-      commands.add(entry);
-    } else if (entry is Command) {
-      commands.add(entry as Command<void>);
-    } else {
-      throw UsageException(
-        'Invalid command returned from buildProjectCommands(): ${entry.runtimeType}.',
-        '',
-      );
-    }
-  }
-  return commands;
+  return List<Command<void>>.from(result);
 }

@@ -15,6 +15,10 @@ void main() {
     late _RecordingLogger logger;
     late List<fs.Directory> pubGetInvocations;
     late int pubGetExitCode;
+    late List<_InertiaInvocation> inertiaInvocations;
+    late int inertiaExitCode;
+    late bool isInteractive;
+    late bool promptAnswer;
 
     setUp(() {
       memoryFs = MemoryFileSystem();
@@ -24,6 +28,10 @@ void main() {
       logger = _RecordingLogger();
       pubGetInvocations = <fs.Directory>[];
       pubGetExitCode = 0;
+      inertiaInvocations = <_InertiaInvocation>[];
+      inertiaExitCode = 0;
+      isInteractive = false;
+      promptAnswer = false;
       runner = RoutedCommandRunner(logger: logger)
         ..register([
           CreateCommand(
@@ -33,6 +41,14 @@ void main() {
               pubGetInvocations.add(projectDir);
               return pubGetExitCode;
             },
+            inertiaCreate: (projectDir, options) async {
+              inertiaInvocations.add(
+                _InertiaInvocation(projectDir: projectDir, options: options),
+              );
+              return inertiaExitCode;
+            },
+            isInteractive: () => isInteractive,
+            inertiaPrompt: () async => promptAnswer,
           ),
         ]);
     });
@@ -95,7 +111,10 @@ void main() {
       );
 
       final appContent = _read(projectDir, 'lib/app.dart');
-      expect(appContent, contains('Future<Engine> createEngine() async'));
+      expect(
+        appContent,
+        contains('Future<Engine> createEngine({bool initialize = true}) async'),
+      );
       expect(appContent, contains('Welcome to Demo App!'));
 
       final manifestScript = _read(projectDir, 'tool/spec_manifest.dart');
@@ -301,6 +320,238 @@ void main() {
         'unknown',
       ], 'Unsupported template');
     });
+
+    test('scaffolds inertia client when flag is set', () async {
+      await _run(runner, ['create', '--name', 'demo_app', '--inertia']);
+
+      final projectDir = memoryFs.directory(
+        memoryFs.path.join(workspace.path, 'demo_app'),
+      );
+      final pubspec = loadYaml(_read(projectDir, 'pubspec.yaml')) as YamlMap;
+      final deps = pubspec['dependencies'] as YamlMap;
+      final devDeps = pubspec['dev_dependencies'] as YamlMap? ?? YamlMap();
+      expect(deps.containsKey('routed_inertia'), isTrue);
+      expect(devDeps.containsKey('inertia_dart'), isTrue);
+      expect(_exists(projectDir, 'config/inertia.yaml'), isTrue);
+      expect(_exists(projectDir, 'views/inertia.liquid'), isTrue);
+      expect(_exists(projectDir, 'lib/inertia_views.dart'), isTrue);
+      expect(
+        _read(projectDir, 'config/inertia.yaml'),
+        contains('root_view: "inertia.liquid"'),
+      );
+      expect(_read(projectDir, 'config/http.yaml'), contains('routed.inertia'));
+      expect(
+        _read(projectDir, 'config/static.yaml'),
+        contains('route: /assets'),
+      );
+      final appSource = _read(projectDir, 'lib/app.dart');
+      expect(appSource, contains('ctx.inertia'));
+      expect(appSource, contains('configureInertiaViews'));
+      expect(inertiaInvocations, hasLength(1));
+      final invocation = inertiaInvocations.first;
+      expect(
+        memoryFs.path.normalize(invocation.projectDir.path),
+        equals(memoryFs.path.normalize(projectDir.path)),
+      );
+      expect(invocation.options.framework, equals('react'));
+      expect(invocation.options.packageManager, equals('npm'));
+      expect(invocation.options.output, equals('client'));
+      expect(invocation.options.projectName, equals('client'));
+      expect(invocation.options.force, isFalse);
+    });
+
+    test('passes --force to inertia when create is forced', () async {
+      await _run(runner, [
+        'create',
+        '--name',
+        'demo_app',
+        '--inertia',
+        '--force',
+      ]);
+
+      expect(inertiaInvocations, hasLength(1));
+      expect(inertiaInvocations.first.options.force, isTrue);
+    });
+
+    test('skips inertia when explicitly disabled', () async {
+      isInteractive = true;
+      promptAnswer = true;
+
+      await _run(runner, ['create', '--name', 'demo_app', '--no-inertia']);
+      expect(inertiaInvocations, isEmpty);
+    });
+
+    test('prompts for inertia when interactive', () async {
+      isInteractive = true;
+      promptAnswer = true;
+
+      await _run(runner, ['create', '--name', 'demo_app']);
+      expect(inertiaInvocations, hasLength(1));
+    });
+
+    test('fails when inertia scaffolding returns non-zero', () async {
+      inertiaExitCode = 64;
+
+      await _expectUsageError(runner, [
+        'create',
+        '--name',
+        'demo_app',
+        '--inertia',
+      ], 'Inertia scaffolding failed');
+    });
+
+    group('workspace detection', () {
+      late fs.Directory workspaceRoot;
+
+      setUp(() {
+        // Create a parent directory that acts as a Dart workspace root.
+        workspaceRoot = memoryFs.directory('/mono')
+          ..createSync(recursive: true);
+        memoryFs
+            .file(memoryFs.path.join(workspaceRoot.path, 'pubspec.yaml'))
+            .writeAsStringSync(
+              'name: my_workspace\n'
+              'publish_to: none\n'
+              'workspace:\n'
+              '  - packages/existing_pkg\n'
+              '\n'
+              'environment:\n'
+              '  sdk: ">=3.9.0 <4.0.0"\n',
+            );
+        // Set current directory inside the workspace.
+        memoryFs.currentDirectory = workspaceRoot;
+      });
+
+      test('adds resolution: workspace when inside a workspace', () async {
+        runner = RoutedCommandRunner(logger: logger)
+          ..register([
+            CreateCommand(
+              logger: logger,
+              fileSystem: memoryFs,
+              pubGet: (d) async {
+                pubGetInvocations.add(d);
+                return 0;
+              },
+              inertiaCreate: (d, o) async => 0,
+              isInteractive: () => false,
+              inertiaPrompt: () async => false,
+            ),
+          ]);
+
+        await _run(runner, ['create', '--name', 'new_app']);
+
+        final projectDir = memoryFs.directory(
+          memoryFs.path.join(workspaceRoot.path, 'new_app'),
+        );
+        final pubspecContent = _read(projectDir, 'pubspec.yaml');
+        final pubspec = loadYaml(pubspecContent) as YamlMap;
+        expect(pubspec['resolution'], equals('workspace'));
+      });
+
+      test('adds project to parent workspace member list', () async {
+        runner = RoutedCommandRunner(logger: logger)
+          ..register([
+            CreateCommand(
+              logger: logger,
+              fileSystem: memoryFs,
+              pubGet: (d) async {
+                pubGetInvocations.add(d);
+                return 0;
+              },
+              inertiaCreate: (d, o) async => 0,
+              isInteractive: () => false,
+              inertiaPrompt: () async => false,
+            ),
+          ]);
+
+        await _run(runner, ['create', '--name', 'new_app']);
+
+        final rootPubspec = memoryFs
+            .file(memoryFs.path.join(workspaceRoot.path, 'pubspec.yaml'))
+            .readAsStringSync();
+        final doc = loadYaml(rootPubspec) as YamlMap;
+        final members = (doc['workspace'] as YamlList).toList();
+        expect(members.map((m) => m.toString()), contains('new_app'));
+        // Original member should still be present.
+        expect(
+          members.map((m) => m.toString()),
+          contains('packages/existing_pkg'),
+        );
+      });
+
+      test('logs workspace addition', () async {
+        runner = RoutedCommandRunner(logger: logger)
+          ..register([
+            CreateCommand(
+              logger: logger,
+              fileSystem: memoryFs,
+              pubGet: (d) async => 0,
+              inertiaCreate: (d, o) async => 0,
+              isInteractive: () => false,
+              inertiaPrompt: () async => false,
+            ),
+          ]);
+
+        await _run(runner, ['create', '--name', 'new_app']);
+
+        expect(logger.infos, contains('Added "new_app" to workspace.'));
+      });
+
+      test(
+        'does not duplicate workspace member on re-run with --force',
+        () async {
+          runner = RoutedCommandRunner(logger: logger)
+            ..register([
+              CreateCommand(
+                logger: logger,
+                fileSystem: memoryFs,
+                pubGet: (d) async => 0,
+                inertiaCreate: (d, o) async => 0,
+                isInteractive: () => false,
+                inertiaPrompt: () async => false,
+              ),
+            ]);
+
+          await _run(runner, ['create', '--name', 'new_app']);
+          await _run(runner, ['create', '--name', 'new_app', '--force']);
+
+          final rootPubspec = memoryFs
+              .file(memoryFs.path.join(workspaceRoot.path, 'pubspec.yaml'))
+              .readAsStringSync();
+          final doc = loadYaml(rootPubspec) as YamlMap;
+          final members = (doc['workspace'] as YamlList).toList();
+          final count = members.where((m) => m.toString() == 'new_app').length;
+          expect(count, equals(1));
+        },
+      );
+
+      test(
+        'does not add resolution: workspace without parent workspace',
+        () async {
+          // Reset to the original workspace directory which has no workspace root.
+          memoryFs.currentDirectory = workspace;
+          runner = RoutedCommandRunner(logger: logger)
+            ..register([
+              CreateCommand(
+                logger: logger,
+                fileSystem: memoryFs,
+                pubGet: (d) async => 0,
+                inertiaCreate: (d, o) async => 0,
+                isInteractive: () => false,
+                inertiaPrompt: () async => false,
+              ),
+            ]);
+
+          await _run(runner, ['create', '--name', 'standalone_app']);
+
+          final projectDir = memoryFs.directory(
+            memoryFs.path.join(workspace.path, 'standalone_app'),
+          );
+          final pubspecContent = _read(projectDir, 'pubspec.yaml');
+          expect(pubspecContent, isNot(contains('resolution: workspace')));
+        },
+      );
+    });
   });
 }
 
@@ -312,6 +563,13 @@ class _TemplateExpectation {
 
   final List<String> expectedFiles;
   final Map<String, String> contentChecks;
+}
+
+class _InertiaInvocation {
+  const _InertiaInvocation({required this.projectDir, required this.options});
+
+  final fs.Directory projectDir;
+  final InertiaScaffoldOptions options;
 }
 
 Future<void> _run(RoutedCommandRunner runner, List<String> args) async {
