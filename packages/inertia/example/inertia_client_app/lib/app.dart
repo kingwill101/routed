@@ -3,7 +3,7 @@ import 'dart:io';
 
 import 'package:inertia_dart/inertia_dart.dart';
 
-const String _clientEntry = 'src/main.jsx';
+const String _clientEntry = 'index.html';
 
 Future<void> serve({String address = '127.0.0.1', int port = 8080}) async {
   final server = await HttpServer.bind(address, port);
@@ -69,7 +69,7 @@ Future<bool> _tryServeStatic(HttpRequest request) async {
 Future<String> _renderHtml(PageData page) async {
   final assets = InertiaViteAssets(
     entry: _clientEntry,
-    manifestPath: 'client/dist/manifest.json',
+    manifestPath: 'client/dist/.vite/manifest.json',
     hotFile: 'client/public/hot',
     includeReactRefresh: true,
   );

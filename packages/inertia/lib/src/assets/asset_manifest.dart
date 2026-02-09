@@ -9,8 +9,8 @@ import 'asset_resolution.dart';
 /// Loads and resolves Vite-style asset manifests for Inertia apps.
 ///
 /// ```dart
-/// final manifest = await InertiaAssetManifest.load('build/manifest.json');
-/// final tags = manifest.renderTags('resources/js/app.js', baseUrl: '/');
+/// final manifest = await InertiaAssetManifest.load('client/dist/.vite/manifest.json');
+/// final tags = manifest.renderTags('index.html', baseUrl: '/');
 /// ```
 class InertiaAssetManifest {
   /// Creates a manifest from pre-parsed [entries].

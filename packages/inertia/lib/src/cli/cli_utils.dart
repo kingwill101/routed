@@ -15,11 +15,14 @@ Future<TaskResult> runInertiaCommand(
   String executable,
   List<String> args, {
   required Directory workingDirectory,
+  Map<String, String>? environment,
 }) async {
+  final env = environment ?? Platform.environment;
   final process = await Process.start(
     executable,
     args,
     workingDirectory: workingDirectory.path,
+    environment: env,
     runInShell: true,
     mode: ProcessStartMode.inheritStdio,
   );

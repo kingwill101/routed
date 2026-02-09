@@ -8,15 +8,15 @@ import 'vite_asset_tags.dart';
 /// Resolves Vite assets for development and production builds.
 ///
 /// ```dart
-/// final assets = InertiaViteAssets(entry: 'src/main.jsx');
+/// final assets = InertiaViteAssets(entry: 'index.html');
 /// final tags = await assets.resolve();
 /// ```
 class InertiaViteAssets {
   /// Creates a Vite asset resolver.
   const InertiaViteAssets({
     required this.entry,
-    this.manifestPath = 'build/manifest.json',
-    this.hotFile = 'public/hot',
+    this.manifestPath = 'client/dist/.vite/manifest.json',
+    this.hotFile = 'client/public/hot',
     this.baseUrl = '/',
     this.devServerUrl,
     this.includeReactRefresh = false,

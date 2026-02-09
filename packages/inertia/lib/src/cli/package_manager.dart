@@ -24,14 +24,45 @@ class InertiaPackageManager {
   List<String> createArgs(String template, String output) {
     switch (command) {
       case 'pnpm':
-        return ['create', 'vite', output, '--', '--template', template];
+        return [
+          'create',
+          'vite',
+          output,
+          '--',
+          '--no-interactive',
+          '--template',
+          template,
+        ];
       case 'yarn':
-        return ['create', 'vite', output, '--template', template];
+        return [
+          'create',
+          'vite',
+          output,
+          '--no-interactive',
+          '--template',
+          template,
+        ];
       case 'bun':
-        return ['create', 'vite', output, '--template', template];
+        return [
+          'create',
+          'vite',
+          output,
+          '--no-interactive',
+          '--template',
+          template,
+        ];
       case 'npm':
       default:
-        return ['create', 'vite@latest', output, '--', '--template', template];
+        return [
+          'create',
+          '--yes',
+          'vite@latest',
+          output,
+          '--',
+          '--no-interactive',
+          '--template',
+          template,
+        ];
     }
   }
 

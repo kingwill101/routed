@@ -1,7 +1,7 @@
 /// Represents resolved assets for a manifest entry.
 ///
 /// ```dart
-/// final resolution = manifest.resolve('resources/js/app.js');
+/// final resolution = manifest.resolve('index.html');
 /// ```
 class InertiaAssetResolution {
   /// Creates an asset resolution result.

@@ -5,6 +5,10 @@ server-side Inertia protocol for Dart and provides property helpers, SSR
 support, and testing utilities. Pair it with a client adapter like
 `@inertiajs/react`, `@inertiajs/vue3`, or `@inertiajs/svelte`.
 
+> **New here?** Follow the [Build a Contacts App](https://kingwill101.github.io/docs/inertia_dart/tutorial) tutorial for a hands-on walkthrough using just `dart:io`.
+>
+> **Using the Routed framework?** See [`routed_inertia`](../routed_inertia) for the framework integration.
+
 ## Install
 
 ```bash
@@ -153,8 +157,8 @@ dart run inertia_dart:inertia ssr:stop --url http://127.0.0.1:13714
 `InertiaAssetManifest` loads a Vite-style `manifest.json` and renders tags.
 
 ```dart
-final manifest = await InertiaAssetManifest.load('build/manifest.json');
-final tags = manifest.renderTags('resources/js/app.js', baseUrl: '/');
+final manifest = await InertiaAssetManifest.load('client/dist/.vite/manifest.json');
+final tags = manifest.renderTags('index.html', baseUrl: '/');
 ```
 
 ## Vite Asset Helper
@@ -164,7 +168,7 @@ script/style tags.
 
 ```dart
 final assets = InertiaViteAssets(
-  entry: 'src/main.jsx',
+  entry: 'index.html',
   hotFile: 'client/public/hot',
   manifestPath: 'client/dist/.vite/manifest.json',
   includeReactRefresh: true,
@@ -221,4 +225,6 @@ response.assertInertia((page) {
 
 ## Learn More
 
-- [Inertia core docs](https://inertiajs.com)
+- [Inertia Dart docs](https://kingwill101.github.io/docs/inertia_dart/) -- full API reference and tutorial
+- [Routed Inertia docs](https://kingwill101.github.io/docs/routed_inertia/) -- framework integration for Routed apps
+- [Inertia core docs](https://inertiajs.com) -- protocol specification and client adapters
