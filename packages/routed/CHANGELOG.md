@@ -5,15 +5,31 @@
   `{{ env.* }}` Liquid expressions are preserved as raw placeholders through
   template rendering, enabling `config:cache` to generate Dart files with
   deferred environment resolution.
+- `ConfigLoader.load()` now returns a `ConfigSnapshot` containing both the
+  resolved config map and the raw YAML sources.
 - New `buildEnvTemplateContext()` public function builds the Liquid template
   context from `Platform.environment` at runtime.
 - `CoreServiceProvider.withCachedConfig()` named constructor accepts a
   `ConfigSnapshot` for zero-I/O startup from a pre-built config cache.
 
+### Engine DX
+- `Engine()` and `Engine.create()` accept an optional `configItems` parameter
+  that auto-prepends a `CoreServiceProvider(configItems: ...)` to the providers
+  list, eliminating the need to manually construct `CoreServiceProvider` for
+  simple inline configuration.
+- New `withConfigItems(Map<String, dynamic>)` EngineOpt function allows late
+  config overrides that run after providers register but before boot.
+
 ### CLI and Scaffolding
+- `config:cache` command generates a Dart file with a `resolveRoutedConfig()`
+  function for zero-I/O startup. Supports `--output`, `--json-output`,
+  `--pretty`, `--docs`, and `--docs-output` options.
+- `config:clear` command removes cached config files.
 - `config:publish` simplified -- generates config stubs directly from
   `buildConfigDefaults()` / `collectConfigDocs()` instead of resolving
   package roots. Added `--only` option for selective stub generation.
+- `provider:list` now accepts an optional positional ID filter and displays
+  config source information.
 - `create` command supports Inertia scaffolding via `--inertia`,
   `--inertia-framework`, `--inertia-package-manager`, and `--inertia-output`
   flags. Entry key defaults to `index.html` for Vite 7 compatibility.
@@ -23,6 +39,8 @@
   for both session and JWT strategies (reissues JWT cookie for JWT strategy).
 - `SessionAuth.updateSession()` provides a static convenience API that
   delegates to the manager when wired by `AuthServiceProvider`.
+- `AuthServiceProvider` registers `JwtVerifier` as a container instance and
+  wires `SessionAuth.setSessionUpdater` for the `updateSession` facade.
 
 ### Container
 - Added `waitFor<T>()`, `waitForType()`, and `makeWhenAvailable<T>()` with
@@ -37,6 +55,9 @@
 ### Logging
 - `RoutedLogger.createForChannel()` creates a logger with a channel override
   key merged into the context.
+- `LoggingServiceProvider` reads channel-specific log levels from
+  `logging.channels.*` config keys and respects the `LOG_CHANNEL` environment
+  variable for default channel selection.
 
 ## 0.3.3
 
