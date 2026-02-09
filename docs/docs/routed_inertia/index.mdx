@@ -9,6 +9,8 @@ sidebar_position: 0
 Routed Inertia wires Inertia.js into Routed with middleware, `EngineContext`
 helpers, and SSR support so you can serve SPA-like pages from a Dart backend.
 
+> **New to Inertia?** Follow the [Build a Todo App](/docs/routed_inertia/tutorial) tutorial for a hands-on walkthrough.
+
 ## Features
 
 - `ctx.inertia` response helpers for JSON + HTML payloads.
@@ -29,12 +31,17 @@ asset manifest reader, SSR gateways, and middleware used under the hood.
 
 ## Start a project
 
-1) Scaffold a Routed app (optional but recommended):
+1) Scaffold a Routed app with Inertia support:
 
 ```bash
-dart run routed create --name inertia_app --template web
+dart run routed create --name inertia_app --inertia
 cd inertia_app
 ```
+
+This generates the full project structure including server configs, a Liquid
+template, and a Vite + React client under `client/`. You can also pass
+`--inertia-framework vue` or `--inertia-framework svelte` for a different
+frontend framework.
 
 2) Add Inertia server dependencies:
 
@@ -78,7 +85,7 @@ version: "1.0.0"
 root_view: "inertia/app"
 assets:
   manifest_path: "client/dist/.vite/manifest.json"
-  entry: "src/main.jsx"
+  entry: "index.html"
   base_url: "/"
   hot_file: "client/public/hot"
 ```
@@ -92,6 +99,37 @@ npm run dev
 # server (from app root)
 dart run routed dev
 ```
+
+7) Configure static asset serving for production:
+
+Vite builds hashed assets into `client/dist/assets/`. You need a storage disk
+and a static mount so Routed can serve them:
+
+```yaml
+# config/storage.yaml
+default: local
+disks:
+  local:
+    driver: local
+    root: "storage/app"
+  public:
+    driver: local
+    root: "."
+```
+
+```yaml
+# config/static.yaml
+enabled: true
+mounts:
+  - route: /assets
+    disk: public
+    path: client/dist/assets
+```
+
+Without the `public` disk, paths resolve relative to the default disk root
+(`storage/app`), causing 404s for static assets. See the
+[tutorial](/docs/routed_inertia/tutorial#assets-return-404-in-production)
+for more details.
 
 The example app in `packages/routed_inertia/example` includes a working Vite
 setup, hot file wiring, and server integration if you want a full reference.
@@ -153,10 +191,10 @@ ssr:
   enabled: false
   url: "http://127.0.0.1:13714"
 assets:
-  manifest_path: "build/manifest.json"
-  entry: "resources/js/app.js"
+  manifest_path: "client/dist/.vite/manifest.json"
+  entry: "index.html"
   base_url: "/"
-  hot_file: "public/hot"
+  hot_file: "client/public/hot"
 ```
 
 If you need a custom version resolver, register the provider directly:
@@ -206,8 +244,8 @@ engine.get('/', (ctx) {
 ## Asset manifest helper
 
 ```dart
-final manifest = await InertiaAssetManifest.load('build/manifest.json');
-final tags = manifest.renderTags('resources/js/app.js', baseUrl: '/');
+final manifest = await InertiaAssetManifest.load('client/dist/.vite/manifest.json');
+final tags = manifest.renderTags('index.html', baseUrl: '/');
 ```
 
 Inject the tags in your template or HTML builder.

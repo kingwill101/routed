@@ -1,0 +1,675 @@
+---
+title: "Tutorial: Build a Todo App"
+description: Build a full-stack Todo app with Routed, Inertia.js, React, and Vite
+sidebar_position: 1
+---
+
+# Tutorial: Build a Todo App
+
+This tutorial walks you through building a server-driven Todo application with **Routed** (Dart), **Inertia.js**, **React**, and **Vite**. You will create a two-page app with full CRUD -- add, toggle, and remove todos -- without writing a REST API or managing client-side state. The server owns the data and Inertia bridges the gap.
+
+By the end you will have:
+
+- A Dart backend with Inertia-powered routes
+- A React frontend scaffolded by Vite
+- A production build with hashed assets served by Routed
+- A development workflow with hot module replacement
+
+## 1. Scaffold the project
+
+The fastest path is the `routed create` CLI with the `--inertia` flag:
+
+```bash
+dart run routed create --name todo_app --inertia
+cd todo_app
+```
+
+This generates the full project structure including server configs, a Liquid template, and a Vite + React client under `client/`. You can also pass `--inertia-framework vue` or `--inertia-framework svelte` if you prefer a different frontend framework.
+
+> After scaffolding, open `config/inertia.yaml` and change `entry: "src/main.jsx"` to `entry: "index.html"`. Vite 7 uses the HTML file as the manifest entry key. See [Troubleshooting](#manifest-entry-key-mismatch) for details.
+
+If you prefer to set things up manually, install the packages and create the files described in the sections below:
+
+```bash
+dart pub add routed_inertia
+dart pub add --dev inertia_dart
+```
+
+## 2. Project structure
+
+After scaffolding, the project looks like this:
+
+```text
+todo_app/
+  bin/
+    server.dart            # Entry point
+  config/
+    http.yaml              # Providers and middleware
+    inertia.yaml           # Inertia version, assets, SSR
+    static.yaml            # Static file mounts
+    storage.yaml           # Storage disks
+    ...
+  views/
+    inertia.liquid          # Root HTML shell
+  lib/
+    app.dart               # Engine, routes, business logic
+    inertia_views.dart     # Liquid view engine setup
+  client/
+    src/
+      main.jsx             # Inertia client entry
+      Pages/
+        Home.jsx           # Home page component
+    vite.config.js         # Vite build config
+    inertia_hot_file.js    # Dev server bridge plugin
+    package.json
+```
+
+## 3. Configure the server
+
+### Inertia config
+
+The Inertia config tells Routed where to find assets and which template to render:
+
+```yaml title="config/inertia.yaml"
+version: "dev"
+root_view: "inertia.liquid"
+history:
+  encrypt: false
+ssr:
+  enabled: false
+  url: "http://127.0.0.1:13714"
+assets:
+  manifest_path: "client/dist/.vite/manifest.json"
+  entry: "index.html"
+  base_url: "/"
+  hot_file: "client/public/hot"
+```
+
+- **`version`** -- asset version string. Change it to bust client caches on deploy.
+- **`root_view`** -- the Liquid template that wraps every Inertia page.
+- **`entry`** -- must match a key in the Vite manifest. Vite 7 uses `"index.html"`.
+- **`hot_file`** -- path to the file the Vite dev server writes when running. If present, assets are proxied to the dev server instead of read from the manifest.
+
+### HTTP providers and middleware
+
+Register the Inertia provider and middleware source in `http.yaml`:
+
+```yaml title="config/http.yaml"
+providers:
+  # ... other providers ...
+  - routed.inertia
+
+middleware_sources:
+  routed.inertia:
+    global:
+      - routed.inertia.middleware
+```
+
+The middleware handles Inertia protocol concerns -- version checking, redirect status rewriting (302 to 303 for PUT/DELETE), and partial reload headers.
+
+### Static assets
+
+Vite builds hashed assets into `client/dist/assets/`. To serve them, configure a static mount backed by a storage disk:
+
+```yaml title="config/static.yaml"
+enabled: true
+mounts:
+  - route: /assets
+    disk: public
+    path: client/dist/assets
+```
+
+```yaml title="config/storage.yaml"
+default: local
+disks:
+  local:
+    driver: local
+    root: "storage/app"
+  public:
+    driver: local
+    root: "."
+```
+
+The `public` disk has its root at `"."` (the project directory), so `client/dist/assets` resolves correctly. Without it, paths resolve relative to the default disk's root (`storage/app`), causing 404s. See [Static Assets](/docs/routed/static-assets) for more on mounts and disks.
+
+### View engine
+
+The helper file configures Liquid templates:
+
+```dart title="lib/inertia_views.dart"
+import 'package:routed/routed.dart';
+
+void configureInertiaViews(Engine engine) {
+  engine.useViewEngine(LiquidViewEngine(directory: 'views'));
+}
+```
+
+### Root template
+
+The Liquid template is the HTML shell for every Inertia page. It receives template variables injected by `ctx.inertia()`:
+
+```html title="views/inertia.liquid"
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>{{ props.title | default: "Routed App" }}</title>
+    {{ ssrHead }}
+    {{ inertia_styles }}
+  </head>
+  <body>
+    {% if ssrBody != blank %}
+      <div id="app" data-page="{{ pageJsonEscaped }}">{{ ssrBody }}</div>
+    {% else %}
+      <div id="app" data-page="{{ pageJsonEscaped }}"></div>
+    {% endif %}
+    {{ inertia_scripts }}
+  </body>
+</html>
+```
+
+- **`{{ inertia_styles }}`** -- CSS `<link>` tags from the Vite manifest (production) or nothing (dev mode, Vite injects CSS via JS).
+- **`{{ inertia_scripts }}`** -- JS `<script>` tags. In dev mode these point to the Vite dev server with HMR support.
+- **`{{ pageJsonEscaped }}`** -- the Inertia page object (component name, props, URL, version) as HTML-escaped JSON in the `data-page` attribute.
+- **`{{ ssrHead }}` / `{{ ssrBody }}`** -- SSR content when enabled.
+
+## 4. Set up the React client
+
+### Entry point
+
+The client entry bootstraps Inertia with a page resolver:
+
+```jsx title="client/src/main.jsx"
+import { createInertiaApp } from '@inertiajs/react'
+import { createRoot } from 'react-dom/client'
+import './index.css'
+
+createInertiaApp({
+  resolve: (name) => {
+    const pages = import.meta.glob('./Pages/**/*.jsx', { eager: true })
+    return pages[`./Pages/${name}.jsx`]
+  },
+  setup({ el, App, props }) {
+    createRoot(el).render(<App {...props} />)
+  },
+})
+```
+
+The `resolve` function maps component names (like `"Home"` or `"Todos"`) to files under `Pages/`. When the server returns `{ component: "Todos", props: {...} }`, Inertia renders `Pages/Todos.jsx` with those props.
+
+### Vite configuration
+
+```js title="client/vite.config.js"
+import { defineConfig } from 'vite'
+import react from '@vitejs/plugin-react'
+import { inertiaHotFile } from './inertia_hot_file.js'
+
+export default defineConfig({
+  plugins: [react(), inertiaHotFile()],
+  server: {
+    port: 5173,
+    strictPort: true,
+  },
+  build: {
+    outDir: 'dist',
+    assetsDir: 'assets',
+    manifest: true,
+  },
+})
+```
+
+- **`manifest: true`** tells Vite to generate `.vite/manifest.json` mapping source entries to hashed filenames.
+- **`inertiaHotFile()`** writes a `public/hot` file when the dev server starts (containing the dev server URL) and deletes it on shutdown. The Dart backend reads this file to decide between dev and production asset resolution.
+
+### Home page
+
+Create a simple landing page:
+
+```jsx title="client/src/Pages/Home.jsx"
+import { Link } from '@inertiajs/react'
+
+export default function Home({ title = 'Inertia + Vite', subtitle }) {
+  return (
+    <main style={{ padding: '2rem', fontFamily: 'system-ui, sans-serif',
+                    maxWidth: 600, margin: '0 auto' }}>
+      <nav style={{ marginBottom: '1.5rem' }}>
+        <Link href="/">Home</Link>
+        <Link href="/todos" style={{ marginLeft: '1rem' }}>Todos</Link>
+      </nav>
+
+      <h1>{title}</h1>
+      {subtitle && <p>{subtitle}</p>}
+      <p>Welcome to your Inertia React client.</p>
+    </main>
+  )
+}
+```
+
+`Link` from `@inertiajs/react` performs client-side navigation -- clicking it sends an XHR with the `X-Inertia` header instead of a full page load.
+
+## 5. Build the Todo page
+
+Create the Todos component. This is the heart of the app -- a form to add todos, checkboxes to toggle them, and buttons to remove them. All mutations go through the server:
+
+```jsx title="client/src/Pages/Todos.jsx"
+import { Link, useForm, router } from '@inertiajs/react'
+
+export default function Todos({ title = 'Todos', todos = [] }) {
+  const { data, setData, post, processing, reset } = useForm({ text: '' })
+
+  const addTodo = (e) => {
+    e.preventDefault()
+    if (!data.text.trim()) return
+    post('/todos', {
+      onSuccess: () => reset('text'),
+    })
+  }
+
+  const toggleTodo = (id) => {
+    router.put(`/todos/${id}`)
+  }
+
+  const removeTodo = (id) => {
+    router.delete(`/todos/${id}`)
+  }
+
+  const remaining = todos.filter((t) => !t.done).length
+
+  return (
+    <main style={{ padding: '2rem', fontFamily: 'system-ui, sans-serif',
+                    maxWidth: 600, margin: '0 auto' }}>
+      <nav style={{ marginBottom: '1.5rem' }}>
+        <Link href="/">Home</Link>
+        <Link href="/todos" style={{ marginLeft: '1rem' }}>Todos</Link>
+      </nav>
+
+      <h1>{title}</h1>
+      <p style={{ color: '#888' }}>
+        {remaining} item{remaining !== 1 ? 's' : ''} remaining
+      </p>
+
+      <form onSubmit={addTodo}
+            style={{ display: 'flex', gap: '0.5rem', marginBottom: '1.5rem' }}>
+        <input
+          type="text"
+          value={data.text}
+          onChange={(e) => setData('text', e.target.value)}
+          placeholder="What needs to be done?"
+          disabled={processing}
+          style={{ flex: 1, padding: '0.6em 1em', borderRadius: 8,
+                   border: '1px solid #444', background: 'transparent',
+                   color: 'inherit', fontSize: '1em' }}
+        />
+        <button type="submit" disabled={processing}>Add</button>
+      </form>
+
+      <ul style={{ listStyle: 'none', padding: 0 }}>
+        {todos.map((todo) => (
+          <li key={todo.id}
+              style={{ display: 'flex', alignItems: 'center', gap: '0.75rem',
+                       padding: '0.5rem 0', borderBottom: '1px solid #333' }}>
+            <input type="checkbox" checked={todo.done}
+                   onChange={() => toggleTodo(todo.id)}
+                   style={{ width: 18, height: 18, cursor: 'pointer' }} />
+            <span style={{ flex: 1,
+                           textDecoration: todo.done ? 'line-through' : 'none',
+                           opacity: todo.done ? 0.5 : 1 }}>
+              {todo.text}
+            </span>
+            <button onClick={() => removeTodo(todo.id)}
+                    style={{ padding: '0.3em 0.6em', fontSize: '0.85em' }}>
+              Remove
+            </button>
+          </li>
+        ))}
+      </ul>
+
+      {todos.length === 0 && (
+        <p style={{ textAlign: 'center', color: '#666', marginTop: '2rem' }}>
+          No todos yet. Add one above!
+        </p>
+      )}
+    </main>
+  )
+}
+```
+
+Key patterns:
+
+- **`useForm`** manages form state and submission. `post('/todos', ...)` sends a POST with the form data as JSON. On success, `reset('text')` clears the input.
+- **`router.put`** and **`router.delete`** send Inertia visits that mutate server state. The server processes the request, redirects back to `/todos`, and Inertia follows the redirect to fetch fresh props.
+- **No local state for todos.** The `todos` array comes as a prop from the server on every render. This is the core Inertia pattern -- the server is the single source of truth.
+
+## 6. Add server routes
+
+### In-memory store
+
+For this tutorial, todos live in memory. In a real app you would use a database:
+
+```dart title="lib/app.dart"
+/// Simple in-memory todo store.
+class TodoStore {
+  int _nextId = 4;
+  final List<Map<String, dynamic>> _todos = [
+    {'id': 1, 'text': 'Learn Routed', 'done': true},
+    {'id': 2, 'text': 'Build an Inertia app', 'done': true},
+    {'id': 3, 'text': 'Add more pages', 'done': false},
+  ];
+
+  List<Map<String, dynamic>> all() =>
+      _todos.map((t) => Map<String, dynamic>.from(t)).toList();
+
+  void add(String text) {
+    _todos.add({'id': _nextId++, 'text': text, 'done': false});
+  }
+
+  void toggle(int id) {
+    final todo = _todos.firstWhere((t) => t['id'] == id, orElse: () => {});
+    if (todo.isNotEmpty) {
+      todo['done'] = !(todo['done'] as bool);
+    }
+  }
+
+  void remove(int id) {
+    _todos.removeWhere((t) => t['id'] == id);
+  }
+}
+```
+
+### Wire up the engine
+
+```dart title="lib/app.dart"
+import 'package:routed/routed.dart';
+import 'package:routed/providers.dart';
+import 'inertia_views.dart';
+import 'package:routed_inertia/routed_inertia.dart';
+
+Future<Engine> createEngine({bool initialize = true}) async {
+  registerRoutedInertiaProvider(ProviderRegistry.instance);
+
+  final engine = Engine(
+    providers: [
+      CoreServiceProvider.withLoader(
+        const ConfigLoaderOptions(
+          configDirectory: 'config',
+          loadEnvFiles: false,
+          includeEnvironmentSubdirectory: false,
+        ),
+      ),
+      RoutingServiceProvider(),
+    ],
+  );
+
+  if (initialize) {
+    await engine.initialize();
+  }
+
+  configureInertiaViews(engine);
+
+  final store = TodoStore();
+
+  engine.get('/', (ctx) async {
+    return ctx.inertia(
+      'Home',
+      props: {'title': 'Todo App', 'subtitle': 'Routed + Inertia starter'},
+    );
+  });
+
+  // List todos
+  engine.get('/todos', (ctx) async {
+    return ctx.inertia(
+      'Todos',
+      props: {'title': 'Todos', 'todos': store.all()},
+    );
+  });
+
+  // Create a todo
+  engine.post('/todos', (ctx) async {
+    final data = <String, dynamic>{};
+    await ctx.bind(data);
+    final text = (data['text'] as String?)?.trim() ?? '';
+    if (text.isNotEmpty) {
+      store.add(text);
+    }
+    return ctx.redirect('/todos');
+  });
+
+  // Toggle a todo's done state
+  engine.put('/todos/{id}', (ctx) async {
+    final id = int.tryParse(ctx.param('id') ?? '') ?? 0;
+    store.toggle(id);
+    return ctx.redirect('/todos');
+  });
+
+  // Delete a todo
+  engine.delete('/todos/{id}', (ctx) async {
+    final id = int.tryParse(ctx.param('id') ?? '') ?? 0;
+    store.remove(id);
+    return ctx.redirect('/todos');
+  });
+
+  return engine;
+}
+```
+
+Key points:
+
+- **`ctx.inertia('Component', props: {...})`** renders an Inertia response. On a full page load it returns HTML; on an Inertia XHR visit it returns JSON.
+- **Route parameters use `{id}` syntax**, not `:id`. Routed treats `:id` as a literal string segment. See [Troubleshooting](#route-parameters-return-404) below.
+- **`ctx.bind(data)`** parses the request body into a map. Inertia's `useForm.post()` sends JSON by default.
+- **`ctx.redirect('/todos')`** after mutations. The Inertia middleware rewrites 302 to 303 for PUT/PATCH/DELETE methods so the browser follows the redirect as GET.
+
+### Server entry point
+
+```dart title="bin/server.dart"
+import 'dart:io';
+import 'package:routed/routed.dart';
+import 'package:todo_app/app.dart' as app;
+
+Future<void> main(List<String> args) async {
+  final host = Platform.environment['HOST'] ?? '127.0.0.1';
+  final port = int.tryParse(Platform.environment['PORT'] ?? '8080') ?? 8080;
+
+  final Engine engine = await app.createEngine();
+  await engine.serve(host: host, port: port);
+}
+```
+
+## 7. Build and run
+
+### Production build
+
+Build the client and start the server:
+
+```bash
+cd client && npm run build
+cd ..
+dart run bin/server.dart
+```
+
+Visit [http://127.0.0.1:8080/](http://127.0.0.1:8080/) to see the Home page. Click **Todos** in the nav to navigate (Inertia sends an XHR, no full page reload). Add, toggle, and remove todos -- each action round-trips to the server and the page re-renders with fresh data.
+
+### Development mode
+
+For hot module replacement during development, run two processes:
+
+```bash
+# Terminal 1 -- Vite dev server (from client/)
+cd client
+npm run dev
+
+# Terminal 2 -- Dart server (from project root)
+dart run routed dev
+```
+
+When Vite starts, the `inertiaHotFile` plugin writes `client/public/hot` containing the dev server URL (e.g. `http://localhost:5173`). The Dart backend reads this file and emits `<script>` tags pointing to Vite instead of the built manifest. Changes to `.jsx` files appear instantly in the browser.
+
+When you stop Vite, the plugin deletes the hot file and the backend falls back to the production manifest automatically.
+
+## 8. How it works
+
+The Inertia request lifecycle:
+
+1. **First visit** -- the browser requests `/todos`. The server renders the Liquid template with the full HTML shell. The `data-page` attribute contains the Inertia page object as JSON (`{component: "Todos", props: {todos: [...]}, url: "/todos", version: "dev"}`). React hydrates from this.
+2. **Client-side navigation** -- clicking a `Link` sends an XHR with the `X-Inertia: true` header. The server returns JSON instead of HTML. Inertia swaps the component and props without a full reload.
+3. **Mutations** -- `useForm.post()`, `router.put()`, and `router.delete()` send Inertia visits. The server processes the request and redirects. Inertia follows the redirect, receives fresh props, and re-renders.
+4. **Version checking** -- the middleware compares `X-Inertia-Version` from the client against the server's version. On a mismatch (e.g. after a deploy), the server responds with 409 and the client does a full page reload to pick up new assets.
+
+## 9. Prop helpers
+
+The `inertia_dart` package (re-exported by `routed_inertia`) provides prop helper classes that control when and how props are resolved. In the tutorial above we used plain values, but for real apps you will want lazy-loaded, deferred, or mergeable props.
+
+### AlwaysProp
+
+Always included in every response, even partial reloads that did not request it. Use for global data like the authenticated user or app name:
+
+```dart
+engine.get('/dashboard', (ctx) async {
+  return ctx.inertia('Dashboard', props: {
+    'appName': AlwaysProp(() => 'Todo App'),
+    'user': AlwaysProp(() => getCurrentUser(ctx)),
+    'stats': fetchDashboardStats(),
+  });
+});
+```
+
+### LazyProp
+
+Excluded on the initial page visit. Only resolved when the client explicitly requests it via a partial reload. Use for expensive data the user may never need:
+
+```dart
+engine.get('/dashboard', (ctx) async {
+  return ctx.inertia('Dashboard', props: {
+    'title': 'Dashboard',
+    'heavyReport': LazyProp(() => generateReport()),
+  });
+});
+```
+
+On the client, trigger a partial reload to fetch it:
+
+```js
+router.reload({ only: ['heavyReport'] })
+```
+
+### DeferredProp
+
+Like `LazyProp`, but the client automatically fetches it after the initial page load. Props are grouped so they can be loaded in batches:
+
+```dart
+engine.get('/dashboard', (ctx) async {
+  return ctx.inertia('Dashboard', props: {
+    'title': 'Dashboard',
+    'feed': DeferredProp(() => loadActivityFeed(), group: 'sidebar'),
+    'notifications': DeferredProp(() => loadNotifications(), group: 'sidebar'),
+  });
+});
+```
+
+The initial response excludes `feed` and `notifications` but includes metadata telling the client which deferred groups exist. The client then fetches the `"sidebar"` group automatically.
+
+### MergeProp
+
+Tells the client to merge the new value into existing props instead of replacing them. Useful for pagination or appending items to a list:
+
+```dart
+engine.get('/feed', (ctx) async {
+  final page = int.tryParse(ctx.input('page') ?? '1') ?? 1;
+  return ctx.inertia('Feed', props: {
+    'items': MergeProp(() => fetchItems(page: page)),
+  });
+});
+```
+
+Supports subpath merging, deduplication via `matchOn`, deep merge, prepend, and append:
+
+```dart
+'items': MergeProp(() => fetchItems(page: page))
+  ..append('data', 'id')   // append at 'data' key, deduplicate by 'id'
+```
+
+### OnceProp
+
+Resolved and sent once. On subsequent Inertia visits the client tells the server it already has the value (via the `X-Inertia-Except-Once-Props` header) and the prop is excluded. Supports TTL for automatic expiry:
+
+```dart
+'permissions': OnceProp(
+  () => loadPermissions(),
+  ttl: Duration(minutes: 30),
+  key: 'user-perms',
+),
+```
+
+### ScrollProp
+
+Purpose-built for infinite scroll. Automatically configures merge behavior and emits pagination metadata (`previousPage`, `nextPage`, `currentPage`). Responds to the `X-Inertia-Infinite-Scroll-Merge-Intent` header to append or prepend:
+
+```dart
+'users': ScrollProp(
+  () => {'data': fetchUsersPage(page)},
+  wrapper: 'data',
+  metadata: (value) => ScrollMetadata(
+    pageName: 'page',
+    previousPage: page > 1 ? page - 1 : null,
+    nextPage: page + 1,
+    currentPage: page,
+  ),
+),
+```
+
+### Summary
+
+| Class | Initial visit | Partial reload | Merge | Defer | Once |
+|-------|--------------|----------------|-------|-------|------|
+| `AlwaysProp` | Always included | Always included | No | No | No |
+| `LazyProp` | Excluded | Only if requested | No | No | No |
+| `OptionalProp` | Excluded | Only if requested | No | No | Optional |
+| `DeferredProp` | Registered in group | Only if requested | Optional | Yes | Optional |
+| `MergeProp` | Included (merges) | Only if requested | Yes | No | Optional |
+| `OnceProp` | Included (skipped if cached) | Only if requested | No | No | Yes |
+| `ScrollProp` | Included or deferred | Only if requested | Yes | Optional | No |
+
+## Troubleshooting
+
+### Route parameters return 404
+
+Routed uses `{id}` syntax for route parameters, not `:id`. A path like `/todos/:id` is treated as a literal string and will never match `/todos/3`. Use `/todos/{id}` instead. Typed parameters are also supported: `/todos/{id:int}` restricts to digits and auto-casts the value.
+
+### Assets return 404 in production
+
+The static mount needs a storage disk whose root is your project directory. Without one, paths resolve relative to the default `local` disk root (`storage/app`), so `client/dist/assets` becomes `storage/app/client/dist/assets` -- which does not exist.
+
+Add a `public` disk with `root: "."` to `config/storage.yaml` and reference it with `disk: public` in `config/static.yaml`. See [Static Assets](/docs/routed/static-assets) for details.
+
+### Manifest entry key mismatch
+
+The `entry` value in `config/inertia.yaml` must exactly match a key in the Vite manifest at `client/dist/.vite/manifest.json`. Vite 7 uses `"index.html"` as the entry key (since the HTML file is the entry point), not `"src/main.jsx"`. If the key does not match, asset resolution silently falls back to a non-existent default and pages load without CSS or JS.
+
+Check your manifest after building:
+
+```bash
+cat client/dist/.vite/manifest.json
+```
+
+### Stale hot file after stopping Vite
+
+If you kill the Vite dev server without a clean shutdown (e.g. `kill -9`), the `client/public/hot` file may persist. The Dart backend will try to proxy assets to a dead dev server. Delete the file before running in production:
+
+```bash
+rm -f client/public/hot
+```
+
+### Inertia requests return HTML instead of JSON
+
+If clicking links triggers full page reloads instead of client-side navigation, verify that:
+
+1. The Inertia middleware is registered in `config/http.yaml` under `middleware_sources`.
+2. The `X-Inertia` header is reaching the server. The `inertia_dart` package handles case-insensitive header matching, so this should work with any HTTP client.
+
+## Next steps
+
+- Read the [Routed Inertia reference](/docs/routed_inertia/) for shared props, SSR, error bags, and testing.
+- Learn more about [Routed fundamentals](/docs/routed/getting-started) -- routing, middleware, and configuration.
+- See [Static Assets](/docs/routed/static-assets) for advanced mount and disk options.
+- See [Views and templates](/docs/routed/views/) for Liquid template syntax.
