@@ -306,6 +306,43 @@ class Container {
     _availabilityCallbacks.putIfAbsent(type, () => []).add(callback);
   }
 
+  /// Waits until [T] becomes available in the container.
+  ///
+  /// If [timeout] is provided, the returned future completes with a [TimeoutException]
+  /// when the duration elapses.
+  Future<void> waitFor<T>({Duration? timeout}) {
+    return waitForType(T, timeout: timeout);
+  }
+
+  /// Waits until [type] becomes available in the container.
+  ///
+  /// This does not resolve the instance; it only waits for a binding or instance
+  /// to be registered. Use [makeWhenAvailable] to await and resolve.
+  Future<void> waitForType(Type type, {Duration? timeout}) {
+    if (hasType(type)) {
+      return Future.value();
+    }
+
+    final completer = Completer<void>();
+    whenAvailable(type, (_) {
+      if (!completer.isCompleted) {
+        completer.complete();
+      }
+    });
+
+    return timeout == null
+        ? completer.future
+        : completer.future.timeout(timeout);
+  }
+
+  /// Waits until [T] is available, then resolves it.
+  ///
+  /// This is useful when a dependency may be registered later during boot.
+  Future<T> makeWhenAvailable<T>({Duration? timeout}) async {
+    await waitFor<T>(timeout: timeout);
+    return make<T>();
+  }
+
   /// Makes an instance of type [T].
   ///
   /// This will:

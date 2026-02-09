@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:routed/src/cache/cache_manager.dart';
 import 'package:routed/src/container/container.dart';
 import 'package:routed/src/contracts/config/config.dart';
@@ -340,6 +342,37 @@ void main() {
 
       await container.make<TestService>();
       expect(count, equals(3));
+    });
+
+    test('waitFor completes when type becomes available', () async {
+      final waited = container.waitFor<TestService>();
+
+      await Future<void>.delayed(const Duration(milliseconds: 10));
+      container.bind<TestService>((c) async => TestService('ready'));
+
+      await waited;
+      final service = await container.make<TestService>();
+      expect(service.value, equals('ready'));
+    });
+
+    test('waitForType times out when type never becomes available', () async {
+      expect(
+        () => container.waitForType(
+          DependentService,
+          timeout: const Duration(milliseconds: 10),
+        ),
+        throwsA(isA<TimeoutException>()),
+      );
+    });
+
+    test('makeWhenAvailable resolves after binding is registered', () async {
+      final future = container.makeWhenAvailable<TestService>();
+
+      await Future<void>.delayed(const Duration(milliseconds: 10));
+      container.bind<TestService>((c) async => TestService('late'));
+
+      final service = await future;
+      expect(service.value, equals('late'));
     });
   });
 }
