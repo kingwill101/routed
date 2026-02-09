@@ -71,6 +71,16 @@ const config: Config = {
     [
       '@docusaurus/plugin-content-docs',
       {
+        id: 'inertia_dart',
+        path: 'docs/inertia_dart',
+        routeBasePath: 'docs/inertia_dart',
+        sidebarPath: './sidebars/inertia_dart.ts',
+        editUrl: 'https://github.com/kingwill101/routed/tree/main/docs/',
+      },
+    ],
+    [
+      '@docusaurus/plugin-content-docs',
+      {
         id: 'routed_inertia',
         path: 'docs/routed_inertia',
         routeBasePath: 'docs/routed_inertia',
@@ -139,6 +149,13 @@ const config: Config = {
         },
         {
           type: 'docSidebar',
+          sidebarId: 'inertiaDartSidebar',
+          docsPluginId: 'inertia_dart',
+          position: 'left',
+          label: 'Inertia Dart',
+        },
+        {
+          type: 'docSidebar',
           sidebarId: 'routedHotwireSidebar',
           docsPluginId: 'routed_hotwire',
           position: 'left',
@@ -186,6 +203,7 @@ const config: Config = {
           title: 'Docs',
           items: [
             {label: 'Routed', to: '/docs/routed/'},
+            {label: 'Inertia Dart', to: '/docs/inertia_dart/'},
             {label: 'Routed Hotwire', to: '/docs/routed_hotwire/'},
             {label: 'Server Testing', to: '/docs/server_testing/'},
             {label: 'Server Testing Shelf', to: '/docs/server_testing_shelf/'},
