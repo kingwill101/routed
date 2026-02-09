@@ -4,6 +4,7 @@ import 'package:routed/routed.dart';
 ///
 /// See [Sign in with Apple REST API](https://developer.apple.com/documentation/sign_in_with_apple/sign_in_with_apple_rest_api).
 class AppleProfile {
+  /// Creates a new [AppleProfile] with the given fields.
   const AppleProfile({
     required this.sub,
     this.email,
@@ -27,6 +28,7 @@ class AppleProfile {
   /// User's name (only provided on first sign-in).
   final AppleName? name;
 
+  /// Creates an [AppleProfile] from a JSON map decoded from the Apple ID token.
   factory AppleProfile.fromJson(Map<String, dynamic> json) {
     AppleName? name;
     if (json['name'] is Map<String, dynamic>) {
@@ -44,6 +46,7 @@ class AppleProfile {
     );
   }
 
+  /// Converts this profile to a JSON-serializable map.
   Map<String, dynamic> toJson() => {
     'sub': sub,
     'email': email,
@@ -64,11 +67,16 @@ class AppleProfile {
 
 /// Apple user name structure.
 class AppleName {
+  /// Creates a new [AppleName].
   const AppleName({this.firstName, this.lastName});
 
+  /// User's first name.
   final String? firstName;
+
+  /// User's last name.
   final String? lastName;
 
+  /// Creates an [AppleName] from a JSON map.
   factory AppleName.fromJson(Map<String, dynamic> json) {
     return AppleName(
       firstName: json['firstName']?.toString(),
@@ -76,6 +84,7 @@ class AppleName {
     );
   }
 
+  /// Converts this name to a JSON-serializable map.
   Map<String, dynamic> toJson() => {
     'firstName': firstName,
     'lastName': lastName,
@@ -117,6 +126,7 @@ class AppleName {
 /// - User name is only returned on first sign-in, you must store it.
 /// - Apple may return a private relay email address.
 class AppleProviderOptions {
+  /// Creates a new [AppleProviderOptions] configuration.
   const AppleProviderOptions({
     required this.clientId,
     required this.clientSecret,
@@ -130,7 +140,10 @@ class AppleProviderOptions {
   /// JWT signed with your Apple private key.
   final String clientSecret;
 
+  /// The URI to redirect to after authentication.
   final String redirectUri;
+
+  /// OAuth scopes to request. Defaults to `['name', 'email']`.
   final List<String> scopes;
 }
 

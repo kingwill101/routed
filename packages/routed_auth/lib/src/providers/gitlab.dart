@@ -4,6 +4,7 @@ import 'package:routed/routed.dart';
 ///
 /// See [GitLab User API](https://docs.gitlab.com/ee/api/users.html).
 class GitLabProfile {
+  /// Creates a new [GitLabProfile] with the given fields.
   const GitLabProfile({
     required this.id,
     required this.username,
@@ -71,6 +72,7 @@ class GitLabProfile {
   /// When the account was created.
   final String? createdAt;
 
+  /// Creates a [GitLabProfile] from a JSON map returned by the GitLab API.
   factory GitLabProfile.fromJson(Map<String, dynamic> json) {
     return GitLabProfile(
       id: json['id'] as int? ?? 0,
@@ -92,6 +94,7 @@ class GitLabProfile {
     );
   }
 
+  /// Converts this profile to a JSON-serializable map.
   Map<String, dynamic> toJson() => {
     'id': id,
     'username': username,
@@ -143,6 +146,7 @@ class GitLabProfile {
 ///
 /// - For self-hosted GitLab, set [baseUrl].
 class GitLabProviderOptions {
+  /// Creates a new [GitLabProviderOptions] configuration.
   const GitLabProviderOptions({
     required this.clientId,
     required this.clientSecret,
@@ -151,13 +155,19 @@ class GitLabProviderOptions {
     this.scopes = const ['read_user'],
   });
 
+  /// OAuth 2.0 application ID from GitLab.
   final String clientId;
+
+  /// OAuth 2.0 application secret from GitLab.
   final String clientSecret;
+
+  /// The URI to redirect to after authentication.
   final String redirectUri;
 
   /// Base URL for self-hosted GitLab instances.
   final String? baseUrl;
 
+  /// OAuth scopes to request. Defaults to `['read_user']`.
   final List<String> scopes;
 }
 

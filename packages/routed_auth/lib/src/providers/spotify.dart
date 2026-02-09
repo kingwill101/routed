@@ -4,6 +4,7 @@ import 'package:routed/routed.dart';
 ///
 /// See [Spotify Web API User Object](https://developer.spotify.com/documentation/web-api/reference/get-current-users-profile).
 class SpotifyProfile {
+  /// Creates a new [SpotifyProfile] with the given fields.
   const SpotifyProfile({
     required this.id,
     this.displayName,
@@ -47,6 +48,7 @@ class SpotifyProfile {
   /// Follower information.
   final SpotifyFollowers? followers;
 
+  /// Creates a [SpotifyProfile] from a JSON map returned by the Spotify Web API.
   factory SpotifyProfile.fromJson(Map<String, dynamic> json) {
     List<SpotifyImage>? images;
     if (json['images'] is List) {
@@ -75,6 +77,7 @@ class SpotifyProfile {
     );
   }
 
+  /// Converts this profile to a JSON-serializable map.
   Map<String, dynamic> toJson() => {
     'id': id,
     'display_name': displayName,
@@ -94,12 +97,19 @@ class SpotifyProfile {
 
 /// Spotify image object.
 class SpotifyImage {
+  /// Creates a new [SpotifyImage].
   const SpotifyImage({this.url, this.width, this.height});
 
+  /// URL of the image.
   final String? url;
+
+  /// Width of the image in pixels.
   final int? width;
+
+  /// Height of the image in pixels.
   final int? height;
 
+  /// Creates a [SpotifyImage] from a JSON map.
   factory SpotifyImage.fromJson(Map<String, dynamic> json) {
     return SpotifyImage(
       url: json['url']?.toString(),
@@ -108,6 +118,7 @@ class SpotifyImage {
     );
   }
 
+  /// Converts this image to a JSON-serializable map.
   Map<String, dynamic> toJson() => {
     'url': url,
     'width': width,
@@ -117,11 +128,16 @@ class SpotifyImage {
 
 /// Spotify followers object.
 class SpotifyFollowers {
+  /// Creates a new [SpotifyFollowers].
   const SpotifyFollowers({this.href, this.total});
 
+  /// Link to the followers endpoint (always `null` per Spotify docs).
   final String? href;
+
+  /// Total number of followers.
   final int? total;
 
+  /// Creates a [SpotifyFollowers] from a JSON map.
   factory SpotifyFollowers.fromJson(Map<String, dynamic> json) {
     return SpotifyFollowers(
       href: json['href']?.toString(),
@@ -129,6 +145,7 @@ class SpotifyFollowers {
     );
   }
 
+  /// Converts this follower data to a JSON-serializable map.
   Map<String, dynamic> toJson() => {'href': href, 'total': total};
 }
 
@@ -159,6 +176,7 @@ class SpotifyFollowers {
 /// );
 /// ```
 class SpotifyProviderOptions {
+  /// Creates a new [SpotifyProviderOptions] configuration.
   const SpotifyProviderOptions({
     required this.clientId,
     required this.clientSecret,
@@ -166,9 +184,16 @@ class SpotifyProviderOptions {
     this.scopes = const ['user-read-email'],
   });
 
+  /// OAuth 2.0 client ID from the Spotify Developer Dashboard.
   final String clientId;
+
+  /// OAuth 2.0 client secret from the Spotify Developer Dashboard.
   final String clientSecret;
+
+  /// The URI to redirect to after authentication.
   final String redirectUri;
+
+  /// OAuth scopes to request. Defaults to `['user-read-email', 'user-read-private']`.
   final List<String> scopes;
 }
 

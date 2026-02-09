@@ -6,6 +6,7 @@ import 'package:routed/routed.dart';
 ///
 /// See [Dropbox API documentation](https://www.dropbox.com/developers/documentation/http/documentation#users-get_current_account).
 class DropboxProfile {
+  /// Creates a new [DropboxProfile] with the given fields.
   const DropboxProfile({
     required this.accountId,
     this.email,
@@ -49,6 +50,7 @@ class DropboxProfile {
   /// Account type (basic, pro, business).
   final String? accountType;
 
+  /// Creates a [DropboxProfile] from a JSON map returned by the Dropbox API.
   factory DropboxProfile.fromJson(Map<String, dynamic> json) {
     // Extract nested name object
     final nameObj = json['name'] as Map<String, dynamic>?;
@@ -69,6 +71,7 @@ class DropboxProfile {
     );
   }
 
+  /// Converts this profile to a JSON-serializable map.
   Map<String, dynamic> toJson() => {
     'account_id': accountId,
     'email': email,
@@ -116,6 +119,7 @@ class DropboxProfile {
 /// - Set `tokenAccessType: 'offline'` to receive refresh tokens.
 /// - The userinfo endpoint requires a POST request with no body.
 class DropboxProviderOptions {
+  /// Creates a new [DropboxProviderOptions] configuration.
   const DropboxProviderOptions({
     required this.clientId,
     required this.clientSecret,
@@ -124,9 +128,16 @@ class DropboxProviderOptions {
     this.tokenAccessType = 'offline',
   });
 
+  /// OAuth 2.0 app key from the Dropbox App Console.
   final String clientId;
+
+  /// OAuth 2.0 app secret from the Dropbox App Console.
   final String clientSecret;
+
+  /// The URI to redirect to after authentication.
   final String redirectUri;
+
+  /// OAuth scopes to request. Defaults to `['account_info.read']`.
   final List<String> scopes;
 
   /// Token access type. Set to 'offline' for refresh tokens.

@@ -4,6 +4,7 @@ import 'package:routed/routed.dart';
 ///
 /// See [Twitch OIDC](https://dev.twitch.tv/docs/authentication/getting-tokens-oidc/).
 class TwitchProfile {
+  /// Creates a new [TwitchProfile] with the given fields.
   const TwitchProfile({
     required this.sub,
     this.email,
@@ -31,6 +32,7 @@ class TwitchProfile {
   /// When the profile was last updated.
   final String? updatedAt;
 
+  /// Creates a [TwitchProfile] from a JSON map returned by the Twitch OIDC userinfo endpoint.
   factory TwitchProfile.fromJson(Map<String, dynamic> json) {
     return TwitchProfile(
       sub: json['sub']?.toString() ?? '',
@@ -42,6 +44,7 @@ class TwitchProfile {
     );
   }
 
+  /// Converts this profile to a JSON-serializable map.
   Map<String, dynamic> toJson() => {
     'sub': sub,
     'email': email,
@@ -84,6 +87,7 @@ class TwitchProfile {
 /// - Uses OpenID Connect (OIDC).
 /// - Requires `openid` and `user:read:email` scopes for email.
 class TwitchProviderOptions {
+  /// Creates a new [TwitchProviderOptions] configuration.
   const TwitchProviderOptions({
     required this.clientId,
     required this.clientSecret,
@@ -91,9 +95,16 @@ class TwitchProviderOptions {
     this.scopes = const ['openid', 'user:read:email'],
   });
 
+  /// OAuth 2.0 client ID from the Twitch Developer Console.
   final String clientId;
+
+  /// OAuth 2.0 client secret from the Twitch Developer Console.
   final String clientSecret;
+
+  /// The URI to redirect to after authentication.
   final String redirectUri;
+
+  /// OAuth scopes to request. Defaults to `['openid', 'user:read:email']`.
   final List<String> scopes;
 }
 

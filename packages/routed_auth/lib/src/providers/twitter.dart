@@ -4,6 +4,7 @@ import 'package:routed/routed.dart';
 ///
 /// See [Users lookup](https://developer.x.com/en/docs/twitter-api/users/lookup/api-reference/get-users-me).
 class TwitterProfile {
+  /// Creates a new [TwitterProfile] with the given fields.
   const TwitterProfile({
     required this.id,
     required this.name,
@@ -51,6 +52,7 @@ class TwitterProfile {
   /// ID of the user's pinned tweet.
   final String? pinnedTweetId;
 
+  /// Creates a [TwitterProfile] from a JSON map returned by the Twitter API v2.
   factory TwitterProfile.fromJson(Map<String, dynamic> json) {
     // Twitter API wraps user data in 'data' object
     final data = json['data'] as Map<String, dynamic>? ?? json;
@@ -69,6 +71,7 @@ class TwitterProfile {
     );
   }
 
+  /// Converts this profile to a JSON-serializable map.
   Map<String, dynamic> toJson() => {
     'id': id,
     'name': name,
@@ -117,6 +120,7 @@ class TwitterProfile {
 /// - Twitter API v2 is used for user info.
 /// - You must enable "Request email from users" in app permissions.
 class TwitterProviderOptions {
+  /// Creates a new [TwitterProviderOptions] configuration.
   const TwitterProviderOptions({
     required this.clientId,
     required this.clientSecret,
@@ -124,9 +128,16 @@ class TwitterProviderOptions {
     this.scopes = const ['users.read', 'tweet.read', 'offline.access'],
   });
 
+  /// OAuth 2.0 client ID from the Twitter Developer Portal.
   final String clientId;
+
+  /// OAuth 2.0 client secret from the Twitter Developer Portal.
   final String clientSecret;
+
+  /// The URI to redirect to after authentication.
   final String redirectUri;
+
+  /// OAuth scopes to request. Defaults to `['tweet.read', 'users.read']`.
   final List<String> scopes;
 }
 

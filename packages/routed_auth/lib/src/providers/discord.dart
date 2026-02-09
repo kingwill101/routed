@@ -4,6 +4,7 @@ import 'package:routed/routed.dart';
 ///
 /// See [Discord User Object](https://discord.com/developers/docs/resources/user#user-object).
 class DiscordProfile {
+  /// Creates a new [DiscordProfile] with the given fields.
   const DiscordProfile({
     required this.id,
     required this.username,
@@ -71,6 +72,7 @@ class DiscordProfile {
   /// The public flags on a user's account.
   final int? publicFlags;
 
+  /// Creates a [DiscordProfile] from a JSON map returned by the Discord API.
   factory DiscordProfile.fromJson(Map<String, dynamic> json) {
     return DiscordProfile(
       id: json['id']?.toString() ?? '',
@@ -92,6 +94,7 @@ class DiscordProfile {
     );
   }
 
+  /// Converts this profile to a JSON-serializable map.
   Map<String, dynamic> toJson() => {
     'id': id,
     'username': username,
@@ -152,6 +155,7 @@ class DiscordProfile {
 /// - Default scopes: `identify` and `email`.
 /// - Additional scopes: `guilds`, `guilds.join`, `connections`, etc.
 class DiscordProviderOptions {
+  /// Creates a new [DiscordProviderOptions] configuration.
   const DiscordProviderOptions({
     required this.clientId,
     required this.clientSecret,
@@ -159,9 +163,16 @@ class DiscordProviderOptions {
     this.scopes = const ['identify', 'email'],
   });
 
+  /// OAuth 2.0 client ID from the Discord Developer Portal.
   final String clientId;
+
+  /// OAuth 2.0 client secret from the Discord Developer Portal.
   final String clientSecret;
+
+  /// The URI to redirect to after authentication.
   final String redirectUri;
+
+  /// OAuth scopes to request. Defaults to `['identify', 'email']`.
   final List<String> scopes;
 }
 

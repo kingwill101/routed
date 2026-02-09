@@ -4,6 +4,7 @@ import 'package:routed/routed.dart';
 ///
 /// See [Slack OpenID Connect](https://api.slack.com/authentication/sign-in-with-slack).
 class SlackProfile {
+  /// Creates a new [SlackProfile] with the given fields.
   const SlackProfile({
     required this.sub,
     this.email,
@@ -55,6 +56,7 @@ class SlackProfile {
   /// Slack team/workspace image.
   final String? slackTeamImage;
 
+  /// Creates a [SlackProfile] from a JSON map returned by the Slack OIDC userinfo endpoint.
   factory SlackProfile.fromJson(Map<String, dynamic> json) {
     return SlackProfile(
       sub: json['sub']?.toString() ?? '',
@@ -72,6 +74,7 @@ class SlackProfile {
     );
   }
 
+  /// Converts this profile to a JSON-serializable map.
   Map<String, dynamic> toJson() => {
     'sub': sub,
     'email': email,
@@ -120,6 +123,7 @@ class SlackProfile {
 /// - Uses OpenID Connect (OIDC).
 /// - Team information is included in the profile claims.
 class SlackProviderOptions {
+  /// Creates a new [SlackProviderOptions] configuration.
   const SlackProviderOptions({
     required this.clientId,
     required this.clientSecret,
@@ -127,9 +131,16 @@ class SlackProviderOptions {
     this.scopes = const ['openid', 'profile', 'email'],
   });
 
+  /// OAuth 2.0 client ID from the Slack API dashboard.
   final String clientId;
+
+  /// OAuth 2.0 client secret from the Slack API dashboard.
   final String clientSecret;
+
+  /// The URI to redirect to after authentication.
   final String redirectUri;
+
+  /// OAuth scopes to request. Defaults to `['openid', 'profile', 'email']`.
   final List<String> scopes;
 }
 

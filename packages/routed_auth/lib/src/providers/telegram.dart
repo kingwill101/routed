@@ -7,6 +7,7 @@ import 'package:routed/routed.dart';
 ///
 /// See [Telegram Login Widget](https://core.telegram.org/widgets/login).
 class TelegramProfile {
+  /// Creates a new [TelegramProfile] with the given fields.
   const TelegramProfile({
     required this.id,
     required this.authDate,
@@ -44,6 +45,7 @@ class TelegramProfile {
     return [firstName, lastName].whereType<String>().join(' ').trim();
   }
 
+  /// Creates a [TelegramProfile] from a JSON map received via the Telegram Login Widget callback.
   factory TelegramProfile.fromJson(Map<String, dynamic> json) {
     return TelegramProfile(
       id: _parseInt(json['id']) ?? 0,
@@ -56,6 +58,7 @@ class TelegramProfile {
     );
   }
 
+  /// Converts this profile to a JSON-serializable map.
   Map<String, dynamic> toJson() => {
     'id': id,
     'auth_date': authDate,
@@ -122,6 +125,7 @@ class TelegramProfile {
 /// - The bot token is used to verify the HMAC-SHA-256 hash.
 /// - Set [authDateMaxAge] to reject stale authentications.
 class TelegramProviderOptions {
+  /// Creates a new [TelegramProviderOptions] configuration.
   const TelegramProviderOptions({
     required this.botToken,
     required this.botUsername,
@@ -155,6 +159,7 @@ class TelegramProviderOptions {
 /// - https://core.telegram.org/widgets/login
 /// - https://core.telegram.org/bots#botfather
 class TelegramProvider extends AuthProvider with CallbackProvider {
+  /// Creates a new [TelegramProvider] with the given options.
   TelegramProvider({
     required this.botToken,
     required this.botUsername,
@@ -279,9 +284,13 @@ class TelegramProvider extends AuthProvider with CallbackProvider {
 
 /// Exception thrown when Telegram authentication fails.
 class TelegramAuthException implements Exception {
+  /// Creates a new [TelegramAuthException] with the given [message].
   TelegramAuthException(this.message);
+
+  /// Human-readable description of the authentication failure.
   final String message;
 
+  /// Returns a string representation of this exception.
   @override
   String toString() => 'TelegramAuthException: $message';
 }

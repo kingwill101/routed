@@ -4,6 +4,7 @@ import 'package:routed/routed.dart';
 ///
 /// See [Facebook Graph API User](https://developers.facebook.com/docs/graph-api/reference/user/).
 class FacebookProfile {
+  /// Creates a new [FacebookProfile] with the given fields.
   const FacebookProfile({
     required this.id,
     this.email,
@@ -31,6 +32,7 @@ class FacebookProfile {
   /// User's profile picture data.
   final FacebookPicture? picture;
 
+  /// Creates a [FacebookProfile] from a JSON map returned by the Facebook Graph API.
   factory FacebookProfile.fromJson(Map<String, dynamic> json) {
     FacebookPicture? picture;
     if (json['picture'] is Map<String, dynamic>) {
@@ -49,6 +51,7 @@ class FacebookProfile {
     );
   }
 
+  /// Converts this profile to a JSON-serializable map.
   Map<String, dynamic> toJson() => {
     'id': id,
     'email': email,
@@ -61,13 +64,22 @@ class FacebookProfile {
 
 /// Facebook profile picture data.
 class FacebookPicture {
+  /// Creates a new [FacebookPicture].
   const FacebookPicture({this.url, this.width, this.height, this.isSilhouette});
 
+  /// URL of the profile picture.
   final String? url;
+
+  /// Width of the picture in pixels.
   final int? width;
+
+  /// Height of the picture in pixels.
   final int? height;
+
+  /// Whether this is a default silhouette image.
   final bool? isSilhouette;
 
+  /// Creates a [FacebookPicture] from a JSON map.
   factory FacebookPicture.fromJson(Map<String, dynamic> json) {
     return FacebookPicture(
       url: json['url']?.toString(),
@@ -77,6 +89,7 @@ class FacebookPicture {
     );
   }
 
+  /// Converts this picture data to a JSON-serializable map.
   Map<String, dynamic> toJson() => {
     'url': url,
     'width': width,
@@ -112,6 +125,7 @@ class FacebookPicture {
 /// );
 /// ```
 class FacebookProviderOptions {
+  /// Creates a new [FacebookProviderOptions] configuration.
   const FacebookProviderOptions({
     required this.clientId,
     required this.clientSecret,
@@ -125,7 +139,10 @@ class FacebookProviderOptions {
   /// Facebook App Secret.
   final String clientSecret;
 
+  /// The URI to redirect to after authentication.
   final String redirectUri;
+
+  /// OAuth scopes to request. Defaults to `['email', 'public_profile']`.
   final List<String> scopes;
 }
 

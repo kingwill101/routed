@@ -4,6 +4,7 @@ import 'package:routed/routed.dart';
 ///
 /// See [Get the authenticated user](https://developers.google.com/identity/openid-connect/openid-connect#an-id-tokens-payload).
 class GoogleProfile {
+  /// Creates a new [GoogleProfile] with the given fields.
   const GoogleProfile({
     required this.sub,
     this.email,
@@ -43,6 +44,7 @@ class GoogleProfile {
   /// Hosted domain (for Google Workspace accounts).
   final String? hd;
 
+  /// Creates a [GoogleProfile] from a JSON map returned by the Google userinfo endpoint.
   factory GoogleProfile.fromJson(Map<String, dynamic> json) {
     return GoogleProfile(
       sub: json['sub']?.toString() ?? '',
@@ -57,6 +59,7 @@ class GoogleProfile {
     );
   }
 
+  /// Converts this profile to a JSON-serializable map.
   Map<String, dynamic> toJson() => {
     'sub': sub,
     'email': email,
@@ -103,6 +106,7 @@ class GoogleProfile {
 /// - Set `accessType: 'offline'` and `prompt: 'consent'` to receive refresh tokens.
 /// - Use `hd` parameter to restrict to specific Google Workspace domains.
 class GoogleProviderOptions {
+  /// Creates a new [GoogleProviderOptions] configuration.
   const GoogleProviderOptions({
     required this.clientId,
     required this.clientSecret,
@@ -113,9 +117,16 @@ class GoogleProviderOptions {
     this.hostedDomain,
   });
 
+  /// OAuth 2.0 client ID from the Google Cloud Console.
   final String clientId;
+
+  /// OAuth 2.0 client secret from the Google Cloud Console.
   final String clientSecret;
+
+  /// The URI to redirect to after authentication.
   final String redirectUri;
+
+  /// OAuth scopes to request. Defaults to `['openid', 'profile', 'email']`.
   final List<String> scopes;
 
   /// Access type for token requests. Set to 'offline' for refresh tokens.

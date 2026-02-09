@@ -4,6 +4,7 @@ import 'package:routed/routed.dart';
 ///
 /// See [LinkedIn Sign In with OpenID Connect](https://learn.microsoft.com/en-us/linkedin/consumer/integrations/self-serve/sign-in-with-linkedin-v2).
 class LinkedInProfile {
+  /// Creates a new [LinkedInProfile] with the given fields.
   const LinkedInProfile({
     required this.sub,
     this.email,
@@ -39,6 +40,7 @@ class LinkedInProfile {
   /// User's locale.
   final String? locale;
 
+  /// Creates a [LinkedInProfile] from a JSON map returned by the LinkedIn OIDC userinfo endpoint.
   factory LinkedInProfile.fromJson(Map<String, dynamic> json) {
     return LinkedInProfile(
       sub: json['sub']?.toString() ?? '',
@@ -52,6 +54,7 @@ class LinkedInProfile {
     );
   }
 
+  /// Converts this profile to a JSON-serializable map.
   Map<String, dynamic> toJson() => {
     'sub': sub,
     'email': email,
@@ -96,6 +99,7 @@ class LinkedInProfile {
 /// - Uses OpenID Connect (Sign In with LinkedIn v2).
 /// - Legacy v1 API is deprecated.
 class LinkedInProviderOptions {
+  /// Creates a new [LinkedInProviderOptions] configuration.
   const LinkedInProviderOptions({
     required this.clientId,
     required this.clientSecret,
@@ -103,9 +107,16 @@ class LinkedInProviderOptions {
     this.scopes = const ['openid', 'profile', 'email'],
   });
 
+  /// OAuth 2.0 client ID from the LinkedIn Developer Portal.
   final String clientId;
+
+  /// OAuth 2.0 client secret from the LinkedIn Developer Portal.
   final String clientSecret;
+
+  /// The URI to redirect to after authentication.
   final String redirectUri;
+
+  /// OAuth scopes to request. Defaults to `['openid', 'profile', 'email']`.
   final List<String> scopes;
 }
 

@@ -4,6 +4,7 @@ import 'package:routed/routed.dart';
 ///
 /// See [Microsoft Graph User resource](https://learn.microsoft.com/en-us/graph/api/resources/user).
 class MicrosoftEntraProfile {
+  /// Creates a new [MicrosoftEntraProfile] with the given fields.
   const MicrosoftEntraProfile({
     required this.sub,
     this.email,
@@ -43,6 +44,7 @@ class MicrosoftEntraProfile {
   /// Tenant ID.
   final String? tid;
 
+  /// Creates a [MicrosoftEntraProfile] from a JSON map returned by Microsoft Graph.
   factory MicrosoftEntraProfile.fromJson(Map<String, dynamic> json) {
     return MicrosoftEntraProfile(
       sub: json['sub']?.toString() ?? json['oid']?.toString() ?? '',
@@ -57,6 +59,7 @@ class MicrosoftEntraProfile {
     );
   }
 
+  /// Converts this profile to a JSON-serializable map.
   Map<String, dynamic> toJson() => {
     'sub': sub,
     'email': email,
@@ -119,6 +122,7 @@ enum MicrosoftEntraTenantType {
 /// - Set `tenantId` for single-tenant apps, or `tenantType` for multi-tenant.
 /// - Microsoft returns profile picture as binary data - consider using Graph API.
 class MicrosoftEntraProviderOptions {
+  /// Creates a new [MicrosoftEntraProviderOptions] configuration.
   const MicrosoftEntraProviderOptions({
     required this.clientId,
     required this.clientSecret,
@@ -128,8 +132,13 @@ class MicrosoftEntraProviderOptions {
     this.scopes = const ['openid', 'profile', 'email'],
   });
 
+  /// Application (client) ID from the Azure portal.
   final String clientId;
+
+  /// Client secret from the Azure portal.
   final String clientSecret;
+
+  /// The URI to redirect to after authentication.
   final String redirectUri;
 
   /// Specific tenant ID (for single-tenant apps).
@@ -138,6 +147,7 @@ class MicrosoftEntraProviderOptions {
   /// Tenant type (for multi-tenant apps). Ignored if tenantId is set.
   final MicrosoftEntraTenantType? tenantType;
 
+  /// OAuth scopes to request. Defaults to `['openid', 'profile', 'email']`.
   final List<String> scopes;
 
   String get _issuerPath {
