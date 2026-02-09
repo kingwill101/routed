@@ -6,6 +6,8 @@ typedef LoggerFactory =
 class RoutedLogger {
   RoutedLogger._();
 
+  static const String channelOverrideKey = '__routed.log_channel';
+
   static LoggerFactory _factory = _defaultFactory;
   static LoggerFactory _systemFactory = _defaultFactory;
   static contextual.LogMessageFormatter _format =
@@ -25,6 +27,14 @@ class RoutedLogger {
 
   static contextual.Logger create(Map<String, Object?> context) =>
       _factory(Map.unmodifiable(context));
+
+  static contextual.Logger createForChannel(
+    String channel,
+    Map<String, Object?> context,
+  ) {
+    final merged = <String, Object?>{...context, channelOverrideKey: channel};
+    return create(merged);
+  }
 
   static void configureFactory(LoggerFactory factory) {
     _factory = factory;

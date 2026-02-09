@@ -384,12 +384,28 @@ class _LoggerFactoryBuilder {
 
   contextual.Logger createLogger(Map<String, Object?> context) {
     final formatter = RoutedLogger.globalFormat;
+    final channelOverride = _resolveChannelOverride(context);
+    final cleanContext = Map<String, Object?>.from(context)
+      ..remove(RoutedLogger.channelOverrideKey);
     final logger = contextual.Logger(formatter: formatter)
-      ..withContext(context);
+      ..withContext(cleanContext);
 
-    final driver = _driverFor(defaultChannel);
-    logger.addChannel(defaultChannel, driver);
+    final channel = channelOverride ?? defaultChannel;
+    final driver = _driverFor(channel);
+    logger.addChannel(channel, driver);
     return logger;
+  }
+
+  String? _resolveChannelOverride(Map<String, Object?> context) {
+    final value = context[RoutedLogger.channelOverrideKey];
+    if (value is! String) {
+      return null;
+    }
+    final trimmed = value.trim();
+    if (trimmed.isEmpty) {
+      return null;
+    }
+    return trimmed;
   }
 
   contextual.LogDriver _driverFor(String name) {
