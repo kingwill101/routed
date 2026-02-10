@@ -33,7 +33,12 @@ void main() {
 
     test('requires credentials and sets WWW-Authenticate header', () async {
       client = buildClient();
-      final response = await client!.get('/secret');
+      final response = await client!.get(
+        '/secret',
+        headers: {
+          'Accept': ['application/json'],
+        },
+      );
       response
         ..assertStatus(HttpStatus.unauthorized)
         ..assertHeader('WWW-Authenticate', 'Basic realm="Restricted Area"')
@@ -47,6 +52,7 @@ void main() {
         '/secret',
         headers: {
           HttpHeaders.authorizationHeader: ['Basic $invalid'],
+          'Accept': ['application/json'],
         },
       );
       response

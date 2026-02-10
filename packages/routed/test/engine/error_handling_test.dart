@@ -58,7 +58,12 @@ void main() {
       });
 
       final client = TestClient(RoutedRequestHandler(engine));
-      final response = await client.get('/invalid');
+      final response = await client.get(
+        '/invalid',
+        headers: {
+          'Accept': ['application/json'],
+        },
+      );
       response.assertStatus(HttpStatus.unprocessableEntity);
       final payload = await response.json() as Map<String, dynamic>;
       expect(payload['name'], contains('required'));
