@@ -1,0 +1,161 @@
+---
+title: Turbo Streams
+sidebar_position: 1
+---
+
+# Turbo Streams
+
+Turbo Streams deliver page changes as `<turbo-stream>` HTML fragments. Each fragment specifies an **action** (what to do) and a **target** (which DOM element to act on). The browser's Turbo library processes these fragments and updates the page without a full reload.
+
+## The `turboStream` Builder
+
+The core function builds a single `<turbo-stream>` element:
+
+```dart
+import 'package:routed_hotwire/routed_hotwire.dart';
+
+final html = turboStream(
+  action: TurboStreamAction.append,
+  target: 'messages',
+  html: '<li>New message</li>',
+);
+// => <turbo-stream action="append" target="messages"><template><li>New message</li></template></turbo-stream>
+```
+
+### Parameters
+
+| Parameter | Type | Description |
+|-----------|------|-------------|
+| `action` | `TurboStreamAction` (required) | Which DOM mutation to perform |
+| `target` | `String?` | A single DOM element ID |
+| `targets` | `String?` | A CSS selector matching multiple elements |
+| `html` | `String?` | The inner HTML content |
+| `attributes` | `Map<String, String>?` | Extra attributes on the `<turbo-stream>` element |
+
+Content is automatically wrapped in a `<template>` tag for all actions except `remove` and `refresh`, which don't need inner content.
+
+## Actions
+
+The `TurboStreamAction` enum covers all 8 standard Turbo Stream actions:
+
+| Action | Description | Requires HTML? |
+|--------|-------------|----------------|
+| `append` | Append content inside the target element | Yes |
+| `prepend` | Prepend content inside the target element | Yes |
+| `replace` | Replace the entire target element | Yes |
+| `update` | Replace the target's inner content | Yes |
+| `remove` | Remove the target element from the DOM | No |
+| `before` | Insert content before the target element | Yes |
+| `after` | Insert content after the target element | Yes |
+| `refresh` | Trigger a Turbo page refresh | No |
+
+## Convenience Builders
+
+Each action has a dedicated function so you don't need to pass the `action` parameter:
+
+```dart
+// Append a new row to a table body
+turboStreamAppend(
+  target: 'user-list',
+  html: '<tr><td>Alice</td><td>alice@example.com</td></tr>',
+);
+
+// Prepend a notification
+turboStreamPrepend(
+  target: 'notifications',
+  html: '<div class="alert">New notification</div>',
+);
+
+// Replace an entire element
+turboStreamReplace(
+  target: 'user-42',
+  html: '<div id="user-42">Updated content</div>',
+);
+
+// Update only the inner content
+turboStreamUpdate(
+  target: 'counter',
+  html: '42',
+);
+
+// Remove an element
+turboStreamRemove(target: 'old-item');
+
+// Insert before a target
+turboStreamBefore(
+  target: 'footer',
+  html: '<div>Inserted before footer</div>',
+);
+
+// Insert after a target
+turboStreamAfter(
+  target: 'header',
+  html: '<div>Inserted after header</div>',
+);
+
+// Trigger a page refresh
+turboStreamRefresh(requestId: 'abc-123');
+```
+
+### Function Signatures
+
+All content-bearing functions require `target` and `html` as named parameters. `turboStreamRemove` requires only `target`. `turboStreamRefresh` takes an optional `requestId`. All accept optional `attributes`.
+
+## Combining Multiple Fragments
+
+A single response can contain multiple stream fragments. Use `joinTurboStreams` to concatenate them:
+
+```dart
+final payload = joinTurboStreams([
+  turboStreamAppend(target: 'messages', html: '<li>Hello</li>'),
+  turboStreamUpdate(target: 'unread-count', html: '3'),
+  turboStreamRemove(target: 'empty-state'),
+]);
+
+// Send as a Turbo Stream response
+return ctx.turboStream(payload);
+```
+
+## Targeting Multiple Elements
+
+Use the `targets` parameter with a CSS selector to act on multiple elements at once:
+
+```dart
+turboStream(
+  action: TurboStreamAction.update,
+  targets: '.price-display',
+  html: '\$9.99',
+);
+// => <turbo-stream action="update" targets=".price-display"><template>$9.99</template></turbo-stream>
+```
+
+## Custom Attributes
+
+Pass extra attributes to the `<turbo-stream>` element via the `attributes` parameter:
+
+```dart
+turboStreamAppend(
+  target: 'feed',
+  html: '<article>New post</article>',
+  attributes: {'method': 'morph'},
+);
+// => <turbo-stream action="append" target="feed" method="morph"><template><article>New post</article></template></turbo-stream>
+```
+
+Attribute values are automatically HTML-escaped.
+
+## Body Normalization
+
+`normalizeTurboStreamBody` coerces different input types into a single string for response bodies:
+
+```dart
+// String passes through
+normalizeTurboStreamBody('<turbo-stream ...>');
+
+// Iterable is joined
+normalizeTurboStreamBody([fragment1, fragment2]);
+
+// Anything else throws ArgumentError
+```
+
+This is used internally by `TurboResponse.stream()` and `ctx.turboStream()`, so you typically don't need to call it directly.

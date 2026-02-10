@@ -1,0 +1,163 @@
+---
+title: Stream Signing
+sidebar_position: 4
+---
+
+# Stream Signing
+
+Stream signing prevents unauthorized clients from subscribing to arbitrary topics. Topic names are HMAC-SHA256 signed server-side and verified when a WebSocket connection is established. This is analogous to Rails' signed stream names in Action Cable.
+
+## How It Works
+
+1. **Server** builds a canonical stream name from identifiers (model IDs, channel names, etc.)
+2. **Server** signs the name with HMAC-SHA256 and base64url-encodes it: `base64payload--base64signature`
+3. **Client** receives the signed name (e.g., embedded in HTML) and passes it as a topic query parameter when connecting via WebSocket
+4. **Server** verifies the signature before allowing the subscription
+
+## Signing a Stream Name
+
+### `buildTurboStreamName`
+
+Builds a canonical colon-separated name from a list of objects:
+
+```dart
+buildTurboStreamName(['chat', 42]);
+// => "chat:42"
+
+buildTurboStreamName(['notifications', user]);
+// => "notifications:user-123" (if user.toString() returns "user-123")
+```
+
+Objects implementing `TurboStreamIdentifiable` use their `turboStreamIdentifier` property:
+
+```dart
+class Room implements TurboStreamIdentifiable {
+  final int id;
+  Room(this.id);
+
+  @override
+  String get turboStreamIdentifier => 'room-$id';
+}
+
+buildTurboStreamName([Room(5), 'messages']);
+// => "room-5:messages"
+```
+
+Nested `Iterable` values are flattened. Null values are skipped. Empty strings are ignored.
+
+### `signTurboStreamName`
+
+Builds the canonical name and returns the signed form:
+
+```dart
+final signed = signTurboStreamName(['chat', 42]);
+// => "Y2hhdDo0Mg==--3xK9f..." (base64url payload + HMAC signature)
+```
+
+### `verifyTurboStreamName`
+
+Verifies a signed name and returns the original topic if valid:
+
+```dart
+final topic = verifyTurboStreamName(signed);
+// => "chat:42" (or null if signature is invalid)
+```
+
+Verification uses constant-time comparison to prevent timing attacks.
+
+## Configuring the Signing Secret
+
+By default, a 32-byte random secret is generated at startup. **This means signed names are only valid for the lifetime of the process.** For production deployments with multiple instances or restarts, set a stable secret:
+
+```dart
+turboStreamSigningSecret = 'your-stable-secret-key';
+```
+
+Set this before any signing or verification calls. You might load it from environment variables or your application config:
+
+```dart
+turboStreamSigningSecret = Platform.environment['TURBO_SIGNING_SECRET']
+    ?? 'development-secret';
+```
+
+## Generating HTML Source Tags
+
+`turboStreamSourceTag` generates a `<turbo-cable-stream-source>` HTML element with a signed stream name. This tag tells the Turbo client to subscribe to the stream:
+
+```dart
+final tag = turboStreamSourceTag(
+  streamables: ['chat', roomId],
+  channel: 'Turbo::StreamsChannel',
+  dataAttributes: {'controller': 'turbo-stream'},
+);
+```
+
+Produces:
+
+```html
+<turbo-cable-stream-source
+  channel="Turbo::StreamsChannel"
+  signed-stream-name="Y2hhdDox--..."
+  data-controller="turbo-stream"
+></turbo-cable-stream-source>
+```
+
+### Parameters
+
+| Parameter | Type | Default | Description |
+|-----------|------|---------|-------------|
+| `streamables` | `Iterable<Object?>` (required) | — | Objects to build the stream name from |
+| `channel` | `String` | `'Turbo::StreamsChannel'` | The channel name attribute |
+| `dataAttributes` | `Map<String, String>?` | `null` | Extra `data-*` attributes |
+
+Data attribute keys are normalized: underscores and spaces become hyphens. Values are HTML-escaped.
+
+## `TurboStreamIdentifiable`
+
+Implement this interface on your model classes to provide stable identifiers for stream naming:
+
+```dart
+abstract class TurboStreamIdentifiable {
+  String get turboStreamIdentifier;
+}
+```
+
+Example:
+
+```dart
+class User implements TurboStreamIdentifiable {
+  final int id;
+  final String name;
+  User({required this.id, required this.name});
+
+  @override
+  String get turboStreamIdentifier => 'user-$id';
+}
+
+class Project implements TurboStreamIdentifiable {
+  final String slug;
+  Project({required this.slug});
+
+  @override
+  String get turboStreamIdentifier => slug;
+}
+
+// Sign a stream scoped to a user's project
+final signed = signTurboStreamName([user, project, 'updates']);
+// Canonical name: "user-42:my-project:updates"
+```
+
+## Integration with the WebSocket Hub
+
+The default `TurboStreamSocketHandler` topic resolver automatically calls `verifyTurboStreamName` on each `?topic=` query parameter. If verification succeeds, the original plain-text name is used as the topic. If verification fails (invalid signature), the raw string is used as-is.
+
+This means you can use signed names for secure topics and plain names for public topics in the same application:
+
+```dart
+// Server: broadcast to the verified topic name
+hub.broadcast('chat:42', [fragment]);
+
+// Client connects with a signed topic
+// ws://localhost:8080/turbo-streams?topic=Y2hhdDo0Mg==--3xK9f...
+// The handler verifies it to "chat:42" and subscribes
+```

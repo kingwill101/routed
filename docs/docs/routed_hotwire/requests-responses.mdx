@@ -1,0 +1,139 @@
+---
+title: Requests & Responses
+sidebar_position: 2
+---
+
+# Turbo Requests & Responses
+
+Turbo adds specific HTTP headers to requests to identify their origin (Drive navigation, Frame, or Stream). Routed Hotwire provides helpers to inspect these headers and send responses with the correct content types.
+
+## Inspecting Requests
+
+### `ctx.turbo`
+
+The `TurboContextExtensions` extension adds a `turbo` getter to `EngineContext` that returns a `TurboRequestInfo` object. The result is cached on the context so repeated access is free.
+
+```dart
+engine.post('/comments', (ctx) async {
+  final info = ctx.turbo;
+
+  if (info.isStreamRequest) {
+    // Client accepts Turbo Stream — return a stream fragment
+    return ctx.turboStream(
+      turboStreamAppend(target: 'comments', html: '<p>New comment</p>'),
+    );
+  }
+
+  // Standard request — redirect back
+  return ctx.turboSeeOther('/posts/1');
+});
+```
+
+Accessing `ctx.turbo` also enriches the request logger context with Hotwire metadata (`hotwire.kind`, `hotwire.frame_id`, `hotwire.stream_request`, etc.).
+
+### `TurboRequestInfo` Properties
+
+| Property | Type | Description |
+|----------|------|-------------|
+| `method` | `String` | HTTP method (uppercased) |
+| `kind` | `TurboRequestKind` | Classification: `standard`, `frame`, or `stream` |
+| `isStreamRequest` | `bool` | `true` if `Accept` header includes `text/vnd.turbo-stream.html` |
+| `isFrameRequest` | `bool` | `true` if a `Turbo-Frame` header is present |
+| `isTurboVisit` | `bool` | `true` if `Turbo-Visit: true` header is set |
+| `frameId` | `String?` | Value of the `Turbo-Frame` header |
+| `requestId` | `String?` | Value of the `X-Turbo-Request-Id` header |
+| `header(name)` | `String?` | Raw header value lookup |
+
+### `TurboRequestKind`
+
+```dart
+enum TurboRequestKind {
+  standard,  // No Turbo-specific headers
+  frame,     // Turbo-Frame header present
+  stream,    // Accept: text/vnd.turbo-stream.html
+}
+```
+
+The `kind` getter checks stream first, then frame, then falls back to standard. This means a request that is both a frame request and a stream request will be classified as `stream`.
+
+### Standalone Usage
+
+You can also construct `TurboRequestInfo` from raw headers for testing or tooling:
+
+```dart
+final info = TurboRequestInfo.fromHeaders({
+  'accept': ['text/vnd.turbo-stream.html'],
+  'turbo-frame': ['my-frame'],
+}, method: 'POST');
+
+print(info.kind);           // TurboRequestKind.stream
+print(info.frameId);        // my-frame
+print(info.isStreamRequest); // true
+```
+
+## Sending Responses
+
+### Context Extension Methods
+
+The `TurboResponseContext` extension provides shorthand methods on `EngineContext`:
+
+| Method | Content Type | Default Status | Description |
+|--------|-------------|----------------|-------------|
+| `ctx.turboHtml(html)` | `text/html` | 200 | Full-page HTML (Turbo Drive) |
+| `ctx.turboFrame(html)` | `text/html` | 200 | HTML fragment for a Turbo Frame |
+| `ctx.turboStream(body)` | `text/vnd.turbo-stream.html` | 200 | Turbo Stream payload |
+| `ctx.turboSeeOther(url)` | — | 303 | Redirect (Turbo Drive follows automatically) |
+| `ctx.turboUnprocessable(html)` | `text/html` | 422 | Validation error page |
+
+All methods accept optional `headers` and (except `turboSeeOther` and `turboUnprocessable`) an optional `statusCode`.
+
+### Static Methods
+
+The same helpers are available as static methods on `TurboResponse` if you prefer explicit context passing:
+
+```dart
+return TurboResponse.stream(ctx, fragment);
+return TurboResponse.html(ctx, '<h1>Hello</h1>');
+return TurboResponse.seeOther(ctx, '/dashboard');
+return TurboResponse.unprocessable(ctx, '<p>Email is required</p>');
+```
+
+### Example: Form Submission with Validation
+
+```dart
+engine.post('/contacts', (ctx) async {
+  final name = ctx.input('name');
+  final email = ctx.input('email');
+
+  if (name.isEmpty || email.isEmpty) {
+    // Return 422 so Turbo re-renders the form with errors
+    return ctx.turboUnprocessable(
+      '<form id="contact-form">..errors..</form>',
+    );
+  }
+
+  // Success — append the new contact and clear the form
+  if (ctx.turbo.isStreamRequest) {
+    return ctx.turboStream(joinTurboStreams([
+      turboStreamAppend(
+        target: 'contacts',
+        html: '<li>$name ($email)</li>',
+      ),
+      turboStreamUpdate(
+        target: 'contact-form',
+        html: '<form id="contact-form">..blank form..</form>',
+      ),
+    ]));
+  }
+
+  // Non-Turbo fallback — redirect
+  return ctx.turboSeeOther('/contacts');
+});
+```
+
+### Response Behavior
+
+- **`turboStream`** accepts either a `String` or an `Iterable<String>` as the body. It calls `normalizeTurboStreamBody()` internally to coerce the input.
+- **`turboSeeOther`** sets the `Location` header and a 303 status. Turbo Drive automatically follows 303 redirects.
+- **`turboUnprocessable`** returns a 422 status with `text/html`. Turbo treats 422 responses as form validation errors and re-renders the response content.
+- All response helpers check `ctx.isClosed` before writing to avoid double-response errors.

@@ -1,0 +1,181 @@
+---
+title: WebSocket Hub
+sidebar_position: 3
+---
+
+# WebSocket Hub
+
+The WebSocket hub enables real-time broadcasting of Turbo Stream fragments to connected clients. It follows a **topic-based pub/sub** model: clients subscribe to topics when they connect, and your server code broadcasts fragments to a topic to push updates to all subscribers.
+
+## Architecture
+
+```
+Client A ──ws──┐                 ┌── Client A (subscribed to "chat:1")
+Client B ──ws──┤  TurboStreamHub ├── Client B (subscribed to "chat:1", "chat:2")
+Client C ──ws──┘                 └── Client C (subscribed to "chat:2")
+
+hub.broadcast("chat:1", fragments)  →  delivers to Client A and Client B
+hub.broadcast("chat:2", fragments)  →  delivers to Client B and Client C
+```
+
+## Setup
+
+### 1. Create the Hub and Handler
+
+```dart
+import 'package:routed/routed.dart';
+import 'package:routed_hotwire/routed_hotwire.dart';
+
+final hub = TurboStreamHub();
+final handler = TurboStreamSocketHandler(hub: hub);
+```
+
+### 2. Register a WebSocket Route
+
+```dart
+final engine = await Engine.create();
+
+engine.ws('/turbo-streams', handler);
+```
+
+### 3. Broadcast From Your Routes
+
+```dart
+engine.post('/messages', (ctx) async {
+  final body = ctx.input('body');
+  final roomId = ctx.input('room_id');
+
+  // Build the Turbo Stream fragment
+  final fragment = turboStreamAppend(
+    target: 'messages',
+    html: '<div class="message">$body</div>',
+  );
+
+  // Broadcast to all WebSocket clients subscribed to this room
+  hub.broadcast('chat:$roomId', [fragment]);
+
+  // Also respond to the HTTP request
+  return ctx.turboStream(fragment);
+});
+```
+
+### 4. Client-Side Connection
+
+On the client side, connect to the WebSocket with topic query parameters:
+
+```javascript
+// Subscribe to a single topic
+const ws = new WebSocket('ws://localhost:8080/turbo-streams?topic=chat:1');
+
+// Subscribe to multiple topics
+const ws = new WebSocket('ws://localhost:8080/turbo-streams?topic=chat:1&topic=chat:2');
+
+// Comma-separated topics also work
+const ws = new WebSocket('ws://localhost:8080/turbo-streams?topic=chat:1,chat:2');
+```
+
+Turbo Stream fragments arrive as WebSocket messages and can be processed by Turbo's `StreamActions` on the client.
+
+## TurboStreamHub API
+
+### `subscribe(connection, topics)`
+
+Register a connection under one or more topics.
+
+```dart
+hub.subscribe(connection, ['chat:1', 'chat:2']);
+```
+
+### `unsubscribe(connection, {topics})`
+
+Remove a connection from all topics, or from a specific subset:
+
+```dart
+// Remove from all topics
+hub.unsubscribe(connection);
+
+// Remove from specific topics only
+hub.unsubscribe(connection, topics: ['chat:1']);
+```
+
+### `broadcast(topic, fragments)`
+
+Send Turbo Stream fragments to every subscriber of a topic. Fragments are joined into a single payload before sending.
+
+```dart
+hub.broadcast('notifications', [
+  turboStreamAppend(target: 'alerts', html: '<div>New alert</div>'),
+  turboStreamUpdate(target: 'badge', html: '5'),
+]);
+```
+
+The hub automatically detects and removes disconnected clients (connections with a non-null `closeCode` or that throw on `send`).
+
+## TurboStreamSocketHandler
+
+`TurboStreamSocketHandler` extends routed's `WebSocketHandler` and manages the full WebSocket lifecycle:
+
+| Callback | Behavior |
+|----------|----------|
+| `onOpen` | Resolves topics from query parameters, subscribes the connection. Closes with code 1008 if no topics are found. |
+| `onMessage` | Delegates to an optional `messageHandler` callback. |
+| `onClose` | Unsubscribes the connection from the hub. |
+| `onError` | Unsubscribes the connection from the hub. |
+
+### Custom Topic Resolver
+
+By default, topics are extracted from `?topic=` query parameters. You can provide a custom `TurboTopicResolver` to change this behavior:
+
+```dart
+Iterable<String> myResolver(WebSocketContext context) {
+  // Extract topics from the path instead of query parameters
+  final roomId = context.initialContext.pathParameters['room'];
+  return roomId != null ? ['chat:$roomId'] : [];
+}
+
+final handler = TurboStreamSocketHandler(
+  hub: hub,
+  topicResolver: myResolver,
+);
+
+engine.ws('/rooms/{room}/stream', handler);
+```
+
+The `TurboTopicResolver` typedef is:
+
+```dart
+typedef TurboTopicResolver = Iterable<String> Function(WebSocketContext context);
+```
+
+### Custom Message Handler
+
+By default, incoming WebSocket messages are ignored. Pass a `messageHandler` to process them:
+
+```dart
+final handler = TurboStreamSocketHandler(
+  hub: hub,
+  messageHandler: (context, message) async {
+    // Handle incoming messages from clients
+    print('Received: $message');
+  },
+);
+```
+
+## Signed Topics
+
+The default topic resolver automatically verifies signed stream names. If a topic parameter contains a signed name (format `base64payload--base64signature`), it is verified and the original topic name is extracted. Unsigned topic strings are passed through as-is.
+
+See [Stream Signing](./stream-signing) for details on generating signed names.
+
+## Custom Connection Implementations
+
+The hub operates on the `TurboStreamConnection` interface:
+
+```dart
+abstract class TurboStreamConnection {
+  int? get closeCode;
+  void send(String payload);
+}
+```
+
+The built-in `WebSocketTurboConnection` wraps a routed `WebSocketContext`. You can implement this interface to integrate with other transports (SSE, long-polling, test doubles, etc.).
