@@ -14,6 +14,8 @@ AGENTS.md
 storage/
 !packages/routed/lib/src/storage/
 !packages/routed/lib/src/storage/**
+!packages/routed/test/storage/
+!packages/routed/test/storage/**
 
 # Test artifacts
 **/templates/test/logs/
