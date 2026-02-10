@@ -69,9 +69,10 @@ export 'src/observability/health.dart'
     show HealthService, HealthCheck, HealthCheckResult, HealthEndpointRegistry;
 export 'src/observability/metrics.dart' show MetricsService;
 export 'src/observability/tracing.dart' show TracingService, TracingConfig;
-export 'src/openapi/generator.dart';
-export 'src/openapi/operation.dart';
 export 'src/openapi/annotations.dart';
+export 'src/openapi/handler_identity.dart';
+export 'src/openapi/pipe_rule_converter.dart';
+export 'src/openapi/schema.dart';
 export 'src/provider/config_utils.dart';
 export 'src/provider/provider.dart';
 export 'src/engine/providers/core.dart' show CoreServiceProvider;

@@ -27,11 +27,13 @@ extension EngineRouting on Engine {
   ///
   /// The [middlewares] parameter allows specifying middleware to apply to this route.
   /// The [constraints] parameter allows adding custom validation rules.
+  /// The [schema] parameter allows attaching API schema metadata.
   RouteBuilder get(
     String path,
     RouteHandler handler, {
     List<Middleware> middlewares = const [],
     Map<String, dynamic> constraints = const {},
+    RouteSchema? schema,
   }) {
     _markRoutesDirty();
     _ensureDefaultRouterMounted();
@@ -40,6 +42,7 @@ extension EngineRouting on Engine {
       handler,
       middlewares: middlewares,
       constraints: constraints,
+      schema: schema,
     );
   }
 
@@ -58,11 +61,13 @@ extension EngineRouting on Engine {
   ///
   /// The [middlewares] parameter allows specifying middleware to apply to this route.
   /// The [constraints] parameter allows adding custom validation rules.
+  /// The [schema] parameter allows attaching API schema metadata.
   RouteBuilder post(
     String path,
     RouteHandler handler, {
     List<Middleware> middlewares = const [],
     Map<String, dynamic> constraints = const {},
+    RouteSchema? schema,
   }) {
     _markRoutesDirty();
     _ensureDefaultRouterMounted();
@@ -71,6 +76,7 @@ extension EngineRouting on Engine {
       handler,
       middlewares: middlewares,
       constraints: constraints,
+      schema: schema,
     );
   }
 
@@ -89,11 +95,13 @@ extension EngineRouting on Engine {
   ///
   /// The [middlewares] parameter allows specifying middleware to apply to this route.
   /// The [constraints] parameter allows adding custom validation rules.
+  /// The [schema] parameter allows attaching API schema metadata.
   RouteBuilder put(
     String path,
     RouteHandler handler, {
     List<Middleware> middlewares = const [],
     Map<String, dynamic> constraints = const {},
+    RouteSchema? schema,
   }) {
     _markRoutesDirty();
     _ensureDefaultRouterMounted();
@@ -102,6 +110,7 @@ extension EngineRouting on Engine {
       handler,
       middlewares: middlewares,
       constraints: constraints,
+      schema: schema,
     );
   }
 
@@ -119,11 +128,13 @@ extension EngineRouting on Engine {
   ///
   /// The [middlewares] parameter allows specifying middleware to apply to this route.
   /// The [constraints] parameter allows adding custom validation rules.
+  /// The [schema] parameter allows attaching API schema metadata.
   RouteBuilder delete(
     String path,
     RouteHandler handler, {
     List<Middleware> middlewares = const [],
     Map<String, dynamic> constraints = const {},
+    RouteSchema? schema,
   }) {
     _markRoutesDirty();
     _ensureDefaultRouterMounted();
@@ -132,6 +143,7 @@ extension EngineRouting on Engine {
       handler,
       middlewares: middlewares,
       constraints: constraints,
+      schema: schema,
     );
   }
 
@@ -150,11 +162,13 @@ extension EngineRouting on Engine {
   ///
   /// The [middlewares] parameter allows specifying middleware to apply to this route.
   /// The [constraints] parameter allows adding custom validation rules.
+  /// The [schema] parameter allows attaching API schema metadata.
   RouteBuilder patch(
     String path,
     RouteHandler handler, {
     List<Middleware> middlewares = const [],
     Map<String, dynamic> constraints = const {},
+    RouteSchema? schema,
   }) {
     _markRoutesDirty();
     _ensureDefaultRouterMounted();
@@ -163,6 +177,7 @@ extension EngineRouting on Engine {
       handler,
       middlewares: middlewares,
       constraints: constraints,
+      schema: schema,
     );
   }
 
@@ -180,11 +195,13 @@ extension EngineRouting on Engine {
   ///
   /// The [middlewares] parameter allows specifying middleware to apply to this route.
   /// The [constraints] parameter allows adding custom validation rules.
+  /// The [schema] parameter allows attaching API schema metadata.
   RouteBuilder head(
     String path,
     RouteHandler handler, {
     List<Middleware> middlewares = const [],
     Map<String, dynamic> constraints = const {},
+    RouteSchema? schema,
   }) {
     _markRoutesDirty();
     _ensureDefaultRouterMounted();
@@ -193,6 +210,7 @@ extension EngineRouting on Engine {
       handler,
       middlewares: middlewares,
       constraints: constraints,
+      schema: schema,
     );
   }
 
@@ -212,11 +230,13 @@ extension EngineRouting on Engine {
   ///
   /// The [middlewares] parameter allows specifying middleware to apply to this route.
   /// The [constraints] parameter allows adding custom validation rules.
+  /// The [schema] parameter allows attaching API schema metadata.
   RouteBuilder options(
     String path,
     RouteHandler handler, {
     List<Middleware> middlewares = const [],
     Map<String, dynamic> constraints = const {},
+    RouteSchema? schema,
   }) {
     _markRoutesDirty();
     _ensureDefaultRouterMounted();
@@ -225,6 +245,7 @@ extension EngineRouting on Engine {
       handler,
       middlewares: middlewares,
       constraints: constraints,
+      schema: schema,
     );
   }
 
@@ -234,14 +255,21 @@ extension EngineRouting on Engine {
   /// for HTTPS connections through HTTP proxies.
   ///
   /// The [middlewares] parameter allows specifying middleware to apply to this route.
+  /// The [schema] parameter allows attaching API schema metadata.
   RouteBuilder connect(
     String path,
     RouteHandler handler, {
     List<Middleware> middlewares = const [],
+    RouteSchema? schema,
   }) {
     _markRoutesDirty();
     _ensureDefaultRouterMounted();
-    return _defaultRouter.connect(path, handler, middlewares: middlewares);
+    return _defaultRouter.connect(
+      path,
+      handler,
+      middlewares: middlewares,
+      schema: schema,
+    );
   }
 
   /// Registers a route with a custom HTTP [method], [path], and [handler].
@@ -259,12 +287,14 @@ extension EngineRouting on Engine {
   ///
   /// The [middlewares] parameter allows specifying middleware to apply to this route.
   /// The [constraints] parameter allows adding custom validation rules.
+  /// The [schema] parameter allows attaching API schema metadata.
   RouteBuilder handle(
     String method,
     String path,
     RouteHandler handler, {
     List<Middleware> middlewares = const [],
     Map<String, dynamic> constraints = const {},
+    RouteSchema? schema,
   }) {
     _markRoutesDirty();
     _ensureDefaultRouterMounted();
@@ -274,6 +304,7 @@ extension EngineRouting on Engine {
       handler,
       middlewares: middlewares,
       constraints: constraints,
+      schema: schema,
     );
   }
 

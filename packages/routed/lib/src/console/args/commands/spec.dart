@@ -5,7 +5,7 @@ import 'package:file/file.dart' as fs;
 import 'package:path/path.dart' as p;
 import 'package:routed/console.dart';
 import 'package:routed/src/console/args/base_command.dart';
-import 'package:routed/src/console/engine/introspector.dart';
+import 'package:routed/src/console/engine/manifest_loader.dart';
 
 class SpecGenerateCommand extends BaseCommand {
   SpecGenerateCommand({

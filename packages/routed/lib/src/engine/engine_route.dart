@@ -45,6 +45,12 @@ class EngineRoute {
   /// Allows for more complex route matching beyond simple path and method.
   final Map<String, dynamic> constraints;
 
+  /// Optional API schema metadata for this route.
+  ///
+  /// Contains request body, parameter, and response metadata used for
+  /// OpenAPI generation and runtime validation.
+  final RouteSchema? schema;
+
   /// Whether this is a fallback route.
   ///
   /// Fallback routes match any request that doesn't match any other route.
@@ -60,6 +66,11 @@ class EngineRoute {
   late final bool hasMiddlewareReference;
 
   late final Middleware _handlerMiddleware;
+
+  /// Middleware that auto-validates requests against [schema.validationRules].
+  /// Null when the route has no validation rules.
+  late final Middleware? _schemaValidationMiddleware;
+
   List<Middleware> _cachedHandlers = const <Middleware>[];
 
   /// Creates a new route with the given properties.
@@ -71,6 +82,7 @@ class EngineRoute {
     this.name,
     this.middlewares = const [],
     this.constraints = const {},
+    this.schema,
     this.isFallback = false,
   }) : _patternRegistry = patternRegistry {
     final patternData = _buildUriPattern(path, _patternRegistry);
@@ -82,6 +94,7 @@ class EngineRoute {
       (middleware) => MiddlewareReference.lookup(middleware) != null,
     );
     _handlerMiddleware = (EngineContext ctx, Next _) => handler(ctx);
+    _schemaValidationMiddleware = _buildSchemaValidationMiddleware();
   }
 
   /// Creates a fallback route.
@@ -93,6 +106,7 @@ class EngineRoute {
        path = '*',
        name = null,
        constraints = const {},
+       schema = null,
        isFallback = true,
        _patternRegistry = patternRegistry {
     _uriPattern = RegExp('.*');
@@ -100,6 +114,7 @@ class EngineRoute {
     isStatic = false;
     staticPath = '*';
     _handlerMiddleware = (EngineContext ctx, Next _) => handler(ctx);
+    _schemaValidationMiddleware = null;
   }
 
   /// Checks if a request matches this route.
@@ -118,25 +133,39 @@ class EngineRoute {
       _cachedHandlers = const <Middleware>[];
       return;
     }
+    final tail = _tailMiddlewares;
     if (globalMiddlewares.isEmpty && middlewares.isEmpty) {
-      _cachedHandlers = <Middleware>[_handlerMiddleware];
+      _cachedHandlers = tail;
       return;
     }
-    _cachedHandlers = [
-      ...globalMiddlewares,
-      ...middlewares,
-      _handlerMiddleware,
-    ];
+    _cachedHandlers = [...globalMiddlewares, ...middlewares, ...tail];
   }
 
   List<Middleware> composeHandlers(
     List<Middleware> globalMiddlewares,
     List<Middleware> routeMiddlewares,
   ) {
+    final tail = _tailMiddlewares;
     if (globalMiddlewares.isEmpty && routeMiddlewares.isEmpty) {
-      return <Middleware>[_handlerMiddleware];
+      return tail;
     }
-    return [...globalMiddlewares, ...routeMiddlewares, _handlerMiddleware];
+    return [...globalMiddlewares, ...routeMiddlewares, ...tail];
+  }
+
+  /// The tail of the middleware chain: optional schema validation + handler.
+  List<Middleware> get _tailMiddlewares {
+    final validation = _schemaValidationMiddleware;
+    if (validation != null) {
+      return <Middleware>[validation, _handlerMiddleware];
+    }
+    return <Middleware>[_handlerMiddleware];
+  }
+
+  /// Builds a schema validation middleware if this route has validation rules.
+  Middleware? _buildSchemaValidationMiddleware() {
+    final rules = schema?.validationRules;
+    if (rules == null || rules.isEmpty) return null;
+    return schemaValidationMiddleware(schema!);
   }
 
   bool matchesPath(String path, {bool allowTrailingSlash = true}) {

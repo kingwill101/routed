@@ -18,7 +18,6 @@ Future<void> main(List<String> args) async {
       cmds.ConfigSchemaCommand(),
       cmds.ConfigClearCommand(),
       cmds.RoutesCommand(),
-      cmds.OpenApiCommand(),
       cmds.SpecGenerateCommand(),
       cmds.ProviderListCommand(),
       cmds.ProviderEnableCommand(),

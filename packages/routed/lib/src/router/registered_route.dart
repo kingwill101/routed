@@ -1,3 +1,4 @@
+import 'package:routed/src/openapi/schema.dart';
 import 'package:routed/src/router/types.dart';
 
 /// Represents a route that has been registered in the Router.
@@ -18,12 +19,16 @@ class RegisteredRoute {
 
   Map<String, dynamic> constraints;
 
+  /// Optional schema metadata describing this route's API contract.
+  RouteSchema? schema;
+
   RegisteredRoute({
     required this.method,
     required this.path,
     required this.handler,
     this.routeMiddlewares = const [],
     this.name,
+    this.schema,
     Map<String, dynamic>? constraints,
   }) : constraints = Map<String, dynamic>.from(constraints ?? const {});
 

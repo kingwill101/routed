@@ -117,11 +117,13 @@ class Router with StaticFileHandler {
   /// [handler]: The handler function for the GET route.
   /// [middlewares]: Optional middlewares specific to this route.
   /// [constraints]: Optional constraints for the route parameters.
+  /// [schema]: Optional API schema metadata for this route.
   RouteBuilder get(
     String path,
     RouteHandler handler, {
     List<Middleware> middlewares = const [],
     Map<String, dynamic> constraints = const {},
+    RouteSchema? schema,
   }) {
     return handle(
       "GET",
@@ -129,6 +131,7 @@ class Router with StaticFileHandler {
       handler,
       middlewares: middlewares,
       constraints: constraints,
+      schema: schema,
     );
   }
 
@@ -138,11 +141,13 @@ class Router with StaticFileHandler {
   /// [handler]: The handler function for the POST route.
   /// [middlewares]: Optional middlewares specific to this route.
   /// [constraints]: Optional constraints for the route parameters.
+  /// [schema]: Optional API schema metadata for this route.
   RouteBuilder post(
     String path,
     RouteHandler handler, {
     List<Middleware> middlewares = const [],
     Map<String, dynamic> constraints = const {},
+    RouteSchema? schema,
   }) {
     return handle(
       "POST",
@@ -150,6 +155,7 @@ class Router with StaticFileHandler {
       handler,
       middlewares: middlewares,
       constraints: constraints,
+      schema: schema,
     );
   }
 
@@ -159,11 +165,13 @@ class Router with StaticFileHandler {
   /// [handler]: The handler function for the PUT route.
   /// [middlewares]: Optional middlewares specific to this route.
   /// [constraints]: Optional constraints for the route parameters.
+  /// [schema]: Optional API schema metadata for this route.
   RouteBuilder put(
     String path,
     RouteHandler handler, {
     List<Middleware> middlewares = const [],
     Map<String, dynamic> constraints = const {},
+    RouteSchema? schema,
   }) {
     return handle(
       "PUT",
@@ -171,6 +179,7 @@ class Router with StaticFileHandler {
       handler,
       middlewares: middlewares,
       constraints: constraints,
+      schema: schema,
     );
   }
 
@@ -180,11 +189,13 @@ class Router with StaticFileHandler {
   /// [handler]: The handler function for the DELETE route.
   /// [middlewares]: Optional middlewares specific to this route.
   /// [constraints]: Optional constraints for the route parameters.
+  /// [schema]: Optional API schema metadata for this route.
   RouteBuilder delete(
     String path,
     RouteHandler handler, {
     List<Middleware> middlewares = const [],
     Map<String, dynamic> constraints = const {},
+    RouteSchema? schema,
   }) {
     return handle(
       "DELETE",
@@ -192,6 +203,7 @@ class Router with StaticFileHandler {
       handler,
       middlewares: middlewares,
       constraints: constraints,
+      schema: schema,
     );
   }
 
@@ -201,11 +213,13 @@ class Router with StaticFileHandler {
   /// [handler]: The handler function for the PATCH route.
   /// [middlewares]: Optional middlewares specific to this route.
   /// [constraints]: Optional constraints for the route parameters.
+  /// [schema]: Optional API schema metadata for this route.
   RouteBuilder patch(
     String path,
     RouteHandler handler, {
     List<Middleware> middlewares = const [],
     Map<String, dynamic> constraints = const {},
+    RouteSchema? schema,
   }) {
     return handle(
       "PATCH",
@@ -213,6 +227,7 @@ class Router with StaticFileHandler {
       handler,
       middlewares: middlewares,
       constraints: constraints,
+      schema: schema,
     );
   }
 
@@ -222,11 +237,13 @@ class Router with StaticFileHandler {
   /// [handler]: The handler function for the HEAD route.
   /// [middlewares]: Optional middlewares specific to this route.
   /// [constraints]: Optional constraints for the route parameters.
+  /// [schema]: Optional API schema metadata for this route.
   RouteBuilder head(
     String path,
     RouteHandler handler, {
     List<Middleware> middlewares = const [],
     Map<String, dynamic> constraints = const {},
+    RouteSchema? schema,
   }) {
     return handle(
       "HEAD",
@@ -234,6 +251,7 @@ class Router with StaticFileHandler {
       handler,
       middlewares: middlewares,
       constraints: constraints,
+      schema: schema,
     );
   }
 
@@ -243,11 +261,13 @@ class Router with StaticFileHandler {
   /// [handler]: The handler function for the OPTIONS route.
   /// [middlewares]: Optional middlewares specific to this route.
   /// [constraints]: Optional constraints for the route parameters.
+  /// [schema]: Optional API schema metadata for this route.
   RouteBuilder options(
     String path,
     RouteHandler handler, {
     List<Middleware> middlewares = const [],
     Map<String, dynamic> constraints = const {},
+    RouteSchema? schema,
   }) {
     return handle(
       "OPTIONS",
@@ -255,6 +275,7 @@ class Router with StaticFileHandler {
       handler,
       middlewares: middlewares,
       constraints: constraints,
+      schema: schema,
     );
   }
 
@@ -264,11 +285,13 @@ class Router with StaticFileHandler {
   /// [handler]: The handler function for the CONNECT route.
   /// [middlewares]: Optional middlewares specific to this route.
   /// [constraints]: Optional constraints for the route parameters.
+  /// [schema]: Optional API schema metadata for this route.
   RouteBuilder connect(
     String path,
     RouteHandler handler, {
     List<Middleware> middlewares = const [],
     Map<String, dynamic> constraints = const {},
+    RouteSchema? schema,
   }) {
     return handle(
       "CONNECT",
@@ -276,6 +299,7 @@ class Router with StaticFileHandler {
       handler,
       middlewares: middlewares,
       constraints: constraints,
+      schema: schema,
     );
   }
 
@@ -285,11 +309,13 @@ class Router with StaticFileHandler {
   /// [handler]: The handler function for the route.
   /// [middlewares]: Optional middlewares specific to this route.
   /// [constraints]: Optional constraints for the route parameters.
+  /// [schema]: Optional API schema metadata for this route.
   RouteBuilder any(
     String path,
     Handler handler, {
     List<Middleware> middlewares = const [],
     Map<String, dynamic> constraints = const {},
+    RouteSchema? schema,
   }) {
     // Create routes for all common HTTP methods
     final methods = [
@@ -312,6 +338,7 @@ class Router with StaticFileHandler {
         handler,
         middlewares: middlewares,
         constraints: constraints,
+        schema: schema,
       );
 
       firstBuilder ??= builder;
@@ -327,12 +354,14 @@ class Router with StaticFileHandler {
   /// [handler]: The handler function for the route.
   /// [middlewares]: Optional middlewares specific to this route.
   /// [constraints]: Optional constraints for the route parameters.
+  /// [schema]: Optional API schema metadata for this route.
   RouteBuilder handle(
     String method,
     String path,
     RouteHandler handler, {
     List<Middleware> middlewares = const [],
     Map<String, dynamic> constraints = const {},
+    RouteSchema? schema,
   }) {
     final fullPath = _joinPaths(_prefix, path);
     final route = RegisteredRoute(
@@ -341,6 +370,7 @@ class Router with StaticFileHandler {
       handler: handler,
       routeMiddlewares: middlewares,
       constraints: constraints,
+      schema: schema,
     );
     _routes.add(route);
     return RouteBuilder(route, this);

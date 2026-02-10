@@ -10,6 +10,7 @@ export 'src/middleware/rate_limit.dart';
 export 'src/middleware/recovery.dart';
 export 'src/middleware/request_size_limit.dart';
 export 'src/middleware/request_tracker.dart';
+export 'src/middleware/schema_validation.dart';
 export 'src/middleware/security_header.dart';
 export 'src/middleware/timeout.dart';
 export 'src/router/middleware_reference.dart' show MiddlewareRef;

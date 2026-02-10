@@ -4,7 +4,7 @@ import 'package:file/file.dart' as fs;
 import 'package:routed/console.dart' show CliLogger;
 
 import 'package:routed/src/console/args/base_command.dart';
-import 'package:routed/src/console/engine/introspector.dart';
+import 'package:routed/src/console/engine/manifest_loader.dart';
 
 class RoutesCommand extends BaseCommand {
   RoutesCommand({

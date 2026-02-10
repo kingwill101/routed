@@ -109,7 +109,7 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:routed/routed.dart';
-import 'package:$packageName/app.dart' as app;
+import 'package:\$packageName/app.dart' as app;
 
 Future<void> main(List<String> args) async {
   Directory.current = Directory($rootLiteral);

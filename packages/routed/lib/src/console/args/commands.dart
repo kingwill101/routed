@@ -5,5 +5,4 @@ export 'commands/provider.dart';
 export 'commands/provider_driver.dart';
 export 'commands/spec.dart';
 export 'commands/routes.dart';
-export 'commands/openapi.dart';
 export 'commands/stimulus.dart';

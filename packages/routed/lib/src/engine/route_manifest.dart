@@ -1,6 +1,7 @@
 import 'dart:convert';
 
 import 'engine.dart';
+import 'package:routed/src/openapi/schema.dart';
 
 /// A serializable snapshot of the engine's registered routes.
 class RouteManifest {
@@ -82,6 +83,7 @@ class RouteManifestEntry {
     Iterable<String> middleware = const [],
     Map<String, Object?> constraints = const {},
     this.isFallback = false,
+    this.schema,
   }) : middleware = List<String>.unmodifiable(middleware),
        constraints = Map<String, Object?>.unmodifiable(constraints);
 
@@ -93,6 +95,7 @@ class RouteManifestEntry {
       middleware: route.middlewares.map(_describeMiddleware),
       constraints: _serializeConstraints(route.constraints),
       isFallback: route.isFallback,
+      schema: route.schema,
     );
   }
 
@@ -110,6 +113,9 @@ class RouteManifestEntry {
         ? _stringKeyed(json['constraints'] as Map)
         : const <String, Object?>{};
     final isFallback = json['isFallback'] == true;
+    final schema = json['schema'] is Map
+        ? RouteSchema.fromJson(_stringKeyed(json['schema'] as Map))
+        : null;
     return RouteManifestEntry(
       method: method,
       path: path,
@@ -117,6 +123,7 @@ class RouteManifestEntry {
       middleware: middleware,
       constraints: constraints,
       isFallback: isFallback,
+      schema: schema,
     );
   }
 
@@ -127,6 +134,9 @@ class RouteManifestEntry {
   final Map<String, Object?> constraints;
   final bool isFallback;
 
+  /// Optional API schema metadata for this route.
+  final RouteSchema? schema;
+
   Map<String, Object?> toJson() {
     return <String, Object?>{
       'method': method,
@@ -135,6 +145,7 @@ class RouteManifestEntry {
       if (middleware.isNotEmpty) 'middleware': middleware,
       if (constraints.isNotEmpty) 'constraints': constraints,
       if (isFallback) 'isFallback': true,
+      if (schema != null) 'schema': schema!.toJson(),
     };
   }
 }

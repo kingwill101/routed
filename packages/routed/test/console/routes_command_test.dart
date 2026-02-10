@@ -7,7 +7,7 @@ import 'package:file/memory.dart';
 import 'package:routed/console.dart' show CliLogger;
 import 'package:routed/src/console/args/commands/routes.dart';
 import 'package:routed/src/console/args/runner.dart';
-import 'package:routed/src/console/engine/introspector.dart';
+import 'package:routed/src/console/engine/manifest_loader.dart';
 import 'package:test/test.dart';
 
 void main() {

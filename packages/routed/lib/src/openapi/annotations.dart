@@ -1,144 +1,163 @@
+/// Annotations for attaching OpenAPI metadata to route handlers.
+///
+/// These annotations are read by the build_runner generator (Phase 2) and
+/// the analyzer plugin (Phase 3) to produce OpenAPI specifications.
+/// They can also be used alongside the `schema:` parameter on route
+/// registration for maximum flexibility.
 library;
 
-/// OpenAPI annotations for handler functions.
+/// Marks a handler with an OpenAPI summary (short description).
 ///
-/// These annotations can be placed on handler functions to provide
-/// OpenAPI metadata for API documentation generation.
-///
-/// Example:
 /// ```dart
-/// @Summary('Get all products')
-/// @Description('Returns a list of all products.')
-/// @Tags(['products', 'catalog'])
-/// @ApiResponse(200, description: 'Success')
-/// @ApiResponse(404, description: 'Not found')
-/// Future<Response> getProducts(EngineContext ctx) async { ... }
+/// @Summary('List all users')
+/// FutureOr<dynamic> listUsers(EngineContext ctx) { ... }
 /// ```
-///
-/// Provides a short summary for the OpenAPI operation.
 class Summary {
-  final String value;
   const Summary(this.value);
+  final String value;
 }
 
-/// Provides a longer description for the OpenAPI operation.
+/// Marks a handler with an OpenAPI description (detailed explanation).
+///
+/// ```dart
+/// @Description('Returns a paginated list of all registered users.')
+/// FutureOr<dynamic> listUsers(EngineContext ctx) { ... }
+/// ```
 class Description {
-  final String value;
   const Description(this.value);
-}
-
-/// Adds tags to the OpenAPI operation for grouping.
-class ApiTags {
-  final List<String> values;
-  const ApiTags(this.values);
-}
-
-/// Marks the operation as deprecated in OpenAPI.
-class ApiDeprecated {
-  final String? reason;
-  const ApiDeprecated([this.reason]);
-}
-
-/// Specifies the operation ID for the OpenAPI operation.
-class OperationId {
   final String value;
+}
+
+/// Assigns one or more OpenAPI tags to a handler.
+///
+/// ```dart
+/// @Tags(['users', 'admin'])
+/// FutureOr<dynamic> listUsers(EngineContext ctx) { ... }
+/// ```
+class Tags {
+  const Tags(this.values);
+  final List<String> values;
+}
+
+/// Sets the OpenAPI operationId for a handler.
+///
+/// ```dart
+/// @OperationId('listUsers')
+/// FutureOr<dynamic> listUsers(EngineContext ctx) { ... }
+/// ```
+class OperationId {
   const OperationId(this.value);
+  final String value;
 }
 
-/// Defines a response for the OpenAPI operation.
-class ApiResponse {
-  /// HTTP status code (e.g., 200, 404, 500)
-  final int status;
-
-  /// Description of the response
-  final String description;
-
-  /// Example response body
-  final Object? example;
-
-  /// JSON schema for the response body
-  final Map<String, Object?>? schema;
-
-  /// Content type (defaults to 'application/json')
-  final String contentType;
-
-  const ApiResponse(
-    this.status, {
-    this.description = 'Success',
-    this.example,
-    this.schema,
-    this.contentType = 'application/json',
-  });
+/// Marks a handler as deprecated in the OpenAPI spec.
+///
+/// ```dart
+/// @ApiDeprecated('Use /v2/users instead')
+/// FutureOr<dynamic> listUsers(EngineContext ctx) { ... }
+/// ```
+class ApiDeprecated {
+  const ApiDeprecated([this.message]);
+  final String? message;
 }
 
-/// Provides an example for the request body in OpenAPI.
-class RequestExample {
-  /// Example request body
-  final Object value;
-
-  /// Description of the example
-  final String? description;
-
-  const RequestExample(this.value, {this.description});
-}
-
-/// Defines a request body for the OpenAPI operation.
-class RequestBody {
-  /// Description of the request body
-  final String? description;
-
-  /// Whether the request body is required
-  final bool required;
-
-  /// Content type (defaults to 'application/json')
-  final String contentType;
-
-  /// JSON schema for the request body
-  final Map<String, Object?>? schema;
-
-  /// Example request body
-  final Object? example;
-
-  const RequestBody({
-    this.description,
-    this.required = true,
-    this.contentType = 'application/json',
-    this.schema,
-    this.example,
-  });
-}
-
-/// Defines a parameter for the OpenAPI operation.
-class ApiParameter {
-  /// Parameter name
-  final String name;
-
-  /// Parameter location: 'query', 'path', 'header', 'cookie'
-  final String location;
-
-  /// Description of the parameter
-  final String? description;
-
-  /// Whether the parameter is required
-  final bool required;
-
-  /// JSON schema for the parameter
-  final Map<String, Object?>? schema;
-
-  /// Example value
-  final Object? example;
-
-  const ApiParameter({
-    required this.name,
-    this.location = 'query',
-    this.description,
-    this.required = false,
-    this.schema,
-    this.example,
-  });
-}
-
-/// Hides the operation from OpenAPI documentation.
+/// Hides a handler from the generated OpenAPI spec.
+///
+/// ```dart
+/// @ApiHidden()
+/// FutureOr<dynamic> healthCheck(EngineContext ctx) { ... }
+/// ```
 class ApiHidden {
   const ApiHidden();
 }
+
+/// Describes a possible response for a handler.
+///
+/// ```dart
+/// @ApiResponse(200, description: 'User created')
+/// @ApiResponse(422, description: 'Validation failed')
+/// FutureOr<dynamic> createUser(EngineContext ctx) { ... }
+/// ```
+class ApiResponse {
+  const ApiResponse(
+    this.statusCode, {
+    this.description = '',
+    this.contentType,
+    this.schema,
+    this.headers,
+  });
+
+  final int statusCode;
+  final String description;
+
+  /// MIME type for the response body (e.g. 'application/json').
+  /// Defaults to 'application/json' when [schema] is provided.
+  final String? contentType;
+
+  /// JSON Schema for the response body, as a const map.
+  final Map<String, Object?>? schema;
+
+  /// Headers included in the response.
+  final Map<String, Object?>? headers;
+}
+
+/// Describes a path, query, header, or cookie parameter for a handler.
+///
+/// ```dart
+/// @ApiParam('id', location: ParamLocation.path, description: 'User ID')
+/// @ApiParam('q', location: ParamLocation.query, description: 'Search term')
+/// FutureOr<dynamic> getUser(EngineContext ctx) { ... }
+/// ```
+class ApiParam {
+  const ApiParam(
+    this.name, {
+    this.location = ParamLocation.query,
+    this.description = '',
+    this.required,
+    this.schema,
+    this.example,
+  });
+
+  final String name;
+  final ParamLocation location;
+  final String description;
+
+  /// Whether the parameter is required. Defaults to `true` for path params,
+  /// `false` otherwise.
+  final bool? required;
+
+  /// JSON Schema for the parameter value.
+  final Map<String, Object?>? schema;
+
+  /// Example value for documentation.
+  final Object? example;
+}
+
+/// Describes the request body for a handler.
+///
+/// ```dart
+/// @ApiBody(
+///   description: 'User creation payload',
+///   contentType: 'application/json',
+///   required: true,
+/// )
+/// FutureOr<dynamic> createUser(EngineContext ctx) { ... }
+/// ```
+class ApiBody {
+  const ApiBody({
+    this.description = '',
+    this.contentType = 'application/json',
+    this.required = false,
+    this.schema,
+  });
+
+  final String description;
+  final String contentType;
+  final bool required;
+
+  /// JSON Schema for the request body.
+  final Map<String, Object?>? schema;
+}
+
+/// Location of an API parameter in the HTTP request.
+enum ParamLocation { query, path, header, cookie }

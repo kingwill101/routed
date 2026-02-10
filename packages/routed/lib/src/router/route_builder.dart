@@ -1,4 +1,4 @@
-import 'package:routed/src/openapi/operation.dart';
+import 'package:routed/src/openapi/schema.dart';
 import 'package:routed/src/router/registered_route.dart';
 import 'package:routed/src/router/router.dart';
 import 'package:routed/src/router/types.dart';
@@ -35,6 +35,26 @@ class RouteBuilder {
     return this;
   }
 
+  /// Attaches API schema metadata to the route.
+  ///
+  /// The [routeSchema] parameter describes the route's request/response
+  /// contract for OpenAPI generation and runtime validation.
+  /// Returns the current instance of `RouteBuilder` to allow for method chaining.
+  ///
+  /// ```dart
+  /// engine.post('/users', createUser)
+  ///   .name('users.create')
+  ///   .schema(RouteSchema(
+  ///     summary: 'Create a new user',
+  ///     body: BodySchema.fromRules({'name': 'required|string|min:2'}),
+  ///     responses: [ResponseSchema(201, description: 'Created')],
+  ///   ));
+  /// ```
+  RouteBuilder schema(RouteSchema routeSchema) {
+    _route.schema = routeSchema;
+    return this;
+  }
+
   /// Creates a new router group with the specified path, middlewares, and builder function.
   ///
   /// The [path] parameter specifies the base path for the group.
@@ -51,26 +71,5 @@ class RouteBuilder {
       middlewares: middlewares,
       builder: builder,
     );
-  }
-
-  /// Attach OpenAPI operation metadata for spec generation.
-  ///
-  /// The provided [configure] callback can populate summaries, tags, responses,
-  /// and other OpenAPI fields. Multiple invocations merge metadata.
-  RouteBuilder openApi(
-    void Function(OpenApiOperationBuilder builder) configure,
-  ) {
-    final builder = OpenApiOperationBuilder();
-    configure(builder);
-    final spec = builder.build();
-    final existing = _route.constraints['openapi'];
-    if (existing is Map<String, Object?>) {
-      final merged = Map<String, Object?>.from(existing);
-      merged.addAll(spec.toJson());
-      _route.constraints['openapi'] = merged;
-    } else {
-      _route.constraints['openapi'] = spec.toJson();
-    }
-    return this;
   }
 }

@@ -12,7 +12,6 @@ workspace:
   - packages/property_testing
   - examples/kitchen_sink
   - examples/config_demo
-  - examples/openapi
   - examples/policy_demo/policy_demo
   - examples/demo_app
   - examples/contacts_app
