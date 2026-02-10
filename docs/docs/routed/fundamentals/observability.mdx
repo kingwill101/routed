@@ -158,6 +158,155 @@ When `observability.logging.format` is `json` (the default), the provider config
 
 Combine log formatting with tracing and metrics so each request yields structured telemetry alongside spans and Prometheus counters. All components read from the same configuration scope, making it easy to toggle behaviour per environment (for example, JSON logs with OTLP spans in production, plain text with console spans locally).
 
+## Events
+
+The `EventManager` is a lightweight pub/sub bus built on top of Dart streams. The observability provider subscribes to events automatically, but you can also use it directly for application-level concerns.
+
+### Publishing and Subscribing
+
+```dart
+final events = engine.container.make<EventManager>();
+
+// Subscribe to a specific event type
+events.listen<RequestFinishedEvent>((event) {
+  print('Request completed: ${event.context.path}');
+});
+
+// Or get a stream for more control
+events.on<RouteMatchedEvent>().where((e) => e.route.path.startsWith('/api')).listen((e) {
+  // Track API-specific metrics
+});
+
+// Publish a custom event
+events.publish(MyCustomEvent(data: 'hello'));
+```
+
+### Built-in Event Types
+
+#### Request Lifecycle
+
+| Event | When |
+|-------|------|
+| `RequestStartedEvent(context)` | Request context has been initialized |
+| `RequestFinishedEvent(context)` | After the full request pipeline completes |
+
+#### Routing
+
+| Event | When |
+|-------|------|
+| `BeforeRoutingEvent(context)` | Before route matching begins |
+| `RouteMatchedEvent(context, route)` | A route was successfully matched |
+| `RouteNotFoundEvent(context)` | No matching route was found |
+| `AfterRoutingEvent(context, {route?, error?})` | After the handler completes (success or failure) |
+| `RoutingErrorEvent(context, route?, error, stackTrace)` | The handler threw an error |
+
+#### System
+
+| Event | When |
+|-------|------|
+| `ProviderRegisteredEvent(provider)` | A service provider was registered |
+| `ProviderBootedEvent(provider)` | A service provider finished booting |
+| `RequestContainerCreatedEvent(containerId)` | A scoped request container was created |
+| `RequestContainerDisposedEvent(containerId)` | A scoped request container was disposed |
+| `SystemErrorEvent(error, stackTrace?)` | A system-level error occurred |
+
+#### Cache
+
+| Event | When |
+|-------|------|
+| `CacheHitEvent(store, key)` | A cache lookup returned a value |
+| `CacheMissEvent(store, key)` | A cache lookup missed |
+| `CacheWriteEvent(store, key, {ttl?})` | A value was written to cache |
+| `CacheForgetEvent(store, key)` | A value was removed from cache |
+
+#### Rate Limiting
+
+| Event | When |
+|-------|------|
+| `RateLimitAllowedEvent(policy, strategy, identity, remaining)` | A request passed the rate limiter |
+| `RateLimitBlockedEvent(policy, strategy, identity, remaining, {retryAfter})` | A request was blocked by the rate limiter |
+
+### Custom Events
+
+Create custom events by extending the `Event` base class:
+
+```dart
+class OrderPlacedEvent extends Event {
+  final String orderId;
+  final double total;
+  OrderPlacedEvent({required this.orderId, required this.total});
+}
+
+// Publish
+events.publish(OrderPlacedEvent(orderId: '123', total: 99.99));
+
+// Subscribe
+events.listen<OrderPlacedEvent>((e) {
+  print('Order ${e.orderId} placed for \$${e.total}');
+});
+```
+
+All events inherit a `timestamp` field (`DateTime`) that is set automatically at creation time.
+
+## Signals
+
+Signals provide a Django-like pattern for request lifecycle hooks with sender filtering. Unlike raw events, signals support:
+
+- **Sender filtering** — only fire when the signal comes from a specific context or route
+- **Keyed handlers** — de-duplicate subscriptions by key
+- **Sequential dispatch** — handlers run one at a time (not concurrent)
+
+### `SignalHub`
+
+The `SignalHub` wraps `EventManager` and exposes five request signals:
+
+```dart
+final signalHub = engine.container.make<SignalHub>();
+
+// Connect to the "request started" signal
+signalHub.requestSignals.started.connect((event) {
+  print('New request: ${event.context.path}');
+});
+
+// Connect with sender filtering — only fires for a specific route
+signalHub.requestSignals.routeMatched.connect(
+  (event) => print('API route matched'),
+  sender: myApiRoute,  // Only fires for this specific route
+);
+```
+
+### Available Signals
+
+| Signal | Event Type | When |
+|--------|-----------|------|
+| `requestSignals.started` | `RequestStartedEvent` | Request begins |
+| `requestSignals.finished` | `RequestFinishedEvent` | Request completes |
+| `requestSignals.routeMatched` | `RouteMatchedEvent` | Route matched |
+| `requestSignals.routingError` | `RoutingErrorEvent` | Handler error |
+| `requestSignals.afterRouting` | `AfterRoutingEvent` | After handler runs |
+
+### Disconnecting
+
+```dart
+final sub = signalHub.requestSignals.started.connect(myHandler);
+sub.cancel(); // Disconnect this handler
+
+// Or disconnect by handler reference
+signalHub.requestSignals.started.disconnect(myHandler);
+```
+
+Signal handler exceptions are caught and re-published as `UnhandledSignalError` events — they never crash the request pipeline.
+
+### Zone Access
+
+Signals are also available via `AppZone.signals` when running inside an engine zone:
+
+```dart
+AppZone.signals.requestSignals.finished.connect((event) {
+  // ...
+});
+```
+
 ## Putting it together
 
 Most deployments start with:
@@ -166,5 +315,6 @@ Most deployments start with:
 2. Turn on metrics and point your Prometheus scraper at the exposed path.
 3. Register readiness checks for backing services (databases, queues, external APIs).
 4. Add an error observer that forwards critical errors to your alerting stack.
+5. Subscribe to events or signals for application-level cross-cutting concerns (audit logs, analytics, notifications).
 
 Because the provider reacts to configuration reloads, you can change options (for example, toggling tracing or metrics) without recreating the engine—handy during incident response when you need deeper visibility temporarily.

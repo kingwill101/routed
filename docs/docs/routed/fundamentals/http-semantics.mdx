@@ -4,54 +4,219 @@ description: Content negotiation, conditional requests, and automatic OPTIONS re
 sidebar_position: 5
 ---
 
-Routed now bundles helpers for negotiating response formats, honouring conditional request headers, and serving default `OPTIONS` responses. These utilities keep handlers focused on business logic while emitting compliant HTTP behaviour out of the box.
+Routed bundles helpers for negotiating response formats, honouring conditional request headers, and serving default `OPTIONS` responses. These utilities keep handlers focused on business logic while emitting compliant HTTP behaviour out of the box.
 
 ## Content Negotiation
 
-`ContentNegotiator` parses `Accept` headers and picks the best match from a list of supported media types. The `EngineContext.negotiate` helper does the heavy lifting for typical handlers:
+### `ctx.negotiate`
+
+`ContentNegotiator` parses `Accept` headers and picks the best match from a list of supported media types. The `ctx.negotiate` helper does the heavy lifting for typical handlers:
 
 ```dart
-router.get('/profile', (ctx) async {
+engine.get('/profile', (ctx) async {
   return await ctx.negotiate({
-    'application/json': () => ctx.json({'message': 'hello'}),
-    'text/html': () => ctx.html('<h1>Hello</h1>'),
+    'application/json': () => ctx.json({'name': 'Alice'}),
+    'text/html': () => ctx.html('<h1>Alice</h1>'),
+    'text/plain': () => ctx.string('Alice'),
   });
 });
 ```
 
-`ctx.negotiate` attaches `Vary: Accept`, honours quality factors, and falls back to the first supported type (or a `defaultType` that you provide). When no offer matches, the helper responds with `406 Not Acceptable`. For advanced scenarios you can invoke `ContentNegotiator.negotiate` directly and inspect the returned `NegotiatedMediaType`.
+`ctx.negotiate` automatically:
 
-## Conditional Requests
+- Adds a `Vary: Accept` header to the response
+- Honours quality factors (`q=0.8`, etc.) in the client's `Accept` header
+- Falls back to the first supported type when no `Accept` header is present
+- Responds with `406 Not Acceptable` when no offer matches
 
-Use the `conditionalRequests` middleware when a route can validate resources via ETags or last-modified timestamps:
+You can override the fallback with `defaultType`:
 
 ```dart
-router.get(
-  '/articles/:id',
-  (ctx) async {
-    final id = ctx.request.pathParameters['id']!;
-    final article = await repo.fetch(id);
-    return ctx.json(article);
+return await ctx.negotiate(
+  {
+    'application/json': () => ctx.json(data),
+    'text/html': () => ctx.html(rendered),
   },
-  middlewares: [
-    conditionalRequests(
-      etag: (ctx) {
-        final id = ctx.request.pathParameters['id']!;
-        return generateStrongEtagFromString(repo.versionFor(id));
-      },
-      lastModified: (ctx) {
-        final id = ctx.request.pathParameters['id']!;
-        return repo.lastUpdatedFor(id);
-      },
-    ),
-  ],
+  defaultType: 'text/html',
 );
 ```
 
-The middleware evaluates `If-None-Match`, `If-Match`, `If-Modified-Since`, and `If-Unmodified-Since`, short-circuiting with `304 Not Modified` for safe requests and `412 Precondition Failed` when preconditions are violated. Helpers such as `generateStrongEtag`, `generateWeakEtag`, and `generateStrongEtagFromString` simplify creating validators. To align middleware defaults with your deployment, set `routing.etag.strategy` to `strong`, `weak`, or `disabled`—the `resolveDefaultEtag` helper maps the configured strategy to a generated value. When you already have the raw representation bytes, call `resolveDefaultEtag(bytes, ctx.engineConfig.etagStrategy)` to produce a validator consistent with the configured policy.
+### `ctx.negotiateContentType`
+
+For cases where you just need to know which type was selected without executing a callback:
+
+```dart
+final selected = ctx.negotiateContentType(
+  ['application/json', 'text/html'],
+  defaultType: 'application/json',
+);
+// selected is a NegotiatedMediaType with .value, .quality, .parameters
+```
+
+### `ContentNegotiator.negotiate` (Advanced)
+
+For full control, call the negotiator directly:
+
+```dart
+final result = ContentNegotiator.negotiate(
+  ctx.header('Accept') ?? '*/*',
+  ['application/json', 'text/html', 'text/plain'],
+  defaultType: 'application/json',
+);
+
+if (result != null) {
+  print(result.value);      // "application/json"
+  print(result.quality);    // 1.0
+  print(result.parameters); // {}
+}
+```
+
+The negotiator uses specificity scoring to break ties: concrete types beat wildcards, and more specific subtypes beat less specific ones. Among equal-specificity matches, the client's stated quality factor and declaration order determine the winner.
+
+### Convenience Getters
+
+The `NegotiationContext` extension adds shorthand checks:
+
+| Property | Description |
+|----------|-------------|
+| `ctx.wantsJson` | `true` if the client prefers JSON (checks `Accept`, `X-Requested-With`, and `Content-Type`) |
+| `ctx.acceptsHtml` | `true` if `Accept` includes `text/html` or `application/xhtml+xml` |
+| `ctx.accepts(mime)` | `true` if `Accept` header contains the given MIME type |
+
+```dart
+engine.post('/api/data', (ctx) async {
+  if (ctx.wantsJson) {
+    return ctx.json({'status': 'ok'});
+  }
+  return ctx.html('<p>OK</p>');
+});
+```
+
+## Conditional Requests
+
+Conditional requests let clients cache resources and only fetch updates when the content has actually changed. Routed provides a middleware and standalone evaluation function.
+
+### The Middleware
+
+Use `conditionalRequests` when a route can validate resources via ETags or last-modified timestamps:
+
+```dart
+engine.get('/articles/{id}', (ctx) async {
+  final id = ctx.pathParam('id')!;
+  final article = await repo.fetch(id);
+  return ctx.json(article);
+}, middlewares: [
+  conditionalRequests(
+    etag: (ctx) {
+      final id = ctx.pathParam('id')!;
+      return generateStrongEtagFromString(repo.versionFor(id));
+    },
+    lastModified: (ctx) {
+      final id = ctx.pathParam('id')!;
+      return repo.lastUpdatedFor(id);
+    },
+  ),
+]);
+```
+
+The middleware:
+
+1. Resolves the ETag and/or last-modified timestamp via your callbacks
+2. Evaluates the conditional headers (`If-None-Match`, `If-Match`, `If-Modified-Since`, `If-Unmodified-Since`)
+3. Short-circuits with `304 Not Modified` for safe requests (GET/HEAD) when the resource hasn't changed
+4. Short-circuits with `412 Precondition Failed` when preconditions are violated (e.g., `If-Match` fails on an unsafe method)
+5. If the request proceeds, applies `ETag` and `Last-Modified` headers to the response
+
+### ETag Generators
+
+| Function | Output Format | Example |
+|----------|---------------|---------|
+| `generateStrongEtag(bytes)` | `"<base64url-hash>"` | `"abc123..."` |
+| `generateWeakEtag(bytes)` | `W/"<base64url-hash>"` | `W/"abc123..."` |
+| `generateStrongEtagFromString(value)` | `"<base64url-hash>"` | `"def456..."` |
+| `generateWeakEtagFromString(value)` | `W/"<base64url-hash>"` | `W/"def456..."` |
+
+All generators default to SHA-256 but accept an optional `algorithm` parameter (`sha256`, `sha1`, `md5`).
+
+### `resolveDefaultEtag`
+
+Maps a configured strategy to a generated ETag value:
+
+```dart
+final etag = resolveDefaultEtag(bodyBytes, ctx.engineConfig.etagStrategy);
+// Returns a strong ETag, weak ETag, or null depending on the strategy
+```
+
+### ETag Strategy Configuration
+
+Configure the default ETag behaviour in your YAML:
+
+```yaml title="config/routing.yaml"
+routing:
+  etag:
+    strategy: strong  # strong, weak, or disabled
+```
+
+| Strategy | Behavior |
+|----------|----------|
+| `strong` | Generates a strong ETag with full byte-level validation |
+| `weak` | Generates a weak ETag (semantic equivalence) |
+| `disabled` | No automatic ETag generation |
+
+### `evaluateConditionals` (Advanced)
+
+For standalone evaluation without middleware:
+
+```dart
+final outcome = evaluateConditionals(
+  method: ctx.method,
+  headers: ctx.headers,
+  etag: '"abc123"',
+  lastModified: DateTime.utc(2025, 1, 1),
+);
+
+switch (outcome) {
+  case ConditionalOutcome.proceed:
+    // Serve the full response
+    break;
+  case ConditionalOutcome.notModified:
+    // Return 304
+    break;
+  case ConditionalOutcome.preconditionFailed:
+    // Return 412
+    break;
+}
+```
+
+The evaluation follows [RFC 9110 Section 13](https://httpwg.org/specs/rfc9110.html#conditional.requests) precedence rules:
+
+1. `If-Match` is checked first (strong comparison only)
+2. `If-Unmodified-Since` is checked next
+3. `If-None-Match` (weak comparison allowed for GET/HEAD)
+4. `If-Modified-Since` (only when `If-None-Match` is absent and method is safe)
 
 ## Automatic OPTIONS Responses
 
-When `routing.default_options` is enabled (the default), Routed returns `204 No Content` with a populated `Allow` header whenever an `OPTIONS` request hits a path that has handlers but no explicit `OPTIONS` route. The response enumerates allowed methods, including implicit support for `HEAD` and `OPTIONS` themselves. Persistent `405 Method Not Allowed` responses now also include `OPTIONS` in the `Allow` header so clients can discover capabilities.
+When `routing.default_options` is enabled (the default), Routed returns `204 No Content` with a populated `Allow` header whenever an `OPTIONS` request hits a path that has handlers but no explicit `OPTIONS` route. The response enumerates allowed methods, including implicit support for `HEAD` and `OPTIONS` themselves.
 
-Set `routing.default_options` to `false` if you prefer to author every `OPTIONS` handler manually or want middleware to take full control.
+`405 Method Not Allowed` responses also include `OPTIONS` in the `Allow` header so clients can discover capabilities via CORS preflight or general probing.
+
+```yaml title="config/routing.yaml"
+routing:
+  default_options: true    # default
+```
+
+Set to `false` if you prefer to author every `OPTIONS` handler manually or want middleware to take full control.
+
+## Routing Configuration Reference
+
+All HTTP semantics settings live under the `routing` namespace:
+
+```yaml title="config/routing.yaml"
+routing:
+  redirect_trailing_slash: true   # Redirect /foo/ to /foo (or vice versa)
+  handle_method_not_allowed: true # Return 405 instead of 404 for wrong methods
+  default_options: true           # Auto-generate OPTIONS responses
+  etag:
+    strategy: strong              # strong, weak, or disabled
+```

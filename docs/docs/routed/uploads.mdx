@@ -6,41 +6,183 @@ sidebar_position: 22
 
 # Uploads
 
-Uploads are controlled via the `uploads.*` namespace and enforced during multipart parsing. Configure limits, allowed extensions, and upload directories in the manifest.
+Routed handles file uploads via multipart form parsing with configurable size limits, extension whitelists, and disk quotas. Limits are enforced during streaming — oversized or disallowed files are rejected and cleaned up automatically.
 
 ## Configuration
 
 ```yaml title="config/uploads.yaml"
 uploads:
-  max_memory: 33554432
-  max_file_size: 10485760
-  max_disk_usage: 33554432
+  max_memory: 33554432       # 32 MB — max in-memory buffer for non-file fields
+  max_file_size: 10485760    # 10 MB — per-file size limit
+  max_disk_usage: 33554432   # 32 MB — aggregate disk quota per request
   allowed_extensions:
     - jpg
     - jpeg
     - png
+    - gif
     - pdf
-  directory: uploads
-  permissions: 750
+  directory: uploads         # upload directory (falls back to temp dir if empty)
+  permissions: 750           # Unix file permissions for uploaded files
 ```
 
-## Behavior
+### Configuration via Code
 
-- Limits are enforced during multipart parsing; oversized parts are skipped and cleaned up.
-- File names are sanitized and saved under the configured upload directory.
-- When `uploads.directory` is empty, the engine falls back to the temp directory.
-
-## Handling uploads
+You can also configure uploads programmatically with `withMultipart`:
 
 ```dart
-final file = ctx.formFile('avatar');
-if (file != null) {
-  await ctx.saveUploadedFile(file, 'uploads/${file.filename}');
-}
+final engine = await Engine.create(options: [
+  withMultipart(
+    maxMemory: 16 * 1024 * 1024,
+    maxFileSize: 5 * 1024 * 1024,
+    allowedExtensions: {'jpg', 'png', 'webp'},
+  ),
+]);
 ```
 
-## Next steps
+Or use `configItems` on `Engine.create`:
 
-- [Security: Uploads](/docs/routed/security/upload-hardening)
-- [Configuration: Uploads](/docs/routed/fundamentals/requests#file-uploads)
-- [Storage](/docs/routed/storage)
+```dart
+final engine = await Engine.create(configItems: {
+  'uploads.max_file_size': 5 * 1024 * 1024,
+  'uploads.allowed_extensions': ['jpg', 'png', 'webp'],
+});
+```
+
+## Handling Uploads
+
+### Single File
+
+```dart
+engine.post('/avatar', (ctx) async {
+  final file = ctx.formFile('avatar');
+  if (file == null) {
+    return ctx.json({'error': 'No file uploaded'}, statusCode: 400);
+  }
+
+  await ctx.saveUploadedFile(file, 'uploads/${file.filename}');
+  return ctx.json({'saved': file.filename});
+});
+```
+
+### Multiple Files
+
+When a form contains multiple files with the same field name, `multipartForm()` collects all of them:
+
+```dart
+engine.post('/gallery', (ctx) async {
+  final form = await ctx.multipartForm();
+  final files = form.files; // List<MultipartFile>
+
+  for (final file in files) {
+    await ctx.saveUploadedFile(file, 'uploads/gallery/${file.filename}');
+  }
+
+  return ctx.json({'uploaded': files.length});
+});
+```
+
+### Accessing Form Fields
+
+Multipart forms can contain both files and regular fields:
+
+```dart
+engine.post('/profile', (ctx) async {
+  final form = await ctx.multipartForm();
+
+  // Regular form fields
+  final name = ctx.postForm('name');
+  final bio = ctx.postForm('bio');
+  final defaultRole = ctx.defaultPostForm('role', 'user');
+
+  // Array fields (e.g., multiple checkboxes)
+  final tags = ctx.postFormArray('tags'); // List<String>
+
+  // File upload
+  final avatar = ctx.formFile('avatar');
+
+  // ...
+});
+```
+
+## Context Extension Methods
+
+The `MultipartFormMethods` extension on `EngineContext` provides:
+
+| Method | Return Type | Description |
+|--------|-------------|-------------|
+| `multipartForm()` | `Future<MultipartForm>` | Parse and cache the full multipart form |
+| `formFile(name)` | `MultipartFile?` | Get a single uploaded file by field name |
+| `saveUploadedFile(file, dest)` | `Future<void>` | Copy an uploaded file to a destination path |
+| `postForm(key)` | `String?` | Get a single form field value |
+| `defaultPostForm(key, default)` | `String` | Get a form field with fallback |
+| `postFormArray(key)` | `List<String>` | Get all values for a repeated field |
+| `postFormMap(key)` | `Map<String, dynamic>` | Get the entire form data map |
+| `form()` | `Map<String, dynamic>` | Alias for all form data |
+
+## `MultipartFile`
+
+Each uploaded file is represented as a `MultipartFile`:
+
+| Property | Type | Description |
+|----------|------|-------------|
+| `name` | `String` | The form field name |
+| `filename` | `String` | The original file name (sanitized) |
+| `path` | `String` | Temporary file path on disk |
+| `size` | `int` | File size in bytes |
+| `contentType` | `String?` | MIME type from the `Content-Type` header |
+
+## Enforcement Behavior
+
+Limits are enforced during streaming, not after the upload completes:
+
+- **Per-file size** (`max_file_size`) — the file is streamed to disk in chunks. If it exceeds the limit, writing stops, the partial file is deleted, and a `FileTooLargeException` is raised.
+- **Extension whitelist** (`allowed_extensions`) — checked before writing begins. Files with disallowed extensions are rejected with a `FileExtensionNotAllowedException`.
+- **Aggregate disk quota** (`max_disk_usage`) — tracks cumulative bytes across all files in a single request. When exceeded, a `FileQuotaExceededException` is raised and the file is cleaned up.
+- **Filename sanitization** — filenames are sanitized to remove path traversal characters and special symbols. Each file gets a unique prefix (`upload_<microseconds>_<sanitizedName>`) to prevent collisions.
+
+On any failure during multipart parsing, all files created during that request are deleted and disk quota allocations are released.
+
+## Validation Rules
+
+You can validate uploaded files using the built-in validation rules:
+
+```dart
+engine.post('/upload', (ctx) async {
+  await ctx.validate({
+    'document': 'file|max_file_size:5242880',          // 5 MB
+    'image': 'file|allowed_mime_types:image/jpeg,image/png',
+  });
+  // ...
+});
+```
+
+| Rule | Description |
+|------|-------------|
+| `file` | Validates that the value is a `MultipartFile` |
+| `max_file_size:bytes` | Validates `file.size <= bytes` |
+| `allowed_mime_types:type1,type2` | Validates `file.contentType` is in the list |
+
+## Error Handling
+
+Upload violations throw specific exceptions you can catch in middleware or error handlers:
+
+| Exception | When |
+|-----------|------|
+| `FileTooLargeException` | A single file exceeds `max_file_size` |
+| `FileExtensionNotAllowedException` | File extension not in `allowed_extensions` |
+| `FileQuotaExceededException` | Aggregate `max_disk_usage` exceeded |
+
+Each exception carries details (the limit that was exceeded, the disallowed extension, etc.) that you can use in error responses.
+
+## Security Checklist
+
+- Set `allowed_extensions` to a strict whitelist appropriate for your application
+- Keep `max_file_size` and `max_disk_usage` as low as your use case allows
+- Use `uploads.directory` to isolate uploaded files from application code
+- Never serve the upload directory directly — use a storage abstraction or CDN
+- Validate MIME types in addition to extensions for defense in depth
+
+## Next Steps
+
+- [Security: Upload Hardening](/docs/routed/security/uploads) — defense-in-depth strategies
+- [Storage](/docs/routed/storage) — storage drivers and disk abstraction
