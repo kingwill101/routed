@@ -183,8 +183,8 @@ boots service providers, and returns the initialized instance. Pass a custom
 listeners before boot), you can instantiate `Engine(providers: [...])` and call
 `await engine.initialize()` manually.
 
-The loader pushes a resolved `ConfigImpl` instance into the container. It is automatically cloned for every
-request so per-request mutations do not leak.
+The loader pushes a resolved `ConfigImpl` instance into the container. A lightweight `ScopedConfig` overlay is created for every
+request so per-request mutations do not leak back to the application-level config. Reads fall through to the parent; writes are captured in a local override map.
 
 ## Customising the loader & enabling watch mode
 
@@ -279,14 +279,14 @@ Prefer code over the CLI? Call `inspectProviders()` (re-exported from `package:r
 ```dart
 import 'package:routed/routed.dart';
 
-final providers = await inspectProviders();
+final providers = inspectProviders();
 for (final provider in providers) {
   logger.info('${provider.id} -> ${provider.description}');
-  for (final doc in provider.docs) {
-    logger.debug('${doc.path}: ${doc.description}', {
-      'default': doc.defaultValue,
-      'options': doc.resolveOptions(),
-      'metadata': doc.metadata,
+  for (final field in provider.fields) {
+    logger.debug('${field.path}: ${field.description}', {
+      'default': field.defaultValue,
+      'options': field.options,
+      'metadata': field.metadata,
     });
   }
 }
@@ -306,12 +306,27 @@ class MailProvider extends ServiceProvider with ProvidesDefaultConfig {
   String get configSource => 'my_package.mail';
 
   @override
-  Map<String, dynamic> get defaultConfig => const {
-    'mail': {
-      'host': 'localhost',
-      'port': 2525,
-    },
-  };
+  ConfigDefaults get defaultConfig => const ConfigDefaults(
+    docs: [
+      ConfigDocEntry(
+        path: 'mail.host',
+        type: 'string',
+        description: 'SMTP server hostname.',
+        defaultValue: 'localhost',
+      ),
+      ConfigDocEntry(
+        path: 'mail.port',
+        type: 'int',
+        description: 'SMTP server port.',
+        defaultValue: 2525,
+      ),
+    ],
+  );
+
+  @override
+  void register(Container container) {
+    // bindings
+  }
 }
 ```
 
@@ -449,6 +464,58 @@ expect(configValue<String>('app.name'), equals('Routed App'));
 ```
 
 This is ideal for integration tests and background scripts that need to impersonate a tenant or toggle features.
+
+### `configNamespace` helper
+
+Use `configNamespace()` to retrieve an entire configuration subtree as a map:
+
+```dart
+import 'package:routed/routed.dart';
+
+// Get the entire 'mail' config subtree
+final mailConfig = configNamespace('mail');
+// => {'host': 'smtp.example.com', 'port': 587, ...}
+
+// Get all config
+final allConfig = configNamespace(null);
+```
+
+This is useful when passing a whole section to a service constructor (e.g. `Mailer.fromConfig(configNamespace('mail'))`).
+
+### Automatic `app.root` injection
+
+The config loader automatically injects `app.root` into the configuration, set to the resolved project root directory. This value is available both as a template variable during config rendering and as a config key at runtime:
+
+```yaml title="config/storage.yaml"
+root: "{{ app.root }}/storage/app"
+```
+
+```dart
+final projectRoot = configValue<String>('app.root');
+```
+
+The `app.root` key is only set when it is not already explicitly defined in your configuration. Providers like `ViewServiceProvider` and `StorageServiceProvider` use it to resolve relative paths.
+
+### `onConfigReload` hook
+
+Providers that mix in `ProvidesDefaultConfig` can override `onConfigReload` to react when configuration files change in watch mode. The engine calls this method on every provider that implements it after a reload:
+
+```dart
+class MyProvider extends ServiceProvider with ProvidesDefaultConfig {
+  @override
+  ConfigDefaults get defaultConfig => const ConfigDefaults(docs: [/* ... */]);
+
+  @override
+  Future<void> onConfigReload(Container container, Config config) async {
+    // Re-read your config and update cached state
+    final newSettings = config.get<Map<String, dynamic>>('my_service');
+    final service = await container.make<MyService>();
+    service.reconfigure(newSettings);
+  }
+}
+```
+
+All built-in providers (logging, storage, views, sessions, CORS, security, etc.) implement this hook, which is why configuration changes take effect without restarting the server.
 
 ## Listening to configuration events
 
@@ -835,26 +902,37 @@ final config = EngineConfig(
 
 ### Custom template engines
 
-Swap out Liquid entirely by registering your own `ViewEngine` implementation:
+Swap out Liquid entirely by implementing the `ViewEngine` interface and registering it with the `ViewEngineManager`:
 
 ```dart
-test('Email provider registers Mailer binding', () async {
-  final engine = Engine(
-    providers: [
-      ...Engine.builtins,
-      EmailServiceProvider(),
-    ],
-    configItems: {
-      'mail': {'default': 'log'},
-    },
-  );
-  await engine.initialize();
+import 'package:routed/routed.dart';
 
-  final mailer = await engine.make<Mailer>();
-  expect(mailer, isA<Mailer>());
+class MustacheViewEngine implements ViewEngine {
+  final String directory;
 
-  await engine.close();
-});
+  MustacheViewEngine({this.directory = 'views'});
+
+  @override
+  List<String> get extensions => ['.mustache', '.hbs'];
+
+  @override
+  Future<String> render(String name, [Map<String, dynamic>? data]) async {
+    final template = await _loadTemplate(name);
+    return _renderMustache(template, data ?? {});
+  }
+
+  @override
+  Future<String> renderFile(String filePath, [Map<String, dynamic>? data]) async {
+    final template = await File(filePath).readAsString();
+    return _renderMustache(template, data ?? {});
+  }
+
+  // Your Mustache rendering implementation...
+}
+
+// Register it during provider boot or engine setup:
+final viewManager = await engine.make<ViewEngineManager>();
+viewManager.register(MustacheViewEngine(directory: 'templates'));
 ```
 
 Pair this with the `view.*` config (or `withStaticAssets`/`storage.*`) so the rest of the ecosystem keeps using the same disks and cache settings.
