@@ -29,23 +29,38 @@ Scaffolds a Routed project, writing `bin/server.dart`, config manifests, README,
 - `--output/-o` – destination directory (defaults to `.`).
 - `--template/-t` – template to use (`basic`, `api`, `web`, or `fullstack`).
 - `--force/-f` – overwrite conflicting files.
+- `--inertia/--no-inertia` – scaffold an Inertia client app alongside the server. When running interactively without `--inertia`, the CLI prompts.
+- `--inertia-framework` – Inertia framework adapter: `react` (default), `vue`, or `svelte`.
+- `--inertia-package-manager` – package manager for the client: `npm` (default), `pnpm`, `yarn`, or `bun`.
+- `--inertia-output` – output directory for the client app, relative to the project root (default: `client`).
 
-After generating files, `create` automatically runs `dart pub get` using the resolved Dart executable. If dependency resolution fails the CLI prints the exit code and keeps the “Next steps” list so you can retry manually.
+After generating files, `create` automatically runs `dart pub get` using the resolved Dart executable. If dependency resolution fails the CLI prints the exit code and keeps the "Next steps" list so you can retry manually. When `--inertia` is set, the CLI also runs `inertia_dart:inertia create` to scaffold the frontend app.
 
 ## `dev`
 
 ```bash
-dart run routed dev [--entry bin/server.dart] [--host 127.0.0.1] [--port 8080]
+dart run routed dev [-e bin/server.dart] [-H 127.0.0.1] [-p 8080]
 ```
 
 Launches a development server with hot-reload support. Highlights:
 
 - Resolves the correct Dart binary (respecting the environment overrides above) and enables the VM service.
 - Generates a bootstrap that wires in [`hotreloader`](https://pub.dev/packages/hotreloader) so file changes trigger reloads.
-- Restarts the process automatically when `--bootstrap=false` (or `--no-bootstrap`).
+- Restarts the process automatically when `--no-bootstrap` is used.
 - Accepts additional flags: `--bootstrap-path`, `--install-missing/--no-install-missing`, `--no-warn-missing`, and `--watch` for custom directories.
 
-Use this during development; fall back to `dart run bin/server.dart` for single runs or CI pipelines. If you see "Entry file not found" errors, pass `--entry` to point at your server file.
+| Flag | Abbreviation | Default | Description |
+|------|-------------|---------|-------------|
+| `--entry` | `-e` | `bin/server.dart` | Entrypoint file to run in development |
+| `--host` | `-H` | `127.0.0.1` | The host to bind |
+| `--port` | `-p` | `8080` | The port to bind |
+| `--bootstrap/--no-bootstrap` | | `true` | Generate and run a hotreloader bootstrap |
+| `--bootstrap-path` | | (auto) | Custom path for the generated bootstrap file |
+| `--install-missing/--no-install-missing` | | `true` | Auto-install `hotreloader` if missing |
+| `--no-warn-missing` | | `false` | Suppress warning when `hotreloader` is missing |
+| `--watch` | | `[]` | Additional directories or files to watch (repeatable) |
+
+Use this during development; fall back to `dart run bin/server.dart` for single runs or CI pipelines. If you see "Entry file not found" errors, pass `-e` to point at your server file.
 
 ## `routes`
 
@@ -59,9 +74,17 @@ Prints the HTTP and WebSocket routes for your application. The loader tries `lib
 
 ```bash
 dart run routed spec:generate --output .dart_tool/routed/route_manifest.json
+# shorthand alias:
+dart run routed spec --output .dart_tool/routed/route_manifest.json
 ```
 
-Writes a JSON route manifest to disk. Useful for documentation, contract tests, or code generators. Accepts the same `--entry` and `--pretty/--no-pretty` options as `routes`. The CLI ensures parent directories exist before writing.
+Writes a JSON route manifest to disk. Useful for documentation, contract tests, or code generators. The CLI ensures parent directories exist before writing.
+
+| Flag | Default | Description |
+|------|---------|-------------|
+| `--entry` | (auto) | Dart entrypoint that prints a route manifest as JSON |
+| `--output` | `.dart_tool/routed/route_manifest.json` | Target path for the generated manifest |
+| `--pretty/--no-pretty` | `true` | Pretty-print the JSON output |
 
 ## `openapi generate`
 
@@ -71,12 +94,73 @@ dart run routed openapi generate [--title "My API"] [--version 1.0.0] [--server 
 
 Generates an OpenAPI 3.1 document from your routed engine. By default the CLI writes `.dart_tool/routed/openapi.json`; use `--output` to change the destination and `--server` (repeatable) to declare server URLs. Metadata added via `routeBuilder.openApi((op) { ... })` flows into the generated spec.
 
+| Flag | Default | Description |
+|------|---------|-------------|
+| `--entry` | (auto) | Dart entrypoint that prints a route manifest as JSON |
+| `--output` | `.dart_tool/routed/openapi.json` | Target path for the generated document |
+| `--title` | `Routed Service` | OpenAPI `info.title` value |
+| `--version` | `1.0.0` | OpenAPI `info.version` value |
+| `--description` | (none) | OpenAPI `info.description` value |
+| `--server` | `[]` | Server URL(s). Format: `url` or `url\|Description`. Repeatable |
+| `--pretty/--no-pretty` | `true` | Pretty-print the JSON output |
+
+## `openapi make`
+
+```bash
+dart run routed openapi make [--entry tool/spec_manifest.dart] [--output .dart_tool/routed/openapi.json]
+```
+
+Statically analyzes the codebase to generate an OpenAPI document without running the engine. This is useful in CI pipelines or when the engine cannot be started.
+
+| Flag | Default | Description |
+|------|---------|-------------|
+| `--entry` | `tool/spec_manifest.dart` | Entrypoint file to start analysis from |
+| `--output` | `.dart_tool/routed/openapi.json` | Target path for the generated document |
+| `--pretty/--no-pretty` | `true` | Pretty-print the JSON output |
+
+## `stimulus:install`
+
+```bash
+dart run routed stimulus:install [--force]
+```
+
+Scaffolds Stimulus (Hotwire) application boilerplate and a sample controller into `public/js/`. Currently supports `--mode cdn` (the default), which generates ES modules that import Stimulus from a CDN.
+
+Generated files:
+- `public/js/stimulus.js` – module entry point
+- `public/js/controllers/application.js` – Stimulus application setup
+- `public/js/controllers/index.js` – controller registration
+- `public/js/controllers/hello_controller.js` – sample controller
+
+After scaffolding, include `<script type="module" src="/js/stimulus.js"></script>` in your HTML layout and attach controllers with `data-controller` attributes.
+
+## `provider:driver`
+
+```bash
+dart run routed provider:driver <type> <name>
+dart run routed provider:driver --type storage my_driver
+```
+
+Generates a starter file for a custom storage, cache, or session driver. The `type` argument selects the driver category (`storage`, `cache`, or `session`) and `name` is the driver identifier.
+
+| Flag | Abbreviation | Default | Description |
+|------|-------------|---------|-------------|
+| `--type` | `-t` | `storage` | Driver category: `storage`, `cache`, or `session` |
+| `--output` | `-o` | `lib/drivers/<type>` | Directory where the driver file is written |
+| `--force` | `-f` | `false` | Overwrite the target file if it exists |
+
 ## Provider & configuration helpers
 
 Additional commands help manage provider configuration:
 
-- `config:init`, `config:publish`, `config:cache`, `config:clear`
-- `provider:list`, `provider:enable`, `provider:disable`
+- `config:init` – scaffold `config/` and `.env` files for a new project. Pass `--force/-f` to overwrite existing files.
+- `config:publish` – generate configuration stubs into `config/`. Pass `--force/-f` to overwrite, `--only` for a subset.
+- `config:cache` – merge configuration sources and write a generated cache file. Options: `--output/-o`, `--json-output`, `--pretty`, `--docs`, `--docs-output`.
+- `config:clear` – delete generated configuration cache artifacts. Options: `--output/-o`, `--json-output`.
+- `config:schema` – generate a master JSON Schema for configuration validation. Options: `--output/-o` (default: `schemas/config.schema.json`).
+- `provider:list` – list registered providers. Pass a provider ID to filter; add `--config/-c` to show configuration details.
+- `provider:enable` – enable a disabled provider by ID.
+- `provider:disable` – disable a provider by ID.
 
 See [Configuration](/docs/routed/fundamentals/configuration) for details and usage patterns.
 
