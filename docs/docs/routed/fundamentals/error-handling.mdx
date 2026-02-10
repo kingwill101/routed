@@ -1,10 +1,12 @@
 ---
 title: Error Handling
-description: Handle validation errors, aborts, and uncaught exceptions
+description: Handle validation errors, aborts, and uncaught exceptions with content-negotiated responses
 sidebar_position: 10
 ---
 
 Routed includes a global error handler that maps common failures to sensible HTTP responses, so you rarely need to wrap handlers in try/catch blocks. You opt into custom handling only when you want a different response shape or additional logging/metrics.
+
+All error responses are **content-negotiated** — the framework inspects the request's `Accept` header, `X-Requested-With`, and `Content-Type` to return JSON for API clients, styled HTML for browsers, or plain text as a fallback.
 
 Unmatched routes return 404 by default (or your group/global fallback if configured), and optional routing toggles can surface 405 for method mismatches. The sections below show the defaults and how to extend them safely.
 
@@ -12,31 +14,96 @@ Unmatched routes return 404 by default (or your group/global fallback if configu
 
 The framework automatically handles:
 
-- ValidationError — 422 Unprocessable Entity with field-level errors
-- EngineError — custom status code and message payload
-- Unmatched routes — 404 Not Found (or your fallback handler’s response)
-- Method not allowed — 405 with an Allow header when handleMethodNotAllowed is enabled
-- Unhandled exceptions — 500 Internal Server Error
+- **ValidationError** — 422 Unprocessable Entity with field-level errors
+- **EngineError** (and subclasses) — custom status code and message payload
+- **Unmatched routes** — 404 Not Found (or your fallback handler's response)
+- **Method not allowed** — 405 with an Allow header when `handleMethodNotAllowed` is enabled
+- **Unhandled exceptions** — 500 Internal Server Error
+
+## Content-Negotiated Responses
+
+Every error response from the global handler, 404 handler, and built-in middleware adapts to what the client expects:
+
+| Client signal | Response format |
+|---|---|
+| `Accept: application/json` or `+json` suffix | JSON body |
+| `X-Requested-With: XMLHttpRequest` (AJAX) | JSON body |
+| Request `Content-Type: application/json` | JSON body |
+| `Accept: text/html` or `application/xhtml+xml` | Styled HTML error page |
+| No matching signal | Plain text |
+
+### JSON response (API client)
+
+```
+POST /register HTTP/1.1
+Accept: application/json
+```
+
+```json
+{
+  "errors": {
+    "email": ["Invalid email format"],
+    "password": ["Must be at least 8 characters"]
+  }
+}
+```
+
+### HTML response (browser)
+
+```
+GET /missing-page HTTP/1.1
+Accept: text/html
+```
+
+Returns a minimal, self-contained HTML page with the status code and message — no external dependencies or stylesheets.
+
+### Plain text fallback
+
+When the client doesn't indicate a preference for JSON or HTML, the error message is returned as plain text.
+
+## Negotiation Helpers
+
+Three convenience getters on `EngineContext` let you inspect what the client prefers:
+
+```dart
+router.get('/debug', (ctx) {
+  // Does the client want JSON?
+  final json = ctx.wantsJson;    // true for Accept: application/json, XHR, or JSON Content-Type
+
+  // Does the client accept HTML?
+  final html = ctx.acceptsHtml;  // true for Accept: text/html or application/xhtml+xml
+
+  // Check for any MIME type
+  final xml = ctx.accepts('application/xml');
+
+  ctx.json({
+    'wantsJson': json,
+    'acceptsHtml': html,
+    'acceptsXml': xml,
+  });
+});
+```
 
 ## Common Error Types
 
 ### ValidationError
+
 Thrown when request validation fails. Automatically returns a 422 status code with validation details:
 
 ```dart
 router.post('/users', (ctx) async {
-  // No try-catch needed - ValidationError is handled automatically
+  // No try-catch needed — ValidationError is handled automatically
   await ctx.validate({
     'email': 'required|email',
     'password': 'required|min:8'
   });
-  
-  // Validation passed - continue processing
+
+  // Validation passed — continue processing
   ctx.json({'message': 'User created'});
 });
 ```
 
-Response (422):
+JSON response (422):
 ```json
 {
   "errors": {
@@ -47,53 +114,128 @@ Response (422):
 ```
 
 ### EngineError
-Used for framework-level errors with custom status codes:
+
+Base class for framework-level errors with custom status codes:
 
 ```dart
 router.get('/items/{id}', (ctx) {
   if (itemNotFound) {
-    throw EngineError(
-      message: 'Item not found',
-      code: 404
-    );
+    throw EngineError(message: 'Item not found', code: 404);
   }
   ctx.json(item);
 });
 ```
 
-Response (404):
-```text
-EngineError(404): Item not found
+### Built-in EngineError Subclasses
+
+Routed provides typed error classes for common HTTP error codes. These are preferred over raw `EngineError` because they enforce the correct status code:
+
+| Class | Status | Default message |
+|---|---|---|
+| `NotFoundError` | 404 | Not found. |
+| `BadRequestError` | 400 | Bad request. |
+| `UnauthorizedError` | 401 | Unauthorized. |
+| `ForbiddenError` | 403 | Forbidden. |
+| `ConflictError` | 409 | Conflict. |
+| `InternalServerError` | 500 | Internal server error. |
+| `JsonParseError` | 400 | Invalid JSON payload. |
+
+```dart
+router.get('/users/{id}', (ctx) {
+  final user = findUser(ctx.param('id'));
+  if (user == null) throw NotFoundError(message: 'User not found');
+  ctx.json(user);
+});
+
+router.post('/resources', (ctx) async {
+  if (await resourceExists(ctx)) {
+    throw ConflictError(message: 'Resource already exists');
+  }
+  // create resource...
+});
 ```
 
 ## Custom Error Types
 
-Create custom error types by implementing `EngineError`:
+Create custom error types by extending `EngineError`:
+
+```dart
+class PaymentRequiredError extends EngineError {
+  PaymentRequiredError({String message = 'Payment required.'})
+    : super(message: message);
+
+  @override
+  int? get code => 402;
+}
+
+// Usage
+router.get('/premium', (ctx) {
+  if (!ctx.user.isPremium) {
+    throw PaymentRequiredError(message: 'Upgrade to access this resource');
+  }
+  ctx.json(premiumContent);
+});
+```
+
+You can also implement `EngineError` instead of extending it for full control:
 
 ```dart
 class ResourceError implements EngineError {
   @override
   final String message;
   @override
-  final int code;
+  final int? code;
 
   ResourceError.notFound(String resource)
     : message = '$resource not found',
       code = 404;
-      
+
   ResourceError.conflict(String resource)
     : message = '$resource already exists',
       code = 409;
-}
 
-// Usage
-router.post('/projects', (ctx) {
-  if (projectExists) {
-    throw ResourceError.conflict('Project');
+  @override
+  Map<String, dynamic> toJson() => {'message': message, 'code': code};
+
+  @override
+  String toString() => 'ResourceError($code): $message';
+}
+```
+
+## Manual Error Responses
+
+Use `ctx.errorResponse()` when you need to produce a content-negotiated error response outside of the throw-and-catch flow:
+
+```dart
+router.get('/items/{id}', (ctx) {
+  final item = lookupItem(ctx.param('id'));
+  if (item == null) {
+    return ctx.errorResponse(statusCode: 404, message: 'Item not found');
   }
-  // Create project...
+  ctx.json(item);
 });
 ```
+
+Override the JSON body when you need a custom structure:
+
+```dart
+router.delete('/items/{id}', (ctx) {
+  return ctx.errorResponse(
+    statusCode: 410,
+    message: 'This item has been permanently removed',
+    jsonBody: {
+      'error': 'gone',
+      'item_id': ctx.param('id'),
+      'removed_at': DateTime.now().toIso8601String(),
+    },
+  );
+});
+```
+
+The `errorResponse()` method follows the same negotiation logic as the global handler:
+- JSON when `wantsJson` is true
+- Styled HTML when `acceptsHtml` is true
+- Plain text otherwise
 
 ## Engine Configuration
 
@@ -104,7 +246,7 @@ final engine = Engine(
   config: EngineConfig(
     // Handle 405 Method Not Allowed responses
     handleMethodNotAllowed: true,
-    
+
     // Redirect trailing slashes
     redirectTrailingSlash: true
   )
@@ -113,7 +255,7 @@ final engine = Engine(
 
 These toggles are also exposed by the routing provider via configuration (see Routing → Config-driven defaults) so you can change behavior without code changes.
 
-## Aborting early
+## Aborting Early
 
 When you need to stop the pipeline and return a response immediately, use the abort helpers:
 
@@ -126,7 +268,7 @@ router.get('/maintenance', (ctx) {
 
 - Aborting prevents downstream middleware/handlers from running.
 - Prefer returning the aborted response right away to avoid further writes.
-- Import dart:io for HttpStatus constants in examples.
+- Import `dart:io` for `HttpStatus` constants.
 
 ## Custom Error Handling
 
@@ -139,9 +281,9 @@ router.post('/register', (ctx) async {
       'email': 'required|email',
       'password': 'required|min:8'
     });
-    
+
     // Process registration...
-    
+
   } on ValidationError catch (e) {
     // Custom validation error format
     return ctx.json({
@@ -149,7 +291,7 @@ router.post('/register', (ctx) async {
       'type': 'validation',
       'fields': e.errors
     }, statusCode: 422);
-    
+
   } on EngineError catch (e) {
     // Custom engine error format
     return ctx.json({
@@ -168,7 +310,7 @@ You can observe or override the engine's default behaviour without wrapping ever
 final engine = Engine();
 
 engine.beforeError((ctx, error, stack) {
-  // Runs before the default handler – perfect for telemetry
+  // Runs before the default handler — perfect for telemetry
   ctx.logger.error('Unhandled error', {
     'path': ctx.request.uri.path,
     'error': error.toString(),
@@ -189,8 +331,22 @@ engine.afterError((ctx, error, stack) {
 
 Hook semantics:
 
-- Order: beforeError → the first matching `onError<T>` → default handler (if not handled) → afterError.
-- Matching: `onError<T>` matches subtypes too (for example, `onError<StateError>` catches RangeError).
-- Short-circuit: return true from onError to stop further handling (the default handler won’t run).
-- afterError always runs once a response exists (handled or default), making it ideal for auditing/metrics.
-- Register multiple onError hooks carefully—earliest registration wins for a given type when you return true.
+- **Order:** beforeError → the first matching `onError<T>` → default handler (if not handled) → afterError.
+- **Matching:** `onError<T>` matches subtypes too (for example, `onError<StateError>` catches RangeError).
+- **Short-circuit:** return `true` from `onError` to stop further handling (the default handler won't run).
+- **afterError** always runs once a response exists (handled or default), making it ideal for auditing/metrics.
+- Register multiple `onError` hooks carefully — earliest registration wins for a given type when you return `true`.
+
+## Middleware Error Responses
+
+Built-in middleware also produces content-negotiated error responses:
+
+| Middleware | Error scenario | Status |
+|---|---|---|
+| `recoveryMiddleware()` | Uncaught exception in handler | 500 |
+| `rateLimitMiddleware()` | Rate limit exceeded | 429 |
+| `basicAuthMiddleware()` | Invalid or missing credentials | 401 |
+| `timeoutMiddleware()` | Request exceeded time limit | 504 |
+| JWT `_writeUnauthorized` | Missing or invalid JWT | 401 |
+
+All of these respect the same `Accept` header negotiation — API clients get JSON error bodies, browsers get HTML error pages.
