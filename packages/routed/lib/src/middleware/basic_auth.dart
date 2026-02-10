@@ -28,9 +28,10 @@ Middleware basicAuth(
 
     if (authHeader == null || !authHeader.startsWith('Basic ')) {
       ctx.response.headers.set('WWW-Authenticate', 'Basic realm="$realm"');
-      return ctx.json({
-        "error": "Unauthorized",
-      }, statusCode: HttpStatus.unauthorized);
+      return ctx.errorResponse(
+        statusCode: HttpStatus.unauthorized,
+        message: 'Unauthorized',
+      );
     }
 
     final encodedCredentials = authHeader.substring(6).trim();
@@ -42,9 +43,10 @@ Middleware basicAuth(
         !accounts.containsKey(credentials[0]) ||
         !_timingSafeEquals(accounts[credentials[0]]!, credentials[1])) {
       ctx.response.headers.set('WWW-Authenticate', 'Basic realm="$realm"');
-      return ctx.json({
-        "error": "Unauthorized",
-      }, statusCode: HttpStatus.unauthorized);
+      return ctx.errorResponse(
+        statusCode: HttpStatus.unauthorized,
+        message: 'Unauthorized',
+      );
     }
 
     ctx.set('user', credentials[0]);

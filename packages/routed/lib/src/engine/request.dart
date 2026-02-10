@@ -369,8 +369,10 @@ extension ServerExtension on Engine {
     final handlers = <Middleware>[..._resolveGlobalMiddlewares(container)];
     handlers.add((EngineContext ctx, Next next) async {
       if (!ctx.response.isClosed) {
-        ctx.response.statusCode = HttpStatus.notFound;
-        ctx.response.write('404 Not Found');
+        ctx.errorResponse(
+          statusCode: HttpStatus.notFound,
+          message: 'Not Found',
+        );
       }
       return ctx.response;
     });
@@ -777,26 +779,28 @@ extension ServerExtension on Engine {
     if (!handled &&
         err is HttpException &&
         err.message == 'Request body exceeds the maximum allowed size.') {
-      ctx.string(
-        'Request body exceeds the maximum allowed size.',
+      ctx.errorResponse(
         statusCode: HttpStatus.requestEntityTooLarge,
+        message: 'Request body exceeds the maximum allowed size.',
       );
       handled = true;
     }
 
     if (!handled && err is ValidationError) {
-      ctx.json(
-        err.errors,
+      ctx.errorResponse(
         statusCode: err.code ?? HttpStatus.unprocessableEntity,
+        message: err.message,
+        jsonBody: err.errors,
       );
       handled = true;
     }
 
     if (!handled && err is EngineError && err.code != null) {
       if (!ctx.isClosed) {
-        ctx.string(
-          'EngineError(${err.code}): ${err.message}',
+        ctx.errorResponse(
           statusCode: err.code!,
+          message: err.message,
+          jsonBody: err.toJson(),
         );
       }
       handled = true;
@@ -804,9 +808,9 @@ extension ServerExtension on Engine {
 
     if (!handled) {
       if (!ctx.isClosed) {
-        ctx.string(
-          'An unexpected error occurred. Please try again later.',
+        ctx.errorResponse(
           statusCode: HttpStatus.internalServerError,
+          message: 'An unexpected error occurred. Please try again later.',
         );
       }
       handled = true;

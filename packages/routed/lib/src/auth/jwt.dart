@@ -427,14 +427,15 @@ class JwtVerifier {
 
   /// Writes an HTTP 401 Unauthorized response with the given [reason].
   void _writeUnauthorized(EngineContext ctx, String reason) {
-    ctx.response
-      ..statusCode = HttpStatus.unauthorized
-      ..headers.set(
-        'WWW-Authenticate',
-        'Bearer error="invalid_token", error_description="$reason"',
-      );
+    ctx.response.headers.set(
+      'WWW-Authenticate',
+      'Bearer error="invalid_token", error_description="$reason"',
+    );
     if (!ctx.response.isClosed) {
-      ctx.response.write('Unauthorized');
+      ctx.errorResponse(
+        statusCode: HttpStatus.unauthorized,
+        message: 'Unauthorized',
+      );
     }
   }
 

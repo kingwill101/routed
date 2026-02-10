@@ -17,11 +17,11 @@ Middleware rateLimitMiddleware(RateLimitService service) {
     final retrySeconds = retryDuration.inSeconds <= 0
         ? (retryDuration.inMilliseconds > 0 ? 1 : 0)
         : retryDuration.inSeconds;
-    ctx.response.statusCode = 429;
     ctx.response.headers.set('Retry-After', retrySeconds.toString());
-    ctx.response.headers.set('Content-Type', 'application/json');
-    ctx.response.write(
-      '{"error":"too_many_requests","retry_after":$retrySeconds}',
+    ctx.errorResponse(
+      statusCode: 429,
+      message: 'Too Many Requests',
+      jsonBody: {'error': 'too_many_requests', 'retry_after': retrySeconds},
     );
     ctx.abort();
     return ctx.response;

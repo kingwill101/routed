@@ -41,9 +41,10 @@ Middleware recoveryMiddleware({RecoveryHandler? handler}) {
         final handled = ctx.get<bool>(_recoveryHandledKey) ?? false;
         if (!ctx.isClosed && !handled) {
           ctx.set(_recoveryHandledKey, true);
-          return ctx.json({
-            'error': 'Internal Server Error',
-          }, statusCode: HttpStatus.internalServerError);
+          return ctx.errorResponse(
+            statusCode: HttpStatus.internalServerError,
+            message: 'Internal Server Error',
+          );
         }
         // The response has already been handled inside the custom recovery
         // handler, so we simply return the current response.

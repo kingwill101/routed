@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:io';
 
 import 'package:routed/routed.dart';
 
@@ -18,7 +19,21 @@ Middleware timeoutMiddleware(Duration duration) {
         // Write timeout directly to the underlying response to avoid hitting
         // higher-level render logic which may ignore writes after abort.
         ctx.response.statusCode = HttpStatus.gatewayTimeout;
-        ctx.response.write('Gateway Timeout');
+        if (ctx.wantsJson) {
+          ctx.response.headers.contentType = ContentType.json;
+          ctx.response.write('{"error":"Gateway Timeout","status":504}');
+        } else if (ctx.acceptsHtml) {
+          ctx.response.headers.contentType = ContentType.html;
+          ctx.response.write(
+            '<!DOCTYPE html><html><head><title>504</title></head>'
+            '<body style="font-family:system-ui;display:flex;justify-content:center;'
+            'align-items:center;min-height:100vh;margin:0"><div style="text-align:center">'
+            '<h1 style="font-size:4rem;font-weight:300;color:#868e96">504</h1>'
+            '<p>Gateway Timeout</p></div></body></html>',
+          );
+        } else {
+          ctx.response.write('Gateway Timeout');
+        }
         unawaited(ctx.response.close());
       }
       return ctx.response;
