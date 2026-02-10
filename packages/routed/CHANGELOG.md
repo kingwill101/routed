@@ -39,6 +39,25 @@
 - Provider and artisanal command registries are merged into generated CLI
   runners for `dart run <app>:cli`.
 
+### Error Responses
+- All error responses are now content-negotiated based on the `Accept` header,
+  `X-Requested-With` (XHR detection), and request `Content-Type`. API clients
+  receive JSON, browsers receive styled HTML error pages, and other clients
+  receive plain text.
+- New `ctx.errorResponse()` method on `EngineContext` produces a
+  content-negotiated error response with status code, message, and optional
+  custom JSON body override.
+- New convenience getters: `ctx.wantsJson`, `ctx.acceptsHtml`, and
+  `ctx.accepts(mimeType)` for inspecting client content preferences.
+- Built-in error handler (`_handleGlobalError`) and 404 handler now use
+  `errorResponse()` instead of hardcoded JSON.
+- All built-in middleware error paths updated: `recoveryMiddleware`,
+  `rateLimitMiddleware`, `basicAuthMiddleware`, `timeoutMiddleware`, and
+  JWT `_writeUnauthorized`.
+- **Breaking:** Clients that previously received JSON error bodies without
+  sending an `Accept: application/json` header will now receive plain text
+  instead. Add the `Accept` header to restore JSON responses.
+
 ### Auth
 - Added `userInfoRequest` to `OAuthProvider` for non-standard userinfo flows.
 - Introduced `CallbackProvider` for custom auth callbacks (ex: Telegram).
