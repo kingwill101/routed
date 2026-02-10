@@ -16,6 +16,7 @@ workspace:
   - examples/policy_demo/policy_demo
   - examples/demo_app
   - examples/contacts_app
+  - examples/error_responses
 
 funding:
   - https://www.buymeacoffee.com/kingwill101
