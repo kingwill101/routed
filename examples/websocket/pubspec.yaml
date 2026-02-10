@@ -1,0 +1,17 @@
+name: websocket_example
+description: Demonstrates WebSocket echo server, chat room, and Dart client.
+publish_to: none
+funding:
+  - https://www.buymeacoffee.com/kingwill101
+
+environment:
+  sdk: ">=3.9.0 <4.0.0"
+
+resolution: workspace
+
+dependencies:
+  routed:
+
+tags:
+  - example
+  - routed

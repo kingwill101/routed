@@ -17,6 +17,8 @@ workspace:
   - examples/demo_app
   - examples/contacts_app
   - examples/error_responses
+  - examples/websocket
+  - examples/rate_limiting
 
 funding:
   - https://www.buymeacoffee.com/kingwill101

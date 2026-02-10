@@ -1,0 +1,57 @@
+# Rate Limit Configuration
+#
+# This file configures the rate limiting middleware for the example server.
+# The routed framework reads this automatically from the config/ directory.
+#
+# Duration format: <number><unit> where unit is ms, s, m, h, d
+# Strategies: token_bucket, sliding_window, quota
+# Key resolvers: ip (default), header (extracts identity from a named header)
+
+rate_limit:
+  enabled: true
+  backend: memory
+  failover: allow    # fail-open if backend is unavailable
+
+  policies:
+    # -----------------------------------------------------------------------
+    # 1. Global catch-all — token bucket, 10 requests per 30 seconds
+    #    Applies to every endpoint unless a more specific policy matches first.
+    # -----------------------------------------------------------------------
+    - name: global
+      match: "**"
+      strategy: token_bucket
+      capacity: 10
+      interval: 30s
+      burst: 1.5       # allow short bursts up to 15 tokens
+
+    # -----------------------------------------------------------------------
+    # 2. Auth endpoints — stricter sliding window, 5 requests per minute
+    #    Prevents brute-force login/registration attempts.
+    # -----------------------------------------------------------------------
+    - name: auth
+      match: "/auth/**"
+      strategy: sliding_window
+      limit: 5
+      window: 1m
+
+    # -----------------------------------------------------------------------
+    # 3. API key endpoint — per-header identity, 3 requests per minute
+    #    Demonstrates key resolution by header instead of IP.
+    # -----------------------------------------------------------------------
+    - name: api_key
+      match: "/api/**"
+      strategy: sliding_window
+      limit: 3
+      window: 1m
+      key:
+        type: header
+        header: X-API-Key
+
+    # -----------------------------------------------------------------------
+    # 4. Daily quota — 100 requests per day on the /quota endpoint
+    # -----------------------------------------------------------------------
+    - name: daily_quota
+      match: "/quota"
+      strategy: quota
+      limit: 100
+      period: 1d

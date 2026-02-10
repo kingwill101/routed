@@ -1,0 +1,18 @@
+name: rate_limiting_example
+description: Demonstrates rate limiting with token bucket, sliding window, and quota strategies.
+publish_to: none
+funding:
+  - https://www.buymeacoffee.com/kingwill101
+
+environment:
+  sdk: ">=3.9.0 <4.0.0"
+
+resolution: workspace
+
+dependencies:
+  routed:
+  http: ^1.5.0
+
+tags:
+  - example
+  - routed
