@@ -1,6 +1,6 @@
 ---
 title: Structured Logging
-description: Capture per-request logs with contextual metadata
+description: Capture per-request logs with contextual metadata, channels, and custom drivers
 sidebar_position: 11
 ---
 
@@ -50,9 +50,135 @@ Future<Response> correlationMiddleware(EngineContext ctx, Next next) async {
 }
 ```
 
-Pair this with the logging provider’s `request_headers` option (see below) so the value is also copied from the HTTP header onto the log context automatically.
+Pair this with the logging provider's `request_headers` option (see below) so the value is also copied from the HTTP header onto the log context automatically.
+
+## Runtime configuration
+
+The logging subsystem is configured under the `logging` root key in `config/logging.yaml` (not `config/http.yaml`):
+
+```yaml title="config/logging.yaml"
+logging:
+  enabled: true
+  default: stack             # default channel name (or set LOG_CHANNEL env var)
+  format: pretty             # pretty | raw | json | plain
+  level: info                # any contextual.Level (debug, info, warning, error, etc.)
+  errors_only: false
+  include_stack_traces: false
+  extra_fields:
+    service: api
+    deployment: production
+  request_headers:
+    - X-Correlation-ID
+    - X-Request-ID
+  channels:
+    stack:
+      driver: stack
+      channels: [single, stdout]
+      ignore_exceptions: false
+    single:
+      driver: single
+      path: storage/logs/routed.log
+    daily:
+      driver: daily
+      path: storage/logs/routed
+      days: 14
+      use_isolate: false
+    stderr:
+      driver: stderr
+    stdout:
+      driver: stdout
+    "null":
+      driver: "null"
+```
+
+| Key | Type | Default | Description |
+|-----|------|---------|-------------|
+| `enabled` | `bool` | `true` | Enable structured application logging |
+| `default` | `string` | `stack` | Default log channel. Overridden by `LOG_CHANNEL` env var |
+| `format` | `string` | `pretty` | Output format: `pretty`, `raw`, `json`, or `plain` |
+| `level` | `string` | `info` | Default log level |
+| `errors_only` | `bool` | `false` | Only emit logs for failing requests |
+| `include_stack_traces` | `bool` | `false` | Include stack traces in error logs |
+| `extra_fields` | `map` | `{}` | Fields appended to every log entry |
+| `request_headers` | `list<string>` | `[]` | HTTP headers to surface in log context |
+| `channels` | `map` | *(see above)* | Named channel definitions |
+
+Those same keys can be mutated at runtime with `EngineOpt.withLogging`, allowing you to reduce noise (set `errors_only: true`) or disable request logging altogether without rebuilding the engine.
+
+`extra_fields` is merged into the structured payload so every request log carries consistent metadata (such as service or deployment identifiers). `request_headers` selects HTTP headers to surface; values are normalised into snake_case keys (for example, `X-Correlation-ID` becomes `header_x_correlation_id`). Set `include_stack_traces: true` temporarily when diagnosing production issues; otherwise stack traces are suppressed from request logs to keep noise down while the browser still receives the generic 500 response.
+
+## Channels and drivers
+
+Logging uses a **channel/driver** architecture. Each channel is a named logging destination with a specific driver. The `default` key (or `LOG_CHANNEL` env var) selects which channel handles logs by default. Channels can be composed — the `stack` driver fans out to multiple channels.
+
+### Built-in drivers
+
+| Driver | Description |
+|--------|-------------|
+| `console` / `stdout` | Writes to standard output |
+| `stderr` | Writes to standard error |
+| `null` | Drops all messages (useful for tests) |
+| `single` | Appends to a single log file. Options: `path` |
+| `daily` | Rotated daily log files. Options: `path`, `days` (retention), `use_isolate` |
+| `stack` | Fans out to multiple channels. Options: `channels` (list), `ignore_exceptions` |
+| `webhook` | POSTs log entries to a URL. Options: per `contextual` package |
+| `sampling` | Rate-limited sampling wrapper. Options: per `contextual` package |
+
+### Channel resolution order
+
+The default channel is resolved as follows:
+1. `logging.default` config key
+2. `LOG_CHANNEL` environment variable
+3. `'stack'` fallback
+4. First defined channel key
+5. `'stdout'` ultimate fallback
+
+### Custom drivers
+
+Register custom drivers via `LogDriverRegistry`:
+
+```dart
+final registry = await engine.make<LogDriverRegistry>();
+registry.register('sentry', (context) {
+  // context.name       — channel name
+  // context.options     — the channel's config map
+  // context.config      — full app Config
+  // context.container   — DI container
+  return SentryLogDriver(
+    dsn: context.options['dsn'] as String,
+    level: context.options['level'] as String? ?? 'error',
+  );
+});
+```
+
+Then reference it in configuration:
+
+```yaml title="config/logging.yaml"
+logging:
+  channels:
+    sentry:
+      driver: sentry
+      dsn: "{{ env.SENTRY_DSN }}"
+      level: error
+    stack:
+      driver: stack
+      channels: [single, stdout, sentry]
+```
 
 ## Customising the Logger
+
+### `RoutedLogger` API
+
+The `RoutedLogger` class provides static methods for controlling the logging subsystem:
+
+| Method | Description |
+|--------|-------------|
+| `RoutedLogger.create(context)` | Creates a Logger with the given context map |
+| `RoutedLogger.createForChannel(channel, context)` | Creates a Logger pre-bound to a specific channel |
+| `RoutedLogger.configureFactory(factory)` | Sets a user-supplied factory (takes priority over system factory) |
+| `RoutedLogger.configureSystemFactory(factory)` | Sets the system-level factory (used by `LoggingServiceProvider`) |
+| `RoutedLogger.setGlobalFormat(formatter)` | Sets the global log output formatter |
+| `RoutedLogger.reset()` | Resets all factories and format back to defaults |
 
 If you want to forward logs to a different sink or change the formatter, replace the logger factory once at application start:
 
@@ -68,39 +194,28 @@ RoutedLogger.configureFactory((context) {
 });
 ```
 
-Call `RoutedLogger.reset()` in test teardown if you override the factory inside a test suite.
+`configureFactory()` always takes priority over the system factory set by the logging provider. Call `RoutedLogger.reset()` in test teardown if you override the factory inside a test suite.
 
-## Runtime configuration
+### Channel-scoped loggers
 
-The logging middleware can be enabled/disabled or tuned via configuration:
+Use `createForChannel` when you need a logger bound to a specific channel:
 
-```yaml title="config/http.yaml"
-logging:
-  enabled: true
-  level: info        # or debug
-  errors_only: false
-  include_stack_traces: false
-  extra_fields:
-    service: api
-    deployment: production
-  request_headers: X-Correlation-ID, X-Request-ID
+```dart
+// Log audit events to the 'daily' channel regardless of the default
+final auditLogger = RoutedLogger.createForChannel('daily', {
+  'component': 'audit',
+  'user_id': userId,
+});
+auditLogger.info('user action recorded', {'action': 'login'});
 ```
-
-Those same keys can be mutated at runtime with `EngineOpt.withLogging`, allowing you to reduce noise (set `errors_only: true`) or disable request logging altogether without rebuilding the engine.
-
-`extra_fields` is merged into the structured payload so every request log carries consistent metadata (such as service or deployment identifiers). `request_headers` selects HTTP headers to surface; values are normalised into snake_case keys (for example, `X-Correlation-ID` becomes `header_x_correlation_id`). Set `include_stack_traces: true` temporarily when diagnosing production issues; otherwise stack traces are suppressed from request logs to keep noise down while the browser still receives the generic 500 response.
-
-Best practices:
-- Use `errors_only: true` in noisy environments and add sampling for high-volume endpoints.
-- Put stable identifiers in `extra_fields` (service, deployment, region) so you can slice dashboards consistently.
-- Capture a correlation/request ID (via `request_headers` or middleware) and include it in all logs and external spans.
-- Log payload shapes, not full sensitive bodies; when necessary, redact fields at the edge.
-
-> Validation: The logging provider rejects malformed overrides (for example, non-boolean `enabled` flags or non-string `request_headers` entries) by throwing a `ProviderConfigException` during boot. You can catch mistakes early by running `dart run routed provider:list --config`, which prints each provider’s defaults and surfaces validation errors.
 
 ## Error Hooks & Logging
 
-Combine the logging API with the engine's error hooks to capture unhandled exceptions:
+Combine the logging API with the engine's error hooks to capture unhandled exceptions. The engine provides three error hook types that fire in order:
+
+1. **`beforeError`** — observers that run before error handling
+2. **`onError<T>`** — typed handlers that can intercept specific error types
+3. **`afterError`** — observers that run after error handling
 
 ```dart
 engine.beforeError((ctx, error, stack) {
@@ -109,6 +224,28 @@ engine.beforeError((ctx, error, stack) {
     'stack_trace': stack.toString(),
   });
 });
+
+engine.afterError((ctx, error, stack) {
+  // Post-processing: emit metrics, notify external systems
+  metrics.increment('http.errors', tags: {'path': ctx.request.path});
+});
+
+// Type-specific handling
+engine.onError<NotFoundException>((ctx, error, stack) {
+  ctx.logger.warning('resource not found: ${error.message}');
+  return true; // returning true means the error was handled
+});
 ```
 
 This ensures every failed request surfaces consistent, structured telemetry without adding boilerplate to each route.
+
+## Best practices
+
+- Use `errors_only: true` in noisy environments and add sampling for high-volume endpoints.
+- Put stable identifiers in `extra_fields` (service, deployment, region) so you can slice dashboards consistently.
+- Capture a correlation/request ID (via `request_headers` or middleware) and include it in all logs and external spans.
+- Log payload shapes, not full sensitive bodies; when necessary, redact fields at the edge.
+- Use the `stack` channel in development to write to both file and console simultaneously.
+- Use `LOG_CHANNEL` env var to switch channels per environment without changing config files.
+
+> Validation: The logging provider rejects malformed overrides (for example, non-boolean `enabled` flags or non-string `request_headers` entries) by throwing a `ProviderConfigException` during boot. You can catch mistakes early by running `dart run routed provider:list --config`, which prints each provider's defaults and surfaces validation errors.
