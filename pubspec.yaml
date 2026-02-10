@@ -18,6 +18,7 @@ workspace:
   - examples/error_responses
   - examples/websocket
   - examples/rate_limiting
+  - examples/openapi_demo
 
 funding:
   - https://www.buymeacoffee.com/kingwill101

@@ -1,16 +1,17 @@
 /// Build-runner `$package$` builder that generates an OpenAPI 3.1 spec
 /// from a route manifest JSON file.
 ///
-/// This builder reads `route_manifest.json` (produced by running
-/// `dart run routed manifest` or `dart run tool/spec_manifest.dart`) and
-/// converts it into `openapi.json` plus an optional serving controller.
+/// This builder reads the route manifest (produced by running
+/// `dart run routed spec`) and converts it into `openapi.json` plus a
+/// serving controller.
 ///
 /// ## Usage
 ///
 /// 1. Generate the manifest:
 ///    ```bash
-///    dart run routed manifest
+///    dart run routed spec
 ///    ```
+///    This writes `.dart_tool/routed/route_manifest.json` by default.
 ///
 /// 2. Run `build_runner`:
 ///    ```bash
@@ -19,7 +20,8 @@
 ///
 /// 3. The builder outputs:
 ///    - `lib/generated/openapi.json` — The OpenAPI 3.1 specification
-///    - `lib/generated/openapi_controller.g.dart` — A handler that serves the spec
+///    - `lib/generated/openapi_controller.g.dart` — A handler that serves
+///      the spec
 ///
 /// ## Configuration
 ///
@@ -34,7 +36,7 @@
 ///           title: "My API"
 ///           version: "1.0.0"
 ///           description: "API description"
-///           manifest_path: "route_manifest.json"
+///           manifest_path: ".dart_tool/routed/route_manifest.json"
 ///           serve_path: "/openapi.json"
 ///           include_hidden: false
 ///           servers:
@@ -59,7 +61,7 @@ class _OpenApiBuilder implements Builder {
 
   final Map<String, dynamic> _config;
 
-  static const _defaultManifestPath = 'route_manifest.json';
+  static const _defaultManifestPath = '.dart_tool/routed/route_manifest.json';
   static const _outputSpecPath = 'lib/generated/openapi.json';
   static const _outputControllerPath =
       'lib/generated/openapi_controller.g.dart';
@@ -79,7 +81,7 @@ class _OpenApiBuilder implements Builder {
     if (!await buildStep.canRead(manifestAssetId)) {
       log.warning(
         'OpenAPI builder: manifest file not found at "$manifestPath". '
-        'Run `dart run routed manifest` first to generate it.',
+        'Run `dart run routed spec` first to generate it.',
       );
       return;
     }

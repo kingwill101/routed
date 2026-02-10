@@ -1,0 +1,21 @@
+# Compression configuration quick reference:
+# algorithms – Preferred compression algorithms (gzip, br). Default: ["br","gzip"]. Type: array
+# enabled – Enable automatic response compression. Default: true. Type: boolean
+# mime_allow – MIME prefixes eligible for compression. Default: ["text/*","application/json","application/javascript"]. Type: array
+# mime_deny – MIME prefixes excluded from compression. Default: ["image/*","audio/*","video/*"]. Type: array
+# min_length – Minimum body size (bytes) before compression applies. Default: 1024. Type: integer
+
+algorithms:
+  - br
+  - gzip
+enabled: true
+mime_allow:
+  - "text/*"
+  - application/json
+  - application/javascript
+mime_deny:
+  - "image/*"
+  - "audio/*"
+  - "video/*"
+min_length: 1024
+
