@@ -12,8 +12,7 @@ Routed’s core features (logging, cache, storage, uploads, etc.) are all implem
 Every provider extends the `ServiceProvider` base class:
 
 ```dart title="lib/services/email_service_provider.dart"
-import 'package:routed/src/container/container.dart';
-import 'package:routed/src/provider/provider.dart';
+import 'package:routed/routed.dart';
 
 class EmailServiceProvider extends ServiceProvider {
   @override
@@ -69,6 +68,45 @@ final engine = await Engine.create(
     EmailServiceProvider(),
   ],
 );
+
+// Option 4: Use configItems for inline configuration (no YAML needed)
+final engine = await Engine.create(
+  configItems: {
+    'app.name': 'My App',
+    'mail.default': 'smtp',
+  },
+  providers: [
+    ...Engine.builtins,
+    EmailServiceProvider(),
+  ],
+);
+```
+
+### Provider deduplication
+
+The engine tracks provider types and skips duplicates by `runtimeType`. The first
+registered instance of each type wins; subsequent instances are silently skipped.
+This means:
+
+- When you pass `configItems` to `Engine()` or `Engine.create()`, a
+  `CoreServiceProvider` is automatically prepended. If `Engine.builtins` also
+  includes one, the duplicate is skipped.
+- Manifest-driven providers (from `config/http.yaml`) also respect deduplication—
+  they will not override providers already registered in code.
+
+### `Engine.defaultProviders` vs `Engine.builtins`
+
+| Getter | Providers | Use case |
+|--------|-----------|----------|
+| `Engine.defaultProviders` | `CoreServiceProvider` + `RoutingServiceProvider` (2 total) | Minimal engine with config and routing only |
+| `Engine.builtins` | All 16 registered providers from `ProviderRegistry` (core, routing, cache, sessions, uploads, cors, security, logging, auth, observability, compression, rate_limit, storage, static, views, localization) | Full-featured engine (default for `Engine.create()`) |
+
+```dart
+// Minimal engine — just config + routing
+final engine = await Engine.create(providers: Engine.defaultProviders);
+
+// Full-featured engine — all builtins (this is the default)
+final engine = await Engine.create();
 ```
 
 ### Ordering and pre-registration hooks
@@ -204,11 +242,11 @@ dart run routed provider:list --config | grep mail
 When you toggle providers in `config/http.yaml` (for example via `providers: [routed.logging, my.custom.email]`), Routed resolves those IDs through `ProviderRegistry`. To make your provider manifest-friendly, export a factory from a package and register it:
 
 ```dart title="lib/providers.dart"
-import 'package:routed/src/provider/registry.dart';
+import 'package:routed/src/engine/providers/registry.dart';
 
 void registerProviders() {
   ProviderRegistry.instance.register(
-    id: 'custom.mail',
+    'custom.mail',
     description: 'Application mailer',
     factory: () => EmailServiceProvider(),
   );
@@ -276,4 +314,40 @@ If the provider exposes CLI docs, add an assertion against `provider.defaultConf
 | Contribute defaults/docs | Return `ConfigDefaults` with `ConfigDocEntry` |
 | Offer CLI/manifest ID | Register with `ProviderRegistry` |
 
-With these building blocks you can package reusable integrations (queues, telemetry, payment gateways) that feel identical to the providers shipped by Routed.***
+With these building blocks you can package reusable integrations (queues, telemetry, payment gateways) that feel identical to the providers shipped by Routed.
+
+## `CoreServiceProvider` modes
+
+`CoreServiceProvider` supports three construction modes that control how configuration is loaded:
+
+| Mode | Constructor | File I/O | Description |
+|------|------------|----------|-------------|
+| **Default (in-memory)** | `CoreServiceProvider({config, configItems})` | None | In-memory `Config` with framework defaults + optional overrides |
+| **Loader** | `CoreServiceProvider.withLoader([options, configItems, config])` | Yes | Loads YAML/JSON from disk, env vars, `.env` files. Supports `watch` for hot reload |
+| **Cached config** | `CoreServiceProvider.withCachedConfig(snapshot, {config, configItems})` | None | Uses a pre-built `ConfigSnapshot` from `routed config:cache`. No file I/O |
+
+```dart
+// Mode 1: In-memory only (default) — good for tests and simple apps
+final engine = Engine(providers: [
+  CoreServiceProvider(configItems: {'app.name': 'Test'}),
+  RoutingServiceProvider(),
+]);
+
+// Mode 2: File-based loading — for apps with config/ directory
+final engine = Engine(providers: [
+  CoreServiceProvider.withLoader(ConfigLoaderOptions(
+    configDir: 'config',
+    watch: true,  // enables hot-reload of config files
+  )),
+  RoutingServiceProvider(),
+]);
+
+// Mode 3: Cached — for production (no file I/O at startup)
+final snapshot = ConfigSnapshot.fromFile('.dart_tool/routed/config_cache.json');
+final engine = Engine(providers: [
+  CoreServiceProvider.withCachedConfig(snapshot),
+  RoutingServiceProvider(),
+]);
+```
+
+When using `Engine.create()` or passing `configItems` to the `Engine()` constructor, the framework automatically creates a default-mode `CoreServiceProvider` for you — no need to instantiate one manually.
