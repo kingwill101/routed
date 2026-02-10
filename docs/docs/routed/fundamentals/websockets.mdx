@@ -1,0 +1,195 @@
+---
+id: websockets
+title: WebSockets
+sidebar_position: 7
+description: Handle bidirectional real-time communication with Routed's WebSocket support.
+---
+
+WebSockets give you full-duplex, bidirectional communication over a single TCP
+connection. Routed provides a handler-based API that manages the upgrade
+handshake, message routing, and lifecycle callbacks.
+
+## Registering a WebSocket route
+
+Use `engine.ws(path, handler)` to mount a `WebSocketHandler` at a given path.
+The handler receives lifecycle callbacks for the connection:
+
+```dart title="server.dart"
+import 'dart:async';
+import 'package:routed/routed.dart';
+
+class EchoHandler implements WebSocketHandler {
+  @override
+  FutureOr<void> onOpen(WebSocketContext context) {
+    print('Client connected');
+    context.send('Welcome!');
+  }
+
+  @override
+  FutureOr<void> onMessage(WebSocketContext context, dynamic message) {
+    // Echo the message back to the client.
+    context.send('Echo: $message');
+  }
+
+  @override
+  FutureOr<void> onClose(WebSocketContext context) {
+    print('Client disconnected');
+  }
+
+  @override
+  FutureOr<void> onError(WebSocketContext context, dynamic error) {
+    print('WebSocket error: $error');
+  }
+}
+
+void main() async {
+  final engine = await Engine.create();
+
+  engine.ws('/ws/echo', EchoHandler());
+
+  await engine.serve(port: 3000);
+  print('WebSocket server listening on ws://localhost:3000/ws/echo');
+}
+```
+
+## WebSocketHandler interface
+
+Every WebSocket handler must implement the four lifecycle callbacks:
+
+| Callback | Signature | Called when |
+|----------|-----------|------------|
+| `onOpen` | `FutureOr<void> onOpen(WebSocketContext ctx)` | Connection is established |
+| `onMessage` | `FutureOr<void> onMessage(WebSocketContext ctx, dynamic message)` | A message frame arrives |
+| `onClose` | `FutureOr<void> onClose(WebSocketContext ctx)` | Connection is closed |
+| `onError` | `FutureOr<void> onError(WebSocketContext ctx, dynamic error)` | An error occurs |
+
+All callbacks may be synchronous or asynchronous — return `void` or `Future<void>`.
+
+## WebSocketContext
+
+`WebSocketContext` wraps the underlying `dart:io` `WebSocket` and carries the
+initial `EngineContext` from the HTTP upgrade request:
+
+```dart
+class WebSocketContext {
+  /// The underlying dart:io WebSocket.
+  final WebSocket webSocket;
+
+  /// The HTTP context from the upgrade request.
+  /// Use this to access path params, query params, headers, etc.
+  final EngineContext initialContext;
+
+  /// Send data (String or List<int>) to the client.
+  void send(dynamic data);
+
+  /// Close the connection with an optional code and reason.
+  Future<void> close([int? code, String? reason]);
+}
+```
+
+### Accessing request data
+
+Since `initialContext` is the full `EngineContext` from the upgrade request, you
+can read path parameters, query parameters, headers, and any middleware-injected
+data:
+
+```dart
+@override
+FutureOr<void> onOpen(WebSocketContext context) {
+  final roomId = context.initialContext.pathParam('roomId');
+  final token = context.initialContext.query('token');
+  print('Joined room $roomId with token $token');
+}
+```
+
+## Path parameters
+
+WebSocket routes support the same `{param}` path parameter syntax as regular
+HTTP routes:
+
+```dart
+engine.ws('/ws/chat/{roomId}', ChatHandler());
+```
+
+The parameter is then available via `context.initialContext.pathParam('roomId')`.
+
+## Middleware
+
+You can apply middleware to WebSocket routes using the `middlewares` parameter.
+Middleware runs during the HTTP upgrade request — before the WebSocket connection
+is established:
+
+```dart
+engine.ws(
+  '/ws/secure',
+  SecureHandler(),
+  middlewares: [authMiddleware()],
+);
+```
+
+If the middleware rejects the request (e.g. returns a 401 response), the
+WebSocket upgrade never completes.
+
+## Chat room example
+
+Here is a more complete example that manages multiple connected clients in a
+chat room:
+
+```dart title="chat_handler.dart"
+import 'dart:async';
+import 'package:routed/routed.dart';
+
+class ChatHandler implements WebSocketHandler {
+  final Map<WebSocketContext, String> _clients = {};
+
+  @override
+  FutureOr<void> onOpen(WebSocketContext context) {
+    final name = context.initialContext.query('name') ?? 'Anonymous';
+    _clients[context] = name;
+    _broadcast('$name joined the chat');
+  }
+
+  @override
+  FutureOr<void> onMessage(WebSocketContext context, dynamic message) {
+    final name = _clients[context] ?? 'Unknown';
+    _broadcast('$name: $message');
+  }
+
+  @override
+  FutureOr<void> onClose(WebSocketContext context) {
+    final name = _clients.remove(context) ?? 'Unknown';
+    _broadcast('$name left the chat');
+  }
+
+  @override
+  FutureOr<void> onError(WebSocketContext context, dynamic error) {
+    print('Error from ${_clients[context]}: $error');
+  }
+
+  void _broadcast(String message) {
+    for (final client in _clients.keys) {
+      client.send(message);
+    }
+  }
+}
+```
+
+Register with a path parameter for room isolation:
+
+```dart
+engine.ws('/ws/chat/{roomId}', ChatHandler());
+```
+
+## Comparison with SSE
+
+| Feature | WebSocket | SSE |
+|---------|-----------|-----|
+| Direction | Bidirectional | Server → Client |
+| Protocol | `ws://` / `wss://` | Standard HTTP |
+| Binary data | Yes | No (text only) |
+| Reconnection | Manual | Built-in (`EventSource`) |
+| Proxy support | Requires upgrade support | Works everywhere |
+
+Use WebSockets when you need bidirectional communication (chat, gaming,
+collaborative editing). Use [SSE](./sse) when you only need to push updates
+from the server (live feeds, notifications, progress updates).
