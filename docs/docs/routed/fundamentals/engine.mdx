@@ -33,11 +33,22 @@ static assets, views, and localization.
 ## `Engine.create()` – async convenience (recommended)
 
 `Engine.create()` is the recommended way to create an engine. It constructs an
-engine with all built-in providers and initializes it in one call:
+engine with all built-in providers and initializes it in one call. It accepts
+optional `configItems` for inline configuration, `providers`, `middlewares`,
+`options`, and `errorHandling` for full customization:
 
 ```dart
 // Full-featured engine with all builtins (default)
 final engine = await Engine.create();
+
+// Inline configuration — no YAML files needed (recommended)
+final engine = await Engine.create(
+  configItems: {
+    'app.name': 'My Application',
+    'app.env': 'production',
+    'logging.enabled': true,
+  },
+);
 
 // Minimal engine with just core + routing
 final engine = await Engine.create(providers: Engine.defaultProviders);
@@ -45,7 +56,7 @@ final engine = await Engine.create(providers: Engine.defaultProviders);
 // Bare engine (no providers)
 final engine = await Engine.create(providers: []);
 
-// Custom configuration with builtins
+// Advanced: explicit CoreServiceProvider (e.g. when combining with withLoader)
 final engine = await Engine.create(
   providers: [
     CoreServiceProvider(configItems: {'app.name': 'MyApp'}),
@@ -110,11 +121,36 @@ This gives you:
 - Router registration
 - Event manager
 
-### Custom configuration
+### Inline configuration with `configItems`
 
-For custom configuration values without file I/O:
+For custom configuration values without file I/O, use the `configItems`
+parameter directly on the constructor. This automatically creates a
+`CoreServiceProvider` with your values:
 
-```dart title="Custom in-memory configuration"
+```dart title="Inline configuration (recommended)"
+final engine = Engine(
+  providers: Engine.builtins,
+  configItems: {
+    'app.name': 'My Application',
+    'app.env': 'production',
+    'database.host': 'db.internal',
+  },
+);
+
+await engine.initialize();
+```
+
+This is equivalent to the more verbose pattern of constructing a
+`CoreServiceProvider(configItems: {...})` manually, but shorter and less
+error-prone.
+
+### Custom configuration (explicit CoreServiceProvider)
+
+When you need to combine inline config with a specific `CoreServiceProvider`
+constructor (for example, `withLoader` or `withCachedConfig`), construct it
+explicitly:
+
+```dart title="Explicit CoreServiceProvider"
 final engine = Engine(
   providers: [
     CoreServiceProvider(configItems: {
@@ -182,6 +218,7 @@ The providers listed in `http.providers` will be auto-registered from the
 | Scenario | Recommended API | Notes |
 | --- | --- | --- |
 | Standard applications | `Engine.create()` | All builtins, fully featured. |
+| Inline config without YAML | `Engine.create(configItems: {...})` | No file I/O needed. |
 | Minimal applications | `Engine.create(providers: Engine.defaultProviders)` | Just core + routing. |
 | Microbenchmarks / tiny services | `Engine()` or `Engine.create(providers: [])` | Bare mode. Minimal overhead. |
 | Custom provider configuration | `Engine(providers: [...])` + `initialize()` | Explicit provider control. |
@@ -194,3 +231,24 @@ Most `EngineOpt` helpers and provider-backed features depend on `Config`. In
 bare mode, `Config` is not bound unless you register `CoreServiceProvider` or
 bind a `Config` instance yourself. If you need config-driven middleware or
 provider defaults, include `CoreServiceProvider` in your providers list.
+
+### Late configuration overrides with `withConfigItems`
+
+If you need to override configuration values *after* providers have registered
+their defaults, use the `withConfigItems` engine option:
+
+```dart
+final engine = Engine(
+  providers: Engine.builtins,
+  options: [
+    withConfigItems({
+      'app.debug': true,
+      'cache.driver': 'array',
+    }),
+  ],
+);
+```
+
+**Important:** `withConfigItems` runs after provider registration, so it acts as
+a late override. If you need values available *during* provider registration, use
+the `configItems` constructor parameter instead.
