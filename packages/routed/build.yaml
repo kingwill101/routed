@@ -14,6 +14,12 @@ targets:
       routed|scaffold_template_embed:
         generate_for:
           - "$package$"
+      routed|openapi:
+        generate_for:
+          - "$package$"
+        options:
+          title: "API"
+          version: "1.0.0"
 
 builders:
   scaffold_template_embed:
@@ -21,4 +27,10 @@ builders:
     builder_factories: ["scaffoldTemplateEmbedBuilder"]
     build_extensions: {"$package$": ["lib/src/console/create/templates_embedded.dart"]}
     auto_apply: root_package
+    build_to: source
+  openapi:
+    import: "package:routed/src/openapi/openapi_builder.dart"
+    builder_factories: ["openApiBuilder"]
+    build_extensions: {"$package$": ["lib/generated/openapi.json", "lib/generated/openapi_controller.g.dart"]}
+    auto_apply: none
     build_to: source
