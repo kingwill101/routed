@@ -11,6 +11,7 @@ import 'package:routed_ffi/src/routed/routed_bridge_runtime.dart';
 
 const int _maxBridgeFrameBytes = 64 * 1024 * 1024;
 const int _maxBridgeBodyBytes = 32 * 1024 * 1024;
+const int _coalescePayloadThresholdBytes = 4 * 1024;
 
 final class _BridgeBinding {
   _BridgeBinding({
@@ -709,10 +710,7 @@ Future<void> _handleChunkedBridgeRequest(
           'bridge response chunk emitted before response start frame',
         );
       }
-      writer.writeChunkFrame(
-        BridgeResponseFrame.chunkFrameType,
-        chunkBytes,
-      );
+      writer.writeChunkFrame(BridgeResponseFrame.chunkFrameType, chunkBytes);
     },
   );
 
@@ -1043,12 +1041,25 @@ final class _BridgeSocketWriter {
         'bridge response frame too large: ${payload.length}',
       );
     }
-    final header = Uint32List(1);
-    ByteData.sublistView(header).setUint32(0, payload.length, Endian.big);
-    _socket.add(header.buffer.asUint8List());
-    if (payload.isNotEmpty) {
-      _socket.add(payload);
+    if (payload.isEmpty) {
+      final prelude = Uint8List(4);
+      _writeUint32BigEndian(prelude, 0, 0);
+      _socket.add(prelude);
+      return;
     }
+
+    if (payload.length <= _coalescePayloadThresholdBytes) {
+      final out = Uint8List(4 + payload.length);
+      _writeUint32BigEndian(out, 0, payload.length);
+      out.setRange(4, out.length, payload);
+      _socket.add(out);
+      return;
+    }
+
+    final prelude = Uint8List(4);
+    _writeUint32BigEndian(prelude, 0, payload.length);
+    _socket.add(prelude);
+    _socket.add(payload);
   }
 
   void writeResponseFrame(BridgeResponseFrame response) {
@@ -1058,10 +1069,21 @@ final class _BridgeSocketWriter {
     if (payloadLength > _maxBridgeFrameBytes) {
       throw FormatException('bridge response frame too large: $payloadLength');
     }
-    final header = Uint32List(1);
-    ByteData.sublistView(header).setUint32(0, payloadLength, Endian.big);
-    _socket.add(header.buffer.asUint8List());
-    _socket.add(prefix);
+    if (payloadLength <= _coalescePayloadThresholdBytes) {
+      final out = Uint8List(4 + payloadLength);
+      _writeUint32BigEndian(out, 0, payloadLength);
+      out.setRange(4, 4 + prefix.length, prefix);
+      if (body.isNotEmpty) {
+        out.setRange(4 + prefix.length, out.length, body);
+      }
+      _socket.add(out);
+      return;
+    }
+
+    final prelude = Uint8List(4 + prefix.length);
+    _writeUint32BigEndian(prelude, 0, payloadLength);
+    prelude.setRange(4, prelude.length, prefix);
+    _socket.add(prelude);
     if (body.isNotEmpty) {
       _socket.add(body);
     }
@@ -1072,12 +1094,24 @@ final class _BridgeSocketWriter {
     if (payloadLength > _maxBridgeFrameBytes) {
       throw FormatException('bridge response frame too large: $payloadLength');
     }
+    if (chunkBytes.length <= _coalescePayloadThresholdBytes) {
+      final out = Uint8List(10 + chunkBytes.length);
+      _writeUint32BigEndian(out, 0, payloadLength);
+      out[4] = bridgeFrameProtocolVersion;
+      out[5] = frameType & 0xff;
+      _writeUint32BigEndian(out, 6, chunkBytes.length);
+      if (chunkBytes.isNotEmpty) {
+        out.setRange(10, out.length, chunkBytes);
+      }
+      _socket.add(out);
+      return;
+    }
+
     final prelude = Uint8List(10);
-    final preludeData = ByteData.sublistView(prelude);
-    preludeData.setUint32(0, payloadLength, Endian.big);
+    _writeUint32BigEndian(prelude, 0, payloadLength);
     prelude[4] = bridgeFrameProtocolVersion;
     prelude[5] = frameType & 0xff;
-    preludeData.setUint32(6, chunkBytes.length, Endian.big);
+    _writeUint32BigEndian(prelude, 6, chunkBytes.length);
     _socket.add(prelude);
     if (chunkBytes.isNotEmpty) {
       _socket.add(chunkBytes);
@@ -1091,6 +1125,20 @@ final class _BridgeSocketWriter {
     writeChunkFrame(frameType, chunkBytes);
     await _socket.flush();
   }
+}
+
+void _writeUint32BigEndian(Uint8List buffer, int offset, int value) {
+  buffer[offset] = (value >> 24) & 0xff;
+  buffer[offset + 1] = (value >> 16) & 0xff;
+  buffer[offset + 2] = (value >> 8) & 0xff;
+  buffer[offset + 3] = value & 0xff;
+}
+
+int _readUint32BigEndian(Uint8List buffer, int offset) {
+  return (buffer[offset] << 24) |
+      (buffer[offset + 1] << 16) |
+      (buffer[offset + 2] << 8) |
+      buffer[offset + 3];
 }
 
 final class _DirectHeaderListView extends ListBase<MapEntry<String, String>> {
@@ -1150,9 +1198,7 @@ final class _SocketFrameReader {
     if (headerBytes == null) {
       return null;
     }
-    final payloadLength = ByteData.sublistView(
-      headerBytes,
-    ).getUint32(0, Endian.big);
+    final payloadLength = _readUint32BigEndian(headerBytes, 0);
     if (payloadLength > _maxBridgeFrameBytes) {
       throw FormatException('bridge frame too large: $payloadLength');
     }
