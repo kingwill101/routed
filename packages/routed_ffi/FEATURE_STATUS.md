@@ -12,6 +12,7 @@ Last updated: February 18, 2026
   - `routed_ffi_start_proxy_server`
   - `routed_ffi_stop_proxy_server`
 - `serveFfi` entrypoint implemented as alternative server boot path.
+- `serveFfiDirect` and `serveSecureFfiDirect` entrypoints implemented for direct Dart handlers over FFI bridge without Routed engine request pipeline.
 - Native transport wired for HTTP/1 and HTTP/2 handling.
 - Native TLS transport wired for `serveSecureFfi` with cert/key PEM input and ALPN (`h2`, `http/1.1`).
 - Native TLS transport now supports HTTP/3/QUIC listener in secure mode when `http3` is enabled.
@@ -46,6 +47,7 @@ Last updated: February 18, 2026
 - Rust bridge frame writes now use vectored writes (`write_vectored`) for frame header+payload/chunk emission.
 - Benchmark regression gate workflow added (`.github/workflows/routed_ffi_benchmark_gate.yml`).
 - Benchmark harness now includes a native-direct mode (`routed_ffi_native_direct`) to isolate Rust front-server cost from bridge+routed overhead.
+- Benchmark harness now includes a direct-handler mode (`routed_ffi_direct`) to isolate Rust front-server + bridge overhead without Routed engine execution.
 - Bridge protocol specification documented in `BRIDGE_PROTOCOL.md`.
 - Bridge protocol tests added/updated:
   - frame encode/decode behavior

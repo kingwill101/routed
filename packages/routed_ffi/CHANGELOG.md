@@ -1,6 +1,7 @@
 ## 0.1.0
 
 - Add `serveFfi(...)` and `serveSecureFfi(...)` boot helper APIs.
+- Add `serveFfiDirect(...)` and `serveSecureFfiDirect(...)` boot helper APIs for direct Dart handlers without Routed engine request pipeline.
 - Scaffold Rust native asset build hook using `native_toolchain_rust`.
 - Add Rust-native proxy front server with FFI start/stop lifecycle bindings.
 - Add typed bridge serialization between Rust transport and Routed request/response execution.
@@ -13,6 +14,7 @@
 - Add dedicated HTTP/3 integration test coverage and CI workflow for QUIC path validation.
 - Install rustls crypto provider during native TLS startup and add native QUIC endpoint smoke tests.
 - Add native direct benchmark mode (`routed_ffi_native_direct`) for transport-overhead isolation and wire benchmark-mode config through FFI.
+- Add routed-ffi direct benchmark mode (`routed_ffi_direct`) using `serveFfiDirect(...)` to isolate Rust+bridge overhead without Routed engine request handling.
 - Add benchmark gate support with ratio thresholds/json output and CI workflow for routed_ffi.
 - Improve bridge transport latency by enabling `TCP_NODELAY` on bridge sockets and reducing per-frame flush overhead.
 - Reduce bridge overhead with non-streaming single-frame request/response fast paths and lower-copy bridge decoding/runtime buffers.

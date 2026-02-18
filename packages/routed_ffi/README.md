@@ -45,10 +45,59 @@ Future<void> main() async {
 }
 ```
 
+Use `serveFfiDirect(...)` to keep the Rust transport + FFI bridge but bypass
+Routed engine handling entirely:
+
+```dart
+import 'dart:convert';
+import 'dart:io';
+import 'dart:typed_data';
+
+import 'package:routed_ffi/routed_ffi.dart';
+
+Future<void> main() async {
+  await serveFfiDirect((request) async {
+    if (request.method == 'GET' && request.path == '/health') {
+      return FfiDirectResponse.bytes(
+        headers: const [
+          MapEntry(HttpHeaders.contentTypeHeader, 'application/json'),
+        ],
+        bodyBytes: Uint8List.fromList(utf8.encode('{"ok":true}')),
+      );
+    }
+
+    if (request.method == 'POST' && request.path == '/echo') {
+      final body = await utf8.decoder.bind(request.body).join();
+      final payload = jsonEncode({
+        'method': request.method,
+        'path': request.path,
+        'query': request.query,
+        'body': body,
+      });
+      return FfiDirectResponse.bytes(
+        headers: const [
+          MapEntry(HttpHeaders.contentTypeHeader, 'application/json'),
+        ],
+        bodyBytes: Uint8List.fromList(utf8.encode(payload)),
+      );
+    }
+
+    return FfiDirectResponse.bytes(
+      status: HttpStatus.notFound,
+      headers: const [
+        MapEntry(HttpHeaders.contentTypeHeader, 'text/plain; charset=utf-8'),
+      ],
+      bodyBytes: Uint8List.fromList(utf8.encode('Not Found')),
+    );
+  }, host: '127.0.0.1', port: 8080, http3: false);
+}
+```
+
 ## Current Status
 
 - `serveFfi(...)`: Rust native front server is active (HTTP/1 + HTTP/2).
 - `serveSecureFfi(...)`: Rust native TLS front server is active (HTTP/1 + HTTP/2 + HTTP/3).
+- `serveFfiDirect(...)` / `serveSecureFfiDirect(...)`: Rust native front server is active with direct Dart handlers (no Routed engine request pipeline).
 - bridge transport: binary framed protocol with chunked request/response exchange (no JSON/base64 in hot path).
 - Dart bridge runtime streams chunked request/response bodies to/from Routed handlers.
 - Rust proxy streams request/response body data through bridge frames (no full proxy-body buffering path).
@@ -71,7 +120,7 @@ dart run tool/generate_ffi.dart
 
 ## Benchmark
 
-Run the local transport benchmark (`routed_io`, `routed_ffi`, and native-direct `routed_ffi_native_direct`):
+Run the local transport benchmark (`dart_io_direct`, `routed_io`, `routed_ffi_direct`, `routed_ffi`, and native-direct `routed_ffi_native_direct`):
 
 ```bash
 dart run tool/benchmark_transport.dart
@@ -94,6 +143,12 @@ using ratio thresholds to catch performance regressions.
 `routed_ffi_native_direct` is a benchmark-only native mode that serves a static
 JSON response from Rust without bridge/routed execution. It is intended for
 transport-cost isolation, not application serving.
+
+`dart_io_direct` is a benchmark-only pure `dart:io` `HttpServer` mode that serves
+the same static JSON response shape without Routed engine execution.
+
+`routed_ffi_direct` is a benchmark mode using `serveFfiDirect(...)` (Rust front
+server + FFI bridge + direct Dart handler) without Routed engine execution.
 
 ### Latest Snapshot
 

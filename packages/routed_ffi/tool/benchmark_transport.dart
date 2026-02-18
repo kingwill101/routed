@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 import 'dart:math' as math;
+import 'dart:typed_data';
 
 import 'package:routed/routed.dart';
 import 'package:routed_ffi/routed_ffi.dart';
@@ -183,7 +184,9 @@ final class _RunningServer {
 
 Future<void> main(List<String> args) async {
   final options = _BenchmarkOptions.parse(args);
+  final dartIoDirectRuns = <_BenchmarkResult>[];
   final ioRuns = <_BenchmarkResult>[];
+  final ffiDirectRuns = <_BenchmarkResult>[];
   final ffiRuns = <_BenchmarkResult>[];
   final ffiNativeDirectRuns = <_BenchmarkResult>[];
 
@@ -199,11 +202,25 @@ Future<void> main(List<String> args) async {
     if (!options.jsonOutput && options.iterations > 1) {
       stdout.writeln('\nIteration ${i + 1}/${options.iterations}');
     }
+    dartIoDirectRuns.add(
+      await _runTransportBenchmark(
+        label: 'dart_io_direct',
+        options: options,
+        startServer: _startDartIoDirectServer,
+      ),
+    );
     ioRuns.add(
       await _runTransportBenchmark(
         label: 'routed_io',
         options: options,
         startServer: _startIoServer,
+      ),
+    );
+    ffiDirectRuns.add(
+      await _runTransportBenchmark(
+        label: 'routed_ffi_direct',
+        options: options,
+        startServer: _startFfiDirectServer,
       ),
     );
     ffiRuns.add(
@@ -222,7 +239,12 @@ Future<void> main(List<String> args) async {
     );
   }
 
+  final dartIoDirectResult = _aggregateResults(
+    'dart_io_direct',
+    dartIoDirectRuns,
+  );
   final ioResult = _aggregateResults('routed_io', ioRuns);
+  final ffiDirectResult = _aggregateResults('routed_ffi_direct', ffiDirectRuns);
   final ffiResult = _aggregateResults('routed_ffi', ffiRuns);
   final ffiNativeDirectResult = _aggregateResults(
     'routed_ffi_native_direct',
@@ -243,7 +265,9 @@ Future<void> main(List<String> args) async {
           'maxP95Ratio': options.maxP95Ratio,
         },
         'results': <Map<String, Object?>>[
+          _resultToJson(dartIoDirectResult),
           _resultToJson(ioResult),
+          _resultToJson(ffiDirectResult),
           _resultToJson(ffiResult),
           _resultToJson(ffiNativeDirectResult),
         ],
@@ -255,7 +279,9 @@ Future<void> main(List<String> args) async {
     );
   } else {
     _printSummary(<_BenchmarkResult>[
+      dartIoDirectResult,
       ioResult,
+      ffiDirectResult,
       ffiResult,
       ffiNativeDirectResult,
     ]);
@@ -544,6 +570,57 @@ Future<_RunningServer> _startIoServer(
   );
 }
 
+Future<_RunningServer> _startDartIoDirectServer(
+  Engine engine,
+  String host,
+  int port,
+  Completer<void> shutdown,
+) async {
+  const bodyString = '{"ok":true,"label":"dart_io_direct"}';
+  final bodyBytes = utf8.encode(bodyString);
+  final server = await HttpServer.bind(host, port);
+
+  final done = Completer<void>();
+  // ignore: discarded_futures
+  server
+      .listen((request) async {
+        if (request.uri.path != '/bench') {
+          request.response.statusCode = HttpStatus.notFound;
+          await request.response.close();
+          return;
+        }
+
+        await request.drain<void>();
+        request.response.statusCode = HttpStatus.ok;
+        request.response.headers.contentType = ContentType.json;
+        request.response.add(bodyBytes);
+        await request.response.close();
+      })
+      .asFuture<void>()
+      .whenComplete(() {
+        if (!done.isCompleted) {
+          done.complete();
+        }
+      });
+
+  // ignore: discarded_futures
+  shutdown.future.whenComplete(() async {
+    await server.close(force: true);
+    if (!done.isCompleted) {
+      done.complete();
+    }
+  });
+
+  final baseUri = Uri.parse('http://$host:${server.port}');
+  await _waitUntilUp(baseUri.replace(path: '/bench'));
+  return _RunningServer(
+    engine: engine,
+    baseUri: baseUri,
+    shutdown: shutdown,
+    done: done.future,
+  );
+}
+
 Future<_RunningServer> _startFfiServer(
   Engine engine,
   String host,
@@ -552,6 +629,38 @@ Future<_RunningServer> _startFfiServer(
 ) async {
   final done = serveFfi(
     engine,
+    host: host,
+    port: port,
+    echo: false,
+    http3: false,
+    shutdownSignal: shutdown.future,
+  );
+  final baseUri = Uri.parse('http://$host:$port');
+  await _waitUntilUp(baseUri.replace(path: '/bench'));
+  return _RunningServer(
+    engine: engine,
+    baseUri: baseUri,
+    shutdown: shutdown,
+    done: done,
+  );
+}
+
+Future<_RunningServer> _startFfiDirectServer(
+  Engine engine,
+  String host,
+  int port,
+  Completer<void> shutdown,
+) async {
+  final bodyBytes = Uint8List.fromList(
+    utf8.encode('{"ok":true,"label":"routed_ffi_direct"}'),
+  );
+  final done = serveFfiDirect(
+    (_) async => FfiDirectResponse.bytes(
+      headers: const <MapEntry<String, String>>[
+        MapEntry(HttpHeaders.contentTypeHeader, 'application/json'),
+      ],
+      bodyBytes: bodyBytes,
+    ),
     host: host,
     port: port,
     echo: false,
