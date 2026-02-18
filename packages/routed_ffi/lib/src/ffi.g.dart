@@ -41,12 +41,26 @@ final class RoutedFfiProxyConfig extends ffi.Struct {
 
   external ffi.Pointer<ffi.Char> backend_path;
 
+  @ffi.Uint32()
+  external int backlog;
+
+  @ffi.Uint8()
+  external int v6_only;
+
+  @ffi.Uint8()
+  external int shared;
+
+  @ffi.Uint8()
+  external int request_client_certificate;
+
   @ffi.Uint8()
   external int http3;
 
   external ffi.Pointer<ffi.Char> tls_cert_path;
 
   external ffi.Pointer<ffi.Char> tls_key_path;
+
+  external ffi.Pointer<ffi.Char> tls_cert_password;
 
   @ffi.Uint8()
   external int benchmark_mode;

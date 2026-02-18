@@ -28,9 +28,14 @@ final class NativeProxyServer {
     required int backendPort,
     int backendKind = bridgeBackendKindTcp,
     String? backendPath,
+    int backlog = 0,
+    bool v6Only = false,
+    bool shared = false,
+    bool requestClientCertificate = false,
     bool enableHttp3 = false,
     String? tlsCertPath,
     String? tlsKeyPath,
+    String? tlsCertPassword,
     int benchmarkMode = 0,
   }) {
     if (backendKind < 0 || backendKind > 255) {
@@ -55,6 +60,16 @@ final class NativeProxyServer {
         'benchmarkMode must be between 0 and 255',
       );
     }
+    if (backlog < 0) {
+      throw ArgumentError.value(backlog, 'backlog', 'backlog must be >= 0');
+    }
+    if (backlog > 0xffffffff) {
+      throw ArgumentError.value(
+        backlog,
+        'backlog',
+        'backlog must be <= 4294967295',
+      );
+    }
 
     final configPtr = calloc<RoutedFfiProxyConfig>();
     final outPortPtr = calloc<ffi.Uint16>();
@@ -63,6 +78,7 @@ final class NativeProxyServer {
     final backendPathPtr = backendPath?.toNativeUtf8();
     final tlsCertPathPtr = tlsCertPath?.toNativeUtf8();
     final tlsKeyPathPtr = tlsKeyPath?.toNativeUtf8();
+    final tlsCertPasswordPtr = tlsCertPassword?.toNativeUtf8();
 
     try {
       configPtr.ref
@@ -72,9 +88,15 @@ final class NativeProxyServer {
         ..backend_port = backendPort
         ..backend_kind = backendKind
         ..backend_path = (backendPathPtr ?? ffi.nullptr).cast<ffi.Char>()
+        ..backlog = backlog
+        ..v6_only = v6Only ? 1 : 0
+        ..shared = shared ? 1 : 0
+        ..request_client_certificate = requestClientCertificate ? 1 : 0
         ..http3 = enableHttp3 ? 1 : 0
         ..tls_cert_path = (tlsCertPathPtr ?? ffi.nullptr).cast<ffi.Char>()
         ..tls_key_path = (tlsKeyPathPtr ?? ffi.nullptr).cast<ffi.Char>()
+        ..tls_cert_password = (tlsCertPasswordPtr ?? ffi.nullptr)
+            .cast<ffi.Char>()
         ..benchmark_mode = benchmarkMode;
 
       final handle = routed_ffi_start_proxy_server(configPtr, outPortPtr);
@@ -94,6 +116,9 @@ final class NativeProxyServer {
       }
       if (tlsKeyPathPtr != null) {
         calloc.free(tlsKeyPathPtr);
+      }
+      if (tlsCertPasswordPtr != null) {
+        calloc.free(tlsCertPasswordPtr);
       }
       calloc.free(hostPtr);
       calloc.free(backendHostPtr);

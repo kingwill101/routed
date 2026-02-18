@@ -7,6 +7,7 @@ import 'dart:typed_data';
 import 'package:routed/routed.dart';
 import 'package:routed_ffi/src/bridge/bridge_runtime.dart';
 import 'package:routed_ffi/src/native/routed_ffi_native.dart';
+import 'package:routed_ffi/src/routed/routed_bridge_runtime.dart';
 
 const int _maxBridgeFrameBytes = 64 * 1024 * 1024;
 const int _maxBridgeBodyBytes = 32 * 1024 * 1024;
@@ -32,32 +33,86 @@ final class _BridgeBinding {
 /// Request delivered to a direct FFI handler without Routed engine wrapping.
 final class FfiDirectRequest {
   FfiDirectRequest({
-    required this.method,
-    required this.scheme,
-    required this.authority,
-    required this.path,
-    required this.query,
-    required this.protocol,
-    required this.headers,
+    required String method,
+    required String scheme,
+    required String authority,
+    required String path,
+    required String query,
+    required String protocol,
+    required List<MapEntry<String, String>> headers,
     required this.body,
-  }) : uri = _buildDirectUri(
-         scheme: scheme,
-         authority: authority,
-         path: path,
-         query: query,
-       );
+  }) : _frame = null,
+       _method = method,
+       _scheme = scheme,
+       _authority = authority,
+       _path = path,
+       _query = query,
+       _protocol = protocol,
+       _headers = List<MapEntry<String, String>>.unmodifiable(headers);
 
-  final String method;
-  final String scheme;
-  final String authority;
-  final String path;
-  final String query;
-  final String protocol;
-  final List<MapEntry<String, String>> headers;
+  FfiDirectRequest._fromFrame(this._frame, this.body)
+    : _method = null,
+      _scheme = null,
+      _authority = null,
+      _path = null,
+      _query = null,
+      _protocol = null,
+      _headers = null;
+
+  final BridgeRequestFrame? _frame;
+  final String? _method;
+  final String? _scheme;
+  final String? _authority;
+  final String? _path;
+  final String? _query;
+  final String? _protocol;
+  List<MapEntry<String, String>>? _headers;
   final Stream<Uint8List> body;
-  final Uri uri;
+
+  String get method => _frame?.method ?? _method!;
+
+  String get scheme => _frame?.scheme ?? _scheme!;
+
+  String get authority => _frame?.authority ?? _authority!;
+
+  String get path => _frame?.path ?? _path!;
+
+  String get query => _frame?.query ?? _query!;
+
+  String get protocol => _frame?.protocol ?? _protocol!;
+
+  List<MapEntry<String, String>> get headers {
+    final headers = _headers;
+    if (headers != null) {
+      return headers;
+    }
+    final frame = _frame;
+    if (frame == null) {
+      return const <MapEntry<String, String>>[];
+    }
+    final view = UnmodifiableListView(_DirectHeaderListView(frame));
+    _headers = view;
+    return view;
+  }
+
+  late final Uri uri = _buildDirectUri(
+    scheme: scheme,
+    authority: authority,
+    path: path,
+    query: query,
+  );
 
   String? header(String name) {
+    final frame = _frame;
+    if (frame != null) {
+      for (var i = 0; i < frame.headerCount; i++) {
+        if (_equalsAsciiIgnoreCase(frame.headerNameAt(i), name)) {
+          return frame.headerValueAt(i);
+        }
+      }
+      return null;
+    }
+
     final target = name;
     for (final entry in headers) {
       if (_equalsAsciiIgnoreCase(entry.key, target)) {
@@ -111,18 +166,26 @@ typedef _BridgeHandleStream =
 /// to a private Dart bridge socket that invokes [Engine.handleRequest].
 Future<void> serveFfi(
   Engine engine, {
-  String host = '127.0.0.1',
+  Object host = '127.0.0.1',
   int? port,
   bool echo = true,
+  int backlog = 0,
+  bool v6Only = false,
+  bool shared = false,
   bool http3 = true,
   Future<void>? shutdownSignal,
 }) {
-  final runtime = BridgeRuntime(engine);
+  final runtime = RoutedBridgeRuntime(engine);
+  final normalizedHost = _normalizeBindHost(host, 'host');
   return _serveWithNativeProxy(
-    host: host,
+    host: normalizedHost,
     port: port ?? 0,
     secure: false,
     echo: echo,
+    backlog: backlog,
+    v6Only: v6Only,
+    shared: shared,
+    requestClientCertificate: false,
     http3: http3,
     shutdownSignal: shutdownSignal,
     onEcho: echo ? engine.printRoutes : null,
@@ -136,14 +199,15 @@ Future<void> serveFfi(
 /// This requires PEM certificate and key files.
 Future<void> serveSecureFfi(
   Engine engine, {
-  String address = 'localhost',
+  Object address = 'localhost',
   int port = 443,
   String? certificatePath,
   String? keyPath,
   String? certificatePassword,
-  bool? v6Only,
-  bool? requestClientCertificate,
-  bool? shared,
+  int backlog = 0,
+  bool v6Only = false,
+  bool requestClientCertificate = false,
+  bool shared = false,
   bool http3 = true,
   Future<void>? shutdownSignal,
 }) {
@@ -162,32 +226,105 @@ Future<void> serveSecureFfi(
     );
   }
 
-  if (certificatePassword != null && certificatePassword.isNotEmpty) {
-    stderr.writeln(
-      '[routed_ffi] certificatePassword is currently ignored in native TLS mode.',
-    );
-  }
-  if (requestClientCertificate == true) {
-    stderr.writeln(
-      '[routed_ffi] requestClientCertificate is not yet implemented in native TLS mode.',
-    );
-  }
-  if (v6Only != null || shared != null) {
-    stderr.writeln(
-      '[routed_ffi] v6Only/shared socket options are not yet configurable in native mode.',
-    );
-  }
-
-  final runtime = BridgeRuntime(engine);
+  final runtime = RoutedBridgeRuntime(engine);
+  final normalizedAddress = _normalizeBindHost(address, 'address');
   return _serveWithNativeProxy(
-    host: address,
+    host: normalizedAddress,
     port: port,
     secure: true,
     echo: false,
+    backlog: backlog,
+    v6Only: v6Only,
+    shared: shared,
+    requestClientCertificate: requestClientCertificate,
     http3: http3,
     shutdownSignal: shutdownSignal,
     tlsCertPath: certificatePath,
     tlsKeyPath: keyPath,
+    tlsCertPassword: certificatePassword,
+    handleFrame: runtime.handleFrame,
+    handleStream: runtime.handleStream,
+  );
+}
+
+/// Boots the Rust-native transport and dispatches `HttpRequest` objects to
+/// [handler], similar to listening on `dart:io` `HttpServer`.
+Future<void> serveFfiHttp(
+  BridgeHttpHandler handler, {
+  Object host = '127.0.0.1',
+  int? port,
+  bool echo = true,
+  int backlog = 0,
+  bool v6Only = false,
+  bool shared = false,
+  bool http3 = true,
+  Future<void>? shutdownSignal,
+}) {
+  final runtime = BridgeHttpRuntime(handler);
+  final normalizedHost = _normalizeBindHost(host, 'host');
+  return _serveWithNativeProxy(
+    host: normalizedHost,
+    port: port ?? 0,
+    secure: false,
+    echo: echo,
+    backlog: backlog,
+    v6Only: v6Only,
+    shared: shared,
+    requestClientCertificate: false,
+    http3: http3,
+    shutdownSignal: shutdownSignal,
+    handleFrame: runtime.handleFrame,
+    handleStream: runtime.handleStream,
+  );
+}
+
+/// Boots the Rust-native TLS transport and dispatches `HttpRequest` objects to
+/// [handler], similar to listening on `dart:io` `HttpServer`.
+Future<void> serveSecureFfiHttp(
+  BridgeHttpHandler handler, {
+  Object address = 'localhost',
+  int port = 443,
+  String? certificatePath,
+  String? keyPath,
+  String? certificatePassword,
+  int backlog = 0,
+  bool v6Only = false,
+  bool requestClientCertificate = false,
+  bool shared = false,
+  bool http3 = true,
+  Future<void>? shutdownSignal,
+}) {
+  if (certificatePath == null || certificatePath.isEmpty) {
+    throw ArgumentError.value(
+      certificatePath,
+      'certificatePath',
+      'certificatePath is required for serveSecureFfiHttp',
+    );
+  }
+  if (keyPath == null || keyPath.isEmpty) {
+    throw ArgumentError.value(
+      keyPath,
+      'keyPath',
+      'keyPath is required for serveSecureFfiHttp',
+    );
+  }
+
+  final runtime = BridgeHttpRuntime(handler);
+  final normalizedAddress = _normalizeBindHost(address, 'address');
+  return _serveWithNativeProxy(
+    host: normalizedAddress,
+    port: port,
+    secure: true,
+    echo: false,
+    backlog: backlog,
+    v6Only: v6Only,
+    shared: shared,
+    requestClientCertificate: requestClientCertificate,
+    http3: http3,
+    shutdownSignal: shutdownSignal,
+    tlsCertPath: certificatePath,
+    tlsKeyPath: keyPath,
+    tlsCertPassword: certificatePassword,
     handleFrame: runtime.handleFrame,
     handleStream: runtime.handleStream,
   );
@@ -197,17 +334,25 @@ Future<void> serveSecureFfi(
 /// without Routed engine request/response wrapping.
 Future<void> serveFfiDirect(
   FfiDirectHandler handler, {
-  String host = '127.0.0.1',
+  Object host = '127.0.0.1',
   int? port,
   bool echo = true,
+  int backlog = 0,
+  bool v6Only = false,
+  bool shared = false,
   bool http3 = true,
   Future<void>? shutdownSignal,
 }) {
+  final normalizedHost = _normalizeBindHost(host, 'host');
   return _serveWithNativeProxy(
-    host: host,
+    host: normalizedHost,
     port: port ?? 0,
     secure: false,
     echo: echo,
+    backlog: backlog,
+    v6Only: v6Only,
+    shared: shared,
+    requestClientCertificate: false,
     http3: http3,
     shutdownSignal: shutdownSignal,
     handleFrame: (frame) => _handleDirectFrame(handler, frame),
@@ -231,14 +376,15 @@ Future<void> serveFfiDirect(
 /// [handler] without Routed engine request/response wrapping.
 Future<void> serveSecureFfiDirect(
   FfiDirectHandler handler, {
-  String address = 'localhost',
+  Object address = 'localhost',
   int port = 443,
   String? certificatePath,
   String? keyPath,
   String? certificatePassword,
-  bool? v6Only,
-  bool? requestClientCertificate,
-  bool? shared,
+  int backlog = 0,
+  bool v6Only = false,
+  bool requestClientCertificate = false,
+  bool shared = false,
   bool http3 = true,
   Future<void>? shutdownSignal,
 }) {
@@ -257,31 +403,21 @@ Future<void> serveSecureFfiDirect(
     );
   }
 
-  if (certificatePassword != null && certificatePassword.isNotEmpty) {
-    stderr.writeln(
-      '[routed_ffi] certificatePassword is currently ignored in native TLS mode.',
-    );
-  }
-  if (requestClientCertificate == true) {
-    stderr.writeln(
-      '[routed_ffi] requestClientCertificate is not yet implemented in native TLS mode.',
-    );
-  }
-  if (v6Only != null || shared != null) {
-    stderr.writeln(
-      '[routed_ffi] v6Only/shared socket options are not yet configurable in native mode.',
-    );
-  }
-
+  final normalizedAddress = _normalizeBindHost(address, 'address');
   return _serveWithNativeProxy(
-    host: address,
+    host: normalizedAddress,
     port: port,
     secure: true,
     echo: false,
+    backlog: backlog,
+    v6Only: v6Only,
+    shared: shared,
+    requestClientCertificate: requestClientCertificate,
     http3: http3,
     shutdownSignal: shutdownSignal,
     tlsCertPath: certificatePath,
     tlsKeyPath: keyPath,
+    tlsCertPassword: certificatePassword,
     handleFrame: (frame) => _handleDirectFrame(handler, frame),
     handleStream:
         ({
@@ -304,6 +440,10 @@ Future<void> _serveWithNativeProxy({
   required int port,
   required bool secure,
   required bool echo,
+  required int backlog,
+  required bool v6Only,
+  required bool shared,
+  required bool requestClientCertificate,
   required bool http3,
   required _BridgeHandleFrame handleFrame,
   required _BridgeHandleStream handleStream,
@@ -311,6 +451,7 @@ Future<void> _serveWithNativeProxy({
   Future<void>? shutdownSignal,
   String? tlsCertPath,
   String? tlsKeyPath,
+  String? tlsCertPassword,
 }) async {
   // Ensure native symbol resolution and ABI compatibility are available.
   final abiVersion = transportAbiVersion();
@@ -351,9 +492,14 @@ Future<void> _serveWithNativeProxy({
       backendPort: bridgeBinding.backendPort,
       backendKind: bridgeBinding.backendKind,
       backendPath: bridgeBinding.backendPath,
+      backlog: backlog,
+      v6Only: v6Only,
+      shared: shared,
+      requestClientCertificate: requestClientCertificate,
       enableHttp3: enableHttp3,
       tlsCertPath: tlsCertPath,
       tlsKeyPath: tlsKeyPath,
+      tlsCertPassword: tlsCertPassword,
     );
   } catch (error) {
     await bridgeSubscription.cancel();
@@ -485,7 +631,7 @@ Future<void> _handleBridgeSocket(
           continue;
         }
       } catch (error) {
-        await _writeBridgeBadRequest(writer, error);
+        _writeBridgeBadRequest(writer, error);
         continue;
       }
 
@@ -493,12 +639,17 @@ Future<void> _handleBridgeSocket(
       try {
         frame = BridgeRequestFrame.decodePayload(firstPayload);
       } catch (error) {
-        await _writeBridgeBadRequest(writer, error);
+        _writeBridgeBadRequest(writer, error);
         continue;
       }
 
       final response = await handleFrame(frame);
-      await _writeBridgeResponse(writer, response);
+      _writeBridgeResponse(writer, response);
+      final detachedSocket = response.detachedSocket;
+      if (detachedSocket != null) {
+        await _runDetachedSocketTunnel(reader, writer, detachedSocket);
+        return;
+      }
     }
   } catch (error, stack) {
     stderr.writeln('[routed_ffi] bridge socket error: $error\n$stack');
@@ -513,6 +664,24 @@ Future<void> _handleBridgeSocket(
   }
 }
 
+String _normalizeBindHost(Object value, String name) {
+  if (value is String) {
+    final trimmed = value.trim();
+    if (trimmed.isEmpty) {
+      throw ArgumentError.value(value, name, '$name must not be empty');
+    }
+    return trimmed;
+  }
+  if (value is InternetAddress) {
+    return value.address;
+  }
+  throw ArgumentError.value(
+    value,
+    name,
+    '$name must be a String or InternetAddress',
+  );
+}
+
 Future<void> _handleChunkedBridgeRequest(
   _SocketFrameReader reader,
   _BridgeSocketWriter writer, {
@@ -522,12 +691,14 @@ Future<void> _handleChunkedBridgeRequest(
   final requestBody = StreamController<Uint8List>(sync: true);
   var requestBodyBytes = 0;
   var responseStarted = false;
+  BridgeDetachedSocket? detachedSocket;
   final handlerFuture = handleStream(
     frame: startFrame,
     bodyStream: requestBody.stream,
     onResponseStart: (frame) async {
       responseStarted = true;
-      await writer.writeFrame(frame.encodeStartPayload());
+      detachedSocket = frame.detachedSocket;
+      writer.writeFrame(frame.encodeStartPayload());
     },
     onResponseChunk: (chunkBytes) async {
       if (chunkBytes.isEmpty) {
@@ -538,7 +709,7 @@ Future<void> _handleChunkedBridgeRequest(
           'bridge response chunk emitted before response start frame',
         );
       }
-      await writer.writeChunkFrame(
+      writer.writeChunkFrame(
         BridgeResponseFrame.chunkFrameType,
         chunkBytes,
       );
@@ -580,7 +751,7 @@ Future<void> _handleChunkedBridgeRequest(
         await handlerFuture;
       } catch (_) {}
       if (!responseStarted) {
-        await _writeBridgeBadRequest(writer, error);
+        _writeBridgeBadRequest(writer, error);
         return;
       }
       rethrow;
@@ -596,10 +767,14 @@ Future<void> _handleChunkedBridgeRequest(
     if (!responseStarted) {
       throw StateError('bridge response start frame was not emitted');
     }
-    await writer.writeFrame(BridgeResponseFrame.encodeEndPayload());
+    writer.writeFrame(BridgeResponseFrame.encodeEndPayload());
+    if (detachedSocket != null) {
+      await _runDetachedSocketTunnel(reader, writer, detachedSocket!);
+      return;
+    }
   } catch (error) {
     if (!responseStarted) {
-      await _writeBridgeBadRequest(writer, error);
+      _writeBridgeBadRequest(writer, error);
       return;
     }
     rethrow;
@@ -699,16 +874,7 @@ FfiDirectRequest _toDirectRequest(
   BridgeRequestFrame frame,
   Stream<Uint8List> bodyStream,
 ) {
-  return FfiDirectRequest(
-    method: frame.method,
-    scheme: frame.scheme,
-    authority: frame.authority,
-    path: frame.path,
-    query: frame.query,
-    protocol: frame.protocol,
-    headers: frame.headers,
-    body: bodyStream,
-  );
+  return FfiDirectRequest._fromFrame(frame, bodyStream);
 }
 
 Uri _buildDirectUri({
@@ -796,10 +962,7 @@ BridgeResponseFrame _internalServerErrorFrame(Object error) {
   );
 }
 
-Future<void> _writeBridgeBadRequest(
-  _BridgeSocketWriter writer,
-  Object error,
-) async {
+void _writeBridgeBadRequest(_BridgeSocketWriter writer, Object error) {
   final errorResponse = BridgeResponseFrame(
     status: HttpStatus.badRequest,
     headers: const <MapEntry<String, String>>[],
@@ -807,14 +970,66 @@ Future<void> _writeBridgeBadRequest(
       utf8.encode('invalid bridge request: $error'),
     ),
   );
-  await _writeBridgeResponse(writer, errorResponse);
+  _writeBridgeResponse(writer, errorResponse);
 }
 
-Future<void> _writeBridgeResponse(
+void _writeBridgeResponse(
   _BridgeSocketWriter writer,
   BridgeResponseFrame response,
+) {
+  writer.writeResponseFrame(response);
+}
+
+Future<void> _runDetachedSocketTunnel(
+  _SocketFrameReader reader,
+  _BridgeSocketWriter writer,
+  BridgeDetachedSocket detachedSocket,
 ) async {
-  await writer.writeResponseFrame(response);
+  final bridgeSocket = detachedSocket.bridgeSocket;
+
+  final outboundTask = () async {
+    try {
+      await for (final chunk in bridgeSocket) {
+        if (chunk.isEmpty) {
+          continue;
+        }
+        await writer.writeChunkFrameAndFlush(
+          BridgeTunnelFrame.chunkFrameType,
+          chunk,
+        );
+      }
+    } catch (_) {
+      // Peer bridge disconnect and write errors both terminate the tunnel.
+    }
+  }();
+
+  try {
+    while (true) {
+      final payload = await reader.readFrame();
+      if (payload == null) {
+        break;
+      }
+      if (BridgeTunnelFrame.isChunkPayload(payload)) {
+        final chunk = BridgeTunnelFrame.decodeChunkPayload(payload);
+        if (chunk.isNotEmpty) {
+          bridgeSocket.add(chunk);
+        }
+        continue;
+      }
+      if (BridgeTunnelFrame.isClosePayload(payload)) {
+        BridgeTunnelFrame.decodeClosePayload(payload);
+        break;
+      }
+      throw const FormatException(
+        'unexpected bridge frame while detached socket tunnel is active',
+      );
+    }
+  } finally {
+    await detachedSocket.close();
+    try {
+      await outboundTask;
+    } catch (_) {}
+  }
 }
 
 final class _BridgeSocketWriter {
@@ -822,58 +1037,80 @@ final class _BridgeSocketWriter {
 
   final Socket _socket;
 
-  Future<void> writeFrame(Uint8List payload) async {
+  void writeFrame(Uint8List payload) {
     if (payload.length > _maxBridgeFrameBytes) {
       throw FormatException(
         'bridge response frame too large: ${payload.length}',
       );
     }
-    final header = Uint8List(4);
-    _writeUint32(header, 0, payload.length);
-    _socket.add(header);
+    final header = Uint32List(1);
+    ByteData.sublistView(header).setUint32(0, payload.length, Endian.big);
+    _socket.add(header.buffer.asUint8List());
     if (payload.isNotEmpty) {
       _socket.add(payload);
     }
   }
 
-  Future<void> writeResponseFrame(BridgeResponseFrame response) async {
+  void writeResponseFrame(BridgeResponseFrame response) {
     final body = response.bodyBytes;
     final prefix = response.encodePayloadPrefixWithoutBody();
     final payloadLength = prefix.length + body.length;
     if (payloadLength > _maxBridgeFrameBytes) {
       throw FormatException('bridge response frame too large: $payloadLength');
     }
-    final header = Uint8List(4);
-    _writeUint32(header, 0, payloadLength);
-    _socket.add(header);
+    final header = Uint32List(1);
+    ByteData.sublistView(header).setUint32(0, payloadLength, Endian.big);
+    _socket.add(header.buffer.asUint8List());
     _socket.add(prefix);
     if (body.isNotEmpty) {
       _socket.add(body);
     }
   }
 
-  Future<void> writeChunkFrame(int frameType, Uint8List chunkBytes) async {
+  void writeChunkFrame(int frameType, Uint8List chunkBytes) {
     final payloadLength = 6 + chunkBytes.length;
     if (payloadLength > _maxBridgeFrameBytes) {
       throw FormatException('bridge response frame too large: $payloadLength');
     }
     final prelude = Uint8List(10);
-    _writeUint32(prelude, 0, payloadLength);
+    final preludeData = ByteData.sublistView(prelude);
+    preludeData.setUint32(0, payloadLength, Endian.big);
     prelude[4] = bridgeFrameProtocolVersion;
     prelude[5] = frameType & 0xff;
-    _writeUint32(prelude, 6, chunkBytes.length);
+    preludeData.setUint32(6, chunkBytes.length, Endian.big);
     _socket.add(prelude);
     if (chunkBytes.isNotEmpty) {
       _socket.add(chunkBytes);
     }
   }
+
+  Future<void> writeChunkFrameAndFlush(
+    int frameType,
+    Uint8List chunkBytes,
+  ) async {
+    writeChunkFrame(frameType, chunkBytes);
+    await _socket.flush();
+  }
 }
 
-void _writeUint32(Uint8List target, int offset, int value) {
-  target[offset] = (value >> 24) & 0xff;
-  target[offset + 1] = (value >> 16) & 0xff;
-  target[offset + 2] = (value >> 8) & 0xff;
-  target[offset + 3] = value & 0xff;
+final class _DirectHeaderListView extends ListBase<MapEntry<String, String>> {
+  _DirectHeaderListView(this._frame);
+
+  final BridgeRequestFrame _frame;
+
+  @override
+  int get length => _frame.headerCount;
+
+  @override
+  set length(int _) => throw UnsupportedError('unmodifiable');
+
+  @override
+  MapEntry<String, String> operator [](int index) =>
+      MapEntry(_frame.headerNameAt(index), _frame.headerValueAt(index));
+
+  @override
+  void operator []=(int index, MapEntry<String, String> value) =>
+      throw UnsupportedError('unmodifiable');
 }
 
 bool _equalsAsciiIgnoreCase(String a, String b) {
@@ -909,11 +1146,13 @@ final class _SocketFrameReader {
   int _availableBytes = 0;
 
   Future<Uint8List?> readFrame() async {
-    final hasHeader = await _ensureAvailableOrNull(4);
-    if (!hasHeader) {
+    final headerBytes = await _readExactOrNull(4);
+    if (headerBytes == null) {
       return null;
     }
-    final payloadLength = _readUint32FromBuffer();
+    final payloadLength = ByteData.sublistView(
+      headerBytes,
+    ).getUint32(0, Endian.big);
     if (payloadLength > _maxBridgeFrameBytes) {
       throw FormatException('bridge frame too large: $payloadLength');
     }
@@ -989,25 +1228,5 @@ final class _SocketFrameReader {
       _availableBytes += chunk.length;
     }
     return true;
-  }
-
-  int _readByteFromBuffer() {
-    final chunk = _chunks.first;
-    final value = chunk[_chunkOffset];
-    _chunkOffset += 1;
-    _availableBytes -= 1;
-    if (_chunkOffset == chunk.length) {
-      _chunks.removeFirst();
-      _chunkOffset = 0;
-    }
-    return value;
-  }
-
-  int _readUint32FromBuffer() {
-    final b0 = _readByteFromBuffer();
-    final b1 = _readByteFromBuffer();
-    final b2 = _readByteFromBuffer();
-    final b3 = _readByteFromBuffer();
-    return (b0 << 24) | (b1 << 16) | (b2 << 8) | b3;
   }
 }

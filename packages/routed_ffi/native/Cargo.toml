@@ -12,9 +12,13 @@ axum = { version = "0.8.6", default-features = false, features = ["http1", "http
 h3 = "0.0.8"
 h3-axum = "0.2.0"
 h3-quinn = "0.0.10"
+hyper = { version = "1.8.1", default-features = false, features = ["http1", "server"] }
 hyper-util = { version = "0.1.17", features = ["server-auto", "tokio", "http1", "http2"] }
 quinn = "0.11.9"
+pkcs8 = { version = "0.10.2", features = ["std", "pem", "encryption"] }
 rustls-pemfile = "2.2.0"
+rustls-native-certs = "0.8.2"
+socket2 = { version = "0.5.10", features = ["all"] }
 tokio = { version = "1.48.0", features = ["rt-multi-thread", "sync", "net", "time", "io-util"] }
 tokio-rustls = "0.26.4"
 tokio-stream = "0.1.17"

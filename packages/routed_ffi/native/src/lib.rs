@@ -8,21 +8,25 @@ use std::sync::Arc;
 use std::thread;
 use std::time::Duration;
 
-use axum::body::{Body, BodyDataStream, Bytes};
+use axum::body::{Body, BodyDataStream, Bytes, HttpBody};
 use axum::extract::State;
-use axum::http::{Request, Response, StatusCode, Version};
+use axum::http::{HeaderMap, Request, Response, StatusCode, Version};
 use axum::routing::any;
 use axum::Router;
+use hyper::upgrade::OnUpgrade;
 use hyper_util::rt::{TokioExecutor, TokioIo};
 use hyper_util::server::conn::auto::Builder as AutoBuilder;
 use hyper_util::service::TowerToHyperService;
 use parking_lot::Mutex;
+use pkcs8::der::pem::PemLabel;
+use socket2::{Domain, Protocol, Socket, Type};
 use tokio::io::{AsyncRead, AsyncReadExt, AsyncWrite, AsyncWriteExt};
 #[cfg(unix)]
 use tokio::net::UnixStream;
 use tokio::net::{TcpListener, TcpStream};
 use tokio::sync::{mpsc, oneshot};
-use tokio_rustls::rustls::ServerConfig;
+use tokio_rustls::rustls::server::WebPkiClientVerifier;
+use tokio_rustls::rustls::{RootCertStore, ServerConfig};
 use tokio_rustls::TlsAcceptor;
 use tokio_stream::{wrappers::ReceiverStream, StreamExt};
 
@@ -38,6 +42,8 @@ const BRIDGE_REQUEST_END_FRAME_TYPE: u8 = 5;
 const BRIDGE_RESPONSE_START_FRAME_TYPE: u8 = 6;
 const BRIDGE_RESPONSE_CHUNK_FRAME_TYPE: u8 = 7;
 const BRIDGE_RESPONSE_END_FRAME_TYPE: u8 = 8;
+const BRIDGE_TUNNEL_CHUNK_FRAME_TYPE: u8 = 9;
+const BRIDGE_TUNNEL_CLOSE_FRAME_TYPE: u8 = 10;
 const BRIDGE_BACKEND_KIND_TCP: u8 = 0;
 const BRIDGE_BACKEND_KIND_UNIX: u8 = 1;
 const BENCHMARK_MODE_NONE: u8 = 0;
@@ -52,9 +58,14 @@ pub struct RoutedFfiProxyConfig {
     pub backend_port: u16,
     pub backend_kind: u8,
     pub backend_path: *const c_char,
+    pub backlog: u32,
+    pub v6_only: u8,
+    pub shared: u8,
+    pub request_client_certificate: u8,
     pub http3: u8,
     pub tls_cert_path: *const c_char,
     pub tls_key_path: *const c_char,
+    pub tls_cert_password: *const c_char,
     pub benchmark_mode: u8,
 }
 
@@ -68,6 +79,7 @@ struct ProxyState {
 struct ProxyTlsConfig {
     cert_path: String,
     key_path: String,
+    cert_password: Option<String>,
 }
 
 pub struct ProxyServerHandle {
@@ -78,13 +90,18 @@ pub struct ProxyServerHandle {
 struct BridgePool {
     endpoint: BridgeEndpoint,
     max_idle: usize,
-    hot: Mutex<Option<BoxBridgeStream>>,
-    idle: Mutex<Vec<BoxBridgeStream>>,
+    hot: Mutex<Option<BridgeConnection>>,
+    idle: Mutex<Vec<BridgeConnection>>,
 }
 
 trait BridgeStream: AsyncRead + AsyncWrite + Unpin + Send {}
 impl<T> BridgeStream for T where T: AsyncRead + AsyncWrite + Unpin + Send {}
 type BoxBridgeStream = Box<dyn BridgeStream>;
+
+struct BridgeConnection {
+    stream: BoxBridgeStream,
+    read_buffer: Vec<u8>,
+}
 
 #[derive(Clone)]
 enum BridgeEndpoint {
@@ -105,7 +122,7 @@ impl BridgePool {
         }
     }
 
-    async fn acquire(&self) -> Result<BoxBridgeStream, String> {
+    async fn acquire(&self) -> Result<BridgeConnection, String> {
         {
             let mut hot = self.hot.lock();
             if let Some(stream) = hot.take() {
@@ -122,7 +139,7 @@ impl BridgePool {
         self.connect_new().await
     }
 
-    async fn connect_new(&self) -> Result<BoxBridgeStream, String> {
+    async fn connect_new(&self) -> Result<BridgeConnection, String> {
         match &self.endpoint {
             BridgeEndpoint::Tcp(addr) => {
                 let stream = TcpStream::connect(addr)
@@ -131,14 +148,20 @@ impl BridgePool {
                 stream
                     .set_nodelay(true)
                     .map_err(|error| format!("set_nodelay failed: {error}"))?;
-                Ok(Box::new(stream))
+                Ok(BridgeConnection {
+                    stream: Box::new(stream),
+                    read_buffer: Vec::with_capacity(8 * 1024),
+                })
             }
             #[cfg(unix)]
             BridgeEndpoint::Unix(path) => {
                 let stream = UnixStream::connect(path)
                     .await
                     .map_err(|error| format!("connect failed: {error}"))?;
-                Ok(Box::new(stream))
+                Ok(BridgeConnection {
+                    stream: Box::new(stream),
+                    read_buffer: Vec::with_capacity(8 * 1024),
+                })
             }
             #[cfg(not(unix))]
             BridgeEndpoint::Unix(_) => {
@@ -147,38 +170,51 @@ impl BridgePool {
         }
     }
 
-    fn release(&self, socket: BoxBridgeStream) {
-        let mut socket = Some(socket);
+    fn release(&self, mut connection: BridgeConnection) {
+        // Prevent one oversized frame from permanently bloating pooled buffers.
+        if connection.read_buffer.capacity() > MAX_BRIDGE_FRAME_BYTES {
+            connection.read_buffer = Vec::with_capacity(8 * 1024);
+        } else {
+            connection.read_buffer.clear();
+        }
+        let mut connection = Some(connection);
         {
             let mut hot = self.hot.lock();
             if hot.is_none() {
-                *hot = socket.take();
+                *hot = connection.take();
             }
         }
-        let Some(socket) = socket else {
+        let Some(connection) = connection else {
             return;
         };
         let mut idle = self.idle.lock();
         if idle.len() < self.max_idle {
-            idle.push(socket);
+            idle.push(connection);
         }
     }
 }
 
-struct BridgeRequest {
-    method: String,
-    scheme: String,
-    authority: String,
-    path: String,
-    query: String,
-    protocol: String,
-    headers: Vec<(String, String)>,
+struct BridgeRequestRef<'a> {
+    method: &'a str,
+    scheme: &'a str,
+    authority: &'a str,
+    path: &'a str,
+    query: &'a str,
+    protocol: &'a str,
+    headers: &'a HeaderMap,
 }
 
 struct BridgeResponse {
     status: u16,
-    headers: Vec<(String, String)>,
+    headers: Vec<(axum::http::header::HeaderName, axum::http::HeaderValue)>,
     body_bytes: Bytes,
+}
+
+struct BridgeCallResult {
+    status: u16,
+    headers: Vec<(axum::http::header::HeaderName, axum::http::HeaderValue)>,
+    body: Body,
+    tunnel_socket: Option<BridgeConnection>,
 }
 
 #[no_mangle]
@@ -240,6 +276,10 @@ pub extern "C" fn routed_ffi_start_proxy_server(
         }
     };
     let enable_http3 = config.http3 != 0;
+    let backlog = config.backlog;
+    let v6_only = config.v6_only != 0;
+    let shared = config.shared != 0;
+    let request_client_certificate = config.request_client_certificate != 0;
     let benchmark_mode = config.benchmark_mode;
     if benchmark_mode != BENCHMARK_MODE_NONE && benchmark_mode != BENCHMARK_MODE_STATIC_OK {
         eprintln!("[routed_ffi_native] invalid benchmark_mode: {benchmark_mode}");
@@ -247,11 +287,14 @@ pub extern "C" fn routed_ffi_start_proxy_server(
     }
     let tls_cert_path = c_string_to_string(config.tls_cert_path).filter(|value| !value.is_empty());
     let tls_key_path = c_string_to_string(config.tls_key_path).filter(|value| !value.is_empty());
+    let tls_cert_password =
+        c_string_to_string(config.tls_cert_password).filter(|value| !value.is_empty());
     let tls_config = match (tls_cert_path, tls_key_path) {
         (None, None) => None,
         (Some(cert_path), Some(key_path)) => Some(ProxyTlsConfig {
             cert_path,
             key_path,
+            cert_password: tls_cert_password,
         }),
         _ => {
             eprintln!(
@@ -283,7 +326,7 @@ pub extern "C" fn routed_ffi_start_proxy_server(
         };
 
         runtime.block_on(async move {
-            let listener = match tokio::net::TcpListener::bind(format!("{host}:{port}")).await {
+            let listener = match bind_tcp_listener(&host, port, backlog, v6_only, shared).await {
                 Ok(listener) => listener,
                 Err(error) => {
                     let _ = startup_tx.send(Err(format!("bind failed: {error}")));
@@ -308,9 +351,22 @@ pub extern "C" fn routed_ffi_start_proxy_server(
 
             let result = match tls_config {
                 Some(tls_config) => {
-                    run_tls_proxy(listener, app, shutdown_rx, tls_config, enable_http3).await
+                    run_tls_proxy(
+                        listener,
+                        app,
+                        shutdown_rx,
+                        tls_config,
+                        enable_http3,
+                        request_client_certificate,
+                    )
+                    .await
                 }
                 None => {
+                    if request_client_certificate {
+                        eprintln!(
+                            "[routed_ffi_native] request_client_certificate requires tls cert/key; option ignored"
+                        );
+                    }
                     if enable_http3 {
                         eprintln!(
                             "[routed_ffi_native] http3 requested without tls cert/key; running http1/http2 only"
@@ -366,6 +422,81 @@ pub extern "C" fn routed_ffi_stop_proxy_server(handle: *mut ProxyServerHandle) {
     }
 }
 
+async fn bind_tcp_listener(
+    host: &str,
+    port: u16,
+    backlog: u32,
+    v6_only: bool,
+    shared: bool,
+) -> Result<TcpListener, String> {
+    let mut resolved = tokio::net::lookup_host((host, port))
+        .await
+        .map_err(|error| format!("resolve {host}:{port} failed: {error}"))?;
+    let mut last_error: Option<String> = None;
+
+    while let Some(addr) = resolved.next() {
+        match bind_tcp_listener_addr(addr, backlog, v6_only, shared) {
+            Ok(listener) => return Ok(listener),
+            Err(error) => {
+                last_error = Some(format!("bind {addr} failed: {error}"));
+            }
+        }
+    }
+
+    Err(last_error.unwrap_or_else(|| format!("no resolved addresses for {host}:{port}")))
+}
+
+fn bind_tcp_listener_addr(
+    addr: SocketAddr,
+    backlog: u32,
+    v6_only: bool,
+    shared: bool,
+) -> Result<TcpListener, String> {
+    let domain = if addr.is_ipv6() {
+        Domain::IPV6
+    } else {
+        Domain::IPV4
+    };
+    let socket = Socket::new(domain, Type::STREAM, Some(Protocol::TCP))
+        .map_err(|error| format!("socket create failed: {error}"))?;
+
+    if addr.is_ipv6() {
+        socket
+            .set_only_v6(v6_only)
+            .map_err(|error| format!("set_only_v6 failed: {error}"))?;
+    }
+
+    if shared {
+        socket
+            .set_reuse_address(true)
+            .map_err(|error| format!("set_reuse_address failed: {error}"))?;
+        #[cfg(unix)]
+        socket
+            .set_reuse_port(true)
+            .map_err(|error| format!("set_reuse_port failed: {error}"))?;
+    }
+
+    socket
+        .bind(&addr.into())
+        .map_err(|error| format!("socket bind failed: {error}"))?;
+
+    let backlog = if backlog == 0 {
+        1024
+    } else {
+        backlog.min(i32::MAX as u32)
+    };
+    socket
+        .listen(backlog as i32)
+        .map_err(|error| format!("socket listen failed: {error}"))?;
+
+    socket
+        .set_nonblocking(true)
+        .map_err(|error| format!("set_nonblocking failed: {error}"))?;
+
+    let listener = std::net::TcpListener::from(socket);
+    TcpListener::from_std(listener).map_err(|error| format!("from_std failed: {error}"))
+}
+
 async fn run_plain_proxy(
     listener: TcpListener,
     app: Router,
@@ -419,16 +550,28 @@ async fn run_tls_proxy(
     mut shutdown_rx: oneshot::Receiver<()>,
     tls_config: ProxyTlsConfig,
     enable_http3: bool,
+    request_client_certificate: bool,
 ) -> Result<(), String> {
     ensure_rustls_crypto_provider()?;
-    let tls = load_tls_server_config(&tls_config.cert_path, &tls_config.key_path)?;
+    let tls = load_tls_server_config(
+        &tls_config.cert_path,
+        &tls_config.key_path,
+        tls_config.cert_password.as_deref(),
+        request_client_certificate,
+    )?;
     let acceptor = TlsAcceptor::from(Arc::new(tls));
     let mut connections = tokio::task::JoinSet::new();
     let local_addr = listener
         .local_addr()
         .map_err(|error| format!("local_addr failed: {error}"))?;
     let h3_endpoint = if enable_http3 {
-        match create_h3_endpoint(local_addr, &tls_config.cert_path, &tls_config.key_path) {
+        match create_h3_endpoint(
+            local_addr,
+            &tls_config.cert_path,
+            &tls_config.key_path,
+            tls_config.cert_password.as_deref(),
+            request_client_certificate,
+        ) {
             Ok(endpoint) => {
                 eprintln!(
                     "[routed_ffi_native] http3 endpoint enabled on https://{}:{}",
@@ -564,14 +707,26 @@ fn ensure_rustls_crypto_provider() -> Result<(), String> {
     Err("failed to install rustls crypto provider".to_string())
 }
 
-fn load_tls_server_config(cert_path: &str, key_path: &str) -> Result<ServerConfig, String> {
+fn load_tls_server_config(
+    cert_path: &str,
+    key_path: &str,
+    key_password: Option<&str>,
+    request_client_certificate: bool,
+) -> Result<ServerConfig, String> {
     let certs = load_tls_cert_chain(cert_path)?;
 
-    let key = load_tls_private_key(key_path)?;
-    let mut server_config = ServerConfig::builder()
-        .with_no_client_auth()
-        .with_single_cert(certs, key)
-        .map_err(|error| format!("invalid tls cert/key pair: {error}"))?;
+    let key = load_tls_private_key(key_path, key_password)?;
+    let mut server_config = if request_client_certificate {
+        ServerConfig::builder()
+            .with_client_cert_verifier(load_optional_client_verifier()?)
+            .with_single_cert(certs, key)
+            .map_err(|error| format!("invalid tls cert/key pair: {error}"))?
+    } else {
+        ServerConfig::builder()
+            .with_no_client_auth()
+            .with_single_cert(certs, key)
+            .map_err(|error| format!("invalid tls cert/key pair: {error}"))?
+    };
     server_config.alpn_protocols = vec![b"h2".to_vec(), b"http/1.1".to_vec()];
     Ok(server_config)
 }
@@ -595,7 +750,29 @@ fn load_tls_cert_chain(
 
 fn load_tls_private_key(
     key_path: &str,
+    key_password: Option<&str>,
 ) -> Result<tokio_rustls::rustls::pki_types::PrivateKeyDer<'static>, String> {
+    if let Some(password) = key_password {
+        let key_pem = std::fs::read_to_string(key_path)
+            .map_err(|error| format!("read tls key failed ({key_path}): {error}"))?;
+        if key_pem.contains("BEGIN ENCRYPTED PRIVATE KEY") {
+            let (label, doc) = pkcs8::der::SecretDocument::from_pem(&key_pem)
+                .map_err(|error| format!("read encrypted key pem failed ({key_path}): {error}"))?;
+            pkcs8::EncryptedPrivateKeyInfo::validate_pem_label(&label).map_err(|error| {
+                format!("invalid encrypted key pem label ({key_path}): {error}")
+            })?;
+            let encrypted =
+                pkcs8::EncryptedPrivateKeyInfo::try_from(doc.as_bytes()).map_err(|error| {
+                    format!("parse encrypted pkcs8 key failed ({key_path}): {error}")
+                })?;
+            let decrypted = encrypted.decrypt(password).map_err(|error| {
+                format!("decrypt encrypted pkcs8 key failed ({key_path}): {error}")
+            })?;
+            let key_der = decrypted.as_bytes().to_vec();
+            return Ok(tokio_rustls::rustls::pki_types::PrivatePkcs8KeyDer::from(key_der).into());
+        }
+    }
+
     let pkcs8_file = File::open(key_path)
         .map_err(|error| format!("open tls key failed ({key_path}): {error}"))?;
     let mut pkcs8_reader = BufReader::new(pkcs8_file);
@@ -625,14 +802,23 @@ fn create_h3_endpoint(
     addr: SocketAddr,
     cert_path: &str,
     key_path: &str,
+    key_password: Option<&str>,
+    request_client_certificate: bool,
 ) -> Result<quinn::Endpoint, String> {
     let certs = load_tls_cert_chain(cert_path)?;
-    let key = load_tls_private_key(key_path)?;
+    let key = load_tls_private_key(key_path, key_password)?;
 
-    let mut tls_config = ServerConfig::builder()
-        .with_no_client_auth()
-        .with_single_cert(certs, key)
-        .map_err(|error| format!("invalid h3 tls cert/key pair: {error}"))?;
+    let mut tls_config = if request_client_certificate {
+        ServerConfig::builder()
+            .with_client_cert_verifier(load_optional_client_verifier()?)
+            .with_single_cert(certs, key)
+            .map_err(|error| format!("invalid h3 tls cert/key pair: {error}"))?
+    } else {
+        ServerConfig::builder()
+            .with_no_client_auth()
+            .with_single_cert(certs, key)
+            .map_err(|error| format!("invalid h3 tls cert/key pair: {error}"))?
+    };
     tls_config.alpn_protocols = vec![b"h3".to_vec()];
     tls_config.max_early_data_size = u32::MAX;
 
@@ -652,6 +838,32 @@ fn create_h3_endpoint(
 
     quinn::Endpoint::server(server_config, addr)
         .map_err(|error| format!("bind h3 endpoint failed: {error}"))
+}
+
+fn load_optional_client_verifier(
+) -> Result<Arc<dyn tokio_rustls::rustls::server::danger::ClientCertVerifier>, String> {
+    let roots = load_native_root_store()?;
+    let verifier = WebPkiClientVerifier::builder(roots.into())
+        .allow_unauthenticated()
+        .build()
+        .map_err(|error| format!("build client verifier failed: {error}"))?;
+    Ok(verifier)
+}
+
+fn load_native_root_store() -> Result<RootCertStore, String> {
+    let mut roots = RootCertStore::empty();
+    let native = rustls_native_certs::load_native_certs();
+    if !native.errors.is_empty() {
+        eprintln!(
+            "[routed_ffi_native] some native root certificates failed to load: {}",
+            native.errors.len()
+        );
+    }
+    if native.certs.is_empty() {
+        return Err("no native root certificates available for client verification".to_string());
+    }
+    roots.add_parsable_certificates(native.certs);
+    Ok(roots)
 }
 
 async fn handle_h3_connection(incoming: quinn::Incoming, app: Router) -> Result<(), String> {
@@ -692,76 +904,86 @@ async fn proxy_request(State(state): State<ProxyState>, request: Request<Body>) 
         return benchmark_static_ok_response();
     }
 
-    let (parts, body) = request.into_parts();
-
-    if is_websocket_upgrade(&parts.headers) {
-        return text_response(
-            StatusCode::NOT_IMPLEMENTED,
-            "websocket upgrade is not yet supported by routed_ffi bridge",
-        );
-    }
+    let (mut parts, body) = request.into_parts();
+    let websocket_upgrade_requested = is_websocket_upgrade(&parts.headers);
+    let upgrade = if websocket_upgrade_requested {
+        parts.extensions.remove::<OnUpgrade>()
+    } else {
+        None
+    };
 
     let path_and_query = parts
         .uri
         .path_and_query()
         .map(|value| value.as_str())
         .unwrap_or(parts.uri.path());
-    let (path, query) = split_path_and_query(path_and_query);
-
+    let (path, query) = split_path_and_query_ref(path_and_query);
+    let request_body_known_empty = body.size_hint().exact() == Some(0);
     let body_stream = body.into_data_stream();
 
     let authority = parts
         .headers
         .get("host")
         .and_then(|value| value.to_str().ok())
-        .unwrap_or_default()
-        .to_string();
-    let scheme = parts.uri.scheme_str().unwrap_or("http").to_string();
+        .unwrap_or_default();
+    let scheme = parts.uri.scheme_str().unwrap_or("http");
 
-    let mut headers = Vec::with_capacity(parts.headers.len());
-    for (name, value) in parts.headers.iter() {
-        let value = match value.to_str() {
-            Ok(value) => value.to_string(),
-            Err(_) => continue,
-        };
-        headers.push((name.as_str().to_string(), value));
-    }
-
-    let bridge_request = BridgeRequest {
-        method: parts.method.as_str().to_string(),
+    let bridge_request = BridgeRequestRef {
+        method: parts.method.as_str(),
         scheme,
         authority,
         path,
         query,
-        protocol: http_version_to_protocol(parts.version).to_string(),
-        headers,
+        protocol: http_version_to_protocol(parts.version),
+        headers: &parts.headers,
     };
 
-    let (bridge_status, bridge_headers, bridge_body) =
-        match call_bridge(&state.bridge_pool, bridge_request, body_stream).await {
-            Ok(response) => response,
-            Err(error) => {
-                return text_response(
-                    StatusCode::BAD_GATEWAY,
-                    format!("bridge call failed: {error}"),
-                );
-            }
-        };
+    let mut bridge_result = match call_bridge(
+        &state.bridge_pool,
+        bridge_request,
+        body_stream,
+        request_body_known_empty,
+        websocket_upgrade_requested,
+    )
+    .await
+    {
+        Ok(response) => response,
+        Err(error) => {
+            return text_response(
+                StatusCode::BAD_GATEWAY,
+                format!("bridge call failed: {error}"),
+            );
+        }
+    };
 
-    let status = match StatusCode::from_u16(bridge_status) {
+    let status = match StatusCode::from_u16(bridge_result.status) {
         Ok(status) => status,
         Err(_) => StatusCode::BAD_GATEWAY,
     };
 
-    let mut response = Response::new(bridge_body);
+    if websocket_upgrade_requested && status == StatusCode::SWITCHING_PROTOCOLS {
+        let Some(upgrade) = upgrade else {
+            return text_response(
+                StatusCode::BAD_GATEWAY,
+                "websocket upgrade failed: missing hyper upgrade handle",
+            );
+        };
+        let Some(tunnel_connection) = bridge_result.tunnel_socket.take() else {
+            return text_response(
+                StatusCode::BAD_GATEWAY,
+                "websocket upgrade failed: bridge did not expose detached socket",
+            );
+        };
+        tokio::spawn(async move {
+            if let Err(error) = run_websocket_tunnel(upgrade, tunnel_connection.stream).await {
+                eprintln!("[routed_ffi_native] websocket tunnel error: {error}");
+            }
+        });
+    }
+
+    let mut response = Response::new(bridge_result.body);
     *response.status_mut() = status;
-    for (name, value) in bridge_headers {
-        let Ok(header_name) = axum::http::header::HeaderName::from_bytes(name.as_bytes()) else {
-            continue;
-        };
-        let Ok(header_value) = axum::http::HeaderValue::from_str(&value) else {
-            continue;
-        };
+    for (header_name, header_value) in bridge_result.headers {
         response.headers_mut().append(header_name, header_value);
     }
     response
@@ -779,40 +1001,61 @@ fn benchmark_static_ok_response() -> Response<Body> {
 
 async fn call_bridge(
     bridge_pool: &Arc<BridgePool>,
-    request: BridgeRequest,
+    request: BridgeRequestRef<'_>,
     mut request_body_stream: BodyDataStream,
-) -> Result<(u16, Vec<(String, String)>, Body), String> {
-    let mut socket = bridge_pool.acquire().await?;
+    request_body_known_empty: bool,
+    websocket_upgrade_requested: bool,
+) -> Result<BridgeCallResult, String> {
+    let mut connection = bridge_pool.acquire().await?;
     let mut request_body_empty = true;
     if let Err(error) = write_bridge_request(
-        &mut *socket,
+        &mut *connection.stream,
         &request,
         &mut request_body_stream,
         &mut request_body_empty,
+        request_body_known_empty,
     )
     .await
     {
         if request_body_empty {
-            return call_bridge_retry_empty_body(bridge_pool, &request).await;
+            return call_bridge_retry_empty_body(
+                bridge_pool,
+                &request,
+                websocket_upgrade_requested,
+            )
+            .await;
         }
         return Err(error);
     }
 
-    let first_payload = match read_bridge_frame(&mut *socket).await? {
-        Some(payload) => payload,
-        None => {
-            if request_body_empty {
-                return call_bridge_retry_empty_body(bridge_pool, &request).await;
-            }
-            return Err("bridge closed connection without response".to_string());
+    if !read_bridge_frame_reuse(&mut *connection.stream, &mut connection.read_buffer).await? {
+        if request_body_empty {
+            return call_bridge_retry_empty_body(
+                bridge_pool,
+                &request,
+                websocket_upgrade_requested,
+            )
+            .await;
         }
-    };
+        return Err("bridge closed connection without response".to_string());
+    }
 
-    match decode_bridge_response_stream(socket, first_payload, bridge_pool.clone()).await {
+    match decode_bridge_response_stream(
+        connection,
+        bridge_pool.clone(),
+        websocket_upgrade_requested,
+    )
+    .await
+    {
         Ok(response) => Ok(response),
         Err(error) => {
             if request_body_empty {
-                return call_bridge_retry_empty_body(bridge_pool, &request).await;
+                return call_bridge_retry_empty_body(
+                    bridge_pool,
+                    &request,
+                    websocket_upgrade_requested,
+                )
+                .await;
             }
             Err(error)
         }
@@ -821,23 +1064,30 @@ async fn call_bridge(
 
 async fn call_bridge_retry_empty_body(
     bridge_pool: &Arc<BridgePool>,
-    request: &BridgeRequest,
-) -> Result<(u16, Vec<(String, String)>, Body), String> {
-    let mut socket = bridge_pool.connect_new().await?;
-    write_bridge_empty_request(&mut *socket, request).await?;
-    let first_payload = match read_bridge_frame(&mut *socket).await? {
-        Some(payload) => payload,
-        None => return Err("bridge closed connection without response".to_string()),
-    };
-    decode_bridge_response_stream(socket, first_payload, bridge_pool.clone()).await
+    request: &BridgeRequestRef<'_>,
+    websocket_upgrade_requested: bool,
+) -> Result<BridgeCallResult, String> {
+    let mut connection = bridge_pool.connect_new().await?;
+    write_bridge_empty_request(&mut *connection.stream, request).await?;
+    if !read_bridge_frame_reuse(&mut *connection.stream, &mut connection.read_buffer).await? {
+        return Err("bridge closed connection without response".to_string());
+    }
+    decode_bridge_response_stream(connection, bridge_pool.clone(), websocket_upgrade_requested)
+        .await
 }
 
 async fn write_bridge_request(
     socket: &mut dyn BridgeStream,
-    request: &BridgeRequest,
+    request: &BridgeRequestRef<'_>,
     request_body_stream: &mut BodyDataStream,
     request_body_empty: &mut bool,
+    request_body_known_empty: bool,
 ) -> Result<(), String> {
+    if request_body_known_empty {
+        *request_body_empty = true;
+        write_bridge_empty_request(socket, request).await?;
+        return Ok(());
+    }
     *request_body_empty = true;
     let mut first_non_empty_chunk: Option<Bytes> = None;
     while let Some(next_chunk) = request_body_stream.next().await {
@@ -881,7 +1131,7 @@ async fn write_bridge_request(
 
 async fn write_bridge_empty_request(
     socket: &mut dyn BridgeStream,
-    request: &BridgeRequest,
+    request: &BridgeRequestRef<'_>,
 ) -> Result<(), String> {
     let payload = encode_bridge_request(request, &[])?;
     write_bridge_frame(socket, &payload).await
@@ -908,45 +1158,60 @@ async fn write_bridge_request_body_chunk(
     Ok(total_body_bytes)
 }
 
-fn encode_bridge_request_start(request: &BridgeRequest) -> Result<Vec<u8>, String> {
+fn encode_bridge_request_start(request: &BridgeRequestRef<'_>) -> Result<Vec<u8>, String> {
     let mut writer = BridgeByteWriter::new();
+    writer.reserve(256 + request.headers.len() * 32);
     writer.put_u8(BRIDGE_PROTOCOL_VERSION);
     writer.put_u8(BRIDGE_REQUEST_START_FRAME_TYPE);
-    writer.put_string(&request.method)?;
-    writer.put_string(&request.scheme)?;
-    writer.put_string(&request.authority)?;
-    writer.put_string(&request.path)?;
-    writer.put_string(&request.query)?;
-    writer.put_string(&request.protocol)?;
-    writer.put_u32(
-        u32::try_from(request.headers.len())
-            .map_err(|_| "bridge request has too many headers".to_string())?,
-    );
+    writer.put_string(request.method)?;
+    writer.put_string(request.scheme)?;
+    writer.put_string(request.authority)?;
+    writer.put_string(request.path)?;
+    writer.put_string(request.query)?;
+    writer.put_string(request.protocol)?;
+    let count_pos = writer.reserve_u32();
+    let mut count: u32 = 0;
     for (name, value) in request.headers.iter() {
-        writer.put_string(name)?;
+        let Ok(value) = value.to_str() else {
+            continue;
+        };
+        count = count
+            .checked_add(1)
+            .ok_or_else(|| "bridge request has too many headers".to_string())?;
+        writer.put_string(name.as_str())?;
         writer.put_string(value)?;
     }
+    writer.patch_u32(count_pos, count);
     Ok(writer.into_inner())
 }
 
-fn encode_bridge_request(request: &BridgeRequest, body_bytes: &[u8]) -> Result<Vec<u8>, String> {
+fn encode_bridge_request(
+    request: &BridgeRequestRef<'_>,
+    body_bytes: &[u8],
+) -> Result<Vec<u8>, String> {
     let mut writer = BridgeByteWriter::new();
+    writer.reserve(256 + request.headers.len() * 32 + body_bytes.len());
     writer.put_u8(BRIDGE_PROTOCOL_VERSION);
     writer.put_u8(BRIDGE_REQUEST_FRAME_TYPE);
-    writer.put_string(&request.method)?;
-    writer.put_string(&request.scheme)?;
-    writer.put_string(&request.authority)?;
-    writer.put_string(&request.path)?;
-    writer.put_string(&request.query)?;
-    writer.put_string(&request.protocol)?;
-    writer.put_u32(
-        u32::try_from(request.headers.len())
-            .map_err(|_| "bridge request has too many headers".to_string())?,
-    );
+    writer.put_string(request.method)?;
+    writer.put_string(request.scheme)?;
+    writer.put_string(request.authority)?;
+    writer.put_string(request.path)?;
+    writer.put_string(request.query)?;
+    writer.put_string(request.protocol)?;
+    let count_pos = writer.reserve_u32();
+    let mut count: u32 = 0;
     for (name, value) in request.headers.iter() {
-        writer.put_string(name)?;
+        let Ok(value) = value.to_str() else {
+            continue;
+        };
+        count = count
+            .checked_add(1)
+            .ok_or_else(|| "bridge request has too many headers".to_string())?;
+        writer.put_string(name.as_str())?;
         writer.put_string(value)?;
     }
+    writer.patch_u32(count_pos, count);
     writer.put_bytes(body_bytes)?;
     Ok(writer.into_inner())
 }
@@ -957,6 +1222,21 @@ fn encode_bridge_request_end() -> Vec<u8> {
 
 async fn write_bridge_request_chunk_frame(
     socket: &mut dyn BridgeStream,
+    chunk: &[u8],
+) -> Result<(), String> {
+    write_bridge_chunk_frame_with_type(socket, BRIDGE_REQUEST_CHUNK_FRAME_TYPE, chunk).await
+}
+
+async fn write_bridge_tunnel_chunk_frame<S: AsyncWrite + Unpin + ?Sized>(
+    socket: &mut S,
+    chunk: &[u8],
+) -> Result<(), String> {
+    write_bridge_chunk_frame_with_type(socket, BRIDGE_TUNNEL_CHUNK_FRAME_TYPE, chunk).await
+}
+
+async fn write_bridge_chunk_frame_with_type<S: AsyncWrite + Unpin + ?Sized>(
+    socket: &mut S,
+    frame_type: u8,
     chunk: &[u8],
 ) -> Result<(), String> {
     let chunk_len = u32::try_from(chunk.len())
@@ -973,7 +1253,7 @@ async fn write_bridge_request_chunk_frame(
     let header = payload_len.to_be_bytes();
     let mut prefix = [0_u8; 6];
     prefix[0] = BRIDGE_PROTOCOL_VERSION;
-    prefix[1] = BRIDGE_REQUEST_CHUNK_FRAME_TYPE;
+    prefix[1] = frame_type;
     prefix[2..6].copy_from_slice(&chunk_len.to_be_bytes());
     if chunk.is_empty() {
         write_all_vectored(socket, &[&header, &prefix])
@@ -989,20 +1269,31 @@ async fn write_bridge_request_chunk_frame(
 }
 
 async fn decode_bridge_response_stream(
-    mut socket: BoxBridgeStream,
-    first_payload: Vec<u8>,
+    mut connection: BridgeConnection,
     bridge_pool: Arc<BridgePool>,
-) -> Result<(u16, Vec<(String, String)>, Body), String> {
-    let first_frame_type = peek_bridge_frame_type(&first_payload)?;
+    websocket_upgrade_requested: bool,
+) -> Result<BridgeCallResult, String> {
+    let first_frame_type = peek_bridge_frame_type(&connection.read_buffer)?;
     if first_frame_type == BRIDGE_RESPONSE_FRAME_TYPE {
-        let legacy_response = decode_bridge_response(first_payload)
+        let legacy_response = decode_bridge_response(&connection.read_buffer)
             .map_err(|error| format!("decode response failed: {error}"))?;
-        bridge_pool.release(socket);
-        return Ok((
-            legacy_response.status,
-            legacy_response.headers,
-            Body::from(legacy_response.body_bytes),
-        ));
+        if websocket_upgrade_requested
+            && legacy_response.status == StatusCode::SWITCHING_PROTOCOLS.as_u16()
+        {
+            return Ok(BridgeCallResult {
+                status: legacy_response.status,
+                headers: legacy_response.headers,
+                body: Body::empty(),
+                tunnel_socket: Some(connection),
+            });
+        }
+        bridge_pool.release(connection);
+        return Ok(BridgeCallResult {
+            status: legacy_response.status,
+            headers: legacy_response.headers,
+            body: Body::from(legacy_response.body_bytes),
+            tunnel_socket: None,
+        });
     }
     if first_frame_type != BRIDGE_RESPONSE_START_FRAME_TYPE {
         return Err(format!(
@@ -1010,25 +1301,35 @@ async fn decode_bridge_response_stream(
         ));
     }
 
-    let (status, headers) = decode_bridge_response_start(&first_payload)
+    let (status, headers) = decode_bridge_response_start(&connection.read_buffer)
         .map_err(|error| format!("decode response failed: {error}"))?;
 
-    let next_payload = match read_bridge_frame(&mut *socket).await? {
-        Some(payload) => payload,
-        None => {
-            return Err(
-                "decode response failed: bridge closed connection before response end".to_string(),
-            )
-        }
-    };
-    let next_frame_type = peek_bridge_frame_type(&next_payload)
+    if !read_bridge_frame_reuse(&mut *connection.stream, &mut connection.read_buffer).await? {
+        return Err(
+            "decode response failed: bridge closed connection before response end".to_string(),
+        );
+    }
+    let next_frame_type = peek_bridge_frame_type(&connection.read_buffer)
         .map_err(|error| format!("decode response failed: {error}"))?;
 
     if next_frame_type == BRIDGE_RESPONSE_END_FRAME_TYPE {
-        decode_bridge_response_end(&next_payload)
+        decode_bridge_response_end(&connection.read_buffer)
             .map_err(|error| format!("decode response failed: {error}"))?;
-        bridge_pool.release(socket);
-        return Ok((status, headers, Body::empty()));
+        if websocket_upgrade_requested && status == StatusCode::SWITCHING_PROTOCOLS.as_u16() {
+            return Ok(BridgeCallResult {
+                status,
+                headers,
+                body: Body::empty(),
+                tunnel_socket: Some(connection),
+            });
+        }
+        bridge_pool.release(connection);
+        return Ok(BridgeCallResult {
+            status,
+            headers,
+            body: Body::empty(),
+            tunnel_socket: None,
+        });
     }
     if next_frame_type != BRIDGE_RESPONSE_CHUNK_FRAME_TYPE {
         return Err(format!(
@@ -1036,7 +1337,7 @@ async fn decode_bridge_response_stream(
         ));
     }
 
-    let first_chunk = decode_bridge_response_chunk(next_payload)
+    let first_chunk = decode_bridge_response_chunk(&connection.read_buffer)
         .map_err(|error| format!("decode response failed: {error}"))?;
 
     let (tx, rx) = mpsc::channel::<Result<Bytes, io::Error>>(8);
@@ -1047,22 +1348,27 @@ async fn decode_bridge_response_stream(
     }
 
     tokio::spawn(async move {
-        stream_bridge_response_chunks(socket, tx, bridge_pool).await;
+        stream_bridge_response_chunks(connection, tx, bridge_pool).await;
     });
 
-    Ok((status, headers, Body::from_stream(ReceiverStream::new(rx))))
+    Ok(BridgeCallResult {
+        status,
+        headers,
+        body: Body::from_stream(ReceiverStream::new(rx)),
+        tunnel_socket: None,
+    })
 }
 
 async fn stream_bridge_response_chunks(
-    mut socket: BoxBridgeStream,
+    mut connection: BridgeConnection,
     tx: mpsc::Sender<Result<Bytes, io::Error>>,
     bridge_pool: Arc<BridgePool>,
 ) {
     let mut total_body_bytes = 0usize;
     loop {
-        let payload = match read_bridge_frame(&mut *socket).await {
-            Ok(Some(payload)) => payload,
-            Ok(None) => {
+        match read_bridge_frame_reuse(&mut *connection.stream, &mut connection.read_buffer).await {
+            Ok(true) => {}
+            Ok(false) => {
                 let _ = tx
                     .send(Err(io::Error::new(
                         ErrorKind::UnexpectedEof,
@@ -1075,9 +1381,9 @@ async fn stream_bridge_response_chunks(
                 let _ = tx.send(Err(io::Error::new(ErrorKind::Other, error))).await;
                 return;
             }
-        };
+        }
 
-        let frame_type = match peek_bridge_frame_type(&payload) {
+        let frame_type = match peek_bridge_frame_type(&connection.read_buffer) {
             Ok(frame_type) => frame_type,
             Err(error) => {
                 let _ = tx
@@ -1088,7 +1394,7 @@ async fn stream_bridge_response_chunks(
         };
 
         if frame_type == BRIDGE_RESPONSE_CHUNK_FRAME_TYPE {
-            let chunk = match decode_bridge_response_chunk(payload) {
+            let chunk = match decode_bridge_response_chunk(&connection.read_buffer) {
                 Ok(chunk) => chunk,
                 Err(error) => {
                     let _ = tx
@@ -1128,13 +1434,13 @@ async fn stream_bridge_response_chunks(
         }
 
         if frame_type == BRIDGE_RESPONSE_END_FRAME_TYPE {
-            if let Err(error) = decode_bridge_response_end(&payload) {
+            if let Err(error) = decode_bridge_response_end(&connection.read_buffer) {
                 let _ = tx
                     .send(Err(io::Error::new(ErrorKind::InvalidData, error)))
                     .await;
                 return;
             }
-            bridge_pool.release(socket);
+            bridge_pool.release(connection);
             return;
         }
 
@@ -1148,8 +1454,75 @@ async fn stream_bridge_response_chunks(
     }
 }
 
-fn decode_bridge_response(payload: Vec<u8>) -> Result<BridgeResponse, String> {
-    let mut reader = BridgeByteReader::new(&payload);
+async fn run_websocket_tunnel(
+    upgrade: OnUpgrade,
+    bridge_socket: BoxBridgeStream,
+) -> Result<(), String> {
+    let upgraded = upgrade
+        .await
+        .map_err(|error| format!("frontend upgrade failed: {error}"))?;
+    let upgraded = TokioIo::new(upgraded);
+    let (mut frontend_reader, mut frontend_writer) = tokio::io::split(upgraded);
+    let (mut bridge_reader, mut bridge_writer) = tokio::io::split(bridge_socket);
+
+    let frontend_to_bridge = tokio::spawn(async move {
+        let mut buffer = vec![0_u8; BRIDGE_BODY_CHUNK_BYTES];
+        loop {
+            let read = frontend_reader
+                .read(&mut buffer)
+                .await
+                .map_err(|error| format!("read upgraded frontend stream failed: {error}"))?;
+            if read == 0 {
+                write_bridge_tunnel_close_frame(&mut bridge_writer).await?;
+                return Ok::<(), String>(());
+            }
+            write_bridge_tunnel_chunk_frame(&mut bridge_writer, &buffer[..read]).await?;
+        }
+    });
+
+    let bridge_to_frontend = tokio::spawn(async move {
+        loop {
+            let payload = match read_bridge_frame(&mut bridge_reader).await? {
+                Some(payload) => payload,
+                None => return Ok::<(), String>(()),
+            };
+            let frame_type = peek_bridge_frame_type(&payload)?;
+            if frame_type == BRIDGE_TUNNEL_CHUNK_FRAME_TYPE {
+                let chunk = decode_bridge_tunnel_chunk(&payload)?;
+                if !chunk.is_empty() {
+                    frontend_writer.write_all(&chunk).await.map_err(|error| {
+                        format!("write upgraded frontend stream failed: {error}")
+                    })?;
+                }
+                continue;
+            }
+            if frame_type == BRIDGE_TUNNEL_CLOSE_FRAME_TYPE {
+                decode_bridge_tunnel_close(&payload)?;
+                return Ok(());
+            }
+            return Err(format!("unexpected bridge tunnel frame type: {frame_type}"));
+        }
+    });
+
+    let (frontend_result, bridge_result) = tokio::join!(frontend_to_bridge, bridge_to_frontend);
+
+    match frontend_result {
+        Ok(Ok(())) => {}
+        Ok(Err(error)) => return Err(error),
+        Err(error) => return Err(format!("frontend-to-bridge tunnel task failed: {error}")),
+    }
+
+    match bridge_result {
+        Ok(Ok(())) => {}
+        Ok(Err(error)) => return Err(error),
+        Err(error) => return Err(format!("bridge-to-frontend tunnel task failed: {error}")),
+    }
+
+    Ok(())
+}
+
+fn decode_bridge_response(payload: &[u8]) -> Result<BridgeResponse, String> {
+    let mut reader = BridgeByteReader::new(payload);
     let version = reader.get_u8()?;
     if version != BRIDGE_PROTOCOL_VERSION {
         return Err(format!("unsupported bridge protocol version: {version}"));
@@ -1163,17 +1536,19 @@ fn decode_bridge_response(payload: Vec<u8>) -> Result<BridgeResponse, String> {
     let header_count = reader.get_u32()? as usize;
     let mut headers = Vec::with_capacity(header_count);
     for _ in 0..header_count {
-        let name = reader.get_string()?;
-        let value = reader.get_string()?;
-        headers.push((name, value));
+        let name = reader.get_bytes()?;
+        let value = reader.get_bytes()?;
+        let Ok(header_name) = axum::http::header::HeaderName::from_bytes(name) else {
+            continue;
+        };
+        let Ok(header_value) = axum::http::HeaderValue::from_bytes(value) else {
+            continue;
+        };
+        headers.push((header_name, header_value));
     }
-    let (body_start, body_len) = reader.get_bytes_range()?;
+    let body = reader.get_bytes()?;
     reader.ensure_done()?;
-    drop(reader);
-    let body_end = body_start
-        .checked_add(body_len)
-        .ok_or_else(|| "bridge response body length overflow".to_string())?;
-    let body_bytes = Bytes::from(payload).slice(body_start..body_end);
+    let body_bytes = Bytes::copy_from_slice(body);
 
     Ok(BridgeResponse {
         status,
@@ -1182,7 +1557,15 @@ fn decode_bridge_response(payload: Vec<u8>) -> Result<BridgeResponse, String> {
     })
 }
 
-fn decode_bridge_response_start(payload: &[u8]) -> Result<(u16, Vec<(String, String)>), String> {
+fn decode_bridge_response_start(
+    payload: &[u8],
+) -> Result<
+    (
+        u16,
+        Vec<(axum::http::header::HeaderName, axum::http::HeaderValue)>,
+    ),
+    String,
+> {
     let mut reader = BridgeByteReader::new(payload);
     let version = reader.get_u8()?;
     if version != BRIDGE_PROTOCOL_VERSION {
@@ -1198,16 +1581,22 @@ fn decode_bridge_response_start(payload: &[u8]) -> Result<(u16, Vec<(String, Str
     let header_count = reader.get_u32()? as usize;
     let mut headers = Vec::with_capacity(header_count);
     for _ in 0..header_count {
-        let name = reader.get_string()?;
-        let value = reader.get_string()?;
-        headers.push((name, value));
+        let name = reader.get_bytes()?;
+        let value = reader.get_bytes()?;
+        let Ok(header_name) = axum::http::header::HeaderName::from_bytes(name) else {
+            continue;
+        };
+        let Ok(header_value) = axum::http::HeaderValue::from_bytes(value) else {
+            continue;
+        };
+        headers.push((header_name, header_value));
     }
     reader.ensure_done()?;
     Ok((status, headers))
 }
 
-fn decode_bridge_response_chunk(payload: Vec<u8>) -> Result<Bytes, String> {
-    let mut reader = BridgeByteReader::new(&payload);
+fn decode_bridge_response_chunk(payload: &[u8]) -> Result<Bytes, String> {
+    let mut reader = BridgeByteReader::new(payload);
     let version = reader.get_u8()?;
     if version != BRIDGE_PROTOCOL_VERSION {
         return Err(format!("unsupported bridge protocol version: {version}"));
@@ -1218,13 +1607,9 @@ fn decode_bridge_response_chunk(payload: Vec<u8>) -> Result<Bytes, String> {
             "invalid bridge response chunk frame type: {frame_type}"
         ));
     }
-    let (chunk_start, chunk_len) = reader.get_bytes_range()?;
+    let chunk = reader.get_bytes()?;
     reader.ensure_done()?;
-    drop(reader);
-    let chunk_end = chunk_start
-        .checked_add(chunk_len)
-        .ok_or_else(|| "bridge response chunk length overflow".to_string())?;
-    Ok(Bytes::from(payload).slice(chunk_start..chunk_end))
+    Ok(Bytes::copy_from_slice(chunk))
 }
 
 fn decode_bridge_response_end(payload: &[u8]) -> Result<(), String> {
@@ -1237,6 +1622,38 @@ fn decode_bridge_response_end(payload: &[u8]) -> Result<(), String> {
     if frame_type != BRIDGE_RESPONSE_END_FRAME_TYPE {
         return Err(format!(
             "invalid bridge response end frame type: {frame_type}"
+        ));
+    }
+    reader.ensure_done()
+}
+
+fn decode_bridge_tunnel_chunk(payload: &[u8]) -> Result<Bytes, String> {
+    let mut reader = BridgeByteReader::new(payload);
+    let version = reader.get_u8()?;
+    if version != BRIDGE_PROTOCOL_VERSION {
+        return Err(format!("unsupported bridge protocol version: {version}"));
+    }
+    let frame_type = reader.get_u8()?;
+    if frame_type != BRIDGE_TUNNEL_CHUNK_FRAME_TYPE {
+        return Err(format!(
+            "invalid bridge tunnel chunk frame type: {frame_type}"
+        ));
+    }
+    let chunk = reader.get_bytes()?;
+    reader.ensure_done()?;
+    Ok(Bytes::copy_from_slice(chunk))
+}
+
+fn decode_bridge_tunnel_close(payload: &[u8]) -> Result<(), String> {
+    let mut reader = BridgeByteReader::new(payload);
+    let version = reader.get_u8()?;
+    if version != BRIDGE_PROTOCOL_VERSION {
+        return Err(format!("unsupported bridge protocol version: {version}"));
+    }
+    let frame_type = reader.get_u8()?;
+    if frame_type != BRIDGE_TUNNEL_CLOSE_FRAME_TYPE {
+        return Err(format!(
+            "invalid bridge tunnel close frame type: {frame_type}"
         ));
     }
     reader.ensure_done()
@@ -1276,6 +1693,13 @@ async fn write_bridge_frame<S: AsyncWrite + Unpin + ?Sized>(
     Ok(())
 }
 
+async fn write_bridge_tunnel_close_frame<S: AsyncWrite + Unpin + ?Sized>(
+    socket: &mut S,
+) -> Result<(), String> {
+    let payload = [BRIDGE_PROTOCOL_VERSION, BRIDGE_TUNNEL_CLOSE_FRAME_TYPE];
+    write_bridge_frame(socket, &payload).await
+}
+
 async fn write_all_vectored<S: AsyncWrite + Unpin + ?Sized>(
     socket: &mut S,
     buffers: &[&[u8]],
@@ -1292,13 +1716,28 @@ async fn write_all_vectored<S: AsyncWrite + Unpin + ?Sized>(
             break;
         }
 
-        let mut io_slices = Vec::with_capacity(buffers.len() - index);
-        io_slices.push(IoSlice::new(&buffers[index][offset..]));
-        for buffer in &buffers[(index + 1)..] {
-            io_slices.push(IoSlice::new(buffer));
-        }
-
-        let written = socket.write_vectored(&io_slices).await?;
+        let remaining_buffers = buffers.len() - index;
+        let written = if remaining_buffers <= 3 {
+            let mut io_slices = [IoSlice::new(&[]), IoSlice::new(&[]), IoSlice::new(&[])];
+            io_slices[0] = IoSlice::new(&buffers[index][offset..]);
+            let mut slice_len = 1usize;
+            if remaining_buffers >= 2 {
+                io_slices[1] = IoSlice::new(buffers[index + 1]);
+                slice_len = 2;
+            }
+            if remaining_buffers >= 3 {
+                io_slices[2] = IoSlice::new(buffers[index + 2]);
+                slice_len = 3;
+            }
+            socket.write_vectored(&io_slices[..slice_len]).await?
+        } else {
+            let mut io_slices = Vec::with_capacity(remaining_buffers);
+            io_slices.push(IoSlice::new(&buffers[index][offset..]));
+            for buffer in &buffers[(index + 1)..] {
+                io_slices.push(IoSlice::new(buffer));
+            }
+            socket.write_vectored(&io_slices).await?
+        };
         if written == 0 {
             return Err(io::Error::new(
                 ErrorKind::WriteZero,
@@ -1326,6 +1765,18 @@ async fn write_all_vectored<S: AsyncWrite + Unpin + ?Sized>(
 async fn read_bridge_frame<S: AsyncRead + Unpin + ?Sized>(
     socket: &mut S,
 ) -> Result<Option<Vec<u8>>, String> {
+    let mut payload = Vec::new();
+    let has_frame = read_bridge_frame_reuse(socket, &mut payload).await?;
+    if !has_frame {
+        return Ok(None);
+    }
+    Ok(Some(payload))
+}
+
+async fn read_bridge_frame_reuse<S: AsyncRead + Unpin + ?Sized>(
+    socket: &mut S,
+    payload: &mut Vec<u8>,
+) -> Result<bool, String> {
     let mut header = [0_u8; 4];
     let mut read = 0;
     while read < header.len() {
@@ -1335,7 +1786,7 @@ async fn read_bridge_frame<S: AsyncRead + Unpin + ?Sized>(
             .map_err(|error| format!("read frame header failed: {error}"))?;
         if n == 0 {
             if read == 0 {
-                return Ok(None);
+                return Ok(false);
             }
             return Err("bridge closed connection while reading frame header".to_string());
         }
@@ -1347,11 +1798,11 @@ async fn read_bridge_frame<S: AsyncRead + Unpin + ?Sized>(
         return Err(format!("bridge frame too large: {payload_len}"));
     }
 
-    let mut payload = vec![0_u8; payload_len];
+    payload.resize(payload_len, 0);
     let mut read = 0;
     while read < payload_len {
         let n = socket
-            .read(&mut payload[read..])
+            .read(&mut payload[read..payload_len])
             .await
             .map_err(|error| format!("read frame payload failed: {error}"))?;
         if n == 0 {
@@ -1360,7 +1811,7 @@ async fn read_bridge_frame<S: AsyncRead + Unpin + ?Sized>(
         read += n;
     }
 
-    Ok(Some(payload))
+    Ok(true)
 }
 
 struct BridgeByteWriter {
@@ -1370,6 +1821,20 @@ struct BridgeByteWriter {
 impl BridgeByteWriter {
     fn new() -> Self {
         Self { bytes: Vec::new() }
+    }
+
+    fn reserve(&mut self, additional: usize) {
+        self.bytes.reserve(additional);
+    }
+
+    fn reserve_u32(&mut self) -> usize {
+        let pos = self.bytes.len();
+        self.bytes.extend_from_slice(&0_u32.to_be_bytes());
+        pos
+    }
+
+    fn patch_u32(&mut self, pos: usize, value: u32) {
+        self.bytes[pos..pos + 4].copy_from_slice(&value.to_be_bytes());
     }
 
     fn into_inner(self) -> Vec<u8> {
@@ -1422,13 +1887,6 @@ impl<'a> BridgeByteReader<'a> {
         Ok(u32::from_be_bytes([bytes[0], bytes[1], bytes[2], bytes[3]]))
     }
 
-    fn get_string(&mut self) -> Result<String, String> {
-        let bytes = self.get_bytes()?;
-        std::str::from_utf8(bytes)
-            .map(|value| value.to_string())
-            .map_err(|error| format!("invalid utf8 string: {error}"))
-    }
-
     fn get_bytes(&mut self) -> Result<&'a [u8], String> {
         let (start, length) = self.get_bytes_range()?;
         Ok(&self.bytes[start..start + length])
@@ -1475,10 +1933,10 @@ fn http_version_to_protocol(version: Version) -> &'static str {
     }
 }
 
-fn split_path_and_query(path_and_query: &str) -> (String, String) {
+fn split_path_and_query_ref(path_and_query: &str) -> (&str, &str) {
     match path_and_query.split_once('?') {
-        Some((path, query)) => (path.to_string(), query.to_string()),
-        None => (path_and_query.to_string(), String::new()),
+        Some((path, query)) => (path, query),
+        None => (path_and_query, ""),
     }
 }
 

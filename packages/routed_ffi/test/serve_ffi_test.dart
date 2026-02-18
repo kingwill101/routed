@@ -52,6 +52,8 @@ Future<_RunningFfiServer> _startSecureServer(
   Engine engine, {
   required String certificatePath,
   required String keyPath,
+  String? certificatePassword,
+  bool requestClientCertificate = false,
   bool http3 = false,
 }) async {
   final shutdown = Completer<void>();
@@ -62,6 +64,8 @@ Future<_RunningFfiServer> _startSecureServer(
     port: port,
     certificatePath: certificatePath,
     keyPath: keyPath,
+    certificatePassword: certificatePassword,
+    requestClientCertificate: requestClientCertificate,
     http3: http3,
     shutdownSignal: shutdown.future,
   );
@@ -272,33 +276,24 @@ void main() {
     await _stopServer(running, engine);
   });
 
-  test(
-    'serveFfi returns explicit unsupported response for websocket upgrade',
-    () async {
-      final engine = Engine()..get('/ws', (ctx) async => ctx.string('plain'));
+  test('serveFfi forwards websocket upgrade and messages', () async {
+    final engine = Engine()..ws('/ws', _EchoWebSocketHandler());
 
-      final running = await _startServer(engine);
-      final uri = running.baseUri.replace(path: '/ws');
+    final running = await _startServer(engine);
+    final uri = running.baseUri.replace(scheme: 'ws', path: '/ws');
 
-      final client = HttpClient();
-      try {
-        final req = await client.getUrl(uri);
-        req.headers.set(HttpHeaders.connectionHeader, 'Upgrade');
-        req.headers.set(HttpHeaders.upgradeHeader, 'websocket');
-        req.headers.set('Sec-WebSocket-Version', '13');
-        req.headers.set('Sec-WebSocket-Key', 'dGhlIHNhbXBsZSBub25jZQ==');
+    final socket = await WebSocket.connect(uri.toString());
+    try {
+      socket.add('ping');
+      final firstMessage = await socket.first.timeout(const Duration(seconds: 3));
+      expect(firstMessage, 'echo:ping');
+      await socket.close();
+    } finally {
+      await socket.close();
+    }
 
-        final res = await req.close();
-        final body = await utf8.decodeStream(res);
-        expect(res.statusCode, HttpStatus.notImplemented);
-        expect(body, contains('websocket upgrade is not yet supported'));
-      } finally {
-        client.close(force: true);
-      }
-
-      await _stopServer(running, engine);
-    },
-  );
+    await _stopServer(running, engine);
+  });
 
   test('serveFfi preserves non-200 status codes', () async {
     final engine = Engine()
@@ -587,6 +582,83 @@ void main() {
     }
   });
 
+  test(
+    'serveSecureFfi accepts requestClientCertificate without requiring client cert',
+    () async {
+      final certPath = _locateTlsAsset('cert.pem');
+      final keyPath = _locateTlsAsset('key.pem');
+      final engine = Engine()
+        ..get('/mtls-optional', (ctx) async => ctx.string('ok'));
+
+      final running = await _startSecureServer(
+        engine,
+        certificatePath: certPath,
+        keyPath: keyPath,
+        requestClientCertificate: true,
+      );
+      final uri = running.baseUri.replace(path: '/mtls-optional');
+
+      final client = HttpClient()..badCertificateCallback = (_, _, _) => true;
+      try {
+        final req = await client.getUrl(uri);
+        final res = await req.close();
+        expect(res.statusCode, HttpStatus.ok);
+        expect(await utf8.decodeStream(res), 'ok');
+      } finally {
+        client.close(force: true);
+      }
+
+      await _stopServer(running, engine);
+    },
+  );
+
+  test(
+    'serveSecureFfi supports encrypted private keys with certificatePassword',
+    () async {
+      final certPath = _locateTlsAsset('cert.pem');
+      final keyPath = _locateTlsAsset('key_encrypted.pem');
+      final engine = Engine()
+        ..get('/secure-password', (ctx) async => ctx.string('ok'));
+
+      final running = await _startSecureServer(
+        engine,
+        certificatePath: certPath,
+        keyPath: keyPath,
+        certificatePassword: 'routed-test-pass',
+      );
+      final uri = running.baseUri.replace(path: '/secure-password');
+
+      final client = HttpClient()..badCertificateCallback = (_, _, _) => true;
+      try {
+        final req = await client.getUrl(uri);
+        final res = await req.close();
+        expect(res.statusCode, HttpStatus.ok);
+        expect(await utf8.decodeStream(res), 'ok');
+      } finally {
+        client.close(force: true);
+      }
+
+      await _stopServer(running, engine);
+    },
+  );
+
+  test('serveSecureFfi fails with wrong certificatePassword', () async {
+    final certPath = _locateTlsAsset('cert.pem');
+    final keyPath = _locateTlsAsset('key_encrypted.pem');
+    final engine = Engine();
+
+    await expectLater(
+      () => _startSecureServer(
+        engine,
+        certificatePath: certPath,
+        keyPath: keyPath,
+        certificatePassword: 'wrong-pass',
+      ),
+      throwsStateError,
+    );
+    await engine.close();
+  });
+
   test('serveSecureFfi throws when certificate paths are missing', () async {
     final engine = Engine();
     await expectLater(
@@ -601,4 +673,20 @@ void main() {
     );
     await engine.close();
   });
+}
+
+final class _EchoWebSocketHandler extends WebSocketHandler {
+  @override
+  Future<void> onOpen(WebSocketContext context) async {}
+
+  @override
+  Future<void> onMessage(WebSocketContext context, dynamic message) async {
+    context.send('echo:$message');
+  }
+
+  @override
+  Future<void> onClose(WebSocketContext context) async {}
+
+  @override
+  Future<void> onError(WebSocketContext context, dynamic error) async {}
 }

@@ -6,6 +6,7 @@ This header is designed to be consumed by ffigen on the Dart side.
 */
 
 typedef signed int int32_t;
+typedef unsigned int uint32_t;
 typedef unsigned short uint16_t;
 typedef unsigned char uint8_t;
 
@@ -19,9 +20,14 @@ typedef struct RoutedFfiProxyConfig {
   uint16_t backend_port;
   uint8_t backend_kind;
   const char *backend_path;
+  uint32_t backlog;
+  uint8_t v6_only;
+  uint8_t shared;
+  uint8_t request_client_certificate;
   uint8_t http3;
   const char *tls_cert_path;
   const char *tls_key_path;
+  const char *tls_cert_password;
   uint8_t benchmark_mode;
 } RoutedFfiProxyConfig;
 
