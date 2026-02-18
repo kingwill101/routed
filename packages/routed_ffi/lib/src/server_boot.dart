@@ -831,8 +831,9 @@ final class _BridgeSocketWriter {
         'bridge response frame too large: ${payload.length}',
       );
     }
-    final header = ByteData(4)..setUint32(0, payload.length, Endian.big);
-    _socket.add(header.buffer.asUint8List());
+    final header = Uint8List(4);
+    _writeUint32(header, 0, payload.length);
+    _socket.add(header);
     if (payload.isNotEmpty) {
       _socket.add(payload);
     }
@@ -843,19 +844,25 @@ final class _BridgeSocketWriter {
     if (payloadLength > _maxBridgeFrameBytes) {
       throw FormatException('bridge response frame too large: $payloadLength');
     }
-    final header = ByteData(4)..setUint32(0, payloadLength, Endian.big);
-    _socket.add(header.buffer.asUint8List());
-    final prefix = ByteData(6)
-      ..setUint8(0, bridgeFrameProtocolVersion)
-      ..setUint8(1, frameType & 0xff)
-      ..setUint32(2, chunkBytes.length, Endian.big);
-    _socket.add(prefix.buffer.asUint8List());
+    final prelude = Uint8List(10);
+    _writeUint32(prelude, 0, payloadLength);
+    prelude[4] = bridgeFrameProtocolVersion;
+    prelude[5] = frameType & 0xff;
+    _writeUint32(prelude, 6, chunkBytes.length);
+    _socket.add(prelude);
     if (chunkBytes.isNotEmpty) {
       _socket.add(chunkBytes);
     }
   }
 
   Future<void> flush() => _socket.flush();
+}
+
+void _writeUint32(Uint8List target, int offset, int value) {
+  target[offset] = (value >> 24) & 0xff;
+  target[offset + 1] = (value >> 16) & 0xff;
+  target[offset + 2] = (value >> 8) & 0xff;
+  target[offset + 3] = value & 0xff;
 }
 
 bool _equalsAsciiIgnoreCase(String a, String b) {

@@ -18,6 +18,7 @@ const int _bridgeRequestEndFrameType = 5;
 const int _bridgeResponseStartFrameType = 6;
 const int _bridgeResponseChunkFrameType = 7;
 const int _bridgeResponseEndFrameType = 8;
+const Utf8Decoder _strictUtf8Decoder = Utf8Decoder(allowMalformed: false);
 
 final class BridgeRequestFrame {
   BridgeRequestFrame({
@@ -27,9 +28,25 @@ final class BridgeRequestFrame {
     required this.path,
     required this.query,
     required this.protocol,
-    required this.headers,
+    required List<MapEntry<String, String>> headers,
     required this.bodyBytes,
-  });
+  }) : _headers = headers,
+       _headerNames = null,
+       _headerValues = null;
+
+  BridgeRequestFrame._decoded({
+    required this.method,
+    required this.scheme,
+    required this.authority,
+    required this.path,
+    required this.query,
+    required this.protocol,
+    required List<String> headerNames,
+    required List<String> headerValues,
+    required this.bodyBytes,
+  }) : _headers = null,
+       _headerNames = headerNames,
+       _headerValues = headerValues;
 
   final String method;
   final String scheme;
@@ -37,8 +54,62 @@ final class BridgeRequestFrame {
   final String path;
   final String query;
   final String protocol;
-  final List<MapEntry<String, String>> headers;
   final Uint8List bodyBytes;
+  List<MapEntry<String, String>>? _headers;
+  final List<String>? _headerNames;
+  final List<String>? _headerValues;
+
+  List<MapEntry<String, String>> get headers =>
+      _headers ??= _materializeHeaders();
+
+  int get headerCount => _headerNames?.length ?? _headers?.length ?? 0;
+
+  String headerNameAt(int index) {
+    final names = _headerNames;
+    if (names != null) {
+      return names[index];
+    }
+    return _headers![index].key;
+  }
+
+  String headerValueAt(int index) {
+    final values = _headerValues;
+    if (values != null) {
+      return values[index];
+    }
+    return _headers![index].value;
+  }
+
+  void forEachHeader(void Function(String name, String value) visitor) {
+    final names = _headerNames;
+    if (names != null) {
+      final values = _headerValues!;
+      for (var i = 0; i < names.length; i++) {
+        visitor(names[i], values[i]);
+      }
+      return;
+    }
+    final headers = _headers;
+    if (headers == null) {
+      return;
+    }
+    for (final entry in headers) {
+      visitor(entry.key, entry.value);
+    }
+  }
+
+  List<MapEntry<String, String>> _materializeHeaders() {
+    final names = _headerNames;
+    if (names == null || names.isEmpty) {
+      return const <MapEntry<String, String>>[];
+    }
+    final values = _headerValues!;
+    return List<MapEntry<String, String>>.generate(
+      names.length,
+      (i) => MapEntry(names[i], values[i]),
+      growable: false,
+    );
+  }
 
   BridgeRequestFrame copyWith({
     String? method,
@@ -72,10 +143,10 @@ final class BridgeRequestFrame {
     writer.writeString(path);
     writer.writeString(query);
     writer.writeString(protocol);
-    writer.writeUint32(headers.length);
-    for (final entry in headers) {
-      writer.writeString(entry.key);
-      writer.writeString(entry.value);
+    writer.writeUint32(headerCount);
+    for (var i = 0; i < headerCount; i++) {
+      writer.writeString(headerNameAt(i));
+      writer.writeString(headerValueAt(i));
     }
     writer.writeBytes(bodyBytes);
     return writer.takeBytes();
@@ -99,20 +170,23 @@ final class BridgeRequestFrame {
     final query = reader.readString();
     final protocol = reader.readString();
     final headerCount = reader.readUint32();
-    final headers = <MapEntry<String, String>>[];
+    final headerNames = List<String>.filled(headerCount, '', growable: false);
+    final headerValues = List<String>.filled(headerCount, '', growable: false);
     for (var i = 0; i < headerCount; i++) {
-      headers.add(MapEntry(reader.readString(), reader.readString()));
+      headerNames[i] = reader.readString();
+      headerValues[i] = reader.readString();
     }
     final bodyBytes = reader.readBytes();
     reader.ensureDone();
-    return BridgeRequestFrame(
+    return BridgeRequestFrame._decoded(
       method: method.isEmpty ? 'GET' : method,
       scheme: scheme.isEmpty ? 'http' : scheme,
       authority: authority.isEmpty ? '127.0.0.1' : authority,
       path: path.isEmpty ? '/' : path,
       query: query,
       protocol: protocol.isEmpty ? '1.1' : protocol,
-      headers: headers,
+      headerNames: headerNames,
+      headerValues: headerValues,
       bodyBytes: bodyBytes,
     );
   }
@@ -127,10 +201,10 @@ final class BridgeRequestFrame {
     writer.writeString(path);
     writer.writeString(query);
     writer.writeString(protocol);
-    writer.writeUint32(headers.length);
-    for (final entry in headers) {
-      writer.writeString(entry.key);
-      writer.writeString(entry.value);
+    writer.writeUint32(headerCount);
+    for (var i = 0; i < headerCount; i++) {
+      writer.writeString(headerNameAt(i));
+      writer.writeString(headerValueAt(i));
     }
     return writer.takeBytes();
   }
@@ -152,19 +226,22 @@ final class BridgeRequestFrame {
     final query = reader.readString();
     final protocol = reader.readString();
     final headerCount = reader.readUint32();
-    final headers = <MapEntry<String, String>>[];
+    final headerNames = List<String>.filled(headerCount, '', growable: false);
+    final headerValues = List<String>.filled(headerCount, '', growable: false);
     for (var i = 0; i < headerCount; i++) {
-      headers.add(MapEntry(reader.readString(), reader.readString()));
+      headerNames[i] = reader.readString();
+      headerValues[i] = reader.readString();
     }
     reader.ensureDone();
-    return BridgeRequestFrame(
+    return BridgeRequestFrame._decoded(
       method: method.isEmpty ? 'GET' : method,
       scheme: scheme.isEmpty ? 'http' : scheme,
       authority: authority.isEmpty ? '127.0.0.1' : authority,
       path: path.isEmpty ? '/' : path,
       query: query,
       protocol: protocol.isEmpty ? '1.1' : protocol,
-      headers: headers,
+      headerNames: headerNames,
+      headerValues: headerValues,
       bodyBytes: Uint8List(0),
     );
   }
@@ -222,13 +299,80 @@ final class BridgeRequestFrame {
 final class BridgeResponseFrame {
   BridgeResponseFrame({
     required this.status,
-    required this.headers,
+    required List<MapEntry<String, String>> headers,
     required this.bodyBytes,
-  });
+  }) : _headers = headers,
+       _headerNames = null,
+       _headerValues = null;
+
+  BridgeResponseFrame._decoded({
+    required this.status,
+    required List<String> headerNames,
+    required List<String> headerValues,
+    required this.bodyBytes,
+  }) : _headers = null,
+       _headerNames = headerNames,
+       _headerValues = headerValues;
+
+  factory BridgeResponseFrame.fromHeaderPairs({
+    required int status,
+    required List<String> headerNames,
+    required List<String> headerValues,
+    required Uint8List bodyBytes,
+  }) {
+    if (headerNames.length != headerValues.length) {
+      throw ArgumentError(
+        'headerNames/headerValues length mismatch: '
+        '${headerNames.length} != ${headerValues.length}',
+      );
+    }
+    return BridgeResponseFrame._decoded(
+      status: status,
+      headerNames: headerNames,
+      headerValues: headerValues,
+      bodyBytes: bodyBytes,
+    );
+  }
 
   final int status;
-  final List<MapEntry<String, String>> headers;
   final Uint8List bodyBytes;
+  List<MapEntry<String, String>>? _headers;
+  final List<String>? _headerNames;
+  final List<String>? _headerValues;
+
+  List<MapEntry<String, String>> get headers =>
+      _headers ??= _materializeHeaders();
+
+  int get headerCount => _headerNames?.length ?? _headers?.length ?? 0;
+
+  String headerNameAt(int index) {
+    final names = _headerNames;
+    if (names != null) {
+      return names[index];
+    }
+    return _headers![index].key;
+  }
+
+  String headerValueAt(int index) {
+    final values = _headerValues;
+    if (values != null) {
+      return values[index];
+    }
+    return _headers![index].value;
+  }
+
+  List<MapEntry<String, String>> _materializeHeaders() {
+    final names = _headerNames;
+    if (names == null || names.isEmpty) {
+      return const <MapEntry<String, String>>[];
+    }
+    final values = _headerValues!;
+    return List<MapEntry<String, String>>.generate(
+      names.length,
+      (i) => MapEntry(names[i], values[i]),
+      growable: false,
+    );
+  }
 
   BridgeResponseFrame copyWith({
     int? status,
@@ -247,10 +391,10 @@ final class BridgeResponseFrame {
     writer.writeUint8(bridgeFrameProtocolVersion);
     writer.writeUint8(_bridgeResponseFrameType);
     writer.writeUint16(status);
-    writer.writeUint32(headers.length);
-    for (final entry in headers) {
-      writer.writeString(entry.key);
-      writer.writeString(entry.value);
+    writer.writeUint32(headerCount);
+    for (var i = 0; i < headerCount; i++) {
+      writer.writeString(headerNameAt(i));
+      writer.writeString(headerValueAt(i));
     }
     writer.writeBytes(bodyBytes);
     return writer.takeBytes();
@@ -268,15 +412,18 @@ final class BridgeResponseFrame {
     }
     final status = reader.readUint16();
     final headerCount = reader.readUint32();
-    final headers = <MapEntry<String, String>>[];
+    final headerNames = List<String>.filled(headerCount, '', growable: false);
+    final headerValues = List<String>.filled(headerCount, '', growable: false);
     for (var i = 0; i < headerCount; i++) {
-      headers.add(MapEntry(reader.readString(), reader.readString()));
+      headerNames[i] = reader.readString();
+      headerValues[i] = reader.readString();
     }
     final bodyBytes = reader.readBytes();
     reader.ensureDone();
-    return BridgeResponseFrame(
+    return BridgeResponseFrame._decoded(
       status: status,
-      headers: headers,
+      headerNames: headerNames,
+      headerValues: headerValues,
       bodyBytes: bodyBytes,
     );
   }
@@ -286,10 +433,10 @@ final class BridgeResponseFrame {
     writer.writeUint8(bridgeFrameProtocolVersion);
     writer.writeUint8(_bridgeResponseStartFrameType);
     writer.writeUint16(status);
-    writer.writeUint32(headers.length);
-    for (final entry in headers) {
-      writer.writeString(entry.key);
-      writer.writeString(entry.value);
+    writer.writeUint32(headerCount);
+    for (var i = 0; i < headerCount; i++) {
+      writer.writeString(headerNameAt(i));
+      writer.writeString(headerValueAt(i));
     }
     return writer.takeBytes();
   }
@@ -306,14 +453,17 @@ final class BridgeResponseFrame {
     }
     final status = reader.readUint16();
     final headerCount = reader.readUint32();
-    final headers = <MapEntry<String, String>>[];
+    final headerNames = List<String>.filled(headerCount, '', growable: false);
+    final headerValues = List<String>.filled(headerCount, '', growable: false);
     for (var i = 0; i < headerCount; i++) {
-      headers.add(MapEntry(reader.readString(), reader.readString()));
+      headerNames[i] = reader.readString();
+      headerValues[i] = reader.readString();
     }
     reader.ensureDone();
-    return BridgeResponseFrame(
+    return BridgeResponseFrame._decoded(
       status: status,
-      headers: headers,
+      headerNames: headerNames,
+      headerValues: headerValues,
       bodyBytes: Uint8List(0),
     );
   }
@@ -443,7 +593,32 @@ final class _BridgeFrameWriter {
     _length += 4;
   }
 
-  void writeString(String value) => writeBytes(utf8.encode(value));
+  void writeString(String value) {
+    if (value.isEmpty) {
+      writeUint32(0);
+      return;
+    }
+
+    var isAscii = true;
+    for (var i = 0; i < value.length; i++) {
+      if (value.codeUnitAt(i) > 0x7f) {
+        isAscii = false;
+        break;
+      }
+    }
+
+    if (isAscii) {
+      writeUint32(value.length);
+      _ensureCapacity(value.length);
+      for (var i = 0; i < value.length; i++) {
+        _buffer[_length + i] = value.codeUnitAt(i);
+      }
+      _length += value.length;
+      return;
+    }
+
+    writeBytes(utf8.encode(value));
+  }
 
   void writeBytes(List<int> bytes) {
     writeUint32(bytes.length);
@@ -503,7 +678,19 @@ final class _BridgeFrameReader {
     return value;
   }
 
-  String readString() => utf8.decode(readBytes(), allowMalformed: false);
+  String readString() {
+    final length = readUint32();
+    _ensureAvailable(length);
+    final start = _offset;
+    final end = start + length;
+    _offset = end;
+    for (var i = start; i < end; i++) {
+      if (_bytes[i] > 0x7f) {
+        return _strictUtf8Decoder.convert(_bytes, start, end);
+      }
+    }
+    return String.fromCharCodes(_bytes, start, end);
+  }
 
   Uint8List readBytes() {
     final length = readUint32();
@@ -567,16 +754,14 @@ final class BridgeRuntime {
     await _engine.handleRequest(request);
     await response.done;
 
-    final flattenedHeaders = <MapEntry<String, String>>[];
-    response.headers.forEach((name, values) {
-      for (final value in values) {
-        flattenedHeaders.add(MapEntry(name, value));
-      }
-    });
+    final headerNames = <String>[];
+    final headerValues = <String>[];
+    response.appendFlattenedHeaders(headerNames, headerValues);
 
-    return BridgeResponseFrame(
+    return BridgeResponseFrame.fromHeaderPairs(
       status: response.statusCode,
-      headers: flattenedHeaders,
+      headerNames: headerNames,
+      headerValues: headerValues,
       bodyBytes: response.takeBodyBytes(),
     );
   }
@@ -592,7 +777,7 @@ final class _BridgeHttpRequest extends Stream<Uint8List>
        protocolVersion = frame.protocol,
        requestedUri = _buildUri(frame),
        _bodyStream = bodyStream,
-       _headerEntries = frame.headers;
+       _frame = frame;
 
   static Uri _buildUri(BridgeRequestFrame frame) {
     final authority = _splitAuthority(frame.authority);
@@ -605,16 +790,16 @@ final class _BridgeHttpRequest extends Stream<Uint8List>
     );
   }
 
-  static Http2Headers _buildHeaders(List<MapEntry<String, String>> entries) {
+  static Http2Headers _buildHeaders(BridgeRequestFrame frame) {
     final headers = Http2Headers();
-    for (final entry in entries) {
-      headers.add(entry.key, entry.value);
+    for (var i = 0; i < frame.headerCount; i++) {
+      headers.add(frame.headerNameAt(i), frame.headerValueAt(i));
     }
     return headers;
   }
 
   Http2Headers? _headers;
-  final List<MapEntry<String, String>> _headerEntries;
+  final BridgeRequestFrame _frame;
   List<Cookie>? _cookies;
   final Stream<Uint8List> _bodyStream;
 
@@ -631,7 +816,7 @@ final class _BridgeHttpRequest extends Stream<Uint8List>
   Uri get uri => requestedUri;
 
   @override
-  HttpHeaders get headers => _headers ??= _buildHeaders(_headerEntries);
+  HttpHeaders get headers => _headers ??= _buildHeaders(_frame);
 
   @override
   int get contentLength {
@@ -639,9 +824,10 @@ final class _BridgeHttpRequest extends Stream<Uint8List>
     if (headers != null) {
       return headers.contentLength;
     }
-    for (final entry in _headerEntries) {
-      if (_equalsAsciiIgnoreCase(entry.key, HttpHeaders.contentLengthHeader)) {
-        return int.tryParse(entry.value.trim()) ?? -1;
+    for (var i = 0; i < _frame.headerCount; i++) {
+      final name = _frame.headerNameAt(i);
+      if (_equalsAsciiIgnoreCase(name, HttpHeaders.contentLengthHeader)) {
+        return int.tryParse(_frame.headerValueAt(i).trim()) ?? -1;
       }
     }
     return -1;
@@ -655,11 +841,12 @@ final class _BridgeHttpRequest extends Stream<Uint8List>
     }
 
     final parsed = <Cookie>[];
-    for (final entry in _headerEntries) {
-      if (!_equalsAsciiIgnoreCase(entry.key, HttpHeaders.cookieHeader)) {
+    for (var i = 0; i < _frame.headerCount; i++) {
+      final name = _frame.headerNameAt(i);
+      if (!_equalsAsciiIgnoreCase(name, HttpHeaders.cookieHeader)) {
         continue;
       }
-      for (final part in entry.value.split(';')) {
+      for (final part in _frame.headerValueAt(i).split(';')) {
         final trimmed = part.trim();
         if (trimmed.isEmpty) continue;
         final idx = trimmed.indexOf('=');
@@ -686,7 +873,8 @@ final class _BridgeHttpRequest extends Stream<Uint8List>
   X509Certificate? get certificate => null;
 
   @override
-  final HttpSession session = _BridgeSession();
+  HttpSession get session => _session ??= _BridgeSession();
+  _BridgeSession? _session;
 
   @override
   HttpConnectionInfo? get connectionInfo => const _BridgeConnectionInfo();
@@ -761,8 +949,8 @@ _ParsedAuthority _splitAuthority(String authority) {
 final class _BridgeHttpResponse implements HttpResponse {
   _BridgeHttpResponse();
 
-  final Http2Headers _headers = Http2Headers();
-  final List<Cookie> _cookies = <Cookie>[];
+  Http2Headers? _headers;
+  List<Cookie>? _cookies;
   final BytesBuilder _body = BytesBuilder(copy: false);
   final Completer<void> _done = Completer<void>();
   bool _closed = false;
@@ -786,13 +974,13 @@ final class _BridgeHttpResponse implements HttpResponse {
   bool bufferOutput = true;
 
   @override
-  HttpHeaders get headers => _headers;
+  HttpHeaders get headers => _headers ??= Http2Headers();
 
   @override
-  List<Cookie> get cookies => _cookies;
+  List<Cookie> get cookies => _cookies ??= <Cookie>[];
 
   @override
-  int get contentLength => headers.contentLength;
+  int get contentLength => _headers?.contentLength ?? -1;
 
   @override
   set contentLength(int value) => headers.contentLength = value;
@@ -875,6 +1063,22 @@ final class _BridgeHttpResponse implements HttpResponse {
       throw StateError('Response is already closed');
     }
   }
+
+  void appendFlattenedHeaders(
+    List<String> headerNames,
+    List<String> headerValues,
+  ) {
+    final headers = _headers;
+    if (headers == null) {
+      return;
+    }
+    headers.forEach((name, values) {
+      for (final value in values) {
+        headerNames.add(name);
+        headerValues.add(value);
+      }
+    });
+  }
 }
 
 final class _BridgeStreamingHttpResponse implements HttpResponse {
@@ -883,8 +1087,8 @@ final class _BridgeStreamingHttpResponse implements HttpResponse {
   final Future<void> Function(BridgeResponseFrame frame) onStart;
   final Future<void> Function(Uint8List chunkBytes) onChunk;
 
-  final Http2Headers _headers = Http2Headers();
-  final List<Cookie> _cookies = <Cookie>[];
+  Http2Headers? _headers;
+  List<Cookie>? _cookies;
   final Completer<void> _done = Completer<void>();
   Future<void> _pendingWrite = Future<void>.value();
   bool _closed = false;
@@ -909,13 +1113,13 @@ final class _BridgeStreamingHttpResponse implements HttpResponse {
   bool bufferOutput = true;
 
   @override
-  HttpHeaders get headers => _headers;
+  HttpHeaders get headers => _headers ??= Http2Headers();
 
   @override
-  List<Cookie> get cookies => _cookies;
+  List<Cookie> get cookies => _cookies ??= <Cookie>[];
 
   @override
-  int get contentLength => headers.contentLength;
+  int get contentLength => _headers?.contentLength ?? -1;
 
   @override
   set contentLength(int value) => headers.contentLength = value;
@@ -1009,22 +1213,30 @@ final class _BridgeStreamingHttpResponse implements HttpResponse {
     }
     _started = true;
 
-    final flattenedHeaders = <MapEntry<String, String>>[];
-    headers.forEach((name, values) {
-      for (final value in values) {
-        flattenedHeaders.add(MapEntry(name, value));
+    final headerNames = <String>[];
+    final headerValues = <String>[];
+    final headers = _headers;
+    if (headers != null) {
+      headers.forEach((name, values) {
+        for (final value in values) {
+          headerNames.add(name);
+          headerValues.add(value);
+        }
+      });
+    }
+    final cookies = _cookies;
+    if (cookies != null) {
+      for (final cookie in cookies) {
+        headerNames.add(HttpHeaders.setCookieHeader);
+        headerValues.add(cookie.toString());
       }
-    });
-    for (final cookie in _cookies) {
-      flattenedHeaders.add(
-        MapEntry(HttpHeaders.setCookieHeader, cookie.toString()),
-      );
     }
 
     await onStart(
-      BridgeResponseFrame(
+      BridgeResponseFrame.fromHeaderPairs(
         status: statusCode,
-        headers: flattenedHeaders,
+        headerNames: headerNames,
+        headerValues: headerValues,
         bodyBytes: Uint8List(0),
       ),
     );
@@ -1092,33 +1304,33 @@ final class _BridgeSession extends MapBase<dynamic, dynamic>
   @override
   bool isNew = false;
 
-  final Map<String, dynamic> _data = <String, dynamic>{};
+  Map<String, dynamic>? _data;
 
   Duration timeout = const Duration(minutes: 20);
 
   @override
-  void destroy() => _data.clear();
+  void destroy() => _data?.clear();
 
   @override
   set onTimeout(void Function() callback) {}
 
   @override
-  dynamic operator [](Object? key) => key is String ? _data[key] : null;
+  dynamic operator [](Object? key) => key is String ? (_data?[key]) : null;
 
   @override
-  void clear() => _data.clear();
+  void clear() => _data?.clear();
 
   @override
-  Iterable<dynamic> get keys => _data.keys;
+  Iterable<dynamic> get keys => _data?.keys ?? const <String>[];
 
   @override
   void operator []=(Object? key, dynamic value) {
     if (key is! String) {
       throw ArgumentError('Session keys must be strings');
     }
-    _data[key] = value;
+    (_data ??= <String, dynamic>{})[key] = value;
   }
 
   @override
-  dynamic remove(Object? key) => key is String ? _data.remove(key) : null;
+  dynamic remove(Object? key) => key is String ? _data?.remove(key) : null;
 }
