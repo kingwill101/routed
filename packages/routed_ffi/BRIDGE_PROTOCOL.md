@@ -1,6 +1,6 @@
 # routed_ffi Bridge Protocol
 
-Last updated: February 17, 2026
+Last updated: February 18, 2026
 
 This document defines the binary request/response bridge protocol between:
 
@@ -36,6 +36,8 @@ Current frame types:
 - `6`: response start
 - `7`: response chunk
 - `8`: response end
+- `9`: upgraded tunnel chunk
+- `10`: upgraded tunnel close
 
 ## Field Encoding
 
@@ -106,6 +108,25 @@ Order:
 1. `body_chunk: bytes`
 
 ## Response End Payload (frame type `8`)
+
+No additional fields beyond payload header.
+
+## Upgraded Tunnel Frames
+
+When Dart detaches the response socket (for example via
+`WebSocketTransformer.upgrade`), the bridge switches to tunnel mode on the same
+bridge connection after the HTTP response handshake is sent.
+
+### Tunnel Chunk Payload (frame type `9`)
+
+Order:
+
+1. `chunk: bytes`
+
+These frames carry raw upgraded-protocol bytes bidirectionally between Rust and
+Dart.
+
+### Tunnel Close Payload (frame type `10`)
 
 No additional fields beyond payload header.
 

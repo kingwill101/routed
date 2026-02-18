@@ -1,0 +1,16 @@
+Running build hooks...Running build hooks...time=2026-02-18T03:20:19.150-05:00 level=info msg="Engine listening" event=engine_started scheme=http host=127.0.0.1 port=34365 logger=root
+time=2026-02-18T03:20:22.248-05:00 level=info msg="Engine listening" event=engine_started scheme=http host=127.0.0.1 port=37165 logger=root
+time=2026-02-18T03:20:24.214-05:00 level=info msg="Engine listening" event=engine_started scheme=http host=127.0.0.1 port=35557 logger=root
+time=2026-02-18T03:20:25.979-05:00 level=info msg="Engine listening" event=engine_started scheme=http host=127.0.0.1 port=43857 logger=root
+time=2026-02-18T03:20:28.046-05:00 level=info msg="Engine listening" event=engine_started scheme=http host=127.0.0.1 port=43535 logger=root
+time=2026-02-18T03:20:30.649-05:00 level=info msg="Engine listening" event=engine_started scheme=http host=127.0.0.1 port=37599 logger=root
+time=2026-02-18T03:20:32.773-05:00 level=info msg="Engine listening" event=engine_started scheme=http host=127.0.0.1 port=35597 logger=root
+time=2026-02-18T03:20:34.814-05:00 level=info msg="Engine listening" event=engine_started scheme=http host=127.0.0.1 port=34049 logger=root
+time=2026-02-18T03:20:36.845-05:00 level=info msg="Engine listening" event=engine_started scheme=http host=127.0.0.1 port=36951 logger=root
+time=2026-02-18T03:20:38.951-05:00 level=info msg="Engine listening" event=engine_started scheme=http host=127.0.0.1 port=42335 logger=root
+time=2026-02-18T03:20:41.033-05:00 level=info msg="Engine listening" event=engine_started scheme=http host=127.0.0.1 port=33219 logger=root
+time=2026-02-18T03:20:43.109-05:00 level=info msg="Engine listening" event=engine_started scheme=http host=127.0.0.1 port=43593 logger=root
+time=2026-02-18T03:20:45.142-05:00 level=info msg="Engine listening" event=engine_started scheme=http host=127.0.0.1 port=34691 logger=root
+time=2026-02-18T03:20:47.252-05:00 level=info msg="Engine listening" event=engine_started scheme=http host=127.0.0.1 port=35857 logger=root
+time=2026-02-18T03:20:50.636-05:00 level=info msg="Engine listening" event=engine_started scheme=http host=127.0.0.1 port=46545 logger=root
+{"options":{"requests":2500,"concurrency":64,"warmup":300,"host":"127.0.0.1","iterations":15,"minReqPerSecRatio":null,"maxP95Ratio":null},"results":[{"label":"dart_io_direct","requests":2500,"totalMicros":394774,"requestsPerSecond":6332.737211670475,"p50Micros":11500,"p95Micros":11500},{"label":"routed_io","requests":2500,"totalMicros":492106,"requestsPerSecond":5080.206297017309,"p50Micros":14097,"p95Micros":14097},{"label":"routed_ffi_direct","requests":2500,"totalMicros":284552,"requestsPerSecond":8785.740391914307,"p50Micros":8880,"p95Micros":8880},{"label":"routed_ffi","requests":2500,"totalMicros":354057,"requestsPerSecond":7061.009950375222,"p50Micros":10956,"p95Micros":10956},{"label":"routed_ffi_native_direct","requests":2500,"totalMicros":207968,"requestsPerSecond":12021.080166179412,"p50Micros":6684,"p95Micros":6684}],"gate":{"passed":true,"messages":[]}}

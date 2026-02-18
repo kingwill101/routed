@@ -93,12 +93,34 @@ Future<void> main() async {
 }
 ```
 
+Use `serveFfiHttp(...)` to use bridge transport with a plain `HttpRequest`
+handler (closest to `dart:io` `HttpServer.listen(...)` style):
+
+```dart
+import 'dart:io';
+
+import 'package:routed_ffi/routed_ffi.dart';
+
+Future<void> main() async {
+  await serveFfiHttp((request) async {
+    request.response.headers.contentType = ContentType.text;
+    request.response.write('hello from ffi http bridge');
+    await request.response.close();
+  }, host: '127.0.0.1', port: 8080, http3: false);
+}
+```
+
 ## Current Status
 
 - `serveFfi(...)`: Rust native front server is active (HTTP/1 + HTTP/2).
 - `serveSecureFfi(...)`: Rust native TLS front server is active (HTTP/1 + HTTP/2 + HTTP/3).
+- `serveFfiHttp(...)` / `serveSecureFfiHttp(...)`: Rust native front server is active with `HttpRequest` handlers and no Routed engine coupling.
 - `serveFfiDirect(...)` / `serveSecureFfiDirect(...)`: Rust native front server is active with direct Dart handlers (no Routed engine request pipeline).
+- FFI boot APIs accept HttpServer-like bind options (`host/address` as `String` or `InternetAddress`, plus `backlog`, `v6Only`, and `shared`).
+- `requestClientCertificate` is supported in TLS APIs; the transport requests optional client certificates and validates them against native trust roots when provided.
+- `certificatePassword` is supported for encrypted PKCS#8 private key files (`BEGIN ENCRYPTED PRIVATE KEY`).
 - bridge transport: binary framed protocol with chunked request/response exchange (no JSON/base64 in hot path).
+- WebSocket upgrades are forwarded over the bridge (including Routed `engine.ws(...)` and plain `serveFfiHttp` handlers using `WebSocketTransformer.upgrade`).
 - Dart bridge runtime streams chunked request/response bodies to/from Routed handlers.
 - Rust proxy streams request/response body data through bridge frames (no full proxy-body buffering path).
 - HTTP/3 is enabled only for TLS mode (`serveSecureFfi`) when `http3: true`.
