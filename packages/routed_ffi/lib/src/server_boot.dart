@@ -40,7 +40,12 @@ final class FfiDirectRequest {
     required this.protocol,
     required this.headers,
     required this.body,
-  });
+  }) : uri = _buildDirectUri(
+         scheme: scheme,
+         authority: authority,
+         path: path,
+         query: query,
+       );
 
   final String method;
   final String scheme;
@@ -50,15 +55,12 @@ final class FfiDirectRequest {
   final String protocol;
   final List<MapEntry<String, String>> headers;
   final Stream<Uint8List> body;
-
-  Uri get uri {
-    final queryPart = query.isEmpty ? '' : '?$query';
-    return Uri.parse('$scheme://$authority$path$queryPart');
-  }
+  final Uri uri;
 
   String? header(String name) {
+    final target = name;
     for (final entry in headers) {
-      if (entry.key.toLowerCase() == name.toLowerCase()) {
+      if (_equalsAsciiIgnoreCase(entry.key, target)) {
         return entry.value;
       }
     }
@@ -461,6 +463,7 @@ Future<void> _handleBridgeSocket(
   required _BridgeHandleStream handleStream,
 }) async {
   final reader = _SocketFrameReader(socket);
+  final writer = _BridgeSocketWriter(socket);
   try {
     while (true) {
       final firstPayload = await reader.readFrame();
@@ -474,15 +477,15 @@ Future<void> _handleBridgeSocket(
             firstPayload,
           );
           await _handleChunkedBridgeRequest(
-            socket,
             reader,
+            writer,
             handleStream: handleStream,
             startFrame: startFrame,
           );
           continue;
         }
       } catch (error) {
-        await _writeBridgeBadRequest(socket, error);
+        await _writeBridgeBadRequest(writer, error);
         continue;
       }
 
@@ -490,12 +493,12 @@ Future<void> _handleBridgeSocket(
       try {
         frame = BridgeRequestFrame.decodePayload(firstPayload);
       } catch (error) {
-        await _writeBridgeBadRequest(socket, error);
+        await _writeBridgeBadRequest(writer, error);
         continue;
       }
 
       final response = await handleFrame(frame);
-      await _writeBridgeResponse(socket, response);
+      await _writeBridgeResponse(writer, response);
     }
   } catch (error, stack) {
     stderr.writeln('[routed_ffi] bridge socket error: $error\n$stack');
@@ -511,12 +514,12 @@ Future<void> _handleBridgeSocket(
 }
 
 Future<void> _handleChunkedBridgeRequest(
-  Socket socket,
-  _SocketFrameReader reader, {
+  _SocketFrameReader reader,
+  _BridgeSocketWriter writer, {
   required _BridgeHandleStream handleStream,
   required BridgeRequestFrame startFrame,
 }) async {
-  final requestBody = StreamController<Uint8List>();
+  final requestBody = StreamController<Uint8List>(sync: true);
   var requestBodyBytes = 0;
   var responseStarted = false;
   final handlerFuture = handleStream(
@@ -524,7 +527,7 @@ Future<void> _handleChunkedBridgeRequest(
     bodyStream: requestBody.stream,
     onResponseStart: (frame) async {
       responseStarted = true;
-      await _writeBridgeFrame(socket, frame.encodeStartPayload());
+      await writer.writeFrame(frame.encodeStartPayload());
     },
     onResponseChunk: (chunkBytes) async {
       if (chunkBytes.isEmpty) {
@@ -535,12 +538,11 @@ Future<void> _handleChunkedBridgeRequest(
           'bridge response chunk emitted before response start frame',
         );
       }
-      await _writeBridgeChunkFrame(
-        socket,
+      await writer.writeChunkFrame(
         BridgeResponseFrame.chunkFrameType,
         chunkBytes,
       );
-      await socket.flush();
+      await writer.flush();
     },
   );
 
@@ -579,7 +581,7 @@ Future<void> _handleChunkedBridgeRequest(
         await handlerFuture;
       } catch (_) {}
       if (!responseStarted) {
-        await _writeBridgeBadRequest(socket, error);
+        await _writeBridgeBadRequest(writer, error);
         return;
       }
       rethrow;
@@ -595,11 +597,11 @@ Future<void> _handleChunkedBridgeRequest(
     if (!responseStarted) {
       throw StateError('bridge response start frame was not emitted');
     }
-    await _writeBridgeFrame(socket, BridgeResponseFrame.encodeEndPayload());
-    await socket.flush();
+    await writer.writeFrame(BridgeResponseFrame.encodeEndPayload());
+    await writer.flush();
   } catch (error) {
     if (!responseStarted) {
-      await _writeBridgeBadRequest(socket, error);
+      await _writeBridgeBadRequest(writer, error);
       return;
     }
     rethrow;
@@ -711,6 +713,62 @@ FfiDirectRequest _toDirectRequest(
   );
 }
 
+Uri _buildDirectUri({
+  required String scheme,
+  required String authority,
+  required String path,
+  required String query,
+}) {
+  final parsed = _splitDirectAuthority(authority);
+  return Uri(
+    scheme: scheme.isEmpty ? 'http' : scheme,
+    host: parsed.host.isEmpty ? '127.0.0.1' : parsed.host,
+    port: parsed.port,
+    path: path.isEmpty ? '/' : path,
+    query: query.isEmpty ? null : query,
+  );
+}
+
+final class _DirectAuthority {
+  const _DirectAuthority({required this.host, required this.port});
+
+  final String host;
+  final int? port;
+}
+
+_DirectAuthority _splitDirectAuthority(String authority) {
+  if (authority.isEmpty) {
+    return const _DirectAuthority(host: '127.0.0.1', port: null);
+  }
+
+  if (authority.startsWith('[')) {
+    final end = authority.indexOf(']');
+    if (end > 0) {
+      final host = authority.substring(1, end);
+      final suffix = authority.substring(end + 1);
+      if (suffix.startsWith(':')) {
+        final parsedPort = int.tryParse(suffix.substring(1));
+        if (parsedPort != null) {
+          return _DirectAuthority(host: host, port: parsedPort);
+        }
+      }
+      return _DirectAuthority(host: host, port: null);
+    }
+  }
+
+  final firstColon = authority.indexOf(':');
+  final lastColon = authority.lastIndexOf(':');
+  if (firstColon != -1 && firstColon == lastColon) {
+    final host = authority.substring(0, firstColon);
+    final parsedPort = int.tryParse(authority.substring(firstColon + 1));
+    if (parsedPort != null) {
+      return _DirectAuthority(host: host, port: parsedPort);
+    }
+  }
+
+  return _DirectAuthority(host: authority, port: null);
+}
+
 Future<Uint8List> _collectDirectBodyBytes(Stream<Uint8List>? bodyStream) async {
   if (bodyStream == null) {
     return Uint8List(0);
@@ -740,7 +798,10 @@ BridgeResponseFrame _internalServerErrorFrame(Object error) {
   );
 }
 
-Future<void> _writeBridgeBadRequest(Socket socket, Object error) async {
+Future<void> _writeBridgeBadRequest(
+  _BridgeSocketWriter writer,
+  Object error,
+) async {
   final errorResponse = BridgeResponseFrame(
     status: HttpStatus.badRequest,
     headers: const <MapEntry<String, String>>[],
@@ -748,50 +809,54 @@ Future<void> _writeBridgeBadRequest(Socket socket, Object error) async {
       utf8.encode('invalid bridge request: $error'),
     ),
   );
-  await _writeBridgeResponse(socket, errorResponse);
+  await _writeBridgeResponse(writer, errorResponse);
 }
 
 Future<void> _writeBridgeResponse(
-  Socket socket,
+  _BridgeSocketWriter writer,
   BridgeResponseFrame response,
 ) async {
-  await _writeBridgeFrame(socket, response.encodePayload());
-  await socket.flush();
+  await writer.writeFrame(response.encodePayload());
+  await writer.flush();
 }
 
-Future<void> _writeBridgeFrame(Socket socket, Uint8List payload) async {
-  if (payload.length > _maxBridgeFrameBytes) {
-    throw FormatException('bridge response frame too large: ${payload.length}');
-  }
-  final header = Uint8List(4);
-  _writeUint32(header, 0, payload.length);
-  socket.add(header);
-  if (payload.isNotEmpty) {
-    socket.add(payload);
-  }
-}
+final class _BridgeSocketWriter {
+  _BridgeSocketWriter(this._socket);
 
-Future<void> _writeBridgeChunkFrame(
-  Socket socket,
-  int frameType,
-  Uint8List chunkBytes,
-) async {
-  final payloadLength = 6 + chunkBytes.length;
-  if (payloadLength > _maxBridgeFrameBytes) {
-    throw FormatException('bridge response frame too large: $payloadLength');
-  }
-  final header = Uint8List(4);
-  _writeUint32(header, 0, payloadLength);
-  socket.add(header);
+  final Socket _socket;
+  final Uint8List _header = Uint8List(4);
+  final Uint8List _prefix = Uint8List(6);
 
-  final prefix = Uint8List(6);
-  prefix[0] = bridgeFrameProtocolVersion;
-  prefix[1] = frameType & 0xff;
-  _writeUint32(prefix, 2, chunkBytes.length);
-  socket.add(prefix);
-  if (chunkBytes.isNotEmpty) {
-    socket.add(chunkBytes);
+  Future<void> writeFrame(Uint8List payload) async {
+    if (payload.length > _maxBridgeFrameBytes) {
+      throw FormatException(
+        'bridge response frame too large: ${payload.length}',
+      );
+    }
+    _writeUint32(_header, 0, payload.length);
+    _socket.add(_header);
+    if (payload.isNotEmpty) {
+      _socket.add(payload);
+    }
   }
+
+  Future<void> writeChunkFrame(int frameType, Uint8List chunkBytes) async {
+    final payloadLength = 6 + chunkBytes.length;
+    if (payloadLength > _maxBridgeFrameBytes) {
+      throw FormatException('bridge response frame too large: $payloadLength');
+    }
+    _writeUint32(_header, 0, payloadLength);
+    _socket.add(_header);
+    _prefix[0] = bridgeFrameProtocolVersion;
+    _prefix[1] = frameType & 0xff;
+    _writeUint32(_prefix, 2, chunkBytes.length);
+    _socket.add(_prefix);
+    if (chunkBytes.isNotEmpty) {
+      _socket.add(chunkBytes);
+    }
+  }
+
+  Future<void> flush() => _socket.flush();
 }
 
 void _writeUint32(Uint8List target, int offset, int value) {
@@ -801,11 +866,27 @@ void _writeUint32(Uint8List target, int offset, int value) {
   target[offset + 3] = value & 0xff;
 }
 
-int _readUint32(Uint8List bytes, int offset) {
-  return (bytes[offset] << 24) |
-      (bytes[offset + 1] << 16) |
-      (bytes[offset + 2] << 8) |
-      bytes[offset + 3];
+bool _equalsAsciiIgnoreCase(String a, String b) {
+  if (a.length != b.length) {
+    return false;
+  }
+  for (var i = 0; i < a.length; i++) {
+    var x = a.codeUnitAt(i);
+    var y = b.codeUnitAt(i);
+    if (x == y) {
+      continue;
+    }
+    if (x >= 0x41 && x <= 0x5a) {
+      x += 0x20;
+    }
+    if (y >= 0x41 && y <= 0x5a) {
+      y += 0x20;
+    }
+    if (x != y) {
+      return false;
+    }
+  }
+  return true;
 }
 
 final class _SocketFrameReader {
@@ -818,11 +899,11 @@ final class _SocketFrameReader {
   int _availableBytes = 0;
 
   Future<Uint8List?> readFrame() async {
-    final header = await _readExactOrNull(4);
-    if (header == null) {
+    final hasHeader = await _ensureAvailableOrNull(4);
+    if (!hasHeader) {
       return null;
     }
-    final payloadLength = _readUint32(header, 0);
+    final payloadLength = _readUint32FromBuffer();
     if (payloadLength > _maxBridgeFrameBytes) {
       throw FormatException('bridge frame too large: $payloadLength');
     }
@@ -839,20 +920,9 @@ final class _SocketFrameReader {
     if (count == 0) {
       return Uint8List(0);
     }
-    while (_availableBytes < count) {
-      final hasNext = await _iterator.moveNext();
-      if (!hasNext) {
-        if (_availableBytes == 0) {
-          return null;
-        }
-        throw const FormatException('bridge stream ended mid-frame');
-      }
-      final chunk = _iterator.current;
-      if (chunk.isEmpty) {
-        continue;
-      }
-      _chunks.addLast(chunk);
-      _availableBytes += chunk.length;
+    final hasBytes = await _ensureAvailableOrNull(count);
+    if (!hasBytes) {
+      return null;
     }
 
     // Fast path: satisfy the read directly from the current chunk view.
@@ -890,5 +960,44 @@ final class _SocketFrameReader {
       }
     }
     return out;
+  }
+
+  Future<bool> _ensureAvailableOrNull(int count) async {
+    while (_availableBytes < count) {
+      final hasNext = await _iterator.moveNext();
+      if (!hasNext) {
+        if (_availableBytes == 0) {
+          return false;
+        }
+        throw const FormatException('bridge stream ended mid-frame');
+      }
+      final chunk = _iterator.current;
+      if (chunk.isEmpty) {
+        continue;
+      }
+      _chunks.addLast(chunk);
+      _availableBytes += chunk.length;
+    }
+    return true;
+  }
+
+  int _readByteFromBuffer() {
+    final chunk = _chunks.first;
+    final value = chunk[_chunkOffset];
+    _chunkOffset += 1;
+    _availableBytes -= 1;
+    if (_chunkOffset == chunk.length) {
+      _chunks.removeFirst();
+      _chunkOffset = 0;
+    }
+    return value;
+  }
+
+  int _readUint32FromBuffer() {
+    final b0 = _readByteFromBuffer();
+    final b1 = _readByteFromBuffer();
+    final b2 = _readByteFromBuffer();
+    final b3 = _readByteFromBuffer();
+    return (b0 << 24) | (b1 << 16) | (b2 << 8) | b3;
   }
 }

@@ -92,7 +92,7 @@ final class BridgeRequestFrame {
       throw FormatException('invalid bridge request frame type: $frameType');
     }
 
-    final method = reader.readString().toUpperCase();
+    final method = _normalizeHttpMethod(reader.readString());
     final scheme = reader.readString();
     final authority = reader.readString();
     final path = reader.readString();
@@ -145,7 +145,7 @@ final class BridgeRequestFrame {
     if (frameType != _bridgeRequestStartFrameType) {
       throw StateError('unreachable');
     }
-    final method = reader.readString().toUpperCase();
+    final method = _normalizeHttpMethod(reader.readString());
     final scheme = reader.readString();
     final authority = reader.readString();
     final path = reader.readString();
@@ -393,33 +393,53 @@ int _peekFrameType(Uint8List payload) {
   return payload[1];
 }
 
+String _normalizeHttpMethod(String method) {
+  if (method.isEmpty) {
+    return 'GET';
+  }
+  for (var i = 0; i < method.length; i++) {
+    final code = method.codeUnitAt(i);
+    if (code >= 0x61 && code <= 0x7a) {
+      return method.toUpperCase();
+    }
+  }
+  return method;
+}
+
 final class _BridgeFrameWriter {
-  final BytesBuilder _buffer = BytesBuilder(copy: false);
+  _BridgeFrameWriter([int initialCapacity = 256])
+    : _buffer = Uint8List(initialCapacity),
+      _byteData = ByteData(initialCapacity);
+
+  Uint8List _buffer;
+  ByteData _byteData;
+  int _length = 0;
 
   void writeUint8(int value) {
     if (value < 0 || value > 0xff) {
       throw RangeError.range(value, 0, 0xff, 'value');
     }
-    _buffer.addByte(value);
+    _ensureCapacity(1);
+    _buffer[_length] = value;
+    _length += 1;
   }
 
   void writeUint16(int value) {
     if (value < 0 || value > 0xffff) {
       throw RangeError.range(value, 0, 0xffff, 'value');
     }
-    _buffer.add(<int>[(value >> 8) & 0xff, value & 0xff]);
+    _ensureCapacity(2);
+    _byteData.setUint16(_length, value, Endian.big);
+    _length += 2;
   }
 
   void writeUint32(int value) {
     if (value < 0 || value > 0xffffffff) {
       throw RangeError.range(value, 0, 0xffffffff, 'value');
     }
-    _buffer.add(<int>[
-      (value >> 24) & 0xff,
-      (value >> 16) & 0xff,
-      (value >> 8) & 0xff,
-      value & 0xff,
-    ]);
+    _ensureCapacity(4);
+    _byteData.setUint32(_length, value, Endian.big);
+    _length += 4;
   }
 
   void writeString(String value) => writeBytes(utf8.encode(value));
@@ -427,11 +447,30 @@ final class _BridgeFrameWriter {
   void writeBytes(List<int> bytes) {
     writeUint32(bytes.length);
     if (bytes.isNotEmpty) {
-      _buffer.add(bytes);
+      _ensureCapacity(bytes.length);
+      _buffer.setRange(_length, _length + bytes.length, bytes);
+      _length += bytes.length;
     }
   }
 
-  Uint8List takeBytes() => _buffer.takeBytes();
+  Uint8List takeBytes() => Uint8List.sublistView(_buffer, 0, _length);
+
+  void _ensureCapacity(int additionalBytes) {
+    final needed = _length + additionalBytes;
+    if (needed <= _buffer.length) {
+      return;
+    }
+
+    var capacity = _buffer.length;
+    while (capacity < needed) {
+      capacity *= 2;
+    }
+
+    final next = Uint8List(capacity);
+    next.setRange(0, _length, _buffer);
+    _buffer = next;
+    _byteData = ByteData.view(next.buffer);
+  }
 }
 
 final class _BridgeFrameReader {
@@ -576,8 +615,14 @@ final class _BridgeHttpRequest extends Stream<Uint8List>
   }
 
   static Uri _buildUri(BridgeRequestFrame frame) {
-    final query = frame.query.isEmpty ? '' : '?${frame.query}';
-    return Uri.parse('${frame.scheme}://${frame.authority}${frame.path}$query');
+    final authority = _splitAuthority(frame.authority);
+    return Uri(
+      scheme: frame.scheme.isEmpty ? 'http' : frame.scheme,
+      host: authority.host.isEmpty ? '127.0.0.1' : authority.host,
+      port: authority.port,
+      path: frame.path.isEmpty ? '/' : frame.path,
+      query: frame.query.isEmpty ? null : frame.query,
+    );
   }
 
   static Http2Headers _buildHeaders(List<MapEntry<String, String>> entries) {
@@ -649,6 +694,46 @@ final class _BridgeHttpRequest extends Stream<Uint8List>
   Future<HttpClientResponse> upgrade(Future<void> Function(Socket p1) handler) {
     throw UnsupportedError('upgrade is not supported by bridge requests');
   }
+}
+
+final class _ParsedAuthority {
+  const _ParsedAuthority({required this.host, required this.port});
+
+  final String host;
+  final int? port;
+}
+
+_ParsedAuthority _splitAuthority(String authority) {
+  if (authority.isEmpty) {
+    return const _ParsedAuthority(host: '127.0.0.1', port: null);
+  }
+
+  if (authority.startsWith('[')) {
+    final end = authority.indexOf(']');
+    if (end > 0) {
+      final host = authority.substring(1, end);
+      final suffix = authority.substring(end + 1);
+      if (suffix.startsWith(':')) {
+        final parsedPort = int.tryParse(suffix.substring(1));
+        if (parsedPort != null) {
+          return _ParsedAuthority(host: host, port: parsedPort);
+        }
+      }
+      return _ParsedAuthority(host: host, port: null);
+    }
+  }
+
+  final firstColon = authority.indexOf(':');
+  final lastColon = authority.lastIndexOf(':');
+  if (firstColon != -1 && firstColon == lastColon) {
+    final host = authority.substring(0, firstColon);
+    final parsedPort = int.tryParse(authority.substring(firstColon + 1));
+    if (parsedPort != null) {
+      return _ParsedAuthority(host: host, port: parsedPort);
+    }
+  }
+
+  return _ParsedAuthority(host: authority, port: null);
 }
 
 final class _BridgeHttpResponse implements HttpResponse {
