@@ -464,7 +464,11 @@ final class BridgeResponseFrame {
     writer.writeUint16(status);
     writer.writeUint32(headerCount);
     for (var i = 0; i < headerCount; i++) {
-      _writeHeaderName(writer, headerNameAt(i), tokenized: false);
+      _writeHeaderName(
+        writer,
+        headerNameAt(i),
+        tokenized: _encodeTokenizedHeaderFrameTypes,
+      );
       writer.writeString(headerValueAt(i));
     }
     writer.writeBytes(bodyBytes);
@@ -482,7 +486,11 @@ final class BridgeResponseFrame {
     writer.writeUint16(status);
     writer.writeUint32(headerCount);
     for (var i = 0; i < headerCount; i++) {
-      _writeHeaderName(writer, headerNameAt(i), tokenized: false);
+      _writeHeaderName(
+        writer,
+        headerNameAt(i),
+        tokenized: _encodeTokenizedHeaderFrameTypes,
+      );
       writer.writeString(headerValueAt(i));
     }
     writer.writeUint32(bodyBytes.length);
@@ -526,7 +534,11 @@ final class BridgeResponseFrame {
     writer.writeUint16(status);
     writer.writeUint32(headerCount);
     for (var i = 0; i < headerCount; i++) {
-      _writeHeaderName(writer, headerNameAt(i), tokenized: false);
+      _writeHeaderName(
+        writer,
+        headerNameAt(i),
+        tokenized: _encodeTokenizedHeaderFrameTypes,
+      );
       writer.writeString(headerValueAt(i));
     }
     return writer.takeBytes();
@@ -703,9 +715,10 @@ int get _requestStartFrameTypeForEncode => _encodeTokenizedHeaderFrameTypes
     ? _bridgeRequestStartFrameTypeTokenized
     : _bridgeRequestStartFrameType;
 
-int get _responseFrameTypeForEncode => _bridgeResponseFrameType;
+int get _responseFrameTypeForEncode => _bridgeResponseFrameTypeTokenized;
 
-int get _responseStartFrameTypeForEncode => _bridgeResponseStartFrameType;
+int get _responseStartFrameTypeForEncode =>
+    _bridgeResponseStartFrameTypeTokenized;
 
 bool _isRequestFrameType(int frameType) {
   return frameType == _bridgeRequestFrameType ||

@@ -245,7 +245,7 @@ void main() {
       expect(payload[1], 11);
     });
 
-    test('keeps legacy response frame type under protocol v1', () {
+    test('uses tokenized response frame type under protocol v1', () {
       const headers = <MapEntry<String, String>>[
         MapEntry('content-type', 'text/plain'),
       ];
@@ -255,7 +255,7 @@ void main() {
         bodyBytes: Uint8List(0),
       ).encodePayload();
       expect(payload[0], 1);
-      expect(payload[1], 2);
+      expect(payload[1], 12);
     });
 
     test('round-trips chunked request frames', () {
