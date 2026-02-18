@@ -34,9 +34,10 @@ const MAX_PROXY_BODY_BYTES: usize = 32 * 1024 * 1024;
 const MAX_BRIDGE_FRAME_BYTES: usize = 64 * 1024 * 1024;
 const BRIDGE_BODY_CHUNK_BYTES: usize = 64 * 1024;
 const BRIDGE_PROTOCOL_VERSION: u8 = 1;
-const BRIDGE_REQUEST_FRAME_TYPE: u8 = 1; // legacy single-frame request
+const BRIDGE_PROTOCOL_VERSION_LEGACY: u8 = 1;
+const _BRIDGE_REQUEST_FRAME_TYPE: u8 = 1; // legacy single-frame request
 const BRIDGE_RESPONSE_FRAME_TYPE: u8 = 2; // legacy single-frame response
-const BRIDGE_REQUEST_START_FRAME_TYPE: u8 = 3;
+const _BRIDGE_REQUEST_START_FRAME_TYPE: u8 = 3;
 const BRIDGE_REQUEST_CHUNK_FRAME_TYPE: u8 = 4;
 const BRIDGE_REQUEST_END_FRAME_TYPE: u8 = 5;
 const BRIDGE_RESPONSE_START_FRAME_TYPE: u8 = 6;
@@ -44,11 +45,48 @@ const BRIDGE_RESPONSE_CHUNK_FRAME_TYPE: u8 = 7;
 const BRIDGE_RESPONSE_END_FRAME_TYPE: u8 = 8;
 const BRIDGE_TUNNEL_CHUNK_FRAME_TYPE: u8 = 9;
 const BRIDGE_TUNNEL_CLOSE_FRAME_TYPE: u8 = 10;
+const BRIDGE_REQUEST_FRAME_TYPE_TOKENIZED: u8 = 11;
+const BRIDGE_RESPONSE_FRAME_TYPE_TOKENIZED: u8 = 12;
+const BRIDGE_REQUEST_START_FRAME_TYPE_TOKENIZED: u8 = 13;
+const BRIDGE_RESPONSE_START_FRAME_TYPE_TOKENIZED: u8 = 14;
+const BRIDGE_HEADER_NAME_LITERAL_TOKEN: u16 = 0xFFFF;
 const BRIDGE_BACKEND_KIND_TCP: u8 = 0;
 const BRIDGE_BACKEND_KIND_UNIX: u8 = 1;
 const BENCHMARK_MODE_NONE: u8 = 0;
 const BENCHMARK_MODE_STATIC_OK: u8 = 1;
 const BENCHMARK_STATIC_OK_BODY: &[u8] = br#"{"ok":true,"label":"routed_ffi_native_direct"}"#;
+
+const BRIDGE_HEADER_NAME_TABLE: [&str; 29] = [
+    "host",
+    "connection",
+    "user-agent",
+    "accept",
+    "accept-encoding",
+    "accept-language",
+    "content-type",
+    "content-length",
+    "transfer-encoding",
+    "cookie",
+    "set-cookie",
+    "cache-control",
+    "pragma",
+    "upgrade",
+    "authorization",
+    "origin",
+    "referer",
+    "location",
+    "server",
+    "date",
+    "x-forwarded-for",
+    "x-forwarded-proto",
+    "x-forwarded-host",
+    "x-forwarded-port",
+    "x-request-id",
+    "sec-websocket-key",
+    "sec-websocket-version",
+    "sec-websocket-protocol",
+    "sec-websocket-extensions",
+];
 
 #[repr(C)]
 pub struct RoutedFfiProxyConfig {
@@ -1162,7 +1200,7 @@ fn encode_bridge_request_start(request: &BridgeRequestRef<'_>) -> Result<Vec<u8>
     let mut writer = BridgeByteWriter::new();
     writer.reserve(256 + request.headers.len() * 32);
     writer.put_u8(BRIDGE_PROTOCOL_VERSION);
-    writer.put_u8(BRIDGE_REQUEST_START_FRAME_TYPE);
+    writer.put_u8(BRIDGE_REQUEST_START_FRAME_TYPE_TOKENIZED);
     writer.put_string(request.method)?;
     writer.put_string(request.scheme)?;
     writer.put_string(request.authority)?;
@@ -1178,7 +1216,7 @@ fn encode_bridge_request_start(request: &BridgeRequestRef<'_>) -> Result<Vec<u8>
         count = count
             .checked_add(1)
             .ok_or_else(|| "bridge request has too many headers".to_string())?;
-        writer.put_string(name.as_str())?;
+        write_bridge_header_name(&mut writer, name.as_str())?;
         writer.put_string(value)?;
     }
     writer.patch_u32(count_pos, count);
@@ -1192,7 +1230,7 @@ fn encode_bridge_request(
     let mut writer = BridgeByteWriter::new();
     writer.reserve(256 + request.headers.len() * 32 + body_bytes.len());
     writer.put_u8(BRIDGE_PROTOCOL_VERSION);
-    writer.put_u8(BRIDGE_REQUEST_FRAME_TYPE);
+    writer.put_u8(BRIDGE_REQUEST_FRAME_TYPE_TOKENIZED);
     writer.put_string(request.method)?;
     writer.put_string(request.scheme)?;
     writer.put_string(request.authority)?;
@@ -1208,7 +1246,7 @@ fn encode_bridge_request(
         count = count
             .checked_add(1)
             .ok_or_else(|| "bridge request has too many headers".to_string())?;
-        writer.put_string(name.as_str())?;
+        write_bridge_header_name(&mut writer, name.as_str())?;
         writer.put_string(value)?;
     }
     writer.patch_u32(count_pos, count);
@@ -1218,6 +1256,56 @@ fn encode_bridge_request(
 
 fn encode_bridge_request_end() -> Vec<u8> {
     vec![BRIDGE_PROTOCOL_VERSION, BRIDGE_REQUEST_END_FRAME_TYPE]
+}
+
+fn write_bridge_header_name(writer: &mut BridgeByteWriter, name: &str) -> Result<(), String> {
+    if let Some(token) = bridge_header_name_token(name) {
+        writer.put_u16(token);
+        return Ok(());
+    }
+    writer.put_u16(BRIDGE_HEADER_NAME_LITERAL_TOKEN);
+    writer.put_string(name)
+}
+
+fn bridge_header_name_token(name: &str) -> Option<u16> {
+    // Header names are normalized lowercase by hyper/axum in hot paths.
+    let token = match name {
+        "host" => 0,
+        "connection" => 1,
+        "user-agent" => 2,
+        "accept" => 3,
+        "accept-encoding" => 4,
+        "accept-language" => 5,
+        "content-type" => 6,
+        "content-length" => 7,
+        "transfer-encoding" => 8,
+        "cookie" => 9,
+        "set-cookie" => 10,
+        "cache-control" => 11,
+        "pragma" => 12,
+        "upgrade" => 13,
+        "authorization" => 14,
+        "origin" => 15,
+        "referer" => 16,
+        "location" => 17,
+        "server" => 18,
+        "date" => 19,
+        "x-forwarded-for" => 20,
+        "x-forwarded-proto" => 21,
+        "x-forwarded-host" => 22,
+        "x-forwarded-port" => 23,
+        "x-request-id" => 24,
+        "sec-websocket-key" => 25,
+        "sec-websocket-version" => 26,
+        "sec-websocket-protocol" => 27,
+        "sec-websocket-extensions" => 28,
+        _ => return None,
+    };
+    Some(token)
+}
+
+fn bridge_header_name_from_token(token: u16) -> Option<&'static str> {
+    BRIDGE_HEADER_NAME_TABLE.get(token as usize).copied()
 }
 
 async fn write_bridge_request_chunk_frame(
@@ -1274,7 +1362,7 @@ async fn decode_bridge_response_stream(
     websocket_upgrade_requested: bool,
 ) -> Result<BridgeCallResult, String> {
     let first_frame_type = peek_bridge_frame_type(&connection.read_buffer)?;
-    if first_frame_type == BRIDGE_RESPONSE_FRAME_TYPE {
+    if is_bridge_response_frame_type(first_frame_type) {
         let legacy_response = decode_bridge_response(&connection.read_buffer)
             .map_err(|error| format!("decode response failed: {error}"))?;
         if websocket_upgrade_requested
@@ -1295,7 +1383,7 @@ async fn decode_bridge_response_stream(
             tunnel_socket: None,
         });
     }
-    if first_frame_type != BRIDGE_RESPONSE_START_FRAME_TYPE {
+    if !is_bridge_response_start_frame_type(first_frame_type) {
         return Err(format!(
             "decode response failed: invalid bridge response frame type: {first_frame_type}"
         ));
@@ -1524,19 +1612,20 @@ async fn run_websocket_tunnel(
 fn decode_bridge_response(payload: &[u8]) -> Result<BridgeResponse, String> {
     let mut reader = BridgeByteReader::new(payload);
     let version = reader.get_u8()?;
-    if version != BRIDGE_PROTOCOL_VERSION {
+    if !is_supported_bridge_protocol_version(version) {
         return Err(format!("unsupported bridge protocol version: {version}"));
     }
     let frame_type = reader.get_u8()?;
-    if frame_type != BRIDGE_RESPONSE_FRAME_TYPE {
+    if !is_bridge_response_frame_type(frame_type) {
         return Err(format!("invalid bridge response frame type: {frame_type}"));
     }
+    let tokenized_names = is_bridge_response_frame_type_tokenized(frame_type);
 
     let status = reader.get_u16()?;
     let header_count = reader.get_u32()? as usize;
     let mut headers = Vec::with_capacity(header_count);
     for _ in 0..header_count {
-        let name = reader.get_bytes()?;
+        let name = decode_bridge_header_name_bytes(&mut reader, tokenized_names)?;
         let value = reader.get_bytes()?;
         let Ok(header_name) = axum::http::header::HeaderName::from_bytes(name) else {
             continue;
@@ -1568,20 +1657,21 @@ fn decode_bridge_response_start(
 > {
     let mut reader = BridgeByteReader::new(payload);
     let version = reader.get_u8()?;
-    if version != BRIDGE_PROTOCOL_VERSION {
+    if !is_supported_bridge_protocol_version(version) {
         return Err(format!("unsupported bridge protocol version: {version}"));
     }
     let frame_type = reader.get_u8()?;
-    if frame_type != BRIDGE_RESPONSE_START_FRAME_TYPE {
+    if !is_bridge_response_start_frame_type(frame_type) {
         return Err(format!(
             "invalid bridge response start frame type: {frame_type}"
         ));
     }
+    let tokenized_names = is_bridge_response_start_frame_type_tokenized(frame_type);
     let status = reader.get_u16()?;
     let header_count = reader.get_u32()? as usize;
     let mut headers = Vec::with_capacity(header_count);
     for _ in 0..header_count {
-        let name = reader.get_bytes()?;
+        let name = decode_bridge_header_name_bytes(&mut reader, tokenized_names)?;
         let value = reader.get_bytes()?;
         let Ok(header_name) = axum::http::header::HeaderName::from_bytes(name) else {
             continue;
@@ -1598,7 +1688,7 @@ fn decode_bridge_response_start(
 fn decode_bridge_response_chunk(payload: &[u8]) -> Result<Bytes, String> {
     let mut reader = BridgeByteReader::new(payload);
     let version = reader.get_u8()?;
-    if version != BRIDGE_PROTOCOL_VERSION {
+    if !is_supported_bridge_protocol_version(version) {
         return Err(format!("unsupported bridge protocol version: {version}"));
     }
     let frame_type = reader.get_u8()?;
@@ -1615,7 +1705,7 @@ fn decode_bridge_response_chunk(payload: &[u8]) -> Result<Bytes, String> {
 fn decode_bridge_response_end(payload: &[u8]) -> Result<(), String> {
     let mut reader = BridgeByteReader::new(payload);
     let version = reader.get_u8()?;
-    if version != BRIDGE_PROTOCOL_VERSION {
+    if !is_supported_bridge_protocol_version(version) {
         return Err(format!("unsupported bridge protocol version: {version}"));
     }
     let frame_type = reader.get_u8()?;
@@ -1630,7 +1720,7 @@ fn decode_bridge_response_end(payload: &[u8]) -> Result<(), String> {
 fn decode_bridge_tunnel_chunk(payload: &[u8]) -> Result<Bytes, String> {
     let mut reader = BridgeByteReader::new(payload);
     let version = reader.get_u8()?;
-    if version != BRIDGE_PROTOCOL_VERSION {
+    if !is_supported_bridge_protocol_version(version) {
         return Err(format!("unsupported bridge protocol version: {version}"));
     }
     let frame_type = reader.get_u8()?;
@@ -1647,7 +1737,7 @@ fn decode_bridge_tunnel_chunk(payload: &[u8]) -> Result<Bytes, String> {
 fn decode_bridge_tunnel_close(payload: &[u8]) -> Result<(), String> {
     let mut reader = BridgeByteReader::new(payload);
     let version = reader.get_u8()?;
-    if version != BRIDGE_PROTOCOL_VERSION {
+    if !is_supported_bridge_protocol_version(version) {
         return Err(format!("unsupported bridge protocol version: {version}"));
     }
     let frame_type = reader.get_u8()?;
@@ -1664,10 +1754,49 @@ fn peek_bridge_frame_type(payload: &[u8]) -> Result<u8, String> {
         return Err("truncated bridge payload".to_string());
     }
     let version = payload[0];
-    if version != BRIDGE_PROTOCOL_VERSION {
+    if !is_supported_bridge_protocol_version(version) {
         return Err(format!("unsupported bridge protocol version: {version}"));
     }
     Ok(payload[1])
+}
+
+fn is_supported_bridge_protocol_version(version: u8) -> bool {
+    version == BRIDGE_PROTOCOL_VERSION || version == BRIDGE_PROTOCOL_VERSION_LEGACY
+}
+
+fn is_bridge_response_frame_type(frame_type: u8) -> bool {
+    frame_type == BRIDGE_RESPONSE_FRAME_TYPE || frame_type == BRIDGE_RESPONSE_FRAME_TYPE_TOKENIZED
+}
+
+fn is_bridge_response_frame_type_tokenized(frame_type: u8) -> bool {
+    frame_type == BRIDGE_RESPONSE_FRAME_TYPE_TOKENIZED
+}
+
+fn is_bridge_response_start_frame_type(frame_type: u8) -> bool {
+    frame_type == BRIDGE_RESPONSE_START_FRAME_TYPE
+        || frame_type == BRIDGE_RESPONSE_START_FRAME_TYPE_TOKENIZED
+}
+
+fn is_bridge_response_start_frame_type_tokenized(frame_type: u8) -> bool {
+    frame_type == BRIDGE_RESPONSE_START_FRAME_TYPE_TOKENIZED
+}
+
+fn decode_bridge_header_name_bytes<'a>(
+    reader: &mut BridgeByteReader<'a>,
+    tokenized: bool,
+) -> Result<&'a [u8], String> {
+    if !tokenized {
+        return reader.get_bytes();
+    }
+
+    let token = reader.get_u16()?;
+    if token == BRIDGE_HEADER_NAME_LITERAL_TOKEN {
+        return reader.get_bytes();
+    }
+
+    let name = bridge_header_name_from_token(token)
+        .ok_or_else(|| format!("invalid bridge header name token: {token}"))?;
+    Ok(name.as_bytes())
 }
 
 async fn write_bridge_frame<S: AsyncWrite + Unpin + ?Sized>(
@@ -1843,6 +1972,10 @@ impl BridgeByteWriter {
 
     fn put_u8(&mut self, value: u8) {
         self.bytes.push(value);
+    }
+
+    fn put_u16(&mut self, value: u16) {
+        self.bytes.extend_from_slice(&value.to_be_bytes());
     }
 
     fn put_u32(&mut self, value: u32) {

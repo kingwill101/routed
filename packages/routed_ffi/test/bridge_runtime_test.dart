@@ -36,6 +36,88 @@ BridgeRequestFrame _requestFrame({
   );
 }
 
+final class _LegacyFrameWriter {
+  _LegacyFrameWriter() : _builder = BytesBuilder(copy: false);
+
+  final BytesBuilder _builder;
+
+  void writeUint8(int value) {
+    _builder.add(<int>[value & 0xff]);
+  }
+
+  void writeUint16(int value) {
+    _builder.add(<int>[(value >> 8) & 0xff, value & 0xff]);
+  }
+
+  void writeUint32(int value) {
+    _builder.add(<int>[
+      (value >> 24) & 0xff,
+      (value >> 16) & 0xff,
+      (value >> 8) & 0xff,
+      value & 0xff,
+    ]);
+  }
+
+  void writeString(String value) {
+    final bytes = utf8.encode(value);
+    writeUint32(bytes.length);
+    _builder.add(bytes);
+  }
+
+  void writeBytes(List<int> bytes) {
+    writeUint32(bytes.length);
+    _builder.add(bytes);
+  }
+
+  Uint8List takeBytes() => _builder.takeBytes();
+}
+
+Uint8List _legacyRequestPayload({
+  required String method,
+  required String scheme,
+  required String authority,
+  required String path,
+  required String query,
+  required String protocol,
+  required List<MapEntry<String, String>> headers,
+  required List<int> bodyBytes,
+}) {
+  final writer = _LegacyFrameWriter();
+  writer.writeUint8(1);
+  writer.writeUint8(1);
+  writer.writeString(method);
+  writer.writeString(scheme);
+  writer.writeString(authority);
+  writer.writeString(path);
+  writer.writeString(query);
+  writer.writeString(protocol);
+  writer.writeUint32(headers.length);
+  for (final header in headers) {
+    writer.writeString(header.key);
+    writer.writeString(header.value);
+  }
+  writer.writeBytes(bodyBytes);
+  return writer.takeBytes();
+}
+
+Uint8List _legacyResponsePayload({
+  required int status,
+  required List<MapEntry<String, String>> headers,
+  required List<int> bodyBytes,
+}) {
+  final writer = _LegacyFrameWriter();
+  writer.writeUint8(1);
+  writer.writeUint8(2);
+  writer.writeUint16(status);
+  writer.writeUint32(headers.length);
+  for (final header in headers) {
+    writer.writeString(header.key);
+    writer.writeString(header.value);
+  }
+  writer.writeBytes(bodyBytes);
+  return writer.takeBytes();
+}
+
 void main() {
   group('Bridge frame codec', () {
     test('applies defaults when request fields are empty', () {
@@ -86,6 +168,31 @@ void main() {
       expect(decoded.bodyBytes, Uint8List.fromList(const <int>[1, 2, 3]));
     });
 
+    test('decodes legacy v1 request payloads', () {
+      final payload = _legacyRequestPayload(
+        method: 'post',
+        scheme: 'https',
+        authority: 'legacy.example',
+        path: '/legacy',
+        query: 'q=1',
+        protocol: '1.1',
+        headers: const <MapEntry<String, String>>[
+          MapEntry('content-type', 'text/plain'),
+        ],
+        bodyBytes: utf8.encode('legacy body'),
+      );
+
+      final decoded = BridgeRequestFrame.decodePayload(payload);
+      expect(decoded.method, 'POST');
+      expect(decoded.scheme, 'https');
+      expect(decoded.authority, 'legacy.example');
+      expect(decoded.path, '/legacy');
+      expect(decoded.query, 'q=1');
+      expect(decoded.headers, hasLength(1));
+      expect(decoded.headers.first.key, 'content-type');
+      expect(utf8.decode(decoded.bodyBytes), 'legacy body');
+    });
+
     test('throws FormatException for invalid request frame type', () {
       final payload = _requestFrame().encodePayload();
       payload[1] = 255;
@@ -111,6 +218,44 @@ void main() {
       expect(decoded.headers.length, 2);
       expect(decoded.headers.first.key, 'content-type');
       expect(utf8.decode(decoded.bodyBytes), '{"ok":true}');
+    });
+
+    test('decodes legacy v1 response payloads', () {
+      final payload = _legacyResponsePayload(
+        status: HttpStatus.accepted,
+        headers: const <MapEntry<String, String>>[
+          MapEntry('content-type', 'application/json'),
+        ],
+        bodyBytes: utf8.encode('{"legacy":true}'),
+      );
+
+      final decoded = BridgeResponseFrame.decodePayload(payload);
+      expect(decoded.status, HttpStatus.accepted);
+      expect(decoded.headers, hasLength(1));
+      expect(decoded.headers.first.key, 'content-type');
+      expect(utf8.decode(decoded.bodyBytes), '{"legacy":true}');
+    });
+
+    test('uses tokenized request frame type under protocol v1', () {
+      const headers = <MapEntry<String, String>>[
+        MapEntry('content-type', 'text/plain'),
+      ];
+      final payload = _requestFrame(headers: headers).encodePayload();
+      expect(payload[0], 1);
+      expect(payload[1], 11);
+    });
+
+    test('keeps legacy response frame type under protocol v1', () {
+      const headers = <MapEntry<String, String>>[
+        MapEntry('content-type', 'text/plain'),
+      ];
+      final payload = BridgeResponseFrame(
+        status: HttpStatus.ok,
+        headers: headers,
+        bodyBytes: Uint8List(0),
+      ).encodePayload();
+      expect(payload[0], 1);
+      expect(payload[1], 2);
     });
 
     test('round-trips chunked request frames', () {
@@ -174,9 +319,11 @@ void main() {
     });
 
     test('round-trips tunnel chunk and close frames', () {
-      final chunkPayload = BridgeTunnelFrame.encodeChunkPayload(
-        const <int>[9, 8, 7],
-      );
+      final chunkPayload = BridgeTunnelFrame.encodeChunkPayload(const <int>[
+        9,
+        8,
+        7,
+      ]);
       final closePayload = BridgeTunnelFrame.encodeClosePayload();
 
       final decodedChunk = BridgeTunnelFrame.decodeChunkPayload(chunkPayload);

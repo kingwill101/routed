@@ -1,17 +1,22 @@
 use std::{env, path::PathBuf};
 
+const GENERATE_BINDINGS_ENV: &str = "ROUTED_FFI_GENERATE_BINDINGS";
+
 fn main() {
     println!("cargo:rerun-if-changed=src/lib.rs");
     println!("cargo:rerun-if-changed=cbindgen.toml");
+    println!("cargo:rerun-if-env-changed={GENERATE_BINDINGS_ENV}");
 
-    create_rust_to_dart_bindings();
+    if env::var_os(GENERATE_BINDINGS_ENV).is_some() {
+        create_rust_to_dart_bindings();
+    }
 }
 
 fn create_rust_to_dart_bindings() {
     let crate_dir = env::var("CARGO_MANIFEST_DIR").expect("Missing CARGO_MANIFEST_DIR");
     let header_path = PathBuf::from(crate_dir.clone()).join("bindings.h");
 
-    cbindgen::Builder::new()
+    let changed = cbindgen::Builder::new()
         .with_crate(crate_dir)
         .with_config(
             cbindgen::Config::from_file("cbindgen.toml")
@@ -24,4 +29,8 @@ fn create_rust_to_dart_bindings() {
         .generate()
         .expect("Unable to generate bindings")
         .write_to_file(header_path);
+
+    if changed {
+        println!("cargo:warning=Updated native/bindings.h for ffigen");
+    }
 }

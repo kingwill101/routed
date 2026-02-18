@@ -2,6 +2,7 @@ part of 'bridge_runtime.dart';
 
 /// Current bridge wire protocol version.
 const int bridgeFrameProtocolVersion = 1;
+const int _bridgeFrameProtocolVersionLegacy = 1;
 const int _bridgeRequestFrameType = 1; // legacy single-frame request
 const int _bridgeResponseFrameType = 2; // legacy single-frame response
 const int _bridgeRequestStartFrameType = 3;
@@ -12,7 +13,51 @@ const int _bridgeResponseChunkFrameType = 7;
 const int _bridgeResponseEndFrameType = 8;
 const int _bridgeTunnelChunkFrameType = 9;
 const int _bridgeTunnelCloseFrameType = 10;
+const int _bridgeRequestFrameTypeTokenized = 11;
+const int _bridgeResponseFrameTypeTokenized = 12;
+const int _bridgeRequestStartFrameTypeTokenized = 13;
+const int _bridgeResponseStartFrameTypeTokenized = 14;
+const int _bridgeHeaderNameLiteralToken = 0xffff;
 const Utf8Decoder _strictUtf8Decoder = Utf8Decoder(allowMalformed: false);
+const bool _encodeTokenizedHeaderFrameTypes = true;
+
+const List<String> _bridgeHeaderNameTable = <String>[
+  'host',
+  'connection',
+  'user-agent',
+  'accept',
+  'accept-encoding',
+  'accept-language',
+  'content-type',
+  'content-length',
+  'transfer-encoding',
+  'cookie',
+  'set-cookie',
+  'cache-control',
+  'pragma',
+  'upgrade',
+  'authorization',
+  'origin',
+  'referer',
+  'location',
+  'server',
+  'date',
+  'x-forwarded-for',
+  'x-forwarded-proto',
+  'x-forwarded-host',
+  'x-forwarded-port',
+  'x-request-id',
+  'sec-websocket-key',
+  'sec-websocket-version',
+  'sec-websocket-protocol',
+  'sec-websocket-extensions',
+];
+
+final Map<String, int> _bridgeHeaderNameTokenByName =
+    Map<String, int>.unmodifiable(<String, int>{
+      for (var i = 0; i < _bridgeHeaderNameTable.length; i++)
+        _bridgeHeaderNameTable[i]: i,
+    });
 
 /// A binary bridge request frame passed from Rust transport to Dart.
 ///
@@ -135,7 +180,7 @@ final class BridgeRequestFrame {
   Uint8List encodePayload() {
     final writer = _BridgeFrameWriter();
     writer.writeUint8(bridgeFrameProtocolVersion);
-    writer.writeUint8(_bridgeRequestFrameType);
+    writer.writeUint8(_requestFrameTypeForEncode);
     writer.writeString(method);
     writer.writeString(scheme);
     writer.writeString(authority);
@@ -144,7 +189,11 @@ final class BridgeRequestFrame {
     writer.writeString(protocol);
     writer.writeUint32(headerCount);
     for (var i = 0; i < headerCount; i++) {
-      writer.writeString(headerNameAt(i));
+      _writeHeaderName(
+        writer,
+        headerNameAt(i),
+        tokenized: _encodeTokenizedHeaderFrameTypes,
+      );
       writer.writeString(headerValueAt(i));
     }
     writer.writeBytes(bodyBytes);
@@ -154,13 +203,14 @@ final class BridgeRequestFrame {
   factory BridgeRequestFrame.decodePayload(Uint8List payload) {
     final reader = _BridgeFrameReader(payload);
     final version = reader.readUint8();
-    if (version != bridgeFrameProtocolVersion) {
+    if (!_isSupportedBridgeProtocolVersion(version)) {
       throw FormatException('unsupported bridge protocol version: $version');
     }
     final frameType = reader.readUint8();
-    if (frameType != _bridgeRequestFrameType) {
+    if (!_isRequestFrameType(frameType)) {
       throw FormatException('invalid bridge request frame type: $frameType');
     }
+    final tokenizedNames = _isTokenizedRequestFrameType(frameType);
 
     final method = _normalizeHttpMethod(reader.readString());
     final scheme = reader.readString();
@@ -172,7 +222,7 @@ final class BridgeRequestFrame {
     final headerNames = List<String>.filled(headerCount, '', growable: false);
     final headerValues = List<String>.filled(headerCount, '', growable: false);
     for (var i = 0; i < headerCount; i++) {
-      headerNames[i] = reader.readString();
+      headerNames[i] = _readHeaderName(reader, tokenized: tokenizedNames);
       headerValues[i] = reader.readString();
     }
     final bodyBytes = reader.readBytes();
@@ -193,7 +243,7 @@ final class BridgeRequestFrame {
   Uint8List encodeStartPayload() {
     final writer = _BridgeFrameWriter();
     writer.writeUint8(bridgeFrameProtocolVersion);
-    writer.writeUint8(_bridgeRequestStartFrameType);
+    writer.writeUint8(_requestStartFrameTypeForEncode);
     writer.writeString(method);
     writer.writeString(scheme);
     writer.writeString(authority);
@@ -202,7 +252,11 @@ final class BridgeRequestFrame {
     writer.writeString(protocol);
     writer.writeUint32(headerCount);
     for (var i = 0; i < headerCount; i++) {
-      writer.writeString(headerNameAt(i));
+      _writeHeaderName(
+        writer,
+        headerNameAt(i),
+        tokenized: _encodeTokenizedHeaderFrameTypes,
+      );
       writer.writeString(headerValueAt(i));
     }
     return writer.takeBytes();
@@ -210,14 +264,17 @@ final class BridgeRequestFrame {
 
   factory BridgeRequestFrame.decodeStartPayload(Uint8List payload) {
     final reader = _BridgeFrameReader(payload);
-    final frameType = _readAndValidateHeader(
-      reader,
-      expectedFrameType: _bridgeRequestStartFrameType,
-      frameLabel: 'request start',
-    );
-    if (frameType != _bridgeRequestStartFrameType) {
-      throw StateError('unreachable');
+    final version = reader.readUint8();
+    if (!_isSupportedBridgeProtocolVersion(version)) {
+      throw FormatException('unsupported bridge protocol version: $version');
     }
+    final frameType = reader.readUint8();
+    if (!_isRequestStartFrameType(frameType)) {
+      throw FormatException(
+        'invalid bridge request start frame type: $frameType',
+      );
+    }
+    final tokenizedNames = _isTokenizedRequestStartFrameType(frameType);
     final method = _normalizeHttpMethod(reader.readString());
     final scheme = reader.readString();
     final authority = reader.readString();
@@ -228,7 +285,7 @@ final class BridgeRequestFrame {
     final headerNames = List<String>.filled(headerCount, '', growable: false);
     final headerValues = List<String>.filled(headerCount, '', growable: false);
     for (var i = 0; i < headerCount; i++) {
-      headerNames[i] = reader.readString();
+      headerNames[i] = _readHeaderName(reader, tokenized: tokenizedNames);
       headerValues[i] = reader.readString();
     }
     reader.ensureDone();
@@ -291,7 +348,7 @@ final class BridgeRequestFrame {
   }
 
   static bool isStartPayload(Uint8List payload) {
-    return _peekFrameType(payload) == _bridgeRequestStartFrameType;
+    return _isRequestStartFrameType(_peekFrameType(payload));
   }
 }
 
@@ -403,11 +460,11 @@ final class BridgeResponseFrame {
   Uint8List encodePayload() {
     final writer = _BridgeFrameWriter();
     writer.writeUint8(bridgeFrameProtocolVersion);
-    writer.writeUint8(_bridgeResponseFrameType);
+    writer.writeUint8(_responseFrameTypeForEncode);
     writer.writeUint16(status);
     writer.writeUint32(headerCount);
     for (var i = 0; i < headerCount; i++) {
-      writer.writeString(headerNameAt(i));
+      _writeHeaderName(writer, headerNameAt(i), tokenized: false);
       writer.writeString(headerValueAt(i));
     }
     writer.writeBytes(bodyBytes);
@@ -421,11 +478,11 @@ final class BridgeResponseFrame {
   Uint8List encodePayloadPrefixWithoutBody() {
     final writer = _BridgeFrameWriter();
     writer.writeUint8(bridgeFrameProtocolVersion);
-    writer.writeUint8(_bridgeResponseFrameType);
+    writer.writeUint8(_responseFrameTypeForEncode);
     writer.writeUint16(status);
     writer.writeUint32(headerCount);
     for (var i = 0; i < headerCount; i++) {
-      writer.writeString(headerNameAt(i));
+      _writeHeaderName(writer, headerNameAt(i), tokenized: false);
       writer.writeString(headerValueAt(i));
     }
     writer.writeUint32(bodyBytes.length);
@@ -435,19 +492,20 @@ final class BridgeResponseFrame {
   factory BridgeResponseFrame.decodePayload(Uint8List payload) {
     final reader = _BridgeFrameReader(payload);
     final version = reader.readUint8();
-    if (version != bridgeFrameProtocolVersion) {
+    if (!_isSupportedBridgeProtocolVersion(version)) {
       throw FormatException('unsupported bridge protocol version: $version');
     }
     final frameType = reader.readUint8();
-    if (frameType != _bridgeResponseFrameType) {
+    if (!_isResponseFrameType(frameType)) {
       throw FormatException('invalid bridge response frame type: $frameType');
     }
+    final tokenizedNames = _isTokenizedResponseFrameType(frameType);
     final status = reader.readUint16();
     final headerCount = reader.readUint32();
     final headerNames = List<String>.filled(headerCount, '', growable: false);
     final headerValues = List<String>.filled(headerCount, '', growable: false);
     for (var i = 0; i < headerCount; i++) {
-      headerNames[i] = reader.readString();
+      headerNames[i] = _readHeaderName(reader, tokenized: tokenizedNames);
       headerValues[i] = reader.readString();
     }
     final bodyBytes = reader.readBytes();
@@ -464,11 +522,11 @@ final class BridgeResponseFrame {
   Uint8List encodeStartPayload() {
     final writer = _BridgeFrameWriter();
     writer.writeUint8(bridgeFrameProtocolVersion);
-    writer.writeUint8(_bridgeResponseStartFrameType);
+    writer.writeUint8(_responseStartFrameTypeForEncode);
     writer.writeUint16(status);
     writer.writeUint32(headerCount);
     for (var i = 0; i < headerCount; i++) {
-      writer.writeString(headerNameAt(i));
+      _writeHeaderName(writer, headerNameAt(i), tokenized: false);
       writer.writeString(headerValueAt(i));
     }
     return writer.takeBytes();
@@ -476,20 +534,23 @@ final class BridgeResponseFrame {
 
   factory BridgeResponseFrame.decodeStartPayload(Uint8List payload) {
     final reader = _BridgeFrameReader(payload);
-    final frameType = _readAndValidateHeader(
-      reader,
-      expectedFrameType: _bridgeResponseStartFrameType,
-      frameLabel: 'response start',
-    );
-    if (frameType != _bridgeResponseStartFrameType) {
-      throw StateError('unreachable');
+    final version = reader.readUint8();
+    if (!_isSupportedBridgeProtocolVersion(version)) {
+      throw FormatException('unsupported bridge protocol version: $version');
     }
+    final frameType = reader.readUint8();
+    if (!_isResponseStartFrameType(frameType)) {
+      throw FormatException(
+        'invalid bridge response start frame type: $frameType',
+      );
+    }
+    final tokenizedNames = _isTokenizedResponseStartFrameType(frameType);
     final status = reader.readUint16();
     final headerCount = reader.readUint32();
     final headerNames = List<String>.filled(headerCount, '', growable: false);
     final headerValues = List<String>.filled(headerCount, '', growable: false);
     for (var i = 0; i < headerCount; i++) {
-      headerNames[i] = reader.readString();
+      headerNames[i] = _readHeaderName(reader, tokenized: tokenizedNames);
       headerValues[i] = reader.readString();
     }
     reader.ensureDone();
@@ -608,7 +669,7 @@ int _readAndValidateHeader(
   required String frameLabel,
 }) {
   final version = reader.readUint8();
-  if (version != bridgeFrameProtocolVersion) {
+  if (!_isSupportedBridgeProtocolVersion(version)) {
     throw FormatException('unsupported bridge protocol version: $version');
   }
   final frameType = reader.readUint8();
@@ -623,10 +684,120 @@ int _peekFrameType(Uint8List payload) {
     throw const FormatException('truncated bridge payload');
   }
   final version = payload[0];
-  if (version != bridgeFrameProtocolVersion) {
+  if (!_isSupportedBridgeProtocolVersion(version)) {
     throw FormatException('unsupported bridge protocol version: $version');
   }
   return payload[1];
+}
+
+bool _isSupportedBridgeProtocolVersion(int version) {
+  return version == bridgeFrameProtocolVersion ||
+      version == _bridgeFrameProtocolVersionLegacy;
+}
+
+int get _requestFrameTypeForEncode => _encodeTokenizedHeaderFrameTypes
+    ? _bridgeRequestFrameTypeTokenized
+    : _bridgeRequestFrameType;
+
+int get _requestStartFrameTypeForEncode => _encodeTokenizedHeaderFrameTypes
+    ? _bridgeRequestStartFrameTypeTokenized
+    : _bridgeRequestStartFrameType;
+
+int get _responseFrameTypeForEncode => _bridgeResponseFrameType;
+
+int get _responseStartFrameTypeForEncode => _bridgeResponseStartFrameType;
+
+bool _isRequestFrameType(int frameType) {
+  return frameType == _bridgeRequestFrameType ||
+      frameType == _bridgeRequestFrameTypeTokenized;
+}
+
+bool _isTokenizedRequestFrameType(int frameType) {
+  return frameType == _bridgeRequestFrameTypeTokenized;
+}
+
+bool _isRequestStartFrameType(int frameType) {
+  return frameType == _bridgeRequestStartFrameType ||
+      frameType == _bridgeRequestStartFrameTypeTokenized;
+}
+
+bool _isTokenizedRequestStartFrameType(int frameType) {
+  return frameType == _bridgeRequestStartFrameTypeTokenized;
+}
+
+bool _isResponseFrameType(int frameType) {
+  return frameType == _bridgeResponseFrameType ||
+      frameType == _bridgeResponseFrameTypeTokenized;
+}
+
+bool _isTokenizedResponseFrameType(int frameType) {
+  return frameType == _bridgeResponseFrameTypeTokenized;
+}
+
+bool _isResponseStartFrameType(int frameType) {
+  return frameType == _bridgeResponseStartFrameType ||
+      frameType == _bridgeResponseStartFrameTypeTokenized;
+}
+
+bool _isTokenizedResponseStartFrameType(int frameType) {
+  return frameType == _bridgeResponseStartFrameTypeTokenized;
+}
+
+void _writeHeaderName(
+  _BridgeFrameWriter writer,
+  String name, {
+  required bool tokenized,
+}) {
+  if (!tokenized) {
+    writer.writeString(name);
+    return;
+  }
+  final normalized = _asciiLower(name);
+  final token = _bridgeHeaderNameTokenByName[normalized];
+  if (token != null) {
+    writer.writeUint16(token);
+    return;
+  }
+  writer.writeUint16(_bridgeHeaderNameLiteralToken);
+  writer.writeString(name);
+}
+
+String _readHeaderName(_BridgeFrameReader reader, {required bool tokenized}) {
+  if (!tokenized) {
+    return reader.readString();
+  }
+  final token = reader.readUint16();
+  if (token == _bridgeHeaderNameLiteralToken) {
+    return reader.readString();
+  }
+  if (token < 0 || token >= _bridgeHeaderNameTable.length) {
+    throw FormatException('invalid bridge header name token: $token');
+  }
+  return _bridgeHeaderNameTable[token];
+}
+
+String _asciiLower(String value) {
+  var hasUpper = false;
+  for (var i = 0; i < value.length; i++) {
+    final code = value.codeUnitAt(i);
+    if (code >= 0x41 && code <= 0x5a) {
+      hasUpper = true;
+      break;
+    }
+  }
+  if (!hasUpper) {
+    return value;
+  }
+  final out = Uint8List(value.length);
+  for (var i = 0; i < value.length; i++) {
+    final code = value.codeUnitAt(i);
+    if (code >= 0x41 && code <= 0x5a) {
+      out[i] = code + 0x20;
+    } else {
+      out[i] = code;
+    }
+  }
+  return String.fromCharCodes(out);
 }
 
 String _normalizeHttpMethod(String method) {

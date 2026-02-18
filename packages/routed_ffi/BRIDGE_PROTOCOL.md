@@ -38,6 +38,10 @@ Current frame types:
 - `8`: response end
 - `9`: upgraded tunnel chunk
 - `10`: upgraded tunnel close
+- `11`: tokenized single-frame request
+- `12`: tokenized single-frame response
+- `13`: tokenized request start
+- `14`: tokenized response start
 
 ## Field Encoding
 
@@ -45,6 +49,23 @@ Current frame types:
 - `bytes`: `u32` big-endian length + raw bytes
 - `u16`: big-endian
 - `u32`: big-endian
+
+For tokenized request/response frame types (`11`, `12`, `13`, `14`), header
+name fields are encoded as:
+
+1. `header_name_token: u16`
+2. if token is `65535` (`0xFFFF`), `header_name_literal: string`
+
+Token table:
+
+`host`, `connection`, `user-agent`, `accept`, `accept-encoding`,
+`accept-language`, `content-type`, `content-length`, `transfer-encoding`,
+`cookie`, `set-cookie`, `cache-control`, `pragma`, `upgrade`,
+`authorization`, `origin`, `referer`, `location`, `server`, `date`,
+`x-forwarded-for`, `x-forwarded-proto`, `x-forwarded-host`,
+`x-forwarded-port`, `x-request-id`, `sec-websocket-key`,
+`sec-websocket-version`, `sec-websocket-protocol`,
+`sec-websocket-extensions`
 
 ## Preferred Exchange (Chunked Framing)
 
@@ -60,7 +81,7 @@ Current default exchange sequence:
 This framing keeps request/response metadata separate from body chunks and
 supports large payload transfer without JSON/base64 overhead.
 
-## Request Start Payload (frame type `3`)
+## Request Start Payload (frame type `3` or `13`)
 
 Order:
 
@@ -72,7 +93,8 @@ Order:
 6. `protocol: string`
 7. `headers_count: u32`
 8. repeated `headers_count` times:
-   - `header_name: string`
+   - type `3`: `header_name: string`
+   - type `13`: `header_name_token: u16` (+ optional literal string if token is `65535`)
    - `header_value: string`
 Default normalization on Dart decode:
 
@@ -92,14 +114,15 @@ Order:
 
 No additional fields beyond payload header.
 
-## Response Start Payload (frame type `6`)
+## Response Start Payload (frame type `6` or `14`)
 
 Order:
 
 1. `status: u16`
 2. `headers_count: u32`
 3. repeated `headers_count` times:
-   - `header_name: string`
+   - type `6`: `header_name: string`
+   - type `14`: `header_name_token: u16` (+ optional literal string if token is `65535`)
    - `header_value: string`
 ## Response Chunk Payload (frame type `7`)
 
@@ -136,6 +159,8 @@ For compatibility with older bridge peers, these frames are still accepted:
 
 - request (`1`): request metadata + full body in one payload
 - response (`2`): status + headers + full body in one payload
+- tokenized request (`11`): request metadata + full body in one payload
+- tokenized response (`12`): status + headers + full body in one payload
 
 ## Error Semantics
 

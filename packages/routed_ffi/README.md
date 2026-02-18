@@ -134,11 +134,17 @@ Future<void> main() async {
 ## Binding Generation
 
 - Rust exports C headers via `native/build.rs` using `cbindgen`.
-- Dart bindings are generated with `ffigen`:
+- Normal native build hooks do not rewrite `native/bindings.h` to avoid
+  first-run invalidation churn.
+- Dart bindings are generated with `ffigen` using:
 
 ```bash
 dart run tool/generate_ffi.dart
 ```
+
+`tool/generate_ffi.dart` first runs Cargo with
+`ROUTED_FFI_GENERATE_BINDINGS=1` to refresh `native/bindings.h`, then runs
+`ffigen`.
 
 ## Benchmark
 
@@ -174,7 +180,7 @@ server + FFI bridge + direct Dart handler) without Routed engine execution.
 
 ### Latest Snapshot
 
-Last run (local): 2026-02-17 21:30 -0500
+Last run (local): 2026-02-18 03:22 -0500
 
 Command:
 
@@ -183,19 +189,21 @@ dart run tool/benchmark_transport.dart \
   --requests=2500 \
   --concurrency=64 \
   --warmup=300 \
-  --iterations=5 \
+  --iterations=25 \
   --json
 ```
 
 Result summary:
 
-- `routed_io`: `4746.12 req/s`, `p50=15.19 ms`, `p95=15.19 ms`
-- `routed_ffi`: `6615.23 req/s`, `p50=11.56 ms`, `p95=11.56 ms`
-- `routed_ffi_native_direct`: `11560.85 req/s`, `p50=8.56 ms`, `p95=8.56 ms`
+- `dart_io_direct`: `7119.34 req/s`, `p50=10.48 ms`, `p95=10.48 ms`
+- `routed_io`: `5859.84 req/s`, `p50=12.35 ms`, `p95=12.35 ms`
+- `routed_ffi_direct`: `10119.20 req/s`, `p50=7.83 ms`, `p95=7.83 ms`
+- `routed_ffi`: `7532.32 req/s`, `p50=10.32 ms`, `p95=10.32 ms`
+- `routed_ffi_native_direct`: `13659.26 req/s`, `p50=5.47 ms`, `p95=5.47 ms`
 Ratios:
-- `routed_ffi / routed_io`: throughput `1.394`, p95 `0.761`
-- `routed_ffi_native_direct / routed_io`: throughput `2.436`, p95 `0.563`
-- `routed_ffi_native_direct / routed_ffi`: throughput `1.748`, p95 `0.741`
+- `routed_ffi / routed_io`: throughput `1.286`, p95 `0.835`
+- `routed_ffi_direct / dart_io_direct`: throughput `1.421`, p95 `0.747`
+- `routed_ffi_native_direct / routed_ffi_direct`: throughput `1.350`, p95 `0.698`
 
 Interpretation:
 - The Rust native front path remains much faster than routed execution (`routed_ffi_native_direct`).
@@ -208,7 +216,7 @@ Interpretation:
 - Bridge idle socket robustness was preserved without per-request probe overhead by retrying once with a fresh socket for failed empty-body bridge calls.
 - Bridge transport now auto-selects Unix domain sockets on Linux/macOS (fallback to loopback TCP), reducing local bridge overhead while preserving the same public boot API.
 - Bridge pool now keeps a hot idle-socket slot before falling back to the shared idle vector, reducing lock contention in the common reuse path.
-- With this run profile, `routed_ffi` now exceeds `routed_io` throughput and p95 latency.
+- With this run profile, `routed_ffi` exceeds both `routed_io` and `dart_io_direct` throughput.
 
 ## Troubleshooting
 
@@ -220,3 +228,12 @@ If you see this during benchmark/test runs:
 
 Run the same command again immediately. This can happen when native build hooks
 refresh `.dart_tool` artifacts on first invocation.
+
+If you changed native Rust FFI structs/functions, run:
+
+```bash
+dart run tool/generate_ffi.dart
+```
+
+before benchmark/test commands so `bindings.h` and `lib/src/ffi.g.dart` are in
+sync.

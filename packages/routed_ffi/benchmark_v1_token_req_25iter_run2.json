@@ -1,0 +1,26 @@
+Running build hooks...Running build hooks...time=2026-02-18T03:57:04.076-05:00 level=info msg="Engine listening" event=engine_started scheme=http host=127.0.0.1 port=40679 logger=root
+time=2026-02-18T03:57:06.707-05:00 level=info msg="Engine listening" event=engine_started scheme=http host=127.0.0.1 port=41615 logger=root
+time=2026-02-18T03:57:08.420-05:00 level=info msg="Engine listening" event=engine_started scheme=http host=127.0.0.1 port=33571 logger=root
+time=2026-02-18T03:57:09.946-05:00 level=info msg="Engine listening" event=engine_started scheme=http host=127.0.0.1 port=39441 logger=root
+time=2026-02-18T03:57:11.779-05:00 level=info msg="Engine listening" event=engine_started scheme=http host=127.0.0.1 port=39567 logger=root
+time=2026-02-18T03:57:13.634-05:00 level=info msg="Engine listening" event=engine_started scheme=http host=127.0.0.1 port=44537 logger=root
+time=2026-02-18T03:57:15.499-05:00 level=info msg="Engine listening" event=engine_started scheme=http host=127.0.0.1 port=34791 logger=root
+time=2026-02-18T03:57:17.369-05:00 level=info msg="Engine listening" event=engine_started scheme=http host=127.0.0.1 port=33949 logger=root
+time=2026-02-18T03:57:19.223-05:00 level=info msg="Engine listening" event=engine_started scheme=http host=127.0.0.1 port=40685 logger=root
+time=2026-02-18T03:57:21.047-05:00 level=info msg="Engine listening" event=engine_started scheme=http host=127.0.0.1 port=40381 logger=root
+time=2026-02-18T03:57:22.863-05:00 level=info msg="Engine listening" event=engine_started scheme=http host=127.0.0.1 port=35229 logger=root
+time=2026-02-18T03:57:24.632-05:00 level=info msg="Engine listening" event=engine_started scheme=http host=127.0.0.1 port=46165 logger=root
+time=2026-02-18T03:57:26.426-05:00 level=info msg="Engine listening" event=engine_started scheme=http host=127.0.0.1 port=43071 logger=root
+time=2026-02-18T03:57:28.287-05:00 level=info msg="Engine listening" event=engine_started scheme=http host=127.0.0.1 port=40105 logger=root
+time=2026-02-18T03:57:30.103-05:00 level=info msg="Engine listening" event=engine_started scheme=http host=127.0.0.1 port=42359 logger=root
+time=2026-02-18T03:57:31.960-05:00 level=info msg="Engine listening" event=engine_started scheme=http host=127.0.0.1 port=42141 logger=root
+time=2026-02-18T03:57:33.799-05:00 level=info msg="Engine listening" event=engine_started scheme=http host=127.0.0.1 port=38509 logger=root
+time=2026-02-18T03:57:35.551-05:00 level=info msg="Engine listening" event=engine_started scheme=http host=127.0.0.1 port=44235 logger=root
+time=2026-02-18T03:57:37.344-05:00 level=info msg="Engine listening" event=engine_started scheme=http host=127.0.0.1 port=43531 logger=root
+time=2026-02-18T03:57:39.226-05:00 level=info msg="Engine listening" event=engine_started scheme=http host=127.0.0.1 port=43069 logger=root
+time=2026-02-18T03:57:41.126-05:00 level=info msg="Engine listening" event=engine_started scheme=http host=127.0.0.1 port=45213 logger=root
+time=2026-02-18T03:57:43.075-05:00 level=info msg="Engine listening" event=engine_started scheme=http host=127.0.0.1 port=42951 logger=root
+time=2026-02-18T03:57:45.155-05:00 level=info msg="Engine listening" event=engine_started scheme=http host=127.0.0.1 port=33675 logger=root
+time=2026-02-18T03:57:47.123-05:00 level=info msg="Engine listening" event=engine_started scheme=http host=127.0.0.1 port=36919 logger=root
+time=2026-02-18T03:57:49.241-05:00 level=info msg="Engine listening" event=engine_started scheme=http host=127.0.0.1 port=44693 logger=root
+{"options":{"requests":2500,"concurrency":64,"warmup":300,"host":"127.0.0.1","iterations":25,"minReqPerSecRatio":null,"maxP95Ratio":null},"results":[{"label":"dart_io_direct","requests":2500,"totalMicros":350805,"requestsPerSecond":7126.466270435142,"p50Micros":10483,"p95Micros":10483},{"label":"routed_io","requests":2500,"totalMicros":435544,"requestsPerSecond":5739.948202707419,"p50Micros":11993,"p95Micros":11993},{"label":"routed_ffi_direct","requests":2500,"totalMicros":247471,"requestsPerSecond":10102.193792403958,"p50Micros":8150,"p95Micros":8150},{"label":"routed_ffi","requests":2500,"totalMicros":328441,"requestsPerSecond":7611.717172947348,"p50Micros":10010,"p95Micros":10010},{"label":"routed_ffi_native_direct","requests":2500,"totalMicros":186750,"requestsPerSecond":13386.880856760376,"p50Micros":5709,"p95Micros":5709}],"gate":{"passed":true,"messages":[]}}

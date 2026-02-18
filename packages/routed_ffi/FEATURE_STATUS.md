@@ -7,6 +7,7 @@ Last updated: February 18, 2026
 - Rust native transport package scaffolded in `packages/routed_ffi`.
 - Dart and Rust FFI bindings wired with `ffigen` and generated `lib/src/ffi.g.dart`.
 - `cbindgen` integrated in `native/build.rs` to generate C headers for Dart-side binding generation.
+- Native build hooks now avoid rewriting `native/bindings.h` by default; header refresh is explicit through `tool/generate_ffi.dart` (`ROUTED_FFI_GENERATE_BINDINGS=1`) to reduce build invalidation churn.
 - Rust proxy server start/stop hooks exposed over FFI:
   - `routed_ffi_transport_version`
   - `routed_ffi_start_proxy_server`
@@ -45,6 +46,7 @@ Last updated: February 18, 2026
 - Rust bridge response decode now maps body/chunk payloads to `Bytes` without extra copy allocations.
 - Rust and Dart chunk-frame write paths now emit frame metadata + chunk bytes directly (no temporary encoded chunk payload buffers).
 - Dart bridge socket frame length headers now use typed-data (`Uint32List` + `ByteData`) instead of manual bit shifts in hot-path encode/decode.
+- Bridge protocol now supports tokenized header-name frame variants (`11`/`12`/`13`/`14`) under protocol v1 with legacy frame-type fallback.
 - Plain HTTP accept path now sets `TCP_NODELAY` on native frontend client sockets to reduce small-request latency.
 - Bridge call path now retries empty-body requests once with a fresh bridge socket when a reused socket is stale.
 - Bridge backend transport now supports Unix domain sockets (auto-selected by Dart boot on Linux/macOS with TCP fallback).
