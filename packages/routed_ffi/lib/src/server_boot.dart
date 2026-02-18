@@ -12,6 +12,41 @@ import 'package:routed_ffi/src/routed/routed_bridge_runtime.dart';
 const int _maxBridgeFrameBytes = 64 * 1024 * 1024;
 const int _maxBridgeBodyBytes = 32 * 1024 * 1024;
 const int _coalescePayloadThresholdBytes = 4 * 1024;
+const int _bridgeRequestFrameTypeLegacy = 1;
+const int _bridgeRequestFrameTypeTokenized = 11;
+const int _bridgeHeaderNameLiteralToken = 0xffff;
+const Utf8Decoder _directStrictUtf8Decoder = Utf8Decoder(allowMalformed: false);
+const List<String> _directBridgeHeaderNameTable = <String>[
+  'host',
+  'connection',
+  'user-agent',
+  'accept',
+  'accept-encoding',
+  'accept-language',
+  'content-type',
+  'content-length',
+  'transfer-encoding',
+  'cookie',
+  'set-cookie',
+  'cache-control',
+  'pragma',
+  'upgrade',
+  'authorization',
+  'origin',
+  'referer',
+  'location',
+  'server',
+  'date',
+  'x-forwarded-for',
+  'x-forwarded-proto',
+  'x-forwarded-host',
+  'x-forwarded-port',
+  'x-request-id',
+  'sec-websocket-key',
+  'sec-websocket-version',
+  'sec-websocket-protocol',
+  'sec-websocket-extensions',
+];
 
 final class _BridgeBinding {
   _BridgeBinding({
@@ -43,6 +78,7 @@ final class FfiDirectRequest {
     required List<MapEntry<String, String>> headers,
     required this.body,
   }) : _frame = null,
+       _payload = null,
        _method = method,
        _scheme = scheme,
        _authority = authority,
@@ -52,7 +88,18 @@ final class FfiDirectRequest {
        _headers = List<MapEntry<String, String>>.unmodifiable(headers);
 
   FfiDirectRequest._fromFrame(this._frame, this.body)
-    : _method = null,
+    : _payload = null,
+      _method = null,
+      _scheme = null,
+      _authority = null,
+      _path = null,
+      _query = null,
+      _protocol = null,
+      _headers = null;
+
+  FfiDirectRequest._fromPayload(this._payload, this.body)
+    : _frame = null,
+      _method = null,
       _scheme = null,
       _authority = null,
       _path = null,
@@ -61,6 +108,7 @@ final class FfiDirectRequest {
       _headers = null;
 
   final BridgeRequestFrame? _frame;
+  final _DirectPayloadRequestView? _payload;
   final String? _method;
   final String? _scheme;
   final String? _authority;
@@ -70,17 +118,18 @@ final class FfiDirectRequest {
   List<MapEntry<String, String>>? _headers;
   final Stream<Uint8List> body;
 
-  String get method => _frame?.method ?? _method!;
+  String get method => _frame?.method ?? _payload?.method ?? _method!;
 
-  String get scheme => _frame?.scheme ?? _scheme!;
+  String get scheme => _frame?.scheme ?? _payload?.scheme ?? _scheme!;
 
-  String get authority => _frame?.authority ?? _authority!;
+  String get authority =>
+      _frame?.authority ?? _payload?.authority ?? _authority!;
 
-  String get path => _frame?.path ?? _path!;
+  String get path => _frame?.path ?? _payload?.path ?? _path!;
 
-  String get query => _frame?.query ?? _query!;
+  String get query => _frame?.query ?? _payload?.query ?? _query!;
 
-  String get protocol => _frame?.protocol ?? _protocol!;
+  String get protocol => _frame?.protocol ?? _payload?.protocol ?? _protocol!;
 
   List<MapEntry<String, String>> get headers {
     final headers = _headers;
@@ -89,7 +138,13 @@ final class FfiDirectRequest {
     }
     final frame = _frame;
     if (frame == null) {
-      return const <MapEntry<String, String>>[];
+      final payload = _payload;
+      if (payload == null) {
+        return const <MapEntry<String, String>>[];
+      }
+      final view = UnmodifiableListView(payload.materializeHeaders());
+      _headers = view;
+      return view;
     }
     final view = UnmodifiableListView(_DirectHeaderListView(frame));
     _headers = view;
@@ -113,6 +168,10 @@ final class FfiDirectRequest {
       }
       return null;
     }
+    final payload = _payload;
+    if (payload != null) {
+      return payload.header(name);
+    }
 
     final target = name;
     for (final entry in headers) {
@@ -132,26 +191,64 @@ final class FfiDirectResponse {
     Uint8List? bodyBytes,
   }) : headers = List<MapEntry<String, String>>.of(headers),
        bodyBytes = bodyBytes ?? Uint8List(0),
-       body = null;
+       body = null,
+       encodedBridgePayload = null;
 
   FfiDirectResponse.stream({
     this.status = HttpStatus.ok,
     List<MapEntry<String, String>> headers = const <MapEntry<String, String>>[],
     required this.body,
   }) : headers = List<MapEntry<String, String>>.of(headers),
-       bodyBytes = null;
+       bodyBytes = null,
+       encodedBridgePayload = null;
+
+  /// Returns a direct response backed by a pre-encoded bridge response payload.
+  ///
+  /// This avoids per-request Dart response encoding when the same response can
+  /// be reused (for example, static benchmark responses).
+  FfiDirectResponse.encodedPayload({required Uint8List bridgeResponsePayload})
+    : status = HttpStatus.ok,
+      headers = const <MapEntry<String, String>>[],
+      bodyBytes = null,
+      body = null,
+      encodedBridgePayload = bridgeResponsePayload {
+    // Validate once at construction time so invalid payloads fail fast.
+    BridgeResponseFrame.decodePayload(bridgeResponsePayload);
+  }
+
+  /// Builds and caches a single encoded bridge response payload.
+  ///
+  /// Useful when a direct handler always returns the same bytes response.
+  factory FfiDirectResponse.preEncodedBytes({
+    int status = HttpStatus.ok,
+    List<MapEntry<String, String>> headers = const <MapEntry<String, String>>[],
+    Uint8List? bodyBytes,
+  }) {
+    final frame = BridgeResponseFrame(
+      status: status,
+      headers: headers,
+      bodyBytes: bodyBytes ?? Uint8List(0),
+    );
+    return FfiDirectResponse.encodedPayload(
+      bridgeResponsePayload: frame.encodePayload(),
+    );
+  }
 
   final int status;
   final List<MapEntry<String, String>> headers;
   final Uint8List? bodyBytes;
   final Stream<Uint8List>? body;
+  final Uint8List? encodedBridgePayload;
 }
 
 typedef FfiDirectHandler =
     FutureOr<FfiDirectResponse> Function(FfiDirectRequest request);
 
 typedef _BridgeHandleFrame =
-    Future<BridgeResponseFrame> Function(BridgeRequestFrame frame);
+    Future<_BridgeHandleFrameResult> Function(BridgeRequestFrame frame);
+
+typedef _BridgeHandlePayload =
+    Future<_BridgeHandleFrameResult> Function(Uint8List payload);
 
 typedef _BridgeHandleStream =
     Future<void> Function({
@@ -160,6 +257,25 @@ typedef _BridgeHandleStream =
       required Future<void> Function(BridgeResponseFrame frame) onResponseStart,
       required Future<void> Function(Uint8List chunkBytes) onResponseChunk,
     });
+
+final class _BridgeHandleFrameResult {
+  _BridgeHandleFrameResult.frame(BridgeResponseFrame frame)
+    : _frame = frame,
+      _encodedPayload = null;
+
+  _BridgeHandleFrameResult.encoded(Uint8List payload)
+    : _frame = null,
+      _encodedPayload = payload;
+
+  final BridgeResponseFrame? _frame;
+  final Uint8List? _encodedPayload;
+
+  BridgeResponseFrame get frame => _frame!;
+
+  Uint8List? get encodedPayload => _encodedPayload;
+
+  BridgeDetachedSocket? get detachedSocket => _frame?.detachedSocket;
+}
 
 /// Boots a Routed [engine] using a Rust-native transport front server.
 ///
@@ -190,7 +306,8 @@ Future<void> serveFfi(
     http3: http3,
     shutdownSignal: shutdownSignal,
     onEcho: echo ? engine.printRoutes : null,
-    handleFrame: runtime.handleFrame,
+    handleFrame: (frame) async =>
+        _BridgeHandleFrameResult.frame(await runtime.handleFrame(frame)),
     handleStream: runtime.handleStream,
   );
 }
@@ -243,7 +360,8 @@ Future<void> serveSecureFfi(
     tlsCertPath: certificatePath,
     tlsKeyPath: keyPath,
     tlsCertPassword: certificatePassword,
-    handleFrame: runtime.handleFrame,
+    handleFrame: (frame) async =>
+        _BridgeHandleFrameResult.frame(await runtime.handleFrame(frame)),
     handleStream: runtime.handleStream,
   );
 }
@@ -274,7 +392,8 @@ Future<void> serveFfiHttp(
     requestClientCertificate: false,
     http3: http3,
     shutdownSignal: shutdownSignal,
-    handleFrame: runtime.handleFrame,
+    handleFrame: (frame) async =>
+        _BridgeHandleFrameResult.frame(await runtime.handleFrame(frame)),
     handleStream: runtime.handleStream,
   );
 }
@@ -326,7 +445,8 @@ Future<void> serveSecureFfiHttp(
     tlsCertPath: certificatePath,
     tlsKeyPath: keyPath,
     tlsCertPassword: certificatePassword,
-    handleFrame: runtime.handleFrame,
+    handleFrame: (frame) async =>
+        _BridgeHandleFrameResult.frame(await runtime.handleFrame(frame)),
     handleStream: runtime.handleStream,
   );
 }
@@ -357,6 +477,7 @@ Future<void> serveFfiDirect(
     http3: http3,
     shutdownSignal: shutdownSignal,
     handleFrame: (frame) => _handleDirectFrame(handler, frame),
+    handlePayload: (payload) => _handleDirectPayload(handler, payload),
     handleStream:
         ({
           required frame,
@@ -420,6 +541,7 @@ Future<void> serveSecureFfiDirect(
     tlsKeyPath: keyPath,
     tlsCertPassword: certificatePassword,
     handleFrame: (frame) => _handleDirectFrame(handler, frame),
+    handlePayload: (payload) => _handleDirectPayload(handler, payload),
     handleStream:
         ({
           required frame,
@@ -448,6 +570,7 @@ Future<void> _serveWithNativeProxy({
   required bool http3,
   required _BridgeHandleFrame handleFrame,
   required _BridgeHandleStream handleStream,
+  _BridgeHandlePayload? handlePayload,
   void Function()? onEcho,
   Future<void>? shutdownSignal,
   String? tlsCertPath,
@@ -481,6 +604,7 @@ Future<void> _serveWithNativeProxy({
       socket,
       handleFrame: handleFrame,
       handleStream: handleStream,
+      handlePayload: handlePayload,
     );
   });
 
@@ -649,6 +773,7 @@ Future<void> _handleBridgeSocket(
   Socket socket, {
   required _BridgeHandleFrame handleFrame,
   required _BridgeHandleStream handleStream,
+  _BridgeHandlePayload? handlePayload,
 }) async {
   final reader = _SocketFrameReader(socket);
   final writer = _BridgeSocketWriter(socket);
@@ -677,15 +802,24 @@ Future<void> _handleBridgeSocket(
         continue;
       }
 
-      BridgeRequestFrame frame;
-      try {
-        frame = BridgeRequestFrame.decodePayload(firstPayload);
-      } catch (error) {
-        _writeBridgeBadRequest(writer, error);
-        continue;
+      late final _BridgeHandleFrameResult response;
+      if (handlePayload != null) {
+        try {
+          response = await handlePayload(firstPayload);
+        } catch (error) {
+          _writeBridgeBadRequest(writer, error);
+          continue;
+        }
+      } else {
+        BridgeRequestFrame frame;
+        try {
+          frame = BridgeRequestFrame.decodePayload(firstPayload);
+        } catch (error) {
+          _writeBridgeBadRequest(writer, error);
+          continue;
+        }
+        response = await handleFrame(frame);
       }
-
-      final response = await handleFrame(frame);
       _writeBridgeResponse(writer, response);
       final detachedSocket = response.detachedSocket;
       if (detachedSocket != null) {
@@ -841,7 +975,7 @@ Future<void> _handleChunkedBridgeRequest(
   }
 }
 
-Future<BridgeResponseFrame> _handleDirectFrame(
+Future<_BridgeHandleFrameResult> _handleDirectFrame(
   FfiDirectHandler handler,
   BridgeRequestFrame frame,
 ) async {
@@ -853,23 +987,73 @@ Future<BridgeResponseFrame> _handleDirectFrame(
           : Stream<Uint8List>.value(frame.bodyBytes),
     );
     final response = await handler(request);
+    if (response.encodedBridgePayload != null) {
+      return _BridgeHandleFrameResult.encoded(response.encodedBridgePayload!);
+    }
     if (response.bodyBytes != null) {
-      return BridgeResponseFrame(
-        status: response.status,
-        headers: response.headers,
-        bodyBytes: response.bodyBytes!,
+      return _BridgeHandleFrameResult.frame(
+        BridgeResponseFrame(
+          status: response.status,
+          headers: response.headers,
+          bodyBytes: response.bodyBytes!,
+        ),
       );
     }
     final bodyBytes = await _collectDirectBodyBytes(response.body);
-    return BridgeResponseFrame(
-      status: response.status,
-      headers: response.headers,
-      bodyBytes: bodyBytes,
+    return _BridgeHandleFrameResult.frame(
+      BridgeResponseFrame(
+        status: response.status,
+        headers: response.headers,
+        bodyBytes: bodyBytes,
+      ),
     );
   } catch (error, stack) {
     stderr.writeln('[routed_ffi] direct handler error: $error\n$stack');
-    return _internalServerErrorFrame(error);
+    return _BridgeHandleFrameResult.frame(_internalServerErrorFrame(error));
   }
+}
+
+Future<_BridgeHandleFrameResult> _handleDirectPayload(
+  FfiDirectHandler handler,
+  Uint8List payload,
+) async {
+  try {
+    final requestView = _DirectPayloadRequestView.parse(payload);
+    final request = FfiDirectRequest._fromPayload(
+      requestView,
+      _lazyDirectPayloadBodyStream(requestView),
+    );
+    final response = await handler(request);
+    if (response.encodedBridgePayload != null) {
+      return _BridgeHandleFrameResult.encoded(response.encodedBridgePayload!);
+    }
+    if (response.bodyBytes != null) {
+      return _BridgeHandleFrameResult.frame(
+        BridgeResponseFrame(
+          status: response.status,
+          headers: response.headers,
+          bodyBytes: response.bodyBytes!,
+        ),
+      );
+    }
+    final bodyBytes = await _collectDirectBodyBytes(response.body);
+    return _BridgeHandleFrameResult.frame(
+      BridgeResponseFrame(
+        status: response.status,
+        headers: response.headers,
+        bodyBytes: bodyBytes,
+      ),
+    );
+  } catch (error, stack) {
+    stderr.writeln('[routed_ffi] direct handler error: $error\n$stack');
+    return _BridgeHandleFrameResult.frame(_internalServerErrorFrame(error));
+  }
+}
+
+Stream<Uint8List> _lazyDirectPayloadBodyStream(
+  _DirectPayloadRequestView requestView,
+) {
+  return _DirectPayloadBodyStream(requestView);
 }
 
 Future<void> _handleDirectStream(
@@ -883,6 +1067,23 @@ Future<void> _handleDirectStream(
   try {
     final request = _toDirectRequest(frame, bodyStream);
     final response = await handler(request);
+    if (response.encodedBridgePayload != null) {
+      final decoded = BridgeResponseFrame.decodePayload(
+        response.encodedBridgePayload!,
+      );
+      await onResponseStart(
+        BridgeResponseFrame(
+          status: decoded.status,
+          headers: decoded.headers,
+          bodyBytes: Uint8List(0),
+        ),
+      );
+      responseStarted = true;
+      if (decoded.bodyBytes.isNotEmpty) {
+        await onResponseChunk(decoded.bodyBytes);
+      }
+      return;
+    }
     await onResponseStart(
       BridgeResponseFrame(
         status: response.status,
@@ -1030,14 +1231,19 @@ void _writeBridgeBadRequest(_BridgeSocketWriter writer, Object error) {
       utf8.encode('invalid bridge request: $error'),
     ),
   );
-  _writeBridgeResponse(writer, errorResponse);
+  _writeBridgeResponse(writer, _BridgeHandleFrameResult.frame(errorResponse));
 }
 
 void _writeBridgeResponse(
   _BridgeSocketWriter writer,
-  BridgeResponseFrame response,
+  _BridgeHandleFrameResult response,
 ) {
-  writer.writeResponseFrame(response);
+  final encoded = response.encodedPayload;
+  if (encoded != null) {
+    writer.writeFrame(encoded);
+    return;
+  }
+  writer.writeResponseFrame(response.frame);
 }
 
 Future<void> _runDetachedSocketTunnel(
@@ -1205,6 +1411,341 @@ int _readUint32BigEndian(Uint8List buffer, int offset) {
       buffer[offset + 3];
 }
 
+final class _ByteSlice {
+  const _ByteSlice(this.start, this.end);
+
+  final int start;
+  final int end;
+}
+
+final class _ParsedField {
+  const _ParsedField(this.slice, this.nextOffset);
+
+  final _ByteSlice slice;
+  final int nextOffset;
+}
+
+final class _DirectPayloadRequestView {
+  _DirectPayloadRequestView._({
+    required Uint8List payload,
+    required bool tokenizedHeaderNames,
+  }) : _payload = payload,
+       _tokenizedHeaderNames = tokenizedHeaderNames;
+
+  factory _DirectPayloadRequestView.parse(Uint8List payload) {
+    if (payload.length < 2) {
+      throw const FormatException('truncated bridge payload');
+    }
+    final version = payload[0];
+    if (version != bridgeFrameProtocolVersion) {
+      throw FormatException('unsupported bridge protocol version: $version');
+    }
+    final frameType = payload[1];
+    final tokenized = frameType == _bridgeRequestFrameTypeTokenized;
+    if (frameType != _bridgeRequestFrameTypeLegacy && !tokenized) {
+      throw FormatException('invalid bridge request frame type: $frameType');
+    }
+
+    return _DirectPayloadRequestView._(
+      payload: payload,
+      tokenizedHeaderNames: tokenized,
+    );
+  }
+
+  final Uint8List _payload;
+  final bool _tokenizedHeaderNames;
+  _ByteSlice? _methodRange;
+  _ByteSlice? _schemeRange;
+  _ByteSlice? _authorityRange;
+  _ByteSlice? _pathRange;
+  _ByteSlice? _queryRange;
+  _ByteSlice? _protocolRange;
+  int? _headerCount;
+  int? _headersOffset;
+
+  String? _method;
+  String? _scheme;
+  String? _authority;
+  String? _path;
+  String? _query;
+  String? _protocol;
+  List<MapEntry<String, String>>? _headers;
+  _ByteSlice? _bodyRange;
+  Uint8List? _bodyBytes;
+
+  String get method {
+    _ensureHeadParsed();
+    return _method ??= _readFieldOrDefault(_methodRange!, 'GET');
+  }
+
+  String get scheme {
+    _ensureHeadParsed();
+    return _scheme ??= _readFieldOrDefault(_schemeRange!, 'http');
+  }
+
+  String get authority {
+    _ensureHeadParsed();
+    return _authority ??= _readFieldOrDefault(_authorityRange!, '127.0.0.1');
+  }
+
+  String get path {
+    _ensureHeadParsed();
+    return _path ??= _readFieldOrDefault(_pathRange!, '/');
+  }
+
+  String get query {
+    _ensureHeadParsed();
+    return _query ??= _readFieldString(_queryRange!);
+  }
+
+  String get protocol {
+    _ensureHeadParsed();
+    return _protocol ??= _readFieldOrDefault(_protocolRange!, '1.1');
+  }
+
+  Uint8List get bodyBytes {
+    final range = _bodyRange ??= _parseBodyRange();
+    return _bodyBytes ??= Uint8List.sublistView(
+      _payload,
+      range.start,
+      range.end,
+    );
+  }
+
+  List<MapEntry<String, String>> materializeHeaders() {
+    final cached = _headers;
+    if (cached != null) {
+      return cached;
+    }
+    _ensureHeadParsed();
+    final headerCount = _headerCount!;
+    final headers = List<MapEntry<String, String>>.filled(
+      headerCount,
+      const MapEntry('', ''),
+      growable: false,
+    );
+    var offset = _headersOffset!;
+    for (var i = 0; i < headerCount; i++) {
+      final parsed = _readHeaderAt(offset);
+      headers[i] = MapEntry(parsed.name, parsed.value);
+      offset = parsed.nextOffset;
+    }
+    _headers = headers;
+    return headers;
+  }
+
+  String? header(String name) {
+    _ensureHeadParsed();
+    var offset = _headersOffset!;
+    for (var i = 0; i < _headerCount!; i++) {
+      final parsed = _readHeaderAt(offset);
+      if (_equalsAsciiIgnoreCase(parsed.name, name)) {
+        return parsed.value;
+      }
+      offset = parsed.nextOffset;
+    }
+    return null;
+  }
+
+  String _readFieldOrDefault(_ByteSlice range, String fallback) {
+    if (range.start == range.end) {
+      return fallback;
+    }
+    return _readFieldString(range);
+  }
+
+  @pragma('vm:prefer-inline')
+  String _readFieldString(_ByteSlice range) {
+    for (var i = range.start; i < range.end; i++) {
+      if (_payload[i] > 0x7f) {
+        return _directStrictUtf8Decoder.convert(
+          _payload,
+          range.start,
+          range.end,
+        );
+      }
+    }
+    return String.fromCharCodes(_payload, range.start, range.end);
+  }
+
+  _ParsedHeader _readHeaderAt(int offset) {
+    late final String name;
+    if (!_tokenizedHeaderNames) {
+      final nameField = _readField(_payload, offset);
+      name = _readFieldString(nameField.slice);
+      offset = nameField.nextOffset;
+    } else {
+      if (offset + 2 > _payload.length) {
+        throw const FormatException('truncated bridge payload');
+      }
+      final token = (_payload[offset] << 8) | _payload[offset + 1];
+      offset += 2;
+      if (token == _bridgeHeaderNameLiteralToken) {
+        final nameField = _readField(_payload, offset);
+        name = _readFieldString(nameField.slice);
+        offset = nameField.nextOffset;
+      } else {
+        if (token < 0 || token >= _directBridgeHeaderNameTable.length) {
+          throw FormatException('invalid bridge header name token: $token');
+        }
+        name = _directBridgeHeaderNameTable[token];
+      }
+    }
+
+    final valueField = _readField(_payload, offset);
+    final value = _readFieldString(valueField.slice);
+    return _ParsedHeader(
+      name: name,
+      value: value,
+      nextOffset: valueField.nextOffset,
+    );
+  }
+
+  static _ParsedField _readField(Uint8List payload, int offset) {
+    if (offset + 4 > payload.length) {
+      throw const FormatException('truncated bridge payload');
+    }
+    final length = _readUint32BigEndian(payload, offset);
+    final start = offset + 4;
+    final end = start + length;
+    if (end > payload.length) {
+      throw const FormatException('truncated bridge payload');
+    }
+    return _ParsedField(_ByteSlice(start, end), end);
+  }
+
+  static int _skipField(Uint8List payload, int offset) {
+    if (offset + 4 > payload.length) {
+      throw const FormatException('truncated bridge payload');
+    }
+    final length = _readUint32BigEndian(payload, offset);
+    final nextOffset = offset + 4 + length;
+    if (nextOffset > payload.length) {
+      throw const FormatException('truncated bridge payload');
+    }
+    return nextOffset;
+  }
+
+  static int _skipHeaderName(Uint8List payload, int offset, bool tokenized) {
+    if (!tokenized) {
+      return _skipField(payload, offset);
+    }
+    if (offset + 2 > payload.length) {
+      throw const FormatException('truncated bridge payload');
+    }
+    final token = (payload[offset] << 8) | payload[offset + 1];
+    offset += 2;
+    if (token == _bridgeHeaderNameLiteralToken) {
+      return _skipField(payload, offset);
+    }
+    if (token < 0 || token >= _directBridgeHeaderNameTable.length) {
+      throw FormatException('invalid bridge header name token: $token');
+    }
+    return offset;
+  }
+
+  _ByteSlice _parseBodyRange() {
+    _ensureHeadParsed();
+    final headerCount = _headerCount!;
+    var offset = _headersOffset!;
+    for (var i = 0; i < headerCount; i++) {
+      offset = _skipHeaderName(_payload, offset, _tokenizedHeaderNames);
+      offset = _skipField(_payload, offset);
+    }
+    if (offset + 4 > _payload.length) {
+      throw const FormatException('truncated bridge payload');
+    }
+    final bodyLength = _readUint32BigEndian(_payload, offset);
+    offset += 4;
+    final bodyStart = offset;
+    final bodyEnd = bodyStart + bodyLength;
+    if (bodyEnd > _payload.length) {
+      throw const FormatException('truncated bridge payload');
+    }
+    if (bodyEnd != _payload.length) {
+      throw FormatException(
+        'unexpected trailing bridge payload bytes: ${_payload.length - bodyEnd}',
+      );
+    }
+    return _ByteSlice(bodyStart, bodyEnd);
+  }
+
+  void _ensureHeadParsed() {
+    if (_headerCount != null) {
+      return;
+    }
+
+    var offset = 2;
+    final method = _readField(_payload, offset);
+    offset = method.nextOffset;
+    final scheme = _readField(_payload, offset);
+    offset = scheme.nextOffset;
+    final authority = _readField(_payload, offset);
+    offset = authority.nextOffset;
+    final path = _readField(_payload, offset);
+    offset = path.nextOffset;
+    final query = _readField(_payload, offset);
+    offset = query.nextOffset;
+    final protocol = _readField(_payload, offset);
+    offset = protocol.nextOffset;
+
+    if (offset + 4 > _payload.length) {
+      throw const FormatException('truncated bridge payload');
+    }
+
+    _methodRange = method.slice;
+    _schemeRange = scheme.slice;
+    _authorityRange = authority.slice;
+    _pathRange = path.slice;
+    _queryRange = query.slice;
+    _protocolRange = protocol.slice;
+    _headerCount = _readUint32BigEndian(_payload, offset);
+    _headersOffset = offset + 4;
+  }
+}
+
+final class _ParsedHeader {
+  const _ParsedHeader({
+    required this.name,
+    required this.value,
+    required this.nextOffset,
+  });
+
+  final String name;
+  final String value;
+  final int nextOffset;
+}
+
+final class _DirectPayloadBodyStream extends Stream<Uint8List> {
+  _DirectPayloadBodyStream(this._requestView);
+
+  final _DirectPayloadRequestView _requestView;
+
+  @override
+  StreamSubscription<Uint8List> listen(
+    void Function(Uint8List event)? onData, {
+    Function? onError,
+    void Function()? onDone,
+    bool? cancelOnError,
+  }) {
+    final bodyBytes = _requestView.bodyBytes;
+    if (bodyBytes.isEmpty) {
+      return const Stream<Uint8List>.empty().listen(
+        onData,
+        onError: onError,
+        onDone: onDone,
+        cancelOnError: cancelOnError,
+      );
+    }
+    return Stream<Uint8List>.value(bodyBytes).listen(
+      onData,
+      onError: onError,
+      onDone: onDone,
+      cancelOnError: cancelOnError,
+    );
+  }
+}
+
 final class _DirectHeaderListView extends ListBase<MapEntry<String, String>> {
   _DirectHeaderListView(this._frame);
 
@@ -1289,11 +1830,11 @@ final class _SocketFrameReader {
       return value;
     }
 
-    final bytes = await _readExactOrNull(4);
-    if (bytes == null) {
-      return null;
-    }
-    return _readUint32BigEndian(bytes, 0);
+    final b0 = _consumeByte();
+    final b1 = _consumeByte();
+    final b2 = _consumeByte();
+    final b3 = _consumeByte();
+    return (b0 << 24) | (b1 << 16) | (b2 << 8) | b3;
   }
 
   Future<Uint8List?> _readExactOrNull(int count) async {
@@ -1340,6 +1881,14 @@ final class _SocketFrameReader {
       _chunks.removeFirst();
       _chunkOffset = 0;
     }
+  }
+
+  @pragma('vm:prefer-inline')
+  int _consumeByte() {
+    final chunk = _chunks.first;
+    final value = chunk[_chunkOffset];
+    _advanceFirstChunk(chunk, 1);
+    return value;
   }
 
   Future<bool> _ensureAvailableOrNull(int count) async {
