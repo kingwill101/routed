@@ -3,7 +3,7 @@ import 'dart:convert';
 import 'dart:typed_data';
 
 import 'package:routed/routed.dart';
-import 'package:routed_ffi/src/bridge/bridge_runtime.dart';
+import 'package:routed_ffi/routed_ffi.dart';
 import 'package:test/test.dart';
 
 List<String> _headerValues(BridgeResponseFrame response, String name) {
@@ -171,6 +171,55 @@ void main() {
       expect(utf8.decode(chunk), 'hello chunked');
       expect(BridgeResponseFrame.isChunkPayload(chunkPayload), isTrue);
       expect(BridgeResponseFrame.isEndPayload(endPayload), isTrue);
+    });
+
+    test('round-trips tunnel chunk and close frames', () {
+      final chunkPayload = BridgeTunnelFrame.encodeChunkPayload(
+        const <int>[9, 8, 7],
+      );
+      final closePayload = BridgeTunnelFrame.encodeClosePayload();
+
+      final decodedChunk = BridgeTunnelFrame.decodeChunkPayload(chunkPayload);
+      BridgeTunnelFrame.decodeClosePayload(closePayload);
+
+      expect(decodedChunk, Uint8List.fromList(const <int>[9, 8, 7]));
+      expect(BridgeTunnelFrame.isChunkPayload(chunkPayload), isTrue);
+      expect(BridgeTunnelFrame.isClosePayload(closePayload), isTrue);
+    });
+  });
+
+  group('BridgeHttpRuntime', () {
+    test('handles request with plain HttpRequest-style callback', () async {
+      final runtime = BridgeHttpRuntime((request) async {
+        final requestBody = await utf8.decoder.bind(request).join();
+        request.response.statusCode = HttpStatus.created;
+        request.response.headers.set(
+          HttpHeaders.contentTypeHeader,
+          'text/plain',
+        );
+        request.response.headers.set('x-path', request.uri.path);
+        request.response.write('echo:$requestBody');
+        await request.response.close();
+      });
+
+      final response = await runtime.handleFrame(
+        _requestFrame(
+          method: 'POST',
+          path: '/raw',
+          headers: const <MapEntry<String, String>>[
+            MapEntry(HttpHeaders.contentTypeHeader, 'text/plain'),
+          ],
+          bodyBytes: utf8.encode('hello bridge'),
+        ),
+      );
+
+      expect(response.status, HttpStatus.created);
+      expect(
+        _headerValues(response, HttpHeaders.contentTypeHeader),
+        contains('text/plain'),
+      );
+      expect(_headerValues(response, 'x-path'), contains('/raw'));
+      expect(utf8.decode(response.bodyBytes), 'echo:hello bridge');
     });
   });
 
