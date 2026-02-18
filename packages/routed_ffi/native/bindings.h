@@ -9,6 +9,7 @@ typedef signed int int32_t;
 typedef unsigned int uint32_t;
 typedef unsigned short uint16_t;
 typedef unsigned char uint8_t;
+typedef unsigned long long uint64_t;
 
 
 typedef struct ProxyServerHandle ProxyServerHandle;
@@ -29,6 +30,7 @@ typedef struct RoutedFfiProxyConfig {
   const char *tls_key_path;
   const char *tls_cert_password;
   uint8_t benchmark_mode;
+  const void *direct_request_callback;
 } RoutedFfiProxyConfig;
 
 int32_t routed_ffi_transport_version(void);
@@ -37,3 +39,13 @@ struct ProxyServerHandle *routed_ffi_start_proxy_server(const struct RoutedFfiPr
                                                         uint16_t *out_port);
 
 void routed_ffi_stop_proxy_server(struct ProxyServerHandle *handle);
+
+uint8_t routed_ffi_push_direct_response_frame(struct ProxyServerHandle *handle,
+                                              uint64_t request_id,
+                                              const uint8_t *response_payload,
+                                              uint64_t response_payload_len);
+
+uint8_t routed_ffi_complete_direct_request(struct ProxyServerHandle *handle,
+                                           uint64_t request_id,
+                                           const uint8_t *response_payload,
+                                           uint64_t response_payload_len);

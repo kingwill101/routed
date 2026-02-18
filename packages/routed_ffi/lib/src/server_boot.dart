@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:ffi';
 import 'dart:collection';
 import 'dart:convert';
 import 'dart:io';
@@ -47,6 +48,71 @@ const List<String> _directBridgeHeaderNameTable = <String>[
   'sec-websocket-protocol',
   'sec-websocket-extensions',
 ];
+
+@pragma('vm:prefer-inline')
+int? _directHeaderLookupToken(String name) {
+  switch (name) {
+    case 'host':
+      return 0;
+    case 'connection':
+      return 1;
+    case 'user-agent':
+      return 2;
+    case 'accept':
+      return 3;
+    case 'accept-encoding':
+      return 4;
+    case 'accept-language':
+      return 5;
+    case 'content-type':
+      return 6;
+    case 'content-length':
+      return 7;
+    case 'transfer-encoding':
+      return 8;
+    case 'cookie':
+      return 9;
+    case 'set-cookie':
+      return 10;
+    case 'cache-control':
+      return 11;
+    case 'pragma':
+      return 12;
+    case 'upgrade':
+      return 13;
+    case 'authorization':
+      return 14;
+    case 'origin':
+      return 15;
+    case 'referer':
+      return 16;
+    case 'location':
+      return 17;
+    case 'server':
+      return 18;
+    case 'date':
+      return 19;
+    case 'x-forwarded-for':
+      return 20;
+    case 'x-forwarded-proto':
+      return 21;
+    case 'x-forwarded-host':
+      return 22;
+    case 'x-forwarded-port':
+      return 23;
+    case 'x-request-id':
+      return 24;
+    case 'sec-websocket-key':
+      return 25;
+    case 'sec-websocket-version':
+      return 26;
+    case 'sec-websocket-protocol':
+      return 27;
+    case 'sec-websocket-extensions':
+      return 28;
+  }
+  return null;
+}
 
 final class _BridgeBinding {
   _BridgeBinding({
@@ -162,7 +228,10 @@ final class FfiDirectRequest {
     final frame = _frame;
     if (frame != null) {
       for (var i = 0; i < frame.headerCount; i++) {
-        if (_equalsAsciiIgnoreCase(frame.headerNameAt(i), name)) {
+        final headerName = frame.headerNameAt(i);
+        if (identical(headerName, name) ||
+            headerName == name ||
+            _equalsAsciiIgnoreCase(headerName, name)) {
           return frame.headerValueAt(i);
         }
       }
@@ -277,6 +346,12 @@ final class _BridgeHandleFrameResult {
   BridgeDetachedSocket? get detachedSocket => _frame?.detachedSocket;
 }
 
+final class _NativeDirectRequestStreamState {
+  _NativeDirectRequestStreamState(this.requestBody);
+
+  final StreamController<Uint8List> requestBody;
+}
+
 /// Boots a Routed [engine] using a Rust-native transport front server.
 ///
 /// The Rust transport terminates inbound HTTP traffic and forwards typed frames
@@ -290,6 +365,7 @@ Future<void> serveFfi(
   bool v6Only = false,
   bool shared = false,
   bool http3 = true,
+  bool nativeCallback = false,
   Future<void>? shutdownSignal,
 }) {
   final runtime = RoutedBridgeRuntime(engine);
@@ -304,10 +380,14 @@ Future<void> serveFfi(
     shared: shared,
     requestClientCertificate: false,
     http3: http3,
+    nativeDirectCallback: nativeCallback,
     shutdownSignal: shutdownSignal,
     onEcho: echo ? engine.printRoutes : null,
     handleFrame: (frame) async =>
         _BridgeHandleFrameResult.frame(await runtime.handleFrame(frame)),
+    handlePayload: (payload) async => _BridgeHandleFrameResult.frame(
+      await runtime.handleFrame(BridgeRequestFrame.decodePayload(payload)),
+    ),
     handleStream: runtime.handleStream,
   );
 }
@@ -327,6 +407,7 @@ Future<void> serveSecureFfi(
   bool requestClientCertificate = false,
   bool shared = false,
   bool http3 = true,
+  bool nativeCallback = false,
   Future<void>? shutdownSignal,
 }) {
   if (certificatePath == null || certificatePath.isEmpty) {
@@ -356,12 +437,16 @@ Future<void> serveSecureFfi(
     shared: shared,
     requestClientCertificate: requestClientCertificate,
     http3: http3,
+    nativeDirectCallback: nativeCallback,
     shutdownSignal: shutdownSignal,
     tlsCertPath: certificatePath,
     tlsKeyPath: keyPath,
     tlsCertPassword: certificatePassword,
     handleFrame: (frame) async =>
         _BridgeHandleFrameResult.frame(await runtime.handleFrame(frame)),
+    handlePayload: (payload) async => _BridgeHandleFrameResult.frame(
+      await runtime.handleFrame(BridgeRequestFrame.decodePayload(payload)),
+    ),
     handleStream: runtime.handleStream,
   );
 }
@@ -462,6 +547,7 @@ Future<void> serveFfiDirect(
   bool v6Only = false,
   bool shared = false,
   bool http3 = true,
+  bool nativeDirect = false,
   Future<void>? shutdownSignal,
 }) {
   final normalizedHost = _normalizeBindHost(host, 'host');
@@ -475,6 +561,7 @@ Future<void> serveFfiDirect(
     shared: shared,
     requestClientCertificate: false,
     http3: http3,
+    nativeDirectCallback: nativeDirect,
     shutdownSignal: shutdownSignal,
     handleFrame: (frame) => _handleDirectFrame(handler, frame),
     handlePayload: (payload) => _handleDirectPayload(handler, payload),
@@ -508,6 +595,7 @@ Future<void> serveSecureFfiDirect(
   bool requestClientCertificate = false,
   bool shared = false,
   bool http3 = true,
+  bool nativeDirect = false,
   Future<void>? shutdownSignal,
 }) {
   if (certificatePath == null || certificatePath.isEmpty) {
@@ -536,6 +624,7 @@ Future<void> serveSecureFfiDirect(
     shared: shared,
     requestClientCertificate: requestClientCertificate,
     http3: http3,
+    nativeDirectCallback: nativeDirect,
     shutdownSignal: shutdownSignal,
     tlsCertPath: certificatePath,
     tlsKeyPath: keyPath,
@@ -568,6 +657,7 @@ Future<void> _serveWithNativeProxy({
   required bool shared,
   required bool requestClientCertificate,
   required bool http3,
+  bool nativeDirectCallback = false,
   required _BridgeHandleFrame handleFrame,
   required _BridgeHandleStream handleStream,
   _BridgeHandlePayload? handlePayload,
@@ -592,43 +682,205 @@ Future<void> _serveWithNativeProxy({
     );
   }
 
-  final bridgeBinding = await _bindBridgeServer();
-  final bridgeServer = bridgeBinding.server;
-
-  final bridgeSubscription = bridgeServer.listen((socket) {
-    try {
-      socket.setOption(SocketOption.tcpNoDelay, true);
-    } catch (_) {}
-    // ignore: discarded_futures
-    _handleBridgeSocket(
-      socket,
-      handleFrame: handleFrame,
-      handleStream: handleStream,
-      handlePayload: handlePayload,
-    );
-  });
-
+  _BridgeBinding? bridgeBinding;
+  StreamSubscription<Socket>? bridgeSubscription;
   late final NativeProxyServer proxy;
   try {
-    proxy = NativeProxyServer.start(
-      host: host,
-      port: port,
-      backendHost: bridgeBinding.backendHost,
-      backendPort: bridgeBinding.backendPort,
-      backendKind: bridgeBinding.backendKind,
-      backendPath: bridgeBinding.backendPath,
-      backlog: backlog,
-      v6Only: v6Only,
-      shared: shared,
-      requestClientCertificate: requestClientCertificate,
-      enableHttp3: enableHttp3,
-      tlsCertPath: tlsCertPath,
-      tlsKeyPath: tlsKeyPath,
-      tlsCertPassword: tlsCertPassword,
-    );
+    if (nativeDirectCallback) {
+      final directPayloadHandler = handlePayload;
+      if (directPayloadHandler == null) {
+        throw StateError(
+          'nativeDirectCallback requires a payload-based direct handler',
+        );
+      }
+
+      final nativeDirectStreams = <int, _NativeDirectRequestStreamState>{};
+      late final NativeProxyServer proxyRef;
+      proxy = NativeProxyServer.start(
+        host: host,
+        port: port,
+        backendHost: InternetAddress.loopbackIPv4.address,
+        backendPort: 9,
+        backlog: backlog,
+        v6Only: v6Only,
+        shared: shared,
+        requestClientCertificate: requestClientCertificate,
+        enableHttp3: enableHttp3,
+        tlsCertPath: tlsCertPath,
+        tlsKeyPath: tlsKeyPath,
+        tlsCertPassword: tlsCertPassword,
+        directRequestCallback: (requestId, payload, payloadLen) {
+          final requestPayload = Uint8List.fromList(
+            payload.asTypedList(payloadLen),
+          );
+
+          void pushResponsePayload(Uint8List responsePayload) {
+            final pushed = proxyRef.pushDirectResponseFrame(
+              requestId,
+              responsePayload,
+            );
+            if (!pushed) {
+              stderr.writeln(
+                '[routed_ffi] native direct callback push failed for requestId=$requestId',
+              );
+            }
+          }
+
+          if (BridgeRequestFrame.isStartPayload(requestPayload)) {
+            BridgeRequestFrame startFrame;
+            try {
+              startFrame = BridgeRequestFrame.decodeStartPayload(
+                requestPayload,
+              );
+            } catch (error, stack) {
+              stderr.writeln(
+                '[routed_ffi] native direct callback handler error: $error\n$stack',
+              );
+              pushResponsePayload(_encodeDirectBadRequestPayload(error));
+              return;
+            }
+
+            final requestBody = StreamController<Uint8List>(sync: true);
+            final streamState = _NativeDirectRequestStreamState(requestBody);
+            nativeDirectStreams[requestId] = streamState;
+
+            unawaited(() async {
+              try {
+                await handleStream(
+                  frame: startFrame,
+                  bodyStream: requestBody.stream,
+                  onResponseStart: (frame) async {
+                    pushResponsePayload(frame.encodeStartPayload());
+                  },
+                  onResponseChunk: (chunkBytes) async {
+                    if (chunkBytes.isEmpty) {
+                      return;
+                    }
+                    pushResponsePayload(
+                      BridgeResponseFrame.encodeChunkPayload(chunkBytes),
+                    );
+                  },
+                );
+                pushResponsePayload(BridgeResponseFrame.encodeEndPayload());
+              } catch (error, stack) {
+                stderr.writeln(
+                  '[routed_ffi] native direct callback stream handler error: $error\n$stack',
+                );
+                pushResponsePayload(
+                  _internalServerErrorFrame(error).encodePayload(),
+                );
+              } finally {
+                nativeDirectStreams.remove(requestId);
+                if (!requestBody.isClosed) {
+                  await requestBody.close();
+                }
+              }
+            }());
+            return;
+          }
+
+          final streamState = nativeDirectStreams[requestId];
+          if (streamState != null) {
+            if (BridgeRequestFrame.isChunkPayload(requestPayload)) {
+              try {
+                final chunk = BridgeRequestFrame.decodeChunkPayload(
+                  requestPayload,
+                );
+                if (chunk.isNotEmpty) {
+                  streamState.requestBody.add(chunk);
+                }
+              } catch (error) {
+                streamState.requestBody.addError(error);
+                unawaited(streamState.requestBody.close());
+              }
+              return;
+            }
+            if (BridgeRequestFrame.isEndPayload(requestPayload)) {
+              try {
+                BridgeRequestFrame.decodeEndPayload(requestPayload);
+              } catch (error) {
+                streamState.requestBody.addError(error);
+              }
+              unawaited(streamState.requestBody.close());
+              return;
+            }
+
+            streamState.requestBody.addError(
+              const FormatException(
+                'unexpected frame while reading native direct request stream',
+              ),
+            );
+            unawaited(streamState.requestBody.close());
+            return;
+          }
+
+          if (BridgeRequestFrame.isChunkPayload(requestPayload) ||
+              BridgeRequestFrame.isEndPayload(requestPayload)) {
+            stderr.writeln(
+              '[routed_ffi] dropping unmatched native direct request frame for requestId=$requestId',
+            );
+            return;
+          }
+
+          unawaited(() async {
+            _BridgeHandleFrameResult result;
+            try {
+              result = await directPayloadHandler(requestPayload);
+            } catch (error, stack) {
+              stderr.writeln(
+                '[routed_ffi] native direct callback handler error: $error\n$stack',
+              );
+              result = _BridgeHandleFrameResult.frame(
+                _internalServerErrorFrame(error),
+              );
+            }
+            final responsePayload =
+                result.encodedPayload ?? result.frame.encodePayload();
+            pushResponsePayload(responsePayload);
+          }());
+        },
+      );
+      proxyRef = proxy;
+    } else {
+      bridgeBinding = await _bindBridgeServer();
+      final bridgeServer = bridgeBinding.server;
+      bridgeSubscription = bridgeServer.listen((socket) {
+        try {
+          socket.setOption(SocketOption.tcpNoDelay, true);
+        } catch (_) {}
+        // ignore: discarded_futures
+        _handleBridgeSocket(
+          socket,
+          handleFrame: handleFrame,
+          handleStream: handleStream,
+          handlePayload: handlePayload,
+        );
+      });
+
+      proxy = NativeProxyServer.start(
+        host: host,
+        port: port,
+        backendHost: bridgeBinding.backendHost,
+        backendPort: bridgeBinding.backendPort,
+        backendKind: bridgeBinding.backendKind,
+        backendPath: bridgeBinding.backendPath,
+        backlog: backlog,
+        v6Only: v6Only,
+        shared: shared,
+        requestClientCertificate: requestClientCertificate,
+        enableHttp3: enableHttp3,
+        tlsCertPath: tlsCertPath,
+        tlsKeyPath: tlsKeyPath,
+        tlsCertPassword: tlsCertPassword,
+      );
+    }
   } catch (error) {
-    await bridgeSubscription.cancel();
-    await bridgeBinding.dispose();
+    if (bridgeSubscription != null) {
+      await bridgeSubscription.cancel();
+    }
+    if (bridgeBinding != null) {
+      await bridgeBinding.dispose();
+    }
     rethrow;
   }
 
@@ -660,10 +912,14 @@ Future<void> _serveWithNativeProxy({
       stderr.writeln('[routed_ffi] proxy shutdown error: $error\n$stack');
     }
     try {
-      await bridgeSubscription.cancel();
+      if (bridgeSubscription != null) {
+        await bridgeSubscription.cancel();
+      }
     } catch (_) {}
     try {
-      await bridgeBinding.dispose();
+      if (bridgeBinding != null) {
+        await bridgeBinding.dispose();
+      }
     } catch (_) {}
     done.complete();
   }
@@ -709,7 +965,7 @@ Future<void> _serveWithNativeProxy({
     shutdownSignal.whenComplete(stopAll);
   }
 
-  bridgeSubscription.onDone(() {
+  bridgeSubscription?.onDone(() {
     // ignore: discarded_futures
     stopAll();
   });
@@ -1223,6 +1479,16 @@ BridgeResponseFrame _internalServerErrorFrame(Object error) {
   );
 }
 
+Uint8List _encodeDirectBadRequestPayload(Object error) {
+  return BridgeResponseFrame(
+    status: HttpStatus.badRequest,
+    headers: const <MapEntry<String, String>>[],
+    bodyBytes: Uint8List.fromList(
+      utf8.encode('invalid bridge request: $error'),
+    ),
+  ).encodePayload();
+}
+
 void _writeBridgeBadRequest(_BridgeSocketWriter writer, Object error) {
   final errorResponse = BridgeResponseFrame(
     status: HttpStatus.badRequest,
@@ -1536,6 +1802,15 @@ final class _DirectPayloadRequestView {
 
   String? header(String name) {
     _ensureHeadParsed();
+    final tokenLookup = _tokenizedHeaderNames
+        ? _directHeaderLookupToken(name)
+        : null;
+    if (tokenLookup != null) {
+      final value = _readTokenizedHeaderValueByToken(name, tokenLookup);
+      if (value != null) {
+        return value;
+      }
+    }
     var offset = _headersOffset!;
     for (var i = 0; i < _headerCount!; i++) {
       final parsed = _readHeaderAt(offset);
@@ -1543,6 +1818,37 @@ final class _DirectPayloadRequestView {
         return parsed.value;
       }
       offset = parsed.nextOffset;
+    }
+    return null;
+  }
+
+  String? _readTokenizedHeaderValueByToken(String name, int tokenLookup) {
+    var offset = _headersOffset!;
+    for (var i = 0; i < _headerCount!; i++) {
+      if (offset + 2 > _payload.length) {
+        throw const FormatException('truncated bridge payload');
+      }
+      final token = (_payload[offset] << 8) | _payload[offset + 1];
+      offset += 2;
+
+      var matches = false;
+      if (token == _bridgeHeaderNameLiteralToken) {
+        final nameField = _readField(_payload, offset);
+        final parsedName = _readFieldString(nameField.slice);
+        matches = _equalsAsciiIgnoreCase(parsedName, name);
+        offset = nameField.nextOffset;
+      } else {
+        if (token < 0 || token >= _directBridgeHeaderNameTable.length) {
+          throw FormatException('invalid bridge header name token: $token');
+        }
+        matches = token == tokenLookup;
+      }
+
+      final valueField = _readField(_payload, offset);
+      if (matches) {
+        return _readFieldString(valueField.slice);
+      }
+      offset = valueField.nextOffset;
     }
     return null;
   }

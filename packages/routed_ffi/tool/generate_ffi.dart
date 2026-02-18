@@ -13,6 +13,8 @@ Future<void> main() async {
       'routed_ffi_transport_version',
       'routed_ffi_start_proxy_server',
       'routed_ffi_stop_proxy_server',
+      'routed_ffi_push_direct_response_frame',
+      'routed_ffi_complete_direct_request',
     }),
     structs: Structs.includeSet({'RoutedFfiProxyConfig'}),
   ).generate();

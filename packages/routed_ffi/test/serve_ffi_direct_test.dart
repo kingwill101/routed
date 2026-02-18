@@ -46,8 +46,9 @@ Future<void> _waitUntilUp(Uri uri) async {
 }
 
 Future<_RunningDirectServer> _startDirectServer(
-  FfiDirectHandler handler,
-) async {
+  FfiDirectHandler handler, {
+  bool nativeDirect = false,
+}) async {
   final shutdown = Completer<void>();
   final port = await _reservePort();
   final serveFuture = serveFfiDirect(
@@ -56,6 +57,7 @@ Future<_RunningDirectServer> _startDirectServer(
     port: port,
     echo: false,
     http3: false,
+    nativeDirect: nativeDirect,
     shutdownSignal: shutdown.future,
   );
 
@@ -169,6 +171,82 @@ void main() {
     await _stopDirectServer(running);
   });
 
+  test('serveFfiDirect supports pre-encoded static responses', () async {
+    final staticResponse = FfiDirectResponse.preEncodedBytes(
+      headers: const <MapEntry<String, String>>[
+        MapEntry(HttpHeaders.contentTypeHeader, 'application/json'),
+      ],
+      bodyBytes: Uint8List.fromList(
+        utf8.encode('{"ok":true,"mode":"pre_encoded"}'),
+      ),
+    );
+    final running = await _startDirectServer((_) async => staticResponse);
+
+    final client = HttpClient();
+    try {
+      final uri = running.baseUri.replace(path: '/pre-encoded');
+      final req = await client.getUrl(uri);
+      final res = await req.close();
+      final body = await utf8.decodeStream(res);
+
+      expect(res.statusCode, HttpStatus.ok);
+      expect(res.headers.contentType?.mimeType, 'application/json');
+      expect(jsonDecode(body), <String, Object?>{
+        'ok': true,
+        'mode': 'pre_encoded',
+      });
+    } finally {
+      client.close(force: true);
+    }
+
+    await _stopDirectServer(running);
+  });
+
+  test(
+    'serveFfiDirect nativeDirect callback mode supports streaming request/response',
+    () async {
+      final running = await _startDirectServer((request) async {
+        var requestBytes = 0;
+        await for (final chunk in request.body) {
+          requestBytes += chunk.length;
+        }
+        return FfiDirectResponse.stream(
+          status: HttpStatus.accepted,
+          headers: <MapEntry<String, String>>[
+            const MapEntry(HttpHeaders.contentTypeHeader, 'text/plain'),
+            MapEntry('x-request-bytes', '$requestBytes'),
+          ],
+          body: Stream<Uint8List>.fromIterable(<Uint8List>[
+            Uint8List.fromList(utf8.encode('stream-')),
+            Uint8List.fromList(utf8.encode('ok')),
+          ]),
+        );
+      }, nativeDirect: true);
+
+      final client = HttpClient();
+      try {
+        final uri = running.baseUri.replace(path: '/native-stream');
+        final req = await client.postUrl(uri);
+        await req.addStream(
+          Stream<List<int>>.fromIterable(<List<int>>[
+            utf8.encode('hello'),
+            utf8.encode('world'),
+          ]),
+        );
+        final res = await req.close();
+        final body = await utf8.decodeStream(res);
+
+        expect(res.statusCode, HttpStatus.accepted);
+        expect(res.headers.value('x-request-bytes'), '10');
+        expect(body, 'stream-ok');
+      } finally {
+        client.close(force: true);
+      }
+
+      await _stopDirectServer(running);
+    },
+  );
+
   test('serveFfiDirect maps handler exception to 500 response', () async {
     final running = await _startDirectServer((_) async {
       throw StateError('boom');
@@ -189,4 +267,47 @@ void main() {
 
     await _stopDirectServer(running);
   });
+
+  test(
+    'serveFfiDirect nativeDirect callback mode handles request/response',
+    () async {
+      final running = await _startDirectServer((request) async {
+        final bodyText = await utf8.decoder.bind(request.body).join();
+        return FfiDirectResponse.bytes(
+          headers: const <MapEntry<String, String>>[
+            MapEntry(HttpHeaders.contentTypeHeader, 'application/json'),
+          ],
+          bodyBytes: Uint8List.fromList(
+            utf8.encode(
+              jsonEncode(<String, Object?>{
+                'method': request.method,
+                'path': request.path,
+                'body': bodyText,
+              }),
+            ),
+          ),
+        );
+      }, nativeDirect: true);
+
+      final client = HttpClient();
+      try {
+        final uri = running.baseUri.replace(path: '/native-direct');
+        final req = await client.postUrl(uri);
+        req.add(utf8.encode('native direct body'));
+        final res = await req.close();
+        final body = await utf8.decodeStream(res);
+
+        expect(res.statusCode, HttpStatus.ok);
+        expect(jsonDecode(body), <String, Object?>{
+          'method': 'POST',
+          'path': '/native-direct',
+          'body': 'native direct body',
+        });
+      } finally {
+        client.close(force: true);
+      }
+
+      await _stopDirectServer(running);
+    },
+  );
 }

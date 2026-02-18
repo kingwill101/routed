@@ -26,7 +26,10 @@ Future<int> _reservePort() async {
   return port;
 }
 
-Future<_RunningFfiServer> _startServer(Engine engine) async {
+Future<_RunningFfiServer> _startServer(
+  Engine engine, {
+  bool nativeCallback = false,
+}) async {
   final shutdown = Completer<void>();
   final port = await _reservePort();
   final serveFuture = serveFfi(
@@ -35,6 +38,7 @@ Future<_RunningFfiServer> _startServer(Engine engine) async {
     port: port,
     echo: false,
     http3: false,
+    nativeCallback: nativeCallback,
     shutdownSignal: shutdown.future,
   );
 
@@ -200,6 +204,31 @@ void main() {
     await _stopServer(running, engine);
   });
 
+  test(
+    'serveFfi native callback mode proxies GET requests to routed engine handlers',
+    () async {
+      final engine = Engine()
+        ..get('/ping', (ctx) async => ctx.json({'ok': true}));
+
+      final running = await _startServer(engine, nativeCallback: true);
+      final uri = running.baseUri.replace(path: '/ping');
+
+      final client = HttpClient();
+      try {
+        final req = await client.getUrl(uri);
+        final res = await req.close();
+        final body = await utf8.decodeStream(res);
+
+        expect(res.statusCode, HttpStatus.ok);
+        expect(jsonDecode(body), {'ok': true});
+      } finally {
+        client.close(force: true);
+      }
+
+      await _stopServer(running, engine);
+    },
+  );
+
   test('serveFfi forwards method, headers, query, and body', () async {
     final engine = Engine()
       ..post('/echo', (ctx) async {
@@ -285,7 +314,9 @@ void main() {
     final socket = await WebSocket.connect(uri.toString());
     try {
       socket.add('ping');
-      final firstMessage = await socket.first.timeout(const Duration(seconds: 3));
+      final firstMessage = await socket.first.timeout(
+        const Duration(seconds: 3),
+      );
       expect(firstMessage, 'echo:ping');
       await socket.close();
     } finally {

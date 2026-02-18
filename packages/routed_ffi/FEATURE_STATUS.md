@@ -15,6 +15,7 @@ Last updated: February 18, 2026
 - `serveFfi` entrypoint implemented as alternative server boot path.
 - `serveFfiHttp` and `serveSecureFfiHttp` entrypoints implemented for `HttpRequest`-style bridge handlers without Routed engine coupling.
 - `serveFfiDirect` and `serveSecureFfiDirect` entrypoints implemented for direct Dart handlers over FFI bridge without Routed engine request pipeline.
+- `serveFfiDirect(..., nativeDirect: true)` and `serveSecureFfiDirect(..., nativeDirect: true)` now run over direct native callback frames (request start/chunk/end and response start/chunk/end) without using the bridge backend socket path.
 - FFI boot APIs now expose HttpServer-like bind options (`host/address` as `String|InternetAddress`, `backlog`, `v6Only`, `shared`, and `requestClientCertificate` in TLS mode).
 - Native TLS now supports `requestClientCertificate` by requesting optional client certificates and validating them against native trust roots.
 - Native TLS now supports `certificatePassword` for encrypted PKCS#8 private key files.

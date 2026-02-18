@@ -23,6 +23,36 @@ external void routed_ffi_stop_proxy_server(
   ffi.Pointer<ProxyServerHandle> handle,
 );
 
+@ffi.Native<
+  ffi.Uint8 Function(
+    ffi.Pointer<ProxyServerHandle>,
+    ffi.Uint64,
+    ffi.Pointer<ffi.Uint8>,
+    ffi.Uint64,
+  )
+>()
+external int routed_ffi_push_direct_response_frame(
+  ffi.Pointer<ProxyServerHandle> handle,
+  int request_id,
+  ffi.Pointer<ffi.Uint8> response_payload,
+  int response_payload_len,
+);
+
+@ffi.Native<
+  ffi.Uint8 Function(
+    ffi.Pointer<ProxyServerHandle>,
+    ffi.Uint64,
+    ffi.Pointer<ffi.Uint8>,
+    ffi.Uint64,
+  )
+>()
+external int routed_ffi_complete_direct_request(
+  ffi.Pointer<ProxyServerHandle> handle,
+  int request_id,
+  ffi.Pointer<ffi.Uint8> response_payload,
+  int response_payload_len,
+);
+
 final class ProxyServerHandle extends ffi.Opaque {}
 
 final class RoutedFfiProxyConfig extends ffi.Struct {
@@ -64,4 +94,6 @@ final class RoutedFfiProxyConfig extends ffi.Struct {
 
   @ffi.Uint8()
   external int benchmark_mode;
+
+  external ffi.Pointer<ffi.Void> direct_request_callback;
 }

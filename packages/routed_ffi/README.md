@@ -144,9 +144,11 @@ dart --observe example/devtools_profile_server.dart --mode=http --port=8080
 ## Current Status
 
 - `serveFfi(...)`: Rust native front server is active (HTTP/1 + HTTP/2).
+- `serveFfi(..., nativeCallback: true)`: Routed engine over native callback request/response frames (no bridge backend socket hop for that mode).
 - `serveSecureFfi(...)`: Rust native TLS front server is active (HTTP/1 + HTTP/2 + HTTP/3).
 - `serveFfiHttp(...)` / `serveSecureFfiHttp(...)`: Rust native front server is active with `HttpRequest` handlers and no Routed engine coupling.
 - `serveFfiDirect(...)` / `serveSecureFfiDirect(...)`: Rust native front server is active with direct Dart handlers (no Routed engine request pipeline).
+- `serveFfiDirect(..., nativeDirect: true)` / `serveSecureFfiDirect(..., nativeDirect: true)` now run fully over native callback frames (no bridge backend socket hop for that mode), including chunked request/response frame flow.
 - FFI boot APIs accept HttpServer-like bind options (`host/address` as `String` or `InternetAddress`, plus `backlog`, `v6Only`, and `shared`).
 - `requestClientCertificate` is supported in TLS APIs; the transport requests optional client certificates and validates them against native trust roots when provided.
 - `certificatePassword` is supported for encrypted PKCS#8 private key files (`BEGIN ENCRYPTED PRIVATE KEY`).
@@ -195,6 +197,8 @@ Optional flags:
 - `--min-req-per-sec-ratio=R`
 - `--max-p95-ratio=R`
 - `--json`
+- `--include-direct-native-callback`
+- `--include-routed-native-callback`
 
 CI runs a benchmark gate workflow at `.github/workflows/routed_ffi_benchmark_gate.yml`
 using ratio thresholds to catch performance regressions.
@@ -209,9 +213,13 @@ the same static JSON response shape without Routed engine execution.
 `routed_ffi_direct` is a benchmark mode using `serveFfiDirect(...)` (Rust front
 server + FFI bridge + direct Dart handler) without Routed engine execution.
 
+`routed_ffi_native_callback` is a benchmark mode using
+`serveFfi(..., nativeCallback: true)` (Routed engine over native callback frames)
+without the bridge backend socket hop.
+
 ### Latest Snapshot
 
-Last run (local): 2026-02-18 06:14 -0500 (`benchmark_v1_headerfast_chunkloop_25iter.json`)
+Last run (local): 2026-02-18 11:33 -0500 (terminal summary via `--pretty`)
 
 Command:
 
@@ -219,38 +227,47 @@ Command:
 dart run tool/benchmark_transport.dart \
   --requests=2500 \
   --concurrency=64 \
-  --warmup=300 \
+  --warmup=10 \
   --iterations=25 \
-  --json
+  --include-direct-native-callback \
+  --pretty
 ```
 
 Result summary:
 
-- `dart_io_direct`: `7547.60 req/s`, `p50=9.64 ms`, `p95=9.64 ms`
-- `routed_io`: `5835.50 req/s`, `p50=11.79 ms`, `p95=11.79 ms`
-- `routed_ffi_direct`: `10037.30 req/s`, `p50=7.72 ms`, `p95=7.72 ms`
-- `routed_ffi`: `8015.60 req/s`, `p50=9.75 ms`, `p95=9.75 ms`
-- `routed_ffi_native_direct`: `13742.91 req/s`, `p50=5.60 ms`, `p95=5.60 ms`
+- `dart_io_direct`: `6907 req/s`, `p50=10.55 ms`, `p95=10.55 ms`
+- `routed_io`: `5850 req/s`, `p50=13.30 ms`, `p95=13.30 ms`
+- `routed_ffi_direct`: `9689 req/s`, `p50=7.95 ms`, `p95=7.95 ms`
+- `routed_ffi_direct_native_callback`: `12584 req/s`, `p50=6.34 ms`, `p95=6.34 ms`
+- `routed_ffi`: `6902 req/s`, `p50=10.90 ms`, `p95=10.90 ms`
+- `routed_ffi_native_direct`: `13636 req/s`, `p50=5.73 ms`, `p95=5.73 ms`
 Ratios:
-- `routed_ffi / routed_io`: throughput `1.374`, p95 `0.827`
-- `routed_ffi_direct / dart_io_direct`: throughput `1.330`, p95 `0.801`
-- `routed_ffi_native_direct / routed_ffi_direct`: throughput `1.369`, p95 `0.725`
+- `routed_ffi / routed_io`: throughput `1.180`, p95 `0.820`
+- `routed_ffi_direct / dart_io_direct`: throughput `1.402`, p95 `0.753`
+- `routed_ffi_direct_native_callback / routed_ffi_direct`: throughput `1.299`, p95 `0.797`
+- `routed_ffi_native_direct / routed_ffi_direct_native_callback`: throughput `1.084`, p95 `0.904`
 
 Interpretation:
 - The Rust native front path remains much faster than routed execution (`routed_ffi_native_direct`).
-- Bridge transport latency regression was reduced via bridge socket `TCP_NODELAY` + fewer per-frame flushes.
-- Additional bridge overhead was reduced by using legacy single-frame fast paths for non-streaming request/response handling and reducing Dart-side byte copies in frame decode.
-- Serialization/deserialization overhead was further reduced by:
-  - zero-copy Rust decode of Dart response body/chunk frame payloads into `Bytes`,
-  - direct chunk frame writes (no temporary encoded chunk payload buffers) in both Rust and Dart bridge paths.
-- Low-concurrency path was improved by enabling `TCP_NODELAY` on accepted plain HTTP sockets in the native Rust front server.
-- Bridge idle socket robustness was preserved without per-request probe overhead by retrying once with a fresh socket for failed empty-body bridge calls.
-- Bridge transport now auto-selects Unix domain sockets on Linux/macOS (fallback to loopback TCP), reducing local bridge overhead while preserving the same public boot API.
-- Bridge pool now keeps a hot idle-socket slot before falling back to the shared idle vector, reducing lock contention in the common reuse path.
-- With this run profile, `routed_ffi` exceeds both `routed_io` and `dart_io_direct` throughput.
+- `routed_ffi_direct_native_callback` is now the fastest Dart-involved path by throughput and p95.
+- `routed_ffi_direct_native_callback` materially narrows the gap to the Rust-only baseline.
+- This snapshot uses 25 iterations and includes the direct native callback transport mode.
 
 ### Snapshot History
 
+- `2026-02-18 16:40 +0000` (Ubuntu `ubuntu-s-1vcpu-512mb-10gb-sfo3-01`, bundled CLI, `2500/64/10/25`, `--include-direct-native-callback`):
+- `dart_io_direct`: `4113 req/s`
+- `routed_io`: `3336 req/s`
+- `routed_ffi_direct`: `3765 req/s`
+- `routed_ffi_direct_native_callback`: `4547 req/s`
+- `routed_ffi`: `3079 req/s`
+- `routed_ffi_native_direct`: `5892 req/s`
+- `2026-02-18 06:46 -0500` (`benchmark_v1_direct_payload_lazy_25iter_2500req.json`):
+- `dart_io_direct`: `7030.53 req/s`
+- `routed_io`: `5697.89 req/s`
+- `routed_ffi_direct`: `9618.75 req/s`
+- `routed_ffi`: `7294.82 req/s`
+- `routed_ffi_native_direct`: `13592.50 req/s`
 - `2026-02-18 04:22 -0500` (`benchmark_v1_coalesce_writes_lenread_25iter_run2.json`):
 - `dart_io_direct`: `5692.08 req/s`
 - `routed_io`: `4580.04 req/s`

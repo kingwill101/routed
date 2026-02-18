@@ -1,9 +1,11 @@
-use std::ffi::{c_char, CStr};
+use std::collections::HashMap;
+use std::ffi::{c_char, c_void, CStr};
 use std::fs::File;
 use std::io::{self, BufReader, ErrorKind, IoSlice};
 use std::net::SocketAddr;
 use std::path::PathBuf;
 use std::ptr::null_mut;
+use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Arc;
 use std::thread;
 use std::time::Duration;
@@ -25,6 +27,7 @@ use tokio::io::{AsyncRead, AsyncReadExt, AsyncWrite, AsyncWriteExt};
 use tokio::net::UnixStream;
 use tokio::net::{TcpListener, TcpStream};
 use tokio::sync::{mpsc, oneshot};
+use tokio::time;
 use tokio_rustls::rustls::server::WebPkiClientVerifier;
 use tokio_rustls::rustls::{RootCertStore, ServerConfig};
 use tokio_rustls::TlsAcceptor;
@@ -33,6 +36,7 @@ use tokio_stream::{wrappers::ReceiverStream, StreamExt};
 const MAX_PROXY_BODY_BYTES: usize = 32 * 1024 * 1024;
 const MAX_BRIDGE_FRAME_BYTES: usize = 64 * 1024 * 1024;
 const BRIDGE_BODY_CHUNK_BYTES: usize = 64 * 1024;
+const BRIDGE_COALESCE_WRITE_THRESHOLD_BYTES: usize = 4 * 1024;
 const BRIDGE_PROTOCOL_VERSION: u8 = 1;
 const BRIDGE_PROTOCOL_VERSION_LEGACY: u8 = 1;
 const _BRIDGE_REQUEST_FRAME_TYPE: u8 = 1; // legacy single-frame request
@@ -54,7 +58,12 @@ const BRIDGE_BACKEND_KIND_TCP: u8 = 0;
 const BRIDGE_BACKEND_KIND_UNIX: u8 = 1;
 const BENCHMARK_MODE_NONE: u8 = 0;
 const BENCHMARK_MODE_STATIC_OK: u8 = 1;
+const BENCHMARK_MODE_STATIC_OK_ROUTED_FFI_DIRECT_SHAPE: u8 = 2;
 const BENCHMARK_STATIC_OK_BODY: &[u8] = br#"{"ok":true,"label":"routed_ffi_native_direct"}"#;
+const BENCHMARK_ROUTED_FFI_DIRECT_SHAPE_BODY: &[u8] = br#"{"ok":true,"label":"routed_ffi_direct"}"#;
+const DIRECT_REQUEST_TIMEOUT: Duration = Duration::from_secs(30);
+
+type DirectRequestCallback = extern "C" fn(request_id: u64, payload: *const u8, payload_len: u64);
 
 const BRIDGE_HEADER_NAME_TABLE: [&str; 29] = [
     "host",
@@ -105,12 +114,14 @@ pub struct RoutedFfiProxyConfig {
     pub tls_key_path: *const c_char,
     pub tls_cert_password: *const c_char,
     pub benchmark_mode: u8,
+    pub direct_request_callback: *const c_void,
 }
 
 #[derive(Clone)]
 struct ProxyState {
     bridge_pool: Arc<BridgePool>,
     benchmark_mode: u8,
+    direct_bridge: Option<Arc<DirectRequestBridge>>,
 }
 
 #[derive(Clone)]
@@ -123,6 +134,18 @@ struct ProxyTlsConfig {
 pub struct ProxyServerHandle {
     shutdown_tx: Option<oneshot::Sender<()>>,
     join_handle: Option<thread::JoinHandle<()>>,
+    direct_bridge: Option<Arc<DirectRequestBridge>>,
+}
+
+struct DirectRequestBridge {
+    callback: DirectRequestCallback,
+    next_request_id: AtomicU64,
+    pending: Mutex<HashMap<u64, PendingDirectRequest>>,
+}
+
+struct PendingDirectRequest {
+    inflight_payloads: Vec<Vec<u8>>,
+    response_tx: mpsc::UnboundedSender<Vec<u8>>,
 }
 
 struct BridgePool {
@@ -319,7 +342,10 @@ pub extern "C" fn routed_ffi_start_proxy_server(
     let shared = config.shared != 0;
     let request_client_certificate = config.request_client_certificate != 0;
     let benchmark_mode = config.benchmark_mode;
-    if benchmark_mode != BENCHMARK_MODE_NONE && benchmark_mode != BENCHMARK_MODE_STATIC_OK {
+    if benchmark_mode != BENCHMARK_MODE_NONE
+        && benchmark_mode != BENCHMARK_MODE_STATIC_OK
+        && benchmark_mode != BENCHMARK_MODE_STATIC_OK_ROUTED_FFI_DIRECT_SHAPE
+    {
         eprintln!("[routed_ffi_native] invalid benchmark_mode: {benchmark_mode}");
         return null_mut();
     }
@@ -327,6 +353,22 @@ pub extern "C" fn routed_ffi_start_proxy_server(
     let tls_key_path = c_string_to_string(config.tls_key_path).filter(|value| !value.is_empty());
     let tls_cert_password =
         c_string_to_string(config.tls_cert_password).filter(|value| !value.is_empty());
+    let direct_callback = if config.direct_request_callback.is_null() {
+        None
+    } else {
+        Some(unsafe {
+            std::mem::transmute::<*const c_void, DirectRequestCallback>(
+                config.direct_request_callback,
+            )
+        })
+    };
+    let direct_bridge = direct_callback.map(|callback| {
+        Arc::new(DirectRequestBridge {
+            callback,
+            next_request_id: AtomicU64::new(1),
+            pending: Mutex::new(HashMap::new()),
+        })
+    });
     let tls_config = match (tls_cert_path, tls_key_path) {
         (None, None) => None,
         (Some(cert_path), Some(key_path)) => Some(ProxyTlsConfig {
@@ -345,6 +387,7 @@ pub extern "C" fn routed_ffi_start_proxy_server(
     let (startup_tx, startup_rx) = std::sync::mpsc::channel::<Result<u16, String>>();
     let (shutdown_tx, shutdown_rx) = oneshot::channel::<()>();
 
+    let runtime_direct_bridge = direct_bridge.clone();
     let join_handle = thread::spawn(move || {
         let worker_threads = std::thread::available_parallelism()
             .map(|value| value.get())
@@ -383,6 +426,7 @@ pub extern "C" fn routed_ffi_start_proxy_server(
             let state = ProxyState {
                 bridge_pool: Arc::new(BridgePool::new(bridge_endpoint, 256)),
                 benchmark_mode,
+                direct_bridge: runtime_direct_bridge,
             };
             let app = Router::new().fallback(any(proxy_request)).with_state(state);
             let _ = startup_tx.send(Ok(actual_port));
@@ -441,6 +485,7 @@ pub extern "C" fn routed_ffi_start_proxy_server(
     let handle = ProxyServerHandle {
         shutdown_tx: Some(shutdown_tx),
         join_handle: Some(join_handle),
+        direct_bridge,
     };
     Box::into_raw(Box::new(handle))
 }
@@ -458,6 +503,54 @@ pub extern "C" fn routed_ffi_stop_proxy_server(handle: *mut ProxyServerHandle) {
     if let Some(join_handle) = handle.join_handle.take() {
         let _ = join_handle.join();
     }
+}
+
+#[no_mangle]
+pub extern "C" fn routed_ffi_push_direct_response_frame(
+    handle: *mut ProxyServerHandle,
+    request_id: u64,
+    response_payload: *const u8,
+    response_payload_len: u64,
+) -> u8 {
+    if handle.is_null() || response_payload.is_null() {
+        return 0;
+    }
+
+    let handle_ref = unsafe { &*handle };
+    let Some(direct_bridge) = handle_ref.direct_bridge.as_ref() else {
+        return 0;
+    };
+
+    let Ok(response_payload_len) = usize::try_from(response_payload_len) else {
+        return 0;
+    };
+    let response = unsafe { std::slice::from_raw_parts(response_payload, response_payload_len) };
+    let response_tx = {
+        let pending = direct_bridge.pending.lock();
+        let Some(entry) = pending.get(&request_id) else {
+            return 0;
+        };
+        entry.response_tx.clone()
+    };
+    if response_tx.send(response.to_vec()).is_err() {
+        return 0;
+    }
+    1
+}
+
+#[no_mangle]
+pub extern "C" fn routed_ffi_complete_direct_request(
+    handle: *mut ProxyServerHandle,
+    request_id: u64,
+    response_payload: *const u8,
+    response_payload_len: u64,
+) -> u8 {
+    routed_ffi_push_direct_response_frame(
+        handle,
+        request_id,
+        response_payload,
+        response_payload_len,
+    )
 }
 
 async fn bind_tcp_listener(
@@ -941,6 +1034,9 @@ async fn proxy_request(State(state): State<ProxyState>, request: Request<Body>) 
     if state.benchmark_mode == BENCHMARK_MODE_STATIC_OK {
         return benchmark_static_ok_response();
     }
+    if state.benchmark_mode == BENCHMARK_MODE_STATIC_OK_ROUTED_FFI_DIRECT_SHAPE {
+        return benchmark_static_response(BENCHMARK_ROUTED_FFI_DIRECT_SHAPE_BODY);
+    }
 
     let (mut parts, body) = request.into_parts();
     let websocket_upgrade_requested = is_websocket_upgrade(&parts.headers);
@@ -956,8 +1052,6 @@ async fn proxy_request(State(state): State<ProxyState>, request: Request<Body>) 
         .map(|value| value.as_str())
         .unwrap_or(parts.uri.path());
     let (path, query) = split_path_and_query_ref(path_and_query);
-    let request_body_known_empty = body.size_hint().exact() == Some(0);
-    let body_stream = body.into_data_stream();
 
     let authority = parts
         .headers
@@ -975,6 +1069,34 @@ async fn proxy_request(State(state): State<ProxyState>, request: Request<Body>) 
         protocol: http_version_to_protocol(parts.version),
         headers: &parts.headers,
     };
+
+    if let Some(direct_bridge) = state.direct_bridge.as_ref() {
+        if websocket_upgrade_requested {
+            return text_response(
+                StatusCode::BAD_GATEWAY,
+                "websocket upgrade is not supported by direct callback mode",
+            );
+        }
+        let request_body_known_empty = body.size_hint().exact() == Some(0);
+        let body_stream = body.into_data_stream();
+        return match call_direct_bridge_request(
+            direct_bridge,
+            bridge_request,
+            body_stream,
+            request_body_known_empty,
+        )
+        .await
+        {
+            Ok(response) => response,
+            Err(error) => text_response(
+                StatusCode::BAD_GATEWAY,
+                format!("direct bridge call failed: {error}"),
+            ),
+        };
+    }
+
+    let request_body_known_empty = body.size_hint().exact() == Some(0);
+    let body_stream = body.into_data_stream();
 
     let mut bridge_result = match call_bridge(
         &state.bridge_pool,
@@ -1028,13 +1150,298 @@ async fn proxy_request(State(state): State<ProxyState>, request: Request<Body>) 
 }
 
 fn benchmark_static_ok_response() -> Response<Body> {
-    let mut response = Response::new(Body::from(BENCHMARK_STATIC_OK_BODY));
+    benchmark_static_response(BENCHMARK_STATIC_OK_BODY)
+}
+
+fn benchmark_static_response(body: &'static [u8]) -> Response<Body> {
+    let mut response = Response::new(Body::from(body));
     *response.status_mut() = StatusCode::OK;
     response.headers_mut().insert(
         axum::http::header::CONTENT_TYPE,
         axum::http::HeaderValue::from_static("application/json"),
     );
     response
+}
+
+async fn call_direct_bridge_request(
+    direct_bridge: &Arc<DirectRequestBridge>,
+    request: BridgeRequestRef<'_>,
+    mut body_stream: BodyDataStream,
+    request_body_known_empty: bool,
+) -> Result<Response<Body>, String> {
+    let request_id = direct_bridge
+        .next_request_id
+        .fetch_add(1, Ordering::Relaxed);
+    let (response_tx, mut response_rx) = mpsc::unbounded_channel::<Vec<u8>>();
+
+    direct_bridge.pending.lock().insert(
+        request_id,
+        PendingDirectRequest {
+            inflight_payloads: Vec::new(),
+            response_tx,
+        },
+    );
+
+    if let Err(error) = emit_direct_bridge_request(
+        direct_bridge,
+        request_id,
+        &request,
+        &mut body_stream,
+        request_body_known_empty,
+    )
+    .await
+    {
+        remove_pending_direct_request(direct_bridge, request_id);
+        return Err(error);
+    }
+
+    let first_payload = match time::timeout(DIRECT_REQUEST_TIMEOUT, response_rx.recv()).await {
+        Ok(Some(payload)) => payload,
+        Ok(None) => {
+            remove_pending_direct_request(direct_bridge, request_id);
+            return Err("direct bridge callback closed before response".to_string());
+        }
+        Err(_) => {
+            remove_pending_direct_request(direct_bridge, request_id);
+            return Err(format!(
+                "direct bridge callback timed out after {:?}",
+                DIRECT_REQUEST_TIMEOUT
+            ));
+        }
+    };
+
+    let frame_type = match peek_bridge_frame_type(&first_payload) {
+        Ok(frame_type) => frame_type,
+        Err(error) => {
+            remove_pending_direct_request(direct_bridge, request_id);
+            return Err(format!("decode response failed: {error}"));
+        }
+    };
+
+    if is_bridge_response_frame_type(frame_type) {
+        let decoded = decode_bridge_response(&first_payload)
+            .map_err(|error| format!("decode response failed: {error}"))?;
+        remove_pending_direct_request(direct_bridge, request_id);
+        let status = StatusCode::from_u16(decoded.status).unwrap_or(StatusCode::BAD_GATEWAY);
+        let mut response = Response::new(Body::from(decoded.body_bytes));
+        *response.status_mut() = status;
+        for (header_name, header_value) in decoded.headers {
+            response.headers_mut().append(header_name, header_value);
+        }
+        return Ok(response);
+    }
+
+    if !is_bridge_response_start_frame_type(frame_type) {
+        remove_pending_direct_request(direct_bridge, request_id);
+        return Err(format!(
+            "decode response failed: invalid bridge response frame type: {frame_type}"
+        ));
+    }
+
+    let (status_code, headers) = decode_bridge_response_start(&first_payload)
+        .map_err(|error| format!("decode response failed: {error}"))?;
+    let status = StatusCode::from_u16(status_code).unwrap_or(StatusCode::BAD_GATEWAY);
+    let (tx, rx) = mpsc::channel::<Result<Bytes, String>>(16);
+    let direct_bridge = direct_bridge.clone();
+    tokio::spawn(async move {
+        stream_direct_bridge_response_frames(direct_bridge, request_id, response_rx, tx).await;
+    });
+
+    let mut response = Response::new(Body::from_stream(ReceiverStream::new(rx)));
+    *response.status_mut() = status;
+    for (header_name, header_value) in headers {
+        response.headers_mut().append(header_name, header_value);
+    }
+    Ok(response)
+}
+
+fn remove_pending_direct_request(direct_bridge: &Arc<DirectRequestBridge>, request_id: u64) {
+    let _ = direct_bridge.pending.lock().remove(&request_id);
+}
+
+async fn emit_direct_bridge_request(
+    direct_bridge: &Arc<DirectRequestBridge>,
+    request_id: u64,
+    request: &BridgeRequestRef<'_>,
+    body_stream: &mut BodyDataStream,
+    request_body_known_empty: bool,
+) -> Result<(), String> {
+    if request_body_known_empty {
+        return emit_direct_empty_request(direct_bridge, request_id, request);
+    }
+
+    let mut first_non_empty_chunk: Option<Bytes> = None;
+    while let Some(next_chunk) = body_stream.next().await {
+        let chunk =
+            next_chunk.map_err(|error| format!("failed to read request body chunk: {error}"))?;
+        if chunk.is_empty() {
+            continue;
+        }
+        first_non_empty_chunk = Some(chunk);
+        break;
+    }
+
+    if first_non_empty_chunk.is_none() {
+        return emit_direct_empty_request(direct_bridge, request_id, request);
+    }
+
+    let start_payload = encode_bridge_request_start(request)?;
+    emit_direct_callback_payload(direct_bridge, request_id, start_payload)?;
+
+    let mut total_body_bytes = 0usize;
+    if let Some(first_chunk) = first_non_empty_chunk {
+        total_body_bytes = emit_direct_request_chunk(
+            direct_bridge,
+            request_id,
+            first_chunk.as_ref(),
+            total_body_bytes,
+        )?;
+    }
+
+    while let Some(next_chunk) = body_stream.next().await {
+        let chunk =
+            next_chunk.map_err(|error| format!("failed to read request body chunk: {error}"))?;
+        if chunk.is_empty() {
+            continue;
+        }
+        total_body_bytes =
+            emit_direct_request_chunk(direct_bridge, request_id, chunk.as_ref(), total_body_bytes)?;
+    }
+
+    let end_payload = encode_bridge_request_end();
+    emit_direct_callback_payload(direct_bridge, request_id, end_payload)
+}
+
+fn emit_direct_empty_request(
+    direct_bridge: &Arc<DirectRequestBridge>,
+    request_id: u64,
+    request: &BridgeRequestRef<'_>,
+) -> Result<(), String> {
+    let payload = encode_bridge_request(request, &[])?;
+    emit_direct_callback_payload(direct_bridge, request_id, payload)
+}
+
+fn emit_direct_request_chunk(
+    direct_bridge: &Arc<DirectRequestBridge>,
+    request_id: u64,
+    chunk: &[u8],
+    total_body_bytes: usize,
+) -> Result<usize, String> {
+    let total_body_bytes = total_body_bytes
+        .checked_add(chunk.len())
+        .ok_or_else(|| "request body length overflow".to_string())?;
+    if total_body_bytes > MAX_PROXY_BODY_BYTES {
+        return Err(format!(
+            "failed to read request body: body too large: {total_body_bytes}"
+        ));
+    }
+
+    for frame_chunk in chunk.chunks(BRIDGE_BODY_CHUNK_BYTES) {
+        let payload = encode_bridge_request_chunk_payload(frame_chunk)?;
+        emit_direct_callback_payload(direct_bridge, request_id, payload)?;
+    }
+
+    Ok(total_body_bytes)
+}
+
+fn emit_direct_callback_payload(
+    direct_bridge: &Arc<DirectRequestBridge>,
+    request_id: u64,
+    payload: Vec<u8>,
+) -> Result<(), String> {
+    let (payload_ptr, payload_len) = {
+        let mut pending = direct_bridge.pending.lock();
+        let Some(entry) = pending.get_mut(&request_id) else {
+            return Err(format!(
+                "direct bridge callback missing request id: {request_id}"
+            ));
+        };
+        entry.inflight_payloads.push(payload);
+        let payload = entry
+            .inflight_payloads
+            .last()
+            .ok_or_else(|| "direct bridge callback payload queue unexpectedly empty".to_string())?;
+        let payload_len = u64::try_from(payload.len())
+            .map_err(|_| "direct request payload length does not fit u64".to_string())?;
+        (payload.as_ptr(), payload_len)
+    };
+    (direct_bridge.callback)(request_id, payload_ptr, payload_len);
+    Ok(())
+}
+
+async fn stream_direct_bridge_response_frames(
+    direct_bridge: Arc<DirectRequestBridge>,
+    request_id: u64,
+    mut response_rx: mpsc::UnboundedReceiver<Vec<u8>>,
+    tx: mpsc::Sender<Result<Bytes, String>>,
+) {
+    loop {
+        let payload = match time::timeout(DIRECT_REQUEST_TIMEOUT, response_rx.recv()).await {
+            Ok(Some(payload)) => payload,
+            Ok(None) => {
+                let _ = tx
+                    .send(Err(
+                        "direct bridge callback closed before response end".to_string()
+                    ))
+                    .await;
+                break;
+            }
+            Err(_) => {
+                let _ = tx
+                    .send(Err(format!(
+                        "direct bridge callback timed out after {:?}",
+                        DIRECT_REQUEST_TIMEOUT
+                    )))
+                    .await;
+                break;
+            }
+        };
+
+        let frame_type = match peek_bridge_frame_type(&payload) {
+            Ok(frame_type) => frame_type,
+            Err(error) => {
+                let _ = tx
+                    .send(Err(format!("decode response failed: {error}")))
+                    .await;
+                break;
+            }
+        };
+
+        if frame_type == BRIDGE_RESPONSE_CHUNK_FRAME_TYPE {
+            match decode_bridge_response_chunk(&payload) {
+                Ok(chunk) => {
+                    if !chunk.is_empty() && tx.send(Ok(chunk)).await.is_err() {
+                        break;
+                    }
+                }
+                Err(error) => {
+                    let _ = tx
+                        .send(Err(format!("decode response failed: {error}")))
+                        .await;
+                    break;
+                }
+            }
+            continue;
+        }
+
+        if frame_type == BRIDGE_RESPONSE_END_FRAME_TYPE {
+            if let Err(error) = decode_bridge_response_end(&payload) {
+                let _ = tx
+                    .send(Err(format!("decode response failed: {error}")))
+                    .await;
+            }
+            break;
+        }
+
+        let _ = tx
+            .send(Err(format!(
+                "decode response failed: unexpected bridge frame type: {frame_type}"
+            )))
+            .await;
+        break;
+    }
+
+    remove_pending_direct_request(&direct_bridge, request_id);
 }
 
 async fn call_bridge(
@@ -1207,19 +1614,7 @@ fn encode_bridge_request_start(request: &BridgeRequestRef<'_>) -> Result<Vec<u8>
     writer.put_string(request.path)?;
     writer.put_string(request.query)?;
     writer.put_string(request.protocol)?;
-    let count_pos = writer.reserve_u32();
-    let mut count: u32 = 0;
-    for (name, value) in request.headers.iter() {
-        let Ok(value) = value.to_str() else {
-            continue;
-        };
-        count = count
-            .checked_add(1)
-            .ok_or_else(|| "bridge request has too many headers".to_string())?;
-        write_bridge_header_name(&mut writer, name.as_str())?;
-        writer.put_string(value)?;
-    }
-    writer.patch_u32(count_pos, count);
+    encode_bridge_request_headers(&mut writer, request)?;
     Ok(writer.into_inner())
 }
 
@@ -1237,6 +1632,20 @@ fn encode_bridge_request(
     writer.put_string(request.path)?;
     writer.put_string(request.query)?;
     writer.put_string(request.protocol)?;
+    encode_bridge_request_headers(&mut writer, request)?;
+    writer.put_bytes(body_bytes)?;
+    Ok(writer.into_inner())
+}
+
+fn encode_bridge_request_headers(
+    writer: &mut BridgeByteWriter,
+    request: &BridgeRequestRef<'_>,
+) -> Result<(), String> {
+    if request.headers.is_empty() {
+        writer.put_u32(0);
+        return Ok(());
+    }
+
     let count_pos = writer.reserve_u32();
     let mut count: u32 = 0;
     for (name, value) in request.headers.iter() {
@@ -1246,12 +1655,11 @@ fn encode_bridge_request(
         count = count
             .checked_add(1)
             .ok_or_else(|| "bridge request has too many headers".to_string())?;
-        write_bridge_header_name(&mut writer, name.as_str())?;
+        write_bridge_header_name(writer, name.as_str())?;
         writer.put_string(value)?;
     }
     writer.patch_u32(count_pos, count);
-    writer.put_bytes(body_bytes)?;
-    Ok(writer.into_inner())
+    Ok(())
 }
 
 fn encode_bridge_request_end() -> Vec<u8> {
@@ -1308,6 +1716,15 @@ fn bridge_header_name_from_token(token: u16) -> Option<&'static str> {
     BRIDGE_HEADER_NAME_TABLE.get(token as usize).copied()
 }
 
+fn encode_bridge_request_chunk_payload(chunk: &[u8]) -> Result<Vec<u8>, String> {
+    let mut writer = BridgeByteWriter::new();
+    writer.reserve(6 + chunk.len());
+    writer.put_u8(BRIDGE_PROTOCOL_VERSION);
+    writer.put_u8(BRIDGE_REQUEST_CHUNK_FRAME_TYPE);
+    writer.put_bytes(chunk)?;
+    Ok(writer.into_inner())
+}
+
 async fn write_bridge_request_chunk_frame(
     socket: &mut dyn BridgeStream,
     chunk: &[u8],
@@ -1343,6 +1760,19 @@ async fn write_bridge_chunk_frame_with_type<S: AsyncWrite + Unpin + ?Sized>(
     prefix[0] = BRIDGE_PROTOCOL_VERSION;
     prefix[1] = frame_type;
     prefix[2..6].copy_from_slice(&chunk_len.to_be_bytes());
+    if payload_len as usize <= BRIDGE_COALESCE_WRITE_THRESHOLD_BYTES {
+        let mut out = Vec::with_capacity(10 + chunk.len());
+        out.extend_from_slice(&header);
+        out.extend_from_slice(&prefix);
+        if !chunk.is_empty() {
+            out.extend_from_slice(chunk);
+        }
+        socket
+            .write_all(&out)
+            .await
+            .map_err(|error| format!("write frame payload failed: {error}"))?;
+        return Ok(());
+    }
     if chunk.is_empty() {
         write_all_vectored(socket, &[&header, &prefix])
             .await
@@ -1625,9 +2055,9 @@ fn decode_bridge_response(payload: &[u8]) -> Result<BridgeResponse, String> {
     let header_count = reader.get_u32()? as usize;
     let mut headers = Vec::with_capacity(header_count);
     for _ in 0..header_count {
-        let name = decode_bridge_header_name_bytes(&mut reader, tokenized_names)?;
+        let header_name = decode_bridge_response_header_name(&mut reader, tokenized_names)?;
         let value = reader.get_bytes()?;
-        let Ok(header_name) = axum::http::header::HeaderName::from_bytes(name) else {
+        let Some(header_name) = header_name else {
             continue;
         };
         let Ok(header_value) = axum::http::HeaderValue::from_bytes(value) else {
@@ -1671,9 +2101,9 @@ fn decode_bridge_response_start(
     let header_count = reader.get_u32()? as usize;
     let mut headers = Vec::with_capacity(header_count);
     for _ in 0..header_count {
-        let name = decode_bridge_header_name_bytes(&mut reader, tokenized_names)?;
+        let header_name = decode_bridge_response_header_name(&mut reader, tokenized_names)?;
         let value = reader.get_bytes()?;
-        let Ok(header_name) = axum::http::header::HeaderName::from_bytes(name) else {
+        let Some(header_name) = header_name else {
             continue;
         };
         let Ok(header_value) = axum::http::HeaderValue::from_bytes(value) else {
@@ -1781,22 +2211,77 @@ fn is_bridge_response_start_frame_type_tokenized(frame_type: u8) -> bool {
     frame_type == BRIDGE_RESPONSE_START_FRAME_TYPE_TOKENIZED
 }
 
-fn decode_bridge_header_name_bytes<'a>(
-    reader: &mut BridgeByteReader<'a>,
+fn decode_bridge_response_header_name(
+    reader: &mut BridgeByteReader<'_>,
     tokenized: bool,
-) -> Result<&'a [u8], String> {
+) -> Result<Option<axum::http::header::HeaderName>, String> {
     if !tokenized {
-        return reader.get_bytes();
+        let name = reader.get_bytes()?;
+        return Ok(axum::http::header::HeaderName::from_bytes(name).ok());
     }
 
     let token = reader.get_u16()?;
     if token == BRIDGE_HEADER_NAME_LITERAL_TOKEN {
-        return reader.get_bytes();
+        let name = reader.get_bytes()?;
+        return Ok(axum::http::header::HeaderName::from_bytes(name).ok());
     }
 
-    let name = bridge_header_name_from_token(token)
+    let name = bridge_header_name_from_token_header_name(token)
         .ok_or_else(|| format!("invalid bridge header name token: {token}"))?;
-    Ok(name.as_bytes())
+    Ok(Some(name))
+}
+
+fn bridge_header_name_from_token_header_name(token: u16) -> Option<axum::http::header::HeaderName> {
+    use axum::http::header;
+
+    match token {
+        0 => Some(header::HOST),
+        1 => Some(header::CONNECTION),
+        2 => Some(header::USER_AGENT),
+        3 => Some(header::ACCEPT),
+        4 => Some(header::ACCEPT_ENCODING),
+        5 => Some(header::ACCEPT_LANGUAGE),
+        6 => Some(header::CONTENT_TYPE),
+        7 => Some(header::CONTENT_LENGTH),
+        8 => Some(header::TRANSFER_ENCODING),
+        9 => Some(header::COOKIE),
+        10 => Some(header::SET_COOKIE),
+        11 => Some(header::CACHE_CONTROL),
+        12 => Some(header::PRAGMA),
+        13 => Some(header::UPGRADE),
+        14 => Some(header::AUTHORIZATION),
+        15 => Some(header::ORIGIN),
+        16 => Some(header::REFERER),
+        17 => Some(header::LOCATION),
+        18 => Some(header::SERVER),
+        19 => Some(header::DATE),
+        20 => Some(axum::http::header::HeaderName::from_static(
+            "x-forwarded-for",
+        )),
+        21 => Some(axum::http::header::HeaderName::from_static(
+            "x-forwarded-proto",
+        )),
+        22 => Some(axum::http::header::HeaderName::from_static(
+            "x-forwarded-host",
+        )),
+        23 => Some(axum::http::header::HeaderName::from_static(
+            "x-forwarded-port",
+        )),
+        24 => Some(axum::http::header::HeaderName::from_static("x-request-id")),
+        25 => Some(axum::http::header::HeaderName::from_static(
+            "sec-websocket-key",
+        )),
+        26 => Some(axum::http::header::HeaderName::from_static(
+            "sec-websocket-version",
+        )),
+        27 => Some(axum::http::header::HeaderName::from_static(
+            "sec-websocket-protocol",
+        )),
+        28 => Some(axum::http::header::HeaderName::from_static(
+            "sec-websocket-extensions",
+        )),
+        _ => None,
+    }
 }
 
 async fn write_bridge_frame<S: AsyncWrite + Unpin + ?Sized>(
@@ -1814,6 +2299,16 @@ async fn write_bridge_frame<S: AsyncWrite + Unpin + ?Sized>(
             .write_all(&header)
             .await
             .map_err(|error| format!("write frame header failed: {error}"))?;
+        return Ok(());
+    }
+    if payload.len() <= BRIDGE_COALESCE_WRITE_THRESHOLD_BYTES {
+        let mut out = Vec::with_capacity(4 + payload.len());
+        out.extend_from_slice(&header);
+        out.extend_from_slice(payload);
+        socket
+            .write_all(&out)
+            .await
+            .map_err(|error| format!("write frame payload failed: {error}"))?;
         return Ok(());
     }
     write_all_vectored(socket, &[&header, payload])
