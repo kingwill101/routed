@@ -110,6 +110,37 @@ Future<void> main() async {
 }
 ```
 
+## DevTools Profiling Example
+
+Use `example/devtools_profile_server.dart` as a local profiling target.
+
+Start with VM service enabled:
+
+```bash
+dart --observe example/devtools_profile_server.dart --mode=direct --port=8080
+```
+
+Then drive traffic:
+
+```bash
+curl http://127.0.0.1:8080/health
+curl "http://127.0.0.1:8080/cpu?iterations=800000&seed=7"
+curl -X POST http://127.0.0.1:8080/upload --data-binary @/tmp/payload.bin
+curl -X POST http://127.0.0.1:8080/echo --data-binary @/tmp/payload.bin
+```
+
+Notes:
+- `/upload` streams and counts request bytes without buffering the full payload in
+  user code (better for bridge/runtime profiling).
+- `/echo` intentionally collects the full body in memory and includes a preview
+  (useful when you want application buffering to show up in the profile).
+
+Switch to `HttpRequest` adapter mode if needed:
+
+```bash
+dart --observe example/devtools_profile_server.dart --mode=http --port=8080
+```
+
 ## Current Status
 
 - `serveFfi(...)`: Rust native front server is active (HTTP/1 + HTTP/2).
@@ -180,7 +211,7 @@ server + FFI bridge + direct Dart handler) without Routed engine execution.
 
 ### Latest Snapshot
 
-Last run (local): 2026-02-18 03:22 -0500
+Last run (local): 2026-02-18 06:14 -0500 (`benchmark_v1_headerfast_chunkloop_25iter.json`)
 
 Command:
 
@@ -195,15 +226,15 @@ dart run tool/benchmark_transport.dart \
 
 Result summary:
 
-- `dart_io_direct`: `7119.34 req/s`, `p50=10.48 ms`, `p95=10.48 ms`
-- `routed_io`: `5859.84 req/s`, `p50=12.35 ms`, `p95=12.35 ms`
-- `routed_ffi_direct`: `10119.20 req/s`, `p50=7.83 ms`, `p95=7.83 ms`
-- `routed_ffi`: `7532.32 req/s`, `p50=10.32 ms`, `p95=10.32 ms`
-- `routed_ffi_native_direct`: `13659.26 req/s`, `p50=5.47 ms`, `p95=5.47 ms`
+- `dart_io_direct`: `7547.60 req/s`, `p50=9.64 ms`, `p95=9.64 ms`
+- `routed_io`: `5835.50 req/s`, `p50=11.79 ms`, `p95=11.79 ms`
+- `routed_ffi_direct`: `10037.30 req/s`, `p50=7.72 ms`, `p95=7.72 ms`
+- `routed_ffi`: `8015.60 req/s`, `p50=9.75 ms`, `p95=9.75 ms`
+- `routed_ffi_native_direct`: `13742.91 req/s`, `p50=5.60 ms`, `p95=5.60 ms`
 Ratios:
-- `routed_ffi / routed_io`: throughput `1.286`, p95 `0.835`
-- `routed_ffi_direct / dart_io_direct`: throughput `1.421`, p95 `0.747`
-- `routed_ffi_native_direct / routed_ffi_direct`: throughput `1.350`, p95 `0.698`
+- `routed_ffi / routed_io`: throughput `1.374`, p95 `0.827`
+- `routed_ffi_direct / dart_io_direct`: throughput `1.330`, p95 `0.801`
+- `routed_ffi_native_direct / routed_ffi_direct`: throughput `1.369`, p95 `0.725`
 
 Interpretation:
 - The Rust native front path remains much faster than routed execution (`routed_ffi_native_direct`).
@@ -217,6 +248,16 @@ Interpretation:
 - Bridge transport now auto-selects Unix domain sockets on Linux/macOS (fallback to loopback TCP), reducing local bridge overhead while preserving the same public boot API.
 - Bridge pool now keeps a hot idle-socket slot before falling back to the shared idle vector, reducing lock contention in the common reuse path.
 - With this run profile, `routed_ffi` exceeds both `routed_io` and `dart_io_direct` throughput.
+
+### Snapshot History
+
+- `2026-02-18 04:22 -0500` (`benchmark_v1_coalesce_writes_lenread_25iter_run2.json`):
+- `dart_io_direct`: `5692.08 req/s`
+- `routed_io`: `4580.04 req/s`
+- `routed_ffi_direct`: `8183.04 req/s`
+- `routed_ffi`: `6437.89 req/s`
+- `routed_ffi_native_direct`: `10838.84 req/s`
+- Note: all transports dropped together in this run, indicating host load variance rather than an isolated FFI regression.
 
 ## Troubleshooting
 

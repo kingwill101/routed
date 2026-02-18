@@ -517,9 +517,19 @@ Future<void> _serveWithNativeProxy({
   }
 
   final done = Completer<void>();
+  final signalSubscriptions = <StreamSubscription<ProcessSignal>>[];
+  Timer? forceExitTimer;
+  ProcessSignal? shutdownSignalSource;
 
   Future<void> stopAll() async {
     if (done.isCompleted) return;
+    forceExitTimer?.cancel();
+    for (final subscription in signalSubscriptions) {
+      try {
+        await subscription.cancel();
+      } catch (_) {}
+    }
+    signalSubscriptions.clear();
     try {
       proxy.close();
     } catch (error, stack) {
@@ -534,11 +544,42 @@ Future<void> _serveWithNativeProxy({
     done.complete();
   }
 
+  int forcedExitCode(ProcessSignal signal) {
+    if (signal == ProcessSignal.sigterm) {
+      return 143;
+    }
+    return 130;
+  }
+
+  void onProcessSignal(ProcessSignal signal) {
+    if (shutdownSignalSource == null) {
+      shutdownSignalSource = signal;
+      stderr.writeln(
+        '[routed_ffi] received $signal, attempting graceful shutdown '
+        '(send again to force exit).',
+      );
+      // ignore: discarded_futures
+      stopAll();
+      forceExitTimer = Timer(const Duration(seconds: 5), () {
+        if (!done.isCompleted) {
+          stderr.writeln(
+            '[routed_ffi] graceful shutdown timed out; forcing exit.',
+          );
+          exit(forcedExitCode(signal));
+        }
+      });
+      return;
+    }
+
+    stderr.writeln('[routed_ffi] forcing exit due to repeated signal.');
+    exit(forcedExitCode(shutdownSignalSource!));
+  }
+
   // Fallback signal handling for transports that do not use Engine.serve().
-  // ignore: discarded_futures
-  ProcessSignal.sigint.watch().listen((_) => stopAll());
-  // ignore: discarded_futures
-  ProcessSignal.sigterm.watch().listen((_) => stopAll());
+  signalSubscriptions.add(ProcessSignal.sigint.watch().listen(onProcessSignal));
+  signalSubscriptions.add(
+    ProcessSignal.sigterm.watch().listen(onProcessSignal),
+  );
   if (shutdownSignal != null) {
     // ignore: discarded_futures
     shutdownSignal.whenComplete(stopAll);
@@ -720,21 +761,42 @@ Future<void> _handleChunkedBridgeRequest(
       if (payload == null) {
         throw const FormatException('bridge stream ended before request end');
       }
-      if (BridgeRequestFrame.isChunkPayload(payload)) {
-        final chunk = BridgeRequestFrame.decodeChunkPayload(payload);
-        if (chunk.isNotEmpty) {
-          requestBodyBytes += chunk.length;
+      final payloadLength = payload.length;
+      if (payloadLength < 2) {
+        throw const FormatException('truncated bridge request frame header');
+      }
+      if (payload[0] != bridgeFrameProtocolVersion) {
+        throw FormatException(
+          'unsupported bridge protocol version: ${payload[0]}',
+        );
+      }
+
+      final frameType = payload[1];
+      if (frameType == BridgeRequestFrame.chunkFrameType) {
+        if (payloadLength < 6) {
+          throw const FormatException('truncated bridge request chunk payload');
+        }
+        final chunkLength = _readUint32BigEndian(payload, 2);
+        if (payloadLength != chunkLength + 6) {
+          throw const FormatException('truncated bridge request chunk payload');
+        }
+        if (chunkLength != 0) {
+          requestBodyBytes += chunkLength;
           if (requestBodyBytes > _maxBridgeBodyBytes) {
             throw FormatException(
               'bridge request body too large: $requestBodyBytes',
             );
           }
-          requestBody.add(chunk);
+          requestBody.add(Uint8List.sublistView(payload, 6, payloadLength));
         }
         continue;
       }
-      if (BridgeRequestFrame.isEndPayload(payload)) {
-        BridgeRequestFrame.decodeEndPayload(payload);
+      if (frameType == BridgeRequestFrame.endFrameType) {
+        if (payloadLength != 2) {
+          throw const FormatException(
+            'unexpected trailing bridge payload bytes: request end',
+          );
+        }
         break;
       }
       throw const FormatException(
@@ -1127,6 +1189,7 @@ final class _BridgeSocketWriter {
   }
 }
 
+@pragma('vm:prefer-inline')
 void _writeUint32BigEndian(Uint8List buffer, int offset, int value) {
   buffer[offset] = (value >> 24) & 0xff;
   buffer[offset + 1] = (value >> 16) & 0xff;
@@ -1134,6 +1197,7 @@ void _writeUint32BigEndian(Uint8List buffer, int offset, int value) {
   buffer[offset + 3] = value & 0xff;
 }
 
+@pragma('vm:prefer-inline')
 int _readUint32BigEndian(Uint8List buffer, int offset) {
   return (buffer[offset] << 24) |
       (buffer[offset + 1] << 16) |
@@ -1194,11 +1258,10 @@ final class _SocketFrameReader {
   int _availableBytes = 0;
 
   Future<Uint8List?> readFrame() async {
-    final headerBytes = await _readExactOrNull(4);
-    if (headerBytes == null) {
+    final payloadLength = await _readUint32OrNull();
+    if (payloadLength == null) {
       return null;
     }
-    final payloadLength = _readUint32BigEndian(headerBytes, 0);
     if (payloadLength > _maxBridgeFrameBytes) {
       throw FormatException('bridge frame too large: $payloadLength');
     }
@@ -1210,6 +1273,28 @@ final class _SocketFrameReader {
   }
 
   Future<void> cancel() => _iterator.cancel();
+
+  Future<int?> _readUint32OrNull() async {
+    final hasBytes = await _ensureAvailableOrNull(4);
+    if (!hasBytes) {
+      return null;
+    }
+
+    final first = _chunks.first;
+    final start = _chunkOffset;
+    final remainingInFirst = first.length - start;
+    if (remainingInFirst >= 4) {
+      final value = _readUint32BigEndian(first, start);
+      _advanceFirstChunk(first, 4);
+      return value;
+    }
+
+    final bytes = await _readExactOrNull(4);
+    if (bytes == null) {
+      return null;
+    }
+    return _readUint32BigEndian(bytes, 0);
+  }
 
   Future<Uint8List?> _readExactOrNull(int count) async {
     if (count == 0) {
@@ -1227,12 +1312,7 @@ final class _SocketFrameReader {
       final remainingInFirst = first.length - start;
       if (remainingInFirst >= count) {
         final end = start + count;
-        _chunkOffset = end;
-        _availableBytes -= count;
-        if (_chunkOffset == first.length) {
-          _chunks.removeFirst();
-          _chunkOffset = 0;
-        }
+        _advanceFirstChunk(first, count);
         return Uint8List.sublistView(first, start, end);
       }
     }
@@ -1247,14 +1327,19 @@ final class _SocketFrameReader {
       final take = remainingInChunk < needed ? remainingInChunk : needed;
       out.setRange(written, written + take, chunk, start);
       written += take;
-      _chunkOffset += take;
-      _availableBytes -= take;
-      if (_chunkOffset == chunk.length) {
-        _chunks.removeFirst();
-        _chunkOffset = 0;
-      }
+      _advanceFirstChunk(chunk, take);
     }
     return out;
+  }
+
+  @pragma('vm:prefer-inline')
+  void _advanceFirstChunk(Uint8List chunk, int count) {
+    _chunkOffset += count;
+    _availableBytes -= count;
+    if (_chunkOffset == chunk.length) {
+      _chunks.removeFirst();
+      _chunkOffset = 0;
+    }
   }
 
   Future<bool> _ensureAvailableOrNull(int count) async {

@@ -27,7 +27,7 @@ final class BridgeDetachedSocket {
 final class BridgeHttpResponse implements HttpResponse {
   BridgeHttpResponse();
 
-  Http2Headers? _headers;
+  _BridgeHttpHeaders? _headers;
   List<Cookie>? _cookies;
   final BytesBuilder _body = BytesBuilder(copy: false);
   final Completer<void> _done = Completer<void>();
@@ -35,9 +35,8 @@ final class BridgeHttpResponse implements HttpResponse {
   bool _closed = false;
   Encoding _encoding = utf8;
 
-  Uint8List takeBodyBytes() => _detachedSocket == null
-      ? _body.takeBytes()
-      : Uint8List(0);
+  Uint8List takeBodyBytes() =>
+      _detachedSocket == null ? _body.takeBytes() : Uint8List(0);
 
   BridgeDetachedSocket? takeDetachedSocket() {
     final detached = _detachedSocket;
@@ -61,7 +60,7 @@ final class BridgeHttpResponse implements HttpResponse {
   bool bufferOutput = true;
 
   @override
-  HttpHeaders get headers => _headers ??= Http2Headers();
+  HttpHeaders get headers => _headers ??= _BridgeHttpHeaders();
 
   @override
   List<Cookie> get cookies => _cookies ??= <Cookie>[];
@@ -165,16 +164,50 @@ final class BridgeHttpResponse implements HttpResponse {
     List<String> headerNames,
     List<String> headerValues,
   ) {
-    final headers = _headers;
-    if (headers == null) {
+    final originalLength = headerNames.length;
+    final total = flattenedHeaderCount;
+    if (total == 0) {
       return;
     }
-    headers.forEach((name, values) {
-      for (final value in values) {
-        headerNames.add(name);
-        headerValues.add(value);
+    headerNames.length = originalLength + total;
+    headerValues.length = originalLength + total;
+    _writeFlattenedHeaders(headerNames, headerValues, originalLength);
+  }
+
+  int get flattenedHeaderCount {
+    final headerCount = _headers?.flattenedHeaderValueCount ?? 0;
+    final cookieCount = _cookies?.length ?? 0;
+    return headerCount + cookieCount;
+  }
+
+  void writeFlattenedHeaders(
+    List<String> headerNames,
+    List<String> headerValues,
+  ) {
+    _writeFlattenedHeaders(headerNames, headerValues, 0);
+  }
+
+  void _writeFlattenedHeaders(
+    List<String> headerNames,
+    List<String> headerValues,
+    int offset,
+  ) {
+    final headers = _headers;
+    if (headers != null) {
+      offset = headers.writeFlattenedHeaderPairs(
+        headerNames,
+        headerValues,
+        offset,
+      );
+    }
+    final cookies = _cookies;
+    if (cookies != null) {
+      for (final cookie in cookies) {
+        headerNames[offset] = HttpHeaders.setCookieHeader;
+        headerValues[offset] = cookie.toString();
+        offset++;
       }
-    });
+    }
   }
 }
 
@@ -185,7 +218,7 @@ final class BridgeStreamingHttpResponse implements HttpResponse {
   final Future<void> Function(BridgeResponseFrame frame) onStart;
   final Future<void> Function(Uint8List chunkBytes) onChunk;
 
-  Http2Headers? _headers;
+  _BridgeHttpHeaders? _headers;
   List<Cookie>? _cookies;
   final Completer<void> _done = Completer<void>();
   BridgeDetachedSocket? _detachedSocket;
@@ -212,7 +245,7 @@ final class BridgeStreamingHttpResponse implements HttpResponse {
   bool bufferOutput = true;
 
   @override
-  HttpHeaders get headers => _headers ??= Http2Headers();
+  HttpHeaders get headers => _headers ??= _BridgeHttpHeaders();
 
   @override
   List<Cookie> get cookies => _cookies ??= <Cookie>[];
@@ -323,22 +356,32 @@ final class BridgeStreamingHttpResponse implements HttpResponse {
     }
     _started = true;
 
-    final headerNames = <String>[];
-    final headerValues = <String>[];
     final headers = _headers;
-    if (headers != null) {
-      headers.forEach((name, values) {
-        for (final value in values) {
-          headerNames.add(name);
-          headerValues.add(value);
-        }
-      });
-    }
     final cookies = _cookies;
-    if (cookies != null) {
-      for (final cookie in cookies) {
-        headerNames.add(HttpHeaders.setCookieHeader);
-        headerValues.add(cookie.toString());
+    final headerCount =
+        (headers?.flattenedHeaderValueCount ?? 0) + (cookies?.length ?? 0);
+    final headerNames = headerCount == 0
+        ? const <String>[]
+        : List<String>.filled(headerCount, '', growable: false);
+    final headerValues = headerCount == 0
+        ? const <String>[]
+        : List<String>.filled(headerCount, '', growable: false);
+
+    if (headerCount != 0) {
+      var offset = 0;
+      if (headers != null) {
+        offset = headers.writeFlattenedHeaderPairs(
+          headerNames,
+          headerValues,
+          offset,
+        );
+      }
+      if (cookies != null) {
+        for (final cookie in cookies) {
+          headerNames[offset] = HttpHeaders.setCookieHeader;
+          headerValues[offset] = cookie.toString();
+          offset++;
+        }
       }
     }
 
@@ -367,6 +410,390 @@ final class BridgeStreamingHttpResponse implements HttpResponse {
   void _ensureOpen() {
     if (_closed) {
       throw StateError('Response is already closed');
+    }
+  }
+}
+
+/// Fast bridge response headers optimized for low cardinality writes.
+final class _BridgeHttpHeaders implements HttpHeaders {
+  final Map<String, List<String>> _headers = <String, List<String>>{};
+  final Map<String, String> _originalNames = <String, String>{};
+  final Set<String> _noFolding = <String>{};
+
+  DateTime? _date;
+  DateTime? _expires;
+  DateTime? _ifModifiedSince;
+  String? _host;
+  int? _port;
+  ContentType? _contentType;
+  int _contentLength = -1;
+  bool _persistentConnection = true;
+  bool _chunkedTransferEncoding = false;
+
+  @override
+  DateTime? get date => _date;
+
+  @override
+  set date(DateTime? value) {
+    _date = value;
+    _setSingleValue(
+      HttpHeaders.dateHeader,
+      value == null ? null : HttpDate.format(value),
+    );
+  }
+
+  @override
+  DateTime? get expires => _expires;
+
+  @override
+  set expires(DateTime? value) {
+    _expires = value;
+    _setSingleValue(
+      HttpHeaders.expiresHeader,
+      value == null ? null : HttpDate.format(value),
+    );
+  }
+
+  @override
+  DateTime? get ifModifiedSince => _ifModifiedSince;
+
+  @override
+  set ifModifiedSince(DateTime? value) {
+    _ifModifiedSince = value;
+    _setSingleValue(
+      HttpHeaders.ifModifiedSinceHeader,
+      value == null ? null : HttpDate.format(value),
+    );
+  }
+
+  @override
+  String? get host => _host;
+
+  @override
+  set host(String? value) {
+    _host = value;
+    _updateHostHeader();
+  }
+
+  @override
+  int? get port => _port;
+
+  @override
+  set port(int? value) {
+    _port = value;
+    _updateHostHeader();
+  }
+
+  @override
+  ContentType? get contentType => _contentType;
+
+  @override
+  set contentType(ContentType? value) {
+    _contentType = value;
+    _setSingleValue(
+      HttpHeaders.contentTypeHeader,
+      value == null ? null : value.toString(),
+    );
+  }
+
+  @override
+  int get contentLength => _contentLength;
+
+  @override
+  set contentLength(int value) {
+    _contentLength = value;
+    if (value < 0) {
+      _setSingleValue(HttpHeaders.contentLengthHeader, null);
+      return;
+    }
+    _setSingleValue(HttpHeaders.contentLengthHeader, value.toString());
+  }
+
+  @override
+  bool get persistentConnection => _persistentConnection;
+
+  @override
+  set persistentConnection(bool value) {
+    _persistentConnection = value;
+    if (value) {
+      remove(HttpHeaders.connectionHeader, 'close');
+      return;
+    }
+    _setSingleValue(HttpHeaders.connectionHeader, 'close');
+  }
+
+  @override
+  bool get chunkedTransferEncoding => _chunkedTransferEncoding;
+
+  @override
+  set chunkedTransferEncoding(bool value) {
+    _chunkedTransferEncoding = value;
+    if (value) {
+      _setSingleValue(HttpHeaders.transferEncodingHeader, 'chunked');
+      return;
+    }
+    remove(HttpHeaders.transferEncodingHeader, 'chunked');
+  }
+
+  @override
+  List<String>? operator [](String name) {
+    final values = _headers[_normalize(name)];
+    if (values == null) {
+      return null;
+    }
+    return List<String>.from(values);
+  }
+
+  @override
+  String? value(String name) {
+    final values = _headers[_normalize(name)];
+    if (values == null || values.isEmpty) {
+      return null;
+    }
+    if (values.length > 1) {
+      throw HttpException('More than one value for header $name');
+    }
+    return values.first;
+  }
+
+  @override
+  void add(String name, Object value, {bool preserveHeaderCase = false}) {
+    final normalized = _normalize(name);
+    final values = _headers.putIfAbsent(normalized, () => <String>[]);
+    if (value is Iterable<Object?> && value is! String) {
+      for (final item in value) {
+        values.add(_valueToString(item));
+      }
+    } else {
+      values.add(_valueToString(value));
+    }
+    _originalNames[normalized] = preserveHeaderCase ? name : normalized;
+    _updateComputedFields(normalized);
+  }
+
+  @override
+  void set(String name, Object value, {bool preserveHeaderCase = false}) {
+    final normalized = _normalize(name);
+    _headers.remove(normalized);
+    _originalNames.remove(normalized);
+    add(name, value, preserveHeaderCase: preserveHeaderCase);
+  }
+
+  @override
+  void remove(String name, Object value) {
+    final normalized = _normalize(name);
+    final values = _headers[normalized];
+    if (values == null) {
+      return;
+    }
+    final toRemove = _valueToString(value);
+    values.removeWhere((element) => element == toRemove);
+    if (values.isEmpty) {
+      _headers.remove(normalized);
+      _originalNames.remove(normalized);
+    }
+    _updateComputedFields(normalized);
+  }
+
+  @override
+  void removeAll(String name) {
+    final normalized = _normalize(name);
+    _headers.remove(normalized);
+    _originalNames.remove(normalized);
+    _updateComputedFields(normalized);
+  }
+
+  @override
+  void forEach(void Function(String name, List<String> values) action) {
+    for (final entry in _headers.entries) {
+      action(
+        _originalNames[entry.key] ?? entry.key,
+        List<String>.from(entry.value),
+      );
+    }
+  }
+
+  @override
+  void noFolding(String name) {
+    _noFolding.add(_normalize(name));
+  }
+
+  @override
+  void clear() {
+    _headers.clear();
+    _originalNames.clear();
+    _noFolding.clear();
+    _date = null;
+    _expires = null;
+    _ifModifiedSince = null;
+    _host = null;
+    _port = null;
+    _contentType = null;
+    _contentLength = -1;
+    _persistentConnection = true;
+    _chunkedTransferEncoding = false;
+  }
+
+  int get flattenedHeaderValueCount {
+    var count = 0;
+    for (final values in _headers.values) {
+      count += values.length;
+    }
+    return count;
+  }
+
+  int writeFlattenedHeaderPairs(
+    List<String> headerNames,
+    List<String> headerValues,
+    int offset,
+  ) {
+    for (final entry in _headers.entries) {
+      final originalName = _originalNames[entry.key] ?? entry.key;
+      final values = entry.value;
+      for (var i = 0; i < values.length; i++) {
+        headerNames[offset] = originalName;
+        headerValues[offset] = values[i];
+        offset++;
+      }
+    }
+    return offset;
+  }
+
+  @pragma('vm:prefer-inline')
+  String _normalize(String name) {
+    if (name.isEmpty) {
+      throw ArgumentError('Header name cannot be empty');
+    }
+    return _asciiLower(name);
+  }
+
+  @pragma('vm:prefer-inline')
+  String _valueToString(Object? value) {
+    if (value is DateTime) {
+      return HttpDate.format(value);
+    }
+    if (value is HeaderValue) {
+      return value.toString();
+    }
+    if (value is ContentType) {
+      return value.toString();
+    }
+    return value.toString();
+  }
+
+  @pragma('vm:prefer-inline')
+  void _setSingleValue(String name, String? value) {
+    final normalized = _normalize(name);
+    if (value == null) {
+      _headers.remove(normalized);
+      _originalNames.remove(normalized);
+      _updateComputedFields(normalized);
+      return;
+    }
+    _headers[normalized] = <String>[value];
+    _originalNames[normalized] = normalized;
+    _updateComputedFields(normalized);
+  }
+
+  @pragma('vm:prefer-inline')
+  void _updateHostHeader() {
+    final hostValue = _host;
+    if (hostValue == null || hostValue.isEmpty) {
+      _setSingleValue(HttpHeaders.hostHeader, null);
+      return;
+    }
+    _setSingleValue(
+      HttpHeaders.hostHeader,
+      _port == null ? hostValue : '$hostValue:${_port!}',
+    );
+  }
+
+  void _updateComputedFields(String key) {
+    final values = _headers[key];
+    switch (key) {
+      case HttpHeaders.contentLengthHeader:
+        _contentLength = values == null || values.isEmpty
+            ? -1
+            : int.tryParse(values.last.trim()) ?? -1;
+        return;
+      case HttpHeaders.contentTypeHeader:
+        if (values == null || values.isEmpty) {
+          _contentType = null;
+          return;
+        }
+        try {
+          _contentType = ContentType.parse(values.last);
+        } catch (_) {
+          _contentType = null;
+        }
+        return;
+      case HttpHeaders.hostHeader:
+        if (values == null || values.isEmpty) {
+          _host = null;
+          _port = null;
+          return;
+        }
+        final hostValue = values.last;
+        final colonIndex = hostValue.lastIndexOf(':');
+        if (colonIndex != -1 &&
+            colonIndex < hostValue.length - 1 &&
+            int.tryParse(hostValue.substring(colonIndex + 1)) != null) {
+          _host = hostValue.substring(0, colonIndex);
+          _port = int.tryParse(hostValue.substring(colonIndex + 1));
+          return;
+        }
+        _host = hostValue;
+        _port = null;
+        return;
+      case HttpHeaders.dateHeader:
+        _date = _parseHttpDate(values);
+        return;
+      case HttpHeaders.expiresHeader:
+        _expires = _parseHttpDate(values);
+        return;
+      case HttpHeaders.ifModifiedSinceHeader:
+        _ifModifiedSince = _parseHttpDate(values);
+        return;
+      case HttpHeaders.transferEncodingHeader:
+        if (values == null) {
+          _chunkedTransferEncoding = false;
+          return;
+        }
+        _chunkedTransferEncoding = _containsTokenIgnoreCase(values, 'chunked');
+        return;
+      case HttpHeaders.connectionHeader:
+        if (values == null || values.isEmpty) {
+          _persistentConnection = true;
+          return;
+        }
+        if (_containsTokenIgnoreCase(values, 'close')) {
+          _persistentConnection = false;
+          return;
+        }
+        if (_containsTokenIgnoreCase(values, 'keep-alive')) {
+          _persistentConnection = true;
+        }
+        return;
+    }
+  }
+
+  bool _containsTokenIgnoreCase(List<String> values, String token) {
+    for (var i = 0; i < values.length; i++) {
+      if (_equalsAsciiIgnoreCase(values[i], token)) {
+        return true;
+      }
+    }
+    return false;
+  }
+
+  DateTime? _parseHttpDate(List<String>? values) {
+    if (values == null || values.isEmpty) {
+      return null;
+    }
+    try {
+      return HttpDate.parse(values.last);
+    } catch (_) {
+      return null;
     }
   }
 }

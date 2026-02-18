@@ -46,9 +46,16 @@ final class BridgeHttpRuntime {
     await _handler(request);
     await response.done;
 
-    final headerNames = <String>[];
-    final headerValues = <String>[];
-    response.appendFlattenedHeaders(headerNames, headerValues);
+    final headerCount = response.flattenedHeaderCount;
+    final headerNames = headerCount == 0
+        ? const <String>[]
+        : List<String>.filled(headerCount, '', growable: false);
+    final headerValues = headerCount == 0
+        ? const <String>[]
+        : List<String>.filled(headerCount, '', growable: false);
+    if (headerCount != 0) {
+      response.writeFlattenedHeaders(headerNames, headerValues);
+    }
 
     return BridgeResponseFrame.fromHeaderPairs(
       status: response.statusCode,

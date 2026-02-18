@@ -53,12 +53,6 @@ const List<String> _bridgeHeaderNameTable = <String>[
   'sec-websocket-extensions',
 ];
 
-final Map<String, int> _bridgeHeaderNameTokenByName =
-    Map<String, int>.unmodifiable(<String, int>{
-      for (var i = 0; i < _bridgeHeaderNameTable.length; i++)
-        _bridgeHeaderNameTable[i]: i,
-    });
-
 /// A binary bridge request frame passed from Rust transport to Dart.
 ///
 /// {@macro routed_ffi_bridge_protocol_overview}
@@ -346,6 +340,10 @@ final class BridgeRequestFrame {
   static bool isEndPayload(Uint8List payload) {
     return _peekFrameType(payload) == _bridgeRequestEndFrameType;
   }
+
+  static int get chunkFrameType => _bridgeRequestChunkFrameType;
+
+  static int get endFrameType => _bridgeRequestEndFrameType;
 
   static bool isStartPayload(Uint8List payload) {
     return _isRequestStartFrameType(_peekFrameType(payload));
@@ -765,14 +763,85 @@ void _writeHeaderName(
     writer.writeString(name);
     return;
   }
-  final normalized = _asciiLower(name);
-  final token = _bridgeHeaderNameTokenByName[normalized];
+
+  var token = _bridgeHeaderNameToken(name);
+  if (token == null) {
+    final normalized = _asciiLower(name);
+    if (!identical(normalized, name)) {
+      token = _bridgeHeaderNameToken(normalized);
+    }
+  }
   if (token != null) {
     writer.writeUint16(token);
     return;
   }
   writer.writeUint16(_bridgeHeaderNameLiteralToken);
   writer.writeString(name);
+}
+
+@pragma('vm:prefer-inline')
+int? _bridgeHeaderNameToken(String name) {
+  switch (name) {
+    case 'host':
+      return 0;
+    case 'connection':
+      return 1;
+    case 'user-agent':
+      return 2;
+    case 'accept':
+      return 3;
+    case 'accept-encoding':
+      return 4;
+    case 'accept-language':
+      return 5;
+    case 'content-type':
+      return 6;
+    case 'content-length':
+      return 7;
+    case 'transfer-encoding':
+      return 8;
+    case 'cookie':
+      return 9;
+    case 'set-cookie':
+      return 10;
+    case 'cache-control':
+      return 11;
+    case 'pragma':
+      return 12;
+    case 'upgrade':
+      return 13;
+    case 'authorization':
+      return 14;
+    case 'origin':
+      return 15;
+    case 'referer':
+      return 16;
+    case 'location':
+      return 17;
+    case 'server':
+      return 18;
+    case 'date':
+      return 19;
+    case 'x-forwarded-for':
+      return 20;
+    case 'x-forwarded-proto':
+      return 21;
+    case 'x-forwarded-host':
+      return 22;
+    case 'x-forwarded-port':
+      return 23;
+    case 'x-request-id':
+      return 24;
+    case 'sec-websocket-key':
+      return 25;
+    case 'sec-websocket-version':
+      return 26;
+    case 'sec-websocket-protocol':
+      return 27;
+    case 'sec-websocket-extensions':
+      return 28;
+  }
+  return null;
 }
 
 String _readHeaderName(_BridgeFrameReader reader, {required bool tokenized}) {
