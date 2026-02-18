@@ -1,0 +1,29 @@
+## 0.1.0
+
+- Add `serveFfi(...)` and `serveSecureFfi(...)` boot helper APIs.
+- Scaffold Rust native asset build hook using `native_toolchain_rust`.
+- Add Rust-native proxy front server with FFI start/stop lifecycle bindings.
+- Add typed bridge serialization between Rust transport and Routed request/response execution.
+- Generate Rust C headers with `cbindgen` and Dart bindings with `ffigen`.
+- Switch bridge transport to binary framed request/response payloads (no JSON/base64 encoding).
+- Add chunked bridge frame protocol (request/response start + chunk + end) with legacy single-frame compatibility.
+- Stream chunked request bodies through Dart `HttpRequest` and emit chunked response callbacks from Dart `HttpResponse` path.
+- Stream request and response bodies through Rust proxy bridge path (remove `to_bytes`/full-response buffering from chunked path).
+- Add secure-mode HTTP/3 support in the Rust transport (`serveSecureFfi` with `http3: true`).
+- Add dedicated HTTP/3 integration test coverage and CI workflow for QUIC path validation.
+- Install rustls crypto provider during native TLS startup and add native QUIC endpoint smoke tests.
+- Add native direct benchmark mode (`routed_ffi_native_direct`) for transport-overhead isolation and wire benchmark-mode config through FFI.
+- Add benchmark gate support with ratio thresholds/json output and CI workflow for routed_ffi.
+- Improve bridge transport latency by enabling `TCP_NODELAY` on bridge sockets and reducing per-frame flush overhead.
+- Reduce bridge overhead with non-streaming single-frame request/response fast paths and lower-copy bridge decoding/runtime buffers.
+- Remove exception-driven non-streaming bridge request dispatch and add socket-reader contiguous fast path for lower Dart bridge overhead.
+- Reduce serialization copy overhead by zero-copy Rust response chunk/body decode into `Bytes` and direct chunk-frame writes in Rust/Dart bridge paths.
+- Enable `TCP_NODELAY` on accepted plain HTTP sockets in native Rust frontend to improve low-concurrency request latency.
+- Handle stale reused bridge sockets via single retry on empty-body requests using a fresh connection (without per-request socket probe overhead).
+- Add Unix domain socket bridge backend support (`backend_kind` + `backend_path`) with Dart-side auto-selection/fallback to loopback TCP.
+- Add bridge pool hot idle-socket slot to reduce lock contention on high-frequency bridge reuse.
+- Switch Rust bridge pool locking to `parking_lot::Mutex` for lower-overhead hot-path locking.
+- Add vectored Rust bridge frame writes (`write_vectored`) for header+payload/chunk emission.
+- Enable HTTP/2 support in native Rust front transport.
+- Implement native TLS boot path for `serveSecureFfi(...)` using certificate/key PEM files.
+- Add transport benchmark script for `routed_io` vs `routed_ffi`.

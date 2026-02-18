@@ -1,0 +1,70 @@
+name: routed_ffi Benchmark Gate
+
+on:
+  pull_request:
+    branches:
+      - master
+    paths:
+      - 'packages/routed_ffi/**'
+      - '.github/workflows/routed_ffi_benchmark_gate.yml'
+  push:
+    branches:
+      - master
+    paths:
+      - 'packages/routed_ffi/**'
+      - '.github/workflows/routed_ffi_benchmark_gate.yml'
+  workflow_dispatch:
+
+jobs:
+  benchmark-gate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Dart
+        uses: dart-lang/setup-dart@v1
+        with:
+          sdk: stable
+
+      - name: Set up Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Get dependencies
+        run: dart pub get
+
+      - name: Run routed_ffi benchmark gate
+        working-directory: packages/routed_ffi
+        run: |
+          dart run tool/benchmark_transport.dart \
+            --requests=2500 \
+            --concurrency=64 \
+            --warmup=300 \
+            --iterations=3 \
+            --min-req-per-sec-ratio=0.70 \
+            --max-p95-ratio=1.60 \
+            --json > benchmark_gate_result.json
+
+      - name: Publish benchmark JSON
+        if: always()
+        working-directory: packages/routed_ffi
+        run: |
+          echo "## routed_ffi Benchmark Gate" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo '```json' >> $GITHUB_STEP_SUMMARY
+          if [ -f benchmark_gate_result.json ]; then
+            cat benchmark_gate_result.json >> $GITHUB_STEP_SUMMARY
+          else
+            echo '{"error":"benchmark_gate_result.json not found"}' >> $GITHUB_STEP_SUMMARY
+          fi
+          echo '```' >> $GITHUB_STEP_SUMMARY
+
+      - name: Upload benchmark artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: routed-ffi-benchmark-gate-result
+          path: packages/routed_ffi/benchmark_gate_result.json
+          if-no-files-found: ignore
+          retention-days: 14

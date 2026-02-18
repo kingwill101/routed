@@ -1,0 +1,54 @@
+name: routed_ffi HTTP3 Integration
+
+on:
+  pull_request:
+    branches:
+      - master
+    paths:
+      - 'packages/routed_ffi/**'
+      - '.github/workflows/routed_ffi_http3_integration.yml'
+  push:
+    branches:
+      - master
+    paths:
+      - 'packages/routed_ffi/**'
+      - '.github/workflows/routed_ffi_http3_integration.yml'
+  workflow_dispatch:
+
+jobs:
+  http3-integration:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Dart
+        uses: dart-lang/setup-dart@v1
+        with:
+          sdk: stable
+
+      - name: Set up Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Check curl HTTP/3 support
+        run: |
+          curl --version
+          if ! curl --version | grep -qi "http3"; then
+            echo "curl in this runner does not advertise HTTP/3 support"
+            exit 1
+          fi
+
+      - name: Get dependencies
+        run: dart pub get
+
+      - name: Run native QUIC smoke tests
+        run: |
+          cargo test --manifest-path packages/routed_ffi/native/Cargo.toml \
+            --test h3_endpoint_smoke
+
+      - name: Run routed_ffi HTTP/3 integration test
+        working-directory: packages/routed_ffi
+        run: |
+          dart test test/serve_ffi_test.dart \
+            --plain-name "serveSecureFfi serves HTTP/3 requests when enabled"
