@@ -408,11 +408,12 @@ String _normalizeHttpMethod(String method) {
 
 final class _BridgeFrameWriter {
   _BridgeFrameWriter([int initialCapacity = 256])
-    : _buffer = Uint8List(initialCapacity),
-      _byteData = ByteData(initialCapacity);
+    : _buffer = Uint8List(initialCapacity) {
+    _byteData = ByteData.view(_buffer.buffer);
+  }
 
   Uint8List _buffer;
-  ByteData _byteData;
+  late ByteData _byteData;
   int _length = 0;
 
   void writeUint8(int value) {
@@ -576,7 +577,7 @@ final class BridgeRuntime {
     return BridgeResponseFrame(
       status: response.statusCode,
       headers: flattenedHeaders,
-      bodyBytes: response.bodyBytes,
+      bodyBytes: response.takeBodyBytes(),
     );
   }
 }
@@ -591,28 +592,7 @@ final class _BridgeHttpRequest extends Stream<Uint8List>
        protocolVersion = frame.protocol,
        requestedUri = _buildUri(frame),
        _bodyStream = bodyStream,
-       _headers = _buildHeaders(frame.headers) {
-    final cookieValues = _headers[HttpHeaders.cookieHeader];
-    if (cookieValues != null) {
-      for (final header in cookieValues) {
-        for (final part in header.split(';')) {
-          final trimmed = part.trim();
-          if (trimmed.isEmpty) continue;
-          final idx = trimmed.indexOf('=');
-          if (idx == -1) {
-            cookies.add(Cookie(trimmed, ''));
-          } else {
-            cookies.add(
-              Cookie(
-                trimmed.substring(0, idx).trim(),
-                trimmed.substring(idx + 1).trim(),
-              ),
-            );
-          }
-        }
-      }
-    }
-  }
+       _headerEntries = frame.headers;
 
   static Uri _buildUri(BridgeRequestFrame frame) {
     final authority = _splitAuthority(frame.authority);
@@ -633,7 +613,9 @@ final class _BridgeHttpRequest extends Stream<Uint8List>
     return headers;
   }
 
-  final Http2Headers _headers;
+  Http2Headers? _headers;
+  final List<MapEntry<String, String>> _headerEntries;
+  List<Cookie>? _cookies;
   final Stream<Uint8List> _bodyStream;
 
   @override
@@ -649,13 +631,53 @@ final class _BridgeHttpRequest extends Stream<Uint8List>
   Uri get uri => requestedUri;
 
   @override
-  HttpHeaders get headers => _headers;
+  HttpHeaders get headers => _headers ??= _buildHeaders(_headerEntries);
 
   @override
-  int get contentLength => _headers.contentLength;
+  int get contentLength {
+    final headers = _headers;
+    if (headers != null) {
+      return headers.contentLength;
+    }
+    for (final entry in _headerEntries) {
+      if (_equalsAsciiIgnoreCase(entry.key, HttpHeaders.contentLengthHeader)) {
+        return int.tryParse(entry.value.trim()) ?? -1;
+      }
+    }
+    return -1;
+  }
 
   @override
-  final List<Cookie> cookies = <Cookie>[];
+  List<Cookie> get cookies {
+    final existing = _cookies;
+    if (existing != null) {
+      return existing;
+    }
+
+    final parsed = <Cookie>[];
+    for (final entry in _headerEntries) {
+      if (!_equalsAsciiIgnoreCase(entry.key, HttpHeaders.cookieHeader)) {
+        continue;
+      }
+      for (final part in entry.value.split(';')) {
+        final trimmed = part.trim();
+        if (trimmed.isEmpty) continue;
+        final idx = trimmed.indexOf('=');
+        if (idx == -1) {
+          parsed.add(Cookie(trimmed, ''));
+        } else {
+          parsed.add(
+            Cookie(
+              trimmed.substring(0, idx).trim(),
+              trimmed.substring(idx + 1).trim(),
+            ),
+          );
+        }
+      }
+    }
+    _cookies = parsed;
+    return parsed;
+  }
 
   @override
   bool persistentConnection = true;
@@ -746,7 +768,7 @@ final class _BridgeHttpResponse implements HttpResponse {
   bool _closed = false;
   Encoding _encoding = utf8;
 
-  Uint8List get bodyBytes => _body.toBytes();
+  Uint8List takeBodyBytes() => _body.takeBytes();
 
   @override
   int statusCode = HttpStatus.ok;
@@ -1024,6 +1046,29 @@ final class _BridgeStreamingHttpResponse implements HttpResponse {
       throw StateError('Response is already closed');
     }
   }
+}
+
+bool _equalsAsciiIgnoreCase(String a, String b) {
+  if (a.length != b.length) {
+    return false;
+  }
+  for (var i = 0; i < a.length; i++) {
+    var x = a.codeUnitAt(i);
+    var y = b.codeUnitAt(i);
+    if (x == y) {
+      continue;
+    }
+    if (x >= 0x41 && x <= 0x5a) {
+      x += 0x20;
+    }
+    if (y >= 0x41 && y <= 0x5a) {
+      y += 0x20;
+    }
+    if (x != y) {
+      return false;
+    }
+  }
+  return true;
 }
 
 final class _BridgeConnectionInfo implements HttpConnectionInfo {
