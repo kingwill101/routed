@@ -542,7 +542,6 @@ Future<void> _handleChunkedBridgeRequest(
         BridgeResponseFrame.chunkFrameType,
         chunkBytes,
       );
-      await writer.flush();
     },
   );
 
@@ -598,7 +597,6 @@ Future<void> _handleChunkedBridgeRequest(
       throw StateError('bridge response start frame was not emitted');
     }
     await writer.writeFrame(BridgeResponseFrame.encodeEndPayload());
-    await writer.flush();
   } catch (error) {
     if (!responseStarted) {
       await _writeBridgeBadRequest(writer, error);
@@ -816,8 +814,7 @@ Future<void> _writeBridgeResponse(
   _BridgeSocketWriter writer,
   BridgeResponseFrame response,
 ) async {
-  await writer.writeFrame(response.encodePayload());
-  await writer.flush();
+  await writer.writeResponseFrame(response);
 }
 
 final class _BridgeSocketWriter {
@@ -839,6 +836,22 @@ final class _BridgeSocketWriter {
     }
   }
 
+  Future<void> writeResponseFrame(BridgeResponseFrame response) async {
+    final body = response.bodyBytes;
+    final prefix = response.encodePayloadPrefixWithoutBody();
+    final payloadLength = prefix.length + body.length;
+    if (payloadLength > _maxBridgeFrameBytes) {
+      throw FormatException('bridge response frame too large: $payloadLength');
+    }
+    final header = Uint8List(4);
+    _writeUint32(header, 0, payloadLength);
+    _socket.add(header);
+    _socket.add(prefix);
+    if (body.isNotEmpty) {
+      _socket.add(body);
+    }
+  }
+
   Future<void> writeChunkFrame(int frameType, Uint8List chunkBytes) async {
     final payloadLength = 6 + chunkBytes.length;
     if (payloadLength > _maxBridgeFrameBytes) {
@@ -854,8 +867,6 @@ final class _BridgeSocketWriter {
       _socket.add(chunkBytes);
     }
   }
-
-  Future<void> flush() => _socket.flush();
 }
 
 void _writeUint32(Uint8List target, int offset, int value) {

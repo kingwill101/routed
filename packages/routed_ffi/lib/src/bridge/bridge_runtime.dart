@@ -400,6 +400,21 @@ final class BridgeResponseFrame {
     return writer.takeBytes();
   }
 
+  /// Encodes response metadata and body length, excluding body bytes.
+  Uint8List encodePayloadPrefixWithoutBody() {
+    final writer = _BridgeFrameWriter();
+    writer.writeUint8(bridgeFrameProtocolVersion);
+    writer.writeUint8(_bridgeResponseFrameType);
+    writer.writeUint16(status);
+    writer.writeUint32(headerCount);
+    for (var i = 0; i < headerCount; i++) {
+      writer.writeString(headerNameAt(i));
+      writer.writeString(headerValueAt(i));
+    }
+    writer.writeUint32(bodyBytes.length);
+    return writer.takeBytes();
+  }
+
   factory BridgeResponseFrame.decodePayload(Uint8List payload) {
     final reader = _BridgeFrameReader(payload);
     final version = reader.readUint8();
