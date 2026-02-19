@@ -58,7 +58,7 @@ const List<String> _directBridgeHeaderNameTable = <String>[
 /// final engine = Engine()
 ///   ..get('/health', (ctx) async => ctx.text('ok'));
 ///
-/// await serveFfi(
+/// await serveNative(
 ///   engine,
 ///   host: InternetAddress.loopbackIPv4,
 ///   port: 8080,
@@ -69,7 +69,7 @@ const List<String> _directBridgeHeaderNameTable = <String>[
 /// {@template server_native_serve_http_handler_example}
 /// Example:
 /// ```dart
-/// await serveFfiHttp((request) async {
+/// await serveNativeHttp((request) async {
 ///   request.response
 ///     ..statusCode = HttpStatus.ok
 ///     ..headers.contentType = ContentType.text
@@ -205,7 +205,7 @@ final class _NativeDirectRequestStreamState {
 /// to a private Dart bridge socket that invokes [Engine.handleRequest].
 ///
 /// {@macro server_native_serve_engine_example}
-Future<void> serveFfi(
+Future<void> serveNative(
   Engine engine, {
   Object host = '127.0.0.1',
   int? port,
@@ -246,7 +246,7 @@ Future<void> serveFfi(
 /// This requires PEM certificate and key files.
 ///
 /// {@macro server_native_serve_engine_example}
-Future<void> serveSecureFfi(
+Future<void> serveSecureNative(
   Engine engine, {
   Object address = 'localhost',
   int port = 443,
@@ -265,14 +265,14 @@ Future<void> serveSecureFfi(
     throw ArgumentError.value(
       certificatePath,
       'certificatePath',
-      'certificatePath is required for serveSecureFfi',
+      'certificatePath is required for serveSecureNative',
     );
   }
   if (keyPath == null || keyPath.isEmpty) {
     throw ArgumentError.value(
       keyPath,
       'keyPath',
-      'keyPath is required for serveSecureFfi',
+      'keyPath is required for serveSecureNative',
     );
   }
 
@@ -308,9 +308,9 @@ Future<void> serveSecureFfi(
 /// addresses. The only per-listener difference is host/port binding.
 ///
 /// {@macro server_native_multi_bind_example}
-Future<void> serveFfiMulti(
+Future<void> serveNativeMulti(
   Engine engine, {
-  required List<FfiServerBind> binds,
+  required List<NativeServerBind> binds,
   bool echo = true,
   int backlog = 0,
   bool v6Only = false,
@@ -374,9 +374,9 @@ Future<void> serveFfiMulti(
 /// Boots a Routed [engine] across multiple Rust-native TLS listeners.
 ///
 /// {@macro server_native_multi_bind_example}
-Future<void> serveSecureFfiMulti(
+Future<void> serveSecureNativeMulti(
   Engine engine, {
-  required List<FfiServerBind> binds,
+  required List<NativeServerBind> binds,
   required String certificatePath,
   required String keyPath,
   String? certificatePassword,
@@ -395,14 +395,14 @@ Future<void> serveSecureFfiMulti(
     throw ArgumentError.value(
       certificatePath,
       'certificatePath',
-      'certificatePath is required for serveSecureFfiMulti',
+      'certificatePath is required for serveSecureNativeMulti',
     );
   }
   if (keyPath.isEmpty) {
     throw ArgumentError.value(
       keyPath,
       'keyPath',
-      'keyPath is required for serveSecureFfiMulti',
+      'keyPath is required for serveSecureNativeMulti',
     );
   }
 
@@ -460,7 +460,7 @@ Future<void> serveSecureFfiMulti(
 /// [handler], similar to listening on `dart:io` `HttpServer`.
 ///
 /// {@macro server_native_serve_http_handler_example}
-Future<void> serveFfiHttp(
+Future<void> serveNativeHttp(
   BridgeHttpHandler handler, {
   Object host = '127.0.0.1',
   int? port,
@@ -494,7 +494,7 @@ Future<void> serveFfiHttp(
 /// [handler], similar to listening on `dart:io` `HttpServer`.
 ///
 /// {@macro server_native_serve_http_handler_example}
-Future<void> serveSecureFfiHttp(
+Future<void> serveSecureNativeHttp(
   BridgeHttpHandler handler, {
   Object address = 'localhost',
   int port = 443,
@@ -512,14 +512,14 @@ Future<void> serveSecureFfiHttp(
     throw ArgumentError.value(
       certificatePath,
       'certificatePath',
-      'certificatePath is required for serveSecureFfiHttp',
+      'certificatePath is required for serveSecureNativeHttp',
     );
   }
   if (keyPath == null || keyPath.isEmpty) {
     throw ArgumentError.value(
       keyPath,
       'keyPath',
-      'keyPath is required for serveSecureFfiHttp',
+      'keyPath is required for serveSecureNativeHttp',
     );
   }
 
@@ -549,8 +549,8 @@ Future<void> serveSecureFfiHttp(
 /// without Routed engine request/response wrapping.
 ///
 /// {@macro server_native_direct_handler_example}
-Future<void> serveFfiDirect(
-  FfiDirectHandler handler, {
+Future<void> serveNativeDirect(
+  NativeDirectHandler handler, {
   Object host = '127.0.0.1',
   int? port,
   bool echo = true,
@@ -596,8 +596,8 @@ Future<void> serveFfiDirect(
 /// [handler] without Routed engine request/response wrapping.
 ///
 /// {@macro server_native_direct_handler_example}
-Future<void> serveSecureFfiDirect(
-  FfiDirectHandler handler, {
+Future<void> serveSecureNativeDirect(
+  NativeDirectHandler handler, {
   Object address = 'localhost',
   int port = 443,
   String? certificatePath,
@@ -615,14 +615,14 @@ Future<void> serveSecureFfiDirect(
     throw ArgumentError.value(
       certificatePath,
       'certificatePath',
-      'certificatePath is required for serveSecureFfiDirect',
+      'certificatePath is required for serveSecureNativeDirect',
     );
   }
   if (keyPath == null || keyPath.isEmpty) {
     throw ArgumentError.value(
       keyPath,
       'keyPath',
-      'keyPath is required for serveSecureFfiDirect',
+      'keyPath is required for serveSecureNativeDirect',
     );
   }
 
@@ -1302,7 +1302,7 @@ Future<String> _anyHost() async {
   return InternetAddress.anyIPv4.address;
 }
 
-Future<List<FfiServerBind>> _loopbackBinds(int port) async {
+Future<List<NativeServerBind>> _loopbackBinds(int port) async {
   final supportsV4 = await _supportsIPv4;
   final supportsV6 = await _supportsIPv6;
 
@@ -1317,18 +1317,30 @@ Future<List<FfiServerBind>> _loopbackBinds(int port) async {
       : port;
 
   if (!supportsV4) {
-    return <FfiServerBind>[
-      FfiServerBind(host: InternetAddress.loopbackIPv6.address, port: bindPort),
+    return <NativeServerBind>[
+      NativeServerBind(
+        host: InternetAddress.loopbackIPv6.address,
+        port: bindPort,
+      ),
     ];
   }
   if (!supportsV6) {
-    return <FfiServerBind>[
-      FfiServerBind(host: InternetAddress.loopbackIPv4.address, port: bindPort),
+    return <NativeServerBind>[
+      NativeServerBind(
+        host: InternetAddress.loopbackIPv4.address,
+        port: bindPort,
+      ),
     ];
   }
-  return <FfiServerBind>[
-    FfiServerBind(host: InternetAddress.loopbackIPv4.address, port: bindPort),
-    FfiServerBind(host: InternetAddress.loopbackIPv6.address, port: bindPort),
+  return <NativeServerBind>[
+    NativeServerBind(
+      host: InternetAddress.loopbackIPv4.address,
+      port: bindPort,
+    ),
+    NativeServerBind(
+      host: InternetAddress.loopbackIPv6.address,
+      port: bindPort,
+    ),
   ];
 }
 
@@ -1496,7 +1508,7 @@ Future<void> _handleChunkedBridgeRequest(
 }
 
 Future<_BridgeHandleFrameResult> _handleDirectFrame(
-  FfiDirectHandler handler,
+  NativeDirectHandler handler,
   BridgeRequestFrame frame,
 ) async {
   try {
@@ -1534,12 +1546,12 @@ Future<_BridgeHandleFrameResult> _handleDirectFrame(
 }
 
 Future<_BridgeHandleFrameResult> _handleDirectPayload(
-  FfiDirectHandler handler,
+  NativeDirectHandler handler,
   Uint8List payload,
 ) async {
   try {
     final requestView = _DirectPayloadRequestView.parse(payload);
-    final request = FfiDirectRequest._fromPayload(
+    final request = NativeDirectRequest._fromPayload(
       requestView,
       _lazyDirectPayloadBodyStream(requestView),
     );
@@ -1577,7 +1589,7 @@ Stream<Uint8List> _lazyDirectPayloadBodyStream(
 }
 
 Future<void> _handleDirectStream(
-  FfiDirectHandler handler, {
+  NativeDirectHandler handler, {
   required BridgeRequestFrame frame,
   required Stream<Uint8List> bodyStream,
   required Future<void> Function(BridgeResponseFrame frame) onResponseStart,
@@ -1636,7 +1648,9 @@ Future<void> _handleDirectStream(
     if (responseStarted) {
       rethrow;
     }
-    stderr.writeln('[server_native] direct stream handler error: $error\n$stack');
+    stderr.writeln(
+      '[server_native] direct stream handler error: $error\n$stack',
+    );
     final errorResponse = _internalServerErrorFrame(error);
     await onResponseStart(
       BridgeResponseFrame(
@@ -1651,11 +1665,11 @@ Future<void> _handleDirectStream(
   }
 }
 
-FfiDirectRequest _toDirectRequest(
+NativeDirectRequest _toDirectRequest(
   BridgeRequestFrame frame,
   Stream<Uint8List> bodyStream,
 ) {
-  return FfiDirectRequest._fromFrame(frame, bodyStream);
+  return NativeDirectRequest._fromFrame(frame, bodyStream);
 }
 
 Uri _buildDirectUri({

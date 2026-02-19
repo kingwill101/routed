@@ -89,7 +89,7 @@ import 'dart:io';
 import 'package:server_native/server_native.dart';
 
 Future<void> main() async {
-  await serveFfiHttp((request) async {
+  await serveNativeHttp((request) async {
     request.response
       ..statusCode = HttpStatus.ok
       ..headers.contentType = ContentType.text
@@ -99,7 +99,7 @@ Future<void> main() async {
 }
 ```
 
-## Direct Handler API (`FfiDirectRequest`)
+## Direct Handler API (`NativeDirectRequest`)
 
 This mode gives direct method/path/header/body access without `HttpRequest`.
 
@@ -111,9 +111,9 @@ import 'dart:typed_data';
 import 'package:server_native/server_native.dart';
 
 Future<void> main() async {
-  await serveFfiDirect((request) async {
+  await serveNativeDirect((request) async {
     if (request.method == 'GET' && request.path == '/health') {
-      return FfiDirectResponse.bytes(
+      return NativeDirectResponse.bytes(
         headers: const [
           MapEntry(HttpHeaders.contentTypeHeader, 'application/json'),
         ],
@@ -122,7 +122,7 @@ Future<void> main() async {
     }
 
     final body = await utf8.decoder.bind(request.body).join();
-    return FfiDirectResponse.bytes(
+    return NativeDirectResponse.bytes(
       status: HttpStatus.ok,
       headers: const [
         MapEntry(HttpHeaders.contentTypeHeader, 'text/plain; charset=utf-8'),
@@ -142,8 +142,8 @@ import 'dart:typed_data';
 import 'package:server_native/server_native.dart';
 
 Future<void> main() async {
-  await serveFfiDirect((request) async {
-    return FfiDirectResponse.bytes(
+  await serveNativeDirect((request) async {
+    return NativeDirectResponse.bytes(
       status: HttpStatus.ok,
       headers: const [
         MapEntry(HttpHeaders.contentTypeHeader, 'text/plain; charset=utf-8'),
@@ -166,7 +166,7 @@ import 'package:server_native/server_native.dart';
 
 Future<void> main() async {
   final shutdown = Completer<void>();
-  final serveFuture = serveFfiHttp((request) async {
+  final serveFuture = serveNativeHttp((request) async {
     request.response
       ..statusCode = HttpStatus.ok
       ..write('bye');

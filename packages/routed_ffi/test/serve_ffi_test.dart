@@ -19,8 +19,8 @@ final class _RunningFfiServer {
   final Future<void> serveFuture;
 }
 
-final class _RunningFfiMultiServer {
-  _RunningFfiMultiServer({
+final class _RunningNativeMultiServer {
+  _RunningNativeMultiServer({
     required this.baseUris,
     required this.shutdown,
     required this.serveFuture,
@@ -64,7 +64,7 @@ Future<_RunningFfiServer> _startServer(
 }) async {
   final shutdown = Completer<void>();
   final port = await _reservePort();
-  final serveFuture = serveFfi(
+  final serveFuture = serveNative(
     engine,
     host: InternetAddress.loopbackIPv4.address,
     port: port,
@@ -84,7 +84,7 @@ Future<_RunningFfiServer> _startServer(
   );
 }
 
-Future<_RunningFfiMultiServer> _startMultiServer(
+Future<_RunningNativeMultiServer> _startMultiServer(
   Engine engine, {
   bool nativeCallback = false,
   int listeners = 2,
@@ -96,13 +96,13 @@ Future<_RunningFfiMultiServer> _startMultiServer(
   }
   final binds = ports
       .map(
-        (port) => FfiServerBind(
+        (port) => NativeServerBind(
           host: InternetAddress.loopbackIPv4.address,
           port: port,
         ),
       )
       .toList(growable: false);
-  final serveFuture = serveFfiMulti(
+  final serveFuture = serveNativeMulti(
     engine,
     binds: binds,
     echo: false,
@@ -118,7 +118,7 @@ Future<_RunningFfiMultiServer> _startMultiServer(
     await _waitUntilUp(baseUri.replace(path: '/'));
   }
 
-  return _RunningFfiMultiServer(
+  return _RunningNativeMultiServer(
     baseUris: baseUris,
     shutdown: shutdown,
     serveFuture: serveFuture,
@@ -135,7 +135,7 @@ Future<_RunningFfiServer> _startSecureServer(
 }) async {
   final shutdown = Completer<void>();
   final port = await _reservePort();
-  final serveFuture = serveSecureFfi(
+  final serveFuture = serveSecureNative(
     engine,
     address: InternetAddress.loopbackIPv4.address,
     port: port,
@@ -166,7 +166,7 @@ Future<void> _stopServer(_RunningFfiServer running, Engine engine) async {
 }
 
 Future<void> _stopMultiServer(
-  _RunningFfiMultiServer running,
+  _RunningNativeMultiServer running,
   Engine engine,
 ) async {
   if (!running.shutdown.isCompleted) {
@@ -266,7 +266,7 @@ String _locateTlsAsset(String filename) {
 }
 
 void main() {
-  test('serveFfi proxies GET requests to routed engine handlers', () async {
+  test('serveNative proxies GET requests to routed engine handlers', () async {
     final engine = Engine()
       ..get('/ping', (ctx) async => ctx.json({'ok': true}));
 
@@ -289,7 +289,7 @@ void main() {
   });
 
   test(
-    'serveFfi native callback mode proxies GET requests to routed engine handlers',
+    'serveNative native callback mode proxies GET requests to routed engine handlers',
     () async {
       final engine = Engine()
         ..get('/ping', (ctx) async => ctx.json({'ok': true}));
@@ -313,7 +313,7 @@ void main() {
     },
   );
 
-  test('serveFfiMulti proxies GET requests on each bind', () async {
+  test('serveNativeMulti proxies GET requests on each bind', () async {
     final engine = Engine()
       ..get('/ping', (ctx) async => ctx.json({'ok': true}));
 
@@ -336,7 +336,7 @@ void main() {
   });
 
   test(
-    'serveFfiMulti native callback mode proxies GET requests on each bind',
+    'serveNativeMulti native callback mode proxies GET requests on each bind',
     () async {
       final engine = Engine()
         ..get('/ping', (ctx) async => ctx.json({'ok': true}));
@@ -360,22 +360,22 @@ void main() {
     },
   );
 
-  test('serveFfiMulti throws when binds list is empty', () async {
+  test('serveNativeMulti throws when binds list is empty', () async {
     final engine = Engine();
     await expectLater(
-      () => serveFfiMulti(engine, binds: const <FfiServerBind>[]),
+      () => serveNativeMulti(engine, binds: const <NativeServerBind>[]),
       throwsArgumentError,
     );
     await engine.close();
   });
 
-  test('FfiMultiServer.bind handles localhost like loopback', () async {
+  test('NativeMultiServer.bind handles localhost like loopback', () async {
     final engine = Engine()
       ..get('/ping', (ctx) async => ctx.json({'ok': true}));
 
     final shutdown = Completer<void>();
     final port = await _reservePort();
-    final serveFuture = FfiMultiServer.bind(
+    final serveFuture = NativeMultiServer.bind(
       engine,
       'localhost',
       port,
@@ -414,13 +414,13 @@ void main() {
     await serveFuture.timeout(const Duration(seconds: 5));
   });
 
-  test('FfiMultiServer.bind handles any', () async {
+  test('NativeMultiServer.bind handles any', () async {
     final engine = Engine()
       ..get('/ping', (ctx) async => ctx.json({'ok': true}));
 
     final shutdown = Completer<void>();
     final port = await _reservePort();
-    final serveFuture = FfiMultiServer.bind(
+    final serveFuture = NativeMultiServer.bind(
       engine,
       'any',
       port,
@@ -447,7 +447,7 @@ void main() {
     await serveFuture.timeout(const Duration(seconds: 5));
   });
 
-  test('serveFfi forwards method, headers, query, and body', () async {
+  test('serveNative forwards method, headers, query, and body', () async {
     final engine = Engine()
       ..post('/echo', (ctx) async {
         final body = await ctx.body();
@@ -488,7 +488,7 @@ void main() {
     await _stopServer(running, engine);
   });
 
-  test('serveFfi preserves response cookies', () async {
+  test('serveNative preserves response cookies', () async {
     final engine = Engine()
       ..get('/cookies', (ctx) async {
         ctx.response.setCookie('session', 'abc');
@@ -523,7 +523,7 @@ void main() {
     await _stopServer(running, engine);
   });
 
-  test('serveFfi forwards websocket upgrade and messages', () async {
+  test('serveNative forwards websocket upgrade and messages', () async {
     final engine = Engine()..ws('/ws', _EchoWebSocketHandler());
 
     final running = await _startServer(engine);
@@ -544,7 +544,7 @@ void main() {
     await _stopServer(running, engine);
   });
 
-  test('serveFfi preserves non-200 status codes', () async {
+  test('serveNative preserves non-200 status codes', () async {
     final engine = Engine()
       ..get('/created', (ctx) async {
         await ctx.response.json({'ok': true}, statusCode: HttpStatus.created);
@@ -568,7 +568,7 @@ void main() {
     await _stopServer(running, engine);
   });
 
-  test('serveFfi handles binary request bodies', () async {
+  test('serveNative handles binary request bodies', () async {
     final engine = Engine()
       ..post('/bytes', (ctx) async {
         final bytes = await ctx.bodyBytes;
@@ -599,7 +599,7 @@ void main() {
     await _stopServer(running, engine);
   });
 
-  test('serveFfi handles repeated response headers', () async {
+  test('serveNative handles repeated response headers', () async {
     final engine = Engine()
       ..get('/headers', (ctx) async {
         ctx.response.addHeader('x-multi', 'a');
@@ -628,7 +628,7 @@ void main() {
     await _stopServer(running, engine);
   });
 
-  test('serveFfi preserves 404 behavior', () async {
+  test('serveNative preserves 404 behavior', () async {
     final engine = Engine();
     final running = await _startServer(engine);
     final uri = running.baseUri.replace(path: '/missing');
@@ -645,7 +645,7 @@ void main() {
     await _stopServer(running, engine);
   });
 
-  test('serveFfi handles concurrent requests', () async {
+  test('serveNative handles concurrent requests', () async {
     final engine = Engine()
       ..get('/slow', (ctx) async {
         await Future<void>.delayed(const Duration(milliseconds: 20));
@@ -673,7 +673,7 @@ void main() {
     await _stopServer(running, engine);
   });
 
-  test('serveFfi preserves redirect status and location headers', () async {
+  test('serveNative preserves redirect status and location headers', () async {
     final engine = Engine()
       ..get('/redirect', (ctx) async {
         ctx.response.redirect('/target', status: HttpStatus.found);
@@ -697,7 +697,7 @@ void main() {
     await _stopServer(running, engine);
   });
 
-  test('serveFfi forwards repeated request header values', () async {
+  test('serveNative forwards repeated request header values', () async {
     final engine = Engine()
       ..get('/header-echo', (ctx) async {
         return ctx.json({'value': ctx.requestHeader('x-multi') ?? ''});
@@ -725,7 +725,7 @@ void main() {
     await _stopServer(running, engine);
   });
 
-  test('serveFfi handles large request payloads', () async {
+  test('serveNative handles large request payloads', () async {
     final engine = Engine()
       ..post('/size', (ctx) async {
         final bytes = await ctx.bodyBytes;
@@ -751,7 +751,7 @@ void main() {
     await _stopServer(running, engine);
   });
 
-  test('serveFfi completes when shutdown signal is triggered', () async {
+  test('serveNative completes when shutdown signal is triggered', () async {
     final engine = Engine()..get('/', (ctx) async => ctx.string('ok'));
     final running = await _startServer(engine);
 
@@ -761,7 +761,7 @@ void main() {
   });
 
   test(
-    'serveSecureFfi proxies HTTPS requests via native TLS transport',
+    'serveSecureNative proxies HTTPS requests via native TLS transport',
     () async {
       final certPath = _locateTlsAsset('cert.pem');
       final keyPath = _locateTlsAsset('key.pem');
@@ -791,7 +791,7 @@ void main() {
     },
   );
 
-  test('serveSecureFfi serves HTTP/3 requests when enabled', () async {
+  test('serveSecureNative serves HTTP/3 requests when enabled', () async {
     if (!await _curlSupportsHttp3()) {
       markTestSkipped('curl with HTTP/3 support is unavailable');
       return;
@@ -832,7 +832,7 @@ void main() {
   });
 
   test(
-    'serveSecureFfi accepts requestClientCertificate without requiring client cert',
+    'serveSecureNative accepts requestClientCertificate without requiring client cert',
     () async {
       final certPath = _locateTlsAsset('cert.pem');
       final keyPath = _locateTlsAsset('key.pem');
@@ -862,7 +862,7 @@ void main() {
   );
 
   test(
-    'serveSecureFfi supports encrypted private keys with certificatePassword',
+    'serveSecureNative supports encrypted private keys with certificatePassword',
     () async {
       final certPath = _locateTlsAsset('cert.pem');
       final keyPath = _locateTlsAsset('key_encrypted.pem');
@@ -891,7 +891,7 @@ void main() {
     },
   );
 
-  test('serveSecureFfi fails with wrong certificatePassword', () async {
+  test('serveSecureNative fails with wrong certificatePassword', () async {
     final certPath = _locateTlsAsset('cert.pem');
     final keyPath = _locateTlsAsset('key_encrypted.pem');
     final engine = Engine();
@@ -908,10 +908,10 @@ void main() {
     await engine.close();
   });
 
-  test('serveSecureFfi throws when certificate paths are missing', () async {
+  test('serveSecureNative throws when certificate paths are missing', () async {
     final engine = Engine();
     await expectLater(
-      () => serveSecureFfi(
+      () => serveSecureNative(
         engine,
         address: '127.0.0.1',
         port: 0,
@@ -923,12 +923,12 @@ void main() {
     await engine.close();
   });
 
-  test('serveSecureFfiMulti throws when binds list is empty', () async {
+  test('serveSecureNativeMulti throws when binds list is empty', () async {
     final engine = Engine();
     await expectLater(
-      () => serveSecureFfiMulti(
+      () => serveSecureNativeMulti(
         engine,
-        binds: const <FfiServerBind>[],
+        binds: const <NativeServerBind>[],
         certificatePath: 'cert.pem',
         keyPath: 'key.pem',
       ),
@@ -938,13 +938,13 @@ void main() {
   });
 
   test(
-    'serveSecureFfiMulti throws when certificate paths are missing',
+    'serveSecureNativeMulti throws when certificate paths are missing',
     () async {
       final engine = Engine();
       await expectLater(
-        () => serveSecureFfiMulti(
+        () => serveSecureNativeMulti(
           engine,
-          binds: const <FfiServerBind>[FfiServerBind()],
+          binds: const <NativeServerBind>[NativeServerBind()],
           certificatePath: '',
           keyPath: '',
         ),

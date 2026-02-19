@@ -184,10 +184,10 @@ final class _BenchmarkOptions {
       '  --include-native-direct-shape  Add rust-only direct-shape benchmark mode',
     );
     stdout.writeln(
-      '  --include-direct-native-callback  Add serveFfiDirect(nativeDirect:true) mode',
+      '  --include-direct-native-callback  Add serveNativeDirect(nativeDirect:true) mode',
     );
     stdout.writeln(
-      '  --include-routed-native-callback  Add serveFfi(nativeCallback:true) mode',
+      '  --include-routed-native-callback  Add serveNative(nativeCallback:true) mode',
     );
     stdout.writeln(
       '  --min-req-per-sec-ratio=R  Require ffi req/s >= io req/s * R',
@@ -801,7 +801,7 @@ Future<_RunningServer> _startFfiServer(
   int port,
   Completer<void> shutdown,
 ) async {
-  final done = serveFfi(
+  final done = serveNative(
     engine,
     host: host,
     port: port,
@@ -825,7 +825,7 @@ Future<_RunningServer> _startFfiNativeCallbackServer(
   int port,
   Completer<void> shutdown,
 ) async {
-  final done = serveFfi(
+  final done = serveNative(
     engine,
     host: host,
     port: port,
@@ -853,13 +853,13 @@ Future<_RunningServer> _startFfiDirectServer(
   final bodyBytes = Uint8List.fromList(
     utf8.encode('{"ok":true,"label":"routed_ffi_direct"}'),
   );
-  final staticResponse = FfiDirectResponse.preEncodedBytes(
+  final staticResponse = NativeDirectResponse.preEncodedBytes(
     headers: const <MapEntry<String, String>>[
       MapEntry(HttpHeaders.contentTypeHeader, 'application/json'),
     ],
     bodyBytes: bodyBytes,
   );
-  final done = serveFfiDirect(
+  final done = serveNativeDirect(
     (_) async => staticResponse,
     host: host,
     port: port,
@@ -886,13 +886,13 @@ Future<_RunningServer> _startFfiDirectNativeCallbackServer(
   final bodyBytes = Uint8List.fromList(
     utf8.encode('{"ok":true,"label":"routed_ffi_direct"}'),
   );
-  final staticResponse = FfiDirectResponse.preEncodedBytes(
+  final staticResponse = NativeDirectResponse.preEncodedBytes(
     headers: const <MapEntry<String, String>>[
       MapEntry(HttpHeaders.contentTypeHeader, 'application/json'),
     ],
     bodyBytes: bodyBytes,
   );
-  final done = serveFfiDirect(
+  final done = serveNativeDirect(
     (_) async => staticResponse,
     host: host,
     port: port,

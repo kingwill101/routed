@@ -31,7 +31,7 @@ Future<void> main(List<String> args) async {
   stdout.writeln('[devtools] endpoints: /health, /cpu, /upload, /echo');
 
   if (config.mode == 'http') {
-    await serveFfiHttp(
+    await serveNativeHttp(
       _httpHandler,
       host: config.host,
       port: config.port,
@@ -41,7 +41,7 @@ Future<void> main(List<String> args) async {
     return;
   }
 
-  await serveFfiDirect(
+  await serveNativeDirect(
     _directHandler,
     host: config.host,
     port: config.port,
@@ -50,9 +50,9 @@ Future<void> main(List<String> args) async {
   );
 }
 
-Future<FfiDirectResponse> _directHandler(FfiDirectRequest request) async {
+Future<NativeDirectResponse> _directHandler(NativeDirectRequest request) async {
   if (request.path == '/health') {
-    return FfiDirectResponse.bytes(
+    return NativeDirectResponse.bytes(
       headers: _jsonHeaders,
       bodyBytes: Uint8List.fromList(utf8.encode('{"ok":true}')),
     );
@@ -66,7 +66,7 @@ Future<FfiDirectResponse> _directHandler(FfiDirectRequest request) async {
     final checksum = _cpuBurn(iterations: iterations, seed: seed);
     final payload =
         '{"iterations":$iterations,"seed":$seed,"checksum":$checksum}';
-    return FfiDirectResponse.bytes(
+    return NativeDirectResponse.bytes(
       headers: _jsonHeaders,
       bodyBytes: Uint8List.fromList(utf8.encode(payload)),
     );
@@ -76,7 +76,7 @@ Future<FfiDirectResponse> _directHandler(FfiDirectRequest request) async {
     final bodyBytes = await _collectBytes(request.body);
     final payload =
         '{"ok":true,"bytes":${bodyBytes.length},"preview":"${_preview(bodyBytes)}"}';
-    return FfiDirectResponse.bytes(
+    return NativeDirectResponse.bytes(
       headers: _jsonHeaders,
       bodyBytes: Uint8List.fromList(utf8.encode(payload)),
     );
@@ -86,13 +86,13 @@ Future<FfiDirectResponse> _directHandler(FfiDirectRequest request) async {
     final stats = await _collectBodyStats(request.body);
     final payload =
         '{"ok":true,"bytes":${stats.bytes},"preview":"${stats.previewBase64}"}';
-    return FfiDirectResponse.bytes(
+    return NativeDirectResponse.bytes(
       headers: _jsonHeaders,
       bodyBytes: Uint8List.fromList(utf8.encode(payload)),
     );
   }
 
-  return FfiDirectResponse.bytes(
+  return NativeDirectResponse.bytes(
     status: HttpStatus.notFound,
     headers: _textHeaders,
     bodyBytes: Uint8List.fromList(utf8.encode('Not Found')),

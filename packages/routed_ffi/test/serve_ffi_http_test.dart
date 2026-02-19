@@ -54,7 +54,7 @@ Future<_RunningHttpBridgeServer> _startHttpBridgeServer(
 }) async {
   final shutdown = Completer<void>();
   final port = await _reservePort();
-  final serveFuture = serveFfiHttp(
+  final serveFuture = serveNativeHttp(
     handler,
     host: host,
     port: port,
@@ -83,7 +83,7 @@ Future<void> _stopServer(_RunningHttpBridgeServer running) async {
 }
 
 void main() {
-  test('serveFfiHttp exposes bridge as HttpServer-style handler', () async {
+  test('serveNativeHttp exposes bridge as HttpServer-style handler', () async {
     final running = await _startHttpBridgeServer((request) async {
       final requestBody = await utf8.decoder.bind(request).join();
       request.response.statusCode = HttpStatus.created;
@@ -127,7 +127,7 @@ void main() {
     await _stopServer(running);
   });
 
-  test('serveFfiHttp accepts HttpServer-like bind options', () async {
+  test('serveNativeHttp accepts HttpServer-like bind options', () async {
     final running = await _startHttpBridgeServer(
       (request) async {
         request.response.statusCode = HttpStatus.ok;
@@ -154,7 +154,7 @@ void main() {
     await _stopServer(running);
   });
 
-  test('serveFfiHttp supports WebSocket upgrade', () async {
+  test('serveNativeHttp supports WebSocket upgrade', () async {
     final running = await _startHttpBridgeServer((request) async {
       if (request.uri.path == '/ws') {
         final webSocket = await WebSocketTransformer.upgrade(request);

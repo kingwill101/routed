@@ -46,12 +46,12 @@ Future<void> _waitUntilUp(Uri uri) async {
 }
 
 Future<_RunningDirectServer> _startDirectServer(
-  FfiDirectHandler handler, {
+  NativeDirectHandler handler, {
   bool nativeDirect = false,
 }) async {
   final shutdown = Completer<void>();
   final port = await _reservePort();
-  final serveFuture = serveFfiDirect(
+  final serveFuture = serveNativeDirect(
     handler,
     host: InternetAddress.loopbackIPv4.address,
     port: port,
@@ -79,11 +79,11 @@ Future<void> _stopDirectServer(_RunningDirectServer running) async {
 
 void main() {
   test(
-    'serveFfiDirect handles request fields and returns bytes response',
+    'serveNativeDirect handles request fields and returns bytes response',
     () async {
       final running = await _startDirectServer((request) async {
         final bodyText = await utf8.decoder.bind(request.body).join();
-        return FfiDirectResponse.bytes(
+        return NativeDirectResponse.bytes(
           headers: const <MapEntry<String, String>>[
             MapEntry(HttpHeaders.contentTypeHeader, 'application/json'),
           ],
@@ -129,13 +129,13 @@ void main() {
     },
   );
 
-  test('serveFfiDirect supports streaming responses', () async {
+  test('serveNativeDirect supports streaming responses', () async {
     final running = await _startDirectServer((request) async {
       var requestBytes = 0;
       await for (final chunk in request.body) {
         requestBytes += chunk.length;
       }
-      return FfiDirectResponse.stream(
+      return NativeDirectResponse.stream(
         status: HttpStatus.created,
         headers: <MapEntry<String, String>>[
           const MapEntry(HttpHeaders.contentTypeHeader, 'text/plain'),
@@ -171,8 +171,8 @@ void main() {
     await _stopDirectServer(running);
   });
 
-  test('serveFfiDirect supports pre-encoded static responses', () async {
-    final staticResponse = FfiDirectResponse.preEncodedBytes(
+  test('serveNativeDirect supports pre-encoded static responses', () async {
+    final staticResponse = NativeDirectResponse.preEncodedBytes(
       headers: const <MapEntry<String, String>>[
         MapEntry(HttpHeaders.contentTypeHeader, 'application/json'),
       ],
@@ -203,14 +203,14 @@ void main() {
   });
 
   test(
-    'serveFfiDirect nativeDirect callback mode supports streaming request/response',
+    'serveNativeDirect nativeDirect callback mode supports streaming request/response',
     () async {
       final running = await _startDirectServer((request) async {
         var requestBytes = 0;
         await for (final chunk in request.body) {
           requestBytes += chunk.length;
         }
-        return FfiDirectResponse.stream(
+        return NativeDirectResponse.stream(
           status: HttpStatus.accepted,
           headers: <MapEntry<String, String>>[
             const MapEntry(HttpHeaders.contentTypeHeader, 'text/plain'),
@@ -247,7 +247,7 @@ void main() {
     },
   );
 
-  test('serveFfiDirect maps handler exception to 500 response', () async {
+  test('serveNativeDirect maps handler exception to 500 response', () async {
     final running = await _startDirectServer((_) async {
       throw StateError('boom');
     });
@@ -269,11 +269,11 @@ void main() {
   });
 
   test(
-    'serveFfiDirect nativeDirect callback mode handles request/response',
+    'serveNativeDirect nativeDirect callback mode handles request/response',
     () async {
       final running = await _startDirectServer((request) async {
         final bodyText = await utf8.decoder.bind(request.body).join();
-        return FfiDirectResponse.bytes(
+        return NativeDirectResponse.bytes(
           headers: const <MapEntry<String, String>>[
             MapEntry(HttpHeaders.contentTypeHeader, 'application/json'),
           ],

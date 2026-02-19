@@ -6,10 +6,10 @@ library;
 /// It exposes:
 ///
 /// - `HttpServer`-style APIs via [NativeHttpServer].
-/// - callback-style APIs via [serveFfiHttp] and [serveSecureFfiHttp].
-/// - direct request/response callback APIs via [serveFfiDirect] and
-///   [serveSecureFfiDirect].
-/// - multi-bind helpers via [FfiMultiServer] and [serveFfiMulti].
+/// - callback-style APIs via [serveNativeHttp] and [serveSecureNativeHttp].
+/// - direct request/response callback APIs via [serveNativeDirect] and
+///   [serveSecureNativeDirect].
+/// - multi-bind helpers via [NativeMultiServer] and [serveNativeMulti].
 ///
 /// The API surface is designed so you can start from a familiar
 /// `dart:io HttpServer` model and selectively move to lower-overhead
@@ -46,7 +46,7 @@ library;
 /// import 'package:server_native/server_native.dart';
 ///
 /// Future<void> main() async {
-///   await serveFfiHttp((request) async {
+///   await serveNativeHttp((request) async {
 ///     request.response
 ///       ..statusCode = HttpStatus.ok
 ///       ..headers.contentType = ContentType.text
@@ -58,7 +58,7 @@ library;
 /// {@endtemplate}
 ///
 /// {@template server_native_direct_callback_example}
-/// ## Direct Callback API (`FfiDirectRequest`)
+/// ## Direct Callback API (`NativeDirectRequest`)
 ///
 /// ```dart
 /// import 'dart:io';
@@ -67,8 +67,8 @@ library;
 /// import 'package:server_native/server_native.dart';
 ///
 /// Future<void> main() async {
-///   await serveFfiDirect((request) async {
-///     return FfiDirectResponse.bytes(
+///   await serveNativeDirect((request) async {
+///     return NativeDirectResponse.bytes(
 ///       status: HttpStatus.ok,
 ///       headers: const <MapEntry<String, String>>[
 ///         MapEntry(HttpHeaders.contentTypeHeader, 'text/plain; charset=utf-8'),
@@ -119,7 +119,7 @@ library;
 ///
 /// Future<void> main() async {
 ///   final shutdown = Completer<void>();
-///   final serveFuture = serveFfiHttp((request) async {
+///   final serveFuture = serveNativeHttp((request) async {
 ///     request.response
 ///       ..statusCode = HttpStatus.ok
 ///       ..write('bye');
@@ -138,9 +138,9 @@ library;
 /// Includes:
 ///
 /// - [NativeHttpServer] for stream-based `HttpServer` handling.
-/// - [FfiMultiServer] and [FfiServerBind] for multi-bind boot helpers.
-/// - [serveFfiHttp]/[serveSecureFfiHttp] for callback-style request handling.
-/// - [serveFfiDirect]/[serveSecureFfiDirect] for direct low-overhead handlers.
+/// - [NativeMultiServer] and [NativeServerBind] for multi-bind boot helpers.
+/// - [serveNativeHttp]/[serveSecureNativeHttp] for callback-style request handling.
+/// - [serveNativeDirect]/[serveSecureNativeDirect] for direct low-overhead handlers.
 ///
 /// {@macro server_native_quick_start}
 /// {@macro server_native_http_callback_example}
@@ -150,19 +150,19 @@ library;
 export 'src/server_boot.dart'
     show
         NativeHttpServer,
-        FfiMultiServer,
-        FfiServerBind,
-        FfiDirectHandler,
-        FfiDirectRequest,
-        FfiDirectResponse,
-        serveFfi,
-        serveFfiMulti,
-        serveFfiHttp,
-        serveFfiDirect,
-        serveSecureFfi,
-        serveSecureFfiMulti,
-        serveSecureFfiHttp,
-        serveSecureFfiDirect;
+        NativeMultiServer,
+        NativeServerBind,
+        NativeDirectHandler,
+        NativeDirectRequest,
+        NativeDirectResponse,
+        serveNative,
+        serveNativeMulti,
+        serveNativeHttp,
+        serveNativeDirect,
+        serveSecureNative,
+        serveSecureNativeMulti,
+        serveSecureNativeHttp,
+        serveSecureNativeDirect;
 
 /// ABI version helper for the linked native transport asset.
 ///

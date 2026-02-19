@@ -13,9 +13,9 @@ part of 'server_boot.dart';
 /// {@template server_native_direct_handler_example}
 /// Example:
 /// ```dart
-/// await serveFfiDirect((request) async {
+/// await serveNativeDirect((request) async {
 ///   if (request.path == '/health') {
-///     return FfiDirectResponse.bytes(
+///     return NativeDirectResponse.bytes(
 ///       status: HttpStatus.ok,
 ///       headers: const <MapEntry<String, String>>[
 ///         MapEntry(HttpHeaders.contentTypeHeader, 'text/plain; charset=utf-8'),
@@ -23,7 +23,7 @@ part of 'server_boot.dart';
 ///       bodyBytes: Uint8List.fromList('ok'.codeUnits),
 ///     );
 ///   }
-///   return FfiDirectResponse.bytes(status: HttpStatus.notFound);
+///   return NativeDirectResponse.bytes(status: HttpStatus.notFound);
 /// }, host: InternetAddress.loopbackIPv4, port: 8080);
 /// ```
 /// {@endtemplate}
@@ -31,11 +31,11 @@ part of 'server_boot.dart';
 /// {@template server_native_multi_bind_example}
 /// Example:
 /// ```dart
-/// await serveFfiMulti(
+/// await serveNativeMulti(
 ///   engine,
-///   binds: const <FfiServerBind>[
-///     FfiServerBind(host: '127.0.0.1', port: 8080),
-///     FfiServerBind(host: '::1', port: 8080),
+///   binds: const <NativeServerBind>[
+///     NativeServerBind(host: '127.0.0.1', port: 8080),
+///     NativeServerBind(host: '::1', port: 8080),
 ///   ],
 /// );
 /// ```
@@ -47,9 +47,9 @@ part of 'server_boot.dart';
 ///
 /// This request view avoids allocating Routed HTTP abstractions and is useful
 /// when handlers only need method/uri/header/body primitives.
-final class FfiDirectRequest {
+final class NativeDirectRequest {
   /// Creates a request object from explicit fields.
-  FfiDirectRequest({
+  NativeDirectRequest({
     required String method,
     required String scheme,
     required String authority,
@@ -68,7 +68,7 @@ final class FfiDirectRequest {
        _protocol = protocol,
        _headers = List<MapEntry<String, String>>.unmodifiable(headers);
 
-  FfiDirectRequest._fromFrame(this._frame, this.body)
+  NativeDirectRequest._fromFrame(this._frame, this.body)
     : _payload = null,
       _method = null,
       _scheme = null,
@@ -78,7 +78,7 @@ final class FfiDirectRequest {
       _protocol = null,
       _headers = null;
 
-  FfiDirectRequest._fromPayload(this._payload, this.body)
+  NativeDirectRequest._fromPayload(this._payload, this.body)
     : _frame = null,
       _method = null,
       _scheme = null,
@@ -180,12 +180,12 @@ final class FfiDirectRequest {
   }
 }
 
-/// Response returned by [FfiDirectHandler].
+/// Response returned by [NativeDirectHandler].
 ///
 /// {@macro server_native_direct_handler_example}
-final class FfiDirectResponse {
+final class NativeDirectResponse {
   /// Creates an in-memory bytes response.
-  FfiDirectResponse.bytes({
+  NativeDirectResponse.bytes({
     this.status = HttpStatus.ok,
     List<MapEntry<String, String>> headers = const <MapEntry<String, String>>[],
     Uint8List? bodyBytes,
@@ -195,7 +195,7 @@ final class FfiDirectResponse {
        encodedBridgePayload = null;
 
   /// Creates a streaming response.
-  FfiDirectResponse.stream({
+  NativeDirectResponse.stream({
     this.status = HttpStatus.ok,
     List<MapEntry<String, String>> headers = const <MapEntry<String, String>>[],
     required this.body,
@@ -207,17 +207,18 @@ final class FfiDirectResponse {
   ///
   /// This avoids per-request Dart response encoding when the same response can
   /// be reused (for example, static benchmark responses).
-  FfiDirectResponse.encodedPayload({required Uint8List bridgeResponsePayload})
-    : status = HttpStatus.ok,
-      headers = const <MapEntry<String, String>>[],
-      bodyBytes = null,
-      body = null,
-      encodedBridgePayload = bridgeResponsePayload {
+  NativeDirectResponse.encodedPayload({
+    required Uint8List bridgeResponsePayload,
+  }) : status = HttpStatus.ok,
+       headers = const <MapEntry<String, String>>[],
+       bodyBytes = null,
+       body = null,
+       encodedBridgePayload = bridgeResponsePayload {
     BridgeResponseFrame.decodePayload(bridgeResponsePayload);
   }
 
   /// Builds and caches a single encoded bridge response payload.
-  factory FfiDirectResponse.preEncodedBytes({
+  factory NativeDirectResponse.preEncodedBytes({
     int status = HttpStatus.ok,
     List<MapEntry<String, String>> headers = const <MapEntry<String, String>>[],
     Uint8List? bodyBytes,
@@ -227,7 +228,7 @@ final class FfiDirectResponse {
       headers: headers,
       bodyBytes: bodyBytes ?? Uint8List(0),
     );
-    return FfiDirectResponse.encodedPayload(
+    return NativeDirectResponse.encodedPayload(
       bridgeResponsePayload: frame.encodePayload(),
     );
   }
@@ -248,10 +249,10 @@ final class FfiDirectResponse {
   final Uint8List? encodedBridgePayload;
 }
 
-/// Direct callback signature used by [serveFfiDirect] and
-/// [serveSecureFfiDirect].
-typedef FfiDirectHandler =
-    FutureOr<FfiDirectResponse> Function(FfiDirectRequest request);
+/// Direct callback signature used by [serveNativeDirect] and
+/// [serveSecureNativeDirect].
+typedef NativeDirectHandler =
+    FutureOr<NativeDirectResponse> Function(NativeDirectRequest request);
 
 typedef _BridgeHandleFrame =
     Future<_BridgeHandleFrameResult> Function(BridgeRequestFrame frame);
@@ -269,13 +270,13 @@ typedef _BridgeHandleStream =
 
 /// Listener binding config for FFI server boot helpers.
 ///
-/// Use this with [serveFfiMulti] and [serveSecureFfiMulti] to expose one
+/// Use this with [serveNativeMulti] and [serveSecureNativeMulti] to expose one
 /// logical engine on multiple host/port listeners.
 ///
 /// {@macro server_native_multi_bind_example}
-final class FfiServerBind {
+final class NativeServerBind {
   /// Creates a bind configuration.
-  const FfiServerBind({this.host = '127.0.0.1', this.port = 0});
+  const NativeServerBind({this.host = '127.0.0.1', this.port = 0});
 
   /// Host/address to bind.
   ///
@@ -293,7 +294,7 @@ final class FfiServerBind {
 /// - `'any'`: bind `InternetAddress.anyIPv6` when supported, else IPv4.
 ///
 /// {@macro server_native_transport_overview}
-final class FfiMultiServer {
+final class NativeMultiServer {
   /// Boots server_native transport on all available loopback interfaces.
   ///
   /// For `port == 0`, a shared ephemeral port is reserved first so both
@@ -310,7 +311,7 @@ final class FfiMultiServer {
     Future<void>? shutdownSignal,
   }) async {
     final binds = await _loopbackBinds(port);
-    await serveFfiMulti(
+    await serveNativeMulti(
       engine,
       binds: binds,
       echo: echo,
@@ -342,7 +343,7 @@ final class FfiMultiServer {
     Future<void>? shutdownSignal,
   }) async {
     final binds = await _loopbackBinds(port);
-    await serveSecureFfiMulti(
+    await serveSecureNativeMulti(
       engine,
       binds: binds,
       certificatePath: certificatePath,
@@ -392,7 +393,7 @@ final class FfiMultiServer {
     }
     if (normalized == 'any') {
       final host = await _anyHost();
-      return serveFfi(
+      return serveNative(
         engine,
         host: host,
         port: port,
@@ -405,7 +406,7 @@ final class FfiMultiServer {
         shutdownSignal: shutdownSignal,
       );
     }
-    return serveFfi(
+    return serveNative(
       engine,
       host: normalized,
       port: port,
@@ -459,7 +460,7 @@ final class FfiMultiServer {
     }
     if (normalized == 'any') {
       final host = await _anyHost();
-      return serveSecureFfi(
+      return serveSecureNative(
         engine,
         address: host,
         port: port,
@@ -475,7 +476,7 @@ final class FfiMultiServer {
         shutdownSignal: shutdownSignal,
       );
     }
-    return serveSecureFfi(
+    return serveSecureNative(
       engine,
       address: normalized,
       port: port,

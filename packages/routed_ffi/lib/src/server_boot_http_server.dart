@@ -14,8 +14,8 @@ part of 'server_boot.dart';
 /// ```
 /// {@endtemplate}
 
-final class _FfiHttpBinding {
-  _FfiHttpBinding({required this.address, required this.running});
+final class _NativeHttpBinding {
+  _NativeHttpBinding({required this.address, required this.running});
 
   final InternetAddress address;
   final _RunningProxy running;
@@ -57,8 +57,8 @@ final class NativeHttpServer extends StreamView<HttpRequest>
     }
     if (normalizedAddress == 'any') {
       return _start(
-        binds: <FfiServerBind>[
-          FfiServerBind(host: await _anyHost(), port: port),
+        binds: <NativeServerBind>[
+          NativeServerBind(host: await _anyHost(), port: port),
         ],
         secure: false,
         backlog: backlog,
@@ -70,8 +70,8 @@ final class NativeHttpServer extends StreamView<HttpRequest>
       );
     }
     return _start(
-      binds: <FfiServerBind>[
-        FfiServerBind(host: normalizedAddress, port: port),
+      binds: <NativeServerBind>[
+        NativeServerBind(host: normalizedAddress, port: port),
       ],
       secure: false,
       backlog: backlog,
@@ -135,8 +135,8 @@ final class NativeHttpServer extends StreamView<HttpRequest>
     }
     if (normalizedAddress == 'any') {
       return _start(
-        binds: <FfiServerBind>[
-          FfiServerBind(host: await _anyHost(), port: port),
+        binds: <NativeServerBind>[
+          NativeServerBind(host: await _anyHost(), port: port),
         ],
         secure: true,
         certificatePath: certificatePath,
@@ -151,8 +151,8 @@ final class NativeHttpServer extends StreamView<HttpRequest>
       );
     }
     return _start(
-      binds: <FfiServerBind>[
-        FfiServerBind(host: normalizedAddress, port: port),
+      binds: <NativeServerBind>[
+        NativeServerBind(host: normalizedAddress, port: port),
       ],
       secure: true,
       certificatePath: certificatePath,
@@ -196,7 +196,7 @@ final class NativeHttpServer extends StreamView<HttpRequest>
   }
 
   static Future<NativeHttpServer> _start({
-    required List<FfiServerBind> binds,
+    required List<NativeServerBind> binds,
     required bool secure,
     String? certificatePath,
     String? keyPath,
@@ -275,7 +275,7 @@ final class NativeHttpServer extends StreamView<HttpRequest>
         );
         final address = await _resolveInternetAddress(normalizedHost);
         server._bindings.add(
-          _FfiHttpBinding(address: address, running: running),
+          _NativeHttpBinding(address: address, running: running),
         );
         server._runningBindingCount++;
         // ignore: discarded_futures
@@ -296,9 +296,9 @@ final class NativeHttpServer extends StreamView<HttpRequest>
 
   final StreamController<HttpRequest> _requestController;
   final _ProxyConnectionCounters _connectionCounters;
-  final List<_FfiHttpBinding> _bindings = <_FfiHttpBinding>[];
+  final List<_NativeHttpBinding> _bindings = <_NativeHttpBinding>[];
   final Completer<void> _stopped = Completer<void>();
-  final _FfiSessionStore _sessions = _FfiSessionStore(
+  final _NativeSessionStore _sessions = _NativeSessionStore(
     timeout: const Duration(minutes: 20),
   );
   int _sessionTimeoutSeconds = 20 * 60;
@@ -495,12 +495,12 @@ bool _acceptsGzip(HttpRequest request) {
   return false;
 }
 
-final class _FfiSessionStore {
-  _FfiSessionStore({required Duration timeout}) : _timeout = timeout;
+final class _NativeSessionStore {
+  _NativeSessionStore({required Duration timeout}) : _timeout = timeout;
 
   static const String cookieName = 'DARTSESSID';
 
-  final Map<String, _FfiSession> _sessions = <String, _FfiSession>{};
+  final Map<String, _NativeSession> _sessions = <String, _NativeSession>{};
   Duration _timeout;
   int _nextId = 0;
 
@@ -521,7 +521,7 @@ final class _FfiSessionStore {
     }
     _pruneExpiredSessions();
     final cookieValue = _sessionCookieValue(request.cookies);
-    _FfiSession? session;
+    _NativeSession? session;
     if (cookieValue != null) {
       session = _sessions[cookieValue];
     }
@@ -546,9 +546,9 @@ final class _FfiSessionStore {
     _sessions.clear();
   }
 
-  _FfiSession _createSession() {
+  _NativeSession _createSession() {
     final id = _nextSessionId();
-    final session = _FfiSession(
+    final session = _NativeSession(
       id: id,
       timeout: _timeout,
       onExpired: () {
@@ -594,9 +594,9 @@ final class _FfiSessionStore {
   }
 }
 
-final class _FfiSession extends MapBase<dynamic, dynamic>
+final class _NativeSession extends MapBase<dynamic, dynamic>
     implements HttpSession {
-  _FfiSession({
+  _NativeSession({
     required this.id,
     required Duration timeout,
     required void Function() onExpired,
@@ -652,7 +652,7 @@ final class _FfiSession extends MapBase<dynamic, dynamic>
     }
     _boundResponses.add(response);
     response.cookies.add(
-      Cookie(_FfiSessionStore.cookieName, id)
+      Cookie(_NativeSessionStore.cookieName, id)
         ..path = '/'
         ..httpOnly = true
         ..secure = secure
@@ -735,7 +735,7 @@ final class _FfiSession extends MapBase<dynamic, dynamic>
     required bool secure,
   }) {
     response.cookies.add(
-      Cookie(_FfiSessionStore.cookieName, '')
+      Cookie(_NativeSessionStore.cookieName, '')
         ..path = '/'
         ..httpOnly = true
         ..secure = secure
