@@ -24,13 +24,13 @@ Current framework adapters:
 From `packages/server_native/`:
 
 ```bash
-dart run benchmarks/framework_transport_benchmark.dart
+dart run benchmark/framework_transport_benchmark.dart
 ```
 
 Useful options:
 
 ```bash
-dart run benchmarks/framework_transport_benchmark.dart \
+dart run benchmark/framework_transport_benchmark.dart \
   --framework=all \
   --requests=2500 \
   --concurrency=64 \
@@ -42,7 +42,7 @@ dart run benchmarks/framework_transport_benchmark.dart \
 JSON output:
 
 ```bash
-dart run benchmarks/framework_transport_benchmark.dart --json
+dart run benchmark/framework_transport_benchmark.dart --json
 ```
 
 ## Cases
@@ -78,7 +78,7 @@ Host run date: **February 19, 2026**
 Command (both modes):
 
 ```bash
-dart run benchmarks/framework_transport_benchmark.dart \
+dart run benchmark/framework_transport_benchmark.dart \
   --framework=all \
   --requests=2500 \
   --concurrency=64 \
@@ -87,7 +87,7 @@ dart run benchmarks/framework_transport_benchmark.dart \
   --native-callback=true \
   --json
 
-dart run benchmarks/framework_transport_benchmark.dart \
+dart run benchmark/framework_transport_benchmark.dart \
   --framework=all \
   --requests=2500 \
   --concurrency=64 \

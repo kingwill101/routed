@@ -603,7 +603,7 @@ bool _parseBool(String value) {
 
 Never _printUsageAndExit(int code) {
   stdout.writeln(
-    'Usage: dart run benchmarks/framework_transport_benchmark.dart [options]\n'
+    'Usage: dart run benchmark/framework_transport_benchmark.dart [options]\n'
     'Options:\n'
     '  --requests=<int>           Requests per iteration (default: 2500)\n'
     '  --concurrency=<int>        Parallel clients (default: 64)\n'

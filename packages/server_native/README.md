@@ -1,5 +1,11 @@
 # server_native
 
+[![pub package](https://img.shields.io/pub/v/server_native.svg)](https://pub.dev/packages/server_native)
+[![pub points](https://img.shields.io/pub/points/server_native)](https://pub.dev/packages/server_native/score)
+[![popularity](https://img.shields.io/pub/popularity/server_native)](https://pub.dev/packages/server_native/score)
+[![likes](https://img.shields.io/pub/likes/server_native)](https://pub.dev/packages/server_native/score)
+[![server_native CI](https://github.com/kingwill101/routed/actions/workflows/server_native_ci.yml/badge.svg?branch=master)](https://github.com/kingwill101/routed/actions/workflows/server_native_ci.yml)
+
 `server_native` provides a Rust-backed HTTP server runtime for Dart with a
 `dart:io`-like programming model.
 For most server code, it is intended to be a drop-in replacement for
@@ -366,17 +372,17 @@ Modes:
 
 ## Framework Benchmarks
 
-Framework transport benchmarks live in `benchmarks/`:
+Framework transport benchmarks live in `benchmark/`:
 
 ```bash
-dart run benchmarks/framework_transport_benchmark.dart --framework=all
+dart run benchmark/framework_transport_benchmark.dart --framework=all
 ```
 
 Latest harness snapshot (February 19, 2026; `requests=2500`, `concurrency=64`,
 `warmup=300`, `iterations=25`):
 
 Note: these values were measured on a local development machine and are
-intended for relative comparison. See `benchmarks/README.md` for full test
+intended for relative comparison. See `benchmark/README.md` for full test
 machine specs and run context.
 
 Mode meaning in this table:
@@ -400,7 +406,7 @@ Framework pair highlights from the same harness:
 | `relic` | 5073 req/s, p95 14.46 ms | 6823 req/s, p95 11.31 ms | 5990 req/s, p95 12.73 ms |
 | `shelf` | 5181 req/s, p95 14.08 ms | 6524 req/s, p95 11.66 ms | 5843 req/s, p95 13.07 ms |
 
-See `benchmarks/README.md` for full result tables, options, and case labels.
+See `benchmark/README.md` for full result tables, options, and case labels.
 
 ## Native Bindings
 
