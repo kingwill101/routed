@@ -1,0 +1,57 @@
+name: server_native CI
+
+on:
+  pull_request:
+    branches:
+      - master
+    paths:
+      - 'packages/server_native/**'
+      - '.github/workflows/server_native_ci.yml'
+  push:
+    branches:
+      - master
+    paths:
+      - 'packages/server_native/**'
+      - '.github/workflows/server_native_ci.yml'
+  workflow_dispatch:
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Dart
+        uses: dart-lang/setup-dart@v1
+        with:
+          sdk: stable
+
+      - name: Set up Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Get package dependencies
+        working-directory: packages/server_native
+        run: dart pub get
+
+      - name: Analyze Dart sources
+        working-directory: packages/server_native
+        run: dart analyze
+
+      - name: Run Rust unit tests
+        working-directory: packages/server_native/native
+        run: cargo test --lib
+
+      - name: Run server_native Dart tests
+        working-directory: packages/server_native
+        run: |
+          dart test test/serve_ffi_http_test.dart
+          dart test test/native_proxy_failure_test.dart
+          dart test test/serve_ffi_test.dart -n "HTTP/2 prior|HTTP/3"
+
+      - name: Check generated FFI bindings are up to date
+        working-directory: packages/server_native
+        run: |
+          dart run tool/generate_ffi.dart
+          git diff --exit-code -- native/bindings.h lib/src/ffi.g.dart

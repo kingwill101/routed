@@ -5,13 +5,13 @@ on:
     branches:
       - master
     paths:
-      - 'packages/routed_ffi/**'
+      - 'packages/server_native/**'
       - '.github/workflows/routed_ffi_http3_integration.yml'
   push:
     branches:
       - master
     paths:
-      - 'packages/routed_ffi/**'
+      - 'packages/server_native/**'
       - '.github/workflows/routed_ffi_http3_integration.yml'
   workflow_dispatch:
 
@@ -44,11 +44,11 @@ jobs:
 
       - name: Run native QUIC smoke tests
         run: |
-          cargo test --manifest-path packages/routed_ffi/native/Cargo.toml \
+          cargo test --manifest-path packages/server_native/native/Cargo.toml \
             --test h3_endpoint_smoke
 
       - name: Run routed_ffi HTTP/3 integration test
-        working-directory: packages/routed_ffi
+        working-directory: packages/server_native
         run: |
           dart test test/serve_ffi_test.dart \
-            --plain-name "serveSecureFfi serves HTTP/3 requests when enabled"
+            --plain-name "serveSecureNative serves HTTP/3 requests when enabled"

@@ -1,0 +1,24 @@
+name: framework_suite
+publish_to: none
+description: Standalone example project with all server framework dependencies.
+version: 0.1.0
+
+environment:
+  sdk: ">=3.10.0 <4.0.0"
+
+dependencies:
+  server_native:
+    path: ../..
+  routed:
+    path: ../../../routed
+  routed_io:
+    path: ../../../routed_io
+  shelf: ^1.4.2
+  relic: ^0.14.0
+
+dev_dependencies:
+  lints: ^6.0.0
+
+dependency_overrides:
+  routed:
+    path: ../../../routed

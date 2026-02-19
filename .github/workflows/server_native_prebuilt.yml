@@ -147,7 +147,7 @@ jobs:
         run: cargo install cargo-ndk
 
       - name: Build routed_ffi native library
-        working-directory: packages/routed_ffi/native
+        working-directory: packages/server_native/native
         shell: bash
         run: |
           set -euxo pipefail
@@ -163,7 +163,7 @@ jobs:
 
       - name: Locate artifact
         id: locate
-        working-directory: packages/routed_ffi/native
+        working-directory: packages/server_native/native
         shell: bash
         run: |
           set -euxo pipefail
@@ -185,7 +185,7 @@ jobs:
         run: |
           set -euxo pipefail
           mkdir -p staging
-          cp "packages/routed_ffi/native/${{ steps.locate.outputs.path }}" "staging/${{ matrix.binary_name }}"
+          cp "packages/server_native/native/${{ steps.locate.outputs.path }}" "staging/${{ matrix.binary_name }}"
           tar czf "${{ env.PREBUILT_PACKAGE }}-${{ matrix.os_label }}.tar.gz" -C staging "${{ matrix.binary_name }}"
 
       - name: Upload artifact
