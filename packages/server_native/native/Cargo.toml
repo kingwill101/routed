@@ -26,3 +26,9 @@ parking_lot = "0.12.5"
 
 [build-dependencies]
 cbindgen = "0.29.0"
+
+[profile.release]
+debug = false
+strip = "symbols"
+lto = "thin"
+codegen-units = 1

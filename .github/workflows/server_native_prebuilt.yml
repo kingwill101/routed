@@ -190,6 +190,25 @@ jobs:
           echo "path=$artifact_path" >> "$GITHUB_OUTPUT"
           ls -lh "$artifact_path"
 
+      - name: Strip artifact
+        working-directory: packages/server_native/native
+        shell: bash
+        run: |
+          set -euxo pipefail
+          artifact="${{ steps.locate.outputs.path }}"
+          if command -v llvm-strip >/dev/null 2>&1; then
+            llvm-strip -g "$artifact" || true
+            llvm-strip -S "$artifact" || true
+            llvm-strip -x "$artifact" || true
+          elif command -v strip >/dev/null 2>&1; then
+            strip -g "$artifact" || true
+            strip -S "$artifact" || true
+            strip -x "$artifact" || true
+          else
+            echo "No strip tool found; leaving artifact unstripped"
+          fi
+          ls -lh "$artifact"
+
       - name: Package artifact
         shell: bash
         run: |
@@ -259,12 +278,17 @@ jobs:
           set -euxo pipefail
           root="packages/server_native/native/prebuilt"
           mkdir -p "$root"
+          rm -rf "$root/ios-sim-x64"
 
           shopt -s globstar nullglob
           for tarball in artifacts/**/*.tar.gz; do
             name="$(basename "$tarball")"
             platform="${name#${{ env.PREBUILT_PACKAGE }}-}"
             platform="${platform%.tar.gz}"
+            if [ "$platform" = "ios-sim-x64" ]; then
+              echo "Skipping $platform in package prebuilt tree to stay below pub.dev size limits."
+              continue
+            fi
             target="$root/$platform"
             mkdir -p "$target"
             tar xzf "$tarball" -C "$target"
