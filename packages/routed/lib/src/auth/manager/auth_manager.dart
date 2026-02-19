@@ -223,6 +223,7 @@ class AuthManager {
       challenge = _base64Url(sha256Bytes(verifier));
       ctx.setSession('${options.pkceKey}.${provider.id}', verifier);
     }
+    final codeChallengeMethod = challenge == null ? null : 'S256';
 
     final params = <String, String>{
       'response_type': 'code',
@@ -230,8 +231,8 @@ class AuthManager {
       'redirect_uri': provider.redirectUri,
       'state': state,
       if (provider.scopes.isNotEmpty) 'scope': provider.scopes.join(' '),
-      if (challenge != null) 'code_challenge': challenge,
-      if (challenge != null) 'code_challenge_method': 'S256',
+      'code_challenge': ?challenge,
+      'code_challenge_method': ?codeChallengeMethod,
       ...provider.authorizationParams,
     };
 

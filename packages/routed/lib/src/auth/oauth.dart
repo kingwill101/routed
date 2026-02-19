@@ -109,10 +109,10 @@ class OAuth2Client {
       'grant_type': 'authorization_code',
       'code': code,
       'redirect_uri': redirectUri.toString(),
-      if (scope != null) 'scope': scope,
-      if (codeVerifier != null) 'code_verifier': codeVerifier,
-      if (clientId != null) 'client_id': clientId!,
-      if (additionalParameters != null) ...additionalParameters,
+      'scope': ?scope,
+      'code_verifier': ?codeVerifier,
+      'client_id': ?clientId,
+      ...?additionalParameters,
     };
     return _sendTokenRequest(body);
   }
@@ -123,9 +123,9 @@ class OAuth2Client {
   }) {
     final body = <String, String>{
       'grant_type': 'client_credentials',
-      if (scope != null) 'scope': scope,
-      if (clientId != null) 'client_id': clientId!,
-      if (additionalParameters != null) ...additionalParameters,
+      'scope': ?scope,
+      'client_id': ?clientId,
+      ...?additionalParameters,
     };
     return _sendTokenRequest(body);
   }
@@ -138,9 +138,9 @@ class OAuth2Client {
     final body = <String, String>{
       'grant_type': 'refresh_token',
       'refresh_token': refreshToken,
-      if (scope != null) 'scope': scope,
-      if (clientId != null) 'client_id': clientId!,
-      if (additionalParameters != null) ...additionalParameters,
+      'scope': ?scope,
+      'client_id': ?clientId,
+      ...?additionalParameters,
     };
     return _sendTokenRequest(body);
   }
@@ -162,12 +162,7 @@ class OAuth2Client {
       headers['Authorization'] = 'Basic $credentials';
     }
     if (!useBasicAuth) {
-      if (clientId != null) {
-        body['client_id'] = clientId!;
-      }
-      if (clientSecret != null) {
-        body['client_secret'] = clientSecret!;
-      }
+      body.addAll({'client_id': ?clientId, 'client_secret': ?clientSecret});
     }
 
     final response = await _httpClient.post(

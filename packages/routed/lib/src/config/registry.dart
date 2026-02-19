@@ -94,7 +94,7 @@ class ConfigRegistry {
     }
 
     return {
-      if (id != null) '\$id': id,
+      '\$id': ?id,
       '\$schema': 'http://json-schema.org/draft-07/schema#',
       'title': title,
       'type': 'object',

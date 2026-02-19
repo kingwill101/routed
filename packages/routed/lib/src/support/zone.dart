@@ -98,7 +98,7 @@ class AppZone {
         _engineKey: engine,
         _configKey: zoneConfig,
         _contextKey: context,
-        if (signalHub != null) _signalsKey: signalHub,
+        _signalsKey: ?signalHub,
       },
       zoneSpecification: const ZoneSpecification(),
     );
