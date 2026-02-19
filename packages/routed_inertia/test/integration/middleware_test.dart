@@ -24,7 +24,9 @@ void main() {
             .assertHeaderContains('X-Inertia-Location', '/version');
       },
       options: [
-        withMiddleware([RoutedInertiaMiddleware(versionResolver: () => 'new')]),
+        withMiddleware([
+          RoutedInertiaMiddleware(versionResolver: () => 'new').call,
+        ]),
       ],
     );
 
@@ -45,7 +47,9 @@ void main() {
         response.assertStatus(303);
       },
       options: [
-        withMiddleware([RoutedInertiaMiddleware(versionResolver: () => '1')]),
+        withMiddleware([
+          RoutedInertiaMiddleware(versionResolver: () => '1').call,
+        ]),
       ],
     );
 
@@ -59,7 +63,9 @@ void main() {
         response.assertStatus(302);
       },
       options: [
-        withMiddleware([RoutedInertiaMiddleware(versionResolver: () => '1')]),
+        withMiddleware([
+          RoutedInertiaMiddleware(versionResolver: () => '1').call,
+        ]),
       ],
     );
   });

@@ -10,7 +10,8 @@ const Map<String, dynamic> routedConfig = <String, dynamic>{
     'env': '{{ env.APP_ENV | default: \'development\' }}',
     'greeting': 'Hello {{ env.APP_GREETING_NAME | default: \'friend\' }}!',
     'name': '{{ env.APP_NAME | default: \'Config Demo\' }}',
-    'root': '/run/media/kingwill101/disk2/code/code/dart_packages/routed_ecosystem/examples/config_demo',
+    'root':
+        '/run/media/kingwill101/disk2/code/code/dart_packages/routed_ecosystem/examples/config_demo',
   },
   'app_greeting_name': 'Routed',
   'cache': <String, dynamic>{
@@ -23,15 +24,11 @@ const Map<String, dynamic> routedConfig = <String, dynamic>{
       },
     },
   },
-  'features': <String, dynamic>{
-    'beta_banner': 'false',
-  },
+  'features': <String, dynamic>{'beta_banner': 'false'},
   'http': <String, dynamic>{
     'middleware': <String, dynamic>{
-      'global': <dynamic>[
-      ],
-      'groups': <String, dynamic>{
-      },
+      'global': <dynamic>[],
+      'groups': <String, dynamic>{},
     },
     'providers': <dynamic>[
       'routed.core',
@@ -53,10 +50,7 @@ const Map<String, dynamic> routedConfig = <String, dynamic>{
         'force_after': '20s',
         'grace_period': '5s',
         'notify_readiness': true,
-        'signals': <dynamic>[
-          'sigint',
-          'sigterm',
-        ],
+        'signals': <dynamic>['sigint', 'sigterm'],
       },
     },
   },
@@ -66,10 +60,7 @@ const Map<String, dynamic> routedConfig = <String, dynamic>{
       'service': 'config_demo',
     },
     'format': 'pretty',
-    'request_headers': <dynamic>[
-      'X-Request-ID',
-      'X-Trace-ID',
-    ],
+    'request_headers': <dynamic>['X-Request-ID', 'X-Trace-ID'],
   },
   'mail': <String, dynamic>{
     'credentials': <String, dynamic>{
@@ -110,10 +101,7 @@ const Map<String, dynamic> routedConfig = <String, dynamic>{
   'storage': <String, Object?>{
     'default': 'assets',
     'disks': <String, dynamic>{
-      'assets': <String, dynamic>{
-        'driver': 'local',
-        'root': 'public/assets',
-      },
+      'assets': <String, dynamic>{'driver': 'local', 'root': 'public/assets'},
       'transient': <String, dynamic>{
         'driver': 'memory_ephemeral',
         'root': 'runtime/transient',
@@ -122,11 +110,7 @@ const Map<String, dynamic> routedConfig = <String, dynamic>{
     },
   },
   'uploads': <String, dynamic>{
-    'allowed_extensions': <dynamic>[
-      'jpg',
-      'png',
-      'pdf',
-    ],
+    'allowed_extensions': <dynamic>['jpg', 'png', 'pdf'],
     'max_file_size': 6291456,
   },
 };

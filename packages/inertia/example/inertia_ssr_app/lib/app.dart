@@ -47,10 +47,10 @@ Future<void> _handleRequest(HttpRequest request) async {
 }
 
 Future<SsrResponse?> _renderSsr(PageData page) async {
-  print("_renderSSr called");
+  print('_renderSSr called');
   final enabled = _boolEnv('INERTIA_SSR', defaultValue: true);
   if (!enabled) return null;
-  print("render ssr actually happening");
+  print('render ssr actually happening');
   final endpoint =
       Platform.environment['INERTIA_SSR_URL'] ??
       'http://127.0.0.1:13714/render';

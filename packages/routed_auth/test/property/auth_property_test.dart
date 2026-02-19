@@ -6,6 +6,8 @@
 /// - Edge case values (null bytes, unicode, control characters)
 /// - Invalid credentials and tokens
 /// - State machine invariants
+library;
+
 import 'dart:convert';
 import 'dart:io';
 
