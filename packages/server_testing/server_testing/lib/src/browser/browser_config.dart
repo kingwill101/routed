@@ -16,12 +16,12 @@ Map<String, dynamic> _defaultCapabilities(String browserName) {
     if (browserName == 'chrome')
       'goog:chromeOptions': {
         'args': ['--headless', '--disable-gpu', '--no-sandbox'],
-        if (browserPath != null) 'binary': browserPath,
+        'binary': ?browserPath,
       },
     if (browserName == 'firefox')
       'moz:firefoxOptions': {
         'args': ['-headless'],
-        if (browserPath != null) 'binary': browserPath,
+        'binary': ?browserPath,
       },
   };
 }
