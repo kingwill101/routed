@@ -134,28 +134,31 @@ void main() {
     expect(status, HttpStatus.ok);
     expect(jsonDecode(body), <String, Object?>{
       'ok': true,
-      'label': 'routed_ffi_native_direct',
+      'label': 'server_native_direct',
     });
   });
 
-  test('serves routed_ffi_direct-shaped response in benchmark mode', () async {
-    final proxy = NativeProxyServer.start(
-      host: InternetAddress.loopbackIPv4.address,
-      port: 0,
-      backendHost: InternetAddress.loopbackIPv4.address,
-      backendPort: 9,
-      benchmarkMode: benchmarkModeStaticServerNativeDirectShape,
-    );
-    addTearDown(proxy.close);
+  test(
+    'serves server_native_direct-shaped response in benchmark mode',
+    () async {
+      final proxy = NativeProxyServer.start(
+        host: InternetAddress.loopbackIPv4.address,
+        port: 0,
+        backendHost: InternetAddress.loopbackIPv4.address,
+        backendPort: 9,
+        benchmarkMode: benchmarkModeStaticServerNativeDirectShape,
+      );
+      addTearDown(proxy.close);
 
-    final uri = Uri.parse('http://127.0.0.1:${proxy.port}/bench');
-    final (status, body) = await _requestText(uri);
-    expect(status, HttpStatus.ok);
-    expect(jsonDecode(body), <String, Object?>{
-      'ok': true,
-      'label': 'routed_ffi_direct',
-    });
-  });
+      final uri = Uri.parse('http://127.0.0.1:${proxy.port}/bench');
+      final (status, body) = await _requestText(uri);
+      expect(status, HttpStatus.ok);
+      expect(jsonDecode(body), <String, Object?>{
+        'ok': true,
+        'label': 'server_native_direct',
+      });
+    },
+  );
 
   test('returns 502 when bridge closes without response', () async {
     final harness = await _startProxyHarness((socket) async {

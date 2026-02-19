@@ -15,19 +15,19 @@ typedef unsigned long long uint64_t;
 /**
  * Opaque server handle returned to Dart through FFI.
  *
- * The pointer returned by [`routed_ffi_start_proxy_server`] must later be
- * passed to [`routed_ffi_stop_proxy_server`] exactly once.
+ * The pointer returned by [`server_native_start_proxy_server`] must later be
+ * passed to [`server_native_stop_proxy_server`] exactly once.
  */
 typedef struct ProxyServerHandle ProxyServerHandle;
 
 /**
  * C-compatible proxy boot configuration consumed by
- * [`routed_ffi_start_proxy_server`].
+ * [`server_native_start_proxy_server`].
  *
  * All `*const c_char` fields are expected to be valid UTF-8 C strings or
  * null pointers where explicitly optional.
  */
-typedef struct RoutedFfiProxyConfig {
+typedef struct ServerNativeProxyConfig {
   /**
    * Public bind host (for example `127.0.0.1`, `::1`, `0.0.0.0`).
    */
@@ -98,12 +98,12 @@ typedef struct RoutedFfiProxyConfig {
    * Optional direct request callback pointer.
    */
   const void *direct_request_callback;
-} RoutedFfiProxyConfig;
+} ServerNativeProxyConfig;
 
 /**
  * Returns the native transport ABI version expected by Dart bindings.
  */
-int32_t routed_ffi_transport_version(void);
+int32_t server_native_transport_version(void);
 
 /**
  * Starts the proxy server and returns an opaque handle.
@@ -111,22 +111,22 @@ int32_t routed_ffi_transport_version(void);
  * On success:
  * - writes the effective bound port to `out_port`,
  * - returns a non-null pointer that must be stopped with
- *   [`routed_ffi_stop_proxy_server`].
+ *   [`server_native_stop_proxy_server`].
  *
  * On failure:
  * - returns null,
  * - emits error details to stderr.
  */
-struct ProxyServerHandle *routed_ffi_start_proxy_server(const struct RoutedFfiProxyConfig *config,
-                                                        uint16_t *out_port);
+struct ProxyServerHandle *server_native_start_proxy_server(const struct ServerNativeProxyConfig *config,
+                                                           uint16_t *out_port);
 
 /**
- * Stops a proxy server previously created by [`routed_ffi_start_proxy_server`].
+ * Stops a proxy server previously created by [`server_native_start_proxy_server`].
  *
  * This function consumes the handle pointer and must not be called twice with
  * the same pointer.
  */
-void routed_ffi_stop_proxy_server(struct ProxyServerHandle *handle);
+void server_native_stop_proxy_server(struct ProxyServerHandle *handle);
 
 /**
  * Pushes a direct-callback response frame for a pending request.
@@ -134,15 +134,15 @@ void routed_ffi_stop_proxy_server(struct ProxyServerHandle *handle);
  * Returns `1` on success, `0` when the request is unknown or arguments are
  * invalid.
  */
-uint8_t routed_ffi_push_direct_response_frame(struct ProxyServerHandle *handle,
+uint8_t server_native_push_direct_response_frame(struct ProxyServerHandle *handle,
+                                                 uint64_t request_id,
+                                                 const uint8_t *response_payload,
+                                                 uint64_t response_payload_len);
+
+/**
+ * Compatibility alias for [`server_native_push_direct_response_frame`].
+ */
+uint8_t server_native_complete_direct_request(struct ProxyServerHandle *handle,
                                               uint64_t request_id,
                                               const uint8_t *response_payload,
                                               uint64_t response_payload_len);
-
-/**
- * Compatibility alias for [`routed_ffi_push_direct_response_frame`].
- */
-uint8_t routed_ffi_complete_direct_request(struct ProxyServerHandle *handle,
-                                           uint64_t request_id,
-                                           const uint8_t *response_payload,
-                                           uint64_t response_payload_len);

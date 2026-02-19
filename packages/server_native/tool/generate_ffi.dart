@@ -10,13 +10,13 @@ Future<void> main() async {
     headers: Headers(entryPoints: [packageRoot.resolve('native/bindings.h')]),
     output: Output(dartFile: packageRoot.resolve('lib/src/ffi.g.dart')),
     functions: Functions.includeSet({
-      'routed_ffi_transport_version',
-      'routed_ffi_start_proxy_server',
-      'routed_ffi_stop_proxy_server',
-      'routed_ffi_push_direct_response_frame',
-      'routed_ffi_complete_direct_request',
+      'server_native_transport_version',
+      'server_native_start_proxy_server',
+      'server_native_stop_proxy_server',
+      'server_native_push_direct_response_frame',
+      'server_native_complete_direct_request',
     }),
-    structs: Structs.includeSet({'RoutedFfiProxyConfig'}),
+    structs: Structs.includeSet({'ServerNativeProxyConfig'}),
   ).generate();
 }
 
@@ -28,7 +28,7 @@ Future<void> _refreshNativeBindings(Uri packageRoot) async {
     workingDirectory: nativeDir.path,
     environment: <String, String>{
       ...Platform.environment,
-      'ROUTED_FFI_GENERATE_BINDINGS': '1',
+      'SERVER_NATIVE_GENERATE_BINDINGS': '1',
     },
     runInShell: Platform.isWindows,
   );

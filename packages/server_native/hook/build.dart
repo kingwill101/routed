@@ -6,7 +6,7 @@ import 'package:native_toolchain_rust/native_toolchain_rust.dart';
 
 const _assetName = 'src/ffi.g.dart';
 const _cratePath = 'native';
-const _crateName = 'routed_ffi_native';
+const _crateName = 'server_native';
 const _prebuiltEnvVar = 'SERVER_NATIVE_PREBUILT';
 
 Future<void> main(List<String> args) async {

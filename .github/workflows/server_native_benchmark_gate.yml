@@ -1,4 +1,4 @@
-name: routed_ffi Benchmark Gate
+name: server_native Benchmark Gate
 
 on:
   pull_request:
@@ -6,13 +6,13 @@ on:
       - master
     paths:
       - 'packages/server_native/**'
-      - '.github/workflows/routed_ffi_benchmark_gate.yml'
+      - '.github/workflows/server_native_benchmark_gate.yml'
   push:
     branches:
       - master
     paths:
       - 'packages/server_native/**'
-      - '.github/workflows/routed_ffi_benchmark_gate.yml'
+      - '.github/workflows/server_native_benchmark_gate.yml'
   workflow_dispatch:
 
 jobs:
@@ -34,7 +34,7 @@ jobs:
       - name: Get dependencies
         run: dart pub get
 
-      - name: Run routed_ffi benchmark gate
+      - name: Run server_native benchmark gate
         working-directory: packages/server_native
         run: |
           dart run tool/benchmark_transport.dart \
@@ -50,7 +50,7 @@ jobs:
         if: always()
         working-directory: packages/server_native
         run: |
-          echo "## routed_ffi Benchmark Gate" >> $GITHUB_STEP_SUMMARY
+          echo "## server_native Benchmark Gate" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           echo '```json' >> $GITHUB_STEP_SUMMARY
           if [ -f benchmark_gate_result.json ]; then
@@ -64,7 +64,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: routed-ffi-benchmark-gate-result
+          name: server-native-benchmark-gate-result
           path: packages/server_native/benchmark_gate_result.json
           if-no-files-found: ignore
           retention-days: 14

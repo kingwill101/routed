@@ -1,4 +1,4 @@
-name: routed_ffi HTTP3 Integration
+name: server_native HTTP3 Integration
 
 on:
   pull_request:
@@ -6,13 +6,13 @@ on:
       - master
     paths:
       - 'packages/server_native/**'
-      - '.github/workflows/routed_ffi_http3_integration.yml'
+      - '.github/workflows/server_native_http3_integration.yml'
   push:
     branches:
       - master
     paths:
       - 'packages/server_native/**'
-      - '.github/workflows/routed_ffi_http3_integration.yml'
+      - '.github/workflows/server_native_http3_integration.yml'
   workflow_dispatch:
 
 jobs:
@@ -52,7 +52,7 @@ jobs:
           cargo test --manifest-path packages/server_native/native/Cargo.toml \
             --test h3_endpoint_smoke
 
-      - name: Run routed_ffi HTTP/3 integration test
+      - name: Run server_native HTTP/3 integration test
         if: steps.curl-h3.outputs.has_http3 == 'true'
         working-directory: packages/server_native
         run: |

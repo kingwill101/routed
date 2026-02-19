@@ -78,15 +78,6 @@ fn ensure_rustls_crypto_provider() {
     if CryptoProvider::get_default().is_some() {
         return;
     }
-    if tokio_rustls::rustls::crypto::aws_lc_rs::default_provider()
-        .install_default()
-        .is_ok()
-    {
-        return;
-    }
-    if CryptoProvider::get_default().is_some() {
-        return;
-    }
     let _ = tokio_rustls::rustls::crypto::ring::default_provider().install_default();
 }
 

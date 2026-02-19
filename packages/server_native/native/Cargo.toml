@@ -1,5 +1,5 @@
 [package]
-name = "routed_ffi_native"
+name = "server_native"
 version = "0.1.0"
 edition = "2021"
 build = "build.rs"
@@ -20,7 +20,7 @@ rustls-pemfile = "2.2.0"
 rustls-native-certs = "0.8.2"
 socket2 = { version = "0.5.10", features = ["all"] }
 tokio = { version = "1.48.0", features = ["rt-multi-thread", "sync", "net", "time", "io-util"] }
-tokio-rustls = "0.26.4"
+tokio-rustls = { version = "0.26.4", default-features = false, features = ["ring", "logging", "tls12"] }
 tokio-stream = "0.1.17"
 parking_lot = "0.12.5"
 

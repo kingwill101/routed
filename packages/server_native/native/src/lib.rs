@@ -1,4 +1,4 @@
-//! Native Rust transport runtime for `package:routed_ffi`.
+//! Native Rust transport runtime for `package:server_native`.
 //!
 //! This crate exposes a C ABI used by Dart FFI to boot and control a Rust HTTP
 //! front server. The front server:
@@ -8,11 +8,11 @@
 //! - relays bridge responses back to network clients.
 //!
 //! The crate intentionally keeps the FFI surface small:
-//! - `routed_ffi_transport_version`
-//! - `routed_ffi_start_proxy_server`
-//! - `routed_ffi_stop_proxy_server`
-//! - `routed_ffi_push_direct_response_frame`
-//! - `routed_ffi_complete_direct_request`
+//! - `server_native_transport_version`
+//! - `server_native_start_proxy_server`
+//! - `server_native_stop_proxy_server`
+//! - `server_native_push_direct_response_frame`
+//! - `server_native_complete_direct_request`
 
 use std::collections::HashMap;
 use std::ffi::{c_char, c_void, CStr};
@@ -78,20 +78,21 @@ const BRIDGE_BACKEND_KIND_TCP: u8 = 0;
 const BRIDGE_BACKEND_KIND_UNIX: u8 = 1;
 const BENCHMARK_MODE_NONE: u8 = 0;
 const BENCHMARK_MODE_STATIC_OK: u8 = 1;
-const BENCHMARK_MODE_STATIC_OK_ROUTED_FFI_DIRECT_SHAPE: u8 = 2;
-const BENCHMARK_STATIC_OK_BODY: &[u8] = br#"{"ok":true,"label":"routed_ffi_native_direct"}"#;
-const BENCHMARK_ROUTED_FFI_DIRECT_SHAPE_BODY: &[u8] = br#"{"ok":true,"label":"routed_ffi_direct"}"#;
+const BENCHMARK_MODE_STATIC_OK_SERVER_NATIVE_DIRECT_SHAPE: u8 = 2;
+const BENCHMARK_STATIC_OK_BODY: &[u8] = br#"{"ok":true,"label":"server_native_direct"}"#;
+const BENCHMARK_SERVER_NATIVE_DIRECT_SHAPE_BODY: &[u8] =
+    br#"{"ok":true,"label":"server_native_direct"}"#;
 const DIRECT_REQUEST_TIMEOUT: Duration = Duration::from_secs(30);
 
 type DirectRequestCallback = extern "C" fn(request_id: u64, payload: *const u8, payload_len: u64);
 
 #[repr(C)]
 /// C-compatible proxy boot configuration consumed by
-/// [`routed_ffi_start_proxy_server`].
+/// [`server_native_start_proxy_server`].
 ///
 /// All `*const c_char` fields are expected to be valid UTF-8 C strings or
 /// null pointers where explicitly optional.
-pub struct RoutedFfiProxyConfig {
+pub struct ServerNativeProxyConfig {
     /// Public bind host (for example `127.0.0.1`, `::1`, `0.0.0.0`).
     pub host: *const c_char,
     /// Public bind port. `0` requests an ephemeral OS-assigned port.
@@ -147,8 +148,8 @@ struct ProxyTlsConfig {
 
 /// Opaque server handle returned to Dart through FFI.
 ///
-/// The pointer returned by [`routed_ffi_start_proxy_server`] must later be
-/// passed to [`routed_ffi_stop_proxy_server`] exactly once.
+/// The pointer returned by [`server_native_start_proxy_server`] must later be
+/// passed to [`server_native_stop_proxy_server`] exactly once.
 pub struct ProxyServerHandle {
     shutdown_tx: Option<oneshot::Sender<()>>,
     join_handle: Option<thread::JoinHandle<()>>,
@@ -306,7 +307,7 @@ struct BridgeCallResult {
 
 #[no_mangle]
 /// Returns the native transport ABI version expected by Dart bindings.
-pub extern "C" fn routed_ffi_transport_version() -> i32 {
+pub extern "C" fn server_native_transport_version() -> i32 {
     1
 }
 
@@ -316,17 +317,17 @@ pub extern "C" fn routed_ffi_transport_version() -> i32 {
 /// On success:
 /// - writes the effective bound port to `out_port`,
 /// - returns a non-null pointer that must be stopped with
-///   [`routed_ffi_stop_proxy_server`].
+///   [`server_native_stop_proxy_server`].
 ///
 /// On failure:
 /// - returns null,
 /// - emits error details to stderr.
-pub extern "C" fn routed_ffi_start_proxy_server(
-    config: *const RoutedFfiProxyConfig,
+pub extern "C" fn server_native_start_proxy_server(
+    config: *const ServerNativeProxyConfig,
     out_port: *mut u16,
 ) -> *mut ProxyServerHandle {
     if config.is_null() || out_port.is_null() {
-        eprintln!("[routed_ffi_native] invalid start parameters");
+        eprintln!("[server_native] invalid start parameters");
         return null_mut();
     }
 
@@ -334,7 +335,7 @@ pub extern "C" fn routed_ffi_start_proxy_server(
     let host = match c_string_to_string(config.host) {
         Some(value) if !value.is_empty() => value,
         _ => {
-            eprintln!("[routed_ffi_native] invalid host");
+            eprintln!("[server_native] invalid host");
             return null_mut();
         }
     };
@@ -344,7 +345,7 @@ pub extern "C" fn routed_ffi_start_proxy_server(
             let bridge_host = match c_string_to_string(config.backend_host) {
                 Some(value) if !value.is_empty() => value,
                 _ => {
-                    eprintln!("[routed_ffi_native] invalid backend_host");
+                    eprintln!("[server_native] invalid backend_host");
                     return null_mut();
                 }
             };
@@ -355,7 +356,7 @@ pub extern "C" fn routed_ffi_start_proxy_server(
             let path = match c_string_to_string(config.backend_path) {
                 Some(value) if !value.is_empty() => value,
                 _ => {
-                    eprintln!("[routed_ffi_native] invalid backend_path");
+                    eprintln!("[server_native] invalid backend_path");
                     return null_mut();
                 }
             };
@@ -369,7 +370,7 @@ pub extern "C" fn routed_ffi_start_proxy_server(
             }
         }
         backend_kind => {
-            eprintln!("[routed_ffi_native] invalid backend_kind: {backend_kind}");
+            eprintln!("[server_native] invalid backend_kind: {backend_kind}");
             return null_mut();
         }
     };
@@ -382,9 +383,9 @@ pub extern "C" fn routed_ffi_start_proxy_server(
     let benchmark_mode = config.benchmark_mode;
     if benchmark_mode != BENCHMARK_MODE_NONE
         && benchmark_mode != BENCHMARK_MODE_STATIC_OK
-        && benchmark_mode != BENCHMARK_MODE_STATIC_OK_ROUTED_FFI_DIRECT_SHAPE
+        && benchmark_mode != BENCHMARK_MODE_STATIC_OK_SERVER_NATIVE_DIRECT_SHAPE
     {
-        eprintln!("[routed_ffi_native] invalid benchmark_mode: {benchmark_mode}");
+        eprintln!("[server_native] invalid benchmark_mode: {benchmark_mode}");
         return null_mut();
     }
     let tls_cert_path = c_string_to_string(config.tls_cert_path).filter(|value| !value.is_empty());
@@ -416,7 +417,7 @@ pub extern "C" fn routed_ffi_start_proxy_server(
         }),
         _ => {
             eprintln!(
-                "[routed_ffi_native] invalid tls settings: both tls_cert_path and tls_key_path are required"
+                "[server_native] invalid tls settings: both tls_cert_path and tls_key_path are required"
             );
             return null_mut();
         }
@@ -485,12 +486,12 @@ pub extern "C" fn routed_ffi_start_proxy_server(
                 None => {
                     if request_client_certificate {
                         eprintln!(
-                            "[routed_ffi_native] request_client_certificate requires tls cert/key; option ignored"
+                            "[server_native] request_client_certificate requires tls cert/key; option ignored"
                         );
                     }
                     if enable_http3 {
                         eprintln!(
-                            "[routed_ffi_native] http3 requested without tls cert/key; running http1{} only",
+                            "[server_native] http3 requested without tls cert/key; running http1{} only",
                             if enable_http2 { "/http2" } else { "" }
                         );
                     }
@@ -499,7 +500,7 @@ pub extern "C" fn routed_ffi_start_proxy_server(
             };
 
             if let Err(error) = result {
-                eprintln!("[routed_ffi_native] proxy server error: {error}");
+                eprintln!("[server_native] proxy server error: {error}");
             }
         });
     });
@@ -507,12 +508,12 @@ pub extern "C" fn routed_ffi_start_proxy_server(
     let actual_port = match startup_rx.recv_timeout(Duration::from_secs(10)) {
         Ok(Ok(port)) => port,
         Ok(Err(error)) => {
-            eprintln!("[routed_ffi_native] startup failed: {error}");
+            eprintln!("[server_native] startup failed: {error}");
             let _ = join_handle.join();
             return null_mut();
         }
         Err(error) => {
-            eprintln!("[routed_ffi_native] startup timeout/error: {error}");
+            eprintln!("[server_native] startup timeout/error: {error}");
             let _ = join_handle.join();
             return null_mut();
         }
@@ -531,11 +532,11 @@ pub extern "C" fn routed_ffi_start_proxy_server(
 }
 
 #[no_mangle]
-/// Stops a proxy server previously created by [`routed_ffi_start_proxy_server`].
+/// Stops a proxy server previously created by [`server_native_start_proxy_server`].
 ///
 /// This function consumes the handle pointer and must not be called twice with
 /// the same pointer.
-pub extern "C" fn routed_ffi_stop_proxy_server(handle: *mut ProxyServerHandle) {
+pub extern "C" fn server_native_stop_proxy_server(handle: *mut ProxyServerHandle) {
     if handle.is_null() {
         return;
     }
@@ -554,7 +555,7 @@ pub extern "C" fn routed_ffi_stop_proxy_server(handle: *mut ProxyServerHandle) {
 ///
 /// Returns `1` on success, `0` when the request is unknown or arguments are
 /// invalid.
-pub extern "C" fn routed_ffi_push_direct_response_frame(
+pub extern "C" fn server_native_push_direct_response_frame(
     handle: *mut ProxyServerHandle,
     request_id: u64,
     response_payload: *const u8,
@@ -587,14 +588,14 @@ pub extern "C" fn routed_ffi_push_direct_response_frame(
 }
 
 #[no_mangle]
-/// Compatibility alias for [`routed_ffi_push_direct_response_frame`].
-pub extern "C" fn routed_ffi_complete_direct_request(
+/// Compatibility alias for [`server_native_push_direct_response_frame`].
+pub extern "C" fn server_native_complete_direct_request(
     handle: *mut ProxyServerHandle,
     request_id: u64,
     response_payload: *const u8,
     response_payload_len: u64,
 ) -> u8 {
-    routed_ffi_push_direct_response_frame(
+    server_native_push_direct_response_frame(
         handle,
         request_id,
         response_payload,
@@ -699,12 +700,12 @@ async fn run_plain_proxy(
                 let (stream, _) = match accepted {
                     Ok(value) => value,
                     Err(error) => {
-                        eprintln!("[routed_ffi_native] plain accept failed: {error}");
+                        eprintln!("[server_native] plain accept failed: {error}");
                         continue;
                     }
                 };
                 if let Err(error) = stream.set_nodelay(true) {
-                    eprintln!("[routed_ffi_native] set_nodelay failed: {error}");
+                    eprintln!("[server_native] set_nodelay failed: {error}");
                 }
                 let app = app.clone();
                 let enable_http2 = enable_http2;
@@ -732,8 +733,8 @@ async fn run_plain_proxy(
     while let Some(result) = connections.join_next().await {
         match result {
             Ok(Ok(())) => {}
-            Ok(Err(error)) => eprintln!("[routed_ffi_native] {error}"),
-            Err(error) => eprintln!("[routed_ffi_native] plain task join failed: {error}"),
+            Ok(Err(error)) => eprintln!("[server_native] {error}"),
+            Err(error) => eprintln!("[server_native] plain task join failed: {error}"),
         }
     }
 
@@ -773,7 +774,7 @@ async fn run_tls_proxy(
         ) {
             Ok(endpoint) => {
                 eprintln!(
-                    "[routed_ffi_native] http3 endpoint enabled on https://{}:{}",
+                    "[server_native] http3 endpoint enabled on https://{}:{}",
                     local_addr.ip(),
                     local_addr.port()
                 );
@@ -781,7 +782,7 @@ async fn run_tls_proxy(
             }
             Err(error) => {
                 eprintln!(
-                    "[routed_ffi_native] http3 setup failed; continuing with http1{} only: {error}",
+                    "[server_native] http3 setup failed; continuing with http1{} only: {error}",
                     if enable_http2 { "/http2" } else { "" }
                 );
                 None
@@ -801,7 +802,7 @@ async fn run_tls_proxy(
                     let (stream, _) = match accepted {
                         Ok(value) => value,
                         Err(error) => {
-                            eprintln!("[routed_ffi_native] tls accept failed: {error}");
+                            eprintln!("[server_native] tls accept failed: {error}");
                             continue;
                         }
                     };
@@ -849,7 +850,7 @@ async fn run_tls_proxy(
                     let (stream, _) = match accepted {
                         Ok(value) => value,
                         Err(error) => {
-                            eprintln!("[routed_ffi_native] tls accept failed: {error}");
+                            eprintln!("[server_native] tls accept failed: {error}");
                             continue;
                         }
                     };
@@ -889,8 +890,8 @@ async fn run_tls_proxy(
     while let Some(result) = connections.join_next().await {
         match result {
             Ok(Ok(())) => {}
-            Ok(Err(error)) => eprintln!("[routed_ffi_native] {error}"),
-            Err(error) => eprintln!("[routed_ffi_native] tls task join failed: {error}"),
+            Ok(Err(error)) => eprintln!("[server_native] {error}"),
+            Err(error) => eprintln!("[server_native] tls task join failed: {error}"),
         }
     }
 
@@ -907,8 +908,8 @@ async fn proxy_request(State(state): State<ProxyState>, request: Request<Body>) 
     if state.benchmark_mode == BENCHMARK_MODE_STATIC_OK {
         return benchmark_static_ok_response();
     }
-    if state.benchmark_mode == BENCHMARK_MODE_STATIC_OK_ROUTED_FFI_DIRECT_SHAPE {
-        return benchmark_static_response(BENCHMARK_ROUTED_FFI_DIRECT_SHAPE_BODY);
+    if state.benchmark_mode == BENCHMARK_MODE_STATIC_OK_SERVER_NATIVE_DIRECT_SHAPE {
+        return benchmark_static_response(BENCHMARK_SERVER_NATIVE_DIRECT_SHAPE_BODY);
     }
 
     let (mut parts, body) = request.into_parts();
@@ -1005,7 +1006,7 @@ async fn proxy_request(State(state): State<ProxyState>, request: Request<Body>) 
         };
         tokio::spawn(async move {
             if let Err(error) = run_websocket_tunnel(upgrade, tunnel_connection.stream).await {
-                eprintln!("[routed_ffi_native] websocket tunnel error: {error}");
+                eprintln!("[server_native] websocket tunnel error: {error}");
             }
         });
     }
@@ -1023,7 +1024,7 @@ fn benchmark_static_ok_response() -> Response<Body> {
     benchmark_static_response(BENCHMARK_STATIC_OK_BODY)
 }
 
-/// Convenience benchmark response shape that mirrors routed_ffi direct path.
+/// Convenience benchmark response shape that mirrors server_native direct path.
 fn benchmark_static_response(body: &'static [u8]) -> Response<Body> {
     let mut response = Response::new(Body::from(body));
     *response.status_mut() = StatusCode::OK;
@@ -1131,7 +1132,7 @@ async fn call_direct_bridge_request(
             if let Err(error) =
                 run_direct_websocket_tunnel(upgrade, direct_bridge, request_id, response_rx).await
             {
-                eprintln!("[routed_ffi_native] direct websocket tunnel error: {error}");
+                eprintln!("[server_native] direct websocket tunnel error: {error}");
             }
         });
         let mut response = Response::new(Body::empty());

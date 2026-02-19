@@ -40,14 +40,14 @@ jobs:
           # Linux
           - runner: ubuntu-latest
             rust_target: x86_64-unknown-linux-gnu
-            binary_name: librouted_ffi_native.so
+            binary_name: libserver_native.so
             os_label: linux-x64
             use_cross: false
             android_abi: ""
             allow_failure: false
           - runner: ubuntu-latest
             rust_target: aarch64-unknown-linux-gnu
-            binary_name: librouted_ffi_native.so
+            binary_name: libserver_native.so
             os_label: linux-arm64
             use_cross: true
             android_abi: ""
@@ -56,14 +56,14 @@ jobs:
           # macOS
           - runner: macos-latest
             rust_target: aarch64-apple-darwin
-            binary_name: librouted_ffi_native.dylib
+            binary_name: libserver_native.dylib
             os_label: macos-arm64
             use_cross: false
             android_abi: ""
             allow_failure: false
           - runner: macos-latest
             rust_target: x86_64-apple-darwin
-            binary_name: librouted_ffi_native.dylib
+            binary_name: libserver_native.dylib
             os_label: macos-x64
             use_cross: false
             android_abi: ""
@@ -72,14 +72,14 @@ jobs:
           # Windows
           - runner: windows-latest
             rust_target: x86_64-pc-windows-msvc
-            binary_name: routed_ffi_native.dll
+            binary_name: server_native.dll
             os_label: windows-x64
             use_cross: false
             android_abi: ""
             allow_failure: false
           - runner: windows-latest
             rust_target: aarch64-pc-windows-msvc
-            binary_name: routed_ffi_native.dll
+            binary_name: server_native.dll
             os_label: windows-arm64
             use_cross: false
             android_abi: ""
@@ -88,21 +88,21 @@ jobs:
           # Android (cross-compiled from Linux with NDK)
           - runner: ubuntu-latest
             rust_target: aarch64-linux-android
-            binary_name: librouted_ffi_native.so
+            binary_name: libserver_native.so
             os_label: android-arm64
             use_cross: false
             android_abi: arm64-v8a
             allow_failure: false
           - runner: ubuntu-latest
             rust_target: armv7-linux-androideabi
-            binary_name: librouted_ffi_native.so
+            binary_name: libserver_native.so
             os_label: android-armv7
             use_cross: false
             android_abi: armeabi-v7a
             allow_failure: false
           - runner: ubuntu-latest
             rust_target: x86_64-linux-android
-            binary_name: librouted_ffi_native.so
+            binary_name: libserver_native.so
             os_label: android-x64
             use_cross: false
             android_abi: x86_64
@@ -111,21 +111,21 @@ jobs:
           # iOS static libraries
           - runner: macos-latest
             rust_target: aarch64-apple-ios
-            binary_name: librouted_ffi_native.a
+            binary_name: libserver_native.a
             os_label: ios-arm64
             use_cross: false
             android_abi: ""
             allow_failure: false
           - runner: macos-latest
             rust_target: aarch64-apple-ios-sim
-            binary_name: librouted_ffi_native.a
+            binary_name: libserver_native.a
             os_label: ios-sim-arm64
             use_cross: false
             android_abi: ""
             allow_failure: false
           - runner: macos-latest
             rust_target: x86_64-apple-ios
-            binary_name: librouted_ffi_native.a
+            binary_name: libserver_native.a
             os_label: ios-sim-x64
             use_cross: false
             android_abi: ""
@@ -156,7 +156,7 @@ jobs:
         shell: bash
         run: cargo install cargo-ndk
 
-      - name: Build routed_ffi native library
+      - name: Build server_native native library
         working-directory: packages/server_native/native
         shell: bash
         run: |

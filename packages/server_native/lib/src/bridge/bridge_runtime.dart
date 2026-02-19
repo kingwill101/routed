@@ -7,14 +7,14 @@ import 'dart:typed_data';
 /// Bridge runtime primitives for routing requests between Rust transport
 /// and Dart request handlers.
 ///
-/// {@template routed_ffi_bridge_protocol_overview}
+/// {@template server_native_bridge_protocol_overview}
 /// Frames are encoded as length-prefixed binary payloads:
 /// `version(1) + frameType(1) + fields...`.
 /// Strings and byte fields are encoded as `u32 length + bytes` using UTF-8
 /// for text.
 /// {@endtemplate}
 ///
-/// {@template routed_ffi_bridge_request_example}
+/// {@template server_native_bridge_request_example}
 /// Example:
 /// ```dart
 /// final request = BridgeRequestFrame(
@@ -34,7 +34,7 @@ import 'dart:typed_data';
 /// ```
 /// {@endtemplate}
 ///
-/// {@template routed_ffi_bridge_response_example}
+/// {@template server_native_bridge_response_example}
 /// Example:
 /// ```dart
 /// final response = BridgeResponseFrame(
@@ -49,7 +49,7 @@ import 'dart:typed_data';
 /// ```
 /// {@endtemplate}
 ///
-/// {@template routed_ffi_bridge_runtime_example}
+/// {@template server_native_bridge_runtime_example}
 /// Example:
 /// ```dart
 /// final runtime = BridgeHttpRuntime((request) async {

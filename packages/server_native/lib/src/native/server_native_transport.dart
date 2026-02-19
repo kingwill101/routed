@@ -11,7 +11,7 @@ const int benchmarkModeStaticNativeDirect = 1;
 const int benchmarkModeStaticServerNativeDirectShape = 2;
 
 @Deprecated('Use benchmarkModeStaticServerNativeDirectShape')
-const int benchmarkModeStaticRoutedFfiDirectShape =
+const int benchmarkModeStaticServerNativeDirectShape =
     benchmarkModeStaticServerNativeDirectShape;
 
 typedef NativeDirectRequestCallback =
@@ -29,7 +29,7 @@ typedef _NativeDirectRequestCallbackC =
     );
 
 /// Returns the ABI version for the linked Rust native asset.
-int transportAbiVersion() => routed_ffi_transport_version();
+int transportAbiVersion() => server_native_transport_version();
 
 /// Handle to a running native Rust proxy transport server.
 final class NativeProxyServer {
@@ -101,7 +101,7 @@ final class NativeProxyServer {
       );
     }
 
-    final configPtr = calloc<RoutedFfiProxyConfig>();
+    final configPtr = calloc<ServerNativeProxyConfig>();
     final outPortPtr = calloc<ffi.Uint16>();
     final hostPtr = host.toNativeUtf8();
     final backendHostPtr = backendHost.toNativeUtf8();
@@ -146,7 +146,7 @@ final class NativeProxyServer {
         ..benchmark_mode = benchmarkMode
         ..direct_request_callback = nativeCallbackPtr.cast<ffi.Void>();
 
-      final handle = routed_ffi_start_proxy_server(configPtr, outPortPtr);
+      final handle = server_native_start_proxy_server(configPtr, outPortPtr);
       if (handle == ffi.nullptr) {
         nativeCallback?.close();
         throw StateError(
@@ -183,7 +183,7 @@ final class NativeProxyServer {
   void close() {
     if (_closed) return;
     _closed = true;
-    routed_ffi_stop_proxy_server(_handle);
+    server_native_stop_proxy_server(_handle);
     _directRequestCallback?.close();
   }
 
@@ -191,7 +191,7 @@ final class NativeProxyServer {
     final payloadPtr = calloc<ffi.Uint8>(responsePayload.length);
     try {
       payloadPtr.asTypedList(responsePayload.length).setAll(0, responsePayload);
-      return routed_ffi_push_direct_response_frame(
+      return server_native_push_direct_response_frame(
             _handle,
             requestId,
             payloadPtr,

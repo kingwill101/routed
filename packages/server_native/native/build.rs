@@ -1,6 +1,6 @@
 use std::{env, path::PathBuf};
 
-const GENERATE_BINDINGS_ENV: &str = "ROUTED_FFI_GENERATE_BINDINGS";
+const GENERATE_BINDINGS_ENV: &str = "SERVER_NATIVE_GENERATE_BINDINGS";
 
 fn main() {
     println!("cargo:rerun-if-changed=src/lib.rs");

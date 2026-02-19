@@ -1,19 +1,9 @@
 /// Ensures a rustls crypto provider is installed for this process.
 ///
-/// Tries `aws-lc-rs` first, then falls back to `ring`.
+/// Installs the `ring` provider when none has been configured yet.
 fn ensure_rustls_crypto_provider() -> Result<(), String> {
     use tokio_rustls::rustls::crypto::CryptoProvider;
 
-    if CryptoProvider::get_default().is_some() {
-        return Ok(());
-    }
-
-    if tokio_rustls::rustls::crypto::aws_lc_rs::default_provider()
-        .install_default()
-        .is_ok()
-    {
-        return Ok(());
-    }
     if CryptoProvider::get_default().is_some() {
         return Ok(());
     }
@@ -195,7 +185,7 @@ fn load_native_root_store() -> Result<RootCertStore, String> {
     let native = rustls_native_certs::load_native_certs();
     if !native.errors.is_empty() {
         eprintln!(
-            "[routed_ffi_native] some native root certificates failed to load: {}",
+            "[server_native] some native root certificates failed to load: {}",
             native.errors.len()
         );
     }
@@ -223,7 +213,7 @@ async fn handle_h3_connection(incoming: quinn::Incoming, app: Router) -> Result<
                 let app = app.clone();
                 tokio::spawn(async move {
                     if let Err(error) = h3_axum::serve_h3_with_axum(app, resolver).await {
-                        eprintln!("[routed_ffi_native] h3 request error: {error}");
+                        eprintln!("[server_native] h3 request error: {error}");
                     }
                 });
             }

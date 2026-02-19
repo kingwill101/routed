@@ -280,7 +280,7 @@ Future<void> main(List<String> args) async {
     );
     ffiDirectRuns.add(
       await _runTransportBenchmark(
-        label: 'routed_ffi_direct',
+        label: 'server_native_direct',
         options: options,
         startServer: _startFfiDirectServer,
       ),
@@ -288,7 +288,7 @@ Future<void> main(List<String> args) async {
     if (options.includeDirectNativeCallback) {
       ffiDirectNativeCallbackRuns.add(
         await _runTransportBenchmark(
-          label: 'routed_ffi_direct_native_callback',
+          label: 'server_native_direct_native_callback',
           options: options,
           startServer: _startFfiDirectNativeCallbackServer,
         ),
@@ -296,7 +296,7 @@ Future<void> main(List<String> args) async {
     }
     ffiRuns.add(
       await _runTransportBenchmark(
-        label: 'routed_ffi',
+        label: 'server_native',
         options: options,
         startServer: _startFfiServer,
       ),
@@ -304,7 +304,7 @@ Future<void> main(List<String> args) async {
     if (options.includeRoutedNativeCallback) {
       ffiNativeCallbackRuns.add(
         await _runTransportBenchmark(
-          label: 'routed_ffi_native_callback',
+          label: 'server_native_callback',
           options: options,
           startServer: _startFfiNativeCallbackServer,
         ),
@@ -312,7 +312,7 @@ Future<void> main(List<String> args) async {
     }
     ffiNativeDirectRuns.add(
       await _runTransportBenchmark(
-        label: 'routed_ffi_native_direct',
+        label: 'server_native_direct',
         options: options,
         startServer: _startFfiNativeDirectServer,
       ),
@@ -320,7 +320,7 @@ Future<void> main(List<String> args) async {
     if (options.includeNativeDirectShape) {
       ffiNativeDirectShapeRuns.add(
         await _runTransportBenchmark(
-          label: 'routed_ffi_native_direct_shape',
+          label: 'server_native_direct_shape',
           options: options,
           startServer: _startFfiNativeDirectShapeServer,
         ),
@@ -333,19 +333,22 @@ Future<void> main(List<String> args) async {
     dartIoDirectRuns,
   );
   final ioResult = _aggregateResults('routed_io', ioRuns);
-  final ffiDirectResult = _aggregateResults('routed_ffi_direct', ffiDirectRuns);
+  final ffiDirectResult = _aggregateResults(
+    'server_native_direct',
+    ffiDirectRuns,
+  );
   final ffiDirectNativeCallbackResult = options.includeDirectNativeCallback
       ? _aggregateResults(
-          'routed_ffi_direct_native_callback',
+          'server_native_direct_native_callback',
           ffiDirectNativeCallbackRuns,
         )
       : null;
-  final ffiResult = _aggregateResults('routed_ffi', ffiRuns);
+  final ffiResult = _aggregateResults('server_native', ffiRuns);
   final ffiNativeCallbackResult = options.includeRoutedNativeCallback
-      ? _aggregateResults('routed_ffi_native_callback', ffiNativeCallbackRuns)
+      ? _aggregateResults('server_native_callback', ffiNativeCallbackRuns)
       : null;
   final ffiNativeDirectResult = _aggregateResults(
-    'routed_ffi_native_direct',
+    'server_native_direct',
     ffiNativeDirectRuns,
   );
   final summaryResults = <_BenchmarkResult>[
@@ -359,10 +362,7 @@ Future<void> main(List<String> args) async {
   ];
   if (options.includeNativeDirectShape) {
     summaryResults.add(
-      _aggregateResults(
-        'routed_ffi_native_direct_shape',
-        ffiNativeDirectShapeRuns,
-      ),
+      _aggregateResults('server_native_direct_shape', ffiNativeDirectShapeRuns),
     );
   }
   final gate = _evaluateGate(ioResult, ffiResult, options);
@@ -415,10 +415,10 @@ String _buildPrettyInterpretation(List<_BenchmarkResult> results) {
   final ranked = List<_BenchmarkResult>.of(results)
     ..sort((a, b) => b.requestsPerSecond.compareTo(a.requestsPerSecond));
   final nativeOnly = ranked
-      .where((result) => result.label.startsWith('routed_ffi_native_direct'))
+      .where((result) => result.label.startsWith('server_native_direct'))
       .toList(growable: false);
   final dartInvolvedRanked = ranked
-      .where((result) => !result.label.startsWith('routed_ffi_native_direct'))
+      .where((result) => !result.label.startsWith('server_native_direct'))
       .toList(growable: false);
   final fastest = ranked.first;
   final dartInvolved = dartInvolvedRanked.first;
@@ -851,7 +851,7 @@ Future<_RunningServer> _startFfiDirectServer(
   Completer<void> shutdown,
 ) async {
   final bodyBytes = Uint8List.fromList(
-    utf8.encode('{"ok":true,"label":"routed_ffi_direct"}'),
+    utf8.encode('{"ok":true,"label":"server_native_direct"}'),
   );
   final staticResponse = NativeDirectResponse.preEncodedBytes(
     headers: const <MapEntry<String, String>>[
@@ -884,7 +884,7 @@ Future<_RunningServer> _startFfiDirectNativeCallbackServer(
   Completer<void> shutdown,
 ) async {
   final bodyBytes = Uint8List.fromList(
-    utf8.encode('{"ok":true,"label":"routed_ffi_direct"}'),
+    utf8.encode('{"ok":true,"label":"server_native_direct"}'),
   );
   final staticResponse = NativeDirectResponse.preEncodedBytes(
     headers: const <MapEntry<String, String>>[

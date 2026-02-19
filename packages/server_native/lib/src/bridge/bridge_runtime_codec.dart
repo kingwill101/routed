@@ -55,9 +55,9 @@ const List<String> _bridgeHeaderNameTable = <String>[
 
 /// A binary bridge request frame passed from Rust transport to Dart.
 ///
-/// {@macro routed_ffi_bridge_protocol_overview}
+/// {@macro server_native_bridge_protocol_overview}
 ///
-/// {@macro routed_ffi_bridge_request_example}
+/// {@macro server_native_bridge_request_example}
 final class BridgeRequestFrame {
   BridgeRequestFrame({
     required this.method,
@@ -352,9 +352,9 @@ final class BridgeRequestFrame {
 
 /// A binary bridge response frame passed from Dart handlers back to Rust.
 ///
-/// {@macro routed_ffi_bridge_protocol_overview}
+/// {@macro server_native_bridge_protocol_overview}
 ///
-/// {@macro routed_ffi_bridge_response_example}
+/// {@macro server_native_bridge_response_example}
 final class BridgeResponseFrame {
   BridgeResponseFrame({
     required this.status,

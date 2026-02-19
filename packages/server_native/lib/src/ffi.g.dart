@@ -6,35 +6,35 @@ import 'dart:ffi' as ffi;
 
 /// Returns the native transport ABI version expected by Dart bindings.
 @ffi.Native<ffi.Int32 Function()>()
-external int routed_ffi_transport_version();
+external int server_native_transport_version();
 
 /// Starts the proxy server and returns an opaque handle.
 ///
 /// On success:
 /// - writes the effective bound port to `out_port`,
 /// - returns a non-null pointer that must be stopped with
-/// [`routed_ffi_stop_proxy_server`].
+/// [`server_native_stop_proxy_server`].
 ///
 /// On failure:
 /// - returns null,
 /// - emits error details to stderr.
 @ffi.Native<
   ffi.Pointer<ProxyServerHandle> Function(
-    ffi.Pointer<RoutedFfiProxyConfig>,
+    ffi.Pointer<ServerNativeProxyConfig>,
     ffi.Pointer<ffi.Uint16>,
   )
 >()
-external ffi.Pointer<ProxyServerHandle> routed_ffi_start_proxy_server(
-  ffi.Pointer<RoutedFfiProxyConfig> config,
+external ffi.Pointer<ProxyServerHandle> server_native_start_proxy_server(
+  ffi.Pointer<ServerNativeProxyConfig> config,
   ffi.Pointer<ffi.Uint16> out_port,
 );
 
-/// Stops a proxy server previously created by [`routed_ffi_start_proxy_server`].
+/// Stops a proxy server previously created by [`server_native_start_proxy_server`].
 ///
 /// This function consumes the handle pointer and must not be called twice with
 /// the same pointer.
 @ffi.Native<ffi.Void Function(ffi.Pointer<ProxyServerHandle>)>()
-external void routed_ffi_stop_proxy_server(
+external void server_native_stop_proxy_server(
   ffi.Pointer<ProxyServerHandle> handle,
 );
 
@@ -50,14 +50,14 @@ external void routed_ffi_stop_proxy_server(
     ffi.Uint64,
   )
 >()
-external int routed_ffi_push_direct_response_frame(
+external int server_native_push_direct_response_frame(
   ffi.Pointer<ProxyServerHandle> handle,
   int request_id,
   ffi.Pointer<ffi.Uint8> response_payload,
   int response_payload_len,
 );
 
-/// Compatibility alias for [`routed_ffi_push_direct_response_frame`].
+/// Compatibility alias for [`server_native_push_direct_response_frame`].
 @ffi.Native<
   ffi.Uint8 Function(
     ffi.Pointer<ProxyServerHandle>,
@@ -66,7 +66,7 @@ external int routed_ffi_push_direct_response_frame(
     ffi.Uint64,
   )
 >()
-external int routed_ffi_complete_direct_request(
+external int server_native_complete_direct_request(
   ffi.Pointer<ProxyServerHandle> handle,
   int request_id,
   ffi.Pointer<ffi.Uint8> response_payload,
@@ -76,11 +76,11 @@ external int routed_ffi_complete_direct_request(
 final class ProxyServerHandle extends ffi.Opaque {}
 
 /// C-compatible proxy boot configuration consumed by
-/// [`routed_ffi_start_proxy_server`].
+/// [`server_native_start_proxy_server`].
 ///
 /// All `*const c_char` fields are expected to be valid UTF-8 C strings or
 /// null pointers where explicitly optional.
-final class RoutedFfiProxyConfig extends ffi.Struct {
+final class ServerNativeProxyConfig extends ffi.Struct {
   /// Public bind host (for example `127.0.0.1`, `::1`, `0.0.0.0`).
   external ffi.Pointer<ffi.Char> host;
 
