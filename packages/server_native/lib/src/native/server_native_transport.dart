@@ -11,7 +11,7 @@ const int benchmarkModeStaticNativeDirect = 1;
 const int benchmarkModeStaticServerNativeDirectShape = 2;
 
 @Deprecated('Use benchmarkModeStaticServerNativeDirectShape')
-const int benchmarkModeStaticServerNativeDirectShape =
+const int benchmarkModeStaticRoutedFfiDirectShape =
     benchmarkModeStaticServerNativeDirectShape;
 
 typedef NativeDirectRequestCallback =
