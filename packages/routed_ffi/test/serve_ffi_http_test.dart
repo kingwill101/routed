@@ -2,7 +2,8 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 
-import 'package:routed_ffi/routed_ffi.dart';
+import 'package:server_native/server_native.dart';
+import 'package:server_native/src/bridge/bridge_runtime.dart';
 import 'package:test/test.dart';
 
 final class _RunningHttpBridgeServer {

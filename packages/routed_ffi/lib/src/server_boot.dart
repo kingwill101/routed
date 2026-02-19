@@ -6,9 +6,12 @@ import 'dart:io';
 import 'dart:typed_data';
 
 import 'package:routed/routed.dart';
-import 'package:routed_ffi/src/bridge/bridge_runtime.dart';
-import 'package:routed_ffi/src/native/routed_ffi_native.dart';
-import 'package:routed_ffi/src/routed/routed_bridge_runtime.dart';
+import 'package:server_native/src/bridge/bridge_runtime.dart';
+import 'package:server_native/src/native/server_native_transport.dart';
+import 'package:server_native/src/routed/routed_bridge_runtime.dart';
+
+part 'server_boot_api.dart';
+part 'server_boot_http_server.dart';
 
 const int _maxBridgeFrameBytes = 64 * 1024 * 1024;
 const int _maxBridgeBodyBytes = 32 * 1024 * 1024;
@@ -48,6 +51,33 @@ const List<String> _directBridgeHeaderNameTable = <String>[
   'sec-websocket-protocol',
   'sec-websocket-extensions',
 ];
+
+/// {@template server_native_serve_engine_example}
+/// Example:
+/// ```dart
+/// final engine = Engine()
+///   ..get('/health', (ctx) async => ctx.text('ok'));
+///
+/// await serveFfi(
+///   engine,
+///   host: InternetAddress.loopbackIPv4,
+///   port: 8080,
+/// );
+/// ```
+/// {@endtemplate}
+///
+/// {@template server_native_serve_http_handler_example}
+/// Example:
+/// ```dart
+/// await serveFfiHttp((request) async {
+///   request.response
+///     ..statusCode = HttpStatus.ok
+///     ..headers.contentType = ContentType.text
+///     ..write('ok');
+///   await request.response.close();
+/// }, host: InternetAddress.loopbackIPv4, port: 8080);
+/// ```
+/// {@endtemplate}
 
 @pragma('vm:prefer-inline')
 int? _directHeaderLookupToken(String name) {
@@ -132,200 +162,17 @@ final class _BridgeBinding {
   final Future<void> Function() dispose;
 }
 
-/// Request delivered to a direct FFI handler without Routed engine wrapping.
-final class FfiDirectRequest {
-  FfiDirectRequest({
-    required String method,
-    required String scheme,
-    required String authority,
-    required String path,
-    required String query,
-    required String protocol,
-    required List<MapEntry<String, String>> headers,
-    required this.body,
-  }) : _frame = null,
-       _payload = null,
-       _method = method,
-       _scheme = scheme,
-       _authority = authority,
-       _path = path,
-       _query = query,
-       _protocol = protocol,
-       _headers = List<MapEntry<String, String>>.unmodifiable(headers);
-
-  FfiDirectRequest._fromFrame(this._frame, this.body)
-    : _payload = null,
-      _method = null,
-      _scheme = null,
-      _authority = null,
-      _path = null,
-      _query = null,
-      _protocol = null,
-      _headers = null;
-
-  FfiDirectRequest._fromPayload(this._payload, this.body)
-    : _frame = null,
-      _method = null,
-      _scheme = null,
-      _authority = null,
-      _path = null,
-      _query = null,
-      _protocol = null,
-      _headers = null;
-
-  final BridgeRequestFrame? _frame;
-  final _DirectPayloadRequestView? _payload;
-  final String? _method;
-  final String? _scheme;
-  final String? _authority;
-  final String? _path;
-  final String? _query;
-  final String? _protocol;
-  List<MapEntry<String, String>>? _headers;
-  final Stream<Uint8List> body;
-
-  String get method => _frame?.method ?? _payload?.method ?? _method!;
-
-  String get scheme => _frame?.scheme ?? _payload?.scheme ?? _scheme!;
-
-  String get authority =>
-      _frame?.authority ?? _payload?.authority ?? _authority!;
-
-  String get path => _frame?.path ?? _payload?.path ?? _path!;
-
-  String get query => _frame?.query ?? _payload?.query ?? _query!;
-
-  String get protocol => _frame?.protocol ?? _payload?.protocol ?? _protocol!;
-
-  List<MapEntry<String, String>> get headers {
-    final headers = _headers;
-    if (headers != null) {
-      return headers;
-    }
-    final frame = _frame;
-    if (frame == null) {
-      final payload = _payload;
-      if (payload == null) {
-        return const <MapEntry<String, String>>[];
-      }
-      final view = UnmodifiableListView(payload.materializeHeaders());
-      _headers = view;
-      return view;
-    }
-    final view = UnmodifiableListView(_DirectHeaderListView(frame));
-    _headers = view;
-    return view;
+Future<InternetAddress> _resolveInternetAddress(String host) async {
+  final parsed = InternetAddress.tryParse(host);
+  if (parsed != null) {
+    return parsed;
   }
-
-  late final Uri uri = _buildDirectUri(
-    scheme: scheme,
-    authority: authority,
-    path: path,
-    query: query,
-  );
-
-  String? header(String name) {
-    final frame = _frame;
-    if (frame != null) {
-      for (var i = 0; i < frame.headerCount; i++) {
-        final headerName = frame.headerNameAt(i);
-        if (identical(headerName, name) ||
-            headerName == name ||
-            _equalsAsciiIgnoreCase(headerName, name)) {
-          return frame.headerValueAt(i);
-        }
-      }
-      return null;
-    }
-    final payload = _payload;
-    if (payload != null) {
-      return payload.header(name);
-    }
-
-    final target = name;
-    for (final entry in headers) {
-      if (_equalsAsciiIgnoreCase(entry.key, target)) {
-        return entry.value;
-      }
-    }
-    return null;
+  final resolved = await InternetAddress.lookup(host);
+  if (resolved.isEmpty) {
+    throw StateError('Unable to resolve host "$host"');
   }
+  return resolved.first;
 }
-
-/// Response returned by [FfiDirectHandler].
-final class FfiDirectResponse {
-  FfiDirectResponse.bytes({
-    this.status = HttpStatus.ok,
-    List<MapEntry<String, String>> headers = const <MapEntry<String, String>>[],
-    Uint8List? bodyBytes,
-  }) : headers = List<MapEntry<String, String>>.of(headers),
-       bodyBytes = bodyBytes ?? Uint8List(0),
-       body = null,
-       encodedBridgePayload = null;
-
-  FfiDirectResponse.stream({
-    this.status = HttpStatus.ok,
-    List<MapEntry<String, String>> headers = const <MapEntry<String, String>>[],
-    required this.body,
-  }) : headers = List<MapEntry<String, String>>.of(headers),
-       bodyBytes = null,
-       encodedBridgePayload = null;
-
-  /// Returns a direct response backed by a pre-encoded bridge response payload.
-  ///
-  /// This avoids per-request Dart response encoding when the same response can
-  /// be reused (for example, static benchmark responses).
-  FfiDirectResponse.encodedPayload({required Uint8List bridgeResponsePayload})
-    : status = HttpStatus.ok,
-      headers = const <MapEntry<String, String>>[],
-      bodyBytes = null,
-      body = null,
-      encodedBridgePayload = bridgeResponsePayload {
-    // Validate once at construction time so invalid payloads fail fast.
-    BridgeResponseFrame.decodePayload(bridgeResponsePayload);
-  }
-
-  /// Builds and caches a single encoded bridge response payload.
-  ///
-  /// Useful when a direct handler always returns the same bytes response.
-  factory FfiDirectResponse.preEncodedBytes({
-    int status = HttpStatus.ok,
-    List<MapEntry<String, String>> headers = const <MapEntry<String, String>>[],
-    Uint8List? bodyBytes,
-  }) {
-    final frame = BridgeResponseFrame(
-      status: status,
-      headers: headers,
-      bodyBytes: bodyBytes ?? Uint8List(0),
-    );
-    return FfiDirectResponse.encodedPayload(
-      bridgeResponsePayload: frame.encodePayload(),
-    );
-  }
-
-  final int status;
-  final List<MapEntry<String, String>> headers;
-  final Uint8List? bodyBytes;
-  final Stream<Uint8List>? body;
-  final Uint8List? encodedBridgePayload;
-}
-
-typedef FfiDirectHandler =
-    FutureOr<FfiDirectResponse> Function(FfiDirectRequest request);
-
-typedef _BridgeHandleFrame =
-    Future<_BridgeHandleFrameResult> Function(BridgeRequestFrame frame);
-
-typedef _BridgeHandlePayload =
-    Future<_BridgeHandleFrameResult> Function(Uint8List payload);
-
-typedef _BridgeHandleStream =
-    Future<void> Function({
-      required BridgeRequestFrame frame,
-      required Stream<Uint8List> bodyStream,
-      required Future<void> Function(BridgeResponseFrame frame) onResponseStart,
-      required Future<void> Function(Uint8List chunkBytes) onResponseChunk,
-    });
 
 final class _BridgeHandleFrameResult {
   _BridgeHandleFrameResult.frame(BridgeResponseFrame frame)
@@ -356,6 +203,8 @@ final class _NativeDirectRequestStreamState {
 ///
 /// The Rust transport terminates inbound HTTP traffic and forwards typed frames
 /// to a private Dart bridge socket that invokes [Engine.handleRequest].
+///
+/// {@macro server_native_serve_engine_example}
 Future<void> serveFfi(
   Engine engine, {
   Object host = '127.0.0.1',
@@ -395,6 +244,8 @@ Future<void> serveFfi(
 /// Boots a Routed [engine] using the Rust-native transport entrypoint and TLS.
 ///
 /// This requires PEM certificate and key files.
+///
+/// {@macro server_native_serve_engine_example}
 Future<void> serveSecureFfi(
   Engine engine, {
   Object address = 'localhost',
@@ -451,8 +302,164 @@ Future<void> serveSecureFfi(
   );
 }
 
+/// Boots a Routed [engine] across multiple Rust-native listeners.
+///
+/// Similar to `http_multi_server`, this runs one engine behind several bind
+/// addresses. The only per-listener difference is host/port binding.
+///
+/// {@macro server_native_multi_bind_example}
+Future<void> serveFfiMulti(
+  Engine engine, {
+  required List<FfiServerBind> binds,
+  bool echo = true,
+  int backlog = 0,
+  bool v6Only = false,
+  bool shared = false,
+  bool http3 = true,
+  bool nativeCallback = false,
+  Future<void>? shutdownSignal,
+}) async {
+  if (binds.isEmpty) {
+    throw ArgumentError.value(binds, 'binds', 'binds must not be empty');
+  }
+
+  final runtime = RoutedBridgeRuntime(engine);
+  final internalShutdown = Completer<void>();
+  if (shutdownSignal != null) {
+    // ignore: discarded_futures
+    shutdownSignal.whenComplete(() {
+      if (!internalShutdown.isCompleted) {
+        internalShutdown.complete();
+      }
+    });
+  }
+
+  final futures = <Future<void>>[];
+  for (var i = 0; i < binds.length; i++) {
+    final bind = binds[i];
+    final normalizedHost = _normalizeBindHost(bind.host, 'binds[$i].host');
+    final future = _serveWithNativeProxy(
+      host: normalizedHost,
+      port: bind.port,
+      secure: false,
+      echo: echo,
+      backlog: backlog,
+      v6Only: v6Only,
+      shared: shared,
+      requestClientCertificate: false,
+      http3: http3,
+      nativeDirectCallback: nativeCallback,
+      shutdownSignal: internalShutdown.future,
+      onEcho: (echo && i == 0) ? engine.printRoutes : null,
+      handleFrame: (frame) async =>
+          _BridgeHandleFrameResult.frame(await runtime.handleFrame(frame)),
+      handlePayload: (payload) async => _BridgeHandleFrameResult.frame(
+        await runtime.handleFrame(BridgeRequestFrame.decodePayload(payload)),
+      ),
+      handleStream: runtime.handleStream,
+    );
+    futures.add(future);
+    // Any listener completion (error or normal) should stop all listeners.
+    // ignore: discarded_futures
+    future.whenComplete(() {
+      if (!internalShutdown.isCompleted) {
+        internalShutdown.complete();
+      }
+    });
+  }
+
+  await Future.wait(futures);
+}
+
+/// Boots a Routed [engine] across multiple Rust-native TLS listeners.
+///
+/// {@macro server_native_multi_bind_example}
+Future<void> serveSecureFfiMulti(
+  Engine engine, {
+  required List<FfiServerBind> binds,
+  required String certificatePath,
+  required String keyPath,
+  String? certificatePassword,
+  int backlog = 0,
+  bool v6Only = false,
+  bool requestClientCertificate = false,
+  bool shared = false,
+  bool http3 = true,
+  bool nativeCallback = false,
+  Future<void>? shutdownSignal,
+}) async {
+  if (binds.isEmpty) {
+    throw ArgumentError.value(binds, 'binds', 'binds must not be empty');
+  }
+  if (certificatePath.isEmpty) {
+    throw ArgumentError.value(
+      certificatePath,
+      'certificatePath',
+      'certificatePath is required for serveSecureFfiMulti',
+    );
+  }
+  if (keyPath.isEmpty) {
+    throw ArgumentError.value(
+      keyPath,
+      'keyPath',
+      'keyPath is required for serveSecureFfiMulti',
+    );
+  }
+
+  final runtime = RoutedBridgeRuntime(engine);
+  final internalShutdown = Completer<void>();
+  if (shutdownSignal != null) {
+    // ignore: discarded_futures
+    shutdownSignal.whenComplete(() {
+      if (!internalShutdown.isCompleted) {
+        internalShutdown.complete();
+      }
+    });
+  }
+
+  final futures = <Future<void>>[];
+  for (var i = 0; i < binds.length; i++) {
+    final bind = binds[i];
+    final normalizedHost = _normalizeBindHost(bind.host, 'binds[$i].host');
+    final future = _serveWithNativeProxy(
+      host: normalizedHost,
+      port: bind.port,
+      secure: true,
+      echo: false,
+      backlog: backlog,
+      v6Only: v6Only,
+      shared: shared,
+      requestClientCertificate: requestClientCertificate,
+      http3: http3,
+      nativeDirectCallback: nativeCallback,
+      shutdownSignal: internalShutdown.future,
+      tlsCertPath: certificatePath,
+      tlsKeyPath: keyPath,
+      tlsCertPassword: certificatePassword,
+      handleFrame: (frame) async =>
+          _BridgeHandleFrameResult.frame(await runtime.handleFrame(frame)),
+      handlePayload: (payload) async => _BridgeHandleFrameResult.frame(
+        await runtime.handleFrame(BridgeRequestFrame.decodePayload(payload)),
+      ),
+      handleStream: runtime.handleStream,
+    );
+    futures.add(future);
+    // Any listener completion (error or normal) should stop all listeners.
+    // ignore: discarded_futures
+    future.whenComplete(() {
+      if (!internalShutdown.isCompleted) {
+        internalShutdown.complete();
+      }
+    });
+  }
+
+  await Future.wait(futures);
+}
+
 /// Boots the Rust-native transport and dispatches `HttpRequest` objects to
 /// [handler], similar to listening on `dart:io` `HttpServer`.
+///
+/// {@macro server_native_serve_http_handler_example}
 Future<void> serveFfiHttp(
   BridgeHttpHandler handler, {
   Object host = '127.0.0.1',
@@ -485,6 +492,8 @@ Future<void> serveFfiHttp(
 
 /// Boots the Rust-native TLS transport and dispatches `HttpRequest` objects to
 /// [handler], similar to listening on `dart:io` `HttpServer`.
+///
+/// {@macro server_native_serve_http_handler_example}
 Future<void> serveSecureFfiHttp(
   BridgeHttpHandler handler, {
   Object address = 'localhost',
@@ -538,6 +547,8 @@ Future<void> serveSecureFfiHttp(
 
 /// Boots the Rust-native transport and dispatches requests directly to [handler]
 /// without Routed engine request/response wrapping.
+///
+/// {@macro server_native_direct_handler_example}
 Future<void> serveFfiDirect(
   FfiDirectHandler handler, {
   Object host = '127.0.0.1',
@@ -583,6 +594,8 @@ Future<void> serveFfiDirect(
 
 /// Boots the Rust-native TLS transport and dispatches requests directly to
 /// [handler] without Routed engine request/response wrapping.
+///
+/// {@macro server_native_direct_handler_example}
 Future<void> serveSecureFfiDirect(
   FfiDirectHandler handler, {
   Object address = 'localhost',
@@ -647,6 +660,61 @@ Future<void> serveSecureFfiDirect(
   );
 }
 
+final class _ProxyConnectionCounters {
+  int _openSockets = 0;
+  int _activeRequests = 0;
+
+  void onSocketOpened() {
+    _openSockets++;
+  }
+
+  void onSocketClosed() {
+    if (_openSockets > 0) {
+      _openSockets--;
+    }
+    if (_activeRequests > _openSockets) {
+      _activeRequests = _openSockets;
+    }
+  }
+
+  void onRequestStarted() {
+    _activeRequests++;
+  }
+
+  void onRequestCompleted() {
+    if (_activeRequests > 0) {
+      _activeRequests--;
+    }
+  }
+
+  HttpConnectionsInfo snapshot() {
+    final info = HttpConnectionsInfo();
+    info.total = _openSockets;
+    info.active = _activeRequests;
+    info.idle = _openSockets - _activeRequests;
+    info.closing = 0;
+    return info;
+  }
+}
+
+final class _RunningProxy {
+  _RunningProxy({
+    required this.host,
+    required this.port,
+    required Future<void> Function({bool force}) close,
+    required this.done,
+    required this.connectionsInfo,
+  }) : _close = close;
+
+  final String host;
+  final int port;
+  final Future<void> Function({bool force}) _close;
+  final Future<void> done;
+  final HttpConnectionsInfo Function() connectionsInfo;
+
+  Future<void> close({bool force = false}) => _close(force: force);
+}
+
 Future<void> _serveWithNativeProxy({
   required String host,
   required int port,
@@ -667,10 +735,57 @@ Future<void> _serveWithNativeProxy({
   String? tlsKeyPath,
   String? tlsCertPassword,
 }) async {
+  final running = await _startNativeProxy(
+    host: host,
+    port: port,
+    secure: secure,
+    echo: echo,
+    backlog: backlog,
+    v6Only: v6Only,
+    shared: shared,
+    requestClientCertificate: requestClientCertificate,
+    http3: http3,
+    nativeDirectCallback: nativeDirectCallback,
+    handleFrame: handleFrame,
+    handleStream: handleStream,
+    handlePayload: handlePayload,
+    onEcho: onEcho,
+    shutdownSignal: shutdownSignal,
+    tlsCertPath: tlsCertPath,
+    tlsKeyPath: tlsKeyPath,
+    tlsCertPassword: tlsCertPassword,
+    installSignalHandlers: true,
+  );
+  await running.done;
+}
+
+Future<_RunningProxy> _startNativeProxy({
+  required String host,
+  required int port,
+  required bool secure,
+  required bool echo,
+  required int backlog,
+  required bool v6Only,
+  required bool shared,
+  required bool requestClientCertificate,
+  required bool http3,
+  bool nativeDirectCallback = false,
+  required _BridgeHandleFrame handleFrame,
+  required _BridgeHandleStream handleStream,
+  _BridgeHandlePayload? handlePayload,
+  void Function()? onEcho,
+  Future<void>? shutdownSignal,
+  String? tlsCertPath,
+  String? tlsKeyPath,
+  String? tlsCertPassword,
+  bool installSignalHandlers = true,
+  _ProxyConnectionCounters? connectionCounters,
+  Duration? Function()? idleTimeoutProvider,
+}) async {
   // Ensure native symbol resolution and ABI compatibility are available.
   final abiVersion = transportAbiVersion();
   if (abiVersion <= 0) {
-    throw StateError('Invalid routed_ffi native ABI version: $abiVersion');
+    throw StateError('Invalid server_native native ABI version: $abiVersion');
   }
 
   onEcho?.call();
@@ -678,7 +793,7 @@ Future<void> _serveWithNativeProxy({
   final enableHttp3 = secure && http3;
   if (http3 && !secure) {
     stderr.writeln(
-      '[routed_ffi] http3=true requested for insecure server; HTTP/3 requires TLS and will be disabled.',
+      '[server_native] http3=true requested for insecure server; HTTP/3 requires TLS and will be disabled.',
     );
   }
 
@@ -721,7 +836,7 @@ Future<void> _serveWithNativeProxy({
             );
             if (!pushed) {
               stderr.writeln(
-                '[routed_ffi] native direct callback push failed for requestId=$requestId',
+                '[server_native] native direct callback push failed for requestId=$requestId',
               );
             }
           }
@@ -734,7 +849,7 @@ Future<void> _serveWithNativeProxy({
               );
             } catch (error, stack) {
               stderr.writeln(
-                '[routed_ffi] native direct callback handler error: $error\n$stack',
+                '[server_native] native direct callback handler error: $error\n$stack',
               );
               pushResponsePayload(_encodeDirectBadRequestPayload(error));
               return;
@@ -764,7 +879,7 @@ Future<void> _serveWithNativeProxy({
                 pushResponsePayload(BridgeResponseFrame.encodeEndPayload());
               } catch (error, stack) {
                 stderr.writeln(
-                  '[routed_ffi] native direct callback stream handler error: $error\n$stack',
+                  '[server_native] native direct callback stream handler error: $error\n$stack',
                 );
                 pushResponsePayload(
                   _internalServerErrorFrame(error).encodePayload(),
@@ -817,7 +932,7 @@ Future<void> _serveWithNativeProxy({
           if (BridgeRequestFrame.isChunkPayload(requestPayload) ||
               BridgeRequestFrame.isEndPayload(requestPayload)) {
             stderr.writeln(
-              '[routed_ffi] dropping unmatched native direct request frame for requestId=$requestId',
+              '[server_native] dropping unmatched native direct request frame for requestId=$requestId',
             );
             return;
           }
@@ -828,7 +943,7 @@ Future<void> _serveWithNativeProxy({
               result = await directPayloadHandler(requestPayload);
             } catch (error, stack) {
               stderr.writeln(
-                '[routed_ffi] native direct callback handler error: $error\n$stack',
+                '[server_native] native direct callback handler error: $error\n$stack',
               );
               result = _BridgeHandleFrameResult.frame(
                 _internalServerErrorFrame(error),
@@ -845,6 +960,7 @@ Future<void> _serveWithNativeProxy({
       bridgeBinding = await _bindBridgeServer();
       final bridgeServer = bridgeBinding.server;
       bridgeSubscription = bridgeServer.listen((socket) {
+        connectionCounters?.onSocketOpened();
         try {
           socket.setOption(SocketOption.tcpNoDelay, true);
         } catch (_) {}
@@ -854,6 +970,10 @@ Future<void> _serveWithNativeProxy({
           handleFrame: handleFrame,
           handleStream: handleStream,
           handlePayload: handlePayload,
+          idleTimeoutProvider: idleTimeoutProvider,
+          onRequestStarted: connectionCounters?.onRequestStarted,
+          onRequestCompleted: connectionCounters?.onRequestCompleted,
+          onSocketClosed: connectionCounters?.onSocketClosed,
         );
       });
 
@@ -887,7 +1007,7 @@ Future<void> _serveWithNativeProxy({
   if (echo) {
     final scheme = secure ? 'https' : 'http';
     stdout.writeln(
-      'Engine listening on $scheme://$host:${proxy.port} via routed_ffi '
+      'Engine listening on $scheme://$host:${proxy.port} via server_native '
       '(abi=$abiVersion, http3=$enableHttp3)',
     );
   }
@@ -896,9 +1016,11 @@ Future<void> _serveWithNativeProxy({
   final signalSubscriptions = <StreamSubscription<ProcessSignal>>[];
   Timer? forceExitTimer;
   ProcessSignal? shutdownSignalSource;
+  var stopping = false;
 
   Future<void> stopAll() async {
-    if (done.isCompleted) return;
+    if (done.isCompleted || stopping) return;
+    stopping = true;
     forceExitTimer?.cancel();
     for (final subscription in signalSubscriptions) {
       try {
@@ -909,7 +1031,7 @@ Future<void> _serveWithNativeProxy({
     try {
       proxy.close();
     } catch (error, stack) {
-      stderr.writeln('[routed_ffi] proxy shutdown error: $error\n$stack');
+      stderr.writeln('[server_native] proxy shutdown error: $error\n$stack');
     }
     try {
       if (bridgeSubscription != null) {
@@ -921,7 +1043,9 @@ Future<void> _serveWithNativeProxy({
         await bridgeBinding.dispose();
       }
     } catch (_) {}
-    done.complete();
+    if (!done.isCompleted) {
+      done.complete();
+    }
   }
 
   int forcedExitCode(ProcessSignal signal) {
@@ -935,7 +1059,7 @@ Future<void> _serveWithNativeProxy({
     if (shutdownSignalSource == null) {
       shutdownSignalSource = signal;
       stderr.writeln(
-        '[routed_ffi] received $signal, attempting graceful shutdown '
+        '[server_native] received $signal, attempting graceful shutdown '
         '(send again to force exit).',
       );
       // ignore: discarded_futures
@@ -943,7 +1067,7 @@ Future<void> _serveWithNativeProxy({
       forceExitTimer = Timer(const Duration(seconds: 5), () {
         if (!done.isCompleted) {
           stderr.writeln(
-            '[routed_ffi] graceful shutdown timed out; forcing exit.',
+            '[server_native] graceful shutdown timed out; forcing exit.',
           );
           exit(forcedExitCode(signal));
         }
@@ -951,15 +1075,19 @@ Future<void> _serveWithNativeProxy({
       return;
     }
 
-    stderr.writeln('[routed_ffi] forcing exit due to repeated signal.');
+    stderr.writeln('[server_native] forcing exit due to repeated signal.');
     exit(forcedExitCode(shutdownSignalSource!));
   }
 
-  // Fallback signal handling for transports that do not use Engine.serve().
-  signalSubscriptions.add(ProcessSignal.sigint.watch().listen(onProcessSignal));
-  signalSubscriptions.add(
-    ProcessSignal.sigterm.watch().listen(onProcessSignal),
-  );
+  if (installSignalHandlers) {
+    // Fallback signal handling for transports that do not use Engine.serve().
+    signalSubscriptions.add(
+      ProcessSignal.sigint.watch().listen(onProcessSignal),
+    );
+    signalSubscriptions.add(
+      ProcessSignal.sigterm.watch().listen(onProcessSignal),
+    );
+  }
   if (shutdownSignal != null) {
     // ignore: discarded_futures
     shutdownSignal.whenComplete(stopAll);
@@ -970,7 +1098,19 @@ Future<void> _serveWithNativeProxy({
     stopAll();
   });
 
-  await done.future;
+  return _RunningProxy(
+    host: host,
+    port: proxy.port,
+    close: ({bool force = false}) {
+      if (force) {
+        proxy.close();
+      }
+      return stopAll();
+    },
+    done: done.future,
+    connectionsInfo: () =>
+        connectionCounters?.snapshot() ?? HttpConnectionsInfo(),
+  );
 }
 
 Future<_BridgeBinding> _bindBridgeServer() async {
@@ -997,7 +1137,7 @@ Future<_BridgeBinding> _bindBridgeServer() async {
       );
     } catch (error) {
       stderr.writeln(
-        '[routed_ffi] unix bridge bind failed ($path): $error; falling back to loopback tcp.',
+        '[server_native] unix bridge bind failed ($path): $error; falling back to loopback tcp.',
       );
       try {
         final file = File(path);
@@ -1022,7 +1162,7 @@ Future<_BridgeBinding> _bindBridgeServer() async {
 String _bridgeUnixSocketPath() {
   final tempDir = Directory.systemTemp.path;
   final timestamp = DateTime.now().microsecondsSinceEpoch;
-  return '$tempDir/routed_ffi_bridge_${pid}_$timestamp.sock';
+  return '$tempDir/server_native_bridge_${pid}_$timestamp.sock';
 }
 
 Future<void> _handleBridgeSocket(
@@ -1030,12 +1170,23 @@ Future<void> _handleBridgeSocket(
   required _BridgeHandleFrame handleFrame,
   required _BridgeHandleStream handleStream,
   _BridgeHandlePayload? handlePayload,
+  Duration? Function()? idleTimeoutProvider,
+  void Function()? onRequestStarted,
+  void Function()? onRequestCompleted,
+  void Function()? onSocketClosed,
 }) async {
   final reader = _SocketFrameReader(socket);
   final writer = _BridgeSocketWriter(socket);
   try {
     while (true) {
-      final firstPayload = await reader.readFrame();
+      Uint8List? firstPayload;
+      try {
+        firstPayload = await reader.readFrame(
+          timeout: idleTimeoutProvider?.call(),
+        );
+      } on TimeoutException {
+        return;
+      }
       if (firstPayload == null) {
         return;
       }
@@ -1045,12 +1196,17 @@ Future<void> _handleBridgeSocket(
           final startFrame = BridgeRequestFrame.decodeStartPayload(
             firstPayload,
           );
-          await _handleChunkedBridgeRequest(
-            reader,
-            writer,
-            handleStream: handleStream,
-            startFrame: startFrame,
-          );
+          onRequestStarted?.call();
+          try {
+            await _handleChunkedBridgeRequest(
+              reader,
+              writer,
+              handleStream: handleStream,
+              startFrame: startFrame,
+            );
+          } finally {
+            onRequestCompleted?.call();
+          }
           continue;
         }
       } catch (error) {
@@ -1058,34 +1214,40 @@ Future<void> _handleBridgeSocket(
         continue;
       }
 
-      late final _BridgeHandleFrameResult response;
-      if (handlePayload != null) {
-        try {
-          response = await handlePayload(firstPayload);
-        } catch (error) {
-          _writeBridgeBadRequest(writer, error);
-          continue;
+      onRequestStarted?.call();
+      try {
+        late final _BridgeHandleFrameResult response;
+        if (handlePayload != null) {
+          try {
+            response = await handlePayload(firstPayload);
+          } catch (error) {
+            _writeBridgeBadRequest(writer, error);
+            continue;
+          }
+        } else {
+          BridgeRequestFrame frame;
+          try {
+            frame = BridgeRequestFrame.decodePayload(firstPayload);
+          } catch (error) {
+            _writeBridgeBadRequest(writer, error);
+            continue;
+          }
+          response = await handleFrame(frame);
         }
-      } else {
-        BridgeRequestFrame frame;
-        try {
-          frame = BridgeRequestFrame.decodePayload(firstPayload);
-        } catch (error) {
-          _writeBridgeBadRequest(writer, error);
-          continue;
+        _writeBridgeResponse(writer, response);
+        final detachedSocket = response.detachedSocket;
+        if (detachedSocket != null) {
+          await _runDetachedSocketTunnel(reader, writer, detachedSocket);
+          return;
         }
-        response = await handleFrame(frame);
-      }
-      _writeBridgeResponse(writer, response);
-      final detachedSocket = response.detachedSocket;
-      if (detachedSocket != null) {
-        await _runDetachedSocketTunnel(reader, writer, detachedSocket);
-        return;
+      } finally {
+        onRequestCompleted?.call();
       }
     }
   } catch (error, stack) {
-    stderr.writeln('[routed_ffi] bridge socket error: $error\n$stack');
+    stderr.writeln('[server_native] bridge socket error: $error\n$stack');
   } finally {
+    onSocketClosed?.call();
     await reader.cancel();
     try {
       await socket.flush();
@@ -1094,6 +1256,108 @@ Future<void> _handleBridgeSocket(
       await socket.close();
     } catch (_) {}
   }
+}
+
+final Future<bool> _supportsIPv6 = () async {
+  try {
+    final socket = await ServerSocket.bind(InternetAddress.loopbackIPv6, 0);
+    await socket.close();
+    return true;
+  } on SocketException {
+    return false;
+  }
+}();
+
+final Future<bool> _supportsIPv4 = () async {
+  try {
+    final socket = await ServerSocket.bind(InternetAddress.loopbackIPv4, 0);
+    await socket.close();
+    return true;
+  } on SocketException {
+    return false;
+  }
+}();
+
+int _addressInUseErrorCode() {
+  if (Platform.isWindows) {
+    return 10048;
+  }
+  if (Platform.isMacOS) {
+    return 48;
+  }
+  return 98;
+}
+
+bool _isAddressInUseSocketException(Object error) {
+  if (error is! SocketException) {
+    return false;
+  }
+  return error.osError?.errorCode == _addressInUseErrorCode();
+}
+
+Future<String> _anyHost() async {
+  if (await _supportsIPv6) {
+    return InternetAddress.anyIPv6.address;
+  }
+  return InternetAddress.anyIPv4.address;
+}
+
+Future<List<FfiServerBind>> _loopbackBinds(int port) async {
+  final supportsV4 = await _supportsIPv4;
+  final supportsV6 = await _supportsIPv6;
+
+  if (!supportsV4 && !supportsV6) {
+    throw StateError(
+      'Neither IPv4 nor IPv6 loopback sockets are available on this host',
+    );
+  }
+
+  final bindPort = (port == 0 && supportsV4 && supportsV6)
+      ? await _reserveSharedLoopbackPort()
+      : port;
+
+  if (!supportsV4) {
+    return <FfiServerBind>[
+      FfiServerBind(host: InternetAddress.loopbackIPv6.address, port: bindPort),
+    ];
+  }
+  if (!supportsV6) {
+    return <FfiServerBind>[
+      FfiServerBind(host: InternetAddress.loopbackIPv4.address, port: bindPort),
+    ];
+  }
+  return <FfiServerBind>[
+    FfiServerBind(host: InternetAddress.loopbackIPv4.address, port: bindPort),
+    FfiServerBind(host: InternetAddress.loopbackIPv6.address, port: bindPort),
+  ];
+}
+
+Future<int> _reserveSharedLoopbackPort({int retries = 5}) async {
+  for (var attempt = 0; attempt <= retries; attempt++) {
+    ServerSocket? v4Server;
+    ServerSocket? v6Server;
+    try {
+      v4Server = await ServerSocket.bind(InternetAddress.loopbackIPv4, 0);
+      final candidatePort = v4Server.port;
+      v6Server = await ServerSocket.bind(
+        InternetAddress.loopbackIPv6,
+        candidatePort,
+      );
+      return candidatePort;
+    } on SocketException catch (error) {
+      if (attempt == retries || !_isAddressInUseSocketException(error)) {
+        rethrow;
+      }
+    } finally {
+      if (v6Server != null) {
+        await v6Server.close();
+      }
+      if (v4Server != null) {
+        await v4Server.close();
+      }
+    }
+  }
+  throw StateError('unreachable');
 }
 
 String _normalizeBindHost(Object value, String name) {
@@ -1264,7 +1528,7 @@ Future<_BridgeHandleFrameResult> _handleDirectFrame(
       ),
     );
   } catch (error, stack) {
-    stderr.writeln('[routed_ffi] direct handler error: $error\n$stack');
+    stderr.writeln('[server_native] direct handler error: $error\n$stack');
     return _BridgeHandleFrameResult.frame(_internalServerErrorFrame(error));
   }
 }
@@ -1301,7 +1565,7 @@ Future<_BridgeHandleFrameResult> _handleDirectPayload(
       ),
     );
   } catch (error, stack) {
-    stderr.writeln('[routed_ffi] direct handler error: $error\n$stack');
+    stderr.writeln('[server_native] direct handler error: $error\n$stack');
     return _BridgeHandleFrameResult.frame(_internalServerErrorFrame(error));
   }
 }
@@ -1372,7 +1636,7 @@ Future<void> _handleDirectStream(
     if (responseStarted) {
       rethrow;
     }
-    stderr.writeln('[routed_ffi] direct stream handler error: $error\n$stack');
+    stderr.writeln('[server_native] direct stream handler error: $error\n$stack');
     final errorResponse = _internalServerErrorFrame(error);
     await onResponseStart(
       BridgeResponseFrame(
@@ -2104,19 +2368,26 @@ final class _SocketFrameReader {
   int _chunkOffset = 0;
   int _availableBytes = 0;
 
-  Future<Uint8List?> readFrame() async {
-    final payloadLength = await _readUint32OrNull();
-    if (payloadLength == null) {
-      return null;
+  Future<Uint8List?> readFrame({Duration? timeout}) async {
+    Future<Uint8List?> readOperation() async {
+      final payloadLength = await _readUint32OrNull();
+      if (payloadLength == null) {
+        return null;
+      }
+      if (payloadLength > _maxBridgeFrameBytes) {
+        throw FormatException('bridge frame too large: $payloadLength');
+      }
+      final payload = await _readExactOrNull(payloadLength);
+      if (payload == null) {
+        throw const FormatException('bridge stream ended before payload');
+      }
+      return payload;
     }
-    if (payloadLength > _maxBridgeFrameBytes) {
-      throw FormatException('bridge frame too large: $payloadLength');
+
+    if (timeout == null) {
+      return readOperation();
     }
-    final payload = await _readExactOrNull(payloadLength);
-    if (payload == null) {
-      throw const FormatException('bridge stream ended before payload');
-    }
-    return payload;
+    return readOperation().timeout(timeout);
   }
 
   Future<void> cancel() => _iterator.cancel();

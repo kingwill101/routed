@@ -6,16 +6,34 @@ final class BridgeHttpRequest extends Stream<Uint8List> implements HttpRequest {
     required BridgeRequestFrame frame,
     required this.response,
     required Stream<Uint8List> bodyStream,
+    HttpSession Function()? sessionFactory,
   }) : method = frame.method,
        protocolVersion = frame.protocol,
-       requestedUri = _buildUri(frame),
        _bodyStream = bodyStream,
-       _frame = frame;
+       _frame = frame,
+       _sessionFactory = sessionFactory;
 
   static Uri _buildUri(BridgeRequestFrame frame) {
-    final authority = _splitAuthority(frame.authority);
+    final absolute = _tryAbsoluteRequestUri(frame);
+    if (absolute != null) {
+      return absolute;
+    }
+
+    final forwardedProto = _headerValue(frame, 'x-forwarded-proto')?.trim();
+    final forwardedHost = _headerValue(frame, 'x-forwarded-host')?.trim();
+    final hostHeader = _headerValue(frame, HttpHeaders.hostHeader)?.trim();
+    final authorityValue = (forwardedHost?.isNotEmpty ?? false)
+        ? forwardedHost!
+        : (hostHeader?.isNotEmpty ?? false)
+        ? hostHeader!
+        : frame.authority;
+    final authority = _splitAuthority(authorityValue);
     return Uri(
-      scheme: frame.scheme.isEmpty ? 'http' : frame.scheme,
+      scheme: (forwardedProto != null && forwardedProto.isNotEmpty)
+          ? forwardedProto
+          : frame.scheme.isEmpty
+          ? 'http'
+          : frame.scheme,
       host: authority.host.isEmpty ? '127.0.0.1' : authority.host,
       port: authority.port,
       path: frame.path.isEmpty ? '/' : frame.path,
@@ -35,6 +53,8 @@ final class BridgeHttpRequest extends Stream<Uint8List> implements HttpRequest {
   final BridgeRequestFrame _frame;
   List<Cookie>? _cookies;
   final Stream<Uint8List> _bodyStream;
+  HttpSession? _session;
+  HttpSession Function()? _sessionFactory;
 
   @override
   final String method;
@@ -43,7 +63,8 @@ final class BridgeHttpRequest extends Stream<Uint8List> implements HttpRequest {
   final String protocolVersion;
 
   @override
-  final Uri requestedUri;
+  Uri get requestedUri => _requestedUri ??= _buildUri(_frame);
+  Uri? _requestedUri;
 
   @override
   Uri get uri => requestedUri;
@@ -106,8 +127,23 @@ final class BridgeHttpRequest extends Stream<Uint8List> implements HttpRequest {
   X509Certificate? get certificate => null;
 
   @override
-  HttpSession get session => _session ??= BridgeSession();
-  BridgeSession? _session;
+  HttpSession get session {
+    final existing = _session;
+    if (existing != null) {
+      return existing;
+    }
+    final sessionFactory = _sessionFactory;
+    if (sessionFactory != null) {
+      final next = sessionFactory();
+      _session = next;
+      return next;
+    }
+    return _session ??= BridgeSession();
+  }
+
+  void setSessionFactory(HttpSession Function() sessionFactory) {
+    _sessionFactory = sessionFactory;
+  }
 
   @override
   HttpConnectionInfo? get connectionInfo => const BridgeConnectionInfo();
@@ -201,4 +237,29 @@ bool _equalsAsciiIgnoreCase(String a, String b) {
     }
   }
   return true;
+}
+
+String? _headerValue(BridgeRequestFrame frame, String name) {
+  for (var i = 0; i < frame.headerCount; i++) {
+    final headerName = frame.headerNameAt(i);
+    if (_equalsAsciiIgnoreCase(headerName, name)) {
+      return frame.headerValueAt(i);
+    }
+  }
+  return null;
+}
+
+Uri? _tryAbsoluteRequestUri(BridgeRequestFrame frame) {
+  final path = frame.path;
+  if (!(path.startsWith('http://') ||
+      path.startsWith('https://') ||
+      path.startsWith('ws://') ||
+      path.startsWith('wss://'))) {
+    return null;
+  }
+  final uri = Uri.tryParse(path);
+  if (uri == null || !uri.hasScheme || !uri.hasAuthority) {
+    return null;
+  }
+  return uri;
 }

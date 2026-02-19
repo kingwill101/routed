@@ -5,8 +5,8 @@ import 'dart:convert';
 import 'dart:io';
 import 'dart:typed_data';
 
-import 'package:routed_ffi/src/bridge/bridge_runtime.dart';
-import 'package:routed_ffi/src/native/routed_ffi_native.dart';
+import 'package:server_native/src/bridge/bridge_runtime.dart';
+import 'package:server_native/src/native/server_native_transport.dart';
 import 'package:test/test.dart';
 
 final class _ProxyHarness {
@@ -125,7 +125,7 @@ void main() {
       port: 0,
       backendHost: InternetAddress.loopbackIPv4.address,
       backendPort: 9,
-      benchmarkMode: 1,
+      benchmarkMode: benchmarkModeStaticNativeDirect,
     );
     addTearDown(proxy.close);
 
@@ -135,6 +135,25 @@ void main() {
     expect(jsonDecode(body), <String, Object?>{
       'ok': true,
       'label': 'routed_ffi_native_direct',
+    });
+  });
+
+  test('serves routed_ffi_direct-shaped response in benchmark mode', () async {
+    final proxy = NativeProxyServer.start(
+      host: InternetAddress.loopbackIPv4.address,
+      port: 0,
+      backendHost: InternetAddress.loopbackIPv4.address,
+      backendPort: 9,
+      benchmarkMode: benchmarkModeStaticServerNativeDirectShape,
+    );
+    addTearDown(proxy.close);
+
+    final uri = Uri.parse('http://127.0.0.1:${proxy.port}/bench');
+    final (status, body) = await _requestText(uri);
+    expect(status, HttpStatus.ok);
+    expect(jsonDecode(body), <String, Object?>{
+      'ok': true,
+      'label': 'routed_ffi_direct',
     });
   });
 

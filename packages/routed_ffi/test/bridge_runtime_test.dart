@@ -3,7 +3,8 @@ import 'dart:convert';
 import 'dart:typed_data';
 
 import 'package:routed/routed.dart';
-import 'package:routed_ffi/routed_ffi.dart';
+import 'package:server_native/src/bridge/bridge_runtime.dart';
+import 'package:server_native/src/routed/routed_bridge_runtime.dart';
 import 'package:test/test.dart';
 
 List<String> _headerValues(BridgeResponseFrame response, String name) {

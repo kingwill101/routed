@@ -34,9 +34,30 @@ final class BridgeHttpResponse implements HttpResponse {
   BridgeDetachedSocket? _detachedSocket;
   bool _closed = false;
   Encoding _encoding = utf8;
+  bool _autoCompressEnabled = false;
+  bool _requestAcceptsGzip = false;
 
-  Uint8List takeBodyBytes() =>
-      _detachedSocket == null ? _body.takeBytes() : Uint8List(0);
+  void configureAutoCompression({
+    required bool enabled,
+    required bool requestAcceptsGzip,
+  }) {
+    _autoCompressEnabled = enabled;
+    _requestAcceptsGzip = requestAcceptsGzip;
+  }
+
+  Uint8List takeBodyBytes() {
+    if (_detachedSocket != null) {
+      return Uint8List(0);
+    }
+    final bodyBytes = _body.takeBytes();
+    if (!_shouldCompressBody(bodyBytes)) {
+      return bodyBytes;
+    }
+    final compressed = Uint8List.fromList(gzip.encode(bodyBytes));
+    headers.set(HttpHeaders.contentEncodingHeader, 'gzip');
+    headers.contentLength = compressed.length;
+    return compressed;
+  }
 
   BridgeDetachedSocket? takeDetachedSocket() {
     final detached = _detachedSocket;
@@ -160,6 +181,17 @@ final class BridgeHttpResponse implements HttpResponse {
     }
   }
 
+  bool _shouldCompressBody(Uint8List bodyBytes) {
+    if (!_autoCompressEnabled || !_requestAcceptsGzip || bodyBytes.isEmpty) {
+      return false;
+    }
+    final contentEncoding = _headers?.value(HttpHeaders.contentEncodingHeader);
+    if (contentEncoding != null && contentEncoding.isNotEmpty) {
+      return false;
+    }
+    return true;
+  }
+
   void appendFlattenedHeaders(
     List<String> headerNames,
     List<String> headerValues,
@@ -226,8 +258,20 @@ final class BridgeStreamingHttpResponse implements HttpResponse {
   bool _closed = false;
   bool _started = false;
   Encoding _encoding = utf8;
+  bool _autoCompressEnabled = false;
+  bool _requestAcceptsGzip = false;
+  bool _compressBody = false;
+  BytesBuilder? _compressionBuffer;
 
   bool get isClosed => _closed;
+
+  void configureAutoCompression({
+    required bool enabled,
+    required bool requestAcceptsGzip,
+  }) {
+    _autoCompressEnabled = enabled;
+    _requestAcceptsGzip = requestAcceptsGzip;
+  }
 
   @override
   int statusCode = HttpStatus.ok;
@@ -268,6 +312,10 @@ final class BridgeStreamingHttpResponse implements HttpResponse {
     final chunk = data is Uint8List ? data : Uint8List.fromList(data);
     _enqueueWrite(() async {
       await _ensureStarted();
+      if (_compressBody) {
+        (_compressionBuffer ??= BytesBuilder(copy: false)).add(chunk);
+        return;
+      }
       await onChunk(chunk);
     });
   }
@@ -292,7 +340,15 @@ final class BridgeStreamingHttpResponse implements HttpResponse {
   Future<void> close() async {
     if (_closed) return;
     _closed = true;
-    _enqueueWrite(_ensureStarted);
+    _enqueueWrite(() async {
+      await _ensureStarted();
+      if (_compressBody) {
+        final buffered = _compressionBuffer?.takeBytes() ?? Uint8List(0);
+        if (buffered.isNotEmpty) {
+          await onChunk(Uint8List.fromList(gzip.encode(buffered)));
+        }
+      }
+    });
     await _pendingWrite;
     if (!_done.isCompleted) {
       _done.complete();
@@ -355,11 +411,18 @@ final class BridgeStreamingHttpResponse implements HttpResponse {
       return;
     }
     _started = true;
+    _compressBody = _shouldCompressBody();
+    if (_compressBody) {
+      final compressionHeaders = headers;
+      compressionHeaders.set(HttpHeaders.contentEncodingHeader, 'gzip');
+      compressionHeaders.contentLength = -1;
+    }
 
-    final headers = _headers;
+    final bridgeHeaders = _headers;
     final cookies = _cookies;
     final headerCount =
-        (headers?.flattenedHeaderValueCount ?? 0) + (cookies?.length ?? 0);
+        (bridgeHeaders?.flattenedHeaderValueCount ?? 0) +
+        (cookies?.length ?? 0);
     final headerNames = headerCount == 0
         ? const <String>[]
         : List<String>.filled(headerCount, '', growable: false);
@@ -369,8 +432,8 @@ final class BridgeStreamingHttpResponse implements HttpResponse {
 
     if (headerCount != 0) {
       var offset = 0;
-      if (headers != null) {
-        offset = headers.writeFlattenedHeaderPairs(
+      if (bridgeHeaders != null) {
+        offset = bridgeHeaders.writeFlattenedHeaderPairs(
           headerNames,
           headerValues,
           offset,
@@ -412,6 +475,17 @@ final class BridgeStreamingHttpResponse implements HttpResponse {
       throw StateError('Response is already closed');
     }
   }
+
+  bool _shouldCompressBody() {
+    if (!_autoCompressEnabled || !_requestAcceptsGzip) {
+      return false;
+    }
+    final contentEncoding = _headers?.value(HttpHeaders.contentEncodingHeader);
+    if (contentEncoding != null && contentEncoding.isNotEmpty) {
+      return false;
+    }
+    return true;
+  }
 }
 
 /// Fast bridge response headers optimized for low cardinality writes.
@@ -419,6 +493,7 @@ final class _BridgeHttpHeaders implements HttpHeaders {
   final Map<String, List<String>> _headers = <String, List<String>>{};
   final Map<String, String> _originalNames = <String, String>{};
   final Set<String> _noFolding = <String>{};
+  int _flattenedHeaderValueCount = 0;
 
   DateTime? _date;
   DateTime? _expires;
@@ -490,10 +565,7 @@ final class _BridgeHttpHeaders implements HttpHeaders {
   @override
   set contentType(ContentType? value) {
     _contentType = value;
-    _setSingleValue(
-      HttpHeaders.contentTypeHeader,
-      value == null ? null : value.toString(),
-    );
+    _setSingleValue(HttpHeaders.contentTypeHeader, value?.toString());
   }
 
   @override
@@ -560,13 +632,20 @@ final class _BridgeHttpHeaders implements HttpHeaders {
   void add(String name, Object value, {bool preserveHeaderCase = false}) {
     final normalized = _normalize(name);
     final values = _headers.putIfAbsent(normalized, () => <String>[]);
+    var addedCount = 0;
     if (value is Iterable<Object?> && value is! String) {
       for (final item in value) {
         values.add(_valueToString(item));
+        addedCount++;
       }
     } else {
       values.add(_valueToString(value));
+      addedCount = 1;
     }
+    if (addedCount == 0) {
+      return;
+    }
+    _flattenedHeaderValueCount += addedCount;
     _originalNames[normalized] = preserveHeaderCase ? name : normalized;
     _updateComputedFields(normalized);
   }
@@ -574,6 +653,10 @@ final class _BridgeHttpHeaders implements HttpHeaders {
   @override
   void set(String name, Object value, {bool preserveHeaderCase = false}) {
     final normalized = _normalize(name);
+    final previous = _headers[normalized];
+    if (previous != null) {
+      _flattenedHeaderValueCount -= previous.length;
+    }
     _headers.remove(normalized);
     _originalNames.remove(normalized);
     add(name, value, preserveHeaderCase: preserveHeaderCase);
@@ -587,7 +670,12 @@ final class _BridgeHttpHeaders implements HttpHeaders {
       return;
     }
     final toRemove = _valueToString(value);
+    final before = values.length;
     values.removeWhere((element) => element == toRemove);
+    final removed = before - values.length;
+    if (removed > 0) {
+      _flattenedHeaderValueCount -= removed;
+    }
     if (values.isEmpty) {
       _headers.remove(normalized);
       _originalNames.remove(normalized);
@@ -598,6 +686,8 @@ final class _BridgeHttpHeaders implements HttpHeaders {
   @override
   void removeAll(String name) {
     final normalized = _normalize(name);
+    final removed = _headers[normalized]?.length ?? 0;
+    _flattenedHeaderValueCount -= removed;
     _headers.remove(normalized);
     _originalNames.remove(normalized);
     _updateComputedFields(normalized);
@@ -623,6 +713,7 @@ final class _BridgeHttpHeaders implements HttpHeaders {
     _headers.clear();
     _originalNames.clear();
     _noFolding.clear();
+    _flattenedHeaderValueCount = 0;
     _date = null;
     _expires = null;
     _ifModifiedSince = null;
@@ -635,11 +726,7 @@ final class _BridgeHttpHeaders implements HttpHeaders {
   }
 
   int get flattenedHeaderValueCount {
-    var count = 0;
-    for (final values in _headers.values) {
-      count += values.length;
-    }
-    return count;
+    return _flattenedHeaderValueCount;
   }
 
   int writeFlattenedHeaderPairs(
@@ -684,13 +771,16 @@ final class _BridgeHttpHeaders implements HttpHeaders {
   @pragma('vm:prefer-inline')
   void _setSingleValue(String name, String? value) {
     final normalized = _normalize(name);
+    final previousLength = _headers[normalized]?.length ?? 0;
     if (value == null) {
       _headers.remove(normalized);
       _originalNames.remove(normalized);
+      _flattenedHeaderValueCount -= previousLength;
       _updateComputedFields(normalized);
       return;
     }
     _headers[normalized] = <String>[value];
+    _flattenedHeaderValueCount += 1 - previousLength;
     _originalNames[normalized] = normalized;
     _updateComputedFields(normalized);
   }

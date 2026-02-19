@@ -6,8 +6,8 @@ import 'dart:typed_data';
 
 import 'package:contextual/contextual.dart' as contextual;
 import 'package:routed/routed.dart';
-import 'package:routed_ffi/routed_ffi.dart';
-import 'package:routed_ffi/src/native/routed_ffi_native.dart';
+import 'package:server_native/server_native.dart';
+import 'package:server_native/src/native/server_native_transport.dart';
 import 'package:routed_io/routed_io.dart';
 
 final class _BenchmarkOptions {
@@ -954,7 +954,7 @@ Future<_RunningServer> _startFfiNativeDirectShapeServer(
     port: port,
     backendHost: InternetAddress.loopbackIPv4.address,
     backendPort: 9,
-    benchmarkMode: benchmarkModeStaticRoutedFfiDirectShape,
+    benchmarkMode: benchmarkModeStaticServerNativeDirectShape,
   );
   final done = Completer<void>();
   // ignore: discarded_futures

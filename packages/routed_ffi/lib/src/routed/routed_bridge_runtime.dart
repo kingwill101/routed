@@ -2,7 +2,7 @@ import 'dart:async';
 import 'dart:typed_data';
 
 import 'package:routed/routed.dart';
-import 'package:routed_ffi/src/bridge/bridge_runtime.dart';
+import 'package:server_native/src/bridge/bridge_runtime.dart';
 
 /// Routed-specific adapter that dispatches bridge requests through an [Engine].
 final class RoutedBridgeRuntime {

@@ -4,7 +4,7 @@ import 'dart:io';
 
 import 'package:path/path.dart' as p;
 import 'package:routed/routed.dart';
-import 'package:routed_ffi/routed_ffi.dart';
+import 'package:server_native/server_native.dart';
 import 'package:test/test.dart';
 
 final class _RunningFfiServer {
@@ -19,11 +19,43 @@ final class _RunningFfiServer {
   final Future<void> serveFuture;
 }
 
+final class _RunningFfiMultiServer {
+  _RunningFfiMultiServer({
+    required this.baseUris,
+    required this.shutdown,
+    required this.serveFuture,
+  });
+
+  final List<Uri> baseUris;
+  final Completer<void> shutdown;
+  final Future<void> serveFuture;
+}
+
 Future<int> _reservePort() async {
   final socket = await ServerSocket.bind(InternetAddress.loopbackIPv4, 0);
   final port = socket.port;
   await socket.close();
   return port;
+}
+
+Future<bool> _supportsLoopbackIPv4() async {
+  try {
+    final socket = await ServerSocket.bind(InternetAddress.loopbackIPv4, 0);
+    await socket.close();
+    return true;
+  } on SocketException {
+    return false;
+  }
+}
+
+Future<bool> _supportsLoopbackIPv6() async {
+  try {
+    final socket = await ServerSocket.bind(InternetAddress.loopbackIPv6, 0);
+    await socket.close();
+    return true;
+  } on SocketException {
+    return false;
+  }
 }
 
 Future<_RunningFfiServer> _startServer(
@@ -47,6 +79,47 @@ Future<_RunningFfiServer> _startServer(
 
   return _RunningFfiServer(
     baseUri: baseUri,
+    shutdown: shutdown,
+    serveFuture: serveFuture,
+  );
+}
+
+Future<_RunningFfiMultiServer> _startMultiServer(
+  Engine engine, {
+  bool nativeCallback = false,
+  int listeners = 2,
+}) async {
+  final shutdown = Completer<void>();
+  final ports = <int>[];
+  for (var i = 0; i < listeners; i++) {
+    ports.add(await _reservePort());
+  }
+  final binds = ports
+      .map(
+        (port) => FfiServerBind(
+          host: InternetAddress.loopbackIPv4.address,
+          port: port,
+        ),
+      )
+      .toList(growable: false);
+  final serveFuture = serveFfiMulti(
+    engine,
+    binds: binds,
+    echo: false,
+    http3: false,
+    nativeCallback: nativeCallback,
+    shutdownSignal: shutdown.future,
+  );
+
+  final baseUris = ports
+      .map((port) => Uri.parse('http://127.0.0.1:$port'))
+      .toList(growable: false);
+  for (final baseUri in baseUris) {
+    await _waitUntilUp(baseUri.replace(path: '/'));
+  }
+
+  return _RunningFfiMultiServer(
+    baseUris: baseUris,
     shutdown: shutdown,
     serveFuture: serveFuture,
   );
@@ -85,6 +158,17 @@ Future<_RunningFfiServer> _startSecureServer(
 }
 
 Future<void> _stopServer(_RunningFfiServer running, Engine engine) async {
+  if (!running.shutdown.isCompleted) {
+    running.shutdown.complete();
+  }
+  await engine.close();
+  await running.serveFuture.timeout(const Duration(seconds: 5));
+}
+
+Future<void> _stopMultiServer(
+  _RunningFfiMultiServer running,
+  Engine engine,
+) async {
   if (!running.shutdown.isCompleted) {
     running.shutdown.complete();
   }
@@ -228,6 +312,140 @@ void main() {
       await _stopServer(running, engine);
     },
   );
+
+  test('serveFfiMulti proxies GET requests on each bind', () async {
+    final engine = Engine()
+      ..get('/ping', (ctx) async => ctx.json({'ok': true}));
+
+    final running = await _startMultiServer(engine);
+    final client = HttpClient();
+    try {
+      for (final baseUri in running.baseUris) {
+        final req = await client.getUrl(baseUri.replace(path: '/ping'));
+        final res = await req.close();
+        final body = await utf8.decodeStream(res);
+
+        expect(res.statusCode, HttpStatus.ok);
+        expect(jsonDecode(body), {'ok': true});
+      }
+    } finally {
+      client.close(force: true);
+    }
+
+    await _stopMultiServer(running, engine);
+  });
+
+  test(
+    'serveFfiMulti native callback mode proxies GET requests on each bind',
+    () async {
+      final engine = Engine()
+        ..get('/ping', (ctx) async => ctx.json({'ok': true}));
+
+      final running = await _startMultiServer(engine, nativeCallback: true);
+      final client = HttpClient();
+      try {
+        for (final baseUri in running.baseUris) {
+          final req = await client.getUrl(baseUri.replace(path: '/ping'));
+          final res = await req.close();
+          final body = await utf8.decodeStream(res);
+
+          expect(res.statusCode, HttpStatus.ok);
+          expect(jsonDecode(body), {'ok': true});
+        }
+      } finally {
+        client.close(force: true);
+      }
+
+      await _stopMultiServer(running, engine);
+    },
+  );
+
+  test('serveFfiMulti throws when binds list is empty', () async {
+    final engine = Engine();
+    await expectLater(
+      () => serveFfiMulti(engine, binds: const <FfiServerBind>[]),
+      throwsArgumentError,
+    );
+    await engine.close();
+  });
+
+  test('FfiMultiServer.bind handles localhost like loopback', () async {
+    final engine = Engine()
+      ..get('/ping', (ctx) async => ctx.json({'ok': true}));
+
+    final shutdown = Completer<void>();
+    final port = await _reservePort();
+    final serveFuture = FfiMultiServer.bind(
+      engine,
+      'localhost',
+      port,
+      echo: false,
+      http3: false,
+      shutdownSignal: shutdown.future,
+    );
+
+    final client = HttpClient();
+    try {
+      final v4Supported = await _supportsLoopbackIPv4();
+      final v6Supported = await _supportsLoopbackIPv6();
+      if (v4Supported) {
+        final uri = Uri.parse('http://127.0.0.1:$port/ping');
+        await _waitUntilUp(uri);
+        final req = await client.getUrl(uri);
+        final res = await req.close();
+        expect(res.statusCode, HttpStatus.ok);
+        expect(jsonDecode(await utf8.decodeStream(res)), {'ok': true});
+      }
+      if (v6Supported) {
+        final uri = Uri.parse('http://[::1]:$port/ping');
+        await _waitUntilUp(uri);
+        final req = await client.getUrl(uri);
+        final res = await req.close();
+        expect(res.statusCode, HttpStatus.ok);
+        expect(jsonDecode(await utf8.decodeStream(res)), {'ok': true});
+      }
+      expect(v4Supported || v6Supported, isTrue);
+    } finally {
+      client.close(force: true);
+    }
+
+    shutdown.complete();
+    await engine.close();
+    await serveFuture.timeout(const Duration(seconds: 5));
+  });
+
+  test('FfiMultiServer.bind handles any', () async {
+    final engine = Engine()
+      ..get('/ping', (ctx) async => ctx.json({'ok': true}));
+
+    final shutdown = Completer<void>();
+    final port = await _reservePort();
+    final serveFuture = FfiMultiServer.bind(
+      engine,
+      'any',
+      port,
+      echo: false,
+      http3: false,
+      shutdownSignal: shutdown.future,
+    );
+
+    final uri = Uri.parse('http://127.0.0.1:$port/ping');
+    await _waitUntilUp(uri);
+
+    final client = HttpClient();
+    try {
+      final req = await client.getUrl(uri);
+      final res = await req.close();
+      expect(res.statusCode, HttpStatus.ok);
+      expect(jsonDecode(await utf8.decodeStream(res)), {'ok': true});
+    } finally {
+      client.close(force: true);
+    }
+
+    shutdown.complete();
+    await engine.close();
+    await serveFuture.timeout(const Duration(seconds: 5));
+  });
 
   test('serveFfi forwards method, headers, query, and body', () async {
     final engine = Engine()
@@ -704,6 +922,37 @@ void main() {
     );
     await engine.close();
   });
+
+  test('serveSecureFfiMulti throws when binds list is empty', () async {
+    final engine = Engine();
+    await expectLater(
+      () => serveSecureFfiMulti(
+        engine,
+        binds: const <FfiServerBind>[],
+        certificatePath: 'cert.pem',
+        keyPath: 'key.pem',
+      ),
+      throwsArgumentError,
+    );
+    await engine.close();
+  });
+
+  test(
+    'serveSecureFfiMulti throws when certificate paths are missing',
+    () async {
+      final engine = Engine();
+      await expectLater(
+        () => serveSecureFfiMulti(
+          engine,
+          binds: const <FfiServerBind>[FfiServerBind()],
+          certificatePath: '',
+          keyPath: '',
+        ),
+        throwsArgumentError,
+      );
+      await engine.close();
+    },
+  );
 }
 
 final class _EchoWebSocketHandler extends WebSocketHandler {

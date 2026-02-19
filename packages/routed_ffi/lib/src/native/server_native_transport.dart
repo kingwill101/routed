@@ -2,13 +2,17 @@ import 'dart:ffi' as ffi;
 import 'dart:typed_data';
 
 import 'package:ffi/ffi.dart';
-import 'package:routed_ffi/src/ffi.g.dart';
+import 'package:server_native/src/ffi.g.dart';
 
 const int bridgeBackendKindTcp = 0;
 const int bridgeBackendKindUnix = 1;
 const int benchmarkModeNone = 0;
 const int benchmarkModeStaticNativeDirect = 1;
-const int benchmarkModeStaticRoutedFfiDirectShape = 2;
+const int benchmarkModeStaticServerNativeDirectShape = 2;
+
+@Deprecated('Use benchmarkModeStaticServerNativeDirectShape')
+const int benchmarkModeStaticRoutedFfiDirectShape =
+    benchmarkModeStaticServerNativeDirectShape;
 
 typedef NativeDirectRequestCallback =
     void Function(
@@ -144,7 +148,7 @@ final class NativeProxyServer {
       if (handle == ffi.nullptr) {
         nativeCallback?.close();
         throw StateError(
-          'Failed to start routed_ffi native proxy server for $host:$port',
+          'Failed to start server_native proxy server for $host:$port',
         );
       }
 

@@ -3,7 +3,7 @@ import 'dart:convert';
 import 'dart:io';
 import 'dart:typed_data';
 
-import 'package:routed_ffi/routed_ffi.dart';
+import 'package:server_native/server_native.dart';
 import 'package:test/test.dart';
 
 final class _RunningDirectServer {
