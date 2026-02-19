@@ -1,5 +1,3 @@
-import 'dart:io';
-
 import 'package:routed/routed.dart';
 import 'package:routed/middlewares.dart';
 import 'package:routed_testing/routed_testing.dart';

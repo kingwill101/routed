@@ -1,9 +1,6 @@
-import 'dart:io';
-
 import 'package:routed/routed.dart';
 import 'package:routed_testing/routed_testing.dart';
 import 'package:server_testing/server_testing.dart';
-import 'package:test/test.dart';
 
 import '../test_engine.dart';
 
@@ -53,8 +50,8 @@ void main() {
         final client = useClient(engine);
         final response = await client.postJson(
           '/users',
-          {},
-          headers: {
+          <String, Object?>{},
+          headers: <String, List<String>>{
             'Accept': ['application/json'],
           },
         );
@@ -81,7 +78,7 @@ void main() {
         final response = await client.postJson(
           '/users',
           {'name': 'Alice'},
-          headers: {
+          headers: <String, List<String>>{
             'Accept': ['application/json'],
           },
         );
@@ -89,9 +86,9 @@ void main() {
         response.assertStatus(HttpStatus.unprocessableEntity);
         // The response body should contain error details for the email field
         // ValidationError.errors is sent directly as the JSON body
-        final json = response.json();
-        expect(json, isA<Map>());
-        expect((json as Map).containsKey('email'), isTrue);
+        final json = response.json() as Map<String, Object?>;
+        expect(json, isA<Map<String, Object?>>());
+        expect(json.containsKey('email'), isTrue);
         await client.close();
       });
 
@@ -122,7 +119,7 @@ void main() {
         }, schema: RouteSchema.fromRules({'name': 'required'}));
 
         final client = useClient(engine);
-        final response = await client.postJson('/users', {});
+        final response = await client.postJson('/users', <String, Object?>{});
 
         response.assertStatus(HttpStatus.unprocessableEntity);
         expect(
@@ -193,7 +190,7 @@ void main() {
 
         final client = useClient(engine);
         // Send empty body — should succeed because no schema validation
-        final response = await client.postJson('/open', {});
+        final response = await client.postJson('/open', <String, Object?>{});
 
         response.assertStatus(HttpStatus.ok);
         await client.close();
@@ -201,13 +198,20 @@ void main() {
 
       test('no validation when schema has no validationRules', () async {
         final engine = testEngine();
-        engine.post('/documented', (ctx) async {
-          return ctx.json({'status': 'ok'});
-        }, schema: RouteSchema(summary: 'A documented endpoint'));
+        engine.post(
+          '/documented',
+          (ctx) async {
+            return ctx.json({'status': 'ok'});
+          },
+          schema: const RouteSchema(summary: 'A documented endpoint'),
+        );
 
         final client = useClient(engine);
         // Send empty body — should succeed because schema has no validation rules
-        final response = await client.postJson('/documented', {});
+        final response = await client.postJson(
+          '/documented',
+          <String, Object?>{},
+        );
 
         response.assertStatus(HttpStatus.ok);
         await client.close();
@@ -225,7 +229,7 @@ void main() {
 
         final client = useClient(engine);
         // Missing required 'title' field
-        final response = await client.postJson('/items', {});
+        final response = await client.postJson('/items', <String, Object?>{});
 
         response.assertStatus(HttpStatus.unprocessableEntity);
         await client.close();
@@ -285,15 +289,15 @@ void main() {
         // All fields invalid or missing
         final response = await client.postJson(
           '/register',
-          {},
-          headers: {
+          <String, Object?>{},
+          headers: <String, List<String>>{
             'Accept': ['application/json'],
           },
         );
 
         response.assertStatus(HttpStatus.unprocessableEntity);
         // ValidationError.errors is sent directly as the JSON body
-        final json = response.json() as Map;
+        final json = response.json() as Map<String, Object?>;
         // All three fields should have errors
         expect(json.containsKey('username'), isTrue);
         expect(json.containsKey('email'), isTrue);

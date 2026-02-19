@@ -1,7 +1,6 @@
 import 'dart:async';
 
 import 'package:routed/routed.dart';
-import 'package:routed/src/router/middleware_reference.dart';
 import 'package:routed/src/router/registered_route.dart';
 import 'package:server_testing/server_testing.dart';
 
@@ -16,13 +15,11 @@ void main() {
       'placeholder throws UnimplementedError if called without resolution',
       () async {
         final placeholder = MiddlewareReference.create('unresolved');
+        final dynamicPlaceholder = placeholder as dynamic;
 
-        // Build a minimal EngineContext-like call
         expect(
-          () => placeholder(
-            // Can't easily construct EngineContext without engine, so just
-            // verify the function throws via the type system
-            throw UnimplementedError('would need engine context'),
+          () => dynamicPlaceholder(
+            Object(),
             () => throw UnimplementedError('next'),
           ),
           throwsA(isA<UnimplementedError>()),

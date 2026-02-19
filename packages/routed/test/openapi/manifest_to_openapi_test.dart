@@ -362,9 +362,9 @@ void main() {
           RouteManifestEntry(
             method: 'GET',
             path: '/users/:id',
-            schema: RouteSchema(
+            schema: const RouteSchema(
               params: [
-                const ParamSchema(
+                ParamSchema(
                   'id',
                   location: ParamLocation.path,
                   description: 'User ID',
@@ -395,16 +395,16 @@ void main() {
           RouteManifestEntry(
             method: 'GET',
             path: '/users',
-            schema: RouteSchema(
+            schema: const RouteSchema(
               params: [
-                const ParamSchema(
+                ParamSchema(
                   'page',
                   location: ParamLocation.query,
                   description: 'Page number',
                   required: false,
                   jsonSchema: {'type': 'integer', 'minimum': 1},
                 ),
-                const ParamSchema(
+                ParamSchema(
                   'limit',
                   location: ParamLocation.query,
                   description: 'Items per page',
@@ -432,9 +432,9 @@ void main() {
           RouteManifestEntry(
             method: 'GET',
             path: '/data',
-            schema: RouteSchema(
+            schema: const RouteSchema(
               params: [
-                const ParamSchema(
+                ParamSchema(
                   'X-Api-Key',
                   location: ParamLocation.header,
                   description: 'API key',
@@ -586,10 +586,10 @@ void main() {
             method: 'POST',
             path: '/users',
             name: 'users.store',
-            schema: RouteSchema(
+            schema: const RouteSchema(
               summary: 'Create user',
-              tags: const ['users'],
-              body: const BodySchema(
+              tags: ['users'],
+              body: BodySchema(
                 required: true,
                 jsonSchema: {
                   'type': 'object',
@@ -600,7 +600,7 @@ void main() {
                   'required': ['name', 'email'],
                 },
               ),
-              responses: const [
+              responses: [
                 ResponseSchema(201, description: 'Created'),
                 ResponseSchema(422, description: 'Validation error'),
               ],
@@ -610,18 +610,18 @@ void main() {
             method: 'GET',
             path: '/users/:id',
             name: 'users.show',
-            schema: RouteSchema(
+            schema: const RouteSchema(
               summary: 'Get user by ID',
-              tags: const ['users'],
+              tags: ['users'],
               params: [
-                const ParamSchema(
+                ParamSchema(
                   'id',
                   location: ParamLocation.path,
                   description: 'User ID',
                   jsonSchema: {'type': 'integer'},
                 ),
               ],
-              responses: const [
+              responses: [
                 ResponseSchema(200, description: 'User found'),
                 ResponseSchema(404, description: 'User not found'),
               ],

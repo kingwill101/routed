@@ -41,14 +41,14 @@ void main() {
         strategy: RateLimitStrategy.slidingWindow,
         identity: '10.0.0.1',
         remaining: 0,
-        retryAfter: Duration(seconds: 30),
+        retryAfter: const Duration(seconds: 30),
       );
 
       expect(event.policy, equals('auth'));
       expect(event.strategy, equals(RateLimitStrategy.slidingWindow));
       expect(event.identity, equals('10.0.0.1'));
       expect(event.remaining, equals(0));
-      expect(event.retryAfter, equals(Duration(seconds: 30)));
+      expect(event.retryAfter, equals(const Duration(seconds: 30)));
       expect(event.failoverMode, isNull);
       expect(event, isA<RateLimitEvent>());
     });
@@ -59,12 +59,12 @@ void main() {
         strategy: RateLimitStrategy.quota,
         identity: 'user:42',
         remaining: 0,
-        retryAfter: Duration(hours: 1),
+        retryAfter: const Duration(hours: 1),
         failoverMode: RateLimitFailoverMode.block,
       );
 
       expect(event.strategy, equals(RateLimitStrategy.quota));
-      expect(event.retryAfter, equals(Duration(hours: 1)));
+      expect(event.retryAfter, equals(const Duration(hours: 1)));
       expect(event.failoverMode, equals(RateLimitFailoverMode.block));
     });
 
@@ -115,7 +115,7 @@ void main() {
         strategy: RateLimitStrategy.tokenBucket,
         identity: 'id',
         remaining: 0,
-        retryAfter: Duration(seconds: 10),
+        retryAfter: const Duration(seconds: 10),
       );
       final after = DateTime.now();
 

@@ -31,7 +31,6 @@ import 'package:routed/src/engine/wrapped_request.dart';
 import 'package:routed/src/events/event_manager.dart';
 import 'package:routed/src/logging/logging.dart';
 import 'package:routed/src/observability/health.dart';
-import 'package:routed/src/middleware/schema_validation.dart';
 import 'package:routed/src/openapi/schema.dart';
 import 'package:routed/src/provider/provider.dart';
 import 'package:routed/src/provider/config_utils.dart';

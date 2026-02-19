@@ -27,8 +27,8 @@ void main() {
         ),
         servers: const [OpenApiServer(url: 'https://api.example.com')],
         paths: {
-          '/users': OpenApiPathItem(
-            get: const OpenApiOperation(
+          '/users': const OpenApiPathItem(
+            get: OpenApiOperation(
               summary: 'List users',
               operationId: 'listUsers',
               tags: ['users'],
@@ -41,12 +41,18 @@ void main() {
 
       final json = spec.toJson();
       expect(json['openapi'], '3.1.0');
-      expect((json['info'] as Map)['description'], 'A test API');
-      expect(json['servers'], isA<List>());
-      expect((json['servers'] as List).length, 1);
-      expect(json['paths'], isA<Map>());
-      expect((json['paths'] as Map).containsKey('/users'), isTrue);
-      expect(json['tags'], isA<List>());
+      expect(
+        (json['info'] as Map<String, Object?>)['description'],
+        'A test API',
+      );
+      expect(json['servers'], isA<List<Object?>>());
+      expect((json['servers'] as List<Object?>).length, 1);
+      expect(json['paths'], isA<Map<String, Object?>>());
+      expect(
+        (json['paths'] as Map<String, Object?>).containsKey('/users'),
+        isTrue,
+      );
+      expect(json['tags'], isA<List<Object?>>());
     });
 
     test('round-trip through JSON preserves data', () {
@@ -64,8 +70,8 @@ void main() {
           OpenApiServer(url: 'http://localhost:8080', description: 'Dev'),
         ],
         paths: {
-          '/items': OpenApiPathItem(
-            get: const OpenApiOperation(
+          '/items': const OpenApiPathItem(
+            get: OpenApiOperation(
               summary: 'Get items',
               description: 'Returns all items',
               operationId: 'getItems',
@@ -89,7 +95,7 @@ void main() {
                 ),
               },
             ),
-            post: const OpenApiOperation(
+            post: OpenApiOperation(
               summary: 'Create item',
               operationId: 'createItem',
               tags: ['items'],
@@ -111,8 +117,8 @@ void main() {
               deprecated: true,
             ),
           ),
-          '/items/{id}': OpenApiPathItem(
-            delete: const OpenApiOperation(
+          '/items/{id}': const OpenApiPathItem(
+            delete: OpenApiOperation(
               summary: 'Delete item',
               operationId: 'deleteItem',
               parameters: [
@@ -243,7 +249,7 @@ void main() {
 
     test('operationFor returns correct operation', () {
       const op = OpenApiOperation(summary: 'test');
-      final item = OpenApiPathItem(get: op);
+      final item = const OpenApiPathItem(get: op);
       expect(item.operationFor('GET'), isNotNull);
       expect(item.operationFor('GET')!.summary, 'test');
       expect(item.operationFor('POST'), isNull);
@@ -287,17 +293,15 @@ void main() {
     });
 
     test('round-trip with multiple methods', () {
-      final original = OpenApiPathItem(
+      final original = const OpenApiPathItem(
         summary: 'User path',
-        get: const OpenApiOperation(
+        get: OpenApiOperation(
           summary: 'List',
           operationId: 'list',
           responses: {'200': OpenApiResponse(description: 'OK')},
         ),
-        post: const OpenApiOperation(summary: 'Create', operationId: 'create'),
-        parameters: const [
-          OpenApiParameter(name: 'x-trace', location: 'header'),
-        ],
+        post: OpenApiOperation(summary: 'Create', operationId: 'create'),
+        parameters: [OpenApiParameter(name: 'x-trace', location: 'header')],
       );
       final restored = OpenApiPathItem.fromJson(original.toJson());
       expect(restored.summary, 'User path');

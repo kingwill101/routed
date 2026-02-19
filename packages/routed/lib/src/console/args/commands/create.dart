@@ -298,7 +298,7 @@ class CreateCommand extends BaseCommand {
       }
 
       if (inWorkspace) {
-        await _addToWorkspace(workspaceRoot!, targetDir);
+        await _addToWorkspace(workspaceRoot, targetDir);
         logger.info('Added "$packageName" to workspace.');
       }
 

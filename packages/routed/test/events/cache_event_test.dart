@@ -26,12 +26,12 @@ void main() {
       final withTtl = CacheWriteEvent(
         store: 'redis',
         key: 'token:xyz',
-        ttl: Duration(minutes: 15),
+        ttl: const Duration(minutes: 15),
       );
 
       expect(withTtl.store, equals('redis'));
       expect(withTtl.key, equals('token:xyz'));
-      expect(withTtl.ttl, equals(Duration(minutes: 15)));
+      expect(withTtl.ttl, equals(const Duration(minutes: 15)));
       expect(withTtl, isA<CacheEvent>());
 
       final withoutTtl = CacheWriteEvent(store: 'memory', key: 'data:1');
@@ -77,7 +77,7 @@ void main() {
 
     test('different instances have independent timestamps', () async {
       final first = CacheHitEvent(store: 's', key: 'k');
-      await Future.delayed(Duration(milliseconds: 10));
+      await Future<void>.delayed(const Duration(milliseconds: 10));
       final second = CacheMissEvent(store: 's', key: 'k');
 
       expect(

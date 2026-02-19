@@ -52,6 +52,8 @@
 ///           servers:
 ///             - url: "https://api.example.com"
 /// ```
+library;
+
 import 'dart:convert';
 
 import 'package:routed/routed.dart';
@@ -207,12 +209,12 @@ Engine createOpenApiApp({UserRepository? repository}) {
       }
       return ctx.json(user.toJson());
     },
-    schema: RouteSchema(
+    schema: const RouteSchema(
       summary: 'Get a user by ID',
-      tags: const ['users'],
+      tags: ['users'],
       operationId: 'getUser',
       params: [
-        const ParamSchema(
+        ParamSchema(
           'id',
           location: ParamLocation.path,
           description: 'The user\'s numeric ID',
@@ -220,7 +222,7 @@ Engine createOpenApiApp({UserRepository? repository}) {
           example: 1,
         ),
       ],
-      responses: const [
+      responses: [
         ResponseSchema(200, description: 'The user object'),
         ResponseSchema(404, description: 'User not found'),
       ],
@@ -239,23 +241,23 @@ Engine createOpenApiApp({UserRepository? repository}) {
       }
       return ctx.json({'status': 'deleted'});
     },
-    schema: RouteSchema(
+    schema: const RouteSchema(
       summary: 'Delete a user',
       description:
           'Deprecated: use PATCH /api/users/:id with '
           '{"active": false} instead.',
-      tags: const ['users'],
+      tags: ['users'],
       operationId: 'deleteUser',
       deprecated: true,
       params: [
-        const ParamSchema(
+        ParamSchema(
           'id',
           location: ParamLocation.path,
           description: 'The user\'s numeric ID',
           jsonSchema: {'type': 'integer'},
         ),
       ],
-      responses: const [
+      responses: [
         ResponseSchema(200, description: 'User deleted'),
         ResponseSchema(404, description: 'User not found'),
       ],

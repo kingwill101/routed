@@ -3,7 +3,6 @@ import 'dart:async';
 import 'package:routed/routed.dart';
 import 'package:routed_testing/routed_testing.dart';
 import 'package:server_testing/server_testing.dart';
-import '../test_engine.dart';
 
 /// A simple controller for testing.
 class GreetingController extends Controller {
@@ -145,7 +144,7 @@ void main() {
         });
 
         tess('POST /greetings/ returns created', (engine, client) async {
-          final res = await client.postJson('/greetings/', {});
+          final res = await client.postJson('/greetings/', <String, Object?>{});
           res
             ..assertStatus(200)
             ..assertJsonPath('created', true);

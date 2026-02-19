@@ -8,10 +8,10 @@ import 'package:test/test.dart';
 void main() {
   group('ShutdownConfig', () {
     test('copyWith preserves fields when no overrides given', () {
-      final config = ShutdownConfig(
+      final config = const ShutdownConfig(
         enabled: true,
-        gracePeriod: const Duration(seconds: 20),
-        forceAfter: const Duration(minutes: 1),
+        gracePeriod: Duration(seconds: 20),
+        forceAfter: Duration(minutes: 1),
         exitCode: 0,
         notifyReadiness: true,
         signals: {ProcessSignal.sigint},
@@ -26,10 +26,10 @@ void main() {
     });
 
     test('copyWith overrides specified fields', () {
-      final config = ShutdownConfig(
+      final config = const ShutdownConfig(
         enabled: true,
-        gracePeriod: const Duration(seconds: 20),
-        forceAfter: const Duration(minutes: 1),
+        gracePeriod: Duration(seconds: 20),
+        forceAfter: Duration(minutes: 1),
         exitCode: 0,
         notifyReadiness: true,
         signals: {ProcessSignal.sigint},
@@ -99,10 +99,10 @@ void main() {
     late ShutdownConfig config;
 
     setUp(() {
-      config = ShutdownConfig(
+      config = const ShutdownConfig(
         enabled: true,
-        gracePeriod: const Duration(seconds: 5),
-        forceAfter: const Duration(seconds: 30),
+        gracePeriod: Duration(seconds: 5),
+        forceAfter: Duration(seconds: 30),
         exitCode: 0,
         notifyReadiness: true,
         signals: {},

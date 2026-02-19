@@ -74,16 +74,16 @@ class ReadOnlyContainer extends Container {
   @override
   Future<T> make<T>() => _inner.make<T>();
 
-    @override
-    Future<void> waitFor<T>({Duration? timeout}) =>
+  @override
+  Future<void> waitFor<T>({Duration? timeout}) =>
       _inner.waitFor<T>(timeout: timeout);
 
-    @override
-    Future<void> waitForType(Type type, {Duration? timeout}) =>
+  @override
+  Future<void> waitForType(Type type, {Duration? timeout}) =>
       _inner.waitForType(type, timeout: timeout);
 
-    @override
-    Future<T> makeWhenAvailable<T>({Duration? timeout}) =>
+  @override
+  Future<T> makeWhenAvailable<T>({Duration? timeout}) =>
       _inner.makeWhenAvailable<T>(timeout: timeout);
 
   @override
