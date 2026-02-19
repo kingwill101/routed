@@ -416,6 +416,15 @@ Cross-platform artifacts are built by:
 
 - `.github/workflows/server_native_prebuilt.yml`
 
+CI build output is staged under:
+
+- `packages/server_native/native/prebuilt/<platform>/`
+
+To persist those binaries in-repo from CI, run the workflow manually with:
+
+- `save_to_repo=true`
+- `target_branch=<branch>`
+
 Artifact naming:
 
 - `server_native-<platform>.tar.gz`
@@ -427,6 +436,33 @@ Current platform labels:
 - `windows-x64`, `windows-arm64`
 - `android-arm64`, `android-armv7`, `android-x64`
 - `ios-arm64`, `ios-sim-arm64`, `ios-sim-x64`
+
+Pull host prebuilts into your project:
+
+```bash
+dart run server_native:setup
+```
+
+Pull a specific release tag and platform:
+
+```bash
+dart run server_native:setup --tag v0.1.0 --platform linux-x64
+```
+
+Downloaded files are extracted to:
+
+- `.prebuilt/<platform>/`
+
+Build hook prebuilt lookup order:
+
+1. `SERVER_NATIVE_PREBUILT` (absolute path to a library file)
+2. `<package-root>/native/<platform>/<library>` (packaged prebuilt)
+3. `<package-root>/native/prebuilt/<platform>/<library>`
+4. `<repo-root>/.prebuilt/<platform>/<library>`
+5. `<project-root>/.prebuilt/<platform>/<library>`
+
+If no prebuilt library is found, the hook falls back to Rust source build
+through `native_toolchain_rust`.
 
 ## Troubleshooting
 

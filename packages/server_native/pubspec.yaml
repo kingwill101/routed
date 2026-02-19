@@ -12,6 +12,9 @@ funding:
 
 resolution: workspace
 
+executables:
+  setup:
+
 environment:
   sdk: '>=3.9.0 <4.0.0'
 

@@ -7,6 +7,16 @@ on:
         description: "Release tag (e.g. v0.1.0). If empty, uploads artifacts only."
         required: false
         type: string
+      save_to_repo:
+        description: "Commit built prebuilts into packages/server_native/native/prebuilt."
+        required: false
+        type: boolean
+        default: false
+      target_branch:
+        description: "Branch to commit prebuilts to when save_to_repo=true."
+        required: false
+        type: string
+        default: master
   push:
     tags:
       - "v*"
@@ -184,9 +194,11 @@ jobs:
         shell: bash
         run: |
           set -euxo pipefail
-          mkdir -p staging
-          cp "packages/server_native/native/${{ steps.locate.outputs.path }}" "staging/${{ matrix.binary_name }}"
-          tar czf "${{ env.PREBUILT_PACKAGE }}-${{ matrix.os_label }}.tar.gz" -C staging "${{ matrix.binary_name }}"
+          target_dir="packages/server_native/native/prebuilt/${{ matrix.os_label }}"
+          mkdir -p "$target_dir"
+          cp "packages/server_native/native/${{ steps.locate.outputs.path }}" "$target_dir/${{ matrix.binary_name }}"
+          ls -lh "$target_dir/${{ matrix.binary_name }}"
+          tar czf "${{ env.PREBUILT_PACKAGE }}-${{ matrix.os_label }}.tar.gz" -C "$target_dir" "${{ matrix.binary_name }}"
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
@@ -224,3 +236,51 @@ jobs:
           name: ${{ steps.tag.outputs.tag }}
           generate_release_notes: true
           files: artifacts/**/*.tar.gz
+
+  save-prebuilts:
+    name: Save Prebuilts To Repo
+    if: github.event_name == 'workflow_dispatch' && github.event.inputs.save_to_repo == 'true'
+    needs: [native]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.inputs.target_branch }}
+          fetch-depth: 0
+
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+
+      - name: Expand prebuilts into package tree
+        shell: bash
+        run: |
+          set -euxo pipefail
+          root="packages/server_native/native/prebuilt"
+          mkdir -p "$root"
+
+          shopt -s globstar nullglob
+          for tarball in artifacts/**/*.tar.gz; do
+            name="$(basename "$tarball")"
+            platform="${name#${{ env.PREBUILT_PACKAGE }}-}"
+            platform="${platform%.tar.gz}"
+            target="$root/$platform"
+            mkdir -p "$target"
+            tar xzf "$tarball" -C "$target"
+            find "$target" -maxdepth 2 -type f | sort
+          done
+
+      - name: Commit prebuilts (if changed)
+        shell: bash
+        run: |
+          set -euxo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add packages/server_native/native/prebuilt
+          if git diff --cached --quiet; then
+            echo "No prebuilt changes to commit."
+            exit 0
+          fi
+          git commit -m "chore(server_native): update prebuilt native libraries"
+          git push origin "HEAD:${{ github.event.inputs.target_branch }}"
