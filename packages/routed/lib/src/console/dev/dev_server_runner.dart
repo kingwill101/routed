@@ -81,6 +81,7 @@ class DevServerRunner {
     this.hotReloadExpected = true,
     List<String>? additionalWatchPaths,
     void Function()? onHotReloadEnabled,
+    void Function()? onReload,
     // Testability hooks
     DirectoryWatcherBuilder? directoryWatcher,
     bool? isWindows,
@@ -88,6 +89,7 @@ class DevServerRunner {
     ProcessStart? startProcess,
     ProcessRun? runProcess,
   }) : _onHotReloadEnabled = onHotReloadEnabled,
+       _onReload = onReload,
        _directoryWatcher = directoryWatcher ?? DirectoryWatcher.new,
        _isWindows = isWindows ?? io.Platform.isWindows,
        _sigint = sigint ?? io.ProcessSignal.sigint,
@@ -133,6 +135,9 @@ class DevServerRunner {
 
   /// Optional callback when hot reload is detected/enabled.
   final void Function()? _onHotReloadEnabled;
+
+  /// Optional callback when a reload event is detected.
+  final void Function()? _onReload;
 
   /// Additional project files/directories to watch for changes.
   final List<String> extraWatchPaths;
@@ -333,6 +338,7 @@ class DevServerRunner {
     if (hotReloadExpected) {
       // Let in-app hotreloader react; we only log here.
       log('[reload] change detected (in-app hot reload expected).');
+      _onReload?.call();
       return;
     }
 
@@ -344,6 +350,7 @@ class DevServerRunner {
     await _killServer();
     await _serve(const []);
     _isReloading = false;
+    _onReload?.call();
     log('[reload] restart complete.');
   }
 

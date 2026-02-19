@@ -1,0 +1,22 @@
+name: routed_io
+description: dart:io transport boot APIs for routed servers.
+version: 0.1.0
+repository: https://github.com/kingwill101/routed/tree/master/packages/routed_io
+tags:
+  - routed
+  - server
+  - io
+
+funding:
+  - https://www.buymeacoffee.com/kingwill101
+
+resolution: workspace
+
+environment:
+  sdk: '>=3.9.0 <4.0.0'
+
+dependencies:
+  routed: ^0.3.3
+
+dev_dependencies:
+  lints: ^6.0.0

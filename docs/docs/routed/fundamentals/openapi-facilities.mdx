@@ -1,0 +1,219 @@
+---
+title: OpenAPI Facilities
+description: Strengths, tradeoffs, and practical gotchas when using Routed OpenAPI generation
+sidebar_position: 16
+---
+
+# OpenAPI Facilities
+
+Routed supports OpenAPI generation from real route registrations and can enrich route metadata from three sources:
+
+1. `schema:` on route registration
+2. OpenAPI annotations on handlers (for example `@Summary`, `@ApiResponse`)
+3. Standard Dartdoc comments on handlers and route registrations
+
+This page covers the practical upsides, downsides, and the common gotchas you should expect in larger projects.
+
+## Why teams like this approach
+
+- **Runtime truth first**: specs start from registered routes, so nested routers and mounts are represented as the app actually runs.
+- **Progressive adoption**: you can begin with `schema:` only, then add annotations and Dartdoc as the API grows.
+- **Good defaults**: routes without explicit metadata still produce operations with generated `operationId`s and default 200 responses.
+- **Cross-file support**: handler metadata can be merged even when routes are defined in multiple files and mounted later.
+- **Runtime + build workflows**: generate specs on the fly (`/openapi.json`) and as static build artifacts (`build_runner`).
+
+## Tradeoffs and limitations
+
+- **Best accuracy comes from explicit metadata**: `schema:` is still the most deterministic source.
+- **Source matching complexity**: inline closures and deeply mounted routers require identity matching heuristics; they are better than before but still less explicit than named handlers.
+- **Extra build/runtime work**: metadata extraction parses Dart source files, which adds overhead compared to schema-only generation.
+- **Generated output drift risk**: runtime and static generation can diverge if teams forget to regenerate static artifacts.
+
+## Merge rules (important)
+
+When multiple sources define the same fields, Routed merges deterministically:
+
+- Scalar fields (`summary`, `description`, `operationId`, `deprecated`, `hidden`): `schema` > annotation > Dartdoc.
+- Tags: merged and de-duplicated.
+- Params and responses: merged by semantic identity; schema-defined values win on collisions.
+- Validation rules: taken from `schema.validationRules`.
+
+## Example: schema + annotations + Dartdoc
+
+The following route set demonstrates all three metadata sources:
+
+```dart
+import 'package:routed/routed.dart';
+
+class ProductHandlers {
+  @Summary('List products from annotation')
+  @Tags(['Catalog'])
+  @ApiResponse(200, description: 'Product list')
+  Future<Response> list(EngineContext ctx) async {
+    return ctx.json({'data': []});
+  }
+}
+
+void registerProductRoutes(Router router) {
+  final handlers = ProductHandlers();
+
+  router.get(
+    '/products',
+    handlers.list,
+    schema: const RouteSchema(
+      operationId: 'catalogProducts', // schema wins over annotation
+      tags: ['Catalog'],
+    ),
+  );
+
+  /// Product health check.
+  ///
+  /// This is an inline closure route with Dartdoc only.
+  router.get('/products/health', (ctx) => ctx.json({'ok': true}));
+
+  // No schema, no annotations, no docs.
+  router.get('/products/raw', (ctx) => ctx.json({'mode': 'raw'}));
+}
+```
+
+Generated OpenAPI output will look like this (abridged):
+
+```json
+{
+  "paths": {
+    "/products": {
+      "get": {
+        "summary": "List products from annotation",
+        "operationId": "catalogProducts",
+        "tags": ["Catalog"],
+        "responses": {
+          "200": {"description": "Product list"}
+        }
+      }
+    },
+    "/products/health": {
+      "get": {
+        "summary": "Product health check.",
+        "description": "This is an inline closure route with Dartdoc only.",
+        "operationId": "getProductsHealth"
+      }
+    },
+    "/products/raw": {
+      "get": {
+        "operationId": "getProductsRaw"
+      }
+    }
+  }
+}
+```
+
+Notes from this example:
+
+- `/products` shows schema + annotation merge, with schema winning on `operationId`.
+- `/products/health` shows Dartdoc extraction for an inline closure route.
+- `/products/raw` shows fallback behavior when no metadata exists.
+
+## Example: build output and runtime output
+
+```bash
+cd examples/openapi_demo
+dart run routed spec
+dart run build_runner build --delete-conflicting-outputs
+```
+
+This writes:
+
+- `.dart_tool/routed/route_manifest.json`
+- `lib/generated/openapi.json`
+- `lib/generated/openapi_controller.g.dart`
+
+At runtime, you can also serve a generated spec endpoint:
+
+```dart
+engine.get('/openapi.json', (ctx) async {
+  final manifest = engine.buildRouteManifest();
+  final enriched = await enrichManifestWithProjectMetadata(
+    manifest,
+    projectRoot: '/path/to/project',
+    packageName: 'my_app',
+  );
+
+  final spec = manifestToOpenApi(enriched);
+  return ctx.string(spec.toJsonString(pretty: true));
+});
+```
+
+In CI, keep runtime and static outputs aligned by asserting key paths/operations are equivalent.
+
+## Gotchas and workarounds
+
+### 1) Inline closures in mounted routers
+
+**Symptom**: docs/annotations are missing or attached to the wrong mounted route.
+
+**Why**: inline closures do not have stable function names.
+
+**Workarounds**:
+
+- Prefer named handlers for critical endpoints.
+- Keep route registration comments directly above the route call.
+- Use explicit `schema:` for routes where correctness is non-negotiable.
+
+### 2) Multiple files define the same leaf path
+
+**Symptom**: two modules both define `GET /inline`, mounted under different prefixes.
+
+**Why**: suffix-only matching can become ambiguous.
+
+**Workarounds**:
+
+- Keep modules logically separated with distinct route comments.
+- Use route names and/or explicit `schema.operationId` for deterministic identity.
+- Prefer named handlers in repeated path patterns.
+
+### 3) Runtime spec and generated spec mismatch
+
+**Symptom**: `/openapi.json` shows updates but `lib/generated/openapi.json` is stale.
+
+**Workarounds**:
+
+- Regenerate before release:
+
+```bash
+cd examples/openapi_demo
+dart run routed spec
+dart run build_runner build --delete-conflicting-outputs
+```
+
+- Add CI checks that compare key runtime and generated operations.
+
+### 4) Annotation-only metadata not showing
+
+**Symptom**: `@Summary` is ignored.
+
+**Common causes**:
+
+- Annotation is on a symbol that is not the handler used by the route.
+- Handler is refactored to inline closure without moving docs to route call.
+
+**Workarounds**:
+
+- Annotate the exact handler function/method passed to the router.
+- For closure handlers, add Dartdoc directly above route registration.
+
+### 5) Docs unexpectedly overwritten
+
+**Symptom**: annotation `operationId` or `summary` does not appear.
+
+**Why**: explicit `schema:` fields take precedence.
+
+**Workaround**:
+
+- Treat `schema:` as authoritative; remove conflicting fields from annotations if you want annotation values to appear.
+
+## Recommended strategy for production APIs
+
+1. Use `schema:` for endpoint contracts that must be exact (params, body, responses, validation).
+2. Use annotations for readability and tooling support on named handlers.
+3. Use Dartdoc for inline closure routes and quick descriptive context.
+4. Keep a parity test between runtime and generated specs for your important paths.

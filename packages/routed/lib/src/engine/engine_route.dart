@@ -51,6 +51,15 @@ class EngineRoute {
   /// OpenAPI generation and runtime validation.
   final RouteSchema? schema;
 
+  /// Source file where this route was registered.
+  final String? sourceFile;
+
+  /// 1-based source line where this route was registered.
+  final int? sourceLine;
+
+  /// 1-based source column where this route was registered.
+  final int? sourceColumn;
+
   /// Whether this is a fallback route.
   ///
   /// Fallback routes match any request that doesn't match any other route.
@@ -84,6 +93,9 @@ class EngineRoute {
     this.constraints = const {},
     this.schema,
     this.isFallback = false,
+    this.sourceFile,
+    this.sourceLine,
+    this.sourceColumn,
   }) : _patternRegistry = patternRegistry {
     final patternData = _buildUriPattern(path, _patternRegistry);
     _uriPattern = patternData.pattern;
@@ -108,6 +120,9 @@ class EngineRoute {
        constraints = const {},
        schema = null,
        isFallback = true,
+       sourceFile = null,
+       sourceLine = null,
+       sourceColumn = null,
        _patternRegistry = patternRegistry {
     _uriPattern = RegExp('.*');
     _parameterPatterns = const {};

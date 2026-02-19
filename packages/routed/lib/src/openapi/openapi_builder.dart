@@ -2,8 +2,9 @@
 /// from a route manifest JSON file.
 ///
 /// This builder reads the route manifest (produced by running
-/// `dart run routed spec`) and converts it into `openapi.json` plus a
-/// serving controller.
+/// `dart run routed spec`), enriches route metadata with handler annotations
+/// and handler Dartdoc comments, then converts the result into `openapi.json`
+/// plus a serving controller.
 ///
 /// ## Usage
 ///
@@ -46,11 +47,14 @@
 library;
 
 import 'dart:convert';
+import 'dart:io' as io;
 
 import 'package:build/build.dart';
 import 'package:routed/src/engine/route_manifest.dart';
 import 'package:routed/src/openapi/manifest_to_openapi.dart';
 import 'package:routed/src/openapi/openapi_spec.dart';
+import 'package:routed/src/openapi/route_metadata_extractor.dart';
+import 'package:routed/src/openapi/route_metadata_merger.dart';
 
 /// Factory function registered in `build.yaml`.
 Builder openApiBuilder(BuilderOptions options) =>
@@ -76,9 +80,8 @@ class _OpenApiBuilder implements Builder {
     final manifestPath =
         _config['manifest_path'] as String? ?? _defaultManifestPath;
 
-    // Locate the manifest file.
-    final manifestAssetId = AssetId(buildStep.inputId.package, manifestPath);
-    if (!await buildStep.canRead(manifestAssetId)) {
+    final manifestJson = await _readManifestJson(buildStep, manifestPath);
+    if (manifestJson == null) {
       log.warning(
         'OpenAPI builder: manifest file not found at "$manifestPath". '
         'Run `dart run routed spec` first to generate it.',
@@ -87,7 +90,6 @@ class _OpenApiBuilder implements Builder {
     }
 
     // Parse the manifest.
-    final manifestJson = await buildStep.readAsString(manifestAssetId);
     final Map<String, Object?> manifestMap;
     try {
       manifestMap = jsonDecode(manifestJson) as Map<String, Object?>;
@@ -96,7 +98,10 @@ class _OpenApiBuilder implements Builder {
       return;
     }
 
-    final manifest = RouteManifest.fromJson(manifestMap);
+    var manifest = RouteManifest.fromJson(manifestMap);
+
+    final extractedMetadata = await extractRouteMetadataIndex(buildStep);
+    manifest = mergeManifestWithExtractedMetadata(manifest, extractedMetadata);
 
     // Build the OpenAPI config from builder options.
     final config = _buildConfig();
@@ -121,6 +126,22 @@ class _OpenApiBuilder implements Builder {
       'OpenAPI builder: generated spec with ${spec.paths.length} paths '
       'and ${spec.tags.length} tags.',
     );
+  }
+
+  Future<String?> _readManifestJson(
+    BuildStep buildStep,
+    String manifestPath,
+  ) async {
+    final manifestAssetId = AssetId(buildStep.inputId.package, manifestPath);
+    if (await buildStep.canRead(manifestAssetId)) {
+      return buildStep.readAsString(manifestAssetId);
+    }
+
+    final file = io.File(manifestPath);
+    if (!file.existsSync()) {
+      return null;
+    }
+    return file.readAsString();
   }
 
   OpenApiConfig _buildConfig() {
@@ -157,8 +178,8 @@ class _OpenApiBuilder implements Builder {
   /// and provides a handler to serve it.
   String _generateController(OpenApiSpec spec, String servePath) {
     final specJson = spec.toJsonString(pretty: true);
-    // Escape for embedding in a Dart raw string.
-    final escaped = specJson.replaceAll(r"'", r"\'");
+    // Escape triple quotes for embedding in a raw multi-line string.
+    final escaped = specJson.replaceAll("'''", r"\'\'\'");
 
     final buffer = StringBuffer()
       ..writeln('// GENERATED CODE - DO NOT MODIFY BY HAND')
@@ -170,7 +191,7 @@ class _OpenApiBuilder implements Builder {
       ..writeln("import 'package:routed/routed.dart';")
       ..writeln()
       ..writeln('/// The OpenAPI 3.1 specification as a JSON string.')
-      ..writeln("const String openApiSpecJson = '$escaped';")
+      ..writeln("const String openApiSpecJson = r'''$escaped''';")
       ..writeln()
       ..writeln('/// The OpenAPI 3.1 specification as a parsed map.')
       ..writeln(

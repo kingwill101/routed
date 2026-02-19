@@ -25,6 +25,9 @@ class HandlerIdentity {
     this.functionRef,
     this.method,
     this.path,
+    this.sourceFile,
+    this.sourceLine,
+    this.sourceColumn,
   });
 
   /// Creates an identity from a route name.
@@ -32,19 +35,28 @@ class HandlerIdentity {
     : routeName = name,
       functionRef = null,
       method = null,
-      path = null;
+      path = null,
+      sourceFile = null,
+      sourceLine = null,
+      sourceColumn = null;
 
   /// Creates an identity from a function reference name.
   const HandlerIdentity.fromFunction(String ref)
     : routeName = null,
       functionRef = ref,
       method = null,
-      path = null;
+      path = null,
+      sourceFile = null,
+      sourceLine = null,
+      sourceColumn = null;
 
   /// Creates an identity from an HTTP method and path.
   const HandlerIdentity.fromRoute(String this.method, String this.path)
     : routeName = null,
-      functionRef = null;
+      functionRef = null,
+      sourceFile = null,
+      sourceLine = null,
+      sourceColumn = null;
 
   /// The explicit route name (e.g. `'users.create'`).
   final String? routeName;
@@ -62,6 +74,15 @@ class HandlerIdentity {
   /// The route path pattern (e.g. `'/users/{id}'`).
   final String? path;
 
+  /// Source file where the route registration call was made.
+  final String? sourceFile;
+
+  /// 1-based source line for the registration call.
+  final int? sourceLine;
+
+  /// 1-based source column for the registration call.
+  final int? sourceColumn;
+
   /// The canonical identity string, resolved in priority order.
   ///
   /// Returns the most specific identity available:
@@ -75,6 +96,9 @@ class HandlerIdentity {
     if (functionRef != null && functionRef!.isNotEmpty) {
       return 'fn:$functionRef';
     }
+    if (sourceFile != null && sourceLine != null && sourceColumn != null) {
+      return 'source:$sourceFile:$sourceLine:$sourceColumn';
+    }
     if (method != null && path != null) {
       return 'route:$method $path';
     }
@@ -85,6 +109,7 @@ class HandlerIdentity {
   bool get isResolved =>
       (routeName != null && routeName!.isNotEmpty) ||
       (functionRef != null && functionRef!.isNotEmpty) ||
+      (sourceFile != null && sourceLine != null && sourceColumn != null) ||
       (method != null && path != null);
 
   /// Returns `true` if this identity matches [other].
@@ -105,6 +130,11 @@ class HandlerIdentity {
     if (_hasRoute && other._hasRoute) {
       return method == other.method && path == other.path;
     }
+    if (_hasSource && other._hasSource) {
+      return sourceFile == other.sourceFile &&
+          sourceLine == other.sourceLine &&
+          sourceColumn == other.sourceColumn;
+    }
     // Cross-level: check if any available identity component matches
     if (_hasRouteName && other._hasRouteName) {
       return routeName == other.routeName;
@@ -114,6 +144,8 @@ class HandlerIdentity {
 
   bool get _hasRouteName => routeName != null && routeName!.isNotEmpty;
   bool get _hasFunctionRef => functionRef != null && functionRef!.isNotEmpty;
+  bool get _hasSource =>
+      sourceFile != null && sourceLine != null && sourceColumn != null;
   bool get _hasRoute => method != null && path != null;
 
   @override
@@ -136,6 +168,9 @@ class HandlerIdentity {
       if (functionRef != null) 'functionRef': functionRef,
       if (method != null) 'method': method,
       if (path != null) 'path': path,
+      if (sourceFile != null) 'sourceFile': sourceFile,
+      if (sourceLine != null) 'sourceLine': sourceLine,
+      if (sourceColumn != null) 'sourceColumn': sourceColumn,
     };
   }
 
@@ -146,6 +181,9 @@ class HandlerIdentity {
       functionRef: json['functionRef'] as String?,
       method: json['method'] as String?,
       path: json['path'] as String?,
+      sourceFile: json['sourceFile'] as String?,
+      sourceLine: json['sourceLine'] as int?,
+      sourceColumn: json['sourceColumn'] as int?,
     );
   }
 }

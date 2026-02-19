@@ -363,6 +363,7 @@ class Router with StaticFileHandler {
     Map<String, dynamic> constraints = const {},
     RouteSchema? schema,
   }) {
+    final source = _captureRouteRegistrationSource();
     final fullPath = _joinPaths(_prefix, path);
     final route = RegisteredRoute(
       method: method,
@@ -371,6 +372,9 @@ class Router with StaticFileHandler {
       routeMiddlewares: middlewares,
       constraints: constraints,
       schema: schema,
+      sourceFile: source.file,
+      sourceLine: source.line,
+      sourceColumn: source.column,
     );
     _routes.add(route);
     return RouteBuilder(route, this);
@@ -543,6 +547,28 @@ class Router with StaticFileHandler {
     if (parent == null || parent.isEmpty) return child ?? '';
     if (child == null || child.isEmpty) return parent;
     return '$parent.$child';
+  }
+
+  static ({String? file, int? line, int? column})
+  _captureRouteRegistrationSource() {
+    final frames = StackTrace.current.toString().split('\n');
+    final framePattern = RegExp(r'([^\s()]+\.dart):(\d+):(\d+)');
+
+    for (final frame in frames) {
+      if (frame.contains('package:routed/')) continue;
+      if (frame.contains('(dart:')) continue;
+
+      final match = framePattern.firstMatch(frame);
+      if (match == null) continue;
+
+      final file = match.group(1);
+      final line = int.tryParse(match.group(2) ?? '');
+      final column = int.tryParse(match.group(3) ?? '');
+      if (file == null || line == null || column == null) continue;
+      return (file: file, line: line, column: column);
+    }
+
+    return (file: null, line: null, column: null);
   }
 }
 

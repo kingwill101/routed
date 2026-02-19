@@ -15,6 +15,8 @@ bootstrap.
 - [Address Semantics](#address-semantics)
 - [Multi-Server Binding (`NativeHttpServer.loopback`)](#multi-server-binding-nativehttpserverloopback)
 - [Multi-Server Binding Shortcut (`localhost` / `any`)](#multi-server-binding-shortcut-localhost--any)
+- [Callback Multi-Server Binding (`NativeMultiServer`)](#callback-multi-server-binding-nativemultiserver)
+- [Explicit Multi-Bind List (`NativeServerBind`)](#explicit-multi-bind-list-nativeserverbind)
 - [TLS / HTTPS (Optional HTTP/3)](#tls--https-optional-http3)
 - [Callback API (`HttpRequest`)](#callback-api-httprequest)
 - [Direct Handler API (`NativeDirectRequest`)](#direct-handler-api-nativedirectrequest)
@@ -160,6 +162,60 @@ Future<void> main() async {
       ..write('localhost multi-server ok');
     await request.response.close();
   }
+}
+```
+
+## Callback Multi-Server Binding (`NativeMultiServer`)
+
+Use `NativeMultiServer` when you want callback-style routing and
+`http_multi_server`-style bind semantics:
+
+```dart
+import 'dart:io';
+
+import 'package:server_native/server_native.dart';
+
+Future<void> main() async {
+  await NativeMultiServer.bind(
+    (request) async {
+      request.response
+        ..statusCode = HttpStatus.ok
+        ..headers.contentType = ContentType.text
+        ..write('native multi bind ok');
+      await request.response.close();
+    },
+    'localhost',
+    8080,
+    http3: false,
+  );
+}
+```
+
+## Explicit Multi-Bind List (`NativeServerBind`)
+
+Use `NativeServerBind` with `serveNativeMulti`/`serveSecureNativeMulti` for
+fully explicit listener lists:
+
+```dart
+import 'dart:io';
+
+import 'package:server_native/server_native.dart';
+
+Future<void> main() async {
+  await serveNativeMulti(
+    (request) async {
+      request.response
+        ..statusCode = HttpStatus.ok
+        ..headers.contentType = ContentType.text
+        ..write('explicit binds ok');
+      await request.response.close();
+    },
+    binds: const <NativeServerBind>[
+      NativeServerBind(host: '127.0.0.1', port: 8080),
+      NativeServerBind(host: '::1', port: 8080),
+    ],
+    http3: false,
+  );
 }
 ```
 

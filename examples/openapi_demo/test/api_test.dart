@@ -1,8 +1,8 @@
 import 'dart:convert';
+import 'dart:io';
 
 import 'package:routed_testing/routed_testing.dart';
 import 'package:server_testing/server_testing.dart';
-import 'package:test/test.dart';
 
 import 'package:openapi_demo/app.dart' as app;
 
@@ -81,6 +81,65 @@ void main() {
 
       expect(paths, contains('/api/v1/users'));
       expect(paths, contains('/api/v1/users/{id}'));
+      expect(paths, contains('/api/v1/catalog/v2/health'));
+      expect(paths, contains('/api/v1/catalog/v2/products'));
+      expect(paths, contains('/api/v1/catalog/v2/products/{sku}'));
+      expect(paths, contains('/api/v1/catalog/v2/raw'));
+      expect(paths, contains('/api/v1/catalog/v2/inline'));
+      expect(paths, contains('/api/v1/admin/v2/inline'));
+    });
+
+    test('spec merges metadata from annotations and dartdoc', () async {
+      final response = await client.get('/openapi.json');
+      final body = jsonDecode(response.body) as Map<String, dynamic>;
+      final paths = body['paths'] as Map<String, dynamic>;
+
+      final health = paths['/api/v1/catalog/v2/health'] as Map<String, dynamic>;
+      final healthGet = health['get'] as Map<String, dynamic>;
+      expect(healthGet['summary'], 'Catalog health check.');
+      expect(
+        healthGet['description'],
+        'Demonstrates Dartdoc extraction from an inline closure route.',
+      );
+
+      final products =
+          paths['/api/v1/catalog/v2/products'] as Map<String, dynamic>;
+      final productsGet = products['get'] as Map<String, dynamic>;
+      expect(productsGet['summary'], 'List catalog products');
+      // schema operationId should win over @OperationId annotation
+      expect(productsGet['operationId'], 'catalogProducts');
+      expect(productsGet['tags'], contains('Catalog'));
+
+      final productBySku =
+          paths['/api/v1/catalog/v2/products/{sku}'] as Map<String, dynamic>;
+      final bySkuGet = productBySku['get'] as Map<String, dynamic>;
+      expect(bySkuGet['summary'], 'Get catalog product by sku');
+      final responses = bySkuGet['responses'] as Map<String, dynamic>;
+      expect(responses, contains('404'));
+
+      final catalogInline =
+          paths['/api/v1/catalog/v2/inline'] as Map<String, dynamic>;
+      final adminInline =
+          paths['/api/v1/admin/v2/inline'] as Map<String, dynamic>;
+      expect(
+        (catalogInline['get'] as Map<String, dynamic>)['summary'],
+        'Catalog inline docs route.',
+      );
+      expect(
+        (adminInline['get'] as Map<String, dynamic>)['summary'],
+        'Admin inline docs route.',
+      );
+    });
+
+    test('route without schema or docs falls back to defaults', () async {
+      final response = await client.get('/openapi.json');
+      final body = jsonDecode(response.body) as Map<String, dynamic>;
+      final paths = body['paths'] as Map<String, dynamic>;
+
+      final raw = paths['/api/v1/catalog/v2/raw'] as Map<String, dynamic>;
+      final rawGet = raw['get'] as Map<String, dynamic>;
+      expect(rawGet.containsKey('summary'), isFalse);
+      expect(rawGet['operationId'], 'getApiV1CatalogV2Raw');
     });
 
     test('spec excludes hidden routes', () async {
@@ -109,5 +168,59 @@ void main() {
 
       expect(tags.any((t) => t['name'] == 'Users'), isTrue);
     });
+
+    test('runtime and generated specs match for stress routes', () async {
+      final runtimeResponse = await client.get('/openapi.json');
+      runtimeResponse.assertStatus(200);
+      final runtimeSpec =
+          jsonDecode(runtimeResponse.body) as Map<String, dynamic>;
+
+      final generatedSpec = _readGeneratedSpec();
+
+      expect(runtimeSpec['openapi'], equals(generatedSpec['openapi']));
+      final runtimeInfo = runtimeSpec['info'] as Map<String, dynamic>;
+      final generatedInfo = generatedSpec['info'] as Map<String, dynamic>;
+      expect(runtimeInfo['title'], equals(generatedInfo['title']));
+      expect(runtimeInfo['version'], equals(generatedInfo['version']));
+
+      final runtimePaths = runtimeSpec['paths'] as Map<String, dynamic>;
+      final generatedPaths = generatedSpec['paths'] as Map<String, dynamic>;
+
+      const stressPaths = [
+        '/api/v1/catalog/v2/health',
+        '/api/v1/catalog/v2/inline',
+        '/api/v1/admin/v2/inline',
+        '/api/v1/catalog/v2/products',
+        '/api/v1/catalog/v2/products/{sku}',
+        '/api/v1/catalog/v2/raw',
+      ];
+
+      for (final path in stressPaths) {
+        expect(runtimePaths, contains(path));
+        expect(generatedPaths, contains(path));
+        expect(runtimePaths[path], equals(generatedPaths[path]));
+      }
+    });
   });
+}
+
+Map<String, dynamic> _readGeneratedSpec() {
+  final candidates = <String>[
+    'examples/openapi_demo/lib/generated/openapi.json',
+    'lib/generated/openapi.json',
+  ];
+
+  for (final candidate in candidates) {
+    final file = File(candidate);
+    if (file.existsSync()) {
+      final json = jsonDecode(file.readAsStringSync());
+      return json as Map<String, dynamic>;
+    }
+  }
+
+  fail(
+    'Generated OpenAPI spec not found. Run `dart run routed spec` and '
+    '`dart run build_runner build --delete-conflicting-outputs` in '
+    '`examples/openapi_demo` before running this test.',
+  );
 }

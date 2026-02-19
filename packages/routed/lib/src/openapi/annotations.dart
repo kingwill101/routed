@@ -1,9 +1,12 @@
 /// Annotations for attaching OpenAPI metadata to route handlers.
 ///
-/// These annotations are read by the build_runner generator (Phase 2) and
-/// the analyzer plugin (Phase 3) to produce OpenAPI specifications.
-/// They can also be used alongside the `schema:` parameter on route
-/// registration for maximum flexibility.
+/// These annotations are consumed by:
+/// - the analyzer plugin for IDE diagnostics and guidance
+/// - the OpenAPI build pipeline as metadata enrichment for route schemas
+///
+/// The final OpenAPI operation metadata is merged from route `schema:`,
+/// handler annotations, and handler Dartdoc comments. When multiple sources
+/// define the same scalar field, route `schema:` takes precedence.
 library;
 
 /// Marks a handler with an OpenAPI summary (short description).

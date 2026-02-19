@@ -36,15 +36,20 @@ part of 'server_boot.dart';
 /// import 'package:server_native/server_native.dart';
 ///
 /// Future<void> main() async {
-///   final server = await NativeHttpServer.loopback(8080, http3: false);
-///
-///   await for (final request in server) {
+///   await serveNativeMulti(
+///     (request) async {
 ///     request.response
 ///       ..statusCode = HttpStatus.ok
 ///       ..headers.contentType = ContentType.text
 ///       ..write('multi-server ok');
 ///     await request.response.close();
-///   }
+///   },
+///   binds: const <NativeServerBind>[
+///     NativeServerBind(host: '127.0.0.1', port: 8080),
+///     NativeServerBind(host: '::1', port: 8080),
+///   ],
+///   http3: false,
+/// );
 /// }
 /// ```
 /// {@endtemplate}

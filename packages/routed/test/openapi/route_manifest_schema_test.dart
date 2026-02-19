@@ -156,6 +156,12 @@ void main() {
         method: 'POST',
         path: '/users',
         name: 'users.store',
+        handlerIdentity: const HandlerIdentity(
+          functionRef: 'createUser',
+          sourceFile: 'lib/app.dart',
+          sourceLine: 88,
+          sourceColumn: 9,
+        ),
         schema: const RouteSchema(
           summary: 'Create user',
           validationRules: {'name': 'required'},
@@ -171,6 +177,11 @@ void main() {
       expect((json['schema'] as Map<String, Object?>)['validationRules'], {
         'name': 'required',
       });
+      expect(json['handlerIdentity'], isA<Map<String, Object?>>());
+      final identity = json['handlerIdentity'] as Map<String, Object?>;
+      expect(identity['sourceFile'], 'lib/app.dart');
+      expect(identity['sourceLine'], 88);
+      expect(identity['sourceColumn'], 9);
     });
 
     test('toJson omits schema when null', () {
@@ -185,6 +196,12 @@ void main() {
         'method': 'PUT',
         'path': '/users/:id',
         'name': 'users.update',
+        'handlerIdentity': {
+          'functionRef': 'updateUser',
+          'sourceFile': 'package:demo/routes.dart',
+          'sourceLine': 21,
+          'sourceColumn': 5,
+        },
         'schema': {
           'summary': 'Update user',
           'tags': ['users'],
@@ -197,6 +214,11 @@ void main() {
       expect(entry.schema!.summary, 'Update user');
       expect(entry.schema!.tags, ['users']);
       expect(entry.schema!.validationRules, {'name': 'string|min:1'});
+      expect(entry.handlerIdentity, isNotNull);
+      expect(entry.handlerIdentity!.functionRef, 'updateUser');
+      expect(entry.handlerIdentity!.sourceFile, 'package:demo/routes.dart');
+      expect(entry.handlerIdentity!.sourceLine, 21);
+      expect(entry.handlerIdentity!.sourceColumn, 5);
     });
 
     test('fromJson handles missing schema', () {
@@ -329,10 +351,14 @@ void main() {
       expect(getUsers.schema, isNotNull);
       expect(getUsers.schema!.summary, 'List users');
       expect(getUsers.schema!.tags, ['users']);
+      expect(getUsers.handlerIdentity, isNotNull);
+      expect(getUsers.handlerIdentity!.method, 'GET');
+      expect(getUsers.handlerIdentity!.path, '/users');
 
       expect(postUsers.schema, isNotNull);
       expect(postUsers.schema!.validationRules, isNotNull);
       expect(postUsers.schema!.validationRules!['name'], 'required|string');
+      expect(postUsers.handlerIdentity, isNotNull);
 
       expect(health.schema, isNull);
 

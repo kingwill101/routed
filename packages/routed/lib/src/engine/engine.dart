@@ -869,6 +869,9 @@ class Engine with StaticFileHandler, ContainerMixin {
           constraints: r.constraints,
           schema: r.schema,
           isFallback: r.constraints['isFallback'] == true,
+          sourceFile: r.sourceFile,
+          sourceLine: r.sourceLine,
+          sourceColumn: r.sourceColumn,
         );
 
         // Uniqueness checks

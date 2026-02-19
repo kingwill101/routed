@@ -442,6 +442,34 @@ class Http2Headers implements HttpHeaders {
     });
   }
 
+  /// Number of flattened name/value header pairs.
+  int get flattenedHeaderValueCount {
+    var count = 0;
+    for (final values in _headers.values) {
+      count += values.length;
+    }
+    return count;
+  }
+
+  /// Writes flattened header pairs into pre-sized lists starting at [offset].
+  ///
+  /// Returns the next offset after all pairs are written.
+  int writeFlattenedHeaderPairs(
+    List<String> headerNames,
+    List<String> headerValues,
+    int offset,
+  ) {
+    for (final entry in _headers.entries) {
+      final originalName = _originalNames[entry.key] ?? entry.key;
+      for (final value in entry.value) {
+        headerNames[offset] = originalName;
+        headerValues[offset] = value;
+        offset++;
+      }
+    }
+    return offset;
+  }
+
   @override
   void noFolding(String name) {
     _noFolding.add(_normalize(name));

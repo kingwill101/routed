@@ -22,6 +22,15 @@ class RegisteredRoute {
   /// Optional schema metadata describing this route's API contract.
   RouteSchema? schema;
 
+  /// Source file where the route registration call occurred.
+  final String? sourceFile;
+
+  /// 1-based source line where the route registration call occurred.
+  final int? sourceLine;
+
+  /// 1-based source column where the route registration call occurred.
+  final int? sourceColumn;
+
   RegisteredRoute({
     required this.method,
     required this.path,
@@ -29,6 +38,9 @@ class RegisteredRoute {
     this.routeMiddlewares = const [],
     this.name,
     this.schema,
+    this.sourceFile,
+    this.sourceLine,
+    this.sourceColumn,
     Map<String, dynamic>? constraints,
   }) : constraints = Map<String, dynamic>.from(constraints ?? const {});
 

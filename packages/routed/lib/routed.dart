@@ -74,6 +74,8 @@ export 'src/openapi/handler_identity.dart';
 export 'src/openapi/manifest_to_openapi.dart';
 export 'src/openapi/openapi_spec.dart';
 export 'src/openapi/pipe_rule_converter.dart';
+export 'src/openapi/route_metadata_merger.dart'
+    show enrichManifestWithProjectMetadata;
 export 'src/openapi/schema.dart';
 export 'src/provider/config_utils.dart';
 export 'src/provider/provider.dart';

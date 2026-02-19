@@ -31,7 +31,11 @@
 /// - `DELETE /api/v1/users/{id}`     — delete user (deprecated)
 library;
 
+import 'dart:isolate';
+import 'dart:io' as io;
+
 import 'package:routed/routed.dart';
+import 'package:openapi_demo/metadata_routes.dart';
 
 Future<Engine> createEngine({bool initialize = true}) async {
   final engine = Engine(
@@ -238,6 +242,9 @@ Future<Engine> createEngine({bool initialize = true}) async {
           ],
         ),
       );
+
+      // -- Metadata merger demo routes (cross-file + nested groups) ----------
+      registerMetadataRoutes(router);
     },
   );
 
@@ -249,10 +256,16 @@ Future<Engine> createEngine({bool initialize = true}) async {
   // production use, prefer the build_runner approach which outputs a static
   // openapi.json file.
 
-  engine.get('/openapi.json', (ctx) {
+  final projectRoot = await _resolveProjectRoot();
+  engine.get('/openapi.json', (ctx) async {
     final manifest = engine.buildRouteManifest();
-    final spec = manifestToOpenApi(
+    final enrichedManifest = await enrichManifestWithProjectMetadata(
       manifest,
+      projectRoot: projectRoot,
+      packageName: 'openapi_demo',
+    );
+    final spec = manifestToOpenApi(
+      enrichedManifest,
       config: const OpenApiConfig(
         title: 'OpenAPI Demo',
         version: '1.0.0',
@@ -267,4 +280,16 @@ Future<Engine> createEngine({bool initialize = true}) async {
   });
 
   return engine;
+}
+
+Future<String> _resolveProjectRoot() async {
+  final uri = await Isolate.resolvePackageUri(
+    Uri.parse('package:openapi_demo/app.dart'),
+  );
+  if (uri != null && uri.scheme == 'file') {
+    final appFile = io.File.fromUri(uri);
+    final libDir = appFile.parent;
+    return libDir.parent.path;
+  }
+  return io.Directory.current.path;
 }

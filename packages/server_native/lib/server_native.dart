@@ -138,6 +138,58 @@ library;
 /// ```
 /// {@endtemplate}
 ///
+/// {@template server_native_native_multi_example}
+/// ## Callback Multi-Server Binding (`NativeMultiServer`)
+///
+/// ```dart
+/// import 'dart:io';
+///
+/// import 'package:server_native/server_native.dart';
+///
+/// Future<void> main() async {
+///   await NativeMultiServer.bind(
+///     (request) async {
+///       request.response
+///         ..statusCode = HttpStatus.ok
+///         ..headers.contentType = ContentType.text
+///         ..write('native multi bind ok');
+///       await request.response.close();
+///     },
+///     'localhost',
+///     8080,
+///     http3: false,
+///   );
+/// }
+/// ```
+/// {@endtemplate}
+///
+/// {@template server_native_bind_list_example}
+/// ## Explicit Multi-Bind List (`NativeServerBind`)
+///
+/// ```dart
+/// import 'dart:io';
+///
+/// import 'package:server_native/server_native.dart';
+///
+/// Future<void> main() async {
+///   await serveNativeMulti(
+///     (request) async {
+///       request.response
+///         ..statusCode = HttpStatus.ok
+///         ..headers.contentType = ContentType.text
+///         ..write('explicit binds ok');
+///       await request.response.close();
+///     },
+///     binds: const <NativeServerBind>[
+///       NativeServerBind(host: '127.0.0.1', port: 8080),
+///       NativeServerBind(host: '::1', port: 8080),
+///     ],
+///     http3: false,
+///   );
+/// }
+/// ```
+/// {@endtemplate}
+///
 /// {@template server_native_graceful_shutdown_example}
 /// ## Graceful shutdown
 ///
@@ -177,6 +229,8 @@ library;
 /// {@macro server_native_direct_callback_example}
 /// {@macro server_native_tls_example}
 /// {@macro server_native_multi_server_example}
+/// {@macro server_native_native_multi_example}
+/// {@macro server_native_bind_list_example}
 /// {@macro server_native_graceful_shutdown_example}
 export 'src/server_boot.dart'
     show

@@ -1,7 +1,9 @@
 import 'dart:convert';
 
 import 'engine.dart';
+import 'package:routed/src/openapi/handler_identity.dart';
 import 'package:routed/src/openapi/schema.dart';
+import 'package:routed/src/validation/validator.dart';
 
 /// A serializable snapshot of the engine's registered routes.
 class RouteManifest {
@@ -9,9 +11,11 @@ class RouteManifest {
     DateTime? generatedAt,
     Iterable<RouteManifestEntry> routes = const [],
     Iterable<WebSocketRouteManifestEntry> webSockets = const [],
+    Iterable<String> validationRuleNames = const [],
   }) : generatedAt = generatedAt ?? DateTime.now().toUtc(),
        routes = List<RouteManifestEntry>.unmodifiable(routes),
-       webSockets = List<WebSocketRouteManifestEntry>.unmodifiable(webSockets);
+       webSockets = List<WebSocketRouteManifestEntry>.unmodifiable(webSockets),
+       validationRuleNames = List<String>.unmodifiable(validationRuleNames);
 
   factory RouteManifest.fromJson(Map<String, Object?> json) {
     final generatedAtRaw = json['generatedAt'];
@@ -39,10 +43,19 @@ class RouteManifest {
               .toList()
         : const <WebSocketRouteManifestEntry>[];
 
+    final validationNamesJson = json['validationRuleNames'];
+    final validationRuleNames = validationNamesJson is List
+        ? validationNamesJson
+              .whereType<Object>()
+              .map((value) => value.toString())
+              .toList()
+        : const <String>[];
+
     return RouteManifest(
       generatedAt: generatedAt,
       routes: routes,
       webSockets: webSockets,
+      validationRuleNames: validationRuleNames,
     );
   }
 
@@ -55,6 +68,9 @@ class RouteManifest {
   /// Registered WebSocket routes.
   final List<WebSocketRouteManifestEntry> webSockets;
 
+  /// Names of validation rules registered in the engine.
+  final List<String> validationRuleNames;
+
   Map<String, Object?> toJson() {
     return <String, Object?>{
       'generatedAt': generatedAt.toIso8601String(),
@@ -62,6 +78,8 @@ class RouteManifest {
       'webSockets': webSockets
           .map((route) => route.toJson())
           .toList(growable: false),
+      if (validationRuleNames.isNotEmpty)
+        'validationRuleNames': validationRuleNames.toList(growable: false),
     };
   }
 
@@ -80,6 +98,7 @@ class RouteManifestEntry {
     required this.method,
     required this.path,
     this.name,
+    this.handlerIdentity,
     Iterable<String> middleware = const [],
     Map<String, Object?> constraints = const {},
     this.isFallback = false,
@@ -88,10 +107,21 @@ class RouteManifestEntry {
        constraints = Map<String, Object?>.unmodifiable(constraints);
 
   factory RouteManifestEntry.fromEngineRoute(EngineRoute route) {
+    final handlerIdentity = HandlerIdentity(
+      routeName: route.name,
+      functionRef: _extractHandlerFunctionRef(route.handler),
+      method: route.method,
+      path: route.path,
+      sourceFile: route.sourceFile,
+      sourceLine: route.sourceLine,
+      sourceColumn: route.sourceColumn,
+    );
+
     return RouteManifestEntry(
       method: route.method,
       path: route.path,
       name: route.name,
+      handlerIdentity: handlerIdentity.isResolved ? handlerIdentity : null,
       middleware: route.middlewares.map(_describeMiddleware),
       constraints: _serializeConstraints(route.constraints),
       isFallback: route.isFallback,
@@ -113,6 +143,9 @@ class RouteManifestEntry {
         ? _stringKeyed(json['constraints'] as Map)
         : const <String, Object?>{};
     final isFallback = json['isFallback'] == true;
+    final handlerIdentity = json['handlerIdentity'] is Map
+        ? HandlerIdentity.fromJson(_stringKeyed(json['handlerIdentity'] as Map))
+        : null;
     final schema = json['schema'] is Map
         ? RouteSchema.fromJson(_stringKeyed(json['schema'] as Map))
         : null;
@@ -120,6 +153,7 @@ class RouteManifestEntry {
       method: method,
       path: path,
       name: name?.isEmpty == true ? null : name,
+      handlerIdentity: handlerIdentity,
       middleware: middleware,
       constraints: constraints,
       isFallback: isFallback,
@@ -130,6 +164,7 @@ class RouteManifestEntry {
   final String method;
   final String path;
   final String? name;
+  final HandlerIdentity? handlerIdentity;
   final List<String> middleware;
   final Map<String, Object?> constraints;
   final bool isFallback;
@@ -142,6 +177,7 @@ class RouteManifestEntry {
       'method': method,
       'path': path,
       if (name != null) 'name': name,
+      if (handlerIdentity != null) 'handlerIdentity': handlerIdentity!.toJson(),
       if (middleware.isNotEmpty) 'middleware': middleware,
       if (constraints.isNotEmpty) 'constraints': constraints,
       if (isFallback) 'isFallback': true,
@@ -192,6 +228,11 @@ class WebSocketRouteManifestEntry {
 extension EngineRouteManifestX on Engine {
   /// Generates a [RouteManifest] for the current engine.
   RouteManifest buildRouteManifest() {
+    final validationRuleNames = <String>[];
+    if (container.has<ValidationRuleRegistry>()) {
+      validationRuleNames.addAll(container.get<ValidationRuleRegistry>().names);
+      validationRuleNames.sort();
+    }
     final routeEntries = getAllRoutes()
         .map(RouteManifestEntry.fromEngineRoute)
         .toList();
@@ -201,7 +242,11 @@ extension EngineRouteManifestX on Engine {
               WebSocketRouteManifestEntry.fromRoute(entry.key, entry.value),
         )
         .toList();
-    return RouteManifest(routes: routeEntries, webSockets: websocketEntries);
+    return RouteManifest(
+      routes: routeEntries,
+      webSockets: websocketEntries,
+      validationRuleNames: validationRuleNames,
+    );
   }
 }
 
@@ -246,4 +291,24 @@ Map<String, Object?> _stringKeyed(Map<Object?, Object?>? source) {
   if (source == null || source.isEmpty) return const <String, Object?>{};
   return source.map((key, value) => MapEntry(key?.toString() ?? '', value))
     ..removeWhere((key, _) => key.isEmpty);
+}
+
+String? _extractHandlerFunctionRef(Object handler) {
+  final text = handler.toString();
+
+  final namedMatch = RegExp(r"Function '([^']+)'").firstMatch(text);
+  var candidate = namedMatch?.group(1);
+  if (candidate == null || candidate.isEmpty) {
+    return null;
+  }
+
+  if (candidate.contains('<anonymous closure>')) {
+    return null;
+  }
+
+  if (candidate.startsWith('new ')) {
+    candidate = candidate.substring(4);
+  }
+
+  return candidate;
 }

@@ -1,9 +1,12 @@
 import 'dart:async';
+import 'dart:convert';
 import 'dart:io' as io;
 
+import 'package:file/file.dart' as fs;
 import 'package:routed/console.dart' show CliLogger;
 import 'package:routed/src/console/args/base_command.dart';
 import 'package:routed/src/console/dev/dev_server_runner.dart' as dev;
+import 'package:routed/src/console/engine/manifest_loader.dart';
 import 'package:routed/src/console/util/dart_exec.dart';
 
 typedef DevServerFactory =
@@ -16,6 +19,7 @@ typedef DevServerFactory =
       required String scriptPath,
       required bool hotReloadExpected,
       List<String>? additionalWatchPaths,
+      void Function()? onReload,
     });
 
 abstract class DevServer {
@@ -34,6 +38,7 @@ class _DefaultDevServer implements DevServer {
     required String scriptPath,
     required bool hotReloadExpected,
     List<String>? additionalWatchPaths,
+    void Function()? onReload,
   }) : _runner = dev.DevServerRunner(
          logger: logger,
          port: port,
@@ -43,6 +48,7 @@ class _DefaultDevServer implements DevServer {
          scriptPath: scriptPath,
          hotReloadExpected: hotReloadExpected,
          additionalWatchPaths: additionalWatchPaths,
+         onReload: onReload,
        );
 
   final dev.DevServerRunner _runner;
@@ -72,8 +78,14 @@ class _DefaultDevServer implements DevServer {
 /// - --install-missing: Auto-install hotreloader when missing (default: true)
 /// - --no-warn-missing: Suppress warning if hotreloader is missing (default: false)
 class DevCommand extends BaseCommand {
-  DevCommand({super.logger, super.fileSystem, DevServerFactory? runnerFactory})
-    : _runnerFactory = runnerFactory ?? _defaultRunnerFactory {
+  DevCommand({
+    super.logger,
+    super.fileSystem,
+    DevServerFactory? runnerFactory,
+    ManifestLoaderFactory? manifestLoaderFactory,
+  }) : _runnerFactory = runnerFactory ?? _defaultRunnerFactory,
+       _manifestLoaderFactory =
+           manifestLoaderFactory ?? _defaultManifestLoaderFactory {
     argParser
       ..addOption(
         'host',
@@ -139,6 +151,7 @@ class DevCommand extends BaseCommand {
   String get category => 'Development';
 
   final DevServerFactory _runnerFactory;
+  final ManifestLoaderFactory _manifestLoaderFactory;
 
   static DevServer _defaultRunnerFactory({
     required CliLogger logger,
@@ -149,6 +162,7 @@ class DevCommand extends BaseCommand {
     required String scriptPath,
     required bool hotReloadExpected,
     List<String>? additionalWatchPaths,
+    void Function()? onReload,
   }) {
     return _DefaultDevServer(
       logger: logger,
@@ -159,6 +173,21 @@ class DevCommand extends BaseCommand {
       scriptPath: scriptPath,
       hotReloadExpected: hotReloadExpected,
       additionalWatchPaths: additionalWatchPaths,
+      onReload: onReload,
+    );
+  }
+
+  static ManifestLoader _defaultManifestLoaderFactory(
+    fs.Directory projectRoot,
+    CliLogger logger,
+    String usage,
+    fs.FileSystem fileSystem,
+  ) {
+    return ManifestLoader(
+      projectRoot: projectRoot,
+      logger: logger,
+      usage: usage,
+      fileSystem: fileSystem,
     );
   }
 
@@ -186,6 +215,19 @@ class DevCommand extends BaseCommand {
       final projectRoot = await findProjectRoot();
       if (verbose) {
         logger.debug('Project root: ${projectRoot?.path ?? '(not found)'}');
+      }
+
+      final manifestPublisher = projectRoot == null
+          ? null
+          : _DevManifestPublisher(
+              projectRoot: projectRoot,
+              logger: logger,
+              usage: usage,
+              fileSystem: fileSystem,
+              loaderFactory: _manifestLoaderFactory,
+            );
+      if (manifestPublisher != null) {
+        await manifestPublisher.publish(reason: 'startup');
       }
 
       // Ensure hotreloader is available if we're using bootstrap
@@ -309,11 +351,120 @@ Future<void> main(List<String> args) async {
         scriptPath: scriptToRun,
         hotReloadExpected: useBootstrap,
         additionalWatchPaths: watch,
+        onReload: manifestPublisher == null
+            ? null
+            : () => manifestPublisher.schedule(reason: 'reload'),
       );
 
       await runner.start(['--host', host, '--port', '$port']);
       final result = await runner.exitCode;
       io.exitCode = result.code;
     });
+  }
+}
+
+class _DevManifestPublisher {
+  _DevManifestPublisher({
+    required this.projectRoot,
+    required this.logger,
+    required this.usage,
+    required this.fileSystem,
+    required this.loaderFactory,
+  });
+
+  final fs.Directory projectRoot;
+  final CliLogger logger;
+  final String usage;
+  final fs.FileSystem fileSystem;
+  final ManifestLoaderFactory loaderFactory;
+
+  static const _outputSegments = [
+    '.dart_tool',
+    'routed',
+    'route_manifest.json',
+  ];
+
+  bool _publishing = false;
+  bool _queued = false;
+  bool _hasLoggedSuccess = false;
+  bool _hasLoggedUnavailable = false;
+
+  Future<void> publish({required String reason}) async {
+    if (_publishing) {
+      _queued = true;
+      return;
+    }
+
+    _publishing = true;
+    try {
+      await _publishOnce(reason: reason);
+      while (_queued) {
+        _queued = false;
+        await _publishOnce(reason: 'reload');
+      }
+    } finally {
+      _publishing = false;
+    }
+  }
+
+  void schedule({required String reason}) {
+    unawaited(publish(reason: reason));
+  }
+
+  Future<void> _publishOnce({required String reason}) async {
+    try {
+      if (!await _hasManifestSource()) {
+        if (!_hasLoggedUnavailable) {
+          logger.debug(
+            'Skipping route manifest publish: no lib/app.dart or tool/spec_manifest.dart found.',
+          );
+          _hasLoggedUnavailable = true;
+        }
+        return;
+      }
+
+      final loader = loaderFactory(projectRoot, logger, usage, fileSystem);
+      final result = await loader.load();
+
+      final outputFile = fileSystem.file(
+        fileSystem.path.join(
+          projectRoot.path,
+          _outputSegments[0],
+          _outputSegments[1],
+          _outputSegments[2],
+        ),
+      );
+      await outputFile.parent.create(recursive: true);
+
+      final encoder = const JsonEncoder.withIndent('  ');
+      await outputFile.writeAsString(encoder.convert(result.manifest));
+
+      final relativePath = fileSystem.path.relative(
+        outputFile.path,
+        from: projectRoot.path,
+      );
+      if (!_hasLoggedSuccess) {
+        logger.info('Published route manifest to $relativePath');
+        _hasLoggedSuccess = true;
+      } else {
+        logger.debug('Updated route manifest ($reason): $relativePath');
+      }
+    } catch (error) {
+      logger.warn('Unable to publish route manifest ($reason): $error');
+    }
+  }
+
+  Future<bool> _hasManifestSource() async {
+    final appFile = fileSystem.file(
+      fileSystem.path.join(projectRoot.path, 'lib', 'app.dart'),
+    );
+    if (await appFile.exists()) {
+      return true;
+    }
+
+    final toolEntry = fileSystem.file(
+      fileSystem.path.join(projectRoot.path, 'tool', 'spec_manifest.dart'),
+    );
+    return toolEntry.exists();
   }
 }
