@@ -32,8 +32,8 @@ class ConfigSchema {
   }) {
     final Map<String, dynamic> schemaMap = {
       'type': 'object',
-      if (title != null) 'title': title,
-      if (description != null) 'description': description,
+      'title': ?title,
+      'description': ?description,
       'properties': ?properties?.map(
         (key, value) => MapEntry(key, value.value),
       ),
