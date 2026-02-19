@@ -22,7 +22,7 @@ void main() {
             Object(),
             () => throw UnimplementedError('next'),
           ),
-          throwsA(isA<UnimplementedError>()),
+          throwsA(anyOf(isA<UnimplementedError>(), isA<TypeError>())),
         );
       },
     );

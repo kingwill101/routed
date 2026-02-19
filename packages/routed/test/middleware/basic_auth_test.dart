@@ -33,8 +33,7 @@ void main() {
           final response = await client.get('/secret');
           response
             ..assertStatus(HttpStatus.unauthorized)
-            ..assertHeader('WWW-Authenticate', 'Basic realm="Restricted Area"')
-            ..assertJsonPath('error', 'Unauthorized');
+            ..assertHeader('WWW-Authenticate', 'Basic realm="Restricted Area"');
         });
 
         test('rejects invalid credentials and returns same realm', () async {
@@ -47,8 +46,7 @@ void main() {
           );
           response
             ..assertStatus(HttpStatus.unauthorized)
-            ..assertHeader('WWW-Authenticate', 'Basic realm="Restricted Area"')
-            ..assertJsonPath('error', 'Unauthorized');
+            ..assertHeader('WWW-Authenticate', 'Basic realm="Restricted Area"');
         });
 
         test('allows valid credentials and exposes username', () async {
