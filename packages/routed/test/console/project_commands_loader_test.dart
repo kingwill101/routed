@@ -158,17 +158,26 @@ Future<void> _deleteDirectory(io.Directory directory) async {
     return;
   }
 
-  const maxAttempts = 5;
+  const maxAttempts = 15;
+  Object? lastError;
   for (var attempt = 0; attempt < maxAttempts; attempt += 1) {
     try {
       await directory.delete(recursive: true);
       return;
-    } on io.FileSystemException {
-      if (attempt == maxAttempts - 1) {
-        rethrow;
+    } on io.FileSystemException catch (error) {
+      lastError = error;
+      if (!await directory.exists()) {
+        return;
       }
-      await Future<void>.delayed(Duration(milliseconds: 200 * (attempt + 1)));
+      await Future<void>.delayed(Duration(milliseconds: (attempt + 1) * 250));
     }
+  }
+
+  if (await directory.exists()) {
+    io.stderr.writeln(
+      'Warning: unable to delete temp test directory "${directory.path}" '
+      'after $maxAttempts attempts: $lastError',
+    );
   }
 }
 
