@@ -2,6 +2,8 @@ name: routed_ecosystem
 publish_to: none
 workspace:
   - packages/routed
+  - packages/routed_io
+  - packages/routed_ffi
   - packages/routed_auth
   - packages/routed_hotwire
   - packages/inertia
