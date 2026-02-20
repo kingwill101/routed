@@ -21,7 +21,7 @@ use std::io::{self, BufReader, ErrorKind, IoSlice};
 use std::net::SocketAddr;
 use std::path::PathBuf;
 use std::ptr::null_mut;
-use std::sync::atomic::{AtomicU64, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::Arc;
 use std::thread;
 use std::time::Duration;
@@ -190,6 +190,7 @@ pub struct ProxyServerHandle {
 struct DirectRequestBridge {
     callback: DirectRequestCallback,
     next_request_id: AtomicU64,
+    stopped: AtomicBool,
     pending: Mutex<HashMap<u64, PendingDirectRequest>>,
 }
 
@@ -457,6 +458,7 @@ pub extern "C" fn server_native_start_proxy_server(
         Arc::new(DirectRequestBridge {
             callback,
             next_request_id: AtomicU64::new(1),
+            stopped: AtomicBool::new(false),
             pending: Mutex::new(HashMap::new()),
         })
     });
@@ -599,6 +601,10 @@ pub extern "C" fn server_native_stop_proxy_server(handle: *mut ProxyServerHandle
     }
 
     let mut handle = unsafe { Box::from_raw(handle) };
+    if let Some(direct_bridge) = handle.direct_bridge.as_ref() {
+        direct_bridge.stopped.store(true, Ordering::Release);
+        direct_bridge.pending.lock().clear();
+    }
     if let Some(tx) = handle.shutdown_tx.take() {
         let _ = tx.send(());
     }
@@ -632,6 +638,9 @@ pub extern "C" fn server_native_push_direct_response_frame(
     let Some(direct_bridge) = handle_ref.direct_bridge.as_ref() else {
         return 0;
     };
+    if direct_bridge.stopped.load(Ordering::Acquire) {
+        return 0;
+    }
 
     let Ok(response_payload_len) = usize::try_from(response_payload_len) else {
         return 0;
@@ -1341,6 +1350,9 @@ fn emit_direct_callback_payload(
     request_id: u64,
     payload: Vec<u8>,
 ) -> Result<(), String> {
+    if direct_bridge.stopped.load(Ordering::Acquire) {
+        return Err("direct bridge is stopping".to_string());
+    }
     let (payload_ptr, payload_len) = {
         let mut pending = direct_bridge.pending.lock();
         let Some(entry) = pending.get_mut(&request_id) else {
