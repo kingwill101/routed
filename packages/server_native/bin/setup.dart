@@ -1,9 +1,9 @@
 /// Downloads the prebuilt server_native library for a target platform.
 ///
 /// Usage:
-///   dart run server_native:setup [--tag v0.1.0] [--platform linux-x64]
+///   dart run server_native:setup [--tag server-native-prebuilt-v0.1.2] [--platform linux-x64]
 ///
-/// By default this resolves the latest release and host platform.
+/// By default this resolves the latest prebuilt-only release and host platform.
 library;
 
 import 'dart:convert';
@@ -11,6 +11,7 @@ import 'dart:io';
 
 const _repo = 'kingwill101/routed';
 const _defaultTag = 'latest';
+const _prebuiltTagPrefix = 'server-native-prebuilt-v';
 const _artifactPrefix = 'server_native';
 const _supportedPlatforms = <String>{
   'linux-x64',
@@ -48,7 +49,8 @@ Future<void> main(List<String> args) async {
           '  .prebuilt/<platform>/\n'
           '\n'
           'Options:\n'
-          '  --tag, -t       Release tag (default: latest)\n'
+          '  --tag, -t       Binary release tag '
+          '(default: latest prebuilt release)\n'
           '  --platform, -p  e.g. linux-x64 (default: host platform)\n',
         );
         return;
@@ -92,10 +94,13 @@ Future<void> _downloadAndExtract({
   required String filename,
   required Directory outDir,
 }) async {
+  final resolvedTag = tag == _defaultTag
+      ? await _latestPrebuiltTag(requiredAssetName: filename)
+      : tag;
   final ghArgs = <String>[
     'release',
     'download',
-    if (tag != _defaultTag) tag,
+    resolvedTag,
     '--repo',
     _repo,
     '--pattern',
@@ -108,7 +113,6 @@ Future<void> _downloadAndExtract({
 
   final tarPath = '${outDir.path}/$filename';
   if (ghResult.exitCode != 0) {
-    final resolvedTag = tag == _defaultTag ? await _latestTag() : tag;
     final encodedTag = Uri.encodeComponent(resolvedTag);
     final url =
         'https://github.com/$_repo/releases/download/$encodedTag/$filename';
@@ -151,8 +155,12 @@ Future<void> _downloadAndExtract({
   }
 }
 
-Future<String> _latestTag() async {
-  final url = Uri.https('api.github.com', '/repos/$_repo/releases/latest');
+Future<String> _latestPrebuiltTag({required String requiredAssetName}) async {
+  final url = Uri.https(
+    'api.github.com',
+    '/repos/$_repo/releases',
+    <String, String>{'per_page': '100'},
+  );
   final client = HttpClient();
   try {
     final request = await client.getUrl(url);
@@ -160,15 +168,49 @@ Future<String> _latestTag() async {
     final response = await request.close();
     if (response.statusCode != HttpStatus.ok) {
       throw Exception(
-        'Failed to resolve latest release tag (${response.statusCode})',
+        'Failed to resolve release tags (${response.statusCode})',
       );
     }
     final body = await utf8.decodeStream(response);
     final decoded = jsonDecode(body);
-    if (decoded is! Map<String, Object?> || decoded['tag_name'] is! String) {
-      throw Exception('Unexpected latest release payload');
+    if (decoded is! List) {
+      throw Exception('Unexpected releases payload');
     }
-    return decoded['tag_name']! as String;
+
+    String? fallbackWithAsset;
+    for (final release in decoded) {
+      if (release is! Map<String, Object?>) {
+        continue;
+      }
+      final tag = release['tag_name'];
+      if (tag is! String || tag.isEmpty) {
+        continue;
+      }
+      final assets = release['assets'];
+      final hasAsset =
+          assets is List &&
+          assets.any(
+            (asset) =>
+                asset is Map<String, Object?> &&
+                asset['name'] == requiredAssetName,
+          );
+      if (!hasAsset) {
+        continue;
+      }
+      if (tag.startsWith(_prebuiltTagPrefix)) {
+        return tag;
+      }
+      fallbackWithAsset ??= tag;
+    }
+
+    if (fallbackWithAsset != null) {
+      return fallbackWithAsset;
+    }
+
+    throw Exception(
+      'No release found with asset "$requiredAssetName". '
+      'Create a prebuilt release with tag prefix "$_prebuiltTagPrefix".',
+    );
   } finally {
     client.close(force: true);
   }

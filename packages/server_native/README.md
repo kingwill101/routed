@@ -435,6 +435,10 @@ Artifact naming:
 
 - `server_native-<platform>.tar.gz`
 
+Prebuilt binary release tags are separate from Dart package releases:
+
+- `server-native-prebuilt-v*`
+
 Current platform labels:
 
 - `linux-x64`, `linux-arm64`
@@ -452,7 +456,7 @@ dart run server_native:setup
 Pull a specific release tag and platform:
 
 ```bash
-dart run server_native:setup --tag v0.1.0 --platform linux-x64
+dart run server_native:setup --tag server-native-prebuilt-v0.1.2 --platform linux-x64
 ```
 
 Downloaded files are extracted to:

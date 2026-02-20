@@ -4,7 +4,7 @@ on:
   workflow_dispatch:
     inputs:
       tag:
-        description: "Release tag (e.g. v0.1.0). If empty, uploads artifacts only."
+        description: "Binary release tag (e.g. server-native-prebuilt-v0.1.2). If empty, uploads artifacts only."
         required: false
         type: string
       save_to_repo:
@@ -19,7 +19,7 @@ on:
         default: master
   push:
     tags:
-      - "v*"
+      - "server-native-prebuilt-v*"
 
 permissions:
   contents: write
@@ -227,7 +227,7 @@ jobs:
 
   release:
     name: Create Release
-    if: startsWith(github.ref, 'refs/tags/v') || github.event.inputs.tag != ''
+    if: startsWith(github.ref, 'refs/tags/server-native-prebuilt-v') || github.event.inputs.tag != ''
     needs: [native]
     runs-on: ubuntu-latest
     steps:
