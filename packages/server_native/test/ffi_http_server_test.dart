@@ -457,6 +457,88 @@ void main() {
     expect(secondParts[1], 'true');
   });
 
+  test(
+    'NativeHttpServer.close(force: true) does not hang with idle keep-alive connections (bridge mode)',
+    () async {
+      final server = await NativeHttpServer.bind(
+        InternetAddress.loopbackIPv4,
+        0,
+        http3: false,
+        nativeCallback: false,
+      );
+      final clientA = HttpClient();
+      final clientB = HttpClient();
+      addTearDown(() async {
+        clientA.close(force: true);
+        clientB.close(force: true);
+        try {
+          await server.close(force: true).timeout(const Duration(seconds: 1));
+        } catch (_) {}
+      });
+
+      // ignore: discarded_futures
+      server.listen((request) async {
+        request.response.write('ok');
+        await request.response.close();
+      });
+
+      final firstReq = await clientA.getUrl(
+        Uri.parse('http://127.0.0.1:${server.port}/a'),
+      );
+      final firstRes = await firstReq.close();
+      await firstRes.drain<void>();
+
+      final secondReq = await clientB.getUrl(
+        Uri.parse('http://127.0.0.1:${server.port}/b'),
+      );
+      final secondRes = await secondReq.close();
+      await secondRes.drain<void>();
+
+      await server.close(force: true).timeout(const Duration(seconds: 3));
+    },
+  );
+
+  test(
+    'NativeHttpServer.close(force: true) does not hang with idle keep-alive connections (nativeCallback mode)',
+    () async {
+      final server = await NativeHttpServer.bind(
+        InternetAddress.loopbackIPv4,
+        0,
+        http3: false,
+        nativeCallback: true,
+      );
+      final clientA = HttpClient();
+      final clientB = HttpClient();
+      addTearDown(() async {
+        clientA.close(force: true);
+        clientB.close(force: true);
+        try {
+          await server.close(force: true).timeout(const Duration(seconds: 1));
+        } catch (_) {}
+      });
+
+      // ignore: discarded_futures
+      server.listen((request) async {
+        request.response.write('ok');
+        await request.response.close();
+      });
+
+      final firstReq = await clientA.getUrl(
+        Uri.parse('http://127.0.0.1:${server.port}/a'),
+      );
+      final firstRes = await firstReq.close();
+      await firstRes.drain<void>();
+
+      final secondReq = await clientB.getUrl(
+        Uri.parse('http://127.0.0.1:${server.port}/b'),
+      );
+      final secondRes = await secondReq.close();
+      await secondRes.drain<void>();
+
+      await server.close(force: true).timeout(const Duration(seconds: 3));
+    },
+  );
+
   test('NativeHttpServer autoCompress sends gzip when accepted', () async {
     final server = await NativeHttpServer.bind(
       InternetAddress.loopbackIPv4,

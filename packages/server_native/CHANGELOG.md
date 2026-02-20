@@ -10,6 +10,9 @@ All notable changes to `server_native` will be documented in this file.
 - Fixed `NativeHttpServer.connectionsInfo()` tracking in native callback mode by wiring request/socket lifecycle counters on the direct callback path.
 - Added callback-free direct frame polling mode for native direct transport to avoid Rust->Dart callback teardown races.
 - Fixed `NativeHttpServer.close(force: true)` shutdown hangs by cancelling active Rust connection tasks during shutdown.
+- Added explicit regression tests for `NativeHttpServer.close(force: true)` in both bridge and native-callback modes.
+- Reduced runtime log noise by silencing expected shutdown cancellation/tunnel teardown messages by default.
+- Added `server_native.verbose_logs` toggle for opt-in verbose runtime diagnostics (including non-TLS HTTP/3 downgrade notices).
 - Regenerated `native/bindings.h` and `lib/src/ffi.g.dart` to keep generated FFI artifacts in sync with native source updates.
 - Refreshed checked-in native prebuilt binaries for supported desktop/mobile targets.
 

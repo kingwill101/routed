@@ -102,6 +102,14 @@ const BENCHMARK_MODE_STATIC_OK_SERVER_NATIVE_DIRECT_SHAPE: u8 = 2;
 const BENCHMARK_STATIC_OK_BODY: &[u8] = br#"{"ok":true,"label":"server_native_direct"}"#;
 const BENCHMARK_SERVER_NATIVE_DIRECT_SHAPE_BODY: &[u8] =
     br#"{"ok":true,"label":"server_native_direct"}"#;
+const MESSAGE_CANCELLED: &str = "cancelled";
+const MESSAGE_CANCELED: &str = "canceled";
+const MESSAGE_BRIDGE_STOPPING: &str = "bridge is stopping";
+const MESSAGE_CONNECTION_CLOSED: &str = "connection closed";
+const MESSAGE_CHANNEL_CLOSED: &str = "channel closed";
+const LOG_WEBSOCKET_TUNNEL_ERROR_PREFIX: &str = "[server_native] websocket tunnel error: ";
+const LOG_DIRECT_WEBSOCKET_TUNNEL_ERROR_PREFIX: &str =
+    "[server_native] direct websocket tunnel error: ";
 
 /// Max time to wait for direct-callback response frames from Dart.
 const DIRECT_REQUEST_TIMEOUT: Duration = Duration::from_secs(30);
@@ -358,6 +366,22 @@ struct BridgeCallResult {
     headers: Vec<(axum::http::header::HeaderName, axum::http::HeaderValue)>,
     body: Body,
     tunnel_socket: Option<BridgeConnection>,
+}
+
+/// Returns true when an error message indicates expected cancellation during
+/// shutdown (e.g. aborted keep-alive connection tasks).
+fn is_cancellation_message(message: &str) -> bool {
+    let lower = message.to_lowercase();
+    lower.contains(MESSAGE_CANCELLED) || lower.contains(MESSAGE_CANCELED)
+}
+
+/// Returns true for expected websocket tunnel errors during shutdown.
+fn is_expected_shutdown_tunnel_error(message: &str) -> bool {
+    let lower = message.to_lowercase();
+    is_cancellation_message(message)
+        || lower.contains(MESSAGE_BRIDGE_STOPPING)
+        || lower.contains(MESSAGE_CONNECTION_CLOSED)
+        || lower.contains(MESSAGE_CHANNEL_CLOSED)
 }
 
 #[no_mangle]
@@ -911,12 +935,12 @@ async fn run_plain_proxy(
         match result {
             Ok(Ok(())) => {}
             Ok(Err(error)) => {
-                if !error.to_lowercase().contains("cancelled") {
+                if !is_cancellation_message(&error) {
                     eprintln!("[server_native] {error}");
                 }
             }
             Err(error) => {
-                if !error.is_cancelled() {
+                if !error.is_cancelled() && !is_cancellation_message(&error.to_string()) {
                     eprintln!("[server_native] plain task join failed: {error}");
                 }
             }
@@ -1078,12 +1102,12 @@ async fn run_tls_proxy(
         match result {
             Ok(Ok(())) => {}
             Ok(Err(error)) => {
-                if !error.to_lowercase().contains("cancelled") {
+                if !is_cancellation_message(&error) {
                     eprintln!("[server_native] {error}");
                 }
             }
             Err(error) => {
-                if !error.is_cancelled() {
+                if !error.is_cancelled() && !is_cancellation_message(&error.to_string()) {
                     eprintln!("[server_native] tls task join failed: {error}");
                 }
             }
@@ -1200,7 +1224,9 @@ async fn proxy_request(State(state): State<ProxyState>, request: Request<Body>) 
         };
         tokio::spawn(async move {
             if let Err(error) = run_websocket_tunnel(upgrade, tunnel_connection.stream).await {
-                eprintln!("[server_native] websocket tunnel error: {error}");
+                if !is_expected_shutdown_tunnel_error(&error.to_string()) {
+                    eprintln!("{LOG_WEBSOCKET_TUNNEL_ERROR_PREFIX}{error}");
+                }
             }
         });
     }
@@ -1326,7 +1352,9 @@ async fn call_direct_bridge_request(
             if let Err(error) =
                 run_direct_websocket_tunnel(upgrade, direct_bridge, request_id, response_rx).await
             {
-                eprintln!("[server_native] direct websocket tunnel error: {error}");
+                if !is_expected_shutdown_tunnel_error(&error.to_string()) {
+                    eprintln!("{LOG_DIRECT_WEBSOCKET_TUNNEL_ERROR_PREFIX}{error}");
+                }
             }
         });
         let mut response = Response::new(Body::empty());

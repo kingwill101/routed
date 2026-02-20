@@ -31,6 +31,13 @@ const int _maxBridgeBodyBytes = 32 * 1024 * 1024;
 
 /// Payload size threshold where writes are coalesced into one socket add.
 const int _coalescePayloadThresholdBytes = 4 * 1024;
+const bool _nativeVerboseLogs = bool.fromEnvironment(
+  'server_native.verbose_logs',
+  defaultValue: false,
+);
+const String _http3RequiresTlsLogMessage =
+    '[server_native] http3=true requested for insecure server; '
+    'HTTP/3 requires TLS and will be disabled.';
 const int _bridgeRequestFrameTypeLegacy = 1;
 const int _bridgeRequestFrameTypeTokenized = 11;
 const int _bridgeHeaderNameLiteralToken = 0xffff;
@@ -83,6 +90,14 @@ const List<String> _directBridgeHeaderNameTable = <String>[
 /// );
 /// ```
 /// {@endtemplate}
+
+@pragma('vm:prefer-inline')
+void _nativeVerboseLog(String message) {
+  if (_nativeVerboseLogs) {
+    stderr.writeln(message);
+  }
+}
+
 ///
 /// {@template server_native_serve_http_handler_example}
 /// Example:

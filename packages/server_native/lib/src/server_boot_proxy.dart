@@ -112,9 +112,7 @@ Future<_RunningProxy> _startNativeProxy({
   final enableHttp3 = secure && http3;
   final enableHttp2 = http2;
   if (http3 && !secure) {
-    stderr.writeln(
-      '[server_native] http3=true requested for insecure server; HTTP/3 requires TLS and will be disabled.',
-    );
+    _nativeVerboseLog(_http3RequiresTlsLogMessage);
   }
 
   _BridgeBinding? bridgeBinding;
