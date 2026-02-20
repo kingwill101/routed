@@ -904,14 +904,24 @@ async fn run_plain_proxy(
         }
     }
 
+    // Force-close all active per-connection tasks on shutdown so the FFI stop
+    // path cannot hang behind idle keep-alive sockets.
+    connections.abort_all();
     while let Some(result) = connections.join_next().await {
         match result {
             Ok(Ok(())) => {}
-            Ok(Err(error)) => eprintln!("[server_native] {error}"),
-            Err(error) => eprintln!("[server_native] plain task join failed: {error}"),
+            Ok(Err(error)) => {
+                if !error.to_lowercase().contains("cancelled") {
+                    eprintln!("[server_native] {error}");
+                }
+            }
+            Err(error) => {
+                if !error.is_cancelled() {
+                    eprintln!("[server_native] plain task join failed: {error}");
+                }
+            }
         }
     }
-
     Ok(())
 }
 
@@ -1061,14 +1071,24 @@ async fn run_tls_proxy(
         endpoint.close(0_u32.into(), b"shutdown");
     }
 
+    // Force-close all active per-connection tasks on shutdown so the FFI stop
+    // path cannot hang behind idle keep-alive sockets.
+    connections.abort_all();
     while let Some(result) = connections.join_next().await {
         match result {
             Ok(Ok(())) => {}
-            Ok(Err(error)) => eprintln!("[server_native] {error}"),
-            Err(error) => eprintln!("[server_native] tls task join failed: {error}"),
+            Ok(Err(error)) => {
+                if !error.to_lowercase().contains("cancelled") {
+                    eprintln!("[server_native] {error}");
+                }
+            }
+            Err(error) => {
+                if !error.is_cancelled() {
+                    eprintln!("[server_native] tls task join failed: {error}");
+                }
+            }
         }
     }
-
     Ok(())
 }
 

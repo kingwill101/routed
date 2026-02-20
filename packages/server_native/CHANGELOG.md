@@ -8,6 +8,8 @@ All notable changes to `server_native` will be documented in this file.
 - Added extensive Dart and Rust internal documentation across hot-path runtime code and protocol helpers.
 - Fixed `NativeMultiServer.bind` to consistently forward the `http2` flag.
 - Fixed `NativeHttpServer.connectionsInfo()` tracking in native callback mode by wiring request/socket lifecycle counters on the direct callback path.
+- Added callback-free direct frame polling mode for native direct transport to avoid Rust->Dart callback teardown races.
+- Fixed `NativeHttpServer.close(force: true)` shutdown hangs by cancelling active Rust connection tasks during shutdown.
 - Regenerated `native/bindings.h` and `lib/src/ffi.g.dart` to keep generated FFI artifacts in sync with native source updates.
 - Refreshed checked-in native prebuilt binaries for supported desktop/mobile targets.
 
