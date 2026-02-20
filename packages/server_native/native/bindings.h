@@ -116,6 +116,12 @@ int32_t server_native_transport_version(void);
  * On failure:
  * - returns null,
  * - emits error details to stderr.
+ *
+ * # Safety
+ *
+ * `config` and `out_port` must be valid non-null pointers for the duration
+ * of this call. String pointers inside `config` must either be null (for
+ * optional fields) or point to valid NUL-terminated UTF-8 strings.
  */
 struct ProxyServerHandle *server_native_start_proxy_server(const struct ServerNativeProxyConfig *config,
                                                            uint16_t *out_port);
@@ -125,6 +131,11 @@ struct ProxyServerHandle *server_native_start_proxy_server(const struct ServerNa
  *
  * This function consumes the handle pointer and must not be called twice with
  * the same pointer.
+ *
+ * # Safety
+ *
+ * `handle` must be either null or a pointer returned by
+ * [`server_native_start_proxy_server`] that has not yet been freed.
  */
 void server_native_stop_proxy_server(struct ProxyServerHandle *handle);
 
@@ -133,6 +144,12 @@ void server_native_stop_proxy_server(struct ProxyServerHandle *handle);
  *
  * Returns `1` on success, `0` when the request is unknown or arguments are
  * invalid.
+ *
+ * # Safety
+ *
+ * `handle` must be a valid pointer returned by
+ * [`server_native_start_proxy_server`]. `response_payload` must reference
+ * `response_payload_len` readable bytes for the duration of this call.
  */
 uint8_t server_native_push_direct_response_frame(struct ProxyServerHandle *handle,
                                                  uint64_t request_id,
@@ -141,6 +158,10 @@ uint8_t server_native_push_direct_response_frame(struct ProxyServerHandle *handl
 
 /**
  * Compatibility alias for [`server_native_push_direct_response_frame`].
+ *
+ * # Safety
+ *
+ * Same safety contract as [`server_native_push_direct_response_frame`].
  */
 uint8_t server_native_complete_direct_request(struct ProxyServerHandle *handle,
                                               uint64_t request_id,

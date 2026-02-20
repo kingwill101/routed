@@ -18,6 +18,12 @@ external int server_native_transport_version();
 /// On failure:
 /// - returns null,
 /// - emits error details to stderr.
+///
+/// # Safety
+///
+/// `config` and `out_port` must be valid non-null pointers for the duration
+/// of this call. String pointers inside `config` must either be null (for
+/// optional fields) or point to valid NUL-terminated UTF-8 strings.
 @ffi.Native<
   ffi.Pointer<ProxyServerHandle> Function(
     ffi.Pointer<ServerNativeProxyConfig>,
@@ -33,6 +39,11 @@ external ffi.Pointer<ProxyServerHandle> server_native_start_proxy_server(
 ///
 /// This function consumes the handle pointer and must not be called twice with
 /// the same pointer.
+///
+/// # Safety
+///
+/// `handle` must be either null or a pointer returned by
+/// [`server_native_start_proxy_server`] that has not yet been freed.
 @ffi.Native<ffi.Void Function(ffi.Pointer<ProxyServerHandle>)>()
 external void server_native_stop_proxy_server(
   ffi.Pointer<ProxyServerHandle> handle,
@@ -42,6 +53,12 @@ external void server_native_stop_proxy_server(
 ///
 /// Returns `1` on success, `0` when the request is unknown or arguments are
 /// invalid.
+///
+/// # Safety
+///
+/// `handle` must be a valid pointer returned by
+/// [`server_native_start_proxy_server`]. `response_payload` must reference
+/// `response_payload_len` readable bytes for the duration of this call.
 @ffi.Native<
   ffi.Uint8 Function(
     ffi.Pointer<ProxyServerHandle>,
@@ -58,6 +75,10 @@ external int server_native_push_direct_response_frame(
 );
 
 /// Compatibility alias for [`server_native_push_direct_response_frame`].
+///
+/// # Safety
+///
+/// Same safety contract as [`server_native_push_direct_response_frame`].
 @ffi.Native<
   ffi.Uint8 Function(
     ffi.Pointer<ProxyServerHandle>,
