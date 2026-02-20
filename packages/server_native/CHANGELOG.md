@@ -18,6 +18,8 @@ All notable changes to `server_native` will be documented in this file.
 - Added generated prebuilt release metadata (`lib/src/generated/prebuilt_release.g.dart`) sourced from `pubspec.yaml` version.
 - Updated hooks/setup to use versioned prebuilt paths (`.prebuilt/<tag>/<platform>/`) with legacy path fallback.
 - Updated prebuilt CI workflow to auto-derive release tags from package version when no tag input is provided.
+- Removed `save_to_repo` prebuilt commit path from CI to avoid drift from release source-of-truth.
+- Updated hook prebuilt lookup priority to prefer downloaded versioned prebuilts over packaged fallback binaries.
 - Regenerated `native/bindings.h` and `lib/src/ffi.g.dart` to keep generated FFI artifacts in sync with native source updates.
 - Refreshed checked-in native prebuilt binaries for supported desktop/mobile targets.
 

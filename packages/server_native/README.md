@@ -432,11 +432,6 @@ CI build output is staged under:
 
 - `packages/server_native/native/prebuilt/<platform>/`
 
-To persist those binaries in-repo from CI, run the workflow manually with:
-
-- `save_to_repo=true`
-- `target_branch=<branch>`
-
 Artifact naming:
 
 - `server_native-<platform>.tar.gz`
@@ -480,13 +475,13 @@ Downloaded files are extracted to:
 Build hook prebuilt lookup order:
 
 1. `SERVER_NATIVE_PREBUILT` (absolute path to a library file)
-2. `<package-root>/native/<platform>/<library>` (packaged prebuilt)
-3. `<package-root>/native/prebuilt/<tag>/<platform>/<library>`
-4. `<package-root>/native/prebuilt/<platform>/<library>` (legacy fallback)
-5. `<repo-root>/.prebuilt/<tag>/<platform>/<library>`
-6. `<repo-root>/.prebuilt/<platform>/<library>` (legacy fallback)
-7. `<project-root>/.prebuilt/<tag>/<platform>/<library>`
-8. `<project-root>/.prebuilt/<platform>/<library>` (legacy fallback)
+2. `<project-root>/.prebuilt/<tag>/<platform>/<library>`
+3. `<project-root>/.prebuilt/<platform>/<library>` (legacy fallback)
+4. `<repo-root>/.prebuilt/<tag>/<platform>/<library>`
+5. `<repo-root>/.prebuilt/<platform>/<library>` (legacy fallback)
+6. `<package-root>/native/prebuilt/<tag>/<platform>/<library>` (packaged fallback)
+7. `<package-root>/native/prebuilt/<platform>/<library>` (legacy packaged fallback)
+8. `<package-root>/native/<platform>/<library>` (legacy packaged fallback)
 
 If no prebuilt library is found, the hook falls back to Rust source build
 through `native_toolchain_rust`.

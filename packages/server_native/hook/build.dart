@@ -64,17 +64,19 @@ File? _findPrebuiltLibrary(
   }
 
   final platformLabel = _platformLabel(code);
-  final packagedCandidates = <Uri>[
-    input.packageRoot.resolve('native/$platformLabel/$libraryName'),
-    input.packageRoot.resolve(
-      'native/prebuilt/$serverNativePrebuiltReleaseTag/$platformLabel/$libraryName',
-    ),
-    input.packageRoot.resolve('native/prebuilt/$platformLabel/$libraryName'),
-  ];
-  for (final candidate in packagedCandidates) {
-    final file = File.fromUri(candidate);
-    if (file.existsSync()) {
-      return file;
+  final projectRoot = _findProjectRoot(input.outputDirectory);
+  if (projectRoot != null) {
+    final candidates = <Uri>[
+      projectRoot.resolve(
+        '.prebuilt/$serverNativePrebuiltReleaseTag/$platformLabel/$libraryName',
+      ),
+      projectRoot.resolve('.prebuilt/$platformLabel/$libraryName'),
+    ];
+    for (final candidate in candidates) {
+      final file = File.fromUri(candidate);
+      if (file.existsSync()) {
+        return file;
+      }
     }
   }
 
@@ -94,19 +96,17 @@ File? _findPrebuiltLibrary(
     }
   }
 
-  final projectRoot = _findProjectRoot(input.outputDirectory);
-  if (projectRoot != null) {
-    final candidates = <Uri>[
-      projectRoot.resolve(
-        '.prebuilt/$serverNativePrebuiltReleaseTag/$platformLabel/$libraryName',
-      ),
-      projectRoot.resolve('.prebuilt/$platformLabel/$libraryName'),
-    ];
-    for (final candidate in candidates) {
-      final file = File.fromUri(candidate);
-      if (file.existsSync()) {
-        return file;
-      }
+  final packagedCandidates = <Uri>[
+    input.packageRoot.resolve(
+      'native/prebuilt/$serverNativePrebuiltReleaseTag/$platformLabel/$libraryName',
+    ),
+    input.packageRoot.resolve('native/prebuilt/$platformLabel/$libraryName'),
+    input.packageRoot.resolve('native/$platformLabel/$libraryName'),
+  ];
+  for (final candidate in packagedCandidates) {
+    final file = File.fromUri(candidate);
+    if (file.existsSync()) {
+      return file;
     }
   }
 
