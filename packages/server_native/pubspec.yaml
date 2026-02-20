@@ -1,6 +1,6 @@
 name: server_native
 description: Rust-backed transport boot APIs for Dart HTTP servers.
-version: 0.1.1
+version: 0.1.2
 homepage: https://github.com/kingwill101/routed/tree/master/packages/server_native
 repository: https://github.com/kingwill101/routed
 issue_tracker: https://github.com/kingwill101/routed/issues
