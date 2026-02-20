@@ -15,6 +15,9 @@ All notable changes to `server_native` will be documented in this file.
 - Added `server_native.verbose_logs` toggle for opt-in verbose runtime diagnostics (including non-TLS HTTP/3 downgrade notices).
 - Split native binary publishing to dedicated prebuilt release tags (`server-native-prebuilt-v*`) independent from Dart package tags.
 - Updated `server_native:setup` to resolve latest prebuilt-specific release tags instead of generic repository latest release.
+- Added generated prebuilt release metadata (`lib/src/generated/prebuilt_release.g.dart`) sourced from `pubspec.yaml` version.
+- Updated hooks/setup to use versioned prebuilt paths (`.prebuilt/<tag>/<platform>/`) with legacy path fallback.
+- Updated prebuilt CI workflow to auto-derive release tags from package version when no tag input is provided.
 - Regenerated `native/bindings.h` and `lib/src/ffi.g.dart` to keep generated FFI artifacts in sync with native source updates.
 - Refreshed checked-in native prebuilt binaries for supported desktop/mobile targets.
 

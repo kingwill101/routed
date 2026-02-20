@@ -3,14 +3,17 @@
 /// Usage:
 ///   dart run server_native:setup [--tag server-native-prebuilt-v0.1.2] [--platform linux-x64]
 ///
-/// By default this resolves the latest prebuilt-only release and host platform.
+/// By default this resolves the package-matched prebuilt tag and host platform.
+/// Use `--tag latest` to resolve the newest available prebuilt tag instead.
 library;
 
 import 'dart:convert';
 import 'dart:io';
 
+import 'package:server_native/src/generated/prebuilt_release.g.dart';
+
 const _repo = 'kingwill101/routed';
-const _defaultTag = 'latest';
+const _latestTagAlias = 'latest';
 const _prebuiltTagPrefix = 'server-native-prebuilt-v';
 const _artifactPrefix = 'server_native';
 const _supportedPlatforms = <String>{
@@ -29,7 +32,7 @@ const _supportedPlatforms = <String>{
 };
 
 Future<void> main(List<String> args) async {
-  var tag = _defaultTag;
+  var tag = serverNativePrebuiltReleaseTag;
   String? platform;
 
   for (var i = 0; i < args.length; i++) {
@@ -46,11 +49,11 @@ Future<void> main(List<String> args) async {
           'Usage: dart run server_native:setup [options]\n'
           '\n'
           'Downloads a prebuilt server_native library to:\n'
-          '  .prebuilt/<platform>/\n'
+          '  .prebuilt/<tag>/<platform>/\n'
           '\n'
           'Options:\n'
           '  --tag, -t       Binary release tag '
-          '(default: latest prebuilt release)\n'
+          '(default: package-matched prebuilt tag; use "latest" to auto-discover)\n'
           '  --platform, -p  e.g. linux-x64 (default: host platform)\n',
         );
         return;
@@ -68,20 +71,28 @@ Future<void> main(List<String> args) async {
   }
 
   final filename = '$_artifactPrefix-$platform.tar.gz';
+  final resolvedTag = tag == _latestTagAlias
+      ? await _latestPrebuiltTag(requiredAssetName: filename)
+      : tag;
   final projectRoot = _findProjectRoot(Directory.current);
-  final outDir = Directory('${projectRoot.path}/.prebuilt/$platform')
-    ..createSync(recursive: true);
+  final outDir = Directory(
+    '${projectRoot.path}/.prebuilt/$resolvedTag/$platform',
+  )..createSync(recursive: true);
 
   stdout.writeln('server_native setup');
   stdout.writeln('  Repo:     $_repo');
-  stdout.writeln('  Tag:      $tag');
+  stdout.writeln('  Tag:      $resolvedTag');
   stdout.writeln('  Platform: $platform');
   stdout.writeln('  Artifact: $filename');
   stdout.writeln('  Target:   ${outDir.path}');
   stdout.writeln('');
 
   try {
-    await _downloadAndExtract(tag: tag, filename: filename, outDir: outDir);
+    await _downloadAndExtract(
+      tag: resolvedTag,
+      filename: filename,
+      outDir: outDir,
+    );
     stdout.writeln('Done. Build hooks will now prefer this prebuilt artifact.');
   } on Exception catch (error) {
     stderr.writeln('Failed: $error');
@@ -94,13 +105,10 @@ Future<void> _downloadAndExtract({
   required String filename,
   required Directory outDir,
 }) async {
-  final resolvedTag = tag == _defaultTag
-      ? await _latestPrebuiltTag(requiredAssetName: filename)
-      : tag;
   final ghArgs = <String>[
     'release',
     'download',
-    resolvedTag,
+    tag,
     '--repo',
     _repo,
     '--pattern',
@@ -113,7 +121,7 @@ Future<void> _downloadAndExtract({
 
   final tarPath = '${outDir.path}/$filename';
   if (ghResult.exitCode != 0) {
-    final encodedTag = Uri.encodeComponent(resolvedTag);
+    final encodedTag = Uri.encodeComponent(tag);
     final url =
         'https://github.com/$_repo/releases/download/$encodedTag/$filename';
     stdout.writeln('  gh CLI failed, falling back to curl...');

@@ -416,6 +416,12 @@ If you changed Rust FFI symbols/structs, regenerate bindings:
 dart run tool/generate_ffi.dart
 ```
 
+If you bump `pubspec.yaml` version, regenerate prebuilt release metadata:
+
+```bash
+dart run tool/generate_prebuilt_release.dart
+```
+
 ## Prebuilt Native Artifacts
 
 Cross-platform artifacts are built by:
@@ -453,6 +459,14 @@ Pull host prebuilts into your project:
 dart run server_native:setup
 ```
 
+This defaults to the prebuilt tag generated from the local
+`server_native` package version (for example `server-native-prebuilt-v0.1.2`).
+To auto-select the newest available prebuilt release instead, use:
+
+```bash
+dart run server_native:setup --tag latest
+```
+
 Pull a specific release tag and platform:
 
 ```bash
@@ -461,15 +475,18 @@ dart run server_native:setup --tag server-native-prebuilt-v0.1.2 --platform linu
 
 Downloaded files are extracted to:
 
-- `.prebuilt/<platform>/`
+- `.prebuilt/<tag>/<platform>/`
 
 Build hook prebuilt lookup order:
 
 1. `SERVER_NATIVE_PREBUILT` (absolute path to a library file)
 2. `<package-root>/native/<platform>/<library>` (packaged prebuilt)
-3. `<package-root>/native/prebuilt/<platform>/<library>`
-4. `<repo-root>/.prebuilt/<platform>/<library>`
-5. `<project-root>/.prebuilt/<platform>/<library>`
+3. `<package-root>/native/prebuilt/<tag>/<platform>/<library>`
+4. `<package-root>/native/prebuilt/<platform>/<library>` (legacy fallback)
+5. `<repo-root>/.prebuilt/<tag>/<platform>/<library>`
+6. `<repo-root>/.prebuilt/<platform>/<library>` (legacy fallback)
+7. `<project-root>/.prebuilt/<tag>/<platform>/<library>`
+8. `<project-root>/.prebuilt/<platform>/<library>` (legacy fallback)
 
 If no prebuilt library is found, the hook falls back to Rust source build
 through `native_toolchain_rust`.

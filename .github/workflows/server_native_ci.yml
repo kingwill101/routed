@@ -55,3 +55,9 @@ jobs:
         run: |
           dart run tool/generate_ffi.dart
           git diff --exit-code -- native/bindings.h lib/src/ffi.g.dart
+
+      - name: Check generated prebuilt release metadata is up to date
+        working-directory: packages/server_native
+        run: |
+          dart run tool/generate_prebuilt_release.dart
+          git diff --exit-code -- lib/src/generated/prebuilt_release.g.dart

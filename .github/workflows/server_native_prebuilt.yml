@@ -4,7 +4,7 @@ on:
   workflow_dispatch:
     inputs:
       tag:
-        description: "Binary release tag (e.g. server-native-prebuilt-v0.1.2). If empty, uploads artifacts only."
+        description: "Binary release tag (e.g. server-native-prebuilt-v0.1.2). If empty, auto-uses package version."
         required: false
         type: string
       save_to_repo:
@@ -27,6 +27,7 @@ permissions:
 env:
   RUST_VERSION: "1.92.0"
   PREBUILT_PACKAGE: "server_native"
+  PREBUILT_TAG_PREFIX: "server-native-prebuilt-v"
 
 jobs:
   native:
@@ -227,10 +228,12 @@ jobs:
 
   release:
     name: Create Release
-    if: startsWith(github.ref, 'refs/tags/server-native-prebuilt-v') || github.event.inputs.tag != ''
+    if: startsWith(github.ref, 'refs/tags/server-native-prebuilt-v') || github.event_name == 'workflow_dispatch'
     needs: [native]
     runs-on: ubuntu-latest
     steps:
+      - uses: actions/checkout@v4
+
       - name: Download all artifacts
         uses: actions/download-artifact@v4
         with:
@@ -241,11 +244,20 @@ jobs:
 
       - name: Determine tag
         id: tag
+        shell: bash
         run: |
-          if [ -n "${{ github.event.inputs.tag }}" ]; then
+          set -euo pipefail
+          if [[ "${GITHUB_REF:-}" == refs/tags/server-native-prebuilt-v* ]]; then
+            echo "tag=${GITHUB_REF#refs/tags/}" >> "$GITHUB_OUTPUT"
+          elif [ -n "${{ github.event.inputs.tag }}" ]; then
             echo "tag=${{ github.event.inputs.tag }}" >> "$GITHUB_OUTPUT"
           else
-            echo "tag=${GITHUB_REF#refs/tags/}" >> "$GITHUB_OUTPUT"
+            version="$(awk '/^version:/{print $2; exit}' packages/server_native/pubspec.yaml)"
+            if [ -z "$version" ]; then
+              echo "::error::Unable to determine server_native version from pubspec.yaml"
+              exit 1
+            fi
+            echo "tag=${{ env.PREBUILT_TAG_PREFIX }}${version}" >> "$GITHUB_OUTPUT"
           fi
 
       - name: Create GitHub Release

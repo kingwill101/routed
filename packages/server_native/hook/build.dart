@@ -3,6 +3,7 @@ import 'dart:io';
 import 'package:code_assets/code_assets.dart';
 import 'package:hooks/hooks.dart';
 import 'package:native_toolchain_rust/native_toolchain_rust.dart';
+import 'package:server_native/src/generated/prebuilt_release.g.dart';
 
 const _assetName = 'src/ffi.g.dart';
 const _cratePath = 'native';
@@ -65,6 +66,9 @@ File? _findPrebuiltLibrary(
   final platformLabel = _platformLabel(code);
   final packagedCandidates = <Uri>[
     input.packageRoot.resolve('native/$platformLabel/$libraryName'),
+    input.packageRoot.resolve(
+      'native/prebuilt/$serverNativePrebuiltReleaseTag/$platformLabel/$libraryName',
+    ),
     input.packageRoot.resolve('native/prebuilt/$platformLabel/$libraryName'),
   ];
   for (final candidate in packagedCandidates) {
@@ -76,21 +80,33 @@ File? _findPrebuiltLibrary(
 
   final repoRoot = _findRepoRoot(input.packageRoot);
   if (repoRoot != null) {
-    final file = File.fromUri(
+    final candidates = <Uri>[
+      repoRoot.resolve(
+        '.prebuilt/$serverNativePrebuiltReleaseTag/$platformLabel/$libraryName',
+      ),
       repoRoot.resolve('.prebuilt/$platformLabel/$libraryName'),
-    );
-    if (file.existsSync()) {
-      return file;
+    ];
+    for (final candidate in candidates) {
+      final file = File.fromUri(candidate);
+      if (file.existsSync()) {
+        return file;
+      }
     }
   }
 
   final projectRoot = _findProjectRoot(input.outputDirectory);
   if (projectRoot != null) {
-    final file = File.fromUri(
+    final candidates = <Uri>[
+      projectRoot.resolve(
+        '.prebuilt/$serverNativePrebuiltReleaseTag/$platformLabel/$libraryName',
+      ),
       projectRoot.resolve('.prebuilt/$platformLabel/$libraryName'),
-    );
-    if (file.existsSync()) {
-      return file;
+    ];
+    for (final candidate in candidates) {
+      final file = File.fromUri(candidate);
+      if (file.existsSync()) {
+        return file;
+      }
     }
   }
 
