@@ -470,15 +470,15 @@ dart run server_native:setup --tag server-native-prebuilt-v0.1.2 --platform linu
 
 Downloaded files are extracted to:
 
-- `.prebuilt/<tag>/<platform>/`
+- `.dart_tool/server_native/prebuilt/<tag>/<platform>/`
 
 Build hook prebuilt lookup order:
 
 1. `SERVER_NATIVE_PREBUILT` (absolute path to a library file)
-2. `<project-root>/.prebuilt/<tag>/<platform>/<library>`
-3. `<project-root>/.prebuilt/<platform>/<library>` (legacy fallback)
-4. `<repo-root>/.prebuilt/<tag>/<platform>/<library>`
-5. `<repo-root>/.prebuilt/<platform>/<library>` (legacy fallback)
+2. `<project-root>/.dart_tool/server_native/prebuilt/<tag>/<platform>/<library>`
+3. `<project-root>/.dart_tool/server_native/prebuilt/<platform>/<library>` (legacy fallback)
+4. `<repo-root>/.dart_tool/server_native/prebuilt/<tag>/<platform>/<library>`
+5. `<repo-root>/.dart_tool/server_native/prebuilt/<platform>/<library>` (legacy fallback)
 6. `<package-root>/native/prebuilt/<tag>/<platform>/<library>` (packaged fallback)
 7. `<package-root>/native/prebuilt/<platform>/<library>` (legacy packaged fallback)
 8. `<package-root>/native/<platform>/<library>` (legacy packaged fallback)

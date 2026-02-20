@@ -16,6 +16,7 @@ const _repo = 'kingwill101/routed';
 const _latestTagAlias = 'latest';
 const _prebuiltTagPrefix = 'server-native-prebuilt-v';
 const _artifactPrefix = 'server_native';
+const _projectPrebuiltRoot = '.dart_tool/server_native/prebuilt';
 const _supportedPlatforms = <String>{
   'linux-x64',
   'linux-arm64',
@@ -49,7 +50,7 @@ Future<void> main(List<String> args) async {
           'Usage: dart run server_native:setup [options]\n'
           '\n'
           'Downloads a prebuilt server_native library to:\n'
-          '  .prebuilt/<tag>/<platform>/\n'
+          '  $_projectPrebuiltRoot/<tag>/<platform>/\n'
           '\n'
           'Options:\n'
           '  --tag, -t       Binary release tag '
@@ -76,7 +77,7 @@ Future<void> main(List<String> args) async {
       : tag;
   final projectRoot = _findProjectRoot(Directory.current);
   final outDir = Directory(
-    '${projectRoot.path}/.prebuilt/$resolvedTag/$platform',
+    '${projectRoot.path}/$_projectPrebuiltRoot/$resolvedTag/$platform',
   )..createSync(recursive: true);
 
   stdout.writeln('server_native setup');

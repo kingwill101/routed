@@ -9,6 +9,7 @@ const _assetName = 'src/ffi.g.dart';
 const _cratePath = 'native';
 const _crateName = 'server_native';
 const _prebuiltEnvVar = 'SERVER_NATIVE_PREBUILT';
+const _projectPrebuiltRoot = '.dart_tool/server_native/prebuilt';
 
 Future<void> main(List<String> args) async {
   await build(args, (input, output) async {
@@ -68,9 +69,9 @@ File? _findPrebuiltLibrary(
   if (projectRoot != null) {
     final candidates = <Uri>[
       projectRoot.resolve(
-        '.prebuilt/$serverNativePrebuiltReleaseTag/$platformLabel/$libraryName',
+        '$_projectPrebuiltRoot/$serverNativePrebuiltReleaseTag/$platformLabel/$libraryName',
       ),
-      projectRoot.resolve('.prebuilt/$platformLabel/$libraryName'),
+      projectRoot.resolve('$_projectPrebuiltRoot/$platformLabel/$libraryName'),
     ];
     for (final candidate in candidates) {
       final file = File.fromUri(candidate);
@@ -84,9 +85,9 @@ File? _findPrebuiltLibrary(
   if (repoRoot != null) {
     final candidates = <Uri>[
       repoRoot.resolve(
-        '.prebuilt/$serverNativePrebuiltReleaseTag/$platformLabel/$libraryName',
+        '$_projectPrebuiltRoot/$serverNativePrebuiltReleaseTag/$platformLabel/$libraryName',
       ),
-      repoRoot.resolve('.prebuilt/$platformLabel/$libraryName'),
+      repoRoot.resolve('$_projectPrebuiltRoot/$platformLabel/$libraryName'),
     ];
     for (final candidate in candidates) {
       final file = File.fromUri(candidate);
