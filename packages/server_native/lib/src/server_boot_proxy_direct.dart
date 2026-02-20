@@ -45,6 +45,9 @@ NativeProxyServer _startNativeDirectProxy({
     tlsKeyPath: tlsKeyPath,
     tlsCertPassword: tlsCertPassword,
     directRequestCallback: (requestId, payload, payloadLen) {
+      if (proxyRef.isClosed) {
+        return;
+      }
       final requestPayload = Uint8List.fromList(
         payload.asTypedList(payloadLen),
       );
@@ -60,6 +63,9 @@ NativeProxyServer _startNativeDirectProxy({
       }
 
       void pushResponsePayload(Uint8List responsePayload) {
+        if (proxyRef.isClosed) {
+          return;
+        }
         final pushed = proxyRef.pushDirectResponseFrame(
           requestId,
           responsePayload,
@@ -141,7 +147,15 @@ NativeProxyServer _startNativeDirectProxy({
               keepStreamState = true;
               unawaited(() async {
                 try {
-                  await for (final chunk in detachedSocket.bridgeSocket) {
+                  final prefetched = detachedSocket.takePrefetchedTunnelBytes();
+                  if (prefetched != null && prefetched.isNotEmpty) {
+                    pushResponsePayload(
+                      BridgeTunnelFrame.encodeChunkPayload(prefetched),
+                    );
+                  }
+                  final bridgeIterator = detachedSocket.bridgeIterator();
+                  while (await bridgeIterator.moveNext()) {
+                    final chunk = bridgeIterator.current;
                     if (chunk.isEmpty) {
                       continue;
                     }

@@ -9,6 +9,7 @@ final class BridgeHttpResponse implements HttpResponse {
   final BytesBuilder _body = BytesBuilder(copy: false);
   final Completer<void> _done = Completer<void>();
   BridgeDetachedSocket? _detachedSocket;
+  bool _detachedWriteHeaders = true;
   bool _closed = false;
   Encoding _encoding = utf8;
   bool _autoCompressEnabled = false;
@@ -146,6 +147,7 @@ final class BridgeHttpResponse implements HttpResponse {
     if (_detachedSocket != null) {
       throw StateError('Response socket has already been detached');
     }
+    _detachedWriteHeaders = writeHeaders;
     final detached = await _createDetachedSocketPair();
     _detachedSocket = detached;
     _closed = true;
@@ -153,6 +155,27 @@ final class BridgeHttpResponse implements HttpResponse {
       _done.complete();
     }
     return detached.applicationSocket;
+  }
+
+  /// Parses and applies manually-written detached response headers.
+  ///
+  /// When callers use `detachSocket(writeHeaders: false)` they may write a raw
+  /// HTTP status/header preface directly to the detached socket. We parse that
+  /// preface so the bridge still emits a proper structured response start.
+  Future<void> prepareDetachedHeaders() async {
+    final detached = _detachedSocket;
+    if (detached == null || _detachedWriteHeaders) {
+      return;
+    }
+    final preface = await _readDetachedHttpResponsePreface(detached);
+    detached.stashPrefetchedTunnelBytes(preface.trailingBytes);
+
+    statusCode = preface.status;
+    final bridgeHeaders = headers;
+    bridgeHeaders.clear();
+    for (var i = 0; i < preface.headerNames.length; i++) {
+      bridgeHeaders.add(preface.headerNames[i], preface.headerValues[i]);
+    }
   }
 
   void _ensureOpen() {

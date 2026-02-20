@@ -14,6 +14,7 @@ final class BridgeStreamingHttpResponse implements HttpResponse {
   Future<void> _pendingWrite = Future<void>.value();
   bool _closed = false;
   bool _started = false;
+  bool _detachedWriteHeaders = true;
   Encoding _encoding = utf8;
   bool _autoCompressEnabled = false;
   bool _requestAcceptsGzip = false;
@@ -154,14 +155,47 @@ final class BridgeStreamingHttpResponse implements HttpResponse {
     if (_detachedSocket != null) {
       throw StateError('Response socket has already been detached');
     }
+    _detachedWriteHeaders = writeHeaders;
     final detached = await _createDetachedSocketPair();
     _detachedSocket = detached;
-    await _ensureStarted();
+    if (_detachedWriteHeaders) {
+      await _ensureStarted();
+    } else {
+      final manualDetachedStart = _emitManualDetachedStart(detached);
+      unawaited(
+        manualDetachedStart
+            .then((_) {
+              if (!_done.isCompleted) {
+                _done.complete();
+              }
+            })
+            .catchError((error, stack) {
+              if (!_done.isCompleted) {
+                _done.completeError(error, stack);
+              }
+            }),
+      );
+    }
     _closed = true;
-    if (!_done.isCompleted) {
+    if (_detachedWriteHeaders && !_done.isCompleted) {
       _done.complete();
     }
     return detached.applicationSocket;
+  }
+
+  Future<void> _emitManualDetachedStart(BridgeDetachedSocket detached) async {
+    final preface = await _readDetachedHttpResponsePreface(detached);
+    detached.stashPrefetchedTunnelBytes(preface.trailingBytes);
+    _started = true;
+    await onStart(
+      BridgeResponseFrame.fromHeaderPairs(
+        status: preface.status,
+        headerNames: preface.headerNames,
+        headerValues: preface.headerValues,
+        bodyBytes: Uint8List(0),
+        detachedSocket: detached,
+      ),
+    );
   }
 
   Future<void> _ensureStarted() async {

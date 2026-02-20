@@ -28,6 +28,10 @@ typedef _NativeDirectRequestCallbackC =
       ffi.Uint64 payloadLen,
     );
 
+final Set<ffi.NativeCallable<_NativeDirectRequestCallbackC>>
+_retainedDirectRequestCallbacks =
+    <ffi.NativeCallable<_NativeDirectRequestCallbackC>>{};
+
 /// Returns the ABI version for the linked Rust native asset.
 int transportAbiVersion() => server_native_transport_version();
 
@@ -47,6 +51,9 @@ final class NativeProxyServer {
   final int port;
 
   bool _closed = false;
+
+  /// Returns whether this proxy handle has been closed.
+  bool get isClosed => _closed;
 
   /// Starts a Rust proxy server that forwards requests to a local Dart backend.
   static NativeProxyServer start({
@@ -154,6 +161,10 @@ final class NativeProxyServer {
         );
       }
 
+      if (nativeCallback != null) {
+        _retainedDirectRequestCallbacks.add(nativeCallback);
+      }
+
       return NativeProxyServer._(
         handle,
         outPortPtr.value,
@@ -184,10 +195,23 @@ final class NativeProxyServer {
     if (_closed) return;
     _closed = true;
     server_native_stop_proxy_server(_handle);
-    _directRequestCallback?.close();
+    if (_directRequestCallback != null) {
+      // Intentionally retained after shutdown; see note below.
+    }
+    // Intentionally do not close the NativeCallable here.
+    //
+    // The Rust runtime can still race a late callback dispatch during teardown
+    // (especially with upgraded/tunneled sockets). Closing the listener first
+    // can crash the VM with "Callback invoked after it has been deleted".
+    //
+    // Keeping the callback alive for process lifetime avoids that teardown race
+    // and makes shutdown safe.
   }
 
   bool pushDirectResponseFrame(int requestId, Uint8List responsePayload) {
+    if (_closed) {
+      return false;
+    }
     final payloadPtr = calloc<ffi.Uint8>(responsePayload.length);
     try {
       payloadPtr.asTypedList(responsePayload.length).setAll(0, responsePayload);

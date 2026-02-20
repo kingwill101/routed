@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
+import 'dart:typed_data';
 
 import 'package:server_native/server_native.dart';
 import 'package:server_native/src/bridge/bridge_runtime.dart';
@@ -82,6 +83,21 @@ Future<void> _stopServer(_RunningHttpBridgeServer running) async {
     running.shutdown.complete();
   }
   await running.serveFuture.timeout(const Duration(seconds: 5));
+}
+
+Future<String> _readHttpPreface(Socket socket) async {
+  final buffer = BytesBuilder(copy: false);
+  await for (final chunk in socket) {
+    if (chunk.isNotEmpty) {
+      buffer.add(chunk);
+    }
+    final bytes = buffer.toBytes();
+    final marker = ascii.decode(bytes, allowInvalid: true).indexOf('\r\n\r\n');
+    if (marker != -1) {
+      return ascii.decode(bytes.sublist(0, marker + 4), allowInvalid: true);
+    }
+  }
+  throw StateError('socket closed before HTTP preface');
 }
 
 void main() {
@@ -256,6 +272,60 @@ void main() {
         await webSocket.close();
       } finally {
         await webSocket.close();
+      }
+
+      await _stopServer(running);
+    },
+  );
+
+  test(
+    'serveNativeHttp supports manual websocket handshake with detachSocket(writeHeaders: false) in nativeCallback mode',
+    () async {
+      const key = 'dGhlIHNhbXBsZSBub25jZQ==';
+      const accept = 's3pPLMBiTxaQ9kYGzzhZRbK+xOo=';
+      final running = await _startHttpBridgeServer((request) async {
+        if (request.uri.path != '/ws-manual') {
+          request.response.statusCode = HttpStatus.notFound;
+          await request.response.close();
+          return;
+        }
+        final socket = await request.response.detachSocket(writeHeaders: false);
+        socket.add(
+          ascii.encode(
+            'HTTP/1.1 101 Switching Protocols\r\n'
+            'Upgrade: websocket\r\n'
+            'Connection: Upgrade\r\n'
+            'Sec-WebSocket-Accept: $accept\r\n'
+            '\r\n',
+          ),
+        );
+        await socket.flush();
+        await socket.close();
+      }, nativeCallback: true);
+
+      final socket = await Socket.connect('127.0.0.1', running.baseUri.port);
+      try {
+        socket.add(
+          ascii.encode(
+            'GET /ws-manual HTTP/1.1\r\n'
+            'Host: 127.0.0.1:${running.baseUri.port}\r\n'
+            'Upgrade: websocket\r\n'
+            'Connection: Upgrade\r\n'
+            'Sec-WebSocket-Version: 13\r\n'
+            'Sec-WebSocket-Key: $key\r\n'
+            '\r\n',
+          ),
+        );
+        await socket.flush();
+        final preface = await _readHttpPreface(
+          socket,
+        ).timeout(const Duration(seconds: 3));
+        expect(preface, startsWith('HTTP/1.1 101 Switching Protocols\r\n'));
+        expect(preface, contains('upgrade: websocket\r\n'));
+        expect(preface, contains('connection: Upgrade\r\n'));
+        expect(preface, contains('sec-websocket-accept: $accept\r\n'));
+      } finally {
+        await socket.close();
       }
 
       await _stopServer(running);

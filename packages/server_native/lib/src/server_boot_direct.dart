@@ -421,10 +421,19 @@ Future<void> _runDetachedSocketTunnel(
   BridgeDetachedSocket detachedSocket,
 ) async {
   final bridgeSocket = detachedSocket.bridgeSocket;
+  final bridgeIterator = detachedSocket.bridgeIterator();
 
   final outboundTask = () async {
     try {
-      await for (final chunk in bridgeSocket) {
+      final prefetched = detachedSocket.takePrefetchedTunnelBytes();
+      if (prefetched != null && prefetched.isNotEmpty) {
+        await writer.writeChunkFrameAndFlush(
+          BridgeTunnelFrame.chunkFrameType,
+          prefetched,
+        );
+      }
+      while (await bridgeIterator.moveNext()) {
+        final chunk = bridgeIterator.current;
         if (chunk.isEmpty) {
           continue;
         }

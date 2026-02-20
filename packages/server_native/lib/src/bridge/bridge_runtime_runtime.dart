@@ -45,6 +45,9 @@ final class BridgeHttpRuntime {
     );
     await _handler(request);
     await response.done;
+    await response.prepareDetachedHeaders();
+
+    final bodyBytes = response.takeBodyBytes();
 
     final headerCount = response.flattenedHeaderCount;
     final headerNames = headerCount == 0
@@ -61,7 +64,7 @@ final class BridgeHttpRuntime {
       status: response.statusCode,
       headerNames: headerNames,
       headerValues: headerValues,
-      bodyBytes: response.takeBodyBytes(),
+      bodyBytes: bodyBytes,
       detachedSocket: response.takeDetachedSocket(),
     );
   }
