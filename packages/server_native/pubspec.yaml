@@ -22,6 +22,7 @@ environment:
   sdk: '>=3.9.0 <4.0.0'
 
 dependencies:
+  archive: ^4.0.7
   code_assets: ^1.0.0
   contextual: ^2.2.0
   ffi: ^2.1.4

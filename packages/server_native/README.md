@@ -454,6 +454,10 @@ Pull host prebuilts into your project:
 dart run server_native:setup
 ```
 
+`setup` is optional. Build hooks now auto-download the package-matched prebuilt
+release into `.dart_tool/server_native/prebuilt/<tag>/<platform>/` when no
+local prebuilt is available.
+
 This defaults to the prebuilt tag generated from the local
 `server_native` package version (for example `server-native-prebuilt-v0.1.2`).
 To auto-select the newest available prebuilt release instead, use:

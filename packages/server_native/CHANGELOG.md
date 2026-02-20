@@ -22,6 +22,7 @@ All notable changes to `server_native` will be documented in this file.
 - Updated hook prebuilt lookup priority to prefer downloaded versioned prebuilts over packaged fallback binaries.
 - Switched setup/hook cache path from `.prebuilt/...` to `.dart_tool/server_native/prebuilt/...`.
 - Removed checked-in native prebuilt binaries from the repository; GitHub binary releases are now the source-of-truth.
+- Added hook-level prebuilt auto-download from versioned GitHub release assets when no local prebuilt is found.
 - Regenerated `native/bindings.h` and `lib/src/ffi.g.dart` to keep generated FFI artifacts in sync with native source updates.
 
 ## 0.1.1
