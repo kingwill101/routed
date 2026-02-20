@@ -15,6 +15,8 @@ Future<void> main() async {
       'server_native_stop_proxy_server',
       'server_native_push_direct_response_frame',
       'server_native_complete_direct_request',
+      'server_native_poll_direct_request_frame',
+      'server_native_free_direct_request_payload',
     }),
     structs: Structs.includeSet({'ServerNativeProxyConfig'}),
   ).generate();

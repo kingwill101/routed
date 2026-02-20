@@ -14,7 +14,7 @@
 //! - `server_native_push_direct_response_frame`
 //! - `server_native_complete_direct_request`
 
-use std::collections::HashMap;
+use std::collections::{HashMap, VecDeque};
 use std::ffi::{c_char, c_void, CStr};
 use std::fs::File;
 use std::io::{self, BufReader, ErrorKind, IoSlice};
@@ -36,7 +36,7 @@ use hyper::upgrade::OnUpgrade;
 use hyper_util::rt::{TokioExecutor, TokioIo};
 use hyper_util::server::conn::auto::Builder as AutoBuilder;
 use hyper_util::service::TowerToHyperService;
-use parking_lot::Mutex;
+use parking_lot::{Condvar, Mutex};
 use pkcs8::der::pem::PemLabel;
 use socket2::{Domain, Protocol, Socket, Type};
 use tokio::io::{AsyncRead, AsyncReadExt, AsyncWrite, AsyncWriteExt};
@@ -188,16 +188,24 @@ pub struct ProxyServerHandle {
 
 /// Registry for in-flight direct-callback requests.
 struct DirectRequestBridge {
-    callback: DirectRequestCallback,
+    callback: Option<DirectRequestCallback>,
     next_request_id: AtomicU64,
     stopped: AtomicBool,
     pending: Mutex<HashMap<u64, PendingDirectRequest>>,
+    queued_payloads: Mutex<VecDeque<QueuedDirectPayload>>,
+    queued_payloads_cv: Condvar,
 }
 
 /// Per-request direct-callback state.
 struct PendingDirectRequest {
     inflight_payloads: Vec<Vec<u8>>,
     response_tx: mpsc::UnboundedSender<Vec<u8>>,
+}
+
+/// Queued direct-request payload awaiting Dart polling.
+struct QueuedDirectPayload {
+    request_id: u64,
+    payload: Vec<u8>,
 }
 
 /// Connection pool for bridge sockets between Rust and Dart runtime.
@@ -454,14 +462,20 @@ pub extern "C" fn server_native_start_proxy_server(
             )
         })
     };
-    let direct_bridge = direct_callback.map(|callback| {
-        Arc::new(DirectRequestBridge {
-            callback,
+    let direct_polling_mode = direct_callback.is_none()
+        && matches!(&bridge_endpoint, BridgeEndpoint::Tcp(addr) if addr == "127.0.0.1:9");
+    let direct_bridge = if direct_callback.is_some() || direct_polling_mode {
+        Some(Arc::new(DirectRequestBridge {
+            callback: direct_callback,
             next_request_id: AtomicU64::new(1),
             stopped: AtomicBool::new(false),
             pending: Mutex::new(HashMap::new()),
-        })
-    });
+            queued_payloads: Mutex::new(VecDeque::new()),
+            queued_payloads_cv: Condvar::new(),
+        }))
+    } else {
+        None
+    };
     let tls_config = match (tls_cert_path, tls_key_path) {
         (None, None) => None,
         (Some(cert_path), Some(key_path)) => Some(ProxyTlsConfig {
@@ -604,6 +618,8 @@ pub extern "C" fn server_native_stop_proxy_server(handle: *mut ProxyServerHandle
     if let Some(direct_bridge) = handle.direct_bridge.as_ref() {
         direct_bridge.stopped.store(true, Ordering::Release);
         direct_bridge.pending.lock().clear();
+        direct_bridge.queued_payloads.lock().clear();
+        direct_bridge.queued_payloads_cv.notify_all();
     }
     if let Some(tx) = handle.shutdown_tx.take() {
         let _ = tx.send(());
@@ -657,6 +673,88 @@ pub extern "C" fn server_native_push_direct_response_frame(
         return 0;
     }
     1
+}
+
+#[no_mangle]
+/// Polls one queued direct-request frame produced by Rust.
+///
+/// Returns `1` and writes outputs when a frame is available, otherwise `0`.
+///
+/// # Safety
+///
+/// `handle` must be a valid pointer returned by
+/// [`server_native_start_proxy_server`]. `out_request_id`, `out_payload`, and
+/// `out_payload_len` must be valid writable pointers.
+pub extern "C" fn server_native_poll_direct_request_frame(
+    handle: *mut ProxyServerHandle,
+    timeout_millis: u32,
+    out_request_id: *mut u64,
+    out_payload: *mut *mut u8,
+    out_payload_len: *mut u64,
+) -> u8 {
+    if handle.is_null()
+        || out_request_id.is_null()
+        || out_payload.is_null()
+        || out_payload_len.is_null()
+    {
+        return 0;
+    }
+
+    let handle_ref = unsafe { &*handle };
+    let Some(direct_bridge) = handle_ref.direct_bridge.as_ref() else {
+        return 0;
+    };
+    if direct_bridge.stopped.load(Ordering::Acquire) {
+        return 0;
+    }
+
+    let mut queued = direct_bridge.queued_payloads.lock();
+    if queued.is_empty() && timeout_millis != 0 {
+        let timeout = Duration::from_millis(timeout_millis as u64);
+        let _ = direct_bridge
+            .queued_payloads_cv
+            .wait_for(&mut queued, timeout);
+    }
+
+    let Some(item) = queued.pop_front() else {
+        return 0;
+    };
+    drop(queued);
+
+    let mut payload = item.payload.into_boxed_slice();
+    let Ok(payload_len) = u64::try_from(payload.len()) else {
+        return 0;
+    };
+    let payload_ptr = payload.as_mut_ptr();
+    std::mem::forget(payload);
+
+    unsafe {
+        *out_request_id = item.request_id;
+        *out_payload = payload_ptr;
+        *out_payload_len = payload_len;
+    }
+
+    1
+}
+
+#[no_mangle]
+/// Frees one payload previously returned by
+/// [`server_native_poll_direct_request_frame`].
+///
+/// # Safety
+///
+/// `payload` must be a pointer returned by
+/// [`server_native_poll_direct_request_frame`] with matching `payload_len`.
+pub extern "C" fn server_native_free_direct_request_payload(payload: *mut u8, payload_len: u64) {
+    if payload.is_null() {
+        return;
+    }
+    let Ok(payload_len) = usize::try_from(payload_len) else {
+        return;
+    };
+    unsafe {
+        let _ = Vec::from_raw_parts(payload, payload_len, payload_len);
+    }
 }
 
 #[no_mangle]
@@ -1353,23 +1451,42 @@ fn emit_direct_callback_payload(
     if direct_bridge.stopped.load(Ordering::Acquire) {
         return Err("direct bridge is stopping".to_string());
     }
-    let (payload_ptr, payload_len) = {
-        let mut pending = direct_bridge.pending.lock();
-        let Some(entry) = pending.get_mut(&request_id) else {
+    let callback = direct_bridge.callback;
+    if let Some(callback) = callback {
+        let (payload_ptr, payload_len) = {
+            let mut pending = direct_bridge.pending.lock();
+            let Some(entry) = pending.get_mut(&request_id) else {
+                return Err(format!(
+                    "direct bridge callback missing request id: {request_id}"
+                ));
+            };
+            entry.inflight_payloads.push(payload);
+            let payload = entry.inflight_payloads.last().ok_or_else(|| {
+                "direct bridge callback payload queue unexpectedly empty".to_string()
+            })?;
+            let payload_len = u64::try_from(payload.len())
+                .map_err(|_| "direct request payload length does not fit u64".to_string())?;
+            (payload.as_ptr(), payload_len)
+        };
+        callback(request_id, payload_ptr, payload_len);
+        return Ok(());
+    }
+
+    {
+        let pending = direct_bridge.pending.lock();
+        if !pending.contains_key(&request_id) {
             return Err(format!(
                 "direct bridge callback missing request id: {request_id}"
             ));
-        };
-        entry.inflight_payloads.push(payload);
-        let payload = entry
-            .inflight_payloads
-            .last()
-            .ok_or_else(|| "direct bridge callback payload queue unexpectedly empty".to_string())?;
-        let payload_len = u64::try_from(payload.len())
-            .map_err(|_| "direct request payload length does not fit u64".to_string())?;
-        (payload.as_ptr(), payload_len)
-    };
-    (direct_bridge.callback)(request_id, payload_ptr, payload_len);
+        }
+    }
+
+    let mut queued = direct_bridge.queued_payloads.lock();
+    queued.push_back(QueuedDirectPayload {
+        request_id,
+        payload,
+    });
+    direct_bridge.queued_payloads_cv.notify_one();
     Ok(())
 }
 

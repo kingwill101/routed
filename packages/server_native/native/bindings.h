@@ -157,6 +157,34 @@ uint8_t server_native_push_direct_response_frame(struct ProxyServerHandle *handl
                                                  uint64_t response_payload_len);
 
 /**
+ * Polls one queued direct-request frame produced by Rust.
+ *
+ * Returns `1` and writes outputs when a frame is available, otherwise `0`.
+ *
+ * # Safety
+ *
+ * `handle` must be a valid pointer returned by
+ * [`server_native_start_proxy_server`]. `out_request_id`, `out_payload`, and
+ * `out_payload_len` must be valid writable pointers.
+ */
+uint8_t server_native_poll_direct_request_frame(struct ProxyServerHandle *handle,
+                                                uint32_t timeout_millis,
+                                                uint64_t *out_request_id,
+                                                uint8_t **out_payload,
+                                                uint64_t *out_payload_len);
+
+/**
+ * Frees one payload previously returned by
+ * [`server_native_poll_direct_request_frame`].
+ *
+ * # Safety
+ *
+ * `payload` must be a pointer returned by
+ * [`server_native_poll_direct_request_frame`] with matching `payload_len`.
+ */
+void server_native_free_direct_request_payload(uint8_t *payload, uint64_t payload_len);
+
+/**
  * Compatibility alias for [`server_native_push_direct_response_frame`].
  *
  * # Safety

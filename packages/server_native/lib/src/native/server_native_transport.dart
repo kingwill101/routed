@@ -32,6 +32,20 @@ final Set<ffi.NativeCallable<_NativeDirectRequestCallbackC>>
 _retainedDirectRequestCallbacks =
     <ffi.NativeCallable<_NativeDirectRequestCallbackC>>{};
 
+/// One direct request frame polled from the Rust transport queue.
+final class NativeDirectRequestFrame {
+  const NativeDirectRequestFrame({
+    required this.requestId,
+    required this.payload,
+  });
+
+  /// Correlation id used when pushing response frames back to Rust.
+  final int requestId;
+
+  /// Encoded bridge payload bytes.
+  final Uint8List payload;
+}
+
 /// Returns the ABI version for the linked Rust native asset.
 int transportAbiVersion() => server_native_transport_version();
 
@@ -230,5 +244,59 @@ final class NativeProxyServer {
   bool completeDirectRequest(int requestId, Uint8List responsePayload) {
     // Backward-compatible alias for one-shot response mode.
     return pushDirectResponseFrame(requestId, responsePayload);
+  }
+
+  /// Polls one queued direct request frame from Rust.
+  ///
+  /// Returns `null` on timeout/no frame.
+  NativeDirectRequestFrame? pollDirectRequestFrame({int timeoutMs = 50}) {
+    if (_closed) {
+      return null;
+    }
+    if (timeoutMs < 0) {
+      throw ArgumentError.value(
+        timeoutMs,
+        'timeoutMs',
+        'timeoutMs must be >= 0',
+      );
+    }
+
+    final requestIdPtr = calloc<ffi.Uint64>();
+    final payloadPtrPtr = calloc<ffi.Pointer<ffi.Uint8>>();
+    final payloadLenPtr = calloc<ffi.Uint64>();
+    try {
+      final ok = server_native_poll_direct_request_frame(
+        _handle,
+        timeoutMs,
+        requestIdPtr,
+        payloadPtrPtr,
+        payloadLenPtr,
+      );
+      if (ok == 0) {
+        return null;
+      }
+
+      final payloadPtr = payloadPtrPtr.value;
+      final payloadLen = payloadLenPtr.value;
+      if (payloadPtr == ffi.nullptr || payloadLen == 0) {
+        return NativeDirectRequestFrame(
+          requestId: requestIdPtr.value,
+          payload: Uint8List(0),
+        );
+      }
+
+      final payloadBytes = Uint8List.fromList(
+        payloadPtr.asTypedList(payloadLen),
+      );
+      server_native_free_direct_request_payload(payloadPtr, payloadLen);
+      return NativeDirectRequestFrame(
+        requestId: requestIdPtr.value,
+        payload: payloadBytes,
+      );
+    } finally {
+      calloc.free(requestIdPtr);
+      calloc.free(payloadPtrPtr);
+      calloc.free(payloadLenPtr);
+    }
   }
 }

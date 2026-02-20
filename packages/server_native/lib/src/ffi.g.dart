@@ -74,6 +74,45 @@ external int server_native_push_direct_response_frame(
   int response_payload_len,
 );
 
+/// Polls one queued direct-request frame produced by Rust.
+///
+/// Returns `1` and writes outputs when a frame is available, otherwise `0`.
+///
+/// # Safety
+///
+/// `handle` must be a valid pointer returned by
+/// [`server_native_start_proxy_server`]. `out_request_id`, `out_payload`, and
+/// `out_payload_len` must be valid writable pointers.
+@ffi.Native<
+  ffi.Uint8 Function(
+    ffi.Pointer<ProxyServerHandle>,
+    ffi.Uint32,
+    ffi.Pointer<ffi.Uint64>,
+    ffi.Pointer<ffi.Pointer<ffi.Uint8>>,
+    ffi.Pointer<ffi.Uint64>,
+  )
+>()
+external int server_native_poll_direct_request_frame(
+  ffi.Pointer<ProxyServerHandle> handle,
+  int timeout_millis,
+  ffi.Pointer<ffi.Uint64> out_request_id,
+  ffi.Pointer<ffi.Pointer<ffi.Uint8>> out_payload,
+  ffi.Pointer<ffi.Uint64> out_payload_len,
+);
+
+/// Frees one payload previously returned by
+/// [`server_native_poll_direct_request_frame`].
+///
+/// # Safety
+///
+/// `payload` must be a pointer returned by
+/// [`server_native_poll_direct_request_frame`] with matching `payload_len`.
+@ffi.Native<ffi.Void Function(ffi.Pointer<ffi.Uint8>, ffi.Uint64)>()
+external void server_native_free_direct_request_payload(
+  ffi.Pointer<ffi.Uint8> payload,
+  int payload_len,
+);
+
 /// Compatibility alias for [`server_native_push_direct_response_frame`].
 ///
 /// # Safety
