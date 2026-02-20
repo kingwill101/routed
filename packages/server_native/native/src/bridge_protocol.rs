@@ -1,3 +1,19 @@
+// Bridge protocol codec used between Rust transport runtime and Dart runtime.
+//
+// This module handles:
+// - request encoding (single-frame and streaming),
+// - response decoding (single-frame and streaming),
+// - websocket tunnel frame relay,
+// - compact tokenized header-name mapping.
+//
+// Frame envelope:
+// - outer prefix: `u32` big-endian payload length
+// - payload: `{version: u8, frame_type: u8, ...frame-specific fields...}`
+//
+// Most fields in frame payloads are length-prefixed bytes (`u32 + bytes`).
+// Tokenized header formats replace common header names with `u16` IDs to
+// reduce frame size and UTF-8 parsing overhead.
+
 /// Encodes bridge request start frame for streaming request bodies.
 fn encode_bridge_request_start(request: &BridgeRequestRef<'_>) -> Result<Vec<u8>, String> {
     let mut writer = BridgeByteWriter::new();
@@ -887,44 +903,54 @@ struct BridgeByteWriter {
 }
 
 impl BridgeByteWriter {
+    /// Creates a new empty bridge payload writer.
     fn new() -> Self {
         Self { bytes: Vec::new() }
     }
 
+    /// Reserves additional payload capacity.
     fn reserve(&mut self, additional: usize) {
         self.bytes.reserve(additional);
     }
 
+    /// Appends a placeholder `u32` and returns its position for patching.
     fn reserve_u32(&mut self) -> usize {
         let pos = self.bytes.len();
         self.bytes.extend_from_slice(&0_u32.to_be_bytes());
         pos
     }
 
+    /// Overwrites a previously reserved `u32` at `pos`.
     fn patch_u32(&mut self, pos: usize, value: u32) {
         self.bytes[pos..pos + 4].copy_from_slice(&value.to_be_bytes());
     }
 
+    /// Finalizes and returns encoded bytes.
     fn into_inner(self) -> Vec<u8> {
         self.bytes
     }
 
+    /// Writes one byte.
     fn put_u8(&mut self, value: u8) {
         self.bytes.push(value);
     }
 
+    /// Writes one big-endian `u16`.
     fn put_u16(&mut self, value: u16) {
         self.bytes.extend_from_slice(&value.to_be_bytes());
     }
 
+    /// Writes one big-endian `u32`.
     fn put_u32(&mut self, value: u32) {
         self.bytes.extend_from_slice(&value.to_be_bytes());
     }
 
+    /// Writes UTF-8 bytes as a length-prefixed field.
     fn put_string(&mut self, value: &str) -> Result<(), String> {
         self.put_bytes(value.as_bytes())
     }
 
+    /// Writes arbitrary bytes as a length-prefixed field.
     fn put_bytes(&mut self, bytes: &[u8]) -> Result<(), String> {
         let len = u32::try_from(bytes.len())
             .map_err(|_| "bridge field length does not fit u32".to_string())?;
@@ -941,30 +967,36 @@ struct BridgeByteReader<'a> {
 }
 
 impl<'a> BridgeByteReader<'a> {
+    /// Creates a reader over a full bridge payload slice.
     fn new(bytes: &'a [u8]) -> Self {
         Self { bytes, offset: 0 }
     }
 
+    /// Reads one `u8`.
     fn get_u8(&mut self) -> Result<u8, String> {
         let bytes = self.get_exact(1)?;
         Ok(bytes[0])
     }
 
+    /// Reads one big-endian `u16`.
     fn get_u16(&mut self) -> Result<u16, String> {
         let bytes = self.get_exact(2)?;
         Ok(u16::from_be_bytes([bytes[0], bytes[1]]))
     }
 
+    /// Reads one big-endian `u32`.
     fn get_u32(&mut self) -> Result<u32, String> {
         let bytes = self.get_exact(4)?;
         Ok(u32::from_be_bytes([bytes[0], bytes[1], bytes[2], bytes[3]]))
     }
 
+    /// Reads one length-prefixed byte field.
     fn get_bytes(&mut self) -> Result<&'a [u8], String> {
         let (start, length) = self.get_bytes_range()?;
         Ok(&self.bytes[start..start + length])
     }
 
+    /// Reads a length prefix and advances the cursor over its field.
     fn get_bytes_range(&mut self) -> Result<(usize, usize), String> {
         let length = self.get_u32()? as usize;
         if self.offset + length > self.bytes.len() {
@@ -975,6 +1007,7 @@ impl<'a> BridgeByteReader<'a> {
         Ok((start, length))
     }
 
+    /// Ensures all payload bytes have been consumed.
     fn ensure_done(&self) -> Result<(), String> {
         if self.offset == self.bytes.len() {
             return Ok(());
@@ -985,6 +1018,7 @@ impl<'a> BridgeByteReader<'a> {
         ))
     }
 
+    /// Reads exactly `len` bytes from the current cursor.
     fn get_exact(&mut self, len: usize) -> Result<&'a [u8], String> {
         if self.offset + len > self.bytes.len() {
             return Err("truncated bridge payload".to_string());

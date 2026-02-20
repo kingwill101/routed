@@ -53,10 +53,28 @@ use tokio_stream::{wrappers::ReceiverStream, StreamExt};
 include!("tls_support.rs");
 include!("bridge_protocol.rs");
 
+// ---- Transport and protocol limits -----------------------------------------
+//
+// These constants define hard safety limits for inbound/outbound bridge and
+// HTTP body handling. They are used to:
+// - bound per-request memory growth,
+// - avoid oversized frame allocations, and
+// - keep backpressure behavior predictable across Rust <-> Dart.
 const MAX_PROXY_BODY_BYTES: usize = 32 * 1024 * 1024;
 const MAX_BRIDGE_FRAME_BYTES: usize = 64 * 1024 * 1024;
 const BRIDGE_BODY_CHUNK_BYTES: usize = 64 * 1024;
 const BRIDGE_COALESCE_WRITE_THRESHOLD_BYTES: usize = 4 * 1024;
+
+// ---- Bridge protocol wire format -------------------------------------------
+//
+// All bridge frames are prefixed with:
+// - u32 BE payload length
+// followed by a payload starting with:
+// - u8 protocol version
+// - u8 frame type
+//
+// The *_TOKENIZED variants encode common header names as u16 tokens to reduce
+// frame size and UTF-8 parsing overhead on hot paths.
 const BRIDGE_PROTOCOL_VERSION: u8 = 1;
 const BRIDGE_PROTOCOL_VERSION_LEGACY: u8 = 1;
 const _BRIDGE_REQUEST_FRAME_TYPE: u8 = 1; // legacy single-frame request
@@ -76,14 +94,26 @@ const BRIDGE_RESPONSE_START_FRAME_TYPE_TOKENIZED: u8 = 14;
 const BRIDGE_HEADER_NAME_LITERAL_TOKEN: u16 = 0xFFFF;
 const BRIDGE_BACKEND_KIND_TCP: u8 = 0;
 const BRIDGE_BACKEND_KIND_UNIX: u8 = 1;
+
+// ---- Benchmark modes --------------------------------------------------------
 const BENCHMARK_MODE_NONE: u8 = 0;
 const BENCHMARK_MODE_STATIC_OK: u8 = 1;
 const BENCHMARK_MODE_STATIC_OK_SERVER_NATIVE_DIRECT_SHAPE: u8 = 2;
 const BENCHMARK_STATIC_OK_BODY: &[u8] = br#"{"ok":true,"label":"server_native_direct"}"#;
 const BENCHMARK_SERVER_NATIVE_DIRECT_SHAPE_BODY: &[u8] =
     br#"{"ok":true,"label":"server_native_direct"}"#;
+
+/// Max time to wait for direct-callback response frames from Dart.
 const DIRECT_REQUEST_TIMEOUT: Duration = Duration::from_secs(30);
 
+/// C callback signature used by direct request mode.
+///
+/// Rust invokes this callback with:
+/// - `request_id`: correlation identifier unique per in-flight request,
+/// - `payload`: pointer to encoded bridge frame bytes,
+/// - `payload_len`: payload length in bytes.
+///
+/// Dart must treat `payload` as read-only and copy the bytes before returning.
 type DirectRequestCallback = extern "C" fn(request_id: u64, payload: *const u8, payload_len: u64);
 
 #[repr(C)]
@@ -198,6 +228,10 @@ enum BridgeEndpoint {
 }
 
 impl BridgePool {
+    /// Creates a new bridge connection pool.
+    ///
+    /// `max_idle` controls how many idle connections are retained in the
+    /// secondary idle list (in addition to the single-slot `hot` fast path).
     fn new(endpoint: BridgeEndpoint, max_idle: usize) -> Self {
         Self {
             endpoint,
@@ -207,6 +241,12 @@ impl BridgePool {
         }
     }
 
+    /// Acquires a bridge connection, preferring warm pooled connections.
+    ///
+    /// Acquisition order:
+    /// 1. hot slot
+    /// 2. idle vector
+    /// 3. establish a new socket
     async fn acquire(&self) -> Result<BridgeConnection, String> {
         {
             let mut hot = self.hot.lock();
@@ -224,6 +264,7 @@ impl BridgePool {
         self.connect_new().await
     }
 
+    /// Establishes a fresh bridge socket to the configured backend endpoint.
     async fn connect_new(&self) -> Result<BridgeConnection, String> {
         match &self.endpoint {
             BridgeEndpoint::Tcp(addr) => {
@@ -255,6 +296,11 @@ impl BridgePool {
         }
     }
 
+    /// Returns a connection to the pool for reuse.
+    ///
+    /// The read buffer is either:
+    /// - reset to a small default capacity if it grew too large, or
+    /// - cleared in place for fast reuse.
     fn release(&self, mut connection: BridgeConnection) {
         // Prevent one oversized frame from permanently bloating pooled buffers.
         if connection.read_buffer.capacity() > MAX_BRIDGE_FRAME_BYTES {
@@ -322,6 +368,12 @@ pub extern "C" fn server_native_transport_version() -> i32 {
 /// On failure:
 /// - returns null,
 /// - emits error details to stderr.
+///
+/// # Safety
+///
+/// `config` and `out_port` must be valid non-null pointers for the duration
+/// of this call. String pointers inside `config` must either be null (for
+/// optional fields) or point to valid NUL-terminated UTF-8 strings.
 pub extern "C" fn server_native_start_proxy_server(
     config: *const ServerNativeProxyConfig,
     out_port: *mut u16,
@@ -536,6 +588,11 @@ pub extern "C" fn server_native_start_proxy_server(
 ///
 /// This function consumes the handle pointer and must not be called twice with
 /// the same pointer.
+///
+/// # Safety
+///
+/// `handle` must be either null or a pointer returned by
+/// [`server_native_start_proxy_server`] that has not yet been freed.
 pub extern "C" fn server_native_stop_proxy_server(handle: *mut ProxyServerHandle) {
     if handle.is_null() {
         return;
@@ -555,6 +612,12 @@ pub extern "C" fn server_native_stop_proxy_server(handle: *mut ProxyServerHandle
 ///
 /// Returns `1` on success, `0` when the request is unknown or arguments are
 /// invalid.
+///
+/// # Safety
+///
+/// `handle` must be a valid pointer returned by
+/// [`server_native_start_proxy_server`]. `response_payload` must reference
+/// `response_payload_len` readable bytes for the duration of this call.
 pub extern "C" fn server_native_push_direct_response_frame(
     handle: *mut ProxyServerHandle,
     request_id: u64,
@@ -589,6 +652,10 @@ pub extern "C" fn server_native_push_direct_response_frame(
 
 #[no_mangle]
 /// Compatibility alias for [`server_native_push_direct_response_frame`].
+///
+/// # Safety
+///
+/// Same safety contract as [`server_native_push_direct_response_frame`].
 pub extern "C" fn server_native_complete_direct_request(
     handle: *mut ProxyServerHandle,
     request_id: u64,
@@ -1567,6 +1634,15 @@ async fn call_bridge_retry_empty_body(
         .await
 }
 
+/// Writes one HTTP request to the bridge socket in either single-frame or
+/// streaming frame mode.
+///
+/// Behavior:
+/// - empty body: emits one single-frame request payload,
+/// - non-empty body: emits start + chunk(s) + end frames.
+///
+/// `request_body_empty` is updated to indicate whether at least one non-empty
+/// request body chunk was observed.
 async fn write_bridge_request(
     socket: &mut dyn BridgeStream,
     request: &BridgeRequestRef<'_>,
@@ -1620,6 +1696,7 @@ async fn write_bridge_request(
     write_bridge_frame(socket, &end_payload).await
 }
 
+/// Writes an empty-body request as a single bridge frame.
 async fn write_bridge_empty_request(
     socket: &mut dyn BridgeStream,
     request: &BridgeRequestRef<'_>,
@@ -1628,6 +1705,10 @@ async fn write_bridge_empty_request(
     write_bridge_frame(socket, &payload).await
 }
 
+/// Writes one logical request-body chunk sequence to the bridge socket.
+///
+/// The input chunk may be further split into transport-sized bridge chunks
+/// (`BRIDGE_BODY_CHUNK_BYTES`) before write.
 async fn write_bridge_request_body_chunk(
     socket: &mut dyn BridgeStream,
     chunk: &[u8],

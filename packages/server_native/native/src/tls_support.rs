@@ -1,3 +1,15 @@
+// TLS and HTTP/3 bootstrap helpers for the native transport runtime.
+//
+// Responsibilities:
+// - load server certificates/private keys from PEM files,
+// - configure rustls ALPN for HTTP/1.1 + optional HTTP/2,
+// - create QUIC endpoint configuration for HTTP/3 (`h3`),
+// - optionally enable client-certificate verification using host trust roots.
+//
+// These helpers are intentionally side-effect free (except for reading files
+// and logging root-load warnings) so server boot logic in `lib.rs` can remain
+// focused on listener lifecycle and request serving.
+
 /// Ensures a rustls crypto provider is installed for this process.
 ///
 /// Installs the `ring` provider when none has been configured yet.
@@ -22,6 +34,10 @@ fn ensure_rustls_crypto_provider() -> Result<(), String> {
 }
 
 /// Loads server-side rustls configuration for HTTP/1.1 + HTTP/2.
+///
+/// ALPN behavior:
+/// - `enable_http2 = true` => advertise `h2`, then `http/1.1`
+/// - `enable_http2 = false` => advertise `http/1.1` only
 fn load_tls_server_config(
     cert_path: &str,
     key_path: &str,
@@ -126,6 +142,11 @@ fn load_tls_private_key(
 }
 
 /// Creates QUIC endpoint config used for HTTP/3.
+///
+/// The endpoint is bound on the same IP/port tuple as the TCP listener so the
+/// runtime can concurrently serve:
+/// - HTTP/1.1 + optional HTTP/2 over TLS/TCP
+/// - HTTP/3 over QUIC/UDP
 fn create_h3_endpoint(
     addr: SocketAddr,
     cert_path: &str,
@@ -169,6 +190,9 @@ fn create_h3_endpoint(
 }
 
 /// Builds an optional client-cert verifier from native trust roots.
+///
+/// The verifier is configured with `allow_unauthenticated()` so TLS handshakes
+/// still succeed when the client does not send a certificate.
 fn load_optional_client_verifier(
 ) -> Result<Arc<dyn tokio_rustls::rustls::server::danger::ClientCertVerifier>, String> {
     let roots = load_native_root_store()?;
