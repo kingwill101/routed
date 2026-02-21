@@ -9,7 +9,7 @@ part of 'bridge_runtime.dart';
 final class _BridgeHttpHeaders implements HttpHeaders {
   final Map<String, List<String>> _headers = <String, List<String>>{};
   final Map<String, String> _originalNames = <String, String>{};
-  final Set<String> _noFolding = <String>{};
+  final Set<String> _noFolding = <String>{HttpHeaders.setCookieHeader};
   int _flattenedHeaderValueCount = 0;
 
   DateTime? _date;
@@ -247,6 +247,26 @@ final class _BridgeHttpHeaders implements HttpHeaders {
     return _flattenedHeaderValueCount;
   }
 
+  /// Total number of serialized header pairs after folding rules are applied.
+  int get flattenedHeaderPairCount {
+    var count = 0;
+    for (final entry in _headers.entries) {
+      if (entry.key == HttpHeaders.transferEncodingHeader) {
+        continue;
+      }
+      final values = entry.value;
+      if (values.isEmpty) {
+        continue;
+      }
+      if (_shouldFoldHeader(entry.key)) {
+        count += 1;
+      } else {
+        count += values.length;
+      }
+    }
+    return count;
+  }
+
   /// Writes all header pairs into [headerNames]/[headerValues] from [offset].
   int writeFlattenedHeaderPairs(
     List<String> headerNames,
@@ -254,8 +274,22 @@ final class _BridgeHttpHeaders implements HttpHeaders {
     int offset,
   ) {
     for (final entry in _headers.entries) {
+      if (entry.key == HttpHeaders.transferEncodingHeader) {
+        continue;
+      }
       final originalName = _originalNames[entry.key] ?? entry.key;
       final values = entry.value;
+      if (values.isEmpty) {
+        continue;
+      }
+      if (_shouldFoldHeader(entry.key)) {
+        headerNames[offset] = originalName;
+        headerValues[offset] = values.length == 1
+            ? values.first
+            : values.join(', ');
+        offset++;
+        continue;
+      }
       for (var i = 0; i < values.length; i++) {
         headerNames[offset] = originalName;
         headerValues[offset] = values[i];
@@ -263,6 +297,11 @@ final class _BridgeHttpHeaders implements HttpHeaders {
       }
     }
     return offset;
+  }
+
+  @pragma('vm:prefer-inline')
+  bool _shouldFoldHeader(String normalizedName) {
+    return !_noFolding.contains(normalizedName);
   }
 
   @pragma('vm:prefer-inline')

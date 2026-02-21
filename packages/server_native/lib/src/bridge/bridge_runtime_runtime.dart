@@ -16,15 +16,21 @@ final class BridgeHttpRuntime {
     required Stream<Uint8List> bodyStream,
     required Future<void> Function(BridgeResponseFrame frame) onResponseStart,
     required Future<void> Function(Uint8List chunkBytes) onResponseChunk,
+    void Function(BridgeDetachedSocket detachedSocket)? onDetachedSocket,
   }) async {
+    final connectionInfo = BridgeConnectionInfo.fromRequestFrame(frame);
     final response = BridgeStreamingHttpResponse(
       onStart: onResponseStart,
       onChunk: onResponseChunk,
+      connectionInfo: connectionInfo,
+      onDetachedSocket: onDetachedSocket,
     );
     final request = BridgeHttpRequest(
       frame: frame,
       response: response,
       bodyStream: bodyStream,
+      stripTransferEncoding: true,
+      connectionInfo: connectionInfo,
     );
     await _handler(request);
     if (!response.isClosed) {
@@ -35,13 +41,15 @@ final class BridgeHttpRuntime {
 
   /// Handles a full single-frame request and returns a full response frame.
   Future<BridgeResponseFrame> handleFrame(BridgeRequestFrame frame) async {
-    final response = BridgeHttpResponse();
+    final connectionInfo = BridgeConnectionInfo.fromRequestFrame(frame);
+    final response = BridgeHttpResponse(connectionInfo: connectionInfo);
     final request = BridgeHttpRequest(
       frame: frame,
       response: response,
       bodyStream: frame.bodyBytes.isEmpty
           ? const Stream<Uint8List>.empty()
           : Stream<Uint8List>.value(frame.bodyBytes),
+      connectionInfo: connectionInfo,
     );
     await _handler(request);
     await response.done;

@@ -2,16 +2,45 @@ part of 'bridge_runtime.dart';
 
 /// Basic connection info exposed by bridge-backed request/response adapters.
 final class BridgeConnectionInfo implements HttpConnectionInfo {
-  const BridgeConnectionInfo();
+  const BridgeConnectionInfo({
+    required this.remoteAddress,
+    required this.remotePort,
+    required this.localPort,
+  });
+
+  factory BridgeConnectionInfo.fromRequestFrame(BridgeRequestFrame frame) {
+    final hostHeader = _bridgeHeaderValue(frame, HttpHeaders.hostHeader);
+    final authority = _splitBridgeAuthority(
+      (hostHeader != null && hostHeader.isNotEmpty)
+          ? hostHeader
+          : frame.authority,
+    );
+    final remoteAddress = _inferRemoteAddress(authority.host);
+    return BridgeConnectionInfo(
+      remoteAddress: remoteAddress,
+      remotePort: 0,
+      localPort: authority.port ?? 0,
+    );
+  }
 
   @override
-  int get localPort => 0;
+  final int localPort;
 
   @override
-  InternetAddress get remoteAddress => InternetAddress.loopbackIPv4;
+  final InternetAddress remoteAddress;
 
   @override
-  int get remotePort => 0;
+  final int remotePort;
+}
+
+InternetAddress _inferRemoteAddress(String host) {
+  if (host.isEmpty || host == 'localhost' || host == '127.0.0.1') {
+    return InternetAddress.loopbackIPv4;
+  }
+  if (host == '::1' || host == '[::1]') {
+    return InternetAddress.loopbackIPv6;
+  }
+  return InternetAddress.tryParse(host) ?? InternetAddress.loopbackIPv4;
 }
 
 /// In-memory `HttpSession` implementation used by bridge-backed requests.

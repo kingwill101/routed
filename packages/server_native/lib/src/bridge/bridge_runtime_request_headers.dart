@@ -2,13 +2,20 @@ part of 'bridge_runtime.dart';
 
 /// Immutable request-headers implementation backed by bridge frame data.
 final class _BridgeRequestHeaders implements HttpHeaders {
-  _BridgeRequestHeaders.fromFrame(BridgeRequestFrame frame) {
+  _BridgeRequestHeaders.fromFrame(
+    BridgeRequestFrame frame, {
+    bool stripTransferEncoding = false,
+  }) {
     for (var i = 0; i < frame.headerCount; i++) {
       final name = frame.headerNameAt(i);
       final normalized = _asciiLower(name);
       final values = _headers.putIfAbsent(normalized, () => <String>[]);
       values.add(frame.headerValueAt(i));
       _originalNames[normalized] = name;
+    }
+    if (stripTransferEncoding) {
+      _headers.remove(HttpHeaders.transferEncodingHeader);
+      _originalNames.remove(HttpHeaders.transferEncodingHeader);
     }
   }
 
@@ -196,6 +203,12 @@ final class _BridgeRequestHeaders implements HttpHeaders {
 }
 
 /// Decodes immutable header view used by [BridgeHttpRequest.headers].
-_BridgeRequestHeaders _buildBridgeRequestHeaders(BridgeRequestFrame frame) {
-  return _BridgeRequestHeaders.fromFrame(frame);
+_BridgeRequestHeaders _buildBridgeRequestHeaders(
+  BridgeRequestFrame frame, {
+  bool stripTransferEncoding = false,
+}) {
+  return _BridgeRequestHeaders.fromFrame(
+    frame,
+    stripTransferEncoding: stripTransferEncoding,
+  );
 }

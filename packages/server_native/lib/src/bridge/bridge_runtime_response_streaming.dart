@@ -2,7 +2,13 @@ part of 'bridge_runtime.dart';
 
 /// Streaming `HttpResponse` adapter for chunked bridge responses.
 final class BridgeStreamingHttpResponse implements HttpResponse {
-  BridgeStreamingHttpResponse({required this.onStart, required this.onChunk});
+  BridgeStreamingHttpResponse({
+    required this.onStart,
+    required this.onChunk,
+    required BridgeConnectionInfo connectionInfo,
+    void Function(BridgeDetachedSocket detachedSocket)? onDetachedSocket,
+  }) : _connectionInfo = connectionInfo,
+       _onDetachedSocket = onDetachedSocket;
 
   final Future<void> Function(BridgeResponseFrame frame) onStart;
   final Future<void> Function(Uint8List chunkBytes) onChunk;
@@ -20,6 +26,8 @@ final class BridgeStreamingHttpResponse implements HttpResponse {
   bool _requestAcceptsGzip = false;
   bool _compressBody = false;
   BytesBuilder? _compressionBuffer;
+  final BridgeConnectionInfo _connectionInfo;
+  final void Function(BridgeDetachedSocket detachedSocket)? _onDetachedSocket;
 
   bool get isClosed => _closed;
 
@@ -60,7 +68,7 @@ final class BridgeStreamingHttpResponse implements HttpResponse {
   set contentLength(int value) => headers.contentLength = value;
 
   @override
-  HttpConnectionInfo? get connectionInfo => const BridgeConnectionInfo();
+  HttpConnectionInfo? get connectionInfo => _connectionInfo;
 
   @override
   void add(List<int> data) {
@@ -158,6 +166,7 @@ final class BridgeStreamingHttpResponse implements HttpResponse {
     _detachedWriteHeaders = writeHeaders;
     final detached = await _createDetachedSocketPair();
     _detachedSocket = detached;
+    _onDetachedSocket?.call(detached);
     if (_detachedWriteHeaders) {
       await _ensureStarted();
     } else {
@@ -213,8 +222,7 @@ final class BridgeStreamingHttpResponse implements HttpResponse {
     final bridgeHeaders = _headers;
     final cookies = _cookies;
     final headerCount =
-        (bridgeHeaders?.flattenedHeaderValueCount ?? 0) +
-        (cookies?.length ?? 0);
+        (bridgeHeaders?.flattenedHeaderPairCount ?? 0) + (cookies?.length ?? 0);
     final headerNames = headerCount == 0
         ? const <String>[]
         : List<String>.filled(headerCount, '', growable: false);

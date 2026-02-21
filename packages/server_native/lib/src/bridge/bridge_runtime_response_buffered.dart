@@ -2,7 +2,8 @@ part of 'bridge_runtime.dart';
 
 /// Buffered `HttpResponse` adapter for single-frame bridge responses.
 final class BridgeHttpResponse implements HttpResponse {
-  BridgeHttpResponse();
+  BridgeHttpResponse({required BridgeConnectionInfo connectionInfo})
+    : _connectionInfo = connectionInfo;
 
   _BridgeHttpHeaders? _headers;
   List<Cookie>? _cookies;
@@ -14,6 +15,7 @@ final class BridgeHttpResponse implements HttpResponse {
   Encoding _encoding = utf8;
   bool _autoCompressEnabled = false;
   bool _requestAcceptsGzip = false;
+  final BridgeConnectionInfo _connectionInfo;
 
   /// Enables gzip auto-compression based on request/response negotiation.
   void configureAutoCompression({
@@ -74,7 +76,7 @@ final class BridgeHttpResponse implements HttpResponse {
   set contentLength(int value) => headers.contentLength = value;
 
   @override
-  HttpConnectionInfo? get connectionInfo => const BridgeConnectionInfo();
+  HttpConnectionInfo? get connectionInfo => _connectionInfo;
 
   @override
   void add(List<int> data) {
@@ -210,7 +212,7 @@ final class BridgeHttpResponse implements HttpResponse {
   }
 
   int get flattenedHeaderCount {
-    final headerCount = _headers?.flattenedHeaderValueCount ?? 0;
+    final headerCount = _headers?.flattenedHeaderPairCount ?? 0;
     final cookieCount = _cookies?.length ?? 0;
     return headerCount + cookieCount;
   }

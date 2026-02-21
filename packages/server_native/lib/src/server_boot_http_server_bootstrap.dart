@@ -10,7 +10,13 @@ final class _NativeHttpBinding {
 
 /// Creates the default response-headers template used by [NativeHttpServer].
 HttpHeaders _createNativeHttpDefaultResponseHeaders() {
-  final headers = BridgeHttpResponse().headers;
+  final headers = BridgeHttpResponse(
+    connectionInfo: BridgeConnectionInfo(
+      remoteAddress: InternetAddress.loopbackIPv4,
+      remotePort: 0,
+      localPort: 0,
+    ),
+  ).headers;
   headers.contentType = ContentType.text;
   headers.set('x-frame-options', 'SAMEORIGIN');
   headers.set('x-content-type-options', 'nosniff');

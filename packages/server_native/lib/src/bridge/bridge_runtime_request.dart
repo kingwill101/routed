@@ -7,11 +7,16 @@ final class BridgeHttpRequest extends Stream<Uint8List> implements HttpRequest {
     required this.response,
     required Stream<Uint8List> bodyStream,
     HttpSession Function()? sessionFactory,
+    bool stripTransferEncoding = false,
+    BridgeConnectionInfo? connectionInfo,
   }) : method = frame.method,
        protocolVersion = frame.protocol,
        _bodyStream = bodyStream,
        _frame = frame,
-       _sessionFactory = sessionFactory;
+       _sessionFactory = sessionFactory,
+       _stripTransferEncoding = stripTransferEncoding,
+       _connectionInfo =
+           connectionInfo ?? BridgeConnectionInfo.fromRequestFrame(frame);
 
   _BridgeRequestHeaders? _headers;
   final BridgeRequestFrame _frame;
@@ -19,6 +24,8 @@ final class BridgeHttpRequest extends Stream<Uint8List> implements HttpRequest {
   final Stream<Uint8List> _bodyStream;
   HttpSession? _session;
   HttpSession Function()? _sessionFactory;
+  final bool _stripTransferEncoding;
+  final BridgeConnectionInfo _connectionInfo;
 
   @override
   final String method;
@@ -34,7 +41,10 @@ final class BridgeHttpRequest extends Stream<Uint8List> implements HttpRequest {
   Uri get uri => requestedUri;
 
   @override
-  HttpHeaders get headers => _headers ??= _buildBridgeRequestHeaders(_frame);
+  HttpHeaders get headers => _headers ??= _buildBridgeRequestHeaders(
+    _frame,
+    stripTransferEncoding: _stripTransferEncoding,
+  );
 
   @override
   int get contentLength {
@@ -111,7 +121,7 @@ final class BridgeHttpRequest extends Stream<Uint8List> implements HttpRequest {
   }
 
   @override
-  HttpConnectionInfo? get connectionInfo => const BridgeConnectionInfo();
+  HttpConnectionInfo? get connectionInfo => _connectionInfo;
 
   @override
   final HttpResponse response;
