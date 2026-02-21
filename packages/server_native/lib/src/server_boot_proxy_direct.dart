@@ -2,10 +2,53 @@ part of 'server_boot.dart';
 
 /// State holder for in-flight native direct stream requests.
 final class _NativeDirectRequestStreamState {
-  _NativeDirectRequestStreamState(this.requestBody);
+  _NativeDirectRequestStreamState(
+    this.requestBody, {
+    required this.onTrackedClose,
+  });
 
   final StreamController<Uint8List> requestBody;
+  final void Function() onTrackedClose;
   BridgeDetachedSocket? detachedSocket;
+  int responseStatusCode = HttpStatus.ok;
+  bool detachedSocketUsesTunnel = false;
+  final List<Uint8List> _pendingUnconsumedBodyChunks = <Uint8List>[];
+  bool requestEnded = false;
+  bool responseCompleted = false;
+  bool _trackedClosed = false;
+
+  void closeTrackedRequest() {
+    if (_trackedClosed) {
+      return;
+    }
+    _trackedClosed = true;
+    onTrackedClose();
+  }
+
+  void maybeBufferUnconsumedRequestChunk(Uint8List chunk) {
+    if (chunk.isEmpty) {
+      return;
+    }
+    if (detachedSocket != null || requestBody.hasListener) {
+      return;
+    }
+    _pendingUnconsumedBodyChunks.add(chunk);
+  }
+
+  void flushBufferedChunksToDetachedSocket() {
+    final socket = detachedSocket;
+    if (socket == null || _pendingUnconsumedBodyChunks.isEmpty) {
+      return;
+    }
+    for (final chunk in _pendingUnconsumedBodyChunks) {
+      socket.bridgeSocket.add(chunk);
+    }
+    _pendingUnconsumedBodyChunks.clear();
+  }
+
+  void clearBufferedRequestChunks() {
+    _pendingUnconsumedBodyChunks.clear();
+  }
 }
 
 /// Starts the native callback transport path (no bridge socket backend).
@@ -78,9 +121,28 @@ NativeProxyServer _startNativeDirectProxy({
       }
     }
 
+    Future<void> forwardDetachedOutput(
+      BridgeDetachedSocket detachedSocket, {
+      required void Function(Uint8List chunkBytes) emitChunk,
+    }) async {
+      final prefetched = detachedSocket.takePrefetchedTunnelBytes();
+      if (prefetched != null && prefetched.isNotEmpty) {
+        emitChunk(prefetched);
+      }
+      final bridgeIterator = detachedSocket.bridgeIterator();
+      while (await bridgeIterator.moveNext()) {
+        final chunk = bridgeIterator.current;
+        if (chunk.isEmpty) {
+          continue;
+        }
+        emitChunk(chunk);
+      }
+    }
+
     Future<void> removeNativeDirectStream({
       required _NativeDirectRequestStreamState streamState,
       bool closeDetachedSocket = true,
+      bool closeTrackedRequest = true,
     }) async {
       final removed = nativeDirectStreams.remove(requestId);
       if (!identical(removed, streamState)) {
@@ -89,11 +151,15 @@ NativeProxyServer _startNativeDirectProxy({
       if (!streamState.requestBody.isClosed) {
         await streamState.requestBody.close();
       }
+      streamState.clearBufferedRequestChunks();
       if (closeDetachedSocket) {
         final detachedSocket = streamState.detachedSocket;
         if (detachedSocket != null) {
           await detachedSocket.close();
         }
+      }
+      if (closeTrackedRequest) {
+        streamState.closeTrackedRequest();
       }
     }
 
@@ -111,26 +177,29 @@ NativeProxyServer _startNativeDirectProxy({
       beginTrackedRequest();
 
       final requestBody = StreamController<Uint8List>(sync: true);
-      final streamState = _NativeDirectRequestStreamState(requestBody);
+      final streamState = _NativeDirectRequestStreamState(
+        requestBody,
+        onTrackedClose: endTrackedRequest,
+      );
       nativeDirectStreams[requestId] = streamState;
 
       unawaited(() async {
         var keepStreamState = false;
-        var requestClosed = false;
-        void closeTrackedRequest() {
-          if (requestClosed) {
-            return;
-          }
-          requestClosed = true;
-          endTrackedRequest();
-        }
 
         try {
           await handleStream(
             frame: startFrame,
             bodyStream: requestBody.stream,
+            onDetachedSocket: (socket) {
+              streamState.detachedSocket = socket;
+              streamState.flushBufferedChunksToDetachedSocket();
+            },
             onResponseStart: (frame) async {
+              streamState.responseStatusCode = frame.status;
+              streamState.detachedSocketUsesTunnel =
+                  frame.status == HttpStatus.switchingProtocols;
               streamState.detachedSocket = frame.detachedSocket;
+              streamState.flushBufferedChunksToDetachedSocket();
               pushResponsePayload(frame.encodeStartPayload());
             },
             onResponseChunk: (chunkBytes) async {
@@ -142,54 +211,80 @@ NativeProxyServer _startNativeDirectProxy({
               );
             },
           );
-          pushResponsePayload(BridgeResponseFrame.encodeEndPayload());
+          streamState.responseCompleted = true;
           final detachedSocket = streamState.detachedSocket;
           if (detachedSocket != null) {
             keepStreamState = true;
+            final usesTunnel = streamState.detachedSocketUsesTunnel;
             unawaited(() async {
               try {
-                final prefetched = detachedSocket.takePrefetchedTunnelBytes();
-                if (prefetched != null && prefetched.isNotEmpty) {
-                  pushResponsePayload(
-                    BridgeTunnelFrame.encodeChunkPayload(prefetched),
+                if (usesTunnel) {
+                  pushResponsePayload(BridgeResponseFrame.encodeEndPayload());
+                  await forwardDetachedOutput(
+                    detachedSocket,
+                    emitChunk: (chunk) {
+                      pushResponsePayload(
+                        BridgeTunnelFrame.encodeChunkPayload(chunk),
+                      );
+                    },
                   );
-                }
-                final bridgeIterator = detachedSocket.bridgeIterator();
-                while (await bridgeIterator.moveNext()) {
-                  final chunk = bridgeIterator.current;
-                  if (chunk.isEmpty) {
-                    continue;
-                  }
-                  pushResponsePayload(
-                    BridgeTunnelFrame.encodeChunkPayload(chunk),
+                } else {
+                  await forwardDetachedOutput(
+                    detachedSocket,
+                    emitChunk: (chunk) {
+                      pushResponsePayload(
+                        BridgeResponseFrame.encodeChunkPayload(chunk),
+                      );
+                    },
                   );
+                  pushResponsePayload(BridgeResponseFrame.encodeEndPayload());
                 }
               } catch (_) {
                 // Peer closure and write errors both end the tunnel.
               } finally {
-                if (identical(nativeDirectStreams[requestId], streamState)) {
+                if (usesTunnel &&
+                    identical(nativeDirectStreams[requestId], streamState)) {
                   pushResponsePayload(BridgeTunnelFrame.encodeClosePayload());
                 }
                 await removeNativeDirectStream(
                   streamState: streamState,
                   closeDetachedSocket: true,
+                  closeTrackedRequest: true,
                 );
-                closeTrackedRequest();
               }
             }());
+          } else {
+            pushResponsePayload(BridgeResponseFrame.encodeEndPayload());
+            if (streamState.requestEnded) {
+              await removeNativeDirectStream(
+                streamState: streamState,
+                closeDetachedSocket: true,
+                closeTrackedRequest: true,
+              );
+            }
           }
         } catch (error, stack) {
           stderr.writeln(
             '[server_native] native direct callback stream handler error: $error\n$stack',
           );
           pushResponsePayload(_internalServerErrorFrame(error).encodePayload());
-        } finally {
-          if (!keepStreamState) {
+          streamState.responseCompleted = true;
+          if (streamState.requestEnded && streamState.detachedSocket == null) {
             await removeNativeDirectStream(
               streamState: streamState,
               closeDetachedSocket: true,
+              closeTrackedRequest: true,
             );
-            closeTrackedRequest();
+          }
+        } finally {
+          if (!keepStreamState &&
+              streamState.requestEnded &&
+              streamState.detachedSocket == null) {
+            await removeNativeDirectStream(
+              streamState: streamState,
+              closeDetachedSocket: true,
+              closeTrackedRequest: true,
+            );
           }
         }
       }());
@@ -202,11 +297,28 @@ NativeProxyServer _startNativeDirectProxy({
         try {
           final chunk = BridgeRequestFrame.decodeChunkPayload(requestPayload);
           if (chunk.isNotEmpty) {
-            streamState.requestBody.add(chunk);
+            final detachedSocket = streamState.detachedSocket;
+            if (detachedSocket != null) {
+              detachedSocket.bridgeSocket.add(chunk);
+            } else {
+              streamState.maybeBufferUnconsumedRequestChunk(chunk);
+              streamState.requestBody.add(chunk);
+            }
           }
         } catch (error) {
           streamState.requestBody.addError(error);
+          streamState.requestEnded = true;
           unawaited(streamState.requestBody.close());
+          if (streamState.responseCompleted &&
+              streamState.detachedSocket == null) {
+            unawaited(
+              removeNativeDirectStream(
+                streamState: streamState,
+                closeDetachedSocket: true,
+                closeTrackedRequest: true,
+              ),
+            );
+          }
         }
         return;
       }
@@ -216,12 +328,23 @@ NativeProxyServer _startNativeDirectProxy({
         } catch (error) {
           streamState.requestBody.addError(error);
         }
+        streamState.requestEnded = true;
         unawaited(streamState.requestBody.close());
+        if (streamState.responseCompleted &&
+            streamState.detachedSocket == null) {
+          unawaited(
+            removeNativeDirectStream(
+              streamState: streamState,
+              closeDetachedSocket: true,
+              closeTrackedRequest: true,
+            ),
+          );
+        }
         return;
       }
 
       final detachedSocket = streamState.detachedSocket;
-      if (detachedSocket != null) {
+      if (detachedSocket != null && streamState.detachedSocketUsesTunnel) {
         if (BridgeTunnelFrame.isChunkPayload(requestPayload)) {
           Uint8List chunkBytes;
           try {
@@ -234,6 +357,7 @@ NativeProxyServer _startNativeDirectProxy({
               removeNativeDirectStream(
                 streamState: streamState,
                 closeDetachedSocket: true,
+                closeTrackedRequest: true,
               ),
             );
             return;
@@ -252,6 +376,7 @@ NativeProxyServer _startNativeDirectProxy({
             removeNativeDirectStream(
               streamState: streamState,
               closeDetachedSocket: true,
+              closeTrackedRequest: true,
             ),
           );
           return;
@@ -263,7 +388,17 @@ NativeProxyServer _startNativeDirectProxy({
           'unexpected frame while reading native direct request stream',
         ),
       );
+      streamState.requestEnded = true;
       unawaited(streamState.requestBody.close());
+      if (streamState.responseCompleted && streamState.detachedSocket == null) {
+        unawaited(
+          removeNativeDirectStream(
+            streamState: streamState,
+            closeDetachedSocket: true,
+            closeTrackedRequest: true,
+          ),
+        );
+      }
       return;
     }
 
@@ -279,21 +414,79 @@ NativeProxyServer _startNativeDirectProxy({
 
     unawaited(() async {
       beginTrackedRequest();
-      _BridgeHandleFrameResult result;
       try {
-        result = await directPayloadHandler(requestPayload);
+        BridgeRequestFrame? singleFrame;
+        try {
+          singleFrame = BridgeRequestFrame.decodePayload(requestPayload);
+        } catch (_) {}
+
+        if (singleFrame != null) {
+          final bodyStream = singleFrame.bodyBytes.isEmpty
+              ? const Stream<Uint8List>.empty()
+              : Stream<Uint8List>.value(singleFrame.bodyBytes);
+          BridgeDetachedSocket? detachedSocket;
+          var detachedUsesTunnel = false;
+          await handleStream(
+            frame: singleFrame.copyWith(bodyBytes: Uint8List(0)),
+            bodyStream: bodyStream,
+            onDetachedSocket: (socket) {
+              detachedSocket = socket;
+            },
+            onResponseStart: (frame) async {
+              detachedUsesTunnel =
+                  frame.status == HttpStatus.switchingProtocols;
+              detachedSocket = frame.detachedSocket;
+              pushResponsePayload(frame.encodeStartPayload());
+            },
+            onResponseChunk: (chunkBytes) async {
+              if (chunkBytes.isEmpty) {
+                return;
+              }
+              pushResponsePayload(
+                BridgeResponseFrame.encodeChunkPayload(chunkBytes),
+              );
+            },
+          );
+          if (detachedSocket != null) {
+            try {
+              if (detachedUsesTunnel) {
+                pushResponsePayload(BridgeResponseFrame.encodeEndPayload());
+              }
+              await forwardDetachedOutput(
+                detachedSocket!,
+                emitChunk: (chunk) {
+                  pushResponsePayload(
+                    detachedUsesTunnel
+                        ? BridgeTunnelFrame.encodeChunkPayload(chunk)
+                        : BridgeResponseFrame.encodeChunkPayload(chunk),
+                  );
+                },
+              );
+              if (detachedUsesTunnel) {
+                pushResponsePayload(BridgeTunnelFrame.encodeClosePayload());
+              } else {
+                pushResponsePayload(BridgeResponseFrame.encodeEndPayload());
+              }
+            } catch (_) {
+              // Peer closure and write errors both end the tunnel.
+            } finally {
+              await detachedSocket!.close();
+            }
+          } else {
+            pushResponsePayload(BridgeResponseFrame.encodeEndPayload());
+          }
+          return;
+        }
+
+        final result = await directPayloadHandler(requestPayload);
+        final responsePayload =
+            result.encodedPayload ?? result.frame.encodePayload();
+        pushResponsePayload(responsePayload);
       } catch (error, stack) {
         stderr.writeln(
           '[server_native] native direct callback handler error: $error\n$stack',
         );
-        result = _BridgeHandleFrameResult.frame(
-          _internalServerErrorFrame(error),
-        );
-      }
-      final responsePayload =
-          result.encodedPayload ?? result.frame.encodePayload();
-      try {
-        pushResponsePayload(responsePayload);
+        pushResponsePayload(_internalServerErrorFrame(error).encodePayload());
       } finally {
         endTrackedRequest();
       }

@@ -14,6 +14,9 @@ Future<void> _handleChunkedBridgeRequest(
   final handlerFuture = handleStream(
     frame: startFrame,
     bodyStream: requestBody.stream,
+    onDetachedSocket: (socket) {
+      detachedSocket = socket;
+    },
     onResponseStart: (frame) async {
       responseStarted = true;
       detachedSocket = frame.detachedSocket;
@@ -64,7 +67,12 @@ Future<void> _handleChunkedBridgeRequest(
               'bridge request body too large: $requestBodyBytes',
             );
           }
-          requestBody.add(Uint8List.sublistView(payload, 6, payloadLength));
+          final chunkBytes = Uint8List.sublistView(payload, 6, payloadLength);
+          if (detachedSocket != null) {
+            detachedSocket!.bridgeSocket.add(chunkBytes);
+          } else {
+            requestBody.add(chunkBytes);
+          }
         }
         continue;
       }
@@ -209,6 +217,7 @@ Future<void> _handleDirectStream(
   required Stream<Uint8List> bodyStream,
   required Future<void> Function(BridgeResponseFrame frame) onResponseStart,
   required Future<void> Function(Uint8List chunkBytes) onResponseChunk,
+  void Function(BridgeDetachedSocket detachedSocket)? onDetachedSocket,
 }) async {
   var responseStarted = false;
   try {

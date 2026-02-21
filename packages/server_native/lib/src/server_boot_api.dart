@@ -18,4 +18,5 @@ typedef _BridgeHandleStream =
       required Stream<Uint8List> bodyStream,
       required Future<void> Function(BridgeResponseFrame frame) onResponseStart,
       required Future<void> Function(Uint8List chunkBytes) onResponseChunk,
+      void Function(BridgeDetachedSocket detachedSocket)? onDetachedSocket,
     });
