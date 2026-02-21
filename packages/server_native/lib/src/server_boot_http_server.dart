@@ -157,9 +157,32 @@ final class NativeHttpServer extends StreamView<HttpRequest>
   int _sessionTimeoutSeconds = 20 * 60;
   int _runningBindingCount = 0;
   bool _closed = false;
+  bool _forceClosing = false;
+
+  Future<void> _waitForActiveRequestsToDrain({
+    Duration timeout = const Duration(seconds: 5),
+  }) async {
+    // Give requests that are already in-flight at close() call-time a chance
+    // to be observed by counters before concluding the server is drained.
+    await Future<void>.delayed(const Duration(milliseconds: 25));
+    final deadline = DateTime.now().add(timeout);
+    var stableZeroSamples = 0;
+    while (DateTime.now().isBefore(deadline)) {
+      final info = _connectionCounters.snapshot();
+      if (info.active == 0) {
+        stableZeroSamples++;
+        if (stableZeroSamples >= 3) {
+          return;
+        }
+      } else {
+        stableZeroSamples = 0;
+      }
+      await Future<void>.delayed(const Duration(milliseconds: 10));
+    }
+  }
 
   Future<void> _handleRequest(BridgeHttpRequest request) {
-    if (_closed || _requestController.isClosed) {
+    if ((_closed && !_forceClosing) || _requestController.isClosed) {
       request.response.statusCode = HttpStatus.serviceUnavailable;
       return request.response.close();
     }
@@ -171,8 +194,28 @@ final class NativeHttpServer extends StreamView<HttpRequest>
       defaultResponseHeaders: defaultResponseHeaders,
       serverHeader: serverHeader,
     );
-    _requestController.add(request);
-    return request.response.done;
+    final response = request.response;
+    runZonedGuarded(
+      () {
+        _requestController.add(request);
+      },
+      (error, stackTrace) {
+        _nativeVerboseLog(
+          '[server_native] uncaught request listener error: $error\n$stackTrace',
+        );
+        try {
+          response
+            ..statusCode = HttpStatus.internalServerError
+            ..headers.contentType = ContentType.text
+            ..write('Internal Server Error');
+          // ignore: discarded_futures
+          response.close();
+        } catch (_) {
+          // Response may already be closed or detached.
+        }
+      },
+    );
+    return response.done;
   }
 
   void _completeIfStopped() {
@@ -238,9 +281,13 @@ final class NativeHttpServer extends StreamView<HttpRequest>
     if (_closed) {
       return _stopped.future;
     }
+    _forceClosing = force;
     _closed = true;
+    if (!force) {
+      await _waitForActiveRequestsToDrain();
+    }
     await Future.wait(
-      _bindings.map((binding) => binding.running.close(force: force)),
+      _bindings.map((binding) => binding.running.close(force: true)),
       eagerError: false,
     );
     await Future.wait(
@@ -253,6 +300,8 @@ final class NativeHttpServer extends StreamView<HttpRequest>
     if (!_stopped.isCompleted) {
       _stopped.complete();
     }
+    _forceClosing = false;
+    _connectionCounters.reset();
     _sessions.dispose();
     return _stopped.future;
   }

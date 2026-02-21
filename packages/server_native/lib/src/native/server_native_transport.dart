@@ -15,11 +15,7 @@ const int benchmarkModeStaticRoutedFfiDirectShape =
     benchmarkModeStaticServerNativeDirectShape;
 
 typedef NativeDirectRequestCallback =
-    void Function(
-      int requestId,
-      ffi.Pointer<ffi.Uint8> payload,
-      int payloadLen,
-    );
+    void Function(int requestId, Uint8List payload);
 
 typedef _NativeDirectRequestCallbackC =
     ffi.Void Function(
@@ -141,7 +137,10 @@ final class NativeProxyServer {
             ffi.Pointer<ffi.Uint8> payload,
             int payloadLen,
           ) {
-            callback(requestId, payload, payloadLen);
+            final payloadBytes = payloadLen == 0
+                ? Uint8List(0)
+                : Uint8List.fromList(payload.asTypedList(payloadLen));
+            callback(requestId, payloadBytes);
           });
       nativeCallbackPtr = nativeCallback.nativeFunction;
     }

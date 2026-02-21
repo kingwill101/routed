@@ -1051,16 +1051,24 @@ fn split_path_and_query_ref(path_and_query: &str) -> (&str, &str) {
 
 /// Returns true when request headers indicate websocket upgrade.
 fn is_websocket_upgrade(headers: &axum::http::HeaderMap) -> bool {
-    let has_upgrade = headers
-        .get("connection")
-        .and_then(|value| value.to_str().ok())
-        .map(|value| value.to_ascii_lowercase().contains("upgrade"))
-        .unwrap_or(false);
-    let websocket_upgrade = headers
-        .get("upgrade")
-        .and_then(|value| value.to_str().ok())
-        .map(|value| value.eq_ignore_ascii_case("websocket"))
-        .unwrap_or(false);
+    let has_upgrade = headers.get_all("connection").iter().any(|value| {
+        value
+            .to_str()
+            .ok()
+            .map(|value| {
+                value
+                    .split(',')
+                    .any(|token| token.trim().eq_ignore_ascii_case("upgrade"))
+            })
+            .unwrap_or(false)
+    });
+    let websocket_upgrade = headers.get_all("upgrade").iter().any(|value| {
+        value
+            .to_str()
+            .ok()
+            .map(|value| value.trim().eq_ignore_ascii_case("websocket"))
+            .unwrap_or(false)
+    });
     has_upgrade && websocket_upgrade
 }
 

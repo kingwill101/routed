@@ -5,6 +5,7 @@
 [![popularity](https://img.shields.io/pub/popularity/server_native)](https://pub.dev/packages/server_native/score)
 [![likes](https://img.shields.io/pub/likes/server_native)](https://pub.dev/packages/server_native/score)
 [![server_native CI](https://github.com/kingwill101/routed/actions/workflows/server_native_ci.yml/badge.svg?branch=master)](https://github.com/kingwill101/routed/actions/workflows/server_native_ci.yml)
+[![framework compat](https://github.com/kingwill101/routed/actions/workflows/server_native_framework_compat.yml/badge.svg?branch=master)](https://github.com/kingwill101/routed/actions/workflows/server_native_framework_compat.yml)
 
 `server_native` provides a Rust-backed HTTP server runtime for Dart with a
 `dart:io`-like programming model.
@@ -29,6 +30,7 @@ bootstrap.
 - [Graceful Shutdown](#graceful-shutdown)
 - [DevTools Profiling Example](#devtools-profiling-example)
 - [Framework Benchmarks](#framework-benchmarks)
+- [Framework Compatibility Suites (Local + CI)](#framework-compatibility-suites-local--ci)
 - [Native Bindings](#native-bindings)
 - [Prebuilt Native Artifacts](#prebuilt-native-artifacts)
 - [Troubleshooting](#troubleshooting)
@@ -407,6 +409,37 @@ Framework pair highlights from the same harness:
 | `shelf` | 5181 req/s, p95 14.08 ms | 6524 req/s, p95 11.66 ms | 5843 req/s, p95 13.07 ms |
 
 See `benchmark/README.md` for full result tables, options, and case labels.
+
+## Framework Compatibility Suites (Local + CI)
+
+Use the compatibility harness to clone/update external frameworks, apply
+`server_native` integration patches, and run their full test suites in both
+transport modes:
+
+- `SERVER_NATIVE_COMPAT=false` (`io`): framework binds with `dart:io` `HttpServer`
+- `SERVER_NATIVE_COMPAT=true` (`native`): framework binds with `NativeHttpServer`
+
+Run locally from repo root:
+
+```bash
+dart run packages/server_native/tool/framework_compat.dart \
+  --framework=all \
+  --mode=both \
+  --fresh \
+  --json-output=.dart_tool/server_native/framework_compat/report.json
+```
+
+Run a single framework:
+
+```bash
+dart run packages/server_native/tool/framework_compat.dart --framework=shelf --mode=both --fresh
+```
+
+CI workflow:
+
+- `.github/workflows/server_native_framework_compat.yml`
+
+The workflow runs the same harness command and uploads a JSON result artifact.
 
 ## Native Bindings
 

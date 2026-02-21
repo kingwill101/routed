@@ -1,0 +1,31 @@
+diff --git a/packages/serinus/lib/src/adapters/serinus_http_server.dart b/packages/serinus/lib/src/adapters/serinus_http_server.dart
+index 9bb050c..1bc0f9e 100644
+--- a/packages/serinus/lib/src/adapters/serinus_http_server.dart
++++ b/packages/serinus/lib/src/adapters/serinus_http_server.dart
+@@ -16,6 +16,10 @@ import '../utils/wrapped_response.dart';
+ import 'http_adapter.dart';
+ import 'server_adapter.dart';
+ 
++const _serverNativeCompatEnv = 'SERVER_NATIVE_COMPAT';
++bool get _useServerNative =>
++    io.Platform.environment[_serverNativeCompatEnv] == 'true';
++
+ /// The [SerinusHttpAdapter] class is used to create an HTTP server adapter.
+ /// It extends the [HttpAdapter] class.
+ class SerinusHttpAdapter
+@@ -56,7 +60,14 @@ class SerinusHttpAdapter
+   @override
+   Future<void> init([ApplicationConfig? config]) async {
+     if (securityContext == null) {
+-      server = await NativeHttpServer.bind(host, port, shared: true);
++      server = await (_useServerNative
++          ? NativeHttpServer.bind(
++              host,
++              port,
++              shared: true,
++              http3: false,
++            )
++          : io.HttpServer.bind(host, port, shared: true));
+     } else {
+       server = await io.HttpServer.bindSecure(
+         host,

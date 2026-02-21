@@ -44,6 +44,12 @@ final class _ProxyConnectionCounters {
     info.closing = 0;
     return info;
   }
+
+  /// Clears tracked counters.
+  void reset() {
+    _openSockets = 0;
+    _activeRequests = 0;
+  }
 }
 
 /// Binds the local bridge transport server used for Rust <-> Dart frames.

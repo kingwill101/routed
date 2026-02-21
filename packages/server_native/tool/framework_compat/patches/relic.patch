@@ -1,0 +1,58 @@
+diff --git a/packages/relic_io/lib/src/adapter/bind_http_server.dart b/packages/relic_io/lib/src/adapter/bind_http_server.dart
+index e93b47e..f516d58 100644
+--- a/packages/relic_io/lib/src/adapter/bind_http_server.dart
++++ b/packages/relic_io/lib/src/adapter/bind_http_server.dart
+@@ -1,6 +1,11 @@
+ import 'dart:async';
+ import 'dart:io' as io;
+ 
++import 'package:server_native/server_native.dart';
++
++const _serverNativeCompatEnv = 'SERVER_NATIVE_COMPAT';
++bool get _useServerNative => io.Platform.environment[_serverNativeCompatEnv] == 'true';
++
+ /// Binds an HTTP server to the given [address] and [port].
+ ///
+ /// If [context] is provided, a secure HTTPS server will be started using
+@@ -28,13 +33,22 @@ Future<io.HttpServer> bindHttpServer(
+   final bool shared = false,
+ }) async {
+   if (context == null) {
+-    return await io.HttpServer.bind(
+-      address,
+-      port,
+-      backlog: backlog,
+-      v6Only: v6Only,
+-      shared: shared,
+-    );
++    return await (_useServerNative
++        ? NativeHttpServer.bind(
++            address,
++            port,
++            backlog: backlog,
++            v6Only: v6Only,
++            shared: shared,
++            http3: false,
++          )
++        : io.HttpServer.bind(
++            address,
++            port,
++            backlog: backlog,
++            v6Only: v6Only,
++            shared: shared,
++          ));
+   }
+   return await io.HttpServer.bindSecure(
+     address,
+diff --git a/packages/relic_io/pubspec.yaml b/packages/relic_io/pubspec.yaml
+index 808a9f3..58cab97 100644
+--- a/packages/relic_io/pubspec.yaml
++++ b/packages/relic_io/pubspec.yaml
+@@ -19,6 +19,7 @@ dependencies:
+   mime: ^2.0.0
+   path: ^1.8.3
+   relic_core: ^1.0.0
++  server_native: ^0.1.2
+   stack_trace: ^1.10.0
+   stream_channel: ^2.1.1
+   web_socket: ^1.0.1

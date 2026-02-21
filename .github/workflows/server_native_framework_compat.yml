@@ -1,0 +1,65 @@
+name: server_native Framework Compatibility
+
+on:
+  workflow_dispatch:
+    inputs:
+      framework:
+        description: "Framework(s): all,shelf,relic,serinus"
+        required: false
+        default: "all"
+      mode:
+        description: "Mode(s): both,io,native"
+        required: false
+        default: "both"
+  pull_request:
+    branches:
+      - master
+    paths:
+      - 'packages/server_native/**'
+      - '.github/workflows/server_native_framework_compat.yml'
+  push:
+    branches:
+      - master
+    paths:
+      - 'packages/server_native/**'
+      - '.github/workflows/server_native_framework_compat.yml'
+
+jobs:
+  compat:
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Dart
+        uses: dart-lang/setup-dart@v1
+        with:
+          sdk: stable
+
+      - name: Set up Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Get server_native dependencies
+        working-directory: packages/server_native
+        run: dart pub get
+
+      - name: Run framework compatibility harness
+        working-directory: packages/server_native
+        env:
+          FRAMEWORK: ${{ github.event.inputs.framework || 'all' }}
+          MODE: ${{ github.event.inputs.mode || 'both' }}
+        run: |
+          dart run tool/framework_compat.dart \
+            --framework="$FRAMEWORK" \
+            --mode="$MODE" \
+            --fresh \
+            --json-output=.dart_tool/server_native/framework_compat/report.json
+
+      - name: Upload compatibility report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: server-native-framework-compat-report
+          path: packages/server_native/.dart_tool/server_native/framework_compat/report.json
+          if-no-files-found: warn

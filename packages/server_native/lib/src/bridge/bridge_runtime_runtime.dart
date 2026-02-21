@@ -29,7 +29,6 @@ final class BridgeHttpRuntime {
       frame: frame,
       response: response,
       bodyStream: bodyStream,
-      stripTransferEncoding: true,
       connectionInfo: connectionInfo,
     );
     await _handler(request);

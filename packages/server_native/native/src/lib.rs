@@ -20,9 +20,11 @@ use std::fs::File;
 use std::io::{self, BufReader, ErrorKind, IoSlice};
 use std::net::SocketAddr;
 use std::path::PathBuf;
+use std::pin::Pin;
 use std::ptr::null_mut;
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::Arc;
+use std::task::{Context, Poll};
 use std::thread;
 use std::time::Duration;
 
@@ -110,6 +112,10 @@ const MESSAGE_CHANNEL_CLOSED: &str = "channel closed";
 const LOG_WEBSOCKET_TUNNEL_ERROR_PREFIX: &str = "[server_native] websocket tunnel error: ";
 const LOG_DIRECT_WEBSOCKET_TUNNEL_ERROR_PREFIX: &str =
     "[server_native] direct websocket tunnel error: ";
+const TRANSFER_ENCODING_HEADER: &str = "transfer-encoding";
+const SANITIZED_TRANSFER_ENCODING_HEADER: &str = "x-server-native-transfer-encoding";
+const HOST_HEADER: &str = "host";
+const SANITIZED_HOST_HEADER: &str = "x-server-native-host";
 const BAD_REQUEST_RESPONSE_BYTES: &[u8] = b"HTTP/1.1 400 Bad Request\r\n\
 content-type: text/plain; charset=utf-8\r\n\
 content-length: 11\r\n\
@@ -212,7 +218,6 @@ struct DirectRequestBridge {
 
 /// Per-request direct-callback state.
 struct PendingDirectRequest {
-    inflight_payloads: Vec<Vec<u8>>,
     response_tx: mpsc::UnboundedSender<Vec<u8>>,
 }
 
@@ -372,6 +377,68 @@ struct BridgeCallResult {
     headers: Vec<(axum::http::header::HeaderName, axum::http::HeaderValue)>,
     body: Body,
     tunnel_socket: Option<BridgeConnection>,
+}
+
+/// Async I/O wrapper that replays a prefetched/sanitized prefix before
+/// reading from the underlying transport stream.
+struct PrefixedIo<S> {
+    inner: S,
+    prefix: Vec<u8>,
+    prefix_offset: usize,
+}
+
+impl<S> PrefixedIo<S> {
+    fn new(inner: S, prefix: Vec<u8>) -> Self {
+        Self {
+            inner,
+            prefix,
+            prefix_offset: 0,
+        }
+    }
+}
+
+impl<S> AsyncRead for PrefixedIo<S>
+where
+    S: AsyncRead + Unpin,
+{
+    fn poll_read(
+        mut self: Pin<&mut Self>,
+        cx: &mut Context<'_>,
+        buf: &mut tokio::io::ReadBuf<'_>,
+    ) -> Poll<io::Result<()>> {
+        if self.prefix_offset < self.prefix.len() && buf.remaining() > 0 {
+            let available = &self.prefix[self.prefix_offset..];
+            let to_copy = available.len().min(buf.remaining());
+            buf.put_slice(&available[..to_copy]);
+            self.prefix_offset += to_copy;
+            return Poll::Ready(Ok(()));
+        }
+        Pin::new(&mut self.inner).poll_read(cx, buf)
+    }
+}
+
+impl<S> AsyncWrite for PrefixedIo<S>
+where
+    S: AsyncWrite + Unpin,
+{
+    fn poll_write(
+        mut self: Pin<&mut Self>,
+        cx: &mut Context<'_>,
+        src: &[u8],
+    ) -> Poll<Result<usize, io::Error>> {
+        Pin::new(&mut self.inner).poll_write(cx, src)
+    }
+
+    fn poll_flush(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Result<(), io::Error>> {
+        Pin::new(&mut self.inner).poll_flush(cx)
+    }
+
+    fn poll_shutdown(
+        mut self: Pin<&mut Self>,
+        cx: &mut Context<'_>,
+    ) -> Poll<Result<(), io::Error>> {
+        Pin::new(&mut self.inner).poll_shutdown(cx)
+    }
 }
 
 /// Returns true when an error message indicates expected cancellation during
@@ -647,7 +714,6 @@ pub extern "C" fn server_native_stop_proxy_server(handle: *mut ProxyServerHandle
     let mut handle = unsafe { Box::from_raw(handle) };
     if let Some(direct_bridge) = handle.direct_bridge.as_ref() {
         direct_bridge.stopped.store(true, Ordering::Release);
-        direct_bridge.pending.lock().clear();
         direct_bridge.queued_payloads.lock().clear();
         direct_bridge.queued_payloads_cv.notify_all();
     }
@@ -914,25 +980,36 @@ async fn run_plain_proxy(
                 let app = app.clone();
                 let enable_http2 = enable_http2;
                 connections.spawn(async move {
-                    let mut stream = stream;
-                    if reject_invalid_http1_request_target(&mut stream).await? {
+                    let stream = stream;
+                    let local_addr = stream.local_addr().ok();
+                    let peer_addr = stream.peer_addr().ok();
+                    let Some(stream) = maybe_prepare_http1_prefixed_stream(stream).await? else {
                         return Ok(());
-                    }
+                    };
                     let service = TowerToHyperService::new(app);
                     if enable_http2 {
                         let builder = AutoBuilder::new(TokioExecutor::new());
                         builder
                             .serve_connection_with_upgrades(TokioIo::new(stream), service)
                             .await
-                            .map_err(|error| format!("plain connection failed: {error}"))
+                            .map_err(|error| {
+                                format!(
+                                    "plain connection failed (local={local_addr:?} peer={peer_addr:?}): {error}"
+                                )
+                            })
                     } else {
                         let mut builder = http1::Builder::new();
                         builder.half_close(true);
+                        builder.ignore_invalid_headers(true);
                         builder
                             .serve_connection(TokioIo::new(stream), service)
                             .with_upgrades()
                             .await
-                            .map_err(|error| format!("plain h1 connection failed: {error}"))
+                            .map_err(|error| {
+                                format!(
+                                    "plain h1 connection failed (local={local_addr:?} peer={peer_addr:?}): {error}"
+                                )
+                            })
                     }
                 });
             }
@@ -960,67 +1037,21 @@ async fn run_plain_proxy(
     Ok(())
 }
 
-/// Rejects malformed HTTP/1.1 request targets that contain a URI fragment.
-///
-/// Dart's `HttpServer` returns `400 Bad Request` for request-lines like:
-/// `GET /#/ HTTP/1.1`.
-///
-/// Hyper normalizes such targets to `/` before handlers see them, so we peek
-/// the first line on plaintext connections and emulate Dart's behavior.
-async fn reject_invalid_http1_request_target(stream: &mut TcpStream) -> Result<bool, String> {
-    let mut peek_buffer = [0_u8; 4096];
-    let mut attempts = 0_u16;
-    let mut invalid_target = false;
-    loop {
-        let read = stream
-            .peek(&mut peek_buffer)
-            .await
-            .map_err(|error| format!("peek request line failed: {error}"))?;
-        if read == 0 {
-            return Ok(false);
-        }
-        let bytes = &peek_buffer[..read];
-        if let Some(line_end) = find_crlf(bytes) {
-            let request_line = &bytes[..line_end];
-            if !invalid_target {
-                invalid_target = request_target_contains_fragment(request_line);
-            }
-            if invalid_target {
-                // Delay the 400 until full request headers arrive so clients
-                // writing header lines sequentially do not hit Broken Pipe.
-                if find_headers_terminator(bytes).is_some() || attempts >= 200 {
-                    if let Err(error) = stream.write_all(BAD_REQUEST_RESPONSE_BYTES).await {
-                        return Err(format!("write bad request response failed: {error}"));
-                    }
-                    let _ = stream.flush().await;
-                    // Drain any in-flight client writes before dropping the
-                    // socket so clients don't observe an immediate RST while
-                    // writing request headers.
-                    let mut drain_buffer = [0_u8; 1024];
-                    loop {
-                        match time::timeout(
-                            Duration::from_millis(25),
-                            stream.read(&mut drain_buffer),
-                        )
-                        .await
-                        {
-                            Ok(Ok(0)) => break,
-                            Ok(Ok(_)) => continue,
-                            Ok(Err(_)) | Err(_) => break,
-                        }
-                    }
-                    return Ok(true);
-                }
-            } else {
-                return Ok(false);
-            }
-        }
-        attempts = attempts.saturating_add(1);
-        if read >= peek_buffer.len() || (!invalid_target && attempts >= 8) {
-            return Ok(false);
-        }
-        time::sleep(Duration::from_millis(1)).await;
+/// Writes one 400 response and drains pending client writes to avoid RST races.
+async fn write_bad_request_and_drain(stream: &mut TcpStream) -> Result<(), String> {
+    if let Err(error) = stream.write_all(BAD_REQUEST_RESPONSE_BYTES).await {
+        return Err(format!("write bad request response failed: {error}"));
     }
+    let _ = stream.flush().await;
+    let mut drain_buffer = [0_u8; 1024];
+    loop {
+        match time::timeout(Duration::from_millis(25), stream.read(&mut drain_buffer)).await {
+            Ok(Ok(0)) => break,
+            Ok(Ok(_)) => continue,
+            Ok(Err(_)) | Err(_) => break,
+        }
+    }
+    Ok(())
 }
 
 /// Returns the index of the first CRLF line terminator, if present.
@@ -1073,6 +1104,363 @@ fn request_target_contains_fragment(request_line: &[u8]) -> bool {
         return false;
     }
     request_line[after_method..second_space].contains(&b'#')
+}
+
+/// Returns whether `haystack` contains `needle` using ASCII case folding.
+fn contains_ascii_case_insensitive(haystack: &[u8], needle: &[u8]) -> bool {
+    if needle.is_empty() {
+        return true;
+    }
+    if haystack.len() < needle.len() {
+        return false;
+    }
+    haystack.windows(needle.len()).any(|window| {
+        window
+            .iter()
+            .zip(needle.iter())
+            .all(|(a, b)| a.eq_ignore_ascii_case(b))
+    })
+}
+
+/// Returns whether transfer-encoding tokens end in `chunked`.
+fn transfer_encoding_is_chunked_final(value: &str) -> bool {
+    let mut saw_token = false;
+    let mut last_token = "";
+    for token in value.split(',') {
+        let token = token.trim();
+        if token.is_empty() {
+            continue;
+        }
+        saw_token = true;
+        last_token = token;
+    }
+    saw_token && last_token.eq_ignore_ascii_case("chunked")
+}
+
+/// Returns `true` when request method is `GET` or `HEAD`.
+fn request_method_is_get_or_head(request_head: &[u8]) -> bool {
+    let Some(first_line_end) = find_crlf(request_head) else {
+        return false;
+    };
+    let request_line = &request_head[..first_line_end];
+    let Some(method_end) = request_line.iter().position(|byte| *byte == b' ') else {
+        return false;
+    };
+    let method = &request_line[..method_end];
+    method.eq_ignore_ascii_case(b"GET") || method.eq_ignore_ascii_case(b"HEAD")
+}
+
+/// Returns whether request head includes a `content-length` header.
+fn request_has_content_length_header(request_head: &[u8]) -> bool {
+    contains_ascii_case_insensitive(request_head, b"content-length:")
+}
+
+/// Returns whether an HTTP/1 header value byte is unsupported by Hyper's h1
+/// parser and should be rewritten before parsing.
+fn is_invalid_http1_header_value_byte(byte: u8) -> bool {
+    byte == 0x7f || (byte < 0x20 && byte != b'\t')
+}
+
+/// Returns whether request head contains unsupported HTTP/1 header value bytes.
+fn request_head_contains_invalid_header_value_bytes(request_head: &[u8]) -> bool {
+    let Some(first_line_end) = find_crlf(request_head) else {
+        return false;
+    };
+    let mut line_start = first_line_end + 2;
+    while line_start < request_head.len() {
+        let remaining = &request_head[line_start..];
+        let Some(relative_line_end) = find_crlf(remaining) else {
+            break;
+        };
+        let line_end = line_start + relative_line_end;
+        if line_end == line_start {
+            break;
+        }
+        let line = &request_head[line_start..line_end];
+        line_start = line_end + 2;
+        let Some(colon_index) = line.iter().position(|byte| *byte == b':') else {
+            continue;
+        };
+        let value = line.get(colon_index + 1..).unwrap_or_default();
+        if value
+            .iter()
+            .any(|byte| is_invalid_http1_header_value_byte(*byte))
+        {
+            return true;
+        }
+    }
+    false
+}
+
+/// Appends header value bytes to [output], rewriting unsupported bytes.
+///
+/// Returns `true` when any byte was rewritten.
+fn append_rewritten_header_value(output: &mut Vec<u8>, value: &[u8]) -> bool {
+    let mut rewritten = false;
+    for byte in value {
+        if is_invalid_http1_header_value_byte(*byte) {
+            rewritten = true;
+            // `"` is legal at the HTTP header level but invalid for cookie
+            // value validators. This preserves lazy header-validation behavior:
+            // - request passes when header is untouched,
+            // - typed cookie parsing still throws `Invalid cookie value`.
+            output.push(b'"');
+            continue;
+        }
+        output.push(*byte);
+    }
+    rewritten
+}
+
+/// Returns whether request head carries an invalid transfer-encoding header.
+fn request_has_invalid_transfer_encoding(request_head: &[u8]) -> bool {
+    let Some(first_line_end) = find_crlf(request_head) else {
+        return false;
+    };
+    let mut line_start = first_line_end + 2;
+    while line_start < request_head.len() {
+        let remaining = &request_head[line_start..];
+        let Some(relative_line_end) = find_crlf(remaining) else {
+            break;
+        };
+        let line_end = line_start + relative_line_end;
+        if line_end == line_start {
+            break;
+        }
+        let line = &request_head[line_start..line_end];
+        line_start = line_end + 2;
+        let Some(colon_index) = line.iter().position(|byte| *byte == b':') else {
+            continue;
+        };
+        let (name, value_with_colon) = line.split_at(colon_index);
+        if !name.eq_ignore_ascii_case(TRANSFER_ENCODING_HEADER.as_bytes()) {
+            continue;
+        }
+        let value_bytes = value_with_colon.get(1..).unwrap_or_default();
+        let Ok(value) = std::str::from_utf8(value_bytes) else {
+            return true;
+        };
+        if !transfer_encoding_is_chunked_final(value.trim()) {
+            return true;
+        }
+    }
+    false
+}
+
+/// Returns whether one host header value cannot be parsed as HTTP authority.
+fn host_header_value_is_invalid(value: &[u8]) -> bool {
+    let Ok(value) = std::str::from_utf8(value) else {
+        return true;
+    };
+    // HTTP allows optional whitespace around header values.
+    let trimmed = value.trim();
+    if trimmed.is_empty() {
+        return true;
+    }
+    trimmed.parse::<axum::http::uri::Authority>().is_err()
+}
+
+/// Returns whether transfer-encoding should be rewritten before Hyper parsing.
+///
+/// Rules:
+/// - invalid transfer-encoding values are rewritten for lenient parsing;
+/// - `GET`/`HEAD` with transfer-encoding and no prefetched body bytes are
+///   rewritten to avoid hanging waiting for absent chunk framing.
+fn request_should_rewrite_transfer_encoding(
+    request_head: &[u8],
+    has_prefetched_body_bytes: bool,
+) -> bool {
+    if request_has_invalid_transfer_encoding(request_head) {
+        return true;
+    }
+    if !has_prefetched_body_bytes
+        && request_method_is_get_or_head(request_head)
+        && !request_has_content_length_header(request_head)
+    {
+        return true;
+    }
+    false
+}
+
+/// Rewrites transfer-encoding headers to an internal header name.
+#[cfg(test)]
+fn rewrite_transfer_encoding_headers(request_head: &[u8]) -> Vec<u8> {
+    rewrite_request_head_for_hyper(request_head, true).unwrap_or_else(|| request_head.to_vec())
+}
+
+/// Rewrites request-head headers so Hyper can parse inputs that dart:io accepts.
+///
+/// Current rewrites:
+/// - optional transfer-encoding header name rewrite (for TE compatibility),
+/// - percent-encoding of unsupported control bytes in header values.
+///
+/// Returns `None` when no rewrite was needed.
+fn rewrite_request_head_for_hyper(
+    request_head: &[u8],
+    rewrite_transfer_encoding: bool,
+) -> Option<Vec<u8>> {
+    let mut output = Vec::with_capacity(request_head.len());
+    let Some(first_line_end) = find_crlf(request_head) else {
+        return None;
+    };
+    output.extend_from_slice(&request_head[..first_line_end + 2]);
+    let mut rewritten = false;
+
+    let mut line_start = first_line_end + 2;
+    while line_start < request_head.len() {
+        let remaining = &request_head[line_start..];
+        let Some(relative_line_end) = find_crlf(remaining) else {
+            output.extend_from_slice(remaining);
+            break;
+        };
+        let line_end = line_start + relative_line_end;
+        if line_end == line_start {
+            output.extend_from_slice(b"\r\n");
+            break;
+        }
+        let line = &request_head[line_start..line_end];
+        line_start = line_end + 2;
+        let Some(colon_index) = line.iter().position(|byte| *byte == b':') else {
+            output.extend_from_slice(line);
+            output.extend_from_slice(b"\r\n");
+            continue;
+        };
+        let (name, value) = line.split_at(colon_index);
+        let value = value.get(1..).unwrap_or_default();
+        let invalid_host = name.eq_ignore_ascii_case(HOST_HEADER.as_bytes())
+            && host_header_value_is_invalid(value);
+        if rewrite_transfer_encoding
+            && name.eq_ignore_ascii_case(TRANSFER_ENCODING_HEADER.as_bytes())
+        {
+            rewritten = true;
+            output.extend_from_slice(SANITIZED_TRANSFER_ENCODING_HEADER.as_bytes());
+        } else if invalid_host {
+            rewritten = true;
+            // Preserve original host for Dart-side semantics while giving Hyper
+            // a parseable host value.
+            output.extend_from_slice(SANITIZED_HOST_HEADER.as_bytes());
+        } else {
+            output.extend_from_slice(name);
+        }
+        output.push(b':');
+        if append_rewritten_header_value(&mut output, value) {
+            rewritten = true;
+        }
+        output.extend_from_slice(b"\r\n");
+        if invalid_host {
+            output.extend_from_slice(HOST_HEADER.as_bytes());
+            output.extend_from_slice(b":127.0.0.1\r\n");
+        }
+    }
+    if rewritten {
+        Some(output)
+    } else {
+        None
+    }
+}
+
+/// Reads/sanitizes one prefetched HTTP/1 request head before Hyper parsing.
+async fn maybe_prepare_http1_prefixed_stream(
+    stream: TcpStream,
+) -> Result<Option<PrefixedIo<TcpStream>>, String> {
+    let mut stream = stream;
+    let mut prefix = Vec::<u8>::with_capacity(4096);
+    let mut read_buffer = [0_u8; 2048];
+    let mut idle_timeouts = 0_u8;
+    while prefix.len() < 16384 {
+        let read =
+            match time::timeout(Duration::from_millis(5), stream.read(&mut read_buffer)).await {
+                Ok(Ok(read)) => read,
+                Ok(Err(error)) => {
+                    return Err(format!("read request head failed: {error}"));
+                }
+                Err(_) => {
+                    idle_timeouts = idle_timeouts.saturating_add(1);
+                    if find_headers_terminator(&prefix).is_some() {
+                        break;
+                    }
+                    // Give new connections enough time to deliver the first
+                    // request head so transfer-encoding sanitization can run.
+                    // Once any bytes are prefetched, keep the previous tighter
+                    // timeout to avoid stalling on slowloris-style peers.
+                    let max_idle_timeouts = if prefix.is_empty() { 200 } else { 200 };
+                    if idle_timeouts >= max_idle_timeouts {
+                        break;
+                    }
+                    continue;
+                }
+            };
+        idle_timeouts = 0;
+        if read == 0 {
+            break;
+        }
+        prefix.extend_from_slice(&read_buffer[..read]);
+        if find_headers_terminator(&prefix).is_some() {
+            break;
+        }
+    }
+    if prefix.is_empty() {
+        return Ok(Some(PrefixedIo::new(stream, Vec::new())));
+    }
+    let Some(headers_end) = find_headers_terminator(&prefix) else {
+        return Ok(Some(PrefixedIo::new(stream, prefix)));
+    };
+    let header_len = headers_end + 4;
+    if prefix.len() == header_len {
+        let request_head = &prefix[..header_len];
+        let probe_for_immediate_chunk_body = contains_ascii_case_insensitive(
+            request_head,
+            b"transfer-encoding:",
+        ) && request_method_is_get_or_head(request_head)
+            && !request_has_content_length_header(request_head);
+        if probe_for_immediate_chunk_body {
+            // Some clients send empty chunk framing (`0\r\n\r\n`) for
+            // GET/HEAD + chunked. Probe briefly so we do not rewrite TE in that
+            // case and leave framing bytes as a phantom next request.
+            let mut probe_timeouts = 0_u8;
+            while prefix.len() == header_len && probe_timeouts < 6 {
+                match time::timeout(Duration::from_millis(5), stream.read(&mut read_buffer)).await
+                {
+                    Ok(Ok(0)) => break,
+                    Ok(Ok(read)) => {
+                        prefix.extend_from_slice(&read_buffer[..read]);
+                        break;
+                    }
+                    Ok(Err(error)) => {
+                        return Err(format!("read request body probe failed: {error}"));
+                    }
+                    Err(_) => {
+                        probe_timeouts = probe_timeouts.saturating_add(1);
+                    }
+                }
+            }
+        }
+    }
+    let request_head = &prefix[..header_len];
+    if let Some(first_line_end) = find_crlf(request_head) {
+        if request_target_contains_fragment(&request_head[..first_line_end]) {
+            write_bad_request_and_drain(&mut stream).await?;
+            return Ok(None);
+        }
+    }
+    let rewrite_transfer_encoding = contains_ascii_case_insensitive(
+        request_head,
+        b"transfer-encoding:",
+    ) && request_should_rewrite_transfer_encoding(request_head, header_len < prefix.len());
+    let rewrite_invalid_value_bytes =
+        request_head_contains_invalid_header_value_bytes(request_head);
+    if !rewrite_transfer_encoding && !rewrite_invalid_value_bytes {
+        return Ok(Some(PrefixedIo::new(stream, prefix)));
+    }
+    let Some(mut sanitized) =
+        rewrite_request_head_for_hyper(request_head, rewrite_transfer_encoding)
+    else {
+        return Ok(Some(PrefixedIo::new(stream, prefix)));
+    };
+    if header_len < prefix.len() {
+        sanitized.extend_from_slice(&prefix[header_len..]);
+    }
+    Ok(Some(PrefixedIo::new(stream, sanitized)))
 }
 
 /// Runs TLS serving loop and optionally HTTP/3 endpoint.
@@ -1158,6 +1546,7 @@ async fn run_tls_proxy(
                         } else {
                             let mut builder = http1::Builder::new();
                             builder.half_close(true);
+                            builder.ignore_invalid_headers(true);
                             builder
                                 .serve_connection(TokioIo::new(tls_stream), service)
                                 .with_upgrades()
@@ -1207,6 +1596,7 @@ async fn run_tls_proxy(
                         } else {
                             let mut builder = http1::Builder::new();
                             builder.half_close(true);
+                            builder.ignore_invalid_headers(true);
                             builder
                                 .serve_connection(TokioIo::new(tls_stream), service)
                                 .with_upgrades()
@@ -1259,6 +1649,7 @@ async fn proxy_request(State(state): State<ProxyState>, request: Request<Body>) 
     }
 
     let (mut parts, body) = request.into_parts();
+    restore_sanitized_compat_headers(&mut parts.headers);
     let websocket_upgrade_requested = is_websocket_upgrade(&parts.headers);
     let mut upgrade = if websocket_upgrade_requested {
         parts.extensions.remove::<OnUpgrade>()
@@ -1365,6 +1756,42 @@ async fn proxy_request(State(state): State<ProxyState>, request: Request<Body>) 
     response
 }
 
+/// Restores rewritten compatibility headers before request bridging.
+fn restore_sanitized_compat_headers(headers: &mut HeaderMap) {
+    let sanitized_name =
+        axum::http::header::HeaderName::from_static(SANITIZED_TRANSFER_ENCODING_HEADER);
+    let transfer_encoding_name =
+        axum::http::header::HeaderName::from_static(TRANSFER_ENCODING_HEADER);
+    let values = headers
+        .get_all(&sanitized_name)
+        .iter()
+        .cloned()
+        .collect::<Vec<_>>();
+    if values.is_empty() {
+        return;
+    }
+    headers.remove(&sanitized_name);
+    for value in values {
+        headers.append(transfer_encoding_name.clone(), value);
+    }
+
+    let sanitized_host_name = axum::http::header::HeaderName::from_static(SANITIZED_HOST_HEADER);
+    let host_name = axum::http::header::HeaderName::from_static(HOST_HEADER);
+    let host_values = headers
+        .get_all(&sanitized_host_name)
+        .iter()
+        .cloned()
+        .collect::<Vec<_>>();
+    if host_values.is_empty() {
+        return;
+    }
+    headers.remove(&sanitized_host_name);
+    headers.remove(&host_name);
+    for value in host_values {
+        headers.append(host_name.clone(), value);
+    }
+}
+
 /// Convenience benchmark response for native-direct transport baseline.
 fn benchmark_static_ok_response() -> Response<Body> {
     benchmark_static_response(BENCHMARK_STATIC_OK_BODY)
@@ -1423,13 +1850,10 @@ async fn call_direct_bridge_request(
         .fetch_add(1, Ordering::Relaxed);
     let (response_tx, mut response_rx) = mpsc::unbounded_channel::<Vec<u8>>();
 
-    direct_bridge.pending.lock().insert(
-        request_id,
-        PendingDirectRequest {
-            inflight_payloads: Vec::new(),
-            response_tx,
-        },
-    );
+    direct_bridge
+        .pending
+        .lock()
+        .insert(request_id, PendingDirectRequest { response_tx });
 
     if let Err(error) = emit_direct_bridge_request(
         direct_bridge,
@@ -1547,37 +1971,10 @@ async fn emit_direct_bridge_request(
         return emit_direct_empty_request(direct_bridge, request_id, request);
     }
 
-    let mut first_non_empty_chunk: Option<Bytes> = None;
-    while let Some(next_chunk) = body_stream.next().await {
-        let chunk =
-            next_chunk.map_err(|error| format!("failed to read request body chunk: {error}"))?;
-        if chunk.is_empty() {
-            continue;
-        }
-        first_non_empty_chunk = Some(chunk);
-        break;
-    }
-
-    if first_non_empty_chunk.is_none() {
-        if is_websocket_upgrade(request.headers) {
-            return emit_direct_streaming_empty_request(direct_bridge, request_id, request);
-        }
-        return emit_direct_empty_request(direct_bridge, request_id, request);
-    }
-
     let start_payload = encode_bridge_request_start(request)?;
     emit_direct_callback_payload(direct_bridge, request_id, start_payload)?;
 
     let mut total_body_bytes = 0usize;
-    if let Some(first_chunk) = first_non_empty_chunk {
-        total_body_bytes = emit_direct_request_chunk(
-            direct_bridge,
-            request_id,
-            first_chunk.as_ref(),
-            total_body_bytes,
-        )?;
-    }
-
     while let Some(next_chunk) = body_stream.next().await {
         let chunk =
             next_chunk.map_err(|error| format!("failed to read request body chunk: {error}"))?;
@@ -1647,27 +2044,6 @@ fn emit_direct_callback_payload(
     if direct_bridge.stopped.load(Ordering::Acquire) {
         return Err("direct bridge is stopping".to_string());
     }
-    let callback = direct_bridge.callback;
-    if let Some(callback) = callback {
-        let (payload_ptr, payload_len) = {
-            let mut pending = direct_bridge.pending.lock();
-            let Some(entry) = pending.get_mut(&request_id) else {
-                return Err(format!(
-                    "direct bridge callback missing request id: {request_id}"
-                ));
-            };
-            entry.inflight_payloads.push(payload);
-            let payload = entry.inflight_payloads.last().ok_or_else(|| {
-                "direct bridge callback payload queue unexpectedly empty".to_string()
-            })?;
-            let payload_len = u64::try_from(payload.len())
-                .map_err(|_| "direct request payload length does not fit u64".to_string())?;
-            (payload.as_ptr(), payload_len)
-        };
-        callback(request_id, payload_ptr, payload_len);
-        return Ok(());
-    }
-
     {
         let pending = direct_bridge.pending.lock();
         if !pending.contains_key(&request_id) {
@@ -1683,6 +2059,14 @@ fn emit_direct_callback_payload(
         payload,
     });
     direct_bridge.queued_payloads_cv.notify_one();
+    drop(queued);
+
+    if let Some(callback) = direct_bridge.callback {
+        // In callback mode we still enqueue payloads and only use callback as a
+        // wake-up signal. This avoids passing raw pointers through the async
+        // isolate listener boundary in Dart.
+        callback(request_id, std::ptr::null(), 0);
+    }
     Ok(())
 }
 
@@ -2066,9 +2450,276 @@ fn c_string_to_string(value: *const c_char) -> Option<String> {
 
 #[cfg(test)]
 mod tests {
-    use super::{BridgeEndpoint, BridgePool};
+    use super::*;
+    use axum::http::{header::HeaderName, StatusCode};
+    use std::sync::atomic::{AtomicU64, AtomicUsize, Ordering as AtomicOrdering};
     use std::time::Duration;
     use tokio::net::TcpListener;
+
+    static TEST_CALLBACK_INVOCATIONS: AtomicUsize = AtomicUsize::new(0);
+    static TEST_CALLBACK_LAST_REQUEST_ID: AtomicU64 = AtomicU64::new(0);
+
+    extern "C" fn test_direct_callback(request_id: u64, _payload: *const u8, _payload_len: u64) {
+        TEST_CALLBACK_INVOCATIONS.fetch_add(1, AtomicOrdering::SeqCst);
+        TEST_CALLBACK_LAST_REQUEST_ID.store(request_id, AtomicOrdering::SeqCst);
+    }
+
+    fn create_direct_bridge(callback: Option<DirectRequestCallback>) -> Arc<DirectRequestBridge> {
+        Arc::new(DirectRequestBridge {
+            callback,
+            next_request_id: AtomicU64::new(1),
+            stopped: AtomicBool::new(false),
+            pending: Mutex::new(HashMap::new()),
+            queued_payloads: Mutex::new(VecDeque::new()),
+            queued_payloads_cv: Condvar::new(),
+        })
+    }
+
+    fn register_pending_request(
+        direct_bridge: &Arc<DirectRequestBridge>,
+        request_id: u64,
+    ) -> mpsc::UnboundedReceiver<Vec<u8>> {
+        let (response_tx, response_rx) = mpsc::unbounded_channel::<Vec<u8>>();
+        direct_bridge
+            .pending
+            .lock()
+            .insert(request_id, PendingDirectRequest { response_tx });
+        response_rx
+    }
+
+    #[test]
+    fn transfer_encoding_requires_chunked_as_final_token() {
+        assert!(transfer_encoding_is_chunked_final("chunked"));
+        assert!(transfer_encoding_is_chunked_final("gzip, chunked"));
+        assert!(transfer_encoding_is_chunked_final(
+            "gzip , deflate , chunked"
+        ));
+        assert!(!transfer_encoding_is_chunked_final(""));
+        assert!(!transfer_encoding_is_chunked_final("gzip"));
+        assert!(!transfer_encoding_is_chunked_final("chunked, gzip"));
+    }
+
+    #[test]
+    fn request_detects_invalid_transfer_encoding_values() {
+        let valid =
+            b"GET / HTTP/1.1\r\nHost: example.test\r\nTransfer-Encoding: gzip, chunked\r\n\r\n";
+        assert!(!request_has_invalid_transfer_encoding(valid));
+
+        let invalid_order =
+            b"GET / HTTP/1.1\r\nHost: example.test\r\nTransfer-Encoding: chunked, gzip\r\n\r\n";
+        assert!(request_has_invalid_transfer_encoding(invalid_order));
+
+        let invalid_utf8 =
+            b"GET / HTTP/1.1\r\nHost: example.test\r\nTransfer-Encoding: \xFFchunked\r\n\r\n";
+        assert!(request_has_invalid_transfer_encoding(invalid_utf8));
+    }
+
+    #[test]
+    fn request_rewrite_transfer_encoding_for_lenient_get_head_without_body() {
+        let valid_get =
+            b"GET / HTTP/1.1\r\nHost: example.test\r\nTransfer-Encoding: gzip, chunked\r\n\r\n";
+        assert!(request_should_rewrite_transfer_encoding(valid_get, false));
+        assert!(!request_should_rewrite_transfer_encoding(valid_get, true));
+
+        let valid_head =
+            b"HEAD / HTTP/1.1\r\nHost: example.test\r\nTransfer-Encoding: gzip, chunked\r\n\r\n";
+        assert!(request_should_rewrite_transfer_encoding(valid_head, false));
+        assert!(!request_should_rewrite_transfer_encoding(valid_head, true));
+
+        let valid_post =
+            b"POST / HTTP/1.1\r\nHost: example.test\r\nTransfer-Encoding: gzip, chunked\r\n\r\n";
+        assert!(!request_should_rewrite_transfer_encoding(valid_post, false));
+
+        let invalid_post =
+            b"POST / HTTP/1.1\r\nHost: example.test\r\nTransfer-Encoding: chunked, gzip\r\n\r\n";
+        assert!(request_should_rewrite_transfer_encoding(invalid_post, false));
+    }
+
+    #[test]
+    fn request_head_detects_invalid_header_value_bytes() {
+        let valid = b"GET / HTTP/1.1\r\nHost: example.test\r\nCookie: sessionId=abc123\r\n\r\n";
+        assert!(!request_head_contains_invalid_header_value_bytes(valid));
+
+        let invalid =
+            b"GET / HTTP/1.1\r\nHost: example.test\r\nCookie: sessionId=abc\x7F123\r\n\r\n";
+        assert!(request_head_contains_invalid_header_value_bytes(invalid));
+    }
+
+    #[test]
+    fn rewrite_transfer_encoding_headers_rewrites_all_variants() {
+        let request_head = b"GET /upload HTTP/1.1\r\n\
+Host: example.test\r\n\
+Transfer-Encoding: gzip\r\n\
+X-One: 1\r\n\
+transfer-encoding: chunked\r\n\
+\r\n";
+
+        let sanitized = rewrite_transfer_encoding_headers(request_head);
+        let sanitized_text =
+            String::from_utf8(sanitized).expect("sanitized request should be utf8");
+        for line in sanitized_text.lines() {
+            assert!(!line.to_ascii_lowercase().starts_with("transfer-encoding:"));
+        }
+        assert!(sanitized_text
+            .to_ascii_lowercase()
+            .contains("x-server-native-transfer-encoding: gzip"));
+        assert!(sanitized_text
+            .to_ascii_lowercase()
+            .contains("x-server-native-transfer-encoding: chunked"));
+        assert!(sanitized_text.contains("Host: example.test\r\n"));
+        assert!(sanitized_text.contains("X-One: 1\r\n"));
+        assert!(sanitized_text.ends_with("\r\n\r\n"));
+    }
+
+    #[test]
+    fn rewrite_request_head_for_hyper_escapes_invalid_header_value_bytes() {
+        let request_head = b"GET / HTTP/1.1\r\n\
+Host: example.test\r\n\
+Cookie: sessionId=abc123; userId=42\x7F\r\n\
+\r\n";
+
+        let sanitized = rewrite_request_head_for_hyper(request_head, false)
+            .expect("invalid cookie value should trigger rewrite");
+        let sanitized_text =
+            String::from_utf8(sanitized).expect("sanitized request should be utf8");
+        assert!(sanitized_text.contains("Cookie: sessionId=abc123; userId=42\"\r\n"));
+        assert!(sanitized_text.ends_with("\r\n\r\n"));
+    }
+
+    #[test]
+    fn bridge_response_filters_hop_by_hop_headers_for_non_upgrade() {
+        let transfer_encoding = HeaderName::from_static("transfer-encoding");
+        let connection = HeaderName::from_static("connection");
+        let custom = HeaderName::from_static("x-custom");
+
+        assert!(!should_forward_bridge_response_header(
+            &transfer_encoding,
+            StatusCode::OK
+        ));
+        assert!(!should_forward_bridge_response_header(
+            &connection,
+            StatusCode::OK
+        ));
+        assert!(should_forward_bridge_response_header(
+            &custom,
+            StatusCode::OK
+        ));
+        assert!(should_forward_bridge_response_header(
+            &transfer_encoding,
+            StatusCode::SWITCHING_PROTOCOLS
+        ));
+    }
+
+    #[test]
+    fn direct_callback_payload_enqueues_and_signals_callback() {
+        TEST_CALLBACK_INVOCATIONS.store(0, AtomicOrdering::SeqCst);
+        TEST_CALLBACK_LAST_REQUEST_ID.store(0, AtomicOrdering::SeqCst);
+
+        let direct_bridge = create_direct_bridge(Some(test_direct_callback));
+        let _response_rx = register_pending_request(&direct_bridge, 42);
+
+        emit_direct_callback_payload(&direct_bridge, 42, vec![1, 2, 3, 4]).expect("emit payload");
+
+        let queued = direct_bridge.queued_payloads.lock();
+        assert_eq!(queued.len(), 1);
+        assert_eq!(queued.front().expect("queued payload").request_id, 42);
+        assert_eq!(
+            queued.front().expect("queued payload").payload.as_slice(),
+            &[1, 2, 3, 4]
+        );
+        drop(queued);
+
+        assert_eq!(TEST_CALLBACK_INVOCATIONS.load(AtomicOrdering::SeqCst), 1);
+        assert_eq!(
+            TEST_CALLBACK_LAST_REQUEST_ID.load(AtomicOrdering::SeqCst),
+            42
+        );
+    }
+
+    #[test]
+    fn direct_callback_payload_rejects_missing_or_stopped_request() {
+        let direct_bridge = create_direct_bridge(None);
+
+        let missing_error =
+            emit_direct_callback_payload(&direct_bridge, 99, vec![1]).expect_err("missing request");
+        assert!(missing_error.contains("missing request id"));
+
+        let _response_rx = register_pending_request(&direct_bridge, 99);
+        direct_bridge.stopped.store(true, Ordering::Release);
+        let stopped_error =
+            emit_direct_callback_payload(&direct_bridge, 99, vec![1]).expect_err("stopped bridge");
+        assert!(stopped_error.contains("stopping"));
+    }
+
+    #[test]
+    fn push_direct_response_frame_routes_payload_to_pending_request() {
+        let direct_bridge = create_direct_bridge(None);
+        let mut response_rx = register_pending_request(&direct_bridge, 7);
+        let mut handle = ProxyServerHandle {
+            shutdown_tx: None,
+            join_handle: None,
+            direct_bridge: Some(direct_bridge),
+        };
+        let handle_ptr = &mut handle as *mut ProxyServerHandle;
+
+        let payload = vec![10_u8, 20_u8, 30_u8];
+        let pushed = server_native_push_direct_response_frame(
+            handle_ptr,
+            7,
+            payload.as_ptr(),
+            payload.len() as u64,
+        );
+        assert_eq!(pushed, 1);
+        assert_eq!(
+            response_rx.try_recv().expect("payload should be delivered"),
+            payload
+        );
+
+        let unknown = server_native_push_direct_response_frame(handle_ptr, 8, payload.as_ptr(), 3);
+        assert_eq!(unknown, 0);
+    }
+
+    #[test]
+    fn poll_direct_request_frame_returns_and_frees_payload() {
+        let direct_bridge = create_direct_bridge(None);
+        direct_bridge
+            .queued_payloads
+            .lock()
+            .push_back(QueuedDirectPayload {
+                request_id: 17,
+                payload: vec![1_u8, 3_u8, 5_u8, 7_u8],
+            });
+
+        let mut handle = ProxyServerHandle {
+            shutdown_tx: None,
+            join_handle: None,
+            direct_bridge: Some(direct_bridge),
+        };
+        let handle_ptr = &mut handle as *mut ProxyServerHandle;
+
+        let mut out_request_id = 0_u64;
+        let mut out_payload: *mut u8 = std::ptr::null_mut();
+        let mut out_payload_len = 0_u64;
+        let result = server_native_poll_direct_request_frame(
+            handle_ptr,
+            0,
+            &mut out_request_id as *mut u64,
+            &mut out_payload as *mut *mut u8,
+            &mut out_payload_len as *mut u64,
+        );
+
+        assert_eq!(result, 1);
+        assert_eq!(out_request_id, 17);
+        assert!(!out_payload.is_null());
+        assert_eq!(out_payload_len, 4);
+
+        let payload = unsafe {
+            std::slice::from_raw_parts(out_payload as *const u8, out_payload_len as usize)
+        };
+        assert_eq!(payload, &[1_u8, 3_u8, 5_u8, 7_u8]);
+
+        server_native_free_direct_request_payload(out_payload, out_payload_len);
+    }
 
     #[tokio::test]
     async fn bridge_pool_acquires_new_and_reused_sockets() {

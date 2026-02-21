@@ -141,7 +141,10 @@ Future<_RunningProxy> _startNativeProxy({
         directPayloadHandler: directPayloadHandler,
         handleStream: handleStream,
         onSocketOpened: connectionCounters?.onSocketOpened,
-        onSocketClosed: connectionCounters?.onSocketClosed,
+        // Direct callback mode does not expose real socket lifecycle events.
+        // Keep synthetic connection slots until shutdown so connectionsInfo()
+        // can report idle keep-alive style state between requests.
+        onSocketClosed: null,
         onRequestStarted: connectionCounters?.onRequestStarted,
         onRequestCompleted: connectionCounters?.onRequestCompleted,
       );

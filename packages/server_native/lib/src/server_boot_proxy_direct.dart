@@ -73,23 +73,6 @@ NativeProxyServer _startNativeDirectProxy({
 }) {
   final nativeDirectStreams = <int, _NativeDirectRequestStreamState>{};
   late final NativeProxyServer proxyRef;
-  final proxy = NativeProxyServer.start(
-    host: host,
-    port: port,
-    backendHost: InternetAddress.loopbackIPv4.address,
-    backendPort: 9,
-    backlog: backlog,
-    v6Only: v6Only,
-    shared: shared,
-    requestClientCertificate: requestClientCertificate,
-    enableHttp2: enableHttp2,
-    enableHttp3: enableHttp3,
-    tlsCertPath: tlsCertPath,
-    tlsKeyPath: tlsKeyPath,
-    tlsCertPassword: tlsCertPassword,
-    directRequestCallback: null,
-  );
-  proxyRef = proxy;
 
   void processRequestFrame(int requestId, Uint8List requestPayload) {
     if (proxyRef.isClosed) {
@@ -115,7 +98,7 @@ NativeProxyServer _startNativeDirectProxy({
         responsePayload,
       );
       if (!pushed) {
-        stderr.writeln(
+        _nativeVerboseLog(
           '[server_native] native direct callback push failed for requestId=$requestId',
         );
       }
@@ -185,6 +168,61 @@ NativeProxyServer _startNativeDirectProxy({
 
       unawaited(() async {
         var keepStreamState = false;
+        var detachedForwardingStarted = false;
+        var responseStartSent = false;
+
+        void startDetachedForwardingIfNeeded() {
+          if (!responseStartSent) {
+            return;
+          }
+          if (detachedForwardingStarted) {
+            return;
+          }
+          final detachedSocket = streamState.detachedSocket;
+          if (detachedSocket == null) {
+            return;
+          }
+          detachedForwardingStarted = true;
+          keepStreamState = true;
+          final usesTunnel = streamState.detachedSocketUsesTunnel;
+          unawaited(() async {
+            try {
+              if (usesTunnel) {
+                pushResponsePayload(BridgeResponseFrame.encodeEndPayload());
+                await forwardDetachedOutput(
+                  detachedSocket,
+                  emitChunk: (chunk) {
+                    pushResponsePayload(
+                      BridgeTunnelFrame.encodeChunkPayload(chunk),
+                    );
+                  },
+                );
+              } else {
+                await forwardDetachedOutput(
+                  detachedSocket,
+                  emitChunk: (chunk) {
+                    pushResponsePayload(
+                      BridgeResponseFrame.encodeChunkPayload(chunk),
+                    );
+                  },
+                );
+                pushResponsePayload(BridgeResponseFrame.encodeEndPayload());
+              }
+            } catch (_) {
+              // Peer closure and write errors both end the tunnel.
+            } finally {
+              if (usesTunnel &&
+                  identical(nativeDirectStreams[requestId], streamState)) {
+                pushResponsePayload(BridgeTunnelFrame.encodeClosePayload());
+              }
+              await removeNativeDirectStream(
+                streamState: streamState,
+                closeDetachedSocket: true,
+                closeTrackedRequest: true,
+              );
+            }
+          }());
+        }
 
         try {
           await handleStream(
@@ -193,14 +231,17 @@ NativeProxyServer _startNativeDirectProxy({
             onDetachedSocket: (socket) {
               streamState.detachedSocket = socket;
               streamState.flushBufferedChunksToDetachedSocket();
+              startDetachedForwardingIfNeeded();
             },
             onResponseStart: (frame) async {
+              responseStartSent = true;
               streamState.responseStatusCode = frame.status;
               streamState.detachedSocketUsesTunnel =
                   frame.status == HttpStatus.switchingProtocols;
               streamState.detachedSocket = frame.detachedSocket;
               streamState.flushBufferedChunksToDetachedSocket();
               pushResponsePayload(frame.encodeStartPayload());
+              startDetachedForwardingIfNeeded();
             },
             onResponseChunk: (chunkBytes) async {
               if (chunkBytes.isEmpty) {
@@ -212,47 +253,8 @@ NativeProxyServer _startNativeDirectProxy({
             },
           );
           streamState.responseCompleted = true;
-          final detachedSocket = streamState.detachedSocket;
-          if (detachedSocket != null) {
-            keepStreamState = true;
-            final usesTunnel = streamState.detachedSocketUsesTunnel;
-            unawaited(() async {
-              try {
-                if (usesTunnel) {
-                  pushResponsePayload(BridgeResponseFrame.encodeEndPayload());
-                  await forwardDetachedOutput(
-                    detachedSocket,
-                    emitChunk: (chunk) {
-                      pushResponsePayload(
-                        BridgeTunnelFrame.encodeChunkPayload(chunk),
-                      );
-                    },
-                  );
-                } else {
-                  await forwardDetachedOutput(
-                    detachedSocket,
-                    emitChunk: (chunk) {
-                      pushResponsePayload(
-                        BridgeResponseFrame.encodeChunkPayload(chunk),
-                      );
-                    },
-                  );
-                  pushResponsePayload(BridgeResponseFrame.encodeEndPayload());
-                }
-              } catch (_) {
-                // Peer closure and write errors both end the tunnel.
-              } finally {
-                if (usesTunnel &&
-                    identical(nativeDirectStreams[requestId], streamState)) {
-                  pushResponsePayload(BridgeTunnelFrame.encodeClosePayload());
-                }
-                await removeNativeDirectStream(
-                  streamState: streamState,
-                  closeDetachedSocket: true,
-                  closeTrackedRequest: true,
-                );
-              }
-            }());
+          if (streamState.detachedSocket != null) {
+            startDetachedForwardingIfNeeded();
           } else {
             pushResponsePayload(BridgeResponseFrame.encodeEndPayload());
             if (streamState.requestEnded) {
@@ -350,7 +352,7 @@ NativeProxyServer _startNativeDirectProxy({
           try {
             chunkBytes = BridgeTunnelFrame.decodeChunkPayload(requestPayload);
           } catch (error) {
-            stderr.writeln(
+            _nativeVerboseLog(
               '[server_native] invalid native direct tunnel chunk for requestId=$requestId: $error',
             );
             unawaited(
@@ -383,22 +385,10 @@ NativeProxyServer _startNativeDirectProxy({
         }
       }
 
-      streamState.requestBody.addError(
-        const FormatException(
-          'unexpected frame while reading native direct request stream',
-        ),
+      _nativeVerboseLog(
+        '[server_native] dropping unexpected in-flight native direct request frame '
+        'for requestId=$requestId',
       );
-      streamState.requestEnded = true;
-      unawaited(streamState.requestBody.close());
-      if (streamState.responseCompleted && streamState.detachedSocket == null) {
-        unawaited(
-          removeNativeDirectStream(
-            streamState: streamState,
-            closeDetachedSocket: true,
-            closeTrackedRequest: true,
-          ),
-        );
-      }
       return;
     }
 
@@ -406,7 +396,7 @@ NativeProxyServer _startNativeDirectProxy({
         BridgeRequestFrame.isEndPayload(requestPayload) ||
         BridgeTunnelFrame.isChunkPayload(requestPayload) ||
         BridgeTunnelFrame.isClosePayload(requestPayload)) {
-      stderr.writeln(
+      _nativeVerboseLog(
         '[server_native] dropping unmatched native direct frame for requestId=$requestId',
       );
       return;
@@ -493,11 +483,31 @@ NativeProxyServer _startNativeDirectProxy({
     }());
   }
 
+  final proxy = NativeProxyServer.start(
+    host: host,
+    port: port,
+    backendHost: InternetAddress.loopbackIPv4.address,
+    backendPort: 9,
+    backlog: backlog,
+    v6Only: v6Only,
+    shared: shared,
+    requestClientCertificate: requestClientCertificate,
+    enableHttp2: enableHttp2,
+    enableHttp3: enableHttp3,
+    tlsCertPath: tlsCertPath,
+    tlsKeyPath: tlsKeyPath,
+    tlsCertPassword: tlsCertPassword,
+    directRequestCallback: null,
+  );
+  proxyRef = proxy;
+
   unawaited(() async {
     while (!proxyRef.isClosed) {
       NativeDirectRequestFrame? frame;
       try {
-        frame = proxyRef.pollDirectRequestFrame(timeoutMs: 100);
+        // Use non-blocking native polling to avoid monopolizing the isolate
+        // thread during websocket tunnel forwarding and teardown races.
+        frame = proxyRef.pollDirectRequestFrame(timeoutMs: 0);
       } catch (error, stack) {
         stderr.writeln(
           '[server_native] native direct poll failed: $error\n$stack',
@@ -509,7 +519,7 @@ NativeProxyServer _startNativeDirectProxy({
         continue;
       }
       if (frame == null) {
-        await Future<void>.delayed(Duration.zero);
+        await Future<void>.delayed(const Duration(milliseconds: 1));
         continue;
       }
       processRequestFrame(frame.requestId, frame.payload);

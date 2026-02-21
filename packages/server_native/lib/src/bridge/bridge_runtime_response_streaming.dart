@@ -90,6 +90,12 @@ final class BridgeStreamingHttpResponse implements HttpResponse {
   @override
   Future<void> addStream(Stream<List<int>> stream) async {
     _ensureOpen();
+    // Emit response start as soon as body streaming begins so the Rust side
+    // can flush status/headers even if first body chunk arrives later.
+    _enqueueWrite(() async {
+      await _ensureStarted();
+    });
+    await _pendingWrite;
     await for (final chunk in stream) {
       add(chunk);
     }
