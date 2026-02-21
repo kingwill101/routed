@@ -53,8 +53,9 @@ Future<void> main(List<String> args) async {
     'serinus': const _FrameworkConfig(
       name: 'serinus',
       gitUrl: 'https://github.com/francescovallone/serinus.git',
-      branch: 'main',
-      patchFile: 'serinus.patch',
+      branch: 'feat/server_native',
+      patchFile: null,
+      workspaceTestPackages: ['packages/serinus'],
     ),
   };
 
@@ -96,12 +97,18 @@ Future<void> main(List<String> args) async {
     );
 
     stdout.writeln('=== ${framework.name}: patch ===');
-    await _applyPatch(
-      framework: framework,
-      checkoutDir: checkoutDir,
-      patchFile: File(p.join(patchesRoot, framework.patchFile)),
-      serverNativePath: p.normalize(packageRoot),
-    );
+    if (framework.patchFile != null) {
+      await _applyPatch(
+        framework: framework,
+        checkoutDir: checkoutDir,
+        patchFile: File(p.join(patchesRoot, framework.patchFile!)),
+        serverNativePath: p.normalize(packageRoot),
+      );
+    } else {
+      stdout.writeln(
+        '=== ${framework.name}: patch skipped (not configured) ===',
+      );
+    }
     await _writeRootOverride(
       checkoutDir: checkoutDir,
       serverNativePath: p.normalize(packageRoot),
@@ -422,6 +429,7 @@ Future<List<_CommandResult>> _runFrameworkSuite({
         framework: framework.name,
         localPrebuiltPath: localPrebuiltPath,
         stopOnFailure: stopOnFailure,
+        workspaceTestPackages: framework.workspaceTestPackages?.toSet(),
       );
     case 'serinus':
       return _runWorkspaceSuite(
@@ -430,6 +438,7 @@ Future<List<_CommandResult>> _runFrameworkSuite({
         framework: framework.name,
         localPrebuiltPath: localPrebuiltPath,
         stopOnFailure: stopOnFailure,
+        workspaceTestPackages: framework.workspaceTestPackages?.toSet(),
       );
     default:
       throw StateError('Unsupported framework: ${framework.name}');
@@ -499,6 +508,7 @@ Future<List<_CommandResult>> _runWorkspaceSuite(
   required String framework,
   required String? localPrebuiltPath,
   required bool stopOnFailure,
+  Set<String>? workspaceTestPackages,
 }) async {
   final env = _compatEnvironment(
     mode: mode,
@@ -524,6 +534,10 @@ Future<List<_CommandResult>> _runWorkspaceSuite(
 
   final workspacePackages = await _loadWorkspacePackages(checkoutDir);
   for (final package in workspacePackages) {
+    if (workspaceTestPackages != null &&
+        !workspaceTestPackages.contains(package)) {
+      continue;
+    }
     final packageDir = Directory(p.join(checkoutDir.path, package));
     final testDir = Directory(p.join(packageDir.path, 'test'));
     if (!testDir.existsSync()) {
@@ -754,13 +768,15 @@ class _FrameworkConfig {
   final String name;
   final String gitUrl;
   final String branch;
-  final String patchFile;
+  final String? patchFile;
+  final List<String>? workspaceTestPackages;
 
   const _FrameworkConfig({
     required this.name,
     required this.gitUrl,
     required this.branch,
     required this.patchFile,
+    this.workspaceTestPackages,
   });
 }
 

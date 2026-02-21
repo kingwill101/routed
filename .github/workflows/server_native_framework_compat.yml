@@ -28,6 +28,11 @@ jobs:
   compat:
     runs-on: ubuntu-latest
     timeout-minutes: 90
+    strategy:
+      fail-fast: false
+      matrix:
+        framework: [shelf, relic, serinus]
+        mode: [io, native]
 
     steps:
       - uses: actions/checkout@v4
@@ -49,17 +54,55 @@ jobs:
         env:
           FRAMEWORK: ${{ github.event.inputs.framework || 'all' }}
           MODE: ${{ github.event.inputs.mode || 'both' }}
+          MATRIX_FRAMEWORK: ${{ matrix.framework }}
+          MATRIX_MODE: ${{ matrix.mode }}
         run: |
+          should_run=true
+
+          if [[ "$FRAMEWORK" != "all" ]]; then
+            should_run=false
+            IFS=',' read -ra framework_filters <<< "$FRAMEWORK"
+            for filter in "${framework_filters[@]}"; do
+              filter="${filter//[[:space:]]/}"
+              if [[ "$filter" == "$MATRIX_FRAMEWORK" ]]; then
+                should_run=true
+                break
+              fi
+            done
+          fi
+
+          if [[ "$MODE" != "both" ]]; then
+            mode_match=false
+            IFS=',' read -ra mode_filters <<< "$MODE"
+            for filter in "${mode_filters[@]}"; do
+              filter="${filter//[[:space:]]/}"
+              if [[ "$filter" == "$MATRIX_MODE" ]]; then
+                mode_match=true
+                break
+              fi
+            done
+            if [[ "$mode_match" != "true" ]]; then
+              should_run=false
+            fi
+          fi
+
+          if [[ "$should_run" != "true" ]]; then
+            echo "Skipping framework=$MATRIX_FRAMEWORK mode=$MATRIX_MODE due to filters"
+            exit 0
+          fi
+
+          report_path=".dart_tool/server_native/framework_compat/report_${MATRIX_FRAMEWORK}_${MATRIX_MODE}.json"
+
           dart run tool/framework_compat.dart \
-            --framework="$FRAMEWORK" \
-            --mode="$MODE" \
+            --framework="$MATRIX_FRAMEWORK" \
+            --mode="$MATRIX_MODE" \
             --fresh \
-            --json-output=.dart_tool/server_native/framework_compat/report.json
+            --json-output="$report_path"
 
       - name: Upload compatibility report
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: server-native-framework-compat-report
-          path: packages/server_native/.dart_tool/server_native/framework_compat/report.json
+          name: server-native-framework-compat-report-${{ matrix.framework }}-${{ matrix.mode }}
+          path: packages/server_native/.dart_tool/server_native/framework_compat/report_${{ matrix.framework }}_${{ matrix.mode }}.json
           if-no-files-found: warn

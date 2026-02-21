@@ -39,9 +39,9 @@ jobs:
         working-directory: packages/server_native
         run: dart analyze
 
-      - name: Run Rust unit tests
+      - name: Run Rust tests (lib + integration)
         working-directory: packages/server_native/native
-        run: cargo test --lib
+        run: cargo test --all-targets
 
       - name: Run server_native Dart tests
         working-directory: packages/server_native
