@@ -26,7 +26,7 @@ use std::sync::Arc;
 use std::thread;
 use std::time::Duration;
 
-use axum::body::{Body, BodyDataStream, Bytes, HttpBody};
+use axum::body::{Body, BodyDataStream, Bytes};
 use axum::extract::State;
 use axum::http::{HeaderMap, Request, Response, StatusCode, Version};
 use axum::routing::any;
@@ -110,6 +110,12 @@ const MESSAGE_CHANNEL_CLOSED: &str = "channel closed";
 const LOG_WEBSOCKET_TUNNEL_ERROR_PREFIX: &str = "[server_native] websocket tunnel error: ";
 const LOG_DIRECT_WEBSOCKET_TUNNEL_ERROR_PREFIX: &str =
     "[server_native] direct websocket tunnel error: ";
+const BAD_REQUEST_RESPONSE_BYTES: &[u8] = b"HTTP/1.1 400 Bad Request\r\n\
+content-type: text/plain; charset=utf-8\r\n\
+content-length: 11\r\n\
+connection: close\r\n\
+\r\n\
+Bad Request";
 
 /// Max time to wait for direct-callback response frames from Dart.
 const DIRECT_REQUEST_TIMEOUT: Duration = Duration::from_secs(30);
@@ -908,6 +914,10 @@ async fn run_plain_proxy(
                 let app = app.clone();
                 let enable_http2 = enable_http2;
                 connections.spawn(async move {
+                    let mut stream = stream;
+                    if reject_invalid_http1_request_target(&mut stream).await? {
+                        return Ok(());
+                    }
                     let service = TowerToHyperService::new(app);
                     if enable_http2 {
                         let builder = AutoBuilder::new(TokioExecutor::new());
@@ -916,7 +926,8 @@ async fn run_plain_proxy(
                             .await
                             .map_err(|error| format!("plain connection failed: {error}"))
                     } else {
-                        let builder = http1::Builder::new();
+                        let mut builder = http1::Builder::new();
+                        builder.half_close(true);
                         builder
                             .serve_connection(TokioIo::new(stream), service)
                             .with_upgrades()
@@ -947,6 +958,121 @@ async fn run_plain_proxy(
         }
     }
     Ok(())
+}
+
+/// Rejects malformed HTTP/1.1 request targets that contain a URI fragment.
+///
+/// Dart's `HttpServer` returns `400 Bad Request` for request-lines like:
+/// `GET /#/ HTTP/1.1`.
+///
+/// Hyper normalizes such targets to `/` before handlers see them, so we peek
+/// the first line on plaintext connections and emulate Dart's behavior.
+async fn reject_invalid_http1_request_target(stream: &mut TcpStream) -> Result<bool, String> {
+    let mut peek_buffer = [0_u8; 4096];
+    let mut attempts = 0_u16;
+    let mut invalid_target = false;
+    loop {
+        let read = stream
+            .peek(&mut peek_buffer)
+            .await
+            .map_err(|error| format!("peek request line failed: {error}"))?;
+        if read == 0 {
+            return Ok(false);
+        }
+        let bytes = &peek_buffer[..read];
+        if let Some(line_end) = find_crlf(bytes) {
+            let request_line = &bytes[..line_end];
+            if !invalid_target {
+                invalid_target = request_target_contains_fragment(request_line);
+            }
+            if invalid_target {
+                // Delay the 400 until full request headers arrive so clients
+                // writing header lines sequentially do not hit Broken Pipe.
+                if find_headers_terminator(bytes).is_some() || attempts >= 200 {
+                    if let Err(error) = stream.write_all(BAD_REQUEST_RESPONSE_BYTES).await {
+                        return Err(format!("write bad request response failed: {error}"));
+                    }
+                    let _ = stream.flush().await;
+                    // Drain any in-flight client writes before dropping the
+                    // socket so clients don't observe an immediate RST while
+                    // writing request headers.
+                    let mut drain_buffer = [0_u8; 1024];
+                    loop {
+                        match time::timeout(
+                            Duration::from_millis(25),
+                            stream.read(&mut drain_buffer),
+                        )
+                        .await
+                        {
+                            Ok(Ok(0)) => break,
+                            Ok(Ok(_)) => continue,
+                            Ok(Err(_)) | Err(_) => break,
+                        }
+                    }
+                    return Ok(true);
+                }
+            } else {
+                return Ok(false);
+            }
+        }
+        attempts = attempts.saturating_add(1);
+        if read >= peek_buffer.len() || (!invalid_target && attempts >= 8) {
+            return Ok(false);
+        }
+        time::sleep(Duration::from_millis(1)).await;
+    }
+}
+
+/// Returns the index of the first CRLF line terminator, if present.
+fn find_crlf(bytes: &[u8]) -> Option<usize> {
+    if bytes.len() < 2 {
+        return None;
+    }
+    for index in 0..(bytes.len() - 1) {
+        if bytes[index] == b'\r' && bytes[index + 1] == b'\n' {
+            return Some(index);
+        }
+    }
+    None
+}
+
+/// Returns the index of the first HTTP header terminator (`\r\n\r\n`).
+fn find_headers_terminator(bytes: &[u8]) -> Option<usize> {
+    if bytes.len() < 4 {
+        return None;
+    }
+    for index in 0..(bytes.len() - 3) {
+        if bytes[index] == b'\r'
+            && bytes[index + 1] == b'\n'
+            && bytes[index + 2] == b'\r'
+            && bytes[index + 3] == b'\n'
+        {
+            return Some(index);
+        }
+    }
+    None
+}
+
+/// Returns `true` when the HTTP/1 request-line target contains a `#` fragment.
+fn request_target_contains_fragment(request_line: &[u8]) -> bool {
+    let Some(first_space) = request_line.iter().position(|byte| *byte == b' ') else {
+        return false;
+    };
+    let after_method = first_space + 1;
+    if after_method >= request_line.len() {
+        return false;
+    }
+    let Some(relative_second_space) = request_line[after_method..]
+        .iter()
+        .position(|byte| *byte == b' ')
+    else {
+        return false;
+    };
+    let second_space = after_method + relative_second_space;
+    if second_space <= after_method {
+        return false;
+    }
+    request_line[after_method..second_space].contains(&b'#')
 }
 
 /// Runs TLS serving loop and optionally HTTP/3 endpoint.
@@ -1030,7 +1156,8 @@ async fn run_tls_proxy(
                                 .await
                                 .map_err(|error| format!("tls connection failed: {error}"))
                         } else {
-                            let builder = http1::Builder::new();
+                            let mut builder = http1::Builder::new();
+                            builder.half_close(true);
                             builder
                                 .serve_connection(TokioIo::new(tls_stream), service)
                                 .with_upgrades()
@@ -1078,7 +1205,8 @@ async fn run_tls_proxy(
                                 .await
                                 .map_err(|error| format!("tls connection failed: {error}"))
                         } else {
-                            let builder = http1::Builder::new();
+                            let mut builder = http1::Builder::new();
+                            builder.half_close(true);
                             builder
                                 .serve_connection(TokioIo::new(tls_stream), service)
                                 .with_upgrades()
@@ -1163,7 +1291,7 @@ async fn proxy_request(State(state): State<ProxyState>, request: Request<Body>) 
     };
 
     if let Some(direct_bridge) = state.direct_bridge.as_ref() {
-        let request_body_known_empty = body.size_hint().exact() == Some(0);
+        let request_body_known_empty = false;
         let body_stream = body.into_data_stream();
         return match call_direct_bridge_request(
             direct_bridge,
@@ -1183,7 +1311,7 @@ async fn proxy_request(State(state): State<ProxyState>, request: Request<Body>) 
         };
     }
 
-    let request_body_known_empty = body.size_hint().exact() == Some(0);
+    let request_body_known_empty = false;
     let body_stream = body.into_data_stream();
 
     let mut bridge_result = match call_bridge(
@@ -1233,9 +1361,7 @@ async fn proxy_request(State(state): State<ProxyState>, request: Request<Body>) 
 
     let mut response = Response::new(bridge_result.body);
     *response.status_mut() = status;
-    for (header_name, header_value) in bridge_result.headers {
-        response.headers_mut().append(header_name, header_value);
-    }
+    append_bridge_response_headers(response.headers_mut(), status, bridge_result.headers);
     response
 }
 
@@ -1253,6 +1379,34 @@ fn benchmark_static_response(body: &'static [u8]) -> Response<Body> {
         axum::http::HeaderValue::from_static("application/json"),
     );
     response
+}
+
+/// Appends decoded bridge response headers while filtering hop-by-hop headers
+/// that Hyper manages internally for non-upgrade responses.
+fn append_bridge_response_headers(
+    target: &mut axum::http::HeaderMap,
+    status: StatusCode,
+    headers: Vec<(axum::http::header::HeaderName, axum::http::HeaderValue)>,
+) {
+    for (header_name, header_value) in headers {
+        if should_forward_bridge_response_header(&header_name, status) {
+            target.append(header_name, header_value);
+        }
+    }
+}
+
+/// Returns whether a response header should be forwarded to Hyper.
+fn should_forward_bridge_response_header(
+    header_name: &axum::http::header::HeaderName,
+    status: StatusCode,
+) -> bool {
+    if status == StatusCode::SWITCHING_PROTOCOLS {
+        return true;
+    }
+    match header_name.as_str() {
+        "transfer-encoding" | "connection" | "keep-alive" | "upgrade" | "proxy-connection" => false,
+        _ => true,
+    }
 }
 
 /// Forwards a request through the direct callback bridge.
@@ -1326,9 +1480,7 @@ async fn call_direct_bridge_request(
         }
         let mut response = Response::new(Body::from(decoded.body_bytes));
         *response.status_mut() = status;
-        for (header_name, header_value) in decoded.headers {
-            response.headers_mut().append(header_name, header_value);
-        }
+        append_bridge_response_headers(response.headers_mut(), status, decoded.headers);
         return Ok(response);
     }
 
@@ -1359,9 +1511,7 @@ async fn call_direct_bridge_request(
         });
         let mut response = Response::new(Body::empty());
         *response.status_mut() = status;
-        for (header_name, header_value) in headers {
-            response.headers_mut().append(header_name, header_value);
-        }
+        append_bridge_response_headers(response.headers_mut(), status, headers);
         return Ok(response);
     }
 
@@ -1373,9 +1523,7 @@ async fn call_direct_bridge_request(
 
     let mut response = Response::new(Body::from_stream(ReceiverStream::new(rx)));
     *response.status_mut() = status;
-    for (header_name, header_value) in headers {
-        response.headers_mut().append(header_name, header_value);
-    }
+    append_bridge_response_headers(response.headers_mut(), status, headers);
     Ok(response)
 }
 
