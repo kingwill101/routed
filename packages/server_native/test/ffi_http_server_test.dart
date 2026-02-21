@@ -40,6 +40,28 @@ Future<void> _waitFor(
   throw StateError('Timed out waiting for predicate');
 }
 
+Future<Uint8List> _readExactFromSocket(
+  Socket socket,
+  int byteCount, {
+  Duration timeout = const Duration(seconds: 3),
+}) async {
+  final iterator = StreamIterator<Uint8List>(socket);
+  final builder = BytesBuilder(copy: false);
+  try {
+    while (builder.length < byteCount) {
+      final hasNext = await iterator.moveNext().timeout(timeout);
+      if (!hasNext) {
+        throw StateError('Socket closed before reading $byteCount bytes');
+      }
+      builder.add(iterator.current);
+    }
+  } finally {
+    await iterator.cancel();
+  }
+  final bytes = builder.takeBytes();
+  return Uint8List.sublistView(bytes, 0, byteCount);
+}
+
 String? _sessionCookieFrom(HttpClientResponse response) {
   final setCookieValues = response.headers[HttpHeaders.setCookieHeader];
   if (setCookieValues == null) {
@@ -166,6 +188,103 @@ void main() {
     },
   );
 
+  test(
+    'NativeHttpServer nativeCallback replays unread request body for detachSocket(writeHeaders: false)',
+    () async {
+      final server = await NativeHttpServer.bind(
+        InternetAddress.loopbackIPv4,
+        0,
+        http3: false,
+        nativeCallback: true,
+      );
+      addTearDown(() => server.close(force: true));
+
+      // ignore: discarded_futures
+      server.listen((request) async {
+        if (request.uri.path != '/hijack') {
+          request.response.statusCode = HttpStatus.notFound;
+          await request.response.close();
+          return;
+        }
+        final socket = await request.response.detachSocket(writeHeaders: false);
+        final bodyBytes = await _readExactFromSocket(socket, 5);
+        expect(utf8.decode(bodyBytes), 'Hello');
+        socket.add(
+          ascii.encode(
+            'HTTP/1.1 404 Not Found\r\n'
+            'Content-Type: text/plain\r\n'
+            'Content-Length: 13\r\n'
+            '\r\n'
+            'Hello, world!',
+          ),
+        );
+        await socket.flush();
+        await socket.close();
+      });
+
+      final client = HttpClient();
+      addTearDown(() => client.close(force: true));
+      final req = await client.postUrl(
+        Uri.parse('http://127.0.0.1:${server.port}/hijack'),
+      );
+      req.add(utf8.encode('Hello'));
+      final res = await req.close();
+      final body = await utf8.decodeStream(res);
+
+      expect(res.statusCode, HttpStatus.notFound);
+      expect(body, 'Hello, world!');
+    },
+  );
+
+  test(
+    'NativeHttpServer nativeCallback supports non-101 detachSocket(writeHeaders: false) streaming',
+    () async {
+      final server = await NativeHttpServer.bind(
+        InternetAddress.loopbackIPv4,
+        0,
+        http3: false,
+        nativeCallback: true,
+      );
+      addTearDown(() => server.close(force: true));
+
+      // ignore: discarded_futures
+      server.listen((request) async {
+        if (request.uri.path != '/detached-stream') {
+          request.response.statusCode = HttpStatus.notFound;
+          await request.response.close();
+          return;
+        }
+        final socket = await request.response.detachSocket(writeHeaders: false);
+        socket.add(
+          ascii.encode(
+            'HTTP/1.1 201 Created\r\n'
+            'Content-Type: text/plain\r\n'
+            'X-Detached: yes\r\n'
+            '\r\n',
+          ),
+        );
+        await socket.flush();
+        socket.add(utf8.encode('alpha-'));
+        await socket.flush();
+        socket.add(utf8.encode('beta'));
+        await socket.flush();
+        await socket.close();
+      });
+
+      final client = HttpClient();
+      addTearDown(() => client.close(force: true));
+      final req = await client.getUrl(
+        Uri.parse('http://127.0.0.1:${server.port}/detached-stream'),
+      );
+      final res = await req.close();
+      final body = await utf8.decodeStream(res);
+
+      expect(res.statusCode, HttpStatus.created);
+      expect(res.headers.value('x-detached'), 'yes');
+      expect(body, 'alpha-beta');
+    },
+  );
+
   test('NativeHttpServer.bind handles localhost loopback semantics', () async {
     final server = await NativeHttpServer.bind('localhost', 0, http3: false);
     addTearDown(() => server.close(force: true));
@@ -199,6 +318,48 @@ void main() {
     }
     expect(v4Supported || v6Supported, isTrue);
   });
+
+  test(
+    'NativeHttpServer returns 400 for malformed request target /#/ and does not invoke handler',
+    () async {
+      final server = await NativeHttpServer.bind(
+        InternetAddress.loopbackIPv4,
+        0,
+        http3: false,
+        nativeCallback: true,
+      );
+      addTearDown(() => server.close(force: true));
+
+      var handlerInvoked = false;
+      // ignore: discarded_futures
+      server.listen((request) async {
+        handlerInvoked = true;
+        request.response.statusCode = HttpStatus.ok;
+        request.response.write('unexpected');
+        await request.response.close();
+      });
+
+      final socket = await Socket.connect('127.0.0.1', server.port);
+      addTearDown(() async {
+        try {
+          await socket.close();
+        } catch (_) {}
+      });
+      socket.add(
+        ascii.encode(
+          'GET /#/ HTTP/1.1\r\n'
+          'Host: 127.0.0.1:${server.port}\r\n'
+          'Connection: close\r\n'
+          '\r\n',
+        ),
+      );
+      await socket.flush();
+      final responseText = await utf8.decoder.bind(socket).join();
+
+      expect(responseText, contains('HTTP/1.1 400'));
+      expect(handlerInvoked, isFalse);
+    },
+  );
 
   test('NativeHttpServer.connectionsInfo tracks active requests', () async {
     final server = await NativeHttpServer.bind(
