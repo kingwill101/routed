@@ -45,6 +45,10 @@ jobs:
       - name: Set up Rust
         uses: dtolnay/rust-toolchain@stable
 
+      - name: Build server_native native library (debug)
+        working-directory: packages/server_native/native
+        run: cargo build
+
       - name: Get server_native dependencies
         working-directory: packages/server_native
         run: dart pub get
@@ -104,5 +108,5 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: server-native-framework-compat-report-${{ matrix.framework }}-${{ matrix.mode }}
-          path: packages/server_native/.dart_tool/server_native/framework_compat/report_${{ matrix.framework }}_${{ matrix.mode }}.json
+          path: .dart_tool/server_native/framework_compat/report_${{ matrix.framework }}_${{ matrix.mode }}.json
           if-no-files-found: warn
