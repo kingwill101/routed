@@ -52,8 +52,8 @@ Future<void> main(List<String> args) async {
     ),
     'serinus': const _FrameworkConfig(
       name: 'serinus',
-      gitUrl: 'https://github.com/kingwill101/serinus.git',
-      branch: 'feat/server_native',
+      gitUrl: 'https://github.com/francescovallone/serinus.git',
+      branch: 'main',
       patchFile: 'serinus.patch',
     ),
   };

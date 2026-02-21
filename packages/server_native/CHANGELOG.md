@@ -2,6 +2,18 @@
 
 All notable changes to `server_native` will be documented in this file.
 
+## Unreleased
+
+- Fixed native callback websocket tunnel stability by switching direct frame polling to a non-blocking fair scheduling loop.
+- Added and expanded framework compatibility tooling (`tool/framework_compat.dart`) and deterministic patch sets for `shelf`, `relic`, and `serinus`.
+- Added CI workflow for framework compatibility coverage (`.github/workflows/server_native_framework_compat.yml`).
+- Added `relic` A/B parity regression coverage for transfer-encoding handling, websocket ping interval behavior, graceful close, malformed host/url handling, and `connectionsInfo`.
+- Added native transfer-encoding regression tests to lock behavior across lenient `GET`/`HEAD` and chunked edge-cases.
+- Improved `HttpRequest` URI reconstruction and malformed-target handling parity with `dart:io`.
+- Improved bridge-mode `HttpRequest`/`HttpResponse` compatibility across default headers, streaming start timing, and detach/hijack flows.
+- Stabilized native callback detach/hijack handling and direct stream lifecycle cleanup under shutdown and tunnel-close races.
+- Updated compatibility harness to target upstream `serinus` `main` branch and refreshed the `serinus` compat patch accordingly.
+
 ## 0.1.2
 
 - Split large Dart runtime files into focused modules for server boot, proxy runtime, direct path, and bridge codec/request/response layers.

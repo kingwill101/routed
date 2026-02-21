@@ -1,8 +1,15 @@
 diff --git a/packages/serinus/lib/src/adapters/serinus_http_server.dart b/packages/serinus/lib/src/adapters/serinus_http_server.dart
-index 9bb050c..1bc0f9e 100644
 --- a/packages/serinus/lib/src/adapters/serinus_http_server.dart
 +++ b/packages/serinus/lib/src/adapters/serinus_http_server.dart
-@@ -16,6 +16,10 @@ import '../utils/wrapped_response.dart';
+@@ -3,6 +3,7 @@ import 'dart:io' as io;
+ import 'dart:typed_data';
+ 
+ import 'package:http_parser/http_parser.dart';
++import 'package:server_native/server_native.dart';
+ 
+ import '../contexts/contexts.dart';
+ import '../core/core.dart';
+@@ -16,6 +17,10 @@ import '../utils/wrapped_response.dart';
  import 'http_adapter.dart';
  import 'server_adapter.dart';
  
@@ -13,11 +20,11 @@ index 9bb050c..1bc0f9e 100644
  /// The [SerinusHttpAdapter] class is used to create an HTTP server adapter.
  /// It extends the [HttpAdapter] class.
  class SerinusHttpAdapter
-@@ -56,7 +60,14 @@ class SerinusHttpAdapter
+@@ -53,7 +58,14 @@ class SerinusHttpAdapter
    @override
    Future<void> init([ApplicationConfig? config]) async {
      if (securityContext == null) {
--      server = await NativeHttpServer.bind(host, port, shared: true);
+-      server = await io.HttpServer.bind(host, port, shared: true);
 +      server = await (_useServerNative
 +          ? NativeHttpServer.bind(
 +              host,
@@ -29,3 +36,14 @@ index 9bb050c..1bc0f9e 100644
      } else {
        server = await io.HttpServer.bindSecure(
          host,
+diff --git a/packages/serinus/pubspec.yaml b/packages/serinus/pubspec.yaml
+--- a/packages/serinus/pubspec.yaml
++++ b/packages/serinus/pubspec.yaml
+@@ -34,6 +34,7 @@ dependencies:
+   acanthis: ^1.5.0
+   secure_session: ^1.0.5
+   crypto: ^3.0.7
++  server_native: ^0.1.2
+ 
+ dev_dependencies:
+   mocktail: ^1.0.4
