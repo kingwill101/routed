@@ -405,69 +405,6 @@ NativeProxyServer _startNativeDirectProxy({
     unawaited(() async {
       beginTrackedRequest();
       try {
-        BridgeRequestFrame? singleFrame;
-        try {
-          singleFrame = BridgeRequestFrame.decodePayload(requestPayload);
-        } catch (_) {}
-
-        if (singleFrame != null) {
-          final bodyStream = singleFrame.bodyBytes.isEmpty
-              ? const Stream<Uint8List>.empty()
-              : Stream<Uint8List>.value(singleFrame.bodyBytes);
-          BridgeDetachedSocket? detachedSocket;
-          var detachedUsesTunnel = false;
-          await handleStream(
-            frame: singleFrame.copyWith(bodyBytes: Uint8List(0)),
-            bodyStream: bodyStream,
-            onDetachedSocket: (socket) {
-              detachedSocket = socket;
-            },
-            onResponseStart: (frame) async {
-              detachedUsesTunnel =
-                  frame.status == HttpStatus.switchingProtocols;
-              detachedSocket = frame.detachedSocket;
-              pushResponsePayload(frame.encodeStartPayload());
-            },
-            onResponseChunk: (chunkBytes) async {
-              if (chunkBytes.isEmpty) {
-                return;
-              }
-              pushResponsePayload(
-                BridgeResponseFrame.encodeChunkPayload(chunkBytes),
-              );
-            },
-          );
-          if (detachedSocket != null) {
-            try {
-              if (detachedUsesTunnel) {
-                pushResponsePayload(BridgeResponseFrame.encodeEndPayload());
-              }
-              await forwardDetachedOutput(
-                detachedSocket!,
-                emitChunk: (chunk) {
-                  pushResponsePayload(
-                    detachedUsesTunnel
-                        ? BridgeTunnelFrame.encodeChunkPayload(chunk)
-                        : BridgeResponseFrame.encodeChunkPayload(chunk),
-                  );
-                },
-              );
-              if (detachedUsesTunnel) {
-                pushResponsePayload(BridgeTunnelFrame.encodeClosePayload());
-              } else {
-                pushResponsePayload(BridgeResponseFrame.encodeEndPayload());
-              }
-            } catch (_) {
-              // Peer closure and write errors both end the tunnel.
-            } finally {
-              await detachedSocket!.close();
-            }
-          } else {
-            pushResponsePayload(BridgeResponseFrame.encodeEndPayload());
-          }
-          return;
-        }
-
         final result = await directPayloadHandler(requestPayload);
         final responsePayload =
             result.encodedPayload ?? result.frame.encodePayload();

@@ -41,6 +41,18 @@ bool _isAddressInUseSocketException(Object error) {
   return error.osError?.errorCode == _addressInUseErrorCode();
 }
 
+/// Returns whether [error] indicates a transient address-in-use bind failure.
+///
+/// Native proxy startup wraps socket bind errors in higher-level exceptions, so
+/// this checks both raw [SocketException] values and wrapped error strings.
+bool _isAddressInUseBindFailure(Object error) {
+  if (_isAddressInUseSocketException(error)) {
+    return true;
+  }
+  final text = error.toString().toLowerCase();
+  return text.contains('address already in use') || text.contains('eaddrinuse');
+}
+
 /// Resolves the wildcard host for this machine (`::` when IPv6 is available).
 Future<String> _anyHost() async {
   if (await _supportsIPv6) {

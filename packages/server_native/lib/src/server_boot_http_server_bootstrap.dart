@@ -92,8 +92,8 @@ Future<NativeHttpServer> _nativeHttpServerLoopback(
   required bool nativeCallback,
   Future<void>? shutdownSignal,
 }) async {
-  return _startNativeHttpServer(
-    binds: await _loopbackBinds(port),
+  return _startNativeLoopbackHttpServer(
+    port: port,
     secure: false,
     backlog: backlog,
     v6Only: v6Only,
@@ -192,8 +192,8 @@ Future<NativeHttpServer> _nativeHttpServerLoopbackSecure(
   required bool nativeCallback,
   Future<void>? shutdownSignal,
 }) async {
-  return _startNativeHttpServer(
-    binds: await _loopbackBinds(port),
+  return _startNativeLoopbackHttpServer(
+    port: port,
     secure: true,
     certificatePath: certificatePath,
     keyPath: keyPath,
@@ -207,6 +207,66 @@ Future<NativeHttpServer> _nativeHttpServerLoopbackSecure(
     nativeCallback: nativeCallback,
     shutdownSignal: shutdownSignal,
   );
+}
+
+/// Starts loopback listeners with retry behavior for dual-stack ephemeral port
+/// collisions.
+///
+/// On some systems a port selected on IPv4 may race with IPv6 availability even
+/// after pre-reservation. This mirrors `http_multi_server` semantics by
+/// retrying ephemeral loopback startup when a transient address-in-use bind
+/// error is encountered.
+Future<NativeHttpServer> _startNativeLoopbackHttpServer({
+  required int port,
+  required bool secure,
+  String? certificatePath,
+  String? keyPath,
+  String? certificatePassword,
+  required int backlog,
+  required bool v6Only,
+  required bool requestClientCertificate,
+  required bool shared,
+  required bool http2,
+  required bool http3,
+  required bool nativeCallback,
+  Future<void>? shutdownSignal,
+}) async {
+  final supportsV4 = await _supportsIPv4;
+  final supportsV6 = await _supportsIPv6;
+  final retryEligible = port == 0 && supportsV4 && supportsV6;
+  const maxRetries = 5;
+  var attempt = 0;
+
+  while (true) {
+    try {
+      return await _startNativeHttpServer(
+        binds: await _loopbackBinds(port),
+        secure: secure,
+        certificatePath: certificatePath,
+        keyPath: keyPath,
+        certificatePassword: certificatePassword,
+        backlog: backlog,
+        v6Only: v6Only,
+        requestClientCertificate: requestClientCertificate,
+        shared: shared,
+        http2: http2,
+        http3: http3,
+        nativeCallback: nativeCallback,
+        shutdownSignal: shutdownSignal,
+      );
+    } catch (error) {
+      if (!retryEligible ||
+          attempt >= maxRetries ||
+          !_isAddressInUseBindFailure(error)) {
+        rethrow;
+      }
+      attempt++;
+      _nativeVerboseLog(
+        '[server_native] loopback dual-stack bind collision; retrying '
+        'ephemeral port startup (attempt $attempt/$maxRetries).',
+      );
+    }
+  }
 }
 
 /// Starts the underlying transport listeners and wires them into one server.
