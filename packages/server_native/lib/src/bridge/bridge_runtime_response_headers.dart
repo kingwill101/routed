@@ -103,12 +103,16 @@ final class _BridgeHttpHeaders implements HttpHeaders {
 
   @override
   set persistentConnection(bool value) {
+    if (value == _persistentConnection) {
+      return;
+    }
     _persistentConnection = value;
     if (value) {
       remove(HttpHeaders.connectionHeader, 'close');
       return;
     }
-    _setSingleValue(HttpHeaders.connectionHeader, 'close');
+    final existing = _originalNames[HttpHeaders.connectionHeader];
+    add(existing ?? HttpHeaders.connectionHeader, 'close');
   }
 
   @override
@@ -427,9 +431,13 @@ final class _BridgeHttpHeaders implements HttpHeaders {
   }
 
   bool _containsTokenIgnoreCase(List<String> values, String token) {
+    final target = _asciiLower(token);
     for (var i = 0; i < values.length; i++) {
-      if (_equalsAsciiIgnoreCase(values[i], token)) {
-        return true;
+      for (final part in values[i].split(',')) {
+        final normalizedPart = _asciiLower(part.trim());
+        if (normalizedPart.isNotEmpty && normalizedPart == target) {
+          return true;
+        }
       }
     }
     return false;

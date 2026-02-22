@@ -21,7 +21,9 @@ final class BridgeStreamingHttpResponse implements HttpResponse {
   bool _closed = false;
   bool _started = false;
   bool _detachedWriteHeaders = true;
-  Encoding _encoding = utf8;
+  Encoding _encoding = latin1;
+  bool _encodingSet = false;
+  int _bytesWritten = 0;
   bool _autoCompressEnabled = false;
   bool _requestAcceptsGzip = false;
   bool _compressBody = false;
@@ -47,7 +49,12 @@ final class BridgeStreamingHttpResponse implements HttpResponse {
   String reasonPhrase = 'OK';
 
   @override
-  bool persistentConnection = true;
+  bool get persistentConnection => headers.persistentConnection;
+
+  @override
+  set persistentConnection(bool value) {
+    headers.persistentConnection = value;
+  }
 
   @override
   Duration? deadline;
@@ -79,6 +86,7 @@ final class BridgeStreamingHttpResponse implements HttpResponse {
     final chunk = data is Uint8List ? data : Uint8List.fromList(data);
     _enqueueWrite(() async {
       await _ensureStarted();
+      _validateContentLengthOnAdd(chunk.length);
       if (_compressBody) {
         (_compressionBuffer ??= BytesBuilder(copy: false)).add(chunk);
         return;
@@ -115,6 +123,7 @@ final class BridgeStreamingHttpResponse implements HttpResponse {
     _closed = true;
     _enqueueWrite(() async {
       await _ensureStarted();
+      _validateContentLengthOnClose();
       if (_compressBody) {
         final buffered = _compressionBuffer?.takeBytes() ?? Uint8List(0);
         if (buffered.isNotEmpty) {
@@ -132,13 +141,28 @@ final class BridgeStreamingHttpResponse implements HttpResponse {
   Future<void> get done => _done.future;
 
   @override
-  Encoding get encoding => _encoding;
+  Encoding get encoding {
+    if (_encodingSet) {
+      return _encoding;
+    }
+    final charset = headers.contentType?.charset ?? 'iso-8859-1';
+    return Encoding.getByName(charset) ?? latin1;
+  }
 
   @override
-  set encoding(Encoding value) => _encoding = value;
+  set encoding(Encoding value) {
+    _encoding = value;
+    _encodingSet = true;
+  }
 
   @override
-  void write(Object? object) => add(encoding.encode(object?.toString() ?? ''));
+  void write(Object? object) {
+    if (!_encodingSet) {
+      _encoding = encoding;
+      _encodingSet = true;
+    }
+    add(_encoding.encode(object?.toString() ?? ''));
+  }
 
   @override
   void writeAll(Iterable<Object?> objects, [String separator = '']) =>
@@ -291,5 +315,35 @@ final class BridgeStreamingHttpResponse implements HttpResponse {
       return false;
     }
     return true;
+  }
+
+  void _validateContentLengthOnAdd(int length) {
+    final declaredContentLength = headers.contentLength;
+    if (declaredContentLength < 0 || headers.chunkedTransferEncoding) {
+      _bytesWritten += length;
+      return;
+    }
+
+    final nextBytesWritten = _bytesWritten + length;
+    if (nextBytesWritten > declaredContentLength) {
+      throw HttpException(
+        'Content size exceeds specified contentLength. '
+        '$nextBytesWritten bytes written while expected $declaredContentLength.',
+      );
+    }
+    _bytesWritten = nextBytesWritten;
+  }
+
+  void _validateContentLengthOnClose() {
+    final declaredContentLength = headers.contentLength;
+    if (declaredContentLength < 0 || headers.chunkedTransferEncoding) {
+      return;
+    }
+    if (_bytesWritten < declaredContentLength) {
+      throw HttpException(
+        'Content size below specified contentLength. '
+        '$_bytesWritten bytes written but expected $declaredContentLength.',
+      );
+    }
   }
 }

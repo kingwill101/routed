@@ -11,12 +11,15 @@ final class BridgeHttpRequest extends Stream<Uint8List> implements HttpRequest {
     BridgeConnectionInfo? connectionInfo,
   }) : method = frame.method,
        protocolVersion = frame.protocol,
+       persistentConnection = _derivePersistentConnection(frame),
        _bodyStream = bodyStream,
        _frame = frame,
        _sessionFactory = sessionFactory,
        _stripTransferEncoding = stripTransferEncoding,
        _connectionInfo =
-           connectionInfo ?? BridgeConnectionInfo.fromRequestFrame(frame);
+           connectionInfo ?? BridgeConnectionInfo.fromRequestFrame(frame) {
+    response.persistentConnection = persistentConnection;
+  }
 
   _BridgeRequestHeaders? _headers;
   final BridgeRequestFrame _frame;
@@ -95,7 +98,7 @@ final class BridgeHttpRequest extends Stream<Uint8List> implements HttpRequest {
   }
 
   @override
-  bool persistentConnection = true;
+  final bool persistentConnection;
 
   @override
   X509Certificate? get certificate => null;
@@ -148,4 +151,39 @@ final class BridgeHttpRequest extends Stream<Uint8List> implements HttpRequest {
   Future<HttpClientResponse> upgrade(Future<void> Function(Socket p1) handler) {
     throw UnsupportedError('upgrade is not supported by bridge requests');
   }
+}
+
+bool _derivePersistentConnection(BridgeRequestFrame frame) {
+  final protocol = frame.protocol.trim().toLowerCase();
+  var defaultPersistentConnection = true;
+  if (protocol == '1.0' || protocol == 'http/1.0') {
+    defaultPersistentConnection = false;
+  }
+
+  var hasClose = false;
+  var hasKeepAlive = false;
+  frame.forEachHeader((name, value) {
+    if (!_equalsAsciiIgnoreCase(name, HttpHeaders.connectionHeader)) {
+      return;
+    }
+    for (final part in value.split(',')) {
+      final token = _asciiLower(part.trim());
+      if (token.isEmpty) {
+        continue;
+      }
+      if (token == 'close') {
+        hasClose = true;
+      } else if (token == 'keep-alive') {
+        hasKeepAlive = true;
+      }
+    }
+  });
+
+  if (hasClose) {
+    return false;
+  }
+  if (hasKeepAlive) {
+    return true;
+  }
+  return defaultPersistentConnection;
 }

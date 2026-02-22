@@ -5,7 +5,8 @@ final class _BridgeRequestHeaders implements HttpHeaders {
   _BridgeRequestHeaders.fromFrame(
     BridgeRequestFrame frame, {
     bool stripTransferEncoding = false,
-  }) {
+    bool defaultPersistentConnection = true,
+  }) : _defaultPersistentConnection = defaultPersistentConnection {
     for (var i = 0; i < frame.headerCount; i++) {
       final name = frame.headerNameAt(i);
       final normalized = _asciiLower(name);
@@ -21,6 +22,7 @@ final class _BridgeRequestHeaders implements HttpHeaders {
 
   final Map<String, List<String>> _headers = <String, List<String>>{};
   final Map<String, String> _originalNames = <String, String>{};
+  final bool _defaultPersistentConnection;
 
   @override
   DateTime? get date => _parseDate(HttpHeaders.dateHeader);
@@ -91,7 +93,7 @@ final class _BridgeRequestHeaders implements HttpHeaders {
   bool get persistentConnection {
     final values = _headers[_asciiLower(HttpHeaders.connectionHeader)];
     if (values == null || values.isEmpty) {
-      return true;
+      return _defaultPersistentConnection;
     }
     if (_containsTokenIgnoreCase(values, 'close')) {
       return false;
@@ -99,7 +101,7 @@ final class _BridgeRequestHeaders implements HttpHeaders {
     if (_containsTokenIgnoreCase(values, 'keep-alive')) {
       return true;
     }
-    return true;
+    return _defaultPersistentConnection;
   }
 
   @override
@@ -193,7 +195,8 @@ final class _BridgeRequestHeaders implements HttpHeaders {
     final target = _asciiLower(token);
     for (final value in values) {
       for (final part in value.split(',')) {
-        if (_asciiLower(part.trim()) == target) {
+        final normalizedPart = _asciiLower(part.trim());
+        if (normalizedPart.isNotEmpty && normalizedPart == target) {
           return true;
         }
       }
@@ -207,8 +210,22 @@ _BridgeRequestHeaders _buildBridgeRequestHeaders(
   BridgeRequestFrame frame, {
   bool stripTransferEncoding = false,
 }) {
+  final protocol = frame.protocol.trim().toLowerCase();
+  final defaultPersistentConnection =
+      protocol.isEmpty ||
+      protocol == '1.1' ||
+      protocol == '2' ||
+      protocol == '2.0' ||
+      protocol == '3' ||
+      protocol == '3.0' ||
+      protocol == 'http/1.1' ||
+      protocol == 'http/2' ||
+      protocol == 'http/2.0' ||
+      protocol == 'http/3' ||
+      protocol == 'http/3.0';
   return _BridgeRequestHeaders.fromFrame(
     frame,
     stripTransferEncoding: stripTransferEncoding,
+    defaultPersistentConnection: defaultPersistentConnection,
   );
 }

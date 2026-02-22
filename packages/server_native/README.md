@@ -31,6 +31,7 @@ bootstrap.
 - [DevTools Profiling Example](#devtools-profiling-example)
 - [Framework Benchmarks](#framework-benchmarks)
 - [Framework Compatibility Suites (Local + CI)](#framework-compatibility-suites-local--ci)
+- [Dart SDK `HttpServer` Compatibility Tests](#dart-sdk-httpserver-compatibility-tests)
 - [Native Bindings](#native-bindings)
 - [Prebuilt Native Artifacts](#prebuilt-native-artifacts)
 - [Troubleshooting](#troubleshooting)
@@ -440,6 +441,31 @@ CI workflow:
 - `.github/workflows/server_native_framework_compat.yml`
 
 The workflow runs the same harness command and uploads a JSON result artifact.
+
+## Dart SDK `HttpServer` Compatibility Tests
+
+`server_native` includes a Dart SDK-derived compatibility suite in:
+
+- `test/sdk_http_server_compat_test.dart`
+
+Run it directly:
+
+```bash
+dart test test/sdk_http_server_compat_test.dart
+```
+
+The suite is ported from SDK standalone IO `HttpServer` tests and currently
+contains:
+
+- default response-header behavior
+- content-type charset encoding behavior for `response.write`
+- connection-header/persistent-connection behavior
+- content-length mismatch error behavior (`response.done`)
+- shared bind behavior (`shared: true`)
+
+Some native parity cases are explicitly `skip`ped with a reason string until
+the corresponding behavior matches `dart:io`. Those skip reasons serve as an
+up-to-date checklist for remaining `HttpServer` parity work.
 
 ## Native Bindings
 
