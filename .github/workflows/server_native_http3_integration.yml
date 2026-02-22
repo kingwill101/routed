@@ -19,6 +19,10 @@ jobs:
   http3-integration:
     runs-on: ubuntu-latest
     timeout-minutes: 25
+    env:
+      STATIC_CURL_VERSION: 8.18.0-ech
+      STATIC_CURL_ARCHIVE: curl-linux-x86_64-glibc-8.18.0-ech.tar.xz
+      STATIC_CURL_SHA256: 51fbd60752b65b8a2d5a56cb4aad05a4d5f22d1864f3f0066769e54ba9e34d9a
 
     steps:
       - uses: actions/checkout@v4
@@ -31,35 +35,34 @@ jobs:
       - name: Set up Rust
         uses: dtolnay/rust-toolchain@stable
 
-      - name: Check curl HTTP/3 support
-        id: curl-h3
+      - name: Install static curl with HTTP/3 support
         run: |
-          curl --version
-          if curl --version | grep -qi "http3"; then
-            echo "has_http3=true" >> "$GITHUB_OUTPUT"
-          else
-            echo "has_http3=false" >> "$GITHUB_OUTPUT"
-            echo "curl in this runner does not advertise HTTP/3 support; HTTP/3 steps will be skipped"
-          fi
+          set -euo pipefail
+          archive="$STATIC_CURL_ARCHIVE"
+          download_url="https://github.com/stunnel/static-curl/releases/download/$STATIC_CURL_VERSION/$archive"
+          archive_path="$RUNNER_TEMP/$archive"
+          curl -fL --retry 5 --retry-delay 2 --retry-connrefused \
+            -o "$archive_path" \
+            "$download_url"
+          echo "$STATIC_CURL_SHA256  $archive_path" | sha256sum -c -
+          install_dir="$RUNNER_TEMP/static-curl-http3"
+          mkdir -p "$install_dir"
+          tar -xJf "$archive_path" -C "$install_dir"
+          chmod +x "$install_dir/curl"
+          "$install_dir/curl" --version
+          "$install_dir/curl" --version | grep -qi "http3"
+          echo "$install_dir" >> "$GITHUB_PATH"
 
       - name: Get dependencies
-        if: steps.curl-h3.outputs.has_http3 == 'true'
         run: dart pub get
 
       - name: Run native QUIC smoke tests
-        if: steps.curl-h3.outputs.has_http3 == 'true'
         run: |
           cargo test --manifest-path packages/server_native/native/Cargo.toml \
             --test h3_endpoint_smoke
 
       - name: Run server_native HTTP/3 integration test
-        if: steps.curl-h3.outputs.has_http3 == 'true'
         working-directory: packages/server_native
         run: |
           dart test test/serve_ffi_test.dart \
             --plain-name "serveSecureNative serves HTTP/3 requests when enabled"
-
-      - name: HTTP/3 Integration Skipped
-        if: steps.curl-h3.outputs.has_http3 != 'true'
-        run: |
-          echo "Skipped: runner curl does not support HTTP/3."
