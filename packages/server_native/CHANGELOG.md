@@ -4,7 +4,9 @@ All notable changes to `server_native` will be documented in this file.
 
 ## Unreleased
 
-- No changes yet.
+- Fixed native-callback direct frame handling in `server_boot_proxy_direct.dart` to avoid routing single-frame direct requests through the stream path, improving shelf compatibility stability under repeated request/response cycles.
+- Added loopback bind retry handling for transient dual-stack ephemeral `EADDRINUSE` collisions, including wrapped native bind error detection.
+- Updated HTTP/3 integration CI to install a pinned static curl build with guaranteed HTTP/3 support and checksum verification, so HTTP/3 integration tests run deterministically instead of being skipped based on runner curl capabilities.
 
 ## 0.1.3
 
