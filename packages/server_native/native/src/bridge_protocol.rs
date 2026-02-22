@@ -66,6 +66,20 @@ fn encode_bridge_request_headers(
         let Ok(value) = value.to_str() else {
             continue;
         };
+        if name.as_str() == "connection" {
+            for token in value.split(',') {
+                let token = token.trim();
+                if token.is_empty() {
+                    continue;
+                }
+                count = count
+                    .checked_add(1)
+                    .ok_or_else(|| "bridge request has too many headers".to_string())?;
+                write_bridge_header_name(writer, name.as_str())?;
+                writer.put_string(token)?;
+            }
+            continue;
+        }
         count = count
             .checked_add(1)
             .ok_or_else(|| "bridge request has too many headers".to_string())?;

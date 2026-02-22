@@ -1282,6 +1282,14 @@ fn request_should_rewrite_transfer_encoding(
     false
 }
 
+/// Returns whether request connection headers should be rewritten before Hyper
+/// parsing.
+///
+/// Hyper's HTTP/1 state machine rewrites/normalizes `Connection` semantics in
+/// ways that diverge from dart:io behavior (especially when `close` is present).
+/// We therefore rewrite `Connection` to an internal header for non-upgrade
+/// requests, restore it post-parse, and keep upgrade requests untouched so
+/// websocket upgrade flow remains native to Hyper.
 /// Rewrites transfer-encoding headers to an internal header name.
 #[cfg(test)]
 fn rewrite_transfer_encoding_headers(request_head: &[u8]) -> Vec<u8> {
@@ -1408,19 +1416,17 @@ async fn maybe_prepare_http1_prefixed_stream(
     let header_len = headers_end + 4;
     if prefix.len() == header_len {
         let request_head = &prefix[..header_len];
-        let probe_for_immediate_chunk_body = contains_ascii_case_insensitive(
-            request_head,
-            b"transfer-encoding:",
-        ) && request_method_is_get_or_head(request_head)
-            && !request_has_content_length_header(request_head);
+        let probe_for_immediate_chunk_body =
+            contains_ascii_case_insensitive(request_head, b"transfer-encoding:")
+                && request_method_is_get_or_head(request_head)
+                && !request_has_content_length_header(request_head);
         if probe_for_immediate_chunk_body {
             // Some clients send empty chunk framing (`0\r\n\r\n`) for
             // GET/HEAD + chunked. Probe briefly so we do not rewrite TE in that
             // case and leave framing bytes as a phantom next request.
             let mut probe_timeouts = 0_u8;
             while prefix.len() == header_len && probe_timeouts < 6 {
-                match time::timeout(Duration::from_millis(5), stream.read(&mut read_buffer)).await
-                {
+                match time::timeout(Duration::from_millis(5), stream.read(&mut read_buffer)).await {
                     Ok(Ok(0)) => break,
                     Ok(Ok(read)) => {
                         prefix.extend_from_slice(&read_buffer[..read]);
@@ -1443,10 +1449,9 @@ async fn maybe_prepare_http1_prefixed_stream(
             return Ok(None);
         }
     }
-    let rewrite_transfer_encoding = contains_ascii_case_insensitive(
-        request_head,
-        b"transfer-encoding:",
-    ) && request_should_rewrite_transfer_encoding(request_head, header_len < prefix.len());
+    let rewrite_transfer_encoding =
+        contains_ascii_case_insensitive(request_head, b"transfer-encoding:")
+            && request_should_rewrite_transfer_encoding(request_head, header_len < prefix.len());
     let rewrite_invalid_value_bytes =
         request_head_contains_invalid_header_value_bytes(request_head);
     if !rewrite_transfer_encoding && !rewrite_invalid_value_bytes {
@@ -1671,13 +1676,14 @@ async fn proxy_request(State(state): State<ProxyState>, request: Request<Body>) 
         .unwrap_or_default();
     let scheme = parts.uri.scheme_str().unwrap_or("http");
 
+    let request_protocol = http_version_to_protocol(parts.version);
     let bridge_request = BridgeRequestRef {
         method: parts.method.as_str(),
         scheme,
         authority,
         path,
         query,
-        protocol: http_version_to_protocol(parts.version),
+        protocol: request_protocol,
         headers: &parts.headers,
     };
 
@@ -1752,7 +1758,12 @@ async fn proxy_request(State(state): State<ProxyState>, request: Request<Body>) 
 
     let mut response = Response::new(bridge_result.body);
     *response.status_mut() = status;
-    append_bridge_response_headers(response.headers_mut(), status, bridge_result.headers);
+    append_bridge_response_headers(
+        response.headers_mut(),
+        status,
+        request_protocol,
+        bridge_result.headers,
+    );
     response
 }
 
@@ -1813,12 +1824,39 @@ fn benchmark_static_response(body: &'static [u8]) -> Response<Body> {
 fn append_bridge_response_headers(
     target: &mut axum::http::HeaderMap,
     status: StatusCode,
+    request_protocol: &str,
     headers: Vec<(axum::http::header::HeaderName, axum::http::HeaderValue)>,
 ) {
     for (header_name, header_value) in headers {
-        if should_forward_bridge_response_header(&header_name, status) {
+        if should_forward_bridge_response_header(&header_name, status, request_protocol) {
             target.append(header_name, header_value);
         }
+    }
+}
+
+/// Ensures HTTP body framing headers are explicit for fixed-size responses.
+///
+/// Hyper can infer framing in many cases, but callback-driven bridge responses
+/// are safest when `Content-Length` is explicit for body-bearing statuses.
+fn ensure_content_length_header(
+    headers: &mut axum::http::HeaderMap,
+    status: StatusCode,
+    body_len: usize,
+) {
+    if status.is_informational()
+        || status == StatusCode::NO_CONTENT
+        || status == StatusCode::NOT_MODIFIED
+        || status == StatusCode::SWITCHING_PROTOCOLS
+    {
+        return;
+    }
+    if headers.contains_key(axum::http::header::CONTENT_LENGTH)
+        || headers.contains_key(axum::http::header::TRANSFER_ENCODING)
+    {
+        return;
+    }
+    if let Ok(value) = axum::http::HeaderValue::from_str(&body_len.to_string()) {
+        headers.insert(axum::http::header::CONTENT_LENGTH, value);
     }
 }
 
@@ -1826,12 +1864,15 @@ fn append_bridge_response_headers(
 fn should_forward_bridge_response_header(
     header_name: &axum::http::header::HeaderName,
     status: StatusCode,
+    request_protocol: &str,
 ) -> bool {
     if status == StatusCode::SWITCHING_PROTOCOLS {
         return true;
     }
+    let request_is_http1 = request_protocol == "1.0" || request_protocol == "1.1";
     match header_name.as_str() {
-        "transfer-encoding" | "connection" | "keep-alive" | "upgrade" | "proxy-connection" => false,
+        "transfer-encoding" => false,
+        "connection" | "keep-alive" | "upgrade" | "proxy-connection" => request_is_http1,
         _ => true,
     }
 }
@@ -1902,9 +1943,16 @@ async fn call_direct_bridge_request(
                     .to_string(),
             );
         }
+        let body_len = decoded.body_bytes.len();
         let mut response = Response::new(Body::from(decoded.body_bytes));
         *response.status_mut() = status;
-        append_bridge_response_headers(response.headers_mut(), status, decoded.headers);
+        append_bridge_response_headers(
+            response.headers_mut(),
+            status,
+            request.protocol,
+            decoded.headers,
+        );
+        ensure_content_length_header(response.headers_mut(), status, body_len);
         return Ok(response);
     }
 
@@ -1935,7 +1983,7 @@ async fn call_direct_bridge_request(
         });
         let mut response = Response::new(Body::empty());
         *response.status_mut() = status;
-        append_bridge_response_headers(response.headers_mut(), status, headers);
+        append_bridge_response_headers(response.headers_mut(), status, request.protocol, headers);
         return Ok(response);
     }
 
@@ -1947,7 +1995,7 @@ async fn call_direct_bridge_request(
 
     let mut response = Response::new(Body::from_stream(ReceiverStream::new(rx)));
     *response.status_mut() = status;
-    append_bridge_response_headers(response.headers_mut(), status, headers);
+    append_bridge_response_headers(response.headers_mut(), status, request.protocol, headers);
     Ok(response)
 }
 
@@ -2451,7 +2499,10 @@ fn c_string_to_string(value: *const c_char) -> Option<String> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use axum::http::{header::HeaderName, StatusCode};
+    use axum::http::{
+        header::{HeaderName, HeaderValue, CONNECTION},
+        StatusCode,
+    };
     use std::sync::atomic::{AtomicU64, AtomicUsize, Ordering as AtomicOrdering};
     use std::time::Duration;
     use tokio::net::TcpListener;
@@ -2532,7 +2583,10 @@ mod tests {
 
         let invalid_post =
             b"POST / HTTP/1.1\r\nHost: example.test\r\nTransfer-Encoding: chunked, gzip\r\n\r\n";
-        assert!(request_should_rewrite_transfer_encoding(invalid_post, false));
+        assert!(request_should_rewrite_transfer_encoding(
+            invalid_post,
+            false
+        ));
     }
 
     #[test]
@@ -2587,26 +2641,124 @@ Cookie: sessionId=abc123; userId=42\x7F\r\n\
     }
 
     #[test]
-    fn bridge_response_filters_hop_by_hop_headers_for_non_upgrade() {
+    fn encode_bridge_request_splits_connection_header_tokens() {
+        let mut headers = HeaderMap::new();
+        headers.append(
+            CONNECTION,
+            HeaderValue::from_static("my-connection-header1, my-connection-header2, close"),
+        );
+        let request = BridgeRequestRef {
+            method: "GET",
+            scheme: "http",
+            authority: "127.0.0.1:8080",
+            path: "/",
+            query: "",
+            protocol: "1.1",
+            headers: &headers,
+        };
+        let payload = encode_bridge_request_start(&request).expect("encode request start frame");
+
+        let mut reader = BridgeByteReader::new(&payload);
+        assert_eq!(
+            reader.get_u8().expect("protocol version"),
+            BRIDGE_PROTOCOL_VERSION
+        );
+        assert_eq!(
+            reader.get_u8().expect("frame type"),
+            BRIDGE_REQUEST_START_FRAME_TYPE_TOKENIZED
+        );
+        assert_eq!(
+            reader
+                .get_bytes()
+                .and_then(|bytes| std::str::from_utf8(bytes).map_err(|e| e.to_string()))
+                .expect("method"),
+            "GET"
+        );
+        assert_eq!(
+            reader
+                .get_bytes()
+                .and_then(|bytes| std::str::from_utf8(bytes).map_err(|e| e.to_string()))
+                .expect("scheme"),
+            "http"
+        );
+        assert_eq!(
+            reader
+                .get_bytes()
+                .and_then(|bytes| std::str::from_utf8(bytes).map_err(|e| e.to_string()))
+                .expect("authority"),
+            "127.0.0.1:8080"
+        );
+        assert_eq!(
+            reader
+                .get_bytes()
+                .and_then(|bytes| std::str::from_utf8(bytes).map_err(|e| e.to_string()))
+                .expect("path"),
+            "/"
+        );
+        assert_eq!(
+            reader
+                .get_bytes()
+                .and_then(|bytes| std::str::from_utf8(bytes).map_err(|e| e.to_string()))
+                .expect("query"),
+            ""
+        );
+        assert_eq!(
+            reader
+                .get_bytes()
+                .and_then(|bytes| std::str::from_utf8(bytes).map_err(|e| e.to_string()))
+                .expect("protocol"),
+            "1.1"
+        );
+
+        assert_eq!(reader.get_u32().expect("header count"), 3);
+        for expected in ["my-connection-header1", "my-connection-header2", "close"] {
+            assert_eq!(reader.get_u16().expect("header token"), 1);
+            assert_eq!(
+                reader
+                    .get_bytes()
+                    .and_then(|bytes| std::str::from_utf8(bytes).map_err(|e| e.to_string()))
+                    .expect("header value"),
+                expected
+            );
+        }
+        reader.ensure_done().expect("no trailing payload bytes");
+    }
+
+    #[test]
+    fn bridge_response_preserves_http1_connection_tokens() {
         let transfer_encoding = HeaderName::from_static("transfer-encoding");
         let connection = HeaderName::from_static("connection");
         let custom = HeaderName::from_static("x-custom");
 
         assert!(!should_forward_bridge_response_header(
             &transfer_encoding,
-            StatusCode::OK
+            StatusCode::OK,
+            "1.1"
         ));
-        assert!(!should_forward_bridge_response_header(
+        assert!(should_forward_bridge_response_header(
             &connection,
-            StatusCode::OK
+            StatusCode::OK,
+            "1.1"
         ));
         assert!(should_forward_bridge_response_header(
             &custom,
-            StatusCode::OK
+            StatusCode::OK,
+            "1.1"
         ));
         assert!(should_forward_bridge_response_header(
             &transfer_encoding,
-            StatusCode::SWITCHING_PROTOCOLS
+            StatusCode::SWITCHING_PROTOCOLS,
+            "1.1"
+        ));
+    }
+
+    #[test]
+    fn bridge_response_filters_connection_headers_for_http2() {
+        let connection = HeaderName::from_static("connection");
+        assert!(!should_forward_bridge_response_header(
+            &connection,
+            StatusCode::OK,
+            "2.0"
         ));
     }
 
