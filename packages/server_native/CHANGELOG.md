@@ -4,9 +4,14 @@ All notable changes to `server_native` will be documented in this file.
 
 ## Unreleased
 
+## 0.1.3+1
+
 - Fixed native-callback direct frame handling in `server_boot_proxy_direct.dart` to avoid routing single-frame direct requests through the stream path, improving shelf compatibility stability under repeated request/response cycles.
 - Added loopback bind retry handling for transient dual-stack ephemeral `EADDRINUSE` collisions, including wrapped native bind error detection.
 - Updated HTTP/3 integration CI to install a pinned static curl build with guaranteed HTTP/3 support and checksum verification, so HTTP/3 integration tests run deterministically instead of being skipped based on runner curl capabilities.
+- Fixed native shelf/relic compatibility for empty `Connection` header values by preserving empty connection header semantics across sanitize/rewrite/bridge encoding paths.
+- Fixed native response `contentLength` close parity for `HEAD`, `1xx`, `204`, and `304` responses to match `dart:io` behavior.
+- Added Rust and Dart regression coverage for empty/sanitized connection header preservation and `HEAD` content-length close behavior.
 
 ## 0.1.3
 
