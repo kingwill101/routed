@@ -116,6 +116,7 @@ const TRANSFER_ENCODING_HEADER: &str = "transfer-encoding";
 const SANITIZED_TRANSFER_ENCODING_HEADER: &str = "x-server-native-transfer-encoding";
 const CONNECTION_HEADER: &str = "connection";
 const SANITIZED_CONNECTION_HEADER: &str = "x-server-native-connection";
+const EMPTY_CONNECTION_SENTINEL: &str = "__server_native_empty_connection__";
 const HOST_HEADER: &str = "host";
 const SANITIZED_HOST_HEADER: &str = "x-server-native-host";
 const BAD_REQUEST_RESPONSE_BYTES: &[u8] = b"HTTP/1.1 400 Bad Request\r\n\
@@ -1411,7 +1412,12 @@ fn rewrite_request_head_for_hyper(
             rewritten = true;
             output.extend_from_slice(SANITIZED_CONNECTION_HEADER.as_bytes());
             output.push(b':');
-            if append_rewritten_header_value(&mut output, value) {
+            if value.iter().all(|byte| byte.is_ascii_whitespace()) {
+                // Hyper drops all-whitespace header values in lenient mode.
+                // Use a sentinel token so the header survives parsing, then
+                // bridge encoding maps it back to an empty connection value.
+                output.extend_from_slice(EMPTY_CONNECTION_SENTINEL.as_bytes());
+            } else if append_rewritten_header_value(&mut output, value) {
                 rewritten = true;
             }
             output.extend_from_slice(b"\r\n");
@@ -2759,6 +2765,22 @@ My-Connection-Header2: some-value2\r\n\
     }
 
     #[test]
+    fn rewrite_request_head_for_hyper_preserves_empty_connection_value() {
+        let request_head = b"GET / HTTP/1.1\r\n\
+Host: example.test\r\n\
+Connection: \r\n\
+\r\n";
+
+        let sanitized = rewrite_request_head_for_hyper(request_head, false, true)
+            .expect("connection rewrite should trigger");
+        let sanitized_text =
+            String::from_utf8(sanitized).expect("sanitized request should be utf8");
+        assert!(sanitized_text.contains(&format!(
+            "{SANITIZED_CONNECTION_HEADER}:{EMPTY_CONNECTION_SENTINEL}\r\n"
+        )));
+    }
+
+    #[test]
     fn request_should_not_rewrite_connection_for_upgrade() {
         let request_head = b"GET /ws HTTP/1.1\r\n\
 Host: example.test\r\n\
@@ -2898,6 +2920,75 @@ My-Connection-Header2: some-value2\r\n\
                 expected
             );
         }
+    }
+
+    #[test]
+    fn encode_bridge_request_preserves_empty_connection_header_value() {
+        let mut headers = HeaderMap::new();
+        headers.append(CONNECTION, HeaderValue::from_static(""));
+        let request = BridgeRequestRef {
+            method: "GET",
+            scheme: "http",
+            authority: "127.0.0.1:8080",
+            path: "/",
+            query: "",
+            protocol: "1.1",
+            headers: &headers,
+        };
+        let payload = encode_bridge_request_start(&request).expect("encode request start frame");
+
+        let mut reader = BridgeByteReader::new(&payload);
+        let _ = reader.get_u8().expect("protocol version");
+        let _ = reader.get_u8().expect("frame type");
+        for _ in 0..6 {
+            let _ = reader.get_bytes().expect("request field");
+        }
+        assert_eq!(reader.get_u32().expect("header count"), 1);
+        assert_eq!(reader.get_u16().expect("header token"), 1);
+        assert_eq!(
+            reader
+                .get_bytes()
+                .and_then(|bytes| std::str::from_utf8(bytes).map_err(|e| e.to_string()))
+                .expect("header value"),
+            ""
+        );
+        reader.ensure_done().expect("no trailing payload bytes");
+    }
+
+    #[test]
+    fn encode_bridge_request_preserves_empty_sanitized_connection_header_value() {
+        let mut headers = HeaderMap::new();
+        headers.append(CONNECTION, HeaderValue::from_static("close"));
+        headers.append(
+            HeaderName::from_static(SANITIZED_CONNECTION_HEADER),
+            HeaderValue::from_static(""),
+        );
+        let request = BridgeRequestRef {
+            method: "GET",
+            scheme: "http",
+            authority: "127.0.0.1:8080",
+            path: "/",
+            query: "",
+            protocol: "1.1",
+            headers: &headers,
+        };
+        let payload = encode_bridge_request_start(&request).expect("encode request start frame");
+        let mut reader = BridgeByteReader::new(&payload);
+        let _ = reader.get_u8().expect("protocol version");
+        let _ = reader.get_u8().expect("frame type");
+        for _ in 0..6 {
+            let _ = reader.get_bytes().expect("request field");
+        }
+        assert_eq!(reader.get_u32().expect("header count"), 1);
+        assert_eq!(reader.get_u16().expect("header token"), 1);
+        assert_eq!(
+            reader
+                .get_bytes()
+                .and_then(|bytes| std::str::from_utf8(bytes).map_err(|e| e.to_string()))
+                .expect("header value"),
+            ""
+        );
+        reader.ensure_done().expect("no trailing payload bytes");
     }
 
     #[test]

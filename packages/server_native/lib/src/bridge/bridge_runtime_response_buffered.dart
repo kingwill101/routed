@@ -2,8 +2,11 @@ part of 'bridge_runtime.dart';
 
 /// Buffered `HttpResponse` adapter for single-frame bridge responses.
 final class BridgeHttpResponse implements HttpResponse {
-  BridgeHttpResponse({required BridgeConnectionInfo connectionInfo})
-    : _connectionInfo = connectionInfo;
+  BridgeHttpResponse({
+    required String requestMethod,
+    required BridgeConnectionInfo connectionInfo,
+  }) : _connectionInfo = connectionInfo,
+       _isHeadRequest = _equalsAsciiIgnoreCase(requestMethod, 'HEAD');
 
   _BridgeHttpHeaders? _headers;
   List<Cookie>? _cookies;
@@ -18,6 +21,7 @@ final class BridgeHttpResponse implements HttpResponse {
   bool _autoCompressEnabled = false;
   bool _requestAcceptsGzip = false;
   final BridgeConnectionInfo _connectionInfo;
+  final bool _isHeadRequest;
 
   /// Enables gzip auto-compression based on request/response negotiation.
   void configureAutoCompression({
@@ -247,6 +251,9 @@ final class BridgeHttpResponse implements HttpResponse {
     if (declaredContentLength < 0 || headers.chunkedTransferEncoding) {
       return;
     }
+    if (_skipContentLengthValidationOnClose()) {
+      return;
+    }
     if (_bytesWritten < declaredContentLength) {
       final error = HttpException(
         'Content size below specified contentLength. '
@@ -257,6 +264,16 @@ final class BridgeHttpResponse implements HttpResponse {
       }
       throw error;
     }
+  }
+
+  bool _skipContentLengthValidationOnClose() {
+    if (_isHeadRequest) {
+      return true;
+    }
+    final status = statusCode;
+    return (status >= 100 && status < 200) ||
+        status == HttpStatus.noContent ||
+        status == HttpStatus.notModified;
   }
 
   void appendFlattenedHeaders(

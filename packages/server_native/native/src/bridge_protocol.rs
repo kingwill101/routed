@@ -80,9 +80,13 @@ fn encode_bridge_request_headers(
             continue;
         };
         if header_name == CONNECTION_HEADER {
+            let mut emitted_connection_token = false;
             for token in value.split(',') {
                 let token = token.trim();
                 if token.is_empty() {
+                    continue;
+                }
+                if token.eq_ignore_ascii_case(EMPTY_CONNECTION_SENTINEL) {
                     continue;
                 }
                 count = count
@@ -90,6 +94,17 @@ fn encode_bridge_request_headers(
                     .ok_or_else(|| "bridge request has too many headers".to_string())?;
                 write_bridge_header_name(writer, header_name)?;
                 writer.put_string(token)?;
+                emitted_connection_token = true;
+            }
+            if !emitted_connection_token {
+                // Preserve syntactically-empty `connection:` values so Dart
+                // header validators can surface the same invalid-header errors
+                // as `dart:io` instead of observing the header as absent.
+                count = count
+                    .checked_add(1)
+                    .ok_or_else(|| "bridge request has too many headers".to_string())?;
+                write_bridge_header_name(writer, header_name)?;
+                writer.put_string("")?;
             }
             continue;
         }

@@ -5,10 +5,12 @@ final class BridgeStreamingHttpResponse implements HttpResponse {
   BridgeStreamingHttpResponse({
     required this.onStart,
     required this.onChunk,
+    required String requestMethod,
     required BridgeConnectionInfo connectionInfo,
     void Function(BridgeDetachedSocket detachedSocket)? onDetachedSocket,
   }) : _connectionInfo = connectionInfo,
-       _onDetachedSocket = onDetachedSocket;
+       _onDetachedSocket = onDetachedSocket,
+       _isHeadRequest = _equalsAsciiIgnoreCase(requestMethod, 'HEAD');
 
   final Future<void> Function(BridgeResponseFrame frame) onStart;
   final Future<void> Function(Uint8List chunkBytes) onChunk;
@@ -30,6 +32,7 @@ final class BridgeStreamingHttpResponse implements HttpResponse {
   BytesBuilder? _compressionBuffer;
   final BridgeConnectionInfo _connectionInfo;
   final void Function(BridgeDetachedSocket detachedSocket)? _onDetachedSocket;
+  final bool _isHeadRequest;
 
   bool get isClosed => _closed;
 
@@ -339,11 +342,24 @@ final class BridgeStreamingHttpResponse implements HttpResponse {
     if (declaredContentLength < 0 || headers.chunkedTransferEncoding) {
       return;
     }
+    if (_skipContentLengthValidationOnClose()) {
+      return;
+    }
     if (_bytesWritten < declaredContentLength) {
       throw HttpException(
         'Content size below specified contentLength. '
         '$_bytesWritten bytes written but expected $declaredContentLength.',
       );
     }
+  }
+
+  bool _skipContentLengthValidationOnClose() {
+    if (_isHeadRequest) {
+      return true;
+    }
+    final status = statusCode;
+    return (status >= 100 && status < 200) ||
+        status == HttpStatus.noContent ||
+        status == HttpStatus.notModified;
   }
 }

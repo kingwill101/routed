@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:convert';
 import 'dart:io';
 
 import 'package:server_native/server_native.dart';
@@ -169,6 +170,91 @@ Future<int> _singleRequestStatus(String host, int port) async {
     return statusCode;
   } finally {
     client.close(force: true);
+  }
+}
+
+Future<List<String>> _captureEmptyConnectionHeaderValues(
+  _Backend backend,
+) async {
+  final observed = Completer<List<String>>();
+  final server = await _bindServer(backend, InternetAddress.loopbackIPv4, 0);
+  final sub = server.listen((request) async {
+    observed.complete(
+      request.headers[HttpHeaders.connectionHeader] ?? const <String>[],
+    );
+    request.response.headers.set(HttpHeaders.connectionHeader, 'close');
+    await request.response.close();
+  });
+
+  final socket = await Socket.connect('127.0.0.1', server.port);
+  try {
+    socket.add(
+      ascii.encode(
+        'GET / HTTP/1.1\r\n'
+        'Host: localhost\r\n'
+        'Connection: \r\n'
+        '\r\n',
+      ),
+    );
+    await socket.flush();
+    await socket.fold<List<int>>(<int>[], (all, chunk) => all..addAll(chunk));
+    return observed.future.timeout(const Duration(seconds: 3));
+  } finally {
+    await socket.close();
+    await sub.cancel();
+    await server.close(force: true);
+  }
+}
+
+Future<bool> _headCloseCompletesWithContentLengthError(_Backend backend) async {
+  final completion = Completer<Object?>();
+  final server = await _bindServer(backend, InternetAddress.loopbackIPv4, 0);
+  final sub = server.listen((request) async {
+    if (request.method != 'HEAD') {
+      request.response.statusCode = HttpStatus.methodNotAllowed;
+      await request.response.close();
+      return;
+    }
+
+    request.response.contentLength = 1;
+    request.response.done
+        .then((_) {
+          if (!completion.isCompleted) {
+            completion.complete(null);
+          }
+        })
+        .catchError((error) {
+          if (!completion.isCompleted) {
+            completion.complete(error);
+          }
+        });
+
+    try {
+      await request.response.close();
+      if (!completion.isCompleted) {
+        completion.complete(null);
+      }
+    } catch (error) {
+      if (!completion.isCompleted) {
+        completion.complete(error);
+      }
+    }
+  });
+
+  final client = HttpClient();
+  try {
+    final request = await client.openUrl(
+      'HEAD',
+      Uri.parse('http://127.0.0.1:${server.port}/'),
+    );
+    final response = await request.close();
+    await response.drain<void>();
+    final outcome = await completion.future.timeout(const Duration(seconds: 3));
+    return outcome is HttpException;
+  } finally {
+    client.close(force: true);
+    await sub.cancel();
+    await server.close(force: true);
   }
 }
 
@@ -397,6 +483,24 @@ void main() {
             await sub.cancel();
             await server.close(force: true);
           }
+        },
+      );
+
+      test(
+        '${backend.label}: empty Connection header value is preserved on request',
+        () async {
+          final values = await _captureEmptyConnectionHeaderValues(backend);
+          expect(values, equals(const <String>['']));
+        },
+      );
+
+      test(
+        '${backend.label}: HEAD close does not fail when content-length exceeds body bytes',
+        () async {
+          final hasError = await _headCloseCompletesWithContentLengthError(
+            backend,
+          );
+          expect(hasError, isFalse);
         },
       );
     }

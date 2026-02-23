@@ -22,6 +22,7 @@ final class BridgeHttpRuntime {
     final response = BridgeStreamingHttpResponse(
       onStart: onResponseStart,
       onChunk: onResponseChunk,
+      requestMethod: frame.method,
       connectionInfo: connectionInfo,
       onDetachedSocket: onDetachedSocket,
     );
@@ -41,7 +42,10 @@ final class BridgeHttpRuntime {
   /// Handles a full single-frame request and returns a full response frame.
   Future<BridgeResponseFrame> handleFrame(BridgeRequestFrame frame) async {
     final connectionInfo = BridgeConnectionInfo.fromRequestFrame(frame);
-    final response = BridgeHttpResponse(connectionInfo: connectionInfo);
+    final response = BridgeHttpResponse(
+      requestMethod: frame.method,
+      connectionInfo: connectionInfo,
+    );
     final request = BridgeHttpRequest(
       frame: frame,
       response: response,

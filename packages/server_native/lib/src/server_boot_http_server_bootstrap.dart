@@ -11,6 +11,7 @@ final class _NativeHttpBinding {
 /// Creates the default response-headers template used by [NativeHttpServer].
 HttpHeaders _createNativeHttpDefaultResponseHeaders() {
   final headers = BridgeHttpResponse(
+    requestMethod: 'GET',
     connectionInfo: BridgeConnectionInfo(
       remoteAddress: InternetAddress.loopbackIPv4,
       remotePort: 0,
