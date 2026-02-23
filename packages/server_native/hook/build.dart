@@ -10,6 +10,7 @@ const _assetName = 'src/ffi.g.dart';
 const _cratePath = 'native';
 const _crateName = 'server_native';
 const _prebuiltEnvVar = 'SERVER_NATIVE_PREBUILT';
+const _disablePrebuiltEnvVar = 'SERVER_NATIVE_DISABLE_PREBUILT';
 const _projectPrebuiltRoot = '.dart_tool/server_native/prebuilt';
 const _releaseRepo = 'kingwill101/routed';
 const _releaseAssetPrefix = 'server_native';
@@ -56,6 +57,22 @@ Future<File?> _findPrebuiltLibrary(
   CodeConfig code,
   String libraryName,
 ) async {
+  final repoRoot = _findRepoRoot(input.packageRoot);
+  if (repoRoot != null) {
+    stderr.writeln(
+      '[server_native] workspace checkout detected; building native library from source',
+    );
+    return null;
+  }
+
+  final disablePrebuilt = _environmentFlag(_disablePrebuiltEnvVar);
+  if (disablePrebuilt) {
+    stderr.writeln(
+      '[server_native] $_disablePrebuiltEnvVar=1; building native library from source',
+    );
+    return null;
+  }
+
   final envPath = Platform.environment[_prebuiltEnvVar];
   if (envPath != null && envPath.isNotEmpty) {
     final file = File(envPath);
@@ -75,22 +92,6 @@ Future<File?> _findPrebuiltLibrary(
         '$_projectPrebuiltRoot/$serverNativePrebuiltReleaseTag/$platformLabel/$libraryName',
       ),
       projectRoot.resolve('$_projectPrebuiltRoot/$platformLabel/$libraryName'),
-    ];
-    for (final candidate in candidates) {
-      final file = File.fromUri(candidate);
-      if (file.existsSync()) {
-        return file;
-      }
-    }
-  }
-
-  final repoRoot = _findRepoRoot(input.packageRoot);
-  if (repoRoot != null) {
-    final candidates = <Uri>[
-      repoRoot.resolve(
-        '$_projectPrebuiltRoot/$serverNativePrebuiltReleaseTag/$platformLabel/$libraryName',
-      ),
-      repoRoot.resolve('$_projectPrebuiltRoot/$platformLabel/$libraryName'),
     ];
     for (final candidate in candidates) {
       final file = File.fromUri(candidate);
@@ -128,6 +129,15 @@ Future<File?> _findPrebuiltLibrary(
   }
 
   return null;
+}
+
+bool _environmentFlag(String name) {
+  final raw = Platform.environment[name];
+  if (raw == null) {
+    return false;
+  }
+  final normalized = raw.trim().toLowerCase();
+  return normalized == '1' || normalized == 'true' || normalized == 'yes';
 }
 
 Future<File?> _downloadPrebuiltLibrary({

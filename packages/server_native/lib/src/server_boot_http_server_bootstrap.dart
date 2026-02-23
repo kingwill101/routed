@@ -354,6 +354,9 @@ Future<NativeHttpServer> _startNativeHttpServer({
       server._bindings.add(
         _NativeHttpBinding(address: address, running: running),
       );
+      if (shared) {
+        server._registerSharedPort(running.port);
+      }
       server._runningBindingCount++;
       // ignore: discarded_futures
       running.done.whenComplete(() {

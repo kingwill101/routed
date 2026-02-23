@@ -62,11 +62,24 @@ fn encode_bridge_request_headers(
 
     let count_pos = writer.reserve_u32();
     let mut count: u32 = 0;
+    let has_sanitized_connection_header = request
+        .headers
+        .contains_key(SANITIZED_CONNECTION_HEADER);
     for (name, value) in request.headers.iter() {
+        if has_sanitized_connection_header && name.as_str() == CONNECTION_HEADER {
+            // Ignore Hyper framing connection header when the original value
+            // has been preserved in the sanitized compatibility header.
+            continue;
+        }
+        let header_name = if name.as_str() == SANITIZED_CONNECTION_HEADER {
+            CONNECTION_HEADER
+        } else {
+            name.as_str()
+        };
         let Ok(value) = value.to_str() else {
             continue;
         };
-        if name.as_str() == "connection" {
+        if header_name == CONNECTION_HEADER {
             for token in value.split(',') {
                 let token = token.trim();
                 if token.is_empty() {
@@ -75,7 +88,7 @@ fn encode_bridge_request_headers(
                 count = count
                     .checked_add(1)
                     .ok_or_else(|| "bridge request has too many headers".to_string())?;
-                write_bridge_header_name(writer, name.as_str())?;
+                write_bridge_header_name(writer, header_name)?;
                 writer.put_string(token)?;
             }
             continue;
@@ -83,7 +96,7 @@ fn encode_bridge_request_headers(
         count = count
             .checked_add(1)
             .ok_or_else(|| "bridge request has too many headers".to_string())?;
-        write_bridge_header_name(writer, name.as_str())?;
+        write_bridge_header_name(writer, header_name)?;
         writer.put_string(value)?;
     }
     writer.patch_u32(count_pos, count);

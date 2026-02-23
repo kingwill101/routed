@@ -114,6 +114,8 @@ const LOG_DIRECT_WEBSOCKET_TUNNEL_ERROR_PREFIX: &str =
     "[server_native] direct websocket tunnel error: ";
 const TRANSFER_ENCODING_HEADER: &str = "transfer-encoding";
 const SANITIZED_TRANSFER_ENCODING_HEADER: &str = "x-server-native-transfer-encoding";
+const CONNECTION_HEADER: &str = "connection";
+const SANITIZED_CONNECTION_HEADER: &str = "x-server-native-connection";
 const HOST_HEADER: &str = "host";
 const SANITIZED_HOST_HEADER: &str = "x-server-native-host";
 const BAD_REQUEST_RESPONSE_BYTES: &[u8] = b"HTTP/1.1 400 Bad Request\r\n\
@@ -1282,18 +1284,78 @@ fn request_should_rewrite_transfer_encoding(
     false
 }
 
+/// Returns whether request head contains a header named [name].
+fn request_has_header(request_head: &[u8], name: &str) -> bool {
+    let needle = format!("{name}:");
+    contains_ascii_case_insensitive(request_head, needle.as_bytes())
+}
+
+/// Returns whether a header value contains token [token] (ASCII case-folded).
+fn header_value_contains_token(value: &str, token: &str) -> bool {
+    for candidate in value.split(',') {
+        if candidate.trim().eq_ignore_ascii_case(token) {
+            return true;
+        }
+    }
+    false
+}
+
+/// Returns whether request head has `connection: ...upgrade...`.
+fn request_connection_has_upgrade_token(request_head: &[u8]) -> bool {
+    let Some(first_line_end) = find_crlf(request_head) else {
+        return false;
+    };
+    let mut line_start = first_line_end + 2;
+    while line_start < request_head.len() {
+        let remaining = &request_head[line_start..];
+        let Some(relative_line_end) = find_crlf(remaining) else {
+            break;
+        };
+        let line_end = line_start + relative_line_end;
+        if line_end == line_start {
+            break;
+        }
+        let line = &request_head[line_start..line_end];
+        line_start = line_end + 2;
+        let Some(colon_index) = line.iter().position(|byte| *byte == b':') else {
+            continue;
+        };
+        let (name, value_with_colon) = line.split_at(colon_index);
+        if !name.eq_ignore_ascii_case(CONNECTION_HEADER.as_bytes()) {
+            continue;
+        }
+        let value = value_with_colon.get(1..).unwrap_or_default();
+        let Ok(value) = std::str::from_utf8(value) else {
+            continue;
+        };
+        if header_value_contains_token(value, "upgrade") {
+            return true;
+        }
+    }
+    false
+}
+
+/// Returns whether request is an HTTP upgrade request.
+fn request_is_upgrade(request_head: &[u8]) -> bool {
+    request_has_header(request_head, "upgrade")
+        && request_connection_has_upgrade_token(request_head)
+}
+
 /// Returns whether request connection headers should be rewritten before Hyper
 /// parsing.
 ///
-/// Hyper's HTTP/1 state machine rewrites/normalizes `Connection` semantics in
-/// ways that diverge from dart:io behavior (especially when `close` is present).
-/// We therefore rewrite `Connection` to an internal header for non-upgrade
-/// requests, restore it post-parse, and keep upgrade requests untouched so
-/// websocket upgrade flow remains native to Hyper.
+/// Hyper strips headers listed in `Connection` tokens. dart:io exposes those
+/// headers as received, so for non-upgrade requests we rewrite `Connection`
+/// into an internal header and restore it post-parse.
+fn request_should_rewrite_connection_header(request_head: &[u8]) -> bool {
+    request_has_header(request_head, CONNECTION_HEADER) && !request_is_upgrade(request_head)
+}
+
 /// Rewrites transfer-encoding headers to an internal header name.
 #[cfg(test)]
 fn rewrite_transfer_encoding_headers(request_head: &[u8]) -> Vec<u8> {
-    rewrite_request_head_for_hyper(request_head, true).unwrap_or_else(|| request_head.to_vec())
+    rewrite_request_head_for_hyper(request_head, true, false)
+        .unwrap_or_else(|| request_head.to_vec())
 }
 
 /// Rewrites request-head headers so Hyper can parse inputs that dart:io accepts.
@@ -1306,6 +1368,7 @@ fn rewrite_transfer_encoding_headers(request_head: &[u8]) -> Vec<u8> {
 fn rewrite_request_head_for_hyper(
     request_head: &[u8],
     rewrite_transfer_encoding: bool,
+    rewrite_connection_header: bool,
 ) -> Option<Vec<u8>> {
     let mut output = Vec::with_capacity(request_head.len());
     let Some(first_line_end) = find_crlf(request_head) else {
@@ -1342,6 +1405,17 @@ fn rewrite_request_head_for_hyper(
         {
             rewritten = true;
             output.extend_from_slice(SANITIZED_TRANSFER_ENCODING_HEADER.as_bytes());
+        } else if rewrite_connection_header
+            && name.eq_ignore_ascii_case(CONNECTION_HEADER.as_bytes())
+        {
+            rewritten = true;
+            output.extend_from_slice(SANITIZED_CONNECTION_HEADER.as_bytes());
+            output.push(b':');
+            if append_rewritten_header_value(&mut output, value) {
+                rewritten = true;
+            }
+            output.extend_from_slice(b"\r\n");
+            continue;
         } else if invalid_host {
             rewritten = true;
             // Preserve original host for Dart-side semantics while giving Hyper
@@ -1452,14 +1526,17 @@ async fn maybe_prepare_http1_prefixed_stream(
     let rewrite_transfer_encoding =
         contains_ascii_case_insensitive(request_head, b"transfer-encoding:")
             && request_should_rewrite_transfer_encoding(request_head, header_len < prefix.len());
+    let rewrite_connection_header = request_should_rewrite_connection_header(request_head);
     let rewrite_invalid_value_bytes =
         request_head_contains_invalid_header_value_bytes(request_head);
-    if !rewrite_transfer_encoding && !rewrite_invalid_value_bytes {
+    if !rewrite_transfer_encoding && !rewrite_connection_header && !rewrite_invalid_value_bytes {
         return Ok(Some(PrefixedIo::new(stream, prefix)));
     }
-    let Some(mut sanitized) =
-        rewrite_request_head_for_hyper(request_head, rewrite_transfer_encoding)
-    else {
+    let Some(mut sanitized) = rewrite_request_head_for_hyper(
+        request_head,
+        rewrite_transfer_encoding,
+        rewrite_connection_header,
+    ) else {
         return Ok(Some(PrefixedIo::new(stream, prefix)));
     };
     if header_len < prefix.len() {
@@ -1778,13 +1855,17 @@ fn restore_sanitized_compat_headers(headers: &mut HeaderMap) {
         .iter()
         .cloned()
         .collect::<Vec<_>>();
-    if values.is_empty() {
-        return;
+    if !values.is_empty() {
+        headers.remove(&sanitized_name);
+        for value in values {
+            headers.append(transfer_encoding_name.clone(), value);
+        }
     }
-    headers.remove(&sanitized_name);
-    for value in values {
-        headers.append(transfer_encoding_name.clone(), value);
-    }
+
+    // Keep `x-server-native-connection` in-request so Hyper does not apply
+    // hop-by-hop connection stripping/overrides from the original value.
+    // Bridge encoding remaps this sanitized header back to `connection` for
+    // Dart-side HttpRequest compatibility.
 
     let sanitized_host_name = axum::http::header::HeaderName::from_static(SANITIZED_HOST_HEADER);
     let host_name = axum::http::header::HeaderName::from_static(HOST_HEADER);
@@ -1793,13 +1874,12 @@ fn restore_sanitized_compat_headers(headers: &mut HeaderMap) {
         .iter()
         .cloned()
         .collect::<Vec<_>>();
-    if host_values.is_empty() {
-        return;
-    }
-    headers.remove(&sanitized_host_name);
-    headers.remove(&host_name);
-    for value in host_values {
-        headers.append(host_name.clone(), value);
+    if !host_values.is_empty() {
+        headers.remove(&sanitized_host_name);
+        headers.remove(&host_name);
+        for value in host_values {
+            headers.append(host_name.clone(), value);
+        }
     }
 }
 
@@ -1827,8 +1907,23 @@ fn append_bridge_response_headers(
     request_protocol: &str,
     headers: Vec<(axum::http::header::HeaderName, axum::http::HeaderValue)>,
 ) {
+    let request_is_http1 = request_protocol == "1.0" || request_protocol == "1.1";
     for (header_name, header_value) in headers {
         if should_forward_bridge_response_header(&header_name, status, request_protocol) {
+            if request_is_http1 && header_name.as_str() == CONNECTION_HEADER {
+                if let Ok(connection_value) = header_value.to_str() {
+                    for token in connection_value.split(',') {
+                        let token = token.trim();
+                        if token.is_empty() {
+                            continue;
+                        }
+                        if let Ok(value) = axum::http::HeaderValue::from_str(token) {
+                            target.append(header_name.clone(), value);
+                        }
+                    }
+                    continue;
+                }
+            }
             target.append(header_name, header_value);
         }
     }
@@ -2632,12 +2727,56 @@ Host: example.test\r\n\
 Cookie: sessionId=abc123; userId=42\x7F\r\n\
 \r\n";
 
-        let sanitized = rewrite_request_head_for_hyper(request_head, false)
+        let sanitized = rewrite_request_head_for_hyper(request_head, false, false)
             .expect("invalid cookie value should trigger rewrite");
         let sanitized_text =
             String::from_utf8(sanitized).expect("sanitized request should be utf8");
         assert!(sanitized_text.contains("Cookie: sessionId=abc123; userId=42\"\r\n"));
         assert!(sanitized_text.ends_with("\r\n\r\n"));
+    }
+
+    #[test]
+    fn rewrite_request_head_for_hyper_rewrites_connection_for_non_upgrade() {
+        let request_head = b"GET / HTTP/1.1\r\n\
+Host: example.test\r\n\
+Connection: my-connection-header1, my-connection-header2, close\r\n\
+My-Connection-Header1: some-value1\r\n\
+My-Connection-Header2: some-value2\r\n\
+\r\n";
+
+        let sanitized = rewrite_request_head_for_hyper(request_head, false, true)
+            .expect("connection rewrite should trigger");
+        let sanitized_text =
+            String::from_utf8(sanitized).expect("sanitized request should be utf8");
+        assert!(sanitized_text.to_ascii_lowercase().contains(
+            "x-server-native-connection: my-connection-header1, my-connection-header2, close"
+        ));
+        assert!(!sanitized_text
+            .to_ascii_lowercase()
+            .contains("connection:close"));
+        assert!(sanitized_text.contains("My-Connection-Header1: some-value1\r\n"));
+        assert!(sanitized_text.contains("My-Connection-Header2: some-value2\r\n"));
+    }
+
+    #[test]
+    fn request_should_not_rewrite_connection_for_upgrade() {
+        let request_head = b"GET /ws HTTP/1.1\r\n\
+Host: example.test\r\n\
+Connection: Upgrade\r\n\
+Upgrade: websocket\r\n\
+\r\n";
+        assert!(!request_should_rewrite_connection_header(request_head));
+    }
+
+    #[test]
+    fn request_should_rewrite_connection_for_non_upgrade() {
+        let request_head = b"GET / HTTP/1.1\r\n\
+Host: example.test\r\n\
+Connection: my-connection-header1, my-connection-header2, close\r\n\
+My-Connection-Header1: some-value1\r\n\
+My-Connection-Header2: some-value2\r\n\
+\r\n";
+        assert!(request_should_rewrite_connection_header(request_head));
     }
 
     #[test]
@@ -2722,6 +2861,43 @@ Cookie: sessionId=abc123; userId=42\x7F\r\n\
             );
         }
         reader.ensure_done().expect("no trailing payload bytes");
+    }
+
+    #[test]
+    fn encode_bridge_request_prefers_sanitized_connection_header() {
+        let mut headers = HeaderMap::new();
+        headers.append(CONNECTION, HeaderValue::from_static("close"));
+        headers.append(
+            HeaderName::from_static(SANITIZED_CONNECTION_HEADER),
+            HeaderValue::from_static("my-connection-header1, my-connection-header2, close"),
+        );
+        let request = BridgeRequestRef {
+            method: "GET",
+            scheme: "http",
+            authority: "127.0.0.1:8080",
+            path: "/",
+            query: "",
+            protocol: "1.1",
+            headers: &headers,
+        };
+        let payload = encode_bridge_request_start(&request).expect("encode request start frame");
+        let mut reader = BridgeByteReader::new(&payload);
+        let _ = reader.get_u8().expect("protocol version");
+        let _ = reader.get_u8().expect("frame type");
+        for _ in 0..6 {
+            let _ = reader.get_bytes().expect("request field");
+        }
+        assert_eq!(reader.get_u32().expect("header count"), 3);
+        for expected in ["my-connection-header1", "my-connection-header2", "close"] {
+            assert_eq!(reader.get_u16().expect("header token"), 1);
+            assert_eq!(
+                reader
+                    .get_bytes()
+                    .and_then(|bytes| std::str::from_utf8(bytes).map_err(|e| e.to_string()))
+                    .expect("header value"),
+                expected
+            );
+        }
     }
 
     #[test]

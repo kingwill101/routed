@@ -9,9 +9,6 @@ import 'package:test/test.dart';
 /// - tests/standalone/io/http_bind_test.dart
 /// - tests/standalone/io/http_connection_header_test.dart
 /// - tests/standalone/io/http_content_length_test.dart
-///
-/// The suite intentionally keeps known native gaps visible via skipped tests
-/// so future parity work can be enabled by removing skip markers.
 
 enum _Backend {
   dartIo('dart:io'),
@@ -300,10 +297,6 @@ void main() {
               await server.close(force: true);
             }
           },
-          skip: backend == _Backend.native
-              ? 'Known parity gap: connection-header/persistentConnection '
-                    'behavior diverges'
-              : false,
         );
       }
 
@@ -408,59 +401,55 @@ void main() {
       );
     }
 
-    test(
-      'bind(shared:true) parity on IPv4/IPv6 loopback',
-      () async {
-        final hosts = <String>['127.0.0.1'];
-        if (await _supportsIPv6()) {
-          hosts.add('::1');
-        }
+    test('bind(shared:true) parity on IPv4/IPv6 loopback', () async {
+      final hosts = <String>['127.0.0.1'];
+      if (await _supportsIPv6()) {
+        hosts.add('::1');
+      }
 
-        for (final backend in _Backend.values) {
-          for (final host in hosts) {
-            for (final v6Only in <bool>[false, true]) {
-              final server1 = await _bindServer(
-                backend,
-                host,
-                0,
-                v6Only: v6Only,
-                shared: true,
-              );
-              final port = server1.port;
-              expect(port, greaterThan(0));
+      for (final backend in _Backend.values) {
+        for (final host in hosts) {
+          for (final v6Only in <bool>[false, true]) {
+            final server1 = await _bindServer(
+              backend,
+              host,
+              0,
+              v6Only: v6Only,
+              shared: true,
+            );
+            final port = server1.port;
+            expect(port, greaterThan(0));
 
-              final server2 = await _bindServer(
-                backend,
-                host,
-                port,
-                v6Only: v6Only,
-                shared: true,
-              );
-              expect(server2.port, port);
-              expect(server2.address.address, server1.address.address);
+            final server2 = await _bindServer(
+              backend,
+              host,
+              port,
+              v6Only: v6Only,
+              shared: true,
+            );
+            expect(server2.port, port);
+            expect(server2.address.address, server1.address.address);
 
-              final sub1 = server1.listen((request) async {
-                request.response.statusCode = 501;
-                await request.response.close();
-              });
-              final status1 = await _singleRequestStatus(host, port);
-              expect(status1, 501);
-              await sub1.cancel();
-              await server1.close(force: true);
+            final sub1 = server1.listen((request) async {
+              request.response.statusCode = 501;
+              await request.response.close();
+            });
+            final status1 = await _singleRequestStatus(host, port);
+            expect(status1, 501);
+            await sub1.cancel();
+            await server1.close(force: true);
 
-              final sub2 = server2.listen((request) async {
-                request.response.statusCode = 502;
-                await request.response.close();
-              });
-              final status2 = await _singleRequestStatus(host, port);
-              expect(status2, 502);
-              await sub2.cancel();
-              await server2.close(force: true);
-            }
+            final sub2 = server2.listen((request) async {
+              request.response.statusCode = 502;
+              await request.response.close();
+            });
+            final status2 = await _singleRequestStatus(host, port);
+            expect(status2, 502);
+            await sub2.cancel();
+            await server2.close(force: true);
           }
         }
-      },
-      skip: 'Known parity gap: NativeHttpServer shared-bind lifecycle differs',
-    );
+      }
+    });
   });
 }

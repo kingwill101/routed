@@ -1,5 +1,8 @@
 part of 'server_boot.dart';
 
+final Map<int, Set<NativeHttpServer>> _nativeSharedServersByPort =
+    <int, Set<NativeHttpServer>>{};
+
 /// {@template server_native_http_server_example}
 /// Example:
 /// ```dart
@@ -150,6 +153,7 @@ final class NativeHttpServer extends StreamView<HttpRequest>
   final StreamController<HttpRequest> _requestController;
   final _ProxyConnectionCounters _connectionCounters;
   final List<_NativeHttpBinding> _bindings = <_NativeHttpBinding>[];
+  final Set<int> _sharedPorts = <int>{};
   final Completer<void> _stopped = Completer<void>();
   final _NativeSessionStore _sessions = _NativeSessionStore(
     timeout: const Duration(minutes: 20),
@@ -186,6 +190,15 @@ final class NativeHttpServer extends StreamView<HttpRequest>
       request.response.statusCode = HttpStatus.serviceUnavailable;
       return request.response.close();
     }
+    if (!_requestController.hasListener) {
+      return _tryForwardSharedRequest(request).then((forwarded) {
+        if (forwarded) {
+          return request.response.done;
+        }
+        request.response.statusCode = HttpStatus.serviceUnavailable;
+        return request.response.close();
+      });
+    }
     _applyNativeHttpRequestPolicies(
       request: request,
       sessions: _sessions,
@@ -216,6 +229,53 @@ final class NativeHttpServer extends StreamView<HttpRequest>
       },
     );
     return response.done;
+  }
+
+  bool get _canAcceptRequests =>
+      !_closed &&
+      !_requestController.isClosed &&
+      _requestController.hasListener;
+
+  void _registerSharedPort(int port) {
+    final peers = _nativeSharedServersByPort.putIfAbsent(
+      port,
+      () => <NativeHttpServer>{},
+    );
+    peers.add(this);
+    _sharedPorts.add(port);
+  }
+
+  void _unregisterSharedPorts() {
+    for (final port in _sharedPorts) {
+      final peers = _nativeSharedServersByPort[port];
+      if (peers == null) {
+        continue;
+      }
+      peers.remove(this);
+      if (peers.isEmpty) {
+        _nativeSharedServersByPort.remove(port);
+      }
+    }
+    _sharedPorts.clear();
+  }
+
+  Future<bool> _tryForwardSharedRequest(BridgeHttpRequest request) async {
+    final localPort = request.connectionInfo?.localPort;
+    if (localPort == null) {
+      return false;
+    }
+    final peers = _nativeSharedServersByPort[localPort];
+    if (peers == null || peers.isEmpty) {
+      return false;
+    }
+    for (final peer in peers) {
+      if (identical(peer, this) || !peer._canAcceptRequests) {
+        continue;
+      }
+      await peer._handleRequest(request);
+      return true;
+    }
+    return false;
   }
 
   void _completeIfStopped() {
@@ -283,6 +343,7 @@ final class NativeHttpServer extends StreamView<HttpRequest>
     }
     _forceClosing = force;
     _closed = true;
+    _unregisterSharedPorts();
     if (!force) {
       await _waitForActiveRequestsToDrain();
     }
