@@ -1,4 +1,5 @@
 import 'package:routed/routed.dart';
+import 'package:server_auth/server_auth.dart';
 import 'package:routed_testing/routed_testing.dart';
 import 'package:server_testing/server_testing.dart';
 import '../test_engine.dart';
@@ -68,8 +69,8 @@ void main() {
       expect(abilityStrict.evaluate(null), isFalse);
     });
 
-    test('registerRbacWithHaigate applies abilities', () async {
-      final abilities = registerRbacWithHaigate({
+    test('registerRbacAbilities applies abilities', () async {
+      final abilities = registerRbacAbilities(gateRegistry, {
         'rbac.haigate': RbacAbility.role('admin'),
       });
       addTearDown(() {
@@ -90,7 +91,7 @@ void main() {
     });
 
     test('does not override existing gates', () async {
-      final registry = GateRegistry.instance;
+      final registry = gateRegistry;
       const ability = 'rbac.keep';
       var originalCalled = false;
       registry.register(ability, (_) {
@@ -109,7 +110,7 @@ void main() {
 
       await _withContext((ctx) async {
         callback!(
-          GateEvaluationContext(
+          AuthGateEvaluationContext<EngineContext>(
             context: ctx,
             principal: _principal('1', ['admin']),
           ),
@@ -121,7 +122,7 @@ void main() {
     });
 
     test('registers and overrides managed abilities', () async {
-      final registry = GateRegistry.instance;
+      final registry = gateRegistry;
       const ability = 'rbac.swap';
       var firstCalled = false;
       registry.register(ability, (_) {
@@ -143,7 +144,7 @@ void main() {
       final allowed = await _withContext((ctx) async {
         return await Future.value(
           callback!(
-            GateEvaluationContext(
+            AuthGateEvaluationContext<EngineContext>(
               context: ctx,
               principal: _principal('1', ['admin']),
             ),
@@ -156,7 +157,7 @@ void main() {
     });
 
     test('registers abilities and skips empty keys', () {
-      final registry = GateRegistry.instance;
+      final registry = gateRegistry;
       const ability = 'rbac.trim';
       addTearDown(() => registry.unregister(ability));
 
@@ -183,7 +184,7 @@ void main() {
 
   group('Policies', () {
     test('registers policy abilities and evaluates payloads', () async {
-      final registry = GateRegistry.instance;
+      final registry = gateRegistry;
       const prefix = 'project';
       final binding = PolicyBinding<Project>(
         policy: ProjectPolicy(),
@@ -214,7 +215,7 @@ void main() {
       final results = await _withContext((ctx) async {
         final updateOwner = await Future.value(
           updateGate!(
-            GateEvaluationContext(
+            AuthGateEvaluationContext<EngineContext>(
               context: ctx,
               principal: owner,
               payload: project,
@@ -223,7 +224,7 @@ void main() {
         );
         final updateOther = await Future.value(
           updateGate(
-            GateEvaluationContext(
+            AuthGateEvaluationContext<EngineContext>(
               context: ctx,
               principal: other,
               payload: project,
@@ -232,7 +233,7 @@ void main() {
         );
         final deleteOwner = await Future.value(
           deleteGate!(
-            GateEvaluationContext(
+            AuthGateEvaluationContext<EngineContext>(
               context: ctx,
               principal: owner,
               payload: project,
@@ -240,10 +241,20 @@ void main() {
           ),
         );
         final createOwner = await Future.value(
-          createGate!(GateEvaluationContext(context: ctx, principal: owner)),
+          createGate!(
+            AuthGateEvaluationContext<EngineContext>(
+              context: ctx,
+              principal: owner,
+            ),
+          ),
         );
         final createGuest = await Future.value(
-          createGate(GateEvaluationContext(context: ctx, principal: null)),
+          createGate(
+            AuthGateEvaluationContext<EngineContext>(
+              context: ctx,
+              principal: null,
+            ),
+          ),
         );
 
         return {

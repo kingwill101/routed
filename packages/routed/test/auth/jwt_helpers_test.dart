@@ -2,8 +2,7 @@ import 'dart:convert';
 
 import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
-import 'package:jose/jose.dart';
-import 'package:routed/auth.dart';
+import 'package:server_auth/server_auth.dart';
 import 'package:test/test.dart';
 
 const _sharedSecret = 'secret-test-key';

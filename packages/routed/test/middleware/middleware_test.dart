@@ -2,8 +2,8 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:routed/routed.dart';
+import 'package:server_data/sessions.dart';
 import 'package:routed/middlewares.dart';
-import 'package:routed/session.dart';
 import 'package:routed_testing/routed_testing.dart';
 import 'package:server_testing/server_testing.dart';
 import '../test_engine.dart';
@@ -169,7 +169,7 @@ void main() {
                 'base64:${base64.encode(List<int>.generate(32, (i) => i + 1))}',
           ),
         ],
-        defaultOptions: Options(
+        defaultOptions: SessionOptions(
           path: '/',
           maxAge: const Duration(hours: 1).inSeconds,
           secure: false,

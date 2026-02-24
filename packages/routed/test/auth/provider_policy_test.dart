@@ -1,4 +1,5 @@
 import 'package:routed/routed.dart';
+import 'package:server_auth/server_auth.dart';
 import 'package:test/test.dart';
 
 class Project {
@@ -33,8 +34,8 @@ void main() {
       providers: [CoreServiceProvider(), RoutingServiceProvider()],
       options: [
         (engine) {
-          engine.container.instance<AuthOptions>(
-            AuthOptions(
+          engine.container.instance<AuthOptions<EngineContext>>(
+            AuthOptions<EngineContext>(
               providers: const [],
               rbac: RbacOptions(
                 abilities: {'admin.only': RbacAbility.role('admin')},
@@ -55,7 +56,7 @@ void main() {
       ],
     );
 
-    final registry = GateRegistry.instance;
+    final registry = gateRegistry;
     expect(registry.resolve('admin.only'), isNotNull);
     expect(registry.resolve('project.update'), isNotNull);
 

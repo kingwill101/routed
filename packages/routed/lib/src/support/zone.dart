@@ -1,7 +1,7 @@
 import 'dart:async';
 
 import 'package:routed/src/context/context.dart';
-import 'package:routed/src/contracts/contracts.dart';
+import 'package:routed/src/contracts/config/config.dart';
 import 'package:routed/src/engine/config.dart';
 import 'package:routed/src/engine/engine.dart';
 import 'package:routed/src/events/event_manager.dart';

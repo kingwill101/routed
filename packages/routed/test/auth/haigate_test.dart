@@ -1,16 +1,14 @@
 import 'package:routed/routed.dart';
-import 'package:routed/src/auth/session_auth.dart';
+import 'package:server_auth/server_auth.dart';
 import 'package:routed_testing/routed_testing.dart';
 import 'package:server_testing/server_testing.dart';
 import '../test_engine.dart';
 
-final Set<String> _baselineAbilities = Set<String>.from(
-  GateRegistry.instance.abilities,
-);
+final Set<String> _baselineAbilities = Set<String>.from(gateRegistry.abilities);
 
 void main() {
   tearDown(() {
-    final registry = GateRegistry.instance;
+    final registry = gateRegistry;
     for (final ability in Set<String>.from(registry.abilities)) {
       if (!_baselineAbilities.contains(ability)) {
         Haigate.unregister(ability);
@@ -25,14 +23,14 @@ void main() {
 
       expect(
         () => Haigate.register('demo', (_) => true),
-        throwsA(isA<GateRegistrationException>()),
+        throwsA(isA<AuthGateRegistrationException>()),
       );
     });
 
     test('register rejects empty ability names', () {
       expect(
         () => Haigate.register(' ', (_) => true),
-        throwsA(isA<GateRegistrationException>()),
+        throwsA(isA<AuthGateRegistrationException>()),
       );
     });
 
@@ -40,14 +38,14 @@ void main() {
       Haigate.register('deny', (_) => false);
       addTearDown(() => Haigate.unregister('deny'));
 
-      GateViolation? capturedViolation;
+      AuthGateViolation<EngineContext>? capturedViolation;
 
       final engine = testEngine();
       engine.get('/authorize', (ctx) async {
         try {
           await Haigate.authorize('deny', ctx: ctx);
         } catch (error) {
-          if (error is GateViolation) {
+          if (error is AuthGateViolation<EngineContext>) {
             capturedViolation = error;
             return ctx.string('denied');
           }
@@ -69,7 +67,7 @@ void main() {
       final res = await client.get('/authorize');
       res.assertStatus(200);
       expect(res.body, equals('denied'));
-      expect(capturedViolation, isA<GateViolation>());
+      expect(capturedViolation, isA<AuthGateViolation<EngineContext>>());
       expect(capturedViolation?.ability, equals('deny'));
     });
 
@@ -77,8 +75,8 @@ void main() {
       Haigate.register('observer-demo', (_) => true);
       addTearDown(() => Haigate.unregister('observer-demo'));
 
-      final evaluations = <GateEvaluation>[];
-      void observer(GateEvaluation evaluation) {
+      final evaluations = <AuthGateEvaluation<EngineContext>>[];
+      void observer(AuthGateEvaluation<EngineContext> evaluation) {
         evaluations.add(evaluation);
       }
 

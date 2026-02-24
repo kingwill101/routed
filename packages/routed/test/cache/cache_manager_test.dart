@@ -2,23 +2,11 @@ import 'dart:async';
 
 import 'package:file/file.dart';
 import 'package:file/memory.dart';
-import 'package:routed/src/cache/array_store_factory.dart';
 import 'package:routed/src/cache/cache_manager.dart';
-import 'package:routed/src/cache/file_lock.dart';
-import 'package:routed/src/cache/file_store.dart';
-import 'package:routed/src/cache/file_store_factory.dart';
-import 'package:routed/src/cache/lock.dart';
-import 'package:routed/src/cache/null_lock.dart';
-import 'package:routed/src/cache/null_store.dart';
-import 'package:routed/src/cache/null_store_factory.dart';
-import 'package:routed/src/cache/redis_lock.dart';
-import 'package:routed/src/cache/redis_store.dart';
-import 'package:routed/src/cache/redis_store_factory.dart';
-import 'package:routed/src/cache/tag_set.dart';
-import 'package:routed/src/cache/tagged_cache.dart';
-import 'package:routed/src/contracts/cache/lock_timeout_exception.dart';
-import 'package:routed/src/contracts/cache/store.dart';
 import 'package:redis/redis.dart';
+import 'package:server_contracts/server_contracts.dart'
+    show LockTimeoutException, Store;
+import 'package:server_data/server_data.dart';
 import 'package:test/test.dart';
 
 void main() {

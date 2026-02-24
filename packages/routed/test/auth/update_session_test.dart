@@ -2,7 +2,8 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:routed/routed.dart';
-import 'package:routed/session.dart';
+import 'package:server_data/sessions.dart';
+import 'package:server_auth/server_auth.dart';
 import 'package:routed/src/sessions/middleware.dart';
 import 'package:routed_testing/routed_testing.dart';
 import 'package:server_testing/server_testing.dart';
@@ -31,7 +32,7 @@ SessionConfig _sessionConfig() {
   return SessionConfig.cookie(
     appKey: 'base64:$key',
     cookieName: 'test_session',
-    options: Options(
+    options: SessionOptions(
       path: '/',
       secure: false,
       httpOnly: true,
@@ -71,9 +72,9 @@ Map<String, dynamic>? _decodeJson(TestResponse response) {
   return null;
 }
 
-AuthManager _sessionManager({AuthCallbacks? callbacks}) {
+AuthManager _sessionManager({AuthCallbacks<EngineContext>? callbacks}) {
   return AuthManager(
-    AuthOptions(
+    AuthOptions<EngineContext>(
       providers: [
         CredentialsProvider(
           authorize: (ctx, provider, credentials) async {
@@ -92,16 +93,16 @@ AuthManager _sessionManager({AuthCallbacks? callbacks}) {
       ],
       sessionStrategy: AuthSessionStrategy.session,
       enforceCsrf: false,
-      callbacks: callbacks ?? const AuthCallbacks(),
+      callbacks: callbacks ?? const AuthCallbacks<EngineContext>(),
     ),
   );
 }
 
 const String _jwtSecret = 'test-jwt-secret-for-update-session';
 
-AuthManager _jwtManager({AuthCallbacks? callbacks}) {
+AuthManager _jwtManager({AuthCallbacks<EngineContext>? callbacks}) {
   return AuthManager(
-    AuthOptions(
+    AuthOptions<EngineContext>(
       providers: [
         CredentialsProvider(
           authorize: (ctx, provider, credentials) async {
@@ -121,7 +122,7 @@ AuthManager _jwtManager({AuthCallbacks? callbacks}) {
       sessionStrategy: AuthSessionStrategy.jwt,
       jwtOptions: const JwtSessionOptions(secret: _jwtSecret),
       enforceCsrf: false,
-      callbacks: callbacks ?? const AuthCallbacks(),
+      callbacks: callbacks ?? const AuthCallbacks<EngineContext>(),
     ),
   );
 }
@@ -275,7 +276,7 @@ void main() {
 
       test('preserves session max age configuration', () async {
         final manager = AuthManager(
-          AuthOptions(
+          AuthOptions<EngineContext>(
             providers: [
               CredentialsProvider(
                 authorize: (ctx, provider, credentials) async {
@@ -384,7 +385,7 @@ void main() {
         expect(beforeBody['user']['name'], equals('Test User'));
 
         final jwtCookie =
-            sessionBefore.cookie('routed_auth_token') ?? authCookie;
+            sessionBefore.cookie('auth_token') ?? authCookie;
 
         // Call update.
         final updateResponse = await client.postJson(
@@ -405,7 +406,7 @@ void main() {
         expect(updateBody['hasToken'], isTrue);
 
         // The response should set a new JWT cookie.
-        final newJwtCookie = updateResponse.cookie('routed_auth_token');
+        final newJwtCookie = updateResponse.cookie('auth_token');
         expect(
           newJwtCookie,
           isNotNull,
@@ -522,7 +523,7 @@ void main() {
 
       test('throws AuthFlowException when JWT secret is empty', () async {
         final manager = AuthManager(
-          AuthOptions(
+          AuthOptions<EngineContext>(
             providers: [
               CredentialsProvider(
                 authorize: (ctx, provider, credentials) async {
@@ -689,7 +690,7 @@ void main() {
         final cookies = <String>[_cookieHeader(authCookie)];
         final newSession = updateResponse.cookie('test_session');
         if (newSession != null) cookies.add(_cookieHeader(newSession));
-        final newJwt = updateResponse.cookie('routed_auth_token');
+        final newJwt = updateResponse.cookie('auth_token');
         if (newJwt != null) cookies.add(_cookieHeader(newJwt));
 
         final sessionResponse = await client.get(
@@ -963,7 +964,7 @@ void _sessionAuthUpdateSessionTests() {
         updateResponse.assertStatus(HttpStatus.ok);
 
         // Should have reissued the JWT cookie.
-        final newJwt = updateResponse.cookie('routed_auth_token');
+        final newJwt = updateResponse.cookie('auth_token');
         expect(newJwt, isNotNull, reason: 'JWT cookie should be reissued');
 
         // Verify the new token resolves correctly.

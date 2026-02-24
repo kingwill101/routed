@@ -1,4 +1,4 @@
-import 'package:routed/src/contracts/contracts.dart';
+import 'package:routed/src/contracts/config/config.dart';
 import 'package:routed/src/events/event.dart';
 
 /// Base class for configuration-related events in the engine.

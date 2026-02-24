@@ -260,7 +260,7 @@ String _renderSessionTemplate(String identifier, String pascal) {
 import 'dart:async';
 
 import 'package:routed/routed.dart';
-import 'package:routed/session.dart';
+import 'package:server_data/sessions.dart';
 
 void $registerName() {
   SessionServiceProvider.registerDriver(

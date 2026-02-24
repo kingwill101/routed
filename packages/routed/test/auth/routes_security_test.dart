@@ -2,7 +2,8 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:routed/routed.dart';
-import 'package:routed/session.dart';
+import 'package:server_data/sessions.dart';
+import 'package:server_auth/server_auth.dart';
 import 'package:routed/src/sessions/middleware.dart';
 import 'package:routed_testing/routed_testing.dart';
 import 'package:server_testing/server_testing.dart';
@@ -13,7 +14,7 @@ SessionConfig _sessionConfig() {
   return SessionConfig.cookie(
     appKey: 'base64:$key',
     cookieName: 'test_session',
-    options: Options(
+    options: SessionOptions(
       path: '/',
       secure: false,
       httpOnly: true,
@@ -40,7 +41,10 @@ String _cookieHeader(Cookie cookie) => '${cookie.name}=${cookie.value}';
 void main() {
   test('GET sign-in for credentials is rejected', () async {
     final manager = AuthManager(
-      AuthOptions(providers: [CredentialsProvider()], enforceCsrf: false),
+      AuthOptions<EngineContext>(
+        providers: [CredentialsProvider()],
+        enforceCsrf: false,
+      ),
     );
 
     final engine = _authEngine(manager);
@@ -56,7 +60,7 @@ void main() {
 
   test('callbackUrl sanitization ignores external redirects', () async {
     final manager = AuthManager(
-      AuthOptions(
+      AuthOptions<EngineContext>(
         providers: [
           OAuthProvider<Map<String, dynamic>>(
             id: 'oauth',
@@ -89,7 +93,10 @@ void main() {
 
   test('unknown providers return not found responses', () async {
     final manager = AuthManager(
-      AuthOptions(providers: [CredentialsProvider()], enforceCsrf: false),
+      AuthOptions<EngineContext>(
+        providers: [CredentialsProvider()],
+        enforceCsrf: false,
+      ),
     );
 
     final engine = _authEngine(manager);
@@ -119,7 +126,7 @@ void main() {
 
   test('rejects missing OAuth callback code', () async {
     final manager = AuthManager(
-      AuthOptions(
+      AuthOptions<EngineContext>(
         providers: [
           OAuthProvider<Map<String, dynamic>>(
             id: 'oauth',
@@ -148,7 +155,7 @@ void main() {
 
   test('rejects missing email verification tokens', () async {
     final manager = AuthManager(
-      AuthOptions(
+      AuthOptions<EngineContext>(
         providers: [EmailProvider(sendVerificationRequest: (_, _, _) async {})],
         enforceCsrf: false,
       ),
@@ -167,7 +174,7 @@ void main() {
 
   test('register rejects unsupported providers', () async {
     final manager = AuthManager(
-      AuthOptions(
+      AuthOptions<EngineContext>(
         providers: [EmailProvider(sendVerificationRequest: (_, _, _) async {})],
         enforceCsrf: false,
       ),
@@ -189,7 +196,10 @@ void main() {
 
   test('rejects invalid CSRF tokens on sign-in', () async {
     final manager = AuthManager(
-      AuthOptions(providers: [CredentialsProvider()], enforceCsrf: true),
+      AuthOptions<EngineContext>(
+        providers: [CredentialsProvider()],
+        enforceCsrf: true,
+      ),
     );
 
     final engine = _authEngine(manager);
@@ -215,7 +225,7 @@ void main() {
 
   test('signout clears JWT cookies', () async {
     final manager = AuthManager(
-      AuthOptions(
+      AuthOptions<EngineContext>(
         providers: [CredentialsProvider()],
         sessionStrategy: AuthSessionStrategy.jwt,
         enforceCsrf: false,

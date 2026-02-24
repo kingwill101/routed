@@ -4,6 +4,7 @@ import 'package:liquify/src/filter_registry.dart' as liquify;
 import 'package:routed/routed.dart';
 import 'package:routed/src/translation/locale_manager.dart';
 import 'package:routed_testing/routed_testing.dart';
+import 'package:server_contracts/server_contracts.dart' show TranslationLoader;
 import 'package:server_testing/server_testing.dart';
 import '../test_engine.dart';
 

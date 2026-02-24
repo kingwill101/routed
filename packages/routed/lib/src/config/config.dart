@@ -1,4 +1,4 @@
-import 'package:routed/src/contracts/contracts.dart';
+import 'package:routed/src/contracts/config/config.dart';
 import 'package:routed/src/utils/deep_copy.dart';
 import 'package:routed/src/utils/deep_merge.dart';
 import 'package:routed/src/utils/dot.dart';

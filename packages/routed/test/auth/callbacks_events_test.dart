@@ -2,7 +2,8 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:routed/routed.dart';
-import 'package:routed/session.dart';
+import 'package:server_data/sessions.dart';
+import 'package:server_auth/server_auth.dart';
 import 'package:routed/src/sessions/middleware.dart';
 import 'package:routed_testing/routed_testing.dart';
 import 'package:server_testing/server_testing.dart';
@@ -14,7 +15,7 @@ SessionConfig _sessionConfig() {
   return SessionConfig.cookie(
     appKey: 'base64:$key',
     cookieName: 'test_session',
-    options: Options(
+    options: SessionOptions(
       path: '/',
       secure: false,
       httpOnly: true,
@@ -43,7 +44,7 @@ void main() {
   group('Auth callbacks and events', () {
     test('signIn callback can deny sign-in', () async {
       final manager = AuthManager(
-        AuthOptions(
+        AuthOptions<EngineContext>(
           providers: [
             CredentialsProvider(
               authorize: (ctx, provider, credentials) async {
@@ -80,7 +81,7 @@ void main() {
 
     test('session callback decorates payload', () async {
       final manager = AuthManager(
-        AuthOptions(
+        AuthOptions<EngineContext>(
           providers: [
             CredentialsProvider(
               authorize: (ctx, provider, credentials) async {
@@ -134,7 +135,7 @@ void main() {
     test('jwt callback augments claims', () async {
       const jwtSecret = 'jwt-secret';
       final manager = AuthManager(
-        AuthOptions(
+        AuthOptions<EngineContext>(
           providers: [
             CredentialsProvider(
               authorize: (ctx, provider, credentials) async {
@@ -187,7 +188,7 @@ void main() {
     test('events fire on sign-in and sign-out', () async {
       final events = <String>[];
       final manager = AuthManager(
-        AuthOptions(
+        AuthOptions<EngineContext>(
           providers: [
             CredentialsProvider(
               authorize: (ctx, provider, credentials) async {
@@ -244,9 +245,59 @@ void main() {
       expect(events, contains('sign_out:user-1'));
       expect(events, contains('session'));
     });
+
+    test('redirect callback receives request baseUrl', () async {
+      String? observedBaseUrl;
+
+      final manager = AuthManager(
+        AuthOptions<EngineContext>(
+          providers: [
+            CredentialsProvider(
+              authorize: (ctx, provider, credentials) async {
+                return AuthUser(id: 'user-1', email: credentials.email);
+              },
+            ),
+          ],
+          sessionStrategy: AuthSessionStrategy.session,
+          enforceCsrf: false,
+          callbacks: AuthCallbacks(
+            signIn: (context) =>
+                const AuthSignInResult.allow(redirectUrl: '/from-signin'),
+            redirect: (context) {
+              observedBaseUrl = context.baseUrl;
+              return '/after-signin';
+            },
+          ),
+        ),
+      );
+      final engine = _authEngine(manager);
+      await engine.initialize();
+
+      final client = TestClient(RoutedRequestHandler(engine));
+      addTearDown(() async => await client.close());
+
+      final csrfResponse = await client.get('/auth/csrf');
+      final csrfToken = csrfResponse.json()['csrfToken'] as String;
+      final sessionCookie = csrfResponse.cookie('test_session');
+      expect(sessionCookie, isNotNull);
+
+      final signInResponse = await client.postJson(
+        '/auth/signin/credentials',
+        {'email': 'user@example.com', 'password': 'secret', '_csrf': csrfToken},
+        headers: {
+          HttpHeaders.cookieHeader: [_cookieHeader(sessionCookie!)],
+        },
+      );
+
+      signInResponse.assertStatus(HttpStatus.movedTemporarily);
+      final location = signInResponse.headers[HttpHeaders.locationHeader];
+      expect(location, isNotNull);
+      expect(location!.first, equals('/after-signin'));
+      expect(observedBaseUrl, equals('http://server_testing.internal'));
+    });
   });
 }
 
-AuthSignInResult _denySignIn(AuthSignInCallbackContext context) {
+AuthSignInResult _denySignIn(AuthSignInCallbackContext<EngineContext> context) {
   return const AuthSignInResult.deny();
 }

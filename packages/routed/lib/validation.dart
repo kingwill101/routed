@@ -10,7 +10,7 @@ export 'src/validation/validator.dart'
         ValidationRuleRegistry,
         RuleWithOptions,
         parseRules;
-export 'src/validation/validation_error.dart';
+export 'src/context/context.dart' show ValidationError;
 export 'src/validation/rule.dart' show ValidationRule;
 export 'src/validation/context_aware_rule.dart';
 export 'src/validation/abstract_rule.dart';

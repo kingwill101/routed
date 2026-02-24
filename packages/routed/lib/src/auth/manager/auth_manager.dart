@@ -1,84 +1,92 @@
 import 'dart:async';
-import 'dart:convert';
-import 'dart:io';
-import 'dart:math';
 
 import 'package:http/http.dart' as http;
-import 'package:routed/src/auth/adapter.dart';
+import 'package:server_auth/server_auth.dart'
+    show
+        AuthAccount,
+        AuthAdapter,
+        AuthCallbacks,
+        AuthCredentials,
+        requireAuthorizedCredentialsRegistration,
+        requireAuthorizedCredentialsSignIn,
+        resolveAuthRedirectWithCallbacks,
+        resolveAuthSignInResultForStrategyWithCallbacks,
+        resolveAuthSessionPayloadWithCallbacks,
+        resolveAuthSignInRedirectTarget,
+        AuthPrincipal,
+        AuthProvider,
+        baseUrlFromUri,
+        resolveOAuthAuthorizationStart,
+        resolveOAuthCallbackSignInForProvider,
+        AuthResult,
+        AuthSession,
+        AuthSessionStrategy,
+        AuthFlowException,
+        AuthUser,
+        AuthVerificationTokenStore,
+        InMemoryAuthVerificationTokenStore,
+        resolveAuthEmailVerificationSignIn,
+        startAuthEmailSignIn,
+        resolveBearerOrCookieToken,
+        resolveAuthSessionForStrategyWithCallbacks,
+        resolveAuthSessionUpdateForStrategyWithCallbacks,
+        resolveCsrfToken,
+        validateCsrfToken,
+        CallbackProvider,
+        CredentialsProvider,
+        EmailProvider,
+        OAuthProvider,
+        authSessionIssuedAtKey,
+        AuthOptions,
+        resolveAuthSessionMaxAgeSeconds,
+        resolveAuthSessionExpiry,
+        serializeAuthSessionIssuedAt,
+        secureRandomToken;
 import 'package:routed/src/auth/hooks.dart';
-import 'package:routed/src/auth/models.dart';
-import 'package:routed/src/auth/providers.dart';
-import 'package:routed/src/auth/jwt.dart';
-import 'package:routed/src/auth/oauth.dart';
 import 'package:routed/src/auth/session_auth.dart';
 import 'package:routed/src/context/context.dart';
 import 'package:routed/src/events/event.dart';
 import 'package:routed/src/events/event_manager.dart';
-import 'package:routed/src/crypto/crypto.dart';
 
-import 'auth_options.dart';
-import 'verification_token_store.dart';
-
-/// {@macro routed_auth_manager}
+/// High-level auth coordinator for routed.
 class AuthManager {
-  static const String _sessionIssuedAtKey = '_auth.session.issued_at';
-
-  AuthManager(this.options)
+  AuthManager(this.options, {SessionAuthService? sessionAuth})
     : _tokenStore = options.tokenStore ?? InMemoryAuthVerificationTokenStore(),
+      _sessionAuth = sessionAuth,
       _httpClient = options.httpClient;
 
-  final AuthOptions options;
+  final AuthOptions<EngineContext> options;
   final AuthVerificationTokenStore _tokenStore;
+  final SessionAuthService? _sessionAuth;
   http.Client? _httpClient;
 
   AuthAdapter get adapter => options.adapter;
 
-  SessionAuthService get sessionAuth =>
-      options.sessionAuth ?? SessionAuth.instance;
+  SessionAuthService get sessionAuth => _sessionAuth ?? SessionAuth.instance;
 
   http.Client get httpClient => _httpClient ??= http.Client();
 
-  AuthCallbacks get callbacks => options.callbacks;
-
-  AuthProvider? resolveProvider(String id) {
-    for (final provider in options.providers) {
-      if (provider.id == id) {
-        return provider;
-      }
-    }
-    return null;
-  }
-
-  List<Map<String, dynamic>> providerSummaries() {
-    return options.providers
-        .map((provider) => provider.toJson())
-        .toList(growable: false);
-  }
+  AuthCallbacks<EngineContext> get callbacks => options.callbacks;
 
   String csrfToken(EngineContext ctx) {
-    final existing = ctx.getSession<String>(options.csrfKey);
-    if (existing != null && existing.isNotEmpty) {
-      return existing;
-    }
-    final token = _randomToken();
+    final token = resolveCsrfToken(
+      existingToken: ctx.getSession<String>(options.csrfKey),
+      generateToken: secureRandomToken,
+    );
     ctx.setSession(options.csrfKey, token);
     return token;
   }
 
   bool validateCsrf(EngineContext ctx, Map<String, dynamic> payload) {
-    if (!options.enforceCsrf) {
-      return true;
-    }
-    final expected = ctx.getSession<String>(options.csrfKey);
-    if (expected == null || expected.isEmpty) {
-      return false;
-    }
-    final header =
+    final headerToken =
         ctx.request.headers.value('x-csrf-token') ??
         ctx.request.headers.value('X-CSRF-Token');
-    final formToken = payload['_csrf']?.toString();
-    final token = header ?? formToken;
-    return token != null && token == expected;
+    return validateCsrfToken(
+      expectedToken: ctx.getSession<String>(options.csrfKey),
+      headerToken: headerToken,
+      formToken: payload['_csrf']?.toString(),
+      enforce: options.enforceCsrf,
+    );
   }
 
   Future<AuthResult> signInWithCredentials(
@@ -86,15 +94,12 @@ class AuthManager {
     CredentialsProvider provider,
     AuthCredentials credentials,
   ) async {
-    final user = provider.authorize != null
-        ? await Future.sync(
-            () => provider.authorize!(ctx, provider, credentials),
-          )
-        : await Future.sync(() => adapter.verifyCredentials(credentials));
-
-    if (user == null) {
-      throw AuthFlowException('invalid_credentials');
-    }
+    final user = await requireAuthorizedCredentialsSignIn(
+      adapter: adapter,
+      provider: provider,
+      context: ctx,
+      credentials: credentials,
+    );
 
     return _completeSignIn(
       ctx,
@@ -109,15 +114,12 @@ class AuthManager {
     CredentialsProvider provider,
     AuthCredentials credentials,
   ) async {
-    final user = provider.register != null
-        ? await Future.sync(
-            () => provider.register!(ctx, provider, credentials),
-          )
-        : await Future.sync(() => adapter.registerCredentials(credentials));
-
-    if (user == null) {
-      throw AuthFlowException('registration_failed');
-    }
+    final user = await requireAuthorizedCredentialsRegistration(
+      adapter: adapter,
+      provider: provider,
+      context: ctx,
+      credentials: credentials,
+    );
 
     return _completeSignIn(
       ctx,
@@ -134,37 +136,19 @@ class AuthManager {
     String email,
     String callbackUrl,
   ) async {
-    await Future.sync(() => adapter.deleteVerificationTokens(email));
-    await _tokenStore.delete(email);
-    final token = provider.tokenGenerator?.call() ?? _randomToken();
-    final expiresAt = DateTime.now().add(provider.tokenExpiry);
-    if (callbackUrl.isNotEmpty) {
-      ctx.setSession('${options.callbackKey}.email', callbackUrl);
-    }
-    final verification = AuthVerificationToken(
-      identifier: email,
-      token: token,
-      expiresAt: expiresAt,
-    );
-    await Future.sync(() => adapter.saveVerificationToken(verification));
-    await _tokenStore.save(verification);
-
-    final request = AuthEmailRequest(
+    final payload = await startAuthEmailSignIn<EngineContext>(
+      adapter: adapter,
+      tokenStore: _tokenStore,
+      provider: provider,
+      context: ctx,
       email: email,
-      token: token,
       callbackUrl: callbackUrl,
-      expiresAt: expiresAt,
+      sessionStrategy: options.sessionStrategy,
+      generateToken: secureRandomToken,
+      writeSession: ctx.setSession,
+      callbackKey: options.callbackKey,
     );
-    await Future.sync(
-      () => provider.sendVerificationRequest(ctx, provider, request),
-    );
-
-    final session = AuthSession(
-      user: AuthUser(id: '', email: email),
-      expiresAt: expiresAt,
-      strategy: options.sessionStrategy,
-    );
-    return AuthResult(user: session.user, session: session);
+    return payload.pendingResult;
   }
 
   Future<AuthResult> verifyEmail(
@@ -173,34 +157,24 @@ class AuthManager {
     String email,
     String token,
   ) async {
-    final verification = await Future.sync(
-      () => adapter.useVerificationToken(email, token),
+    final resolved = await resolveAuthEmailVerificationSignIn(
+      adapter: adapter,
+      tokenStore: _tokenStore,
+      email: email,
+      token: token,
+      callbackKey: options.callbackKey,
+      readSession: (key) => ctx.getSession<String>(key),
     );
-    final fallback = await _tokenStore.use(email, token);
-    final resolved = verification ?? fallback;
     if (resolved == null) {
       throw AuthFlowException('invalid_token');
     }
 
-    final existing = await Future.sync(() => adapter.getUserByEmail(email));
-    var isNewUser = false;
-    late final AuthUser user;
-    if (existing != null) {
-      user = existing;
-    } else {
-      user = await Future.sync(
-        () => adapter.createUser(AuthUser(id: email, email: email)),
-      );
-      isNewUser = true;
-    }
-    final redirectUrl = ctx.getSession<String>('${options.callbackKey}.email');
-
     return _completeSignIn(
       ctx,
-      user,
-      redirectUrl: redirectUrl,
+      resolved.user,
+      redirectUrl: resolved.callbackUrl,
       provider: provider,
-      isNewUser: isNewUser,
+      isNewUser: resolved.isNewUser,
     );
   }
 
@@ -209,39 +183,17 @@ class AuthManager {
     OAuthProvider<TProfile> provider, {
     String? callbackUrl,
   }) async {
-    final state = _randomToken();
-    ctx.setSession('${options.stateKey}.${provider.id}', state);
-
-    if (provider.onStateGenerated != null) {
-      await Future.sync(() => provider.onStateGenerated!(ctx, provider, state));
-    }
-
-    String? verifier;
-    String? challenge;
-    if (provider.usePkce) {
-      verifier = _randomToken(length: 48);
-      challenge = _base64Url(sha256Bytes(verifier));
-      ctx.setSession('${options.pkceKey}.${provider.id}', verifier);
-    }
-    final codeChallengeMethod = challenge == null ? null : 'S256';
-
-    final params = <String, String>{
-      'response_type': 'code',
-      'client_id': provider.clientId,
-      'redirect_uri': provider.redirectUri,
-      'state': state,
-      if (provider.scopes.isNotEmpty) 'scope': provider.scopes.join(' '),
-      'code_challenge': ?challenge,
-      'code_challenge_method': ?codeChallengeMethod,
-      ...provider.authorizationParams,
-    };
-
-    if (callbackUrl != null && callbackUrl.isNotEmpty) {
-      ctx.setSession('${options.callbackKey}.${provider.id}', callbackUrl);
-      params['callbackUrl'] = callbackUrl;
-    }
-
-    return provider.authorizationEndpoint.replace(queryParameters: params);
+    final resolved =
+        await resolveOAuthAuthorizationStart<EngineContext, TProfile>(
+          context: ctx,
+          provider: provider,
+          stateKey: options.stateKey,
+          pkceKey: options.pkceKey,
+          callbackKey: options.callbackKey,
+          callbackUrl: callbackUrl,
+          writeSession: ctx.setSession,
+        );
+    return resolved.authorizationUri;
   }
 
   Future<AuthResult> finishOAuth<TProfile extends Object>(
@@ -250,90 +202,36 @@ class AuthManager {
     String code,
     String? state,
   ) async {
-    final expectedState = ctx.getSession<String>(
-      '${options.stateKey}.${provider.id}',
-    );
-    if (expectedState == null || expectedState != state) {
-      throw AuthFlowException('invalid_state');
-    }
-
-    final verifier = ctx.getSession<String>(
-      '${options.pkceKey}.${provider.id}',
-    );
-    final tokenResponse = await _exchangeOAuthCode(provider, code, verifier);
-
-    final rawProfile = await _loadOAuthProfile(ctx, provider, tokenResponse);
-    final parsedProfile = provider.parseProfile(rawProfile);
-    final enrichedProfile = await Future.sync(
-      () =>
-          provider.enrichProfile(ctx, tokenResponse, httpClient, parsedProfile),
-    );
-    final mapped = provider.mapProfile(enrichedProfile);
-    final override = await Future.sync(
-      () => provider.overrideProfile(ctx, enrichedProfile),
-    );
-    final user = override ?? mapped;
-
-    final profileMap = provider.serializeProfile(enrichedProfile);
-    final accountId = _resolveAccountId(profileMap, user);
-    final accountExpiresAt = tokenResponse.expiresIn == null
-        ? null
-        : DateTime.now().add(Duration(seconds: tokenResponse.expiresIn!));
-
-    final existingAccount = await Future.sync(
-      () => adapter.getAccount(provider.id, accountId),
-    );
-
-    var isNewUser = false;
-    AuthUser resolvedUser = user;
-    if (existingAccount != null && existingAccount.userId != null) {
-      final byId = await Future.sync(
-        () => adapter.getUserById(existingAccount.userId!),
-      );
-      if (byId != null) {
-        resolvedUser = byId;
-      }
-    }
-
-    if (resolvedUser.email != null) {
-      final byEmail = await Future.sync(
-        () => adapter.getUserByEmail(resolvedUser.email!),
-      );
-      if (byEmail != null) {
-        resolvedUser = byEmail;
-      }
-    }
-
-    if (resolvedUser.id.isEmpty) {
-      resolvedUser = await Future.sync(() => adapter.createUser(resolvedUser));
-      isNewUser = true;
-    } else {
-      final updatedUser = _mergeUser(resolvedUser, user);
-      if (_hasUserChanges(resolvedUser, updatedUser)) {
-        final stored = await Future.sync(() => adapter.updateUser(updatedUser));
-        resolvedUser = stored ?? updatedUser;
-        await _emitAuthEvent(
-          ctx,
-          AuthUpdateUserEvent(
-            context: ctx,
-            user: resolvedUser,
-            provider: provider,
-          ),
+    final resolved =
+        await resolveOAuthCallbackSignInForProvider<EngineContext, TProfile>(
+          adapter: adapter,
+          context: ctx,
+          provider: provider,
+          code: code,
+          receivedState: state,
+          stateKey: options.stateKey,
+          pkceKey: options.pkceKey,
+          callbackKey: options.callbackKey,
+          readSession: (key) => ctx.getSession<String>(key),
+          httpClient: httpClient,
+          fallbackAccountId: secureRandomToken,
         );
-      }
+    final signIn = resolved.signIn;
+    final resolvedUser = signIn.user;
+    final isNewUser = signIn.isNewUser;
+    if (signIn.userUpdated) {
+      await _emitAuthEvent(
+        ctx,
+        AuthUpdateUserEvent(
+          context: ctx,
+          user: resolvedUser,
+          provider: provider,
+        ),
+      );
     }
 
-    final account = AuthAccount(
-      providerId: provider.id,
-      providerAccountId: accountId,
-      userId: resolvedUser.id,
-      accessToken: tokenResponse.accessToken,
-      refreshToken: tokenResponse.refreshToken,
-      expiresAt: accountExpiresAt,
-      metadata: profileMap,
-    );
-
-    await Future.sync(() => adapter.linkAccount(account));
+    final account = signIn.account;
+    final profileMap = signIn.profile;
     await _emitAuthEvent(
       ctx,
       AuthLinkAccountEvent(
@@ -344,9 +242,7 @@ class AuthManager {
       ),
     );
 
-    final redirectUrl = ctx.getSession<String>(
-      '${options.callbackKey}.${provider.id}',
-    );
+    final redirectUrl = resolved.callbackUrl;
     return _completeSignIn(
       ctx,
       resolvedUser,
@@ -418,103 +314,51 @@ class AuthManager {
     EngineContext ctx,
     AuthPrincipal principal,
   ) async {
-    final user = AuthUser.fromPrincipal(principal);
-    switch (options.sessionStrategy) {
-      case AuthSessionStrategy.session:
-        _applySessionMaxAge(ctx);
-        await sessionAuth.login(ctx, principal);
-        _setSessionIssuedAt(ctx, DateTime.now().toUtc());
-        final expires = _sessionExpiry(ctx);
-        return AuthSession(
-          user: user,
-          expiresAt: expires,
-          strategy: AuthSessionStrategy.session,
+    final resolved =
+        await resolveAuthSessionUpdateForStrategyWithCallbacks<EngineContext>(
+          strategy: options.sessionStrategy,
+          callbacks: callbacks,
+          context: ctx,
+          principal: principal,
+          jwtOptions: options.jwtOptions,
+          applySessionMaxAge: () => _applySessionMaxAge(ctx),
+          persistSessionPrincipal: (nextPrincipal) =>
+              sessionAuth.login(ctx, nextPrincipal),
+          writeSessionIssuedAt: (issuedAtUtc) =>
+              _setSessionIssuedAt(ctx, issuedAtUtc),
+          resolveSessionExpiry: () => _sessionExpiry(ctx),
         );
-      case AuthSessionStrategy.jwt:
-        if (options.jwtOptions.secret.isEmpty) {
-          throw AuthFlowException('missing_jwt_secret');
-        }
-        final issuer = _jwtIssuer();
-        final claims = await _applyJwtCallback(
-          AuthJwtCallbackContext(
-            context: ctx,
-            token: _jwtClaimsForUser(user),
-            user: user,
-            strategy: AuthSessionStrategy.jwt,
-          ),
-        );
-        final token = issuer.issue(claims);
-        _attachJwtCookie(ctx, token, issuer.expiry);
-        return AuthSession(
-          user: user,
-          expiresAt: issuer.expiry,
-          strategy: AuthSessionStrategy.jwt,
-          token: token,
-        );
+    final jwtCookie = resolved.jwtCookie;
+    if (jwtCookie != null) {
+      ctx.response.cookies.add(jwtCookie);
     }
+    return resolved.session;
   }
 
   Future<AuthSession?> resolveSession(EngineContext ctx) async {
-    switch (options.sessionStrategy) {
-      case AuthSessionStrategy.session:
-        final principal = sessionAuth.current(ctx);
-        if (principal == null) return null;
-        _applySessionMaxAge(ctx);
-        _refreshSessionIfNeeded(ctx);
-        final user = AuthUser.fromPrincipal(principal);
-        final expires = _sessionExpiry(ctx);
-        return AuthSession(
-          user: user,
-          expiresAt: expires,
-          strategy: AuthSessionStrategy.session,
+    final resolved =
+        await resolveAuthSessionForStrategyWithCallbacks<EngineContext>(
+          strategy: options.sessionStrategy,
+          callbacks: callbacks,
+          context: ctx,
+          jwtOptions: options.jwtOptions,
+          sessionUpdateAge: options.sessionUpdateAge,
+          readSessionPrincipal: () => sessionAuth.current(ctx),
+          applySessionMaxAge: () => _applySessionMaxAge(ctx),
+          readSessionIssuedAt: () =>
+              ctx.getSession<String>(authSessionIssuedAtKey),
+          writeSessionIssuedAt: (issuedAtUtc) =>
+              _setSessionIssuedAt(ctx, issuedAtUtc),
+          touchSession: ctx.session.touch,
+          resolveSessionExpiry: () => _sessionExpiry(ctx),
+          readJwtToken: () => _resolveJwtToken(ctx),
+          httpClient: httpClient,
         );
-      case AuthSessionStrategy.jwt:
-        final token = _resolveJwtToken(ctx);
-        if (token == null || token.isEmpty) return null;
-        if (options.jwtOptions.secret.isEmpty) return null;
-        final verifier = _jwtVerifier();
-        JwtPayload payload;
-        try {
-          payload = await verifier.verifyToken(token);
-        } on JwtAuthException {
-          return null;
-        }
-        final user = _userFromJwtClaims(payload.claims);
-        var resolvedToken = token;
-        var resolvedExpiry = payload.token.claims.expiry?.toUtc();
-        final refreshed = await _refreshJwtIfNeeded(ctx, payload, user);
-        if (refreshed != null) {
-          resolvedToken = refreshed.token;
-          resolvedExpiry = refreshed.expiresAt;
-        }
-        return AuthSession(
-          user: user,
-          expiresAt: resolvedExpiry,
-          strategy: AuthSessionStrategy.jwt,
-          token: resolvedToken,
-        );
+    final refreshCookie = resolved.refreshCookie;
+    if (refreshCookie != null) {
+      ctx.response.cookies.add(refreshCookie);
     }
-  }
-
-  Future<AuthSignInResult> _applySignInCallback(
-    AuthSignInCallbackContext context,
-  ) async {
-    final callback = callbacks.signIn;
-    if (callback == null) {
-      return const AuthSignInResult.allow();
-    }
-    return await Future.sync(() => callback(context));
-  }
-
-  Future<Map<String, dynamic>> _applyJwtCallback(
-    AuthJwtCallbackContext context,
-  ) async {
-    final callback = callbacks.jwt;
-    if (callback == null) {
-      return context.token;
-    }
-    final updated = await Future.sync(() => callback(context));
-    return updated ?? context.token;
+    return resolved.session;
   }
 
   Future<String?> resolveRedirect(
@@ -522,24 +366,17 @@ class AuthManager {
     String? url, {
     AuthProvider? provider,
   }) async {
-    if (url == null || url.trim().isEmpty) {
-      return null;
-    }
-    final callback = callbacks.redirect;
-    if (callback == null) {
-      return url;
-    }
-    final resolved = await Future.sync(
-      () => callback(
-        AuthRedirectCallbackContext(
-          context: ctx,
-          url: url,
-          baseUrl: _baseUrl(ctx.request.uri),
-          provider: provider,
-        ),
+    return resolveAuthRedirectWithCallbacks<EngineContext>(
+      callbacks: callbacks,
+      context: ctx,
+      url: url,
+      baseUrl: baseUrlFromUri(
+        ctx.requestedUri,
+        defaultScheme: ctx.scheme,
+        defaultHost: ctx.host,
       ),
+      provider: provider,
     );
-    return resolved ?? url;
   }
 
   Future<Map<String, dynamic>> buildSessionPayload(
@@ -547,23 +384,14 @@ class AuthManager {
     AuthSession session, {
     AuthProvider? provider,
   }) async {
-    final payload = Map<String, dynamic>.from(session.toJson());
-    final callback = callbacks.session;
-    final resolved = callback == null
-        ? null
-        : await Future.sync(
-            () => callback(
-              AuthSessionCallbackContext(
-                context: ctx,
-                session: session,
-                payload: payload,
-                user: session.user,
-                strategy: session.strategy ?? options.sessionStrategy,
-                provider: provider,
-              ),
-            ),
-          );
-    final finalPayload = resolved ?? payload;
+    final finalPayload =
+        await resolveAuthSessionPayloadWithCallbacks<EngineContext>(
+          callbacks: callbacks,
+          context: ctx,
+          session: session,
+          strategy: session.strategy ?? options.sessionStrategy,
+          provider: provider,
+        );
     await _emitAuthEvent(
       ctx,
       AuthSessionEvent(
@@ -601,13 +429,6 @@ class AuthManager {
     manager.publish(event);
   }
 
-  String _baseUrl(Uri uri) {
-    final scheme = uri.scheme.isEmpty ? 'http' : uri.scheme;
-    final host = uri.host.isEmpty ? 'localhost' : uri.host;
-    final port = uri.hasPort ? ':${uri.port}' : '';
-    return '$scheme://$host$port';
-  }
-
   Future<AuthResult> _completeSignIn(
     EngineContext ctx,
     AuthUser user, {
@@ -618,29 +439,21 @@ class AuthManager {
     AuthCredentials? credentials,
     bool isNewUser = false,
   }) async {
-    final decision = await _applySignInCallback(
-      AuthSignInCallbackContext(
-        context: ctx,
-        user: user,
-        strategy: options.sessionStrategy,
-        provider: provider,
-        account: account,
-        profile: profile,
-        credentials: credentials,
-        isNewUser: isNewUser,
-        callbackUrl: redirectUrl,
-      ),
-    );
-
-    if (!decision.allowed) {
-      throw AuthFlowException('sign_in_blocked');
-    }
-
-    final resolvedRedirect = await resolveRedirect(
-      ctx,
-      decision.redirectUrl ?? redirectUrl,
-      provider: provider,
-    );
+    final resolvedRedirect =
+        await resolveAuthSignInRedirectTarget<EngineContext>(
+          callbacks: callbacks,
+          context: ctx,
+          user: user,
+          strategy: options.sessionStrategy,
+          provider: provider,
+          account: account,
+          profile: profile,
+          credentials: credentials,
+          isNewUser: isNewUser,
+          callbackUrl: redirectUrl,
+          resolveRedirect: (candidate) =>
+              resolveRedirect(ctx, candidate, provider: provider),
+        );
 
     if (isNewUser) {
       await _emitAuthEvent(
@@ -654,391 +467,86 @@ class AuthManager {
       );
     }
 
-    switch (options.sessionStrategy) {
-      case AuthSessionStrategy.session:
-        _applySessionMaxAge(ctx);
-        await sessionAuth.login(ctx, user.toPrincipal());
-        _setSessionIssuedAt(ctx, DateTime.now().toUtc());
-        final expires = _sessionExpiry(ctx);
-        final session = AuthSession(
-          user: user,
-          expiresAt: expires,
-          strategy: AuthSessionStrategy.session,
-        );
-        await _emitAuthEvent(
-          ctx,
-          AuthSignInEvent(
-            context: ctx,
-            user: user,
-            session: session,
-            strategy: AuthSessionStrategy.session,
-            provider: provider,
-            account: account,
-            profile: profile,
-            credentials: credentials,
-            redirectUrl: resolvedRedirect,
-            isNewUser: isNewUser,
-          ),
-        );
-        return AuthResult(
-          user: user,
-          session: session,
-          redirectUrl: resolvedRedirect,
-        );
-      case AuthSessionStrategy.jwt:
-        if (options.jwtOptions.secret.isEmpty) {
-          throw AuthFlowException('missing_jwt_secret');
-        }
-        final issuer = _jwtIssuer();
-        final claims = await _applyJwtCallback(
-          AuthJwtCallbackContext(
-            context: ctx,
-            token: _jwtClaimsForUser(user),
-            user: user,
-            strategy: AuthSessionStrategy.jwt,
-            provider: provider,
-            account: account,
-            profile: profile,
-            isNewUser: isNewUser,
-          ),
-        );
-        final token = issuer.issue(claims);
-        _attachJwtCookie(ctx, token, issuer.expiry);
-        final session = AuthSession(
-          user: user,
-          expiresAt: issuer.expiry,
-          strategy: AuthSessionStrategy.jwt,
-          token: token,
-        );
-        await _emitAuthEvent(
-          ctx,
-          AuthSignInEvent(
-            context: ctx,
-            user: user,
-            session: session,
-            strategy: AuthSessionStrategy.jwt,
-            provider: provider,
-            account: account,
-            profile: profile,
-            credentials: credentials,
-            redirectUrl: resolvedRedirect,
-            isNewUser: isNewUser,
-          ),
-        );
-        return AuthResult(
-          user: user,
-          session: session,
-          redirectUrl: resolvedRedirect,
-        );
+    DateTime? sessionExpiresAt;
+    if (options.sessionStrategy == AuthSessionStrategy.session) {
+      _applySessionMaxAge(ctx);
+      await sessionAuth.login(ctx, user.toPrincipal());
+      _setSessionIssuedAt(ctx, DateTime.now().toUtc());
+      sessionExpiresAt = _sessionExpiry(ctx);
     }
-  }
 
-  JwtIssuer _jwtIssuer() => JwtIssuer(options.jwtOptions);
+    final resolvedSignIn =
+        await resolveAuthSignInResultForStrategyWithCallbacks<EngineContext>(
+          callbacks: callbacks,
+          context: ctx,
+          strategy: options.sessionStrategy,
+          user: user,
+          redirectUrl: resolvedRedirect,
+          jwtOptions: options.jwtOptions,
+          sessionExpiresAt: sessionExpiresAt,
+          provider: provider,
+          account: account,
+          profile: profile,
+          isNewUser: isNewUser,
+        );
 
-  JwtVerifier _jwtVerifier() {
-    return JwtVerifier(
-      options: options.jwtOptions.toVerifierOptions(),
-      httpClient: httpClient,
+    final issuedJwt = resolvedSignIn.issuedJwt;
+    if (issuedJwt != null) {
+      ctx.response.cookies.add(issuedJwt.cookie);
+    }
+
+    final result = resolvedSignIn.result;
+    final session = result.session;
+    await _emitAuthEvent(
+      ctx,
+      AuthSignInEvent(
+        context: ctx,
+        user: user,
+        session: session,
+        strategy: options.sessionStrategy,
+        provider: provider,
+        account: account,
+        profile: profile,
+        credentials: credentials,
+        redirectUrl: resolvedRedirect,
+        isNewUser: isNewUser,
+      ),
     );
-  }
-
-  Map<String, dynamic> _jwtClaimsForUser(AuthUser user) {
-    return {
-      'sub': user.id,
-      'email': user.email,
-      'name': user.name,
-      'image': user.image,
-      'roles': user.roles,
-      'attributes': user.attributes,
-    };
-  }
-
-  AuthUser _userFromJwtClaims(Map<String, dynamic> claims) {
-    return AuthUser(
-      id: claims['sub']?.toString() ?? '',
-      email: claims['email']?.toString(),
-      name: claims['name']?.toString(),
-      image: claims['image']?.toString(),
-      roles: (claims['roles'] as List?)?.cast<String>() ?? const <String>[],
-      attributes: (claims['attributes'] as Map?)?.cast<String, dynamic>(),
-    );
+    return result;
   }
 
   void _applySessionMaxAge(EngineContext ctx) {
-    final maxAge = options.sessionMaxAge;
-    if (maxAge == null) {
+    final maxAgeSeconds = resolveAuthSessionMaxAgeSeconds(
+      options.sessionMaxAge,
+    );
+    if (maxAgeSeconds == null) {
       return;
     }
-    ctx.session.options.setMaxAge(maxAge.inSeconds);
+    ctx.session.options.setMaxAge(maxAgeSeconds);
   }
 
   void _setSessionIssuedAt(EngineContext ctx, DateTime issuedAt) {
-    ctx.setSession(_sessionIssuedAtKey, issuedAt.toIso8601String());
-  }
-
-  DateTime? _sessionIssuedAt(EngineContext ctx) {
-    final stored = ctx.getSession<String>(_sessionIssuedAtKey);
-    if (stored == null || stored.isEmpty) {
-      return null;
-    }
-    return DateTime.tryParse(stored)?.toUtc();
-  }
-
-  void _refreshSessionIfNeeded(EngineContext ctx) {
-    final updateAge = options.sessionUpdateAge;
-    if (updateAge == null) {
-      return;
-    }
-    final now = DateTime.now().toUtc();
-    final issuedAt = _sessionIssuedAt(ctx);
-    if (issuedAt == null) {
-      _setSessionIssuedAt(ctx, now);
-      return;
-    }
-    if (now.difference(issuedAt) >= updateAge) {
-      _setSessionIssuedAt(ctx, now);
-      ctx.session.touch();
-    }
-  }
-
-  Future<_JwtRefresh?> _refreshJwtIfNeeded(
-    EngineContext ctx,
-    JwtPayload payload,
-    AuthUser user,
-  ) async {
-    final updateAge = options.sessionUpdateAge;
-    if (updateAge == null) {
-      return null;
-    }
-    final issuedAtValue = payload.claims['iat'];
-    if (issuedAtValue is! num) {
-      return null;
-    }
-    final issuedAt = DateTime.fromMillisecondsSinceEpoch(
-      issuedAtValue.toInt() * 1000,
-      isUtc: true,
-    ).toUtc();
-    if (DateTime.now().toUtc().difference(issuedAt) < updateAge) {
-      return null;
-    }
-    final issuer = _jwtIssuer();
-    final claims = await _applyJwtCallback(
-      AuthJwtCallbackContext(
-        context: ctx,
-        token: Map<String, dynamic>.from(payload.claims),
-        user: user,
-        strategy: AuthSessionStrategy.jwt,
-      ),
+    ctx.setSession(
+      authSessionIssuedAtKey,
+      serializeAuthSessionIssuedAt(issuedAt),
     );
-    final token = issuer.issue(claims);
-    _attachJwtCookie(ctx, token, issuer.expiry);
-    return _JwtRefresh(token: token, expiresAt: issuer.expiry);
   }
 
   DateTime? _sessionExpiry(EngineContext ctx) {
-    final override = options.sessionMaxAge;
-    if (override != null) {
-      return DateTime.now().add(override);
-    }
-    final maxAge = ctx.session.options.maxAge;
-    if (maxAge == null || maxAge <= 0) {
-      return null;
-    }
-    return DateTime.now().add(Duration(seconds: maxAge));
+    return resolveAuthSessionExpiry(
+      sessionMaxAge: options.sessionMaxAge,
+      sessionOptionsMaxAgeSeconds: ctx.session.options.maxAge,
+    );
   }
 
   String? _resolveJwtToken(EngineContext ctx) {
-    final header = ctx.request.headers.value(options.jwtOptions.header);
-    if (header != null && header.startsWith(options.jwtOptions.bearerPrefix)) {
-      return header.substring(options.jwtOptions.bearerPrefix.length).trim();
-    }
-    for (final cookie in ctx.request.cookies) {
-      if (cookie.name == options.jwtOptions.cookieName) {
-        return cookie.value;
-      }
-    }
-    return null;
-  }
-
-  void _attachJwtCookie(EngineContext ctx, String token, DateTime? expires) {
-    final cookie = Cookie(options.jwtOptions.cookieName, token)
-      ..httpOnly = true
-      ..path = '/';
-    if (expires != null) {
-      cookie.expires = expires;
-    }
-    ctx.response.cookies.add(cookie);
-  }
-
-  OAuth2Client _oauthClient<TProfile extends Object>(
-    OAuthProvider<TProfile> provider,
-  ) {
-    return OAuth2Client(
-      tokenEndpoint: provider.tokenEndpoint,
-      clientId: provider.clientId,
-      clientSecret: provider.clientSecret,
-      httpClient: httpClient,
-      useBasicAuth: provider.useBasicAuth,
+    return resolveBearerOrCookieToken(
+      authorizationHeader: ctx.request.headers.value(options.jwtOptions.header),
+      bearerPrefix: options.jwtOptions.bearerPrefix,
+      cookieName: options.jwtOptions.cookieName,
+      cookies: ctx.request.cookies.map(
+        (cookie) => MapEntry<String, String>(cookie.name, cookie.value),
+      ),
     );
   }
-
-  Future<OAuthTokenResponse> _exchangeOAuthCode<TProfile extends Object>(
-    OAuthProvider<TProfile> provider,
-    String code,
-    String? verifier,
-  ) async {
-    final scope = provider.scopes.isEmpty ? null : provider.scopes.join(' ');
-    return _oauthClient(provider).exchangeAuthorizationCode(
-      code: code,
-      redirectUri: Uri.parse(provider.redirectUri),
-      codeVerifier: verifier,
-      scope: scope,
-      additionalParameters: provider.tokenParams.isEmpty
-          ? null
-          : provider.tokenParams,
-    );
-  }
-
-  Future<Map<String, dynamic>> _loadOAuthProfile<TProfile extends Object>(
-    EngineContext ctx,
-    OAuthProvider<TProfile> provider,
-    OAuthTokenResponse token,
-  ) async {
-    Map<String, dynamic> profile;
-    if (provider.userInfoEndpoint == null) {
-      final idToken = token.raw['id_token']?.toString();
-      if (idToken != null && idToken.isNotEmpty) {
-        final jwt = JsonWebToken.unverified(idToken);
-        profile = jwt.claims.toJson();
-      } else {
-        profile = <String, dynamic>{};
-      }
-    } else if (provider.userInfoRequest != null) {
-      // Use custom userinfo request callback (e.g., for POST-based endpoints)
-      try {
-        profile = await Future.sync(
-          () => provider.userInfoRequest!(
-            token,
-            httpClient,
-            provider.userInfoEndpoint!,
-          ),
-        );
-      } catch (e) {
-        throw AuthFlowException('userinfo_failed');
-      }
-    } else {
-      try {
-        profile = await _oauthClient(
-          provider,
-        ).fetchUserInfo(provider.userInfoEndpoint!, token.accessToken);
-      } on OAuth2Exception {
-        throw AuthFlowException('userinfo_failed');
-      }
-    }
-
-    return profile;
-  }
-
-  String _resolveAccountId(Map<String, dynamic> profile, AuthUser user) {
-    final candidates = [
-      profile['sub'],
-      profile['id'],
-      profile['user_id'],
-      user.id,
-      user.email,
-    ];
-    return candidates
-        .firstWhere(
-          (value) => value != null && value.toString().isNotEmpty,
-          orElse: () => _randomToken(),
-        )
-        .toString();
-  }
-
-  AuthUser _mergeUser(AuthUser existing, AuthUser incoming) {
-    final roles = incoming.roles.isNotEmpty ? incoming.roles : existing.roles;
-    final attributes = <String, dynamic>{
-      ...existing.attributes,
-      ...incoming.attributes,
-    };
-    return AuthUser(
-      id: existing.id,
-      email: incoming.email ?? existing.email,
-      name: incoming.name ?? existing.name,
-      image: incoming.image ?? existing.image,
-      roles: roles,
-      attributes: attributes,
-    );
-  }
-
-  bool _hasUserChanges(AuthUser existing, AuthUser updated) {
-    if (existing.email != updated.email ||
-        existing.name != updated.name ||
-        existing.image != updated.image) {
-      return true;
-    }
-    if (!_listEquals(existing.roles, updated.roles)) {
-      return true;
-    }
-    return !_mapEquals(existing.attributes, updated.attributes);
-  }
-
-  bool _listEquals(List<String> left, List<String> right) {
-    if (left.length != right.length) {
-      return false;
-    }
-    for (var i = 0; i < left.length; i++) {
-      if (left[i] != right[i]) {
-        return false;
-      }
-    }
-    return true;
-  }
-
-  bool _mapEquals(Map<String, dynamic> left, Map<String, dynamic> right) {
-    if (left.length != right.length) {
-      return false;
-    }
-    for (final entry in left.entries) {
-      if (!right.containsKey(entry.key)) {
-        return false;
-      }
-      final rightValue = right[entry.key];
-      if (rightValue != entry.value) {
-        return false;
-      }
-    }
-    return true;
-  }
-
-  String _randomToken({int length = 32}) {
-    final rand = Random.secure();
-    final bytes = List<int>.generate(length, (_) => rand.nextInt(256));
-    return base64UrlEncode(bytes);
-  }
-
-  List<int> sha256Bytes(String value) {
-    final data = utf8.encode(value);
-    return sha256Digest(data);
-  }
-
-  String _base64Url(List<int> bytes) {
-    return base64UrlEncode(bytes).replaceAll('=', '');
-  }
-}
-
-class _JwtRefresh {
-  const _JwtRefresh({required this.token, required this.expiresAt});
-
-  final String token;
-  final DateTime expiresAt;
-}
-
-class AuthFlowException implements Exception {
-  AuthFlowException(this.code);
-
-  final String code;
-
-  @override
-  String toString() => 'AuthFlowException($code)';
 }

@@ -1,6 +1,6 @@
 import 'dart:async';
 
-import 'package:routed/src/contracts/contracts.dart';
+import 'package:routed/src/contracts/config/config.dart';
 
 /// Retrieves a configuration value using dot notation (e.g. `app.name`).
 T? configValue<T>(String key, [T? defaultValue]) {

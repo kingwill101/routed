@@ -11,7 +11,7 @@ import '../../config/config.dart' show ConfigImpl;
 import '../../config/loader.dart';
 import '../../config/registry.dart';
 import '../../container/container.dart';
-import '../../contracts/contracts.dart' show Config;
+import '../../contracts/config/config.dart' show Config;
 import '../../engine/engine.dart';
 import '../../provider/config_utils.dart';
 import '../../provider/provider.dart'

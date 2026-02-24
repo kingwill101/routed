@@ -1,7 +1,7 @@
 /// Telegram Login Widget Authentication Example
 ///
 /// This example demonstrates how to integrate Telegram Login Widget
-/// authentication with routed using the TelegramProvider from routed_auth.
+/// authentication with routed using the TelegramProvider from server_auth.
 ///
 /// ## Setup
 ///
@@ -34,7 +34,7 @@ import 'dart:io';
 import 'package:routed/routed.dart';
 import 'package:routed/session.dart';
 import 'package:routed/src/sessions/middleware.dart';
-import 'package:routed_auth/routed_auth.dart';
+import 'package:server_auth/server_auth.dart';
 
 void main() async {
   // Get credentials from environment

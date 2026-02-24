@@ -2,7 +2,7 @@ import 'package:json_schema_builder/json_schema_builder.dart';
 import 'package:routed/src/config/schema.dart';
 import 'package:routed/src/provider/config_utils.dart';
 import 'package:routed/src/provider/provider.dart';
-import 'package:routed/src/rate_limit/policy.dart';
+import 'package:server_data/rate_limit.dart';
 
 import '../spec.dart';
 

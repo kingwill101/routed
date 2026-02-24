@@ -1,10 +1,13 @@
 name: routed_ecosystem
 publish_to: none
 workspace:
+  - packages/server_contracts
+  - packages/server_data
+  - packages/server_auth
+  - packages/shelf_auth
   - packages/routed
   - packages/routed_io
   - packages/server_native
-  - packages/routed_auth
   - packages/routed_hotwire
   - packages/inertia
   - packages/routed_inertia

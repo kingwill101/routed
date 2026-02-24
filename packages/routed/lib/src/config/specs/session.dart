@@ -3,13 +3,12 @@ import 'dart:io';
 
 import 'package:json_schema_builder/json_schema_builder.dart';
 import 'package:routed/src/config/schema.dart';
-import 'package:routed/src/contracts/contracts.dart' show Config;
+import 'package:routed/src/contracts/config/config.dart' show Config;
 import 'package:routed/src/engine/storage_defaults.dart';
 import 'package:routed/src/provider/config_utils.dart';
 import 'package:routed/src/provider/provider.dart';
-import 'package:routed/src/sessions/options.dart';
-import 'package:routed/src/sessions/secure_cookie.dart';
 import 'package:routed/src/crypto/crypto.dart';
+import 'package:server_data/sessions.dart';
 
 import '../spec.dart';
 
@@ -39,7 +38,7 @@ class SessionProviderConfig {
   final Duration lifetime;
   final bool expireOnClose;
   final bool encrypt;
-  final Options options;
+  final SessionOptions options;
   final List<SecureCookie> codecs;
   final String cachePrefix;
   final List<String> keys;
@@ -165,7 +164,7 @@ class SessionProviderConfig {
         ) ??
         'session:';
 
-    final options = Options(
+    final options = SessionOptions(
       path: cookiePath,
       domain: domain,
       maxAge: expireOnClose ? null : lifetime.inSeconds,

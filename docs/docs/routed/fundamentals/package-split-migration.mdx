@@ -1,0 +1,39 @@
+---
+title: Package Split Migration
+description: Import migration guide for routed -> server_* package extraction
+sidebar_position: 13
+---
+
+# Package Split Migration
+
+Routed now uses a split architecture:
+
+- `routed`: framework runtime, provider wiring, middleware, CLI/tooling.
+- `server_contracts`: contracts only.
+- `server_auth`: framework-agnostic auth models/providers/flows.
+- `server_data`: framework-agnostic cache/storage/session/rate-limit runtime.
+
+## Import map
+
+| Old | New |
+| --- | --- |
+| `package:routed_auth/routed_auth.dart` | `package:server_auth/server_auth.dart` |
+| `package:routed/src/contracts/cache/*.dart` | `package:server_contracts/server_contracts.dart` |
+| `package:routed/src/contracts/config/config.dart` | `package:server_contracts/server_contracts.dart` |
+| `package:routed/src/contracts/translation/*.dart` | `package:server_contracts/server_contracts.dart` |
+| `package:routed/src/cache/*.dart` implementations | `package:server_data/cache.dart` |
+| `package:routed/src/storage/storage_manager.dart` runtime types | `package:server_data/storage.dart` |
+| `package:routed/src/sessions/*.dart` store/runtime implementations | `package:server_data/sessions.dart` |
+| `package:routed/src/rate_limit/*.dart` core runtime | `package:server_data/rate_limit.dart` |
+
+## Recommended strategy
+
+1. Migrate direct imports first (`src/...` internal imports).
+2. Keep `routed` imports for framework runtime (`Engine`, `EngineContext`, providers, middleware).
+3. Use `server_*` imports for reusable runtime modules you want to share across non-Routed ecosystems.
+
+## Notes
+
+- `server_contracts` should only contain contracts and contract-level DTO/exception surfaces.
+- `server_*` packages must not import Routed runtime internals.
+- Extracted `server_*` modules should be imported directly; do not rely on Routed wrapper exports.

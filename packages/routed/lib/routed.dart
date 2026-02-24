@@ -10,8 +10,9 @@ export 'src/binding/multipart.dart'
         FileExtensionNotAllowedException,
         FileQuotaExceededException;
 export 'src/binding/binding.dart' show Binding, Bindable, MimeType;
-export 'src/cache/cache.dart';
+export 'src/cache/cache_manager.dart';
 export 'src/config/config.dart';
+export 'src/contracts/config/config.dart' show Config;
 export 'src/config/helpers.dart';
 export 'src/config/loader.dart';
 export 'src/config/registry.dart';
@@ -29,14 +30,14 @@ export 'src/config/specs/session.dart';
 export 'src/config/specs/storage.dart';
 export 'src/config/specs/rate_limit.dart';
 export 'src/config/specs/routing.dart';
-export 'src/config/specs/runtime.dart';
+export 'src/runtime/shutdown.dart'
+    show RuntimeConfig, RuntimeConfigSpec, ShutdownConfig;
 export 'src/config/specs/security.dart';
 export 'src/config/specs/static_assets.dart';
 export 'src/config/specs/uploads.dart';
 export 'src/config/specs/views.dart';
 export 'src/container/container.dart' hide Binding;
 export 'src/context/context.dart';
-export 'src/contracts/contracts.dart';
 export 'src/engine/config.dart';
 export 'src/engine/engine.dart';
 export 'src/engine/engine_opt.dart';
@@ -60,7 +61,11 @@ export 'src/http/conditional.dart'
 export 'src/http/negotiation.dart' show ContentNegotiator, NegotiatedMediaType;
 export 'src/inspection/metadata.dart'
     show ConfigFieldMetadata, ProviderMetadata, inspectProviders;
-export 'src/logging/logging.dart';
+export 'src/logging/channel_drivers.dart';
+export 'src/logging/context.dart';
+export 'src/logging/driver_registry.dart';
+export 'src/logging/extensions.dart';
+export 'src/logging/logger.dart';
 export 'src/middleware/conditional_request.dart'
     show conditionalRequests, EtagResolver, LastModifiedResolver;
 export 'src/observability/errors.dart'
@@ -88,7 +93,6 @@ export 'src/router/router.dart';
 export 'src/router/controller.dart';
 export 'src/router/types.dart';
 export 'src/runtime/shutdown.dart';
-export 'src/storage/storage_manager.dart';
 export 'src/support/helpers.dart'
     show config, route, trans, transChoice, currentLocale;
 export 'src/support/zone.dart';
@@ -106,5 +110,8 @@ export 'src/utils/deep_merge.dart';
 export 'src/utils/dot.dart';
 export 'src/utils/environment.dart';
 export 'src/utils/request_id.dart';
-export 'src/view/view.dart';
+export 'src/view/view_engine.dart';
+export 'src/view/engine_manager.dart';
+export 'src/view/engines/liquid_engine.dart';
+export 'src/view/view_extensions.dart';
 export 'src/websocket/websocket_handler.dart';

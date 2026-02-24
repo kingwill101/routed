@@ -4,15 +4,14 @@ import 'package:file/memory.dart';
 import 'package:routed/src/cache/cache_manager.dart';
 import 'package:routed/src/config/config.dart';
 import 'package:routed/src/container/container.dart';
-import 'package:routed/src/contracts/contracts.dart' show Config;
+import 'package:routed/src/contracts/config/config.dart' show Config;
 import 'package:routed/src/engine/config.dart' show EngineConfig, SessionConfig;
 import 'package:routed/src/engine/middleware_registry.dart';
 import 'package:routed/src/engine/providers/sessions.dart';
 import 'package:routed/src/engine/storage_defaults.dart';
 import 'package:routed/src/engine/storage_paths.dart';
 import 'package:routed/src/provider/provider.dart';
-import 'package:routed/src/sessions/cache_store.dart';
-import 'package:routed/src/sessions/filesystem_store.dart';
+import 'package:server_data/sessions.dart';
 import 'package:test/test.dart';
 
 void main() {

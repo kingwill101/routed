@@ -1,5 +1,5 @@
 import 'package:routed/src/config/specs/routing.dart';
-import 'package:routed/src/contracts/contracts.dart' show Config;
+import 'package:routed/src/contracts/config/config.dart' show Config;
 import 'package:routed/src/events/event_manager.dart';
 import 'package:routed/src/events/signals.dart';
 import 'package:routed/src/validation/validator.dart';

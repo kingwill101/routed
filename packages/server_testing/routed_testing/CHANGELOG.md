@@ -1,3 +1,8 @@
+## 0.3.3
+
+- Updated compatibility constraints for the package split rollout.
+- Updated publish metadata and repository path to the nested package location.
+
 ## 0.3.2
 
 - Added `providers` parameter to `engineTest` and `engineGroup` for explicit

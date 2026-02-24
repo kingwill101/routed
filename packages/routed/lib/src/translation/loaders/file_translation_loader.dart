@@ -1,9 +1,9 @@
 import 'dart:convert';
 
 import 'package:file/file.dart' as file;
+import 'package:server_contracts/server_contracts.dart' show TranslationLoader;
 import 'package:yaml/yaml.dart';
 
-import 'package:routed/src/contracts/translation/loader.dart';
 import 'package:routed/src/utils/deep_merge.dart';
 
 class FileTranslationLoader implements TranslationLoader {

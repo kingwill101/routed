@@ -1,16 +1,24 @@
 import 'dart:async';
-import 'dart:convert';
 import 'dart:io';
-import 'dart:math' show Random;
 
+import 'package:server_auth/server_auth.dart'
+    show
+        AuthSessionRuntimeAdapter,
+        AuthGuard,
+        AuthGuardRegistry,
+        AuthGuardService,
+        AuthPrincipal,
+        RememberSessionAuthRuntime,
+        buildExpiredRememberTokenCookie,
+        buildRememberTokenCookie,
+        buildBearerAuthenticateHeader,
+        requireAuthenticatedGuard,
+        requireRolesGuard,
+        RememberTokenStore,
+        InMemoryRememberTokenStore;
 import 'package:routed/src/context/context.dart';
 import 'package:routed/src/response.dart';
 import 'package:routed/src/router/types.dart';
-import 'package:routed/src/sessions/session.dart';
-import 'package:routed/src/support/named_registry.dart';
-
-/// Attribute key for storing the authenticated principal in the request context.
-const String authPrincipalAttribute = 'auth.principal';
 
 /// Key for storing the authenticated principal in the session.
 const String _sessionPrincipalKey = '__routed.auth.principal';
@@ -18,119 +26,26 @@ const String _sessionPrincipalKey = '__routed.auth.principal';
 /// Default name for the "remember me" cookie.
 const String _defaultRememberCookieName = 'remember_token';
 
-/// Represents an authenticated user or entity.
-///
-/// This class encapsulates the user's unique identifier, roles, and additional
-/// attributes that may be associated with the user.
-class AuthPrincipal {
-  /// Creates an instance of [AuthPrincipal].
-  ///
-  /// - [id]: The unique identifier for the principal.
-  /// - [roles]: A list of roles assigned to the principal.
-  /// - [attributes]: Additional attributes associated with the principal.
-  AuthPrincipal({
-    required this.id,
-    this.roles = const <String>[],
-    Map<String, dynamic>? attributes,
-  }) : attributes = attributes == null
-           ? const <String, dynamic>{}
-           : Map<String, dynamic>.from(attributes);
-
-  /// The unique identifier for the principal.
-  final String id;
-
-  /// A list of roles assigned to the principal.
-  final List<String> roles;
-
-  /// Additional attributes associated with the principal.
-  final Map<String, dynamic> attributes;
-
-  /// Checks if the principal has the specified [role].
-  bool hasRole(String role) => roles.contains(role);
-
-  /// Converts the principal to a JSON-serializable map.
-  Map<String, dynamic> toJson() => {
-    'id': id,
-    'roles': roles,
-    'attributes': attributes,
-  };
-
-  /// Creates an [AuthPrincipal] instance from a JSON map.
-  factory AuthPrincipal.fromJson(Map<String, dynamic> json) {
-    return AuthPrincipal(
-      id: json['id'] as String,
-      roles: (json['roles'] as List?)?.cast<String>() ?? const <String>[],
-      attributes: (json['attributes'] as Map?)?.cast<String, dynamic>(),
-    );
-  }
-}
-
-abstract class RememberTokenStore {
-  FutureOr<void> save(
-    String token,
-    AuthPrincipal principal,
-    DateTime expiresAt,
-  );
-
-  FutureOr<AuthPrincipal?> read(String token);
-
-  FutureOr<void> remove(String token);
-}
-
-class InMemoryRememberTokenStore implements RememberTokenStore {
-  final Map<String, _RememberRecord> _storage = <String, _RememberRecord>{};
-
-  @override
-  Future<void> save(
-    String token,
-    AuthPrincipal principal,
-    DateTime expiresAt,
-  ) async {
-    _storage[token] = _RememberRecord(principal, expiresAt);
-  }
-
-  @override
-  Future<AuthPrincipal?> read(String token) async {
-    final record = _storage[token];
-    if (record == null) return null;
-    if (DateTime.now().isAfter(record.expiresAt)) {
-      _storage.remove(token);
-      return null;
-    }
-    return record.principal;
-  }
-
-  @override
-  Future<void> remove(String token) async {
-    _storage.remove(token);
-  }
-}
-
-class _RememberRecord {
-  _RememberRecord(this.principal, this.expiresAt);
-
-  final AuthPrincipal principal;
-  final DateTime expiresAt;
-}
-
 class SessionAuthService {
   SessionAuthService({
     RememberTokenStore? rememberStore,
     String rememberCookieName = _defaultRememberCookieName,
     Duration defaultRememberDuration = const Duration(days: 30),
-  }) : _rememberStore = rememberStore ?? InMemoryRememberTokenStore(),
-       _rememberCookieName = rememberCookieName,
-       _defaultRememberDuration = defaultRememberDuration;
+  }) : _runtime = RememberSessionAuthRuntime<EngineContext>(
+         adapter: const _RoutedAuthSessionRuntimeAdapter(),
+         rememberStore: rememberStore ?? InMemoryRememberTokenStore(),
+         rememberCookieName: rememberCookieName,
+         defaultRememberDuration: defaultRememberDuration,
+         sessionPrincipalKey: _sessionPrincipalKey,
+       );
 
-  final RememberTokenStore _rememberStore;
-  final String _rememberCookieName;
-  final Duration _defaultRememberDuration;
+  final RememberSessionAuthRuntime<EngineContext> _runtime;
 
-  RememberTokenStore get rememberStore => _rememberStore;
+  RememberTokenStore get rememberStore => _runtime.rememberStore;
 
-  String get rememberCookieName => _rememberCookieName;
+  String get rememberCookieName => _runtime.rememberCookieName;
 
-  Duration get defaultRememberDuration => _defaultRememberDuration;
+  Duration get defaultRememberDuration => _runtime.defaultRememberDuration;
 
   /// Logs in the user by storing their [AuthPrincipal] in the session.
   ///
@@ -150,138 +65,111 @@ class SessionAuthService {
     bool rememberMe = false,
     Duration? rememberDuration,
   }) async {
-    ctx.session.setValue(_sessionPrincipalKey, principal.toJson());
-    ctx.request.setAttribute(authPrincipalAttribute, principal);
-
-    if (!rememberMe) {
-      return;
-    }
-
-    final existing = _findRequestCookie(ctx);
-    if (existing != null && existing.value.isNotEmpty) {
-      await Future.sync(() => _rememberStore.remove(existing.value));
-    }
-
-    final token = _generateToken();
-    final expiresAt = DateTime.now().add(
-      rememberDuration ?? _defaultRememberDuration,
+    await _runtime.login(
+      ctx,
+      principal,
+      rememberMe: rememberMe,
+      rememberDuration: rememberDuration,
     );
-    await Future.sync(() => _rememberStore.save(token, principal, expiresAt));
-    ctx.response.cookies.add(_buildCookie(ctx.session, token, expiresAt));
   }
 
   Future<void> logout(EngineContext ctx) async {
-    ctx.session.values.remove(_sessionPrincipalKey);
-    ctx.request.setAttribute(authPrincipalAttribute, null);
-
-    final cookie = _findRequestCookie(ctx);
-    if (cookie != null && cookie.value.isNotEmpty) {
-      await Future.sync(() => _rememberStore.remove(cookie.value));
-    }
-    ctx.response.cookies.add(_expiredCookie(ctx.session));
+    await _runtime.logout(ctx);
   }
 
   AuthPrincipal? current(EngineContext ctx) {
-    final cached = ctx.request.getAttribute<AuthPrincipal?>(
-      authPrincipalAttribute,
-    );
-    if (cached != null) {
-      return cached;
-    }
-
-    final stored = ctx.session.getValue<Map<String, dynamic>>(
-      _sessionPrincipalKey,
-    );
-    if (stored == null) {
-      return null;
-    }
-
-    final principal = AuthPrincipal.fromJson(stored);
-    ctx.request.setAttribute(authPrincipalAttribute, principal);
-    return principal;
+    return _runtime.current(ctx);
   }
 
   Middleware middleware() {
     return (EngineContext ctx, Next next) async {
-      final sessionData = ctx.session.getValue<Map<String, dynamic>>(
-        _sessionPrincipalKey,
-      );
-      if (sessionData != null) {
-        ctx.request.setAttribute(
-          authPrincipalAttribute,
-          AuthPrincipal.fromJson(sessionData),
-        );
-        return await next();
-      }
-
-      final rememberCookie = _findRequestCookie(ctx);
-      if (rememberCookie == null || rememberCookie.value.isEmpty) {
-        return await next();
-      }
-
-      final principal = await Future.sync(
-        () => _rememberStore.read(rememberCookie.value),
-      );
-      if (principal == null) {
-        await Future.sync(() => _rememberStore.remove(rememberCookie.value));
-        ctx.response.cookies.add(_expiredCookie(ctx.session));
-        return await next();
-      }
-
-      ctx.session.setValue(_sessionPrincipalKey, principal.toJson());
-      ctx.request.setAttribute(authPrincipalAttribute, principal);
-
-      final rotatedToken = _generateToken();
-      final newExpiry = DateTime.now().add(_defaultRememberDuration);
-      await Future.sync(
-        () => _rememberStore.save(rotatedToken, principal, newExpiry),
-      );
-      await Future.sync(() => _rememberStore.remove(rememberCookie.value));
-      ctx.response.cookies.add(
-        _buildCookie(ctx.session, rotatedToken, newExpiry),
-      );
-
+      await _runtime.hydrate(ctx);
       return await next();
     };
   }
+}
 
-  Cookie? _findRequestCookie(EngineContext ctx) {
-    for (final cookie in ctx.request.cookies) {
-      if (cookie.name == _rememberCookieName) {
-        return cookie;
-      }
-    }
-    return null;
-  }
+class _RoutedAuthSessionRuntimeAdapter
+    implements AuthSessionRuntimeAdapter<EngineContext> {
+  const _RoutedAuthSessionRuntimeAdapter();
 
-  Cookie _buildCookie(Session session, String value, DateTime expiresAt) {
-    final cookie = Cookie(_rememberCookieName, value)
-      ..httpOnly = true
-      ..expires = expiresAt;
-
-    final options = session.options;
-    cookie.path = options.path ?? '/';
-    if (options.domain != null && options.domain!.isNotEmpty) {
-      cookie.domain = options.domain!;
-    }
-    if (options.secure == true) {
-      cookie.secure = true;
-    }
-    if (options.sameSite != null) {
-      cookie.sameSite = options.sameSite!;
-    }
-
-    return cookie;
-  }
-
-  Cookie _expiredCookie(Session session) {
-    final cookie = _buildCookie(
-      session,
-      '',
-      DateTime.fromMillisecondsSinceEpoch(0),
+  @override
+  Cookie buildExpiredRememberCookie(EngineContext context, String cookieName) {
+    final options = context.session.options;
+    return buildExpiredRememberTokenCookie(
+      cookieName,
+      path: options.path ?? '/',
+      domain: options.domain,
+      secure: options.secure == true,
+      sameSite: options.sameSite,
     );
-    cookie.maxAge = 0;
-    return cookie;
+  }
+
+  @override
+  Cookie buildRememberCookie(
+    EngineContext context,
+    String cookieName,
+    String token,
+    DateTime expiresAt,
+  ) {
+    final options = context.session.options;
+    return buildRememberTokenCookie(
+      cookieName,
+      token,
+      expiresAt: expiresAt,
+      path: options.path ?? '/',
+      domain: options.domain,
+      secure: options.secure == true,
+      sameSite: options.sameSite,
+    );
+  }
+
+  @override
+  AuthPrincipal? readPrincipalAttribute(
+    EngineContext context,
+    String attributeKey,
+  ) {
+    return context.request.getAttribute<AuthPrincipal?>(attributeKey);
+  }
+
+  @override
+  Map<String, dynamic>? readSessionPrincipal(
+    EngineContext context,
+    String sessionKey,
+  ) {
+    return context.session.getValue<Map<String, dynamic>>(sessionKey);
+  }
+
+  @override
+  Iterable<Cookie> requestCookies(EngineContext context) {
+    return context.request.cookies;
+  }
+
+  @override
+  void setResponseCookie(EngineContext context, Cookie cookie) {
+    context.response.cookies.add(cookie);
+  }
+
+  @override
+  void writePrincipalAttribute(
+    EngineContext context,
+    String attributeKey,
+    AuthPrincipal? principal,
+  ) {
+    context.request.setAttribute(attributeKey, principal);
+  }
+
+  @override
+  void writeSessionPrincipal(
+    EngineContext context,
+    String sessionKey,
+    Map<String, dynamic>? principalJson,
+  ) {
+    if (principalJson == null) {
+      context.session.values.remove(sessionKey);
+      return;
+    }
+    context.session.setValue(sessionKey, principalJson);
   }
 }
 
@@ -404,81 +292,59 @@ class SessionAuth {
   }
 }
 
-class GuardResult {
-  const GuardResult._(this.allowed, this.response);
+/// Global guard registry used by [guardMiddleware].
+final AuthGuardRegistry<EngineContext, Response> guardRegistry =
+    AuthGuardRegistry<EngineContext, Response>();
 
-  final bool allowed;
-  final Response? response;
+/// Global guard service used by [guardMiddleware].
+final AuthGuardService<EngineContext, Response> guardService =
+    AuthGuardService<EngineContext, Response>(registry: guardRegistry);
 
-  static GuardResult allow() => const GuardResult._(true, null);
+Middleware guardMiddleware(
+  List<String> guardNames, {
+  AuthGuardRegistry<EngineContext, Response>? registry,
+}) {
+  final service = registry == null
+      ? guardService
+      : AuthGuardService<EngineContext, Response>(registry: registry);
 
-  static GuardResult deny([Response? response]) =>
-      GuardResult._(false, response);
-}
-
-typedef AuthGuard = FutureOr<GuardResult> Function(EngineContext ctx);
-
-class GuardRegistry extends NamedRegistry<AuthGuard> {
-  GuardRegistry._();
-
-  static final GuardRegistry instance = GuardRegistry._();
-
-  @override
-  String normalizeName(String name) => name.trim();
-
-  void register(String name, AuthGuard handler) {
-    registerEntry(name, handler);
-  }
-
-  void unregister(String name) {
-    unregisterEntry(name);
-  }
-
-  AuthGuard? resolve(String name) => getEntry(name);
-
-  Iterable<String> get names => entryNames;
-}
-
-Middleware guardMiddleware(List<String> guardNames, {GuardRegistry? registry}) {
-  final reg = registry ?? GuardRegistry.instance;
   return (EngineContext ctx, Next next) async {
-    for (final name in guardNames) {
-      final handler = reg.resolve(name);
-      if (handler == null) {
-        continue;
-      }
-      final result = await Future.sync(() => handler(ctx));
-      if (!result.allowed) {
-        if (result.response != null) {
-          return result.response!;
-        }
-        ctx.response.statusCode = HttpStatus.forbidden;
-        ctx.response.write('Forbidden by guard: $name');
-        return ctx.response;
-      }
+    final denied = await service.firstDenied(
+      guardNames,
+      ctx,
+      onDenied: (context, name) {
+        context.response.statusCode = HttpStatus.forbidden;
+        context.response.write('Forbidden by guard: $name');
+        return context.response;
+      },
+    );
+    if (denied != null) {
+      return denied;
     }
     return await next();
   };
 }
 
-AuthGuard requireAuthenticated({
+AuthGuard<EngineContext, Response> requireAuthenticated({
   String realm = 'Restricted',
   SessionAuthService? sessionAuth,
 }) {
   final auth = sessionAuth ?? SessionAuth.instance;
-  return (EngineContext ctx) {
-    final principal = auth.current(ctx);
-    if (principal != null) {
-      return GuardResult.allow();
-    }
-    ctx.response.statusCode = HttpStatus.unauthorized;
-    ctx.response.headers.set('WWW-Authenticate', 'Bearer realm="$realm"');
-    ctx.response.write('Authentication required');
-    return GuardResult.deny(ctx.response);
-  };
+  return requireAuthenticatedGuard<EngineContext, Response>(
+    principalResolver: auth.current,
+    onDenied: (ctx) {
+      ctx.response.statusCode = HttpStatus.unauthorized;
+      ctx.response.headers.set(
+        'WWW-Authenticate',
+        buildBearerAuthenticateHeader(realm: realm),
+      );
+      ctx.response.write('Authentication required');
+      return ctx.response;
+    },
+  );
 }
 
-AuthGuard requireRoles(
+AuthGuard<EngineContext, Response> requireRoles(
   List<String> roles, {
   SessionAuthService? sessionAuth,
   bool any = false,
@@ -490,27 +356,14 @@ AuthGuard requireRoles(
 
   final auth = sessionAuth ?? SessionAuth.instance;
 
-  return (EngineContext ctx) {
-    final principal = auth.current(ctx);
-    if (principal == null) {
+  return requireRolesGuard<EngineContext, Response>(
+    expected,
+    principalResolver: auth.current,
+    any: any,
+    onUnauthenticated: (ctx) {
       ctx.response.statusCode = HttpStatus.unauthorized;
       ctx.response.write('Authentication required');
-      return GuardResult.deny(ctx.response);
-    }
-
-    if (expected.isEmpty) {
-      return GuardResult.allow();
-    }
-
-    final matches = any
-        ? expected.any(principal.hasRole)
-        : expected.every(principal.hasRole);
-    return matches ? GuardResult.allow() : GuardResult.deny();
-  };
-}
-
-String _generateToken() {
-  final rand = Random.secure();
-  final bytes = List<int>.generate(32, (_) => rand.nextInt(256));
-  return base64UrlEncode(bytes);
+      return ctx.response;
+    },
+  );
 }
