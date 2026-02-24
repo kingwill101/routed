@@ -594,4 +594,60 @@ void main() {
       expect(missingSecret, isNull);
     },
   );
+
+  test(
+    'resolveAuthJwtSessionWithRefresh returns verified session when no refresh is needed',
+    () async {
+      const options = JwtSessionOptions(secret: _sharedSecret);
+      final issued = issueAuthJwtToken(
+        options: options,
+        claims: const <String, dynamic>{'sub': 'user-1'},
+      );
+
+      final resolved = await resolveAuthJwtSessionWithRefresh(
+        token: issued.token,
+        options: options,
+        updateAge: const Duration(minutes: 15),
+      );
+
+      expect(resolved, isNotNull);
+      expect(resolved!.token, equals(issued.token));
+      expect(resolved.refreshCookie, isNull);
+      expect(resolved.user.id, equals('user-1'));
+      expect(resolved.toSession().token, equals(issued.token));
+    },
+  );
+
+  test(
+    'resolveAuthJwtSessionWithRefresh reissues token and applies resolveClaims',
+    () async {
+      const options = JwtSessionOptions(secret: _sharedSecret);
+      final issued = issueAuthJwtToken(
+        options: options,
+        claims: const <String, dynamic>{'sub': 'user-1'},
+      );
+      var called = false;
+
+      final resolved = await resolveAuthJwtSessionWithRefresh(
+        token: issued.token,
+        options: options,
+        updateAge: const Duration(minutes: 5),
+        now: DateTime.now().add(const Duration(minutes: 20)),
+        resolveClaims: (claims, user) {
+          called = true;
+          return <String, dynamic>{...claims, 'plan': 'pro', 'sub': user.id};
+        },
+      );
+
+      expect(resolved, isNotNull);
+      expect(called, isTrue);
+      expect(resolved!.refreshCookie, isNotNull);
+      expect(resolved.token, isNot(equals(issued.token)));
+      expect(resolved.refreshCookie!.value, equals(resolved.token));
+
+      final verifier = JwtVerifier(options: options.toVerifierOptions());
+      final payload = await verifier.verifyToken(resolved.token);
+      expect(payload.claims['plan'], equals('pro'));
+    },
+  );
 }

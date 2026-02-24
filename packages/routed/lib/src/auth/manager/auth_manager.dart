@@ -36,9 +36,7 @@ import 'package:server_auth/server_auth.dart'
         CallbackProvider,
         CredentialsProvider,
         EmailProvider,
-        refreshAuthJwtTokenIfNeeded,
-        verifyAuthJwtSessionToken,
-        JwtPayload,
+        resolveAuthJwtSessionWithRefresh,
         OAuthProvider,
         authSessionIssuedAtKey,
         AuthOptions,
@@ -373,32 +371,31 @@ class AuthManager {
           strategy: AuthSessionStrategy.session,
         );
       case AuthSessionStrategy.jwt:
-        final token = _resolveJwtToken(ctx);
-        final verified = await verifyAuthJwtSessionToken(
-          token: token,
+        final resolved = await resolveAuthJwtSessionWithRefresh(
+          token: _resolveJwtToken(ctx),
           options: options.jwtOptions,
+          updateAge: options.sessionUpdateAge,
           httpClient: httpClient,
+          resolveClaims: (claims, user) =>
+              resolveAuthJwtClaimsWithCallbacks<EngineContext>(
+                callbacks: callbacks,
+                context: ctx,
+                user: user,
+                strategy: AuthSessionStrategy.jwt,
+                token: claims,
+              ),
         );
-        if (verified == null) {
+        if (resolved == null) {
           return null;
         }
-        final user = verified.user;
-        var resolvedToken = verified.token;
-        var resolvedExpiry = verified.expiresAt;
-        final refreshed = await _refreshJwtIfNeeded(
-          ctx,
-          verified.payload,
-          user,
-        );
-        if (refreshed != null) {
-          resolvedToken = refreshed.token;
-          resolvedExpiry = refreshed.expiresAt;
+        if (resolved.refreshCookie != null) {
+          ctx.response.cookies.add(resolved.refreshCookie!);
         }
         return AuthSession(
-          user: user,
-          expiresAt: resolvedExpiry,
+          user: resolved.user,
+          expiresAt: resolved.expiresAt,
           strategy: AuthSessionStrategy.jwt,
-          token: resolvedToken,
+          token: resolved.token,
         );
     }
   }
@@ -607,31 +604,6 @@ class AuthManager {
     );
   }
 
-  Future<_JwtRefresh?> _refreshJwtIfNeeded(
-    EngineContext ctx,
-    JwtPayload payload,
-    AuthUser user,
-  ) async {
-    final refreshed = await refreshAuthJwtTokenIfNeeded(
-      options: options.jwtOptions,
-      claims: payload.claims,
-      updateAge: options.sessionUpdateAge,
-      resolveClaims: (claims) =>
-          resolveAuthJwtClaimsWithCallbacks<EngineContext>(
-            callbacks: callbacks,
-            context: ctx,
-            user: user,
-            strategy: AuthSessionStrategy.jwt,
-            token: claims,
-          ),
-    );
-    if (refreshed == null) {
-      return null;
-    }
-    ctx.response.cookies.add(refreshed.cookie);
-    return _JwtRefresh(token: refreshed.token, expiresAt: refreshed.expiresAt);
-  }
-
   DateTime? _sessionExpiry(EngineContext ctx) {
     return resolveAuthSessionExpiry(
       sessionMaxAge: options.sessionMaxAge,
@@ -649,11 +621,4 @@ class AuthManager {
       ),
     );
   }
-}
-
-class _JwtRefresh {
-  const _JwtRefresh({required this.token, required this.expiresAt});
-
-  final String token;
-  final DateTime expiresAt;
 }

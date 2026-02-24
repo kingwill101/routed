@@ -357,6 +357,89 @@ Future<AuthVerifiedJwtSession?> verifyAuthJwtSessionToken({
   );
 }
 
+/// Resolved JWT session payload after optional refresh processing.
+class AuthResolvedJwtSession {
+  const AuthResolvedJwtSession({
+    required this.token,
+    required this.user,
+    required this.expiresAt,
+    required this.payload,
+    this.refreshCookie,
+  });
+
+  final String token;
+  final AuthUser user;
+  final DateTime? expiresAt;
+  final JwtPayload payload;
+  final Cookie? refreshCookie;
+
+  AuthSession toSession({
+    AuthSessionStrategy strategy = AuthSessionStrategy.jwt,
+  }) {
+    return AuthSession(
+      user: user,
+      expiresAt: expiresAt,
+      strategy: strategy,
+      token: token,
+    );
+  }
+}
+
+/// Verifies a JWT session token and optionally refreshes it when `iat` exceeds
+/// [updateAge].
+Future<AuthResolvedJwtSession?> resolveAuthJwtSessionWithRefresh({
+  required String? token,
+  required JwtSessionOptions options,
+  required Duration? updateAge,
+  FutureOr<Map<String, dynamic>> Function(
+    Map<String, dynamic> claims,
+    AuthUser user,
+  )?
+  resolveClaims,
+  http.Client? httpClient,
+  DateTime? now,
+}) async {
+  final verified = await verifyAuthJwtSessionToken(
+    token: token,
+    options: options,
+    httpClient: httpClient,
+  );
+  if (verified == null) {
+    return null;
+  }
+
+  var resolvedToken = verified.token;
+  var resolvedExpiry = verified.expiresAt;
+  Cookie? refreshCookie;
+
+  final refreshed = await refreshAuthJwtTokenIfNeeded(
+    options: options,
+    claims: verified.payload.claims,
+    updateAge: updateAge,
+    now: now,
+    resolveClaims: (claims) {
+      if (resolveClaims == null) {
+        return claims;
+      }
+      return resolveClaims(claims, verified.user);
+    },
+  );
+
+  if (refreshed != null) {
+    resolvedToken = refreshed.token;
+    resolvedExpiry = refreshed.expiresAt;
+    refreshCookie = refreshed.cookie;
+  }
+
+  return AuthResolvedJwtSession(
+    token: resolvedToken,
+    user: verified.user,
+    expiresAt: resolvedExpiry,
+    payload: verified.payload,
+    refreshCookie: refreshCookie,
+  );
+}
+
 /// Builds a symmetric [JsonWebKey] from a plain-text [secret].
 JsonWebKey jwtSecretKey(String secret) {
   return JsonWebKey.fromJson({
