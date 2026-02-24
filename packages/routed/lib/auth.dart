@@ -1,5 +1,4 @@
 export 'src/auth/manager/auth_manager.dart';
-export 'package:server_auth/server_auth.dart' show AuthOptions;
 export 'src/auth/hooks.dart';
 export 'src/auth/routes.dart';
 export 'src/middleware/basic_auth.dart';
