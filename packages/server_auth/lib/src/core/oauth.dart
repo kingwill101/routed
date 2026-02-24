@@ -60,6 +60,14 @@ class OAuthTokenResponse {
   final Map<String, dynamic> raw;
 }
 
+/// Resolves token expiration from OAuth `expires_in` seconds.
+DateTime? oauthTokenExpiryFromSeconds(int? expiresIn, {DateTime? now}) {
+  if (expiresIn == null) {
+    return null;
+  }
+  return (now ?? DateTime.now()).add(Duration(seconds: expiresIn));
+}
+
 /// Parsed response from an RFC 7662 token introspection endpoint.
 class OAuthIntrospectionResult {
   OAuthIntrospectionResult({required this.active, required this.raw});

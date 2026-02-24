@@ -37,6 +37,15 @@ void main() {
     expect(oauthScopeAttribute, equals('auth.oauth.scope'));
   });
 
+  test('oauthTokenExpiryFromSeconds resolves nullable expirations', () {
+    final now = DateTime.utc(2026, 2, 24, 12);
+    expect(oauthTokenExpiryFromSeconds(null, now: now), isNull);
+    expect(
+      oauthTokenExpiryFromSeconds(60, now: now),
+      equals(now.add(const Duration(seconds: 60))),
+    );
+  });
+
   test('OAuth2TokenIntrospector caches introspection responses', () async {
     var requestCount = 0;
     final introspector = OAuth2TokenIntrospector(

@@ -50,6 +50,7 @@ import 'package:server_auth/server_auth.dart'
         JwtVerifier,
         OAuthProvider,
         loadOAuthProfile,
+        oauthTokenExpiryFromSeconds,
         pkceS256CodeChallenge,
         authSessionRefreshAction,
         AuthSessionRefreshAction,
@@ -314,9 +315,9 @@ class AuthManager {
       user,
       fallbackId: secureRandomToken,
     );
-    final accountExpiresAt = tokenResponse.expiresIn == null
-        ? null
-        : DateTime.now().add(Duration(seconds: tokenResponse.expiresIn!));
+    final accountExpiresAt = oauthTokenExpiryFromSeconds(
+      tokenResponse.expiresIn,
+    );
 
     final existingAccount = await Future.sync(
       () => adapter.getAccount(provider.id, accountId),
