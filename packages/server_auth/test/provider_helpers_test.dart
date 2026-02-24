@@ -48,6 +48,25 @@ void main() {
     expect(merged.first.name, equals('Google'));
   });
 
+  test('auth provider session key helpers compose stable keys', () {
+    expect(
+      authProviderStateSessionKey('_auth.state', 'github'),
+      equals('_auth.state.github'),
+    );
+    expect(
+      authProviderPkceSessionKey('_auth.pkce', 'google'),
+      equals('_auth.pkce.google'),
+    );
+    expect(
+      authProviderCallbackSessionKey('_auth.callback', 'discord'),
+      equals('_auth.callback.discord'),
+    );
+    expect(
+      authEmailCallbackSessionKey('_auth.callback'),
+      equals('_auth.callback.email'),
+    );
+  });
+
   test(
     'resolveOAuthUserForAccount updates linked users when profile changes',
     () async {
@@ -177,6 +196,31 @@ void main() {
     expect(captured.bodyFields['scope'], equals('openid profile'));
     expect(captured.bodyFields['code_verifier'], equals('pkce-verifier'));
     expect(captured.bodyFields['resource'], equals('api'));
+  });
+
+  test('buildOAuthAuthAccount maps oauth token payload into account', () {
+    final account = buildOAuthAuthAccount(
+      providerId: 'github',
+      providerAccountId: 'acct-1',
+      userId: 'user-1',
+      token: OAuthTokenResponse(
+        accessToken: 'access',
+        tokenType: 'Bearer',
+        expiresIn: 3600,
+        refreshToken: 'refresh',
+        raw: const <String, dynamic>{},
+      ),
+      expiresAt: DateTime.utc(2026, 2, 24, 12),
+      metadata: const <String, dynamic>{'login': 'octocat'},
+    );
+
+    expect(account.providerId, equals('github'));
+    expect(account.providerAccountId, equals('acct-1'));
+    expect(account.userId, equals('user-1'));
+    expect(account.accessToken, equals('access'));
+    expect(account.refreshToken, equals('refresh'));
+    expect(account.expiresAt, equals(DateTime.utc(2026, 2, 24, 12)));
+    expect(account.metadata['login'], equals('octocat'));
   });
 
   test(

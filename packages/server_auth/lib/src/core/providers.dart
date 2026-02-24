@@ -217,6 +217,26 @@ List<AuthProvider> mergeAuthProvidersById(
   return merged;
 }
 
+/// Session key for provider OAuth state.
+String authProviderStateSessionKey(String stateKey, String providerId) {
+  return '$stateKey.$providerId';
+}
+
+/// Session key for provider PKCE verifier.
+String authProviderPkceSessionKey(String pkceKey, String providerId) {
+  return '$pkceKey.$providerId';
+}
+
+/// Session key for provider callback URL.
+String authProviderCallbackSessionKey(String callbackKey, String providerId) {
+  return '$callbackKey.$providerId';
+}
+
+/// Session key for email callback URL.
+String authEmailCallbackSessionKey(String callbackKey) {
+  return '$callbackKey.email';
+}
+
 /// Builds OAuth authorization query parameters for [provider].
 Map<String, String> buildOAuthAuthorizationParameters<TProfile extends Object>(
   OAuthProvider<TProfile> provider, {
@@ -275,6 +295,26 @@ exchangeOAuthAuthorizationCode<TProfile extends Object>(
     additionalParameters: provider.tokenParams.isEmpty
         ? null
         : provider.tokenParams,
+  );
+}
+
+/// Builds an [AuthAccount] from OAuth token/profile payloads.
+AuthAccount buildOAuthAuthAccount({
+  required String providerId,
+  required String providerAccountId,
+  required String userId,
+  required OAuthTokenResponse token,
+  required Map<String, dynamic> metadata,
+  DateTime? expiresAt,
+}) {
+  return AuthAccount(
+    providerId: providerId,
+    providerAccountId: providerAccountId,
+    userId: userId,
+    accessToken: token.accessToken,
+    refreshToken: token.refreshToken,
+    expiresAt: expiresAt,
+    metadata: metadata,
   );
 }
 

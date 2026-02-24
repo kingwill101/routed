@@ -15,8 +15,13 @@ import 'package:server_auth/server_auth.dart'
         resolveAuthSignInDecision,
         AuthPrincipal,
         AuthProvider,
+        authEmailCallbackSessionKey,
+        authProviderCallbackSessionKey,
+        authProviderPkceSessionKey,
+        authProviderStateSessionKey,
         authProviderSummaries,
         baseUrlFromUri,
+        buildOAuthAuthAccount,
         buildOAuthAuthorizationParameters,
         exchangeOAuthAuthorizationCode,
         resolveAuthProviderById,
@@ -172,7 +177,10 @@ class AuthManager {
     final token = provider.tokenGenerator?.call() ?? secureRandomToken();
     final expiresAt = DateTime.now().add(provider.tokenExpiry);
     if (callbackUrl.isNotEmpty) {
-      ctx.setSession('${options.callbackKey}.email', callbackUrl);
+      ctx.setSession(
+        authEmailCallbackSessionKey(options.callbackKey),
+        callbackUrl,
+      );
     }
     final verification = AuthVerificationToken(
       identifier: email,
@@ -226,7 +234,9 @@ class AuthManager {
       );
       isNewUser = true;
     }
-    final redirectUrl = ctx.getSession<String>('${options.callbackKey}.email');
+    final redirectUrl = ctx.getSession<String>(
+      authEmailCallbackSessionKey(options.callbackKey),
+    );
 
     return _completeSignIn(
       ctx,
@@ -243,7 +253,10 @@ class AuthManager {
     String? callbackUrl,
   }) async {
     final state = secureRandomToken();
-    ctx.setSession('${options.stateKey}.${provider.id}', state);
+    ctx.setSession(
+      authProviderStateSessionKey(options.stateKey, provider.id),
+      state,
+    );
 
     if (provider.onStateGenerated != null) {
       await Future.sync(() => provider.onStateGenerated!(ctx, provider, state));
@@ -254,7 +267,10 @@ class AuthManager {
     if (provider.usePkce) {
       verifier = secureRandomToken(length: 48);
       challenge = pkceS256CodeChallenge(verifier);
-      ctx.setSession('${options.pkceKey}.${provider.id}', verifier);
+      ctx.setSession(
+        authProviderPkceSessionKey(options.pkceKey, provider.id),
+        verifier,
+      );
     }
     final params = buildOAuthAuthorizationParameters(
       provider,
@@ -264,7 +280,10 @@ class AuthManager {
     );
 
     if (callbackUrl != null && callbackUrl.isNotEmpty) {
-      ctx.setSession('${options.callbackKey}.${provider.id}', callbackUrl);
+      ctx.setSession(
+        authProviderCallbackSessionKey(options.callbackKey, provider.id),
+        callbackUrl,
+      );
     }
 
     return provider.authorizationEndpoint.replace(queryParameters: params);
@@ -277,14 +296,14 @@ class AuthManager {
     String? state,
   ) async {
     final expectedState = ctx.getSession<String>(
-      '${options.stateKey}.${provider.id}',
+      authProviderStateSessionKey(options.stateKey, provider.id),
     );
     if (expectedState == null || expectedState != state) {
       throw AuthFlowException('invalid_state');
     }
 
     final verifier = ctx.getSession<String>(
-      '${options.pkceKey}.${provider.id}',
+      authProviderPkceSessionKey(options.pkceKey, provider.id),
     );
     final tokenResponse = await exchangeOAuthAuthorizationCode(
       provider,
@@ -339,12 +358,11 @@ class AuthManager {
       );
     }
 
-    final account = AuthAccount(
+    final account = buildOAuthAuthAccount(
       providerId: provider.id,
       providerAccountId: accountId,
       userId: resolvedUser.id,
-      accessToken: tokenResponse.accessToken,
-      refreshToken: tokenResponse.refreshToken,
+      token: tokenResponse,
       expiresAt: accountExpiresAt,
       metadata: profileMap,
     );
@@ -361,7 +379,7 @@ class AuthManager {
     );
 
     final redirectUrl = ctx.getSession<String>(
-      '${options.callbackKey}.${provider.id}',
+      authProviderCallbackSessionKey(options.callbackKey, provider.id),
     );
     return _completeSignIn(
       ctx,
