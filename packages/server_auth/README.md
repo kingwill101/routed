@@ -164,6 +164,21 @@ final resolved = await resolveAuthEmailVerificationSignIn(
 );
 ```
 
+## Credentials orchestration helpers
+
+Use `requireAuthorizedCredentialsSignIn` and
+`requireAuthorizedCredentialsRegistration` to perform provider/adapter
+credential resolution with standard auth errors:
+
+```dart
+final user = await requireAuthorizedCredentialsSignIn(
+  adapter: adapter,
+  provider: credentialsProvider,
+  context: context,
+  credentials: credentials,
+);
+```
+
 ## OAuth callback orchestration helper
 
 Use `resolveOAuthSignInForProvider` in framework adapters to share OAuth
