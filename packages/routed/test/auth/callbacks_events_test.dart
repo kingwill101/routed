@@ -248,6 +248,6 @@ void main() {
   });
 }
 
-AuthSignInResult _denySignIn(AuthSignInCallbackContext context) {
+AuthSignInResult _denySignIn(AuthSignInCallbackContext<EngineContext> context) {
   return const AuthSignInResult.deny();
 }

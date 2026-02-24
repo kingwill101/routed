@@ -2,13 +2,14 @@ import 'package:http/http.dart' as http;
 import 'package:server_auth/server_auth.dart'
     show
         AuthAdapter,
+        AuthCallbacks,
         AuthProvider,
-        PolicyOptions,
-        RbacOptions,
         AuthSessionStrategy,
+        AuthVerificationTokenStore,
         JwtSessionOptions,
-        AuthVerificationTokenStore;
-import 'package:routed/src/auth/hooks.dart';
+        PolicyOptions,
+        RbacOptions;
+import 'package:routed/src/context/context.dart';
 import 'package:routed/src/auth/session_auth.dart';
 
 /// {@template routed_auth_manager}
@@ -59,7 +60,7 @@ class AuthOptions {
     this.enforceCsrf = true,
     this.rbac = const RbacOptions(),
     this.policies = const PolicyOptions(),
-    this.callbacks = const AuthCallbacks(),
+    this.callbacks = const AuthCallbacks<EngineContext>(),
   });
 
   /// List of configured auth providers.
@@ -114,7 +115,7 @@ class AuthOptions {
   final PolicyOptions policies;
 
   /// Auth callback hooks.
-  final AuthCallbacks callbacks;
+  final AuthCallbacks<EngineContext> callbacks;
 
   AuthOptions copyWith({
     List<AuthProvider>? providers,
@@ -134,7 +135,7 @@ class AuthOptions {
     bool? enforceCsrf,
     RbacOptions? rbac,
     PolicyOptions? policies,
-    AuthCallbacks? callbacks,
+    AuthCallbacks<EngineContext>? callbacks,
   }) {
     return AuthOptions(
       providers: providers ?? this.providers,

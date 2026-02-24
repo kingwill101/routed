@@ -72,7 +72,7 @@ Map<String, dynamic>? _decodeJson(TestResponse response) {
   return null;
 }
 
-AuthManager _sessionManager({AuthCallbacks? callbacks}) {
+AuthManager _sessionManager({AuthCallbacks<EngineContext>? callbacks}) {
   return AuthManager(
     AuthOptions(
       providers: [
@@ -93,14 +93,14 @@ AuthManager _sessionManager({AuthCallbacks? callbacks}) {
       ],
       sessionStrategy: AuthSessionStrategy.session,
       enforceCsrf: false,
-      callbacks: callbacks ?? const AuthCallbacks(),
+      callbacks: callbacks ?? const AuthCallbacks<EngineContext>(),
     ),
   );
 }
 
 const String _jwtSecret = 'test-jwt-secret-for-update-session';
 
-AuthManager _jwtManager({AuthCallbacks? callbacks}) {
+AuthManager _jwtManager({AuthCallbacks<EngineContext>? callbacks}) {
   return AuthManager(
     AuthOptions(
       providers: [
@@ -122,7 +122,7 @@ AuthManager _jwtManager({AuthCallbacks? callbacks}) {
       sessionStrategy: AuthSessionStrategy.jwt,
       jwtOptions: const JwtSessionOptions(secret: _jwtSecret),
       enforceCsrf: false,
-      callbacks: callbacks ?? const AuthCallbacks(),
+      callbacks: callbacks ?? const AuthCallbacks<EngineContext>(),
     ),
   );
 }

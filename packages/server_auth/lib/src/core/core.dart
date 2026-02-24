@@ -1,5 +1,6 @@
 export 'adapter.dart';
 export 'authorization.dart';
+export 'callbacks.dart';
 export 'config_schema.dart';
 export 'config_utils.dart';
 export 'exceptions.dart';

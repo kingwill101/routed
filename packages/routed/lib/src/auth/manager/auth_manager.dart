@@ -9,13 +9,19 @@ import 'package:server_auth/server_auth.dart'
     show
         AuthAccount,
         AuthAdapter,
+        AuthCallbacks,
         AuthCredentials,
         AuthEmailRequest,
+        AuthJwtCallbackContext,
         AuthPrincipal,
         AuthProvider,
+        AuthRedirectCallbackContext,
         AuthResult,
+        AuthSessionCallbackContext,
         AuthSession,
         AuthSessionStrategy,
+        AuthSignInCallbackContext,
+        AuthSignInResult,
         OAuth2Client,
         OAuth2Exception,
         AuthFlowException,
@@ -60,7 +66,7 @@ class AuthManager {
 
   http.Client get httpClient => _httpClient ??= http.Client();
 
-  AuthCallbacks get callbacks => options.callbacks;
+  AuthCallbacks<EngineContext> get callbacks => options.callbacks;
 
   AuthProvider? resolveProvider(String id) {
     for (final provider in options.providers) {
@@ -458,7 +464,7 @@ class AuthManager {
         }
         final issuer = _jwtIssuer();
         final claims = await _applyJwtCallback(
-          AuthJwtCallbackContext(
+          AuthJwtCallbackContext<EngineContext>(
             context: ctx,
             token: _jwtClaimsForUser(user),
             user: user,
@@ -519,7 +525,7 @@ class AuthManager {
   }
 
   Future<AuthSignInResult> _applySignInCallback(
-    AuthSignInCallbackContext context,
+    AuthSignInCallbackContext<EngineContext> context,
   ) async {
     final callback = callbacks.signIn;
     if (callback == null) {
@@ -529,7 +535,7 @@ class AuthManager {
   }
 
   Future<Map<String, dynamic>> _applyJwtCallback(
-    AuthJwtCallbackContext context,
+    AuthJwtCallbackContext<EngineContext> context,
   ) async {
     final callback = callbacks.jwt;
     if (callback == null) {
@@ -553,7 +559,7 @@ class AuthManager {
     }
     final resolved = await Future.sync(
       () => callback(
-        AuthRedirectCallbackContext(
+        AuthRedirectCallbackContext<EngineContext>(
           context: ctx,
           url: url,
           baseUrl: _baseUrl(ctx.request.uri),
@@ -575,7 +581,7 @@ class AuthManager {
         ? null
         : await Future.sync(
             () => callback(
-              AuthSessionCallbackContext(
+              AuthSessionCallbackContext<EngineContext>(
                 context: ctx,
                 session: session,
                 payload: payload,
@@ -641,7 +647,7 @@ class AuthManager {
     bool isNewUser = false,
   }) async {
     final decision = await _applySignInCallback(
-      AuthSignInCallbackContext(
+      AuthSignInCallbackContext<EngineContext>(
         context: ctx,
         user: user,
         strategy: options.sessionStrategy,
@@ -713,7 +719,7 @@ class AuthManager {
         }
         final issuer = _jwtIssuer();
         final claims = await _applyJwtCallback(
-          AuthJwtCallbackContext(
+          AuthJwtCallbackContext<EngineContext>(
             context: ctx,
             token: _jwtClaimsForUser(user),
             user: user,
@@ -845,7 +851,7 @@ class AuthManager {
     }
     final issuer = _jwtIssuer();
     final claims = await _applyJwtCallback(
-      AuthJwtCallbackContext(
+      AuthJwtCallbackContext<EngineContext>(
         context: ctx,
         token: Map<String, dynamic>.from(payload.claims),
         user: user,
