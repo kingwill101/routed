@@ -10,7 +10,7 @@ export 'src/binding/multipart.dart'
         FileExtensionNotAllowedException,
         FileQuotaExceededException;
 export 'src/binding/binding.dart' show Binding, Bindable, MimeType;
-export 'src/cache/cache.dart';
+export 'src/cache/cache_manager.dart';
 export 'src/config/config.dart';
 export 'src/contracts/config/config.dart' show Config;
 export 'src/config/helpers.dart';

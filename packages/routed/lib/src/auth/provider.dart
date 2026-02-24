@@ -9,7 +9,8 @@ import 'package:server_auth/server_auth.dart'
         AuthVerificationTokenStore,
         OAuthIntrospectionOptions,
         registerGitHubAuthProvider;
-import 'package:routed/src/auth/manager.dart';
+import 'package:routed/src/auth/manager/auth_manager.dart';
+import 'package:routed/src/auth/manager/auth_options.dart';
 import 'package:routed/src/auth/routes.dart';
 import 'package:routed/src/auth/haigate.dart';
 import 'package:routed/src/auth/jwt.dart';

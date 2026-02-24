@@ -1,6 +1,6 @@
 import 'dart:io';
 
-import 'package:routed/src/auth/manager.dart';
+import 'package:routed/src/auth/manager/auth_manager.dart';
 import 'package:server_auth/server_auth.dart'
     show
         AuthCredentials,

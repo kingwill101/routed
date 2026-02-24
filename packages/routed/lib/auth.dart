@@ -1,8 +1,9 @@
-export 'src/auth/manager.dart';
+export 'src/auth/manager/auth_manager.dart';
+export 'src/auth/manager/auth_options.dart';
 export 'src/auth/hooks.dart';
 export 'src/auth/routes.dart';
-export 'src/auth/basic_auth.dart';
-export 'src/auth/csrf.dart';
+export 'src/middleware/basic_auth.dart';
+export 'src/middleware/csrf.dart';
 export 'src/auth/haigate.dart'
     show
         GateCallback,
