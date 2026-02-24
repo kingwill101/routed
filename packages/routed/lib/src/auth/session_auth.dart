@@ -1,7 +1,5 @@
 import 'dart:async';
-import 'dart:convert';
 import 'dart:io';
-import 'dart:math' show Random;
 
 import 'package:server_auth/server_auth.dart'
     show
@@ -13,6 +11,7 @@ import 'package:server_auth/server_auth.dart'
         requireRolesGuard,
         RememberTokenStore,
         InMemoryRememberTokenStore,
+        secureRandomToken,
         authPrincipalAttribute;
 import 'package:routed/src/context/context.dart';
 import 'package:routed/src/response.dart';
@@ -74,7 +73,7 @@ class SessionAuthService {
       await Future.sync(() => _rememberStore.remove(existing.value));
     }
 
-    final token = _generateToken();
+    final token = secureRandomToken();
     final expiresAt = DateTime.now().add(
       rememberDuration ?? _defaultRememberDuration,
     );
@@ -143,7 +142,7 @@ class SessionAuthService {
       ctx.session.setValue(_sessionPrincipalKey, principal.toJson());
       ctx.request.setAttribute(authPrincipalAttribute, principal);
 
-      final rotatedToken = _generateToken();
+      final rotatedToken = secureRandomToken();
       final newExpiry = DateTime.now().add(_defaultRememberDuration);
       await Future.sync(
         () => _rememberStore.save(rotatedToken, principal, newExpiry),
@@ -387,10 +386,4 @@ AuthGuard<EngineContext, Response> requireRoles(
       return ctx.response;
     },
   );
-}
-
-String _generateToken() {
-  final rand = Random.secure();
-  final bytes = List<int>.generate(32, (_) => rand.nextInt(256));
-  return base64UrlEncode(bytes);
 }

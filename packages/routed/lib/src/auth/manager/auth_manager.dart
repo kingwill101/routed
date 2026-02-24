@@ -1,7 +1,6 @@
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
-import 'dart:math';
 
 import 'package:http/http.dart' as http;
 import 'package:jose/jose.dart' show JsonWebToken;
@@ -40,7 +39,9 @@ import 'package:server_auth/server_auth.dart'
         JwtPayload,
         JwtVerifier,
         OAuthProvider,
-        OAuthTokenResponse;
+        OAuthTokenResponse,
+        base64UrlNoPadding,
+        secureRandomToken;
 import 'package:routed/src/auth/hooks.dart';
 import 'package:routed/src/auth/session_auth.dart';
 import 'package:routed/src/context/context.dart';
@@ -82,7 +83,7 @@ class AuthManager {
     if (existing != null && existing.isNotEmpty) {
       return existing;
     }
-    final token = _randomToken();
+    final token = secureRandomToken();
     ctx.setSession(options.csrfKey, token);
     return token;
   }
@@ -158,7 +159,7 @@ class AuthManager {
   ) async {
     await Future.sync(() => adapter.deleteVerificationTokens(email));
     await _tokenStore.delete(email);
-    final token = provider.tokenGenerator?.call() ?? _randomToken();
+    final token = provider.tokenGenerator?.call() ?? secureRandomToken();
     final expiresAt = DateTime.now().add(provider.tokenExpiry);
     if (callbackUrl.isNotEmpty) {
       ctx.setSession('${options.callbackKey}.email', callbackUrl);
@@ -231,7 +232,7 @@ class AuthManager {
     OAuthProvider<TProfile> provider, {
     String? callbackUrl,
   }) async {
-    final state = _randomToken();
+    final state = secureRandomToken();
     ctx.setSession('${options.stateKey}.${provider.id}', state);
 
     if (provider.onStateGenerated != null) {
@@ -241,8 +242,8 @@ class AuthManager {
     String? verifier;
     String? challenge;
     if (provider.usePkce) {
-      verifier = _randomToken(length: 48);
-      challenge = _base64Url(sha256Bytes(verifier));
+      verifier = secureRandomToken(length: 48);
+      challenge = base64UrlNoPadding(sha256Bytes(verifier));
       ctx.setSession('${options.pkceKey}.${provider.id}', verifier);
     }
     final codeChallengeMethod = challenge == null ? null : 'S256';
@@ -976,7 +977,7 @@ class AuthManager {
     return candidates
         .firstWhere(
           (value) => value != null && value.toString().isNotEmpty,
-          orElse: () => _randomToken(),
+          orElse: secureRandomToken,
         )
         .toString();
   }
@@ -1037,19 +1038,9 @@ class AuthManager {
     return true;
   }
 
-  String _randomToken({int length = 32}) {
-    final rand = Random.secure();
-    final bytes = List<int>.generate(length, (_) => rand.nextInt(256));
-    return base64UrlEncode(bytes);
-  }
-
   List<int> sha256Bytes(String value) {
     final data = utf8.encode(value);
     return sha256Digest(data);
-  }
-
-  String _base64Url(List<int> bytes) {
-    return base64UrlEncode(bytes).replaceAll('=', '');
   }
 }
 
