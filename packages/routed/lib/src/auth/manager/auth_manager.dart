@@ -31,6 +31,9 @@ import 'package:server_auth/server_auth.dart'
         AuthVerificationTokenStore,
         AuthVerificationToken,
         InMemoryAuthVerificationTokenStore,
+        authUsersDiffer,
+        mergeAuthUser,
+        resolveAuthAccountId,
         resolveCsrfToken,
         validateCsrfToken,
         extractBearerToken,
@@ -296,7 +299,11 @@ class AuthManager {
     final user = override ?? mapped;
 
     final profileMap = provider.serializeProfile(enrichedProfile);
-    final accountId = _resolveAccountId(profileMap, user);
+    final accountId = resolveAuthAccountId(
+      profileMap,
+      user,
+      fallbackId: secureRandomToken,
+    );
     final accountExpiresAt = tokenResponse.expiresIn == null
         ? null
         : DateTime.now().add(Duration(seconds: tokenResponse.expiresIn!));
@@ -329,8 +336,8 @@ class AuthManager {
       resolvedUser = await Future.sync(() => adapter.createUser(resolvedUser));
       isNewUser = true;
     } else {
-      final updatedUser = _mergeUser(resolvedUser, user);
-      if (_hasUserChanges(resolvedUser, updatedUser)) {
+      final updatedUser = mergeAuthUser(resolvedUser, user);
+      if (authUsersDiffer(resolvedUser, updatedUser)) {
         final stored = await Future.sync(() => adapter.updateUser(updatedUser));
         resolvedUser = stored ?? updatedUser;
         await _emitAuthEvent(
@@ -955,78 +962,6 @@ class AuthManager {
     }
 
     return profile;
-  }
-
-  String _resolveAccountId(Map<String, dynamic> profile, AuthUser user) {
-    final candidates = [
-      profile['sub'],
-      profile['id'],
-      profile['user_id'],
-      user.id,
-      user.email,
-    ];
-    return candidates
-        .firstWhere(
-          (value) => value != null && value.toString().isNotEmpty,
-          orElse: secureRandomToken,
-        )
-        .toString();
-  }
-
-  AuthUser _mergeUser(AuthUser existing, AuthUser incoming) {
-    final roles = incoming.roles.isNotEmpty ? incoming.roles : existing.roles;
-    final attributes = <String, dynamic>{
-      ...existing.attributes,
-      ...incoming.attributes,
-    };
-    return AuthUser(
-      id: existing.id,
-      email: incoming.email ?? existing.email,
-      name: incoming.name ?? existing.name,
-      image: incoming.image ?? existing.image,
-      roles: roles,
-      attributes: attributes,
-    );
-  }
-
-  bool _hasUserChanges(AuthUser existing, AuthUser updated) {
-    if (existing.email != updated.email ||
-        existing.name != updated.name ||
-        existing.image != updated.image) {
-      return true;
-    }
-    if (!_listEquals(existing.roles, updated.roles)) {
-      return true;
-    }
-    return !_mapEquals(existing.attributes, updated.attributes);
-  }
-
-  bool _listEquals(List<String> left, List<String> right) {
-    if (left.length != right.length) {
-      return false;
-    }
-    for (var i = 0; i < left.length; i++) {
-      if (left[i] != right[i]) {
-        return false;
-      }
-    }
-    return true;
-  }
-
-  bool _mapEquals(Map<String, dynamic> left, Map<String, dynamic> right) {
-    if (left.length != right.length) {
-      return false;
-    }
-    for (final entry in left.entries) {
-      if (!right.containsKey(entry.key)) {
-        return false;
-      }
-      final rightValue = right[entry.key];
-      if (rightValue != entry.value) {
-        return false;
-      }
-    }
-    return true;
   }
 
   List<int> sha256Bytes(String value) {

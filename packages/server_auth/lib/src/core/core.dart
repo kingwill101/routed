@@ -17,4 +17,5 @@ export 'providers.dart';
 export 'redirects.dart';
 export 'session.dart';
 export 'tokens.dart';
+export 'users.dart';
 export 'verification_token_store.dart';
