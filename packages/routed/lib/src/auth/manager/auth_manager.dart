@@ -14,6 +14,7 @@ import 'package:server_auth/server_auth.dart'
         resolveAuthRedirectWithCallbacks,
         resolveAuthSessionPayloadWithCallbacks,
         resolveAuthSignInDecision,
+        issueAuthJwtSessionWithCallbacks,
         AuthPrincipal,
         AuthProvider,
         authEmailCallbackSessionKey,
@@ -53,7 +54,6 @@ import 'package:server_auth/server_auth.dart'
         CredentialsProvider,
         EmailProvider,
         JwtAuthException,
-        issueAuthJwtToken,
         refreshAuthJwtTokenIfNeeded,
         JwtPayload,
         JwtVerifier,
@@ -449,26 +449,15 @@ class AuthManager {
           strategy: AuthSessionStrategy.session,
         );
       case AuthSessionStrategy.jwt:
-        if (options.jwtOptions.secret.isEmpty) {
-          throw AuthFlowException('missing_jwt_secret');
-        }
-        final claims = await resolveAuthJwtClaimsWithCallbacks<EngineContext>(
+        final issued = await issueAuthJwtSessionWithCallbacks<EngineContext>(
           callbacks: callbacks,
           context: ctx,
-          user: user,
-          strategy: AuthSessionStrategy.jwt,
-        );
-        final issued = issueAuthJwtToken(
           options: options.jwtOptions,
-          claims: claims,
-        );
-        ctx.response.cookies.add(issued.cookie);
-        return AuthSession(
           user: user,
-          expiresAt: issued.expiresAt,
           strategy: AuthSessionStrategy.jwt,
-          token: issued.token,
         );
+        ctx.response.cookies.add(issued.issued.cookie);
+        return issued.session;
     }
   }
 
@@ -661,12 +650,10 @@ class AuthManager {
           redirectUrl: resolvedRedirect,
         );
       case AuthSessionStrategy.jwt:
-        if (options.jwtOptions.secret.isEmpty) {
-          throw AuthFlowException('missing_jwt_secret');
-        }
-        final claims = await resolveAuthJwtClaimsWithCallbacks<EngineContext>(
+        final issued = await issueAuthJwtSessionWithCallbacks<EngineContext>(
           callbacks: callbacks,
           context: ctx,
+          options: options.jwtOptions,
           user: user,
           strategy: AuthSessionStrategy.jwt,
           provider: provider,
@@ -674,17 +661,8 @@ class AuthManager {
           profile: profile,
           isNewUser: isNewUser,
         );
-        final issued = issueAuthJwtToken(
-          options: options.jwtOptions,
-          claims: claims,
-        );
-        ctx.response.cookies.add(issued.cookie);
-        final session = AuthSession(
-          user: user,
-          expiresAt: issued.expiresAt,
-          strategy: AuthSessionStrategy.jwt,
-          token: issued.token,
-        );
+        ctx.response.cookies.add(issued.issued.cookie);
+        final session = issued.session;
         await _emitAuthEvent(
           ctx,
           AuthSignInEvent(

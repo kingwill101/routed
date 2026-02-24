@@ -200,6 +200,14 @@ final sessionPayload = await resolveAuthSessionPayloadWithCallbacks<MyContext>(
   session: session,
   strategy: AuthSessionStrategy.session,
 );
+
+final jwtIssue = await issueAuthJwtSessionWithCallbacks<MyContext>(
+  callbacks: callbacks,
+  context: context,
+  options: jwtOptions,
+  user: user,
+  strategy: AuthSessionStrategy.jwt,
+);
 ```
 
 ## Authorization and gates example

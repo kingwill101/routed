@@ -1,5 +1,7 @@
 import 'dart:async';
 
+import 'exceptions.dart';
+import 'jwt.dart';
 import 'models.dart';
 import 'providers.dart';
 import 'users.dart';
@@ -172,6 +174,61 @@ Future<Map<String, dynamic>> resolveAuthSessionPayloadWithCallbacks<TContext>({
       user: session.user,
       strategy: strategy,
       provider: provider,
+    ),
+  );
+}
+
+/// Result of issuing a JWT session with callbacks.
+class AuthJwtSessionIssue {
+  const AuthJwtSessionIssue({
+    required this.claims,
+    required this.issued,
+    required this.session,
+  });
+
+  final Map<String, dynamic> claims;
+  final AuthIssuedJwtToken issued;
+  final AuthSession session;
+}
+
+/// Issues a JWT-backed auth session using callback-driven claims resolution.
+Future<AuthJwtSessionIssue> issueAuthJwtSessionWithCallbacks<TContext>({
+  required AuthCallbacks<TContext> callbacks,
+  required TContext context,
+  required JwtSessionOptions options,
+  required AuthUser user,
+  AuthSessionStrategy strategy = AuthSessionStrategy.jwt,
+  AuthProvider? provider,
+  AuthAccount? account,
+  Map<String, dynamic>? profile,
+  bool isNewUser = false,
+  Map<String, dynamic>? token,
+}) async {
+  if (options.secret.isEmpty) {
+    throw AuthFlowException('missing_jwt_secret');
+  }
+
+  final claims = await resolveAuthJwtClaimsWithCallbacks<TContext>(
+    callbacks: callbacks,
+    context: context,
+    user: user,
+    strategy: strategy,
+    provider: provider,
+    account: account,
+    profile: profile,
+    isNewUser: isNewUser,
+    token: token,
+  );
+
+  final issued = issueAuthJwtToken(options: options, claims: claims);
+  return AuthJwtSessionIssue(
+    claims: claims,
+    issued: issued,
+    session: AuthSession(
+      user: user,
+      expiresAt: issued.expiresAt,
+      strategy: strategy,
+      token: issued.token,
     ),
   );
 }

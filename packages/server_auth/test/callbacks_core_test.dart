@@ -170,6 +170,46 @@ void main() {
   );
 
   test(
+    'issueAuthJwtSessionWithCallbacks throws when secret is missing',
+    () async {
+      await expectLater(
+        issueAuthJwtSessionWithCallbacks<String>(
+          callbacks: const AuthCallbacks<String>(),
+          context: 'ctx',
+          options: const JwtSessionOptions(secret: ''),
+          user: AuthUser(id: 'u1'),
+        ),
+        throwsA(
+          isA<AuthFlowException>().having(
+            (error) => error.code,
+            'code',
+            'missing_jwt_secret',
+          ),
+        ),
+      );
+    },
+  );
+
+  test(
+    'issueAuthJwtSessionWithCallbacks issues token and session from callbacks',
+    () async {
+      final issued = await issueAuthJwtSessionWithCallbacks<String>(
+        callbacks: AuthCallbacks<String>(
+          jwt: (context) => <String, dynamic>{...context.token, 'plan': 'pro'},
+        ),
+        context: 'ctx',
+        options: const JwtSessionOptions(secret: 'secret-test'),
+        user: AuthUser(id: 'u1'),
+      );
+
+      expect(issued.claims['plan'], equals('pro'));
+      expect(issued.issued.cookie.value, equals(issued.issued.token));
+      expect(issued.session.token, equals(issued.issued.token));
+      expect(issued.session.strategy, equals(AuthSessionStrategy.jwt));
+    },
+  );
+
+  test(
     'resolveAuthRedirectTarget returns null when callback is absent',
     () async {
       final target = await resolveAuthRedirectTarget<String>(
