@@ -117,6 +117,26 @@ final refreshed = await refreshAuthJwtTokenIfNeeded(
 );
 ```
 
+## OAuth callback orchestration helper
+
+Use `resolveOAuthSignInForProvider` in framework adapters to share OAuth
+callback exchange/profile/user resolution logic without depending on Routed.
+
+```dart
+final resolved = await resolveOAuthSignInForProvider<MyContext, Map<String, dynamic>>(
+  adapter: adapter,
+  context: context,
+  provider: oauthProvider,
+  code: authorizationCode,
+  codeVerifier: pkceVerifier,
+  httpClient: httpClient,
+);
+
+await adapter.linkAccount(resolved.account);
+print(resolved.user.id);
+print(resolved.profile);
+```
+
 ## Adapter attribute mapping helpers
 
 When writing framework adapters, use these helpers to store verified auth
