@@ -160,6 +160,20 @@ Set<String> registerRbacAbilitiesSafely<TContext>(
   return registered;
 }
 
+/// Synchronizes [managed] with [nextManaged], unregistering stale abilities.
+void syncManagedGateAbilities<TContext>(
+  AuthGateRegistry<TContext> registry, {
+  required Set<String> managed,
+  required Set<String> nextManaged,
+}) {
+  for (final ability in managed.difference(nextManaged)) {
+    registry.unregister(ability);
+  }
+  managed
+    ..clear()
+    ..addAll(nextManaged);
+}
+
 /// Builds a gate callback for a specific policy action.
 AuthGateCallback<TContext> policyGate<TContext, T extends Object>(
   Policy<T> policy,

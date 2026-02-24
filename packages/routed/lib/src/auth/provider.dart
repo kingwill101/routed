@@ -23,6 +23,7 @@ import 'package:server_auth/server_auth.dart'
         registerRbacAbilitiesSafely,
         registerDefaultAuthProviders,
         resolveAuthOptions,
+        syncManagedGateAbilities,
         AuthOptions;
 import 'package:routed/src/auth/manager/auth_manager.dart';
 import 'package:routed/src/auth/routes.dart';
@@ -373,10 +374,11 @@ class AuthServiceProvider extends ServiceProvider with ProvidesDefaultConfig {
   void _configureRbac(Container container, AuthOptions<EngineContext> options) {
     final registry = _resolveGateRegistry(container);
     if (options.rbac.isEmpty) {
-      for (final ability in _managedRbacAbilities) {
-        registry.unregister(ability);
-      }
-      _managedRbacAbilities.clear();
+      syncManagedGateAbilities<EngineContext>(
+        registry,
+        managed: _managedRbacAbilities,
+        nextManaged: const <String>{},
+      );
       return;
     }
 
@@ -386,12 +388,11 @@ class AuthServiceProvider extends ServiceProvider with ProvidesDefaultConfig {
       managed: _managedRbacAbilities,
     );
 
-    for (final ability in _managedRbacAbilities.difference(newAbilities)) {
-      registry.unregister(ability);
-    }
-    _managedRbacAbilities
-      ..clear()
-      ..addAll(newAbilities);
+    syncManagedGateAbilities<EngineContext>(
+      registry,
+      managed: _managedRbacAbilities,
+      nextManaged: newAbilities,
+    );
   }
 
   void _configurePolicies(
@@ -400,10 +401,11 @@ class AuthServiceProvider extends ServiceProvider with ProvidesDefaultConfig {
   ) {
     final registry = _resolveGateRegistry(container);
     if (options.policies.isEmpty) {
-      for (final ability in _managedPolicyAbilities) {
-        registry.unregister(ability);
-      }
-      _managedPolicyAbilities.clear();
+      syncManagedGateAbilities<EngineContext>(
+        registry,
+        managed: _managedPolicyAbilities,
+        nextManaged: const <String>{},
+      );
       return;
     }
 
@@ -413,12 +415,11 @@ class AuthServiceProvider extends ServiceProvider with ProvidesDefaultConfig {
       managed: _managedPolicyAbilities,
     );
 
-    for (final ability in _managedPolicyAbilities.difference(newAbilities)) {
-      registry.unregister(ability);
-    }
-    _managedPolicyAbilities
-      ..clear()
-      ..addAll(newAbilities);
+    syncManagedGateAbilities<EngineContext>(
+      registry,
+      managed: _managedPolicyAbilities,
+      nextManaged: newAbilities,
+    );
   }
 
   AuthGateCallback<EngineContext>? _buildGateFromDefinition(

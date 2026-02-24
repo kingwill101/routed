@@ -95,4 +95,36 @@ void main() {
     );
     expect(allowed, isTrue);
   });
+
+  test('syncManagedGateAbilities unregisters stale managed abilities', () {
+    final registry = AuthGateRegistry<String>();
+    registry.register('ability.keep', (_) => true);
+    registry.register('ability.remove', (_) => true);
+
+    final managed = <String>{'ability.keep', 'ability.remove'};
+    syncManagedGateAbilities<String>(
+      registry,
+      managed: managed,
+      nextManaged: const <String>{'ability.keep'},
+    );
+
+    expect(registry.resolve('ability.keep'), isNotNull);
+    expect(registry.resolve('ability.remove'), isNull);
+    expect(managed, equals(const <String>{'ability.keep'}));
+  });
+
+  test('syncManagedGateAbilities can clear all managed abilities', () {
+    final registry = AuthGateRegistry<String>();
+    registry.register('ability.one', (_) => true);
+
+    final managed = <String>{'ability.one'};
+    syncManagedGateAbilities<String>(
+      registry,
+      managed: managed,
+      nextManaged: const <String>{},
+    );
+
+    expect(registry.resolve('ability.one'), isNull);
+    expect(managed, isEmpty);
+  });
 }
