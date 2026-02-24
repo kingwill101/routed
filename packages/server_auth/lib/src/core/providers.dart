@@ -195,6 +195,24 @@ List<Map<String, dynamic>> authProviderSummaries(
   return providers.map((provider) => provider.toJson()).toList(growable: false);
 }
 
+/// Merges [additional] providers into [base] by unique provider id.
+///
+/// Existing providers in [base] win collisions.
+List<AuthProvider> mergeAuthProvidersById(
+  Iterable<AuthProvider> base,
+  Iterable<AuthProvider> additional,
+) {
+  final merged = <AuthProvider>[...base];
+  final ids = merged.map((provider) => provider.id).toSet();
+  for (final provider in additional) {
+    if (!ids.contains(provider.id)) {
+      merged.add(provider);
+      ids.add(provider.id);
+    }
+  }
+  return merged;
+}
+
 /// {@macro server_auth_oauth_provider}
 class OAuthProvider<TProfile extends Object> extends AuthProvider {
   OAuthProvider({

@@ -110,4 +110,45 @@ void main() {
     expect(authUsersDiffer(left, same), isFalse);
     expect(authUsersDiffer(left, changed), isTrue);
   });
+
+  test('authJwtClaimsForUser maps user fields to standard auth claims', () {
+    final user = AuthUser(
+      id: 'u1',
+      email: 'user@test.dev',
+      name: 'User',
+      image: 'avatar.png',
+      roles: const <String>['admin'],
+      attributes: const <String, dynamic>{'team': 'core'},
+    );
+
+    expect(
+      authJwtClaimsForUser(user),
+      equals(<String, dynamic>{
+        'sub': 'u1',
+        'email': 'user@test.dev',
+        'name': 'User',
+        'image': 'avatar.png',
+        'roles': <String>['admin'],
+        'attributes': <String, dynamic>{'team': 'core'},
+      }),
+    );
+  });
+
+  test('authUserFromJwtClaims maps standard auth claims to user', () {
+    final user = authUserFromJwtClaims(<String, dynamic>{
+      'sub': 'u1',
+      'email': 'user@test.dev',
+      'name': 'User',
+      'image': 'avatar.png',
+      'roles': <String>['admin'],
+      'attributes': <String, dynamic>{'team': 'core'},
+    });
+
+    expect(user.id, equals('u1'));
+    expect(user.email, equals('user@test.dev'));
+    expect(user.name, equals('User'));
+    expect(user.image, equals('avatar.png'));
+    expect(user.roles, equals(<String>['admin']));
+    expect(user.attributes, equals(<String, dynamic>{'team': 'core'}));
+  });
 }

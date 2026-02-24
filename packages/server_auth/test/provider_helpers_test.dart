@@ -25,4 +25,22 @@ void main() {
       ]),
     );
   });
+
+  test('mergeAuthProvidersById appends only missing providers', () {
+    final base = <AuthProvider>[
+      AuthProvider(id: 'google', name: 'Google', type: AuthProviderType.oidc),
+    ];
+    final additional = <AuthProvider>[
+      AuthProvider(id: 'google', name: 'Google 2', type: AuthProviderType.oidc),
+      AuthProvider(id: 'github', name: 'GitHub', type: AuthProviderType.oauth),
+    ];
+
+    final merged = mergeAuthProvidersById(base, additional);
+
+    expect(
+      merged.map((provider) => provider.id),
+      equals(<String>['google', 'github']),
+    );
+    expect(merged.first.name, equals('Google'));
+  });
 }

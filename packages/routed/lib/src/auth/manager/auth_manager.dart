@@ -30,6 +30,8 @@ import 'package:server_auth/server_auth.dart'
         AuthVerificationTokenStore,
         AuthVerificationToken,
         InMemoryAuthVerificationTokenStore,
+        authJwtClaimsForUser,
+        authUserFromJwtClaims,
         authUsersDiffer,
         mergeAuthUser,
         resolveAuthAccountId,
@@ -464,7 +466,7 @@ class AuthManager {
         final claims = await _applyJwtCallback(
           AuthJwtCallbackContext<EngineContext>(
             context: ctx,
-            token: _jwtClaimsForUser(user),
+            token: authJwtClaimsForUser(user),
             user: user,
             strategy: AuthSessionStrategy.jwt,
           ),
@@ -505,7 +507,7 @@ class AuthManager {
         } on JwtAuthException {
           return null;
         }
-        final user = _userFromJwtClaims(payload.claims);
+        final user = authUserFromJwtClaims(payload.claims);
         var resolvedToken = token;
         var resolvedExpiry = payload.token.claims.expiry?.toUtc();
         final refreshed = await _refreshJwtIfNeeded(ctx, payload, user);
@@ -712,7 +714,7 @@ class AuthManager {
         final claims = await _applyJwtCallback(
           AuthJwtCallbackContext<EngineContext>(
             context: ctx,
-            token: _jwtClaimsForUser(user),
+            token: authJwtClaimsForUser(user),
             user: user,
             strategy: AuthSessionStrategy.jwt,
             provider: provider,
@@ -758,28 +760,6 @@ class AuthManager {
     return JwtVerifier(
       options: options.jwtOptions.toVerifierOptions(),
       httpClient: httpClient,
-    );
-  }
-
-  Map<String, dynamic> _jwtClaimsForUser(AuthUser user) {
-    return {
-      'sub': user.id,
-      'email': user.email,
-      'name': user.name,
-      'image': user.image,
-      'roles': user.roles,
-      'attributes': user.attributes,
-    };
-  }
-
-  AuthUser _userFromJwtClaims(Map<String, dynamic> claims) {
-    return AuthUser(
-      id: claims['sub']?.toString() ?? '',
-      email: claims['email']?.toString(),
-      name: claims['name']?.toString(),
-      image: claims['image']?.toString(),
-      roles: (claims['roles'] as List?)?.cast<String>() ?? const <String>[],
-      attributes: (claims['attributes'] as Map?)?.cast<String, dynamic>(),
     );
   }
 

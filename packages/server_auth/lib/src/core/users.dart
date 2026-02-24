@@ -53,6 +53,30 @@ bool authUsersDiffer(AuthUser left, AuthUser right) {
   return !_mapEquals(left.attributes, right.attributes);
 }
 
+/// Converts [user] into default JWT auth claims.
+Map<String, dynamic> authJwtClaimsForUser(AuthUser user) {
+  return {
+    'sub': user.id,
+    'email': user.email,
+    'name': user.name,
+    'image': user.image,
+    'roles': user.roles,
+    'attributes': user.attributes,
+  };
+}
+
+/// Creates an [AuthUser] from default JWT auth [claims].
+AuthUser authUserFromJwtClaims(Map<String, dynamic> claims) {
+  return AuthUser(
+    id: claims['sub']?.toString() ?? '',
+    email: claims['email']?.toString(),
+    name: claims['name']?.toString(),
+    image: claims['image']?.toString(),
+    roles: (claims['roles'] as List?)?.cast<String>() ?? const <String>[],
+    attributes: (claims['attributes'] as Map?)?.cast<String, dynamic>(),
+  );
+}
+
 bool _listEquals(List<String> left, List<String> right) {
   if (left.length != right.length) {
     return false;

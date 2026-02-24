@@ -10,8 +10,8 @@ import 'package:server_auth/server_auth.dart'
         AuthGateRegistry,
         AuthGateRegistrationException,
         AuthGuardRegistry,
-        AuthProvider,
         AuthProviderRegistry,
+        mergeAuthProvidersById,
         RememberTokenStore,
         AuthVerificationTokenStore,
         JwtOptions,
@@ -199,7 +199,7 @@ class AuthServiceProvider extends ServiceProvider with ProvidesDefaultConfig {
     final configuredProviders = AuthProviderRegistry.instance.buildProviders(
       _resolvedConfig?.providers ?? const <String, dynamic>{},
     );
-    final mergedProviders = _mergeProviders(
+    final mergedProviders = mergeAuthProvidersById(
       options.providers,
       configuredProviders,
     );
@@ -246,24 +246,6 @@ class AuthServiceProvider extends ServiceProvider with ProvidesDefaultConfig {
       return container.get<AuthVerificationTokenStore>();
     }
     return null;
-  }
-
-  List<AuthProvider> _mergeProviders(
-    List<AuthProvider> base,
-    List<AuthProvider> configured,
-  ) {
-    if (configured.isEmpty) {
-      return base;
-    }
-    final merged = <AuthProvider>[...base];
-    final ids = base.map((provider) => provider.id).toSet();
-    for (final provider in configured) {
-      if (!ids.contains(provider.id)) {
-        merged.add(provider);
-        ids.add(provider.id);
-      }
-    }
-    return merged;
   }
 
   AuthGuardRegistry<EngineContext, Response> _resolveGuardRegistry(
