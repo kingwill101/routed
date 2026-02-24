@@ -124,4 +124,126 @@ void main() {
       await service.dispose();
     });
   });
+
+  group('rate limit compiler', () {
+    test('compiles policies with default failover', () async {
+      final backend = CacheRateLimiterBackend(
+        repository: RepositoryImpl(ArrayStore(), 'rate', ''),
+      );
+
+      final policies = compileRateLimitPolicies(
+        specs: [
+          const RateLimitPolicySpec(
+            name: 'compiled',
+            match: '/api/*',
+            method: 'GET',
+            strategy: RateLimitStrategy.tokenBucket,
+            capacity: 1,
+            interval: Duration(minutes: 1),
+            window: Duration(minutes: 1),
+            period: Duration(hours: 1),
+            burstMultiplier: null,
+            key: RateLimitKeySpec.header('x-user'),
+            failover: null,
+          ),
+        ],
+        backend: backend,
+        defaultFailover: RateLimitFailoverMode.block,
+      );
+
+      final request = _FakeRequest(
+        method: 'GET',
+        path: '/api/users',
+        headers: {'x-user': 'user-1'},
+      );
+
+      expect(policies, hasLength(1));
+      expect(policies.first.matches(request), isTrue);
+      expect(policies.first.keyResolver.resolve(request), equals('user-1'));
+      expect(policies.first.failover, equals(RateLimitFailoverMode.block));
+
+      await backend.close();
+    });
+
+    test('falls back to ip resolver for blank header key specs', () {
+      final resolver = buildRateLimitKeyResolver(
+        const RateLimitKeySpec.header('   '),
+      );
+      final request = _FakeRequest(
+        method: 'GET',
+        path: '/',
+        clientIP: '192.168.1.10',
+      );
+
+      expect(resolver.resolve(request), equals('192.168.1.10'));
+    });
+
+    test('normalizes min capacity across strategies', () async {
+      final backend = CacheRateLimiterBackend(
+        repository: RepositoryImpl(ArrayStore(), 'rate', ''),
+      );
+
+      final token = compileRateLimitPolicy(
+        spec: const RateLimitPolicySpec(
+          name: 'token',
+          match: '*',
+          method: null,
+          strategy: RateLimitStrategy.tokenBucket,
+          capacity: 0,
+          interval: Duration(seconds: 30),
+          window: Duration(minutes: 1),
+          period: Duration(hours: 1),
+          burstMultiplier: null,
+          key: RateLimitKeySpec.ip(),
+          failover: null,
+        ),
+        backend: backend,
+        defaultFailover: RateLimitFailoverMode.allow,
+      );
+      final tokenConfig = token.algorithm as TokenBucketConfig;
+      expect(tokenConfig.capacity, equals(1));
+
+      final sliding = compileRateLimitPolicy(
+        spec: const RateLimitPolicySpec(
+          name: 'sliding',
+          match: '*',
+          method: null,
+          strategy: RateLimitStrategy.slidingWindow,
+          capacity: 0,
+          interval: Duration(seconds: 30),
+          window: Duration(minutes: 1),
+          period: Duration(hours: 1),
+          burstMultiplier: null,
+          key: RateLimitKeySpec.ip(),
+          failover: null,
+        ),
+        backend: backend,
+        defaultFailover: RateLimitFailoverMode.allow,
+      );
+      final slidingConfig = sliding.algorithm as SlidingWindowConfig;
+      expect(slidingConfig.limit, equals(1));
+
+      final quota = compileRateLimitPolicy(
+        spec: const RateLimitPolicySpec(
+          name: 'quota',
+          match: '*',
+          method: null,
+          strategy: RateLimitStrategy.quota,
+          capacity: 0,
+          interval: Duration(seconds: 30),
+          window: Duration(minutes: 1),
+          period: Duration(hours: 1),
+          burstMultiplier: null,
+          key: RateLimitKeySpec.ip(),
+          failover: null,
+        ),
+        backend: backend,
+        defaultFailover: RateLimitFailoverMode.allow,
+      );
+      final quotaConfig = quota.algorithm as QuotaConfig;
+      expect(quotaConfig.limit, equals(1));
+
+      await backend.close();
+    });
+  });
 }

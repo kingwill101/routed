@@ -279,4 +279,42 @@ void main() {
       expect(loaded.isNew, isFalse);
     });
   });
+
+  group('SessionRuntimeFactory', () {
+    test('builds built-in session store implementations', () {
+      final codec = SecureCookie(key: SecureCookie.generateKey());
+      final options = SessionOptions(maxAge: 120);
+      final repository = _InMemoryRepository();
+      final fs = MemoryFileSystem();
+
+      final cookie = sessionRuntimeFactory.cookie(codecs: [codec]);
+      final memory = sessionRuntimeFactory.memory(
+        codecs: [codec],
+        defaultOptions: options,
+        lifetime: const Duration(minutes: 2),
+      );
+      final file = sessionRuntimeFactory.file(
+        codecs: [codec],
+        storagePath: '/sessions',
+        defaultOptions: options,
+        lottery: const [2, 100],
+        fileSystem: fs,
+      );
+      final cache = sessionRuntimeFactory.cache(
+        repository: repository,
+        codecs: [codec],
+        defaultOptions: options,
+        cachePrefix: 'session:',
+        lifetime: const Duration(minutes: 2),
+      );
+
+      expect(cookie, isA<CookieStore>());
+      expect(memory, isA<MemorySessionStore>());
+      expect(file, isA<FilesystemStore>());
+      expect(cache, isA<CacheSessionStore>());
+      expect(file.storageDir, equals('/sessions'));
+      expect(file.lottery, equals(const [2, 100]));
+      expect(cache.cachePrefix, equals('session:'));
+    });
+  });
 }
