@@ -348,6 +348,64 @@ void main() {
     });
   });
 
+  group('GitHubProvider', () {
+    test('creates provider with required options', () {
+      final provider = githubProvider(
+        GitHubProviderOptions(
+          clientId: 'github-client-id',
+          clientSecret: 'github-client-secret',
+          redirectUri: 'https://example.com/auth/callback/github',
+        ),
+      );
+
+      expect(provider.id, equals('github'));
+      expect(provider.name, equals('GitHub'));
+      expect(provider.type, equals(AuthProviderType.oauth));
+      expect(provider.clientId, equals('github-client-id'));
+    });
+
+    test('parses GitHub profile correctly', () {
+      final profile = GitHubProfile.fromJson({
+        'id': 12345,
+        'login': 'octocat',
+        'name': 'The Octocat',
+        'email': 'octo@example.com',
+        'avatar_url': 'https://avatars.githubusercontent.com/u/12345?v=4',
+      });
+
+      expect(profile.id, equals(12345));
+      expect(profile.login, equals('octocat'));
+      expect(profile.name, equals('The Octocat'));
+      expect(profile.email, equals('octo@example.com'));
+      expect(profile.avatarUrl, contains('avatars.githubusercontent.com'));
+    });
+
+    test('maps profile to AuthUser', () {
+      final provider = githubProvider(
+        GitHubProviderOptions(
+          clientId: 'id',
+          clientSecret: 'secret',
+          redirectUri: 'https://example.com/callback',
+        ),
+      );
+
+      final profile = GitHubProfile.fromJson({
+        'id': 42,
+        'login': 'octocat',
+        'name': 'The Octocat',
+        'email': 'octo@example.com',
+        'avatar_url': 'https://avatars.githubusercontent.com/u/42?v=4',
+      });
+
+      final user = provider.mapProfile(profile);
+
+      expect(user.id, equals('42'));
+      expect(user.name, equals('The Octocat'));
+      expect(user.email, equals('octo@example.com'));
+      expect(user.image, contains('avatars.githubusercontent.com'));
+    });
+  });
+
   group('SlackProvider', () {
     test('creates provider with required options', () {
       final provider = slackProvider(

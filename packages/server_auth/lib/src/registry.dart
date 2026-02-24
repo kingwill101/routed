@@ -5,6 +5,7 @@ import 'providers/discord.dart';
 import 'providers/dropbox.dart';
 import 'providers/facebook.dart';
 import 'providers/gitlab.dart';
+import 'providers/github.dart';
 import 'providers/google.dart';
 import 'providers/linkedin.dart';
 import 'providers/microsoft_entra.dart';
@@ -58,6 +59,7 @@ void registerAllAuthProviders(
   registerTwitterAuthProvider(registry, overrideExisting: overrideExisting);
   registerFacebookAuthProvider(registry, overrideExisting: overrideExisting);
   registerGitLabAuthProvider(registry, overrideExisting: overrideExisting);
+  registerGitHubAuthProvider(registry, overrideExisting: overrideExisting);
   registerSpotifyAuthProvider(registry, overrideExisting: overrideExisting);
   registerSlackAuthProvider(registry, overrideExisting: overrideExisting);
   registerLinkedInAuthProvider(registry, overrideExisting: overrideExisting);

@@ -6,6 +6,7 @@ export 'src/providers/discord.dart';
 export 'src/providers/dropbox.dart';
 export 'src/providers/facebook.dart';
 export 'src/providers/gitlab.dart';
+export 'src/providers/github.dart';
 export 'src/providers/google.dart';
 export 'src/providers/linkedin.dart';
 export 'src/providers/microsoft_entra.dart';

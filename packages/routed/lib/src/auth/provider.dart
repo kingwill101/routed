@@ -2,14 +2,17 @@ import 'dart:async';
 
 import 'package:http/http.dart' as http;
 import 'package:server_auth/server_auth.dart'
-    show AuthAdapter, AuthProvider, AuthProviderRegistry;
+    show
+        AuthAdapter,
+        AuthProvider,
+        AuthProviderRegistry,
+        registerGitHubAuthProvider;
 import 'package:routed/src/auth/manager.dart';
 import 'package:routed/src/auth/routes.dart';
 import 'package:routed/src/auth/haigate.dart';
 import 'package:routed/src/auth/jwt.dart';
 import 'package:routed/src/auth/oauth.dart';
 import 'package:routed/src/auth/policies.dart';
-import 'package:routed/src/auth/providers/github.dart';
 import 'package:routed/src/auth/rbac.dart';
 import 'package:routed/src/auth/session_auth.dart';
 import 'package:routed/src/config/specs/auth.dart';

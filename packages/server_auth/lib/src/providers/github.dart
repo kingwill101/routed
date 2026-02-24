@@ -1,18 +1,8 @@
 import 'dart:convert';
-import 'dart:io';
 
 import 'package:http/http.dart' as http;
-import 'package:server_auth/server_auth.dart'
-    show
-        AuthProvider,
-        AuthProviderRegistration,
-        AuthProviderRegistry,
-        AuthUser,
-        OAuthProvider,
-        OAuthTokenResponse;
-import 'package:routed/src/config/schema.dart';
-import 'package:routed/src/provider/config_utils.dart';
-import 'package:routed/src/provider/provider.dart';
+
+import '../core/core.dart';
 
 /// GitHub email payload returned by `/user/emails`.
 class GitHubEmail {
@@ -302,8 +292,7 @@ class GitHubProfile {
 ///
 /// ### Usage
 /// ```dart
-/// import 'package:routed/auth.dart';
-/// import 'package:routed/auth/providers/github.dart';
+/// import 'package:server_auth/server_auth.dart';
 ///
 /// final manager = AuthManager(
 ///   AuthOptions(
@@ -526,8 +515,8 @@ Future<List<GitHubEmail>> _loadGitHubEmails(
     final response = await httpClient.get(
       Uri.parse('$apiBaseUrl/user/emails'),
       headers: {
-        HttpHeaders.authorizationHeader: 'Bearer ${token.accessToken}',
-        HttpHeaders.userAgentHeader: 'routed',
+        'Authorization': 'Bearer ${token.accessToken}',
+        'User-Agent': 'server_auth',
       },
     );
     if (response.statusCode < 200 || response.statusCode >= 300) {
