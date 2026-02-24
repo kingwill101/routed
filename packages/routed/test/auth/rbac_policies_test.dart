@@ -110,7 +110,7 @@ void main() {
 
       await _withContext((ctx) async {
         callback!(
-          GateEvaluationContext(
+          AuthGateEvaluationContext<EngineContext>(
             context: ctx,
             principal: _principal('1', ['admin']),
           ),
@@ -144,7 +144,7 @@ void main() {
       final allowed = await _withContext((ctx) async {
         return await Future.value(
           callback!(
-            GateEvaluationContext(
+            AuthGateEvaluationContext<EngineContext>(
               context: ctx,
               principal: _principal('1', ['admin']),
             ),
@@ -215,7 +215,7 @@ void main() {
       final results = await _withContext((ctx) async {
         final updateOwner = await Future.value(
           updateGate!(
-            GateEvaluationContext(
+            AuthGateEvaluationContext<EngineContext>(
               context: ctx,
               principal: owner,
               payload: project,
@@ -224,7 +224,7 @@ void main() {
         );
         final updateOther = await Future.value(
           updateGate(
-            GateEvaluationContext(
+            AuthGateEvaluationContext<EngineContext>(
               context: ctx,
               principal: other,
               payload: project,
@@ -233,7 +233,7 @@ void main() {
         );
         final deleteOwner = await Future.value(
           deleteGate!(
-            GateEvaluationContext(
+            AuthGateEvaluationContext<EngineContext>(
               context: ctx,
               principal: owner,
               payload: project,
@@ -241,10 +241,20 @@ void main() {
           ),
         );
         final createOwner = await Future.value(
-          createGate!(GateEvaluationContext(context: ctx, principal: owner)),
+          createGate!(
+            AuthGateEvaluationContext<EngineContext>(
+              context: ctx,
+              principal: owner,
+            ),
+          ),
         );
         final createGuest = await Future.value(
-          createGate(GateEvaluationContext(context: ctx, principal: null)),
+          createGate(
+            AuthGateEvaluationContext<EngineContext>(
+              context: ctx,
+              principal: null,
+            ),
+          ),
         );
 
         return {

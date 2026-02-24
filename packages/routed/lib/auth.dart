@@ -5,17 +5,7 @@ export 'src/auth/routes.dart';
 export 'src/middleware/basic_auth.dart';
 export 'src/middleware/csrf.dart';
 export 'src/auth/haigate.dart'
-    show
-        GateCallback,
-        GateEvaluation,
-        GateEvaluationContext,
-        GateObserver,
-        GatePayloadProvider,
-        GateDeniedHandler,
-        GateRegistry,
-        GateRegistrationException,
-        GateViolation,
-        Haigate;
+    show GatePayloadProvider, GateDeniedHandler, GateRegistry, Haigate;
 export 'src/auth/jwt.dart' show jwtAuthentication;
 export 'src/auth/provider.dart' show AuthServiceProvider;
 export 'src/auth/rbac.dart'
@@ -36,8 +26,6 @@ export 'src/auth/session_auth.dart'
     show
         SessionAuthService,
         SessionAuth,
-        GuardResult,
-        AuthGuard,
         GuardRegistry,
         guardMiddleware,
         requireAuthenticated,

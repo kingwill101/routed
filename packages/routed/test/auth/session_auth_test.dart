@@ -3,7 +3,7 @@ import 'dart:io';
 
 import 'package:routed/routed.dart';
 import 'package:server_data/sessions.dart';
-import 'package:server_auth/server_auth.dart' hide GuardResult;
+import 'package:server_auth/server_auth.dart';
 import 'package:routed_testing/routed_testing.dart';
 import 'package:server_testing/server_testing.dart';
 import '../test_engine.dart';
