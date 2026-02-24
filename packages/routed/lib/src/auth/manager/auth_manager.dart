@@ -7,7 +7,7 @@ import 'package:server_auth/server_auth.dart'
         AuthAdapter,
         AuthCallbacks,
         AuthCredentials,
-        AuthEmailRequest,
+        AuthEmailVerificationPayload,
         AuthJwtCallbackContext,
         authorizeCredentialsRegistration,
         authorizeCredentialsSignIn,
@@ -37,7 +37,6 @@ import 'package:server_auth/server_auth.dart'
         AuthFlowException,
         AuthUser,
         AuthVerificationTokenStore,
-        AuthVerificationToken,
         InMemoryAuthVerificationTokenStore,
         authJwtClaimsForUser,
         authUserFromJwtClaims,
@@ -45,6 +44,9 @@ import 'package:server_auth/server_auth.dart'
         AuthOAuthUserResolution,
         AuthEmailUserResolution,
         consumeAuthVerificationToken,
+        clearAuthVerificationTokens,
+        persistAuthVerificationToken,
+        prepareAuthEmailVerificationPayload,
         resolveAuthUserByEmailOrCreate,
         resolveOAuthUserForAccount,
         resolveBearerOrCookieToken,
@@ -180,40 +182,34 @@ class AuthManager {
     String email,
     String callbackUrl,
   ) async {
-    await Future.sync(() => adapter.deleteVerificationTokens(email));
-    await _tokenStore.delete(email);
-    final token = provider.tokenGenerator?.call() ?? secureRandomToken();
-    final expiresAt = DateTime.now().add(provider.tokenExpiry);
+    await clearAuthVerificationTokens(
+      adapter: adapter,
+      tokenStore: _tokenStore,
+      identifier: email,
+    );
+    final AuthEmailVerificationPayload payload =
+        prepareAuthEmailVerificationPayload(
+          provider: provider,
+          email: email,
+          callbackUrl: callbackUrl,
+          sessionStrategy: options.sessionStrategy,
+          generateToken: secureRandomToken,
+        );
     if (callbackUrl.isNotEmpty) {
       ctx.setSession(
         authEmailCallbackSessionKey(options.callbackKey),
         callbackUrl,
       );
     }
-    final verification = AuthVerificationToken(
-      identifier: email,
-      token: token,
-      expiresAt: expiresAt,
-    );
-    await Future.sync(() => adapter.saveVerificationToken(verification));
-    await _tokenStore.save(verification);
-
-    final request = AuthEmailRequest(
-      email: email,
-      token: token,
-      callbackUrl: callbackUrl,
-      expiresAt: expiresAt,
+    await persistAuthVerificationToken(
+      adapter: adapter,
+      tokenStore: _tokenStore,
+      verification: payload.verification,
     );
     await Future.sync(
-      () => provider.sendVerificationRequest(ctx, provider, request),
+      () => provider.sendVerificationRequest(ctx, provider, payload.request),
     );
-
-    final session = AuthSession(
-      user: AuthUser(id: '', email: email),
-      expiresAt: expiresAt,
-      strategy: options.sessionStrategy,
-    );
-    return AuthResult(user: session.user, session: session);
+    return payload.pendingResult;
   }
 
   Future<AuthResult> verifyEmail(

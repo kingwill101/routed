@@ -307,6 +307,91 @@ void main() {
     },
   );
 
+  test(
+    'clearAuthVerificationTokens removes adapter and store tokens',
+    () async {
+      var deletedIdentifier = '';
+      final adapter = CallbackAuthAdapter(
+        onDeleteVerificationTokens: (identifier) async {
+          deletedIdentifier = identifier;
+        },
+      );
+      final tokenStore = InMemoryAuthVerificationTokenStore();
+      await tokenStore.save(
+        AuthVerificationToken(
+          identifier: 'user@example.com',
+          token: 'token-1',
+          expiresAt: DateTime.now().add(const Duration(minutes: 5)),
+        ),
+      );
+
+      await clearAuthVerificationTokens(
+        adapter: adapter,
+        tokenStore: tokenStore,
+        identifier: 'user@example.com',
+      );
+
+      expect(deletedIdentifier, equals('user@example.com'));
+      final consumed = await tokenStore.use('user@example.com', 'token-1');
+      expect(consumed, isNull);
+    },
+  );
+
+  test('persistAuthVerificationToken saves to adapter and store', () async {
+    AuthVerificationToken? savedToAdapter;
+    final adapter = CallbackAuthAdapter(
+      onSaveVerificationToken: (token) async {
+        savedToAdapter = token;
+      },
+    );
+    final tokenStore = InMemoryAuthVerificationTokenStore();
+    final verification = AuthVerificationToken(
+      identifier: 'user@example.com',
+      token: 'token-2',
+      expiresAt: DateTime.now().add(const Duration(minutes: 5)),
+    );
+
+    await persistAuthVerificationToken(
+      adapter: adapter,
+      tokenStore: tokenStore,
+      verification: verification,
+    );
+
+    expect(savedToAdapter, isNotNull);
+    final consumed = await tokenStore.use('user@example.com', 'token-2');
+    expect(consumed, isNotNull);
+  });
+
+  test(
+    'prepareAuthEmailVerificationPayload builds request and pending result',
+    () {
+      final now = DateTime.utc(2026, 2, 24, 12);
+      final provider = EmailProvider(
+        tokenGenerator: () => 'generated-token',
+        tokenExpiry: const Duration(minutes: 15),
+        sendVerificationRequest: (context, provider, request) async {},
+      );
+
+      final payload = prepareAuthEmailVerificationPayload(
+        provider: provider,
+        email: 'user@example.com',
+        callbackUrl: '/dashboard',
+        sessionStrategy: AuthSessionStrategy.jwt,
+        now: now,
+      );
+
+      expect(payload.token, equals('generated-token'));
+      expect(payload.expiresAt, equals(now.add(const Duration(minutes: 15))));
+      expect(payload.verification.identifier, equals('user@example.com'));
+      expect(payload.request.callbackUrl, equals('/dashboard'));
+      expect(payload.pendingResult.user.email, equals('user@example.com'));
+      expect(
+        payload.pendingResult.session.strategy,
+        equals(AuthSessionStrategy.jwt),
+      );
+    },
+  );
+
   test('exchangeOAuthAuthorizationCode uses provider token settings', () async {
     late http.Request captured;
     final provider = OAuthProvider<Map<String, dynamic>>(

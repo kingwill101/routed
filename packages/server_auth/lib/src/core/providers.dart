@@ -6,6 +6,7 @@ import 'adapter.dart';
 import 'exceptions.dart' show AuthFlowException;
 import 'models.dart';
 import 'oauth.dart';
+import 'tokens.dart' show secureRandomToken;
 import 'users.dart' show authUsersDiffer, mergeAuthUser;
 import 'verification_token_store.dart';
 
@@ -375,6 +376,81 @@ Future<AuthVerificationToken?> consumeAuthVerificationToken({
     return fromAdapter;
   }
   return Future.sync(() => tokenStore.use(identifier, token));
+}
+
+/// Deletes existing verification tokens from adapter and fallback store.
+Future<void> clearAuthVerificationTokens({
+  required AuthAdapter adapter,
+  required AuthVerificationTokenStore tokenStore,
+  required String identifier,
+}) async {
+  await Future.sync(() => adapter.deleteVerificationTokens(identifier));
+  await Future.sync(() => tokenStore.delete(identifier));
+}
+
+/// Persists a verification token in adapter and fallback store.
+Future<void> persistAuthVerificationToken({
+  required AuthAdapter adapter,
+  required AuthVerificationTokenStore tokenStore,
+  required AuthVerificationToken verification,
+}) async {
+  await Future.sync(() => adapter.saveVerificationToken(verification));
+  await Future.sync(() => tokenStore.save(verification));
+}
+
+/// Prepared payload for email verification sign-in flows.
+class AuthEmailVerificationPayload {
+  const AuthEmailVerificationPayload({
+    required this.token,
+    required this.expiresAt,
+    required this.verification,
+    required this.request,
+    required this.pendingResult,
+  });
+
+  final String token;
+  final DateTime expiresAt;
+  final AuthVerificationToken verification;
+  final AuthEmailRequest request;
+  final AuthResult pendingResult;
+}
+
+/// Prepares token, request, and pending session payloads for email sign-in.
+AuthEmailVerificationPayload prepareAuthEmailVerificationPayload({
+  required EmailProvider provider,
+  required String email,
+  required String callbackUrl,
+  required AuthSessionStrategy sessionStrategy,
+  String Function()? generateToken,
+  DateTime? now,
+}) {
+  final tokenGenerator = provider.tokenGenerator ?? generateToken;
+  final token = tokenGenerator?.call() ?? secureRandomToken();
+  final current = now ?? DateTime.now();
+  final expiresAt = current.add(provider.tokenExpiry);
+  final verification = AuthVerificationToken(
+    identifier: email,
+    token: token,
+    expiresAt: expiresAt,
+  );
+  final request = AuthEmailRequest(
+    email: email,
+    token: token,
+    callbackUrl: callbackUrl,
+    expiresAt: expiresAt,
+  );
+  final session = AuthSession(
+    user: AuthUser(id: '', email: email),
+    expiresAt: expiresAt,
+    strategy: sessionStrategy,
+  );
+  return AuthEmailVerificationPayload(
+    token: token,
+    expiresAt: expiresAt,
+    verification: verification,
+    request: request,
+    pendingResult: AuthResult(user: session.user, session: session),
+  );
 }
 
 /// Result of resolving an email sign-in user.
