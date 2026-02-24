@@ -70,6 +70,38 @@ Future<String?> resolveAuthSignInRedirectOrThrow<TContext>({
   return decision.redirectUrl;
 }
 
+/// Resolves sign-in callback using [callbacks.signIn], returning redirect when
+/// allowed and throwing [AuthFlowException] when denied.
+Future<String?> resolveAuthSignInRedirectWithCallbacks<TContext>({
+  required AuthCallbacks<TContext> callbacks,
+  required TContext context,
+  required AuthUser user,
+  required AuthSessionStrategy strategy,
+  AuthProvider? provider,
+  AuthAccount? account,
+  Map<String, dynamic>? profile,
+  AuthCredentials? credentials,
+  bool isNewUser = false,
+  String? callbackUrl,
+  String blockedCode = 'sign_in_blocked',
+}) {
+  return resolveAuthSignInRedirectOrThrow<TContext>(
+    callback: callbacks.signIn,
+    context: AuthSignInCallbackContext<TContext>(
+      context: context,
+      user: user,
+      strategy: strategy,
+      provider: provider,
+      account: account,
+      profile: profile,
+      credentials: credentials,
+      isNewUser: isNewUser,
+      callbackUrl: callbackUrl,
+    ),
+    blockedCode: blockedCode,
+  );
+}
+
 /// Evaluates JWT callback behavior with pass-through defaults.
 Future<Map<String, dynamic>> resolveAuthJwtClaims<TContext>({
   required AuthJwtCallback<TContext>? callback,

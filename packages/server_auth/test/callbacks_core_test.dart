@@ -129,6 +129,63 @@ void main() {
   );
 
   test(
+    'resolveAuthSignInRedirectWithCallbacks forwards context and returns redirect',
+    () async {
+      final provider = CredentialsProvider();
+      final credentials = AuthCredentials(email: 'u1@example.com');
+      late AuthSignInCallbackContext<String> seen;
+
+      final redirect = await resolveAuthSignInRedirectWithCallbacks<String>(
+        callbacks: AuthCallbacks<String>(
+          signIn: (context) {
+            seen = context;
+            return const AuthSignInResult.allow(redirectUrl: '/dashboard');
+          },
+        ),
+        context: 'ctx',
+        user: AuthUser(id: 'u1'),
+        strategy: AuthSessionStrategy.jwt,
+        provider: provider,
+        credentials: credentials,
+        isNewUser: true,
+        callbackUrl: '/callback',
+      );
+
+      expect(redirect, equals('/dashboard'));
+      expect(seen.context, equals('ctx'));
+      expect(seen.user.id, equals('u1'));
+      expect(seen.strategy, equals(AuthSessionStrategy.jwt));
+      expect(seen.provider, same(provider));
+      expect(seen.credentials, same(credentials));
+      expect(seen.isNewUser, isTrue);
+      expect(seen.callbackUrl, equals('/callback'));
+    },
+  );
+
+  test(
+    'resolveAuthSignInRedirectWithCallbacks throws when sign-in is denied',
+    () async {
+      await expectLater(
+        resolveAuthSignInRedirectWithCallbacks<String>(
+          callbacks: AuthCallbacks<String>(
+            signIn: (_) => const AuthSignInResult.deny(),
+          ),
+          context: 'ctx',
+          user: AuthUser(id: 'u1'),
+          strategy: AuthSessionStrategy.session,
+        ),
+        throwsA(
+          isA<AuthFlowException>().having(
+            (error) => error.code,
+            'code',
+            'sign_in_blocked',
+          ),
+        ),
+      );
+    },
+  );
+
+  test(
     'resolveAuthJwtClaims and resolveAuthSessionPayload pass through defaults',
     () async {
       final jwtContext = AuthJwtCallbackContext<String>(

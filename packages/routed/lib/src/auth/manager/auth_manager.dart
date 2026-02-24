@@ -13,7 +13,7 @@ import 'package:server_auth/server_auth.dart'
         resolveAuthJwtClaimsWithCallbacks,
         resolveAuthRedirectWithCallbacks,
         resolveAuthSessionPayloadWithCallbacks,
-        resolveAuthSignInRedirectOrThrow,
+        resolveAuthSignInRedirectWithCallbacks,
         issueAuthJwtSessionWithCallbacks,
         AuthPrincipal,
         AuthProvider,
@@ -32,7 +32,6 @@ import 'package:server_auth/server_auth.dart'
         AuthResult,
         AuthSession,
         AuthSessionStrategy,
-        AuthSignInCallbackContext,
         AuthFlowException,
         AuthUser,
         AuthVerificationTokenStore,
@@ -582,19 +581,17 @@ class AuthManager {
     bool isNewUser = false,
   }) async {
     final resolvedDecisionRedirect =
-        await resolveAuthSignInRedirectOrThrow<EngineContext>(
-          callback: callbacks.signIn,
-          context: AuthSignInCallbackContext<EngineContext>(
-            context: ctx,
-            user: user,
-            strategy: options.sessionStrategy,
-            provider: provider,
-            account: account,
-            profile: profile,
-            credentials: credentials,
-            isNewUser: isNewUser,
-            callbackUrl: redirectUrl,
-          ),
+        await resolveAuthSignInRedirectWithCallbacks<EngineContext>(
+          callbacks: callbacks,
+          context: ctx,
+          user: user,
+          strategy: options.sessionStrategy,
+          provider: provider,
+          account: account,
+          profile: profile,
+          credentials: credentials,
+          isNewUser: isNewUser,
+          callbackUrl: redirectUrl,
         );
 
     final resolvedRedirect = await resolveRedirect(
