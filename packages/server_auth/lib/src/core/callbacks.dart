@@ -38,6 +38,52 @@ class AuthCallbacks<TContext> {
       signIn == null && redirect == null && jwt == null && session == null;
 }
 
+/// Evaluates sign-in callback behavior with built-in allow-by-default logic.
+Future<AuthSignInResult> resolveAuthSignInDecision<TContext>({
+  required AuthSignInCallback<TContext>? callback,
+  required AuthSignInCallbackContext<TContext> context,
+}) async {
+  if (callback == null) {
+    return const AuthSignInResult.allow();
+  }
+  return await Future<AuthSignInResult>.value(callback(context));
+}
+
+/// Evaluates JWT callback behavior with pass-through defaults.
+Future<Map<String, dynamic>> resolveAuthJwtClaims<TContext>({
+  required AuthJwtCallback<TContext>? callback,
+  required AuthJwtCallbackContext<TContext> context,
+}) async {
+  if (callback == null) {
+    return context.token;
+  }
+  final updated = await Future<Map<String, dynamic>?>.value(callback(context));
+  return updated ?? context.token;
+}
+
+/// Evaluates session callback behavior with pass-through defaults.
+Future<Map<String, dynamic>> resolveAuthSessionPayload<TContext>({
+  required AuthSessionCallback<TContext>? callback,
+  required AuthSessionCallbackContext<TContext> context,
+}) async {
+  if (callback == null) {
+    return context.payload;
+  }
+  final updated = await Future<Map<String, dynamic>?>.value(callback(context));
+  return updated ?? context.payload;
+}
+
+/// Evaluates redirect callback behavior.
+Future<String?> resolveAuthRedirectTarget<TContext>({
+  required AuthRedirectCallback<TContext>? callback,
+  required AuthRedirectCallbackContext<TContext> context,
+}) async {
+  if (callback == null) {
+    return null;
+  }
+  return await Future<String?>.value(callback(context));
+}
+
 /// Result of a sign-in callback decision.
 class AuthSignInResult {
   const AuthSignInResult.allow({this.redirectUrl}) : allowed = true;

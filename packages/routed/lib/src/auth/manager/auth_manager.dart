@@ -10,6 +10,10 @@ import 'package:server_auth/server_auth.dart'
         AuthCredentials,
         AuthEmailRequest,
         AuthJwtCallbackContext,
+        resolveAuthJwtClaims,
+        resolveAuthRedirectTarget,
+        resolveAuthSessionPayload,
+        resolveAuthSignInDecision,
         AuthPrincipal,
         AuthProvider,
         authProviderSummaries,
@@ -22,7 +26,6 @@ import 'package:server_auth/server_auth.dart'
         AuthSession,
         AuthSessionStrategy,
         AuthSignInCallbackContext,
-        AuthSignInResult,
         AuthFlowException,
         AuthUser,
         AuthVerificationTokenStore,
@@ -536,25 +539,13 @@ class AuthManager {
     }
   }
 
-  Future<AuthSignInResult> _applySignInCallback(
-    AuthSignInCallbackContext<EngineContext> context,
-  ) async {
-    final callback = callbacks.signIn;
-    if (callback == null) {
-      return const AuthSignInResult.allow();
-    }
-    return await Future.sync(() => callback(context));
-  }
-
   Future<Map<String, dynamic>> _applyJwtCallback(
     AuthJwtCallbackContext<EngineContext> context,
   ) async {
-    final callback = callbacks.jwt;
-    if (callback == null) {
-      return context.token;
-    }
-    final updated = await Future.sync(() => callback(context));
-    return updated ?? context.token;
+    return resolveAuthJwtClaims<EngineContext>(
+      callback: callbacks.jwt,
+      context: context,
+    );
   }
 
   Future<String?> resolveRedirect(
@@ -565,18 +556,13 @@ class AuthManager {
     if (url == null || url.trim().isEmpty) {
       return null;
     }
-    final callback = callbacks.redirect;
-    if (callback == null) {
-      return url;
-    }
-    final resolved = await Future.sync(
-      () => callback(
-        AuthRedirectCallbackContext<EngineContext>(
-          context: ctx,
-          url: url,
-          baseUrl: baseUrlFromUri(ctx.request.uri),
-          provider: provider,
-        ),
+    final resolved = await resolveAuthRedirectTarget<EngineContext>(
+      callback: callbacks.redirect,
+      context: AuthRedirectCallbackContext<EngineContext>(
+        context: ctx,
+        url: url,
+        baseUrl: baseUrlFromUri(ctx.request.uri),
+        provider: provider,
       ),
     );
     return resolved ?? url;
@@ -588,22 +574,17 @@ class AuthManager {
     AuthProvider? provider,
   }) async {
     final payload = Map<String, dynamic>.from(session.toJson());
-    final callback = callbacks.session;
-    final resolved = callback == null
-        ? null
-        : await Future.sync(
-            () => callback(
-              AuthSessionCallbackContext<EngineContext>(
-                context: ctx,
-                session: session,
-                payload: payload,
-                user: session.user,
-                strategy: session.strategy ?? options.sessionStrategy,
-                provider: provider,
-              ),
-            ),
-          );
-    final finalPayload = resolved ?? payload;
+    final finalPayload = await resolveAuthSessionPayload<EngineContext>(
+      callback: callbacks.session,
+      context: AuthSessionCallbackContext<EngineContext>(
+        context: ctx,
+        session: session,
+        payload: payload,
+        user: session.user,
+        strategy: session.strategy ?? options.sessionStrategy,
+        provider: provider,
+      ),
+    );
     await _emitAuthEvent(
       ctx,
       AuthSessionEvent(
@@ -651,8 +632,9 @@ class AuthManager {
     AuthCredentials? credentials,
     bool isNewUser = false,
   }) async {
-    final decision = await _applySignInCallback(
-      AuthSignInCallbackContext<EngineContext>(
+    final decision = await resolveAuthSignInDecision<EngineContext>(
+      callback: callbacks.signIn,
+      context: AuthSignInCallbackContext<EngineContext>(
         context: ctx,
         user: user,
         strategy: options.sessionStrategy,

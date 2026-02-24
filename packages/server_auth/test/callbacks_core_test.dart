@@ -72,4 +72,71 @@ void main() {
     expect(session.payload['user'], equals(user.id));
     expect(session.strategy, equals(AuthSessionStrategy.session));
   });
+
+  test(
+    'resolveAuthSignInDecision defaults to allow when callback is absent',
+    () async {
+      final result = await resolveAuthSignInDecision<String>(
+        callback: null,
+        context: AuthSignInCallbackContext<String>(
+          context: 'ctx',
+          user: AuthUser(id: 'u1'),
+          strategy: AuthSessionStrategy.session,
+        ),
+      );
+
+      expect(result.allowed, isTrue);
+    },
+  );
+
+  test(
+    'resolveAuthJwtClaims and resolveAuthSessionPayload pass through defaults',
+    () async {
+      final jwtContext = AuthJwtCallbackContext<String>(
+        context: 'ctx',
+        token: <String, dynamic>{'sub': 'u1'},
+        user: AuthUser(id: 'u1'),
+        strategy: AuthSessionStrategy.jwt,
+      );
+      final sessionContext = AuthSessionCallbackContext<String>(
+        context: 'ctx',
+        session: AuthSession(
+          user: AuthUser(id: 'u1'),
+          expiresAt: null,
+          strategy: AuthSessionStrategy.session,
+        ),
+        payload: <String, dynamic>{'sub': 'u1'},
+        user: AuthUser(id: 'u1'),
+        strategy: AuthSessionStrategy.session,
+      );
+
+      final jwt = await resolveAuthJwtClaims<String>(
+        callback: null,
+        context: jwtContext,
+      );
+      final session = await resolveAuthSessionPayload<String>(
+        callback: null,
+        context: sessionContext,
+      );
+
+      expect(jwt, equals(<String, dynamic>{'sub': 'u1'}));
+      expect(session, equals(<String, dynamic>{'sub': 'u1'}));
+    },
+  );
+
+  test(
+    'resolveAuthRedirectTarget returns null when callback is absent',
+    () async {
+      final target = await resolveAuthRedirectTarget<String>(
+        callback: null,
+        context: AuthRedirectCallbackContext<String>(
+          context: 'ctx',
+          url: '/from',
+          baseUrl: 'https://example.test',
+        ),
+      );
+
+      expect(target, isNull);
+    },
+  );
 }
