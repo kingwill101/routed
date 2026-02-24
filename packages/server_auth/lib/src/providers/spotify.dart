@@ -158,7 +158,7 @@ class SpotifyFollowers {
 ///
 /// ### Usage
 /// ```dart
-/// import 'package:routed/auth.dart';
+/// import 'package:server_auth/server_auth.dart';
 /// import 'package:server_auth/server_auth.dart';
 ///
 /// final manager = AuthManager(

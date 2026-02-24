@@ -8,7 +8,7 @@ import 'oauth.dart';
 typedef AuthContext = dynamic;
 
 /// {@template server_auth_provider_overview}
-/// Base metadata for a routed auth provider.
+/// Base metadata for a server auth provider.
 ///
 /// Providers describe the authentication mechanism and the identifiers exposed
 /// by `AuthRoutes` at `/auth/providers`.
