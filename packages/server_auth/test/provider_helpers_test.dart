@@ -153,6 +153,65 @@ void main() {
     },
   );
 
+  test(
+    'consumeAuthVerificationToken falls back to secondary token store',
+    () async {
+      final adapter = CallbackAuthAdapter(
+        onUseVerificationToken: (_, _) => null,
+      );
+      final tokenStore = InMemoryAuthVerificationTokenStore();
+      final record = AuthVerificationToken(
+        identifier: 'user@example.com',
+        token: 'token-1',
+        expiresAt: DateTime.now().add(const Duration(minutes: 10)),
+      );
+      await tokenStore.save(record);
+
+      final resolved = await consumeAuthVerificationToken(
+        adapter: adapter,
+        tokenStore: tokenStore,
+        identifier: 'user@example.com',
+        token: 'token-1',
+      );
+      expect(resolved, isNotNull);
+      expect(resolved!.identifier, equals('user@example.com'));
+    },
+  );
+
+  test(
+    'resolveAuthUserByEmailOrCreate returns existing or creates new user',
+    () async {
+      var created = false;
+      final adapter = CallbackAuthAdapter(
+        onGetUserByEmail: (email) async {
+          if (email == 'existing@example.com') {
+            return AuthUser(id: 'existing-1', email: email);
+          }
+          return null;
+        },
+        onCreateUser: (user) async {
+          created = true;
+          return AuthUser(id: 'created-1', email: user.email);
+        },
+      );
+
+      final existing = await resolveAuthUserByEmailOrCreate(
+        adapter: adapter,
+        email: 'existing@example.com',
+      );
+      final createdResult = await resolveAuthUserByEmailOrCreate(
+        adapter: adapter,
+        email: 'new@example.com',
+      );
+
+      expect(existing.isNewUser, isFalse);
+      expect(existing.user.id, equals('existing-1'));
+      expect(createdResult.isNewUser, isTrue);
+      expect(createdResult.user.id, equals('created-1'));
+      expect(created, isTrue);
+    },
+  );
+
   test('exchangeOAuthAuthorizationCode uses provider token settings', () async {
     late http.Request captured;
     final provider = OAuthProvider<Map<String, dynamic>>(

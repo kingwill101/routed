@@ -40,6 +40,9 @@ import 'package:server_auth/server_auth.dart'
         authUserFromJwtClaims,
         resolveAuthAccountId,
         AuthOAuthUserResolution,
+        AuthEmailUserResolution,
+        consumeAuthVerificationToken,
+        resolveAuthUserByEmailOrCreate,
         resolveOAuthUserForAccount,
         resolveBearerOrCookieToken,
         resolveCsrfToken,
@@ -214,26 +217,20 @@ class AuthManager {
     String email,
     String token,
   ) async {
-    final verification = await Future.sync(
-      () => adapter.useVerificationToken(email, token),
+    final resolved = await consumeAuthVerificationToken(
+      adapter: adapter,
+      tokenStore: _tokenStore,
+      identifier: email,
+      token: token,
     );
-    final fallback = await _tokenStore.use(email, token);
-    final resolved = verification ?? fallback;
     if (resolved == null) {
       throw AuthFlowException('invalid_token');
     }
 
-    final existing = await Future.sync(() => adapter.getUserByEmail(email));
-    var isNewUser = false;
-    late final AuthUser user;
-    if (existing != null) {
-      user = existing;
-    } else {
-      user = await Future.sync(
-        () => adapter.createUser(AuthUser(id: email, email: email)),
-      );
-      isNewUser = true;
-    }
+    final AuthEmailUserResolution userResolution =
+        await resolveAuthUserByEmailOrCreate(adapter: adapter, email: email);
+    final user = userResolution.user;
+    final isNewUser = userResolution.isNewUser;
     final redirectUrl = ctx.getSession<String>(
       authEmailCallbackSessionKey(options.callbackKey),
     );

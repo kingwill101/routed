@@ -7,6 +7,7 @@ import 'exceptions.dart' show AuthFlowException;
 import 'models.dart';
 import 'oauth.dart';
 import 'users.dart' show authUsersDiffer, mergeAuthUser;
+import 'verification_token_store.dart';
 
 /// Framework-specific auth callback context.
 typedef AuthContext = dynamic;
@@ -316,6 +317,45 @@ AuthAccount buildOAuthAuthAccount({
     expiresAt: expiresAt,
     metadata: metadata,
   );
+}
+
+/// Consumes an email verification token from adapter or fallback store.
+Future<AuthVerificationToken?> consumeAuthVerificationToken({
+  required AuthAdapter adapter,
+  required AuthVerificationTokenStore tokenStore,
+  required String identifier,
+  required String token,
+}) async {
+  final fromAdapter = await Future.sync(
+    () => adapter.useVerificationToken(identifier, token),
+  );
+  if (fromAdapter != null) {
+    return fromAdapter;
+  }
+  return Future.sync(() => tokenStore.use(identifier, token));
+}
+
+/// Result of resolving an email sign-in user.
+class AuthEmailUserResolution {
+  const AuthEmailUserResolution({required this.user, required this.isNewUser});
+
+  final AuthUser user;
+  final bool isNewUser;
+}
+
+/// Loads an existing user by [email] or creates a new record.
+Future<AuthEmailUserResolution> resolveAuthUserByEmailOrCreate({
+  required AuthAdapter adapter,
+  required String email,
+}) async {
+  final existing = await Future.sync(() => adapter.getUserByEmail(email));
+  if (existing != null) {
+    return AuthEmailUserResolution(user: existing, isNewUser: false);
+  }
+  final created = await Future.sync(
+    () => adapter.createUser(AuthUser(id: email, email: email)),
+  );
+  return AuthEmailUserResolution(user: created, isNewUser: true);
 }
 
 /// Loads a provider profile from userinfo or an ID token payload.
