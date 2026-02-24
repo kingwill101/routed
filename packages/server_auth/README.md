@@ -173,6 +173,27 @@ final values = resolveOAuthCallbackSessionValues(
 );
 ```
 
+Or use the higher-level callback helper to validate state, resolve sign-in,
+and persist linked accounts in one call:
+
+```dart
+final callback = await resolveOAuthCallbackSignInForProvider<MyContext, Map<String, dynamic>>(
+  adapter: adapter,
+  context: context,
+  provider: oauthProvider,
+  code: authorizationCode,
+  receivedState: stateFromRequest,
+  stateKey: '_auth.state',
+  pkceKey: '_auth.pkce',
+  callbackKey: '_auth.callback',
+  readSession: (key) => sessionStore[key],
+  httpClient: httpClient,
+);
+
+print(callback.signIn.user.id);
+print(callback.callbackUrl);
+```
+
 ## Adapter attribute mapping helpers
 
 When writing framework adapters, use these helpers to store verified auth
