@@ -11,7 +11,8 @@ import 'package:server_auth/server_auth.dart'
         CallbackProvider,
         CredentialsProvider,
         EmailProvider,
-        OAuthProvider;
+        OAuthProvider,
+        sanitizeRedirectUrl;
 import 'package:routed/src/context/context.dart';
 import 'package:routed/src/response.dart';
 import 'package:routed/src/router/router.dart';
@@ -338,35 +339,12 @@ class AuthRoutes {
   }
 
   String? _sanitizeRedirect(EngineContext ctx, String? value) {
-    if (value == null || value.trim().isEmpty) {
-      return null;
-    }
-    final uri = Uri.tryParse(value.trim());
-    if (uri == null) {
-      return null;
-    }
-    if (!uri.isAbsolute) {
-      if (!value.startsWith('/')) {
-        return null;
-      }
-      return value;
-    }
-
-    final requestUri = ctx.requestedUri;
-    final requestHost = requestUri.host.isNotEmpty ? requestUri.host : ctx.host;
-    final requestScheme = requestUri.scheme.isNotEmpty
-        ? requestUri.scheme
-        : ctx.scheme;
-    final sameHost = requestHost.isNotEmpty && uri.host == requestHost;
-    final sameScheme =
-        uri.scheme.isEmpty ||
-        (requestScheme.isNotEmpty &&
-            uri.scheme.toLowerCase() == requestScheme.toLowerCase());
-
-    if (sameHost && sameScheme) {
-      return uri.toString();
-    }
-    return null;
+    return sanitizeRedirectUrl(
+      value,
+      requestUri: ctx.requestedUri,
+      fallbackHost: ctx.host,
+      fallbackScheme: ctx.scheme,
+    );
   }
 
   Future<Response> _respond(

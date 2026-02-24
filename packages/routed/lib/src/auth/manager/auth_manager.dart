@@ -15,6 +15,7 @@ import 'package:server_auth/server_auth.dart'
         AuthPrincipal,
         AuthProvider,
         authProviderSummaries,
+        baseUrlFromUri,
         resolveAuthProviderById,
         AuthRedirectCallbackContext,
         AuthResult,
@@ -554,7 +555,7 @@ class AuthManager {
         AuthRedirectCallbackContext<EngineContext>(
           context: ctx,
           url: url,
-          baseUrl: _baseUrl(ctx.request.uri),
+          baseUrl: baseUrlFromUri(ctx.request.uri),
           provider: provider,
         ),
       ),
@@ -619,13 +620,6 @@ class AuthManager {
     }
     final manager = await container.make<EventManager>();
     manager.publish(event);
-  }
-
-  String _baseUrl(Uri uri) {
-    final scheme = uri.scheme.isEmpty ? 'http' : uri.scheme;
-    final host = uri.host.isEmpty ? 'localhost' : uri.host;
-    final port = uri.hasPort ? ':${uri.port}' : '';
-    return '$scheme://$host$port';
   }
 
   Future<AuthResult> _completeSignIn(

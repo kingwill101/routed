@@ -14,6 +14,7 @@ export 'named_registry.dart';
 export 'oauth.dart';
 export 'provider_registry.dart';
 export 'providers.dart';
+export 'redirects.dart';
 export 'session.dart';
 export 'tokens.dart';
 export 'verification_token_store.dart';
