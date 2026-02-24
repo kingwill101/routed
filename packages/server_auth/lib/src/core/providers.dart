@@ -614,6 +614,102 @@ Future<AuthEmailUserResolution> resolveAuthUserByEmailOrCreate({
   return AuthEmailUserResolution(user: created, isNewUser: true);
 }
 
+/// Starts an email verification sign-in flow and dispatches the provider
+/// verification request.
+Future<AuthEmailVerificationPayload> startAuthEmailSignIn<TContext>({
+  required AuthAdapter adapter,
+  required AuthVerificationTokenStore tokenStore,
+  required EmailProvider provider,
+  required TContext context,
+  required String email,
+  required String callbackUrl,
+  required AuthSessionStrategy sessionStrategy,
+  String Function()? generateToken,
+  void Function(String key, String value)? writeSession,
+  String? callbackKey,
+  DateTime? now,
+}) async {
+  await clearAuthVerificationTokens(
+    adapter: adapter,
+    tokenStore: tokenStore,
+    identifier: email,
+  );
+
+  final payload = prepareAuthEmailVerificationPayload(
+    provider: provider,
+    email: email,
+    callbackUrl: callbackUrl,
+    sessionStrategy: sessionStrategy,
+    generateToken: generateToken,
+    now: now,
+  );
+
+  if (writeSession != null && callbackKey != null && callbackUrl.isNotEmpty) {
+    writeSession(authEmailCallbackSessionKey(callbackKey), callbackUrl);
+  }
+
+  await persistAuthVerificationToken(
+    adapter: adapter,
+    tokenStore: tokenStore,
+    verification: payload.verification,
+  );
+  await Future.sync(
+    () => provider.sendVerificationRequest(context, provider, payload.request),
+  );
+
+  return payload;
+}
+
+/// Result of resolving an email verification callback into sign-in payloads.
+class AuthEmailVerificationSignInResolution {
+  const AuthEmailVerificationSignInResolution({
+    required this.user,
+    required this.isNewUser,
+    required this.callbackUrl,
+  });
+
+  final AuthUser user;
+  final bool isNewUser;
+  final String? callbackUrl;
+}
+
+/// Resolves an email verification callback token into sign-in user data.
+///
+/// Returns `null` when the token cannot be consumed.
+Future<AuthEmailVerificationSignInResolution?>
+resolveAuthEmailVerificationSignIn({
+  required AuthAdapter adapter,
+  required AuthVerificationTokenStore tokenStore,
+  required String email,
+  required String token,
+  String? callbackKey,
+  String? Function(String key)? readSession,
+}) async {
+  final consumed = await consumeAuthVerificationToken(
+    adapter: adapter,
+    tokenStore: tokenStore,
+    identifier: email,
+    token: token,
+  );
+  if (consumed == null) {
+    return null;
+  }
+
+  final userResolution = await resolveAuthUserByEmailOrCreate(
+    adapter: adapter,
+    email: email,
+  );
+  final callbackUrl = callbackKey == null || readSession == null
+      ? null
+      : readSession(authEmailCallbackSessionKey(callbackKey));
+
+  return AuthEmailVerificationSignInResolution(
+    user: userResolution.user,
+    isNewUser: userResolution.isNewUser,
+    callbackUrl: callbackUrl,
+  );
+}
+
 /// Loads a provider profile from userinfo or an ID token payload.
 Future<Map<String, dynamic>> loadOAuthProfile<TProfile extends Object>(
   OAuthProvider<TProfile> provider, {

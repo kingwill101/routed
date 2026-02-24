@@ -7,7 +7,6 @@ import 'package:server_auth/server_auth.dart'
         AuthAdapter,
         AuthCallbacks,
         AuthCredentials,
-        AuthEmailVerificationPayload,
         authorizeCredentialsRegistration,
         authorizeCredentialsSignIn,
         resolveAuthJwtClaimsWithCallbacks,
@@ -17,7 +16,6 @@ import 'package:server_auth/server_auth.dart'
         issueAuthJwtSessionWithCallbacks,
         AuthPrincipal,
         AuthProvider,
-        authEmailCallbackSessionKey,
         authProviderSummaries,
         baseUrlFromUri,
         resolveOAuthAuthorizationStart,
@@ -30,12 +28,8 @@ import 'package:server_auth/server_auth.dart'
         AuthUser,
         AuthVerificationTokenStore,
         InMemoryAuthVerificationTokenStore,
-        AuthEmailUserResolution,
-        consumeAuthVerificationToken,
-        clearAuthVerificationTokens,
-        persistAuthVerificationToken,
-        prepareAuthEmailVerificationPayload,
-        resolveAuthUserByEmailOrCreate,
+        resolveAuthEmailVerificationSignIn,
+        startAuthEmailSignIn,
         resolveBearerOrCookieToken,
         resolveCsrfToken,
         validateCsrfToken,
@@ -161,32 +155,17 @@ class AuthManager {
     String email,
     String callbackUrl,
   ) async {
-    await clearAuthVerificationTokens(
+    final payload = await startAuthEmailSignIn<EngineContext>(
       adapter: adapter,
       tokenStore: _tokenStore,
-      identifier: email,
-    );
-    final AuthEmailVerificationPayload payload =
-        prepareAuthEmailVerificationPayload(
-          provider: provider,
-          email: email,
-          callbackUrl: callbackUrl,
-          sessionStrategy: options.sessionStrategy,
-          generateToken: secureRandomToken,
-        );
-    if (callbackUrl.isNotEmpty) {
-      ctx.setSession(
-        authEmailCallbackSessionKey(options.callbackKey),
-        callbackUrl,
-      );
-    }
-    await persistAuthVerificationToken(
-      adapter: adapter,
-      tokenStore: _tokenStore,
-      verification: payload.verification,
-    );
-    await Future.sync(
-      () => provider.sendVerificationRequest(ctx, provider, payload.request),
+      provider: provider,
+      context: ctx,
+      email: email,
+      callbackUrl: callbackUrl,
+      sessionStrategy: options.sessionStrategy,
+      generateToken: secureRandomToken,
+      writeSession: ctx.setSession,
+      callbackKey: options.callbackKey,
     );
     return payload.pendingResult;
   }
@@ -197,30 +176,24 @@ class AuthManager {
     String email,
     String token,
   ) async {
-    final resolved = await consumeAuthVerificationToken(
+    final resolved = await resolveAuthEmailVerificationSignIn(
       adapter: adapter,
       tokenStore: _tokenStore,
-      identifier: email,
+      email: email,
       token: token,
+      callbackKey: options.callbackKey,
+      readSession: (key) => ctx.getSession<String>(key),
     );
     if (resolved == null) {
       throw AuthFlowException('invalid_token');
     }
 
-    final AuthEmailUserResolution userResolution =
-        await resolveAuthUserByEmailOrCreate(adapter: adapter, email: email);
-    final user = userResolution.user;
-    final isNewUser = userResolution.isNewUser;
-    final redirectUrl = ctx.getSession<String>(
-      authEmailCallbackSessionKey(options.callbackKey),
-    );
-
     return _completeSignIn(
       ctx,
-      user,
-      redirectUrl: redirectUrl,
+      resolved.user,
+      redirectUrl: resolved.callbackUrl,
       provider: provider,
-      isNewUser: isNewUser,
+      isNewUser: resolved.isNewUser,
     );
   }
 

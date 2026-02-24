@@ -412,6 +412,96 @@ void main() {
     },
   );
 
+  test(
+    'startAuthEmailSignIn clears tokens, persists verification, sends email, and writes callback session',
+    () async {
+      final sentRequests = <AuthEmailRequest>[];
+      final provider = EmailProvider(
+        tokenGenerator: () => 'generated-token',
+        sendVerificationRequest: (_, _, request) async {
+          sentRequests.add(request);
+        },
+      );
+      final tokenStore = InMemoryAuthVerificationTokenStore();
+      final adapter = CallbackAuthAdapter();
+      final session = <String, String>{};
+
+      final payload = await startAuthEmailSignIn<Object>(
+        adapter: adapter,
+        tokenStore: tokenStore,
+        provider: provider,
+        context: Object(),
+        email: 'user@example.com',
+        callbackUrl: '/after',
+        sessionStrategy: AuthSessionStrategy.session,
+        callbackKey: '_auth.callback',
+        writeSession: (key, value) => session[key] = value,
+      );
+
+      expect(payload.token, equals('generated-token'));
+      expect(sentRequests, hasLength(1));
+      expect(sentRequests.single.email, equals('user@example.com'));
+      expect(sentRequests.single.callbackUrl, equals('/after'));
+      expect(
+        session[authEmailCallbackSessionKey('_auth.callback')],
+        equals('/after'),
+      );
+      final consumed = await tokenStore.use(
+        'user@example.com',
+        'generated-token',
+      );
+      expect(consumed, isNotNull);
+    },
+  );
+
+  test(
+    'resolveAuthEmailVerificationSignIn resolves user/new flag and callback url',
+    () async {
+      final tokenStore = InMemoryAuthVerificationTokenStore();
+      await tokenStore.save(
+        AuthVerificationToken(
+          identifier: 'user@example.com',
+          token: 'token-1',
+          expiresAt: DateTime.now().add(const Duration(minutes: 10)),
+        ),
+      );
+      final adapter = CallbackAuthAdapter(
+        onGetUserByEmail: (email) async => AuthUser(id: 'user-1', email: email),
+      );
+      final session = <String, String>{
+        authEmailCallbackSessionKey('_auth.callback'): '/dashboard',
+      };
+
+      final resolved = await resolveAuthEmailVerificationSignIn(
+        adapter: adapter,
+        tokenStore: tokenStore,
+        email: 'user@example.com',
+        token: 'token-1',
+        callbackKey: '_auth.callback',
+        readSession: (key) => session[key],
+      );
+
+      expect(resolved, isNotNull);
+      expect(resolved!.user.id, equals('user-1'));
+      expect(resolved.isNewUser, isFalse);
+      expect(resolved.callbackUrl, equals('/dashboard'));
+    },
+  );
+
+  test(
+    'resolveAuthEmailVerificationSignIn returns null for invalid token',
+    () async {
+      final resolved = await resolveAuthEmailVerificationSignIn(
+        adapter: CallbackAuthAdapter(),
+        tokenStore: InMemoryAuthVerificationTokenStore(),
+        email: 'missing@example.com',
+        token: 'missing-token',
+      );
+
+      expect(resolved, isNull);
+    },
+  );
+
   test('exchangeOAuthAuthorizationCode uses provider token settings', () async {
     late http.Request captured;
     final provider = OAuthProvider<Map<String, dynamic>>(
