@@ -177,6 +177,24 @@ final resolvedFromCallbacks = await resolveAuthRedirectWithCallbacks<MyContext>(
 );
 ```
 
+The same pattern exists for JWT/session callback orchestration:
+
+```dart
+final claims = await resolveAuthJwtClaimsWithCallbacks<MyContext>(
+  callbacks: callbacks,
+  context: context,
+  user: user,
+  strategy: AuthSessionStrategy.jwt,
+);
+
+final sessionPayload = await resolveAuthSessionPayloadWithCallbacks<MyContext>(
+  callbacks: callbacks,
+  context: context,
+  session: session,
+  strategy: AuthSessionStrategy.session,
+);
+```
+
 ## Authorization and gates example
 
 ```dart

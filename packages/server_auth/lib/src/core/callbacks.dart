@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'models.dart';
 import 'providers.dart';
+import 'users.dart';
 
 /// Callback invoked before completing a sign-in flow.
 typedef AuthSignInCallback<TContext> =
@@ -118,6 +119,60 @@ Future<String?> resolveAuthRedirectWithCallbacks<TContext>({
       provider: provider,
     ),
     fallbackUrl: url,
+  );
+}
+
+/// Resolves JWT claims through [callbacks.jwt] using standard auth context.
+Future<Map<String, dynamic>> resolveAuthJwtClaimsWithCallbacks<TContext>({
+  required AuthCallbacks<TContext> callbacks,
+  required TContext context,
+  required AuthUser user,
+  required AuthSessionStrategy strategy,
+  AuthProvider? provider,
+  AuthAccount? account,
+  Map<String, dynamic>? profile,
+  bool isNewUser = false,
+  Map<String, dynamic>? token,
+}) async {
+  final baseToken = Map<String, dynamic>.from(
+    token ?? authJwtClaimsForUser(user),
+  );
+  return resolveAuthJwtClaims<TContext>(
+    callback: callbacks.jwt,
+    context: AuthJwtCallbackContext<TContext>(
+      context: context,
+      token: baseToken,
+      user: user,
+      strategy: strategy,
+      provider: provider,
+      account: account,
+      profile: profile,
+      isNewUser: isNewUser,
+    ),
+  );
+}
+
+/// Resolves session payload through [callbacks.session] using standard auth
+/// session callback context.
+Future<Map<String, dynamic>> resolveAuthSessionPayloadWithCallbacks<TContext>({
+  required AuthCallbacks<TContext> callbacks,
+  required TContext context,
+  required AuthSession session,
+  required AuthSessionStrategy strategy,
+  AuthProvider? provider,
+  Map<String, dynamic>? payload,
+}) async {
+  final basePayload = Map<String, dynamic>.from(payload ?? session.toJson());
+  return resolveAuthSessionPayload<TContext>(
+    callback: callbacks.session,
+    context: AuthSessionCallbackContext<TContext>(
+      context: context,
+      session: session,
+      payload: basePayload,
+      user: session.user,
+      strategy: strategy,
+      provider: provider,
+    ),
   );
 }
 

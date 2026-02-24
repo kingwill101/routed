@@ -8,12 +8,11 @@ import 'package:server_auth/server_auth.dart'
         AuthCallbacks,
         AuthCredentials,
         AuthEmailVerificationPayload,
-        AuthJwtCallbackContext,
         authorizeCredentialsRegistration,
         authorizeCredentialsSignIn,
-        resolveAuthJwtClaims,
+        resolveAuthJwtClaimsWithCallbacks,
         resolveAuthRedirectWithCallbacks,
-        resolveAuthSessionPayload,
+        resolveAuthSessionPayloadWithCallbacks,
         resolveAuthSignInDecision,
         AuthPrincipal,
         AuthProvider,
@@ -30,7 +29,6 @@ import 'package:server_auth/server_auth.dart'
         prepareOAuthAuthorizationStart,
         resolveAuthProviderById,
         AuthResult,
-        AuthSessionCallbackContext,
         AuthSession,
         AuthSessionStrategy,
         AuthSignInCallbackContext,
@@ -38,7 +36,6 @@ import 'package:server_auth/server_auth.dart'
         AuthUser,
         AuthVerificationTokenStore,
         InMemoryAuthVerificationTokenStore,
-        authJwtClaimsForUser,
         authUserFromJwtClaims,
         resolveAuthAccountId,
         AuthOAuthUserResolution,
@@ -455,13 +452,11 @@ class AuthManager {
         if (options.jwtOptions.secret.isEmpty) {
           throw AuthFlowException('missing_jwt_secret');
         }
-        final claims = await _applyJwtCallback(
-          AuthJwtCallbackContext<EngineContext>(
-            context: ctx,
-            token: authJwtClaimsForUser(user),
-            user: user,
-            strategy: AuthSessionStrategy.jwt,
-          ),
+        final claims = await resolveAuthJwtClaimsWithCallbacks<EngineContext>(
+          callbacks: callbacks,
+          context: ctx,
+          user: user,
+          strategy: AuthSessionStrategy.jwt,
         );
         final issued = issueAuthJwtToken(
           options: options.jwtOptions,
@@ -519,15 +514,6 @@ class AuthManager {
     }
   }
 
-  Future<Map<String, dynamic>> _applyJwtCallback(
-    AuthJwtCallbackContext<EngineContext> context,
-  ) async {
-    return resolveAuthJwtClaims<EngineContext>(
-      callback: callbacks.jwt,
-      context: context,
-    );
-  }
-
   Future<String?> resolveRedirect(
     EngineContext ctx,
     String? url, {
@@ -551,18 +537,14 @@ class AuthManager {
     AuthSession session, {
     AuthProvider? provider,
   }) async {
-    final payload = Map<String, dynamic>.from(session.toJson());
-    final finalPayload = await resolveAuthSessionPayload<EngineContext>(
-      callback: callbacks.session,
-      context: AuthSessionCallbackContext<EngineContext>(
-        context: ctx,
-        session: session,
-        payload: payload,
-        user: session.user,
-        strategy: session.strategy ?? options.sessionStrategy,
-        provider: provider,
-      ),
-    );
+    final finalPayload =
+        await resolveAuthSessionPayloadWithCallbacks<EngineContext>(
+          callbacks: callbacks,
+          context: ctx,
+          session: session,
+          strategy: session.strategy ?? options.sessionStrategy,
+          provider: provider,
+        );
     await _emitAuthEvent(
       ctx,
       AuthSessionEvent(
@@ -682,17 +664,15 @@ class AuthManager {
         if (options.jwtOptions.secret.isEmpty) {
           throw AuthFlowException('missing_jwt_secret');
         }
-        final claims = await _applyJwtCallback(
-          AuthJwtCallbackContext<EngineContext>(
-            context: ctx,
-            token: authJwtClaimsForUser(user),
-            user: user,
-            strategy: AuthSessionStrategy.jwt,
-            provider: provider,
-            account: account,
-            profile: profile,
-            isNewUser: isNewUser,
-          ),
+        final claims = await resolveAuthJwtClaimsWithCallbacks<EngineContext>(
+          callbacks: callbacks,
+          context: ctx,
+          user: user,
+          strategy: AuthSessionStrategy.jwt,
+          provider: provider,
+          account: account,
+          profile: profile,
+          isNewUser: isNewUser,
         );
         final issued = issueAuthJwtToken(
           options: options.jwtOptions,
@@ -769,13 +749,12 @@ class AuthManager {
     if (!shouldRefreshJwtClaims(payload.claims, options.sessionUpdateAge)) {
       return null;
     }
-    final claims = await _applyJwtCallback(
-      AuthJwtCallbackContext<EngineContext>(
-        context: ctx,
-        token: Map<String, dynamic>.from(payload.claims),
-        user: user,
-        strategy: AuthSessionStrategy.jwt,
-      ),
+    final claims = await resolveAuthJwtClaimsWithCallbacks<EngineContext>(
+      callbacks: callbacks,
+      context: ctx,
+      user: user,
+      strategy: AuthSessionStrategy.jwt,
+      token: payload.claims,
     );
     final issued = issueAuthJwtToken(
       options: options.jwtOptions,

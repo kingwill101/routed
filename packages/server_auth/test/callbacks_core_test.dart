@@ -125,6 +125,51 @@ void main() {
   );
 
   test(
+    'resolveAuthJwtClaimsWithCallbacks builds defaults and applies callback',
+    () async {
+      final user = AuthUser(id: 'u1', email: 'u1@example.com');
+
+      final claims = await resolveAuthJwtClaimsWithCallbacks<String>(
+        callbacks: AuthCallbacks<String>(
+          jwt: (context) => <String, dynamic>{...context.token, 'plan': 'pro'},
+        ),
+        context: 'ctx',
+        user: user,
+        strategy: AuthSessionStrategy.jwt,
+      );
+
+      expect(claims['sub'], equals('u1'));
+      expect(claims['plan'], equals('pro'));
+    },
+  );
+
+  test(
+    'resolveAuthSessionPayloadWithCallbacks builds defaults and applies callback',
+    () async {
+      final session = AuthSession(
+        user: AuthUser(id: 'u1'),
+        expiresAt: null,
+        strategy: AuthSessionStrategy.session,
+      );
+
+      final payload = await resolveAuthSessionPayloadWithCallbacks<String>(
+        callbacks: AuthCallbacks<String>(
+          session: (context) => <String, dynamic>{
+            ...context.payload,
+            'note': 'custom',
+          },
+        ),
+        context: 'ctx',
+        session: session,
+        strategy: AuthSessionStrategy.session,
+      );
+
+      expect(payload['user'], isA<Map<String, dynamic>>());
+      expect(payload['note'], equals('custom'));
+    },
+  );
+
+  test(
     'resolveAuthRedirectTarget returns null when callback is absent',
     () async {
       final target = await resolveAuthRedirectTarget<String>(
