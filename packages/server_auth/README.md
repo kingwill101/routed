@@ -152,6 +152,19 @@ final allowed = await gates.can(
   principal: principal,
 );
 print(allowed); // true
+
+// Config/manifest-driven gate registration that preserves unmanaged entries:
+final managed = <String>{};
+final registered = registerGateCallbacksSafely<Map<String, dynamic>>(
+  gates.registry,
+  <String, AuthGateCallback<Map<String, dynamic>>>{
+    'posts.publish': rolesGate(<String>['editor']),
+  },
+  managed: managed,
+);
+managed
+  ..clear()
+  ..addAll(registered);
 ```
 
 ## Framework Adapter Session Runtime
