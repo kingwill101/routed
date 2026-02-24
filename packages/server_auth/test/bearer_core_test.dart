@@ -2,6 +2,38 @@ import 'package:server_auth/server_auth.dart';
 import 'package:test/test.dart';
 
 void main() {
+  group('buildBearerAuthenticateHeader', () {
+    test('renders Bearer challenge with optional fields', () {
+      expect(buildBearerAuthenticateHeader(), equals('Bearer'));
+      expect(
+        buildBearerAuthenticateHeader(realm: 'Restricted'),
+        equals('Bearer realm="Restricted"'),
+      );
+      expect(
+        buildBearerAuthenticateHeader(
+          error: 'invalid_token',
+          errorDescription: 'missing_token',
+        ),
+        equals(
+          'Bearer error="invalid_token", error_description="missing_token"',
+        ),
+      );
+    });
+
+    test('escapes challenge parameters', () {
+      final header = buildBearerAuthenticateHeader(
+        realm: 'My "Realm" \\ x',
+        errorDescription: 'bad "token"',
+      );
+      expect(
+        header,
+        equals(
+          r'Bearer realm="My \"Realm\" \\ x", error_description="bad \"token\""',
+        ),
+      );
+    });
+  });
+
   group('extractBearerToken', () {
     test('extracts token for matching prefix', () {
       expect(extractBearerToken('Bearer token-123'), equals('token-123'));

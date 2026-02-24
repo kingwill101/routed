@@ -7,6 +7,7 @@ import 'package:server_auth/server_auth.dart'
     show
         JwtAuthException,
         AuthJwtVerifiedCallback,
+        buildBearerAuthenticateHeader,
         JwtBearerVerificationResult,
         JwtOptions,
         JwtVerifier,
@@ -67,7 +68,10 @@ Middleware jwtAuthenticationWithVerifier(
 void _writeUnauthorized(EngineContext ctx, String reason) {
   ctx.response.headers.set(
     HttpHeaders.wwwAuthenticateHeader,
-    'Bearer error="invalid_token", error_description="$reason"',
+    buildBearerAuthenticateHeader(
+      error: 'invalid_token',
+      errorDescription: reason,
+    ),
   );
   if (!ctx.response.isClosed) {
     ctx.errorResponse(

@@ -33,6 +33,30 @@ String? extractBearerToken(
   return token.isEmpty ? null : token;
 }
 
+/// Builds a `WWW-Authenticate` header value for Bearer challenges.
+String buildBearerAuthenticateHeader({
+  String? realm,
+  String? error,
+  String? errorDescription,
+}) {
+  final params = <String>[];
+  if (realm != null && realm.isNotEmpty) {
+    params.add('realm="${_escapeBearerHeaderValue(realm)}"');
+  }
+  if (error != null && error.isNotEmpty) {
+    params.add('error="${_escapeBearerHeaderValue(error)}"');
+  }
+  if (errorDescription != null && errorDescription.isNotEmpty) {
+    params.add(
+      'error_description="${_escapeBearerHeaderValue(errorDescription)}"',
+    );
+  }
+  if (params.isEmpty) {
+    return 'Bearer';
+  }
+  return 'Bearer ${params.join(', ')}';
+}
+
 /// Resolves a token from bearer header first, then cookie entries by name.
 String? resolveBearerOrCookieToken({
   required String? authorizationHeader,
@@ -57,4 +81,8 @@ String? resolveBearerOrCookieToken({
     }
   }
   return null;
+}
+
+String _escapeBearerHeaderValue(String value) {
+  return value.replaceAll(r'\', r'\\').replaceAll('"', r'\"');
 }

@@ -7,6 +7,7 @@ import 'package:server_auth/server_auth.dart'
         AuthGuardRegistry,
         AuthGuardService,
         AuthPrincipal,
+        buildBearerAuthenticateHeader,
         requireAuthenticatedGuard,
         requireRolesGuard,
         RememberTokenStore,
@@ -357,7 +358,10 @@ AuthGuard<EngineContext, Response> requireAuthenticated({
     principalResolver: auth.current,
     onDenied: (ctx) {
       ctx.response.statusCode = HttpStatus.unauthorized;
-      ctx.response.headers.set('WWW-Authenticate', 'Bearer realm="$realm"');
+      ctx.response.headers.set(
+        'WWW-Authenticate',
+        buildBearerAuthenticateHeader(realm: realm),
+      );
       ctx.response.write('Authentication required');
       return ctx.response;
     },
