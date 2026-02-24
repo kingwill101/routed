@@ -30,7 +30,8 @@ export 'src/config/specs/session.dart';
 export 'src/config/specs/storage.dart';
 export 'src/config/specs/rate_limit.dart';
 export 'src/config/specs/routing.dart';
-export 'src/config/specs/runtime.dart';
+export 'src/runtime/shutdown.dart'
+    show RuntimeConfig, RuntimeConfigSpec, ShutdownConfig;
 export 'src/config/specs/security.dart';
 export 'src/config/specs/static_assets.dart';
 export 'src/config/specs/uploads.dart';
