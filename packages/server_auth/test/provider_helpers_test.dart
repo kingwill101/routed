@@ -437,6 +437,143 @@ void main() {
     expect(captured.bodyFields['resource'], equals('api'));
   });
 
+  test(
+    'resolveOAuthSignInForProvider assembles user account and profile payloads',
+    () async {
+      final adapter = CallbackAuthAdapter(
+        onGetAccount: (_, _) => null,
+        onGetUserByEmail: (_) => null,
+        onCreateUser: (user) async =>
+            AuthUser(id: 'created-user', email: user.email, name: user.name),
+      );
+      final provider = OAuthProvider<Map<String, dynamic>>(
+        id: 'example',
+        name: 'Example',
+        clientId: 'client-id',
+        clientSecret: 'client-secret',
+        authorizationEndpoint: Uri.parse('https://auth.test/authorize'),
+        tokenEndpoint: Uri.parse('https://auth.test/token'),
+        userInfoEndpoint: Uri.parse('https://auth.test/userinfo'),
+        redirectUri: 'https://app.test/callback/example',
+        profile: (profile) => AuthUser(
+          id: '',
+          email: profile['email']?.toString(),
+          name: profile['name']?.toString(),
+        ),
+      );
+
+      final resolved =
+          await resolveOAuthSignInForProvider<Object, Map<String, dynamic>>(
+            adapter: adapter,
+            context: Object(),
+            provider: provider,
+            code: 'auth-code',
+            codeVerifier: 'pkce-verifier',
+            httpClient: MockClient((request) async {
+              if (request.url.path == '/token') {
+                return http.Response(
+                  jsonEncode(<String, dynamic>{
+                    'access_token': 'token-1',
+                    'token_type': 'Bearer',
+                    'refresh_token': 'refresh-1',
+                    'expires_in': 3600,
+                  }),
+                  200,
+                  headers: const <String, String>{
+                    'content-type': 'application/json',
+                  },
+                );
+              }
+              if (request.url.path == '/userinfo') {
+                return http.Response(
+                  jsonEncode(<String, dynamic>{
+                    'sub': 'sub-123',
+                    'email': 'user@example.com',
+                    'name': 'Example User',
+                  }),
+                  200,
+                  headers: const <String, String>{
+                    'content-type': 'application/json',
+                  },
+                );
+              }
+              return http.Response('not-found', 404);
+            }),
+          );
+
+      expect(resolved.isNewUser, isTrue);
+      expect(resolved.userUpdated, isFalse);
+      expect(resolved.user.id, equals('created-user'));
+      expect(resolved.user.email, equals('user@example.com'));
+      expect(resolved.account.providerId, equals('example'));
+      expect(resolved.account.providerAccountId, equals('sub-123'));
+      expect(resolved.account.userId, equals('created-user'));
+      expect(resolved.account.accessToken, equals('token-1'));
+      expect(resolved.account.refreshToken, equals('refresh-1'));
+      expect(resolved.profile['sub'], equals('sub-123'));
+      expect(resolved.profile['email'], equals('user@example.com'));
+    },
+  );
+
+  test(
+    'resolveOAuthSignInForProvider uses fallback account id when profile has no identifier',
+    () async {
+      final adapter = CallbackAuthAdapter(
+        onGetAccount: (_, _) => null,
+        onCreateUser: (user) async => AuthUser(id: 'created-user'),
+      );
+      final provider = OAuthProvider<Map<String, dynamic>>(
+        id: 'example',
+        name: 'Example',
+        clientId: 'client-id',
+        clientSecret: 'client-secret',
+        authorizationEndpoint: Uri.parse('https://auth.test/authorize'),
+        tokenEndpoint: Uri.parse('https://auth.test/token'),
+        userInfoEndpoint: Uri.parse('https://auth.test/userinfo'),
+        redirectUri: 'https://app.test/callback/example',
+        profile: (_) => AuthUser(id: ''),
+      );
+
+      final resolved =
+          await resolveOAuthSignInForProvider<Object, Map<String, dynamic>>(
+            adapter: adapter,
+            context: Object(),
+            provider: provider,
+            code: 'auth-code',
+            httpClient: MockClient((request) async {
+              if (request.url.path == '/token') {
+                return http.Response(
+                  jsonEncode(<String, dynamic>{
+                    'access_token': 'token-1',
+                    'token_type': 'Bearer',
+                    'expires_in': 3600,
+                  }),
+                  200,
+                  headers: const <String, String>{
+                    'content-type': 'application/json',
+                  },
+                );
+              }
+              if (request.url.path == '/userinfo') {
+                return http.Response(
+                  jsonEncode(<String, dynamic>{'name': 'No Identifier'}),
+                  200,
+                  headers: const <String, String>{
+                    'content-type': 'application/json',
+                  },
+                );
+              }
+              return http.Response('not-found', 404);
+            }),
+            fallbackAccountId: () => 'fallback-account',
+          );
+
+      expect(resolved.isNewUser, isTrue);
+      expect(resolved.account.providerAccountId, equals('fallback-account'));
+      expect(resolved.account.userId, equals('created-user'));
+    },
+  );
+
   test('buildOAuthAuthAccount maps oauth token payload into account', () {
     final account = buildOAuthAuthAccount(
       providerId: 'github',

@@ -24,9 +24,7 @@ import 'package:server_auth/server_auth.dart'
         authProviderSummaries,
         baseUrlFromUri,
         AuthOAuthAuthorizationStart,
-        buildOAuthAuthAccount,
         ensureOAuthStateMatches,
-        exchangeOAuthAuthorizationCode,
         prepareOAuthAuthorizationStart,
         resolveAuthProviderById,
         AuthResult,
@@ -37,15 +35,13 @@ import 'package:server_auth/server_auth.dart'
         AuthVerificationTokenStore,
         InMemoryAuthVerificationTokenStore,
         authUserFromJwtClaims,
-        resolveAuthAccountId,
-        AuthOAuthUserResolution,
         AuthEmailUserResolution,
         consumeAuthVerificationToken,
         clearAuthVerificationTokens,
         persistAuthVerificationToken,
         prepareAuthEmailVerificationPayload,
         resolveAuthUserByEmailOrCreate,
-        resolveOAuthUserForAccount,
+        resolveOAuthSignInForProvider,
         resolveBearerOrCookieToken,
         resolveCsrfToken,
         validateCsrfToken,
@@ -57,8 +53,6 @@ import 'package:server_auth/server_auth.dart'
         JwtPayload,
         JwtVerifier,
         OAuthProvider,
-        loadOAuthProfile,
-        oauthTokenExpiryFromSeconds,
         authSessionIssuedAtKey,
         AuthOptions,
         resolveAuthSessionMaxAgeSeconds,
@@ -288,49 +282,19 @@ class AuthManager {
     final verifier = ctx.getSession<String>(
       authProviderPkceSessionKey(options.pkceKey, provider.id),
     );
-    final tokenResponse = await exchangeOAuthAuthorizationCode(
-      provider,
-      code: code,
-      codeVerifier: verifier,
-      httpClient: httpClient,
-    );
-
-    final rawProfile = await loadOAuthProfile(
-      provider,
-      token: tokenResponse,
-      httpClient: httpClient,
-    );
-    final parsedProfile = provider.parseProfile(rawProfile);
-    final enrichedProfile = await Future.sync(
-      () =>
-          provider.enrichProfile(ctx, tokenResponse, httpClient, parsedProfile),
-    );
-    final mapped = provider.mapProfile(enrichedProfile);
-    final override = await Future.sync(
-      () => provider.overrideProfile(ctx, enrichedProfile),
-    );
-    final user = override ?? mapped;
-
-    final profileMap = provider.serializeProfile(enrichedProfile);
-    final accountId = resolveAuthAccountId(
-      profileMap,
-      user,
-      fallbackId: secureRandomToken,
-    );
-    final accountExpiresAt = oauthTokenExpiryFromSeconds(
-      tokenResponse.expiresIn,
-    );
-
-    final AuthOAuthUserResolution userResolution =
-        await resolveOAuthUserForAccount(
+    final resolved =
+        await resolveOAuthSignInForProvider<EngineContext, TProfile>(
           adapter: adapter,
-          providerId: provider.id,
-          accountId: accountId,
-          mappedUser: user,
+          context: ctx,
+          provider: provider,
+          code: code,
+          codeVerifier: verifier,
+          httpClient: httpClient,
+          fallbackAccountId: secureRandomToken,
         );
-    final resolvedUser = userResolution.user;
-    final isNewUser = userResolution.isNewUser;
-    if (userResolution.userUpdated) {
+    final resolvedUser = resolved.user;
+    final isNewUser = resolved.isNewUser;
+    if (resolved.userUpdated) {
       await _emitAuthEvent(
         ctx,
         AuthUpdateUserEvent(
@@ -341,14 +305,8 @@ class AuthManager {
       );
     }
 
-    final account = buildOAuthAuthAccount(
-      providerId: provider.id,
-      providerAccountId: accountId,
-      userId: resolvedUser.id,
-      token: tokenResponse,
-      expiresAt: accountExpiresAt,
-      metadata: profileMap,
-    );
+    final account = resolved.account;
+    final profileMap = resolved.profile;
 
     await Future.sync(() => adapter.linkAccount(account));
     await _emitAuthEvent(

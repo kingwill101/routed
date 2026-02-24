@@ -7,7 +7,7 @@ import 'exceptions.dart' show AuthFlowException;
 import 'models.dart';
 import 'oauth.dart';
 import 'tokens.dart' show pkceS256CodeChallenge, secureRandomToken;
-import 'users.dart' show authUsersDiffer, mergeAuthUser;
+import 'users.dart' show authUsersDiffer, mergeAuthUser, resolveAuthAccountId;
 import 'verification_token_store.dart';
 
 /// Framework-specific auth callback context.
@@ -568,6 +568,23 @@ class AuthOAuthUserResolution {
   final bool userUpdated;
 }
 
+/// Result of resolving provider OAuth callback data into auth sign-in payloads.
+class AuthOAuthSignInResolution {
+  const AuthOAuthSignInResolution({
+    required this.user,
+    required this.isNewUser,
+    required this.userUpdated,
+    required this.account,
+    required this.profile,
+  });
+
+  final AuthUser user;
+  final bool isNewUser;
+  final bool userUpdated;
+  final AuthAccount account;
+  final Map<String, dynamic> profile;
+}
+
 /// Resolves OAuth-mapped users against existing account/email records.
 Future<AuthOAuthUserResolution> resolveOAuthUserForAccount({
   required AuthAdapter adapter,
@@ -616,6 +633,76 @@ Future<AuthOAuthUserResolution> resolveOAuthUserForAccount({
     user: resolvedUser,
     isNewUser: isNewUser,
     userUpdated: userUpdated,
+  );
+}
+
+/// Resolves OAuth callback payloads into user/account/profile sign-in data.
+Future<AuthOAuthSignInResolution>
+resolveOAuthSignInForProvider<TContext, TProfile extends Object>({
+  required AuthAdapter adapter,
+  required TContext context,
+  required OAuthProvider<TProfile> provider,
+  required String code,
+  String? codeVerifier,
+  required http.Client httpClient,
+  String Function()? fallbackAccountId,
+}) async {
+  final tokenResponse = await exchangeOAuthAuthorizationCode(
+    provider,
+    code: code,
+    codeVerifier: codeVerifier,
+    httpClient: httpClient,
+  );
+
+  final rawProfile = await loadOAuthProfile(
+    provider,
+    token: tokenResponse,
+    httpClient: httpClient,
+  );
+  final parsedProfile = provider.parseProfile(rawProfile);
+  final enrichedProfile = await Future.sync(
+    () => provider.enrichProfile(
+      context,
+      tokenResponse,
+      httpClient,
+      parsedProfile,
+    ),
+  );
+  final mappedUser = provider.mapProfile(enrichedProfile);
+  final overrideUser = await Future.sync(
+    () => provider.overrideProfile(context, enrichedProfile),
+  );
+  final user = overrideUser ?? mappedUser;
+  final profileMap = provider.serializeProfile(enrichedProfile);
+  final accountId = resolveAuthAccountId(
+    profileMap,
+    user,
+    fallbackId: fallbackAccountId ?? secureRandomToken,
+  );
+  final accountExpiresAt = oauthTokenExpiryFromSeconds(tokenResponse.expiresIn);
+
+  final userResolution = await resolveOAuthUserForAccount(
+    adapter: adapter,
+    providerId: provider.id,
+    accountId: accountId,
+    mappedUser: user,
+  );
+
+  final account = buildOAuthAuthAccount(
+    providerId: provider.id,
+    providerAccountId: accountId,
+    userId: userResolution.user.id,
+    token: tokenResponse,
+    expiresAt: accountExpiresAt,
+    metadata: profileMap,
+  );
+
+  return AuthOAuthSignInResolution(
+    user: userResolution.user,
+    isNewUser: userResolution.isNewUser,
+    userUpdated: userResolution.userUpdated,
+    account: account,
+    profile: profileMap,
   );
 }
 
