@@ -53,6 +53,41 @@ int _secondsSinceEpoch(DateTime time) =>
     time.toUtc().millisecondsSinceEpoch ~/ 1000;
 
 void main() {
+  test('jwtIssuedAtUtc parses numeric issued-at values', () {
+    final issuedAt = jwtIssuedAtUtc(1_700_000_000);
+    expect(issuedAt, isNotNull);
+    expect(issuedAt!.isUtc, isTrue);
+    expect(jwtIssuedAtUtc('1700000000'), isNull);
+  });
+
+  test('shouldRefreshJwtByIssuedAt respects update age threshold', () {
+    final now = DateTime.utc(2026, 2, 24, 12);
+    final issuedAtSeconds =
+        now.subtract(const Duration(minutes: 10)).millisecondsSinceEpoch ~/
+        1000;
+
+    expect(
+      shouldRefreshJwtByIssuedAt(
+        issuedAtSeconds,
+        const Duration(minutes: 5),
+        now: now,
+      ),
+      isTrue,
+    );
+    expect(
+      shouldRefreshJwtByIssuedAt(
+        issuedAtSeconds,
+        const Duration(minutes: 15),
+        now: now,
+      ),
+      isFalse,
+    );
+    expect(
+      shouldRefreshJwtByIssuedAt('bad', const Duration(minutes: 5), now: now),
+      isFalse,
+    );
+  });
+
   test('AuthJwtVerifiedCallback supports typed async handlers', () async {
     var invoked = false;
     Future<void> callback(JwtPayload payload, String context) async {

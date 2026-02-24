@@ -15,6 +15,31 @@ const String jwtHeadersAttribute = 'auth.jwt.headers';
 /// Attribute key for the JWT subject in framework request context stores.
 const String jwtSubjectAttribute = 'auth.jwt.subject';
 
+/// Parses a JWT `iat` claim value into a UTC timestamp.
+DateTime? jwtIssuedAtUtc(Object? value) {
+  if (value is! num) {
+    return null;
+  }
+  return DateTime.fromMillisecondsSinceEpoch(
+    value.toInt() * 1000,
+    isUtc: true,
+  ).toUtc();
+}
+
+/// Returns true when a JWT should be refreshed based on its `iat` claim.
+bool shouldRefreshJwtByIssuedAt(
+  Object? issuedAtClaim,
+  Duration updateAge, {
+  DateTime? now,
+}) {
+  final issuedAt = jwtIssuedAtUtc(issuedAtClaim);
+  if (issuedAt == null) {
+    return false;
+  }
+  final current = (now ?? DateTime.now()).toUtc();
+  return current.difference(issuedAt) >= updateAge;
+}
+
 /// Callback invoked after a JWT has been successfully verified.
 typedef AuthJwtVerifiedCallback<TContext> =
     FutureOr<void> Function(JwtPayload payload, TContext context);
