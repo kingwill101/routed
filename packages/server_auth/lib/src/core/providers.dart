@@ -171,6 +171,30 @@ class AuthProvider {
   }
 }
 
+/// Resolves an auth provider by [id] from [providers].
+AuthProvider? resolveAuthProviderById(
+  Iterable<AuthProvider> providers,
+  String id,
+) {
+  final expected = id.trim();
+  if (expected.isEmpty) {
+    return null;
+  }
+  for (final provider in providers) {
+    if (provider.id == expected) {
+      return provider;
+    }
+  }
+  return null;
+}
+
+/// Builds JSON-friendly provider summaries for `/auth/providers` responses.
+List<Map<String, dynamic>> authProviderSummaries(
+  Iterable<AuthProvider> providers,
+) {
+  return providers.map((provider) => provider.toJson()).toList(growable: false);
+}
+
 /// {@macro server_auth_oauth_provider}
 class OAuthProvider<TProfile extends Object> extends AuthProvider {
   OAuthProvider({

@@ -15,6 +15,8 @@ import 'package:server_auth/server_auth.dart'
         AuthJwtCallbackContext,
         AuthPrincipal,
         AuthProvider,
+        authProviderSummaries,
+        resolveAuthProviderById,
         AuthRedirectCallbackContext,
         AuthResult,
         AuthSessionCallbackContext,
@@ -69,20 +71,11 @@ class AuthManager {
 
   AuthCallbacks<EngineContext> get callbacks => options.callbacks;
 
-  AuthProvider? resolveProvider(String id) {
-    for (final provider in options.providers) {
-      if (provider.id == id) {
-        return provider;
-      }
-    }
-    return null;
-  }
+  AuthProvider? resolveProvider(String id) =>
+      resolveAuthProviderById(options.providers, id);
 
-  List<Map<String, dynamic>> providerSummaries() {
-    return options.providers
-        .map((provider) => provider.toJson())
-        .toList(growable: false);
-  }
+  List<Map<String, dynamic>> providerSummaries() =>
+      authProviderSummaries(options.providers);
 
   String csrfToken(EngineContext ctx) {
     final existing = ctx.getSession<String>(options.csrfKey);

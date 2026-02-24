@@ -78,9 +78,7 @@ Middleware authProvidersEndpoint({
 }) {
   final normalizedPath = _normalizePath(path);
   final payload = jsonEncode(<String, Object>{
-    'providers': providers
-        .map((provider) => provider.toJson())
-        .toList(growable: false),
+    'providers': authProviderSummaries(providers),
   });
 
   return (innerHandler) {
