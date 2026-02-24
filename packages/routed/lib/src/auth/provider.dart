@@ -22,7 +22,7 @@ import 'package:server_auth/server_auth.dart'
         parseStringLike,
         registerPolicyBindingsSafely,
         registerRbacAbilitiesSafely,
-        registerAllAuthProviders,
+        registerDefaultAuthProviders,
         AuthOptions;
 import 'package:routed/src/auth/manager/auth_manager.dart';
 import 'package:routed/src/auth/routes.dart';
@@ -47,10 +47,8 @@ import 'package:routed/src/router/types.dart';
 class AuthServiceProvider extends ServiceProvider with ProvidesDefaultConfig {
   AuthServiceProvider({http.Client? httpClient})
     : _httpClient = httpClient ?? http.Client() {
-    _registerDefaultProviders();
+    registerDefaultAuthProviders();
   }
-
-  static bool _defaultProvidersRegistered = false;
 
   final http.Client _httpClient;
   JwtVerifier? _jwtVerifier;
@@ -66,17 +64,6 @@ class AuthServiceProvider extends ServiceProvider with ProvidesDefaultConfig {
   final Set<String> _managedRbacAbilities = <String>{};
   final Set<String> _managedPolicyAbilities = <String>{};
   static const AuthConfigSpec spec = AuthConfigSpec();
-
-  void _registerDefaultProviders() {
-    if (_defaultProvidersRegistered) {
-      return;
-    }
-    registerAllAuthProviders(
-      AuthProviderRegistry.instance,
-      overrideExisting: false,
-    );
-    _defaultProvidersRegistered = true;
-  }
 
   @override
   ConfigDefaults get defaultConfig {

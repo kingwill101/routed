@@ -67,3 +67,14 @@ void registerAllAuthProviders(
   registerTelegramAuthProvider(registry, overrideExisting: overrideExisting);
   registerDropboxAuthProvider(registry, overrideExisting: overrideExisting);
 }
+
+/// Registers built-in providers into [AuthProviderRegistry.instance].
+///
+/// This is idempotent for normal usage because built-ins are registered with
+/// `overrideExisting: false`.
+void registerDefaultAuthProviders() {
+  registerAllAuthProviders(
+    AuthProviderRegistry.instance,
+    overrideExisting: false,
+  );
+}
