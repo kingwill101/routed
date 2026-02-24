@@ -268,6 +268,18 @@ String authEmailCallbackSessionKey(String callbackKey) {
   return '$callbackKey.email';
 }
 
+/// Ensures OAuth callback [receivedState] matches [expectedState].
+///
+/// Throws [AuthFlowException] with `invalid_state` when validation fails.
+void ensureOAuthStateMatches({
+  required String? expectedState,
+  required String? receivedState,
+}) {
+  if (expectedState == null || expectedState != receivedState) {
+    throw AuthFlowException('invalid_state');
+  }
+}
+
 /// Builds OAuth authorization query parameters for [provider].
 Map<String, String> buildOAuthAuthorizationParameters<TProfile extends Object>(
   OAuthProvider<TProfile> provider, {

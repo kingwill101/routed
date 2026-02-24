@@ -139,6 +139,29 @@ void main() {
     );
   });
 
+  test('ensureOAuthStateMatches validates callback state', () {
+    expect(
+      () => ensureOAuthStateMatches(
+        expectedState: 'state-1',
+        receivedState: 'state-1',
+      ),
+      returnsNormally,
+    );
+    expect(
+      () => ensureOAuthStateMatches(
+        expectedState: 'state-1',
+        receivedState: 'state-2',
+      ),
+      throwsA(
+        isA<AuthFlowException>().having(
+          (error) => error.code,
+          'code',
+          'invalid_state',
+        ),
+      ),
+    );
+  });
+
   test(
     'resolveOAuthUserForAccount updates linked users when profile changes',
     () async {

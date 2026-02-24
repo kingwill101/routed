@@ -25,6 +25,7 @@ import 'package:server_auth/server_auth.dart'
         baseUrlFromUri,
         buildOAuthAuthAccount,
         buildOAuthAuthorizationParameters,
+        ensureOAuthStateMatches,
         exchangeOAuthAuthorizationCode,
         resolveAuthProviderById,
         AuthRedirectCallbackContext,
@@ -299,9 +300,7 @@ class AuthManager {
     final expectedState = ctx.getSession<String>(
       authProviderStateSessionKey(options.stateKey, provider.id),
     );
-    if (expectedState == null || expectedState != state) {
-      throw AuthFlowException('invalid_state');
-    }
+    ensureOAuthStateMatches(expectedState: expectedState, receivedState: state);
 
     final verifier = ctx.getSession<String>(
       authProviderPkceSessionKey(options.pkceKey, provider.id),
