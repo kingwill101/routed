@@ -5,6 +5,7 @@ import 'dart:io';
 import 'package:http/http.dart' as http;
 
 import 'bearer.dart' show extractBearerToken;
+import 'config_utils.dart' show parseStringLike;
 
 /// Attribute key used to store the OAuth2 access token.
 const String oauthTokenAttribute = 'auth.oauth.access_token';
@@ -103,6 +104,31 @@ Future<OAuthBearerValidationResult> validateOAuthBearerAuthorization({
   return OAuthBearerValidationResult(token: token, result: result);
 }
 
+/// Validates a bearer token, writes attributes, and runs validation callback.
+Future<OAuthBearerValidationResult>
+validateOAuthBearerAuthorizationAndWriteAttributes<TContext>({
+  required String? authorizationHeader,
+  required OAuth2TokenIntrospector introspector,
+  required void Function(String key, Object? value) setAttribute,
+  required TContext context,
+  AuthOAuthValidatedCallback<TContext>? onValidated,
+  String bearerPrefix = 'Bearer ',
+}) async {
+  final validation = await validateOAuthBearerAuthorization(
+    authorizationHeader: authorizationHeader,
+    introspector: introspector,
+    bearerPrefix: bearerPrefix,
+  );
+
+  writeOAuthValidationAttributes(validation, setAttribute: setAttribute);
+
+  if (onValidated != null) {
+    await onValidated(validation.result, context);
+  }
+
+  return validation;
+}
+
 /// Parsed response from an RFC 7662 token introspection endpoint.
 class OAuthIntrospectionResult {
   OAuthIntrospectionResult({required this.active, required this.raw});
@@ -150,6 +176,46 @@ class OAuthIntrospectionOptions {
   final Duration cacheTtl;
   final Duration clockSkew;
   final Map<String, String> additionalParameters;
+}
+
+/// Materializes OAuth introspection options from config-like fields.
+///
+/// Returns `null` when introspection is disabled or [endpoint] is missing.
+OAuthIntrospectionOptions? materializeOAuthIntrospectionOptions({
+  required bool enabled,
+  required Uri? endpoint,
+  Object? clientId,
+  Object? clientSecret,
+  Object? tokenTypeHint,
+  Duration cacheTtl = const Duration(seconds: 30),
+  Duration clockSkew = const Duration(seconds: 60),
+  Map<String, String> additionalParameters = const <String, String>{},
+}) {
+  if (!enabled || endpoint == null) {
+    return null;
+  }
+
+  return OAuthIntrospectionOptions(
+    endpoint: endpoint,
+    clientId: parseStringLike(
+      clientId,
+      context: 'oauth.introspection.client_id',
+      throwOnInvalid: false,
+    ),
+    clientSecret: parseStringLike(
+      clientSecret,
+      context: 'oauth.introspection.client_secret',
+      throwOnInvalid: false,
+    ),
+    tokenTypeHint: parseStringLike(
+      tokenTypeHint,
+      context: 'oauth.introspection.token_type_hint',
+      throwOnInvalid: false,
+    ),
+    cacheTtl: cacheTtl,
+    clockSkew: clockSkew,
+    additionalParameters: additionalParameters,
+  );
 }
 
 class _CachedIntrospection {

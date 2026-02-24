@@ -102,6 +102,41 @@ Future<String?> resolveAuthSignInRedirectWithCallbacks<TContext>({
   );
 }
 
+/// Resolves the final sign-in redirect by combining sign-in callback decision
+/// and adapter-specific redirect resolution.
+Future<String?> resolveAuthSignInRedirectTarget<TContext>({
+  required AuthCallbacks<TContext> callbacks,
+  required TContext context,
+  required AuthUser user,
+  required AuthSessionStrategy strategy,
+  required FutureOr<String?> Function(String? candidate) resolveRedirect,
+  AuthProvider? provider,
+  AuthAccount? account,
+  Map<String, dynamic>? profile,
+  AuthCredentials? credentials,
+  bool isNewUser = false,
+  String? callbackUrl,
+  String blockedCode = 'sign_in_blocked',
+}) async {
+  final decidedRedirect =
+      await resolveAuthSignInRedirectWithCallbacks<TContext>(
+        callbacks: callbacks,
+        context: context,
+        user: user,
+        strategy: strategy,
+        provider: provider,
+        account: account,
+        profile: profile,
+        credentials: credentials,
+        isNewUser: isNewUser,
+        callbackUrl: callbackUrl,
+        blockedCode: blockedCode,
+      );
+
+  final target = decidedRedirect ?? callbackUrl;
+  return await Future<String?>.value(resolveRedirect(target));
+}
+
 /// Evaluates JWT callback behavior with pass-through defaults.
 Future<Map<String, dynamic>> resolveAuthJwtClaims<TContext>({
   required AuthJwtCallback<TContext>? callback,
@@ -241,6 +276,14 @@ class AuthJwtSessionIssue {
   final AuthSession session;
 }
 
+/// Result of resolving a sign-in response for a session strategy.
+class AuthResolvedSignInResult {
+  const AuthResolvedSignInResult({required this.result, this.issuedJwt});
+
+  final AuthResult result;
+  final AuthIssuedJwtToken? issuedJwt;
+}
+
 /// Issues a JWT-backed auth session using callback-driven claims resolution.
 Future<AuthJwtSessionIssue> issueAuthJwtSessionWithCallbacks<TContext>({
   required AuthCallbacks<TContext> callbacks,
@@ -281,6 +324,67 @@ Future<AuthJwtSessionIssue> issueAuthJwtSessionWithCallbacks<TContext>({
       token: issued.token,
     ),
   );
+}
+
+/// Resolves a sign-in [AuthResult] for the selected strategy.
+///
+/// For [AuthSessionStrategy.session], returns a session-backed result using
+/// [sessionExpiresAt].
+///
+/// For [AuthSessionStrategy.jwt], issues a JWT via
+/// [issueAuthJwtSessionWithCallbacks] and returns the resulting cookie/token in
+/// [AuthResolvedSignInResult.issuedJwt].
+Future<AuthResolvedSignInResult>
+resolveAuthSignInResultForStrategyWithCallbacks<TContext>({
+  required AuthCallbacks<TContext> callbacks,
+  required TContext context,
+  required AuthSessionStrategy strategy,
+  required AuthUser user,
+  required String? redirectUrl,
+  required JwtSessionOptions jwtOptions,
+  DateTime? sessionExpiresAt,
+  AuthProvider? provider,
+  AuthAccount? account,
+  Map<String, dynamic>? profile,
+  bool isNewUser = false,
+  Map<String, dynamic>? token,
+}) async {
+  switch (strategy) {
+    case AuthSessionStrategy.session:
+      final session = AuthSession(
+        user: user,
+        expiresAt: sessionExpiresAt,
+        strategy: AuthSessionStrategy.session,
+      );
+      return AuthResolvedSignInResult(
+        result: AuthResult(
+          user: user,
+          session: session,
+          redirectUrl: redirectUrl,
+        ),
+      );
+    case AuthSessionStrategy.jwt:
+      final issued = await issueAuthJwtSessionWithCallbacks<TContext>(
+        callbacks: callbacks,
+        context: context,
+        options: jwtOptions,
+        user: user,
+        strategy: AuthSessionStrategy.jwt,
+        provider: provider,
+        account: account,
+        profile: profile,
+        isNewUser: isNewUser,
+        token: token,
+      );
+      return AuthResolvedSignInResult(
+        result: AuthResult(
+          user: user,
+          session: issued.session,
+          redirectUrl: redirectUrl,
+        ),
+        issuedJwt: issued.issued,
+      );
+  }
 }
 
 /// Result of a sign-in callback decision.

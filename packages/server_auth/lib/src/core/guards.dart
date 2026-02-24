@@ -124,6 +124,45 @@ void syncManagedGuards<TContext, TResponse>(
     ..addAll(nextManaged);
 }
 
+/// Builds and synchronizes managed guard registrations from [definitions].
+///
+/// Guard names are normalized by trimming whitespace. Definitions that produce
+/// `null` guards are skipped.
+Set<String>
+syncManagedGuardDefinitions<TContext, TResponse, TDefinition extends Object>(
+  AuthGuardRegistry<TContext, TResponse> registry,
+  Map<String, TDefinition> definitions, {
+  required AuthGuard<TContext, TResponse>? Function(
+    String name,
+    TDefinition definition,
+  )
+  buildGuard,
+  required Set<String> managed,
+  Set<String> preserve = const <String>{},
+}) {
+  final nextManaged = <String>{};
+  definitions.forEach((name, definition) {
+    final trimmed = name.trim();
+    if (trimmed.isEmpty) {
+      return;
+    }
+    final guard = buildGuard(trimmed, definition);
+    if (guard == null) {
+      return;
+    }
+    registry.register(trimmed, guard);
+    nextManaged.add(trimmed);
+  });
+
+  syncManagedGuards<TContext, TResponse>(
+    registry,
+    managed: managed,
+    nextManaged: nextManaged,
+    preserve: preserve,
+  );
+  return nextManaged;
+}
+
 /// Framework-agnostic guard evaluation service.
 class AuthGuardService<TContext, TResponse> {
   AuthGuardService({AuthGuardRegistry<TContext, TResponse>? registry})

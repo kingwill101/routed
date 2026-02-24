@@ -1,5 +1,7 @@
 import 'dart:async';
 
+import 'models.dart' show AuthResult, AuthSession;
+
 /// Builds a base URL (`scheme://host[:port]`) from [uri].
 String baseUrlFromUri(
   Uri uri, {
@@ -133,4 +135,26 @@ Future<String?> resolveAndSanitizeRedirectWithResolver(
     fallbackHost: fallbackHost,
     fallbackScheme: fallbackScheme,
   );
+}
+
+/// Resolves a response by preferring a sanitized redirect URL when present,
+/// otherwise falling back to session payload handling.
+Future<TResponse> respondWithSanitizedAuthRedirectOrSession<TResponse>({
+  required AuthResult result,
+  required Uri requestUri,
+  required FutureOr<TResponse> Function(String redirectUrl) onRedirect,
+  required FutureOr<TResponse> Function(AuthSession session) onSession,
+  String? fallbackHost,
+  String? fallbackScheme,
+}) async {
+  final redirectUrl = sanitizeRedirectUrl(
+    result.redirectUrl,
+    requestUri: requestUri,
+    fallbackHost: fallbackHost,
+    fallbackScheme: fallbackScheme,
+  );
+  if (redirectUrl != null && redirectUrl.isNotEmpty) {
+    return Future<TResponse>.value(onRedirect(redirectUrl));
+  }
+  return Future<TResponse>.value(onSession(result.session));
 }

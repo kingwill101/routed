@@ -173,6 +173,88 @@ void syncManagedGateAbilities<TContext>(
     ..addAll(nextManaged);
 }
 
+/// Builds and synchronizes managed gate registrations from [definitions].
+///
+/// Ability names are normalized by trimming whitespace. Definitions that
+/// produce `null` callbacks are skipped.
+Set<String> syncManagedGateDefinitions<TContext, TDefinition extends Object>(
+  AuthGateRegistry<TContext> registry,
+  Map<String, TDefinition> definitions, {
+  required AuthGateCallback<TContext>? Function(
+    String ability,
+    TDefinition definition,
+  )
+  buildGate,
+  required Set<String> managed,
+}) {
+  final entries = <String, AuthGateCallback<TContext>>{};
+  definitions.forEach((ability, definition) {
+    final trimmed = ability.trim();
+    if (trimmed.isEmpty) {
+      return;
+    }
+    final callback = buildGate(trimmed, definition);
+    if (callback == null) {
+      return;
+    }
+    entries[trimmed] = callback;
+  });
+
+  final nextManaged = registerGateCallbacksSafely<TContext>(
+    registry,
+    entries,
+    managed: managed,
+  );
+  syncManagedGateAbilities<TContext>(
+    registry,
+    managed: managed,
+    nextManaged: nextManaged,
+  );
+  return nextManaged;
+}
+
+/// Registers RBAC abilities and synchronizes the managed ability set.
+Set<String> syncManagedRbacAbilities<TContext>(
+  AuthGateRegistry<TContext> registry,
+  Map<String, RbacAbility> abilities, {
+  required Set<String> managed,
+}) {
+  final nextManaged = abilities.isEmpty
+      ? const <String>{}
+      : registerRbacAbilitiesSafely<TContext>(
+          registry,
+          abilities,
+          managed: managed,
+        );
+  syncManagedGateAbilities<TContext>(
+    registry,
+    managed: managed,
+    nextManaged: nextManaged,
+  );
+  return nextManaged;
+}
+
+/// Registers policy abilities and synchronizes the managed ability set.
+Set<String> syncManagedPolicyBindings<TContext>(
+  AuthGateRegistry<TContext> registry,
+  List<PolicyBinding> bindings, {
+  required Set<String> managed,
+}) {
+  final nextManaged = bindings.isEmpty
+      ? const <String>{}
+      : registerPolicyBindingsSafely<TContext>(
+          registry,
+          bindings,
+          managed: managed,
+        );
+  syncManagedGateAbilities<TContext>(
+    registry,
+    managed: managed,
+    nextManaged: nextManaged,
+  );
+  return nextManaged;
+}
+
 /// Builds a gate callback for a specific policy action.
 AuthGateCallback<TContext> policyGate<TContext, T extends Object>(
   Policy<T> policy,

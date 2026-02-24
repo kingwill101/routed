@@ -265,6 +265,17 @@ AuthProvider? resolveAuthProviderById(
   return null;
 }
 
+/// Resolves an auth provider by optional [id], returning `null` when absent.
+AuthProvider? resolveAuthProviderByOptionalId(
+  Iterable<AuthProvider> providers,
+  String? id,
+) {
+  if (id == null) {
+    return null;
+  }
+  return resolveAuthProviderById(providers, id);
+}
+
 /// Builds JSON-friendly provider summaries for `/auth/providers` responses.
 List<Map<String, dynamic>> authProviderSummaries(
   Iterable<AuthProvider> providers,

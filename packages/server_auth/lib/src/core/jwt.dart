@@ -303,6 +303,87 @@ class JwtOptions {
   }
 }
 
+/// Materializes JWT verifier options from config-like fields.
+///
+/// Returns `null` when [enabled] is `false`.
+JwtOptions? materializeJwtVerifierOptions({
+  required bool enabled,
+  String? issuer,
+  Iterable<String> audience = const <String>[],
+  Iterable<String> requiredClaims = const <String>[],
+  Uri? jwksUri,
+  Iterable<Map<String, dynamic>> inlineKeys = const <Map<String, dynamic>>[],
+  Iterable<String> algorithms = const <String>['RS256'],
+  Duration clockSkew = const Duration(seconds: 60),
+  Duration jwksCacheTtl = const Duration(minutes: 5),
+  String header = 'Authorization',
+  String bearerPrefix = 'Bearer ',
+}) {
+  if (!enabled) {
+    return null;
+  }
+
+  final normalizedIssuer = issuer == null || issuer.trim().isEmpty
+      ? null
+      : issuer.trim();
+  final normalizedAlgorithms = algorithms
+      .map((algorithm) => algorithm.trim())
+      .where((algorithm) => algorithm.isNotEmpty)
+      .toList(growable: false);
+
+  return JwtOptions(
+    enabled: true,
+    issuer: normalizedIssuer,
+    audience: audience.toList(growable: false),
+    requiredClaims: requiredClaims.toList(growable: false),
+    jwksUri: jwksUri,
+    inlineKeys: inlineKeys.toList(growable: false),
+    algorithms: normalizedAlgorithms.isEmpty
+        ? const <String>['RS256']
+        : normalizedAlgorithms,
+    clockSkew: clockSkew,
+    jwksCacheTtl: jwksCacheTtl,
+    header: header,
+    bearerPrefix: bearerPrefix,
+  );
+}
+
+/// Materializes a [JwtVerifier] from config-like fields.
+///
+/// Returns `null` when [enabled] is `false`.
+JwtVerifier? materializeJwtVerifier({
+  required bool enabled,
+  String? issuer,
+  Iterable<String> audience = const <String>[],
+  Iterable<String> requiredClaims = const <String>[],
+  Uri? jwksUri,
+  Iterable<Map<String, dynamic>> inlineKeys = const <Map<String, dynamic>>[],
+  Iterable<String> algorithms = const <String>['RS256'],
+  Duration clockSkew = const Duration(seconds: 60),
+  Duration jwksCacheTtl = const Duration(minutes: 5),
+  String header = 'Authorization',
+  String bearerPrefix = 'Bearer ',
+  http.Client? httpClient,
+}) {
+  final options = materializeJwtVerifierOptions(
+    enabled: enabled,
+    issuer: issuer,
+    audience: audience,
+    requiredClaims: requiredClaims,
+    jwksUri: jwksUri,
+    inlineKeys: inlineKeys,
+    algorithms: algorithms,
+    clockSkew: clockSkew,
+    jwksCacheTtl: jwksCacheTtl,
+    header: header,
+    bearerPrefix: bearerPrefix,
+  );
+  if (options == null) {
+    return null;
+  }
+  return JwtVerifier(options: options, httpClient: httpClient);
+}
+
 /// Extracts and verifies a bearer JWT token from an authorization header.
 Future<JwtBearerVerificationResult> verifyJwtBearerAuthorization({
   required String? authorizationHeader,
@@ -320,6 +401,32 @@ Future<JwtBearerVerificationResult> verifyJwtBearerAuthorization({
 
   final payload = await verifier.verifyToken(token);
   return JwtBearerVerificationResult(token: token, payload: payload);
+}
+
+/// Verifies a bearer JWT token, writes payload attributes, and runs callback.
+Future<JwtBearerVerificationResult>
+verifyJwtBearerAuthorizationAndWriteAttributes<TContext>({
+  required String? authorizationHeader,
+  required JwtVerifier verifier,
+  required void Function(String key, Object? value) setAttribute,
+  required TContext context,
+  AuthJwtVerifiedCallback<TContext>? onVerified,
+  String? bearerPrefix,
+}) async {
+  final verification = await verifyJwtBearerAuthorization(
+    authorizationHeader: authorizationHeader,
+    verifier: verifier,
+    bearerPrefix: bearerPrefix,
+  );
+
+  final payload = verification.payload;
+  writeJwtPayloadAttributes(payload, setAttribute: setAttribute);
+
+  if (onVerified != null) {
+    await onVerified(payload, context);
+  }
+
+  return verification;
 }
 
 /// Verifies a JWT session token and returns auth user/session material.
