@@ -355,12 +355,11 @@ class AuthServiceProvider extends ServiceProvider with ProvidesDefaultConfig {
       });
     }
 
-    for (final ability in _managedConfigGates.difference(newAbilities)) {
-      registry.unregister(ability);
-    }
-    _managedConfigGates
-      ..clear()
-      ..addAll(newAbilities);
+    syncManagedGateAbilities<EngineContext>(
+      registry,
+      managed: _managedConfigGates,
+      nextManaged: newAbilities,
+    );
 
     final toReset = _managedGateMiddleware.difference(newMiddlewareIds);
     for (final id in toReset) {
