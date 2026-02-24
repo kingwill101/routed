@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'gates.dart';
 import 'models.dart';
 
 /// Role-based ability definition.
@@ -109,4 +110,138 @@ class PolicyOptions {
 
   /// Returns `true` when there are no policy bindings.
   bool get isEmpty => bindings.isEmpty;
+}
+
+/// Builds a gate callback for an RBAC ability.
+AuthGateCallback<TContext> rbacGate<TContext>(RbacAbility ability) {
+  return (AuthGateEvaluationContext<TContext> context) {
+    return ability.evaluate(context.principal);
+  };
+}
+
+/// Registers RBAC abilities into [registry].
+Set<String> registerRbacAbilities<TContext>(
+  AuthGateRegistry<TContext> registry,
+  Map<String, RbacAbility> abilities,
+) {
+  final registered = <String>{};
+  abilities.forEach((ability, rule) {
+    final trimmed = ability.trim();
+    if (trimmed.isEmpty) {
+      return;
+    }
+    registry.register(trimmed, rbacGate<TContext>(rule));
+    registered.add(trimmed);
+  });
+  return registered;
+}
+
+/// Registers RBAC abilities without overriding unmanaged entries.
+Set<String> registerRbacAbilitiesSafely<TContext>(
+  AuthGateRegistry<TContext> registry,
+  Map<String, RbacAbility> abilities, {
+  Set<String> managed = const <String>{},
+}) {
+  final registered = <String>{};
+  abilities.forEach((ability, rule) {
+    final trimmed = ability.trim();
+    if (trimmed.isEmpty) {
+      return;
+    }
+    if (registry.resolve(trimmed) != null && !managed.contains(trimmed)) {
+      return;
+    }
+    if (managed.contains(trimmed)) {
+      registry.unregister(trimmed);
+    }
+    registry.register(trimmed, rbacGate<TContext>(rule));
+    registered.add(trimmed);
+  });
+  return registered;
+}
+
+/// Builds a gate callback for a specific policy action.
+AuthGateCallback<TContext> policyGate<TContext, T extends Object>(
+  Policy<T> policy,
+  PolicyAction action,
+) {
+  return (AuthGateEvaluationContext<TContext> context) {
+    final principal = context.principal;
+    final payload = context.payload;
+    switch (action) {
+      case PolicyAction.view:
+        if (payload is T) {
+          return policy.canView(principal, payload);
+        }
+        return false;
+      case PolicyAction.create:
+        return policy.canCreate(principal);
+      case PolicyAction.update:
+        if (payload is T) {
+          return policy.canUpdate(principal, payload);
+        }
+        return false;
+      case PolicyAction.delete:
+        if (payload is T) {
+          return policy.canDelete(principal, payload);
+        }
+        return false;
+    }
+  };
+}
+
+/// Registers policy abilities into [registry].
+Set<String> registerPolicyBindings<TContext>(
+  AuthGateRegistry<TContext> registry,
+  List<PolicyBinding> bindings,
+) {
+  final registered = <String>{};
+  for (final binding in bindings) {
+    registered.addAll(_registerPolicyBinding<TContext>(registry, binding));
+  }
+  return registered;
+}
+
+/// Registers policy abilities without overriding unmanaged entries.
+Set<String> registerPolicyBindingsSafely<TContext>(
+  AuthGateRegistry<TContext> registry,
+  List<PolicyBinding> bindings, {
+  Set<String> managed = const <String>{},
+}) {
+  final registered = <String>{};
+  for (final binding in bindings) {
+    registered.addAll(
+      _registerPolicyBinding<TContext>(registry, binding, managed: managed),
+    );
+  }
+  return registered;
+}
+
+Set<String> _registerPolicyBinding<TContext>(
+  AuthGateRegistry<TContext> registry,
+  PolicyBinding binding, {
+  Set<String> managed = const <String>{},
+}) {
+  final registered = <String>{};
+  final prefix = binding.abilityPrefix.trim();
+  if (prefix.isEmpty) {
+    return registered;
+  }
+
+  for (final action in binding.actions) {
+    final ability = '$prefix.${action.name}';
+    if (registry.resolve(ability) != null && !managed.contains(ability)) {
+      continue;
+    }
+    if (managed.contains(ability)) {
+      registry.unregister(ability);
+    }
+    registry.register(
+      ability,
+      policyGate<TContext, Object>(binding.policy, action),
+    );
+    registered.add(ability);
+  }
+
+  return registered;
 }

@@ -69,8 +69,8 @@ void main() {
       expect(abilityStrict.evaluate(null), isFalse);
     });
 
-    test('registerRbacWithHaigate applies abilities', () async {
-      final abilities = registerRbacWithHaigate({
+    test('registerRbacAbilities applies abilities', () async {
+      final abilities = registerRbacAbilities(gateRegistry, {
         'rbac.haigate': RbacAbility.role('admin'),
       });
       addTearDown(() {

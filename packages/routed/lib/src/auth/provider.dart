@@ -17,6 +17,8 @@ import 'package:server_auth/server_auth.dart'
         JwtOptions,
         JwtVerifier,
         OAuthIntrospectionOptions,
+        registerPolicyBindingsSafely,
+        registerRbacAbilitiesSafely,
         registerGitHubAuthProvider;
 import 'package:routed/src/auth/manager/auth_manager.dart';
 import 'package:routed/src/auth/manager/auth_options.dart';
@@ -24,8 +26,6 @@ import 'package:routed/src/auth/routes.dart';
 import 'package:routed/src/auth/haigate.dart';
 import 'package:routed/src/auth/jwt.dart' show jwtAuthenticationWithVerifier;
 import 'package:routed/src/auth/oauth.dart';
-import 'package:routed/src/auth/policies.dart';
-import 'package:routed/src/auth/rbac.dart';
 import 'package:routed/src/auth/session_auth.dart';
 import 'package:routed/src/config/specs/auth.dart';
 import 'package:routed/src/container/container.dart';
