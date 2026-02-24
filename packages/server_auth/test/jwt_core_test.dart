@@ -539,4 +539,59 @@ void main() {
     expect(updated.bearerPrefix, equals('Token '));
     expect(updated.cookieName, equals('cookie'));
   });
+
+  test(
+    'verifyAuthJwtSessionToken returns mapped user/session material',
+    () async {
+      const options = JwtSessionOptions(
+        secret: _sharedSecret,
+        issuer: 'server_auth',
+        audience: ['demo'],
+      );
+      final issued = issueAuthJwtToken(
+        options: options,
+        claims: const <String, dynamic>{
+          'sub': 'user-42',
+          'email': 'user@example.com',
+          'roles': <String>['admin'],
+        },
+      );
+
+      final verified = await verifyAuthJwtSessionToken(
+        token: issued.token,
+        options: options,
+      );
+
+      expect(verified, isNotNull);
+      expect(verified!.user.id, equals('user-42'));
+      expect(verified.user.email, equals('user@example.com'));
+      expect(verified.user.roles, contains('admin'));
+      expect(verified.expiresAt, isNotNull);
+      final session = verified.toSession();
+      expect(session.token, equals(issued.token));
+      expect(session.strategy, equals(AuthSessionStrategy.jwt));
+    },
+  );
+
+  test(
+    'verifyAuthJwtSessionToken returns null on invalid or missing config',
+    () async {
+      final invalid = await verifyAuthJwtSessionToken(
+        token: 'not-a-token',
+        options: const JwtSessionOptions(secret: _sharedSecret),
+      );
+      final missingToken = await verifyAuthJwtSessionToken(
+        token: null,
+        options: const JwtSessionOptions(secret: _sharedSecret),
+      );
+      final missingSecret = await verifyAuthJwtSessionToken(
+        token: 'any-token',
+        options: const JwtSessionOptions(secret: ''),
+      );
+
+      expect(invalid, isNull);
+      expect(missingToken, isNull);
+      expect(missingSecret, isNull);
+    },
+  );
 }

@@ -6,6 +6,8 @@ import 'package:http/http.dart' as http;
 import 'package:jose/jose.dart';
 
 import 'bearer.dart' show extractBearerToken;
+import 'models.dart' show AuthSession, AuthSessionStrategy, AuthUser;
+import 'users.dart' show authUserFromJwtClaims;
 
 export 'package:jose/jose.dart';
 
@@ -179,6 +181,32 @@ class JwtBearerVerificationResult {
   final JwtPayload payload;
 }
 
+/// Verified JWT session payload for auth session resolution.
+class AuthVerifiedJwtSession {
+  const AuthVerifiedJwtSession({
+    required this.token,
+    required this.payload,
+    required this.user,
+  });
+
+  final String token;
+  final JwtPayload payload;
+  final AuthUser user;
+
+  DateTime? get expiresAt => payload.token.claims.expiry?.toUtc();
+
+  AuthSession toSession({
+    AuthSessionStrategy strategy = AuthSessionStrategy.jwt,
+  }) {
+    return AuthSession(
+      user: user,
+      expiresAt: expiresAt,
+      strategy: strategy,
+      token: token,
+    );
+  }
+}
+
 /// Writes verified JWT payload attributes into a context attribute store.
 void writeJwtPayloadAttributes(
   JwtPayload payload, {
@@ -292,6 +320,41 @@ Future<JwtBearerVerificationResult> verifyJwtBearerAuthorization({
 
   final payload = await verifier.verifyToken(token);
   return JwtBearerVerificationResult(token: token, payload: payload);
+}
+
+/// Verifies a JWT session token and returns auth user/session material.
+///
+/// Returns `null` when the token is absent, the secret is missing, or
+/// verification fails.
+Future<AuthVerifiedJwtSession?> verifyAuthJwtSessionToken({
+  required String? token,
+  required JwtSessionOptions options,
+  http.Client? httpClient,
+}) async {
+  if (token == null || token.isEmpty) {
+    return null;
+  }
+  if (options.secret.isEmpty) {
+    return null;
+  }
+
+  final verifier = JwtVerifier(
+    options: options.toVerifierOptions(),
+    httpClient: httpClient,
+  );
+
+  JwtPayload payload;
+  try {
+    payload = await verifier.verifyToken(token);
+  } on JwtAuthException {
+    return null;
+  }
+
+  return AuthVerifiedJwtSession(
+    token: token,
+    payload: payload,
+    user: authUserFromJwtClaims(payload.claims),
+  );
 }
 
 /// Builds a symmetric [JsonWebKey] from a plain-text [secret].

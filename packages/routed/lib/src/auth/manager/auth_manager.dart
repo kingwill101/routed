@@ -31,7 +31,6 @@ import 'package:server_auth/server_auth.dart'
         AuthUser,
         AuthVerificationTokenStore,
         InMemoryAuthVerificationTokenStore,
-        authUserFromJwtClaims,
         AuthEmailUserResolution,
         consumeAuthVerificationToken,
         clearAuthVerificationTokens,
@@ -45,10 +44,9 @@ import 'package:server_auth/server_auth.dart'
         CallbackProvider,
         CredentialsProvider,
         EmailProvider,
-        JwtAuthException,
         refreshAuthJwtTokenIfNeeded,
+        verifyAuthJwtSessionToken,
         JwtPayload,
-        JwtVerifier,
         OAuthProvider,
         authSessionIssuedAtKey,
         AuthOptions,
@@ -413,19 +411,22 @@ class AuthManager {
         );
       case AuthSessionStrategy.jwt:
         final token = _resolveJwtToken(ctx);
-        if (token == null || token.isEmpty) return null;
-        if (options.jwtOptions.secret.isEmpty) return null;
-        final verifier = _jwtVerifier();
-        JwtPayload payload;
-        try {
-          payload = await verifier.verifyToken(token);
-        } on JwtAuthException {
+        final verified = await verifyAuthJwtSessionToken(
+          token: token,
+          options: options.jwtOptions,
+          httpClient: httpClient,
+        );
+        if (verified == null) {
           return null;
         }
-        final user = authUserFromJwtClaims(payload.claims);
-        var resolvedToken = token;
-        var resolvedExpiry = payload.token.claims.expiry?.toUtc();
-        final refreshed = await _refreshJwtIfNeeded(ctx, payload, user);
+        final user = verified.user;
+        var resolvedToken = verified.token;
+        var resolvedExpiry = verified.expiresAt;
+        final refreshed = await _refreshJwtIfNeeded(
+          ctx,
+          verified.payload,
+          user,
+        );
         if (refreshed != null) {
           resolvedToken = refreshed.token;
           resolvedExpiry = refreshed.expiresAt;
@@ -615,13 +616,6 @@ class AuthManager {
           redirectUrl: resolvedRedirect,
         );
     }
-  }
-
-  JwtVerifier _jwtVerifier() {
-    return JwtVerifier(
-      options: options.jwtOptions.toVerifierOptions(),
-      httpClient: httpClient,
-    );
   }
 
   void _applySessionMaxAge(EngineContext ctx) {
