@@ -74,7 +74,7 @@ Map<String, dynamic>? _decodeJson(TestResponse response) {
 
 AuthManager _sessionManager({AuthCallbacks<EngineContext>? callbacks}) {
   return AuthManager(
-    AuthOptions(
+    AuthOptions<EngineContext>(
       providers: [
         CredentialsProvider(
           authorize: (ctx, provider, credentials) async {
@@ -102,7 +102,7 @@ const String _jwtSecret = 'test-jwt-secret-for-update-session';
 
 AuthManager _jwtManager({AuthCallbacks<EngineContext>? callbacks}) {
   return AuthManager(
-    AuthOptions(
+    AuthOptions<EngineContext>(
       providers: [
         CredentialsProvider(
           authorize: (ctx, provider, credentials) async {
@@ -276,7 +276,7 @@ void main() {
 
       test('preserves session max age configuration', () async {
         final manager = AuthManager(
-          AuthOptions(
+          AuthOptions<EngineContext>(
             providers: [
               CredentialsProvider(
                 authorize: (ctx, provider, credentials) async {
@@ -523,7 +523,7 @@ void main() {
 
       test('throws AuthFlowException when JWT secret is empty', () async {
         final manager = AuthManager(
-          AuthOptions(
+          AuthOptions<EngineContext>(
             providers: [
               CredentialsProvider(
                 authorize: (ctx, provider, credentials) async {

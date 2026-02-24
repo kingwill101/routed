@@ -1,47 +1,18 @@
 import 'package:http/http.dart' as http;
-import 'package:server_auth/server_auth.dart'
-    show
-        AuthAdapter,
-        AuthCallbacks,
-        AuthProvider,
-        AuthSessionStrategy,
-        AuthVerificationTokenStore,
-        JwtSessionOptions,
-        PolicyOptions,
-        RbacOptions;
-import 'package:routed/src/context/context.dart';
-import 'package:routed/src/auth/session_auth.dart';
 
-/// {@template routed_auth_manager}
-/// High-level auth coordinator for routed.
+import 'adapter.dart';
+import 'authorization.dart';
+import 'callbacks.dart';
+import 'jwt.dart';
+import 'models.dart';
+import 'providers.dart';
+import 'verification_token_store.dart';
+
+/// Framework-agnostic auth runtime options.
 ///
-/// ## Basic usage
-/// ```dart
-/// final engine = await Engine.create(providers: Engine.defaultProviders);
-/// engine.container.instance<AuthOptions>(
-///   AuthOptions(
-///     providers: [
-///       CredentialsProvider(
-///         authorize: (ctx, provider, credentials) async {
-///           return AuthUser(id: 'user-1', email: credentials.email);
-///         },
-///       ),
-///     ],
-///     sessionStrategy: AuthSessionStrategy.session,
-///   ),
-/// );
-///
-/// // AuthServiceProvider will bind AuthManager and register AuthRoutes.
-/// await engine.serve(host: '127.0.0.1', port: 8080);
-/// ```
-///
-/// ## Session strategies
-/// - `session`: Uses the server session store via `SessionAuthService`.
-/// - `jwt`: Issues a signed JWT and stores it in a cookie.
-/// {@endtemplate}
-///
-/// Options that configure auth providers, storage, and session strategies.
-class AuthOptions {
+/// Adapters should map these options onto framework-specific routing and
+/// session integration.
+class AuthOptions<TContext> {
   AuthOptions({
     required this.providers,
     this.adapter = const AuthAdapter(),
@@ -54,14 +25,13 @@ class AuthOptions {
     this.stateKey = '_auth.state',
     this.pkceKey = '_auth.pkce',
     this.callbackKey = '_auth.callback',
-    this.sessionAuth,
     this.httpClient,
     this.tokenStore,
     this.enforceCsrf = true,
     this.rbac = const RbacOptions(),
     this.policies = const PolicyOptions(),
-    this.callbacks = const AuthCallbacks<EngineContext>(),
-  });
+    AuthCallbacks<TContext>? callbacks,
+  }) : callbacks = callbacks ?? AuthCallbacks<TContext>();
 
   /// List of configured auth providers.
   final List<AuthProvider> providers;
@@ -72,7 +42,7 @@ class AuthOptions {
   /// Session storage strategy.
   final AuthSessionStrategy sessionStrategy;
 
-  /// JWT configuration when using `AuthSessionStrategy.jwt`.
+  /// JWT configuration when using [AuthSessionStrategy.jwt].
   final JwtSessionOptions jwtOptions;
 
   /// Maximum age for auth sessions.
@@ -96,9 +66,6 @@ class AuthOptions {
   /// Session key used to store callback URLs.
   final String callbackKey;
 
-  /// Session auth service (defaults to `SessionAuth.instance`).
-  final SessionAuthService? sessionAuth;
-
   /// HTTP client used for OAuth calls.
   final http.Client? httpClient;
 
@@ -115,9 +82,9 @@ class AuthOptions {
   final PolicyOptions policies;
 
   /// Auth callback hooks.
-  final AuthCallbacks<EngineContext> callbacks;
+  final AuthCallbacks<TContext> callbacks;
 
-  AuthOptions copyWith({
+  AuthOptions<TContext> copyWith({
     List<AuthProvider>? providers,
     AuthAdapter? adapter,
     AuthSessionStrategy? sessionStrategy,
@@ -129,15 +96,14 @@ class AuthOptions {
     String? stateKey,
     String? pkceKey,
     String? callbackKey,
-    SessionAuthService? sessionAuth,
     http.Client? httpClient,
     AuthVerificationTokenStore? tokenStore,
     bool? enforceCsrf,
     RbacOptions? rbac,
     PolicyOptions? policies,
-    AuthCallbacks<EngineContext>? callbacks,
+    AuthCallbacks<TContext>? callbacks,
   }) {
-    return AuthOptions(
+    return AuthOptions<TContext>(
       providers: providers ?? this.providers,
       adapter: adapter ?? this.adapter,
       sessionStrategy: sessionStrategy ?? this.sessionStrategy,
@@ -149,7 +115,6 @@ class AuthOptions {
       stateKey: stateKey ?? this.stateKey,
       pkceKey: pkceKey ?? this.pkceKey,
       callbackKey: callbackKey ?? this.callbackKey,
-      sessionAuth: sessionAuth ?? this.sessionAuth,
       httpClient: httpClient ?? this.httpClient,
       tokenStore: tokenStore ?? this.tokenStore,
       enforceCsrf: enforceCsrf ?? this.enforceCsrf,

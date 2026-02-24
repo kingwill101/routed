@@ -12,6 +12,7 @@ export 'jwt.dart';
 export 'models.dart';
 export 'named_registry.dart';
 export 'oauth.dart';
+export 'options.dart';
 export 'provider_registry.dart';
 export 'providers.dart';
 export 'redirects.dart';

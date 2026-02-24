@@ -22,9 +22,9 @@ import 'package:server_auth/server_auth.dart'
         parseStringLike,
         registerPolicyBindingsSafely,
         registerRbacAbilitiesSafely,
-        registerAllAuthProviders;
+        registerAllAuthProviders,
+        AuthOptions;
 import 'package:routed/src/auth/manager/auth_manager.dart';
-import 'package:routed/src/auth/manager/auth_options.dart';
 import 'package:routed/src/auth/routes.dart';
 import 'package:routed/src/auth/haigate.dart';
 import 'package:routed/src/auth/jwt.dart' show jwtAuthenticationWithVerifier;
@@ -181,7 +181,7 @@ class AuthServiceProvider extends ServiceProvider with ProvidesDefaultConfig {
   }
 
   void _applyAuthManager(Container container) {
-    if (!container.has<AuthOptions>()) {
+    if (!container.has<AuthOptions<EngineContext>>()) {
       if (_ownsAuthManager) {
         container.remove<AuthManager>();
         SessionAuth.setSessionUpdater(null);
@@ -195,7 +195,7 @@ class AuthServiceProvider extends ServiceProvider with ProvidesDefaultConfig {
       return;
     }
 
-    final options = container.get<AuthOptions>();
+    final options = container.get<AuthOptions<EngineContext>>();
     final adapter = _resolveAuthAdapter(container, options);
     final tokenStore = _resolveTokenStore(container, options);
     final configSession = _resolvedConfig?.session;
@@ -209,7 +209,6 @@ class AuthServiceProvider extends ServiceProvider with ProvidesDefaultConfig {
     final resolvedOptions = options.copyWith(
       providers: mergedProviders,
       adapter: adapter,
-      sessionAuth: options.sessionAuth ?? _sessionAuth,
       httpClient: options.httpClient ?? _httpClient,
       tokenStore: tokenStore,
       sessionStrategy: configSession?.strategy ?? options.sessionStrategy,
@@ -217,7 +216,7 @@ class AuthServiceProvider extends ServiceProvider with ProvidesDefaultConfig {
       sessionUpdateAge: options.sessionUpdateAge ?? configSession?.updateAge,
     );
 
-    final manager = AuthManager(resolvedOptions);
+    final manager = AuthManager(resolvedOptions, sessionAuth: _sessionAuth);
     _managedAuthManager = manager;
     container.instance<AuthManager>(manager);
     _ownsAuthManager = true;
@@ -228,7 +227,10 @@ class AuthServiceProvider extends ServiceProvider with ProvidesDefaultConfig {
     _configurePolicies(container, resolvedOptions);
   }
 
-  AuthAdapter _resolveAuthAdapter(Container container, AuthOptions options) {
+  AuthAdapter _resolveAuthAdapter(
+    Container container,
+    AuthOptions<EngineContext> options,
+  ) {
     if (!container.has<AuthAdapter>()) {
       return options.adapter;
     }
@@ -240,7 +242,7 @@ class AuthServiceProvider extends ServiceProvider with ProvidesDefaultConfig {
 
   AuthVerificationTokenStore? _resolveTokenStore(
     Container container,
-    AuthOptions options,
+    AuthOptions<EngineContext> options,
   ) {
     if (options.tokenStore != null) {
       return options.tokenStore;
@@ -383,7 +385,7 @@ class AuthServiceProvider extends ServiceProvider with ProvidesDefaultConfig {
       ..addAll(newMiddlewareIds);
   }
 
-  void _configureRbac(Container container, AuthOptions options) {
+  void _configureRbac(Container container, AuthOptions<EngineContext> options) {
     final registry = _resolveGateRegistry(container);
     if (options.rbac.isEmpty) {
       for (final ability in _managedRbacAbilities) {
@@ -407,7 +409,10 @@ class AuthServiceProvider extends ServiceProvider with ProvidesDefaultConfig {
       ..addAll(newAbilities);
   }
 
-  void _configurePolicies(Container container, AuthOptions options) {
+  void _configurePolicies(
+    Container container,
+    AuthOptions<EngineContext> options,
+  ) {
     final registry = _resolveGateRegistry(container);
     if (options.policies.isEmpty) {
       for (final ability in _managedPolicyAbilities) {

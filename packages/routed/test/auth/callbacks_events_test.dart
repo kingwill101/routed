@@ -44,7 +44,7 @@ void main() {
   group('Auth callbacks and events', () {
     test('signIn callback can deny sign-in', () async {
       final manager = AuthManager(
-        AuthOptions(
+        AuthOptions<EngineContext>(
           providers: [
             CredentialsProvider(
               authorize: (ctx, provider, credentials) async {
@@ -81,7 +81,7 @@ void main() {
 
     test('session callback decorates payload', () async {
       final manager = AuthManager(
-        AuthOptions(
+        AuthOptions<EngineContext>(
           providers: [
             CredentialsProvider(
               authorize: (ctx, provider, credentials) async {
@@ -135,7 +135,7 @@ void main() {
     test('jwt callback augments claims', () async {
       const jwtSecret = 'jwt-secret';
       final manager = AuthManager(
-        AuthOptions(
+        AuthOptions<EngineContext>(
           providers: [
             CredentialsProvider(
               authorize: (ctx, provider, credentials) async {
@@ -188,7 +188,7 @@ void main() {
     test('events fire on sign-in and sign-out', () async {
       final events = <String>[];
       final manager = AuthManager(
-        AuthOptions(
+        AuthOptions<EngineContext>(
           providers: [
             CredentialsProvider(
               authorize: (ctx, provider, credentials) async {

@@ -66,6 +66,7 @@ import 'package:server_auth/server_auth.dart'
         authSessionIssuedAtKey,
         authSessionRefreshAction,
         AuthSessionRefreshAction,
+        AuthOptions,
         resolveAuthSessionMaxAgeSeconds,
         resolveAuthSessionExpiry,
         serializeAuthSessionIssuedAt,
@@ -77,22 +78,21 @@ import 'package:routed/src/context/context.dart';
 import 'package:routed/src/events/event.dart';
 import 'package:routed/src/events/event_manager.dart';
 
-import 'auth_options.dart';
-
-/// {@macro routed_auth_manager}
+/// High-level auth coordinator for routed.
 class AuthManager {
-  AuthManager(this.options)
+  AuthManager(this.options, {SessionAuthService? sessionAuth})
     : _tokenStore = options.tokenStore ?? InMemoryAuthVerificationTokenStore(),
+      _sessionAuth = sessionAuth,
       _httpClient = options.httpClient;
 
-  final AuthOptions options;
+  final AuthOptions<EngineContext> options;
   final AuthVerificationTokenStore _tokenStore;
+  final SessionAuthService? _sessionAuth;
   http.Client? _httpClient;
 
   AuthAdapter get adapter => options.adapter;
 
-  SessionAuthService get sessionAuth =>
-      options.sessionAuth ?? SessionAuth.instance;
+  SessionAuthService get sessionAuth => _sessionAuth ?? SessionAuth.instance;
 
   http.Client get httpClient => _httpClient ??= http.Client();
 

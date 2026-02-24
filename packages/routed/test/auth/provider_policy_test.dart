@@ -34,8 +34,8 @@ void main() {
       providers: [CoreServiceProvider(), RoutingServiceProvider()],
       options: [
         (engine) {
-          engine.container.instance<AuthOptions>(
-            AuthOptions(
+          engine.container.instance<AuthOptions<EngineContext>>(
+            AuthOptions<EngineContext>(
               providers: const [],
               rbac: RbacOptions(
                 abilities: {'admin.only': RbacAbility.role('admin')},

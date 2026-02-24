@@ -58,7 +58,7 @@ void main() {
   group('AuthRoutes', () {
     test('accepts providers created from package:server_auth', () async {
       final manager = AuthManager(
-        AuthOptions(
+        AuthOptions<EngineContext>(
           providers: [
             server_auth.CredentialsProvider(
               authorize: (_, _, credentials) async {
@@ -106,7 +106,7 @@ void main() {
 
     test('credentials flow establishes a session', () async {
       final manager = AuthManager(
-        AuthOptions(
+        AuthOptions<EngineContext>(
           providers: [
             CredentialsProvider(
               authorize: (ctx, provider, credentials) async {
@@ -173,7 +173,7 @@ void main() {
 
     test('credentials register creates a session', () async {
       final manager = AuthManager(
-        AuthOptions(
+        AuthOptions<EngineContext>(
           providers: [
             CredentialsProvider(
               register: (ctx, provider, credentials) async {
@@ -228,7 +228,7 @@ void main() {
     test('email flow issues verification tokens and signs in', () async {
       late AuthEmailRequest capturedRequest;
       final manager = AuthManager(
-        AuthOptions(
+        AuthOptions<EngineContext>(
           providers: [
             EmailProvider(
               sendVerificationRequest: (ctx, provider, request) async {
@@ -278,7 +278,7 @@ void main() {
     test('email flow invalidates previous verification tokens', () async {
       final requests = <AuthEmailRequest>[];
       final manager = AuthManager(
-        AuthOptions(
+        AuthOptions<EngineContext>(
           providers: [
             EmailProvider(
               sendVerificationRequest: (ctx, provider, request) async {
@@ -366,7 +366,7 @@ void main() {
       });
 
       final manager = AuthManager(
-        AuthOptions(
+        AuthOptions<EngineContext>(
           providers: [
             OAuthProvider<Map<String, dynamic>>(
               id: 'oauth',
@@ -431,7 +431,7 @@ void main() {
 
     test('jwt strategy issues token cookie', () async {
       final manager = AuthManager(
-        AuthOptions(
+        AuthOptions<EngineContext>(
           providers: [
             CredentialsProvider(
               authorize: (ctx, provider, credentials) async {
@@ -479,7 +479,7 @@ void main() {
 
     test('session update age refreshes session cookie', () async {
       final manager = AuthManager(
-        AuthOptions(
+        AuthOptions<EngineContext>(
           providers: [
             CredentialsProvider(
               authorize: (ctx, provider, credentials) async {
@@ -530,7 +530,7 @@ void main() {
 
     test('jwt update age refreshes token cookie', () async {
       final manager = AuthManager(
-        AuthOptions(
+        AuthOptions<EngineContext>(
           providers: [
             CredentialsProvider(
               authorize: (ctx, provider, credentials) async {
