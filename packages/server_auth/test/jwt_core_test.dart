@@ -107,6 +107,28 @@ void main() {
     expect(cookie.path, equals('/'));
   });
 
+  test('issueAuthJwtToken returns token, expiry, and cookie', () async {
+    const options = JwtSessionOptions(
+      secret: _sharedSecret,
+      issuer: 'server_auth',
+      audience: ['demo'],
+      cookieName: 'auth_cookie',
+    );
+    final issued = issueAuthJwtToken(
+      options: options,
+      claims: const <String, dynamic>{'sub': 'user-1'},
+    );
+
+    expect(issued.token, isNotEmpty);
+    expect(issued.expiresAt.isAfter(DateTime.now()), isTrue);
+    expect(issued.cookie.name, equals('auth_cookie'));
+    expect(issued.cookie.value, equals(issued.token));
+
+    final verifier = JwtVerifier(options: options.toVerifierOptions());
+    final payload = await verifier.verifyToken(issued.token);
+    expect(payload.subject, equals('user-1'));
+  });
+
   test('AuthJwtVerifiedCallback supports typed async handlers', () async {
     var invoked = false;
     Future<void> callback(JwtPayload payload, String context) async {

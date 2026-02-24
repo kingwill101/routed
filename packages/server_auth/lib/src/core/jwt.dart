@@ -65,6 +65,35 @@ Cookie buildExpiredJwtTokenCookie(String cookieName, {String path = '/'}) {
   return buildJwtTokenCookie(cookieName, '', path: path)..maxAge = 0;
 }
 
+/// Result of issuing a JWT token and corresponding auth cookie.
+class AuthIssuedJwtToken {
+  const AuthIssuedJwtToken({
+    required this.token,
+    required this.expiresAt,
+    required this.cookie,
+  });
+
+  final String token;
+  final DateTime expiresAt;
+  final Cookie cookie;
+}
+
+/// Issues a JWT token and builds the corresponding auth cookie.
+AuthIssuedJwtToken issueAuthJwtToken({
+  required JwtSessionOptions options,
+  required Map<String, dynamic> claims,
+}) {
+  final issuer = JwtIssuer(options);
+  final token = issuer.issue(claims);
+  final expiresAt = issuer.expiry;
+  final cookie = buildJwtTokenCookie(
+    options.cookieName,
+    token,
+    expires: expiresAt,
+  );
+  return AuthIssuedJwtToken(token: token, expiresAt: expiresAt, cookie: cookie);
+}
+
 /// Callback invoked after a JWT has been successfully verified.
 typedef AuthJwtVerifiedCallback<TContext> =
     FutureOr<void> Function(JwtPayload payload, TContext context);

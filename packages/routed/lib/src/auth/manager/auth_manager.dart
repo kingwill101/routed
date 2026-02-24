@@ -56,10 +56,9 @@ import 'package:server_auth/server_auth.dart'
         CallbackProvider,
         CredentialsProvider,
         EmailProvider,
-        buildJwtTokenCookie,
         JwtAuthException,
         jwtIssuedAtUtc,
-        JwtIssuer,
+        issueAuthJwtToken,
         JwtPayload,
         JwtVerifier,
         OAuthProvider,
@@ -458,7 +457,6 @@ class AuthManager {
         if (options.jwtOptions.secret.isEmpty) {
           throw AuthFlowException('missing_jwt_secret');
         }
-        final issuer = _jwtIssuer();
         final claims = await _applyJwtCallback(
           AuthJwtCallbackContext<EngineContext>(
             context: ctx,
@@ -467,19 +465,16 @@ class AuthManager {
             strategy: AuthSessionStrategy.jwt,
           ),
         );
-        final token = issuer.issue(claims);
-        ctx.response.cookies.add(
-          buildJwtTokenCookie(
-            options.jwtOptions.cookieName,
-            token,
-            expires: issuer.expiry,
-          ),
+        final issued = issueAuthJwtToken(
+          options: options.jwtOptions,
+          claims: claims,
         );
+        ctx.response.cookies.add(issued.cookie);
         return AuthSession(
           user: user,
-          expiresAt: issuer.expiry,
+          expiresAt: issued.expiresAt,
           strategy: AuthSessionStrategy.jwt,
-          token: token,
+          token: issued.token,
         );
     }
   }
@@ -691,7 +686,6 @@ class AuthManager {
         if (options.jwtOptions.secret.isEmpty) {
           throw AuthFlowException('missing_jwt_secret');
         }
-        final issuer = _jwtIssuer();
         final claims = await _applyJwtCallback(
           AuthJwtCallbackContext<EngineContext>(
             context: ctx,
@@ -704,19 +698,16 @@ class AuthManager {
             isNewUser: isNewUser,
           ),
         );
-        final token = issuer.issue(claims);
-        ctx.response.cookies.add(
-          buildJwtTokenCookie(
-            options.jwtOptions.cookieName,
-            token,
-            expires: issuer.expiry,
-          ),
+        final issued = issueAuthJwtToken(
+          options: options.jwtOptions,
+          claims: claims,
         );
+        ctx.response.cookies.add(issued.cookie);
         final session = AuthSession(
           user: user,
-          expiresAt: issuer.expiry,
+          expiresAt: issued.expiresAt,
           strategy: AuthSessionStrategy.jwt,
-          token: token,
+          token: issued.token,
         );
         await _emitAuthEvent(
           ctx,
@@ -740,8 +731,6 @@ class AuthManager {
         );
     }
   }
-
-  JwtIssuer _jwtIssuer() => JwtIssuer(options.jwtOptions);
 
   JwtVerifier _jwtVerifier() {
     return JwtVerifier(
@@ -806,7 +795,6 @@ class AuthManager {
     if (!shouldRefreshJwtByIssuedAt(issuedAtValue, updateAge)) {
       return null;
     }
-    final issuer = _jwtIssuer();
     final claims = await _applyJwtCallback(
       AuthJwtCallbackContext<EngineContext>(
         context: ctx,
@@ -815,15 +803,12 @@ class AuthManager {
         strategy: AuthSessionStrategy.jwt,
       ),
     );
-    final token = issuer.issue(claims);
-    ctx.response.cookies.add(
-      buildJwtTokenCookie(
-        options.jwtOptions.cookieName,
-        token,
-        expires: issuer.expiry,
-      ),
+    final issued = issueAuthJwtToken(
+      options: options.jwtOptions,
+      claims: claims,
     );
-    return _JwtRefresh(token: token, expiresAt: issuer.expiry);
+    ctx.response.cookies.add(issued.cookie);
+    return _JwtRefresh(token: issued.token, expiresAt: issued.expiresAt);
   }
 
   DateTime? _sessionExpiry(EngineContext ctx) {
