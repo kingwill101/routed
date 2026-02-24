@@ -45,6 +45,84 @@ void main() {
     },
   );
 
+  test('guestGate allows guest principals only', () async {
+    final gate = guestGate<String>();
+    expect(
+      await gate(
+        AuthGateEvaluationContext<String>(context: 'ctx', principal: null),
+      ),
+      isTrue,
+    );
+    expect(
+      await gate(
+        AuthGateEvaluationContext<String>(
+          context: 'ctx',
+          principal: AuthPrincipal(id: 'u1'),
+        ),
+      ),
+      isFalse,
+    );
+  });
+
+  test('authenticatedGate allows authenticated principals only', () async {
+    final gate = authenticatedGate<String>();
+    expect(
+      await gate(
+        AuthGateEvaluationContext<String>(context: 'ctx', principal: null),
+      ),
+      isFalse,
+    );
+    expect(
+      await gate(
+        AuthGateEvaluationContext<String>(
+          context: 'ctx',
+          principal: AuthPrincipal(id: 'u1'),
+        ),
+      ),
+      isTrue,
+    );
+  });
+
+  test('rolesGate supports any/all and allowGuest semantics', () async {
+    final adminAll = rolesGate<String>(const ['admin', 'editor']);
+    final adminAny = rolesGate<String>(const ['admin', 'editor'], any: true);
+    final openGate = rolesGate<String>(const <String>[], allowGuest: true);
+
+    final member = AuthPrincipal(id: 'u1', roles: const <String>['member']);
+    final admin = AuthPrincipal(
+      id: 'u2',
+      roles: const <String>['admin', 'editor'],
+    );
+
+    expect(
+      await adminAll(
+        AuthGateEvaluationContext<String>(context: 'ctx', principal: member),
+      ),
+      isFalse,
+    );
+    expect(
+      await adminAll(
+        AuthGateEvaluationContext<String>(context: 'ctx', principal: admin),
+      ),
+      isTrue,
+    );
+    expect(
+      await adminAny(
+        AuthGateEvaluationContext<String>(
+          context: 'ctx',
+          principal: AuthPrincipal(id: 'u3', roles: const <String>['admin']),
+        ),
+      ),
+      isTrue,
+    );
+    expect(
+      await openGate(
+        AuthGateEvaluationContext<String>(context: 'ctx', principal: null),
+      ),
+      isTrue,
+    );
+  });
+
   test('AuthGateRegistry registers and resolves trimmed abilities', () {
     final registry = AuthGateRegistry<String>();
     registry.register(' posts.publish ', (_) => true);

@@ -14,6 +14,46 @@ typedef AuthGateObserver<TContext> =
 typedef AuthGatePayloadResolver<TContext> =
     Object? Function(TContext context, String ability);
 
+/// Creates a gate callback that allows only guests.
+AuthGateCallback<TContext> guestGate<TContext>() {
+  return (AuthGateEvaluationContext<TContext> context) =>
+      context.principal == null;
+}
+
+/// Creates a gate callback that allows only authenticated principals.
+AuthGateCallback<TContext> authenticatedGate<TContext>() {
+  return (AuthGateEvaluationContext<TContext> context) =>
+      context.principal != null;
+}
+
+/// Creates a roles gate callback.
+///
+/// When [requiredRoles] is empty, authenticated users are allowed and guests
+/// follow [allowGuest].
+AuthGateCallback<TContext> rolesGate<TContext>(
+  Iterable<String> requiredRoles, {
+  bool any = false,
+  bool allowGuest = false,
+}) {
+  final normalized = requiredRoles
+      .map((role) => role.trim())
+      .where((role) => role.isNotEmpty)
+      .toList(growable: false);
+
+  return (AuthGateEvaluationContext<TContext> context) {
+    final principal = context.principal;
+    if (principal == null) {
+      return allowGuest;
+    }
+    if (normalized.isEmpty) {
+      return true;
+    }
+    return any
+        ? normalized.any(principal.hasRole)
+        : normalized.every(principal.hasRole);
+  };
+}
+
 /// Exception thrown when there is an error during gate registration.
 class AuthGateRegistrationException implements Exception {
   AuthGateRegistrationException(this.message);

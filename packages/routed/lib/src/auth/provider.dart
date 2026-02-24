@@ -5,13 +5,15 @@ import 'package:server_auth/server_auth.dart'
     show
         AuthAdapter,
         AuthGuard,
+        authenticatedGate,
         AuthGateCallback,
-        AuthGateEvaluationContext,
         AuthGateRegistry,
         AuthGateRegistrationException,
         AuthGuardRegistry,
+        guestGate,
         AuthProviderRegistry,
         mergeAuthProvidersById,
+        rolesGate,
         RememberTokenStore,
         AuthVerificationTokenStore,
         JwtOptions,
@@ -434,33 +436,15 @@ class AuthServiceProvider extends ServiceProvider with ProvidesDefaultConfig {
   ) {
     switch (definition.type) {
       case GateType.guest:
-        return (AuthGateEvaluationContext<EngineContext> context) =>
-            context.principal == null;
+        return guestGate<EngineContext>();
       case GateType.authenticated:
-        return (AuthGateEvaluationContext<EngineContext> context) =>
-            context.principal != null;
+        return authenticatedGate<EngineContext>();
       case GateType.roles:
-        final requiredRoles = definition.roles;
-        final any = definition.any;
-        final allowGuest = definition.allowGuest;
-        if (requiredRoles.isEmpty) {
-          return (AuthGateEvaluationContext<EngineContext> context) {
-            final principal = context.principal;
-            if (principal == null) {
-              return allowGuest;
-            }
-            return true;
-          };
-        }
-        return (AuthGateEvaluationContext<EngineContext> context) {
-          final principal = context.principal;
-          if (principal == null) {
-            return allowGuest;
-          }
-          return any
-              ? requiredRoles.any(principal.hasRole)
-              : requiredRoles.every(principal.hasRole);
-        };
+        return rolesGate<EngineContext>(
+          definition.roles,
+          any: definition.any,
+          allowGuest: definition.allowGuest,
+        );
     }
   }
 
