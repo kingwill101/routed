@@ -385,7 +385,7 @@ void main() {
         expect(beforeBody['user']['name'], equals('Test User'));
 
         final jwtCookie =
-            sessionBefore.cookie('routed_auth_token') ?? authCookie;
+            sessionBefore.cookie('auth_token') ?? authCookie;
 
         // Call update.
         final updateResponse = await client.postJson(
@@ -406,7 +406,7 @@ void main() {
         expect(updateBody['hasToken'], isTrue);
 
         // The response should set a new JWT cookie.
-        final newJwtCookie = updateResponse.cookie('routed_auth_token');
+        final newJwtCookie = updateResponse.cookie('auth_token');
         expect(
           newJwtCookie,
           isNotNull,
@@ -690,7 +690,7 @@ void main() {
         final cookies = <String>[_cookieHeader(authCookie)];
         final newSession = updateResponse.cookie('test_session');
         if (newSession != null) cookies.add(_cookieHeader(newSession));
-        final newJwt = updateResponse.cookie('routed_auth_token');
+        final newJwt = updateResponse.cookie('auth_token');
         if (newJwt != null) cookies.add(_cookieHeader(newJwt));
 
         final sessionResponse = await client.get(
@@ -964,7 +964,7 @@ void _sessionAuthUpdateSessionTests() {
         updateResponse.assertStatus(HttpStatus.ok);
 
         // Should have reissued the JWT cookie.
-        final newJwt = updateResponse.cookie('routed_auth_token');
+        final newJwt = updateResponse.cookie('auth_token');
         expect(newJwt, isNotNull, reason: 'JWT cookie should be reissued');
 
         // Verify the new token resolves correctly.

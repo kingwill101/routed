@@ -175,7 +175,7 @@ class JwtOptions {
     this.jwksCacheTtl = const Duration(minutes: 5),
     this.header = 'Authorization',
     this.bearerPrefix = 'Bearer ',
-    this.cookieName = 'routed_auth_token',
+    this.cookieName = 'auth_token',
   });
 
   /// Whether JWT verification is enabled.
@@ -282,7 +282,7 @@ class JwtSessionOptions {
     this.audience,
     this.maxAge = const Duration(hours: 1),
     this.algorithm = 'HS256',
-    this.cookieName = 'routed_auth_token',
+    this.cookieName = 'auth_token',
     this.header = 'Authorization',
     this.bearerPrefix = 'Bearer ',
   });

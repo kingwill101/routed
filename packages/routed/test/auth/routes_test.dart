@@ -463,7 +463,7 @@ void main() {
         },
       );
       signInResponse.assertStatus(HttpStatus.ok);
-      final tokenCookie = signInResponse.cookie('routed_auth_token');
+      final tokenCookie = signInResponse.cookie('auth_token');
       expect(tokenCookie, isNotNull);
 
       final sessionResponse = await client.get(
@@ -563,7 +563,7 @@ void main() {
         },
       );
       signInResponse.assertStatus(HttpStatus.ok);
-      final tokenCookie = signInResponse.cookie('routed_auth_token');
+      final tokenCookie = signInResponse.cookie('auth_token');
       expect(tokenCookie, isNotNull);
 
       await Future<void>.delayed(const Duration(milliseconds: 1100));
@@ -575,7 +575,7 @@ void main() {
         },
       );
       sessionResponse.assertStatus(HttpStatus.ok);
-      final refreshedCookie = sessionResponse.cookie('routed_auth_token');
+      final refreshedCookie = sessionResponse.cookie('auth_token');
       expect(refreshedCookie, isNotNull);
       expect(refreshedCookie!.value, isNot(tokenCookie.value));
     });
