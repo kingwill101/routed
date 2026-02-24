@@ -1,6 +1,7 @@
 import 'package:routed/drivers.dart';
 import 'package:routed/providers.dart';
 import 'package:routed/routed.dart' as routed;
+import 'package:server_contracts/server_contracts.dart';
 import 'package:server_data/storage.dart';
 import 'package:server_data/sessions.dart' as session;
 import 'package:server_data/cache.dart' as server_cache;
@@ -93,7 +94,7 @@ void registerFilesystemCacheDriver() {
 
 class FilesystemCacheStoreFactory extends server_cache.StoreFactory {
   @override
-  CacheStore create(Map<String, dynamic> config) {
+  Store create(Map<String, dynamic> config) {
     final directory = config['cache_dir'] as String;
     // TODO: Return your concrete Store implementation.
     throw UnimplementedError(

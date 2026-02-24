@@ -4,8 +4,6 @@
 /// inspecting driver metadata.
 library;
 
-import 'package:server_contracts/server_contracts.dart' as cache_store;
-
 export 'src/cache/cache_manager.dart'
     show
         CacheDriverRegistry,
@@ -28,5 +26,3 @@ export 'src/engine/providers/sessions.dart'
         SessionDriverDocBuilder,
         SessionDriverDocContext,
         SessionDriverBuilder;
-
-typedef CacheStore = cache_store.Store;
