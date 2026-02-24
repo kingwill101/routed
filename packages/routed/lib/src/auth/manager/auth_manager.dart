@@ -66,6 +66,7 @@ import 'package:server_auth/server_auth.dart'
         authSessionIssuedAtKey,
         authSessionRefreshAction,
         AuthSessionRefreshAction,
+        resolveAuthSessionMaxAgeSeconds,
         resolveAuthSessionExpiry,
         serializeAuthSessionIssuedAt,
         secureRandomToken,
@@ -739,11 +740,13 @@ class AuthManager {
   }
 
   void _applySessionMaxAge(EngineContext ctx) {
-    final maxAge = options.sessionMaxAge;
-    if (maxAge == null) {
+    final maxAgeSeconds = resolveAuthSessionMaxAgeSeconds(
+      options.sessionMaxAge,
+    );
+    if (maxAgeSeconds == null) {
       return;
     }
-    ctx.session.options.setMaxAge(maxAge.inSeconds);
+    ctx.session.options.setMaxAge(maxAgeSeconds);
   }
 
   void _setSessionIssuedAt(EngineContext ctx, DateTime issuedAt) {

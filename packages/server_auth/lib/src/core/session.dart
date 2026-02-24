@@ -68,6 +68,18 @@ DateTime? resolveAuthSessionExpiry({
   return current.add(Duration(seconds: maxAge));
 }
 
+/// Resolves positive session max-age seconds from a duration.
+int? resolveAuthSessionMaxAgeSeconds(Duration? sessionMaxAge) {
+  if (sessionMaxAge == null) {
+    return null;
+  }
+  final seconds = sessionMaxAge.inSeconds;
+  if (seconds <= 0) {
+    return null;
+  }
+  return seconds;
+}
+
 /// Builds an HTTP-only remember-token cookie.
 Cookie buildRememberTokenCookie(
   String cookieName,

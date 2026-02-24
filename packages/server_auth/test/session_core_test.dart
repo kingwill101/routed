@@ -95,6 +95,15 @@ void main() {
     expect(none, isNull);
   });
 
+  test('resolveAuthSessionMaxAgeSeconds returns positive seconds only', () {
+    expect(resolveAuthSessionMaxAgeSeconds(null), isNull);
+    expect(resolveAuthSessionMaxAgeSeconds(Duration.zero), isNull);
+    expect(
+      resolveAuthSessionMaxAgeSeconds(const Duration(minutes: 5)),
+      equals(300),
+    );
+  });
+
   test('remember-token cookie builders apply options and expiration', () {
     final expiresAt = DateTime.now().add(const Duration(minutes: 10));
     final cookie = buildRememberTokenCookie(
