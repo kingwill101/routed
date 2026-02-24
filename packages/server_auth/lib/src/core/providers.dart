@@ -2,9 +2,11 @@ import 'dart:async';
 
 import 'package:http/http.dart' as http;
 import 'package:jose/jose.dart' show JsonWebToken;
+import 'adapter.dart';
 import 'exceptions.dart' show AuthFlowException;
 import 'models.dart';
 import 'oauth.dart';
+import 'users.dart' show authUsersDiffer, mergeAuthUser;
 
 /// Framework-specific auth callback context.
 typedef AuthContext = dynamic;
@@ -313,6 +315,70 @@ Future<Map<String, dynamic>> loadOAuthProfile<TProfile extends Object>(
   } on OAuth2Exception {
     throw AuthFlowException('userinfo_failed');
   }
+}
+
+/// Result of resolving an OAuth-mapped user against persisted identities.
+class AuthOAuthUserResolution {
+  const AuthOAuthUserResolution({
+    required this.user,
+    required this.isNewUser,
+    required this.userUpdated,
+  });
+
+  final AuthUser user;
+  final bool isNewUser;
+  final bool userUpdated;
+}
+
+/// Resolves OAuth-mapped users against existing account/email records.
+Future<AuthOAuthUserResolution> resolveOAuthUserForAccount({
+  required AuthAdapter adapter,
+  required String providerId,
+  required String accountId,
+  required AuthUser mappedUser,
+}) async {
+  final existingAccount = await Future.sync(
+    () => adapter.getAccount(providerId, accountId),
+  );
+
+  var resolvedUser = mappedUser;
+  var isNewUser = false;
+  var userUpdated = false;
+
+  if (existingAccount != null && existingAccount.userId != null) {
+    final byId = await Future.sync(
+      () => adapter.getUserById(existingAccount.userId!),
+    );
+    if (byId != null) {
+      resolvedUser = byId;
+    }
+  }
+
+  final email = resolvedUser.email;
+  if (email != null) {
+    final byEmail = await Future.sync(() => adapter.getUserByEmail(email));
+    if (byEmail != null) {
+      resolvedUser = byEmail;
+    }
+  }
+
+  if (resolvedUser.id.isEmpty) {
+    resolvedUser = await Future.sync(() => adapter.createUser(resolvedUser));
+    isNewUser = true;
+  } else {
+    final mergedUser = mergeAuthUser(resolvedUser, mappedUser);
+    if (authUsersDiffer(resolvedUser, mergedUser)) {
+      final stored = await Future.sync(() => adapter.updateUser(mergedUser));
+      resolvedUser = stored ?? mergedUser;
+      userUpdated = true;
+    }
+  }
+
+  return AuthOAuthUserResolution(
+    user: resolvedUser,
+    isNewUser: isNewUser,
+    userUpdated: userUpdated,
+  );
 }
 
 /// {@macro server_auth_oauth_provider}

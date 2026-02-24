@@ -33,9 +33,9 @@ import 'package:server_auth/server_auth.dart'
         InMemoryAuthVerificationTokenStore,
         authJwtClaimsForUser,
         authUserFromJwtClaims,
-        authUsersDiffer,
-        mergeAuthUser,
         resolveAuthAccountId,
+        AuthOAuthUserResolution,
+        resolveOAuthUserForAccount,
         resolveBearerOrCookieToken,
         resolveCsrfToken,
         validateCsrfToken,
@@ -319,47 +319,24 @@ class AuthManager {
       tokenResponse.expiresIn,
     );
 
-    final existingAccount = await Future.sync(
-      () => adapter.getAccount(provider.id, accountId),
-    );
-
-    var isNewUser = false;
-    AuthUser resolvedUser = user;
-    if (existingAccount != null && existingAccount.userId != null) {
-      final byId = await Future.sync(
-        () => adapter.getUserById(existingAccount.userId!),
-      );
-      if (byId != null) {
-        resolvedUser = byId;
-      }
-    }
-
-    if (resolvedUser.email != null) {
-      final byEmail = await Future.sync(
-        () => adapter.getUserByEmail(resolvedUser.email!),
-      );
-      if (byEmail != null) {
-        resolvedUser = byEmail;
-      }
-    }
-
-    if (resolvedUser.id.isEmpty) {
-      resolvedUser = await Future.sync(() => adapter.createUser(resolvedUser));
-      isNewUser = true;
-    } else {
-      final updatedUser = mergeAuthUser(resolvedUser, user);
-      if (authUsersDiffer(resolvedUser, updatedUser)) {
-        final stored = await Future.sync(() => adapter.updateUser(updatedUser));
-        resolvedUser = stored ?? updatedUser;
-        await _emitAuthEvent(
-          ctx,
-          AuthUpdateUserEvent(
-            context: ctx,
-            user: resolvedUser,
-            provider: provider,
-          ),
+    final AuthOAuthUserResolution userResolution =
+        await resolveOAuthUserForAccount(
+          adapter: adapter,
+          providerId: provider.id,
+          accountId: accountId,
+          mappedUser: user,
         );
-      }
+    final resolvedUser = userResolution.user;
+    final isNewUser = userResolution.isNewUser;
+    if (userResolution.userUpdated) {
+      await _emitAuthEvent(
+        ctx,
+        AuthUpdateUserEvent(
+          context: ctx,
+          user: resolvedUser,
+          provider: provider,
+        ),
+      );
     }
 
     final account = AuthAccount(

@@ -48,6 +48,92 @@ void main() {
     expect(merged.first.name, equals('Google'));
   });
 
+  test(
+    'resolveOAuthUserForAccount updates linked users when profile changes',
+    () async {
+      var updated = false;
+      final adapter = CallbackAuthAdapter(
+        onGetAccount: (providerId, providerAccountId) {
+          return AuthAccount(
+            providerId: providerId,
+            providerAccountId: providerAccountId,
+            userId: 'user-1',
+          );
+        },
+        onGetUserById: (id) async {
+          expect(id, equals('user-1'));
+          return AuthUser(
+            id: 'user-1',
+            email: 'old@example.com',
+            name: 'Old Name',
+            attributes: const <String, dynamic>{'legacy': true},
+          );
+        },
+        onGetUserByEmail: (_) => null,
+        onUpdateUser: (user) async {
+          updated = true;
+          return user;
+        },
+      );
+
+      final resolved = await resolveOAuthUserForAccount(
+        adapter: adapter,
+        providerId: 'github',
+        accountId: 'acct-1',
+        mappedUser: AuthUser(
+          id: 'provider-user',
+          email: 'new@example.com',
+          name: 'New Name',
+          attributes: const <String, dynamic>{'fresh': true},
+        ),
+      );
+
+      expect(resolved.isNewUser, isFalse);
+      expect(resolved.userUpdated, isTrue);
+      expect(resolved.user.id, equals('user-1'));
+      expect(resolved.user.email, equals('new@example.com'));
+      expect(resolved.user.attributes['legacy'], isTrue);
+      expect(resolved.user.attributes['fresh'], isTrue);
+      expect(updated, isTrue);
+    },
+  );
+
+  test(
+    'resolveOAuthUserForAccount creates user when no records resolve',
+    () async {
+      var created = false;
+      final adapter = CallbackAuthAdapter(
+        onGetAccount: (_, _) => null,
+        onGetUserByEmail: (_) => null,
+        onCreateUser: (user) async {
+          created = true;
+          return AuthUser(
+            id: 'created-user',
+            email: user.email,
+            name: user.name,
+            attributes: user.attributes,
+          );
+        },
+      );
+
+      final resolved = await resolveOAuthUserForAccount(
+        adapter: adapter,
+        providerId: 'google',
+        accountId: 'acct-2',
+        mappedUser: AuthUser(
+          id: '',
+          email: 'new@example.com',
+          name: 'New User',
+        ),
+      );
+
+      expect(resolved.isNewUser, isTrue);
+      expect(resolved.userUpdated, isFalse);
+      expect(resolved.user.id, equals('created-user'));
+      expect(created, isTrue);
+    },
+  );
+
   test('exchangeOAuthAuthorizationCode uses provider token settings', () async {
     late http.Request captured;
     final provider = OAuthProvider<Map<String, dynamic>>(
