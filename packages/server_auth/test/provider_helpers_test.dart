@@ -48,6 +48,78 @@ void main() {
     expect(merged.first.name, equals('Google'));
   });
 
+  test(
+    'authorizeCredentialsSignIn uses provider callback or adapter fallback',
+    () async {
+      final providerUser = AuthUser(id: 'provider-user');
+      final adapterUser = AuthUser(id: 'adapter-user');
+      final credentials = AuthCredentials(
+        email: 'user@example.com',
+        password: 'pw',
+      );
+
+      final providerBacked = CredentialsProvider(
+        authorize: (context, provider, credentials) => providerUser,
+      );
+      final adapterBacked = CredentialsProvider();
+      final adapter = CallbackAuthAdapter(
+        onVerifyCredentials: (_) => adapterUser,
+      );
+
+      final fromProvider = await authorizeCredentialsSignIn(
+        adapter: adapter,
+        provider: providerBacked,
+        context: Object(),
+        credentials: credentials,
+      );
+      final fromAdapter = await authorizeCredentialsSignIn(
+        adapter: adapter,
+        provider: adapterBacked,
+        context: Object(),
+        credentials: credentials,
+      );
+
+      expect(fromProvider?.id, equals('provider-user'));
+      expect(fromAdapter?.id, equals('adapter-user'));
+    },
+  );
+
+  test(
+    'authorizeCredentialsRegistration uses provider callback or adapter fallback',
+    () async {
+      final providerUser = AuthUser(id: 'provider-register');
+      final adapterUser = AuthUser(id: 'adapter-register');
+      final credentials = AuthCredentials(
+        email: 'new@example.com',
+        password: 'pw',
+      );
+
+      final providerBacked = CredentialsProvider(
+        register: (context, provider, credentials) => providerUser,
+      );
+      final adapterBacked = CredentialsProvider();
+      final adapter = CallbackAuthAdapter(
+        onRegisterCredentials: (_) => adapterUser,
+      );
+
+      final fromProvider = await authorizeCredentialsRegistration(
+        adapter: adapter,
+        provider: providerBacked,
+        context: Object(),
+        credentials: credentials,
+      );
+      final fromAdapter = await authorizeCredentialsRegistration(
+        adapter: adapter,
+        provider: adapterBacked,
+        context: Object(),
+        credentials: credentials,
+      );
+
+      expect(fromProvider?.id, equals('provider-register'));
+      expect(fromAdapter?.id, equals('adapter-register'));
+    },
+  );
+
   test('auth provider session key helpers compose stable keys', () {
     expect(
       authProviderStateSessionKey('_auth.state', 'github'),

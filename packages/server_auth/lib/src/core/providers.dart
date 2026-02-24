@@ -153,6 +153,36 @@ typedef CredentialsRegister =
       AuthCredentials credentials,
     );
 
+/// Resolves credential sign-in via provider callback or adapter fallback.
+Future<AuthUser?> authorizeCredentialsSignIn({
+  required AuthAdapter adapter,
+  required CredentialsProvider provider,
+  required AuthContext context,
+  required AuthCredentials credentials,
+}) async {
+  if (provider.authorize != null) {
+    return Future.sync(
+      () => provider.authorize!(context, provider, credentials),
+    );
+  }
+  return Future.sync(() => adapter.verifyCredentials(credentials));
+}
+
+/// Resolves credential registration via provider callback or adapter fallback.
+Future<AuthUser?> authorizeCredentialsRegistration({
+  required AuthAdapter adapter,
+  required CredentialsProvider provider,
+  required AuthContext context,
+  required AuthCredentials credentials,
+}) async {
+  if (provider.register != null) {
+    return Future.sync(
+      () => provider.register!(context, provider, credentials),
+    );
+  }
+  return Future.sync(() => adapter.registerCredentials(credentials));
+}
+
 /// {@macro server_auth_provider_overview}
 class AuthProvider {
   const AuthProvider({

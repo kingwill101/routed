@@ -9,6 +9,8 @@ import 'package:server_auth/server_auth.dart'
         AuthCredentials,
         AuthEmailRequest,
         AuthJwtCallbackContext,
+        authorizeCredentialsRegistration,
+        authorizeCredentialsSignIn,
         resolveAuthJwtClaims,
         resolveAuthRedirectTarget,
         resolveAuthSessionPayload,
@@ -127,11 +129,12 @@ class AuthManager {
     CredentialsProvider provider,
     AuthCredentials credentials,
   ) async {
-    final user = provider.authorize != null
-        ? await Future.sync(
-            () => provider.authorize!(ctx, provider, credentials),
-          )
-        : await Future.sync(() => adapter.verifyCredentials(credentials));
+    final user = await authorizeCredentialsSignIn(
+      adapter: adapter,
+      provider: provider,
+      context: ctx,
+      credentials: credentials,
+    );
 
     if (user == null) {
       throw AuthFlowException('invalid_credentials');
@@ -150,11 +153,12 @@ class AuthManager {
     CredentialsProvider provider,
     AuthCredentials credentials,
   ) async {
-    final user = provider.register != null
-        ? await Future.sync(
-            () => provider.register!(ctx, provider, credentials),
-          )
-        : await Future.sync(() => adapter.registerCredentials(credentials));
+    final user = await authorizeCredentialsRegistration(
+      adapter: adapter,
+      provider: provider,
+      context: ctx,
+      credentials: credentials,
+    );
 
     if (user == null) {
       throw AuthFlowException('registration_failed');
