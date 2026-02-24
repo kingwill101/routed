@@ -20,9 +20,8 @@ import 'package:server_auth/server_auth.dart'
         authEmailCallbackSessionKey,
         authProviderSummaries,
         baseUrlFromUri,
-        ensureOAuthStateMatches,
-        resolveOAuthCallbackSessionValues,
         resolveOAuthAuthorizationStart,
+        resolveOAuthCallbackSignInForProvider,
         resolveAuthProviderById,
         AuthResult,
         AuthSession,
@@ -37,7 +36,6 @@ import 'package:server_auth/server_auth.dart'
         persistAuthVerificationToken,
         prepareAuthEmailVerificationPayload,
         resolveAuthUserByEmailOrCreate,
-        resolveOAuthSignInForProvider,
         resolveBearerOrCookieToken,
         resolveCsrfToken,
         validateCsrfToken,
@@ -250,30 +248,24 @@ class AuthManager {
     String code,
     String? state,
   ) async {
-    final sessionValues = resolveOAuthCallbackSessionValues(
-      providerId: provider.id,
-      stateKey: options.stateKey,
-      pkceKey: options.pkceKey,
-      callbackKey: options.callbackKey,
-      readSession: (key) => ctx.getSession<String>(key),
-    );
-    ensureOAuthStateMatches(
-      expectedState: sessionValues.expectedState,
-      receivedState: state,
-    );
     final resolved =
-        await resolveOAuthSignInForProvider<EngineContext, TProfile>(
+        await resolveOAuthCallbackSignInForProvider<EngineContext, TProfile>(
           adapter: adapter,
           context: ctx,
           provider: provider,
           code: code,
-          codeVerifier: sessionValues.codeVerifier,
+          receivedState: state,
+          stateKey: options.stateKey,
+          pkceKey: options.pkceKey,
+          callbackKey: options.callbackKey,
+          readSession: (key) => ctx.getSession<String>(key),
           httpClient: httpClient,
           fallbackAccountId: secureRandomToken,
         );
-    final resolvedUser = resolved.user;
-    final isNewUser = resolved.isNewUser;
-    if (resolved.userUpdated) {
+    final signIn = resolved.signIn;
+    final resolvedUser = signIn.user;
+    final isNewUser = signIn.isNewUser;
+    if (signIn.userUpdated) {
       await _emitAuthEvent(
         ctx,
         AuthUpdateUserEvent(
@@ -284,10 +276,8 @@ class AuthManager {
       );
     }
 
-    final account = resolved.account;
-    final profileMap = resolved.profile;
-
-    await Future.sync(() => adapter.linkAccount(account));
+    final account = signIn.account;
+    final profileMap = signIn.profile;
     await _emitAuthEvent(
       ctx,
       AuthLinkAccountEvent(
@@ -298,7 +288,7 @@ class AuthManager {
       ),
     );
 
-    final redirectUrl = sessionValues.callbackUrl;
+    final redirectUrl = resolved.callbackUrl;
     return _completeSignIn(
       ctx,
       resolvedUser,

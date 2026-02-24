@@ -594,6 +594,137 @@ void main() {
     },
   );
 
+  test(
+    'resolveOAuthCallbackSignInForProvider validates state and links account',
+    () async {
+      AuthAccount? linkedAccount;
+      final adapter = CallbackAuthAdapter(
+        onGetAccount: (_, _) => null,
+        onGetUserByEmail: (_) => null,
+        onCreateUser: (user) async => AuthUser(id: 'created-user'),
+        onLinkAccount: (account) async {
+          linkedAccount = account;
+        },
+      );
+      final provider = OAuthProvider<Map<String, dynamic>>(
+        id: 'example',
+        name: 'Example',
+        clientId: 'client-id',
+        clientSecret: 'client-secret',
+        authorizationEndpoint: Uri.parse('https://auth.test/authorize'),
+        tokenEndpoint: Uri.parse('https://auth.test/token'),
+        userInfoEndpoint: Uri.parse('https://auth.test/userinfo'),
+        redirectUri: 'https://app.test/callback/example',
+        profile: (_) => AuthUser(id: ''),
+      );
+      final session = <String, String>{
+        authProviderStateSessionKey('_auth.state', provider.id): 'state-1',
+        authProviderPkceSessionKey('_auth.pkce', provider.id): 'verifier-1',
+        authProviderCallbackSessionKey('_auth.callback', provider.id):
+            '/dashboard',
+      };
+
+      final resolved =
+          await resolveOAuthCallbackSignInForProvider<
+            Object,
+            Map<String, dynamic>
+          >(
+            adapter: adapter,
+            context: Object(),
+            provider: provider,
+            code: 'auth-code',
+            receivedState: 'state-1',
+            stateKey: '_auth.state',
+            pkceKey: '_auth.pkce',
+            callbackKey: '_auth.callback',
+            readSession: (key) => session[key],
+            httpClient: MockClient((request) async {
+              if (request.url.path == '/token') {
+                return http.Response(
+                  jsonEncode(<String, dynamic>{
+                    'access_token': 'token-1',
+                    'token_type': 'Bearer',
+                    'expires_in': 3600,
+                  }),
+                  200,
+                  headers: const <String, String>{
+                    'content-type': 'application/json',
+                  },
+                );
+              }
+              if (request.url.path == '/userinfo') {
+                return http.Response(
+                  jsonEncode(<String, dynamic>{'sub': 'sub-1'}),
+                  200,
+                  headers: const <String, String>{
+                    'content-type': 'application/json',
+                  },
+                );
+              }
+              return http.Response('not-found', 404);
+            }),
+          );
+
+      expect(resolved.callbackUrl, equals('/dashboard'));
+      expect(resolved.signIn.account.providerId, equals('example'));
+      expect(linkedAccount, isNotNull);
+      expect(
+        linkedAccount!.providerAccountId,
+        equals(resolved.signIn.account.providerAccountId),
+      );
+    },
+  );
+
+  test(
+    'resolveOAuthCallbackSignInForProvider throws invalid_state before token exchange',
+    () async {
+      var linked = false;
+      final adapter = CallbackAuthAdapter(
+        onLinkAccount: (_) async {
+          linked = true;
+        },
+      );
+      final provider = OAuthProvider<Map<String, dynamic>>(
+        id: 'example',
+        name: 'Example',
+        clientId: 'client-id',
+        clientSecret: 'client-secret',
+        authorizationEndpoint: Uri.parse('https://auth.test/authorize'),
+        tokenEndpoint: Uri.parse('https://auth.test/token'),
+        redirectUri: 'https://app.test/callback/example',
+        profile: (_) => AuthUser(id: ''),
+      );
+      final session = <String, String>{
+        authProviderStateSessionKey('_auth.state', provider.id): 'state-1',
+      };
+
+      await expectLater(
+        resolveOAuthCallbackSignInForProvider<Object, Map<String, dynamic>>(
+          adapter: adapter,
+          context: Object(),
+          provider: provider,
+          code: 'auth-code',
+          receivedState: 'different-state',
+          stateKey: '_auth.state',
+          pkceKey: '_auth.pkce',
+          callbackKey: '_auth.callback',
+          readSession: (key) => session[key],
+          httpClient: MockClient(
+            (_) async => http.Response('should-not-be-called', 500),
+          ),
+        ),
+        throwsA(
+          isA<AuthFlowException>().having(
+            (error) => error.code,
+            'code',
+            'invalid_state',
+          ),
+        ),
+      );
+      expect(linked, isFalse);
+    },
+  );
+
   test('buildOAuthAuthAccount maps oauth token payload into account', () {
     final account = buildOAuthAuthAccount(
       providerId: 'github',

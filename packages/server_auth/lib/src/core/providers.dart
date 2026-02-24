@@ -683,6 +683,18 @@ class AuthOAuthSignInResolution {
   final Map<String, dynamic> profile;
 }
 
+/// Result of resolving an OAuth callback into sign-in payloads and callback
+/// redirect metadata.
+class AuthOAuthCallbackSignInResolution {
+  const AuthOAuthCallbackSignInResolution({
+    required this.signIn,
+    required this.callbackUrl,
+  });
+
+  final AuthOAuthSignInResolution signIn;
+  final String? callbackUrl;
+}
+
 /// Resolves OAuth-mapped users against existing account/email records.
 Future<AuthOAuthUserResolution> resolveOAuthUserForAccount({
   required AuthAdapter adapter,
@@ -801,6 +813,52 @@ resolveOAuthSignInForProvider<TContext, TProfile extends Object>({
     userUpdated: userResolution.userUpdated,
     account: account,
     profile: profileMap,
+  );
+}
+
+/// Resolves a full OAuth callback flow including state validation and account
+/// linking.
+Future<AuthOAuthCallbackSignInResolution>
+resolveOAuthCallbackSignInForProvider<TContext, TProfile extends Object>({
+  required AuthAdapter adapter,
+  required TContext context,
+  required OAuthProvider<TProfile> provider,
+  required String code,
+  required String? receivedState,
+  required String stateKey,
+  required String pkceKey,
+  required String callbackKey,
+  required String? Function(String key) readSession,
+  required http.Client httpClient,
+  String Function()? fallbackAccountId,
+}) async {
+  final sessionValues = resolveOAuthCallbackSessionValues(
+    providerId: provider.id,
+    stateKey: stateKey,
+    pkceKey: pkceKey,
+    callbackKey: callbackKey,
+    readSession: readSession,
+  );
+  ensureOAuthStateMatches(
+    expectedState: sessionValues.expectedState,
+    receivedState: receivedState,
+  );
+
+  final signIn = await resolveOAuthSignInForProvider<TContext, TProfile>(
+    adapter: adapter,
+    context: context,
+    provider: provider,
+    code: code,
+    codeVerifier: sessionValues.codeVerifier,
+    httpClient: httpClient,
+    fallbackAccountId: fallbackAccountId,
+  );
+
+  await Future.sync(() => adapter.linkAccount(signIn.account));
+
+  return AuthOAuthCallbackSignInResolution(
+    signIn: signIn,
+    callbackUrl: sessionValues.callbackUrl,
   );
 }
 
