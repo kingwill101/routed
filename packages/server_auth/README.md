@@ -43,6 +43,32 @@ final providers = <AuthProvider>[google];
 Use `providers` with your framework adapter to wire callback routes, session
 handling, and auth lifecycle.
 
+## Using with Shelf
+
+Use `shelf_auth` for Shelf-specific middleware while keeping providers and
+auth contracts in `server_auth`.
+
+```yaml
+dependencies:
+  server_auth: ^0.1.0
+  shelf_auth: ^0.1.0
+```
+
+```dart
+import 'package:server_auth/server_auth.dart';
+import 'package:shelf_auth/shelf_auth.dart';
+
+final providers = <AuthProvider>[
+  const AuthProvider(
+    id: 'credentials',
+    name: 'Credentials',
+    type: AuthProviderType.credentials,
+  ),
+];
+
+final middleware = authProvidersEndpoint(providers: providers);
+```
+
 ## Config-Driven Registration
 
 ```dart
