@@ -5,6 +5,8 @@ import 'dart:io';
 import 'package:http/http.dart' as http;
 import 'package:jose/jose.dart';
 
+import 'bearer.dart' show extractBearerToken;
+
 export 'package:jose/jose.dart';
 
 /// Attribute key for JWT claims in framework request context stores.
@@ -101,6 +103,17 @@ class JwtPayload {
   String? get subject => token.claims.subject;
 }
 
+/// Result of resolving and verifying a JWT bearer token from a header.
+class JwtBearerVerificationResult {
+  const JwtBearerVerificationResult({
+    required this.token,
+    required this.payload,
+  });
+
+  final String token;
+  final JwtPayload payload;
+}
+
 /// Configuration options for JWT verification.
 class JwtOptions {
   /// Creates a [JwtOptions] instance with the specified parameters.
@@ -185,6 +198,25 @@ class JwtOptions {
       cookieName: cookieName ?? this.cookieName,
     );
   }
+}
+
+/// Extracts and verifies a bearer JWT token from an authorization header.
+Future<JwtBearerVerificationResult> verifyJwtBearerAuthorization({
+  required String? authorizationHeader,
+  required JwtVerifier verifier,
+  String? bearerPrefix,
+}) async {
+  final options = verifier.options;
+  final token = extractBearerToken(
+    authorizationHeader,
+    prefix: bearerPrefix ?? options.bearerPrefix,
+  );
+  if (token == null) {
+    throw JwtAuthException('missing_token');
+  }
+
+  final payload = await verifier.verifyToken(token);
+  return JwtBearerVerificationResult(token: token, payload: payload);
 }
 
 /// Builds a symmetric [JsonWebKey] from a plain-text [secret].

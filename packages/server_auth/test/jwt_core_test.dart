@@ -126,6 +126,49 @@ void main() {
     expect(invoked, isTrue);
   });
 
+  test('verifyJwtBearerAuthorization rejects missing tokens', () async {
+    final verifier = JwtVerifier(
+      options: JwtOptions(inlineKeys: [_testJwk], algorithms: const ['HS256']),
+    );
+
+    await expectLater(
+      verifyJwtBearerAuthorization(
+        authorizationHeader: null,
+        verifier: verifier,
+      ),
+      throwsA(
+        isA<JwtAuthException>().having(
+          (error) => error.message,
+          'message',
+          'missing_token',
+        ),
+      ),
+    );
+  });
+
+  test(
+    'verifyJwtBearerAuthorization resolves and verifies bearer tokens',
+    () async {
+      final token = _buildToken(_claims(now: DateTime.now()));
+      final verifier = JwtVerifier(
+        options: JwtOptions(
+          issuer: 'server_auth',
+          audience: const ['demo'],
+          inlineKeys: [_testJwk],
+          algorithms: const ['HS256'],
+        ),
+      );
+
+      final verified = await verifyJwtBearerAuthorization(
+        authorizationHeader: 'Token $token',
+        verifier: verifier,
+        bearerPrefix: 'Token ',
+      );
+      expect(verified.token, equals(token));
+      expect(verified.payload.subject, equals('user-1'));
+    },
+  );
+
   test('JwtIssuer and JwtVerifier roundtrip', () async {
     const options = JwtSessionOptions(
       secret: 'super-secret',

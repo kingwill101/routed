@@ -7,9 +7,10 @@ import 'package:server_auth/server_auth.dart'
     show
         JwtAuthException,
         AuthJwtVerifiedCallback,
+        JwtBearerVerificationResult,
         JwtOptions,
         JwtVerifier,
-        extractBearerToken,
+        verifyJwtBearerAuthorization,
         jwtClaimsAttribute,
         jwtHeadersAttribute,
         jwtSubjectAttribute;
@@ -39,14 +40,13 @@ Middleware jwtAuthenticationWithVerifier(
     }
 
     final headerValue = ctx.request.header(options.header);
-    final token = extractBearerToken(headerValue, prefix: options.bearerPrefix);
-    if (token == null) {
-      _writeUnauthorized(ctx, 'missing_token');
-      return ctx.response;
-    }
-
+    JwtBearerVerificationResult verification;
     try {
-      final payload = await verifier.verifyToken(token);
+      verification = await verifyJwtBearerAuthorization(
+        authorizationHeader: headerValue,
+        verifier: verifier,
+      );
+      final payload = verification.payload;
       ctx.request
         ..setAttribute(jwtClaimsAttribute, payload.claims)
         ..setAttribute(jwtHeadersAttribute, payload.headers)
