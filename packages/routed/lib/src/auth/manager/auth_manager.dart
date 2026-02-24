@@ -46,7 +46,10 @@ import 'package:server_auth/server_auth.dart'
         OAuthProvider,
         loadOAuthProfile,
         pkceS256CodeChallenge,
-        secureRandomToken;
+        parseAuthSessionIssuedAt,
+        resolveAuthSessionExpiry,
+        secureRandomToken,
+        shouldRefreshAuthSession;
 import 'package:routed/src/auth/hooks.dart';
 import 'package:routed/src/auth/session_auth.dart';
 import 'package:routed/src/context/context.dart';
@@ -783,11 +786,9 @@ class AuthManager {
   }
 
   DateTime? _sessionIssuedAt(EngineContext ctx) {
-    final stored = ctx.getSession<String>(_sessionIssuedAtKey);
-    if (stored == null || stored.isEmpty) {
-      return null;
-    }
-    return DateTime.tryParse(stored)?.toUtc();
+    return parseAuthSessionIssuedAt(
+      ctx.getSession<String>(_sessionIssuedAtKey),
+    );
   }
 
   void _refreshSessionIfNeeded(EngineContext ctx) {
@@ -801,7 +802,7 @@ class AuthManager {
       _setSessionIssuedAt(ctx, now);
       return;
     }
-    if (now.difference(issuedAt) >= updateAge) {
+    if (shouldRefreshAuthSession(issuedAt, updateAge, now: now)) {
       _setSessionIssuedAt(ctx, now);
       ctx.session.touch();
     }
@@ -842,15 +843,10 @@ class AuthManager {
   }
 
   DateTime? _sessionExpiry(EngineContext ctx) {
-    final override = options.sessionMaxAge;
-    if (override != null) {
-      return DateTime.now().add(override);
-    }
-    final maxAge = ctx.session.options.maxAge;
-    if (maxAge == null || maxAge <= 0) {
-      return null;
-    }
-    return DateTime.now().add(Duration(seconds: maxAge));
+    return resolveAuthSessionExpiry(
+      sessionMaxAge: options.sessionMaxAge,
+      sessionOptionsMaxAgeSeconds: ctx.session.options.maxAge,
+    );
   }
 
   String? _resolveJwtToken(EngineContext ctx) {

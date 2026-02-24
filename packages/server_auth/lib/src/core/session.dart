@@ -5,6 +5,41 @@ import 'models.dart';
 /// Attribute key used to store the authenticated principal in request context.
 const String authPrincipalAttribute = 'auth.principal';
 
+/// Parses an ISO-8601 session issued-at timestamp into UTC.
+DateTime? parseAuthSessionIssuedAt(String? value) {
+  if (value == null || value.isEmpty) {
+    return null;
+  }
+  return DateTime.tryParse(value)?.toUtc();
+}
+
+/// Returns true when a session should be refreshed based on [updateAge].
+bool shouldRefreshAuthSession(
+  DateTime issuedAt,
+  Duration updateAge, {
+  DateTime? now,
+}) {
+  final current = (now ?? DateTime.now()).toUtc();
+  return current.difference(issuedAt.toUtc()) >= updateAge;
+}
+
+/// Resolves auth session expiry from explicit or runtime max-age settings.
+DateTime? resolveAuthSessionExpiry({
+  Duration? sessionMaxAge,
+  int? sessionOptionsMaxAgeSeconds,
+  DateTime? now,
+}) {
+  final current = now ?? DateTime.now();
+  if (sessionMaxAge != null) {
+    return current.add(sessionMaxAge);
+  }
+  final maxAge = sessionOptionsMaxAgeSeconds;
+  if (maxAge == null || maxAge <= 0) {
+    return null;
+  }
+  return current.add(Duration(seconds: maxAge));
+}
+
 /// Persistence contract for long-lived "remember me" tokens.
 abstract class RememberTokenStore {
   FutureOr<void> save(
