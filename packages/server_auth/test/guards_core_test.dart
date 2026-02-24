@@ -87,4 +87,93 @@ void main() {
     final denied = await service.firstDenied(['auth'], 'ctx');
     expect(denied, isNull);
   });
+
+  test(
+    'requireAuthenticatedGuard allows with principal and denies otherwise',
+    () async {
+      final guard = requireAuthenticatedGuard<String, String>(
+        principalResolver: (ctx) =>
+            ctx == 'ok' ? AuthPrincipal(id: 'u1') : null,
+        onDenied: (_) => 'auth required',
+      );
+
+      final denied = await guard('nope');
+      final allowed = await guard('ok');
+
+      expect(denied.allowed, isFalse);
+      expect(denied.response, equals('auth required'));
+      expect(allowed.allowed, isTrue);
+      expect(allowed.response, isNull);
+    },
+  );
+
+  test('requireRolesGuard validates roles with any/all semantics', () async {
+    final anyGuard = requireRolesGuard<_Ctx, String>(
+      ['admin', 'support'],
+      principalResolver: (ctx) => ctx.principal,
+      any: true,
+      onUnauthenticated: (_) => 'unauthorized',
+      onForbidden: (_) => 'forbidden',
+    );
+
+    final allGuard = requireRolesGuard<_Ctx, String>(
+      ['admin', 'support'],
+      principalResolver: (ctx) => ctx.principal,
+      any: false,
+      onUnauthenticated: (_) => 'unauthorized',
+      onForbidden: (_) => 'forbidden',
+    );
+
+    final unauthenticated = await anyGuard(const _Ctx());
+    final anyAllowed = await anyGuard(
+      _Ctx(
+        principal: AuthPrincipal(id: 'u1', roles: ['support']),
+      ),
+    );
+    final allDenied = await allGuard(
+      _Ctx(
+        principal: AuthPrincipal(id: 'u1', roles: ['support']),
+      ),
+    );
+    final allAllowed = await allGuard(
+      _Ctx(
+        principal: AuthPrincipal(id: 'u1', roles: ['support', 'admin']),
+      ),
+    );
+
+    expect(unauthenticated.allowed, isFalse);
+    expect(unauthenticated.response, equals('unauthorized'));
+    expect(anyAllowed.allowed, isTrue);
+    expect(allDenied.allowed, isFalse);
+    expect(allDenied.response, equals('forbidden'));
+    expect(allAllowed.allowed, isTrue);
+  });
+
+  test(
+    'requireRolesGuard allows authenticated principal when roles are empty',
+    () async {
+      final guard = requireRolesGuard<_Ctx, String>(
+        const <String>[],
+        principalResolver: (ctx) => ctx.principal,
+        onUnauthenticated: (_) => 'unauthorized',
+      );
+
+      final denied = await guard(const _Ctx());
+      final allowed = await guard(
+        _Ctx(
+          principal: AuthPrincipal(id: 'u1', roles: ['member']),
+        ),
+      );
+
+      expect(denied.allowed, isFalse);
+      expect(denied.response, equals('unauthorized'));
+      expect(allowed.allowed, isTrue);
+    },
+  );
+}
+
+class _Ctx {
+  const _Ctx({this.principal});
+
+  final AuthPrincipal? principal;
 }

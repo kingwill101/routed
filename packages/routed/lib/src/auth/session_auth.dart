@@ -9,7 +9,8 @@ import 'package:server_auth/server_auth.dart'
         AuthGuardRegistry,
         AuthGuardService,
         AuthPrincipal,
-        GuardResult,
+        requireAuthenticatedGuard,
+        requireRolesGuard,
         RememberTokenStore,
         InMemoryRememberTokenStore,
         authPrincipalAttribute;
@@ -353,16 +354,15 @@ AuthGuard<EngineContext, Response> requireAuthenticated({
   SessionAuthService? sessionAuth,
 }) {
   final auth = sessionAuth ?? SessionAuth.instance;
-  return (EngineContext ctx) {
-    final principal = auth.current(ctx);
-    if (principal != null) {
-      return const GuardResult<Response>.allow();
-    }
-    ctx.response.statusCode = HttpStatus.unauthorized;
-    ctx.response.headers.set('WWW-Authenticate', 'Bearer realm="$realm"');
-    ctx.response.write('Authentication required');
-    return GuardResult<Response>.deny(ctx.response);
-  };
+  return requireAuthenticatedGuard<EngineContext, Response>(
+    principalResolver: auth.current,
+    onDenied: (ctx) {
+      ctx.response.statusCode = HttpStatus.unauthorized;
+      ctx.response.headers.set('WWW-Authenticate', 'Bearer realm="$realm"');
+      ctx.response.write('Authentication required');
+      return ctx.response;
+    },
+  );
 }
 
 AuthGuard<EngineContext, Response> requireRoles(
@@ -377,25 +377,16 @@ AuthGuard<EngineContext, Response> requireRoles(
 
   final auth = sessionAuth ?? SessionAuth.instance;
 
-  return (EngineContext ctx) {
-    final principal = auth.current(ctx);
-    if (principal == null) {
+  return requireRolesGuard<EngineContext, Response>(
+    expected,
+    principalResolver: auth.current,
+    any: any,
+    onUnauthenticated: (ctx) {
       ctx.response.statusCode = HttpStatus.unauthorized;
       ctx.response.write('Authentication required');
-      return GuardResult<Response>.deny(ctx.response);
-    }
-
-    if (expected.isEmpty) {
-      return const GuardResult<Response>.allow();
-    }
-
-    final matches = any
-        ? expected.any(principal.hasRole)
-        : expected.every(principal.hasRole);
-    return matches
-        ? const GuardResult<Response>.allow()
-        : const GuardResult<Response>.deny();
-  };
+      return ctx.response;
+    },
+  );
 }
 
 String _generateToken() {
