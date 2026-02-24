@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:io';
 
 import 'models.dart';
+import 'tokens.dart' show secureRandomToken;
 
 /// Attribute key used to store the authenticated principal in request context.
 const String authPrincipalAttribute = 'auth.principal';
@@ -177,4 +178,206 @@ class _RememberRecord {
 
   final AuthPrincipal principal;
   final DateTime expiresAt;
+}
+
+/// Adapter used by [RememberSessionAuthRuntime] to read/write framework state.
+abstract class AuthSessionRuntimeAdapter<TContext> {
+  AuthPrincipal? readPrincipalAttribute(TContext context, String attributeKey);
+
+  void writePrincipalAttribute(
+    TContext context,
+    String attributeKey,
+    AuthPrincipal? principal,
+  );
+
+  Map<String, dynamic>? readSessionPrincipal(
+    TContext context,
+    String sessionKey,
+  );
+
+  void writeSessionPrincipal(
+    TContext context,
+    String sessionKey,
+    Map<String, dynamic>? principalJson,
+  );
+
+  Iterable<Cookie> requestCookies(TContext context);
+
+  void setResponseCookie(TContext context, Cookie cookie);
+
+  Cookie buildRememberCookie(
+    TContext context,
+    String cookieName,
+    String token,
+    DateTime expiresAt,
+  );
+
+  Cookie buildExpiredRememberCookie(TContext context, String cookieName);
+}
+
+/// Framework-agnostic remember-me + session principal runtime.
+///
+/// Framework adapters are responsible for providing a concrete
+/// [AuthSessionRuntimeAdapter] that maps framework request/session/cookie
+/// semantics to this runtime.
+class RememberSessionAuthRuntime<TContext> {
+  RememberSessionAuthRuntime({
+    required this.adapter,
+    RememberTokenStore? rememberStore,
+    this.rememberCookieName = 'remember_token',
+    this.defaultRememberDuration = const Duration(days: 30),
+    this.sessionPrincipalKey = '__auth.principal',
+    this.principalAttributeKey = authPrincipalAttribute,
+    this.tokenGenerator = secureRandomToken,
+    DateTime Function()? clock,
+  }) : rememberStore = rememberStore ?? InMemoryRememberTokenStore(),
+       _clock = clock ?? DateTime.now;
+
+  final AuthSessionRuntimeAdapter<TContext> adapter;
+  final RememberTokenStore rememberStore;
+  final String rememberCookieName;
+  final Duration defaultRememberDuration;
+  final String sessionPrincipalKey;
+  final String principalAttributeKey;
+  final String Function() tokenGenerator;
+  final DateTime Function() _clock;
+
+  Future<void> login(
+    TContext context,
+    AuthPrincipal principal, {
+    bool rememberMe = false,
+    Duration? rememberDuration,
+  }) async {
+    adapter.writeSessionPrincipal(
+      context,
+      sessionPrincipalKey,
+      principal.toJson(),
+    );
+    adapter.writePrincipalAttribute(context, principalAttributeKey, principal);
+
+    if (!rememberMe) {
+      return;
+    }
+
+    final existing = _findRequestCookie(context);
+    if (existing != null && existing.value.isNotEmpty) {
+      await Future.sync(() => rememberStore.remove(existing.value));
+    }
+
+    final token = tokenGenerator();
+    final expiresAt = _clock().add(rememberDuration ?? defaultRememberDuration);
+    await Future.sync(() => rememberStore.save(token, principal, expiresAt));
+    adapter.setResponseCookie(
+      context,
+      adapter.buildRememberCookie(
+        context,
+        rememberCookieName,
+        token,
+        expiresAt,
+      ),
+    );
+  }
+
+  Future<void> logout(TContext context) async {
+    adapter.writeSessionPrincipal(context, sessionPrincipalKey, null);
+    adapter.writePrincipalAttribute(context, principalAttributeKey, null);
+
+    final cookie = _findRequestCookie(context);
+    if (cookie != null && cookie.value.isNotEmpty) {
+      await Future.sync(() => rememberStore.remove(cookie.value));
+    }
+    adapter.setResponseCookie(
+      context,
+      adapter.buildExpiredRememberCookie(context, rememberCookieName),
+    );
+  }
+
+  AuthPrincipal? current(TContext context) {
+    final cached = adapter.readPrincipalAttribute(
+      context,
+      principalAttributeKey,
+    );
+    if (cached != null) {
+      return cached;
+    }
+
+    final stored = adapter.readSessionPrincipal(context, sessionPrincipalKey);
+    if (stored == null) {
+      return null;
+    }
+
+    final principal = AuthPrincipal.fromJson(stored);
+    adapter.writePrincipalAttribute(context, principalAttributeKey, principal);
+    return principal;
+  }
+
+  /// Hydrates auth principal from session or remember-token cookie.
+  ///
+  /// - If session principal exists, request attribute is refreshed.
+  /// - If remember-token cookie is valid, session principal is restored and the
+  ///   remember token is rotated.
+  /// - If remember-token cookie is invalid/expired, it is revoked.
+  Future<void> hydrate(TContext context) async {
+    final sessionData = adapter.readSessionPrincipal(
+      context,
+      sessionPrincipalKey,
+    );
+    if (sessionData != null) {
+      adapter.writePrincipalAttribute(
+        context,
+        principalAttributeKey,
+        AuthPrincipal.fromJson(sessionData),
+      );
+      return;
+    }
+
+    final rememberCookie = _findRequestCookie(context);
+    if (rememberCookie == null || rememberCookie.value.isEmpty) {
+      return;
+    }
+
+    final principal = await Future.sync(
+      () => rememberStore.read(rememberCookie.value),
+    );
+    if (principal == null) {
+      await Future.sync(() => rememberStore.remove(rememberCookie.value));
+      adapter.setResponseCookie(
+        context,
+        adapter.buildExpiredRememberCookie(context, rememberCookieName),
+      );
+      return;
+    }
+
+    adapter.writeSessionPrincipal(
+      context,
+      sessionPrincipalKey,
+      principal.toJson(),
+    );
+    adapter.writePrincipalAttribute(context, principalAttributeKey, principal);
+
+    final rotatedToken = tokenGenerator();
+    final newExpiry = _clock().add(defaultRememberDuration);
+    await Future.sync(
+      () => rememberStore.save(rotatedToken, principal, newExpiry),
+    );
+    await Future.sync(() => rememberStore.remove(rememberCookie.value));
+    adapter.setResponseCookie(
+      context,
+      adapter.buildRememberCookie(
+        context,
+        rememberCookieName,
+        rotatedToken,
+        newExpiry,
+      ),
+    );
+  }
+
+  Cookie? _findRequestCookie(TContext context) {
+    for (final cookie in adapter.requestCookies(context)) {
+      if (cookie.name == rememberCookieName) {
+        return cookie;
+      }
+    }
+    return null;
+  }
 }

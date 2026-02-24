@@ -163,4 +163,173 @@ void main() {
 
     expect(restored, isNull);
   });
+
+  test('RememberSessionAuthRuntime login/current/logout flow', () async {
+    final context = _FakeSessionContext();
+    final store = InMemoryRememberTokenStore();
+    final runtime = RememberSessionAuthRuntime<_FakeSessionContext>(
+      adapter: const _FakeSessionAdapter(),
+      rememberStore: store,
+      tokenGenerator: () => 'token-1',
+      clock: () => DateTime.utc(2026, 2, 24, 12),
+      sessionPrincipalKey: 'session.principal',
+    );
+
+    final principal = AuthPrincipal(id: 'user-1', roles: const ['admin']);
+
+    await runtime.login(context, principal, rememberMe: true);
+    expect(context.session['session.principal'], isA<Map<String, dynamic>>());
+    expect((runtime.current(context))?.id, equals('user-1'));
+    expect(context.responseCookies.last.value, equals('token-1'));
+    expect((await store.read('token-1'))?.id, equals('user-1'));
+
+    context.requestCookies
+      ..clear()
+      ..add(Cookie('remember_token', 'token-1'));
+    await runtime.logout(context);
+    expect(context.session.containsKey('session.principal'), isFalse);
+    expect(context.attributes[authPrincipalAttribute], isNull);
+    expect(await store.read('token-1'), isNull);
+    expect(context.responseCookies.last.maxAge, equals(0));
+  });
+
+  test(
+    'RememberSessionAuthRuntime hydrate restores and rotates remember token',
+    () async {
+      final context = _FakeSessionContext();
+      final store = InMemoryRememberTokenStore();
+      await store.save(
+        'token-old',
+        AuthPrincipal(id: 'user-2', roles: const <String>['user']),
+        DateTime.now().add(const Duration(hours: 1)),
+      );
+      context.requestCookies.add(Cookie('remember_token', 'token-old'));
+
+      final runtime = RememberSessionAuthRuntime<_FakeSessionContext>(
+        adapter: const _FakeSessionAdapter(),
+        rememberStore: store,
+        tokenGenerator: () => 'token-new',
+        clock: () => DateTime.utc(2026, 2, 24, 12),
+        sessionPrincipalKey: 'session.principal',
+      );
+
+      await runtime.hydrate(context);
+      expect((runtime.current(context))?.id, equals('user-2'));
+      expect(await store.read('token-old'), isNull);
+      expect((await store.read('token-new'))?.id, equals('user-2'));
+      expect(context.responseCookies.last.value, equals('token-new'));
+    },
+  );
+
+  test(
+    'RememberSessionAuthRuntime hydrate expires invalid remember token',
+    () async {
+      final context = _FakeSessionContext();
+      context.requestCookies.add(Cookie('remember_token', 'missing-token'));
+      final runtime = RememberSessionAuthRuntime<_FakeSessionContext>(
+        adapter: const _FakeSessionAdapter(),
+        rememberStore: InMemoryRememberTokenStore(),
+        sessionPrincipalKey: 'session.principal',
+      );
+
+      await runtime.hydrate(context);
+      expect(context.session, isEmpty);
+      expect(context.responseCookies.last.maxAge, equals(0));
+    },
+  );
+}
+
+class _FakeSessionContext {
+  final Map<String, Object?> attributes = <String, Object?>{};
+  final Map<String, dynamic> session = <String, dynamic>{};
+  final List<Cookie> requestCookies = <Cookie>[];
+  final List<Cookie> responseCookies = <Cookie>[];
+}
+
+class _FakeSessionAdapter
+    implements AuthSessionRuntimeAdapter<_FakeSessionContext> {
+  const _FakeSessionAdapter();
+
+  @override
+  Cookie buildExpiredRememberCookie(
+    _FakeSessionContext context,
+    String cookieName,
+  ) {
+    return buildExpiredRememberTokenCookie(cookieName, path: '/');
+  }
+
+  @override
+  Cookie buildRememberCookie(
+    _FakeSessionContext context,
+    String cookieName,
+    String token,
+    DateTime expiresAt,
+  ) {
+    return buildRememberTokenCookie(
+      cookieName,
+      token,
+      expiresAt: expiresAt,
+      path: '/',
+    );
+  }
+
+  @override
+  AuthPrincipal? readPrincipalAttribute(
+    _FakeSessionContext context,
+    String attributeKey,
+  ) {
+    final value = context.attributes[attributeKey];
+    if (value is AuthPrincipal) {
+      return value;
+    }
+    return null;
+  }
+
+  @override
+  Map<String, dynamic>? readSessionPrincipal(
+    _FakeSessionContext context,
+    String sessionKey,
+  ) {
+    final value = context.session[sessionKey];
+    if (value is Map<String, dynamic>) {
+      return value;
+    }
+    return null;
+  }
+
+  @override
+  Iterable<Cookie> requestCookies(_FakeSessionContext context) {
+    return context.requestCookies;
+  }
+
+  @override
+  void setResponseCookie(_FakeSessionContext context, Cookie cookie) {
+    context.responseCookies.add(cookie);
+  }
+
+  @override
+  void writePrincipalAttribute(
+    _FakeSessionContext context,
+    String attributeKey,
+    AuthPrincipal? principal,
+  ) {
+    if (principal == null) {
+      context.attributes.remove(attributeKey);
+      return;
+    }
+    context.attributes[attributeKey] = principal;
+  }
+
+  @override
+  void writeSessionPrincipal(
+    _FakeSessionContext context,
+    String sessionKey,
+    Map<String, dynamic>? principalJson,
+  ) {
+    if (principalJson == null) {
+      context.session.remove(sessionKey);
+      return;
+    }
+    context.session[sessionKey] = principalJson;
+  }
 }

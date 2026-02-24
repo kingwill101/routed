@@ -3,23 +3,22 @@ import 'dart:io';
 
 import 'package:server_auth/server_auth.dart'
     show
+        AuthSessionRuntimeAdapter,
         AuthGuard,
         AuthGuardRegistry,
         AuthGuardService,
         AuthPrincipal,
+        RememberSessionAuthRuntime,
         buildExpiredRememberTokenCookie,
         buildRememberTokenCookie,
         buildBearerAuthenticateHeader,
         requireAuthenticatedGuard,
         requireRolesGuard,
         RememberTokenStore,
-        InMemoryRememberTokenStore,
-        secureRandomToken,
-        authPrincipalAttribute;
+        InMemoryRememberTokenStore;
 import 'package:routed/src/context/context.dart';
 import 'package:routed/src/response.dart';
 import 'package:routed/src/router/types.dart';
-import 'package:server_data/sessions.dart';
 
 /// Key for storing the authenticated principal in the session.
 const String _sessionPrincipalKey = '__routed.auth.principal';
@@ -32,19 +31,21 @@ class SessionAuthService {
     RememberTokenStore? rememberStore,
     String rememberCookieName = _defaultRememberCookieName,
     Duration defaultRememberDuration = const Duration(days: 30),
-  }) : _rememberStore = rememberStore ?? InMemoryRememberTokenStore(),
-       _rememberCookieName = rememberCookieName,
-       _defaultRememberDuration = defaultRememberDuration;
+  }) : _runtime = RememberSessionAuthRuntime<EngineContext>(
+         adapter: const _RoutedAuthSessionRuntimeAdapter(),
+         rememberStore: rememberStore ?? InMemoryRememberTokenStore(),
+         rememberCookieName: rememberCookieName,
+         defaultRememberDuration: defaultRememberDuration,
+         sessionPrincipalKey: _sessionPrincipalKey,
+       );
 
-  final RememberTokenStore _rememberStore;
-  final String _rememberCookieName;
-  final Duration _defaultRememberDuration;
+  final RememberSessionAuthRuntime<EngineContext> _runtime;
 
-  RememberTokenStore get rememberStore => _rememberStore;
+  RememberTokenStore get rememberStore => _runtime.rememberStore;
 
-  String get rememberCookieName => _rememberCookieName;
+  String get rememberCookieName => _runtime.rememberCookieName;
 
-  Duration get defaultRememberDuration => _defaultRememberDuration;
+  Duration get defaultRememberDuration => _runtime.defaultRememberDuration;
 
   /// Logs in the user by storing their [AuthPrincipal] in the session.
   ///
@@ -64,115 +65,57 @@ class SessionAuthService {
     bool rememberMe = false,
     Duration? rememberDuration,
   }) async {
-    ctx.session.setValue(_sessionPrincipalKey, principal.toJson());
-    ctx.request.setAttribute(authPrincipalAttribute, principal);
-
-    if (!rememberMe) {
-      return;
-    }
-
-    final existing = _findRequestCookie(ctx);
-    if (existing != null && existing.value.isNotEmpty) {
-      await Future.sync(() => _rememberStore.remove(existing.value));
-    }
-
-    final token = secureRandomToken();
-    final expiresAt = DateTime.now().add(
-      rememberDuration ?? _defaultRememberDuration,
+    await _runtime.login(
+      ctx,
+      principal,
+      rememberMe: rememberMe,
+      rememberDuration: rememberDuration,
     );
-    await Future.sync(() => _rememberStore.save(token, principal, expiresAt));
-    ctx.response.cookies.add(_buildCookie(ctx.session, token, expiresAt));
   }
 
   Future<void> logout(EngineContext ctx) async {
-    ctx.session.values.remove(_sessionPrincipalKey);
-    ctx.request.setAttribute(authPrincipalAttribute, null);
-
-    final cookie = _findRequestCookie(ctx);
-    if (cookie != null && cookie.value.isNotEmpty) {
-      await Future.sync(() => _rememberStore.remove(cookie.value));
-    }
-    ctx.response.cookies.add(_expiredCookie(ctx.session));
+    await _runtime.logout(ctx);
   }
 
   AuthPrincipal? current(EngineContext ctx) {
-    final cached = ctx.request.getAttribute<AuthPrincipal?>(
-      authPrincipalAttribute,
-    );
-    if (cached != null) {
-      return cached;
-    }
-
-    final stored = ctx.session.getValue<Map<String, dynamic>>(
-      _sessionPrincipalKey,
-    );
-    if (stored == null) {
-      return null;
-    }
-
-    final principal = AuthPrincipal.fromJson(stored);
-    ctx.request.setAttribute(authPrincipalAttribute, principal);
-    return principal;
+    return _runtime.current(ctx);
   }
 
   Middleware middleware() {
     return (EngineContext ctx, Next next) async {
-      final sessionData = ctx.session.getValue<Map<String, dynamic>>(
-        _sessionPrincipalKey,
-      );
-      if (sessionData != null) {
-        ctx.request.setAttribute(
-          authPrincipalAttribute,
-          AuthPrincipal.fromJson(sessionData),
-        );
-        return await next();
-      }
-
-      final rememberCookie = _findRequestCookie(ctx);
-      if (rememberCookie == null || rememberCookie.value.isEmpty) {
-        return await next();
-      }
-
-      final principal = await Future.sync(
-        () => _rememberStore.read(rememberCookie.value),
-      );
-      if (principal == null) {
-        await Future.sync(() => _rememberStore.remove(rememberCookie.value));
-        ctx.response.cookies.add(_expiredCookie(ctx.session));
-        return await next();
-      }
-
-      ctx.session.setValue(_sessionPrincipalKey, principal.toJson());
-      ctx.request.setAttribute(authPrincipalAttribute, principal);
-
-      final rotatedToken = secureRandomToken();
-      final newExpiry = DateTime.now().add(_defaultRememberDuration);
-      await Future.sync(
-        () => _rememberStore.save(rotatedToken, principal, newExpiry),
-      );
-      await Future.sync(() => _rememberStore.remove(rememberCookie.value));
-      ctx.response.cookies.add(
-        _buildCookie(ctx.session, rotatedToken, newExpiry),
-      );
-
+      await _runtime.hydrate(ctx);
       return await next();
     };
   }
+}
 
-  Cookie? _findRequestCookie(EngineContext ctx) {
-    for (final cookie in ctx.request.cookies) {
-      if (cookie.name == _rememberCookieName) {
-        return cookie;
-      }
-    }
-    return null;
+class _RoutedAuthSessionRuntimeAdapter
+    implements AuthSessionRuntimeAdapter<EngineContext> {
+  const _RoutedAuthSessionRuntimeAdapter();
+
+  @override
+  Cookie buildExpiredRememberCookie(EngineContext context, String cookieName) {
+    final options = context.session.options;
+    return buildExpiredRememberTokenCookie(
+      cookieName,
+      path: options.path ?? '/',
+      domain: options.domain,
+      secure: options.secure == true,
+      sameSite: options.sameSite,
+    );
   }
 
-  Cookie _buildCookie(Session session, String value, DateTime expiresAt) {
-    final options = session.options;
+  @override
+  Cookie buildRememberCookie(
+    EngineContext context,
+    String cookieName,
+    String token,
+    DateTime expiresAt,
+  ) {
+    final options = context.session.options;
     return buildRememberTokenCookie(
-      _rememberCookieName,
-      value,
+      cookieName,
+      token,
       expiresAt: expiresAt,
       path: options.path ?? '/',
       domain: options.domain,
@@ -181,15 +124,52 @@ class SessionAuthService {
     );
   }
 
-  Cookie _expiredCookie(Session session) {
-    final options = session.options;
-    return buildExpiredRememberTokenCookie(
-      _rememberCookieName,
-      path: options.path ?? '/',
-      domain: options.domain,
-      secure: options.secure == true,
-      sameSite: options.sameSite,
-    );
+  @override
+  AuthPrincipal? readPrincipalAttribute(
+    EngineContext context,
+    String attributeKey,
+  ) {
+    return context.request.getAttribute<AuthPrincipal?>(attributeKey);
+  }
+
+  @override
+  Map<String, dynamic>? readSessionPrincipal(
+    EngineContext context,
+    String sessionKey,
+  ) {
+    return context.session.getValue<Map<String, dynamic>>(sessionKey);
+  }
+
+  @override
+  Iterable<Cookie> requestCookies(EngineContext context) {
+    return context.request.cookies;
+  }
+
+  @override
+  void setResponseCookie(EngineContext context, Cookie cookie) {
+    context.response.cookies.add(cookie);
+  }
+
+  @override
+  void writePrincipalAttribute(
+    EngineContext context,
+    String attributeKey,
+    AuthPrincipal? principal,
+  ) {
+    context.request.setAttribute(attributeKey, principal);
+  }
+
+  @override
+  void writeSessionPrincipal(
+    EngineContext context,
+    String sessionKey,
+    Map<String, dynamic>? principalJson,
+  ) {
+    if (principalJson == null) {
+      context.session.values.remove(sessionKey);
+      return;
+    }
+    context.session.setValue(sessionKey, principalJson);
   }
 }
 
