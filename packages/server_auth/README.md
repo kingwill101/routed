@@ -131,6 +131,48 @@ final resolvedSession = await resolveAuthJwtSessionWithRefresh(
 print(resolvedSession?.refreshCookie != null); // refreshed or not
 ```
 
+## Bearer validation helpers for adapters
+
+Use `verifyJwtBearerAuthorizationAndWriteAttributes` in framework middleware to
+share JWT bearer auth orchestration (token extraction, verification, request
+attribute writes, and optional callback):
+
+```dart
+final result = await verifyJwtBearerAuthorizationAndWriteAttributes<MyContext>(
+  authorizationHeader: request.header('authorization'),
+  verifier: jwtVerifier,
+  setAttribute: request.setAttribute,
+  context: context,
+  onVerified: (payload, ctx) async {
+    if (payload.claims['scope'] == null) {
+      throw JwtAuthException('missing_scope');
+    }
+  },
+);
+
+print(result.payload.subject);
+```
+
+For OAuth introspection middleware, use
+`validateOAuthBearerAuthorizationAndWriteAttributes`:
+
+```dart
+final validation =
+    await validateOAuthBearerAuthorizationAndWriteAttributes<MyContext>(
+      authorizationHeader: request.header('authorization'),
+      introspector: oauthIntrospector,
+      setAttribute: request.setAttribute,
+      context: context,
+      onValidated: (result, ctx) async {
+        if (result.scope?.contains('api:read') != true) {
+          throw OAuth2Exception('insufficient_scope');
+        }
+      },
+    );
+
+print(validation.result.raw);
+```
+
 ## Email verification orchestration helpers
 
 Use `startAuthEmailSignIn` to share the email verification start flow:
@@ -330,6 +372,15 @@ final signInRedirect = await resolveAuthSignInRedirectWithCallbacks<MyContext>(
 
 // Throws AuthFlowException('sign_in_blocked') if callbacks.signIn denies.
 
+final finalRedirect = await resolveAuthSignInRedirectTarget<MyContext>(
+  callbacks: callbacks,
+  context: context,
+  user: user,
+  strategy: AuthSessionStrategy.session,
+  callbackUrl: '/requested',
+  resolveRedirect: (candidate) => adapterResolveRedirect(candidate),
+);
+
 final claims = await resolveAuthJwtClaimsWithCallbacks<MyContext>(
   callbacks: callbacks,
   context: context,
@@ -351,6 +402,18 @@ final jwtIssue = await issueAuthJwtSessionWithCallbacks<MyContext>(
   user: user,
   strategy: AuthSessionStrategy.jwt,
 );
+
+final signInResult = await resolveAuthSignInResultForStrategyWithCallbacks<MyContext>(
+  callbacks: callbacks,
+  context: context,
+  strategy: AuthSessionStrategy.jwt,
+  user: user,
+  redirectUrl: finalRedirect,
+  jwtOptions: jwtOptions,
+);
+
+final authResult = signInResult.result;
+final issuedJwtCookie = signInResult.issuedJwt?.cookie;
 ```
 
 ## Authorization and gates example
