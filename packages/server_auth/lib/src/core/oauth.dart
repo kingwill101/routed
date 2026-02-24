@@ -4,6 +4,8 @@ import 'dart:io';
 
 import 'package:http/http.dart' as http;
 
+import 'bearer.dart' show extractBearerToken;
+
 /// Attribute key used to store the OAuth2 access token.
 const String oauthTokenAttribute = 'auth.oauth.access_token';
 
@@ -26,6 +28,14 @@ class OAuth2Exception implements Exception {
 
   @override
   String toString() => 'OAuth2Exception($statusCode): $message';
+}
+
+/// Result of validating a bearer authorization header via introspection.
+class OAuthBearerValidationResult {
+  OAuthBearerValidationResult({required this.token, required this.result});
+
+  final String token;
+  final OAuthIntrospectionResult result;
 }
 
 /// Represents the response from an OAuth2 token endpoint.
@@ -66,6 +76,21 @@ DateTime? oauthTokenExpiryFromSeconds(int? expiresIn, {DateTime? now}) {
     return null;
   }
   return (now ?? DateTime.now()).add(Duration(seconds: expiresIn));
+}
+
+/// Validates a bearer authorization header using [OAuth2TokenIntrospector].
+Future<OAuthBearerValidationResult> validateOAuthBearerAuthorization({
+  required String? authorizationHeader,
+  required OAuth2TokenIntrospector introspector,
+  String bearerPrefix = 'Bearer ',
+}) async {
+  final token = extractBearerToken(authorizationHeader, prefix: bearerPrefix);
+  if (token == null) {
+    throw OAuth2Exception('missing token');
+  }
+
+  final result = await introspector.validate(token);
+  return OAuthBearerValidationResult(token: token, result: result);
 }
 
 /// Parsed response from an RFC 7662 token introspection endpoint.

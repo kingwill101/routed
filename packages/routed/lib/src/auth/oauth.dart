@@ -4,11 +4,11 @@ import 'package:http/http.dart' as http;
 import 'package:server_auth/server_auth.dart'
     show
         AuthOAuthValidatedCallback,
+        OAuthBearerValidationResult,
         OAuth2Exception,
         OAuth2TokenIntrospector,
         OAuthIntrospectionOptions,
-        OAuthIntrospectionResult,
-        extractBearerToken,
+        validateOAuthBearerAuthorization,
         oauthClaimsAttribute,
         oauthScopeAttribute,
         oauthTokenAttribute;
@@ -45,23 +45,22 @@ Middleware oauth2Introspection(
   final introspector = OAuth2TokenIntrospector(options, httpClient: httpClient);
 
   return (EngineContext ctx, Next next) async {
-    final token = extractBearerToken(ctx.request.header('Authorization'));
-    if (token == null) {
-      ctx.response
-        ..statusCode = HttpStatus.unauthorized
-        ..write('missing token');
-      return ctx.response;
-    }
-
-    OAuthIntrospectionResult result;
+    OAuthBearerValidationResult validation;
     try {
-      result = await introspector.validate(token);
+      validation = await validateOAuthBearerAuthorization(
+        authorizationHeader: ctx.request.header(
+          HttpHeaders.authorizationHeader,
+        ),
+        introspector: introspector,
+      );
     } on OAuth2Exception catch (error) {
       ctx.response
         ..statusCode = HttpStatus.unauthorized
         ..write(error.message);
       return ctx.response;
     }
+    final token = validation.token;
+    final result = validation.result;
 
     ctx.request
       ..setAttribute(oauthTokenAttribute, token)

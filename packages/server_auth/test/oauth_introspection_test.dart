@@ -46,6 +46,59 @@ void main() {
     );
   });
 
+  test(
+    'validateOAuthBearerAuthorization rejects missing bearer token',
+    () async {
+      final introspector = OAuth2TokenIntrospector(
+        OAuthIntrospectionOptions(
+          endpoint: Uri.parse('https://auth.test/introspect'),
+        ),
+        httpClient: MockClient((request) async {
+          fail('introspection should not run when token is missing');
+        }),
+      );
+
+      await expectLater(
+        validateOAuthBearerAuthorization(
+          authorizationHeader: null,
+          introspector: introspector,
+        ),
+        throwsA(
+          isA<OAuth2Exception>().having(
+            (error) => error.message,
+            'message',
+            'missing token',
+          ),
+        ),
+      );
+    },
+  );
+
+  test(
+    'validateOAuthBearerAuthorization validates token and returns result',
+    () async {
+      final introspector = OAuth2TokenIntrospector(
+        OAuthIntrospectionOptions(
+          endpoint: Uri.parse('https://auth.test/introspect'),
+        ),
+        httpClient: MockClient((request) async {
+          expect(request.bodyFields['token'], equals('valid-token'));
+          return http.Response(
+            jsonEncode({'active': true, 'sub': 'user-1'}),
+            200,
+          );
+        }),
+      );
+
+      final validation = await validateOAuthBearerAuthorization(
+        authorizationHeader: 'Bearer valid-token',
+        introspector: introspector,
+      );
+      expect(validation.token, equals('valid-token'));
+      expect(validation.result.subject, equals('user-1'));
+    },
+  );
+
   test('OAuth2TokenIntrospector caches introspection responses', () async {
     var requestCount = 0;
     final introspector = OAuth2TokenIntrospector(
