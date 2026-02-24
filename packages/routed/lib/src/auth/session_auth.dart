@@ -7,6 +7,8 @@ import 'package:server_auth/server_auth.dart'
         AuthGuardRegistry,
         AuthGuardService,
         AuthPrincipal,
+        buildExpiredRememberTokenCookie,
+        buildRememberTokenCookie,
         buildBearerAuthenticateHeader,
         requireAuthenticatedGuard,
         requireRolesGuard,
@@ -167,33 +169,27 @@ class SessionAuthService {
   }
 
   Cookie _buildCookie(Session session, String value, DateTime expiresAt) {
-    final cookie = Cookie(_rememberCookieName, value)
-      ..httpOnly = true
-      ..expires = expiresAt;
-
     final options = session.options;
-    cookie.path = options.path ?? '/';
-    if (options.domain != null && options.domain!.isNotEmpty) {
-      cookie.domain = options.domain!;
-    }
-    if (options.secure == true) {
-      cookie.secure = true;
-    }
-    if (options.sameSite != null) {
-      cookie.sameSite = options.sameSite!;
-    }
-
-    return cookie;
+    return buildRememberTokenCookie(
+      _rememberCookieName,
+      value,
+      expiresAt: expiresAt,
+      path: options.path ?? '/',
+      domain: options.domain,
+      secure: options.secure == true,
+      sameSite: options.sameSite,
+    );
   }
 
   Cookie _expiredCookie(Session session) {
-    final cookie = _buildCookie(
-      session,
-      '',
-      DateTime.fromMillisecondsSinceEpoch(0),
+    final options = session.options;
+    return buildExpiredRememberTokenCookie(
+      _rememberCookieName,
+      path: options.path ?? '/',
+      domain: options.domain,
+      secure: options.secure == true,
+      sameSite: options.sameSite,
     );
-    cookie.maxAge = 0;
-    return cookie;
   }
 }
 

@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:io';
 
 import 'models.dart';
 
@@ -62,6 +63,56 @@ DateTime? resolveAuthSessionExpiry({
     return null;
   }
   return current.add(Duration(seconds: maxAge));
+}
+
+/// Builds an HTTP-only remember-token cookie.
+Cookie buildRememberTokenCookie(
+  String cookieName,
+  String token, {
+  required DateTime expiresAt,
+  String path = '/',
+  String? domain,
+  bool secure = false,
+  SameSite? sameSite,
+  bool httpOnly = true,
+}) {
+  final cookie = Cookie(cookieName, token)
+    ..httpOnly = httpOnly
+    ..expires = expiresAt
+    ..path = path;
+  if (domain != null && domain.isNotEmpty) {
+    cookie.domain = domain;
+  }
+  if (secure) {
+    cookie.secure = true;
+  }
+  if (sameSite != null) {
+    cookie.sameSite = sameSite;
+  }
+  return cookie;
+}
+
+/// Builds an expired remember-token cookie for logout/invalidations.
+Cookie buildExpiredRememberTokenCookie(
+  String cookieName, {
+  String path = '/',
+  String? domain,
+  bool secure = false,
+  SameSite? sameSite,
+  bool httpOnly = true,
+}) {
+  final cookie = buildRememberTokenCookie(
+    cookieName,
+    '',
+    expiresAt: DateTime.fromMillisecondsSinceEpoch(0),
+    path: path,
+    domain: domain,
+    secure: secure,
+    sameSite: sameSite,
+    httpOnly: httpOnly,
+  );
+  cookie.maxAge = 0;
+  return cookie;
 }
 
 /// Persistence contract for long-lived "remember me" tokens.

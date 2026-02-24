@@ -1,3 +1,5 @@
+import 'dart:io';
+
 import 'package:server_auth/server_auth.dart';
 import 'package:test/test.dart';
 
@@ -87,6 +89,42 @@ void main() {
     expect(explicit, equals(now.add(const Duration(hours: 2))));
     expect(runtime, equals(now.add(const Duration(seconds: 120))));
     expect(none, isNull);
+  });
+
+  test('remember-token cookie builders apply options and expiration', () {
+    final expiresAt = DateTime.now().add(const Duration(minutes: 10));
+    final cookie = buildRememberTokenCookie(
+      'remember_token',
+      'token-1',
+      expiresAt: expiresAt,
+      path: '/auth',
+      domain: 'example.test',
+      secure: true,
+      sameSite: SameSite.lax,
+    );
+    final expired = buildExpiredRememberTokenCookie(
+      'remember_token',
+      path: '/auth',
+      domain: 'example.test',
+      secure: true,
+      sameSite: SameSite.lax,
+    );
+
+    expect(cookie.name, equals('remember_token'));
+    expect(cookie.value, equals('token-1'));
+    expect(cookie.httpOnly, isTrue);
+    expect(cookie.path, equals('/auth'));
+    expect(cookie.domain, equals('example.test'));
+    expect(cookie.secure, isTrue);
+    expect(cookie.sameSite, equals(SameSite.lax));
+    expect(cookie.expires, equals(expiresAt));
+
+    expect(expired.value, equals(''));
+    expect(expired.maxAge, equals(0));
+    expect(expired.path, equals('/auth'));
+    expect(expired.domain, equals('example.test'));
+    expect(expired.secure, isTrue);
+    expect(expired.sameSite, equals(SameSite.lax));
   });
 
   test('InMemoryRememberTokenStore saves and reads principals', () async {
