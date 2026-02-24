@@ -2,9 +2,25 @@ import 'dart:io';
 
 import 'package:test/test.dart';
 
+Directory _resolveLibDir() {
+  const candidates = <String>[
+    'lib',
+    'packages/server_data/lib',
+  ];
+  for (final path in candidates) {
+    final directory = Directory(path);
+    if (directory.existsSync()) {
+      return directory;
+    }
+  }
+  throw StateError(
+    'Unable to locate server_data lib directory from ${Directory.current.path}',
+  );
+}
+
 void main() {
   test('server_data does not import routed packages', () async {
-    final libDir = Directory('lib');
+    final libDir = _resolveLibDir();
     final dartFiles = libDir
         .listSync(recursive: true)
         .whereType<File>()
