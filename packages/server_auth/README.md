@@ -19,7 +19,9 @@ dependencies:
 ## Entry points
 
 - `package:server_auth/server_auth.dart` (umbrella export)
-- `package:server_auth/src/core/*` (advanced, package-internal structure)
+
+Avoid `package:server_auth/src/*` imports from outside this package. The
+public API is exposed through `server_auth.dart`.
 
 ## Package Selection
 
@@ -193,6 +195,37 @@ await runtime.hydrate(context); // restore/rotate remember token when needed
 await runtime.logout(context);
 ```
 
+## Minimal adapter skeleton
+
+Use a small framework-specific adapter that maps your persistence layer into
+`server_auth` contracts:
+
+```dart
+class MyAuthAdapter extends AuthAdapter {
+  final Map<String, AuthUser> usersById = <String, AuthUser>{};
+
+  @override
+  FutureOr<AuthUser?> getUserById(String id) {
+    return usersById[id];
+  }
+
+  @override
+  FutureOr<AuthUser> createUser(AuthUser user) {
+    usersById[user.id] = user;
+    return user;
+  }
+
+  @override
+  FutureOr<AuthSession?> getSession(String sessionToken) {
+    // Query your DB or cache here.
+    return null;
+  }
+}
+```
+
+Keep adapters focused on boundary mapping and keep provider/JWT/gate logic in
+`server_auth`.
+
 ## Typed Profiles
 
 Every OAuth provider includes a typed profile model and serializer/parsers,
@@ -209,12 +242,21 @@ dart run example/main.dart
 ```
 
 See `example/main.dart` for provider registration, JWT flows, and gate checks.
+See `example/README.md` for run instructions and expected output.
 
 ## Migration Notes
 
 If older code imported provider factories or auth primitives from Routed
 entrypoints, switch to direct `server_auth` imports to keep auth logic reusable
 across frameworks.
+
+## Validation
+
+```bash
+dart analyze
+dart test
+dart run example/main.dart
+```
 
 ## License
 

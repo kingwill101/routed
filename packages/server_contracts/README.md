@@ -73,8 +73,31 @@ See `example/main.dart` for:
 - an in-memory `Store` and `Repository`
 - a lightweight `TranslatorContract` implementation
 
+See `example/README.md` for run instructions and expected output.
+
 ## Design rules
 
 - Keep contracts small and stable.
 - Do not import framework runtimes here.
 - Move concrete behavior to dedicated runtime packages.
+
+## Adapter checklist
+
+When creating a framework adapter package (for Routed, Shelf, Serinus, etc.):
+
+- Define framework-facing bridge types in the adapter package, not here.
+- Depend on `server_contracts` for interfaces and typed boundaries.
+- Keep framework runtime imports out of contract models and exceptions.
+- Place concrete runtime behavior in `server_data` or `server_auth`.
+
+## Validation
+
+```bash
+dart analyze
+dart test
+dart run example/main.dart
+```
+
+## License
+
+MIT

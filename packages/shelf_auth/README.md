@@ -132,6 +132,11 @@ final protected = const Pipeline()
     .addHandler((_) => Response.ok('ok'));
 ```
 
+This middleware stack returns:
+
+- `401` when no valid principal is attached.
+- `403` when principal exists but lacks the required role(s).
+
 ## Custom Providers Endpoint Path
 
 ```dart
@@ -147,8 +152,22 @@ final middleware = authProvidersEndpoint(
 dart run example/main.dart
 ```
 
+See `example/README.md` for request walkthrough and expected responses.
+
 ## Migration Notes
 
 If older code used Routed auth middleware only for bearer parsing or role
 guards, move those routes to `shelf_auth` middleware and keep provider/runtime
 logic in `server_auth`.
+
+## Validation
+
+```bash
+dart analyze
+dart test
+dart run example/main.dart
+```
+
+## License
+
+MIT

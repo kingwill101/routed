@@ -121,9 +121,59 @@ dart run example/main.dart
 ```
 
 See `example/main.dart` for combined cache, storage, session, and rate-limit usage.
+See `example/README.md` for run instructions and expected output.
 
 ## Migration Notes
 
 If older code imported cache/storage/session runtime types from
 `package:routed/routed.dart`, prefer importing directly from `server_data`
 entrypoints for framework-agnostic usage.
+
+## Framework integration pattern
+
+`server_data` stays framework-agnostic by taking small request/response
+contracts. Your adapter package should map framework objects into those
+contracts at the boundary.
+
+```dart
+class AdapterRateLimitRequest implements RateLimitRequest {
+  AdapterRateLimitRequest({
+    required this.method,
+    required this.path,
+    required this.clientIP,
+    required this.headers,
+  });
+
+  @override
+  final String method;
+
+  @override
+  final String path;
+
+  @override
+  final String clientIP;
+
+  final Map<String, String> headers;
+
+  @override
+  String get remoteAddr => clientIP;
+
+  @override
+  String header(String name) => headers[name.toLowerCase()] ?? '';
+}
+```
+
+Keep this mapping layer thin. Business/runtime behavior should remain inside
+`server_data` services and stores.
+
+## Validation
+
+```bash
+dart analyze
+dart test
+dart run example/main.dart
+```
+
+## License
+
+MIT
