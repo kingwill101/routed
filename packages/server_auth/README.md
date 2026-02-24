@@ -127,6 +127,14 @@ writeOAuthValidationAttributes(
   oauthValidation,
   setAttribute: (key, value) => attributes[key] = value,
 );
+
+final callbackUrl = resolveAndSanitizeRedirectCandidate(
+  payload,
+  queryParameters,
+  requestUri: requestUri,
+  fallbackHost: 'app.test',
+  fallbackScheme: 'https',
+);
 ```
 
 ## Authorization and gates example
