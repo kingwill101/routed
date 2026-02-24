@@ -6,6 +6,7 @@ import 'package:server_auth/server_auth.dart'
         AuthAdapter,
         AuthProvider,
         AuthProviderRegistry,
+        AuthVerificationTokenStore,
         registerGitHubAuthProvider;
 import 'package:routed/src/auth/manager.dart';
 import 'package:routed/src/auth/routes.dart';

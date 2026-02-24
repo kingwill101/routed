@@ -1,13 +1,15 @@
 import 'package:http/http.dart' as http;
 import 'package:server_auth/server_auth.dart'
-    show AuthAdapter, AuthProvider, AuthSessionStrategy;
+    show
+        AuthAdapter,
+        AuthProvider,
+        AuthSessionStrategy,
+        AuthVerificationTokenStore;
 import 'package:routed/src/auth/hooks.dart';
 import 'package:routed/src/auth/jwt.dart';
 import 'package:routed/src/auth/policies.dart';
 import 'package:routed/src/auth/rbac.dart';
 import 'package:routed/src/auth/session_auth.dart';
-
-import 'verification_token_store.dart';
 
 /// {@template routed_auth_manager}
 /// High-level auth coordinator for routed.

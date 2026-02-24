@@ -16,7 +16,9 @@ import 'package:server_auth/server_auth.dart'
         AuthSession,
         AuthSessionStrategy,
         AuthUser,
+        AuthVerificationTokenStore,
         AuthVerificationToken,
+        InMemoryAuthVerificationTokenStore,
         CallbackProvider,
         CredentialsProvider,
         EmailProvider,
@@ -32,7 +34,6 @@ import 'package:routed/src/events/event_manager.dart';
 import 'package:routed/src/crypto/crypto.dart';
 
 import 'auth_options.dart';
-import 'verification_token_store.dart';
 
 /// {@macro routed_auth_manager}
 class AuthManager {
