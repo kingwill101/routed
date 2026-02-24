@@ -29,16 +29,27 @@ dependencies:
 
 Then run `dart pub get`.
 
-## Package split imports
+## Package Split Imports
 
-Core reusable runtime modules are now published under `server_*` packages:
+Core reusable runtime modules are now published under `server_*` packages.
+Import those packages directly for framework-agnostic usage.
 
-- `server_contracts` for shared contracts.
-- `server_auth` for auth providers and auth runtime.
-- `server_data` for cache/storage/session/rate-limit runtime.
+### Migration import map
 
-Routed does not re-export extracted `server_*` modules. Import those packages
-directly when you use shared contracts or reusable auth/data runtime features.
+| Previously (Routed-centric) | Now (split packages) | Notes |
+|---|---|---|
+| `package:routed/routed.dart` for contracts (`Repository`, `Store`, `Config`, translation contracts) | `package:server_contracts/server_contracts.dart` | Contracts only, no runtime implementations. |
+| `package:routed/routed.dart` for cache/storage/session/rate-limit runtime types | `package:server_data/server_data.dart` (or `cache.dart`, `storage.dart`, `sessions.dart`, `rate_limit.dart`) | Reusable runtime implementations across frameworks. |
+| `package:routed/routed.dart` or older auth exports for provider models/factories and auth primitives | `package:server_auth/server_auth.dart` | Framework-agnostic auth providers/runtime helpers. |
+| Routed auth middleware/routes | `package:routed/auth.dart` | Routed-specific HTTP/session wiring remains in Routed. |
+
+Example (providers from `server_auth`, wiring in Routed):
+
+```dart
+import 'package:routed/auth.dart';
+import 'package:routed/routed.dart';
+import 'package:server_auth/server_auth.dart';
+```
 
 ## Quick start
 
@@ -102,12 +113,11 @@ dart test --coverage=coverage
 dart pub run coverage:format_coverage --lcov --in=coverage --out=coverage/lcov.info --package=. --report-on=lib
 ```
 
-## Cli tooling
+## CLI tooling
 
-Routed provides cli tooling
-Command-line tooling for the Routed framework. It scaffolds projects, manages
-providers and middleware, generates configuration defaults, and offers helpers
-for local dev workflows.
+Routed includes command-line tooling for scaffolding projects, managing
+providers and middleware, generating configuration defaults, and local dev
+workflows.
 
 ## Highlights
 
