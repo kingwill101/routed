@@ -215,6 +215,30 @@ List<AuthProvider> mergeAuthProvidersById(
   return merged;
 }
 
+/// Builds OAuth authorization query parameters for [provider].
+Map<String, String> buildOAuthAuthorizationParameters<TProfile extends Object>(
+  OAuthProvider<TProfile> provider, {
+  required String state,
+  String? codeChallenge,
+  String? callbackUrl,
+}) {
+  final codeChallengeMethod = codeChallenge == null ? null : 'S256';
+  final params = <String, String>{
+    'response_type': 'code',
+    'client_id': provider.clientId,
+    'redirect_uri': provider.redirectUri,
+    'state': state,
+    if (provider.scopes.isNotEmpty) 'scope': provider.scopes.join(' '),
+    'code_challenge': ?codeChallenge,
+    'code_challenge_method': ?codeChallengeMethod,
+    ...provider.authorizationParams,
+  };
+  if (callbackUrl != null && callbackUrl.isNotEmpty) {
+    params['callbackUrl'] = callbackUrl;
+  }
+  return params;
+}
+
 /// Builds an [OAuth2Client] from provider metadata.
 OAuth2Client oauthClientForProvider<TProfile extends Object>(
   OAuthProvider<TProfile> provider, {

@@ -94,6 +94,44 @@ void main() {
   });
 
   test(
+    'buildOAuthAuthorizationParameters includes scopes, pkce and callback',
+    () {
+      final provider = OAuthProvider<Map<String, dynamic>>(
+        id: 'example',
+        name: 'Example',
+        clientId: 'client-id',
+        clientSecret: 'client-secret',
+        authorizationEndpoint: Uri.parse('https://auth.test/authorize'),
+        tokenEndpoint: Uri.parse('https://auth.test/token'),
+        redirectUri: 'https://app.test/callback/example',
+        scopes: const <String>['openid', 'profile'],
+        authorizationParams: const <String, String>{'prompt': 'consent'},
+        profile: (profile) => AuthUser(id: profile['sub']?.toString() ?? ''),
+      );
+
+      final params = buildOAuthAuthorizationParameters(
+        provider,
+        state: 'state-123',
+        codeChallenge: 'challenge-xyz',
+        callbackUrl: '/dashboard',
+      );
+
+      expect(params['response_type'], equals('code'));
+      expect(params['client_id'], equals('client-id'));
+      expect(
+        params['redirect_uri'],
+        equals('https://app.test/callback/example'),
+      );
+      expect(params['state'], equals('state-123'));
+      expect(params['scope'], equals('openid profile'));
+      expect(params['code_challenge'], equals('challenge-xyz'));
+      expect(params['code_challenge_method'], equals('S256'));
+      expect(params['callbackUrl'], equals('/dashboard'));
+      expect(params['prompt'], equals('consent'));
+    },
+  );
+
+  test(
     'loadOAuthProfile decodes id_token claims when no userinfo endpoint',
     () async {
       final header = base64UrlEncode(

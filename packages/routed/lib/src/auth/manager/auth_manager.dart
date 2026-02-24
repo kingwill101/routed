@@ -17,6 +17,7 @@ import 'package:server_auth/server_auth.dart'
         AuthProvider,
         authProviderSummaries,
         baseUrlFromUri,
+        buildOAuthAuthorizationParameters,
         exchangeOAuthAuthorizationCode,
         resolveAuthProviderById,
         AuthRedirectCallbackContext,
@@ -254,22 +255,15 @@ class AuthManager {
       challenge = pkceS256CodeChallenge(verifier);
       ctx.setSession('${options.pkceKey}.${provider.id}', verifier);
     }
-    final codeChallengeMethod = challenge == null ? null : 'S256';
-
-    final params = <String, String>{
-      'response_type': 'code',
-      'client_id': provider.clientId,
-      'redirect_uri': provider.redirectUri,
-      'state': state,
-      if (provider.scopes.isNotEmpty) 'scope': provider.scopes.join(' '),
-      'code_challenge': ?challenge,
-      'code_challenge_method': ?codeChallengeMethod,
-      ...provider.authorizationParams,
-    };
+    final params = buildOAuthAuthorizationParameters(
+      provider,
+      state: state,
+      codeChallenge: challenge,
+      callbackUrl: callbackUrl,
+    );
 
     if (callbackUrl != null && callbackUrl.isNotEmpty) {
       ctx.setSession('${options.callbackKey}.${provider.id}', callbackUrl);
-      params['callbackUrl'] = callbackUrl;
     }
 
     return provider.authorizationEndpoint.replace(queryParameters: params);
