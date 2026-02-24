@@ -8,7 +8,7 @@ import 'package:server_data/server_data.dart'
         RepositoryImpl,
         StoreFactory;
 import 'package:routed/src/container/container.dart';
-import 'package:routed/src/contracts/contracts.dart' show Config;
+import 'package:routed/src/contracts/config/config.dart' show Config;
 import 'package:routed/src/events/cache/cache_events.dart';
 import 'package:routed/src/events/event_manager.dart';
 import 'package:routed/src/engine/storage_defaults.dart';

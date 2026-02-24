@@ -6,7 +6,7 @@ import 'package:file/local.dart' as local;
 import 'package:routed/src/config/specs/static_assets.dart';
 import 'package:routed/src/container/container.dart';
 import 'package:routed/src/context/context.dart';
-import 'package:routed/src/contracts/contracts.dart' show Config;
+import 'package:routed/src/contracts/config/config.dart' show Config;
 import 'package:routed/src/engine/config.dart';
 import 'package:routed/src/engine/engine.dart';
 import 'package:routed/src/engine/middleware_registry.dart';

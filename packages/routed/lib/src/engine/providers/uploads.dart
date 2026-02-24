@@ -2,7 +2,7 @@ import 'dart:async';
 
 import 'package:collection/collection.dart';
 import 'package:routed/src/container/container.dart';
-import 'package:routed/src/contracts/contracts.dart' show Config;
+import 'package:routed/src/contracts/config/config.dart' show Config;
 import 'package:routed/src/config/specs/uploads.dart';
 import 'package:routed/src/engine/config.dart';
 import 'package:routed/src/engine/engine.dart';

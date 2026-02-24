@@ -4,7 +4,7 @@ import 'package:file/memory.dart';
 import 'package:routed/src/cache/cache_manager.dart';
 import 'package:routed/src/config/config.dart';
 import 'package:routed/src/container/container.dart';
-import 'package:routed/src/contracts/contracts.dart' show Config;
+import 'package:routed/src/contracts/config/config.dart' show Config;
 import 'package:routed/src/engine/config.dart' show EngineConfig, SessionConfig;
 import 'package:routed/src/engine/middleware_registry.dart';
 import 'package:routed/src/engine/providers/sessions.dart';

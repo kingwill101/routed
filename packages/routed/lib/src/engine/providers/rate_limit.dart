@@ -5,7 +5,7 @@ import 'package:routed/src/cache/cache_manager.dart';
 import 'package:routed/src/config/specs/cache.dart';
 import 'package:routed/src/config/specs/rate_limit.dart';
 import 'package:routed/src/container/container.dart';
-import 'package:routed/src/contracts/contracts.dart' show Config;
+import 'package:routed/src/contracts/config/config.dart' show Config;
 import 'package:routed/src/engine/middleware_registry.dart';
 import 'package:routed/src/provider/provider.dart';
 import 'package:server_contracts/server_contracts.dart' show Repository;

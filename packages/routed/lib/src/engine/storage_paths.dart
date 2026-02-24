@@ -1,5 +1,5 @@
 import 'package:path/path.dart' as p;
-import 'package:routed/src/contracts/contracts.dart' show Config;
+import 'package:routed/src/contracts/config/config.dart' show Config;
 
 /// {@template storage_base_resolution}
 /// Resolves the base storage path used by storage helpers.

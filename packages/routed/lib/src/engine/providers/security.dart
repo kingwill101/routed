@@ -4,7 +4,7 @@ import 'package:routed/middlewares.dart'
     show csrfMiddleware, requestSizeLimitMiddleware, securityHeadersMiddleware;
 import 'package:routed/src/config/specs/security.dart';
 import 'package:routed/src/container/container.dart';
-import 'package:routed/src/contracts/contracts.dart' show Config;
+import 'package:routed/src/contracts/config/config.dart' show Config;
 import 'package:routed/src/engine/config.dart';
 import 'package:routed/src/engine/middleware_registry.dart';
 import 'package:routed/src/provider/provider.dart';

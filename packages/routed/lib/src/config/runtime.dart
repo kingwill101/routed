@@ -1,6 +1,6 @@
 import 'dart:async';
 
-import 'package:routed/src/contracts/contracts.dart';
+import 'package:routed/src/contracts/config/config.dart';
 import 'package:routed/src/support/zone.dart';
 
 Config currentConfig() {

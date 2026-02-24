@@ -4,7 +4,7 @@ import 'dart:io';
 import 'package:contextual/contextual.dart' as contextual;
 import 'package:routed/src/container/container.dart';
 import 'package:routed/src/context/context.dart';
-import 'package:routed/src/contracts/contracts.dart' show Config;
+import 'package:routed/src/contracts/config/config.dart' show Config;
 import 'package:routed/src/engine/middleware_registry.dart';
 import 'package:routed/src/config/specs/logging.dart';
 import 'package:routed/src/config/specs/logging_drivers.dart';

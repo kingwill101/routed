@@ -1,7 +1,8 @@
 import 'package:file/memory.dart';
 import 'package:routed/src/config/config.dart';
 import 'package:routed/src/container/container.dart';
-import 'package:routed/src/contracts/contracts.dart';
+import 'package:routed/src/contracts/config/config.dart';
+import 'package:server_contracts/server_contracts.dart' hide Config;
 import 'package:routed/src/engine/config.dart';
 import 'package:routed/src/engine/middleware_registry.dart';
 import 'package:routed/src/engine/providers/localization.dart';

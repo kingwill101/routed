@@ -5,7 +5,7 @@ import 'package:dartastic_opentelemetry/dartastic_opentelemetry.dart' as dotel;
 import 'package:routed/src/config/specs/observability.dart';
 import 'package:routed/src/container/container.dart';
 import 'package:routed/src/context/context.dart';
-import 'package:routed/src/contracts/contracts.dart' show Config;
+import 'package:routed/src/contracts/config/config.dart' show Config;
 import 'package:routed/src/engine/engine.dart';
 import 'package:routed/src/engine/events/request.dart';
 import 'package:routed/src/engine/middleware_registry.dart';

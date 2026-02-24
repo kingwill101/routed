@@ -3,7 +3,7 @@ import 'dart:async';
 import 'package:file/file.dart' as file;
 import 'package:file/local.dart' as local;
 import 'package:routed/src/container/container.dart';
-import 'package:routed/src/contracts/contracts.dart' show Config;
+import 'package:routed/src/contracts/config/config.dart' show Config;
 import 'package:routed/src/config/specs/views.dart';
 import 'package:routed/src/engine/config.dart';
 import 'package:routed/src/engine/engine.dart';

@@ -1,6 +1,6 @@
 library;
 
-import 'package:routed/src/contracts/contracts.dart' show Config;
+import 'package:routed/src/contracts/config/config.dart' show Config;
 import 'package:routed/src/support/named_registry.dart';
 import 'package:routed/src/translation/resolvers.dart';
 

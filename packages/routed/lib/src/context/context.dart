@@ -11,7 +11,7 @@ import 'package:routed/src/binding/multipart.dart';
 import 'package:routed/src/binding/utils.dart';
 import 'package:routed/src/cache/cache_manager.dart';
 import 'package:routed/src/container/container.dart' show Container;
-import 'package:routed/src/contracts/contracts.dart' show Config;
+import 'package:routed/src/contracts/config/config.dart' show Config;
 import 'package:routed/src/engine/config.dart';
 import 'package:routed/src/engine/engine.dart';
 import 'package:routed/src/engine/engine_template.dart';

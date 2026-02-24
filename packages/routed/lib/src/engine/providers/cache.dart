@@ -2,7 +2,7 @@ import 'dart:async';
 
 import 'package:routed/src/cache/cache_manager.dart';
 import 'package:routed/src/container/container.dart';
-import 'package:routed/src/contracts/contracts.dart' show Config;
+import 'package:routed/src/contracts/config/config.dart' show Config;
 import 'package:routed/src/config/specs/cache.dart';
 import 'package:routed/src/events/event_manager.dart';
 import 'package:routed/src/provider/provider.dart';

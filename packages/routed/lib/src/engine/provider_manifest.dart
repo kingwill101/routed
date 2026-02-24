@@ -1,4 +1,4 @@
-import 'package:routed/src/contracts/contracts.dart' show Config;
+import 'package:routed/src/contracts/config/config.dart' show Config;
 
 /// Describes middleware contributions from a service provider.
 ///
