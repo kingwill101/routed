@@ -37,6 +37,26 @@ void main() {
     expect(oauthScopeAttribute, equals('auth.oauth.scope'));
   });
 
+  test('writeOAuthValidationAttributes writes canonical attribute keys', () {
+    final validation = OAuthBearerValidationResult(
+      token: 'access-token',
+      result: OAuthIntrospectionResult(
+        active: true,
+        raw: const {'active': true, 'scope': 'read:orders'},
+      ),
+    );
+
+    final attributes = <String, Object?>{};
+    writeOAuthValidationAttributes(
+      validation,
+      setAttribute: (key, value) => attributes[key] = value,
+    );
+
+    expect(attributes[oauthTokenAttribute], equals('access-token'));
+    expect(attributes[oauthClaimsAttribute], equals(validation.result.raw));
+    expect(attributes[oauthScopeAttribute], equals('read:orders'));
+  });
+
   test('oauthTokenExpiryFromSeconds resolves nullable expirations', () {
     final now = DateTime.utc(2026, 2, 24, 12);
     expect(oauthTokenExpiryFromSeconds(null, now: now), isNull);

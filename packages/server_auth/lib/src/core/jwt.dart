@@ -160,6 +160,16 @@ class JwtBearerVerificationResult {
   final JwtPayload payload;
 }
 
+/// Writes verified JWT payload attributes into a context attribute store.
+void writeJwtPayloadAttributes(
+  JwtPayload payload, {
+  required void Function(String key, Object? value) setAttribute,
+}) {
+  setAttribute(jwtClaimsAttribute, payload.claims);
+  setAttribute(jwtHeadersAttribute, payload.headers);
+  setAttribute(jwtSubjectAttribute, payload.subject);
+}
+
 /// Configuration options for JWT verification.
 class JwtOptions {
   /// Creates a [JwtOptions] instance with the specified parameters.

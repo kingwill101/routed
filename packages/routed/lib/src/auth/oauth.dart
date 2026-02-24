@@ -9,9 +9,7 @@ import 'package:server_auth/server_auth.dart'
         OAuth2TokenIntrospector,
         OAuthIntrospectionOptions,
         validateOAuthBearerAuthorization,
-        oauthClaimsAttribute,
-        oauthScopeAttribute,
-        oauthTokenAttribute;
+        writeOAuthValidationAttributes;
 import 'package:routed/src/context/context.dart';
 import 'package:routed/src/router/types.dart';
 
@@ -59,13 +57,11 @@ Middleware oauth2Introspection(
         ..write(error.message);
       return ctx.response;
     }
-    final token = validation.token;
     final result = validation.result;
-
-    ctx.request
-      ..setAttribute(oauthTokenAttribute, token)
-      ..setAttribute(oauthClaimsAttribute, result.raw)
-      ..setAttribute(oauthScopeAttribute, result.scope);
+    writeOAuthValidationAttributes(
+      validation,
+      setAttribute: ctx.request.setAttribute,
+    );
 
     if (onValidated != null) {
       await onValidated(result, ctx);

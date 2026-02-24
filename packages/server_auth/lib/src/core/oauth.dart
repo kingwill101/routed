@@ -38,6 +38,16 @@ class OAuthBearerValidationResult {
   final OAuthIntrospectionResult result;
 }
 
+/// Writes OAuth validation attributes into a context attribute store.
+void writeOAuthValidationAttributes(
+  OAuthBearerValidationResult validation, {
+  required void Function(String key, Object? value) setAttribute,
+}) {
+  setAttribute(oauthTokenAttribute, validation.token);
+  setAttribute(oauthClaimsAttribute, validation.result.raw);
+  setAttribute(oauthScopeAttribute, validation.result.scope);
+}
+
 /// Represents the response from an OAuth2 token endpoint.
 class OAuthTokenResponse {
   OAuthTokenResponse({

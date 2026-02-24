@@ -12,9 +12,7 @@ import 'package:server_auth/server_auth.dart'
         JwtOptions,
         JwtVerifier,
         verifyJwtBearerAuthorization,
-        jwtClaimsAttribute,
-        jwtHeadersAttribute,
-        jwtSubjectAttribute;
+        writeJwtPayloadAttributes;
 
 /// Creates a JWT authentication [Middleware] with the given [options].
 Middleware jwtAuthentication(
@@ -48,10 +46,10 @@ Middleware jwtAuthenticationWithVerifier(
         verifier: verifier,
       );
       final payload = verification.payload;
-      ctx.request
-        ..setAttribute(jwtClaimsAttribute, payload.claims)
-        ..setAttribute(jwtHeadersAttribute, payload.headers)
-        ..setAttribute(jwtSubjectAttribute, payload.subject);
+      writeJwtPayloadAttributes(
+        payload,
+        setAttribute: ctx.request.setAttribute,
+      );
 
       if (onVerified != null) {
         await onVerified(payload, ctx);

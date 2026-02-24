@@ -183,6 +183,25 @@ void main() {
     expect(invoked, isTrue);
   });
 
+  test('writeJwtPayloadAttributes writes canonical attribute keys', () async {
+    final verifier = JwtVerifier(
+      options: JwtOptions(inlineKeys: [_testJwk], algorithms: const ['HS256']),
+    );
+    final payload = await verifier.verifyToken(
+      _buildToken(_claims(now: DateTime.now())),
+    );
+
+    final attributes = <String, Object?>{};
+    writeJwtPayloadAttributes(
+      payload,
+      setAttribute: (key, value) => attributes[key] = value,
+    );
+
+    expect(attributes[jwtClaimsAttribute], equals(payload.claims));
+    expect(attributes[jwtHeadersAttribute], equals(payload.headers));
+    expect(attributes[jwtSubjectAttribute], equals(payload.subject));
+  });
+
   test('verifyJwtBearerAuthorization rejects missing tokens', () async {
     final verifier = JwtVerifier(
       options: JwtOptions(inlineKeys: [_testJwk], algorithms: const ['HS256']),
