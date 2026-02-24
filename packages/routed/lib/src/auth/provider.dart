@@ -17,6 +17,7 @@ import 'package:server_auth/server_auth.dart'
         JwtOptions,
         JwtVerifier,
         OAuthIntrospectionOptions,
+        parseStringLike,
         registerPolicyBindingsSafely,
         registerRbacAbilitiesSafely,
         registerAllAuthProviders;
@@ -527,9 +528,21 @@ class AuthServiceProvider extends ServiceProvider with ProvidesDefaultConfig {
 
     final options = OAuthIntrospectionOptions(
       endpoint: endpoint,
-      clientId: _nullIfEmpty(settings.clientId),
-      clientSecret: _nullIfEmpty(settings.clientSecret),
-      tokenTypeHint: _nullIfEmpty(settings.tokenTypeHint),
+      clientId: parseStringLike(
+        settings.clientId,
+        context: 'auth.oauth2.introspection.client_id',
+        throwOnInvalid: false,
+      ),
+      clientSecret: parseStringLike(
+        settings.clientSecret,
+        context: 'auth.oauth2.introspection.client_secret',
+        throwOnInvalid: false,
+      ),
+      tokenTypeHint: parseStringLike(
+        settings.tokenTypeHint,
+        context: 'auth.oauth2.introspection.token_type_hint',
+        throwOnInvalid: false,
+      ),
       cacheTtl: settings.cacheTtl,
       clockSkew: settings.clockSkew,
       additionalParameters: settings.additionalParameters,
@@ -537,12 +550,4 @@ class AuthServiceProvider extends ServiceProvider with ProvidesDefaultConfig {
 
     return oauth2Introspection(options, httpClient: _httpClient);
   }
-}
-
-String? _nullIfEmpty(String? value) {
-  if (value == null) {
-    return null;
-  }
-  final trimmed = value.trim();
-  return trimmed.isEmpty ? null : trimmed;
 }
