@@ -1,10 +1,13 @@
 import 'dart:async';
-import 'dart:convert';
 import 'dart:io';
 
 import 'package:http/http.dart' as http;
 import 'package:server_auth/server_auth.dart'
-    show OAuth2Exception, OAuthIntrospectionOptions, OAuthIntrospectionResult;
+    show
+        OAuth2Exception,
+        OAuth2TokenIntrospector,
+        OAuthIntrospectionOptions,
+        OAuthIntrospectionResult;
 import 'package:routed/src/context/context.dart';
 import 'package:routed/src/router/types.dart';
 
@@ -22,15 +25,6 @@ typedef OAuthOnValidated =
       OAuthIntrospectionResult result,
       EngineContext context,
     );
-
-class _CachedIntrospection {
-  _CachedIntrospection(this.result, this.expiresAt);
-
-  final OAuthIntrospectionResult result;
-  final DateTime expiresAt;
-
-  bool get isExpired => DateTime.now().isAfter(expiresAt);
-}
 
 /// Creates a middleware for OAuth2 token introspection.
 ///
@@ -59,57 +53,7 @@ Middleware oauth2Introspection(
   OAuthOnValidated? onValidated,
   http.Client? httpClient,
 }) {
-  final client = httpClient ?? http.Client();
-  final cache = <String, _CachedIntrospection>{};
-
-  Future<OAuthIntrospectionResult> introspect(String token) async {
-    final cached = cache[token];
-    if (cached != null && !cached.isExpired) {
-      return cached.result;
-    }
-
-    final headers = <String, String>{
-      'Content-Type': 'application/x-www-form-urlencoded',
-    };
-    if (options.clientId != null && options.clientSecret != null) {
-      final credentials = base64Encode(
-        utf8.encode('${options.clientId}:${options.clientSecret}'),
-      );
-      headers['Authorization'] = 'Basic $credentials';
-    }
-
-    final body = <String, String>{
-      'token': token,
-      if (options.tokenTypeHint != null)
-        'token_type_hint': options.tokenTypeHint!,
-      ...options.additionalParameters,
-    };
-
-    final response = await client.post(
-      options.endpoint,
-      headers: headers,
-      body: body,
-    );
-
-    if (response.statusCode < 200 || response.statusCode >= 300) {
-      throw OAuth2Exception(
-        'Introspection endpoint responded with ${response.statusCode}',
-        response.statusCode,
-      );
-    }
-
-    final Map<String, dynamic> jsonResponse =
-        json.decode(response.body) as Map<String, dynamic>;
-    final result = OAuthIntrospectionResult(
-      active: jsonResponse['active'] == true,
-      raw: jsonResponse,
-    );
-    cache[token] = _CachedIntrospection(
-      result,
-      DateTime.now().add(options.cacheTtl),
-    );
-    return result;
-  }
+  final introspector = OAuth2TokenIntrospector(options, httpClient: httpClient);
 
   return (EngineContext ctx, Next next) async {
     final header = ctx.request.header('Authorization');
@@ -129,36 +73,11 @@ Middleware oauth2Introspection(
 
     OAuthIntrospectionResult result;
     try {
-      result = await introspect(token);
+      result = await introspector.validate(token);
     } on OAuth2Exception catch (error) {
       ctx.response
         ..statusCode = HttpStatus.unauthorized
         ..write(error.message);
-      return ctx.response;
-    }
-
-    if (!result.active) {
-      ctx.response
-        ..statusCode = HttpStatus.unauthorized
-        ..write('token inactive');
-      return ctx.response;
-    }
-
-    final now = DateTime.now().toUtc();
-    final expiresAt = result.expiresAt?.toUtc();
-    if (expiresAt != null && expiresAt.add(options.clockSkew).isBefore(now)) {
-      ctx.response
-        ..statusCode = HttpStatus.unauthorized
-        ..write('token expired');
-      return ctx.response;
-    }
-
-    final notBefore = result.notBefore?.toUtc();
-    if (notBefore != null &&
-        notBefore.subtract(options.clockSkew).isAfter(now)) {
-      ctx.response
-        ..statusCode = HttpStatus.unauthorized
-        ..write('token not yet valid');
       return ctx.response;
     }
 

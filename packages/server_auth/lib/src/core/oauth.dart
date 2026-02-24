@@ -95,6 +95,96 @@ class OAuthIntrospectionOptions {
   final Map<String, String> additionalParameters;
 }
 
+class _CachedIntrospection {
+  _CachedIntrospection(this.result, this.expiresAt);
+
+  final OAuthIntrospectionResult result;
+  final DateTime expiresAt;
+
+  bool get isExpired => DateTime.now().isAfter(expiresAt);
+}
+
+/// Reusable RFC 7662 token introspection runtime with in-memory caching.
+class OAuth2TokenIntrospector {
+  OAuth2TokenIntrospector(this.options, {http.Client? httpClient})
+    : _httpClient = httpClient ?? http.Client();
+
+  final OAuthIntrospectionOptions options;
+  final http.Client _httpClient;
+  final Map<String, _CachedIntrospection> _cache =
+      <String, _CachedIntrospection>{};
+
+  Future<OAuthIntrospectionResult> introspect(String token) async {
+    final cached = _cache[token];
+    if (cached != null && !cached.isExpired) {
+      return cached.result;
+    }
+
+    final headers = <String, String>{
+      HttpHeaders.contentTypeHeader: 'application/x-www-form-urlencoded',
+    };
+    if (options.clientId != null && options.clientSecret != null) {
+      final credentials = base64Encode(
+        utf8.encode('${options.clientId}:${options.clientSecret}'),
+      );
+      headers[HttpHeaders.authorizationHeader] = 'Basic $credentials';
+    }
+
+    final body = <String, String>{
+      'token': token,
+      if (options.tokenTypeHint != null)
+        'token_type_hint': options.tokenTypeHint!,
+      ...options.additionalParameters,
+    };
+
+    final response = await _httpClient.post(
+      options.endpoint,
+      headers: headers,
+      body: body,
+    );
+
+    if (response.statusCode < 200 || response.statusCode >= 300) {
+      throw OAuth2Exception(
+        'Introspection endpoint responded with ${response.statusCode}',
+        response.statusCode,
+      );
+    }
+
+    final Map<String, dynamic> jsonResponse =
+        json.decode(response.body) as Map<String, dynamic>;
+    final result = OAuthIntrospectionResult(
+      active: jsonResponse['active'] == true,
+      raw: jsonResponse,
+    );
+    _cache[token] = _CachedIntrospection(
+      result,
+      DateTime.now().add(options.cacheTtl),
+    );
+    return result;
+  }
+
+  Future<OAuthIntrospectionResult> validate(String token) async {
+    final result = await introspect(token);
+    if (!result.active) {
+      throw OAuth2Exception('token inactive');
+    }
+
+    final now = DateTime.now().toUtc();
+    final expiresAt = result.expiresAt?.toUtc();
+    if (expiresAt != null && expiresAt.add(options.clockSkew).isBefore(now)) {
+      throw OAuth2Exception('token expired');
+    }
+
+    final notBefore = result.notBefore?.toUtc();
+    if (notBefore != null &&
+        notBefore.subtract(options.clockSkew).isAfter(now)) {
+      throw OAuth2Exception('token not yet valid');
+    }
+
+    return result;
+  }
+}
+
 /// Generic OAuth2 client for token exchange and userinfo requests.
 class OAuth2Client {
   OAuth2Client({
