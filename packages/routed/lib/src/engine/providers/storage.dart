@@ -12,7 +12,7 @@ import 'package:routed/src/provider/provider.dart';
 import 'package:routed/src/storage/cloud_storage_driver.dart';
 import 'package:routed/src/storage/local_storage_driver.dart';
 import 'package:routed/src/storage/storage_drivers.dart';
-import 'package:routed/src/storage/storage_manager.dart';
+import 'package:server_data/storage.dart';
 import 'package:storage_fs/storage_fs.dart' as storage_fs;
 
 /// {@template storage_provider_resolution}

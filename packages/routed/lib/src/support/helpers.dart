@@ -1,6 +1,6 @@
 import 'package:routed/src/container/container.dart';
 import 'package:routed/src/context/context.dart';
-import 'package:routed/src/contracts/translation/translator.dart';
+import 'package:server_contracts/server_contracts.dart' show TranslatorContract;
 import 'package:routed/src/translation/constants.dart';
 
 import 'zone.dart';

@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:http/http.dart' as http;
+import 'package:server_auth/server_auth.dart' show OAuthTokenResponse;
 import 'package:routed/src/context/context.dart';
 import 'package:routed/src/router/types.dart';
 
@@ -27,53 +28,6 @@ class OAuth2Exception implements Exception {
 
   @override
   String toString() => 'OAuth2Exception($statusCode): $message';
-}
-
-/// Represents the response from an OAuth2 token endpoint.
-///
-/// This class provides access to the access token, token type, expiration time,
-/// and other optional fields such as the refresh token and scope.
-class OAuthTokenResponse {
-  OAuthTokenResponse({
-    required this.accessToken,
-    required this.tokenType,
-    required this.expiresIn,
-    this.refreshToken,
-    this.scope,
-    required this.raw,
-  });
-
-  /// Creates an instance of [OAuthTokenResponse] from a JSON object.
-  factory OAuthTokenResponse.fromJson(Map<String, dynamic> json) {
-    return OAuthTokenResponse(
-      accessToken: json['access_token'] as String? ?? '',
-      tokenType: json['token_type'] as String? ?? 'Bearer',
-      expiresIn: (json['expires_in'] is num)
-          ? (json['expires_in'] as num).toInt()
-          : null,
-      refreshToken: json['refresh_token'] as String?,
-      scope: json['scope'] as String?,
-      raw: json,
-    );
-  }
-
-  /// The access token issued by the authorization server.
-  final String accessToken;
-
-  /// The type of token issued, typically "Bearer".
-  final String tokenType;
-
-  /// The lifetime of the access token in seconds.
-  final int? expiresIn;
-
-  /// The refresh token, if issued.
-  final String? refreshToken;
-
-  /// The scope of the access token.
-  final String? scope;
-
-  /// The raw JSON response from the token endpoint.
-  final Map<String, dynamic> raw;
 }
 
 class OAuth2Client {

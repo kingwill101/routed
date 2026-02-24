@@ -1,17 +1,21 @@
-import 'package:routed/src/cache/array_store_factory.dart';
-import 'package:routed/src/cache/file_store_factory.dart';
-import 'package:routed/src/cache/null_store_factory.dart';
-import 'package:routed/src/cache/redis_store_factory.dart';
-import 'package:routed/src/cache/repository.dart';
-import 'package:routed/src/cache/store_factory.dart';
-import 'package:routed/src/contracts/cache/repository.dart';
+import 'package:server_data/server_data.dart'
+    show
+        ArrayStoreFactory,
+        FileStoreFactory,
+        NullStoreFactory,
+        RedisStoreFactory,
+        RepositoryEventCallbacks,
+        RepositoryImpl,
+        StoreFactory;
 import 'package:routed/src/container/container.dart';
 import 'package:routed/src/contracts/contracts.dart' show Config;
+import 'package:routed/src/events/cache/cache_events.dart';
 import 'package:routed/src/events/event_manager.dart';
 import 'package:routed/src/engine/storage_defaults.dart';
 import 'package:routed/src/engine/storage_paths.dart';
 import 'package:routed/src/provider/provider.dart';
 import 'package:routed/src/support/driver_registry.dart';
+import 'package:server_contracts/server_contracts.dart' show Repository;
 
 /// A builder function that creates a [StoreFactory] instance.
 ///
@@ -440,7 +444,7 @@ class CacheManager {
     if (repository != null) {
       if (repository is RepositoryImpl) {
         repository.updatePrefix(_prefix);
-        repository.attachEventManager(_eventManager);
+        repository.attachCallbacks(_buildRepositoryCallbacks(name));
       }
       _repositories[name] = repository;
     }
@@ -498,7 +502,9 @@ class CacheManager {
     _eventManager = eventManager;
     _repositories.updateAll((_, repository) {
       if (repository is RepositoryImpl) {
-        repository.attachEventManager(eventManager);
+        repository.attachCallbacks(
+          _buildRepositoryCallbacks(repository.storeName),
+        );
       }
       return repository;
     });
@@ -567,11 +573,36 @@ class CacheManager {
 
     // Create the underlying store using the factory.
     final storeInstance = factory.create(resolvedConfig);
-    final repository = RepositoryImpl(storeInstance, name, _prefix);
-    if (_eventManager != null) {
-      repository.attachEventManager(_eventManager);
-    }
+    final repository = RepositoryImpl(
+      storeInstance,
+      name,
+      _prefix,
+      _buildRepositoryCallbacks(name),
+    );
     return repository;
+  }
+
+  RepositoryEventCallbacks? _buildRepositoryCallbacks(String storeName) {
+    final eventManager = _eventManager;
+    if (eventManager == null) {
+      return null;
+    }
+    return RepositoryEventCallbacks(
+      onHit: (key) {
+        eventManager.publish(CacheHitEvent(store: storeName, key: key));
+      },
+      onMiss: (key) {
+        eventManager.publish(CacheMissEvent(store: storeName, key: key));
+      },
+      onWrite: (key, ttl) {
+        eventManager.publish(
+          CacheWriteEvent(store: storeName, key: key, ttl: ttl),
+        );
+      },
+      onForget: (key) {
+        eventManager.publish(CacheForgetEvent(store: storeName, key: key));
+      },
+    );
   }
 
   /// Allows registering custom [StoreFactory] instances for new drivers.

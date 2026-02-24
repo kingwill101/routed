@@ -2,10 +2,14 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:http/http.dart' as http;
-import 'package:routed/src/auth/models.dart';
-import 'package:routed/src/auth/oauth.dart';
-import 'package:routed/src/auth/provider_registry.dart';
-import 'package:routed/src/auth/providers.dart';
+import 'package:server_auth/server_auth.dart'
+    show
+        AuthProvider,
+        AuthProviderRegistration,
+        AuthProviderRegistry,
+        AuthUser,
+        OAuthProvider,
+        OAuthTokenResponse;
 import 'package:routed/src/config/schema.dart';
 import 'package:routed/src/provider/config_utils.dart';
 import 'package:routed/src/provider/provider.dart';

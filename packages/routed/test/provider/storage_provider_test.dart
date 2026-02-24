@@ -2,7 +2,7 @@ import 'package:file/file.dart' as storage_file;
 import 'package:file/memory.dart';
 import 'package:routed/providers.dart';
 import 'package:routed/routed.dart';
-import 'package:routed/src/storage/local_storage_driver.dart';
+import 'package:server_data/storage.dart';
 import 'package:test/test.dart';
 
 import '../test_engine.dart';

@@ -11,8 +11,7 @@ import 'package:routed/src/engine/providers/sessions.dart';
 import 'package:routed/src/engine/storage_defaults.dart';
 import 'package:routed/src/engine/storage_paths.dart';
 import 'package:routed/src/provider/provider.dart';
-import 'package:routed/src/sessions/cache_store.dart';
-import 'package:routed/src/sessions/filesystem_store.dart';
+import 'package:server_data/sessions.dart';
 import 'package:test/test.dart';
 
 void main() {

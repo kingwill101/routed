@@ -1,5 +1,5 @@
 import 'package:collection/collection.dart';
-import 'package:routed/session.dart';
+import 'package:server_data/sessions.dart';
 import 'package:routed/src/context/context.dart';
 import 'package:routed/src/engine/config.dart';
 import 'package:routed/src/router/types.dart';
@@ -15,9 +15,9 @@ import 'package:routed/src/router/types.dart';
 /// [store] is given, a default [CookieStore] with a random key is created as
 /// a fallback.
 Middleware sessionMiddleware({
-  Store? store,
+  SessionStore? store,
   String? name,
-  Options? defaultOptions,
+  SessionOptions? defaultOptions,
   List<SecureCookie>? codecs,
   bool useEncryption = false,
   bool useSigning = false,
@@ -26,7 +26,7 @@ Middleware sessionMiddleware({
   // requests when neither an explicit store nor a container config is present.
   final fallbackStore = store == null
       ? CookieStore(
-          defaultOptions: defaultOptions ?? Options(),
+          defaultOptions: defaultOptions ?? SessionOptions(),
           codecs:
               codecs ??
               [
@@ -40,7 +40,7 @@ Middleware sessionMiddleware({
       : null;
 
   return (EngineContext ctx, Next next) async {
-    final Store resolvedStore;
+    final SessionStore resolvedStore;
     final String resolvedName;
 
     if (store != null) {

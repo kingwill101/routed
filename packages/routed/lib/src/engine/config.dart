@@ -2,7 +2,7 @@ import 'dart:io';
 
 import 'package:file/file.dart';
 import 'package:file/local.dart' as local;
-import 'package:routed/session.dart';
+import 'package:server_data/sessions.dart';
 import 'package:routed/src/runtime/shutdown.dart';
 import 'package:routed/src/utils/debug.dart';
 import 'package:routed/src/view/view_engine.dart';
@@ -294,7 +294,7 @@ class EngineSecurityFeatures {
   /// mitigate XSS attacks. If `null`, no CSP header is added.
   final String? csp;
 
-  /// Whether to add the `X-Content-Type-Options: nosniff` header.
+  /// Whether to add the `X-Content-Type-SessionOptions: nosniff` header.
   ///
   /// This prevents browsers from MIME-sniffing responses, which can prevent
   /// certain types of attacks.
@@ -306,7 +306,7 @@ class EngineSecurityFeatures {
   /// If `null`, no HSTS header is added.
   final int? hstsMaxAge;
 
-  /// Value for the `X-Frame-Options` header.
+  /// Value for the `X-Frame-SessionOptions` header.
   ///
   /// Controls whether the page can be embedded in frames. Common values are
   /// 'DENY', 'SAMEORIGIN', or 'ALLOW-FROM uri'. If `null`, no header is added.
@@ -756,7 +756,7 @@ class SessionConfig {
   final String cookieName;
 
   /// The session store implementation.
-  final Store store;
+  final SessionStore store;
 
   /// The maximum age of the session. Defaults to 1 hour.
   final Duration maxAge;
@@ -771,7 +771,7 @@ class SessionConfig {
   final bool httpOnly;
 
   /// Base cookie options applied when constructing sessions.
-  final Options defaultOptions;
+  final SessionOptions defaultOptions;
 
   /// Whether the cookie should expire when the browser closes.
   final bool expireOnClose;
@@ -803,7 +803,7 @@ class SessionConfig {
     this.path = '/',
     this.secure = false,
     this.httpOnly = true,
-    Options? defaultOptions,
+    SessionOptions? defaultOptions,
     this.expireOnClose = false,
     this.sameSite,
     this.partitioned,
@@ -811,7 +811,7 @@ class SessionConfig {
     this.lottery,
   }) : defaultOptions =
            defaultOptions ??
-           Options(
+           SessionOptions(
              path: path,
              maxAge: expireOnClose ? null : maxAge.inSeconds,
              secure: secure,
@@ -832,14 +832,14 @@ class SessionConfig {
     String cookieName = 'routed_session',
     Duration maxAge = const Duration(hours: 1),
     bool expireOnClose = false,
-    Options? options,
+    SessionOptions? options,
   }) {
     final resolvedCodecs = (codecs != null && codecs.isNotEmpty)
         ? codecs
         : [SecureCookie(key: appKey, useEncryption: true, useSigning: true)];
     final resolvedOptions =
         options ??
-        Options(
+        SessionOptions(
           path: '/',
           maxAge: expireOnClose ? null : maxAge.inSeconds,
           secure: true,
@@ -877,7 +877,7 @@ class SessionConfig {
     String cookieName = 'routed_session',
     Duration maxAge = const Duration(hours: 1),
     bool expireOnClose = false,
-    Options? options,
+    SessionOptions? options,
     List<int>? lottery,
     FileSystem? fileSystem,
   }) {
@@ -886,7 +886,7 @@ class SessionConfig {
         : [SecureCookie(key: appKey, useEncryption: true, useSigning: true)];
     final resolvedOptions =
         options ??
-        Options(
+        SessionOptions(
           path: '/',
           maxAge: expireOnClose ? null : maxAge.inSeconds,
           secure: true,

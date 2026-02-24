@@ -1,7 +1,7 @@
 import 'dart:async';
 
+import 'package:server_auth/server_auth.dart' show AuthPrincipal;
 import 'package:routed/src/auth/haigate.dart';
-import 'package:routed/src/auth/session_auth.dart';
 
 /// {@template routed_auth_policy}
 /// Policy-based authorization built on top of Haigate.

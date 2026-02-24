@@ -4,10 +4,12 @@ import 'dart:io';
 import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
 import 'package:routed/routed.dart';
-import 'package:routed/session.dart';
+import 'package:server_data/sessions.dart';
 import 'package:routed/src/sessions/middleware.dart';
 import 'package:routed_testing/routed_testing.dart';
 import 'package:server_testing/server_testing.dart';
+import 'package:server_auth/server_auth.dart';
+import 'package:server_auth/server_auth.dart' as server_auth;
 import '../test_engine.dart';
 
 SessionConfig _sessionConfig() {
@@ -15,7 +17,7 @@ SessionConfig _sessionConfig() {
   return SessionConfig.cookie(
     appKey: 'base64:$key',
     cookieName: 'test_session',
-    options: Options(
+    options: SessionOptions(
       path: '/',
       secure: false,
       httpOnly: true,
@@ -54,6 +56,54 @@ Map<String, dynamic>? _decodeJson(TestResponse response) {
 
 void main() {
   group('AuthRoutes', () {
+    test('accepts providers created from package:server_auth', () async {
+      final manager = AuthManager(
+        AuthOptions(
+          providers: [
+            server_auth.CredentialsProvider(
+              authorize: (_, _, credentials) async {
+                if (credentials.password == 'secret') {
+                  return server_auth.AuthUser(
+                    id: 'server-auth-user',
+                    email: credentials.email,
+                  );
+                }
+                return null;
+              },
+            ),
+          ],
+          sessionStrategy: AuthSessionStrategy.session,
+          enforceCsrf: false,
+        ),
+      );
+
+      final engine = _authEngine(manager);
+      await engine.initialize();
+
+      final client = TestClient(RoutedRequestHandler(engine));
+      addTearDown(() async => await client.close());
+
+      final csrfResponse = await client.get('/auth/csrf');
+      csrfResponse.assertStatus(HttpStatus.ok);
+      final csrfToken = csrfResponse.json()['csrfToken'] as String;
+      final sessionCookie = csrfResponse.cookie('test_session');
+      expect(sessionCookie, isNotNull);
+
+      final signInResponse = await client.postJson(
+        '/auth/signin/credentials',
+        {'email': 'user@example.com', 'password': 'secret', '_csrf': csrfToken},
+        headers: {
+          HttpHeaders.cookieHeader: [_cookieHeader(sessionCookie!)],
+        },
+      );
+      signInResponse.assertStatus(HttpStatus.ok);
+      expect(signInResponse.json()['user']['id'], equals('server-auth-user'));
+      expect(
+        signInResponse.json()['user']['email'],
+        equals('user@example.com'),
+      );
+    });
+
     test('credentials flow establishes a session', () async {
       final manager = AuthManager(
         AuthOptions(

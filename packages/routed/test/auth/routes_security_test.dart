@@ -2,7 +2,8 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:routed/routed.dart';
-import 'package:routed/session.dart';
+import 'package:server_data/sessions.dart';
+import 'package:server_auth/server_auth.dart';
 import 'package:routed/src/sessions/middleware.dart';
 import 'package:routed_testing/routed_testing.dart';
 import 'package:server_testing/server_testing.dart';
@@ -13,7 +14,7 @@ SessionConfig _sessionConfig() {
   return SessionConfig.cookie(
     appKey: 'base64:$key',
     cookieName: 'test_session',
-    options: Options(
+    options: SessionOptions(
       path: '/',
       secure: false,
       httpOnly: true,

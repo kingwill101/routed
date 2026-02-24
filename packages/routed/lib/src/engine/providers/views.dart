@@ -8,7 +8,7 @@ import 'package:routed/src/config/specs/views.dart';
 import 'package:routed/src/engine/config.dart';
 import 'package:routed/src/engine/engine.dart';
 import 'package:routed/src/provider/provider.dart';
-import 'package:routed/src/storage/storage_manager.dart';
+import 'package:server_data/storage.dart';
 import 'package:routed/src/view/engines/liquid_engine.dart';
 import 'package:routed/src/view/view_engine.dart';
 import 'package:routed/src/view/engine_manager.dart';

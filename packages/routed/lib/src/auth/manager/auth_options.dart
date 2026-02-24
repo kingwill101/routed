@@ -1,8 +1,7 @@
 import 'package:http/http.dart' as http;
-import 'package:routed/src/auth/adapter.dart';
+import 'package:server_auth/server_auth.dart'
+    show AuthAdapter, AuthProvider, AuthSessionStrategy;
 import 'package:routed/src/auth/hooks.dart';
-import 'package:routed/src/auth/models.dart';
-import 'package:routed/src/auth/providers.dart';
 import 'package:routed/src/auth/jwt.dart';
 import 'package:routed/src/auth/policies.dart';
 import 'package:routed/src/auth/rbac.dart';

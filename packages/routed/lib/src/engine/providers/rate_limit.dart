@@ -5,15 +5,14 @@ import 'package:routed/src/cache/cache_manager.dart';
 import 'package:routed/src/config/specs/cache.dart';
 import 'package:routed/src/config/specs/rate_limit.dart';
 import 'package:routed/src/container/container.dart';
-import 'package:routed/src/contracts/cache/repository.dart';
 import 'package:routed/src/contracts/contracts.dart' show Config;
 import 'package:routed/src/engine/middleware_registry.dart';
 import 'package:routed/src/provider/provider.dart';
+import 'package:server_contracts/server_contracts.dart' show Repository;
+import 'package:server_data/rate_limit.dart' hide RateLimitService;
 
 import '../../events/event_manager.dart';
 import '../../middleware/rate_limit.dart';
-import '../../rate_limit/backend.dart';
-import '../../rate_limit/policy.dart';
 import '../../rate_limit/service.dart';
 
 class RateLimitServiceProvider extends ServiceProvider

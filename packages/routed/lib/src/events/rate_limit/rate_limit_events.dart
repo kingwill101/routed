@@ -1,5 +1,5 @@
 import 'package:routed/src/events/event.dart';
-import 'package:routed/src/rate_limit/policy.dart';
+import 'package:server_data/rate_limit.dart';
 
 /// Base class for rate limit telemetry.
 sealed class RateLimitEvent extends Event {

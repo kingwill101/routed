@@ -1,7 +1,7 @@
 import 'package:path/path.dart' as p;
 import 'package:routed/src/contracts/contracts.dart' show Config;
 import 'package:routed/src/engine/storage_paths.dart';
-import 'package:routed/src/storage/storage_manager.dart';
+import 'package:server_data/storage.dart';
 
 /// {@template storage_defaults}
 /// Derives normalized defaults for storage helpers.

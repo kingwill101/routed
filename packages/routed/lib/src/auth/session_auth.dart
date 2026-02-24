@@ -3,10 +3,11 @@ import 'dart:convert';
 import 'dart:io';
 import 'dart:math' show Random;
 
+import 'package:server_auth/server_auth.dart' show AuthPrincipal;
 import 'package:routed/src/context/context.dart';
 import 'package:routed/src/response.dart';
 import 'package:routed/src/router/types.dart';
-import 'package:routed/src/sessions/session.dart';
+import 'package:server_data/sessions.dart';
 import 'package:routed/src/support/named_registry.dart';
 
 /// Attribute key for storing the authenticated principal in the request context.
@@ -17,53 +18,6 @@ const String _sessionPrincipalKey = '__routed.auth.principal';
 
 /// Default name for the "remember me" cookie.
 const String _defaultRememberCookieName = 'remember_token';
-
-/// Represents an authenticated user or entity.
-///
-/// This class encapsulates the user's unique identifier, roles, and additional
-/// attributes that may be associated with the user.
-class AuthPrincipal {
-  /// Creates an instance of [AuthPrincipal].
-  ///
-  /// - [id]: The unique identifier for the principal.
-  /// - [roles]: A list of roles assigned to the principal.
-  /// - [attributes]: Additional attributes associated with the principal.
-  AuthPrincipal({
-    required this.id,
-    this.roles = const <String>[],
-    Map<String, dynamic>? attributes,
-  }) : attributes = attributes == null
-           ? const <String, dynamic>{}
-           : Map<String, dynamic>.from(attributes);
-
-  /// The unique identifier for the principal.
-  final String id;
-
-  /// A list of roles assigned to the principal.
-  final List<String> roles;
-
-  /// Additional attributes associated with the principal.
-  final Map<String, dynamic> attributes;
-
-  /// Checks if the principal has the specified [role].
-  bool hasRole(String role) => roles.contains(role);
-
-  /// Converts the principal to a JSON-serializable map.
-  Map<String, dynamic> toJson() => {
-    'id': id,
-    'roles': roles,
-    'attributes': attributes,
-  };
-
-  /// Creates an [AuthPrincipal] instance from a JSON map.
-  factory AuthPrincipal.fromJson(Map<String, dynamic> json) {
-    return AuthPrincipal(
-      id: json['id'] as String,
-      roles: (json['roles'] as List?)?.cast<String>() ?? const <String>[],
-      attributes: (json['attributes'] as Map?)?.cast<String, dynamic>(),
-    );
-  }
-}
 
 abstract class RememberTokenStore {
   FutureOr<void> save(

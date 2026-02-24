@@ -88,7 +88,6 @@ export 'src/router/router.dart';
 export 'src/router/controller.dart';
 export 'src/router/types.dart';
 export 'src/runtime/shutdown.dart';
-export 'src/storage/storage_manager.dart';
 export 'src/support/helpers.dart'
     show config, route, trans, transChoice, currentLocale;
 export 'src/support/zone.dart';

@@ -1,9 +1,5 @@
-export 'src/auth/adapter.dart';
 export 'src/auth/manager.dart';
-export 'src/auth/models.dart';
 export 'src/auth/hooks.dart';
-export 'src/auth/providers.dart';
-export 'src/auth/provider_registry.dart';
 export 'src/auth/routes.dart';
 export 'src/auth/basic_auth.dart';
 export 'src/auth/csrf.dart';
@@ -57,7 +53,6 @@ export 'src/auth/oauth.dart'
     show
         OAuth2Client,
         OAuth2Exception,
-        OAuthTokenResponse,
         OAuthIntrospectionOptions,
         OAuthIntrospectionResult,
         OAuthOnValidated,
@@ -67,7 +62,6 @@ export 'src/auth/oauth.dart'
         oauthScopeAttribute;
 export 'src/auth/session_auth.dart'
     show
-        AuthPrincipal,
         RememberTokenStore,
         InMemoryRememberTokenStore,
         SessionAuthService,

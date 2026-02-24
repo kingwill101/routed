@@ -3,12 +3,14 @@ import 'dart:convert';
 import 'dart:io';
 import 'dart:typed_data';
 
+import 'package:server_data/server_data.dart'
+    show RateLimitRequest, SessionRequest;
 import 'package:routed/src/engine/config.dart';
 import 'package:routed/src/utils/request_id.dart';
 
 /// Represents an HTTP request and provides various utilities to access
 /// request data and metadata.
-class Request {
+class Request implements SessionRequest, RateLimitRequest {
   /// The underlying [HttpRequest] object.
   ///
   /// @deprecated Use the public API methods instead of accessing httpRequest directly.
@@ -60,6 +62,7 @@ class Request {
   }
 
   /// Returns the HTTP method of the request (e.g., GET, POST).
+  @override
   String get method => httpRequest.method;
 
   /// Returns the content length of the request body.
@@ -75,6 +78,7 @@ class Request {
   HttpHeaders get headers => httpRequest.headers;
 
   /// Returns the cookies sent with the request.
+  @override
   List<Cookie> get cookies => httpRequest.cookies;
 
   /// Returns the persistent connection state signaled by the client.
@@ -96,6 +100,7 @@ class Request {
   ContentType? get contentType => httpRequest.headers.contentType;
 
   /// Returns the path of the request URI.
+  @override
   String get path => httpRequest.uri.path;
 
   /// Returns the host of the request.
@@ -105,9 +110,11 @@ class Request {
   String get scheme => httpRequest.uri.scheme;
 
   /// Returns the value of the specified header [name].
+  @override
   String header(String name) => httpRequest.headers[name]?.join(',') ?? '';
 
   /// Returns the remote address of the client making the request.
+  @override
   String get remoteAddr =>
       httpRequest.connectionInfo?.remoteAddress.address ?? '';
 
@@ -133,6 +140,7 @@ class Request {
   /// This method checks for forwarded headers and trusted proxies based on the
   /// engine configuration. It falls back to the direct connection IP if no
   /// forwarded headers are found or if the immediate client is not trusted.
+  @override
   String get clientIP {
     if (_overrideClientIp != null) {
       return _overrideClientIp!;

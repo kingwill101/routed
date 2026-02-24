@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:io';
 
+import 'package:server_auth/server_auth.dart' show AuthPrincipal;
 import 'package:routed/src/auth/session_auth.dart';
 import 'package:routed/src/context/context.dart';
 import 'package:routed/src/response.dart';

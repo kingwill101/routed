@@ -1,5 +1,5 @@
 import 'package:routed/routed.dart';
-import 'package:routed/src/rate_limit/policy.dart';
+import 'package:server_data/rate_limit.dart';
 import 'package:server_testing/server_testing.dart';
 
 void main() {

@@ -1,7 +1,13 @@
 import 'dart:async';
 
-import 'package:routed/src/auth/models.dart';
-import 'package:routed/src/auth/providers.dart';
+import 'package:server_auth/server_auth.dart'
+    show
+        AuthAccount,
+        AuthCredentials,
+        AuthProvider,
+        AuthSession,
+        AuthSessionStrategy,
+        AuthUser;
 import 'package:routed/src/context/context.dart';
 import 'package:routed/src/events/event.dart';
 

@@ -1,5 +1,5 @@
-import 'package:routed/src/contracts/translation/loader.dart';
-import 'package:routed/src/contracts/translation/translator.dart';
+import 'package:server_contracts/server_contracts.dart'
+    show TranslationLoader, TranslatorContract;
 import 'package:routed/src/translation/message_selector.dart';
 import 'package:routed/src/utils/dot.dart';
 

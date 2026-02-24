@@ -1,8 +1,8 @@
 import 'dart:io';
 
 import 'package:json_schema_builder/json_schema_builder.dart';
-import 'package:routed/src/auth/models.dart';
-import 'package:routed/src/auth/provider_registry.dart';
+import 'package:server_auth/server_auth.dart'
+    show AuthProviderRegistry, AuthSessionStrategy;
 import 'package:routed/src/config/schema.dart';
 import 'package:routed/src/provider/config_utils.dart';
 import 'package:routed/src/provider/provider.dart';

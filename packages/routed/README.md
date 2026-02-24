@@ -29,6 +29,16 @@ dependencies:
 
 Then run `dart pub get`.
 
+## Package split imports
+
+Core reusable runtime modules are now published under `server_*` packages:
+
+- `server_contracts` for shared contracts.
+- `server_auth` for auth providers and auth runtime.
+- `server_data` for cache/storage/session/rate-limit runtime.
+
+Routed keeps compatibility re-exports for now, but new integrations should prefer direct `server_*` imports.
+
 ## Quick start
 
 ```dart

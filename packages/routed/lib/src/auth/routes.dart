@@ -1,8 +1,16 @@
 import 'dart:io';
 
 import 'package:routed/src/auth/manager.dart';
-import 'package:routed/src/auth/models.dart';
-import 'package:routed/src/auth/providers.dart';
+import 'package:server_auth/server_auth.dart'
+    show
+        AuthCredentials,
+        AuthProvider,
+        AuthResult,
+        AuthSessionStrategy,
+        CallbackProvider,
+        CredentialsProvider,
+        EmailProvider,
+        OAuthProvider;
 import 'package:routed/src/context/context.dart';
 import 'package:routed/src/response.dart';
 import 'package:routed/src/router/router.dart';

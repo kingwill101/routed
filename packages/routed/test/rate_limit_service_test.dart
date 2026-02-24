@@ -1,8 +1,7 @@
 import 'dart:async';
 
 import 'package:routed/routed.dart';
-import 'package:routed/src/rate_limit/backend.dart';
-import 'package:routed/src/rate_limit/policy.dart';
+import 'package:server_data/rate_limit.dart' hide RateLimitService;
 import 'package:routed/src/rate_limit/service.dart';
 import 'package:routed_testing/routed_testing.dart';
 import 'package:server_testing/server_testing.dart';

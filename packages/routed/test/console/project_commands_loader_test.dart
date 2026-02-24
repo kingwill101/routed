@@ -187,6 +187,12 @@ Future<void> _writeProject({
   required String commandName,
   String? commandsSource,
 }) async {
+  final serverContractsPath = _escapePath(
+    p.normalize(p.join(cliRoot, '..', 'server_contracts')),
+  );
+  final serverAuthPath = _escapePath(p.normalize(p.join(cliRoot, '..', 'server_auth')));
+  final serverDataPath = _escapePath(p.normalize(p.join(cliRoot, '..', 'server_data')));
+
   final pubspec =
       '''
 name: project_app
@@ -197,6 +203,13 @@ dependencies:
 dev_dependencies:
   routed:
     path: ${_escapePath(cliRoot)}
+dependency_overrides:
+  server_contracts:
+    path: $serverContractsPath
+  server_auth:
+    path: $serverAuthPath
+  server_data:
+    path: $serverDataPath
 ''';
 
   final pubspecFile = io.File(p.join(projectDir.path, 'pubspec.yaml'));

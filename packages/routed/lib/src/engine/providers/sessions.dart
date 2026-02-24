@@ -3,7 +3,6 @@ import 'package:routed/src/config/spec.dart';
 import 'package:routed/src/config/specs/session.dart';
 import 'package:routed/src/config/specs/session_drivers.dart';
 import 'package:routed/src/container/container.dart';
-import 'package:routed/src/contracts/cache/repository.dart' as cache;
 import 'package:routed/src/contracts/contracts.dart' show Config;
 import 'package:routed/src/engine/config.dart' show EngineConfig, SessionConfig;
 import 'package:routed/src/engine/middleware_registry.dart';
@@ -11,11 +10,9 @@ import 'package:routed/src/engine/storage_defaults.dart';
 import 'package:routed/src/engine/storage_paths.dart';
 import 'package:routed/src/provider/config_utils.dart';
 import 'package:routed/src/provider/provider.dart';
-import 'package:routed/src/sessions/cache_store.dart';
-import 'package:routed/src/sessions/memory_store.dart';
+import 'package:server_contracts/server_contracts.dart' as cache;
+import 'package:server_data/sessions.dart';
 import 'package:routed/src/sessions/middleware.dart';
-import 'package:routed/src/sessions/options.dart';
-import 'package:routed/src/sessions/secure_cookie.dart';
 import 'package:routed/src/support/driver_registry.dart';
 
 /// Signature for a function that converts a [SessionDriverBuilderContext] to a
@@ -83,7 +80,7 @@ class SessionDriverBuilderContext {
   final bool encrypt;
 
   /// Resolved cookie options.
-  final Options options;
+  final SessionOptions options;
 
   /// Ordered list of [SecureCookie] codecs (primary first).
   final List<SecureCookie> codecs;

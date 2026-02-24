@@ -4,7 +4,7 @@
 /// inspecting driver metadata.
 library;
 
-import 'src/contracts/cache/store.dart' as cache_store;
+import 'package:server_contracts/server_contracts.dart' as cache_store;
 
 export 'src/cache/cache_manager.dart'
     show
@@ -21,7 +21,6 @@ export 'src/storage/storage_drivers.dart'
         StorageDriverContext,
         StorageDriverDocContext,
         StorageDriverDocBuilder,
-        LocalStorageDisk,
         StorageDiskBuilder;
 export 'src/engine/providers/sessions.dart'
     show

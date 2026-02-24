@@ -3,10 +3,12 @@ import 'dart:convert';
 import 'dart:io';
 import 'dart:typed_data';
 
+import 'package:server_data/server_data.dart' show SessionResponse;
+
 typedef ResponseBodyFilter = List<int> Function(List<int> body);
 
 /// A class that represents an HTTP response.
-class Response {
+class Response implements SessionResponse {
   /// The underlying [HttpResponse] object.
   ///
   /// Use the public API methods instead of accessing httpResponse directly.
@@ -270,6 +272,7 @@ class Response {
   }
 
   /// Sets a cookie with the given [name] and [value], and optional parameters.
+  @override
   void setCookie(
     String name,
     dynamic value, {

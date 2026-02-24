@@ -4,6 +4,7 @@ import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
 import 'package:routed/src/auth/providers/github.dart';
 import 'package:routed/routed.dart';
+import 'package:server_auth/server_auth.dart' show OAuthTokenResponse;
 import 'package:routed_testing/routed_testing.dart';
 import 'package:server_testing/server_testing.dart';
 import '../test_engine.dart';

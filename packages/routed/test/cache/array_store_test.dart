@@ -1,5 +1,5 @@
-import 'package:routed/src/cache/array_store.dart';
-import 'package:routed/src/contracts/cache/store.dart';
+import 'package:server_data/server_data.dart';
+import 'package:server_contracts/server_contracts.dart' show Store;
 import 'package:test/test.dart';
 
 void main() {
