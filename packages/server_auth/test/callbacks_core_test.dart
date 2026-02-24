@@ -90,6 +90,45 @@ void main() {
   );
 
   test(
+    'resolveAuthSignInRedirectOrThrow returns callback redirect when allowed',
+    () async {
+      final redirect = await resolveAuthSignInRedirectOrThrow<String>(
+        callback: (_) => const AuthSignInResult.allow(redirectUrl: '/home'),
+        context: AuthSignInCallbackContext<String>(
+          context: 'ctx',
+          user: AuthUser(id: 'u1'),
+          strategy: AuthSessionStrategy.session,
+        ),
+      );
+
+      expect(redirect, equals('/home'));
+    },
+  );
+
+  test(
+    'resolveAuthSignInRedirectOrThrow throws when sign-in is denied',
+    () async {
+      await expectLater(
+        resolveAuthSignInRedirectOrThrow<String>(
+          callback: (_) => const AuthSignInResult.deny(),
+          context: AuthSignInCallbackContext<String>(
+            context: 'ctx',
+            user: AuthUser(id: 'u1'),
+            strategy: AuthSessionStrategy.session,
+          ),
+        ),
+        throwsA(
+          isA<AuthFlowException>().having(
+            (error) => error.code,
+            'code',
+            'sign_in_blocked',
+          ),
+        ),
+      );
+    },
+  );
+
+  test(
     'resolveAuthJwtClaims and resolveAuthSessionPayload pass through defaults',
     () async {
       final jwtContext = AuthJwtCallbackContext<String>(
