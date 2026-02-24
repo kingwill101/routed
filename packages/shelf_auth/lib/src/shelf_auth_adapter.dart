@@ -104,11 +104,18 @@ Middleware requireAuthenticated({
   String principalContextKey = shelfAuthPrincipalContextKey,
   String realm = 'Restricted',
 }) {
+  final guard = requireAuthenticatedGuard<Request, Response>(
+    principalResolver: (request) =>
+        authPrincipal(request, contextKey: principalContextKey),
+    onDenied: (_) => _unauthorized('authentication_required', realm: realm),
+  );
+
   return (innerHandler) {
-    return (request) {
-      final principal = authPrincipal(request, contextKey: principalContextKey);
-      if (principal == null) {
-        return _unauthorized('authentication_required', realm: realm);
+    return (request) async {
+      final result = await guard(request);
+      if (!result.allowed) {
+        return result.response ??
+            _unauthorized('authentication_required', realm: realm);
       }
       return innerHandler(request);
     };
@@ -126,24 +133,21 @@ Middleware requireRoles(
   String principalContextKey = shelfAuthPrincipalContextKey,
   String realm = 'Restricted',
 }) {
-  final expected = roles
-      .map((role) => role.trim())
-      .where((role) => role.isNotEmpty)
-      .toList(growable: false);
+  final guard = requireRolesGuard<Request, Response>(
+    roles,
+    principalResolver: (request) =>
+        authPrincipal(request, contextKey: principalContextKey),
+    any: any,
+    onUnauthenticated: (_) =>
+        _unauthorized('authentication_required', realm: realm),
+    onForbidden: (_) => _forbidden('insufficient_role'),
+  );
 
   return (innerHandler) {
-    return (request) {
-      final principal = authPrincipal(request, contextKey: principalContextKey);
-      if (principal == null) {
-        return _unauthorized('authentication_required', realm: realm);
-      }
-      final allowed = expected.isEmpty
-          ? true
-          : any
-          ? expected.any(principal.hasRole)
-          : expected.every(principal.hasRole);
-      if (!allowed) {
-        return _forbidden('insufficient_role');
+    return (request) async {
+      final result = await guard(request);
+      if (!result.allowed) {
+        return result.response ?? _forbidden('insufficient_role');
       }
       return innerHandler(request);
     };
