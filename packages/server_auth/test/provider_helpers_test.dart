@@ -665,6 +665,107 @@ void main() {
   });
 
   test(
+    'resolveOAuthAuthorizationStart persists session keys and returns authorization uri',
+    () async {
+      final persisted = <String, String>{};
+      String? seenState;
+      final provider = OAuthProvider<Map<String, dynamic>>(
+        id: 'example',
+        name: 'Example',
+        clientId: 'client-id',
+        clientSecret: 'client-secret',
+        authorizationEndpoint: Uri.parse('https://auth.test/authorize'),
+        tokenEndpoint: Uri.parse('https://auth.test/token'),
+        redirectUri: 'https://app.test/callback/example',
+        scopes: const <String>['openid'],
+        usePkce: true,
+        onStateGenerated: (_, _, state) {
+          seenState = state;
+        },
+        profile: (profile) => AuthUser(id: profile['sub']?.toString() ?? ''),
+      );
+
+      final resolved =
+          await resolveOAuthAuthorizationStart<Object, Map<String, dynamic>>(
+            context: Object(),
+            provider: provider,
+            stateKey: '_auth.state',
+            pkceKey: '_auth.pkce',
+            callbackKey: '_auth.callback',
+            callbackUrl: '/dashboard',
+            writeSession: (key, value) => persisted[key] = value,
+          );
+
+      expect(resolved.state, isNotEmpty);
+      expect(resolved.codeVerifier, isNotNull);
+      expect(resolved.parameters['state'], equals(resolved.state));
+      expect(
+        resolved.authorizationUri.toString(),
+        contains('https://auth.test/authorize?'),
+      );
+      expect(seenState, equals(resolved.state));
+      expect(
+        persisted[authProviderStateSessionKey('_auth.state', 'example')],
+        equals(resolved.state),
+      );
+      expect(
+        persisted[authProviderPkceSessionKey('_auth.pkce', 'example')],
+        equals(resolved.codeVerifier),
+      );
+      expect(
+        persisted[authProviderCallbackSessionKey('_auth.callback', 'example')],
+        equals('/dashboard'),
+      );
+    },
+  );
+
+  test(
+    'resolveOAuthAuthorizationStart skips callback key when callback url missing',
+    () async {
+      final persisted = <String, String>{};
+      final provider = OAuthProvider<Map<String, dynamic>>(
+        id: 'example',
+        name: 'Example',
+        clientId: 'client-id',
+        clientSecret: 'client-secret',
+        authorizationEndpoint: Uri.parse('https://auth.test/authorize'),
+        tokenEndpoint: Uri.parse('https://auth.test/token'),
+        redirectUri: 'https://app.test/callback/example',
+        usePkce: false,
+        profile: (profile) => AuthUser(id: profile['sub']?.toString() ?? ''),
+      );
+
+      await resolveOAuthAuthorizationStart<Object, Map<String, dynamic>>(
+        context: Object(),
+        provider: provider,
+        stateKey: '_auth.state',
+        pkceKey: '_auth.pkce',
+        callbackKey: '_auth.callback',
+        writeSession: (key, value) => persisted[key] = value,
+      );
+
+      expect(
+        persisted.containsKey(
+          authProviderCallbackSessionKey('_auth.callback', 'example'),
+        ),
+        isFalse,
+      );
+      expect(
+        persisted.containsKey(
+          authProviderPkceSessionKey('_auth.pkce', 'example'),
+        ),
+        isFalse,
+      );
+      expect(
+        persisted.containsKey(
+          authProviderStateSessionKey('_auth.state', 'example'),
+        ),
+        isTrue,
+      );
+    },
+  );
+
+  test(
     'loadOAuthProfile decodes id_token claims when no userinfo endpoint',
     () async {
       final header = base64UrlEncode(

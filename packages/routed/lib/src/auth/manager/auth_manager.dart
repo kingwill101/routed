@@ -23,9 +23,8 @@ import 'package:server_auth/server_auth.dart'
         authProviderStateSessionKey,
         authProviderSummaries,
         baseUrlFromUri,
-        AuthOAuthAuthorizationStart,
         ensureOAuthStateMatches,
-        prepareOAuthAuthorizationStart,
+        resolveOAuthAuthorizationStart,
         resolveAuthProviderById,
         AuthResult,
         AuthSession,
@@ -236,36 +235,17 @@ class AuthManager {
     OAuthProvider<TProfile> provider, {
     String? callbackUrl,
   }) async {
-    final AuthOAuthAuthorizationStart start = prepareOAuthAuthorizationStart(
-      provider,
-      callbackUrl: callbackUrl,
-    );
-    final state = start.state;
-    ctx.setSession(
-      authProviderStateSessionKey(options.stateKey, provider.id),
-      state,
-    );
-
-    if (provider.onStateGenerated != null) {
-      await Future.sync(() => provider.onStateGenerated!(ctx, provider, state));
-    }
-
-    if (start.codeVerifier != null) {
-      ctx.setSession(
-        authProviderPkceSessionKey(options.pkceKey, provider.id),
-        start.codeVerifier,
-      );
-    }
-    final params = start.parameters;
-
-    if (callbackUrl != null && callbackUrl.isNotEmpty) {
-      ctx.setSession(
-        authProviderCallbackSessionKey(options.callbackKey, provider.id),
-        callbackUrl,
-      );
-    }
-
-    return provider.authorizationEndpoint.replace(queryParameters: params);
+    final resolved =
+        await resolveOAuthAuthorizationStart<EngineContext, TProfile>(
+          context: ctx,
+          provider: provider,
+          stateKey: options.stateKey,
+          pkceKey: options.pkceKey,
+          callbackKey: options.callbackKey,
+          callbackUrl: callbackUrl,
+          writeSession: ctx.setSession,
+        );
+    return resolved.authorizationUri;
   }
 
   Future<AuthResult> finishOAuth<TProfile extends Object>(

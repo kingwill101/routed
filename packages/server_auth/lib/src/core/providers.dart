@@ -320,6 +320,23 @@ class AuthOAuthAuthorizationStart {
   final Map<String, String> parameters;
 }
 
+/// Result of preparing OAuth authorization and persisted session values.
+class AuthOAuthAuthorizationResolution {
+  const AuthOAuthAuthorizationResolution({
+    required this.state,
+    this.codeVerifier,
+    this.codeChallenge,
+    required this.parameters,
+    required this.authorizationUri,
+  });
+
+  final String state;
+  final String? codeVerifier;
+  final String? codeChallenge;
+  final Map<String, String> parameters;
+  final Uri authorizationUri;
+}
+
 /// Prepares OAuth state, PKCE values, and authorization parameters.
 AuthOAuthAuthorizationStart prepareOAuthAuthorizationStart<
   TProfile extends Object
@@ -341,6 +358,55 @@ AuthOAuthAuthorizationStart prepareOAuthAuthorizationStart<
       state: state,
       codeChallenge: challenge,
       callbackUrl: callbackUrl,
+    ),
+  );
+}
+
+/// Prepares and persists OAuth authorization state for framework adapters.
+Future<AuthOAuthAuthorizationResolution>
+resolveOAuthAuthorizationStart<TContext, TProfile extends Object>({
+  required TContext context,
+  required OAuthProvider<TProfile> provider,
+  required String stateKey,
+  required String pkceKey,
+  required String callbackKey,
+  required void Function(String key, String value) writeSession,
+  String? callbackUrl,
+}) async {
+  final start = prepareOAuthAuthorizationStart(
+    provider,
+    callbackUrl: callbackUrl,
+  );
+
+  writeSession(authProviderStateSessionKey(stateKey, provider.id), start.state);
+
+  if (provider.onStateGenerated != null) {
+    await Future.sync(
+      () => provider.onStateGenerated!(context, provider, start.state),
+    );
+  }
+
+  if (start.codeVerifier != null) {
+    writeSession(
+      authProviderPkceSessionKey(pkceKey, provider.id),
+      start.codeVerifier!,
+    );
+  }
+
+  if (callbackUrl != null && callbackUrl.isNotEmpty) {
+    writeSession(
+      authProviderCallbackSessionKey(callbackKey, provider.id),
+      callbackUrl,
+    );
+  }
+
+  return AuthOAuthAuthorizationResolution(
+    state: start.state,
+    codeVerifier: start.codeVerifier,
+    codeChallenge: start.codeChallenge,
+    parameters: start.parameters,
+    authorizationUri: provider.authorizationEndpoint.replace(
+      queryParameters: start.parameters,
     ),
   );
 }
