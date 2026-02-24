@@ -88,6 +88,41 @@ void main() {
     );
   });
 
+  test(
+    'shouldRefreshJwtClaims evaluates iat claims with nullable update age',
+    () {
+      final now = DateTime.utc(2026, 2, 24, 12);
+      final issuedAtSeconds =
+          now.subtract(const Duration(minutes: 10)).millisecondsSinceEpoch ~/
+          1000;
+
+      expect(
+        shouldRefreshJwtClaims(
+          <String, dynamic>{'iat': issuedAtSeconds},
+          const Duration(minutes: 5),
+          now: now,
+        ),
+        isTrue,
+      );
+      expect(
+        shouldRefreshJwtClaims(
+          <String, dynamic>{'iat': issuedAtSeconds},
+          null,
+          now: now,
+        ),
+        isFalse,
+      );
+      expect(
+        shouldRefreshJwtClaims(
+          <String, dynamic>{'iat': 'bad'},
+          const Duration(minutes: 5),
+          now: now,
+        ),
+        isFalse,
+      );
+    },
+  );
+
   test('buildJwtTokenCookie applies defaults and expiry', () {
     final expiry = DateTime.now().add(const Duration(minutes: 5));
     final cookie = buildJwtTokenCookie('auth', 'token-123', expires: expiry);

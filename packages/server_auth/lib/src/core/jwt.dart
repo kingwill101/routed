@@ -43,6 +43,23 @@ bool shouldRefreshJwtByIssuedAt(
   return current.difference(issuedAt) >= updateAge;
 }
 
+/// Returns true when JWT claims indicate refresh should occur.
+bool shouldRefreshJwtClaims(
+  Map<String, dynamic> claims,
+  Duration? updateAge, {
+  DateTime? now,
+}) {
+  if (updateAge == null) {
+    return false;
+  }
+  final issuedAtValue = claims['iat'];
+  final issuedAt = jwtIssuedAtUtc(issuedAtValue);
+  if (issuedAt == null) {
+    return false;
+  }
+  return shouldRefreshJwtByIssuedAt(issuedAtValue, updateAge, now: now);
+}
+
 /// Builds an HTTP-only JWT cookie.
 Cookie buildJwtTokenCookie(
   String cookieName,

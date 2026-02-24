@@ -57,7 +57,6 @@ import 'package:server_auth/server_auth.dart'
         CredentialsProvider,
         EmailProvider,
         JwtAuthException,
-        jwtIssuedAtUtc,
         issueAuthJwtToken,
         JwtPayload,
         JwtVerifier,
@@ -70,7 +69,7 @@ import 'package:server_auth/server_auth.dart'
         resolveAuthSessionExpiry,
         serializeAuthSessionIssuedAt,
         secureRandomToken,
-        shouldRefreshJwtByIssuedAt;
+        shouldRefreshJwtClaims;
 import 'package:routed/src/auth/hooks.dart';
 import 'package:routed/src/auth/session_auth.dart';
 import 'package:routed/src/context/context.dart';
@@ -783,16 +782,7 @@ class AuthManager {
     JwtPayload payload,
     AuthUser user,
   ) async {
-    final updateAge = options.sessionUpdateAge;
-    if (updateAge == null) {
-      return null;
-    }
-    final issuedAtValue = payload.claims['iat'];
-    final issuedAt = jwtIssuedAtUtc(issuedAtValue);
-    if (issuedAt == null) {
-      return null;
-    }
-    if (!shouldRefreshJwtByIssuedAt(issuedAtValue, updateAge)) {
+    if (!shouldRefreshJwtClaims(payload.claims, options.sessionUpdateAge)) {
       return null;
     }
     final claims = await _applyJwtCallback(
