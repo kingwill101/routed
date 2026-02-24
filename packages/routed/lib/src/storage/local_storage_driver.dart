@@ -27,14 +27,11 @@ class LocalStorageDriver {
     String diskName, {
     String? storageRoot,
   }) {
-    final resolved = configuredRoot?.trim();
-    if (resolved != null && resolved.isNotEmpty) {
-      return resolved;
-    }
-    if (storageRoot != null && storageRoot.isNotEmpty && diskName == 'local') {
-      return storageRoot;
-    }
-    return _defaultRootFor(diskName);
+    return resolveLocalStorageRoot(
+      configuredRoot,
+      diskName,
+      storageRoot: storageRoot,
+    );
   }
 
   /// Produces a `StorageDisk` backed by the local file system.
@@ -67,13 +64,6 @@ class LocalStorageDriver {
       context: specContext,
     );
     return spec.fromMap(merged, context: specContext);
-  }
-
-  String _defaultRootFor(String diskName) {
-    if (diskName == 'local') {
-      return 'storage/app';
-    }
-    return 'storage/$diskName';
   }
 }
 
