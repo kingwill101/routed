@@ -120,6 +120,49 @@ void main() {
     },
   );
 
+  test(
+    'requireAuthorizedCredentialsSignIn throws when credentials are rejected',
+    () async {
+      await expectLater(
+        requireAuthorizedCredentialsSignIn(
+          adapter: CallbackAuthAdapter(onVerifyCredentials: (_) => null),
+          provider: CredentialsProvider(),
+          context: Object(),
+          credentials: AuthCredentials(email: 'user@example.com'),
+        ),
+        throwsA(
+          isA<AuthFlowException>().having(
+            (error) => error.code,
+            'code',
+            'invalid_credentials',
+          ),
+        ),
+      );
+    },
+  );
+
+  test(
+    'requireAuthorizedCredentialsRegistration throws custom code when registration fails',
+    () async {
+      await expectLater(
+        requireAuthorizedCredentialsRegistration(
+          adapter: CallbackAuthAdapter(onRegisterCredentials: (_) => null),
+          provider: CredentialsProvider(),
+          context: Object(),
+          credentials: AuthCredentials(email: 'new@example.com'),
+          invalidCode: 'registration_blocked',
+        ),
+        throwsA(
+          isA<AuthFlowException>().having(
+            (error) => error.code,
+            'code',
+            'registration_blocked',
+          ),
+        ),
+      );
+    },
+  );
+
   test('auth provider session key helpers compose stable keys', () {
     expect(
       authProviderStateSessionKey('_auth.state', 'github'),

@@ -169,6 +169,26 @@ Future<AuthUser?> authorizeCredentialsSignIn({
   return Future.sync(() => adapter.verifyCredentials(credentials));
 }
 
+/// Resolves credential sign-in and throws [AuthFlowException] when rejected.
+Future<AuthUser> requireAuthorizedCredentialsSignIn({
+  required AuthAdapter adapter,
+  required CredentialsProvider provider,
+  required AuthContext context,
+  required AuthCredentials credentials,
+  String invalidCode = 'invalid_credentials',
+}) async {
+  final user = await authorizeCredentialsSignIn(
+    adapter: adapter,
+    provider: provider,
+    context: context,
+    credentials: credentials,
+  );
+  if (user == null) {
+    throw AuthFlowException(invalidCode);
+  }
+  return user;
+}
+
 /// Resolves credential registration via provider callback or adapter fallback.
 Future<AuthUser?> authorizeCredentialsRegistration({
   required AuthAdapter adapter,
@@ -182,6 +202,27 @@ Future<AuthUser?> authorizeCredentialsRegistration({
     );
   }
   return Future.sync(() => adapter.registerCredentials(credentials));
+}
+
+/// Resolves credential registration and throws [AuthFlowException] when
+/// registration fails.
+Future<AuthUser> requireAuthorizedCredentialsRegistration({
+  required AuthAdapter adapter,
+  required CredentialsProvider provider,
+  required AuthContext context,
+  required AuthCredentials credentials,
+  String invalidCode = 'registration_failed',
+}) async {
+  final user = await authorizeCredentialsRegistration(
+    adapter: adapter,
+    provider: provider,
+    context: context,
+    credentials: credentials,
+  );
+  if (user == null) {
+    throw AuthFlowException(invalidCode);
+  }
+  return user;
 }
 
 /// {@macro server_auth_provider_overview}
