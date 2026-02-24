@@ -2,7 +2,6 @@ import 'dart:async';
 import 'dart:io';
 
 import 'package:http/http.dart' as http;
-import 'package:jose/jose.dart' show JsonWebToken;
 import 'package:server_auth/server_auth.dart'
     show
         AuthAccount,
@@ -15,6 +14,7 @@ import 'package:server_auth/server_auth.dart'
         AuthProvider,
         authProviderSummaries,
         baseUrlFromUri,
+        exchangeOAuthAuthorizationCode,
         resolveAuthProviderById,
         AuthRedirectCallbackContext,
         AuthResult,
@@ -23,8 +23,6 @@ import 'package:server_auth/server_auth.dart'
         AuthSessionStrategy,
         AuthSignInCallbackContext,
         AuthSignInResult,
-        OAuth2Client,
-        OAuth2Exception,
         AuthFlowException,
         AuthUser,
         AuthVerificationTokenStore,
@@ -46,7 +44,7 @@ import 'package:server_auth/server_auth.dart'
         JwtPayload,
         JwtVerifier,
         OAuthProvider,
-        OAuthTokenResponse,
+        loadOAuthProfile,
         pkceS256CodeChallenge,
         secureRandomToken;
 import 'package:routed/src/auth/hooks.dart';
@@ -284,9 +282,18 @@ class AuthManager {
     final verifier = ctx.getSession<String>(
       '${options.pkceKey}.${provider.id}',
     );
-    final tokenResponse = await _exchangeOAuthCode(provider, code, verifier);
+    final tokenResponse = await exchangeOAuthAuthorizationCode(
+      provider,
+      code: code,
+      codeVerifier: verifier,
+      httpClient: httpClient,
+    );
 
-    final rawProfile = await _loadOAuthProfile(ctx, provider, tokenResponse);
+    final rawProfile = await loadOAuthProfile(
+      provider,
+      token: tokenResponse,
+      httpClient: httpClient,
+    );
     final parsedProfile = provider.parseProfile(rawProfile);
     final enrichedProfile = await Future.sync(
       () =>
@@ -871,75 +878,6 @@ class AuthManager {
       cookie.expires = expires;
     }
     ctx.response.cookies.add(cookie);
-  }
-
-  OAuth2Client _oauthClient<TProfile extends Object>(
-    OAuthProvider<TProfile> provider,
-  ) {
-    return OAuth2Client(
-      tokenEndpoint: provider.tokenEndpoint,
-      clientId: provider.clientId,
-      clientSecret: provider.clientSecret,
-      httpClient: httpClient,
-      useBasicAuth: provider.useBasicAuth,
-    );
-  }
-
-  Future<OAuthTokenResponse> _exchangeOAuthCode<TProfile extends Object>(
-    OAuthProvider<TProfile> provider,
-    String code,
-    String? verifier,
-  ) async {
-    final scope = provider.scopes.isEmpty ? null : provider.scopes.join(' ');
-    return _oauthClient(provider).exchangeAuthorizationCode(
-      code: code,
-      redirectUri: Uri.parse(provider.redirectUri),
-      codeVerifier: verifier,
-      scope: scope,
-      additionalParameters: provider.tokenParams.isEmpty
-          ? null
-          : provider.tokenParams,
-    );
-  }
-
-  Future<Map<String, dynamic>> _loadOAuthProfile<TProfile extends Object>(
-    EngineContext ctx,
-    OAuthProvider<TProfile> provider,
-    OAuthTokenResponse token,
-  ) async {
-    Map<String, dynamic> profile;
-    if (provider.userInfoEndpoint == null) {
-      final idToken = token.raw['id_token']?.toString();
-      if (idToken != null && idToken.isNotEmpty) {
-        final jwt = JsonWebToken.unverified(idToken);
-        profile = jwt.claims.toJson();
-      } else {
-        profile = <String, dynamic>{};
-      }
-    } else if (provider.userInfoRequest != null) {
-      // Use custom userinfo request callback (e.g., for POST-based endpoints)
-      try {
-        profile = await Future.sync(
-          () => provider.userInfoRequest!(
-            token,
-            httpClient,
-            provider.userInfoEndpoint!,
-          ),
-        );
-      } catch (e) {
-        throw AuthFlowException('userinfo_failed');
-      }
-    } else {
-      try {
-        profile = await _oauthClient(
-          provider,
-        ).fetchUserInfo(provider.userInfoEndpoint!, token.accessToken);
-      } on OAuth2Exception {
-        throw AuthFlowException('userinfo_failed');
-      }
-    }
-
-    return profile;
   }
 }
 

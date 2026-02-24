@@ -1,6 +1,8 @@
 import 'dart:async';
 
 import 'package:http/http.dart' as http;
+import 'package:jose/jose.dart' show JsonWebToken;
+import 'exceptions.dart' show AuthFlowException;
 import 'models.dart';
 import 'oauth.dart';
 
@@ -211,6 +213,82 @@ List<AuthProvider> mergeAuthProvidersById(
     }
   }
   return merged;
+}
+
+/// Builds an [OAuth2Client] from provider metadata.
+OAuth2Client oauthClientForProvider<TProfile extends Object>(
+  OAuthProvider<TProfile> provider, {
+  http.Client? httpClient,
+}) {
+  return OAuth2Client(
+    tokenEndpoint: provider.tokenEndpoint,
+    clientId: provider.clientId,
+    clientSecret: provider.clientSecret,
+    httpClient: httpClient,
+    useBasicAuth: provider.useBasicAuth,
+  );
+}
+
+/// Exchanges an authorization code for provider tokens.
+Future<OAuthTokenResponse>
+exchangeOAuthAuthorizationCode<TProfile extends Object>(
+  OAuthProvider<TProfile> provider, {
+  required String code,
+  String? codeVerifier,
+  http.Client? httpClient,
+}) {
+  final scope = provider.scopes.isEmpty ? null : provider.scopes.join(' ');
+  return oauthClientForProvider(
+    provider,
+    httpClient: httpClient,
+  ).exchangeAuthorizationCode(
+    code: code,
+    redirectUri: Uri.parse(provider.redirectUri),
+    codeVerifier: codeVerifier,
+    scope: scope,
+    additionalParameters: provider.tokenParams.isEmpty
+        ? null
+        : provider.tokenParams,
+  );
+}
+
+/// Loads a provider profile from userinfo or an ID token payload.
+Future<Map<String, dynamic>> loadOAuthProfile<TProfile extends Object>(
+  OAuthProvider<TProfile> provider, {
+  required OAuthTokenResponse token,
+  required http.Client httpClient,
+}) async {
+  if (provider.userInfoEndpoint == null) {
+    final idToken = token.raw['id_token']?.toString();
+    if (idToken != null && idToken.isNotEmpty) {
+      final jwt = JsonWebToken.unverified(idToken);
+      return jwt.claims.toJson();
+    }
+    return <String, dynamic>{};
+  }
+
+  if (provider.userInfoRequest != null) {
+    try {
+      return await Future.sync(
+        () => provider.userInfoRequest!(
+          token,
+          httpClient,
+          provider.userInfoEndpoint!,
+        ),
+      );
+    } catch (_) {
+      throw AuthFlowException('userinfo_failed');
+    }
+  }
+
+  try {
+    return await oauthClientForProvider(
+      provider,
+      httpClient: httpClient,
+    ).fetchUserInfo(provider.userInfoEndpoint!, token.accessToken);
+  } on OAuth2Exception {
+    throw AuthFlowException('userinfo_failed');
+  }
 }
 
 /// {@macro server_auth_oauth_provider}

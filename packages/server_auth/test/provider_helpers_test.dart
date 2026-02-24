@@ -1,3 +1,7 @@
+import 'dart:convert';
+
+import 'package:http/http.dart' as http;
+import 'package:http/testing.dart';
 import 'package:server_auth/server_auth.dart';
 import 'package:test/test.dart';
 
@@ -43,4 +47,125 @@ void main() {
     );
     expect(merged.first.name, equals('Google'));
   });
+
+  test('exchangeOAuthAuthorizationCode uses provider token settings', () async {
+    late http.Request captured;
+    final provider = OAuthProvider<Map<String, dynamic>>(
+      id: 'example',
+      name: 'Example',
+      clientId: 'client-id',
+      clientSecret: 'client-secret',
+      authorizationEndpoint: Uri.parse('https://auth.test/authorize'),
+      tokenEndpoint: Uri.parse('https://auth.test/token'),
+      redirectUri: 'https://app.test/callback/example',
+      scopes: const <String>['openid', 'profile'],
+      tokenParams: const <String, String>{'resource': 'api'},
+      profile: (profile) => AuthUser(id: profile['sub']?.toString() ?? ''),
+    );
+
+    final token = await exchangeOAuthAuthorizationCode(
+      provider,
+      code: 'auth-code',
+      codeVerifier: 'pkce-verifier',
+      httpClient: MockClient((request) async {
+        captured = request;
+        return http.Response(
+          jsonEncode(<String, dynamic>{
+            'access_token': 'token-1',
+            'token_type': 'Bearer',
+            'expires_in': 3600,
+          }),
+          200,
+          headers: const <String, String>{'content-type': 'application/json'},
+        );
+      }),
+    );
+
+    expect(token.accessToken, equals('token-1'));
+    expect(captured.bodyFields['grant_type'], equals('authorization_code'));
+    expect(captured.bodyFields['code'], equals('auth-code'));
+    expect(
+      captured.bodyFields['redirect_uri'],
+      equals('https://app.test/callback/example'),
+    );
+    expect(captured.bodyFields['scope'], equals('openid profile'));
+    expect(captured.bodyFields['code_verifier'], equals('pkce-verifier'));
+    expect(captured.bodyFields['resource'], equals('api'));
+  });
+
+  test(
+    'loadOAuthProfile decodes id_token claims when no userinfo endpoint',
+    () async {
+      final header = base64UrlEncode(
+        utf8.encode('{"alg":"none","typ":"JWT"}'),
+      ).replaceAll('=', '');
+      final payload = base64UrlEncode(
+        utf8.encode('{"sub":"user-1","email":"user@example.com"}'),
+      ).replaceAll('=', '');
+      final idToken = '$header.$payload.';
+
+      final provider = OAuthProvider<Map<String, dynamic>>(
+        id: 'oidc',
+        name: 'OIDC',
+        clientId: 'client-id',
+        clientSecret: 'client-secret',
+        authorizationEndpoint: Uri.parse('https://auth.test/authorize'),
+        tokenEndpoint: Uri.parse('https://auth.test/token'),
+        redirectUri: 'https://app.test/callback/oidc',
+        profile: (profile) => AuthUser(id: profile['sub']?.toString() ?? ''),
+      );
+
+      final profile = await loadOAuthProfile(
+        provider,
+        token: OAuthTokenResponse(
+          accessToken: 'access-token',
+          tokenType: 'Bearer',
+          expiresIn: 3600,
+          raw: <String, dynamic>{'id_token': idToken},
+        ),
+        httpClient: MockClient((_) async => http.Response('{}', 200)),
+      );
+
+      expect(profile['sub'], equals('user-1'));
+      expect(profile['email'], equals('user@example.com'));
+    },
+  );
+
+  test(
+    'loadOAuthProfile maps userinfo callback failures to AuthFlowException',
+    () async {
+      final provider = OAuthProvider<Map<String, dynamic>>(
+        id: 'custom',
+        name: 'Custom',
+        clientId: 'client-id',
+        clientSecret: 'client-secret',
+        authorizationEndpoint: Uri.parse('https://auth.test/authorize'),
+        tokenEndpoint: Uri.parse('https://auth.test/token'),
+        userInfoEndpoint: Uri.parse('https://auth.test/userinfo'),
+        userInfoRequest: (token, client, endpoint) => throw StateError('boom'),
+        redirectUri: 'https://app.test/callback/custom',
+        profile: (profile) => AuthUser(id: profile['sub']?.toString() ?? ''),
+      );
+
+      await expectLater(
+        loadOAuthProfile(
+          provider,
+          token: OAuthTokenResponse(
+            accessToken: 'access-token',
+            tokenType: 'Bearer',
+            expiresIn: 3600,
+            raw: const <String, dynamic>{},
+          ),
+          httpClient: MockClient((_) async => http.Response('{}', 200)),
+        ),
+        throwsA(
+          isA<AuthFlowException>().having(
+            (error) => error.code,
+            'code',
+            'userinfo_failed',
+          ),
+        ),
+      );
+    },
+  );
 }
