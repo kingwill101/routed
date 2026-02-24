@@ -12,7 +12,7 @@ import 'package:server_auth/server_auth.dart'
         authorizeCredentialsRegistration,
         authorizeCredentialsSignIn,
         resolveAuthJwtClaims,
-        resolveAuthRedirectTargetWithFallback,
+        resolveAuthRedirectWithCallbacks,
         resolveAuthSessionPayload,
         resolveAuthSignInDecision,
         AuthPrincipal,
@@ -29,7 +29,6 @@ import 'package:server_auth/server_auth.dart'
         exchangeOAuthAuthorizationCode,
         prepareOAuthAuthorizationStart,
         resolveAuthProviderById,
-        AuthRedirectCallbackContext,
         AuthResult,
         AuthSessionCallbackContext,
         AuthSession,
@@ -535,22 +534,16 @@ class AuthManager {
     String? url, {
     AuthProvider? provider,
   }) async {
-    if (url == null || url.trim().isEmpty) {
-      return null;
-    }
-    return resolveAuthRedirectTargetWithFallback<EngineContext>(
-      callback: callbacks.redirect,
-      context: AuthRedirectCallbackContext<EngineContext>(
-        context: ctx,
-        url: url,
-        baseUrl: baseUrlFromUri(
-          ctx.requestedUri,
-          defaultScheme: ctx.scheme,
-          defaultHost: ctx.host,
-        ),
-        provider: provider,
+    return resolveAuthRedirectWithCallbacks<EngineContext>(
+      callbacks: callbacks,
+      context: ctx,
+      url: url,
+      baseUrl: baseUrlFromUri(
+        ctx.requestedUri,
+        defaultScheme: ctx.scheme,
+        defaultHost: ctx.host,
       ),
-      fallbackUrl: url,
+      provider: provider,
     );
   }
 

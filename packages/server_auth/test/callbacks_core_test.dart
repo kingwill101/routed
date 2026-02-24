@@ -173,4 +173,43 @@ void main() {
       expect(target, equals('/resolved'));
     },
   );
+
+  test(
+    'resolveAuthRedirectWithCallbacks returns null for missing redirect url',
+    () async {
+      final target = await resolveAuthRedirectWithCallbacks<String>(
+        callbacks: const AuthCallbacks<String>(),
+        context: 'ctx',
+        url: null,
+        baseUrl: 'https://example.test',
+      );
+      expect(target, isNull);
+    },
+  );
+
+  test(
+    'resolveAuthRedirectWithCallbacks falls back to provided url when callback is absent',
+    () async {
+      final target = await resolveAuthRedirectWithCallbacks<String>(
+        callbacks: const AuthCallbacks<String>(),
+        context: 'ctx',
+        url: '/requested',
+        baseUrl: 'https://example.test',
+      );
+      expect(target, equals('/requested'));
+    },
+  );
+
+  test(
+    'resolveAuthRedirectWithCallbacks prefers callback redirect result',
+    () async {
+      final target = await resolveAuthRedirectWithCallbacks<String>(
+        callbacks: AuthCallbacks<String>(redirect: (context) => '/resolved'),
+        context: 'ctx',
+        url: '/requested',
+        baseUrl: 'https://example.test',
+      );
+      expect(target, equals('/resolved'));
+    },
+  );
 }

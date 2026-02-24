@@ -165,6 +165,18 @@ final resolvedUrl = await resolveAuthRedirectTargetWithFallback<MyContext>(
 );
 ```
 
+When you already have an `AuthCallbacks<TContext>` instance, use the compact
+wrapper:
+
+```dart
+final resolvedFromCallbacks = await resolveAuthRedirectWithCallbacks<MyContext>(
+  callbacks: callbacks,
+  context: context,
+  url: '/requested',
+  baseUrl: 'https://app.test',
+);
+```
+
 ## Authorization and gates example
 
 ```dart
