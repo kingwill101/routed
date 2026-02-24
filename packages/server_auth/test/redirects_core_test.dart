@@ -100,4 +100,28 @@ void main() {
       );
     },
   );
+
+  test(
+    'resolveAndSanitizeRedirectCandidate combines precedence with sanitization',
+    () {
+      final sanitized = resolveAndSanitizeRedirectCandidate(
+        <String, dynamic>{'callbackUrl': 'https://app.test/one'},
+        <String, String>{'callbackUrl': '/fallback'},
+        requestUri: Uri.parse('https://app.test/auth/signin'),
+      );
+      expect(sanitized, equals('https://app.test/one'));
+    },
+  );
+
+  test(
+    'resolveAndSanitizeRedirectCandidate rejects cross-origin candidates',
+    () {
+      final sanitized = resolveAndSanitizeRedirectCandidate(
+        <String, dynamic>{'callbackUrl': 'https://evil.test/one'},
+        <String, String>{'callbackUrl': '/fallback'},
+        requestUri: Uri.parse('https://app.test/auth/signin'),
+      );
+      expect(sanitized, isNull);
+    },
+  );
 }

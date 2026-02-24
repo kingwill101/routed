@@ -65,3 +65,32 @@ String? resolveRedirectCandidate(
       payload[payloadRedirectKey]?.toString() ??
       queryParameters[queryCallbackKey];
 }
+
+/// Resolves then sanitizes a redirect candidate using callback precedence.
+///
+/// This combines [resolveRedirectCandidate] + [sanitizeRedirectUrl] for
+/// adapter runtimes that receive payload and query maps.
+String? resolveAndSanitizeRedirectCandidate(
+  Map<String, dynamic> payload,
+  Map<String, String> queryParameters, {
+  required Uri requestUri,
+  String? fallbackHost,
+  String? fallbackScheme,
+  String payloadCallbackKey = 'callbackUrl',
+  String payloadRedirectKey = 'redirect',
+  String queryCallbackKey = 'callbackUrl',
+}) {
+  final candidate = resolveRedirectCandidate(
+    payload,
+    queryParameters,
+    payloadCallbackKey: payloadCallbackKey,
+    payloadRedirectKey: payloadRedirectKey,
+    queryCallbackKey: queryCallbackKey,
+  );
+  return sanitizeRedirectUrl(
+    candidate,
+    requestUri: requestUri,
+    fallbackHost: fallbackHost,
+    fallbackScheme: fallbackScheme,
+  );
+}
