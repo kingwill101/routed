@@ -9,11 +9,11 @@ import 'package:routed/src/contracts/contracts.dart' show Config;
 import 'package:routed/src/engine/middleware_registry.dart';
 import 'package:routed/src/provider/provider.dart';
 import 'package:server_contracts/server_contracts.dart' show Repository;
-import 'package:server_data/rate_limit.dart' hide RateLimitService;
+import 'package:server_data/rate_limit.dart';
 
 import '../../events/event_manager.dart';
 import '../../middleware/rate_limit.dart';
-import '../../rate_limit/service.dart';
+import '../../rate_limit/callbacks.dart';
 
 class RateLimitServiceProvider extends ServiceProvider
     with ProvidesDefaultConfig {
@@ -109,7 +109,10 @@ class RateLimitServiceProvider extends ServiceProvider
     if (container.has<EventManager>()) {
       events = await container.make<EventManager>();
     }
-    return RateLimitService(policies, events: events);
+    return RateLimitService(
+      policies,
+      callbacks: rateLimitCallbacksForEvents(events),
+    );
   }
 
   Future<RateLimiterBackend> _createBackend(
