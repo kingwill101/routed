@@ -108,6 +108,27 @@ final payload = await verifier.verifyToken(issued.token);
 print(payload.subject);
 ```
 
+## Adapter attribute mapping helpers
+
+When writing framework adapters, use these helpers to store verified auth
+payloads with consistent attribute keys:
+
+```dart
+import 'package:server_auth/server_auth.dart';
+
+final attributes = <String, Object?>{};
+
+writeJwtPayloadAttributes(
+  payload,
+  setAttribute: (key, value) => attributes[key] = value,
+);
+
+writeOAuthValidationAttributes(
+  oauthValidation,
+  setAttribute: (key, value) => attributes[key] = value,
+);
+```
+
 ## Authorization and gates example
 
 ```dart
