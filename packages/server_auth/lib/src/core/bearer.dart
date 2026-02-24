@@ -32,3 +32,29 @@ String? extractBearerToken(
   final token = headerValue.substring(prefix.length).trim();
   return token.isEmpty ? null : token;
 }
+
+/// Resolves a token from bearer header first, then cookie entries by name.
+String? resolveBearerOrCookieToken({
+  required String? authorizationHeader,
+  required String bearerPrefix,
+  required String cookieName,
+  required Iterable<MapEntry<String, String>> cookies,
+  bool caseSensitive = true,
+}) {
+  final bearer = extractBearerToken(
+    authorizationHeader,
+    prefix: bearerPrefix,
+    caseSensitive: caseSensitive,
+  );
+  if (bearer != null) {
+    return bearer;
+  }
+
+  for (final cookie in cookies) {
+    if (cookie.key == cookieName) {
+      final value = cookie.value.trim();
+      return value.isEmpty ? null : value;
+    }
+  }
+  return null;
+}

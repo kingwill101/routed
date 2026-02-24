@@ -33,9 +33,9 @@ import 'package:server_auth/server_auth.dart'
         authUsersDiffer,
         mergeAuthUser,
         resolveAuthAccountId,
+        resolveBearerOrCookieToken,
         resolveCsrfToken,
         validateCsrfToken,
-        extractBearerToken,
         CallbackProvider,
         CredentialsProvider,
         EmailProvider,
@@ -849,20 +849,14 @@ class AuthManager {
   }
 
   String? _resolveJwtToken(EngineContext ctx) {
-    final header = ctx.request.headers.value(options.jwtOptions.header);
-    final token = extractBearerToken(
-      header,
-      prefix: options.jwtOptions.bearerPrefix,
+    return resolveBearerOrCookieToken(
+      authorizationHeader: ctx.request.headers.value(options.jwtOptions.header),
+      bearerPrefix: options.jwtOptions.bearerPrefix,
+      cookieName: options.jwtOptions.cookieName,
+      cookies: ctx.request.cookies.map(
+        (cookie) => MapEntry<String, String>(cookie.name, cookie.value),
+      ),
     );
-    if (token != null) {
-      return token;
-    }
-    for (final cookie in ctx.request.cookies) {
-      if (cookie.name == options.jwtOptions.cookieName) {
-        return cookie.value;
-      }
-    }
-    return null;
   }
 
   void _attachJwtCookie(EngineContext ctx, String token, DateTime? expires) {

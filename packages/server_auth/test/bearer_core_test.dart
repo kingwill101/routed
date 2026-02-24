@@ -33,4 +33,50 @@ void main() {
       );
     });
   });
+
+  group('resolveBearerOrCookieToken', () {
+    test('prefers bearer header when present', () {
+      final token = resolveBearerOrCookieToken(
+        authorizationHeader: 'Bearer header-token',
+        bearerPrefix: 'Bearer ',
+        cookieName: 'auth',
+        cookies: const <MapEntry<String, String>>[
+          MapEntry<String, String>('auth', 'cookie-token'),
+        ],
+      );
+      expect(token, equals('header-token'));
+    });
+
+    test('falls back to named cookie token', () {
+      final token = resolveBearerOrCookieToken(
+        authorizationHeader: null,
+        bearerPrefix: 'Bearer ',
+        cookieName: 'auth',
+        cookies: const <MapEntry<String, String>>[
+          MapEntry<String, String>('other', 'x'),
+          MapEntry<String, String>('auth', ' cookie-token '),
+        ],
+      );
+      expect(token, equals('cookie-token'));
+    });
+
+    test('returns null when header and cookie are missing or empty', () {
+      final missing = resolveBearerOrCookieToken(
+        authorizationHeader: null,
+        bearerPrefix: 'Bearer ',
+        cookieName: 'auth',
+        cookies: const <MapEntry<String, String>>[],
+      );
+      final emptyCookie = resolveBearerOrCookieToken(
+        authorizationHeader: null,
+        bearerPrefix: 'Bearer ',
+        cookieName: 'auth',
+        cookies: const <MapEntry<String, String>>[
+          MapEntry<String, String>('auth', '   '),
+        ],
+      );
+      expect(missing, isNull);
+      expect(emptyCookie, isNull);
+    });
+  });
 }
