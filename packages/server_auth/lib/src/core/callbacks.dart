@@ -84,6 +84,19 @@ Future<String?> resolveAuthRedirectTarget<TContext>({
   return await Future<String?>.value(callback(context));
 }
 
+/// Evaluates redirect callback behavior with fallback pass-through semantics.
+Future<String?> resolveAuthRedirectTargetWithFallback<TContext>({
+  required AuthRedirectCallback<TContext>? callback,
+  required AuthRedirectCallbackContext<TContext> context,
+  String? fallbackUrl,
+}) async {
+  final resolved = await resolveAuthRedirectTarget<TContext>(
+    callback: callback,
+    context: context,
+  );
+  return resolved ?? fallbackUrl;
+}
+
 /// Result of a sign-in callback decision.
 class AuthSignInResult {
   const AuthSignInResult.allow({this.redirectUrl}) : allowed = true;

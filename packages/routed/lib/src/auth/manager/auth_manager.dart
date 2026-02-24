@@ -12,7 +12,7 @@ import 'package:server_auth/server_auth.dart'
         authorizeCredentialsRegistration,
         authorizeCredentialsSignIn,
         resolveAuthJwtClaims,
-        resolveAuthRedirectTarget,
+        resolveAuthRedirectTargetWithFallback,
         resolveAuthSessionPayload,
         resolveAuthSignInDecision,
         AuthPrincipal,
@@ -538,16 +538,20 @@ class AuthManager {
     if (url == null || url.trim().isEmpty) {
       return null;
     }
-    final resolved = await resolveAuthRedirectTarget<EngineContext>(
+    return resolveAuthRedirectTargetWithFallback<EngineContext>(
       callback: callbacks.redirect,
       context: AuthRedirectCallbackContext<EngineContext>(
         context: ctx,
         url: url,
-        baseUrl: baseUrlFromUri(ctx.request.uri),
+        baseUrl: baseUrlFromUri(
+          ctx.requestedUri,
+          defaultScheme: ctx.scheme,
+          defaultHost: ctx.host,
+        ),
         provider: provider,
       ),
+      fallbackUrl: url,
     );
-    return resolved ?? url;
   }
 
   Future<Map<String, dynamic>> buildSessionPayload(

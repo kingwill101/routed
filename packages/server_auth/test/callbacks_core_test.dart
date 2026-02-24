@@ -139,4 +139,38 @@ void main() {
       expect(target, isNull);
     },
   );
+
+  test(
+    'resolveAuthRedirectTargetWithFallback returns fallback when callback is absent',
+    () async {
+      final target = await resolveAuthRedirectTargetWithFallback<String>(
+        callback: null,
+        context: AuthRedirectCallbackContext<String>(
+          context: 'ctx',
+          url: '/from',
+          baseUrl: 'https://example.test',
+        ),
+        fallbackUrl: '/fallback',
+      );
+
+      expect(target, equals('/fallback'));
+    },
+  );
+
+  test(
+    'resolveAuthRedirectTargetWithFallback prefers callback result',
+    () async {
+      final target = await resolveAuthRedirectTargetWithFallback<String>(
+        callback: (context) => '/resolved',
+        context: AuthRedirectCallbackContext<String>(
+          context: 'ctx',
+          url: '/from',
+          baseUrl: 'https://example.test',
+        ),
+        fallbackUrl: '/fallback',
+      );
+
+      expect(target, equals('/resolved'));
+    },
+  );
 }

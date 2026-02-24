@@ -245,6 +245,56 @@ void main() {
       expect(events, contains('sign_out:user-1'));
       expect(events, contains('session'));
     });
+
+    test('redirect callback receives request baseUrl', () async {
+      String? observedBaseUrl;
+
+      final manager = AuthManager(
+        AuthOptions<EngineContext>(
+          providers: [
+            CredentialsProvider(
+              authorize: (ctx, provider, credentials) async {
+                return AuthUser(id: 'user-1', email: credentials.email);
+              },
+            ),
+          ],
+          sessionStrategy: AuthSessionStrategy.session,
+          enforceCsrf: false,
+          callbacks: AuthCallbacks(
+            signIn: (context) =>
+                const AuthSignInResult.allow(redirectUrl: '/from-signin'),
+            redirect: (context) {
+              observedBaseUrl = context.baseUrl;
+              return '/after-signin';
+            },
+          ),
+        ),
+      );
+      final engine = _authEngine(manager);
+      await engine.initialize();
+
+      final client = TestClient(RoutedRequestHandler(engine));
+      addTearDown(() async => await client.close());
+
+      final csrfResponse = await client.get('/auth/csrf');
+      final csrfToken = csrfResponse.json()['csrfToken'] as String;
+      final sessionCookie = csrfResponse.cookie('test_session');
+      expect(sessionCookie, isNotNull);
+
+      final signInResponse = await client.postJson(
+        '/auth/signin/credentials',
+        {'email': 'user@example.com', 'password': 'secret', '_csrf': csrfToken},
+        headers: {
+          HttpHeaders.cookieHeader: [_cookieHeader(sessionCookie!)],
+        },
+      );
+
+      signInResponse.assertStatus(HttpStatus.movedTemporarily);
+      final location = signInResponse.headers[HttpHeaders.locationHeader];
+      expect(location, isNotNull);
+      expect(location!.first, equals('/after-signin'));
+      expect(observedBaseUrl, equals('http://server_testing.internal'));
+    });
   });
 }
 
