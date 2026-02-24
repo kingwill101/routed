@@ -20,6 +20,7 @@ dependencies:
 - `authProvidersEndpoint` middleware to expose `/auth/providers` metadata.
 - `authPrincipal` helper to read resolved principal from request context.
 - `bearerToken` helper to parse bearer token from request headers.
+- `requireAuthenticated` and `requireRoles` middlewares for protected routes.
 
 ## Quick Start
 
@@ -107,6 +108,23 @@ curl -i -H "Authorization: Bearer demo-token" http://127.0.0.1:8080/me
 
 Use `strict: false` when only some routes require auth and your handler checks
 `authPrincipal(request)` explicitly.
+
+## Route Guards
+
+Use `requireAuthenticated` and `requireRoles` after principal resolution:
+
+```dart
+final protected = const Pipeline()
+    .addMiddleware(
+      bearerAuth(
+        strict: false,
+        resolvePrincipal: resolvePrincipal,
+      ),
+    )
+    .addMiddleware(requireAuthenticated())
+    .addMiddleware(requireRoles(<String>['admin']))
+    .addHandler((_) => Response.ok('ok'));
+```
 
 ## Custom Providers Endpoint Path
 

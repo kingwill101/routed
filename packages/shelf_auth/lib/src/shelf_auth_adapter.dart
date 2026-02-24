@@ -44,7 +44,7 @@ Middleware bearerAuth({
       final token = bearerToken(request);
       if (token == null) {
         if (strict) {
-          return _unauthorized('missing_bearer_token');
+          return _unauthorized('missing_bearer_token', realm: 'Restricted');
         }
         return innerHandler(request);
       }
@@ -52,7 +52,7 @@ Middleware bearerAuth({
       final principal = await resolvePrincipal(token, request);
       if (principal == null) {
         if (strict) {
-          return _unauthorized('invalid_bearer_token');
+          return _unauthorized('invalid_bearer_token', realm: 'Restricted');
         }
         return innerHandler(request);
       }
@@ -96,6 +96,60 @@ Middleware authProvidersEndpoint({
   };
 }
 
+/// Requires an authenticated principal on the request context.
+///
+/// Use together with [bearerAuth] or another middleware that writes
+/// `AuthPrincipal` into the request context.
+Middleware requireAuthenticated({
+  String principalContextKey = shelfAuthPrincipalContextKey,
+  String realm = 'Restricted',
+}) {
+  return (innerHandler) {
+    return (request) {
+      final principal = authPrincipal(request, contextKey: principalContextKey);
+      if (principal == null) {
+        return _unauthorized('authentication_required', realm: realm);
+      }
+      return innerHandler(request);
+    };
+  };
+}
+
+/// Requires the current principal to include the expected [roles].
+///
+/// Returns:
+/// - `401` when unauthenticated
+/// - `403` when authenticated but missing required role(s)
+Middleware requireRoles(
+  Iterable<String> roles, {
+  bool any = false,
+  String principalContextKey = shelfAuthPrincipalContextKey,
+  String realm = 'Restricted',
+}) {
+  final expected = roles
+      .map((role) => role.trim())
+      .where((role) => role.isNotEmpty)
+      .toList(growable: false);
+
+  return (innerHandler) {
+    return (request) {
+      final principal = authPrincipal(request, contextKey: principalContextKey);
+      if (principal == null) {
+        return _unauthorized('authentication_required', realm: realm);
+      }
+      final allowed = expected.isEmpty
+          ? true
+          : any
+          ? expected.any(principal.hasRole)
+          : expected.every(principal.hasRole);
+      if (!allowed) {
+        return _forbidden('insufficient_role');
+      }
+      return innerHandler(request);
+    };
+  };
+}
+
 String _normalizePath(String path) {
   final trimmed = path.trim();
   if (trimmed.isEmpty || trimmed == '/') {
@@ -111,13 +165,23 @@ String _normalizePath(String path) {
   return normalized;
 }
 
-Response _unauthorized(String code) {
+Response _unauthorized(String code, {required String realm}) {
   return Response(
     401,
     body: jsonEncode(<String, String>{'error': code}),
+    headers: <String, String>{
+      'content-type': 'application/json; charset=utf-8',
+      'www-authenticate': buildBearerAuthenticateHeader(realm: realm),
+    },
+  );
+}
+
+Response _forbidden(String code) {
+  return Response(
+    403,
+    body: jsonEncode(<String, String>{'error': code}),
     headers: const <String, String>{
       'content-type': 'application/json; charset=utf-8',
-      'www-authenticate': 'Bearer',
     },
   );
 }

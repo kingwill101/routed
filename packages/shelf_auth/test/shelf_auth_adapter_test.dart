@@ -147,4 +147,140 @@ void main() {
       expect(await response.readAsString(), 'missing');
     });
   });
+
+  group('requireAuthenticated', () {
+    test('rejects when principal is missing', () async {
+      final handler = const Pipeline()
+          .addMiddleware(requireAuthenticated())
+          .addHandler((_) => Response.ok('ok'));
+
+      final response = await handler(
+        Request('GET', Uri.parse('http://localhost/me')),
+      );
+
+      expect(response.statusCode, 401);
+      expect(
+        await response.readAsString(),
+        contains('authentication_required'),
+      );
+    });
+
+    test('passes when principal exists', () async {
+      final handler = const Pipeline()
+          .addMiddleware((inner) {
+            return (request) => inner(
+              request.change(
+                context: <String, Object>{
+                  ...request.context,
+                  shelfAuthPrincipalContextKey: AuthPrincipal(id: 'user-1'),
+                },
+              ),
+            );
+          })
+          .addMiddleware(requireAuthenticated())
+          .addHandler((request) {
+            final principal = authPrincipal(request);
+            return Response.ok(principal?.id ?? 'missing');
+          });
+
+      final response = await handler(
+        Request('GET', Uri.parse('http://localhost/me')),
+      );
+
+      expect(response.statusCode, 200);
+      expect(await response.readAsString(), 'user-1');
+    });
+  });
+
+  group('requireRoles', () {
+    test('rejects unauthenticated requests', () async {
+      final handler = const Pipeline()
+          .addMiddleware(requireRoles(<String>['admin']))
+          .addHandler((_) => Response.ok('ok'));
+
+      final response = await handler(
+        Request('GET', Uri.parse('http://localhost/admin')),
+      );
+
+      expect(response.statusCode, 401);
+    });
+
+    test('rejects authenticated principal without required role', () async {
+      final handler = const Pipeline()
+          .addMiddleware((inner) {
+            return (request) => inner(
+              request.change(
+                context: <String, Object>{
+                  ...request.context,
+                  shelfAuthPrincipalContextKey: AuthPrincipal(
+                    id: 'user-1',
+                    roles: const <String>['user'],
+                  ),
+                },
+              ),
+            );
+          })
+          .addMiddleware(requireRoles(<String>['admin']))
+          .addHandler((_) => Response.ok('ok'));
+
+      final response = await handler(
+        Request('GET', Uri.parse('http://localhost/admin')),
+      );
+
+      expect(response.statusCode, 403);
+      expect(await response.readAsString(), contains('insufficient_role'));
+    });
+
+    test('passes when principal satisfies all required roles', () async {
+      final handler = const Pipeline()
+          .addMiddleware((inner) {
+            return (request) => inner(
+              request.change(
+                context: <String, Object>{
+                  ...request.context,
+                  shelfAuthPrincipalContextKey: AuthPrincipal(
+                    id: 'user-1',
+                    roles: const <String>['admin', 'editor'],
+                  ),
+                },
+              ),
+            );
+          })
+          .addMiddleware(requireRoles(<String>['admin', 'editor']))
+          .addHandler((_) => Response.ok('ok'));
+
+      final response = await handler(
+        Request('GET', Uri.parse('http://localhost/admin')),
+      );
+
+      expect(response.statusCode, 200);
+      expect(await response.readAsString(), 'ok');
+    });
+
+    test('passes with any=true when one role matches', () async {
+      final handler = const Pipeline()
+          .addMiddleware((inner) {
+            return (request) => inner(
+              request.change(
+                context: <String, Object>{
+                  ...request.context,
+                  shelfAuthPrincipalContextKey: AuthPrincipal(
+                    id: 'user-1',
+                    roles: const <String>['editor'],
+                  ),
+                },
+              ),
+            );
+          })
+          .addMiddleware(requireRoles(<String>['admin', 'editor'], any: true))
+          .addHandler((_) => Response.ok('ok'));
+
+      final response = await handler(
+        Request('GET', Uri.parse('http://localhost/admin')),
+      );
+
+      expect(response.statusCode, 200);
+      expect(await response.readAsString(), 'ok');
+    });
+  });
 }
