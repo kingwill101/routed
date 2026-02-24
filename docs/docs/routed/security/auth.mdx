@@ -318,6 +318,8 @@ Use `OAuth2Client` when you need to exchange authorization codes, request client
 or refresh access tokens. The helper wraps the standard `/token` endpoint calls.
 
 ```dart
+import 'package:server_auth/server_auth.dart';
+
 final oauth = OAuth2Client(
   tokenEndpoint: Uri.parse('https://auth.example.com/oauth/token'),
   clientId: 'web-app',

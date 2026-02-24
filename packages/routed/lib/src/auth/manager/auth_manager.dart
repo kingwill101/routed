@@ -15,6 +15,8 @@ import 'package:server_auth/server_auth.dart'
         AuthResult,
         AuthSession,
         AuthSessionStrategy,
+        OAuth2Client,
+        OAuth2Exception,
         AuthUser,
         AuthVerificationTokenStore,
         AuthVerificationToken,
@@ -26,7 +28,6 @@ import 'package:server_auth/server_auth.dart'
         OAuthTokenResponse;
 import 'package:routed/src/auth/hooks.dart';
 import 'package:routed/src/auth/jwt.dart';
-import 'package:routed/src/auth/oauth.dart';
 import 'package:routed/src/auth/session_auth.dart';
 import 'package:routed/src/context/context.dart';
 import 'package:routed/src/events/event.dart';

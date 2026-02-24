@@ -5,6 +5,8 @@ import 'package:http/testing.dart';
 import 'package:routed/routed.dart';
 import 'package:server_auth/server_auth.dart'
     show
+        OAuth2Client,
+        OAuth2Exception,
         OAuthTokenResponse,
         GitHubEmail,
         GitHubPlan,
