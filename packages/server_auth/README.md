@@ -123,6 +123,39 @@ final verifiedSession = await verifyAuthJwtSessionToken(
 print(verifiedSession?.user.id);
 ```
 
+## Email verification orchestration helpers
+
+Use `startAuthEmailSignIn` to share the email verification start flow:
+
+```dart
+final payload = await startAuthEmailSignIn<MyContext>(
+  adapter: adapter,
+  tokenStore: tokenStore,
+  provider: emailProvider,
+  context: context,
+  email: 'user@example.com',
+  callbackUrl: '/dashboard',
+  sessionStrategy: AuthSessionStrategy.session,
+  callbackKey: '_auth.callback',
+  writeSession: (key, value) => sessionStore[key] = value,
+);
+
+print(payload.pendingResult.session.strategy);
+```
+
+Use `resolveAuthEmailVerificationSignIn` in callback handlers:
+
+```dart
+final resolved = await resolveAuthEmailVerificationSignIn(
+  adapter: adapter,
+  tokenStore: tokenStore,
+  email: email,
+  token: token,
+  callbackKey: '_auth.callback',
+  readSession: (key) => sessionStore[key],
+);
+```
+
 ## OAuth callback orchestration helper
 
 Use `resolveOAuthSignInForProvider` in framework adapters to share OAuth
