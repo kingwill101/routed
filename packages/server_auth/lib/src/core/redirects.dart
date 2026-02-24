@@ -51,3 +51,17 @@ String? sanitizeRedirectUrl(
   }
   return null;
 }
+
+/// Resolves a redirect candidate using auth callback precedence:
+/// payload callback key -> payload redirect key -> query callback key.
+String? resolveRedirectCandidate(
+  Map<String, dynamic> payload,
+  Map<String, String> queryParameters, {
+  String payloadCallbackKey = 'callbackUrl',
+  String payloadRedirectKey = 'redirect',
+  String queryCallbackKey = 'callbackUrl',
+}) {
+  return payload[payloadCallbackKey]?.toString() ??
+      payload[payloadRedirectKey]?.toString() ??
+      queryParameters[queryCallbackKey];
+}

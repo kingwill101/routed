@@ -62,4 +62,42 @@ void main() {
       expect(sanitized, equals('https://app.test/profile'));
     },
   );
+
+  test('resolveRedirectCandidate applies payload/query precedence', () {
+    expect(
+      resolveRedirectCandidate(
+        <String, dynamic>{'callbackUrl': '/one', 'redirect': '/two'},
+        <String, String>{'callbackUrl': '/three'},
+      ),
+      equals('/one'),
+    );
+
+    expect(
+      resolveRedirectCandidate(
+        <String, dynamic>{'redirect': '/two'},
+        <String, String>{'callbackUrl': '/three'},
+      ),
+      equals('/two'),
+    );
+
+    expect(
+      resolveRedirectCandidate(<String, dynamic>{}, <String, String>{
+        'callbackUrl': '/three',
+      }),
+      equals('/three'),
+    );
+  });
+
+  test(
+    'resolveRedirectCandidate keeps empty callback payload over fallback',
+    () {
+      expect(
+        resolveRedirectCandidate(
+          <String, dynamic>{'callbackUrl': '', 'redirect': '/two'},
+          <String, String>{'callbackUrl': '/three'},
+        ),
+        equals(''),
+      );
+    },
+  );
 }

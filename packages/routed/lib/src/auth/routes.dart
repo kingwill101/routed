@@ -12,6 +12,7 @@ import 'package:server_auth/server_auth.dart'
         CredentialsProvider,
         EmailProvider,
         OAuthProvider,
+        resolveRedirectCandidate,
         sanitizeRedirectUrl;
 import 'package:routed/src/context/context.dart';
 import 'package:routed/src/response.dart';
@@ -325,10 +326,10 @@ class AuthRoutes {
     Map<String, dynamic> payload, {
     AuthProvider? provider,
   }) async {
-    final candidate =
-        payload['callbackUrl']?.toString() ??
-        payload['redirect']?.toString() ??
-        ctx.request.queryParameters['callbackUrl'];
+    final candidate = resolveRedirectCandidate(
+      payload,
+      ctx.request.queryParameters,
+    );
     final sanitized = _sanitizeRedirect(ctx, candidate);
     final resolved = await manager.resolveRedirect(
       ctx,
