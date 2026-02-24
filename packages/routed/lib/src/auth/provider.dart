@@ -19,7 +19,7 @@ import 'package:server_auth/server_auth.dart'
         OAuthIntrospectionOptions,
         registerPolicyBindingsSafely,
         registerRbacAbilitiesSafely,
-        registerGitHubAuthProvider;
+        registerAllAuthProviders;
 import 'package:routed/src/auth/manager/auth_manager.dart';
 import 'package:routed/src/auth/manager/auth_options.dart';
 import 'package:routed/src/auth/routes.dart';
@@ -68,7 +68,7 @@ class AuthServiceProvider extends ServiceProvider with ProvidesDefaultConfig {
     if (_defaultProvidersRegistered) {
       return;
     }
-    registerGitHubAuthProvider(
+    registerAllAuthProviders(
       AuthProviderRegistry.instance,
       overrideExisting: false,
     );
