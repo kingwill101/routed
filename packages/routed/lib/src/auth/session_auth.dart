@@ -3,69 +3,23 @@ import 'dart:convert';
 import 'dart:io';
 import 'dart:math' show Random;
 
-import 'package:server_auth/server_auth.dart' show AuthPrincipal;
+import 'package:server_auth/server_auth.dart'
+    show
+        AuthPrincipal,
+        RememberTokenStore,
+        InMemoryRememberTokenStore,
+        authPrincipalAttribute;
 import 'package:routed/src/context/context.dart';
 import 'package:routed/src/response.dart';
 import 'package:routed/src/router/types.dart';
 import 'package:server_data/sessions.dart';
 import 'package:routed/src/support/named_registry.dart';
 
-/// Attribute key for storing the authenticated principal in the request context.
-const String authPrincipalAttribute = 'auth.principal';
-
 /// Key for storing the authenticated principal in the session.
 const String _sessionPrincipalKey = '__routed.auth.principal';
 
 /// Default name for the "remember me" cookie.
 const String _defaultRememberCookieName = 'remember_token';
-
-abstract class RememberTokenStore {
-  FutureOr<void> save(
-    String token,
-    AuthPrincipal principal,
-    DateTime expiresAt,
-  );
-
-  FutureOr<AuthPrincipal?> read(String token);
-
-  FutureOr<void> remove(String token);
-}
-
-class InMemoryRememberTokenStore implements RememberTokenStore {
-  final Map<String, _RememberRecord> _storage = <String, _RememberRecord>{};
-
-  @override
-  Future<void> save(
-    String token,
-    AuthPrincipal principal,
-    DateTime expiresAt,
-  ) async {
-    _storage[token] = _RememberRecord(principal, expiresAt);
-  }
-
-  @override
-  Future<AuthPrincipal?> read(String token) async {
-    final record = _storage[token];
-    if (record == null) return null;
-    if (DateTime.now().isAfter(record.expiresAt)) {
-      _storage.remove(token);
-      return null;
-    }
-    return record.principal;
-  }
-
-  @override
-  Future<void> remove(String token) async {
-    _storage.remove(token);
-  }
-}
-
-class _RememberRecord {
-  _RememberRecord(this.principal, this.expiresAt);
-
-  final AuthPrincipal principal;
-  final DateTime expiresAt;
-}
 
 class SessionAuthService {
   SessionAuthService({

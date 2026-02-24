@@ -8,4 +8,5 @@ export 'models.dart';
 export 'oauth.dart';
 export 'provider_registry.dart';
 export 'providers.dart';
+export 'session.dart';
 export 'verification_token_store.dart';

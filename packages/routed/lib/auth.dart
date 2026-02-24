@@ -40,8 +40,6 @@ export 'src/auth/oauth.dart'
         oauthScopeAttribute;
 export 'src/auth/session_auth.dart'
     show
-        RememberTokenStore,
-        InMemoryRememberTokenStore,
         SessionAuthService,
         SessionAuth,
         GuardResult,

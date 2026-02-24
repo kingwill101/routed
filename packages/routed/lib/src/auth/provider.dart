@@ -6,6 +6,7 @@ import 'package:server_auth/server_auth.dart'
         AuthAdapter,
         AuthProvider,
         AuthProviderRegistry,
+        RememberTokenStore,
         AuthVerificationTokenStore,
         JwtOptions,
         JwtVerifier,
