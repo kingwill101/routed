@@ -6,7 +6,7 @@ import 'adapter.dart';
 import 'exceptions.dart' show AuthFlowException;
 import 'models.dart';
 import 'oauth.dart';
-import 'tokens.dart' show secureRandomToken;
+import 'tokens.dart' show pkceS256CodeChallenge, secureRandomToken;
 import 'users.dart' show authUsersDiffer, mergeAuthUser;
 import 'verification_token_store.dart';
 
@@ -303,6 +303,46 @@ Map<String, String> buildOAuthAuthorizationParameters<TProfile extends Object>(
     params['callbackUrl'] = callbackUrl;
   }
   return params;
+}
+
+/// Prepared OAuth authorization start payload.
+class AuthOAuthAuthorizationStart {
+  const AuthOAuthAuthorizationStart({
+    required this.state,
+    this.codeVerifier,
+    this.codeChallenge,
+    required this.parameters,
+  });
+
+  final String state;
+  final String? codeVerifier;
+  final String? codeChallenge;
+  final Map<String, String> parameters;
+}
+
+/// Prepares OAuth state, PKCE values, and authorization parameters.
+AuthOAuthAuthorizationStart prepareOAuthAuthorizationStart<
+  TProfile extends Object
+>(OAuthProvider<TProfile> provider, {String? callbackUrl}) {
+  final state = secureRandomToken();
+  String? verifier;
+  String? challenge;
+  if (provider.usePkce) {
+    verifier = secureRandomToken(length: 48);
+    challenge = pkceS256CodeChallenge(verifier);
+  }
+
+  return AuthOAuthAuthorizationStart(
+    state: state,
+    codeVerifier: verifier,
+    codeChallenge: challenge,
+    parameters: buildOAuthAuthorizationParameters(
+      provider,
+      state: state,
+      codeChallenge: challenge,
+      callbackUrl: callbackUrl,
+    ),
+  );
 }
 
 /// Builds an [OAuth2Client] from provider metadata.

@@ -500,6 +500,33 @@ void main() {
     },
   );
 
+  test('prepareOAuthAuthorizationStart generates state, pkce and params', () {
+    final provider = OAuthProvider<Map<String, dynamic>>(
+      id: 'example',
+      name: 'Example',
+      clientId: 'client-id',
+      clientSecret: 'client-secret',
+      authorizationEndpoint: Uri.parse('https://auth.test/authorize'),
+      tokenEndpoint: Uri.parse('https://auth.test/token'),
+      redirectUri: 'https://app.test/callback/example',
+      scopes: const <String>['openid'],
+      usePkce: true,
+      profile: (profile) => AuthUser(id: profile['sub']?.toString() ?? ''),
+    );
+
+    final start = prepareOAuthAuthorizationStart(
+      provider,
+      callbackUrl: '/dashboard',
+    );
+
+    expect(start.state, isNotEmpty);
+    expect(start.codeVerifier, isNotNull);
+    expect(start.codeChallenge, isNotNull);
+    expect(start.parameters['state'], equals(start.state));
+    expect(start.parameters['code_challenge'], equals(start.codeChallenge));
+    expect(start.parameters['callbackUrl'], equals('/dashboard'));
+  });
+
   test(
     'loadOAuthProfile decodes id_token claims when no userinfo endpoint',
     () async {

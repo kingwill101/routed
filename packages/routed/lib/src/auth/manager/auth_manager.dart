@@ -23,10 +23,11 @@ import 'package:server_auth/server_auth.dart'
         authProviderStateSessionKey,
         authProviderSummaries,
         baseUrlFromUri,
+        AuthOAuthAuthorizationStart,
         buildOAuthAuthAccount,
-        buildOAuthAuthorizationParameters,
         ensureOAuthStateMatches,
         exchangeOAuthAuthorizationCode,
+        prepareOAuthAuthorizationStart,
         resolveAuthProviderById,
         AuthRedirectCallbackContext,
         AuthResult,
@@ -64,7 +65,6 @@ import 'package:server_auth/server_auth.dart'
         OAuthProvider,
         loadOAuthProfile,
         oauthTokenExpiryFromSeconds,
-        pkceS256CodeChallenge,
         authSessionIssuedAtKey,
         authSessionRefreshAction,
         AuthSessionRefreshAction,
@@ -249,7 +249,11 @@ class AuthManager {
     OAuthProvider<TProfile> provider, {
     String? callbackUrl,
   }) async {
-    final state = secureRandomToken();
+    final AuthOAuthAuthorizationStart start = prepareOAuthAuthorizationStart(
+      provider,
+      callbackUrl: callbackUrl,
+    );
+    final state = start.state;
     ctx.setSession(
       authProviderStateSessionKey(options.stateKey, provider.id),
       state,
@@ -259,22 +263,13 @@ class AuthManager {
       await Future.sync(() => provider.onStateGenerated!(ctx, provider, state));
     }
 
-    String? verifier;
-    String? challenge;
-    if (provider.usePkce) {
-      verifier = secureRandomToken(length: 48);
-      challenge = pkceS256CodeChallenge(verifier);
+    if (start.codeVerifier != null) {
       ctx.setSession(
         authProviderPkceSessionKey(options.pkceKey, provider.id),
-        verifier,
+        start.codeVerifier,
       );
     }
-    final params = buildOAuthAuthorizationParameters(
-      provider,
-      state: state,
-      codeChallenge: challenge,
-      callbackUrl: callbackUrl,
-    );
+    final params = start.parameters;
 
     if (callbackUrl != null && callbackUrl.isNotEmpty) {
       ctx.setSession(
