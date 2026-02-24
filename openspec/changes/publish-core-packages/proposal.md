@@ -1,5 +1,5 @@
 ## Why
-- The Routed ecosystem currently uses workspace-only configuration that blocks publishing (`publish_to: none`, `resolution: workspace`, and path dependencies).
+- The Routed ecosystem needs publish-ready metadata and dependency constraints across split packages so downstream users can depend on released versions from pub.dev.
 - We need to publish the core set of libraries (`server_contracts`, `server_data`, `server_auth`, `server_testing`, `server_testing_shelf`, `routed`, `routed_testing`, `property_testing`) to pub.dev so downstream users can depend on them.
 - Establishing the publishing baseline ensures future releases are repeatable and verifiable.
 
