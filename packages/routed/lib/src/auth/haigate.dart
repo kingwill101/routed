@@ -16,13 +16,6 @@ import 'package:routed/src/context/context.dart';
 import 'package:routed/src/response.dart';
 import 'package:routed/src/router/types.dart';
 
-/// A callback function used to evaluate whether a specific ability is allowed
-/// in the given [GateEvaluationContext].
-typedef GateCallback = AuthGateCallback<EngineContext>;
-
-/// A function that observes the result of a gate evaluation.
-typedef GateObserver = AuthGateObserver<EngineContext>;
-
 /// A function that provides a payload for a specific ability in the given
 /// [EngineContext].
 typedef GatePayloadProvider =
@@ -30,28 +23,16 @@ typedef GatePayloadProvider =
 
 /// A handler function that is called when a gate denies access.
 typedef GateDeniedHandler =
-    FutureOr<Response?> Function(GateViolation violation, EngineContext ctx);
-
-typedef GateRegistrationException = AuthGateRegistrationException;
-typedef GateViolation = AuthGateViolation<EngineContext>;
-
-/// Context provided during the evaluation of a gate.
-///
-/// This contains information about the current [EngineContext], the
-/// authenticated principal, and any additional payload.
-typedef GateEvaluationContext = AuthGateEvaluationContext<EngineContext>;
-
-/// Represents the result of a gate evaluation.
-///
-/// This includes the evaluated ability, whether it was allowed, and
-/// additional context such as the principal and payload.
-typedef GateEvaluation = AuthGateEvaluation<EngineContext>;
+    FutureOr<Response?> Function(
+      AuthGateViolation<EngineContext> violation,
+      EngineContext ctx,
+    );
 
 /// A registry for managing gate callbacks.
 ///
 /// This allows registering, unregistering, and resolving gate callbacks
 /// by their ability names.
-class GateRegistry extends NamedRegistry<GateCallback> {
+class GateRegistry extends NamedRegistry<AuthGateCallback<EngineContext>> {
   GateRegistry._();
 
   /// The singleton instance of [GateRegistry].
@@ -61,26 +42,32 @@ class GateRegistry extends NamedRegistry<GateCallback> {
   String normalizeName(String name) => name.trim();
 
   @override
-  bool onDuplicate(String name, GateCallback existing, bool overrideExisting) {
+  bool onDuplicate(
+    String name,
+    AuthGateCallback<EngineContext> existing,
+    bool overrideExisting,
+  ) {
     if (!overrideExisting) {
       return false;
     }
-    throw GateRegistrationException('Ability "$name" is already registered.');
+    throw AuthGateRegistrationException(
+      'Ability "$name" is already registered.',
+    );
   }
 
   /// Registers a new gate callback for the given [ability].
   ///
-  /// Throws a [GateRegistrationException] if the ability name is empty.
-  void register(String ability, GateCallback callback) {
+  /// Throws a [AuthGateRegistrationException] if the ability name is empty.
+  void register(String ability, AuthGateCallback<EngineContext> callback) {
     final key = normalizeName(ability);
     if (key.isEmpty) {
-      throw GateRegistrationException('Ability name cannot be empty.');
+      throw AuthGateRegistrationException('Ability name cannot be empty.');
     }
     registerEntry(key, callback);
   }
 
   /// Registers multiple gate callbacks from the given [entries].
-  void registerAll(Map<String, GateCallback> entries) {
+  void registerAll(Map<String, AuthGateCallback<EngineContext>> entries) {
     entries.forEach(register);
   }
 
@@ -92,7 +79,7 @@ class GateRegistry extends NamedRegistry<GateCallback> {
   /// Resolves the gate callback for the given [ability].
   ///
   /// Returns `null` if no callback is registered for the ability.
-  GateCallback? resolve(String ability) => getEntry(ability);
+  AuthGateCallback<EngineContext>? resolve(String ability) => getEntry(ability);
 
   /// Returns a list of all registered ability names.
   Iterable<String> get abilities => entryNames;
@@ -102,15 +89,21 @@ class Haigate {
   Haigate._();
 
   static final GateRegistry _registry = GateRegistry.instance;
-  static final List<GateObserver> _observers = <GateObserver>[];
+  static final List<AuthGateObserver<EngineContext>> _observers =
+      <AuthGateObserver<EngineContext>>[];
 
   static GateRegistry get registry => _registry;
 
-  static void register(String ability, GateCallback callback) {
+  static void register(
+    String ability,
+    AuthGateCallback<EngineContext> callback,
+  ) {
     _registry.register(ability, callback);
   }
 
-  static void registerAll(Map<String, GateCallback> entries) {
+  static void registerAll(
+    Map<String, AuthGateCallback<EngineContext>> entries,
+  ) {
     _registry.registerAll(entries);
   }
 
@@ -118,11 +111,11 @@ class Haigate {
     _registry.unregister(ability);
   }
 
-  static void addObserver(GateObserver observer) {
+  static void addObserver(AuthGateObserver<EngineContext> observer) {
     _observers.add(observer);
   }
 
-  static void removeObserver(GateObserver observer) {
+  static void removeObserver(AuthGateObserver<EngineContext> observer) {
     _observers.remove(observer);
   }
 
@@ -134,7 +127,9 @@ class Haigate {
   }) async {
     final callback = _registry.resolve(ability);
     if (callback == null) {
-      throw GateRegistrationException('Ability "$ability" is not registered.');
+      throw AuthGateRegistrationException(
+        'Ability "$ability" is not registered.',
+      );
     }
 
     AuthPrincipal? resolvedPrincipal = principal;
@@ -145,7 +140,7 @@ class Haigate {
         resolvedPrincipal = null;
       }
     }
-    final evaluationContext = GateEvaluationContext(
+    final evaluationContext = AuthGateEvaluationContext<EngineContext>(
       context: ctx,
       principal: resolvedPrincipal,
       payload: payload,
@@ -153,7 +148,7 @@ class Haigate {
 
     final allowed = await Future<bool>.value(callback(evaluationContext));
     _notifyObservers(
-      GateEvaluation(
+      AuthGateEvaluation<EngineContext>(
         ability: ability,
         allowed: allowed,
         context: ctx,
@@ -178,7 +173,7 @@ class Haigate {
       payload: payload,
     );
     if (!allowed) {
-      throw GateViolation(
+      throw AuthGateViolation<EngineContext>(
         ability: ability,
         context: ctx,
         message: message,
@@ -225,8 +220,10 @@ class Haigate {
     return true;
   }
 
-  static void _notifyObservers(GateEvaluation eval) {
-    for (final observer in List<GateObserver>.from(_observers)) {
+  static void _notifyObservers(AuthGateEvaluation<EngineContext> eval) {
+    for (final observer in List<AuthGateObserver<EngineContext>>.from(
+      _observers,
+    )) {
       observer(eval);
     }
   }
@@ -248,7 +245,7 @@ class Haigate {
         final payload = payloadProvider?.call(ctx, ability);
         final allowed = await can(ability, ctx: ctx, payload: payload);
         if (!allowed) {
-          final violation = GateViolation(
+          final violation = AuthGateViolation<EngineContext>(
             ability: ability,
             context: ctx,
             message: deniedMessage,

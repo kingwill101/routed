@@ -1,5 +1,7 @@
-import 'package:server_auth/server_auth.dart' show RbacAbility;
+import 'package:server_auth/server_auth.dart'
+    show AuthGateCallback, AuthGateEvaluationContext, RbacAbility;
 import 'package:routed/src/auth/haigate.dart';
+import 'package:routed/src/context/context.dart';
 
 /// {@template routed_auth_rbac}
 /// Role-based access control helpers built on top of Haigate.
@@ -9,8 +11,8 @@ import 'package:routed/src/auth/haigate.dart';
 /// {@endtemplate}
 
 /// Builds a gate callback for an RBAC ability.
-GateCallback rbacGate(RbacAbility ability) {
-  return (GateEvaluationContext context) {
+AuthGateCallback<EngineContext> rbacGate(RbacAbility ability) {
+  return (AuthGateEvaluationContext<EngineContext> context) {
     return ability.evaluate(context.principal);
   };
 }

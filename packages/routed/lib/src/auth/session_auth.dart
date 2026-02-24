@@ -5,18 +5,17 @@ import 'dart:math' show Random;
 
 import 'package:server_auth/server_auth.dart'
     show
+        AuthGuard,
         AuthPrincipal,
+        GuardResult,
         RememberTokenStore,
         InMemoryRememberTokenStore,
+        NamedRegistry,
         authPrincipalAttribute;
-import 'package:server_auth/server_auth.dart'
-    as server_auth
-    show AuthGuard, GuardResult;
 import 'package:routed/src/context/context.dart';
 import 'package:routed/src/response.dart';
 import 'package:routed/src/router/types.dart';
 import 'package:server_data/sessions.dart';
-import 'package:server_auth/server_auth.dart' show NamedRegistry;
 
 /// Key for storing the authenticated principal in the session.
 const String _sessionPrincipalKey = '__routed.auth.principal';
@@ -315,10 +314,7 @@ class SessionAuth {
   }
 }
 
-typedef GuardResult = server_auth.GuardResult<Response>;
-typedef AuthGuard = server_auth.AuthGuard<EngineContext, Response>;
-
-class GuardRegistry extends NamedRegistry<AuthGuard> {
+class GuardRegistry extends NamedRegistry<AuthGuard<EngineContext, Response>> {
   GuardRegistry._();
 
   static final GuardRegistry instance = GuardRegistry._();
@@ -326,7 +322,7 @@ class GuardRegistry extends NamedRegistry<AuthGuard> {
   @override
   String normalizeName(String name) => name.trim();
 
-  void register(String name, AuthGuard handler) {
+  void register(String name, AuthGuard<EngineContext, Response> handler) {
     registerEntry(name, handler);
   }
 
@@ -334,7 +330,7 @@ class GuardRegistry extends NamedRegistry<AuthGuard> {
     unregisterEntry(name);
   }
 
-  AuthGuard? resolve(String name) => getEntry(name);
+  AuthGuard<EngineContext, Response>? resolve(String name) => getEntry(name);
 
   Iterable<String> get names => entryNames;
 }
@@ -361,7 +357,7 @@ Middleware guardMiddleware(List<String> guardNames, {GuardRegistry? registry}) {
   };
 }
 
-AuthGuard requireAuthenticated({
+AuthGuard<EngineContext, Response> requireAuthenticated({
   String realm = 'Restricted',
   SessionAuthService? sessionAuth,
 }) {
@@ -369,16 +365,16 @@ AuthGuard requireAuthenticated({
   return (EngineContext ctx) {
     final principal = auth.current(ctx);
     if (principal != null) {
-      return const GuardResult.allow();
+      return const GuardResult<Response>.allow();
     }
     ctx.response.statusCode = HttpStatus.unauthorized;
     ctx.response.headers.set('WWW-Authenticate', 'Bearer realm="$realm"');
     ctx.response.write('Authentication required');
-    return GuardResult.deny(ctx.response);
+    return GuardResult<Response>.deny(ctx.response);
   };
 }
 
-AuthGuard requireRoles(
+AuthGuard<EngineContext, Response> requireRoles(
   List<String> roles, {
   SessionAuthService? sessionAuth,
   bool any = false,
@@ -395,17 +391,19 @@ AuthGuard requireRoles(
     if (principal == null) {
       ctx.response.statusCode = HttpStatus.unauthorized;
       ctx.response.write('Authentication required');
-      return GuardResult.deny(ctx.response);
+      return GuardResult<Response>.deny(ctx.response);
     }
 
     if (expected.isEmpty) {
-      return const GuardResult.allow();
+      return const GuardResult<Response>.allow();
     }
 
     final matches = any
         ? expected.any(principal.hasRole)
         : expected.every(principal.hasRole);
-    return matches ? const GuardResult.allow() : const GuardResult.deny();
+    return matches
+        ? const GuardResult<Response>.allow()
+        : const GuardResult<Response>.deny();
   };
 }
 

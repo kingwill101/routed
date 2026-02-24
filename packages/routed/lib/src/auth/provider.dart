@@ -4,6 +4,10 @@ import 'package:http/http.dart' as http;
 import 'package:server_auth/server_auth.dart'
     show
         AuthAdapter,
+        AuthGuard,
+        AuthGateCallback,
+        AuthGateEvaluationContext,
+        AuthGateRegistrationException,
         AuthProvider,
         AuthProviderRegistry,
         RememberTokenStore,
@@ -352,7 +356,7 @@ class AuthServiceProvider extends ServiceProvider with ProvidesDefaultConfig {
 
         try {
           registry.register(trimmed, callback);
-        } on GateRegistrationException {
+        } on AuthGateRegistrationException {
           if (!managedBefore) {
             // Preserve user-defined gate registrations when names collide.
             return;
@@ -438,18 +442,22 @@ class AuthServiceProvider extends ServiceProvider with ProvidesDefaultConfig {
       ..addAll(newAbilities);
   }
 
-  GateCallback? _buildGateFromDefinition(GateDefinition definition) {
+  AuthGateCallback<EngineContext>? _buildGateFromDefinition(
+    GateDefinition definition,
+  ) {
     switch (definition.type) {
       case GateType.guest:
-        return (GateEvaluationContext context) => context.principal == null;
+        return (AuthGateEvaluationContext<EngineContext> context) =>
+            context.principal == null;
       case GateType.authenticated:
-        return (GateEvaluationContext context) => context.principal != null;
+        return (AuthGateEvaluationContext<EngineContext> context) =>
+            context.principal != null;
       case GateType.roles:
         final requiredRoles = definition.roles;
         final any = definition.any;
         final allowGuest = definition.allowGuest;
         if (requiredRoles.isEmpty) {
-          return (GateEvaluationContext context) {
+          return (AuthGateEvaluationContext<EngineContext> context) {
             final principal = context.principal;
             if (principal == null) {
               return allowGuest;
@@ -457,7 +465,7 @@ class AuthServiceProvider extends ServiceProvider with ProvidesDefaultConfig {
             return true;
           };
         }
-        return (GateEvaluationContext context) {
+        return (AuthGateEvaluationContext<EngineContext> context) {
           final principal = context.principal;
           if (principal == null) {
             return allowGuest;
@@ -469,7 +477,7 @@ class AuthServiceProvider extends ServiceProvider with ProvidesDefaultConfig {
     }
   }
 
-  AuthGuard? _buildGuardFromDefinition(
+  AuthGuard<EngineContext, Response>? _buildGuardFromDefinition(
     GuardDefinition definition,
     SessionAuthService sessionAuth,
   ) {

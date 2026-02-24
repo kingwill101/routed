@@ -1,6 +1,12 @@
 import 'package:server_auth/server_auth.dart'
-    show Policy, PolicyAction, PolicyBinding;
+    show
+        AuthGateCallback,
+        AuthGateEvaluationContext,
+        Policy,
+        PolicyAction,
+        PolicyBinding;
 import 'package:routed/src/auth/haigate.dart';
+import 'package:routed/src/context/context.dart';
 
 /// {@template routed_auth_policy}
 /// Policy-based authorization built on top of Haigate.
@@ -10,11 +16,11 @@ import 'package:routed/src/auth/haigate.dart';
 /// {@endtemplate}
 
 /// Builds a gate callback for a specific policy action.
-GateCallback policyGate<T extends Object>(
+AuthGateCallback<EngineContext> policyGate<T extends Object>(
   Policy<T> policy,
   PolicyAction action,
 ) {
-  return (GateEvaluationContext context) {
+  return (AuthGateEvaluationContext<EngineContext> context) {
     final principal = context.principal;
     final payload = context.payload;
     switch (action) {
