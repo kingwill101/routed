@@ -29,7 +29,7 @@ import 'package:routed/src/engine/route_match.dart';
 import 'package:routed/src/engine/request_scope.dart';
 import 'package:routed/src/engine/wrapped_request.dart';
 import 'package:routed/src/events/event_manager.dart';
-import 'package:routed/src/logging/logging.dart';
+import 'package:routed/src/logging/context.dart';
 import 'package:routed/src/observability/health.dart';
 import 'package:routed/src/openapi/schema.dart';
 import 'package:routed/src/provider/provider.dart';

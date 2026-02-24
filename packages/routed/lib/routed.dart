@@ -61,7 +61,11 @@ export 'src/http/conditional.dart'
 export 'src/http/negotiation.dart' show ContentNegotiator, NegotiatedMediaType;
 export 'src/inspection/metadata.dart'
     show ConfigFieldMetadata, ProviderMetadata, inspectProviders;
-export 'src/logging/logging.dart';
+export 'src/logging/channel_drivers.dart';
+export 'src/logging/context.dart';
+export 'src/logging/driver_registry.dart';
+export 'src/logging/extensions.dart';
+export 'src/logging/logger.dart';
 export 'src/middleware/conditional_request.dart'
     show conditionalRequests, EtagResolver, LastModifiedResolver;
 export 'src/observability/errors.dart'
@@ -106,5 +110,8 @@ export 'src/utils/deep_merge.dart';
 export 'src/utils/dot.dart';
 export 'src/utils/environment.dart';
 export 'src/utils/request_id.dart';
-export 'src/view/view.dart';
+export 'src/view/view_engine.dart';
+export 'src/view/engine_manager.dart';
+export 'src/view/engines/liquid_engine.dart';
+export 'src/view/view_extensions.dart';
 export 'src/websocket/websocket_handler.dart';
