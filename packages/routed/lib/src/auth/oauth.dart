@@ -4,7 +4,7 @@ import 'dart:io';
 
 import 'package:http/http.dart' as http;
 import 'package:server_auth/server_auth.dart'
-    show OAuth2Exception;
+    show OAuth2Exception, OAuthIntrospectionOptions, OAuthIntrospectionResult;
 import 'package:routed/src/context/context.dart';
 import 'package:routed/src/router/types.dart';
 
@@ -17,58 +17,11 @@ const String oauthClaimsAttribute = 'auth.oauth.claims';
 /// Attribute key for storing OAuth2 scopes in the request context.
 const String oauthScopeAttribute = 'auth.oauth.scope';
 
-class OAuthIntrospectionResult {
-  OAuthIntrospectionResult({required this.active, required this.raw});
-
-  final bool active;
-  final Map<String, dynamic> raw;
-
-  String? get subject => raw['sub'] as String?;
-
-  String? get scope => raw['scope'] as String?;
-
-  DateTime? get expiresAt {
-    final exp = raw['exp'];
-    if (exp is num) {
-      return DateTime.fromMillisecondsSinceEpoch(exp.toInt() * 1000);
-    }
-    return null;
-  }
-
-  DateTime? get notBefore {
-    final nbf = raw['nbf'];
-    if (nbf is num) {
-      return DateTime.fromMillisecondsSinceEpoch(nbf.toInt() * 1000);
-    }
-    return null;
-  }
-}
-
 typedef OAuthOnValidated =
     FutureOr<void> Function(
       OAuthIntrospectionResult result,
       EngineContext context,
     );
-
-class OAuthIntrospectionOptions {
-  const OAuthIntrospectionOptions({
-    required this.endpoint,
-    this.clientId,
-    this.clientSecret,
-    this.tokenTypeHint,
-    this.cacheTtl = const Duration(seconds: 30),
-    this.clockSkew = const Duration(seconds: 60),
-    this.additionalParameters = const <String, String>{},
-  });
-
-  final Uri endpoint;
-  final String? clientId;
-  final String? clientSecret;
-  final String? tokenTypeHint;
-  final Duration cacheTtl;
-  final Duration clockSkew;
-  final Map<String, String> additionalParameters;
-}
 
 class _CachedIntrospection {
   _CachedIntrospection(this.result, this.expiresAt);

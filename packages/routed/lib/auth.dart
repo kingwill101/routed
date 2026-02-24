@@ -51,8 +51,6 @@ export 'src/auth/policies.dart'
 
 export 'src/auth/oauth.dart'
     show
-        OAuthIntrospectionOptions,
-        OAuthIntrospectionResult,
         OAuthOnValidated,
         oauth2Introspection,
         oauthTokenAttribute,

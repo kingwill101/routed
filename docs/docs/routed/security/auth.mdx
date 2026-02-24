@@ -343,6 +343,8 @@ introspection. Use it when access tokens are opaque and must be validated agains
 server.
 
 ```dart
+import 'package:server_auth/server_auth.dart';
+
 engine.addGlobalMiddleware(
   oauth2Introspection(
     OAuthIntrospectionOptions(

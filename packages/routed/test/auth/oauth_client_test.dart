@@ -7,6 +7,7 @@ import 'package:server_auth/server_auth.dart'
     show
         OAuth2Client,
         OAuth2Exception,
+        OAuthIntrospectionResult,
         OAuthTokenResponse,
         GitHubEmail,
         GitHubPlan,

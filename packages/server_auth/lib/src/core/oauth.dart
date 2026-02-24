@@ -46,6 +46,55 @@ class OAuthTokenResponse {
   final Map<String, dynamic> raw;
 }
 
+/// Parsed response from an RFC 7662 token introspection endpoint.
+class OAuthIntrospectionResult {
+  OAuthIntrospectionResult({required this.active, required this.raw});
+
+  final bool active;
+  final Map<String, dynamic> raw;
+
+  String? get subject => raw['sub'] as String?;
+
+  String? get scope => raw['scope'] as String?;
+
+  DateTime? get expiresAt {
+    final exp = raw['exp'];
+    if (exp is num) {
+      return DateTime.fromMillisecondsSinceEpoch(exp.toInt() * 1000);
+    }
+    return null;
+  }
+
+  DateTime? get notBefore {
+    final nbf = raw['nbf'];
+    if (nbf is num) {
+      return DateTime.fromMillisecondsSinceEpoch(nbf.toInt() * 1000);
+    }
+    return null;
+  }
+}
+
+/// Options for RFC 7662 token introspection.
+class OAuthIntrospectionOptions {
+  const OAuthIntrospectionOptions({
+    required this.endpoint,
+    this.clientId,
+    this.clientSecret,
+    this.tokenTypeHint,
+    this.cacheTtl = const Duration(seconds: 30),
+    this.clockSkew = const Duration(seconds: 60),
+    this.additionalParameters = const <String, String>{},
+  });
+
+  final Uri endpoint;
+  final String? clientId;
+  final String? clientSecret;
+  final String? tokenTypeHint;
+  final Duration cacheTtl;
+  final Duration clockSkew;
+  final Map<String, String> additionalParameters;
+}
+
 /// Generic OAuth2 client for token exchange and userinfo requests.
 class OAuth2Client {
   OAuth2Client({
