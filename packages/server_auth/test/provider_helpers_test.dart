@@ -139,6 +139,26 @@ void main() {
     );
   });
 
+  test('resolveOAuthCallbackSessionValues reads provider callback keys', () {
+    final store = <String, String>{
+      '_auth.state.github': 'state-1',
+      '_auth.pkce.github': 'verifier-1',
+      '_auth.callback.github': '/dashboard',
+    };
+
+    final values = resolveOAuthCallbackSessionValues(
+      providerId: 'github',
+      stateKey: '_auth.state',
+      pkceKey: '_auth.pkce',
+      callbackKey: '_auth.callback',
+      readSession: (key) => store[key],
+    );
+
+    expect(values.expectedState, equals('state-1'));
+    expect(values.codeVerifier, equals('verifier-1'));
+    expect(values.callbackUrl, equals('/dashboard'));
+  });
+
   test('ensureOAuthStateMatches validates callback state', () {
     expect(
       () => ensureOAuthStateMatches(

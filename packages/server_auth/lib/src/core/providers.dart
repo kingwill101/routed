@@ -269,6 +269,38 @@ String authEmailCallbackSessionKey(String callbackKey) {
   return '$callbackKey.email';
 }
 
+/// OAuth callback session values loaded for a provider.
+class AuthOAuthCallbackSessionValues {
+  const AuthOAuthCallbackSessionValues({
+    required this.expectedState,
+    required this.codeVerifier,
+    required this.callbackUrl,
+  });
+
+  final String? expectedState;
+  final String? codeVerifier;
+  final String? callbackUrl;
+}
+
+/// Loads OAuth callback state/verifier/callback URL values from session.
+AuthOAuthCallbackSessionValues resolveOAuthCallbackSessionValues({
+  required String providerId,
+  required String stateKey,
+  required String pkceKey,
+  required String callbackKey,
+  required String? Function(String key) readSession,
+}) {
+  return AuthOAuthCallbackSessionValues(
+    expectedState: readSession(
+      authProviderStateSessionKey(stateKey, providerId),
+    ),
+    codeVerifier: readSession(authProviderPkceSessionKey(pkceKey, providerId)),
+    callbackUrl: readSession(
+      authProviderCallbackSessionKey(callbackKey, providerId),
+    ),
+  );
+}
+
 /// Ensures OAuth callback [receivedState] matches [expectedState].
 ///
 /// Throws [AuthFlowException] with `invalid_state` when validation fails.

@@ -18,12 +18,10 @@ import 'package:server_auth/server_auth.dart'
         AuthPrincipal,
         AuthProvider,
         authEmailCallbackSessionKey,
-        authProviderCallbackSessionKey,
-        authProviderPkceSessionKey,
-        authProviderStateSessionKey,
         authProviderSummaries,
         baseUrlFromUri,
         ensureOAuthStateMatches,
+        resolveOAuthCallbackSessionValues,
         resolveOAuthAuthorizationStart,
         resolveAuthProviderById,
         AuthResult,
@@ -254,13 +252,16 @@ class AuthManager {
     String code,
     String? state,
   ) async {
-    final expectedState = ctx.getSession<String>(
-      authProviderStateSessionKey(options.stateKey, provider.id),
+    final sessionValues = resolveOAuthCallbackSessionValues(
+      providerId: provider.id,
+      stateKey: options.stateKey,
+      pkceKey: options.pkceKey,
+      callbackKey: options.callbackKey,
+      readSession: (key) => ctx.getSession<String>(key),
     );
-    ensureOAuthStateMatches(expectedState: expectedState, receivedState: state);
-
-    final verifier = ctx.getSession<String>(
-      authProviderPkceSessionKey(options.pkceKey, provider.id),
+    ensureOAuthStateMatches(
+      expectedState: sessionValues.expectedState,
+      receivedState: state,
     );
     final resolved =
         await resolveOAuthSignInForProvider<EngineContext, TProfile>(
@@ -268,7 +269,7 @@ class AuthManager {
           context: ctx,
           provider: provider,
           code: code,
-          codeVerifier: verifier,
+          codeVerifier: sessionValues.codeVerifier,
           httpClient: httpClient,
           fallbackAccountId: secureRandomToken,
         );
@@ -299,9 +300,7 @@ class AuthManager {
       ),
     );
 
-    final redirectUrl = ctx.getSession<String>(
-      authProviderCallbackSessionKey(options.callbackKey, provider.id),
-    );
+    final redirectUrl = sessionValues.callbackUrl;
     return _completeSignIn(
       ctx,
       resolvedUser,
