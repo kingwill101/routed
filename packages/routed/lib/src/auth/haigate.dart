@@ -1,12 +1,11 @@
 import 'dart:async';
 import 'dart:io';
 
-import 'package:server_auth/server_auth.dart' show AuthPrincipal;
+import 'package:server_auth/server_auth.dart' show AuthPrincipal, NamedRegistry;
 import 'package:routed/src/auth/session_auth.dart';
 import 'package:routed/src/context/context.dart';
 import 'package:routed/src/response.dart';
 import 'package:routed/src/router/types.dart';
-import 'package:routed/src/support/named_registry.dart';
 
 /// A callback function used to evaluate whether a specific ability is allowed
 /// in the given [GateEvaluationContext].

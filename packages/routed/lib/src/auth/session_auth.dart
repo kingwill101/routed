@@ -16,7 +16,7 @@ import 'package:routed/src/context/context.dart';
 import 'package:routed/src/response.dart';
 import 'package:routed/src/router/types.dart';
 import 'package:server_data/sessions.dart';
-import 'package:routed/src/support/named_registry.dart';
+import 'package:server_auth/server_auth.dart' show NamedRegistry;
 
 /// Key for storing the authenticated principal in the session.
 const String _sessionPrincipalKey = '__routed.auth.principal';

@@ -6,6 +6,7 @@ export 'exceptions.dart';
 export 'guards.dart';
 export 'jwt.dart';
 export 'models.dart';
+export 'named_registry.dart';
 export 'oauth.dart';
 export 'provider_registry.dart';
 export 'providers.dart';
