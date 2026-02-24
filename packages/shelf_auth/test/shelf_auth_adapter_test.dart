@@ -17,6 +17,16 @@ void main() {
       expect(bearerToken(request), 'abc123');
     });
 
+    test('extracts lowercase bearer token', () {
+      final request = Request(
+        'GET',
+        Uri.parse('http://localhost/'),
+        headers: const <String, String>{'authorization': 'bearer abc123'},
+      );
+
+      expect(bearerToken(request), 'abc123');
+    });
+
     test('returns null for non-bearer authorization header', () {
       final request = Request(
         'GET',

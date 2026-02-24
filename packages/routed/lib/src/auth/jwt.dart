@@ -9,6 +9,7 @@ import 'package:server_auth/server_auth.dart'
         AuthJwtVerifiedCallback,
         JwtOptions,
         JwtVerifier,
+        extractBearerToken,
         jwtClaimsAttribute,
         jwtHeadersAttribute,
         jwtSubjectAttribute;
@@ -38,7 +39,7 @@ Middleware jwtAuthenticationWithVerifier(
     }
 
     final headerValue = ctx.request.header(options.header);
-    final token = _extractToken(headerValue, options.bearerPrefix);
+    final token = extractBearerToken(headerValue, prefix: options.bearerPrefix);
     if (token == null) {
       _writeUnauthorized(ctx, 'missing_token');
       return ctx.response;
@@ -74,15 +75,4 @@ void _writeUnauthorized(EngineContext ctx, String reason) {
       message: 'Unauthorized',
     );
   }
-}
-
-String? _extractToken(String? headerValue, String prefix) {
-  if (headerValue == null || headerValue.isEmpty) {
-    return null;
-  }
-  if (!headerValue.startsWith(prefix)) {
-    return null;
-  }
-  final token = headerValue.substring(prefix.length).trim();
-  return token.isEmpty ? null : token;
 }

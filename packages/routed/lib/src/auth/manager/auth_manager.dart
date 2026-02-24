@@ -29,6 +29,7 @@ import 'package:server_auth/server_auth.dart'
         AuthVerificationTokenStore,
         AuthVerificationToken,
         InMemoryAuthVerificationTokenStore,
+        extractBearerToken,
         CallbackProvider,
         CredentialsProvider,
         EmailProvider,
@@ -877,8 +878,12 @@ class AuthManager {
 
   String? _resolveJwtToken(EngineContext ctx) {
     final header = ctx.request.headers.value(options.jwtOptions.header);
-    if (header != null && header.startsWith(options.jwtOptions.bearerPrefix)) {
-      return header.substring(options.jwtOptions.bearerPrefix.length).trim();
+    final token = extractBearerToken(
+      header,
+      prefix: options.jwtOptions.bearerPrefix,
+    );
+    if (token != null) {
+      return token;
     }
     for (final cookie in ctx.request.cookies) {
       if (cookie.name == options.jwtOptions.cookieName) {

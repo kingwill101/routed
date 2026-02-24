@@ -24,19 +24,10 @@ AuthPrincipal? authPrincipal(
 
 /// Reads a bearer token from the `Authorization` header.
 String? bearerToken(Request request) {
-  final header = request.headers['authorization'];
-  if (header == null) {
-    return null;
-  }
-  final value = header.trim();
-  if (value.isEmpty) {
-    return null;
-  }
-  if (value.toLowerCase().startsWith('bearer ')) {
-    final token = value.substring(7).trim();
-    return token.isEmpty ? null : token;
-  }
-  return null;
+  return extractBearerToken(
+    request.headers['authorization'],
+    caseSensitive: false,
+  );
 }
 
 /// Resolves bearer tokens into [AuthPrincipal] values.

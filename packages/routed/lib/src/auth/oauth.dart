@@ -8,6 +8,7 @@ import 'package:server_auth/server_auth.dart'
         OAuth2TokenIntrospector,
         OAuthIntrospectionOptions,
         OAuthIntrospectionResult,
+        extractBearerToken,
         oauthClaimsAttribute,
         oauthScopeAttribute,
         oauthTokenAttribute;
@@ -44,15 +45,8 @@ Middleware oauth2Introspection(
   final introspector = OAuth2TokenIntrospector(options, httpClient: httpClient);
 
   return (EngineContext ctx, Next next) async {
-    final header = ctx.request.header('Authorization');
-    if (header.isEmpty || !header.startsWith('Bearer ')) {
-      ctx.response
-        ..statusCode = HttpStatus.unauthorized
-        ..write('missing token');
-      return ctx.response;
-    }
-    final token = header.substring('Bearer '.length).trim();
-    if (token.isEmpty) {
+    final token = extractBearerToken(ctx.request.header('Authorization'));
+    if (token == null) {
       ctx.response
         ..statusCode = HttpStatus.unauthorized
         ..write('missing token');
