@@ -104,6 +104,26 @@ class AuthGuardRegistry<TContext, TResponse> {
   Iterable<String> get names => _entries.keys;
 }
 
+/// Synchronizes [managed] with [nextManaged], unregistering stale guard names.
+///
+/// [preserve] can be used for names that should never be removed during sync.
+void syncManagedGuards<TContext, TResponse>(
+  AuthGuardRegistry<TContext, TResponse> registry, {
+  required Set<String> managed,
+  required Set<String> nextManaged,
+  Set<String> preserve = const <String>{},
+}) {
+  for (final name in managed.difference(nextManaged)) {
+    if (preserve.contains(name)) {
+      continue;
+    }
+    registry.unregister(name);
+  }
+  managed
+    ..clear()
+    ..addAll(nextManaged);
+}
+
 /// Framework-agnostic guard evaluation service.
 class AuthGuardService<TContext, TResponse> {
   AuthGuardService({AuthGuardRegistry<TContext, TResponse>? registry})

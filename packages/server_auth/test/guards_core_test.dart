@@ -170,6 +170,42 @@ void main() {
       expect(allowed.allowed, isTrue);
     },
   );
+
+  test('syncManagedGuards unregisters stale guard registrations', () {
+    final registry = AuthGuardRegistry<String, String>();
+    registry.register('keep', (_) => const GuardResult<String>.allow());
+    registry.register('remove', (_) => const GuardResult<String>.allow());
+
+    final managed = <String>{'keep', 'remove'};
+    syncManagedGuards<String, String>(
+      registry,
+      managed: managed,
+      nextManaged: const <String>{'keep'},
+    );
+
+    expect(registry.resolve('keep'), isNotNull);
+    expect(registry.resolve('remove'), isNull);
+    expect(managed, equals(const <String>{'keep'}));
+  });
+
+  test('syncManagedGuards preserves protected guard names', () {
+    final registry = AuthGuardRegistry<String, String>();
+    registry.register(
+      'authenticated',
+      (_) => const GuardResult<String>.allow(),
+    );
+
+    final managed = <String>{'authenticated'};
+    syncManagedGuards<String, String>(
+      registry,
+      managed: managed,
+      nextManaged: const <String>{},
+      preserve: const <String>{'authenticated'},
+    );
+
+    expect(registry.resolve('authenticated'), isNotNull);
+    expect(managed, isEmpty);
+  });
 }
 
 class _Ctx {

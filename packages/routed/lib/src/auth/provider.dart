@@ -24,6 +24,7 @@ import 'package:server_auth/server_auth.dart'
         registerDefaultAuthProviders,
         resolveAuthOptions,
         syncManagedGateAbilities,
+        syncManagedGuards,
         AuthOptions;
 import 'package:routed/src/auth/manager/auth_manager.dart';
 import 'package:routed/src/auth/routes.dart';
@@ -148,16 +149,21 @@ class AuthServiceProvider extends ServiceProvider with ProvidesDefaultConfig {
     container.instance<SessionAuthService>(_sessionAuth!);
 
     final guardRegistry = _resolveGuardRegistry(container);
-    for (final name in _managedConfigGuards) {
-      guardRegistry.unregister(name);
-    }
     guardRegistry.register(
       'authenticated',
       requireAuthenticated(sessionAuth: _sessionAuth!),
     );
-    _managedConfigGuards
-      ..clear()
-      ..addAll(_configureGuards(resolved.guards, guardRegistry, _sessionAuth!));
+    final configuredGuards = _configureGuards(
+      resolved.guards,
+      guardRegistry,
+      _sessionAuth!,
+    );
+    syncManagedGuards<EngineContext, Response>(
+      guardRegistry,
+      managed: _managedConfigGuards,
+      nextManaged: configuredGuards,
+      preserve: const <String>{'authenticated'},
+    );
 
     final gateRegistry = _resolveGateRegistry(container);
     final middlewareRegistry = container.get<MiddlewareRegistry>();
