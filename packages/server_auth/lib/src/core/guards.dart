@@ -46,3 +46,47 @@ class AuthGuardRegistry<TContext, TResponse> {
   /// Registered guard names.
   Iterable<String> get names => _entries.keys;
 }
+
+/// Framework-agnostic guard evaluation service.
+class AuthGuardService<TContext, TResponse> {
+  AuthGuardService({AuthGuardRegistry<TContext, TResponse>? registry})
+    : registry = registry ?? AuthGuardRegistry<TContext, TResponse>();
+
+  /// Backing registry for guard callbacks.
+  final AuthGuardRegistry<TContext, TResponse> registry;
+
+  void register(
+    String name,
+    AuthGuard<TContext, TResponse> handler, {
+    bool overrideExisting = true,
+  }) {
+    registry.register(name, handler, overrideExisting: overrideExisting);
+  }
+
+  void unregister(String name) {
+    registry.unregister(name);
+  }
+
+  /// Returns the first denied response across [guardNames], if any.
+  ///
+  /// When a guard denies without attaching a response, [onDenied] is used to
+  /// materialize one.
+  Future<TResponse?> firstDenied(
+    Iterable<String> guardNames,
+    TContext context, {
+    TResponse Function(TContext context, String guardName)? onDenied,
+  }) async {
+    for (final name in guardNames) {
+      final handler = registry.resolve(name);
+      if (handler == null) {
+        continue;
+      }
+
+      final result = await Future.sync(() => handler(context));
+      if (!result.allowed) {
+        return result.response ?? onDenied?.call(context, name);
+      }
+    }
+    return null;
+  }
+}

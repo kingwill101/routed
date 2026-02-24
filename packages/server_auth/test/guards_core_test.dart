@@ -57,4 +57,34 @@ void main() {
     final result = await registry.resolve('auth')!('ignored');
     expect(result.allowed, isTrue);
   });
+
+  test('AuthGuardService returns first denied response', () async {
+    final service = AuthGuardService<String, String>();
+    service.register('a', (_) => const GuardResult<String>.allow());
+    service.register('b', (_) => const GuardResult<String>.deny('blocked'));
+
+    final denied = await service.firstDenied(['a', 'b'], 'ctx');
+    expect(denied, equals('blocked'));
+  });
+
+  test('AuthGuardService can build fallback denied response', () async {
+    final service = AuthGuardService<String, String>();
+    service.register('auth', (_) => const GuardResult<String>.deny());
+
+    final denied = await service.firstDenied(
+      ['auth'],
+      'ctx',
+      onDenied: (_, name) => 'denied by $name',
+    );
+
+    expect(denied, equals('denied by auth'));
+  });
+
+  test('AuthGuardService returns null when all guards pass', () async {
+    final service = AuthGuardService<String, String>();
+    service.register('auth', (_) => const GuardResult<String>.allow());
+
+    final denied = await service.firstDenied(['auth'], 'ctx');
+    expect(denied, isNull);
+  });
 }

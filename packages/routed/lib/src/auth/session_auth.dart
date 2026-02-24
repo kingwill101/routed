@@ -7,6 +7,7 @@ import 'package:server_auth/server_auth.dart'
     show
         AuthGuard,
         AuthGuardRegistry,
+        AuthGuardService,
         AuthPrincipal,
         GuardResult,
         RememberTokenStore,
@@ -318,26 +319,30 @@ class SessionAuth {
 final AuthGuardRegistry<EngineContext, Response> guardRegistry =
     AuthGuardRegistry<EngineContext, Response>();
 
+/// Global guard service used by [guardMiddleware].
+final AuthGuardService<EngineContext, Response> guardService =
+    AuthGuardService<EngineContext, Response>(registry: guardRegistry);
+
 Middleware guardMiddleware(
   List<String> guardNames, {
   AuthGuardRegistry<EngineContext, Response>? registry,
 }) {
-  final reg = registry ?? guardRegistry;
+  final service = registry == null
+      ? guardService
+      : AuthGuardService<EngineContext, Response>(registry: registry);
+
   return (EngineContext ctx, Next next) async {
-    for (final name in guardNames) {
-      final handler = reg.resolve(name);
-      if (handler == null) {
-        continue;
-      }
-      final result = await Future.sync(() => handler(ctx));
-      if (!result.allowed) {
-        if (result.response != null) {
-          return result.response!;
-        }
-        ctx.response.statusCode = HttpStatus.forbidden;
-        ctx.response.write('Forbidden by guard: $name');
-        return ctx.response;
-      }
+    final denied = await service.firstDenied(
+      guardNames,
+      ctx,
+      onDenied: (context, name) {
+        context.response.statusCode = HttpStatus.forbidden;
+        context.response.write('Forbidden by guard: $name');
+        return context.response;
+      },
+    );
+    if (denied != null) {
+      return denied;
     }
     return await next();
   };
