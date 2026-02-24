@@ -137,6 +137,23 @@ print(resolved.user.id);
 print(resolved.profile);
 ```
 
+Use `resolveOAuthAuthorizationStart` to share OAuth begin-flow state/PKCE/callback
+session persistence:
+
+```dart
+final start = await resolveOAuthAuthorizationStart<MyContext, Map<String, dynamic>>(
+  context: context,
+  provider: oauthProvider,
+  stateKey: '_auth.state',
+  pkceKey: '_auth.pkce',
+  callbackKey: '_auth.callback',
+  callbackUrl: '/dashboard',
+  writeSession: (key, value) => sessionStore[key] = value,
+);
+
+return start.authorizationUri;
+```
+
 ## Adapter attribute mapping helpers
 
 When writing framework adapters, use these helpers to store verified auth
