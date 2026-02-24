@@ -73,6 +73,79 @@ void main() {
     );
   });
 
+  test('syncAuthSessionRefresh no-ops when updateAge is null', () {
+    var wrote = false;
+    var touched = false;
+
+    syncAuthSessionRefresh(
+      issuedAtValue: null,
+      updateAge: null,
+      writeIssuedAt: (_) => wrote = true,
+      touchSession: () => touched = true,
+    );
+
+    expect(wrote, isFalse);
+    expect(touched, isFalse);
+  });
+
+  test('syncAuthSessionRefresh initializes issued-at without touching', () {
+    DateTime? written;
+    var touched = false;
+    final now = DateTime.utc(2026, 2, 24, 12);
+
+    syncAuthSessionRefresh(
+      issuedAtValue: null,
+      updateAge: const Duration(minutes: 5),
+      now: now,
+      writeIssuedAt: (value) => written = value,
+      touchSession: () => touched = true,
+    );
+
+    expect(written, equals(now));
+    expect(touched, isFalse);
+  });
+
+  test('syncAuthSessionRefresh refreshes issued-at and touches session', () {
+    DateTime? written;
+    var touched = false;
+    final now = DateTime.utc(2026, 2, 24, 12);
+
+    syncAuthSessionRefresh(
+      issuedAtValue: serializeAuthSessionIssuedAt(
+        now.subtract(const Duration(minutes: 10)),
+      ),
+      updateAge: const Duration(minutes: 5),
+      now: now,
+      writeIssuedAt: (value) => written = value,
+      touchSession: () => touched = true,
+    );
+
+    expect(written, equals(now));
+    expect(touched, isTrue);
+  });
+
+  test(
+    'syncAuthSessionRefresh keeps current state when refresh is not due',
+    () {
+      DateTime? written;
+      var touched = false;
+      final now = DateTime.utc(2026, 2, 24, 12);
+
+      syncAuthSessionRefresh(
+        issuedAtValue: serializeAuthSessionIssuedAt(
+          now.subtract(const Duration(minutes: 1)),
+        ),
+        updateAge: const Duration(minutes: 5),
+        now: now,
+        writeIssuedAt: (value) => written = value,
+        touchSession: () => touched = true,
+      );
+
+      expect(written, isNull);
+      expect(touched, isFalse);
+    },
+  );
+
   test('resolveAuthSessionExpiry prefers explicit max age', () {
     final now = DateTime.utc(2026, 2, 24, 12);
 

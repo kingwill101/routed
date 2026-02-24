@@ -52,6 +52,39 @@ AuthSessionRefreshAction authSessionRefreshAction({
       : AuthSessionRefreshAction.keep;
 }
 
+/// Applies issued-at refresh semantics with adapter hooks for write/touch.
+void syncAuthSessionRefresh({
+  required String? issuedAtValue,
+  required Duration? updateAge,
+  DateTime? now,
+  required void Function(DateTime issuedAtUtc) writeIssuedAt,
+  void Function()? touchSession,
+}) {
+  final age = updateAge;
+  if (age == null) {
+    return;
+  }
+
+  final current = (now ?? DateTime.now()).toUtc();
+  final action = authSessionRefreshAction(
+    issuedAtValue: issuedAtValue,
+    updateAge: age,
+    now: current,
+  );
+
+  switch (action) {
+    case AuthSessionRefreshAction.initialize:
+      writeIssuedAt(current);
+      return;
+    case AuthSessionRefreshAction.refresh:
+      writeIssuedAt(current);
+      touchSession?.call();
+      return;
+    case AuthSessionRefreshAction.keep:
+      return;
+  }
+}
+
 /// Resolves auth session expiry from explicit or runtime max-age settings.
 DateTime? resolveAuthSessionExpiry({
   Duration? sessionMaxAge,

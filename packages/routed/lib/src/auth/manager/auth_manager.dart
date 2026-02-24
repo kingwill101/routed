@@ -63,12 +63,11 @@ import 'package:server_auth/server_auth.dart'
         loadOAuthProfile,
         oauthTokenExpiryFromSeconds,
         authSessionIssuedAtKey,
-        authSessionRefreshAction,
-        AuthSessionRefreshAction,
         AuthOptions,
         resolveAuthSessionMaxAgeSeconds,
         resolveAuthSessionExpiry,
         serializeAuthSessionIssuedAt,
+        syncAuthSessionRefresh,
         secureRandomToken,
         shouldRefreshJwtClaims;
 import 'package:routed/src/auth/hooks.dart';
@@ -754,27 +753,12 @@ class AuthManager {
   }
 
   void _refreshSessionIfNeeded(EngineContext ctx) {
-    final updateAge = options.sessionUpdateAge;
-    if (updateAge == null) {
-      return;
-    }
-    final now = DateTime.now().toUtc();
-    final action = authSessionRefreshAction(
+    syncAuthSessionRefresh(
       issuedAtValue: ctx.getSession<String>(authSessionIssuedAtKey),
-      updateAge: updateAge,
-      now: now,
+      updateAge: options.sessionUpdateAge,
+      writeIssuedAt: (issuedAtUtc) => _setSessionIssuedAt(ctx, issuedAtUtc),
+      touchSession: ctx.session.touch,
     );
-    switch (action) {
-      case AuthSessionRefreshAction.initialize:
-        _setSessionIssuedAt(ctx, now);
-        return;
-      case AuthSessionRefreshAction.refresh:
-        _setSessionIssuedAt(ctx, now);
-        ctx.session.touch();
-        return;
-      case AuthSessionRefreshAction.keep:
-        return;
-    }
   }
 
   Future<_JwtRefresh?> _refreshJwtIfNeeded(

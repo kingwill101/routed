@@ -233,6 +233,20 @@ await runtime.hydrate(context); // restore/rotate remember token when needed
 await runtime.logout(context);
 ```
 
+For adapters that keep issued-at metadata, use
+`syncAuthSessionRefresh` to apply initialize/refresh/keep behavior:
+
+```dart
+syncAuthSessionRefresh(
+  issuedAtValue: session['__auth.session.issued_at'] as String?,
+  updateAge: const Duration(minutes: 5),
+  writeIssuedAt: (value) {
+    session['__auth.session.issued_at'] = serializeAuthSessionIssuedAt(value);
+  },
+  touchSession: () => sessionTouch(),
+);
+```
+
 ## Minimal adapter skeleton
 
 Use a small framework-specific adapter that maps your persistence layer into
