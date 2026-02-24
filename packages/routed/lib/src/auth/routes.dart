@@ -8,6 +8,7 @@ import 'package:server_auth/server_auth.dart'
         AuthProvider,
         AuthResult,
         AuthSessionStrategy,
+        buildExpiredJwtTokenCookie,
         CallbackProvider,
         CredentialsProvider,
         EmailProvider,
@@ -296,10 +297,9 @@ class AuthRoutes {
         await manager.sessionAuth.logout(ctx);
         break;
       case AuthSessionStrategy.jwt:
-        final cookie = Cookie(manager.options.jwtOptions.cookieName, '')
-          ..maxAge = 0
-          ..path = '/';
-        ctx.response.cookies.add(cookie);
+        ctx.response.cookies.add(
+          buildExpiredJwtTokenCookie(manager.options.jwtOptions.cookieName),
+        );
         break;
     }
 

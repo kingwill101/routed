@@ -88,6 +88,25 @@ void main() {
     );
   });
 
+  test('buildJwtTokenCookie applies defaults and expiry', () {
+    final expiry = DateTime.now().add(const Duration(minutes: 5));
+    final cookie = buildJwtTokenCookie('auth', 'token-123', expires: expiry);
+
+    expect(cookie.name, equals('auth'));
+    expect(cookie.value, equals('token-123'));
+    expect(cookie.httpOnly, isTrue);
+    expect(cookie.path, equals('/'));
+    expect(cookie.expires, equals(expiry));
+  });
+
+  test('buildExpiredJwtTokenCookie creates maxAge zero cookie', () {
+    final cookie = buildExpiredJwtTokenCookie('auth');
+    expect(cookie.name, equals('auth'));
+    expect(cookie.value, equals(''));
+    expect(cookie.maxAge, equals(0));
+    expect(cookie.path, equals('/'));
+  });
+
   test('AuthJwtVerifiedCallback supports typed async handlers', () async {
     var invoked = false;
     Future<void> callback(JwtPayload payload, String context) async {

@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:convert';
+import 'dart:io';
 
 import 'package:http/http.dart' as http;
 import 'package:jose/jose.dart';
@@ -38,6 +39,28 @@ bool shouldRefreshJwtByIssuedAt(
   }
   final current = (now ?? DateTime.now()).toUtc();
   return current.difference(issuedAt) >= updateAge;
+}
+
+/// Builds an HTTP-only JWT cookie.
+Cookie buildJwtTokenCookie(
+  String cookieName,
+  String token, {
+  DateTime? expires,
+  String path = '/',
+  bool httpOnly = true,
+}) {
+  final cookie = Cookie(cookieName, token)
+    ..httpOnly = httpOnly
+    ..path = path;
+  if (expires != null) {
+    cookie.expires = expires;
+  }
+  return cookie;
+}
+
+/// Builds an expired JWT cookie for sign-out flows.
+Cookie buildExpiredJwtTokenCookie(String cookieName, {String path = '/'}) {
+  return buildJwtTokenCookie(cookieName, '', path: path)..maxAge = 0;
 }
 
 /// Callback invoked after a JWT has been successfully verified.

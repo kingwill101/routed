@@ -1,5 +1,4 @@
 import 'dart:async';
-import 'dart:io';
 
 import 'package:http/http.dart' as http;
 import 'package:server_auth/server_auth.dart'
@@ -42,6 +41,7 @@ import 'package:server_auth/server_auth.dart'
         CallbackProvider,
         CredentialsProvider,
         EmailProvider,
+        buildJwtTokenCookie,
         JwtAuthException,
         jwtIssuedAtUtc,
         JwtIssuer,
@@ -487,7 +487,13 @@ class AuthManager {
           ),
         );
         final token = issuer.issue(claims);
-        _attachJwtCookie(ctx, token, issuer.expiry);
+        ctx.response.cookies.add(
+          buildJwtTokenCookie(
+            options.jwtOptions.cookieName,
+            token,
+            expires: issuer.expiry,
+          ),
+        );
         return AuthSession(
           user: user,
           expiresAt: issuer.expiry,
@@ -718,7 +724,13 @@ class AuthManager {
           ),
         );
         final token = issuer.issue(claims);
-        _attachJwtCookie(ctx, token, issuer.expiry);
+        ctx.response.cookies.add(
+          buildJwtTokenCookie(
+            options.jwtOptions.cookieName,
+            token,
+            expires: issuer.expiry,
+          ),
+        );
         final session = AuthSession(
           user: user,
           expiresAt: issuer.expiry,
@@ -819,7 +831,13 @@ class AuthManager {
       ),
     );
     final token = issuer.issue(claims);
-    _attachJwtCookie(ctx, token, issuer.expiry);
+    ctx.response.cookies.add(
+      buildJwtTokenCookie(
+        options.jwtOptions.cookieName,
+        token,
+        expires: issuer.expiry,
+      ),
+    );
     return _JwtRefresh(token: token, expiresAt: issuer.expiry);
   }
 
@@ -839,16 +857,6 @@ class AuthManager {
         (cookie) => MapEntry<String, String>(cookie.name, cookie.value),
       ),
     );
-  }
-
-  void _attachJwtCookie(EngineContext ctx, String token, DateTime? expires) {
-    final cookie = Cookie(options.jwtOptions.cookieName, token)
-      ..httpOnly = true
-      ..path = '/';
-    if (expires != null) {
-      cookie.expires = expires;
-    }
-    ctx.response.cookies.add(cookie);
   }
 }
 
