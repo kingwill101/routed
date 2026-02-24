@@ -124,3 +124,33 @@ class AuthOptions<TContext> {
     );
   }
 }
+
+/// Resolves final auth runtime options by combining base [options] with
+/// adapter/framework overrides and config-driven provider additions.
+///
+/// This helper keeps option merge behavior consistent across framework
+/// integrations (for example Routed and Shelf adapters).
+AuthOptions<TContext> resolveAuthOptions<TContext>({
+  required AuthOptions<TContext> options,
+  Iterable<AuthProvider> configuredProviders = const <AuthProvider>[],
+  AuthAdapter? adapter,
+  http.Client? httpClient,
+  AuthVerificationTokenStore? tokenStore,
+  AuthSessionStrategy? sessionStrategy,
+  Duration? sessionMaxAge,
+  Duration? sessionUpdateAge,
+}) {
+  final mergedProviders = mergeAuthProvidersById(
+    options.providers,
+    configuredProviders,
+  );
+  return options.copyWith(
+    providers: mergedProviders,
+    adapter: adapter ?? options.adapter,
+    httpClient: options.httpClient ?? httpClient,
+    tokenStore: options.tokenStore ?? tokenStore,
+    sessionStrategy: sessionStrategy ?? options.sessionStrategy,
+    sessionMaxAge: options.sessionMaxAge ?? sessionMaxAge,
+    sessionUpdateAge: options.sessionUpdateAge ?? sessionUpdateAge,
+  );
+}

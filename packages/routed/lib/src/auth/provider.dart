@@ -12,7 +12,6 @@ import 'package:server_auth/server_auth.dart'
         AuthGuardRegistry,
         guestGate,
         AuthProviderRegistry,
-        mergeAuthProvidersById,
         rolesGate,
         RememberTokenStore,
         AuthVerificationTokenStore,
@@ -23,6 +22,7 @@ import 'package:server_auth/server_auth.dart'
         registerPolicyBindingsSafely,
         registerRbacAbilitiesSafely,
         registerDefaultAuthProviders,
+        resolveAuthOptions,
         AuthOptions;
 import 'package:routed/src/auth/manager/auth_manager.dart';
 import 'package:routed/src/auth/routes.dart';
@@ -189,18 +189,16 @@ class AuthServiceProvider extends ServiceProvider with ProvidesDefaultConfig {
     final configuredProviders = AuthProviderRegistry.instance.buildProviders(
       _resolvedConfig?.providers ?? const <String, dynamic>{},
     );
-    final mergedProviders = mergeAuthProvidersById(
-      options.providers,
-      configuredProviders,
-    );
-    final resolvedOptions = options.copyWith(
-      providers: mergedProviders,
+
+    final resolvedOptions = resolveAuthOptions<EngineContext>(
+      options: options,
+      configuredProviders: configuredProviders,
       adapter: adapter,
-      httpClient: options.httpClient ?? _httpClient,
+      httpClient: _httpClient,
       tokenStore: tokenStore,
-      sessionStrategy: configSession?.strategy ?? options.sessionStrategy,
-      sessionMaxAge: options.sessionMaxAge ?? configSession?.maxAge,
-      sessionUpdateAge: options.sessionUpdateAge ?? configSession?.updateAge,
+      sessionStrategy: configSession?.strategy,
+      sessionMaxAge: configSession?.maxAge,
+      sessionUpdateAge: configSession?.updateAge,
     );
 
     final manager = AuthManager(resolvedOptions, sessionAuth: _sessionAuth);
