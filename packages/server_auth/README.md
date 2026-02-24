@@ -119,6 +119,32 @@ final allowed = await gates.can(
 print(allowed); // true
 ```
 
+## Framework Adapter Session Runtime
+
+`RememberSessionAuthRuntime<TContext>` provides framework-agnostic
+remember-me/session principal logic. Frameworks supply an
+`AuthSessionRuntimeAdapter<TContext>` to map request/session/cookie behavior.
+
+```dart
+import 'package:server_auth/server_auth.dart';
+
+final runtime = RememberSessionAuthRuntime<MyContext>(
+  adapter: myAdapter,
+  rememberCookieName: 'remember_token',
+  defaultRememberDuration: const Duration(days: 30),
+  sessionPrincipalKey: '__auth.principal',
+);
+
+await runtime.login(
+  context,
+  AuthPrincipal(id: 'user-1', roles: const <String>['user']),
+  rememberMe: true,
+);
+
+await runtime.hydrate(context); // restore/rotate remember token when needed
+await runtime.logout(context);
+```
+
 ## Typed Profiles
 
 Every OAuth provider includes a typed profile model and serializer/parsers,
