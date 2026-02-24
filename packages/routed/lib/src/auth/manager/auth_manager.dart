@@ -17,6 +17,7 @@ import 'package:server_auth/server_auth.dart'
         AuthSessionStrategy,
         OAuth2Client,
         OAuth2Exception,
+        AuthFlowException,
         AuthUser,
         AuthVerificationTokenStore,
         AuthVerificationToken,
@@ -1049,13 +1050,4 @@ class _JwtRefresh {
 
   final String token;
   final DateTime expiresAt;
-}
-
-class AuthFlowException implements Exception {
-  AuthFlowException(this.code);
-
-  final String code;
-
-  @override
-  String toString() => 'AuthFlowException($code)';
 }

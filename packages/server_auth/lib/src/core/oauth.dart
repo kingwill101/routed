@@ -3,6 +3,15 @@ import 'dart:io';
 
 import 'package:http/http.dart' as http;
 
+/// Attribute key used to store the OAuth2 access token.
+const String oauthTokenAttribute = 'auth.oauth.access_token';
+
+/// Attribute key used to store OAuth2 claims.
+const String oauthClaimsAttribute = 'auth.oauth.claims';
+
+/// Attribute key used to store OAuth2 scope values.
+const String oauthScopeAttribute = 'auth.oauth.scope';
+
 /// Represents an exception that occurs during OAuth2 operations.
 class OAuth2Exception implements Exception {
   OAuth2Exception(this.message, [this.statusCode]);

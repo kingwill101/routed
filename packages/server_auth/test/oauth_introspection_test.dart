@@ -7,6 +7,18 @@ import 'package:server_auth/server_auth.dart';
 import 'package:test/test.dart';
 
 void main() {
+  test('auth flow exception exposes code', () {
+    final exception = AuthFlowException('invalid_state');
+    expect(exception.code, equals('invalid_state'));
+    expect(exception.toString(), equals('AuthFlowException(invalid_state)'));
+  });
+
+  test('oauth context attributes remain stable', () {
+    expect(oauthTokenAttribute, equals('auth.oauth.access_token'));
+    expect(oauthClaimsAttribute, equals('auth.oauth.claims'));
+    expect(oauthScopeAttribute, equals('auth.oauth.scope'));
+  });
+
   test('OAuth2TokenIntrospector caches introspection responses', () async {
     var requestCount = 0;
     final introspector = OAuth2TokenIntrospector(

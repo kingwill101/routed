@@ -8,17 +8,20 @@ import 'package:server_auth/server_auth.dart'
         OAuth2TokenIntrospector,
         OAuthIntrospectionOptions,
         OAuthIntrospectionResult;
+import 'package:server_auth/server_auth.dart'
+    as server_auth
+    show oauthClaimsAttribute, oauthScopeAttribute, oauthTokenAttribute;
 import 'package:routed/src/context/context.dart';
 import 'package:routed/src/router/types.dart';
 
 /// Attribute key for storing the OAuth2 access token in the request context.
-const String oauthTokenAttribute = 'auth.oauth.access_token';
+const String oauthTokenAttribute = server_auth.oauthTokenAttribute;
 
 /// Attribute key for storing OAuth2 claims in the request context.
-const String oauthClaimsAttribute = 'auth.oauth.claims';
+const String oauthClaimsAttribute = server_auth.oauthClaimsAttribute;
 
 /// Attribute key for storing OAuth2 scopes in the request context.
-const String oauthScopeAttribute = 'auth.oauth.scope';
+const String oauthScopeAttribute = server_auth.oauthScopeAttribute;
 
 typedef OAuthOnValidated =
     FutureOr<void> Function(
