@@ -4,27 +4,27 @@ import 'package:http/http.dart' as http;
 import 'package:server_auth/server_auth.dart'
     show
         AuthAdapter,
-        AuthGuard,
-        authenticatedGate,
-        AuthGateCallback,
+        AuthConfig,
         AuthGateRegistry,
+        GateDefinition,
+        GuardDefinition,
         AuthGuardRegistry,
-        guestGate,
+        HaigateConfig,
         AuthProviderRegistry,
-        rolesGate,
-        registerGateCallbacksSafely,
+        materializeJwtVerifier,
+        materializeOAuthIntrospectionOptions,
         RememberTokenStore,
+        resolveConfiguredGateCallback,
+        resolveConfiguredGuard,
         AuthVerificationTokenStore,
-        JwtOptions,
         JwtVerifier,
-        OAuthIntrospectionOptions,
-        parseStringLike,
-        registerPolicyBindingsSafely,
-        registerRbacAbilitiesSafely,
         registerDefaultAuthProviders,
         resolveAuthOptions,
-        syncManagedGateAbilities,
-        syncManagedGuards,
+        SessionRememberMeConfig,
+        syncManagedGateDefinitions,
+        syncManagedGuardDefinitions,
+        syncManagedPolicyBindings,
+        syncManagedRbacAbilities,
         AuthOptions;
 import 'package:routed/src/auth/manager/auth_manager.dart';
 import 'package:routed/src/auth/routes.dart';
@@ -138,8 +138,41 @@ class AuthServiceProvider extends ServiceProvider with ProvidesDefaultConfig {
     final resolved = spec.resolve(config);
     _resolvedConfig = resolved;
 
-    _jwtVerifier = _buildJwtVerifier(resolved);
-    _oauthMiddleware = _buildOAuthMiddleware(resolved);
+    final jwt = resolved.jwt;
+    _jwtVerifier = materializeJwtVerifier(
+      enabled: jwt.enabled,
+      issuer: jwt.issuer,
+      audience: jwt.audience,
+      requiredClaims: jwt.requiredClaims,
+      jwksUri: jwt.jwksUri,
+      inlineKeys: jwt.inlineKeys,
+      algorithms: jwt.algorithms,
+      clockSkew: jwt.clockSkew,
+      jwksCacheTtl: jwt.jwksCacheTtl,
+      header: jwt.header,
+      bearerPrefix: jwt.bearerPrefix,
+      httpClient: _httpClient,
+    );
+
+    final oauth = resolved.oauth2Introspection;
+    final oauthOptions = materializeOAuthIntrospectionOptions(
+      enabled: oauth.enabled,
+      endpoint: oauth.endpoint,
+      clientId: oauth.clientId,
+      clientSecret: oauth.clientSecret,
+      tokenTypeHint: oauth.tokenTypeHint,
+      cacheTtl: oauth.cacheTtl,
+      clockSkew: oauth.clockSkew,
+      additionalParameters: oauth.additionalParameters,
+    );
+    if (oauth.enabled && oauthOptions == null) {
+      throw ProviderConfigException(
+        'auth.oauth2.introspection.endpoint is required when enabled',
+      );
+    }
+    _oauthMiddleware = oauthOptions == null
+        ? null
+        : oauth2Introspection(oauthOptions, httpClient: _httpClient);
 
     if (_jwtVerifier != null) {
       container.instance<JwtVerifier>(_jwtVerifier!);
@@ -153,15 +186,18 @@ class AuthServiceProvider extends ServiceProvider with ProvidesDefaultConfig {
       'authenticated',
       requireAuthenticated(sessionAuth: _sessionAuth!),
     );
-    final configuredGuards = _configureGuards(
+    syncManagedGuardDefinitions<EngineContext, Response, GuardDefinition>(
+      guardRegistry,
       resolved.guards,
-      guardRegistry,
-      _sessionAuth!,
-    );
-    syncManagedGuards<EngineContext, Response>(
-      guardRegistry,
+      buildGuard: (_, definition) =>
+          resolveConfiguredGuard<EngineContext, Response>(
+            definition: definition,
+            authenticatedGuard: (realm) =>
+                requireAuthenticated(realm: realm, sessionAuth: _sessionAuth!),
+            rolesGuard: (roles, any) =>
+                requireRoles(roles, sessionAuth: _sessionAuth!, any: any),
+          ),
       managed: _managedConfigGuards,
-      nextManaged: configuredGuards,
       preserve: const <String>{'authenticated'},
     );
 
@@ -211,8 +247,17 @@ class AuthServiceProvider extends ServiceProvider with ProvidesDefaultConfig {
 
     SessionAuth.setSessionUpdater(manager.updateSession);
 
-    _configureRbac(container, resolvedOptions);
-    _configurePolicies(container, resolvedOptions);
+    final registry = _resolveGateRegistry(container);
+    syncManagedRbacAbilities<EngineContext>(
+      registry,
+      resolvedOptions.rbac.abilities,
+      managed: _managedRbacAbilities,
+    );
+    syncManagedPolicyBindings<EngineContext>(
+      registry,
+      resolvedOptions.policies.bindings,
+      managed: _managedPolicyAbilities,
+    );
   }
 
   AuthAdapter _resolveAuthAdapter(
@@ -289,56 +334,34 @@ class AuthServiceProvider extends ServiceProvider with ProvidesDefaultConfig {
     );
   }
 
-  Set<String> _configureGuards(
-    Map<String, GuardDefinition> guards,
-    AuthGuardRegistry<EngineContext, Response> registry,
-    SessionAuthService sessionAuth,
-  ) {
-    final managed = <String>{};
-    guards.forEach((name, definition) {
-      final guard = _buildGuardFromDefinition(definition, sessionAuth);
-      if (guard != null) {
-        registry.register(name, guard);
-        managed.add(name);
-      }
-    });
-    return managed;
-  }
-
   void _configureHaigate(
     HaigateConfig config,
     AuthGateRegistry<EngineContext> registry,
     MiddlewareRegistry middlewareRegistry,
   ) {
-    final enabled = config.enabled;
-
     final defaults = config.defaults;
-
-    final gateEntries = <String, AuthGateCallback<EngineContext>>{};
     final middlewareIdsByAbility = <String, String>{};
     final newMiddlewareIds = <String>{};
 
-    if (enabled) {
-      config.abilities.forEach((ability, definition) {
-        final trimmed = ability.trim();
-        if (trimmed.isEmpty) {
-          return;
-        }
-        final callback = _buildGateFromDefinition(definition);
-        if (callback == null) {
-          return;
-        }
-
-        gateEntries[trimmed] = callback;
-        middlewareIdsByAbility[trimmed] = 'routed.auth.gate.$trimmed';
-      });
-    }
-
-    final newAbilities = registerGateCallbacksSafely<EngineContext>(
-      registry,
-      gateEntries,
-      managed: _managedConfigGates,
-    );
+    final definitions = config.enabled
+        ? config.abilities
+        : const <String, GateDefinition>{};
+    final newAbilities =
+        syncManagedGateDefinitions<EngineContext, GateDefinition>(
+          registry,
+          definitions,
+          buildGate: (ability, definition) {
+            final callback = resolveConfiguredGateCallback<EngineContext>(
+              definition,
+            );
+            if (callback == null) {
+              return null;
+            }
+            middlewareIdsByAbility[ability] = 'routed.auth.gate.$ability';
+            return callback;
+          },
+          managed: _managedConfigGates,
+        );
 
     for (final ability in newAbilities) {
       final middlewareId = middlewareIdsByAbility[ability];
@@ -356,12 +379,6 @@ class AuthServiceProvider extends ServiceProvider with ProvidesDefaultConfig {
       newMiddlewareIds.add(middlewareId);
     }
 
-    syncManagedGateAbilities<EngineContext>(
-      registry,
-      managed: _managedConfigGates,
-      nextManaged: newAbilities,
-    );
-
     final toReset = _managedGateMiddleware.difference(newMiddlewareIds);
     for (final id in toReset) {
       middlewareRegistry.register(id, (_) => _passthrough);
@@ -371,158 +388,5 @@ class AuthServiceProvider extends ServiceProvider with ProvidesDefaultConfig {
       ..addAll(newMiddlewareIds);
   }
 
-  void _configureRbac(Container container, AuthOptions<EngineContext> options) {
-    final registry = _resolveGateRegistry(container);
-    if (options.rbac.isEmpty) {
-      syncManagedGateAbilities<EngineContext>(
-        registry,
-        managed: _managedRbacAbilities,
-        nextManaged: const <String>{},
-      );
-      return;
-    }
-
-    final newAbilities = registerRbacAbilitiesSafely(
-      registry,
-      options.rbac.abilities,
-      managed: _managedRbacAbilities,
-    );
-
-    syncManagedGateAbilities<EngineContext>(
-      registry,
-      managed: _managedRbacAbilities,
-      nextManaged: newAbilities,
-    );
-  }
-
-  void _configurePolicies(
-    Container container,
-    AuthOptions<EngineContext> options,
-  ) {
-    final registry = _resolveGateRegistry(container);
-    if (options.policies.isEmpty) {
-      syncManagedGateAbilities<EngineContext>(
-        registry,
-        managed: _managedPolicyAbilities,
-        nextManaged: const <String>{},
-      );
-      return;
-    }
-
-    final newAbilities = registerPolicyBindingsSafely(
-      registry,
-      options.policies.bindings,
-      managed: _managedPolicyAbilities,
-    );
-
-    syncManagedGateAbilities<EngineContext>(
-      registry,
-      managed: _managedPolicyAbilities,
-      nextManaged: newAbilities,
-    );
-  }
-
-  AuthGateCallback<EngineContext>? _buildGateFromDefinition(
-    GateDefinition definition,
-  ) {
-    switch (definition.type) {
-      case GateType.guest:
-        return guestGate<EngineContext>();
-      case GateType.authenticated:
-        return authenticatedGate<EngineContext>();
-      case GateType.roles:
-        return rolesGate<EngineContext>(
-          definition.roles,
-          any: definition.any,
-          allowGuest: definition.allowGuest,
-        );
-    }
-  }
-
-  AuthGuard<EngineContext, Response>? _buildGuardFromDefinition(
-    GuardDefinition definition,
-    SessionAuthService sessionAuth,
-  ) {
-    switch (definition.type) {
-      case GuardType.authenticated:
-        final realm =
-            definition.realm == null || definition.realm!.trim().isEmpty
-            ? 'Restricted'
-            : definition.realm!;
-        return requireAuthenticated(realm: realm, sessionAuth: sessionAuth);
-      case GuardType.roles:
-        if (definition.roles.isEmpty) {
-          return null;
-        }
-        return requireRoles(
-          definition.roles,
-          sessionAuth: sessionAuth,
-          any: definition.any,
-        );
-    }
-  }
-
   FutureOr<Response> _passthrough(EngineContext ctx, Next next) => next();
-
-  JwtVerifier? _buildJwtVerifier(AuthConfig config) {
-    final settings = config.jwt;
-    if (!settings.enabled) {
-      return null;
-    }
-
-    final options = JwtOptions(
-      enabled: true,
-      issuer: settings.issuer?.isEmpty ?? true ? null : settings.issuer,
-      audience: settings.audience,
-      requiredClaims: settings.requiredClaims,
-      jwksUri: settings.jwksUri,
-      inlineKeys: settings.inlineKeys,
-      algorithms: settings.algorithms.isEmpty
-          ? const <String>['RS256']
-          : settings.algorithms,
-      clockSkew: settings.clockSkew,
-      jwksCacheTtl: settings.jwksCacheTtl,
-      header: settings.header,
-      bearerPrefix: settings.bearerPrefix,
-    );
-
-    return JwtVerifier(options: options, httpClient: _httpClient);
-  }
-
-  Middleware? _buildOAuthMiddleware(AuthConfig config) {
-    final settings = config.oauth2Introspection;
-    if (!settings.enabled) {
-      return null;
-    }
-    final endpoint = settings.endpoint;
-    if (endpoint == null) {
-      throw ProviderConfigException(
-        'auth.oauth2.introspection.endpoint is required when enabled',
-      );
-    }
-
-    final options = OAuthIntrospectionOptions(
-      endpoint: endpoint,
-      clientId: parseStringLike(
-        settings.clientId,
-        context: 'auth.oauth2.introspection.client_id',
-        throwOnInvalid: false,
-      ),
-      clientSecret: parseStringLike(
-        settings.clientSecret,
-        context: 'auth.oauth2.introspection.client_secret',
-        throwOnInvalid: false,
-      ),
-      tokenTypeHint: parseStringLike(
-        settings.tokenTypeHint,
-        context: 'auth.oauth2.introspection.token_type_hint',
-        throwOnInvalid: false,
-      ),
-      cacheTtl: settings.cacheTtl,
-      clockSkew: settings.clockSkew,
-      additionalParameters: settings.additionalParameters,
-    );
-
-    return oauth2Introspection(options, httpClient: _httpClient);
-  }
 }
