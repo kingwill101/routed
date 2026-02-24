@@ -115,6 +115,12 @@ final refreshed = await refreshAuthJwtTokenIfNeeded(
   updateAge: const Duration(minutes: 15),
   resolveClaims: (claims) => claims,
 );
+
+final verifiedSession = await verifyAuthJwtSessionToken(
+  token: issued.token,
+  options: options,
+);
+print(verifiedSession?.user.id);
 ```
 
 ## OAuth callback orchestration helper
