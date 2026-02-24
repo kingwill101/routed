@@ -25,6 +25,12 @@ dependencies:
 - `package:server_data/rate_limit.dart`
 - `package:server_data/server_data.dart` (umbrella export)
 
+## Package Selection
+
+- Use `server_data` for concrete runtime implementations.
+- Use `server_contracts` if you only need interfaces/contracts.
+- Use framework adapters (`routed`, `shelf_*`, etc.) only for request/response wiring.
+
 ## Cache example
 
 `DataCacheManager` is the framework-agnostic cache lifecycle core.
@@ -115,3 +121,9 @@ dart run example/main.dart
 ```
 
 See `example/main.dart` for combined cache, storage, session, and rate-limit usage.
+
+## Migration Notes
+
+If older code imported cache/storage/session runtime types from
+`package:routed/routed.dart`, prefer importing directly from `server_data`
+entrypoints for framework-agnostic usage.

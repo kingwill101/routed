@@ -21,6 +21,12 @@ dependencies:
 - `package:server_auth/server_auth.dart` (umbrella export)
 - `package:server_auth/src/core/*` (advanced, package-internal structure)
 
+## Package Selection
+
+- Use `server_auth` for auth runtime primitives and provider implementations.
+- Use `server_contracts` for contract-only abstractions.
+- Use adapter packages (`routed`, `shelf_auth`, etc.) for framework-specific HTTP/session wiring.
+
 ## Quick start
 
 ```dart
@@ -161,6 +167,12 @@ dart run example/main.dart
 ```
 
 See `example/main.dart` for provider registration, JWT flows, and gate checks.
+
+## Migration Notes
+
+If older code imported provider factories or auth primitives from Routed
+entrypoints, switch to direct `server_auth` imports to keep auth logic reusable
+across frameworks.
 
 ## License
 

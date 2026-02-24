@@ -22,6 +22,12 @@ dependencies:
 - `bearerToken` helper to parse bearer token from request headers.
 - `requireAuthenticated` and `requireRoles` middlewares for protected routes.
 
+## When to Use
+
+- Use `shelf_auth` when your server runtime is Shelf.
+- Keep provider definitions, JWT helpers, and authorization contracts in
+  `server_auth` so they remain portable.
+
 ## Quick Start
 
 ```dart
@@ -140,3 +146,9 @@ final middleware = authProvidersEndpoint(
 ```bash
 dart run example/main.dart
 ```
+
+## Migration Notes
+
+If older code used Routed auth middleware only for bearer parsing or role
+guards, move those routes to `shelf_auth` middleware and keep provider/runtime
+logic in `server_auth`.

@@ -13,6 +13,14 @@ layout so packages share tooling, CI, and release notes.
 
 - [packages/routed](packages/routed) – modular HTTP engine with providers,
   logging, localization, signals, and lifecycle hooks.
+- [packages/server_contracts](packages/server_contracts) – framework-agnostic
+  contracts shared by adapters and runtime packages.
+- [packages/server_data](packages/server_data) – framework-agnostic runtime
+  implementations for cache, storage, sessions, and rate limiting.
+- [packages/server_auth](packages/server_auth) – framework-agnostic auth
+  runtime primitives and provider implementations.
+- [packages/shelf_auth](packages/shelf_auth) – Shelf middleware adapters for
+  `server_auth`.
 - [packages/routed_cli](packages/routed_cli) – project scaffolding,
   configuration docs, provider management, and dev tooling.
 - [packages/routed_hotwire](packages/routed_hotwire) – Turbo/Stimulus helpers

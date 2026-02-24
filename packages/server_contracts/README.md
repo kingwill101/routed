@@ -48,6 +48,17 @@ Future<String> readHealth(Repository repository) async {
 }
 ```
 
+## Package Selection
+
+- Use `server_contracts` when you need interfaces only.
+- Use `server_data` when you need concrete cache/storage/session/rate-limit implementations.
+- Use `server_auth` when you need auth providers, JWT, callbacks, and authorization primitives.
+
+## Migration Notes
+
+If older code imported these contracts from `package:routed/routed.dart`,
+switch to direct imports from `server_contracts` to avoid framework coupling.
+
 ## Contract implementation example
 
 Runnable example:
