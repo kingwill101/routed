@@ -110,7 +110,7 @@ void main() {
           return ctx.json({'id': principal?.id, 'roles': principal?.roles});
         });
 
-        GuardRegistry.instance.register('admin-only', requireRoles(['admin']));
+        guardRegistry.register('admin-only', requireRoles(['admin']));
 
         engine.get(
           '/admin',
@@ -128,7 +128,7 @@ void main() {
         );
         addTearDown(() async => await client.close());
         addTearDown(() {
-          GuardRegistry.instance.unregister('admin-only');
+          guardRegistry.unregister('admin-only');
         });
 
         final loginResponse = await client.post('/login', '');
@@ -174,7 +174,7 @@ void main() {
 
       engine.addGlobalMiddleware(SessionAuth.sessionAuthMiddleware());
 
-      GuardRegistry.instance.register('admin-only', requireRoles(['admin']));
+      guardRegistry.register('admin-only', requireRoles(['admin']));
 
       engine.post('/login-user', (ctx) async {
         final principal = AuthPrincipal(id: 'user-2', roles: const ['user']);
@@ -198,7 +198,7 @@ void main() {
       );
       addTearDown(() async => await client.close());
       addTearDown(() {
-        GuardRegistry.instance.unregister('admin-only');
+        guardRegistry.unregister('admin-only');
       });
 
       final loginResponse = await client.post('/login-user', '');
@@ -334,10 +334,7 @@ void main() {
 
         engine.addGlobalMiddleware(SessionAuth.sessionAuthMiddleware());
 
-        GuardRegistry.instance.register(
-          'auth-required',
-          requireAuthenticated(),
-        );
+        guardRegistry.register('auth-required', requireAuthenticated());
         engine.get(
           '/secure',
           (ctx) => ctx.string('ok'),
@@ -355,7 +352,7 @@ void main() {
         );
         addTearDown(() async => await client.close());
         addTearDown(() {
-          GuardRegistry.instance.unregister('auth-required');
+          guardRegistry.unregister('auth-required');
         });
 
         final response = await client.get(
@@ -390,7 +387,7 @@ void main() {
 
       engine.addGlobalMiddleware(SessionAuth.sessionAuthMiddleware());
 
-      GuardRegistry.instance
+      guardRegistry
         ..register('auth-only-test', requireAuthenticated())
         ..register(
           'support-any-test',
@@ -427,7 +424,7 @@ void main() {
       await engine.initialize();
       addTearDown(() async => await engine.close());
       addTearDown(() {
-        GuardRegistry.instance
+        guardRegistry
           ..unregister('auth-only-test')
           ..unregister('support-any-test')
           ..unregister('support-all-test');
@@ -481,7 +478,7 @@ void main() {
 
       engine.addGlobalMiddleware(SessionAuth.sessionAuthMiddleware());
 
-      GuardRegistry.instance.register('maintenance-test', (ctx) {
+      guardRegistry.register('maintenance-test', (ctx) {
         final response = ctx.string(
           'maintenance mode',
           statusCode: HttpStatus.serviceUnavailable,
@@ -500,7 +497,7 @@ void main() {
       await engine.initialize();
       addTearDown(() async => await engine.close());
       addTearDown(() {
-        GuardRegistry.instance.unregister('maintenance-test');
+        guardRegistry.unregister('maintenance-test');
       });
 
       final client = TestClient(

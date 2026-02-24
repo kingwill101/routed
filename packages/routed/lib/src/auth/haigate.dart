@@ -7,10 +7,10 @@ import 'package:server_auth/server_auth.dart'
         AuthGateEvaluation,
         AuthGateEvaluationContext,
         AuthGateObserver,
+        AuthGateRegistry,
         AuthGateRegistrationException,
         AuthGateViolation,
-        AuthPrincipal,
-        NamedRegistry;
+        AuthPrincipal;
 import 'package:routed/src/auth/session_auth.dart';
 import 'package:routed/src/context/context.dart';
 import 'package:routed/src/response.dart';
@@ -28,71 +28,18 @@ typedef GateDeniedHandler =
       EngineContext ctx,
     );
 
-/// A registry for managing gate callbacks.
-///
-/// This allows registering, unregistering, and resolving gate callbacks
-/// by their ability names.
-class GateRegistry extends NamedRegistry<AuthGateCallback<EngineContext>> {
-  GateRegistry._();
-
-  /// The singleton instance of [GateRegistry].
-  static final GateRegistry instance = GateRegistry._();
-
-  @override
-  String normalizeName(String name) => name.trim();
-
-  @override
-  bool onDuplicate(
-    String name,
-    AuthGateCallback<EngineContext> existing,
-    bool overrideExisting,
-  ) {
-    if (!overrideExisting) {
-      return false;
-    }
-    throw AuthGateRegistrationException(
-      'Ability "$name" is already registered.',
-    );
-  }
-
-  /// Registers a new gate callback for the given [ability].
-  ///
-  /// Throws a [AuthGateRegistrationException] if the ability name is empty.
-  void register(String ability, AuthGateCallback<EngineContext> callback) {
-    final key = normalizeName(ability);
-    if (key.isEmpty) {
-      throw AuthGateRegistrationException('Ability name cannot be empty.');
-    }
-    registerEntry(key, callback);
-  }
-
-  /// Registers multiple gate callbacks from the given [entries].
-  void registerAll(Map<String, AuthGateCallback<EngineContext>> entries) {
-    entries.forEach(register);
-  }
-
-  /// Unregisters the gate callback for the given [ability].
-  void unregister(String ability) {
-    unregisterEntry(ability);
-  }
-
-  /// Resolves the gate callback for the given [ability].
-  ///
-  /// Returns `null` if no callback is registered for the ability.
-  AuthGateCallback<EngineContext>? resolve(String ability) => getEntry(ability);
-
-  /// Returns a list of all registered ability names.
-  Iterable<String> get abilities => entryNames;
-}
+/// Global gate registry used by [Haigate].
+final AuthGateRegistry<EngineContext> gateRegistry =
+    AuthGateRegistry<EngineContext>();
 
 class Haigate {
   Haigate._();
 
-  static final GateRegistry _registry = GateRegistry.instance;
+  static final AuthGateRegistry<EngineContext> _registry = gateRegistry;
   static final List<AuthGateObserver<EngineContext>> _observers =
       <AuthGateObserver<EngineContext>>[];
 
-  static GateRegistry get registry => _registry;
+  static AuthGateRegistry<EngineContext> get registry => _registry;
 
   static void register(
     String ability,

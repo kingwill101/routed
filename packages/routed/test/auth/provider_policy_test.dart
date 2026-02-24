@@ -56,7 +56,7 @@ void main() {
       ],
     );
 
-    final registry = GateRegistry.instance;
+    final registry = gateRegistry;
     expect(registry.resolve('admin.only'), isNotNull);
     expect(registry.resolve('project.update'), isNotNull);
 

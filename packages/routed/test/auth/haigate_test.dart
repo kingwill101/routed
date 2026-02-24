@@ -4,13 +4,11 @@ import 'package:routed_testing/routed_testing.dart';
 import 'package:server_testing/server_testing.dart';
 import '../test_engine.dart';
 
-final Set<String> _baselineAbilities = Set<String>.from(
-  GateRegistry.instance.abilities,
-);
+final Set<String> _baselineAbilities = Set<String>.from(gateRegistry.abilities);
 
 void main() {
   tearDown(() {
-    final registry = GateRegistry.instance;
+    final registry = gateRegistry;
     for (final ability in Set<String>.from(registry.abilities)) {
       if (!_baselineAbilities.contains(ability)) {
         Haigate.unregister(ability);

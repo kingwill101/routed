@@ -27,4 +27,34 @@ void main() {
     expect(denied.response, equals('unauthorized'));
     expect(allowed.allowed, isTrue);
   });
+
+  test('AuthGuardRegistry registers and resolves guards', () async {
+    final registry = AuthGuardRegistry<String, String>();
+    registry.register(' admin ', (ctx) async {
+      if (ctx == 'ok') return const GuardResult<String>.allow();
+      return const GuardResult<String>.deny('blocked');
+    });
+
+    final handler = registry.resolve('admin');
+    expect(handler, isNotNull);
+
+    final denied = await handler!('no');
+    final allowed = await handler('ok');
+    expect(denied.allowed, isFalse);
+    expect(allowed.allowed, isTrue);
+    expect(registry.names, contains('admin'));
+  });
+
+  test('AuthGuardRegistry supports explicit duplicate override', () async {
+    final registry = AuthGuardRegistry<String, String>();
+    registry.register('auth', (_) => const GuardResult<String>.deny('x'));
+    registry.register(
+      'auth',
+      (_) => const GuardResult<String>.allow(),
+      overrideExisting: true,
+    );
+
+    final result = await registry.resolve('auth')!('ignored');
+    expect(result.allowed, isTrue);
+  });
 }

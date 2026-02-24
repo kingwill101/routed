@@ -1,5 +1,9 @@
 import 'package:server_auth/server_auth.dart'
-    show AuthGateCallback, AuthGateEvaluationContext, RbacAbility;
+    show
+        AuthGateCallback,
+        AuthGateEvaluationContext,
+        AuthGateRegistry,
+        RbacAbility;
 import 'package:routed/src/auth/haigate.dart';
 import 'package:routed/src/context/context.dart';
 
@@ -7,7 +11,7 @@ import 'package:routed/src/context/context.dart';
 /// Role-based access control helpers built on top of Haigate.
 ///
 /// Use `RbacOptions` from `server_auth` to declare ability -> role mappings
-/// and register them with `GateRegistry` or `Haigate` using these helpers.
+/// and register them with `AuthGateRegistry` or `Haigate` using these helpers.
 /// {@endtemplate}
 
 /// Builds a gate callback for an RBAC ability.
@@ -17,9 +21,9 @@ AuthGateCallback<EngineContext> rbacGate(RbacAbility ability) {
   };
 }
 
-/// Registers RBAC abilities into a [GateRegistry].
+/// Registers RBAC abilities into an [AuthGateRegistry].
 Set<String> registerRbacAbilities(
-  GateRegistry registry,
+  AuthGateRegistry<EngineContext> registry,
   Map<String, RbacAbility> abilities,
 ) {
   final registered = <String>{};
@@ -36,7 +40,7 @@ Set<String> registerRbacAbilities(
 
 /// Safely registers RBAC abilities without overriding existing entries.
 Set<String> registerRbacAbilitiesSafely(
-  GateRegistry registry,
+  AuthGateRegistry<EngineContext> registry,
   Map<String, RbacAbility> abilities, {
   Set<String> managed = const <String>{},
 }) {

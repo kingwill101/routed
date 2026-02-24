@@ -2,6 +2,7 @@ import 'package:server_auth/server_auth.dart'
     show
         AuthGateCallback,
         AuthGateEvaluationContext,
+        AuthGateRegistry,
         Policy,
         PolicyAction,
         PolicyBinding;
@@ -45,9 +46,9 @@ AuthGateCallback<EngineContext> policyGate<T extends Object>(
   };
 }
 
-/// Registers policy abilities into a [GateRegistry].
+/// Registers policy abilities into an [AuthGateRegistry].
 Set<String> registerPolicyBindings(
-  GateRegistry registry,
+  AuthGateRegistry<EngineContext> registry,
   List<PolicyBinding> bindings,
 ) {
   final registered = <String>{};
@@ -59,7 +60,7 @@ Set<String> registerPolicyBindings(
 
 /// Registers policy abilities without overriding existing entries.
 Set<String> registerPolicyBindingsSafely(
-  GateRegistry registry,
+  AuthGateRegistry<EngineContext> registry,
   List<PolicyBinding> bindings, {
   Set<String> managed = const <String>{},
 }) {
@@ -71,7 +72,7 @@ Set<String> registerPolicyBindingsSafely(
 }
 
 Set<String> _registerBinding(
-  GateRegistry registry,
+  AuthGateRegistry<EngineContext> registry,
   PolicyBinding binding, {
   Set<String> managed = const <String>{},
 }) {

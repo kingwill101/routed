@@ -7,7 +7,9 @@ import 'package:server_auth/server_auth.dart'
         AuthGuard,
         AuthGateCallback,
         AuthGateEvaluationContext,
+        AuthGateRegistry,
         AuthGateRegistrationException,
+        AuthGuardRegistry,
         AuthProvider,
         AuthProviderRegistry,
         RememberTokenStore,
@@ -264,29 +266,31 @@ class AuthServiceProvider extends ServiceProvider with ProvidesDefaultConfig {
     return merged;
   }
 
-  GuardRegistry _resolveGuardRegistry(Container container) {
-    if (container.has<GuardRegistry>()) {
+  AuthGuardRegistry<EngineContext, Response> _resolveGuardRegistry(
+    Container container,
+  ) {
+    if (container.has<AuthGuardRegistry<EngineContext, Response>>()) {
       try {
-        return container.get<GuardRegistry>();
+        return container.get<AuthGuardRegistry<EngineContext, Response>>();
       } catch (_) {
         // Fall through to create a new registry instance.
       }
     }
-    final guardRegistry = GuardRegistry.instance;
-    container.instance<GuardRegistry>(guardRegistry);
+    container.instance<AuthGuardRegistry<EngineContext, Response>>(
+      guardRegistry,
+    );
     return guardRegistry;
   }
 
-  GateRegistry _resolveGateRegistry(Container container) {
-    if (container.has<GateRegistry>()) {
+  AuthGateRegistry<EngineContext> _resolveGateRegistry(Container container) {
+    if (container.has<AuthGateRegistry<EngineContext>>()) {
       try {
-        return container.get<GateRegistry>();
+        return container.get<AuthGateRegistry<EngineContext>>();
       } catch (_) {
         // Fall through to create a new registry instance.
       }
     }
-    final gateRegistry = GateRegistry.instance;
-    container.instance<GateRegistry>(gateRegistry);
+    container.instance<AuthGateRegistry<EngineContext>>(gateRegistry);
     return gateRegistry;
   }
 
@@ -312,7 +316,7 @@ class AuthServiceProvider extends ServiceProvider with ProvidesDefaultConfig {
 
   Set<String> _configureGuards(
     Map<String, GuardDefinition> guards,
-    GuardRegistry registry,
+    AuthGuardRegistry<EngineContext, Response> registry,
     SessionAuthService sessionAuth,
   ) {
     final managed = <String>{};
@@ -328,7 +332,7 @@ class AuthServiceProvider extends ServiceProvider with ProvidesDefaultConfig {
 
   void _configureHaigate(
     HaigateConfig config,
-    GateRegistry registry,
+    AuthGateRegistry<EngineContext> registry,
     MiddlewareRegistry middlewareRegistry,
   ) {
     final enabled = config.enabled;

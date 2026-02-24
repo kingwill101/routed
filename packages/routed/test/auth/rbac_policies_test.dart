@@ -91,7 +91,7 @@ void main() {
     });
 
     test('does not override existing gates', () async {
-      final registry = GateRegistry.instance;
+      final registry = gateRegistry;
       const ability = 'rbac.keep';
       var originalCalled = false;
       registry.register(ability, (_) {
@@ -122,7 +122,7 @@ void main() {
     });
 
     test('registers and overrides managed abilities', () async {
-      final registry = GateRegistry.instance;
+      final registry = gateRegistry;
       const ability = 'rbac.swap';
       var firstCalled = false;
       registry.register(ability, (_) {
@@ -157,7 +157,7 @@ void main() {
     });
 
     test('registers abilities and skips empty keys', () {
-      final registry = GateRegistry.instance;
+      final registry = gateRegistry;
       const ability = 'rbac.trim';
       addTearDown(() => registry.unregister(ability));
 
@@ -184,7 +184,7 @@ void main() {
 
   group('Policies', () {
     test('registers policy abilities and evaluates payloads', () async {
-      final registry = GateRegistry.instance;
+      final registry = gateRegistry;
       const prefix = 'project';
       final binding = PolicyBinding<Project>(
         policy: ProjectPolicy(),

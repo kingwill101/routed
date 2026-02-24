@@ -5,7 +5,7 @@ export 'src/auth/routes.dart';
 export 'src/middleware/basic_auth.dart';
 export 'src/middleware/csrf.dart';
 export 'src/auth/haigate.dart'
-    show GatePayloadProvider, GateDeniedHandler, GateRegistry, Haigate;
+    show GatePayloadProvider, GateDeniedHandler, gateRegistry, Haigate;
 export 'src/auth/jwt.dart' show jwtAuthentication;
 export 'src/auth/provider.dart' show AuthServiceProvider;
 export 'src/auth/rbac.dart'
@@ -26,7 +26,7 @@ export 'src/auth/session_auth.dart'
     show
         SessionAuthService,
         SessionAuth,
-        GuardRegistry,
+        guardRegistry,
         guardMiddleware,
         requireAuthenticated,
         requireRoles;

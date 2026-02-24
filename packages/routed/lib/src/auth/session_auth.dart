@@ -6,11 +6,11 @@ import 'dart:math' show Random;
 import 'package:server_auth/server_auth.dart'
     show
         AuthGuard,
+        AuthGuardRegistry,
         AuthPrincipal,
         GuardResult,
         RememberTokenStore,
         InMemoryRememberTokenStore,
-        NamedRegistry,
         authPrincipalAttribute;
 import 'package:routed/src/context/context.dart';
 import 'package:routed/src/response.dart';
@@ -314,29 +314,15 @@ class SessionAuth {
   }
 }
 
-class GuardRegistry extends NamedRegistry<AuthGuard<EngineContext, Response>> {
-  GuardRegistry._();
+/// Global guard registry used by [guardMiddleware].
+final AuthGuardRegistry<EngineContext, Response> guardRegistry =
+    AuthGuardRegistry<EngineContext, Response>();
 
-  static final GuardRegistry instance = GuardRegistry._();
-
-  @override
-  String normalizeName(String name) => name.trim();
-
-  void register(String name, AuthGuard<EngineContext, Response> handler) {
-    registerEntry(name, handler);
-  }
-
-  void unregister(String name) {
-    unregisterEntry(name);
-  }
-
-  AuthGuard<EngineContext, Response>? resolve(String name) => getEntry(name);
-
-  Iterable<String> get names => entryNames;
-}
-
-Middleware guardMiddleware(List<String> guardNames, {GuardRegistry? registry}) {
-  final reg = registry ?? GuardRegistry.instance;
+Middleware guardMiddleware(
+  List<String> guardNames, {
+  AuthGuardRegistry<EngineContext, Response>? registry,
+}) {
+  final reg = registry ?? guardRegistry;
   return (EngineContext ctx, Next next) async {
     for (final name in guardNames) {
       final handler = reg.resolve(name);

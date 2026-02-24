@@ -90,3 +90,53 @@ class AuthGateEvaluation<TContext> {
   /// Optional payload associated with the evaluation.
   final Object? payload;
 }
+
+/// Registry for gate callbacks keyed by ability.
+class AuthGateRegistry<TContext> {
+  final Map<String, AuthGateCallback<TContext>> _entries =
+      <String, AuthGateCallback<TContext>>{};
+
+  /// Registers a gate callback for [ability].
+  void register(
+    String ability,
+    AuthGateCallback<TContext> callback, {
+    bool overrideExisting = true,
+  }) {
+    final key = ability.trim();
+    if (key.isEmpty) {
+      throw AuthGateRegistrationException('Ability name cannot be empty.');
+    }
+    final exists = _entries.containsKey(key);
+    if (exists) {
+      if (!overrideExisting) {
+        return;
+      }
+      throw AuthGateRegistrationException(
+        'Ability "$key" is already registered.',
+      );
+    }
+    _entries[key] = callback;
+  }
+
+  /// Registers multiple gate callbacks.
+  void registerAll(
+    Map<String, AuthGateCallback<TContext>> entries, {
+    bool overrideExisting = true,
+  }) {
+    entries.forEach((ability, callback) {
+      register(ability, callback, overrideExisting: overrideExisting);
+    });
+  }
+
+  /// Unregisters [ability].
+  void unregister(String ability) {
+    _entries.remove(ability.trim());
+  }
+
+  /// Resolves callback for [ability].
+  AuthGateCallback<TContext>? resolve(String ability) =>
+      _entries[ability.trim()];
+
+  /// All registered ability names.
+  Iterable<String> get abilities => _entries.keys;
+}

@@ -44,4 +44,36 @@ void main() {
       expect(eval.payload, equals(7));
     },
   );
+
+  test('AuthGateRegistry registers and resolves trimmed abilities', () {
+    final registry = AuthGateRegistry<String>();
+    registry.register(' posts.publish ', (_) => true);
+
+    expect(registry.resolve('posts.publish'), isNotNull);
+    expect(registry.abilities, contains('posts.publish'));
+  });
+
+  test('AuthGateRegistry rejects duplicate ability by default', () {
+    final registry = AuthGateRegistry<String>();
+    registry.register('posts.publish', (_) => true);
+
+    expect(
+      () => registry.register('posts.publish', (_) => false),
+      throwsA(isA<AuthGateRegistrationException>()),
+    );
+  });
+
+  test('AuthGateRegistry can ignore duplicate registration attempts', () async {
+    final registry = AuthGateRegistry<String>();
+    registry.register('posts.publish', (_) => false);
+    registry.register('posts.publish', (_) => true, overrideExisting: false);
+
+    final callback = registry.resolve('posts.publish');
+    expect(callback, isNotNull);
+
+    final allowed = await callback!(
+      AuthGateEvaluationContext<String>(context: 'ctx', principal: null),
+    );
+    expect(allowed, isFalse);
+  });
 }
