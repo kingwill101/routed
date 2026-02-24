@@ -154,6 +154,19 @@ final start = await resolveOAuthAuthorizationStart<MyContext, Map<String, dynami
 return start.authorizationUri;
 ```
 
+For callback handlers, `resolveOAuthCallbackSessionValues` reads state/verifier/
+callback URL using the same key contract:
+
+```dart
+final values = resolveOAuthCallbackSessionValues(
+  providerId: oauthProvider.id,
+  stateKey: '_auth.state',
+  pkceKey: '_auth.pkce',
+  callbackKey: '_auth.callback',
+  readSession: (key) => sessionStore[key],
+);
+```
+
 ## Adapter attribute mapping helpers
 
 When writing framework adapters, use these helpers to store verified auth
