@@ -7,6 +7,24 @@ import 'package:server_auth/server_auth.dart';
 import 'package:test/test.dart';
 
 void main() {
+  test('AuthOAuthValidatedCallback supports typed handlers', () async {
+    var seen = false;
+    Future<void> callback(
+      OAuthIntrospectionResult result,
+      String context,
+    ) async {
+      seen = result.active && context == 'ctx';
+    }
+
+    final AuthOAuthValidatedCallback<String> typed = callback;
+
+    await typed(
+      OAuthIntrospectionResult(active: true, raw: const {'active': true}),
+      'ctx',
+    );
+    expect(seen, isTrue);
+  });
+
   test('auth flow exception exposes code', () {
     final exception = AuthFlowException('invalid_state');
     expect(exception.code, equals('invalid_state'));

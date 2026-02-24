@@ -1,33 +1,18 @@
-import 'dart:async';
 import 'dart:io';
 
 import 'package:http/http.dart' as http;
 import 'package:server_auth/server_auth.dart'
     show
+        AuthOAuthValidatedCallback,
         OAuth2Exception,
         OAuth2TokenIntrospector,
         OAuthIntrospectionOptions,
-        OAuthIntrospectionResult;
-import 'package:server_auth/server_auth.dart'
-    as server_auth
-    show oauthClaimsAttribute, oauthScopeAttribute, oauthTokenAttribute;
+        OAuthIntrospectionResult,
+        oauthClaimsAttribute,
+        oauthScopeAttribute,
+        oauthTokenAttribute;
 import 'package:routed/src/context/context.dart';
 import 'package:routed/src/router/types.dart';
-
-/// Attribute key for storing the OAuth2 access token in the request context.
-const String oauthTokenAttribute = server_auth.oauthTokenAttribute;
-
-/// Attribute key for storing OAuth2 claims in the request context.
-const String oauthClaimsAttribute = server_auth.oauthClaimsAttribute;
-
-/// Attribute key for storing OAuth2 scopes in the request context.
-const String oauthScopeAttribute = server_auth.oauthScopeAttribute;
-
-typedef OAuthOnValidated =
-    FutureOr<void> Function(
-      OAuthIntrospectionResult result,
-      EngineContext context,
-    );
 
 /// Creates a middleware for OAuth2 token introspection.
 ///
@@ -53,7 +38,7 @@ typedef OAuthOnValidated =
 /// ```
 Middleware oauth2Introspection(
   OAuthIntrospectionOptions options, {
-  OAuthOnValidated? onValidated,
+  AuthOAuthValidatedCallback<EngineContext>? onValidated,
   http.Client? httpClient,
 }) {
   final introspector = OAuth2TokenIntrospector(options, httpClient: httpClient);

@@ -16,7 +16,7 @@ export 'src/auth/haigate.dart'
         GateRegistrationException,
         GateViolation,
         Haigate;
-export 'src/auth/jwt.dart' show JwtOnVerified, jwtAuthentication;
+export 'src/auth/jwt.dart' show jwtAuthentication;
 export 'src/auth/provider.dart' show AuthServiceProvider;
 export 'src/auth/rbac.dart'
     show
@@ -31,13 +31,7 @@ export 'src/auth/policies.dart'
         registerPolicyBindingsSafely,
         registerPoliciesWithHaigate;
 
-export 'src/auth/oauth.dart'
-    show
-        OAuthOnValidated,
-        oauth2Introspection,
-        oauthTokenAttribute,
-        oauthClaimsAttribute,
-        oauthScopeAttribute;
+export 'src/auth/oauth.dart' show oauth2Introspection;
 export 'src/auth/session_auth.dart'
     show
         SessionAuthService,

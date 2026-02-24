@@ -5,7 +5,7 @@ import 'package:http/testing.dart';
 import 'package:routed/routed.dart';
 import 'package:routed_testing/routed_testing.dart';
 import 'package:server_auth/server_auth.dart'
-    show OAuth2Client, OAuthIntrospectionOptions;
+    show OAuth2Client, OAuthIntrospectionOptions, oauthClaimsAttribute;
 import 'package:server_testing/server_testing.dart';
 import '../test_engine.dart';
 

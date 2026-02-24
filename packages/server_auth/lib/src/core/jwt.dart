@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 
 import 'package:http/http.dart' as http;
@@ -13,6 +14,10 @@ const String jwtHeadersAttribute = 'auth.jwt.headers';
 
 /// Attribute key for the JWT subject in framework request context stores.
 const String jwtSubjectAttribute = 'auth.jwt.subject';
+
+/// Callback invoked after a JWT has been successfully verified.
+typedef AuthJwtVerifiedCallback<TContext> =
+    FutureOr<void> Function(JwtPayload payload, TContext context);
 
 /// An exception thrown when JWT authentication fails.
 class JwtAuthException implements Exception {

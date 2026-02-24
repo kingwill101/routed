@@ -1,4 +1,3 @@
-import 'dart:async';
 import 'dart:io';
 
 import 'package:http/http.dart' as http;
@@ -7,21 +6,17 @@ import 'package:routed/src/router/types.dart';
 import 'package:server_auth/server_auth.dart'
     show
         JwtAuthException,
+        AuthJwtVerifiedCallback,
         JwtOptions,
-        JwtPayload,
         JwtVerifier,
         jwtClaimsAttribute,
         jwtHeadersAttribute,
         jwtSubjectAttribute;
 
-/// Callback invoked after a JWT has been successfully verified.
-typedef JwtOnVerified =
-    FutureOr<void> Function(JwtPayload payload, EngineContext context);
-
 /// Creates a JWT authentication [Middleware] with the given [options].
 Middleware jwtAuthentication(
   JwtOptions options, {
-  JwtOnVerified? onVerified,
+  AuthJwtVerifiedCallback<EngineContext>? onVerified,
   http.Client? httpClient,
 }) {
   return jwtAuthenticationWithVerifier(
@@ -33,7 +28,7 @@ Middleware jwtAuthentication(
 /// Creates JWT authentication [Middleware] with an existing [verifier].
 Middleware jwtAuthenticationWithVerifier(
   JwtVerifier verifier, {
-  JwtOnVerified? onVerified,
+  AuthJwtVerifiedCallback<EngineContext>? onVerified,
 }) {
   final options = verifier.options;
 

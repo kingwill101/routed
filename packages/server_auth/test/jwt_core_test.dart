@@ -53,6 +53,25 @@ int _secondsSinceEpoch(DateTime time) =>
     time.toUtc().millisecondsSinceEpoch ~/ 1000;
 
 void main() {
+  test('AuthJwtVerifiedCallback supports typed async handlers', () async {
+    var invoked = false;
+    Future<void> callback(JwtPayload payload, String context) async {
+      invoked = payload.subject == 'user-1' && context == 'ctx';
+    }
+
+    final AuthJwtVerifiedCallback<String> typed = callback;
+
+    final verifier = JwtVerifier(
+      options: JwtOptions(inlineKeys: [_testJwk], algorithms: const ['HS256']),
+    );
+    final payload = await verifier.verifyToken(
+      _buildToken(_claims(now: DateTime.now())),
+    );
+    await typed(payload, 'ctx');
+
+    expect(invoked, isTrue);
+  });
+
   test('JwtIssuer and JwtVerifier roundtrip', () async {
     const options = JwtSessionOptions(
       secret: 'super-secret',

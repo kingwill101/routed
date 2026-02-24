@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 
@@ -11,6 +12,10 @@ const String oauthClaimsAttribute = 'auth.oauth.claims';
 
 /// Attribute key used to store OAuth2 scope values.
 const String oauthScopeAttribute = 'auth.oauth.scope';
+
+/// Callback invoked after token introspection has validated a request.
+typedef AuthOAuthValidatedCallback<TContext> =
+    FutureOr<void> Function(OAuthIntrospectionResult result, TContext context);
 
 /// Represents an exception that occurs during OAuth2 operations.
 class OAuth2Exception implements Exception {
