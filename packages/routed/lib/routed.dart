@@ -12,6 +12,7 @@ export 'src/binding/multipart.dart'
 export 'src/binding/binding.dart' show Binding, Bindable, MimeType;
 export 'src/cache/cache.dart';
 export 'src/config/config.dart';
+export 'src/contracts/config/config.dart' show Config;
 export 'src/config/helpers.dart';
 export 'src/config/loader.dart';
 export 'src/config/registry.dart';
@@ -36,7 +37,6 @@ export 'src/config/specs/uploads.dart';
 export 'src/config/specs/views.dart';
 export 'src/container/container.dart' hide Binding;
 export 'src/context/context.dart';
-export 'src/contracts/contracts.dart';
 export 'src/engine/config.dart';
 export 'src/engine/engine.dart';
 export 'src/engine/engine_opt.dart';
