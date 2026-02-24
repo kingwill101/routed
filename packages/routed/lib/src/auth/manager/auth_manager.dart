@@ -65,6 +65,7 @@ import 'package:server_auth/server_auth.dart'
         loadOAuthProfile,
         oauthTokenExpiryFromSeconds,
         pkceS256CodeChallenge,
+        authSessionIssuedAtKey,
         authSessionRefreshAction,
         AuthSessionRefreshAction,
         resolveAuthSessionExpiry,
@@ -81,8 +82,6 @@ import 'auth_options.dart';
 
 /// {@macro routed_auth_manager}
 class AuthManager {
-  static const String _sessionIssuedAtKey = '_auth.session.issued_at';
-
   AuthManager(this.options)
     : _tokenStore = options.tokenStore ?? InMemoryAuthVerificationTokenStore(),
       _httpClient = options.httpClient;
@@ -765,7 +764,10 @@ class AuthManager {
   }
 
   void _setSessionIssuedAt(EngineContext ctx, DateTime issuedAt) {
-    ctx.setSession(_sessionIssuedAtKey, serializeAuthSessionIssuedAt(issuedAt));
+    ctx.setSession(
+      authSessionIssuedAtKey,
+      serializeAuthSessionIssuedAt(issuedAt),
+    );
   }
 
   void _refreshSessionIfNeeded(EngineContext ctx) {
@@ -775,7 +777,7 @@ class AuthManager {
     }
     final now = DateTime.now().toUtc();
     final action = authSessionRefreshAction(
-      issuedAtValue: ctx.getSession<String>(_sessionIssuedAtKey),
+      issuedAtValue: ctx.getSession<String>(authSessionIssuedAtKey),
       updateAge: updateAge,
       now: now,
     );

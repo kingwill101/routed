@@ -8,6 +8,10 @@ void main() {
     expect(authPrincipalAttribute, equals('auth.principal'));
   });
 
+  test('authSessionIssuedAtKey remains stable', () {
+    expect(authSessionIssuedAtKey, equals('_auth.session.issued_at'));
+  });
+
   test('parseAuthSessionIssuedAt parses ISO timestamp to UTC', () {
     final parsed = parseAuthSessionIssuedAt('2026-02-24T10:30:00Z');
     expect(parsed, isNotNull);

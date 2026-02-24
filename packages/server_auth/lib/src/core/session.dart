@@ -6,6 +6,9 @@ import 'models.dart';
 /// Attribute key used to store the authenticated principal in request context.
 const String authPrincipalAttribute = 'auth.principal';
 
+/// Session key used to store auth session issued-at timestamps.
+const String authSessionIssuedAtKey = '_auth.session.issued_at';
+
 /// Parses an ISO-8601 session issued-at timestamp into UTC.
 DateTime? parseAuthSessionIssuedAt(String? value) {
   if (value == null || value.isEmpty) {
