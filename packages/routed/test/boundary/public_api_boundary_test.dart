@@ -8,11 +8,14 @@ void main() {
       r"^export\s+'package:server_(auth|contracts|data)/",
       multiLine: true,
     );
+    final prohibitedServerContractsImport = RegExp(
+      r"^import\s+'package:server_contracts/",
+      multiLine: true,
+    );
 
-    final publicEntries = Directory('lib')
-        .listSync()
-        .whereType<File>()
-        .where((file) => file.path.endsWith('.dart'));
+    final publicEntries = Directory(
+      'lib',
+    ).listSync().whereType<File>().where((file) => file.path.endsWith('.dart'));
 
     for (final file in publicEntries) {
       final content = file.readAsStringSync();
@@ -20,6 +23,12 @@ void main() {
         prohibitedReExport.hasMatch(content),
         isFalse,
         reason: 'Forbidden server_* re-export in ${file.path}',
+      );
+      expect(
+        prohibitedServerContractsImport.hasMatch(content),
+        isFalse,
+        reason:
+            'Forbidden server_contracts import in public entrypoint ${file.path}',
       );
     }
   });
