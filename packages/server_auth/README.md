@@ -121,6 +121,14 @@ final verifiedSession = await verifyAuthJwtSessionToken(
   options: options,
 );
 print(verifiedSession?.user.id);
+
+final resolvedSession = await resolveAuthJwtSessionWithRefresh(
+  token: issued.token,
+  options: options,
+  updateAge: const Duration(minutes: 15),
+  resolveClaims: (claims, user) => claims,
+);
+print(resolvedSession?.refreshCookie != null); // refreshed or not
 ```
 
 ## Email verification orchestration helpers
