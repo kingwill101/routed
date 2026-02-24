@@ -96,6 +96,68 @@ void main() {
     expect(allowed, isTrue);
   });
 
+  test(
+    'registerPolicyBindingsSafely keeps unmanaged existing entries',
+    () async {
+      final registry = AuthGateRegistry<String>();
+      var originalCalled = false;
+      registry.register('project.update', (_) {
+        originalCalled = true;
+        return false;
+      });
+
+      registerPolicyBindingsSafely<String>(registry, [
+        PolicyBinding<_Project>(
+          policy: _ProjectPolicy(),
+          abilityPrefix: 'project',
+          actions: {PolicyAction.update},
+        ),
+      ]);
+
+      final callback = registry.resolve('project.update');
+      expect(callback, isNotNull);
+      await callback!(
+        AuthGateEvaluationContext<String>(
+          context: 'ctx',
+          principal: AuthPrincipal(id: 'owner-1', roles: const ['user']),
+          payload: _Project(ownerId: 'owner-1'),
+        ),
+      );
+      expect(originalCalled, isTrue);
+    },
+  );
+
+  test(
+    'registerPolicyBindingsSafely replaces previously managed entries',
+    () async {
+      final registry = AuthGateRegistry<String>();
+      registry.register('project.update', (_) => false);
+
+      registerPolicyBindingsSafely<String>(
+        registry,
+        [
+          PolicyBinding<_Project>(
+            policy: _ProjectPolicy(),
+            abilityPrefix: 'project',
+            actions: {PolicyAction.update},
+          ),
+        ],
+        managed: const <String>{'project.update'},
+      );
+
+      final callback = registry.resolve('project.update');
+      expect(callback, isNotNull);
+      final allowed = await callback!(
+        AuthGateEvaluationContext<String>(
+          context: 'ctx',
+          principal: AuthPrincipal(id: 'owner-1', roles: const ['user']),
+          payload: _Project(ownerId: 'owner-1'),
+        ),
+      );
+      expect(allowed, isTrue);
+    },
+  );
+
   test('syncManagedGateAbilities unregisters stale managed abilities', () {
     final registry = AuthGateRegistry<String>();
     registry.register('ability.keep', (_) => true);

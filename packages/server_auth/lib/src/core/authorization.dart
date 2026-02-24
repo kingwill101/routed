@@ -148,14 +148,13 @@ Set<String> registerRbacAbilitiesSafely<TContext>(
     if (trimmed.isEmpty) {
       return;
     }
-    if (registry.resolve(trimmed) != null && !managed.contains(trimmed)) {
-      return;
-    }
-    if (managed.contains(trimmed)) {
-      registry.unregister(trimmed);
-    }
-    registry.register(trimmed, rbacGate<TContext>(rule));
-    registered.add(trimmed);
+    registered.addAll(
+      registerGateCallbacksSafely<TContext>(
+        registry,
+        <String, AuthGateCallback<TContext>>{trimmed: rbacGate<TContext>(rule)},
+        managed: managed,
+      ),
+    );
   });
   return registered;
 }
@@ -225,13 +224,39 @@ Set<String> registerPolicyBindingsSafely<TContext>(
   final registered = <String>{};
   for (final binding in bindings) {
     registered.addAll(
-      _registerPolicyBinding<TContext>(registry, binding, managed: managed),
+      _registerPolicyBindingSafely<TContext>(
+        registry,
+        binding,
+        managed: managed,
+      ),
     );
   }
   return registered;
 }
 
 Set<String> _registerPolicyBinding<TContext>(
+  AuthGateRegistry<TContext> registry,
+  PolicyBinding binding,
+) {
+  final registered = <String>{};
+  final prefix = binding.abilityPrefix.trim();
+  if (prefix.isEmpty) {
+    return registered;
+  }
+
+  for (final action in binding.actions) {
+    final ability = '$prefix.${action.name}';
+    registry.register(
+      ability,
+      policyGate<TContext, Object>(binding.policy, action),
+    );
+    registered.add(ability);
+  }
+
+  return registered;
+}
+
+Set<String> _registerPolicyBindingSafely<TContext>(
   AuthGateRegistry<TContext> registry,
   PolicyBinding binding, {
   Set<String> managed = const <String>{},
@@ -244,17 +269,15 @@ Set<String> _registerPolicyBinding<TContext>(
 
   for (final action in binding.actions) {
     final ability = '$prefix.${action.name}';
-    if (registry.resolve(ability) != null && !managed.contains(ability)) {
-      continue;
-    }
-    if (managed.contains(ability)) {
-      registry.unregister(ability);
-    }
-    registry.register(
-      ability,
-      policyGate<TContext, Object>(binding.policy, action),
+    registered.addAll(
+      registerGateCallbacksSafely<TContext>(
+        registry,
+        <String, AuthGateCallback<TContext>>{
+          ability: policyGate<TContext, Object>(binding.policy, action),
+        },
+        managed: managed,
+      ),
     );
-    registered.add(ability);
   }
 
   return registered;
