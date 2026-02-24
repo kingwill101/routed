@@ -8,11 +8,11 @@ import 'package:server_auth/server_auth.dart'
         authenticatedGate,
         AuthGateCallback,
         AuthGateRegistry,
-        AuthGateRegistrationException,
         AuthGuardRegistry,
         guestGate,
         AuthProviderRegistry,
         rolesGate,
+        registerGateCallbacksSafely,
         RememberTokenStore,
         AuthVerificationTokenStore,
         JwtOptions,
@@ -314,7 +314,8 @@ class AuthServiceProvider extends ServiceProvider with ProvidesDefaultConfig {
 
     final defaults = config.defaults;
 
-    final newAbilities = <String>{};
+    final gateEntries = <String, AuthGateCallback<EngineContext>>{};
+    final middlewareIdsByAbility = <String, String>{};
     final newMiddlewareIds = <String>{};
 
     if (enabled) {
@@ -328,33 +329,31 @@ class AuthServiceProvider extends ServiceProvider with ProvidesDefaultConfig {
           return;
         }
 
-        final managedBefore = _managedConfigGates.contains(trimmed);
-        if (managedBefore) {
-          registry.unregister(trimmed);
-        }
-
-        try {
-          registry.register(trimmed, callback);
-        } on AuthGateRegistrationException {
-          if (!managedBefore) {
-            // Preserve user-defined gate registrations when names collide.
-            return;
-          }
-          rethrow;
-        }
-
-        newAbilities.add(trimmed);
-        final middlewareId = 'routed.auth.gate.$trimmed';
-        middlewareRegistry.register(
-          middlewareId,
-          (_) => Haigate.middleware(
-            [trimmed],
-            deniedStatusCode: defaults.statusCode,
-            deniedMessage: defaults.message,
-          ),
-        );
-        newMiddlewareIds.add(middlewareId);
+        gateEntries[trimmed] = callback;
+        middlewareIdsByAbility[trimmed] = 'routed.auth.gate.$trimmed';
       });
+    }
+
+    final newAbilities = registerGateCallbacksSafely<EngineContext>(
+      registry,
+      gateEntries,
+      managed: _managedConfigGates,
+    );
+
+    for (final ability in newAbilities) {
+      final middlewareId = middlewareIdsByAbility[ability];
+      if (middlewareId == null) {
+        continue;
+      }
+      middlewareRegistry.register(
+        middlewareId,
+        (_) => Haigate.middleware(
+          [ability],
+          deniedStatusCode: defaults.statusCode,
+          deniedMessage: defaults.message,
+        ),
+      );
+      newMiddlewareIds.add(middlewareId);
     }
 
     syncManagedGateAbilities<EngineContext>(

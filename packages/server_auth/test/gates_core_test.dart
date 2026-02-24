@@ -155,6 +155,48 @@ void main() {
     expect(allowed, isFalse);
   });
 
+  test(
+    'registerGateCallbacksSafely keeps unmanaged existing registrations',
+    () async {
+      final registry = AuthGateRegistry<String>();
+      registry.register('posts.publish', (_) => false);
+
+      final registered = registerGateCallbacksSafely<String>(registry, {
+        'posts.publish': (_) => true,
+      });
+      expect(registered, isEmpty);
+
+      final callback = registry.resolve('posts.publish');
+      expect(callback, isNotNull);
+      final allowed = await callback!(
+        AuthGateEvaluationContext<String>(context: 'ctx', principal: null),
+      );
+      expect(allowed, isFalse);
+    },
+  );
+
+  test(
+    'registerGateCallbacksSafely replaces previously managed registrations',
+    () async {
+      final registry = AuthGateRegistry<String>();
+      registry.register('posts.publish', (_) => false);
+
+      final registered = registerGateCallbacksSafely<String>(
+        registry,
+        {'posts.publish': (_) => true},
+        managed: const <String>{'posts.publish'},
+      );
+      expect(registered, contains('posts.publish'));
+
+      final callback = registry.resolve('posts.publish');
+      expect(callback, isNotNull);
+      final allowed = await callback!(
+        AuthGateEvaluationContext<String>(context: 'ctx', principal: null),
+      );
+      expect(allowed, isTrue);
+    },
+  );
+
   test('AuthGateService evaluates gates and notifies observers', () async {
     final registry = AuthGateRegistry<String>();
     final service = AuthGateService<String>(registry: registry);

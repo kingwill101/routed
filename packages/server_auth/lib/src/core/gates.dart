@@ -185,6 +185,40 @@ class AuthGateRegistry<TContext> {
   Iterable<String> get abilities => _entries.keys;
 }
 
+/// Registers gate callbacks without overriding unmanaged existing entries.
+///
+/// Existing entries are replaced only when their names are listed in [managed].
+Set<String> registerGateCallbacksSafely<TContext>(
+  AuthGateRegistry<TContext> registry,
+  Map<String, AuthGateCallback<TContext>> entries, {
+  Set<String> managed = const <String>{},
+}) {
+  final registered = <String>{};
+  entries.forEach((ability, callback) {
+    final trimmed = ability.trim();
+    if (trimmed.isEmpty) {
+      return;
+    }
+
+    final managedBefore = managed.contains(trimmed);
+    if (managedBefore) {
+      registry.unregister(trimmed);
+    }
+
+    try {
+      registry.register(trimmed, callback);
+    } on AuthGateRegistrationException {
+      if (!managedBefore) {
+        return;
+      }
+      rethrow;
+    }
+
+    registered.add(trimmed);
+  });
+  return registered;
+}
+
 /// Framework-agnostic gate evaluation service.
 class AuthGateService<TContext> {
   AuthGateService({
