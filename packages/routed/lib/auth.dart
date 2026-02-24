@@ -16,20 +16,7 @@ export 'src/auth/haigate.dart'
         GateRegistrationException,
         GateViolation,
         Haigate;
-export 'src/auth/jwt.dart'
-    show
-        JwtAuthException,
-        JwtIssuer,
-        JwtOptions,
-        JwtPayload,
-        JwtSessionOptions,
-        JwtVerifier,
-        JwtOnVerified,
-        jwtAuthentication,
-        jwtClaimsAttribute,
-        jwtHeadersAttribute,
-        jwtSecretKey,
-        jwtSubjectAttribute;
+export 'src/auth/jwt.dart' show JwtOnVerified, jwtAuthentication;
 export 'src/auth/provider.dart' show AuthServiceProvider;
 export 'src/auth/rbac.dart'
     show

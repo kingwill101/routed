@@ -7,13 +7,15 @@ import 'package:server_auth/server_auth.dart'
         AuthProvider,
         AuthProviderRegistry,
         AuthVerificationTokenStore,
+        JwtOptions,
+        JwtVerifier,
         OAuthIntrospectionOptions,
         registerGitHubAuthProvider;
 import 'package:routed/src/auth/manager/auth_manager.dart';
 import 'package:routed/src/auth/manager/auth_options.dart';
 import 'package:routed/src/auth/routes.dart';
 import 'package:routed/src/auth/haigate.dart';
-import 'package:routed/src/auth/jwt.dart';
+import 'package:routed/src/auth/jwt.dart' show jwtAuthenticationWithVerifier;
 import 'package:routed/src/auth/oauth.dart';
 import 'package:routed/src/auth/policies.dart';
 import 'package:routed/src/auth/rbac.dart';
@@ -101,7 +103,9 @@ class AuthServiceProvider extends ServiceProvider with ProvidesDefaultConfig {
     final registry = container.get<MiddlewareRegistry>();
     registry.register(
       'routed.auth.jwt',
-      (_) => _jwtVerifier?.middleware() ?? _passthrough,
+      (_) => _jwtVerifier == null
+          ? _passthrough
+          : jwtAuthenticationWithVerifier(_jwtVerifier!),
     );
     registry.register(
       'routed.auth.oauth2',

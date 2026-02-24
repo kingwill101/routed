@@ -36,7 +36,7 @@ Map<String, dynamic> _claims({
   required DateTime now,
   Duration expiresIn = const Duration(minutes: 5),
   Duration notBeforeOffset = Duration.zero,
-  String issuer = 'routed',
+  String issuer = 'server_auth',
   List<String> audience = const ['demo'],
 }) {
   return <String, dynamic>{
@@ -56,7 +56,7 @@ void main() {
   test('JwtIssuer and JwtVerifier roundtrip', () async {
     const options = JwtSessionOptions(
       secret: 'super-secret',
-      issuer: 'routed',
+      issuer: 'server_auth',
       audience: ['demo'],
     );
     final issuer = JwtIssuer(options);
@@ -208,7 +208,7 @@ void main() {
     final issuerMismatch = _buildToken(_claims(now: now, issuer: 'other'));
     final verifier = JwtVerifier(
       options: JwtOptions(
-        issuer: 'routed',
+        issuer: 'server_auth',
         audience: const ['demo'],
         requiredClaims: const ['role'],
         inlineKeys: [_testJwk],
@@ -257,7 +257,7 @@ void main() {
   test('JwtOptions copyWith applies overrides', () {
     const options = JwtOptions(
       enabled: true,
-      issuer: 'routed',
+      issuer: 'server_auth',
       audience: ['demo'],
       requiredClaims: ['role'],
       jwksUri: null,

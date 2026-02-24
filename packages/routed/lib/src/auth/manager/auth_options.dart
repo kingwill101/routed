@@ -4,9 +4,9 @@ import 'package:server_auth/server_auth.dart'
         AuthAdapter,
         AuthProvider,
         AuthSessionStrategy,
+        JwtSessionOptions,
         AuthVerificationTokenStore;
 import 'package:routed/src/auth/hooks.dart';
-import 'package:routed/src/auth/jwt.dart';
 import 'package:routed/src/auth/policies.dart';
 import 'package:routed/src/auth/rbac.dart';
 import 'package:routed/src/auth/session_auth.dart';
