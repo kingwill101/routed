@@ -187,6 +187,16 @@ final resolvedFromCallbacks = await resolveAuthRedirectWithCallbacks<MyContext>(
 The same pattern exists for JWT/session callback orchestration:
 
 ```dart
+final signInRedirect = await resolveAuthSignInRedirectWithCallbacks<MyContext>(
+  callbacks: callbacks,
+  context: context,
+  user: user,
+  strategy: AuthSessionStrategy.session,
+  callbackUrl: '/requested',
+);
+
+// Throws AuthFlowException('sign_in_blocked') if callbacks.signIn denies.
+
 final claims = await resolveAuthJwtClaimsWithCallbacks<MyContext>(
   callbacks: callbacks,
   context: context,
