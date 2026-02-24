@@ -148,6 +148,23 @@ final callbackFromResolver = await resolveAndSanitizeRedirectWithResolver(
 );
 ```
 
+## Callback helper for redirect fallbacks
+
+Use `resolveAuthRedirectTargetWithFallback` when your adapter supports
+redirect callbacks but should preserve a framework-provided fallback URL.
+
+```dart
+final resolvedUrl = await resolveAuthRedirectTargetWithFallback<MyContext>(
+  callback: callbacks.redirect,
+  context: AuthRedirectCallbackContext<MyContext>(
+    context: context,
+    url: '/requested',
+    baseUrl: 'https://app.test',
+  ),
+  fallbackUrl: '/requested',
+);
+```
+
 ## Authorization and gates example
 
 ```dart
