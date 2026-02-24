@@ -50,10 +50,11 @@ import 'package:server_auth/server_auth.dart'
         OAuthProvider,
         loadOAuthProfile,
         pkceS256CodeChallenge,
-        parseAuthSessionIssuedAt,
+        authSessionRefreshAction,
+        AuthSessionRefreshAction,
         resolveAuthSessionExpiry,
+        serializeAuthSessionIssuedAt,
         secureRandomToken,
-        shouldRefreshAuthSession,
         shouldRefreshJwtByIssuedAt;
 import 'package:routed/src/auth/hooks.dart';
 import 'package:routed/src/auth/session_auth.dart';
@@ -778,13 +779,7 @@ class AuthManager {
   }
 
   void _setSessionIssuedAt(EngineContext ctx, DateTime issuedAt) {
-    ctx.setSession(_sessionIssuedAtKey, issuedAt.toIso8601String());
-  }
-
-  DateTime? _sessionIssuedAt(EngineContext ctx) {
-    return parseAuthSessionIssuedAt(
-      ctx.getSession<String>(_sessionIssuedAtKey),
-    );
+    ctx.setSession(_sessionIssuedAtKey, serializeAuthSessionIssuedAt(issuedAt));
   }
 
   void _refreshSessionIfNeeded(EngineContext ctx) {
@@ -793,14 +788,21 @@ class AuthManager {
       return;
     }
     final now = DateTime.now().toUtc();
-    final issuedAt = _sessionIssuedAt(ctx);
-    if (issuedAt == null) {
-      _setSessionIssuedAt(ctx, now);
-      return;
-    }
-    if (shouldRefreshAuthSession(issuedAt, updateAge, now: now)) {
-      _setSessionIssuedAt(ctx, now);
-      ctx.session.touch();
+    final action = authSessionRefreshAction(
+      issuedAtValue: ctx.getSession<String>(_sessionIssuedAtKey),
+      updateAge: updateAge,
+      now: now,
+    );
+    switch (action) {
+      case AuthSessionRefreshAction.initialize:
+        _setSessionIssuedAt(ctx, now);
+        return;
+      case AuthSessionRefreshAction.refresh:
+        _setSessionIssuedAt(ctx, now);
+        ctx.session.touch();
+        return;
+      case AuthSessionRefreshAction.keep:
+        return;
     }
   }
 

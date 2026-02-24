@@ -15,6 +15,13 @@ void main() {
     expect(parseAuthSessionIssuedAt('invalid'), isNull);
   });
 
+  test('serializeAuthSessionIssuedAt writes UTC ISO timestamps', () {
+    final value = serializeAuthSessionIssuedAt(
+      DateTime.parse('2026-02-24T12:00:00-05:00'),
+    );
+    expect(value, equals('2026-02-24T17:00:00.000Z'));
+  });
+
   test('shouldRefreshAuthSession compares update age threshold', () {
     final now = DateTime.utc(2026, 2, 24, 12);
     final issuedAt = now.subtract(const Duration(minutes: 10));
@@ -26,6 +33,37 @@ void main() {
     expect(
       shouldRefreshAuthSession(issuedAt, const Duration(minutes: 15), now: now),
       isFalse,
+    );
+  });
+
+  test('authSessionRefreshAction resolves initialize/refresh/keep', () {
+    final now = DateTime.utc(2026, 2, 24, 12);
+    final oldIssuedAt = now.subtract(const Duration(minutes: 10));
+    final recentIssuedAt = now.subtract(const Duration(minutes: 1));
+
+    expect(
+      authSessionRefreshAction(
+        issuedAtValue: null,
+        updateAge: const Duration(minutes: 5),
+        now: now,
+      ),
+      AuthSessionRefreshAction.initialize,
+    );
+    expect(
+      authSessionRefreshAction(
+        issuedAtValue: serializeAuthSessionIssuedAt(oldIssuedAt),
+        updateAge: const Duration(minutes: 5),
+        now: now,
+      ),
+      AuthSessionRefreshAction.refresh,
+    );
+    expect(
+      authSessionRefreshAction(
+        issuedAtValue: serializeAuthSessionIssuedAt(recentIssuedAt),
+        updateAge: const Duration(minutes: 5),
+        now: now,
+      ),
+      AuthSessionRefreshAction.keep,
     );
   });
 

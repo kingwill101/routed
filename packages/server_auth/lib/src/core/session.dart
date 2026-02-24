@@ -13,6 +13,14 @@ DateTime? parseAuthSessionIssuedAt(String? value) {
   return DateTime.tryParse(value)?.toUtc();
 }
 
+/// Session refresh action derived from issued-at metadata.
+enum AuthSessionRefreshAction { initialize, refresh, keep }
+
+/// Serializes issued-at timestamps for auth session metadata.
+String serializeAuthSessionIssuedAt(DateTime issuedAt) {
+  return issuedAt.toUtc().toIso8601String();
+}
+
 /// Returns true when a session should be refreshed based on [updateAge].
 bool shouldRefreshAuthSession(
   DateTime issuedAt,
@@ -21,6 +29,22 @@ bool shouldRefreshAuthSession(
 }) {
   final current = (now ?? DateTime.now()).toUtc();
   return current.difference(issuedAt.toUtc()) >= updateAge;
+}
+
+/// Decides whether auth session issued-at metadata should be initialized,
+/// refreshed, or left unchanged.
+AuthSessionRefreshAction authSessionRefreshAction({
+  required String? issuedAtValue,
+  required Duration updateAge,
+  DateTime? now,
+}) {
+  final issuedAt = parseAuthSessionIssuedAt(issuedAtValue);
+  if (issuedAt == null) {
+    return AuthSessionRefreshAction.initialize;
+  }
+  return shouldRefreshAuthSession(issuedAt, updateAge, now: now)
+      ? AuthSessionRefreshAction.refresh
+      : AuthSessionRefreshAction.keep;
 }
 
 /// Resolves auth session expiry from explicit or runtime max-age settings.
