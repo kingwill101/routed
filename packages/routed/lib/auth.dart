@@ -20,18 +20,12 @@ export 'src/auth/jwt.dart' show JwtOnVerified, jwtAuthentication;
 export 'src/auth/provider.dart' show AuthServiceProvider;
 export 'src/auth/rbac.dart'
     show
-        RbacAbility,
-        RbacOptions,
         registerRbacAbilities,
         registerRbacAbilitiesSafely,
         registerRbacWithHaigate,
         rbacGate;
 export 'src/auth/policies.dart'
     show
-        Policy,
-        PolicyAction,
-        PolicyBinding,
-        PolicyOptions,
         policyGate,
         registerPolicyBindings,
         registerPolicyBindingsSafely,

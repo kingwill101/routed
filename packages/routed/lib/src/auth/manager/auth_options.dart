@@ -3,12 +3,12 @@ import 'package:server_auth/server_auth.dart'
     show
         AuthAdapter,
         AuthProvider,
+        PolicyOptions,
+        RbacOptions,
         AuthSessionStrategy,
         JwtSessionOptions,
         AuthVerificationTokenStore;
 import 'package:routed/src/auth/hooks.dart';
-import 'package:routed/src/auth/policies.dart';
-import 'package:routed/src/auth/rbac.dart';
 import 'package:routed/src/auth/session_auth.dart';
 
 /// {@template routed_auth_manager}

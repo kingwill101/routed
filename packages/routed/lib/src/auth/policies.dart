@@ -1,69 +1,13 @@
-import 'dart:async';
-
-import 'package:server_auth/server_auth.dart' show AuthPrincipal;
+import 'package:server_auth/server_auth.dart'
+    show Policy, PolicyAction, PolicyBinding;
 import 'package:routed/src/auth/haigate.dart';
 
 /// {@template routed_auth_policy}
 /// Policy-based authorization built on top of Haigate.
 ///
-/// Policies encapsulate authorization decisions for a specific resource type
-/// (e.g. `ProjectPolicy`). Use [PolicyBinding] with an ability prefix to
-/// register Haigate abilities like `project.view` or `project.update`.
+/// Use policy contracts from `server_auth` and register them against Routed
+/// gate abilities via these helpers.
 /// {@endtemplate}
-
-/// Available policy actions.
-enum PolicyAction { view, create, update, delete }
-
-/// {@macro routed_auth_policy}
-abstract class Policy<T extends Object> {
-  const Policy();
-
-  /// Whether the principal can view a resource.
-  FutureOr<bool> canView(AuthPrincipal? principal, T resource);
-
-  /// Whether the principal can create a resource.
-  FutureOr<bool> canCreate(AuthPrincipal? principal);
-
-  /// Whether the principal can update a resource.
-  FutureOr<bool> canUpdate(AuthPrincipal? principal, T resource);
-
-  /// Whether the principal can delete a resource.
-  FutureOr<bool> canDelete(AuthPrincipal? principal, T resource);
-}
-
-/// Binds a policy to a Haigate ability prefix.
-class PolicyBinding<T extends Object> {
-  const PolicyBinding({
-    required this.policy,
-    required this.abilityPrefix,
-    this.actions = const {
-      PolicyAction.view,
-      PolicyAction.create,
-      PolicyAction.update,
-      PolicyAction.delete,
-    },
-  });
-
-  /// Policy instance used for evaluations.
-  final Policy<T> policy;
-
-  /// Prefix used to build ability names (e.g. `project`).
-  final String abilityPrefix;
-
-  /// Actions to register for this policy.
-  final Set<PolicyAction> actions;
-}
-
-/// Options that configure policy bindings.
-class PolicyOptions {
-  const PolicyOptions({this.bindings = const <PolicyBinding>[]});
-
-  /// Policy bindings to register with Haigate.
-  final List<PolicyBinding> bindings;
-
-  /// Returns `true` when there are no policy bindings.
-  bool get isEmpty => bindings.isEmpty;
-}
 
 /// Builds a gate callback for a specific policy action.
 GateCallback policyGate<T extends Object>(
