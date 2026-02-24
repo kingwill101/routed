@@ -128,4 +128,26 @@ void main() {
     expect(await service.any(const ['b', 'a'], context: 'ctx'), isTrue);
     expect(await service.all(const ['a', 'b'], context: 'ctx'), isFalse);
   });
+
+  test(
+    'AuthGateService firstDenied returns violation payload details',
+    () async {
+      final service = AuthGateService<String>();
+      service.register('a', (_) => true);
+      service.register('b', (_) => false);
+
+      final denied = await service.firstDenied(
+        const ['a', 'b'],
+        context: 'ctx',
+        payloadResolver: (context, ability) => '$context:$ability',
+        message: 'blocked',
+      );
+
+      expect(denied, isNotNull);
+      expect(denied!.ability, equals('b'));
+      expect(denied.context, equals('ctx'));
+      expect(denied.message, equals('blocked'));
+      expect(denied.payload, equals('ctx:b'));
+    },
+  );
 }

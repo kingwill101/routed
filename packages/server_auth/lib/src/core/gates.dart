@@ -10,6 +10,10 @@ typedef AuthGateCallback<TContext> =
 typedef AuthGateObserver<TContext> =
     void Function(AuthGateEvaluation<TContext> evaluation);
 
+/// Resolves payloads for gate ability checks.
+typedef AuthGatePayloadResolver<TContext> =
+    Object? Function(TContext context, String ability);
+
 /// Exception thrown when there is an error during gate registration.
 class AuthGateRegistrationException implements Exception {
   AuthGateRegistrationException(this.message);
@@ -269,6 +273,34 @@ class AuthGateService<TContext> {
       }
     }
     return true;
+  }
+
+  /// Returns the first denied ability as a violation, if any.
+  Future<AuthGateViolation<TContext>?> firstDenied(
+    Iterable<String> abilities, {
+    required TContext context,
+    AuthPrincipal? principal,
+    AuthGatePayloadResolver<TContext>? payloadResolver,
+    String? message,
+  }) async {
+    for (final ability in abilities) {
+      final payload = payloadResolver?.call(context, ability);
+      final allowed = await can(
+        ability,
+        context: context,
+        principal: principal,
+        payload: payload,
+      );
+      if (!allowed) {
+        return AuthGateViolation<TContext>(
+          ability: ability,
+          context: context,
+          message: message,
+          payload: payload,
+        );
+      }
+    }
+    return null;
   }
 
   void _notifyObservers(AuthGateEvaluation<TContext> evaluation) {

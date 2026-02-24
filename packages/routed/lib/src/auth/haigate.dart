@@ -145,25 +145,23 @@ class Haigate {
         .toList(growable: false);
 
     return (EngineContext ctx, Next next) async {
-      for (final ability in requested) {
-        final payload = payloadProvider?.call(ctx, ability);
-        final allowed = await can(ability, ctx: ctx, payload: payload);
-        if (!allowed) {
-          final violation = AuthGateViolation<EngineContext>(
-            ability: ability,
-            context: ctx,
-            message: deniedMessage,
-            payload: payload,
-          );
-          final custom = await onDenied?.call(violation, ctx);
-          if (custom != null) {
-            return custom;
-          }
-          ctx.response
-            ..statusCode = deniedStatusCode
-            ..write(deniedMessage ?? 'Forbidden by gate: $ability');
-          return ctx.response;
+      final violation = await _service.firstDenied(
+        requested,
+        context: ctx,
+        payloadResolver: payloadProvider == null
+            ? null
+            : (context, ability) => payloadProvider(context, ability),
+        message: deniedMessage,
+      );
+      if (violation != null) {
+        final custom = await onDenied?.call(violation, ctx);
+        if (custom != null) {
+          return custom;
         }
+        ctx.response
+          ..statusCode = deniedStatusCode
+          ..write(deniedMessage ?? 'Forbidden by gate: ${violation.ability}');
+        return ctx.response;
       }
       return next();
     };
