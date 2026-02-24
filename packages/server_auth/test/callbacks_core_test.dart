@@ -186,6 +186,53 @@ void main() {
   );
 
   test(
+    'resolveAuthSignInRedirectTarget uses sign-in redirect decision and resolver',
+    () async {
+      String? seenCandidate;
+      final target = await resolveAuthSignInRedirectTarget<String>(
+        callbacks: AuthCallbacks<String>(
+          signIn: (_) =>
+              const AuthSignInResult.allow(redirectUrl: '/from-signin'),
+        ),
+        context: 'ctx',
+        user: AuthUser(id: 'u1'),
+        strategy: AuthSessionStrategy.session,
+        callbackUrl: '/fallback',
+        resolveRedirect: (candidate) {
+          seenCandidate = candidate;
+          return '/resolved';
+        },
+      );
+
+      expect(seenCandidate, equals('/from-signin'));
+      expect(target, equals('/resolved'));
+    },
+  );
+
+  test(
+    'resolveAuthSignInRedirectTarget falls back to callbackUrl before resolver',
+    () async {
+      String? seenCandidate;
+      final target = await resolveAuthSignInRedirectTarget<String>(
+        callbacks: AuthCallbacks<String>(
+          signIn: (_) => const AuthSignInResult.allow(),
+        ),
+        context: 'ctx',
+        user: AuthUser(id: 'u1'),
+        strategy: AuthSessionStrategy.session,
+        callbackUrl: '/fallback',
+        resolveRedirect: (candidate) {
+          seenCandidate = candidate;
+          return candidate;
+        },
+      );
+
+      expect(seenCandidate, equals('/fallback'));
+      expect(target, equals('/fallback'));
+    },
+  );
+
+  test(
     'resolveAuthJwtClaims and resolveAuthSessionPayload pass through defaults',
     () async {
       final jwtContext = AuthJwtCallbackContext<String>(
@@ -302,6 +349,57 @@ void main() {
       expect(issued.issued.cookie.value, equals(issued.issued.token));
       expect(issued.session.token, equals(issued.issued.token));
       expect(issued.session.strategy, equals(AuthSessionStrategy.jwt));
+    },
+  );
+
+  test(
+    'resolveAuthSignInResultForStrategyWithCallbacks returns session strategy result',
+    () async {
+      final result =
+          await resolveAuthSignInResultForStrategyWithCallbacks<String>(
+            callbacks: const AuthCallbacks<String>(),
+            context: 'ctx',
+            strategy: AuthSessionStrategy.session,
+            user: AuthUser(id: 'u1'),
+            redirectUrl: '/dashboard',
+            jwtOptions: const JwtSessionOptions(secret: 'unused'),
+            sessionExpiresAt: DateTime.utc(2026, 2, 24, 12),
+          );
+
+      expect(result.issuedJwt, isNull);
+      expect(result.result.redirectUrl, equals('/dashboard'));
+      expect(
+        result.result.session.strategy,
+        equals(AuthSessionStrategy.session),
+      );
+      expect(
+        result.result.session.expiresAt,
+        equals(DateTime.utc(2026, 2, 24, 12)),
+      );
+    },
+  );
+
+  test(
+    'resolveAuthSignInResultForStrategyWithCallbacks issues jwt strategy result',
+    () async {
+      final result =
+          await resolveAuthSignInResultForStrategyWithCallbacks<String>(
+            callbacks: const AuthCallbacks<String>(),
+            context: 'ctx',
+            strategy: AuthSessionStrategy.jwt,
+            user: AuthUser(id: 'u1'),
+            redirectUrl: '/dashboard',
+            jwtOptions: const JwtSessionOptions(secret: 'secret-test'),
+          );
+
+      expect(result.issuedJwt, isNotNull);
+      expect(result.result.redirectUrl, equals('/dashboard'));
+      expect(result.result.session.strategy, equals(AuthSessionStrategy.jwt));
+      expect(result.result.session.token, equals(result.issuedJwt!.token));
+      expect(
+        result.result.session.expiresAt,
+        equals(result.issuedJwt!.expiresAt),
+      );
     },
   );
 

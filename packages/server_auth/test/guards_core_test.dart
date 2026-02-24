@@ -171,6 +171,58 @@ void main() {
     },
   );
 
+  test(
+    'syncManagedGuardDefinitions registers built guards and removes stale managed entries',
+    () async {
+      final registry = AuthGuardRegistry<String, String>();
+      registry.register('legacy', (_) => const GuardResult<String>.allow());
+
+      final managed = <String>{'legacy'};
+      final registered = syncManagedGuardDefinitions<String, String, String>(
+        registry,
+        const <String, String>{' auth ': 'allow', 'skip': 'ignore'},
+        buildGuard: (_, definition) {
+          if (definition == 'ignore') {
+            return null;
+          }
+          return (_) => const GuardResult<String>.deny('blocked');
+        },
+        managed: managed,
+      );
+
+      expect(registered, equals(const <String>{'auth'}));
+      expect(registry.resolve('auth'), isNotNull);
+      expect(registry.resolve('legacy'), isNull);
+      expect(managed, equals(const <String>{'auth'}));
+
+      final result = await registry.resolve('auth')!('ctx');
+      expect(result.allowed, isFalse);
+      expect(result.response, equals('blocked'));
+    },
+  );
+
+  test('syncManagedGuardDefinitions honors preserved guard names', () {
+    final registry = AuthGuardRegistry<String, String>();
+    registry.register(
+      'authenticated',
+      (_) => const GuardResult<String>.allow(),
+    );
+
+    final managed = <String>{'authenticated'};
+    final registered = syncManagedGuardDefinitions<String, String, String>(
+      registry,
+      const <String, String>{},
+      buildGuard: (_, _) =>
+          (_) => const GuardResult<String>.allow(),
+      managed: managed,
+      preserve: const <String>{'authenticated'},
+    );
+
+    expect(registered, isEmpty);
+    expect(registry.resolve('authenticated'), isNotNull);
+    expect(managed, isEmpty);
+  });
+
   test('syncManagedGuards unregisters stale guard registrations', () {
     final registry = AuthGuardRegistry<String, String>();
     registry.register('keep', (_) => const GuardResult<String>.allow());

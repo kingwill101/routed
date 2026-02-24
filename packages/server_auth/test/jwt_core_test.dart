@@ -142,6 +142,43 @@ void main() {
     expect(cookie.path, equals('/'));
   });
 
+  test('materializeJwtVerifierOptions returns null when disabled', () {
+    final options = materializeJwtVerifierOptions(
+      enabled: false,
+      algorithms: const <String>['HS256'],
+    );
+    expect(options, isNull);
+  });
+
+  test(
+    'materializeJwtVerifierOptions normalizes issuer and defaults algorithms',
+    () {
+      final options = materializeJwtVerifierOptions(
+        enabled: true,
+        issuer: '   ',
+        algorithms: const <String>[' ', ''],
+      );
+
+      expect(options, isNotNull);
+      expect(options!.issuer, isNull);
+      expect(options.algorithms, equals(const <String>['RS256']));
+    },
+  );
+
+  test('materializeJwtVerifier builds verifier with materialized options', () {
+    final verifier = materializeJwtVerifier(
+      enabled: true,
+      issuer: 'server_auth',
+      audience: const <String>['demo'],
+      inlineKeys: <Map<String, dynamic>>[_testJwk],
+      algorithms: const <String>['HS256'],
+    );
+
+    expect(verifier, isNotNull);
+    expect(verifier!.options.issuer, equals('server_auth'));
+    expect(verifier.options.algorithms, equals(const <String>['HS256']));
+  });
+
   test('issueAuthJwtToken returns token, expiry, and cookie', () async {
     const options = JwtSessionOptions(
       secret: _sharedSecret,
@@ -291,6 +328,47 @@ void main() {
       );
       expect(verified.token, equals(token));
       expect(verified.payload.subject, equals('user-1'));
+    },
+  );
+
+  test(
+    'verifyJwtBearerAuthorizationAndWriteAttributes writes attributes and invokes callback',
+    () async {
+      final token = _buildToken(_claims(now: DateTime.now()));
+      final verifier = JwtVerifier(
+        options: JwtOptions(
+          issuer: 'server_auth',
+          audience: const ['demo'],
+          inlineKeys: [_testJwk],
+          algorithms: const ['HS256'],
+        ),
+      );
+
+      final attributes = <String, Object?>{};
+      String? callbackContext;
+      final verification =
+          await verifyJwtBearerAuthorizationAndWriteAttributes<String>(
+            authorizationHeader: 'Bearer $token',
+            verifier: verifier,
+            setAttribute: (key, value) => attributes[key] = value,
+            context: 'ctx',
+            onVerified: (payload, ctx) {
+              callbackContext = ctx;
+              expect(payload.subject, equals('user-1'));
+            },
+          );
+
+      expect(verification.token, equals(token));
+      expect(
+        attributes[jwtClaimsAttribute],
+        equals(verification.payload.claims),
+      );
+      expect(
+        attributes[jwtHeadersAttribute],
+        equals(verification.payload.headers),
+      );
+      expect(attributes[jwtSubjectAttribute], equals('user-1'));
+      expect(callbackContext, equals('ctx'));
     },
   );
 

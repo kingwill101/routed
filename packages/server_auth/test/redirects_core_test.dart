@@ -166,4 +166,64 @@ void main() {
       expect(resolved, isNull);
     },
   );
+
+  test(
+    'respondWithSanitizedAuthRedirectOrSession prefers sanitized redirect',
+    () async {
+      final session = AuthSession(
+        user: AuthUser(id: 'user-1'),
+        expiresAt: null,
+        strategy: AuthSessionStrategy.session,
+      );
+      final result = AuthResult(
+        user: session.user,
+        session: session,
+        redirectUrl: '/dashboard',
+      );
+      var sessionCalled = false;
+
+      final response = await respondWithSanitizedAuthRedirectOrSession<String>(
+        result: result,
+        requestUri: Uri.parse('https://app.test/auth/callback'),
+        onRedirect: (redirectUrl) => 'redirect:$redirectUrl',
+        onSession: (_) {
+          sessionCalled = true;
+          return 'session';
+        },
+      );
+
+      expect(response, equals('redirect:/dashboard'));
+      expect(sessionCalled, isFalse);
+    },
+  );
+
+  test(
+    'respondWithSanitizedAuthRedirectOrSession falls back to session when redirect is invalid',
+    () async {
+      final session = AuthSession(
+        user: AuthUser(id: 'user-1'),
+        expiresAt: null,
+        strategy: AuthSessionStrategy.session,
+      );
+      final result = AuthResult(
+        user: session.user,
+        session: session,
+        redirectUrl: 'https://evil.test/pwn',
+      );
+      var redirected = false;
+
+      final response = await respondWithSanitizedAuthRedirectOrSession<String>(
+        result: result,
+        requestUri: Uri.parse('https://app.test/auth/callback'),
+        onRedirect: (_) {
+          redirected = true;
+          return 'redirect';
+        },
+        onSession: (_) => 'session',
+      );
+
+      expect(response, equals('session'));
+      expect(redirected, isFalse);
+    },
+  );
 }

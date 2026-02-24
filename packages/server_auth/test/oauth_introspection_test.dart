@@ -37,6 +37,41 @@ void main() {
     expect(oauthScopeAttribute, equals('auth.oauth.scope'));
   });
 
+  test(
+    'materializeOAuthIntrospectionOptions handles disabled and null endpoint',
+    () {
+      expect(
+        materializeOAuthIntrospectionOptions(
+          enabled: false,
+          endpoint: Uri.parse('https://auth.test/introspect'),
+        ),
+        isNull,
+      );
+      expect(
+        materializeOAuthIntrospectionOptions(enabled: true, endpoint: null),
+        isNull,
+      );
+    },
+  );
+
+  test(
+    'materializeOAuthIntrospectionOptions normalizes optional string fields',
+    () {
+      final options = materializeOAuthIntrospectionOptions(
+        enabled: true,
+        endpoint: Uri.parse('https://auth.test/introspect'),
+        clientId: '  ',
+        clientSecret: 'secret',
+        tokenTypeHint: ' access_token ',
+      );
+
+      expect(options, isNotNull);
+      expect(options!.clientId, isNull);
+      expect(options.clientSecret, equals('secret'));
+      expect(options.tokenTypeHint, equals('access_token'));
+    },
+  );
+
   test('writeOAuthValidationAttributes writes canonical attribute keys', () {
     final validation = OAuthBearerValidationResult(
       token: 'access-token',
@@ -116,6 +151,44 @@ void main() {
       );
       expect(validation.token, equals('valid-token'));
       expect(validation.result.subject, equals('user-1'));
+    },
+  );
+
+  test(
+    'validateOAuthBearerAuthorizationAndWriteAttributes writes attributes and invokes callback',
+    () async {
+      final introspector = OAuth2TokenIntrospector(
+        OAuthIntrospectionOptions(
+          endpoint: Uri.parse('https://auth.test/introspect'),
+        ),
+        httpClient: MockClient((request) async {
+          expect(request.bodyFields['token'], equals('valid-token'));
+          return http.Response(
+            jsonEncode({'active': true, 'sub': 'user-1', 'scope': 'read'}),
+            200,
+          );
+        }),
+      );
+
+      final attributes = <String, Object?>{};
+      String? callbackContext;
+      final validation =
+          await validateOAuthBearerAuthorizationAndWriteAttributes<String>(
+            authorizationHeader: 'Bearer valid-token',
+            introspector: introspector,
+            setAttribute: (key, value) => attributes[key] = value,
+            context: 'ctx',
+            onValidated: (result, ctx) {
+              callbackContext = ctx;
+              expect(result.subject, equals('user-1'));
+            },
+          );
+
+      expect(validation.token, equals('valid-token'));
+      expect(attributes[oauthTokenAttribute], equals('valid-token'));
+      expect(attributes[oauthClaimsAttribute], equals(validation.result.raw));
+      expect(attributes[oauthScopeAttribute], equals('read'));
+      expect(callbackContext, equals('ctx'));
     },
   );
 

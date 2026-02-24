@@ -189,4 +189,97 @@ void main() {
     expect(registry.resolve('ability.one'), isNull);
     expect(managed, isEmpty);
   });
+
+  test(
+    'syncManagedGateDefinitions preserves unmanaged abilities and synchronizes managed ones',
+    () async {
+      final registry = AuthGateRegistry<String>();
+      registry.register('ability.keep', (_) => false);
+      registry.register('ability.remove', (_) => true);
+
+      final managed = <String>{'ability.remove'};
+      final registered = syncManagedGateDefinitions<String, bool>(
+        registry,
+        const <String, bool>{
+          'ability.keep': true,
+          'ability.add': true,
+          ' ': true,
+        },
+        buildGate: (_, allow) =>
+            (_) => allow,
+        managed: managed,
+      );
+
+      expect(registered, equals(const <String>{'ability.add'}));
+      expect(registry.resolve('ability.remove'), isNull);
+      expect(managed, equals(const <String>{'ability.add'}));
+
+      final kept = await registry.resolve('ability.keep')!(
+        AuthGateEvaluationContext<String>(context: 'ctx', principal: null),
+      );
+      final added = await registry.resolve('ability.add')!(
+        AuthGateEvaluationContext<String>(context: 'ctx', principal: null),
+      );
+
+      expect(kept, isFalse);
+      expect(added, isTrue);
+    },
+  );
+
+  test('syncManagedRbacAbilities registers and clears managed RBAC gates', () {
+    final registry = AuthGateRegistry<String>();
+    final managed = <String>{};
+
+    final registered = syncManagedRbacAbilities<String>(
+      registry,
+      const <String, RbacAbility>{
+        'admin.only': RbacAbility(roles: ['admin']),
+      },
+      managed: managed,
+    );
+
+    expect(registered, equals(const <String>{'admin.only'}));
+    expect(registry.resolve('admin.only'), isNotNull);
+    expect(managed, equals(const <String>{'admin.only'}));
+
+    final cleared = syncManagedRbacAbilities<String>(
+      registry,
+      const <String, RbacAbility>{},
+      managed: managed,
+    );
+
+    expect(cleared, isEmpty);
+    expect(registry.resolve('admin.only'), isNull);
+    expect(managed, isEmpty);
+  });
+
+  test(
+    'syncManagedPolicyBindings registers and clears managed policy gates',
+    () {
+      final registry = AuthGateRegistry<String>();
+      final managed = <String>{};
+
+      final registered = syncManagedPolicyBindings<String>(registry, [
+        PolicyBinding<_Project>(
+          policy: _ProjectPolicy(),
+          abilityPrefix: 'project',
+          actions: {PolicyAction.update},
+        ),
+      ], managed: managed);
+
+      expect(registered, equals(const <String>{'project.update'}));
+      expect(registry.resolve('project.update'), isNotNull);
+      expect(managed, equals(const <String>{'project.update'}));
+
+      final cleared = syncManagedPolicyBindings<String>(
+        registry,
+        const <PolicyBinding>[],
+        managed: managed,
+      );
+
+      expect(cleared, isEmpty);
+      expect(registry.resolve('project.update'), isNull);
+      expect(managed, isEmpty);
+    },
+  );
 }

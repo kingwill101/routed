@@ -17,6 +17,18 @@ void main() {
     expect(resolveAuthProviderById(providers, '   '), isNull);
   });
 
+  test('resolveAuthProviderByOptionalId handles null and delegates lookup', () {
+    final providers = <AuthProvider>[
+      AuthProvider(id: 'google', name: 'Google', type: AuthProviderType.oidc),
+    ];
+
+    expect(resolveAuthProviderByOptionalId(providers, null), isNull);
+    expect(
+      resolveAuthProviderByOptionalId(providers, 'google')?.name,
+      'Google',
+    );
+  });
+
   test('authProviderSummaries returns stable provider payloads', () {
     final providers = <AuthProvider>[
       AuthProvider(id: 'google', name: 'Google', type: AuthProviderType.oidc),
