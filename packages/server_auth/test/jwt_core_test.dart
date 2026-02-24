@@ -164,6 +164,55 @@ void main() {
     expect(payload.subject, equals('user-1'));
   });
 
+  test(
+    'refreshAuthJwtTokenIfNeeded returns null when refresh is not required',
+    () async {
+      final now = DateTime.utc(2026, 2, 24, 12);
+      final claims = <String, dynamic>{'iat': _secondsSinceEpoch(now)};
+
+      final refreshed = await refreshAuthJwtTokenIfNeeded(
+        options: const JwtSessionOptions(secret: _sharedSecret),
+        claims: claims,
+        updateAge: const Duration(minutes: 5),
+        now: now,
+        resolveClaims: (token) => token,
+      );
+
+      expect(refreshed, isNull);
+    },
+  );
+
+  test(
+    'refreshAuthJwtTokenIfNeeded reissues token with resolved claims',
+    () async {
+      final now = DateTime.utc(2026, 2, 24, 12);
+      final claims = <String, dynamic>{
+        'sub': 'user-1',
+        'iat': _secondsSinceEpoch(now.subtract(const Duration(minutes: 10))),
+      };
+
+      final refreshed = await refreshAuthJwtTokenIfNeeded(
+        options: const JwtSessionOptions(secret: _sharedSecret),
+        claims: claims,
+        updateAge: const Duration(minutes: 5),
+        now: now,
+        resolveClaims: (token) => <String, dynamic>{...token, 'plan': 'pro'},
+      );
+
+      expect(refreshed, isNotNull);
+      expect(refreshed!.token, isNotEmpty);
+      expect(refreshed.cookie.value, equals(refreshed.token));
+
+      final verifier = JwtVerifier(
+        options: const JwtSessionOptions(
+          secret: _sharedSecret,
+        ).toVerifierOptions(),
+      );
+      final payload = await verifier.verifyToken(refreshed.token);
+      expect(payload.claims['plan'], equals('pro'));
+    },
+  );
+
   test('AuthJwtVerifiedCallback supports typed async handlers', () async {
     var invoked = false;
     Future<void> callback(JwtPayload payload, String context) async {

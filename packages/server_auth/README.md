@@ -108,6 +108,13 @@ final issued = issueAuthJwtToken(
 final verifier = JwtVerifier(options: options.toVerifierOptions());
 final payload = await verifier.verifyToken(issued.token);
 print(payload.subject);
+
+final refreshed = await refreshAuthJwtTokenIfNeeded(
+  options: options,
+  claims: payload.claims,
+  updateAge: const Duration(minutes: 15),
+  resolveClaims: (claims) => claims,
+);
 ```
 
 ## Adapter attribute mapping helpers

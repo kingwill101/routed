@@ -54,6 +54,7 @@ import 'package:server_auth/server_auth.dart'
         EmailProvider,
         JwtAuthException,
         issueAuthJwtToken,
+        refreshAuthJwtTokenIfNeeded,
         JwtPayload,
         JwtVerifier,
         OAuthProvider,
@@ -65,8 +66,7 @@ import 'package:server_auth/server_auth.dart'
         resolveAuthSessionExpiry,
         serializeAuthSessionIssuedAt,
         syncAuthSessionRefresh,
-        secureRandomToken,
-        shouldRefreshJwtClaims;
+        secureRandomToken;
 import 'package:routed/src/auth/hooks.dart';
 import 'package:routed/src/auth/session_auth.dart';
 import 'package:routed/src/context/context.dart';
@@ -746,22 +746,24 @@ class AuthManager {
     JwtPayload payload,
     AuthUser user,
   ) async {
-    if (!shouldRefreshJwtClaims(payload.claims, options.sessionUpdateAge)) {
+    final refreshed = await refreshAuthJwtTokenIfNeeded(
+      options: options.jwtOptions,
+      claims: payload.claims,
+      updateAge: options.sessionUpdateAge,
+      resolveClaims: (claims) =>
+          resolveAuthJwtClaimsWithCallbacks<EngineContext>(
+            callbacks: callbacks,
+            context: ctx,
+            user: user,
+            strategy: AuthSessionStrategy.jwt,
+            token: claims,
+          ),
+    );
+    if (refreshed == null) {
       return null;
     }
-    final claims = await resolveAuthJwtClaimsWithCallbacks<EngineContext>(
-      callbacks: callbacks,
-      context: ctx,
-      user: user,
-      strategy: AuthSessionStrategy.jwt,
-      token: payload.claims,
-    );
-    final issued = issueAuthJwtToken(
-      options: options.jwtOptions,
-      claims: claims,
-    );
-    ctx.response.cookies.add(issued.cookie);
-    return _JwtRefresh(token: issued.token, expiresAt: issued.expiresAt);
+    ctx.response.cookies.add(refreshed.cookie);
+    return _JwtRefresh(token: refreshed.token, expiresAt: refreshed.expiresAt);
   }
 
   DateTime? _sessionExpiry(EngineContext ctx) {

@@ -111,6 +111,25 @@ AuthIssuedJwtToken issueAuthJwtToken({
   return AuthIssuedJwtToken(token: token, expiresAt: expiresAt, cookie: cookie);
 }
 
+/// Reissues JWT token/cookie only when [claims] indicate refresh is required.
+Future<AuthIssuedJwtToken?> refreshAuthJwtTokenIfNeeded({
+  required JwtSessionOptions options,
+  required Map<String, dynamic> claims,
+  required Duration? updateAge,
+  required FutureOr<Map<String, dynamic>> Function(Map<String, dynamic> claims)
+  resolveClaims,
+  DateTime? now,
+}) async {
+  if (!shouldRefreshJwtClaims(claims, updateAge, now: now)) {
+    return null;
+  }
+
+  final nextClaims = await Future<Map<String, dynamic>>.value(
+    resolveClaims(Map<String, dynamic>.from(claims)),
+  );
+  return issueAuthJwtToken(options: options, claims: nextClaims);
+}
+
 /// Callback invoked after a JWT has been successfully verified.
 typedef AuthJwtVerifiedCallback<TContext> =
     FutureOr<void> Function(JwtPayload payload, TContext context);
