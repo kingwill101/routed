@@ -1,6 +1,7 @@
 export 'array_lock.dart';
 export 'array_store.dart';
 export 'array_store_factory.dart';
+export 'data_cache_manager.dart';
 export 'file_lock.dart';
 export 'file_store.dart';
 export 'file_store_factory.dart';
