@@ -37,7 +37,8 @@ Core reusable runtime modules are now published under `server_*` packages:
 - `server_auth` for auth providers and auth runtime.
 - `server_data` for cache/storage/session/rate-limit runtime.
 
-Routed keeps compatibility re-exports for now, but new integrations should prefer direct `server_*` imports.
+Routed does not re-export extracted `server_*` modules. Import those packages
+directly when you use shared contracts or reusable auth/data runtime features.
 
 ## Quick start
 
@@ -62,11 +63,13 @@ Future<void> main() async {
 
 ## Auth
 
-Use `package:routed/auth.dart` for auth providers, routes, and middleware.
+Use `package:routed/auth.dart` for routed auth routes/middleware and
+`package:server_auth/server_auth.dart` for auth provider models/factories.
 
 ```dart
 import 'package:routed/auth.dart';
 import 'package:routed/routed.dart';
+import 'package:server_auth/server_auth.dart';
 
 Future<void> main() async {
   final engine = await Engine.createFull();

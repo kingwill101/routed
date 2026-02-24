@@ -13,8 +13,6 @@ Routed now uses a split architecture:
 - `server_auth`: framework-agnostic auth models/providers/flows.
 - `server_data`: framework-agnostic cache/storage/session/rate-limit runtime.
 
-Compatibility re-exports still exist in `routed`, but new code should import from `server_*` directly.
-
 ## Import map
 
 | Old | New |
@@ -38,4 +36,4 @@ Compatibility re-exports still exist in `routed`, but new code should import fro
 
 - `server_contracts` should only contain contracts and contract-level DTO/exception surfaces.
 - `server_*` packages must not import Routed runtime internals.
-- Compatibility wrappers in `routed` are temporary and will be removed after the compatibility window.
+- Extracted `server_*` modules should be imported directly; do not rely on Routed wrapper exports.
