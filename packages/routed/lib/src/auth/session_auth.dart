@@ -9,6 +9,9 @@ import 'package:server_auth/server_auth.dart'
         RememberTokenStore,
         InMemoryRememberTokenStore,
         authPrincipalAttribute;
+import 'package:server_auth/server_auth.dart'
+    as server_auth
+    show AuthGuard, GuardResult;
 import 'package:routed/src/context/context.dart';
 import 'package:routed/src/response.dart';
 import 'package:routed/src/router/types.dart';
@@ -312,19 +315,8 @@ class SessionAuth {
   }
 }
 
-class GuardResult {
-  const GuardResult._(this.allowed, this.response);
-
-  final bool allowed;
-  final Response? response;
-
-  static GuardResult allow() => const GuardResult._(true, null);
-
-  static GuardResult deny([Response? response]) =>
-      GuardResult._(false, response);
-}
-
-typedef AuthGuard = FutureOr<GuardResult> Function(EngineContext ctx);
+typedef GuardResult = server_auth.GuardResult<Response>;
+typedef AuthGuard = server_auth.AuthGuard<EngineContext, Response>;
 
 class GuardRegistry extends NamedRegistry<AuthGuard> {
   GuardRegistry._();
@@ -377,7 +369,7 @@ AuthGuard requireAuthenticated({
   return (EngineContext ctx) {
     final principal = auth.current(ctx);
     if (principal != null) {
-      return GuardResult.allow();
+      return const GuardResult.allow();
     }
     ctx.response.statusCode = HttpStatus.unauthorized;
     ctx.response.headers.set('WWW-Authenticate', 'Bearer realm="$realm"');
@@ -407,13 +399,13 @@ AuthGuard requireRoles(
     }
 
     if (expected.isEmpty) {
-      return GuardResult.allow();
+      return const GuardResult.allow();
     }
 
     final matches = any
         ? expected.any(principal.hasRole)
         : expected.every(principal.hasRole);
-    return matches ? GuardResult.allow() : GuardResult.deny();
+    return matches ? const GuardResult.allow() : const GuardResult.deny();
   };
 }
 
