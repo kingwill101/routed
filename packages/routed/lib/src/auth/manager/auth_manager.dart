@@ -1,5 +1,4 @@
 import 'dart:async';
-import 'dart:convert';
 import 'dart:io';
 
 import 'package:http/http.dart' as http;
@@ -46,14 +45,13 @@ import 'package:server_auth/server_auth.dart'
         JwtVerifier,
         OAuthProvider,
         OAuthTokenResponse,
-        base64UrlNoPadding,
+        pkceS256CodeChallenge,
         secureRandomToken;
 import 'package:routed/src/auth/hooks.dart';
 import 'package:routed/src/auth/session_auth.dart';
 import 'package:routed/src/context/context.dart';
 import 'package:routed/src/events/event.dart';
 import 'package:routed/src/events/event_manager.dart';
-import 'package:routed/src/crypto/crypto.dart';
 
 import 'auth_options.dart';
 
@@ -244,7 +242,7 @@ class AuthManager {
     String? challenge;
     if (provider.usePkce) {
       verifier = secureRandomToken(length: 48);
-      challenge = base64UrlNoPadding(sha256Bytes(verifier));
+      challenge = pkceS256CodeChallenge(verifier);
       ctx.setSession('${options.pkceKey}.${provider.id}', verifier);
     }
     final codeChallengeMethod = challenge == null ? null : 'S256';
@@ -962,11 +960,6 @@ class AuthManager {
     }
 
     return profile;
-  }
-
-  List<int> sha256Bytes(String value) {
-    final data = utf8.encode(value);
-    return sha256Digest(data);
   }
 }
 

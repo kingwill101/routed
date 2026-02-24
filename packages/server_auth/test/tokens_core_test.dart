@@ -24,4 +24,11 @@ void main() {
     expect(encoded, equals('_w'));
     expect(encoded.contains('='), isFalse);
   });
+
+  test('pkceS256CodeChallenge matches RFC 7636 example', () {
+    const verifier = 'dBjftJeZ4CVP-mB92K27uhbUJU1p1r_wW1gFWFOEjXk';
+    final challenge = pkceS256CodeChallenge(verifier);
+
+    expect(challenge, equals('E9Melhoa2OwvFrEMTJguCHaoeK1t8URWbuGJSstw-cM'));
+  });
 }
