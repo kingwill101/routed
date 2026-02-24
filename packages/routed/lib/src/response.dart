@@ -3,7 +3,7 @@ import 'dart:convert';
 import 'dart:io';
 import 'dart:typed_data';
 
-import 'package:server_data/server_data.dart' show SessionResponse;
+import 'package:server_data/sessions.dart' show SessionResponse;
 
 typedef ResponseBodyFilter = List<int> Function(List<int> body);
 
