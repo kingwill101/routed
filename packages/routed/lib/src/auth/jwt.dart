@@ -8,11 +8,9 @@ import 'package:server_auth/server_auth.dart'
         JwtAuthException,
         AuthJwtVerifiedCallback,
         buildBearerAuthenticateHeader,
-        JwtBearerVerificationResult,
         JwtOptions,
         JwtVerifier,
-        verifyJwtBearerAuthorization,
-        writeJwtPayloadAttributes;
+        verifyJwtBearerAuthorizationAndWriteAttributes;
 
 /// Creates a JWT authentication [Middleware] with the given [options].
 Middleware jwtAuthentication(
@@ -39,21 +37,14 @@ Middleware jwtAuthenticationWithVerifier(
     }
 
     final headerValue = ctx.request.header(options.header);
-    JwtBearerVerificationResult verification;
     try {
-      verification = await verifyJwtBearerAuthorization(
+      await verifyJwtBearerAuthorizationAndWriteAttributes(
         authorizationHeader: headerValue,
         verifier: verifier,
-      );
-      final payload = verification.payload;
-      writeJwtPayloadAttributes(
-        payload,
         setAttribute: ctx.request.setAttribute,
+        context: ctx,
+        onVerified: onVerified,
       );
-
-      if (onVerified != null) {
-        await onVerified(payload, ctx);
-      }
 
       return await next();
     } on JwtAuthException catch (error) {

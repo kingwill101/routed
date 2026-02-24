@@ -4,12 +4,10 @@ import 'package:http/http.dart' as http;
 import 'package:server_auth/server_auth.dart'
     show
         AuthOAuthValidatedCallback,
-        OAuthBearerValidationResult,
         OAuth2Exception,
         OAuth2TokenIntrospector,
         OAuthIntrospectionOptions,
-        validateOAuthBearerAuthorization,
-        writeOAuthValidationAttributes;
+        validateOAuthBearerAuthorizationAndWriteAttributes;
 import 'package:routed/src/context/context.dart';
 import 'package:routed/src/router/types.dart';
 
@@ -43,28 +41,21 @@ Middleware oauth2Introspection(
   final introspector = OAuth2TokenIntrospector(options, httpClient: httpClient);
 
   return (EngineContext ctx, Next next) async {
-    OAuthBearerValidationResult validation;
     try {
-      validation = await validateOAuthBearerAuthorization(
+      await validateOAuthBearerAuthorizationAndWriteAttributes(
         authorizationHeader: ctx.request.header(
           HttpHeaders.authorizationHeader,
         ),
         introspector: introspector,
+        setAttribute: ctx.request.setAttribute,
+        context: ctx,
+        onValidated: onValidated,
       );
     } on OAuth2Exception catch (error) {
       ctx.response
         ..statusCode = HttpStatus.unauthorized
         ..write(error.message);
       return ctx.response;
-    }
-    final result = validation.result;
-    writeOAuthValidationAttributes(
-      validation,
-      setAttribute: ctx.request.setAttribute,
-    );
-
-    if (onValidated != null) {
-      await onValidated(result, ctx);
     }
 
     return await next();

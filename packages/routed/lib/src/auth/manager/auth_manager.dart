@@ -9,18 +9,15 @@ import 'package:server_auth/server_auth.dart'
         AuthCredentials,
         requireAuthorizedCredentialsRegistration,
         requireAuthorizedCredentialsSignIn,
-        resolveAuthJwtClaimsWithCallbacks,
         resolveAuthRedirectWithCallbacks,
+        resolveAuthSignInResultForStrategyWithCallbacks,
         resolveAuthSessionPayloadWithCallbacks,
-        resolveAuthSignInRedirectWithCallbacks,
-        issueAuthJwtSessionWithCallbacks,
+        resolveAuthSignInRedirectTarget,
         AuthPrincipal,
         AuthProvider,
-        authProviderSummaries,
         baseUrlFromUri,
         resolveOAuthAuthorizationStart,
         resolveOAuthCallbackSignInForProvider,
-        resolveAuthProviderById,
         AuthResult,
         AuthSession,
         AuthSessionStrategy,
@@ -31,19 +28,19 @@ import 'package:server_auth/server_auth.dart'
         resolveAuthEmailVerificationSignIn,
         startAuthEmailSignIn,
         resolveBearerOrCookieToken,
+        resolveAuthSessionForStrategyWithCallbacks,
+        resolveAuthSessionUpdateForStrategyWithCallbacks,
         resolveCsrfToken,
         validateCsrfToken,
         CallbackProvider,
         CredentialsProvider,
         EmailProvider,
-        resolveAuthJwtSessionWithRefresh,
         OAuthProvider,
         authSessionIssuedAtKey,
         AuthOptions,
         resolveAuthSessionMaxAgeSeconds,
         resolveAuthSessionExpiry,
         serializeAuthSessionIssuedAt,
-        syncAuthSessionRefresh,
         secureRandomToken;
 import 'package:routed/src/auth/hooks.dart';
 import 'package:routed/src/auth/session_auth.dart';
@@ -70,12 +67,6 @@ class AuthManager {
   http.Client get httpClient => _httpClient ??= http.Client();
 
   AuthCallbacks<EngineContext> get callbacks => options.callbacks;
-
-  AuthProvider? resolveProvider(String id) =>
-      resolveAuthProviderById(options.providers, id);
-
-  List<Map<String, dynamic>> providerSummaries() =>
-      authProviderSummaries(options.providers);
 
   String csrfToken(EngineContext ctx) {
     final token = resolveCsrfToken(
@@ -323,73 +314,51 @@ class AuthManager {
     EngineContext ctx,
     AuthPrincipal principal,
   ) async {
-    final user = AuthUser.fromPrincipal(principal);
-    switch (options.sessionStrategy) {
-      case AuthSessionStrategy.session:
-        _applySessionMaxAge(ctx);
-        await sessionAuth.login(ctx, principal);
-        _setSessionIssuedAt(ctx, DateTime.now().toUtc());
-        final expires = _sessionExpiry(ctx);
-        return AuthSession(
-          user: user,
-          expiresAt: expires,
-          strategy: AuthSessionStrategy.session,
-        );
-      case AuthSessionStrategy.jwt:
-        final issued = await issueAuthJwtSessionWithCallbacks<EngineContext>(
+    final resolved =
+        await resolveAuthSessionUpdateForStrategyWithCallbacks<EngineContext>(
+          strategy: options.sessionStrategy,
           callbacks: callbacks,
           context: ctx,
-          options: options.jwtOptions,
-          user: user,
-          strategy: AuthSessionStrategy.jwt,
+          principal: principal,
+          jwtOptions: options.jwtOptions,
+          applySessionMaxAge: () => _applySessionMaxAge(ctx),
+          persistSessionPrincipal: (nextPrincipal) =>
+              sessionAuth.login(ctx, nextPrincipal),
+          writeSessionIssuedAt: (issuedAtUtc) =>
+              _setSessionIssuedAt(ctx, issuedAtUtc),
+          resolveSessionExpiry: () => _sessionExpiry(ctx),
         );
-        ctx.response.cookies.add(issued.issued.cookie);
-        return issued.session;
+    final jwtCookie = resolved.jwtCookie;
+    if (jwtCookie != null) {
+      ctx.response.cookies.add(jwtCookie);
     }
+    return resolved.session;
   }
 
   Future<AuthSession?> resolveSession(EngineContext ctx) async {
-    switch (options.sessionStrategy) {
-      case AuthSessionStrategy.session:
-        final principal = sessionAuth.current(ctx);
-        if (principal == null) return null;
-        _applySessionMaxAge(ctx);
-        _refreshSessionIfNeeded(ctx);
-        final user = AuthUser.fromPrincipal(principal);
-        final expires = _sessionExpiry(ctx);
-        return AuthSession(
-          user: user,
-          expiresAt: expires,
-          strategy: AuthSessionStrategy.session,
-        );
-      case AuthSessionStrategy.jwt:
-        final resolved = await resolveAuthJwtSessionWithRefresh(
-          token: _resolveJwtToken(ctx),
-          options: options.jwtOptions,
-          updateAge: options.sessionUpdateAge,
+    final resolved =
+        await resolveAuthSessionForStrategyWithCallbacks<EngineContext>(
+          strategy: options.sessionStrategy,
+          callbacks: callbacks,
+          context: ctx,
+          jwtOptions: options.jwtOptions,
+          sessionUpdateAge: options.sessionUpdateAge,
+          readSessionPrincipal: () => sessionAuth.current(ctx),
+          applySessionMaxAge: () => _applySessionMaxAge(ctx),
+          readSessionIssuedAt: () =>
+              ctx.getSession<String>(authSessionIssuedAtKey),
+          writeSessionIssuedAt: (issuedAtUtc) =>
+              _setSessionIssuedAt(ctx, issuedAtUtc),
+          touchSession: ctx.session.touch,
+          resolveSessionExpiry: () => _sessionExpiry(ctx),
+          readJwtToken: () => _resolveJwtToken(ctx),
           httpClient: httpClient,
-          resolveClaims: (claims, user) =>
-              resolveAuthJwtClaimsWithCallbacks<EngineContext>(
-                callbacks: callbacks,
-                context: ctx,
-                user: user,
-                strategy: AuthSessionStrategy.jwt,
-                token: claims,
-              ),
         );
-        if (resolved == null) {
-          return null;
-        }
-        if (resolved.refreshCookie != null) {
-          ctx.response.cookies.add(resolved.refreshCookie!);
-        }
-        return AuthSession(
-          user: resolved.user,
-          expiresAt: resolved.expiresAt,
-          strategy: AuthSessionStrategy.jwt,
-          token: resolved.token,
-        );
+    final refreshCookie = resolved.refreshCookie;
+    if (refreshCookie != null) {
+      ctx.response.cookies.add(refreshCookie);
     }
+    return resolved.session;
   }
 
   Future<String?> resolveRedirect(
@@ -470,8 +439,8 @@ class AuthManager {
     AuthCredentials? credentials,
     bool isNewUser = false,
   }) async {
-    final resolvedDecisionRedirect =
-        await resolveAuthSignInRedirectWithCallbacks<EngineContext>(
+    final resolvedRedirect =
+        await resolveAuthSignInRedirectTarget<EngineContext>(
           callbacks: callbacks,
           context: ctx,
           user: user,
@@ -482,13 +451,9 @@ class AuthManager {
           credentials: credentials,
           isNewUser: isNewUser,
           callbackUrl: redirectUrl,
+          resolveRedirect: (candidate) =>
+              resolveRedirect(ctx, candidate, provider: provider),
         );
-
-    final resolvedRedirect = await resolveRedirect(
-      ctx,
-      resolvedDecisionRedirect ?? redirectUrl,
-      provider: provider,
-    );
 
     if (isNewUser) {
       await _emitAuthEvent(
@@ -502,72 +467,52 @@ class AuthManager {
       );
     }
 
-    switch (options.sessionStrategy) {
-      case AuthSessionStrategy.session:
-        _applySessionMaxAge(ctx);
-        await sessionAuth.login(ctx, user.toPrincipal());
-        _setSessionIssuedAt(ctx, DateTime.now().toUtc());
-        final expires = _sessionExpiry(ctx);
-        final session = AuthSession(
-          user: user,
-          expiresAt: expires,
-          strategy: AuthSessionStrategy.session,
-        );
-        await _emitAuthEvent(
-          ctx,
-          AuthSignInEvent(
-            context: ctx,
-            user: user,
-            session: session,
-            strategy: AuthSessionStrategy.session,
-            provider: provider,
-            account: account,
-            profile: profile,
-            credentials: credentials,
-            redirectUrl: resolvedRedirect,
-            isNewUser: isNewUser,
-          ),
-        );
-        return AuthResult(
-          user: user,
-          session: session,
-          redirectUrl: resolvedRedirect,
-        );
-      case AuthSessionStrategy.jwt:
-        final issued = await issueAuthJwtSessionWithCallbacks<EngineContext>(
+    DateTime? sessionExpiresAt;
+    if (options.sessionStrategy == AuthSessionStrategy.session) {
+      _applySessionMaxAge(ctx);
+      await sessionAuth.login(ctx, user.toPrincipal());
+      _setSessionIssuedAt(ctx, DateTime.now().toUtc());
+      sessionExpiresAt = _sessionExpiry(ctx);
+    }
+
+    final resolvedSignIn =
+        await resolveAuthSignInResultForStrategyWithCallbacks<EngineContext>(
           callbacks: callbacks,
           context: ctx,
-          options: options.jwtOptions,
+          strategy: options.sessionStrategy,
           user: user,
-          strategy: AuthSessionStrategy.jwt,
+          redirectUrl: resolvedRedirect,
+          jwtOptions: options.jwtOptions,
+          sessionExpiresAt: sessionExpiresAt,
           provider: provider,
           account: account,
           profile: profile,
           isNewUser: isNewUser,
         );
-        ctx.response.cookies.add(issued.issued.cookie);
-        final session = issued.session;
-        await _emitAuthEvent(
-          ctx,
-          AuthSignInEvent(
-            context: ctx,
-            user: user,
-            session: session,
-            strategy: AuthSessionStrategy.jwt,
-            provider: provider,
-            account: account,
-            profile: profile,
-            credentials: credentials,
-            redirectUrl: resolvedRedirect,
-            isNewUser: isNewUser,
-          ),
-        );
-        return AuthResult(
-          user: user,
-          session: session,
-          redirectUrl: resolvedRedirect,
-        );
+
+    final issuedJwt = resolvedSignIn.issuedJwt;
+    if (issuedJwt != null) {
+      ctx.response.cookies.add(issuedJwt.cookie);
     }
+
+    final result = resolvedSignIn.result;
+    final session = result.session;
+    await _emitAuthEvent(
+      ctx,
+      AuthSignInEvent(
+        context: ctx,
+        user: user,
+        session: session,
+        strategy: options.sessionStrategy,
+        provider: provider,
+        account: account,
+        profile: profile,
+        credentials: credentials,
+        redirectUrl: resolvedRedirect,
+        isNewUser: isNewUser,
+      ),
+    );
+    return result;
   }
 
   void _applySessionMaxAge(EngineContext ctx) {
@@ -584,15 +529,6 @@ class AuthManager {
     ctx.setSession(
       authSessionIssuedAtKey,
       serializeAuthSessionIssuedAt(issuedAt),
-    );
-  }
-
-  void _refreshSessionIfNeeded(EngineContext ctx) {
-    syncAuthSessionRefresh(
-      issuedAtValue: ctx.getSession<String>(authSessionIssuedAtKey),
-      updateAge: options.sessionUpdateAge,
-      writeIssuedAt: (issuedAtUtc) => _setSessionIssuedAt(ctx, issuedAtUtc),
-      touchSession: ctx.session.touch,
     );
   }
 
