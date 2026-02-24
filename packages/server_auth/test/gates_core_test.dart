@@ -76,4 +76,56 @@ void main() {
     );
     expect(allowed, isFalse);
   });
+
+  test('AuthGateService evaluates gates and notifies observers', () async {
+    final registry = AuthGateRegistry<String>();
+    final service = AuthGateService<String>(registry: registry);
+    final evaluations = <AuthGateEvaluation<String>>[];
+
+    service.addObserver(evaluations.add);
+    service.register('posts.publish', (_) => true);
+
+    final allowed = await service.can(
+      'posts.publish',
+      context: 'ctx-1',
+      principal: AuthPrincipal(id: 'u1'),
+      payload: {'id': 1},
+    );
+
+    expect(allowed, isTrue);
+    expect(evaluations, hasLength(1));
+    expect(evaluations.single.ability, equals('posts.publish'));
+    expect(evaluations.single.allowed, isTrue);
+    expect(evaluations.single.context, equals('ctx-1'));
+  });
+
+  test(
+    'AuthGateService principal resolver and authorize work as expected',
+    () async {
+      final service = AuthGateService<String>(
+        principalResolver: (context) =>
+            context == 'auth' ? AuthPrincipal(id: 'u1') : null,
+      );
+
+      service.register('auth-only', (ctx) => ctx.principal != null);
+      service.register('always-deny', (_) => false);
+
+      expect(await service.can('auth-only', context: 'auth'), isTrue);
+      expect(await service.can('auth-only', context: 'guest'), isFalse);
+
+      await expectLater(
+        service.authorize('always-deny', context: 'ctx'),
+        throwsA(isA<AuthGateViolation<String>>()),
+      );
+    },
+  );
+
+  test('AuthGateService any/all evaluate multiple abilities', () async {
+    final service = AuthGateService<String>();
+    service.register('a', (_) => true);
+    service.register('b', (_) => false);
+
+    expect(await service.any(const ['b', 'a'], context: 'ctx'), isTrue);
+    expect(await service.all(const ['a', 'b'], context: 'ctx'), isFalse);
+  });
 }

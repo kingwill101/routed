@@ -140,3 +140,140 @@ class AuthGateRegistry<TContext> {
   /// All registered ability names.
   Iterable<String> get abilities => _entries.keys;
 }
+
+/// Framework-agnostic gate evaluation service.
+class AuthGateService<TContext> {
+  AuthGateService({
+    AuthGateRegistry<TContext>? registry,
+    this.principalResolver,
+  }) : registry = registry ?? AuthGateRegistry<TContext>();
+
+  /// Backing registry for ability callbacks.
+  final AuthGateRegistry<TContext> registry;
+
+  /// Optional resolver used when [can] is called without an explicit principal.
+  final AuthPrincipal? Function(TContext context)? principalResolver;
+
+  final List<AuthGateObserver<TContext>> _observers =
+      <AuthGateObserver<TContext>>[];
+
+  void register(String ability, AuthGateCallback<TContext> callback) {
+    registry.register(ability, callback);
+  }
+
+  void registerAll(Map<String, AuthGateCallback<TContext>> entries) {
+    registry.registerAll(entries);
+  }
+
+  void unregister(String ability) {
+    registry.unregister(ability);
+  }
+
+  void addObserver(AuthGateObserver<TContext> observer) {
+    _observers.add(observer);
+  }
+
+  void removeObserver(AuthGateObserver<TContext> observer) {
+    _observers.remove(observer);
+  }
+
+  Future<bool> can(
+    String ability, {
+    required TContext context,
+    AuthPrincipal? principal,
+    Object? payload,
+  }) async {
+    final callback = registry.resolve(ability);
+    if (callback == null) {
+      throw AuthGateRegistrationException(
+        'Ability "$ability" is not registered.',
+      );
+    }
+
+    final resolvedPrincipal = principal ?? principalResolver?.call(context);
+    final evaluationContext = AuthGateEvaluationContext<TContext>(
+      context: context,
+      principal: resolvedPrincipal,
+      payload: payload,
+    );
+
+    final allowed = await Future<bool>.value(callback(evaluationContext));
+    _notifyObservers(
+      AuthGateEvaluation<TContext>(
+        ability: ability,
+        allowed: allowed,
+        context: context,
+        principal: resolvedPrincipal,
+        payload: payload,
+      ),
+    );
+    return allowed;
+  }
+
+  Future<void> authorize(
+    String ability, {
+    required TContext context,
+    AuthPrincipal? principal,
+    Object? payload,
+    String? message,
+  }) async {
+    final allowed = await can(
+      ability,
+      context: context,
+      principal: principal,
+      payload: payload,
+    );
+    if (!allowed) {
+      throw AuthGateViolation<TContext>(
+        ability: ability,
+        context: context,
+        message: message,
+        payload: payload,
+      );
+    }
+  }
+
+  Future<bool> any(
+    Iterable<String> abilities, {
+    required TContext context,
+    AuthPrincipal? principal,
+    Object? payload,
+  }) async {
+    for (final ability in abilities) {
+      if (await can(
+        ability,
+        context: context,
+        principal: principal,
+        payload: payload,
+      )) {
+        return true;
+      }
+    }
+    return false;
+  }
+
+  Future<bool> all(
+    Iterable<String> abilities, {
+    required TContext context,
+    AuthPrincipal? principal,
+    Object? payload,
+  }) async {
+    for (final ability in abilities) {
+      if (!await can(
+        ability,
+        context: context,
+        principal: principal,
+        payload: payload,
+      )) {
+        return false;
+      }
+    }
+    return true;
+  }
+
+  void _notifyObservers(AuthGateEvaluation<TContext> evaluation) {
+    for (final observer in List<AuthGateObserver<TContext>>.from(_observers)) {
+      observer(evaluation);
+    }
+  }
+}
