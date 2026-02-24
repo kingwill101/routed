@@ -137,6 +137,15 @@ final callbackUrl = resolveAndSanitizeRedirectCandidate(
   fallbackHost: 'app.test',
   fallbackScheme: 'https',
 );
+
+final callbackFromResolver = await resolveAndSanitizeRedirectWithResolver(
+  payload,
+  queryParameters,
+  requestUri: requestUri,
+  fallbackHost: 'app.test',
+  fallbackScheme: 'https',
+  resolveRedirect: (candidate) async => candidate,
+);
 ```
 
 ## Authorization and gates example

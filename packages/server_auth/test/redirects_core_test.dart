@@ -124,4 +124,46 @@ void main() {
       expect(sanitized, isNull);
     },
   );
+
+  test(
+    'resolveAndSanitizeRedirectWithResolver resolves then sanitizes callback result',
+    () async {
+      final resolved = await resolveAndSanitizeRedirectWithResolver(
+        <String, dynamic>{'callbackUrl': '/one'},
+        <String, String>{},
+        requestUri: Uri.parse('https://app.test/auth/signin'),
+        resolveRedirect: (candidate) => '/two?from=${candidate ?? ''}',
+      );
+
+      expect(resolved, equals('/two?from=/one'));
+    },
+  );
+
+  test(
+    'resolveAndSanitizeRedirectWithResolver falls back to candidate when callback returns null',
+    () async {
+      final resolved = await resolveAndSanitizeRedirectWithResolver(
+        <String, dynamic>{'callbackUrl': '/one'},
+        <String, String>{'callbackUrl': '/two'},
+        requestUri: Uri.parse('https://app.test/auth/signin'),
+        resolveRedirect: (_) => null,
+      );
+
+      expect(resolved, equals('/one'));
+    },
+  );
+
+  test(
+    'resolveAndSanitizeRedirectWithResolver rejects cross-origin callback result',
+    () async {
+      final resolved = await resolveAndSanitizeRedirectWithResolver(
+        <String, dynamic>{'callbackUrl': '/one'},
+        <String, String>{},
+        requestUri: Uri.parse('https://app.test/auth/signin'),
+        resolveRedirect: (_) => 'https://evil.test/pwn',
+      );
+
+      expect(resolved, isNull);
+    },
+  );
 }

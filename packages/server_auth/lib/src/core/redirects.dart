@@ -1,3 +1,5 @@
+import 'dart:async';
+
 /// Builds a base URL (`scheme://host[:port]`) from [uri].
 String baseUrlFromUri(
   Uri uri, {
@@ -89,6 +91,44 @@ String? resolveAndSanitizeRedirectCandidate(
   );
   return sanitizeRedirectUrl(
     candidate,
+    requestUri: requestUri,
+    fallbackHost: fallbackHost,
+    fallbackScheme: fallbackScheme,
+  );
+}
+
+/// Resolves and sanitizes redirect values using callback precedence plus an
+/// optional external resolver.
+///
+/// The flow is:
+/// 1. Resolve candidate from payload/query via [resolveRedirectCandidate].
+/// 2. Sanitize candidate for same-origin safety.
+/// 3. Invoke [resolveRedirect] with sanitized candidate.
+/// 4. Sanitize resolved value again (or fallback to candidate when null).
+Future<String?> resolveAndSanitizeRedirectWithResolver(
+  Map<String, dynamic> payload,
+  Map<String, String> queryParameters, {
+  required Uri requestUri,
+  required FutureOr<String?> Function(String? candidate) resolveRedirect,
+  String? fallbackHost,
+  String? fallbackScheme,
+  String payloadCallbackKey = 'callbackUrl',
+  String payloadRedirectKey = 'redirect',
+  String queryCallbackKey = 'callbackUrl',
+}) async {
+  final candidate = resolveAndSanitizeRedirectCandidate(
+    payload,
+    queryParameters,
+    requestUri: requestUri,
+    fallbackHost: fallbackHost,
+    fallbackScheme: fallbackScheme,
+    payloadCallbackKey: payloadCallbackKey,
+    payloadRedirectKey: payloadRedirectKey,
+    queryCallbackKey: queryCallbackKey,
+  );
+  final resolved = await Future<String?>.value(resolveRedirect(candidate));
+  return sanitizeRedirectUrl(
+    resolved ?? candidate,
     requestUri: requestUri,
     fallbackHost: fallbackHost,
     fallbackScheme: fallbackScheme,
