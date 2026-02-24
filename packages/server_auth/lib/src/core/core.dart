@@ -4,6 +4,7 @@ export 'bearer.dart';
 export 'callbacks.dart';
 export 'config_schema.dart';
 export 'config_utils.dart';
+export 'csrf.dart';
 export 'exceptions.dart';
 export 'gates.dart';
 export 'guards.dart';

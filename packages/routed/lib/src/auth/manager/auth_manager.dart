@@ -30,6 +30,8 @@ import 'package:server_auth/server_auth.dart'
         AuthVerificationTokenStore,
         AuthVerificationToken,
         InMemoryAuthVerificationTokenStore,
+        resolveCsrfToken,
+        validateCsrfToken,
         extractBearerToken,
         CallbackProvider,
         CredentialsProvider,
@@ -79,29 +81,24 @@ class AuthManager {
       authProviderSummaries(options.providers);
 
   String csrfToken(EngineContext ctx) {
-    final existing = ctx.getSession<String>(options.csrfKey);
-    if (existing != null && existing.isNotEmpty) {
-      return existing;
-    }
-    final token = secureRandomToken();
+    final token = resolveCsrfToken(
+      existingToken: ctx.getSession<String>(options.csrfKey),
+      generateToken: secureRandomToken,
+    );
     ctx.setSession(options.csrfKey, token);
     return token;
   }
 
   bool validateCsrf(EngineContext ctx, Map<String, dynamic> payload) {
-    if (!options.enforceCsrf) {
-      return true;
-    }
-    final expected = ctx.getSession<String>(options.csrfKey);
-    if (expected == null || expected.isEmpty) {
-      return false;
-    }
-    final header =
+    final headerToken =
         ctx.request.headers.value('x-csrf-token') ??
         ctx.request.headers.value('X-CSRF-Token');
-    final formToken = payload['_csrf']?.toString();
-    final token = header ?? formToken;
-    return token != null && token == expected;
+    return validateCsrfToken(
+      expectedToken: ctx.getSession<String>(options.csrfKey),
+      headerToken: headerToken,
+      formToken: payload['_csrf']?.toString(),
+      enforce: options.enforceCsrf,
+    );
   }
 
   Future<AuthResult> signInWithCredentials(
