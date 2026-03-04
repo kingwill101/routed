@@ -16,9 +16,11 @@ environment:
   sdk: ">=3.9.0 <4.0.0"
 
 dependencies:
+  args: ^2.7.0
   artisanal: ^0.1.2
   file: ^7.0.1
   path: ^1.9.1
+  routed_core: ^0.1.0
   stream_transform: ^2.1.1
   watcher: ^1.2.1
   yaml: ^3.1.3
