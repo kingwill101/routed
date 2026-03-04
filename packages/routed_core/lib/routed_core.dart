@@ -22,6 +22,7 @@ export 'src/config/specs/views.dart';
 export 'src/events/event.dart';
 export 'src/events/event_manager.dart';
 export 'src/events/signals.dart';
+export 'src/events/cache/cache_events.dart';
 export 'src/events/system_events.dart';
 export 'src/observability/errors.dart';
 export 'src/observability/health.dart';
