@@ -11,6 +11,7 @@ export 'src/config/specs/http.dart';
 export 'src/config/specs/localization.dart';
 export 'src/config/specs/routing.dart';
 export 'src/config/specs/static_assets.dart';
+export 'src/config/specs/storage.dart';
 export 'src/config/specs/storage_drivers.dart';
 export 'src/config/specs/session.dart';
 export 'src/config/specs/session_drivers.dart';
