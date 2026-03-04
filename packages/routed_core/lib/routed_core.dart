@@ -8,6 +8,7 @@ export 'src/config/spec.dart';
 export 'src/config/schema.dart';
 export 'src/events/event.dart';
 export 'src/events/event_manager.dart';
+export 'src/events/signals.dart';
 export 'src/events/system_events.dart';
 export 'src/provider/provider.dart';
 export 'src/provider/config_utils.dart';
