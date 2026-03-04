@@ -136,29 +136,7 @@ class Http2Config {
   }
 }
 
-/// Configuration for security features.
-///
-/// This class groups security-related settings that protect the application
-/// from common attacks and vulnerabilities.
-class SecurityConfig {
-  /// Maximum request size in bytes.
-  ///
-  /// Requests larger than this will be rejected to prevent memory exhaustion
-  /// attacks. Default is 5MB.
-  final int maxRequestSize;
-
-  /// List of trusted proxy IP addresses or CIDR ranges.
-  ///
-  /// When the application runs behind proxies, this list defines which proxies
-  /// are trusted to provide the real client IP address.
-  final List<String> trustedProxies;
-
-  /// Creates a security configuration with the given settings.
-  const SecurityConfig({
-    this.maxRequestSize = 5 * 1024 * 1024, // 5MB default
-    this.trustedProxies = const [],
-  });
-}
+typedef SecurityConfig = security.SecurityConfig;
 
 /// Configuration for feature flags.
 ///

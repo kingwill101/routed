@@ -1,3 +1,17 @@
+/// Legacy top-level security configuration model.
+class SecurityConfig {
+  /// Maximum request size in bytes.
+  final int maxRequestSize;
+
+  /// List of trusted proxy IP addresses or CIDR ranges.
+  final List<String> trustedProxies;
+
+  const SecurityConfig({
+    this.maxRequestSize = 5 * 1024 * 1024,
+    this.trustedProxies = const [],
+  });
+}
+
 /// Configuration for Cross-Origin Resource Sharing (CORS).
 class CorsConfig {
   /// Whether CORS is enabled.

@@ -3,6 +3,12 @@ import 'package:test/test.dart';
 
 void main() {
   group('engine security models', () {
+    test('legacy security config defaults remain stable', () {
+      const config = SecurityConfig();
+      expect(config.maxRequestSize, equals(5 * 1024 * 1024));
+      expect(config.trustedProxies, isEmpty);
+    });
+
     test('cors defaults remain stable', () {
       const config = CorsConfig();
       expect(config.enabled, isFalse);
