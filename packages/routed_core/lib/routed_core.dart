@@ -3,6 +3,7 @@ library;
 export 'src/container/container.dart';
 export 'src/container/read_only_container.dart';
 export 'src/config/config.dart';
+export 'src/config/registry.dart';
 export 'src/config/schema.dart';
 export 'src/events/event.dart';
 export 'src/events/event_manager.dart';
