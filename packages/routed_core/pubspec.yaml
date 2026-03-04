@@ -16,6 +16,7 @@ environment:
   sdk: ">=3.9.0 <4.0.0"
 
 dependencies:
+  event_bus: ^2.0.1
   meta: ^1.18.0
 
 dev_dependencies:
