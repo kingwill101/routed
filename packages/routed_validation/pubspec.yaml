@@ -16,6 +16,8 @@ environment:
 
 dependencies:
   intl: ^0.20.2
+  path: ^1.9.1
+  routed_core: ^0.1.0
 
 dev_dependencies:
   lints: ^6.0.0
