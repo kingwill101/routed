@@ -3,8 +3,8 @@ import 'package:routed/src/config/schema.dart';
 import 'package:routed/src/engine/config.dart';
 import 'package:routed/src/provider/config_utils.dart';
 import 'package:routed/src/provider/provider.dart';
-import 'package:routed/src/security/ip_filter.dart';
-import 'package:routed/src/security/network.dart';
+import 'package:routed_security/routed_security.dart'
+    show IpFilterAction, NetworkMatcher;
 
 import '../spec.dart';
 

@@ -57,6 +57,7 @@ dependencies:
   routed_cli: ^0.1.0
   routed_core: ^0.1.0
   routed_openapi: ^0.1.0
+  routed_security: ^0.1.0
   sentry: ^9.10.0
   server_contracts: ^0.1.0
   server_data: ^0.1.0

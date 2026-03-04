@@ -9,8 +9,8 @@ import 'package:routed/src/engine/config.dart';
 import 'package:routed/src/engine/middleware_registry.dart';
 import 'package:routed/src/provider/provider.dart';
 import 'package:routed/src/router/types.dart';
-import 'package:routed/src/security/ip_filter.dart';
-import 'package:routed/src/security/trusted_proxy_resolver.dart';
+import 'package:routed_security/routed_security.dart' show IpFilter;
+import 'package:routed_security/routed_security.dart' show TrustedProxyResolver;
 
 /// Provides security middleware defaults (CSRF, headers, size limits).
 class SecurityServiceProvider extends ServiceProvider

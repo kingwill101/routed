@@ -1,0 +1,22 @@
+name: routed_security
+description: Security primitives and middleware utilities for the Routed ecosystem.
+version: 0.1.0
+repository: https://github.com/kingwill101/routed/tree/master/packages/routed_security
+tags:
+  - security
+  - routed
+  - middleware
+
+funding:
+  - https://www.buymeacoffee.com/kingwill101
+
+resolution: workspace
+
+environment:
+  sdk: ">=3.9.0 <4.0.0"
+
+dependencies: {}
+
+dev_dependencies:
+  lints: ^6.0.0
+  test: ^1.29.0
