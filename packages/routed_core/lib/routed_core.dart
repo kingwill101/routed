@@ -31,5 +31,7 @@ export 'src/utils/deep_merge.dart';
 export 'src/utils/dot.dart';
 export 'src/utils/html_utils.dart';
 export 'src/utils/request_id.dart';
+export 'src/utils/storage_defaults.dart';
+export 'src/utils/storage_paths.dart';
 export 'src/http/etag.dart';
 export 'src/http/multipart.dart';
