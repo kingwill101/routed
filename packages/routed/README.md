@@ -41,13 +41,13 @@ Import those packages directly for framework-agnostic usage.
 | `package:routed/routed.dart` for contracts (`Repository`, `Store`, `Config`, translation contracts) | `package:server_contracts/server_contracts.dart` | Contracts only, no runtime implementations. |
 | `package:routed/routed.dart` for cache/storage/session/rate-limit runtime types | `package:server_data/server_data.dart` (or `cache.dart`, `storage.dart`, `sessions.dart`, `rate_limit.dart`) | Reusable runtime implementations across frameworks. |
 | `package:routed/routed.dart` or older auth exports for provider models/factories and auth primitives | `package:server_auth/server_auth.dart` | Framework-agnostic auth providers/runtime helpers. |
-| Routed auth middleware/routes | `package:routed/auth.dart` | Routed-specific HTTP/session wiring remains in Routed. |
+| Routed auth middleware/routes | `package:routed_auth/routed_auth.dart` | Routed-specific HTTP/session wiring now lives in the `routed_auth` package. |
 
 Example (providers from `server_auth`, wiring in Routed):
 
 ```dart
-import 'package:routed/auth.dart';
 import 'package:routed/routed.dart';
+import 'package:routed_auth/routed_auth.dart';
 import 'package:server_auth/server_auth.dart';
 ```
 
@@ -74,12 +74,12 @@ Future<void> main() async {
 
 ## Auth
 
-Use `package:routed/auth.dart` for routed auth routes/middleware and
+Use `package:routed_auth/routed_auth.dart` for routed auth routes/middleware and
 `package:server_auth/server_auth.dart` for auth provider models/factories.
 
 ```dart
-import 'package:routed/auth.dart';
 import 'package:routed/routed.dart';
+import 'package:routed_auth/routed_auth.dart';
 import 'package:server_auth/server_auth.dart';
 
 Future<void> main() async {

@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:routed/routed.dart';
+import 'package:routed_auth/routed_auth.dart';
 import 'package:server_data/sessions.dart';
 import 'package:server_auth/server_auth.dart';
 import 'package:routed/src/sessions/middleware.dart';

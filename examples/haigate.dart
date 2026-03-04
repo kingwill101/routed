@@ -1,6 +1,7 @@
 import 'dart:convert';
 
 import 'package:routed/routed.dart';
+import 'package:routed_auth/routed_auth.dart';
 
 const _appKey =
     'base64:MTIzNDU2Nzg5MDEyMzQ1Njc4OTAxMjM0NTY3ODkwMTIzNDU2Nzg5MDEyMzQ1Ng==';

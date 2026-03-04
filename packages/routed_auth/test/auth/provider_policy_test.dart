@@ -1,4 +1,5 @@
 import 'package:routed/routed.dart';
+import 'package:routed_auth/routed_auth.dart';
 import 'package:server_auth/server_auth.dart';
 import 'package:test/test.dart';
 
@@ -31,7 +32,11 @@ class ProjectPolicy extends Policy<Project> {
 void main() {
   test('AuthServiceProvider registers RBAC and policy abilities', () async {
     final engine = await Engine.create(
-      providers: [CoreServiceProvider(), RoutingServiceProvider()],
+      providers: [
+        CoreServiceProvider(),
+        RoutingServiceProvider(),
+        AuthServiceProvider(),
+      ],
       options: [
         (engine) {
           engine.container.instance<AuthOptions<EngineContext>>(
@@ -57,13 +62,13 @@ void main() {
     );
 
     final registry = gateRegistry;
-    expect(registry.resolve('admin.only'), isNotNull);
-    expect(registry.resolve('project.update'), isNotNull);
-
     addTearDown(() async {
       registry.unregister('admin.only');
       registry.unregister('project.update');
       await engine.close();
     });
+
+    expect(registry.resolve('admin.only'), isNotNull);
+    expect(registry.resolve('project.update'), isNotNull);
   });
 }

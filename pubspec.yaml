@@ -6,6 +6,7 @@ workspace:
   - packages/server_auth
   - packages/shelf_auth
   - packages/routed
+  - packages/routed_auth
   - packages/routed_io
   - packages/server_native
   - packages/routed_hotwire
@@ -17,6 +18,7 @@ workspace:
   - packages/property_testing
   - examples/kitchen_sink
   - examples/config_demo
+  - examples/auth_demo
   - examples/policy_demo/policy_demo
   - examples/demo_app
   - examples/contacts_app

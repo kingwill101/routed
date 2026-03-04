@@ -2,7 +2,6 @@ export 'dart:io' show HttpHeaders, HttpStatus;
 
 export 'package:storage_fs/storage_fs.dart' hide Factory;
 
-export 'auth.dart';
 export 'src/binding/convert/sse.dart' show SseEvent, SseCodec;
 export 'src/binding/multipart.dart'
     show
@@ -21,7 +20,6 @@ export 'src/config/schema.dart';
 export 'src/config/spec.dart';
 export 'src/config/specs/cache.dart';
 export 'src/config/specs/compression.dart';
-export 'src/config/specs/auth.dart';
 export 'src/config/specs/cors.dart';
 export 'src/config/specs/logging.dart';
 export 'src/config/specs/localization.dart';
@@ -68,6 +66,8 @@ export 'src/logging/extensions.dart';
 export 'src/logging/logger.dart';
 export 'src/middleware/conditional_request.dart'
     show conditionalRequests, EtagResolver, LastModifiedResolver;
+export 'src/middleware/basic_auth.dart' show basicAuth, AuthAccounts;
+export 'src/middleware/csrf.dart' show csrfMiddleware, generateCsrfToken;
 export 'src/observability/errors.dart'
     show ErrorObserver, ErrorObserverRegistry;
 export 'src/observability/health.dart'

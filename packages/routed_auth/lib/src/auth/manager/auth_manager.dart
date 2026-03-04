@@ -42,8 +42,8 @@ import 'package:server_auth/server_auth.dart'
         resolveAuthSessionExpiry,
         serializeAuthSessionIssuedAt,
         secureRandomToken;
-import 'package:routed/src/auth/hooks.dart';
-import 'package:routed/src/auth/session_auth.dart';
+import 'package:routed_auth/src/auth/hooks.dart';
+import 'package:routed_auth/src/auth/session_auth.dart';
 import 'package:routed/src/context/context.dart';
 import 'package:routed/src/events/event.dart';
 import 'package:routed/src/events/event_manager.dart';

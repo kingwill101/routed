@@ -57,7 +57,6 @@ dependencies:
   pointycastle: ^4.0.0
   redis: ^4.0.0
   sentry: ^9.10.0
-  server_auth: ^0.1.0
   server_contracts: ^0.1.0
   server_data: ^0.1.0
   shelf: ^1.4.2

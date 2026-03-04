@@ -25,7 +25,6 @@ class HttpConfigSpec extends ConfigSpec<Map<String, dynamic>> {
           'routed.uploads',
           'routed.cors',
           'routed.security',
-          'routed.auth',
           'routed.logging',
           'routed.observability',
           'routed.compression',

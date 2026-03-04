@@ -26,13 +26,13 @@ import 'package:server_auth/server_auth.dart'
         syncManagedPolicyBindings,
         syncManagedRbacAbilities,
         AuthOptions;
-import 'package:routed/src/auth/manager/auth_manager.dart';
-import 'package:routed/src/auth/routes.dart';
-import 'package:routed/src/auth/haigate.dart';
-import 'package:routed/src/auth/jwt.dart' show jwtAuthenticationWithVerifier;
-import 'package:routed/src/auth/oauth.dart';
-import 'package:routed/src/auth/session_auth.dart';
-import 'package:routed/src/config/specs/auth.dart';
+import 'package:routed_auth/src/auth/manager/auth_manager.dart';
+import 'package:routed_auth/src/auth/routes.dart';
+import 'package:routed_auth/src/auth/haigate.dart';
+import 'package:routed_auth/src/auth/jwt.dart' show jwtAuthenticationWithVerifier;
+import 'package:routed_auth/src/auth/oauth.dart';
+import 'package:routed_auth/src/auth/session_auth.dart';
+import 'package:routed_auth/src/config/specs/auth.dart';
 import 'package:routed/src/container/container.dart';
 import 'package:routed/src/context/context.dart';
 import 'package:routed/src/contracts/config/config.dart' show Config;
@@ -118,6 +118,8 @@ class AuthServiceProvider extends ServiceProvider with ProvidesDefaultConfig {
 
   @override
   Future<void> boot(Container container) async {
+    _applyAuthManager(container);
+
     final engine = container.has<Engine>() ? container.get<Engine>() : null;
     final manager = container.has<AuthManager>()
         ? container.get<AuthManager>()

@@ -180,7 +180,7 @@ class Engine with StaticFileHandler, ContainerMixin {
   /// Returns all built-in service providers registered with the framework.
   ///
   /// This includes all providers from the [ProviderRegistry]: core, routing,
-  /// cache, sessions, uploads, cors, security, logging, auth, observability,
+  /// cache, sessions, uploads, cors, security, logging, observability,
   /// compression, rate limiting, storage, static assets, views, and localization.
   ///
   /// Use this when you want a fully-featured engine with all framework capabilities:
@@ -491,6 +491,15 @@ class Engine with StaticFileHandler, ContainerMixin {
     _providerManifest = manifest;
     _rebuildMiddlewareStacks();
     if (_unresolvedProviderIds.isNotEmpty) {
+      if (_unresolvedProviderIds.any(
+        (id) => id.trim().toLowerCase() == 'routed.auth',
+      )) {
+        debugPrintWarning(
+          'Provider "routed.auth" has moved to package:routed_auth. '
+          'Import package:routed_auth/routed_auth.dart to auto-register it, '
+          'or call ensureRoutedAuthProviderRegistered() before initialization.',
+        );
+      }
       debugPrintWarning(
         'Unknown providers in http.providers manifest: '
         '${_unresolvedProviderIds.join(', ')}',

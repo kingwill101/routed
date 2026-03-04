@@ -11,9 +11,12 @@ dependencies:
   args: ^2.5.0
   routed:
     path: ../../packages/routed
+  routed_auth:
+    path: ../../packages/routed_auth
+  server_auth:
+    path: ../../packages/server_auth
 
 dev_dependencies:
   hotreloader: ^4.3.0
   lints: ^6.0.0
   test: ^1.26.3
-

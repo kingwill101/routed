@@ -1,6 +1,8 @@
 import 'dart:io';
 
 import 'package:routed/routed.dart';
+import 'package:routed_auth/routed_auth.dart';
+import 'package:server_auth/server_auth.dart';
 
 class Project {
   const Project({required this.id, required this.name, required this.ownerId});
@@ -59,6 +61,7 @@ Future<Engine> createEngine() async {
         ),
       ),
       RoutingServiceProvider(),
+      AuthServiceProvider(),
     ],
   );
 

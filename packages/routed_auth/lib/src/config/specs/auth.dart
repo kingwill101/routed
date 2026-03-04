@@ -4,8 +4,7 @@ import 'package:json_schema_builder/json_schema_builder.dart';
 import 'package:server_auth/server_auth.dart'
     show AuthConfig, AuthProviderRegistry;
 import 'package:routed/src/config/schema.dart';
-
-import '../spec.dart';
+import 'package:routed/src/config/spec.dart';
 
 const List<String> _defaultJwtAlgorithms = ['RS256'];
 

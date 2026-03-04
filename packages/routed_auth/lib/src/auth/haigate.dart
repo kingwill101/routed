@@ -8,8 +8,10 @@ import 'package:server_auth/server_auth.dart'
         AuthGateRegistry,
         AuthGateService,
         AuthGateViolation,
+        PolicyBinding,
+        syncManagedPolicyBindings,
         AuthPrincipal;
-import 'package:routed/src/auth/session_auth.dart';
+import 'package:routed_auth/src/auth/session_auth.dart';
 import 'package:routed/src/context/context.dart';
 import 'package:routed/src/response.dart';
 import 'package:routed/src/router/types.dart';
@@ -18,6 +20,9 @@ import 'package:routed/src/router/types.dart';
 /// [EngineContext].
 typedef GatePayloadProvider =
     Object? Function(EngineContext ctx, String ability);
+
+/// Backward-compatible alias for denied authorization exceptions.
+typedef GateViolation = AuthGateViolation<EngineContext>;
 
 /// A handler function that is called when a gate denies access.
 typedef GateDeniedHandler =
@@ -29,6 +34,16 @@ typedef GateDeniedHandler =
 /// Global gate registry used by [Haigate].
 final AuthGateRegistry<EngineContext> gateRegistry =
     AuthGateRegistry<EngineContext>();
+final Set<String> _managedPolicyAbilities = <String>{};
+
+/// Registers policy bindings into [gateRegistry] with stable ability tracking.
+Set<String> registerPoliciesWithHaigate(List<PolicyBinding> bindings) {
+  return syncManagedPolicyBindings<EngineContext>(
+    gateRegistry,
+    bindings,
+    managed: _managedPolicyAbilities,
+  );
+}
 
 class Haigate {
   Haigate._();
