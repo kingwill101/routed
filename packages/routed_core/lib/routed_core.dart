@@ -58,3 +58,7 @@ export 'src/render/render.dart';
 export 'src/render/string_render.dart';
 export 'src/render/xml.dart';
 export 'src/render/yaml.dart';
+export 'src/view/engine_manager.dart';
+export 'src/view/template_engine.dart';
+export 'src/view/view_engine.dart';
+export 'src/view/view_extensions.dart';
