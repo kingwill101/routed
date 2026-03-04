@@ -10,6 +10,7 @@ export 'src/events/event.dart';
 export 'src/events/event_manager.dart';
 export 'src/events/signals.dart';
 export 'src/events/system_events.dart';
+export 'src/observability/errors.dart';
 export 'src/observability/health.dart';
 export 'src/observability/metrics.dart';
 export 'src/provider/provider.dart';
