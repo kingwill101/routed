@@ -37,5 +37,6 @@ export 'src/utils/request_id.dart';
 export 'src/utils/storage_defaults.dart';
 export 'src/utils/storage_paths.dart';
 export 'src/http/etag.dart';
+export 'src/http/conditional.dart';
 export 'src/http/compression.dart';
 export 'src/http/multipart.dart';
