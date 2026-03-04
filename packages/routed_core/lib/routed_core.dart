@@ -7,6 +7,7 @@ export 'src/config/registry.dart';
 export 'src/config/spec.dart';
 export 'src/config/schema.dart';
 export 'src/config/specs/core.dart';
+export 'src/config/specs/cache.dart';
 export 'src/config/specs/http.dart';
 export 'src/config/specs/localization.dart';
 export 'src/config/specs/compression.dart';
