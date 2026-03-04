@@ -1,25 +1,12 @@
-import 'dart:async';
 import 'dart:convert';
 
 import 'package:routed/src/engine/engine.dart';
-import 'package:routed/src/support/named_registry.dart';
+import 'package:routed_core/routed_core.dart' as core;
 
-typedef HealthCheck = FutureOr<HealthCheckResult> Function();
-
-class HealthCheckResult {
-  HealthCheckResult.ok([this.details = const <String, Object?>{}]) : ok = true;
-
-  HealthCheckResult.failure([this.details = const <String, Object?>{}])
-    : ok = false;
-
-  final bool ok;
-  final Map<String, Object?> details;
-
-  Map<String, Object?> toJson() => {
-    'ok': ok,
-    if (details.isNotEmpty) ...details,
-  };
-}
+typedef HealthCheck = core.HealthCheck;
+typedef HealthCheckResult = core.HealthCheckResult;
+typedef HealthResponse = core.HealthResponse;
+typedef HealthEndpointRegistry = core.HealthEndpointRegistry;
 
 class HealthService {
   HealthService({required this.engine});
@@ -85,25 +72,4 @@ class HealthService {
     }
     return HealthResponse(ok: ok, checks: results);
   }
-}
-
-class HealthResponse {
-  const HealthResponse({required this.ok, required this.checks});
-
-  final bool ok;
-  final Map<String, HealthCheckResult> checks;
-}
-
-class HealthEndpointRegistry extends NamedRegistry<bool> {
-  void setPaths(Iterable<String> paths) {
-    clearEntries();
-    for (final path in paths) {
-      registerEntry(path, true);
-    }
-  }
-
-  bool allows(String path) => containsEntry(path);
-
-  @override
-  String normalizeName(String name) => name;
 }
