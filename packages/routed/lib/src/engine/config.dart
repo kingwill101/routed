@@ -2,14 +2,14 @@ import 'dart:io';
 
 import 'package:file/file.dart';
 import 'package:file/local.dart' as local;
+import 'package:routed_core/routed_core.dart' show EtagStrategy;
 import 'package:routed_security/routed_security.dart' as security;
 import 'package:server_data/sessions.dart';
 import 'package:routed/src/runtime/shutdown.dart';
 import 'package:routed/src/utils/debug.dart';
 import 'package:routed/src/view/view_engine.dart';
 
-/// Default ETag generation strategies supported by the engine.
-enum EtagStrategy { disabled, strong, weak }
+export 'package:routed_core/routed_core.dart' show EtagStrategy;
 
 /// Configuration for handling multipart file uploads.
 ///
