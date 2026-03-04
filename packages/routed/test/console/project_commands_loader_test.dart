@@ -199,6 +199,9 @@ Future<void> _writeProject({
   final routedCliPath = _escapePath(
     p.normalize(p.join(cliRoot, '..', 'routed_cli')),
   );
+  final routedAnalyzerPath = _escapePath(
+    p.normalize(p.join(cliRoot, '..', 'routed_analyzer')),
+  );
 
   final pubspec =
       '''
@@ -219,6 +222,8 @@ dependency_overrides:
     path: $serverDataPath
   routed_cli:
     path: $routedCliPath
+  routed_analyzer:
+    path: $routedAnalyzerPath
 ''';
 
   final pubspecFile = io.File(p.join(projectDir.path, 'pubspec.yaml'));

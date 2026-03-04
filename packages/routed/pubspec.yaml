@@ -22,9 +22,7 @@ executables:
 # Add regular dependencies here.
 dependencies:
   acanthis: ^1.5.1
-  analysis_server_plugin: ^0.3.7
   analyzer: ^10.0.1
-  analyzer_plugin: ^0.14.1
   args: ^2.7.0
   artisanal: ^0.1.2
   build: ^4.0.4
@@ -56,6 +54,7 @@ dependencies:
   path: ^1.9.1
   pointycastle: ^4.0.0
   redis: ^4.0.0
+  routed_analyzer: ^0.1.0
   routed_cli: ^0.1.0
   sentry: ^9.10.0
   server_contracts: ^0.1.0

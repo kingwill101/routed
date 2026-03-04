@@ -15,7 +15,7 @@
 /// ```
 library;
 
-import 'package:routed/src/analyzer/routed_analyzer_plugin.dart';
+import 'package:routed_analyzer/routed_analyzer.dart';
 
 /// The analyzer plugin instance discovered by the analysis server.
 final plugin = RoutedAnalyzerPlugin();
