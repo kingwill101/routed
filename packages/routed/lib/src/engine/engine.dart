@@ -7,6 +7,8 @@ import 'package:fuzzywuzzy/fuzzywuzzy.dart' as fuzzy;
 import 'package:http2/http2.dart' as http2;
 import 'package:meta/meta.dart' show internal, visibleForTesting;
 import 'package:routed/middlewares.dart';
+import 'package:routed_core/routed_core.dart'
+    show RoutePatternRegistry, requireRoutePatternRegistry;
 import 'package:routed/src/config/registry.dart';
 import 'package:routed/src/container/container.dart';
 import 'package:routed/src/container/container_mixin.dart';
@@ -42,19 +44,18 @@ import 'package:routed/src/router/middleware_reference.dart';
 import 'package:routed/src/router/types.dart';
 import 'package:routed/src/runtime/shutdown.dart';
 import 'package:routed/src/static_files.dart';
-import 'package:routed/src/support/named_registry.dart';
 import 'package:routed/src/utils/debug.dart';
 import 'package:routed/src/validation/validator.dart';
 import 'package:routed/src/websocket/websocket_handler.dart';
 
 export 'events/events.dart';
+export 'patterns.dart';
 
 part 'engine_route.dart';
 part 'engine_routing.dart';
 part 'error_handling.dart';
 part 'mount.dart';
 part 'param_utils.dart';
-part 'patterns.dart';
 part 'route_trie.dart';
 part 'request.dart';
 
