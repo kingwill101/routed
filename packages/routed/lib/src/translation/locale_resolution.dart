@@ -1,34 +1,19 @@
 library;
 
 import 'package:routed/src/context/context.dart';
+import 'package:routed_core/routed_core.dart' as core;
 
-/// Looks up a value by [name] from a particular source (headers, query, etc.).
-typedef LocaleLookup = String? Function(String name);
+export 'package:routed_core/routed_core.dart' show LocaleLookup;
 
-/// Utilities for exposing header, query, cookie, and session lookups when
-/// resolving locales.
-///
-/// Encapsulates the data available to locale resolvers.
-class LocaleResolutionContext {
-  /// Creates a context with individual lookups for each source.
+/// Routed compatibility wrapper that keeps `fromContext` while delegating the
+/// underlying locale-resolution model to `routed_core`.
+class LocaleResolutionContext extends core.LocaleResolutionContext {
   LocaleResolutionContext({
-    required this.header,
-    required this.query,
-    required this.cookie,
-    this.sessionValue,
+    required super.header,
+    required super.query,
+    required super.cookie,
+    super.sessionValue,
   });
-
-  /// Header lookup (case-insensitive).
-  final LocaleLookup header;
-
-  /// Query parameter lookup.
-  final LocaleLookup query;
-
-  /// Cookie lookup.
-  final LocaleLookup cookie;
-
-  /// Session lookup, if sessions are enabled.
-  final LocaleLookup? sessionValue;
 
   /// Builds a context from the current [EngineContext].
   ///
