@@ -5,12 +5,11 @@ import 'package:routed/middlewares.dart'
 import 'package:routed/src/config/specs/security.dart';
 import 'package:routed/src/container/container.dart';
 import 'package:routed/src/contracts/config/config.dart' show Config;
-import 'package:routed/src/engine/config.dart';
 import 'package:routed/src/engine/middleware_registry.dart';
 import 'package:routed/src/provider/provider.dart';
 import 'package:routed/src/router/types.dart';
-import 'package:routed_security/routed_security.dart' show IpFilter;
-import 'package:routed_security/routed_security.dart' show TrustedProxyResolver;
+import 'package:routed_security/routed_security.dart'
+    show IpFilter, TrustedProxyResolver;
 
 /// Provides security middleware defaults (CSRF, headers, size limits).
 class SecurityServiceProvider extends ServiceProvider
@@ -63,13 +62,9 @@ class SecurityServiceProvider extends ServiceProvider
   @override
   void register(Container container) {
     final config = container.get<Config>();
-    final engineConfig = container.get<EngineConfig>();
     final resolved = spec.resolve(
       config,
-      context: SecurityConfigContext(
-        config: config,
-        engineConfig: engineConfig,
-      ),
+      context: SecurityConfigContext(config: config),
     );
     final trustedResolver = _buildTrustedProxyResolver(resolved);
     container.instance<TrustedProxyResolver>(trustedResolver);
@@ -92,13 +87,9 @@ class SecurityServiceProvider extends ServiceProvider
 
   @override
   Future<void> onConfigReload(Container container, Config config) async {
-    final engineConfig = container.get<EngineConfig>();
     final resolved = spec.resolve(
       config,
-      context: SecurityConfigContext(
-        config: config,
-        engineConfig: engineConfig,
-      ),
+      context: SecurityConfigContext(config: config),
     );
     final updated = _buildTrustedProxyResolver(resolved);
     container.instance<TrustedProxyResolver>(updated);
