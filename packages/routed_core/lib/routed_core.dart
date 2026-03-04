@@ -46,6 +46,7 @@ export 'src/http/limited_request.dart';
 export 'src/http/negotiation.dart';
 export 'src/http/multipart.dart';
 export 'src/http/query_params.dart';
+export 'src/http/request.dart';
 export 'src/http/response.dart';
 export 'src/http/sse.dart';
 export 'src/http/urlencoded.dart';

@@ -3,7 +3,7 @@ import 'dart:io';
 import 'package:file/file.dart';
 import 'package:file/local.dart' as local;
 import 'package:routed_core/routed_core.dart'
-    show EtagStrategy, MultipartConfig;
+    show EtagStrategy, MultipartConfig, RequestConfig;
 import 'package:routed_security/routed_security.dart' as security;
 import 'package:server_data/sessions.dart';
 import 'package:routed/src/runtime/shutdown.dart';
@@ -211,7 +211,7 @@ typedef CorsConfig = security.CorsConfig;
 ///   handleMethodNotAllowed: true,
 /// );
 /// ```
-class EngineConfig {
+class EngineConfig implements RequestConfig {
   final EngineFeatures features;
   final EngineSecurityFeatures security;
   final ViewConfig views;
@@ -234,7 +234,9 @@ class EngineConfig {
   final int pathInternCacheSize;
 
   // IP and forwarding
+  @override
   final bool forwardedByClientIP;
+  @override
   final List<String> remoteIPHeaders;
   List<String> _trustedProxies = [];
   String? _trustedPlatform;
@@ -256,6 +258,12 @@ class EngineConfig {
 
   /// Fly.io's client IP header name.
   static const platformFlyIO = 'Fly-Client-IP';
+
+  @override
+  bool get enableProxySupport => features.enableProxySupport;
+
+  @override
+  bool get enableSecureRequestIds => features.enableSecureRequestIds;
 
   /// Creates an engine configuration with the given settings.
   ///
@@ -387,6 +395,7 @@ class EngineConfig {
   /// prefix length specified in CIDR notation.
   ///
   /// Returns `true` if the address is a trusted proxy, `false` otherwise.
+  @override
   bool isTrustedProxy(InternetAddress addr) {
     if (!features.enableProxySupport) {
       throw StateError(
@@ -422,6 +431,7 @@ class EngineConfig {
     _parsedProxies = [];
   }
 
+  @override
   String? get trustedPlatform => _trustedPlatform;
 
   set trustedPlatform(String? value) {
