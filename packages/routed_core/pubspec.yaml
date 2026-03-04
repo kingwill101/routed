@@ -21,6 +21,7 @@ dependencies:
   es_compression: ^2.0.15
   event_bus: ^2.0.1
   file: ^7.0.1
+  http_parser: ^4.1.2
   json_schema_builder: ^0.1.3
   meta: ^1.18.0
   path: ^1.9.1

@@ -40,4 +40,5 @@ export 'src/utils/storage_paths.dart';
 export 'src/http/etag.dart';
 export 'src/http/conditional.dart';
 export 'src/http/compression.dart';
+export 'src/http/negotiation.dart';
 export 'src/http/multipart.dart';
