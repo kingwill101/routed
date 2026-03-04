@@ -9,4 +9,5 @@ export 'src/provider/config_utils.dart';
 export 'src/support/driver_registry.dart';
 export 'src/support/named_registry.dart';
 export 'src/utils/deep_copy.dart';
+export 'src/utils/deep_merge.dart';
 export 'src/utils/dot.dart';
