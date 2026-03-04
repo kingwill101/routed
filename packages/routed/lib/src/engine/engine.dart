@@ -49,13 +49,13 @@ import 'package:routed/src/validation/validator.dart';
 import 'package:routed/src/websocket/websocket_handler.dart';
 
 export 'events/events.dart';
+export 'param_utils.dart';
 export 'patterns.dart';
 
 part 'engine_route.dart';
 part 'engine_routing.dart';
 part 'error_handling.dart';
 part 'mount.dart';
-part 'param_utils.dart';
 part 'route_trie.dart';
 part 'request.dart';
 

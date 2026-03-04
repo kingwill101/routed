@@ -68,6 +68,7 @@ export 'src/view/view_engine.dart';
 export 'src/view/view_extensions.dart';
 export 'src/router/route_match.dart';
 export 'src/router/patterns.dart';
+export 'src/router/param_map.dart';
 export 'src/translation/constants.dart';
 export 'src/translation/loaders/file_translation_loader.dart';
 export 'src/translation/locale_manager.dart';
