@@ -50,6 +50,7 @@ export 'src/http/request.dart';
 export 'src/http/response.dart';
 export 'src/http/sse.dart';
 export 'src/http/urlencoded.dart';
+export 'src/http/wrapped_request.dart';
 export 'src/http/xml.dart';
 export 'src/render/data_render.dart';
 export 'src/render/json_render.dart';
