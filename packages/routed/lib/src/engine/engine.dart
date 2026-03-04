@@ -28,6 +28,7 @@ import 'package:routed/src/engine/providers/logging.dart';
 import 'package:routed/src/engine/providers/registry.dart';
 import 'package:routed/src/engine/providers/routing.dart';
 import 'package:routed/src/engine/route_match.dart';
+import 'package:routed/src/engine/route_trie.dart';
 import 'package:routed/src/engine/request_scope.dart';
 import 'package:routed/src/engine/wrapped_request.dart';
 import 'package:routed/src/events/event_manager.dart';
@@ -51,12 +52,12 @@ import 'package:routed/src/websocket/websocket_handler.dart';
 export 'events/events.dart';
 export 'param_utils.dart';
 export 'patterns.dart';
+export 'route_trie.dart';
 
 part 'engine_route.dart';
 part 'engine_routing.dart';
 part 'error_handling.dart';
 part 'mount.dart';
-part 'route_trie.dart';
 part 'request.dart';
 
 /// The core HTTP engine of the Routed framework.
