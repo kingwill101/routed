@@ -6,6 +6,7 @@ workspace:
   - packages/server_auth
   - packages/shelf_auth
   - packages/routed
+  - packages/routed_cli
   - packages/routed_auth
   - packages/routed_io
   - packages/server_native

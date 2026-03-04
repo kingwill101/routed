@@ -190,8 +190,15 @@ Future<void> _writeProject({
   final serverContractsPath = _escapePath(
     p.normalize(p.join(cliRoot, '..', 'server_contracts')),
   );
-  final serverAuthPath = _escapePath(p.normalize(p.join(cliRoot, '..', 'server_auth')));
-  final serverDataPath = _escapePath(p.normalize(p.join(cliRoot, '..', 'server_data')));
+  final serverAuthPath = _escapePath(
+    p.normalize(p.join(cliRoot, '..', 'server_auth')),
+  );
+  final serverDataPath = _escapePath(
+    p.normalize(p.join(cliRoot, '..', 'server_data')),
+  );
+  final routedCliPath = _escapePath(
+    p.normalize(p.join(cliRoot, '..', 'routed_cli')),
+  );
 
   final pubspec =
       '''
@@ -210,6 +217,8 @@ dependency_overrides:
     path: $serverAuthPath
   server_data:
     path: $serverDataPath
+  routed_cli:
+    path: $routedCliPath
 ''';
 
   final pubspecFile = io.File(p.join(projectDir.path, 'pubspec.yaml'));
