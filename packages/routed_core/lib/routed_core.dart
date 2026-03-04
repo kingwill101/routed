@@ -1,6 +1,7 @@
 library;
 
 export 'src/container/container.dart';
+export 'src/config/config.dart';
 export 'src/config/schema.dart';
 export 'src/events/event.dart';
 export 'src/events/event_manager.dart';
