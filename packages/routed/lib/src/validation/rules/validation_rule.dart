@@ -1,5 +1,1 @@
-/// Base class for validation rules
-abstract class ValidationRule {
-  /// Validate a value
-  void validate(dynamic value);
-}
+export 'package:routed_validation/src/validation/rules/validation_rule.dart';
