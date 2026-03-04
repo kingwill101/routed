@@ -65,6 +65,7 @@ export 'src/view/template_engine.dart';
 export 'src/view/view_engine.dart';
 export 'src/view/view_extensions.dart';
 export 'src/translation/constants.dart';
+export 'src/translation/loaders/file_translation_loader.dart';
 export 'src/translation/locale_manager.dart';
 export 'src/translation/locale_resolution.dart';
 export 'src/translation/locale_resolver_registry.dart';
