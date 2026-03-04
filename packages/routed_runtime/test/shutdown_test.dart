@@ -1,8 +1,8 @@
 import 'dart:async';
 import 'dart:io';
 
-import 'package:routed/src/provider/provider.dart';
-import 'package:routed/src/runtime/shutdown.dart';
+import 'package:routed_core/routed_core.dart' show ProviderConfigException;
+import 'package:routed_runtime/routed_runtime.dart';
 import 'package:test/test.dart';
 
 void main() {
