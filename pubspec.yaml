@@ -8,6 +8,7 @@ workspace:
   - packages/routed
   - packages/routed_cli
   - packages/routed_analyzer
+  - packages/routed_openapi
   - packages/routed_auth
   - packages/routed_io
   - packages/server_native
