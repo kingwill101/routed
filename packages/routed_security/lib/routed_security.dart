@@ -12,3 +12,4 @@ export 'src/security/secure_transport.dart';
 export 'src/security/request_size.dart';
 export 'src/security/security_headers.dart';
 export 'src/security/cors.dart';
+export 'src/security/engine_security.dart';
