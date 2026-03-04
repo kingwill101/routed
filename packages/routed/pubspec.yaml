@@ -55,6 +55,7 @@ dependencies:
   redis: ^4.0.0
   routed_analyzer: ^0.1.0
   routed_cli: ^0.1.0
+  routed_core: ^0.1.0
   routed_openapi: ^0.1.0
   sentry: ^9.10.0
   server_contracts: ^0.1.0
