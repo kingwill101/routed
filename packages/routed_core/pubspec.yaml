@@ -17,6 +17,7 @@ environment:
 
 dependencies:
   collection: ^1.19.1
+  crypto: ^3.0.6
   event_bus: ^2.0.1
   file: ^7.0.1
   json_schema_builder: ^0.1.3
