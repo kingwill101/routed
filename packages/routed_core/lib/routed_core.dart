@@ -8,6 +8,7 @@ export 'src/config/spec.dart';
 export 'src/config/schema.dart';
 export 'src/config/specs/core.dart';
 export 'src/config/specs/http.dart';
+export 'src/config/specs/localization.dart';
 export 'src/events/event.dart';
 export 'src/events/event_manager.dart';
 export 'src/events/signals.dart';
