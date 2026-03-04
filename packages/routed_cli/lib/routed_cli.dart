@@ -5,6 +5,10 @@ import 'dart:io';
 
 import 'package:routed_cli/src/console/util/dart_exec.dart';
 
+export 'src/console/create/templates.dart'
+    show FileBuilder, ScaffoldTemplate, TemplateContext, Templates;
+export 'src/console/create/templates_embedded.dart' show scaffoldTemplateBytes;
+
 /// Routed CLI core utilities.
 ///
 /// This library provides:
