@@ -18,7 +18,8 @@ import 'package:routed/src/provider/provider.dart';
 import 'package:routed/src/response.dart';
 import 'package:routed/src/router/middleware_reference.dart';
 import 'package:routed/src/router/types.dart';
-import 'package:sentry/sentry.dart';
+import 'package:routed_observability/routed_observability.dart'
+    show SentryReporter, SentrySpanHandle;
 
 class ObservabilityServiceProvider extends ServiceProvider
     with ProvidesDefaultConfig {
@@ -36,8 +37,7 @@ class ObservabilityServiceProvider extends ServiceProvider
   bool _metricsEnabled = false;
   bool _healthEnabled = true;
   bool _sentryEnabled = false;
-  bool _sentryConfigured = false;
-  ObservabilitySentryConfig? _sentryConfig;
+  final SentryReporter _sentry = SentryReporter(operation: _sentryOp);
 
   late MetricsService _metrics;
   late HealthService _health;
@@ -122,10 +122,8 @@ class ObservabilityServiceProvider extends ServiceProvider
   Future<void> cleanup(Container container) async {
     await _eventSubscription?.cancel();
     _eventSubscription = null;
-    if (_sentryConfigured) {
-      await Sentry.close();
-      _sentryConfigured = false;
-    }
+    await _sentry.close();
+    _sentryEnabled = false;
   }
 
   void _configure(Container container) {
@@ -170,9 +168,8 @@ class ObservabilityServiceProvider extends ServiceProvider
         ? container.get<ErrorObserverRegistry>()
         : ErrorObserverRegistry();
 
-    _sentryConfig = resolved.sentry;
     _sentryEnabled = false;
-    _configureSentry(_sentryConfig!, enabled: enabled);
+    _configureSentry(resolved.sentry, enabled: enabled);
 
     container.instance<MetricsService>(_metrics);
     container.instance<HealthService>(_health);
@@ -398,113 +395,39 @@ class ObservabilityServiceProvider extends ServiceProvider
     ObservabilitySentryConfig config, {
     required bool enabled,
   }) {
-    final effectiveEnabled = enabled && config.enabled;
-    if (!effectiveEnabled) {
-      _sentryEnabled = false;
-      if (_sentryConfigured) {
-        unawaited(Sentry.close());
-        _sentryConfigured = false;
-      }
-      return;
-    }
-
-    _sentryEnabled = true;
-  }
-
-  Future<void> _initSentry(ObservabilitySentryConfig config) async {
-    if (_sentryConfigured) {
-      await Sentry.close();
-      _sentryConfigured = false;
-    }
-
-    final dsn = config.dsn;
-    if (dsn == null || dsn.isEmpty) {
-      _sentryEnabled = false;
-      return;
-    }
-
-    await Sentry.init((options) {
-      options.dsn = dsn;
-      options.sendDefaultPii = config.sendDefaultPii;
-      if (config.tracesSampleRate > 0) {
-        options.tracesSampleRate = config.tracesSampleRate;
-      }
-    });
-
-    _sentryEnabled = true;
-    _sentryConfigured = true;
-    _sentryConfig = config;
+    _sentry.configure(config, enabled: enabled);
+    _sentryEnabled = _sentry.enabled;
   }
 
   Future<void> _ensureSentryReady() async {
-    if (!_sentryEnabled || _sentryConfig == null) {
-      return;
-    }
-    if (_sentryConfigured && _sentryConfigEquals(_sentryConfig!)) {
-      return;
-    }
-    await _initSentry(_sentryConfig!);
+    await _sentry.ensureReady();
+    _sentryEnabled = _sentry.enabled;
   }
 
-  bool _sentryConfigEquals(ObservabilitySentryConfig config) {
-    final current = _sentryConfig;
-    if (current == null) {
-      return false;
-    }
-    return current.enabled == config.enabled &&
-        current.dsn == config.dsn &&
-        current.sendDefaultPii == config.sendDefaultPii &&
-        current.tracesSampleRate == config.tracesSampleRate;
-  }
-
-  ISentrySpan? _startSentryTransaction(EngineContext ctx) {
-    if (!_sentryEnabled || !_sentryConfigured) {
+  SentrySpanHandle? _startSentryTransaction(EngineContext ctx) {
+    if (!_sentryEnabled) {
       return null;
     }
 
     final request = ctx.request;
     final routeLabel = _routeLabel(ctx);
-    final name = '${request.method} $routeLabel';
-
-    final traceHeader = _parseSentryTraceHeader(request.headers);
-    final baggage = _parseSentryBaggage(request.headers);
-    final transactionContext = traceHeader == null
-        ? SentryTransactionContext(
-            name,
-            _sentryOp,
-            transactionNameSource: SentryTransactionNameSource.route,
-          )
-        : SentryTransactionContext.fromSentryTrace(
-            name,
-            _sentryOp,
-            traceHeader,
-            transactionNameSource: SentryTransactionNameSource.route,
-            baggage: baggage,
-          );
-
-    final transaction = Sentry.startTransactionWithContext(
-      transactionContext,
-      bindToScope: false,
-      startTimestamp: DateTime.now(),
+    return _sentry.startTransaction(
+      method: request.method,
+      route: routeLabel,
+      uri: request.uri,
+      headers: _headersMap(request.headers),
     );
-
-    transaction.setTag('http.method', request.method);
-    transaction.setTag('http.route', routeLabel);
-    transaction.setData('http.target', request.uri.path);
-    return transaction;
   }
 
   Future<void> _finishSentryTransaction(
     EngineContext ctx,
-    ISentrySpan? span,
+    SentrySpanHandle? span,
   ) async {
-    if (span == null || span.finished) {
-      return;
-    }
-    span.setTag('http.route', _routeLabel(ctx));
-    span.setData('http.status_code', ctx.response.statusCode);
-    span.status = SpanStatus.fromHttpStatusCode(ctx.response.statusCode);
-    await span.finish();
+    await _sentry.finishTransaction(
+      span,
+      route: _routeLabel(ctx),
+      statusCode: ctx.response.statusCode,
+    );
     ctx.set(_sentrySpanKey, null);
   }
 
@@ -512,66 +435,28 @@ class ObservabilityServiceProvider extends ServiceProvider
     EngineContext ctx,
     Object error,
     StackTrace stackTrace,
-    ISentrySpan? span,
+    SentrySpanHandle? span,
   ) async {
-    if (!_sentryEnabled || !_sentryConfigured) {
+    if (!_sentryEnabled) {
       return;
     }
-    final requestContext = _buildSentryRequest(ctx);
-    await Sentry.captureException(
-      error,
+    await _sentry.captureException(
+      error: error,
       stackTrace: stackTrace,
-      withScope: (scope) {
-        if (span != null) {
-          scope.span = span;
-          scope.transaction = _routeLabel(ctx);
-        }
-        scope.setContexts('request', requestContext.toJson());
-        scope.setTag('http.method', ctx.request.method);
-        scope.setTag('http.route', _routeLabel(ctx));
-      },
-    );
-  }
-
-  SentryRequest _buildSentryRequest(EngineContext ctx) {
-    final headers = <String, String>{};
-    if (_sentryConfig?.sendDefaultPii ?? false) {
-      ctx.request.headers.forEach((name, values) {
-        if (values.isNotEmpty) {
-          headers[name] = values.join(',');
-        }
-      });
-    }
-
-    return SentryRequest.fromUri(
-      uri: ctx.request.uri,
+      span: span,
       method: ctx.request.method,
-      headers: headers.isEmpty ? null : headers,
+      route: _routeLabel(ctx),
+      uri: ctx.request.uri,
+      headers: _headersMap(ctx.request.headers),
     );
   }
 
-  SentryTraceHeader? _parseSentryTraceHeader(HttpHeaders headers) {
-    try {
-      final value = headers.value('sentry-trace');
-      if (value == null || value.trim().isEmpty) {
-        return null;
-      }
-      return SentryTraceHeader.fromTraceHeader(value.trim());
-    } catch (_) {
-      return null;
-    }
-  }
-
-  SentryBaggage? _parseSentryBaggage(HttpHeaders headers) {
-    final values = headers['baggage'];
-    if (values == null || values.isEmpty) {
-      return null;
-    }
-    try {
-      return SentryBaggage.fromHeaderList(values);
-    } catch (_) {
-      return null;
-    }
+  Map<String, List<String>> _headersMap(HttpHeaders headers) {
+    final values = <String, List<String>>{};
+    headers.forEach((name, headerValues) {
+      values[name] = List<String>.from(headerValues);
+    });
+    return values;
   }
 
   TracingSpan? _spanForEvent(Event event) {
