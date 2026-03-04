@@ -10,6 +10,7 @@ workspace:
   - packages/routed_analyzer
   - packages/routed_openapi
   - packages/routed_observability
+  - packages/routed_runtime
   - packages/routed_security
   - packages/routed_core
   - packages/routed_auth

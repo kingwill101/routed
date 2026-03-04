@@ -28,7 +28,6 @@ dependencies:
   collection: ^1.19.1
   contextual: ^2.2.0
   decimal: ^3.2.4
-  dotenv: ^4.2.0
   es_compression: ^2.0.15
   event_bus: ^2.0.1
   file: ^7.0.1
@@ -56,6 +55,7 @@ dependencies:
   routed_core: ^0.1.0
   routed_observability: ^0.1.0
   routed_openapi: ^0.1.0
+  routed_runtime: ^0.1.0
   routed_security: ^0.1.0
   server_contracts: ^0.1.0
   server_data: ^0.1.0
