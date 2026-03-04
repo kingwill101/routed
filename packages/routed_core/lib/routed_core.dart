@@ -10,6 +10,7 @@ export 'src/config/specs/core.dart';
 export 'src/config/specs/http.dart';
 export 'src/config/specs/localization.dart';
 export 'src/config/specs/routing.dart';
+export 'src/config/specs/static_assets.dart';
 export 'src/config/specs/session_drivers.dart';
 export 'src/config/specs/uploads.dart';
 export 'src/config/specs/views.dart';
