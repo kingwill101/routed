@@ -1,3 +1,4 @@
+// ignore_for_file: implementation_imports
 import 'dart:io';
 
 import 'package:routed_auth/src/auth/manager/auth_manager.dart';

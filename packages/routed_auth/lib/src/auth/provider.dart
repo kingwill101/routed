@@ -1,3 +1,4 @@
+// ignore_for_file: implementation_imports
 import 'dart:async';
 
 import 'package:http/http.dart' as http;
@@ -29,7 +30,8 @@ import 'package:server_auth/server_auth.dart'
 import 'package:routed_auth/src/auth/manager/auth_manager.dart';
 import 'package:routed_auth/src/auth/routes.dart';
 import 'package:routed_auth/src/auth/haigate.dart';
-import 'package:routed_auth/src/auth/jwt.dart' show jwtAuthenticationWithVerifier;
+import 'package:routed_auth/src/auth/jwt.dart'
+    show jwtAuthenticationWithVerifier;
 import 'package:routed_auth/src/auth/oauth.dart';
 import 'package:routed_auth/src/auth/session_auth.dart';
 import 'package:routed_auth/src/config/specs/auth.dart';

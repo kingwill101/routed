@@ -1,3 +1,4 @@
+// ignore_for_file: implementation_imports
 import 'dart:io';
 
 import 'package:json_schema_builder/json_schema_builder.dart';

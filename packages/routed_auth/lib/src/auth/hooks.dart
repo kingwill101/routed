@@ -1,3 +1,4 @@
+// ignore_for_file: implementation_imports
 import 'package:server_auth/server_auth.dart'
     show
         AuthAccount,
