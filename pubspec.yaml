@@ -12,6 +12,7 @@ workspace:
   - packages/routed_observability
   - packages/routed_runtime
   - packages/routed_validation
+  - packages/routed_logging
   - packages/routed_security
   - packages/routed_core
   - packages/routed_auth
