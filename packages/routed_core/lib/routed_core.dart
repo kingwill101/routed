@@ -17,4 +17,5 @@ export 'src/support/named_registry.dart';
 export 'src/utils/deep_copy.dart';
 export 'src/utils/deep_merge.dart';
 export 'src/utils/dot.dart';
+export 'src/utils/html_utils.dart';
 export 'src/utils/request_id.dart';
