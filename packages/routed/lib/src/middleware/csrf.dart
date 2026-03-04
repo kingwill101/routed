@@ -1,10 +1,9 @@
-import 'dart:convert';
 import 'dart:io';
-import 'dart:math';
 
 import 'package:routed/middlewares.dart' show Middleware, Next;
 import 'package:routed/src/context/context.dart';
 import 'package:routed/src/engine/config.dart' show SessionConfig;
+import 'package:routed_security/routed_security.dart' as security;
 
 Middleware csrfMiddleware() {
   return (EngineContext ctx, Next next) async {
@@ -69,11 +68,7 @@ Middleware csrfMiddleware() {
   };
 }
 
-String generateCsrfToken() {
-  final random = Random.secure();
-  final bytes = List<int>.generate(32, (i) => random.nextInt(256));
-  return base64Url.encode(bytes);
-}
+String generateCsrfToken() => security.generateCsrfToken();
 
 bool _isSecureRequest(EngineContext ctx) {
   if (ctx.request.uri.scheme == 'https') {

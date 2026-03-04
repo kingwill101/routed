@@ -1,6 +1,8 @@
 import 'dart:convert';
 import 'dart:io';
 
+import 'package:routed_security/routed_security.dart' as security;
+
 import '../context/context.dart';
 import '../router/types.dart';
 
@@ -41,7 +43,7 @@ Middleware basicAuth(
 
     if (credentials.length != 2 ||
         !accounts.containsKey(credentials[0]) ||
-        !_timingSafeEquals(accounts[credentials[0]]!, credentials[1])) {
+        !security.timingSafeEquals(accounts[credentials[0]]!, credentials[1])) {
       ctx.response.headers.set('WWW-Authenticate', 'Basic realm="$realm"');
       return ctx.errorResponse(
         statusCode: HttpStatus.unauthorized,
@@ -52,13 +54,4 @@ Middleware basicAuth(
     ctx.set('user', credentials[0]);
     return await next();
   };
-}
-
-bool _timingSafeEquals(String a, String b) {
-  if (a.length != b.length) return false;
-  var result = 0;
-  for (var i = 0; i < a.length; i++) {
-    result |= a.codeUnitAt(i) ^ b.codeUnitAt(i);
-  }
-  return result == 0;
 }
