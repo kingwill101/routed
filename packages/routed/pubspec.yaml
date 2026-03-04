@@ -27,8 +27,6 @@ dependencies:
   build: ^4.0.4
   collection: ^1.19.1
   contextual: ^2.2.0
-  dartastic_opentelemetry: ^0.9.3
-  dartastic_opentelemetry_api: ^0.8.7
   decimal: ^3.2.4
   dotenv: ^4.2.0
   es_compression: ^2.0.15

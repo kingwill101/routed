@@ -4,6 +4,44 @@ import 'package:dartastic_opentelemetry/dartastic_opentelemetry.dart' as dotel;
 import 'package:dartastic_opentelemetry_api/dartastic_opentelemetry_api.dart'
     as dotel_api;
 
+class TracingSpan {
+  TracingSpan._(this._span);
+
+  final dotel.Span _span;
+
+  bool get isEnded => _span.isEnded;
+
+  void addHttpStatusCode(int statusCode) {
+    _span.addAttributes(
+      dotel.OTel.attributes([dotel.OTel.attributeInt('http.status_code', statusCode)]),
+    );
+  }
+
+  void setStatusOk() {
+    _span.setStatus(dotel.SpanStatusCode.Ok);
+  }
+
+  void setStatusError([String? message]) {
+    _span.setStatus(dotel.SpanStatusCode.Error, message);
+  }
+
+  void recordException(Object error, {StackTrace? stackTrace}) {
+    _span.recordException(error, stackTrace: stackTrace);
+  }
+
+  void addEvent(String name, [Map<String, Object>? attributes]) {
+    if (attributes == null || attributes.isEmpty) {
+      _span.addEventNow(name);
+      return;
+    }
+    _span.addEventNow(name, dotel.OTel.attributesFromMap(attributes));
+  }
+
+  void end() {
+    _span.end();
+  }
+}
+
 class TracingService {
   TracingService._({
     required this.enabled,
@@ -87,6 +125,38 @@ class TracingService {
     }
 
     return attrs;
+  }
+
+  TracingSpan? startServerSpan({
+    required Map<String, String> headers,
+    required String method,
+    required String route,
+    required Uri uri,
+  }) {
+    final tracer = _tracer;
+    if (!enabled || tracer == null) {
+      return null;
+    }
+
+    final parentContext = extractContext(headers);
+    final spanAttributes = attributesFor(method: method, route: route, uri: uri);
+
+    final span = tracer.startSpan(
+      '$method $route',
+      context: parentContext,
+      kind: dotel.SpanKind.server,
+      attributes: dotel.OTel.attributesFromList(spanAttributes),
+    );
+
+    return TracingSpan._(span);
+  }
+
+  Future<T> withSpanAsync<T>(TracingSpan span, Future<T> Function() action) {
+    final tracer = _tracer;
+    if (tracer == null) {
+      return action();
+    }
+    return tracer.withSpanAsync(span._span, action);
   }
 
   void shutdown() {

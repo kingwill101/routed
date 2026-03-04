@@ -1,7 +1,6 @@
 import 'dart:async';
 import 'dart:io';
 
-import 'package:dartastic_opentelemetry/dartastic_opentelemetry.dart' as dotel;
 import 'package:routed/src/config/specs/observability.dart';
 import 'package:routed/src/container/container.dart';
 import 'package:routed/src/context/context.dart';
@@ -252,51 +251,38 @@ class ObservabilityServiceProvider extends ServiceProvider
       }
     });
 
-    final parentContext = _tracing.extractContext(headers);
     final routeLabel = _routeLabel(ctx);
-    final spanAttributes = _tracing.attributesFor(
+    final span = _tracing.startServerSpan(
       method: request.method,
       route: routeLabel,
       uri: request.uri,
+      headers: headers,
     );
-    final tracer = _tracing.tracer!;
-
-    final span = tracer.startSpan(
-      '${request.method} $routeLabel',
-      context: parentContext,
-      kind: dotel.SpanKind.server,
-      attributes: dotel.OTel.attributesFromList(spanAttributes),
-    );
+    if (span == null) {
+      return next();
+    }
     ctx.set(_spanKey, span);
-    span.addEventNow('routed.request.start');
+    span.addEvent('routed.request.start');
 
     try {
-      return await tracer.withSpanAsync(span, () async {
+      return await _tracing.withSpanAsync(span, () async {
         try {
           final response = await next();
           final statusCode = ctx.response.statusCode;
-          span.addAttributes(
-            dotel.OTel.attributes([
-              dotel.OTel.attributeInt('http.status_code', statusCode),
-            ]),
-          );
-          span.setStatus(
-            statusCode >= 500
-                ? dotel.SpanStatusCode.Error
-                : dotel.SpanStatusCode.Ok,
-          );
+          span.addHttpStatusCode(statusCode);
+          if (statusCode >= 500) {
+            span.setStatusError();
+          } else {
+            span.setStatusOk();
+          }
           return response;
         } catch (error, stackTrace) {
           final statusCode = ctx.response.statusCode >= 400
               ? ctx.response.statusCode
               : 500;
-          span.addAttributes(
-            dotel.OTel.attributes([
-              dotel.OTel.attributeInt('http.status_code', statusCode),
-            ]),
-          );
+          span.addHttpStatusCode(statusCode);
           span.recordException(error, stackTrace: stackTrace);
-          span.setStatus(dotel.SpanStatusCode.Error, error.toString());
+          span.setStatusError(error.toString());
           await _captureSentryException(ctx, error, stackTrace, sentrySpan);
           rethrow;
         }
@@ -588,7 +574,7 @@ class ObservabilityServiceProvider extends ServiceProvider
     }
   }
 
-  dotel.Span? _spanForEvent(Event event) {
+  TracingSpan? _spanForEvent(Event event) {
     EngineContext? context;
     if (event is BeforeRoutingEvent) {
       context = event.context;
@@ -609,10 +595,10 @@ class ObservabilityServiceProvider extends ServiceProvider
       return null;
     }
     final span = context.get<Object>(_spanKey);
-    return span is dotel.Span ? span : null;
+    return span is TracingSpan ? span : null;
   }
 
-  void _recordSpanEvent(dotel.Span span, Event event) {
+  void _recordSpanEvent(TracingSpan span, Event event) {
     if (event is BeforeRoutingEvent) {
       _addSpanEvent(
         span,
@@ -671,7 +657,7 @@ class ObservabilityServiceProvider extends ServiceProvider
   }
 
   void _addSpanEvent(
-    dotel.Span span,
+    TracingSpan span,
     String name,
     Map<String, Object?> attributes,
   ) {
@@ -687,10 +673,10 @@ class ObservabilityServiceProvider extends ServiceProvider
       }
     });
     if (cleaned.isEmpty) {
-      span.addEventNow(name);
+      span.addEvent(name);
       return;
     }
-    span.addEventNow(name, dotel.OTel.attributesFromMap(cleaned));
+    span.addEvent(name, cleaned);
   }
 
   Map<String, Object?> _requestAttributes(EngineContext context) {
