@@ -27,6 +27,7 @@ dependencies:
   path: ^1.9.1
   server_contracts: ^0.1.0
   server_data: ^0.1.0
+  xml: ^6.6.1
 
 dev_dependencies:
   lints: ^6.0.0

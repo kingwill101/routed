@@ -48,3 +48,4 @@ export 'src/http/multipart.dart';
 export 'src/http/query_params.dart';
 export 'src/http/sse.dart';
 export 'src/http/urlencoded.dart';
+export 'src/http/xml.dart';
