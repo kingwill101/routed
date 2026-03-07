@@ -9,18 +9,7 @@ final class BridgeConnectionInfo implements HttpConnectionInfo {
   });
 
   factory BridgeConnectionInfo.fromRequestFrame(BridgeRequestFrame frame) {
-    final hostHeader = _bridgeHeaderValue(frame, HttpHeaders.hostHeader);
-    final authority = _splitBridgeAuthority(
-      (hostHeader != null && hostHeader.isNotEmpty)
-          ? hostHeader
-          : frame.authority,
-    );
-    final remoteAddress = _inferRemoteAddress(authority.host);
-    return BridgeConnectionInfo(
-      remoteAddress: remoteAddress,
-      remotePort: 0,
-      localPort: authority.port ?? 0,
-    );
+    return _bridgeConnectionInfoFromSource(_BridgeFrameRequestSource(frame));
   }
 
   @override
@@ -31,6 +20,22 @@ final class BridgeConnectionInfo implements HttpConnectionInfo {
 
   @override
   final int remotePort;
+}
+
+BridgeConnectionInfo _bridgeConnectionInfoFromSource(
+  _BridgeRequestSource source,
+) {
+  final hostHeader = source.firstHeaderValue(HttpHeaders.hostHeader);
+  final authority = _splitBridgeAuthority(
+    (hostHeader != null && hostHeader.isNotEmpty)
+        ? hostHeader
+        : source.authority,
+  );
+  return BridgeConnectionInfo(
+    remoteAddress: _inferRemoteAddress(authority.host),
+    remotePort: 0,
+    localPort: authority.port ?? 0,
+  );
 }
 
 InternetAddress _inferRemoteAddress(String host) {

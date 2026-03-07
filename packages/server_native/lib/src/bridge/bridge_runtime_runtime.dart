@@ -13,18 +13,19 @@ final class BridgeHttpRuntime {
   Future<(Uint8List?, BridgeResponseFrame?)> handlePayload(
     Uint8List payload,
   ) async {
-    final frame = BridgeRequestFrame.decodePayload(payload);
-    final connectionInfo = BridgeConnectionInfo.fromRequestFrame(frame);
+    final source = _BridgePayloadRequestSource.parse(payload);
+    final requestBodyBytes = source.bodyBytes;
+    final connectionInfo = _bridgeConnectionInfoFromSource(source);
     final response = BridgeHttpResponse(
-      requestMethod: frame.method,
+      requestMethod: source.method,
       connectionInfo: connectionInfo,
     );
-    final request = BridgeHttpRequest(
-      frame: frame,
+    final request = BridgeHttpRequest._fromSource(
+      source: source,
       response: response,
-      bodyStream: frame.bodyBytes.isEmpty
+      bodyStream: requestBodyBytes.isEmpty
           ? const Stream<Uint8List>.empty()
-          : Stream<Uint8List>.value(frame.bodyBytes),
+          : Stream<Uint8List>.value(requestBodyBytes),
       connectionInfo: connectionInfo,
     );
     await _handler(request);

@@ -2,18 +2,17 @@ part of 'bridge_runtime.dart';
 
 /// Immutable request-headers implementation backed by bridge frame data.
 final class _BridgeRequestHeaders implements HttpHeaders {
-  _BridgeRequestHeaders.fromFrame(
-    BridgeRequestFrame frame, {
+  _BridgeRequestHeaders.fromSource(
+    _BridgeRequestSource source, {
     bool stripTransferEncoding = false,
     bool defaultPersistentConnection = true,
   }) : _defaultPersistentConnection = defaultPersistentConnection {
-    for (var i = 0; i < frame.headerCount; i++) {
-      final name = frame.headerNameAt(i);
+    source.forEachHeader((name, value) {
       final normalized = _asciiLower(name);
       final values = _headers.putIfAbsent(normalized, () => <String>[]);
-      values.add(frame.headerValueAt(i));
+      values.add(value);
       _originalNames[normalized] = name;
-    }
+    });
     if (stripTransferEncoding) {
       _headers.remove(HttpHeaders.transferEncodingHeader);
       _originalNames.remove(HttpHeaders.transferEncodingHeader);
@@ -207,10 +206,10 @@ final class _BridgeRequestHeaders implements HttpHeaders {
 
 /// Decodes immutable header view used by [BridgeHttpRequest.headers].
 _BridgeRequestHeaders _buildBridgeRequestHeaders(
-  BridgeRequestFrame frame, {
+  _BridgeRequestSource source, {
   bool stripTransferEncoding = false,
 }) {
-  final protocol = frame.protocol.trim().toLowerCase();
+  final protocol = source.protocol.trim().toLowerCase();
   final defaultPersistentConnection =
       protocol.isEmpty ||
       protocol == '1.1' ||
@@ -223,8 +222,8 @@ _BridgeRequestHeaders _buildBridgeRequestHeaders(
       protocol == 'http/2.0' ||
       protocol == 'http/3' ||
       protocol == 'http/3.0';
-  return _BridgeRequestHeaders.fromFrame(
-    frame,
+  return _BridgeRequestHeaders.fromSource(
+    source,
     stripTransferEncoding: stripTransferEncoding,
     defaultPersistentConnection: defaultPersistentConnection,
   );

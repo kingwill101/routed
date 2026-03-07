@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:convert';
+import 'dart:io';
 import 'dart:typed_data';
 
 import 'package:routed/routed.dart';
@@ -368,6 +369,69 @@ void main() {
       expect(_headerValues(response, 'x-path'), contains('/raw'));
       expect(utf8.decode(response.bodyBytes), 'echo:hello bridge');
     });
+
+    test(
+      'handles payload-backed callback requests without frame decode',
+      () async {
+        final runtime = BridgeHttpRuntime((request) async {
+          final requestBody = await utf8.decoder.bind(request).join();
+          request.response.statusCode = HttpStatus.accepted;
+          request.response.headers.contentType = ContentType.json;
+          request.response.write(
+            jsonEncode({
+              'method': request.method,
+              'uri': request.requestedUri.toString(),
+              'contentLength': request.contentLength,
+              'persistentConnection': request.persistentConnection,
+              'host': request.headers.host,
+              'port': request.headers.port,
+              'localPort': request.connectionInfo?.localPort,
+              'cookies': request.cookies
+                  .map((cookie) => '${cookie.name}=${cookie.value}')
+                  .toList(growable: false),
+              'body': requestBody,
+            }),
+          );
+          await request.response.close();
+        });
+
+        final (encodedPayload, frame) = await runtime.handlePayload(
+          _requestFrame(
+            method: 'post',
+            authority: '127.0.0.1:8080',
+            path: '/payload',
+            query: 'q=1',
+            protocol: '1.0',
+            headers: const <MapEntry<String, String>>[
+              MapEntry(HttpHeaders.hostHeader, 'upstream.test:8081'),
+              MapEntry('x-forwarded-proto', 'https'),
+              MapEntry('x-forwarded-host', 'example.test:8443'),
+              MapEntry(HttpHeaders.connectionHeader, 'keep-alive, upgrade'),
+              MapEntry(HttpHeaders.cookieHeader, 'a=1; b=two'),
+              MapEntry(HttpHeaders.contentLengthHeader, '13'),
+            ],
+            bodyBytes: utf8.encode('hello payload'),
+          ).encodePayload(),
+        );
+
+        expect(frame, isNull);
+        final response = BridgeResponseFrame.decodePayload(encodedPayload!);
+        expect(response.status, HttpStatus.accepted);
+        final json =
+            jsonDecode(utf8.decode(response.bodyBytes)) as Map<String, dynamic>;
+        expect(json, {
+          'method': 'POST',
+          'uri': 'https://example.test:8443/payload?q=1',
+          'contentLength': 13,
+          'persistentConnection': true,
+          'host': 'upstream.test',
+          'port': 8081,
+          'localPort': 8081,
+          'cookies': <String>['a=1', 'b=two'],
+          'body': 'hello payload',
+        });
+      },
+    );
   });
 
   group('BridgeRuntime', () {

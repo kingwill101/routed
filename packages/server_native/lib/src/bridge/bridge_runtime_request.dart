@@ -1,28 +1,45 @@
 part of 'bridge_runtime.dart';
 
-/// `HttpRequest` adapter backed by a [BridgeRequestFrame] and body stream.
+/// `HttpRequest` adapter backed by a bridge request source and body stream.
 final class BridgeHttpRequest extends Stream<Uint8List> implements HttpRequest {
   BridgeHttpRequest({
     required BridgeRequestFrame frame,
+    required HttpResponse response,
+    required Stream<Uint8List> bodyStream,
+    HttpSession Function()? sessionFactory,
+    bool stripTransferEncoding = false,
+    BridgeConnectionInfo? connectionInfo,
+  }) : this._fromSource(
+         source: _BridgeFrameRequestSource(frame),
+         response: response,
+         bodyStream: bodyStream,
+         sessionFactory: sessionFactory,
+         stripTransferEncoding: stripTransferEncoding,
+         connectionInfo:
+             connectionInfo ?? BridgeConnectionInfo.fromRequestFrame(frame),
+       );
+
+  BridgeHttpRequest._fromSource({
+    required _BridgeRequestSource source,
     required this.response,
     required Stream<Uint8List> bodyStream,
     HttpSession Function()? sessionFactory,
     bool stripTransferEncoding = false,
     BridgeConnectionInfo? connectionInfo,
-  }) : method = frame.method,
-       protocolVersion = frame.protocol,
-       persistentConnection = _derivePersistentConnection(frame),
+  }) : method = source.method,
+       protocolVersion = source.protocol,
+       persistentConnection = _derivePersistentConnection(source),
        _bodyStream = bodyStream,
-       _frame = frame,
+       _source = source,
        _sessionFactory = sessionFactory,
        _stripTransferEncoding = stripTransferEncoding,
        _connectionInfo =
-           connectionInfo ?? BridgeConnectionInfo.fromRequestFrame(frame) {
+           connectionInfo ?? _bridgeConnectionInfoFromSource(source) {
     response.persistentConnection = persistentConnection;
   }
 
   _BridgeRequestHeaders? _headers;
-  final BridgeRequestFrame _frame;
+  final _BridgeRequestSource _source;
   List<Cookie>? _cookies;
   final Stream<Uint8List> _bodyStream;
   HttpSession? _session;
@@ -37,7 +54,7 @@ final class BridgeHttpRequest extends Stream<Uint8List> implements HttpRequest {
   final String protocolVersion;
 
   @override
-  Uri get requestedUri => _requestedUri ??= _buildBridgeRequestUri(_frame);
+  Uri get requestedUri => _requestedUri ??= _buildBridgeRequestUri(_source);
   Uri? _requestedUri;
 
   @override
@@ -45,7 +62,7 @@ final class BridgeHttpRequest extends Stream<Uint8List> implements HttpRequest {
 
   @override
   HttpHeaders get headers => _headers ??= _buildBridgeRequestHeaders(
-    _frame,
+    _source,
     stripTransferEncoding: _stripTransferEncoding,
   );
 
@@ -55,13 +72,8 @@ final class BridgeHttpRequest extends Stream<Uint8List> implements HttpRequest {
     if (headers != null) {
       return headers.contentLength;
     }
-    for (var i = 0; i < _frame.headerCount; i++) {
-      final name = _frame.headerNameAt(i);
-      if (_equalsAsciiIgnoreCase(name, HttpHeaders.contentLengthHeader)) {
-        return int.tryParse(_frame.headerValueAt(i).trim()) ?? -1;
-      }
-    }
-    return -1;
+    final raw = _source.firstHeaderValue(HttpHeaders.contentLengthHeader);
+    return raw == null ? -1 : int.tryParse(raw.trim()) ?? -1;
   }
 
   @override
@@ -72,14 +84,15 @@ final class BridgeHttpRequest extends Stream<Uint8List> implements HttpRequest {
     }
 
     final parsed = <Cookie>[];
-    for (var i = 0; i < _frame.headerCount; i++) {
-      final name = _frame.headerNameAt(i);
+    _source.forEachHeader((name, value) {
       if (!_equalsAsciiIgnoreCase(name, HttpHeaders.cookieHeader)) {
-        continue;
+        return;
       }
-      for (final part in _frame.headerValueAt(i).split(';')) {
+      for (final part in value.split(';')) {
         final trimmed = part.trim();
-        if (trimmed.isEmpty) continue;
+        if (trimmed.isEmpty) {
+          continue;
+        }
         final idx = trimmed.indexOf('=');
         if (idx == -1) {
           parsed.add(Cookie(trimmed, ''));
@@ -92,7 +105,7 @@ final class BridgeHttpRequest extends Stream<Uint8List> implements HttpRequest {
           );
         }
       }
-    }
+    });
     _cookies = parsed;
     return parsed;
   }
@@ -153,8 +166,8 @@ final class BridgeHttpRequest extends Stream<Uint8List> implements HttpRequest {
   }
 }
 
-bool _derivePersistentConnection(BridgeRequestFrame frame) {
-  final protocol = frame.protocol.trim().toLowerCase();
+bool _derivePersistentConnection(_BridgeRequestSource source) {
+  final protocol = source.protocol.trim().toLowerCase();
   var defaultPersistentConnection = true;
   if (protocol == '1.0' || protocol == 'http/1.0') {
     defaultPersistentConnection = false;
@@ -162,7 +175,7 @@ bool _derivePersistentConnection(BridgeRequestFrame frame) {
 
   var hasClose = false;
   var hasKeepAlive = false;
-  frame.forEachHeader((name, value) {
+  source.forEachHeader((name, value) {
     if (!_equalsAsciiIgnoreCase(name, HttpHeaders.connectionHeader)) {
       return;
     }
