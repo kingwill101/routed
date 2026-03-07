@@ -306,7 +306,7 @@ Future<NativeHttpServer> _startNativeHttpServer({
     }
   }
 
-  final requestController = StreamController<HttpRequest>();
+  final requestController = StreamController<HttpRequest>(sync: true);
   final connectionCounters = _ProxyConnectionCounters();
   final server = NativeHttpServer._(requestController, connectionCounters);
   final runtime = BridgeHttpRuntime(server._handleRequest);

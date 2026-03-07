@@ -424,38 +424,52 @@ NativeProxyServer _startNativeDirectProxy({
     const minIdleDelay = Duration(milliseconds: 1);
     const maxIdleDelayNoStreams = Duration(milliseconds: 20);
     const maxIdleDelayWithStreams = Duration(milliseconds: 5);
+    const maxFramesPerTurn = 32;
 
+    outerLoop:
     while (!proxyRef.isClosed) {
-      NativeDirectRequestFrame? frame;
-      try {
-        frame = proxyRef.pollDirectRequestFrame(timeoutMs: 0);
-      } catch (error, stack) {
-        stderr.writeln(
-          '[server_native] native direct poll failed: $error\n$stack',
-        );
-        if (proxyRef.isClosed) {
+      var drainedFrames = 0;
+      while (!proxyRef.isClosed && drainedFrames < maxFramesPerTurn) {
+        NativeDirectRequestFrame? frame;
+        try {
+          frame = proxyRef.pollDirectRequestFrame(timeoutMs: 0);
+        } catch (error, stack) {
+          stderr.writeln(
+            '[server_native] native direct poll failed: $error\n$stack',
+          );
+          if (proxyRef.isClosed) {
+            break outerLoop;
+          }
+          idleDelay = maxIdleDelayNoStreams;
+          await Future<void>.delayed(idleDelay);
+          continue outerLoop;
+        }
+
+        if (frame == null) {
           break;
         }
-        idleDelay = maxIdleDelayNoStreams;
-        await Future<void>.delayed(idleDelay);
-        continue;
+
+        idleDelay = minIdleDelay;
+        processRequestFrame(frame.requestId, frame.payload);
+        drainedFrames++;
       }
-      if (frame == null) {
-        await Future<void>.delayed(idleDelay);
-        final maxIdleDelay = nativeDirectStreams.isEmpty
-            ? maxIdleDelayNoStreams
-            : maxIdleDelayWithStreams;
-        final nextMicros =
-            idleDelay.inMicroseconds >= maxIdleDelay.inMicroseconds
-            ? maxIdleDelay.inMicroseconds
-            : idleDelay.inMicroseconds * 2;
-        idleDelay = Duration(microseconds: nextMicros);
+
+      if (drainedFrames != 0) {
+        // Draining short bursts keeps callback mode responsive without paying
+        // an event-queue yield for every single request frame.
+        await Future<void>.delayed(Duration.zero);
         continue;
       }
 
-      idleDelay = minIdleDelay;
-      processRequestFrame(frame.requestId, frame.payload);
-      await Future<void>.delayed(Duration.zero);
+      await Future<void>.delayed(idleDelay);
+      final maxIdleDelay = nativeDirectStreams.isEmpty
+          ? maxIdleDelayNoStreams
+          : maxIdleDelayWithStreams;
+      final nextMicros =
+          idleDelay.inMicroseconds >= maxIdleDelay.inMicroseconds
+          ? maxIdleDelay.inMicroseconds
+          : idleDelay.inMicroseconds * 2;
+      idleDelay = Duration(microseconds: nextMicros);
     }
   }
 
