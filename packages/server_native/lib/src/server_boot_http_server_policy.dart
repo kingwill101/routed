@@ -22,7 +22,7 @@ void _applyNativeHttpRequestPolicies({
     ),
   );
 
-  final requestAcceptsGzip = _acceptsGzip(request);
+  final requestAcceptsGzip = autoCompress && _acceptsGzip(request);
   final response = request.response;
   if (response case BridgeHttpResponse()) {
     response.configureAutoCompression(

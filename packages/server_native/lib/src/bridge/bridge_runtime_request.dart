@@ -74,6 +74,7 @@ final class BridgeHttpRequest extends Stream<Uint8List> implements HttpRequest {
   @override
   HttpHeaders get headers => _headers ??= _buildBridgeRequestHeaders(
     _source,
+    metadata: _metadata,
     stripTransferEncoding: _stripTransferEncoding,
   );
 

@@ -11,6 +11,8 @@ abstract interface class _BridgeRequestSource {
 
   void forEachHeader(void Function(String name, String value) visitor);
 
+  void forEachMatchingHeader(String name, void Function(String value) visitor);
+
   String? firstHeaderValue(String name);
 }
 
@@ -128,6 +130,20 @@ bool _defaultPersistentConnectionForProtocol(String protocol) {
   return (hasClose: nextHasClose, hasKeepAlive: nextHasKeepAlive);
 }
 
+@pragma('vm:prefer-inline')
+int? _bridgeHeaderLookupTokenIgnoreCase(String name) {
+  final exact = _bridgeHeaderLookupToken(name);
+  if (exact != null) {
+    return exact;
+  }
+  for (var i = 0; i < _bridgeHeaderNameTable.length; i++) {
+    if (_equalsAsciiIgnoreCase(_bridgeHeaderNameTable[i], name)) {
+      return i;
+    }
+  }
+  return null;
+}
+
 final class _BridgeFrameRequestSource implements _BridgeRequestSource {
   _BridgeFrameRequestSource(this._frame);
 
@@ -157,6 +173,16 @@ final class _BridgeFrameRequestSource implements _BridgeRequestSource {
   @override
   void forEachHeader(void Function(String name, String value) visitor) {
     _frame.forEachHeader(visitor);
+  }
+
+  @override
+  void forEachMatchingHeader(String name, void Function(String value) visitor) {
+    for (var i = 0; i < _frame.headerCount; i++) {
+      final headerName = _frame.headerNameAt(i);
+      if (_equalsAsciiIgnoreCase(headerName, name)) {
+        visitor(_frame.headerValueAt(i));
+      }
+    }
   }
 
   @override
@@ -293,10 +319,55 @@ final class _BridgePayloadRequestSource implements _BridgeRequestSource {
   }
 
   @override
+  void forEachMatchingHeader(String name, void Function(String value) visitor) {
+    _ensureHeadParsed();
+    final tokenLookup = _tokenizedHeaderNames
+        ? _bridgeHeaderLookupTokenIgnoreCase(name)
+        : null;
+    var offset = _headersOffset!;
+    for (var i = 0; i < _headerCount!; i++) {
+      var matches = false;
+      if (!_tokenizedHeaderNames) {
+        final nameField = _readField(_payload, offset);
+        matches = _equalsAsciiIgnoreCase(
+          _readFieldString(nameField.slice),
+          name,
+        );
+        offset = nameField.nextOffset;
+      } else {
+        if (offset + 2 > _payload.length) {
+          throw const FormatException('truncated bridge payload');
+        }
+        final token = (_payload[offset] << 8) | _payload[offset + 1];
+        offset += 2;
+        if (token == _bridgeHeaderNameLiteralToken) {
+          final nameField = _readField(_payload, offset);
+          matches = _equalsAsciiIgnoreCase(
+            _readFieldString(nameField.slice),
+            name,
+          );
+          offset = nameField.nextOffset;
+        } else {
+          if (token < 0 || token >= _bridgeHeaderNameTable.length) {
+            throw FormatException('invalid bridge header name token: $token');
+          }
+          matches = tokenLookup != null && token == tokenLookup;
+        }
+      }
+
+      final valueField = _readField(_payload, offset);
+      if (matches) {
+        visitor(_readFieldString(valueField.slice));
+      }
+      offset = valueField.nextOffset;
+    }
+  }
+
+  @override
   String? firstHeaderValue(String name) {
     _ensureHeadParsed();
     final tokenLookup = _tokenizedHeaderNames
-        ? _bridgeHeaderLookupToken(name)
+        ? _bridgeHeaderLookupTokenIgnoreCase(name)
         : null;
     if (tokenLookup != null) {
       final value = _readTokenizedHeaderValueByToken(name, tokenLookup);
