@@ -10,6 +10,54 @@ final class BridgeHttpRuntime {
 
   final FutureOr<void> Function(BridgeHttpRequest request) _handler;
 
+  Future<(Uint8List?, BridgeResponseFrame?)> handlePayload(
+    Uint8List payload,
+  ) async {
+    final frame = BridgeRequestFrame.decodePayload(payload);
+    final connectionInfo = BridgeConnectionInfo.fromRequestFrame(frame);
+    final response = BridgeHttpResponse(
+      requestMethod: frame.method,
+      connectionInfo: connectionInfo,
+    );
+    final request = BridgeHttpRequest(
+      frame: frame,
+      response: response,
+      bodyStream: frame.bodyBytes.isEmpty
+          ? const Stream<Uint8List>.empty()
+          : Stream<Uint8List>.value(frame.bodyBytes),
+      connectionInfo: connectionInfo,
+    );
+    await _handler(request);
+    await response.done;
+    await response.prepareDetachedHeaders();
+    final detachedSocket = response.takeDetachedSocket();
+    if (detachedSocket == null) {
+      return (response.encodePayload(), null);
+    }
+
+    final bodyBytes = response.takeBodyBytes();
+    final headerCount = response.flattenedHeaderCount;
+    final headerNames = headerCount == 0
+        ? const <String>[]
+        : List<String>.filled(headerCount, '', growable: false);
+    final headerValues = headerCount == 0
+        ? const <String>[]
+        : List<String>.filled(headerCount, '', growable: false);
+    if (headerCount != 0) {
+      response.writeFlattenedHeaders(headerNames, headerValues);
+    }
+    return (
+      null,
+      BridgeResponseFrame.fromHeaderPairs(
+        status: response.statusCode,
+        headerNames: headerNames,
+        headerValues: headerValues,
+        bodyBytes: bodyBytes,
+        detachedSocket: detachedSocket,
+      ),
+    );
+  }
+
   /// Handles chunked request bodies and emits a chunked bridge response.
   Future<void> handleStream({
     required BridgeRequestFrame frame,

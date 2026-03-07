@@ -325,4 +325,30 @@ final class BridgeHttpResponse implements HttpResponse {
       }
     }
   }
+
+  Uint8List encodePayload() {
+    final bodyBytes = takeBodyBytes();
+    final writer = _BridgeFrameWriter();
+    writer.writeUint8(bridgeFrameProtocolVersion);
+    writer.writeUint8(_responseFrameTypeForEncode);
+    writer.writeUint16(statusCode);
+    writer.writeUint32(flattenedHeaderCount);
+    final headers = _headers;
+    if (headers != null) {
+      headers.writeEncodedHeaderPairs(writer);
+    }
+    final cookies = _cookies;
+    if (cookies != null) {
+      for (final cookie in cookies) {
+        _writeHeaderName(
+          writer,
+          HttpHeaders.setCookieHeader,
+          tokenized: _encodeTokenizedHeaderFrameTypes,
+        );
+        writer.writeString(cookie.toString());
+      }
+    }
+    writer.writeBytes(bodyBytes);
+    return writer.takeBytes();
+  }
 }

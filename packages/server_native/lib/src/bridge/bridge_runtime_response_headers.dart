@@ -303,6 +303,37 @@ final class _BridgeHttpHeaders implements HttpHeaders {
     return offset;
   }
 
+  void writeEncodedHeaderPairs(_BridgeFrameWriter writer) {
+    for (final entry in _headers.entries) {
+      if (entry.key == HttpHeaders.transferEncodingHeader) {
+        continue;
+      }
+      final originalName = _originalNames[entry.key] ?? entry.key;
+      final values = entry.value;
+      if (values.isEmpty) {
+        continue;
+      }
+      _writeHeaderName(
+        writer,
+        originalName,
+        tokenized: _encodeTokenizedHeaderFrameTypes,
+      );
+      if (_shouldFoldHeader(entry.key)) {
+        writer.writeString(values.length == 1 ? values.first : values.join(', '));
+        continue;
+      }
+      writer.writeString(values.first);
+      for (var i = 1; i < values.length; i++) {
+        _writeHeaderName(
+          writer,
+          originalName,
+          tokenized: _encodeTokenizedHeaderFrameTypes,
+        );
+        writer.writeString(values[i]);
+      }
+    }
+  }
+
   @pragma('vm:prefer-inline')
   bool _shouldFoldHeader(String normalizedName) {
     return !_noFolding.contains(normalizedName);

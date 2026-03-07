@@ -34,8 +34,8 @@ Future<void> serveNative(
     shutdownSignal: shutdownSignal,
     handleFrame: (frame) async =>
         _BridgeHandleFrameResult.frame(await runtime.handleFrame(frame)),
-    handlePayload: (payload) async => _BridgeHandleFrameResult.frame(
-      await runtime.handleFrame(BridgeRequestFrame.decodePayload(payload)),
+    handlePayload: (payload) async => _bridgePayloadResultToHandleResult(
+      await runtime.handlePayload(payload),
     ),
     handleStream: runtime.handleStream,
   );
@@ -98,8 +98,8 @@ Future<void> serveSecureNative(
     tlsCertPassword: certificatePassword,
     handleFrame: (frame) async =>
         _BridgeHandleFrameResult.frame(await runtime.handleFrame(frame)),
-    handlePayload: (payload) async => _BridgeHandleFrameResult.frame(
-      await runtime.handleFrame(BridgeRequestFrame.decodePayload(payload)),
+    handlePayload: (payload) async => _bridgePayloadResultToHandleResult(
+      await runtime.handlePayload(payload),
     ),
     handleStream: runtime.handleStream,
   );
@@ -157,8 +157,8 @@ Future<void> serveNativeMulti(
       shutdownSignal: internalShutdown.future,
       handleFrame: (frame) async =>
           _BridgeHandleFrameResult.frame(await runtime.handleFrame(frame)),
-      handlePayload: (payload) async => _BridgeHandleFrameResult.frame(
-        await runtime.handleFrame(BridgeRequestFrame.decodePayload(payload)),
+      handlePayload: (payload) async => _bridgePayloadResultToHandleResult(
+        await runtime.handlePayload(payload),
       ),
       handleStream: runtime.handleStream,
     );
@@ -244,8 +244,8 @@ Future<void> serveSecureNativeMulti(
       tlsCertPassword: certificatePassword,
       handleFrame: (frame) async =>
           _BridgeHandleFrameResult.frame(await runtime.handleFrame(frame)),
-      handlePayload: (payload) async => _BridgeHandleFrameResult.frame(
-        await runtime.handleFrame(BridgeRequestFrame.decodePayload(payload)),
+      handlePayload: (payload) async => _bridgePayloadResultToHandleResult(
+        await runtime.handlePayload(payload),
       ),
       handleStream: runtime.handleStream,
     );
@@ -301,8 +301,8 @@ Future<void> serveNativeHttp(
     shutdownSignal: shutdownSignal,
     handleFrame: (frame) async =>
         _BridgeHandleFrameResult.frame(await runtime.handleFrame(frame)),
-    handlePayload: (payload) async => _BridgeHandleFrameResult.frame(
-      await runtime.handleFrame(BridgeRequestFrame.decodePayload(payload)),
+    handlePayload: (payload) async => _bridgePayloadResultToHandleResult(
+      await runtime.handlePayload(payload),
     ),
     handleStream: runtime.handleStream,
   );
@@ -368,8 +368,8 @@ Future<void> serveSecureNativeHttp(
     tlsCertPassword: certificatePassword,
     handleFrame: (frame) async =>
         _BridgeHandleFrameResult.frame(await runtime.handleFrame(frame)),
-    handlePayload: (payload) async => _BridgeHandleFrameResult.frame(
-      await runtime.handleFrame(BridgeRequestFrame.decodePayload(payload)),
+    handlePayload: (payload) async => _bridgePayloadResultToHandleResult(
+      await runtime.handlePayload(payload),
     ),
     handleStream: runtime.handleStream,
   );

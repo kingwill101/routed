@@ -346,9 +346,10 @@ Future<NativeHttpServer> _startNativeHttpServer({
         idleTimeoutProvider: () => server.idleTimeout,
         handleFrame: (frame) async =>
             _BridgeHandleFrameResult.frame(await runtime.handleFrame(frame)),
-        handlePayload: (payload) async => _BridgeHandleFrameResult.frame(
-          await runtime.handleFrame(BridgeRequestFrame.decodePayload(payload)),
-        ),
+        handlePayload: (payload) async =>
+            _bridgePayloadResultToHandleResult(
+              await runtime.handlePayload(payload),
+            ),
         handleStream: runtime.handleStream,
       );
       final address = await _resolveInternetAddress(normalizedHost);
