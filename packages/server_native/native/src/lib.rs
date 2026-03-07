@@ -466,6 +466,22 @@ pub extern "C" fn server_native_transport_version() -> i32 {
     1
 }
 
+/// Chooses Tokio worker thread count for one proxy runtime.
+///
+/// Shared listeners are typically booted once per Dart isolate via
+/// `shared: true`, so keeping each runtime to a single worker avoids
+/// multiplying the machine core count across every isolate.
+fn proxy_runtime_worker_threads(shared: bool) -> usize {
+    if shared {
+        return 1;
+    }
+
+    std::thread::available_parallelism()
+        .map(|value| value.get())
+        .unwrap_or(2)
+        .clamp(2, 16)
+}
+
 #[no_mangle]
 /// Starts the proxy server and returns an opaque handle.
 ///
@@ -596,10 +612,7 @@ pub extern "C" fn server_native_start_proxy_server(
 
     let runtime_direct_bridge = direct_bridge.clone();
     let join_handle = thread::spawn(move || {
-        let worker_threads = std::thread::available_parallelism()
-            .map(|value| value.get())
-            .unwrap_or(2)
-            .clamp(2, 16);
+        let worker_threads = proxy_runtime_worker_threads(shared);
         let runtime = match tokio::runtime::Builder::new_multi_thread()
             .enable_all()
             .worker_threads(worker_threads)
@@ -2203,6 +2216,7 @@ fn emit_direct_callback_payload(
     }
 
     let mut queued = direct_bridge.queued_payloads.lock();
+    let should_wake = queued.is_empty();
     queued.push_back(QueuedDirectPayload {
         request_id,
         payload,
@@ -2210,11 +2224,13 @@ fn emit_direct_callback_payload(
     direct_bridge.queued_payloads_cv.notify_one();
     drop(queued);
 
-    if let Some(callback) = direct_bridge.callback {
-        // In callback mode we still enqueue payloads and only use callback as a
-        // wake-up signal. This avoids passing raw pointers through the async
-        // isolate listener boundary in Dart.
-        callback(request_id, std::ptr::null(), 0);
+    if should_wake {
+        if let Some(callback) = direct_bridge.callback {
+            // In callback mode we still enqueue payloads and only use callback as a
+            // wake-up signal. This avoids passing raw pointers through the async
+            // isolate listener boundary in Dart.
+            callback(request_id, std::ptr::null(), 0);
+        }
     }
     Ok(())
 }
@@ -2652,6 +2668,17 @@ mod tests {
     }
 
     #[test]
+    fn shared_proxy_runtime_uses_single_worker_thread() {
+        assert_eq!(proxy_runtime_worker_threads(true), 1);
+    }
+
+    #[test]
+    fn non_shared_proxy_runtime_clamps_worker_threads() {
+        let worker_threads = proxy_runtime_worker_threads(false);
+        assert!((2..=16).contains(&worker_threads));
+    }
+
+    #[test]
     fn request_detects_invalid_transfer_encoding_values() {
         let valid =
             b"GET / HTTP/1.1\r\nHost: example.test\r\nTransfer-Encoding: gzip, chunked\r\n\r\n";
@@ -3052,6 +3079,36 @@ My-Connection-Header2: some-value2\r\n\
         assert_eq!(
             TEST_CALLBACK_LAST_REQUEST_ID.load(AtomicOrdering::SeqCst),
             42
+        );
+    }
+
+    #[test]
+    fn direct_callback_payload_coalesces_wakeups_while_queue_is_non_empty() {
+        TEST_CALLBACK_INVOCATIONS.store(0, AtomicOrdering::SeqCst);
+        TEST_CALLBACK_LAST_REQUEST_ID.store(0, AtomicOrdering::SeqCst);
+
+        let direct_bridge = create_direct_bridge(Some(test_direct_callback));
+        let _response_rx = register_pending_request(&direct_bridge, 7);
+
+        emit_direct_callback_payload(&direct_bridge, 7, vec![1]).expect("first payload");
+        emit_direct_callback_payload(&direct_bridge, 7, vec![2]).expect("second payload");
+
+        assert_eq!(TEST_CALLBACK_INVOCATIONS.load(AtomicOrdering::SeqCst), 1);
+        assert_eq!(
+            TEST_CALLBACK_LAST_REQUEST_ID.load(AtomicOrdering::SeqCst),
+            7
+        );
+
+        let mut queued = direct_bridge.queued_payloads.lock();
+        queued.clear();
+        drop(queued);
+
+        emit_direct_callback_payload(&direct_bridge, 7, vec![3]).expect("third payload");
+
+        assert_eq!(TEST_CALLBACK_INVOCATIONS.load(AtomicOrdering::SeqCst), 2);
+        assert_eq!(
+            TEST_CALLBACK_LAST_REQUEST_ID.load(AtomicOrdering::SeqCst),
+            7
         );
     }
 

@@ -75,7 +75,8 @@ NativeProxyServer _startNativeDirectProxy({
   late final NativeProxyServer proxyRef;
 
   void processRequestFrame(int requestId, Uint8List requestPayload) {
-    if (proxyRef.isClosed) {
+    final proxy = proxyRef;
+    if (proxy.isClosed) {
       return;
     }
 
@@ -90,13 +91,11 @@ NativeProxyServer _startNativeDirectProxy({
     }
 
     void pushResponsePayload(Uint8List responsePayload) {
-      if (proxyRef.isClosed) {
+      final proxy = proxyRef;
+      if (proxy.isClosed) {
         return;
       }
-      final pushed = proxyRef.pushDirectResponseFrame(
-        requestId,
-        responsePayload,
-      );
+      final pushed = proxy.pushDirectResponseFrame(requestId, responsePayload);
       if (!pushed) {
         _nativeVerboseLog(
           '[server_native] native direct callback push failed for requestId=$requestId',
@@ -420,6 +419,46 @@ NativeProxyServer _startNativeDirectProxy({
     }());
   }
 
+  Future<void> drainQueuedRequestFrames() async {
+    var idleDelay = const Duration(milliseconds: 1);
+    const minIdleDelay = Duration(milliseconds: 1);
+    const maxIdleDelayNoStreams = Duration(milliseconds: 20);
+    const maxIdleDelayWithStreams = Duration(milliseconds: 5);
+
+    while (!proxyRef.isClosed) {
+      NativeDirectRequestFrame? frame;
+      try {
+        frame = proxyRef.pollDirectRequestFrame(timeoutMs: 0);
+      } catch (error, stack) {
+        stderr.writeln(
+          '[server_native] native direct poll failed: $error\n$stack',
+        );
+        if (proxyRef.isClosed) {
+          break;
+        }
+        idleDelay = maxIdleDelayNoStreams;
+        await Future<void>.delayed(idleDelay);
+        continue;
+      }
+      if (frame == null) {
+        await Future<void>.delayed(idleDelay);
+        final maxIdleDelay = nativeDirectStreams.isEmpty
+            ? maxIdleDelayNoStreams
+            : maxIdleDelayWithStreams;
+        final nextMicros =
+            idleDelay.inMicroseconds >= maxIdleDelay.inMicroseconds
+            ? maxIdleDelay.inMicroseconds
+            : idleDelay.inMicroseconds * 2;
+        idleDelay = Duration(microseconds: nextMicros);
+        continue;
+      }
+
+      idleDelay = minIdleDelay;
+      processRequestFrame(frame.requestId, frame.payload);
+      await Future<void>.delayed(Duration.zero);
+    }
+  }
+
   final proxy = NativeProxyServer.start(
     host: host,
     port: port,
@@ -437,32 +476,7 @@ NativeProxyServer _startNativeDirectProxy({
     directRequestCallback: null,
   );
   proxyRef = proxy;
-
-  unawaited(() async {
-    while (!proxyRef.isClosed) {
-      NativeDirectRequestFrame? frame;
-      try {
-        // Use non-blocking native polling to avoid monopolizing the isolate
-        // thread during websocket tunnel forwarding and teardown races.
-        frame = proxyRef.pollDirectRequestFrame(timeoutMs: 0);
-      } catch (error, stack) {
-        stderr.writeln(
-          '[server_native] native direct poll failed: $error\n$stack',
-        );
-        if (proxyRef.isClosed) {
-          break;
-        }
-        await Future<void>.delayed(const Duration(milliseconds: 20));
-        continue;
-      }
-      if (frame == null) {
-        await Future<void>.delayed(const Duration(milliseconds: 1));
-        continue;
-      }
-      processRequestFrame(frame.requestId, frame.payload);
-      await Future<void>.delayed(Duration.zero);
-    }
-  }());
+  unawaited(drainQueuedRequestFrames());
 
   return proxy;
 }
