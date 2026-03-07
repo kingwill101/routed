@@ -9,15 +9,19 @@ final class _BridgeParsedAuthority {
 }
 
 /// Builds `HttpRequest.requestedUri` from frame pseudo-headers and metadata.
-Uri _buildBridgeRequestUri(_BridgeRequestSource source) {
+Uri _buildBridgeRequestUri(
+  _BridgeRequestSource source, {
+  _BridgeRequestMetadata? metadata,
+}) {
   final absolute = _tryAbsoluteRequestUri(source);
   if (absolute != null) {
     return absolute;
   }
 
-  final forwardedProto = source.firstHeaderValue('x-forwarded-proto')?.trim();
-  final forwardedHost = source.firstHeaderValue('x-forwarded-host')?.trim();
-  final hostHeader = source.firstHeaderValue(HttpHeaders.hostHeader)?.trim();
+  final requestMetadata = metadata ?? _bridgeRequestMetadataFromSource(source);
+  final forwardedProto = requestMetadata.forwardedProto;
+  final forwardedHost = requestMetadata.forwardedHost;
+  final hostHeader = requestMetadata.hostHeader;
   final authorityValue = (forwardedHost?.isNotEmpty ?? false)
       ? forwardedHost!
       : (hostHeader?.isNotEmpty ?? false)
@@ -186,7 +190,6 @@ bool _equalsAsciiIgnoreCase(String a, String b) {
   return true;
 }
 
-/// Returns the first matching header value by case-insensitive [name].
 /// Attempts to parse an absolute request URI from the request path.
 Uri? _tryAbsoluteRequestUri(_BridgeRequestSource source) {
   final path = source.path;

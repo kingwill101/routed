@@ -209,22 +209,11 @@ _BridgeRequestHeaders _buildBridgeRequestHeaders(
   _BridgeRequestSource source, {
   bool stripTransferEncoding = false,
 }) {
-  final protocol = source.protocol.trim().toLowerCase();
-  final defaultPersistentConnection =
-      protocol.isEmpty ||
-      protocol == '1.1' ||
-      protocol == '2' ||
-      protocol == '2.0' ||
-      protocol == '3' ||
-      protocol == '3.0' ||
-      protocol == 'http/1.1' ||
-      protocol == 'http/2' ||
-      protocol == 'http/2.0' ||
-      protocol == 'http/3' ||
-      protocol == 'http/3.0';
   return _BridgeRequestHeaders.fromSource(
     source,
     stripTransferEncoding: stripTransferEncoding,
-    defaultPersistentConnection: defaultPersistentConnection,
+    defaultPersistentConnection: _defaultPersistentConnectionForProtocol(
+      source.protocol,
+    ),
   );
 }

@@ -23,9 +23,11 @@ final class BridgeConnectionInfo implements HttpConnectionInfo {
 }
 
 BridgeConnectionInfo _bridgeConnectionInfoFromSource(
-  _BridgeRequestSource source,
-) {
-  final hostHeader = source.firstHeaderValue(HttpHeaders.hostHeader);
+  _BridgeRequestSource source, {
+  _BridgeRequestMetadata? metadata,
+}) {
+  final requestMetadata = metadata ?? _bridgeRequestMetadataFromSource(source);
+  final hostHeader = requestMetadata.hostHeader;
   final authority = _splitBridgeAuthority(
     (hostHeader != null && hostHeader.isNotEmpty)
         ? hostHeader

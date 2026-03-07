@@ -2,25 +2,32 @@ part of 'bridge_runtime.dart';
 
 /// `HttpRequest` adapter backed by a bridge request source and body stream.
 final class BridgeHttpRequest extends Stream<Uint8List> implements HttpRequest {
-  BridgeHttpRequest({
+  factory BridgeHttpRequest({
     required BridgeRequestFrame frame,
     required HttpResponse response,
     required Stream<Uint8List> bodyStream,
     HttpSession Function()? sessionFactory,
     bool stripTransferEncoding = false,
     BridgeConnectionInfo? connectionInfo,
-  }) : this._fromSource(
-         source: _BridgeFrameRequestSource(frame),
-         response: response,
-         bodyStream: bodyStream,
-         sessionFactory: sessionFactory,
-         stripTransferEncoding: stripTransferEncoding,
-         connectionInfo:
-             connectionInfo ?? BridgeConnectionInfo.fromRequestFrame(frame),
-       );
+  }) {
+    final source = _BridgeFrameRequestSource(frame);
+    final metadata = _bridgeRequestMetadataFromSource(source);
+    return BridgeHttpRequest._fromSource(
+      source: source,
+      metadata: metadata,
+      response: response,
+      bodyStream: bodyStream,
+      sessionFactory: sessionFactory,
+      stripTransferEncoding: stripTransferEncoding,
+      connectionInfo:
+          connectionInfo ??
+          _bridgeConnectionInfoFromSource(source, metadata: metadata),
+    );
+  }
 
   BridgeHttpRequest._fromSource({
     required _BridgeRequestSource source,
+    required _BridgeRequestMetadata metadata,
     required this.response,
     required Stream<Uint8List> bodyStream,
     HttpSession Function()? sessionFactory,
@@ -28,18 +35,21 @@ final class BridgeHttpRequest extends Stream<Uint8List> implements HttpRequest {
     BridgeConnectionInfo? connectionInfo,
   }) : method = source.method,
        protocolVersion = source.protocol,
-       persistentConnection = _derivePersistentConnection(source),
+       persistentConnection = metadata.persistentConnection,
        _bodyStream = bodyStream,
        _source = source,
+       _metadata = metadata,
        _sessionFactory = sessionFactory,
        _stripTransferEncoding = stripTransferEncoding,
        _connectionInfo =
-           connectionInfo ?? _bridgeConnectionInfoFromSource(source) {
+           connectionInfo ??
+           _bridgeConnectionInfoFromSource(source, metadata: metadata) {
     response.persistentConnection = persistentConnection;
   }
 
   _BridgeRequestHeaders? _headers;
   final _BridgeRequestSource _source;
+  final _BridgeRequestMetadata _metadata;
   List<Cookie>? _cookies;
   final Stream<Uint8List> _bodyStream;
   HttpSession? _session;
@@ -54,7 +64,8 @@ final class BridgeHttpRequest extends Stream<Uint8List> implements HttpRequest {
   final String protocolVersion;
 
   @override
-  Uri get requestedUri => _requestedUri ??= _buildBridgeRequestUri(_source);
+  Uri get requestedUri =>
+      _requestedUri ??= _buildBridgeRequestUri(_source, metadata: _metadata);
   Uri? _requestedUri;
 
   @override
@@ -72,8 +83,7 @@ final class BridgeHttpRequest extends Stream<Uint8List> implements HttpRequest {
     if (headers != null) {
       return headers.contentLength;
     }
-    final raw = _source.firstHeaderValue(HttpHeaders.contentLengthHeader);
-    return raw == null ? -1 : int.tryParse(raw.trim()) ?? -1;
+    return _metadata.contentLength;
   }
 
   @override
@@ -164,39 +174,4 @@ final class BridgeHttpRequest extends Stream<Uint8List> implements HttpRequest {
   Future<HttpClientResponse> upgrade(Future<void> Function(Socket p1) handler) {
     throw UnsupportedError('upgrade is not supported by bridge requests');
   }
-}
-
-bool _derivePersistentConnection(_BridgeRequestSource source) {
-  final protocol = source.protocol.trim().toLowerCase();
-  var defaultPersistentConnection = true;
-  if (protocol == '1.0' || protocol == 'http/1.0') {
-    defaultPersistentConnection = false;
-  }
-
-  var hasClose = false;
-  var hasKeepAlive = false;
-  source.forEachHeader((name, value) {
-    if (!_equalsAsciiIgnoreCase(name, HttpHeaders.connectionHeader)) {
-      return;
-    }
-    for (final part in value.split(',')) {
-      final token = _asciiLower(part.trim());
-      if (token.isEmpty) {
-        continue;
-      }
-      if (token == 'close') {
-        hasClose = true;
-      } else if (token == 'keep-alive') {
-        hasKeepAlive = true;
-      }
-    }
-  });
-
-  if (hasClose) {
-    return false;
-  }
-  if (hasKeepAlive) {
-    return true;
-  }
-  return defaultPersistentConnection;
 }

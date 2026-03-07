@@ -14,6 +14,120 @@ abstract interface class _BridgeRequestSource {
   String? firstHeaderValue(String name);
 }
 
+final class _BridgeRequestMetadata {
+  const _BridgeRequestMetadata({
+    required this.contentLength,
+    required this.persistentConnection,
+    this.hostHeader,
+    this.forwardedProto,
+    this.forwardedHost,
+  });
+
+  final int contentLength;
+  final bool persistentConnection;
+  final String? hostHeader;
+  final String? forwardedProto;
+  final String? forwardedHost;
+}
+
+_BridgeRequestMetadata _bridgeRequestMetadataFromSource(
+  _BridgeRequestSource source,
+) {
+  return switch (source) {
+    _BridgePayloadRequestSource payload => payload.metadata,
+    _ => _scanBridgeRequestMetadata(source),
+  };
+}
+
+_BridgeRequestMetadata _scanBridgeRequestMetadata(_BridgeRequestSource source) {
+  final defaultPersistentConnection = _defaultPersistentConnectionForProtocol(
+    source.protocol,
+  );
+  var hasClose = false;
+  var hasKeepAlive = false;
+  var sawContentLength = false;
+  var contentLength = -1;
+  String? hostHeader;
+  String? forwardedProto;
+  String? forwardedHost;
+
+  source.forEachHeader((name, value) {
+    if (hostHeader == null &&
+        _equalsAsciiIgnoreCase(name, HttpHeaders.hostHeader)) {
+      hostHeader = value.trim();
+      return;
+    }
+    if (forwardedProto == null &&
+        _equalsAsciiIgnoreCase(name, 'x-forwarded-proto')) {
+      forwardedProto = value.trim();
+      return;
+    }
+    if (forwardedHost == null &&
+        _equalsAsciiIgnoreCase(name, 'x-forwarded-host')) {
+      forwardedHost = value.trim();
+      return;
+    }
+    if (!sawContentLength &&
+        _equalsAsciiIgnoreCase(name, HttpHeaders.contentLengthHeader)) {
+      sawContentLength = true;
+      contentLength = int.tryParse(value.trim()) ?? -1;
+      return;
+    }
+    if (!_equalsAsciiIgnoreCase(name, HttpHeaders.connectionHeader)) {
+      return;
+    }
+    (
+      hasClose: hasClose,
+      hasKeepAlive: hasKeepAlive,
+    ) = _scanBridgeConnectionHeaderValue(
+      value,
+      hasClose: hasClose,
+      hasKeepAlive: hasKeepAlive,
+    );
+  });
+
+  return _BridgeRequestMetadata(
+    contentLength: contentLength,
+    persistentConnection: hasClose
+        ? false
+        : hasKeepAlive
+        ? true
+        : defaultPersistentConnection,
+    hostHeader: hostHeader,
+    forwardedProto: forwardedProto,
+    forwardedHost: forwardedHost,
+  );
+}
+
+@pragma('vm:prefer-inline')
+bool _defaultPersistentConnectionForProtocol(String protocol) {
+  return switch (protocol.trim().toLowerCase()) {
+    '1.0' || 'http/1.0' => false,
+    _ => true,
+  };
+}
+
+({bool hasClose, bool hasKeepAlive}) _scanBridgeConnectionHeaderValue(
+  String value, {
+  required bool hasClose,
+  required bool hasKeepAlive,
+}) {
+  var nextHasClose = hasClose;
+  var nextHasKeepAlive = hasKeepAlive;
+  for (final part in value.split(',')) {
+    final token = _asciiLower(part.trim());
+    if (token.isEmpty) {
+      continue;
+    }
+    if (token == 'close') {
+      nextHasClose = true;
+    } else if (token == 'keep-alive') {
+      nextHasKeepAlive = true;
+    }
+  }
+  return (hasClose: nextHasClose, hasKeepAlive: nextHasKeepAlive);
+}
+
 final class _BridgeFrameRequestSource implements _BridgeRequestSource {
   _BridgeFrameRequestSource(this._frame);
 
@@ -117,6 +231,9 @@ final class _BridgePayloadRequestSource implements _BridgeRequestSource {
   String? _protocol;
   _BridgeByteSlice? _bodyRange;
   Uint8List? _bodyBytes;
+  _BridgeRequestMetadata? _metadata;
+
+  _BridgeRequestMetadata get metadata => _metadata ??= _scanMetadata();
 
   @override
   String get method {
@@ -378,6 +495,305 @@ final class _BridgePayloadRequestSource implements _BridgeRequestSource {
     _headerCount = _readBridgeUint32BigEndian(_payload, offset);
     _headersOffset = offset + 4;
   }
+
+  _BridgeRequestMetadata _scanMetadata() {
+    _ensureHeadParsed();
+    final defaultPersistentConnection = _defaultPersistentConnectionForProtocol(
+      protocol,
+    );
+    var hasClose = false;
+    var hasKeepAlive = false;
+    var sawContentLength = false;
+    var contentLength = -1;
+    String? hostHeader;
+    String? forwardedProto;
+    String? forwardedHost;
+
+    var offset = _headersOffset!;
+    for (var i = 0; i < _headerCount!; i++) {
+      if (_tokenizedHeaderNames) {
+        if (offset + 2 > _payload.length) {
+          throw const FormatException('truncated bridge payload');
+        }
+        final token = (_payload[offset] << 8) | _payload[offset + 1];
+        offset += 2;
+        if (token == _bridgeHeaderNameLiteralToken) {
+          final nameField = _readField(_payload, offset);
+          final name = _readFieldString(nameField.slice);
+          offset = nameField.nextOffset;
+          final scanned = _scanLiteralMetadataHeader(
+            name,
+            offset,
+            hasClose: hasClose,
+            hasKeepAlive: hasKeepAlive,
+            sawContentLength: sawContentLength,
+            contentLength: contentLength,
+            hostHeader: hostHeader,
+            forwardedProto: forwardedProto,
+            forwardedHost: forwardedHost,
+          );
+          offset = scanned.nextOffset;
+          hasClose = scanned.hasClose;
+          hasKeepAlive = scanned.hasKeepAlive;
+          sawContentLength = scanned.sawContentLength;
+          contentLength = scanned.contentLength;
+          hostHeader = scanned.hostHeader;
+          forwardedProto = scanned.forwardedProto;
+          forwardedHost = scanned.forwardedHost;
+          continue;
+        }
+        if (token < 0 || token >= _bridgeHeaderNameTable.length) {
+          throw FormatException('invalid bridge header name token: $token');
+        }
+        final scanned = _scanTokenizedMetadataHeader(
+          token,
+          offset,
+          hasClose: hasClose,
+          hasKeepAlive: hasKeepAlive,
+          sawContentLength: sawContentLength,
+          contentLength: contentLength,
+          hostHeader: hostHeader,
+          forwardedProto: forwardedProto,
+          forwardedHost: forwardedHost,
+        );
+        offset = scanned.nextOffset;
+        hasClose = scanned.hasClose;
+        hasKeepAlive = scanned.hasKeepAlive;
+        sawContentLength = scanned.sawContentLength;
+        contentLength = scanned.contentLength;
+        hostHeader = scanned.hostHeader;
+        forwardedProto = scanned.forwardedProto;
+        forwardedHost = scanned.forwardedHost;
+        continue;
+      }
+
+      final nameField = _readField(_payload, offset);
+      final name = _readFieldString(nameField.slice);
+      offset = nameField.nextOffset;
+      final scanned = _scanLiteralMetadataHeader(
+        name,
+        offset,
+        hasClose: hasClose,
+        hasKeepAlive: hasKeepAlive,
+        sawContentLength: sawContentLength,
+        contentLength: contentLength,
+        hostHeader: hostHeader,
+        forwardedProto: forwardedProto,
+        forwardedHost: forwardedHost,
+      );
+      offset = scanned.nextOffset;
+      hasClose = scanned.hasClose;
+      hasKeepAlive = scanned.hasKeepAlive;
+      sawContentLength = scanned.sawContentLength;
+      contentLength = scanned.contentLength;
+      hostHeader = scanned.hostHeader;
+      forwardedProto = scanned.forwardedProto;
+      forwardedHost = scanned.forwardedHost;
+    }
+
+    return _BridgeRequestMetadata(
+      contentLength: contentLength,
+      persistentConnection: hasClose
+          ? false
+          : hasKeepAlive
+          ? true
+          : defaultPersistentConnection,
+      hostHeader: hostHeader,
+      forwardedProto: forwardedProto,
+      forwardedHost: forwardedHost,
+    );
+  }
+
+  _ScannedBridgeMetadataHeader _scanLiteralMetadataHeader(
+    String name,
+    int offset, {
+    required bool hasClose,
+    required bool hasKeepAlive,
+    required bool sawContentLength,
+    required int contentLength,
+    required String? hostHeader,
+    required String? forwardedProto,
+    required String? forwardedHost,
+  }) {
+    if (hostHeader == null &&
+        _equalsAsciiIgnoreCase(name, HttpHeaders.hostHeader)) {
+      final valueField = _readField(_payload, offset);
+      return _ScannedBridgeMetadataHeader(
+        nextOffset: valueField.nextOffset,
+        hasClose: hasClose,
+        hasKeepAlive: hasKeepAlive,
+        sawContentLength: sawContentLength,
+        contentLength: contentLength,
+        hostHeader: _readFieldString(valueField.slice).trim(),
+        forwardedProto: forwardedProto,
+        forwardedHost: forwardedHost,
+      );
+    }
+    if (forwardedProto == null &&
+        _equalsAsciiIgnoreCase(name, 'x-forwarded-proto')) {
+      final valueField = _readField(_payload, offset);
+      return _ScannedBridgeMetadataHeader(
+        nextOffset: valueField.nextOffset,
+        hasClose: hasClose,
+        hasKeepAlive: hasKeepAlive,
+        sawContentLength: sawContentLength,
+        contentLength: contentLength,
+        hostHeader: hostHeader,
+        forwardedProto: _readFieldString(valueField.slice).trim(),
+        forwardedHost: forwardedHost,
+      );
+    }
+    if (forwardedHost == null &&
+        _equalsAsciiIgnoreCase(name, 'x-forwarded-host')) {
+      final valueField = _readField(_payload, offset);
+      return _ScannedBridgeMetadataHeader(
+        nextOffset: valueField.nextOffset,
+        hasClose: hasClose,
+        hasKeepAlive: hasKeepAlive,
+        sawContentLength: sawContentLength,
+        contentLength: contentLength,
+        hostHeader: hostHeader,
+        forwardedProto: forwardedProto,
+        forwardedHost: _readFieldString(valueField.slice).trim(),
+      );
+    }
+    if (!sawContentLength &&
+        _equalsAsciiIgnoreCase(name, HttpHeaders.contentLengthHeader)) {
+      final valueField = _readField(_payload, offset);
+      final value = _readFieldString(valueField.slice);
+      return _ScannedBridgeMetadataHeader(
+        nextOffset: valueField.nextOffset,
+        hasClose: hasClose,
+        hasKeepAlive: hasKeepAlive,
+        sawContentLength: true,
+        contentLength: int.tryParse(value.trim()) ?? -1,
+        hostHeader: hostHeader,
+        forwardedProto: forwardedProto,
+        forwardedHost: forwardedHost,
+      );
+    }
+    if (!_equalsAsciiIgnoreCase(name, HttpHeaders.connectionHeader)) {
+      return _ScannedBridgeMetadataHeader(
+        nextOffset: _skipField(_payload, offset),
+        hasClose: hasClose,
+        hasKeepAlive: hasKeepAlive,
+        sawContentLength: sawContentLength,
+        contentLength: contentLength,
+        hostHeader: hostHeader,
+        forwardedProto: forwardedProto,
+        forwardedHost: forwardedHost,
+      );
+    }
+
+    final valueField = _readField(_payload, offset);
+    final scannedConnection = _scanBridgeConnectionHeaderValue(
+      _readFieldString(valueField.slice),
+      hasClose: hasClose,
+      hasKeepAlive: hasKeepAlive,
+    );
+    return _ScannedBridgeMetadataHeader(
+      nextOffset: valueField.nextOffset,
+      hasClose: scannedConnection.hasClose,
+      hasKeepAlive: scannedConnection.hasKeepAlive,
+      sawContentLength: sawContentLength,
+      contentLength: contentLength,
+      hostHeader: hostHeader,
+      forwardedProto: forwardedProto,
+      forwardedHost: forwardedHost,
+    );
+  }
+
+  _ScannedBridgeMetadataHeader _scanTokenizedMetadataHeader(
+    int token,
+    int offset, {
+    required bool hasClose,
+    required bool hasKeepAlive,
+    required bool sawContentLength,
+    required int contentLength,
+    required String? hostHeader,
+    required String? forwardedProto,
+    required String? forwardedHost,
+  }) {
+    switch (token) {
+      case 0 when hostHeader == null:
+        final valueField = _readField(_payload, offset);
+        return _ScannedBridgeMetadataHeader(
+          nextOffset: valueField.nextOffset,
+          hasClose: hasClose,
+          hasKeepAlive: hasKeepAlive,
+          sawContentLength: sawContentLength,
+          contentLength: contentLength,
+          hostHeader: _readFieldString(valueField.slice).trim(),
+          forwardedProto: forwardedProto,
+          forwardedHost: forwardedHost,
+        );
+      case 1:
+        final valueField = _readField(_payload, offset);
+        final scannedConnection = _scanBridgeConnectionHeaderValue(
+          _readFieldString(valueField.slice),
+          hasClose: hasClose,
+          hasKeepAlive: hasKeepAlive,
+        );
+        return _ScannedBridgeMetadataHeader(
+          nextOffset: valueField.nextOffset,
+          hasClose: scannedConnection.hasClose,
+          hasKeepAlive: scannedConnection.hasKeepAlive,
+          sawContentLength: sawContentLength,
+          contentLength: contentLength,
+          hostHeader: hostHeader,
+          forwardedProto: forwardedProto,
+          forwardedHost: forwardedHost,
+        );
+      case 7 when !sawContentLength:
+        final valueField = _readField(_payload, offset);
+        final value = _readFieldString(valueField.slice);
+        return _ScannedBridgeMetadataHeader(
+          nextOffset: valueField.nextOffset,
+          hasClose: hasClose,
+          hasKeepAlive: hasKeepAlive,
+          sawContentLength: true,
+          contentLength: int.tryParse(value.trim()) ?? -1,
+          hostHeader: hostHeader,
+          forwardedProto: forwardedProto,
+          forwardedHost: forwardedHost,
+        );
+      case 21 when forwardedProto == null:
+        final valueField = _readField(_payload, offset);
+        return _ScannedBridgeMetadataHeader(
+          nextOffset: valueField.nextOffset,
+          hasClose: hasClose,
+          hasKeepAlive: hasKeepAlive,
+          sawContentLength: sawContentLength,
+          contentLength: contentLength,
+          hostHeader: hostHeader,
+          forwardedProto: _readFieldString(valueField.slice).trim(),
+          forwardedHost: forwardedHost,
+        );
+      case 22 when forwardedHost == null:
+        final valueField = _readField(_payload, offset);
+        return _ScannedBridgeMetadataHeader(
+          nextOffset: valueField.nextOffset,
+          hasClose: hasClose,
+          hasKeepAlive: hasKeepAlive,
+          sawContentLength: sawContentLength,
+          contentLength: contentLength,
+          hostHeader: hostHeader,
+          forwardedProto: forwardedProto,
+          forwardedHost: _readFieldString(valueField.slice).trim(),
+        );
+      default:
+        return _ScannedBridgeMetadataHeader(
+          nextOffset: _skipField(_payload, offset),
+          hasClose: hasClose,
+          hasKeepAlive: hasKeepAlive,
+          sawContentLength: sawContentLength,
+          contentLength: contentLength,
+          hostHeader: hostHeader,
+          forwardedProto: forwardedProto,
+          forwardedHost: forwardedHost,
+        );
+    }
+  }
 }
 
 final class _BridgeParsedHeader {
@@ -390,6 +806,28 @@ final class _BridgeParsedHeader {
   final String name;
   final String value;
   final int nextOffset;
+}
+
+final class _ScannedBridgeMetadataHeader {
+  const _ScannedBridgeMetadataHeader({
+    required this.nextOffset,
+    required this.hasClose,
+    required this.hasKeepAlive,
+    required this.sawContentLength,
+    required this.contentLength,
+    required this.hostHeader,
+    required this.forwardedProto,
+    required this.forwardedHost,
+  });
+
+  final int nextOffset;
+  final bool hasClose;
+  final bool hasKeepAlive;
+  final bool sawContentLength;
+  final int contentLength;
+  final String? hostHeader;
+  final String? forwardedProto;
+  final String? forwardedHost;
 }
 
 @pragma('vm:prefer-inline')
