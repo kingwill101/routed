@@ -14,8 +14,8 @@ final class BridgeHttpRuntime {
     Uint8List payload,
   ) async {
     final source = _BridgePayloadRequestSource.parse(payload);
-    final requestBodyBytes = source.bodyBytes;
-    final metadata = _bridgeRequestMetadataFromSource(source);
+    final metadata = source.metadata;
+    final bodyRange = metadata.payloadBodyRange!;
     BridgeConnectionInfo? connectionInfo;
     BridgeConnectionInfo resolveConnectionInfo() => connectionInfo ??=
         _bridgeConnectionInfoFromSource(source, metadata: metadata);
@@ -27,9 +27,9 @@ final class BridgeHttpRuntime {
       source: source,
       metadata: metadata,
       response: response,
-      bodyStream: requestBodyBytes.isEmpty
+      bodyStream: bodyRange.start == bodyRange.end
           ? const Stream<Uint8List>.empty()
-          : Stream<Uint8List>.value(requestBodyBytes),
+          : Stream<Uint8List>.value(source.bodyBytes),
       connectionInfoFactory: resolveConnectionInfo,
     );
     await _handler(request);

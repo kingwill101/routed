@@ -88,14 +88,7 @@ final class _BridgeRequestHeaders implements HttpHeaders {
     if (_isTransferEncodingStripped(HttpHeaders.transferEncodingHeader)) {
       return false;
     }
-    var hasChunked = false;
-    _source.forEachMatchingHeader(HttpHeaders.transferEncodingHeader, (value) {
-      if (hasChunked) {
-        return;
-      }
-      hasChunked = _headerValueContainsTokenIgnoreCase(value, 'chunked');
-    });
-    return hasChunked;
+    return _metadata.chunkedTransferEncoding;
   }
 
   @override

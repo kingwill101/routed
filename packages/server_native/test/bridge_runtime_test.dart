@@ -488,6 +488,39 @@ void main() {
         });
       },
     );
+
+    test(
+      'handles payload-backed callback requests without a request body',
+      () async {
+        final runtime = BridgeHttpRuntime((request) async {
+          request.response.headers.contentType = ContentType.json;
+          request.response.write(
+            jsonEncode({
+              'uri': request.uri.toString(),
+              'contentLength': request.contentLength,
+              'chunked': request.headers.chunkedTransferEncoding,
+              'body': await utf8.decoder.bind(request).join(),
+            }),
+          );
+          await request.response.close();
+        });
+
+        final (encodedPayload, frame) = await runtime.handlePayload(
+          _requestFrame(path: '/empty').encodePayload(),
+        );
+
+        expect(frame, isNull);
+        final response = BridgeResponseFrame.decodePayload(encodedPayload!);
+        final json =
+            jsonDecode(utf8.decode(response.bodyBytes)) as Map<String, dynamic>;
+        expect(json, {
+          'uri': '/empty',
+          'contentLength': -1,
+          'chunked': false,
+          'body': '',
+        });
+      },
+    );
   });
 
   group('BridgeRuntime', () {
