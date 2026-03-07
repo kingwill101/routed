@@ -21,18 +21,22 @@ final class _BridgeRequestMetadata {
     required this.contentLength,
     required this.persistentConnection,
     required this.chunkedTransferEncoding,
+    required this.hasMultipleConnectionHeaders,
     this.hostHeader,
     this.forwardedProto,
     this.forwardedHost,
+    this.connectionHeaderValue,
     this.payloadBodyRange,
   });
 
   final int contentLength;
   final bool persistentConnection;
   final bool chunkedTransferEncoding;
+  final bool hasMultipleConnectionHeaders;
   final String? hostHeader;
   final String? forwardedProto;
   final String? forwardedHost;
+  final String? connectionHeaderValue;
   final _BridgeByteSlice? payloadBodyRange;
 }
 
@@ -52,11 +56,13 @@ _BridgeRequestMetadata _scanBridgeRequestMetadata(_BridgeRequestSource source) {
   var hasClose = false;
   var hasKeepAlive = false;
   var hasChunkedTransferEncoding = false;
+  var hasMultipleConnectionHeaders = false;
   var sawContentLength = false;
   var contentLength = -1;
   String? hostHeader;
   String? forwardedProto;
   String? forwardedHost;
+  String? connectionHeaderValue;
 
   source.forEachHeader((name, value) {
     if (hostHeader == null &&
@@ -89,6 +95,11 @@ _BridgeRequestMetadata _scanBridgeRequestMetadata(_BridgeRequestSource source) {
     if (!_equalsAsciiIgnoreCase(name, HttpHeaders.connectionHeader)) {
       return;
     }
+    if (connectionHeaderValue == null) {
+      connectionHeaderValue = value;
+    } else {
+      hasMultipleConnectionHeaders = true;
+    }
     (
       hasClose: hasClose,
       hasKeepAlive: hasKeepAlive,
@@ -107,9 +118,11 @@ _BridgeRequestMetadata _scanBridgeRequestMetadata(_BridgeRequestSource source) {
         ? true
         : defaultPersistentConnection,
     chunkedTransferEncoding: hasChunkedTransferEncoding,
+    hasMultipleConnectionHeaders: hasMultipleConnectionHeaders,
     hostHeader: hostHeader,
     forwardedProto: forwardedProto,
     forwardedHost: forwardedHost,
+    connectionHeaderValue: connectionHeaderValue,
   );
 }
 
@@ -128,16 +141,25 @@ bool _defaultPersistentConnectionForProtocol(String protocol) {
 }) {
   var nextHasClose = hasClose;
   var nextHasKeepAlive = hasKeepAlive;
-  for (final part in value.split(',')) {
-    final token = _asciiLower(part.trim());
-    if (token.isEmpty) {
-      continue;
+  var partStart = 0;
+  while (partStart <= value.length) {
+    var partEnd = partStart;
+    while (partEnd < value.length && value.codeUnitAt(partEnd) != 0x2c) {
+      partEnd++;
     }
-    if (token == 'close') {
+    final start = _skipHttpTokenWhitespace(value, partStart, partEnd);
+    final end = _trimHttpTokenWhitespace(value, start, partEnd);
+    if (end > start &&
+        _equalsAsciiIgnoreCaseRange(value, start, end, 'close')) {
       nextHasClose = true;
-    } else if (token == 'keep-alive') {
+    } else if (end > start &&
+        _equalsAsciiIgnoreCaseRange(value, start, end, 'keep-alive')) {
       nextHasKeepAlive = true;
     }
+    if (partEnd == value.length) {
+      break;
+    }
+    partStart = partEnd + 1;
   }
   return (hasClose: nextHasClose, hasKeepAlive: nextHasKeepAlive);
 }
@@ -563,11 +585,13 @@ final class _BridgePayloadRequestSource implements _BridgeRequestSource {
     var hasClose = false;
     var hasKeepAlive = false;
     var hasChunkedTransferEncoding = false;
+    var hasMultipleConnectionHeaders = false;
     var sawContentLength = false;
     var contentLength = -1;
     String? hostHeader;
     String? forwardedProto;
     String? forwardedHost;
+    String? connectionHeaderValue;
 
     var offset = _headersOffset!;
     for (var i = 0; i < _headerCount!; i++) {
@@ -587,21 +611,25 @@ final class _BridgePayloadRequestSource implements _BridgeRequestSource {
             hasClose: hasClose,
             hasKeepAlive: hasKeepAlive,
             hasChunkedTransferEncoding: hasChunkedTransferEncoding,
+            hasMultipleConnectionHeaders: hasMultipleConnectionHeaders,
             sawContentLength: sawContentLength,
             contentLength: contentLength,
             hostHeader: hostHeader,
             forwardedProto: forwardedProto,
             forwardedHost: forwardedHost,
+            connectionHeaderValue: connectionHeaderValue,
           );
           offset = scanned.nextOffset;
           hasClose = scanned.hasClose;
           hasKeepAlive = scanned.hasKeepAlive;
           hasChunkedTransferEncoding = scanned.hasChunkedTransferEncoding;
+          hasMultipleConnectionHeaders = scanned.hasMultipleConnectionHeaders;
           sawContentLength = scanned.sawContentLength;
           contentLength = scanned.contentLength;
           hostHeader = scanned.hostHeader;
           forwardedProto = scanned.forwardedProto;
           forwardedHost = scanned.forwardedHost;
+          connectionHeaderValue = scanned.connectionHeaderValue;
           continue;
         }
         if (token < 0 || token >= _bridgeHeaderNameTable.length) {
@@ -613,21 +641,25 @@ final class _BridgePayloadRequestSource implements _BridgeRequestSource {
           hasClose: hasClose,
           hasKeepAlive: hasKeepAlive,
           hasChunkedTransferEncoding: hasChunkedTransferEncoding,
+          hasMultipleConnectionHeaders: hasMultipleConnectionHeaders,
           sawContentLength: sawContentLength,
           contentLength: contentLength,
           hostHeader: hostHeader,
           forwardedProto: forwardedProto,
           forwardedHost: forwardedHost,
+          connectionHeaderValue: connectionHeaderValue,
         );
         offset = scanned.nextOffset;
         hasClose = scanned.hasClose;
         hasKeepAlive = scanned.hasKeepAlive;
         hasChunkedTransferEncoding = scanned.hasChunkedTransferEncoding;
+        hasMultipleConnectionHeaders = scanned.hasMultipleConnectionHeaders;
         sawContentLength = scanned.sawContentLength;
         contentLength = scanned.contentLength;
         hostHeader = scanned.hostHeader;
         forwardedProto = scanned.forwardedProto;
         forwardedHost = scanned.forwardedHost;
+        connectionHeaderValue = scanned.connectionHeaderValue;
         continue;
       }
 
@@ -640,21 +672,25 @@ final class _BridgePayloadRequestSource implements _BridgeRequestSource {
         hasClose: hasClose,
         hasKeepAlive: hasKeepAlive,
         hasChunkedTransferEncoding: hasChunkedTransferEncoding,
+        hasMultipleConnectionHeaders: hasMultipleConnectionHeaders,
         sawContentLength: sawContentLength,
         contentLength: contentLength,
         hostHeader: hostHeader,
         forwardedProto: forwardedProto,
         forwardedHost: forwardedHost,
+        connectionHeaderValue: connectionHeaderValue,
       );
       offset = scanned.nextOffset;
       hasClose = scanned.hasClose;
       hasKeepAlive = scanned.hasKeepAlive;
       hasChunkedTransferEncoding = scanned.hasChunkedTransferEncoding;
+      hasMultipleConnectionHeaders = scanned.hasMultipleConnectionHeaders;
       sawContentLength = scanned.sawContentLength;
       contentLength = scanned.contentLength;
       hostHeader = scanned.hostHeader;
       forwardedProto = scanned.forwardedProto;
       forwardedHost = scanned.forwardedHost;
+      connectionHeaderValue = scanned.connectionHeaderValue;
     }
 
     final bodyRange = _readPayloadBodyRange(offset);
@@ -667,9 +703,11 @@ final class _BridgePayloadRequestSource implements _BridgeRequestSource {
           ? true
           : defaultPersistentConnection,
       chunkedTransferEncoding: hasChunkedTransferEncoding,
+      hasMultipleConnectionHeaders: hasMultipleConnectionHeaders,
       hostHeader: hostHeader,
       forwardedProto: forwardedProto,
       forwardedHost: forwardedHost,
+      connectionHeaderValue: connectionHeaderValue,
       payloadBodyRange: bodyRange,
     );
   }
@@ -680,11 +718,13 @@ final class _BridgePayloadRequestSource implements _BridgeRequestSource {
     required bool hasClose,
     required bool hasKeepAlive,
     required bool hasChunkedTransferEncoding,
+    required bool hasMultipleConnectionHeaders,
     required bool sawContentLength,
     required int contentLength,
     required String? hostHeader,
     required String? forwardedProto,
     required String? forwardedHost,
+    required String? connectionHeaderValue,
   }) {
     if (hostHeader == null &&
         _equalsAsciiIgnoreCase(name, HttpHeaders.hostHeader)) {
@@ -694,11 +734,13 @@ final class _BridgePayloadRequestSource implements _BridgeRequestSource {
         hasClose: hasClose,
         hasKeepAlive: hasKeepAlive,
         hasChunkedTransferEncoding: hasChunkedTransferEncoding,
+        hasMultipleConnectionHeaders: hasMultipleConnectionHeaders,
         sawContentLength: sawContentLength,
         contentLength: contentLength,
         hostHeader: _readFieldString(valueField.slice).trim(),
         forwardedProto: forwardedProto,
         forwardedHost: forwardedHost,
+        connectionHeaderValue: connectionHeaderValue,
       );
     }
     if (forwardedProto == null &&
@@ -709,11 +751,13 @@ final class _BridgePayloadRequestSource implements _BridgeRequestSource {
         hasClose: hasClose,
         hasKeepAlive: hasKeepAlive,
         hasChunkedTransferEncoding: hasChunkedTransferEncoding,
+        hasMultipleConnectionHeaders: hasMultipleConnectionHeaders,
         sawContentLength: sawContentLength,
         contentLength: contentLength,
         hostHeader: hostHeader,
         forwardedProto: _readFieldString(valueField.slice).trim(),
         forwardedHost: forwardedHost,
+        connectionHeaderValue: connectionHeaderValue,
       );
     }
     if (forwardedHost == null &&
@@ -724,11 +768,13 @@ final class _BridgePayloadRequestSource implements _BridgeRequestSource {
         hasClose: hasClose,
         hasKeepAlive: hasKeepAlive,
         hasChunkedTransferEncoding: hasChunkedTransferEncoding,
+        hasMultipleConnectionHeaders: hasMultipleConnectionHeaders,
         sawContentLength: sawContentLength,
         contentLength: contentLength,
         hostHeader: hostHeader,
         forwardedProto: forwardedProto,
         forwardedHost: _readFieldString(valueField.slice).trim(),
+        connectionHeaderValue: connectionHeaderValue,
       );
     }
     if (!sawContentLength &&
@@ -740,11 +786,13 @@ final class _BridgePayloadRequestSource implements _BridgeRequestSource {
         hasClose: hasClose,
         hasKeepAlive: hasKeepAlive,
         hasChunkedTransferEncoding: hasChunkedTransferEncoding,
+        hasMultipleConnectionHeaders: hasMultipleConnectionHeaders,
         sawContentLength: true,
         contentLength: int.tryParse(value.trim()) ?? -1,
         hostHeader: hostHeader,
         forwardedProto: forwardedProto,
         forwardedHost: forwardedHost,
+        connectionHeaderValue: connectionHeaderValue,
       );
     }
     if (_equalsAsciiIgnoreCase(name, HttpHeaders.transferEncodingHeader)) {
@@ -759,11 +807,13 @@ final class _BridgePayloadRequestSource implements _BridgeRequestSource {
               _readFieldString(valueField.slice),
               'chunked',
             ),
+        hasMultipleConnectionHeaders: hasMultipleConnectionHeaders,
         sawContentLength: sawContentLength,
         contentLength: contentLength,
         hostHeader: hostHeader,
         forwardedProto: forwardedProto,
         forwardedHost: forwardedHost,
+        connectionHeaderValue: connectionHeaderValue,
       );
     }
     if (!_equalsAsciiIgnoreCase(name, HttpHeaders.connectionHeader)) {
@@ -772,17 +822,20 @@ final class _BridgePayloadRequestSource implements _BridgeRequestSource {
         hasClose: hasClose,
         hasKeepAlive: hasKeepAlive,
         hasChunkedTransferEncoding: hasChunkedTransferEncoding,
+        hasMultipleConnectionHeaders: hasMultipleConnectionHeaders,
         sawContentLength: sawContentLength,
         contentLength: contentLength,
         hostHeader: hostHeader,
         forwardedProto: forwardedProto,
         forwardedHost: forwardedHost,
+        connectionHeaderValue: connectionHeaderValue,
       );
     }
 
     final valueField = _readField(_payload, offset);
+    final rawValue = _readFieldString(valueField.slice);
     final scannedConnection = _scanBridgeConnectionHeaderValue(
-      _readFieldString(valueField.slice),
+      rawValue,
       hasClose: hasClose,
       hasKeepAlive: hasKeepAlive,
     );
@@ -791,11 +844,14 @@ final class _BridgePayloadRequestSource implements _BridgeRequestSource {
       hasClose: scannedConnection.hasClose,
       hasKeepAlive: scannedConnection.hasKeepAlive,
       hasChunkedTransferEncoding: hasChunkedTransferEncoding,
+      hasMultipleConnectionHeaders:
+          hasMultipleConnectionHeaders || connectionHeaderValue != null,
       sawContentLength: sawContentLength,
       contentLength: contentLength,
       hostHeader: hostHeader,
       forwardedProto: forwardedProto,
       forwardedHost: forwardedHost,
+      connectionHeaderValue: connectionHeaderValue ?? rawValue,
     );
   }
 
@@ -805,11 +861,13 @@ final class _BridgePayloadRequestSource implements _BridgeRequestSource {
     required bool hasClose,
     required bool hasKeepAlive,
     required bool hasChunkedTransferEncoding,
+    required bool hasMultipleConnectionHeaders,
     required bool sawContentLength,
     required int contentLength,
     required String? hostHeader,
     required String? forwardedProto,
     required String? forwardedHost,
+    required String? connectionHeaderValue,
   }) {
     switch (token) {
       case 0 when hostHeader == null:
@@ -819,16 +877,19 @@ final class _BridgePayloadRequestSource implements _BridgeRequestSource {
           hasClose: hasClose,
           hasKeepAlive: hasKeepAlive,
           hasChunkedTransferEncoding: hasChunkedTransferEncoding,
+          hasMultipleConnectionHeaders: hasMultipleConnectionHeaders,
           sawContentLength: sawContentLength,
           contentLength: contentLength,
           hostHeader: _readFieldString(valueField.slice).trim(),
           forwardedProto: forwardedProto,
           forwardedHost: forwardedHost,
+          connectionHeaderValue: connectionHeaderValue,
         );
       case 1:
         final valueField = _readField(_payload, offset);
+        final rawValue = _readFieldString(valueField.slice);
         final scannedConnection = _scanBridgeConnectionHeaderValue(
-          _readFieldString(valueField.slice),
+          rawValue,
           hasClose: hasClose,
           hasKeepAlive: hasKeepAlive,
         );
@@ -837,11 +898,14 @@ final class _BridgePayloadRequestSource implements _BridgeRequestSource {
           hasClose: scannedConnection.hasClose,
           hasKeepAlive: scannedConnection.hasKeepAlive,
           hasChunkedTransferEncoding: hasChunkedTransferEncoding,
+          hasMultipleConnectionHeaders:
+              hasMultipleConnectionHeaders || connectionHeaderValue != null,
           sawContentLength: sawContentLength,
           contentLength: contentLength,
           hostHeader: hostHeader,
           forwardedProto: forwardedProto,
           forwardedHost: forwardedHost,
+          connectionHeaderValue: connectionHeaderValue ?? rawValue,
         );
       case 8:
         final valueField = _readField(_payload, offset);
@@ -855,11 +919,13 @@ final class _BridgePayloadRequestSource implements _BridgeRequestSource {
                 _readFieldString(valueField.slice),
                 'chunked',
               ),
+          hasMultipleConnectionHeaders: hasMultipleConnectionHeaders,
           sawContentLength: sawContentLength,
           contentLength: contentLength,
           hostHeader: hostHeader,
           forwardedProto: forwardedProto,
           forwardedHost: forwardedHost,
+          connectionHeaderValue: connectionHeaderValue,
         );
       case 7 when !sawContentLength:
         final valueField = _readField(_payload, offset);
@@ -869,11 +935,13 @@ final class _BridgePayloadRequestSource implements _BridgeRequestSource {
           hasClose: hasClose,
           hasKeepAlive: hasKeepAlive,
           hasChunkedTransferEncoding: hasChunkedTransferEncoding,
+          hasMultipleConnectionHeaders: hasMultipleConnectionHeaders,
           sawContentLength: true,
           contentLength: int.tryParse(value.trim()) ?? -1,
           hostHeader: hostHeader,
           forwardedProto: forwardedProto,
           forwardedHost: forwardedHost,
+          connectionHeaderValue: connectionHeaderValue,
         );
       case 21 when forwardedProto == null:
         final valueField = _readField(_payload, offset);
@@ -882,11 +950,13 @@ final class _BridgePayloadRequestSource implements _BridgeRequestSource {
           hasClose: hasClose,
           hasKeepAlive: hasKeepAlive,
           hasChunkedTransferEncoding: hasChunkedTransferEncoding,
+          hasMultipleConnectionHeaders: hasMultipleConnectionHeaders,
           sawContentLength: sawContentLength,
           contentLength: contentLength,
           hostHeader: hostHeader,
           forwardedProto: _readFieldString(valueField.slice).trim(),
           forwardedHost: forwardedHost,
+          connectionHeaderValue: connectionHeaderValue,
         );
       case 22 when forwardedHost == null:
         final valueField = _readField(_payload, offset);
@@ -895,11 +965,13 @@ final class _BridgePayloadRequestSource implements _BridgeRequestSource {
           hasClose: hasClose,
           hasKeepAlive: hasKeepAlive,
           hasChunkedTransferEncoding: hasChunkedTransferEncoding,
+          hasMultipleConnectionHeaders: hasMultipleConnectionHeaders,
           sawContentLength: sawContentLength,
           contentLength: contentLength,
           hostHeader: hostHeader,
           forwardedProto: forwardedProto,
           forwardedHost: _readFieldString(valueField.slice).trim(),
+          connectionHeaderValue: connectionHeaderValue,
         );
       default:
         return _ScannedBridgeMetadataHeader(
@@ -907,11 +979,13 @@ final class _BridgePayloadRequestSource implements _BridgeRequestSource {
           hasClose: hasClose,
           hasKeepAlive: hasKeepAlive,
           hasChunkedTransferEncoding: hasChunkedTransferEncoding,
+          hasMultipleConnectionHeaders: hasMultipleConnectionHeaders,
           sawContentLength: sawContentLength,
           contentLength: contentLength,
           hostHeader: hostHeader,
           forwardedProto: forwardedProto,
           forwardedHost: forwardedHost,
+          connectionHeaderValue: connectionHeaderValue,
         );
     }
   }
@@ -935,22 +1009,26 @@ final class _ScannedBridgeMetadataHeader {
     required this.hasClose,
     required this.hasKeepAlive,
     required this.hasChunkedTransferEncoding,
+    required this.hasMultipleConnectionHeaders,
     required this.sawContentLength,
     required this.contentLength,
     required this.hostHeader,
     required this.forwardedProto,
     required this.forwardedHost,
+    required this.connectionHeaderValue,
   });
 
   final int nextOffset;
   final bool hasClose;
   final bool hasKeepAlive;
   final bool hasChunkedTransferEncoding;
+  final bool hasMultipleConnectionHeaders;
   final bool sawContentLength;
   final int contentLength;
   final String? hostHeader;
   final String? forwardedProto;
   final String? forwardedHost;
+  final String? connectionHeaderValue;
 }
 
 @pragma('vm:prefer-inline')

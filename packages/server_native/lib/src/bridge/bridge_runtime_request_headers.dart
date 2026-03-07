@@ -17,6 +17,7 @@ final class _BridgeRequestHeaders implements HttpHeaders {
   _materialized;
   _BridgeParsedAuthority? _parsedHostPort;
   bool _parsedHostPortResolved = false;
+  List<String>? _connectionHeaderValues;
 
   @override
   DateTime? get date => _parseDate(HttpHeaders.dateHeader);
@@ -99,6 +100,16 @@ final class _BridgeRequestHeaders implements HttpHeaders {
     if (_isTransferEncodingStripped(name)) {
       return null;
     }
+    if (_equalsAsciiIgnoreCase(name, HttpHeaders.connectionHeader) &&
+        !_metadata.hasMultipleConnectionHeaders) {
+      final value = _metadata.connectionHeaderValue;
+      if (value == null) {
+        return null;
+      }
+      return _connectionHeaderValues ??= List<String>.unmodifiable(<String>[
+        value,
+      ]);
+    }
     final values = <String>[];
     _source.forEachMatchingHeader(name, values.add);
     return values.isEmpty ? null : values;
@@ -108,6 +119,10 @@ final class _BridgeRequestHeaders implements HttpHeaders {
   String? value(String name) {
     if (_isTransferEncodingStripped(name)) {
       return null;
+    }
+    if (_equalsAsciiIgnoreCase(name, HttpHeaders.connectionHeader) &&
+        !_metadata.hasMultipleConnectionHeaders) {
+      return _metadata.connectionHeaderValue;
     }
     String? found;
     var count = 0;
@@ -218,26 +233,9 @@ bool _headerValueContainsTokenIgnoreCase(String value, String token) {
       partEnd++;
     }
 
-    var start = partStart;
-    while (start < partEnd) {
-      final codeUnit = value.codeUnitAt(start);
-      if (codeUnit != 0x20 && codeUnit != 0x09) {
-        break;
-      }
-      start++;
-    }
-
-    var end = partEnd;
-    while (end > start) {
-      final codeUnit = value.codeUnitAt(end - 1);
-      if (codeUnit != 0x20 && codeUnit != 0x09) {
-        break;
-      }
-      end--;
-    }
-
-    if (end > start &&
-        _equalsAsciiIgnoreCase(value.substring(start, end), token)) {
+    final start = _skipHttpTokenWhitespace(value, partStart, partEnd);
+    final end = _trimHttpTokenWhitespace(value, start, partEnd);
+    if (end > start && _equalsAsciiIgnoreCaseRange(value, start, end, token)) {
       return true;
     }
 
@@ -247,6 +245,59 @@ bool _headerValueContainsTokenIgnoreCase(String value, String token) {
     partStart = partEnd + 1;
   }
   return false;
+}
+
+@pragma('vm:prefer-inline')
+int _skipHttpTokenWhitespace(String value, int start, int end) {
+  while (start < end) {
+    final codeUnit = value.codeUnitAt(start);
+    if (codeUnit != 0x20 && codeUnit != 0x09) {
+      break;
+    }
+    start++;
+  }
+  return start;
+}
+
+@pragma('vm:prefer-inline')
+int _trimHttpTokenWhitespace(String value, int start, int end) {
+  while (end > start) {
+    final codeUnit = value.codeUnitAt(end - 1);
+    if (codeUnit != 0x20 && codeUnit != 0x09) {
+      break;
+    }
+    end--;
+  }
+  return end;
+}
+
+@pragma('vm:prefer-inline')
+bool _equalsAsciiIgnoreCaseRange(
+  String value,
+  int start,
+  int end,
+  String token,
+) {
+  if (end - start != token.length) {
+    return false;
+  }
+  for (var i = 0; i < token.length; i++) {
+    var x = value.codeUnitAt(start + i);
+    var y = token.codeUnitAt(i);
+    if (x == y) {
+      continue;
+    }
+    if (x >= 0x41 && x <= 0x5a) {
+      x += 0x20;
+    }
+    if (y >= 0x41 && y <= 0x5a) {
+      y += 0x20;
+    }
+    if (x != y) {
+      return false;
+    }
+  }
+  return true;
 }
 
 /// Decodes immutable header view used by [BridgeHttpRequest.headers].

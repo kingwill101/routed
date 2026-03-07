@@ -521,6 +521,45 @@ void main() {
         });
       },
     );
+
+    test('preserves repeated connection header values', () async {
+      final runtime = BridgeHttpRuntime((request) async {
+        request.response.headers.contentType = ContentType.json;
+        request.response.write(
+          jsonEncode(<String, Object?>{
+            'connection': request.headers[HttpHeaders.connectionHeader],
+            'valueThrows': () {
+              try {
+                request.headers.value(HttpHeaders.connectionHeader);
+                return false;
+              } on HttpException {
+                return true;
+              }
+            }(),
+          }),
+        );
+        await request.response.close();
+      });
+
+      final (encodedPayload, frame) = await runtime.handlePayload(
+        _requestFrame(
+          path: '/repeat-connection',
+          headers: const <MapEntry<String, String>>[
+            MapEntry(HttpHeaders.connectionHeader, 'keep-alive'),
+            MapEntry(HttpHeaders.connectionHeader, 'upgrade'),
+          ],
+        ).encodePayload(),
+      );
+
+      expect(frame, isNull);
+      final response = BridgeResponseFrame.decodePayload(encodedPayload!);
+      final json =
+          jsonDecode(utf8.decode(response.bodyBytes)) as Map<String, dynamic>;
+      expect(json, {
+        'connection': <String>['keep-alive', 'upgrade'],
+        'valueThrows': true,
+      });
+    });
   });
 
   group('BridgeRuntime', () {
