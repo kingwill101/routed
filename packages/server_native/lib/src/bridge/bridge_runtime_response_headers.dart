@@ -18,6 +18,7 @@ final class _BridgeHttpHeaders implements HttpHeaders {
   String? _host;
   int? _port;
   ContentType? _contentType;
+  bool _contentTypeNeedsParse = false;
   int _contentLength = -1;
   bool _persistentConnection = true;
   bool _chunkedTransferEncoding = false;
@@ -80,11 +81,27 @@ final class _BridgeHttpHeaders implements HttpHeaders {
   }
 
   @override
-  ContentType? get contentType => _contentType;
+  ContentType? get contentType {
+    if (_contentTypeNeedsParse) {
+      final values = _headers[HttpHeaders.contentTypeHeader];
+      if (values == null || values.isEmpty) {
+        _contentType = null;
+      } else {
+        try {
+          _contentType = ContentType.parse(values.last);
+        } catch (_) {
+          _contentType = null;
+        }
+      }
+      _contentTypeNeedsParse = false;
+    }
+    return _contentType;
+  }
 
   @override
   set contentType(ContentType? value) {
     _contentType = value;
+    _contentTypeNeedsParse = false;
     _setSingleValue(
       HttpHeaders.contentTypeHeader,
       value?.toString(),
@@ -252,6 +269,7 @@ final class _BridgeHttpHeaders implements HttpHeaders {
     _host = null;
     _port = null;
     _contentType = null;
+    _contentTypeNeedsParse = false;
     _contentLength = -1;
     _persistentConnection = true;
     _chunkedTransferEncoding = false;
@@ -420,13 +438,11 @@ final class _BridgeHttpHeaders implements HttpHeaders {
       case HttpHeaders.contentTypeHeader:
         if (values == null || values.isEmpty) {
           _contentType = null;
+          _contentTypeNeedsParse = false;
           return;
         }
-        try {
-          _contentType = ContentType.parse(values.last);
-        } catch (_) {
-          _contentType = null;
-        }
+        _contentType = null;
+        _contentTypeNeedsParse = true;
         return;
       case HttpHeaders.hostHeader:
         if (values == null || values.isEmpty) {
