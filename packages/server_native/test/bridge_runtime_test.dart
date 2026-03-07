@@ -380,6 +380,8 @@ void main() {
           request.response.write(
             jsonEncode({
               'method': request.method,
+              'relativeUri': request.uri.toString(),
+              'relativeScheme': request.uri.scheme,
               'uri': request.requestedUri.toString(),
               'contentLength': request.contentLength,
               'persistentConnection': request.persistentConnection,
@@ -430,6 +432,8 @@ void main() {
             jsonDecode(utf8.decode(response.bodyBytes)) as Map<String, dynamic>;
         expect(json, {
           'method': 'POST',
+          'relativeUri': '/payload?q=1',
+          'relativeScheme': '',
           'uri': 'https://example.test:8443/payload?q=1',
           'contentLength': 13,
           'persistentConnection': true,
@@ -442,6 +446,45 @@ void main() {
           'localPort': 8081,
           'cookies': <String>['a=1', 'b=two'],
           'body': 'hello payload',
+        });
+      },
+    );
+
+    test(
+      'preserves absolute-form request-targets for uri and requestedUri',
+      () async {
+        final runtime = BridgeHttpRuntime((request) async {
+          request.response.headers.contentType = ContentType.json;
+          request.response.write(
+            jsonEncode({
+              'uri': request.uri.toString(),
+              'requestedUri': request.requestedUri.toString(),
+              'scheme': request.uri.scheme,
+              'path': request.uri.path,
+            }),
+          );
+          await request.response.close();
+        });
+
+        final (encodedPayload, frame) = await runtime.handlePayload(
+          _requestFrame(
+            authority: 'proxy.local',
+            path: 'http://example.test:8080/absolute?q=1',
+            headers: const <MapEntry<String, String>>[
+              MapEntry(HttpHeaders.hostHeader, 'proxy.local'),
+            ],
+          ).encodePayload(),
+        );
+
+        expect(frame, isNull);
+        final response = BridgeResponseFrame.decodePayload(encodedPayload!);
+        final json =
+            jsonDecode(utf8.decode(response.bodyBytes)) as Map<String, dynamic>;
+        expect(json, {
+          'uri': 'http://example.test:8080/absolute?q=1',
+          'requestedUri': 'http://example.test:8080/absolute?q=1',
+          'scheme': 'http',
+          'path': '/absolute',
         });
       },
     );
