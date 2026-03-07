@@ -4,8 +4,8 @@ part of 'bridge_runtime.dart';
 final class BridgeHttpResponse implements HttpResponse {
   BridgeHttpResponse({
     required String requestMethod,
-    required BridgeConnectionInfo connectionInfo,
-  }) : _connectionInfo = connectionInfo,
+    required BridgeConnectionInfo Function() connectionInfoFactory,
+  }) : _connectionInfoFactory = connectionInfoFactory,
        _isHeadRequest = _equalsAsciiIgnoreCase(requestMethod, 'HEAD');
 
   _BridgeHttpHeaders? _headers;
@@ -20,7 +20,8 @@ final class BridgeHttpResponse implements HttpResponse {
   int _bytesWritten = 0;
   bool _autoCompressEnabled = false;
   bool _requestAcceptsGzip = false;
-  final BridgeConnectionInfo _connectionInfo;
+  final BridgeConnectionInfo Function() _connectionInfoFactory;
+  BridgeConnectionInfo? _connectionInfo;
   final bool _isHeadRequest;
 
   /// Enables gzip auto-compression based on request/response negotiation.
@@ -87,7 +88,8 @@ final class BridgeHttpResponse implements HttpResponse {
   set contentLength(int value) => headers.contentLength = value;
 
   @override
-  HttpConnectionInfo? get connectionInfo => _connectionInfo;
+  HttpConnectionInfo? get connectionInfo =>
+      _connectionInfo ??= _connectionInfoFactory();
 
   @override
   void add(List<int> data) {

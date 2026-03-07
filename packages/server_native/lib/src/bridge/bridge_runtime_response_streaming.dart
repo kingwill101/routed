@@ -6,9 +6,9 @@ final class BridgeStreamingHttpResponse implements HttpResponse {
     required this.onStart,
     required this.onChunk,
     required String requestMethod,
-    required BridgeConnectionInfo connectionInfo,
+    required BridgeConnectionInfo Function() connectionInfoFactory,
     void Function(BridgeDetachedSocket detachedSocket)? onDetachedSocket,
-  }) : _connectionInfo = connectionInfo,
+  }) : _connectionInfoFactory = connectionInfoFactory,
        _onDetachedSocket = onDetachedSocket,
        _isHeadRequest = _equalsAsciiIgnoreCase(requestMethod, 'HEAD');
 
@@ -30,7 +30,8 @@ final class BridgeStreamingHttpResponse implements HttpResponse {
   bool _requestAcceptsGzip = false;
   bool _compressBody = false;
   BytesBuilder? _compressionBuffer;
-  final BridgeConnectionInfo _connectionInfo;
+  final BridgeConnectionInfo Function() _connectionInfoFactory;
+  BridgeConnectionInfo? _connectionInfo;
   final void Function(BridgeDetachedSocket detachedSocket)? _onDetachedSocket;
   final bool _isHeadRequest;
 
@@ -78,7 +79,8 @@ final class BridgeStreamingHttpResponse implements HttpResponse {
   set contentLength(int value) => headers.contentLength = value;
 
   @override
-  HttpConnectionInfo? get connectionInfo => _connectionInfo;
+  HttpConnectionInfo? get connectionInfo =>
+      _connectionInfo ??= _connectionInfoFactory();
 
   @override
   void add(List<int> data) {

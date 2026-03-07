@@ -16,13 +16,12 @@ final class BridgeHttpRuntime {
     final source = _BridgePayloadRequestSource.parse(payload);
     final requestBodyBytes = source.bodyBytes;
     final metadata = _bridgeRequestMetadataFromSource(source);
-    final connectionInfo = _bridgeConnectionInfoFromSource(
-      source,
-      metadata: metadata,
-    );
+    BridgeConnectionInfo? connectionInfo;
+    BridgeConnectionInfo resolveConnectionInfo() => connectionInfo ??=
+        _bridgeConnectionInfoFromSource(source, metadata: metadata);
     final response = BridgeHttpResponse(
       requestMethod: source.method,
-      connectionInfo: connectionInfo,
+      connectionInfoFactory: resolveConnectionInfo,
     );
     final request = BridgeHttpRequest._fromSource(
       source: source,
@@ -31,7 +30,7 @@ final class BridgeHttpRuntime {
       bodyStream: requestBodyBytes.isEmpty
           ? const Stream<Uint8List>.empty()
           : Stream<Uint8List>.value(requestBodyBytes),
-      connectionInfo: connectionInfo,
+      connectionInfoFactory: resolveConnectionInfo,
     );
     await _handler(request);
     await response.done;
@@ -74,15 +73,14 @@ final class BridgeHttpRuntime {
   }) async {
     final source = _BridgeFrameRequestSource(frame);
     final metadata = _bridgeRequestMetadataFromSource(source);
-    final connectionInfo = _bridgeConnectionInfoFromSource(
-      source,
-      metadata: metadata,
-    );
+    BridgeConnectionInfo? connectionInfo;
+    BridgeConnectionInfo resolveConnectionInfo() => connectionInfo ??=
+        _bridgeConnectionInfoFromSource(source, metadata: metadata);
     final response = BridgeStreamingHttpResponse(
       onStart: onResponseStart,
       onChunk: onResponseChunk,
       requestMethod: frame.method,
-      connectionInfo: connectionInfo,
+      connectionInfoFactory: resolveConnectionInfo,
       onDetachedSocket: onDetachedSocket,
     );
     final request = BridgeHttpRequest._fromSource(
@@ -90,7 +88,7 @@ final class BridgeHttpRuntime {
       metadata: metadata,
       response: response,
       bodyStream: bodyStream,
-      connectionInfo: connectionInfo,
+      connectionInfoFactory: resolveConnectionInfo,
     );
     await _handler(request);
     if (!response.isClosed) {
@@ -103,13 +101,12 @@ final class BridgeHttpRuntime {
   Future<BridgeResponseFrame> handleFrame(BridgeRequestFrame frame) async {
     final source = _BridgeFrameRequestSource(frame);
     final metadata = _bridgeRequestMetadataFromSource(source);
-    final connectionInfo = _bridgeConnectionInfoFromSource(
-      source,
-      metadata: metadata,
-    );
+    BridgeConnectionInfo? connectionInfo;
+    BridgeConnectionInfo resolveConnectionInfo() => connectionInfo ??=
+        _bridgeConnectionInfoFromSource(source, metadata: metadata);
     final response = BridgeHttpResponse(
       requestMethod: frame.method,
-      connectionInfo: connectionInfo,
+      connectionInfoFactory: resolveConnectionInfo,
     );
     final request = BridgeHttpRequest._fromSource(
       source: source,
@@ -118,7 +115,7 @@ final class BridgeHttpRuntime {
       bodyStream: frame.bodyBytes.isEmpty
           ? const Stream<Uint8List>.empty()
           : Stream<Uint8List>.value(frame.bodyBytes),
-      connectionInfo: connectionInfo,
+      connectionInfoFactory: resolveConnectionInfo,
     );
     await _handler(request);
     await response.done;

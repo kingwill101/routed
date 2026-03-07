@@ -8,7 +8,7 @@ final class BridgeHttpRequest extends Stream<Uint8List> implements HttpRequest {
     required Stream<Uint8List> bodyStream,
     HttpSession Function()? sessionFactory,
     bool stripTransferEncoding = false,
-    BridgeConnectionInfo? connectionInfo,
+    BridgeConnectionInfo Function()? connectionInfoFactory,
   }) {
     final source = _BridgeFrameRequestSource(frame);
     final metadata = _bridgeRequestMetadataFromSource(source);
@@ -19,9 +19,9 @@ final class BridgeHttpRequest extends Stream<Uint8List> implements HttpRequest {
       bodyStream: bodyStream,
       sessionFactory: sessionFactory,
       stripTransferEncoding: stripTransferEncoding,
-      connectionInfo:
-          connectionInfo ??
-          _bridgeConnectionInfoFromSource(source, metadata: metadata),
+      connectionInfoFactory:
+          connectionInfoFactory ??
+          () => _bridgeConnectionInfoFromSource(source, metadata: metadata),
     );
   }
 
@@ -32,7 +32,7 @@ final class BridgeHttpRequest extends Stream<Uint8List> implements HttpRequest {
     required Stream<Uint8List> bodyStream,
     HttpSession Function()? sessionFactory,
     bool stripTransferEncoding = false,
-    BridgeConnectionInfo? connectionInfo,
+    BridgeConnectionInfo Function()? connectionInfoFactory,
   }) : method = source.method,
        protocolVersion = source.protocol,
        persistentConnection = metadata.persistentConnection,
@@ -41,9 +41,9 @@ final class BridgeHttpRequest extends Stream<Uint8List> implements HttpRequest {
        _metadata = metadata,
        _sessionFactory = sessionFactory,
        _stripTransferEncoding = stripTransferEncoding,
-       _connectionInfo =
-           connectionInfo ??
-           _bridgeConnectionInfoFromSource(source, metadata: metadata) {
+       _connectionInfoFactory =
+           connectionInfoFactory ??
+           (() => _bridgeConnectionInfoFromSource(source, metadata: metadata)) {
     response.persistentConnection = persistentConnection;
   }
 
@@ -55,7 +55,8 @@ final class BridgeHttpRequest extends Stream<Uint8List> implements HttpRequest {
   HttpSession? _session;
   HttpSession Function()? _sessionFactory;
   final bool _stripTransferEncoding;
-  final BridgeConnectionInfo _connectionInfo;
+  final BridgeConnectionInfo Function() _connectionInfoFactory;
+  BridgeConnectionInfo? _connectionInfo;
 
   @override
   final String method;
@@ -148,7 +149,8 @@ final class BridgeHttpRequest extends Stream<Uint8List> implements HttpRequest {
   }
 
   @override
-  HttpConnectionInfo? get connectionInfo => _connectionInfo;
+  HttpConnectionInfo? get connectionInfo =>
+      _connectionInfo ??= _connectionInfoFactory();
 
   @override
   final HttpResponse response;
