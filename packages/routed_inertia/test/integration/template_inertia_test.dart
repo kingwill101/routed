@@ -69,7 +69,10 @@ void main() {
       response
           .assertStatus(200)
           .assertHeaderContains('content-type', 'text/html')
-          .assertBodyContains('data-page=');
+          .assertBodyContains(
+            '<script data-page="app" type="application/json">',
+          )
+          .assertBodyContains('<div id="app"></div>');
     });
 
     engineTest('default html includes request url', (engine, client) async {
@@ -82,9 +85,7 @@ void main() {
       response
           .assertStatus(200)
           .assertHeaderContains('content-type', 'text/html')
-          .assertBodyContains(
-            '&quot;url&quot;:&quot;/users/?page=2&amp;filter=a&quot;',
-          );
+          .assertBodyContains('"url":"/users/?page=2\\u0026filter=a"');
     });
 
     engineTest('SSR head and body render once', (engine, client) async {

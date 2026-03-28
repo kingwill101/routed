@@ -91,11 +91,7 @@ Future<String> _renderHtml(PageData page, SsrResponse? ssr) async {
     includeReactRefresh: true,
   );
   final tags = await assets.resolve();
-  final pageJson = jsonEncode(page.toJson());
-  final escaped = _escapeHtml(pageJson);
   final head = ssr?.head ?? '';
-  final bodyContent = ssr?.body ?? '';
-  final app = _resolveAppMarkup(bodyContent, escaped);
 
   return '''<!doctype html>
 <html lang="en">
@@ -107,21 +103,11 @@ Future<String> _renderHtml(PageData page, SsrResponse? ssr) async {
     <title>Inertia SSR App</title>
   </head>
   <body>
-    $app
+    ${renderInertiaBootstrap(page, body: ssr?.body)}
     ${tags.renderScripts()}
   </body>
 </html>
 ''';
-}
-
-String _resolveAppMarkup(String bodyContent, String pageJson) {
-  if (bodyContent.isEmpty) {
-    return '<div id="app" data-page="$pageJson"></div>';
-  }
-  if (bodyContent.contains('id="app"')) {
-    return bodyContent;
-  }
-  return '<div id="app" data-page="$pageJson">$bodyContent</div>';
 }
 
 String _requestUrl(Uri uri) {
@@ -130,15 +116,6 @@ String _requestUrl(Uri uri) {
     return '$path?${uri.query}';
   }
   return path;
-}
-
-String _escapeHtml(String value) {
-  return value
-      .replaceAll('&', '&amp;')
-      .replaceAll('<', '&lt;')
-      .replaceAll('>', '&gt;')
-      .replaceAll('"', '&quot;')
-      .replaceAll("'", '&#x27;');
 }
 
 ContentType _contentTypeForPath(String path) {

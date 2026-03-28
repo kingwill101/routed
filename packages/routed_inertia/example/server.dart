@@ -1,4 +1,3 @@
-import 'dart:convert';
 import 'dart:io';
 
 import 'package:inertia_dart/inertia_dart.dart';
@@ -75,8 +74,6 @@ void main() async {
 
 String _renderHtml(PageData page, {required AssetTags assets}) {
   final title = page.props['title']?.toString() ?? 'Routed Inertia';
-  final pageJson = jsonEncode(page.toJson());
-  final escaped = _escapeHtml(pageJson);
   final styleTags = assets.styles.join('\n    ');
   final scriptTags = assets.scripts.join('\n    ');
 
@@ -89,20 +86,11 @@ String _renderHtml(PageData page, {required AssetTags assets}) {
     ${styleTags.isEmpty ? '' : styleTags}
   </head>
   <body>
-    <div id="app" data-page="$escaped"></div>
+    ${renderInertiaBootstrap(page)}
     ${scriptTags.trim()}
   </body>
 </html>
 ''';
-}
-
-String _escapeHtml(String value) {
-  return value
-      .replaceAll('&', '&amp;')
-      .replaceAll('<', '&lt;')
-      .replaceAll('>', '&gt;')
-      .replaceAll('"', '&quot;')
-      .replaceAll("'", '&#x27;');
 }
 
 class AssetTags {

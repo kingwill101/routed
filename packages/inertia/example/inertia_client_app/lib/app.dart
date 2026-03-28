@@ -1,4 +1,3 @@
-import 'dart:convert';
 import 'dart:io';
 
 import 'package:inertia_dart/inertia_dart.dart';
@@ -74,8 +73,6 @@ Future<String> _renderHtml(PageData page) async {
     includeReactRefresh: true,
   );
   final tags = await assets.resolve();
-  final pageJson = jsonEncode(page.toJson());
-  final escaped = _escapeHtml(pageJson);
 
   return '''<!doctype html>
 <html lang="en">
@@ -86,7 +83,7 @@ Future<String> _renderHtml(PageData page) async {
     <title>Inertia Client App</title>
   </head>
   <body>
-    <div id="app" data-page="$escaped"></div>
+    ${renderInertiaBootstrap(page)}
     ${tags.renderScripts()}
   </body>
 </html>
@@ -99,15 +96,6 @@ String _requestUrl(Uri uri) {
     return '$path?${uri.query}';
   }
   return path;
-}
-
-String _escapeHtml(String value) {
-  return value
-      .replaceAll('&', '&amp;')
-      .replaceAll('<', '&lt;')
-      .replaceAll('>', '&gt;')
-      .replaceAll('"', '&quot;')
-      .replaceAll("'", '&#x27;');
 }
 
 ContentType _contentTypeForPath(String path) {

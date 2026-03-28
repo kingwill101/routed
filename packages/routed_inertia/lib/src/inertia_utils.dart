@@ -1,5 +1,3 @@
-import 'dart:convert' as convert;
-
 import 'package:inertia_dart/inertia_dart.dart';
 import 'package:routed/routed.dart';
 
@@ -50,13 +48,9 @@ String _applyForwardedPrefix(String path, String? prefix) {
 
 /// Generates a minimal HTML page for an Inertia initial visit.
 String inertiaDefaultHtml(PageData page, SsrResponse? ssrResponse) {
-  final pageJson = convert.jsonEncode(page.toJson());
-  final escaped = escapeInertiaHtml(pageJson);
   final head = ssrResponse?.head ?? '';
   final bodyContent = ssrResponse?.body ?? '';
-  final app = bodyContent.isEmpty
-      ? '<div id="app" data-page="$escaped"></div>'
-      : '<div id="app" data-page="$escaped">$bodyContent</div>';
+  final app = renderInertiaBootstrap(page, body: bodyContent);
   return '''<!doctype html>
 <html lang="en">
   <head>

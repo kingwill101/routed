@@ -1,10 +1,12 @@
 library;
 
+import 'dart:convert';
 import 'dart:io';
 
 import '../core/inertia_headers.dart';
 import '../core/inertia_request.dart';
 import '../core/inertia_response.dart';
+import '../core/page_data.dart';
 
 /// Extracts a flat `Map<String, String>` from `dart:io` [HttpHeaders].
 ///
@@ -40,6 +42,40 @@ String escapeInertiaHtml(String value) {
       .replaceAll('>', '&gt;')
       .replaceAll('"', '&quot;')
       .replaceAll("'", '&#x27;');
+}
+
+/// Escapes JSON text for safe embedding inside an HTML `<script>` tag.
+///
+/// This preserves valid JSON while preventing the browser from treating
+/// characters like `<` as HTML markup.
+String escapeInertiaJsonForScript(String value) {
+  return value
+      .replaceAll('&', r'\u0026')
+      .replaceAll('<', r'\u003C')
+      .replaceAll('>', r'\u003E')
+      .replaceAll('\u2028', r'\u2028')
+      .replaceAll('\u2029', r'\u2029');
+}
+
+/// Renders the JSON bootstrap `<script>` element used by Inertia v3.
+String inertiaPageScriptTag(PageData page, {String id = 'app'}) {
+  final pageJson = jsonEncode(page.toJson());
+  final safeId = escapeInertiaHtml(id);
+  final safeJson = escapeInertiaJsonForScript(pageJson);
+  return '<script data-page="$safeId" type="application/json">$safeJson</script>';
+}
+
+/// Renders the default Inertia v3 bootstrap markup.
+String renderInertiaBootstrap(
+  PageData page, {
+  String id = 'app',
+  String? body,
+}) {
+  final safeId = escapeInertiaHtml(id);
+  final app = body == null || body.isEmpty
+      ? '<div id="$safeId"></div>'
+      : '<div id="$safeId">$body</div>';
+  return '${inertiaPageScriptTag(page, id: id)}$app';
 }
 
 /// Provides dart:io helpers for Inertia requests and responses.

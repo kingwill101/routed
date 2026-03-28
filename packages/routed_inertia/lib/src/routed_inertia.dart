@@ -29,8 +29,8 @@ class RoutedInertia {
     String Function(PageData page, SsrResponse? ssr)? templateRenderer,
     this.ssrGateway,
     this.ssrEnabled = false,
-  }) : responseFactory = responseFactory ?? InertiaResponseFactory(),
-       templateRenderer = templateRenderer ?? _defaultTemplateRenderer;
+  })  : responseFactory = responseFactory ?? InertiaResponseFactory(),
+        templateRenderer = templateRenderer ?? _defaultTemplateRenderer;
 
   final InertiaResponseFactory responseFactory;
   final String Function(PageData page, SsrResponse? ssr) templateRenderer;
@@ -65,9 +65,8 @@ class RoutedInertia {
     final context = request.createContext();
 
     final flash = consumeFlash(ctx);
-    final resolvedVersion = version.isEmpty
-        ? (config?.resolveVersion() ?? '')
-        : version;
+    final resolvedVersion =
+        version.isEmpty ? (config?.resolveVersion() ?? '') : version;
     final resolvedEncryptHistory =
         encryptHistory || (config?.history.encrypt ?? false);
     final resolvedGateway = ssrGateway ?? config?.ssrGateway;
@@ -108,12 +107,6 @@ class RoutedInertia {
   }
 
   static String _defaultTemplateRenderer(PageData page, SsrResponse? ssr) {
-    final json = jsonEncode(page.toJson());
-    final escaped = escapeInertiaHtml(json);
-    final body = ssr?.body ?? '';
-    if (body.isEmpty) {
-      return '<div id="app" data-page="$escaped"></div>';
-    }
-    return '<div id="app" data-page="$escaped">$body</div>';
+    return renderInertiaBootstrap(page, body: ssr?.body);
   }
 }

@@ -547,11 +547,7 @@ class CreateCommand extends BaseCommand {
     {{ inertia_styles }}
   </head>
   <body>
-    {% if ssrBody != blank %}
-      <div id="app" data-page="{{ pageJsonEscaped }}">{{ ssrBody }}</div>
-    {% else %}
-      <div id="app" data-page="{{ pageJsonEscaped }}"></div>
-    {% endif %}
+    {{ inertiaBootstrap }}
     {{ inertia_scripts }}
   </body>
 </html>

@@ -159,11 +159,7 @@ The Liquid template is the HTML shell for every Inertia page. It receives templa
     {{ inertia_styles }}
   </head>
   <body>
-    {% if ssrBody != blank %}
-      <div id="app" data-page="{{ pageJsonEscaped }}">{{ ssrBody }}</div>
-    {% else %}
-      <div id="app" data-page="{{ pageJsonEscaped }}"></div>
-    {% endif %}
+    {{ inertiaBootstrap }}
     {{ inertia_scripts }}
   </body>
 </html>
@@ -171,7 +167,7 @@ The Liquid template is the HTML shell for every Inertia page. It receives templa
 
 - **`{{ inertia_styles }}`** -- CSS `<link>` tags from the Vite manifest (production) or nothing (dev mode, Vite injects CSS via JS).
 - **`{{ inertia_scripts }}`** -- JS `<script>` tags. In dev mode these point to the Vite dev server with HMR support.
-- **`{{ pageJsonEscaped }}`** -- the Inertia page object (component name, props, URL, version) as HTML-escaped JSON in the `data-page` attribute.
+- **`{{ inertiaBootstrap }}`** -- renders the Inertia 3 bootstrap markup: a `<script data-page="app" type="application/json">` element with the page JSON plus the `<div id="app">` mount node, optionally containing SSR markup.
 - **`{{ ssrHead }}` / `{{ ssrBody }}`** -- SSR content when enabled.
 
 ## 4. Set up the React client
@@ -511,7 +507,7 @@ When you stop Vite, the plugin deletes the hot file and the backend falls back t
 
 The Inertia request lifecycle:
 
-1. **First visit** -- the browser requests `/todos`. The server renders the Liquid template with the full HTML shell. The `data-page` attribute contains the Inertia page object as JSON (`{component: "Todos", props: {todos: [...]}, url: "/todos", version: "dev"}`). React hydrates from this.
+1. **First visit** -- the browser requests `/todos`. The server renders the Liquid template with the full HTML shell. The page object (`{component: "Todos", props: {todos: [...]}, url: "/todos", version: "dev"}`) is embedded in a `<script data-page="app" type="application/json">` element, and React mounts into `<div id="app">`.
 2. **Client-side navigation** -- clicking a `Link` sends an XHR with the `X-Inertia: true` header. The server returns JSON instead of HTML. Inertia swaps the component and props without a full reload.
 3. **Mutations** -- `useForm.post()`, `router.put()`, and `router.delete()` send Inertia visits. The server processes the request and redirects. Inertia follows the redirect, receives fresh props, and re-renders.
 4. **Version checking** -- the middleware compares `X-Inertia-Version` from the client against the server's version. On a mismatch (e.g. after a deploy), the server responds with 409 and the client does a full page reload to pick up new assets.

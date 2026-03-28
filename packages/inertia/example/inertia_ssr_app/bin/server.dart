@@ -1,6 +1,6 @@
 import 'dart:io';
 
-import 'package:inertia_ssr_app/app.dart' as app;
+import '../lib/app.dart' as app;
 
 Future<void> main(List<String> args) async {
   final host = Platform.environment['HOST'] ?? '127.0.0.1';

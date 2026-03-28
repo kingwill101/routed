@@ -19,5 +19,6 @@ npm run dev
 ```
 
 ## Notes
-- The server renders initial HTML with `data-page` and injects Vite tags.
+- The server renders the initial page using the Inertia 3 JSON script bootstrap
+  and injects Vite tags.
 - This example is client-only (no SSR entry).

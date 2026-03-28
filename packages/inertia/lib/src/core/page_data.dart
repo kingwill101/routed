@@ -112,8 +112,8 @@ class PageData {
       'props': props,
       'url': url,
       'version': version,
-      'encryptHistory': encryptHistory,
-      'clearHistory': clearHistory,
+      if (encryptHistory) 'encryptHistory': true,
+      if (clearHistory) 'clearHistory': true,
       if (deferredProps != null && deferredProps!.isNotEmpty)
         'deferredProps': deferredProps,
       if (mergeProps != null && mergeProps!.isNotEmpty)

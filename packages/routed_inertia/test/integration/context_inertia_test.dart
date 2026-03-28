@@ -186,10 +186,10 @@ void main() {
       },
     );
 
-    response
-        .assertStatus(200)
-        .assertJsonPath('encryptHistory', false)
-        .assertJsonPath('clearHistory', false);
+    response.assertStatus(200);
+    final json = response.json() as Map<String, dynamic>;
+    expect(json.containsKey('encryptHistory'), isFalse);
+    expect(json.containsKey('clearHistory'), isFalse);
   });
 
   engineTest('history encrypts from config', (engine, client) async {
@@ -225,7 +225,9 @@ void main() {
       },
     );
 
-    response.assertStatus(200).assertJsonPath('encryptHistory', false);
+    response.assertStatus(200);
+    final json = response.json() as Map<String, dynamic>;
+    expect(json.containsKey('encryptHistory'), isFalse);
   });
 
   engineTest('flash data is included', (engine, client) async {

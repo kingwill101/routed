@@ -38,28 +38,25 @@ class PropertyContext {
     String? mergeIntent,
     this.onceKey,
     bool Function(String key)? shouldIncludeProp,
-  }) : resetKeys =
-           resetKeys ?? InertiaHeaderUtils.getResetKeys(headers) ?? const [],
-       requestedExceptProps =
-           requestedExceptProps ??
-           InertiaHeaderUtils.getPartialExcept(headers) ??
-           const [],
-       exceptOnceProps =
-           exceptOnceProps ??
-           InertiaHeaderUtils.getExceptOnceProps(headers) ??
-           const [],
-       errorBag = errorBag ?? InertiaHeaderUtils.getErrorBag(headers),
-       mergeIntent = mergeIntent ?? InertiaHeaderUtils.getMergeIntent(headers),
-       shouldIncludeProp =
-           shouldIncludeProp ??
-           ((key) => PropertyContext._defaultIncludePredicate(
-             isPartialReload,
-             requestedProps,
-             requestedExceptProps ??
-                 InertiaHeaderUtils.getPartialExcept(headers) ??
-                 const [],
-             key,
-           ));
+  })  : resetKeys =
+            resetKeys ?? InertiaHeaderUtils.getResetKeys(headers) ?? const [],
+        requestedExceptProps = requestedExceptProps ??
+            InertiaHeaderUtils.getPartialExcept(headers) ??
+            const [],
+        exceptOnceProps = exceptOnceProps ??
+            InertiaHeaderUtils.getExceptOnceProps(headers) ??
+            const [],
+        errorBag = errorBag ?? InertiaHeaderUtils.getErrorBag(headers),
+        mergeIntent = mergeIntent ?? InertiaHeaderUtils.getMergeIntent(headers),
+        shouldIncludeProp = shouldIncludeProp ??
+            ((key) => PropertyContext._defaultIncludePredicate(
+                  isPartialReload,
+                  requestedProps,
+                  requestedExceptProps ??
+                      InertiaHeaderUtils.getPartialExcept(headers) ??
+                      const [],
+                  key,
+                ));
 
   /// Creates a context for a partial reload.
   ///
@@ -80,29 +77,26 @@ class PropertyContext {
     String? mergeIntent,
     this.onceKey,
     bool Function(String key)? shouldIncludeProp,
-  }) : isPartialReload = true,
-       resetKeys =
-           resetKeys ?? InertiaHeaderUtils.getResetKeys(headers) ?? const [],
-       requestedExceptProps =
-           requestedExceptProps ??
-           InertiaHeaderUtils.getPartialExcept(headers) ??
-           const [],
-       exceptOnceProps =
-           exceptOnceProps ??
-           InertiaHeaderUtils.getExceptOnceProps(headers) ??
-           const [],
-       errorBag = errorBag ?? InertiaHeaderUtils.getErrorBag(headers),
-       mergeIntent = mergeIntent ?? InertiaHeaderUtils.getMergeIntent(headers),
-       shouldIncludeProp =
-           shouldIncludeProp ??
-           ((key) => PropertyContext._defaultIncludePredicate(
-             true,
-             requestedProps,
-             requestedExceptProps ??
-                 InertiaHeaderUtils.getPartialExcept(headers) ??
-                 const [],
-             key,
-           ));
+  })  : isPartialReload = true,
+        resetKeys =
+            resetKeys ?? InertiaHeaderUtils.getResetKeys(headers) ?? const [],
+        requestedExceptProps = requestedExceptProps ??
+            InertiaHeaderUtils.getPartialExcept(headers) ??
+            const [],
+        exceptOnceProps = exceptOnceProps ??
+            InertiaHeaderUtils.getExceptOnceProps(headers) ??
+            const [],
+        errorBag = errorBag ?? InertiaHeaderUtils.getErrorBag(headers),
+        mergeIntent = mergeIntent ?? InertiaHeaderUtils.getMergeIntent(headers),
+        shouldIncludeProp = shouldIncludeProp ??
+            ((key) => PropertyContext._defaultIncludePredicate(
+                  true,
+                  requestedProps,
+                  requestedExceptProps ??
+                      InertiaHeaderUtils.getPartialExcept(headers) ??
+                      const [],
+                  key,
+                ));
 
   /// Creates a context for deferred prop groups.
   ///
@@ -123,29 +117,26 @@ class PropertyContext {
     String? mergeIntent,
     this.onceKey,
     bool Function(String key)? shouldIncludeProp,
-  }) : isPartialReload = false,
-       resetKeys =
-           resetKeys ?? InertiaHeaderUtils.getResetKeys(headers) ?? const [],
-       requestedExceptProps =
-           requestedExceptProps ??
-           InertiaHeaderUtils.getPartialExcept(headers) ??
-           const [],
-       exceptOnceProps =
-           exceptOnceProps ??
-           InertiaHeaderUtils.getExceptOnceProps(headers) ??
-           const [],
-       errorBag = errorBag ?? InertiaHeaderUtils.getErrorBag(headers),
-       mergeIntent = mergeIntent ?? InertiaHeaderUtils.getMergeIntent(headers),
-       shouldIncludeProp =
-           shouldIncludeProp ??
-           ((key) => PropertyContext._defaultIncludePredicate(
-             false,
-             requestedProps,
-             requestedExceptProps ??
-                 InertiaHeaderUtils.getPartialExcept(headers) ??
-                 const [],
-             key,
-           ));
+  })  : isPartialReload = false,
+        resetKeys =
+            resetKeys ?? InertiaHeaderUtils.getResetKeys(headers) ?? const [],
+        requestedExceptProps = requestedExceptProps ??
+            InertiaHeaderUtils.getPartialExcept(headers) ??
+            const [],
+        exceptOnceProps = exceptOnceProps ??
+            InertiaHeaderUtils.getExceptOnceProps(headers) ??
+            const [],
+        errorBag = errorBag ?? InertiaHeaderUtils.getErrorBag(headers),
+        mergeIntent = mergeIntent ?? InertiaHeaderUtils.getMergeIntent(headers),
+        shouldIncludeProp = shouldIncludeProp ??
+            ((key) => PropertyContext._defaultIncludePredicate(
+                  false,
+                  requestedProps,
+                  requestedExceptProps ??
+                      InertiaHeaderUtils.getPartialExcept(headers) ??
+                      const [],
+                  key,
+                ));
 
   /// The original request headers.
   final Map<String, String> headers;
@@ -201,10 +192,20 @@ class PropertyContext {
     String key,
   ) {
     if (!isPartialReload) return true;
-    if (requestedProps.isNotEmpty && !requestedProps.contains(key)) {
+    if (requestedProps.isNotEmpty &&
+        !requestedProps.any(
+          (path) =>
+              path == key ||
+              path.startsWith('$key.') ||
+              key.startsWith('$path.'),
+        )) {
       return false;
     }
-    if (requestedExceptProps.contains(key)) return false;
+    if (requestedExceptProps.any(
+      (path) => path == key || key.startsWith('$path.'),
+    )) {
+      return false;
+    }
     return true;
   }
 }

@@ -287,8 +287,6 @@ Future<String> _renderHtml(PageData page) async {
     includeReactRefresh: true,
   );
   final tags = await assets.resolve();
-  final pageJson = jsonEncode(page.toJson());
-  final escaped = escapeInertiaHtml(pageJson);
 
   return '''<!doctype html>
 <html lang="en">
@@ -299,7 +297,7 @@ Future<String> _renderHtml(PageData page) async {
     ${tags.renderStyles()}
   </head>
   <body>
-    <div id="app" data-page="$escaped"></div>
+    ${renderInertiaBootstrap(page)}
     ${tags.renderScripts()}
   </body>
 </html>
@@ -359,8 +357,9 @@ middleware.
 
 **HTML rendering** -- `InertiaViteAssets` reads the hot file (dev mode) or the
 Vite manifest (production) and generates the correct `<script>` and `<link>`
-tags. The `data-page` attribute contains the Inertia page object as
-HTML-escaped JSON, which the React client reads to hydrate the app.
+tags. `renderInertiaBootstrap(page)` emits the Inertia 3 bootstrap markup: a
+`<script data-page="app" type="application/json">` element containing the page
+object plus the `<div id="app">` mount node the React client hydrates into.
 
 ## 6. Update the entry point
 
@@ -632,8 +631,8 @@ The request lifecycle at the protocol level:
 
 1. **First visit** -- the browser sends a normal GET to `/contacts`. The server
    builds the page object (`{component: "Contacts", props: {...}, url: "/contacts", version: "dev"}`)
-   and wraps it in an HTML shell with the page JSON in `data-page`. React
-   hydrates from this attribute.
+   and wraps it in an HTML shell using the Inertia 3 JSON script bootstrap.
+   React mounts into `<div id="app">` using that page payload.
 
 2. **Client-side navigation** -- clicking a `<Link>` sends an XHR with
    `X-Inertia: true`. The server detects `request.isInertia == true` and
@@ -668,7 +667,7 @@ The request lifecycle at the protocol level:
 | `InertiaResponse.html()` | HTML response for initial page loads |
 | `writeInertiaResponse()` | Writes an `InertiaResponse` to a `dart:io` `HttpResponse` |
 | `InertiaViteAssets` | Resolves Vite asset tags (dev hot file or production manifest) |
-| `escapeInertiaHtml()` | HTML-escapes JSON for safe embedding in `data-page` |
+| `renderInertiaBootstrap()` | Renders the Inertia 3 initial page bootstrap (`<script data-page="app" ...>` plus `<div id="app">`) |
 
 ## 10. Prop helpers
 

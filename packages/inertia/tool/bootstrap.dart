@@ -1,6 +1,5 @@
 library;
 
-import 'dart:convert';
 import 'dart:io';
 
 import 'package:artisanal/artisanal.dart';
@@ -243,10 +242,7 @@ Future<HttpServer> _startInertiaServer(Console console) async {
 
     final response = inertiaRequest.isInertia
         ? InertiaResponse.json(page)
-        : InertiaResponse.html(
-            page,
-            '<div id="app" data-page="${jsonEncode(page.toJson())}"></div>',
-          );
+        : InertiaResponse.html(page, renderInertiaBootstrap(page));
     await writeInertiaResponse(request.response, response);
   });
 

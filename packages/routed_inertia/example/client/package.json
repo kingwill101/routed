@@ -9,10 +9,10 @@
     "preview": "vite preview"
   },
   "dependencies": {
-    "@inertiajs/core": "^1.0.14",
-    "@inertiajs/react": "^1.0.14",
-    "react": "^18.2.0",
-    "react-dom": "^18.2.0"
+    "@inertiajs/core": "^3.0.0",
+    "@inertiajs/react": "^3.0.0",
+    "react": "^19.2.0",
+    "react-dom": "^19.2.0"
   },
   "devDependencies": {
     "@vitejs/plugin-react": "^4.2.0",
