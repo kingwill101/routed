@@ -1,0 +1,146 @@
+---
+title: Serinus
+description: Use Inertia with Serinus through the serinus_inertia adapter
+---
+
+# Serinus
+
+For Serinus apps, use the `serinus_inertia` adapter package. It wraps the core
+`inertia_dart` protocol helpers with Serinus-friendly module and request
+integration, so you can focus on routes and page props instead of the raw HTTP
+plumbing.
+
+## What the adapter gives you
+
+- `InertiaModule` to register app-wide defaults
+- `context.inertia()` to render page responses from controllers and handlers
+- Asset configuration for the Vite client directory and entry file
+- Optional SSR gateway support
+- The same Inertia property helpers you use with plain `inertia_dart`
+
+## 1. Install the packages
+
+```bash
+dart pub add serinus serinus_inertia
+dart run inertia_dart:inertia create client --framework react --package-manager npm
+cd client
+npm install
+cd ..
+```
+
+## 2. Register the Inertia module
+
+```dart
+import 'package:serinus/serinus.dart';
+import 'package:serinus_inertia/serinus_inertia.dart';
+
+class HomeController extends Controller {
+  HomeController() {
+    on(Route.get('/'), (context) async {
+      return context.inertia(
+        component: 'Home',
+        props: {
+          'title': 'Hello from Serinus',
+          'message': 'Rendered through the Inertia adapter',
+        },
+      );
+    });
+  }
+}
+
+class AppModule extends Module {
+  AppModule()
+      : super(
+          imports: [
+            InertiaModule(
+              options: SerinusInertiaOptions(
+                version: '1.0.0',
+                assets: SerinusInertiaAssetOptions(
+                  clientDirectory: 'client',
+                  entry: 'src/main.jsx',
+                  includeReactRefresh: true,
+                ),
+              ),
+            ),
+          ],
+          controllers: [HomeController()],
+        );
+}
+
+Future<void> main() async {
+  final app = await serinus.createApplication(entrypoint: AppModule());
+  await app.serve();
+}
+```
+
+## 3. Shared defaults
+
+Use the module options to define shared behavior once:
+
+- `version` for asset reloads
+- `sharedProps` for app-wide props
+- `assets` for the Vite client path and entry
+- `ssr` for server-side rendering settings
+
+That keeps route handlers small:
+
+```dart
+return context.inertia(
+  component: 'Dashboard',
+  props: {
+    'user': {'name': 'Ada'},
+    'stats': LazyProp(() => loadStats()),
+  },
+);
+```
+
+## 4. SSR
+
+Point the adapter at a normal Inertia SSR endpoint:
+
+```dart
+InertiaModule(
+  options: SerinusInertiaOptions(
+    assets: SerinusInertiaAssetOptions(
+      clientDirectory: 'client',
+      entry: 'src/main.jsx',
+    ),
+    ssr: SerinusInertiaSsrOptions(
+      enabled: true,
+      endpoint: Uri.parse('http://127.0.0.1:13714/render'),
+    ),
+  ),
+)
+```
+
+You can manage the renderer separately with the standard commands:
+
+```bash
+dart run inertia_dart:inertia ssr:start
+dart run inertia_dart:inertia ssr:check
+dart run inertia_dart:inertia ssr:stop
+```
+
+If your adapter setup manages the SSR child process directly, keep the bundle
+path and runtime settings next to the module options so the server and
+renderer stay in sync.
+
+## 5. When to choose Serinus vs plain HttpServer
+
+Use Serinus when you want:
+
+- Module-based application structure
+- Controller routing and framework lifecycle hooks
+- Centralized defaults for assets, shared props, and SSR
+
+Use plain `HttpServer` when you want:
+
+- The smallest possible dependency set
+- Full control over routing and response handling
+- A framework-free Inertia proof of concept
+
+## Next steps
+
+- Start with the [plain HttpServer guide](/docs/httpserver) if you want the lower-level version first
+- Use the [core reference](/docs/) for prop helpers, partial reloads, and SSR utilities
+- See the [Routed adapter docs](/docs/routed/) if you are already on Routed instead of Serinus

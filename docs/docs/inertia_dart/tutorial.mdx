@@ -19,7 +19,7 @@ By the end you will have:
 - A `dart:io` HTTP server that speaks the Inertia protocol
 - A React frontend scaffolded with Vite
 - Automatic dev/production asset switching via the hot file bridge
-- An understanding of how `InertiaRequest`, `PropertyContext`, and `InertiaResponseFactory` fit together
+- An understanding of how the `HttpServer` helpers fit together
 
 ## 1. Create the project
 
@@ -104,18 +104,16 @@ export default defineConfig({
 
 ## 5. Write the server
 
-Replace the contents of `lib/contacts_app.dart` with the full server. We will
-walk through each piece below.
+Instead of pasting one large backend file all at once, build
+`lib/contacts_app.dart` in three small pieces.
+
+### 5.1 Create the contact store
 
 ```dart title="lib/contacts_app.dart"
 import 'dart:convert';
 import 'dart:io';
 
 import 'package:inertia_dart/inertia_dart.dart';
-
-// ---------------------------------------------------------------------------
-// In-memory contact store
-// ---------------------------------------------------------------------------
 
 class ContactStore {
   int _nextId = 4;
@@ -136,112 +134,87 @@ class ContactStore {
     _contacts.removeWhere((c) => c['id'] == id);
   }
 }
+```
 
-// ---------------------------------------------------------------------------
-// Server
-// ---------------------------------------------------------------------------
+### 5.2 Add the server and routes
 
-const String _version = 'dev';
-const String _clientEntry = 'index.html';
-const String _manifestPath = 'client/dist/.vite/manifest.json';
-const String _hotFile = 'client/public/hot';
+Append the server wiring below the store:
+
+```dart title="lib/contacts_app.dart"
 const InertiaViteAssets _assets = InertiaViteAssets(
-  entry: _clientEntry,
-  manifestPath: _manifestPath,
-  hotFile: _hotFile,
+  entry: 'index.html',
+  manifestPath: 'client/dist/.vite/manifest.json',
+  hotFile: 'client/public/hot',
   includeReactRefresh: true,
 );
+
+final _contactRoute = RegExp(r'^/contacts/(\d+)$');
 
 Future<void> serve({String address = '127.0.0.1', int port = 8080}) async {
   final store = ContactStore();
   final server = await HttpServer.bind(address, port);
   stdout.writeln('Contacts app listening on http://$address:$port');
 
-  await for (final httpRequest in server) {
-    try {
-      await _handleRequest(httpRequest, store);
-    } catch (e, st) {
-      stderr.writeln('Error handling ${httpRequest.uri}: $e\n$st');
-      httpRequest.response.statusCode = HttpStatus.internalServerError;
-      httpRequest.response.write('Internal Server Error');
-      await httpRequest.response.close();
-    }
+  await for (final request in server) {
+    await _handleRequest(request, store);
   }
 }
 
-Future<void> _handleRequest(HttpRequest httpRequest, ContactStore store) async {
-  // Serve static assets first
-  if (await _tryServeStatic(httpRequest)) return;
+Future<void> _handleRequest(HttpRequest request, ContactStore store) async {
+  if (await tryWriteStaticAsset(request, rootDirectory: 'client/dist')) return;
 
-  final method = httpRequest.method;
-  final path = httpRequest.uri.path;
-
-  // Route: GET /
-  if (method == 'GET' && path == '/') {
-    await _respondPage(
-      httpRequest,
-      component: 'Home',
-      props: {'title': 'Contacts App', 'subtitle': 'inertia_dart + dart:io'},
-      version: _version,
-    );
-    return;
+  switch ('${request.method} ${request.uri.path}') {
+    case 'GET /':
+      return _page(
+        request,
+        component: 'Home',
+        props: {
+          'title': 'Contacts App',
+          'subtitle': 'inertia_dart + dart:io',
+        },
+      );
+    case 'GET /contacts':
+      return _page(
+        request,
+        component: 'Contacts',
+        props: {'title': 'Contacts', 'contacts': store.all()},
+      );
+    case 'POST /contacts':
+      final body = await _readJsonBody(request);
+      final name = (body['name'] as String? ?? '').trim();
+      final email = (body['email'] as String? ?? '').trim();
+      if (name.isNotEmpty && email.isNotEmpty) {
+        store.add(name, email);
+      }
+      return _redirect(request, '/contacts');
   }
 
-  // Route: GET /contacts
-  if (method == 'GET' && path == '/contacts') {
-    await _respondPage(
-      httpRequest,
-      component: 'Contacts',
-      props: {'title': 'Contacts', 'contacts': store.all()},
-      version: _version,
-    );
-    return;
-  }
-
-  // Route: POST /contacts
-  if (method == 'POST' && path == '/contacts') {
-    final body = await _readJsonBody(httpRequest);
-    final name = (body['name'] as String?)?.trim() ?? '';
-    final email = (body['email'] as String?)?.trim() ?? '';
-    if (name.isNotEmpty && email.isNotEmpty) {
-      store.add(name, email);
-    }
-    _redirect(httpRequest, '/contacts');
-    return;
-  }
-
-  // Route: DELETE /contacts/{id}
-  final deleteMatch = RegExp(r'^/contacts/(\d+)$').firstMatch(path);
-  if (method == 'DELETE' && deleteMatch != null) {
+  final deleteMatch = _contactRoute.firstMatch(request.uri.path);
+  if (request.method == 'DELETE' && deleteMatch != null) {
     final id = int.parse(deleteMatch.group(1)!);
     store.remove(id);
-    // Rewrite 302 -> 303 for DELETE (Inertia protocol requirement)
-    _redirect(httpRequest, '/contacts', status: HttpStatus.seeOther);
-    return;
+    return _redirect(request, '/contacts', status: HttpStatus.seeOther);
   }
 
-  // 404
-  httpRequest.response.statusCode = HttpStatus.notFound;
-  httpRequest.response.write('Not Found');
-  await httpRequest.response.close();
+  return _notFound(request);
 }
+```
 
-// ---------------------------------------------------------------------------
-// Response helpers
-// ---------------------------------------------------------------------------
+### 5.3 Add the small helpers
 
-/// Sends JSON for Inertia visits or a full HTML page for initial loads.
-Future<void> _respondPage(
-  HttpRequest httpRequest,
-  String component,
-  Map<String, dynamic> props, {
-  String version = _version,
-) async {
-  await respondWithInertiaPage(
-    httpRequest,
+Finish the file with the few helper functions the routes need:
+
+```dart title="lib/contacts_app.dart"
+Future<void> _page(
+  HttpRequest request, {
+  required String component,
+  required Map<String, dynamic> props,
+}) {
+  return respondWithInertiaPage(
+    request,
     component: component,
     props: props,
-    version: version,
+    version: 'dev',
     html: (page, _) => renderInertiaVitePageHtml(
       page,
       assets: _assets,
@@ -250,19 +223,16 @@ Future<void> _respondPage(
   );
 }
 
-/// Redirects. For PUT/PATCH/DELETE, Inertia requires 303 so the browser
-/// follows the redirect as GET.
-void _redirect(
-  HttpRequest httpRequest,
+Future<void> _redirect(
+  HttpRequest request,
   String location, {
   int status = HttpStatus.found,
-}) {
-  httpRequest.response.statusCode = status;
-  httpRequest.response.headers.set(HttpHeaders.locationHeader, location);
-  httpRequest.response.close();
+}) async {
+  request.response.statusCode = status;
+  request.response.headers.set(HttpHeaders.locationHeader, location);
+  await request.response.close();
 }
 
-/// Reads a JSON request body into a Map.
 Future<Map<String, dynamic>> _readJsonBody(HttpRequest request) async {
   final raw = await utf8.decoder.bind(request).join();
   if (raw.isEmpty) return {};
@@ -273,13 +243,10 @@ Future<Map<String, dynamic>> _readJsonBody(HttpRequest request) async {
   }
 }
 
-// ---------------------------------------------------------------------------
-// Static file serving
-// ---------------------------------------------------------------------------
-
-/// Serves production assets from client/dist/assets/.
-Future<bool> _tryServeStatic(HttpRequest request) async {
-  return tryWriteStaticAsset(request, rootDirectory: 'client/dist');
+Future<void> _notFound(HttpRequest request) async {
+  request.response.statusCode = HttpStatus.notFound;
+  request.response.write('Not Found');
+  await request.response.close();
 }
 ```
 
@@ -288,21 +255,20 @@ Future<bool> _tryServeStatic(HttpRequest request) async {
 **Contact store** -- a simple in-memory list. In a real app, replace this with
 a database.
 
-**Request handling** -- each route does three things:
+**Request handling** -- the route function is intentionally small:
 1. Serve built assets with `tryWriteStaticAsset()` before app routes
-2. Call `respondWithInertiaPage()` with the component name and props
-3. Render the HTML shell with `renderInertiaVitePageHtml()` for first visits, while the helper automatically returns JSON for Inertia visits
+2. Match the request and pass only the component name and props into `_page()`
+3. Let `respondWithInertiaPage()` choose JSON vs HTML automatically
 
 **Redirect rewriting** -- the Inertia protocol requires 303 (See Other) instead
 of 302 for DELETE/PUT/PATCH so the browser follows the redirect as GET. We
 handle this manually here; the Routed framework does it automatically via
 middleware.
 
-**HTML rendering** -- `InertiaViteAssets` reads the hot file (dev mode) or the
-Vite manifest (production) and generates the correct `<script>` and `<link>`
-tags. `renderInertiaBootstrap(page)` emits the Inertia 3 bootstrap markup: a
-`<script data-page="app" type="application/json">` element containing the page
-object plus the `<div id="app">` mount node the React client hydrates into.
+**HTML rendering** -- `renderInertiaVitePageHtml()` keeps the HTML shell small.
+Under the hood, `InertiaViteAssets` reads the hot file (dev mode) or the Vite
+manifest (production), and `renderInertiaBootstrap(page)` emits the Inertia 3
+bootstrap markup the React client hydrates into.
 
 ## 6. Update the entry point
 
@@ -655,7 +621,7 @@ On the client, trigger a partial reload to fetch lazy props:
 router.reload({ only: ['auditLog'] })
 ```
 
-See the [prop helpers reference](/docs/inertia_dart/#props) for the full list.
+See the [prop helpers reference](/docs/props) for the full list.
 
 ## Troubleshooting
 
@@ -700,8 +666,8 @@ Always use `HttpStatus.seeOther` (303) for mutation redirects.
 
 ## Next steps
 
-- Read the [Inertia Dart reference](/docs/inertia_dart/) for the full API
-- See the [Routed Inertia integration](/docs/routed_inertia/) if you want a
+- Read the [Inertia Dart reference](/docs/) for the full API
+- See the [Routed Inertia integration](/docs/routed/) if you want a
   framework with config-driven providers, middleware, templates, and routing
 - Explore [Inertia.js docs](https://inertiajs.com) for client-side features
   like shared data, remember state, and scroll management

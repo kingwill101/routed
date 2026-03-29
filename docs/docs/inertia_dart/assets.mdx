@@ -1,0 +1,67 @@
+---
+title: Assets
+description: Resolve Vite assets in development and production and render Inertia HTML shells
+---
+
+# Assets
+
+`inertia_dart` includes helpers for both the Vite manifest and the Vite hot
+file flow.
+
+## Vite asset helper
+
+`InertiaViteAssets` reads a dev hot file or a production manifest and returns
+script and style tags:
+
+```dart
+final assets = InertiaViteAssets(
+  entry: 'index.html',
+  hotFile: 'client/public/hot',
+  manifestPath: 'client/dist/.vite/manifest.json',
+  includeReactRefresh: true,
+);
+
+final tags = await assets.resolve();
+final styles = tags.renderStyles();
+final scripts = tags.renderScripts();
+```
+
+## Manifest helper
+
+Load a Vite manifest directly when you want lower-level control:
+
+```dart
+final manifest = await InertiaAssetManifest.load(
+  'client/dist/.vite/manifest.json',
+);
+final tags = manifest.renderTags('index.html', baseUrl: '/');
+```
+
+## HTML rendering helper
+
+Use `renderInertiaVitePageHtml()` when you want a simple HTML shell with the
+Inertia bootstrap and Vite tags:
+
+```dart
+final html = await renderInertiaVitePageHtml(
+  page,
+  assets: assets,
+  title: 'My App',
+);
+```
+
+## Static assets
+
+For plain `HttpServer` apps, `tryWriteStaticAsset()` serves built files from
+`client/dist` for `/assets/*` requests:
+
+```dart
+if (await tryWriteStaticAsset(request, rootDirectory: 'client/dist')) {
+  return;
+}
+```
+
+## Related topics
+
+- [HttpServer](/docs/httpserver)
+- [SSR](/docs/ssr)

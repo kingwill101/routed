@@ -130,7 +130,7 @@ disks:
     root: "."
 ```
 
-The `public` disk has its root at `"."` (the project directory), so `client/dist/assets` resolves correctly. Without it, paths resolve relative to the default disk's root (`storage/app`), causing 404s. See [Static Assets](/docs/routed/static-assets) for more on mounts and disks.
+The `public` disk has its root at `"."` (the project directory), so `client/dist/assets` resolves correctly. Without it, paths resolve relative to the default disk's root (`storage/app`), causing 404s. See [Static assets](#static-assets) for the exact mount and disk setup used in this guide.
 
 ### View engine
 
@@ -636,7 +636,7 @@ Routed uses `{id}` syntax for route parameters, not `:id`. A path like `/todos/:
 
 The static mount needs a storage disk whose root is your project directory. Without one, paths resolve relative to the default `local` disk root (`storage/app`), so `client/dist/assets` becomes `storage/app/client/dist/assets` -- which does not exist.
 
-Add a `public` disk with `root: "."` to `config/storage.yaml` and reference it with `disk: public` in `config/static.yaml`. See [Static Assets](/docs/routed/static-assets) for details.
+Add a `public` disk with `root: "."` to `config/storage.yaml` and reference it with `disk: public` in `config/static.yaml`. See [Static assets](#static-assets) for the exact configuration.
 
 ### Manifest entry key mismatch
 
@@ -665,7 +665,7 @@ If clicking links triggers full page reloads instead of client-side navigation, 
 
 ## Next steps
 
-- Read the [Routed Inertia reference](/docs/routed_inertia/) for shared props, SSR, error bags, and testing.
-- Learn more about [Routed fundamentals](/docs/routed/getting-started) -- routing, middleware, and configuration.
-- See [Static Assets](/docs/routed/static-assets) for advanced mount and disk options.
-- See [Views and templates](/docs/routed/views/) for Liquid template syntax.
+- Read the [Routed Inertia reference](/docs/routed/) for shared props, SSR, error bags, and testing.
+- Learn more about the [Routed Inertia reference](/docs/routed/) for shared props, SSR, and testing.
+- See [Static assets](#static-assets) for mount and disk options.
+- See [Root template](#root-template) for the Liquid template used by this tutorial.

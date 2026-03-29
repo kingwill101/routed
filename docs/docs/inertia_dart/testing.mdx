@@ -1,0 +1,41 @@
+---
+title: Testing
+description: Assert Inertia responses and verify page payloads in Dart tests
+---
+
+# Testing
+
+Use `AssertableInertia` and the test extensions to verify page payloads
+without manually inspecting JSON.
+
+## Basic assertion
+
+```dart
+response.assertInertia((page) {
+  page.component('Dashboard').has('user.name');
+});
+```
+
+## What to test
+
+- component names
+- resolved props
+- deferred and merge metadata
+- flash and error payloads
+- SSR and HTML bootstrap behavior when relevant
+
+## Helpful pairings
+
+The `HttpServer` helpers are small enough to exercise in unit or integration
+tests directly:
+
+- `buildInertiaHttpPageData()`
+- `buildInertiaHttpResponse()`
+- `respondWithInertiaPage()`
+- `writeInertiaResponse()`
+
+## Related topics
+
+- [Props](/docs/props)
+- [Partial Reloads](/docs/partial-reloads)
+- [HttpServer](/docs/httpserver)

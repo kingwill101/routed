@@ -5,8 +5,8 @@ import type * as Preset from '@docusaurus/preset-classic';
 // This runs in Node.js - Don't use client-side code here (browser APIs, JSX...)
 
 const config: Config = {
-  title: 'Routed',
-    tagline: 'Routing, testing, and property-based tooling for Dart',
+  title: 'Inertia Dart',
+    tagline: 'Inertia.js server adapters and tooling for Dart',
   favicon: 'img/favicon.ico',
 
   // Set the production url of your site here
@@ -51,29 +51,9 @@ const config: Config = {
     [
       '@docusaurus/plugin-content-docs',
       {
-        id: 'routed',
-        path: 'docs/routed',
-        routeBasePath: 'docs/routed',
-        sidebarPath: './sidebars/routed.ts',
-        editUrl: 'https://github.com/kingwill101/routed/tree/main/docs/',
-      },
-    ],
-    [
-      '@docusaurus/plugin-content-docs',
-      {
-        id: 'routed_hotwire',
-        path: 'docs/routed_hotwire',
-        routeBasePath: 'docs/routed_hotwire',
-        sidebarPath: './sidebars/routed_hotwire.ts',
-        editUrl: 'https://github.com/kingwill101/routed/tree/main/docs/',
-      },
-    ],
-    [
-      '@docusaurus/plugin-content-docs',
-      {
         id: 'inertia_dart',
         path: 'docs/inertia_dart',
-        routeBasePath: 'docs/inertia_dart',
+        routeBasePath: 'docs',
         sidebarPath: './sidebars/inertia_dart.ts',
         editUrl: 'https://github.com/kingwill101/routed/tree/main/docs/',
       },
@@ -83,48 +63,8 @@ const config: Config = {
       {
         id: 'routed_inertia',
         path: 'docs/routed_inertia',
-        routeBasePath: 'docs/routed_inertia',
+        routeBasePath: 'docs/routed',
         sidebarPath: './sidebars/routed_inertia.ts',
-        editUrl: 'https://github.com/kingwill101/routed/tree/main/docs/',
-      },
-    ],
-    [
-      '@docusaurus/plugin-content-docs',
-      {
-        id: 'server_testing',
-        path: 'docs/server-testing',
-        routeBasePath: 'docs/server_testing',
-        sidebarPath: './sidebars/server_testing.ts',
-        editUrl: 'https://github.com/kingwill101/routed/tree/main/docs/',
-      },
-    ],
-    [
-      '@docusaurus/plugin-content-docs',
-      {
-        id: 'server_testing_shelf',
-        path: 'docs/server_testing_shelf',
-        routeBasePath: 'docs/server_testing_shelf',
-        sidebarPath: './sidebars/server_testing_shelf.ts',
-        editUrl: 'https://github.com/kingwill101/routed/tree/main/docs/',
-      },
-    ],
-    [
-      '@docusaurus/plugin-content-docs',
-      {
-        id: 'routed_testing',
-        path: 'docs/routed_testing',
-        routeBasePath: 'docs/routed_testing',
-        sidebarPath: './sidebars/routed_testing.ts',
-        editUrl: 'https://github.com/kingwill101/routed/tree/main/docs/',
-      },
-    ],
-    [
-      '@docusaurus/plugin-content-docs',
-      {
-        id: 'property_testing',
-        path: 'docs/property-testing',
-        routeBasePath: 'docs/property_testing',
-        sidebarPath: './sidebars/property_testing.ts',
         editUrl: 'https://github.com/kingwill101/routed/tree/main/docs/',
       },
     ],
@@ -134,60 +74,35 @@ const config: Config = {
     // Replace with your project's social card
     image: 'img/docusaurus-social-card.jpg',
     navbar: {
-      title: 'Routed',
+      title: 'Inertia Dart',
       logo: {
-        alt: 'Routed Logo',
+        alt: 'Inertia Dart Logo',
         src: 'img/logo.svg',
       },
       items: [
         {
           type: 'docSidebar',
-          sidebarId: 'routedSidebar',
-          docsPluginId: 'routed',
-          position: 'left',
-          label: 'Routed',
-        },
-        {
-          type: 'docSidebar',
           sidebarId: 'inertiaDartSidebar',
           docsPluginId: 'inertia_dart',
           position: 'left',
-          label: 'Inertia Dart',
+          label: 'Core',
+        },
+        {
+          to: '/docs/httpserver',
+          position: 'left',
+          label: 'HttpServer',
+        },
+        {
+          to: '/docs/serinus',
+          position: 'left',
+          label: 'Serinus',
         },
         {
           type: 'docSidebar',
-          sidebarId: 'routedHotwireSidebar',
-          docsPluginId: 'routed_hotwire',
+          sidebarId: 'routedInertiaSidebar',
+          docsPluginId: 'routed_inertia',
           position: 'left',
-          label: 'Routed Hotwire',
-        },
-        {
-          type: 'docSidebar',
-          sidebarId: 'serverTestingSidebar',
-          docsPluginId: 'server_testing',
-          position: 'left',
-          label: 'Server Testing',
-        },
-        {
-          type: 'docSidebar',
-          sidebarId: 'serverTestingShelfSidebar',
-          docsPluginId: 'server_testing_shelf',
-          position: 'left',
-          label: 'Server Testing Shelf',
-        },
-        {
-          type: 'docSidebar',
-          sidebarId: 'routedTestingSidebar',
-          docsPluginId: 'routed_testing',
-          position: 'left',
-          label: 'Routed Testing',
-        },
-        {
-          type: 'docSidebar',
-          sidebarId: 'propertyTestingSidebar',
-          docsPluginId: 'property_testing',
-          position: 'left',
-          label: 'Property Testing',
+          label: 'Routed',
         },
         {
             href: 'https://github.com/kingwill101/routed',
@@ -202,13 +117,11 @@ const config: Config = {
         {
           title: 'Docs',
           items: [
+            {label: 'Core', to: '/docs/'},
+            {label: 'HttpServer', to: '/docs/httpserver'},
+            {label: 'Serinus', to: '/docs/serinus'},
             {label: 'Routed', to: '/docs/routed/'},
-            {label: 'Inertia Dart', to: '/docs/inertia_dart/'},
-            {label: 'Routed Hotwire', to: '/docs/routed_hotwire/'},
-            {label: 'Server Testing', to: '/docs/server_testing/'},
-            {label: 'Server Testing Shelf', to: '/docs/server_testing_shelf/'},
-            {label: 'Routed Testing', to: '/docs/routed_testing/'},
-            {label: 'Property Testing', to: '/docs/property_testing/'},
+            {label: 'Tutorial', to: '/docs/tutorial'},
           ],
         },
         {
@@ -222,7 +135,7 @@ const config: Config = {
           ],
         },
       ],
-        copyright: `Copyright © ${new Date().getFullYear()} Routed contributors.`,
+        copyright: `Copyright © ${new Date().getFullYear()} Inertia Dart contributors.`,
     },
     prism: {
       theme: prismThemes.github,

@@ -5,7 +5,7 @@ server-side Inertia protocol for Dart and provides property helpers, SSR
 support, and testing utilities. Pair it with a client adapter like
 `@inertiajs/react`, `@inertiajs/vue3`, or `@inertiajs/svelte`.
 
-> **New here?** Follow the [Build a Contacts App](https://kingwill101.github.io/docs/inertia_dart/tutorial) tutorial for a hands-on walkthrough using just `dart:io`.
+> **New here?** Follow the [Build a Contacts App](https://kingwill101.github.io/docs/tutorial) tutorial for a hands-on walkthrough using just `dart:io`.
 >
 > **Using the Routed framework?** See [`routed_inertia`](../routed_inertia) for the framework integration.
 
@@ -94,7 +94,7 @@ To add SSR later, start a renderer with `dart run bin/ssr.dart` or
 `respondWithInertiaPage()` and forward the SSR payload to
 `renderInertiaVitePageHtml(..., ssr: ssr)`.
 
-For a fuller walkthrough, use the [Build a Contacts App](https://kingwill101.github.io/docs/inertia_dart/tutorial)
+For a fuller walkthrough, use the [Build a Contacts App](https://kingwill101.github.io/docs/tutorial)
 tutorial. For runnable reference apps, see:
 - [`packages/inertia/example/inertia_client_app`](example/inertia_client_app)
 - [`packages/inertia/example/inertia_ssr_app`](example/inertia_ssr_app)
@@ -322,6 +322,8 @@ response.assertInertia((page) {
 
 ## Learn More
 
-- [Inertia Dart docs](https://kingwill101.github.io/docs/inertia_dart/) -- full API reference and tutorial
-- [Routed Inertia docs](https://kingwill101.github.io/docs/routed_inertia/) -- framework integration for Routed apps
+- [Inertia Dart docs](https://kingwill101.github.io/docs/) -- core reference and tutorial
+- [HttpServer guide](https://kingwill101.github.io/docs/httpserver) -- plain `dart:io` setup from scratch
+- [Serinus guide](https://kingwill101.github.io/docs/serinus) -- adapter-based setup with `serinus_inertia`
+- [Routed Inertia docs](https://kingwill101.github.io/docs/routed/) -- framework integration for Routed apps
 - [Inertia core docs](https://inertiajs.com) -- protocol specification and client adapters

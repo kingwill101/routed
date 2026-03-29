@@ -1,0 +1,45 @@
+---
+title: Partial Reloads
+description: Use Inertia request headers and PropertyContext to resolve only the props you need
+---
+
+# Partial Reloads
+
+The request helpers parse the advanced Inertia headers used for partial reloads
+and merge behavior.
+
+## Supported headers
+
+- `X-Inertia-Partial-Data` for which props to include
+- `X-Inertia-Partial-Except` for which props to exclude
+- `X-Inertia-Reset` for merge reset keys
+- `X-Inertia-Except-Once-Props` for already-received once props
+- `X-Inertia-Infinite-Scroll-Merge-Intent` for scroll direction
+- `X-Inertia-Error-Bag` for error bag selection
+
+## Build the request context
+
+Use `InertiaRequest.createContext()` to build the correct `PropertyContext`
+from the incoming request headers:
+
+```dart
+final request = inertiaRequestFromHttp(httpRequest);
+final context = request.createContext();
+```
+
+If you are using the higher-level `HttpServer` helpers, they create this
+context for you unless you override it explicitly.
+
+## Why it matters
+
+`PropertyContext` is what lets the response factory decide:
+
+- which lazy props should resolve
+- which deferred groups are being requested
+- which merge keys should reset
+- which once props should be excluded
+
+## Related topics
+
+- [Props](/docs/props)
+- [HttpServer](/docs/httpserver)

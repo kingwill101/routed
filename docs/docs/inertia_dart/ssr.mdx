@@ -1,0 +1,73 @@
+---
+title: SSR
+description: Render Inertia pages through an SSR gateway and manage renderer processes
+---
+
+# SSR
+
+Use `SsrGateway` to call an SSR server and render HTML on the server.
+
+## Render through a gateway
+
+```dart
+final gateway = HttpSsrGateway(Uri.parse('http://localhost:13714'));
+final ssr = await gateway.render(jsonPage);
+// ssr.head -- <head> tags
+// ssr.body -- rendered HTML body
+```
+
+When you are using the `HttpServer` helper flow:
+
+```dart
+await respondWithInertiaPage(
+  request,
+  component: 'Home',
+  props: {'title': 'Hello'},
+  ssr: (page) => gateway.render(jsonEncode(page.toJson())),
+  html: (page, ssr) => renderInertiaVitePageHtml(
+    page,
+    assets: assets,
+    title: 'My App',
+    ssr: ssr,
+  ),
+);
+```
+
+## Manage a local renderer
+
+```dart
+final process = await startSsrServer(SsrServerConfig.fromSettings(settings));
+final healthy = await checkSsrServer(endpoint: settings.endpoint!);
+await stopSsrServer(endpoint: settings.endpoint!);
+```
+
+## CLI helpers
+
+```bash
+dart run inertia_dart:inertia ssr:start --runtime node
+dart run inertia_dart:inertia ssr:check --url http://127.0.0.1:13714
+dart run inertia_dart:inertia ssr:stop --url http://127.0.0.1:13714
+```
+
+## History flags
+
+`PageData` supports history flags for client-side history management:
+
+- `encryptHistory`
+- `clearHistory`
+
+## Middleware helpers
+
+Built-in middleware classes cover common protocol concerns:
+
+- `VersionMiddleware`
+- `RedirectMiddleware`
+- `EncryptHistoryMiddleware`
+- `SharedDataMiddleware`
+- `ErrorHandlingMiddleware`
+
+## Related topics
+
+- [Assets](/docs/assets)
+- [Serinus](/docs/serinus)
+- [Routed](/docs/routed/)

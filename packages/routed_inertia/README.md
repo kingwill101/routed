@@ -4,9 +4,9 @@ Routed integration for Inertia.js. This package wires the Inertia protocol into
 the Routed framework with middleware, `EngineContext` helpers, SSR support, and
 template rendering.
 
-> **New here?** Follow the [Build a Todo App](https://kingwill101.github.io/docs/routed_inertia/tutorial) tutorial for a hands-on walkthrough.
+> **New here?** Follow the [Build a Todo App](https://kingwill101.github.io/docs/routed/tutorial) tutorial for a hands-on walkthrough.
 >
-> **Using dart:io without Routed?** See [`inertia_dart`](../inertia) for the standalone package and its [Contacts App tutorial](https://kingwill101.github.io/docs/inertia_dart/tutorial).
+> **Using dart:io without Routed?** See [`inertia_dart`](../inertia) for the standalone package and its [Contacts App tutorial](https://kingwill101.github.io/docs/tutorial).
 
 ## Install
 
@@ -158,6 +158,6 @@ See `packages/routed_inertia/example/README.md` for a full React + Routed demo.
 
 ## Learn More
 
-- [Routed Inertia docs](https://kingwill101.github.io/docs/routed_inertia/) -- full reference and tutorial
-- [Inertia Dart docs](https://kingwill101.github.io/docs/inertia_dart/) -- standalone package API and dart:io tutorial
+- [Routed Inertia docs](https://kingwill101.github.io/docs/routed/) -- full reference and tutorial
+- [Inertia Dart docs](https://kingwill101.github.io/docs/) -- standalone package API and dart:io tutorial
 - [Inertia.js docs](https://inertiajs.com) -- protocol specification and client adapters

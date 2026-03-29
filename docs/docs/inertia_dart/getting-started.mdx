@@ -1,0 +1,52 @@
+---
+title: Getting Started
+description: Install inertia_dart, scaffold a client, and choose the right server integration
+---
+
+# Getting Started
+
+Use `inertia_dart` when you want Dart to own the server side of the Inertia
+protocol and a JavaScript adapter to own the client-side page rendering.
+
+## Install
+
+```bash
+dart pub add inertia_dart
+```
+
+## Choose your server setup
+
+- [HttpServer](/docs/httpserver) if you want plain `dart:io` with no framework layer
+- [Serinus](/docs/serinus) if you want a module-based adapter with `serinus_inertia`
+- [Routed](/docs/routed/) if you are already using `routed_inertia`
+
+## CLI
+
+Scaffold a Vite client with Inertia already wired:
+
+```bash
+dart run inertia_dart:inertia create my-app --framework react
+```
+
+Install Inertia into an existing Vite project:
+
+```bash
+dart run inertia_dart:inertia install --framework react --path ./client
+```
+
+## Smallest useful flow
+
+1. Add the Dart package.
+2. Scaffold a Vite client with the CLI.
+3. Pick a server integration.
+4. Render pages with component names and props from Dart.
+
+If you want the lowest-level version of that flow, use the [HttpServer guide](/docs/httpserver).
+
+## What to read next
+
+- [Props](/docs/props)
+- [Partial Reloads](/docs/partial-reloads)
+- [Assets](/docs/assets)
+- [SSR](/docs/ssr)
+- [Testing](/docs/testing)

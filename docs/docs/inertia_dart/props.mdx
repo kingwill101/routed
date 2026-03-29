@@ -1,0 +1,42 @@
+---
+title: Props
+description: Control prop resolution, deferral, merging, and one-time delivery
+---
+
+# Props
+
+Property helpers control when data resolves and how it merges across visits.
+
+| Class | Initial visit | Partial reload | Merge | Defer | Once |
+|-------|--------------|----------------|-------|-------|------|
+| `AlwaysProp` | Always included | Always included | No | No | No |
+| `LazyProp` | Excluded | Only if requested | No | No | No |
+| `OptionalProp` | Excluded | Only if requested | No | No | Optional |
+| `DeferredProp` | Registered in group | Only if requested | Optional | Yes | Optional |
+| `MergeProp` | Included (merges) | Only if requested | Yes | No | Optional |
+| `OnceProp` | Included (skipped if cached) | Only if requested | No | No | Yes |
+| `ScrollProp` | Included or deferred | Only if requested | Yes | Optional | No |
+
+## Common example
+
+```dart
+final props = {
+  'user': AlwaysProp(() => currentUser),
+  'stats': LazyProp(() => expensiveQuery()),
+  'feed': DeferredProp(() => loadFeed(), group: 'sidebar'),
+  'items': MergeProp(() => fetchPage(page))..append('data', 'id'),
+  'token': OnceProp(() => csrfToken, ttl: Duration(hours: 1)),
+};
+```
+
+## Notes
+
+- `LazyProp` and `OptionalProp` are useful for expensive data that should not be present on the first page load.
+- `DeferredProp` lets the client ask for a named group later.
+- `MergeProp` and `ScrollProp` are how you model append/prepend behavior for lists.
+- `OnceProp` is useful for one-time values like tokens or large boot payloads.
+
+## Related topics
+
+- [Partial Reloads](/docs/partial-reloads)
+- [Testing](/docs/testing)

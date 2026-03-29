@@ -1,6 +1,6 @@
 ---
 title: Inertia Dart
-description: Server-side Inertia.js protocol for Dart with property helpers, SSR, and dart:io support
+description: Server-side Inertia.js protocol for Dart with setup guides and reference docs
 sidebar_position: 0
 ---
 
@@ -11,246 +11,36 @@ server-side Inertia protocol for Dart and provides property helpers, SSR
 support, asset manifest reading, and testing utilities. Pair it with a client
 adapter like `@inertiajs/react`, `@inertiajs/vue3`, or `@inertiajs/svelte`.
 
-> **Want a hands-on walkthrough?** Follow the [Build a Contacts App](/docs/inertia_dart/tutorial) tutorial using just `dart:io` -- no framework required.
+> **Want a hands-on walkthrough?** Follow the [Build a Contacts App](/docs/tutorial) tutorial using just `dart:io`.
 
-> **Using the Routed framework?** See [Routed Inertia](/docs/routed_inertia/) for the framework integration, or the [Todo App tutorial](/docs/routed_inertia/tutorial) for a guided build.
+## Start here
 
-## Features
+- [Getting Started](/docs/getting-started) for installation, the CLI, and setup choices
+- [HttpServer](/docs/httpserver) for the plain `dart:io` path
+- [Serinus](/docs/serinus) for the `serinus_inertia` adapter
+- [Routed](/docs/routed/) for the `routed_inertia` adapter
 
-- Full Inertia protocol: JSON responses for XHR visits, HTML for initial page loads
-- Property helpers: `AlwaysProp`, `LazyProp`, `OptionalProp`, `DeferredProp`, `MergeProp`, `OnceProp`, `ScrollProp`
-- Partial reloads, deferred groups, merge strategies, infinite scroll metadata
-- Vite manifest reader and dev server hot file bridge
-- SSR gateway for server-side rendering with Node.js
-- `dart:io` helpers for routing, HTML rendering, and static asset serving
-- CLI for scaffolding Vite + Inertia client apps
+## Core topics
+
+- [Props](/docs/props) for property helpers and merge behavior
+- [Partial Reloads](/docs/partial-reloads) for request headers and `PropertyContext`
+- [Assets](/docs/assets) for Vite manifests, hot files, and HTML rendering
+- [SSR](/docs/ssr) for gateways, renderer processes, and CLI helpers
+- [Testing](/docs/testing) for response assertions and protocol verification
+
+## What the package includes
+
+- Full Inertia protocol handling for HTML and JSON responses
+- Property helpers like `LazyProp`, `DeferredProp`, `MergeProp`, and `ScrollProp`
+- Request helpers for partial reloads, deferred groups, and merge resets
+- Vite asset helpers for development and production
+- SSR helpers for HTTP gateways and renderer lifecycle management
 - Testing utilities with `AssertableInertia`
 
-## Install
+## Reference apps
 
-```bash
-dart pub add inertia_dart
-```
-
-## CLI
-
-Scaffold a Vite client with Inertia already wired:
-
-```bash
-dart run inertia_dart:inertia create my-app --framework react
-```
-
-Install Inertia into an existing Vite project:
-
-```bash
-dart run inertia_dart:inertia install --framework react --path ./client
-```
-
-## Start from scratch with dart:io
-
-Use this flow when you want a plain `HttpServer` app with no framework layer.
-
-### 1. Create the project
-
-```bash
-dart create -t console my_app
-cd my_app
-dart pub add inertia_dart
-dart run inertia_dart:inertia create client --framework react --package-manager npm
-cd client
-npm install
-cd ..
-```
-
-### 2. Wire the server
-
-```dart
-import 'dart:io';
-
-import 'package:inertia_dart/inertia_dart.dart';
-
-const assets = InertiaViteAssets(
-  entry: 'index.html',
-  manifestPath: 'client/dist/.vite/manifest.json',
-  hotFile: 'client/public/hot',
-  includeReactRefresh: true,
-);
-
-Future<void> main() async {
-  final server = await HttpServer.bind('127.0.0.1', 8080);
-
-  await for (final request in server) {
-    if (await tryWriteStaticAsset(request, rootDirectory: 'client/dist')) {
-      continue;
-    }
-
-    if (request.uri.path != '/') {
-      request.response.statusCode = HttpStatus.notFound;
-      request.response.write('Not Found');
-      await request.response.close();
-      continue;
-    }
-
-    await respondWithInertiaPage(
-      request,
-      component: 'Dashboard',
-      props: {
-        'user': {'name': 'Ada'},
-        'stats': LazyProp(() => loadStats()),
-      },
-      html: (page, _) => renderInertiaVitePageHtml(
-        page,
-        assets: assets,
-        title: 'My App',
-      ),
-    );
-  }
-}
-```
-
-### 3. Run it
-
-```bash
-dart run bin/my_app.dart
-cd client
-npm run dev
-```
-
-The server reads `client/public/hot` during development and switches to
-`client/dist/.vite/manifest.json` after a production build, so the same Dart
-code works in both modes.
-
-To add SSR later, start a renderer with `dart run bin/ssr.dart` or
-`dart run inertia_dart:inertia ssr:start`, then pass an `ssr:` callback into
-`respondWithInertiaPage()` and forward the returned payload into
-`renderInertiaVitePageHtml(..., ssr: ssr)`.
-
-For a full working server, see the [tutorial](/docs/inertia_dart/tutorial) or
-the example apps in [`packages/inertia/example`](https://github.com/kingwill101/routed/tree/main/packages/inertia/example).
-
-## Props
-
-Property helpers control when data resolves and how it merges across visits.
-
-| Class | Initial visit | Partial reload | Merge | Defer | Once |
-|-------|--------------|----------------|-------|-------|------|
-| `AlwaysProp` | Always included | Always included | No | No | No |
-| `LazyProp` | Excluded | Only if requested | No | No | No |
-| `OptionalProp` | Excluded | Only if requested | No | No | Optional |
-| `DeferredProp` | Registered in group | Only if requested | Optional | Yes | Optional |
-| `MergeProp` | Included (merges) | Only if requested | Yes | No | Optional |
-| `OnceProp` | Included (skipped if cached) | Only if requested | No | No | Yes |
-| `ScrollProp` | Included or deferred | Only if requested | Yes | Optional | No |
-
-```dart
-final props = {
-  'user': AlwaysProp(() => currentUser),
-  'stats': LazyProp(() => expensiveQuery()),
-  'feed': DeferredProp(() => loadFeed(), group: 'sidebar'),
-  'items': MergeProp(() => fetchPage(page))..append('data', 'id'),
-  'token': OnceProp(() => csrfToken, ttl: Duration(hours: 1)),
-};
-```
-
-## Partial reloads
-
-The request helpers parse advanced Inertia headers:
-
-- `X-Inertia-Partial-Data` -- which props to include
-- `X-Inertia-Partial-Except` -- which props to exclude
-- `X-Inertia-Reset` -- merge reset keys
-- `X-Inertia-Except-Once-Props` -- already-received once props
-- `X-Inertia-Infinite-Scroll-Merge-Intent` -- scroll direction
-- `X-Inertia-Error-Bag` -- error bag selection
-
-Use `InertiaRequest.createContext()` to build the correct `PropertyContext`
-automatically from headers:
-
-```dart
-final request = inertiaRequestFromHttp(httpRequest);
-final context = request.createContext();
-```
-
-## Vite asset helper
-
-`InertiaViteAssets` reads a dev hot file or a production manifest and returns
-script/style tags:
-
-```dart
-final assets = InertiaViteAssets(
-  entry: 'index.html',
-  hotFile: 'client/public/hot',
-  manifestPath: 'client/dist/.vite/manifest.json',
-  includeReactRefresh: true,
-);
-
-final tags = await assets.resolve();
-final styles = tags.renderStyles();   // <link> tags
-final scripts = tags.renderScripts(); // <script> tags
-```
-
-## Asset manifest helper
-
-Load a Vite manifest directly:
-
-```dart
-final manifest = await InertiaAssetManifest.load('client/dist/.vite/manifest.json');
-final tags = manifest.renderTags('index.html', baseUrl: '/');
-```
-
-## SSR
-
-Use `SsrGateway` to call an SSR server and render HTML on the server:
-
-```dart
-final gateway = HttpSsrGateway(Uri.parse('http://localhost:13714'));
-final ssr = await gateway.render(jsonPage);
-// ssr.head -- <head> tags
-// ssr.body -- rendered HTML body
-```
-
-Manage a local SSR process:
-
-```dart
-final process = await startSsrServer(SsrServerConfig.fromSettings(settings));
-final healthy = await checkSsrServer(endpoint: settings.endpoint!);
-await stopSsrServer(endpoint: settings.endpoint!);
-```
-
-CLI helpers:
-
-```bash
-dart run inertia_dart:inertia ssr:start --runtime node
-dart run inertia_dart:inertia ssr:check --url http://127.0.0.1:13714
-dart run inertia_dart:inertia ssr:stop --url http://127.0.0.1:13714
-```
-
-## History flags
-
-`PageData` supports history flags for client-side history management:
-
-- `encryptHistory` -- encrypt the history state
-- `clearHistory` -- clear the history stack
-
-## Middleware
-
-Built-in middleware classes for common protocol concerns:
-
-- `VersionMiddleware` -- checks `X-Inertia-Version` and forces full reload on mismatch
-- `RedirectMiddleware` -- rewrites 302 to 303 for PUT/PATCH/DELETE
-- `EncryptHistoryMiddleware` -- sets the `encryptHistory` flag
-- `SharedDataMiddleware` -- merges shared props into every response
-- `ErrorHandlingMiddleware` -- catches errors and sets error props
-
-## Testing
-
-Use `AssertableInertia` for response assertions:
-
-```dart
-response.assertInertia((page) {
-  page.component('Dashboard').has('user.name');
-});
-```
+- [`packages/inertia/example/inertia_client_app`](https://github.com/kingwill101/routed/tree/main/packages/inertia/example/inertia_client_app)
+- [`packages/inertia/example/inertia_ssr_app`](https://github.com/kingwill101/routed/tree/main/packages/inertia/example/inertia_ssr_app)
 
 ## Vite hot file plugin
 
@@ -276,4 +66,6 @@ export default defineConfig({
 ## Learn more
 
 - [Inertia.js docs](https://inertiajs.com) -- protocol specification and client adapters
-- [Routed Inertia](/docs/routed_inertia/) -- framework integration for Routed apps
+- [HttpServer guide](/docs/httpserver) -- plain `dart:io` setup from scratch
+- [Serinus guide](/docs/serinus) -- adapter-based setup with `serinus_inertia`
+- [Routed Inertia](/docs/routed/) -- framework integration for Routed apps
