@@ -22,7 +22,7 @@ adapter like `@inertiajs/react`, `@inertiajs/vue3`, or `@inertiajs/svelte`.
 - Partial reloads, deferred groups, merge strategies, infinite scroll metadata
 - Vite manifest reader and dev server hot file bridge
 - SSR gateway for server-side rendering with Node.js
-- `dart:io` helpers: `inertiaRequestFromHttp()` and `writeInertiaResponse()`
+- `dart:io` helpers for routing, HTML rendering, and static asset serving
 - CLI for scaffolding Vite + Inertia client apps
 - Testing utilities with `AssertableInertia`
 
@@ -46,41 +46,87 @@ Install Inertia into an existing Vite project:
 dart run inertia_dart:inertia install --framework react --path ./client
 ```
 
-## Quick start
+## Start from scratch with dart:io
 
-The core flow for a standalone `dart:io` server:
+Use this flow when you want a plain `HttpServer` app with no framework layer.
+
+### 1. Create the project
+
+```bash
+dart create -t console my_app
+cd my_app
+dart pub add inertia_dart
+dart run inertia_dart:inertia create client --framework react --package-manager npm
+cd client
+npm install
+cd ..
+```
+
+### 2. Wire the server
 
 ```dart
+import 'dart:io';
+
 import 'package:inertia_dart/inertia_dart.dart';
 
-// 1. Parse the incoming HTTP request
-final request = inertiaRequestFromHttp(httpRequest);
-
-// 2. Build a property resolution context from the request headers
-final context = request.createContext();
-
-// 3. Resolve props and build the Inertia page object
-final page = await InertiaResponseFactory().buildPageDataAsync(
-  component: 'Dashboard',
-  props: {
-    'user': {'name': 'Ada'},
-    'stats': LazyProp(() => loadStats()),
-  },
-  url: request.url,
-  context: context,
-  version: '1.0.0',
+const assets = InertiaViteAssets(
+  entry: 'index.html',
+  manifestPath: 'client/dist/.vite/manifest.json',
+  hotFile: 'client/public/hot',
+  includeReactRefresh: true,
 );
 
-// 4. Return JSON for Inertia XHR visits, HTML for initial page loads
-if (request.isInertia) {
-  await writeInertiaResponse(httpRequest.response, InertiaResponse.json(page));
-} else {
-  final html = renderHtmlShell(page); // your HTML template
-  await writeInertiaResponse(httpRequest.response, InertiaResponse.html(page, html));
+Future<void> main() async {
+  final server = await HttpServer.bind('127.0.0.1', 8080);
+
+  await for (final request in server) {
+    if (await tryWriteStaticAsset(request, rootDirectory: 'client/dist')) {
+      continue;
+    }
+
+    if (request.uri.path != '/') {
+      request.response.statusCode = HttpStatus.notFound;
+      request.response.write('Not Found');
+      await request.response.close();
+      continue;
+    }
+
+    await respondWithInertiaPage(
+      request,
+      component: 'Dashboard',
+      props: {
+        'user': {'name': 'Ada'},
+        'stats': LazyProp(() => loadStats()),
+      },
+      html: (page, _) => renderInertiaVitePageHtml(
+        page,
+        assets: assets,
+        title: 'My App',
+      ),
+    );
+  }
 }
 ```
 
-For a full working server, see the [tutorial](/docs/inertia_dart/tutorial).
+### 3. Run it
+
+```bash
+dart run bin/my_app.dart
+cd client
+npm run dev
+```
+
+The server reads `client/public/hot` during development and switches to
+`client/dist/.vite/manifest.json` after a production build, so the same Dart
+code works in both modes.
+
+To add SSR later, start a renderer with `dart run bin/ssr.dart` or
+`dart run inertia_dart:inertia ssr:start`, then pass an `ssr:` callback into
+`respondWithInertiaPage()` and forward the returned payload into
+`renderInertiaVitePageHtml(..., ssr: ssr)`.
+
+For a full working server, see the [tutorial](/docs/inertia_dart/tutorial) or
+the example apps in [`packages/inertia/example`](https://github.com/kingwill101/routed/tree/main/packages/inertia/example).
 
 ## Props
 

@@ -15,6 +15,90 @@ support, and testing utilities. Pair it with a client adapter like
 dart pub add inertia_dart
 ```
 
+## Start From Scratch With dart:io
+
+If you want the smallest possible setup with a plain `HttpServer`, use this
+flow.
+
+1. Create the Dart app and add the server package:
+
+```bash
+dart create -t console my_app
+cd my_app
+dart pub add inertia_dart
+```
+
+2. Scaffold the client app and install its dependencies:
+
+```bash
+dart run inertia_dart:inertia create client --framework react --package-manager npm
+cd client
+npm install
+cd ..
+```
+
+3. Wire the server with the raw `dart:io` helpers:
+
+```dart
+import 'dart:io';
+
+import 'package:inertia_dart/inertia_dart.dart';
+
+const assets = InertiaViteAssets(
+  entry: 'index.html',
+  manifestPath: 'client/dist/.vite/manifest.json',
+  hotFile: 'client/public/hot',
+  includeReactRefresh: true,
+);
+
+Future<void> main() async {
+  final server = await HttpServer.bind('127.0.0.1', 8080);
+
+  await for (final request in server) {
+    if (await tryWriteStaticAsset(request, rootDirectory: 'client/dist')) {
+      continue;
+    }
+
+    if (request.uri.path != '/') {
+      request.response.statusCode = HttpStatus.notFound;
+      request.response.write('Not Found');
+      await request.response.close();
+      continue;
+    }
+
+    await respondWithInertiaPage(
+      request,
+      component: 'Home',
+      props: {'title': 'Hello from Dart'},
+      html: (page, _) => renderInertiaVitePageHtml(
+        page,
+        assets: assets,
+        title: 'My App',
+      ),
+    );
+  }
+}
+```
+
+4. Run the server and the Vite client:
+
+```bash
+dart run bin/my_app.dart
+cd client
+npm run dev
+```
+
+To add SSR later, start a renderer with `dart run bin/ssr.dart` or
+`dart run inertia_dart:inertia ssr:start`, then pass
+`ssr: (page) => gateway.render(jsonEncode(page.toJson()))` into
+`respondWithInertiaPage()` and forward the SSR payload to
+`renderInertiaVitePageHtml(..., ssr: ssr)`.
+
+For a fuller walkthrough, use the [Build a Contacts App](https://kingwill101.github.io/docs/inertia_dart/tutorial)
+tutorial. For runnable reference apps, see:
+- [`packages/inertia/example/inertia_client_app`](example/inertia_client_app)
+- [`packages/inertia/example/inertia_ssr_app`](example/inertia_ssr_app)
+
 ## CLI
 
 Scaffold a Vite client with Inertia already wired:
@@ -180,22 +264,35 @@ final htmlTags = tags.renderAll();
 
 ## dart:io HttpServer Helper
 
-If you are using `dart:io` directly, you can build requests and write responses
-without a framework wrapper.
+If you are using `dart:io` directly, you can keep the setup small without
+re-implementing the Inertia protocol branches yourself.
 
 ```dart
-final request = inertiaRequestFromHttp(httpRequest);
-final context = request.createContext();
-final page = InertiaResponseFactory().buildPageData(
-  component: 'Home',
-  props: {'title': 'Inertia + HttpServer'},
-  url: request.url,
-  context: context,
+const assets = InertiaViteAssets(
+  entry: 'index.html',
+  manifestPath: 'client/dist/.vite/manifest.json',
+  hotFile: 'client/public/hot',
+  includeReactRefresh: true,
 );
 
-final response = InertiaResponse.json(page);
-await writeInertiaResponse(httpRequest.response, response);
+if (await tryWriteStaticAsset(httpRequest, rootDirectory: 'client/dist')) {
+  return;
+}
+
+await respondWithInertiaPage(
+  httpRequest,
+  component: 'Home',
+  props: {'title': 'Inertia + HttpServer'},
+  html: (page, _) => renderInertiaVitePageHtml(
+    page,
+    assets: assets,
+    title: 'Inertia + HttpServer',
+  ),
+);
 ```
+
+For SSR, add `ssr: (page) => gateway.render(jsonEncode(page.toJson()))` and
+pass the resulting payload into `renderInertiaVitePageHtml(..., ssr: ssr)`.
 
 ## Vite Hot File Helper
 

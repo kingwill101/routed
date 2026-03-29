@@ -1,12 +1,17 @@
 library;
 
+import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 
+import '../assets/vite_assets.dart';
 import '../core/inertia_headers.dart';
 import '../core/inertia_request.dart';
 import '../core/inertia_response.dart';
 import '../core/page_data.dart';
+import '../core/response_factory.dart';
+import '../property_context.dart';
+import '../ssr/ssr_response.dart';
 
 /// Extracts a flat `Map<String, String>` from `dart:io` [HttpHeaders].
 ///
@@ -78,6 +83,20 @@ String renderInertiaBootstrap(
   return '${inertiaPageScriptTag(page, id: id)}$app';
 }
 
+/// Builds props for a raw `dart:io` Inertia request.
+typedef InertiaHttpPropsBuilder =
+    FutureOr<Map<String, dynamic>> Function(
+      HttpRequest request,
+      InertiaRequest inertiaRequest,
+    );
+
+/// Renders HTML for a raw `dart:io` Inertia request.
+typedef InertiaHttpHtmlBuilder =
+    FutureOr<String> Function(PageData page, SsrResponse? ssrResponse);
+
+/// Resolves an optional SSR response for a raw `dart:io` Inertia request.
+typedef InertiaHttpSsrBuilder = FutureOr<SsrResponse?> Function(PageData page);
+
 /// Provides dart:io helpers for Inertia requests and responses.
 ///
 /// ```dart
@@ -95,6 +114,169 @@ InertiaRequest inertiaRequestFromHttp(HttpRequest request) {
     url: request.uri.toString(),
     method: request.method,
   );
+}
+
+/// Builds page data for a raw `dart:io` Inertia request.
+Future<PageData> buildInertiaHttpPageData(
+  HttpRequest request, {
+  required String component,
+  required Map<String, dynamic> props,
+  String? url,
+  PropertyContext? context,
+  String version = '',
+  bool encryptHistory = false,
+  bool clearHistory = false,
+  Map<String, dynamic>? flash,
+  List<int>? cache,
+  InertiaResponseFactory? responseFactory,
+}) async {
+  final inertiaRequest = inertiaRequestFromHttp(request);
+  final resolvedContext = context ?? inertiaRequest.createContext();
+
+  return await (responseFactory ?? InertiaResponseFactory()).buildPageDataAsync(
+    component: component,
+    props: props,
+    url: url ?? _requestUrl(request.uri),
+    context: resolvedContext,
+    version: version,
+    encryptHistory: encryptHistory,
+    clearHistory: clearHistory,
+    flash: flash,
+    cache: cache,
+  );
+}
+
+/// Builds an Inertia response for a raw `dart:io` request.
+Future<InertiaResponse> buildInertiaHttpResponse(
+  HttpRequest request, {
+  required String component,
+  required Map<String, dynamic> props,
+  required InertiaHttpHtmlBuilder html,
+  InertiaHttpSsrBuilder? ssr,
+  String? url,
+  PropertyContext? context,
+  String version = '',
+  bool encryptHistory = false,
+  bool clearHistory = false,
+  Map<String, dynamic>? flash,
+  List<int>? cache,
+  int statusCode = 200,
+  InertiaResponseFactory? responseFactory,
+}) async {
+  final page = await buildInertiaHttpPageData(
+    request,
+    component: component,
+    props: props,
+    url: url,
+    context: context,
+    version: version,
+    encryptHistory: encryptHistory,
+    clearHistory: clearHistory,
+    flash: flash,
+    cache: cache,
+    responseFactory: responseFactory,
+  );
+
+  final inertiaRequest = inertiaRequestFromHttp(request);
+  if (inertiaRequest.isInertia) {
+    return InertiaResponse.json(page, statusCode: statusCode);
+  }
+
+  final ssrResponse = ssr == null ? null : await ssr(page);
+  final htmlBody = await html(page, ssrResponse);
+  return InertiaResponse.html(page, htmlBody, statusCode: statusCode);
+}
+
+/// Builds and writes a page response for a raw `dart:io` request.
+Future<InertiaResponse> respondWithInertiaPage(
+  HttpRequest request, {
+  required String component,
+  required Map<String, dynamic> props,
+  required InertiaHttpHtmlBuilder html,
+  InertiaHttpSsrBuilder? ssr,
+  String? url,
+  PropertyContext? context,
+  String version = '',
+  bool encryptHistory = false,
+  bool clearHistory = false,
+  Map<String, dynamic>? flash,
+  List<int>? cache,
+  int statusCode = 200,
+  InertiaResponseFactory? responseFactory,
+}) async {
+  final response = await buildInertiaHttpResponse(
+    request,
+    component: component,
+    props: props,
+    html: html,
+    ssr: ssr,
+    url: url,
+    context: context,
+    version: version,
+    encryptHistory: encryptHistory,
+    clearHistory: clearHistory,
+    flash: flash,
+    cache: cache,
+    statusCode: statusCode,
+    responseFactory: responseFactory,
+  );
+  await writeInertiaResponse(request.response, response);
+  return response;
+}
+
+/// Renders a simple HTML document using Vite asset tags.
+Future<String> renderInertiaVitePageHtml(
+  PageData page, {
+  required InertiaViteAssets assets,
+  String title = 'Inertia',
+  String lang = 'en',
+  SsrResponse? ssr,
+}) async {
+  final tags = await assets.resolve();
+  final head = ssr?.head ?? '';
+
+  return '''<!doctype html>
+<html lang="$lang">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    $head
+    ${tags.renderStyles()}
+    <title>$title</title>
+  </head>
+  <body>
+    ${renderInertiaBootstrap(page, body: ssr?.body)}
+    ${tags.renderScripts()}
+  </body>
+</html>
+''';
+}
+
+/// Serves a static asset from [rootDirectory] when [request] targets [pathPrefix].
+Future<bool> tryWriteStaticAsset(
+  HttpRequest request, {
+  required String rootDirectory,
+  String pathPrefix = '/assets/',
+}) async {
+  if (request.method != 'GET' && request.method != 'HEAD') {
+    return false;
+  }
+
+  final path = request.uri.path;
+  if (!path.startsWith(pathPrefix)) {
+    return false;
+  }
+
+  final relative = path.startsWith('/') ? path.substring(1) : path;
+  final file = File('$rootDirectory/$relative');
+  if (!file.existsSync()) {
+    return false;
+  }
+
+  request.response.headers.contentType = _contentTypeForPath(path);
+  await request.response.addStream(file.openRead());
+  await request.response.close();
+  return true;
 }
 
 /// Writes an [InertiaResponse] to a `dart:io` [HttpResponse].
@@ -118,4 +300,28 @@ Future<void> writeInertiaResponse(
     response.write(inertiaResponse.toJsonString());
   }
   await response.close();
+}
+
+String _requestUrl(Uri uri) {
+  final path = uri.path.isEmpty ? '/' : uri.path;
+  if (uri.hasQuery) {
+    return '$path?${uri.query}';
+  }
+  return path;
+}
+
+ContentType _contentTypeForPath(String path) {
+  if (path.endsWith('.js')) {
+    return ContentType('application', 'javascript');
+  }
+  if (path.endsWith('.css')) {
+    return ContentType('text', 'css');
+  }
+  if (path.endsWith('.svg')) {
+    return ContentType('image', 'svg+xml');
+  }
+  if (path.endsWith('.json')) {
+    return ContentType('application', 'json');
+  }
+  return ContentType.binary;
 }

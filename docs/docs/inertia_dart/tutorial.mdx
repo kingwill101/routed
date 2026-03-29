@@ -145,6 +145,12 @@ const String _version = 'dev';
 const String _clientEntry = 'index.html';
 const String _manifestPath = 'client/dist/.vite/manifest.json';
 const String _hotFile = 'client/public/hot';
+const InertiaViteAssets _assets = InertiaViteAssets(
+  entry: _clientEntry,
+  manifestPath: _manifestPath,
+  hotFile: _hotFile,
+  includeReactRefresh: true,
+);
 
 Future<void> serve({String address = '127.0.0.1', int port = 8080}) async {
   final store = ContactStore();
@@ -170,33 +176,25 @@ Future<void> _handleRequest(HttpRequest httpRequest, ContactStore store) async {
   final method = httpRequest.method;
   final path = httpRequest.uri.path;
 
-  // Parse the Inertia request
-  final request = inertiaRequestFromHttp(httpRequest);
-  final context = request.createContext();
-
   // Route: GET /
   if (method == 'GET' && path == '/') {
-    final page = await InertiaResponseFactory().buildPageDataAsync(
+    await _respondPage(
+      httpRequest,
       component: 'Home',
       props: {'title': 'Contacts App', 'subtitle': 'inertia_dart + dart:io'},
-      url: _requestUrl(httpRequest.uri),
-      context: context,
       version: _version,
     );
-    await _respond(httpRequest, request, page);
     return;
   }
 
   // Route: GET /contacts
   if (method == 'GET' && path == '/contacts') {
-    final page = await InertiaResponseFactory().buildPageDataAsync(
+    await _respondPage(
+      httpRequest,
       component: 'Contacts',
       props: {'title': 'Contacts', 'contacts': store.all()},
-      url: _requestUrl(httpRequest.uri),
-      context: context,
       version: _version,
     );
-    await _respond(httpRequest, request, page);
     return;
   }
 
@@ -232,22 +230,23 @@ Future<void> _handleRequest(HttpRequest httpRequest, ContactStore store) async {
 // Response helpers
 // ---------------------------------------------------------------------------
 
-/// Sends an Inertia JSON response for XHR visits, or a full HTML page for
-/// initial loads.
-Future<void> _respond(
+/// Sends JSON for Inertia visits or a full HTML page for initial loads.
+Future<void> _respondPage(
   HttpRequest httpRequest,
-  InertiaRequest request,
-  PageData page,
+  String component,
+  Map<String, dynamic> props, {
+  String version = _version,
 ) async {
-  if (request.isInertia) {
-    await writeInertiaResponse(httpRequest.response, InertiaResponse.json(page));
-    return;
-  }
-
-  final html = await _renderHtml(page);
-  await writeInertiaResponse(
-    httpRequest.response,
-    InertiaResponse.html(page, html),
+  await respondWithInertiaPage(
+    httpRequest,
+    component: component,
+    props: props,
+    version: version,
+    html: (page, _) => renderInertiaVitePageHtml(
+      page,
+      assets: _assets,
+      title: 'Contacts App',
+    ),
   );
 }
 
@@ -275,67 +274,12 @@ Future<Map<String, dynamic>> _readJsonBody(HttpRequest request) async {
 }
 
 // ---------------------------------------------------------------------------
-// HTML rendering
-// ---------------------------------------------------------------------------
-
-/// Renders the HTML shell with Vite asset tags and the Inertia page object.
-Future<String> _renderHtml(PageData page) async {
-  final assets = InertiaViteAssets(
-    entry: _clientEntry,
-    manifestPath: _manifestPath,
-    hotFile: _hotFile,
-    includeReactRefresh: true,
-  );
-  final tags = await assets.resolve();
-
-  return '''<!doctype html>
-<html lang="en">
-  <head>
-    <meta charset="utf-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>Contacts App</title>
-    ${tags.renderStyles()}
-  </head>
-  <body>
-    ${renderInertiaBootstrap(page)}
-    ${tags.renderScripts()}
-  </body>
-</html>
-''';
-}
-
-// ---------------------------------------------------------------------------
 // Static file serving
 // ---------------------------------------------------------------------------
 
 /// Serves production assets from client/dist/assets/.
 Future<bool> _tryServeStatic(HttpRequest request) async {
-  if (request.method != 'GET' && request.method != 'HEAD') return false;
-  final path = request.uri.path;
-  if (!path.startsWith('/assets/')) return false;
-
-  final relative = path.startsWith('/') ? path.substring(1) : path;
-  final file = File('client/dist/$relative');
-  if (!file.existsSync()) return false;
-
-  request.response.headers.contentType = _contentTypeForPath(path);
-  await request.response.addStream(file.openRead());
-  await request.response.close();
-  return true;
-}
-
-ContentType _contentTypeForPath(String path) {
-  if (path.endsWith('.js')) return ContentType('application', 'javascript');
-  if (path.endsWith('.css')) return ContentType('text', 'css');
-  if (path.endsWith('.svg')) return ContentType('image', 'svg+xml');
-  if (path.endsWith('.png')) return ContentType('image', 'png');
-  if (path.endsWith('.woff2')) return ContentType('font', 'woff2');
-  return ContentType.binary;
-}
-
-String _requestUrl(Uri uri) {
-  final path = uri.path.isEmpty ? '/' : uri.path;
-  return uri.hasQuery ? '$path?${uri.query}' : path;
+  return tryWriteStaticAsset(request, rootDirectory: 'client/dist');
 }
 ```
 
@@ -344,11 +288,10 @@ String _requestUrl(Uri uri) {
 **Contact store** -- a simple in-memory list. In a real app, replace this with
 a database.
 
-**Request handling** -- each route does four things:
-1. Parse the HTTP request with `inertiaRequestFromHttp(httpRequest)` to get an `InertiaRequest`
-2. Build a `PropertyContext` with `request.createContext()` -- this reads Inertia headers for partial reloads, deferred groups, etc.
-3. Build the page data with `InertiaResponseFactory().buildPageDataAsync()` -- this resolves props through the property helpers
-4. Return either JSON (for Inertia XHR visits) or HTML (for initial page loads) using `writeInertiaResponse()`
+**Request handling** -- each route does three things:
+1. Serve built assets with `tryWriteStaticAsset()` before app routes
+2. Call `respondWithInertiaPage()` with the component name and props
+3. Render the HTML shell with `renderInertiaVitePageHtml()` for first visits, while the helper automatically returns JSON for Inertia visits
 
 **Redirect rewriting** -- the Inertia protocol requires 303 (See Other) instead
 of 302 for DELETE/PUT/PATCH so the browser follows the redirect as GET. We
@@ -663,6 +606,9 @@ The request lifecycle at the protocol level:
 | `PropertyContext` | Decides which props resolve (partial reloads, deferred groups, once-prop exclusions) |
 | `InertiaResponseFactory` | Resolves props through property helpers and builds a `PageData` object |
 | `PageData` | The Inertia page object: component name, resolved props, URL, version |
+| `respondWithInertiaPage()` | The high-level `dart:io` helper that builds page data, chooses JSON vs HTML, and writes the response |
+| `renderInertiaVitePageHtml()` | Builds a simple HTML document with the Inertia bootstrap plus Vite assets |
+| `tryWriteStaticAsset()` | Serves files from `client/dist` for `/assets/*` requests |
 | `InertiaResponse.json()` | JSON response for XHR visits |
 | `InertiaResponse.html()` | HTML response for initial page loads |
 | `writeInertiaResponse()` | Writes an `InertiaResponse` to a `dart:io` `HttpResponse` |
