@@ -26,7 +26,7 @@ dependencies:
   analyzer: ^10.0.1
   analyzer_plugin: ^0.14.1
   args: ^2.7.0
-  artisanal: ^0.1.2
+  artisanal: ^0.3.0
   build: ^4.0.4
   collection: ^1.19.1
   contextual: ^2.2.0
@@ -45,7 +45,7 @@ dependencies:
   http_parser: ^4.1.2
   image: ^4.7.2
   intl: ^0.20.2
-  jose: ^0.3.5
+  jose: ^0.3.5+2
   json2yaml: ^3.0.1
   json_annotation: ^4.9.0
   json_schema_builder: ^0.1.3
