@@ -33,6 +33,7 @@ export 'src/observability/errors.dart';
 export 'src/observability/health.dart';
 export 'src/observability/metrics.dart';
 export 'src/provider/provider.dart';
+export 'src/provider/provider_manifest.dart';
 export 'src/provider/config_utils.dart';
 export 'src/support/driver_registry.dart';
 export 'src/support/named_registry.dart';
