@@ -4,7 +4,7 @@ import 'dart:io';
 import 'package:routed/src/config/config.dart';
 import 'package:routed/src/config/registry.dart';
 import 'package:routed/src/container/container.dart';
-import 'package:routed/src/contracts/contracts.dart';
+import 'package:routed/src/contracts/config/config.dart';
 import 'package:routed/src/engine/providers/request.dart'
     show RequestServiceProvider;
 

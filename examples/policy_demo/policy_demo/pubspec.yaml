@@ -12,6 +12,10 @@ dependencies:
   args: ^2.5.0
   routed:
     path: ../../../packages/routed
+  routed_auth:
+    path: ../../../packages/routed_auth
+  server_auth:
+    path: ../../../packages/server_auth
 
 dev_dependencies:
   lints: ^6.0.0
@@ -20,4 +24,3 @@ dev_dependencies:
   server_testing:
     path: ../../../packages/server_testing/server_testing
   test: ^1.26.3
-

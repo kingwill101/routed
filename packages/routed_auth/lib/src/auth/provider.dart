@@ -1,0 +1,396 @@
+// ignore_for_file: implementation_imports
+import 'dart:async';
+
+import 'package:http/http.dart' as http;
+import 'package:server_auth/server_auth.dart'
+    show
+        AuthAdapter,
+        AuthConfig,
+        AuthGateRegistry,
+        GateDefinition,
+        GuardDefinition,
+        AuthGuardRegistry,
+        HaigateConfig,
+        AuthProviderRegistry,
+        materializeJwtVerifier,
+        materializeOAuthIntrospectionOptions,
+        RememberTokenStore,
+        resolveConfiguredGateCallback,
+        resolveConfiguredGuard,
+        AuthVerificationTokenStore,
+        JwtVerifier,
+        registerDefaultAuthProviders,
+        resolveAuthOptions,
+        SessionRememberMeConfig,
+        syncManagedGateDefinitions,
+        syncManagedGuardDefinitions,
+        syncManagedPolicyBindings,
+        syncManagedRbacAbilities,
+        AuthOptions;
+import 'package:routed_auth/src/auth/manager/auth_manager.dart';
+import 'package:routed_auth/src/auth/routes.dart';
+import 'package:routed_auth/src/auth/haigate.dart';
+import 'package:routed_auth/src/auth/jwt.dart'
+    show jwtAuthenticationWithVerifier;
+import 'package:routed_auth/src/auth/oauth.dart';
+import 'package:routed_auth/src/auth/session_auth.dart';
+import 'package:routed_auth/src/config/specs/auth.dart';
+import 'package:routed/src/container/container.dart';
+import 'package:routed/src/context/context.dart';
+import 'package:routed/src/contracts/config/config.dart' show Config;
+import 'package:routed/src/engine/engine.dart';
+import 'package:routed/src/engine/middleware_registry.dart';
+import 'package:routed/src/provider/provider.dart';
+import 'package:routed/src/response.dart';
+import 'package:routed/src/router/types.dart';
+
+/// Service provider that boots routed auth infrastructure.
+///
+/// Registers JWT and OAuth middleware, session auth defaults, and binds an
+/// `AuthManager` when `AuthOptions` is available in the container.
+class AuthServiceProvider extends ServiceProvider with ProvidesDefaultConfig {
+  AuthServiceProvider({http.Client? httpClient})
+    : _httpClient = httpClient ?? http.Client() {
+    registerDefaultAuthProviders();
+  }
+
+  final http.Client _httpClient;
+  JwtVerifier? _jwtVerifier;
+  Middleware? _oauthMiddleware;
+  SessionAuthService? _sessionAuth;
+  AuthConfig? _resolvedConfig;
+  bool _ownsAuthManager = false;
+  final Set<String> _managedConfigGuards = <String>{};
+  final Set<String> _managedConfigGates = <String>{};
+  final Set<String> _managedGateMiddleware = <String>{};
+  final Set<String> _managedRbacAbilities = <String>{};
+  final Set<String> _managedPolicyAbilities = <String>{};
+  static const AuthConfigSpec spec = AuthConfigSpec();
+
+  @override
+  ConfigDefaults get defaultConfig {
+    final values = spec.defaultsWithRoot();
+    values['http'] = {
+      'middleware_sources': {
+        'routed.auth': {
+          'global': ['routed.auth.jwt', 'routed.auth.oauth2'],
+        },
+      },
+    };
+    return ConfigDefaults(
+      docs: [
+        const ConfigDocEntry(
+          path: 'http.middleware_sources',
+          type: 'map',
+          description:
+              'Authentication middleware references registered globally.',
+          defaultValue: <String, Object?>{
+            'routed.auth': <String, Object?>{
+              'global': <String>['routed.auth.jwt', 'routed.auth.oauth2'],
+            },
+          },
+        ),
+        ...spec.docs(),
+      ],
+      values: values,
+      schemas: spec.schemaWithRoot(),
+    );
+  }
+
+  @override
+  void register(Container container) {
+    final registry = container.get<MiddlewareRegistry>();
+    registry.register(
+      'routed.auth.jwt',
+      (_) => _jwtVerifier == null
+          ? _passthrough
+          : jwtAuthenticationWithVerifier(_jwtVerifier!),
+    );
+    registry.register(
+      'routed.auth.oauth2',
+      (_) => _oauthMiddleware ?? _passthrough,
+    );
+
+    if (container.has<Config>()) {
+      _applyConfig(container, container.get<Config>());
+    } else {
+      _applyAuthManager(container);
+    }
+  }
+
+  @override
+  Future<void> boot(Container container) async {
+    _applyAuthManager(container);
+
+    final engine = container.has<Engine>() ? container.get<Engine>() : null;
+    final manager = container.has<AuthManager>()
+        ? container.get<AuthManager>()
+        : null;
+    if (engine == null || manager == null) {
+      return;
+    }
+
+    AuthRoutes(manager).register(engine.defaultRouter);
+  }
+
+  @override
+  Future<void> onConfigReload(Container container, Config config) async {
+    _applyConfig(container, config);
+  }
+
+  void _applyConfig(Container container, Config config) {
+    final resolved = spec.resolve(config);
+    _resolvedConfig = resolved;
+
+    final jwt = resolved.jwt;
+    _jwtVerifier = materializeJwtVerifier(
+      enabled: jwt.enabled,
+      issuer: jwt.issuer,
+      audience: jwt.audience,
+      requiredClaims: jwt.requiredClaims,
+      jwksUri: jwt.jwksUri,
+      inlineKeys: jwt.inlineKeys,
+      algorithms: jwt.algorithms,
+      clockSkew: jwt.clockSkew,
+      jwksCacheTtl: jwt.jwksCacheTtl,
+      header: jwt.header,
+      bearerPrefix: jwt.bearerPrefix,
+      httpClient: _httpClient,
+    );
+
+    final oauth = resolved.oauth2Introspection;
+    final oauthOptions = materializeOAuthIntrospectionOptions(
+      enabled: oauth.enabled,
+      endpoint: oauth.endpoint,
+      clientId: oauth.clientId,
+      clientSecret: oauth.clientSecret,
+      tokenTypeHint: oauth.tokenTypeHint,
+      cacheTtl: oauth.cacheTtl,
+      clockSkew: oauth.clockSkew,
+      additionalParameters: oauth.additionalParameters,
+    );
+    if (oauth.enabled && oauthOptions == null) {
+      throw ProviderConfigException(
+        'auth.oauth2.introspection.endpoint is required when enabled',
+      );
+    }
+    _oauthMiddleware = oauthOptions == null
+        ? null
+        : oauth2Introspection(oauthOptions, httpClient: _httpClient);
+
+    if (_jwtVerifier != null) {
+      container.instance<JwtVerifier>(_jwtVerifier!);
+    }
+
+    _sessionAuth = _configureSessionAuth(container, resolved.sessionRememberMe);
+    container.instance<SessionAuthService>(_sessionAuth!);
+
+    final guardRegistry = _resolveGuardRegistry(container);
+    guardRegistry.register(
+      'authenticated',
+      requireAuthenticated(sessionAuth: _sessionAuth!),
+    );
+    syncManagedGuardDefinitions<EngineContext, Response, GuardDefinition>(
+      guardRegistry,
+      resolved.guards,
+      buildGuard: (_, definition) =>
+          resolveConfiguredGuard<EngineContext, Response>(
+            definition: definition,
+            authenticatedGuard: (realm) =>
+                requireAuthenticated(realm: realm, sessionAuth: _sessionAuth!),
+            rolesGuard: (roles, any) =>
+                requireRoles(roles, sessionAuth: _sessionAuth!, any: any),
+          ),
+      managed: _managedConfigGuards,
+      preserve: const <String>{'authenticated'},
+    );
+
+    final gateRegistry = _resolveGateRegistry(container);
+    final middlewareRegistry = container.get<MiddlewareRegistry>();
+    _configureHaigate(resolved.haigate, gateRegistry, middlewareRegistry);
+
+    _applyAuthManager(container);
+  }
+
+  void _applyAuthManager(Container container) {
+    if (!container.has<AuthOptions<EngineContext>>()) {
+      if (_ownsAuthManager) {
+        container.remove<AuthManager>();
+        SessionAuth.setSessionUpdater(null);
+        _ownsAuthManager = false;
+      }
+      return;
+    }
+
+    if (container.has<AuthManager>() && !_ownsAuthManager) {
+      return;
+    }
+
+    final options = container.get<AuthOptions<EngineContext>>();
+    final adapter = _resolveAuthAdapter(container, options);
+    final tokenStore = _resolveTokenStore(container, options);
+    final configSession = _resolvedConfig?.session;
+    final configuredProviders = AuthProviderRegistry.instance.buildProviders(
+      _resolvedConfig?.providers ?? const <String, dynamic>{},
+    );
+
+    final resolvedOptions = resolveAuthOptions<EngineContext>(
+      options: options,
+      configuredProviders: configuredProviders,
+      adapter: adapter,
+      httpClient: _httpClient,
+      tokenStore: tokenStore,
+      sessionStrategy: configSession?.strategy,
+      sessionMaxAge: configSession?.maxAge,
+      sessionUpdateAge: configSession?.updateAge,
+    );
+
+    final manager = AuthManager(resolvedOptions, sessionAuth: _sessionAuth);
+    container.instance<AuthManager>(manager);
+    _ownsAuthManager = true;
+
+    SessionAuth.setSessionUpdater(manager.updateSession);
+
+    final registry = _resolveGateRegistry(container);
+    syncManagedRbacAbilities<EngineContext>(
+      registry,
+      resolvedOptions.rbac.abilities,
+      managed: _managedRbacAbilities,
+    );
+    syncManagedPolicyBindings<EngineContext>(
+      registry,
+      resolvedOptions.policies.bindings,
+      managed: _managedPolicyAbilities,
+    );
+  }
+
+  AuthAdapter _resolveAuthAdapter(
+    Container container,
+    AuthOptions<EngineContext> options,
+  ) {
+    if (!container.has<AuthAdapter>()) {
+      return options.adapter;
+    }
+    if (options.adapter.runtimeType != AuthAdapter) {
+      return options.adapter;
+    }
+    return container.get<AuthAdapter>();
+  }
+
+  AuthVerificationTokenStore? _resolveTokenStore(
+    Container container,
+    AuthOptions<EngineContext> options,
+  ) {
+    if (options.tokenStore != null) {
+      return options.tokenStore;
+    }
+    if (container.has<AuthVerificationTokenStore>()) {
+      return container.get<AuthVerificationTokenStore>();
+    }
+    return null;
+  }
+
+  AuthGuardRegistry<EngineContext, Response> _resolveGuardRegistry(
+    Container container,
+  ) {
+    if (container.has<AuthGuardRegistry<EngineContext, Response>>()) {
+      try {
+        return container.get<AuthGuardRegistry<EngineContext, Response>>();
+      } catch (_) {
+        // Fall through to create a new registry instance.
+      }
+    }
+    container.instance<AuthGuardRegistry<EngineContext, Response>>(
+      guardRegistry,
+    );
+    return guardRegistry;
+  }
+
+  AuthGateRegistry<EngineContext> _resolveGateRegistry(Container container) {
+    if (container.has<AuthGateRegistry<EngineContext>>()) {
+      try {
+        return container.get<AuthGateRegistry<EngineContext>>();
+      } catch (_) {
+        // Fall through to create a new registry instance.
+      }
+    }
+    container.instance<AuthGateRegistry<EngineContext>>(gateRegistry);
+    return gateRegistry;
+  }
+
+  SessionAuthService _configureSessionAuth(
+    Container container,
+    SessionRememberMeConfig rememberMe,
+  ) {
+    RememberTokenStore? rememberStore;
+    if (container.has<RememberTokenStore>()) {
+      try {
+        rememberStore = container.get<RememberTokenStore>();
+      } catch (_) {
+        rememberStore = null;
+      }
+    }
+
+    return SessionAuth.configure(
+      rememberStore: rememberStore,
+      rememberCookieName: rememberMe.cookieName,
+      defaultRememberDuration: rememberMe.duration,
+    );
+  }
+
+  void _configureHaigate(
+    HaigateConfig config,
+    AuthGateRegistry<EngineContext> registry,
+    MiddlewareRegistry middlewareRegistry,
+  ) {
+    final defaults = config.defaults;
+    final middlewareIdsByAbility = <String, String>{};
+    final newMiddlewareIds = <String>{};
+
+    final definitions = config.enabled
+        ? config.abilities
+        : const <String, GateDefinition>{};
+    final newAbilities =
+        syncManagedGateDefinitions<EngineContext, GateDefinition>(
+          registry,
+          definitions,
+          buildGate: (ability, definition) {
+            final callback = resolveConfiguredGateCallback<EngineContext>(
+              definition,
+            );
+            if (callback == null) {
+              return null;
+            }
+            middlewareIdsByAbility[ability] = 'routed.auth.gate.$ability';
+            return callback;
+          },
+          managed: _managedConfigGates,
+        );
+
+    for (final ability in newAbilities) {
+      final middlewareId = middlewareIdsByAbility[ability];
+      if (middlewareId == null) {
+        continue;
+      }
+      middlewareRegistry.register(
+        middlewareId,
+        (_) => Haigate.middleware(
+          [ability],
+          deniedStatusCode: defaults.statusCode,
+          deniedMessage: defaults.message,
+        ),
+      );
+      newMiddlewareIds.add(middlewareId);
+    }
+
+    final toReset = _managedGateMiddleware.difference(newMiddlewareIds);
+    for (final id in toReset) {
+      middlewareRegistry.register(id, (_) => _passthrough);
+    }
+    _managedGateMiddleware
+      ..clear()
+      ..addAll(newMiddlewareIds);
+  }
+
+  FutureOr<Response> _passthrough(EngineContext ctx, Next next) => next();
+}

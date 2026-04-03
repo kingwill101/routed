@@ -1,17 +1,22 @@
-import 'package:routed/src/cache/array_store_factory.dart';
-import 'package:routed/src/cache/file_store_factory.dart';
-import 'package:routed/src/cache/null_store_factory.dart';
-import 'package:routed/src/cache/redis_store_factory.dart';
-import 'package:routed/src/cache/repository.dart';
-import 'package:routed/src/cache/store_factory.dart';
-import 'package:routed/src/contracts/cache/repository.dart';
+import 'package:server_data/server_data.dart'
+    show
+        ArrayStoreFactory,
+        DataCacheManager,
+        FileStoreFactory,
+        NullStoreFactory,
+        RedisStoreFactory,
+        RepositoryEventCallbacks,
+        RepositoryImpl,
+        StoreFactory;
 import 'package:routed/src/container/container.dart';
-import 'package:routed/src/contracts/contracts.dart' show Config;
+import 'package:routed/src/contracts/config/config.dart' show Config;
+import 'package:routed/src/events/cache/cache_events.dart';
 import 'package:routed/src/events/event_manager.dart';
 import 'package:routed/src/engine/storage_defaults.dart';
 import 'package:routed/src/engine/storage_paths.dart';
 import 'package:routed/src/provider/provider.dart';
 import 'package:routed/src/support/driver_registry.dart';
+import 'package:server_contracts/server_contracts.dart' show Repository;
 
 /// A builder function that creates a [StoreFactory] instance.
 ///
@@ -366,30 +371,14 @@ class CacheDriverRegistry
 ///
 /// It allows registering, retrieving, and resolving cache stores based on their configurations.
 class CacheManager {
-  /// A map to store the registered repositories.
-  ///
-  /// The key is the name of the store, and the value is the corresponding [Repository] instance.
-  final Map<String, Repository> _repositories = {};
-
-  /// A map to store the configurations of the cache stores.
-  ///
-  /// The key is the name of the store, and the value is a map containing the configuration details.
-  final Map<String, Map<String, dynamic>> _configurations = {};
+  /// Framework-agnostic cache core used for store lifecycle and resolution.
+  late final DataCacheManager _core;
 
   /// An optional [EventManager] used for publishing cache-related events.
   EventManager? _eventManager;
 
-  /// The global prefix applied to all keys managed by this [CacheManager].
-  String _prefix = '';
-
   /// An optional [Container] used for resolving driver configuration dependencies.
   final Container? _container;
-
-  /// A registry of [StoreFactory] instances for different cache drivers.
-  ///
-  /// The key is the driver name (e.g., 'file', 'redis'), and the value is the
-  /// corresponding [StoreFactory] instance.
-  final Map<String, StoreFactory> _storeFactories = {};
 
   /// Creates a [CacheManager] instance.
   ///
@@ -407,8 +396,13 @@ class CacheManager {
   /// ```
   CacheManager({EventManager? events, String prefix = '', Container? container})
     : _eventManager = events,
-      _prefix = prefix,
       _container = container {
+    _core = DataCacheManager(
+      prefix: prefix,
+      configResolver: _resolveDriverConfig,
+      callbacksBuilder: _buildRepositoryCallbacks,
+      registerDefaultStoreFactories: false,
+    );
     _ensureDefaultDriversRegistered();
     CacheDriverRegistry.instance.populate(this);
   }
@@ -436,14 +430,7 @@ class CacheManager {
     Map<String, dynamic> config, {
     Repository? repository,
   }) {
-    _configurations[name] = config;
-    if (repository != null) {
-      if (repository is RepositoryImpl) {
-        repository.updatePrefix(_prefix);
-        repository.attachEventManager(_eventManager);
-      }
-      _repositories[name] = repository;
-    }
+    _core.registerStore(name, config, repository: repository);
   }
 
   /// Whether a configuration exists for the cache store [name].
@@ -455,7 +442,7 @@ class CacheManager {
   /// print(manager.hasStore('test_store')); // true
   /// print(manager.hasStore('non_existent')); // false
   /// ```
-  bool hasStore(String name) => _configurations.containsKey(name);
+  bool hasStore(String name) => _core.hasStore(name);
 
   /// A list of the names of all registered cache store configurations.
   ///
@@ -464,7 +451,7 @@ class CacheManager {
   /// manager.registerStore('store2', {'driver': 'file'});
   /// print(manager.storeNames); // ['store1', 'store2']
   /// ```
-  List<String> get storeNames => _configurations.keys.toList(growable: false);
+  List<String> get storeNames => _core.storeNames;
 
   /// Retrieves the [Repository] for the given store [name].
   ///
@@ -481,7 +468,7 @@ class CacheManager {
   /// defaultRepo.put('user:1', {'name': 'Alice'});
   /// ```
   Repository store(String name) {
-    return _repositories[name] ??= resolve(name);
+    return _core.store(name);
   }
 
   /// Attaches an [EventManager] so repositories can publish cache events.
@@ -496,12 +483,7 @@ class CacheManager {
   /// ```
   void attachEventManager(EventManager eventManager) {
     _eventManager = eventManager;
-    _repositories.updateAll((_, repository) {
-      if (repository is RepositoryImpl) {
-        repository.attachEventManager(eventManager);
-      }
-      return repository;
-    });
+    _core.setCallbacksBuilder(_buildRepositoryCallbacks);
   }
 
   /// Sets a new global prefix for all cache keys.
@@ -515,17 +497,11 @@ class CacheManager {
   /// manager.store('default').put('user_id', 123); // Stores as 'v2_user_id'
   /// ```
   void setPrefix(String prefix) {
-    _prefix = prefix;
-    _repositories.updateAll((_, repository) {
-      if (repository is RepositoryImpl) {
-        repository.updatePrefix(prefix);
-      }
-      return repository;
-    });
+    _core.setPrefix(prefix);
   }
 
   /// The current global prefix applied to all cache keys.
-  String get prefix => _prefix;
+  String get prefix => _core.prefix;
 
   /// Builds a [Repository] instance from the configuration of the store [name].
   ///
@@ -543,35 +519,41 @@ class CacheManager {
   /// final repository = manager.resolve('my_custom_store');
   /// ```
   Repository resolve(String name) {
-    final config = _configurations[name];
-    if (config == null) {
-      throw ArgumentError('Cache store [$name] is not defined.');
-    }
-    final driver = config['driver'];
-    final factory = _storeFactories[driver];
+    return _core.resolve(name);
+  }
 
-    if (factory == null) {
-      throw ArgumentError(
-        'Driver [$driver] is not supported. Supported drivers are: ${_storeFactories.keys.join(", ")}.',
-      );
-    }
-
+  Map<String, dynamic> _resolveDriverConfig(
+    String driver,
+    Map<String, dynamic> config,
+  ) {
     final container = _container;
-    final resolvedConfig = container != null
-        ? CacheDriverRegistry.instance.buildConfig(
-            driver.toString(),
-            config,
-            container,
-          )
-        : config;
-
-    // Create the underlying store using the factory.
-    final storeInstance = factory.create(resolvedConfig);
-    final repository = RepositoryImpl(storeInstance, name, _prefix);
-    if (_eventManager != null) {
-      repository.attachEventManager(_eventManager);
+    if (container == null) {
+      return config;
     }
-    return repository;
+    return CacheDriverRegistry.instance.buildConfig(driver, config, container);
+  }
+
+  RepositoryEventCallbacks? _buildRepositoryCallbacks(String storeName) {
+    final eventManager = _eventManager;
+    if (eventManager == null) {
+      return null;
+    }
+    return RepositoryEventCallbacks(
+      onHit: (key) {
+        eventManager.publish(CacheHitEvent(store: storeName, key: key));
+      },
+      onMiss: (key) {
+        eventManager.publish(CacheMissEvent(store: storeName, key: key));
+      },
+      onWrite: (key, ttl) {
+        eventManager.publish(
+          CacheWriteEvent(store: storeName, key: key, ttl: ttl),
+        );
+      },
+      onForget: (key) {
+        eventManager.publish(CacheForgetEvent(store: storeName, key: key));
+      },
+    );
   }
 
   /// Allows registering custom [StoreFactory] instances for new drivers.
@@ -589,7 +571,7 @@ class CacheManager {
   /// manager.registerStore('my_custom_cache', {'driver': 'custom_driver'});
   /// ```
   void registerStoreFactory(String driver, StoreFactory factory) {
-    _storeFactories[driver] = factory;
+    _core.registerStoreFactory(driver, factory);
   }
 
   /// Registers a cache driver globally so future managers can resolve it.
@@ -950,9 +932,6 @@ class CacheManager {
   /// print(manager.getDefaultDriver()); // 'primary'
   /// ```
   String getDefaultDriver() {
-    if (_configurations.isEmpty) {
-      throw StateError('No stores have been registered.');
-    }
-    return _configurations.keys.first;
+    return _core.getDefaultDriver();
   }
 }

@@ -1,10 +1,23 @@
 name: routed_ecosystem
 publish_to: none
 workspace:
+  - packages/server_contracts
+  - packages/server_data
+  - packages/server_auth
+  - packages/shelf_auth
   - packages/routed
+  - packages/routed_cli
+  - packages/routed_analyzer
+  - packages/routed_openapi
+  - packages/routed_observability
+  - packages/routed_runtime
+  - packages/routed_validation
+  - packages/routed_logging
+  - packages/routed_security
+  - packages/routed_core
+  - packages/routed_auth
   - packages/routed_io
   - packages/server_native
-  - packages/routed_auth
   - packages/routed_hotwire
   - packages/inertia
   - packages/routed_inertia
@@ -14,6 +27,7 @@ workspace:
   - packages/property_testing
   - examples/kitchen_sink
   - examples/config_demo
+  - examples/auth_demo
   - examples/policy_demo/policy_demo
   - examples/demo_app
   - examples/contacts_app

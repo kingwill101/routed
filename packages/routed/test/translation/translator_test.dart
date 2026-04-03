@@ -1,4 +1,4 @@
-import 'package:routed/src/contracts/translation/loader.dart';
+import 'package:server_contracts/server_contracts.dart' show TranslationLoader;
 import 'package:routed/src/translation/translator.dart';
 import 'package:test/test.dart';
 

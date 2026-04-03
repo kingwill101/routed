@@ -1,7 +1,8 @@
 import 'dart:io';
 
-import 'package:routed/auth/providers/github.dart';
 import 'package:routed/routed.dart';
+import 'package:routed_auth/routed_auth.dart';
+import 'package:server_auth/server_auth.dart';
 
 Future<void> _registerAuthEvents(Engine engine) async {
   final eventManager = await engine.container.make<EventManager>();
@@ -24,7 +25,7 @@ Future<Engine> createEngine() async {
     config: EngineConfig(
       security: const EngineSecurityFeatures(csrfProtection: false),
     ),
-    providers: Engine.defaultProviders,
+    providers: [...Engine.defaultProviders, AuthServiceProvider()],
     options: [
       (engine) {
         final providers = <AuthProvider>[

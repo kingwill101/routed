@@ -3,7 +3,7 @@ import 'dart:io' show SameSite;
 import 'package:file/memory.dart';
 import 'package:routed/providers.dart';
 import 'package:routed/routed.dart';
-import 'package:routed/session.dart';
+import 'package:server_data/sessions.dart';
 import 'package:test/test.dart';
 
 import '../test_engine.dart';

@@ -187,6 +187,28 @@ Future<void> _writeProject({
   required String commandName,
   String? commandsSource,
 }) async {
+  final serverContractsPath = _escapePath(
+    p.normalize(p.join(cliRoot, '..', 'server_contracts')),
+  );
+  final serverAuthPath = _escapePath(
+    p.normalize(p.join(cliRoot, '..', 'server_auth')),
+  );
+  final serverDataPath = _escapePath(
+    p.normalize(p.join(cliRoot, '..', 'server_data')),
+  );
+  final routedCliPath = _escapePath(
+    p.normalize(p.join(cliRoot, '..', 'routed_cli')),
+  );
+  final routedAnalyzerPath = _escapePath(
+    p.normalize(p.join(cliRoot, '..', 'routed_analyzer')),
+  );
+  final routedOpenapiPath = _escapePath(
+    p.normalize(p.join(cliRoot, '..', 'routed_openapi')),
+  );
+  final routedCorePath = _escapePath(
+    p.normalize(p.join(cliRoot, '..', 'routed_core')),
+  );
+
   final pubspec =
       '''
 name: project_app
@@ -197,6 +219,21 @@ dependencies:
 dev_dependencies:
   routed:
     path: ${_escapePath(cliRoot)}
+dependency_overrides:
+  server_contracts:
+    path: $serverContractsPath
+  server_auth:
+    path: $serverAuthPath
+  server_data:
+    path: $serverDataPath
+  routed_cli:
+    path: $routedCliPath
+  routed_analyzer:
+    path: $routedAnalyzerPath
+  routed_openapi:
+    path: $routedOpenapiPath
+  routed_core:
+    path: $routedCorePath
 ''';
 
   final pubspecFile = io.File(p.join(projectDir.path, 'pubspec.yaml'));

@@ -8,7 +8,7 @@
 # middleware.global – Middleware executed for every HTTP request. Default: []. Type: array
 # middleware.groups – Named middleware groups applied to route collections. Default: {}. Type: object
 # middleware_sources – Declarative middleware mappings contributed by service providers. Default: {}. Type: object
-# providers – Service providers registered for the HTTP pipeline. Default: ["routed.core","routed.routing","routed.cache","routed.sessions","routed.uploads","routed.cors","routed.security","routed.auth","routed.logging","routed.observability","routed.compression","routed.rate_limit","routed.storage","routed.static","routed.localization","routed.views"]. Type: array
+# providers – Service providers registered for the HTTP pipeline. Default: ["routed.core","routed.routing","routed.cache","routed.sessions","routed.uploads","routed.cors","routed.security","routed.logging","routed.observability","routed.compression","routed.rate_limit","routed.storage","routed.static","routed.localization","routed.views"]. Type: array
 # tls – Type: object
 # tls.certificate_path – Path to the PEM certificate chain used for TLS. Type: string
 # tls.key_path – Path to the private key corresponding to the TLS certificate. Type: string
@@ -70,7 +70,6 @@ providers:
   - routed.uploads
   - routed.cors
   - routed.security
-  - routed.auth
   - routed.logging
   - routed.observability
   - routed.compression
@@ -79,4 +78,3 @@ providers:
   - routed.static
   - routed.localization
   - routed.views
-

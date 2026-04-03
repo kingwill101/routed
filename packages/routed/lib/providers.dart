@@ -4,7 +4,6 @@
 /// service provider ecosystem.
 library;
 
-export 'src/engine/providers/auth.dart';
 export 'src/engine/providers/cache.dart';
 export 'src/engine/providers/compression.dart';
 export 'src/engine/providers/core.dart';

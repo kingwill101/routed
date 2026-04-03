@@ -1,0 +1,20 @@
+name: server_contracts
+description: Framework-agnostic contracts for auth, data, config, and translation server packages.
+version: 0.1.0
+repository: https://github.com/kingwill101/routed/tree/master/packages/server_contracts
+tags:
+  - server
+  - contracts
+  - interfaces
+
+funding:
+  - https://www.buymeacoffee.com/kingwill101
+
+resolution: workspace
+
+environment:
+  sdk: ">=3.9.0 <4.0.0"
+
+dev_dependencies:
+  lints: ^6.0.0
+  test: ^1.29.0

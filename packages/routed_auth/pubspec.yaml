@@ -1,10 +1,10 @@
 name: routed_auth
-description: OAuth providers for routed - includes Google, Discord, Microsoft, Apple, Twitter, and many more out-of-the-box auth providers.
+description: Routed-specific authentication integration package built on top of server_auth.
 version: 0.1.0
 repository: https://github.com/kingwill101/routed/tree/master/packages/routed_auth
 tags:
   - auth
-  - oauth
+  - routed
   - server
 
 funding:
@@ -16,13 +16,15 @@ environment:
   sdk: ">=3.9.0 <4.0.0"
 
 dependencies:
+  http: ^1.6.0
+  json_schema_builder: ^0.1.3
   routed: ^0.3.3
-  http: ^1.2.0
-  crypto: ^3.0.0
+  server_auth: ^0.1.0
 
 dev_dependencies:
+  jose: ^0.3.5
   lints: ^6.0.0
-  test: ^1.24.0
-  routed_testing: ^0.3.3
-  server_testing: ^0.3.2
   property_testing: ^0.3.2
+  routed_testing: ^0.3.2
+  server_testing: ^0.3.2
+  test: ^1.29.0

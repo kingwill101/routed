@@ -1,0 +1,731 @@
+import 'dart:convert';
+
+import 'package:http/http.dart' as http;
+import 'package:http/testing.dart';
+import 'package:server_auth/server_auth.dart';
+import 'package:test/test.dart';
+
+const _sharedSecret = 'secret-test-key';
+
+Map<String, dynamic> get _testJwk => <String, dynamic>{
+  'kty': 'oct',
+  'kid': 'test-key',
+  'alg': 'HS256',
+  'k': base64UrlEncode(utf8.encode(_sharedSecret)).replaceAll('=', ''),
+};
+
+String _buildToken(
+  Map<String, dynamic> claims, {
+  String secret = _sharedSecret,
+}) {
+  final key = JsonWebKey.fromJson({
+    'kty': 'oct',
+    'kid': 'test-key',
+    'alg': 'HS256',
+    'k': base64UrlEncode(utf8.encode(secret)).replaceAll('=', ''),
+  });
+  final builder = JsonWebSignatureBuilder()
+    ..jsonContent = claims
+    ..setProtectedHeader('alg', 'HS256')
+    ..setProtectedHeader('typ', 'JWT')
+    ..addRecipient(key, algorithm: 'HS256');
+  return builder.build().toCompactSerialization();
+}
+
+Map<String, dynamic> _claims({
+  required DateTime now,
+  Duration expiresIn = const Duration(minutes: 5),
+  Duration notBeforeOffset = Duration.zero,
+  String issuer = 'server_auth',
+  List<String> audience = const ['demo'],
+}) {
+  return <String, dynamic>{
+    'sub': 'user-1',
+    'iss': issuer,
+    'aud': audience,
+    'exp': _secondsSinceEpoch(now.add(expiresIn)),
+    'nbf': _secondsSinceEpoch(now.add(notBeforeOffset)),
+    'iat': _secondsSinceEpoch(now),
+  };
+}
+
+int _secondsSinceEpoch(DateTime time) =>
+    time.toUtc().millisecondsSinceEpoch ~/ 1000;
+
+void main() {
+  test('jwtIssuedAtUtc parses numeric issued-at values', () {
+    final issuedAt = jwtIssuedAtUtc(1_700_000_000);
+    expect(issuedAt, isNotNull);
+    expect(issuedAt!.isUtc, isTrue);
+    expect(jwtIssuedAtUtc('1700000000'), isNull);
+  });
+
+  test('shouldRefreshJwtByIssuedAt respects update age threshold', () {
+    final now = DateTime.utc(2026, 2, 24, 12);
+    final issuedAtSeconds =
+        now.subtract(const Duration(minutes: 10)).millisecondsSinceEpoch ~/
+        1000;
+
+    expect(
+      shouldRefreshJwtByIssuedAt(
+        issuedAtSeconds,
+        const Duration(minutes: 5),
+        now: now,
+      ),
+      isTrue,
+    );
+    expect(
+      shouldRefreshJwtByIssuedAt(
+        issuedAtSeconds,
+        const Duration(minutes: 15),
+        now: now,
+      ),
+      isFalse,
+    );
+    expect(
+      shouldRefreshJwtByIssuedAt('bad', const Duration(minutes: 5), now: now),
+      isFalse,
+    );
+  });
+
+  test(
+    'shouldRefreshJwtClaims evaluates iat claims with nullable update age',
+    () {
+      final now = DateTime.utc(2026, 2, 24, 12);
+      final issuedAtSeconds =
+          now.subtract(const Duration(minutes: 10)).millisecondsSinceEpoch ~/
+          1000;
+
+      expect(
+        shouldRefreshJwtClaims(
+          <String, dynamic>{'iat': issuedAtSeconds},
+          const Duration(minutes: 5),
+          now: now,
+        ),
+        isTrue,
+      );
+      expect(
+        shouldRefreshJwtClaims(
+          <String, dynamic>{'iat': issuedAtSeconds},
+          null,
+          now: now,
+        ),
+        isFalse,
+      );
+      expect(
+        shouldRefreshJwtClaims(
+          <String, dynamic>{'iat': 'bad'},
+          const Duration(minutes: 5),
+          now: now,
+        ),
+        isFalse,
+      );
+    },
+  );
+
+  test('buildJwtTokenCookie applies defaults and expiry', () {
+    final expiry = DateTime.now().add(const Duration(minutes: 5));
+    final cookie = buildJwtTokenCookie('auth', 'token-123', expires: expiry);
+
+    expect(cookie.name, equals('auth'));
+    expect(cookie.value, equals('token-123'));
+    expect(cookie.httpOnly, isTrue);
+    expect(cookie.path, equals('/'));
+    expect(cookie.expires, equals(expiry));
+  });
+
+  test('buildExpiredJwtTokenCookie creates maxAge zero cookie', () {
+    final cookie = buildExpiredJwtTokenCookie('auth');
+    expect(cookie.name, equals('auth'));
+    expect(cookie.value, equals(''));
+    expect(cookie.maxAge, equals(0));
+    expect(cookie.path, equals('/'));
+  });
+
+  test('materializeJwtVerifierOptions returns null when disabled', () {
+    final options = materializeJwtVerifierOptions(
+      enabled: false,
+      algorithms: const <String>['HS256'],
+    );
+    expect(options, isNull);
+  });
+
+  test(
+    'materializeJwtVerifierOptions normalizes issuer and defaults algorithms',
+    () {
+      final options = materializeJwtVerifierOptions(
+        enabled: true,
+        issuer: '   ',
+        algorithms: const <String>[' ', ''],
+      );
+
+      expect(options, isNotNull);
+      expect(options!.issuer, isNull);
+      expect(options.algorithms, equals(const <String>['RS256']));
+    },
+  );
+
+  test('materializeJwtVerifier builds verifier with materialized options', () {
+    final verifier = materializeJwtVerifier(
+      enabled: true,
+      issuer: 'server_auth',
+      audience: const <String>['demo'],
+      inlineKeys: <Map<String, dynamic>>[_testJwk],
+      algorithms: const <String>['HS256'],
+    );
+
+    expect(verifier, isNotNull);
+    expect(verifier!.options.issuer, equals('server_auth'));
+    expect(verifier.options.algorithms, equals(const <String>['HS256']));
+  });
+
+  test('issueAuthJwtToken returns token, expiry, and cookie', () async {
+    const options = JwtSessionOptions(
+      secret: _sharedSecret,
+      issuer: 'server_auth',
+      audience: ['demo'],
+      cookieName: 'auth_cookie',
+    );
+    final issued = issueAuthJwtToken(
+      options: options,
+      claims: const <String, dynamic>{'sub': 'user-1'},
+    );
+
+    expect(issued.token, isNotEmpty);
+    expect(issued.expiresAt.isAfter(DateTime.now()), isTrue);
+    expect(issued.cookie.name, equals('auth_cookie'));
+    expect(issued.cookie.value, equals(issued.token));
+
+    final verifier = JwtVerifier(options: options.toVerifierOptions());
+    final payload = await verifier.verifyToken(issued.token);
+    expect(payload.subject, equals('user-1'));
+  });
+
+  test(
+    'refreshAuthJwtTokenIfNeeded returns null when refresh is not required',
+    () async {
+      final now = DateTime.utc(2026, 2, 24, 12);
+      final claims = <String, dynamic>{'iat': _secondsSinceEpoch(now)};
+
+      final refreshed = await refreshAuthJwtTokenIfNeeded(
+        options: const JwtSessionOptions(secret: _sharedSecret),
+        claims: claims,
+        updateAge: const Duration(minutes: 5),
+        now: now,
+        resolveClaims: (token) => token,
+      );
+
+      expect(refreshed, isNull);
+    },
+  );
+
+  test(
+    'refreshAuthJwtTokenIfNeeded reissues token with resolved claims',
+    () async {
+      final now = DateTime.utc(2026, 2, 24, 12);
+      final claims = <String, dynamic>{
+        'sub': 'user-1',
+        'iat': _secondsSinceEpoch(now.subtract(const Duration(minutes: 10))),
+      };
+
+      final refreshed = await refreshAuthJwtTokenIfNeeded(
+        options: const JwtSessionOptions(secret: _sharedSecret),
+        claims: claims,
+        updateAge: const Duration(minutes: 5),
+        now: now,
+        resolveClaims: (token) => <String, dynamic>{...token, 'plan': 'pro'},
+      );
+
+      expect(refreshed, isNotNull);
+      expect(refreshed!.token, isNotEmpty);
+      expect(refreshed.cookie.value, equals(refreshed.token));
+
+      final verifier = JwtVerifier(
+        options: const JwtSessionOptions(
+          secret: _sharedSecret,
+        ).toVerifierOptions(),
+      );
+      final payload = await verifier.verifyToken(refreshed.token);
+      expect(payload.claims['plan'], equals('pro'));
+    },
+  );
+
+  test('AuthJwtVerifiedCallback supports typed async handlers', () async {
+    var invoked = false;
+    Future<void> callback(JwtPayload payload, String context) async {
+      invoked = payload.subject == 'user-1' && context == 'ctx';
+    }
+
+    final AuthJwtVerifiedCallback<String> typed = callback;
+
+    final verifier = JwtVerifier(
+      options: JwtOptions(inlineKeys: [_testJwk], algorithms: const ['HS256']),
+    );
+    final payload = await verifier.verifyToken(
+      _buildToken(_claims(now: DateTime.now())),
+    );
+    await typed(payload, 'ctx');
+
+    expect(invoked, isTrue);
+  });
+
+  test('writeJwtPayloadAttributes writes canonical attribute keys', () async {
+    final verifier = JwtVerifier(
+      options: JwtOptions(inlineKeys: [_testJwk], algorithms: const ['HS256']),
+    );
+    final payload = await verifier.verifyToken(
+      _buildToken(_claims(now: DateTime.now())),
+    );
+
+    final attributes = <String, Object?>{};
+    writeJwtPayloadAttributes(
+      payload,
+      setAttribute: (key, value) => attributes[key] = value,
+    );
+
+    expect(attributes[jwtClaimsAttribute], equals(payload.claims));
+    expect(attributes[jwtHeadersAttribute], equals(payload.headers));
+    expect(attributes[jwtSubjectAttribute], equals(payload.subject));
+  });
+
+  test('verifyJwtBearerAuthorization rejects missing tokens', () async {
+    final verifier = JwtVerifier(
+      options: JwtOptions(inlineKeys: [_testJwk], algorithms: const ['HS256']),
+    );
+
+    await expectLater(
+      verifyJwtBearerAuthorization(
+        authorizationHeader: null,
+        verifier: verifier,
+      ),
+      throwsA(
+        isA<JwtAuthException>().having(
+          (error) => error.message,
+          'message',
+          'missing_token',
+        ),
+      ),
+    );
+  });
+
+  test(
+    'verifyJwtBearerAuthorization resolves and verifies bearer tokens',
+    () async {
+      final token = _buildToken(_claims(now: DateTime.now()));
+      final verifier = JwtVerifier(
+        options: JwtOptions(
+          issuer: 'server_auth',
+          audience: const ['demo'],
+          inlineKeys: [_testJwk],
+          algorithms: const ['HS256'],
+        ),
+      );
+
+      final verified = await verifyJwtBearerAuthorization(
+        authorizationHeader: 'Token $token',
+        verifier: verifier,
+        bearerPrefix: 'Token ',
+      );
+      expect(verified.token, equals(token));
+      expect(verified.payload.subject, equals('user-1'));
+    },
+  );
+
+  test(
+    'verifyJwtBearerAuthorizationAndWriteAttributes writes attributes and invokes callback',
+    () async {
+      final token = _buildToken(_claims(now: DateTime.now()));
+      final verifier = JwtVerifier(
+        options: JwtOptions(
+          issuer: 'server_auth',
+          audience: const ['demo'],
+          inlineKeys: [_testJwk],
+          algorithms: const ['HS256'],
+        ),
+      );
+
+      final attributes = <String, Object?>{};
+      String? callbackContext;
+      final verification =
+          await verifyJwtBearerAuthorizationAndWriteAttributes<String>(
+            authorizationHeader: 'Bearer $token',
+            verifier: verifier,
+            setAttribute: (key, value) => attributes[key] = value,
+            context: 'ctx',
+            onVerified: (payload, ctx) {
+              callbackContext = ctx;
+              expect(payload.subject, equals('user-1'));
+            },
+          );
+
+      expect(verification.token, equals(token));
+      expect(
+        attributes[jwtClaimsAttribute],
+        equals(verification.payload.claims),
+      );
+      expect(
+        attributes[jwtHeadersAttribute],
+        equals(verification.payload.headers),
+      );
+      expect(attributes[jwtSubjectAttribute], equals('user-1'));
+      expect(callbackContext, equals('ctx'));
+    },
+  );
+
+  test('JwtIssuer and JwtVerifier roundtrip', () async {
+    const options = JwtSessionOptions(
+      secret: 'super-secret',
+      issuer: 'server_auth',
+      audience: ['demo'],
+    );
+    final issuer = JwtIssuer(options);
+    final token = issuer.issue({
+      'sub': 'user-1',
+      'roles': ['admin'],
+    });
+
+    final verifier = JwtVerifier(options: options.toVerifierOptions());
+    final payload = await verifier.verifyToken(token);
+
+    expect(payload.subject, equals('user-1'));
+    expect(payload.claims['roles'], isA<List<dynamic>>());
+    expect((payload.claims['roles'] as List).first, equals('admin'));
+  });
+
+  test('JwtVerifier rejects invalid token format', () async {
+    final verifier = JwtVerifier(
+      options: JwtOptions(inlineKeys: [_testJwk], algorithms: const ['HS256']),
+    );
+
+    expect(
+      verifier.verifyToken('not-a-token'),
+      throwsA(
+        isA<JwtAuthException>().having(
+          (error) => error.message,
+          'message',
+          'invalid_format',
+        ),
+      ),
+    );
+  });
+
+  test('JwtVerifier rejects tokens when no keys configured', () async {
+    final token = _buildToken(_claims(now: DateTime.now()));
+    final verifier = JwtVerifier(
+      options: const JwtOptions(algorithms: ['HS256']),
+    );
+
+    expect(
+      verifier.verifyToken(token),
+      throwsA(
+        isA<JwtAuthException>().having(
+          (error) => error.message,
+          'message',
+          'no_keys_configured',
+        ),
+      ),
+    );
+  });
+
+  test('JwtVerifier reports JWKS fetch failures', () async {
+    final token = _buildToken(_claims(now: DateTime.now()));
+    final verifier = JwtVerifier(
+      options: JwtOptions(
+        jwksUri: Uri.parse('https://auth.test/jwks'),
+        algorithms: const ['HS256'],
+      ),
+      httpClient: MockClient((request) async {
+        return http.Response('fail', 500);
+      }),
+    );
+
+    expect(
+      verifier.verifyToken(token),
+      throwsA(
+        isA<JwtAuthException>().having(
+          (error) => error.message,
+          'message',
+          'jwks_fetch_failed',
+        ),
+      ),
+    );
+  });
+
+  test('JwtVerifier reports malformed JWKS payloads', () async {
+    final token = _buildToken(_claims(now: DateTime.now()));
+    final verifier = JwtVerifier(
+      options: JwtOptions(
+        jwksUri: Uri.parse('https://auth.test/jwks'),
+        algorithms: const ['HS256'],
+      ),
+      httpClient: MockClient((request) async {
+        return http.Response(jsonEncode({'invalid': true}), 200);
+      }),
+    );
+
+    expect(
+      verifier.verifyToken(token),
+      throwsA(
+        isA<JwtAuthException>().having(
+          (error) => error.message,
+          'message',
+          'jwks_missing_keys',
+        ),
+      ),
+    );
+  });
+
+  test('JwtVerifier caches JWKS responses', () async {
+    final token = _buildToken(_claims(now: DateTime.now()));
+    var requestCount = 0;
+    final verifier = JwtVerifier(
+      options: JwtOptions(
+        jwksUri: Uri.parse('https://auth.test/jwks'),
+        algorithms: const ['HS256'],
+        jwksCacheTtl: const Duration(minutes: 10),
+      ),
+      httpClient: MockClient((request) async {
+        requestCount += 1;
+        return http.Response(
+          jsonEncode({
+            'keys': [_testJwk],
+          }),
+          200,
+        );
+      }),
+    );
+
+    await verifier.verifyToken(token);
+    await verifier.verifyToken(token);
+
+    expect(requestCount, equals(1));
+  });
+
+  test('JwtVerifier rejects tokens with invalid signature', () async {
+    final token = _buildToken(
+      _claims(now: DateTime.now()),
+      secret: 'different-secret',
+    );
+    final verifier = JwtVerifier(
+      options: JwtOptions(inlineKeys: [_testJwk], algorithms: const ['HS256']),
+    );
+
+    expect(
+      verifier.verifyToken(token),
+      throwsA(
+        isA<JwtAuthException>().having(
+          (error) => error.message,
+          'message',
+          'signature_verification_failed',
+        ),
+      ),
+    );
+  });
+
+  test('JwtVerifier validates issuer, audience, and required claims', () async {
+    final now = DateTime.now();
+    final issuerMismatch = _buildToken(_claims(now: now, issuer: 'other'));
+    final verifier = JwtVerifier(
+      options: JwtOptions(
+        issuer: 'server_auth',
+        audience: const ['demo'],
+        requiredClaims: const ['role'],
+        inlineKeys: [_testJwk],
+        algorithms: const ['HS256'],
+      ),
+    );
+
+    await expectLater(
+      verifier.verifyToken(issuerMismatch),
+      throwsA(
+        isA<JwtAuthException>().having(
+          (error) => error.message,
+          'message',
+          'issuer_mismatch',
+        ),
+      ),
+    );
+
+    final audienceMismatch = _buildToken(
+      _claims(now: now, audience: const ['other']),
+    );
+    await expectLater(
+      verifier.verifyToken(audienceMismatch),
+      throwsA(
+        isA<JwtAuthException>().having(
+          (error) => error.message,
+          'message',
+          'audience_mismatch',
+        ),
+      ),
+    );
+
+    final missingClaim = _buildToken(_claims(now: now));
+    await expectLater(
+      verifier.verifyToken(missingClaim),
+      throwsA(
+        isA<JwtAuthException>().having(
+          (error) => error.message,
+          'message',
+          'missing_claim_role',
+        ),
+      ),
+    );
+  });
+
+  test('JwtOptions copyWith applies overrides', () {
+    const options = JwtOptions(
+      enabled: true,
+      issuer: 'server_auth',
+      audience: ['demo'],
+      requiredClaims: ['role'],
+      jwksUri: null,
+      inlineKeys: [],
+      algorithms: ['HS256'],
+      clockSkew: Duration(seconds: 15),
+      jwksCacheTtl: Duration(minutes: 1),
+      header: 'Authorization',
+      bearerPrefix: 'Bearer ',
+      cookieName: 'auth',
+    );
+
+    final updated = options.copyWith(
+      enabled: false,
+      issuer: 'custom',
+      audience: ['api'],
+      requiredClaims: ['scope'],
+      jwksUri: Uri.parse('https://auth.test/jwks'),
+      inlineKeys: [_testJwk],
+      algorithms: ['RS256'],
+      clockSkew: const Duration(seconds: 5),
+      jwksCacheTtl: const Duration(minutes: 5),
+      header: 'X-Auth',
+      bearerPrefix: 'Token ',
+      cookieName: 'cookie',
+    );
+
+    expect(updated.enabled, isFalse);
+    expect(updated.issuer, equals('custom'));
+    expect(updated.audience, equals(['api']));
+    expect(updated.requiredClaims, equals(['scope']));
+    expect(updated.jwksUri.toString(), equals('https://auth.test/jwks'));
+    expect(updated.inlineKeys, isNotEmpty);
+    expect(updated.algorithms, equals(['RS256']));
+    expect(updated.clockSkew, equals(const Duration(seconds: 5)));
+    expect(updated.jwksCacheTtl, equals(const Duration(minutes: 5)));
+    expect(updated.header, equals('X-Auth'));
+    expect(updated.bearerPrefix, equals('Token '));
+    expect(updated.cookieName, equals('cookie'));
+  });
+
+  test(
+    'verifyAuthJwtSessionToken returns mapped user/session material',
+    () async {
+      const options = JwtSessionOptions(
+        secret: _sharedSecret,
+        issuer: 'server_auth',
+        audience: ['demo'],
+      );
+      final issued = issueAuthJwtToken(
+        options: options,
+        claims: const <String, dynamic>{
+          'sub': 'user-42',
+          'email': 'user@example.com',
+          'roles': <String>['admin'],
+        },
+      );
+
+      final verified = await verifyAuthJwtSessionToken(
+        token: issued.token,
+        options: options,
+      );
+
+      expect(verified, isNotNull);
+      expect(verified!.user.id, equals('user-42'));
+      expect(verified.user.email, equals('user@example.com'));
+      expect(verified.user.roles, contains('admin'));
+      expect(verified.expiresAt, isNotNull);
+      final session = verified.toSession();
+      expect(session.token, equals(issued.token));
+      expect(session.strategy, equals(AuthSessionStrategy.jwt));
+    },
+  );
+
+  test(
+    'verifyAuthJwtSessionToken returns null on invalid or missing config',
+    () async {
+      final invalid = await verifyAuthJwtSessionToken(
+        token: 'not-a-token',
+        options: const JwtSessionOptions(secret: _sharedSecret),
+      );
+      final missingToken = await verifyAuthJwtSessionToken(
+        token: null,
+        options: const JwtSessionOptions(secret: _sharedSecret),
+      );
+      final missingSecret = await verifyAuthJwtSessionToken(
+        token: 'any-token',
+        options: const JwtSessionOptions(secret: ''),
+      );
+
+      expect(invalid, isNull);
+      expect(missingToken, isNull);
+      expect(missingSecret, isNull);
+    },
+  );
+
+  test(
+    'resolveAuthJwtSessionWithRefresh returns verified session when no refresh is needed',
+    () async {
+      const options = JwtSessionOptions(secret: _sharedSecret);
+      final issued = issueAuthJwtToken(
+        options: options,
+        claims: const <String, dynamic>{'sub': 'user-1'},
+      );
+
+      final resolved = await resolveAuthJwtSessionWithRefresh(
+        token: issued.token,
+        options: options,
+        updateAge: const Duration(minutes: 15),
+      );
+
+      expect(resolved, isNotNull);
+      expect(resolved!.token, equals(issued.token));
+      expect(resolved.refreshCookie, isNull);
+      expect(resolved.user.id, equals('user-1'));
+      expect(resolved.toSession().token, equals(issued.token));
+    },
+  );
+
+  test(
+    'resolveAuthJwtSessionWithRefresh reissues token and applies resolveClaims',
+    () async {
+      const options = JwtSessionOptions(secret: _sharedSecret);
+      final issued = issueAuthJwtToken(
+        options: options,
+        claims: const <String, dynamic>{'sub': 'user-1'},
+      );
+      var called = false;
+
+      final resolved = await resolveAuthJwtSessionWithRefresh(
+        token: issued.token,
+        options: options,
+        updateAge: const Duration(minutes: 5),
+        now: DateTime.now().add(const Duration(minutes: 20)),
+        resolveClaims: (claims, user) {
+          called = true;
+          return <String, dynamic>{...claims, 'plan': 'pro', 'sub': user.id};
+        },
+      );
+
+      expect(resolved, isNotNull);
+      expect(called, isTrue);
+      expect(resolved!.refreshCookie, isNotNull);
+      expect(resolved.token, isNot(equals(issued.token)));
+      expect(resolved.refreshCookie!.value, equals(resolved.token));
+
+      final verifier = JwtVerifier(options: options.toVerifierOptions());
+      final payload = await verifier.verifyToken(resolved.token);
+      expect(payload.claims['plan'], equals('pro'));
+    },
+  );
+}

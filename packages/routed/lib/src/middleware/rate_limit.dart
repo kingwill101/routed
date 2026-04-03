@@ -1,6 +1,6 @@
 import 'package:routed/src/context/context.dart';
 import 'package:routed/src/router/types.dart' show Middleware, Next;
-import '../rate_limit/service.dart';
+import 'package:server_data/rate_limit.dart' show RateLimitService;
 
 Middleware rateLimitMiddleware(RateLimitService service) {
   return (EngineContext ctx, Next next) async {

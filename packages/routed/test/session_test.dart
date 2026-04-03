@@ -2,8 +2,7 @@ import 'dart:convert';
 
 import 'package:property_testing/property_testing.dart';
 import 'package:routed/routed.dart';
-import 'package:routed/src/sessions/cookie_store.dart';
-import 'package:routed/src/sessions/secure_cookie.dart';
+import 'package:server_data/sessions.dart';
 import 'package:routed_testing/routed_testing.dart';
 import 'package:server_testing/server_testing.dart';
 import 'test_engine.dart';

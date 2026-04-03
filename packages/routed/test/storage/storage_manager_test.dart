@@ -1,5 +1,5 @@
 import 'package:file/memory.dart';
-import 'package:routed/src/storage/storage_manager.dart';
+import 'package:server_data/storage.dart';
 import 'package:test/test.dart';
 
 /// Minimal in-memory disk for testing.

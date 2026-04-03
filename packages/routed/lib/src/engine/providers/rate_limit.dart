@@ -1,20 +1,18 @@
 import 'dart:async';
-import 'dart:math';
 
 import 'package:routed/src/cache/cache_manager.dart';
 import 'package:routed/src/config/specs/cache.dart';
 import 'package:routed/src/config/specs/rate_limit.dart';
 import 'package:routed/src/container/container.dart';
-import 'package:routed/src/contracts/cache/repository.dart';
-import 'package:routed/src/contracts/contracts.dart' show Config;
+import 'package:routed/src/contracts/config/config.dart' show Config;
 import 'package:routed/src/engine/middleware_registry.dart';
 import 'package:routed/src/provider/provider.dart';
+import 'package:server_contracts/server_contracts.dart' show Repository;
+import 'package:server_data/rate_limit.dart';
 
 import '../../events/event_manager.dart';
 import '../../middleware/rate_limit.dart';
-import '../../rate_limit/backend.dart';
-import '../../rate_limit/policy.dart';
-import '../../rate_limit/service.dart';
+import '../../rate_limit/callbacks.dart';
 
 class RateLimitServiceProvider extends ServiceProvider
     with ProvidesDefaultConfig {
@@ -110,7 +108,10 @@ class RateLimitServiceProvider extends ServiceProvider
     if (container.has<EventManager>()) {
       events = await container.make<EventManager>();
     }
-    return RateLimitService(policies, events: events);
+    return RateLimitService(
+      policies,
+      callbacks: rateLimitCallbacksForEvents(events),
+    );
   }
 
   Future<RateLimiterBackend> _createBackend(
@@ -148,64 +149,31 @@ class RateLimitServiceProvider extends ServiceProvider
     if (config.policies.isEmpty) {
       return const [];
     }
-    final defaultFailover = config.failover;
-    return config.policies
-        .map((policy) => _compilePolicy(policy, backend, defaultFailover))
-        .toList(growable: false);
-  }
-
-  CompiledRateLimitPolicy _compilePolicy(
-    RateLimitPolicyConfig policy,
-    RateLimiterBackend backend,
-    RateLimitFailoverMode defaultFailover,
-  ) {
-    final RateLimitAlgorithmConfig algorithm;
-    switch (policy.strategy) {
-      case RateLimitStrategy.slidingWindow:
-        algorithm = SlidingWindowConfig(
-          limit: max(1, policy.capacity),
-          window: policy.window,
-        );
-        break;
-      case RateLimitStrategy.quota:
-        algorithm = QuotaConfig(
-          limit: max(1, policy.capacity),
-          period: policy.period,
-        );
-        break;
-      case RateLimitStrategy.tokenBucket:
-        algorithm = buildBucketConfig(
-          capacity: policy.capacity,
-          refillInterval: policy.interval,
-          burstMultiplier: policy.burstMultiplier,
-        );
-        break;
-    }
-
-    final keyResolver = _buildKeyResolver(policy.key);
-    final matcher = RequestMatcher(
-      method: policy.method,
-      pattern: policy.match,
-    );
-    final failover = policy.failover ?? defaultFailover;
-
-    return CompiledRateLimitPolicy(
-      name: policy.name,
-      matcher: matcher,
-      keyResolver: keyResolver,
-      algorithm: algorithm,
+    return compileRateLimitPolicies(
+      specs: config.policies.map(_toPolicySpec),
       backend: backend,
-      failover: failover,
+      defaultFailover: config.failover,
     );
   }
 
-  RateLimitKeyResolver _buildKeyResolver(RateLimitKeyConfig key) {
-    switch (key.type) {
-      case RateLimitKeyType.ip:
-        return const IpKeyResolver();
-      case RateLimitKeyType.header:
-        final header = key.header ?? '';
-        return HeaderKeyResolver(header);
-    }
+  RateLimitPolicySpec _toPolicySpec(RateLimitPolicyConfig policy) {
+    final key = switch (policy.key.type) {
+      RateLimitKeyType.ip => const RateLimitKeySpec.ip(),
+      RateLimitKeyType.header => RateLimitKeySpec.header(policy.key.header),
+    };
+
+    return RateLimitPolicySpec(
+      name: policy.name,
+      match: policy.match,
+      method: policy.method,
+      strategy: policy.strategy,
+      capacity: policy.capacity,
+      interval: policy.interval,
+      window: policy.window,
+      period: policy.period,
+      burstMultiplier: policy.burstMultiplier,
+      key: key,
+      failover: policy.failover,
+    );
   }
 }

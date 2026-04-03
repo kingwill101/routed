@@ -6,8 +6,7 @@ import 'package:liquify/liquify.dart' show FilterRegistry;
 import 'package:routed/middlewares.dart' show localizationMiddleware;
 import 'package:routed/src/config/specs/localization.dart';
 import 'package:routed/src/container/container.dart';
-import 'package:routed/src/contracts/contracts.dart'
-    show Config, TranslationLoader, TranslatorContract;
+import 'package:routed/src/contracts/config/config.dart' show Config;
 import 'package:routed/src/engine/config.dart';
 import 'package:routed/src/engine/middleware_registry.dart';
 import 'package:routed/src/provider/provider.dart';
@@ -17,6 +16,8 @@ import 'package:routed/src/translation/locale_manager.dart';
 import 'package:routed/src/translation/locale_resolver_registry.dart';
 import 'package:routed/src/translation/resolvers.dart';
 import 'package:routed/src/translation/translator.dart' as routed;
+import 'package:server_contracts/server_contracts.dart'
+    show TranslationLoader, TranslatorContract;
 
 /// Provides translation loader + translator bindings using the default
 /// filesystem configured by the engine.

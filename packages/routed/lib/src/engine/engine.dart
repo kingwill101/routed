@@ -7,12 +7,14 @@ import 'package:fuzzywuzzy/fuzzywuzzy.dart' as fuzzy;
 import 'package:http2/http2.dart' as http2;
 import 'package:meta/meta.dart' show internal, visibleForTesting;
 import 'package:routed/middlewares.dart';
+import 'package:routed_core/routed_core.dart'
+    show RoutePatternRegistry, requireRoutePatternRegistry;
 import 'package:routed/src/config/registry.dart';
 import 'package:routed/src/container/container.dart';
 import 'package:routed/src/container/container_mixin.dart';
 import 'package:routed/src/container/read_only_container.dart';
 import 'package:routed/src/context/context.dart';
-import 'package:routed/src/contracts/contracts.dart';
+import 'package:routed/src/contracts/config/config.dart';
 import 'package:routed/src/engine/config.dart';
 import 'package:routed/src/engine/engine_opt.dart';
 import 'package:routed/src/engine/events/config.dart';
@@ -26,10 +28,11 @@ import 'package:routed/src/engine/providers/logging.dart';
 import 'package:routed/src/engine/providers/registry.dart';
 import 'package:routed/src/engine/providers/routing.dart';
 import 'package:routed/src/engine/route_match.dart';
+import 'package:routed/src/engine/route_trie.dart';
 import 'package:routed/src/engine/request_scope.dart';
 import 'package:routed/src/engine/wrapped_request.dart';
 import 'package:routed/src/events/event_manager.dart';
-import 'package:routed/src/logging/logging.dart';
+import 'package:routed/src/logging/context.dart';
 import 'package:routed/src/observability/health.dart';
 import 'package:routed/src/openapi/schema.dart';
 import 'package:routed/src/provider/provider.dart';
@@ -42,20 +45,19 @@ import 'package:routed/src/router/middleware_reference.dart';
 import 'package:routed/src/router/types.dart';
 import 'package:routed/src/runtime/shutdown.dart';
 import 'package:routed/src/static_files.dart';
-import 'package:routed/src/support/named_registry.dart';
 import 'package:routed/src/utils/debug.dart';
 import 'package:routed/src/validation/validator.dart';
 import 'package:routed/src/websocket/websocket_handler.dart';
 
 export 'events/events.dart';
+export 'param_utils.dart';
+export 'patterns.dart';
+export 'route_trie.dart';
 
 part 'engine_route.dart';
 part 'engine_routing.dart';
 part 'error_handling.dart';
 part 'mount.dart';
-part 'param_utils.dart';
-part 'patterns.dart';
-part 'route_trie.dart';
 part 'request.dart';
 
 /// The core HTTP engine of the Routed framework.
@@ -180,7 +182,7 @@ class Engine with StaticFileHandler, ContainerMixin {
   /// Returns all built-in service providers registered with the framework.
   ///
   /// This includes all providers from the [ProviderRegistry]: core, routing,
-  /// cache, sessions, uploads, cors, security, logging, auth, observability,
+  /// cache, sessions, uploads, cors, security, logging, observability,
   /// compression, rate limiting, storage, static assets, views, and localization.
   ///
   /// Use this when you want a fully-featured engine with all framework capabilities:
@@ -491,6 +493,15 @@ class Engine with StaticFileHandler, ContainerMixin {
     _providerManifest = manifest;
     _rebuildMiddlewareStacks();
     if (_unresolvedProviderIds.isNotEmpty) {
+      if (_unresolvedProviderIds.any(
+        (id) => id.trim().toLowerCase() == 'routed.auth',
+      )) {
+        debugPrintWarning(
+          'Provider "routed.auth" has moved to package:routed_auth. '
+          'Import package:routed_auth/routed_auth.dart to auto-register it, '
+          'or call ensureRoutedAuthProviderRegistered() before initialization.',
+        );
+      }
       debugPrintWarning(
         'Unknown providers in http.providers manifest: '
         '${_unresolvedProviderIds.join(', ')}',

@@ -1,9 +1,8 @@
 import 'dart:async';
 
 import 'package:routed/routed.dart';
-import 'package:routed/src/rate_limit/backend.dart';
-import 'package:routed/src/rate_limit/policy.dart';
-import 'package:routed/src/rate_limit/service.dart';
+import 'package:routed/src/rate_limit/callbacks.dart';
+import 'package:server_data/rate_limit.dart';
 import 'package:routed_testing/routed_testing.dart';
 import 'package:server_testing/server_testing.dart';
 import 'test_engine.dart';
@@ -29,7 +28,9 @@ void main() {
     );
 
     final events = EventManager();
-    final service = RateLimitService([policy], events: events);
+    final service = RateLimitService([
+      policy,
+    ], callbacks: rateLimitCallbacksForEvents(events));
 
     final subscriptions = <RateLimitEvent>[];
     final sub = events.on<RateLimitEvent>().listen(subscriptions.add);

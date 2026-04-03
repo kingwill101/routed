@@ -10,9 +10,18 @@ sidebar_position: 4
 This page documents how auth providers are configured, registered, and wired into the
 `AuthManager`, plus how to implement a custom `AuthAdapter` for persistence.
 
-## Built-in Providers (routed_auth)
+## Migration from routed_auth
 
-The `routed_auth` package provides pre-built OAuth providers following the NextAuth.js pattern.
+Provider implementations were moved from `routed_auth` to `server_auth`.
+
+- Old import: `package:routed_auth/routed_auth.dart`
+- New import: `package:server_auth/server_auth.dart`
+
+The `routed_auth` package is removed as part of the package split.
+
+## Built-in Providers (server_auth)
+
+The `server_auth` package provides pre-built OAuth providers following the NextAuth.js pattern.
 
 ### Installation
 
@@ -22,10 +31,10 @@ dependencies:
     git:
       url: https://github.com/kingwill101/routed.git
       path: packages/routed
-  routed_auth:
+  server_auth:
     git:
       url: https://github.com/kingwill101/routed.git
-      path: packages/routed_auth
+      path: packages/server_auth
 ```
 
 ### Available Providers
@@ -50,7 +59,7 @@ dependencies:
 
 ```dart
 import 'package:routed/routed.dart';
-import 'package:routed_auth/routed_auth.dart';
+import 'package:server_auth/server_auth.dart';
 
 final engine = await Engine.create(
   providers: [
@@ -95,7 +104,7 @@ print(profile.emailVerified);
 For config-driven setups, register providers with the registry:
 
 ```dart
-import 'package:routed_auth/routed_auth.dart';
+import 'package:server_auth/server_auth.dart';
 
 // Register all providers at once
 registerAllAuthProviders(AuthProviderRegistry.instance);
@@ -155,7 +164,7 @@ OAuthProvider<MyProfile>(
 );
 ```
 
-The Dropbox provider in `routed_auth` demonstrates this pattern.
+The Dropbox provider in `server_auth` demonstrates this pattern.
 
 ## CallbackProvider for Non-OAuth Flows
 

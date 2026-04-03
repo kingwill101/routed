@@ -1,6 +1,5 @@
-import 'package:routed/src/cache/array_lock.dart';
-import 'package:routed/src/cache/array_store.dart';
-import 'package:routed/src/contracts/cache/lock.dart';
+import 'package:server_data/server_data.dart';
+import 'package:server_contracts/server_contracts.dart' show Lock;
 import 'package:test/test.dart';
 
 void main() {

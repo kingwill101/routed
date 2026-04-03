@@ -3,6 +3,7 @@ import 'dart:convert';
 
 import 'package:jose/jose.dart';
 import 'package:routed/routed.dart';
+import 'package:routed_auth/routed_auth.dart';
 
 const _sharedSecret = 'demo-jwt-secret-key';
 

@@ -3,16 +3,14 @@ import 'dart:convert';
 import 'dart:io';
 import 'dart:typed_data';
 
-import 'package:meta/meta.dart' show internal;
 import 'package:path/path.dart' as p;
 import 'package:routed/src/binding/binding.dart';
 import 'package:routed/src/binding/convert/sse.dart';
 import 'package:routed/src/binding/multipart.dart';
 import 'package:routed/src/binding/utils.dart';
-import 'package:routed/src/cache/cache.dart';
+import 'package:routed/src/cache/cache_manager.dart';
 import 'package:routed/src/container/container.dart' show Container;
-import 'package:routed/src/contracts/contracts.dart' show Config;
-import 'package:routed/src/contracts/translation/translator.dart';
+import 'package:routed/src/contracts/config/config.dart' show Config;
 import 'package:routed/src/engine/config.dart';
 import 'package:routed/src/engine/engine.dart';
 import 'package:routed/src/engine/engine_template.dart';
@@ -29,7 +27,8 @@ import 'package:routed/src/render/xml.dart';
 import 'package:routed/src/render/yaml.dart';
 import 'package:routed/src/request.dart';
 import 'package:routed/src/response.dart';
-import 'package:routed/src/sessions/session.dart';
+import 'package:server_contracts/server_contracts.dart' show TranslatorContract;
+import 'package:server_data/sessions.dart';
 import 'package:routed/src/translation/constants.dart';
 import 'package:routed/src/view/view_engine.dart';
 
@@ -59,7 +58,6 @@ part 'shortcuts.dart';
 /// tracks errors, and can control flow in a chain of handlers.
 class EngineContext {
   /// The current HTTP request data.
-  @internal
   final Request request;
 
   /// The current HTTP response writer.

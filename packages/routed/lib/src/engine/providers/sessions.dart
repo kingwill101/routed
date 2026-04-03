@@ -3,19 +3,16 @@ import 'package:routed/src/config/spec.dart';
 import 'package:routed/src/config/specs/session.dart';
 import 'package:routed/src/config/specs/session_drivers.dart';
 import 'package:routed/src/container/container.dart';
-import 'package:routed/src/contracts/cache/repository.dart' as cache;
-import 'package:routed/src/contracts/contracts.dart' show Config;
+import 'package:routed/src/contracts/config/config.dart' show Config;
 import 'package:routed/src/engine/config.dart' show EngineConfig, SessionConfig;
 import 'package:routed/src/engine/middleware_registry.dart';
 import 'package:routed/src/engine/storage_defaults.dart';
 import 'package:routed/src/engine/storage_paths.dart';
 import 'package:routed/src/provider/config_utils.dart';
 import 'package:routed/src/provider/provider.dart';
-import 'package:routed/src/sessions/cache_store.dart';
-import 'package:routed/src/sessions/memory_store.dart';
+import 'package:server_contracts/server_contracts.dart' as cache;
+import 'package:server_data/sessions.dart';
 import 'package:routed/src/sessions/middleware.dart';
-import 'package:routed/src/sessions/options.dart';
-import 'package:routed/src/sessions/secure_cookie.dart';
 import 'package:routed/src/support/driver_registry.dart';
 
 /// Signature for a function that converts a [SessionDriverBuilderContext] to a
@@ -83,7 +80,7 @@ class SessionDriverBuilderContext {
   final bool encrypt;
 
   /// Resolved cookie options.
-  final Options options;
+  final SessionOptions options;
 
   /// Ordered list of [SecureCookie] codecs (primary first).
   final List<SecureCookie> codecs;
@@ -423,12 +420,19 @@ class SessionServiceProvider extends ServiceProvider
   // ---------------------------------------------------------------------------
 
   static SessionConfig _buildCookieDriver(SessionDriverBuilderContext context) {
-    return SessionConfig.cookie(
+    final store = sessionRuntimeFactory.cookie(codecs: context.codecs);
+    return SessionConfig(
       codecs: context.codecs,
       cookieName: context.cookieName,
+      store: store,
       maxAge: context.lifetime,
+      path: context.options.path ?? '/',
+      secure: context.options.secure ?? true,
+      httpOnly: context.options.httpOnly ?? true,
+      defaultOptions: context.options,
       expireOnClose: context.expireOnClose,
-      options: context.options,
+      sameSite: context.options.sameSite,
+      partitioned: context.options.partitioned,
     );
   }
 
@@ -460,21 +464,31 @@ class SessionServiceProvider extends ServiceProvider
         ? context.container.get<EngineConfig>()
         : null;
 
-    return SessionConfig.file(
-      appKey: context.keys.first,
+    final store = sessionRuntimeFactory.file(
       codecs: context.codecs,
       storagePath: storagePath,
-      cookieName: context.cookieName,
-      maxAge: context.lifetime,
-      expireOnClose: context.expireOnClose,
-      options: context.options,
+      defaultOptions: context.options,
       lottery: resolved.lottery ?? context.lottery,
       fileSystem: engineConfig?.fileSystem,
+    );
+
+    return SessionConfig(
+      cookieName: context.cookieName,
+      store: store,
+      maxAge: context.lifetime,
+      path: context.options.path ?? '/',
+      secure: context.options.secure ?? false,
+      httpOnly: context.options.httpOnly ?? true,
+      defaultOptions: context.options,
+      expireOnClose: context.expireOnClose,
+      sameSite: context.options.sameSite,
+      partitioned: context.options.partitioned,
+      codecs: context.codecs,
     );
   }
 
   static SessionConfig _buildArrayDriver(SessionDriverBuilderContext context) {
-    final store = MemorySessionStore(
+    final store = sessionRuntimeFactory.memory(
       codecs: context.codecs,
       defaultOptions: context.options,
       lifetime: context.lifetime,
@@ -514,7 +528,7 @@ class SessionServiceProvider extends ServiceProvider
     final storeName = resolved.resolveStoreName(context.driver);
     final repository = cacheManager.store(storeName);
 
-    final store = CacheSessionStore(
+    final store = sessionRuntimeFactory.cache(
       repository: repository,
       codecs: context.codecs,
       defaultOptions: context.options,

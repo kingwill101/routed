@@ -2,6 +2,7 @@ import 'dart:io';
 
 import 'package:file/local.dart' as local;
 import 'package:routed/routed.dart';
+import 'package:server_data/cache.dart';
 import 'package:test/test.dart';
 
 void main() {

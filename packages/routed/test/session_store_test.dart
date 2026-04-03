@@ -3,9 +3,9 @@ import 'dart:io';
 
 import 'package:file/memory.dart';
 import 'package:routed/routed.dart';
-import 'package:routed/session.dart';
-import 'package:routed/src/contracts/cache/repository.dart' as cache;
-import 'package:routed/src/contracts/cache/store.dart' as cache_store;
+import 'package:server_contracts/server_contracts.dart' as cache;
+import 'package:server_contracts/server_contracts.dart' as cache_store;
+import 'package:server_data/sessions.dart';
 import 'package:routed/src/crypto/crypto.dart';
 import 'package:routed_testing/routed_testing.dart';
 import 'package:server_testing/server_testing.dart';
@@ -89,7 +89,7 @@ Map<String, List<String>> _cookieHeaderValue(String name, String value) {
 void main() {
   group('Session model', () {
     test('serializes, deserializes, and converts values', () {
-      final options = Options(path: '/app', maxAge: 60);
+      final options = SessionOptions(path: '/app', maxAge: 60);
       final createdAt = DateTime.utc(2024, 1, 1);
       final accessedAt = DateTime.utc(2024, 1, 2);
       final session = Session(
@@ -131,7 +131,7 @@ void main() {
 
   group('Session options', () {
     test('clones and serializes options', () {
-      final options = Options(
+      final options = SessionOptions(
         path: '/api',
         domain: 'example.com',
         maxAge: 120,
@@ -143,7 +143,7 @@ void main() {
       options.setMaxAge(240);
 
       final json = options.toJson();
-      final restored = Options.fromJson(json);
+      final restored = SessionOptions.fromJson(json);
       final cloned = options.clone();
       final copied = options.copyWith(path: '/new', maxAge: 10);
 
@@ -210,11 +210,14 @@ void main() {
         final codec = SecureCookie(key: SecureCookie.generateKey());
         final store = MemorySessionStore(
           codecs: [codec],
-          defaultOptions: Options(maxAge: 5),
+          defaultOptions: SessionOptions(maxAge: 5),
         );
 
         engine.get('/write', (ctx) async {
-          final session = Session(name: 'mem', options: Options(maxAge: 5));
+          final session = Session(
+            name: 'mem',
+            options: SessionOptions(maxAge: 5),
+          );
           session.setValue('foo', 'bar');
           await store.write(ctx.request, ctx.response, session);
           return ctx.response;
@@ -263,11 +266,14 @@ void main() {
         final store = CacheSessionStore(
           repository: repo,
           codecs: [codec],
-          defaultOptions: Options(maxAge: 10),
+          defaultOptions: SessionOptions(maxAge: 10),
         );
 
         engine.get('/write', (ctx) async {
-          final session = Session(name: 'cache', options: Options(maxAge: 10));
+          final session = Session(
+            name: 'cache',
+            options: SessionOptions(maxAge: 10),
+          );
           session.setValue('token', 'abc');
           await store.write(ctx.request, ctx.response, session);
           return ctx.response;
@@ -328,11 +334,14 @@ void main() {
         final store = CacheSessionStore(
           repository: repo,
           codecs: [SecureCookie(key: SecureCookie.generateKey())],
-          defaultOptions: Options(maxAge: 10),
+          defaultOptions: SessionOptions(maxAge: 10),
         );
 
         engine.get('/destroy', (ctx) async {
-          final session = Session(name: 'cache', options: Options(maxAge: 10));
+          final session = Session(
+            name: 'cache',
+            options: SessionOptions(maxAge: 10),
+          );
           await store.write(ctx.request, ctx.response, session);
 
           session.destroy();
@@ -362,7 +371,7 @@ void main() {
         final store = FilesystemStore(
           storageDir: directory.path,
           codecs: [codec],
-          defaultOptions: Options(maxAge: 1),
+          defaultOptions: SessionOptions(maxAge: 1),
           lottery: const [1, 1],
           fileSystem: fs,
         );
@@ -376,7 +385,7 @@ void main() {
         engine.get('/write', (ctx) async {
           final session = Session(
             name: 'file',
-            options: Options(maxAge: 10, path: '/'),
+            options: SessionOptions(maxAge: 10, path: '/'),
           );
           session.setValue('user', 'alice');
           await store.write(ctx.request, ctx.response, session);
@@ -418,14 +427,14 @@ void main() {
         final store = FilesystemStore(
           storageDir: directory.path,
           codecs: [SecureCookie(key: SecureCookie.generateKey())],
-          defaultOptions: Options(maxAge: 0),
+          defaultOptions: SessionOptions(maxAge: 0),
           fileSystem: fs,
         );
 
         engine.get('/write', (ctx) async {
           final session = Session(
             name: 'file',
-            options: Options(maxAge: 0, path: '/'),
+            options: SessionOptions(maxAge: 0, path: '/'),
           );
           await store.write(ctx.request, ctx.response, session);
           return ctx.response;

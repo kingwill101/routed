@@ -4,6 +4,7 @@ import 'dart:io' show Platform, Process;
 import 'package:file/file.dart' as fs;
 import 'package:file/local.dart' as local_fs;
 import 'package:mime/mime.dart';
+import 'package:routed_validation/routed_validation.dart' show ValidationFile;
 import 'package:routed/src/binding/binding.dart';
 import 'package:routed/src/binding/utils.dart';
 import 'package:routed/src/context/context.dart';
@@ -357,10 +358,13 @@ Future<MultipartForm> parseMultipartForm(EngineContext context) async {
 }
 
 /// Represents a file in a multipart form.
-class MultipartFile {
+class MultipartFile implements ValidationFile {
+  @override
   final String filename;
   final String path;
+  @override
   final int size;
+  @override
   final String contentType;
   final String name;
 

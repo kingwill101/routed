@@ -2,75 +2,16 @@ import 'dart:io';
 
 import 'package:file/file.dart';
 import 'package:file/local.dart' as local;
-import 'package:routed/session.dart';
+import 'package:routed_core/routed_core.dart'
+    show EtagStrategy, MultipartConfig, RequestConfig;
+import 'package:routed_security/routed_security.dart' as security;
+import 'package:server_data/sessions.dart';
 import 'package:routed/src/runtime/shutdown.dart';
 import 'package:routed/src/utils/debug.dart';
 import 'package:routed/src/view/view_engine.dart';
 
-/// Default ETag generation strategies supported by the engine.
-enum EtagStrategy { disabled, strong, weak }
-
-/// Configuration for handling multipart file uploads.
-///
-/// This class controls limits and behavior for file uploads through multipart
-/// form data. It helps protect against denial-of-service attacks and ensures
-/// uploaded files meet security requirements.
-///
-/// Example:
-/// ```dart
-/// final config = MultipartConfig(
-///   maxMemory: 64 * 1024 * 1024,
-///   maxFileSize: 20 * 1024 * 1024,
-///   allowedExtensions: {'jpg', 'png', 'pdf', 'docx'},
-///   uploadDirectory: 'storage/uploads',
-/// );
-/// ```
-class MultipartConfig {
-  /// Maximum memory size allowed for file uploads in bytes.
-  ///
-  /// This limits how much memory can be used for buffering uploads before
-  /// they are written to disk. Default is 32MB.
-  int maxMemory;
-
-  /// Maximum file size allowed for individual uploads in bytes.
-  ///
-  /// Any file exceeding this size will be rejected. Default is 10MB.
-  int maxFileSize;
-
-  /// Maximum total disk usage per request in bytes.
-  ///
-  /// This limits the total size of all files in a single request.
-  /// Default mirrors [maxMemory].
-  int maxDiskUsage;
-
-  /// Set of allowed file extensions for uploads.
-  ///
-  /// Only files with these extensions will be accepted. Extensions should be
-  /// lowercase without the leading dot. Default includes 'jpg', 'jpeg', 'png', 'gif', 'pdf'.
-  Set<String> allowedExtensions;
-
-  /// Directory where uploaded files will be stored.
-  ///
-  /// This path is relative to the application root. Default is 'uploads'.
-  final String uploadDirectory;
-
-  /// File permissions for uploaded files in octal notation.
-  ///
-  /// Default is 0750 (owner: read/write/execute, group: read/execute, others: none).
-  final int filePermissions;
-
-  /// Creates a multipart configuration with the given settings.
-  ///
-  /// All parameters are optional and have sensible defaults for typical applications.
-  MultipartConfig({
-    this.maxMemory = 32 * 1024 * 1024, // 32MB default
-    this.maxFileSize = 10 * 1024 * 1024, // 10MB default
-    int? maxDiskUsage,
-    this.allowedExtensions = const {'jpg', 'jpeg', 'png', 'gif', 'pdf'},
-    this.uploadDirectory = 'uploads',
-    this.filePermissions = 0750,
-  }) : maxDiskUsage = maxDiskUsage ?? maxMemory;
-}
+export 'package:routed_core/routed_core.dart'
+    show EtagStrategy, MultipartConfig;
 
 /// Configuration for HTTP/2 protocol support.
 ///
@@ -135,29 +76,7 @@ class Http2Config {
   }
 }
 
-/// Configuration for security features.
-///
-/// This class groups security-related settings that protect the application
-/// from common attacks and vulnerabilities.
-class SecurityConfig {
-  /// Maximum request size in bytes.
-  ///
-  /// Requests larger than this will be rejected to prevent memory exhaustion
-  /// attacks. Default is 5MB.
-  final int maxRequestSize;
-
-  /// List of trusted proxy IP addresses or CIDR ranges.
-  ///
-  /// When the application runs behind proxies, this list defines which proxies
-  /// are trusted to provide the real client IP address.
-  final List<String> trustedProxies;
-
-  /// Creates a security configuration with the given settings.
-  const SecurityConfig({
-    this.maxRequestSize = 5 * 1024 * 1024, // 5MB default
-    this.trustedProxies = const [],
-  });
-}
+typedef SecurityConfig = security.SecurityConfig;
 
 /// Configuration for feature flags.
 ///
@@ -272,165 +191,8 @@ class EngineFeatures {
   });
 }
 
-/// Configuration for engine security features.
-///
-/// This class provides fine-grained control over security headers, CSRF
-/// protection, CORS, and request size limits.
-class EngineSecurityFeatures {
-  /// Whether CSRF protection is enabled.
-  ///
-  /// When enabled, state-changing requests (POST, PUT, DELETE) must include
-  /// a valid CSRF token.
-  final bool csrfProtection;
-
-  /// Name of the cookie used to store the CSRF token.
-  ///
-  /// Default is 'csrf_token'.
-  final String csrfCookieName;
-
-  /// Content Security Policy header value.
-  ///
-  /// When set, adds a `Content-Security-Policy` header to responses to
-  /// mitigate XSS attacks. If `null`, no CSP header is added.
-  final String? csp;
-
-  /// Whether to add the `X-Content-Type-Options: nosniff` header.
-  ///
-  /// This prevents browsers from MIME-sniffing responses, which can prevent
-  /// certain types of attacks.
-  final bool xContentTypeOptionsNoSniff;
-
-  /// Maximum age in seconds for HTTP Strict Transport Security (HSTS).
-  ///
-  /// When set, adds an `Strict-Transport-Security` header to force HTTPS.
-  /// If `null`, no HSTS header is added.
-  final int? hstsMaxAge;
-
-  /// Value for the `X-Frame-Options` header.
-  ///
-  /// Controls whether the page can be embedded in frames. Common values are
-  /// 'DENY', 'SAMEORIGIN', or 'ALLOW-FROM uri'. If `null`, no header is added.
-  final String? xFrameOptions;
-
-  /// Maximum request size in bytes.
-  ///
-  /// Requests larger than this will be rejected. Default is 10MB.
-  final int maxRequestSize;
-
-  /// CORS configuration.
-  ///
-  /// Controls cross-origin resource sharing policies.
-  final CorsConfig cors;
-
-  /// Creates an engine security features configuration.
-  const EngineSecurityFeatures({
-    this.csrfProtection = true,
-    this.csrfCookieName = 'csrf_token',
-    this.csp,
-    this.xContentTypeOptionsNoSniff = false,
-    this.hstsMaxAge,
-    this.xFrameOptions,
-    this.maxRequestSize = 1024 * 1024 * 10, // 10MB Default
-    this.cors = const CorsConfig(),
-  });
-
-  /// Creates a copy of this configuration with updated values.
-  ///
-  /// Any parameters not provided will retain their current values.
-  EngineSecurityFeatures copyWith({
-    bool? csrfProtection,
-    String? csrfCookieName,
-    String? csp,
-    bool? xContentTypeOptionsNoSniff,
-    int? hstsMaxAge,
-    String? xFrameOptions,
-    int? maxRequestSize,
-    CorsConfig? cors,
-  }) {
-    return EngineSecurityFeatures(
-      csrfProtection: csrfProtection ?? this.csrfProtection,
-      csrfCookieName: csrfCookieName ?? this.csrfCookieName,
-      csp: csp ?? this.csp,
-      xContentTypeOptionsNoSniff:
-          xContentTypeOptionsNoSniff ?? this.xContentTypeOptionsNoSniff,
-      hstsMaxAge: hstsMaxAge ?? this.hstsMaxAge,
-      xFrameOptions: xFrameOptions ?? this.xFrameOptions,
-      maxRequestSize: maxRequestSize ?? this.maxRequestSize,
-      cors: cors ?? this.cors,
-    );
-  }
-}
-
-/// Configuration for Cross-Origin Resource Sharing (CORS).
-///
-/// CORS controls which domains can make cross-origin requests to the API.
-/// This is essential for web applications that access the API from different domains.
-///
-/// Example:
-/// ```dart
-/// final config = CorsConfig(
-///   enabled: true,
-///   allowedOrigins: ['https://example.com', 'https://app.example.com'],
-///   allowedMethods: ['GET', 'POST', 'PUT'],
-///   allowCredentials: true,
-/// );
-/// ```
-class CorsConfig {
-  /// Whether CORS is enabled.
-  final bool enabled;
-
-  /// List of allowed origin domains.
-  ///
-  /// Use '*' to allow all origins (not recommended for production).
-  /// Specific origins should include the full protocol and domain,
-  /// e.g., 'https://example.com'.
-  final List<String> allowedOrigins;
-
-  /// List of allowed HTTP methods for cross-origin requests.
-  ///
-  /// Default includes GET, POST, PUT, DELETE, PATCH, and OPTIONS.
-  final List<String> allowedMethods;
-
-  /// List of allowed request headers.
-  ///
-  /// Headers that the client is allowed to send. Empty list allows all headers.
-  final List<String> allowedHeaders;
-
-  /// Whether credentials (cookies, authorization headers) are allowed.
-  ///
-  /// When enabled, the `Access-Control-Allow-Credentials` header is set to true.
-  final bool allowCredentials;
-
-  /// Maximum time in seconds that preflight responses can be cached.
-  ///
-  /// This sets the `Access-Control-Max-Age` header. If `null`, no max-age
-  /// header is sent.
-  final int? maxAge;
-
-  /// List of headers that browsers are allowed to access.
-  ///
-  /// This sets the `Access-Control-Expose-Headers` header. Headers not in
-  /// this list won't be accessible to JavaScript in the browser.
-  final List<String> exposedHeaders;
-
-  /// Creates a CORS configuration with the given settings.
-  const CorsConfig({
-    this.enabled = false,
-    this.allowedOrigins = const ['*'],
-    this.allowedMethods = const [
-      'GET',
-      'POST',
-      'PUT',
-      'DELETE',
-      'PATCH',
-      'OPTIONS',
-    ],
-    this.allowedHeaders = const [],
-    this.allowCredentials = false,
-    this.maxAge,
-    this.exposedHeaders = const [],
-  });
-}
+typedef EngineSecurityFeatures = security.EngineSecurityFeatures;
+typedef CorsConfig = security.CorsConfig;
 
 /// Primary configuration for the routing engine.
 ///
@@ -449,7 +211,7 @@ class CorsConfig {
 ///   handleMethodNotAllowed: true,
 /// );
 /// ```
-class EngineConfig {
+class EngineConfig implements RequestConfig {
   final EngineFeatures features;
   final EngineSecurityFeatures security;
   final ViewConfig views;
@@ -472,7 +234,9 @@ class EngineConfig {
   final int pathInternCacheSize;
 
   // IP and forwarding
+  @override
   final bool forwardedByClientIP;
+  @override
   final List<String> remoteIPHeaders;
   List<String> _trustedProxies = [];
   String? _trustedPlatform;
@@ -494,6 +258,12 @@ class EngineConfig {
 
   /// Fly.io's client IP header name.
   static const platformFlyIO = 'Fly-Client-IP';
+
+  @override
+  bool get enableProxySupport => features.enableProxySupport;
+
+  @override
+  bool get enableSecureRequestIds => features.enableSecureRequestIds;
 
   /// Creates an engine configuration with the given settings.
   ///
@@ -625,6 +395,7 @@ class EngineConfig {
   /// prefix length specified in CIDR notation.
   ///
   /// Returns `true` if the address is a trusted proxy, `false` otherwise.
+  @override
   bool isTrustedProxy(InternetAddress addr) {
     if (!features.enableProxySupport) {
       throw StateError(
@@ -660,6 +431,7 @@ class EngineConfig {
     _parsedProxies = [];
   }
 
+  @override
   String? get trustedPlatform => _trustedPlatform;
 
   set trustedPlatform(String? value) {
@@ -756,7 +528,7 @@ class SessionConfig {
   final String cookieName;
 
   /// The session store implementation.
-  final Store store;
+  final SessionStore store;
 
   /// The maximum age of the session. Defaults to 1 hour.
   final Duration maxAge;
@@ -771,7 +543,7 @@ class SessionConfig {
   final bool httpOnly;
 
   /// Base cookie options applied when constructing sessions.
-  final Options defaultOptions;
+  final SessionOptions defaultOptions;
 
   /// Whether the cookie should expire when the browser closes.
   final bool expireOnClose;
@@ -803,7 +575,7 @@ class SessionConfig {
     this.path = '/',
     this.secure = false,
     this.httpOnly = true,
-    Options? defaultOptions,
+    SessionOptions? defaultOptions,
     this.expireOnClose = false,
     this.sameSite,
     this.partitioned,
@@ -811,7 +583,7 @@ class SessionConfig {
     this.lottery,
   }) : defaultOptions =
            defaultOptions ??
-           Options(
+           SessionOptions(
              path: path,
              maxAge: expireOnClose ? null : maxAge.inSeconds,
              secure: secure,
@@ -832,14 +604,14 @@ class SessionConfig {
     String cookieName = 'routed_session',
     Duration maxAge = const Duration(hours: 1),
     bool expireOnClose = false,
-    Options? options,
+    SessionOptions? options,
   }) {
     final resolvedCodecs = (codecs != null && codecs.isNotEmpty)
         ? codecs
         : [SecureCookie(key: appKey, useEncryption: true, useSigning: true)];
     final resolvedOptions =
         options ??
-        Options(
+        SessionOptions(
           path: '/',
           maxAge: expireOnClose ? null : maxAge.inSeconds,
           secure: true,
@@ -877,7 +649,7 @@ class SessionConfig {
     String cookieName = 'routed_session',
     Duration maxAge = const Duration(hours: 1),
     bool expireOnClose = false,
-    Options? options,
+    SessionOptions? options,
     List<int>? lottery,
     FileSystem? fileSystem,
   }) {
@@ -886,7 +658,7 @@ class SessionConfig {
         : [SecureCookie(key: appKey, useEncryption: true, useSigning: true)];
     final resolvedOptions =
         options ??
-        Options(
+        SessionOptions(
           path: '/',
           maxAge: expireOnClose ? null : maxAge.inSeconds,
           secure: true,

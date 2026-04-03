@@ -15,7 +15,6 @@ import 'views.dart';
 import 'compression.dart';
 import 'rate_limit.dart';
 import 'observability.dart';
-import '../../auth/provider.dart';
 import 'localization.dart';
 
 typedef ServiceProviderFactory = ServiceProvider Function();
@@ -79,11 +78,6 @@ class ProviderRegistry extends NamedRegistry<ProviderRegistration> {
       'routed.logging',
       factory: () => LoggingServiceProvider(),
       description: 'HTTP logging defaults and helpers.',
-    );
-    register(
-      'routed.auth',
-      factory: () => AuthServiceProvider(),
-      description: 'Authentication helpers (JWT middleware, validators).',
     );
     register(
       'routed.observability',

@@ -70,13 +70,13 @@ Each endpoint is mounted under `basePath` (defaults to `/auth`).
 
 ## Provider config
 
-The `routed_auth` package provides 13+ pre-built OAuth providers (Google, Discord, Microsoft,
+The `server_auth` package provides 13+ pre-built OAuth providers (Google, Discord, Microsoft,
 Apple, Twitter, Facebook, GitLab, Dropbox, Slack, LinkedIn, Spotify, Twitch, Telegram).
 For per-provider docs and custom provider/adapter guidance, see
 [Auth Providers & Adapters](/docs/routed/security/auth-providers).
 
 ```dart
-import 'package:routed_auth/routed_auth.dart';
+import 'package:server_auth/server_auth.dart';
 
 final options = AuthOptions(
   providers: [
@@ -318,6 +318,8 @@ Use `OAuth2Client` when you need to exchange authorization codes, request client
 or refresh access tokens. The helper wraps the standard `/token` endpoint calls.
 
 ```dart
+import 'package:server_auth/server_auth.dart';
+
 final oauth = OAuth2Client(
   tokenEndpoint: Uri.parse('https://auth.example.com/oauth/token'),
   clientId: 'web-app',
@@ -341,6 +343,8 @@ introspection. Use it when access tokens are opaque and must be validated agains
 server.
 
 ```dart
+import 'package:server_auth/server_auth.dart';
+
 engine.addGlobalMiddleware(
   oauth2Introspection(
     OAuthIntrospectionOptions(

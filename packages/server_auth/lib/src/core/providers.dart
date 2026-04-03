@@ -1,0 +1,1490 @@
+import 'dart:async';
+
+import 'package:http/http.dart' as http;
+import 'package:jose/jose.dart' show JsonWebToken;
+import 'adapter.dart';
+import 'exceptions.dart' show AuthFlowException;
+import 'models.dart';
+import 'oauth.dart';
+import 'tokens.dart' show pkceS256CodeChallenge, secureRandomToken;
+import 'users.dart' show authUsersDiffer, mergeAuthUser, resolveAuthAccountId;
+import 'verification_token_store.dart';
+
+/// Framework-specific auth callback context.
+typedef AuthContext = dynamic;
+
+/// {@template server_auth_provider_overview}
+/// Base metadata for a server auth provider.
+///
+/// Providers describe the authentication mechanism and the identifiers exposed
+/// by `AuthRoutes` at `/auth/providers`.
+/// {@endtemplate}
+///
+/// {@template server_auth_oauth_provider}
+/// OAuth 2.0 provider configuration.
+///
+/// ## Required fields
+/// - `id` and `name` are visible to clients.
+/// - `authorizationEndpoint` and `tokenEndpoint` power the OAuth handshake.
+/// - `profile` maps provider-specific profile data into an `AuthUser`.
+///
+/// ## Typed profiles
+/// - `profileParser` converts a raw profile map into a typed profile.
+/// - `profileSerializer` converts the typed profile back into a map for
+///   metadata storage.
+///
+/// ## Optional hooks
+/// - `onStateGenerated` lets you persist extra state tied to the OAuth flow.
+/// - `onProfile` lets you override the mapped user.
+/// - `profileRequest` can enrich the profile (for example, extra API calls).
+/// {@endtemplate}
+///
+/// {@template server_auth_email_provider}
+/// Email (magic link) provider configuration.
+///
+/// Provide `sendVerificationRequest` to send the token to the user. The
+/// provider uses `tokenExpiry` and `tokenGenerator` to manage verification.
+/// {@endtemplate}
+///
+/// {@template server_auth_credentials_provider}
+/// Credentials provider configuration.
+///
+/// Provide `authorize` to validate username/email/password input. When omitted,
+/// the `AuthAdapter.verifyCredentials` hook is used.
+///
+/// Provide `register` to create new users. When omitted, the
+/// `AuthAdapter.registerCredentials` hook is used.
+/// {@endtemplate}
+
+/// Supported provider kinds.
+///
+/// - [oauth] - Standard OAuth 2.0 authorization code flow.
+/// - [oidc] - OpenID Connect (extends OAuth 2.0 with identity layer).
+/// - [email] - Magic link / passwordless email authentication.
+/// - [credentials] - Username/password or custom credential authentication.
+/// - [webauthn] - Passkeys, biometric, and hardware key authentication.
+enum AuthProviderType {
+  /// Standard OAuth 2.0 authorization code flow.
+  oauth,
+
+  /// OpenID Connect (extends OAuth 2.0 with identity layer).
+  oidc,
+
+  /// Magic link / passwordless email authentication.
+  email,
+
+  /// Username/password or custom credential authentication.
+  credentials,
+
+  /// Passkeys, biometric, and hardware key authentication.
+  webauthn,
+}
+
+/// Maps a provider profile payload to an `AuthUser`.
+typedef AuthProfileMapper<TProfile extends Object> =
+    AuthUser Function(TProfile profile);
+
+/// Parses a raw OAuth profile payload into a typed profile.
+typedef OAuthProfileParser<TProfile extends Object> =
+    TProfile Function(Map<String, dynamic> profile);
+
+/// Serializes a typed profile into a JSON-friendly map.
+typedef OAuthProfileSerializer<TProfile extends Object> =
+    Map<String, dynamic> Function(TProfile profile);
+
+/// Called after OAuth state is generated.
+typedef OAuthStateCallback<TProfile extends Object> =
+    FutureOr<void> Function(
+      AuthContext context,
+      OAuthProvider<TProfile> provider,
+      String state,
+    );
+
+/// Called after the OAuth profile is loaded.
+typedef OAuthProfileCallback<TProfile extends Object> =
+    FutureOr<AuthUser?> Function(
+      AuthContext context,
+      OAuthProvider<TProfile> provider,
+      TProfile profile,
+    );
+
+/// Called to enrich or replace the OAuth profile data.
+typedef OAuthProfileRequest<TProfile extends Object> =
+    FutureOr<TProfile> Function(
+      AuthContext context,
+      OAuthProvider<TProfile> provider,
+      OAuthTokenResponse token,
+      http.Client httpClient,
+      TProfile profile,
+    );
+
+/// Custom userinfo request callback for providers that require non-standard
+/// userinfo fetching (e.g., POST instead of GET, custom headers, etc.).
+///
+/// Returns the raw profile data as a map. This is called instead of the
+/// default GET request to `userInfoEndpoint` when provided.
+typedef OAuthUserInfoRequest =
+    FutureOr<Map<String, dynamic>> Function(
+      OAuthTokenResponse token,
+      http.Client httpClient,
+      Uri endpoint,
+    );
+
+/// Sends a verification token for email flows.
+typedef EmailSendCallback =
+    FutureOr<void> Function(
+      AuthContext context,
+      EmailProvider provider,
+      AuthEmailRequest request,
+    );
+
+/// Authorizes credential-based sign-in.
+typedef CredentialsAuthorize =
+    FutureOr<AuthUser?> Function(
+      AuthContext context,
+      CredentialsProvider provider,
+      AuthCredentials credentials,
+    );
+
+/// Registers a new user from credential input.
+typedef CredentialsRegister =
+    FutureOr<AuthUser?> Function(
+      AuthContext context,
+      CredentialsProvider provider,
+      AuthCredentials credentials,
+    );
+
+/// Resolves credential sign-in via provider callback or adapter fallback.
+Future<AuthUser?> authorizeCredentialsSignIn({
+  required AuthAdapter adapter,
+  required CredentialsProvider provider,
+  required AuthContext context,
+  required AuthCredentials credentials,
+}) async {
+  if (provider.authorize != null) {
+    return Future.sync(
+      () => provider.authorize!(context, provider, credentials),
+    );
+  }
+  return Future.sync(() => adapter.verifyCredentials(credentials));
+}
+
+/// Resolves credential sign-in and throws [AuthFlowException] when rejected.
+Future<AuthUser> requireAuthorizedCredentialsSignIn({
+  required AuthAdapter adapter,
+  required CredentialsProvider provider,
+  required AuthContext context,
+  required AuthCredentials credentials,
+  String invalidCode = 'invalid_credentials',
+}) async {
+  final user = await authorizeCredentialsSignIn(
+    adapter: adapter,
+    provider: provider,
+    context: context,
+    credentials: credentials,
+  );
+  if (user == null) {
+    throw AuthFlowException(invalidCode);
+  }
+  return user;
+}
+
+/// Resolves credential registration via provider callback or adapter fallback.
+Future<AuthUser?> authorizeCredentialsRegistration({
+  required AuthAdapter adapter,
+  required CredentialsProvider provider,
+  required AuthContext context,
+  required AuthCredentials credentials,
+}) async {
+  if (provider.register != null) {
+    return Future.sync(
+      () => provider.register!(context, provider, credentials),
+    );
+  }
+  return Future.sync(() => adapter.registerCredentials(credentials));
+}
+
+/// Resolves credential registration and throws [AuthFlowException] when
+/// registration fails.
+Future<AuthUser> requireAuthorizedCredentialsRegistration({
+  required AuthAdapter adapter,
+  required CredentialsProvider provider,
+  required AuthContext context,
+  required AuthCredentials credentials,
+  String invalidCode = 'registration_failed',
+}) async {
+  final user = await authorizeCredentialsRegistration(
+    adapter: adapter,
+    provider: provider,
+    context: context,
+    credentials: credentials,
+  );
+  if (user == null) {
+    throw AuthFlowException(invalidCode);
+  }
+  return user;
+}
+
+/// {@macro server_auth_provider_overview}
+class AuthProvider {
+  const AuthProvider({
+    required this.id,
+    required this.name,
+    required this.type,
+  });
+
+  /// Provider identifier used in callback routes.
+  final String id;
+
+  /// Human-readable provider name.
+  final String name;
+
+  /// Provider category.
+  final AuthProviderType type;
+
+  /// Summary payload used by `/auth/providers`.
+  Map<String, dynamic> toJson() {
+    return {'id': id, 'name': name, 'type': type.name};
+  }
+}
+
+/// Resolves an auth provider by [id] from [providers].
+AuthProvider? resolveAuthProviderById(
+  Iterable<AuthProvider> providers,
+  String id,
+) {
+  final expected = id.trim();
+  if (expected.isEmpty) {
+    return null;
+  }
+  for (final provider in providers) {
+    if (provider.id == expected) {
+      return provider;
+    }
+  }
+  return null;
+}
+
+/// Resolves an auth provider by optional [id], returning `null` when absent.
+AuthProvider? resolveAuthProviderByOptionalId(
+  Iterable<AuthProvider> providers,
+  String? id,
+) {
+  if (id == null) {
+    return null;
+  }
+  return resolveAuthProviderById(providers, id);
+}
+
+/// Builds JSON-friendly provider summaries for `/auth/providers` responses.
+List<Map<String, dynamic>> authProviderSummaries(
+  Iterable<AuthProvider> providers,
+) {
+  return providers.map((provider) => provider.toJson()).toList(growable: false);
+}
+
+/// Merges [additional] providers into [base] by unique provider id.
+///
+/// Existing providers in [base] win collisions.
+List<AuthProvider> mergeAuthProvidersById(
+  Iterable<AuthProvider> base,
+  Iterable<AuthProvider> additional,
+) {
+  final merged = <AuthProvider>[...base];
+  final ids = merged.map((provider) => provider.id).toSet();
+  for (final provider in additional) {
+    if (!ids.contains(provider.id)) {
+      merged.add(provider);
+      ids.add(provider.id);
+    }
+  }
+  return merged;
+}
+
+/// Session key for provider OAuth state.
+String authProviderStateSessionKey(String stateKey, String providerId) {
+  return '$stateKey.$providerId';
+}
+
+/// Session key for provider PKCE verifier.
+String authProviderPkceSessionKey(String pkceKey, String providerId) {
+  return '$pkceKey.$providerId';
+}
+
+/// Session key for provider callback URL.
+String authProviderCallbackSessionKey(String callbackKey, String providerId) {
+  return '$callbackKey.$providerId';
+}
+
+/// Session key for email callback URL.
+String authEmailCallbackSessionKey(String callbackKey) {
+  return '$callbackKey.email';
+}
+
+/// OAuth callback session values loaded for a provider.
+class AuthOAuthCallbackSessionValues {
+  const AuthOAuthCallbackSessionValues({
+    required this.expectedState,
+    required this.codeVerifier,
+    required this.callbackUrl,
+  });
+
+  final String? expectedState;
+  final String? codeVerifier;
+  final String? callbackUrl;
+}
+
+/// Loads OAuth callback state/verifier/callback URL values from session.
+AuthOAuthCallbackSessionValues resolveOAuthCallbackSessionValues({
+  required String providerId,
+  required String stateKey,
+  required String pkceKey,
+  required String callbackKey,
+  required String? Function(String key) readSession,
+}) {
+  return AuthOAuthCallbackSessionValues(
+    expectedState: readSession(
+      authProviderStateSessionKey(stateKey, providerId),
+    ),
+    codeVerifier: readSession(authProviderPkceSessionKey(pkceKey, providerId)),
+    callbackUrl: readSession(
+      authProviderCallbackSessionKey(callbackKey, providerId),
+    ),
+  );
+}
+
+/// Ensures OAuth callback [receivedState] matches [expectedState].
+///
+/// Throws [AuthFlowException] with `invalid_state` when validation fails.
+void ensureOAuthStateMatches({
+  required String? expectedState,
+  required String? receivedState,
+}) {
+  if (expectedState == null || expectedState != receivedState) {
+    throw AuthFlowException('invalid_state');
+  }
+}
+
+/// Builds OAuth authorization query parameters for [provider].
+Map<String, String> buildOAuthAuthorizationParameters<TProfile extends Object>(
+  OAuthProvider<TProfile> provider, {
+  required String state,
+  String? codeChallenge,
+  String? callbackUrl,
+}) {
+  final codeChallengeMethod = codeChallenge == null ? null : 'S256';
+  final params = <String, String>{
+    'response_type': 'code',
+    'client_id': provider.clientId,
+    'redirect_uri': provider.redirectUri,
+    'state': state,
+    if (provider.scopes.isNotEmpty) 'scope': provider.scopes.join(' '),
+    'code_challenge': ?codeChallenge,
+    'code_challenge_method': ?codeChallengeMethod,
+    ...provider.authorizationParams,
+  };
+  if (callbackUrl != null && callbackUrl.isNotEmpty) {
+    params['callbackUrl'] = callbackUrl;
+  }
+  return params;
+}
+
+/// Prepared OAuth authorization start payload.
+class AuthOAuthAuthorizationStart {
+  const AuthOAuthAuthorizationStart({
+    required this.state,
+    this.codeVerifier,
+    this.codeChallenge,
+    required this.parameters,
+  });
+
+  final String state;
+  final String? codeVerifier;
+  final String? codeChallenge;
+  final Map<String, String> parameters;
+}
+
+/// Result of preparing OAuth authorization and persisted session values.
+class AuthOAuthAuthorizationResolution {
+  const AuthOAuthAuthorizationResolution({
+    required this.state,
+    this.codeVerifier,
+    this.codeChallenge,
+    required this.parameters,
+    required this.authorizationUri,
+  });
+
+  final String state;
+  final String? codeVerifier;
+  final String? codeChallenge;
+  final Map<String, String> parameters;
+  final Uri authorizationUri;
+}
+
+/// Prepares OAuth state, PKCE values, and authorization parameters.
+AuthOAuthAuthorizationStart prepareOAuthAuthorizationStart<
+  TProfile extends Object
+>(OAuthProvider<TProfile> provider, {String? callbackUrl}) {
+  final state = secureRandomToken();
+  String? verifier;
+  String? challenge;
+  if (provider.usePkce) {
+    verifier = secureRandomToken(length: 48);
+    challenge = pkceS256CodeChallenge(verifier);
+  }
+
+  return AuthOAuthAuthorizationStart(
+    state: state,
+    codeVerifier: verifier,
+    codeChallenge: challenge,
+    parameters: buildOAuthAuthorizationParameters(
+      provider,
+      state: state,
+      codeChallenge: challenge,
+      callbackUrl: callbackUrl,
+    ),
+  );
+}
+
+/// Prepares and persists OAuth authorization state for framework adapters.
+Future<AuthOAuthAuthorizationResolution>
+resolveOAuthAuthorizationStart<TContext, TProfile extends Object>({
+  required TContext context,
+  required OAuthProvider<TProfile> provider,
+  required String stateKey,
+  required String pkceKey,
+  required String callbackKey,
+  required void Function(String key, String value) writeSession,
+  String? callbackUrl,
+}) async {
+  final start = prepareOAuthAuthorizationStart(
+    provider,
+    callbackUrl: callbackUrl,
+  );
+
+  writeSession(authProviderStateSessionKey(stateKey, provider.id), start.state);
+
+  if (provider.onStateGenerated != null) {
+    await Future.sync(
+      () => provider.onStateGenerated!(context, provider, start.state),
+    );
+  }
+
+  if (start.codeVerifier != null) {
+    writeSession(
+      authProviderPkceSessionKey(pkceKey, provider.id),
+      start.codeVerifier!,
+    );
+  }
+
+  if (callbackUrl != null && callbackUrl.isNotEmpty) {
+    writeSession(
+      authProviderCallbackSessionKey(callbackKey, provider.id),
+      callbackUrl,
+    );
+  }
+
+  return AuthOAuthAuthorizationResolution(
+    state: start.state,
+    codeVerifier: start.codeVerifier,
+    codeChallenge: start.codeChallenge,
+    parameters: start.parameters,
+    authorizationUri: provider.authorizationEndpoint.replace(
+      queryParameters: start.parameters,
+    ),
+  );
+}
+
+/// Builds an [OAuth2Client] from provider metadata.
+OAuth2Client oauthClientForProvider<TProfile extends Object>(
+  OAuthProvider<TProfile> provider, {
+  http.Client? httpClient,
+}) {
+  return OAuth2Client(
+    tokenEndpoint: provider.tokenEndpoint,
+    clientId: provider.clientId,
+    clientSecret: provider.clientSecret,
+    httpClient: httpClient,
+    useBasicAuth: provider.useBasicAuth,
+  );
+}
+
+/// Exchanges an authorization code for provider tokens.
+Future<OAuthTokenResponse>
+exchangeOAuthAuthorizationCode<TProfile extends Object>(
+  OAuthProvider<TProfile> provider, {
+  required String code,
+  String? codeVerifier,
+  http.Client? httpClient,
+}) {
+  final scope = provider.scopes.isEmpty ? null : provider.scopes.join(' ');
+  return oauthClientForProvider(
+    provider,
+    httpClient: httpClient,
+  ).exchangeAuthorizationCode(
+    code: code,
+    redirectUri: Uri.parse(provider.redirectUri),
+    codeVerifier: codeVerifier,
+    scope: scope,
+    additionalParameters: provider.tokenParams.isEmpty
+        ? null
+        : provider.tokenParams,
+  );
+}
+
+/// Builds an [AuthAccount] from OAuth token/profile payloads.
+AuthAccount buildOAuthAuthAccount({
+  required String providerId,
+  required String providerAccountId,
+  required String userId,
+  required OAuthTokenResponse token,
+  required Map<String, dynamic> metadata,
+  DateTime? expiresAt,
+}) {
+  return AuthAccount(
+    providerId: providerId,
+    providerAccountId: providerAccountId,
+    userId: userId,
+    accessToken: token.accessToken,
+    refreshToken: token.refreshToken,
+    expiresAt: expiresAt,
+    metadata: metadata,
+  );
+}
+
+/// Consumes an email verification token from adapter or fallback store.
+Future<AuthVerificationToken?> consumeAuthVerificationToken({
+  required AuthAdapter adapter,
+  required AuthVerificationTokenStore tokenStore,
+  required String identifier,
+  required String token,
+}) async {
+  final fromAdapter = await Future.sync(
+    () => adapter.useVerificationToken(identifier, token),
+  );
+  if (fromAdapter != null) {
+    return fromAdapter;
+  }
+  return Future.sync(() => tokenStore.use(identifier, token));
+}
+
+/// Deletes existing verification tokens from adapter and fallback store.
+Future<void> clearAuthVerificationTokens({
+  required AuthAdapter adapter,
+  required AuthVerificationTokenStore tokenStore,
+  required String identifier,
+}) async {
+  await Future.sync(() => adapter.deleteVerificationTokens(identifier));
+  await Future.sync(() => tokenStore.delete(identifier));
+}
+
+/// Persists a verification token in adapter and fallback store.
+Future<void> persistAuthVerificationToken({
+  required AuthAdapter adapter,
+  required AuthVerificationTokenStore tokenStore,
+  required AuthVerificationToken verification,
+}) async {
+  await Future.sync(() => adapter.saveVerificationToken(verification));
+  await Future.sync(() => tokenStore.save(verification));
+}
+
+/// Prepared payload for email verification sign-in flows.
+class AuthEmailVerificationPayload {
+  const AuthEmailVerificationPayload({
+    required this.token,
+    required this.expiresAt,
+    required this.verification,
+    required this.request,
+    required this.pendingResult,
+  });
+
+  final String token;
+  final DateTime expiresAt;
+  final AuthVerificationToken verification;
+  final AuthEmailRequest request;
+  final AuthResult pendingResult;
+}
+
+/// Prepares token, request, and pending session payloads for email sign-in.
+AuthEmailVerificationPayload prepareAuthEmailVerificationPayload({
+  required EmailProvider provider,
+  required String email,
+  required String callbackUrl,
+  required AuthSessionStrategy sessionStrategy,
+  String Function()? generateToken,
+  DateTime? now,
+}) {
+  final tokenGenerator = provider.tokenGenerator ?? generateToken;
+  final token = tokenGenerator?.call() ?? secureRandomToken();
+  final current = now ?? DateTime.now();
+  final expiresAt = current.add(provider.tokenExpiry);
+  final verification = AuthVerificationToken(
+    identifier: email,
+    token: token,
+    expiresAt: expiresAt,
+  );
+  final request = AuthEmailRequest(
+    email: email,
+    token: token,
+    callbackUrl: callbackUrl,
+    expiresAt: expiresAt,
+  );
+  final session = AuthSession(
+    user: AuthUser(id: '', email: email),
+    expiresAt: expiresAt,
+    strategy: sessionStrategy,
+  );
+  return AuthEmailVerificationPayload(
+    token: token,
+    expiresAt: expiresAt,
+    verification: verification,
+    request: request,
+    pendingResult: AuthResult(user: session.user, session: session),
+  );
+}
+
+/// Result of resolving an email sign-in user.
+class AuthEmailUserResolution {
+  const AuthEmailUserResolution({required this.user, required this.isNewUser});
+
+  final AuthUser user;
+  final bool isNewUser;
+}
+
+/// Loads an existing user by [email] or creates a new record.
+Future<AuthEmailUserResolution> resolveAuthUserByEmailOrCreate({
+  required AuthAdapter adapter,
+  required String email,
+}) async {
+  final existing = await Future.sync(() => adapter.getUserByEmail(email));
+  if (existing != null) {
+    return AuthEmailUserResolution(user: existing, isNewUser: false);
+  }
+  final created = await Future.sync(
+    () => adapter.createUser(AuthUser(id: email, email: email)),
+  );
+  return AuthEmailUserResolution(user: created, isNewUser: true);
+}
+
+/// Starts an email verification sign-in flow and dispatches the provider
+/// verification request.
+Future<AuthEmailVerificationPayload> startAuthEmailSignIn<TContext>({
+  required AuthAdapter adapter,
+  required AuthVerificationTokenStore tokenStore,
+  required EmailProvider provider,
+  required TContext context,
+  required String email,
+  required String callbackUrl,
+  required AuthSessionStrategy sessionStrategy,
+  String Function()? generateToken,
+  void Function(String key, String value)? writeSession,
+  String? callbackKey,
+  DateTime? now,
+}) async {
+  await clearAuthVerificationTokens(
+    adapter: adapter,
+    tokenStore: tokenStore,
+    identifier: email,
+  );
+
+  final payload = prepareAuthEmailVerificationPayload(
+    provider: provider,
+    email: email,
+    callbackUrl: callbackUrl,
+    sessionStrategy: sessionStrategy,
+    generateToken: generateToken,
+    now: now,
+  );
+
+  if (writeSession != null && callbackKey != null && callbackUrl.isNotEmpty) {
+    writeSession(authEmailCallbackSessionKey(callbackKey), callbackUrl);
+  }
+
+  await persistAuthVerificationToken(
+    adapter: adapter,
+    tokenStore: tokenStore,
+    verification: payload.verification,
+  );
+  await Future.sync(
+    () => provider.sendVerificationRequest(context, provider, payload.request),
+  );
+
+  return payload;
+}
+
+/// Result of resolving an email verification callback into sign-in payloads.
+class AuthEmailVerificationSignInResolution {
+  const AuthEmailVerificationSignInResolution({
+    required this.user,
+    required this.isNewUser,
+    required this.callbackUrl,
+  });
+
+  final AuthUser user;
+  final bool isNewUser;
+  final String? callbackUrl;
+}
+
+/// Resolves an email verification callback token into sign-in user data.
+///
+/// Returns `null` when the token cannot be consumed.
+Future<AuthEmailVerificationSignInResolution?>
+resolveAuthEmailVerificationSignIn({
+  required AuthAdapter adapter,
+  required AuthVerificationTokenStore tokenStore,
+  required String email,
+  required String token,
+  String? callbackKey,
+  String? Function(String key)? readSession,
+}) async {
+  final consumed = await consumeAuthVerificationToken(
+    adapter: adapter,
+    tokenStore: tokenStore,
+    identifier: email,
+    token: token,
+  );
+  if (consumed == null) {
+    return null;
+  }
+
+  final userResolution = await resolveAuthUserByEmailOrCreate(
+    adapter: adapter,
+    email: email,
+  );
+  final callbackUrl = callbackKey == null || readSession == null
+      ? null
+      : readSession(authEmailCallbackSessionKey(callbackKey));
+
+  return AuthEmailVerificationSignInResolution(
+    user: userResolution.user,
+    isNewUser: userResolution.isNewUser,
+    callbackUrl: callbackUrl,
+  );
+}
+
+/// Loads a provider profile from userinfo or an ID token payload.
+Future<Map<String, dynamic>> loadOAuthProfile<TProfile extends Object>(
+  OAuthProvider<TProfile> provider, {
+  required OAuthTokenResponse token,
+  required http.Client httpClient,
+}) async {
+  if (provider.userInfoEndpoint == null) {
+    final idToken = token.raw['id_token']?.toString();
+    if (idToken != null && idToken.isNotEmpty) {
+      final jwt = JsonWebToken.unverified(idToken);
+      return jwt.claims.toJson();
+    }
+    return <String, dynamic>{};
+  }
+
+  if (provider.userInfoRequest != null) {
+    try {
+      return await Future.sync(
+        () => provider.userInfoRequest!(
+          token,
+          httpClient,
+          provider.userInfoEndpoint!,
+        ),
+      );
+    } catch (_) {
+      throw AuthFlowException('userinfo_failed');
+    }
+  }
+
+  try {
+    return await oauthClientForProvider(
+      provider,
+      httpClient: httpClient,
+    ).fetchUserInfo(provider.userInfoEndpoint!, token.accessToken);
+  } on OAuth2Exception {
+    throw AuthFlowException('userinfo_failed');
+  }
+}
+
+/// Result of resolving an OAuth-mapped user against persisted identities.
+class AuthOAuthUserResolution {
+  const AuthOAuthUserResolution({
+    required this.user,
+    required this.isNewUser,
+    required this.userUpdated,
+  });
+
+  final AuthUser user;
+  final bool isNewUser;
+  final bool userUpdated;
+}
+
+/// Result of resolving provider OAuth callback data into auth sign-in payloads.
+class AuthOAuthSignInResolution {
+  const AuthOAuthSignInResolution({
+    required this.user,
+    required this.isNewUser,
+    required this.userUpdated,
+    required this.account,
+    required this.profile,
+  });
+
+  final AuthUser user;
+  final bool isNewUser;
+  final bool userUpdated;
+  final AuthAccount account;
+  final Map<String, dynamic> profile;
+}
+
+/// Result of resolving an OAuth callback into sign-in payloads and callback
+/// redirect metadata.
+class AuthOAuthCallbackSignInResolution {
+  const AuthOAuthCallbackSignInResolution({
+    required this.signIn,
+    required this.callbackUrl,
+  });
+
+  final AuthOAuthSignInResolution signIn;
+  final String? callbackUrl;
+}
+
+/// Resolves OAuth-mapped users against existing account/email records.
+Future<AuthOAuthUserResolution> resolveOAuthUserForAccount({
+  required AuthAdapter adapter,
+  required String providerId,
+  required String accountId,
+  required AuthUser mappedUser,
+}) async {
+  final existingAccount = await Future.sync(
+    () => adapter.getAccount(providerId, accountId),
+  );
+
+  var resolvedUser = mappedUser;
+  var isNewUser = false;
+  var userUpdated = false;
+
+  if (existingAccount != null && existingAccount.userId != null) {
+    final byId = await Future.sync(
+      () => adapter.getUserById(existingAccount.userId!),
+    );
+    if (byId != null) {
+      resolvedUser = byId;
+    }
+  }
+
+  final email = resolvedUser.email;
+  if (email != null) {
+    final byEmail = await Future.sync(() => adapter.getUserByEmail(email));
+    if (byEmail != null) {
+      resolvedUser = byEmail;
+    }
+  }
+
+  if (resolvedUser.id.isEmpty) {
+    resolvedUser = await Future.sync(() => adapter.createUser(resolvedUser));
+    isNewUser = true;
+  } else {
+    final mergedUser = mergeAuthUser(resolvedUser, mappedUser);
+    if (authUsersDiffer(resolvedUser, mergedUser)) {
+      final stored = await Future.sync(() => adapter.updateUser(mergedUser));
+      resolvedUser = stored ?? mergedUser;
+      userUpdated = true;
+    }
+  }
+
+  return AuthOAuthUserResolution(
+    user: resolvedUser,
+    isNewUser: isNewUser,
+    userUpdated: userUpdated,
+  );
+}
+
+/// Resolves OAuth callback payloads into user/account/profile sign-in data.
+Future<AuthOAuthSignInResolution>
+resolveOAuthSignInForProvider<TContext, TProfile extends Object>({
+  required AuthAdapter adapter,
+  required TContext context,
+  required OAuthProvider<TProfile> provider,
+  required String code,
+  String? codeVerifier,
+  required http.Client httpClient,
+  String Function()? fallbackAccountId,
+}) async {
+  final tokenResponse = await exchangeOAuthAuthorizationCode(
+    provider,
+    code: code,
+    codeVerifier: codeVerifier,
+    httpClient: httpClient,
+  );
+
+  final rawProfile = await loadOAuthProfile(
+    provider,
+    token: tokenResponse,
+    httpClient: httpClient,
+  );
+  final parsedProfile = provider.parseProfile(rawProfile);
+  final enrichedProfile = await Future.sync(
+    () => provider.enrichProfile(
+      context,
+      tokenResponse,
+      httpClient,
+      parsedProfile,
+    ),
+  );
+  final mappedUser = provider.mapProfile(enrichedProfile);
+  final overrideUser = await Future.sync(
+    () => provider.overrideProfile(context, enrichedProfile),
+  );
+  final user = overrideUser ?? mappedUser;
+  final profileMap = provider.serializeProfile(enrichedProfile);
+  final accountId = resolveAuthAccountId(
+    profileMap,
+    user,
+    fallbackId: fallbackAccountId ?? secureRandomToken,
+  );
+  final accountExpiresAt = oauthTokenExpiryFromSeconds(tokenResponse.expiresIn);
+
+  final userResolution = await resolveOAuthUserForAccount(
+    adapter: adapter,
+    providerId: provider.id,
+    accountId: accountId,
+    mappedUser: user,
+  );
+
+  final account = buildOAuthAuthAccount(
+    providerId: provider.id,
+    providerAccountId: accountId,
+    userId: userResolution.user.id,
+    token: tokenResponse,
+    expiresAt: accountExpiresAt,
+    metadata: profileMap,
+  );
+
+  return AuthOAuthSignInResolution(
+    user: userResolution.user,
+    isNewUser: userResolution.isNewUser,
+    userUpdated: userResolution.userUpdated,
+    account: account,
+    profile: profileMap,
+  );
+}
+
+/// Resolves a full OAuth callback flow including state validation and account
+/// linking.
+Future<AuthOAuthCallbackSignInResolution>
+resolveOAuthCallbackSignInForProvider<TContext, TProfile extends Object>({
+  required AuthAdapter adapter,
+  required TContext context,
+  required OAuthProvider<TProfile> provider,
+  required String code,
+  required String? receivedState,
+  required String stateKey,
+  required String pkceKey,
+  required String callbackKey,
+  required String? Function(String key) readSession,
+  required http.Client httpClient,
+  String Function()? fallbackAccountId,
+}) async {
+  final sessionValues = resolveOAuthCallbackSessionValues(
+    providerId: provider.id,
+    stateKey: stateKey,
+    pkceKey: pkceKey,
+    callbackKey: callbackKey,
+    readSession: readSession,
+  );
+  ensureOAuthStateMatches(
+    expectedState: sessionValues.expectedState,
+    receivedState: receivedState,
+  );
+
+  final signIn = await resolveOAuthSignInForProvider<TContext, TProfile>(
+    adapter: adapter,
+    context: context,
+    provider: provider,
+    code: code,
+    codeVerifier: sessionValues.codeVerifier,
+    httpClient: httpClient,
+    fallbackAccountId: fallbackAccountId,
+  );
+
+  await Future.sync(() => adapter.linkAccount(signIn.account));
+
+  return AuthOAuthCallbackSignInResolution(
+    signIn: signIn,
+    callbackUrl: sessionValues.callbackUrl,
+  );
+}
+
+/// {@macro server_auth_oauth_provider}
+class OAuthProvider<TProfile extends Object> extends AuthProvider {
+  OAuthProvider({
+    required super.id,
+    required super.name,
+    required this.clientId,
+    required this.clientSecret,
+    required this.authorizationEndpoint,
+    required this.tokenEndpoint,
+    required this.profile,
+    required this.redirectUri,
+    super.type = AuthProviderType.oauth,
+    this.userInfoEndpoint,
+    this.userInfoRequest,
+    this.scopes = const <String>[],
+    this.authorizationParams = const <String, String>{},
+    this.tokenParams = const <String, String>{},
+    this.usePkce = true,
+    this.useBasicAuth = true,
+    this.profileParser,
+    this.profileSerializer,
+    this.onStateGenerated,
+    this.onProfile,
+    this.profileRequest,
+  });
+
+  /// OAuth client identifier.
+  final String clientId;
+
+  /// OAuth client secret.
+  final String clientSecret;
+
+  /// Authorization endpoint for the provider.
+  final Uri authorizationEndpoint;
+
+  /// Token exchange endpoint for the provider.
+  final Uri tokenEndpoint;
+
+  /// Userinfo endpoint (optional if ID token contains claims).
+  final Uri? userInfoEndpoint;
+
+  /// Custom userinfo request callback for providers that require non-standard
+  /// userinfo fetching (e.g., POST instead of GET).
+  ///
+  /// When provided alongside `userInfoEndpoint`, this callback is used instead
+  /// of the default GET request. This is useful for providers like Dropbox
+  /// that require POST requests to their userinfo endpoint.
+  final OAuthUserInfoRequest? userInfoRequest;
+
+  /// OAuth scopes to request.
+  final List<String> scopes;
+
+  /// Extra authorization parameters appended to the request.
+  final Map<String, String> authorizationParams;
+
+  /// Extra token request parameters appended to the exchange.
+  final Map<String, String> tokenParams;
+
+  /// Enables PKCE for the authorization code flow.
+  final bool usePkce;
+
+  /// Uses HTTP basic auth for the token exchange.
+  final bool useBasicAuth;
+
+  /// Converts raw profile payloads to typed profiles.
+  final OAuthProfileParser<TProfile>? profileParser;
+
+  /// Converts typed profiles to JSON-friendly maps.
+  final OAuthProfileSerializer<TProfile>? profileSerializer;
+
+  /// Maps the provider profile payload into an `AuthUser`.
+  final AuthProfileMapper<TProfile> profile;
+
+  /// Redirect URI registered with the provider.
+  final String redirectUri;
+
+  /// Optional hook for custom state handling.
+  final OAuthStateCallback<TProfile>? onStateGenerated;
+
+  /// Optional hook for profile overrides.
+  final OAuthProfileCallback<TProfile>? onProfile;
+
+  /// Optional hook to enrich profile payloads with extra API calls.
+  final OAuthProfileRequest<TProfile>? profileRequest;
+
+  /// Parses the raw profile response into the typed profile.
+  TProfile parseProfile(Map<String, dynamic> profile) {
+    if (profileParser != null) {
+      return profileParser!(profile);
+    }
+    return profile as TProfile;
+  }
+
+  /// Serializes the typed profile into a JSON-friendly map.
+  Map<String, dynamic> serializeProfile(TProfile profile) {
+    if (profileSerializer != null) {
+      return profileSerializer!(profile);
+    }
+    if (profile is Map<String, dynamic>) {
+      return profile;
+    }
+    return <String, dynamic>{};
+  }
+
+  /// Maps the typed profile into an `AuthUser`.
+  AuthUser mapProfile(TProfile profile) => this.profile(profile);
+
+  /// Runs the optional profile override hook.
+  FutureOr<AuthUser?> overrideProfile(AuthContext context, TProfile profile) {
+    if (onProfile == null) {
+      return null;
+    }
+    return onProfile!(context, this, profile);
+  }
+
+  /// Runs the optional profile enrichment hook.
+  FutureOr<TProfile> enrichProfile(
+    AuthContext context,
+    OAuthTokenResponse token,
+    http.Client httpClient,
+    TProfile profile,
+  ) {
+    if (profileRequest == null) {
+      return profile;
+    }
+    return profileRequest!(context, this, token, httpClient, profile);
+  }
+}
+
+/// {@macro server_auth_email_provider}
+class EmailProvider extends AuthProvider {
+  EmailProvider({
+    super.id = 'email',
+    super.name = 'Email',
+    required this.sendVerificationRequest,
+    this.tokenExpiry = const Duration(minutes: 15),
+    this.tokenGenerator,
+  }) : super(type: AuthProviderType.email);
+
+  /// Sends the verification email (or other delivery mechanism).
+  final EmailSendCallback sendVerificationRequest;
+
+  /// Expiration window for the verification token.
+  final Duration tokenExpiry;
+
+  /// Custom token generator. Defaults to a secure random token.
+  final String Function()? tokenGenerator;
+}
+
+/// {@macro server_auth_credentials_provider}
+class CredentialsProvider extends AuthProvider {
+  CredentialsProvider({
+    super.id = 'credentials',
+    super.name = 'Credentials',
+    this.authorize,
+    this.register,
+  }) : super(type: AuthProviderType.credentials);
+
+  /// Custom authorization callback for credentials.
+  final CredentialsAuthorize? authorize;
+
+  /// Custom registration callback for credentials.
+  final CredentialsRegister? register;
+}
+
+/// Email verification payload shared with provider callbacks.
+class AuthEmailRequest {
+  AuthEmailRequest({
+    required this.email,
+    required this.token,
+    required this.callbackUrl,
+    required this.expiresAt,
+  });
+
+  /// User email address.
+  final String email;
+
+  /// Verification token.
+  final String token;
+
+  /// Callback URL to complete the sign-in.
+  final String callbackUrl;
+
+  /// Expiration timestamp for the token.
+  final DateTime expiresAt;
+}
+
+/// Relying party configuration for WebAuthn.
+///
+/// The relying party represents your application/domain to the authenticator.
+class WebAuthnRelyingParty {
+  const WebAuthnRelyingParty({
+    required this.id,
+    required this.name,
+    required this.origin,
+  });
+
+  /// Relying party ID (typically the domain name).
+  final String id;
+
+  /// Human-readable name of the relying party.
+  final String name;
+
+  /// Origin URL (protocol + domain).
+  final String origin;
+}
+
+/// Authenticator device stored for a user.
+class WebAuthnAuthenticator {
+  const WebAuthnAuthenticator({
+    required this.credentialId,
+    required this.publicKey,
+    required this.counter,
+    this.userId,
+    this.transports,
+    this.createdAt,
+    this.lastUsedAt,
+    this.name,
+  });
+
+  /// Unique credential identifier.
+  final String credentialId;
+
+  /// COSE public key bytes (base64 encoded).
+  final String publicKey;
+
+  /// Signature counter for replay protection.
+  final int counter;
+
+  /// Associated user ID.
+  final String? userId;
+
+  /// Supported transports (usb, nfc, ble, internal).
+  final List<String>? transports;
+
+  /// When the authenticator was registered.
+  final DateTime? createdAt;
+
+  /// When the authenticator was last used.
+  final DateTime? lastUsedAt;
+
+  /// Optional friendly name for the authenticator.
+  final String? name;
+
+  Map<String, dynamic> toJson() => {
+    'credential_id': credentialId,
+    'public_key': publicKey,
+    'counter': counter,
+    'user_id': userId,
+    'transports': transports,
+    'created_at': createdAt?.toIso8601String(),
+    'last_used_at': lastUsedAt?.toIso8601String(),
+    'name': name,
+  };
+
+  factory WebAuthnAuthenticator.fromJson(Map<String, dynamic> json) {
+    return WebAuthnAuthenticator(
+      credentialId: json['credential_id']?.toString() ?? '',
+      publicKey: json['public_key']?.toString() ?? '',
+      counter: json['counter'] as int? ?? 0,
+      userId: json['user_id']?.toString(),
+      transports: (json['transports'] as List?)?.cast<String>(),
+      createdAt: json['created_at'] != null
+          ? DateTime.parse(json['created_at'].toString())
+          : null,
+      lastUsedAt: json['last_used_at'] != null
+          ? DateTime.parse(json['last_used_at'].toString())
+          : null,
+      name: json['name']?.toString(),
+    );
+  }
+}
+
+/// Callback to retrieve user info for WebAuthn registration/authentication.
+typedef WebAuthnGetUserInfo =
+    FutureOr<WebAuthnUserInfo?> Function(
+      AuthContext context,
+      WebAuthnProvider provider,
+      Map<String, dynamic> request,
+    );
+
+/// Callback to get the relying party configuration.
+typedef WebAuthnGetRelyingParty =
+    WebAuthnRelyingParty Function(
+      AuthContext context,
+      WebAuthnProvider provider,
+    );
+
+/// User info returned by WebAuthn getUserInfo callback.
+class WebAuthnUserInfo {
+  const WebAuthnUserInfo({required this.user, required this.exists});
+
+  /// The user (new or existing).
+  final AuthUser user;
+
+  /// Whether the user already exists in the database.
+  final bool exists;
+}
+
+/// {@template server_auth_webauthn_provider}
+/// WebAuthn (Passkey) provider configuration.
+///
+/// Enables passwordless authentication using passkeys, biometrics, and
+/// hardware security keys following the WebAuthn standard.
+///
+/// ## Required callbacks
+/// - [getUserInfo] retrieves user information for registration/authentication.
+/// - [getRelyingParty] returns the relying party (domain) configuration.
+///
+/// ## Configuration
+/// - [timeout] controls the authentication ceremony timeout.
+/// - [enableConditionalUI] enables autofill-assisted sign-in.
+/// - [formFields] defines fields shown in the default sign-in form.
+/// {@endtemplate}
+class WebAuthnProvider extends AuthProvider {
+  WebAuthnProvider({
+    super.id = 'webauthn',
+    super.name = 'Passkey',
+    required this.getUserInfo,
+    required this.getRelyingParty,
+    this.timeout = const Duration(minutes: 5),
+    this.enableConditionalUI = true,
+    this.formFields = const {
+      'email': WebAuthnFormField(label: 'Email', required: true),
+    },
+    this.registrationOptions = const WebAuthnRegistrationOptions(),
+    this.authenticationOptions = const WebAuthnAuthenticationOptions(),
+  }) : super(type: AuthProviderType.webauthn);
+
+  /// Retrieves user info for the WebAuthn ceremony.
+  final WebAuthnGetUserInfo getUserInfo;
+
+  /// Returns the relying party configuration.
+  final WebAuthnGetRelyingParty getRelyingParty;
+
+  /// Timeout for WebAuthn ceremonies.
+  final Duration timeout;
+
+  /// Whether to enable conditional UI (autofill-assisted passkeys).
+  final bool enableConditionalUI;
+
+  /// Form fields displayed in the default sign-in form.
+  final Map<String, WebAuthnFormField> formFields;
+
+  /// Registration-specific options.
+  final WebAuthnRegistrationOptions registrationOptions;
+
+  /// Authentication-specific options.
+  final WebAuthnAuthenticationOptions authenticationOptions;
+}
+
+/// Form field configuration for WebAuthn sign-in forms.
+class WebAuthnFormField {
+  const WebAuthnFormField({
+    this.label,
+    this.required = false,
+    this.type = 'text',
+    this.autocomplete,
+  });
+
+  /// Label shown in the form.
+  final String? label;
+
+  /// Whether the field is required.
+  final bool required;
+
+  /// HTML input type.
+  final String type;
+
+  /// Autocomplete attribute value.
+  final String? autocomplete;
+}
+
+/// Options for WebAuthn registration ceremonies.
+class WebAuthnRegistrationOptions {
+  const WebAuthnRegistrationOptions({
+    this.attestation = 'none',
+    this.authenticatorSelection,
+    this.excludeCredentials = true,
+  });
+
+  /// Attestation conveyance preference (none, indirect, direct).
+  final String attestation;
+
+  /// Authenticator selection criteria.
+  final WebAuthnAuthenticatorSelection? authenticatorSelection;
+
+  /// Whether to exclude existing credentials during registration.
+  final bool excludeCredentials;
+}
+
+/// Options for WebAuthn authentication ceremonies.
+class WebAuthnAuthenticationOptions {
+  const WebAuthnAuthenticationOptions({this.userVerification = 'preferred'});
+
+  /// User verification requirement (required, preferred, discouraged).
+  final String userVerification;
+}
+
+/// Authenticator selection criteria for registration.
+class WebAuthnAuthenticatorSelection {
+  const WebAuthnAuthenticatorSelection({
+    this.authenticatorAttachment,
+    this.residentKey = 'preferred',
+    this.userVerification = 'preferred',
+  });
+
+  /// Attachment type (platform, cross-platform).
+  final String? authenticatorAttachment;
+
+  /// Resident key requirement (required, preferred, discouraged).
+  final String residentKey;
+
+  /// User verification requirement.
+  final String userVerification;
+}
+
+/// Result from a custom callback provider's handleCallback method.
+class CallbackResult {
+  const CallbackResult({required this.user, this.redirect, this.error});
+
+  /// Successfully authenticated user.
+  final AuthUser? user;
+
+  /// Optional redirect URL after authentication.
+  final String? redirect;
+
+  /// Error message if authentication failed.
+  final String? error;
+
+  /// Creates a successful result.
+  const CallbackResult.success(AuthUser this.user, {this.redirect})
+    : error = null;
+
+  /// Creates an error result.
+  const CallbackResult.failure(String this.error)
+    : user = null,
+      redirect = null;
+
+  /// Whether authentication succeeded.
+  bool get isSuccess => user != null && error == null;
+}
+
+/// Mixin for auth providers that handle custom callback flows.
+///
+/// Implement this mixin on custom providers (like Telegram) that don't follow
+/// standard OAuth or email flows. The [handleCallback] method will be called
+/// by [AuthRoutes] when the callback URL is accessed.
+///
+/// ## Example
+///
+/// ```dart
+/// class TelegramProvider extends AuthProvider with CallbackProvider {
+///   @override
+///   Future<CallbackResult> handleCallback(
+///     AuthContext ctx,
+///     Map<String, String> params,
+///   ) async {
+///     // Verify HMAC signature from Telegram
+///     final profile = verifyAndParseCallback(params);
+///     final user = mapProfile(profile);
+///     return CallbackResult.success(user, redirect: '/profile');
+///   }
+/// }
+/// ```
+mixin CallbackProvider on AuthProvider {
+  /// Handles the callback request from the external provider.
+  ///
+  /// [ctx] is the engine context for the request.
+  /// [params] contains query parameters from the callback URL.
+  ///
+  /// Returns a [CallbackResult] with either the authenticated user
+  /// or an error message.
+  FutureOr<CallbackResult> handleCallback(
+    AuthContext ctx,
+    Map<String, String> params,
+  );
+}

@@ -1,10 +1,8 @@
 import 'package:routed/src/cache/cache_manager.dart';
 import 'dart:async';
 
-import 'package:routed/src/contracts/cache/repository.dart';
-import 'package:routed/src/contracts/cache/store.dart';
-import 'package:routed/src/rate_limit/backend.dart';
-import 'package:routed/src/rate_limit/policy.dart';
+import 'package:server_contracts/server_contracts.dart' show Repository, Store;
+import 'package:server_data/rate_limit.dart';
 import 'package:test/test.dart';
 
 void main() {

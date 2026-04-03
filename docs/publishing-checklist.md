@@ -16,21 +16,31 @@ dart pub publish --dry-run
 ```
 
 Packages:
-1. `packages/server_testing/server_testing`
-2. `packages/server_testing/server_testing_shelf`
-3. `packages/routed`
-4. `packages/server_testing/routed_testing`
-5. `packages/property_testing`
-6. `packages/routed_cli`
+1. `packages/server_contracts`
+2. `packages/server_data`
+3. `packages/server_auth`
+4. `packages/server_testing/server_testing`
+5. `packages/server_testing/server_testing_shelf`
+6. `packages/routed`
+7. `packages/server_testing/routed_testing`
+8. `packages/property_testing`
+
+Notes:
+- `routed` now depends on `server_contracts`, `server_data`, and `server_auth`.
+  Dry-run for `routed` will fail until those three packages are published.
+- There is no standalone `packages/routed_cli`; the CLI is shipped by the
+  `routed` package executable.
 
 ## Publish Order
 When you are ready to publish for real, follow the dependency-aware order:
-1. `server_testing`
-2. `server_testing_shelf`
-3. `routed`
-4. `routed_testing`
-5. `property_testing`
-6. `routed_cli`
+1. `server_contracts`
+2. `server_data`
+3. `server_auth`
+4. `server_testing`
+5. `server_testing_shelf`
+6. `routed`
+7. `routed_testing`
+8. `property_testing`
 
 Publish each package from its directory with:
 

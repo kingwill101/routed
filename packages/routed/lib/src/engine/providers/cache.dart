@@ -2,14 +2,16 @@ import 'dart:async';
 
 import 'package:routed/src/cache/cache_manager.dart';
 import 'package:routed/src/container/container.dart';
-import 'package:routed/src/contracts/contracts.dart' show Config;
+import 'package:routed/src/contracts/config/config.dart' show Config;
 import 'package:routed/src/config/specs/cache.dart';
 import 'package:routed/src/events/event_manager.dart';
 import 'package:routed/src/provider/provider.dart';
 
 /// Provides cache infrastructure and default configuration hooks.
 class CacheServiceProvider extends ServiceProvider with ProvidesDefaultConfig {
-  static const CacheConfigSpec spec = CacheConfigSpec();
+  static const CacheConfigSpec spec = CacheConfigSpec(
+    driverDocumentationBuilder: CacheManager.driverDocumentation,
+  );
   CacheManager? _managedManager;
   bool _ownsManagedManager = false;
 

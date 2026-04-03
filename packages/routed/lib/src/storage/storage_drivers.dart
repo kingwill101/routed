@@ -1,9 +1,7 @@
 import 'package:routed/src/container/container.dart';
 import 'package:routed/src/provider/provider.dart';
-import 'package:routed/src/storage/storage_manager.dart';
+import 'package:server_data/storage.dart';
 import 'package:routed/src/support/driver_registry.dart';
-
-export 'local_storage_driver.dart' show LocalStorageDisk;
 
 /// A function that builds a [StorageDisk] using the provided [StorageDriverContext].
 typedef StorageDiskBuilder = StorageDisk Function(StorageDriverContext context);

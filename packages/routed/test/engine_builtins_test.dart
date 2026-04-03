@@ -1,4 +1,5 @@
 import 'package:routed/routed.dart';
+import 'package:routed/providers.dart' show ProviderRegistry;
 import 'package:test/test.dart';
 
 void main() {
@@ -6,8 +7,11 @@ void main() {
     test('returns all built-in providers', () {
       final providers = Engine.builtins;
 
-      // Should have all registered providers (currently 16)
-      expect(providers.length, greaterThanOrEqualTo(16));
+      // Builtins should mirror the provider registry exactly.
+      expect(
+        providers.length,
+        equals(ProviderRegistry.instance.registrations.length),
+      );
 
       // Verify core providers are included
       expect(

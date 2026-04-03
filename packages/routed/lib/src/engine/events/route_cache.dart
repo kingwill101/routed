@@ -1,6 +1,1 @@
-import 'package:routed/src/events/event.dart';
-
-/// Event emitted when route cache should be rebuilt.
-final class RouteCacheInvalidatedEvent extends Event {
-  RouteCacheInvalidatedEvent() : super();
-}
+export 'package:routed_core/routed_core.dart' show RouteCacheInvalidatedEvent;

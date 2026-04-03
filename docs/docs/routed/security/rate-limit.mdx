@@ -136,7 +136,7 @@ You can inject `RateLimitService` to run bespoke checks in handlers:
 ```dart
 import 'dart:io';
 
-import 'package:routed/src/rate_limit/service.dart';
+import 'package:server_data/rate_limit.dart';
 
 final service = container.get<RateLimitService>();
 final outcome = await service.check(ctx.request);
