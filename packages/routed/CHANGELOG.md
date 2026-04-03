@@ -1,3 +1,6 @@
+## 0.3.4
+
+  - bump jose + artisanal dependencies
 ## 0.3.3
 
 ### Configuration
