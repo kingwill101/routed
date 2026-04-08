@@ -73,6 +73,9 @@ NativeProxyServer _startNativeDirectProxy({
 }) {
   final nativeDirectStreams = <int, _NativeDirectRequestStreamState>{};
   late final NativeProxyServer proxyRef;
+  var proxyAssigned = false;
+  var drainQueuedFramesScheduled = false;
+  var drainWakeRequested = false;
 
   void processRequestFrame(int requestId, Uint8List requestPayload) {
     final proxy = proxyRef;
@@ -419,58 +422,64 @@ NativeProxyServer _startNativeDirectProxy({
     }());
   }
 
-  Future<void> drainQueuedRequestFrames() async {
-    var idleDelay = const Duration(milliseconds: 1);
-    const minIdleDelay = Duration(milliseconds: 1);
-    const maxIdleDelayNoStreams = Duration(milliseconds: 20);
-    const maxIdleDelayWithStreams = Duration(milliseconds: 5);
-    const maxFramesPerTurn = 32;
-
-    outerLoop:
-    while (!proxyRef.isClosed) {
-      var drainedFrames = 0;
-      while (!proxyRef.isClosed && drainedFrames < maxFramesPerTurn) {
-        NativeDirectRequestFrame? frame;
-        try {
-          frame = proxyRef.pollDirectRequestFrame(timeoutMs: 0);
-        } catch (error, stack) {
-          stderr.writeln(
-            '[server_native] native direct poll failed: $error\n$stack',
-          );
-          if (proxyRef.isClosed) {
-            break outerLoop;
-          }
-          idleDelay = maxIdleDelayNoStreams;
-          await Future<void>.delayed(idleDelay);
-          continue outerLoop;
-        }
-
-        if (frame == null) {
-          break;
-        }
-
-        idleDelay = minIdleDelay;
-        processRequestFrame(frame.requestId, frame.payload);
-        drainedFrames++;
-      }
-
-      if (drainedFrames != 0) {
-        // Draining short bursts keeps callback mode responsive without paying
-        // an event-queue yield for every single request frame.
-        await Future<void>.delayed(Duration.zero);
-        continue;
-      }
-
-      await Future<void>.delayed(idleDelay);
-      final maxIdleDelay = nativeDirectStreams.isEmpty
-          ? maxIdleDelayNoStreams
-          : maxIdleDelayWithStreams;
-      final nextMicros =
-          idleDelay.inMicroseconds >= maxIdleDelay.inMicroseconds
-          ? maxIdleDelay.inMicroseconds
-          : idleDelay.inMicroseconds * 2;
-      idleDelay = Duration(microseconds: nextMicros);
+  void scheduleDrainQueuedRequestFrames() {
+    drainWakeRequested = true;
+    if (!proxyAssigned || drainQueuedFramesScheduled || proxyRef.isClosed) {
+      return;
     }
+    drainQueuedFramesScheduled = true;
+    unawaited(() async {
+      const retryDelayAfterPollError = Duration(milliseconds: 1);
+      const maxFramesPerTurn = 32;
+
+      try {
+        while (!proxyRef.isClosed) {
+          drainWakeRequested = false;
+          var drainedFrames = 0;
+          while (!proxyRef.isClosed && drainedFrames < maxFramesPerTurn) {
+            NativeDirectRequestFrame? frame;
+            try {
+              frame = proxyRef.pollDirectRequestFrame(timeoutMs: 0);
+            } catch (error, stack) {
+              stderr.writeln(
+                '[server_native] native direct poll failed: $error\n$stack',
+              );
+              if (proxyRef.isClosed) {
+                return;
+              }
+              drainWakeRequested = true;
+              await Future<void>.delayed(retryDelayAfterPollError);
+              break;
+            }
+
+            if (frame == null) {
+              break;
+            }
+
+            processRequestFrame(frame.requestId, frame.payload);
+            drainedFrames++;
+          }
+
+          if (drainedFrames == maxFramesPerTurn) {
+            // Draining short bursts keeps callback mode responsive without
+            // starving the event loop when a queue fills up.
+            await Future<void>.delayed(Duration.zero);
+            continue;
+          }
+
+          if (!drainWakeRequested) {
+            break;
+          }
+
+          await Future<void>.delayed(Duration.zero);
+        }
+      } finally {
+        drainQueuedFramesScheduled = false;
+        if (drainWakeRequested && !proxyRef.isClosed) {
+          scheduleDrainQueuedRequestFrames();
+        }
+      }
+    }());
   }
 
   final proxy = NativeProxyServer.start(
@@ -487,10 +496,17 @@ NativeProxyServer _startNativeDirectProxy({
     tlsCertPath: tlsCertPath,
     tlsKeyPath: tlsKeyPath,
     tlsCertPassword: tlsCertPassword,
-    directRequestCallback: null,
+    // Rust still queues payloads in callback mode and only uses this callback
+    // to wake the isolate when the queue transitions from empty to non-empty.
+    directRequestCallback: (requestId, payload) {
+      scheduleDrainQueuedRequestFrames();
+    },
   );
   proxyRef = proxy;
-  unawaited(drainQueuedRequestFrames());
+  proxyAssigned = true;
+  if (drainWakeRequested) {
+    scheduleDrainQueuedRequestFrames();
+  }
 
   return proxy;
 }

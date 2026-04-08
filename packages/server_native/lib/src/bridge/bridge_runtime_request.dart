@@ -66,12 +66,11 @@ final class BridgeHttpRequest extends Stream<Uint8List> implements HttpRequest {
 
   @override
   Uri get requestedUri =>
-      _requestedUri ??= _buildBridgeRequestedUri(_source, metadata: _metadata);
+      _requestedUri ??= _buildBridgeRequestUri(_source, metadata: _metadata);
   Uri? _requestedUri;
 
   @override
-  Uri get uri => _uri ??= _buildBridgeRequestUri(_source);
-  Uri? _uri;
+  Uri get uri => requestedUri;
 
   @override
   HttpHeaders get headers => _headers ??= _buildBridgeRequestHeaders(

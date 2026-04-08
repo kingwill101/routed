@@ -8,20 +8,8 @@ final class _BridgeParsedAuthority {
   final int? port;
 }
 
-/// Builds `HttpRequest.uri` from frame pseudo-headers.
-Uri _buildBridgeRequestUri(_BridgeRequestSource source) {
-  final absolute = _tryAbsoluteRequestUri(source);
-  if (absolute != null) {
-    return absolute;
-  }
-  return Uri(
-    path: source.path.isEmpty ? '/' : source.path,
-    query: source.query.isEmpty ? null : source.query,
-  );
-}
-
 /// Builds `HttpRequest.requestedUri` from frame pseudo-headers and metadata.
-Uri _buildBridgeRequestedUri(
+Uri _buildBridgeRequestUri(
   _BridgeRequestSource source, {
   _BridgeRequestMetadata? metadata,
 }) {

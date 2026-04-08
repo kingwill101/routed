@@ -156,6 +156,9 @@ void main() {
           jsonEncode(<String, Object?>{
             'method': request.method,
             'path': request.uri.path,
+            'scheme': request.uri.scheme,
+            'uri': request.uri.toString(),
+            'requestedUri': request.requestedUri.toString(),
             'body': requestBody,
           }),
         );
@@ -176,6 +179,9 @@ void main() {
         expect(jsonDecode(body), <String, Object?>{
           'method': 'POST',
           'path': '/native-http',
+          'scheme': 'http',
+          'uri': '${running.baseUri}/native-http',
+          'requestedUri': '${running.baseUri}/native-http',
           'body': 'native callback body',
         });
       } finally {

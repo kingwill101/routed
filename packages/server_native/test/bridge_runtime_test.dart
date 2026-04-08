@@ -380,9 +380,9 @@ void main() {
           request.response.write(
             jsonEncode({
               'method': request.method,
-              'relativeUri': request.uri.toString(),
-              'relativeScheme': request.uri.scheme,
-              'uri': request.requestedUri.toString(),
+              'uri': request.uri.toString(),
+              'requestedUri': request.requestedUri.toString(),
+              'scheme': request.uri.scheme,
               'contentLength': request.contentLength,
               'persistentConnection': request.persistentConnection,
               'connection': request.headers[HttpHeaders.connectionHeader],
@@ -432,9 +432,9 @@ void main() {
             jsonDecode(utf8.decode(response.bodyBytes)) as Map<String, dynamic>;
         expect(json, {
           'method': 'POST',
-          'relativeUri': '/payload?q=1',
-          'relativeScheme': '',
           'uri': 'https://example.test:8443/payload?q=1',
+          'requestedUri': 'https://example.test:8443/payload?q=1',
+          'scheme': 'https',
           'contentLength': 13,
           'persistentConnection': true,
           'connection': <String>['keep-alive, upgrade'],
@@ -514,7 +514,7 @@ void main() {
         final json =
             jsonDecode(utf8.decode(response.bodyBytes)) as Map<String, dynamic>;
         expect(json, {
-          'uri': '/empty',
+          'uri': 'http://127.0.0.1/empty',
           'contentLength': -1,
           'chunked': false,
           'body': '',
