@@ -66,7 +66,6 @@ part 'bridge_runtime_request_codec.dart';
 part 'bridge_runtime_response_codec.dart';
 part 'bridge_runtime_frame_codec.dart';
 part 'bridge_runtime_runtime.dart';
-part 'bridge_runtime_request_source.dart';
 part 'bridge_runtime_request.dart';
 part 'bridge_runtime_request_headers.dart';
 part 'bridge_runtime_request_uri.dart';

@@ -229,13 +229,3 @@ final class _BridgeHandleFrameResult {
 
   BridgeDetachedSocket? get detachedSocket => _frame?.detachedSocket;
 }
-
-_BridgeHandleFrameResult _bridgePayloadResultToHandleResult(
-  (Uint8List?, BridgeResponseFrame?) result,
-) {
-  final (encodedPayload, frame) = result;
-  if (encodedPayload != null) {
-    return _BridgeHandleFrameResult.encoded(encodedPayload);
-  }
-  return _BridgeHandleFrameResult.frame(frame!);
-}

@@ -4,8 +4,8 @@ part of 'bridge_runtime.dart';
 final class BridgeHttpResponse implements HttpResponse {
   BridgeHttpResponse({
     required String requestMethod,
-    required BridgeConnectionInfo Function() connectionInfoFactory,
-  }) : _connectionInfoFactory = connectionInfoFactory,
+    required BridgeConnectionInfo connectionInfo,
+  }) : _connectionInfo = connectionInfo,
        _isHeadRequest = _equalsAsciiIgnoreCase(requestMethod, 'HEAD');
 
   _BridgeHttpHeaders? _headers;
@@ -20,8 +20,7 @@ final class BridgeHttpResponse implements HttpResponse {
   int _bytesWritten = 0;
   bool _autoCompressEnabled = false;
   bool _requestAcceptsGzip = false;
-  final BridgeConnectionInfo Function() _connectionInfoFactory;
-  BridgeConnectionInfo? _connectionInfo;
+  final BridgeConnectionInfo _connectionInfo;
   final bool _isHeadRequest;
 
   /// Enables gzip auto-compression based on request/response negotiation.
@@ -88,8 +87,7 @@ final class BridgeHttpResponse implements HttpResponse {
   set contentLength(int value) => headers.contentLength = value;
 
   @override
-  HttpConnectionInfo? get connectionInfo =>
-      _connectionInfo ??= _connectionInfoFactory();
+  HttpConnectionInfo? get connectionInfo => _connectionInfo;
 
   @override
   void add(List<int> data) {
@@ -102,6 +100,7 @@ final class BridgeHttpResponse implements HttpResponse {
   Future<void> addStream(Stream<List<int>> stream) async {
     _ensureOpen();
     await for (final chunk in stream) {
+      _validateContentLengthOnAdd(chunk.length);
       _body.add(chunk);
     }
   }
@@ -326,31 +325,5 @@ final class BridgeHttpResponse implements HttpResponse {
         offset++;
       }
     }
-  }
-
-  Uint8List encodePayload() {
-    final bodyBytes = takeBodyBytes();
-    final writer = _BridgeFrameWriter();
-    writer.writeUint8(bridgeFrameProtocolVersion);
-    writer.writeUint8(_responseFrameTypeForEncode);
-    writer.writeUint16(statusCode);
-    writer.writeUint32(flattenedHeaderCount);
-    final headers = _headers;
-    if (headers != null) {
-      headers.writeEncodedHeaderPairs(writer);
-    }
-    final cookies = _cookies;
-    if (cookies != null) {
-      for (final cookie in cookies) {
-        _writeHeaderName(
-          writer,
-          HttpHeaders.setCookieHeader,
-          tokenized: _encodeTokenizedHeaderFrameTypes,
-        );
-        writer.writeString(cookie.toString());
-      }
-    }
-    writer.writeBytes(bodyBytes);
-    return writer.takeBytes();
   }
 }

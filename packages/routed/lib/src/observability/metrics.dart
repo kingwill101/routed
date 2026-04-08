@@ -165,7 +165,7 @@ class _CounterKey {
       'method': method,
       'route': route,
       'status': status,
-      if (extra != null) ...extra,
+      ...?extra,
     };
     final entries = labels.entries
         .map((entry) => '${entry.key}="${_escape(entry.value)}"')

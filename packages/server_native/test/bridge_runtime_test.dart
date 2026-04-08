@@ -1,6 +1,5 @@
 import 'dart:async';
 import 'dart:convert';
-import 'dart:io';
 import 'dart:typed_data';
 
 import 'package:routed/routed.dart';
@@ -370,195 +369,18 @@ void main() {
       expect(utf8.decode(response.bodyBytes), 'echo:hello bridge');
     });
 
-    test(
-      'handles payload-backed callback requests without frame decode',
-      () async {
-        final runtime = BridgeHttpRuntime((request) async {
-          final requestBody = await utf8.decoder.bind(request).join();
-          request.response.statusCode = HttpStatus.accepted;
-          request.response.headers.contentType = ContentType.json;
-          request.response.write(
-            jsonEncode({
-              'method': request.method,
-              'uri': request.uri.toString(),
-              'requestedUri': request.requestedUri.toString(),
-              'scheme': request.uri.scheme,
-              'contentLength': request.contentLength,
-              'persistentConnection': request.persistentConnection,
-              'connection': request.headers[HttpHeaders.connectionHeader],
-              'host': request.headers.host,
-              'port': request.headers.port,
-              'upgrade': request.headers.value(HttpHeaders.upgradeHeader),
-              'websocketKey': request.headers.value('Sec-WebSocket-Key'),
-              'websocketVersion': request.headers.value(
-                'Sec-WebSocket-Version',
-              ),
-              'localPort': request.connectionInfo?.localPort,
-              'cookies': request.cookies
-                  .map((cookie) => '${cookie.name}=${cookie.value}')
-                  .toList(growable: false),
-              'body': requestBody,
-            }),
-          );
-          await request.response.close();
-        });
-
-        final (encodedPayload, frame) = await runtime.handlePayload(
-          _requestFrame(
-            method: 'post',
-            authority: '127.0.0.1:8080',
-            path: '/payload',
-            query: 'q=1',
-            protocol: '1.0',
-            headers: const <MapEntry<String, String>>[
-              MapEntry(HttpHeaders.hostHeader, 'upstream.test:8081'),
-              MapEntry('x-forwarded-proto', 'https'),
-              MapEntry('x-forwarded-host', 'example.test:8443'),
-              MapEntry(HttpHeaders.connectionHeader, 'keep-alive, upgrade'),
-              MapEntry(HttpHeaders.upgradeHeader, 'websocket'),
-              MapEntry('sec-websocket-key', 'bridge-key'),
-              MapEntry('sec-websocket-version', '13'),
-              MapEntry(HttpHeaders.cookieHeader, 'a=1; b=two'),
-              MapEntry(HttpHeaders.contentLengthHeader, '13'),
-            ],
-            bodyBytes: utf8.encode('hello payload'),
-          ).encodePayload(),
-        );
-
-        expect(frame, isNull);
-        final response = BridgeResponseFrame.decodePayload(encodedPayload!);
-        expect(response.status, HttpStatus.accepted);
-        final json =
-            jsonDecode(utf8.decode(response.bodyBytes)) as Map<String, dynamic>;
-        expect(json, {
-          'method': 'POST',
-          'uri': 'https://example.test:8443/payload?q=1',
-          'requestedUri': 'https://example.test:8443/payload?q=1',
-          'scheme': 'https',
-          'contentLength': 13,
-          'persistentConnection': true,
-          'connection': <String>['keep-alive, upgrade'],
-          'host': 'upstream.test',
-          'port': 8081,
-          'upgrade': 'websocket',
-          'websocketKey': 'bridge-key',
-          'websocketVersion': '13',
-          'localPort': 8081,
-          'cookies': <String>['a=1', 'b=two'],
-          'body': 'hello payload',
-        });
-      },
-    );
-
-    test(
-      'preserves absolute-form request-targets for uri and requestedUri',
-      () async {
-        final runtime = BridgeHttpRuntime((request) async {
-          request.response.headers.contentType = ContentType.json;
-          request.response.write(
-            jsonEncode({
-              'uri': request.uri.toString(),
-              'requestedUri': request.requestedUri.toString(),
-              'scheme': request.uri.scheme,
-              'path': request.uri.path,
-            }),
-          );
-          await request.response.close();
-        });
-
-        final (encodedPayload, frame) = await runtime.handlePayload(
-          _requestFrame(
-            authority: 'proxy.local',
-            path: 'http://example.test:8080/absolute?q=1',
-            headers: const <MapEntry<String, String>>[
-              MapEntry(HttpHeaders.hostHeader, 'proxy.local'),
-            ],
-          ).encodePayload(),
-        );
-
-        expect(frame, isNull);
-        final response = BridgeResponseFrame.decodePayload(encodedPayload!);
-        final json =
-            jsonDecode(utf8.decode(response.bodyBytes)) as Map<String, dynamic>;
-        expect(json, {
-          'uri': 'http://example.test:8080/absolute?q=1',
-          'requestedUri': 'http://example.test:8080/absolute?q=1',
-          'scheme': 'http',
-          'path': '/absolute',
-        });
-      },
-    );
-
-    test(
-      'handles payload-backed callback requests without a request body',
-      () async {
-        final runtime = BridgeHttpRuntime((request) async {
-          request.response.headers.contentType = ContentType.json;
-          request.response.write(
-            jsonEncode({
-              'uri': request.uri.toString(),
-              'contentLength': request.contentLength,
-              'chunked': request.headers.chunkedTransferEncoding,
-              'body': await utf8.decoder.bind(request).join(),
-            }),
-          );
-          await request.response.close();
-        });
-
-        final (encodedPayload, frame) = await runtime.handlePayload(
-          _requestFrame(path: '/empty').encodePayload(),
-        );
-
-        expect(frame, isNull);
-        final response = BridgeResponseFrame.decodePayload(encodedPayload!);
-        final json =
-            jsonDecode(utf8.decode(response.bodyBytes)) as Map<String, dynamic>;
-        expect(json, {
-          'uri': 'http://127.0.0.1/empty',
-          'contentLength': -1,
-          'chunked': false,
-          'body': '',
-        });
-      },
-    );
-
-    test('preserves repeated connection header values', () async {
+    test('tracks content length when buffering addStream bodies', () async {
       final runtime = BridgeHttpRuntime((request) async {
-        request.response.headers.contentType = ContentType.json;
-        request.response.write(
-          jsonEncode(<String, Object?>{
-            'connection': request.headers[HttpHeaders.connectionHeader],
-            'valueThrows': () {
-              try {
-                request.headers.value(HttpHeaders.connectionHeader);
-                return false;
-              } on HttpException {
-                return true;
-              }
-            }(),
-          }),
-        );
+        final bodyBytes = Uint8List.fromList(utf8.encode('streamed body'));
+        request.response.contentLength = bodyBytes.length;
+        await request.response.addStream(Stream<List<int>>.value(bodyBytes));
         await request.response.close();
       });
 
-      final (encodedPayload, frame) = await runtime.handlePayload(
-        _requestFrame(
-          path: '/repeat-connection',
-          headers: const <MapEntry<String, String>>[
-            MapEntry(HttpHeaders.connectionHeader, 'keep-alive'),
-            MapEntry(HttpHeaders.connectionHeader, 'upgrade'),
-          ],
-        ).encodePayload(),
-      );
+      final response = await runtime.handleFrame(_requestFrame(path: '/stream'));
 
-      expect(frame, isNull);
-      final response = BridgeResponseFrame.decodePayload(encodedPayload!);
-      final json =
-          jsonDecode(utf8.decode(response.bodyBytes)) as Map<String, dynamic>;
-      expect(json, {
-        'connection': <String>['keep-alive', 'upgrade'],
-        'valueThrows': true,
-      });
+      expect(response.status, HttpStatus.ok);
+      expect(utf8.decode(response.bodyBytes), 'streamed body');
     });
   });
 

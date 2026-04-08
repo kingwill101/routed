@@ -18,7 +18,6 @@ final class _BridgeHttpHeaders implements HttpHeaders {
   String? _host;
   int? _port;
   ContentType? _contentType;
-  bool _contentTypeNeedsParse = false;
   int _contentLength = -1;
   bool _persistentConnection = true;
   bool _chunkedTransferEncoding = false;
@@ -32,7 +31,6 @@ final class _BridgeHttpHeaders implements HttpHeaders {
     _setSingleValue(
       HttpHeaders.dateHeader,
       value == null ? null : HttpDate.format(value),
-      recompute: false,
     );
   }
 
@@ -45,7 +43,6 @@ final class _BridgeHttpHeaders implements HttpHeaders {
     _setSingleValue(
       HttpHeaders.expiresHeader,
       value == null ? null : HttpDate.format(value),
-      recompute: false,
     );
   }
 
@@ -58,7 +55,6 @@ final class _BridgeHttpHeaders implements HttpHeaders {
     _setSingleValue(
       HttpHeaders.ifModifiedSinceHeader,
       value == null ? null : HttpDate.format(value),
-      recompute: false,
     );
   }
 
@@ -81,32 +77,12 @@ final class _BridgeHttpHeaders implements HttpHeaders {
   }
 
   @override
-  ContentType? get contentType {
-    if (_contentTypeNeedsParse) {
-      final values = _headers[HttpHeaders.contentTypeHeader];
-      if (values == null || values.isEmpty) {
-        _contentType = null;
-      } else {
-        try {
-          _contentType = ContentType.parse(values.last);
-        } catch (_) {
-          _contentType = null;
-        }
-      }
-      _contentTypeNeedsParse = false;
-    }
-    return _contentType;
-  }
+  ContentType? get contentType => _contentType;
 
   @override
   set contentType(ContentType? value) {
     _contentType = value;
-    _contentTypeNeedsParse = false;
-    _setSingleValue(
-      HttpHeaders.contentTypeHeader,
-      value?.toString(),
-      recompute: false,
-    );
+    _setSingleValue(HttpHeaders.contentTypeHeader, value?.toString());
   }
 
   @override
@@ -114,16 +90,12 @@ final class _BridgeHttpHeaders implements HttpHeaders {
 
   @override
   set contentLength(int value) {
-    _contentLength = value < 0 ? -1 : value;
+    _contentLength = value;
     if (value < 0) {
-      _setSingleValue(HttpHeaders.contentLengthHeader, null, recompute: false);
+      _setSingleValue(HttpHeaders.contentLengthHeader, null);
       return;
     }
-    _setSingleValue(
-      HttpHeaders.contentLengthHeader,
-      value.toString(),
-      recompute: false,
-    );
+    _setSingleValue(HttpHeaders.contentLengthHeader, value.toString());
   }
 
   @override
@@ -269,7 +241,6 @@ final class _BridgeHttpHeaders implements HttpHeaders {
     _host = null;
     _port = null;
     _contentType = null;
-    _contentTypeNeedsParse = false;
     _contentLength = -1;
     _persistentConnection = true;
     _chunkedTransferEncoding = false;
@@ -332,39 +303,6 @@ final class _BridgeHttpHeaders implements HttpHeaders {
     return offset;
   }
 
-  void writeEncodedHeaderPairs(_BridgeFrameWriter writer) {
-    for (final entry in _headers.entries) {
-      if (entry.key == HttpHeaders.transferEncodingHeader) {
-        continue;
-      }
-      final originalName = _originalNames[entry.key] ?? entry.key;
-      final values = entry.value;
-      if (values.isEmpty) {
-        continue;
-      }
-      _writeHeaderName(
-        writer,
-        originalName,
-        tokenized: _encodeTokenizedHeaderFrameTypes,
-      );
-      if (_shouldFoldHeader(entry.key)) {
-        writer.writeString(
-          values.length == 1 ? values.first : values.join(', '),
-        );
-        continue;
-      }
-      writer.writeString(values.first);
-      for (var i = 1; i < values.length; i++) {
-        _writeHeaderName(
-          writer,
-          originalName,
-          tokenized: _encodeTokenizedHeaderFrameTypes,
-        );
-        writer.writeString(values[i]);
-      }
-    }
-  }
-
   @pragma('vm:prefer-inline')
   bool _shouldFoldHeader(String normalizedName) {
     return !_noFolding.contains(normalizedName);
@@ -392,24 +330,21 @@ final class _BridgeHttpHeaders implements HttpHeaders {
     return value.toString();
   }
 
-  void _setSingleValue(String name, String? value, {bool recompute = true}) {
+  @pragma('vm:prefer-inline')
+  void _setSingleValue(String name, String? value) {
     final normalized = _normalize(name);
     final previousLength = _headers[normalized]?.length ?? 0;
     if (value == null) {
       _headers.remove(normalized);
       _originalNames.remove(normalized);
       _flattenedHeaderValueCount -= previousLength;
-      if (recompute) {
-        _updateComputedFields(normalized);
-      }
+      _updateComputedFields(normalized);
       return;
     }
     _headers[normalized] = <String>[value];
     _flattenedHeaderValueCount += 1 - previousLength;
     _originalNames[normalized] = normalized;
-    if (recompute) {
-      _updateComputedFields(normalized);
-    }
+    _updateComputedFields(normalized);
   }
 
   @pragma('vm:prefer-inline')
@@ -422,7 +357,6 @@ final class _BridgeHttpHeaders implements HttpHeaders {
     _setSingleValue(
       HttpHeaders.hostHeader,
       _port == null ? hostValue : '$hostValue:${_port!}',
-      recompute: false,
     );
   }
 
@@ -438,11 +372,13 @@ final class _BridgeHttpHeaders implements HttpHeaders {
       case HttpHeaders.contentTypeHeader:
         if (values == null || values.isEmpty) {
           _contentType = null;
-          _contentTypeNeedsParse = false;
           return;
         }
-        _contentType = null;
-        _contentTypeNeedsParse = true;
+        try {
+          _contentType = ContentType.parse(values.last);
+        } catch (_) {
+          _contentType = null;
+        }
         return;
       case HttpHeaders.hostHeader:
         if (values == null || values.isEmpty) {

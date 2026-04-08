@@ -10,59 +10,6 @@ final class BridgeHttpRuntime {
 
   final FutureOr<void> Function(BridgeHttpRequest request) _handler;
 
-  Future<(Uint8List?, BridgeResponseFrame?)> handlePayload(
-    Uint8List payload,
-  ) async {
-    final source = _BridgePayloadRequestSource.parse(payload);
-    final metadata = source.metadata;
-    final bodyRange = metadata.payloadBodyRange!;
-    BridgeConnectionInfo? connectionInfo;
-    BridgeConnectionInfo resolveConnectionInfo() => connectionInfo ??=
-        _bridgeConnectionInfoFromSource(source, metadata: metadata);
-    final response = BridgeHttpResponse(
-      requestMethod: source.method,
-      connectionInfoFactory: resolveConnectionInfo,
-    );
-    final request = BridgeHttpRequest._fromSource(
-      source: source,
-      metadata: metadata,
-      response: response,
-      bodyStream: bodyRange.start == bodyRange.end
-          ? const Stream<Uint8List>.empty()
-          : Stream<Uint8List>.value(source.bodyBytes),
-      connectionInfoFactory: resolveConnectionInfo,
-    );
-    await _handler(request);
-    await response.done;
-    await response.prepareDetachedHeaders();
-    final detachedSocket = response.takeDetachedSocket();
-    if (detachedSocket == null) {
-      return (response.encodePayload(), null);
-    }
-
-    final bodyBytes = response.takeBodyBytes();
-    final headerCount = response.flattenedHeaderCount;
-    final headerNames = headerCount == 0
-        ? const <String>[]
-        : List<String>.filled(headerCount, '', growable: false);
-    final headerValues = headerCount == 0
-        ? const <String>[]
-        : List<String>.filled(headerCount, '', growable: false);
-    if (headerCount != 0) {
-      response.writeFlattenedHeaders(headerNames, headerValues);
-    }
-    return (
-      null,
-      BridgeResponseFrame.fromHeaderPairs(
-        status: response.statusCode,
-        headerNames: headerNames,
-        headerValues: headerValues,
-        bodyBytes: bodyBytes,
-        detachedSocket: detachedSocket,
-      ),
-    );
-  }
-
   /// Handles chunked request bodies and emits a chunked bridge response.
   Future<void> handleStream({
     required BridgeRequestFrame frame,
@@ -71,24 +18,19 @@ final class BridgeHttpRuntime {
     required Future<void> Function(Uint8List chunkBytes) onResponseChunk,
     void Function(BridgeDetachedSocket detachedSocket)? onDetachedSocket,
   }) async {
-    final source = _BridgeFrameRequestSource(frame);
-    final metadata = _bridgeRequestMetadataFromSource(source);
-    BridgeConnectionInfo? connectionInfo;
-    BridgeConnectionInfo resolveConnectionInfo() => connectionInfo ??=
-        _bridgeConnectionInfoFromSource(source, metadata: metadata);
+    final connectionInfo = BridgeConnectionInfo.fromRequestFrame(frame);
     final response = BridgeStreamingHttpResponse(
       onStart: onResponseStart,
       onChunk: onResponseChunk,
       requestMethod: frame.method,
-      connectionInfoFactory: resolveConnectionInfo,
+      connectionInfo: connectionInfo,
       onDetachedSocket: onDetachedSocket,
     );
-    final request = BridgeHttpRequest._fromSource(
-      source: source,
-      metadata: metadata,
+    final request = BridgeHttpRequest(
+      frame: frame,
       response: response,
       bodyStream: bodyStream,
-      connectionInfoFactory: resolveConnectionInfo,
+      connectionInfo: connectionInfo,
     );
     await _handler(request);
     if (!response.isClosed) {
@@ -99,23 +41,18 @@ final class BridgeHttpRuntime {
 
   /// Handles a full single-frame request and returns a full response frame.
   Future<BridgeResponseFrame> handleFrame(BridgeRequestFrame frame) async {
-    final source = _BridgeFrameRequestSource(frame);
-    final metadata = _bridgeRequestMetadataFromSource(source);
-    BridgeConnectionInfo? connectionInfo;
-    BridgeConnectionInfo resolveConnectionInfo() => connectionInfo ??=
-        _bridgeConnectionInfoFromSource(source, metadata: metadata);
+    final connectionInfo = BridgeConnectionInfo.fromRequestFrame(frame);
     final response = BridgeHttpResponse(
       requestMethod: frame.method,
-      connectionInfoFactory: resolveConnectionInfo,
+      connectionInfo: connectionInfo,
     );
-    final request = BridgeHttpRequest._fromSource(
-      source: source,
-      metadata: metadata,
+    final request = BridgeHttpRequest(
+      frame: frame,
       response: response,
       bodyStream: frame.bodyBytes.isEmpty
           ? const Stream<Uint8List>.empty()
           : Stream<Uint8List>.value(frame.bodyBytes),
-      connectionInfoFactory: resolveConnectionInfo,
+      connectionInfo: connectionInfo,
     );
     await _handler(request);
     await response.done;

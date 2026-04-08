@@ -12,7 +12,7 @@ final class _NativeHttpBinding {
 HttpHeaders _createNativeHttpDefaultResponseHeaders() {
   final headers = BridgeHttpResponse(
     requestMethod: 'GET',
-    connectionInfoFactory: () => BridgeConnectionInfo(
+    connectionInfo: BridgeConnectionInfo(
       remoteAddress: InternetAddress.loopbackIPv4,
       remotePort: 0,
       localPort: 0,
@@ -306,7 +306,7 @@ Future<NativeHttpServer> _startNativeHttpServer({
     }
   }
 
-  final requestController = StreamController<HttpRequest>(sync: true);
+  final requestController = StreamController<HttpRequest>();
   final connectionCounters = _ProxyConnectionCounters();
   final server = NativeHttpServer._(requestController, connectionCounters);
   final runtime = BridgeHttpRuntime(server._handleRequest);
@@ -346,10 +346,9 @@ Future<NativeHttpServer> _startNativeHttpServer({
         idleTimeoutProvider: () => server.idleTimeout,
         handleFrame: (frame) async =>
             _BridgeHandleFrameResult.frame(await runtime.handleFrame(frame)),
-        handlePayload: (payload) async =>
-            _bridgePayloadResultToHandleResult(
-              await runtime.handlePayload(payload),
-            ),
+        handlePayload: (payload) async => _BridgeHandleFrameResult.frame(
+          await runtime.handleFrame(BridgeRequestFrame.decodePayload(payload)),
+        ),
         handleStream: runtime.handleStream,
       );
       final address = await _resolveInternetAddress(normalizedHost);

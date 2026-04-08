@@ -9,33 +9,29 @@ final class _BridgeParsedAuthority {
 }
 
 /// Builds `HttpRequest.requestedUri` from frame pseudo-headers and metadata.
-Uri _buildBridgeRequestUri(
-  _BridgeRequestSource source, {
-  _BridgeRequestMetadata? metadata,
-}) {
-  final absolute = _tryAbsoluteRequestUri(source);
+Uri _buildBridgeRequestUri(BridgeRequestFrame frame) {
+  final absolute = _tryAbsoluteRequestUri(frame);
   if (absolute != null) {
     return absolute;
   }
 
-  final requestMetadata = metadata ?? _bridgeRequestMetadataFromSource(source);
-  final forwardedProto = requestMetadata.forwardedProto;
-  final forwardedHost = requestMetadata.forwardedHost;
-  final hostHeader = requestMetadata.hostHeader;
+  final forwardedProto = _bridgeHeaderValue(frame, 'x-forwarded-proto')?.trim();
+  final forwardedHost = _bridgeHeaderValue(frame, 'x-forwarded-host')?.trim();
+  final hostHeader = _bridgeHeaderValue(frame, HttpHeaders.hostHeader)?.trim();
   final authorityValue = (forwardedHost?.isNotEmpty ?? false)
       ? forwardedHost!
       : (hostHeader?.isNotEmpty ?? false)
       ? hostHeader!
-      : source.authority;
+      : frame.authority;
   final authority = _splitBridgeAuthority(authorityValue);
   final schemeCandidate = (forwardedProto != null && forwardedProto.isNotEmpty)
       ? forwardedProto
-      : source.scheme.isEmpty
+      : frame.scheme.isEmpty
       ? 'http'
-      : source.scheme;
+      : frame.scheme;
   final scheme = _isValidUriScheme(schemeCandidate) ? schemeCandidate : 'http';
-  final path = source.path.isEmpty ? '/' : source.path;
-  final query = source.query.isEmpty ? null : source.query;
+  final path = frame.path.isEmpty ? '/' : frame.path;
+  final query = frame.query.isEmpty ? null : frame.query;
   final host = authority.host.isEmpty ? '127.0.0.1' : authority.host;
   try {
     return _bridgeUriFromParts(
@@ -190,9 +186,20 @@ bool _equalsAsciiIgnoreCase(String a, String b) {
   return true;
 }
 
+/// Returns the first matching header value by case-insensitive [name].
+String? _bridgeHeaderValue(BridgeRequestFrame frame, String name) {
+  for (var i = 0; i < frame.headerCount; i++) {
+    final headerName = frame.headerNameAt(i);
+    if (_equalsAsciiIgnoreCase(headerName, name)) {
+      return frame.headerValueAt(i);
+    }
+  }
+  return null;
+}
+
 /// Attempts to parse an absolute request URI from the request path.
-Uri? _tryAbsoluteRequestUri(_BridgeRequestSource source) {
-  final path = source.path;
+Uri? _tryAbsoluteRequestUri(BridgeRequestFrame frame) {
+  final path = frame.path;
   if (!(path.startsWith('http://') ||
       path.startsWith('https://') ||
       path.startsWith('ws://') ||

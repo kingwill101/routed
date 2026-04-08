@@ -27,6 +27,15 @@ typedef _NativeDirectRequestCallbackC =
 final Set<ffi.NativeCallable<_NativeDirectRequestCallbackC>>
 _retainedDirectRequestCallbacks =
     <ffi.NativeCallable<_NativeDirectRequestCallbackC>>{};
+final Set<NativeProxyServer> _liveNativeProxyServers = <NativeProxyServer>{};
+final ffi.NativeFinalizer _nativeProxyServerFinalizer = ffi.NativeFinalizer(
+  ffi
+      .Native
+      .addressOf<
+        ffi.NativeFunction<ffi.Void Function(ffi.Pointer<ProxyServerHandle>)>
+      >(server_native_stop_proxy_server)
+      .cast(),
+);
 
 /// One direct request frame polled from the Rust transport queue.
 final class NativeDirectRequestFrame {
@@ -46,7 +55,7 @@ final class NativeDirectRequestFrame {
 int transportAbiVersion() => server_native_transport_version();
 
 /// Handle to a running native Rust proxy transport server.
-final class NativeProxyServer {
+final class NativeProxyServer implements ffi.Finalizable {
   NativeProxyServer._(
     this._handle,
     this.port, {
@@ -178,11 +187,14 @@ final class NativeProxyServer {
         _retainedDirectRequestCallbacks.add(nativeCallback);
       }
 
-      return NativeProxyServer._(
+      final proxy = NativeProxyServer._(
         handle,
         outPortPtr.value,
         directRequestCallback: nativeCallback,
       );
+      _nativeProxyServerFinalizer.attach(proxy, handle.cast(), detach: proxy);
+      _liveNativeProxyServers.add(proxy);
+      return proxy;
     } finally {
       if (tlsCertPathPtr != null) {
         calloc.free(tlsCertPathPtr);
@@ -207,6 +219,8 @@ final class NativeProxyServer {
   void close() {
     if (_closed) return;
     _closed = true;
+    _nativeProxyServerFinalizer.detach(this);
+    _liveNativeProxyServers.remove(this);
     server_native_stop_proxy_server(_handle);
     if (_directRequestCallback != null) {
       // Intentionally retained after shutdown; see note below.

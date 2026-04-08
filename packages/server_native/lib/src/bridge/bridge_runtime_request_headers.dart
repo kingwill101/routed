@@ -1,23 +1,28 @@
 part of 'bridge_runtime.dart';
 
-/// Immutable request-headers implementation backed by a bridge request source.
+/// Immutable request-headers implementation backed by bridge frame data.
 final class _BridgeRequestHeaders implements HttpHeaders {
-  _BridgeRequestHeaders.fromSource(
-    _BridgeRequestSource source, {
-    required _BridgeRequestMetadata metadata,
+  _BridgeRequestHeaders.fromFrame(
+    BridgeRequestFrame frame, {
     bool stripTransferEncoding = false,
-  }) : _source = source,
-       _metadata = metadata,
-       _stripTransferEncoding = stripTransferEncoding;
+    bool defaultPersistentConnection = true,
+  }) : _defaultPersistentConnection = defaultPersistentConnection {
+    for (var i = 0; i < frame.headerCount; i++) {
+      final name = frame.headerNameAt(i);
+      final normalized = _asciiLower(name);
+      final values = _headers.putIfAbsent(normalized, () => <String>[]);
+      values.add(frame.headerValueAt(i));
+      _originalNames[normalized] = name;
+    }
+    if (stripTransferEncoding) {
+      _headers.remove(HttpHeaders.transferEncodingHeader);
+      _originalNames.remove(HttpHeaders.transferEncodingHeader);
+    }
+  }
 
-  final _BridgeRequestSource _source;
-  final _BridgeRequestMetadata _metadata;
-  final bool _stripTransferEncoding;
-  ({Map<String, List<String>> headers, Map<String, String> originalNames})?
-  _materialized;
-  _BridgeParsedAuthority? _parsedHostPort;
-  bool _parsedHostPortResolved = false;
-  List<String>? _connectionHeaderValues;
+  final Map<String, List<String>> _headers = <String, List<String>>{};
+  final Map<String, String> _originalNames = <String, String>{};
+  final bool _defaultPersistentConnection;
 
   @override
   DateTime? get date => _parseDate(HttpHeaders.dateHeader);
@@ -73,23 +78,42 @@ final class _BridgeRequestHeaders implements HttpHeaders {
   set contentType(ContentType? value) => _immutable();
 
   @override
-  int get contentLength => _metadata.contentLength;
+  int get contentLength {
+    final raw = value(HttpHeaders.contentLengthHeader);
+    if (raw == null || raw.isEmpty) {
+      return -1;
+    }
+    return int.tryParse(raw.trim()) ?? -1;
+  }
 
   @override
   set contentLength(int value) => _immutable();
 
   @override
-  bool get persistentConnection => _metadata.persistentConnection;
+  bool get persistentConnection {
+    final values = _headers[_asciiLower(HttpHeaders.connectionHeader)];
+    if (values == null || values.isEmpty) {
+      return _defaultPersistentConnection;
+    }
+    if (_containsTokenIgnoreCase(values, 'close')) {
+      return false;
+    }
+    if (_containsTokenIgnoreCase(values, 'keep-alive')) {
+      return true;
+    }
+    return _defaultPersistentConnection;
+  }
 
   @override
   set persistentConnection(bool value) => _immutable();
 
   @override
   bool get chunkedTransferEncoding {
-    if (_isTransferEncodingStripped(HttpHeaders.transferEncodingHeader)) {
+    final values = _headers[_asciiLower(HttpHeaders.transferEncodingHeader)];
+    if (values == null || values.isEmpty) {
       return false;
     }
-    return _metadata.chunkedTransferEncoding;
+    return _containsTokenIgnoreCase(values, 'chunked');
   }
 
   @override
@@ -97,46 +121,20 @@ final class _BridgeRequestHeaders implements HttpHeaders {
 
   @override
   List<String>? operator [](String name) {
-    if (_isTransferEncodingStripped(name)) {
-      return null;
-    }
-    if (_equalsAsciiIgnoreCase(name, HttpHeaders.connectionHeader) &&
-        !_metadata.hasMultipleConnectionHeaders) {
-      final value = _metadata.connectionHeaderValue;
-      if (value == null) {
-        return null;
-      }
-      return _connectionHeaderValues ??= List<String>.unmodifiable(<String>[
-        value,
-      ]);
-    }
-    final values = <String>[];
-    _source.forEachMatchingHeader(name, values.add);
-    return values.isEmpty ? null : values;
+    final values = _headers[_asciiLower(name)];
+    return values == null ? null : List<String>.of(values);
   }
 
   @override
   String? value(String name) {
-    if (_isTransferEncodingStripped(name)) {
+    final values = _headers[_asciiLower(name)];
+    if (values == null || values.isEmpty) {
       return null;
     }
-    if (_equalsAsciiIgnoreCase(name, HttpHeaders.connectionHeader) &&
-        !_metadata.hasMultipleConnectionHeaders) {
-      return _metadata.connectionHeaderValue;
-    }
-    String? found;
-    var count = 0;
-    _source.forEachMatchingHeader(name, (value) {
-      count++;
-      found ??= value;
-    });
-    if (count == 0) {
-      return null;
-    }
-    if (count > 1) {
+    if (values.length > 1) {
       throw HttpException('More than one value for header $name');
     }
-    return found;
+    return values.first;
   }
 
   @override
@@ -155,10 +153,9 @@ final class _BridgeRequestHeaders implements HttpHeaders {
 
   @override
   void forEach(void Function(String name, List<String> values) action) {
-    final materialized = _materializeHeaders();
-    for (final entry in materialized.headers.entries) {
+    for (final entry in _headers.entries) {
       action(
-        materialized.originalNames[entry.key] ?? entry.key,
+        _originalNames[entry.key] ?? entry.key,
         List<String>.of(entry.value),
       );
     }
@@ -187,128 +184,48 @@ final class _BridgeRequestHeaders implements HttpHeaders {
   }
 
   _BridgeParsedAuthority? _parseHostPort() {
-    if (_parsedHostPortResolved) {
-      return _parsedHostPort;
-    }
-    _parsedHostPortResolved = true;
-    final raw = _metadata.hostHeader;
+    final raw = value(HttpHeaders.hostHeader);
     if (raw == null || raw.isEmpty) {
       return null;
     }
-    return _parsedHostPort = _splitBridgeAuthority(raw);
+    return _splitBridgeAuthority(raw);
   }
 
-  bool _isTransferEncodingStripped(String name) {
-    return _stripTransferEncoding &&
-        _equalsAsciiIgnoreCase(name, HttpHeaders.transferEncodingHeader);
-  }
-
-  ({Map<String, List<String>> headers, Map<String, String> originalNames})
-  _materializeHeaders() {
-    final materialized = _materialized;
-    if (materialized != null) {
-      return materialized;
-    }
-
-    final headers = <String, List<String>>{};
-    final originalNames = <String, String>{};
-    _source.forEachHeader((name, value) {
-      if (_isTransferEncodingStripped(name)) {
-        return;
+  bool _containsTokenIgnoreCase(List<String> values, String token) {
+    final target = _asciiLower(token);
+    for (final value in values) {
+      for (final part in value.split(',')) {
+        final normalizedPart = _asciiLower(part.trim());
+        if (normalizedPart.isNotEmpty && normalizedPart == target) {
+          return true;
+        }
       }
-      final normalized = _asciiLower(name);
-      final values = headers.putIfAbsent(normalized, () => <String>[]);
-      values.add(value);
-      originalNames[normalized] = name;
-    });
-    return _materialized = (headers: headers, originalNames: originalNames);
-  }
-}
-
-bool _headerValueContainsTokenIgnoreCase(String value, String token) {
-  var partStart = 0;
-  while (partStart <= value.length) {
-    var partEnd = partStart;
-    while (partEnd < value.length && value.codeUnitAt(partEnd) != 0x2c) {
-      partEnd++;
     }
-
-    final start = _skipHttpTokenWhitespace(value, partStart, partEnd);
-    final end = _trimHttpTokenWhitespace(value, start, partEnd);
-    if (end > start && _equalsAsciiIgnoreCaseRange(value, start, end, token)) {
-      return true;
-    }
-
-    if (partEnd == value.length) {
-      return false;
-    }
-    partStart = partEnd + 1;
-  }
-  return false;
-}
-
-@pragma('vm:prefer-inline')
-int _skipHttpTokenWhitespace(String value, int start, int end) {
-  while (start < end) {
-    final codeUnit = value.codeUnitAt(start);
-    if (codeUnit != 0x20 && codeUnit != 0x09) {
-      break;
-    }
-    start++;
-  }
-  return start;
-}
-
-@pragma('vm:prefer-inline')
-int _trimHttpTokenWhitespace(String value, int start, int end) {
-  while (end > start) {
-    final codeUnit = value.codeUnitAt(end - 1);
-    if (codeUnit != 0x20 && codeUnit != 0x09) {
-      break;
-    }
-    end--;
-  }
-  return end;
-}
-
-@pragma('vm:prefer-inline')
-bool _equalsAsciiIgnoreCaseRange(
-  String value,
-  int start,
-  int end,
-  String token,
-) {
-  if (end - start != token.length) {
     return false;
   }
-  for (var i = 0; i < token.length; i++) {
-    var x = value.codeUnitAt(start + i);
-    var y = token.codeUnitAt(i);
-    if (x == y) {
-      continue;
-    }
-    if (x >= 0x41 && x <= 0x5a) {
-      x += 0x20;
-    }
-    if (y >= 0x41 && y <= 0x5a) {
-      y += 0x20;
-    }
-    if (x != y) {
-      return false;
-    }
-  }
-  return true;
 }
 
 /// Decodes immutable header view used by [BridgeHttpRequest.headers].
 _BridgeRequestHeaders _buildBridgeRequestHeaders(
-  _BridgeRequestSource source, {
-  required _BridgeRequestMetadata metadata,
+  BridgeRequestFrame frame, {
   bool stripTransferEncoding = false,
 }) {
-  return _BridgeRequestHeaders.fromSource(
-    source,
-    metadata: metadata,
+  final protocol = frame.protocol.trim().toLowerCase();
+  final defaultPersistentConnection =
+      protocol.isEmpty ||
+      protocol == '1.1' ||
+      protocol == '2' ||
+      protocol == '2.0' ||
+      protocol == '3' ||
+      protocol == '3.0' ||
+      protocol == 'http/1.1' ||
+      protocol == 'http/2' ||
+      protocol == 'http/2.0' ||
+      protocol == 'http/3' ||
+      protocol == 'http/3.0';
+  return _BridgeRequestHeaders.fromFrame(
+    frame,
     stripTransferEncoding: stripTransferEncoding,
+    defaultPersistentConnection: defaultPersistentConnection,
   );
 }
