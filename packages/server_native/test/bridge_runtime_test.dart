@@ -368,6 +368,20 @@ void main() {
       expect(_headerValues(response, 'x-path'), contains('/raw'));
       expect(utf8.decode(response.bodyBytes), 'echo:hello bridge');
     });
+
+    test('tracks content length when buffering addStream bodies', () async {
+      final runtime = BridgeHttpRuntime((request) async {
+        final bodyBytes = Uint8List.fromList(utf8.encode('streamed body'));
+        request.response.contentLength = bodyBytes.length;
+        await request.response.addStream(Stream<List<int>>.value(bodyBytes));
+        await request.response.close();
+      });
+
+      final response = await runtime.handleFrame(_requestFrame(path: '/stream'));
+
+      expect(response.status, HttpStatus.ok);
+      expect(utf8.decode(response.bodyBytes), 'streamed body');
+    });
   });
 
   group('BridgeRuntime', () {

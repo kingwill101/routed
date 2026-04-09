@@ -111,7 +111,7 @@ class Translator implements TranslatorContract {
         key;
     final selected = _selector.choose(raw, count, targetLocale);
     final resolved = <String, dynamic>{
-      if (replacements != null) ...replacements,
+      ...?replacements,
       if (!(replacements?.containsKey('count') ?? false)) 'count': count,
     };
     return _applyReplacements(selected, resolved);

@@ -100,6 +100,7 @@ final class BridgeHttpResponse implements HttpResponse {
   Future<void> addStream(Stream<List<int>> stream) async {
     _ensureOpen();
     await for (final chunk in stream) {
+      _validateContentLengthOnAdd(chunk.length);
       _body.add(chunk);
     }
   }
