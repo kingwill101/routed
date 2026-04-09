@@ -2716,6 +2716,7 @@ mod tests {
     static TEST_CALLBACK_INVOCATIONS: AtomicUsize = AtomicUsize::new(0);
     static TEST_CALLBACK_LAST_REQUEST_ID: AtomicU64 = AtomicU64::new(0);
     static TEST_BLOCKING_CALLBACK_RELEASED: TestAtomicBool = TestAtomicBool::new(false);
+    static TEST_CALLBACK_LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
 
     extern "C" fn test_direct_callback(request_id: u64, _payload: *const u8, _payload_len: u64) {
         TEST_CALLBACK_INVOCATIONS.fetch_add(1, AtomicOrdering::SeqCst);
@@ -2760,6 +2761,14 @@ mod tests {
             .lock()
             .insert(request_id, PendingDirectRequest { response_tx });
         response_rx
+    }
+
+    fn lock_test_callback_state() -> std::sync::MutexGuard<'static, ()> {
+        let guard = TEST_CALLBACK_LOCK.lock().expect("test callback lock");
+        TEST_CALLBACK_INVOCATIONS.store(0, AtomicOrdering::SeqCst);
+        TEST_CALLBACK_LAST_REQUEST_ID.store(0, AtomicOrdering::SeqCst);
+        TEST_BLOCKING_CALLBACK_RELEASED.store(false, AtomicOrdering::SeqCst);
+        guard
     }
 
     #[test]
@@ -3165,8 +3174,7 @@ My-Connection-Header2: some-value2\r\n\
 
     #[test]
     fn direct_callback_payload_enqueues_and_signals_callback() {
-        TEST_CALLBACK_INVOCATIONS.store(0, AtomicOrdering::SeqCst);
-        TEST_CALLBACK_LAST_REQUEST_ID.store(0, AtomicOrdering::SeqCst);
+        let _callback_guard = lock_test_callback_state();
 
         let direct_bridge = create_direct_bridge(Some(test_direct_callback));
         let _response_rx = register_pending_request(&direct_bridge, 42);
@@ -3191,8 +3199,7 @@ My-Connection-Header2: some-value2\r\n\
 
     #[test]
     fn direct_callback_payload_coalesces_wakeups_while_queue_is_non_empty() {
-        TEST_CALLBACK_INVOCATIONS.store(0, AtomicOrdering::SeqCst);
-        TEST_CALLBACK_LAST_REQUEST_ID.store(0, AtomicOrdering::SeqCst);
+        let _callback_guard = lock_test_callback_state();
 
         let direct_bridge = create_direct_bridge(Some(test_direct_callback));
         let _response_rx = register_pending_request(&direct_bridge, 7);
@@ -3236,9 +3243,7 @@ My-Connection-Header2: some-value2\r\n\
 
     #[test]
     fn stop_direct_bridge_waits_for_in_flight_callback() {
-        TEST_CALLBACK_INVOCATIONS.store(0, AtomicOrdering::SeqCst);
-        TEST_CALLBACK_LAST_REQUEST_ID.store(0, AtomicOrdering::SeqCst);
-        TEST_BLOCKING_CALLBACK_RELEASED.store(false, AtomicOrdering::SeqCst);
+        let _callback_guard = lock_test_callback_state();
 
         let direct_bridge = create_direct_bridge(Some(blocking_test_direct_callback));
         let _response_rx = register_pending_request(&direct_bridge, 5);
