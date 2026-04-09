@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:convert';
+import 'dart:io';
 import 'dart:typed_data';
 
 import 'package:routed/routed.dart';
@@ -367,6 +368,123 @@ void main() {
       );
       expect(_headerValues(response, 'x-path'), contains('/raw'));
       expect(utf8.decode(response.bodyBytes), 'echo:hello bridge');
+    });
+
+    test('tracks content length when buffering addStream bodies', () async {
+      final runtime = BridgeHttpRuntime((request) async {
+        final bodyBytes = Uint8List.fromList(utf8.encode('streamed body'));
+        request.response.contentLength = bodyBytes.length;
+        await request.response.addStream(Stream<List<int>>.value(bodyBytes));
+        await request.response.close();
+      });
+
+      final response = await runtime.handleFrame(_requestFrame(path: '/stream'));
+
+      expect(response.status, HttpStatus.ok);
+      expect(utf8.decode(response.bodyBytes), 'streamed body');
+    });
+
+    test('addStream throws when chunk exceeds declared content-length', () async {
+      Object? caughtError;
+      final runtime = BridgeHttpRuntime((request) async {
+        request.response.contentLength = 3; // declare only 3 bytes
+        try {
+          await request.response.addStream(
+            Stream<List<int>>.value([1, 2, 3, 4, 5]), // 5 bytes – too many
+          );
+        } catch (error) {
+          caughtError = error;
+        }
+      });
+
+      await runtime.handleFrame(_requestFrame(path: '/overflow'));
+      expect(caughtError, isA<HttpException>());
+      expect(
+        (caughtError as HttpException).message,
+        contains('exceeds specified contentLength'),
+      );
+    });
+
+    test(
+        'addStream with multiple chunks validates cumulative total against content-length',
+        () async {
+      // Three chunks of 4 bytes each = 12 bytes, but only 10 declared.
+      Object? caughtError;
+      final controller = StreamController<List<int>>();
+      final runtime = BridgeHttpRuntime((request) async {
+        request.response.contentLength = 10;
+        try {
+          await request.response.addStream(controller.stream);
+        } catch (error) {
+          caughtError = error;
+        }
+      });
+
+      final frameFuture = runtime.handleFrame(_requestFrame(path: '/multi'));
+      controller
+        ..add([1, 2, 3, 4])
+        ..add([5, 6, 7, 8])
+        ..add([9, 10, 11, 12]); // third chunk pushes past declared length
+      await controller.close();
+      await frameFuture;
+
+      expect(caughtError, isA<HttpException>());
+    });
+
+    test(
+        'addStream with no declared content-length accumulates bytes without error',
+        () async {
+      final runtime = BridgeHttpRuntime((request) async {
+        // contentLength defaults to -1 (unset): no validation should occur.
+        await request.response.addStream(
+          Stream<List<int>>.fromIterable([
+            [1, 2, 3],
+            [4, 5, 6],
+          ]),
+        );
+        await request.response.close();
+      });
+
+      final response =
+          await runtime.handleFrame(_requestFrame(path: '/no-len'));
+
+      expect(response.status, HttpStatus.ok);
+      expect(response.bodyBytes, Uint8List.fromList([1, 2, 3, 4, 5, 6]));
+    });
+
+    test(
+        'addStream with exact content-length match completes without error',
+        () async {
+      final body = utf8.encode('exact');
+      final runtime = BridgeHttpRuntime((request) async {
+        request.response.contentLength = body.length;
+        await request.response.addStream(Stream<List<int>>.value(body));
+        await request.response.close();
+      });
+
+      final response =
+          await runtime.handleFrame(_requestFrame(path: '/exact'));
+
+      expect(response.status, HttpStatus.ok);
+      expect(utf8.decode(response.bodyBytes), 'exact');
+    });
+
+    test(
+        'addStream with chunked transfer encoding skips content-length validation',
+        () async {
+      final runtime = BridgeHttpRuntime((request) async {
+        request.response.headers.chunkedTransferEncoding = true;
+        await request.response.addStream(
+          Stream<List<int>>.value([1, 2, 3, 4, 5]),
+        );
+        await request.response.close();
+      });
+
+      // Should not throw even if contentLength is set to a smaller value,
+      // because chunked encoding bypasses the check.
+      final response =
+          await runtime.handleFrame(_requestFrame(path: '/chunked'));
+      expect(response.status, HttpStatus.ok);
     });
   });
 
