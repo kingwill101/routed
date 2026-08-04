@@ -4,13 +4,8 @@ part of 'server_boot.dart';
 ///
 /// This parser honors quality values (`q=`) and treats `gzip;q=0` as disabled.
 bool _acceptsGzip(HttpRequest request) {
-  final values = <String>[];
-  request.headers.forEach((name, headerValues) {
-    if (_equalsAsciiIgnoreCase(name, HttpHeaders.acceptEncodingHeader)) {
-      values.addAll(headerValues);
-    }
-  });
-  if (values.isEmpty) {
+  final values = request.headers[HttpHeaders.acceptEncodingHeader];
+  if (values == null || values.isEmpty) {
     return false;
   }
   for (final value in values) {

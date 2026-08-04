@@ -73,9 +73,13 @@ NativeProxyServer _startNativeDirectProxy({
 }) {
   final nativeDirectStreams = <int, _NativeDirectRequestStreamState>{};
   late final NativeProxyServer proxyRef;
+  var proxyAssigned = false;
+  var drainQueuedFramesScheduled = false;
+  var drainWakeRequested = false;
 
   void processRequestFrame(int requestId, Uint8List requestPayload) {
-    if (proxyRef.isClosed) {
+    final proxy = proxyRef;
+    if (proxy.isClosed) {
       return;
     }
 
@@ -90,13 +94,11 @@ NativeProxyServer _startNativeDirectProxy({
     }
 
     void pushResponsePayload(Uint8List responsePayload) {
-      if (proxyRef.isClosed) {
+      final proxy = proxyRef;
+      if (proxy.isClosed) {
         return;
       }
-      final pushed = proxyRef.pushDirectResponseFrame(
-        requestId,
-        responsePayload,
-      );
+      final pushed = proxy.pushDirectResponseFrame(requestId, responsePayload);
       if (!pushed) {
         _nativeVerboseLog(
           '[server_native] native direct callback push failed for requestId=$requestId',
@@ -420,6 +422,66 @@ NativeProxyServer _startNativeDirectProxy({
     }());
   }
 
+  void scheduleDrainQueuedRequestFrames() {
+    drainWakeRequested = true;
+    if (!proxyAssigned || drainQueuedFramesScheduled || proxyRef.isClosed) {
+      return;
+    }
+    drainQueuedFramesScheduled = true;
+    unawaited(() async {
+      const retryDelayAfterPollError = Duration(milliseconds: 1);
+      const maxFramesPerTurn = 32;
+
+      try {
+        while (!proxyRef.isClosed) {
+          drainWakeRequested = false;
+          var drainedFrames = 0;
+          while (!proxyRef.isClosed && drainedFrames < maxFramesPerTurn) {
+            NativeDirectRequestFrame? frame;
+            try {
+              frame = proxyRef.pollDirectRequestFrame(timeoutMs: 0);
+            } catch (error, stack) {
+              stderr.writeln(
+                '[server_native] native direct poll failed: $error\n$stack',
+              );
+              if (proxyRef.isClosed) {
+                return;
+              }
+              drainWakeRequested = true;
+              await Future<void>.delayed(retryDelayAfterPollError);
+              break;
+            }
+
+            if (frame == null) {
+              break;
+            }
+
+            processRequestFrame(frame.requestId, frame.payload);
+            drainedFrames++;
+          }
+
+          if (drainedFrames == maxFramesPerTurn) {
+            // Draining short bursts keeps callback mode responsive without
+            // starving the event loop when a queue fills up.
+            await Future<void>.delayed(Duration.zero);
+            continue;
+          }
+
+          if (!drainWakeRequested) {
+            break;
+          }
+
+          await Future<void>.delayed(Duration.zero);
+        }
+      } finally {
+        drainQueuedFramesScheduled = false;
+        if (drainWakeRequested && !proxyRef.isClosed) {
+          scheduleDrainQueuedRequestFrames();
+        }
+      }
+    }());
+  }
+
   final proxy = NativeProxyServer.start(
     host: host,
     port: port,
@@ -434,35 +496,17 @@ NativeProxyServer _startNativeDirectProxy({
     tlsCertPath: tlsCertPath,
     tlsKeyPath: tlsKeyPath,
     tlsCertPassword: tlsCertPassword,
-    directRequestCallback: null,
+    // Rust still queues payloads in callback mode and only uses this callback
+    // to wake the isolate when the queue transitions from empty to non-empty.
+    directRequestCallback: (requestId, payload) {
+      scheduleDrainQueuedRequestFrames();
+    },
   );
   proxyRef = proxy;
-
-  unawaited(() async {
-    while (!proxyRef.isClosed) {
-      NativeDirectRequestFrame? frame;
-      try {
-        // Use non-blocking native polling to avoid monopolizing the isolate
-        // thread during websocket tunnel forwarding and teardown races.
-        frame = proxyRef.pollDirectRequestFrame(timeoutMs: 0);
-      } catch (error, stack) {
-        stderr.writeln(
-          '[server_native] native direct poll failed: $error\n$stack',
-        );
-        if (proxyRef.isClosed) {
-          break;
-        }
-        await Future<void>.delayed(const Duration(milliseconds: 20));
-        continue;
-      }
-      if (frame == null) {
-        await Future<void>.delayed(const Duration(milliseconds: 1));
-        continue;
-      }
-      processRequestFrame(frame.requestId, frame.payload);
-      await Future<void>.delayed(Duration.zero);
-    }
-  }());
+  proxyAssigned = true;
+  if (drainWakeRequested) {
+    scheduleDrainQueuedRequestFrames();
+  }
 
   return proxy;
 }

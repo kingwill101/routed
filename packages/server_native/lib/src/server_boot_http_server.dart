@@ -344,7 +344,14 @@ final class NativeHttpServer extends StreamView<HttpRequest>
     _forceClosing = force;
     _closed = true;
     _unregisterSharedPorts();
-    if (!force) {
+    if (force) {
+      // Even forceful shutdown benefits from a short grace period so
+      // just-started callback/tunnel responses can flush before the native
+      // proxy is torn down underneath them.
+      await _waitForActiveRequestsToDrain(
+        timeout: const Duration(milliseconds: 100),
+      );
+    } else {
       await _waitForActiveRequestsToDrain();
     }
     await Future.wait(
