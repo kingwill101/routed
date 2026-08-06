@@ -4,6 +4,7 @@ import 'dart:math';
 
 import 'package:routed/middlewares.dart' show Middleware, Next;
 import 'package:routed/src/context/context.dart';
+import 'package:routed/src/context/session.dart';
 import 'package:routed/src/engine/config.dart' show SessionConfig;
 
 Middleware csrfMiddleware() {
