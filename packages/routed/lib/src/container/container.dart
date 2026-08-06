@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'service_resolver.dart';
 
 /// Represents a binding for a type, including its factory and singleton status.
 ///
@@ -87,7 +88,8 @@ class Binding<T> {
 /// // Resolve a dependency
 /// final instance = await container.make<MyRepository>();
 /// ```
-class Container {
+
+class Container implements ServiceResolver {
   /// Map of type to binding
   final Map<Type, Binding<dynamic>> _bindings = {};
 
@@ -353,6 +355,7 @@ class Container {
   /// 5. Execute callbacks
   ///
   /// Throws [StateError] if no binding is found.
+  @override
   Future<T> make<T>() async {
     // Check for existing instance
     final existingInstance = _instances[T];
@@ -419,6 +422,7 @@ class Container {
   /// Checks if a binding exists for type [T].
   ///
   /// This checks bindings, instances, aliases, and parent container.
+  @override
   bool has<T>() {
     return _bindings.containsKey(T) ||
         _instances.containsKey(T) ||
@@ -469,6 +473,7 @@ class Container {
   /// - Directly bound instances
   ///
   /// Throws [StateError] if no synchronously available instance is found.
+  @override
   T get<T>() {
     final instance = _instances[T];
     if (instance != null) {
