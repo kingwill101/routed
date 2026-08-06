@@ -1,4 +1,7 @@
-part of 'context.dart';
+import 'dart:async';
+
+import 'package:routed/src/cache/cache.dart';
+import 'package:routed/src/context/context.dart';
 
 extension ContextCache on EngineContext {
   CacheManager get cacheManager {

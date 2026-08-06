@@ -1,10 +1,16 @@
-part of 'context.dart';
+import 'package:routed/src/context/context.dart';
+import 'package:routed/src/context/context_key.dart';
+import 'package:routed/src/context/typed_context_state.dart';
+import 'package:routed/src/sessions/session.dart';
+
+/// Typed key for session storage in [EngineContext].
+const sessionKey = ContextKey<Session>('session');
 
 /// Extension for session-related functionality
 extension SessionMethods on EngineContext {
-  /// Get the current session instance (provided by sessionMiddleware via ctx.set('session', ...))
+  /// Get the current session instance (provided by sessionMiddleware via ctx.write(sessionKey, ...))
   Session get session {
-    final s = get<Session>('session');
+    final s = read(sessionKey);
     if (s == null) {
       throw StateError('Session middleware not configured');
     }
@@ -27,7 +33,7 @@ extension SessionMethods on EngineContext {
       values: Map<String, dynamic>.from(oldSession.values),
     );
     // Replace the old session with the new one in the context
-    set('session', newSession);
+    write(sessionKey, newSession);
     // Destroy the old session
     oldSession.destroy();
   }
