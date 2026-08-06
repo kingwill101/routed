@@ -30,5 +30,5 @@ export 'package:routed_cache/routed_cache.dart';
 export 'package:routed_sessions/routed_sessions.dart';
 export 'package:routed_storage/routed_storage.dart';
 export 'package:routed_rate_limit/routed_rate_limit.dart';
-export 'package:routed_view/routed_view.dart';
+export 'package:routed_views/routed_views.dart';
 export 'package:routed_http/routed_http.dart';

@@ -1,7 +1,7 @@
-name: routed_views
+name: routed_viewss
 description: View and translation presentation for Routed — Mustache, Liquid, and locale helpers.
 version: 0.1.0
-repository: https://github.com/kingwill101/routed/tree/master/packages/routed_view
+repository: https://github.com/kingwill101/routed/tree/master/packages/routed_views
 tags: [routed, view, translation]
 resolution: workspace
 environment: {sdk: ">=3.9.0 <4.0.0"}

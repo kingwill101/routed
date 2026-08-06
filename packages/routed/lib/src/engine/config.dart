@@ -4,7 +4,7 @@ import 'package:file/file.dart';
 import 'package:file/local.dart' as local;
 import 'package:routed/src/runtime/shutdown.dart';
 import 'package:routed/src/utils/debug.dart';
-import 'package:routed_view/routed_view.dart';
+import 'package:routed_views/routed_views.dart';
 
 // Stubs for moved session types
 class Options {

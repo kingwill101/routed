@@ -750,7 +750,7 @@ class ConfigLoader {
       return source;
     }
     // Simple fallback without liquify: replace {{ key }} via context lookup.
-    // Full Liquid support is provided by routed_view when available.
+    // Full Liquid support is provided by routed_views when available.
     try {
       return source.replaceAllMapped(RegExp(r'\{\{\s*([\w\.]+)\s*\}\}'), (m) {
         final key = m.group(1)!;

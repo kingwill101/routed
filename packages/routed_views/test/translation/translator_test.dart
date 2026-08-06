@@ -1,5 +1,5 @@
 import 'package:routed/src/contracts/translation/loader.dart';
-import 'package:routed_view/src/translation/translator.dart';
+import 'package:routed_views/src/translation/translator.dart';
 import 'package:test/test.dart';
 
 void main() {

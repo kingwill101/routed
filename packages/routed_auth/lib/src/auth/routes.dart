@@ -29,7 +29,7 @@ import 'package:routed/src/context/context.dart';
 import 'package:routed/src/response.dart';
 import 'package:routed/src/router/router.dart';
 import 'package:routed_sessions/routed_sessions.dart';
-import 'package:routed_view/routed_view.dart';
+import 'package:routed_views/routed_views.dart';
 
 /// Auth HTTP routes for routed.
 ///

@@ -1,5 +1,5 @@
-import 'package:routed_view/src/view/engine_manager.dart';
-import 'package:routed_view/src/view/view_engine.dart';
+import 'package:routed_views/src/view/engine_manager.dart';
+import 'package:routed_views/src/view/view_engine.dart';
 import 'package:test/test.dart';
 
 class FakeViewEngine implements ViewEngine {

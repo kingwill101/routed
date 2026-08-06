@@ -1,6 +1,6 @@
 import 'package:file/file.dart';
 import 'package:routed/src/engine/engine.dart';
-import 'package:routed_view/routed_view.dart';
+import 'package:routed_views/routed_views.dart';
 
 /// Extension on the Engine class to provide view engine functionalities.
 extension EngineViewEngineExtension on Engine {

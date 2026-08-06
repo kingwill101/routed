@@ -1,6 +1,6 @@
 import 'package:file/memory.dart';
 import 'package:routed/routed.dart';
-import 'package:routed_view/routed_view.dart';
+import 'package:routed_views/routed_views.dart';
 import 'package:test/test.dart';
 import '../test_engine.dart';
 

@@ -2,7 +2,7 @@ import 'dart:async';
 import 'dart:io';
 
 import 'package:routed/routed.dart';
-import 'package:routed_view/src/view/engine_manager.dart';
+import 'view/engine_manager.dart';
 
 /// Local stub for Render to break dependency on `routed` render.
 /// Original was in `package:routed/src/render/render.dart`.

@@ -20,7 +20,7 @@ dependencies:
   intl: ^0.20.2
   crypto: ^3.0.7
   routed: ^0.3.3
-  routed_view: ^0.1.0
+  routed_views: ^0.1.0
 
 dev_dependencies:
   contextual: ^2.2.0

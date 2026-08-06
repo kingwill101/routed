@@ -1,6 +1,6 @@
 import 'package:routed/routed.dart';
 
-/// View helpers for [EngineContext] — moved from `routed` to `routed_view`
+/// View helpers for [EngineContext] — moved from `routed` to `routed_views`
 /// per refactor.md §16.2. Initially a skeleton; render helpers remain in
 /// `routed` until PR J extracts them as extensions.
 extension RoutedViewContext on EngineContext {

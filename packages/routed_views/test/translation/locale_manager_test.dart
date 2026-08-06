@@ -1,6 +1,6 @@
-import 'package:routed_view/src/translation/locale_manager.dart';
-import 'package:routed_view/src/translation/locale_resolution.dart';
-import 'package:routed_view/src/translation/resolvers.dart';
+import 'package:routed_views/src/translation/locale_manager.dart';
+import 'package:routed_views/src/translation/locale_resolution.dart';
+import 'package:routed_views/src/translation/resolvers.dart';
 import 'package:test/test.dart';
 
 LocaleResolutionContext contextFactory({

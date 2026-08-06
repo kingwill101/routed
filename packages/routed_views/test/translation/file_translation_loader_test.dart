@@ -1,5 +1,5 @@
 import 'package:file/memory.dart';
-import 'package:routed_view/src/translation/loaders/file_translation_loader.dart';
+import 'package:routed_views/src/translation/loaders/file_translation_loader.dart';
 import 'package:test/test.dart';
 
 void main() {

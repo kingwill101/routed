@@ -6,11 +6,11 @@ import 'package:routed/src/engine/config.dart';
 import 'package:routed/src/engine/middleware_registry.dart';
 import 'package:routed/src/engine/providers/localization.dart';
 import 'package:routed/src/provider/provider.dart';
-import 'package:routed_view/src/translation/loaders/file_translation_loader.dart';
-import 'package:routed_view/src/translation/locale_manager.dart';
-import 'package:routed_view/src/translation/locale_resolver_registry.dart';
-import 'package:routed_view/src/translation/locale_resolution.dart';
-import 'package:routed_view/src/translation/resolvers.dart';
+import 'package:routed_views/src/translation/loaders/file_translation_loader.dart';
+import 'package:routed_views/src/translation/locale_manager.dart';
+import 'package:routed_views/src/translation/locale_resolver_registry.dart';
+import 'package:routed_views/src/translation/locale_resolution.dart';
+import 'package:routed_views/src/translation/resolvers.dart';
 import 'package:test/test.dart';
 
 void main() {
