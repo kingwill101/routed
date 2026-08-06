@@ -3,10 +3,7 @@ import 'dart:io';
 import 'package:test/test.dart';
 
 Directory _resolveLibDir() {
-  const candidates = <String>[
-    'lib',
-    'packages/server_contracts/lib',
-  ];
+  const candidates = <String>['lib', 'packages/server_contracts/lib'];
   for (final path in candidates) {
     final directory = Directory(path);
     if (directory.existsSync()) {

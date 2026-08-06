@@ -1,4 +1,5 @@
 library;
+
 import 'package:routed/routed.dart';
 
 class RoutedRateLimitProvider extends ServiceProvider {

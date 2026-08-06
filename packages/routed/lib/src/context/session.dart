@@ -13,10 +13,12 @@ extension SessionMethods on EngineContext {
     }
     return s;
   }
+
   T? getSession<T>(String key) => session.getValue<T>(key);
   void setSession(String key, dynamic value) {
     session.setValue(key, value);
   }
+
   void regenerateSession() {
     final oldSession = session;
     final newSession = Session(
@@ -27,15 +29,19 @@ extension SessionMethods on EngineContext {
     (this as dynamic).write(sessionKey, newSession);
     oldSession.destroy();
   }
+
   T getSessionOrDefault<T>(String key, T defaultValue) {
     return getSession<T>(key) ?? defaultValue;
   }
+
   void removeSession(String key) {
     session.values.remove(key);
   }
+
   void clearSession() {
     session.values.clear();
   }
+
   bool hasSession(String key) => session.values.containsKey(key);
   Map<String, dynamic> get sessionData => Map.from(session.values);
   DateTime get sessionCreatedAt => session.createdAt;
@@ -46,8 +52,10 @@ extension SessionMethods on EngineContext {
   void destroySession() {
     session.destroy();
   }
+
   String get sessionId => session.id;
 }
+
 extension FlashMessages on EngineContext {
   static const String _flashKey = '_flashes';
   void flash(String message, [String category = 'message']) {
@@ -60,18 +68,41 @@ extension FlashMessages on EngineContext {
       rethrow;
     }
   }
-  List<dynamic> getFlashMessages({bool withCategories = false, List<String> categoryFilter = const [],}) {
+
+  List<dynamic> getFlashMessages({
+    bool withCategories = false,
+    List<String> categoryFilter = const [],
+  }) {
     try {
       final dynamic flashesRaw = getSession<dynamic>(_flashKey);
-      final List<List<dynamic>> flashes = (flashesRaw is List) ? flashesRaw.map((flash) => flash is List ? flash : <dynamic>[]).toList() : <List<dynamic>>[];
+      final List<List<dynamic>> flashes = (flashesRaw is List)
+          ? flashesRaw
+                .map((flash) => flash is List ? flash : <dynamic>[])
+                .toList()
+          : <List<dynamic>>[];
       removeSession(_flashKey);
-      var filteredFlashes = categoryFilter.isEmpty ? flashes : flashes.where((f) => f.isNotEmpty && f[0] is String && categoryFilter.contains(f[0]),).toList();
-      return withCategories ? filteredFlashes : filteredFlashes.map((f) => f.length > 1 ? f[1] : null).where((m) => m != null).toList();
+      var filteredFlashes = categoryFilter.isEmpty
+          ? flashes
+          : flashes
+                .where(
+                  (f) =>
+                      f.isNotEmpty &&
+                      f[0] is String &&
+                      categoryFilter.contains(f[0]),
+                )
+                .toList();
+      return withCategories
+          ? filteredFlashes
+          : filteredFlashes
+                .map((f) => f.length > 1 ? f[1] : null)
+                .where((m) => m != null)
+                .toList();
     } catch (e) {
       print('Error retrieving flash messages: $e');
       return [];
     }
   }
+
   bool hasFlashMessages() {
     final flashes = getSession<List<dynamic>>(_flashKey);
     return flashes != null && flashes.isNotEmpty;

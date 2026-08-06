@@ -1,4 +1,5 @@
 library;
+
 // Final routed_full per refactor.md §12 - re-exports the slimmed Routed
 // foundation plus portable runtimes and routed_* adapters. Only names that
 // still collide with Routed's foundation are hidden (see below).

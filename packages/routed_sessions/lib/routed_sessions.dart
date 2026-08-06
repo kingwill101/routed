@@ -1,5 +1,8 @@
 library;
+<<<<<<< HEAD
 import 'dart:io';
+=======
+>>>>>>> a5d0ac8f (style: dart format across routed ecosystem)
 
 import 'package:routed/routed.dart';
 import 'package:server_sessions/server_sessions.dart';
@@ -93,6 +96,7 @@ class RoutedSessionsProvider extends ServiceProvider {
   void register(Container container) {
     container.singleton<SessionStore>((_) async => store);
   }
+
   @override
   Future<void> boot(Container container) async {}
 }

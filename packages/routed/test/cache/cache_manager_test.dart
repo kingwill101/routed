@@ -261,7 +261,6 @@ void main() {
       expect(factory.create(const {}), isA<NullStore>());
     });
 
-
     test('file lock enforces ownership and callbacks', () async {
       final fs = MemoryFileSystem();
       final dir = fs.systemTempDirectory.createTempSync();
@@ -440,4 +439,3 @@ class _FailingFileStore extends FileStore {
     return false;
   }
 }
-

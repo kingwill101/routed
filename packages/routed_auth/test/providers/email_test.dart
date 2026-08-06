@@ -1,7 +1,17 @@
 import 'dart:async';
 import 'package:server_auth/server_auth.dart';
 
-import 'package:routed/routed.dart' hide AuthProviderType, AuthUser, AuthSessionStrategy, CredentialsProvider, AuthCredentials , EmailProvider, AuthEmailRequest, InMemoryAuthAdapter, AuthVerificationToken;
+import 'package:routed/routed.dart'
+    hide
+        AuthProviderType,
+        AuthUser,
+        AuthSessionStrategy,
+        CredentialsProvider,
+        AuthCredentials,
+        EmailProvider,
+        AuthEmailRequest,
+        InMemoryAuthAdapter,
+        AuthVerificationToken;
 import 'package:test/test.dart';
 
 void main() {

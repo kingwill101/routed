@@ -1,4 +1,5 @@
 library;
+
 import 'package:routed/routed.dart';
 
 class RoutedStorageProvider extends ServiceProvider {

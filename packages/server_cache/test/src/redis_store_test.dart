@@ -121,7 +121,8 @@ class _FakeRedisBackend {
       return 'OK';
     }
     if (cmd == 'GET') return values[args[1].toString()];
-    if (cmd == 'MGET') return args.sublist(1).map((k) => values[k.toString()]).toList();
+    if (cmd == 'MGET')
+      return args.sublist(1).map((k) => values[k.toString()]).toList();
     if (cmd == 'DEL') {
       final existed = values.containsKey(args[1].toString());
       values.remove(args[1].toString());

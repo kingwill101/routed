@@ -3,7 +3,6 @@ import 'package:file/local.dart' as local;
 import 'package:liquify/liquify.dart';
 import 'package:routed/src/render/html/template_engine.dart';
 
-
 /// {@template liquid_root_base_directory}
 /// `LiquidRoot` resolves templates relative to `baseDirectory` without
 /// mutating the underlying file system's current directory.
@@ -156,7 +155,10 @@ class LiquidTemplateEngine implements TemplateEngine {
       return;
     }
     if (root is FileSystemRoot) {
-      _root = FileSystemRoot(directory.path, fileSystem: (root as dynamic).fileSystem as FileSystem?);
+      _root = FileSystemRoot(
+        directory.path,
+        fileSystem: (root as dynamic).fileSystem as FileSystem?,
+      );
       return;
     }
   }

@@ -1,4 +1,5 @@
 library;
+
 import 'package:routed/routed.dart' hide Store;
 import 'package:server_contracts/server_contracts.dart' show Store;
 
@@ -23,6 +24,7 @@ class RoutedCacheProvider extends ServiceProvider {
   void register(Container container) {
     container.singleton<Store>((_) async => store);
   }
+
   @override
   Future<void> boot(Container container) async {}
 }

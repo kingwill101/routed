@@ -198,4 +198,3 @@ class User implements XmlEncodable, XmlDecodable<User> {
     return 'User(name: $name, age: $age, emails: $emails, isActive: $isActive)';
   }
 }
-

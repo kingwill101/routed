@@ -113,4 +113,3 @@ class _SseEventEncoder extends Converter<SseEvent, String> {
     return buffer.toString();
   }
 }
-

@@ -10,6 +10,7 @@ class WebSocketContext {
   void send(dynamic data) {
     webSocket.add(data);
   }
+
   Future<void> close([int? code, String? reason]) {
     return webSocket.close(code, reason);
   }
