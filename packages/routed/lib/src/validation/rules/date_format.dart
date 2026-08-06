@@ -22,12 +22,23 @@ class DateFormatRule extends ValidationRule {
     // Full intl DateFormat support is available via validation_ext when intl is present;
     // this keeps routed core free of intl for pubspec slim (resolves blocked 38->29).
     try {
-      // Try ISO parse first
-      if (DateTime.tryParse(str) != null) {
-        // For strict format check, ensure string matches expected pattern length
-        // Basic strictness: if format contains 'yyyy', ensure 4-digit year present
-        if (format.contains('yyyy') && !RegExp(r'\d{4}').hasMatch(str))
+      final parsed = DateTime.tryParse(str);
+      if (parsed != null) {
+        // Strict check: for yyyy-MM-dd formats, verify month/day are valid and match input
+        // DateTime.tryParse overflows month 13 to next year, so need to verify.
+        if (format.contains('yyyy-MM-dd') || format.contains('yyyy/MM/dd')) {
+          final m = RegExp(r'\d{4}[-/](\d{2})[-/](\d{2})').firstMatch(str);
+          if (m != null) {
+            final month = int.tryParse(m.group(1)!);
+            final day = int.tryParse(m.group(2)!);
+            if (month == null || month < 1 || month > 12) return false;
+            if (day == null || day < 1 || day > 31) return false;
+            if (parsed.month != month || parsed.day != day) return false;
+          }
+        }
+        if (format.contains('yyyy') && !RegExp(r'\d{4}').hasMatch(str)) {
           return false;
+        }
         return true;
       }
       // Fallback: try to parse with manual pattern for yyyy-MM-dd etc.
