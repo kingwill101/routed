@@ -2,6 +2,7 @@ name: routed_ecosystem
 publish_to: none
 workspace:
   - packages/routed
+  - packages/routed_cli
   - packages/routed_io
   - packages/server_native
   - packages/routed_auth
