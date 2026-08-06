@@ -42,13 +42,15 @@ void _validateConfigItems(Map<String, dynamic> items) {
   }
 
   // security
-  final sec = items['security'] as Map?;
+  final secRaw = items['security'];
+  if (secRaw != null && secRaw is! Map) {
+    fail('security must be a map');
+  }
+  final sec = secRaw as Map?;
   if (sec != null) {
-    final proxies = sec['trusted_proxies'] as Map?;
+    final trustedRaw = sec['trusted_proxies'];
+    final proxies = trustedRaw is Map ? trustedRaw as Map : null;
     if (proxies != null) {
-      if (sec['trusted_proxies'] is! Map) {
-        // handled below for type check
-      }
       final list = proxies['proxies'] as List?;
       if (list != null && list.length > 1 && list[1] is! String) {
         fail('security.trusted_proxies.proxies[1] must be a string');
@@ -66,6 +68,65 @@ void _validateConfigItems(Map<String, dynamic> items) {
     final headers = sec['headers'] as Map?;
     if (headers != null && headers['Referrer-Policy'] is! String && headers.containsKey('Referrer-Policy')) {
       fail('security.headers.Referrer-Policy must be a string');
+    }
+    // csrf
+    final csrfRaw = sec['csrf'];
+    if (csrfRaw != null && csrfRaw is! Map) {
+      fail('security.csrf must be a map');
+    }
+    final csrf = csrfRaw as Map?;
+    if (csrf != null) {
+      if (csrf.containsKey('enabled') && csrf['enabled'] is! bool) {
+        fail('security.csrf.enabled must be a boolean');
+      }
+      if (csrf.containsKey('cookie_name') && csrf['cookie_name'] is! String) {
+        fail('security.csrf.cookie_name must be a string');
+      }
+    }
+  }
+
+  // view
+  final viewRaw = items['view'];
+  if (viewRaw != null && viewRaw is! Map) {
+    fail('view must be a map');
+  }
+  final view = viewRaw as Map?;
+  if (view != null) {
+    if (view.containsKey('directory') && view['directory'] is! String) {
+      fail('view.directory must be a string');
+    }
+    if (view.containsKey('cache') && view['cache'] is! bool) {
+      fail('view.cache must be a boolean');
+    }
+    if (view.containsKey('engine') && view['engine'] is! String) {
+      fail('view.engine must be a string');
+    }
+    if (view.containsKey('disk') && view['disk'] is! String) {
+      fail('view.disk must be a string');
+    }
+  }
+
+  // cache
+  final cacheRaw = items['cache'];
+  if (cacheRaw != null && cacheRaw is! Map) {
+    fail('cache must be a map');
+  }
+  final cache = cacheRaw as Map?;
+  if (cache != null) {
+    if (cache.containsKey('default') && cache['default'] is! String) {
+      fail('cache.default must be a string');
+    }
+    if (cache.containsKey('stores') && cache['stores'] is! Map) {
+      fail('cache.stores must be a map');
+    }
+    // check each store type
+    final stores = cache['stores'] as Map?;
+    if (stores != null) {
+      for (final entry in stores.entries) {
+        if (entry.value is! Map) {
+          fail('cache.stores.${entry.key} must be a map');
+        }
+      }
     }
   }
 

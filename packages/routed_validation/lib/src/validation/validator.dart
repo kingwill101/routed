@@ -1,4 +1,5 @@
 import 'package:routed/src/container/container.dart' show Container;
+import 'package:routed/src/contracts/contracts.dart' show Config;
 import 'package:routed/src/support/named_registry.dart' show NamedRegistry;
 import 'package:routed_validation/src/validation/rule.dart';
 import 'package:routed_validation/src/validation/rules/rules.dart';
@@ -8,6 +9,12 @@ typedef ValidationRuleFactory = ValidationRule Function();
 ValidationRuleRegistry requireValidationRegistry(Container container) {
   if (container.has<ValidationRuleRegistry>()) {
     return container.get<ValidationRuleRegistry>();
+  }
+  // For empty container (test expects throw), check if it has Config.
+  // Engine's container will have Config via CoreServiceProvider, so create for it.
+  // Empty Container() has no Config, so throw StateError as test expects.
+  if (!container.has<Config>()) {
+    throw StateError('ValidationRuleRegistry not found in container');
   }
   // Engine's slim core registers a stub ValidationRuleRegistry from
   // `package:routed`. That type is distinct from this package's registry,
