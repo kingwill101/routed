@@ -1,0 +1,12 @@
+library;
+export 'package:routed/src/config/specs/core.dart';
+export 'package:routed/src/config/specs/http.dart';
+export 'package:routed/src/config/specs/localization.dart';
+export 'package:routed/src/config/specs/logging.dart';
+export 'package:routed/src/config/specs/logging_drivers.dart';
+export 'package:routed/src/config/specs/observability.dart';
+export 'package:routed/src/config/specs/routing.dart';
+export 'package:routed/src/config/specs/runtime.dart';
+export 'package:routed/src/config/specs/session_drivers.dart';
+export 'package:routed/src/config/specs/uploads.dart';
+export 'package:routed/src/config/specs/views.dart';
