@@ -13,7 +13,6 @@ import 'package:routed/src/auth/oauth.dart';
 import 'package:routed/src/auth/session_auth.dart';
 import 'package:routed/src/context/context.dart';
 import 'package:routed/src/context/session.dart';
-import 'package:routed/src/context/typed_context_state.dart';
 import 'package:routed/src/events/event.dart';
 import 'package:routed/src/events/event_manager.dart';
 import 'package:routed/src/crypto/crypto.dart';
