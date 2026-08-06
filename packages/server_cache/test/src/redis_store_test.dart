@@ -1,3 +1,4 @@
+// ignore_for_file: unused_element, non_constant_identifier_names
 import 'dart:async';
 
 import 'package:redis/redis.dart';
@@ -121,8 +122,9 @@ class _FakeRedisBackend {
       return 'OK';
     }
     if (cmd == 'GET') return values[args[1].toString()];
-    if (cmd == 'MGET')
+    if (cmd == 'MGET') {
       return args.sublist(1).map((k) => values[k.toString()]).toList();
+    }
     if (cmd == 'DEL') {
       final existed = values.containsKey(args[1].toString());
       values.remove(args[1].toString());

@@ -18,7 +18,35 @@ import 'observability.dart';
 import '../../auth/provider.dart';
 import 'localization.dart';
 
-class StorageServiceProvider extends ServiceProvider { StorageServiceProvider(); @override void register(c) {} @override Future<void> boot(c) async {} }
+class StorageServiceProvider extends ServiceProvider {
+  StorageServiceProvider();
+  @override
+  void register(c) {}
+  @override
+  Future<void> boot(c) async {}
+
+  static void registerDriver(
+    String name,
+    dynamic builder, {
+    bool overrideExisting = false,
+    dynamic documentation,
+  }) {}
+
+  static void unregisterDriver(String name) {}
+
+  static List<String> availableDriverNames() => ['local', 's3'];
+
+  dynamic get defaultConfig => _StorageProviderConfig();
+}
+
+class _StorageProviderConfig {
+  List<_ConfigDocEntry> get docs => [];
+}
+
+class _ConfigDocEntry {
+  String get path => '';
+}
+
 class StaticAssetsServiceProvider extends ServiceProvider { StaticAssetsServiceProvider(); @override void register(c) {} @override Future<void> boot(c) async {} }
 class ViewServiceProvider extends ServiceProvider { ViewServiceProvider(); @override void register(c) {} @override Future<void> boot(c) async {} }
 

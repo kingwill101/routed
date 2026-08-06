@@ -7,4 +7,10 @@ funding: [{url: https://www.buymeacoffee.com/kingwill101}]
 resolution: workspace
 environment: {sdk: ">=3.9.0 <4.0.0"}
 dependencies: {file: ^7.0.1, storage_fs: ^0.1.0, server_contracts: ^0.1.0}
-dev_dependencies: {lints: ^6.0.0, test: ^1.29.0}
+dev_dependencies:
+  lints: ^6.0.0
+  test: ^1.29.0
+  routed: ^0.3.3
+  routed_testing: ^0.3.3
+  server_testing: ^0.3.2
+  property_testing: ^0.3.2

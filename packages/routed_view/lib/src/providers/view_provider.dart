@@ -9,11 +9,11 @@ import 'package:routed/src/config/specs/views.dart';
 import 'package:routed/src/engine/config.dart';
 import 'package:routed/src/engine/engine.dart';
 import 'package:routed/src/provider/provider.dart';
-import 'package:routed/src/storage/storage_manager.dart';
-import 'package:routed/src/view/engines/liquid_engine.dart';
-import 'package:routed/src/view/view_engine.dart';
-import 'package:routed/src/view/engine_manager.dart';
-import 'package:routed/src/view/view_extensions.dart';
+import 'package:server_storage/server_storage.dart';
+import 'package:routed_view/src/view/engines/liquid_engine.dart';
+import 'package:routed_view/src/view/view_engine.dart';
+import 'package:routed_view/src/view/engine_manager.dart';
+import 'package:routed_view/src/view/view_extensions.dart';
 
 /// Configures view engine defaults driven by configuration/disks.
 class ViewServiceProvider extends ServiceProvider with ProvidesDefaultConfig {

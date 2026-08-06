@@ -1,4 +1,5 @@
 import 'package:artisanal/args.dart';
+// ignore: implementation_imports
 import 'package:routed/src/support/named_registry.dart';
 
 typedef ProviderCommandFactory = Command<void> Function();

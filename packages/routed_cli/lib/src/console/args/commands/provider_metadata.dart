@@ -27,9 +27,6 @@ extension ProviderMetadata on ServiceProvider {
     if (this is LoggingServiceProvider) {
       return 'HTTP logging defaults and helpers.';
     }
-    return 'Storage disks (local file systems, etc.).';
-    return 'Static asset serving configuration defaults.';
-    return 'View template configuration and engines.';
     return '';
   }
 }
