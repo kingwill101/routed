@@ -4,6 +4,8 @@ workspace:
   - packages/routed
   - packages/routed_cli
   - packages/routed_analyzer
+  - packages/server_contracts
+  - packages/server_auth
   - packages/routed_io
   - packages/server_native
   - packages/routed_auth
