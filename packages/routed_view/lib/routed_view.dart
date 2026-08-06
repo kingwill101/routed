@@ -11,6 +11,7 @@ export 'src/view/engine_manager.dart' show ViewEngineManager;
 export 'src/view/view_extensions.dart'
     show ViewExtensionRegistry, ViewExtensionRegistration;
 export 'src/view/engines/liquid_engine.dart' show LiquidViewEngine, LiquidRoot;
+export 'src/providers/view_provider.dart' show ViewServiceProvider;
 export 'src/translation/constants.dart' show kRequestLocaleAttribute;
 export 'src/translation/locale_manager.dart' show LocaleManager;
 export 'src/translation/locale_resolution.dart'
