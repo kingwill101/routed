@@ -1,7 +1,8 @@
 import 'dart:convert';
+import 'package:server_auth/server_auth.dart';
 
 import 'package:crypto/crypto.dart';
-import 'package:routed/routed.dart';
+import 'package:routed/routed.dart' hide ConfigSchema, parseBoolLike, parseStringList, parseStringLike, ProviderConfigException;
 
 /// Telegram user profile returned by the Login Widget.
 ///
@@ -215,7 +216,7 @@ class TelegramProvider extends AuthProvider with CallbackProvider {
   /// accessed. It verifies the HMAC signature and returns the user.
   @override
   Future<CallbackResult> handleCallback(
-    EngineContext ctx,
+    dynamic ctx,
     Map<String, String> params,
   ) async {
     try {

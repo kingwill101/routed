@@ -8,7 +8,7 @@ import 'package:routed/routed.dart'
         SseCodec,
         ContentNegotiator,
         NegotiatedMediaType;
-import 'package:routed/src/validation/validator.dart';
+
 
 import 'binding.dart';
 
@@ -27,17 +27,7 @@ class QueryBinding extends Binding {
     bool bail = false,
     Map<String, String>? messages,
   }) async {
-    final registry = requireValidationRegistry(context.container);
-    final validator = Validator.make(
-      rules,
-      registry: registry,
-      bail: bail,
-      messages: messages,
-    );
-    final errors = validator.validate(context.queryCache);
-    if (errors.isNotEmpty) {
-      throw ValidationError(errors);
-    }
+    throw UnimplementedError('validation moved to routed_validation');
   }
 
   @override

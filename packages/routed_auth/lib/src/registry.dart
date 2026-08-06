@@ -1,4 +1,18 @@
-import 'package:routed/auth.dart';
+import 'package:server_auth/server_auth.dart'
+    hide
+        registerGoogleAuthProvider,
+        registerDiscordAuthProvider,
+        registerMicrosoftEntraAuthProvider,
+        registerAppleAuthProvider,
+        registerTwitterAuthProvider,
+        registerFacebookAuthProvider,
+        registerGitLabAuthProvider,
+        registerSpotifyAuthProvider,
+        registerSlackAuthProvider,
+        registerLinkedInAuthProvider,
+        registerTwitchAuthProvider,
+        registerTelegramAuthProvider,
+        registerDropboxAuthProvider;
 
 import 'providers/apple.dart';
 import 'providers/discord.dart';

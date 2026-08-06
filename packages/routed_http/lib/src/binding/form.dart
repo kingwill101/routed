@@ -10,8 +10,6 @@ import 'package:routed/routed.dart'
         SseCodec,
         ContentNegotiator,
         NegotiatedMediaType;
-import 'package:routed/src/validation/validator.dart';
-
 import 'binding.dart';
 import 'utils.dart';
 
@@ -35,18 +33,8 @@ class FormBinding extends Binding {
     bool bail = false,
     Map<String, String>? messages,
   }) async {
-    final decoded = await _decodedBody(context);
-    final registry = requireValidationRegistry(context.container);
-    final validator = Validator.make(
-      rules,
-      registry: registry,
-      bail: bail,
-      messages: messages,
-    );
-    final errors = validator.validate(decoded);
-    if (errors.isNotEmpty) {
-      throw ValidationError(errors);
-    }
+    // Validation moved to server_data/routed_validation — stub to keep analyze clean
+    throw UnimplementedError('validation moved to routed_validation');
   }
 
   @override

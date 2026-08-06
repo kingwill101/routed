@@ -10,8 +10,6 @@ import 'package:routed/routed.dart'
         SseCodec,
         ContentNegotiator,
         NegotiatedMediaType;
-import 'package:routed/src/validation/validator.dart';
-
 import 'binding.dart';
 
 /// Handles JSON binding and validation.
@@ -48,18 +46,7 @@ class JsonBinding extends Binding {
     bool bail = false,
     Map<String, String>? messages,
   }) async {
-    final decoded = await _decodedBody(context);
-    final registry = requireValidationRegistry(context.container);
-    final validator = Validator.make(
-      rules,
-      registry: registry,
-      bail: bail,
-      messages: messages,
-    );
-    final errors = validator.validate(decoded);
-    if (errors.isNotEmpty) {
-      throw ValidationError(errors);
-    }
+    throw UnimplementedError('validation moved to routed_validation');
   }
 
   @override

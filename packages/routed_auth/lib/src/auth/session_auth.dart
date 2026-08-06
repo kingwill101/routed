@@ -18,6 +18,7 @@ import 'package:server_auth/server_auth.dart'
         RememberTokenStore,
         InMemoryRememberTokenStore;
 import 'package:routed/src/context/context.dart';
+import 'package:routed_sessions/routed_sessions.dart';
 import 'package:routed/src/response.dart';
 import 'package:routed/src/router/types.dart';
 

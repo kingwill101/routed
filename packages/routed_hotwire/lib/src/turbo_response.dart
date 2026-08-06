@@ -1,4 +1,5 @@
 import 'package:routed/routed.dart';
+import 'package:routed_view/routed_view.dart';
 
 import 'turbo_streams.dart';
 
@@ -7,22 +8,22 @@ class TurboResponse {
   const TurboResponse._();
 
   /// Send a full-page HTML response (Turbo Drive navigation).
-  static Response html(
+  static Future<Response> html(
     EngineContext ctx,
     String html, {
     int statusCode = HttpStatus.ok,
     Map<String, String>? headers,
-  }) {
+  }) async {
     return _write(ctx, html, 'text/html; charset=utf-8', statusCode, headers);
   }
 
   /// Send a fragment response scoped to a frame.
-  static Response frame(
+  static Future<Response> frame(
     EngineContext ctx,
     String html, {
     int statusCode = HttpStatus.ok,
     Map<String, String>? headers,
-  }) {
+  }) async {
     return TurboResponse.html(
       ctx,
       html,
@@ -32,12 +33,12 @@ class TurboResponse {
   }
 
   /// Send a Turbo Stream payload with proper content type.
-  static Response stream(
+  static Future<Response> stream(
     EngineContext ctx,
     dynamic body, {
     int statusCode = HttpStatus.ok,
     Map<String, String>? headers,
-  }) {
+  }) async {
     return _write(
       ctx,
       normalizeTurboStreamBody(body),
@@ -48,11 +49,11 @@ class TurboResponse {
   }
 
   /// Send a 422 response with HTML content (common for validation failures).
-  static Response unprocessable(
+  static Future<Response> unprocessable(
     EngineContext ctx,
     String html, {
     Map<String, String>? headers,
-  }) {
+  }) async {
     return _write(
       ctx,
       html,
@@ -63,11 +64,11 @@ class TurboResponse {
   }
 
   /// Issue a 303 redirect which Turbo Drive will follow automatically.
-  static Response seeOther(
+  static Future<Response> seeOther(
     EngineContext ctx,
     String location, {
     Map<String, String>? headers,
-  }) {
+  }) async {
     if (ctx.isClosed) return ctx.string('');
     ctx.status(HttpStatus.seeOther);
     ctx.setHeader(HttpHeaders.locationHeader, location);
@@ -76,13 +77,13 @@ class TurboResponse {
     return ctx.string('');
   }
 
-  static Response _write(
+  static Future<Response> _write(
     EngineContext ctx,
     String body,
     String contentType,
     int statusCode,
     Map<String, String>? headers,
-  ) {
+  ) async {
     if (ctx.isClosed) return ctx.string('');
     ctx.status(statusCode);
     ctx.setHeader(HttpHeaders.contentTypeHeader, contentType);
@@ -95,21 +96,21 @@ class TurboResponse {
 
 /// Mixin helpers onto [EngineContext] for concise usage.
 extension TurboResponseContext on EngineContext {
-  Response turboHtml(
+  Future<Response> turboHtml(
     String html, {
     int statusCode = HttpStatus.ok,
     Map<String, String>? headers,
   }) =>
       TurboResponse.html(this, html, statusCode: statusCode, headers: headers);
 
-  Response turboFrame(
+  Future<Response> turboFrame(
     String html, {
     int statusCode = HttpStatus.ok,
     Map<String, String>? headers,
   }) =>
       TurboResponse.frame(this, html, statusCode: statusCode, headers: headers);
 
-  Response turboStream(
+  Future<Response> turboStream(
     dynamic body, {
     int statusCode = HttpStatus.ok,
     Map<String, String>? headers,
@@ -120,9 +121,9 @@ extension TurboResponseContext on EngineContext {
     headers: headers,
   );
 
-  Response turboSeeOther(String location, {Map<String, String>? headers}) =>
+  Future<Response> turboSeeOther(String location, {Map<String, String>? headers}) =>
       TurboResponse.seeOther(this, location, headers: headers);
 
-  Response turboUnprocessable(String html, {Map<String, String>? headers}) =>
+  Future<Response> turboUnprocessable(String html, {Map<String, String>? headers}) =>
       TurboResponse.unprocessable(this, html, headers: headers);
 }
