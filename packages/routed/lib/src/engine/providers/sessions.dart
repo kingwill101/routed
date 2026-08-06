@@ -11,9 +11,9 @@ import 'package:routed/src/engine/storage_defaults.dart';
 import 'package:routed/src/engine/storage_paths.dart';
 import 'package:routed/src/provider/config_utils.dart';
 import 'package:routed/src/provider/provider.dart';
-import 'package:routed/src/sessions/cache_store.dart';
-import 'package:routed/src/sessions/memory_store.dart';
-import 'package:routed/src/sessions/middleware.dart';
+// import 'package:routed/src/sessions/cache_store.dart'; moved to server_sessions
+// import 'package:routed/src/sessions/memory_store.dart'; moved to server_sessions
+// import 'package:routed/src/sessions/middleware.dart'; moved to server_sessions
 import 'package:routed/src/sessions/options.dart';
 import 'package:routed/src/sessions/secure_cookie.dart';
 import 'package:routed/src/support/driver_registry.dart';

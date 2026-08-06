@@ -1,7 +1,7 @@
 import 'package:routed/src/container/container.dart';
 import 'package:routed/src/context/context.dart';
 import 'package:routed/src/contracts/translation/translator.dart';
-import 'package:routed/src/translation/constants.dart';
+import 'package:routed_view/routed_view.dart';
 
 import 'zone.dart';
 

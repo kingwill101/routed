@@ -5,7 +5,7 @@ import 'package:file/local.dart' as local;
 import 'package:routed/session.dart';
 import 'package:routed/src/runtime/shutdown.dart';
 import 'package:routed/src/utils/debug.dart';
-import 'package:routed/src/view/view_engine.dart';
+import 'package:routed_view/routed_view.dart';
 
 /// Default ETag generation strategies supported by the engine.
 enum EtagStrategy { disabled, strong, weak }

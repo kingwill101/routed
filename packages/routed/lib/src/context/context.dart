@@ -5,17 +5,17 @@ import 'dart:typed_data';
 
 import 'package:path/path.dart' as p;
 import 'package:routed/src/binding/binding.dart';
-import 'package:routed/src/binding/convert/sse.dart';
-import 'package:routed/src/binding/multipart.dart';
-import 'package:routed/src/binding/utils.dart';
+import 'package:routed_http/routed_http.dart'; // sse moved
+import 'package:routed_http/routed_http.dart'; // multipart moved
+// utils moved to routed_http
 import 'package:routed/src/container/container.dart' show Container;
 import 'package:routed/src/contracts/contracts.dart' show Config;
 import 'package:routed/src/contracts/translation/translator.dart';
 import 'package:routed/src/engine/config.dart';
 import 'package:routed/src/engine/engine.dart';
 import 'package:routed/src/engine/engine_template.dart';
-import 'package:routed/src/file_handler.dart';
-import 'package:routed/src/http/negotiation.dart';
+import 'package:routed_storage/routed_storage.dart'; // file_handler moved
+// negotiation moved to routed_http
 import 'package:routed/src/render/data_render.dart';
 import 'package:routed/src/render/html.dart';
 import 'package:routed/src/render/json_render.dart';
@@ -27,8 +27,8 @@ import 'package:routed/src/render/xml.dart';
 import 'package:routed/src/render/yaml.dart';
 import 'package:routed/src/request.dart';
 import 'package:routed/src/response.dart';
-import 'package:routed/src/translation/constants.dart';
-import 'package:routed/src/view/view_engine.dart';
+import 'package:routed_view/routed_view.dart'; // constants moved
+import 'package:routed_view/routed_view.dart'; // view_engine moved
 
 import '../../middlewares.dart' show Middleware, disableCompression;
 

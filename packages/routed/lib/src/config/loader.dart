@@ -5,7 +5,9 @@ import 'package:file/file.dart';
 import 'package:file/local.dart' as local;
 import 'package:path/path.dart' as p;
 import 'package:routed/src/config/config.dart';
+
 import 'package:routed/src/utils/deep_copy.dart';
+class YamlScalar { dynamic value; YamlScalar(this.value); }
 
 class ConfigLoaderOptions {
   final Map<String, dynamic> defaults;

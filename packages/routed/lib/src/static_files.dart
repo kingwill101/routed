@@ -1,1 +1,9 @@
-mixin StaticFileHandler { void staticFile(String a, String b, [dynamic fs]) {} void static(String a, String b, {dynamic fileSystem, bool listDirectory = false}) {} }
+mixin StaticFileHandler {
+  void staticFile(String a, String b, [dynamic fs]) {}
+  void static(
+    String a,
+    String b, {
+    dynamic fileSystem,
+    bool listDirectory = false,
+  }) {}
+}

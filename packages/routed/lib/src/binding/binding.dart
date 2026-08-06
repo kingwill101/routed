@@ -90,7 +90,7 @@ enum MimeType {
 /// [contentType] - The MIME type of the request body.
 ///
 /// Returns the appropriate binding based on the method and content type.
-Binding defaultBinding(String method, String contentType) {
+dynamic defaultBinding(String method, String contentType) {
   // If the method is GET, use the QueryBinding.
   if (method.toUpperCase() == 'GET') {
     return QueryBinding();

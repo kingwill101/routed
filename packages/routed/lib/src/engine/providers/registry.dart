@@ -8,10 +8,10 @@ import 'logging.dart';
 import 'routing.dart';
 import 'security.dart';
 import 'sessions.dart';
-import 'static_assets.dart';
-import 'storage.dart';
+// import 'static_assets.dart'; moved to adapters
+// import 'storage.dart'; moved to adapters
 import 'uploads.dart';
-import 'views.dart';
+// import 'views.dart'; moved to adapters
 import 'compression.dart';
 import 'rate_limit.dart';
 import 'observability.dart';

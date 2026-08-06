@@ -1,5 +1,5 @@
 import 'package:routed/src/validation/rule.dart';
-import 'package:routed/src/binding/multipart.dart';
+import 'package:routed_http/routed_http.dart';
 import 'package:path/path.dart' as p;
 
 class FileExtensionsRule extends ValidationRule {

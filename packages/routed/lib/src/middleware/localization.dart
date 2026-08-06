@@ -1,8 +1,8 @@
 library;
 
 import 'package:routed/routed.dart';
-import 'package:routed/src/translation/constants.dart';
-import 'package:routed/src/translation/locale_manager.dart';
+import 'package:routed_view/routed_view.dart';
+import 'package:routed_view/routed_view.dart'; // locale_manager moved
 
 /// Middleware that resolves and stores the active locale for each request.
 ///

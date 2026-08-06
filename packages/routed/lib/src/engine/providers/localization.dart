@@ -10,11 +10,11 @@ import 'package:routed/src/contracts/contracts.dart'
 import 'package:routed/src/engine/config.dart';
 import 'package:routed/src/engine/middleware_registry.dart';
 import 'package:routed/src/provider/provider.dart';
-import 'package:routed/src/translation/loaders/file_translation_loader.dart';
-import 'package:routed/src/translation/locale_manager.dart';
-import 'package:routed/src/translation/locale_resolver_registry.dart';
-import 'package:routed/src/translation/resolvers.dart';
-import 'package:routed/src/translation/translator.dart' as routed;
+import 'package:routed_view/routed_view.dart'; // file loader moved
+import 'package:routed_view/routed_view.dart'; // locale manager moved
+import 'package:routed_view/routed_view.dart'; // registry moved
+import 'package:routed_view/routed_view.dart'; // resolvers moved
+import 'package:routed_view/routed_view.dart'; // translator moved as routed;
 
 /// Provides translation loader + translator bindings using the default
 /// filesystem configured by the engine.
@@ -111,7 +111,7 @@ class LocalizationServiceProvider extends ServiceProvider
     TranslationLoader loader,
     LocalizationConfig localeConfig,
   ) {
-    return routed.Translator(
+    return Translator(
       loader: loader,
       locale: localeConfig.defaultLocale,
       fallbackLocale: localeConfig.fallbackLocale,

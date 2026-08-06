@@ -2,7 +2,7 @@ import 'dart:io' show HttpStatus;
 
 import 'package:routed/src/render/render.dart';
 import 'package:routed/src/response.dart';
-import 'package:routed/src/view/view_engine.dart';
+import 'package:routed_view/routed_view.dart';
 
 /// The `HtmlRender` class is responsible for rendering HTML content using a specified template and data.
 /// It implements the `Render` interface.

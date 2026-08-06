@@ -1,4 +1,4 @@
-import 'package:routed/src/binding/multipart.dart';
+import 'package:routed_http/routed_http.dart';
 import 'package:routed/src/validation/abstract_rule.dart';
 
 class FileBetweenRule extends AbstractValidationRule {
