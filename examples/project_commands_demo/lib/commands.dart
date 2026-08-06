@@ -4,7 +4,6 @@ import 'dart:io';
 
 import 'package:args/command_runner.dart';
 import 'package:project_commands_demo/app.dart' as app;
-import 'package:routed/routed.dart';
 
 class DumpRoutesCommand extends Command<void> {
   DumpRoutesCommand() {

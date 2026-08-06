@@ -1,7 +1,6 @@
 import 'dart:io';
 
 import 'package:artisanal/args.dart';
-import 'package:routed/routed.dart';
 import 'package:demo_app/app.dart' as app;
 import 'package:demo_app/commands.dart' as project_commands;
 

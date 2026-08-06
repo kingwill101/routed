@@ -1,5 +1,4 @@
-import 'package:routed/routed.dart';
-import 'package:routed_auth/routed_auth.dart';
+import 'package:server_auth/server_auth.dart';
 import 'package:test/test.dart';
 
 void main() {

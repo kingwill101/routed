@@ -1,6 +1,5 @@
 import 'dart:io';
 
-import 'package:routed/routed.dart';
 import 'package:demo_app/app.dart' as app;
 
 Future<void> main(List<String> args) async {

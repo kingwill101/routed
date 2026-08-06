@@ -12,9 +12,9 @@ void main() {
       final engine = Engine();
       expect(engine, isA<Engine>());
       // handler signature still valid
-      Handler h = (ctx) => ctx.string('ok');
+      FutureOr<Response> h(EngineContext ctx) => ctx.string('ok');
       expect(h, isA<Handler>());
-      Middleware m = (ctx, next) async => await next();
+      FutureOr<Response> m(EngineContext ctx, Next next) async => await next();
       expect(m, isA<Middleware>());
     });
 
