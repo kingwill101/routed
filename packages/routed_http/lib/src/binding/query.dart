@@ -1,5 +1,13 @@
 // ignore_for_file: implementation_imports
-import 'package:routed/routed.dart';
+import 'package:routed/routed.dart'
+    hide
+        Binding,
+        Bindable,
+        MimeType,
+        SseEvent,
+        SseCodec,
+        ContentNegotiator,
+        NegotiatedMediaType;
 import 'package:routed/src/validation/validator.dart';
 
 import 'binding.dart';
@@ -39,7 +47,7 @@ class QueryBinding extends Binding {
         instance[entry.key] = entry.value;
       }
     } else if (instance is Bindable) {
-      instance.bind(context.queryCache);
+      (instance as Bindable).bind(context.queryCache);
     }
     return instance;
   }

@@ -2,7 +2,15 @@
 // Public surface; EngineContext comes from public `routed` barrel.
 import 'dart:async';
 
-import 'package:routed/routed.dart';
+import 'package:routed/routed.dart'
+    hide
+        Binding,
+        Bindable,
+        MimeType,
+        SseEvent,
+        SseCodec,
+        ContentNegotiator,
+        NegotiatedMediaType;
 
 import 'form.dart' show FormBinding;
 import 'json.dart' show JsonBinding;

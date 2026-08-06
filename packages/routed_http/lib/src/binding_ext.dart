@@ -1,4 +1,4 @@
-import 'package:routed/routed.dart';
+import 'package:routed/routed.dart' hide Binding, Bindable, MimeType;
 
 import 'binding/binding.dart';
 
@@ -7,5 +7,6 @@ import 'binding/binding.dart';
 extension RoutedHttpBinding on EngineContext {
   bool get hasBindingSupport => true;
 
-  Future<T> bindWith<T>(T instance, Binding binding) => binding.bind(this, instance);
+  Future<T> bindWith<T>(T instance, Binding binding) =>
+      binding.bind(this, instance);
 }

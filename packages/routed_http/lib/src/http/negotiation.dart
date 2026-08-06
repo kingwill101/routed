@@ -15,7 +15,11 @@ class NegotiatedMediaType {
 }
 
 class _MediaOffer {
-  _MediaOffer({required this.raw, required this.mediaType, required this.index});
+  _MediaOffer({
+    required this.raw,
+    required this.mediaType,
+    required this.index,
+  });
   final String raw;
   final MediaType? mediaType;
   final int index;
@@ -53,7 +57,11 @@ class ContentNegotiator {
     if (specs.isEmpty) {
       final fallback = _resolveFallback(defaultType, offers);
       if (fallback == null) return null;
-      return NegotiatedMediaType(value: fallback.raw, quality: 1.0, parameters: const {});
+      return NegotiatedMediaType(
+        value: fallback.raw,
+        quality: 1.0,
+        parameters: const {},
+      );
     }
     _MediaOffer? bestOffer;
     _AcceptSpec? bestSpec;
@@ -69,8 +77,13 @@ class ContentNegotiator {
         final specScore = spec.specificity;
         if (q > bestQuality ||
             (q == bestQuality && specScore > bestSpecificity) ||
-            (q == bestQuality && specScore == bestSpecificity && spec.index < bestHeaderIndex) ||
-            (q == bestQuality && specScore == bestSpecificity && spec.index == bestHeaderIndex && offer.index < bestOfferIndex)) {
+            (q == bestQuality &&
+                specScore == bestSpecificity &&
+                spec.index < bestHeaderIndex) ||
+            (q == bestQuality &&
+                specScore == bestSpecificity &&
+                spec.index == bestHeaderIndex &&
+                offer.index < bestOfferIndex)) {
           bestOffer = offer;
           bestSpec = spec;
           bestQuality = q;
@@ -83,7 +96,11 @@ class ContentNegotiator {
     if (bestOffer == null || bestSpec == null) return null;
     final params = Map<String, String>.from(bestSpec.mediaType.parameters);
     params.remove('q');
-    return NegotiatedMediaType(value: bestOffer.raw, quality: bestQuality, parameters: params);
+    return NegotiatedMediaType(
+      value: bestOffer.raw,
+      quality: bestQuality,
+      parameters: params,
+    );
   }
 
   static List<_MediaOffer> _parseOffers(Iterable<String> supported) {
@@ -113,7 +130,14 @@ class ContentNegotiator {
         final qStr = mt.parameters['q'];
         final q = qStr == null ? 1.0 : double.tryParse(qStr) ?? 1.0;
         final paramCount = mt.parameters.length - (qStr == null ? 0 : 1);
-        specs.add(_AcceptSpec(mediaType: mt, quality: q.clamp(0.0, 1.0), index: idx++, parameterCount: paramCount));
+        specs.add(
+          _AcceptSpec(
+            mediaType: mt,
+            quality: q.clamp(0.0, 1.0),
+            index: idx++,
+            parameterCount: paramCount,
+          ),
+        );
       } catch (_) {}
     }
     specs.sort((a, b) {
@@ -126,7 +150,10 @@ class ContentNegotiator {
     return specs;
   }
 
-  static _MediaOffer? _resolveFallback(String? defaultType, List<_MediaOffer> offers) {
+  static _MediaOffer? _resolveFallback(
+    String? defaultType,
+    List<_MediaOffer> offers,
+  ) {
     if (defaultType != null) {
       for (final o in offers) {
         if (o.raw == defaultType) return o;
@@ -152,7 +179,11 @@ extension NegotiationEngineContext on EngineContext {
     String? defaultType,
   }) {
     final header = requestHeader(HttpHeaders.acceptHeader);
-    return ContentNegotiator.negotiate(header, supported, defaultType: defaultType);
+    return ContentNegotiator.negotiate(
+      header,
+      supported,
+      defaultType: defaultType,
+    );
   }
 
   bool accepts(String mediaType) {

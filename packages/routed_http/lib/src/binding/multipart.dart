@@ -5,7 +5,15 @@ import 'dart:io' show Platform, Process;
 import 'package:file/file.dart' as fs;
 import 'package:file/local.dart' as local_fs;
 import 'package:mime/mime.dart';
-import 'package:routed/routed.dart';
+import 'package:routed/routed.dart'
+    hide
+        Binding,
+        Bindable,
+        MimeType,
+        SseEvent,
+        SseCodec,
+        ContentNegotiator,
+        NegotiatedMediaType;
 import 'package:routed/src/validation/validator.dart';
 
 import 'binding.dart';
@@ -167,6 +175,7 @@ class UploadQuotaTracker {
     _used += bytes;
     return true;
   }
+
   void release(int bytes) {
     if (!_enabled) return;
     _used -= bytes;
@@ -174,6 +183,7 @@ class UploadQuotaTracker {
       _used = 0;
     }
   }
+
   void reset() {
     _used = 0;
   }
@@ -346,10 +356,11 @@ class MultipartBinding extends Binding {
         instance[entry.key] = entry.value;
       }
     } else if (instance is Bindable) {
-      instance.bind(data);
+      (instance as Bindable).bind(data);
     }
     return instance;
   }
+
   @override
   Future<void> validate(
     EngineContext context,

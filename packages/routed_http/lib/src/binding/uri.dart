@@ -1,5 +1,6 @@
 // ignore_for_file: implementation_imports
-import 'package:routed/routed.dart';
+import 'package:routed/routed.dart'
+    hide Binding, Bindable, MimeType, SseEvent, SseCodec;
 import 'package:routed/src/validation/validator.dart';
 
 import 'binding.dart';
@@ -25,7 +26,7 @@ class UriBinding extends Binding {
         final values = entry.value as List;
         data[entry.key] = values.isEmpty ? null : values.first;
       }
-      instance.bind(data);
+      (instance as Bindable).bind(data);
     }
     return instance;
   }

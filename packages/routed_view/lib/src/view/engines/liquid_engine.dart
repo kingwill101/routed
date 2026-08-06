@@ -13,7 +13,7 @@ import 'package:routed/routed.dart'
 import '../view_engine.dart';
 import '../view_extensions.dart';
 
-export 'package:routed/routed.dart' show LiquidRoot;
+export 'package:routed/src/render/html/liquid.dart' show LiquidRoot;
 
 /// A view engine implementation that uses the Liquid template language.
 class LiquidViewEngine implements ViewEngine {

@@ -15,9 +15,12 @@ extension RoutedViewTranslation on EngineContext {
     Map<String, dynamic>? replacements,
     String? locale,
     bool fallback = true,
-  }) =>
-      trans(key,
-          replacements: replacements, locale: locale, fallback: fallback);
+  }) => trans(
+    key,
+    replacements: replacements,
+    locale: locale,
+    fallback: fallback,
+  );
 
   /// Alias for `transChoice`.
   String viewTransChoice(
@@ -25,7 +28,5 @@ extension RoutedViewTranslation on EngineContext {
     num count, {
     Map<String, dynamic>? replacements,
     String? locale,
-  }) =>
-      transChoice(key, count,
-          replacements: replacements, locale: locale);
+  }) => transChoice(key, count, replacements: replacements, locale: locale);
 }

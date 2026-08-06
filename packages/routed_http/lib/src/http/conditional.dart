@@ -46,7 +46,11 @@ EtagCandidate? _parseEtag(String raw) {
   return EtagCandidate(value: value, weak: weak);
 }
 
-bool etagMatches(EtagCandidate candidate, EtagCandidate current, {bool weakComparison = false}) {
+bool etagMatches(
+  EtagCandidate candidate,
+  EtagCandidate current, {
+  bool weakComparison = false,
+}) {
   if (candidate.isWildcard) return true;
   if (candidate.value == null || current.value == null) return false;
   if (!weakComparison && (candidate.weak || current.weak)) return false;

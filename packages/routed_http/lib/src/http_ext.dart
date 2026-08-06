@@ -1,4 +1,4 @@
-import 'package:routed/routed.dart';
+import 'package:routed/routed.dart' hide ContentNegotiator, NegotiatedMediaType;
 
 import 'http/negotiation.dart';
 
@@ -8,9 +8,6 @@ extension RoutedHttpNegotiation on EngineContext {
   bool get hasHttpSupport => true;
 
   NegotiatedMediaType? httpNegotiatedContentType(List<String> available) {
-    return ContentNegotiator.negotiate(
-      requestHeader('accept'),
-      available,
-    );
+    return ContentNegotiator.negotiate(requestHeader('accept'), available);
   }
 }
