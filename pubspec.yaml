@@ -7,6 +7,7 @@ workspace:
   - packages/server_contracts
   - packages/server_auth
   - packages/server_cache
+  - packages/server_sessions
   - packages/routed_io
   - packages/server_native
   - packages/routed_auth
