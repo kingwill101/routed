@@ -17,7 +17,7 @@ export 'src/http/conditional.dart';
 export 'src/http/negotiation.dart';
 export 'src/websocket/websocket.dart';
 export 'src/websocket/websocket_handler.dart';
-export 'src/sse/sse.dart';
+export 'src/sse/sse.dart' hide RoutedHttpSse;
 export 'src/http_ext.dart';
 export 'src/binding_ext.dart';
 export 'src/context/binding.dart';

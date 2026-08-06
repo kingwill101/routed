@@ -6,7 +6,7 @@ import 'package:file/local.dart' as local;
 import 'package:routed/src/container/container.dart';
 import 'package:routed/src/contracts/contracts.dart' show Config;
 import 'package:routed/src/config/specs/views.dart';
-import 'package:routed/src/engine/config.dart';
+import 'package:routed/src/engine/config.dart' hide ViewEngine;
 import 'package:routed/src/engine/engine.dart';
 import 'package:routed/src/provider/provider.dart';
 import 'package:server_storage/server_storage.dart';
@@ -83,7 +83,8 @@ class ViewServiceProvider extends ServiceProvider with ProvidesDefaultConfig {
 
     final newConfig = engineConfig.copyWith(
       templateDirectory: resolved.directory,
-      templateEngine: resolved.viewEngine ?? engineConfig.templateEngine,
+      // ignore: avoid_dynamic_calls
+      templateEngine: (resolved.viewEngine as dynamic) ?? engineConfig.templateEngine,
       views: resolved.viewConfig,
     );
 
@@ -180,7 +181,7 @@ class ViewServiceProvider extends ServiceProvider with ProvidesDefaultConfig {
     String? engineName,
     String directory,
     file.FileSystem fs,
-    ViewEngine? fallback,
+    dynamic fallback,
   ) {
     final name = (engineName ?? 'liquid').toLowerCase();
     switch (name) {

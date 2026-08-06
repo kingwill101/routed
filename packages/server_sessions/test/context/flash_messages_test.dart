@@ -1,6 +1,6 @@
 import 'dart:convert';
 
-import 'package:routed/routed.dart';
+import 'package:routed/routed.dart' hide SecureCookie, CookieStore, FilesystemStore, Options;
 import 'package:server_sessions/server_sessions.dart';
 import 'package:routed_testing/routed_testing.dart';
 import 'package:server_testing/server_testing.dart';
