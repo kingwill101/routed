@@ -125,7 +125,7 @@ class RouteManifestEntry {
       middleware: route.middlewares.map(_describeMiddleware),
       constraints: _serializeConstraints(route.constraints),
       isFallback: route.isFallback,
-      schema: route.schema,
+      schema: route.schema as RouteSchema?,
     );
   }
 
