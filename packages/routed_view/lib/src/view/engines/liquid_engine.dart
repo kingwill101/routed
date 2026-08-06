@@ -1,14 +1,19 @@
-// ignore_for_file: implementation_imports, depend_on_referenced_packages
-import 'package:file/file.dart';
 import 'dart:async';
 
+import 'package:file/file.dart';
 import 'package:liquify/liquify.dart' as liquid;
-import 'package:routed/src/render/html/liquid.dart';
-import 'package:routed/src/context/context.dart';
+import 'package:routed/routed.dart'
+    hide
+        ViewEngine,
+        TemplateNotFoundException,
+        kViewEngineContextKey,
+        ViewEngineManager,
+        ViewExtensionRegistry,
+        ViewExtensionRegistration;
 import '../view_engine.dart';
 import '../view_extensions.dart';
 
-export 'package:routed/src/render/html/liquid.dart';
+export 'package:routed/routed.dart' show LiquidRoot;
 
 /// A view engine implementation that uses the Liquid template language.
 class LiquidViewEngine implements ViewEngine {
