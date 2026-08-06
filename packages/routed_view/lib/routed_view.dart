@@ -17,4 +17,3 @@ export 'src/translation/resolvers.dart' show LocaleResolver, QueryLocaleResolver
 export 'src/translation/translator.dart' show Translator;
 export 'src/translation/message_selector.dart' show MessageSelector;
 export 'src/translation/loaders/file_translation_loader.dart' show FileTranslationLoader;
-export 'src/providers/view_provider.dart' show ViewServiceProvider;
