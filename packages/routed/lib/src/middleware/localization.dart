@@ -2,6 +2,7 @@ library;
 
 import 'package:routed/routed.dart';
 import 'package:routed/src/translation/constants.dart';
+import 'package:routed/src/translation/locale_resolution.dart' show LocaleResolutionContext;
 import 'package:routed/src/translation/locale_manager.dart';
 
 /// Middleware that resolves and stores the active locale for each request.

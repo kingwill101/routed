@@ -7,6 +7,7 @@ import 'package:pointycastle/block/aes.dart';
 import 'package:pointycastle/block/modes/gcm.dart';
 import 'package:routed/routed.dart';
 import 'package:routed/src/crypto/crypto.dart';
+import 'package:routed/src/utils/environment.dart' show env;
 
 /// A secure cookie implementation supporting both HMAC signing and AES encryption.
 /// Provides three security modes:

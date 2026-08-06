@@ -1,4 +1,6 @@
 import 'package:routed/routed.dart';
+import 'package:routed/src/openapi/schema.dart' show RouteSchema;
+import 'package:routed/src/websocket/websocket_handler.dart' show WebSocketHandler;
 import 'package:routed/src/router/registered_route.dart';
 import 'package:routed/src/router/router_group_builder.dart';
 import 'package:routed/src/static_files.dart';
