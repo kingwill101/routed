@@ -6,11 +6,11 @@ import 'package:args/command_runner.dart';
 import 'package:file/file.dart' as fs;
 import 'package:path/path.dart' as p;
 import 'package:routed/routed.dart';
-import 'package:routed/src/console/args/base_command.dart';
-import 'package:routed/src/console/config/doc_printer.dart';
-import 'package:routed/src/console/config/generator.dart';
-import 'package:routed/src/console/util/dart_exec.dart';
-import 'package:routed/src/console/util/pubspec.dart';
+import 'package:routed_cli/src/console/args/base_command.dart';
+import 'package:routed_cli/src/console/config/doc_printer.dart';
+import 'package:routed_cli/src/console/config/generator.dart';
+import 'package:routed_cli/src/console/util/dart_exec.dart';
+import 'package:routed_cli/src/console/util/pubspec.dart';
 
 class ConfigInitCommand extends BaseCommand {
   ConfigInitCommand({super.logger, super.fileSystem}) {

@@ -91,6 +91,8 @@ class ConfigSnapshot {
 }
 
 class ConfigLoader {
+  dynamic loadYaml(String s) => null;
+
   ConfigLoader({FileSystem? fileSystem})
     : _fileSystem = fileSystem ?? const local.LocalFileSystem();
 

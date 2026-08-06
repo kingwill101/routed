@@ -27,13 +27,13 @@ extension ProviderMetadata on ServiceProvider {
     if (this is LoggingServiceProvider) {
       return 'HTTP logging defaults and helpers.';
     }
-    if (this is StorageServiceProvider) {
+    if (this is dynamic) {
       return 'Storage disks (local file systems, etc.).';
     }
-    if (this is StaticAssetsServiceProvider) {
+    if (this is dynamic) {
       return 'Static asset serving configuration defaults.';
     }
-    if (this is ViewServiceProvider) {
+    if (this is dynamic) {
       return 'View template configuration and engines.';
     }
     return '';

@@ -4,8 +4,8 @@ import 'package:args/command_runner.dart';
 import 'package:file/file.dart' as fs;
 import 'package:routed/providers.dart' show ProviderRegistry;
 import 'package:routed/routed.dart';
-import 'package:routed/src/console/args/base_command.dart';
-import 'package:routed/src/console/args/commands/provider_metadata.dart';
+import 'package:routed_cli/src/console/args/base_command.dart';
+import 'package:routed_cli/src/console/args/commands/provider_metadata.dart';
 import 'package:yaml/yaml.dart';
 
 class ProviderListCommand extends BaseCommand {
