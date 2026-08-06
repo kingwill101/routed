@@ -2,8 +2,6 @@ import 'package:routed/src/config/specs/routing.dart';
 import 'package:routed/src/contracts/contracts.dart' show Config;
 import 'package:routed/src/events/event_manager.dart';
 import 'package:routed/src/events/signals.dart';
-import 'package:routed/src/validation/validator.dart';
-
 import '../../container/container.dart' show Container;
 import '../../engine/engine.dart';
 import '../../provider/provider.dart';
@@ -36,11 +34,6 @@ class RoutingServiceProvider extends ServiceProvider
   void register(Container container) {
     if (!container.has<RoutePatternRegistry>()) {
       container.instance<RoutePatternRegistry>(RoutePatternRegistry.defaults());
-    }
-    if (!container.has<ValidationRuleRegistry>()) {
-      container.instance<ValidationRuleRegistry>(
-        ValidationRuleRegistry.defaults(),
-      );
     }
     // Register event manager as a singleton
     container.singleton<EventManager>((c) async => EventManager());

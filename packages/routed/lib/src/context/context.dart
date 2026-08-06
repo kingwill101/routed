@@ -15,20 +15,9 @@ import 'package:routed/src/engine/engine.dart';
 import 'package:routed/src/engine/engine_template.dart';
 // file_handler moved
 // negotiation moved to routed_http
-import 'package:routed/src/render/data_render.dart';
-import 'package:routed/src/render/html.dart';
-import 'package:routed/src/render/json_render.dart';
-import 'package:routed/src/render/reader_render.dart';
-import 'package:routed/src/render/redirect.dart';
-import 'package:routed/src/render/render.dart';
-import 'package:routed/src/render/string_render.dart';
-import 'package:routed/src/render/yaml.dart';
 import 'package:routed/src/request.dart';
 import 'package:routed/src/response.dart';
-import 'package:routed_view/routed_view.dart'; // constants moved
-// view_engine moved
-
-import '../../middlewares.dart' show Middleware, disableCompression;
+import 'package:routed/src/router/types.dart' show Middleware;
 
 part 'binding.dart';
 part 'error.dart';
@@ -41,28 +30,10 @@ part 'negotiation.dart';
 part 'proxy.dart';
 
 part 'query.dart';
-part 'render.dart';
-// stubs for moved view/storage
 
 part 'sse.dart';
 
 part 'shortcuts.dart';
-
-class _XmlStub implements Render {
-  _XmlStub(this.data);
-  final data;
-  @override
-  void writeContentType(r) {}
-  @override
-  Future<void> render(r) async {}
-}
-
-class _FileHandlerStub {
-  _FileHandlerStub({required String rootPath});
-  Future<void> serveFile(a, b) async {}
-  Future<void> serveDirectory(a, b) async {}
-  Future<void> serveAttachment(a, b, c) async {}
-}
 
 /// The EngineContext is loosely inspired by gin.Context in Go.
 /// It wraps [Request] and [Response], holds arbitrary keys/values,

@@ -1,3 +1,0 @@
-class StorageManager {}
-
-class StorageDriverRegistry {}

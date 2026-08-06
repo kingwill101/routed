@@ -1,7 +1,6 @@
 import 'package:routed/routed.dart';
 import 'package:routed/src/router/registered_route.dart';
 import 'package:routed/src/router/router_group_builder.dart';
-import 'package:routed/src/static_files.dart';
 export 'route_builder.dart';
 
 /// A hierarchical Router supporting:
@@ -10,7 +9,7 @@ export 'route_builder.dart';
 /// - Group-level middlewares
 /// - Route-level middlewares
 /// - Hierarchical naming
-class Router with StaticFileHandler {
+class Router {
   /// Base path for this router (e.g. `/api`)
   final String _prefix;
 
@@ -123,7 +122,6 @@ class Router with StaticFileHandler {
     RouteHandler handler, {
     List<Middleware> middlewares = const [],
     Map<String, dynamic> constraints = const {},
-    RouteSchema? schema,
   }) {
     return handle(
       "GET",
@@ -131,7 +129,6 @@ class Router with StaticFileHandler {
       handler,
       middlewares: middlewares,
       constraints: constraints,
-      schema: schema,
     );
   }
 
@@ -147,7 +144,6 @@ class Router with StaticFileHandler {
     RouteHandler handler, {
     List<Middleware> middlewares = const [],
     Map<String, dynamic> constraints = const {},
-    RouteSchema? schema,
   }) {
     return handle(
       "POST",
@@ -155,7 +151,6 @@ class Router with StaticFileHandler {
       handler,
       middlewares: middlewares,
       constraints: constraints,
-      schema: schema,
     );
   }
 
@@ -171,7 +166,6 @@ class Router with StaticFileHandler {
     RouteHandler handler, {
     List<Middleware> middlewares = const [],
     Map<String, dynamic> constraints = const {},
-    RouteSchema? schema,
   }) {
     return handle(
       "PUT",
@@ -179,7 +173,6 @@ class Router with StaticFileHandler {
       handler,
       middlewares: middlewares,
       constraints: constraints,
-      schema: schema,
     );
   }
 
@@ -195,7 +188,6 @@ class Router with StaticFileHandler {
     RouteHandler handler, {
     List<Middleware> middlewares = const [],
     Map<String, dynamic> constraints = const {},
-    RouteSchema? schema,
   }) {
     return handle(
       "DELETE",
@@ -203,7 +195,6 @@ class Router with StaticFileHandler {
       handler,
       middlewares: middlewares,
       constraints: constraints,
-      schema: schema,
     );
   }
 
@@ -219,7 +210,6 @@ class Router with StaticFileHandler {
     RouteHandler handler, {
     List<Middleware> middlewares = const [],
     Map<String, dynamic> constraints = const {},
-    RouteSchema? schema,
   }) {
     return handle(
       "PATCH",
@@ -227,7 +217,6 @@ class Router with StaticFileHandler {
       handler,
       middlewares: middlewares,
       constraints: constraints,
-      schema: schema,
     );
   }
 
@@ -243,7 +232,6 @@ class Router with StaticFileHandler {
     RouteHandler handler, {
     List<Middleware> middlewares = const [],
     Map<String, dynamic> constraints = const {},
-    RouteSchema? schema,
   }) {
     return handle(
       "HEAD",
@@ -251,7 +239,6 @@ class Router with StaticFileHandler {
       handler,
       middlewares: middlewares,
       constraints: constraints,
-      schema: schema,
     );
   }
 
@@ -267,7 +254,6 @@ class Router with StaticFileHandler {
     RouteHandler handler, {
     List<Middleware> middlewares = const [],
     Map<String, dynamic> constraints = const {},
-    RouteSchema? schema,
   }) {
     return handle(
       "OPTIONS",
@@ -275,7 +261,6 @@ class Router with StaticFileHandler {
       handler,
       middlewares: middlewares,
       constraints: constraints,
-      schema: schema,
     );
   }
 
@@ -291,7 +276,6 @@ class Router with StaticFileHandler {
     RouteHandler handler, {
     List<Middleware> middlewares = const [],
     Map<String, dynamic> constraints = const {},
-    RouteSchema? schema,
   }) {
     return handle(
       "CONNECT",
@@ -299,7 +283,6 @@ class Router with StaticFileHandler {
       handler,
       middlewares: middlewares,
       constraints: constraints,
-      schema: schema,
     );
   }
 
@@ -315,7 +298,6 @@ class Router with StaticFileHandler {
     Handler handler, {
     List<Middleware> middlewares = const [],
     Map<String, dynamic> constraints = const {},
-    RouteSchema? schema,
   }) {
     // Create routes for all common HTTP methods
     final methods = [
@@ -338,7 +320,6 @@ class Router with StaticFileHandler {
         handler,
         middlewares: middlewares,
         constraints: constraints,
-        schema: schema,
       );
 
       firstBuilder ??= builder;
@@ -361,7 +342,6 @@ class Router with StaticFileHandler {
     RouteHandler handler, {
     List<Middleware> middlewares = const [],
     Map<String, dynamic> constraints = const {},
-    RouteSchema? schema,
   }) {
     final source = _captureRouteRegistrationSource();
     final fullPath = _joinPaths(_prefix, path);
@@ -371,7 +351,6 @@ class Router with StaticFileHandler {
       handler: handler,
       routeMiddlewares: middlewares,
       constraints: constraints,
-      schema: schema,
       sourceFile: source.file,
       sourceLine: source.line,
       sourceColumn: source.column,

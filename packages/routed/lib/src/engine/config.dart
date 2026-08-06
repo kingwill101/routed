@@ -2,11 +2,20 @@ import 'dart:io';
 
 import 'package:file/file.dart';
 import 'package:file/local.dart' as local;
-import 'package:routed/session.dart';
-import 'package:routed/src/contracts/cache/store.dart' show Store;
 import 'package:routed/src/runtime/shutdown.dart';
 import 'package:routed/src/utils/debug.dart';
 import 'package:routed_view/routed_view.dart';
+
+// Stubs for moved session types
+class Options {
+  Options({this.path = '/', this.domain = '', this.maxAge, this.secure, this.httpOnly, this.sameSite, this.partitioned});
+  final dynamic path; final dynamic domain; final dynamic maxAge; final dynamic secure; final dynamic httpOnly; final dynamic sameSite; final dynamic partitioned;
+}
+class SecureCookie {
+  SecureCookie({dynamic key, bool useEncryption = false, bool useSigning = false});
+}
+class CookieStore { CookieStore({dynamic codecs, dynamic defaultOptions}); }
+class FilesystemStore { FilesystemStore({dynamic storageDir, dynamic codecs, dynamic defaultOptions, dynamic fileSystem, dynamic lottery}); }
 
 /// Default ETag generation strategies supported by the engine.
 enum EtagStrategy { disabled, strong, weak }
@@ -854,13 +863,13 @@ class SessionConfig {
         defaultOptions: resolvedOptions,
       ),
       maxAge: maxAge,
-      path: resolvedOptions.path ?? '/',
-      secure: resolvedOptions.secure ?? true,
-      httpOnly: resolvedOptions.httpOnly ?? true,
+      path: resolvedOptions.path as String? ?? '/',
+      secure: resolvedOptions.secure as bool? ?? true,
+      httpOnly: resolvedOptions.httpOnly as bool? ?? true,
       defaultOptions: resolvedOptions,
       expireOnClose: expireOnClose,
-      sameSite: resolvedOptions.sameSite,
-      partitioned: resolvedOptions.partitioned,
+      sameSite: resolvedOptions.sameSite as SameSite?,
+      partitioned: resolvedOptions.partitioned as bool?,
       codecs: resolvedCodecs,
     );
   }
@@ -903,13 +912,13 @@ class SessionConfig {
         lottery: lottery,
       ),
       maxAge: maxAge,
-      path: resolvedOptions.path ?? '/',
-      secure: resolvedOptions.secure ?? true,
-      httpOnly: resolvedOptions.httpOnly ?? true,
+      path: resolvedOptions.path as String? ?? '/',
+      secure: resolvedOptions.secure as bool? ?? true,
+      httpOnly: resolvedOptions.httpOnly as bool? ?? true,
       defaultOptions: resolvedOptions,
       expireOnClose: expireOnClose,
-      sameSite: resolvedOptions.sameSite,
-      partitioned: resolvedOptions.partitioned,
+      sameSite: resolvedOptions.sameSite as SameSite?,
+      partitioned: resolvedOptions.partitioned as bool?,
       codecs: resolvedCodecs,
       lottery: lottery,
     );

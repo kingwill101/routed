@@ -143,7 +143,7 @@ extension EngineContextHelpers on EngineContext {
   }
 
   String? _currentLocaleOverride() {
-    final stored = get<String>(kRequestLocaleAttribute);
+    final stored = get<String>('routed.locale');
     if (stored != null && stored.isNotEmpty) {
       return stored;
     }

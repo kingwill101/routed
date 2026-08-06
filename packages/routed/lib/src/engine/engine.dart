@@ -5,7 +5,6 @@ import 'package:collection/collection.dart';
 import 'package:fuzzywuzzy/fuzzywuzzy.dart' as fuzzy;
 import 'package:http2/http2.dart' as http2;
 import 'package:meta/meta.dart' show internal, visibleForTesting;
-import 'package:routed/middlewares.dart';
 import 'package:routed/src/config/registry.dart';
 import 'package:routed/src/container/container.dart';
 import 'package:routed/src/container/container_mixin.dart';
@@ -36,10 +35,8 @@ import 'package:routed/src/router/router_group_builder.dart';
 import 'package:routed/src/router/middleware_reference.dart';
 import 'package:routed/src/router/types.dart';
 import 'package:routed/src/runtime/shutdown.dart';
-import 'package:routed/src/static_files.dart';
 import 'package:routed/src/support/named_registry.dart';
 import 'package:routed/src/utils/debug.dart';
-import 'package:routed/src/validation/validator.dart';
 import 'package:routed/src/websocket/websocket_handler.dart';
 
 export 'events/events.dart';
@@ -52,6 +49,14 @@ part 'param_utils.dart';
 part 'patterns.dart';
 part 'route_trie.dart';
 part 'request.dart';
+
+// Stub for moved validation
+class ValidationRuleRegistry {
+  static ValidationRuleRegistry defaults() => ValidationRuleRegistry();
+  static ValidationRuleRegistry clone(ValidationRuleRegistry other) => ValidationRuleRegistry();
+  List<String> get names => [];
+  ValidationRuleRegistry cloneInstance() => ValidationRuleRegistry();
+}
 
 /// The core HTTP engine of the Routed framework.
 ///
@@ -146,7 +151,7 @@ part 'request.dart';
 ///
 /// final engine = Engine(providers: [DatabaseServiceProvider()]);
 /// ```
-class Engine with StaticFileHandler, ContainerMixin {
+class Engine with ContainerMixin {
   /// The default providers for a full-featured engine.
   ///
   /// Includes:
@@ -685,7 +690,7 @@ class Engine with StaticFileHandler, ContainerMixin {
   factory Engine.d({EngineConfig? config, List<EngineOpt>? options}) {
     return Engine(
       config: config ?? EngineConfig(),
-      middlewares: [timeoutMiddleware(const Duration(seconds: 30))],
+      middlewares: [],
       options: options,
       providers: Engine.defaultProviders,
     );
@@ -861,7 +866,6 @@ class Engine with StaticFileHandler, ContainerMixin {
           name: r.name,
           middlewares: allMiddlewares,
           constraints: r.constraints,
-          schema: r.schema,
           isFallback: r.constraints['isFallback'] == true,
           sourceFile: r.sourceFile,
           sourceLine: r.sourceLine,

@@ -1,4 +1,3 @@
-import 'package:routed/src/cache/cache_manager.dart';
 import 'package:routed/src/engine/config.dart';
 import 'package:routed/src/engine/engine.dart';
 import 'package:routed/src/router/types.dart';
@@ -367,9 +366,9 @@ EngineOpt withMultipart({
 ///   ],
 /// );
 /// ```
-EngineOpt withCacheManager(CacheManager cacheManager) {
+EngineOpt withCacheManager(dynamic cacheManager) {
   return (Engine engine) {
-    engine.container.instance<CacheManager>(cacheManager);
+    engine.container.instance<dynamic>(cacheManager);
   };
 }
 

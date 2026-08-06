@@ -1,4 +1,3 @@
-import 'package:routed/src/openapi/schema.dart';
 import 'package:routed/src/router/registered_route.dart';
 import 'package:routed/src/router/router.dart';
 import 'package:routed/src/router/types.dart';
@@ -32,26 +31,6 @@ class RouteBuilder {
   /// Returns the current instance of `RouteBuilder` to allow for method chaining.
   RouteBuilder constraints(Map<String, dynamic> newConstraints) {
     _route.constraints.addAll(newConstraints);
-    return this;
-  }
-
-  /// Attaches API schema metadata to the route.
-  ///
-  /// The [routeSchema] parameter describes the route's request/response
-  /// contract for OpenAPI generation and runtime validation.
-  /// Returns the current instance of `RouteBuilder` to allow for method chaining.
-  ///
-  /// ```dart
-  /// engine.post('/users', createUser)
-  ///   .name('users.create')
-  ///   .schema(RouteSchema(
-  ///     summary: 'Create a new user',
-  ///     body: BodySchema.fromRules({'name': 'required|string|min:2'}),
-  ///     responses: [ResponseSchema(201, description: 'Created')],
-  ///   ));
-  /// ```
-  RouteBuilder schema(RouteSchema routeSchema) {
-    _route.schema = routeSchema;
     return this;
   }
 

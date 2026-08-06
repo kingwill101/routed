@@ -177,20 +177,7 @@ class EngineRoute {
   }
 
   /// Builds a schema validation middleware if this route has validation rules.
-  Middleware? _buildSchemaValidationMiddleware() {
-    final s = schema;
-    if (s == null) return null;
-    try {
-      final dynamic dyn = s;
-      final rules = dyn.validationRules as Map<String, String>?;
-      if (rules == null || rules.isEmpty) return null;
-      final middleware =
-          (schemaValidationMiddleware as dynamic)(s) as Middleware?;
-      return middleware;
-    } catch (_) {
-      return null;
-    }
-  }
+  Middleware? _buildSchemaValidationMiddleware() => null;
 
   bool matchesPath(String path, {bool allowTrailingSlash = true}) {
     if (isFallback) {

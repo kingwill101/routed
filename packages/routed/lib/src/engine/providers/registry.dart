@@ -1,22 +1,11 @@
 import 'package:routed/src/provider/provider.dart';
 import 'package:routed/src/support/named_registry.dart';
 
-import 'cache.dart';
 import 'core.dart';
-import 'cors.dart';
 import 'logging.dart';
 import 'routing.dart';
-import 'security.dart';
-import 'sessions.dart';
-// import 'static_assets.dart'; moved to adapters
-// import 'storage.dart'; moved to adapters
 import 'uploads.dart';
-// import 'views.dart'; moved to adapters
-import 'compression.dart';
-import 'rate_limit.dart';
 import 'observability.dart';
-import '../../auth/provider.dart';
-import 'localization.dart';
 
 class StorageServiceProvider extends ServiceProvider {
   StorageServiceProvider();
@@ -84,29 +73,9 @@ class ProviderRegistry extends NamedRegistry<ProviderRegistration> {
       description: 'Routing events and event manager bindings.',
     );
     register(
-      'routed.cache',
-      factory: () => CacheServiceProvider(),
-      description: 'Cache manager bootstrap and defaults.',
-    );
-    register(
-      'routed.sessions',
-      factory: () => SessionServiceProvider(),
-      description: 'Session middleware and configuration.',
-    );
-    register(
       'routed.uploads',
       factory: () => UploadsServiceProvider(),
       description: 'Multipart upload configuration defaults.',
-    );
-    register(
-      'routed.cors',
-      factory: () => CorsServiceProvider(),
-      description: 'CORS configuration and middleware defaults.',
-    );
-    register(
-      'routed.security',
-      factory: () => SecurityServiceProvider(),
-      description: 'Security middleware (CSRF, headers, limits).',
     );
     register(
       'routed.logging',
@@ -114,26 +83,10 @@ class ProviderRegistry extends NamedRegistry<ProviderRegistration> {
       description: 'HTTP logging defaults and helpers.',
     );
     register(
-      'routed.auth',
-      factory: () => AuthServiceProvider(),
-      description: 'Authentication helpers (JWT middleware, validators).',
-    );
-    register(
       'routed.observability',
       factory: () => ObservabilityServiceProvider(),
       description:
           'Tracing, metrics, health endpoints, and error observer hooks.',
-    );
-    register(
-      'routed.compression',
-      factory: () => CompressionServiceProvider(),
-      description: 'Response compression defaults and middleware.',
-    );
-    register(
-      'routed.rate_limit',
-      factory: () => RateLimitServiceProvider(),
-      description:
-          'Rate limiting with token buckets, sliding windows, quotas, and failover modes.',
     );
     register(
       'routed.storage',
@@ -149,11 +102,6 @@ class ProviderRegistry extends NamedRegistry<ProviderRegistration> {
       'routed.views',
       factory: () => ViewServiceProvider(),
       description: 'View template configuration and engines.',
-    );
-    register(
-      'routed.localization',
-      factory: () => LocalizationServiceProvider(),
-      description: 'Translation loader/translator bindings and defaults.',
     );
   }
 

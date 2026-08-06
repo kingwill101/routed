@@ -71,10 +71,10 @@ extension NegotiationContext on EngineContext {
     Map<String, dynamic>? jsonBody,
   }) {
     if (wantsJson) {
-      return ContextRender(this).json(
-        jsonBody ?? {'error': message, 'status': statusCode},
-        statusCode: statusCode,
-      );
+      response.statusCode = statusCode;
+      response.headers.contentType = ContentType.json;
+      response.write(jsonEncode(jsonBody ?? {'error': message, 'status': statusCode}));
+      return response;
     }
     if (acceptsHtml) {
       // Minimal, self-contained HTML error page.
@@ -108,7 +108,10 @@ extension NegotiationContext on EngineContext {
       return response;
     }
     // Fall back to plain text.
-    return ContextRender(this).string(message, statusCode: statusCode);
+    response.statusCode = statusCode;
+    response.headers.contentType = ContentType.text;
+    response.write(message);
+    return response;
   }
 
   /// Negotiates the best media type from [supported] based on the request's

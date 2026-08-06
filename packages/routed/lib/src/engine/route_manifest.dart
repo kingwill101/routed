@@ -1,9 +1,6 @@
 import 'dart:convert';
 
 import 'engine.dart';
-import 'package:routed/src/openapi/handler_identity.dart';
-import 'package:routed/src/openapi/schema.dart';
-import 'package:routed/src/validation/validator.dart';
 
 /// A serializable snapshot of the engine's registered routes.
 class RouteManifest {
@@ -107,25 +104,16 @@ class RouteManifestEntry {
        constraints = Map<String, Object?>.unmodifiable(constraints);
 
   factory RouteManifestEntry.fromEngineRoute(EngineRoute route) {
-    final handlerIdentity = HandlerIdentity(
-      routeName: route.name,
-      functionRef: _extractHandlerFunctionRef(route.handler),
-      method: route.method,
-      path: route.path,
-      sourceFile: route.sourceFile,
-      sourceLine: route.sourceLine,
-      sourceColumn: route.sourceColumn,
-    );
-
+    // Keep generic Object for handlerIdentity/schema to support both routed and routed_openapi RouteSchema
     return RouteManifestEntry(
       method: route.method,
       path: route.path,
       name: route.name,
-      handlerIdentity: handlerIdentity.isResolved ? handlerIdentity : null,
+      handlerIdentity: null,
       middleware: route.middlewares.map(_describeMiddleware),
       constraints: _serializeConstraints(route.constraints),
       isFallback: route.isFallback,
-      schema: route.schema as RouteSchema?,
+      schema: route.schema,
     );
   }
 
@@ -143,45 +131,39 @@ class RouteManifestEntry {
         ? _stringKeyed(json['constraints'] as Map)
         : const <String, Object?>{};
     final isFallback = json['isFallback'] == true;
-    final handlerIdentity = json['handlerIdentity'] is Map
-        ? HandlerIdentity.fromJson(_stringKeyed(json['handlerIdentity'] as Map))
-        : null;
-    final schema = json['schema'] is Map
-        ? RouteSchema.fromJson(_stringKeyed(json['schema'] as Map))
-        : null;
     return RouteManifestEntry(
       method: method,
       path: path,
       name: name?.isEmpty == true ? null : name,
-      handlerIdentity: handlerIdentity,
+      handlerIdentity: json['handlerIdentity'],
       middleware: middleware,
       constraints: constraints,
       isFallback: isFallback,
-      schema: schema,
+      schema: json['schema'],
     );
   }
 
   final String method;
   final String path;
   final String? name;
-  final HandlerIdentity? handlerIdentity;
+  final Object? handlerIdentity;
   final List<String> middleware;
   final Map<String, Object?> constraints;
   final bool isFallback;
 
   /// Optional API schema metadata for this route.
-  final RouteSchema? schema;
+  final Object? schema;
 
   Map<String, Object?> toJson() {
     return <String, Object?>{
       'method': method,
       'path': path,
       if (name != null) 'name': name,
-      if (handlerIdentity != null) 'handlerIdentity': handlerIdentity!.toJson(),
+      if (handlerIdentity != null) 'handlerIdentity': handlerIdentity,
       if (middleware.isNotEmpty) 'middleware': middleware,
       if (constraints.isNotEmpty) 'constraints': constraints,
       if (isFallback) 'isFallback': true,
-      if (schema != null) 'schema': schema!.toJson(),
+      if (schema != null) 'schema': schema,
     };
   }
 }
@@ -229,10 +211,6 @@ extension EngineRouteManifestX on Engine {
   /// Generates a [RouteManifest] for the current engine.
   RouteManifest buildRouteManifest() {
     final validationRuleNames = <String>[];
-    if (container.has<ValidationRuleRegistry>()) {
-      validationRuleNames.addAll(container.get<ValidationRuleRegistry>().names);
-      validationRuleNames.sort();
-    }
     final routeEntries = getAllRoutes()
         .map(RouteManifestEntry.fromEngineRoute)
         .toList();
