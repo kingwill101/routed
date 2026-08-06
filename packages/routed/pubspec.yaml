@@ -21,6 +21,7 @@ executables:
 
 # Add regular dependencies here.
 dependencies:
+  server_sessions: ^0.1.0
   args: ^2.7.0
   artisanal: ^0.3.0
   collection: ^1.19.1
@@ -47,6 +48,7 @@ dependencies:
   stream_transform: ^2.1.1
   watcher: ^1.2.1
 dev_dependencies:
+  server_sessions: ^0.1.0
   coverage: ^1.15.0
   lints: ^6.0.0
   property_testing: ^0.3.2

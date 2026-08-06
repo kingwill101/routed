@@ -1,1 +1,1 @@
-class SessionStore {}
+export 'package:server_sessions/src/store.dart';
