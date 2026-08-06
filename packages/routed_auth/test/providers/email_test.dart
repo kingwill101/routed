@@ -6,7 +6,7 @@ import 'package:test/test.dart';
 void main() {
   group('EmailProvider', () {
     test('creates provider with default id and name', () {
-      final provider = EmailProvider(sendVerificationRequest: (_, __, ___) {});
+      final provider = EmailProvider(sendVerificationRequest: (_, _, _) {});
 
       expect(provider.id, equals('email'));
       expect(provider.name, equals('Email'));
@@ -17,7 +17,7 @@ void main() {
       final provider = EmailProvider(
         id: 'magic-link',
         name: 'Magic Link',
-        sendVerificationRequest: (_, __, ___) {},
+        sendVerificationRequest: (_, _, _) {},
       );
 
       expect(provider.id, equals('magic-link'));
@@ -53,14 +53,14 @@ void main() {
     });
 
     test('default token expiry is 15 minutes', () {
-      final provider = EmailProvider(sendVerificationRequest: (_, __, ___) {});
+      final provider = EmailProvider(sendVerificationRequest: (_, _, _) {});
 
       expect(provider.tokenExpiry, equals(const Duration(minutes: 15)));
     });
 
     test('custom token expiry is respected', () {
       final provider = EmailProvider(
-        sendVerificationRequest: (_, __, ___) {},
+        sendVerificationRequest: (_, _, _) {},
         tokenExpiry: const Duration(hours: 1),
       );
 
@@ -70,7 +70,7 @@ void main() {
     test('custom token generator is used when provided', () {
       var callCount = 0;
       final provider = EmailProvider(
-        sendVerificationRequest: (_, __, ___) {},
+        sendVerificationRequest: (_, _, _) {},
         tokenGenerator: () {
           callCount++;
           return 'custom-token-$callCount';
@@ -86,7 +86,7 @@ void main() {
     });
 
     test('tokenGenerator is null by default', () {
-      final provider = EmailProvider(sendVerificationRequest: (_, __, ___) {});
+      final provider = EmailProvider(sendVerificationRequest: (_, _, _) {});
 
       expect(provider.tokenGenerator, isNull);
     });
@@ -95,7 +95,7 @@ void main() {
       final provider = EmailProvider(
         id: 'magic',
         name: 'Magic Link Login',
-        sendVerificationRequest: (_, __, ___) {},
+        sendVerificationRequest: (_, _, _) {},
       );
 
       final json = provider.toJson();

@@ -1,0 +1,553 @@
+// ignore_for_file: implementation_imports
+import 'dart:async';
+
+import 'package:http/http.dart' as http;
+import 'package:server_auth/server_auth.dart'
+    show
+        AuthAccount,
+        AuthAdapter,
+        AuthCallbacks,
+        AuthCredentials,
+        requireAuthorizedCredentialsRegistration,
+        requireAuthorizedCredentialsSignIn,
+        resolveAuthRedirectWithCallbacks,
+        resolveAuthSignInResultForStrategyWithCallbacks,
+        resolveAuthSessionPayloadWithCallbacks,
+        resolveAuthSignInRedirectTarget,
+        AuthPrincipal,
+        AuthProvider,
+        baseUrlFromUri,
+        resolveOAuthAuthorizationStart,
+        resolveOAuthCallbackSignInForProvider,
+        AuthResult,
+        AuthSession,
+        AuthSessionStrategy,
+        AuthFlowException,
+        AuthUser,
+        AuthVerificationTokenStore,
+        InMemoryAuthVerificationTokenStore,
+        resolveAuthEmailVerificationSignIn,
+        startAuthEmailSignIn,
+        resolveBearerOrCookieToken,
+        resolveAuthSessionForStrategyWithCallbacks,
+        resolveAuthSessionUpdateForStrategyWithCallbacks,
+        resolveCsrfToken,
+        validateCsrfToken,
+        CallbackProvider,
+        CredentialsProvider,
+        EmailProvider,
+        OAuthProvider,
+        authSessionIssuedAtKey,
+        AuthOptions,
+        resolveAuthSessionMaxAgeSeconds,
+        resolveAuthSessionExpiry,
+        serializeAuthSessionIssuedAt,
+        secureRandomToken;
+import 'package:routed_auth/src/auth/hooks.dart';
+import 'package:routed_auth/src/auth/session_auth.dart';
+import 'package:routed/src/context/context.dart';
+import 'package:routed/src/events/event.dart';
+import 'package:routed/src/events/event_manager.dart';
+
+/// High-level auth coordinator for routed.
+class AuthManager {
+  AuthManager(this.options, {SessionAuthService? sessionAuth})
+    : _tokenStore = options.tokenStore ?? InMemoryAuthVerificationTokenStore(),
+      _sessionAuth = sessionAuth,
+      _httpClient = options.httpClient;
+
+  final AuthOptions<EngineContext> options;
+  final AuthVerificationTokenStore _tokenStore;
+  final SessionAuthService? _sessionAuth;
+  http.Client? _httpClient;
+
+  AuthAdapter get adapter => options.adapter;
+
+  SessionAuthService get sessionAuth => _sessionAuth ?? SessionAuth.instance;
+
+  http.Client get httpClient => _httpClient ??= http.Client();
+
+  AuthCallbacks<EngineContext> get callbacks => options.callbacks;
+
+  String csrfToken(EngineContext ctx) {
+    final token = resolveCsrfToken(
+      existingToken: ctx.getSession<String>(options.csrfKey),
+      generateToken: secureRandomToken,
+    );
+    ctx.setSession(options.csrfKey, token);
+    return token;
+  }
+
+  bool validateCsrf(EngineContext ctx, Map<String, dynamic> payload) {
+    final headerToken =
+        ctx.request.headers.value('x-csrf-token') ??
+        ctx.request.headers.value('X-CSRF-Token');
+    return validateCsrfToken(
+      expectedToken: ctx.getSession<String>(options.csrfKey),
+      headerToken: headerToken,
+      formToken: payload['_csrf']?.toString(),
+      enforce: options.enforceCsrf,
+    );
+  }
+
+  Future<AuthResult> signInWithCredentials(
+    EngineContext ctx,
+    CredentialsProvider provider,
+    AuthCredentials credentials,
+  ) async {
+    final user = await requireAuthorizedCredentialsSignIn(
+      adapter: adapter,
+      provider: provider,
+      context: ctx,
+      credentials: credentials,
+    );
+
+    return _completeSignIn(
+      ctx,
+      user,
+      provider: provider,
+      credentials: credentials,
+    );
+  }
+
+  Future<AuthResult> registerWithCredentials(
+    EngineContext ctx,
+    CredentialsProvider provider,
+    AuthCredentials credentials,
+  ) async {
+    final user = await requireAuthorizedCredentialsRegistration(
+      adapter: adapter,
+      provider: provider,
+      context: ctx,
+      credentials: credentials,
+    );
+
+    return _completeSignIn(
+      ctx,
+      user,
+      provider: provider,
+      credentials: credentials,
+      isNewUser: true,
+    );
+  }
+
+  Future<AuthResult> signInWithEmail(
+    EngineContext ctx,
+    EmailProvider provider,
+    String email,
+    String callbackUrl,
+  ) async {
+    final payload = await startAuthEmailSignIn<EngineContext>(
+      adapter: adapter,
+      tokenStore: _tokenStore,
+      provider: provider,
+      context: ctx,
+      email: email,
+      callbackUrl: callbackUrl,
+      sessionStrategy: options.sessionStrategy,
+      generateToken: secureRandomToken,
+      writeSession: ctx.setSession,
+      callbackKey: options.callbackKey,
+    );
+    return payload.pendingResult;
+  }
+
+  Future<AuthResult> verifyEmail(
+    EngineContext ctx,
+    EmailProvider provider,
+    String email,
+    String token,
+  ) async {
+    final resolved = await resolveAuthEmailVerificationSignIn(
+      adapter: adapter,
+      tokenStore: _tokenStore,
+      email: email,
+      token: token,
+      callbackKey: options.callbackKey,
+      readSession: (key) => ctx.getSession<String>(key),
+    );
+    if (resolved == null) {
+      throw AuthFlowException('invalid_token');
+    }
+
+    return _completeSignIn(
+      ctx,
+      resolved.user,
+      redirectUrl: resolved.callbackUrl,
+      provider: provider,
+      isNewUser: resolved.isNewUser,
+    );
+  }
+
+  Future<Uri> beginOAuth<TProfile extends Object>(
+    EngineContext ctx,
+    OAuthProvider<TProfile> provider, {
+    String? callbackUrl,
+  }) async {
+    final resolved =
+        await resolveOAuthAuthorizationStart<EngineContext, TProfile>(
+          context: ctx,
+          provider: provider,
+          stateKey: options.stateKey,
+          pkceKey: options.pkceKey,
+          callbackKey: options.callbackKey,
+          callbackUrl: callbackUrl,
+          writeSession: ctx.setSession,
+        );
+    return resolved.authorizationUri;
+  }
+
+  Future<AuthResult> finishOAuth<TProfile extends Object>(
+    EngineContext ctx,
+    OAuthProvider<TProfile> provider,
+    String code,
+    String? state,
+  ) async {
+    final resolved =
+        await resolveOAuthCallbackSignInForProvider<EngineContext, TProfile>(
+          adapter: adapter,
+          context: ctx,
+          provider: provider,
+          code: code,
+          receivedState: state,
+          stateKey: options.stateKey,
+          pkceKey: options.pkceKey,
+          callbackKey: options.callbackKey,
+          readSession: (key) => ctx.getSession<String>(key),
+          httpClient: httpClient,
+          fallbackAccountId: secureRandomToken,
+        );
+    final signIn = resolved.signIn;
+    final resolvedUser = signIn.user;
+    final isNewUser = signIn.isNewUser;
+    if (signIn.userUpdated) {
+      await _emitAuthEvent(
+        ctx,
+        AuthUpdateUserEvent(
+          context: ctx,
+          user: resolvedUser,
+          provider: provider,
+        ),
+      );
+    }
+
+    final account = signIn.account;
+    final profileMap = signIn.profile;
+    await _emitAuthEvent(
+      ctx,
+      AuthLinkAccountEvent(
+        context: ctx,
+        account: account,
+        user: resolvedUser,
+        profile: profileMap,
+      ),
+    );
+
+    final redirectUrl = resolved.callbackUrl;
+    return _completeSignIn(
+      ctx,
+      resolvedUser,
+      redirectUrl: redirectUrl,
+      provider: provider,
+      account: account,
+      profile: profileMap,
+      isNewUser: isNewUser,
+    );
+  }
+
+  /// Completes authentication for a custom callback provider.
+  ///
+  /// This method is used by [AuthRoutes] to handle providers that implement
+  /// the [CallbackProvider] mixin (e.g., Telegram).
+  ///
+  /// [ctx] is the engine context.
+  /// [provider] is the custom callback provider.
+  /// [user] is the authenticated user.
+  /// [redirectUrl] is an optional redirect URL after sign-in.
+  Future<AuthResult> completeCustomCallback(
+    EngineContext ctx,
+    AuthProvider provider,
+    AuthUser user, {
+    String? redirectUrl,
+    Map<String, dynamic>? profile,
+  }) async {
+    return _completeSignIn(
+      ctx,
+      user,
+      redirectUrl: redirectUrl,
+      provider: provider,
+      account: AuthAccount(providerId: provider.id, providerAccountId: user.id),
+      profile: profile,
+      isNewUser: false,
+    );
+  }
+
+  /// Updates the current auth session with the given [principal].
+  ///
+  /// This method replaces the authenticated identity stored in the current
+  /// request context. Use it after changing user attributes, roles, or other
+  /// profile data that should be reflected in the session immediately.
+  ///
+  /// **Session strategy:** replaces the session principal via
+  /// [SessionAuthService.login] and resets the session issued-at timestamp.
+  ///
+  /// **JWT strategy:** builds new claims from the principal, invokes the
+  /// configured JWT callback (if any), issues a fresh token, and attaches
+  /// it as an HTTP-only cookie.
+  ///
+  /// Returns an [AuthSession] reflecting the updated state.
+  ///
+  /// Throws [AuthFlowException] with code `missing_jwt_secret` when using
+  /// the JWT strategy and no secret is configured.
+  ///
+  /// ## Example
+  ///
+  /// ```dart
+  /// // Preferred: use the SessionAuth convenience method which delegates
+  /// // to this automatically:
+  /// await SessionAuth.updateSession(ctx, updatedPrincipal);
+  ///
+  /// // Or call directly when you need the returned AuthSession:
+  /// final manager = ctx.container.get<AuthManager>();
+  /// final session = await manager.updateSession(ctx, updated);
+  /// ```
+  Future<AuthSession> updateSession(
+    EngineContext ctx,
+    AuthPrincipal principal,
+  ) async {
+    final resolved =
+        await resolveAuthSessionUpdateForStrategyWithCallbacks<EngineContext>(
+          strategy: options.sessionStrategy,
+          callbacks: callbacks,
+          context: ctx,
+          principal: principal,
+          jwtOptions: options.jwtOptions,
+          applySessionMaxAge: () => _applySessionMaxAge(ctx),
+          persistSessionPrincipal: (nextPrincipal) =>
+              sessionAuth.login(ctx, nextPrincipal),
+          writeSessionIssuedAt: (issuedAtUtc) =>
+              _setSessionIssuedAt(ctx, issuedAtUtc),
+          resolveSessionExpiry: () => _sessionExpiry(ctx),
+        );
+    final jwtCookie = resolved.jwtCookie;
+    if (jwtCookie != null) {
+      ctx.response.cookies.add(jwtCookie);
+    }
+    return resolved.session;
+  }
+
+  Future<AuthSession?> resolveSession(EngineContext ctx) async {
+    final resolved =
+        await resolveAuthSessionForStrategyWithCallbacks<EngineContext>(
+          strategy: options.sessionStrategy,
+          callbacks: callbacks,
+          context: ctx,
+          jwtOptions: options.jwtOptions,
+          sessionUpdateAge: options.sessionUpdateAge,
+          readSessionPrincipal: () => sessionAuth.current(ctx),
+          applySessionMaxAge: () => _applySessionMaxAge(ctx),
+          readSessionIssuedAt: () =>
+              ctx.getSession<String>(authSessionIssuedAtKey),
+          writeSessionIssuedAt: (issuedAtUtc) =>
+              _setSessionIssuedAt(ctx, issuedAtUtc),
+          touchSession: ctx.session.touch,
+          resolveSessionExpiry: () => _sessionExpiry(ctx),
+          readJwtToken: () => _resolveJwtToken(ctx),
+          httpClient: httpClient,
+        );
+    final refreshCookie = resolved.refreshCookie;
+    if (refreshCookie != null) {
+      ctx.response.cookies.add(refreshCookie);
+    }
+    return resolved.session;
+  }
+
+  Future<String?> resolveRedirect(
+    EngineContext ctx,
+    String? url, {
+    AuthProvider? provider,
+  }) async {
+    return resolveAuthRedirectWithCallbacks<EngineContext>(
+      callbacks: callbacks,
+      context: ctx,
+      url: url,
+      baseUrl: baseUrlFromUri(
+        ctx.requestedUri,
+        defaultScheme: ctx.scheme,
+        defaultHost: ctx.host,
+      ),
+      provider: provider,
+    );
+  }
+
+  Future<Map<String, dynamic>> buildSessionPayload(
+    EngineContext ctx,
+    AuthSession session, {
+    AuthProvider? provider,
+  }) async {
+    final finalPayload =
+        await resolveAuthSessionPayloadWithCallbacks<EngineContext>(
+          callbacks: callbacks,
+          context: ctx,
+          session: session,
+          strategy: session.strategy ?? options.sessionStrategy,
+          provider: provider,
+        );
+    await _emitAuthEvent(
+      ctx,
+      AuthSessionEvent(
+        context: ctx,
+        session: session,
+        payload: finalPayload,
+        strategy: session.strategy ?? options.sessionStrategy,
+        provider: provider,
+      ),
+    );
+    return finalPayload;
+  }
+
+  Future<void> emitSignOut(EngineContext ctx, {AuthSession? session}) async {
+    await _emitAuthEvent(
+      ctx,
+      AuthSignOutEvent(
+        context: ctx,
+        strategy: session?.strategy ?? options.sessionStrategy,
+        session: session,
+        user: session?.user,
+      ),
+    );
+  }
+
+  Future<void> _emitAuthEvent<T extends Event>(
+    EngineContext ctx,
+    T event,
+  ) async {
+    final container = ctx.container;
+    if (!container.has<EventManager>()) {
+      return;
+    }
+    final manager = await container.make<EventManager>();
+    manager.publish(event);
+  }
+
+  Future<AuthResult> _completeSignIn(
+    EngineContext ctx,
+    AuthUser user, {
+    String? redirectUrl,
+    AuthProvider? provider,
+    AuthAccount? account,
+    Map<String, dynamic>? profile,
+    AuthCredentials? credentials,
+    bool isNewUser = false,
+  }) async {
+    final resolvedRedirect =
+        await resolveAuthSignInRedirectTarget<EngineContext>(
+          callbacks: callbacks,
+          context: ctx,
+          user: user,
+          strategy: options.sessionStrategy,
+          provider: provider,
+          account: account,
+          profile: profile,
+          credentials: credentials,
+          isNewUser: isNewUser,
+          callbackUrl: redirectUrl,
+          resolveRedirect: (candidate) =>
+              resolveRedirect(ctx, candidate, provider: provider),
+        );
+
+    if (isNewUser) {
+      await _emitAuthEvent(
+        ctx,
+        AuthCreateUserEvent(
+          context: ctx,
+          user: user,
+          provider: provider,
+          profile: profile,
+        ),
+      );
+    }
+
+    DateTime? sessionExpiresAt;
+    if (options.sessionStrategy == AuthSessionStrategy.session) {
+      _applySessionMaxAge(ctx);
+      await sessionAuth.login(ctx, user.toPrincipal());
+      _setSessionIssuedAt(ctx, DateTime.now().toUtc());
+      sessionExpiresAt = _sessionExpiry(ctx);
+    }
+
+    final resolvedSignIn =
+        await resolveAuthSignInResultForStrategyWithCallbacks<EngineContext>(
+          callbacks: callbacks,
+          context: ctx,
+          strategy: options.sessionStrategy,
+          user: user,
+          redirectUrl: resolvedRedirect,
+          jwtOptions: options.jwtOptions,
+          sessionExpiresAt: sessionExpiresAt,
+          provider: provider,
+          account: account,
+          profile: profile,
+          isNewUser: isNewUser,
+        );
+
+    final issuedJwt = resolvedSignIn.issuedJwt;
+    if (issuedJwt != null) {
+      ctx.response.cookies.add(issuedJwt.cookie);
+    }
+
+    final result = resolvedSignIn.result;
+    final session = result.session;
+    await _emitAuthEvent(
+      ctx,
+      AuthSignInEvent(
+        context: ctx,
+        user: user,
+        session: session,
+        strategy: options.sessionStrategy,
+        provider: provider,
+        account: account,
+        profile: profile,
+        credentials: credentials,
+        redirectUrl: resolvedRedirect,
+        isNewUser: isNewUser,
+      ),
+    );
+    return result;
+  }
+
+  void _applySessionMaxAge(EngineContext ctx) {
+    final maxAgeSeconds = resolveAuthSessionMaxAgeSeconds(
+      options.sessionMaxAge,
+    );
+    if (maxAgeSeconds == null) {
+      return;
+    }
+    ctx.session.options.setMaxAge(maxAgeSeconds);
+  }
+
+  void _setSessionIssuedAt(EngineContext ctx, DateTime issuedAt) {
+    ctx.setSession(
+      authSessionIssuedAtKey,
+      serializeAuthSessionIssuedAt(issuedAt),
+    );
+  }
+
+  DateTime? _sessionExpiry(EngineContext ctx) {
+    return resolveAuthSessionExpiry(
+      sessionMaxAge: options.sessionMaxAge,
+      sessionOptionsMaxAgeSeconds: ctx.session.options.maxAge,
+    );
+  }
+
+  String? _resolveJwtToken(EngineContext ctx) {
+    return resolveBearerOrCookieToken(
+      authorizationHeader: ctx.request.headers.value(options.jwtOptions.header),
+      bearerPrefix: options.jwtOptions.bearerPrefix,
+      cookieName: options.jwtOptions.cookieName,
+      cookies: ctx.request.cookies.map(
+        (cookie) => MapEntry<String, String>(cookie.name, cookie.value),
+      ),
+    );
+  }
+}

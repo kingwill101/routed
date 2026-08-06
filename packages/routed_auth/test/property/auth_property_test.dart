@@ -855,7 +855,7 @@ void main() {
             {
               'username': 'test',
               'password': 'test',
-              if (csrfToken != null) '_csrf': csrfToken,
+              '_csrf': ?csrfToken,
             },
             headers: {
               HttpHeaders.cookieHeader: [_cookieHeader(sessionCookie!)],

@@ -5,8 +5,8 @@ void main() {
   group('WebAuthnProvider', () {
     test('creates provider with default id and name', () {
       final provider = WebAuthnProvider(
-        getUserInfo: (_, __, ___) => null,
-        getRelyingParty: (_, __) => const WebAuthnRelyingParty(
+        getUserInfo: (_, _, _) => null,
+        getRelyingParty: (_, _) => const WebAuthnRelyingParty(
           id: 'example.com',
           name: 'Example',
           origin: 'https://example.com',
@@ -22,8 +22,8 @@ void main() {
       final provider = WebAuthnProvider(
         id: 'passkeys',
         name: 'Sign in with Passkey',
-        getUserInfo: (_, __, ___) => null,
-        getRelyingParty: (_, __) => const WebAuthnRelyingParty(
+        getUserInfo: (_, _, _) => null,
+        getRelyingParty: (_, _) => const WebAuthnRelyingParty(
           id: 'example.com',
           name: 'Example',
           origin: 'https://example.com',
@@ -36,8 +36,8 @@ void main() {
 
     test('default timeout is 5 minutes', () {
       final provider = WebAuthnProvider(
-        getUserInfo: (_, __, ___) => null,
-        getRelyingParty: (_, __) => const WebAuthnRelyingParty(
+        getUserInfo: (_, _, _) => null,
+        getRelyingParty: (_, _) => const WebAuthnRelyingParty(
           id: 'example.com',
           name: 'Example',
           origin: 'https://example.com',
@@ -49,8 +49,8 @@ void main() {
 
     test('custom timeout is respected', () {
       final provider = WebAuthnProvider(
-        getUserInfo: (_, __, ___) => null,
-        getRelyingParty: (_, __) => const WebAuthnRelyingParty(
+        getUserInfo: (_, _, _) => null,
+        getRelyingParty: (_, _) => const WebAuthnRelyingParty(
           id: 'example.com',
           name: 'Example',
           origin: 'https://example.com',
@@ -63,8 +63,8 @@ void main() {
 
     test('conditional UI is enabled by default', () {
       final provider = WebAuthnProvider(
-        getUserInfo: (_, __, ___) => null,
-        getRelyingParty: (_, __) => const WebAuthnRelyingParty(
+        getUserInfo: (_, _, _) => null,
+        getRelyingParty: (_, _) => const WebAuthnRelyingParty(
           id: 'example.com',
           name: 'Example',
           origin: 'https://example.com',
@@ -76,8 +76,8 @@ void main() {
 
     test('default form fields include email', () {
       final provider = WebAuthnProvider(
-        getUserInfo: (_, __, ___) => null,
-        getRelyingParty: (_, __) => const WebAuthnRelyingParty(
+        getUserInfo: (_, _, _) => null,
+        getRelyingParty: (_, _) => const WebAuthnRelyingParty(
           id: 'example.com',
           name: 'Example',
           origin: 'https://example.com',
@@ -90,8 +90,8 @@ void main() {
 
     test('custom form fields are accepted', () {
       final provider = WebAuthnProvider(
-        getUserInfo: (_, __, ___) => null,
-        getRelyingParty: (_, __) => const WebAuthnRelyingParty(
+        getUserInfo: (_, _, _) => null,
+        getRelyingParty: (_, _) => const WebAuthnRelyingParty(
           id: 'example.com',
           name: 'Example',
           origin: 'https://example.com',
@@ -114,7 +114,7 @@ void main() {
 
     test('getRelyingParty returns configuration', () {
       final provider = WebAuthnProvider(
-        getUserInfo: (_, __, ___) => null,
+        getUserInfo: (_, _, _) => null,
         getRelyingParty: (context, provider) => const WebAuthnRelyingParty(
           id: 'myapp.example.com',
           name: 'My Application',
@@ -144,7 +144,7 @@ void main() {
           }
           return null;
         },
-        getRelyingParty: (_, __) => const WebAuthnRelyingParty(
+        getRelyingParty: (_, _) => const WebAuthnRelyingParty(
           id: 'example.com',
           name: 'Example',
           origin: 'https://example.com',
@@ -174,7 +174,7 @@ void main() {
           }
           return null;
         },
-        getRelyingParty: (_, __) => const WebAuthnRelyingParty(
+        getRelyingParty: (_, _) => const WebAuthnRelyingParty(
           id: 'example.com',
           name: 'Example',
           origin: 'https://example.com',
@@ -204,7 +204,7 @@ void main() {
             exists: false,
           );
         },
-        getRelyingParty: (_, __) => const WebAuthnRelyingParty(
+        getRelyingParty: (_, _) => const WebAuthnRelyingParty(
           id: 'example.com',
           name: 'Example',
           origin: 'https://example.com',
@@ -224,8 +224,8 @@ void main() {
       final provider = WebAuthnProvider(
         id: 'passkey',
         name: 'Passkey Login',
-        getUserInfo: (_, __, ___) => null,
-        getRelyingParty: (_, __) => const WebAuthnRelyingParty(
+        getUserInfo: (_, _, _) => null,
+        getRelyingParty: (_, _) => const WebAuthnRelyingParty(
           id: 'example.com',
           name: 'Example',
           origin: 'https://example.com',
