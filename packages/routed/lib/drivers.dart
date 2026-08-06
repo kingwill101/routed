@@ -15,14 +15,6 @@ export 'src/cache/cache_manager.dart'
         DriverConfigBuilder,
         DriverConfigValidator,
         ConfigurationException;
-export 'src/storage/storage_drivers.dart'
-    show
-        StorageDriverRegistry,
-        StorageDriverContext,
-        StorageDriverDocContext,
-        StorageDriverDocBuilder,
-        LocalStorageDisk,
-        StorageDiskBuilder;
 export 'src/engine/providers/sessions.dart'
     show
         SessionDriverRegistry,

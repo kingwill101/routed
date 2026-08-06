@@ -18,7 +18,6 @@ export 'src/binding/json.dart' show JsonBinding;
 export 'src/binding/form.dart' show FormBinding;
 export 'src/binding/query.dart' show QueryBinding;
 export 'src/binding/uri.dart' show UriBinding;
-export 'src/binding/multipart.dart' show MultipartBinding;
 export 'src/binding/convert/query_params.dart'
     show
         QueryParamsCodec,

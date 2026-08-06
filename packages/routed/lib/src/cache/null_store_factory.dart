@@ -1,5 +1,6 @@
 import 'package:routed/src/cache/null_store.dart';
 import 'package:routed/src/contracts/cache/store.dart';
+import 'store_factory.dart';
 
 import 'store_factory.dart';
 

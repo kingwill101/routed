@@ -1,0 +1,2 @@
+class StorageManager {}
+class StorageDriverRegistry {}

@@ -697,7 +697,7 @@ class CacheManager {
     );
     registerDriver(
       'file',
-      () => FileStoreFactory(),
+      () => throw UnimplementedError('file cache moved to server_cache'),
       documentation: _fileDriverDocs,
       overrideExisting: false,
       configBuilder: (context) {

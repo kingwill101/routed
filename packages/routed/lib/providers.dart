@@ -16,7 +16,4 @@ export 'src/engine/providers/registry.dart';
 export 'src/engine/providers/routing.dart';
 export 'src/engine/providers/security.dart';
 export 'src/engine/providers/sessions.dart';
-export 'src/engine/providers/static_assets.dart';
-export 'src/engine/providers/storage.dart';
 export 'src/engine/providers/uploads.dart';
-export 'src/engine/providers/views.dart';

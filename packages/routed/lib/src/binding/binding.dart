@@ -1,6 +1,6 @@
 import 'dart:async';
 
-import 'package:routed/src/binding/multipart.dart';
+// multipart moved to routed_http
 import 'package:routed/src/context/context.dart';
 
 import 'form.dart' show FormBinding;
