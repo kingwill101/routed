@@ -1,7 +1,6 @@
 import 'package:file/memory.dart';
 import 'package:liquify/liquify.dart' as liquid;
 import 'package:path/path.dart' as path;
-import 'package:routed/src/render/html/liquid.dart';
 import 'package:routed/src/view/engines/liquid_engine.dart';
 import 'package:test/test.dart';
 
