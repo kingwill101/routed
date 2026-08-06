@@ -9,11 +9,13 @@ import 'package:routed/routed.dart'
         kViewEngineContextKey,
         ViewEngineManager,
         ViewExtensionRegistry,
-        ViewExtensionRegistration;
+        ViewExtensionRegistration,
+        LiquidRoot;
 import '../view_engine.dart';
 import '../view_extensions.dart';
+import 'liquid_root.dart';
 
-export 'package:routed/src/render/html/liquid.dart' show LiquidRoot;
+export 'liquid_root.dart' show LiquidRoot;
 
 /// A view engine implementation that uses the Liquid template language.
 class LiquidViewEngine implements ViewEngine {
