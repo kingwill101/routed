@@ -26,3 +26,4 @@ dev_dependencies:
   routed_testing: ^0.3.3
   server_testing: ^0.3.2
   property_testing: ^0.3.2
+  coverage: ^1.15.1
