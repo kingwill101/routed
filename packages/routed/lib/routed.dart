@@ -37,6 +37,7 @@ export 'src/config/specs/views.dart';
 export 'src/container/container.dart' hide Binding;
 export 'src/context/context.dart';
 export 'src/contracts/contracts.dart';
+export 'src/render/render.dart' show Render;
 export 'src/engine/config.dart';
 export 'src/engine/engine.dart';
 export 'src/engine/engine_opt.dart';

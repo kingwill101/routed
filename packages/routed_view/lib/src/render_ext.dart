@@ -1,8 +1,6 @@
 import 'dart:async';
-import 'dart:io';
 
 import 'package:routed/routed.dart';
-import 'package:routed/src/render/render.dart';
 
 /// View/render extensions for [EngineContext] — migrated from `routed`
 /// `src/context/render.dart` per refactor.md §16.2.
