@@ -4,6 +4,9 @@ library;
 // Routed's own duplicate copies of portable runtime symbols (cache, auth,
 // storage, session, gates, config helpers) are hidden so collisions resolve
 // to the portable server_* / routed_* packages.
+// Interim routed_full per refactor.md §12 - re-exports portable runtimes and adapters.
+// Full re-export of `routed` will be added after foundation slim (PR J/K) removes
+// duplicate symbols from the foundation barrel.
 export 'package:server_auth/server_auth.dart';
 export 'package:server_cache/server_cache.dart';
 export 'package:server_sessions/server_sessions.dart';
