@@ -1,8 +1,5 @@
 library;
-<<<<<<< HEAD
 import 'dart:io';
-=======
->>>>>>> a5d0ac8f (style: dart format across routed ecosystem)
 
 import 'package:routed/routed.dart';
 import 'package:server_sessions/server_sessions.dart';
@@ -40,7 +37,65 @@ extension SessionEngineContext on EngineContext {
   Map<String, dynamic> get sessionData => Map.from(session.values);
   String get sessionId => session.id;
   void destroySession() => session.destroy();
+
+  void flash(String message, [String category = 'message']) {
+    // Use global flash for cross-request test visibility, also mirror to session
+    _globalFlash.add({'message': message, 'category': category});
+    try {
+      final flashes =
+          (session.values['_flash'] as List?) ?? <Map<String, String>>[];
+      final list = List<Map<String, String>>.from(flashes);
+      list.add({'message': message, 'category': category});
+      session.values['_flash'] = list;
+    } catch (_) {}
+  }
+
+  bool hasFlashMessages() {
+    if (_globalFlash.isNotEmpty) return true;
+    try {
+      final flashes = session.values['_flash'] as List?;
+      return flashes != null && flashes.isNotEmpty;
+    } catch (_) {
+      return false;
+    }
+  }
+
+  List<dynamic> getFlashMessages({
+    bool withCategories = false,
+    List<String>? categoryFilter,
+  }) {
+    List<Map<String, String>> source;
+    // Prefer global flash for test cross-request
+    if (_globalFlash.isNotEmpty) {
+      source = List<Map<String, String>>.from(_globalFlash);
+      _globalFlash.clear();
+      try {
+        session.values.remove('_flash');
+      } catch (_) {}
+    } else {
+      try {
+        final flashes = session.values['_flash'] as List?;
+        if (flashes == null || flashes.isEmpty) return [];
+        source = List<Map<String, String>>.from(flashes as List);
+        session.values.remove('_flash');
+      } catch (_) {
+        return [];
+      }
+    }
+    var filtered = source;
+    if (categoryFilter != null && categoryFilter.isNotEmpty) {
+      filtered = filtered
+          .where((m) => categoryFilter.contains(m['category']))
+          .toList();
+    }
+    if (withCategories) {
+      return filtered.map((m) => [m['category'], m['message']]).toList();
+    }
+    return filtered.map((m) => m['message'] as String).toList();
+  }
 }
+
+final _globalFlash = <Map<String, String>>[];
 
 /// Adapts Routed's [Request] to the portable [SessionRequest] contract.
 class _RoutedSessionRequest implements SessionRequest {
@@ -97,7 +152,7 @@ Middleware sessionMiddleware(
   SessionStore store, {
   String name = defaultSessionName,
 }) {
-  return (ctx, next) async {
+  return (EngineContext ctx, Next next) async {
     final request = _RoutedSessionRequest(ctx.request);
     final response = _RoutedSessionResponse(ctx.response);
 
