@@ -2,7 +2,6 @@ import 'dart:async';
 
 import 'package:file/file.dart' as file;
 import 'package:file/local.dart' as local;
-import 'package:liquify/liquify.dart' show FilterRegistry;
 import 'package:routed/middlewares.dart' show localizationMiddleware;
 import 'package:routed/src/config/specs/localization.dart';
 import 'package:routed/src/container/container.dart';
@@ -11,7 +10,6 @@ import 'package:routed/src/contracts/contracts.dart'
 import 'package:routed/src/engine/config.dart';
 import 'package:routed/src/engine/middleware_registry.dart';
 import 'package:routed/src/provider/provider.dart';
-import 'package:routed/src/support/helpers.dart' show trans, transChoice;
 import 'package:routed/src/translation/loaders/file_translation_loader.dart';
 import 'package:routed/src/translation/locale_manager.dart';
 import 'package:routed/src/translation/locale_resolver_registry.dart';
@@ -23,7 +21,6 @@ import 'package:routed/src/translation/translator.dart' as routed;
 class LocalizationServiceProvider extends ServiceProvider
     with ProvidesDefaultConfig {
   file.FileSystem _fallbackFileSystem = const local.LocalFileSystem();
-  static bool _filtersRegistered = false;
   static const LocalizationConfigSpec spec = LocalizationConfigSpec();
   static final LocaleResolverRegistry _resolverTemplate =
       _buildResolverTemplate();
@@ -78,7 +75,6 @@ class LocalizationServiceProvider extends ServiceProvider
       ..instance<LocaleManager>(localeManager);
 
     _registerMiddleware(container);
-    _registerTemplateFilters();
   }
 
   @override
@@ -93,7 +89,6 @@ class LocalizationServiceProvider extends ServiceProvider
       ..instance<TranslationLoader>(loader)
       ..instance<TranslatorContract>(translator)
       ..instance<LocaleManager>(localeManager);
-    _registerTemplateFilters();
   }
 
   TranslationLoader _buildLoader(
@@ -190,18 +185,6 @@ class LocalizationServiceProvider extends ServiceProvider
     });
   }
 
-  void _registerTemplateFilters() {
-    if (_filtersRegistered) {
-      return;
-    }
-
-    FilterRegistry.register('trans', _transFilter);
-    FilterRegistry.register('trans_choice', _transChoiceFilter);
-    FilterRegistry.register('transChoice', _transChoiceFilter);
-
-    _filtersRegistered = true;
-  }
-
   String _availableResolversForError(LocaleResolverRegistry registry) {
     final names = registry.identifiers.toList(growable: false);
     if (names.isEmpty) {
@@ -261,77 +244,4 @@ class LocalizationServiceProvider extends ServiceProvider
     }
     return spec.resolve(config);
   }
-}
-
-dynamic _transFilter(
-  dynamic value,
-  List<dynamic> positional,
-  Map<String, dynamic> named,
-) {
-  final key =
-      _coerceString(value) ??
-      (positional.isNotEmpty ? _coerceString(positional.first) : null);
-  if (key == null) return value;
-
-  final replacements = Map<String, dynamic>.from(named);
-  final locale = replacements.remove('locale') ?? replacements.remove('lang');
-
-  final resolved = trans(
-    key,
-    replacements: replacements.isEmpty ? null : replacements,
-    locale: locale?.toString(),
-  );
-
-  return (resolved ?? key).toString();
-}
-
-dynamic _transChoiceFilter(
-  dynamic value,
-  List<dynamic> positional,
-  Map<String, dynamic> named,
-) {
-  final key =
-      _coerceString(value) ??
-      (positional.isNotEmpty ? _coerceString(positional.first) : null);
-  if (key == null) return value;
-
-  final replacements = Map<String, dynamic>.from(named);
-  final locale = replacements.remove('locale') ?? replacements.remove('lang');
-  final dynamic countSource =
-      replacements.remove('count') ??
-      (positional.length > 1
-          ? positional[1]
-          : (positional.isNotEmpty ? positional.last : null));
-  final num? count = _asNum(countSource);
-  if (count == null) {
-    return trans(
-          key,
-          replacements: replacements.isEmpty ? null : replacements,
-          locale: locale?.toString(),
-        )?.toString() ??
-        key;
-  }
-
-  final resolved = transChoice(
-    key,
-    count,
-    replacements: replacements.isEmpty ? null : replacements,
-    locale: locale?.toString(),
-  );
-  return resolved.toString();
-}
-
-String? _coerceString(dynamic input) {
-  if (input == null) return null;
-  if (input is String) return input;
-  return input.toString();
-}
-
-num? _asNum(dynamic input) {
-  if (input == null) return null;
-  if (input is num) return input;
-  if (input is String) {
-    return num.tryParse(input);
-  }
-  return null;
 }
