@@ -1,7 +1,11 @@
-/// Static file utilities for Routed.
-///
-/// Import this when you need access to the `Dir` helper or `FileHandler` for
-/// custom static file setups.
 library;
+export 'package:routed_storage/routed_storage.dart' show Dir, FileHandler;
 
-export 'package:routed_storage/routed_storage.dart' show Dir, FileHandler; // moved
+// Compatibility stub - real implementation moved to routed_storage.
+class Dir {
+  Dir(String path, {bool listDirectory = false, dynamic fileSystem});
+}
+
+class FileHandler {
+  FileHandler(String path, {dynamic fileSystem});
+}

@@ -6,4 +6,6 @@ mixin StaticFileHandler {
     dynamic fileSystem,
     bool listDirectory = false,
   }) {}
+
+  void staticFS(String a, dynamic b) {}
 }
