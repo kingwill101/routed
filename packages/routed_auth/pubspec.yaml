@@ -21,7 +21,6 @@ dependencies:
   routed: ^0.3.3
   server_auth: ^0.1.0
 
-  crypto: any
 dev_dependencies:
   jose: ^0.3.5
   lints: ^6.0.0
@@ -29,8 +28,4 @@ dev_dependencies:
   # removed: routed_testing: ^0.3.2 (workspace package no longer vendored)
   # removed: server_testing: ^0.3.2 (workspace package no longer vendored)
   test: ^1.29.0
-  routed_testing: any
-  server_testing: any
-  property_testing: any
-  server_data: any
-  file: any
+  # removed: server_data: any (split into server_sessions/cache etc.)
