@@ -1,4 +1,6 @@
-part of 'context.dart';
+import 'dart:io';
+
+import 'package:routed/routed.dart';
 
 /// Extension for proxy-related functionality
 extension ProxyMethods on EngineContext {

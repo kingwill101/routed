@@ -1,4 +1,6 @@
-part of 'context.dart';
+import 'package:routed/routed.dart';
+
+import '../binding/multipart.dart';
 
 extension MultipartFormMethods on EngineContext {
   /// Retrieve the multipart form asynchronously.

@@ -1,7 +1,7 @@
 import 'package:json_schema_builder/json_schema_builder.dart';
 import 'package:routed/src/provider/provider.dart';
 
-import '../engine/providers/registry.dart';
+import 'package:routed/src/engine/providers/registry.dart';
 
 /// Metadata describing a single configuration field contributed by a provider.
 class ConfigFieldMetadata {

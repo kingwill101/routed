@@ -1,4 +1,11 @@
-part of 'context.dart';
+import 'dart:async';
+import 'dart:convert';
+import 'dart:io';
+
+import 'package:routed/routed.dart';
+
+import '../binding/convert/sse.dart';
+import '../sse/sse.dart';
 
 /// Extension providing Server-Sent Events (SSE) support for [EngineContext].
 ///

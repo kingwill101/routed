@@ -1,4 +1,4 @@
-part of 'context.dart';
+import 'package:routed/routed.dart';
 
 extension QueryMethods on EngineContext {
   /// Retrieve a query parameter by key.
