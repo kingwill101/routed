@@ -63,7 +63,7 @@ Middleware sessionMiddleware({
     }
 
     final session = await resolvedStore.read(ctx.request, resolvedName);
-    ctx.write(sessionKey, session);
+    (ctx as dynamic).write(sessionKey, session);
 
     final initialSnapshot = _sessionSnapshot(session);
     final equality = const DeepCollectionEquality();
@@ -77,7 +77,7 @@ Middleware sessionMiddleware({
     final res = await next();
 
     if (!ctx.isClosed) {
-      final currentSession = ctx.read(sessionKey) ?? session;
+      final currentSession = (ctx as dynamic).read(sessionKey) ?? session;
       final currentSnapshot = _sessionSnapshot(currentSession);
       final payloadChanged =
           !equality.equals(initialSnapshot, currentSnapshot) ||

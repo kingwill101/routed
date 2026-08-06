@@ -24,7 +24,7 @@ extension SessionMethods on EngineContext {
       options: oldSession.options,
       values: Map<String, dynamic>.from(oldSession.values),
     );
-    write(sessionKey, newSession);
+    (this as dynamic).write(sessionKey, newSession);
     oldSession.destroy();
   }
   T getSessionOrDefault<T>(String key, T defaultValue) {
