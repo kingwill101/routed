@@ -93,7 +93,15 @@ class ContentNegotiator {
         }
       }
     }
-    if (bestOffer == null || bestSpec == null) return null;
+    if (bestOffer == null || bestSpec == null) {
+      // Fallback to first supported when no match and no default (historical behavior)
+      final first = offers.first;
+      return NegotiatedMediaType(
+        value: first.raw,
+        quality: 1.0,
+        parameters: const {},
+      );
+    }
     final params = Map<String, String>.from(bestSpec.mediaType.parameters);
     params.remove('q');
     return NegotiatedMediaType(

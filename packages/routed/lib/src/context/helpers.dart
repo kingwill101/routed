@@ -150,14 +150,19 @@ extension EngineContextHelpers on EngineContext {
     return null;
   }
 
-  Future<void> json(Object? data, {int statusCode = 200}) =>
-      response.json(data, statusCode: statusCode);
+  Future<Response> json(Object? data, {int statusCode = 200}) async {
+    await response.json(data, statusCode: statusCode);
+    return response;
+  }
 
-  Future<void> string(String content, {int statusCode = 200}) =>
-      response.string(content, statusCode: statusCode);
+  Future<Response> string(String content, {int statusCode = 200}) async {
+    await response.string(content, statusCode: statusCode);
+    return response;
+  }
 
-  Future<void> html(String content, {int statusCode = 200}) async {
+  Future<Response> html(String content, {int statusCode = 200}) async {
     response.headers.set('Content-Type', 'text/html; charset=utf-8');
     await response.string(content, statusCode: statusCode);
+    return response;
   }
 }

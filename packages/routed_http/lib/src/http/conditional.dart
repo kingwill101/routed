@@ -62,8 +62,33 @@ ConditionalOutcome evaluateConditional(
   String? etag,
   DateTime? lastModified,
 }) {
+  final ifMatch = ctx.requestHeader(HttpHeaders.ifMatchHeader);
   final ifNoneMatch = ctx.requestHeader(HttpHeaders.ifNoneMatchHeader);
   final ifModifiedSince = ctx.requestHeader(HttpHeaders.ifModifiedSinceHeader);
+  final ifUnmodifiedSince = ctx.requestHeader(HttpHeaders.ifUnmodifiedSinceHeader);
+  // If-Match: if present and etag doesn't match -> preconditionFailed (412)
+  if (ifMatch != null && etag != null) {
+    final current = parseCurrentEtag(etag);
+    if (current != null) {
+      final candidates = parseEtagList([ifMatch]);
+      var matched = false;
+      for (final c in candidates) {
+        if (etagMatches(c, current, weakComparison: false)) {
+          matched = true;
+          break;
+        }
+      }
+      if (!matched) return ConditionalOutcome.preconditionFailed;
+    }
+  }
+  if (ifUnmodifiedSince != null && lastModified != null) {
+    try {
+      final since = HttpDate.parse(ifUnmodifiedSince);
+      if (lastModified.isAfter(since)) {
+        return ConditionalOutcome.preconditionFailed;
+      }
+    } catch (_) {}
+  }
   if (ifNoneMatch != null && etag != null) {
     final current = parseCurrentEtag(etag);
     if (current != null) {
@@ -90,4 +115,31 @@ String generateEtag(List<int> bytes, {bool weak = false}) {
   final digest = base64.encode(bytes);
   final value = '"$digest"';
   return weak ? 'W/$value' : value;
+}
+
+Middleware conditionalRequests({
+  String? Function(EngineContext ctx)? etag,
+  DateTime? Function(EngineContext ctx)? lastModified,
+}) {
+  return (EngineContext ctx, Next next) async {
+    final etagVal = etag?.call(ctx);
+    final lm = lastModified?.call(ctx);
+    // Always set validators before evaluating so 304 responses include them
+    if (etagVal != null) {
+      ctx.response.headers.set(HttpHeaders.etagHeader, etagVal);
+    }
+    if (lm != null) {
+      ctx.response.headers.set(HttpHeaders.lastModifiedHeader, HttpDate.format(lm));
+    }
+    final outcome = evaluateConditional(ctx, etag: etagVal, lastModified: lm);
+    if (outcome == ConditionalOutcome.notModified) {
+      ctx.response.statusCode = HttpStatus.notModified;
+      return ctx.response;
+    }
+    if (outcome == ConditionalOutcome.preconditionFailed) {
+      ctx.response.statusCode = HttpStatus.preconditionFailed;
+      return ctx.response;
+    }
+    return await next();
+  };
 }
