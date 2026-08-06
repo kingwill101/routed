@@ -27,7 +27,7 @@ class StorageDefaults {
   }) {
     String localRoot;
     try {
-      localRoot = manager.disk().resolve('');
+      localRoot = (manager as dynamic).disk().resolve('') as String;
     } catch (_) {
       localRoot = 'storage/app';
     }

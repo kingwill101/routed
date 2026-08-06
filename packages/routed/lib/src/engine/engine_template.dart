@@ -1,7 +1,5 @@
 import 'package:file/file.dart';
 import 'package:routed/src/engine/engine.dart';
-import 'package:routed_view/routed_view.dart'
-    show LiquidViewEngine;
 import 'package:routed_view/routed_view.dart';
 
 /// Extension on the Engine class to provide view engine functionalities.

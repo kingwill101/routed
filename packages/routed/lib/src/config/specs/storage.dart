@@ -2,12 +2,11 @@ import 'package:json_schema_builder/json_schema_builder.dart';
 import 'package:routed/src/config/schema.dart';
 import 'package:routed/src/provider/config_utils.dart';
 import 'package:routed/src/provider/provider.dart';
-import 'package:server_storage/server_storage.dart'; // local driver moved
+// local driver moved
 
 import '../spec.dart';
 
-String defaultStorageRootPath() =>
-    'storage/app';
+String defaultStorageRootPath() => 'storage/app';
 
 String storageRootTemplateDefault() {
   final root = defaultStorageRootPath().replaceAll("'", r"\'");

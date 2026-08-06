@@ -4,4 +4,4 @@
 /// custom static file setups.
 library;
 
-export 'src/file_handler.dart' show Dir, FileHandler;
+export 'package:routed_storage/routed_storage.dart' show Dir, FileHandler; // moved

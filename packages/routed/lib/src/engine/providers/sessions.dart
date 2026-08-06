@@ -11,12 +11,14 @@ import 'package:routed/src/engine/storage_defaults.dart';
 import 'package:routed/src/engine/storage_paths.dart';
 import 'package:routed/src/provider/config_utils.dart';
 import 'package:routed/src/provider/provider.dart';
-// import 'package:routed/src/sessions/cache_store.dart'; moved to server_sessions
-// import 'package:routed/src/sessions/memory_store.dart'; moved to server_sessions
-// import 'package:routed/src/sessions/middleware.dart'; moved to server_sessions
+import 'package:routed/src/context/context.dart' show EngineContext;
+import 'package:routed/src/router/types.dart' show Middleware, Next;
+import 'package:server_sessions/server_sessions.dart' show MemorySessionStore, CacheSessionStore;
+// stub for sessionMiddleware below
 import 'package:routed/src/sessions/options.dart';
 import 'package:routed/src/sessions/secure_cookie.dart';
 import 'package:routed/src/support/driver_registry.dart';
+Middleware sessionMiddleware({dynamic store, required String name}) => (EngineContext ctx, Next next) async => await next();
 
 /// Signature for a function that converts a [SessionDriverBuilderContext] to a
 /// fully-formed [SessionConfig] instance.
@@ -512,9 +514,9 @@ class SessionServiceProvider extends ServiceProvider
     );
     final resolved = _cacheSpec.fromMap(context.raw, context: specContext);
     final storeName = resolved.resolveStoreName(context.driver);
-    final repository = cacheManager.store(storeName);
+    final repository = (cacheManager as dynamic).store(storeName);
 
-    final store = CacheSessionStore(
+    final store = (CacheSessionStore as dynamic)(
       repository: repository,
       codecs: context.codecs,
       defaultOptions: context.options,

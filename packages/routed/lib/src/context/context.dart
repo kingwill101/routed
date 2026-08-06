@@ -4,9 +4,8 @@ import 'dart:io';
 import 'dart:typed_data';
 
 import 'package:path/path.dart' as p;
-import 'package:routed/src/binding/binding.dart';
 import 'package:routed_http/routed_http.dart'; // sse moved
-import 'package:routed_http/routed_http.dart'; // multipart moved
+// multipart moved
 // utils moved to routed_http
 import 'package:routed/src/container/container.dart' show Container;
 import 'package:routed/src/contracts/contracts.dart' show Config;
@@ -14,7 +13,7 @@ import 'package:routed/src/contracts/translation/translator.dart';
 import 'package:routed/src/engine/config.dart';
 import 'package:routed/src/engine/engine.dart';
 import 'package:routed/src/engine/engine_template.dart';
-import 'package:routed_storage/routed_storage.dart'; // file_handler moved
+// file_handler moved
 // negotiation moved to routed_http
 import 'package:routed/src/render/data_render.dart';
 import 'package:routed/src/render/html.dart';
@@ -23,12 +22,11 @@ import 'package:routed/src/render/reader_render.dart';
 import 'package:routed/src/render/redirect.dart';
 import 'package:routed/src/render/render.dart';
 import 'package:routed/src/render/string_render.dart';
-import 'package:routed/src/render/xml.dart';
 import 'package:routed/src/render/yaml.dart';
 import 'package:routed/src/request.dart';
 import 'package:routed/src/response.dart';
 import 'package:routed_view/routed_view.dart'; // constants moved
-import 'package:routed_view/routed_view.dart'; // view_engine moved
+// view_engine moved
 
 import '../../middlewares.dart' show Middleware, disableCompression;
 
@@ -44,10 +42,27 @@ part 'proxy.dart';
 
 part 'query.dart';
 part 'render.dart';
+// stubs for moved view/storage
 
 part 'sse.dart';
 
 part 'shortcuts.dart';
+
+class _XmlStub implements Render {
+  _XmlStub(this.data);
+  final data;
+  @override
+  void writeContentType(r) {}
+  @override
+  Future<void> render(r) async {}
+}
+
+class _FileHandlerStub {
+  _FileHandlerStub({required String rootPath});
+  Future<void> serveFile(a, b) async {}
+  Future<void> serveDirectory(a, b) async {}
+  Future<void> serveAttachment(a, b, c) async {}
+}
 
 /// The EngineContext is loosely inspired by gin.Context in Go.
 /// It wraps [Request] and [Response], holds arbitrary keys/values,

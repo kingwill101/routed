@@ -3,6 +3,7 @@ import 'dart:io';
 import 'package:file/file.dart';
 import 'package:file/local.dart' as local;
 import 'package:routed/session.dart';
+import 'package:routed/src/contracts/cache/store.dart' show Store;
 import 'package:routed/src/runtime/shutdown.dart';
 import 'package:routed/src/utils/debug.dart';
 import 'package:routed_view/routed_view.dart';
@@ -756,7 +757,7 @@ class SessionConfig {
   final String cookieName;
 
   /// The session store implementation.
-  final Store store;
+  final dynamic store;
 
   /// The maximum age of the session. Defaults to 1 hour.
   final Duration maxAge;

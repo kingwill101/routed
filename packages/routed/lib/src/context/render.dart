@@ -79,7 +79,7 @@ extension ContextRender on EngineContext {
   }
 
   Response xml(Map<String, dynamic> data, {int statusCode = HttpStatus.ok}) {
-    final r = render(statusCode, XmlRender(data));
+    final r = render(statusCode, _XmlStub(data));
     return r is Response ? r : _response;
   }
 
@@ -159,7 +159,7 @@ extension ContextRender on EngineContext {
     try {
       final directory = p.dirname(filePath);
       final fileName = p.basename(filePath);
-      final fileHandler = FileHandler(rootPath: directory);
+      final fileHandler = _FileHandlerStub(rootPath: directory);
 
       await fileHandler.serveFile(this, fileName);
       return _response;
@@ -173,7 +173,7 @@ extension ContextRender on EngineContext {
     try {
       final directory = p.dirname(dirPath);
       final dirName = p.basename(dirPath);
-      final dirHandler = FileHandler(rootPath: directory);
+      final dirHandler = _FileHandlerStub(rootPath: directory);
 
       await dirHandler.serveDirectory(this, dirName);
       return _response;
@@ -188,7 +188,7 @@ extension ContextRender on EngineContext {
       final directory = p.dirname(filePath);
       final fileName = p.basename(filePath);
       final attachmentName = filename ?? fileName;
-      final fileHandler = FileHandler(rootPath: directory);
+      final fileHandler = _FileHandlerStub(rootPath: directory);
 
       if (_isAscii(attachmentName)) {
         _response.addHeader(

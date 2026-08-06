@@ -11,10 +11,10 @@ import 'package:routed/src/engine/config.dart';
 import 'package:routed/src/engine/middleware_registry.dart';
 import 'package:routed/src/provider/provider.dart';
 import 'package:routed_view/routed_view.dart'; // file loader moved
-import 'package:routed_view/routed_view.dart'; // locale manager moved
-import 'package:routed_view/routed_view.dart'; // registry moved
-import 'package:routed_view/routed_view.dart'; // resolvers moved
-import 'package:routed_view/routed_view.dart'; // translator moved as routed;
+// locale manager moved
+// registry moved
+// resolvers moved
+// translator moved as routed;
 
 /// Provides translation loader + translator bindings using the default
 /// filesystem configured by the engine.

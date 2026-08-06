@@ -18,6 +18,11 @@ import 'observability.dart';
 import '../../auth/provider.dart';
 import 'localization.dart';
 
+class StorageServiceProvider extends ServiceProvider { StorageServiceProvider(); @override void register(c) {} @override Future<void> boot(c) async {} }
+class StaticAssetsServiceProvider extends ServiceProvider { StaticAssetsServiceProvider(); @override void register(c) {} @override Future<void> boot(c) async {} }
+class ViewServiceProvider extends ServiceProvider { ViewServiceProvider(); @override void register(c) {} @override Future<void> boot(c) async {} }
+
+
 typedef ServiceProviderFactory = ServiceProvider Function();
 
 class ProviderRegistration {

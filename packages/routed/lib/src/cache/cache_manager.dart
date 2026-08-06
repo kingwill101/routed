@@ -1,5 +1,4 @@
 import 'package:routed/src/cache/array_store_factory.dart';
-import 'package:routed/src/cache/file_store_factory.dart';
 import 'package:routed/src/cache/null_store_factory.dart';
 import 'package:routed/src/cache/repository.dart';
 import 'package:routed/src/cache/store_factory.dart';
