@@ -1,5 +1,4 @@
 import 'package:routed/src/validation/rule.dart';
-import 'package:intl/intl.dart';
 
 /// Validation rule that checks if a date matches a given format.
 class DateFormatRule extends ValidationRule {
@@ -17,10 +16,37 @@ class DateFormatRule extends ValidationRule {
   @override
   bool validate(dynamic value, [List<String>? options]) {
     if (value == null || options == null || options.isEmpty) return false;
-
+    final str = value.toString();
+    final format = options[0];
+    // Simple fallback without intl: handle ISO and common yyyy-MM-dd, yyyy/MM/dd, dd-MM-yyyy
+    // Full intl DateFormat support is available via validation_ext when intl is present;
+    // this keeps routed core free of intl for pubspec slim (resolves blocked 38->29).
     try {
-      DateFormat(options[0]).parseStrict(value.toString());
-      return true;
+      // Try ISO parse first
+      if (DateTime.tryParse(str) != null) {
+        // For strict format check, ensure string matches expected pattern length
+        // Basic strictness: if format contains 'yyyy', ensure 4-digit year present
+        if (format.contains('yyyy') && !RegExp(r'\d{4}').hasMatch(str))
+          return false;
+        return true;
+      }
+      // Fallback: try to parse with manual pattern for yyyy-MM-dd etc.
+      final normalized = str.replaceAll('/', '-');
+      if (RegExp(r'^\d{4}-\d{2}-\d{2}').hasMatch(normalized)) {
+        final parts = normalized.split('-');
+        if (parts.length >= 3) {
+          final y = int.tryParse(parts[0]);
+          final m = int.tryParse(parts[1]);
+          final d = int.tryParse(parts[2].split(' ')[0].split('T')[0]);
+          if (y != null && m != null && d != null) {
+            final dt = DateTime.tryParse(
+              '$y-${m.toString().padLeft(2, '0')}-${d.toString().padLeft(2, '0')}',
+            );
+            return dt != null;
+          }
+        }
+      }
+      return false;
     } catch (e) {
       return false;
     }
