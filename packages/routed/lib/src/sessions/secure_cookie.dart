@@ -5,7 +5,6 @@ import 'dart:typed_data';
 import 'package:pointycastle/api.dart' show AEADParameters, KeyParameter;
 import 'package:pointycastle/block/aes.dart';
 import 'package:pointycastle/block/modes/gcm.dart';
-import 'package:routed/routed.dart';
 import 'package:routed/src/crypto/crypto.dart';
 import 'package:routed/src/utils/environment.dart' show env;
 
