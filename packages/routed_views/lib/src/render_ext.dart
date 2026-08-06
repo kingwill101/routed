@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:convert';
 import 'dart:io';
 
 import 'package:routed/routed.dart';
@@ -77,7 +78,11 @@ extension RoutedViewRender on EngineContext {
   }
 
   String _jsonEncode(Object data) {
-    // ignore: avoid_dynamic_calls
-    return (data as dynamic).toString();
+    try {
+      return const JsonEncoder().convert(data);
+    } catch (_) {
+      // ignore: avoid_dynamic_calls
+      return (data as dynamic).toString();
+    }
   }
 }
