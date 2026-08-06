@@ -114,21 +114,3 @@ class _SseEventEncoder extends Converter<SseEvent, String> {
   }
 }
 
-void main() {
-  // Example usage of SseCodec
-  final codec = SseCodec();
-
-  // Decode example
-  final rawSse = 'id: 1\nevent: message\ndata: Hello, world!\n\n';
-  final decodedEvent = codec.decode(rawSse);
-  print('Decoded event: $decodedEvent');
-
-  // Encode example
-  final event = SseEvent(
-    id: '42',
-    event: 'greeting',
-    data: 'Hello, SSE!\nWelcome to the event stream.',
-  );
-  final encodedSse = codec.encode(event);
-  print('Encoded event:\n$encodedSse');
-}
