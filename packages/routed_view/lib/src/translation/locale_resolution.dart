@@ -55,7 +55,7 @@ class LocaleResolutionContext {
 
     String? sessionLookup(String key) {
       try {
-        return ctx.getSession<String>(key);
+        return (ctx as dynamic).getSession<String>(key) as String?;
       } catch (_) {
         return null;
       }
