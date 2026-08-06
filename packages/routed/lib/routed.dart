@@ -58,3 +58,5 @@ export 'src/context/typed_context_state.dart' show TypedContextState;
 export 'src/router/route_metadata.dart' show RouteMetadataKey, RouteMetadata;
 
 export 'src/container/service_resolver.dart' show ServiceResolver;
+export 'src/file_handler.dart' show Dir, FileHandler;
+export 'src/static_files.dart' show StaticFileHandler;

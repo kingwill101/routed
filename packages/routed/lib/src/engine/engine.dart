@@ -9,6 +9,7 @@ import 'package:routed/src/config/registry.dart';
 import 'package:routed/src/container/container.dart';
 import 'package:routed/src/container/container_mixin.dart';
 import 'package:routed/src/container/read_only_container.dart';
+import 'package:routed/src/static_files.dart';
 import 'package:routed/src/context/context.dart';
 import 'package:routed/src/contracts/contracts.dart';
 import 'package:routed/src/engine/config.dart';
@@ -151,7 +152,7 @@ class ValidationRuleRegistry {
 ///
 /// final engine = Engine(providers: [DatabaseServiceProvider()]);
 /// ```
-class Engine with ContainerMixin {
+class Engine with ContainerMixin, StaticFileHandler {
   /// The default providers for a full-featured engine.
   ///
   /// Includes:
