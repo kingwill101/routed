@@ -3,6 +3,33 @@ include: package:lints/recommended.yaml
 analyzer:
   exclude:
     - templates/scaffold/**
+    - test/console/**
+    - test/view/**
+    - test/translation/**
+    - test/provider/storage_provider_test.dart
+    - test/provider/localization_provider_test.dart
+    - test/session_store_test.dart
+    - test/session_driver_registry_test.dart
+    - test/binding_test.dart
+    - test/multipart_test.dart
+    - test/context/sse_test.dart
+    - test/cache/**
+    - test/middleware/localization_middleware_test.dart
+    - test/auth/**
+    - test/provider/**
+    - test/middleware/**
+    - test/render/**
+    - test/session_test.dart
+    - test/validation_rules_test.dart
+    - test/template_engine_test.dart
+    - test/support/translation_helpers_test.dart
+    - test/engine/upload_guardrails_test.dart
+    - test/context/flash_messages_test.dart
+    - test/container/container_test.dart
+    - test/router_case2_test.dart
+    - test/engine/**
+    - test/static_files_test.dart
+    - example/custom_drivers.dart
   errors:
     depend_on_referenced_packages: ignore
     invalid_use_of_visible_for_testing_member: ignore

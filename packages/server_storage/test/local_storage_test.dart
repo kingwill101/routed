@@ -1,5 +1,5 @@
 import 'package:file/memory.dart';
-import 'package:routed/src/storage/local_storage_driver.dart';
+import 'package:server_storage/server_storage.dart';
 import 'package:test/test.dart';
 
 void main() {

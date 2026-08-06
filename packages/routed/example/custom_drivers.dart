@@ -1,6 +1,7 @@
 import 'package:routed/drivers.dart';
 import 'package:routed/providers.dart';
 import 'package:routed/routed.dart' as routed;
+import 'package:server_storage/server_storage.dart' show LocalStorageDisk, StorageDriverContext, StorageDriverDocContext, StorageDisk;
 import 'package:routed/session.dart' as session;
 
 /// Demonstrates how to register custom drivers for storage, cache, and session
@@ -19,7 +20,7 @@ void registerCustomDrivers() {
 const String archiveStorageDriver = 'archive';
 
 void registerArchiveStorageDriver() {
-  StorageServiceProvider.registerDriver(
+  RoutedStorageProvider.registerDriver(
     archiveStorageDriver,
     (StorageDriverContext context) {
       final root = context.configuration['root'];
