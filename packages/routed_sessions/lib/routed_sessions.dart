@@ -13,8 +13,33 @@ const sessionKey = ContextKey<Session>('routed.session');
 const defaultSessionName = 'routed_session';
 
 extension SessionEngineContext on EngineContext {
-  Session get session => mustGet<Session>(sessionKey.name);
+  Session get session {
+    final s = get<Session>(sessionKey.name);
+    if (s == null) throw StateError('Session middleware not configured');
+    return s;
+  }
   bool get hasSession => get<Session>(sessionKey.name) != null;
+
+  T? getSession<T>(String key) {
+    try {
+      return session.getValue<T>(key);
+    } catch (_) {
+      return null;
+    }
+  }
+
+  void setSession(String key, dynamic value) {
+    try {
+      session.setValue(key, value);
+    } catch (_) {}
+  }
+
+  void removeSession(String key) => session.values.remove(key);
+  void clearSession() => session.values.clear();
+  bool hasSessionKey(String key) => session.values.containsKey(key);
+  Map<String, dynamic> get sessionData => Map.from(session.values);
+  String get sessionId => session.id;
+  void destroySession() => session.destroy();
 }
 
 /// Adapts Routed's [Request] to the portable [SessionRequest] contract.

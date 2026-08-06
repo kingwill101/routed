@@ -2,7 +2,19 @@
 import 'package:file/file.dart';
 import 'package:file/local.dart' as local;
 import 'package:liquify/liquify.dart';
-import 'package:routed/src/render/html/template_engine.dart';
+
+/// Local stub for TemplateEngine to break dependency on `routed` render.
+/// Original was in `package:routed/src/render/html/template_engine.dart` which
+/// has been moved out of core per slimming.
+abstract class TemplateEngine {
+  Future<String> render(String templateName, [Map<String, dynamic> data = const {}]);
+  String renderContent(String content, [Map<String, dynamic> data = const {}]);
+  void loadTemplates(String path);
+  Map<String, Function> get funcMap;
+  Map<String, Function> get filterMap;
+  void addFunc(String name, Function fn);
+  void addFilter(String name, Function filter);
+}
 
 /// {@template liquid_root_base_directory}
 /// `LiquidRoot` resolves templates relative to `baseDirectory` without
