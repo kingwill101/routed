@@ -3,7 +3,7 @@ library;
 
 import 'dart:io';
 
-import 'package:routed/src/translation/locale_resolution.dart';
+import 'locale_resolution.dart';
 
 /// Built-in locale resolvers backed by query params, cookies, sessions, and
 /// headers.

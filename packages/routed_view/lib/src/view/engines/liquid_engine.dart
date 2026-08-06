@@ -5,8 +5,8 @@ import 'dart:async';
 import 'package:liquify/liquify.dart' as liquid;
 import 'package:routed/src/render/html/liquid.dart';
 import 'package:routed/src/context/context.dart';
-import 'package:routed/src/view/view_engine.dart';
-import 'package:routed/src/view/view_extensions.dart';
+import '../view_engine.dart';
+import '../view_extensions.dart';
 
 export 'package:routed/src/render/html/liquid.dart';
 

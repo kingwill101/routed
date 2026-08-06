@@ -3,7 +3,7 @@ library;
 
 import 'package:routed/src/contracts/contracts.dart' show Config;
 import 'package:routed/src/support/named_registry.dart';
-import 'package:routed/src/translation/resolvers.dart';
+import 'resolvers.dart';
 
 /// Provides shared options derived from core translation config.
 class LocaleResolverSharedOptions {
