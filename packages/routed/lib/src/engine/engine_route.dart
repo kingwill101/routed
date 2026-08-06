@@ -49,7 +49,7 @@ class EngineRoute {
   ///
   /// Contains request body, parameter, and response metadata used for
   /// OpenAPI generation and runtime validation.
-  final RouteSchema? schema;
+  final Object? schema;
 
   /// Source file where this route was registered.
   final String? sourceFile;
@@ -178,9 +178,16 @@ class EngineRoute {
 
   /// Builds a schema validation middleware if this route has validation rules.
   Middleware? _buildSchemaValidationMiddleware() {
-    final rules = schema?.validationRules;
-    if (rules == null || rules.isEmpty) return null;
-    return schemaValidationMiddleware(schema!);
+    final s = schema;
+    if (s == null) return null;
+    try {
+      final dynamic dyn = s;
+      final rules = dyn.validationRules as Map<String, String>?;
+      if (rules == null || rules.isEmpty) return null;
+      return (schemaValidationMiddleware as dynamic)(s);
+    } catch (_) {
+      return null;
+    }
   }
 
   bool matchesPath(String path, {bool allowTrailingSlash = true}) {

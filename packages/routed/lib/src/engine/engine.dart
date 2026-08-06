@@ -22,16 +22,12 @@ import 'package:routed/src/engine/http2_server.dart';
 import 'package:routed/src/engine/middleware_registry.dart';
 import 'package:routed/src/engine/provider_manifest.dart';
 import 'package:routed/src/engine/providers/core.dart';
-import 'package:routed/src/engine/providers/logging.dart';
 import 'package:routed/src/engine/providers/registry.dart';
 import 'package:routed/src/engine/providers/routing.dart';
 import 'package:routed/src/engine/route_match.dart';
 import 'package:routed/src/engine/request_scope.dart';
 import 'package:routed/src/engine/wrapped_request.dart';
 import 'package:routed/src/events/event_manager.dart';
-import 'package:routed/src/logging/logging.dart';
-import 'package:routed/src/observability/health.dart';
-import 'package:routed/src/openapi/schema.dart';
 import 'package:routed/src/provider/provider.dart';
 import 'package:routed/src/provider/config_utils.dart';
 import 'package:routed/src/request.dart';
@@ -1226,12 +1222,7 @@ class Engine with StaticFileHandler, ContainerMixin {
     if (_closed) {
       throw StateError('Cannot handle requests on a closed engine');
     }
-    final bypassHealth =
-        container.has<HealthEndpointRegistry>() &&
-        container.get<HealthEndpointRegistry>().allows(httpRequest.uri.path);
-
-    if ((_draining || _shutdownController?.isDraining == true) &&
-        !bypassHealth) {
+    if ((_draining || _shutdownController?.isDraining == true)) {
       httpRequest.response.statusCode = HttpStatus.serviceUnavailable;
       httpRequest.response.headers.set(HttpHeaders.connectionHeader, 'close');
       await httpRequest.response.close();
