@@ -157,7 +157,7 @@ class LiquidTemplateEngine implements TemplateEngine {
       return;
     }
     if (root is FileSystemRoot) {
-      _root = FileSystemRoot(directory.path, fileSystem: root.fileSystem);
+      _root = FileSystemRoot(directory.path, fileSystem: (root as dynamic).fileSystem as FileSystem?);
       return;
     }
   }

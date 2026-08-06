@@ -87,11 +87,11 @@ void main() {
       fileSystem.directory('/templates').createSync();
       fileSystem.directory('/custom').createSync();
       final root = liquid.FileSystemRoot('/templates', fileSystem: fileSystem);
-      final originalCurrent = root.fileSystem.currentDirectory.path;
+      final originalCurrent = (root as dynamic).fileSystem.currentDirectory.path as String;
 
       LiquidViewEngine(directory: '/custom', root: root);
 
-      expect(root.fileSystem.currentDirectory.path, equals(originalCurrent));
+      expect((root as dynamic).fileSystem.currentDirectory.path as String, equals(originalCurrent));
     });
   });
 }
