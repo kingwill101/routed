@@ -1,9 +1,9 @@
 import 'package:routed/src/container/container.dart';
 import 'package:routed/src/context/context.dart';
 import 'package:routed/src/contracts/translation/translator.dart';
-import 'package:routed_views/routed_views.dart';
-
 import 'zone.dart';
+
+const kRequestLocaleAttribute = 'routed.locale';
 
 T config<T>(String key, [T? defaultValue]) {
   final ctx = _contextOrNull();

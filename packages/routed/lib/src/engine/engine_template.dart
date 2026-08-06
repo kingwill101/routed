@@ -1,6 +1,8 @@
 import 'package:file/file.dart';
+import 'package:routed/src/engine/config.dart' show ViewEngine;
 import 'package:routed/src/engine/engine.dart';
-import 'package:routed_views/routed_views.dart';
+
+class LiquidViewEngine extends ViewEngine {}
 
 /// Extension on the Engine class to provide view engine functionalities.
 extension EngineViewEngineExtension on Engine {
