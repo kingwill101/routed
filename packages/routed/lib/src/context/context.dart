@@ -19,19 +19,11 @@ import 'package:routed/src/request.dart';
 import 'package:routed/src/response.dart';
 import 'package:routed/src/router/types.dart' show Middleware;
 
-part 'binding.dart';
 part 'error.dart';
 
 part 'helpers.dart';
 
-part 'multipart.dart';
-
 part 'negotiation.dart';
-part 'proxy.dart';
-
-part 'query.dart';
-
-part 'sse.dart';
 
 part 'shortcuts.dart';
 

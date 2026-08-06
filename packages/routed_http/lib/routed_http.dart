@@ -20,3 +20,8 @@ export 'src/websocket/websocket_handler.dart';
 export 'src/sse/sse.dart';
 export 'src/http_ext.dart';
 export 'src/binding_ext.dart';
+export 'src/context/binding.dart';
+export 'src/context/multipart.dart';
+export 'src/context/proxy.dart';
+export 'src/context/query.dart';
+export 'src/context/sse.dart';

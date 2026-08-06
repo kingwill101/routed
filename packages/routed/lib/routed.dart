@@ -32,16 +32,7 @@ export 'src/events/event.dart';
 export 'src/events/events.dart';
 export 'src/events/signals.dart';
 
-export 'src/inspection/metadata.dart'
-    show ConfigFieldMetadata, ProviderMetadata, inspectProviders;
-export 'src/logging/logging.dart';
 
-export 'src/observability/errors.dart'
-    show ErrorObserver, ErrorObserverRegistry;
-export 'src/observability/health.dart'
-    show HealthService, HealthCheck, HealthCheckResult, HealthEndpointRegistry;
-export 'src/observability/metrics.dart' show MetricsService;
-export 'src/observability/tracing.dart' show TracingService, TracingConfig;
 
 export 'src/provider/config_utils.dart';
 export 'src/provider/provider.dart';
