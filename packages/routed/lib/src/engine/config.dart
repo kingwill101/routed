@@ -491,7 +491,7 @@ class EngineConfig {
   List<({InternetAddress address, int prefixLength})> _parsedProxies = [];
 
   final String templateDirectory;
-  final ViewEngine? templateEngine;
+  final dynamic templateEngine;
   final FileSystem fileSystem;
   final MultipartConfig multipart;
   final String? appKey;
@@ -700,7 +700,7 @@ class EngineConfig {
     List<String>? trustedProxies,
     String? trustedPlatform,
     String? templateDirectory,
-    ViewEngine? templateEngine,
+    dynamic templateEngine,
     String? appKey,
     bool? defaultOptionsEnabled,
     EtagStrategy? etagStrategy,

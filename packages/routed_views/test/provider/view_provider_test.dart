@@ -1,5 +1,5 @@
 import 'package:file/memory.dart';
-import 'package:routed/routed.dart';
+import 'package:routed/routed.dart' hide LiquidViewEngine;
 import 'package:routed_views/routed_views.dart';
 import 'package:test/test.dart';
 import '../test_engine.dart';
