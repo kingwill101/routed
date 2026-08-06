@@ -184,7 +184,9 @@ class EngineRoute {
       final dynamic dyn = s;
       final rules = dyn.validationRules as Map<String, String>?;
       if (rules == null || rules.isEmpty) return null;
-      return (schemaValidationMiddleware as dynamic)(s);
+      final middleware =
+          (schemaValidationMiddleware as dynamic)(s) as Middleware?;
+      return middleware;
     } catch (_) {
       return null;
     }

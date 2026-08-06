@@ -33,17 +33,17 @@ extension EngineRouting on Engine {
     RouteHandler handler, {
     List<Middleware> middlewares = const [],
     Map<String, dynamic> constraints = const {},
-    RouteSchema? schema,
+    Object? schema,
   }) {
     _markRoutesDirty();
     _ensureDefaultRouterMounted();
-    return _defaultRouter.get(
+    return ((_defaultRouter as dynamic).get(
       path,
       handler,
       middlewares: middlewares,
       constraints: constraints,
-      schema: schema,
-    );
+      schema: schema as dynamic,
+    ) as RouteBuilder);
   }
 
   /// Registers a POST route with the given [path] and [handler].
@@ -67,17 +67,17 @@ extension EngineRouting on Engine {
     RouteHandler handler, {
     List<Middleware> middlewares = const [],
     Map<String, dynamic> constraints = const {},
-    RouteSchema? schema,
+    Object? schema,
   }) {
     _markRoutesDirty();
     _ensureDefaultRouterMounted();
-    return _defaultRouter.post(
+    return ((_defaultRouter as dynamic).post(
       path,
       handler,
       middlewares: middlewares,
       constraints: constraints,
-      schema: schema,
-    );
+      schema: schema as dynamic,
+    ) as RouteBuilder);
   }
 
   /// Registers a PUT route with the given [path] and [handler].
@@ -101,17 +101,17 @@ extension EngineRouting on Engine {
     RouteHandler handler, {
     List<Middleware> middlewares = const [],
     Map<String, dynamic> constraints = const {},
-    RouteSchema? schema,
+    Object? schema,
   }) {
     _markRoutesDirty();
     _ensureDefaultRouterMounted();
-    return _defaultRouter.put(
+    return ((_defaultRouter as dynamic).put(
       path,
       handler,
       middlewares: middlewares,
       constraints: constraints,
-      schema: schema,
-    );
+      schema: schema as dynamic,
+    ) as RouteBuilder);
   }
 
   /// Registers a DELETE route with the given [path] and [handler].
@@ -134,17 +134,17 @@ extension EngineRouting on Engine {
     RouteHandler handler, {
     List<Middleware> middlewares = const [],
     Map<String, dynamic> constraints = const {},
-    RouteSchema? schema,
+    Object? schema,
   }) {
     _markRoutesDirty();
     _ensureDefaultRouterMounted();
-    return _defaultRouter.delete(
+    return ((_defaultRouter as dynamic).delete(
       path,
       handler,
       middlewares: middlewares,
       constraints: constraints,
-      schema: schema,
-    );
+      schema: schema as dynamic,
+    ) as RouteBuilder);
   }
 
   /// Registers a PATCH route with the given [path] and [handler].
@@ -168,17 +168,17 @@ extension EngineRouting on Engine {
     RouteHandler handler, {
     List<Middleware> middlewares = const [],
     Map<String, dynamic> constraints = const {},
-    RouteSchema? schema,
+    Object? schema,
   }) {
     _markRoutesDirty();
     _ensureDefaultRouterMounted();
-    return _defaultRouter.patch(
+    return ((_defaultRouter as dynamic).patch(
       path,
       handler,
       middlewares: middlewares,
       constraints: constraints,
-      schema: schema,
-    );
+      schema: schema as dynamic,
+    ) as RouteBuilder);
   }
 
   /// Registers a HEAD route with the given [path] and [handler].
@@ -201,17 +201,17 @@ extension EngineRouting on Engine {
     RouteHandler handler, {
     List<Middleware> middlewares = const [],
     Map<String, dynamic> constraints = const {},
-    RouteSchema? schema,
+    Object? schema,
   }) {
     _markRoutesDirty();
     _ensureDefaultRouterMounted();
-    return _defaultRouter.head(
+    return ((_defaultRouter as dynamic).head(
       path,
       handler,
       middlewares: middlewares,
       constraints: constraints,
-      schema: schema,
-    );
+      schema: schema as dynamic,
+    ) as RouteBuilder);
   }
 
   /// Registers an OPTIONS route with the given [path] and [handler].
@@ -236,17 +236,17 @@ extension EngineRouting on Engine {
     RouteHandler handler, {
     List<Middleware> middlewares = const [],
     Map<String, dynamic> constraints = const {},
-    RouteSchema? schema,
+    Object? schema,
   }) {
     _markRoutesDirty();
     _ensureDefaultRouterMounted();
-    return _defaultRouter.options(
+    return ((_defaultRouter as dynamic).options(
       path,
       handler,
       middlewares: middlewares,
       constraints: constraints,
-      schema: schema,
-    );
+      schema: schema as dynamic,
+    ) as RouteBuilder);
   }
 
   /// Registers a CONNECT route with the given [path] and [handler].
@@ -260,16 +260,16 @@ extension EngineRouting on Engine {
     String path,
     RouteHandler handler, {
     List<Middleware> middlewares = const [],
-    RouteSchema? schema,
+    Object? schema,
   }) {
     _markRoutesDirty();
     _ensureDefaultRouterMounted();
-    return _defaultRouter.connect(
+    return ((_defaultRouter as dynamic).connect(
       path,
       handler,
       middlewares: middlewares,
-      schema: schema,
-    );
+      schema: schema as dynamic,
+    ) as RouteBuilder);
   }
 
   /// Registers a route with a custom HTTP [method], [path], and [handler].
@@ -294,18 +294,18 @@ extension EngineRouting on Engine {
     RouteHandler handler, {
     List<Middleware> middlewares = const [],
     Map<String, dynamic> constraints = const {},
-    RouteSchema? schema,
+    Object? schema,
   }) {
     _markRoutesDirty();
     _ensureDefaultRouterMounted();
-    return _defaultRouter.handle(
+    return ((_defaultRouter as dynamic).handle(
       method,
       path,
       handler,
       middlewares: middlewares,
       constraints: constraints,
-      schema: schema,
-    );
+      schema: schema as dynamic,
+    ) as RouteBuilder);
   }
 
   /// Registers a fallback route with the given [handler].
@@ -335,13 +335,13 @@ extension EngineRouting on Engine {
     // We use a wildcard parameter in the path that will match anything.
     // We also add a flag in constraints so later when building the EngineRoute
     // we know this route is the fallback.
-    return _defaultRouter.handle(
+    return ((_defaultRouter as dynamic).handle(
       'GET',
       '/{__fallback:*}', // a path that matches everything
       handler,
       middlewares: middlewares,
       constraints: {'isFallback': true},
-    );
+    ) as RouteBuilder);
   }
 
   /// Creates a group of routes with a common [path] prefix and [middlewares].

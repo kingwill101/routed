@@ -33,13 +33,6 @@ extension ServerExtension on Engine {
         _server = await HttpServer.bind(host, port ?? 0, shared: true);
         final boundPort = _server!.port;
 
-        await LoggingContext.withValues({
-          'event': 'engine_started',
-          'scheme': 'http',
-          'host': host,
-          'port': boundPort,
-        }, (logger) => logger.info('Engine listening'));
-
         if (echo) {
           print('Engine listening on http://$host:$boundPort');
         }
@@ -60,11 +53,6 @@ extension ServerExtension on Engine {
         }
       },
       (error, stack) {
-        LoggingContext.withValues({
-          'event': 'engine_start_error',
-          'error_type': error.runtimeType.toString(),
-          'stack_trace': stack.toString(),
-        }, (logger) => logger.error('Engine failed to start: $error'));
         stderr.writeln('Engine failed to start: $error');
       },
     );
@@ -742,28 +730,9 @@ extension ServerExtension on Engine {
     Object err,
     StackTrace stack,
   ) async {
-    final logger = LoggingContext.currentLogger(ctx);
-    final errorPayload = <String, Object?>{
-      'error_type': err.runtimeType.toString(),
-      'error_message': err.toString(),
-    };
-    if (LoggingServiceProvider.includeStackTraces) {
-      errorPayload['stack_trace'] = stack.toString();
-    }
-    final errorContext = contextual.Context(errorPayload);
-    logger.error('Unhandled exception while processing request', errorContext);
-
     void reportHookError(Object hookError, StackTrace hookStack) {
-      final hookPayload = <String, Object?>{
-        'error_type': hookError.runtimeType.toString(),
-        'error_message': hookError.toString(),
-      };
-      if (LoggingServiceProvider.includeStackTraces) {
-        hookPayload['stack_trace'] = hookStack.toString();
-      }
-      logger.error(
-        'Error hook threw while handling an exception',
-        contextual.Context(hookPayload),
+      stderr.writeln(
+        'Error hook threw while handling an exception: $hookError\n$hookStack',
       );
     }
 
@@ -907,12 +876,6 @@ extension ServerExtension on Engine {
     EngineContext context,
     Future<void> Function() body,
   ) async {
-    if (_isLoggingEnabled(container)) {
-      await LoggingContext.run(this, context, (_) async {
-        await body();
-      });
-      return;
-    }
     await body();
   }
 

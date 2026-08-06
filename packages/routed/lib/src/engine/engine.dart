@@ -2,7 +2,6 @@ import 'dart:async';
 import 'dart:io';
 
 import 'package:collection/collection.dart';
-import 'package:contextual/contextual.dart' as contextual;
 import 'package:fuzzywuzzy/fuzzywuzzy.dart' as fuzzy;
 import 'package:http2/http2.dart' as http2;
 import 'package:meta/meta.dart' show internal, visibleForTesting;
@@ -19,9 +18,6 @@ import 'package:routed/src/engine/events/config.dart';
 import 'package:routed/src/engine/events/request.dart';
 import 'package:routed/src/engine/events/route.dart';
 import 'package:routed/src/engine/http2_server.dart';
-import 'package:routed/src/logging/context.dart';
-import 'package:routed/src/engine/providers/logging.dart';
-import 'package:routed/src/openapi/schema.dart';
 import 'package:routed/src/engine/middleware_registry.dart';
 import 'package:routed/src/engine/provider_manifest.dart';
 import 'package:routed/src/engine/providers/core.dart';
@@ -1615,26 +1611,9 @@ extension SecureEngine on Engine {
           await _handleHttp2Stream(stream, socket);
         },
         onError: (error, stackTrace) {
-          LoggingContext.withValues({
-            'event': 'engine_runtime_error',
-            'scheme': 'https',
-            'host': address,
-            'port': binding.port,
-            'http2': true,
-            'error_type': error.runtimeType.toString(),
-            'stack_trace': stackTrace.toString(),
-          }, (logger) => logger.error('HTTP/2 server error: $error'));
           stderr.writeln('HTTP/2 server error: $error\n$stackTrace');
         },
       );
-
-      await LoggingContext.withValues({
-        'event': 'engine_started',
-        'scheme': 'https',
-        'host': address,
-        'port': binding.port,
-        'http2': true,
-      }, (logger) => logger.info('Secure engine listening'));
 
       print(
         'Secure server listening on https://$address:${binding.port} (HTTP/2 enabled)',
@@ -1655,14 +1634,6 @@ extension SecureEngine on Engine {
     );
 
     _server = server;
-
-    await LoggingContext.withValues({
-      'event': 'engine_started',
-      'scheme': 'https',
-      'host': address,
-      'port': server.port,
-      'http2': false,
-    }, (logger) => logger.info('Secure engine listening'));
 
     print('Secure server listening on https://$address:${server.port}');
 
