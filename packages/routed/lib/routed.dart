@@ -113,6 +113,7 @@ export 'src/websocket/websocket_handler.dart';
 export 'src/context/context_key.dart' show ContextKey;
 export 'src/context/typed_context_state.dart' show TypedContextState;
 export 'src/router/route_metadata.dart' show RouteMetadataKey, RouteMetadata;
+export 'src/render/render.dart' show Render;
 export 'src/http/transport.dart'
     show RequestAdapter, ResponseAdapter, ServerTransport, ServerOptions, ServerHandle;
 export 'src/container/service_resolver.dart' show ServiceResolver;
