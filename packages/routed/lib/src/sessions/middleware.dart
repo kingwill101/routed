@@ -1,6 +1,7 @@
 import 'package:collection/collection.dart';
 import 'package:routed/session.dart';
 import 'package:routed/src/context/context.dart';
+import 'package:routed/src/context/session.dart';
 import 'package:routed/src/engine/config.dart';
 import 'package:routed/src/router/types.dart';
 
@@ -61,7 +62,7 @@ Middleware sessionMiddleware({
     }
 
     final session = await resolvedStore.read(ctx.request, resolvedName);
-    ctx.set('session', session);
+    ctx.write(sessionKey, session);
 
     final initialSnapshot = _sessionSnapshot(session);
     final equality = const DeepCollectionEquality();
@@ -75,7 +76,7 @@ Middleware sessionMiddleware({
     final res = await next();
 
     if (!ctx.isClosed) {
-      final currentSession = ctx.get<Session>('session') ?? session;
+      final currentSession = ctx.read(sessionKey) ?? session;
       final currentSnapshot = _sessionSnapshot(currentSession);
       final payloadChanged =
           !equality.equals(initialSnapshot, currentSnapshot) ||
