@@ -1,7 +1,6 @@
 import 'package:routed/src/cache/array_store_factory.dart';
 import 'package:routed/src/cache/file_store_factory.dart';
 import 'package:routed/src/cache/null_store_factory.dart';
-import 'package:routed/src/cache/redis_store_factory.dart';
 import 'package:routed/src/cache/repository.dart';
 import 'package:routed/src/cache/store_factory.dart';
 import 'package:routed/src/contracts/cache/repository.dart';
@@ -766,78 +765,6 @@ class CacheManager {
       documentation: _nullDriverDocs,
       overrideExisting: false,
     );
-    registerDriver(
-      'redis',
-      () => RedisStoreFactory(),
-      documentation: _redisDriverDocs,
-      overrideExisting: false,
-      validator: (config, driver) {
-        final url = config['url'];
-        if (url != null) {
-          if (url is! String) {
-            throw ConfigurationException(
-              'Cache driver "$driver" url must be a string. '
-              'Received type ${url.runtimeType}.',
-            );
-          }
-          final trimmed = url.trim();
-          if (trimmed.isNotEmpty) {
-            final parsed = Uri.tryParse(trimmed);
-            if (parsed == null || parsed.host.isEmpty) {
-              throw ConfigurationException(
-                'Cache driver "$driver" url must be a valid Redis URL '
-                '(for example redis://localhost:6379/0).',
-              );
-            }
-            config['url'] = trimmed;
-          } else {
-            config.remove('url');
-          }
-        }
-
-        final host = config['host'];
-        if (host != null && host is! String) {
-          throw ConfigurationException(
-            'Cache driver "$driver" host must be a string. '
-            'Received type ${host.runtimeType}.',
-          );
-        }
-
-        void coerceInt(String key) {
-          final value = config[key];
-          if (value == null) {
-            return;
-          }
-          if (value is int) {
-            return;
-          }
-          if (value is num) {
-            config[key] = value.toInt();
-            return;
-          }
-          final parsed = int.tryParse(value.toString());
-          if (parsed == null) {
-            throw ConfigurationException(
-              'Cache driver "$driver" $key must be an integer value. '
-              'Received "$value".',
-            );
-          }
-          config[key] = parsed;
-        }
-
-        coerceInt('port');
-        coerceInt('database');
-        coerceInt('db');
-
-        final password = config['password'];
-        if (password != null && password is! String) {
-          throw ConfigurationException(
-            'Cache driver "$driver" password must be a string. '
-            'Received type ${password.runtimeType}.',
-          );
-        }
-      },
-    );
     _defaultsRegistered = true;
   }
 
@@ -882,60 +809,6 @@ class CacheManager {
   /// This driver discards all cache operations, effectively providing a no-op cache.
   static List<ConfigDocEntry> _nullDriverDocs(CacheDriverDocContext context) =>
       const <ConfigDocEntry>[];
-
-  /// Provides configuration documentation for the `redis` cache driver.
-  ///
-  /// This driver stores cache items in a Redis key-value store.
-  static List<ConfigDocEntry> _redisDriverDocs(
-    CacheDriverDocContext context,
-  ) => <ConfigDocEntry>[
-    ConfigDocEntry(
-      path: context.path('url'),
-      type: 'string',
-      description:
-          'An optional Redis connection URL. When provided, this URL '
-          'overrides the [host], [port], [password], and [db] configurations. '
-          'Example: `redis://username:password@localhost:6379/0`.',
-      metadata: const {
-        'validation': 'Must be a valid redis:// URL including host.',
-      },
-    ),
-    ConfigDocEntry(
-      path: context.path('host'),
-      type: 'string',
-      description: 'The Redis host to connect to when [url] is not provided.',
-      defaultValue: '127.0.0.1',
-      metadata: const {'default_note': 'Ignored when [url] is provided.'},
-    ),
-    ConfigDocEntry(
-      path: context.path('port'),
-      type: 'int',
-      description: 'The Redis port to connect to when [url] is not provided.',
-      defaultValue: 6379,
-      metadata: const {
-        'default_note': 'Ignored when [url] is provided.',
-        'validation': 'Must be an integer.',
-      },
-    ),
-    ConfigDocEntry(
-      path: context.path('password'),
-      type: 'string',
-      description: 'An optional Redis password for authentication.',
-      metadata: const {'default_note': 'Optional; omit for no authentication.'},
-    ),
-    ConfigDocEntry(
-      path: context.path('db'),
-      type: 'int',
-      description:
-          'The Redis database index to select after connecting. '
-          'This setting can also be specified using the `database` alias.',
-      defaultValue: 0,
-      metadata: const {
-        'default_note': 'Overrides apply when `database` or `db` is set.',
-        'validation': 'Must be an integer.',
-      },
-    ),
-  ];
 
   /// Retrieves the name of the default driver for this [CacheManager].
   ///

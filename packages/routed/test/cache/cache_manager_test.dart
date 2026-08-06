@@ -11,14 +11,10 @@ import 'package:routed/src/cache/lock.dart';
 import 'package:routed/src/cache/null_lock.dart';
 import 'package:routed/src/cache/null_store.dart';
 import 'package:routed/src/cache/null_store_factory.dart';
-import 'package:routed/src/cache/redis_lock.dart';
-import 'package:routed/src/cache/redis_store.dart';
-import 'package:routed/src/cache/redis_store_factory.dart';
 import 'package:routed/src/cache/tag_set.dart';
 import 'package:routed/src/cache/tagged_cache.dart';
 import 'package:routed/src/contracts/cache/lock_timeout_exception.dart';
 import 'package:routed/src/contracts/cache/store.dart';
-import 'package:redis/redis.dart';
 import 'package:test/test.dart';
 
 void main() {
@@ -265,169 +261,6 @@ void main() {
       expect(factory.create(const {}), isA<NullStore>());
     });
 
-    test('redis store factory parses config', () {
-      final factory = RedisStoreFactory();
-      final store = factory.create({
-        'url': 'redis://:secret@localhost:6380/5',
-        'db': '2',
-        'host': 'override',
-      });
-
-      expect(store, isA<RedisStore>());
-      final redisStore = store as RedisStore;
-      expect(redisStore.host, equals('override'));
-      expect(redisStore.port, equals(6380));
-      expect(redisStore.password, equals('secret'));
-      expect(redisStore.db, equals(2));
-    });
-
-    test('redis store parses url and overrides', () {
-      final store = RedisStore.fromConfig({
-        'url': 'redis://secret@cache-host:6381/3?db=4',
-        'host': 'override',
-        'port': '6382',
-        'database': '7',
-        'db': 6,
-      });
-
-      expect(store.host, equals('override'));
-      expect(store.port, equals(6382));
-      expect(store.password, equals('secret'));
-      expect(store.db, equals(6));
-    });
-
-    test('redis store accepts numeric config values', () {
-      final store = RedisStore.fromConfig({
-        'host': 'local',
-        'port': 6383,
-        'database': 5,
-      });
-
-      expect(store.host, equals('local'));
-      expect(store.port, equals(6383));
-      expect(store.db, equals(5));
-    });
-
-    test('redis store parses password without colon', () {
-      final store = RedisStore.fromConfig({
-        'url': 'redis://secret@localhost:6379',
-      });
-
-      expect(store.password, equals('secret'));
-    });
-
-    test('redis store operations use send override', () async {
-      final backend = _FakeRedisBackend();
-      final store = RedisStore('localhost', 6379, sendOverride: backend.send);
-
-      expect(store.getPrefix(), isEmpty);
-      await store.put('key', 'value', 10);
-      await store.put('flag', true, 0);
-      await store.put('payload', {'a': 1}, 0);
-      await store.put('count', 1, 0);
-      await store.put('nothing', null, 0);
-      backend.expiries['count'] = 1000;
-
-      expect(await store.get('key'), equals('value'));
-      expect(await store.get('flag'), isTrue);
-      expect(await store.get('payload'), equals({'a': 1}));
-      expect(await store.get('nothing'), isNull);
-
-      backend.values['raw-json'] = 'json:{oops';
-      backend.values['float'] = '12.5';
-      backend.values['int'] = '7';
-      backend.values['false'] = 'bool:0';
-      backend.values['string'] = 'str:hello';
-
-      expect(await store.get('raw-json'), equals('{oops'));
-      expect(await store.get('float'), equals(12.5));
-      expect(await store.get('int'), equals(7));
-      expect(await store.get('false'), isFalse);
-      expect(await store.get('string'), equals('hello'));
-
-      await store.putMany({'one': 1, 'two': 'second'}, 0);
-      expect(
-        await store.many(['one', 'two', 'missing']),
-        equals({'one': 1, 'two': 'second', 'missing': null}),
-      );
-
-      expect(await store.increment('count', 2), equals(3));
-      expect(await store.decrement('count', 1), equals(2));
-
-      expect(await store.forget('key'), isTrue);
-      expect(await store.forget('missing'), isFalse);
-      expect(await store.get('key'), isNull);
-
-      final keys = await store.getAllKeys();
-      expect(keys, containsAll(['flag', 'payload', 'count', 'one', 'two']));
-
-      await store.flush();
-      expect(await store.getAllKeys(), isEmpty);
-    });
-
-    test('redis store ensures command initialization', () async {
-      final sent = <List<dynamic>>[];
-      final connection = _TestRedisConnection((connection) {
-        return _TestRedisCommand(connection, (args) {
-          sent.add(args);
-          if (args.first == 'GET') {
-            return 'str:hello';
-          }
-          return 'OK';
-        });
-      });
-      final store = RedisStore(
-        'localhost',
-        6379,
-        password: 'secret',
-        db: 3,
-        connection: connection,
-      );
-
-      expect(await store.get('greeting'), equals('hello'));
-      expect(connection.connectCount, equals(1));
-      expect(sent, contains(equals(['AUTH', 'secret'])));
-      expect(sent, contains(equals(['SELECT', 3])));
-      expect(sent, contains(equals(['GET', 'greeting'])));
-
-      await store.get('greeting');
-      expect(connection.connectCount, equals(1));
-    });
-
-    test('redis store retries after send error', () async {
-      var shouldThrow = true;
-      final connection = _TestRedisConnection((connection) {
-        return _TestRedisCommand(connection, (args) {
-          if (shouldThrow && args.first == 'GET') {
-            shouldThrow = false;
-            throw StateError('boom');
-          }
-          return 'str:ok';
-        });
-      });
-      final store = RedisStore('localhost', 6379, connection: connection);
-
-      await expectLater(store.get('key'), throwsA(isA<StateError>()));
-      expect(await store.get('key'), equals('ok'));
-      expect(connection.connectCount, equals(2));
-    });
-
-    test('redis lock delegates to store', () async {
-      final backend = _FakeRedisBackend();
-      final store = RedisStore('localhost', 6379, sendOverride: backend.send);
-      final lock = await store.lock('resource', 1, 'owner');
-
-      expect(lock, isA<RedisLock>());
-      expect(await lock.acquire(), isTrue);
-      expect(await lock.acquire(), isFalse);
-      expect(await lock.getCurrentOwner(), equals('owner'));
-      expect(await lock.release(), isTrue);
-      expect(await lock.getCurrentOwner(), isNull);
-
-      lock.forceRelease();
-      await Future<void>.delayed(Duration.zero);
-      expect(await lock.getCurrentOwner(), isNull);
-    });
 
     test('file lock enforces ownership and callbacks', () async {
       final fs = MemoryFileSystem();
@@ -538,33 +371,6 @@ class _ScriptedLock extends CacheLock {
   }
 }
 
-class _TestRedisConnection extends RedisConnection {
-  _TestRedisConnection(this.commandFactory);
-
-  final Command Function(RedisConnection connection) commandFactory;
-  int connectCount = 0;
-
-  @override
-  Future<Command> connect(host, port) async {
-    connectCount += 1;
-    return commandFactory(this);
-  }
-}
-
-class _TestRedisCommand extends Command {
-  _TestRedisCommand(this.connection, this.onSend) : super(connection);
-
-  final RedisConnection connection;
-  final FutureOr<dynamic> Function(List<dynamic>) onSend;
-
-  @override
-  // ignore: non_constant_identifier_names
-  Future<dynamic> send_object(Object obj) {
-    final args = obj is List ? List<dynamic>.from(obj) : <dynamic>[obj];
-    return Future.sync(() => onSend(args));
-  }
-}
-
 class _SyncStore implements Store {
   final Map<String, dynamic> data = {};
 
@@ -635,66 +441,3 @@ class _FailingFileStore extends FileStore {
   }
 }
 
-class _FakeRedisBackend {
-  final Map<String, String> values = {};
-  final Map<String, int> expiries = {};
-
-  Future<dynamic> send(List<dynamic> args) async {
-    final command = args.first.toString();
-    switch (command) {
-      case 'GET':
-        return values[args[1].toString()];
-      case 'MGET':
-        return args.skip(1).map((key) => values[key.toString()]).toList();
-      case 'SET':
-        final key = args[1].toString();
-        final value = args[2].toString();
-        final hasNx = args.contains('NX');
-        if (hasNx && values.containsKey(key)) {
-          return null;
-        }
-        values[key] = value;
-        final exIndex = args.indexOf('EX');
-        if (exIndex != -1 && exIndex + 1 < args.length) {
-          expiries[key] = int.parse(args[exIndex + 1].toString()) * 1000;
-        }
-        return 'OK';
-      case 'DEL':
-        return values.remove(args[1].toString()) != null ? 1 : 0;
-      case 'FLUSHDB':
-        values.clear();
-        expiries.clear();
-        return 'OK';
-      case 'PTTL':
-        return expiries[args[1].toString()] ?? -1;
-      case 'INCRBY':
-        final key = args[1].toString();
-        final incrementBy = int.parse(args[2].toString());
-        final current = int.tryParse(values[key] ?? '0') ?? 0;
-        final next = current + incrementBy;
-        values[key] = next.toString();
-        return next;
-      case 'DECRBY':
-        final key = args[1].toString();
-        final decrementBy = int.parse(args[2].toString());
-        final current = int.tryParse(values[key] ?? '0') ?? 0;
-        final next = current - decrementBy;
-        values[key] = next.toString();
-        return next;
-      case 'PEXPIRE':
-        expiries[args[1].toString()] = int.parse(args[2].toString());
-        return 1;
-      case 'SCAN':
-        return ['0', values.keys.toList()];
-      case 'EVAL':
-        final key = args[3].toString();
-        final owner = args[4].toString();
-        if (values[key] == owner) {
-          values.remove(key);
-          return 1;
-        }
-        return 0;
-    }
-    throw StateError('Unhandled command: $command');
-  }
-}
