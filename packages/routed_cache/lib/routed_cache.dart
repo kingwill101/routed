@@ -3,10 +3,13 @@ library;
 import 'package:routed/routed.dart' hide Store;
 import 'package:server_contracts/server_contracts.dart' show Store;
 
+export 'src/context/cache.dart';
+export 'src/events/cache_events.dart';
+
 const cacheStoreKey = ContextKey<Store>('routed.cache.store');
 
 extension CacheEngineContext on EngineContext {
-  Store get cache => mustGet<Store>(cacheStoreKey.name);
+  Store get cacheStore => mustGet<Store>(cacheStoreKey.name);
   bool get hasCache => get<Store>(cacheStoreKey.name) != null;
 }
 

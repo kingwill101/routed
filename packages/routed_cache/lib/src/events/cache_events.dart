@@ -1,4 +1,4 @@
-import 'package:routed/src/events/event.dart';
+import 'package:routed/routed.dart';
 
 /// Base class for all cache-related events.
 ///
