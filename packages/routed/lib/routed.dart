@@ -95,42 +95,21 @@ export 'src/storage/storage_manager.dart';
 export 'src/support/helpers.dart'
     show config, route, trans, transChoice, currentLocale;
 export 'src/support/zone.dart';
-export 'package:routed_view/routed_view.dart' show Translator;
-export 'package:routed_view/routed_view.dart'
+export 'src/translation/translator.dart' show Translator;
+export 'src/translation/resolvers.dart' show LocaleResolver;
+export 'src/translation/locale_resolution.dart' show LocaleResolutionContext;
+export 'src/translation/locale_resolver_registry.dart'
     show
-        LocaleResolver,
-        QueryLocaleResolver,
-        CookieLocaleResolver,
-        SessionLocaleResolver,
-        HeaderLocaleResolver,
-        sanitizeLocale;
-export 'package:routed_view/routed_view.dart'
-    show
-        LocaleResolutionContext,
-        LocaleLookup,
-        kRequestLocaleAttribute,
-        LocaleManager,
         LocaleResolverRegistry,
-        LocaleResolverBuildContext,
-        LocaleResolverSharedOptions,
         LocaleResolverFactory,
-        MessageSelector,
-        FileTranslationLoader;
+        LocaleResolverBuildContext,
+        LocaleResolverSharedOptions;
 export 'src/utils/deep_copy.dart';
 export 'src/utils/deep_merge.dart';
 export 'src/utils/dot.dart';
 export 'src/utils/environment.dart';
 export 'src/utils/request_id.dart';
-export 'package:routed_view/routed_view.dart'
-    show
-        ViewEngine,
-        ViewEngineManager,
-        ViewExtensionRegistry,
-        ViewExtensionRegistration,
-        LiquidViewEngine,
-        LiquidRoot,
-        TemplateNotFoundException,
-        kViewEngineContextKey;
+export 'src/view/view.dart';
 export 'src/websocket/websocket_handler.dart';
 export 'src/context/context_key.dart' show ContextKey;
 export 'src/context/typed_context_state.dart' show TypedContextState;
