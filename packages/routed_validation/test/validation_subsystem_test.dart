@@ -1,7 +1,7 @@
 import 'package:routed/src/container/container.dart';
-import 'package:routed/src/validation/rule.dart';
-import 'package:routed/src/validation/rules/required.dart';
-import 'package:routed/src/validation/validator.dart';
+import 'package:routed_validation/src/validation/rule.dart';
+import 'package:routed_validation/src/validation/rules/required.dart';
+import 'package:routed_validation/src/validation/validator.dart';
 import 'package:test/test.dart';
 
 class _PassRule extends ValidationRule {

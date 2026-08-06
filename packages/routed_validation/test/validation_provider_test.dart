@@ -1,6 +1,6 @@
 import 'package:routed/routed.dart';
 import 'package:test/test.dart';
-import '../test_engine.dart';
+import 'test_engine.dart';
 
 void main() {
   group('Provider configuration validation', () {
