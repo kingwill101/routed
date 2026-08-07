@@ -22,6 +22,8 @@ workspace:
   - packages/routed_views
   - packages/routed_openapi
   - packages/routed_openapi_builder
+  - packages/routed_observability
+  - packages/routed_security
   - packages/routed_config
   - packages/routed_http
   - packages/routed_validation
