@@ -1,8 +1,6 @@
 import 'dart:io';
 
 import 'package:routed/routed.dart' hide ViewEngine;
-import 'package:routed/src/container/container.dart';
-import 'package:routed/src/engine/config.dart' hide ViewEngine;
 
 import 'view/engine_manager.dart';
 import 'view/view_engine.dart';
@@ -63,7 +61,7 @@ extension RoutedViewContext on EngineContext {
       kViewEngineContextKey: this,
     };
 
-    final rendered = await engine.renderFile(filePath!, mergedData);
+    final rendered = await engine.renderFile(filePath, mergedData);
     response.headers.contentType = ContentType.html;
     response.write(rendered);
     return response;

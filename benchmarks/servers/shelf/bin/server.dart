@@ -18,7 +18,7 @@ Future<void> main() async {
               headers: {HttpHeaders.contentTypeHeader: 'application/json'},
             ));
 
-  final handler = const Pipeline().addHandler(router);
+  final handler = const Pipeline().addHandler(router.call);
 
   final server = await shelf_io.serve(
     handler,

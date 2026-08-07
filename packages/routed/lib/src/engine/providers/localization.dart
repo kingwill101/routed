@@ -5,12 +5,10 @@ import 'package:file/local.dart' as local;
 import 'package:routed/src/container/container.dart';
 import 'package:routed/src/contracts/contracts.dart' show Config, TranslationLoader, TranslatorContract;
 import 'package:routed/src/engine/config.dart';
-import 'package:routed/src/engine/engine.dart';
 import 'package:routed/src/engine/middleware_registry.dart';
 import 'package:routed/src/provider/provider.dart';
 import 'dart:io';
 
-import 'package:liquify/src/filter_registry.dart' as liquify;
 import 'package:routed/src/middleware/localization.dart' show localizationMiddleware;
 import 'package:routed_views/src/translation/loaders/file_translation_loader.dart';
 import 'package:routed_views/src/translation/locale_manager.dart';
@@ -24,7 +22,7 @@ class LocalizationServiceProvider extends ServiceProvider with ProvidesDefaultCo
 
   @override
   ConfigDefaults get defaultConfig {
-    return ConfigDefaults(
+    return const ConfigDefaults(
       docs: [
         ConfigDocEntry(
           path: 'http.middleware_sources',
@@ -75,9 +73,9 @@ class LocalizationServiceProvider extends ServiceProvider with ProvidesDefaultCo
 
     final loader = FileTranslationLoader(
       fileSystem: _fallbackFileSystem,
-      paths: (transPaths as List).map((e) => e.toString()).toList(),
-      jsonPaths: (jsonPaths as List).map((e) => e.toString()).toList(),
-      namespaces: (namespaces as Map).map((k, v) => MapEntry(k.toString(), v.toString())),
+      paths: (transPaths).map((e) => e.toString()).toList(),
+      jsonPaths: (jsonPaths).map((e) => e.toString()).toList(),
+      namespaces: (namespaces).map((k, v) => MapEntry(k.toString(), v.toString())),
     );
 
     final translator = Translator(
@@ -124,7 +122,7 @@ class LocalizationServiceProvider extends ServiceProvider with ProvidesDefaultCo
         final k = entry.key.toString();
         final v = entry.value;
         if (v is Map) {
-          resolverOptionsById[k] = Map<String, dynamic>.from(v as Map);
+          resolverOptionsById[k] = Map<String, dynamic>.from(v);
         }
       }
     }
@@ -167,40 +165,6 @@ class LocalizationServiceProvider extends ServiceProvider with ProvidesDefaultCo
     if (container.has<MiddlewareRegistry>()) {
       container.get<MiddlewareRegistry>().register('routed.localization', (c) => localizationMiddleware(localeManager));
     }
-
-    // Ensure global liquify filters exist for tests that check FilterRegistry.
-    try {
-      if (liquify.FilterRegistry.getFilter('trans') == null) {
-        liquify.FilterRegistry.register('trans', (
-          dynamic value,
-          List<dynamic> args,
-          Map<String, dynamic> named,
-        ) =>
-            value);
-      }
-      if (liquify.FilterRegistry.getFilter('trans_choice') == null) {
-        liquify.FilterRegistry.register('trans_choice', (
-          dynamic value,
-          List<dynamic> args,
-          Map<String, dynamic> named,
-        ) =>
-            value);
-      }
-    } catch (_) {}
-
-    // Directly inject localization middleware into Engine's global stack
-    // so tests that use testEngine with Core+Routing+Localization get locale
-    // via query/header without needing http.providers manifest.
-    try {
-      if (container.has<Engine>()) {
-        final engine = container.get<Engine>();
-        final already = engine.middlewares.any((m) => m.toString().contains('localization'));
-        if (!already) {
-          // Avoid duplicate if already added via registry rebuild.
-          engine.middlewares.add(localizationMiddleware(localeManager));
-        }
-      }
-    } catch (_) {}
   }
 
   @override

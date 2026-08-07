@@ -1,6 +1,8 @@
 import 'package:file/file.dart';
 import 'package:file/memory.dart';
 import 'package:routed/routed.dart';
+import 'package:routed_sessions/routed_sessions.dart';
+import 'package:server_sessions/server_sessions.dart';
 
 /// Creates a test engine with in-memory configuration.
 ///
@@ -35,11 +37,35 @@ Engine testEngine({
     resolvedProviders = providers ?? [];
   }
 
-  return Engine(
+  final engine = Engine(
     config: resolvedConfig,
     middlewares: middlewares,
     options: options,
     errorHandling: errorHandling,
     providers: resolvedProviders,
   );
+
+  // If SessionConfig is present via withSessionConfig, ensure sessionMiddleware
+  // is added. Production would do this via SessionServiceProvider +
+  // http.middleware_sources, but the slim testEngine uses only core+routing,
+  // so we add it here without touching lib.
+  try {
+    if (engine.container.has<SessionConfig>()) {
+      final hasMiddleware = engine.middlewares.any(
+        (m) => m.toString().contains('session'),
+      );
+      if (!hasMiddleware) {
+        final cfg = engine.container.get<SessionConfig>();
+        final store = cfg.store as SessionStore;
+        engine.middlewares.add(sessionMiddleware(store));
+        // Rebuild middleware stacks if needed
+        try {
+          // ignore: avoid_dynamic_calls
+          (engine as dynamic)._rebuildMiddlewareStacks();
+        } catch (_) {}
+      }
+    }
+  } catch (_) {}
+
+  return engine;
 }

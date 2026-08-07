@@ -49,7 +49,7 @@ void _validateConfigItems(Map<String, dynamic> items) {
   final sec = secRaw as Map?;
   if (sec != null) {
     final trustedRaw = sec['trusted_proxies'];
-    final proxies = trustedRaw is Map ? trustedRaw as Map : null;
+    final proxies = trustedRaw is Map ? trustedRaw : null;
     if (proxies != null) {
       final list = proxies['proxies'] as List?;
       if (list != null && list.length > 1 && list[1] is! String) {
