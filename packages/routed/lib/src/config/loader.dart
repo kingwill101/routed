@@ -3,8 +3,10 @@ import 'dart:io';
 
 import 'package:file/file.dart';
 import 'package:file/local.dart' as local;
+import 'package:liquify/liquify.dart' as liquify;
 import 'package:path/path.dart' as p;
 import 'package:routed/src/config/config.dart';
+import 'package:yaml/yaml.dart' as yaml;
 
 import 'package:routed/src/utils/deep_copy.dart';
 
@@ -97,7 +99,7 @@ class ConfigSnapshot {
 }
 
 class ConfigLoader {
-  dynamic loadYaml(String s) => null;
+  dynamic loadYaml(String s) => yaml.loadYaml(s);
 
   ConfigLoader({FileSystem? fileSystem})
     : _fileSystem = fileSystem ?? const local.LocalFileSystem();
@@ -507,8 +509,8 @@ class ConfigLoader {
           parsed = _coerceToMap(decoded);
         case '.yaml':
         case '.yml':
-          final yaml = loadYaml(contents);
-          parsed = _coerceToMap(yaml);
+          final yamlDoc = loadYaml(contents);
+          parsed = _coerceToMap(yamlDoc);
         case '.toml':
           parsed = _parseToml(contents);
         default:
@@ -749,24 +751,29 @@ class ConfigLoader {
     if (context.isEmpty || !source.contains('{{')) {
       return source;
     }
-    // Simple fallback without liquify: replace {{ key }} via context lookup.
-    // Full Liquid support is provided by routed_views when available.
+    // Use liquify for full Liquid support (filters, etc.), fallback to simple replace.
     try {
-      return source.replaceAllMapped(RegExp(r'\{\{\s*([\w\.]+)\s*\}\}'), (m) {
-        final key = m.group(1)!;
-        final parts = key.split('.');
-        dynamic cur = context;
-        for (final part in parts) {
-          if (cur is Map && cur.containsKey(part)) {
-            cur = cur[part];
-          } else {
-            return m.group(0)!;
+      final template = liquify.Template.parse(source, data: context);
+      return template.render();
+    } catch (_) {
+      // Fallback for edge cases where liquify fails
+      try {
+        return source.replaceAllMapped(RegExp(r'\{\{\s*([\w\.]+)\s*\}\}'), (m) {
+          final key = m.group(1)!;
+          final parts = key.split('.');
+          dynamic cur = context;
+          for (final part in parts) {
+            if (cur is Map && cur.containsKey(part)) {
+              cur = cur[part];
+            } else {
+              return m.group(0)!;
+            }
           }
-        }
-        return cur?.toString() ?? m.group(0)!;
-      });
-    } catch (error) {
-      throw FormatException('Failed to render template in "$origin": $error');
+          return cur?.toString() ?? m.group(0)!;
+        });
+      } catch (error) {
+        throw FormatException('Failed to render template in "$origin": $error');
+      }
     }
   }
 

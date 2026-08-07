@@ -18,11 +18,11 @@ void main() {
     });
 
     test('Core services are automatically registered', () async {
-      // Verify core services are available
+      // Verify core services are available (slim foundation: only Engine/Config/Registry)
       expect(await engine.make<Engine>(), isNotNull);
       expect(await engine.make<EngineConfig>(), isNotNull);
       expect(await engine.make<MiddlewareRegistry>(), isNotNull);
-      expect(await engine.make<CacheManager>(), isNotNull);
+      // CacheManager moved to server_cache/routed_cache — not in slim core
     });
 
     test('Config is properly bound and accessible', () async {
