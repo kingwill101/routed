@@ -1,29 +1,71 @@
 import 'dart:io';
 
-import 'package:routed/routed.dart';
+import 'package:routed/routed.dart' hide ViewEngine;
+import 'package:routed/src/container/container.dart';
+import 'package:routed/src/engine/config.dart' hide ViewEngine;
+
+import 'view/engine_manager.dart';
+import 'view/view_engine.dart';
 
 /// View helpers for [EngineContext] — moved from `routed` to `routed_views`
-/// per refactor.md §16.2. Initially a skeleton; render helpers remain in
-/// `routed` until PR J extracts them as extensions.
+/// per refactor.md §16.2.
 extension RoutedViewContext on EngineContext {
-  /// Placeholder view extension to establish package boundary.
-  /// Real `view`/`trans` helpers will migrate here.
   bool get hasViewSupport => true;
 
   Future<Response> template({
     required String templateName,
     Map<String, dynamic>? data,
   }) async {
-    if (templateName.contains('welcome')) {
-      final user = data?['user'] as Map?;
-      final name = user?['name'] ?? 'Guest';
-      final greeting = data?['greeting'] ?? 'Hello $name';
-      response.headers.contentType = ContentType.html;
-      response.write(greeting is String ? greeting : 'Hello $name');
-      return response;
+    final container = (this as dynamic).container as Container;
+    ViewEngine? engine;
+    String? filePath;
+
+    final engineConfig = container.has<EngineConfig>()
+        ? container.get<EngineConfig>()
+        : null;
+
+    if (container.has<ViewEngineManager>()) {
+      final manager = container.get<ViewEngineManager>();
+      engine = manager.engineForFile(templateName);
+      if (engine != null && engineConfig != null) {
+        final viewPath = engineConfig.views.viewPath;
+        if (viewPath.isNotEmpty) {
+          final fs = engineConfig.fileSystem;
+          filePath = fs.path.join(viewPath, templateName);
+          // If file exists at filePath, use it; otherwise try templateName as absolute
+          if (!fs.file(filePath).existsSync() && fs.file(templateName).existsSync()) {
+            filePath = templateName;
+          }
+        } else {
+          filePath = templateName;
+        }
+      } else {
+        filePath = templateName;
+      }
     }
+
+    engine ??= engineConfig?.templateEngine as ViewEngine?;
+    filePath ??= templateName;
+    if (engineConfig != null && filePath == templateName && engineConfig.views.viewPath.isNotEmpty) {
+      final fs = engineConfig.fileSystem;
+      final candidate = fs.path.join(engineConfig.views.viewPath, templateName);
+      if (fs.file(candidate).existsSync()) {
+        filePath = candidate;
+      }
+    }
+
+    if (engine == null) {
+      throw StateError('No view engine registered for $templateName');
+    }
+
+    final mergedData = <String, dynamic>{
+      ...?data,
+      kViewEngineContextKey: this,
+    };
+
+    final rendered = await engine.renderFile(filePath!, mergedData);
     response.headers.contentType = ContentType.html;
-    response.write('template: $templateName');
+    response.write(rendered);
     return response;
   }
 }
