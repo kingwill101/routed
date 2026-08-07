@@ -77,8 +77,13 @@ import 'package:routed/routed.dart'
         OAuthOnValidated,
         OAuthProvider,
         EmailProvider,
-        AuthEmailRequest;
+        AuthEmailRequest,
+        SecureCookie,
+        CookieStore,
+        FilesystemStore;
 import 'package:routed_auth/routed_auth.dart';
+import 'package:routed_sessions/routed_sessions.dart';
+import 'package:server_sessions/server_sessions.dart';
 import 'package:server_auth/server_auth.dart';
 import 'package:routed_testing/routed_testing.dart';
 import 'package:server_testing/server_testing.dart';
@@ -553,10 +558,11 @@ void main() {
         options: [withSessionConfig(_sessionConfig())],
       );
 
+      engine.addGlobalMiddleware(sessionMiddleware(MemorySessionStore(codecs: [SecureCookie(useEncryption: true, useSigning: true)], defaultOptions: SessionOptions(path: '/', httpOnly: true, sameSite: SameSite.lax))));
       engine.addGlobalMiddleware(SessionAuth.sessionAuthMiddleware());
 
-      guardRegistry.register('maintenance-test', (ctx) {
-        final response = ctx.string(
+      guardRegistry.register('maintenance-test', (ctx) async {
+        final response = await ctx.string(
           'maintenance mode',
           statusCode: HttpStatus.serviceUnavailable,
         );

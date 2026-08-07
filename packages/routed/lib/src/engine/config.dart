@@ -14,10 +14,24 @@ class Options {
   final dynamic path; final dynamic domain; final dynamic maxAge; final dynamic secure; final dynamic httpOnly; final dynamic sameSite; final dynamic partitioned;
 }
 class SecureCookie {
-  SecureCookie({dynamic key, bool useEncryption = false, bool useSigning = false});
+  SecureCookie({this.key, this.useEncryption = false, this.useSigning = false});
+  final dynamic key;
+  final bool useEncryption;
+  final bool useSigning;
 }
-class CookieStore { CookieStore({dynamic codecs, dynamic defaultOptions}); }
-class FilesystemStore { FilesystemStore({dynamic storageDir, dynamic codecs, dynamic defaultOptions, dynamic fileSystem, dynamic lottery}); }
+class CookieStore {
+  CookieStore({this.codecs, this.defaultOptions});
+  final dynamic codecs;
+  final dynamic defaultOptions;
+}
+class FilesystemStore {
+  FilesystemStore({this.storageDir, this.codecs, this.defaultOptions, this.fileSystem, this.lottery});
+  final dynamic storageDir;
+  final dynamic codecs;
+  final dynamic defaultOptions;
+  final dynamic fileSystem;
+  final dynamic lottery;
+}
 
 /// Default ETag generation strategies supported by the engine.
 enum EtagStrategy { disabled, strong, weak }

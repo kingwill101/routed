@@ -35,11 +35,13 @@ Engine testEngine({
     resolvedProviders = providers ?? [];
   }
 
-  return Engine(
+  final engine = Engine(
     config: resolvedConfig,
     middlewares: middlewares,
     options: options,
     errorHandling: errorHandling,
     providers: resolvedProviders,
   );
+
+  return engine;
 }

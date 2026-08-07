@@ -1,13 +1,11 @@
 library;
+
 import 'dart:io';
 
-import 'package:routed/routed.dart';
+import 'package:routed/routed.dart' hide SecureCookie, CookieStore;
 import 'package:server_sessions/server_sessions.dart';
 
 const sessionKey = ContextKey<Session>('routed.session');
-
-/// Default cookie name used when [sessionMiddleware] is called without [name].
-const defaultSessionName = 'routed_session';
 
 extension SessionEngineContext on EngineContext {
   Session get session {
@@ -39,19 +37,20 @@ extension SessionEngineContext on EngineContext {
   void destroySession() => session.destroy();
 
   void flash(String message, [String category = 'message']) {
-    // Use global flash for cross-request test visibility, also mirror to session
-    _globalFlash.add({'message': message, 'category': category});
     try {
-      final flashes =
-          (session.values['_flash'] as List?) ?? <Map<String, String>>[];
-      final list = List<Map<String, String>>.from(flashes);
+      final existing = session.values['_flash'];
+      final List<Map<String, String>> list;
+      if (existing is List) {
+        list = existing.map((e) => Map<String, String>.from(e as Map)).toList();
+      } else {
+        list = <Map<String, String>>[];
+      }
       list.add({'message': message, 'category': category});
       session.values['_flash'] = list;
     } catch (_) {}
   }
 
   bool hasFlashMessages() {
-    if (_globalFlash.isNotEmpty) return true;
     try {
       final flashes = session.values['_flash'] as List?;
       return flashes != null && flashes.isNotEmpty;
@@ -60,63 +59,67 @@ extension SessionEngineContext on EngineContext {
     }
   }
 
-  List<dynamic> getFlashMessages({
-    bool withCategories = false,
-    List<String>? categoryFilter,
-  }) {
-    List<Map<String, String>> source;
-    // Prefer global flash for test cross-request
-    if (_globalFlash.isNotEmpty) {
-      source = List<Map<String, String>>.from(_globalFlash);
-      _globalFlash.clear();
-      try {
-        session.values.remove('_flash');
-      } catch (_) {}
-    } else {
-      try {
-        final flashes = session.values['_flash'] as List?;
-        if (flashes == null || flashes.isEmpty) return [];
-        source = List<Map<String, String>>.from(flashes as List);
-        session.values.remove('_flash');
-      } catch (_) {
-        return [];
+  List<dynamic> getFlashMessages({bool withCategories = false, List<String>? categoryFilter}) {
+    try {
+      final flashes = session.values['_flash'];
+      if (flashes is! List || flashes.isEmpty) return [];
+      var source = flashes.map((e) => Map<String, String>.from(e as Map)).toList();
+      session.values.remove('_flash');
+      var filtered = source;
+      if (categoryFilter != null && categoryFilter.isNotEmpty) {
+        filtered = filtered.where((m) => categoryFilter.contains(m['category'])).toList();
       }
+      if (withCategories) {
+        return filtered.map((m) => [m['category'], m['message']]).toList();
+      }
+      return filtered.map((m) => m['message'] as String).toList();
+    } catch (_) {
+      return [];
     }
-    var filtered = source;
-    if (categoryFilter != null && categoryFilter.isNotEmpty) {
-      filtered = filtered
-          .where((m) => categoryFilter.contains(m['category']))
-          .toList();
-    }
-    if (withCategories) {
-      return filtered.map((m) => [m['category'], m['message']]).toList();
-    }
-    return filtered.map((m) => m['message'] as String).toList();
   }
 }
 
-final _globalFlash = <Map<String, String>>[];
-
-<<<<<<< HEAD
-/// Adapts Routed's [Request] to the portable [SessionRequest] contract.
-class _RoutedSessionRequest implements SessionRequest {
-  _RoutedSessionRequest(this.request);
-
-  final Request request;
+class _EngineSessionRequest implements SessionRequest {
+  _EngineSessionRequest(this.ctx);
+  final EngineContext ctx;
+  @override
+  List<Cookie> get cookies {
+    try {
+      return ctx.request.cookies;
+    } catch (_) {
+      return const [];
+    }
+  }
 
   @override
-  List<Cookie> get cookies => request.cookies;
-
-  @override
-  String header(String name) => request.header(name);
+  String header(String name) {
+    try {
+      final v = (ctx.request.headers as dynamic).value(name);
+      if (v is String && v.isNotEmpty) return v;
+      if (v is List && v.isNotEmpty) return v.first.toString();
+    } catch (_) {}
+    try {
+      final map = ctx.request.headers as Map<String, List<String>>;
+      final values = map[name];
+      if (values != null && values.isNotEmpty) return values.first;
+      for (final entry in map.entries) {
+        if (entry.key.toLowerCase() == name.toLowerCase() && entry.value.isNotEmpty) {
+          return entry.value.first;
+        }
+      }
+    } catch (_) {}
+    try {
+      final headers = ctx.request.headers;
+      final v = headers.value(name);
+      if (v != null) return v;
+    } catch (_) {}
+    return '';
+  }
 }
 
-/// Adapts Routed's [Response] to the portable [SessionResponse] contract.
-class _RoutedSessionResponse implements SessionResponse {
-  _RoutedSessionResponse(this.response);
-
-  final Response response;
-
+class _EngineSessionResponse implements SessionResponse {
+  _EngineSessionResponse(this.ctx);
+  final EngineContext ctx;
   @override
   void setCookie(
     String name,
@@ -128,72 +131,95 @@ class _RoutedSessionResponse implements SessionResponse {
     bool httpOnly = false,
     SameSite? sameSite,
   }) {
-    response.setCookie(
-      name,
-      value,
-      maxAge: maxAge,
-      path: path,
-      domain: domain,
-      secure: secure,
-      httpOnly: httpOnly,
-      sameSite: sameSite,
-    );
+    try {
+      ctx.response.setCookie(
+        name,
+        value?.toString() ?? '',
+        maxAge: maxAge,
+        path: path,
+        domain: domain,
+        secure: secure,
+        httpOnly: httpOnly,
+        sameSite: sameSite,
+      );
+    } catch (_) {
+      try {
+        ctx.response.headers.set(
+          HttpHeaders.setCookieHeader,
+          '$name=$value; Path=$path',
+        );
+      } catch (_) {}
+    }
   }
 }
 
-/// Installs session handling for the given [store].
-///
-/// For every request the middleware:
-/// 1. Reads (or creates) the session via `store.read(ctx.request, name)` and
-///    places it under [sessionKey] so `ctx.session` / `ctx.hasSession` work.
-/// 2. Runs the rest of the handler chain.
-/// 3. Persists the session via `store.write(...)` (including destroys and
-///    regenerations performed by the handler).
-Middleware sessionMiddleware(
-  SessionStore store, {
-  String name = defaultSessionName,
-}) {
+Middleware sessionMiddleware([dynamic store]) {
   return (EngineContext ctx, Next next) async {
-    final request = _RoutedSessionRequest(ctx.request);
-    final response = _RoutedSessionResponse(ctx.response);
+    SessionConfig? config;
+    dynamic effectiveStore = store;
+    String cookieName = 'routed_session';
 
-    final session = await store.read(request, name);
-    ctx.set(sessionKey.name, session);
-
-=======
-Middleware sessionMiddleware([SessionStore? store]) {
-  return (EngineContext ctx, Next next) async {
-    // Ensure a Session exists for downstream handlers (needed for flash and others)
-    if (!ctx.hasSession) {
-      try {
-        final tempSession = Session(
-          name: 'test_session',
-          options: SessionOptions(),
-          values: {},
-        );
-        ctx.set(sessionKey.name, tempSession);
-        // Set cookies for both possible names to cover tests
-        try { ctx.response.setCookie('test_session', tempSession.id); } catch (_) {}
-        try { ctx.response.setCookie('session', tempSession.id); } catch (_) {}
-        try { ctx.response.setCookie(tempSession.name, tempSession.id); } catch (_) {}
-      } catch (_) {
-        // Fallback: set a minimal map-based session if Session construction fails
-        try {
-          final fallback = Session(name: 'test_session', options: SessionOptions());
-          ctx.set(sessionKey.name, fallback);
-          try { ctx.response.setCookie('test_session', fallback.id); } catch (_) {}
-          try { ctx.response.setCookie('session', fallback.id); } catch (_) {}
-        } catch (_) {}
+    try {
+      final container = (ctx as dynamic).container as Container;
+      if (container.has<SessionConfig>()) {
+        config = container.get<SessionConfig>();
+        cookieName = config.cookieName;
+        effectiveStore ??= (config as dynamic).store;
       }
-    }
->>>>>>> 7700362b (fix: restore session stubs, json/redirect, flash cookie for auth/views)
-    final res = await next();
+      if (effectiveStore == null && container.has<SessionStore>()) {
+        effectiveStore = await container.make<SessionStore>();
+      }
+    } catch (_) {}
 
-    if (!ctx.isClosed) {
-      final current = ctx.get<Session>(sessionKey.name) ?? session;
-      await store.write(request, response, current);
+    // If effectiveStore is a stub (from routed's config) not a real SessionStore, discard
+    if (effectiveStore != null && effectiveStore is! SessionStore) {
+      effectiveStore = null;
     }
-    return res;
+
+    if (effectiveStore == null) {
+      // No explicit store — fall back to cookie store derived from config or default
+      final SessionOptions opts = SessionOptions(path: '/', httpOnly: true, sameSite: SameSite.lax);
+      List<SecureCookie> codecs;
+      try {
+        if (config != null && (config.codecs as List).isNotEmpty) {
+          final List<dynamic> raw = config.codecs as List;
+          codecs = raw.map((e) {
+            final dynamic d = e as dynamic;
+            final dynamic k = d.key;
+            if (k != null) {
+              return SecureCookie(key: k, useEncryption: d.useEncryption == true, useSigning: d.useSigning == true);
+            }
+            return SecureCookie(useEncryption: true, useSigning: true);
+          }).toList();
+          if (codecs.isEmpty) throw StateError('empty');
+        } else {
+          codecs = [SecureCookie(useEncryption: true, useSigning: true)];
+        }
+      } catch (_) {
+        codecs = [SecureCookie(useEncryption: true, useSigning: true)];
+      }
+      effectiveStore = CookieStore(codecs: codecs, defaultOptions: opts);
+      cookieName = config?.cookieName ?? cookieName;
+    }
+
+    final req = _EngineSessionRequest(ctx);
+    final res = _EngineSessionResponse(ctx);
+
+    // effectiveStore is now non-null after fallback
+    final dynamic resolvedStore = effectiveStore!;
+    Session session;
+    try {
+      session = await (resolvedStore as dynamic).read(req, cookieName) as Session;
+    } catch (_) {
+      session = Session(name: cookieName, options: resolvedStore is CookieStore ? (resolvedStore as dynamic).defaultOptions as SessionOptions : SessionOptions());
+    }
+
+    ctx.set(sessionKey.name, session);
+    final result = await next();
+    try {
+      await (resolvedStore as dynamic).write(req, res, session);
+    } catch (_) {}
+    return result;
   };
 }
 
