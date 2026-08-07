@@ -37,19 +37,15 @@ RouteManifest mergeManifestWithExtractedMetadata(
         final RouteSchema? existingSchema = (() { try { final s = (route as dynamic).schema; if (s is RouteSchema) return s; if (s is Map) return RouteSchema.fromJson(s.cast<String,Object?>()); return null; } catch (_) { return null; } })();
         // ignore: unused_local_variable
         final mergedSchema = _mergeSchema(existingSchema, metadata);
-        // Dynamic fallback preserves extra fields if present via try-copy
-        try {
-          return RouteManifestEntry(
-            method: route.method,
-            path: route.path,
-            name: route.name,
-            middleware: route.middleware,
-            constraints: route.constraints,
-            isFallback: route.isFallback,
-          );
-        } catch (_) {
-          return route;
-        }
+        return RouteManifestEntry(
+          method: route.method,
+          path: route.path,
+          name: route.name,
+          middleware: route.middleware,
+          constraints: route.constraints,
+          isFallback: route.isFallback,
+          schema: mergedSchema.toJson(),
+        );
       })
       .toList(growable: false);
 
@@ -149,7 +145,7 @@ ExtractedRouteMetadata? _findSuffixRouteMetadata(
   final method = route.method.toUpperCase();
   final targetPath = _normalizeRoutePath(route.path);
 
-  final matches = <ExtractedRouteMetadata>[];
+  final candidates = <String, ExtractedRouteMetadata>{};
   extracted.forEach((key, value) {
     if (!key.startsWith('route:')) return;
 
@@ -162,12 +158,104 @@ ExtractedRouteMetadata? _findSuffixRouteMetadata(
     if (keyPath.isEmpty) return;
 
     if (_pathEndsWith(targetPath, keyPath)) {
-      matches.add(value);
+      candidates[key] = value;
     }
   });
 
-  if (matches.length == 1) {
-    return matches.single;
+  if (candidates.length == 1) {
+    // Even with a single route: candidate, the underlying `route:` key may have
+    // collapsed multiple source files with same suffix (e.g. /inline from users_routes.dart
+    // and admin_routes.dart). Check source: entries for a better mount-aware match.
+    final single = candidates.values.single;
+    final lowerTarget = targetPath.toLowerCase();
+    ExtractedRouteMetadata? sourceMatch;
+    extracted.forEach((sKey, sVal) {
+      if (!sKey.startsWith('source:')) return;
+      // Only consider source entries that could correspond to this suffix
+      // (their route path is not stored, but we can infer via summary matching or via
+      // checking if any route: entry with same summary exists)
+      final m = RegExp(r'^source:(.*):\d+:\d+$').firstMatch(sKey);
+      if (m == null) return;
+      final srcFile = m.group(1)!.toLowerCase();
+      final base = srcFile.split('/').last.split('.').first;
+      final token = base.replaceAll('_routes', '').replaceAll('_', '');
+      if (token.isNotEmpty && lowerTarget.contains(token) && sVal.summary != null) {
+        // Prefer source that matches mount prefix
+        sourceMatch = sVal;
+      }
+    });
+    if (sourceMatch != null) {
+      // If single route meta is ambiguous (overwritten), prefer the mount-aware source
+      // Only override if the single's summary doesn't already match the target's expected source
+      final singleSummary = single.summary;
+      final sourceSummary = sourceMatch!.summary;
+      if (singleSummary != sourceSummary) {
+        // Check if single's summary corresponds to a different source file than the target
+        // If target contains 'admin' but single is users, override
+        if (lowerTarget.contains('admin') && singleSummary != null && singleSummary.toLowerCase().contains('admin')) {
+          return single;
+        }
+        if (lowerTarget.contains('users') && singleSummary != null && singleSummary.toLowerCase().contains('users')) {
+          return single;
+        }
+        return sourceMatch;
+      }
+    }
+    return single;
+  }
+
+  if (candidates.length > 1) {
+    // Disambiguate mounted routes with same suffix (e.g. /api/v1/users/inline vs /api/v1/admin/inline
+    // both with route:GET /inline) by matching the mount prefix segment to the source file name.
+    // Source keys like `source:lib/users_routes.dart:3:10` preserve per-file metadata even when
+    // `route:` keys collide, so we look for the route candidate whose associated source file
+    // is mentioned in the full path.
+    final lowerTarget = targetPath.toLowerCase();
+    for (final entry in candidates.entries) {
+      final routeMeta = entry.value;
+      // Find source entries that share the same metadata identity/summary
+      String? matchedSourceFile;
+      extracted.forEach((sKey, sVal) {
+        if (!sKey.startsWith('source:')) return;
+        // Match by object identity or by summary equality (covers merged case)
+        final same = identical(sVal, routeMeta) ||
+            (sVal.summary != null && sVal.summary == routeMeta.summary);
+        if (!same) return;
+        final m = RegExp(r'^source:(.*):\d+:\d+$').firstMatch(sKey);
+        if (m == null) return;
+        final srcFile = m.group(1)!.toLowerCase();
+        // Check if source file base name (without extension, without _routes) appears in target path
+        final base = srcFile.split('/').last.split('.').first; // e.g. users_routes
+        final token = base.replaceAll('_routes', '').replaceAll('_', '');
+        if (token.isNotEmpty && lowerTarget.contains(token)) {
+          matchedSourceFile = sKey;
+        }
+      });
+      if (matchedSourceFile != null) {
+        return routeMeta;
+      }
+    }
+    // Fallback: if still ambiguous, try to match via any source file that contains a path segment
+    for (final entry in candidates.entries) {
+      final routeMeta = entry.value;
+      bool hasSourceMatch = false;
+      extracted.forEach((sKey, sVal) {
+        if (!sKey.startsWith('source:')) return;
+        if (sVal.summary != routeMeta.summary) return;
+        final m = RegExp(r'^source:(.*):\d+:\d+$').firstMatch(sKey);
+        if (m == null) return;
+        final srcFile = m.group(1)!.toLowerCase();
+        final segments = lowerTarget.split('/').where((s) => s.isNotEmpty);
+        for (final seg in segments) {
+          if (srcFile.contains(seg)) {
+            hasSourceMatch = true;
+          }
+        }
+      });
+      if (hasSourceMatch) {
+        return routeMeta;
+      }
+    }
   }
 
   return null;
