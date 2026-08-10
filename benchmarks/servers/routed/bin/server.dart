@@ -1,6 +1,6 @@
 import 'dart:io';
 
-import 'package:routed/routed.dart';
+import 'package:routed_core/routed_core.dart';
 
 Future<void> main() async {
   final host = Platform.environment['HOST'] ?? '0.0.0.0';
