@@ -19,6 +19,7 @@ dependencies:
   routed_rate_limit: ^0.1.0
   routed_views: ^0.1.0
   routed_http: ^0.1.0
+  routed_logging: ^0.1.0
   routed_observability: ^0.1.0
   server_auth: ^0.1.0
   server_cache: ^0.1.0

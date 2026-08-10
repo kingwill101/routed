@@ -38,6 +38,7 @@ export 'package:routed_storage/routed_storage.dart';
 export 'package:routed_rate_limit/routed_rate_limit.dart';
 export 'package:routed_views/routed_views.dart';
 export 'package:routed_http/routed_http.dart';
+export 'package:routed_logging/routed_logging.dart';
 export 'package:routed_observability/routed_observability.dart';
 export 'src/register_providers.dart' show registerRoutedFullProviders;
 

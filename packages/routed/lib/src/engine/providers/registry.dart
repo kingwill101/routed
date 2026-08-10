@@ -2,7 +2,6 @@ import 'package:routed/src/provider/provider.dart';
 import 'package:routed/src/support/named_registry.dart';
 
 import 'core.dart';
-import 'logging.dart';
 import 'routing.dart';
 import 'uploads.dart';
 
@@ -47,11 +46,6 @@ class ProviderRegistry extends NamedRegistry<ProviderRegistration> {
       'routed.uploads',
       factory: () => UploadsServiceProvider(),
       description: 'Multipart upload configuration defaults.',
-    );
-    register(
-      'routed.logging',
-      factory: () => LoggingServiceProvider(),
-      description: 'HTTP logging defaults and helpers.',
     );
   }
 

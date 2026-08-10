@@ -1,5 +1,6 @@
 library;
 
+import 'package:routed/providers.dart' show ProviderRegistry;
 import 'package:routed/routed.dart';
 import 'package:server_rate_limit/server_rate_limit.dart';
 
@@ -33,8 +34,12 @@ Middleware rateLimitMiddleware(RateLimitService service) {
 }
 
 class RoutedRateLimitProvider extends ServiceProvider {
-  RoutedRateLimitProvider(this.service);
+  /// Defaults to an empty policy list (rate limiting disabled until configured).
+  RoutedRateLimitProvider([RateLimitService? service])
+      : service = service ?? RateLimitService(const []);
+
   final RateLimitService service;
+
   @override
   void register(Container container) {
     container.singleton<RateLimitService>((_) async => service);
@@ -43,4 +48,13 @@ class RoutedRateLimitProvider extends ServiceProvider {
 
   @override
   Future<void> boot(Container container) async {}
+}
+
+/// Registers `routed.rate_limit` for `http.providers` resolution.
+void registerRoutedRateLimitProviders() {
+  ProviderRegistry.instance.register(
+    'routed.rate_limit',
+    factory: RoutedRateLimitProvider.new,
+    description: 'Rate-limit service and context helpers.',
+  );
 }

@@ -1,5 +1,6 @@
 library;
 
+import 'package:routed/providers.dart' show ProviderRegistry;
 import 'package:routed/routed.dart';
 import 'package:server_storage/server_storage.dart';
 
@@ -34,15 +35,37 @@ Middleware storageMiddleware(StorageManager manager) {
 }
 
 class RoutedStorageProvider extends ServiceProvider {
-  RoutedStorageProvider(this.manager);
+  /// Defaults to a [StorageManager] with a local `storage/app` disk.
+  RoutedStorageProvider([StorageManager? manager])
+      : manager = manager ?? _defaultManager();
+
   final StorageManager manager;
+
+  static StorageManager _defaultManager() {
+    final m = StorageManager();
+    m.registerDisk(
+      'local',
+      LocalStorageDisk(root: 'storage/app'),
+    );
+    m.setDefault('local');
+    return m;
+  }
+
   @override
   void register(Container container) {
     container.singleton<StorageManager>((_) async => manager);
-    // also expose as dynamic for withStorageManager-style opts
     container.instance<dynamic>(manager);
   }
 
   @override
   Future<void> boot(Container container) async {}
+}
+
+/// Registers `routed.storage` for `http.providers` resolution.
+void registerRoutedStorageProviders() {
+  ProviderRegistry.instance.register(
+    'routed.storage',
+    factory: RoutedStorageProvider.new,
+    description: 'Storage disks and static file helpers.',
+  );
 }

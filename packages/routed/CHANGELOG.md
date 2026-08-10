@@ -1,7 +1,6 @@
-## 0.3.4
+## 0.3.3
 
   - bump jose + artisanal dependencies
-## 0.3.3
 
 ### Configuration
 - `ConfigLoaderOptions` gains a `resolveEnvTemplates` flag. When `false`,

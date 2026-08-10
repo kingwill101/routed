@@ -1,6 +1,6 @@
 import 'package:contextual/contextual.dart' as contextual;
+import 'package:routed/routed.dart' show EngineContext;
 
-import '../context/context.dart';
 import 'context.dart';
 
 extension EngineContextLogging on EngineContext {

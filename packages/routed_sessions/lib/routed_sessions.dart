@@ -2,6 +2,7 @@ library;
 
 import 'dart:io';
 
+import 'package:routed/providers.dart' show ProviderRegistry;
 import 'package:routed/routed.dart' hide SecureCookie, CookieStore;
 import 'package:server_sessions/server_sessions.dart';
 
@@ -226,8 +227,16 @@ Middleware sessionMiddleware([dynamic store]) {
 }
 
 class RoutedSessionsProvider extends ServiceProvider {
-  RoutedSessionsProvider(this.store);
+  /// Defaults to an in-memory session store with signed cookies.
+  RoutedSessionsProvider([SessionStore? store])
+      : store = store ??
+            MemorySessionStore(
+              codecs: [SecureCookie(useEncryption: true, useSigning: true)],
+              defaultOptions: SessionOptions(path: '/', httpOnly: true),
+            );
+
   final SessionStore store;
+
   @override
   void register(Container container) {
     container.singleton<SessionStore>((_) async => store);
@@ -235,4 +244,13 @@ class RoutedSessionsProvider extends ServiceProvider {
 
   @override
   Future<void> boot(Container container) async {}
+}
+
+/// Registers `routed.sessions` for `http.providers` resolution.
+void registerRoutedSessionsProviders() {
+  ProviderRegistry.instance.register(
+    'routed.sessions',
+    factory: RoutedSessionsProvider.new,
+    description: 'Session store and EngineContext session helpers.',
+  );
 }

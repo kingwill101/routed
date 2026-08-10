@@ -1,7 +1,7 @@
 import 'dart:io';
 
 import 'package:contextual/contextual.dart';
-import 'package:routed/src/logging/channel_drivers.dart';
+import 'package:routed_logging/src/logging/channel_drivers.dart';
 import 'package:server_testing/server_testing.dart';
 
 void main() {

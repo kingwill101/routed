@@ -10,7 +10,8 @@ to the slim foundation + `routed_*` / `server_*` packages.
 | `routed` | Slim core: `Engine`, `EngineContext`, `Request`, `Response`, `Router`, config, DI |
 | `routed_*` | Framework adapters (middleware, providers, EngineContext extensions) |
 | `server_*` | Portable runtimes (no `package:routed` in `lib/`) |
-| `routed_full` | Batteries barrel: re-exports official packages + registers zero-arg providers |
+| `routed_logging` | Request logging provider and `RoutedLogger` |
+| `routed_full` | Batteries barrel: re-exports official packages + registers providers |
 
 ## Import changes
 
@@ -67,21 +68,18 @@ Foundation registry ships only:
 Import `package:routed_full/routed_full.dart` (or call the package
 `register*Providers()` helpers) to add:
 
-- `routed.auth`
-- `routed.views`
-- `routed.localization`
-- `routed.observability`
+- `routed.auth`, `routed.logging`, `routed.views`, `routed.localization`
+- `routed.observability`, `routed.cache`, `routed.sessions`, `routed.storage`
+- `routed.rate_limit`
 
-Providers that need runtime deps must be constructed and passed to `Engine`:
+Default constructors use safe in-memory/local backends. Override with explicit
+instances when you need redis/file drivers:
 
 ```dart
 Engine(
   providers: [
     ...Engine.defaultProviders,
-    RoutedCacheProvider(store),
-    RoutedSessionsProvider(sessionStore),
-    RoutedStorageProvider(manager),
-    RoutedRateLimitProvider(rateLimitService),
+    RoutedCacheProvider(customStore), // optional override
   ],
 );
 ```

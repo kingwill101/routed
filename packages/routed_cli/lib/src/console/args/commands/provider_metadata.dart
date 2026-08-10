@@ -1,7 +1,8 @@
 import 'package:routed/providers.dart';
 import 'package:routed/routed.dart';
+import 'package:routed_logging/routed_logging.dart' show LoggingServiceProvider;
 
-extension ProviderMetadata on ServiceProvider {
+extension ServiceProviderDescribe on ServiceProvider {
   String describe() {
     if (this is CoreServiceProvider) {
       return 'Core services: config loader, engine bindings.';

@@ -9,8 +9,8 @@ import 'package:routed/routed.dart'
         configDocMetaInheritFromEnv,
         deepCopyValue,
         deepMerge,
-        dot,
-        inspectProviders;
+        dot;
+import 'package:routed_analyzer/routed_analyzer.dart' show inspectProviders;
 import 'package:yaml/yaml.dart' as yaml;
 
 import 'doc_printer.dart';
