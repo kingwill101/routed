@@ -63,11 +63,15 @@ class CacheRateLimiterBackend implements RateLimiterBackend {
           key,
           max(1, lockTimeout.inSeconds),
         );
-        try {
-          return await action();
-        } finally {
-          await lock.release();
-        }
+        // lock() only *creates* the lock; the read-modify-write in action()
+        // must run while the lock is actually held, otherwise concurrent
+        // requests for the same bucket see the same count/token and all pass
+        // the limit. block() acquires (waiting up to the timeout) and releases
+        // after the callback completes.
+        return await lock.block(
+          max(1, lockTimeout.inSeconds),
+          () => action(),
+        ) as RateLimitOutcome;
       }
       return await action();
     } catch (_) {

@@ -109,19 +109,27 @@ class RequestMatcher {
 
   static _MatchFn _compile(String? method, String pattern) {
     final trimmed = pattern.trim();
+
     if (trimmed == '*' || trimmed.isEmpty) {
-      return (_) => true;
+      // Catch-all still honours the configured HTTP method: a policy with
+      // method: GET and pattern '*' must not consume quota for POST/PUT/etc.
+      return (RateLimitRequest request) => _matchesMethod(method, request);
     }
 
     final regex = RegExp(_wildcardToRegex(trimmed));
     return (RateLimitRequest request) {
-      if (method != null && method.isNotEmpty) {
-        if (request.method.toUpperCase() != method.toUpperCase()) {
-          return false;
-        }
+      if (!_matchesMethod(method, request)) {
+        return false;
       }
       return regex.hasMatch(request.path);
     };
+  }
+
+  static bool _matchesMethod(String? method, RateLimitRequest request) {
+    if (method == null || method.isEmpty) {
+      return true;
+    }
+    return request.method.toUpperCase() == method.toUpperCase();
   }
 
   static String _wildcardToRegex(String pattern) {
