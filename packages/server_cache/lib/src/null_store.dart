@@ -14,6 +14,9 @@ class NullStore extends TaggableStore implements Store, LockProvider {
   Future<bool> put(String key, value, int seconds) async => true;
 
   @override
+  Future<bool> add(String key, value, int seconds) async => true;
+
+  @override
   Future<bool> putMany(Map<String, dynamic> values, int seconds) async => true;
 
   @override

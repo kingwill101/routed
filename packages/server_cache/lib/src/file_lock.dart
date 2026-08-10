@@ -29,12 +29,16 @@ class FileLock implements Lock {
 
   /// Attempts to acquire the lock by creating a lock file.
   ///
+  /// Uses the store's atomic store-only-if-absent operation so an unexpired
+  /// lock file owned by another process is never overwritten, and two
+  /// processes cannot both enter the protected section.
+  ///
   /// If the lock file already exists, it means the lock is held by another
   /// process, and this method returns `false`. If the lock file is successfully
   /// created, this method returns `true`.
   @override
   Future<bool> acquire() async {
-    return store.put(name, lockOwner, seconds);
+    return store.add(name, lockOwner, seconds);
   }
 
   /// Releases the lock by deleting the lock file, but only if this instance owns the lock.

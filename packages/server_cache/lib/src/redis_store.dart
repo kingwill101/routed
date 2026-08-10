@@ -181,6 +181,19 @@ class RedisStore extends TaggableStore implements Store, LockProvider {
   }
 
   @override
+  Future<bool> add(String key, dynamic value, int seconds) async {
+    final encoded = _encode(value);
+    final args = ['SET', key, encoded, 'NX'];
+    if (seconds > 0) {
+      args
+        ..add('EX')
+        ..add(seconds.toString());
+    }
+    final reply = await _send(args);
+    return reply == 'OK';
+  }
+
+  @override
   Future<bool> putMany(Map<String, dynamic> values, int seconds) async {
     if (values.isEmpty) return true;
     for (final entry in values.entries) {

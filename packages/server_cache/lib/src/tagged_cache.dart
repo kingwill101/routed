@@ -3,6 +3,11 @@ import 'package:server_contracts/server_contracts.dart';
 import 'tag_set.dart';
 
 /// A cache repository that supports tagging.
+///
+/// Every key is scoped by the current tag namespace, so entries written under
+/// one set of tag IDs are never visible to a different set, and resetting or
+/// flushing a tag (which changes the namespace) invalidates previously cached
+/// values for that tag.
 class TaggedCache implements Repository {
   /// The underlying store used for caching.
   final Store store;
@@ -12,6 +17,17 @@ class TaggedCache implements Repository {
 
   /// Creates a new instance of [TaggedCache] with the given [store] and [tags].
   TaggedCache(this.store, this.tags);
+
+  /// Scopes [key] by the current tag namespace.
+  ///
+  /// An empty namespace (no tags configured) leaves the key untouched.
+  Future<String> _namespaced(String key) async {
+    final namespace = await tags.getNamespace();
+    if (namespace.isEmpty) {
+      return key;
+    }
+    return '$key|$namespace';
+  }
 
   /// Retrieves an item from the cache and deletes it.
   ///
@@ -24,14 +40,15 @@ class TaggedCache implements Repository {
   @override
   Future<dynamic> pull(dynamic key, [dynamic defaultValue]) async {
     final String keyString = key is String ? key : key.toString();
-    final value = await store.get(keyString);
-    await store.forget(keyString);
+    final namespaced = await _namespaced(keyString);
+    final value = await store.get(namespaced);
+    await store.forget(namespaced);
     return value ?? defaultValue;
   }
 
   @override
   Future<dynamic> get(String key) async {
-    return await store.get(key);
+    return await store.get(await _namespaced(key));
   }
 
   /// Stores an item in the cache.
@@ -43,7 +60,11 @@ class TaggedCache implements Repository {
   /// Returns `true` if the item was successfully stored.
   @override
   Future<bool> put(String key, dynamic value, [Duration? ttl]) async {
-    return await store.put(key, value, ttl?.inSeconds ?? 0);
+    return await store.put(
+      await _namespaced(key),
+      value,
+      ttl?.inSeconds ?? 0,
+    );
   }
 
   /// Stores an item in the cache if the key does not exist.
@@ -55,10 +76,13 @@ class TaggedCache implements Repository {
   /// Returns `true` if the item was successfully stored.
   @override
   Future<bool> add(String key, dynamic value, [Duration? ttl]) async {
-    if (await store.get(key) == null) {
-      return await store.put(key, value, ttl?.inSeconds ?? 0);
-    }
-    return false;
+    // Delegates to the store's atomic store-only-if-absent operation so
+    // concurrent callers cannot both report success for the same key.
+    return await store.add(
+      await _namespaced(key),
+      value,
+      ttl?.inSeconds ?? 0,
+    );
   }
 
   /// Increments the value of an item in the cache.
@@ -69,10 +93,11 @@ class TaggedCache implements Repository {
   /// Returns the new value of the item.
   @override
   Future<dynamic> increment(String key, [dynamic value = 1]) async {
-    final currentValue = await store.get(key) ?? 0;
+    final namespaced = await _namespaced(key);
+    final currentValue = await store.get(namespaced) ?? 0;
     final int incrementValue = value is int ? value : 1;
     final newValue = currentValue + incrementValue;
-    await store.put(key, newValue, 0);
+    await store.put(namespaced, newValue, 0);
     return newValue;
   }
 
@@ -84,10 +109,11 @@ class TaggedCache implements Repository {
   /// Returns the new value of the item.
   @override
   Future<dynamic> decrement(String key, [dynamic value = 1]) async {
-    final currentValue = await store.get(key) ?? 0;
+    final namespaced = await _namespaced(key);
+    final currentValue = await store.get(namespaced) ?? 0;
     final int decrementValue = value is int ? value : 1;
     final newValue = currentValue - decrementValue;
-    await store.put(key, newValue, 0);
+    await store.put(namespaced, newValue, 0);
     return newValue;
   }
 
@@ -99,7 +125,7 @@ class TaggedCache implements Repository {
   /// Returns `true` if the item was successfully stored.
   @override
   Future<bool> forever(String key, dynamic value) async {
-    return await store.put(key, value, 0);
+    return await store.put(await _namespaced(key), value, 0);
   }
 
   /// Gets an item from the cache, or executes the given [callback] and stores the result.
@@ -111,7 +137,8 @@ class TaggedCache implements Repository {
   /// Returns the cached item or the result of the [callback].
   @override
   Future<dynamic> remember(String key, dynamic ttl, Function callback) async {
-    final value = await store.get(key);
+    final namespaced = await _namespaced(key);
+    final value = await store.get(namespaced);
     if (value != null) {
       return value;
     }
@@ -119,7 +146,7 @@ class TaggedCache implements Repository {
     final int seconds = ttl is Duration
         ? ttl.inSeconds
         : (ttl is int ? ttl : 0);
-    await store.put(key, result, seconds);
+    await store.put(namespaced, result, seconds);
     return result;
   }
 
@@ -142,12 +169,13 @@ class TaggedCache implements Repository {
   /// Returns the cached item or the result of the [callback].
   @override
   Future<dynamic> rememberForever(String key, Function callback) async {
-    final value = await store.get(key);
+    final namespaced = await _namespaced(key);
+    final value = await store.get(namespaced);
     if (value != null) {
       return value;
     }
     final result = await callback();
-    await store.put(key, result, 0);
+    await store.put(namespaced, result, 0);
     return result;
   }
 
@@ -158,7 +186,7 @@ class TaggedCache implements Repository {
   /// Returns `true` if the item was successfully removed.
   @override
   Future<bool> forget(String key) async {
-    return await store.forget(key);
+    return await store.forget(await _namespaced(key));
   }
 
   /// Gets the cache store implementation.

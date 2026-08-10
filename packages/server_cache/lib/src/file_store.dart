@@ -112,6 +112,77 @@ class FileStore implements Store, LockProvider {
     return false;
   }
 
+  /// Stores an item in the cache only if [key] is absent or expired.
+  ///
+  /// A slot is only re-acquirable once an existing entry has expired; the
+  /// expiration check plus exclusive file creation keeps concurrent processes
+  /// from both reporting success for the same key.
+  ///
+  /// Returns true if the item was stored, false if [key] already holds an
+  /// unexpired value (or another process won the race).
+  @override
+  bool add(String key, dynamic value, int seconds) {
+    final path = _path(key);
+    _ensureCacheDirectoryExists(path);
+    final file = fileSystem.file(path);
+
+    if (_existsUnexpired(file)) {
+      return false;
+    }
+    _removeExpiredEntry(file);
+    try {
+      file.createSync(exclusive: true);
+    } on FileSystemException {
+      // Another process created the file concurrently.
+      return false;
+    }
+
+    try {
+      file.writeAsStringSync(
+        _serialize({
+          'key': key,
+          'value': value,
+          'expiresAt': _calculateExpiryTime(seconds),
+        }),
+      );
+      _ensurePermissionsAreCorrect(file);
+      return true;
+    } catch (e) {
+      file.deleteSync();
+      return false;
+    }
+  }
+
+  /// Returns true when [file] exists and its entry has not expired.
+  bool _existsUnexpired(File file) {
+    if (!file.existsSync()) {
+      return false;
+    }
+    try {
+      final data = _deserialize(file.readAsStringSync());
+      return !_isExpired(data['expiresAt']);
+    } catch (_) {
+      // Unreadable or corrupt file — treat as expired so it can be replaced.
+      return false;
+    }
+  }
+
+  /// Deletes [file] if it holds an expired entry, so an expired slot can be
+  /// re-acquired by [add].
+  void _removeExpiredEntry(File file) {
+    if (!file.existsSync()) {
+      return;
+    }
+    try {
+      final data = _deserialize(file.readAsStringSync());
+      if (_isExpired(data['expiresAt'])) {
+        file.deleteSync();
+      }
+    } catch (_) {
+      // Unreadable or corrupt file — leave it to the caller to fail.
+    }
+  }
+
   /// Removes an item from the cache.
   ///
   /// Returns true if the item was successfully removed.
@@ -258,7 +329,7 @@ class FileStore implements Store, LockProvider {
   bool _isExpired(dynamic expiresAt) {
     final int expTime = expiresAt is int ? expiresAt : 0;
     return expTime != 0 &&
-        (DateTime.now().millisecondsSinceEpoch / 1000) >= expTime;
+        DateTime.now().millisecondsSinceEpoch >= expTime;
   }
 
   /// Gets the remaining time until a cache item expires.
@@ -268,7 +339,7 @@ class FileStore implements Store, LockProvider {
     final int expTime = expiresAt is int ? expiresAt : 0;
     return expTime == 0
         ? 0
-        : (expTime - DateTime.now().millisecondsSinceEpoch) ~/ 1000;
+        : ((expTime - DateTime.now().millisecondsSinceEpoch) ~/ 1000);
   }
 
   /// Calculates the expiration timestamp based on the specified TTL.

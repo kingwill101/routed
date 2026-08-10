@@ -71,6 +71,32 @@ class ArrayStore extends TaggableStore implements Store, LockProvider {
     return true;
   }
 
+  /// Stores an item in the store only if [key] is absent or expired.
+  ///
+  /// The existence check and the write happen in the same synchronous block,
+  /// so within a single isolate concurrent callers cannot both report success.
+  ///
+  /// Returns true if the item was stored, false if [key] already holds an
+  /// unexpired value.
+  @override
+  Future<bool> add(String key, dynamic value, int seconds) async {
+    if (storage.containsKey(key)) {
+      final item = storage[key];
+      final num? expiresAt = item?['expiresAt'] as num?;
+      if (expiresAt == null ||
+          expiresAt == 0 ||
+          (DateTime.now().millisecondsSinceEpoch / 1000) < expiresAt) {
+        // A non-expiring or still-valid entry occupies the key.
+        return false;
+      }
+    }
+    storage[key] = {
+      'value': serializesValues ? _serialize(value) : value,
+      'expiresAt': _calculateExpiration(seconds),
+    };
+    return true;
+  }
+
   /// Stores multiple items in the store with a time-to-live of [seconds].
   ///
   /// Returns true if all items were successfully stored.

@@ -121,7 +121,14 @@ class RepositoryImpl implements Repository {
       return false;
     }
     _publishMiss(key);
-    final success = await store.put(_prefixed(key), value, ttl?.inSeconds ?? 0);
+    // Use the store's atomic store-only-if-absent operation so concurrent
+    // callers for the same missing key cannot all report success and
+    // clobber each other's values.
+    final success = await store.add(
+      _prefixed(key),
+      value,
+      ttl?.inSeconds ?? 0,
+    );
     if (success) {
       _publishWrite(key, ttl);
     }

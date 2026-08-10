@@ -162,6 +162,10 @@ class InMemoryStore implements Store {
   }
 
   @override
+  FutureOr<bool> add(String key, dynamic value, int seconds) =>
+      _values.containsKey(key) ? false : put(key, value, seconds);
+
+  @override
   FutureOr<bool> putMany(Map<String, dynamic> values, int seconds) {
     _values.addAll(values);
     return true;
