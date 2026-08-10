@@ -6,7 +6,7 @@ import 'package:artisanal/args.dart';
 import 'package:file/file.dart' as fs;
 import 'package:file/local.dart';
 import 'package:path/path.dart' as p;
-import 'package:routed/console.dart' show CliLogger;
+import 'package:routed_cli/routed_cli.dart' show CliLogger;
 
 import '../util/dart_exec.dart';
 import '../util/pubspec.dart';

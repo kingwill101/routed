@@ -3,7 +3,7 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 
-import 'package:routed/routed.dart' hide SseEvent, SseCodec;
+import 'package:routed/routed.dart';
 
 import '../binding/convert/sse.dart';
 

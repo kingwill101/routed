@@ -1,6 +1,9 @@
 library;
 
-// Final routed_full per refactor.md §12 - re-exports foundation + portable runtimes and adapters.
+import 'src/register_providers.dart';
+
+// Batteries-included barrel: foundation + portable runtimes + official adapters.
+// Importing this library registers zero-arg feature providers for http.providers.
 export 'package:routed/routed.dart'
     hide
         ProviderConfigException,
@@ -19,8 +22,11 @@ export 'package:routed/routed.dart'
         parseIntLike,
         parseDoubleLike,
         parseDurationLike,
-        SecureCookie;
-export 'package:server_auth/server_auth.dart';
+        SecureCookie,
+        NamedRegistry,
+        ViewEngine,
+        LiquidViewEngine;
+export 'package:server_auth/server_auth.dart' hide NamedRegistry;
 export 'package:server_cache/server_cache.dart';
 export 'package:server_sessions/server_sessions.dart';
 export 'package:server_storage/server_storage.dart';
@@ -32,3 +38,13 @@ export 'package:routed_storage/routed_storage.dart';
 export 'package:routed_rate_limit/routed_rate_limit.dart';
 export 'package:routed_views/routed_views.dart';
 export 'package:routed_http/routed_http.dart';
+export 'package:routed_observability/routed_observability.dart';
+export 'src/register_providers.dart' show registerRoutedFullProviders;
+
+final _ensureProviders = (() {
+  registerRoutedFullProviders();
+  return true;
+})();
+
+/// Whether official providers were registered via this barrel import.
+bool get officialProvidersRegistered => _ensureProviders;

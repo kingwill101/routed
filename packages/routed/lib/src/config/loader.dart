@@ -3,7 +3,7 @@ import 'dart:io';
 
 import 'package:file/file.dart';
 import 'package:file/local.dart' as local;
-import 'package:liquify/liquify.dart' as liquify;
+import 'package:liquify/liquify.dart' as liquid;
 import 'package:path/path.dart' as p;
 import 'package:routed/src/config/config.dart';
 import 'package:yaml/yaml.dart' as yaml;
@@ -751,29 +751,14 @@ class ConfigLoader {
     if (context.isEmpty || !source.contains('{{')) {
       return source;
     }
-    // Use liquify for full Liquid support (filters, etc.), fallback to simple replace.
     try {
-      final template = liquify.Template.parse(source, data: context);
-      return template.render();
-    } catch (_) {
-      // Fallback for edge cases where liquify fails
-      try {
-        return source.replaceAllMapped(RegExp(r'\{\{\s*([\w\.]+)\s*\}\}'), (m) {
-          final key = m.group(1)!;
-          final parts = key.split('.');
-          dynamic cur = context;
-          for (final part in parts) {
-            if (cur is Map && cur.containsKey(part)) {
-              cur = cur[part];
-            } else {
-              return m.group(0)!;
-            }
-          }
-          return cur?.toString() ?? m.group(0)!;
-        });
-      } catch (error) {
-        throw FormatException('Failed to render template in "$origin": $error');
-      }
+      final template = liquid.Template.parse(source, data: context);
+      final rendered = template.render();
+      return rendered.toString();
+    } catch (error) {
+      throw FormatException(
+        'Failed to render Liquid template in "$origin": $error',
+      );
     }
   }
 

@@ -3,7 +3,7 @@ import 'dart:io' as io;
 
 import 'package:args/command_runner.dart' show UsageException;
 import 'package:path/path.dart' as p;
-import 'package:routed/console.dart' show CliLogger;
+import 'package:routed_cli/routed_cli.dart' show CliLogger;
 import 'package:routed_cli/src/console/args/commands.dart' as cmds;
 import 'package:routed_cli/src/console/args/runner.dart';
 import 'package:routed_cli/src/console/project/commands_loader.dart';

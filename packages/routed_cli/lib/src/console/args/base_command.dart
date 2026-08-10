@@ -4,7 +4,7 @@ import 'dart:io';
 import 'package:artisanal/args.dart';
 import 'package:file/file.dart' as fs;
 import 'package:file/local.dart' as local;
-import 'package:routed/console.dart' show CliLogger;
+import 'package:routed_cli/routed_cli.dart' show CliLogger;
 
 /// Base class for all Routed CLI commands.
 ///

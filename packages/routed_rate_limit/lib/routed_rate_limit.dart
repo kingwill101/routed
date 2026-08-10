@@ -4,6 +4,7 @@ import 'package:routed/routed.dart';
 import 'package:server_rate_limit/server_rate_limit.dart';
 
 export 'package:server_rate_limit/server_rate_limit.dart';
+export 'src/events/rate_limit_events.dart';
 
 extension RateLimitEngineContext on EngineContext {
   RateLimitService get rateLimitService {

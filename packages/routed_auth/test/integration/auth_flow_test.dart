@@ -86,9 +86,9 @@ import 'package:routed/routed.dart'
         AuthEmailRequest;
 import 'package:routed_auth/routed_auth.dart';
 import 'package:server_auth/server_auth.dart';
-import 'package:routed/src/sessions/options.dart';
-import 'package:routed/session.dart';
-import 'package:routed/src/sessions/middleware.dart';
+import 'package:server_sessions/server_sessions.dart';
+import 'package:server_sessions/server_sessions.dart';
+import 'package:routed_sessions/routed_sessions.dart';
 import 'package:routed_testing/routed_testing.dart';
 import 'package:server_testing/server_testing.dart';
 

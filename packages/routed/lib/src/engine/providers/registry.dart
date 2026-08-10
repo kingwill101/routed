@@ -5,40 +5,6 @@ import 'core.dart';
 import 'logging.dart';
 import 'routing.dart';
 import 'uploads.dart';
-import 'observability.dart';
-
-class StorageServiceProvider extends ServiceProvider {
-  StorageServiceProvider();
-  @override
-  void register(c) {}
-  @override
-  Future<void> boot(c) async {}
-
-  static void registerDriver(
-    String name,
-    dynamic builder, {
-    bool overrideExisting = false,
-    dynamic documentation,
-  }) {}
-
-  static void unregisterDriver(String name) {}
-
-  static List<String> availableDriverNames() => ['local', 's3'];
-
-  dynamic get defaultConfig => _StorageProviderConfig();
-}
-
-class _StorageProviderConfig {
-  List<_ConfigDocEntry> get docs => [];
-}
-
-class _ConfigDocEntry {
-  String get path => '';
-}
-
-class StaticAssetsServiceProvider extends ServiceProvider { StaticAssetsServiceProvider(); @override void register(c) {} @override Future<void> boot(c) async {} }
-class ViewServiceProvider extends ServiceProvider { ViewServiceProvider(); @override void register(c) {} @override Future<void> boot(c) async {} }
-
 
 typedef ServiceProviderFactory = ServiceProvider Function();
 
@@ -54,6 +20,11 @@ class ProviderRegistration {
   final String description;
 }
 
+/// Registry of known service providers for `http.providers` resolution.
+///
+/// Foundation only registers core providers that live in `package:routed`.
+/// Feature packages call [register] (via their `registerProviders()` helpers)
+/// when imported — typically through `package:routed_full`.
 class ProviderRegistry extends NamedRegistry<ProviderRegistration> {
   ProviderRegistry._() {
     _registerDefaults();
@@ -82,27 +53,6 @@ class ProviderRegistry extends NamedRegistry<ProviderRegistration> {
       factory: () => LoggingServiceProvider(),
       description: 'HTTP logging defaults and helpers.',
     );
-    register(
-      'routed.observability',
-      factory: () => ObservabilityServiceProvider(),
-      description:
-          'Tracing, metrics, health endpoints, and error observer hooks.',
-    );
-    register(
-      'routed.storage',
-      factory: () => StorageServiceProvider(),
-      description: 'Storage disks (local file systems, etc.).',
-    );
-    register(
-      'routed.static',
-      factory: () => StaticAssetsServiceProvider(),
-      description: 'Static asset serving configuration defaults.',
-    );
-    register(
-      'routed.views',
-      factory: () => ViewServiceProvider(),
-      description: 'View template configuration and engines.',
-    );
   }
 
   Iterable<ProviderRegistration> get registrations =>
@@ -116,10 +66,15 @@ class ProviderRegistry extends NamedRegistry<ProviderRegistration> {
     String id, {
     required ServiceProviderFactory factory,
     String description = '',
+    bool overrideExisting = false,
   }) {
+    if (containsEntry(id) && !overrideExisting) {
+      return;
+    }
     registerEntry(
       id,
       ProviderRegistration(id: id, factory: factory, description: description),
+      overrideExisting: overrideExisting,
     );
   }
 }

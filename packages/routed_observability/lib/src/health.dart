@@ -1,8 +1,8 @@
 import 'dart:async';
 import 'dart:convert';
 
-import 'package:routed/src/engine/engine.dart';
-import 'package:routed/src/support/named_registry.dart';
+import 'package:routed/routed.dart';
+
 
 typedef HealthCheck = FutureOr<HealthCheckResult> Function();
 

@@ -2,9 +2,15 @@ name: routed_openapi_builder
 description: Build-time OpenAPI generation and analyzer integration for Routed.
 version: 0.1.0
 repository: https://github.com/kingwill101/routed/tree/master/packages/routed_openapi_builder
-tags: [routed, openapi, build]
+funding:
+  - https://www.buymeacoffee.com/kingwill101
+tags:
+  - routed
+  - openapi
+  - build
 resolution: workspace
-environment: {sdk: ">=3.9.0 <4.0.0"}
+environment:
+  sdk: ">=3.9.0 <4.0.0"
 dependencies:
   routed: ^0.3.3
   routed_openapi: ^0.1.0

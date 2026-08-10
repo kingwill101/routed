@@ -1,7 +1,5 @@
 export 'dart:io' show HttpHeaders, HttpStatus;
 
-export 'package:storage_fs/storage_fs.dart' hide Factory;
-
 export 'src/config/config.dart';
 export 'src/config/helpers.dart';
 export 'src/config/loader.dart';
@@ -58,5 +56,11 @@ export 'src/context/typed_context_state.dart' show TypedContextState;
 export 'src/router/route_metadata.dart' show RouteMetadataKey, RouteMetadata;
 
 export 'src/container/service_resolver.dart' show ServiceResolver;
-export 'src/file_handler.dart' show Dir, FileHandler;
-export 'src/static_files.dart' show StaticFileHandler;
+export 'src/http/transport.dart'
+    show
+        RequestAdapter,
+        ResponseAdapter,
+        ServerOptions,
+        ServerHandle,
+        ServerTransport;
+export 'src/support/named_registry.dart' show NamedRegistry;

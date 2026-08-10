@@ -1,4 +1,4 @@
-import 'package:routed/routed.dart';
+import 'package:routed/routed.dart' hide SecureCookie;
 import 'package:routed_sessions/routed_sessions.dart';
 import 'package:routed_testing/routed_testing.dart';
 import 'package:server_sessions/server_sessions.dart';
@@ -46,7 +46,7 @@ void main() {
       final setCookies = response.headers[HttpHeaders.setCookieHeader];
       expect(setCookies, isNotEmpty,
           reason: 'the store must write the session cookie');
-      expect(response.cookie(defaultSessionName), isNotNull);
+      expect(response.cookie('routed_session'), isNotNull);
     });
 
     test('session value persists across requests via the cookie', () async {

@@ -6,7 +6,6 @@ library;
 
 export 'src/engine/providers/core.dart';
 export 'src/engine/providers/logging.dart';
-export 'src/engine/providers/observability.dart';
 export 'src/engine/providers/registry.dart';
 export 'src/engine/providers/routing.dart';
 export 'src/engine/providers/uploads.dart';

@@ -169,30 +169,8 @@ import 'package:routed/routed.dart';
 const String $constantName = '$identifier';
 
 void $registerName() {
-  StorageServiceProvider.registerDriver(
-    $constantName,
-    (context) {
-      final root = context.configuration['root']?.toString();
-      final resolvedRoot =
-          (root == null || root.trim().isEmpty) ? 'storage/\${context.diskName}' : root;
-
-      // TODO: Swap LocalStorageDisk for your own StorageDisk implementation.
-      return LocalStorageDisk(
-        root: resolvedRoot,
-        fileSystem: context.manager.defaultFileSystem,
-      );
-    },
-    documentation: (ctx) => <ConfigDocEntry>[
-      ConfigDocEntry(
-        path: ctx.path('root'),
-        type: 'string',
-        description: 'Base path for the $identifier disk.',
-        metadata: const {
-          'default_note': 'Defaults to storage/<disk_name> when omitted.',
-        },
-      ),
-    ],
-  );
+  // Register a custom disk at boot via StorageManager (package:server_storage):
+  // manager.registerDisk($constantName, LocalStorageDisk(root: '...', fileSystem: ...));
 }
 ''';
 }
@@ -259,9 +237,8 @@ String _renderSessionTemplate(String identifier, String pascal) {
   return '''
 import 'dart:async';
 
-import 'package:routed/routed.dart' hide Store;
-import 'package:routed/session.dart';
-import 'package:routed/providers.dart';
+import 'package:routed/routed.dart';
+import 'package:server_sessions/server_sessions.dart';
 
 void $registerName() {
   SessionServiceProvider.registerDriver(

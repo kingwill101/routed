@@ -3,7 +3,7 @@ import 'dart:convert';
 import 'package:args/command_runner.dart';
 import 'package:file/file.dart' as fs;
 import 'package:path/path.dart' as p;
-import 'package:routed/console.dart';
+import 'package:routed_cli/routed_cli.dart';
 import 'package:routed_cli/src/console/args/base_command.dart';
 import 'package:routed_cli/src/console/engine/manifest_loader.dart';
 

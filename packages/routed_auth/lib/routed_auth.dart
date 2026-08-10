@@ -40,3 +40,7 @@ void ensureRoutedAuthProviderRegistered([ProviderRegistry? registry]) {
     );
   }
 }
+
+/// Alias for [ensureRoutedAuthProviderRegistered].
+void registerRoutedAuthProviders([ProviderRegistry? registry]) =>
+    ensureRoutedAuthProviderRegistered(registry);

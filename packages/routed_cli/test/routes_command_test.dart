@@ -4,7 +4,7 @@ import 'package:args/command_runner.dart';
 import 'package:file/file.dart' as fs;
 import 'package:file/memory.dart';
 
-import 'package:routed/console.dart' show CliLogger;
+import 'package:routed_cli/routed_cli.dart' show CliLogger;
 import 'package:routed_cli/src/console/args/commands/routes.dart';
 import 'package:routed_cli/src/console/args/runner.dart';
 import 'package:routed_cli/src/console/engine/manifest_loader.dart';

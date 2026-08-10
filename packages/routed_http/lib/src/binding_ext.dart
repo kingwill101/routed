@@ -1,4 +1,4 @@
-import 'package:routed/routed.dart' hide Binding, Bindable, MimeType;
+import 'package:routed/routed.dart';
 
 import 'binding/binding.dart';
 

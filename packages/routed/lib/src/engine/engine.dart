@@ -9,7 +9,6 @@ import 'package:routed/src/config/registry.dart';
 import 'package:routed/src/container/container.dart';
 import 'package:routed/src/container/container_mixin.dart';
 import 'package:routed/src/container/read_only_container.dart';
-import 'package:routed/src/static_files.dart';
 import 'package:routed/src/context/context.dart';
 import 'package:routed/src/contracts/contracts.dart';
 import 'package:routed/src/engine/config.dart';
@@ -152,7 +151,7 @@ class ValidationRuleRegistry {
 ///
 /// final engine = Engine(providers: [DatabaseServiceProvider()]);
 /// ```
-class Engine with ContainerMixin, StaticFileHandler {
+class Engine with ContainerMixin {
   /// The default providers for a full-featured engine.
   ///
   /// Includes:
@@ -180,9 +179,8 @@ class Engine with ContainerMixin, StaticFileHandler {
 
   /// Returns all built-in service providers registered with the framework.
   ///
-  /// This includes all providers from the [ProviderRegistry]: core, routing,
-  /// cache, sessions, uploads, cors, security, logging, auth, observability,
-  /// compression, rate limiting, storage, static assets, views, and localization.
+  /// This includes all providers currently registered in [ProviderRegistry]
+  /// (foundation defaults plus any adapters that called `register`).
   ///
   /// Use this when you want a fully-featured engine with all framework capabilities:
   ///

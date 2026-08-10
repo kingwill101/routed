@@ -4,9 +4,7 @@ import 'dart:io';
 import 'dart:typed_data';
 
 import 'package:path/path.dart' as p;
-import 'package:routed_http/routed_http.dart'; // sse moved
-// multipart moved
-// utils moved to routed_http
+// HTTP form/query/SSE helpers live in package:routed_http (import that package).
 import 'package:routed/src/container/container.dart' show Container;
 import 'package:routed/src/contracts/contracts.dart' show Config;
 import 'package:routed/src/contracts/translation/translator.dart';
@@ -23,9 +21,9 @@ part 'error.dart';
 
 part 'helpers.dart';
 
-part 'negotiation.dart';
-
 part 'shortcuts.dart';
+
+part 'response_format.dart';
 
 /// The EngineContext is loosely inspired by gin.Context in Go.
 /// It wraps [Request] and [Response], holds arbitrary keys/values,
@@ -94,54 +92,10 @@ class EngineContext {
     }
   }
 
-  // Cache keys are constants
+  // Cache keys shared with package:routed_http form/query extensions.
   final String queryCacheKey = "__queryCache";
   final String formCacheKey = "__formCache";
   final String multipartFormKey = '__multipartForm';
-
-  /// Retrieves the form cache asynchronously.
-  Future<Map<String, dynamic>> get formCache async {
-    await initFormCache();
-    return get<Map<String, dynamic>>(formCacheKey) ?? <String, dynamic>{};
-  }
-
-  /// Retrieves the multipart form asynchronously.
-  Future<MultipartForm> get multipartForm async {
-    await initFormCache();
-    return get(multipartFormKey) ?? MultipartForm();
-  }
-
-  /// Initializes the form cache by parsing form data.
-  Future<Map<String, dynamic>> initFormCache() async {
-    final cached = get<Map<String, dynamic>>(formCacheKey);
-    if (cached != null) return cached;
-
-    final form = <String, dynamic>{};
-
-    // Handle URL-encoded forms
-    if (request.contentType?.subType == 'x-www-form-urlencoded') {
-      form.addAll(await parseForm(this));
-    }
-
-    // Handle multipart forms
-    if (request.contentType?.subType == 'form-data') {
-      final multipartForm = await parseMultipartForm(this);
-      set(multipartFormKey, multipartForm);
-      form.addAll(multipartForm.fields);
-    }
-
-    // Cache the combined results
-    set(formCacheKey, form);
-    return form;
-  }
-
-  /// Retrieves the query cache.
-  Map<String, dynamic> get queryCache {
-    final cache = get<Map<String, dynamic>>(queryCacheKey);
-    if (cache != null) return cache;
-    set(queryCacheKey, parseUrlEncoded(uri.query));
-    return get(queryCacheKey)!;
-  }
 
   /// Retrieve a stored value by [key].
   T? get<T>(String key) => request.getAttribute<T>(key);
@@ -388,8 +342,11 @@ class EngineContext {
   }
 
   /// Retrieve a query parameter from the request.
+  ///
+  /// For multi-value query maps and binding helpers, import
+  /// `package:routed_http` and use [queryCache] / [getQuery].
   dynamic query(String s) {
-    return queryCache[s];
+    return uri.queryParameters[s];
   }
 
   /// Retrieve a header from the request.

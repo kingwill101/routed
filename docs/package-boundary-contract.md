@@ -13,7 +13,7 @@ This document defines the public API, provider IDs, and config roots for all spl
 
 ## Config Roots
 - `http.*`, `cache.*`, `session.*`, `storage.*`, `validation.*`, `views.*`, `auth.*`, `rate_limit.*`, `localization.*`, `observability.*`, `security.*`
-- `routed` umbrella re-exports keep `import 'package:routed/routed.dart'` stable; direct `import 'package:routed_*/routed_*.dart'` and `import 'package:server_*/server_*.dart'` also supported
+- Direct imports are canonical: `import 'package:routed_*/routed_*.dart'` and `import 'package:server_*/server_*.dart'`. Use `routed_full` for a batteries-included barrel. Foundation `routed` does **not** re-export feature packages.
 
 ## Public API Surface
 - `routed`: `Engine`, `EngineContext`, `Router`, `Route`, `Middleware`, `EngineConfig`, `Container`
@@ -24,9 +24,12 @@ This document defines the public API, provider IDs, and config roots for all spl
 - `routed_security`: `IpFilter`, `TrustedProxyResolver`
 
 ## Three-Layer Rule
-`routed` (umbrella) → `routed_*` (adapter, depends on `routed` + `server_*`) → `server_*` (pure Dart, no `routed`). No circular deps, no test code in `lib`, workspace-aware imports only.
+`routed` (slim core) ← `routed_*` (adapter, depends on `routed` + `server_*`) → `server_*` (portable; must not import `routed`). No circular deps, no feature re-exports from `routed`, no test code in `lib`.
 
 ## Verification
 - `dart analyze --fatal-infos` 0
 - `dart test --coverage` per package with real `Engine` (`TestClient`/`RoutedRequestHandler`, `TransportMode.ephemeralServer`)
 - `coverage/lcov.info` generated via `coverage:format_coverage`
+
+## Migration
+See [migration-split-packages.md](./migration-split-packages.md).

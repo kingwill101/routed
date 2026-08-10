@@ -3,9 +3,9 @@ import 'package:file/memory.dart';
 import 'package:liquify/src/filter_registry.dart' as liquify;
 import 'package:routed/routed.dart';
 // ignore: implementation_imports
-import 'package:routed/src/middleware/localization.dart' show localizationMiddleware;
+import 'package:routed_views/src/middleware/localization.dart' show localizationMiddleware;
 // ignore: implementation_imports
-import 'package:routed/src/engine/providers/localization.dart';
+import 'package:routed_views/src/providers/localization.dart';
 import 'package:routed_views/src/providers/view_provider.dart';
 // ignore: implementation_imports
 import 'package:routed_views/src/translation/locale_manager.dart' show LocaleManager;

@@ -2,9 +2,14 @@ name: routed_http
 description: HTTP utilities for Routed — binding, multipart, negotiation, SSE and conditional requests.
 version: 0.1.0
 repository: https://github.com/kingwill101/routed/tree/master/packages/routed_http
-tags: [routed, http]
+funding:
+  - https://www.buymeacoffee.com/kingwill101
+tags:
+  - routed
+  - http
 resolution: workspace
-environment: {sdk: ">=3.9.0 <4.0.0"}
+environment:
+  sdk: ">=3.9.0 <4.0.0"
 dependencies:
   routed: ^0.3.3
   http_parser: ^4.1.2

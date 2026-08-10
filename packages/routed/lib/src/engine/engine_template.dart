@@ -9,7 +9,8 @@ extension EngineViewEngineExtension on Engine {
   /// Gets the current view engine from the configuration.
   ///
   /// Returns null if no view engine has been configured.
-  ViewEngine get viewEngine => config.templateEngine ?? LiquidViewEngine();
+  ViewEngine get viewEngine =>
+      (config.templateEngine as ViewEngine?) ?? LiquidViewEngine();
 
   /// Configures a view engine for the application.
   ///

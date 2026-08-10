@@ -144,9 +144,11 @@ class _EngineSessionResponse implements SessionResponse {
       );
     } catch (_) {
       try {
+        final sb = StringBuffer('$name=$value; Path=$path');
+        if (maxAge != null) sb.write('; Max-Age=$maxAge');
         ctx.response.headers.set(
           HttpHeaders.setCookieHeader,
-          '$name=$value; Path=$path',
+          sb.toString(),
         );
       } catch (_) {}
     }

@@ -2,7 +2,7 @@ import 'dart:async';
 import 'dart:io';
 
 import 'package:artisanal/args.dart';
-import 'package:routed/console.dart';
+import 'package:routed_cli/routed_cli.dart';
 
 /// RoutedCommandRunner centralizes global flags and command registration.
 ///

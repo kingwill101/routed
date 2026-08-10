@@ -4,6 +4,8 @@ import 'package:routed/routed.dart';
 import 'package:server_storage/server_storage.dart';
 
 export 'package:server_storage/server_storage.dart';
+export 'src/engine_static_file_sink.dart';
+export 'src/static_files.dart';
 
 extension StorageEngineContext on EngineContext {
   StorageManager get storageManager {

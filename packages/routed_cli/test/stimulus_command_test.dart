@@ -1,5 +1,5 @@
 import 'package:file/memory.dart';
-import 'package:routed/console.dart' show CliLogger;
+import 'package:routed_cli/routed_cli.dart' show CliLogger;
 import 'package:routed_cli/src/console/args/commands/stimulus.dart';
 import 'package:routed_cli/src/console/args/runner.dart';
 import 'package:test/test.dart';

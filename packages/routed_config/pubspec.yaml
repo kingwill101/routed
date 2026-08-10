@@ -2,9 +2,14 @@ name: routed_config
 description: Application configuration for Routed — typed config specs, loader, and helpers.
 version: 0.1.0
 repository: https://github.com/kingwill101/routed/tree/master/packages/routed_config
-tags: [routed, config]
+funding:
+  - https://www.buymeacoffee.com/kingwill101
+tags:
+  - routed
+  - config
 resolution: workspace
-environment: {sdk: ">=3.9.0 <4.0.0"}
+environment:
+  sdk: ">=3.9.0 <4.0.0"
 dependencies:
   routed: ^0.3.3
   file: ^7.0.1

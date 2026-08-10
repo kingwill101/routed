@@ -1,15 +1,7 @@
 // ignore_for_file: implementation_imports, depend_on_referenced_packages
 import 'dart:convert';
 
-import 'package:routed/routed.dart'
-    hide
-        Binding,
-        Bindable,
-        MimeType,
-        SseEvent,
-        SseCodec,
-        ContentNegotiator,
-        NegotiatedMediaType;
+import 'package:routed/routed.dart';
 import 'binding.dart';
 import 'utils.dart';
 

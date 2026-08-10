@@ -1,5 +1,5 @@
 import 'package:routed/routed.dart';
-import 'package:routed/src/middleware/localization.dart';
+import 'package:routed_views/src/middleware/localization.dart';
 import 'package:routed_views/src/translation/constants.dart';
 import 'package:routed_views/src/translation/locale_manager.dart';
 import 'package:routed_views/src/translation/resolvers.dart';

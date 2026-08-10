@@ -87,7 +87,7 @@ import 'package:server_sessions/server_sessions.dart';
 import 'package:server_auth/server_auth.dart';
 import 'package:routed_testing/routed_testing.dart';
 import 'package:server_testing/server_testing.dart';
-import 'package:routed/src/sessions/options.dart';
+import 'package:server_sessions/server_sessions.dart';
 import '../test_engine.dart';
 
 SessionConfig _sessionConfig() {

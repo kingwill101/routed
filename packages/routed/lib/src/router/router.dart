@@ -9,7 +9,7 @@ export 'route_builder.dart';
 /// - Group-level middlewares
 /// - Route-level middlewares
 /// - Hierarchical naming
-class Router with StaticFileHandler {
+class Router {
   /// Base path for this router (e.g. `/api`)
   final String _prefix;
 

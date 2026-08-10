@@ -3,7 +3,7 @@ import 'dart:convert';
 import 'dart:io' as io;
 
 import 'package:path/path.dart' as p;
-import 'package:routed/console.dart' show CliLogger;
+import 'package:routed_cli/routed_cli.dart' show CliLogger;
 
 import 'package:routed_cli/src/console/util/dart_exec.dart';
 import 'package:stream_transform/stream_transform.dart';
