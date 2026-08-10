@@ -56,7 +56,38 @@ class LocalStorageDisk implements StorageDisk {
       return _root;
     }
     final pathContext = _fileSystem.path;
-    return pathContext.normalize(pathContext.join(_root, path));
+
+    final resolved = pathContext.normalize(pathContext.join(_root, path));
+    _ensureWithinRoot(resolved, path);
+    return resolved;
+  }
+
+  /// Verifies that [resolved] stays inside this disk's [_root], rejecting
+  /// absolute inputs and `..` segments that escape the configured storage
+  /// directory. Without this guard, untrusted paths such as
+  /// `../../etc/passwd` could reach files outside the disk.
+  void _ensureWithinRoot(String resolved, String original) {
+    final pathContext = _fileSystem.path;
+    if (pathContext.isAbsolute(original) ||
+        !_isSameOrChild(resolved, _root, pathContext.separator)) {
+      throw ArgumentError(
+        'Path "$original" escapes the configured storage root "$_root".',
+      );
+    }
+  }
+
+  /// Returns true when [candidate] equals [root] or lies within a
+  /// subdirectory of [root].
+  static bool _isSameOrChild(
+    String candidate,
+    String root,
+    String separator,
+  ) {
+    if (candidate == root) {
+      return true;
+    }
+    final prefix = root.endsWith(separator) ? root : '$root$separator';
+    return candidate.startsWith(prefix);
   }
 
   String get root => _root;

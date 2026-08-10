@@ -34,6 +34,9 @@ class StorageManager {
 
   /// Registers a disk implementation under [name].
   void registerDisk(String name, StorageDisk disk) {
+    if (name.isEmpty) {
+      throw ArgumentError('Disk name cannot be empty.');
+    }
     _disks[name] = disk;
   }
 
