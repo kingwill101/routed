@@ -15,7 +15,6 @@ class AuthConfig {
     required this.providers,
     required this.session,
     required this.sessionRememberMe,
-    required this.callbacks,
     required this.events,
     required this.haigate,
     required this.guards,
@@ -43,12 +42,6 @@ class AuthConfig {
       context: 'auth.session',
     );
     final rememberConfig = sessionConfig.rememberMe;
-
-    final callbacksMap = _mapOrEmpty(map['callbacks'], 'auth.callbacks');
-    final callbacks = AuthCallbackConfig.fromMap(
-      callbacksMap,
-      context: 'auth.callbacks',
-    );
 
     final eventsMap = _mapOrEmpty(map['events'], 'auth.events');
     final events = AuthEventConfig.fromMap(eventsMap, context: 'auth.events');
@@ -96,7 +89,6 @@ class AuthConfig {
       providers: providers,
       session: sessionConfig,
       sessionRememberMe: rememberConfig,
-      callbacks: callbacks,
       events: events,
       haigate: HaigateConfig(
         enabled: haigateEnabled,
@@ -112,7 +104,6 @@ class AuthConfig {
   final Map<String, dynamic> providers;
   final AuthSessionConfig session;
   final SessionRememberMeConfig sessionRememberMe;
-  final AuthCallbackConfig callbacks;
   final AuthEventConfig events;
   final HaigateConfig haigate;
   final Map<String, GuardDefinition> guards;
@@ -438,52 +429,6 @@ class AuthSessionConfig {
   final Duration? maxAge;
   final Duration? updateAge;
   final SessionRememberMeConfig rememberMe;
-}
-
-class AuthCallbackConfig {
-  const AuthCallbackConfig({
-    this.signIn,
-    this.redirect,
-    this.jwt,
-    this.session,
-  });
-
-  factory AuthCallbackConfig.fromMap(
-    Map<String, dynamic> map, {
-    required String context,
-  }) {
-    return AuthCallbackConfig(
-      signIn: parseStringLike(
-        map['sign_in'],
-        context: '$context.sign_in',
-        allowEmpty: true,
-        throwOnInvalid: true,
-      ),
-      redirect: parseStringLike(
-        map['redirect'],
-        context: '$context.redirect',
-        allowEmpty: true,
-        throwOnInvalid: true,
-      ),
-      jwt: parseStringLike(
-        map['jwt'],
-        context: '$context.jwt',
-        allowEmpty: true,
-        throwOnInvalid: true,
-      ),
-      session: parseStringLike(
-        map['session'],
-        context: '$context.session',
-        allowEmpty: true,
-        throwOnInvalid: true,
-      ),
-    );
-  }
-
-  final String? signIn;
-  final String? redirect;
-  final String? jwt;
-  final String? session;
 }
 
 class AuthEventConfig {

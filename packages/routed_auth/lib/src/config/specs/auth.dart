@@ -144,24 +144,6 @@ class AuthConfigSpec extends ConfigSpec<AuthConfig> {
           ),
         },
       ),
-      'callbacks': ConfigSchema.object(
-        description:
-            'Auth callback hooks (sign_in, redirect, jwt, session) backed by the event system.',
-        properties: {
-          'sign_in': ConfigSchema.string(
-            description: 'Event handler name for sign-in callbacks.',
-          ),
-          'redirect': ConfigSchema.string(
-            description: 'Event handler name for redirect callbacks.',
-          ),
-          'jwt': ConfigSchema.string(
-            description: 'Event handler name for JWT callbacks.',
-          ),
-          'session': ConfigSchema.string(
-            description: 'Event handler name for session callbacks.',
-          ),
-        },
-      ).withDefault(const {}),
       'events': ConfigSchema.object(
         description: 'Auth lifecycle events emitted via the event system.',
         properties: {
@@ -290,12 +272,6 @@ class AuthConfigSpec extends ConfigSpec<AuthConfig> {
           'cookie': value.sessionRememberMe.cookieName,
           'duration': value.sessionRememberMe.duration,
         },
-      },
-      'callbacks': {
-        'sign_in': value.callbacks.signIn,
-        'redirect': value.callbacks.redirect,
-        'jwt': value.callbacks.jwt,
-        'session': value.callbacks.session,
       },
       'events': {
         'sign_in': value.events.signIn,

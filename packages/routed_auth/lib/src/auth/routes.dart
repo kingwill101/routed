@@ -46,9 +46,20 @@ import 'package:routed/src/router/router.dart';
 /// routes.register(engine.defaultRouter);
 /// ```
 class AuthRoutes {
-  AuthRoutes(this.manager);
+  AuthRoutes(AuthManager manager, {AuthManager Function()? managerOf})
+    : _manager = manager,
+      _managerOf = managerOf;
 
-  final AuthManager manager;
+  final AuthManager _manager;
+  final AuthManager Function()? _managerOf;
+
+  /// Resolves the manager used by route handlers.
+  ///
+  /// When [managerOf] is provided (e.g. a container lookup), it is consulted on
+  /// every request so handlers stay in sync with the current manager after
+  /// config reloads replace the previously bound instance. Otherwise the
+  /// manager passed to the constructor is used.
+  AuthManager get manager => _managerOf?.call() ?? _manager;
 
   void register(Router router, {String? basePath}) {
     final root = basePath ?? manager.options.basePath;
@@ -62,6 +73,7 @@ class AuthRoutes {
         auth.get('/signin/{provider}', _signIn);
         auth.post('/register/{provider}', _register);
         auth.get('/callback/{provider}', _callback);
+        auth.post('/callback/{provider}', _callback);
         auth.post('/signout', _signOut);
       },
     );
@@ -197,10 +209,19 @@ class AuthRoutes {
       manager.options.providers,
       providerId,
     );
+    // OAuth providers such as Apple use `response_mode=form_post`, delivering
+    // the authorization code and state in the POST body rather than the query
+    // string. Merge the parsed payload so callback decisions see both sources.
+    final params = <String, dynamic>{
+      ...ctx.request.queryParameters,
+    };
+    if (ctx.method == 'POST') {
+      params.addAll(await _payload(ctx));
+    }
     final decision = resolveAuthCallbackRouteDecision(
       providerId: providerId,
       provider: provider,
-      query: ctx.request.queryParameters,
+      query: params,
     );
 
     switch (decision.kind) {
@@ -239,10 +260,9 @@ class AuthRoutes {
       case AuthCallbackRouteKind.custom:
         final callbackProvider = provider as CallbackProvider;
         try {
-          final params = ctx.request.queryParameters;
           final callbackResult = await callbackProvider.handleCallback(
             ctx,
-            params,
+            params.map((key, value) => MapEntry(key, value.toString())),
           );
           final outcome = normalizeAuthCallbackProviderResult(callbackResult);
           if (!outcome.isSuccess) {
