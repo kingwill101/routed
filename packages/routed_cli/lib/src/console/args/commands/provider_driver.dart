@@ -259,8 +259,9 @@ String _renderSessionTemplate(String identifier, String pascal) {
   return '''
 import 'dart:async';
 
-import 'package:routed/routed.dart';
-import 'package:server_data/sessions.dart';
+import 'package:routed/routed.dart' hide Store;
+import 'package:routed/session.dart';
+import 'package:routed/providers.dart';
 
 void $registerName() {
   SessionServiceProvider.registerDriver(

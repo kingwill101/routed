@@ -268,9 +268,7 @@ class DevCommand extends BaseCommand {
 
       // Prepare bootstrap if requested
       String scriptToRun = entryFile.absolute.path;
-      if (useBootstrap &&
-          (projectRoot != null) &&
-          (hasHotReloader || installMissing)) {
+      if (useBootstrap && (projectRoot != null) && hasHotReloader) {
         final root = projectRoot;
         final toolDir = root.fileSystem.directory(
           joinPath([root.path, '.dart_tool', 'routed']),

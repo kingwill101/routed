@@ -5,9 +5,17 @@ import 'dart:io';
 
 import 'package:routed_cli/src/console/util/dart_exec.dart';
 
+export 'src/console/args/runner.dart' show RoutedCommandRunner;
 export 'src/console/create/templates.dart'
     show FileBuilder, ScaffoldTemplate, TemplateContext, Templates;
 export 'src/console/create/templates_embedded.dart' show scaffoldTemplateBytes;
+export 'src/console/dev/dev_server_runner.dart'
+    show DevServerRunner, DevServerRunnerException, ExitCode;
+export 'src/console/project/commands_loader.dart'
+    show
+        ProjectCommandInfo,
+        ProjectCommandOption,
+        ProjectCommandsLoader;
 
 /// Routed CLI core utilities.
 ///
