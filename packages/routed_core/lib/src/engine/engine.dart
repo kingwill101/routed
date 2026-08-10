@@ -26,6 +26,7 @@ import 'package:routed_core/src/engine/route_match.dart';
 import 'package:routed_core/src/engine/request_scope.dart';
 import 'package:routed_core/src/engine/wrapped_request.dart';
 import 'package:routed_core/src/events/event_manager.dart';
+import 'package:routed_core/src/http/transport.dart';
 import 'package:routed_core/src/provider/provider.dart';
 import 'package:routed_core/src/provider/config_utils.dart';
 import 'package:routed_core/src/request.dart';
@@ -202,6 +203,9 @@ class Engine with ContainerMixin {
       .map((r) => r.factory())
       .toList(growable: false);
   bool _closed = false;
+
+  /// Whether [close] has been called on this engine.
+  bool get isClosed => _closed;
 
   /// The configuration settings for this engine.
   EngineConfig get config => container.get();
@@ -1216,7 +1220,33 @@ class Engine with ContainerMixin {
     );
   }
 
-  /// Handles an incoming HTTP request.
+  /// Handles an incoming host exchange via portable adapters.
+  ///
+  /// Prefer this entry from host transports (`routed_io`, Workers, …).
+  ///
+  /// **Transitional behavior:** when [HttpConnection.request] implements
+  /// [NativeRequestHandle] and [NativeRequestHandle.nativeRequest] is a
+  /// `dart:io` [HttpRequest], dispatches to [handleRequest]. Fully portable
+  /// adapter processing (no `dart:io`) will land here next.
+  Future<void> handleConnection(HttpConnection connection) async {
+    final request = connection.request;
+    if (request is NativeRequestHandle) {
+      final native = (request as NativeRequestHandle).nativeRequest;
+      if (native is HttpRequest) {
+        return handleRequest(native);
+      }
+    }
+    throw UnsupportedError(
+      'Portable RequestAdapter dispatch is not implemented yet. '
+      'Use package:routed_io (IoHttpConnection) or provide a '
+      'NativeRequestHandle whose nativeRequest is a dart:io HttpRequest.',
+    );
+  }
+
+  /// Handles an incoming HTTP request (`dart:io`).
+  ///
+  /// Prefer [handleConnection] from host adapters so non-`dart:io` hosts
+  /// (e.g. Cloudflare Workers) can share the same engine entrypoint.
   ///
   /// This method is responsible for processing both HTTP and WebSocket upgrade requests.
   /// The actual implementation is in [ServerExtension._handleRequest].

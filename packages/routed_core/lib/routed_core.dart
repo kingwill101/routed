@@ -60,6 +60,8 @@ export 'src/http/transport.dart'
     show
         RequestAdapter,
         ResponseAdapter,
+        NativeRequestHandle,
+        HttpConnection,
         ServerOptions,
         ServerHandle,
         ServerTransport;

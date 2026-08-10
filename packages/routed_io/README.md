@@ -2,23 +2,28 @@
 
 `dart:io` host transport for Routed.
 
-This package is intentionally separate from **`routed_core`** so the engine can
-target non-`dart:io` hosts later (e.g. **Cloudflare Workers** / fetch-style
-runtimes), the same way Node servers keep core framework logic off raw
-`http.createServer` until a platform adapter is plugged in.
+Kept separate from **`routed_core`** so the engine can target non-`dart:io` hosts
+(e.g. **Cloudflare Workers**) with a different adapter package implementing the
+same core interfaces.
 
-| Package | Responsibility |
-|---------|----------------|
-| `routed_core` | Routing, middleware, context, DI (host-agnostic pipeline) |
-| **`routed_io`** | Bind/listen via `dart:io` (`HttpServer`, TLS file paths, …) |
-| `server_native` | Optional native/Rust transport |
-| (future) workers adapter | Cloudflare / edge fetch entrypoints |
+## Architecture
+
+```
+routed_core:  RequestAdapter / ResponseAdapter / HttpConnection / ServerTransport
+     ↑
+routed_io:    IoRequestAdapter, IoResponseAdapter, IoHttpConnection, IoServerTransport
+     ↑
+future:       WorkersRequestAdapter, … (same interfaces)
+```
+
+`IoHttpConnection` holds both `dart:io` `HttpRequest` and `HttpResponse`, and
+exposes portable adapters for `Engine.handleConnection`.
 
 ## Install
 
 ```yaml
 dependencies:
-  routed_core: ^0.3.3   # or package:routed for batteries
+  routed_core: ^0.3.3
   routed_io: ^0.1.0
 ```
 
@@ -29,12 +34,23 @@ import 'package:routed_core/routed_core.dart';
 import 'package:routed_io/routed_io.dart';
 
 Future<void> main() async {
-  final engine = await Engine.create();
-  await serveIo(engine, host: '127.0.0.1', port: 8080);
+  final engine = Engine(providers: Engine.defaultProviders);
+  engine.get('/', (ctx) => ctx.string('ok'));
+  final handle = await serveIo(engine, host: '127.0.0.1', port: 8080);
+  // ...
+  await handle.close();
 }
 ```
 
-Use `serveSecureIo(...)` for TLS boot with certificate/key paths.
+Or use the transport directly:
 
-Do **not** pull `routed_io` into Workers or other edge builds; depend on core
-(and a workers transport) only.
+```dart
+final transport = IoServerTransport(echo: true);
+final handle = await transport.serve(
+  engine,
+  const ServerOptions(host: '127.0.0.1', port: 8080),
+);
+```
+
+Do **not** depend on `routed_io` in Workers builds; implement the same adapter
+interfaces against the Workers request/response types instead.

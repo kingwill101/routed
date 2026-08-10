@@ -1,16 +1,39 @@
 import 'package:routed_core/routed_core.dart';
 
+import 'io_server_transport.dart';
+
 /// Boots a Routed [engine] using the `dart:io` HTTP server transport.
-Future<void> serveIo(
+///
+/// Prefer this over [Engine.serve] for new code so bind/listen lives outside
+/// `routed_core`. Uses [IoServerTransport] + [Engine.handleConnection].
+///
+/// Returns a [ServerHandle] that can close the listener.
+Future<ServerHandle> serveIo(
   Engine engine, {
   String host = '127.0.0.1',
   int? port,
   bool echo = true,
-}) {
-  return engine.serve(host: host, port: port, echo: echo);
+}) async {
+  if (engine.config.features.enableProxySupport) {
+    await engine.config.ensureTrustedProxiesParsed();
+  }
+  if (echo) {
+    try {
+      engine.printRoutes();
+    } catch (_) {}
+  }
+
+  final transport = IoServerTransport(echo: echo);
+  return transport.serve(
+    engine,
+    ServerOptions(host: host, port: port ?? 0, shared: true),
+  );
 }
 
 /// Boots a Routed [engine] using the `dart:io` HTTPS server transport.
+///
+/// TLS bind still delegates to [Engine.serveSecure] until TLS options are
+/// folded into [IoServerTransport].
 Future<void> serveSecureIo(
   Engine engine, {
   String address = 'localhost',

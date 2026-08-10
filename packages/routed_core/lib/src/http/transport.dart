@@ -2,16 +2,16 @@ import 'dart:async';
 
 import 'package:routed_core/src/engine/engine.dart' show Engine;
 
-/// Minimal adapter exposed to portable domain packages and transports.
+/// Minimal inbound HTTP message (host-agnostic).
 ///
-/// Each domain defines its own narrow adapter; this file provides the
-/// foundation transport boundary so [Engine] can dispatch without
-/// directly depending on `dart:io` in tests.
+/// Host packages implement this for their request type:
+/// - `routed_io` wraps `dart:io` [HttpRequest]
+/// - a Cloudflare adapter wraps the Workers `Request`
 abstract interface class RequestAdapter {
   /// HTTP method, e.g. GET.
   String get method;
 
-  /// Request URI.
+  /// Request URI (path + query as presented to the app).
   Uri get uri;
 
   /// Multi-value headers.
@@ -24,7 +24,11 @@ abstract interface class RequestAdapter {
   String? get remoteAddress;
 }
 
-/// Response adapter backed by the concrete server implementation.
+/// Minimal outbound HTTP response sink (host-agnostic).
+///
+/// Host packages implement this for their response type:
+/// - `routed_io` wraps `dart:io` [HttpResponse]
+/// - a Cloudflare adapter builds a Workers `Response`
 abstract interface class ResponseAdapter {
   int get statusCode;
   set statusCode(int value);
@@ -35,6 +39,31 @@ abstract interface class ResponseAdapter {
   void write(List<int> bytes);
   Future<void> flush();
   Future<void> close();
+}
+
+/// Optional capability for host adapters that carry an opaque native request.
+///
+/// Transitional: [Engine.handleConnection] uses this to dispatch to the
+/// existing `HttpRequest` pipeline when [nativeRequest] is a `dart:io`
+/// `HttpRequest`. Portable hosts leave this unimplemented / return null and
+/// will use a fully adapter-based pipeline once that path lands.
+abstract interface class NativeRequestHandle {
+  /// Host-specific request object (e.g. `dart:io` [HttpRequest]).
+  Object? get nativeRequest;
+
+  /// Host-specific response object (e.g. `dart:io` [HttpResponse]).
+  Object? get nativeResponse;
+}
+
+/// One inbound exchange: request + response adapters from the same host.
+///
+/// Core only depends on this pair; host packages may also expose raw platform
+/// types on their concrete connection class (e.g. [IoHttpConnection.httpRequest]).
+final class HttpConnection {
+  const HttpConnection(this.request, this.response);
+
+  final RequestAdapter request;
+  final ResponseAdapter response;
 }
 
 /// Options passed to [ServerTransport.serve].
@@ -57,8 +86,11 @@ abstract interface class ServerHandle {
   int get port;
 }
 
-/// Pluggable server binding. The default Dart IO adapter lives inside [Engine];
-/// alternate runtimes (e.g. `server_native`) implement this interface.
+/// Pluggable server binding / event loop.
+///
+/// - `routed_io` implements bind/listen with `HttpServer`
+/// - Workers packages typically skip bind and call [Engine.handleConnection]
+///   from a fetch handler instead
 abstract interface class ServerTransport {
   Future<ServerHandle> serve(Engine engine, ServerOptions options);
 }
