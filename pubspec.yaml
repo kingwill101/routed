@@ -25,7 +25,6 @@ workspace:
   - packages/routed_observability
   - packages/routed_logging
   - packages/routed_security
-  - packages/routed_config
   - packages/routed_http
   - packages/routed_validation
   - packages/server_testing/routed_testing
