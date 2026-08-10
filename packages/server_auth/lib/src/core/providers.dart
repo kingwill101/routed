@@ -553,6 +553,9 @@ AuthAccount buildOAuthAuthAccount({
 }
 
 /// Consumes an email verification token from adapter or fallback store.
+///
+/// Tokens are persisted to both stores, so a successful adapter consumption
+/// also removes the fallback copy to keep the token single-use.
 Future<AuthVerificationToken?> consumeAuthVerificationToken({
   required AuthAdapter adapter,
   required AuthVerificationTokenStore tokenStore,
@@ -563,6 +566,8 @@ Future<AuthVerificationToken?> consumeAuthVerificationToken({
     () => adapter.useVerificationToken(identifier, token),
   );
   if (fromAdapter != null) {
+    // Drop the mirrored fallback copy so a replayed link cannot consume it.
+    await Future.sync(() => tokenStore.delete(identifier));
     return fromAdapter;
   }
   return Future.sync(() => tokenStore.use(identifier, token));
@@ -844,11 +849,17 @@ class AuthOAuthCallbackSignInResolution {
 }
 
 /// Resolves OAuth-mapped users against existing account/email records.
+///
+/// [emailVerified] indicates whether the provider asserted ownership of the
+/// profile email address (e.g. Discord's `verified` / Google's
+/// `email_verified`). Email-based linking is only attempted when it is true,
+/// so an unverified provider email can never take over a local account.
 Future<AuthOAuthUserResolution> resolveOAuthUserForAccount({
   required AuthAdapter adapter,
   required String providerId,
   required String accountId,
   required AuthUser mappedUser,
+  bool emailVerified = false,
 }) async {
   final existingAccount = await Future.sync(
     () => adapter.getAccount(providerId, accountId),
@@ -858,27 +869,37 @@ Future<AuthOAuthUserResolution> resolveOAuthUserForAccount({
   var isNewUser = false;
   var userUpdated = false;
 
+  // An existing account link always wins: resolve the user it points to.
+  AuthUser? linkedUser;
   if (existingAccount != null && existingAccount.userId != null) {
-    final byId = await Future.sync(
+    linkedUser = await Future.sync(
       () => adapter.getUserById(existingAccount.userId!),
     );
-    if (byId != null) {
-      resolvedUser = byId;
+  }
+
+  // Email matching is only allowed when the provider verified the address,
+  // preventing account takeover via unverified OAuth emails.
+  AuthUser? emailUser;
+  if (linkedUser == null && emailVerified) {
+    final email = mappedUser.email;
+    if (email != null && email.isNotEmpty) {
+      emailUser = await Future.sync(() => adapter.getUserByEmail(email));
     }
   }
 
-  final email = resolvedUser.email;
-  if (email != null) {
-    final byEmail = await Future.sync(() => adapter.getUserByEmail(email));
-    if (byEmail != null) {
-      resolvedUser = byEmail;
-    }
-  }
-
-  if (resolvedUser.id.isEmpty) {
-    resolvedUser = await Future.sync(() => adapter.createUser(resolvedUser));
-    isNewUser = true;
+  if (linkedUser != null) {
+    resolvedUser = linkedUser;
+  } else if (emailUser != null) {
+    resolvedUser = emailUser;
   } else {
+    // No matching record: persist the mapped user. This runs even when the
+    // mapped user carries a non-empty provider ID (Discord, GitHub, ...)
+    // so first-time OAuth users are never left unpersisted.
+    resolvedUser = await Future.sync(() => adapter.createUser(mappedUser));
+    isNewUser = true;
+  }
+
+  if (!isNewUser) {
     final mergedUser = mergeAuthUser(resolvedUser, mappedUser);
     if (authUsersDiffer(resolvedUser, mergedUser)) {
       final stored = await Future.sync(() => adapter.updateUser(mergedUser));
@@ -944,6 +965,12 @@ resolveOAuthSignInForProvider<TContext, TProfile extends Object>({
     providerId: provider.id,
     accountId: accountId,
     mappedUser: user,
+    // Only link to a local account by email when the provider asserted
+    // ownership of the address (Discord `verified`, Google `email_verified`,
+    // GitHub `verified`, ...). Unverified profile emails must never take over
+    // an existing local user.
+    emailVerified:
+        profileMap['verified'] == true || profileMap['email_verified'] == true,
   );
 
   final account = buildOAuthAuthAccount(

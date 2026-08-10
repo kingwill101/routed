@@ -34,6 +34,12 @@ String? sanitizeRedirectUrl(
   }
 
   if (!uri.isAbsolute) {
+    // Reject protocol-relative URLs (`//evil.test/path`): they parse with
+    // an empty scheme but carry a host, and browsers resolve them as
+    // cross-origin when used in a Location header.
+    if (uri.host.isNotEmpty) {
+      return null;
+    }
     return trimmed.startsWith('/') ? trimmed : null;
   }
 

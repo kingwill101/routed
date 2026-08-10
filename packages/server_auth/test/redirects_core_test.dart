@@ -42,6 +42,26 @@ void main() {
     expect(sanitized, equals('https://app.test/profile'));
   });
 
+  test('sanitizeRedirectUrl rejects protocol-relative URLs', () {
+    // `//evil.test/phish` must not pass the rooted-relative branch: browsers
+    // resolve it as a cross-origin Location header (open redirect).
+    final sanitized = sanitizeRedirectUrl(
+      '//evil.test/phish',
+      requestUri: Uri.parse('https://app.test/auth/signin'),
+    );
+    expect(sanitized, isNull);
+  });
+
+  test('sanitizeRedirectUrl rejects protocol-relative port variants', () {
+    expect(
+      sanitizeRedirectUrl(
+        '//evil.test:8443/phish',
+        requestUri: Uri.parse('https://app.test/auth/signin'),
+      ),
+      isNull,
+    );
+  });
+
   test('sanitizeRedirectUrl rejects cross-origin absolute URLs', () {
     final sanitized = sanitizeRedirectUrl(
       'https://evil.test/profile',

@@ -324,6 +324,99 @@ void main() {
   );
 
   test(
+    'resolveOAuthUserForAccount persists first-time user with provider id',
+    () async {
+      // Discord/GitHub mappers supply a non-empty provider ID; the user must
+      // still be created rather than left unpersisted.
+      var created = false;
+      final adapter = CallbackAuthAdapter(
+        onGetAccount: (_, _) => null,
+        onGetUserByEmail: (_) => null,
+        onCreateUser: (user) async {
+          created = true;
+          return AuthUser(id: 'stored-1', email: user.email);
+        },
+      );
+
+      final resolved = await resolveOAuthUserForAccount(
+        adapter: adapter,
+        providerId: 'discord',
+        accountId: 'acct-3',
+        mappedUser: AuthUser(
+          id: 'discord-uid-12345',
+          email: 'new@example.com',
+          name: 'New OAuth User',
+        ),
+      );
+
+      expect(created, isTrue);
+      expect(resolved.isNewUser, isTrue);
+      expect(resolved.user.id, equals('stored-1'));
+    },
+  );
+
+  test(
+    'resolveOAuthUserForAccount does not link unverified email to local user',
+    () async {
+      var linkedByEmail = false;
+      final adapter = CallbackAuthAdapter(
+        onGetAccount: (_, _) => null,
+        onGetUserByEmail: (email) async {
+          linkedByEmail = true;
+          return AuthUser(id: 'victim-1', email: email);
+        },
+        onCreateUser: (user) async {
+          return AuthUser(id: 'created-oauth', email: user.email);
+        },
+      );
+
+      final resolved = await resolveOAuthUserForAccount(
+        adapter: adapter,
+        providerId: 'discord',
+        accountId: 'acct-4',
+        mappedUser: AuthUser(
+          id: 'discord-uid-999',
+          email: 'victim@example.com',
+        ),
+        // Discord forwards the email regardless of verification; without an
+        // explicit verified assertion we must not match the local victim.
+        emailVerified: false,
+      );
+
+      expect(linkedByEmail, isFalse);
+      expect(resolved.isNewUser, isTrue);
+      expect(resolved.user.id, equals('created-oauth'));
+    },
+  );
+
+  test(
+    'resolveOAuthUserForAccount links verified email to existing local user',
+    () async {
+      final adapter = CallbackAuthAdapter(
+        onGetAccount: (_, _) => null,
+        onGetUserByEmail: (email) async {
+          return AuthUser(id: 'local-1', email: email);
+        },
+      );
+
+      final resolved = await resolveOAuthUserForAccount(
+        adapter: adapter,
+        providerId: 'google',
+        accountId: 'acct-5',
+        mappedUser: AuthUser(
+          id: 'google-sub-123',
+          email: 'existing@example.com',
+        ),
+        emailVerified: true,
+      );
+
+      expect(resolved.isNewUser, isFalse);
+      expect(resolved.user.id, equals('local-1'));
+    },
+  );
+
+
+  test(
     'consumeAuthVerificationToken falls back to secondary token store',
     () async {
       final adapter = CallbackAuthAdapter(
@@ -345,6 +438,56 @@ void main() {
       );
       expect(resolved, isNotNull);
       expect(resolved!.identifier, equals('user@example.com'));
+    },
+  );
+
+  test(
+    'consumeAuthVerificationToken drops fallback copy when adapter consumes',
+    () async {
+      // Simulate a single-use adapter: first call consumes, later calls miss.
+      var adapterUses = 0;
+      final adapter = CallbackAuthAdapter(
+        onUseVerificationToken: (identifier, token) {
+          adapterUses += 1;
+          if (adapterUses > 1) {
+            return null;
+          }
+          return AuthVerificationToken(
+            identifier: identifier,
+            token: token,
+            expiresAt: DateTime.now().add(const Duration(minutes: 10)),
+          );
+        },
+      );
+      // Mirror the token in both stores, as persistAuthVerificationToken does.
+      final tokenStore = InMemoryAuthVerificationTokenStore();
+      final record = AuthVerificationToken(
+        identifier: 'user@example.com',
+        token: 'token-1',
+        expiresAt: DateTime.now().add(const Duration(minutes: 10)),
+      );
+      await tokenStore.save(record);
+
+      final first = await consumeAuthVerificationToken(
+        adapter: adapter,
+        tokenStore: tokenStore,
+        identifier: 'user@example.com',
+        token: 'token-1',
+      );
+      expect(first, isNotNull);
+
+      // A replayed magic-link must not be consumable from the fallback store.
+      final second = await consumeAuthVerificationToken(
+        adapter: adapter,
+        tokenStore: tokenStore,
+        identifier: 'user@example.com',
+        token: 'token-1',
+      );
+      expect(second, isNull);
+
+      // And the fallback copy itself is gone.
+      final direct = await tokenStore.use('user@example.com', 'token-1');
+      expect(direct, isNull);
     },
   );
 
