@@ -4,16 +4,30 @@ import 'dart:io';
 import 'package:routed_core/routed_core.dart';
 
 import 'io_http_connection.dart';
+import 'io_portable.dart';
 
 /// [ServerTransport] using `dart:io` [HttpServer].
+///
+/// Default path uses the native [HttpRequest] fast path
+/// ([Engine.handleConnection] + [NativeRequestHandle]) so websockets and
+/// progressive response writes keep working.
+///
+/// Set [portableEdge] to route each request through
+/// [dispatchIoExchange] / [Engine.handlePortable] (value-style; buffers the
+/// response). Useful for testing parity with Node/Workers hosts.
 final class IoServerTransport implements ServerTransport {
   const IoServerTransport({
     this.shared = true,
     this.echo = false,
+    this.portableEdge = false,
   });
 
   final bool shared;
   final bool echo;
+
+  /// When true, each request uses [dispatchIoExchange] instead of the native
+  /// [HttpRequest] pipeline.
+  final bool portableEdge;
 
   @override
   Future<ServerHandle> serve(Engine engine, ServerOptions options) async {
@@ -36,10 +50,13 @@ final class IoServerTransport implements ServerTransport {
     }
 
     final sub = server.listen((HttpRequest httpRequest) {
-      final conn = IoHttpConnection(httpRequest);
+      final Future<void> work = portableEdge
+          ? dispatchIoExchange(engine, httpRequest)
+          : engine.handleConnection(IoHttpConnection(httpRequest).connection);
+
       // Concurrent requests; errors closed best-effort on the socket.
       unawaited(
-        engine.handleConnection(conn.connection).catchError((Object e, StackTrace s) async {
+        work.catchError((Object e, StackTrace s) async {
           try {
             httpRequest.response.statusCode = HttpStatus.internalServerError;
             await httpRequest.response.close();

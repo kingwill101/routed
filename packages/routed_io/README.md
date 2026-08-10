@@ -2,22 +2,20 @@
 
 `dart:io` host transport for Routed.
 
-Kept separate from **`routed_core`** so the engine can target non-`dart:io` hosts
-(e.g. **Cloudflare Workers**) with a different adapter package implementing the
-same core interfaces.
+Kept separate from **`routed_core`** so non-`dart:io` hosts (Node, Workers)
+use their own packages against the same core contracts.
 
-## Architecture
+See [portable-host-architecture.md](../../docs/portable-host-architecture.md).
 
-```
-routed_core:  RequestAdapter / ResponseAdapter / HttpConnection / ServerTransport
-     ↑
-routed_io:    IoRequestAdapter, IoResponseAdapter, IoHttpConnection, IoServerTransport
-     ↑
-future:       WorkersRequestAdapter, … (same interfaces)
-```
+## Paths
 
-`IoHttpConnection` holds both `dart:io` `HttpRequest` and `HttpResponse`, and
-exposes portable adapters for `Engine.handleConnection`.
+| Path | API |
+|------|-----|
+| **Native serve (default)** | `serveIo` / `IoServerTransport` → `handleConnection` (WS, streaming) |
+| **Value edge** | `dispatchIoExchange` / `portableRequestFromIo` → `handlePortable` |
+| **Adapters** | `IoRequestAdapter`, `IoResponseAdapter`, `IoHttpConnection` |
+
+Declared capabilities: `HostCapabilities.ioProcess`.
 
 ## Install
 
@@ -27,7 +25,7 @@ dependencies:
   routed_io: ^0.1.0
 ```
 
-## Usage
+## Usage (default serve)
 
 ```dart
 import 'package:routed_core/routed_core.dart';
@@ -42,15 +40,24 @@ Future<void> main() async {
 }
 ```
 
-Or use the transport directly:
+## Usage (portable value edge)
 
 ```dart
-final transport = IoServerTransport(echo: true);
-final handle = await transport.serve(
-  engine,
-  const ServerOptions(host: '127.0.0.1', port: 8080),
-);
+// Per-request (e.g. custom server loop):
+await dispatchIoExchange(engine, httpRequest);
+
+// Or force serve through handlePortable (buffers response):
+await serveIo(engine, portableEdge: true);
 ```
 
-Do **not** depend on `routed_io` in Workers builds; implement the same adapter
-interfaces against the Workers request/response types instead.
+## Architecture
+
+```
+routed_core:  PortableRequest / RequestAdapter / Engine.handlePortable|Connection
+     ↑
+routed_io:    dart:io HttpServer  (this package)
+routed_node:  Node.js http
+(future):     Workers fetch
+```
+
+Do **not** depend on `routed_io` in Workers/Node builds.
