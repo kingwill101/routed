@@ -1,6 +1,6 @@
 import 'package:file/file.dart';
 import 'package:file/memory.dart';
-import 'package:routed/routed.dart';
+import 'package:routed_core/routed_core.dart';
 
 /// Creates a test engine with in-memory configuration.
 ///

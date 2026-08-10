@@ -164,7 +164,7 @@ String _renderStorageTemplate(String identifier, String pascal) {
   final registerName = 'register${pascal}StorageDriver';
 
   return '''
-import 'package:routed/routed.dart';
+import 'package:routed_core/routed_core.dart';
 
 const String $constantName = '$identifier';
 

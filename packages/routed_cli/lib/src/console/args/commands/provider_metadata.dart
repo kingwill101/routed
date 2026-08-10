@@ -1,5 +1,5 @@
-import 'package:routed/providers.dart';
-import 'package:routed/routed.dart';
+import 'package:routed_core/providers.dart';
+import 'package:routed_core/routed_core.dart';
 import 'package:routed_logging/routed_logging.dart' show LoggingServiceProvider;
 
 extension ServiceProviderDescribe on ServiceProvider {

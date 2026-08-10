@@ -1,7 +1,7 @@
 // ignore_for_file: implementation_imports, depend_on_referenced_packages
 library;
 
-import 'package:routed/src/context/context.dart';
+import 'package:routed_core/src/context/context.dart';
 
 /// Looks up a value by [name] from a particular source (headers, query, etc.).
 typedef LocaleLookup = String? Function(String name);

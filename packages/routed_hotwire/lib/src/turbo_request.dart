@@ -1,4 +1,4 @@
-import 'package:routed/routed.dart';
+import 'package:routed_core/routed_core.dart';
 
 /// Classification for incoming Turbo-driven requests.
 enum TurboRequestKind {

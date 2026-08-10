@@ -1,6 +1,6 @@
 import 'package:file/file.dart';
 import 'package:file/memory.dart';
-import 'package:routed/routed.dart';
+import 'package:routed_core/routed_core.dart';
 import 'package:routed_observability/routed_observability.dart';
 
 /// Test engine with core + routing + observability providers.

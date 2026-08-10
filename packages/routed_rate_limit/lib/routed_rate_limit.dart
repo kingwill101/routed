@@ -1,7 +1,7 @@
 library;
 
-import 'package:routed/providers.dart' show ProviderRegistry;
-import 'package:routed/routed.dart';
+import 'package:routed_core/providers.dart' show ProviderRegistry;
+import 'package:routed_core/routed_core.dart';
 import 'package:server_rate_limit/server_rate_limit.dart';
 
 export 'package:server_rate_limit/server_rate_limit.dart';

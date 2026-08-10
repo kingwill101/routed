@@ -1,5 +1,5 @@
 // ignore_for_file: implementation_imports
-import 'package:routed/routed.dart';
+import 'package:routed_core/routed_core.dart';
 
 import '../context/form_cache.dart';
 import 'binding.dart';

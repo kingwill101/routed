@@ -1,4 +1,4 @@
-import 'package:routed/routed.dart';
+import 'package:routed_core/routed_core.dart';
 import 'package:routed_hotwire/routed_hotwire.dart';
 
 Iterable<String> _defaultTopicResolver(WebSocketContext context) {

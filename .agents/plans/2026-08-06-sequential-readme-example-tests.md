@@ -22,7 +22,7 @@ Restore each of the final 14 `routed_*` packages (plus `server_*` runtimes) to h
 - Non-goal: not fixing unrelated `file_handler` static file stack now beyond wiring tests that depend on it — those tests stay with `server_storage`/`server_native` where file_handler will live.
 
 ## Key Decisions
-- Order sequentially by dependency: 1 `routed_cache` (already wired, easiest to finish), 2 `routed_sessions` (`server_sessions`), 3 `routed_storage` (`server_storage`), 4 `routed_auth` (`server_auth`), 5 `routed_http` (binding/multipart/sse), 6 `routed_views`, 7 `routed_validation`, 8 `routed_rate_limit`, 9 `routed_analyzer`/`routed_cli`/`routed_openapi`/`routed_openapi_builder`/`routed_io`/`routed_config`/`routed_full`.
+- Order sequentially by dependency: 1 `routed_cache` (already wired, easiest to finish), 2 `routed_sessions` (`server_sessions`), 3 `routed_storage` (`server_storage`), 4 `routed_auth` (`server_auth`), 5 `routed_http` (binding/multipart/sse), 6 `routed_views`, 7 `routed_validation`, 8 `routed_rate_limit`, 9 `routed_analyzer`/`routed_cli`/`routed_openapi`/`routed_openapi_builder`/`routed_io`/`routed_config`/`routed`.
 - For each package: restore tests from `git show <commit>:<path>` (primary `a5d240d1`, fallback `303ff6ea`/`HEAD~`), fix imports with `dart fix --apply` + `dart analyze --fatal-infos`, add minimal `README.md` (purpose, install, usage snippet using real `lib/` export) and `example/<pkg>_example.dart` (runnable `Engine` with `test`/`serve` showing `ctx.json`/`ctx.cache` etc.), then `dart test`.
 - Reuse existing helpers: copy `test_engine.dart`/`test_helpers.dart`/`support/property_generators.dart` from `packages/routed/test` or `server_*` where missing (as done for `server_storage` -> `routed_storage`).
 - Keep `server_*` as source of truth; `routed_*` tests import `server_testing`/`routed_testing` not `routed/src`.
@@ -39,11 +39,11 @@ Iterate package-by-package, one `gh stack` branch per package (atomic `git add -
 6. **routed_views** — README+example (view render), recover view tests.
 7. **routed_validation** — README+example, recover validation tests.
 8. **routed_rate_limit** — README (`server_rate_limit` adapter), example (RateLimitService + policy), tests from `server_rate_limit` (property tests) copied and adapted to `routed_rate_limit`.
-9. **routed_analyzer / routed_cli / routed_openapi / routed_openapi_builder / routed_io / routed_config / routed_full** — each: README+example+existing tests (cli already has, openapi has, analyzer minimal).
+9. **routed_analyzer / routed_cli / routed_openapi / routed_openapi_builder / routed_io / routed_config / routed** — each: README+example+existing tests (cli already has, openapi has, analyzer minimal).
 
 ## Validation Plan
 - Per package: `dart analyze --fatal-infos packages/<pkg>/lib` → `No issues found!`
-- Per package: `dart test packages/<pkg>` → `All tests passed!` (or `No tests ran` only where package intentionally has no runtime tests, e.g. `routed_full` re-export, `routed_config` facade)
+- Per package: `dart test packages/<pkg>` → `All tests passed!` (or `No tests ran` only where package intentionally has no runtime tests, e.g. `routed` re-export, `routed_config` facade)
 - Spot-check example: `dart run packages/<pkg>/example/<example>.dart` exits 0 (no serve)
 - Global: `git status --porcelain=v1` shows staged `README.md`, `example/`, `test/` per package, no collateral `yarn.lock`/`pubspec.lock` edits
 

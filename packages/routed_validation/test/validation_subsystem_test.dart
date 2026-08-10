@@ -1,4 +1,4 @@
-import 'package:routed/src/container/container.dart';
+import 'package:routed_core/src/container/container.dart';
 import 'package:routed_validation/src/validation/rule.dart';
 import 'package:routed_validation/src/validation/rules/required.dart';
 import 'package:routed_validation/src/validation/validator.dart';

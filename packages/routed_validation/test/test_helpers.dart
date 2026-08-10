@@ -1,6 +1,6 @@
 import 'dart:async';
 
-import 'package:routed/routed.dart';
+import 'package:routed_core/routed_core.dart';
 import 'test_engine.dart';
 
 export 'support/property_generators.dart';

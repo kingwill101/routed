@@ -2,7 +2,7 @@ library;
 
 import 'package:file/file.dart' as file;
 import 'package:file/local.dart' as local;
-import 'package:routed/routed.dart';
+import 'package:routed_core/routed_core.dart';
 
 import 'package:routed_views/src/middleware/localization.dart' show localizationMiddleware;
 import 'package:routed_views/src/translation/loaders/file_translation_loader.dart';

@@ -1,11 +1,11 @@
 import 'package:file/memory.dart';
-import 'package:routed/src/config/config.dart';
-import 'package:routed/src/container/container.dart';
-import 'package:routed/src/contracts/contracts.dart';
-import 'package:routed/src/engine/config.dart';
-import 'package:routed/src/engine/middleware_registry.dart';
+import 'package:routed_core/src/config/config.dart';
+import 'package:routed_core/src/container/container.dart';
+import 'package:routed_core/src/contracts/contracts.dart';
+import 'package:routed_core/src/engine/config.dart';
+import 'package:routed_core/src/engine/middleware_registry.dart';
 import 'package:routed_views/src/providers/localization.dart';
-import 'package:routed/src/provider/provider.dart';
+import 'package:routed_core/src/provider/provider.dart';
 import 'package:routed_views/src/translation/loaders/file_translation_loader.dart';
 import 'package:routed_views/src/translation/locale_manager.dart';
 import 'package:routed_views/src/translation/locale_resolver_registry.dart';

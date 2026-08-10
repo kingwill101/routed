@@ -22,7 +22,7 @@ dependencies:
   file: ^7.0.1
   glob: ^2.1.3
   path: ^1.9.1
-  routed: ^0.3.3
+  routed_core: ^0.3.3
   routed_analyzer: ^0.1.0
   routed_logging: ^0.1.0
   stream_transform: ^2.1.1

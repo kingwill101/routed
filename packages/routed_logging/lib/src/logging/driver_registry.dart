@@ -1,7 +1,7 @@
 import 'package:contextual/contextual.dart' as contextual;
-import 'package:routed/src/container/container.dart';
-import 'package:routed/src/contracts/contracts.dart' show Config;
-import 'package:routed/src/support/driver_registry.dart';
+import 'package:routed_core/src/container/container.dart';
+import 'package:routed_core/src/contracts/contracts.dart' show Config;
+import 'package:routed_core/src/support/driver_registry.dart';
 
 typedef LogDriverBuilder =
     contextual.LogDriver Function(LogDriverBuilderContext context);

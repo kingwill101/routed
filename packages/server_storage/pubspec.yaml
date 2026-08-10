@@ -19,7 +19,7 @@ dependencies:
 dev_dependencies:
   lints: ^6.0.0
   property_testing: ^0.3.2
-  routed: ^0.3.3
+  routed_core: ^0.3.3
   routed_storage: ^0.1.0
   routed_testing: ^0.3.3
   server_testing: ^0.3.2

@@ -4,7 +4,7 @@
 /// (with attached [RouteSchema] metadata) into an OpenAPI 3.1 document.
 library;
 
-import 'package:routed/src/engine/route_manifest.dart';
+import 'package:routed_core/src/engine/route_manifest.dart';
 import 'openapi_spec.dart';
 import 'pipe_rule_converter.dart';
 import 'schema.dart';

@@ -1,7 +1,7 @@
 // Content negotiation helpers per refactor.md §11.
 
 import 'package:http_parser/http_parser.dart';
-import 'package:routed/routed.dart';
+import 'package:routed_core/routed_core.dart';
 
 class NegotiatedMediaType {
   NegotiatedMediaType({

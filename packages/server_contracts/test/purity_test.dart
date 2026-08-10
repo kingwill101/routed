@@ -26,7 +26,7 @@ void main() {
     for (final file in dartFiles) {
       final content = await file.readAsString();
       expect(
-        content.contains("package:routed/"),
+        content.contains("package:routed_core/"),
         isFalse,
         reason: 'Forbidden routed import in ${file.path}',
       );

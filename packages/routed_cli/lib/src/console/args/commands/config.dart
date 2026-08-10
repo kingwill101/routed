@@ -5,7 +5,7 @@ import 'dart:io' as io;
 import 'package:args/command_runner.dart';
 import 'package:file/file.dart' as fs;
 import 'package:path/path.dart' as p;
-import 'package:routed/routed.dart';
+import 'package:routed_core/routed_core.dart';
 import 'package:routed_analyzer/routed_analyzer.dart' show ProviderMetadata, inspectProviders;
 import 'package:routed_cli/src/console/args/base_command.dart';
 import 'package:routed_cli/src/console/config/doc_printer.dart';
@@ -209,7 +209,7 @@ class ConfigSchemaCommand extends BaseCommand {
 import 'dart:convert';
 import 'dart:io';
 
-import 'package:routed/routed.dart';
+import 'package:routed_core/routed_core.dart';
 import 'package:routed_analyzer/routed_analyzer.dart' show ProviderMetadata, inspectProviders;
 import 'package:$packageName/app.dart' as app;
 
@@ -690,7 +690,7 @@ Future<void> _writeDartCache(fs.File file, ConfigSnapshot snapshot) async {
     ..writeln('// GENERATED CODE - DO NOT MODIFY BY HAND.')
     ..writeln('// Environment: ${snapshot.environment}')
     ..writeln()
-    ..writeln("import 'package:routed/routed.dart';")
+    ..writeln("import 'package:routed_core/routed_core.dart';")
     ..writeln()
     ..writeln(
       'const String routedConfigEnvironment = '

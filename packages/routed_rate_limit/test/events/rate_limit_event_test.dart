@@ -1,4 +1,4 @@
-import 'package:routed/routed.dart' show Event;
+import 'package:routed_core/routed_core.dart' show Event;
 import 'package:routed_rate_limit/routed_rate_limit.dart';
 import 'package:test/test.dart';
 

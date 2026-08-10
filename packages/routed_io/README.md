@@ -13,7 +13,7 @@ dependencies:
 ## Usage
 
 ```dart
-import 'package:routed/routed.dart';
+import 'package:routed_core/routed_core.dart';
 import 'package:routed_io/routed_io.dart';
 
 Future<void> main() async {

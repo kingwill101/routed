@@ -1,4 +1,4 @@
-import 'package:routed/src/engine/route_manifest.dart';
+import 'package:routed_core/src/engine/route_manifest.dart';
 import 'schema.dart';
 
 import 'route_metadata_extractor.dart';

@@ -9,7 +9,7 @@ import 'package:args/args.dart';
 import 'package:args/command_runner.dart';
 import 'package:file/file.dart' as fs;
 import 'package:path/path.dart' as p;
-import 'package:routed/routed.dart' show ConfigDocEntry;
+import 'package:routed_core/routed_core.dart' show ConfigDocEntry;
 import 'package:routed_cli/src/console/args/base_command.dart';
 import 'package:routed_cli/src/console/config/doc_printer.dart';
 import 'package:routed_cli/src/console/config/generator.dart';
@@ -564,7 +564,7 @@ class CreateCommand extends BaseCommand {
       joinPath([targetDir.path, 'lib/inertia_views.dart']),
     );
     if (await file.exists()) return;
-    const content = '''import 'package:routed/routed.dart';
+    const content = '''import 'package:routed_core/routed_core.dart';
 
 void configureInertiaViews(Engine engine) {
   engine.useViewEngine(LiquidViewEngine(directory: 'views'));
@@ -654,7 +654,7 @@ void configureInertiaViews(Engine engine) {
     if (!await file.exists()) return;
     var content = await file.readAsString();
 
-    content = _ensureImport(content, "import 'package:routed/providers.dart';");
+    content = _ensureImport(content, "import 'package:routed_core/providers.dart';");
     content = _ensureImport(content, "import 'inertia_views.dart';");
     content = _ensureImport(
       content,

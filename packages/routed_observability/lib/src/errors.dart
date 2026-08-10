@@ -1,6 +1,6 @@
 import 'dart:async';
 
-import 'package:routed/routed.dart';
+import 'package:routed_core/routed_core.dart';
 
 abstract class ErrorObserver {
   FutureOr<void> onError(

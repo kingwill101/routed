@@ -1,4 +1,4 @@
-import 'package:routed/routed.dart' show Event;
+import 'package:routed_core/routed_core.dart' show Event;
 import 'package:server_rate_limit/server_rate_limit.dart';
 
 /// Base class for rate limit telemetry.

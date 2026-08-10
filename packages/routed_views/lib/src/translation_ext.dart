@@ -1,4 +1,4 @@
-import 'package:routed/routed.dart';
+import 'package:routed_core/routed_core.dart';
 
 /// Translation extensions for [EngineContext] — migrated from
 /// `routed` `src/context/helpers.dart` per refactor.md §16.2.

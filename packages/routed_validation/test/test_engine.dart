@@ -1,6 +1,6 @@
 import 'package:file/file.dart';
 import 'package:file/memory.dart';
-import 'package:routed/routed.dart';
+import 'package:routed_core/routed_core.dart';
 
 // Minimal validation stub for provider config tests — throws ProviderConfigException
 // for known invalid patterns that would normally be caught by schemas.

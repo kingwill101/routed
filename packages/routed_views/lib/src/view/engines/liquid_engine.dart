@@ -2,7 +2,7 @@ import 'dart:async';
 
 import 'package:file/file.dart';
 import 'package:liquify/liquify.dart' as liquid;
-import 'package:routed/routed.dart' hide ViewEngine;
+import 'package:routed_core/routed_core.dart' hide ViewEngine;
 import '../view_engine.dart';
 import '../view_extensions.dart';
 import 'liquid_root.dart';

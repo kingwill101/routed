@@ -50,7 +50,7 @@ import 'dart:convert';
 import 'dart:io' as io;
 
 import 'package:build/build.dart';
-import 'package:routed/src/engine/route_manifest.dart';
+import 'package:routed_core/src/engine/route_manifest.dart';
 import 'manifest_to_openapi.dart';
 import 'openapi_spec.dart';
 import 'route_metadata_extractor.dart';
@@ -188,7 +188,7 @@ class _OpenApiBuilder implements Builder {
       ..writeln()
       ..writeln("import 'dart:convert';")
       ..writeln()
-      ..writeln("import 'package:routed/routed.dart';")
+      ..writeln("import 'package:routed_core/routed_core.dart';")
       ..writeln()
       ..writeln('/// The OpenAPI 3.1 specification as a JSON string.')
       ..writeln("const String openApiSpecJson = r'''$escaped''';")

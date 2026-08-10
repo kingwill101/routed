@@ -5,7 +5,7 @@ import 'dart:io' show Platform, Process;
 import 'package:file/file.dart' as fs;
 import 'package:file/local.dart' as local_fs;
 import 'package:mime/mime.dart';
-import 'package:routed/routed.dart';
+import 'package:routed_core/routed_core.dart';
 
 import '../context/form_cache.dart';
 import 'binding.dart';

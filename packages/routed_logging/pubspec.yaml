@@ -9,7 +9,7 @@ environment:
   sdk: ">=3.9.0 <4.0.0"
 dependencies:
   contextual: ^2.2.0
-  routed: ^0.3.3
+  routed_core: ^0.3.3
 dev_dependencies:
   file: ^7.0.1
   routed_testing: ^0.3.3

@@ -17,7 +17,7 @@ dependencies:
 
 ```dart
 import 'package:file/memory.dart';
-import 'package:routed/routed.dart';
+import 'package:routed_core/routed_core.dart';
 import 'package:routed_storage/routed_storage.dart';
 import 'package:server_storage/server_storage.dart';
 

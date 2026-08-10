@@ -35,14 +35,14 @@ import 'package:routed_auth/src/auth/jwt.dart'
 import 'package:routed_auth/src/auth/oauth.dart';
 import 'package:routed_auth/src/auth/session_auth.dart';
 import 'package:routed_auth/src/config/specs/auth.dart';
-import 'package:routed/src/container/container.dart';
-import 'package:routed/src/context/context.dart';
-import 'package:routed/src/contracts/config/config.dart' show Config;
-import 'package:routed/src/engine/engine.dart';
-import 'package:routed/src/engine/middleware_registry.dart';
-import 'package:routed/src/provider/provider.dart';
-import 'package:routed/src/response.dart';
-import 'package:routed/src/router/types.dart';
+import 'package:routed_core/src/container/container.dart';
+import 'package:routed_core/src/context/context.dart';
+import 'package:routed_core/src/contracts/config/config.dart' show Config;
+import 'package:routed_core/src/engine/engine.dart';
+import 'package:routed_core/src/engine/middleware_registry.dart';
+import 'package:routed_core/src/provider/provider.dart';
+import 'package:routed_core/src/response.dart';
+import 'package:routed_core/src/router/types.dart';
 
 /// Service provider that boots routed auth infrastructure.
 ///

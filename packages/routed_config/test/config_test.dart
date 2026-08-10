@@ -1,6 +1,6 @@
 import 'package:test/test.dart';
 import 'package:routed_config/routed_config.dart';
-import 'package:routed/src/contracts/config/config.dart';
+import 'package:routed_core/src/contracts/config/config.dart';
 
 void main() {
   group('RoutedConfig', () {

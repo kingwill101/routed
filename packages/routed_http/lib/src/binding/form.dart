@@ -1,7 +1,7 @@
 // ignore_for_file: implementation_imports, depend_on_referenced_packages
 import 'dart:convert';
 
-import 'package:routed/routed.dart';
+import 'package:routed_core/routed_core.dart';
 import 'binding.dart';
 import 'utils.dart';
 

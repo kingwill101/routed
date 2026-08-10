@@ -11,7 +11,7 @@ resolution: workspace
 environment:
   sdk: ">=3.9.0 <4.0.0"
 dependencies:
-  routed: ^0.3.3
+  routed_core: ^0.3.3
   file: ^7.0.1
   path: ^1.9.1
   collection: ^1.19.1

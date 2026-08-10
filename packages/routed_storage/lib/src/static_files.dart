@@ -1,6 +1,6 @@
 import 'package:file/file.dart' as file;
 import 'package:path/path.dart' as p;
-import 'package:routed/routed.dart';
+import 'package:routed_core/routed_core.dart';
 import 'package:server_storage/server_storage.dart';
 
 import 'engine_static_file_sink.dart';

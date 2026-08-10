@@ -11,7 +11,7 @@ resolution: workspace
 environment:
   sdk: ">=3.9.0 <4.0.0"
 dependencies:
-  routed: ^0.3.3
+  routed_core: ^0.3.3
   server_rate_limit: ^0.1.0
 dev_dependencies:
   lints: ^6.0.0

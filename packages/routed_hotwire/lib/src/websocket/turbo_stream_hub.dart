@@ -1,6 +1,6 @@
 import 'dart:collection';
 
-import 'package:routed/routed.dart';
+import 'package:routed_core/routed_core.dart';
 import 'package:routed_hotwire/src/websocket/stream_connection.dart';
 
 import '../turbo_streams.dart';

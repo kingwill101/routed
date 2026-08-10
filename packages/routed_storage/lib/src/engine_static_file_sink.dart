@@ -1,6 +1,6 @@
 import 'dart:async';
 
-import 'package:routed/routed.dart';
+import 'package:routed_core/routed_core.dart';
 import 'package:server_storage/server_storage.dart';
 
 /// Adapts [EngineContext] to the portable [StaticFileSink] surface.

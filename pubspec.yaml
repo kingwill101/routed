@@ -1,7 +1,7 @@
 name: routed_ecosystem
 publish_to: none
 workspace:
-  - packages/routed
+  - packages/routed_core
   - packages/routed_cli
   - packages/routed_analyzer
   - packages/server_contracts
@@ -10,7 +10,7 @@ workspace:
   - packages/server_sessions
   - packages/server_storage
   - packages/server_rate_limit
-  - packages/routed_full
+  - packages/routed
   - packages/routed_cache
   - packages/routed_sessions
   - packages/routed_storage

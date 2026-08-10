@@ -1,6 +1,6 @@
-import 'package:routed/src/container/container.dart' show Container;
-import 'package:routed/src/contracts/contracts.dart' show Config;
-import 'package:routed/src/support/named_registry.dart' show NamedRegistry;
+import 'package:routed_core/src/container/container.dart' show Container;
+import 'package:routed_core/src/contracts/contracts.dart' show Config;
+import 'package:routed_core/src/support/named_registry.dart' show NamedRegistry;
 import 'package:routed_validation/src/validation/rule.dart';
 import 'package:routed_validation/src/validation/rules/rules.dart';
 

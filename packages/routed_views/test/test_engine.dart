@@ -1,7 +1,7 @@
 import 'package:file/file.dart';
 import 'package:file/memory.dart';
 import 'package:liquify/src/filter_registry.dart' as liquify;
-import 'package:routed/routed.dart';
+import 'package:routed_core/routed_core.dart';
 // ignore: implementation_imports
 import 'package:routed_views/src/middleware/localization.dart' show localizationMiddleware;
 // ignore: implementation_imports

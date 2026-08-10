@@ -104,7 +104,7 @@ void main() {
         serverContent,
         contains("import 'package:demo_app/app.dart' as app;"),
       );
-      expect(serverContent, contains("import 'package:routed/routed.dart';"));
+      expect(serverContent, contains("import 'package:routed_core/routed_core.dart';"));
       expect(
         serverContent,
         contains('final Engine engine = await app.createEngine();'),

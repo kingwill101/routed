@@ -3,7 +3,7 @@ import 'dart:io';
 
 import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
-import 'package:routed/routed.dart'
+import 'package:routed_core/routed_core.dart'
     hide
         AuthManager,
         AuthOptions,

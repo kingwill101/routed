@@ -9,8 +9,8 @@ import 'package:server_auth/server_auth.dart'
         OAuth2TokenIntrospector,
         OAuthIntrospectionOptions,
         validateOAuthBearerAuthorizationAndWriteAttributes;
-import 'package:routed/src/context/context.dart';
-import 'package:routed/src/router/types.dart';
+import 'package:routed_core/src/context/context.dart';
+import 'package:routed_core/src/router/types.dart';
 
 /// Creates a middleware for OAuth2 token introspection.
 ///

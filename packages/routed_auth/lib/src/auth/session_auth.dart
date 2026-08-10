@@ -17,10 +17,10 @@ import 'package:server_auth/server_auth.dart'
         requireRolesGuard,
         RememberTokenStore,
         InMemoryRememberTokenStore;
-import 'package:routed/src/context/context.dart';
+import 'package:routed_core/src/context/context.dart';
 import 'package:routed_sessions/routed_sessions.dart';
-import 'package:routed/src/response.dart';
-import 'package:routed/src/router/types.dart';
+import 'package:routed_core/src/response.dart';
+import 'package:routed_core/src/router/types.dart';
 
 /// Key for storing the authenticated principal in the session.
 const String _sessionPrincipalKey = '__routed.auth.principal';

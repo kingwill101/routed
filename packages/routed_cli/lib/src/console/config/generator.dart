@@ -2,7 +2,7 @@ import 'dart:collection';
 import 'dart:convert';
 
 import 'package:json2yaml/json2yaml.dart';
-import 'package:routed/routed.dart'
+import 'package:routed_core/routed_core.dart'
     show
         ConfigDocEntry,
         ConfigSchema,

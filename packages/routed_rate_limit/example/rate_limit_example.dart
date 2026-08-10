@@ -1,4 +1,4 @@
-import 'package:routed/routed.dart';
+import 'package:routed_core/routed_core.dart';
 import 'package:routed_rate_limit/routed_rate_limit.dart';
 
 class _Req implements RateLimitRequest {

@@ -1,4 +1,4 @@
-import 'package:routed/routed.dart';
+import 'package:routed_core/routed_core.dart';
 import 'package:test/test.dart';
 import 'test_engine.dart';
 

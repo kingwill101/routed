@@ -9,7 +9,7 @@ environment:
 resolution: workspace
 
 dependencies:
-  routed: ^0.3.3
+  routed_core: ^0.3.3
   routed_validation: ^0.1.0
   analyzer: ^10.0.1
   build: ^4.0.0

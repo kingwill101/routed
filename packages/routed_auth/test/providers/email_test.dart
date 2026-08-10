@@ -1,7 +1,7 @@
 import 'dart:async';
 import 'package:server_auth/server_auth.dart';
 
-import 'package:routed/routed.dart'
+import 'package:routed_core/routed_core.dart'
     hide
         AuthProviderType,
         AuthUser,

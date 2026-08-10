@@ -1,7 +1,7 @@
 // ignore_for_file: implementation_imports
 import 'dart:async';
 import 'dart:io';
-import 'package:routed/routed.dart';
+import 'package:routed_core/routed_core.dart';
 
 class WebSocketContext {
   final WebSocket webSocket;

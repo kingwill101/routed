@@ -1,4 +1,4 @@
-import 'package:routed/routed.dart';
+import 'package:routed_core/routed_core.dart';
 import 'package:routed_views/src/middleware/localization.dart';
 import 'package:routed_views/src/translation/constants.dart';
 import 'package:routed_views/src/translation/locale_manager.dart';

@@ -3,7 +3,7 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:path/path.dart' as p;
-import 'package:routed/routed.dart';
+import 'package:routed_core/routed_core.dart';
 import 'package:server_native/server_native.dart';
 import 'package:test/test.dart';
 

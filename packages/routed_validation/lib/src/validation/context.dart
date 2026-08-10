@@ -1,6 +1,6 @@
 import 'dart:convert';
 
-import 'package:routed/routed.dart';
+import 'package:routed_core/routed_core.dart';
 
 import 'file.dart';
 import 'validator.dart';

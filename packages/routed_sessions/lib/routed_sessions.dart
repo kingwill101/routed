@@ -2,8 +2,8 @@ library;
 
 import 'dart:io';
 
-import 'package:routed/providers.dart' show ProviderRegistry;
-import 'package:routed/routed.dart' hide SecureCookie, CookieStore;
+import 'package:routed_core/providers.dart' show ProviderRegistry;
+import 'package:routed_core/routed_core.dart' hide SecureCookie, CookieStore;
 import 'package:server_sessions/server_sessions.dart';
 
 const sessionKey = ContextKey<Session>('routed.session');

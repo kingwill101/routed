@@ -1,35 +1,44 @@
 # Package Boundary Contract — Routed Ecosystem
 
-This document defines the public API, provider IDs, and config roots for all split packages in `refactor-routed-modular-packages`.
+## Roles
 
-## Workspace
-- `routed` (slim): `Engine`, `EngineContext`, `Request`, `Response`, `Router` only
-- `routed_*` (adapters): `routed_cache`, `routed_sessions`, `routed_storage`, `routed_validation`, `routed_http`, `routed_views`, `routed_auth`, `routed_rate_limit`, `routed_openapi`, `routed_observability`, `routed_security`, `routed_config`, `routed_io`, `routed_cli`, `routed_analyzer`
-- `server_*` (runtimes): `server_cache`, `server_sessions`, `server_storage`, `server_rate_limit`, `server_auth`, `server_contracts`, `server_testing`, `server_native`
+| Package | Role |
+|---------|------|
+| **`routed_core`** | Slim foundation: `Engine`, `EngineContext`, `Request`, `Response`, `Router`, config, DI |
+| **`routed`** | Batteries-included default for apps: re-exports core + official adapters/runtimes and registers providers |
+| **`routed_*`** | Framework adapters on `routed_core` + `server_*` |
+| **`server_*`** | Portable runtimes (no framework imports in `lib/`) |
 
-## Provider IDs (must be stable)
-- `routed.cache`, `routed.sessions`, `routed.storage`, `routed.validation`, `routed.http`, `routed.views`, `routed.auth`, `routed.rate_limit`, `routed.localization`, `routed.observability`, `routed.security`
-- `server.*` providers are framework-agnostic and not registered via `http.providers` manifest
+## Dependency rules
 
-## Config Roots
-- `http.*`, `cache.*`, `session.*`, `storage.*`, `validation.*`, `views.*`, `auth.*`, `rate_limit.*`, `localization.*`, `observability.*`, `security.*`
-- Direct imports are canonical: `import 'package:routed_*/routed_*.dart'` and `import 'package:server_*/server_*.dart'`. Use `routed_full` for a batteries-included barrel. Foundation `routed` does **not** re-export feature packages.
+```
+app → package:routed
+        ├─ routed_core
+        ├─ routed_* adapters
+        └─ server_* runtimes
 
-## Public API Surface
-- `routed`: `Engine`, `EngineContext`, `Router`, `Route`, `Middleware`, `EngineConfig`, `Container`
-- `routed_sessions`: `sessionMiddleware`, `Session`, `SessionStore`
-- `routed_views`: `ViewEngine`, `ViewEngineManager`, `RoutedViewContext`
-- `routed_auth`: `SessionAuth`, `GuardResult`, `guardMiddleware`
-- `routed_observability`: `Tracing`, `Metrics`, `Health`
-- `routed_security`: `IpFilter`, `TrustedProxyResolver`
+adapter package → routed_core + server_*   (never depend on package:routed)
+server_*        → no routed / routed_core
+```
 
-## Three-Layer Rule
-`routed` (slim core) ← `routed_*` (adapter, depends on `routed` + `server_*`) → `server_*` (portable; must not import `routed`). No circular deps, no feature re-exports from `routed`, no test code in `lib`.
+## Canonical imports
+
+```dart
+// Applications
+import 'package:routed/routed.dart';
+
+// Adapter authors / minimal surface
+import 'package:routed_core/routed_core.dart';
+import 'package:routed_core/providers.dart';
+```
+
+## Provider IDs
+
+- Core registry defaults: `routed.core`, `routed.routing`, `routed.uploads`
+- Registered when importing `package:routed`: auth, logging, views, localization, observability, cache, sessions, storage, rate_limit
 
 ## Verification
-- `dart analyze --fatal-infos` 0
-- `dart test --coverage` per package with real `Engine` (`TestClient`/`RoutedRequestHandler`, `TransportMode.ephemeralServer`)
-- `coverage/lcov.info` generated via `coverage:format_coverage`
 
-## Migration
-See [migration-split-packages.md](./migration-split-packages.md).
+- Adapters depend only on `routed_core` (not batteries `routed`)
+- `server_*` lib purity tests pass
+- No circular deps

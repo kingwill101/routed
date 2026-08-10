@@ -10,7 +10,7 @@ resolution: workspace
 dependencies:
   dartastic_opentelemetry: ^0.9.3
   dartastic_opentelemetry_api: ^0.8.7
-  routed: ^0.3.3
+  routed_core: ^0.3.3
   sentry: ^9.10.0
 dev_dependencies:
   file: ^7.0.1

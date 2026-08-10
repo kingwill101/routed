@@ -2,11 +2,11 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 
-import 'package:routed/routed.dart';
+import 'package:routed_core/routed_core.dart';
 import 'view/engine_manager.dart';
 
 /// Local stub for Render to break dependency on `routed` render.
-/// Original was in `package:routed/src/render/render.dart`.
+/// Original was in `package:routed_core/src/render/render.dart`.
 abstract class Render {
   FutureOr<void> render(Response response);
   void writeContentType(Response response);

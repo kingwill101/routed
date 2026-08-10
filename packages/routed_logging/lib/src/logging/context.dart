@@ -1,8 +1,8 @@
 import 'dart:async';
 
 import 'package:contextual/contextual.dart' as contextual;
-import 'package:routed/src/context/context.dart';
-import 'package:routed/src/engine/engine.dart';
+import 'package:routed_core/src/context/context.dart';
+import 'package:routed_core/src/engine/engine.dart';
 
 import 'logger.dart';
 

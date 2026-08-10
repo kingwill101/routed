@@ -1,8 +1,8 @@
 // ignore_for_file: implementation_imports, depend_on_referenced_packages
 library;
 
-import 'package:routed/src/contracts/contracts.dart' show Config;
-import 'package:routed/src/support/named_registry.dart';
+import 'package:routed_core/src/contracts/contracts.dart' show Config;
+import 'package:routed_core/src/support/named_registry.dart';
 import 'resolvers.dart';
 
 /// Provides shared options derived from core translation config.

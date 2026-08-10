@@ -1,4 +1,4 @@
-import 'package:routed/routed.dart';
+import 'package:routed_core/routed_core.dart';
 import 'package:routed_hotwire/routed_hotwire.dart';
 
 import '../repositories/todo_repository.dart';

@@ -1,5 +1,5 @@
-import 'package:routed/src/context/context.dart';
-import 'package:routed/src/router/types.dart';
+import 'package:routed_core/src/context/context.dart';
+import 'package:routed_core/src/router/types.dart';
 import 'package:routed_validation/routed_validation.dart';
 
 import 'schema.dart';

@@ -35,7 +35,7 @@ import 'providers/telegram.dart';
 ///
 /// ### Example
 /// ```dart
-/// import 'package:routed/auth.dart';
+/// import 'package:routed_core/auth.dart';
 /// import 'package:routed_auth/routed_auth.dart';
 ///
 /// final registry = AuthProviderRegistry.defaultRegistry;

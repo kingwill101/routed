@@ -1,8 +1,8 @@
 import 'dart:convert';
 
 import 'package:path/path.dart' as p;
-import 'package:routed/providers.dart' show ProviderRegistry;
-import 'package:routed/routed.dart';
+import 'package:routed_core/providers.dart' show ProviderRegistry;
+import 'package:routed_core/routed_core.dart';
 
 Map<String, List<ConfigDocEntry>> collectConfigDocs() {
   final mergedByPath = <String, ConfigDocEntry>{};

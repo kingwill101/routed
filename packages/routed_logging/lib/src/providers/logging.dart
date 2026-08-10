@@ -2,18 +2,18 @@ import 'dart:async';
 import 'dart:io';
 
 import 'package:contextual/contextual.dart' as contextual;
-import 'package:routed/src/container/container.dart';
-import 'package:routed/src/context/context.dart';
-import 'package:routed/routed.dart' show Config;
-import 'package:routed/src/engine/middleware_registry.dart';
-import 'package:routed/src/config/specs/logging.dart';
-import 'package:routed/src/config/specs/logging_drivers.dart';
+import 'package:routed_core/src/container/container.dart';
+import 'package:routed_core/src/context/context.dart';
+import 'package:routed_core/routed_core.dart' show Config;
+import 'package:routed_core/src/engine/middleware_registry.dart';
+import 'package:routed_core/src/config/specs/logging.dart';
+import 'package:routed_core/src/config/specs/logging_drivers.dart';
 import 'package:routed_logging/src/logging/channel_drivers.dart';
 import 'package:routed_logging/src/logging/context.dart';
 import 'package:routed_logging/src/logging/driver_registry.dart';
 import 'package:routed_logging/src/logging/logger.dart';
-import 'package:routed/src/provider/provider.dart';
-import 'package:routed/src/router/types.dart';
+import 'package:routed_core/src/provider/provider.dart';
+import 'package:routed_core/src/router/types.dart';
 
 class LoggingServiceProvider extends ServiceProvider
     with ProvidesDefaultConfig {

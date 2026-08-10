@@ -1,6 +1,6 @@
 import 'dart:io';
 
-import 'package:routed/routed.dart';
+import 'package:routed_core/routed_core.dart';
 import 'package:routed_openapi/routed_openapi.dart';
 import 'package:test/test.dart';
 
@@ -24,7 +24,7 @@ void main() {
       'uses source identity to resolve cross-file mounted closure routes',
       () async {
         const usersSource = '''
-import 'package:routed/routed.dart';
+import 'package:routed_core/routed_core.dart';
 import 'package:routed_openapi/routed_openapi.dart';
 
 void registerUserRoutes(Router router) {
@@ -34,7 +34,7 @@ void registerUserRoutes(Router router) {
 ''';
 
         const adminSource = '''
-import 'package:routed/routed.dart';
+import 'package:routed_core/routed_core.dart';
 import 'package:routed_openapi/routed_openapi.dart';
 
 void registerAdminRoutes(Router router) {

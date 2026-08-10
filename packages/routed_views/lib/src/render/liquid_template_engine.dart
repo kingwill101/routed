@@ -4,7 +4,7 @@ import 'package:file/local.dart' as local;
 import 'package:liquify/liquify.dart';
 
 /// Local stub for TemplateEngine to break dependency on `routed` render.
-/// Original was in `package:routed/src/render/html/template_engine.dart` which
+/// Original was in `package:routed_core/src/render/html/template_engine.dart` which
 /// has been moved out of core per slimming.
 abstract class TemplateEngine {
   Future<String> render(String templateName, [Map<String, dynamic> data = const {}]);

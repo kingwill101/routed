@@ -1,6 +1,6 @@
 import 'dart:async';
 
-import 'package:routed/routed.dart';
+import 'package:routed_core/routed_core.dart';
 import 'package:server_cache/server_cache.dart';
 
 typedef CacheManager = DataCacheManager;

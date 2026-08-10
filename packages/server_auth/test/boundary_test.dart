@@ -18,7 +18,7 @@ Directory _resolveLibDir() {
 void main() {
   test('server_auth does not import routed packages', () async {
     final routedImportPattern = RegExp(
-      r"^(import|export)\s+'package:routed/",
+      r"^(import|export)\s+'package:routed_core/",
       multiLine: true,
     );
     final routedAuthImportPattern = RegExp(

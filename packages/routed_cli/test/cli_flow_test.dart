@@ -1,5 +1,5 @@
 import 'package:artisanal/args.dart';
-import 'package:routed/routed.dart';
+import 'package:routed_core/routed_core.dart';
 import 'package:routed_cli/src/console/args/provider_commands.dart';
 import 'package:test/test.dart';
 

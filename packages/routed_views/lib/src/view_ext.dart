@@ -1,6 +1,6 @@
 import 'dart:io';
 
-import 'package:routed/routed.dart' hide ViewEngine;
+import 'package:routed_core/routed_core.dart' hide ViewEngine;
 
 import 'view/engine_manager.dart';
 import 'view/view_engine.dart';

@@ -1,4 +1,4 @@
-import 'package:routed/src/engine/route_manifest.dart';
+import 'package:routed_core/src/engine/route_manifest.dart';
 import 'package:routed_openapi/routed_openapi.dart';
 import 'package:test/test.dart';
 

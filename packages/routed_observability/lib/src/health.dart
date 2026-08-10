@@ -1,7 +1,7 @@
 import 'dart:async';
 import 'dart:convert';
 
-import 'package:routed/routed.dart';
+import 'package:routed_core/routed_core.dart';
 
 
 typedef HealthCheck = FutureOr<HealthCheckResult> Function();

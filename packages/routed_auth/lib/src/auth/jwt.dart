@@ -2,8 +2,8 @@
 import 'dart:io';
 
 import 'package:http/http.dart' as http;
-import 'package:routed/src/context/context.dart';
-import 'package:routed/src/router/types.dart';
+import 'package:routed_core/src/context/context.dart';
+import 'package:routed_core/src/router/types.dart';
 import 'package:server_auth/server_auth.dart'
     show
         JwtAuthException,

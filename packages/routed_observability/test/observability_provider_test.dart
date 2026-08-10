@@ -1,7 +1,7 @@
 import 'dart:async';
 
 import 'package:dartastic_opentelemetry/dartastic_opentelemetry.dart' as dotel;
-import 'package:routed/routed.dart';
+import 'package:routed_core/routed_core.dart';
 import 'package:routed_observability/routed_observability.dart';
 import 'package:routed_testing/routed_testing.dart';
 import 'package:server_testing/server_testing.dart';

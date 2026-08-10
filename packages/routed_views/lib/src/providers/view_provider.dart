@@ -3,12 +3,12 @@ import 'dart:async';
 
 import 'package:file/file.dart' as file;
 import 'package:file/local.dart' as local;
-import 'package:routed/src/container/container.dart';
-import 'package:routed/src/contracts/contracts.dart' show Config;
-import 'package:routed/src/config/specs/views.dart';
-import 'package:routed/src/engine/config.dart' hide ViewEngine;
-import 'package:routed/src/engine/engine.dart';
-import 'package:routed/src/provider/provider.dart';
+import 'package:routed_core/src/container/container.dart';
+import 'package:routed_core/src/contracts/contracts.dart' show Config;
+import 'package:routed_core/src/config/specs/views.dart';
+import 'package:routed_core/src/engine/config.dart' hide ViewEngine;
+import 'package:routed_core/src/engine/engine.dart';
+import 'package:routed_core/src/provider/provider.dart';
 import 'package:server_storage/server_storage.dart';
 import '../view/engines/liquid_engine.dart';
 import '../view/view_engine.dart';

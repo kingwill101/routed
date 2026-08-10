@@ -1,5 +1,5 @@
 import 'package:contextual/contextual.dart' as contextual;
-import 'package:routed/routed.dart';
+import 'package:routed_core/routed_core.dart';
 import 'package:routed_logging/routed_logging.dart';
 import 'package:routed_testing/routed_testing.dart';
 import 'package:server_testing/server_testing.dart';

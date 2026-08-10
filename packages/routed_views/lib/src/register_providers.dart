@@ -1,4 +1,4 @@
-import 'package:routed/providers.dart' show ProviderRegistry;
+import 'package:routed_core/providers.dart' show ProviderRegistry;
 
 import 'providers/localization.dart';
 import 'providers/view_provider.dart';

@@ -1,6 +1,6 @@
 library;
 
-import 'package:routed/providers.dart' show ProviderRegistry;
+import 'package:routed_core/providers.dart' show ProviderRegistry;
 import 'package:routed_auth/src/auth/provider.dart' show AuthServiceProvider;
 
 export 'src/auth/manager/auth_manager.dart';

@@ -1,4 +1,4 @@
-import 'package:routed/routed.dart';
+import 'package:routed_core/routed_core.dart';
 
 /// Boots a Routed [engine] using the `dart:io` HTTP server transport.
 Future<void> serveIo(

@@ -1,6 +1,6 @@
 library;
 
-import 'package:routed/routed.dart';
+import 'package:routed_core/routed_core.dart';
 import 'package:routed_views/src/translation/locale_manager.dart';
 import 'package:routed_views/src/translation/locale_resolution.dart';
 import 'package:routed_views/src/translation/constants.dart';

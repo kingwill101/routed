@@ -4,7 +4,7 @@ import 'dart:io';
 import 'package:args/command_runner.dart';
 import 'package:file/file.dart' as fs;
 import 'package:file/memory.dart';
-import 'package:routed/routed.dart';
+import 'package:routed_core/routed_core.dart';
 import 'package:routed_cli/src/console/args/commands/config.dart';
 import 'package:routed_cli/src/console/args/runner.dart';
 import 'package:test/test.dart';
@@ -181,7 +181,7 @@ void main() {
       final dartCache = read('lib/generated/routed_config.dart');
 
       // Should import routed and have resolveRoutedConfig().
-      expect(dartCache, contains("import 'package:routed/routed.dart';"));
+      expect(dartCache, contains("import 'package:routed_core/routed_core.dart';"));
       expect(dartCache, contains('resolveRoutedConfig()'));
 
       // Env templates must survive as raw strings in the const map.

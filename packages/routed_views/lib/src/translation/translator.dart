@@ -1,8 +1,8 @@
 // ignore_for_file: implementation_imports, depend_on_referenced_packages
-import 'package:routed/src/contracts/translation/loader.dart';
-import 'package:routed/src/contracts/translation/translator.dart';
+import 'package:routed_core/src/contracts/translation/loader.dart';
+import 'package:routed_core/src/contracts/translation/translator.dart';
 import 'message_selector.dart';
-import 'package:routed/src/utils/dot.dart';
+import 'package:routed_core/src/utils/dot.dart';
 
 class Translator implements TranslatorContract {
   Translator({
