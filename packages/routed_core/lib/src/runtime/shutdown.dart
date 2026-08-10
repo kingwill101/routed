@@ -7,6 +7,7 @@ import 'package:routed_core/src/config/schema.dart';
 import 'package:routed_core/src/contracts/contracts.dart' show Config;
 import 'package:routed_core/src/provider/config_utils.dart';
 import 'package:routed_core/src/provider/provider.dart';
+import 'package:routed_core/src/utils/process_env.dart';
 
 import '../config/spec.dart';
 
@@ -266,7 +267,8 @@ class ShutdownController {
   }
 
   bool _isSignalSupported(ProcessSignal signal) {
-    if (!Platform.isWindows) return true;
+    // hostIsWindows is portable (VM + Node); avoids Platform.isWindows on JS.
+    if (!hostIsWindows) return true;
     return signal == ProcessSignal.sigint;
   }
 

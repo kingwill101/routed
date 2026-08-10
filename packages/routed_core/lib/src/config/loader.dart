@@ -9,6 +9,7 @@ import 'package:routed_core/src/config/config.dart';
 import 'package:yaml/yaml.dart' as yaml;
 
 import 'package:routed_core/src/utils/deep_copy.dart';
+import 'package:routed_core/src/utils/process_env.dart';
 
 class YamlScalar {
   dynamic value;
@@ -164,7 +165,7 @@ class ConfigLoader {
       }
     }
 
-    Platform.environment.forEach(addEnvEntry);
+    readProcessEnvironment().forEach(addEnvEntry);
     envVariables.forEach(addEnvEntry);
     if (overrides != null) {
       overrides.forEach((key, value) {
@@ -866,7 +867,7 @@ class ConfigLoader {
           options.environment,
           if (overrides != null) _extractEnv(overrides),
           _extractEnv(options.defaults),
-          Platform.environment['APP_ENV'],
+          readProcessEnvironment()['APP_ENV'],
         ].firstWhere(
           (value) => value != null && value.isNotEmpty,
           orElse: () => 'development',
@@ -931,12 +932,12 @@ class _EnvLoadResult {
   });
 }
 
-/// Builds a Liquid template context from [Platform.environment] so that
+/// Builds a Liquid template context from the process environment so that
 /// `{{ env.VAR }}` expressions can be resolved at runtime.
 ///
-/// This is the same logic used internally by [ConfigLoader.load] and
-/// [CoreServiceProvider] to populate the `env.*` namespace.  It is exposed
-/// as a public API so that generated config caches can call
+/// Uses [readProcessEnvironment] (portable across VM and Node/JS hosts).
+/// Same logic as [ConfigLoader.load] / [CoreServiceProvider] for the `env.*`
+/// namespace. Exposed so generated config caches can call
 /// [ConfigLoader.renderDefaults] with a freshly-built context:
 ///
 /// ```dart
@@ -959,7 +960,7 @@ Map<String, dynamic> buildEnvTemplateContext() {
     }
   }
 
-  Platform.environment.forEach(addEntry);
+  readProcessEnvironment().forEach(addEntry);
   return context;
 }
 

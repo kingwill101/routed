@@ -18,7 +18,7 @@ void main() {
       Object? mutationError;
 
       engine.get('/scope', (ctx) {
-        final scope = requestScopeExpando[ctx.request.httpRequest];
+        final scope = requestScopeExpando[ctx.request.identity];
         capturedScope = scope;
         scopeMatches = identical(scope?.context, ctx);
 

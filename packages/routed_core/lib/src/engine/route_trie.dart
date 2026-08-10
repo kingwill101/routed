@@ -20,7 +20,11 @@ class RouteTrie {
     return RouteTrie._(root);
   }
 
-  RouteTrieMatch match(String path, HttpRequest request) {
+  /// Matches [path] against the trie.
+  ///
+  /// [request] may be an [HttpRequest], [RequestAdapter], or
+  /// [ConstraintRequestView] (used only for constraint checks).
+  RouteTrieMatch match(String path, Object request) {
     final segments = _splitSegments(path);
     EngineRoute? matched;
     var pathMatched = false;

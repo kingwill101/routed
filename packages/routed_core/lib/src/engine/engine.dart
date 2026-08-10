@@ -26,6 +26,9 @@ import 'package:routed_core/src/engine/route_match.dart';
 import 'package:routed_core/src/engine/request_scope.dart';
 import 'package:routed_core/src/engine/wrapped_request.dart';
 import 'package:routed_core/src/events/event_manager.dart';
+import 'package:routed_core/src/http/adapter_http.dart';
+import 'package:routed_core/src/http/constraint_request.dart';
+import 'package:routed_core/src/http/portable_message.dart';
 import 'package:routed_core/src/http/transport.dart';
 import 'package:routed_core/src/provider/provider.dart';
 import 'package:routed_core/src/provider/config_utils.dart';
@@ -1222,12 +1225,14 @@ class Engine with ContainerMixin {
 
   /// Handles an incoming host exchange via portable adapters.
   ///
-  /// Prefer this entry from host transports (`routed_io`, Workers, …).
+  /// Prefer this entry from host transports (`routed_io`, `routed_node`,
+  /// Workers, …).
   ///
-  /// **Transitional behavior:** when [HttpConnection.request] implements
-  /// [NativeRequestHandle] and [NativeRequestHandle.nativeRequest] is a
-  /// `dart:io` [HttpRequest], dispatches to [handleRequest]. Fully portable
-  /// adapter processing (no `dart:io`) will land here next.
+  /// When [HttpConnection.request] implements [NativeRequestHandle] and
+  /// [NativeRequestHandle.nativeRequest] is a `dart:io` [HttpRequest],
+  /// dispatches directly to [handleRequest] (IO fast path: websockets,
+  /// streaming, session). Otherwise runs the portable adapter pipeline
+  /// ([_dispatchPortableConnection]).
   Future<void> handleConnection(HttpConnection connection) async {
     final request = connection.request;
     if (request is NativeRequestHandle) {
@@ -1236,11 +1241,26 @@ class Engine with ContainerMixin {
         return handleRequest(native);
       }
     }
-    throw UnsupportedError(
-      'Portable RequestAdapter dispatch is not implemented yet. '
-      'Use package:routed_io (IoHttpConnection) or provide a '
-      'NativeRequestHandle whose nativeRequest is a dart:io HttpRequest.',
+    return _dispatchPortableConnection(connection);
+  }
+
+  /// Value-style entry: [PortableRequest] in, [PortableResponse] out.
+  ///
+  /// Preferred for fetch-style hosts, tests, and hosts that buffer a full
+  /// response. Does **not** use the IO [NativeRequestHandle] fast path.
+  /// Pipeline still runs via [AdapterHttpBridge] until core is fully portable.
+  Future<PortableResponse> handlePortable(PortableRequest request) async {
+    final sink = RecordingResponseAdapter();
+    await _dispatchPortableConnection(
+      HttpConnection(request.asAdapter(), sink),
     );
+    return sink.toPortableResponse();
+  }
+
+  /// Portable adapter path (no native `HttpRequest`). Transitional bridge.
+  Future<void> _dispatchPortableConnection(HttpConnection connection) {
+    final bridged = AdapterHttpBridge.toHttpRequest(connection);
+    return handleRequest(bridged);
   }
 
   /// Handles an incoming HTTP request (`dart:io`).
@@ -1423,7 +1443,11 @@ class Engine with ContainerMixin {
     }
     for (final request in _activeRequests.values.toList()) {
       try {
-        await request.httpRequest.response.close();
+        // Prefer closing through the tracked response when available; fall back
+        // to native socket close for IO-only requests.
+        if (request.hasNativeHttpRequest) {
+          await request.httpRequest.response.close();
+        }
       } catch (_) {}
     }
     _activeRequests.clear();

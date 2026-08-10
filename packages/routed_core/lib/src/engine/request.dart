@@ -852,7 +852,7 @@ extension ServerExtension on Engine {
             engine: this,
             container: container,
           );
-      requestScopeExpando[request.httpRequest] = RequestScope(
+      requestScopeExpando[request.identity] = RequestScope(
         request: request,
         response: response,
         context: engineContext,

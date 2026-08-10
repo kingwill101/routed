@@ -49,6 +49,7 @@ export 'src/utils/deep_copy.dart';
 export 'src/utils/deep_merge.dart';
 export 'src/utils/dot.dart';
 export 'src/utils/environment.dart';
+export 'src/utils/process_env.dart' show readProcessEnvironment, hostIsWindows;
 export 'src/utils/request_id.dart';
 export 'src/websocket/websocket_handler.dart';
 export 'src/context/context_key.dart' show ContextKey;
@@ -65,4 +66,24 @@ export 'src/http/transport.dart'
         ServerOptions,
         ServerHandle,
         ServerTransport;
+export 'src/http/adapter_http.dart'
+    show
+        AdapterHttpBridge,
+        AdapterHttpRequest,
+        AdapterHttpResponse,
+        SyntheticHttpRequest;
+export 'src/http/portable_message.dart'
+    show
+        PortableHeaders,
+        PortableRequest,
+        PortableResponse,
+        HostCapabilities,
+        RecordingResponseAdapter,
+        writePortableResponse;
+export 'src/http/constraint_request.dart'
+    show
+        ConstraintRequestView,
+        HttpConstraintView,
+        AdapterConstraintView,
+        constraintViewOf;
 export 'src/support/named_registry.dart' show NamedRegistry;

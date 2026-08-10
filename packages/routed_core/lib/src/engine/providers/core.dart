@@ -17,6 +17,7 @@ import '../../provider/config_utils.dart';
 import '../../provider/provider.dart'
     show ConfigDefaults, ProvidesDefaultConfig, ServiceProvider;
 import '../../utils/deep_copy.dart';
+import '../../utils/process_env.dart';
 
 ConfigDefaults _coreDefaults() {
   const coreSpec = CoreConfigSpec();
@@ -257,43 +258,10 @@ class CoreServiceProvider extends ServiceProvider with ProvidesDefaultConfig {
 
   /// Builds a template context from environment variables.
   ///
-  /// This mirrors the logic in [ConfigLoader.load] to ensure Liquid templates
-  /// like `{{ env.APP_NAME | default: 'MyApp' }}` are properly resolved.
-  Map<String, dynamic> _buildTemplateContext() {
-    final context = <String, dynamic>{};
-
-    void addEntry(String key, String value) {
-      _addToContext(context, key, value);
-      _addToContext(context, 'env.$key', value);
-      // Handle double-underscore notation (e.g., APP__DB__HOST -> app.db.host)
-      if (key.contains('__')) {
-        final normalized = key.toLowerCase().replaceAll('__', '.');
-        if (normalized != key) {
-          _addToContext(context, normalized, value);
-          _addToContext(context, 'env.$normalized', value);
-        }
-      }
-    }
-
-    // Add all platform environment variables
-    Platform.environment.forEach(addEntry);
-
-    return context;
-  }
-
-  /// Adds a value to the template context, creating nested maps as needed.
-  void _addToContext(Map<String, dynamic> context, String key, dynamic value) {
-    final parts = key.split('.');
-    var current = context;
-    for (var i = 0; i < parts.length - 1; i++) {
-      final part = parts[i];
-      if (current[part] is! Map) {
-        current[part] = <String, dynamic>{};
-      }
-      current = current[part] as Map<String, dynamic>;
-    }
-    current[parts.last] = value;
-  }
+  /// Mirrors [buildEnvTemplateContext] / [ConfigLoader.load] so Liquid
+  /// templates like `{{ env.APP_NAME | default: 'MyApp' }}` resolve on VM
+  /// and Node/JS hosts.
+  Map<String, dynamic> _buildTemplateContext() => buildEnvTemplateContext();
 
   void _registerWithLoader(Container container) {
     final options = _resolveLoaderOptions(_configOptions);

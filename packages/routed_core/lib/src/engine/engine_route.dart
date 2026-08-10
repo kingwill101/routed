@@ -205,20 +205,23 @@ class EngineRoute {
 
   /// Attempts to match a request to this route.
   ///
+  /// Accepts [HttpRequest], [RequestAdapter], or [ConstraintRequestView].
   /// If [checkMethodOnly] is true, only the HTTP method is checked.
-  RouteMatch? tryMatch(HttpRequest request, {bool checkMethodOnly = false}) {
+  RouteMatch? tryMatch(Object request, {bool checkMethodOnly = false}) {
+    final view = constraintViewOf(request);
+
     // If this is a fallback route, match any path and ignore the method.
     if (isFallback) {
       return RouteMatch(matched: true, isMethodMismatch: false, route: this);
     }
 
     // For non-fallback routes, check path and method.
-    final pathMatches = matchesPath(request.uri.path);
+    final pathMatches = matchesPath(view.uri.path);
     if (!pathMatches) {
       return null;
     }
 
-    if (method != request.method) {
+    if (method != view.method) {
       return RouteMatch(matched: false, isMethodMismatch: true, route: this);
     }
 
@@ -226,7 +229,7 @@ class EngineRoute {
       return RouteMatch(matched: true, isMethodMismatch: false);
     }
 
-    final constraintsValid = validateConstraints(request);
+    final constraintsValid = validateConstraints(view);
     return RouteMatch(
       matched: constraintsValid,
       isMethodMismatch: false,
@@ -302,9 +305,15 @@ class EngineRoute {
   }
 
   /// Validates route constraints against a request.
-  bool validateConstraints(HttpRequest request) {
+  ///
+  /// Accepts [HttpRequest], [RequestAdapter], or [ConstraintRequestView].
+  /// Domain and path-param constraints work on all hosts. Function constraints
+  /// typed as `bool Function(HttpRequest)` only run when a native [HttpRequest]
+  /// is available; otherwise they fail closed (return false).
+  bool validateConstraints(Object request) {
+    final view = constraintViewOf(request);
     // Get route params extracted at runtime
-    final routeParams = extractParameters(request.uri.path);
+    final routeParams = extractParameters(view.uri.path);
 
     return constraints.entries.every((entry) {
       final key = entry.key;
@@ -316,12 +325,14 @@ class EngineRoute {
 
       // Special-case: domain constraint
       if (key == 'domain' && constraint is String) {
-        return RegExp(constraint).hasMatch(request.headers.host ?? '');
+        return RegExp(constraint).hasMatch(view.hostHeader ?? '');
       }
 
-      // Special-case: function constraint
+      // Special-case: function constraint (IO-only)
       if (constraint is bool Function(HttpRequest)) {
-        return constraint(request);
+        final native = view.nativeHttpRequest;
+        if (native == null) return false;
+        return constraint(native);
       }
 
       // Otherwise, treat constraint as a regex pattern for the same-named path param

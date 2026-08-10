@@ -3,117 +3,215 @@ import 'dart:convert';
 import 'dart:io';
 import 'dart:typed_data';
 
+import 'package:routed_core/src/http/adapter_http.dart';
+import 'package:routed_core/src/http/transport.dart';
+
 typedef ResponseBodyFilter = List<int> Function(List<int> body);
 
 /// A class that represents an HTTP response.
+///
+/// Dual-mode: native `dart:io` [HttpResponse] **or** portable [ResponseAdapter].
 class Response {
-  /// The underlying [HttpResponse] object.
-  ///
-  /// Use the public API methods instead of accessing httpResponse directly.
-  /// This field will be made private in a future version.
-  final HttpResponse _httpResponse;
+  /// Native IO response when constructed via [Response.new].
+  final HttpResponse? _httpResponse;
+
+  /// Portable adapter when constructed via [Response.fromAdapter].
+  final ResponseAdapter? _adapter;
+
+  /// Map-backed headers for the portable path (also mirrored into [_headers]).
+  final AdapterHttpHeaders? _portableHeaders;
+
+  /// Cookies for the portable path (written as Set-Cookie on flush).
+  final List<Cookie> _portableCookies = <Cookie>[];
+
   final _buffer = BytesBuilder();
   final _headers = <String, List<String>>{};
   bool _headersWritten = false;
   bool _bodyStarted = false;
   bool _isClosed = false;
+  int _portableStatusCode = HttpStatus.ok;
   ResponseBodyFilter? _bodyFilter;
+  final Completer<void> _portableDone = Completer<void>();
 
-  /// Constructs a Response object with the given [HttpResponse].
-  Response(this._httpResponse);
+  /// Constructs a Response with a native [HttpResponse].
+  Response(HttpResponse httpResponse)
+    : _httpResponse = httpResponse,
+      _adapter = null,
+      _portableHeaders = null;
+
+  /// Constructs a Response that writes through a portable [ResponseAdapter].
+  Response.fromAdapter(ResponseAdapter adapter)
+    : _httpResponse = null,
+      _adapter = adapter,
+      _portableHeaders = AdapterHttpHeaders();
+
+  /// Whether this response is backed by a real `dart:io` [HttpResponse].
+  bool get hasNativeHttpResponse => _httpResponse != null;
+
+  /// Whether this response is portable-adapter backed.
+  bool get isPortable => _adapter != null;
 
   /// Returns whether the response is closed.
   bool get isClosed => _isClosed;
 
-  /// Controls whether output is buffered before streaming.
-  bool get bufferOutput => _httpResponse.bufferOutput;
+  /// Controls whether output is buffered before streaming (native only).
+  bool get bufferOutput => _httpResponse?.bufferOutput ?? true;
 
   set bufferOutput(bool value) {
-    _httpResponse.bufferOutput = value;
+    _httpResponse?.bufferOutput = value;
   }
 
   /// A future that completes when the underlying HTTP response finishes.
-  Future<void> get done => _httpResponse.done;
+  Future<void> get done =>
+      _httpResponse?.done ?? _portableDone.future;
 
   /// Gets the content length of the HTTP response.
-  int? get contentLength => _httpResponse.contentLength;
+  int? get contentLength {
+    final native = _httpResponse;
+    if (native != null) return native.contentLength;
+    final len = _portableHeaders!.contentLength;
+    return len < 0 ? null : len;
+  }
 
   /// Gets the persistent connection state of the HTTP response.
-  bool get persistentConnection => _httpResponse.persistentConnection;
+  bool get persistentConnection =>
+      _httpResponse?.persistentConnection ?? true;
 
   /// Gets the reason phrase of the HTTP response.
-  String? get reasonPhrase => _httpResponse.reasonPhrase;
+  String? get reasonPhrase => _httpResponse?.reasonPhrase;
 
   /// Gets the transfer encoding of the HTTP response.
-  bool get hasTransferEncoding =>
-      _httpResponse.headers[HttpHeaders.transferEncodingHeader] != null;
+  bool get hasTransferEncoding {
+    final native = _httpResponse;
+    if (native != null) {
+      return native.headers[HttpHeaders.transferEncodingHeader] != null;
+    }
+    return _portableHeaders![HttpHeaders.transferEncodingHeader] != null;
+  }
 
   /// Gets the content type of the HTTP response.
-  String? get contentType => _httpResponse.headers.contentType?.value;
+  String? get contentType {
+    final native = _httpResponse;
+    if (native != null) return native.headers.contentType?.value;
+    return _portableHeaders!.contentType?.value;
+  }
 
   /// Gets the cookies of the HTTP response.
-  List<Cookie> get cookies => _httpResponse.cookies;
+  List<Cookie> get cookies {
+    final native = _httpResponse;
+    if (native != null) return native.cookies;
+    return List<Cookie>.unmodifiable(_portableCookies);
+  }
 
-  /// Gets the local port of the HTTP connection.
-  int? get localPort => _httpResponse.connectionInfo?.localPort;
+  /// Gets the local port of the HTTP connection (native only).
+  int? get localPort => _httpResponse?.connectionInfo?.localPort;
 
   /// Gets the remote address of the HTTP connection.
   String? get remoteAddress =>
-      _httpResponse.connectionInfo?.remoteAddress.address;
+      _httpResponse?.connectionInfo?.remoteAddress.address;
 
-  /// Gets the remote port of the HTTP connection.
-  int? get remotePort => _httpResponse.connectionInfo?.remotePort;
+  /// Gets the remote port of the HTTP connection (native only).
+  int? get remotePort => _httpResponse?.connectionInfo?.remotePort;
+
+  void _writeStatus(int statusCode) {
+    final native = _httpResponse;
+    if (native != null) {
+      native.statusCode = statusCode;
+    } else {
+      _portableStatusCode = statusCode;
+      _adapter!.statusCode = statusCode;
+    }
+  }
+
+  void _writeBytesToSink(List<int> data) {
+    final native = _httpResponse;
+    if (native != null) {
+      native.add(data);
+    } else {
+      _adapter!.write(data);
+    }
+  }
+
+  void _writeObjectToSink(Object? data) {
+    final native = _httpResponse;
+    if (native != null) {
+      native.write(data);
+    } else {
+      _adapter!.write(utf8.encode(data?.toString() ?? ''));
+    }
+  }
 
   /// Writes [data] to the response.
-  /// If the body has not started, the data is added to the buffer.
-  /// Otherwise, it is written directly to the HTTP response.
   void write(dynamic data) {
     _ensureNotClosed();
     if (!_bodyStarted) {
       _buffer.add(utf8.encode(data.toString()));
     } else {
-      _httpResponse.write(data);
+      _writeObjectToSink(data);
     }
   }
 
   /// Writes a list of bytes [data] to the response.
-  /// If the body has not started, the data is added to the buffer.
-  /// Otherwise, it is added directly to the HTTP response.
   void writeBytes(List<int> data) {
     _ensureNotClosed();
     if (!_bodyStarted) {
       _buffer.add(data);
     } else {
-      _httpResponse.add(data);
+      _writeBytesToSink(data);
     }
   }
 
   /// Writes the headers to the HTTP response.
   void writeHeaderNow() {
     _ensureNotClosed();
-    if (!_headersWritten) {
+    if (_headersWritten) return;
+
+    final native = _httpResponse;
+    if (native != null) {
       _headers.forEach((name, values) {
-        // Set-Cookie headers must be added separately, not joined
         if (name.toLowerCase() == HttpHeaders.setCookieHeader.toLowerCase()) {
           for (final value in values) {
-            _httpResponse.headers.add(name, value);
+            native.headers.add(name, value);
           }
         } else {
-          _httpResponse.headers.set(name, values.join(', '));
+          native.headers.set(name, values.join(', '));
         }
       });
 
-      // Also write cookies from _httpResponse.cookies to headers
-      // This ensures cookies set via setCookie() are included in the response
-      for (final cookie in _httpResponse.cookies) {
-        _httpResponse.headers.add(
+      for (final cookie in native.cookies) {
+        native.headers.add(
           HttpHeaders.setCookieHeader,
           cookie.toString(),
         );
       }
-
-      _headersWritten = true;
+    } else {
+      final adapter = _adapter!;
+      adapter.statusCode = _portableStatusCode;
+      _headers.forEach((name, values) {
+        if (name.toLowerCase() == HttpHeaders.setCookieHeader.toLowerCase()) {
+          for (final value in values) {
+            adapter.addHeader(name, value);
+          }
+        } else {
+          adapter.setHeader(name, values.join(', '));
+        }
+      });
+      for (final cookie in _portableCookies) {
+        adapter.addHeader(HttpHeaders.setCookieHeader, cookie.toString());
+      }
+      // Also flush AdapterHttpHeaders mutations (content-type etc.).
+      _portableHeaders!.forEach((name, values) {
+        if (name.toLowerCase() == HttpHeaders.setCookieHeader.toLowerCase()) {
+          return;
+        }
+        if (!_headers.containsKey(name) &&
+            !_headers.keys.any((k) => k.toLowerCase() == name.toLowerCase())) {
+          adapter.setHeader(name, values.join(', '));
+        }
+      });
     }
+
+    _headersWritten = true;
   }
 
   /// Writes the buffered data to the HTTP response and starts the body.
@@ -133,22 +231,27 @@ class Response {
         _bodyFilter = null;
       }
     }
-    if (_httpResponse.contentLength < 0) {
-      if (_httpResponse.headers.chunkedTransferEncoding) {
-        _httpResponse.headers.chunkedTransferEncoding = false;
+
+    final native = _httpResponse;
+    if (native != null) {
+      if (native.contentLength < 0) {
+        if (native.headers.chunkedTransferEncoding) {
+          native.headers.chunkedTransferEncoding = false;
+        }
+        native.contentLength = bytes.length;
       }
-      _httpResponse.contentLength = bytes.length;
+      // ignore: unnecessary_statements
+      native.headers[HttpHeaders.transferEncodingHeader];
+      native.add(bytes);
+    } else {
+      if (bytes.isNotEmpty) {
+        _adapter!.write(bytes);
+      }
     }
-    // Touch header to initialize empty list in test mocks when not chunked.
-    // ignore: unnecessary_statements
-    _httpResponse.headers[HttpHeaders.transferEncodingHeader];
-    _httpResponse.add(bytes);
     _bodyStarted = true;
   }
 
   /// Closes the response.
-  /// If the body has not started, it writes the buffered data first.
-  /// Safe for underlying HttpResponse already being closed (e.g. file/dir handlers).
   Future<void> close() async {
     if (_isClosed) return;
     if (!_bodyStarted) {
@@ -156,9 +259,15 @@ class Response {
     }
     _isClosed = true;
     try {
-      await _httpResponse.close();
+      final native = _httpResponse;
+      if (native != null) {
+        await native.close();
+      } else {
+        await _adapter!.close();
+        if (!_portableDone.isCompleted) _portableDone.complete();
+      }
     } catch (_) {
-      // Ignore: underlying already closed (in-memory/mock may throw)
+      // Ignore: underlying already closed
     }
   }
 
@@ -171,9 +280,12 @@ class Response {
   /// Sends a string [content] as the response body with an optional [statusCode].
   Future<void> string(String content, {int statusCode = HttpStatus.ok}) async {
     _ensureNotClosed();
-    _httpResponse.statusCode = statusCode;
+    _writeStatus(statusCode);
     final bytes = utf8.encode(content);
-    _httpResponse.contentLength = bytes.length;
+    final native = _httpResponse;
+    if (native != null) {
+      native.contentLength = bytes.length;
+    }
     write(content);
     await close();
   }
@@ -181,11 +293,14 @@ class Response {
   /// Sends a JSON [data] as the response body with an optional [statusCode].
   Future<void> json(Object? data, {int statusCode = HttpStatus.ok}) async {
     _ensureNotClosed();
-    _httpResponse.statusCode = statusCode;
+    _writeStatus(statusCode);
     _headers['Content-Type'] = ['application/json; charset=utf-8'];
     final encoded = jsonEncode(data);
     final bytes = utf8.encode(encoded);
-    _httpResponse.contentLength = bytes.length;
+    final native = _httpResponse;
+    if (native != null) {
+      native.contentLength = bytes.length;
+    }
     write(encoded);
     await close();
   }
@@ -196,20 +311,24 @@ class Response {
     int statusCode = HttpStatus.internalServerError,
   }) {
     if (_isClosed) return;
-    _httpResponse.statusCode = statusCode;
+    _writeStatus(statusCode);
     write(message);
     close();
   }
 
   /// Adds a stream of bytes [stream] to the response.
-  ///
-  /// This method writes headers and then streams the data to the response.
-  /// Use this method to avoid directly accessing the underlying HttpResponse.
   Future<void> addStream(Stream<List<int>> stream) async {
     _ensureNotClosed();
     writeHeaderNow();
     _bodyStarted = true;
-    await _httpResponse.addStream(stream);
+    final native = _httpResponse;
+    if (native != null) {
+      await native.addStream(stream);
+    } else {
+      await for (final chunk in stream) {
+        if (chunk.isNotEmpty) _adapter!.write(chunk);
+      }
+    }
   }
 
   /// Flushes any buffered data to the client immediately.
@@ -218,24 +337,42 @@ class Response {
     if (!_bodyStarted) {
       writeNow();
     }
-    await _httpResponse.flush();
+    final native = _httpResponse;
+    if (native != null) {
+      await native.flush();
+    } else {
+      await _adapter!.flush();
+    }
   }
 
-  /// Detaches the underlying socket, transferring responsibility to the caller.
+  /// Detaches the underlying socket (native path only).
   Future<Socket> detachSocket({bool writeHeaders = true}) async {
     _ensureNotClosed();
+    final native = _httpResponse;
+    if (native == null) {
+      throw UnsupportedError(
+        'detachSocket is not supported on portable responses',
+      );
+    }
     _isClosed = true;
-    return await _httpResponse.detachSocket(writeHeaders: writeHeaders);
+    return await native.detachSocket(writeHeaders: writeHeaders);
   }
 
-  /// Sends a file [file] as a downloadable attachment with an optional [name] and [headers].
+  /// Sends a file [file] as a downloadable attachment (native path preferred).
   HttpResponse download(
     File file, {
     String? name,
     Map<String, String>? headers,
   }) {
     _ensureNotClosed();
-    _httpResponse.statusCode = HttpStatus.ok;
+    final native = _httpResponse;
+    if (native == null) {
+      throw UnsupportedError(
+        'download() requires a native dart:io HttpResponse; '
+        'use writeBytes/addStream on portable hosts',
+      );
+    }
+    native.statusCode = HttpStatus.ok;
     _headers['Content-Type'] = ['application/octet-stream'];
     _headers['Content-Disposition'] = [
       'attachment; filename="${name ?? file.uri.pathSegments.last}"',
@@ -247,18 +384,21 @@ class Response {
 
     writeHeaderNow();
     _bodyStarted = true;
-    file.openRead().pipe(_httpResponse);
-    return _httpResponse;
+    file.openRead().pipe(native);
+    return native;
   }
 
-  /// Redirects the response to a [location] with an optional [status] and [headers].
-  HttpResponse redirect(
+  /// Redirects the response to a [location].
+  ///
+  /// Returns the native [HttpResponse] when available; otherwise null after
+  /// scheduling close on the portable path.
+  HttpResponse? redirect(
     String location, {
     int status = HttpStatus.found,
     Map<String, String>? headers,
   }) {
     _ensureNotClosed();
-    _httpResponse.statusCode = status;
+    _writeStatus(status);
     _headers['Location'] = [location];
 
     headers?.forEach((key, value) {
@@ -288,45 +428,44 @@ class Response {
       ..secure = secure
       ..httpOnly = httpOnly
       ..sameSite = sameSite;
-    // Only set domain if non-empty to avoid invalid "Domain=;" in cookie header
     if (domain.isNotEmpty) {
       cookie.domain = domain;
     }
 
-    // Remove existing cookies with same name
-    _httpResponse.cookies.removeWhere((c) => c.name == name);
-    _httpResponse.cookies.add(cookie);
-
-    // Don't duplicate into _headers; writeHeaderNow will skip Set-Cookie from _headers map
+    final native = _httpResponse;
+    if (native != null) {
+      native.cookies.removeWhere((c) => c.name == name);
+      native.cookies.add(cookie);
+    } else {
+      _portableCookies.removeWhere((c) => c.name == name);
+      _portableCookies.add(cookie);
+    }
   }
 
   /// Returns the headers of the HTTP response.
-  HttpHeaders get headers => _httpResponse.headers;
+  HttpHeaders get headers => _httpResponse?.headers ?? _portableHeaders!;
 
   /// Gets the status code of the HTTP response.
-  int get statusCode => _httpResponse.statusCode;
+  int get statusCode =>
+      _httpResponse?.statusCode ?? _portableStatusCode;
 
   /// Sets the status code of the HTTP response.
-  /// Safely ignores attempts after headers/body have been sent to mirror
-  /// real-world scenarios where late status changes are ineffective.
   set statusCode(int value) {
     if (_isClosed || _headersWritten || _bodyStarted) {
-      return; // ignore late mutation
+      return;
     }
-    _httpResponse.statusCode = value;
+    _writeStatus(value);
   }
 
   /// Adds a header with the given [name] and [value] to the response.
   void addHeader(String name, String value) {
     _ensureNotClosed();
     if (name.toLowerCase() == HttpHeaders.setCookieHeader) {
-      // Special case: Set-Cookie headers are always separate
       _headers.putIfAbsent(name, () => []).add(value);
     } else {
-      // Standard case: Combine with comma-separation
       final existing = _headers[name];
       if (existing != null) {
-        _headers[name] = [...existing, value]; // Preserve order
+        _headers[name] = [...existing, value];
       } else {
         _headers[name] = [value];
       }
@@ -336,23 +475,37 @@ class Response {
   /// Adds a header with the given [name] and [value] to the response.
   void setHeader(String name, String value) {
     _ensureNotClosed();
-    _httpResponse.headers.set(name, value);
+    final native = _httpResponse;
+    if (native != null) {
+      native.headers.set(name, value);
+    } else {
+      _portableHeaders!.set(name, value);
+      _headers[name] = [value];
+    }
   }
 
   /// Removes a header with the given [name] from the response.
   void removeHeader(String name, {Object? value}) {
     _ensureNotClosed();
-    if (value != null) {
-      _httpResponse.headers.remove(name, value);
+    final native = _httpResponse;
+    if (native != null) {
+      if (value != null) {
+        native.headers.remove(name, value);
+      } else {
+        native.headers.removeAll(name);
+      }
     } else {
-      _httpResponse.headers.removeAll(name);
+      if (value != null) {
+        _portableHeaders!.remove(name, value);
+      } else {
+        _portableHeaders!.removeAll(name);
+      }
     }
     _headers.remove(name);
   }
 
   /// Registers a one-time filter that can transform the buffered body before it
-  /// is written to the underlying [HttpResponse]. If the response has already
-  /// begun streaming, the filter is ignored.
+  /// is written to the underlying sink.
   void setBodyFilter(ResponseBodyFilter? filter) {
     if (_bodyStarted || _isClosed) {
       return;

@@ -6,6 +6,7 @@ import 'package:routed_core/src/engine/engine.dart' show Engine;
 ///
 /// Host packages implement this for their request type:
 /// - `routed_io` wraps `dart:io` [HttpRequest]
+/// - `routed_node` wraps Node.js `IncomingMessage`
 /// - a Cloudflare adapter wraps the Workers `Request`
 abstract interface class RequestAdapter {
   /// HTTP method, e.g. GET.
@@ -28,6 +29,7 @@ abstract interface class RequestAdapter {
 ///
 /// Host packages implement this for their response type:
 /// - `routed_io` wraps `dart:io` [HttpResponse]
+/// - `routed_node` wraps Node.js `ServerResponse`
 /// - a Cloudflare adapter builds a Workers `Response`
 abstract interface class ResponseAdapter {
   int get statusCode;
@@ -43,10 +45,12 @@ abstract interface class ResponseAdapter {
 
 /// Optional capability for host adapters that carry an opaque native request.
 ///
-/// Transitional: [Engine.handleConnection] uses this to dispatch to the
-/// existing `HttpRequest` pipeline when [nativeRequest] is a `dart:io`
-/// `HttpRequest`. Portable hosts leave this unimplemented / return null and
-/// will use a fully adapter-based pipeline once that path lands.
+/// Optional IO fast-path only.
+///
+/// When [nativeRequest] is a `dart:io` [HttpRequest], [Engine.handleConnection]
+/// skips the portable bridge (websockets, progressive writes). Portable hosts
+/// (`routed_node`, Workers) must not implement this — use [PortableRequest] /
+/// [Engine.handlePortable] instead.
 abstract interface class NativeRequestHandle {
   /// Host-specific request object (e.g. `dart:io` [HttpRequest]).
   Object? get nativeRequest;
@@ -89,6 +93,7 @@ abstract interface class ServerHandle {
 /// Pluggable server binding / event loop.
 ///
 /// - `routed_io` implements bind/listen with `HttpServer`
+/// - `routed_node` implements bind/listen with Node.js `http.createServer`
 /// - Workers packages typically skip bind and call [Engine.handleConnection]
 ///   from a fetch handler instead
 abstract interface class ServerTransport {

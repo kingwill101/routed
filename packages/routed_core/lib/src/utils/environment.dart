@@ -1,7 +1,9 @@
 import 'package:dotenv/dotenv.dart';
+import 'package:routed_core/src/utils/process_env.dart';
 
 final env = Environment.fromSystem();
-var _dotenv = DotEnv(includePlatformEnvironment: true, quiet: true);
+// Avoid includePlatformEnvironment: Platform.environment throws on JS/Node.
+var _dotenv = DotEnv(includePlatformEnvironment: false, quiet: true);
 
 /// A wrapper around environment variables that allows for safe access and
 /// in-memory modification.  Note that changes made through this wrapper
@@ -17,7 +19,12 @@ class Environment {
   /// Initializes the Environment with the current system environment variables.
   factory Environment.fromSystem() {
     final instance = Environment._();
-    _dotenv.load();
+    instance._variables.addAll(readProcessEnvironment());
+    try {
+      _dotenv.load();
+    } catch (_) {
+      // dotenv file load may fail without dart:io filesystem on JS hosts.
+    }
     return instance;
   }
 

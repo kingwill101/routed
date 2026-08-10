@@ -1,5 +1,28 @@
 ## 0.3.3
 
+### Transport
+- Portable `Engine.handleConnection` path: non-`dart:io` hosts
+  (`routed_node`, Workers, …) bridge `RequestAdapter`/`ResponseAdapter`
+  through `AdapterHttpBridge` into the existing pipeline when no native
+  `HttpRequest` is provided.
+- Export `AdapterHttpBridge`, `AdapterHttpRequest`, `AdapterHttpResponse`.
+- Value-style portable messages: `PortableRequest`, `PortableResponse`,
+  `PortableHeaders`, `HostCapabilities`, `RecordingResponseAdapter`,
+  and `Engine.handlePortable` (see docs/portable-host-architecture.md).
+- `PortableRequest.fromAdapter` and internal `_dispatchPortableConnection`
+  so value and adapter edges share one portable path (IO native fast path
+  unchanged).
+- `ConstraintRequestView` / `HttpConstraintView` / `AdapterConstraintView`:
+  route constraints and trie matching no longer require IO-only APIs for
+  domain and path-param checks.
+- Dual-mode `Request` / `Response`: `Request.fromAdapter`,
+  `Response.fromAdapter`, `hasNativeHttpRequest`, `isPortable`, `identity`.
+- `SyntheticHttpRequest` marks adapter-bridged shims.
+- Portable process environment: `readProcessEnvironment` / `hostIsWindows`
+  (VM via `dart:io`, Node via `process.env`); config/template boot no longer
+  calls `Platform.environment` (unblocks `dart test -p node`).
+- Portable bridge skips `InternetAddress` when unsupported on JS hosts.
+
   - bump jose + artisanal dependencies
 
 ### Configuration
