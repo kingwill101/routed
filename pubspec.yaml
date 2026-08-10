@@ -16,6 +16,8 @@ workspace:
   - packages/routed_storage
   - packages/routed_rate_limit
   - packages/routed_io
+  - packages/routed_node
+  - packages/routed_node/example/api
   - packages/server_native
   - packages/routed_auth
   - packages/routed_hotwire

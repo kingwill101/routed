@@ -1,0 +1,6 @@
+# Example Node build output
+example/api/build/
+example/api/.dart_tool/
+example/api/node_modules/
+*.js.deps
+*.js.map
