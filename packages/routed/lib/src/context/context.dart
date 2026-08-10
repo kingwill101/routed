@@ -174,6 +174,13 @@ class EngineContext {
   /// Retrieve a stored value by [key].
   T? get<T>(String key) => request.getAttribute<T>(key);
 
+  /// Returns `true` if an attribute with [key] is present, even when its
+  /// value is `null`.
+  ///
+  /// Unlike [get], this distinguishes an explicitly written `null` value from
+  /// an absent key, so typed state can preserve presence for nullable values.
+  bool hasAttribute(String key) => request.containsAttribute(key);
+
   /// Retrieve a stored value by [key] and throw an error if not found.
   T mustGet<T>(String key) {
     final value = get<T>(key);
