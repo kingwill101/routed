@@ -89,11 +89,11 @@ class SecureCookie {
 
     switch (_mode) {
       case SecurityMode.hmacOnly:
-        return _encodeHmacOnly(payload);
+        return _encodeHmacOnly(payload, name);
       case SecurityMode.aesOnly:
-        return _encodeAesOnly(payload);
+        return _encodeAesOnly(payload, name);
       case SecurityMode.both:
-        return _encodeWithBoth(payload);
+        return _encodeWithBoth(payload, name);
     }
   }
 
@@ -104,42 +104,42 @@ class SecureCookie {
 
     switch (_mode) {
       case SecurityMode.hmacOnly:
-        return _decodeHmacOnly(decodedStr);
+        return _decodeHmacOnly(decodedStr, name);
       case SecurityMode.aesOnly:
-        return _decodeAesOnly(decodedStr);
+        return _decodeAesOnly(decodedStr, name);
       case SecurityMode.both:
-        return _decodeWithBoth(decodedStr);
+        return _decodeWithBoth(decodedStr, name);
     }
   }
 
-  String _encodeHmacOnly(String payload) {
+  String _encodeHmacOnly(String payload, String name) {
     if (_hmacKey == null) throw StateError('HMAC not initialized');
-    final signature = _sign(payload);
+    final signature = _sign(payload, name);
     return base64Url.encode(utf8.encode('$payload|$signature'));
   }
 
-  String _encodeAesOnly(String payload) {
+  String _encodeAesOnly(String payload, String name) {
     if (_aesKey == null) throw StateError('Encrypter not initialized');
     final iv = _secureRandomBytes(12);
-    final encryptedBytes = _encryptAesGcm(_aesKey, iv, utf8.encode(payload));
+    final encryptedBytes = _encryptAesGcm(_aesKey, iv, utf8.encode(payload), name);
     return base64Url.encode(
       utf8.encode('${base64.encode(encryptedBytes)}|${base64.encode(iv)}'),
     );
   }
 
-  String _encodeWithBoth(String payload) {
+  String _encodeWithBoth(String payload, String name) {
     if (_aesKey == null) throw StateError('Encrypter not initialized');
     if (_hmacKey == null) throw StateError('HMAC not initialized');
 
     final iv = _secureRandomBytes(12);
-    final encryptedBytes = _encryptAesGcm(_aesKey, iv, utf8.encode(payload));
+    final encryptedBytes = _encryptAesGcm(_aesKey, iv, utf8.encode(payload), name);
     final combined = '${base64.encode(encryptedBytes)}|${base64.encode(iv)}';
-    final signature = _sign(combined);
+    final signature = _sign(combined, name);
 
     return base64Url.encode(utf8.encode('$combined|$signature'));
   }
 
-  Map<String, dynamic> _decodeHmacOnly(String decodedStr) {
+  Map<String, dynamic> _decodeHmacOnly(String decodedStr, String name) {
     if (_hmacKey == null) throw StateError('HMAC not initialized');
 
     final parts = decodedStr.split('|');
@@ -150,7 +150,7 @@ class SecureCookie {
     final payload = parts[0];
     final signature = parts[1];
 
-    if (!_verify(payload, signature)) {
+    if (!_verify(payload, signature, name)) {
       throw Exception('Signature mismatch');
     }
 
@@ -161,7 +161,7 @@ class SecureCookie {
     return <String, dynamic>{'value': decoded};
   }
 
-  Map<String, dynamic> _decodeAesOnly(String decodedStr) {
+  Map<String, dynamic> _decodeAesOnly(String decodedStr, String name) {
     if (_aesKey == null) throw StateError('Encrypter not initialized');
 
     final parts = decodedStr.split('|');
@@ -174,7 +174,7 @@ class SecureCookie {
 
     final iv = base64.decode(ivString);
     final encrypted = base64.decode(encryptedData);
-    final decrypted = _decryptAesGcm(_aesKey, iv, encrypted);
+    final decrypted = _decryptAesGcm(_aesKey, iv, encrypted, name);
 
     final dynamic decoded = jsonDecode(decrypted);
     if (decoded is Map<String, dynamic>) {
@@ -183,7 +183,7 @@ class SecureCookie {
     return <String, dynamic>{'value': decoded};
   }
 
-  Map<String, dynamic> _decodeWithBoth(String decodedStr) {
+  Map<String, dynamic> _decodeWithBoth(String decodedStr, String name) {
     if (_aesKey == null) throw StateError('Encrypter not initialized');
     if (_hmacKey == null) throw StateError('HMAC not initialized');
 
@@ -197,13 +197,13 @@ class SecureCookie {
     final signature = parts[2];
 
     final combined = '$encryptedData|$ivString';
-    if (!_verify(combined, signature)) {
+    if (!_verify(combined, signature, name)) {
       throw Exception('Signature mismatch');
     }
 
     final iv = base64.decode(ivString);
     final encrypted = base64.decode(encryptedData);
-    final decrypted = _decryptAesGcm(_aesKey, iv, encrypted);
+    final decrypted = _decryptAesGcm(_aesKey, iv, encrypted, name);
 
     final dynamic decoded = jsonDecode(decrypted);
     if (decoded is Map<String, dynamic>) {
@@ -212,15 +212,17 @@ class SecureCookie {
     return <String, dynamic>{'value': decoded};
   }
 
-  String _sign(String payload) {
+  /// Signs the [payload] bound to the [name] of the cookie so a value produced
+  /// for one cookie name is never accepted under a different name.
+  String _sign(String payload, String name) {
     if (_hmacKey == null) throw StateError('HMAC not initialized');
-    final bytes = utf8.encode(payload);
+    final bytes = utf8.encode('$name|$payload');
     final mac = crypto.Hmac(crypto.sha256, _hmacKey).convert(bytes);
     return base64Url.encode(mac.bytes);
   }
 
-  bool _verify(String payload, String signature) {
-    final expectedSig = _sign(payload);
+  bool _verify(String payload, String signature, String name) {
+    final expectedSig = _sign(payload, name);
     return _constantTimeEquals(signature, expectedSig);
   }
 
@@ -242,25 +244,37 @@ class SecureCookie {
     return List<int>.generate(length, (_) => rng.nextInt(256));
   }
 
-  List<int> _encryptAesGcm(Uint8List key, List<int> iv, List<int> plaintext) {
+  List<int> _encryptAesGcm(
+    Uint8List key,
+    List<int> iv,
+    List<int> plaintext,
+    String name,
+  ) {
     final cipher = GCMBlockCipher(AESEngine());
     final params = AEADParameters(
       KeyParameter(key),
       128,
       Uint8List.fromList(iv),
-      Uint8List(0),
+      // Bind the cookie name as associated (authenticated) data so ciphertext
+      // produced for one cookie name is rejected under another.
+      Uint8List.fromList(utf8.encode(name)),
     );
     cipher.init(true, params);
     return cipher.process(Uint8List.fromList(plaintext));
   }
 
-  String _decryptAesGcm(Uint8List key, List<int> iv, List<int> ciphertext) {
+  String _decryptAesGcm(
+    Uint8List key,
+    List<int> iv,
+    List<int> ciphertext,
+    String name,
+  ) {
     final cipher = GCMBlockCipher(AESEngine());
     final params = AEADParameters(
       KeyParameter(key),
       128,
       Uint8List.fromList(iv),
-      Uint8List(0),
+      Uint8List.fromList(utf8.encode(name)),
     );
     cipher.init(false, params);
     final decrypted = cipher.process(Uint8List.fromList(ciphertext));

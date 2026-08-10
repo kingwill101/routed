@@ -75,6 +75,13 @@ class MemorySessionStore implements SessionStore {
 
     if (session.isDestroyed || maxAgeSeconds <= 0) {
       _sessions.remove(session.id);
+      // Destroy deletes by the ID referenced by the old cookie; retain support
+      // for the pre-replacement ID recorded by [Session.destroy] or
+      // [Session.regenerate].
+      final previous = session.previousId;
+      if (previous != null && previous != session.id) {
+        _sessions.remove(previous);
+      }
       response.setCookie(
         session.name,
         '',
@@ -83,6 +90,14 @@ class MemorySessionStore implements SessionStore {
         domain: session.options.domain ?? defaultOptions.domain ?? '',
       );
       return;
+    }
+
+    // ID rotation (destroy/regenerate) must invalidate the record the old
+    // cookie still references; otherwise replaying it restores the pre-
+    // rotation session.
+    final previous = session.previousId;
+    if (previous != null && previous != session.id) {
+      _sessions.remove(previous);
     }
 
     final payload = session.serialize();

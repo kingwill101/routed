@@ -9,6 +9,13 @@ class Session {
   String _id;
   set id(String value) => _id = value;
 
+  /// The previously persisted ID, retained until the backend store has had a
+  /// chance to delete it.
+  ///
+  /// Set when [destroy] or [regenerate] replaces [_id], so stores can remove
+  /// the record still referenced by an old cookie instead of leaving it valid.
+  String? _previousId;
+
   /// Name of the session cookie
   final String name;
 
@@ -77,16 +84,25 @@ class Session {
   }
 
   /// Marks the session as destroyed and clears all values.
+  ///
+  /// The current persisted ID is retained in [previousId] so the backend store
+  /// can delete the original record when [write] runs; otherwise the old cookie
+  /// would keep resolving to an orphaned session until it expires.
   void destroy() {
     _destroyed = true;
     values.clear();
+    _previousId ??= _id; // Retain the persisted ID for server-side deletion
     _id = _generateId(); // Reset ID
     _lastAccessed = DateTime.now(); // Update last accessed
     options.setMaxAge(0); // Expire the cookie immediately
   }
 
   /// Regenerates the session ID while maintaining the session data.
+  ///
+  /// The ID that was active before regeneration is recorded in [previousId] so
+  /// the next [write] can invalidate the record referenced by the old cookie.
   void regenerate() {
+    _previousId = _id;
     _id = _generateId();
     touch();
   }
@@ -94,6 +110,10 @@ class Session {
   /// The unique identifier for this session.
   // ignore: unnecessary_getters_setters
   String get id => _id;
+
+  /// The ID that was persisted before the last [destroy] or [regenerate], or
+  /// null when the session ID has never been replaced.
+  String? get previousId => _previousId;
 
   /// When the session was created.
   DateTime get createdAt => _createdAt;

@@ -81,6 +81,13 @@ class CacheSessionStore implements SessionStore {
 
     if (session.isDestroyed || maxAgeSeconds <= 0) {
       await repository.forget(_cacheKey(session.id));
+      // Destroy deletes by the ID referenced by the old cookie; retain support
+      // for the pre-replacement ID recorded by [Session.destroy] or
+      // [Session.regenerate].
+      final previous = session.previousId;
+      if (previous != null && previous != session.id) {
+        await repository.forget(_cacheKey(previous));
+      }
       response.setCookie(
         session.name,
         '',
@@ -89,6 +96,13 @@ class CacheSessionStore implements SessionStore {
         domain: session.options.domain ?? defaultOptions.domain ?? '',
       );
       return;
+    }
+
+    // ID rotation must invalidate the record the old cookie still references;
+    // otherwise replaying the old cookie restores the pre-regeneration session.
+    final previous = session.previousId;
+    if (previous != null && previous != session.id) {
+      await repository.forget(_cacheKey(previous));
     }
 
     final serialized = session.serialize();

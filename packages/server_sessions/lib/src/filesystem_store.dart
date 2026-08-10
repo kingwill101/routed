@@ -72,7 +72,11 @@ class FilesystemStore implements SessionStore {
       (c) => c.name == name,
       orElse: () => Cookie(name, ''),
     );
-    final session = Session(name: name, options: defaultOptions, values: {});
+    final session = Session(
+      name: name,
+      options: defaultOptions.clone(),
+      values: {},
+    );
 
     if (cookie.value.isEmpty) {
       session.id = _generateSessionId();
@@ -110,16 +114,32 @@ class FilesystemStore implements SessionStore {
     SessionResponse response,
     Session session,
   ) async {
-    final maxAge = session.options.maxAge ?? 0;
-    if (maxAge <= 0) {
+    // maxAge == null (default) or 0 means the session never expires (per
+    // [SessionOptions] docs) and must be persisted. Only an explicit destroy
+    // or a negative maxAge removes the backend record.
+    final maxAge = session.options.maxAge;
+    final shouldDelete = session.isDestroyed || (maxAge != null && maxAge < 0);
+
+    if (shouldDelete) {
       await _eraseFile(session.id);
+      final previous = session.previousId;
+      if (previous != null && previous != session.id) {
+        await _eraseFile(previous);
+      }
       response.setCookie(
         session.name,
         '',
         maxAge: -1,
         path: session.options.path ?? "/",
+        domain: session.options.domain ?? "",
       );
       return;
+    }
+
+    // ID rotation must invalidate the file the old cookie still references.
+    final previous = session.previousId;
+    if (previous != null && previous != session.id) {
+      await _eraseFile(previous);
     }
 
     await _saveToFile(session.id, session.values);

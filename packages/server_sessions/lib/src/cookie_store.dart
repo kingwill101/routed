@@ -68,7 +68,7 @@ class CookieStore implements SessionStore {
     }
 
     if (cookie.value.isEmpty) {
-      return Session(name: name, options: defaultOptions);
+      return Session(name: name, options: defaultOptions.clone());
     }
 
     var value = cookie.value;
@@ -100,7 +100,7 @@ class CookieStore implements SessionStore {
           jsonDecode(value) as Map<String, dynamic>;
       final session = Session(
         name: name,
-        options: defaultOptions,
+        options: defaultOptions.clone(),
         id: data['id'] as String?,
         values: Map<String, dynamic>.from(data['values'] as Map),
         createdAt: DateTime.parse(data['created_at'] as String),
@@ -112,7 +112,7 @@ class CookieStore implements SessionStore {
 
       return session;
     } catch (e) {
-      return Session(name: name, options: defaultOptions);
+      return Session(name: name, options: defaultOptions.clone());
     }
   }
 
