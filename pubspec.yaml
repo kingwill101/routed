@@ -19,6 +19,8 @@ workspace:
   - packages/server_native
   - packages/routed_auth
   - packages/routed_hotwire
+  - packages/routed_view
+  - packages/routed_http
   - packages/server_testing/routed_testing
   # - examples/kitchen_sink
   # - examples/config_demo
