@@ -1,18 +1,18 @@
+// ignore_for_file: unnecessary_import
+
 import 'dart:convert';
 
 import 'package:routed/routed.dart';
-import 'package:routed/session.dart';
+import 'package:routed_sessions/routed_sessions.dart';
 
 void main(List<String> args) async {
-  // Create a secure cookie store with a random or fixed hash key
-
-  // Construct an Engine instance
+  // Construct an Engine instance with a secure cookie-backed session store.
   final engine = Engine(
     options: [
       withSessionConfig(
         SessionConfig(
           store: CookieStore(
-            defaultOptions: Options(
+            defaultOptions: SessionOptions(
               path: '/',
               maxAge: 3600, // 1 hour
               secure: false,
@@ -32,31 +32,18 @@ void main(List<String> args) async {
       ),
     ],
   );
+  engine.addGlobalMiddleware(sessionMiddleware());
 
-  // Example route: increments a session counter each time it’s visited
-  engine.get('/counter', (ctx) async {
-    // Retrieve the session from context
-    final session = ctx.get<Session>('session');
-    if (session == null) {
-      ctx.string('No session found');
-      return;
-    }
-
-    // Increment a counter in the session
-    final currentCount = (session.values['count'] ?? 0) as int;
-    session.values['count'] = currentCount + 1;
-
-    ctx.string('Counter = ${session.values['count']}');
+  // Example route: increments a session counter each time it's visited
+  engine.get('/counter', (ctx) {
+    final currentCount = ctx.getSession<int>('count') ?? 0;
+    ctx.setSession('count', currentCount + 1);
+    ctx.string('Counter = ${currentCount + 1}');
   });
 
   // Example route: reset the session
-  engine.get('/reset', (ctx) async {
-    final session = ctx.get<Session>('session');
-    if (session == null) {
-      ctx.string('No session found');
-      return;
-    }
-    session.values.clear();
+  engine.get('/reset', (ctx) {
+    ctx.clearSession();
     ctx.string('Session reset');
   });
 

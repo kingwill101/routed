@@ -21,7 +21,7 @@ final Map<String, Map<String, dynamic>> _users = <String, Map<String, dynamic>>{
 Future<void> main() async {
   SessionAuth.configure(rememberStore: InMemoryRememberTokenStore());
 
-  GuardRegistry.instance
+  guardRegistry
     ..register('authenticated', requireAuthenticated(realm: 'Example App'))
     ..register('admin-only', requireRoles(['admin']));
 

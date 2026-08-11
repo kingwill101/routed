@@ -21,7 +21,7 @@ final users = <String, Map<String, Object?>>{
 Future<void> main() async {
   SessionAuth.configure(rememberStore: InMemoryRememberTokenStore());
 
-  GuardRegistry.instance.register(
+  guardRegistry.register(
     'authenticated',
     requireAuthenticated(realm: 'Haigate Example'),
   );

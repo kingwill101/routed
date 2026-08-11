@@ -1,7 +1,8 @@
+// ignore_for_file: depend_on_referenced_packages, unnecessary_import
+
 import 'package:file/memory.dart';
 import 'package:routed/routed.dart';
-import 'package:routed/static_files.dart';
-
+import 'package:routed_storage/routed_storage.dart';
 void main(List<String> args) async {
   final engine = Engine();
   final fs = MemoryFileSystem();

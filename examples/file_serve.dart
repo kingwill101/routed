@@ -1,29 +1,22 @@
-// ignore_for_file: depend_on_referenced_packages
+// ignore_for_file: depend_on_referenced_packages, unnecessary_import
 
 import 'package:routed/routed.dart';
+import 'package:routed_storage/routed_storage.dart';
 
 void main() {
   final router = Router();
 
   // Serve a single file
-  router.get('/download', (c) async {
-    await c.fileAttachment('files/img.png', 'screenshot.png');
-  });
+  router.staticFile('/download', 'files/img.png');
 
-  // Serve a directory
-  router.get('/files/{file}', (c) async {
-    final filePath = c.param('file');
-    await c.file('files/$filePath');
-    c.abort();
-  });
+  // Serve a directory of files
+  router.static('/files', 'files');
 
-  // Serve an image
-  router.get('/image', (c) async {
-    await c.file(
-      '/home/kingwill101/code/kmp/untitled1/examples/files/file2.txt',
-    );
-    c.abort();
-  });
+  // Serve an image with a custom file system
+  router.staticFile(
+    '/image',
+    '/home/kingwill101/code/kmp/untitled1/examples/files/file2.txt',
+  );
 
   final engine = Engine();
   engine.use(router);

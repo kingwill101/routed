@@ -4,16 +4,9 @@ import 'form_cache.dart';
 import '../binding/multipart.dart';
 
 extension MultipartFormMethods on EngineContext {
-  /// Retrieve the multipart form asynchronously.
-  Future<MultipartForm> multipartForm() async {
-    await initFormCache();
-    final a = get<MultipartForm>(multipartFormKey) ?? MultipartForm();
-    return a;
-  }
-
   /// Retrieve a file from the multipart form.
   Future<MultipartFile?> formFile(String name) async {
-    final form = await multipartForm();
+    final form = await multipartForm;
     return form.files.where((f) => f.name == name).firstOrNull;
   }
 

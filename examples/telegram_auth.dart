@@ -28,13 +28,16 @@
 /// ```
 library;
 
+// ignore_for_file: unnecessary_import
+
 import 'dart:convert';
 import 'dart:io';
 
 import 'package:routed/routed.dart';
-import 'package:routed/session.dart';
-import 'package:routed/src/sessions/middleware.dart';
 import 'package:routed_auth/routed_auth.dart';
+import 'package:routed_sessions/routed_sessions.dart';
+import 'package:server_auth/server_auth.dart';
+import 'package:server_sessions/server_sessions.dart';
 
 void main() async {
   // Get credentials from environment

@@ -562,7 +562,7 @@ void main() {
       engine.addGlobalMiddleware(SessionAuth.sessionAuthMiddleware());
 
       guardRegistry.register('maintenance-test', (ctx) async {
-        final response = await ctx.string(
+        final response = ctx.string(
           'maintenance mode',
           statusCode: HttpStatus.serviceUnavailable,
         );

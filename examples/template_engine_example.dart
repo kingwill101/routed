@@ -1,5 +1,8 @@
+// ignore_for_file: unnecessary_import
+
 import 'package:file/memory.dart';
 import 'package:routed/routed.dart';
+import 'package:routed_views/routed_views.dart';
 
 void main(List<String> args) async {
   final engine = Engine();
@@ -26,8 +29,10 @@ void main(List<String> args) async {
     </html>
   ''');
 
-  // Configure template engines
-  engine.useViewEngine(LiquidViewEngine(root: LiquidRoot(fileSystem: fs)));
+  // Register the view engine so templates resolve through the manager.
+  engine.container
+      .get<ViewEngineManager>()
+      .register(LiquidViewEngine(root: LiquidRoot(fileSystem: fs)));
 
   // Routes for Liquid templates
   engine.get('/liquid', (ctx) {

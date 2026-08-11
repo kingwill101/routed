@@ -1,5 +1,7 @@
+// ignore_for_file: unnecessary_import
+
 import 'package:routed/routed.dart';
-import 'package:routed/bindings.dart';
+import 'package:routed_http/routed_http.dart';
 
 void main(List<String> args) async {
   final engine = Engine();

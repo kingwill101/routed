@@ -1,5 +1,21 @@
-import 'package:routed/middleware.dart';
 import 'package:routed/routed.dart';
+
+/// Simple timeout middleware: aborts with 504 when the downstream handler
+/// does not complete within [timeout].
+Middleware timeoutMiddleware(Duration timeout) {
+  return (EngineContext ctx, Next next) async {
+    final result = next();
+    if (result is Future<Response>) {
+      return result.timeout(timeout, onTimeout: () {
+        return ctx.string(
+          'Request timed out',
+          statusCode: HttpStatus.gatewayTimeout,
+        );
+      });
+    }
+    return result;
+  };
+}
 
 void main(List<String> args) async {
   final engine = Engine();
@@ -8,25 +24,25 @@ void main(List<String> args) async {
   // Add timeout middleware to specific routes
   router.get('/fast', (ctx) {
     ctx.string('Fast response');
-  }, middlewares: [timeoutMiddleware(Duration(seconds: 1))]);
+  }, middlewares: [timeoutMiddleware(const Duration(seconds: 1))]);
 
   router.get('/slow', (ctx) async {
-    await Future.delayed(Duration(seconds: 2));
+    await Future.delayed(const Duration(seconds: 2));
     ctx.string('Slow response');
-  }, middlewares: [timeoutMiddleware(Duration(seconds: 1))]);
+  }, middlewares: [timeoutMiddleware(const Duration(seconds: 1))]);
 
   // Add timeout middleware to a group of routes
   router.group(
     path: '/api',
-    middlewares: [timeoutMiddleware(Duration(seconds: 3))],
+    middlewares: [timeoutMiddleware(const Duration(seconds: 3))],
     builder: (group) {
       group.get('/data', (ctx) async {
-        await Future.delayed(Duration(seconds: 2));
+        await Future.delayed(const Duration(seconds: 2));
         ctx.json({'message': 'Data retrieved'});
       });
 
       group.get('/timeout', (ctx) async {
-        await Future.delayed(Duration(seconds: 4));
+        await Future.delayed(const Duration(seconds: 4));
         ctx.json({'message': 'Should timeout before this'});
       });
     },

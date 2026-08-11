@@ -1,5 +1,4 @@
 import 'dart:async';
-import 'dart:convert';
 import 'dart:io';
 
 import 'package:routed_core/routed_core.dart';
@@ -14,6 +13,10 @@ abstract class Render {
 
 /// View/render extensions for [EngineContext] — migrated from `routed`
 /// `src/context/render.dart` per refactor.md §16.2.
+///
+/// Generic response helpers (`string`, `json`, `html`, `redirect`) live in
+/// `package:routed_core` (see [EngineContextHelpers]); this extension only
+/// carries view-specific rendering.
 extension RoutedViewRender on EngineContext {
   FutureOr<void> viewRender(int statusCode, Render renderer) {
     renderer.writeContentType(response);
@@ -39,50 +42,5 @@ extension RoutedViewRender on EngineContext {
       response.write('<!-- view: $template -->');
     }
     return response;
-  }
-
-  Future<Response> json(Object data, {int statusCode = HttpStatus.ok}) async {
-    response.statusCode = statusCode;
-    response.headers.contentType = ContentType.json;
-    response.write(data is String ? data : _toJson(data));
-    return response;
-  }
-
-  Future<Response> string(String data, {int statusCode = HttpStatus.ok, ContentType? contentType}) async {
-    response.statusCode = statusCode;
-    response.headers.contentType = contentType ?? ContentType.text;
-    response.write(data);
-    return response;
-  }
-
-  Future<Response> html(String data, {Map<String, dynamic> dataMap = const {}, int statusCode = HttpStatus.ok}) async {
-    // html via string with html content type
-    response.statusCode = statusCode;
-    response.headers.contentType = ContentType.html;
-    response.write(data);
-    return response;
-  }
-
-  Future<Response> redirect(String location, {int statusCode = HttpStatus.found}) async {
-    response.statusCode = statusCode;
-    response.headers.set(HttpHeaders.locationHeader, location);
-    return response;
-  }
-
-  String _toJson(Object data) {
-    try {
-      return data is Map || data is List ? _jsonEncode(data) : data.toString();
-    } catch (_) {
-      return data.toString();
-    }
-  }
-
-  String _jsonEncode(Object data) {
-    try {
-      return const JsonEncoder().convert(data);
-    } catch (_) {
-      // ignore: avoid_dynamic_calls
-      return (data as dynamic).toString();
-    }
   }
 }
