@@ -6,10 +6,7 @@ workspace:
   - packages/server_native
   - packages/routed_auth
   - packages/routed_hotwire
-  - packages/server_testing/server_testing
   - packages/server_testing/routed_testing
-  - packages/server_testing/server_testing_shelf
-  - packages/property_testing
   # - examples/kitchen_sink
   # - examples/config_demo
   # - examples/policy_demo/policy_demo

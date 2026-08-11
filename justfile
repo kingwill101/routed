@@ -2,7 +2,7 @@
 # Manages all packages in the ecosystem
 
 # List all packages
-PACKAGES := "packages/property_testing packages/routed packages/routed_cli packages/routed_hotwire packages/server_testing/routed_testing packages/server_testing/server_testing packages/server_testing/server_testing_shelf"
+PACKAGES := "packages/routed packages/routed_io packages/server_native packages/routed_auth packages/routed_hotwire packages/server_testing/routed_testing"
 
 # Default recipe - shows available commands
 default:

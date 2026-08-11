@@ -17,14 +17,17 @@ layout so packages share tooling, CI, and release notes.
   configuration docs, provider management, and dev tooling.
 - [packages/routed_hotwire](packages/routed_hotwire) – Turbo/Stimulus helpers
   for realtime experiences atop Routed.
-- [packages/property_testing](packages/property_testing) – generator + shrinking
-  library that powers fuzz/property coverage across the workspace.
-- [packages/server_testing/server_testing](packages/server_testing/server_testing) –
-  HTTP & browser testing harness with CLI-managed drivers.
 - [packages/server_testing/routed_testing](packages/server_testing/routed_testing) –
   Routed transport adapter for `server_testing`.
-- [packages/server_testing/server_testing_shelf](packages/server_testing/server_testing_shelf) –
-  Shelf adapter for `server_testing`.
+
+Testing utilities that were extracted into their own repositories (published
+under the [RoutedDart](https://github.com/RoutedDart) organization):
+
+- [`property_testing`](https://github.com/RoutedDart/property_testing) –
+  generator + shrinking library that powers fuzz/property coverage.
+- [`server_testing`](https://github.com/RoutedDart/server_testing) – HTTP &
+  browser testing harness with CLI-managed drivers, plus the
+  `server_testing_shelf` Shelf adapter.
 
 ## Examples
 

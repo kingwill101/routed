@@ -169,8 +169,19 @@ class Request {
 
   /// Retrieves a request-scoped attribute by [key].
   ///
-  /// Returns the attribute value if found, otherwise returns null.
-  T? getAttribute<T>(String key) => _attributes[key] as T?;
+  /// Returns the attribute value if found and assignable to [T], otherwise
+  /// returns null. A stored value of a different type (e.g. written through a
+  /// legacy string key or a same-name key collision) is treated as absent
+  /// instead of throwing a runtime type error.
+  T? getAttribute<T>(String key) {
+    final value = _attributes[key];
+    if (value is T) return value;
+    return null;
+  }
+
+  /// Returns `true` if an attribute with [key] is present, even when its
+  /// value is `null` (e.g. written via [setAttribute]).
+  bool containsAttribute(String key) => _attributes.containsKey(key);
 
   /// Sets a request-scoped attribute with the given [key] and [value].
   /// Store a value [value] under [key].
