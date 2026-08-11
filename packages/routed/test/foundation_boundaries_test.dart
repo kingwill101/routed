@@ -56,6 +56,7 @@ void main() {
           'nullableRequire': null,
           'mismatchRead': null,
           'mismatchContains': null,
+          'mismatchRequire': null,
         });
       engine.get('/typed-state', (ctx) {
         // Explicit extension invocation: the instance member write(String)
@@ -88,6 +89,13 @@ void main() {
         observed['mismatchRead'] = ctx.read<String>(userKey);
         // Presence is keyed by name only, so the key remains present.
         observed['mismatchContains'] = ctx.contains(wrongKey);
+        // A present value of an incompatible type throws a StateError.
+        try {
+          ctx.require<bool>(wrongKey);
+          observed['mismatchRequire'] = 'no-throw';
+        } on StateError {
+          observed['mismatchRequire'] = 'throws';
+        }
 
         return ctx.string('ok');
       });
@@ -105,6 +113,7 @@ void main() {
       expect(observed['nullableRequire'], isNull);
       expect(observed['mismatchRead'], isNull);
       expect(observed['mismatchContains'], isTrue);
+      expect(observed['mismatchRequire'], 'throws');
     });
 
     test('transport abstractions are importable and constructible', () {

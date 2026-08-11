@@ -17,7 +17,18 @@ extension TypedContextState on EngineContext {
     if (!hasAttribute(key.name)) {
       throw StateError('Key ${key.name} not found in context');
     }
-    return get<T>(key.name) as T;
+    final raw = request.getAttribute<Object?>(key.name);
+    if (raw == null) {
+      // A written null is only valid for a nullable [T].
+      if (null is T) return null as T;
+      throw StateError(
+        'Key ${key.name} holds null, which is not compatible with $T',
+      );
+    }
+    if (raw is T) return raw as T;
+    throw StateError(
+      'Key ${key.name} holds ${raw.runtimeType}, not $T',
+    );
   }
 
   /// Writes [value] for [key].
