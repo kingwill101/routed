@@ -17,84 +17,9 @@ library;
 
 import 'dart:io';
 
-import 'package:routed_core/routed_core.dart'
-    hide
-        AuthManager,
-        AuthOptions,
-        AuthCallbacks,
-        AuthSession,
-        AuthPrincipal,
-        AuthUser,
-        AuthSessionStrategy,
-        CredentialsProvider,
-        JwtSessionOptions,
-        JwtOptions,
-        JwtVerifier,
-        JwtAuthException,
-        JwtPayload,
-        JwtIssuer,
-        JwtOnVerified,
-        jwtAuthentication,
-        jwtClaimsAttribute,
-        jwtHeadersAttribute,
-        jwtSecretKey,
-        jwtSubjectAttribute,
-        AuthFlowException,
-        SessionAuth,
-        SessionAuthService,
-        AuthRoutes,
-        AuthServiceProvider,
-        Haigate,
-        GateCallback,
-        GateEvaluation,
-        GateEvaluationContext,
-        GateObserver,
-        GatePayloadProvider,
-        GateDeniedHandler,
-        GateRegistry,
-        GateRegistrationException,
-        GateViolation,
-        RbacAbility,
-        RbacOptions,
-        registerRbacAbilities,
-        registerRbacAbilitiesSafely,
-        registerRbacWithHaigate,
-        rbacGate,
-        Policy,
-        PolicyAction,
-        PolicyBinding,
-        PolicyOptions,
-        registerPolicyBindings,
-        registerPolicyBindingsSafely,
-        registerPoliciesWithHaigate,
-        policyGate,
-        AuthSignInEvent,
-        AuthSignOutEvent,
-        AuthSessionEvent,
-        AuthSignInResult,
-        AuthSignInCallbackContext,
-        GuardResult,
-        AuthGuard,
-        GuardRegistry,
-        RememberTokenStore,
-        InMemoryRememberTokenStore,
-        guardMiddleware,
-        requireAuthenticated,
-        requireRoles,
-        OAuth2Client,
-        OAuth2Exception,
-        OAuthTokenResponse,
-        OAuthIntrospectionOptions,
-        OAuthIntrospectionResult,
-        oauth2Introspection,
-        oauthTokenAttribute,
-        oauthClaimsAttribute,
-        oauthScopeAttribute,
-        OAuthOnValidated,
-        OAuthProvider,
-        EmailProvider,
-        AuthEmailRequest;
+import 'package:routed_core/routed_core.dart';
 import 'package:routed_auth/routed_auth.dart';
+import 'package:server_auth/server_auth.dart';
 
 Future<void> main() async {
   // 1. Build the Google OAuth provider.
@@ -115,13 +40,16 @@ Future<void> main() async {
     providers: [...Engine.defaultProviders, AuthServiceProvider()],
   );
 
-  engine.container.instance<AuthOptions>(AuthOptions(providers: [google]));
+  engine.container.instance<AuthOptions<EngineContext>>(
+    AuthOptions<EngineContext>(providers: [google]),
+  );
 
   // 3. Redirect the user to Google's consent screen.
   engine.get('/auth/google', (EngineContext ctx) async {
     final manager = ctx.container.get<AuthManager>();
-    final provider =
-        manager.resolveProvider('google')! as OAuthProvider<GoogleProfile>;
+    final provider = manager.options.providers
+        .whereType<OAuthProvider<GoogleProfile>>()
+        .firstWhere((p) => p.id == 'google');
     final authUrl = await manager.beginOAuth(ctx, provider);
     ctx.redirect(authUrl.toString());
   });
@@ -129,8 +57,9 @@ Future<void> main() async {
   // 4. Handle the OAuth callback from Google.
   engine.get('/auth/callback/google', (EngineContext ctx) async {
     final manager = ctx.container.get<AuthManager>();
-    final provider =
-        manager.resolveProvider('google')! as OAuthProvider<GoogleProfile>;
+    final provider = manager.options.providers
+        .whereType<OAuthProvider<GoogleProfile>>()
+        .firstWhere((p) => p.id == 'google');
 
     final code = ctx.query('code') ?? '';
     final state = ctx.query('state');

@@ -23,6 +23,9 @@ dependencies:
   routed_views: ^0.1.0
 
 dev_dependencies:
+  routed_http: ^0.1.0
+  routed_sessions: ^0.1.0
+  routed_storage: ^0.1.0
   contextual: ^2.2.0
   lints: ^6.0.0
   path: ^1.9.1

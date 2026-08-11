@@ -1,5 +1,7 @@
-import 'package:routed_core/routed_core.dart';
+import 'package:routed_core/routed_core.dart' hide LiquidViewEngine, ViewEngine;
 import 'package:routed_hotwire/routed_hotwire.dart';
+import 'package:routed_http/routed_http.dart';
+import 'package:routed_views/routed_views.dart';
 
 import '../repositories/todo_repository.dart';
 
@@ -284,9 +286,14 @@ Future<String> _renderTemplate(
   String templateName, {
   Map<String, dynamic> data = const {},
 }) async {
-  final engine = ctx.engine;
-  if (engine == null) {
+  final container = ctx.container;
+  if (!container.has<ViewEngineManager>()) {
     throw StateError('View engine not available for template rendering');
   }
-  return engine.viewEngine.renderFile(templateName, data);
+  final manager = container.get<ViewEngineManager>();
+  final engine = manager.engineForFile(templateName);
+  if (engine == null) {
+    throw StateError('No view engine registered for $templateName');
+  }
+  return engine.renderFile(templateName, data);
 }
