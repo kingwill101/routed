@@ -1,11 +1,11 @@
 import 'dart:convert';
 import 'dart:io';
 
-import 'package:routed/routed.dart';
+import 'package:routed/routed.dart' hide AuthManager, AuthOptions, AuthCallbacks, AuthSession, AuthPrincipal, AuthUser, AuthSessionStrategy, CredentialsProvider, JwtSessionOptions, JwtOptions, JwtVerifier, JwtAuthException, JwtPayload, JwtIssuer, JwtOnVerified, jwtAuthentication, jwtClaimsAttribute, jwtHeadersAttribute, jwtSecretKey, jwtSubjectAttribute, AuthFlowException, SessionAuth, SessionAuthService, AuthRoutes, AuthServiceProvider, Haigate, GateCallback, GateEvaluation, GateEvaluationContext, GateObserver, GatePayloadProvider, GateDeniedHandler, GateRegistry, GateRegistrationException, GateViolation, RbacAbility, RbacOptions, registerRbacAbilities, registerRbacAbilitiesSafely, registerRbacWithHaigate, rbacGate, Policy, PolicyAction, PolicyBinding, PolicyOptions, registerPolicyBindings, registerPolicyBindingsSafely, registerPoliciesWithHaigate, policyGate, AuthSignInEvent, AuthSignOutEvent, AuthSessionEvent, AuthSignInResult, AuthSignInCallbackContext, GuardResult, AuthGuard, GuardRegistry, RememberTokenStore, InMemoryRememberTokenStore, guardMiddleware, requireAuthenticated, requireRoles, OAuth2Client, OAuth2Exception, OAuthTokenResponse, OAuthIntrospectionOptions, OAuthIntrospectionResult, oauth2Introspection, oauthTokenAttribute, oauthClaimsAttribute, oauthScopeAttribute, OAuthOnValidated, OAuthProvider, EmailProvider, AuthEmailRequest;
 import 'package:routed_auth/routed_auth.dart';
-import 'package:server_data/sessions.dart';
 import 'package:server_auth/server_auth.dart';
 import 'package:routed/src/sessions/middleware.dart';
+import 'package:routed/src/sessions/options.dart';
 import 'package:routed_testing/routed_testing.dart';
 import 'package:server_testing/server_testing.dart';
 import '../test_engine.dart';
@@ -15,7 +15,7 @@ SessionConfig _sessionConfig() {
   return SessionConfig.cookie(
     appKey: 'base64:$key',
     cookieName: 'test_session',
-    options: SessionOptions(
+    options: Options(
       path: '/',
       secure: false,
       httpOnly: true,

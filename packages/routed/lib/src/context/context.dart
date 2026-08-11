@@ -3,7 +3,6 @@ import 'dart:convert';
 import 'dart:io';
 import 'dart:typed_data';
 
-import 'package:meta/meta.dart' show internal;
 import 'package:path/path.dart' as p;
 import 'package:routed/src/binding/binding.dart';
 import 'package:routed/src/binding/convert/sse.dart';
@@ -59,7 +58,6 @@ part 'shortcuts.dart';
 /// tracks errors, and can control flow in a chain of handlers.
 class EngineContext {
   /// The current HTTP request data.
-  @internal
   final Request request;
 
   /// The current HTTP response writer.

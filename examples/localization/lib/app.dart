@@ -68,7 +68,7 @@ Map<String, Object?> _localizedPayload(EngineContext ctx, {String? note}) {
     'notifications': notificationSummary,
     'cta_hint': ctx.trans('cta_hint').toString(),
     'legal_notice': ctx.trans('legal_notice').toString(),
-    if (note != null) 'note': note,
+    'note': ?note,
   };
 }
 

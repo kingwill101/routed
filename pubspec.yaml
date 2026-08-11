@@ -11,6 +11,10 @@ workspace:
   - packages/server_storage
   - packages/server_rate_limit
   - packages/routed_full
+  - packages/routed_cache
+  - packages/routed_sessions
+  - packages/routed_storage
+  - packages/routed_rate_limit
   - packages/routed_io
   - packages/server_native
   - packages/routed_auth

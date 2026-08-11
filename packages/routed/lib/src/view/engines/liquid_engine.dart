@@ -1,3 +1,4 @@
+import 'package:file/file.dart';
 import 'dart:async';
 
 import 'package:liquify/liquify.dart' as liquid;
@@ -38,7 +39,7 @@ class LiquidViewEngine implements ViewEngine {
     if (resolvedRoot is liquid.FileSystemRoot) {
       return liquid.FileSystemRoot(
         baseDirectory,
-        fileSystem: resolvedRoot.fileSystem,
+        fileSystem: (resolvedRoot as dynamic).fileSystem as FileSystem?,
       );
     }
     return resolvedRoot;

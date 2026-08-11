@@ -1,0 +1,98 @@
+library;
+import 'dart:io';
+
+import 'package:routed/routed.dart';
+import 'package:server_sessions/server_sessions.dart';
+
+const sessionKey = ContextKey<Session>('routed.session');
+
+/// Default cookie name used when [sessionMiddleware] is called without [name].
+const defaultSessionName = 'routed_session';
+
+extension SessionEngineContext on EngineContext {
+  Session get session => mustGet<Session>(sessionKey.name);
+  bool get hasSession => get<Session>(sessionKey.name) != null;
+}
+
+/// Adapts Routed's [Request] to the portable [SessionRequest] contract.
+class _RoutedSessionRequest implements SessionRequest {
+  _RoutedSessionRequest(this.request);
+
+  final Request request;
+
+  @override
+  List<Cookie> get cookies => request.cookies;
+
+  @override
+  String header(String name) => request.header(name);
+}
+
+/// Adapts Routed's [Response] to the portable [SessionResponse] contract.
+class _RoutedSessionResponse implements SessionResponse {
+  _RoutedSessionResponse(this.response);
+
+  final Response response;
+
+  @override
+  void setCookie(
+    String name,
+    dynamic value, {
+    int? maxAge,
+    String path = '/',
+    String domain = '',
+    bool secure = false,
+    bool httpOnly = false,
+    SameSite? sameSite,
+  }) {
+    response.setCookie(
+      name,
+      value,
+      maxAge: maxAge,
+      path: path,
+      domain: domain,
+      secure: secure,
+      httpOnly: httpOnly,
+      sameSite: sameSite,
+    );
+  }
+}
+
+/// Installs session handling for the given [store].
+///
+/// For every request the middleware:
+/// 1. Reads (or creates) the session via `store.read(ctx.request, name)` and
+///    places it under [sessionKey] so `ctx.session` / `ctx.hasSession` work.
+/// 2. Runs the rest of the handler chain.
+/// 3. Persists the session via `store.write(...)` (including destroys and
+///    regenerations performed by the handler).
+Middleware sessionMiddleware(
+  SessionStore store, {
+  String name = defaultSessionName,
+}) {
+  return (ctx, next) async {
+    final request = _RoutedSessionRequest(ctx.request);
+    final response = _RoutedSessionResponse(ctx.response);
+
+    final session = await store.read(request, name);
+    ctx.set(sessionKey.name, session);
+
+    final res = await next();
+
+    if (!ctx.isClosed) {
+      final current = ctx.get<Session>(sessionKey.name) ?? session;
+      await store.write(request, response, current);
+    }
+    return res;
+  };
+}
+
+class RoutedSessionsProvider extends ServiceProvider {
+  RoutedSessionsProvider(this.store);
+  final SessionStore store;
+  @override
+  void register(Container container) {
+    container.singleton<SessionStore>((_) async => store);
+  }
+  @override
+  Future<void> boot(Container container) async {}
+}

@@ -355,9 +355,9 @@ Future<void> main(List<String> args) async {
     dartIoDirectResult,
     ioResult,
     ffiDirectResult,
-    if (ffiDirectNativeCallbackResult case final value?) value,
+    ?ffiDirectNativeCallbackResult,
     ffiResult,
-    if (ffiNativeCallbackResult case final value?) value,
+    ?ffiNativeCallbackResult,
     ffiNativeDirectResult,
   ];
   if (options.includeNativeDirectShape) {

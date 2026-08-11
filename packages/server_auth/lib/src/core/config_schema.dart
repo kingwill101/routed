@@ -18,13 +18,13 @@ class ConfigSchema {
   }) {
     final map = <String, dynamic>{
       'type': 'object',
-      if (title != null) 'title': title,
-      if (description != null) 'description': description,
+      'title': ?title,
+      'description': ?description,
       if (properties != null)
         'properties': properties.map(
           (key, value) => MapEntry(key, value.value),
         ),
-      if (required != null) 'required': required,
+      'required': ?required,
       'additionalProperties': additionalProperties ?? false,
     };
     var schema = Schema.fromMap(map);
