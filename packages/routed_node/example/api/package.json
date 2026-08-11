@@ -1,0 +1,16 @@
+{
+  "name": "routed-node-api-sample",
+  "private": true,
+  "version": "0.1.0",
+  "description": "Sample Routed JSON API on the Node.js host transport",
+  "main": "index.cjs",
+  "scripts": {
+    "smoke": "dart run bin/smoke.dart",
+    "build": "dart compile js bin/server.dart -o build/server.js -O2",
+    "start": "node index.cjs",
+    "serve": "npm run build && npm start"
+  },
+  "engines": {
+    "node": ">=18"
+  }
+}

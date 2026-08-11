@@ -7,8 +7,8 @@ import 'package:server_auth/server_auth.dart'
         AuthUser,
         AuthCredentials,
         AuthProvider;
-import 'package:routed/src/context/context.dart';
-import 'package:routed/src/events/event.dart';
+import 'package:routed_core/src/context/context.dart';
+import 'package:routed_core/src/events/event.dart';
 
 /// Event emitted after a successful sign-in.
 final class AuthSignInEvent extends Event {

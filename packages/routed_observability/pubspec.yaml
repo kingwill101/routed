@@ -1,0 +1,20 @@
+name: routed_observability
+description: Observability providers/middleware for Routed (tracing, metrics, health).
+version: 0.1.0
+repository: https://github.com/kingwill101/routed/tree/master/packages/routed_observability
+funding:
+  - https://www.buymeacoffee.com/kingwill101
+environment:
+  sdk: ">=3.9.0 <4.0.0"
+resolution: workspace
+dependencies:
+  dartastic_opentelemetry: ^0.9.3
+  dartastic_opentelemetry_api: ^0.8.7
+  routed_core: ^0.3.3
+  sentry: ^9.10.0
+dev_dependencies:
+  file: ^7.0.1
+  lints: ^6.0.0
+  routed_testing: ^0.3.3
+  server_testing: ^0.3.2
+  test: ^1.29.0

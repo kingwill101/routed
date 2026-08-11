@@ -1,0 +1,7 @@
+.dart_tool/
+build/
+.packages
+pubspec.lock
+*.js.deps
+*.js.map
+node_modules/

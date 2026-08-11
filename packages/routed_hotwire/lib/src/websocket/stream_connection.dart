@@ -1,4 +1,4 @@
-import 'package:routed/routed.dart' show WebSocketContext;
+import 'package:routed_core/routed_core.dart' show WebSocketContext;
 
 /// Minimal contract representing a client connection that can receive Turbo Streams.
 abstract class TurboStreamConnection {

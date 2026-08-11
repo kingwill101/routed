@@ -1,4 +1,4 @@
-import 'package:routed/routed.dart';
+import 'package:routed_core/routed_core.dart' hide SecureCookie;
 import 'package:routed_sessions/routed_sessions.dart';
 import 'package:routed_testing/routed_testing.dart';
 import 'package:server_sessions/server_sessions.dart';
@@ -22,6 +22,10 @@ void main() {
   // branch (removed up-stack by the foundation slim), so use the explicit
   // extension override to disambiguate.
   Session sessionOf(EngineContext ctx) => SessionEngineContext(ctx).session;
+  // `string` is exposed by both EngineContextHelpers and RoutedViewRender;
+  // use the explicit extension override to disambiguate.
+  void writeString(EngineContext ctx, String text) =>
+      EngineContextHelpers(ctx).string(text);
 
   group('sessionMiddleware lifecycle', () {
     test('creates a session, exposes it under ctx, and persists a cookie',
@@ -30,7 +34,7 @@ void main() {
       engine.get('/check', (EngineContext ctx) async {
         if (!SessionEngineContext(ctx).hasSession) {
           ctx.status(400);
-          ctx.string('no session');
+          writeString(ctx, 'no session');
           return;
         }
         final session = sessionOf(ctx);
@@ -38,7 +42,7 @@ void main() {
           'visits',
           (session.getValue<int>('visits') ?? 0) + 1,
         );
-        ctx.string('ok');
+        writeString(ctx, 'ok');
       });
 
       final response = await client.get('/check');
@@ -46,7 +50,7 @@ void main() {
       final setCookies = response.headers[HttpHeaders.setCookieHeader];
       expect(setCookies, isNotEmpty,
           reason: 'the store must write the session cookie');
-      expect(response.cookie(defaultSessionName), isNotNull);
+      expect(response.cookie('routed_session'), isNotNull);
     });
 
     test('session value persists across requests via the cookie', () async {
@@ -55,7 +59,7 @@ void main() {
         final session = sessionOf(ctx);
         final visits = (session.getValue<int>('visits') ?? 0) + 1;
         session.setValue('visits', visits);
-        ctx.string('visits=$visits');
+        writeString(ctx, 'visits=$visits');
       });
 
       final first = await client.get('/visit');
@@ -78,7 +82,7 @@ void main() {
       await setUpEngine();
       engine.get('/logout', (EngineContext ctx) async {
         sessionOf(ctx).destroy();
-        ctx.string('logged out');
+        writeString(ctx, 'logged out');
       });
 
       final response = await client.get('/logout');

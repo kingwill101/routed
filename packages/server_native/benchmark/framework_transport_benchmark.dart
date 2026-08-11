@@ -4,7 +4,7 @@ import 'dart:io';
 
 import 'package:relic/io_adapter.dart';
 import 'package:relic/relic.dart' as relic;
-import 'package:routed/routed.dart';
+import 'package:routed_core/routed_core.dart';
 import 'package:server_native/server_native.dart';
 import 'package:server_native/src/native/server_native_transport.dart';
 import 'package:shelf/shelf.dart' as shelf;

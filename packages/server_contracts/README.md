@@ -56,7 +56,7 @@ Future<String> readHealth(Repository repository) async {
 
 ## Migration Notes
 
-If older code imported these contracts from `package:routed/routed.dart`,
+If older code imported these contracts from `package:routed_core/routed_core.dart`,
 switch to direct imports from `server_contracts` to avoid framework coupling.
 
 ## Contract implementation example

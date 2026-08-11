@@ -164,35 +164,13 @@ String _renderStorageTemplate(String identifier, String pascal) {
   final registerName = 'register${pascal}StorageDriver';
 
   return '''
-import 'package:routed/routed.dart';
+import 'package:routed_core/routed_core.dart';
 
 const String $constantName = '$identifier';
 
 void $registerName() {
-  StorageServiceProvider.registerDriver(
-    $constantName,
-    (context) {
-      final root = context.configuration['root']?.toString();
-      final resolvedRoot =
-          (root == null || root.trim().isEmpty) ? 'storage/\${context.diskName}' : root;
-
-      // TODO: Swap LocalStorageDisk for your own StorageDisk implementation.
-      return LocalStorageDisk(
-        root: resolvedRoot,
-        fileSystem: context.manager.defaultFileSystem,
-      );
-    },
-    documentation: (ctx) => <ConfigDocEntry>[
-      ConfigDocEntry(
-        path: ctx.path('root'),
-        type: 'string',
-        description: 'Base path for the $identifier disk.',
-        metadata: const {
-          'default_note': 'Defaults to storage/<disk_name> when omitted.',
-        },
-      ),
-    ],
-  );
+  // Register a custom disk at boot via StorageManager (package:server_storage):
+  // manager.registerDisk($constantName, LocalStorageDisk(root: '...', fileSystem: ...));
 }
 ''';
 }
@@ -203,52 +181,31 @@ String _renderCacheTemplate(String identifier, String pascal) {
   final constantName = '${identifier.toUpperCase()}_CACHE_DRIVER';
 
   return '''
-import 'package:routed/routed.dart';
+import 'package:routed_cache/routed_cache.dart';
+import 'package:server_cache/server_cache.dart';
+import 'package:server_contracts/server_contracts.dart';
 
 const String $constantName = '$identifier';
 
-void $registerName() {
-  CacheManager.registerDriver(
-    $constantName,
-    () => $factoryName(),
-    configBuilder: (context) {
-      final config = Map<String, dynamic>.from(context.userConfig);
-      config['cache_dir'] ??=
-          context.get<StorageDefaults>()?.frameworkPath('cache/$identifier') ??
-          'storage/framework/cache/$identifier';
-      return config;
-    },
-    validator: (config, driver) {
-      final directory = config['cache_dir'];
-      if (directory is! String || directory.trim().isEmpty) {
-        throw ConfigurationException(
-          'Cache driver "\$driver" requires a non-empty `cache_dir` value.',
-        );
-      }
-    },
-    documentation: (ctx) => <ConfigDocEntry>[
-      ConfigDocEntry(
-        path: ctx.path('cache_dir'),
-        type: 'string',
-        description: 'Directory used to persist $identifier cache entries.',
-        metadata: const {
-          'default_note': 'Computed from StorageDefaults when omitted.',
-          'validation': 'Must point to a writable directory.',
-        },
-      ),
-    ],
-  );
-}
-
-class $factoryName extends StoreFactory {
+/// Implements [StoreFactory] for the `$identifier` cache driver.
+///
+/// Wire into your app with:
+///   final store = $factoryName().create({...});
+///   Engine(providers: [RoutedCacheProvider(store)]);
+class $factoryName implements StoreFactory {
   @override
   Store create(Map<String, dynamic> config) {
-    final directory = config['cache_dir'] as String;
-    // TODO: Build and return your cache Store implementation.
+    final directory = config['cache_dir'] as String? ??
+        'storage/framework/cache/$identifier';
+    // TODO: return your [Store] implementation for \$directory.
     throw UnimplementedError(
       'Implement the $identifier cache store for "\$directory".',
     );
   }
+}
+
+void $registerName() {
+  // No global CacheManager registry — construct and pass to RoutedCacheProvider.
 }
 ''';
 }
@@ -259,75 +216,25 @@ String _renderSessionTemplate(String identifier, String pascal) {
   return '''
 import 'dart:async';
 
-import 'package:routed/routed.dart' hide Store;
-import 'package:routed/session.dart';
-import 'package:routed/providers.dart';
+import 'package:routed_sessions/routed_sessions.dart';
+import 'package:server_sessions/server_sessions.dart';
 
-void $registerName() {
-  SessionServiceProvider.registerDriver(
-    '$identifier',
-    (context) {
-      final rawRoot = context.raw['root']?.toString();
-      final resolvedRoot = (rawRoot == null || rawRoot.trim().isEmpty)
-          ? context.storageDefaults?.frameworkPath('sessions/$identifier')
-          : rawRoot;
-
-      return SessionConfig(
-        cookieName: context.cookieName,
-        store: _${pascal}SessionStore(
-          apiKey: context.raw['api_key'] as String,
-          root: resolvedRoot ?? '/sessions',
-        ),
-        maxAge: context.lifetime,
-        defaultOptions: context.options,
-        expireOnClose: context.expireOnClose,
-      );
-    },
-    validator: (context) {
-      final apiKey = context.raw['api_key'];
-      if (apiKey is! String || apiKey.trim().isEmpty) {
-        throw ProviderConfigException(
-          'Session driver "$identifier" requires an `api_key` string.',
-        );
-      }
-    },
-    requiresConfig: const ['api_key'],
-    documentation: (ctx) => <ConfigDocEntry>[
-      ConfigDocEntry(
-        path: ctx.path('api_key'),
-        type: 'string',
-        description: 'API key used to authenticate $identifier requests.',
-        metadata: const {'required': true},
-      ),
-      ConfigDocEntry(
-        path: ctx.path('root'),
-        type: 'string',
-        description: 'Remote folder for storing session payloads.',
-        metadata: const {
-          'default_note':
-              'Defaults to storage/framework/sessions/$identifier when omitted.',
-        },
-      ),
-    ],
-  );
-}
-
-class _${pascal}SessionStore implements Store {
+/// Custom [SessionStore] for the `$identifier` driver.
+///
+/// Wire into your app with:
+///   Engine(providers: [RoutedSessionsProvider(_${pascal}SessionStore(...))]);
+class _${pascal}SessionStore implements SessionStore {
   _${pascal}SessionStore({required this.apiKey, required this.root});
 
   final String apiKey;
   final String root;
 
-  @override
-  Future<Session> read(Request request, String name) async {
-    // TODO: Load and return the stored session for [name].
-    throw UnimplementedError('Load session "\$name" from $identifier backend.');
-  }
+  // TODO: implement SessionStore.read / write for the $identifier backend.
+}
 
-  @override
-  Future<void> write(Request request, Response response, Session session) async {
-    // TODO: Persist the session to your $identifier backend.
-  }
+void $registerName() {
+  // No global SessionServiceProvider registry — construct RoutedSessionsProvider.
 }
 ''';
 }
+

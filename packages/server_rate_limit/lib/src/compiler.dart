@@ -10,8 +10,7 @@ enum RateLimitKeyKind { ip, header }
 class RateLimitKeySpec {
   const RateLimitKeySpec.ip() : kind = RateLimitKeyKind.ip, header = null;
 
-  const RateLimitKeySpec.header(this.header)
-    : kind = RateLimitKeyKind.header;
+  const RateLimitKeySpec.header(this.header) : kind = RateLimitKeyKind.header;
 
   final RateLimitKeyKind kind;
   final String? header;

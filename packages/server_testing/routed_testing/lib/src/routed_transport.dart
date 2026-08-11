@@ -1,6 +1,6 @@
 import 'dart:io';
 
-import 'package:routed/routed.dart';
+import 'package:routed_core/routed_core.dart';
 import 'package:server_testing/server_testing.dart';
 
 /// Adapter for the Routed Engine that conforms to the RequestHandler interface.
@@ -12,7 +12,7 @@ import 'package:server_testing/server_testing.dart';
 /// ## Example
 ///
 /// ```dart
-/// import 'package:routed/routed.dart';
+/// import 'package:routed_core/routed_core.dart';
 /// import 'package:routed_testing/routed_testing.dart';
 /// import 'package:server_testing/server_testing.dart';
 ///

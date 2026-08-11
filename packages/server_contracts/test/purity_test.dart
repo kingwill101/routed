@@ -3,10 +3,7 @@ import 'dart:io';
 import 'package:test/test.dart';
 
 Directory _resolveLibDir() {
-  const candidates = <String>[
-    'lib',
-    'packages/server_contracts/lib',
-  ];
+  const candidates = <String>['lib', 'packages/server_contracts/lib'];
   for (final path in candidates) {
     final directory = Directory(path);
     if (directory.existsSync()) {
@@ -29,7 +26,7 @@ void main() {
     for (final file in dartFiles) {
       final content = await file.readAsString();
       expect(
-        content.contains("package:routed/"),
+        content.contains("package:routed_core/"),
         isFalse,
         reason: 'Forbidden routed import in ${file.path}',
       );

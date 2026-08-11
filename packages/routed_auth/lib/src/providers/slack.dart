@@ -1,4 +1,5 @@
-import 'package:routed/routed.dart';
+import 'package:routed_core/routed_core.dart' hide ConfigSchema, parseBoolLike, parseStringList, parseStringLike, ProviderConfigException;
+import 'package:server_auth/server_auth.dart';
 
 /// Slack user profile (OIDC).
 ///
@@ -100,7 +101,7 @@ class SlackProfile {
 ///
 /// ### Usage
 /// ```dart
-/// import 'package:routed/auth.dart';
+/// import 'package:routed_core/auth.dart';
 /// import 'package:routed_auth/routed_auth.dart';
 ///
 /// final manager = AuthManager(

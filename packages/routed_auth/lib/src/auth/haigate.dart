@@ -13,9 +13,9 @@ import 'package:server_auth/server_auth.dart'
         syncManagedPolicyBindings,
         AuthPrincipal;
 import 'package:routed_auth/src/auth/session_auth.dart';
-import 'package:routed/src/context/context.dart';
-import 'package:routed/src/response.dart';
-import 'package:routed/src/router/types.dart';
+import 'package:routed_core/src/context/context.dart';
+import 'package:routed_core/src/response.dart';
+import 'package:routed_core/src/router/types.dart';
 
 /// A function that provides a payload for a specific ability in the given
 /// [EngineContext].

@@ -25,9 +25,12 @@ import 'package:server_auth/server_auth.dart'
         resolveAuthSignInRouteDecision,
         resolveAuthSignOutForStrategy,
         resolveAndSanitizeRedirectWithResolver;
-import 'package:routed/src/context/context.dart';
-import 'package:routed/src/response.dart';
-import 'package:routed/src/router/router.dart';
+import 'package:routed_core/src/context/context.dart';
+import 'package:routed_core/src/response.dart';
+import 'package:routed_core/src/router/router.dart';
+import 'package:routed_http/routed_http.dart';
+import 'package:routed_sessions/routed_sessions.dart';
+import 'package:routed_views/routed_views.dart' hide RoutedViewRender;
 
 /// Auth HTTP routes for routed.
 ///
@@ -79,20 +82,20 @@ class AuthRoutes {
     );
   }
 
-  Response _providers(EngineContext ctx) {
+  Future<Response> _providers(EngineContext ctx) async {
     return ctx.json({
       'providers': authProviderSummaries(manager.options.providers),
     });
   }
 
-  Response _csrf(EngineContext ctx) {
+  Future<Response> _csrf(EngineContext ctx) async {
     return ctx.json({'csrfToken': manager.csrfToken(ctx)});
   }
 
   Future<Response> _session(EngineContext ctx) async {
     final session = await manager.resolveSession(ctx);
     if (session == null) {
-      return ctx.json(null);
+      return ctx.json(<String, dynamic>{});
     }
     final payload = await manager.buildSessionPayload(ctx, session);
     return ctx.json(payload);
@@ -367,7 +370,7 @@ class AuthRoutes {
     );
   }
 
-  Response _errorResponse(EngineContext ctx, String code) {
+  Future<Response> _errorResponse(EngineContext ctx, String code) async {
     return ctx.json({'error': code}, statusCode: authErrorStatusCode(code));
   }
 }

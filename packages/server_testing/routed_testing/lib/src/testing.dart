@@ -1,7 +1,7 @@
 import 'dart:async';
 
 import 'package:meta/meta.dart';
-import 'package:routed/routed.dart';
+import 'package:routed_core/routed_core.dart';
 import 'package:routed_testing/src/routed_transport.dart';
 import 'package:server_testing/server_testing.dart';
 import 'package:test/test.dart'

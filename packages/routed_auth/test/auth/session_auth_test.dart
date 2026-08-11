@@ -1,12 +1,93 @@
 import 'dart:convert';
 import 'dart:io';
 
-import 'package:routed/routed.dart' hide AuthManager, AuthOptions, AuthCallbacks, AuthSession, AuthPrincipal, AuthUser, AuthSessionStrategy, CredentialsProvider, JwtSessionOptions, JwtOptions, JwtVerifier, JwtAuthException, JwtPayload, JwtIssuer, JwtOnVerified, jwtAuthentication, jwtClaimsAttribute, jwtHeadersAttribute, jwtSecretKey, jwtSubjectAttribute, AuthFlowException, SessionAuth, SessionAuthService, AuthRoutes, AuthServiceProvider, Haigate, GateCallback, GateEvaluation, GateEvaluationContext, GateObserver, GatePayloadProvider, GateDeniedHandler, GateRegistry, GateRegistrationException, GateViolation, RbacAbility, RbacOptions, registerRbacAbilities, registerRbacAbilitiesSafely, registerRbacWithHaigate, rbacGate, Policy, PolicyAction, PolicyBinding, PolicyOptions, registerPolicyBindings, registerPolicyBindingsSafely, registerPoliciesWithHaigate, policyGate, AuthSignInEvent, AuthSignOutEvent, AuthSessionEvent, AuthSignInResult, AuthSignInCallbackContext, GuardResult, AuthGuard, GuardRegistry, RememberTokenStore, InMemoryRememberTokenStore, guardMiddleware, requireAuthenticated, requireRoles, OAuth2Client, OAuth2Exception, OAuthTokenResponse, OAuthIntrospectionOptions, OAuthIntrospectionResult, oauth2Introspection, oauthTokenAttribute, oauthClaimsAttribute, oauthScopeAttribute, OAuthOnValidated, OAuthProvider, EmailProvider, AuthEmailRequest;
+import 'package:routed_core/routed_core.dart'
+    hide
+        AuthManager,
+        AuthOptions,
+        AuthCallbacks,
+        AuthSession,
+        AuthPrincipal,
+        AuthUser,
+        AuthSessionStrategy,
+        CredentialsProvider,
+        JwtSessionOptions,
+        JwtOptions,
+        JwtVerifier,
+        JwtAuthException,
+        JwtPayload,
+        JwtIssuer,
+        JwtOnVerified,
+        jwtAuthentication,
+        jwtClaimsAttribute,
+        jwtHeadersAttribute,
+        jwtSecretKey,
+        jwtSubjectAttribute,
+        AuthFlowException,
+        SessionAuth,
+        SessionAuthService,
+        AuthRoutes,
+        AuthServiceProvider,
+        Haigate,
+        GateCallback,
+        GateEvaluation,
+        GateEvaluationContext,
+        GateObserver,
+        GatePayloadProvider,
+        GateDeniedHandler,
+        GateRegistry,
+        GateRegistrationException,
+        GateViolation,
+        RbacAbility,
+        RbacOptions,
+        registerRbacAbilities,
+        registerRbacAbilitiesSafely,
+        registerRbacWithHaigate,
+        rbacGate,
+        Policy,
+        PolicyAction,
+        PolicyBinding,
+        PolicyOptions,
+        registerPolicyBindings,
+        registerPolicyBindingsSafely,
+        registerPoliciesWithHaigate,
+        policyGate,
+        AuthSignInEvent,
+        AuthSignOutEvent,
+        AuthSessionEvent,
+        AuthSignInResult,
+        AuthSignInCallbackContext,
+        GuardResult,
+        AuthGuard,
+        GuardRegistry,
+        RememberTokenStore,
+        InMemoryRememberTokenStore,
+        guardMiddleware,
+        requireAuthenticated,
+        requireRoles,
+        OAuth2Client,
+        OAuth2Exception,
+        OAuthTokenResponse,
+        OAuthIntrospectionOptions,
+        OAuthIntrospectionResult,
+        oauth2Introspection,
+        oauthTokenAttribute,
+        oauthClaimsAttribute,
+        oauthScopeAttribute,
+        OAuthOnValidated,
+        OAuthProvider,
+        EmailProvider,
+        AuthEmailRequest,
+        SecureCookie,
+        CookieStore,
+        FilesystemStore;
 import 'package:routed_auth/routed_auth.dart';
+import 'package:routed_sessions/routed_sessions.dart';
+import 'package:server_sessions/server_sessions.dart';
 import 'package:server_auth/server_auth.dart';
 import 'package:routed_testing/routed_testing.dart';
 import 'package:server_testing/server_testing.dart';
-import 'package:routed/src/sessions/options.dart';
+import 'package:server_sessions/server_sessions.dart';
 import '../test_engine.dart';
 
 SessionConfig _sessionConfig() {
@@ -477,10 +558,11 @@ void main() {
         options: [withSessionConfig(_sessionConfig())],
       );
 
+      engine.addGlobalMiddleware(sessionMiddleware(MemorySessionStore(codecs: [SecureCookie(useEncryption: true, useSigning: true)], defaultOptions: SessionOptions(path: '/', httpOnly: true, sameSite: SameSite.lax))));
       engine.addGlobalMiddleware(SessionAuth.sessionAuthMiddleware());
 
-      guardRegistry.register('maintenance-test', (ctx) {
-        final response = ctx.string(
+      guardRegistry.register('maintenance-test', (ctx) async {
+        final response = await ctx.string(
           'maintenance mode',
           statusCode: HttpStatus.serviceUnavailable,
         );

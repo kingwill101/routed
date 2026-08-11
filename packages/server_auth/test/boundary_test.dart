@@ -3,10 +3,7 @@ import 'dart:io';
 import 'package:test/test.dart';
 
 Directory _resolveLibDir() {
-  const candidates = <String>[
-    'lib',
-    'packages/server_auth/lib',
-  ];
+  const candidates = <String>['lib', 'packages/server_auth/lib'];
   for (final path in candidates) {
     final directory = Directory(path);
     if (directory.existsSync()) {
@@ -21,7 +18,7 @@ Directory _resolveLibDir() {
 void main() {
   test('server_auth does not import routed packages', () async {
     final routedImportPattern = RegExp(
-      r"^(import|export)\s+'package:routed/",
+      r"^(import|export)\s+'package:routed_core/",
       multiLine: true,
     );
     final routedAuthImportPattern = RegExp(

@@ -1,6 +1,6 @@
 library;
 
-import 'package:routed/providers.dart' show ProviderRegistry;
+import 'package:routed_core/providers.dart' show ProviderRegistry;
 import 'package:routed_auth/src/auth/provider.dart' show AuthServiceProvider;
 
 export 'src/auth/manager/auth_manager.dart';
@@ -26,6 +26,8 @@ export 'src/auth/session_auth.dart'
         requireAuthenticated,
         requireRoles;
 export 'src/config/specs/auth.dart' show AuthConfigSpec;
+export 'src/crypto/crypto.dart'
+    show sha1Digest, sha256Digest, md5Digest, hmacSha256, constantTimeEqualsBytes, hexFromBytes;
 
 /// Ensures the Routed auth provider ID is available in the global registry.
 void ensureRoutedAuthProviderRegistered([ProviderRegistry? registry]) {
@@ -38,3 +40,7 @@ void ensureRoutedAuthProviderRegistered([ProviderRegistry? registry]) {
     );
   }
 }
+
+/// Alias for [ensureRoutedAuthProviderRegistered].
+void registerRoutedAuthProviders([ProviderRegistry? registry]) =>
+    ensureRoutedAuthProviderRegistered(registry);

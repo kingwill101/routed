@@ -1,10 +1,60 @@
 library;
-import 'package:routed/routed.dart';
+
+import 'package:routed_core/providers.dart' show ProviderRegistry;
+import 'package:routed_core/routed_core.dart';
+import 'package:server_rate_limit/server_rate_limit.dart';
+
+export 'package:server_rate_limit/server_rate_limit.dart';
+export 'src/events/rate_limit_events.dart';
+
+extension RateLimitEngineContext on EngineContext {
+  RateLimitService get rateLimitService {
+    if (container.has<RateLimitService>()) {
+      return container.get<RateLimitService>();
+    }
+    if (container.has<dynamic>()) {
+      final dynamic m = container.get<dynamic>();
+      if (m is RateLimitService) return m;
+    }
+    throw StateError('Rate limit service not configured');
+  }
+
+  bool get hasRateLimitService => container.has<RateLimitService>();
+  Future<RateLimitOutcome?> checkRateLimit(RateLimitRequest request) =>
+      rateLimitService.check(request);
+}
+
+Middleware rateLimitMiddleware(RateLimitService service) {
+  return (ctx, next) {
+    if (!ctx.container.has<RateLimitService>()) {
+      ctx.container.instance<RateLimitService>(service);
+    }
+    return next();
+  };
+}
 
 class RoutedRateLimitProvider extends ServiceProvider {
-  RoutedRateLimitProvider();
+  /// Defaults to an empty policy list (rate limiting disabled until configured).
+  RoutedRateLimitProvider([RateLimitService? service])
+      : service = service ?? RateLimitService(const []);
+
+  final RateLimitService service;
+
   @override
-  void register(Container container) {}
+  void register(Container container) {
+    container.singleton<RateLimitService>((_) async => service);
+    container.instance<dynamic>(service);
+  }
+
   @override
   Future<void> boot(Container container) async {}
+}
+
+/// Registers `routed.rate_limit` for `http.providers` resolution.
+void registerRoutedRateLimitProviders() {
+  ProviderRegistry.instance.register(
+    'routed.rate_limit',
+    factory: RoutedRateLimitProvider.new,
+    description: 'Rate-limit service and context helpers.',
+  );
 }

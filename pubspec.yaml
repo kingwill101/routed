@@ -1,7 +1,7 @@
 name: routed_ecosystem
 publish_to: none
 workspace:
-  - packages/routed
+  - packages/routed_core
   - packages/routed_cli
   - packages/routed_analyzer
   - packages/server_contracts
@@ -10,17 +10,25 @@ workspace:
   - packages/server_sessions
   - packages/server_storage
   - packages/server_rate_limit
-  - packages/routed_full
+  - packages/routed
   - packages/routed_cache
   - packages/routed_sessions
   - packages/routed_storage
   - packages/routed_rate_limit
   - packages/routed_io
+  - packages/routed_node
+  - packages/routed_node/example/api
   - packages/server_native
   - packages/routed_auth
   - packages/routed_hotwire
-  - packages/routed_view
+  - packages/routed_views
+  - packages/routed_openapi
+  - packages/routed_openapi_builder
+  - packages/routed_observability
+  - packages/routed_logging
+  - packages/routed_security
   - packages/routed_http
+  - packages/routed_validation
   - packages/server_testing/routed_testing
   # - examples/kitchen_sink
   # - examples/config_demo
@@ -43,6 +51,7 @@ dependencies:
   uuid: ^4.5.2
 
 dev_dependencies:
+  coverage: ^1.15.1
   lints: ^6.0.0
 
 tags:

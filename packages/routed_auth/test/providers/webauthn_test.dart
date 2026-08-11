@@ -1,4 +1,16 @@
-import 'package:routed/routed.dart' hide AuthProviderType, AuthUser, AuthSessionStrategy, WebAuthnAuthenticator, WebAuthnFormField, WebAuthnRegistrationOptions, WebAuthnAuthenticatorSelection, WebAuthnAuthenticationOptions, WebAuthnUserInfo, WebAuthnProvider, WebAuthnRelyingParty;
+import 'package:routed_core/routed_core.dart'
+    hide
+        AuthProviderType,
+        AuthUser,
+        AuthSessionStrategy,
+        WebAuthnAuthenticator,
+        WebAuthnFormField,
+        WebAuthnRegistrationOptions,
+        WebAuthnAuthenticatorSelection,
+        WebAuthnAuthenticationOptions,
+        WebAuthnUserInfo,
+        WebAuthnProvider,
+        WebAuthnRelyingParty;
 import 'package:server_auth/server_auth.dart';
 import 'package:test/test.dart';
 
