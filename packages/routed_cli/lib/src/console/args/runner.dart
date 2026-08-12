@@ -47,8 +47,17 @@ class RoutedCommandRunner extends CommandRunner<void> {
 
   @override
   Future<void> run(Iterable<String> args) async {
+    // Accept the documented nested spelling while retaining the existing
+    // colon-separated command names used by older projects.
+    final normalizedArgs = args.toList(growable: false);
+    final commandArgs = normalizedArgs.length >= 2 &&
+            normalizedArgs[0] == 'openapi' &&
+            normalizedArgs[1] == 'generate'
+        ? <String>['openapi:generate', ...normalizedArgs.skip(2)]
+        : normalizedArgs;
+
     // Parse top-level args first to support global flags (like --help/--version)
-    final results = parse(args);
+    final results = parse(commandArgs);
 
     _globalResults = results;
 

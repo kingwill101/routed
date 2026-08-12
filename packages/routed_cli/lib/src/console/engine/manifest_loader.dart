@@ -165,10 +165,16 @@ Future<void> main(List<String> args) async {
       throw UsageException(message.trim(), usage);
     }
 
-    final output = stdoutBuffer.toString().trim();
-    if (output.isEmpty) {
+    final rawOutput = stdoutBuffer.toString().trim();
+    if (rawOutput.isEmpty) {
       throw UsageException('Manifest entrypoint produced no output.', usage);
     }
+
+    // Applications may emit harmless startup diagnostics to stdout. The
+    // manifest contract is the JSON object in the output; tolerate those
+    // diagnostics while still requiring a valid JSON manifest.
+    final jsonStart = rawOutput.indexOf('{');
+    final output = jsonStart == -1 ? rawOutput : rawOutput.substring(jsonStart);
 
     try {
       final decoded = jsonDecode(output);

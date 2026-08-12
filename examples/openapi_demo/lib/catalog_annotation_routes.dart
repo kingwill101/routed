@@ -4,12 +4,40 @@ import 'package:routed_openapi/routed_openapi.dart';
 void registerCatalogAnnotationRoutes(Router router) {
   final handlers = _CatalogHandlers();
 
-  router.get(
-    '/products',
-    handlers.listProducts
-  );
+  router
+      .get('/products', handlers.listProducts)
+      .schema(
+        const RouteSchema(
+          summary: 'List catalog products',
+          description: 'Returns products available in the catalog.',
+          operationId: 'catalogProducts',
+          tags: ['Catalog'],
+          responses: [ResponseSchema(200, description: 'Catalog product list')],
+        ),
+      );
 
-  router.get('/products/{sku}', handlers.getProductBySku);
+  router
+      .get('/products/{sku}', handlers.getProductBySku)
+      .schema(
+        const RouteSchema(
+          summary: 'Get catalog product by sku',
+          description: 'Returns one catalog product for the provided SKU.',
+          tags: ['Catalog'],
+          params: [
+            ParamSchema(
+              'sku',
+              location: ParamLocation.path,
+              required: true,
+              description: 'Catalog SKU',
+              jsonSchema: {'type': 'string'},
+            ),
+          ],
+          responses: [
+            ResponseSchema(200, description: 'Catalog product'),
+            ResponseSchema(404, description: 'Catalog product not found'),
+          ],
+        ),
+      );
 }
 
 class _CatalogHandlers {

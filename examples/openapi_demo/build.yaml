@@ -1,7 +1,7 @@
 targets:
   $default:
     builders:
-      routed|openapi:
+      routed_openapi_builder|openapi:
         options:
           title: "OpenAPI Demo"
           version: "1.0.0"

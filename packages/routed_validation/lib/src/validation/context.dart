@@ -1,6 +1,7 @@
 import 'dart:convert';
 
 import 'package:routed_core/routed_core.dart';
+import 'package:routed_http/routed_http.dart';
 
 import 'file.dart';
 import 'validator.dart';
@@ -128,7 +129,9 @@ extension ValidationContext on EngineContext {
         if (bodyString.isNotEmpty) {
           try {
             final decoded = jsonDecode(bodyString);
-            if (decoded is Map<String, dynamic> && decoded.isNotEmpty) return decoded;
+            if (decoded is Map<String, dynamic> && decoded.isNotEmpty) {
+              return decoded;
+            }
           } catch (_) {}
           final parsed = _simpleParseUrlEncoded(bodyString);
           if (parsed.isNotEmpty) return parsed;

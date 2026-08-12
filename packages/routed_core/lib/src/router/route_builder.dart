@@ -41,6 +41,9 @@ class RouteBuilder {
     return this;
   }
 
+  /// Reads typed metadata previously attached to the route.
+  T? metadataValue<T>(RouteMetadataKey<T> key) => _route.metadata.get(key);
+
   /// Creates a new router group with the specified path, middlewares, and builder function.
   ///
   /// The [path] parameter specifies the base path for the group.

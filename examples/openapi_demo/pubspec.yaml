@@ -12,8 +12,10 @@ dependencies:
   artisanal: ^0.3.0
   routed: ^0.3.3
   routed_openapi: ^0.1.0
+  routed_core: ^0.3.3
 
 dev_dependencies:
+  routed_openapi_builder: ^0.1.0
   lints: ^6.0.0
   routed_testing: ^0.3.2
   server_testing: ^0.3.2

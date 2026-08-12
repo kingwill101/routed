@@ -34,7 +34,7 @@ RouteManifest mergeManifestWithExtractedMetadata(
 
         // handlerIdentity/schema removed from core manifest; merging is no-op when absent
         // ignore: unused_local_variable
-        final RouteSchema? existingSchema = (() { try { final s = (route as dynamic).schema; if (s is RouteSchema) return s; if (s is Map) return RouteSchema.fromJson(s.cast<String,Object?>()); return null; } catch (_) { return null; } })();
+        final existingSchema = _schemaFromRoute(route);
         // ignore: unused_local_variable
         final mergedSchema = _mergeSchema(existingSchema, metadata);
         return RouteManifestEntry(
@@ -44,6 +44,9 @@ RouteManifest mergeManifestWithExtractedMetadata(
           middleware: route.middleware,
           constraints: route.constraints,
           metadata: route.metadata,
+          sourceFile: route.sourceFile,
+          sourceLine: route.sourceLine,
+          sourceColumn: route.sourceColumn,
           isFallback: route.isFallback,
           schema: mergedSchema.toJson(),
         );
@@ -58,6 +61,19 @@ RouteManifest mergeManifestWithExtractedMetadata(
   );
 }
 
+RouteSchema? _schemaFromRoute(RouteManifestEntry route) {
+  final metadata = route.metadata['routed.openapi.schema'];
+  if (metadata is Map) {
+    return RouteSchema.fromJson(metadata.cast<String, Object?>());
+  }
+  final legacy = route.schema;
+  if (legacy is RouteSchema) return legacy;
+  if (legacy is Map) {
+    return RouteSchema.fromJson(legacy.cast<String, Object?>());
+  }
+  return null;
+}
+
 ExtractedRouteMetadata? _resolveMetadata(
   dynamic route,
   Map<String, ExtractedRouteMetadata> extracted,
@@ -68,7 +84,13 @@ ExtractedRouteMetadata? _resolveMetadata(
   final routeMetadata =
       extracted[routeKey] ?? _findSuffixRouteMetadata(route, extracted);
 
-  final functionRef = (() { try { return (route as dynamic).handlerIdentity?.functionRef as String?; } catch (_) { return null; } })();
+  final functionRef = (() {
+    try {
+      return (route as dynamic).handlerIdentity?.functionRef as String?;
+    } catch (_) {
+      return null;
+    }
+  })();
   if (functionRef == null || functionRef.isEmpty) {
     if (sourceMetadata == null) return routeMetadata;
     if (routeMetadata == null) return sourceMetadata;
@@ -99,10 +121,16 @@ ExtractedRouteMetadata? _findSourceMetadata(
   dynamic route,
   Map<String, ExtractedRouteMetadata> extracted,
 ) {
-  final dynamic identity = (() { try { return (route as dynamic).handlerIdentity; } catch (_) { return null; } })();
-  final sourceFile = identity?.sourceFile;
-  final sourceLine = identity?.sourceLine;
-  final sourceColumn = identity?.sourceColumn;
+  final dynamic identity = (() {
+    try {
+      return (route as dynamic).handlerIdentity;
+    } catch (_) {
+      return null;
+    }
+  })();
+  final sourceFile = identity?.sourceFile ?? route.sourceFile;
+  final sourceLine = identity?.sourceLine ?? route.sourceLine;
+  final sourceColumn = identity?.sourceColumn ?? route.sourceColumn;
   if (sourceFile == null || sourceLine == null || sourceColumn == null) {
     return null;
   }
@@ -180,7 +208,9 @@ ExtractedRouteMetadata? _findSuffixRouteMetadata(
       final srcFile = m.group(1)!.toLowerCase();
       final base = srcFile.split('/').last.split('.').first;
       final token = base.replaceAll('_routes', '').replaceAll('_', '');
-      if (token.isNotEmpty && lowerTarget.contains(token) && sVal.summary != null) {
+      if (token.isNotEmpty &&
+          lowerTarget.contains(token) &&
+          sVal.summary != null) {
         // Prefer source that matches mount prefix
         sourceMatch = sVal;
       }
@@ -193,10 +223,14 @@ ExtractedRouteMetadata? _findSuffixRouteMetadata(
       if (singleSummary != sourceSummary) {
         // Check if single's summary corresponds to a different source file than the target
         // If target contains 'admin' but single is users, override
-        if (lowerTarget.contains('admin') && singleSummary != null && singleSummary.toLowerCase().contains('admin')) {
+        if (lowerTarget.contains('admin') &&
+            singleSummary != null &&
+            singleSummary.toLowerCase().contains('admin')) {
           return single;
         }
-        if (lowerTarget.contains('users') && singleSummary != null && singleSummary.toLowerCase().contains('users')) {
+        if (lowerTarget.contains('users') &&
+            singleSummary != null &&
+            singleSummary.toLowerCase().contains('users')) {
           return single;
         }
         return sourceMatch;
@@ -214,19 +248,14 @@ ExtractedRouteMetadata? _findSuffixRouteMetadata(
     final lowerTarget = targetPath.toLowerCase();
     for (final entry in candidates.entries) {
       final routeMeta = entry.value;
-      // Find source entries that share the same metadata identity/summary
       String? matchedSourceFile;
       extracted.forEach((sKey, sVal) {
         if (!sKey.startsWith('source:')) return;
-        // Match by object identity or by summary equality (covers merged case)
-        final same = identical(sVal, routeMeta) ||
-            (sVal.summary != null && sVal.summary == routeMeta.summary);
-        if (!same) return;
+        if (!identical(sVal, routeMeta)) return;
         final m = RegExp(r'^source:(.*):\d+:\d+$').firstMatch(sKey);
         if (m == null) return;
         final srcFile = m.group(1)!.toLowerCase();
-        // Check if source file base name (without extension, without _routes) appears in target path
-        final base = srcFile.split('/').last.split('.').first; // e.g. users_routes
+        final base = srcFile.split('/').last.split('.').first;
         final token = base.replaceAll('_routes', '').replaceAll('_', '');
         if (token.isNotEmpty && lowerTarget.contains(token)) {
           matchedSourceFile = sKey;

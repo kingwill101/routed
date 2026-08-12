@@ -40,7 +40,7 @@ OpenApiSpec manifestToOpenApi(
     // Skip fallback routes — they have no meaningful path.
     if (route.isFallback) continue;
 
-    final RouteSchema? schema = (() { try { final s = (route as dynamic).schema; if (s is RouteSchema) return s; if (s is Map) return RouteSchema.fromJson(s.cast<String, Object?>()); return null; } catch (_) { return null; } })();
+    final schema = _schemaForRoute(route);
 
     // Skip hidden routes unless explicitly included.
     if (schema != null && schema.hidden && !config.includeHidden) continue;
@@ -219,6 +219,19 @@ List<String> _extractPathParams(String path) {
   return matches.map((m) => m.group(1)!).toList();
 }
 
+RouteSchema? _schemaForRoute(RouteManifestEntry route) {
+  final metadata = route.metadata['routed.openapi.schema'];
+  if (metadata is Map) {
+    return RouteSchema.fromJson(metadata.cast<String, Object?>());
+  }
+  final legacy = route.schema;
+  if (legacy is RouteSchema) return legacy;
+  if (legacy is Map) {
+    return RouteSchema.fromJson(legacy.cast<String, Object?>());
+  }
+  return null;
+}
+
 /// Generates an operationId from the route's name or method+path.
 String _generateOperationId(RouteManifestEntry route) {
   if (route.name != null && route.name!.isNotEmpty) {
@@ -226,11 +239,13 @@ String _generateOperationId(RouteManifestEntry route) {
   }
   // Generate from method + path: GET /users/:id → getUsersId
   final method = route.method.toLowerCase();
-  final segments = route.path
-      .split('/')
-      .where((s) => s.isNotEmpty)
-      .map((s) => s.startsWith(':') ? s.substring(1) : s)
-      .toList();
+  final segments = route.path.split('/').where((s) => s.isNotEmpty).map((s) {
+    if (s.startsWith(':')) return s.substring(1);
+    if (s.startsWith('{') && s.endsWith('}')) {
+      return s;
+    }
+    return s;
+  }).toList();
   if (segments.isEmpty) return '${method}Root';
   return method + segments.map(_capitalize).join();
 }

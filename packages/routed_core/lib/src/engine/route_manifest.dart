@@ -99,6 +99,9 @@ class RouteManifestEntry {
     Iterable<String> middleware = const [],
     Map<String, Object?> constraints = const {},
     Map<String, Object?> metadata = const {},
+    this.sourceFile,
+    this.sourceLine,
+    this.sourceColumn,
     this.isFallback = false,
     this.schema,
   }) : middleware = List<String>.unmodifiable(middleware),
@@ -114,7 +117,10 @@ class RouteManifestEntry {
       handlerIdentity: null,
       middleware: route.middlewares.map(_describeMiddleware),
       constraints: _serializeConstraints(route.constraints),
-      metadata: Map<String, Object?>.from(route.metadata.asMap),
+      metadata: _serializeMetadata(route.metadata.asMap),
+      sourceFile: route.sourceFile,
+      sourceLine: route.sourceLine,
+      sourceColumn: route.sourceColumn,
       isFallback: route.isFallback,
       schema: route.schema,
     );
@@ -144,6 +150,9 @@ class RouteManifestEntry {
       metadata: json['metadata'] is Map
           ? _stringKeyed(json['metadata'] as Map)
           : const <String, Object?>{},
+      sourceFile: json['sourceFile']?.toString(),
+      sourceLine: (json['sourceLine'] as num?)?.toInt(),
+      sourceColumn: (json['sourceColumn'] as num?)?.toInt(),
       isFallback: isFallback,
       schema: json['schema'],
     );
@@ -156,6 +165,9 @@ class RouteManifestEntry {
   final List<String> middleware;
   final Map<String, Object?> constraints;
   final Map<String, Object?> metadata;
+  final String? sourceFile;
+  final int? sourceLine;
+  final int? sourceColumn;
   final bool isFallback;
 
   /// Optional API schema metadata for this route.
@@ -170,6 +182,9 @@ class RouteManifestEntry {
       if (middleware.isNotEmpty) 'middleware': middleware,
       if (constraints.isNotEmpty) 'constraints': constraints,
       if (metadata.isNotEmpty) 'metadata': metadata,
+      if (sourceFile != null) 'sourceFile': sourceFile,
+      if (sourceLine != null) 'sourceLine': sourceLine,
+      if (sourceColumn != null) 'sourceColumn': sourceColumn,
       if (isFallback) 'isFallback': true,
       if (schema != null) 'schema': schema,
     };
@@ -242,6 +257,39 @@ String _describeMiddleware(Object middleware) {
     return '<anonymous middleware>';
   }
   return type;
+}
+
+Map<String, Object?> _serializeMetadata(Map<String, Object?> source) {
+  final result = <String, Object?>{};
+  source.forEach((key, value) {
+    final serialized = _serializeMetadataValue(value);
+    if (serialized != null) result[key] = serialized;
+  });
+  return result;
+}
+
+Object? _serializeMetadataValue(Object? value) {
+  if (value == null || value is String || value is num || value is bool) {
+    return value;
+  }
+  if (value is Map) {
+    final result = <String, Object?>{};
+    value.forEach((key, nested) {
+      final serialized = _serializeMetadataValue(nested);
+      if (serialized != null) result[key.toString()] = serialized;
+    });
+    return result;
+  }
+  if (value is Iterable) {
+    return value.map(_serializeMetadataValue).toList(growable: false);
+  }
+  try {
+    final dynamic serializable = value;
+    final json = serializable.toJson();
+    return _serializeMetadataValue(json);
+  } catch (_) {
+    return value.toString();
+  }
 }
 
 Map<String, Object?> _serializeConstraints(Map<String, dynamic> source) {

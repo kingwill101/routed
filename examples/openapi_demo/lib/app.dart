@@ -73,65 +73,96 @@ Future<Engine> createEngine({bool initialize = true}) async {
     path: '/api/v1',
     builder: (router) {
       // -- Health check (hidden from OpenAPI spec) --------------------------
-      router.get(
-        '/health',
-        (ctx) async => ctx.json({'status': 'ok'})
-      );
+      router.get('/health', (ctx) async => ctx.json({'status': 'ok'})).hidden();
 
       // -- List users -------------------------------------------------------
-      router.get(
-        '/users',
-        (ctx) async => ctx.json({'data': users.values.toList()})
-      );
+      router
+          .get(
+            '/users',
+            (ctx) async => ctx.json({'data': users.values.toList()}),
+          )
+          .summary('List all users')
+          .description(
+            'Returns a paginated list of all registered users. Currently returns all registered users.',
+          )
+          .tags(['Users'])
+          .operationId('listUsers')
+          .responseSchema(
+            const ResponseSchema(200, description: 'A list of user objects'),
+          );
 
       // -- Get user by ID ---------------------------------------------------
-      router.get(
-        '/users/{id}',
-        (ctx) async {
-          final id = ctx.mustGetParam<String>('id');
-          final user = await ctx.fetchOr404(
-            () async => users[id],
-            message: 'User not found',
+      router
+          .get('/users/{id}', (ctx) async {
+            final id = ctx.mustGetParam<String>('id');
+            final user = await ctx.fetchOr404(
+              () async => users[id],
+              message: 'User not found',
+            );
+            return ctx.json(user);
+          })
+          .summary('Get a user by ID')
+          .tags(['Users'])
+          .operationId('getUser')
+          .responseSchema(
+            const ResponseSchema(200, description: 'The user object'),
+          )
+          .responseSchema(
+            const ResponseSchema(404, description: 'User not found'),
           );
-          return ctx.json(user);
-        }
-      );
 
       // -- Create user (with auto-validation) -------------------------------
       //
-      // The `validationRules` are used for two things:
-      //   1. Auto-validation middleware: invalid requests → 422 before handler
-      //   2. OpenAPI schema: rules are converted to JSON Schema in the spec
-      router.post(
-        '/users',
-        (ctx) async {
-          final payload = Map<String, dynamic>.from(
-            await ctx.bindJSON({}) as Map? ?? const {},
+      // The fluent metadata is the runtime source of truth for the route.
+      router
+          .post('/users', (ctx) async {
+            final payload = Map<String, dynamic>.from(
+              await ctx.bindJSON({}) as Map? ?? const {},
+            );
+            final id = (users.length + 1).toString();
+            final created = {
+              'id': id,
+              'name': payload['name'] ?? 'user-$id',
+              'email': payload['email'] ?? 'user$id@example.com',
+            };
+            users[id] = created;
+            return ctx.json(created, statusCode: HttpStatus.created);
+          })
+          .summary('Create a new user')
+          .description('Creates a user with the given name and email.')
+          .tags(['Users'])
+          .operationId('createUser')
+          .responseSchema(
+            const ResponseSchema(201, description: 'User created successfully'),
+          )
+          .responseSchema(
+            const ResponseSchema(422, description: 'Validation failed'),
           );
-          final id = (users.length + 1).toString();
-          final created = {
-            'id': id,
-            'name': payload['name'] ?? 'user-$id',
-            'email': payload['email'] ?? 'user$id@example.com',
-          };
-          users[id] = created;
-          return ctx.json(created, statusCode: HttpStatus.created);
-        }
-      );
 
       // -- Delete user (deprecated) -----------------------------------------
-      router.delete(
-        '/users/{id}',
-        (ctx) async {
-          final id = ctx.mustGetParam<String>('id');
-          if (users.remove(id) == null) {
-            return ctx.json({
-              'error': 'User not found',
-            }, statusCode: HttpStatus.notFound);
-          }
-          return ctx.json({'status': 'deleted'});
-        }
-      );
+      router
+          .delete('/users/{id}', (ctx) async {
+            final id = ctx.mustGetParam<String>('id');
+            if (users.remove(id) == null) {
+              return ctx.json({
+                'error': 'User not found',
+              }, statusCode: HttpStatus.notFound);
+            }
+            return ctx.json({'status': 'deleted'});
+          })
+          .summary('Delete a user')
+          .description(
+            'Deprecated: prefer PATCH /api/v1/users/{id} with {"active": false} instead.',
+          )
+          .tags(['Users'])
+          .operationId('deleteUser')
+          .deprecated()
+          .responseSchema(
+            const ResponseSchema(200, description: 'User deleted'),
+          )
+          .responseSchema(
+            const ResponseSchema(404, description: 'User not found'),
+          );
 
       // -- Metadata merger demo routes (cross-file + nested groups) ----------
       registerMetadataRoutes(router);

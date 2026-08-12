@@ -1,0 +1,7 @@
+builders:
+  openapi:
+    import: "package:routed_openapi_builder/routed_openapi_builder.dart"
+    builder_factories: ["openApiBuilder"]
+    build_extensions: {"$package$": ["lib/generated/openapi.json", "lib/generated/openapi_controller.g.dart"]}
+    auto_apply: dependents
+    build_to: source

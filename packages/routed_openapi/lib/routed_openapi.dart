@@ -8,5 +8,6 @@ export 'src/openapi/openapi_spec.dart';
 export 'src/openapi/pipe_rule_converter.dart';
 export 'src/openapi/route_metadata_extractor.dart';
 export 'src/openapi/route_metadata_merger.dart';
+export 'src/openapi/route_builder_extensions.dart';
 export 'src/openapi/schema.dart';
 export 'src/openapi/schema_validation.dart';

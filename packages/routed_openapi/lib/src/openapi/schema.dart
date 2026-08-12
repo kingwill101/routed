@@ -90,6 +90,33 @@ class RouteSchema {
     return RouteSchema(validationRules: rules);
   }
 
+  /// Returns a copy with selected fields replaced.
+  RouteSchema copyWith({
+    String? summary,
+    String? description,
+    List<String>? tags,
+    String? operationId,
+    bool? deprecated,
+    bool? hidden,
+    BodySchema? body,
+    List<ParamSchema>? params,
+    List<ResponseSchema>? responses,
+    Map<String, String>? validationRules,
+  }) {
+    return RouteSchema(
+      summary: summary ?? this.summary,
+      description: description ?? this.description,
+      tags: tags ?? this.tags,
+      operationId: operationId ?? this.operationId,
+      deprecated: deprecated ?? this.deprecated,
+      hidden: hidden ?? this.hidden,
+      body: body ?? this.body,
+      params: params ?? this.params,
+      responses: responses ?? this.responses,
+      validationRules: validationRules ?? this.validationRules,
+    );
+  }
+
   /// Deserializes from a JSON map (e.g. from a route manifest).
   factory RouteSchema.fromJson(Map<String, Object?> json) {
     return RouteSchema(
