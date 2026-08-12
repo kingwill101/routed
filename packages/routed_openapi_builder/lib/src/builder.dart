@@ -1,18 +1,26 @@
+import 'dart:async';
+
 import 'package:build/build.dart';
+import 'package:routed_openapi/routed_openapi.dart' as routed_openapi;
 
-/// Build-time OpenAPI builder for Routed (stub).
+/// Build-time OpenAPI builder for Routed.
+///
+/// This is a small public wrapper around the implementation that lives in
+/// `routed_openapi`, so apps can depend on `routed_openapi_builder` as their
+/// build-time integration package.
 class OpenApiBuilder implements Builder {
-  @override
-  Map<String, List<String>> get buildExtensions => const {
-        r'$lib$': ['openapi.json']
-      };
+  OpenApiBuilder([Map<String, dynamic>? config])
+      : _delegate = routed_openapi.openApiBuilder(
+          BuilderOptions(config ?? const <String, dynamic>{}),
+        );
+
+  final Builder _delegate;
 
   @override
-  Future<void> build(BuildStep buildStep) async {
-    // Stub: generate empty OpenAPI spec
-    final id = buildStep.inputId.changeExtension('.openapi.json');
-    await buildStep.writeAsString(id, '{}');
-  }
+  Map<String, List<String>> get buildExtensions => _delegate.buildExtensions;
+
+  @override
+  FutureOr<void> build(BuildStep buildStep) => _delegate.build(buildStep);
 }
 
-Builder openApiBuilder(BuilderOptions options) => OpenApiBuilder();
+Builder openApiBuilder(BuilderOptions options) => OpenApiBuilder(options.config);
