@@ -4,6 +4,8 @@ import 'dart:io';
 import 'dart:typed_data';
 
 import 'package:routed_core/src/engine/config.dart';
+import 'package:routed_core/src/http/adapter_http.dart';
+import 'package:routed_core/src/http/transport.dart';
 import 'package:routed_core/src/utils/request_id.dart';
 
 /// Represents an HTTP request and provides various utilities to access
@@ -48,6 +50,33 @@ class Request {
           ? RequestId.generateSecure()
           : RequestId.generate(),
       startedAt = DateTime.now();
+
+  /// Constructs a portable [Request] from a host adapter.
+  factory Request.fromAdapter(
+    RequestAdapter adapter,
+    Map<String, dynamic> pathParameters,
+    EngineConfig config,
+  ) {
+    return Request(
+      AdapterHttpBridge.toHttpRequest(
+        HttpConnection(
+          adapter,
+          _RequestBridgeResponseAdapter(),
+        ),
+      ),
+      pathParameters,
+      config,
+    );
+  }
+
+  /// Whether this request is backed by a real native `dart:io` request.
+  bool get hasNativeHttpRequest => httpRequest is! SyntheticHttpRequest;
+
+  /// Whether this request was built from a portable adapter.
+  bool get isPortable => !hasNativeHttpRequest;
+
+  /// Back-compat alias used by older request-scope tests and internals.
+  String get identity => id;
 
   /// Safely extracts query parameters from a URI, handling invalid encodings
   static Map<String, String> _safeQueryParameters(Uri uri) {
@@ -225,6 +254,31 @@ class Request {
       // Ignore: request may already be listened to.
     }
   }
+}
+
+final class _RequestBridgeResponseAdapter implements ResponseAdapter {
+  int _statusCode = 200;
+
+  @override
+  int get statusCode => _statusCode;
+
+  @override
+  set statusCode(int value) => _statusCode = value;
+
+  @override
+  void setHeader(String name, String value) {}
+
+  @override
+  void addHeader(String name, String value) {}
+
+  @override
+  void write(List<int> bytes) {}
+
+  @override
+  Future<void> flush() async {}
+
+  @override
+  Future<void> close() async {}
 }
 
 class _BodyStreamWrapper extends Stream<List<int>> {
