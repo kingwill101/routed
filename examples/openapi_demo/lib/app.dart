@@ -35,6 +35,7 @@ import 'dart:isolate';
 import 'dart:io' as io;
 
 import 'package:routed/routed.dart';
+import 'package:routed_openapi/routed_openapi.dart';
 import 'package:openapi_demo/metadata_routes.dart';
 
 Future<Engine> createEngine({bool initialize = true}) async {
@@ -74,45 +75,13 @@ Future<Engine> createEngine({bool initialize = true}) async {
       // -- Health check (hidden from OpenAPI spec) --------------------------
       router.get(
         '/health',
-        (ctx) async => ctx.json({'status': 'ok'}),
-        schema: const RouteSchema(hidden: true),
+        (ctx) async => ctx.json({'status': 'ok'})
       );
 
       // -- List users -------------------------------------------------------
       router.get(
         '/users',
-        (ctx) async => ctx.json({'data': users.values.toList()}),
-        schema: const RouteSchema(
-          summary: 'List all users',
-          description:
-              'Returns a paginated list of all registered users. '
-              'Currently returns all users without pagination.',
-          tags: ['Users'],
-          operationId: 'listUsers',
-          responses: [
-            ResponseSchema(
-              200,
-              description: 'A list of user objects',
-              contentType: 'application/json',
-              jsonSchema: {
-                'type': 'object',
-                'properties': {
-                  'data': {
-                    'type': 'array',
-                    'items': {
-                      'type': 'object',
-                      'properties': {
-                        'id': {'type': 'string'},
-                        'name': {'type': 'string'},
-                        'email': {'type': 'string', 'format': 'email'},
-                      },
-                    },
-                  },
-                },
-              },
-            ),
-          ],
-        ),
+        (ctx) async => ctx.json({'data': users.values.toList()})
       );
 
       // -- Get user by ID ---------------------------------------------------
@@ -125,36 +94,7 @@ Future<Engine> createEngine({bool initialize = true}) async {
             message: 'User not found',
           );
           return ctx.json(user);
-        },
-        schema: const RouteSchema(
-          summary: 'Get a user by ID',
-          tags: ['Users'],
-          operationId: 'getUser',
-          params: [
-            ParamSchema(
-              'id',
-              location: ParamLocation.path,
-              description: 'The unique user identifier',
-              jsonSchema: {'type': 'string'},
-            ),
-          ],
-          responses: [
-            ResponseSchema(
-              200,
-              description: 'The user object',
-              contentType: 'application/json',
-              jsonSchema: {
-                'type': 'object',
-                'properties': {
-                  'id': {'type': 'string'},
-                  'name': {'type': 'string'},
-                  'email': {'type': 'string', 'format': 'email'},
-                },
-              },
-            ),
-            ResponseSchema(404, description: 'User not found'),
-          ],
-        ),
+        }
       );
 
       // -- Create user (with auto-validation) -------------------------------
@@ -176,36 +116,7 @@ Future<Engine> createEngine({bool initialize = true}) async {
           };
           users[id] = created;
           return ctx.json(created, statusCode: HttpStatus.created);
-        },
-        schema: const RouteSchema(
-          summary: 'Create a new user',
-          description:
-              'Creates a user with the given name and email. '
-              'The request body is automatically validated against the '
-              'defined validation rules before reaching the handler.',
-          tags: ['Users'],
-          operationId: 'createUser',
-          validationRules: {
-            'name': 'required|string|min:2|max:100',
-            'email': 'required|email',
-          },
-          responses: [
-            ResponseSchema(
-              201,
-              description: 'User created successfully',
-              contentType: 'application/json',
-              jsonSchema: {
-                'type': 'object',
-                'properties': {
-                  'id': {'type': 'string'},
-                  'name': {'type': 'string'},
-                  'email': {'type': 'string'},
-                },
-              },
-            ),
-            ResponseSchema(422, description: 'Validation failed'),
-          ],
-        ),
+        }
       );
 
       // -- Delete user (deprecated) -----------------------------------------
@@ -219,28 +130,7 @@ Future<Engine> createEngine({bool initialize = true}) async {
             }, statusCode: HttpStatus.notFound);
           }
           return ctx.json({'status': 'deleted'});
-        },
-        schema: const RouteSchema(
-          summary: 'Delete a user',
-          description:
-              'Deprecated: prefer PATCH /api/v1/users/{id} with '
-              '{"active": false} instead.',
-          tags: ['Users'],
-          operationId: 'deleteUser',
-          deprecated: true,
-          params: [
-            ParamSchema(
-              'id',
-              location: ParamLocation.path,
-              description: 'The unique user identifier',
-              jsonSchema: {'type': 'string'},
-            ),
-          ],
-          responses: [
-            ResponseSchema(200, description: 'User deleted'),
-            ResponseSchema(404, description: 'User not found'),
-          ],
-        ),
+        }
       );
 
       // -- Metadata merger demo routes (cross-file + nested groups) ----------

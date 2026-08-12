@@ -6,12 +6,14 @@ void main() async {
     views: ViewConfig(viewPath: 'views', cache: true),
   );
 
-  final engine = Engine(config: config);
+  final engine = Engine(config: config, providers: [ViewServiceProvider()]);
 
   final fs = local.LocalFileSystem();
   fs.currentDirectory = '${fs.currentDirectory.path}/views';
   // Configure template engines
-  engine.useViewEngine(LiquidViewEngine(root: LiquidRoot(fileSystem: fs)));
+  engine.container
+      .get<ViewEngineManager>()
+      .register(LiquidViewEngine(root: LiquidRoot(fileSystem: fs)));
 
   // Define some example data
   final updates = [

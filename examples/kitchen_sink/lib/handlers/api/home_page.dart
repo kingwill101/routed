@@ -4,5 +4,5 @@ import 'package:routed/routed.dart';
 Future<Response> homePage(EngineContext ctx) async {
   final allRecipes = recipes.map((r) => r.toJson()).toList();
 
-  return await ctx.html("index.html", data: {'recipes': allRecipes});
+  return await ctx.view("index.html", data: {'recipes': allRecipes});
 }

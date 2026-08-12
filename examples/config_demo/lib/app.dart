@@ -1,14 +1,10 @@
 import 'package:config_demo/drivers/cache/in_memory_cache_driver.dart';
 import 'package:config_demo/drivers/storage/memory_storage_driver.dart';
 import 'package:config_demo/providers/mail_provider.dart';
-import 'package:routed/providers.dart'
-    show StorageServiceProvider, ProviderRegistry;
 import 'package:routed/routed.dart';
+import 'package:routed_core/providers.dart' show ProviderRegistry;
 
 Future<Engine> createEngine() async {
-  registerMemoryStorageDriver();
-  registerInMemoryCacheDriver();
-
   ProviderRegistry.instance.register(
     'config_demo.mail',
     factory: () => MailProvider(),
@@ -28,6 +24,14 @@ Future<Engine> createEngine() async {
       RoutingServiceProvider(),
     ],
   );
+
+  // Register demo drivers on the engine's managers (config-driven via
+  // `routed.storage` / `routed.cache` providers from the manifest).
+  final storageManager = engine.container.get<StorageManager>();
+  final cacheManager = engine.container.get<CacheManager>();
+  registerMemoryStorageDriver(storageManager);
+  registerTransientStorageDriver(storageManager);
+  registerInMemoryCacheDriver(cacheManager);
 
   engine.get('/', (ctx) async {
     final config = Config.current;
@@ -64,29 +68,9 @@ Future<Engine> createEngine() async {
       });
     }
 
-    final storageDriverDocs = StorageServiceProvider.driverDocumentation()
-        .map(
-          (doc) => {
-            'path': doc.path,
-            if (doc.type != null) 'type': doc.type,
-            if (doc.description != null) 'description': doc.description,
-            if (doc.resolveOptions() != null) 'options': doc.resolveOptions(),
-          },
-        )
-        .toList();
-
-    final cacheDriverDocs =
-        CacheManager.driverDocumentation(pathBase: 'cache.stores.*')
-            .map(
-              (doc) => {
-                'path': doc.path,
-                if (doc.type != null) 'type': doc.type,
-                if (doc.description != null) 'description': doc.description,
-                if (doc.resolveOptions() != null)
-                  'options': doc.resolveOptions(),
-              },
-            )
-            .toList();
+    final storageDriverNames = storageManager.diskNames.toList()..sort();
+    final cacheStoreFactories = cacheManager.storeFactoryDrivers.toList()
+      ..sort();
 
     return ctx.json({
       'app': {
@@ -109,10 +93,9 @@ Future<Engine> createEngine() async {
       },
       'cache': {
         'default': config.get('cache.default'),
-        'drivers': CacheManager.registeredDrivers,
+        'drivers': cacheStoreFactories,
         'manager_default_store': cacheManager.getDefaultDriver(),
         'stores': cacheStores,
-        'docs': cacheDriverDocs,
       },
       'logging': {
         'extra_fields': config.get('logging.extra_fields'),
@@ -123,8 +106,7 @@ Future<Engine> createEngine() async {
         'default': config.get('storage.default'),
         'assets_root': config.get('storage.disks.assets.root'),
         'transient_root': storageManager.resolve('', disk: 'transient'),
-        'drivers': StorageServiceProvider.availableDriverNames(),
-        'docs': storageDriverDocs,
+        'drivers': storageDriverNames,
       },
       'uploads': {
         'allowed_extensions': config.get('uploads.allowed_extensions'),

@@ -1,4 +1,5 @@
 import 'package:config_demo/app.dart' as app;
+import 'package:routed/routed.dart';
 
 Future<void> main(List<String> args) async {
   final engine = await app.createEngine();

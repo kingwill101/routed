@@ -66,6 +66,15 @@ class _InMemoryCacheStore implements Store {
   }
 
   @override
+  FutureOr<bool> add(String key, dynamic value, int seconds) {
+    if (_store.containsKey(_wrap(key))) {
+      return false;
+    }
+    _store[_wrap(key)] = _createEntry(value, seconds);
+    return true;
+  }
+
+  @override
   FutureOr<bool> putMany(Map<String, dynamic> values, int seconds) {
     for (final entry in values.entries) {
       _store[_wrap(entry.key)] = _createEntry(entry.value, seconds);
@@ -138,22 +147,9 @@ class InMemoryCacheStoreFactory extends StoreFactory {
   }
 }
 
-void registerInMemoryCacheDriver() {
-  CacheManager.registerDriver(
+void registerInMemoryCacheDriver(CacheManager manager) {
+  manager.registerStoreFactory(
     inMemoryCacheDriverName,
-    () => InMemoryCacheStoreFactory(),
-    documentation: (ctx) => <ConfigDocEntry>[
-      ConfigDocEntry(
-        path: ctx.path('ttl'),
-        type: 'int',
-        description:
-            'Default TTL (seconds) applied when cache writes omit a duration.',
-      ),
-      ConfigDocEntry(
-        path: ctx.path('namespace'),
-        type: 'string',
-        description: 'Prefix applied to cache keys stored by this driver.',
-      ),
-    ],
+    InMemoryCacheStoreFactory(),
   );
 }

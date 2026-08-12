@@ -43,6 +43,9 @@ class StorageManager {
   /// Returns whether a disk named [name] exists.
   bool hasDisk(String name) => _disks.containsKey(name);
 
+  /// Names of all registered disks.
+  List<String> get diskNames => _disks.keys.toList(growable: false);
+
   /// Resolves [path] against the selected [disk] (default disk if omitted).
   String resolve(String path, {String? disk}) {
     return this.disk(disk).resolve(path);

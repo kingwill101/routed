@@ -1,4 +1,6 @@
+import 'dart:convert';
 import 'dart:io';
+import 'dart:math';
 
 import 'package:routed/routed.dart';
 
@@ -98,7 +100,7 @@ Future<Engine> createEngine() async {
         final cookieName = ctx.engineConfig.security.csrfCookieName;
         var token = ctx.getSession<String>(cookieName) ?? '';
         if (token.isEmpty) {
-          token = generateCsrfToken();
+          token = _generateCsrfToken();
           ctx.setSession(cookieName, token);
           ctx.setCookie(
             cookieName,
@@ -235,4 +237,10 @@ Future<Engine> createEngine() async {
   );
 
   return engine;
+}
+
+String _generateCsrfToken() {
+  final rng = Random.secure();
+  final bytes = List<int>.generate(32, (_) => rng.nextInt(256));
+  return base64UrlEncode(bytes);
 }

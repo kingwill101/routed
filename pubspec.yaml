@@ -30,15 +30,25 @@ workspace:
   - packages/routed_http
   - packages/routed_validation
   - packages/server_testing/routed_testing
-  # - examples/kitchen_sink
-  # - examples/config_demo
-  # - examples/policy_demo/policy_demo
-  # # - examples/demo_app
-  # - examples/contacts_app
-  # - examples/error_responses
-  # - examples/websocket
-  # - examples/rate_limiting
-  # - examples/openapi_demo
+  - examples/fallback
+  - examples/forward_proxy
+  - examples/http2
+  - examples/liquid_template
+  - examples/multipart
+  - examples/project_commands_demo
+  - examples/route_events
+  - examples/localization
+  - examples/auth_demo
+  - examples/static_mounts
+  - examples/oauth_keycloak
+  - examples/kitchen_sink
+  - examples/config_demo
+  - examples/policy_demo/policy_demo
+  - examples/contacts_app
+  - examples/error_responses
+  - examples/websocket
+  - examples/rate_limiting
+  - examples/openapi_demo
 
 funding:
   - https://www.buymeacoffee.com/kingwill101

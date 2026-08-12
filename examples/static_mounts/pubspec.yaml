@@ -3,6 +3,7 @@ description: A new Routed application.
 version: 0.1.0
 publish_to: 'none'
 
+resolution: workspace
 environment:
   sdk: ">=3.9.2 <4.0.0"
 

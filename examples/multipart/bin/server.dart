@@ -5,6 +5,7 @@ import 'package:routed/routed.dart';
 
 void main() async {
   final engine = Engine(
+    providers: [ViewServiceProvider()],
     config: EngineConfig(
       multipart: MultipartConfig(
         maxFileSize: 10 * 1024 * 1024, // 10MB
@@ -13,14 +14,16 @@ void main() async {
       ),
     ),
   );
-  engine.useViewEngine(LiquidViewEngine(directory: 'templates'));
+  engine.container
+      .get<ViewEngineManager>()
+      .register(LiquidViewEngine(directory: 'templates'));
 
   // Ensure uploads directory exists
   await Directory('uploads').create(recursive: true);
 
   // Serve upload form
   engine.get('/', (ctx) {
-    return ctx.html(
+    return ctx.view(
       'upload_form.liquid',
       data: {
         'page_title': 'File Upload Example',
@@ -79,7 +82,7 @@ void main() async {
         )
         .toList();
 
-    return ctx.html(
+    return ctx.view(
       'file_list.liquid',
       data: {'page_title': 'Uploaded Files', 'files': files},
     );
@@ -94,7 +97,9 @@ void main() async {
       return ctx.json({'error': 'File not found'}, statusCode: 404);
     }
 
-    return ctx.file(filePath);
+    ctx.response.headers.contentType = ContentType('application', 'octet-stream');
+    ctx.response.writeBytes(await File(filePath).readAsBytes());
+    return ctx.response;
   });
 
   // Start the server

@@ -2,14 +2,16 @@ import 'package:routed/routed.dart';
 
 void main() async {
   // Use bare Engine for this simple template demo - no config loading needed
-  final engine = Engine();
+  final engine = Engine(providers: [ViewServiceProvider()]);
 
   // Configure template engines
-  engine.useViewEngine(LiquidViewEngine(directory: 'templates'));
+  engine.container
+      .get<ViewEngineManager>()
+      .register(LiquidViewEngine(directory: 'templates'));
 
   // Home page
   engine.get('/', (ctx) {
-    return ctx.html(
+    return ctx.view(
       'home.liquid',
       data: {
         'page_title': 'Home Page',
@@ -26,7 +28,7 @@ void main() async {
 
   // Basic template with variables and loops
   engine.get('/hello', (ctx) {
-    return ctx.html(
+    return ctx.view(
       'hello.liquid',
       data: {
         'page_title': 'Hello Example',
@@ -42,7 +44,7 @@ void main() async {
   });
   // Extended route
   engine.get('/extended', (ctx) {
-    return ctx.html(
+    return ctx.view(
       'extended.liquid',
       data: {
         'page_title': 'Extended Example',
@@ -63,7 +65,7 @@ void main() async {
   // Dynamic route
   engine.get('/data/{name}', (ctx) {
     final name = ctx.param('name');
-    return ctx.html(
+    return ctx.view(
       'dynamic.liquid',
       data: {
         'page_title': '$name\'s Page',
@@ -80,7 +82,7 @@ void main() async {
 
   // About page
   engine.get('/about', (ctx) {
-    return ctx.html(
+    return ctx.view(
       'about.liquid',
       data: {
         'page_title': 'About Us',
@@ -96,7 +98,7 @@ void main() async {
 
   // Contact page with form example
   engine.get('/contact', (ctx) {
-    return ctx.html(
+    return ctx.view(
       'contact.liquid',
       data: {
         'page_title': 'Contact Us',
@@ -133,7 +135,7 @@ void main() async {
 
   // Success page after form submission
   engine.get('/contact-success', (ctx) {
-    return ctx.html(
+    return ctx.view(
       'contact_success.liquid',
       data: {
         'page_title': 'Contact Form Submitted',

@@ -18,7 +18,6 @@
 //   curl -H "Accept: text/html"        http://localhost:3000/not-found
 //   curl                                http://localhost:3000/not-found
 import 'package:routed/routed.dart';
-import 'package:routed/middleware.dart';
 
 // ---------------------------------------------------------------------------
 // Custom error type — extend EngineError for domain-specific errors.
@@ -30,6 +29,18 @@ class PaymentRequiredError extends EngineError {
 
   PaymentRequiredError()
     : super(message: 'A paid subscription is required for this feature');
+}
+
+/// Catch-all middleware that turns unhandled exceptions into a
+/// content-negotiated 500 response.
+Middleware recoveryMiddleware() {
+  return (ctx, next) async {
+    try {
+      return await next();
+    } catch (_) {
+      return ctx.string('Internal Server Error', statusCode: 500);
+    }
+  };
 }
 
 void main() async {

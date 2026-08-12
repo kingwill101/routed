@@ -1,7 +1,6 @@
 import 'dart:io';
 
 import 'package:routed/routed.dart';
-import 'package:routed/src/storage/local_storage_driver.dart';
 
 Future<void> main() async {
   print('cwd: ${Directory.current.path}');

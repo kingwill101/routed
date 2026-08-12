@@ -3,7 +3,6 @@ import 'package:kitchen_sink_example/handlers/api.dart' as api;
 import 'package:kitchen_sink_example/handlers/web.dart' as web;
 import 'package:kitchen_sink_example/middleware/middleware.dart';
 import 'package:routed/routed.dart';
-import 'package:routed/session.dart';
 
 Engine buildApp() {
   final appKey = 'base64:AQIDBAUGBwgJCgsMDQ4PEBESExQVFhcYGRobHB0eHyA=';
@@ -42,7 +41,9 @@ Engine buildApp() {
     ],
   );
 
-  engine.useViewEngine(LiquidViewEngine(directory: templateDirectory));
+  engine.container
+      .get<ViewEngineManager>()
+      .register(LiquidViewEngine(directory: templateDirectory));
 
   // API Routes
   final apiRouter = Router(

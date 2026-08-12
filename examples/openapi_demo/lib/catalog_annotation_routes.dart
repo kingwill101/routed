@@ -1,15 +1,12 @@
 import 'package:routed/routed.dart';
+import 'package:routed_openapi/routed_openapi.dart';
 
 void registerCatalogAnnotationRoutes(Router router) {
   final handlers = _CatalogHandlers();
 
   router.get(
     '/products',
-    handlers.listProducts,
-    schema: const RouteSchema(
-      tags: ['Catalog'],
-      operationId: 'catalogProducts',
-    ),
+    handlers.listProducts
   );
 
   router.get('/products/{sku}', handlers.getProductBySku);

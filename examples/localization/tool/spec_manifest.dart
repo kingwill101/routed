@@ -1,4 +1,5 @@
 import 'dart:io';
+import 'package:routed/routed.dart';
 
 import 'package:localization_example/app.dart' as app;
 

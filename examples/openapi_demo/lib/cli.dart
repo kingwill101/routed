@@ -2,6 +2,7 @@ import 'dart:io';
 
 import 'package:artisanal/args.dart';
 import 'package:openapi_demo/app.dart' as app;
+import 'package:routed/routed.dart';
 import 'package:openapi_demo/commands.dart' as project_commands;
 
 Future<int> runCli(List<String> args) async {

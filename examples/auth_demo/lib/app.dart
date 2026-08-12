@@ -1,6 +1,5 @@
 import 'dart:io';
 
-import 'package:routed/auth/providers/github.dart';
 import 'package:routed/routed.dart';
 
 Future<void> _registerAuthEvents(Engine engine) async {

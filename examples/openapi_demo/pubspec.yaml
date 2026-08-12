@@ -9,8 +9,9 @@ environment:
 
 dependencies:
   args: ^2.5.0
-  artisanal: ^0.1.2
+  artisanal: ^0.3.0
   routed: ^0.3.3
+  routed_openapi: ^0.1.0
 
 dev_dependencies:
   lints: ^6.0.0
