@@ -49,6 +49,7 @@ workspace:
   - examples/websocket
   - examples/rate_limiting
   - examples/openapi_demo
+  - examples/full_stack
 
 funding:
   - https://www.buymeacoffee.com/kingwill101

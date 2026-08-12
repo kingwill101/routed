@@ -1,4 +1,3 @@
-import 'package:ormed_cli/runtime.dart';
 import 'package:ormed/ormed.dart';
 import 'package:full_stack/orm_registry.g.dart' as g;
 
@@ -38,10 +37,3 @@ Future<void> runProjectSeeds(
     pretend: pretend,
   );
 }
-
-Future<void> main(List<String> args) => runSeedRegistryEntrypoint(
-  args: args,
-  seeds: seeders,
-  beforeRun: (connection) =>
-      g.bootstrapOrm(registry: connection.context.registry),
-);

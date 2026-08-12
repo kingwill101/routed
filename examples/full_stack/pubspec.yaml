@@ -10,7 +10,6 @@ environment:
 dependencies:
   args: ^2.5.0
   ormed: ^0.1.0-dev+7
-  ormed_cli: ^0.1.0
   ormed_sqlite: ^0.1.0-dev+7
   routed:
     path: ../../packages/routed
