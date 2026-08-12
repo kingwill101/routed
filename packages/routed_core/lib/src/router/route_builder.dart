@@ -1,4 +1,5 @@
 import 'package:routed_core/src/router/registered_route.dart';
+import 'package:routed_core/src/router/route_metadata.dart';
 import 'package:routed_core/src/router/router.dart';
 import 'package:routed_core/src/router/types.dart';
 
@@ -31,6 +32,12 @@ class RouteBuilder {
   /// Returns the current instance of `RouteBuilder` to allow for method chaining.
   RouteBuilder constraints(Map<String, dynamic> newConstraints) {
     _route.constraints.addAll(newConstraints);
+    return this;
+  }
+
+  /// Adds typed metadata to the route.
+  RouteBuilder metadata<T>(RouteMetadataKey<T> key, T value) {
+    _route.metadata.set(key, value);
     return this;
   }
 

@@ -65,7 +65,7 @@ void main() {
 
     test('writes manifest to disk', () async {
       await _run(runner, [
-        'spec:generate',
+        'openapi:generate',
         '--entry',
         'tool/spec_manifest.dart',
       ]);

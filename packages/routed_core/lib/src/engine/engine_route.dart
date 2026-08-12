@@ -45,6 +45,9 @@ class EngineRoute {
   /// Allows for more complex route matching beyond simple path and method.
   final Map<String, dynamic> constraints;
 
+  /// Generic typed metadata attached to the route.
+  final RouteMetadata metadata;
+
   /// Optional API schema metadata for this route.
   ///
   /// Contains request body, parameter, and response metadata used for
@@ -91,12 +94,14 @@ class EngineRoute {
     this.name,
     this.middlewares = const [],
     this.constraints = const {},
+    RouteMetadata? metadata,
     this.schema,
     this.isFallback = false,
     this.sourceFile,
     this.sourceLine,
     this.sourceColumn,
-  }) : _patternRegistry = patternRegistry {
+  })  : metadata = metadata ?? RouteMetadata(),
+        _patternRegistry = patternRegistry {
     final patternData = _buildUriPattern(path, _patternRegistry);
     _uriPattern = patternData.pattern;
     _parameterPatterns = patternData.paramInfo;
@@ -114,7 +119,9 @@ class EngineRoute {
     required this.handler,
     required RoutePatternRegistry patternRegistry,
     this.middlewares = const [],
-  }) : method = '*',
+    RouteMetadata? metadata,
+  })  : metadata = metadata ?? RouteMetadata(),
+       method = '*',
        path = '*',
        name = null,
        constraints = const {},

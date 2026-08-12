@@ -1,3 +1,4 @@
+import 'package:routed_core/src/router/route_metadata.dart';
 import 'package:routed_core/src/router/types.dart';
 
 /// Represents a route that has been registered in the Router.
@@ -18,6 +19,9 @@ class RegisteredRoute {
 
   Map<String, dynamic> constraints;
 
+  /// Generic typed metadata attached to the route.
+  final RouteMetadata metadata;
+
   /// Source file where the route registration call occurred.
   final String? sourceFile;
 
@@ -37,7 +41,9 @@ class RegisteredRoute {
     this.sourceLine,
     this.sourceColumn,
     Map<String, dynamic>? constraints,
-  }) : constraints = Map<String, dynamic>.from(constraints ?? const {});
+    RouteMetadata? metadata,
+  })  : constraints = Map<String, dynamic>.from(constraints ?? const {}),
+        metadata = metadata ?? RouteMetadata();
 
   @override
   String toString() {

@@ -37,6 +37,7 @@ import 'package:routed_core/src/response.dart';
 import 'package:routed_core/src/router/router.dart';
 import 'package:routed_core/src/router/router_group_builder.dart';
 import 'package:routed_core/src/router/middleware_reference.dart';
+import 'package:routed_core/src/router/route_metadata.dart';
 import 'package:routed_core/src/router/types.dart';
 import 'package:routed_core/src/runtime/shutdown.dart';
 import 'package:routed_core/src/support/named_registry.dart';
@@ -872,6 +873,7 @@ class Engine with ContainerMixin {
           name: r.name,
           middlewares: allMiddlewares,
           constraints: r.constraints,
+          metadata: r.metadata,
           isFallback: r.constraints['isFallback'] == true,
           sourceFile: r.sourceFile,
           sourceLine: r.sourceLine,

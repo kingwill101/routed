@@ -11,7 +11,7 @@
 ///
 /// 3. **Build-runner** (static generation) — run the two-step pipeline:
 ///    ```bash
-///    dart run routed spec                  # writes route_manifest.json
+///    dart run routed openapi generate       # writes route_manifest.json
 ///    dart run build_runner build           # generates openapi.json + controller
 ///    ```
 ///

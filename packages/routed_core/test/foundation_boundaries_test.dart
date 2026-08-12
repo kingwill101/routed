@@ -18,6 +18,19 @@ void main() {
       expect(m, isA<Middleware>());
     });
 
+    test('route metadata survives registration and manifest build', () {
+      const metaKey = RouteMetadataKey<String>('routed.test.meta');
+      final engine = Engine();
+      engine.get('/meta', (ctx) => ctx.string('ok')).metadata(metaKey, 'hello');
+
+      final route = engine.getAllRoutes().singleWhere((r) => r.path == '/meta');
+      expect(route.metadata.get(metaKey), 'hello');
+
+      final manifest = engine.buildRouteManifest();
+      final manifestRoute = manifest.routes.singleWhere((r) => r.path == '/meta');
+      expect(manifestRoute.metadata['routed.test.meta'], 'hello');
+    });
+
     test('typed ContextKey read/write', () async {
       // RouteMetadata and ServiceResolver smoke tests
       final meta = RouteMetadata();

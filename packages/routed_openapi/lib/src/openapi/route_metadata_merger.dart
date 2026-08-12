@@ -43,6 +43,7 @@ RouteManifest mergeManifestWithExtractedMetadata(
           name: route.name,
           middleware: route.middleware,
           constraints: route.constraints,
+          metadata: route.metadata,
           isFallback: route.isFallback,
           schema: mergedSchema.toJson(),
         );

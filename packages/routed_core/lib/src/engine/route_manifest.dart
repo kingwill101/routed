@@ -98,10 +98,12 @@ class RouteManifestEntry {
     this.handlerIdentity,
     Iterable<String> middleware = const [],
     Map<String, Object?> constraints = const {},
+    Map<String, Object?> metadata = const {},
     this.isFallback = false,
     this.schema,
   }) : middleware = List<String>.unmodifiable(middleware),
-       constraints = Map<String, Object?>.unmodifiable(constraints);
+       constraints = Map<String, Object?>.unmodifiable(constraints),
+       metadata = Map<String, Object?>.unmodifiable(metadata);
 
   factory RouteManifestEntry.fromEngineRoute(EngineRoute route) {
     // Keep generic Object for handlerIdentity/schema to support both routed and routed_openapi RouteSchema
@@ -112,6 +114,7 @@ class RouteManifestEntry {
       handlerIdentity: null,
       middleware: route.middlewares.map(_describeMiddleware),
       constraints: _serializeConstraints(route.constraints),
+      metadata: Map<String, Object?>.from(route.metadata.asMap),
       isFallback: route.isFallback,
       schema: route.schema,
     );
@@ -138,6 +141,9 @@ class RouteManifestEntry {
       handlerIdentity: json['handlerIdentity'],
       middleware: middleware,
       constraints: constraints,
+      metadata: json['metadata'] is Map
+          ? _stringKeyed(json['metadata'] as Map)
+          : const <String, Object?>{},
       isFallback: isFallback,
       schema: json['schema'],
     );
@@ -149,6 +155,7 @@ class RouteManifestEntry {
   final Object? handlerIdentity;
   final List<String> middleware;
   final Map<String, Object?> constraints;
+  final Map<String, Object?> metadata;
   final bool isFallback;
 
   /// Optional API schema metadata for this route.
@@ -162,6 +169,7 @@ class RouteManifestEntry {
       if (handlerIdentity != null) 'handlerIdentity': handlerIdentity,
       if (middleware.isNotEmpty) 'middleware': middleware,
       if (constraints.isNotEmpty) 'constraints': constraints,
+      if (metadata.isNotEmpty) 'metadata': metadata,
       if (isFallback) 'isFallback': true,
       if (schema != null) 'schema': schema,
     };

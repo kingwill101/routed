@@ -219,7 +219,7 @@ Map<String, dynamic> _readGeneratedSpec() {
   }
 
   fail(
-    'Generated OpenAPI spec not found. Run `dart run routed spec` and '
+    'Generated OpenAPI spec not found. Run `dart run routed openapi generate` and '
     '`dart run build_runner build --delete-conflicting-outputs` in '
     '`examples/openapi_demo` before running this test.',
   );

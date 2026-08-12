@@ -2,7 +2,7 @@
 /// from a route manifest JSON file.
 ///
 /// This builder reads the route manifest (produced by running
-/// `dart run routed spec`), enriches route metadata with handler annotations
+/// `dart run routed openapi generate`), enriches route metadata with handler annotations
 /// and handler Dartdoc comments, then converts the result into `openapi.json`
 /// plus a serving controller.
 ///
@@ -10,7 +10,7 @@
 ///
 /// 1. Generate the manifest:
 ///    ```bash
-///    dart run routed spec
+///    dart run routed openapi generate
 ///    ```
 ///    This writes `.dart_tool/routed/route_manifest.json` by default.
 ///
@@ -84,7 +84,7 @@ class _OpenApiBuilder implements Builder {
     if (manifestJson == null) {
       log.warning(
         'OpenAPI builder: manifest file not found at "$manifestPath". '
-        'Run `dart run routed spec` first to generate it.',
+        'Run `dart run routed openapi generate` first to generate it.',
       );
       return;
     }
