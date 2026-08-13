@@ -153,53 +153,63 @@ class DeployCommand extends BaseCommand {
         ? _sanitizeWorkerName(packageName)
         : _sanitizeWorkerName(requestedName);
     final dryRun = results?['dry-run'] as bool? ?? false;
-    final buildRoot = root.fileSystem.directory(
-      p.join(root.path, '.dart_tool', 'routed', 'deploy', 'netlify'),
+    final stagingIo = await io.Directory.systemTemp.createTemp(
+      'routed-netlify-',
     );
-    final edgeRoot = root.fileSystem.directory(
-      p.join(buildRoot.path, 'netlify', 'edge-functions'),
-    );
-    await edgeRoot.create(recursive: true);
-    final dartEntry = root.fileSystem.file(
-      p.join(buildRoot.path, 'worker_entry.dart'),
-    );
-    final jsOutput = root.fileSystem.file(
-      p.join(buildRoot.path, 'worker.dart.js'),
-    );
-    await dartEntry.writeAsString(_netlifyWorkerEntry(packageName));
-    await _runDart(root, [
-      'compile',
-      'js',
-      dartEntry.path,
-      '-o',
-      jsOutput.path,
-      '-O2',
-    ], label: 'Compiling Netlify Edge Function');
-    final handler = root.fileSystem.file(p.join(edgeRoot.path, 'routed.js'));
-    await handler.writeAsString(_netlifyHandler());
-    final config = root.fileSystem.file(p.join(buildRoot.path, 'netlify.toml'));
-    await config.writeAsString('''
+    final staging = root.fileSystem.directory(stagingIo.path);
+
+    try {
+      final edgeRoot = root.fileSystem.directory(
+        p.join(staging.path, 'netlify', 'edge-functions'),
+      );
+      await edgeRoot.create(recursive: true);
+      final sourceRoot = root.fileSystem.directory(
+        p.join(root.path, '.dart_tool', 'routed', 'deploy', 'netlify'),
+      );
+      await sourceRoot.create(recursive: true);
+      final dartEntry = root.fileSystem.file(
+        p.join(sourceRoot.path, 'worker_entry.dart'),
+      );
+      final jsOutput = root.fileSystem.file(
+        p.join(staging.path, 'worker.dart.js'),
+      );
+      await dartEntry.writeAsString(_netlifyWorkerEntry(packageName));
+      await _runDart(root, [
+        'compile',
+        'js',
+        dartEntry.path,
+        '-o',
+        jsOutput.path,
+        '-O2',
+      ], label: 'Compiling Netlify Edge Function');
+      final handler = root.fileSystem.file(p.join(edgeRoot.path, 'routed.js'));
+      await handler.writeAsString(_netlifyHandler());
+      final config = root.fileSystem.file(p.join(staging.path, 'netlify.toml'));
+      await config.writeAsString('''
 [build]
   edge_functions = "netlify/edge-functions"
 ''');
 
-    if (dryRun) {
-      logger.info('Netlify build validation complete: $siteName');
-      return;
-    }
+      if (dryRun) {
+        logger.info('Netlify build validation complete: $siteName');
+        return;
+      }
 
-    final args = <String>[
-      'netlify-cli@latest',
-      'deploy',
-      '--no-build',
-      '--dir',
-      '.',
-      '--site',
-      siteName,
-      '--prod',
-    ];
-    await _runNpx(buildRoot, args, label: 'Deploying Netlify Edge Function');
-    logger.info('Routed Netlify deployment complete: $siteName');
+      final args = <String>[
+        'netlify-cli@latest',
+        'deploy',
+        '--no-build',
+        '--dir',
+        '.',
+        '--site',
+        siteName,
+        '--prod',
+      ];
+      await _runNpx(staging, args, label: 'Deploying Netlify Edge Function');
+      logger.info('Routed Netlify deployment complete: $siteName');
+    } finally {
+      await stagingIo.delete(recursive: true);
+    }
   }
 
   String _netlifyWorkerEntry(String packageName) =>
