@@ -26,7 +26,7 @@ Future<JSObject> hostCreateServer(
   }).toJS;
 
   final global = globalContext;
-  final hostObject = global.getProperty(runtime.toLowerCase().toJS);
+  final hostObject = global.getProperty(runtime.toJS);
   if (hostObject == null || !hostObject.isA<JSObject>()) {
     throw StateError('$runtime global is unavailable');
   }

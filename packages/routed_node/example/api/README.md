@@ -1,7 +1,8 @@
 # routed_node sample API
 
 Small JSON API that demonstrates **`package:routed_node`**: Routed handlers on
-the portable edge, served with Node’s `http` module when compiled for JS.
+the portable edge, served by Node, Bun, and Fetch-compatible hosts when
+compiled for JavaScript.
 
 ```
 example/api/
@@ -9,6 +10,7 @@ example/api/
 ├── bin/server.dart       # serveNode entry (Node host)
 ├── bin/smoke.dart        # same routes via handlePortable (Dart VM)
 ├── package.json
+├── test/                  # VM + Node/Bun integration tests
 └── tool/build.sh         # legacy Node-only helper
 ```
 
@@ -55,6 +57,17 @@ GET /health → 200 {"ok":true,…}
 GET /api/items → 200 {"items":[…]}
 …
 smoke ok
+```
+
+## Test on Node and Bun
+
+The platform integration tests use the real host listener and native `fetch`:
+
+```bash
+dart test -p node test/node_integration_test.dart
+
+dart compile js tool/bun_integration.dart -o /tmp/routed-bun.js -O2
+bun /tmp/routed-bun.js
 ```
 
 ## Deploy to Cloudflare
