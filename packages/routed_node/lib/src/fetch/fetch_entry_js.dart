@@ -78,8 +78,20 @@ Future<web.Response> handleNativeFetch(
       ),
     );
     final view = WebFetchRequest(request, hostContext: hostContext);
-    final response = await dispatchFetchExchange(engine, view, runtime: info);
-    return webResponseFromFetchView(response);
+    final streaming = WebStreamingResponseAdapter();
+    final dispatch = dispatchFetchConnection(
+      engine,
+      view,
+      streaming,
+      runtime: info,
+    );
+    unawaited(
+      dispatch.catchError((Object error, StackTrace stackTrace) {
+        streaming.fail(error, stackTrace);
+      }),
+    );
+    await streaming.headersReady;
+    return webResponseFromStreamingAdapter(streaming);
   } catch (_) {
     return web.Response(
       'Internal Server Error'.toJS,

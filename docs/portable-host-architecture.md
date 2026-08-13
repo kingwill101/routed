@@ -33,15 +33,15 @@ edge, host packages only at the boundary)—not by any third-party source.
 │    RequestAdapter / ResponseAdapter    (stream sink edge)   │
 │    Engine.handlePortable / handleConnection                 │
 ├──────────────┬──────────────────┬───────────────────────────┤
-│  routed_io   │  routed_node     │  (future) workers         │
-│  dart:io     │  Node http       │  fetch handler            │
+│  routed_io   │  routed_node multi-host runtime             │
+│  dart:io     │  Node/Bun/Deno/Fetch host bridges           │
 └──────────────┴──────────────────┴───────────────────────────┘
 ```
 
 | Layer | Owns |
 |-------|------|
 | **Core** | Routing, middleware chain, config, DI, portable message types |
-| **Host package** | Bind/listen or fetch export; map host types ↔ portable messages |
+| **Host package** | Bind/listen or fetch export; map host types ↔ portable messages; declare capabilities |
 | **App** | Routes and business logic; depends on core + one host package |
 
 ## Two edge shapes
@@ -53,8 +53,9 @@ host → RequestAdapter + ResponseAdapter → Engine.handleConnection
                                          → writes into ResponseAdapter
 ```
 
-Used by long-lived listeners that want progressive write/close on a socket-like
-sink. `routed_io` and the current Node transport use this path.
+Used by long-lived listeners and Fetch hosts that want progressive
+write/close through a native stream. `routed_io` and `routed_node` use this path
+where the host supports it.
 
 ### 2. Message (value in / value out) — `handlePortable`
 
@@ -70,8 +71,8 @@ sink until the pipeline is fully portable (no synthetic `HttpRequest`).
 
 | Model | Hosts | Entry |
 |-------|-------|--------|
-| **Serve** | VM (`routed_io`), Node (`routed_node`), … | `serve*(engine, host, port)` |
-| **Fetch export** | Workers, edge functions (future) | Host invokes `handlePortable` / `handleConnection` per request |
+| **Serve** | VM (`routed_io`), Node/Bun/Deno (`routed_node`) | `serve*(engine, host, port)` |
+| **Fetch export** | Cloudflare, Vercel, Netlify (`routed_node`) | Host invokes a Fetch export backed by `handlePortable` / `handleConnection` |
 
 Do not collapse these into one fake API. Serve returns a `ServerHandle`; fetch
 export has no long-lived listener handle.
@@ -113,14 +114,16 @@ on the connection. Portable messages never carry host handles.
 ## Migration steps
 
 1. **Done:** `RequestAdapter` / `ResponseAdapter`, `HttpConnection`,
-   `AdapterHttpBridge`, `routed_io`, `routed_node`.
-2. **Done:** `PortableRequest` / `PortableResponse` / `HostCapabilities` and
+   `AdapterHttpBridge`, `routed_io`, and the initial Node transport.
+2. **Done:** `routed_node` runtime/capability contracts, native Fetch bridge,
+   and explicit Node/Bun/Deno/Cloudflare/Vercel/Netlify entrypoints.
+3. **Done:** `PortableRequest` / `PortableResponse` / `HostCapabilities` and
    `Engine.handlePortable` (recording sink over the existing pipeline).
-3. **Done:** Node and IO hosts map through portable messages at the edge
+4. **Done:** Node and IO hosts map through portable messages at the edge
    (`dispatchNodeExchange`, `dispatchIoExchange`); IO serve keeps a native
    fast path by default (`portableEdge: false`).
-4. **In progress:** shrink residual `dart:io` in core (see below).
-5. **Later:** pipeline consumes portable types natively; drop
+5. **In progress:** shrink residual `dart:io` in core (see below).
+6. **Later:** pipeline consumes portable types natively; drop
    `AdapterHttpBridge`; optional fetch-export host package for Workers.
 
 ## Residual `dart:io` in `routed_core` (shrink list)
@@ -147,7 +150,7 @@ tests. Next shrink: matched routes on dual-mode types without synthetic
 ```
 routed_core   → no Node/Workers APIs; shrink dart:io surface over time
 routed_io     → dart:io only; maps to core portable/adapter APIs
-routed_node   → Node only; maps to core portable/adapter APIs
+routed_node   → JavaScript/edge hosts; maps to core portable/adapter APIs
 routed_*      → framework features; not host bind/listen
 server_*      → no routed imports in lib/
 ```

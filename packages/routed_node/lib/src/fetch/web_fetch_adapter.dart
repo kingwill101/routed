@@ -1,6 +1,8 @@
+import 'dart:async';
 import 'dart:js_interop';
 import 'dart:js_interop_unsafe';
 
+import 'package:routed_core/routed_core.dart';
 import 'package:web/web.dart' as web;
 
 import '../runtime/runtime.dart';
@@ -24,11 +26,11 @@ final class WebFetchRequest implements FetchRequestView {
   @override
   Map<String, Object?> get rawHeaders {
     final headers = <String, Object?>{};
-    final keys = globalContext.getProperty('Object'.toJS);
-    if (keys == null || !keys.isA<JSObject>()) return headers;
-    final keysFn = (keys as JSObject).getProperty('keys'.toJS);
-    if (keysFn == null || !keysFn.isA<JSFunction>()) return headers;
-    final result = (keysFn as JSFunction).callAsFunction(keys, request.headers);
+    final object = globalContext.getProperty('Object'.toJS);
+    if (object == null || !object.isA<JSObject>()) return headers;
+    final keys = (object as JSObject).getProperty('keys'.toJS);
+    if (keys == null || !keys.isA<JSFunction>()) return headers;
+    final result = (keys as JSFunction).callAsFunction(object, request.headers);
     if (result == null || !result.isA<JSArray>()) return headers;
     final list = result as JSArray;
     for (var i = 0; i < list.length; i++) {
@@ -54,7 +56,83 @@ final class WebFetchRequest implements FetchRequestView {
   RoutedNodeContext get hostContext => _hostContext;
 }
 
-/// Converts a Routed response view into a native Fetch response.
+/// Response adapter that starts a native Fetch response before the body ends.
+///
+/// Headers are released once Routed has committed them; body chunks continue
+/// through the returned native `ReadableStream`.
+final class WebStreamingResponseAdapter implements ResponseAdapter {
+  WebStreamingResponseAdapter() : _body = StreamController<List<int>>();
+
+  final StreamController<List<int>> _body;
+  final Completer<void> _headersReady = Completer<void>();
+  final Map<String, List<String>> _headers = <String, List<String>>{};
+  int _statusCode = 200;
+  bool _headersSent = false;
+  bool _closed = false;
+
+  int get statusCodeValue => _statusCode;
+  Map<String, List<String>> get headersValue => _headers;
+  Stream<List<int>> get body => _body.stream;
+  Future<void> get headersReady => _headersReady.future;
+
+  void _markHeadersReady() {
+    if (_headersSent) return;
+    _headersSent = true;
+    if (!_headersReady.isCompleted) _headersReady.complete();
+  }
+
+  @override
+  int get statusCode => _statusCode;
+
+  @override
+  set statusCode(int value) {
+    if (!_headersSent) _statusCode = value;
+  }
+
+  @override
+  void setHeader(String name, String value) {
+    if (_headersSent) return;
+    _headers[name] = <String>[value];
+  }
+
+  @override
+  void addHeader(String name, String value) {
+    if (_headersSent) return;
+    _headers.putIfAbsent(name, () => <String>[]).add(value);
+  }
+
+  @override
+  void write(List<int> bytes) {
+    if (_closed) throw StateError('Cannot write to a closed Fetch response');
+    _markHeadersReady();
+    if (bytes.isNotEmpty) _body.add(bytes);
+  }
+
+  @override
+  Future<void> flush() async {
+    _markHeadersReady();
+  }
+
+  @override
+  Future<void> close() async {
+    if (_closed) return;
+    _closed = true;
+    _markHeadersReady();
+    await _body.close();
+  }
+
+  void fail(Object error, StackTrace stackTrace) {
+    if (_closed) return;
+    _closed = true;
+    _statusCode = 500;
+    _headers['content-type'] = <String>['text/plain; charset=utf-8'];
+    _markHeadersReady();
+    _body.addError(error, stackTrace);
+    unawaited(_body.close());
+  }
+}
+
+/// Converts a buffered/streaming Routed response view into a native Fetch response.
 web.Response webResponseFromFetchView(FetchResponseView source) {
   final headers = web.Headers();
   source.headers.forEach((name, values) {
@@ -65,5 +143,21 @@ web.Response webResponseFromFetchView(FetchResponseView source) {
   return web.Response(
     webStreamFromDart(source.body),
     web.ResponseInit(status: source.statusCode, headers: headers),
+  );
+}
+
+/// Converts a streaming response adapter into a native Fetch response.
+web.Response webResponseFromStreamingAdapter(
+  WebStreamingResponseAdapter source,
+) {
+  final headers = web.Headers();
+  source.headersValue.forEach((name, values) {
+    for (final value in values) {
+      headers.append(name, value);
+    }
+  });
+  return web.Response(
+    webStreamFromDart(source.body),
+    web.ResponseInit(status: source.statusCodeValue, headers: headers),
   );
 }
