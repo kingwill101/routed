@@ -16,10 +16,19 @@ final class WebFetchRequest implements FetchRequestView {
     required RoutedNodeContext hostContext,
     Future<FetchWebSocketUpgrade> Function()? acceptWebSocket,
   }) : _hostContext = hostContext,
-       _acceptWebSocket =
-           request.headers.get('upgrade')?.toLowerCase() == 'websocket'
-           ? acceptWebSocket
-           : null;
+       _acceptWebSocket = _isUpgrade(request) ? acceptWebSocket : null;
+
+  static bool _isUpgrade(web.Request request) {
+    final upgrade = request.headers.get('upgrade')?.toLowerCase();
+    final connection = request.headers.get('connection');
+    return request.method.toUpperCase() == 'GET' &&
+        upgrade == 'websocket' &&
+        (connection
+                ?.split(',')
+                .map((value) => value.trim().toLowerCase())
+                .contains('upgrade') ??
+            false);
+  }
 
   final web.Request request;
   final Future<FetchWebSocketUpgrade> Function()? _acceptWebSocket;
@@ -34,19 +43,19 @@ final class WebFetchRequest implements FetchRequestView {
   @override
   Map<String, Object?> get rawHeaders {
     final headers = <String, Object?>{};
-    final object = globalContext.getProperty('Object'.toJS);
-    if (object == null || !object.isA<JSObject>()) return headers;
-    final keys = (object as JSObject).getProperty('keys'.toJS);
-    if (keys == null || !keys.isA<JSFunction>()) return headers;
-    final result = (keys as JSFunction).callAsFunction(object, request.headers);
-    if (result == null || !result.isA<JSArray>()) return headers;
-    final list = result as JSArray;
-    for (var i = 0; i < list.length; i++) {
-      final key = list.getProperty(i.toJS);
-      if (key != null) {
-        final name = key.toString();
-        headers[name] = request.headers.get(name);
-      }
+    for (final name in const [
+      'upgrade',
+      'connection',
+      'sec-websocket-version',
+      'sec-websocket-key',
+      'sec-websocket-protocol',
+      'content-type',
+      'content-length',
+      'accept',
+      'host',
+    ]) {
+      final value = request.headers.get(name);
+      if (value != null) headers[name] = value;
     }
     return headers;
   }
@@ -167,15 +176,32 @@ web.Response webResponseFromFetchView(FetchResponseView source) {
   );
 }
 
+@JS('Response')
+external JSFunction? get _responseConstructor;
+
+web.Headers _upgradeHeaders() {
+  final headers = web.Headers();
+  headers.append('upgrade', 'websocket');
+  headers.append('connection', 'Upgrade');
+  return headers;
+}
+
 /// Converts a streaming response adapter into a native Fetch response.
 web.Response webResponseFromStreamingAdapter(
   WebStreamingResponseAdapter source,
 ) {
   final upgrade = source.upgradeResponse;
   if (upgrade != null) {
-    final init = web.ResponseInit(status: 101)
-      ..setProperty('webSocket'.toJS, upgrade as JSAny);
-    return web.Response(null, init);
+    final init = web.ResponseInit(
+      status: 101,
+      statusText: 'Switching Protocols',
+      headers: _upgradeHeaders(),
+    )..setProperty('webSocket'.toJS, upgrade as JSAny);
+    final constructor = _responseConstructor;
+    if (constructor == null) {
+      throw UnsupportedError('WebSocket upgrades require native Response.');
+    }
+    return constructor.callAsConstructorVarArgs<web.Response>([null, init]);
   }
   final headers = web.Headers();
   source.headersValue.forEach((name, values) {

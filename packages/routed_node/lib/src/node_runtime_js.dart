@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:convert';
 import 'dart:js_interop';
 import 'dart:js_interop_unsafe';
 import 'dart:typed_data';
@@ -6,43 +7,32 @@ import 'dart:typed_data';
 import 'package:routed_core/routed_core.dart';
 
 import 'node_portable.dart';
+import 'node_request_adapter.dart';
 import 'node_views.dart';
+import 'node_websocket.dart';
+import 'node_websocket_dispatch.dart';
 import 'runtime/runtime.dart';
 
-/// Load Node built-in `http` without relying on dart2js seeing global `require`.
-///
-/// Prefer `process.getBuiltinModule('node:http')` (Node ≥ 22), then
-/// `globalThis.require` / `globalThis.__routedRequire` as a legacy fallback.
+@JS('process.getBuiltinModule')
+external JSAny? _getBuiltinModule(JSString name);
+
+@JS('require')
+external JSFunction? get _nodeRequire;
+
+/// Loads Node's built-in `http` module.
 JSObject? _loadNodeHttpModule() {
   try {
-    final process = globalContext.getProperty('process'.toJS);
-    if (process != null) {
-      final getBuiltin = (process as JSObject).getProperty(
-        'getBuiltinModule'.toJS,
-      );
-      if (getBuiltin != null && getBuiltin.isA<JSFunction>()) {
-        final mod = (getBuiltin as JSFunction).callAsFunction(
-          process,
-          'node:http'.toJS,
-        );
-        if (mod != null && mod.isA<JSObject>()) {
-          return mod as JSObject; // ignore: unnecessary_cast
-        }
-      }
+    final mod = _getBuiltinModule('node:http'.toJS);
+    if (mod != null && mod.isA<JSObject>()) {
+      return mod as JSObject;
     }
   } catch (_) {}
 
-  for (final name in ['__routedRequire', 'require']) {
+  final req = _nodeRequire;
+  if (req != null) {
     try {
-      final reqAny = globalContext.getProperty(name.toJS);
-      if (reqAny == null || !reqAny.isA<JSFunction>()) continue;
-      final req = reqAny as JSFunction;
-      for (final id in ['node:http', 'http']) {
-        final mod = req.callAsFunction(null, id.toJS);
-        if (mod != null && mod.isA<JSObject>()) {
-          return mod as JSObject;
-        }
-      }
+      final mod = req.callAsFunction(null, 'node:http'.toJS);
+      if (mod != null && mod.isA<JSObject>()) return mod as JSObject;
     } catch (_) {}
   }
   return null;
@@ -65,6 +55,75 @@ extension type _NodeServerResponse._(JSObject _) implements JSObject {
 
 extension type _NodeSocket._(JSObject _) implements JSObject {
   external String? get remoteAddress;
+  external void on(String event, JSFunction listener);
+  external void once(String event, JSFunction listener);
+  external void removeListener(String event, JSFunction listener);
+  external void write(JSAny data, [JSFunction? callback]);
+  external void end([JSAny? data]);
+  external void destroy();
+}
+
+final class _JsWebSocketSocket implements NodeWebSocketSocketView {
+  _JsWebSocketSocket(this.socket, {List<int> head = const []}) : _head = head;
+
+  final _NodeSocket socket;
+  final List<int> _head;
+  final StreamController<List<int>> _incoming = StreamController<List<int>>();
+  bool _attached = false;
+
+  void _attach() {
+    if (_attached) return;
+    _attached = true;
+    if (_head.isNotEmpty) _incoming.add(_head);
+    socket.on(
+      'data',
+      ((JSAny chunk) {
+        final bytes = _chunkToBytes(chunk);
+        if (bytes.isNotEmpty) _incoming.add(bytes);
+      }).toJS,
+    );
+    socket.on(
+      'end',
+      (() {
+        unawaited(_incoming.close());
+      }).toJS,
+    );
+    socket.on(
+      'close',
+      (() {
+        unawaited(_incoming.close());
+      }).toJS,
+    );
+    socket.on(
+      'error',
+      ((JSAny error) {
+        if (!_incoming.isClosed) _incoming.addError(StateError('$error'));
+      }).toJS,
+    );
+  }
+
+  @override
+  Stream<List<int>> get incoming {
+    _attach();
+    return _incoming.stream;
+  }
+
+  @override
+  Future<void> write(List<int> bytes) {
+    _attach();
+    final done = Completer<void>();
+    socket.write(Uint8List.fromList(bytes).toJS, (() => done.complete()).toJS);
+    return done.future;
+  }
+
+  @override
+  Future<void> end([List<int>? bytes]) async {
+    _attach();
+    socket.end(bytes == null ? null : Uint8List.fromList(bytes).toJS);
+  }
+
+  @override
+  void destroy() => socket.destroy();
 }
 
 /// Live Node view of IncomingMessage.
@@ -175,6 +234,12 @@ final class _JsOutgoing implements NodeServerResponseView {
   bool get finished => _res.writableEnded;
 }
 
+String? _header(Map<String, Object?> headers, String name) {
+  final value = headers[name];
+  if (value is List && value.isNotEmpty) return value.first.toString();
+  return value?.toString();
+}
+
 List<int> _chunkToBytes(JSAny chunk) {
   // Node may pass Buffer / Uint8Array / string.
   if (chunk.isA<JSString>()) {
@@ -220,6 +285,14 @@ List<String> _objectKeys(JSObject obj) {
   return out;
 }
 
+/// Keeps standalone dart2js Node processes attached to the event loop.
+void keepNodeEventLoopAlive() {
+  final setInterval = globalContext.getProperty('setInterval'.toJS);
+  if (setInterval != null && setInterval.isA<JSFunction>()) {
+    (setInterval as JSFunction).callAsFunction(null, (() {}).toJS, 60_000.toJS);
+  }
+}
+
 /// Bind [engine] using Node `http.createServer`.
 Future<ServerHandle> bindNodeHttp(
   Engine engine,
@@ -229,6 +302,7 @@ Future<ServerHandle> bindNodeHttp(
   if (engine.isClosed) {
     throw StateError('Cannot serve on a closed engine');
   }
+  keepNodeEventLoopAlive();
   await engine.initialize();
 
   final mod = _loadNodeHttpModule();
@@ -289,6 +363,84 @@ Future<ServerHandle> bindNodeHttp(
     throw StateError('http.createServer did not return a server');
   }
   final serverObj = created as JSObject;
+
+  final onUpgrade = serverObj.getProperty('on'.toJS);
+  if (onUpgrade != null && onUpgrade.isA<JSFunction>()) {
+    (onUpgrade as JSFunction).callAsFunction(
+      serverObj,
+      'upgrade'.toJS,
+      ((JSAny req, JSAny socket, JSAny head) {
+        final incoming = _JsIncoming(_NodeIncomingMessage._(req as JSObject));
+        final nodeSocket = _JsWebSocketSocket(
+          _NodeSocket._(socket as JSObject),
+          head: _chunkToBytes(head),
+        );
+        final rawHeaders = incoming.rawHeaders;
+        final upgrade =
+            _header(rawHeaders, 'upgrade')?.toLowerCase() == 'websocket';
+        final connection =
+            _header(rawHeaders, 'connection')
+                ?.toLowerCase()
+                .split(',')
+                .map((v) => v.trim())
+                .contains('upgrade') ??
+            false;
+        final key = _header(rawHeaders, 'sec-websocket-key');
+        final version = _header(rawHeaders, 'sec-websocket-version');
+        if (!upgrade || !connection || key == null || version != '13') {
+          nodeSocket.end(
+            Uint8List.fromList(
+              utf8.encode(
+                'HTTP/1.1 400 Bad Request\\r\\nConnection: close\\r\\n\\r\\n',
+              ),
+            ),
+          );
+          return;
+        }
+        final base = Uri(
+          scheme: 'http',
+          host: options.host,
+          port: options.port == 0 ? null : options.port,
+        );
+        final protocols = _header(rawHeaders, 'sec-websocket-protocol')
+            ?.split(',')
+            .map((value) => value.trim())
+            .where((value) => value.isNotEmpty)
+            .toList(growable: false);
+        final protocol = protocols?.isNotEmpty == true
+            ? protocols!.first
+            : null;
+        final response = NodeWebSocketUpgradeResponse(
+          socket: nodeSocket,
+          key: key,
+          protocol: protocol,
+        );
+        final hostContext = RoutedNodeContext(
+          info: const RoutedNodeRuntimeInfo(
+            runtime: RoutedNodeRuntime.node,
+            capabilities: nodeCapabilities,
+          ),
+          extension: NodeRuntimeExtension(
+            request: req,
+            response: socket,
+            server: serverObj,
+          ),
+        );
+        final adapter = NodeRequestAdapter(
+          incoming,
+          baseUri: base,
+          hostContext: hostContext,
+          isWebSocketUpgrade: true,
+          acceptWebSocket: () async {
+            await nodeSocket.write(response.handshake);
+            return NodeRoutedWebSocket(socket: nodeSocket);
+          },
+          upgradeResponse: () => response,
+        );
+        unawaited(dispatchNodeWebSocket(engine, adapter, nodeSocket));
+      }).toJS,
+    );
+  }
 
   final listen = serverObj.getProperty('listen'.toJS);
   if (listen == null || !listen.isA<JSFunction>()) {

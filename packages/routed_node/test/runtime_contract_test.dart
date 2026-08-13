@@ -10,8 +10,8 @@ void main() {
     expect(cloudflareCapabilities.bufferedResponses, isTrue);
     expect(cloudflareCapabilities.fileSystem, isFalse);
     expect(cloudflareCapabilities.webSocket, isTrue);
-    expect(bunCapabilities.webSocket, isFalse);
-    expect(denoCapabilities.webSocket, isFalse);
+    expect(bunCapabilities.webSocket, isTrue);
+    expect(denoCapabilities.webSocket, isTrue);
     expect(vercelCapabilities.webSocket, isFalse);
     expect(netlifyCapabilities.webSocket, isFalse);
   });

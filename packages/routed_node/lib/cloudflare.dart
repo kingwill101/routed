@@ -18,7 +18,10 @@ export 'src/runtime/lifecycle.dart';
 export 'src/fetch/fetch_exchange.dart';
 export 'src/fetch/web_fetch_adapter.dart';
 export 'src/fetch/fetch_entry.dart'
-    show defineFetchExport, defineFetchExportAsync;
+    show
+        defineFetchExport,
+        defineFetchExportAsync,
+        defineFetchExportFactoryAsync;
 
 /// Installs the Cloudflare Fetch bootstrap function.
 void defineCloudflareFetch(Object engine) {
@@ -34,6 +37,16 @@ void defineCloudflareFetchAsync(Future<Engine> engine) {
   defineFetchExportAsync(
     'Cloudflare',
     engine,
+    capabilities: cloudflareCapabilities,
+  );
+}
+
+/// Installs a Cloudflare Fetch entry whose engine is initialized lazily per
+/// Worker isolate, on the first request.
+void defineCloudflareFetchFactoryAsync(Future<Engine> Function() factory) {
+  defineFetchExportFactoryAsync(
+    'Cloudflare',
+    factory,
     capabilities: cloudflareCapabilities,
   );
 }

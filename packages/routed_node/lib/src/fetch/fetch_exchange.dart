@@ -58,7 +58,17 @@ final class _FetchRequestAdapter
   Object? get hostContext => _portable.hostContext;
 
   @override
-  bool get isWebSocketUpgrade => _accept != null;
+  bool get isWebSocketUpgrade =>
+      _accept != null &&
+      _portable.method.toUpperCase() == 'GET' &&
+      _portable.headers.get('upgrade')?.toLowerCase() == 'websocket' &&
+      (_portable.headers
+              .get('connection')
+              ?.toLowerCase()
+              .split(',')
+              .map((value) => value.trim())
+              .contains('upgrade') ??
+          false);
 
   @override
   Object? get nativeUpgradeResponse => _upgrade?.response;

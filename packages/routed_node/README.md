@@ -13,19 +13,20 @@ See [portable-host-architecture.md](../../docs/portable-host-architecture.md).
 
 ## Runtime entrypoints
 
-| Runtime | Import | Entry model | Entry |
-|---|---|---|---|
-| Node.js | `package:routed_node/node.dart` | listener | `serveNode(...)` |
-| Bun | `package:routed_node/bun.dart` | listener | `serveBun(...)` |
-| Deno | `package:routed_node/deno.dart` | listener | `serveDeno(...)` |
-| Cloudflare | `package:routed_node/cloudflare.dart` | Fetch export | `defineCloudflareFetch(...)` |
-| Vercel | `package:routed_node/vercel.dart` | Fetch export | `defineVercelFetch(...)` |
-| Netlify | `package:routed_node/netlify.dart` | Fetch export | `defineNetlifyFetch(...)` |
+| Runtime | Import | Entry model | HTTP | Streaming | Native `Engine.ws(...)` | Verification |
+|---|---|---|---:|---:|---:|---|
+| Node.js | `package:routed_node/node.dart` | listener | ✅ | ✅ | ✅ | External HTTP + WebSocket echo |
+| Bun | `package:routed_node/bun.dart` | listener | ✅ | ✅ | ✅ | Live HTTP + WebSocket echo |
+| Deno | `package:routed_node/deno.dart` | listener | ✅ | ✅ | ✅ | Native `Deno.upgradeWebSocket` bridge implemented; live validation pending |
+| Cloudflare Workers | `package:routed_node/cloudflare.dart` | Fetch export | ✅ | ✅ | ✅ | Live `/health` and `/ws` echo |
+| Vercel | `package:routed_node/vercel.dart` | Fetch export | ✅ | ✅ | ❌ | Fetch bridge/contract coverage; no upgrade API |
+| Netlify Edge | `package:routed_node/netlify.dart` | Fetch export | ✅ | ✅ | ❌ | Live HTTP; Edge Functions have no server-side upgrade boundary |
 
-Listener runtimes support streaming and buffered dispatch. Fetch runtimes expose
-native Fetch `Request`/`Response` bridges; streaming responses use a native
-`ReadableStream`, while buffered dispatch remains available through the shared
-portable exchange helpers.
+Legend: ✅ verified and supported, ⚠️ host may support WebSockets but Routed's
+adapter is not implemented or not live-verified, ❌ unavailable through the
+host entrypoint. Listener runtimes support streaming and buffered dispatch.
+Fetch runtimes expose native Fetch `Request`/`Response` bridges; streaming
+responses use a native `ReadableStream`.
 
 ## Core paths
 
@@ -76,6 +77,14 @@ defineCloudflareFetch(engine);
 The generated JS bootstrap calls `globalThis.__routed_fetch__` with the native
 Fetch request. Vercel and Netlify use the equivalent `defineVercelFetch` and
 `defineNetlifyFetch` entrypoints.
+
+Netlify Edge Functions support the Fetch bridge and streaming responses, but
+Netlify does not expose a server-side WebSocket upgrade API to Edge Functions.
+Accordingly, `netlifyCapabilities.webSocket` is intentionally `false`; use a
+managed real-time service such as Ably or deploy the WebSocket route to Node or
+Cloudflare instead. This is consistent with Netlify's serverless WebSocket
+guidance, which uses Ably to host the persistent connection rather than keeping
+one inside a Netlify function.
 
 The Dart VM intentionally uses **`package:routed_io`** for process hosting.
 JavaScript-only listener and Fetch entrypoints throw a clear

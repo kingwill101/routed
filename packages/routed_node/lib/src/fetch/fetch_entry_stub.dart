@@ -12,6 +12,16 @@ Never defineFetchExport(
   throw UnsupportedError('$runtime Fetch exports require a JavaScript host.');
 }
 
+/// VM stub for lazy asynchronous JavaScript Fetch exports.
+Never defineFetchExportFactoryAsync(
+  String runtime,
+  Future<Engine> Function() engineFactory, {
+  required RoutedNodeCapabilities capabilities,
+  String name = '__routed_fetch__',
+}) {
+  throw UnsupportedError('$runtime Fetch exports require a JavaScript host.');
+}
+
 /// VM stub for asynchronous JavaScript Fetch exports.
 Never defineFetchExportAsync(
   String runtime,

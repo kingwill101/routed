@@ -21,5 +21,8 @@ export 'src/node_portable.dart'
 export 'src/node_request_adapter.dart' show NodeRequestAdapter;
 export 'src/node_response_adapter.dart' show NodeResponseAdapter;
 export 'src/node_server_transport.dart' show NodeServerTransport;
-export 'src/node_views.dart' show NodeIncomingView, NodeServerResponseView;
+export 'src/node_views.dart'
+    show NodeIncomingView, NodeServerResponseView, NodeWebSocketSocketView;
+export 'src/node_websocket.dart'
+    show NodeRoutedWebSocket, NodeWebSocketUpgradeResponse;
 export 'src/server_boot.dart' show serveNode;

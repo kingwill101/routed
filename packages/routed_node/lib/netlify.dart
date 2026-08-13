@@ -18,7 +18,10 @@ export 'src/runtime/lifecycle.dart';
 export 'src/fetch/fetch_exchange.dart';
 export 'src/fetch/web_fetch_adapter.dart';
 export 'src/fetch/fetch_entry.dart'
-    show defineFetchExport, defineFetchExportAsync;
+    show
+        defineFetchExport,
+        defineFetchExportAsync,
+        defineFetchExportFactoryAsync;
 
 /// Installs the Netlify Fetch bootstrap function.
 void defineNetlifyFetch(Object engine) {
@@ -32,4 +35,13 @@ void defineNetlifyFetch(Object engine) {
 /// Installs a Netlify Fetch export from an asynchronously-built engine.
 void defineNetlifyFetchAsync(Future<Engine> engine) {
   defineFetchExportAsync('Netlify', engine, capabilities: netlifyCapabilities);
+}
+
+/// Installs a Netlify Fetch entry whose engine is created lazily on request.
+void defineNetlifyFetchFactoryAsync(Future<Engine> Function() factory) {
+  defineFetchExportFactoryAsync(
+    'Netlify',
+    factory,
+    capabilities: netlifyCapabilities,
+  );
 }

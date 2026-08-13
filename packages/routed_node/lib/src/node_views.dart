@@ -21,6 +21,14 @@ abstract interface class NodeIncomingView {
 }
 
 /// Node `http.ServerResponse` surface used by [NodeResponseAdapter].
+/// Raw upgraded Node socket used by the Node WebSocket adapter.
+abstract interface class NodeWebSocketSocketView {
+  Stream<List<int>> get incoming;
+  Future<void> write(List<int> bytes);
+  Future<void> end([List<int>? bytes]);
+  void destroy();
+}
+
 abstract interface class NodeServerResponseView {
   /// Write status code (once, before body).
   void writeHead(int statusCode, Map<String, Object> headers);

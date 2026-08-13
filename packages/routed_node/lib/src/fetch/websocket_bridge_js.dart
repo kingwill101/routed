@@ -1,3 +1,6 @@
+// ignore_for_file: library_private_types_in_public_api,
+// invalid_runtime_check_with_js_interop_types
+
 @JS()
 library;
 
@@ -6,6 +9,7 @@ import 'dart:js_interop';
 import 'dart:js_interop_unsafe';
 
 import 'package:routed_core/routed_core.dart';
+
 import 'fetch_exchange.dart';
 
 extension type _NativeWebSocket._(JSObject _) implements JSObject {
@@ -14,8 +18,16 @@ extension type _NativeWebSocket._(JSObject _) implements JSObject {
   external void close([int code, String reason]);
 }
 
-// ignore: invalid_use_of_internal_member
-// ignore_for_file: library_private_types_in_public_api, invalid_runtime_check_with_js_interop_types
+@JS('WebSocketPair')
+extension type _CloudflareWebSocketPair._(JSObject _) implements JSObject {
+  external factory _CloudflareWebSocketPair();
+
+  @JS('0')
+  external JSObject get client;
+
+  @JS('1')
+  external JSObject get server;
+}
 
 final class WebFetchWebSocket implements RoutedWebSocket {
   WebFetchWebSocket(this.socket);
@@ -58,7 +70,7 @@ final class WebFetchWebSocket implements RoutedWebSocket {
     } else if (data is JSAny) {
       socket.send(data);
     } else {
-      socket.send(data.toString().toJS);
+      socket.send((data?.toString() ?? '').toJS);
     }
   }
 
@@ -70,28 +82,11 @@ final class WebFetchWebSocket implements RoutedWebSocket {
 }
 
 Future<FetchWebSocketUpgrade> cloudflareWebSocketPair() async {
-  final pairConstructor = globalContext.getProperty('WebSocketPair'.toJS);
-  if (pairConstructor == null || !pairConstructor.isA<JSFunction>()) {
-    throw UnsupportedError('Cloudflare WebSocketPair is unavailable.');
-  }
-  final pairValue = (pairConstructor as JSFunction).callAsConstructor();
-  if (pairValue == null || !pairValue.isA<JSObject>()) {
-    throw StateError('Cloudflare WebSocketPair construction failed.');
-  }
-  final pair = pairValue as JSObject;
-  final client = pair.getProperty('0'.toJS);
-  final server = pair.getProperty('1'.toJS);
-  if (client == null || server == null) {
-    throw StateError('Cloudflare WebSocketPair is incomplete.');
-  }
-  final serverObject = server as JSObject;
-  final accept = serverObject.getProperty('accept'.toJS);
-  if (accept == null || !accept.isA<JSFunction>()) {
-    throw UnsupportedError('Cloudflare WebSocket.accept is unavailable.');
-  }
-  (accept as JSFunction).callAsFunction(serverObject);
+  final pair = _CloudflareWebSocketPair();
+  final server = pair.server;
+  server.callMethodVarArgs<JSAny?>('accept'.toJS);
   return FetchWebSocketUpgrade(
-    socket: WebFetchWebSocket(_NativeWebSocket._(serverObject)),
-    response: client,
+    socket: WebFetchWebSocket(_NativeWebSocket._(server)),
+    response: pair.client,
   );
 }

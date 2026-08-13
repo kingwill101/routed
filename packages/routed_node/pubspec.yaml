@@ -17,6 +17,7 @@ environment:
   sdk: '>=3.9.0 <4.0.0'
 
 dependencies:
+  crypto: ^3.0.0
   routed_core: ^0.3.3
   web: ^1.1.1
 

@@ -1,6 +1,7 @@
 import 'package:routed_core/routed_core.dart';
 
 import 'node_server_transport.dart';
+import 'node_runtime.dart' as node_runtime;
 import 'runtime/lifecycle.dart';
 import 'runtime/runtime.dart';
 
@@ -19,6 +20,7 @@ Future<ServerHandle> serveNode(
   int? port,
   bool echo = true,
 }) async {
+  node_runtime.keepNodeEventLoopAlive();
   final info = RoutedNodeRuntimeInfo(
     runtime: RoutedNodeRuntime.node,
     capabilities: nodeCapabilities,

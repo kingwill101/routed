@@ -22,25 +22,27 @@ Future<void> main(List<String> args) async {
   final port = _resolvePort(args);
 
   final engine = createSampleEngine();
-  await engine.initialize();
 
   // ignore: avoid_print
   print('Starting routed_node sample API on http://$host:$port …');
 
-  final handle = await serveNode(
-    engine,
-    host: host,
-    port: port,
-    echo: true,
-  );
+  late final dynamic handle;
+  try {
+    handle = await serveNode(engine, host: host, port: port, echo: true);
+  } catch (error, stackTrace) {
+    // ignore: avoid_print
+    print('Failed to start routed_node: $error');
+    // ignore: avoid_print
+    print(stackTrace);
+    rethrow;
+  }
 
   // ignore: avoid_print
   print('Listening on http://${handle.host}:${handle.port}');
   // ignore: avoid_print
   print('Try: curl http://127.0.0.1:${handle.port}/health');
 
-  // Keep the isolate alive. Avoid huge Duration values — JS timers overflow
-  // 32-bit ms and complete almost immediately, which would close the server.
+  // The listener's native server keeps Node's event loop alive.
   await Completer<void>().future;
 }
 

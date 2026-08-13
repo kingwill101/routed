@@ -9,9 +9,15 @@ import 'runtime/runtime.dart';
 /// [AdapterHttpBridge] inside [Engine.handleConnection].
 final class NodeRequestAdapter
     implements RequestAdapter, WebSocketUpgradeRequest, HostContextCarrier {
-  NodeRequestAdapter(this.incoming, {Uri? baseUri, this.hostContext})
-    : uri = _resolveUri(incoming, baseUri),
-      headers = _normalizeHeaders(incoming.rawHeaders);
+  NodeRequestAdapter(
+    this.incoming, {
+    Uri? baseUri,
+    this.hostContext,
+    this.isWebSocketUpgrade = false,
+    this.acceptWebSocket,
+    this.upgradeResponse,
+  }) : uri = _resolveUri(incoming, baseUri),
+       headers = _normalizeHeaders(incoming.rawHeaders);
 
   /// Underlying Node message view.
   final NodeIncomingView incoming;
@@ -20,15 +26,22 @@ final class NodeRequestAdapter
   final RoutedNodeContext? hostContext;
 
   @override
-  bool get isWebSocketUpgrade => false;
+  final bool isWebSocketUpgrade;
+
+  final Future<RoutedWebSocket> Function()? acceptWebSocket;
+
+  /// Native handshake data populated when [accept] is called.
+  final Object? Function()? upgradeResponse;
 
   @override
-  Object? get nativeUpgradeResponse => null;
+  Object? get nativeUpgradeResponse => upgradeResponse?.call();
 
   @override
-  Future<RoutedWebSocket> accept() => throw UnsupportedError(
-    'Node WebSocket upgrade requires the Node listener.',
-  );
+  Future<RoutedWebSocket> accept() => acceptWebSocket == null
+      ? throw UnsupportedError(
+          'Node WebSocket upgrade requires the Node listener.',
+        )
+      : acceptWebSocket!();
 
   @override
   String get method => incoming.method.isEmpty ? 'GET' : incoming.method;

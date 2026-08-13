@@ -4,6 +4,8 @@ import 'package:routed_core/routed_core.dart';
 
 /// VM / non-JS stub: real Node bind requires compiling this package for a
 /// JavaScript runtime (`dart compile js` / dart2wasm with Node host).
+void keepNodeEventLoopAlive() {}
+
 Future<ServerHandle> bindNodeHttp(
   Engine engine,
   ServerOptions options, {

@@ -70,6 +70,10 @@ dart compile js tool/bun_integration.dart -o /tmp/routed-bun.js -O2
 bun /tmp/routed-bun.js
 ```
 
+Node's raw HTTP upgrade path and Bun's native `server.upgrade` path are both
+covered by the WebSocket echo integration. Deno uses the native
+`Deno.upgradeWebSocket` bridge; a live Deno runtime check is still pending.
+
 ## Deploy to Cloudflare
 
 From this project, the Routed CLI performs dependency setup, Dart JS
@@ -84,7 +88,8 @@ handled by Wrangler (`wrangler login` or `CLOUDFLARE_API_TOKEN`). No Worker entr
 
 ## Deploy to Netlify
 
-Netlify Edge Functions use the same Fetch bridge:
+Netlify Edge Functions use the same Fetch bridge for HTTP and streaming
+responses:
 
 ```bash
 routed deploy --target netlify --name routed-api-netlify
@@ -94,6 +99,11 @@ Use `--dry-run` to compile and validate without uploading. Netlify requires
 authentication for Edge Functions; use `netlify login` or set
 `NETLIFY_AUTH_TOKEN`. The CLI generates the Edge Function wrapper and keeps it
 under `.dart_tool/routed/deploy/netlify`.
+
+Netlify does not provide a server-side WebSocket upgrade boundary inside Edge
+Functions, so this deployment reports `webSocket: false`. For persistent
+real-time connections, use a managed service such as Ably or deploy the
+WebSocket route to Node.js or Cloudflare Workers.
 
 ## Run on Node.js
 

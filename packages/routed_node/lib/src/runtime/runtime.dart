@@ -119,7 +119,7 @@ const RoutedNodeCapabilities bunCapabilities = RoutedNodeCapabilities(
   entryModel: RoutedNodeEntryModel.listener,
   streaming: true,
   bufferedResponses: true,
-  webSocket: false,
+  webSocket: true,
   fileSystem: true,
   backgroundWork: true,
 );
@@ -129,7 +129,7 @@ const RoutedNodeCapabilities denoCapabilities = RoutedNodeCapabilities(
   entryModel: RoutedNodeEntryModel.listener,
   streaming: true,
   bufferedResponses: true,
-  webSocket: false,
+  webSocket: true,
   fileSystem: true,
   backgroundWork: true,
 );
@@ -154,6 +154,10 @@ const RoutedNodeCapabilities vercelCapabilities = RoutedNodeCapabilities(
   backgroundWork: false,
 );
 
+/// Netlify Edge Functions expose Fetch-style request/response handlers, but
+/// Netlify does not provide a server-side socket upgrade boundary to the Edge
+/// Function. Real-time connections must use a managed WebSocket provider (for
+/// example Ably) or a separate WebSocket service.
 const RoutedNodeCapabilities netlifyCapabilities = RoutedNodeCapabilities(
   runtime: RoutedNodeRuntime.netlify,
   entryModel: RoutedNodeEntryModel.fetchExport,

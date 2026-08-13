@@ -111,12 +111,50 @@ Future<web.Response> _handleNativeFetchAfterEngine(
       context: context,
       environment: environment,
     );
-  } catch (_) {
+  } catch (error) {
     return web.Response(
-      'Internal Server Error'.toJS,
+      'Internal Server Error: $error'.toJS,
       web.ResponseInit(status: 500, statusText: 'Internal Server Error'),
     );
   }
+}
+
+/// Installs a lazy Fetch export whose engine is created on the first request.
+///
+/// Deferring creation until the host invokes `fetch` avoids starting an async
+/// Dart initialization chain while a Worker is booting. This is important for
+/// runtimes such as Cloudflare Workers, where top-level unresolved futures are
+/// not tied to a request lifetime.
+void defineFetchExportFactoryAsync(
+  String runtime,
+  Future<Engine> Function() engineFactory, {
+  required RoutedNodeCapabilities capabilities,
+  String name = defaultRoutedFetchEntryName,
+}) {
+  if (name.trim().isEmpty) {
+    throw ArgumentError.value(
+      name,
+      'name',
+      'Fetch entry name must not be empty',
+    );
+  }
+
+  final info = RoutedNodeRuntimeInfo(
+    runtime: capabilities.runtime,
+    capabilities: capabilities,
+  );
+  Future<Engine>? engineFuture;
+  final handler = ((JSAny request, [JSAny? context, JSAny? environment]) {
+    engineFuture ??= engineFactory();
+    return _handleNativeFetchAfterEngine(
+      engineFuture!,
+      info,
+      web.Request(request),
+      context: context,
+      environment: environment,
+    ).toJS;
+  }).toJS;
+  globalContext.setProperty(name.toJS, handler);
 }
 
 /// Handles one native Fetch request and returns a native Fetch response.
@@ -152,6 +190,9 @@ Future<web.Response> handleNativeFetch(
       runtime: info,
       acceptWebSocket: view.acceptWebSocket,
     );
+    // A Fetch response must be committed synchronously from the request
+    // handler's lifetime. Keep the dispatch attached to the response stream;
+    // failures before the first chunk are surfaced through [fail].
     unawaited(
       dispatch.catchError((Object error, StackTrace stackTrace) {
         streaming.fail(error, stackTrace);
@@ -159,9 +200,9 @@ Future<web.Response> handleNativeFetch(
     );
     await streaming.headersReady;
     return webResponseFromStreamingAdapter(streaming);
-  } catch (_) {
+  } catch (error) {
     return web.Response(
-      'Internal Server Error'.toJS,
+      'Internal Server Error: $error'.toJS,
       web.ResponseInit(status: 500, statusText: 'Internal Server Error'),
     );
   }
