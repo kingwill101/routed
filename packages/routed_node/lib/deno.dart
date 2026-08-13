@@ -1,5 +1,10 @@
 library;
 
+import 'package:routed_core/routed_core.dart';
+
+import 'src/listener/js_listener.dart';
+import 'src/runtime/runtime.dart';
+
 export 'src/runtime/runtime.dart'
     show
         RoutedNodeCapabilities,
@@ -11,10 +16,15 @@ export 'src/runtime/runtime.dart'
         denoCapabilities;
 export 'src/runtime/lifecycle.dart';
 
-/// Placeholder for the Deno listener implementation.
-Never serveDeno(Object engine, {String host = '0.0.0.0', int port = 0}) {
-  throw UnsupportedError(
-    'Deno support is not implemented yet. This entrypoint is reserved for the '
-    'Deno.serve adapter.',
+/// Starts a Routed application on Deno.
+Future<ServerHandle> serveDeno(
+  Engine engine, {
+  String host = '0.0.0.0',
+  int port = 0,
+}) {
+  const info = RoutedNodeRuntimeInfo(
+    runtime: RoutedNodeRuntime.deno,
+    capabilities: denoCapabilities,
   );
+  return serveJsListener('Deno', engine, host: host, port: port, info: info);
 }

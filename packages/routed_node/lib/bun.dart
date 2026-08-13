@@ -1,5 +1,10 @@
 library;
 
+import 'package:routed_core/routed_core.dart';
+
+import 'src/listener/js_listener.dart';
+import 'src/runtime/runtime.dart';
+
 export 'src/runtime/runtime.dart'
     show
         RoutedNodeCapabilities,
@@ -11,10 +16,15 @@ export 'src/runtime/runtime.dart'
         bunCapabilities;
 export 'src/runtime/lifecycle.dart';
 
-/// Placeholder for the Bun listener implementation.
-Never serveBun(Object engine, {String host = '0.0.0.0', int port = 0}) {
-  throw UnsupportedError(
-    'Bun support is not implemented yet. This entrypoint is reserved for the '
-    'Bun.serve adapter.',
+/// Starts a Routed application on Bun.
+Future<ServerHandle> serveBun(
+  Engine engine, {
+  String host = '0.0.0.0',
+  int port = 0,
+}) {
+  const info = RoutedNodeRuntimeInfo(
+    runtime: RoutedNodeRuntime.bun,
+    capabilities: bunCapabilities,
   );
+  return serveJsListener('Bun', engine, host: host, port: port, info: info);
 }

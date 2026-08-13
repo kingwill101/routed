@@ -7,22 +7,6 @@ import '../runtime/runtime.dart';
 import 'fetch_exchange.dart';
 import 'web_stream_bridge.dart';
 
-/// Typed host extension for Fetch-compatible runtimes.
-final class FetchRuntimeExtension implements RoutedNodeExtension {
-  const FetchRuntimeExtension({
-    required this.runtime,
-    this.request,
-    this.executionContext,
-    this.environment,
-  });
-
-  @override
-  final RoutedNodeRuntime runtime;
-  final web.Request? request;
-  final Object? executionContext;
-  final Object? environment;
-}
-
 /// Adapts a native Fetch request to the shared Fetch view.
 final class WebFetchRequest implements FetchRequestView {
   WebFetchRequest(this.request, {required RoutedNodeContext hostContext})

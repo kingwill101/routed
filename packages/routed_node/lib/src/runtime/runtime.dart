@@ -41,7 +41,7 @@ abstract interface class RoutedNodeExtension {
   RoutedNodeRuntime get runtime;
 }
 
-/// Node-native request/response handles for escape-hatch integrations.
+/// Host-native Node request, response, and server handles.
 final class NodeRuntimeExtension implements RoutedNodeExtension {
   const NodeRuntimeExtension({this.request, this.response, this.server});
 
@@ -51,6 +51,44 @@ final class NodeRuntimeExtension implements RoutedNodeExtension {
 
   @override
   RoutedNodeRuntime get runtime => RoutedNodeRuntime.node;
+}
+
+/// Host-native Bun request and server handles.
+final class BunRuntimeExtension implements RoutedNodeExtension {
+  const BunRuntimeExtension({this.request, this.server});
+
+  final Object? request;
+  final Object? server;
+
+  @override
+  RoutedNodeRuntime get runtime => RoutedNodeRuntime.bun;
+}
+
+/// Host-native Deno request and server handles.
+final class DenoRuntimeExtension implements RoutedNodeExtension {
+  const DenoRuntimeExtension({this.request, this.server});
+
+  final Object? request;
+  final Object? server;
+
+  @override
+  RoutedNodeRuntime get runtime => RoutedNodeRuntime.deno;
+}
+
+/// Host-native Fetch request and execution context handles.
+final class FetchRuntimeExtension implements RoutedNodeExtension {
+  const FetchRuntimeExtension({
+    required this.runtime,
+    this.request,
+    this.executionContext,
+    this.environment,
+  });
+
+  @override
+  final RoutedNodeRuntime runtime;
+  final Object? request;
+  final Object? executionContext;
+  final Object? environment;
 }
 
 /// Runtime-scoped host context carried through a Routed request.
