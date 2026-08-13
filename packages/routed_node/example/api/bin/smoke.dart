@@ -45,6 +45,8 @@ Future<void> main() async {
 
   await hit('GET', '/');
   await hit('GET', '/health');
+  await hit('GET', '/capabilities');
+  await hit('GET', '/stream');
   await hit('GET', '/api/items');
   await hit('GET', '/api/items/1');
   await hit('GET', '/api/items/missing');
@@ -52,6 +54,14 @@ Future<void> main() async {
     'POST',
     '/api/items',
     body: jsonEncode({'name': 'gamma', 'qty': 7}),
+  );
+  await hit(
+    'POST',
+    '/echo',
+    body: jsonEncode({'ok': true}),
+    headers: {
+      'x-trace': ['vm-smoke'],
+    },
   );
   await hit('GET', '/api/items');
   await hit('DELETE', '/api/items/2');
