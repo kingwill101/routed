@@ -12,7 +12,7 @@ import 'runtime/runtime.dart';
 /// Load Node built-in `http` without relying on dart2js seeing global `require`.
 ///
 /// Prefer `process.getBuiltinModule('node:http')` (Node ≥ 22), then
-/// `globalThis.require` / `globalThis.__routedRequire` (set by index.cjs).
+/// `globalThis.require` / `globalThis.__routedRequire` as a legacy fallback.
 JSObject? _loadNodeHttpModule() {
   try {
     final process = globalContext.getProperty('process'.toJS);
@@ -235,8 +235,7 @@ Future<ServerHandle> bindNodeHttp(
   if (mod == null) {
     throw StateError(
       'Unable to load node:http. Need Node ≥ 22 (process.getBuiltinModule) '
-      'or bootstrap that sets globalThis.__routedRequire = require '
-      '(see example/api/index.cjs).',
+      'or a bootstrap that exposes globalThis.require.',
     );
   }
   final createServer = mod.getProperty('createServer'.toJS);

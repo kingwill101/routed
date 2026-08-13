@@ -124,7 +124,7 @@ Runnable JSON API under **`example/api/`**:
 cd packages/routed_node/example/api
 dart pub get
 dart run bin/smoke.dart
-# npm run build && npm start  # Node JS host
+# npm run build && npm start  # Node ≥22 host
 ```
 
 See [example/api/README.md](example/api/README.md).

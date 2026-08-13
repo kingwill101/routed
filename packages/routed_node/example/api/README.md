@@ -8,7 +8,6 @@ example/api/
 ├── lib/app.dart          # routes + in-memory store
 ├── bin/server.dart       # serveNode entry (Node host)
 ├── bin/smoke.dart        # same routes via handlePortable (Dart VM)
-├── index.cjs             # Node bootstrap after dart2js
 ├── package.json
 └── tool/build.sh         # legacy Node-only helper
 ```
@@ -91,7 +90,7 @@ Target entry is `bin/server.dart` → [serveNode].
 cd packages/routed_node/example/api
 dart pub get
 npm run build    # dart compile js bin/server.dart -o build/server.js
-npm start        # node index.cjs
+npm start        # node build/server.js
 ```
 
 Env:
@@ -121,8 +120,8 @@ curl -s -X POST http://127.0.0.1:8080/api/items \
   -H 'content-type: application/json' -d '{"name":"delta","qty":2}'
 ```
 
-`index.cjs` sets `globalThis.__routedRequire` for older Node hosts without
-`process.getBuiltinModule`. Prefer **Node ≥ 22** (uses `getBuiltinModule('node:http')`).
+The example targets **Node ≥ 22**, which provides
+`process.getBuiltinModule('node:http')`; no JavaScript bootstrap file is needed.
 
 Do **not** keep the process alive with huge `Duration`s — JS timers overflow
 32-bit ms; the sample uses an open [Completer] instead.
