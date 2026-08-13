@@ -6,7 +6,8 @@ import 'package:args/command_runner.dart';
 import 'package:file/file.dart' as fs;
 import 'package:path/path.dart' as p;
 import 'package:routed_core/routed_core.dart';
-import 'package:routed_analyzer/routed_analyzer.dart' show ProviderMetadata, inspectProviders;
+import 'package:routed_analyzer/routed_analyzer.dart'
+    show ProviderMetadata, inspectProviders;
 import 'package:routed_cli/src/console/args/base_command.dart';
 import 'package:routed_cli/src/console/config/doc_printer.dart';
 import 'package:routed_cli/src/console/config/generator.dart';

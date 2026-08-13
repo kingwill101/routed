@@ -42,7 +42,11 @@ class SpecGenerateCommand extends BaseCommand {
   String get name => 'openapi:generate';
 
   @override
-  List<String> get aliases => const ['openapi generate', 'spec:generate', 'spec'];
+  List<String> get aliases => const [
+    'openapi generate',
+    'spec:generate',
+    'spec',
+  ];
 
   @override
   String get description => 'Generates an OpenAPI route manifest.';

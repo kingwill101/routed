@@ -218,7 +218,7 @@ import 'package:routed_node/netlify.dart';
 import 'package:$packageName/app.dart' as app;
 
 void main() {
-  defineNetlifyFetchAsync(app.createEngine());
+  defineNetlifyFetchFactoryAsync(app.createEngine);
 }
 ''';
 
@@ -306,7 +306,7 @@ import 'package:routed_node/cloudflare.dart';
 import '$importPath' as app;
 
 void main() {
-  defineCloudflareFetchAsync(app.createEngine());
+  defineCloudflareFetchFactoryAsync(app.createEngine);
 }
 ''';
 

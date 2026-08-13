@@ -654,7 +654,10 @@ void configureInertiaViews(Engine engine) {
     if (!await file.exists()) return;
     var content = await file.readAsString();
 
-    content = _ensureImport(content, "import 'package:routed_core/providers.dart';");
+    content = _ensureImport(
+      content,
+      "import 'package:routed_core/providers.dart';",
+    );
     content = _ensureImport(content, "import 'inertia_views.dart';");
     content = _ensureImport(
       content,

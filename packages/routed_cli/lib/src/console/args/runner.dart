@@ -50,7 +50,8 @@ class RoutedCommandRunner extends CommandRunner<void> {
     // Accept the documented nested spelling while retaining the existing
     // colon-separated command names used by older projects.
     final normalizedArgs = args.toList(growable: false);
-    final commandArgs = normalizedArgs.length >= 2 &&
+    final commandArgs =
+        normalizedArgs.length >= 2 &&
             normalizedArgs[0] == 'openapi' &&
             normalizedArgs[1] == 'generate'
         ? <String>['openapi:generate', ...normalizedArgs.skip(2)]
