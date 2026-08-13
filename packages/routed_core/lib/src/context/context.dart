@@ -184,6 +184,9 @@ class EngineContext {
   /// Retrieve the request host.
   String get host => request.host;
 
+  /// Opaque host context supplied by a portable host adapter, when available.
+  Object? get hostContext => request.hostContext;
+
   /// Retrieve the request scheme.
   String get scheme => request.scheme;
 

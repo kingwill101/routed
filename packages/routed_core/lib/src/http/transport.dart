@@ -8,6 +8,15 @@ import 'package:routed_core/src/engine/engine.dart' show Engine;
 /// - `routed_io` wraps `dart:io` [HttpRequest]
 /// - `routed_node` wraps Node.js `IncomingMessage`
 /// - a Cloudflare adapter wraps the Workers `Request`
+/// Optional opaque host context carried by a request adapter.
+///
+/// Core stores and forwards this value without inspecting it. Host packages
+/// can use it to expose typed native request, response, or execution-context
+/// extensions without importing host APIs into `routed_core`.
+abstract interface class HostContextCarrier {
+  Object? get hostContext;
+}
+
 abstract interface class RequestAdapter {
   /// HTTP method, e.g. GET.
   String get method;

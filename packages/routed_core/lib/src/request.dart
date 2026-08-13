@@ -59,10 +59,7 @@ class Request {
   ) {
     return Request(
       AdapterHttpBridge.toHttpRequest(
-        HttpConnection(
-          adapter,
-          _RequestBridgeResponseAdapter(),
-        ),
+        HttpConnection(adapter, _RequestBridgeResponseAdapter()),
       ),
       pathParameters,
       config,
@@ -74,6 +71,11 @@ class Request {
 
   /// Whether this request was built from a portable adapter.
   bool get isPortable => !hasNativeHttpRequest;
+
+  /// Opaque host context supplied by a portable request adapter, when any.
+  Object? get hostContext => httpRequest is HostContextCarrier
+      ? (httpRequest as HostContextCarrier).hostContext
+      : null;
 
   /// Back-compat alias used by older request-scope tests and internals.
   String get identity => id;

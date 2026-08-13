@@ -30,8 +30,6 @@ export 'src/events/event.dart';
 export 'src/events/events.dart';
 export 'src/events/signals.dart';
 
-
-
 export 'src/provider/config_utils.dart';
 export 'src/provider/provider.dart';
 export 'src/engine/providers/core.dart' show CoreServiceProvider;
@@ -61,6 +59,7 @@ export 'src/http/transport.dart'
     show
         RequestAdapter,
         ResponseAdapter,
+        HostContextCarrier,
         NativeRequestHandle,
         HttpConnection,
         ServerOptions,

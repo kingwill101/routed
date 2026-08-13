@@ -389,7 +389,7 @@ abstract interface class SyntheticHttpRequest {}
 
 /// [HttpRequest] backed by a portable [RequestAdapter].
 final class AdapterHttpRequest extends Stream<Uint8List>
-    implements HttpRequest, SyntheticHttpRequest {
+    implements HttpRequest, SyntheticHttpRequest, HostContextCarrier {
   AdapterHttpRequest(this._adapter, this.response)
     : headers = AdapterHttpHeaders(_adapter.headers),
       requestedUri = _adapter.uri,
@@ -419,6 +419,11 @@ final class AdapterHttpRequest extends Stream<Uint8List>
 
   final RequestAdapter _adapter;
   Stream<List<int>>? _listenedBody;
+
+  @override
+  Object? get hostContext => _adapter is HostContextCarrier
+      ? (_adapter as HostContextCarrier).hostContext
+      : null;
 
   @override
   final String method;
@@ -619,9 +624,7 @@ final class AdapterHttpResponse implements HttpResponse {
 }
 
 final class _AdapterConnectionInfo implements HttpConnectionInfo {
-  _AdapterConnectionInfo._(this.remoteAddress)
-    : remotePort = 0,
-      localPort = 0;
+  _AdapterConnectionInfo._(this.remoteAddress) : remotePort = 0, localPort = 0;
 
   /// Builds connection info when `dart:io` [InternetAddress] is available.
   /// Returns null on JS/Node stubs where address APIs throw.

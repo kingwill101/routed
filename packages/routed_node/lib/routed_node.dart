@@ -8,6 +8,10 @@
 /// Stream-sink path: [NodeHttpConnection] + [Engine.handleConnection].
 library;
 
+export 'src/runtime/runtime.dart';
+export 'src/runtime/lifecycle.dart';
+export 'src/runtime/host_context.dart';
+export 'src/fetch/fetch_exchange.dart';
 export 'src/node_http_connection.dart' show NodeHttpConnection;
 export 'src/node_portable.dart'
     show

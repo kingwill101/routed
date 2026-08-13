@@ -1,18 +1,22 @@
 import 'package:routed_core/routed_core.dart';
 
 import 'node_views.dart';
+import 'runtime/runtime.dart';
 
 /// [RequestAdapter] backed by a Node.js [NodeIncomingView].
 ///
 /// Does **not** implement [NativeRequestHandle] — portable hosts go through
 /// [AdapterHttpBridge] inside [Engine.handleConnection].
-final class NodeRequestAdapter implements RequestAdapter {
-  NodeRequestAdapter(this.incoming, {Uri? baseUri})
+final class NodeRequestAdapter implements RequestAdapter, HostContextCarrier {
+  NodeRequestAdapter(this.incoming, {Uri? baseUri, this.hostContext})
     : uri = _resolveUri(incoming, baseUri),
       headers = _normalizeHeaders(incoming.rawHeaders);
 
   /// Underlying Node message view.
   final NodeIncomingView incoming;
+
+  @override
+  final RoutedNodeContext? hostContext;
 
   @override
   String get method => incoming.method.isEmpty ? 'GET' : incoming.method;
@@ -35,9 +39,7 @@ final class NodeRequestAdapter implements RequestAdapter {
     return base.resolve(raw);
   }
 
-  static Map<String, List<String>> _normalizeHeaders(
-    Map<String, Object?> raw,
-  ) {
+  static Map<String, List<String>> _normalizeHeaders(Map<String, Object?> raw) {
     final out = <String, List<String>>{};
     raw.forEach((name, value) {
       if (value == null) return;

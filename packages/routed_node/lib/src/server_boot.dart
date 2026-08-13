@@ -1,6 +1,8 @@
 import 'package:routed_core/routed_core.dart';
 
 import 'node_server_transport.dart';
+import 'runtime/lifecycle.dart';
+import 'runtime/runtime.dart';
 
 /// Boots a Routed [engine] using the Node.js HTTP server transport.
 ///
@@ -17,6 +19,18 @@ Future<ServerHandle> serveNode(
   int? port,
   bool echo = true,
 }) async {
+  final info = RoutedNodeRuntimeInfo(
+    runtime: RoutedNodeRuntime.node,
+    capabilities: nodeCapabilities,
+  );
+  publishRoutedNodeLifecycle(
+    engine,
+    RoutedNodeLifecycleEvent(
+      phase: RoutedNodeLifecyclePhase.bootRequested,
+      info: info,
+    ),
+  );
+
   if (engine.config.features.enableProxySupport) {
     await engine.config.ensureTrustedProxiesParsed();
   }
@@ -27,8 +41,65 @@ Future<ServerHandle> serveNode(
   }
 
   final transport = NodeServerTransport(echo: echo);
-  return transport.serve(
-    engine,
-    ServerOptions(host: host, port: port ?? 0, shared: false),
-  );
+  try {
+    final handle = await transport.serve(
+      engine,
+      ServerOptions(host: host, port: port ?? 0, shared: false),
+    );
+    publishRoutedNodeLifecycle(
+      engine,
+      RoutedNodeLifecycleEvent(
+        phase: RoutedNodeLifecyclePhase.ready,
+        info: info,
+      ),
+    );
+    return _LifecycleServerHandle(handle, engine, info);
+  } catch (error, stackTrace) {
+    publishRoutedNodeLifecycle(
+      engine,
+      RoutedNodeLifecycleEvent(
+        phase: RoutedNodeLifecyclePhase.requestFailed,
+        info: info,
+        error: error,
+        stackTrace: stackTrace,
+      ),
+    );
+    rethrow;
+  }
+}
+
+final class _LifecycleServerHandle implements ServerHandle {
+  _LifecycleServerHandle(this._delegate, this._engine, this._info);
+
+  final ServerHandle _delegate;
+  final Engine _engine;
+  final RoutedNodeRuntimeInfo _info;
+  bool _closed = false;
+
+  @override
+  String get host => _delegate.host;
+
+  @override
+  int get port => _delegate.port;
+
+  @override
+  Future<void> close({bool force = false}) async {
+    if (_closed) return;
+    _closed = true;
+    publishRoutedNodeLifecycle(
+      _engine,
+      RoutedNodeLifecycleEvent(
+        phase: RoutedNodeLifecyclePhase.shutdownRequested,
+        info: _info,
+      ),
+    );
+    await _delegate.close(force: force);
+    publishRoutedNodeLifecycle(
+      _engine,
+      RoutedNodeLifecycleEvent(
+        phase: RoutedNodeLifecyclePhase.stopped,
+        info: _info,
+      ),
+    );
+  }
 }

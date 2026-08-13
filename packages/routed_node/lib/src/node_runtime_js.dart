@@ -7,6 +7,7 @@ import 'package:routed_core/routed_core.dart';
 
 import 'node_portable.dart';
 import 'node_views.dart';
+import 'runtime/runtime.dart';
 
 /// Load Node built-in `http` without relying on dart2js seeing global `require`.
 ///
@@ -16,8 +17,9 @@ JSObject? _loadNodeHttpModule() {
   try {
     final process = globalContext.getProperty('process'.toJS);
     if (process != null) {
-      final getBuiltin =
-          (process as JSObject).getProperty('getBuiltinModule'.toJS);
+      final getBuiltin = (process as JSObject).getProperty(
+        'getBuiltinModule'.toJS,
+      );
       if (getBuiltin != null && getBuiltin.isA<JSFunction>()) {
         final mod = (getBuiltin as JSFunction).callAsFunction(
           process,
@@ -254,6 +256,17 @@ Future<ServerHandle> bindNodeHttp(
         host: options.host,
         port: options.port == 0 ? null : options.port,
       );
+      final hostContext = RoutedNodeContext(
+        info: const RoutedNodeRuntimeInfo(
+          runtime: RoutedNodeRuntime.node,
+          capabilities: nodeCapabilities,
+        ),
+        extension: NodeRuntimeExtension(
+          request: req,
+          response: res,
+          server: null,
+        ),
+      );
       // Value-style edge: Node → PortableRequest → engine → PortableResponse → Node
       unawaited(
         dispatchNodeExchange(
@@ -261,6 +274,7 @@ Future<ServerHandle> bindNodeHttp(
           incoming,
           outgoing,
           baseUri: base,
+          hostContext: hostContext,
         ).catchError((Object e, StackTrace s) async {
           try {
             if (!outgoing.finished) {

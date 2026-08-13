@@ -77,6 +77,7 @@ final class PortableRequest {
     PortableHeaders? headers,
     Stream<List<int>>? body,
     this.remoteAddress,
+    this.hostContext,
   }) : headers = headers ?? PortableHeaders(),
        body = body ?? const Stream.empty();
 
@@ -88,6 +89,9 @@ final class PortableRequest {
       headers: PortableHeaders(adapter.headers),
       body: adapter.body,
       remoteAddress: adapter.remoteAddress,
+      hostContext: adapter is HostContextCarrier
+          ? (adapter as HostContextCarrier).hostContext
+          : null,
     );
   }
 
@@ -105,6 +109,9 @@ final class PortableRequest {
 
   /// Client address when the host provides one.
   final String? remoteAddress;
+
+  /// Opaque host-owned context forwarded without core inspection.
+  final Object? hostContext;
 
   /// View this message as a [RequestAdapter] for [HttpConnection].
   RequestAdapter asAdapter() => _PortableRequestAdapter(this);
@@ -274,10 +281,14 @@ Future<void> writePortableResponse(
   await target.close();
 }
 
-final class _PortableRequestAdapter implements RequestAdapter {
+final class _PortableRequestAdapter
+    implements RequestAdapter, HostContextCarrier {
   _PortableRequestAdapter(this._request);
 
   final PortableRequest _request;
+
+  @override
+  Object? get hostContext => _request.hostContext;
 
   @override
   String get method => _request.method;

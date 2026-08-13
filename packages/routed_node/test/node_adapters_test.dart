@@ -154,6 +154,33 @@ void main() {
     expect(utf8.decode(outgoing.body.takeBytes()), 'pong');
   });
 
+  test('host context crosses the portable boundary', () async {
+    final extension = NodeRuntimeExtension(request: 'request');
+    final hostContext = RoutedNodeContext(
+      info: const RoutedNodeRuntimeInfo(
+        runtime: RoutedNodeRuntime.node,
+        capabilities: nodeCapabilities,
+      ),
+      extension: extension,
+    );
+    final engine = Engine(providers: Engine.defaultProviders);
+    engine.get('/host', (ctx) {
+      expect(routedNodeContextOf(ctx), same(hostContext));
+      expect(routedNodeExtensionOf<NodeRuntimeExtension>(ctx), same(extension));
+      return ctx.string('ok');
+    });
+    final response = await engine.handlePortable(
+      PortableRequest(
+        method: 'GET',
+        uri: Uri.parse('http://localhost/host'),
+        hostContext: hostContext,
+      ),
+    );
+    expect(response.statusCode, 200);
+    expect(response.bodyText, 'ok');
+    await engine.close();
+  });
+
   test('portableRequestFromNode normalizes headers', () {
     final portable = portableRequestFromNode(
       _FakeIncoming(

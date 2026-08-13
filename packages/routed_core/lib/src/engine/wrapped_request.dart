@@ -2,6 +2,8 @@ import 'dart:async';
 import 'dart:io';
 import 'dart:typed_data';
 
+import 'package:routed_core/src/http/transport.dart';
+
 /// Wraps an [HttpRequest] to enforce a maximum request body size limit.
 ///
 /// This class intercepts the request stream and tracks the total bytes read.
@@ -13,7 +15,7 @@ import 'dart:typed_data';
 /// final maxSize = 5 * 1024 * 1024; // 5MB
 /// final wrapped = WrappedRequest(request, maxSize);
 /// ```
-class WrappedRequest implements HttpRequest {
+class WrappedRequest implements HttpRequest, HostContextCarrier {
   /// The original HTTP request being wrapped.
   final HttpRequest _originalRequest;
 
@@ -77,6 +79,11 @@ class WrappedRequest implements HttpRequest {
       cancelOnError: true,
     );
   }
+
+  @override
+  Object? get hostContext => _originalRequest is HostContextCarrier
+      ? (_originalRequest as HostContextCarrier).hostContext
+      : null;
 
   @override
   HttpConnectionInfo? get connectionInfo => _originalRequest.connectionInfo;

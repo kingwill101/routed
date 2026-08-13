@@ -1,11 +1,14 @@
 import 'package:routed_core/routed_core.dart';
 
 import 'node_views.dart';
+import 'runtime/lifecycle.dart';
+import 'runtime/runtime.dart';
 
 /// Maps a Node [NodeIncomingView] into a core [PortableRequest].
 PortableRequest portableRequestFromNode(
   NodeIncomingView incoming, {
   Uri? baseUri,
+  RoutedNodeContext? hostContext,
 }) {
   final rawUrl = incoming.url.isEmpty ? '/' : incoming.url;
   final base = baseUri ?? Uri(scheme: 'http', host: 'localhost');
@@ -30,6 +33,7 @@ PortableRequest portableRequestFromNode(
     headers: headers,
     body: incoming.body,
     remoteAddress: incoming.remoteAddress,
+    hostContext: hostContext,
   );
 }
 
@@ -66,8 +70,46 @@ Future<void> dispatchNodeExchange(
   NodeIncomingView incoming,
   NodeServerResponseView outgoing, {
   Uri? baseUri,
+  RoutedNodeContext? hostContext,
 }) async {
-  final portableIn = portableRequestFromNode(incoming, baseUri: baseUri);
-  final portableOut = await engine.handlePortable(portableIn);
-  await writePortableResponseToNode(portableOut, outgoing);
+  final info =
+      hostContext?.info ??
+      const RoutedNodeRuntimeInfo(
+        runtime: RoutedNodeRuntime.node,
+        capabilities: nodeCapabilities,
+      );
+  publishRoutedNodeLifecycle(
+    engine,
+    RoutedNodeLifecycleEvent(
+      phase: RoutedNodeLifecyclePhase.requestStarted,
+      info: info,
+    ),
+  );
+  try {
+    final portableIn = portableRequestFromNode(
+      incoming,
+      baseUri: baseUri,
+      hostContext: hostContext,
+    );
+    final portableOut = await engine.handlePortable(portableIn);
+    await writePortableResponseToNode(portableOut, outgoing);
+    publishRoutedNodeLifecycle(
+      engine,
+      RoutedNodeLifecycleEvent(
+        phase: RoutedNodeLifecyclePhase.requestFinished,
+        info: info,
+      ),
+    );
+  } catch (error, stackTrace) {
+    publishRoutedNodeLifecycle(
+      engine,
+      RoutedNodeLifecycleEvent(
+        phase: RoutedNodeLifecyclePhase.requestFailed,
+        info: info,
+        error: error,
+        stackTrace: stackTrace,
+      ),
+    );
+    rethrow;
+  }
 }
