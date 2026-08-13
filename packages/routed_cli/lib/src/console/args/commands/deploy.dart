@@ -197,8 +197,6 @@ class DeployCommand extends BaseCommand {
       '--site',
       siteName,
       '--prod',
-      '--config',
-      config.path,
     ];
     await _runNpx(buildRoot, args, label: 'Deploying Netlify Edge Function');
     logger.info('Routed Netlify deployment complete: $siteName');
@@ -273,8 +271,8 @@ export const config = { path: "/*" };
     final code = await process.exitCode;
     if (code != 0) {
       throw StateError(
-        '$label failed with exit code $code. Check `wrangler whoami` '
-        'or set CLOUDFLARE_API_TOKEN.',
+        '$label failed with exit code $code. Check the target CLI '
+        'authentication and site configuration.',
       );
     }
   }
