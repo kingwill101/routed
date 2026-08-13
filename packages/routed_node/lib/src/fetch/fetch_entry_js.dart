@@ -59,6 +59,65 @@ void defineFetchExport(
   );
 }
 
+/// Installs a Fetch export whose engine is initialized asynchronously.
+///
+/// This is the safe entrypoint for generated Worker modules: the native
+/// handler is installed immediately, while each request waits for the single
+/// shared engine future to complete.
+void defineFetchExportAsync(
+  String runtime,
+  Future<Engine> engineFuture, {
+  required RoutedNodeCapabilities capabilities,
+  String name = defaultRoutedFetchEntryName,
+}) {
+  if (name.trim().isEmpty) {
+    throw ArgumentError.value(
+      name,
+      'name',
+      'Fetch entry name must not be empty',
+    );
+  }
+
+  final info = RoutedNodeRuntimeInfo(
+    runtime: capabilities.runtime,
+    capabilities: capabilities,
+  );
+  final handler = ((JSAny request, [JSAny? context, JSAny? environment]) {
+    return _handleNativeFetchAfterEngine(
+      engineFuture,
+      info,
+      web.Request(request),
+      context: context,
+      environment: environment,
+    ).toJS;
+  }).toJS;
+  globalContext.setProperty(name.toJS, handler);
+}
+
+Future<web.Response> _handleNativeFetchAfterEngine(
+  Future<Engine> engineFuture,
+  RoutedNodeRuntimeInfo info,
+  web.Request request, {
+  JSAny? context,
+  JSAny? environment,
+}) async {
+  try {
+    final engine = await engineFuture;
+    return await handleNativeFetch(
+      engine,
+      info,
+      request,
+      context: context,
+      environment: environment,
+    );
+  } catch (_) {
+    return web.Response(
+      'Internal Server Error'.toJS,
+      web.ResponseInit(status: 500, statusText: 'Internal Server Error'),
+    );
+  }
+}
+
 /// Handles one native Fetch request and returns a native Fetch response.
 Future<web.Response> handleNativeFetch(
   Engine engine,

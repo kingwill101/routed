@@ -10,7 +10,7 @@ example/api/
 ├── bin/smoke.dart        # same routes via handlePortable (Dart VM)
 ├── index.cjs             # Node bootstrap after dart2js
 ├── package.json
-└── tool/build.sh
+└── tool/build.sh         # legacy Node-only helper
 ```
 
 ## API
@@ -50,6 +50,19 @@ GET /api/items → 200 {"items":[…]}
 smoke ok
 ```
 
+## Deploy to Cloudflare
+
+From this project, the Routed CLI performs dependency setup, Dart JS
+compilation, Fetch bootstrap generation, Wrangler configuration, and upload:
+
+```bash
+routed deploy --target cloudflare --name routed-api-demo
+```
+
+Use `--dry-run` to compile and validate without uploading. Authentication is
+handled by Wrangler (`wrangler login` or `CLOUDFLARE_API_TOKEN`). No Worker
+entrypoint, shell script, or hand-written `wrangler.jsonc` is required.
+
 ## Run on Node.js
 
 Target entry is `bin/server.dart` → [serveNode].
@@ -88,7 +101,7 @@ curl -s -X POST http://127.0.0.1:8080/api/items \
   -H 'content-type: application/json' -d '{"name":"delta","qty":2}'
 ```
 
-`index.cjs` sets `globalThis.__routedRequire` for hosts without
+`index.cjs` sets `globalThis.__routedRequire` for older Node hosts without
 `process.getBuiltinModule`. Prefer **Node ≥ 22** (uses `getBuiltinModule('node:http')`).
 
 Do **not** keep the process alive with huge `Duration`s — JS timers overflow
