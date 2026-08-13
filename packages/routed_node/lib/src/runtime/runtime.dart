@@ -119,7 +119,7 @@ const RoutedNodeCapabilities bunCapabilities = RoutedNodeCapabilities(
   entryModel: RoutedNodeEntryModel.listener,
   streaming: true,
   bufferedResponses: true,
-  webSocket: true,
+  webSocket: false,
   fileSystem: true,
   backgroundWork: true,
 );
@@ -129,7 +129,7 @@ const RoutedNodeCapabilities denoCapabilities = RoutedNodeCapabilities(
   entryModel: RoutedNodeEntryModel.listener,
   streaming: true,
   bufferedResponses: true,
-  webSocket: true,
+  webSocket: false,
   fileSystem: true,
   backgroundWork: true,
 );
@@ -139,9 +139,9 @@ const RoutedNodeCapabilities cloudflareCapabilities = RoutedNodeCapabilities(
   entryModel: RoutedNodeEntryModel.fetchExport,
   streaming: true,
   bufferedResponses: true,
-  webSocket: true,
+  webSocket: false,
   fileSystem: false,
-  backgroundWork: true,
+  backgroundWork: false,
 );
 
 const RoutedNodeCapabilities vercelCapabilities = RoutedNodeCapabilities(
@@ -150,8 +150,8 @@ const RoutedNodeCapabilities vercelCapabilities = RoutedNodeCapabilities(
   streaming: true,
   bufferedResponses: true,
   webSocket: false,
-  fileSystem: true,
-  backgroundWork: true,
+  fileSystem: false,
+  backgroundWork: false,
 );
 
 const RoutedNodeCapabilities netlifyCapabilities = RoutedNodeCapabilities(
@@ -160,6 +160,6 @@ const RoutedNodeCapabilities netlifyCapabilities = RoutedNodeCapabilities(
   streaming: true,
   bufferedResponses: true,
   webSocket: false,
-  fileSystem: true,
-  backgroundWork: true,
+  fileSystem: false,
+  backgroundWork: false,
 );

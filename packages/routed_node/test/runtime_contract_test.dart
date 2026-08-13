@@ -9,6 +9,9 @@ void main() {
     expect(nodeCapabilities.streaming, isTrue);
     expect(cloudflareCapabilities.bufferedResponses, isTrue);
     expect(cloudflareCapabilities.fileSystem, isFalse);
+    expect(cloudflareCapabilities.webSocket, isFalse);
+    expect(bunCapabilities.webSocket, isFalse);
+    expect(denoCapabilities.webSocket, isFalse);
     expect(vercelCapabilities.webSocket, isFalse);
     expect(netlifyCapabilities.webSocket, isFalse);
   });
