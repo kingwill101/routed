@@ -194,9 +194,11 @@ class DeployCommand extends BaseCommand {
       '--no-build',
       '--dir',
       buildRoot.path,
-      '--site-name',
+      '--site',
       siteName,
       '--prod',
+      '--config',
+      config.path,
     ];
     await _runNpx(buildRoot, args, label: 'Deploying Netlify Edge Function');
     logger.info('Routed Netlify deployment complete: $siteName');
