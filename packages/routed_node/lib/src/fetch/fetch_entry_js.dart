@@ -11,7 +11,7 @@ import 'package:web/web.dart' as web;
 import '../runtime/lifecycle.dart';
 import '../runtime/runtime.dart';
 import 'fetch_exchange.dart';
-import 'web_fetch_adapter.dart';
+import 'web_fetch_adapter_js.dart';
 
 const defaultRoutedFetchEntryName = '__routed_fetch__';
 

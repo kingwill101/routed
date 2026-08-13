@@ -1,6 +1,7 @@
 import 'dart:convert';
 
 import 'package:routed_core/routed_core.dart';
+import 'package:routed_node/routed_node.dart';
 
 /// In-memory item store for the sample API (demo only — not durable).
 final class ItemStore {
@@ -42,6 +43,8 @@ final class ItemStore {
 /// - `GET  /api/items/:id` get one item
 /// - `POST /api/items`     create (`{"name":"...","qty":1}`)
 /// - `DELETE /api/items/:id`
+/// - `GET  /stream` progressive response
+/// - `POST /echo` request-body and header echo
 Engine createSampleEngine({ItemStore? store}) {
   final items = store ?? ItemStore();
   final engine = Engine(providers: Engine.defaultProviders);
@@ -68,6 +71,45 @@ Engine createSampleEngine({ItemStore? store}) {
         'streaming': HostCapabilities.nodeProcess.streaming,
         'websocket': HostCapabilities.nodeProcess.websocket,
       },
+    });
+  });
+
+  engine.get('/capabilities', (ctx) {
+    return ctx.json(
+      {
+        'node': nodeCapabilities,
+        'bun': bunCapabilities,
+        'deno': denoCapabilities,
+        'cloudflare': cloudflareCapabilities,
+        'vercel': vercelCapabilities,
+        'netlify': netlifyCapabilities,
+      }.map(
+        (key, value) => MapEntry(key, {
+          'streaming': value.streaming,
+          'bufferedResponses': value.bufferedResponses,
+          'webSocket': value.webSocket,
+          'fileSystem': value.fileSystem,
+          'backgroundWork': value.backgroundWork,
+        }),
+      ),
+    );
+  });
+
+  engine.get('/stream', (ctx) async {
+    ctx.response.setHeader('Content-Type', 'text/plain; charset=utf-8');
+    ctx.response.write('routed:');
+    await ctx.response.flush();
+    ctx.response.write('stream');
+    await ctx.response.close();
+    return ctx.response;
+  });
+
+  engine.post('/echo', (ctx) async {
+    final body = await ctx.request.body();
+    return ctx.json({
+      'body': body,
+      'contentType': ctx.request.headers.contentType?.toString(),
+      'trace': ctx.request.headers['x-trace'],
     });
   });
 
@@ -118,5 +160,12 @@ Engine createSampleEngine({ItemStore? store}) {
     return ctx.json({'deleted': true, 'id': id});
   });
 
+  return engine;
+}
+
+/// CLI deployment contract shared by Cloudflare and Netlify.
+Future<Engine> createEngine({bool initialize = true}) async {
+  final engine = createSampleEngine();
+  if (initialize) await engine.initialize();
   return engine;
 }

@@ -17,7 +17,8 @@ export 'src/runtime/runtime.dart'
 export 'src/runtime/lifecycle.dart';
 export 'src/fetch/fetch_exchange.dart';
 export 'src/fetch/web_fetch_adapter.dart';
-export 'src/fetch/fetch_entry.dart' show defineFetchExport;
+export 'src/fetch/fetch_entry.dart'
+    show defineFetchExport, defineFetchExportAsync;
 
 /// Installs the Vercel Fetch bootstrap function.
 void defineVercelFetch(Object engine) {
@@ -26,4 +27,9 @@ void defineVercelFetch(Object engine) {
     engine as Engine,
     capabilities: vercelCapabilities,
   );
+}
+
+/// Installs a Vercel Fetch export from an asynchronously-built engine.
+void defineVercelFetchAsync(Future<Engine> engine) {
+  defineFetchExportAsync('Vercel', engine, capabilities: vercelCapabilities);
 }

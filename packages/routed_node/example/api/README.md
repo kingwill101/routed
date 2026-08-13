@@ -23,8 +23,16 @@ example/api/
 | `GET` | `/api/items/:id` | Get one item |
 | `POST` | `/api/items` | Create (`{"name":"…","qty":1}`) |
 | `DELETE` | `/api/items/:id` | Delete |
+| `GET` | `/capabilities` | Runtime capability matrix |
+| `GET` | `/stream` | Progressive response / flush |
+| `POST` | `/echo` | Request body and header echo |
 
 Seed data: items `1` (alpha) and `2` (beta).
+
+The sample intentionally exercises Routed's portable contracts: routing,
+parameters, query strings, JSON input/output, status codes, multi-value
+headers, streamed output, response flushing, lifecycle-safe initialization,
+and runtime capability reporting.
 
 ## Quick check (Dart VM — no Node)
 
@@ -60,8 +68,20 @@ routed deploy --target cloudflare --name routed-api-demo
 ```
 
 Use `--dry-run` to compile and validate without uploading. Authentication is
-handled by Wrangler (`wrangler login` or `CLOUDFLARE_API_TOKEN`). No Worker
-entrypoint, shell script, or hand-written `wrangler.jsonc` is required.
+handled by Wrangler (`wrangler login` or `CLOUDFLARE_API_TOKEN`). No Worker entrypoint, shell script, or hand-written `wrangler.jsonc` is required.
+
+## Deploy to Netlify
+
+Netlify Edge Functions use the same Fetch bridge:
+
+```bash
+routed deploy --target netlify --name routed-api-netlify
+```
+
+Use `--dry-run` to compile and validate without uploading. Netlify requires
+authentication for Edge Functions; use `netlify login` or set
+`NETLIFY_AUTH_TOKEN`. The CLI generates the Edge Function wrapper and keeps it
+under `.dart_tool/routed/deploy/netlify`.
 
 ## Run on Node.js
 

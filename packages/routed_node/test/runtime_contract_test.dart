@@ -10,6 +10,7 @@ void main() {
     expect(cloudflareCapabilities.bufferedResponses, isTrue);
     expect(cloudflareCapabilities.fileSystem, isFalse);
     expect(vercelCapabilities.webSocket, isFalse);
+    expect(netlifyCapabilities.webSocket, isFalse);
   });
 
   test('host lifecycle events use EventManager', () async {

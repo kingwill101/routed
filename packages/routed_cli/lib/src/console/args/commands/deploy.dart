@@ -15,7 +15,7 @@ class DeployCommand extends BaseCommand {
       ..addOption(
         'target',
         help: 'Deployment target.',
-        allowed: const ['cloudflare'],
+        allowed: const ['cloudflare', 'netlify'],
         defaultsTo: 'cloudflare',
       )
       ..addOption(
@@ -63,7 +63,7 @@ class DeployCommand extends BaseCommand {
     }
 
     final target = results?['target'] as String? ?? 'cloudflare';
-    if (target != 'cloudflare') {
+    if (target != 'cloudflare' && target != 'netlify') {
       throw UsageException('Unsupported deployment target: $target', usage);
     }
 
@@ -76,6 +76,10 @@ class DeployCommand extends BaseCommand {
     }
 
     await _ensureRoutedNode(root);
+    if (target == 'netlify') {
+      await _deployNetlify(root, packageName);
+      return;
+    }
 
     final requestedName = (results?['name'] as String?)?.trim();
     final workerName = _sanitizeWorkerName(
@@ -142,6 +146,81 @@ class DeployCommand extends BaseCommand {
 
     logger.info('Routed Cloudflare deployment complete: $workerName');
   });
+
+  Future<void> _deployNetlify(fs.Directory root, String packageName) async {
+    final requestedName = (results?['name'] as String?)?.trim();
+    final siteName = requestedName == null || requestedName.isEmpty
+        ? _sanitizeWorkerName(packageName)
+        : _sanitizeWorkerName(requestedName);
+    final dryRun = results?['dry-run'] as bool? ?? false;
+    final buildRoot = root.fileSystem.directory(
+      p.join(root.path, '.dart_tool', 'routed', 'deploy', 'netlify'),
+    );
+    final edgeRoot = root.fileSystem.directory(
+      p.join(buildRoot.path, 'netlify', 'edge-functions'),
+    );
+    await edgeRoot.create(recursive: true);
+    final dartEntry = root.fileSystem.file(
+      p.join(buildRoot.path, 'worker_entry.dart'),
+    );
+    final jsOutput = root.fileSystem.file(
+      p.join(buildRoot.path, 'worker.dart.js'),
+    );
+    await dartEntry.writeAsString(_netlifyWorkerEntry(packageName));
+    await _runDart(root, [
+      'compile',
+      'js',
+      dartEntry.path,
+      '-o',
+      jsOutput.path,
+      '-O2',
+    ], label: 'Compiling Netlify Edge Function');
+    final handler = root.fileSystem.file(p.join(edgeRoot.path, 'routed.js'));
+    await handler.writeAsString(_netlifyHandler());
+    final config = root.fileSystem.file(p.join(buildRoot.path, 'netlify.toml'));
+    await config.writeAsString('''
+[build]
+  edge_functions = "netlify/edge-functions"
+''');
+
+    if (dryRun) {
+      logger.info('Netlify build validation complete: $siteName');
+      return;
+    }
+
+    final args = <String>[
+      'netlify-cli@latest',
+      'deploy',
+      '--no-build',
+      '--dir',
+      buildRoot.path,
+      '--site-name',
+      siteName,
+      '--prod',
+    ];
+    await _runNpx(buildRoot, args, label: 'Deploying Netlify Edge Function');
+    logger.info('Routed Netlify deployment complete: $siteName');
+  }
+
+  String _netlifyWorkerEntry(String packageName) =>
+      '''
+import 'package:routed_node/netlify.dart';
+import 'package:$packageName/app.dart' as app;
+
+void main() {
+  defineNetlifyFetchAsync(app.createEngine());
+}
+''';
+
+  String _netlifyHandler() => '''
+import "../../worker.dart.js";
+
+export default async (request, context) => {
+  return await globalThis.__routed_fetch__(request, context, {});
+};
+
+export const config = { path: "/*" };
+''';
 
   Future<void> _ensureRoutedNode(fs.Directory root) async {
     final pubspec = root.fileSystem.file(p.join(root.path, 'pubspec.yaml'));
