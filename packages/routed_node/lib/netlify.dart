@@ -1,5 +1,10 @@
 library;
 
+import 'package:routed_core/routed_core.dart';
+
+import 'src/fetch/fetch_entry.dart';
+import 'src/runtime/runtime.dart';
+
 export 'src/runtime/runtime.dart'
     show
         RoutedNodeCapabilities,
@@ -11,11 +16,13 @@ export 'src/runtime/runtime.dart'
         netlifyCapabilities;
 export 'src/runtime/lifecycle.dart';
 export 'src/fetch/fetch_exchange.dart';
+export 'src/fetch/web_fetch_adapter.dart';
 
-/// Placeholder for the Netlify fetch/function export implementation.
-Never defineNetlifyFetch(Object engine) {
-  throw UnsupportedError(
-    'Netlify support is not implemented yet. This entrypoint is reserved for '
-    'the Netlify function adapter.',
+/// Installs the Netlify Fetch bootstrap function.
+void defineNetlifyFetch(Object engine) {
+  defineFetchExport(
+    'Netlify',
+    engine as Engine,
+    capabilities: netlifyCapabilities,
   );
 }

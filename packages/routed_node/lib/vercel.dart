@@ -1,5 +1,10 @@
 library;
 
+import 'package:routed_core/routed_core.dart';
+
+import 'src/fetch/fetch_entry.dart';
+import 'src/runtime/runtime.dart';
+
 export 'src/runtime/runtime.dart'
     show
         RoutedNodeCapabilities,
@@ -11,11 +16,13 @@ export 'src/runtime/runtime.dart'
         vercelCapabilities;
 export 'src/runtime/lifecycle.dart';
 export 'src/fetch/fetch_exchange.dart';
+export 'src/fetch/web_fetch_adapter.dart';
 
-/// Placeholder for the Vercel fetch/function export implementation.
-Never defineVercelFetch(Object engine) {
-  throw UnsupportedError(
-    'Vercel support is not implemented yet. This entrypoint is reserved for '
-    'the Vercel function adapter.',
+/// Installs the Vercel Fetch bootstrap function.
+void defineVercelFetch(Object engine) {
+  defineFetchExport(
+    'Vercel',
+    engine as Engine,
+    capabilities: vercelCapabilities,
   );
 }
