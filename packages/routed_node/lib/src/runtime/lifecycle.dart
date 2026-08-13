@@ -32,7 +32,12 @@ final class RoutedNodeLifecycleEvent extends Event {
 
 /// Publishes a host lifecycle event when the engine has an EventManager.
 void publishRoutedNodeLifecycle(Engine engine, RoutedNodeLifecycleEvent event) {
-  if (engine.container.has<EventManager>()) {
+  if (!engine.container.has<EventManager>()) return;
+  try {
     engine.container.get<EventManager>().publish(event);
+  } on StateError {
+    // A host may publish boot events before asynchronous providers finish
+    // resolving. Lifecycle publication must never prevent the Worker export
+    // from being installed.
   }
 }

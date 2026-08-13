@@ -1,5 +1,6 @@
 .dart_tool/
 build/
+.wrangler/
 .packages
 pubspec.lock
 *.js.deps

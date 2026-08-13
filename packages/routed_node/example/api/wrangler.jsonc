@@ -1,0 +1,7 @@
+{
+  "$schema": "https://developers.cloudflare.com/workers/wrangler/config-schema.json",
+  "name": "routed-api-demo",
+  "main": "build/worker.js",
+  "compatibility_date": "2026-08-13",
+  "compatibility_flags": ["nodejs_compat"]
+}
