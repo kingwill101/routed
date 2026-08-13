@@ -64,12 +64,14 @@ Engine createSampleEngine({ItemStore? store}) {
   });
 
   engine.get('/health', (ctx) {
+    final capabilities =
+        routedNodeContextOf(ctx)?.info.capabilities ?? nodeCapabilities;
     return ctx.json({
       'ok': true,
       'runtime': 'routed_node',
       'capabilities': {
-        'streaming': HostCapabilities.nodeProcess.streaming,
-        'websocket': HostCapabilities.nodeProcess.websocket,
+        'streaming': capabilities.streaming,
+        'websocket': capabilities.webSocket,
       },
     });
   });
