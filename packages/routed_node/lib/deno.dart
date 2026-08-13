@@ -15,6 +15,7 @@ export 'src/runtime/runtime.dart'
         RoutedNodeRuntimeInfo,
         denoCapabilities;
 export 'src/runtime/lifecycle.dart';
+export 'src/listener/js_listener.dart' show serveJsListener;
 
 /// Starts a Routed application on Deno.
 Future<ServerHandle> serveDeno(

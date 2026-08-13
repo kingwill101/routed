@@ -15,6 +15,7 @@ export 'src/runtime/runtime.dart'
         RoutedNodeRuntimeInfo,
         bunCapabilities;
 export 'src/runtime/lifecycle.dart';
+export 'src/listener/js_listener.dart' show serveJsListener;
 
 /// Starts a Routed application on Bun.
 Future<ServerHandle> serveBun(
