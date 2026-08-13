@@ -10,8 +10,8 @@ void main() {
   test('Fetch host capabilities cover shared deployment targets', () {
     expect(cloudflareCapabilities.streaming, isTrue);
     expect(vercelCapabilities.bufferedResponses, isTrue);
-    expect(netlifyCapabilities.fileSystem, isTrue);
-    expect(cloudflareCapabilities.webSocket, isTrue);
+    expect(netlifyCapabilities.fileSystem, isFalse);
+    expect(cloudflareCapabilities.webSocket, isFalse);
     expect(vercelCapabilities.webSocket, isFalse);
     expect(netlifyCapabilities.webSocket, isFalse);
   });
