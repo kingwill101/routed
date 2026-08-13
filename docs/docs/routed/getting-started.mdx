@@ -120,7 +120,7 @@ Use `dart run routed routes` to print the HTTP and WebSocket routes the engine e
 When you need a persisted snapshot (for documentation, code generation, or contract tests), run:
 
 ```bash
-dart run routed spec:generate --output .dart_tool/routed/route_manifest.json
+dart run routed openapi generate --output .dart_tool/routed/route_manifest.json
 ```
 
 Both commands share the same manifest loader, so toggling providers or adding routes in code stays in sync with the generated spec.

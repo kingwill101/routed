@@ -15,11 +15,30 @@ dependencies:
 ## Usage
 
 ```dart
-import 'package:routed_core/routed_core.dart';
+import 'package:routed/routed.dart';
 import 'package:routed_openapi/routed_openapi.dart';
+
+router
+    .post('/users', createUser)
+    .summary('Create a user')
+    .tags(['Users'])
+    .responseSchema(
+      const ResponseSchema(201, description: 'User created'),
+    );
 ```
 
-See `example/` and `test/` for pre-move tests reused from `routed` OpenAPI suite.
+Fluent metadata is attached to the runtime route and therefore follows nested
+groups and mounted routers into the generated manifest. Nested groups may be
+arbitrarily deep; their prefixes are flattened into the final OpenAPI paths.
+
+For static output, install `routed_openapi_builder` as a dev dependency, then run:
+
+```bash
+dart run routed openapi generate
+dart run build_runner build --delete-conflicting-outputs
+```
+
+See `example/` and `test/` for additional examples.
 
 ## Testing
 

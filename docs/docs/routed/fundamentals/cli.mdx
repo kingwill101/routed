@@ -70,15 +70,16 @@ dart run routed routes [--format table|json] [--entry tool/spec_manifest.dart]
 
 Prints the HTTP and WebSocket routes for your application. The loader tries `lib/app.dart` (expecting a `createEngine()` function) and falls back to `tool/spec_manifest.dart`, or you can point to a custom entry. Use `--format json` together with `--no-pretty` when parsing from scripts.
 
-## `spec:generate`
+## `openapi generate`
 
 ```bash
-dart run routed spec:generate --output .dart_tool/routed/route_manifest.json
-# shorthand alias:
-dart run routed spec --output .dart_tool/routed/route_manifest.json
+dart run routed openapi generate
+# legacy aliases:
+dart run routed openapi:generate
+dart run routed spec
 ```
 
-Writes a JSON route manifest to disk. Useful for documentation, contract tests, or code generators. The CLI ensures parent directories exist before writing.
+Writes the runtime route graph as JSON to disk. This manifest is the input to the OpenAPI build-runner step and is also useful for documentation, contract tests, or code generators. The CLI ensures parent directories exist before writing.
 
 | Flag | Default | Description |
 |------|---------|-------------|
@@ -86,37 +87,15 @@ Writes a JSON route manifest to disk. Useful for documentation, contract tests, 
 | `--output` | `.dart_tool/routed/route_manifest.json` | Target path for the generated manifest |
 | `--pretty/--no-pretty` | `true` | Pretty-print the JSON output |
 
-## `openapi generate`
+## Build-time OpenAPI output
 
 ```bash
-dart run routed openapi generate [--title "My API"] [--version 1.0.0] [--server https://api.example.com]
+cd examples/openapi_demo
+dart run routed openapi generate
+dart run build_runner build --delete-conflicting-outputs
 ```
 
-Generates an OpenAPI 3.1 document from your routed engine. By default the CLI writes `.dart_tool/routed/openapi.json`; use `--output` to change the destination and `--server` (repeatable) to declare server URLs. Metadata added via `routeBuilder.openApi((op) { ... })` flows into the generated spec.
-
-| Flag | Default | Description |
-|------|---------|-------------|
-| `--entry` | (auto) | Dart entrypoint that prints a route manifest as JSON |
-| `--output` | `.dart_tool/routed/openapi.json` | Target path for the generated document |
-| `--title` | `Routed Service` | OpenAPI `info.title` value |
-| `--version` | `1.0.0` | OpenAPI `info.version` value |
-| `--description` | (none) | OpenAPI `info.description` value |
-| `--server` | `[]` | Server URL(s). Format: `url` or `url\|Description`. Repeatable |
-| `--pretty/--no-pretty` | `true` | Pretty-print the JSON output |
-
-## `openapi make`
-
-```bash
-dart run routed openapi make [--entry tool/spec_manifest.dart] [--output .dart_tool/routed/openapi.json]
-```
-
-Statically analyzes the codebase to generate an OpenAPI document without running the engine. This is useful in CI pipelines or when the engine cannot be started.
-
-| Flag | Default | Description |
-|------|---------|-------------|
-| `--entry` | `tool/spec_manifest.dart` | Entrypoint file to start analysis from |
-| `--output` | `.dart_tool/routed/openapi.json` | Target path for the generated document |
-| `--pretty/--no-pretty` | `true` | Pretty-print the JSON output |
+The first command executes the application engine and writes `.dart_tool/routed/route_manifest.json`. The `routed_openapi_builder` build-runner builder then enriches that runtime manifest and writes `lib/generated/openapi.json` plus `lib/generated/openapi_controller.g.dart`. Fluent metadata such as `.summary(...)`, `.tags(...)`, and `.responseSchema(...)` flows into the generated spec.
 
 ## `stimulus:install`
 

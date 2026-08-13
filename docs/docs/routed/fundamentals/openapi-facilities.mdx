@@ -8,7 +8,7 @@ sidebar_position: 16
 
 Routed supports OpenAPI generation from real route registrations and can enrich route metadata from three sources:
 
-1. `schema:` on route registration
+1. Fluent metadata on a `RouteBuilder` (for example `.summary(...)`, `.responseSchema(...)`)
 2. OpenAPI annotations on handlers (for example `@Summary`, `@ApiResponse`)
 3. Standard Dartdoc comments on handlers and route registrations
 
@@ -17,15 +17,15 @@ This page covers the practical upsides, downsides, and the common gotchas you sh
 ## Why teams like this approach
 
 - **Runtime truth first**: specs start from registered routes, so nested routers and mounts are represented as the app actually runs.
-- **Progressive adoption**: you can begin with `schema:` only, then add annotations and Dartdoc as the API grows.
+- **Progressive adoption**: you can begin with fluent metadata, then add annotations and Dartdoc as the API grows.
 - **Good defaults**: routes without explicit metadata still produce operations with generated `operationId`s and default 200 responses.
 - **Cross-file support**: handler metadata can be merged even when routes are defined in multiple files and mounted later.
 - **Runtime + build workflows**: generate specs on the fly (`/openapi.json`) and as static build artifacts (`build_runner`).
 
 ## Tradeoffs and limitations
 
-- **Best accuracy comes from explicit metadata**: `schema:` is still the most deterministic source.
-- **Source matching complexity**: inline closures and deeply mounted routers require identity matching heuristics; they are better than before but still less explicit than named handlers.
+- **Best accuracy comes from explicit metadata**: fluent route metadata is the most deterministic source.
+- **Source matching complexity**: inline closures and dynamically mounted routers are harder for static annotation extraction; named handlers and fluent metadata remain deterministic.
 - **Extra build/runtime work**: metadata extraction parses Dart source files, which adds overhead compared to schema-only generation.
 - **Generated output drift risk**: runtime and static generation can diverge if teams forget to regenerate static artifacts.
 
@@ -33,17 +33,18 @@ This page covers the practical upsides, downsides, and the common gotchas you sh
 
 When multiple sources define the same fields, Routed merges deterministically:
 
-- Scalar fields (`summary`, `description`, `operationId`, `deprecated`, `hidden`): `schema` > annotation > Dartdoc.
+- Scalar fields (`summary`, `description`, `operationId`, `deprecated`, `hidden`): fluent metadata > annotation > Dartdoc.
 - Tags: merged and de-duplicated.
-- Params and responses: merged by semantic identity; schema-defined values win on collisions.
-- Validation rules: taken from `schema.validationRules`.
+- Params and responses: merged by semantic identity; fluent schema-defined values win on collisions.
+- Validation rules: taken from the fluent schema's `validationRules`.
 
-## Example: schema + annotations + Dartdoc
+## Example: fluent metadata + annotations + Dartdoc
 
 The following route set demonstrates all three metadata sources:
 
 ```dart
 import 'package:routed/routed.dart';
+import 'package:routed_openapi/routed_openapi.dart';
 
 class ProductHandlers {
   @Summary('List products from annotation')
@@ -57,14 +58,14 @@ class ProductHandlers {
 void registerProductRoutes(Router router) {
   final handlers = ProductHandlers();
 
-  router.get(
-    '/products',
-    handlers.list,
-    schema: const RouteSchema(
-      operationId: 'catalogProducts', // schema wins over annotation
-      tags: ['Catalog'],
-    ),
-  );
+  router
+      .get('/products', handlers.list)
+      .schema(
+        const RouteSchema(
+          operationId: 'catalogProducts', // fluent metadata wins over annotation
+          tags: ['Catalog'],
+        ),
+      );
 
   /// Product health check.
   ///
@@ -109,7 +110,7 @@ Generated OpenAPI output will look like this (abridged):
 
 Notes from this example:
 
-- `/products` shows schema + annotation merge, with schema winning on `operationId`.
+- `/products` shows fluent schema + annotation merge, with fluent metadata winning on `operationId`.
 - `/products/health` shows Dartdoc extraction for an inline closure route.
 - `/products/raw` shows fallback behavior when no metadata exists.
 
@@ -117,15 +118,15 @@ Notes from this example:
 
 ```bash
 cd examples/openapi_demo
-dart run routed spec
+dart run routed openapi generate
 dart run build_runner build --delete-conflicting-outputs
 ```
 
 This writes:
 
-- `.dart_tool/routed/route_manifest.json`
-- `lib/generated/openapi.json`
-- `lib/generated/openapi_controller.g.dart`
+- `.dart_tool/routed/route_manifest.json` — the runtime route graph
+- `lib/generated/openapi.json` — the generated OpenAPI document
+- `lib/generated/openapi_controller.g.dart` — the generated controller helper
 
 At runtime, you can also serve a generated spec endpoint:
 
@@ -157,7 +158,7 @@ In CI, keep runtime and static outputs aligned by asserting key paths/operations
 
 - Prefer named handlers for critical endpoints.
 - Keep route registration comments directly above the route call.
-- Use explicit `schema:` for routes where correctness is non-negotiable.
+- Use fluent `.schema(...)` or the smaller fluent methods for routes where correctness is non-negotiable.
 
 ### 2) Multiple files define the same leaf path
 
@@ -168,7 +169,7 @@ In CI, keep runtime and static outputs aligned by asserting key paths/operations
 **Workarounds**:
 
 - Keep modules logically separated with distinct route comments.
-- Use route names and/or explicit `schema.operationId` for deterministic identity.
+- Use route names and/or explicit fluent `.operationId(...)` for deterministic identity.
 - Prefer named handlers in repeated path patterns.
 
 ### 3) Runtime spec and generated spec mismatch
@@ -181,7 +182,7 @@ In CI, keep runtime and static outputs aligned by asserting key paths/operations
 
 ```bash
 cd examples/openapi_demo
-dart run routed spec
+dart run routed openapi generate
 dart run build_runner build --delete-conflicting-outputs
 ```
 
@@ -205,15 +206,36 @@ dart run build_runner build --delete-conflicting-outputs
 
 **Symptom**: annotation `operationId` or `summary` does not appear.
 
-**Why**: explicit `schema:` fields take precedence.
+**Why**: explicit fluent schema fields take precedence.
 
 **Workaround**:
 
-- Treat `schema:` as authoritative; remove conflicting fields from annotations if you want annotation values to appear.
+- Treat fluent metadata as authoritative; remove conflicting fields from annotations if you want annotation values to appear.
 
 ## Recommended strategy for production APIs
 
-1. Use `schema:` for endpoint contracts that must be exact (params, body, responses, validation).
+1. Use fluent `.schema(...)`, `.requestSchema(...)`, and `.responseSchema(...)` for endpoint contracts that must be exact (params, body, responses, validation).
 2. Use annotations for readability and tooling support on named handlers.
 3. Use Dartdoc for inline closure routes and quick descriptive context.
 4. Keep a parity test between runtime and generated specs for your important paths.
+
+## Nested route groups
+
+Nested groups may be arbitrarily deep. The runtime router composes every group prefix
+and the manifest contains the flattened paths that the application actually serves:
+
+```dart
+engine.group(path: '/api', builder: (api) {
+  api.group(path: '/v1', builder: (v1) {
+    v1.group(path: '/admin', builder: (admin) {
+      admin.get('/users/{id}', getUser).summary('Get an admin user');
+    });
+  });
+});
+```
+
+This produces `/api/v1/admin/users/{id}` in the OpenAPI `paths` map. Group
+middleware and route metadata remain attached to the registered route. The static
+metadata extractor understands nested groups with literal string prefixes; for
+dynamically computed prefixes, the runtime path is still authoritative, but fluent
+metadata or named handlers are recommended for reliable enrichment.

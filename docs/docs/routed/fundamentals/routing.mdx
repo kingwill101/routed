@@ -121,7 +121,7 @@ router.group(
 );
 ```
 
-Groups can be nested and their paths are prefixed cumulatively. Middleware declared on a group runs after any parent middleware and before route-level middleware.
+Groups can be nested to any depth and their paths are prefixed cumulatively. Middleware declared on a group runs after any parent middleware and before route-level middleware. The runtime route manifest and OpenAPI builder flatten the complete hierarchy into the paths the application serves.
 
 ## Naming routes
 
@@ -140,33 +140,26 @@ Use names when generating links within templates or redirects. Placeholders must
 
 ## Documenting routes for OpenAPI
 
-Invoke `openApi` on a `RouteBuilder` to attach metadata that flows into the generated manifest and CLI tooling:
+Import `package:routed_openapi/routed_openapi.dart` and use fluent `RouteBuilder` extensions to attach metadata that flows into the generated manifest and CLI tooling:
 
 ```dart
 router
     .put('/users/{id:int}', updateUser)
     .name('users.update')
-    .openApi((operation) {
-      operation.summary = 'Update a user';
-      operation.tags(['users']);
-      operation.jsonRequestBody(
-        schema: {
-          'type': 'object',
-          'required': ['name'],
-          'properties': {
-            'name': {'type': 'string'},
-            'email': {'type': 'string', 'format': 'email'},
-          },
-        },
-      );
-      operation.jsonResponse(
-        status: '200',
+    .summary('Update a user')
+    .tags(['users'])
+    .requestSchema(
+      const BodySchema(
+        contentType: 'application/json',
+        schema: {'type': 'object'},
+      ),
+    )
+    .responseSchema(
+      const ResponseSchema(
+        200,
         description: 'Updated user',
-        schema: {
-          r'$ref': '#/components/schemas/User',
-        },
-      );
-    });
+      ),
+    );
 ```
 
 Every call merges into the existing metadata so you can build the description incrementally (for example, set tags in a group helper and add responses alongside the handler). Use the CLI to turn the manifest plus metadata into a spec:
