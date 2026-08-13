@@ -29,6 +29,31 @@ final class FetchResponseView {
   final Stream<List<int>> body;
 }
 
+final class _FetchRequestAdapter implements RequestAdapter, HostContextCarrier {
+  _FetchRequestAdapter(FetchRequestView request, {Uri? baseUri})
+    : _portable = portableRequestFromFetch(request, baseUri: baseUri);
+
+  final PortableRequest _portable;
+
+  @override
+  Object? get hostContext => _portable.hostContext;
+
+  @override
+  String get method => _portable.method;
+
+  @override
+  Uri get uri => _portable.uri;
+
+  @override
+  Map<String, List<String>> get headers => _portable.headers.asMap;
+
+  @override
+  Stream<List<int>> get body => _portable.body;
+
+  @override
+  String? get remoteAddress => _portable.remoteAddress;
+}
+
 /// Converts a Fetch-style request into the core portable request contract.
 PortableRequest portableRequestFromFetch(
   FetchRequestView request, {
@@ -54,6 +79,50 @@ PortableRequest portableRequestFromFetch(
     remoteAddress: request.remoteAddress,
     hostContext: request.hostContext,
   );
+}
+
+/// Dispatches a Fetch-style request through the streaming adapter path.
+///
+/// Hosts can implement [ResponseAdapter] over a native response stream to
+/// preserve progressive writes. This path does not buffer the full response.
+Future<void> dispatchFetchConnection(
+  Engine engine,
+  FetchRequestView request,
+  ResponseAdapter response, {
+  required RoutedNodeRuntimeInfo runtime,
+  Uri? baseUri,
+}) async {
+  publishRoutedNodeLifecycle(
+    engine,
+    RoutedNodeLifecycleEvent(
+      phase: RoutedNodeLifecyclePhase.requestStarted,
+      info: runtime,
+    ),
+  );
+
+  try {
+    await engine.handleConnection(
+      HttpConnection(_FetchRequestAdapter(request, baseUri: baseUri), response),
+    );
+    publishRoutedNodeLifecycle(
+      engine,
+      RoutedNodeLifecycleEvent(
+        phase: RoutedNodeLifecyclePhase.requestFinished,
+        info: runtime,
+      ),
+    );
+  } catch (error, stackTrace) {
+    publishRoutedNodeLifecycle(
+      engine,
+      RoutedNodeLifecycleEvent(
+        phase: RoutedNodeLifecyclePhase.requestFailed,
+        info: runtime,
+        error: error,
+        stackTrace: stackTrace,
+      ),
+    );
+    rethrow;
+  }
 }
 
 /// Dispatches a Fetch-style request through Routed's buffered portable path.
