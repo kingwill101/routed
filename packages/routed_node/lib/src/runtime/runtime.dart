@@ -139,7 +139,7 @@ const RoutedNodeCapabilities cloudflareCapabilities = RoutedNodeCapabilities(
   entryModel: RoutedNodeEntryModel.fetchExport,
   streaming: true,
   bufferedResponses: true,
-  webSocket: false,
+  webSocket: true,
   fileSystem: false,
   backgroundWork: false,
 );

@@ -170,7 +170,10 @@ extension EngineContextHelpers on EngineContext {
     return response;
   }
 
-  Future<Response> redirect(String location, {int statusCode = HttpStatus.found}) async {
+  Future<Response> redirect(
+    String location, {
+    int statusCode = HttpStatus.found,
+  }) async {
     response.statusCode = statusCode;
     response.headers.set(HttpHeaders.locationHeader, location);
     return response;

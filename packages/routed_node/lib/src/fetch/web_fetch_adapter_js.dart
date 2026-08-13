@@ -11,10 +11,18 @@ import 'web_stream_bridge.dart';
 
 /// Adapts a native Fetch request to the shared Fetch view.
 final class WebFetchRequest implements FetchRequestView {
-  WebFetchRequest(this.request, {required RoutedNodeContext hostContext})
-    : _hostContext = hostContext;
+  WebFetchRequest(
+    this.request, {
+    required RoutedNodeContext hostContext,
+    Future<FetchWebSocketUpgrade> Function()? acceptWebSocket,
+  }) : _hostContext = hostContext,
+       _acceptWebSocket =
+           request.headers.get('upgrade')?.toLowerCase() == 'websocket'
+           ? acceptWebSocket
+           : null;
 
   final web.Request request;
+  final Future<FetchWebSocketUpgrade> Function()? _acceptWebSocket;
   final RoutedNodeContext _hostContext;
 
   @override
@@ -54,13 +62,17 @@ final class WebFetchRequest implements FetchRequestView {
 
   @override
   RoutedNodeContext get hostContext => _hostContext;
+
+  Future<FetchWebSocketUpgrade> Function()? get acceptWebSocket =>
+      _acceptWebSocket;
 }
 
 /// Response adapter that starts a native Fetch response before the body ends.
 ///
 /// Headers are released once Routed has committed them; body chunks continue
 /// through the returned native `ReadableStream`.
-final class WebStreamingResponseAdapter implements ResponseAdapter {
+final class WebStreamingResponseAdapter
+    implements ResponseAdapter, WebSocketResponseAdapter {
   WebStreamingResponseAdapter() : _body = StreamController<List<int>>();
 
   final StreamController<List<int>> _body;
@@ -69,6 +81,9 @@ final class WebStreamingResponseAdapter implements ResponseAdapter {
   int _statusCode = 200;
   bool _headersSent = false;
   bool _closed = false;
+  Object? _upgradeResponse;
+
+  Object? get upgradeResponse => _upgradeResponse;
 
   int get statusCodeValue => _statusCode;
   Map<String, List<String>> get headersValue => _headers;
@@ -114,6 +129,12 @@ final class WebStreamingResponseAdapter implements ResponseAdapter {
   }
 
   @override
+  void upgrade(Object nativeWebSocketResponse) {
+    _upgradeResponse = nativeWebSocketResponse;
+    _markHeadersReady();
+  }
+
+  @override
   Future<void> close() async {
     if (_closed) return;
     _closed = true;
@@ -150,6 +171,12 @@ web.Response webResponseFromFetchView(FetchResponseView source) {
 web.Response webResponseFromStreamingAdapter(
   WebStreamingResponseAdapter source,
 ) {
+  final upgrade = source.upgradeResponse;
+  if (upgrade != null) {
+    final init = web.ResponseInit(status: 101)
+      ..setProperty('webSocket'.toJS, upgrade as JSAny);
+    return web.Response(null, init);
+  }
   final headers = web.Headers();
   source.headersValue.forEach((name, values) {
     for (final value in values) {

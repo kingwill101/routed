@@ -4,12 +4,30 @@ import 'runtime.dart';
 
 /// Attaches host context to a portable request adapter.
 final class RoutedNodeRequestAdapter
-    implements RequestAdapter, HostContextCarrier {
+    implements RequestAdapter, WebSocketUpgradeRequest, HostContextCarrier {
   RoutedNodeRequestAdapter(this.delegate, this.hostContext);
 
   final RequestAdapter delegate;
+  WebSocketUpgradeRequest? get _upgrade => delegate is WebSocketUpgradeRequest
+      ? delegate as WebSocketUpgradeRequest
+      : null;
   @override
   final RoutedNodeContext hostContext;
+
+  @override
+  bool get isWebSocketUpgrade => _upgrade?.isWebSocketUpgrade ?? false;
+
+  @override
+  Object? get nativeUpgradeResponse => _upgrade?.nativeUpgradeResponse;
+
+  @override
+  Future<RoutedWebSocket> accept() {
+    final value = _upgrade;
+    if (value != null) {
+      return value.accept();
+    }
+    throw UnsupportedError('WebSocket upgrade is not available.');
+  }
 
   @override
   String get method => delegate.method;

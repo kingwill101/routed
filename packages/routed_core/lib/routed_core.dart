@@ -59,6 +59,9 @@ export 'src/http/transport.dart'
     show
         RequestAdapter,
         ResponseAdapter,
+        RoutedWebSocket,
+        WebSocketUpgradeRequest,
+        WebSocketResponseAdapter,
         HostContextCarrier,
         NativeRequestHandle,
         HttpConnection,

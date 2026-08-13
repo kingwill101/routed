@@ -1,6 +1,7 @@
 import 'package:json_schema_builder/json_schema_builder.dart';
 import 'package:routed_core/src/config/schema.dart';
-import 'package:routed_core/src/engine/config.dart' show EngineConfig, EtagStrategy;
+import 'package:routed_core/src/engine/config.dart'
+    show EngineConfig, EtagStrategy;
 import 'package:routed_core/src/provider/config_utils.dart';
 import 'package:routed_core/src/provider/provider.dart';
 

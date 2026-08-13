@@ -282,13 +282,24 @@ Future<void> writePortableResponse(
 }
 
 final class _PortableRequestAdapter
-    implements RequestAdapter, HostContextCarrier {
+    implements RequestAdapter, WebSocketUpgradeRequest, HostContextCarrier {
   _PortableRequestAdapter(this._request);
 
   final PortableRequest _request;
 
   @override
   Object? get hostContext => _request.hostContext;
+
+  @override
+  bool get isWebSocketUpgrade => false;
+
+  @override
+  Object? get nativeUpgradeResponse => null;
+
+  @override
+  Future<RoutedWebSocket> accept() => throw UnsupportedError(
+    'Portable WebSocket upgrade requires a host adapter.',
+  );
 
   @override
   String get method => _request.method;

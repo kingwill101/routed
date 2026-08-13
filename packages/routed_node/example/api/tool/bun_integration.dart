@@ -5,6 +5,7 @@ import 'dart:js_interop_unsafe';
 
 import 'package:routed_node/bun.dart';
 import 'package:routed_node_api_sample/app.dart';
+import 'package:web/web.dart' as web;
 
 Future<void> main() async {
   final engine = await createEngine();
@@ -21,6 +22,20 @@ Future<void> main() async {
         jsonDecode(capabilities.body) as Map<String, dynamic>;
     _expect(capabilityJson['bun']['streaming'], true, 'Bun streaming');
     _expect(capabilityJson['bun']['webSocket'], false, 'Bun WebSocket flag');
+
+    final socket = web.WebSocket('ws://127.0.0.1:${handle.port}/ws');
+    final ready = Completer<void>();
+    socket.onopen = (() {
+      socket.send('hello'.toJS);
+    }).toJS;
+    socket.onmessage = ((JSAny event) {
+      final data = (event as JSObject).getProperty('data'.toJS);
+      if (data is JSString && data.toDart == 'echo:hello') {
+        if (!ready.isCompleted) ready.complete();
+      }
+    }).toJS;
+    await ready.future.timeout(const Duration(seconds: 5));
+    socket.close();
 
     final echo = await _post(handle.port, '/echo', '{"ok":true}');
     _expect(echo.status, 200, 'POST /echo');

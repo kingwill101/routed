@@ -520,7 +520,7 @@ extension ServerExtension on Engine {
       try {
         // ignore: close_sinks, handed off to the registered WebSocket handler
         final webSocket = await WebSocketTransformer.upgrade(httpRequest);
-        final wsContext = WebSocketContext(webSocket, ctx);
+        final wsContext = WebSocketContext(IoRoutedWebSocket(webSocket), ctx);
 
         await route.handler.onOpen(wsContext);
 

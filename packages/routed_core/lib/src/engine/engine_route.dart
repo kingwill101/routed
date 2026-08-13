@@ -100,8 +100,8 @@ class EngineRoute {
     this.sourceFile,
     this.sourceLine,
     this.sourceColumn,
-  })  : metadata = metadata ?? RouteMetadata(),
-        _patternRegistry = patternRegistry {
+  }) : metadata = metadata ?? RouteMetadata(),
+       _patternRegistry = patternRegistry {
     final patternData = _buildUriPattern(path, _patternRegistry);
     _uriPattern = patternData.pattern;
     _parameterPatterns = patternData.paramInfo;
@@ -120,7 +120,7 @@ class EngineRoute {
     required RoutePatternRegistry patternRegistry,
     this.middlewares = const [],
     RouteMetadata? metadata,
-  })  : metadata = metadata ?? RouteMetadata(),
+  }) : metadata = metadata ?? RouteMetadata(),
        method = '*',
        path = '*',
        name = null,

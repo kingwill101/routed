@@ -42,8 +42,8 @@ class RegisteredRoute {
     this.sourceColumn,
     Map<String, dynamic>? constraints,
     RouteMetadata? metadata,
-  })  : constraints = Map<String, dynamic>.from(constraints ?? const {}),
-        metadata = metadata ?? RouteMetadata();
+  }) : constraints = Map<String, dynamic>.from(constraints ?? const {}),
+       metadata = metadata ?? RouteMetadata();
 
   @override
   String toString() {

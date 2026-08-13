@@ -7,7 +7,8 @@ import 'runtime/runtime.dart';
 ///
 /// Does **not** implement [NativeRequestHandle] — portable hosts go through
 /// [AdapterHttpBridge] inside [Engine.handleConnection].
-final class NodeRequestAdapter implements RequestAdapter, HostContextCarrier {
+final class NodeRequestAdapter
+    implements RequestAdapter, WebSocketUpgradeRequest, HostContextCarrier {
   NodeRequestAdapter(this.incoming, {Uri? baseUri, this.hostContext})
     : uri = _resolveUri(incoming, baseUri),
       headers = _normalizeHeaders(incoming.rawHeaders);
@@ -17,6 +18,17 @@ final class NodeRequestAdapter implements RequestAdapter, HostContextCarrier {
 
   @override
   final RoutedNodeContext? hostContext;
+
+  @override
+  bool get isWebSocketUpgrade => false;
+
+  @override
+  Object? get nativeUpgradeResponse => null;
+
+  @override
+  Future<RoutedWebSocket> accept() => throw UnsupportedError(
+    'Node WebSocket upgrade requires the Node listener.',
+  );
 
   @override
   String get method => incoming.method.isEmpty ? 'GET' : incoming.method;

@@ -29,14 +29,47 @@ final class FetchResponseView {
   final Stream<List<int>> body;
 }
 
-final class _FetchRequestAdapter implements RequestAdapter, HostContextCarrier {
-  _FetchRequestAdapter(FetchRequestView request, {Uri? baseUri})
-    : _portable = portableRequestFromFetch(request, baseUri: baseUri);
+final class FetchWebSocketUpgrade {
+  FetchWebSocketUpgrade({
+    required this.socket,
+    required this.response,
+    this.responseContainsWebSocket = false,
+  });
+
+  final RoutedWebSocket socket;
+  final Object response;
+  final bool responseContainsWebSocket;
+}
+
+final class _FetchRequestAdapter
+    implements RequestAdapter, WebSocketUpgradeRequest, HostContextCarrier {
+  _FetchRequestAdapter(
+    FetchRequestView request, {
+    Uri? baseUri,
+    Future<FetchWebSocketUpgrade> Function()? accept,
+  }) : _portable = portableRequestFromFetch(request, baseUri: baseUri),
+       _accept = accept;
 
   final PortableRequest _portable;
+  final Future<FetchWebSocketUpgrade> Function()? _accept;
+  FetchWebSocketUpgrade? _upgrade;
 
   @override
   Object? get hostContext => _portable.hostContext;
+
+  @override
+  bool get isWebSocketUpgrade => _accept != null;
+
+  @override
+  Object? get nativeUpgradeResponse => _upgrade?.response;
+
+  @override
+  Future<RoutedWebSocket> accept() async {
+    _upgrade ??= _accept == null
+        ? throw UnsupportedError('Fetch WebSocket upgrade is not configured.')
+        : await _accept();
+    return _upgrade!.socket;
+  }
 
   @override
   String get method => _portable.method;
@@ -91,6 +124,7 @@ Future<void> dispatchFetchConnection(
   ResponseAdapter response, {
   required RoutedNodeRuntimeInfo runtime,
   Uri? baseUri,
+  Future<FetchWebSocketUpgrade> Function()? acceptWebSocket,
 }) async {
   publishRoutedNodeLifecycle(
     engine,
@@ -102,7 +136,14 @@ Future<void> dispatchFetchConnection(
 
   try {
     await engine.handleConnection(
-      HttpConnection(_FetchRequestAdapter(request, baseUri: baseUri), response),
+      HttpConnection(
+        _FetchRequestAdapter(
+          request,
+          baseUri: baseUri,
+          accept: acceptWebSocket,
+        ),
+        response,
+      ),
     );
     publishRoutedNodeLifecycle(
       engine,

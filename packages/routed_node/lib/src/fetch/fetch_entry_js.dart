@@ -12,6 +12,7 @@ import '../runtime/lifecycle.dart';
 import '../runtime/runtime.dart';
 import 'fetch_exchange.dart';
 import 'web_fetch_adapter_js.dart';
+import 'websocket_bridge_js.dart';
 
 const defaultRoutedFetchEntryName = '__routed_fetch__';
 
@@ -136,13 +137,20 @@ Future<web.Response> handleNativeFetch(
         environment: environment,
       ),
     );
-    final view = WebFetchRequest(request, hostContext: hostContext);
+    final view = WebFetchRequest(
+      request,
+      hostContext: hostContext,
+      acceptWebSocket: info.capabilities.webSocket
+          ? cloudflareWebSocketPair
+          : null,
+    );
     final streaming = WebStreamingResponseAdapter();
     final dispatch = dispatchFetchConnection(
       engine,
       view,
       streaming,
       runtime: info,
+      acceptWebSocket: view.acceptWebSocket,
     );
     unawaited(
       dispatch.catchError((Object error, StackTrace stackTrace) {

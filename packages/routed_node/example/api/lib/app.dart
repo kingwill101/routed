@@ -4,6 +4,24 @@ import 'package:routed_core/routed_core.dart';
 import 'package:routed_node/routed_node.dart';
 
 /// In-memory item store for the sample API (demo only — not durable).
+final class _EchoWebSocketHandler extends WebSocketHandler {
+  @override
+  Future<void> onOpen(WebSocketContext context) async {
+    context.send('ready');
+  }
+
+  @override
+  Future<void> onMessage(WebSocketContext context, dynamic message) async {
+    context.send('echo:$message');
+  }
+
+  @override
+  Future<void> onClose(WebSocketContext context) async {}
+
+  @override
+  Future<void> onError(WebSocketContext context, dynamic error) async {}
+}
+
 final class ItemStore {
   ItemStore() {
     _items.addAll({
@@ -48,6 +66,7 @@ final class ItemStore {
 Engine createSampleEngine({ItemStore? store}) {
   final items = store ?? ItemStore();
   final engine = Engine(providers: Engine.defaultProviders);
+  engine.ws('/ws', _EchoWebSocketHandler());
 
   engine.get('/', (ctx) {
     return ctx.json({
@@ -59,6 +78,7 @@ Engine createSampleEngine({ItemStore? store}) {
         'get': 'GET /api/items/:id',
         'create': 'POST /api/items',
         'delete': 'DELETE /api/items/:id',
+        'websocket': 'GET /ws',
       },
     });
   });

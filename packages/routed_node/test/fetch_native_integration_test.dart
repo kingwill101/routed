@@ -11,7 +11,7 @@ void main() {
     expect(cloudflareCapabilities.streaming, isTrue);
     expect(vercelCapabilities.bufferedResponses, isTrue);
     expect(netlifyCapabilities.fileSystem, isFalse);
-    expect(cloudflareCapabilities.webSocket, isFalse);
+    expect(cloudflareCapabilities.webSocket, isTrue);
     expect(vercelCapabilities.webSocket, isFalse);
     expect(netlifyCapabilities.webSocket, isFalse);
   });

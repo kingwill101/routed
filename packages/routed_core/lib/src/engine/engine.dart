@@ -58,7 +58,8 @@ part 'request.dart';
 // Stub for moved validation
 class ValidationRuleRegistry {
   static ValidationRuleRegistry defaults() => ValidationRuleRegistry();
-  static ValidationRuleRegistry clone(ValidationRuleRegistry other) => ValidationRuleRegistry();
+  static ValidationRuleRegistry clone(ValidationRuleRegistry other) =>
+      ValidationRuleRegistry();
   List<String> get names => [];
   ValidationRuleRegistry cloneInstance() => ValidationRuleRegistry();
 }
@@ -1237,6 +1238,13 @@ class Engine with ContainerMixin {
   /// ([_dispatchPortableConnection]).
   Future<void> handleConnection(HttpConnection connection) async {
     final request = connection.request;
+    final upgrade = request is WebSocketUpgradeRequest
+        ? request as WebSocketUpgradeRequest
+        : null;
+    if (upgrade?.isWebSocketUpgrade == true) {
+      await _handlePortableWebSocket(connection, upgrade!);
+      return;
+    }
     if (request is NativeRequestHandle) {
       final native = (request as NativeRequestHandle).nativeRequest;
       if (native is HttpRequest) {
@@ -1244,6 +1252,82 @@ class Engine with ContainerMixin {
       }
     }
     return _dispatchPortableConnection(connection);
+  }
+
+  Future<void> _handlePortableWebSocket(
+    HttpConnection connection,
+    WebSocketUpgradeRequest upgrade,
+  ) async {
+    if (!_providersBooted) await initialize();
+    _ensureRoutes();
+    final path = connection.request.uri.path;
+    WebSocketEngineRoute? route;
+    Map<String, dynamic> pathParameters = const {};
+    for (final candidate in _wsRoutes.values) {
+      if (!candidate.pattern.hasMatch(path)) continue;
+      route = candidate;
+      pathParameters = candidate.extractParameters(path);
+      break;
+    }
+    if (route == null) {
+      connection.response.statusCode = HttpStatus.notFound;
+      await connection.response.close();
+      return;
+    }
+
+    final syntheticResponse = AdapterHttpResponse(connection.response);
+    final syntheticRequest = AdapterHttpRequest(
+      connection.request,
+      syntheticResponse,
+    );
+    final request = Request(syntheticRequest, pathParameters, config);
+    final response = Response.fromAdapter(connection.response);
+    final container = createRequestContainer(
+      syntheticRequest,
+      syntheticResponse,
+    );
+    final context = EngineContext(
+      request: request,
+      response: response,
+      engine: this,
+      container: container,
+    );
+    _bindRequestScope(container, request, response, context);
+    final socket = await upgrade.accept();
+    final nativeResponse = upgrade.nativeUpgradeResponse;
+    if (nativeResponse != null &&
+        connection.response is WebSocketResponseAdapter) {
+      (connection.response as WebSocketResponseAdapter).upgrade(nativeResponse);
+    }
+    final wsContext = WebSocketContext(socket, context);
+    try {
+      await route.handler.onOpen(wsContext);
+      unawaited(
+        _runPortableWebSocket(socket, route.handler, wsContext, container),
+      );
+    } catch (error, stackTrace) {
+      await route.handler.onError(wsContext, error);
+      await cleanupRequestContainer(container);
+      Error.throwWithStackTrace(error, stackTrace);
+    }
+  }
+
+  Future<void> _runPortableWebSocket(
+    RoutedWebSocket socket,
+    WebSocketHandler handler,
+    WebSocketContext context,
+    Container container,
+  ) async {
+    try {
+      await for (final message in socket.stream) {
+        await handler.onMessage(context, message);
+      }
+      await handler.onClose(context);
+    } catch (error) {
+      await handler.onError(context, error);
+    } finally {
+      await cleanupRequestContainer(container);
+    }
   }
 
   /// Value-style entry: [PortableRequest] in, [PortableResponse] out.

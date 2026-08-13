@@ -26,9 +26,7 @@ extension TypedContextState on EngineContext {
       );
     }
     if (raw is T) return raw as T;
-    throw StateError(
-      'Key ${key.name} holds ${raw.runtimeType}, not $T',
-    );
+    throw StateError('Key ${key.name} holds ${raw.runtimeType}, not $T');
   }
 
   /// Writes [value] for [key].

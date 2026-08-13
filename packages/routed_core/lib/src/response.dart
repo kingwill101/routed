@@ -62,8 +62,7 @@ class Response {
   }
 
   /// A future that completes when the underlying HTTP response finishes.
-  Future<void> get done =>
-      _httpResponse?.done ?? _portableDone.future;
+  Future<void> get done => _httpResponse?.done ?? _portableDone.future;
 
   /// Gets the content length of the HTTP response.
   int? get contentLength {
@@ -74,8 +73,7 @@ class Response {
   }
 
   /// Gets the persistent connection state of the HTTP response.
-  bool get persistentConnection =>
-      _httpResponse?.persistentConnection ?? true;
+  bool get persistentConnection => _httpResponse?.persistentConnection ?? true;
 
   /// Gets the reason phrase of the HTTP response.
   String? get reasonPhrase => _httpResponse?.reasonPhrase;
@@ -179,10 +177,7 @@ class Response {
       });
 
       for (final cookie in native.cookies) {
-        native.headers.add(
-          HttpHeaders.setCookieHeader,
-          cookie.toString(),
-        );
+        native.headers.add(HttpHeaders.setCookieHeader, cookie.toString());
       }
     } else {
       final adapter = _adapter!;
@@ -446,8 +441,7 @@ class Response {
   HttpHeaders get headers => _httpResponse?.headers ?? _portableHeaders!;
 
   /// Gets the status code of the HTTP response.
-  int get statusCode =>
-      _httpResponse?.statusCode ?? _portableStatusCode;
+  int get statusCode => _httpResponse?.statusCode ?? _portableStatusCode;
 
   /// Sets the status code of the HTTP response.
   set statusCode(int value) {

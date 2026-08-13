@@ -2,6 +2,21 @@ import 'dart:async';
 
 import 'package:routed_core/src/engine/engine.dart' show Engine;
 
+/// A host-neutral WebSocket connection used by portable engine adapters.
+abstract interface class RoutedWebSocket {
+  Stream<dynamic> get stream;
+  int? get closeCode;
+  void add(dynamic data);
+  Future<void> close([int? code, String? reason]);
+}
+
+/// A request that can accept a WebSocket upgrade without `dart:io`.
+abstract interface class WebSocketUpgradeRequest {
+  bool get isWebSocketUpgrade;
+  Object? get nativeUpgradeResponse;
+  Future<RoutedWebSocket> accept();
+}
+
 /// Minimal inbound HTTP message (host-agnostic).
 ///
 /// Host packages implement this for their request type:
@@ -40,6 +55,10 @@ abstract interface class RequestAdapter {
 /// - `routed_io` wraps `dart:io` [HttpResponse]
 /// - `routed_node` wraps Node.js `ServerResponse`
 /// - a Cloudflare adapter builds a Workers `Response`
+abstract interface class WebSocketResponseAdapter {
+  void upgrade(Object nativeWebSocket);
+}
+
 abstract interface class ResponseAdapter {
   int get statusCode;
   set statusCode(int value);

@@ -10,22 +10,45 @@ class ViewEngine {}
 
 // Stubs for moved session types
 class Options {
-  Options({this.path = '/', this.domain = '', this.maxAge, this.secure, this.httpOnly, this.sameSite, this.partitioned});
-  final dynamic path; final dynamic domain; final dynamic maxAge; final dynamic secure; final dynamic httpOnly; final dynamic sameSite; final dynamic partitioned;
+  Options({
+    this.path = '/',
+    this.domain = '',
+    this.maxAge,
+    this.secure,
+    this.httpOnly,
+    this.sameSite,
+    this.partitioned,
+  });
+  final dynamic path;
+  final dynamic domain;
+  final dynamic maxAge;
+  final dynamic secure;
+  final dynamic httpOnly;
+  final dynamic sameSite;
+  final dynamic partitioned;
 }
+
 class SecureCookie {
   SecureCookie({this.key, this.useEncryption = false, this.useSigning = false});
   final dynamic key;
   final bool useEncryption;
   final bool useSigning;
 }
+
 class CookieStore {
   CookieStore({this.codecs, this.defaultOptions});
   final dynamic codecs;
   final dynamic defaultOptions;
 }
+
 class FilesystemStore {
-  FilesystemStore({this.storageDir, this.codecs, this.defaultOptions, this.fileSystem, this.lottery});
+  FilesystemStore({
+    this.storageDir,
+    this.codecs,
+    this.defaultOptions,
+    this.fileSystem,
+    this.lottery,
+  });
   final dynamic storageDir;
   final dynamic codecs;
   final dynamic defaultOptions;
