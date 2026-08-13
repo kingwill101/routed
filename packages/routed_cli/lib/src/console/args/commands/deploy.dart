@@ -125,7 +125,7 @@ class DeployCommand extends BaseCommand {
       r'$schema':
           'https://developers.cloudflare.com/workers/wrangler/config-schema.json',
       'name': workerName,
-      'main': p.relative(workerOutput.path, from: root.path),
+      'main': p.basename(workerOutput.path),
       'compatibility_date': date,
       'compatibility_flags': ['nodejs_compat'],
     };
