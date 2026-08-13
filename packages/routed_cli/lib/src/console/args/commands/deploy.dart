@@ -193,7 +193,7 @@ class DeployCommand extends BaseCommand {
       'deploy',
       '--no-build',
       '--dir',
-      buildRoot.path,
+      '.',
       '--site',
       siteName,
       '--prod',
