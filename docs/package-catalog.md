@@ -7,7 +7,7 @@ manifests in this checkout as of 2026-08-15.
 
 | Package | Version | Role |
 | --- | --- | --- |
-| [`routed`](https://github.com/kingwill101/routed/tree/master/packages/routed) | `0.3.3` | Batteries-included framework facade and official provider registry |
+| [`routed`](https://github.com/kingwill101/routed/tree/master/packages/routed) | `0.4.0` | Batteries-included framework facade and official provider registry |
 | [`routed_core`](https://github.com/kingwill101/routed/tree/master/packages/routed_core) | `0.3.3` | Slim engine, routing, contexts, configuration, and lifecycle |
 | [`routed_auth`](https://github.com/kingwill101/routed/tree/master/packages/routed_auth) | `0.1.0` | Routed authentication and authorization integration |
 | [`routed_cache`](https://github.com/kingwill101/routed/tree/master/packages/routed_cache) | `0.1.0` | Cache services and context helpers for Routed |
@@ -46,7 +46,7 @@ manifests in this checkout as of 2026-08-15.
 
 | Package | Version | Role |
 | --- | --- | --- |
-| [`routed_cli`](https://github.com/kingwill101/routed/tree/master/packages/routed_cli) | `0.1.0` | Project commands, configuration, development, and deployment tooling |
+| [`routed_cli`](https://github.com/kingwill101/routed/tree/master/packages/routed_cli) | `0.2.2` | Project commands, configuration, development, and deployment tooling |
 | [`routed_analyzer`](https://github.com/kingwill101/routed/tree/master/packages/routed_analyzer) | `0.1.0` | Analyzer plugin and Routed lint rules |
 | [`routed_openapi_builder`](https://github.com/kingwill101/routed/tree/master/packages/routed_openapi_builder) | `0.1.0` | Build-time OpenAPI artifact generation |
 | [`routed_testing`](https://github.com/kingwill101/routed/tree/master/packages/server_testing/routed_testing) | `0.3.3` | Routed adapter for the upstream `server_testing` harness |

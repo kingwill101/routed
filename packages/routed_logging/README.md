@@ -6,7 +6,7 @@ HTTP logging provider and request logger helpers for Routed.
 
 ```yaml
 dependencies:
-  routed: ^0.3.3
+  routed: ^0.4.0
   routed_core: ^0.3.3
   routed_logging: ^0.1.0
 ```

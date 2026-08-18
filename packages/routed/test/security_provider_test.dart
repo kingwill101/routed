@@ -1,6 +1,7 @@
+import 'dart:convert';
+
 import 'package:routed/routed.dart';
-import 'package:routed_testing/routed_testing.dart';
-import 'package:server_testing/server_testing.dart';
+import 'package:test/test.dart';
 
 void main() {
   test('security provider applies trusted proxy configuration', () async {
@@ -20,23 +21,25 @@ void main() {
       providers: [...Engine.defaultProviders, RoutedSecurityProvider()],
     )..get('/ip', (ctx) => ctx.string(ctx.request.clientIP));
 
-    final handler = RoutedRequestHandler(engine);
-    final client = TestClient.ephemeralServer(handler);
-    addTearDown(client.close);
     addTearDown(engine.close);
 
     await engine.initialize();
     expect(engine.config.features.enableProxySupport, isTrue);
     expect(engine.config.forwardedByClientIP, isTrue);
 
-    final response = await client.get(
-      '/ip',
-      headers: {
-        'X-Forwarded-For': ['203.0.113.5'],
-      },
+    final response = await engine.handlePortable(
+      PortableRequest(
+        method: 'GET',
+        uri: Uri.parse('http://localhost/ip'),
+        remoteAddress: '127.0.0.1',
+        headers: PortableHeaders({
+          'X-Forwarded-For': ['203.0.113.5'],
+        }),
+      ),
     );
 
-    response.assertStatus(HttpStatus.ok).assertBodyEquals('203.0.113.5');
+    expect(response.statusCode, HttpStatus.ok);
+    expect(utf8.decode(response.bodyBytes ?? const []), '203.0.113.5');
     expect(engine.container.has<TrustedProxyResolver>(), isTrue);
   });
 
@@ -56,15 +59,18 @@ void main() {
       providers: [...Engine.defaultProviders, RoutedSecurityProvider()],
     )..get('/secure', (ctx) => ctx.string('ok'));
 
-    final handler = RoutedRequestHandler(engine);
-    final client = TestClient.ephemeralServer(handler);
-    addTearDown(client.close);
     addTearDown(engine.close);
 
     await engine.initialize();
     expect(engine.middlewares, isNotEmpty);
 
-    final response = await client.get('/secure');
+    final response = await engine.handlePortable(
+      PortableRequest(
+        method: 'GET',
+        uri: Uri.parse('http://localhost/secure'),
+        remoteAddress: '127.0.0.1',
+      ),
+    );
 
     expect(response.statusCode, HttpStatus.forbidden);
   });

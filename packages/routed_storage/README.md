@@ -8,7 +8,7 @@ Wraps `server_storage` for `routed` `EngineContext.storageManager` / `storageDis
 
 ```yaml
 dependencies:
-  routed: ^0.3.3
+  routed: ^0.4.0
   routed_core: ^0.3.3
   routed_storage: ^0.1.0
   server_storage: ^0.1.0

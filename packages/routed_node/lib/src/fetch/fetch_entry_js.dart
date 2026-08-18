@@ -111,9 +111,10 @@ Future<web.Response> _handleNativeFetchAfterEngine(
       context: context,
       environment: environment,
     );
-  } catch (error) {
+  } catch (error, stackTrace) {
+    _logFetchFailure(error, stackTrace);
     return web.Response(
-      'Internal Server Error: $error'.toJS,
+      'Internal Server Error'.toJS,
       web.ResponseInit(status: 500, statusText: 'Internal Server Error'),
     );
   }
@@ -200,10 +201,17 @@ Future<web.Response> handleNativeFetch(
     );
     await streaming.headersReady;
     return webResponseFromStreamingAdapter(streaming);
-  } catch (error) {
+  } catch (error, stackTrace) {
+    _logFetchFailure(error, stackTrace);
     return web.Response(
-      'Internal Server Error: $error'.toJS,
+      'Internal Server Error'.toJS,
       web.ResponseInit(status: 500, statusText: 'Internal Server Error'),
     );
   }
+}
+
+void _logFetchFailure(Object error, StackTrace stackTrace) {
+  // Keep diagnostics in the host logs only. Fetch responses are public and
+  // exception text can contain paths, credentials, or deployment details.
+  print('[routed_node] Fetch handler failed: $error\n$stackTrace');
 }

@@ -17,7 +17,7 @@ Use this when you want auth routes and middleware in a Routed app.
 
 ```yaml
 dependencies:
-  routed: ^0.3.3
+  routed: ^0.4.0
   server_auth: ^0.1.0
   routed_auth: ^0.1.0
 ```

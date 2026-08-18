@@ -55,7 +55,8 @@ void main() {
 
       expect(exists('config/session.yaml'), isFalse);
       expect(exists('config/cache.yaml'), isFalse);
-      expect(exists('config/storage.yaml'), isFalse);
+      expect(exists('config/storage.yaml'), isTrue);
+      expect(exists('config/static.yaml'), isTrue);
       expect(
         read('config/uploads.yaml'),
         contains('# Uploads configuration quick reference:'),

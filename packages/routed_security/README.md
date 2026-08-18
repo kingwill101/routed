@@ -8,7 +8,7 @@ application concerns.
 ## Install
 ```yaml
 dependencies:
-  routed: ^0.3.3
+  routed: ^0.4.0
   routed_security: ^0.1.0
 ```
 

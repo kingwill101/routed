@@ -81,7 +81,7 @@ dart test ./...   # run package tests
 ```
 
 Publishing instructions live in `docs/publishing-checklist.md`. Each package has
-its own changelog and versioned tags (e.g. `routed_cli-0.1.0`).
+its own changelog and versioned tags (e.g. `routed_cli-0.2.2`).
 
 ## Funding
 

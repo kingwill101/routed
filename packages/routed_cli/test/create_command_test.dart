@@ -95,8 +95,8 @@ void main() {
         contains('# Logging configuration quick reference:'),
       );
 
-      expect(_exists(projectDir, 'config/storage.yaml'), isFalse);
-      expect(_exists(projectDir, 'config/static.yaml'), isFalse);
+      expect(_exists(projectDir, 'config/storage.yaml'), isTrue);
+      expect(_exists(projectDir, 'config/static.yaml'), isTrue);
 
       final uploadsConfig = _read(projectDir, 'config/uploads.yaml');
       expect(
