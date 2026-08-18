@@ -1,7 +1,6 @@
-import 'package:routed_core/routed_core.dart' hide SecureCookie;
+import 'package:routed_core/routed_core.dart';
 import 'package:routed_sessions/routed_sessions.dart';
 import 'package:routed_testing/routed_testing.dart';
-import 'package:server_sessions/server_sessions.dart';
 import 'package:server_testing/server_testing.dart';
 
 void main() {
@@ -28,30 +27,35 @@ void main() {
       EngineContextHelpers(ctx).string(text);
 
   group('sessionMiddleware lifecycle', () {
-    test('creates a session, exposes it under ctx, and persists a cookie',
-        () async {
-      await setUpEngine();
-      engine.get('/check', (EngineContext ctx) async {
-        if (!SessionEngineContext(ctx).hasSession) {
-          ctx.status(400);
-          writeString(ctx, 'no session');
-          return;
-        }
-        final session = sessionOf(ctx);
-        session.setValue(
-          'visits',
-          (session.getValue<int>('visits') ?? 0) + 1,
-        );
-        writeString(ctx, 'ok');
-      });
+    test(
+      'creates a session, exposes it under ctx, and persists a cookie',
+      () async {
+        await setUpEngine();
+        engine.get('/check', (EngineContext ctx) async {
+          if (!SessionEngineContext(ctx).hasSession) {
+            ctx.status(400);
+            writeString(ctx, 'no session');
+            return;
+          }
+          final session = sessionOf(ctx);
+          session.setValue(
+            'visits',
+            (session.getValue<int>('visits') ?? 0) + 1,
+          );
+          writeString(ctx, 'ok');
+        });
 
-      final response = await client.get('/check');
-      response.assertStatus(200).assertBodyContains('ok');
-      final setCookies = response.headers[HttpHeaders.setCookieHeader];
-      expect(setCookies, isNotEmpty,
-          reason: 'the store must write the session cookie');
-      expect(response.cookie('routed_session'), isNotNull);
-    });
+        final response = await client.get('/check');
+        response.assertStatus(200).assertBodyContains('ok');
+        final setCookies = response.headers[HttpHeaders.setCookieHeader];
+        expect(
+          setCookies,
+          isNotEmpty,
+          reason: 'the store must write the session cookie',
+        );
+        expect(response.cookie('routed_session'), isNotNull);
+      },
+    );
 
     test('session value persists across requests via the cookie', () async {
       await setUpEngine();
@@ -77,8 +81,7 @@ void main() {
       second.assertStatus(200).assertBodyContains('visits=2');
     });
 
-    test('destroyed session expires the cookie and does not persist',
-        () async {
+    test('destroyed session expires the cookie and does not persist', () async {
       await setUpEngine();
       engine.get('/logout', (EngineContext ctx) async {
         sessionOf(ctx).destroy();
@@ -88,8 +91,11 @@ void main() {
       final response = await client.get('/logout');
       response.assertStatus(200).assertBodyContains('logged out');
       final setCookies = response.headers[HttpHeaders.setCookieHeader];
-      expect(setCookies, isNotEmpty,
-          reason: 'destroy must write an expiring cookie');
+      expect(
+        setCookies,
+        isNotEmpty,
+        reason: 'destroy must write an expiring cookie',
+      );
       expect(setCookies!.first, contains('Max-Age=0'));
     });
   });

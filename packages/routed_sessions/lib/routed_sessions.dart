@@ -2,9 +2,22 @@ library;
 
 import 'dart:io';
 
+import 'src/config.dart';
+
+export 'src/config.dart';
+
 import 'package:routed_core/providers.dart' show ProviderRegistry;
-import 'package:routed_core/routed_core.dart' hide SecureCookie, CookieStore;
+import 'package:routed_core/routed_core.dart';
 import 'package:server_sessions/server_sessions.dart';
+
+export 'package:server_sessions/server_sessions.dart';
+/// Registers session configuration in the engine container.
+EngineOpt withSessionConfig(SessionConfig config) {
+  return (Engine engine) {
+    engine.appConfig.set('session.config', config);
+    engine.container.instance<SessionConfig>(config);
+  };
+}
 
 const sessionKey = ContextKey<Session>('routed.session');
 
@@ -14,6 +27,7 @@ extension SessionEngineContext on EngineContext {
     if (s == null) throw StateError('Session middleware not configured');
     return s;
   }
+
   bool get hasSession => get<Session>(sessionKey.name) != null;
 
   T? getSession<T>(String key) {
@@ -60,15 +74,22 @@ extension SessionEngineContext on EngineContext {
     }
   }
 
-  List<dynamic> getFlashMessages({bool withCategories = false, List<String>? categoryFilter}) {
+  List<dynamic> getFlashMessages({
+    bool withCategories = false,
+    List<String>? categoryFilter,
+  }) {
     try {
       final flashes = session.values['_flash'];
       if (flashes is! List || flashes.isEmpty) return [];
-      var source = flashes.map((e) => Map<String, String>.from(e as Map)).toList();
+      var source = flashes
+          .map((e) => Map<String, String>.from(e as Map))
+          .toList();
       session.values.remove('_flash');
       var filtered = source;
       if (categoryFilter != null && categoryFilter.isNotEmpty) {
-        filtered = filtered.where((m) => categoryFilter.contains(m['category'])).toList();
+        filtered = filtered
+            .where((m) => categoryFilter.contains(m['category']))
+            .toList();
       }
       if (withCategories) {
         return filtered.map((m) => [m['category'], m['message']]).toList();
@@ -104,7 +125,8 @@ class _EngineSessionRequest implements SessionRequest {
       final values = map[name];
       if (values != null && values.isNotEmpty) return values.first;
       for (final entry in map.entries) {
-        if (entry.key.toLowerCase() == name.toLowerCase() && entry.value.isNotEmpty) {
+        if (entry.key.toLowerCase() == name.toLowerCase() &&
+            entry.value.isNotEmpty) {
           return entry.value.first;
         }
       }
@@ -147,10 +169,7 @@ class _EngineSessionResponse implements SessionResponse {
       try {
         final sb = StringBuffer('$name=$value; Path=$path');
         if (maxAge != null) sb.write('; Max-Age=$maxAge');
-        ctx.response.headers.set(
-          HttpHeaders.setCookieHeader,
-          sb.toString(),
-        );
+        ctx.response.headers.set(HttpHeaders.setCookieHeader, sb.toString());
       } catch (_) {}
     }
   }
@@ -174,14 +193,18 @@ Middleware sessionMiddleware([dynamic store]) {
       }
     } catch (_) {}
 
-    // If effectiveStore is a stub (from routed's config) not a real SessionStore, discard
+    // Ignore incompatible stores supplied through untyped configuration.
     if (effectiveStore != null && effectiveStore is! SessionStore) {
       effectiveStore = null;
     }
 
     if (effectiveStore == null) {
       // No explicit store — fall back to cookie store derived from config or default
-      final SessionOptions opts = SessionOptions(path: '/', httpOnly: true, sameSite: SameSite.lax);
+      final SessionOptions opts = SessionOptions(
+        path: '/',
+        httpOnly: true,
+        sameSite: SameSite.lax,
+      );
       List<SecureCookie> codecs;
       try {
         if (config != null && (config.codecs as List).isNotEmpty) {
@@ -190,7 +213,11 @@ Middleware sessionMiddleware([dynamic store]) {
             final dynamic d = e as dynamic;
             final dynamic k = d.key;
             if (k != null) {
-              return SecureCookie(key: k, useEncryption: d.useEncryption == true, useSigning: d.useSigning == true);
+              return SecureCookie(
+                key: k,
+                useEncryption: d.useEncryption == true,
+                useSigning: d.useSigning == true,
+              );
             }
             return SecureCookie(useEncryption: true, useSigning: true);
           }).toList();
@@ -212,9 +239,15 @@ Middleware sessionMiddleware([dynamic store]) {
     final dynamic resolvedStore = effectiveStore!;
     Session session;
     try {
-      session = await (resolvedStore as dynamic).read(req, cookieName) as Session;
+      session =
+          await (resolvedStore as dynamic).read(req, cookieName) as Session;
     } catch (_) {
-      session = Session(name: cookieName, options: resolvedStore is CookieStore ? (resolvedStore as dynamic).defaultOptions as SessionOptions : SessionOptions());
+      session = Session(
+        name: cookieName,
+        options: resolvedStore is CookieStore
+            ? (resolvedStore as dynamic).defaultOptions as SessionOptions
+            : SessionOptions(),
+      );
     }
 
     ctx.set(sessionKey.name, session);
@@ -229,11 +262,12 @@ Middleware sessionMiddleware([dynamic store]) {
 class RoutedSessionsProvider extends ServiceProvider {
   /// Defaults to an in-memory session store with signed cookies.
   RoutedSessionsProvider([SessionStore? store])
-      : store = store ??
-            MemorySessionStore(
-              codecs: [SecureCookie(useEncryption: true, useSigning: true)],
-              defaultOptions: SessionOptions(path: '/', httpOnly: true),
-            );
+    : store =
+          store ??
+          MemorySessionStore(
+            codecs: [SecureCookie(useEncryption: true, useSigning: true)],
+            defaultOptions: SessionOptions(path: '/', httpOnly: true),
+          );
 
   final SessionStore store;
 

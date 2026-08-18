@@ -1,6 +1,5 @@
-import 'package:routed_core/routed_core.dart' hide SecureCookie;
+import 'package:routed_core/routed_core.dart';
 import 'package:routed_sessions/routed_sessions.dart';
-import 'package:server_sessions/server_sessions.dart';
 
 void main() async {
   final store = MemorySessionStore(

@@ -9,6 +9,7 @@ Wraps `server_sessions` for `routed` `EngineContext.session` (`ctx.session`, `ct
 ```yaml
 dependencies:
   routed: ^0.3.3
+  routed_core: ^0.3.3
   routed_sessions: ^0.1.0
   server_sessions: ^0.1.0
 ```
@@ -22,7 +23,12 @@ import 'package:server_sessions/server_sessions.dart';
 
 void main() async {
   final store = MemorySessionStore();
-  final engine = Engine();
+  final engine = await Engine.create(
+    providers: [
+      ...Engine.defaultProviders,
+      RoutedSessionsProvider(store),
+    ],
+  );
   engine.use(sessionMiddleware(store));
 
   engine.get('/', (ctx) {
