@@ -25,17 +25,13 @@ dependencies:
 ## Usage
 
 ```dart
-import 'package:routed_core/routed_core.dart';
-import 'package:routed_auth/routed_auth.dart';
+import 'package:routed/routed.dart';
 import 'package:server_auth/server_auth.dart';
 
 void main() async {
-  final engine = Engine.createSync();
-
-  // Needed when loading providers from config manifests that reference routed.auth.
-  ensureRoutedAuthProviderRegistered();
-
-  engine.registerProvider(AuthServiceProvider());
+  registerRoutedProviders();
+  // Engine.create initializes routed.auth and the other official providers.
+  final engine = await Engine.create();
 
   // Example runtime options.
   engine.instance<AuthOptions<EngineContext>>(
@@ -44,5 +40,18 @@ void main() async {
       providers: const <AuthProvider>[],
     ),
   );
+
+  engine.get(
+    '/account',
+    (ctx) => ctx.json({'authenticated': true}),
+    middlewares: [requireAuthenticated()],
+  );
+
+  await engine.serve(port: 8080);
 }
 ```
+
+For a slim composition, import `routed_auth` directly and add
+`AuthServiceProvider()` after `Engine.defaultProviders`. Call
+`registerRoutedAuthProviders()` first if your configuration manifest names
+`routed.auth` and you are not importing the `routed` facade.

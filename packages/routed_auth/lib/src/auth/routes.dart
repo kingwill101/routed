@@ -29,8 +29,6 @@ import 'package:routed_core/src/context/context.dart';
 import 'package:routed_core/src/response.dart';
 import 'package:routed_core/src/router/router.dart';
 import 'package:routed_http/routed_http.dart';
-import 'package:routed_sessions/routed_sessions.dart';
-import 'package:routed_views/routed_views.dart' hide RoutedViewRender;
 
 /// Auth HTTP routes for routed.
 ///
@@ -95,7 +93,7 @@ class AuthRoutes {
   Future<Response> _session(EngineContext ctx) async {
     final session = await manager.resolveSession(ctx);
     if (session == null) {
-      return ctx.json(<String, dynamic>{});
+      return ctx.json(null);
     }
     final payload = await manager.buildSessionPayload(ctx, session);
     return ctx.json(payload);

@@ -19,7 +19,6 @@ import 'dart:io';
 
 import 'package:routed_core/routed_core.dart';
 import 'package:routed_auth/routed_auth.dart';
-import 'package:server_auth/server_auth.dart';
 
 Future<void> main() async {
   // 1. Build the Google OAuth provider.

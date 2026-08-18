@@ -1,4 +1,3 @@
-import 'package:routed_core/routed_core.dart' hide ConfigSchema, parseBoolLike, parseStringList, parseStringLike, ProviderConfigException;
 import 'package:server_auth/server_auth.dart';
 
 /// Microsoft Entra ID (Azure AD) user profile.

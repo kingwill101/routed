@@ -26,11 +26,14 @@ dependencies:
   pointycastle: ^4.0.0
   routed_http: ^0.1.0
 
+  crypto: any
 dev_dependencies:
   jose: ^0.3.5
   lints: ^6.0.0
-  # removed: property_testing: ^0.3.2 (workspace package no longer vendored)
-  # removed: routed_testing: ^0.3.2 (workspace package no longer vendored)
-  # removed: server_testing: ^0.3.2 (workspace package no longer vendored)
+  property_testing: ^0.3.2
+  routed_testing: ^0.3.3
+  server_testing: ">=0.4.0 <1.0.0"
   test: ^1.29.0
   # removed: server_data: any (split into server_sessions/cache etc.)
+  routed: any
+  file: any

@@ -2,7 +2,6 @@ import 'dart:convert';
 import 'package:server_auth/server_auth.dart';
 
 import 'package:crypto/crypto.dart';
-import 'package:routed_core/routed_core.dart' hide ConfigSchema, parseBoolLike, parseStringList, parseStringLike, ProviderConfigException;
 
 /// Telegram user profile returned by the Login Widget.
 ///
