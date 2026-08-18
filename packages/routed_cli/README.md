@@ -13,3 +13,7 @@ Routed's CLI surface, including:
 
 It is intended for internal ecosystem composition and advanced custom command
 integrations.
+
+`routed_cli` is a command-line package, not an `Engine` provider. Install it as
+a development dependency and run commands with `dart run routed_cli ...`; keep
+runtime provider initialization in `routed` or the relevant adapter package.

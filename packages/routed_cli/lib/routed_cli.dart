@@ -13,6 +13,14 @@ export 'src/console/dev/dev_server_runner.dart'
     show DevServerRunner, DevServerRunnerException, ExitCode;
 export 'src/console/project/commands_loader.dart'
     show ProjectCommandInfo, ProjectCommandOption, ProjectCommandsLoader;
+export 'src/console/args/provider_commands.dart'
+    show
+        ProviderCommandRegistry,
+        ProviderCommandRegistration,
+        ProviderArtisanalCommandRegistry,
+        ProviderArtisanalCommandRegistration,
+        registerProviderCommands,
+        registerProviderArtisanalCommands;
 
 /// Routed CLI core utilities.
 ///

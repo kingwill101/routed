@@ -15,10 +15,6 @@ void main() {
     late _RecordingLogger logger;
     late List<fs.Directory> pubGetInvocations;
     late int pubGetExitCode;
-    late List<_InertiaInvocation> inertiaInvocations;
-    late int inertiaExitCode;
-    late bool isInteractive;
-    late bool promptAnswer;
 
     setUp(() {
       memoryFs = MemoryFileSystem();
@@ -28,10 +24,6 @@ void main() {
       logger = _RecordingLogger();
       pubGetInvocations = <fs.Directory>[];
       pubGetExitCode = 0;
-      inertiaInvocations = <_InertiaInvocation>[];
-      inertiaExitCode = 0;
-      isInteractive = false;
-      promptAnswer = false;
       runner = RoutedCommandRunner(logger: logger)
         ..register([
           CreateCommand(
@@ -41,14 +33,6 @@ void main() {
               pubGetInvocations.add(projectDir);
               return pubGetExitCode;
             },
-            inertiaCreate: (projectDir, options) async {
-              inertiaInvocations.add(
-                _InertiaInvocation(projectDir: projectDir, options: options),
-              );
-              return inertiaExitCode;
-            },
-            isInteractive: () => isInteractive,
-            inertiaPrompt: () async => promptAnswer,
           ),
         ]);
     });
@@ -78,23 +62,8 @@ void main() {
       expect(_exists(projectDir, 'config/http.yaml'), isTrue);
       expect(_read(projectDir, 'config/http.yaml'), contains('providers:'));
 
-      final cacheContent = _read(projectDir, 'config/cache.yaml');
-      expect(cacheContent, contains('default: file'));
-      expect(cacheContent, contains('# Cache configuration quick reference:'));
-      expect(cacheContent, contains('Name of the cache store'));
-
-      final sessionContent = _read(projectDir, 'config/session.yaml');
-      expect(
-        sessionContent,
-        contains(
-          "cookie: \"{{ env.SESSION_COOKIE | default: 'routed-session' }}\"",
-        ),
-      );
-      expect(
-        sessionContent,
-        contains('# Session configuration quick reference:'),
-      );
-      expect(sessionContent, contains('same_site'));
+      expect(_exists(projectDir, 'config/cache.yaml'), isFalse);
+      expect(_exists(projectDir, 'config/session.yaml'), isFalse);
 
       expect(_exists(projectDir, 'analysis_options.yaml'), isTrue);
       expect(_exists(projectDir, 'README.md'), isTrue);
@@ -104,7 +73,7 @@ void main() {
         serverContent,
         contains("import 'package:demo_app/app.dart' as app;"),
       );
-      expect(serverContent, contains("import 'package:routed_core/routed_core.dart';"));
+      expect(serverContent, contains("import 'package:routed/routed.dart';"));
       expect(
         serverContent,
         contains('final Engine engine = await app.createEngine();'),
@@ -126,19 +95,8 @@ void main() {
         contains('# Logging configuration quick reference:'),
       );
 
-      final storageContent = _read(projectDir, 'config/storage.yaml');
-      expect(
-        storageContent,
-        contains('# Storage configuration quick reference:'),
-      );
-      expect(
-        storageContent,
-        contains("root: \"{{ env.STORAGE_ROOT | default: 'storage/app' }}\""),
-      );
-      expect(storageContent, contains('default:'));
-
-      final staticConfig = _read(projectDir, 'config/static.yaml');
-      expect(staticConfig, contains('# Static configuration quick reference:'));
+      expect(_exists(projectDir, 'config/storage.yaml'), isFalse);
+      expect(_exists(projectDir, 'config/static.yaml'), isFalse);
 
       final uploadsConfig = _read(projectDir, 'config/uploads.yaml');
       expect(
@@ -321,85 +279,6 @@ void main() {
       ], 'Unsupported template');
     });
 
-    test('scaffolds inertia client when flag is set', () async {
-      await _run(runner, ['create', '--name', 'demo_app', '--inertia']);
-
-      final projectDir = memoryFs.directory(
-        memoryFs.path.join(workspace.path, 'demo_app'),
-      );
-      final pubspec = loadYaml(_read(projectDir, 'pubspec.yaml')) as YamlMap;
-      final deps = pubspec['dependencies'] as YamlMap;
-      final devDeps = pubspec['dev_dependencies'] as YamlMap? ?? YamlMap();
-      expect(deps.containsKey('routed_inertia'), isTrue);
-      expect(devDeps.containsKey('inertia_dart'), isTrue);
-      expect(_exists(projectDir, 'config/inertia.yaml'), isTrue);
-      expect(_exists(projectDir, 'views/inertia.liquid'), isTrue);
-      expect(_exists(projectDir, 'lib/inertia_views.dart'), isTrue);
-      expect(
-        _read(projectDir, 'config/inertia.yaml'),
-        contains('root_view: "inertia.liquid"'),
-      );
-      expect(_read(projectDir, 'config/http.yaml'), contains('routed.inertia'));
-      expect(
-        _read(projectDir, 'config/static.yaml'),
-        contains('route: /assets'),
-      );
-      final appSource = _read(projectDir, 'lib/app.dart');
-      expect(appSource, contains('ctx.inertia'));
-      expect(appSource, contains('configureInertiaViews'));
-      expect(inertiaInvocations, hasLength(1));
-      final invocation = inertiaInvocations.first;
-      expect(
-        memoryFs.path.normalize(invocation.projectDir.path),
-        equals(memoryFs.path.normalize(projectDir.path)),
-      );
-      expect(invocation.options.framework, equals('react'));
-      expect(invocation.options.packageManager, equals('npm'));
-      expect(invocation.options.output, equals('client'));
-      expect(invocation.options.projectName, equals('client'));
-      expect(invocation.options.force, isFalse);
-    });
-
-    test('passes --force to inertia when create is forced', () async {
-      await _run(runner, [
-        'create',
-        '--name',
-        'demo_app',
-        '--inertia',
-        '--force',
-      ]);
-
-      expect(inertiaInvocations, hasLength(1));
-      expect(inertiaInvocations.first.options.force, isTrue);
-    });
-
-    test('skips inertia when explicitly disabled', () async {
-      isInteractive = true;
-      promptAnswer = true;
-
-      await _run(runner, ['create', '--name', 'demo_app', '--no-inertia']);
-      expect(inertiaInvocations, isEmpty);
-    });
-
-    test('prompts for inertia when interactive', () async {
-      isInteractive = true;
-      promptAnswer = true;
-
-      await _run(runner, ['create', '--name', 'demo_app']);
-      expect(inertiaInvocations, hasLength(1));
-    });
-
-    test('fails when inertia scaffolding returns non-zero', () async {
-      inertiaExitCode = 64;
-
-      await _expectUsageError(runner, [
-        'create',
-        '--name',
-        'demo_app',
-        '--inertia',
-      ], 'Inertia scaffolding failed');
-    });
-
     group('workspace detection', () {
       late fs.Directory workspaceRoot;
 
@@ -432,9 +311,6 @@ void main() {
                 pubGetInvocations.add(d);
                 return 0;
               },
-              inertiaCreate: (d, o) async => 0,
-              isInteractive: () => false,
-              inertiaPrompt: () async => false,
             ),
           ]);
 
@@ -458,9 +334,6 @@ void main() {
                 pubGetInvocations.add(d);
                 return 0;
               },
-              inertiaCreate: (d, o) async => 0,
-              isInteractive: () => false,
-              inertiaPrompt: () async => false,
             ),
           ]);
 
@@ -486,9 +359,6 @@ void main() {
               logger: logger,
               fileSystem: memoryFs,
               pubGet: (d) async => 0,
-              inertiaCreate: (d, o) async => 0,
-              isInteractive: () => false,
-              inertiaPrompt: () async => false,
             ),
           ]);
 
@@ -506,9 +376,6 @@ void main() {
                 logger: logger,
                 fileSystem: memoryFs,
                 pubGet: (d) async => 0,
-                inertiaCreate: (d, o) async => 0,
-                isInteractive: () => false,
-                inertiaPrompt: () async => false,
               ),
             ]);
 
@@ -536,9 +403,6 @@ void main() {
                 logger: logger,
                 fileSystem: memoryFs,
                 pubGet: (d) async => 0,
-                inertiaCreate: (d, o) async => 0,
-                isInteractive: () => false,
-                inertiaPrompt: () async => false,
               ),
             ]);
 
@@ -563,13 +427,6 @@ class _TemplateExpectation {
 
   final List<String> expectedFiles;
   final Map<String, String> contentChecks;
-}
-
-class _InertiaInvocation {
-  const _InertiaInvocation({required this.projectDir, required this.options});
-
-  final fs.Directory projectDir;
-  final InertiaScaffoldOptions options;
 }
 
 Future<void> _run(RoutedCommandRunner runner, List<String> args) async {

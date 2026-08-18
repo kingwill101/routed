@@ -12,14 +12,9 @@ import 'package:test/test.dart';
 
 void main() {
   group('ProjectCommandsLoader', () {
-    late String cliRoot;
     late CliLogger logger;
     late io.Directory projectDir;
     late io.Directory previousCwd;
-
-    setUpAll(() {
-      cliRoot = _resolveCliRoot();
-    });
 
     setUp(() async {
       logger = CliLogger(verbose: true);
@@ -37,11 +32,7 @@ void main() {
     });
 
     test('discovers and runs project commands', () async {
-      await _writeProject(
-        projectDir: projectDir,
-        cliRoot: cliRoot,
-        commandName: 'hello',
-      );
+      await _writeProject(projectDir: projectDir, commandName: 'hello');
 
       io.Directory.current = projectDir;
 
@@ -61,11 +52,7 @@ void main() {
     });
 
     test('throws when a project command conflicts with built-ins', () async {
-      await _writeProject(
-        projectDir: projectDir,
-        cliRoot: cliRoot,
-        commandName: 'dev',
-      );
+      await _writeProject(projectDir: projectDir, commandName: 'dev');
 
       io.Directory.current = projectDir;
 
@@ -84,7 +71,6 @@ void main() {
     test('supports async buildProjectCommands factories', () async {
       await _writeProject(
         projectDir: projectDir,
-        cliRoot: cliRoot,
         commandName: 'asyncHello',
         commandsSource: '''
 import 'dart:async';
@@ -129,7 +115,6 @@ Future<List<Command<void>>> buildProjectCommands() async {
     test('fails when entrypoint returns invalid values', () async {
       await _writeProject(
         projectDir: projectDir,
-        cliRoot: cliRoot,
         commandName: 'broken',
         commandsSource: '''
 import 'dart:async';
@@ -183,20 +168,15 @@ Future<void> _deleteDirectory(io.Directory directory) async {
 
 Future<void> _writeProject({
   required io.Directory projectDir,
-  required String cliRoot,
   required String commandName,
   String? commandsSource,
 }) async {
-  final pubspec =
-      '''
+  final pubspec = '''
 name: project_app
 environment:
   sdk: ">=3.9.2 <4.0.0"
 dependencies:
   args: any
-dev_dependencies:
-  routed:
-    path: ${_escapePath(cliRoot)}
 ''';
 
   final pubspecFile = io.File(p.join(projectDir.path, 'pubspec.yaml'));
@@ -256,46 +236,5 @@ FutureOr<List<Command<void>>> buildProjectCommands() => [$className()];
     throw StateError(
       'pub get failed (exit code $exitCode):\n$stdoutText\n$stderrText',
     );
-  }
-}
-
-String _escapePath(String path) {
-  if (io.Platform.isWindows) {
-    return path.replaceAll(r'\', r'\\');
-  }
-  return path;
-}
-
-String _resolveCliRoot() {
-  final current = io.Directory.current;
-  final direct = _findCliRoot(current);
-  if (direct != null) {
-    return direct;
-  }
-  final nested = io.Directory(p.join(current.path, 'packages', 'routed'));
-  if (nested.existsSync()) {
-    return nested.path;
-  }
-  return current.path;
-}
-
-String? _findCliRoot(io.Directory start) {
-  var dir = start;
-  while (true) {
-    final pubspec = io.File(p.join(dir.path, 'pubspec.yaml'));
-    if (pubspec.existsSync()) {
-      final contents = pubspec.readAsStringSync();
-      if (RegExp(
-        r'^\s*name:\s*routed\s*$',
-        multiLine: true,
-      ).hasMatch(contents)) {
-        return dir.path;
-      }
-    }
-    final parent = dir.parent;
-    if (parent.path == dir.path) {
-      return null;
-    }
-    dir = parent;
   }
 }

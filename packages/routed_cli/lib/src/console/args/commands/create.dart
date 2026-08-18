@@ -5,7 +5,6 @@ import 'dart:io' as io;
 import 'dart:isolate';
 import 'dart:math';
 
-import 'package:args/args.dart';
 import 'package:args/command_runner.dart';
 import 'package:file/file.dart' as fs;
 import 'package:path/path.dart' as p;
@@ -18,28 +17,6 @@ import 'package:routed_cli/src/console/util/dart_exec.dart';
 import 'package:yaml/yaml.dart';
 
 typedef PubGetInvoker = Future<int> Function(fs.Directory projectDir);
-typedef InertiaCreateInvoker =
-    Future<int> Function(
-      fs.Directory projectDir,
-      InertiaScaffoldOptions options,
-    );
-typedef InertiaPrompt = Future<bool> Function();
-
-class InertiaScaffoldOptions {
-  const InertiaScaffoldOptions({
-    required this.framework,
-    required this.packageManager,
-    required this.output,
-    required this.projectName,
-    required this.force,
-  });
-
-  final String framework;
-  final String packageManager;
-  final String output;
-  final String projectName;
-  final bool force;
-}
 
 /// Creates a new Routed app with healthy defaults.
 ///
@@ -58,22 +35,9 @@ class InertiaScaffoldOptions {
 /// - --output/-o: Destination directory (defaults to current directory)
 /// - --template/-t: Template to use (`basic`, `api`, `web`, `fullstack`)
 /// - --force/-f: Overwrite existing files when the target directory exists
-/// - --inertia/--no-inertia: Scaffold an Inertia client app
-/// - --inertia-framework: Inertia framework adapter (`react`, `vue`, `svelte`)
-/// - --inertia-package-manager: Package manager for the client (`npm`, `pnpm`, `yarn`, `bun`)
-/// - --inertia-output: Output directory for the client app (default: `client`)
 class CreateCommand extends BaseCommand {
-  CreateCommand({
-    super.logger,
-    super.fileSystem,
-    PubGetInvoker? pubGet,
-    InertiaCreateInvoker? inertiaCreate,
-    bool Function()? isInteractive,
-    InertiaPrompt? inertiaPrompt,
-  }) : _pubGet = pubGet ?? _defaultPubGet,
-       _inertiaCreate = inertiaCreate ?? _defaultInertiaCreate,
-       _isInteractive = isInteractive ?? _defaultIsInteractive,
-       _inertiaPrompt = inertiaPrompt ?? _defaultInertiaPrompt {
+  CreateCommand({super.logger, super.fileSystem, PubGetInvoker? pubGet})
+    : _pubGet = pubGet ?? _defaultPubGet {
     argParser
       ..addOption(
         'name',
@@ -101,37 +65,10 @@ class CreateCommand extends BaseCommand {
         help: 'Overwrite generated files when the target directory exists.',
         negatable: true,
         defaultsTo: false,
-      )
-      ..addFlag(
-        'inertia',
-        help: 'Scaffold an Inertia client app (prompts when interactive).',
-        negatable: true,
-        defaultsTo: false,
-      )
-      ..addOption(
-        'inertia-framework',
-        help: 'Inertia framework adapter (react, vue, svelte).',
-        allowed: const ['react', 'vue', 'svelte'],
-        defaultsTo: 'react',
-      )
-      ..addOption(
-        'inertia-package-manager',
-        help: 'Package manager for the client (npm, pnpm, yarn, bun).',
-        allowed: const ['npm', 'pnpm', 'yarn', 'bun'],
-        defaultsTo: 'npm',
-      )
-      ..addOption(
-        'inertia-output',
-        help: 'Output directory for the client app (relative to project root).',
-        valueHelp: 'client',
-        defaultsTo: 'client',
       );
   }
 
   final PubGetInvoker _pubGet;
-  final InertiaCreateInvoker _inertiaCreate;
-  final bool Function() _isInteractive;
-  final InertiaPrompt _inertiaPrompt;
 
   @override
   String get name => 'create';
@@ -182,24 +119,10 @@ class CreateCommand extends BaseCommand {
       final workspaceRoot = await _findWorkspaceRoot(targetDir);
       final inWorkspace = workspaceRoot != null;
 
-      final shouldScaffoldInertia = await _resolveInertiaChoice(results);
-      final inertiaOptions = shouldScaffoldInertia
-          ? _buildInertiaOptions(results)
-          : null;
-
       final routedVersion = await _resolvePackageVersion(
         'routed',
         'routed.dart',
       );
-      final routedInertiaVersion = shouldScaffoldInertia
-          ? await _resolvePackageVersion(
-              'routed_inertia',
-              'routed_inertia.dart',
-            )
-          : null;
-      final inertiaCliVersion = shouldScaffoldInertia
-          ? await _resolvePackageVersion('inertia_dart', 'inertia_dart.dart')
-          : null;
       final appKey = _generateAppKey();
       Map<String, List<ConfigDocEntry>> docsByRoot;
       try {
@@ -228,25 +151,12 @@ class CreateCommand extends BaseCommand {
         humanName: humanName,
       );
 
-      final extraDependencies = <String, String>{};
-      final extraDevDependencies = <String, String>{};
-      if (shouldScaffoldInertia) {
-        extraDependencies['routed_inertia'] = _versionConstraint(
-          routedInertiaVersion,
-        );
-        extraDevDependencies['inertia_dart'] = _versionConstraint(
-          inertiaCliVersion,
-        );
-      }
-
       await write(
         'pubspec.yaml',
         _renderPubspec(
           packageName,
           routedVersion,
           scaffoldTemplate,
-          extraDependencies: extraDependencies,
-          extraDevDependencies: extraDevDependencies,
           inWorkspace: inWorkspace,
         ),
       );
@@ -293,10 +203,6 @@ class CreateCommand extends BaseCommand {
       await write('.env', envContent);
       await write('.env.example', envContent);
 
-      if (shouldScaffoldInertia) {
-        await _applyInertiaBootstrap(targetDir, scaffoldTemplate.id, humanName);
-      }
-
       if (inWorkspace) {
         await _addToWorkspace(workspaceRoot, targetDir);
         logger.info('Added "$packageName" to workspace.');
@@ -314,16 +220,6 @@ class CreateCommand extends BaseCommand {
         logger.warn(
           'dart pub get exited with code $pubExitCode. Run it manually if problems persist.',
         );
-      }
-
-      if (shouldScaffoldInertia && inertiaOptions != null) {
-        final inertiaExitCode = await _inertiaCreate(targetDir, inertiaOptions);
-        if (inertiaExitCode != 0) {
-          throw UsageException(
-            'Inertia scaffolding failed (exit code $inertiaExitCode).',
-            usage,
-          );
-        }
       }
 
       if (createdFiles.isNotEmpty || createdDirs.isNotEmpty) {
@@ -345,7 +241,7 @@ class CreateCommand extends BaseCommand {
       if (!pubGetSucceeded) {
         logger.info('  dart pub get');
       }
-      logger.info('  dart run routed dev');
+      logger.info('  dart run routed_cli dev');
     });
   }
 
@@ -496,293 +392,6 @@ class CreateCommand extends BaseCommand {
     return buffer.toString();
   }
 
-  Future<void> _applyInertiaBootstrap(
-    fs.Directory targetDir,
-    String templateId,
-    String humanName,
-  ) async {
-    await _writeInertiaConfig(targetDir);
-    await _writeInertiaView(targetDir);
-    await _writeInertiaViewHelper(targetDir);
-    await _patchHttpConfig(targetDir);
-    await _patchStaticConfig(targetDir);
-    await _patchAppFile(targetDir, templateId, humanName);
-  }
-
-  Future<void> _writeInertiaConfig(fs.Directory targetDir) async {
-    final file = fileSystem.file(
-      joinPath([targetDir.path, 'config/inertia.yaml']),
-    );
-    if (await file.exists()) return;
-    final buffer = StringBuffer()
-      ..writeln('version: "dev"')
-      ..writeln('root_view: "inertia.liquid"')
-      ..writeln('history:')
-      ..writeln('  encrypt: false')
-      ..writeln('ssr:')
-      ..writeln('  enabled: false')
-      ..writeln('  url: "http://127.0.0.1:13714"')
-      ..writeln('  ensure_bundle_exists: true')
-      ..writeln('  runtime: "node"')
-      ..writeln('assets:')
-      ..writeln('  manifest_path: "client/dist/.vite/manifest.json"')
-      ..writeln('  entry: "index.html"')
-      ..writeln('  base_url: "/"')
-      ..writeln('  hot_file: "client/public/hot"');
-    await writeTextFile(file, buffer.toString());
-  }
-
-  Future<void> _writeInertiaView(fs.Directory targetDir) async {
-    final file = fileSystem.file(
-      joinPath([targetDir.path, 'views/inertia.liquid']),
-    );
-    if (await file.exists()) return;
-    const content = '''<!doctype html>
-<html lang="en">
-  <head>
-    <meta charset="utf-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>{{ props.title | default: "Routed App" }}</title>
-    {{ ssrHead }}
-    {{ inertia_styles }}
-  </head>
-  <body>
-    {% if ssrBody != blank %}
-      <div id="app" data-page="{{ pageJsonEscaped }}">{{ ssrBody }}</div>
-    {% else %}
-      <div id="app" data-page="{{ pageJsonEscaped }}"></div>
-    {% endif %}
-    {{ inertia_scripts }}
-  </body>
-</html>
-''';
-    await writeTextFile(file, content);
-  }
-
-  Future<void> _writeInertiaViewHelper(fs.Directory targetDir) async {
-    final file = fileSystem.file(
-      joinPath([targetDir.path, 'lib/inertia_views.dart']),
-    );
-    if (await file.exists()) return;
-    const content = '''import 'package:routed_core/routed_core.dart';
-
-void configureInertiaViews(Engine engine) {
-  engine.useViewEngine(LiquidViewEngine(directory: 'views'));
-}
-''';
-    await writeTextFile(file, content);
-  }
-
-  Future<void> _patchHttpConfig(fs.Directory targetDir) async {
-    final file = fileSystem.file(
-      joinPath([targetDir.path, 'config/http.yaml']),
-    );
-    if (!await file.exists()) return;
-    var content = await file.readAsString();
-
-    if (!content.contains('routed.inertia')) {
-      content = _insertHttpProvider(content);
-    }
-
-    if (!content.contains('routed.inertia.middleware')) {
-      content = _insertInertiaMiddlewareSource(content);
-    }
-
-    await file.writeAsString(content);
-  }
-
-  String _insertHttpProvider(String content) {
-    const marker = '  - routed.views';
-    const insertion = '  - routed.inertia';
-    if (content.contains(insertion)) return content;
-    if (content.contains(marker)) {
-      return content.replaceFirst(marker, '$marker\n$insertion');
-    }
-
-    final providersIndex = content.indexOf('providers:');
-    if (providersIndex == -1) return content;
-    final insertAt = providersIndex + 'providers:'.length;
-    return content.replaceRange(insertAt, insertAt, '\n$insertion');
-  }
-
-  String _insertInertiaMiddlewareSource(String content) {
-    const block =
-        '  routed.inertia:\n'
-        '    global:\n'
-        '      - routed.inertia.middleware\n';
-    if (content.contains('routed.inertia:')) return content;
-
-    final providersIndex = content.indexOf('\nproviders:');
-    final middlewareIndex = content.indexOf('middleware_sources:');
-    if (middlewareIndex == -1 || providersIndex == -1) {
-      return content;
-    }
-
-    return content.replaceRange(
-      providersIndex + 1,
-      providersIndex + 1,
-      '$block\n',
-    );
-  }
-
-  Future<void> _patchStaticConfig(fs.Directory targetDir) async {
-    final file = fileSystem.file(
-      joinPath([targetDir.path, 'config/static.yaml']),
-    );
-    if (!await file.exists()) return;
-    var content = await file.readAsString();
-    content = content.replaceAll('enabled: false', 'enabled: true');
-    if (!content.contains('route: /assets')) {
-      final mountBlock =
-          'mounts:\n'
-          '  - route: /assets\n'
-          '    path: client/dist/assets';
-      content = content.replaceFirst(
-        RegExp(r'^mounts:\s*$', multiLine: true),
-        mountBlock,
-      );
-    }
-    await file.writeAsString(content);
-  }
-
-  Future<void> _patchAppFile(
-    fs.Directory targetDir,
-    String templateId,
-    String humanName,
-  ) async {
-    final file = fileSystem.file(joinPath([targetDir.path, 'lib/app.dart']));
-    if (!await file.exists()) return;
-    var content = await file.readAsString();
-
-    content = _ensureImport(
-      content,
-      "import 'package:routed_core/providers.dart';",
-    );
-    content = _ensureImport(content, "import 'inertia_views.dart';");
-    content = _ensureImport(
-      content,
-      "import 'package:routed_inertia/routed_inertia.dart';",
-    );
-
-    if (!content.contains('registerRoutedInertiaProvider')) {
-      const signature =
-          'Future<Engine> createEngine({bool initialize = true}) async {';
-      if (content.contains(signature)) {
-        content = content.replaceFirst(
-          signature,
-          '$signature\n  registerRoutedInertiaProvider(ProviderRegistry.instance);\n',
-        );
-      }
-    }
-
-    if (!content.contains('ctx.inertia(')) {
-      final route = templateId == 'basic' ? '/' : '/inertia';
-      final inertiaBlock = _inertiaRouteBlock(route, humanName);
-      content = _insertInertiaRoute(content, inertiaBlock);
-    }
-
-    if (templateId == 'basic') {
-      content = _removeDefaultJsonRoute(content);
-    }
-
-    await file.writeAsString(content);
-  }
-
-  String _ensureImport(String content, String importLine) {
-    if (content.contains(importLine)) return content;
-    final matches = RegExp(
-      r'^import\s+[^;]+;\s*$',
-      multiLine: true,
-    ).allMatches(content).toList();
-    if (matches.isEmpty) {
-      return '$importLine\n\n$content';
-    }
-    final last = matches.last;
-    return content.replaceRange(last.end, last.end, '\n$importLine');
-  }
-
-  String _removeDefaultJsonRoute(String content) {
-    final pattern = RegExp(
-      r"engine\.get\('\/'\,\s*\(ctx\)\s*async\s*\{\s*return ctx\.json\(\{'message':\s*'Welcome to .*?'\}\);\s*\}\);",
-    );
-    return content.replaceFirst(pattern, '');
-  }
-
-  String _insertInertiaRoute(String content, String block) {
-    const initBlock =
-        '  if (initialize) {\n'
-        '    await engine.initialize();\n'
-        '  }\n';
-    if (content.contains(initBlock)) {
-      return content.replaceFirst(initBlock, '$initBlock\n$block');
-    }
-
-    const returnBlock = '  return engine;';
-    if (content.contains(returnBlock)) {
-      return content.replaceFirst(returnBlock, '$block\n  return engine;');
-    }
-
-    return content;
-  }
-
-  String _inertiaRouteBlock(String route, String humanName) {
-    final title = humanName.replaceAll("'", "\\'");
-    return '  configureInertiaViews(engine);\n\n'
-        '  engine.get(\'$route\', (ctx) async {\n'
-        '    return ctx.inertia(\n'
-        '      \'Home\',\n'
-        '      props: {\n'
-        '        \'title\': \'$title\',\n'
-        '        \'subtitle\': \'Routed + Inertia starter\',\n'
-        '      },\n'
-        '    );\n'
-        '  });\n';
-  }
-
-  Future<bool> _resolveInertiaChoice(ArgResults? results) async {
-    if (results == null) return false;
-    final parsed = results.wasParsed('inertia');
-    if (parsed) {
-      return (results['inertia'] as bool?) ?? false;
-    }
-    if (!_isInteractive()) return false;
-    return _inertiaPrompt();
-  }
-
-  InertiaScaffoldOptions _buildInertiaOptions(ArgResults? results) {
-    final framework = (results?['inertia-framework'] as String? ?? 'react')
-        .trim();
-    final manager = (results?['inertia-package-manager'] as String? ?? 'npm')
-        .trim();
-    final rawOutput = results?['inertia-output'] as String?;
-    final output = _normalizeInertiaOutput(rawOutput);
-    final projectName = _deriveInertiaProjectName(output);
-    final force = (results?['force'] as bool?) ?? false;
-    return InertiaScaffoldOptions(
-      framework: framework,
-      packageManager: manager,
-      output: output,
-      projectName: projectName,
-      force: force,
-    );
-  }
-
-  String _normalizeInertiaOutput(String? rawOutput) {
-    final trimmed = rawOutput?.trim() ?? '';
-    if (trimmed.isEmpty) return 'client';
-    final normalized = fileSystem.path.normalize(trimmed);
-    if (normalized == '.' || normalized.isEmpty) return 'client';
-    return normalized;
-  }
-
-  String _deriveInertiaProjectName(String output) {
-    final base = fileSystem.path.basename(output);
-    if (base.isEmpty || base == '.' || base == fileSystem.path.separator) {
-      return 'client';
-    }
-    return base;
-  }
-
   /// Walk up from [start] looking for a parent `pubspec.yaml` that contains
   /// a `workspace:` key (i.e. a Dart workspace root). Returns the directory
   /// containing that pubspec, or `null` if none is found.
@@ -868,78 +477,4 @@ Future<int> _defaultPubGet(fs.Directory projectDir) {
     environment: io.Platform.environment,
     mode: io.ProcessStartMode.inheritStdio,
   );
-}
-
-Future<int> _defaultInertiaCreate(
-  fs.Directory projectDir,
-  InertiaScaffoldOptions options,
-) {
-  final workingDirectory = _resolveInertiaWorkingDirectory(projectDir);
-  final output = _resolveInertiaOutput(
-    workingDirectory: workingDirectory,
-    projectDir: projectDir.path,
-    output: options.output,
-  );
-  return runDartProcess(
-    [
-      'run',
-      'inertia_dart:inertia',
-      'create',
-      options.projectName,
-      if (options.force) '--force',
-      '--output',
-      output,
-      '--framework',
-      options.framework,
-      '--package-manager',
-      options.packageManager,
-    ],
-    workingDirectory: workingDirectory,
-    environment: io.Platform.environment,
-    mode: io.ProcessStartMode.inheritStdio,
-  );
-}
-
-String _resolveInertiaWorkingDirectory(fs.Directory projectDir) {
-  final cwd = io.Directory.current;
-  final localInertiaPubspec = io.File(
-    p.join(cwd.path, 'packages', 'inertia', 'pubspec.yaml'),
-  );
-  if (localInertiaPubspec.existsSync()) {
-    return cwd.path;
-  }
-  return projectDir.path;
-}
-
-String _resolveInertiaOutput({
-  required String workingDirectory,
-  required String projectDir,
-  required String output,
-}) {
-  if (workingDirectory == projectDir) {
-    return output;
-  }
-  final desired = p.normalize(p.join(projectDir, output));
-  final relative = p.relative(desired, from: workingDirectory);
-  return relative.isEmpty || relative == '.' ? output : relative;
-}
-
-bool _defaultIsInteractive() {
-  return io.stdin.hasTerminal && io.stdout.hasTerminal;
-}
-
-Future<bool> _defaultInertiaPrompt() async {
-  while (true) {
-    io.stdout.write('Add an Inertia client app? (y/N): ');
-    final response = io.stdin.readLineSync();
-    if (response == null) return false;
-    final normalized = response.trim().toLowerCase();
-    if (normalized.isEmpty || normalized == 'n' || normalized == 'no') {
-      return false;
-    }
-    if (normalized == 'y' || normalized == 'yes') {
-      return true;
-    }
-    io.stdout.writeln('Please enter y or n.');
-  }
 }

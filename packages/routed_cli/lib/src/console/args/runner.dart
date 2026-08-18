@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:io';
 
 import 'package:artisanal/args.dart';
+import 'package:routed/routed.dart' show registerRoutedProviders;
 import 'package:routed_cli/routed_cli.dart';
 
 /// RoutedCommandRunner centralizes global flags and command registration.
@@ -21,6 +22,10 @@ class RoutedCommandRunner extends CommandRunner<void> {
     CliLogger? logger,
   }) : logger = logger ?? CliLogger(),
        super(name, description) {
+    // The CLI inspects and generates manifests outside the application
+    // isolate, so register the same official providers as package:routed.
+    registerRoutedProviders();
+
     // Global flags
     argParser.addFlag(
       'version',

@@ -53,34 +53,9 @@ void main() {
         contains("name: \"{{ env.APP_NAME | default: 'Routed App' }}\""),
       );
 
-      expect(
-        read('config/session.yaml'),
-        contains('# Session configuration quick reference:'),
-      );
-      expect(
-        read('config/cache.yaml'),
-        contains('# Cache configuration quick reference:'),
-      );
-      final cacheYaml = read('config/cache.yaml');
-      expect(
-        cacheYaml,
-        contains(
-          'Default: {"array":{"driver":"array"},"file":{"driver":"file","path":"storage/framework/cache"}}.',
-        ),
-      );
-      expect(
-        cacheYaml,
-        contains('Validation: Must resolve to a non-empty directory path.'),
-      );
-      expect(
-        read('config/storage.yaml'),
-        contains('# Storage configuration quick reference:'),
-      );
-      final storageYaml = read('config/storage.yaml');
-      expect(
-        storageYaml,
-        contains("root: \"{{ env.STORAGE_ROOT | default: 'storage/app' }}\""),
-      );
+      expect(exists('config/session.yaml'), isFalse);
+      expect(exists('config/cache.yaml'), isFalse);
+      expect(exists('config/storage.yaml'), isFalse);
       expect(
         read('config/uploads.yaml'),
         contains('# Uploads configuration quick reference:'),
@@ -89,13 +64,6 @@ void main() {
         read('config/logging.yaml'),
         contains('# Logging configuration quick reference:'),
       );
-      final sessionYaml = read('config/session.yaml');
-      expect(sessionYaml, contains('Default: storage/framework/sessions.'));
-      expect(
-        sessionYaml,
-        contains('Validation: Must match a configured cache store name.'),
-      );
-
       final env = read('.env');
       expect(env, contains('APP_NAME=Routed App'));
       expect(env, contains('APP_ENV=development'));
@@ -103,8 +71,6 @@ void main() {
       expect(env, contains('APP_KEY=change-me'));
       expect(env, contains('SESSION_COOKIE=routed-session'));
       expect(env, contains('STORAGE_ROOT=storage/app'));
-      expect(env, contains('SESSION_DRIVER=cookie'));
-      expect(env, contains('CACHE_STORE=file'));
       expect(
         env,
         contains('OBSERVABILITY_TRACING_SERVICE_NAME=routed-service'),
@@ -119,10 +85,10 @@ void main() {
     });
 
     test('config:publish filters defaults by selection', () async {
-      await _run(runner, ['config:publish', 'app,cache']);
+      await _run(runner, ['config:publish', 'app,routing']);
 
       expect(exists('config/app.yaml'), isTrue);
-      expect(exists('config/cache.yaml'), isTrue);
+      expect(exists('config/routing.yaml'), isTrue);
       expect(exists('config/http.yaml'), isFalse);
     });
 
@@ -181,7 +147,10 @@ void main() {
       final dartCache = read('lib/generated/routed_config.dart');
 
       // Should import routed and have resolveRoutedConfig().
-      expect(dartCache, contains("import 'package:routed_core/routed_core.dart';"));
+      expect(
+        dartCache,
+        contains("import 'package:routed_core/routed_core.dart';"),
+      );
       expect(dartCache, contains('resolveRoutedConfig()'));
 
       // Env templates must survive as raw strings in the const map.

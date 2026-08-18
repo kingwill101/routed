@@ -15,13 +15,19 @@ class DeployCommand extends BaseCommand {
       ..addOption(
         'target',
         help: 'Deployment target.',
-        allowed: const ['cloudflare', 'netlify'],
+        allowed: const ['cloudflare', 'netlify', 'vercel'],
         defaultsTo: 'cloudflare',
       )
       ..addOption(
         'entry',
         help: 'Dart library that exports createEngine().',
         valueHelp: 'package:my_app/app.dart',
+      )
+      ..addOption(
+        'runtime',
+        help: 'Vercel runtime.',
+        allowed: const ['node', 'edge'],
+        defaultsTo: 'node',
       )
       ..addOption(
         'name',
@@ -63,7 +69,7 @@ class DeployCommand extends BaseCommand {
     }
 
     final target = results?['target'] as String? ?? 'cloudflare';
-    if (target != 'cloudflare' && target != 'netlify') {
+    if (target != 'cloudflare' && target != 'netlify' && target != 'vercel') {
       throw UsageException('Unsupported deployment target: $target', usage);
     }
 
@@ -78,6 +84,10 @@ class DeployCommand extends BaseCommand {
     await _ensureRoutedNode(root);
     if (target == 'netlify') {
       await _deployNetlify(root, packageName);
+      return;
+    }
+    if (target == 'vercel') {
+      await _deployVercel(root, packageName);
       return;
     }
 
@@ -146,6 +156,219 @@ class DeployCommand extends BaseCommand {
 
     logger.info('Routed Cloudflare deployment complete: $workerName');
   });
+
+  Future<void> _deployVercel(fs.Directory root, String packageName) async {
+    final requestedName = (results?['name'] as String?)?.trim();
+    final projectName = requestedName == null || requestedName.isEmpty
+        ? _sanitizeWorkerName(packageName)
+        : _sanitizeWorkerName(requestedName);
+    final dryRun = results?['dry-run'] as bool? ?? false;
+    final runtime = results?['runtime'] as String? ?? 'node';
+    final entry = _resolveImport(packageName, results?['entry'] as String?);
+    if (runtime == 'edge') {
+      await _deployVercelEdge(root, packageName, projectName, entry, dryRun);
+      return;
+    }
+    final outputRoot = root.fileSystem.directory(
+      p.join(root.path, '.vercel', 'output'),
+    );
+    final functionRoot = root.fileSystem.directory(
+      p.join(outputRoot.path, 'functions', 'routed.func'),
+    );
+    final sourceRoot = root.fileSystem.directory(
+      p.join(root.path, '.dart_tool', 'routed', 'deploy', 'vercel'),
+    );
+    await functionRoot.create(recursive: true);
+    await sourceRoot.create(recursive: true);
+
+    final dartEntry = root.fileSystem.file(
+      p.join(sourceRoot.path, 'node_entry.dart'),
+    );
+    final jsOutput = root.fileSystem.file(
+      p.join(functionRoot.path, 'main.dart.js'),
+    );
+    await dartEntry.writeAsString(_vercelNodeWorkerEntrySource(entry));
+    await _runDart(root, [
+      'compile',
+      'js',
+      dartEntry.path,
+      '-o',
+      jsOutput.path,
+      '-O2',
+    ], label: 'Compiling Vercel Node.js Function');
+
+    await root.fileSystem
+        .file(p.join(functionRoot.path, 'entry.js'))
+        .writeAsString(_vercelNodeFunctionEntry());
+    if (!dryRun) {
+      await _installVercelNodeDependencies(functionRoot);
+      await _bundleVercelNodeEntry(functionRoot);
+    }
+    await root.fileSystem
+        .file(p.join(functionRoot.path, '.vc-config.json'))
+        .writeAsString('''{
+  "runtime": "nodejs22.x",
+  "handler": "entry.js",
+  "launcherType": "Nodejs",
+  "supportsResponseStreaming": true
+}
+''');
+    await outputRoot.fileSystem
+        .file(p.join(outputRoot.path, 'config.json'))
+        .writeAsString(
+          const JsonEncoder.withIndent('  ').convert({
+            'version': 3,
+            'routes': [
+              {'src': '/(.*)', 'dest': 'routed'},
+            ],
+          }),
+        );
+
+    if (dryRun) {
+      logger.info('Vercel build validation complete: $projectName');
+      return;
+    }
+    await _runNpx(root, [
+      'vercel@latest',
+      'deploy',
+      '--prebuilt',
+      '--yes',
+    ], label: 'Deploying Vercel Node.js Function');
+    logger.info('Vercel deployment complete: $projectName');
+  }
+
+  String _vercelNodeWorkerEntrySource(String importPath) =>
+      '''
+import 'package:routed_node/vercel.dart';
+import '$importPath' as app;
+
+void main() {
+  defineVercelNodeHandlerFactory(app.createEngine);
+}
+''';
+
+  String _vercelNodeFunctionEntry() => '''
+require('./main.dart.js');
+const { WebSocketServer } = require('ws');
+
+async function experimentalUpgradeWebSocket(handler) {
+  const context = globalThis[Symbol.for('@vercel/request-context')]?.get?.();
+  if (!context || typeof context.upgradeWebSocket !== 'function') {
+    throw new Error('Vercel WebSocket upgrades are unavailable in this runtime.');
+  }
+  const { req, socket, head } = context.upgradeWebSocket();
+  const wss = new WebSocketServer({ noServer: true, maxPayload: 256 * 1024 });
+  const webSocket = await new Promise((resolve, reject) => {
+    const cleanup = () => {
+      socket.removeListener('error', onError);
+      socket.removeListener('close', onClose);
+    };
+    const onError = (error) => { cleanup(); reject(error); };
+    const onClose = () => { cleanup(); reject(new Error('socket closed before upgrade')); };
+    socket.once('error', onError);
+    socket.once('close', onClose);
+    wss.handleUpgrade(req, socket, head, (value) => {
+      cleanup();
+      resolve(value);
+    });
+  });
+  await handler(webSocket);
+  return new Response(null, { status: 204 });
+}
+
+module.exports = async (request, response) => {
+  if ((request.headers.upgrade || '').toLowerCase() === 'websocket') {
+    return experimentalUpgradeWebSocket((webSocket) =>
+      globalThis.__routed_vercel_node_websocket__(request, webSocket),
+    );
+  }
+  return globalThis.__routed_vercel_node_request__(request, response);
+};
+''';
+
+  Future<void> _deployVercelEdge(
+    fs.Directory root,
+    String packageName,
+    String projectName,
+    String entry,
+    bool dryRun,
+  ) async {
+    final outputRoot = root.fileSystem.directory(
+      p.join(root.path, '.vercel', 'output'),
+    );
+    final functionRoot = root.fileSystem.directory(
+      p.join(outputRoot.path, 'functions', 'routed-edge.func'),
+    );
+    final sourceRoot = root.fileSystem.directory(
+      p.join(root.path, '.dart_tool', 'routed', 'deploy', 'vercel-edge'),
+    );
+    await functionRoot.create(recursive: true);
+    await sourceRoot.create(recursive: true);
+    final dartEntry = root.fileSystem.file(
+      p.join(sourceRoot.path, 'edge_entry.dart'),
+    );
+    final jsOutput = root.fileSystem.file(
+      p.join(functionRoot.path, 'main.dart.js'),
+    );
+    await dartEntry.writeAsString(_vercelEdgeWorkerEntrySource(entry));
+    await _runDart(root, [
+      'compile',
+      'js',
+      dartEntry.path,
+      '-o',
+      jsOutput.path,
+      '-O2',
+    ], label: 'Compiling Vercel Edge Function');
+    await root.fileSystem
+        .file(p.join(functionRoot.path, 'entry.js'))
+        .writeAsString(_vercelEdgeFunctionEntry());
+    await root.fileSystem
+        .file(p.join(functionRoot.path, '.vc-config.json'))
+        .writeAsString('''{
+  "runtime": "edge",
+  "entrypoint": "entry.js"
+}
+''');
+    await outputRoot.fileSystem
+        .file(p.join(outputRoot.path, 'config.json'))
+        .writeAsString(
+          const JsonEncoder.withIndent('  ').convert({
+            'version': 3,
+            'routes': [
+              {'src': '/(.*)', 'dest': 'routed-edge'},
+            ],
+          }),
+        );
+    if (dryRun) {
+      logger.info('Vercel Edge build validation complete: $projectName');
+      return;
+    }
+    await _runNpx(root, [
+      'vercel@latest',
+      'deploy',
+      '--prebuilt',
+      '--yes',
+    ], label: 'Deploying Vercel Edge Function');
+    logger.info('Vercel deployment complete: $projectName');
+  }
+
+  String _vercelEdgeWorkerEntrySource(String importPath) =>
+      '''
+import 'package:routed_node/vercel.dart';
+import '$importPath' as app;
+
+void main() {
+  defineVercelFetchFactoryAsync(app.createEngine);
+}
+''';
+
+  String _vercelEdgeFunctionEntry() => '''
+import './main.dart.js';
+
+export default async (request) => {
+  return await globalThis.__routed_fetch__(request);
+};
+''';
 
   Future<void> _deployNetlify(fs.Directory root, String packageName) async {
     final requestedName = (results?['name'] as String?)?.trim();
@@ -264,6 +487,48 @@ export const config = { path: "/*" };
     final code = await process.exitCode;
     if (code != 0) throw StateError('$label failed with exit code $code.');
     return code;
+  }
+
+  Future<void> _bundleVercelNodeEntry(fs.Directory functionRoot) async {
+    await _runNpx(functionRoot, [
+      'esbuild',
+      'entry.js',
+      '--bundle',
+      '--platform=node',
+      '--format=cjs',
+      '--external:./main.dart.js',
+      '--outfile=entry.bundle.js',
+    ], label: 'Bundling Vercel Node.js entrypoint');
+    final bundled = functionRoot.fileSystem.file(
+      p.join(functionRoot.path, 'entry.bundle.js'),
+    );
+    bundled.copySync(
+      functionRoot.fileSystem.file(p.join(functionRoot.path, 'entry.js')).path,
+    );
+    bundled.deleteSync();
+    final nodeModules = functionRoot.fileSystem.directory(
+      p.join(functionRoot.path, 'node_modules'),
+    );
+    if (nodeModules.existsSync()) nodeModules.deleteSync(recursive: true);
+  }
+
+  Future<void> _installVercelNodeDependencies(fs.Directory functionRoot) async {
+    logger.info('Installing Vercel Node.js WebSocket dependencies …');
+    functionRoot.fileSystem
+        .file(p.join(functionRoot.path, 'package.json'))
+        .writeAsStringSync('{"private":true}\n');
+    final process = await io.Process.start(
+      'npm',
+      ['install', '--no-package-lock', '--omit=dev', 'ws@8.21.3'],
+      workingDirectory: functionRoot.path,
+      mode: io.ProcessStartMode.inheritStdio,
+    );
+    final code = await process.exitCode;
+    if (code != 0) {
+      throw StateError(
+        'Installing Vercel Node.js dependencies failed with exit code $code.',
+      );
+    }
   }
 
   Future<void> _runNpx(

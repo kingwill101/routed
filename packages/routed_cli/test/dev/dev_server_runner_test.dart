@@ -4,7 +4,6 @@ import 'dart:io' as io;
 
 import 'package:path/path.dart' as p;
 import 'package:routed_cli/routed_cli.dart';
-import 'package:routed_cli/src/console/dev/dev_server_runner.dart';
 import 'package:routed_cli/src/console/util/dart_exec.dart';
 import 'package:test/test.dart';
 import 'package:watcher/watcher.dart';
