@@ -37,21 +37,23 @@ await testBootstrap(config);
 
 ## Device Emulation
 
-Supply a device descriptor (from `devicesJsonData`) when launching a group or individual test. This applies viewport size, user agent, and other hints where supported.
+For responsive-layout checks, resize the browser viewport inside the test. This
+uses the public browser API and does not depend on generated device catalogs.
 
 ```dart
-import 'package:server_testing/src/browser/bootstrap/devices_json_const.dart';
-
-browserGroup('Pixel 5', device: devicesJsonData['Pixel 5'], define: (getBrowser) {
+browserGroup('mobile layout', define: (getBrowser) {
   test('mobile layout', () async {
     final browser = getBrowser();
+    await browser.window.resize(390, 844);
     await browser.visit('/');
     await browser.assertSee('Menu');
   });
 });
 ```
 
-You can also call `browser.emulation.setDevice(device)` manually inside a test for finer control.
+Use `browser.emulation.setUserAgent(...)` or
+`browser.emulation.setViewportSize(...)` when a test needs more specific
+emulation controls.
 
 ## Proxy Configuration
 

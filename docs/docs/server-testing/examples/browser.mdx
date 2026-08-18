@@ -45,15 +45,14 @@ Run the same flow with a mobile device profile.
 
 ```dart
 import 'package:server_testing/server_testing.dart';
-import 'package:server_testing/src/browser/bootstrap/devices_json_const.dart';
 
 browserTest(
   'mobile checkout',
   (browser) async {
+    await browser.window.resize(390, 844);
     await browser.visit('/orders/new');
     await browser.assertSee('Menu');
   },
-  device: devicesJsonData['Pixel 5'],
   headless: true,
 );
 ```

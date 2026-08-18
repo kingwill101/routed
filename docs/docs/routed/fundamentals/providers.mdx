@@ -47,6 +47,7 @@ class EmailServiceProvider extends ServiceProvider {
 Register providers via the constructor or before `engine.initialize()`:
 
 ```dart
+registerRoutedProviders();
 // Option 1: Pass providers to the constructor (recommended)
 final engine = Engine(
   providers: [
@@ -86,6 +87,9 @@ final engine = await Engine.create(
 
 The engine tracks provider types and skips duplicates by `runtimeType`. The first
 registered instance of each type wins; subsequent instances are silently skipped.
+Call `registerRoutedProviders()` once before using `Engine.builtins` or a
+full-featured `Engine.create()` from `package:routed`.
+
 This means:
 
 - When you pass `configItems` to `Engine()` or `Engine.create()`, a
@@ -99,13 +103,14 @@ This means:
 | Getter | Providers | Use case |
 |--------|-----------|----------|
 | `Engine.defaultProviders` | `CoreServiceProvider` + `RoutingServiceProvider` (2 total) | Minimal engine with config and routing only |
-| `Engine.builtins` | All 16 registered providers from `ProviderRegistry` (core, routing, cache, sessions, uploads, cors, security, logging, auth, observability, compression, rate_limit, storage, static, views, localization) | Full-featured engine (default for `Engine.create()`) |
+| `Engine.builtins` | The 14 providers registered by `package:routed`: core, routing, uploads, auth, logging, views, localization, observability, cache, sessions, storage, `rate_limit`, compression, and security | Full-featured engine after `registerRoutedProviders()` |
 
 ```dart
 // Minimal engine — just config + routing
 final engine = await Engine.create(providers: Engine.defaultProviders);
 
 // Full-featured engine — all builtins (this is the default)
+registerRoutedProviders();
 final engine = await Engine.create();
 ```
 
@@ -120,6 +125,7 @@ final engine = await Engine.create();
   wiring defaults, pass an `Engine` option:
 
 ```dart
+registerRoutedProviders();
 final engine = Engine(
   providers: [
     ...Engine.builtins,
@@ -232,7 +238,7 @@ ConfigDocEntry(
 Once the provider ships defaults, the CLI automatically displays them:
 
 ```bash
-dart run routed provider:list --config | grep mail
+dart run routed_cli provider:list --config | grep mail
 ```
 
 `config:init` also inlines the doc comments above each `config/*.yaml` entry, so `ConfigDocEntry.description` + `metadata` show up in generated files.
@@ -242,7 +248,7 @@ dart run routed provider:list --config | grep mail
 When you toggle providers in `config/http.yaml` (for example via `providers: [routed.logging, my.custom.email]`), Routed resolves those IDs through `ProviderRegistry`. To make your provider manifest-friendly, export a factory from a package and register it:
 
 ```dart title="lib/providers.dart"
-import 'package:routed/src/engine/providers/registry.dart';
+import 'package:routed/routed.dart';
 
 void registerProviders() {
   ProviderRegistry.instance.register(

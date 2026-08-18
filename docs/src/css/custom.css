@@ -1,30 +1,118 @@
-/**
- * Any CSS included here will be global. The classic template
- * bundles Infima by default. Infima is a CSS framework designed to
- * work well for content-centric websites.
- */
+@import url('https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Space+Grotesk:wght@400;500;600;700&family=Syne:wght@500;600;700&display=swap');
 
-/* You can override the default Infima variables here. */
 :root {
-  --ifm-color-primary: #2e8555;
-  --ifm-color-primary-dark: #29784c;
-  --ifm-color-primary-darker: #277148;
-  --ifm-color-primary-darkest: #205d3b;
-  --ifm-color-primary-light: #33925d;
-  --ifm-color-primary-lighter: #359962;
-  --ifm-color-primary-lightest: #3cad6e;
-  --ifm-code-font-size: 95%;
-  --docusaurus-highlighted-code-line-bg: rgba(0, 0, 0, 0.1);
+  --routed-ink: #15251f;
+  --routed-paper: #fbf8ef;
+  --routed-lime: #b9f45b;
+  --routed-coral: #ff7257;
+  --routed-muted: #66726a;
+  --routed-line: #cbd0c5;
+  --routed-display: 'Syne', sans-serif;
+  --routed-body: 'Space Grotesk', sans-serif;
+  --routed-mono: 'DM Mono', monospace;
+  --ifm-color-primary: #17734e;
+  --ifm-color-primary-dark: #126445;
+  --ifm-color-primary-darker: #105e40;
+  --ifm-color-primary-darkest: #0b442f;
+  --ifm-color-primary-light: #238a60;
+  --ifm-color-primary-lighter: #2a996c;
+  --ifm-color-primary-lightest: #52b789;
+  --ifm-font-family-base: var(--routed-body);
+  --ifm-heading-font-family: var(--routed-display);
+  --ifm-font-size-base: 17px;
+  --ifm-line-height-base: 1.6;
+  --ifm-code-font-size: 90%;
+  --ifm-background-color: var(--routed-paper);
+  --ifm-background-surface-color: #f1efe7;
+  --ifm-navbar-background-color: var(--routed-paper);
+  --ifm-navbar-shadow: none;
+  --ifm-footer-background-color: var(--routed-ink);
+  --ifm-global-radius: 0px;
+  --ifm-button-border-radius: 0px;
+  --docusaurus-highlighted-code-line-bg: rgba(185, 244, 91, .12);
 }
 
-/* For readability concerns, you should choose a lighter palette in dark mode. */
+html { background: var(--ifm-background-color); }
+body { background: var(--ifm-background-color); color: var(--ifm-color-content); }
+.navbar { border-bottom: 1px solid var(--routed-line); }
+.navbar__inner { max-width: 1440px; margin: 0 auto; padding: 0 1.5rem; }
+.navbar__brand { gap: .65rem; }
+.navbar__logo, .navbar__logo img { height: 29px; width: 29px; }
+.navbar__title { color: var(--routed-ink); font-family: var(--routed-display); font-size: 1.2rem; letter-spacing: -.04em; }
+.navbar__item { color: var(--routed-ink); font-family: var(--routed-mono); font-size: .72rem; font-weight: 500; letter-spacing: .02em; }
+.navbar__item:hover { color: var(--ifm-color-primary); }
+.navbar__link--active, .navbar__link--active:hover { color: var(--ifm-color-primary); }
+.footer { border-top: 1px solid rgba(251,248,239,.12); }
+.footer__title { color: var(--routed-lime); font-family: var(--routed-mono); font-size: .7rem; letter-spacing: .1em; text-transform: uppercase; }
+.footer__link-item { color: rgba(251,248,239,.68); font-size: .84rem; }
+.footer__link-item:hover { color: var(--routed-paper); }
+.footer__copyright { color: rgba(251,248,239,.45); font-family: var(--routed-mono); font-size: .65rem; }
+.theme-doc-markdown h1, .theme-doc-markdown h2, .theme-doc-markdown h3 { letter-spacing: -.04em; }
+.theme-doc-markdown h1 { font-size: 3rem; }
+.theme-doc-markdown h2 { font-size: 2rem; }
+.theme-doc-markdown a { text-underline-offset: 3px; }
+.theme-doc-markdown { font-size: 1.03rem; line-height: 1.72; }
+.theme-doc-sidebar-menu .menu__link, .theme-doc-toc-link { font-size: .86rem; }
+.theme-doc-sidebar-item-category > .menu__list-item-collapsible .menu__link { font-family: var(--routed-mono); font-size: .7rem; letter-spacing: .04em; text-transform: uppercase; }
+.button { font-family: var(--routed-mono); font-size: .72rem; font-weight: 700; letter-spacing: .02em; }
+code { border: 0; }
+.alert { border-radius: 0; }
+
 [data-theme='dark'] {
-  --ifm-color-primary: #25c2a0;
-  --ifm-color-primary-dark: #21af90;
-  --ifm-color-primary-darker: #1fa588;
-  --ifm-color-primary-darkest: #1a8870;
-  --ifm-color-primary-light: #29d5b0;
-  --ifm-color-primary-lighter: #32d8b4;
-  --ifm-color-primary-lightest: #4fddbf;
-  --docusaurus-highlighted-code-line-bg: rgba(0, 0, 0, 0.3);
+  --ifm-color-primary: var(--routed-lime);
+  --ifm-color-primary-dark: #a2db4c;
+  --ifm-color-primary-darker: #96cc44;
+  --ifm-color-primary-darkest: #77a735;
+  --ifm-color-primary-light: #c3f873;
+  --ifm-color-primary-lighter: #ccfb83;
+  --ifm-color-primary-lightest: #ddffa9;
+  --ifm-background-color: #101a16;
+  --ifm-background-surface-color: #18241e;
+  --ifm-navbar-background-color: #101a16;
+  --ifm-font-color-base: #e8efe9;
+  --ifm-font-color-base-inverse: #101a16;
+  --ifm-color-content: #e8efe9;
+  --ifm-color-content-inverse: #101a16;
+  --ifm-heading-color: #fbf8ef;
+  --ifm-color-emphasis-200: #34443a;
+  --ifm-color-emphasis-300: #405047;
+  --ifm-color-emphasis-800: #d0dbd2;
+  --ifm-color-emphasis-900: #e8efe9;
+  --ifm-menu-color: #c2cec5;
+  --ifm-menu-color-active: var(--routed-lime);
+  --ifm-menu-color-background-active: #1d2b24;
+  --ifm-toc-link-color: #b7c5bb;
+  --ifm-pre-color: #e8efe9;
+  --ifm-pre-background: #282938;
+  --ifm-code-background: #282938;
+  --ifm-code-color: #c8f477;
+  --routed-muted: #9ca9a0;
+  --routed-line: #3a4940;
+}
+
+[data-theme='dark'] .navbar__title, [data-theme='dark'] .navbar__item, [data-theme='dark'] .navbar__link { color: #f1efe7; }
+[data-theme='dark'] .main-wrapper { background: #101a16; }
+[data-theme='dark'] .theme-doc-markdown { color: var(--ifm-color-content); }
+[data-theme='dark'] .theme-doc-markdown p,
+[data-theme='dark'] .theme-doc-markdown li,
+[data-theme='dark'] .theme-doc-markdown td,
+[data-theme='dark'] .theme-doc-markdown th,
+[data-theme='dark'] .theme-doc-markdown dd,
+[data-theme='dark'] .theme-doc-markdown dt { color: inherit; }
+[data-theme='dark'] .theme-doc-sidebar-menu .menu__link { color: var(--ifm-menu-color); }
+[data-theme='dark'] .theme-doc-sidebar-menu .menu__link--active,
+[data-theme='dark'] .theme-doc-sidebar-menu .menu__link--active:hover { color: var(--ifm-menu-color-active); }
+[data-theme='dark'] .theme-doc-sidebar-menu .menu__list-item-collapsible:hover,
+[data-theme='dark'] .theme-doc-sidebar-menu .menu__link--active { background: var(--ifm-menu-color-background-active); }
+[data-theme='dark'] .theme-doc-toc-link { color: var(--ifm-toc-link-color); }
+[data-theme='dark'] .theme-doc-toc-link:hover,
+[data-theme='dark'] .table-of-contents__link--active { color: var(--routed-lime); }
+[data-theme='dark'] .breadcrumbs__link { color: #b7c5bb; }
+[data-theme='dark'] .theme-code-block,
+[data-theme='dark'] .theme-code-block pre { background: var(--ifm-pre-background); color: var(--ifm-pre-color); }
+[data-theme='dark'] code:not(pre code) { color: var(--ifm-code-color); background-color: var(--ifm-code-background); }
+
+@media screen and (max-width: 996px) {
+  .navbar__inner { padding: 0 1rem; }
+  .navbar__title { font-size: 1rem; }
 }

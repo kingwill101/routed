@@ -93,7 +93,7 @@ uploads:
   file_permissions: 493        # 0755
 ```
 
-`routed.uploads` validates these values (types; for extensions use ".ext" in code and "ext" in config — Routed normalizes both) and feeds them into `EngineConfig`. Run `dart run routed provider:list --config` to review the effective settings and catch malformed overrides.
+`routed.uploads` validates these values (types; for extensions use ".ext" in code and "ext" in config — Routed normalizes both) and feeds them into `EngineConfig`. Run `dart run routed_cli provider:list --config` to review the effective settings and catch malformed overrides.
 
 ## JSON and raw bodies
 
@@ -157,7 +157,7 @@ final engine = Engine(
 );
 ```
 
-The security provider exposes the same knobs via configuration:
+The `routed.security` provider exposes the same proxy knobs via configuration:
 
 ```yaml title="config/http.yaml"
 security:
@@ -169,6 +169,8 @@ security:
     platform_header: CF-Connecting-IP
 ```
 
-Validation occurs during boot—invalid proxies or header lists trigger a `ProviderConfigException`. Check the CLI output (`provider:list --config`) to verify your proxy settings.
+The provider validates the configured proxy values during boot and reapplies
+them on configuration reload. The re-exported `routed_security` primitives
+remain available for direct use.
 
 See [proxy support](/docs/routed/security/proxy) for more details.

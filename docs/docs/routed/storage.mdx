@@ -6,7 +6,9 @@ sidebar_position: 21
 
 # Storage
 
-Storage disks provide the shared file abstraction for uploads, static mounts, and views. Configure disks once under `storage.*`, then reference them in `static.mounts`, `view.disk`, or upload handlers.
+Storage disks provide the shared file abstraction for uploads, views, and
+declarative static mounts. The `routed_storage` package owns both the storage
+provider and the `static.mounts` provider.
 
 ## Configuration
 
@@ -25,34 +27,20 @@ storage:
       driver: local
       root: public
     backups:
-      driver: s3
-      options:
-        endpoint: https://s3.amazonaws.com
-        bucket: my-app-assets
-        key: ${S3_KEY}
-        secret: ${S3_SECRET}
-        region: us-east-1
+      driver: local
+      root: storage/backups
 ```
 
 ## Driver options
 
 - **Local**: `root`, optional `file_system` (programmatic only).
-- **S3/Cloud**: `endpoint`, `bucket`, `key`, `secret`, `region`, optional `prefix`, `visibility`, `url`, `throw`, `report`, `directory_separator`.
+- Cloud drivers are not created by `RoutedStorageProvider` in this package;
+  register a compatible `StorageDisk` implementation when you need remote
+  storage.
 
-## Storage base vs disk roots
-
-- `storage.base` anchors helper paths like `storage_path()` and framework cache/session storage.
-- `storage.root` only seeds the default local disk if `storage.disks.local.root` is missing.
-- When `app.root` is available, relative storage paths resolve against it.
-
-## Helper paths
-
-Use the `StorageDefaults` helper to build framework paths when you need absolute locations:
-
-```dart
-final defaults = await engine.make<StorageDefaults>();
-final cachePath = defaults.frameworkPath('cache');
-```
+`storage.root` seeds the default local disk when no explicit disk root is
+provided. The provider does not expose a separate `StorageDefaults` service;
+use `StorageManager.resolve` for disk paths.
 
 ## StorageManager usage
 

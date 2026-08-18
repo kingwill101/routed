@@ -15,22 +15,22 @@ dart pub get
 dart pub publish --dry-run
 ```
 
-Packages:
-1. `packages/server_testing/server_testing`
-2. `packages/server_testing/server_testing_shelf`
-3. `packages/routed`
-4. `packages/server_testing/routed_testing`
-5. `packages/property_testing`
-6. `packages/routed_cli`
+Local packages:
+1. `packages/routed`
+2. `packages/server_testing/routed_testing`
+3. `packages/routed_cli`
+
+External prerequisites are published from their own repositories:
+- `server_testing`
+- `server_testing_shelf`
+- `property_testing`
 
 ## Publish Order
 When you are ready to publish for real, follow the dependency-aware order:
-1. `server_testing`
-2. `server_testing_shelf`
-3. `routed`
-4. `routed_testing`
-5. `property_testing`
-6. `routed_cli`
+1. `server_testing`, `server_testing_shelf`, and `property_testing`
+2. `routed`
+3. `routed_testing`
+4. `routed_cli`
 
 Publish each package from its directory with:
 

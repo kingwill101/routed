@@ -6,21 +6,21 @@ sidebar_position: 15
 
 # Routed CLI Reference
 
-The `routed` package ships project scaffolding, a hot-reload dev server, route/spec inspection utilities, and manifest helpers. Install it beside your application (recommended) or activate it globally:
+The `routed_cli` package ships project scaffolding, a hot-reload dev server, route/spec inspection utilities, and manifest helpers. Install it as a development dependency or activate it globally:
 
 ```bash
-dart pub add --dev routed
-# or: dart pub global activate routed
+dart pub add --dev routed_cli
+# or: dart pub global activate routed_cli
 ```
 
-Run commands with `dart run routed <command> [...]`. Add `--verbose` to surface extra debug output.
+Run commands with `dart run routed_cli <command> [...]`. Add `--verbose` to surface extra debug output.
 
 > **Choosing a Dart executable:** The CLI honours the first set environment variable in `ROUTED_CLI_DART`, `DART_BIN`, or `DART_PATH`. Set one of these when you manage multiple SDKs (for example, with FVM) so every command launches the intended runtime.
 
 ## `create`
 
 ```bash
-dart run routed create --name my_app [--output <dir>] [--force]
+dart run routed_cli create --name my_app [--output <dir>] [--force]
 ```
 
 Scaffolds a Routed project, writing `bin/server.dart`, config manifests, README, `.env`, analysis options, and storage directories. Options:
@@ -29,17 +29,13 @@ Scaffolds a Routed project, writing `bin/server.dart`, config manifests, README,
 - `--output/-o` – destination directory (defaults to `.`).
 - `--template/-t` – template to use (`basic`, `api`, `web`, or `fullstack`).
 - `--force/-f` – overwrite conflicting files.
-- `--inertia/--no-inertia` – scaffold an Inertia client app alongside the server. When running interactively without `--inertia`, the CLI prompts.
-- `--inertia-framework` – Inertia framework adapter: `react` (default), `vue`, or `svelte`.
-- `--inertia-package-manager` – package manager for the client: `npm` (default), `pnpm`, `yarn`, or `bun`.
-- `--inertia-output` – output directory for the client app, relative to the project root (default: `client`).
 
-After generating files, `create` automatically runs `dart pub get` using the resolved Dart executable. If dependency resolution fails the CLI prints the exit code and keeps the "Next steps" list so you can retry manually. When `--inertia` is set, the CLI also runs `inertia_dart:inertia create` to scaffold the frontend app.
+After generating files, `create` automatically runs `dart pub get` using the resolved Dart executable. If dependency resolution fails the CLI prints the exit code and keeps the "Next steps" list so you can retry manually.
 
 ## `dev`
 
 ```bash
-dart run routed dev [-e bin/server.dart] [-H 127.0.0.1] [-p 8080]
+dart run routed_cli dev [-e bin/server.dart] [-H 127.0.0.1] [-p 8080]
 ```
 
 Launches a development server with hot-reload support. Highlights:
@@ -62,10 +58,83 @@ Launches a development server with hot-reload support. Highlights:
 
 Use this during development; fall back to `dart run bin/server.dart` for single runs or CI pipelines. If you see "Entry file not found" errors, pass `-e` to point at your server file.
 
+## `deploy`
+
+Build and deploy the application to a supported edge or serverless target:
+
+```bash
+dart run routed_cli deploy \
+  --target cloudflare|netlify|vercel \
+  [--entry package:my_app/app.dart] \
+  [--name <deployment-name>] \
+  [--dry-run]
+```
+
+The command locates the project from its `pubspec.yaml`, ensures the
+`routed_node` adapter is available, compiles the Dart entrypoint to JavaScript,
+and then invokes the target's official CLI through `npx`. Your entrypoint must
+export a `createEngine()` function. If omitted, the command uses the project's
+`package:<package-name>/app.dart` entrypoint.
+
+### Targets
+
+| Target | Runtime/output | Deployment behavior |
+| --- | --- | --- |
+| Cloudflare | Worker with `nodejs_compat` | Writes a Wrangler config under `.dart_tool/routed/deploy/cloudflare` and runs `wrangler deploy`. |
+| Netlify | Edge Function | Stages a `netlify.toml` and edge-function bundle, then runs `netlify deploy --prod`. |
+| Vercel | Node.js function or Edge Function | Writes a prebuilt Vercel output bundle and runs `vercel deploy --prebuilt`. |
+
+Vercel defaults to the Node.js runtime. Select the Edge runtime explicitly:
+
+```bash
+dart run routed_cli deploy \
+  --target vercel \
+  --runtime edge \
+  --name my-routed-app
+```
+
+Use the Node.js runtime when the application needs Node-specific behavior,
+including the WebSocket upgrade path. The Edge runtime is fetch-based and is
+intended for handlers that fit the edge runtime's API constraints.
+
+### Dry runs and credentials
+
+`--dry-run` compiles the application and validates the generated deployment
+bundle without publishing it. Cloudflare also passes `--dry-run` to Wrangler;
+Netlify and Vercel stop after generating their local deployment artifacts.
+
+The command does not create or upload application secrets. Authenticate with
+the target CLI before deploying and configure environment variables or secrets
+through that provider. For Cloudflare, `--keep-vars` preserves variables
+already configured in the Worker dashboard:
+
+```bash
+dart run routed_cli deploy \
+  --target cloudflare \
+  --name my-routed-worker \
+  --keep-vars
+```
+
+The Cloudflare compatibility date defaults to the current date; set it
+explicitly for reproducible deployments:
+
+```bash
+dart run routed_cli deploy \
+  --target cloudflare \
+  --compatibility-date 2026-08-15 \
+  --dry-run
+```
+
+If a deployment fails, fix the reported build or provider-CLI error and rerun
+the command. Cloudflare and Vercel keep their generated artifacts under the
+project's build directories for inspection; Netlify cleans its temporary
+staging directory after the command exits. Run `dart pub get` manually if the
+CLI added `routed_node` but dependency resolution was interrupted.
+
 ## `routes`
 
 ```bash
-dart run routed routes [--format table|json] [--entry tool/spec_manifest.dart]
+dart run routed_cli routes [--format table|json] [--entry tool/spec_manifest.dart]
 ```
 
 Prints the HTTP and WebSocket routes for your application. The loader tries `lib/app.dart` (expecting a `createEngine()` function) and falls back to `tool/spec_manifest.dart`, or you can point to a custom entry. Use `--format json` together with `--no-pretty` when parsing from scripts.
@@ -73,10 +142,10 @@ Prints the HTTP and WebSocket routes for your application. The loader tries `lib
 ## `openapi generate`
 
 ```bash
-dart run routed openapi generate
+dart run routed_cli openapi generate
 # legacy aliases:
-dart run routed openapi:generate
-dart run routed spec
+dart run routed_cli openapi:generate
+dart run routed_cli spec
 ```
 
 Writes the runtime route graph as JSON to disk. This manifest is the input to the OpenAPI build-runner step and is also useful for documentation, contract tests, or code generators. The CLI ensures parent directories exist before writing.
@@ -91,7 +160,7 @@ Writes the runtime route graph as JSON to disk. This manifest is the input to th
 
 ```bash
 cd examples/openapi_demo
-dart run routed openapi generate
+dart run routed_cli openapi generate
 dart run build_runner build --delete-conflicting-outputs
 ```
 
@@ -100,7 +169,7 @@ The first command executes the application engine and writes `.dart_tool/routed/
 ## `stimulus:install`
 
 ```bash
-dart run routed stimulus:install [--force]
+dart run routed_cli stimulus:install [--force]
 ```
 
 Scaffolds Stimulus (Hotwire) application boilerplate and a sample controller into `public/js/`. Currently supports `--mode cdn` (the default), which generates ES modules that import Stimulus from a CDN.
@@ -116,8 +185,8 @@ After scaffolding, include `<script type="module" src="/js/stimulus.js"></script
 ## `provider:driver`
 
 ```bash
-dart run routed provider:driver <type> <name>
-dart run routed provider:driver --type storage my_driver
+dart run routed_cli provider:driver <type> <name>
+dart run routed_cli provider:driver --type storage my_driver
 ```
 
 Generates a starter file for a custom storage, cache, or session driver. The `type` argument selects the driver category (`storage`, `cache`, or `session`) and `name` is the driver identifier.
@@ -146,7 +215,7 @@ See [Configuration](/docs/routed/fundamentals/configuration) for details and usa
 `provider:list` accepts an optional provider id to filter output:
 
 ```bash
-dart run routed provider:list routed.logging --config
+dart run routed_cli provider:list routed.logging --config
 ```
 
 ### Publishing config templates
@@ -154,14 +223,14 @@ dart run routed provider:list routed.logging --config
 Generate the default config templates into `config/`:
 
 ```bash
-dart run routed config:publish
+dart run routed_cli config:publish
 ```
 
 Publish only a subset by passing a comma-separated list (or `--only`):
 
 ```bash
-dart run routed config:publish app,cache
-dart run routed config:publish --only app,cache
+dart run routed_cli config:publish app,cache
+dart run routed_cli config:publish --only app,cache
 ```
 
 ## Project-defined commands
@@ -170,7 +239,7 @@ Every scaffold now includes `lib/commands.dart` exposing a
 `buildProjectCommands()` hook. Return one or more `Command<void>` instances and
 the Routed CLI will load them automatically when you run commands from inside
 the project. Project commands are listed under a "Project" section in
-`dart run routed --help` alongside the built-ins.
+`dart run routed_cli --help` alongside the built-ins.
 
 ```dart title="lib/commands.dart"
 import 'dart:async';
@@ -211,7 +280,7 @@ only when it builds the command list.
 
 ```dart title="lib/providers/my_provider.dart"
 import 'package:args/command_runner.dart';
-import 'package:routed/console.dart';
+import 'package:routed_cli/routed_cli.dart';
 import 'package:routed/routed.dart';
 
 class MyProviderCommand extends Command<void> {

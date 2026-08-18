@@ -58,7 +58,7 @@ The `ctx.html` helper renders a string through the configured template engine, w
 await ctx.html('<p>{{ message }}</p>', data: {'message': 'Welcome'});
 ```
 
-> The view provider validates its configuration (`view.engine`, `view.directory`, `view.disk`, and `view.cache` types) and throws a `ProviderConfigException` if the manifest supplies the wrong shape. Use `dart run routed provider:list --config` to inspect the active view settings and confirm the provider is enabled.
+> The view provider validates its configuration (`view.engine`, `view.directory`, `view.disk`, and `view.cache` types) and throws a `ProviderConfigException` if the manifest supplies the wrong shape. Use `dart run routed_cli provider:list --config` to inspect the active view settings and confirm the provider is enabled.
 
 ## Other content types
 
@@ -72,13 +72,13 @@ ctx.data('text/csv; charset=utf-8', csvBytes); // specify charset for text forma
 
 ## Renderers
 
-The helpers above are small wrappers around `Render` implementations in `packages/routed/lib/src/render/*`. If you need explicit control, call `ctx.render` with a renderer instance or build a custom `Render` subclass.
+The response helpers are exposed by the core response-format extensions.
+Template rendering is supplied by the optional `routed_views` package; use its
+view engine APIs when you need a renderer beyond the built-in response formats.
 
 ```dart
-import 'package:routed/src/render/json_render.dart';
-
 router.get('/status', (ctx) {
-  ctx.render(HttpStatus.ok, JsonRender({'status': 'ok'}));
+  return ctx.json({'status': 'ok'});
 });
 ```
 

@@ -7,33 +7,47 @@ description: Enable CSRF, CORS, security headers, and request limits
 
 Secure your app with headers, CSRF, CORS, trusted proxies, request limits, and session hardening. For uploads and form parsing, see [Request Handling](/docs/routed/fundamentals/requests#file-uploads) and [Validation](/docs/routed/fundamentals/validation). For end-to-end proxy setup, see [Proxy Support](/docs/routed/security/proxy).
 
+> **Current package status:** After `registerRoutedProviders()` is called,
+> `package:routed/routed.dart` includes `routed.security`. It applies request-size limits, configures trusted-proxy
+> client-IP resolution, adds CORS when enabled, and adds IP filtering when
+> enabled. The re-exported `routed_security` package also provides the CORS
+> middleware and underlying resolver and network primitives. CSRF and security
+> headers remain explicit application middleware; they are not installed by
+> this provider.
+
 ## Core Security Features
 
-### Security Headers
+### Request Size, Proxies, and IP Filtering
 
 Configure defaults via `config/http.yaml`:
 
 ```yaml title="config/http.yaml"
 security:
-  headers:
-    Content-Security-Policy: "default-src 'self'"
-    X-Frame-Options: DENY
-    X-Content-Type-Options: nosniff
   max_request_size: 10485760   # 10 MB
   trusted_proxies:
     enabled: true
     forward_client_ip: true
     proxies: ['10.0.0.0/8', '::/0']
     headers: ['X-Forwarded-For', 'X-Real-IP']
+  ip_filter:
+    enabled: true
+    default_action: deny
+    allow: ['10.0.0.0/8']
+    deny: []
+    respect_trusted_proxies: true
 ```
 
-The `routed.security` provider validates these entries and applies them to `EngineConfig.security`. Run `dart run routed provider:list --config` to confirm the active defaults and catch malformed overrides. If you enable a strict Content Security Policy (CSP), confirm your templates, inline scripts, and assets comply; see [Views & Templates](/docs/routed/views/).
+These settings are read by `routed.security` during provider boot and
+configuration reloads. The request-size limit is enforced by the core request
+pipeline; trusted proxy settings control `ctx.request.clientIP`; and an
+enabled IP filter returns `403 Forbidden` before the route handler runs.
 
 ### Rate limiting
 
 See [Rate limiting](/docs/routed/security/rate-limit) for configuring token-bucket policies. The limiter integrates with the cache subsystem, supports memory and Redis stores, and responds with `429 Too Many Requests` plus `Retry-After` headers.
 
-Prefer code? Configure the engine directly:
+Security headers and CSRF are still application concerns. Install their
+middleware explicitly and validate the values in application configuration:
 
 ```dart
 final engine = Engine(
@@ -76,7 +90,7 @@ final engine = Engine(
 
 ### CORS Configuration
 
-Configure CORS via the manifest so defaults survive restarts (you can place the block under `cors` or `security.cors`; the provider merges both):
+Configure CORS via the `cors` manifest section so defaults survive restarts:
 
 ```yaml title="config/http.yaml"
 cors:
@@ -109,11 +123,13 @@ final engine = Engine(
 );
 ```
 
-> Validation: Security and CORS providers validate their inputs during boot. Non-boolean flags (for example `security.csrf.enabled: "yes"`), negative `security.max_request_size` values, malformed trusted proxy lists, or non-string CORS origins/methods trigger a `ProviderConfigException` with an explicit config path so you can fix the override before requests start flowing. Use `dart run routed provider:list --config` to inspect the merged security/CORS defaults.
+> When `cors.enabled` is true, `routed.security` installs CORS middleware and
+> handles valid `OPTIONS` preflight requests before route matching. CSRF and
+> security-header middleware remain explicit application concerns.
 
 ## TLS & HTTPS
 
-Use the `serveSecure` helper (`packages/routed/lib/src/engine/engine.dart:422`) to mount HTTPS endpoints with your certificate chain:
+Use the `serveSecure` helper to mount HTTPS endpoints with your certificate chain:
 
 ```dart
 import 'package:routed/routed.dart';
@@ -250,14 +266,13 @@ if (ctx.sessionAge > maxSessionAge ||
 
 ## Implementation Details
 
-### Security Middleware Order
-The security provider inserts middleware in this order (request-size limits are enforced before middleware when `security.max_request_size` is set):
+### Security Request Order
+The current bundle applies security concerns in this order:
 
-1. Trusted proxies
-2. IP filters
-3. Security headers
-4. CSRF protection
-5. Request size middleware
+1. Request-size enforcement in the core request pipeline
+2. Trusted-proxy client-IP resolution
+3. IP filtering, when `security.ip_filter.enabled` is true
+4. Any application middleware for security headers, CSRF, and CORS
 
 ### IP Resolution Logic
 Client IP resolution follows this order:
@@ -281,7 +296,7 @@ EngineFeatures(
 2. Use HTTPS-only, HttpOnly, and SameSite cookies
 3. Set appropriate size limits
 4. Validate file uploads (see [Securing file uploads](/docs/routed/security/upload-hardening))
-5. Enable response compression where appropriate ([guide](/docs/routed/fundamentals/compression))
+5. Enable gzip response compression where appropriate ([guide](/docs/routed/fundamentals/compression))
 5. Implement proper session management
 6. Configure CORS carefully (prefer explicit origins/methods; avoid wildcard credentials)
 7. Use CSP headers

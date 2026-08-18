@@ -29,6 +29,7 @@ When you publish a trimmed config file (for example via `config:publish app,cach
 
 ```dart
 // Inside an async bootstrap function
+registerRoutedProviders();
 final engine = await Engine.create(
   providers: [
     CoreServiceProvider.withLoader(ConfigLoaderOptions(
@@ -52,7 +53,8 @@ parameter that is merged directly on top of the framework defaults — no file I
 at all. This is the simplest way to get started and is perfectly valid for production use:
 
 ```dart
-// One-liner — all builtins are included by Engine.create() automatically
+// Register the official catalogue before using the full Engine.create() setup.
+registerRoutedProviders();
 final engine = await Engine.create(
   configItems: {
     'app.name': 'My App',
@@ -67,6 +69,7 @@ final engine = await Engine.create(
 The same works with the synchronous constructor:
 
 ```dart
+registerRoutedProviders();
 final engine = Engine(
   providers: Engine.builtins,
   configItems: {
@@ -157,6 +160,7 @@ have registered their defaults. This is handy when you want to combine it with o
 engine options:
 
 ```dart
+registerRoutedProviders();
 final engine = Engine(
   providers: Engine.builtins,
   options: [
@@ -177,8 +181,9 @@ timing needs. The constructor parameter is available *during* provider registrat
 *before* boot.
 :::
 
-`Engine.create` constructs an engine with all built-in providers by default,
-boots service providers, and returns the initialized instance. Pass a custom
+After `registerRoutedProviders()`, `Engine.create` constructs an engine with
+all official providers, boots service providers, and returns the initialized
+instance. Pass a custom
 `providers` list to override. If you need finer control (for example, registering
 listeners before boot), you can instantiate `Engine(providers: [...])` and call
 `await engine.initialize()` manually.
@@ -191,6 +196,7 @@ request so per-request mutations do not leak back to the application-level confi
 Use `ConfigLoaderOptions` to tweak directories, environment files, or enable hot reloading during development:
 
 ```dart
+registerRoutedProviders();
 final engine = Engine(
   providers: [
     CoreServiceProvider.withLoader(ConfigLoaderOptions(
@@ -231,29 +237,36 @@ security:
 Run the CLI to see which providers are active, their descriptions, and the defaults they contribute:
 
 ```bash
-dart run routed provider:list --config
+dart run routed_cli provider:list --config
 ```
 
-The output includes each provider’s `configSource` and the default configuration it publishes. Add a provider id (for example `dart run routed provider:list routed.logging --config`) to filter to a single provider. If the manifest includes malformed overrides (wrong types, missing maps, etc.), Routed throws a `ProviderConfigException` and the CLI shows the failing path so you can fix it before starting the server.
+The output includes each provider’s `configSource` and the default configuration it publishes. Add a provider id (for example `dart run routed_cli provider:list routed.logging --config`) to filter to a single provider. If the manifest includes malformed overrides (wrong types, missing maps, etc.), Routed throws a `ProviderConfigException` and the CLI shows the failing path so you can fix it before starting the server.
 
-> **Tip:** Whenever the CLI writes a config file it prepends a short "configuration quick reference" comment. These comments mirror the provider docs (covering key paths, types, and supported options) so you can discover configuration knobs without leaving the file. If you prefer machine-readable metadata, run `dart run routed config:cache --docs` (optionally with `--docs-output path/to/docs.json`) to emit the same information as JSON. That file is ideal for editor tooling, lint rules, or internal dashboards that want to surface config hints.
+> **Tip:** Whenever the CLI writes a config file it prepends a short "configuration quick reference" comment. These comments mirror the provider docs (covering key paths, types, and supported options) so you can discover configuration knobs without leaving the file. If you prefer machine-readable metadata, run `dart run routed_cli config:cache --docs` (optionally with `--docs-output path/to/docs.json`) to emit the same information as JSON. That file is ideal for editor tooling, lint rules, or internal dashboards that want to surface config hints.
 
 ### Publishing config templates
 
 Use `config:publish` to generate the default templates into `config/`:
 
 ```bash
-dart run routed config:publish
+dart run routed_cli config:publish
 ```
 
 To publish only a subset, pass a comma-separated list (or the `--only` flag). The CLI generates only the matching `config/<name>.yaml` files and limits `.env`/`.env.example` entries to the selected roots:
 
 ```bash
-dart run routed config:publish app,cache
-dart run routed config:publish --only app,cache
+dart run routed_cli config:publish app,cache
+dart run routed_cli config:publish --only app,cache
 ```
 
 ### Built-in provider catalogue
+
+This is the provider catalogue for the current `package:routed` bundle. The
+The `routed.security` provider contributes request-size limits, CORS,
+trusted-proxy settings, and optional IP filtering. The `routed.compression`
+provider adds opt-in gzip compression for buffered responses. The
+`routed.static` provider serves storage-backed declarative mounts, while direct
+engine/router static helpers remain available for code-defined routes.
 
 | Provider ID | Description |
 | --- | --- |
@@ -262,13 +275,12 @@ dart run routed config:publish --only app,cache
 | `routed.cache` | Configures the cache manager and default stores (`cache.*`). |
 | `routed.sessions` | Enables session middleware, cookie/file stores, and session defaults (`session.*`). |
 | `routed.uploads` | Normalises multipart limits (`uploads.*`) and feeds them into `EngineConfig`. |
-| `routed.cors` | Applies CORS defaults (`cors.*` or `security.cors`) and manages middleware reloads. |
-| `routed.security` | Handles CSRF, security headers, trusted proxies, and request size limits from `security.*`. |
 | `routed.logging` | Controls the HTTP logging middleware and structured logging defaults (`logging.*`). |
 | `routed.storage` | Manages storage disks consumed by static assets, views, and uploads (`storage.*`). |
-| `routed.static` | Serves configured static mounts (`static.*`). |
 | `routed.localization` | Binds the translation loader + translator using the default filesystem and `translation.*` config. |
 | `routed.views` | Resolves view engines/directories using the shared storage layer (`view.*`). |
+| `routed.compression` | Adds opt-in gzip compression for eligible buffered responses (`compression.*`). |
+| `routed.security` | Applies request-size limits, CORS, trusted-proxy client-IP resolution, and optional IP filtering (`security.*` and `cors.*`). |
 
 Custom providers can be added by calling `ProviderRegistry.instance.register('your.id', factory: () => YourProvider(), description: '...')`—this makes them visible to the CLI and eligible for inclusion in the manifest.
 
@@ -335,7 +347,7 @@ class MailProvider extends ServiceProvider with ProvidesDefaultConfig {
 Each built-in provider validates its portion of the manifest. Examples include:
 
 - `uploads.max_memory` / `uploads.max_file_size` must be integers.
-- `cors.allowed_origins`, `logging.request_headers`, `security.trusted_proxies.proxies`, and `static.mounts[].disk` must be non-empty strings.
+  - `cors.allowed_origins`, `logging.request_headers`, and `security.trusted_proxies.proxies` must be non-empty strings. `static.mounts` entries must provide a route and either a disk or root.
 - `cache.default` must be a string that references a store defined under `cache.stores`.
 - `view.engine`, `view.directory`, and `view.disk` must be strings; `view.cache` must be a boolean.
 
@@ -403,7 +415,9 @@ http:
     trusted_platform: { enabled: true }
 ```
 
-The providers honour these flags when deciding whether to run (for example, `routed.security` checks `enableSecurityFeatures`).
+The currently registered providers honour these flags when deciding whether to
+run. `routed.security` applies the proxy, CORS, and IP-filter settings described
+above; CSRF and security-header middleware remain explicit application APIs.
 
 ## Application keys & secrets
 
@@ -419,7 +433,7 @@ session:
 ```
 
 ```dotenv title=".env"
-SESSION__CONFIG__APP_KEY=base64:Z0x2...   # generate with `dart run routed key:generate`
+SESSION__CONFIG__APP_KEY=base64:Z0x2...   # generate with `dart run routed_cli key:generate`
 ```
 
 Keep the actual value in `.env`/deployment secrets. The loader exposes both `SESSION__CONFIG__APP_KEY` and `session.config.app_key`, so providers can reference whichever shape is most convenient. The core provider merges `app.key` into `EngineConfig.appKey` so other services can reuse it.
@@ -494,7 +508,7 @@ root: "{{ app.root }}/storage/app"
 final projectRoot = configValue<String>('app.root');
 ```
 
-The `app.root` key is only set when it is not already explicitly defined in your configuration. Providers like `ViewServiceProvider` and `StorageServiceProvider` use it to resolve relative paths.
+The `app.root` key is only set when it is not already explicitly defined in your configuration. The view and storage providers use it to resolve relative paths.
 
 ### `onConfigReload` hook
 
@@ -515,7 +529,9 @@ class MyProvider extends ServiceProvider with ProvidesDefaultConfig {
 }
 ```
 
-All built-in providers (logging, storage, views, sessions, CORS, security, etc.) implement this hook, which is why configuration changes take effect without restarting the server.
+Registered providers such as logging, storage, views, sessions, and security
+implement this hook, which is why their configuration changes take effect
+without restarting the server.
 
 ## Listening to configuration events
 
@@ -658,6 +674,7 @@ view:
 Bootstrap the engine with the same structure when supplying configuration imperatively:
 
 ```dart
+registerRoutedProviders();
 final engine = Engine(
   providers: Engine.builtins,
   configItems: {
@@ -689,7 +706,7 @@ engine.useViewEngine(
 );
 ```
 
-Import `package:routed/template.dart` to access `LiquidViewEngine` and `LiquidRoot` in code samples.
+Import `package:routed/routed.dart` to access `LiquidViewEngine` and `LiquidRoot` in code samples.
 
 When watch mode is enabled (`ConfigLoaderOptions.watch: true`) a change to `config/` or `.env` files triggers `ConfigReloadedEvent`; the view provider listens for the event and reapplies `view.*` settings so disk/directory/cache tweaks take effect without restarting the server.
 
@@ -731,7 +748,8 @@ final config = EngineConfig(
 
 ### Static assets
 
-Static files can now be configured declaratively. Enable the static provider and describe the mounts you want to expose:
+Static files can be registered directly on a router or engine, or through the
+storage-backed `routed.static` provider:
 
 ```yaml title="config/http.yaml"
 storage:
@@ -753,31 +771,19 @@ static:
 
 Each mount maps a request prefix (`route`) to a location managed by the storage provider. Provide `disk` to reuse a configured storage disk and set `path` relative to that disk (the legacy `directory` key is still honoured). When `index` is set, requests that land on the mount root (or a directory ending with a trailing slash) will serve that file. Enable `list_directories` to render directory listings when no index is available.
 
-You can toggle mounts at runtime via `EngineOpt.withStaticAssets`:
+Use the direct `static`/`staticFile` helpers above to serve assets today. For
+example:
 
 ```dart
-engine = Engine(
-  options: [
-    withStaticAssets(
-      enabled: true,
-      route: '/assets',
-      mounts: [
-        {
-          'route': '/assets',
-          'disk': 'assets',
-          'path': '',
-          'index': 'index.html',
-          'list_directories': false,
-        },
-      ],
-    ),
-  ],
-);
+registerRoutedProviders();
+final engine = await Engine.create();
+engine.static('/assets', 'public/assets');
 ```
 
-Configuration reloads update the static middleware without restarting the engine.
-
-> Programmatic overrides can supply a custom `file_system` (and optional `root`) when mounting assets. This is useful for in-memory fixtures during tests or when embedding templates from a virtual file system.
+Configuration reloads do not install or update static mounts in the current
+bundle. Programmatic direct helpers can supply a custom `file_system` (and
+optional `root`) when mounting assets. This is useful for in-memory fixtures
+during tests or when embedding templates from a virtual file system.
 
 ### Storage disks
 
@@ -806,70 +812,12 @@ The storage provider feeds other subsystems automatically: set `view.disk` to ba
 
 Use the top-level `storage.root` key (or the `STORAGE_ROOT` environment variable exposed in new projects) to move the baseline path for the built-in `local` disk without editing every disk entry. If you omit the entire `storage` section the provider still seeds a default `local` disk, but its root now derives from `storage.root` (defaulting to `storage/app`).
 
-Cloud storage is available out of the box through the `s3` driver (and aliases like `minio`, `spaces`, and `r2`). Configure credentials under `options`:
-
-```yaml title="S3-compatible disk"
-storage:
-  default: local
-  cloud: s3
-  disks:
-    local:
-      driver: local
-      root: storage/app
-    s3:
-      driver: s3
-      options:
-        endpoint: s3.amazonaws.com
-        key: "{{ env.AWS_ACCESS_KEY_ID }}"
-        secret: "{{ env.AWS_SECRET_ACCESS_KEY }}"
-        bucket: my-app-assets
-        use_ssl: true
-        region: us-east-1
-```
-
-The provider also boots the [`Storage` facade](https://pub.dev/packages/storage_fs), so code that prefers a Laravel-style API can call it directly:
-
-```dart
-await Storage.put('reports/summary.txt', 'Quarterly results');
-final downloadUrl = await Storage.cloud().getTemporaryUrl(
-  'reports/summary.txt',
-  DateTime.now().add(Duration(minutes: 10)),
-);
-```
-
-To add new drivers, call `StorageServiceProvider.registerDriver` before boot (or inside a service provider). Provide a builder that returns a `StorageDisk` and optionally a `documentation` callback that returns `ConfigDocEntry` items. Those entries feed `provider:list --config` and appear beside the built-in docs under `storage.disks.*`, so teams know which extra keys your driver accepts.
-
-```dart
-StorageServiceProvider.registerDriver(
-  'dropbox',
-  (context) => DropboxDisk(
-    token: context.option<String>('token')!,
-    root: context.option<String>('root') ?? '/app',
-  ),
-  documentation: (ctx) => <ConfigDocEntry>[
-    ConfigDocEntry(
-      path: ctx.path('token'),
-      type: 'string',
-      description: 'Access token used to authenticate Dropbox requests.',
-    ),
-    ConfigDocEntry(
-      path: ctx.path('root'),
-      type: 'string',
-      description: 'Remote folder that acts as the disk root.',
-    ),
-  ],
-);
-```
-
-The built-in `local` driver is registered the same way, so overrides and custom drivers exercise the identical code paths.
-
-> Need a bigger picture? Check [Driver Registries](/docs/routed/advanced/driver-registries) for patterns that apply across storage, cache, and session subsystems.
-
-```bash
-routed provider:driver storage my_driver
-```
-
-The CLI writes a starter file to `lib/drivers/storage/`, including the boilerplate `registerDriver` call and documentation callback.
+Cloud storage is not created from `storage.*` configuration by the current
+Routed provider. The lower-level `server_storage` package exposes
+`CloudStorageDisk`; construct a `StorageManager` with that disk and pass it to
+`RoutedStorageProvider` when an application has a compatible cloud adapter.
+This keeps cloud credentials and adapter setup in application code until a
+first-party configuration driver is added.
 
 ### Session Configuration
 
@@ -898,7 +846,7 @@ final config = EngineConfig(
 );
 ```
 
-> Store secrets in the manifest via Liquid placeholders (for example `session.config.app_key: "{{ session.config.app_key }}"` and `app.key: "{{ session.config.app_key }}"`). Keep the actual key in `.env` as `SESSION__CONFIG__APP_KEY` and generate it with `dart run routed key:generate`.
+> Store secrets in the manifest via Liquid placeholders (for example `session.config.app_key: "{{ session.config.app_key }}"` and `app.key: "{{ session.config.app_key }}"`). Keep the actual key in `.env` as `SESSION__CONFIG__APP_KEY` and generate it with `dart run routed_cli key:generate`.
 
 ### Custom template engines
 
@@ -935,7 +883,7 @@ final viewManager = await engine.make<ViewEngineManager>();
 viewManager.register(MustacheViewEngine(directory: 'templates'));
 ```
 
-Pair this with the `view.*` config (or `withStaticAssets`/`storage.*`) so the rest of the ecosystem keeps using the same disks and cache settings.
+Pair this with the `view.*` and `storage.*` config so the active providers keep using the same disks and cache settings. Historical static mount configuration does not install routes in the current bundle.
 
 If you’re migrating from older codebases you can still rely on the legacy `templateDirectory` / `templateEngine` fields on `EngineConfig`, but we recommend converging on the provider + disk approach to keep configuration centralised.
 
@@ -944,6 +892,7 @@ If you’re migrating from older codebases you can still rely on the legacy `tem
 All providers share the same file system. Swap it out during tests:
 
 ```dart
+registerRoutedProviders();
 final engine = Engine(
   config: EngineConfig(fileSystem: memory.MemoryFileSystem.test()),
   providers: Engine.builtins,
@@ -1081,12 +1030,12 @@ final config = EngineConfig(
 | Logging middleware | `logging.*` | `withLogging(...)` |
 | Cache stores | `cache.default`, `cache.stores.*` | `withCacheManager(...)` |
 | Sessions | `session.config` / `session` | `withSessionConfig(...)` |
-| Static assets | `static.enabled`, `static.mounts[*]` | `withStaticAssets(...)` |
+| Static assets | `static.enabled`, `static.mounts[*]` via `routed.static` | `static(...)` / `staticFile(...)` direct helpers |
 | Remote IP headers | `security.trusted_proxies.headers` | `EngineConfig(remoteIPHeaders: [...])` |
 | File system | -- (inherits from environment) | `EngineConfig(fileSystem: ...)` |
 | App key | `app.key`/`env.APP_KEY` | `EngineConfig(appKey: ...)` |
 
-`dart run routed provider:list --config` is a quick way to verify the manifest-driven configuration after edits.
+`dart run routed_cli provider:list --config` is a quick way to verify the manifest-driven configuration after edits.
 
 ### Enable HTTP/2
 
@@ -1175,7 +1124,7 @@ final engine = Engine();
 
 ## Environment helper
 
-Routed includes an `Environment` wrapper that merges system variables with values loaded from `.env` files (`packages/routed/lib/src/utils/environment.dart:1`). Use the exported singleton `env` when you want safe reads or in-memory overrides:
+Routed includes an `Environment` wrapper that merges system variables with values loaded from `.env` files. Use the exported singleton `env` when you want safe reads or in-memory overrides:
 
 ```dart
 import 'package:routed/routed.dart';
@@ -1243,6 +1192,7 @@ EngineConfig createConfig() {
   );
 }
 
+registerRoutedProviders();
 final engine = Engine(
   config: createConfig(),
   providers: Engine.builtins,
@@ -1290,6 +1240,7 @@ class AppConfig {
 
 // Usage
 final appConfig = AppConfig.fromEnv();
+registerRoutedProviders();
 final engine = Engine(
   config: appConfig.toEngineConfig(),
   providers: Engine.builtins,
@@ -1300,6 +1251,7 @@ final engine = Engine(
 1. Use Environment Variables
 
 ```dart
+registerRoutedProviders();
 final engine = Engine(
   config: EngineConfig(
     appKey: Platform.environment['APP_KEY'],

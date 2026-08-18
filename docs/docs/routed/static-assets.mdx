@@ -6,9 +6,10 @@ sidebar_position: 20
 
 # Static Assets
 
-Static mounts expose files and directories through declarative configuration. They sit in the request pipeline as middleware and are also registered as `GET`/`HEAD` routes (so they appear in `routed routes`).
-
-## Configuration
+The `routed_storage` package owns declarative static mounts. The
+batteries-included `routed` facade registers the provider as `routed.static`.
+Direct router/engine helpers remain useful when a mount is entirely
+programmatic.
 
 Define mounts under `static.mounts` and back them with storage disks:
 
@@ -32,6 +33,11 @@ storage:
       root: public
 ```
 
+The provider must be included in the engine composition. With the `routed`
+facade, call `registerRoutedProviders()` before `Engine.create()`; with a
+slim composition, use `RoutedStorageProvider` and `RoutedStaticProvider`
+explicitly.
+
 ## Mount options
 
 Each mount supports:
@@ -47,8 +53,8 @@ Programmatic configuration can also supply `file_system` when mounting assets.
 
 ## Behavior
 
-- Missing files do **not** match the mount route; requests fall through to normal routing.
-- Directory requests use `index` if configured, otherwise fall back to listing (when enabled).
+- Missing files return `404` from the mount.
+- Directory requests use `index` if configured, otherwise return `404` unless listing is enabled.
 - Paths are normalized and rejected if they escape the disk root.
 
 ## Programmatic helpers
@@ -63,7 +69,9 @@ router.staticFile('/favicon.ico', 'public/favicon.ico');
 ## Troubleshooting
 
 - If mounts 404, confirm the storage disk root matches your project `public` directory.
-- Use `routed provider:list --config` to see merged mount config and `routed routes` to verify the mount routes are registered.
+- Use `dart run routed_cli provider:list --config` to verify that `routed.static`
+  is registered, and `dart run routed_cli routes` to inspect the resulting
+  `GET`/`HEAD` routes after the app boots.
 
 ## Next steps
 

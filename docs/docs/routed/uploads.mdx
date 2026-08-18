@@ -30,6 +30,7 @@ uploads:
 You can also configure uploads programmatically with `withMultipart`:
 
 ```dart
+registerRoutedProviders();
 final engine = await Engine.create(options: [
   withMultipart(
     maxMemory: 16 * 1024 * 1024,
@@ -42,6 +43,7 @@ final engine = await Engine.create(options: [
 Or use `configItems` on `Engine.create`:
 
 ```dart
+registerRoutedProviders();
 final engine = await Engine.create(configItems: {
   'uploads.max_file_size': 5 * 1024 * 1024,
   'uploads.allowed_extensions': ['jpg', 'png', 'webp'],

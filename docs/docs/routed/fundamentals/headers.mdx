@@ -82,7 +82,12 @@ router.use((ctx, next) async {
 });
 ```
 
-Rather not hand-roll them? Configure the security provider once and let it manage header middleware. Note: X-XSS-Protection is deprecated in modern browsers; rely on a strong Content Security Policy (CSP) instead:
+Rather not hand-roll them? `routed.security` handles trusted proxies,
+request-size limits, CORS when enabled, and IP filtering; it does not install
+security-header middleware. Keep these headers in explicit application
+middleware. Note:
+X-XSS-Protection is deprecated in
+modern browsers; rely on a strong Content Security Policy (CSP) instead:
 
 ```yaml title="config/http.yaml"
 security:
@@ -93,7 +98,8 @@ security:
     Content-Security-Policy: "default-src 'self'"
 ```
 
-`routed.security` validates this section and inserts the corresponding middleware automatically. Use `dart run routed provider:list --config` to review the active headers and spot malformed values before starting the server.
+The explicit middleware example above is the runnable path for security
+headers.
 
 ## Content Negotiation
 Accept headers often include multiple types and weights (q-values). The example below is simplified; in production, prefer robust parsing or default to JSON sensibly.

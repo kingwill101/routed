@@ -6,7 +6,7 @@ sidebar_position: 12
 
 # Contracts
 
-Routed exposes a small set of lightweight contracts so you can swap in your own configuration sources, cache backends, and tooling without forking the framework. The most common contracts live under `package:routed/src/contracts`. Prefer integrating them through service providers so they participate in the container lifecycle (register/boot/cleanup) and can be configured via the manifest.
+Routed exposes a small set of lightweight contracts so you can swap in your own configuration sources, cache backends, and tooling without forking the framework. Import the public contracts from `package:routed/routed.dart`. Prefer integrating them through service providers so they participate in the container lifecycle (register/boot/cleanup) and can be configured via the manifest.
 
 ## Configuration Contract
 

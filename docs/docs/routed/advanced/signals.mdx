@@ -40,7 +40,7 @@ ordered handlers.
   `sender` metadata), and published on the event bus.
 
 ```dart
-import 'package:routed/signals.dart';
+import 'package:routed/routed.dart';
 
 Future<void> bootMetrics(Engine engine) async {
   final hub = await engine.container.make<SignalHub>();
@@ -175,7 +175,7 @@ same `EngineRoute` instance the router uses).
 - **Avoid side effects in error listeners** – `UnhandledSignalError` handlers should log or emit metrics. Do not throw
   unless you intend to crash the process.
 - **Unit test signal flows** – Integration tests can attach handlers to `SignalHub` and assert order or error handling,
-  as seen in `packages/routed/test/events/signal_test.dart`.
+  as covered by the signal tests.
 
 ## Further reading
 

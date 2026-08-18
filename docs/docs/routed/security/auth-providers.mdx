@@ -18,14 +18,8 @@ The `routed_auth` package provides pre-built OAuth providers following the NextA
 
 ```yaml title="pubspec.yaml"
 dependencies:
-  routed:
-    git:
-      url: https://github.com/kingwill101/routed.git
-      path: packages/routed
-  routed_auth:
-    git:
-      url: https://github.com/kingwill101/routed.git
-      path: packages/routed_auth
+  routed: ^0.3.3
+  routed_auth: ^0.1.0
 ```
 
 ### Available Providers
@@ -52,6 +46,7 @@ dependencies:
 import 'package:routed/routed.dart';
 import 'package:routed_auth/routed_auth.dart';
 
+registerRoutedProviders();
 final engine = await Engine.create(
   providers: [
     ...Engine.builtins,

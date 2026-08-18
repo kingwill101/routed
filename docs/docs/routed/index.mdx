@@ -16,8 +16,8 @@ Routed is a modular HTTP framework for Dart applications. It combines a lightwei
 - **View rendering** – render Liquid templates out of the box and plug in custom template engines.
 - **Stateful utilities** – optional cache manager, session middleware, and request-ID helpers.
 - **[Signals & events](/docs/routed/advanced/signals)** – a typed signal hub backed by the event bus so you can hook into request lifecycle changes without manual stream management.
-- **Security & runtime** – built-in CSRF, CORS, security headers, request size limits, trusted proxy support, HTTP/2 negotiation, response compression, and graceful shutdown controls via `EngineConfig`.
-- **Providers & configuration** – each subsystem (cache, sessions, uploads, static assets, security, logging, etc.) ships as a service provider with sensible defaults. Feature toggles live in `config/http.yaml`, and the CLI (`dart run routed provider:list --config`) shows provider defaults and validation errors.
+- **Security & runtime** – the core engine enforces request-size limits and supports trusted-proxy parsing; `routed.security` adds configurable CORS and optional IP filtering. `routed.compression` adds opt-in gzip compression for buffered responses. HTTP/2 and graceful shutdown are built in. CSRF and security headers remain application middleware; declarative static mounts remain a restoration target while direct static helpers are available.
+- **Providers & configuration** – the current bundle registers core, routing, uploads, auth, logging, views, localization, observability, cache, sessions, storage, rate-limit, compression, and security providers. Feature toggles live in `config/http.yaml`, and the CLI (`dart run routed_cli provider:list --config`) shows registered provider defaults and validation errors.
 - **CLI tooling** – `routed` scaffolds projects, runs a hot-reload dev server, publishes config templates (`config:publish`), inspects routes, and generates persisted specs.
 
 ## Quick Start
@@ -26,7 +26,8 @@ Routed is a modular HTTP framework for Dart applications. It combines a lightwei
 import 'package:routed/routed.dart';
 
 Future<void> main() async {
-  // Create a fully-featured engine with all built-in providers
+  registerRoutedProviders();
+  // Create an engine with the official providers
   final engine = await Engine.create();
 
   engine.get('/hello/{name}', (ctx) async {
@@ -49,10 +50,10 @@ Future<void> main() async {
 
 This example highlights the core workflow:
 
-1. Build an `Engine` using `Engine.create()` which loads all built-in providers (config, routing, sessions, cache, logging, etc.).
+1. Call `registerRoutedProviders()` once, then build an `Engine` using `Engine.create()` (config, routing, sessions, cache, logging, and related adapters).
 2. Register routes with typed parameters and route names for URL generation.
 3. Group related routes, layering authentication middleware without repeating configuration.
-4. Start the server with HTTP/1.1 or HTTP/2, static assets, sessions, and observability features ready to enable as needs evolve.
+4. Start the server with HTTP/1.1 or HTTP/2, sessions, storage, views, and observability features ready to enable as needs evolve.
 
 For minimal applications or benchmarks, use `Engine()` (bare mode) or `Engine.create(providers: Engine.defaultProviders)` (core + routing only).
 
@@ -61,7 +62,7 @@ For minimal applications or benchmarks, use `Engine()` (bare mode) or `Engine.cr
 - [Getting Started](/docs/routed/getting-started): install packages, create an engine, mount a router, and run your first server.
 - [Fundamentals](/docs/routed/fundamentals/): routing, middleware, request and response helpers, validation, CLI tooling, and configuration.
 - [State & Persistence](/docs/routed/state/): caching and session management using configurable stores.
-- [Security](/docs/routed/security/): enable CSRF, CORS, proxy awareness, secure headers, upload hardening, and tune compression.
+- [Security](/docs/routed/security/): enable CSRF, CORS, proxy awareness, secure headers, upload hardening, and gzip compression.
 - [Server-Sent Events](/docs/routed/fundamentals/sse): stream real-time updates with the built-in SSE helper and heartbeats.
 - [Graceful shutdown](/docs/routed/fundamentals/graceful-shutdown): configure signal handlers and draining behaviour.
 - [Views & Templating](/docs/routed/views/): render Liquid views and integrate custom template engines.

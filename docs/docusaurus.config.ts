@@ -6,18 +6,18 @@ import type * as Preset from '@docusaurus/preset-classic';
 
 const config: Config = {
   title: 'Routed',
-    tagline: 'Routing, testing, and property-based tooling for Dart',
-  favicon: 'img/favicon.ico',
+  tagline: 'A Dart toolkit for shipping backend systems.',
+  favicon: 'img/routed-mark.svg',
 
   // Set the production url of your site here
-    url: 'https://kingwill101.github.io',
+  url: 'https://docs.routed.dev',
   // Set the /<baseUrl>/ pathname under which your site is served
   // For GitHub pages deployment, it is often '/<projectName>/'
   baseUrl: '/',
 
   // GitHub pages deployment config.
   // If you aren't using GitHub pages, you don't need these.
-    organizationName: 'kingwill101', // GitHub org/user name.
+  organizationName: 'kingwill101', // GitHub org/user name.
     projectName: 'routed', // Repo name.
 
   onBrokenLinks: 'throw',
@@ -71,26 +71,6 @@ const config: Config = {
     [
       '@docusaurus/plugin-content-docs',
       {
-        id: 'inertia_dart',
-        path: 'docs/inertia_dart',
-        routeBasePath: 'docs/inertia_dart',
-        sidebarPath: './sidebars/inertia_dart.ts',
-        editUrl: 'https://github.com/kingwill101/routed/tree/main/docs/',
-      },
-    ],
-    [
-      '@docusaurus/plugin-content-docs',
-      {
-        id: 'routed_inertia',
-        path: 'docs/routed_inertia',
-        routeBasePath: 'docs/routed_inertia',
-        sidebarPath: './sidebars/routed_inertia.ts',
-        editUrl: 'https://github.com/kingwill101/routed/tree/main/docs/',
-      },
-    ],
-    [
-      '@docusaurus/plugin-content-docs',
-      {
         id: 'server_testing',
         path: 'docs/server-testing',
         routeBasePath: 'docs/server_testing',
@@ -131,63 +111,40 @@ const config: Config = {
   ],
 
   themeConfig: {
-    // Replace with your project's social card
     image: 'img/docusaurus-social-card.jpg',
     navbar: {
       title: 'Routed',
       logo: {
         alt: 'Routed Logo',
-        src: 'img/logo.svg',
+        src: 'img/routed-mark.svg',
       },
       items: [
+        {
+          type: 'dropdown',
+          label: 'Build',
+          position: 'left',
+          items: [
+            {label: 'Routed', to: '/docs/routed/'},
+            {label: 'Routed Hotwire', to: '/docs/routed_hotwire/'},
+          ],
+        },
+        {
+          type: 'dropdown',
+          label: 'Test',
+          position: 'left',
+          items: [
+            {label: 'Server Testing', to: '/docs/server_testing/'},
+            {label: 'Server Testing Shelf', to: '/docs/server_testing_shelf/'},
+            {label: 'Routed Testing', to: '/docs/routed_testing/'},
+            {label: 'Property Testing', to: '/docs/property_testing/'},
+          ],
+        },
         {
           type: 'docSidebar',
           sidebarId: 'routedSidebar',
           docsPluginId: 'routed',
           position: 'left',
-          label: 'Routed',
-        },
-        {
-          type: 'docSidebar',
-          sidebarId: 'inertiaDartSidebar',
-          docsPluginId: 'inertia_dart',
-          position: 'left',
-          label: 'Inertia Dart',
-        },
-        {
-          type: 'docSidebar',
-          sidebarId: 'routedHotwireSidebar',
-          docsPluginId: 'routed_hotwire',
-          position: 'left',
-          label: 'Routed Hotwire',
-        },
-        {
-          type: 'docSidebar',
-          sidebarId: 'serverTestingSidebar',
-          docsPluginId: 'server_testing',
-          position: 'left',
-          label: 'Server Testing',
-        },
-        {
-          type: 'docSidebar',
-          sidebarId: 'serverTestingShelfSidebar',
-          docsPluginId: 'server_testing_shelf',
-          position: 'left',
-          label: 'Server Testing Shelf',
-        },
-        {
-          type: 'docSidebar',
-          sidebarId: 'routedTestingSidebar',
-          docsPluginId: 'routed_testing',
-          position: 'left',
-          label: 'Routed Testing',
-        },
-        {
-          type: 'docSidebar',
-          sidebarId: 'propertyTestingSidebar',
-          docsPluginId: 'property_testing',
-          position: 'left',
-          label: 'Property Testing',
+          label: 'Routed docs',
         },
         {
             href: 'https://github.com/kingwill101/routed',
@@ -203,7 +160,6 @@ const config: Config = {
           title: 'Docs',
           items: [
             {label: 'Routed', to: '/docs/routed/'},
-            {label: 'Inertia Dart', to: '/docs/inertia_dart/'},
             {label: 'Routed Hotwire', to: '/docs/routed_hotwire/'},
             {label: 'Server Testing', to: '/docs/server_testing/'},
             {label: 'Server Testing Shelf', to: '/docs/server_testing_shelf/'},

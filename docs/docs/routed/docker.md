@@ -128,7 +128,7 @@ secrets:
 
 ### Local Development (without Docker)
 ```bash
-dart run routed dev
+dart run routed_cli dev
 ```
 
 ### Development with Docker

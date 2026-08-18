@@ -41,6 +41,7 @@ By default, engines are created with `Engine.defaultProviders` (core + routing).
 Pass `providers` to use a different set:
 
 ```dart
+registerRoutedProviders();
 engineGroup(
   'with cache & sessions',
   providers: Engine.builtins,  // Use all providers

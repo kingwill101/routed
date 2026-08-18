@@ -5,9 +5,29 @@ sidebar_position: 7
 description: Handle bidirectional real-time communication with Routed's WebSocket support.
 ---
 
-WebSockets give you full-duplex, bidirectional communication over a single TCP
+WebSockets give you full-duplex, bidirectional communication over a single
 connection. Routed provides a handler-based API that manages the upgrade
-handshake, message routing, and lifecycle callbacks.
+handshake, message routing, and lifecycle callbacks. The handler API is
+host-neutral, but the selected host must expose a WebSocket upgrade capability.
+See [Host Runtimes](../advanced/hosts) for the full runtime boundary.
+
+## Host support
+
+| Host | Entry model | Streaming | WebSocket upgrades |
+| --- | --- | --- | --- |
+| `routed_io` on the Dart VM | Listener | Yes | Supported |
+| `routed_node` on Node.js | Listener | Yes | Supported |
+| `routed_node` on Bun | Listener | Yes | Supported |
+| `routed_node` on Deno | Listener | Yes | Adapter support; validate the target runtime before production use |
+| Cloudflare Workers | Fetch export | Yes | Supported |
+| Vercel Node | Node function | Yes | Supported through the Node upgrade entrypoint |
+| Vercel Edge | Fetch export | Yes | Not available through the Edge entrypoint |
+| Netlify Edge | Fetch export | Yes | Not available; there is no server-side upgrade boundary |
+
+The same `engine.ws(...)` route and `WebSocketHandler` can be shared across
+hosts that support upgrades. On a host without that capability, an upgrade
+request cannot be accepted; deploy the route to a listener/host with WebSocket
+support or use a managed real-time service.
 
 ## Registering a WebSocket route
 
@@ -43,6 +63,7 @@ class EchoHandler implements WebSocketHandler {
 }
 
 void main() async {
+  registerRoutedProviders();
   final engine = await Engine.create();
 
   engine.ws('/ws/echo', EchoHandler());
@@ -67,19 +88,19 @@ All callbacks may be synchronous or asynchronous — return `void` or `Future<vo
 
 ## WebSocketContext
 
-`WebSocketContext` wraps the underlying `dart:io` `WebSocket` and carries the
-initial `EngineContext` from the HTTP upgrade request:
+`WebSocketContext` wraps the host-neutral `RoutedWebSocket` connection and
+carries the initial `EngineContext` from the HTTP upgrade request:
 
 ```dart
 class WebSocketContext {
-  /// The underlying dart:io WebSocket.
-  final WebSocket webSocket;
+  /// The host-neutral WebSocket connection.
+  final RoutedWebSocket webSocket;
 
   /// The HTTP context from the upgrade request.
   /// Use this to access path params, query params, headers, etc.
   final EngineContext initialContext;
 
-  /// Send data (String or List<int>) to the client.
+  /// Send data (String, List<int>, or another host-supported value) to the client.
   void send(dynamic data);
 
   /// Close the connection with an optional code and reason.

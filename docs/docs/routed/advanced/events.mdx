@@ -13,7 +13,7 @@ Routed exposes an event bus so you can hook into the request lifecycle, provider
 
 ## Event manager basics
 
-The framework registers an `EventManager` singleton via `RoutingServiceProvider` (`packages/routed/lib/src/engine/providers/routing.dart:1`). Resolve it from the container or the request context when publishing or subscribing:
+The framework registers an `EventManager` singleton via `RoutingServiceProvider`. Resolve it from the container or the request context when publishing or subscribing:
 
 ```dart
 final eventManager = await engine.make<EventManager>();
@@ -36,7 +36,7 @@ router.post('/orders', (ctx) async {
 });
 ```
 
-`EventManager` wraps `package:event_bus/event_bus.dart` and implements `Disposable` so it cleans up on engine shutdown (`packages/routed/lib/src/events/event_manager.dart:1`). Listener lifecycle: keep references to `StreamSubscription`s and cancel them during provider `cleanup()` or test teardown to avoid leaks. For one-shot reactions prefer `.first`/`take(1)` or filter-and-`takeWhile(...)`. Always supply `onError` when listening so failures don't go unobserved.
+`EventManager` wraps `package:event_bus/event_bus.dart` and implements `Disposable` so it cleans up on engine shutdown. Listener lifecycle: keep references to `StreamSubscription`s and cancel them during provider `cleanup()` or test teardown to avoid leaks. For one-shot reactions prefer `.first`/`take(1)` or filter-and-`takeWhile(...)`. Always supply `onError` when listening so failures don't go unobserved.
 
 ```dart
 late final StreamSubscription sub;
@@ -59,7 +59,7 @@ Future<void> cleanup(Container c) async {
 
 ## Routing lifecycle events
 
-Routed emits structured events during request processing whenever the routing provider is active (`packages/routed/lib/src/engine/events/route.dart:1`):
+Routed emits structured events during request processing whenever the routing provider is active:
 
 - `BeforeRoutingEvent` – just after the `EngineContext` is created.
 - `RouteMatchedEvent` – when a route match is found.
@@ -101,7 +101,7 @@ hub.requests.routeMatched.connect((event) async {
 hub.requests.routeMatched.disconnect(myHandler);
 ```
 
-> Prefer `package:routed/signals.dart` when you only need the signal types without the full barrel import.
+> Prefer the signal types re-exported by `package:routed/routed.dart`; the public Routed package intentionally exposes one central barrel.
 
 ### Accessing the signal hub
 
@@ -147,7 +147,7 @@ Signals are thin facades over the existing routing events—the engine still pub
 
 ## System events
 
-The engine also publishes system-level events (`packages/routed/lib/src/events/system_events.dart:4`):
+The engine also publishes system-level events:
 
 - `ProviderRegisteredEvent` / `ProviderBootedEvent` – emitted as providers register and boot.
 - `RequestContainerCreatedEvent` / `RequestContainerDisposedEvent` – wrap request-scoped container lifecycle.

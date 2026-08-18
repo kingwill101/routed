@@ -16,40 +16,31 @@ All driver registries now share a single implementation (`DriverRegistryBase`) s
 - Duplicate registrations throw the same `ProviderConfigException`, so conflicting names are easy to spot regardless of subsystem.
 
 ```dart title="Import driver registries"
-import 'package:routed/drivers.dart';
+import 'package:routed/routed.dart';
 ```
 
 ## Storage
 
+`routed_storage` currently creates local disks from `storage.*` configuration;
+it does not expose a generic storage driver registry. For a custom or cloud
+disk, construct a `StorageDisk` and pass a configured `StorageManager` to
+`RoutedStorageProvider`:
+
 ```dart
-StorageServiceProvider.registerDriver(
-  'memory',
-  (context) {
-    final root =
-        context.configuration['root']?.toString() ?? 'memory/${context.diskName}';
-    final override = context.configuration['file_system'];
-    final fileSystem = override is FileSystem
-        ? override
-        : context.manager.defaultFileSystem;
-    return LocalStorageDisk(root: root, fileSystem: fileSystem);
-  },
-  documentation: (ctx) => <ConfigDocEntry>[
-    ConfigDocEntry(
-      path: ctx.path('root'),
-      type: 'string',
-      description: 'Disk root (defaults to memory/<name>).',
-    ),
-    ConfigDocEntry(
-      path: ctx.path('file_system'),
-      type: 'FileSystem',
-      description: 'Optional file system override for tests.',
-    ),
+final manager = StorageManager()
+  ..registerDisk('assets', myStorageDisk)
+  ..setDefault('assets');
+
+final engine = await Engine.create(
+  providers: [
+    ...Engine.defaultProviders,
+    RoutedStorageProvider(manager),
   ],
 );
 ```
 
-- **Resolution:** The storage provider calls into the registry whenever it encounters `storage.disks.*.driver`.
-- **Documentation:** Add a `documentation` callback to publish `ConfigDocEntry` items. They appear under `storage.disks.*` in `provider:list --config` output and in the docs.
+Use `RoutedStaticProvider` alongside it when the app also needs
+`static.mounts`.
 
 ## Cache
 
@@ -61,13 +52,10 @@ CacheManager.registerDriver(
     final config = Map<String, dynamic>.from(context.userConfig);
 
     // Provide defaults the user can override later.
-    final defaults = context.get<StorageDefaults>();
     config['host'] ??= '127.0.0.1';
     config['port'] = int.tryParse('${config['port'] ?? ''}') ?? 6379;
     config['url'] ??= 'redis://${config['host']}:${config['port']}/0';
-    if (defaults != null && config['cache_dir'] == null) {
-      config['cache_dir'] = defaults.frameworkPath('cache/redis');
-    }
+    config['cache_dir'] ??= 'storage/framework/cache/redis';
     return config;
   },
   validator: (config, driver) {
@@ -98,7 +86,7 @@ CacheManager.registerDriver(
       type: 'string',
       description: 'Directory used for Redis driver cache files.',
       metadata: const {
-        'default_note': 'Computed from StorageDefaults when omitted.',
+        'default_note': 'Defaults to storage/framework/cache/redis.',
       },
     ),
   ],
@@ -106,7 +94,7 @@ CacheManager.registerDriver(
 ```
 
 - **Factories:** Registration wires builders that create `StoreFactory` instances; the provider caches them so every manager sees the same drivers.
-- **Config builders:** `DriverConfigContext` exposes the raw configuration, driver name, and a `get<T>()` helper for container lookups so you can compute defaults based on services such as `StorageDefaults`.
+- **Config builders:** `DriverConfigContext` exposes the raw configuration, driver name, and a `get<T>()` helper for container lookups.
 - **Validation:** Declare `requiresConfig` for mandatory keys and throw `ConfigurationException` inside `validator` for richer diagnostics.
 - **Docs:** `CacheServiceProvider` merges documentation entries under `cache.stores.*` and the CLI surfaces metadata like `default_note`, `validation`, and `required` when generating config files.
 
@@ -118,7 +106,7 @@ SessionServiceProvider.registerDriver(
   (context) {
     final root = context.raw['root']?.toString();
     final resolvedRoot = (root == null || root.trim().isEmpty)
-        ? context.storageDefaults?.frameworkPath('sessions/dropbox')
+        ? 'storage/framework/sessions/dropbox'
         : root;
 
     return SessionConfig(
@@ -160,7 +148,7 @@ SessionServiceProvider.registerDriver(
 );
 ```
 
-- **Context:** `SessionDriverBuilderContext` exposes the merged config, resolved cache manager, storage defaults, and container access so builders can derive paths or look up other services.
+- **Context:** `SessionDriverBuilderContext` exposes the merged config and container access so builders can derive paths or look up other services.
 - **Validation:** Throw `ProviderConfigException` inside the validator (or rely on `requiresConfig`) to surface actionable boot-time errors.
 - **Documentation:** Metadata follows the same conventions as cache drivers, ensuring CLI scaffolding and `provider:list --config` pick up default notes, validation hints, and required markers automatically.
 
@@ -168,7 +156,7 @@ SessionServiceProvider.registerDriver(
 
 ```dart
 import 'package:contextual/contextual.dart' as contextual;
-import 'package:routed/drivers.dart'; // exposes LogDriverRegistry
+import 'package:routed/routed.dart'; // exposes LogDriverRegistry
 
 final registry = LogDriverRegistry();
 

@@ -1,0 +1,133 @@
+---
+title: Host Runtimes
+description: Run the same Routed application on the Dart VM, JavaScript hosts, and edge platforms
+sidebar_position: 8
+---
+
+# Host Runtimes
+
+Routed keeps application code—routes, middleware, providers, and handlers—
+separate from the process that accepts HTTP requests. Choose a host package at
+the deployment boundary and keep the application engine shared across
+runtimes.
+
+## Choose a host
+
+| Runtime | Package | Entry model | Streaming | WebSockets |
+| --- | --- | --- | --- | --- |
+| Dart VM | `routed_io` | Long-lived listener | Yes | Yes |
+| Node.js | `routed_node` | Long-lived listener | Yes | Yes |
+| Bun | `routed_node` | Long-lived listener | Yes | Yes |
+| Deno | `routed_node` | Long-lived listener | Yes | Adapter support; validate the target runtime before production use |
+| Cloudflare Workers | `routed_node` | Fetch export | Yes | Yes |
+| Vercel | `routed_node` | Fetch export | Yes | No through the Edge entrypoint; the Node entrypoint includes the upgrade path |
+| Netlify Edge | `routed_node` | Fetch export | Yes | No server-side upgrade boundary |
+
+The host package owns binding, fetch conversion, and host-specific capabilities.
+The core package owns routing and request handling. Do not import
+`routed_io` into a JavaScript or edge build; do not use JavaScript-only
+`routed_node` listeners in a Dart VM process.
+
+## Dart VM with `routed_io`
+
+```yaml title="pubspec.yaml"
+dependencies:
+  routed_core: ^0.3.3
+  routed_io: ^0.1.0
+```
+
+```dart
+import 'package:routed_core/routed_core.dart';
+import 'package:routed_io/routed_io.dart';
+
+Future<void> main() async {
+  final engine = Engine(providers: Engine.defaultProviders)
+    ..get('/health', (ctx) => ctx.json({'ok': true}));
+
+  final server = await serveIo(engine, host: '127.0.0.1', port: 8080);
+  print('Listening on http://${server.host}:${server.port}');
+  // Close the handle from your shutdown handler.
+}
+```
+
+Use `portableEdge: true` with `serveIo` when you need to exercise the
+portable value boundary. The default VM path keeps the native connection path
+for streaming and WebSocket workloads.
+
+## Node, Bun, and Deno with `routed_node`
+
+```yaml title="pubspec.yaml"
+dependencies:
+  routed_core: ^0.3.3
+  routed_node: ^0.1.0
+```
+
+Node and Bun expose listener entrypoints with the same application engine:
+
+```dart
+import 'package:routed_core/routed_core.dart';
+import 'package:routed_node/node.dart';
+
+Future<void> main() async {
+  final engine = Engine(providers: Engine.defaultProviders)
+    ..get('/health', (ctx) => ctx.json({'ok': true}));
+
+  final server = await serveNode(engine, host: '0.0.0.0', port: 8080);
+  print('Listening on http://${server.host}:${server.port}');
+  // Close the handle from your shutdown handler.
+}
+```
+
+Change the host import and function to `bun.dart`/`serveBun` or
+`deno.dart`/`serveDeno` when deploying to those runtimes. The application
+engine and route definitions do not change.
+
+## Fetch-based edge deployments
+
+Fetch hosts export a handler instead of opening a listener. Cloudflare is the
+most direct example:
+
+```dart
+import 'package:routed_core/routed_core.dart';
+import 'package:routed_node/cloudflare.dart';
+
+final engine = Engine(providers: Engine.defaultProviders)
+  ..get('/health', (ctx) => ctx.json({'ok': true}));
+
+void main() {
+  defineCloudflareFetch(engine);
+}
+```
+
+Vercel and Netlify use the corresponding `vercel.dart` and `netlify.dart`
+entrypoints. These hosts receive a native Fetch `Request` and return a Fetch
+`Response`; they do not expose a long-lived listener handle.
+
+## Portable request boundaries
+
+Host adapters can dispatch through two core shapes:
+
+- `handleConnection` preserves a streaming response sink for listener hosts and
+  fetch hosts that expose native streaming.
+- `handlePortable` accepts value-based request data and returns a portable
+  response, which is useful for buffered fetch-style integrations.
+
+Prefer the host's documented entrypoint instead of calling these boundaries
+directly. They are useful when building a custom adapter or testing the host
+integration.
+
+## Capabilities and WebSockets
+
+Check the host capability value before relying on streaming, filesystem access,
+background work, or WebSocket upgrades. Fetch-based runtimes can support
+streaming without supporting server-side WebSocket upgrades; Vercel Edge and
+Netlify Edge are examples. For a persistent WebSocket route on Vercel, use the
+Node entrypoint or a managed real-time service.
+
+## `server_native`
+
+`server_native` is a separate Rust-backed, `HttpServer`-style runtime for Dart.
+Use it when you need a native server API or HTTP/2/HTTP/3 support in a VM
+application. It is not a replacement for the portable `routed_io` or
+`routed_node` host boundary, so evaluate its integration separately from the
+host matrix above.

@@ -248,4 +248,4 @@ This ensures every failed request surfaces consistent, structured telemetry with
 - Use the `stack` channel in development to write to both file and console simultaneously.
 - Use `LOG_CHANNEL` env var to switch channels per environment without changing config files.
 
-> Validation: The logging provider rejects malformed overrides (for example, non-boolean `enabled` flags or non-string `request_headers` entries) by throwing a `ProviderConfigException` during boot. You can catch mistakes early by running `dart run routed provider:list --config`, which prints each provider's defaults and surfaces validation errors.
+> Validation: The logging provider rejects malformed overrides (for example, non-boolean `enabled` flags or non-string `request_headers` entries) by throwing a `ProviderConfigException` during boot. You can catch mistakes early by running `dart run routed_cli provider:list --config`, which prints each provider's defaults and surfaces validation errors.

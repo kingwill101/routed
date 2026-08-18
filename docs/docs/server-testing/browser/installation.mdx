@@ -13,18 +13,11 @@ description: Install browsers and drivers, version pinning, OS dependencies and 
 
 ## Updating bundled browser + driver versions (maintainers)
 
-The Playwright browser revisions and ChromeDriver version are generated from upstream sources. To refresh them:
-
-```bash
-cd packages/server_testing/server_testing
-dart run build_runner build -d
-```
-
-This regenerates:
-- `lib/src/browser/bootstrap/browsers_json_const.dart` (Playwright browsers.json)
-- `lib/src/browser/bootstrap/devices_json_const.dart`
-- `lib/src/browser/bootstrap/driver/chrome_driver_version.dart`
-- `lib/src/browser/bootstrap/driver/gecko_driver_version.dart`
+The Playwright browser revisions and ChromeDriver version are generated from
+upstream sources. These generated assets are maintained in the upstream
+[`server_testing` repository](https://github.com/RoutedDart/server_testing),
+not in this Routed checkout. Update them there using that repository's build
+instructions, then consume the updated dependency here.
 
 Verify the updates:
 - `dart run server_testing install` (downloads updated browser bundles)
