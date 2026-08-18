@@ -1,3 +1,9 @@
+## 0.3.3
+
+- Updated the `server_testing` integration to support the latest 0.4.x release
+  and future pre-1.0 minor releases without another wrapper release.
+- Raised the minimum Dart SDK to 3.10 to match the current upstream harness.
+
 ## 0.3.2
 
 - Added `providers` parameter to `engineTest` and `engineGroup` for explicit

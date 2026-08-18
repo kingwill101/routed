@@ -16,28 +16,21 @@ import 'package:server_testing/server_testing.dart';
 /// import 'package:routed_testing/routed_testing.dart';
 /// import 'package:server_testing/server_testing.dart';
 ///
-/// void main() {
-///   // Create a Routed engine with your routes
-///   final engine = Engine()
-///     ..get('/users', (req, res) {
-///       return res.json({
-///         'users': [{'name': 'Alice'}, {'name': 'Bob'}]
-///       });
-///     });
-///
-///   // Wrap it in a RoutedRequestHandler
+/// Future<void> main() async {
+///   final engine = await Engine.create();
+///   engine.get('/users', (ctx) => ctx.json({
+///     'users': [{'name': 'Alice'}, {'name': 'Bob'}]
+///   }));
 ///   final handler = RoutedRequestHandler(engine);
+///   final client = TestClient.inMemory(handler);
 ///
-///   // Use it with server_testing
-///   engineTest('GET /users returns list of users', (client) async {
-///     final response = await client.get('/users');
+///   final response = await client.get('/users');
+///   response.assertStatus(200).assertJson((json) {
+///     json.has('users').count('users', 2);
+///   });
 ///
-///     response
-///       .assertStatus(200)
-///       .assertJson((json) {
-///         json.has('users').count('users', 2);
-///       });
-///   }, handler: handler);
+///   await client.close();
+///   await engine.close();
 /// }
 /// ```
 class RoutedRequestHandler implements RequestHandler {

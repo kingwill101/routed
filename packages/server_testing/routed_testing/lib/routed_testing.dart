@@ -9,32 +9,24 @@
 /// import 'package:routed_core/routed_core.dart';
 /// import 'package:routed_testing/routed_testing.dart';
 /// import 'package:server_testing/server_testing.dart';
-/// import 'package:test/test.dart';
 ///
-/// void main() {
-///   // Create a Routed engine with routes
-///   final engine = Engine()
-///     ..get('/hello', (req, res) => res.send('Hello, World!'))
-///     ..get('/users', (req, res) => res.json({
-///       'users': [{'name': 'Alice'}, {'name': 'Bob'}]
-///     }));
+/// Future<void> main() async {
+///   final engine = await Engine.create();
+///   engine.get('/users', (ctx) => ctx.json({
+///     'users': [{'name': 'Alice'}, {'name': 'Bob'}]
+///   }));
+///   final client = TestClient.inMemory(RoutedRequestHandler(engine));
 ///
-///   // Create the handler
-///   final handler = RoutedRequestHandler(engine);
+///   final response = await client.get('/users');
+///   response.assertStatus(200).assertJson((json) {
+///     json.has('users').count('users', 2);
+///   });
 ///
-///   // Test with server_testing
-///   engineTest('GET /users returns user list', (client) async {
-///     final response = await client.get('/users');
-///
-///     response
-///       .assertStatus(200)
-///       .assertJson((json) {
-///         json.has('users').count('users', 2);
-///       });
-///   }, handler: handler);
+///   await client.close();
+///   await engine.close();
 /// }
 /// ```
 library;
 
 export 'src/routed_transport.dart';
-export 'testing.dart';
+export 'src/testing.dart';

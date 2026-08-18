@@ -2,7 +2,7 @@
 
 [![Pub Version](https://img.shields.io/pub/v/routed_testing.svg?label=pub&color=2bb7f6)](https://pub.dev/packages/routed_testing)
 [![CI](https://github.com/kingwill101/routed/actions/workflows/routed_testing.yaml/badge.svg)](https://github.com/kingwill101/routed/actions/workflows/routed_testing.yaml)
-[![License](https://img.shields.io/badge/license-MIT-blue.svg)](../../LICENSE)
+[![License](https://img.shields.io/badge/license-MIT-blue.svg)](../../../LICENSE)
 [![Sponsor](https://img.shields.io/badge/support-Buy%20Me%20a%20Coffee-ff813f?logo=buymeacoffee)](https://www.buymeacoffee.com/kingwill101)
 
 Routed-specific helpers built on top of `server_testing`. It wires the Routed
@@ -22,13 +22,13 @@ in-memory engine or launch an ephemeral server without writing glue code.
 
 ```yaml
 dev_dependencies:
-  routed_testing: ^0.2.1
-  server_testing: ^0.3.0
-  routed: ^0.2.0
-  test: ^1.26.0
+  routed_testing: ^0.3.3
+  server_testing: ">=0.4.0 <1.0.0"
+  routed_core: ">=0.3.3 <1.0.0"
+  test: ^1.29.0
 ```
 
-> `dart pub add --dev routed_testing server_testing routed` will update your
+> `dart pub add --dev routed_testing server_testing routed_core` will update your
 > pubspec automatically.
 
 ## Usage
@@ -57,6 +57,11 @@ void main() {
   });
 }
 ```
+
+`Engine.create()` in this example initializes the core provider set. If the
+application uses feature providers, construct the test engine with the same
+provider list as production, or import `package:routed/routed.dart` and use
+its batteries-included `Engine.create()` setup.
 
 See `test/` for more patterns, including property-based coverage of route
 parameters across transports.
