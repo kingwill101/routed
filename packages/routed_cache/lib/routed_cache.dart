@@ -5,6 +5,7 @@ import 'package:routed_core/routed_core.dart' hide Store;
 import 'package:server_cache/server_cache.dart' show ArrayStore;
 import 'package:server_contracts/server_contracts.dart' show Store;
 
+export 'package:server_cache/server_cache.dart';
 export 'src/context/cache.dart';
 export 'src/events/cache_events.dart';
 

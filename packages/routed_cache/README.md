@@ -9,6 +9,7 @@ Wraps `server_cache` (array/file/redis/null stores, `DataCacheManager`, `Reposit
 ```yaml
 dependencies:
   routed: ^0.3.3
+  routed_core: ^0.3.3
   routed_cache: ^0.1.0
   server_cache: ^0.1.0
 ```
@@ -21,10 +22,15 @@ import 'package:routed_cache/routed_cache.dart';
 import 'package:server_cache/server_cache.dart';
 
 void main() async {
+  final store = ArrayStore();
   final cacheManager = DataCacheManager()
     ..registerStore('array', {'driver': 'array', 'serialize': false});
 
-  final engine = Engine(
+  final engine = await Engine.create(
+    providers: [
+      ...Engine.defaultProviders,
+      RoutedCacheProvider(store),
+    ],
     options: [withCacheManager(cacheManager)],
   );
 
@@ -36,8 +42,8 @@ void main() async {
     return ctx.json({'value': value, 'remembered': remembered});
   });
 
-  // Store middleware (server_contracts Store) for hasCache/cacheStore
-  engine.use(cacheMiddleware(MemoryStore()));
+  // Add this when handlers need ctx.cacheStore or ctx.hasCache.
+  engine.use(cacheMiddleware(store));
 
   await engine.serve();
 }

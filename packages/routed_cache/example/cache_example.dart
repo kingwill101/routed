@@ -2,7 +2,6 @@ import 'dart:async';
 
 import 'package:routed_core/routed_core.dart';
 import 'package:routed_cache/routed_cache.dart';
-import 'package:server_cache/server_cache.dart';
 
 void main() async {
   final cacheManager = DataCacheManager()
