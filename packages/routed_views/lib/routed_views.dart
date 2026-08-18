@@ -1,5 +1,6 @@
 library;
 
+export 'src/engine_ext.dart';
 export 'src/view_ext.dart';
 export 'src/render_ext.dart';
 export 'src/translation_ext.dart';

@@ -6,7 +6,7 @@ import 'package:file/local.dart' as local;
 import 'package:routed_core/src/container/container.dart';
 import 'package:routed_core/src/contracts/contracts.dart' show Config;
 import 'package:routed_core/src/config/specs/views.dart';
-import 'package:routed_core/src/engine/config.dart' hide ViewEngine;
+import 'package:routed_core/src/engine/config.dart';
 import 'package:routed_core/src/engine/engine.dart';
 import 'package:routed_core/src/provider/provider.dart';
 import 'package:server_storage/server_storage.dart';
@@ -43,10 +43,6 @@ class ViewServiceProvider extends ServiceProvider with ProvidesDefaultConfig {
     }
 
     _fallbackFileSystem = container.get<EngineConfig>().fileSystem;
-    if (container.has<StorageManager>()) {
-      _storageManager = container.get<StorageManager>();
-    }
-
     if (container.has<Config>()) {
       _applyConfig(container, container.get<Config>());
     }
@@ -62,7 +58,7 @@ class ViewServiceProvider extends ServiceProvider with ProvidesDefaultConfig {
       _fallbackFileSystem = container.get<EngineConfig>().fileSystem;
     }
     if (container.has<StorageManager>()) {
-      _storageManager = container.get<StorageManager>();
+      _storageManager = await container.make<StorageManager>();
     }
 
     _applyConfig(container, container.get<Config>());
@@ -84,7 +80,8 @@ class ViewServiceProvider extends ServiceProvider with ProvidesDefaultConfig {
     final newConfig = engineConfig.copyWith(
       templateDirectory: resolved.directory,
       // ignore: avoid_dynamic_calls
-      templateEngine: (resolved.viewEngine as dynamic) ?? engineConfig.templateEngine,
+      templateEngine:
+          (resolved.viewEngine as dynamic) ?? engineConfig.templateEngine,
       views: resolved.viewConfig,
     );
 

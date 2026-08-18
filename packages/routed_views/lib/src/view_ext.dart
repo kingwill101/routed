@@ -1,6 +1,6 @@
 import 'dart:io';
 
-import 'package:routed_core/routed_core.dart' hide ViewEngine;
+import 'package:routed_core/routed_core.dart';
 
 import 'view/engine_manager.dart';
 import 'view/view_engine.dart';
@@ -31,7 +31,8 @@ extension RoutedViewContext on EngineContext {
           final fs = engineConfig.fileSystem;
           filePath = fs.path.join(viewPath, templateName);
           // If file exists at filePath, use it; otherwise try templateName as absolute
-          if (!fs.file(filePath).existsSync() && fs.file(templateName).existsSync()) {
+          if (!fs.file(filePath).existsSync() &&
+              fs.file(templateName).existsSync()) {
             filePath = templateName;
           }
         } else {
@@ -44,7 +45,9 @@ extension RoutedViewContext on EngineContext {
 
     engine ??= engineConfig?.templateEngine as ViewEngine?;
     filePath ??= templateName;
-    if (engineConfig != null && filePath == templateName && engineConfig.views.viewPath.isNotEmpty) {
+    if (engineConfig != null &&
+        filePath == templateName &&
+        engineConfig.views.viewPath.isNotEmpty) {
       final fs = engineConfig.fileSystem;
       final candidate = fs.path.join(engineConfig.views.viewPath, templateName);
       if (fs.file(candidate).existsSync()) {
@@ -56,10 +59,7 @@ extension RoutedViewContext on EngineContext {
       throw StateError('No view engine registered for $templateName');
     }
 
-    final mergedData = <String, dynamic>{
-      ...?data,
-      kViewEngineContextKey: this,
-    };
+    final mergedData = <String, dynamic>{...?data, kViewEngineContextKey: this};
 
     final rendered = await engine.renderFile(filePath, mergedData);
     response.headers.contentType = ContentType.html;

@@ -1,5 +1,5 @@
 import 'package:file/memory.dart';
-import 'package:routed_core/routed_core.dart' hide LiquidViewEngine;
+import 'package:routed_core/routed_core.dart';
 import 'package:routed_views/routed_views.dart';
 import 'package:test/test.dart';
 import '../test_engine.dart';
@@ -62,6 +62,5 @@ void main() {
         endsWith(fs.path.join('shared', 'views')),
       );
     });
-
   });
 }

@@ -4,15 +4,17 @@ import 'package:file/file.dart' as file;
 import 'package:file/local.dart' as local;
 import 'package:routed_core/routed_core.dart';
 
-import 'package:routed_views/src/middleware/localization.dart' show localizationMiddleware;
+import 'package:routed_views/src/middleware/localization.dart'
+    show localizationMiddleware;
 import 'package:routed_views/src/translation/loaders/file_translation_loader.dart';
 import 'package:routed_views/src/translation/locale_manager.dart';
 import 'package:routed_views/src/translation/locale_resolver_registry.dart';
 import 'package:routed_views/src/translation/resolvers.dart';
 import 'package:routed_views/src/translation/translator.dart';
 
-/// Stub provider for backward compat — implements minimal register to satisfy tests.
-class LocalizationServiceProvider extends ServiceProvider with ProvidesDefaultConfig {
+/// Registers the localization services and middleware configuration.
+class LocalizationServiceProvider extends ServiceProvider
+    with ProvidesDefaultConfig {
   file.FileSystem _fallbackFileSystem = const local.LocalFileSystem();
 
   @override
@@ -55,8 +57,12 @@ class LocalizationServiceProvider extends ServiceProvider with ProvidesDefaultCo
     }
     final config = container.has<Config>() ? container.get<Config>() : null;
     final appLocale = config?.get<String>('app.locale') ?? 'en';
-    final fallbackLocale = config?.get<String>('app.fallback_locale') ?? config?.get<String>('app.locale') ?? 'en';
-    final transPaths = config?.get<List>('translation.paths') ?? ['resources/lang'];
+    final fallbackLocale =
+        config?.get<String>('app.fallback_locale') ??
+        config?.get<String>('app.locale') ??
+        'en';
+    final transPaths =
+        config?.get<List>('translation.paths') ?? ['resources/lang'];
     final jsonPaths = config?.get<List>('translation.json_paths') ?? [];
     final namespaces = config?.get<Map>('translation.namespaces') ?? {};
 
@@ -70,7 +76,9 @@ class LocalizationServiceProvider extends ServiceProvider with ProvidesDefaultCo
       fileSystem: _fallbackFileSystem,
       paths: (transPaths).map((e) => e.toString()).toList(),
       jsonPaths: (jsonPaths).map((e) => e.toString()).toList(),
-      namespaces: (namespaces).map((k, v) => MapEntry(k.toString(), v.toString())),
+      namespaces: (namespaces).map(
+        (k, v) => MapEntry(k.toString(), v.toString()),
+      ),
     );
 
     final translator = Translator(
@@ -98,19 +106,25 @@ class LocalizationServiceProvider extends ServiceProvider with ProvidesDefaultCo
     // Validate resolvers — allow custom resolvers registered via LocaleResolverRegistry
     for (final id in resolvers) {
       if (['query', 'header', 'cookie', 'session'].contains(id)) continue;
-      final isCustomRegistered = resolverRegistry != null && resolverRegistry.contains(id);
+      final isCustomRegistered =
+          resolverRegistry != null && resolverRegistry.contains(id);
       if (!isCustomRegistered) {
-        throw ProviderConfigException('translation.resolvers: unknown resolver id $id');
+        throw ProviderConfigException(
+          'translation.resolvers: unknown resolver id $id',
+        );
       }
     }
 
     final sharedOptions = LocaleResolverSharedOptions(
-      queryParameter: config?.get<String>('translation.query.parameter') ?? 'lang',
+      queryParameter:
+          config?.get<String>('translation.query.parameter') ?? 'lang',
       cookieName: config?.get<String>('translation.cookie.name') ?? 'locale',
       sessionKey: config?.get<String>('translation.session.key') ?? 'locale',
       headerName: HttpHeaders.acceptLanguageHeader,
     );
-    final resolverOptionsRaw = config?.get<dynamic>('translation.resolver_options');
+    final resolverOptionsRaw = config?.get<dynamic>(
+      'translation.resolver_options',
+    );
     final Map<String, Map<String, dynamic>> resolverOptionsById = {};
     if (resolverOptionsRaw is Map) {
       for (final entry in resolverOptionsRaw.entries) {
@@ -158,7 +172,10 @@ class LocalizationServiceProvider extends ServiceProvider with ProvidesDefaultCo
       ..instance<LocaleManager>(localeManager);
 
     if (container.has<MiddlewareRegistry>()) {
-      container.get<MiddlewareRegistry>().register('routed.localization', (c) => localizationMiddleware(localeManager));
+      container.get<MiddlewareRegistry>().register(
+        'routed.localization',
+        (c) => localizationMiddleware(localeManager),
+      );
     }
   }
 

@@ -3,12 +3,14 @@ import 'package:file/memory.dart';
 import 'package:liquify/src/filter_registry.dart' as liquify;
 import 'package:routed_core/routed_core.dart';
 // ignore: implementation_imports
-import 'package:routed_views/src/middleware/localization.dart' show localizationMiddleware;
+import 'package:routed_views/src/middleware/localization.dart'
+    show localizationMiddleware;
 // ignore: implementation_imports
 import 'package:routed_views/src/providers/localization.dart';
 import 'package:routed_views/src/providers/view_provider.dart';
 // ignore: implementation_imports
-import 'package:routed_views/src/translation/locale_manager.dart' show LocaleManager;
+import 'package:routed_views/src/translation/locale_manager.dart'
+    show LocaleManager;
 
 /// Creates a test engine with in-memory configuration.
 ///
@@ -40,10 +42,7 @@ Engine testEngine({
       LocalizationServiceProvider(),
       ViewServiceProvider(),
     ];
-    resolvedProviders = [
-      ...defaults,
-      ...?providers,
-    ];
+    resolvedProviders = [...defaults, ...?providers];
   } else {
     resolvedProviders = providers ?? [];
   }
@@ -52,20 +51,16 @@ Engine testEngine({
   // This mirrors the production local filters in LiquidViewEngine
   // but satisfies the test's global check without polluting lib.
   if (liquify.FilterRegistry.getFilter('trans') == null) {
-    liquify.FilterRegistry.register('trans', (
-      dynamic value,
-      List<dynamic> args,
-      Map<String, dynamic> named,
-    ) =>
-        value);
+    liquify.FilterRegistry.register(
+      'trans',
+      (dynamic value, List<dynamic> args, Map<String, dynamic> named) => value,
+    );
   }
   if (liquify.FilterRegistry.getFilter('trans_choice') == null) {
-    liquify.FilterRegistry.register('trans_choice', (
-      dynamic value,
-      List<dynamic> args,
-      Map<String, dynamic> named,
-    ) =>
-        value);
+    liquify.FilterRegistry.register(
+      'trans_choice',
+      (dynamic value, List<dynamic> args, Map<String, dynamic> named) => value,
+    );
   }
 
   final engine = Engine(
