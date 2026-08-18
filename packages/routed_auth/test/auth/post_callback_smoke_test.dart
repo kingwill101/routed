@@ -131,6 +131,31 @@ void main() {
       expect(receivedParams!['code'], equals('code123'));
       expect(receivedParams!['email'], equals('get@example.com'));
     });
+
+    test('callback failures do not disclose exception details', () async {
+      final manager = AuthManager(
+        AuthOptions<EngineContext>(
+          providers: [
+            _CustomCallbackProvider(
+              onCallback: (_, _) => throw StateError('/secret/config/path'),
+            ),
+          ],
+          enforceCsrf: false,
+        ),
+      );
+      final engine = _authEngine(manager);
+      await engine.initialize();
+      final client = TestClient(RoutedRequestHandler(engine));
+      addTearDown(() async => await client.close());
+
+      final response = await client.get(
+        '/auth/callback/custom?code=code123&state=state123',
+      );
+
+      expect(response.statusCode, equals(HttpStatus.badRequest));
+      expect(response.json()['error'], equals('callback_error'));
+      expect(response.body, isNot(contains('/secret/config/path')));
+    });
   });
 
   group('AuthRoutes manager binding', () {

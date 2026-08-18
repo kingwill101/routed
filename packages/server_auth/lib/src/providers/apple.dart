@@ -176,6 +176,8 @@ OAuthProvider<AppleProfile> appleProvider(AppleProviderOptions options) {
       'https://appleid.apple.com/auth/authorize',
     ),
     tokenEndpoint: Uri.parse('https://appleid.apple.com/auth/token'),
+    oidcIssuer: Uri.parse('https://appleid.apple.com'),
+    oidcJwksUri: Uri.parse('https://appleid.apple.com/auth/keys'),
     redirectUri: options.redirectUri,
     scopes: options.scopes,
     authorizationParams: {'response_mode': 'form_post'},

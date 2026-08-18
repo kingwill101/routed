@@ -39,6 +39,7 @@ class SessionAuthService {
          rememberCookieName: rememberCookieName,
          defaultRememberDuration: defaultRememberDuration,
          sessionPrincipalKey: _sessionPrincipalKey,
+         regenerateSession: (context) => context.session.regenerate(),
        );
 
   final RememberSessionAuthRuntime<EngineContext> _runtime;
@@ -73,6 +74,11 @@ class SessionAuthService {
       rememberMe: rememberMe,
       rememberDuration: rememberDuration,
     );
+  }
+
+  /// Updates an already-authenticated principal without rotating its session.
+  Future<void> update(EngineContext ctx, AuthPrincipal principal) async {
+    await _runtime.login(ctx, principal, rotateSession: false);
   }
 
   Future<void> logout(EngineContext ctx) async {
@@ -273,7 +279,7 @@ class SessionAuth {
       return updater(ctx, principal);
     }
     // No strategy-aware updater wired — session-only fallback.
-    return _service.login(ctx, principal);
+    return _service.update(ctx, principal);
   }
 
   static Middleware sessionAuthMiddleware({

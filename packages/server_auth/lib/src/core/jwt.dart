@@ -69,10 +69,14 @@ Cookie buildJwtTokenCookie(
   DateTime? expires,
   String path = '/',
   bool httpOnly = true,
+  bool secure = true,
+  SameSite sameSite = SameSite.lax,
 }) {
   final cookie = Cookie(cookieName, token)
     ..httpOnly = httpOnly
-    ..path = path;
+    ..path = path
+    ..secure = secure
+    ..sameSite = sameSite;
   if (expires != null) {
     cookie.expires = expires;
   }
@@ -80,8 +84,19 @@ Cookie buildJwtTokenCookie(
 }
 
 /// Builds an expired JWT cookie for sign-out flows.
-Cookie buildExpiredJwtTokenCookie(String cookieName, {String path = '/'}) {
-  return buildJwtTokenCookie(cookieName, '', path: path)..maxAge = 0;
+Cookie buildExpiredJwtTokenCookie(
+  String cookieName, {
+  String path = '/',
+  bool secure = true,
+  SameSite sameSite = SameSite.lax,
+}) {
+  return buildJwtTokenCookie(
+    cookieName,
+    '',
+    path: path,
+    secure: secure,
+    sameSite: sameSite,
+  )..maxAge = 0;
 }
 
 /// Result of issuing a JWT token and corresponding auth cookie.
@@ -109,6 +124,8 @@ AuthIssuedJwtToken issueAuthJwtToken({
     options.cookieName,
     token,
     expires: expiresAt,
+    secure: options.secure,
+    sameSite: options.sameSite,
   );
   return AuthIssuedJwtToken(token: token, expiresAt: expiresAt, cookie: cookie);
 }
@@ -224,12 +241,13 @@ class JwtOptions {
     this.enabled = true,
     this.issuer,
     this.audience = const <String>[],
-    this.requiredClaims = const <String>[],
+    this.requiredClaims = const <String>['exp'],
     this.jwksUri,
     this.inlineKeys = const <Map<String, dynamic>>[],
     this.algorithms = const <String>['RS256'],
     this.clockSkew = const Duration(seconds: 60),
     this.jwksCacheTtl = const Duration(minutes: 5),
+    this.requestTimeout = const Duration(seconds: 10),
     this.header = 'Authorization',
     this.bearerPrefix = 'Bearer ',
     this.cookieName = 'auth_token',
@@ -262,6 +280,9 @@ class JwtOptions {
   /// The cache time-to-live for fetched JWKS keys.
   final Duration jwksCacheTtl;
 
+  /// Timeout applied when fetching the configured JWKS endpoint.
+  final Duration requestTimeout;
+
   /// The HTTP header used to extract the JWT.
   final String header;
 
@@ -282,6 +303,7 @@ class JwtOptions {
     List<String>? algorithms,
     Duration? clockSkew,
     Duration? jwksCacheTtl,
+    Duration? requestTimeout,
     String? header,
     String? bearerPrefix,
     String? cookieName,
@@ -296,6 +318,7 @@ class JwtOptions {
       algorithms: algorithms ?? this.algorithms,
       clockSkew: clockSkew ?? this.clockSkew,
       jwksCacheTtl: jwksCacheTtl ?? this.jwksCacheTtl,
+      requestTimeout: requestTimeout ?? this.requestTimeout,
       header: header ?? this.header,
       bearerPrefix: bearerPrefix ?? this.bearerPrefix,
       cookieName: cookieName ?? this.cookieName,
@@ -310,12 +333,13 @@ JwtOptions? materializeJwtVerifierOptions({
   required bool enabled,
   String? issuer,
   Iterable<String> audience = const <String>[],
-  Iterable<String> requiredClaims = const <String>[],
+  Iterable<String> requiredClaims = const <String>['exp'],
   Uri? jwksUri,
   Iterable<Map<String, dynamic>> inlineKeys = const <Map<String, dynamic>>[],
   Iterable<String> algorithms = const <String>['RS256'],
   Duration clockSkew = const Duration(seconds: 60),
   Duration jwksCacheTtl = const Duration(minutes: 5),
+  Duration requestTimeout = const Duration(seconds: 10),
   String header = 'Authorization',
   String bearerPrefix = 'Bearer ',
 }) {
@@ -343,6 +367,7 @@ JwtOptions? materializeJwtVerifierOptions({
         : normalizedAlgorithms,
     clockSkew: clockSkew,
     jwksCacheTtl: jwksCacheTtl,
+    requestTimeout: requestTimeout,
     header: header,
     bearerPrefix: bearerPrefix,
   );
@@ -355,12 +380,13 @@ JwtVerifier? materializeJwtVerifier({
   required bool enabled,
   String? issuer,
   Iterable<String> audience = const <String>[],
-  Iterable<String> requiredClaims = const <String>[],
+  Iterable<String> requiredClaims = const <String>['exp'],
   Uri? jwksUri,
   Iterable<Map<String, dynamic>> inlineKeys = const <Map<String, dynamic>>[],
   Iterable<String> algorithms = const <String>['RS256'],
   Duration clockSkew = const Duration(seconds: 60),
   Duration jwksCacheTtl = const Duration(minutes: 5),
+  Duration requestTimeout = const Duration(seconds: 10),
   String header = 'Authorization',
   String bearerPrefix = 'Bearer ',
   http.Client? httpClient,
@@ -375,6 +401,7 @@ JwtVerifier? materializeJwtVerifier({
     algorithms: algorithms,
     clockSkew: clockSkew,
     jwksCacheTtl: jwksCacheTtl,
+    requestTimeout: requestTimeout,
     header: header,
     bearerPrefix: bearerPrefix,
   );
@@ -567,6 +594,8 @@ class JwtSessionOptions {
     this.cookieName = 'auth_token',
     this.header = 'Authorization',
     this.bearerPrefix = 'Bearer ',
+    this.secure = true,
+    this.sameSite = SameSite.lax,
   });
 
   /// The shared secret used for signing tokens.
@@ -593,12 +622,19 @@ class JwtSessionOptions {
   /// The prefix for the token in the authorization header.
   final String bearerPrefix;
 
+  /// Whether the JWT cookie is restricted to HTTPS.
+  final bool secure;
+
+  /// SameSite policy applied to the JWT cookie.
+  final SameSite sameSite;
+
   /// Converts this session configuration to a [JwtOptions] suitable for
   /// token verification.
   JwtOptions toVerifierOptions() {
     return JwtOptions(
       issuer: issuer,
       audience: audience ?? const <String>[],
+      requiredClaims: const <String>['exp'],
       algorithms: [algorithm],
       inlineKeys: [jwtSecretKey(secret).toJson()],
       header: header,
@@ -709,7 +745,9 @@ class JwtVerifier {
     }
 
     if (_options.jwksUri != null) {
-      final response = await _httpClient.get(_options.jwksUri!);
+      final response = await _httpClient
+          .get(_options.jwksUri!)
+          .timeout(_options.requestTimeout);
       if (response.statusCode != 200) {
         throw JwtAuthException('jwks_fetch_failed');
       }

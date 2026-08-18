@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 
@@ -69,8 +70,27 @@ void main() {
       expect(options!.clientId, isNull);
       expect(options.clientSecret, equals('secret'));
       expect(options.tokenTypeHint, equals('access_token'));
+      expect(options.requestTimeout, equals(const Duration(seconds: 10)));
     },
   );
+
+  test('OAuth2TokenIntrospector applies a request timeout', () async {
+    final introspector = OAuth2TokenIntrospector(
+      OAuthIntrospectionOptions(
+        endpoint: Uri.parse('https://auth.test/introspect'),
+        requestTimeout: const Duration(milliseconds: 1),
+      ),
+      httpClient: MockClient((request) async {
+        await Future<void>.delayed(const Duration(milliseconds: 25));
+        return http.Response(jsonEncode({'active': true}), 200);
+      }),
+    );
+
+    await expectLater(
+      introspector.introspect('slow-token'),
+      throwsA(isA<TimeoutException>()),
+    );
+  });
 
   test('writeOAuthValidationAttributes writes canonical attribute keys', () {
     final validation = OAuthBearerValidationResult(
@@ -215,6 +235,24 @@ void main() {
     expect(first.subject, equals('user-1'));
     expect(second.subject, equals('user-1'));
     expect(requestCount, equals(1));
+  });
+
+  test('OAuth2TokenIntrospector does not cache by default', () async {
+    var requestCount = 0;
+    final introspector = OAuth2TokenIntrospector(
+      OAuthIntrospectionOptions(
+        endpoint: Uri.parse('https://auth.test/introspect'),
+      ),
+      httpClient: MockClient((_) async {
+        requestCount += 1;
+        return http.Response(jsonEncode({'active': true}), 200);
+      }),
+    );
+
+    await introspector.introspect('revocation-sensitive-token');
+    await introspector.introspect('revocation-sensitive-token');
+
+    expect(requestCount, equals(2));
   });
 
   test(

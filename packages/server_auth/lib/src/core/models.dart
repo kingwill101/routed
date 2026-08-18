@@ -1,3 +1,45 @@
+const Set<String> _sensitiveAttributeNames = <String>{
+  'apikey',
+  'authorization',
+  'clientsecret',
+  'credential',
+  'credentials',
+  'password',
+  'passwordhash',
+  'privatekey',
+  'refreshtoken',
+  'secret',
+  'token',
+  'accesstoken',
+  'idtoken',
+  'sessiontoken',
+};
+
+String _normalizeAttributeName(Object? name) =>
+    name.toString().toLowerCase().replaceAll(RegExp(r'[^a-z0-9]'), '');
+
+dynamic _sanitizePublicValue(Object? value) {
+  if (value is Map) {
+    return <String, dynamic>{
+      for (final entry in value.entries)
+        if (!_sensitiveAttributeNames.contains(
+          _normalizeAttributeName(entry.key),
+        ))
+          entry.key.toString(): _sanitizePublicValue(entry.value),
+    };
+  }
+  if (value is Iterable) {
+    return value.map(_sanitizePublicValue).toList(growable: false);
+  }
+  return value;
+}
+
+Map<String, dynamic> _sanitizePublicAttributes(Map<String, dynamic> value) {
+  return Map<String, dynamic>.from(
+    _sanitizePublicValue(value) as Map<String, dynamic>,
+  );
+}
+
 /// Represents an authenticated user or entity.
 class AuthPrincipal {
   AuthPrincipal({
@@ -17,7 +59,7 @@ class AuthPrincipal {
   Map<String, dynamic> toJson() => {
     'id': id,
     'roles': roles,
-    'attributes': attributes,
+    'attributes': _sanitizePublicAttributes(attributes),
   };
 
   factory AuthPrincipal.fromJson(Map<String, dynamic> json) {
@@ -82,7 +124,7 @@ class AuthUser {
       'name': name,
       'image': image,
       'roles': roles,
-      'attributes': attributes,
+      'attributes': _sanitizePublicAttributes(attributes),
     };
   }
 
@@ -148,17 +190,28 @@ class AuthAccount {
   final Map<String, dynamic> metadata;
 
   /// Serializes the account payload.
-  Map<String, dynamic> toJson() {
+  Map<String, dynamic> toJson({bool includeTokens = false}) {
     return {
       'provider_id': providerId,
       'provider_account_id': providerAccountId,
       'user_id': userId,
-      'access_token': accessToken,
-      'refresh_token': refreshToken,
+      if (includeTokens) 'access_token': accessToken,
+      if (includeTokens) 'refresh_token': refreshToken,
       'expires_at': expiresAt?.toIso8601String(),
-      'metadata': metadata,
+      'metadata': _sanitizePublicAttributes(metadata),
     };
   }
+
+  /// Serializes the account for private persistence, including OAuth tokens.
+  Map<String, dynamic> toStorageJson() => {
+    'provider_id': providerId,
+    'provider_account_id': providerAccountId,
+    'user_id': userId,
+    'access_token': accessToken,
+    'refresh_token': refreshToken,
+    'expires_at': expiresAt?.toIso8601String(),
+    'metadata': metadata,
+  };
 }
 
 /// Credential input for username/password flows.
@@ -190,7 +243,7 @@ class AuthCredentials {
       email: data['email']?.toString(),
       username: data['username']?.toString(),
       password: data['password']?.toString(),
-      attributes: data,
+      attributes: Map<String, dynamic>.from(data)..remove('password'),
     );
   }
 }
@@ -235,12 +288,12 @@ class AuthSession {
   final String? token;
 
   /// Serializes the session payload.
-  Map<String, dynamic> toJson() {
+  Map<String, dynamic> toJson({bool includeToken = false}) {
     return {
       'user': user.toJson(),
       'expires': expiresAt?.toIso8601String(),
       'strategy': strategy?.name,
-      'token': token,
+      if (includeToken && token != null) 'token': token,
     };
   }
 }

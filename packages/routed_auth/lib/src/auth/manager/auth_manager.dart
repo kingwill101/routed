@@ -191,6 +191,7 @@ class AuthManager {
           provider: provider,
           stateKey: options.stateKey,
           pkceKey: options.pkceKey,
+          nonceKey: options.nonceKey,
           callbackKey: options.callbackKey,
           callbackUrl: callbackUrl,
           writeSession: ctx.setSession,
@@ -213,8 +214,10 @@ class AuthManager {
           receivedState: state,
           stateKey: options.stateKey,
           pkceKey: options.pkceKey,
+          nonceKey: options.nonceKey,
           callbackKey: options.callbackKey,
           readSession: (key) => ctx.getSession<String>(key),
+          removeSession: ctx.removeSession,
           httpClient: httpClient,
           fallbackAccountId: secureRandomToken,
         );
@@ -325,7 +328,7 @@ class AuthManager {
           jwtOptions: options.jwtOptions,
           applySessionMaxAge: () => _applySessionMaxAge(ctx),
           persistSessionPrincipal: (nextPrincipal) =>
-              sessionAuth.login(ctx, nextPrincipal),
+              sessionAuth.update(ctx, nextPrincipal),
           writeSessionIssuedAt: (issuedAtUtc) =>
               _setSessionIssuedAt(ctx, issuedAtUtc),
           resolveSessionExpiry: () => _sessionExpiry(ctx),
@@ -393,6 +396,9 @@ class AuthManager {
           session: session,
           strategy: session.strategy ?? options.sessionStrategy,
           provider: provider,
+          payload: session.toJson(
+            includeToken: options.exposeJwtTokenInSessionResponse,
+          ),
         );
     await _emitAuthEvent(
       ctx,

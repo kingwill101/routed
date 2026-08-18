@@ -26,7 +26,7 @@ dependencies:
   pointycastle: ^4.0.0
   routed_http: ^0.1.0
 
-  crypto: any
+  crypto: ^3.0.0
 dev_dependencies:
   jose: ^0.3.5
   lints: ^6.0.0

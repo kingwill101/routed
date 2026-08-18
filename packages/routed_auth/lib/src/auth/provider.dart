@@ -134,9 +134,8 @@ class AuthServiceProvider extends ServiceProvider with ProvidesDefaultConfig {
     // current manager after config reloads replace the previously bound one.
     AuthRoutes(
       manager,
-      managerOf: () => container.has<AuthManager>()
-          ? container.get<AuthManager>()
-          : manager,
+      managerOf: () =>
+          container.has<AuthManager>() ? container.get<AuthManager>() : manager,
     ).register(engine.defaultRouter);
   }
 

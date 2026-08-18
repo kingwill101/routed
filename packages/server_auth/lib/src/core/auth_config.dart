@@ -158,7 +158,7 @@ class AuthJwtConfig {
           coerceNonStringEntries: true,
           throwOnInvalid: true,
         ) ??
-        const <String>[];
+        const <String>['exp'];
     final jwksUrl = parseStringLike(
       map['jwks_url'],
       context: '$context.jwks_url',
@@ -298,7 +298,7 @@ class OAuthIntrospectionConfig {
           context: '$context.cache_ttl',
           throwOnInvalid: true,
         ) ??
-        const Duration(seconds: 30);
+        Duration.zero;
     final clockSkew =
         parseDurationLike(
           map['clock_skew'],

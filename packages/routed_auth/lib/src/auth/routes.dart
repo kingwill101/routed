@@ -213,9 +213,7 @@ class AuthRoutes {
     // OAuth providers such as Apple use `response_mode=form_post`, delivering
     // the authorization code and state in the POST body rather than the query
     // string. Merge the parsed payload so callback decisions see both sources.
-    final params = <String, dynamic>{
-      ...ctx.request.queryParameters,
-    };
+    final params = <String, dynamic>{...ctx.request.queryParameters};
     if (ctx.method == 'POST') {
       params.addAll(await _payload(ctx));
     }
@@ -284,10 +282,9 @@ class AuthRoutes {
           return ctx.json({
             'error': error.code,
           }, statusCode: HttpStatus.unauthorized);
-        } catch (error) {
+        } catch (_) {
           return ctx.json({
             'error': 'callback_error',
-            'message': error.toString(),
           }, statusCode: HttpStatus.badRequest);
         }
     }
@@ -305,6 +302,8 @@ class AuthRoutes {
     final signOutResolution = await resolveAuthSignOutForStrategy(
       strategy: manager.options.sessionStrategy,
       jwtCookieName: manager.options.jwtOptions.cookieName,
+      jwtCookieSecure: manager.options.jwtOptions.secure,
+      jwtCookieSameSite: manager.options.jwtOptions.sameSite,
       logoutSession: () => manager.sessionAuth.logout(ctx),
     );
     final expiredJwtCookie = signOutResolution.expiredJwtCookie;

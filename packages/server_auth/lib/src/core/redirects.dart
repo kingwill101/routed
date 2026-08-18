@@ -55,11 +55,25 @@ String? sanitizeRedirectUrl(
       uri.scheme.isEmpty ||
       (requestScheme.isNotEmpty &&
           uri.scheme.toLowerCase() == requestScheme.toLowerCase());
+  final samePort =
+      _effectivePort(uri, uri.scheme) ==
+      _effectivePort(requestUri, requestScheme);
 
-  if (sameHost && sameScheme) {
+  if (sameHost && sameScheme && samePort) {
     return uri.toString();
   }
   return null;
+}
+
+int _effectivePort(Uri uri, String scheme) {
+  if (uri.hasPort) {
+    return uri.port;
+  }
+  return switch (scheme.toLowerCase()) {
+    'https' => 443,
+    'http' => 80,
+    _ => -1,
+  };
 }
 
 /// Resolves a redirect candidate using auth callback precedence:

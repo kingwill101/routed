@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 
+import 'package:crypto/crypto.dart' show sha256;
 import 'package:http/http.dart' as http;
 
 import 'bearer.dart' show extractBearerToken;
@@ -164,8 +165,9 @@ class OAuthIntrospectionOptions {
     this.clientId,
     this.clientSecret,
     this.tokenTypeHint,
-    this.cacheTtl = const Duration(seconds: 30),
+    this.cacheTtl = Duration.zero,
     this.clockSkew = const Duration(seconds: 60),
+    this.requestTimeout = const Duration(seconds: 10),
     this.additionalParameters = const <String, String>{},
   });
 
@@ -175,6 +177,7 @@ class OAuthIntrospectionOptions {
   final String? tokenTypeHint;
   final Duration cacheTtl;
   final Duration clockSkew;
+  final Duration requestTimeout;
   final Map<String, String> additionalParameters;
 }
 
@@ -187,8 +190,9 @@ OAuthIntrospectionOptions? materializeOAuthIntrospectionOptions({
   Object? clientId,
   Object? clientSecret,
   Object? tokenTypeHint,
-  Duration cacheTtl = const Duration(seconds: 30),
+  Duration cacheTtl = Duration.zero,
   Duration clockSkew = const Duration(seconds: 60),
+  Duration requestTimeout = const Duration(seconds: 10),
   Map<String, String> additionalParameters = const <String, String>{},
 }) {
   if (!enabled || endpoint == null) {
@@ -214,6 +218,7 @@ OAuthIntrospectionOptions? materializeOAuthIntrospectionOptions({
     ),
     cacheTtl: cacheTtl,
     clockSkew: clockSkew,
+    requestTimeout: requestTimeout,
     additionalParameters: additionalParameters,
   );
 }
@@ -238,9 +243,12 @@ class OAuth2TokenIntrospector {
       <String, _CachedIntrospection>{};
 
   Future<OAuthIntrospectionResult> introspect(String token) async {
-    final cached = _cache[token];
-    if (cached != null && !cached.isExpired) {
-      return cached.result;
+    final cacheKey = sha256.convert(utf8.encode(token)).toString();
+    if (options.cacheTtl > Duration.zero) {
+      final cached = _cache[cacheKey];
+      if (cached != null && !cached.isExpired) {
+        return cached.result;
+      }
     }
 
     final headers = <String, String>{
@@ -260,11 +268,9 @@ class OAuth2TokenIntrospector {
       ...options.additionalParameters,
     };
 
-    final response = await _httpClient.post(
-      options.endpoint,
-      headers: headers,
-      body: body,
-    );
+    final response = await _httpClient
+        .post(options.endpoint, headers: headers, body: body)
+        .timeout(options.requestTimeout);
 
     if (response.statusCode < 200 || response.statusCode >= 300) {
       throw OAuth2Exception(
@@ -279,10 +285,12 @@ class OAuth2TokenIntrospector {
       active: jsonResponse['active'] == true,
       raw: jsonResponse,
     );
-    _cache[token] = _CachedIntrospection(
-      result,
-      DateTime.now().add(options.cacheTtl),
-    );
+    if (options.cacheTtl > Duration.zero) {
+      _cache[cacheKey] = _CachedIntrospection(
+        result,
+        DateTime.now().add(options.cacheTtl),
+      );
+    }
     return result;
   }
 
@@ -316,6 +324,7 @@ class OAuth2Client {
     this.clientSecret,
     this.defaultHeaders = const <String, String>{},
     this.useBasicAuth = true,
+    this.requestTimeout = const Duration(seconds: 10),
     http.Client? httpClient,
   }) : _httpClient = httpClient ?? http.Client();
 
@@ -324,6 +333,7 @@ class OAuth2Client {
   final String? clientSecret;
   final Map<String, String> defaultHeaders;
   final bool useBasicAuth;
+  final Duration requestTimeout;
   final http.Client _httpClient;
 
   Future<OAuthTokenResponse> exchangeAuthorizationCode({
@@ -386,11 +396,9 @@ class OAuth2Client {
       body.addAll({'client_id': ?clientId, 'client_secret': ?clientSecret});
     }
 
-    final response = await _httpClient.post(
-      tokenEndpoint,
-      headers: headers,
-      body: body,
-    );
+    final response = await _httpClient
+        .post(tokenEndpoint, headers: headers, body: body)
+        .timeout(requestTimeout);
 
     if (response.statusCode < 200 || response.statusCode >= 300) {
       throw OAuth2Exception(
@@ -421,13 +429,15 @@ class OAuth2Client {
     Uri endpoint,
     String accessToken,
   ) async {
-    final response = await _httpClient.get(
-      endpoint,
-      headers: {
-        HttpHeaders.authorizationHeader: 'Bearer $accessToken',
-        ...defaultHeaders,
-      },
-    );
+    final response = await _httpClient
+        .get(
+          endpoint,
+          headers: {
+            HttpHeaders.authorizationHeader: 'Bearer $accessToken',
+            ...defaultHeaders,
+          },
+        )
+        .timeout(requestTimeout);
     if (response.statusCode < 200 || response.statusCode >= 300) {
       throw OAuth2Exception(
         'Userinfo endpoint responded with ${response.statusCode}',

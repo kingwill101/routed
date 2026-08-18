@@ -163,6 +163,8 @@ void main() {
         },
       );
       expect(res.statusCode, equals(401));
+      expect(res.body, equals('Unauthorized'));
+      expect(res.body, isNot(contains('nope')));
     });
 
     test('rejects non-bearer authorization schemes', () async {

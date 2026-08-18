@@ -266,6 +266,7 @@ class RememberSessionAuthRuntime<TContext> {
     this.sessionPrincipalKey = '__auth.principal',
     this.principalAttributeKey = authPrincipalAttribute,
     this.tokenGenerator = secureRandomToken,
+    this.regenerateSession,
     DateTime Function()? clock,
   }) : rememberStore =
            rememberStore ??
@@ -279,6 +280,7 @@ class RememberSessionAuthRuntime<TContext> {
   final String sessionPrincipalKey;
   final String principalAttributeKey;
   final String Function() tokenGenerator;
+  final void Function(TContext context)? regenerateSession;
   final DateTime Function() _clock;
 
   Future<void> login(
@@ -286,7 +288,11 @@ class RememberSessionAuthRuntime<TContext> {
     AuthPrincipal principal, {
     bool rememberMe = false,
     Duration? rememberDuration,
+    bool rotateSession = true,
   }) async {
+    if (rotateSession) {
+      regenerateSession?.call(context);
+    }
     adapter.writeSessionPrincipal(
       context,
       sessionPrincipalKey,

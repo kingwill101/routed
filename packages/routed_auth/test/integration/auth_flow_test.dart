@@ -420,7 +420,7 @@ void main() {
         await engine.initialize();
       });
 
-      test('successful login returns JWT token in response', () async {
+      test('successful login keeps JWT in cookie by default', () async {
         final client = TestClient(RoutedRequestHandler(engine));
         addTearDown(client.close);
 
@@ -439,7 +439,6 @@ void main() {
         response.assertJson((json) {
           json
             ..has('user')
-            ..has('token')
             ..where('strategy', 'jwt')
             ..scope('user', (user) {
               user
@@ -450,6 +449,7 @@ void main() {
             })
             ..etc();
         });
+        expect(response.json().containsKey('token'), isFalse);
       });
 
       test('session endpoint returns user from JWT cookie', () async {

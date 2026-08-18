@@ -42,6 +42,22 @@ void main() {
     expect(sanitized, equals('https://app.test/profile'));
   });
 
+  test('sanitizeRedirectUrl rejects same-host different-port URLs', () {
+    final sanitized = sanitizeRedirectUrl(
+      'https://app.test:8443/profile',
+      requestUri: Uri.parse('https://app.test/auth/signin'),
+    );
+    expect(sanitized, isNull);
+  });
+
+  test('sanitizeRedirectUrl allows the exact same custom port', () {
+    final sanitized = sanitizeRedirectUrl(
+      'https://app.test:8443/profile',
+      requestUri: Uri.parse('https://app.test:8443/auth/signin'),
+    );
+    expect(sanitized, equals('https://app.test:8443/profile'));
+  });
+
   test('sanitizeRedirectUrl rejects protocol-relative URLs', () {
     // `//evil.test/phish` must not pass the rooted-relative branch: browsers
     // resolve it as a cross-origin Location header (open redirect).

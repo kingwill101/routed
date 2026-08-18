@@ -1,9 +1,9 @@
 import 'dart:async';
 
 import 'package:http/http.dart' as http;
-import 'package:jose/jose.dart' show JsonWebToken;
 import 'adapter.dart';
 import 'exceptions.dart' show AuthFlowException;
+import 'jwt.dart' show JwtOptions, JwtVerifier;
 import 'models.dart';
 import 'oauth.dart';
 import 'tokens.dart' show pkceS256CodeChallenge, secureRandomToken;
@@ -311,6 +311,11 @@ String authProviderPkceSessionKey(String pkceKey, String providerId) {
   return '$pkceKey.$providerId';
 }
 
+/// Session key for the OIDC nonce associated with a provider flow.
+String authProviderNonceSessionKey(String nonceKey, String providerId) {
+  return '$nonceKey.$providerId';
+}
+
 /// Session key for provider callback URL.
 String authProviderCallbackSessionKey(String callbackKey, String providerId) {
   return '$callbackKey.$providerId';
@@ -326,11 +331,13 @@ class AuthOAuthCallbackSessionValues {
   const AuthOAuthCallbackSessionValues({
     required this.expectedState,
     required this.codeVerifier,
+    required this.nonce,
     required this.callbackUrl,
   });
 
   final String? expectedState;
   final String? codeVerifier;
+  final String? nonce;
   final String? callbackUrl;
 }
 
@@ -339,6 +346,7 @@ AuthOAuthCallbackSessionValues resolveOAuthCallbackSessionValues({
   required String providerId,
   required String stateKey,
   required String pkceKey,
+  String nonceKey = '_auth.nonce',
   required String callbackKey,
   required String? Function(String key) readSession,
 }) {
@@ -347,6 +355,7 @@ AuthOAuthCallbackSessionValues resolveOAuthCallbackSessionValues({
       authProviderStateSessionKey(stateKey, providerId),
     ),
     codeVerifier: readSession(authProviderPkceSessionKey(pkceKey, providerId)),
+    nonce: readSession(authProviderNonceSessionKey(nonceKey, providerId)),
     callbackUrl: readSession(
       authProviderCallbackSessionKey(callbackKey, providerId),
     ),
@@ -370,6 +379,7 @@ Map<String, String> buildOAuthAuthorizationParameters<TProfile extends Object>(
   OAuthProvider<TProfile> provider, {
   required String state,
   String? codeChallenge,
+  String? nonce,
   String? callbackUrl,
 }) {
   final codeChallengeMethod = codeChallenge == null ? null : 'S256';
@@ -378,6 +388,7 @@ Map<String, String> buildOAuthAuthorizationParameters<TProfile extends Object>(
     'client_id': provider.clientId,
     'redirect_uri': provider.redirectUri,
     'state': state,
+    if (nonce != null) 'nonce': nonce,
     if (provider.scopes.isNotEmpty) 'scope': provider.scopes.join(' '),
     'code_challenge': ?codeChallenge,
     'code_challenge_method': ?codeChallengeMethod,
@@ -393,12 +404,14 @@ Map<String, String> buildOAuthAuthorizationParameters<TProfile extends Object>(
 class AuthOAuthAuthorizationStart {
   const AuthOAuthAuthorizationStart({
     required this.state,
+    this.nonce,
     this.codeVerifier,
     this.codeChallenge,
     required this.parameters,
   });
 
   final String state;
+  final String? nonce;
   final String? codeVerifier;
   final String? codeChallenge;
   final Map<String, String> parameters;
@@ -408,6 +421,7 @@ class AuthOAuthAuthorizationStart {
 class AuthOAuthAuthorizationResolution {
   const AuthOAuthAuthorizationResolution({
     required this.state,
+    this.nonce,
     this.codeVerifier,
     this.codeChallenge,
     required this.parameters,
@@ -415,6 +429,7 @@ class AuthOAuthAuthorizationResolution {
   });
 
   final String state;
+  final String? nonce;
   final String? codeVerifier;
   final String? codeChallenge;
   final Map<String, String> parameters;
@@ -426,6 +441,9 @@ AuthOAuthAuthorizationStart prepareOAuthAuthorizationStart<
   TProfile extends Object
 >(OAuthProvider<TProfile> provider, {String? callbackUrl}) {
   final state = secureRandomToken();
+  final nonce = provider.type == AuthProviderType.oidc
+      ? secureRandomToken()
+      : null;
   String? verifier;
   String? challenge;
   if (provider.usePkce) {
@@ -435,12 +453,14 @@ AuthOAuthAuthorizationStart prepareOAuthAuthorizationStart<
 
   return AuthOAuthAuthorizationStart(
     state: state,
+    nonce: nonce,
     codeVerifier: verifier,
     codeChallenge: challenge,
     parameters: buildOAuthAuthorizationParameters(
       provider,
       state: state,
       codeChallenge: challenge,
+      nonce: nonce,
       callbackUrl: callbackUrl,
     ),
   );
@@ -453,6 +473,7 @@ resolveOAuthAuthorizationStart<TContext, TProfile extends Object>({
   required OAuthProvider<TProfile> provider,
   required String stateKey,
   required String pkceKey,
+  String nonceKey = '_auth.nonce',
   required String callbackKey,
   required void Function(String key, String value) writeSession,
   String? callbackUrl,
@@ -477,6 +498,13 @@ resolveOAuthAuthorizationStart<TContext, TProfile extends Object>({
     );
   }
 
+  if (start.nonce != null) {
+    writeSession(
+      authProviderNonceSessionKey(nonceKey, provider.id),
+      start.nonce!,
+    );
+  }
+
   if (callbackUrl != null && callbackUrl.isNotEmpty) {
     writeSession(
       authProviderCallbackSessionKey(callbackKey, provider.id),
@@ -486,6 +514,7 @@ resolveOAuthAuthorizationStart<TContext, TProfile extends Object>({
 
   return AuthOAuthAuthorizationResolution(
     state: start.state,
+    nonce: start.nonce,
     codeVerifier: start.codeVerifier,
     codeChallenge: start.codeChallenge,
     parameters: start.parameters,
@@ -506,6 +535,7 @@ OAuth2Client oauthClientForProvider<TProfile extends Object>(
     clientSecret: provider.clientSecret,
     httpClient: httpClient,
     useBasicAuth: provider.useBasicAuth,
+    requestTimeout: provider.requestTimeout,
   );
 }
 
@@ -772,12 +802,40 @@ Future<Map<String, dynamic>> loadOAuthProfile<TProfile extends Object>(
   OAuthProvider<TProfile> provider, {
   required OAuthTokenResponse token,
   required http.Client httpClient,
+  String? oidcNonce,
 }) async {
   if (provider.userInfoEndpoint == null) {
     final idToken = token.raw['id_token']?.toString();
+    if (provider.type == AuthProviderType.oidc &&
+        (idToken == null || idToken.isEmpty)) {
+      throw AuthFlowException('oidc_id_token_missing');
+    }
     if (idToken != null && idToken.isNotEmpty) {
-      final jwt = JsonWebToken.unverified(idToken);
-      return jwt.claims.toJson();
+      final issuer = provider.oidcIssuer;
+      final jwksUri = provider.oidcJwksUri;
+      if (issuer == null || jwksUri == null) {
+        throw AuthFlowException('oidc_validation_unconfigured');
+      }
+      try {
+        final payload = await JwtVerifier(
+          options: JwtOptions(
+            issuer: issuer.toString(),
+            audience: [provider.clientId],
+            requiredClaims: const ['sub', 'iss', 'aud', 'exp'],
+            jwksUri: jwksUri,
+            algorithms: provider.oidcAlgorithms,
+          ),
+          httpClient: httpClient,
+        ).verifyToken(idToken);
+        if (oidcNonce == null || payload.claims['nonce'] != oidcNonce) {
+          throw AuthFlowException('oidc_nonce_mismatch');
+        }
+        return payload.claims;
+      } on AuthFlowException {
+        rethrow;
+      } catch (_) {
+        throw AuthFlowException('id_token_invalid');
+      }
     }
     return <String, dynamic>{};
   }
@@ -923,6 +981,7 @@ resolveOAuthSignInForProvider<TContext, TProfile extends Object>({
   required OAuthProvider<TProfile> provider,
   required String code,
   String? codeVerifier,
+  String? oidcNonce,
   required http.Client httpClient,
   String Function()? fallbackAccountId,
 }) async {
@@ -937,6 +996,7 @@ resolveOAuthSignInForProvider<TContext, TProfile extends Object>({
     provider,
     token: tokenResponse,
     httpClient: httpClient,
+    oidcNonce: oidcNonce,
   );
   final parsedProfile = provider.parseProfile(rawProfile);
   final enrichedProfile = await Future.sync(
@@ -1002,8 +1062,10 @@ resolveOAuthCallbackSignInForProvider<TContext, TProfile extends Object>({
   required String? receivedState,
   required String stateKey,
   required String pkceKey,
+  String nonceKey = '_auth.nonce',
   required String callbackKey,
   required String? Function(String key) readSession,
+  void Function(String key)? removeSession,
   required http.Client httpClient,
   String Function()? fallbackAccountId,
 }) async {
@@ -1011,6 +1073,7 @@ resolveOAuthCallbackSignInForProvider<TContext, TProfile extends Object>({
     providerId: provider.id,
     stateKey: stateKey,
     pkceKey: pkceKey,
+    nonceKey: nonceKey,
     callbackKey: callbackKey,
     readSession: readSession,
   );
@@ -1019,12 +1082,18 @@ resolveOAuthCallbackSignInForProvider<TContext, TProfile extends Object>({
     receivedState: receivedState,
   );
 
+  removeSession?.call(authProviderStateSessionKey(stateKey, provider.id));
+  removeSession?.call(authProviderPkceSessionKey(pkceKey, provider.id));
+  removeSession?.call(authProviderNonceSessionKey(nonceKey, provider.id));
+  removeSession?.call(authProviderCallbackSessionKey(callbackKey, provider.id));
+
   final signIn = await resolveOAuthSignInForProvider<TContext, TProfile>(
     adapter: adapter,
     context: context,
     provider: provider,
     code: code,
     codeVerifier: sessionValues.codeVerifier,
+    oidcNonce: sessionValues.nonce,
     httpClient: httpClient,
     fallbackAccountId: fallbackAccountId,
   );
@@ -1050,6 +1119,10 @@ class OAuthProvider<TProfile extends Object> extends AuthProvider {
     required this.redirectUri,
     super.type = AuthProviderType.oauth,
     this.userInfoEndpoint,
+    this.oidcIssuer,
+    this.oidcJwksUri,
+    this.oidcAlgorithms = const <String>['RS256'],
+    this.requestTimeout = const Duration(seconds: 10),
     this.userInfoRequest,
     this.scopes = const <String>[],
     this.authorizationParams = const <String, String>{},
@@ -1077,6 +1150,18 @@ class OAuthProvider<TProfile extends Object> extends AuthProvider {
 
   /// Userinfo endpoint (optional if ID token contains claims).
   final Uri? userInfoEndpoint;
+
+  /// Issuer used to validate an OIDC ID token.
+  final Uri? oidcIssuer;
+
+  /// JWKS endpoint used to validate an OIDC ID token.
+  final Uri? oidcJwksUri;
+
+  /// Signature algorithms accepted for OIDC ID tokens.
+  final List<String> oidcAlgorithms;
+
+  /// Timeout applied to provider token and user-info requests.
+  final Duration requestTimeout;
 
   /// Custom userinfo request callback for providers that require non-standard
   /// userinfo fetching (e.g., POST instead of GET).

@@ -28,7 +28,13 @@ export 'src/auth/session_auth.dart'
         requireRoles;
 export 'src/config/specs/auth.dart' show AuthConfigSpec;
 export 'src/crypto/crypto.dart'
-    show sha1Digest, sha256Digest, md5Digest, hmacSha256, constantTimeEqualsBytes, hexFromBytes;
+    show
+        sha1Digest,
+        sha256Digest,
+        md5Digest,
+        hmacSha256,
+        constantTimeEqualsBytes,
+        hexFromBytes;
 
 /// Ensures the Routed auth provider ID is available in the global registry.
 void ensureRoutedAuthProviderRegistered([ProviderRegistry? registry]) {

@@ -1,4 +1,6 @@
+import 'dart:async';
 import 'dart:convert';
+import 'dart:io';
 
 import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
@@ -132,6 +134,8 @@ void main() {
     expect(cookie.httpOnly, isTrue);
     expect(cookie.path, equals('/'));
     expect(cookie.expires, equals(expiry));
+    expect(cookie.secure, isTrue);
+    expect(cookie.sameSite, equals(SameSite.lax));
   });
 
   test('buildExpiredJwtTokenCookie creates maxAge zero cookie', () {
@@ -161,6 +165,7 @@ void main() {
 
       expect(options, isNotNull);
       expect(options!.issuer, isNull);
+      expect(options.requiredClaims, equals(const <String>['exp']));
       expect(options.algorithms, equals(const <String>['RS256']));
     },
   );
@@ -172,11 +177,56 @@ void main() {
       audience: const <String>['demo'],
       inlineKeys: <Map<String, dynamic>>[_testJwk],
       algorithms: const <String>['HS256'],
+      requestTimeout: const Duration(seconds: 3),
     );
 
     expect(verifier, isNotNull);
     expect(verifier!.options.issuer, equals('server_auth'));
+    expect(verifier.options.requiredClaims, equals(const <String>['exp']));
+    expect(verifier.options.requestTimeout, equals(const Duration(seconds: 3)));
     expect(verifier.options.algorithms, equals(const <String>['HS256']));
+  });
+
+  test('JwtVerifier rejects tokens without an expiry by default', () async {
+    final claims = _claims(now: DateTime.now())..remove('exp');
+    final verifier = JwtVerifier(
+      options: JwtOptions(inlineKeys: [_testJwk], algorithms: const ['HS256']),
+    );
+
+    await expectLater(
+      verifier.verifyToken(_buildToken(claims)),
+      throwsA(
+        isA<JwtAuthException>().having(
+          (error) => error.message,
+          'message',
+          'missing_claim_exp',
+        ),
+      ),
+    );
+  });
+
+  test('JwtVerifier applies a timeout when fetching JWKS', () async {
+    final verifier = JwtVerifier(
+      options: JwtOptions(
+        jwksUri: Uri.parse('https://auth.test/jwks'),
+        algorithms: const ['HS256'],
+        requestTimeout: const Duration(milliseconds: 1),
+      ),
+      httpClient: MockClient((request) async {
+        await Future<void>.delayed(const Duration(milliseconds: 25));
+        return http.Response(
+          jsonEncode({
+            'keys': [_testJwk],
+          }),
+          200,
+        );
+      }),
+    );
+
+    await expectLater(
+      verifier.verifyToken(_buildToken(_claims(now: DateTime.now()))),
+      throwsA(isA<TimeoutException>()),
+    );
   });
 
   test('issueAuthJwtToken returns token, expiry, and cookie', () async {

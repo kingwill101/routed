@@ -174,6 +174,8 @@ Future<AuthSignOutResolution> resolveAuthSignOutForStrategy({
   required String jwtCookieName,
   FutureOr<void> Function()? logoutSession,
   String jwtCookiePath = '/',
+  bool jwtCookieSecure = true,
+  SameSite jwtCookieSameSite = SameSite.lax,
 }) async {
   switch (strategy) {
     case AuthSessionStrategy.session:
@@ -186,6 +188,8 @@ Future<AuthSignOutResolution> resolveAuthSignOutForStrategy({
         expiredJwtCookie: buildExpiredJwtTokenCookie(
           jwtCookieName,
           path: jwtCookiePath,
+          secure: jwtCookieSecure,
+          sameSite: jwtCookieSameSite,
         ),
       );
   }

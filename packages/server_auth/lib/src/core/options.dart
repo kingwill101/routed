@@ -24,10 +24,12 @@ class AuthOptions<TContext> {
     this.csrfKey = '_auth.csrf',
     this.stateKey = '_auth.state',
     this.pkceKey = '_auth.pkce',
+    this.nonceKey = '_auth.nonce',
     this.callbackKey = '_auth.callback',
     this.httpClient,
     this.tokenStore,
     this.enforceCsrf = true,
+    this.exposeJwtTokenInSessionResponse = false,
     this.rbac = const RbacOptions(),
     this.policies = const PolicyOptions(),
     AuthCallbacks<TContext>? callbacks,
@@ -63,6 +65,9 @@ class AuthOptions<TContext> {
   /// Session key for PKCE verifier.
   final String pkceKey;
 
+  /// Session key for provider OIDC nonce values.
+  final String nonceKey;
+
   /// Session key used to store callback URLs.
   final String callbackKey;
 
@@ -74,6 +79,11 @@ class AuthOptions<TContext> {
 
   /// Whether to enforce CSRF checks on sign-in/sign-out.
   final bool enforceCsrf;
+
+  /// Whether session endpoint payloads may include the raw JWT bearer token.
+  ///
+  /// Keep this disabled when the JWT is delivered through an HTTP-only cookie.
+  final bool exposeJwtTokenInSessionResponse;
 
   /// Role-based access control mappings.
   final RbacOptions rbac;
@@ -95,10 +105,12 @@ class AuthOptions<TContext> {
     String? csrfKey,
     String? stateKey,
     String? pkceKey,
+    String? nonceKey,
     String? callbackKey,
     http.Client? httpClient,
     AuthVerificationTokenStore? tokenStore,
     bool? enforceCsrf,
+    bool? exposeJwtTokenInSessionResponse,
     RbacOptions? rbac,
     PolicyOptions? policies,
     AuthCallbacks<TContext>? callbacks,
@@ -114,10 +126,14 @@ class AuthOptions<TContext> {
       csrfKey: csrfKey ?? this.csrfKey,
       stateKey: stateKey ?? this.stateKey,
       pkceKey: pkceKey ?? this.pkceKey,
+      nonceKey: nonceKey ?? this.nonceKey,
       callbackKey: callbackKey ?? this.callbackKey,
       httpClient: httpClient ?? this.httpClient,
       tokenStore: tokenStore ?? this.tokenStore,
       enforceCsrf: enforceCsrf ?? this.enforceCsrf,
+      exposeJwtTokenInSessionResponse:
+          exposeJwtTokenInSessionResponse ??
+          this.exposeJwtTokenInSessionResponse,
       rbac: rbac ?? this.rbac,
       policies: policies ?? this.policies,
       callbacks: callbacks ?? this.callbacks,

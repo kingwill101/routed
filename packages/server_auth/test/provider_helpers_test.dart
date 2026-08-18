@@ -5,6 +5,41 @@ import 'package:http/testing.dart';
 import 'package:server_auth/server_auth.dart';
 import 'package:test/test.dart';
 
+const _oidcSecret = 'oidc-test-secret';
+
+String _signedOidcToken({String nonce = 'nonce-1', String? issuer}) {
+  final key = JsonWebKey.fromJson({
+    'kty': 'oct',
+    'kid': 'oidc-key',
+    'alg': 'HS256',
+    'k': base64UrlEncode(utf8.encode(_oidcSecret)).replaceAll('=', ''),
+  });
+  final builder = JsonWebSignatureBuilder()
+    ..jsonContent = <String, dynamic>{
+      'sub': 'user-1',
+      'email': 'user@example.com',
+      'iss': issuer ?? 'https://issuer.test',
+      'aud': <String>['client-id'],
+      'exp':
+          DateTime.now()
+              .add(const Duration(minutes: 5))
+              .millisecondsSinceEpoch ~/
+          1000,
+      'nonce': nonce,
+    }
+    ..setProtectedHeader('alg', 'HS256')
+    ..setProtectedHeader('kid', 'oidc-key')
+    ..addRecipient(key, algorithm: 'HS256');
+  return builder.build().toCompactSerialization();
+}
+
+Map<String, dynamic> _oidcJwk() => <String, dynamic>{
+  'kty': 'oct',
+  'kid': 'oidc-key',
+  'alg': 'HS256',
+  'k': base64UrlEncode(utf8.encode(_oidcSecret)).replaceAll('=', ''),
+};
+
 void main() {
   test('resolveAuthProviderById finds provider by exact id', () {
     final providers = <AuthProvider>[
@@ -185,6 +220,10 @@ void main() {
       equals('_auth.pkce.google'),
     );
     expect(
+      authProviderNonceSessionKey('_auth.nonce', 'google'),
+      equals('_auth.nonce.google'),
+    );
+    expect(
       authProviderCallbackSessionKey('_auth.callback', 'discord'),
       equals('_auth.callback.discord'),
     );
@@ -198,6 +237,7 @@ void main() {
     final store = <String, String>{
       '_auth.state.github': 'state-1',
       '_auth.pkce.github': 'verifier-1',
+      '_auth.nonce.github': 'nonce-1',
       '_auth.callback.github': '/dashboard',
     };
 
@@ -211,6 +251,7 @@ void main() {
 
     expect(values.expectedState, equals('state-1'));
     expect(values.codeVerifier, equals('verifier-1'));
+    expect(values.nonce, equals('nonce-1'));
     expect(values.callbackUrl, equals('/dashboard'));
   });
 
@@ -414,7 +455,6 @@ void main() {
       expect(resolved.user.id, equals('local-1'));
     },
   );
-
 
   test(
     'consumeAuthVerificationToken falls back to secondary token store',
@@ -911,6 +951,7 @@ void main() {
         authProviderCallbackSessionKey('_auth.callback', provider.id):
             '/dashboard',
       };
+      final removedSessionKeys = <String>[];
 
       final resolved =
           await resolveOAuthCallbackSignInForProvider<
@@ -926,6 +967,7 @@ void main() {
             pkceKey: '_auth.pkce',
             callbackKey: '_auth.callback',
             readSession: (key) => session[key],
+            removeSession: removedSessionKeys.add,
             httpClient: MockClient((request) async {
               if (request.url.path == '/token') {
                 return http.Response(
@@ -959,6 +1001,15 @@ void main() {
       expect(
         linkedAccount!.providerAccountId,
         equals(resolved.signIn.account.providerAccountId),
+      );
+      expect(
+        removedSessionKeys,
+        containsAll(<String>[
+          authProviderStateSessionKey('_auth.state', provider.id),
+          authProviderPkceSessionKey('_auth.pkce', provider.id),
+          authProviderNonceSessionKey('_auth.nonce', provider.id),
+          authProviderCallbackSessionKey('_auth.callback', provider.id),
+        ]),
       );
     },
   );
@@ -1103,6 +1154,25 @@ void main() {
     expect(start.parameters['callbackUrl'], equals('/dashboard'));
   });
 
+  test('prepareOAuthAuthorizationStart generates an OIDC nonce', () {
+    final provider = OAuthProvider<Map<String, dynamic>>(
+      id: 'oidc',
+      name: 'OIDC',
+      type: AuthProviderType.oidc,
+      clientId: 'client-id',
+      clientSecret: 'client-secret',
+      authorizationEndpoint: Uri.parse('https://auth.test/authorize'),
+      tokenEndpoint: Uri.parse('https://auth.test/token'),
+      redirectUri: 'https://app.test/callback/oidc',
+      profile: (profile) => AuthUser(id: profile['sub']?.toString() ?? ''),
+    );
+
+    final start = prepareOAuthAuthorizationStart(provider);
+
+    expect(start.nonce, isNotNull);
+    expect(start.parameters['nonce'], equals(start.nonce));
+  });
+
   test(
     'resolveOAuthAuthorizationStart persists session keys and returns authorization uri',
     () async {
@@ -1205,24 +1275,22 @@ void main() {
   );
 
   test(
-    'loadOAuthProfile decodes id_token claims when no userinfo endpoint',
+    'loadOAuthProfile verifies id_token claims when no userinfo endpoint',
     () async {
-      final header = base64UrlEncode(
-        utf8.encode('{"alg":"none","typ":"JWT"}'),
-      ).replaceAll('=', '');
-      final payload = base64UrlEncode(
-        utf8.encode('{"sub":"user-1","email":"user@example.com"}'),
-      ).replaceAll('=', '');
-      final idToken = '$header.$payload.';
+      final idToken = _signedOidcToken();
 
       final provider = OAuthProvider<Map<String, dynamic>>(
         id: 'oidc',
         name: 'OIDC',
+        type: AuthProviderType.oidc,
         clientId: 'client-id',
         clientSecret: 'client-secret',
         authorizationEndpoint: Uri.parse('https://auth.test/authorize'),
         tokenEndpoint: Uri.parse('https://auth.test/token'),
         redirectUri: 'https://app.test/callback/oidc',
+        oidcIssuer: Uri.parse('https://issuer.test'),
+        oidcJwksUri: Uri.parse('https://issuer.test/jwks'),
+        oidcAlgorithms: const ['HS256'],
         profile: (profile) => AuthUser(id: profile['sub']?.toString() ?? ''),
       );
 
@@ -1234,13 +1302,114 @@ void main() {
           expiresIn: 3600,
           raw: <String, dynamic>{'id_token': idToken},
         ),
-        httpClient: MockClient((_) async => http.Response('{}', 200)),
+        oidcNonce: 'nonce-1',
+        httpClient: MockClient((request) async {
+          expect(request.url.path, equals('/jwks'));
+          return http.Response(
+            jsonEncode(<String, dynamic>{
+              'keys': [_oidcJwk()],
+            }),
+            200,
+            headers: const {'content-type': 'application/json'},
+          );
+        }),
       );
 
       expect(profile['sub'], equals('user-1'));
       expect(profile['email'], equals('user@example.com'));
     },
   );
+
+  test('loadOAuthProfile rejects unsigned OIDC id_tokens', () async {
+    final header = base64UrlEncode(
+      utf8.encode('{"alg":"none"}'),
+    ).replaceAll('=', '');
+    final payload = base64UrlEncode(
+      utf8.encode(
+        '{"sub":"attacker","iss":"https://issuer.test","aud":["client-id"],"exp":4102444800,"nonce":"nonce-1"}',
+      ),
+    ).replaceAll('=', '');
+    final provider = OAuthProvider<Map<String, dynamic>>(
+      id: 'oidc',
+      name: 'OIDC',
+      type: AuthProviderType.oidc,
+      clientId: 'client-id',
+      clientSecret: 'client-secret',
+      authorizationEndpoint: Uri.parse('https://auth.test/authorize'),
+      tokenEndpoint: Uri.parse('https://auth.test/token'),
+      redirectUri: 'https://app.test/callback/oidc',
+      oidcIssuer: Uri.parse('https://issuer.test'),
+      oidcJwksUri: Uri.parse('https://issuer.test/jwks'),
+      profile: (profile) => AuthUser(id: profile['sub']?.toString() ?? ''),
+    );
+
+    await expectLater(
+      loadOAuthProfile(
+        provider,
+        token: OAuthTokenResponse(
+          accessToken: 'access-token',
+          tokenType: 'Bearer',
+          expiresIn: 3600,
+          raw: <String, dynamic>{'id_token': '$header.$payload.'},
+        ),
+        oidcNonce: 'nonce-1',
+        httpClient: MockClient(
+          (_) async => http.Response(
+            jsonEncode(<String, dynamic>{
+              'keys': [_oidcJwk()],
+            }),
+            200,
+          ),
+        ),
+      ),
+      throwsA(isA<AuthFlowException>()),
+    );
+  });
+
+  test('loadOAuthProfile rejects an OIDC nonce mismatch', () async {
+    final provider = OAuthProvider<Map<String, dynamic>>(
+      id: 'oidc',
+      name: 'OIDC',
+      type: AuthProviderType.oidc,
+      clientId: 'client-id',
+      clientSecret: 'client-secret',
+      authorizationEndpoint: Uri.parse('https://auth.test/authorize'),
+      tokenEndpoint: Uri.parse('https://auth.test/token'),
+      redirectUri: 'https://app.test/callback/oidc',
+      oidcIssuer: Uri.parse('https://issuer.test'),
+      oidcJwksUri: Uri.parse('https://issuer.test/jwks'),
+      oidcAlgorithms: const ['HS256'],
+      profile: (profile) => AuthUser(id: profile['sub']?.toString() ?? ''),
+    );
+
+    await expectLater(
+      loadOAuthProfile(
+        provider,
+        token: OAuthTokenResponse(
+          accessToken: 'access-token',
+          tokenType: 'Bearer',
+          expiresIn: 3600,
+          raw: <String, dynamic>{'id_token': _signedOidcToken(nonce: 'wrong')},
+        ),
+        oidcNonce: 'expected',
+        httpClient: MockClient(
+          (_) async => http.Response(
+            jsonEncode(<String, dynamic>{
+              'keys': [_oidcJwk()],
+            }),
+            200,
+          ),
+        ),
+      ),
+      throwsA(
+        isA<AuthFlowException>().having(
+          (error) => error.code,
+          'code',
+          'oidc_nonce_mismatch',
+        ),
+      ),
+    );
+  });
 
   test(
     'loadOAuthProfile maps userinfo callback failures to AuthFlowException',

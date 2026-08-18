@@ -97,8 +97,9 @@ class AuthConfigSpec extends ConfigSpec<AuthConfig> {
                     'Optional token type hint passed to the introspection endpoint.',
               ),
               'cache_ttl': ConfigSchema.duration(
-                description: 'How long introspection results are cached.',
-                defaultValue: '30s',
+                description:
+                    'How long introspection results are cached (zero disables caching).',
+                defaultValue: '0s',
               ),
               'clock_skew': ConfigSchema.duration(
                 description:

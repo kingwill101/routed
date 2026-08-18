@@ -52,10 +52,10 @@ Middleware oauth2Introspection(
         context: ctx,
         onValidated: onValidated,
       );
-    } on OAuth2Exception catch (error) {
+    } on OAuth2Exception catch (_) {
       ctx.response
         ..statusCode = HttpStatus.unauthorized
-        ..write(error.message);
+        ..write('Unauthorized');
       return ctx.response;
     }
 

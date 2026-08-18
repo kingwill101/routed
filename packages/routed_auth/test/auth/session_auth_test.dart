@@ -132,8 +132,21 @@ void main() {
           guardRegistry.unregister('admin-only');
         });
 
-        final loginResponse = await client.post('/login', '');
+        final preAuthResponse = await client.get('/me');
+        final preAuthSession = preAuthResponse.cookie('test_session');
+        expect(preAuthSession, isNotNull);
+
+        final loginResponse = await client.post(
+          '/login',
+          '',
+          headers: {
+            HttpHeaders.cookieHeader: ['test_session=${preAuthSession!.value}'],
+          },
+        );
         loginResponse.assertStatus(200);
+        final rotatedSession = loginResponse.cookie('test_session');
+        expect(rotatedSession, isNotNull);
+        expect(rotatedSession!.value, isNot(equals(preAuthSession.value)));
         final rememberCookie = loginResponse.cookie('remember_token');
         expect(rememberCookie, isNotNull);
 
@@ -481,7 +494,18 @@ void main() {
         options: [withSessionConfig(_sessionConfig())],
       );
 
-      engine.addGlobalMiddleware(sessionMiddleware(MemorySessionStore(codecs: [SecureCookie(useEncryption: true, useSigning: true)], defaultOptions: SessionOptions(path: '/', httpOnly: true, sameSite: SameSite.lax))));
+      engine.addGlobalMiddleware(
+        sessionMiddleware(
+          MemorySessionStore(
+            codecs: [SecureCookie(useEncryption: true, useSigning: true)],
+            defaultOptions: SessionOptions(
+              path: '/',
+              httpOnly: true,
+              sameSite: SameSite.lax,
+            ),
+          ),
+        ),
+      );
       engine.addGlobalMiddleware(SessionAuth.sessionAuthMiddleware());
 
       guardRegistry.register('maintenance-test', (ctx) async {
