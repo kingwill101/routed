@@ -1,4 +1,5 @@
 import 'package:routed_core/routed_core.dart';
+import 'package:routed_logging/routed_logging.dart';
 
 /// Classification for incoming Turbo-driven requests.
 enum TurboRequestKind {
@@ -141,7 +142,7 @@ void _attachLoggingContext(EngineContext ctx, TurboRequestInfo info) {
       'method': ctx.method,
       'path': ctx.path,
     };
-    logger = ctx.logger; // This creates a fallback logger
+    logger = LoggingContext.currentLogger(ctx);
     ctx.set(loggerKey, logger);
   }
 

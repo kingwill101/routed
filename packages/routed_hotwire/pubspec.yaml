@@ -20,6 +20,7 @@ dependencies:
   intl: ^0.20.2
   crypto: ^3.0.7
   routed_core: ^0.3.3
+  routed_logging: ^0.1.0
   routed_views: ^0.1.0
 
 dev_dependencies:
@@ -30,5 +31,5 @@ dev_dependencies:
   lints: ^6.0.0
   path: ^1.9.1
   routed_testing: ^0.3.3
-  server_testing: ^0.3.2
+  server_testing: ">=0.3.3 <1.0.0"
   test: ^1.29.0

@@ -1,5 +1,4 @@
 import 'package:routed_core/routed_core.dart';
-import 'package:routed_views/routed_views.dart';
 
 import 'turbo_streams.dart';
 

@@ -20,7 +20,8 @@ Routed engine so you can build interactive hybrids without leaving Dart.
 
 ```yaml
 dependencies:
-  routed_hotwire: ^0.1.0
+  routed: ^0.3.3
+  routed_hotwire: ^0.1.2
 ```
 
 Turbo-first apps typically include `routed`, `routed_testing`, and
@@ -29,15 +30,28 @@ Turbo-first apps typically include `routed`, `routed_testing`, and
 ## Usage
 
 ```dart
+import 'package:routed/routed.dart';
 import 'package:routed_hotwire/routed_hotwire.dart';
 
-router.post('/notes', (ctx) async {
-  final note = await notes.create(ctx.input('content'));
-  return turboStream((streams) {
-    streams.append('#notes', renderNote(note));
+Future<void> main() async {
+  registerRoutedProviders();
+  final engine = await Engine.create();
+
+  engine.post('/notes', (ctx) async {
+    final content = ctx.query('content')?.toString() ?? '';
+    return ctx.turboStream(turboStreamAppend(
+      target: 'notes',
+      html: '<li>$content</li>',
+    ));
   });
-});
+
+  await engine.serve(port: 8080);
+}
 ```
+
+`routed_hotwire` does not register a service provider. The `routed` facade
+initializes the official Routed providers; the Hotwire package adds response
+and stream helpers to the engine context.
 
 See the `example/` directory for a runnable Todo app with Turbo navigation and
 Stimulus controllers.

@@ -4,6 +4,7 @@ import 'dart:io';
 
 import 'package:routed_core/routed_core.dart';
 import 'package:routed_hotwire/routed_hotwire.dart';
+import 'package:routed_http/routed_http.dart';
 import 'package:routed_testing/routed_testing.dart';
 import 'package:server_testing/server_testing.dart';
 import 'package:path/path.dart' as p;

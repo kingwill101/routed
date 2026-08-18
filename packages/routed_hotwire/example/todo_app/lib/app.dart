@@ -1,7 +1,7 @@
 import 'dart:io';
 
 import 'package:path/path.dart' as p;
-import 'package:routed_core/routed_core.dart' hide LiquidViewEngine, ViewEngine;
+import 'package:routed_core/routed_core.dart';
 import 'package:routed_hotwire/routed_hotwire.dart';
 import 'package:routed_storage/routed_storage.dart';
 import 'package:routed_views/routed_views.dart';
@@ -25,9 +25,9 @@ Future<Engine> createTodoApp({
     providers: [...Engine.defaultProviders, ViewServiceProvider()],
   );
 
-  engine.container
-      .get<ViewEngineManager>()
-      .register(LiquidViewEngine(directory: templatesPath));
+  engine.container.get<ViewEngineManager>().register(
+    LiquidViewEngine(directory: templatesPath),
+  );
 
   final assetsRouter = Router()..static('/assets', assetsPath);
   engine.use(assetsRouter);
