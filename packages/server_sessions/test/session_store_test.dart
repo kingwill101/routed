@@ -200,7 +200,7 @@ void main() {
       final signature = base64Url.encode(
         _hmacSha256(
           base64.decode(key.replaceFirst('base64:', '')),
-          utf8.encode(payload),
+          utf8.encode('session|$payload'),
         ),
       );
       final custom = base64Url.encode(utf8.encode('$payload|$signature'));
@@ -390,7 +390,7 @@ void main() {
       final store = FilesystemStore(
         storageDir: directory.path,
         codecs: [SecureCookie(key: SecureCookie.generateKey())],
-        defaultOptions: SessionOptions(maxAge: 0),
+        defaultOptions: SessionOptions(maxAge: -1),
         fileSystem: fs,
       );
 
@@ -398,7 +398,7 @@ void main() {
       final writeRes = _MockResponse();
       final session = Session(
         name: 'file',
-        options: SessionOptions(maxAge: 0, path: '/'),
+        options: SessionOptions(maxAge: -1, path: '/'),
       );
       await store.write(writeReq, writeRes, session);
       final cookie = writeRes.cookie('file');

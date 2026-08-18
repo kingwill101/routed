@@ -2,7 +2,6 @@ import 'package:file/file.dart';
 import 'package:file/memory.dart';
 import 'package:routed_core/routed_core.dart';
 import 'package:routed_sessions/routed_sessions.dart';
-import 'package:server_sessions/server_sessions.dart';
 
 /// Creates a test engine with in-memory configuration.
 ///
