@@ -21,11 +21,11 @@ dependencies:
   routed_http: ^0.1.0
   routed_logging: ^0.1.0
   routed_observability: ^0.1.0
-  server_auth: ^0.1.0
-  server_cache: ^0.1.0
-  server_sessions: ^0.1.0
-  server_storage: ^0.1.0
-  server_rate_limit: ^0.1.0
+  routed_openapi: ^0.1.0
+  routed_security: ^0.1.0
+  routed_validation: ^0.1.0
 dev_dependencies:
   lints: ^6.0.0
+  routed_testing: ^0.3.3
+  server_testing: ">=0.3.3 <1.0.0"
   test: ^1.29.0

@@ -32,16 +32,6 @@ class JsonBinding extends Binding {
   }
 
   @override
-  Future<void> validate(
-    EngineContext context,
-    Map<String, String> rules, {
-    bool bail = false,
-    Map<String, String>? messages,
-  }) async {
-    throw UnimplementedError('validation moved to routed_validation');
-  }
-
-  @override
   Future<T> bind<T>(EngineContext context, T instance) async {
     final decoded = await _decodedBody(context);
     await bindBody(decoded, instance);

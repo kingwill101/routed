@@ -352,14 +352,4 @@ class MultipartBinding extends Binding {
     }
     return instance;
   }
-
-  @override
-  Future<void> validate(
-    EngineContext context,
-    Map<String, String> rules, {
-    bool bail = false,
-    Map<String, String>? messages,
-  }) async {
-    throw UnimplementedError('validation moved to routed_validation');
-  }
 }

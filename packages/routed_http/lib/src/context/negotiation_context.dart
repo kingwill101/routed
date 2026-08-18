@@ -96,4 +96,3 @@ extension NegotiationContext on EngineContext {
     response.headers.add(HttpHeaders.varyHeader, 'Accept');
   }
 }
-

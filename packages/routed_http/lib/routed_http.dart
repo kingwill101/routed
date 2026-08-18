@@ -1,5 +1,8 @@
 library;
 
+export 'src/providers/compression.dart';
+export 'src/register_providers.dart';
+
 // Facade for HTTP utilities per refactor.md §6.
 // Owns `http_parser`, `mime`, negotiation, conditional, SSE deps.
 

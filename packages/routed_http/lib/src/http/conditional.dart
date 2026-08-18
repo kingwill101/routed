@@ -65,7 +65,9 @@ ConditionalOutcome evaluateConditional(
   final ifMatch = ctx.requestHeader(HttpHeaders.ifMatchHeader);
   final ifNoneMatch = ctx.requestHeader(HttpHeaders.ifNoneMatchHeader);
   final ifModifiedSince = ctx.requestHeader(HttpHeaders.ifModifiedSinceHeader);
-  final ifUnmodifiedSince = ctx.requestHeader(HttpHeaders.ifUnmodifiedSinceHeader);
+  final ifUnmodifiedSince = ctx.requestHeader(
+    HttpHeaders.ifUnmodifiedSinceHeader,
+  );
   // If-Match: if present and etag doesn't match -> preconditionFailed (412)
   if (ifMatch != null && etag != null) {
     final current = parseCurrentEtag(etag);
@@ -129,7 +131,10 @@ Middleware conditionalRequests({
       ctx.response.headers.set(HttpHeaders.etagHeader, etagVal);
     }
     if (lm != null) {
-      ctx.response.headers.set(HttpHeaders.lastModifiedHeader, HttpDate.format(lm));
+      ctx.response.headers.set(
+        HttpHeaders.lastModifiedHeader,
+        HttpDate.format(lm),
+      );
     }
     final outcome = evaluateConditional(ctx, etag: etagVal, lastModified: lm);
     if (outcome == ConditionalOutcome.notModified) {

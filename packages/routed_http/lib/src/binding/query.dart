@@ -13,16 +13,6 @@ class QueryBinding extends Binding {
   MimeType? get mimeType => null;
 
   @override
-  Future<void> validate(
-    EngineContext context,
-    Map<String, String> rules, {
-    bool bail = false,
-    Map<String, String>? messages,
-  }) async {
-    throw UnimplementedError('validation moved to routed_validation');
-  }
-
-  @override
   Future<T> bind<T>(EngineContext context, T instance) async {
     if (instance is Map) {
       for (final entry in context.queryCache.entries) {

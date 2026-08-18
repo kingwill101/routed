@@ -1,7 +1,6 @@
 // ignore_for_file: implementation_imports
 import 'package:routed_core/routed_core.dart';
 
-
 import 'binding.dart';
 
 /// Binds URI parameters to a given instance and validates them.
@@ -28,15 +27,5 @@ class UriBinding extends Binding {
       (instance as Bindable).bind(data);
     }
     return instance;
-  }
-
-  @override
-  Future<void> validate(
-    EngineContext context,
-    Map<String, String> rules, {
-    bool bail = false,
-    Map<String, String>? messages,
-  }) async {
-    throw UnimplementedError('validation moved to routed_validation');
   }
 }

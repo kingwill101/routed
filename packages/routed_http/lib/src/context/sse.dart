@@ -88,7 +88,6 @@ extension EngineContextSse on EngineContext {
     Duration heartbeat = const Duration(seconds: 15),
     String heartbeatComment = 'heartbeat',
   }) async {
-
     response.headers
       ..set(HttpHeaders.contentTypeHeader, 'text/event-stream; charset=utf-8')
       ..set(HttpHeaders.cacheControlHeader, 'no-cache, no-transform')

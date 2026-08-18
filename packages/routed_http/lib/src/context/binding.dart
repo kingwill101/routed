@@ -1,4 +1,3 @@
-
 import 'package:routed_core/routed_core.dart';
 
 import '../binding/binding.dart';
@@ -64,20 +63,5 @@ extension BindingMethods on EngineContext {
   Future<T> shouldBind<T>(T model) {
     final b = defaultBinding(request.method, request.contentType?.value ?? '');
     return b.bind(this, model);
-  }
-
-  /// Validates the provided [data] using the default binding for the request method and content type.
-  ///
-  /// This method will determine the appropriate binding based on the request method and content type,
-  /// and then validate the [data] using that binding. It is an asynchronous operation.
-  Future<void> validate(
-    Map<String, String> data, {
-    bool bail = false,
-    Map<String, String>? messages,
-  }) {
-    return defaultBinding(
-      request.method,
-      request.contentType?.value ?? '',
-    ).validate(this, data, bail: bail, messages: messages);
   }
 }

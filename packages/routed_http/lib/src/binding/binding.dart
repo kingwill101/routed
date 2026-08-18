@@ -20,12 +20,6 @@ abstract class Binding {
   String get name;
   MimeType? get mimeType;
   Future<T> bind<T>(EngineContext context, T instance);
-  Future<void> validate(
-    EngineContext context,
-    Map<String, String> data, {
-    bool bail = false,
-    Map<String, String>? messages,
-  });
 }
 
 final jsonBinding = JsonBinding();
