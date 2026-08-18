@@ -627,7 +627,7 @@ final class _AdapterConnectionInfo implements HttpConnectionInfo {
   _AdapterConnectionInfo._(this.remoteAddress) : remotePort = 0, localPort = 0;
 
   /// Builds connection info when `dart:io` [InternetAddress] is available.
-  /// Returns null on JS/Node stubs where address APIs throw.
+  /// Returns null when the host does not expose a parseable address.
   static HttpConnectionInfo? tryParse(String? remoteAddress) {
     try {
       return _AdapterConnectionInfo._(_parseAddress(remoteAddress));

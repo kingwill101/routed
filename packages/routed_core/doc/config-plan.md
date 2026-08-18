@@ -74,10 +74,10 @@ Milestones (incremental):
 
 5) DX/CLI
     - Implementation
-        - `routed config:publish` generates config stubs in `config/` (use `--only app,cache` or `app,cache` to publish a subset).
-        - `routed config:cache` generates a merged Dart file for fast boot and registers it as a service.
-        - `routed config:clear` removes cached artifacts.
-        - `routed provider:list`, `provider:enable`, `provider:disable` expose manifest state (with `--config` surfacing
+        - `routed_cli config:publish` generates config stubs in `config/` (use `--only app,cache` or `app,cache` to publish a subset).
+        - `routed_cli config:cache` generates a merged Dart file for fast boot and registers it as a service.
+        - `routed_cli config:clear` removes cached artifacts.
+        - `routed_cli provider:list`, `provider:enable`, `provider:disable` expose manifest state (with `--config` surfacing
           defaults/validation hints).
     - Dogfooding
         - Hook CLI into example app CI to publish package config stubs and run from cache.

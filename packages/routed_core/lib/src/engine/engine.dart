@@ -55,15 +55,6 @@ part 'patterns.dart';
 part 'route_trie.dart';
 part 'request.dart';
 
-// Stub for moved validation
-class ValidationRuleRegistry {
-  static ValidationRuleRegistry defaults() => ValidationRuleRegistry();
-  static ValidationRuleRegistry clone(ValidationRuleRegistry other) =>
-      ValidationRuleRegistry();
-  List<String> get names => [];
-  ValidationRuleRegistry cloneInstance() => ValidationRuleRegistry();
-}
-
 /// The core HTTP engine of the Routed framework.
 ///
 /// The [Engine] is responsible for managing the complete HTTP request lifecycle,
@@ -375,7 +366,7 @@ class Engine with ContainerMixin {
   /// engine.get('/hello', (ctx) => ctx.string('Hello'));
   /// ```
   ///
-  /// Full-featured engine with default providers:
+  /// Core engine with the default core providers:
   /// ```dart
   /// final engine = Engine(providers: Engine.defaultProviders);
   /// await engine.initialize();
@@ -393,7 +384,7 @@ class Engine with ContainerMixin {
   /// );
   /// ```
   ///
-  /// Custom provider composition:
+  /// Custom core-provider composition:
   /// ```dart
   /// final engine = Engine(
   ///   config: EngineConfig(
@@ -402,7 +393,6 @@ class Engine with ContainerMixin {
   ///   providers: [
   ///     CoreServiceProvider.withLoader(ConfigLoaderOptions(watch: true)),
   ///     RoutingServiceProvider(),
-  ///     DatabaseServiceProvider(),
   ///   ],
   ///   options: [
   ///     withCors(enabled: true),
@@ -456,11 +446,6 @@ class Engine with ContainerMixin {
     }
     if (!container.has<RoutePatternRegistry>()) {
       container.instance<RoutePatternRegistry>(RoutePatternRegistry.defaults());
-    }
-    if (!container.has<ValidationRuleRegistry>()) {
-      container.instance<ValidationRuleRegistry>(
-        ValidationRuleRegistry.defaults(),
-      );
     }
     if (!container.has<MiddlewareRegistry>()) {
       container.instance<MiddlewareRegistry>(MiddlewareRegistry());
@@ -668,23 +653,14 @@ class Engine with ContainerMixin {
         RoutePatternRegistry.clone(registry),
       );
     }
-    if (other.container.has<ValidationRuleRegistry>()) {
-      final registry = other.container.get<ValidationRuleRegistry>();
-      engine.container.instance<ValidationRuleRegistry>(
-        ValidationRuleRegistry.clone(registry),
-      );
-    }
     engine._mounts.addAll(other._mounts);
     engine._engineRoutes.addAll(other._engineRoutes);
     engine.middlewares.addAll(other.middlewares);
     return engine;
   }
 
-  /// Creates a default engine instance with common production settings.
-  ///
-  /// This factory creates an engine with default providers and a 30-second
-  /// timeout middleware pre-configured, which is suitable for most production
-  /// applications.
+  /// Creates an engine instance with the default core providers and common
+  /// production configuration hooks.
   ///
   /// Example:
   /// ```dart
@@ -875,6 +851,7 @@ class Engine with ContainerMixin {
           middlewares: allMiddlewares,
           constraints: r.constraints,
           metadata: r.metadata,
+          schema: r.schema,
           isFallback: r.constraints['isFallback'] == true,
           sourceFile: r.sourceFile,
           sourceLine: r.sourceLine,

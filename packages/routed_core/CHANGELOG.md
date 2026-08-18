@@ -55,9 +55,6 @@
   package roots. Added `--only` option for selective stub generation.
 - `provider:list` now accepts an optional positional ID filter and displays
   config source information.
-- `create` command supports Inertia scaffolding via `--inertia`,
-  `--inertia-framework`, `--inertia-package-manager`, and `--inertia-output`
-  flags. Entry key defaults to `index.html` for Vite 7 compatibility.
 - Generated apps now include a CLI entrypoint with a built-in `serve` command.
 - CLI command discovery can build engines without initialization via
   `createEngine(initialize: false)`.

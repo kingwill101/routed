@@ -119,20 +119,7 @@
           "default": [
             "routed.core",
             "routed.routing",
-            "routed.cache",
-            "routed.sessions",
-            "routed.uploads",
-            "routed.cors",
-            "routed.security",
-            "routed.auth",
-            "routed.logging",
-            "routed.observability",
-            "routed.compression",
-            "routed.rate_limit",
-            "routed.storage",
-            "routed.static",
-            "routed.localization",
-            "routed.views"
+            "routed.uploads"
           ]
         },
         "middleware": {

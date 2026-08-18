@@ -1,4 +1,5 @@
 import 'package:routed_core/routed_core.dart';
+import 'package:routed_views/routed_views.dart';
 
 Future<Engine> createEngine({bool initialize = true}) async {
   final engine = Engine(

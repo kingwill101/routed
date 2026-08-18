@@ -177,9 +177,9 @@ EngineOpt withLogging({
 
 /// Configures Cross-Origin Resource Sharing (CORS) settings.
 ///
-/// CORS controls which domains can make cross-origin requests to your API.
-/// This is essential for web applications that need to access your API from
-/// different domains.
+/// Records CORS settings in the application configuration. The core package
+/// does not install a CORS middleware; an application or host must provide the
+/// middleware that consumes these settings.
 ///
 /// Example:
 /// ```dart
@@ -232,9 +232,10 @@ EngineOpt withCors({
 
 /// Configures static file serving for assets like images, CSS, and JavaScript.
 ///
-/// This option allows you to serve static files from directories or disk
-/// storage. You can configure multiple mount points, each serving files from
-/// a different source.
+/// Records compatible static-mount settings in the application configuration.
+/// The current core package does not install a declarative static provider;
+/// use the router's direct static helpers or a provider that consumes these
+/// settings.
 ///
 /// Example:
 /// ```dart
@@ -300,8 +301,10 @@ EngineOpt withStaticAssets({
 /// final engine = Engine(
 ///   options: [
 ///     withMiddleware([
-///       LoggingMiddleware(),
-///       CompressionMiddleware(),
+///       (ctx, next) async {
+///         final response = await next();
+///         return response;
+///       },
 ///     ]),
 ///   ],
 /// );
@@ -369,35 +372,6 @@ EngineOpt withMultipart({
 EngineOpt withCacheManager(dynamic cacheManager) {
   return (Engine engine) {
     engine.container.instance<dynamic>(cacheManager);
-  };
-}
-
-/// Configures session management settings.
-///
-/// Sessions allow you to store user-specific data across multiple requests.
-/// This option configures how sessions are stored, their lifetime, and
-/// security settings.
-///
-/// Example:
-/// ```dart
-/// final engine = Engine(
-///   options: [
-///     withSessionConfig(
-///       SessionConfig(
-///         driver: 'cookie',
-///         lifetime: Duration(hours: 2),
-///         secure: true,
-///         httpOnly: true,
-///       ),
-///     ),
-///   ],
-/// );
-/// ```
-EngineOpt withSessionConfig(SessionConfig config) {
-  return (Engine engine) {
-    final appConfig = engine.appConfig;
-    appConfig.set('session.config', config);
-    engine.container.instance<SessionConfig>(config);
   };
 }
 

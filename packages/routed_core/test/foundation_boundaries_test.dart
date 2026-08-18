@@ -27,7 +27,9 @@ void main() {
       expect(route.metadata.get(metaKey), 'hello');
 
       final manifest = engine.buildRouteManifest();
-      final manifestRoute = manifest.routes.singleWhere((r) => r.path == '/meta');
+      final manifestRoute = manifest.routes.singleWhere(
+        (r) => r.path == '/meta',
+      );
       expect(manifestRoute.metadata['routed.test.meta'], 'hello');
     });
 
@@ -51,7 +53,10 @@ void main() {
       expect(resolver.get<String>(), 'hello');
     });
 
-    engineTest('TypedContextState write/read/require/contains', (engine, client) async {
+    engineTest('TypedContextState write/read/require/contains', (
+      engine,
+      client,
+    ) async {
       const userKey = ContextKey<String>('routed.test.user');
       const nullableKey = ContextKey<String?>('routed.test.nullable');
       const wrongKey = ContextKey<bool>('routed.test.user');
@@ -153,6 +158,7 @@ void main() {
       final candidates = [
         File('lib/routed.dart'),
         File('packages/routed/lib/routed.dart'),
+        File('../routed/lib/routed.dart'),
       ];
       File? barrel;
       for (final f in candidates) {

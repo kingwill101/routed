@@ -6,7 +6,7 @@ A new [Routed](https://routed.dev) application.
 
 ```bash
 dart pub get
-dart run routed dev
+dart run routed_cli dev
 ```
 
 The default route responds with a friendly JSON payload. Edit

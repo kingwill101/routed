@@ -50,8 +50,8 @@ class EngineRoute {
 
   /// Optional API schema metadata for this route.
   ///
-  /// Contains request body, parameter, and response metadata used for
-  /// OpenAPI generation and runtime validation.
+  /// Contains request body, parameter, and response metadata used by
+  /// OpenAPI generation and optional runtime validation middleware.
   final Object? schema;
 
   /// Source file where this route was registered.
@@ -78,10 +78,6 @@ class EngineRoute {
   late final bool hasMiddlewareReference;
 
   late final Middleware _handlerMiddleware;
-
-  /// Middleware that auto-validates requests against [schema.validationRules].
-  /// Null when the route has no validation rules.
-  late final Middleware? _schemaValidationMiddleware;
 
   List<Middleware> _cachedHandlers = const <Middleware>[];
 
@@ -111,7 +107,6 @@ class EngineRoute {
       (middleware) => MiddlewareReference.lookup(middleware) != null,
     );
     _handlerMiddleware = (EngineContext ctx, Next _) => handler(ctx);
-    _schemaValidationMiddleware = _buildSchemaValidationMiddleware();
   }
 
   /// Creates a fallback route.
@@ -136,7 +131,6 @@ class EngineRoute {
     isStatic = false;
     staticPath = '*';
     _handlerMiddleware = (EngineContext ctx, Next _) => handler(ctx);
-    _schemaValidationMiddleware = null;
   }
 
   /// Checks if a request matches this route.
@@ -174,17 +168,8 @@ class EngineRoute {
     return [...globalMiddlewares, ...routeMiddlewares, ...tail];
   }
 
-  /// The tail of the middleware chain: optional schema validation + handler.
-  List<Middleware> get _tailMiddlewares {
-    final validation = _schemaValidationMiddleware;
-    if (validation != null) {
-      return <Middleware>[validation, _handlerMiddleware];
-    }
-    return <Middleware>[_handlerMiddleware];
-  }
-
-  /// Builds a schema validation middleware if this route has validation rules.
-  Middleware? _buildSchemaValidationMiddleware() => null;
+  /// The tail of the middleware chain: the route handler.
+  List<Middleware> get _tailMiddlewares => <Middleware>[_handlerMiddleware];
 
   bool matchesPath(String path, {bool allowTrailingSlash = true}) {
     if (isFallback) {

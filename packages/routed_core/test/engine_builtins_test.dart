@@ -3,11 +3,12 @@ import 'package:test/test.dart';
 
 void main() {
   group('Engine.builtins', () {
-    test('returns all built-in providers', () {
+    test('returns all foundation providers', () {
       final providers = Engine.builtins;
 
-      // Should have all registered providers (currently 16)
-      expect(providers.length, greaterThanOrEqualTo(16));
+      // routed_core owns only the foundation registrations. Feature providers
+      // are registered by package:routed and its adapter dependencies.
+      expect(providers.length, equals(3));
 
       // Verify core providers are included
       expect(

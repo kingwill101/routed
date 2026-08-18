@@ -10,7 +10,7 @@ dart pub get
 
 ```
 # Run the API locally on port 8080
-dart run routed dev
+dart run routed_cli dev
 ```
 
 ### Example requests

@@ -212,7 +212,6 @@ class Response {
   /// Writes the buffered data to the HTTP response and starts the body.
   void writeNow() {
     _ensureNotClosed();
-    writeHeaderNow();
     Uint8List bytes = _buffer.takeBytes();
     if (_bodyFilter != null) {
       try {
@@ -226,6 +225,8 @@ class Response {
         _bodyFilter = null;
       }
     }
+
+    writeHeaderNow();
 
     final native = _httpResponse;
     if (native != null) {
@@ -439,6 +440,20 @@ class Response {
 
   /// Returns the headers of the HTTP response.
   HttpHeaders get headers => _httpResponse?.headers ?? _portableHeaders!;
+
+  /// Returns a response header, including headers waiting to be flushed.
+  ///
+  /// This is useful to middleware that needs to inspect headers set by a
+  /// handler before the buffered response is written.
+  String? headerValue(String name) {
+    for (final entry in _headers.entries) {
+      if (entry.key.toLowerCase() == name.toLowerCase() &&
+          entry.value.isNotEmpty) {
+        return entry.value.last;
+      }
+    }
+    return headers.value(name);
+  }
 
   /// Gets the status code of the HTTP response.
   int get statusCode => _httpResponse?.statusCode ?? _portableStatusCode;

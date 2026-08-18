@@ -22,6 +22,9 @@ class RegisteredRoute {
   /// Generic typed metadata attached to the route.
   final RouteMetadata metadata;
 
+  /// Optional API schema metadata for this route.
+  final Object? schema;
+
   /// Source file where the route registration call occurred.
   final String? sourceFile;
 
@@ -40,6 +43,7 @@ class RegisteredRoute {
     this.sourceFile,
     this.sourceLine,
     this.sourceColumn,
+    this.schema,
     Map<String, dynamic>? constraints,
     RouteMetadata? metadata,
   }) : constraints = Map<String, dynamic>.from(constraints ?? const {}),

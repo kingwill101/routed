@@ -11,11 +11,21 @@ import 'package:routed_core/src/utils/request_id.dart';
 /// Represents an HTTP request and provides various utilities to access
 /// request data and metadata.
 class Request {
-  /// The underlying [HttpRequest] object.
+  /// The underlying native [HttpRequest] object.
   ///
-  /// @deprecated Use the public API methods instead of accessing httpRequest directly.
-  /// This field will be made private in a future version.
-  final HttpRequest httpRequest;
+  /// Portable requests do not expose a native request and throw
+  /// [UnsupportedError] when this legacy accessor is used.
+  @Deprecated('Use the request accessors instead of httpRequest directly.')
+  HttpRequest get httpRequest {
+    if (!hasNativeHttpRequest) {
+      throw UnsupportedError(
+        'Portable requests do not expose a native HttpRequest.',
+      );
+    }
+    return _httpRequest;
+  }
+
+  final HttpRequest _httpRequest;
 
   /// A unique identifier for the request.
   final String id;
@@ -43,8 +53,8 @@ class Request {
   ///
   /// The [httpRequest] parameter is the underlying HTTP request.
   /// The [pathParameters] parameter is a map of path parameters.
-  Request(this.httpRequest, this.pathParameters, this.config)
-    : queryParameters = _safeQueryParameters(httpRequest.uri),
+  Request(this._httpRequest, this.pathParameters, this.config)
+    : queryParameters = _safeQueryParameters(_httpRequest.uri),
       _attributes = {},
       id = config.features.enableSecureRequestIds
           ? RequestId.generateSecure()
@@ -67,18 +77,18 @@ class Request {
   }
 
   /// Whether this request is backed by a real native `dart:io` request.
-  bool get hasNativeHttpRequest => httpRequest is! SyntheticHttpRequest;
+  bool get hasNativeHttpRequest => _httpRequest is! SyntheticHttpRequest;
 
   /// Whether this request was built from a portable adapter.
   bool get isPortable => !hasNativeHttpRequest;
 
   /// Opaque host context supplied by a portable request adapter, when any.
-  Object? get hostContext => httpRequest is HostContextCarrier
-      ? (httpRequest as HostContextCarrier).hostContext
+  Object? get hostContext => _httpRequest is HostContextCarrier
+      ? (_httpRequest as HostContextCarrier).hostContext
       : null;
 
-  /// Back-compat alias used by older request-scope tests and internals.
-  String get identity => id;
+  /// Stable object identity used by request-scoped `Expando` storage.
+  Request get identity => this;
 
   /// Safely extracts query parameters from a URI, handling invalid encodings
   static Map<String, String> _safeQueryParameters(Uri uri) {
@@ -91,56 +101,56 @@ class Request {
   }
 
   /// Returns the HTTP method of the request (e.g., GET, POST).
-  String get method => httpRequest.method;
+  String get method => _httpRequest.method;
 
   /// Returns the content length of the request body.
-  int get contentLength => httpRequest.contentLength;
+  int get contentLength => _httpRequest.contentLength;
 
   /// Returns the URI of the request.
-  Uri get uri => httpRequest.uri;
+  Uri get uri => _httpRequest.uri;
 
   /// Returns the requested URI for the request.
-  Uri get requestedUri => httpRequest.requestedUri;
+  Uri get requestedUri => _httpRequest.requestedUri;
 
   /// Returns the headers of the request.
-  HttpHeaders get headers => httpRequest.headers;
+  HttpHeaders get headers => _httpRequest.headers;
 
   /// Returns the cookies sent with the request.
-  List<Cookie> get cookies => httpRequest.cookies;
+  List<Cookie> get cookies => _httpRequest.cookies;
 
   /// Returns the persistent connection state signaled by the client.
-  bool get persistentConnection => httpRequest.persistentConnection;
+  bool get persistentConnection => _httpRequest.persistentConnection;
 
   /// Returns the client certificate of the client making the request.
-  X509Certificate? get certificate => httpRequest.certificate;
+  X509Certificate? get certificate => _httpRequest.certificate;
 
   /// Returns the session for the given request.
-  HttpSession get session => httpRequest.session;
+  HttpSession get session => _httpRequest.session;
 
   /// Returns the HTTP protocol version used in the request, either "1.0" or "1.1".
-  String get protocolVersion => httpRequest.protocolVersion;
+  String get protocolVersion => _httpRequest.protocolVersion;
 
   /// Information about the client connection.
-  HttpConnectionInfo? get connectionInfo => httpRequest.connectionInfo;
+  HttpConnectionInfo? get connectionInfo => _httpRequest.connectionInfo;
 
   /// Returns the content type of the request, if available.
-  ContentType? get contentType => httpRequest.headers.contentType;
+  ContentType? get contentType => _httpRequest.headers.contentType;
 
   /// Returns the path of the request URI.
-  String get path => httpRequest.uri.path;
+  String get path => _httpRequest.uri.path;
 
   /// Returns the host of the request.
-  String get host => httpRequest.headers.host ?? '';
+  String get host => _httpRequest.headers.host ?? '';
 
   /// Returns the scheme of the request URI (e.g., http, https).
-  String get scheme => httpRequest.uri.scheme;
+  String get scheme => _httpRequest.uri.scheme;
 
   /// Returns the value of the specified header [name].
-  String header(String name) => httpRequest.headers[name]?.join(',') ?? '';
+  String header(String name) => _httpRequest.headers[name]?.join(',') ?? '';
 
   /// Returns the remote address of the client making the request.
   String get remoteAddr =>
-      httpRequest.connectionInfo?.remoteAddress.address ?? '';
+      _httpRequest.connectionInfo?.remoteAddress.address ?? '';
 
   /// Returns the body of the request as a UTF-8 decoded string.
   FutureOr<String> body() async {
@@ -152,7 +162,7 @@ class Request {
     if (_bodyBytes != null) return _bodyBytes!;
     _bodyConsumed = true;
     BytesBuilder bytes = BytesBuilder();
-    await for (final chunk in httpRequest) {
+    await for (final chunk in _httpRequest) {
       bytes.add(chunk);
     }
     _bodyBytes = bytes.toBytes();
@@ -168,7 +178,7 @@ class Request {
     if (_overrideClientIp != null) {
       return _overrideClientIp!;
     }
-    final remoteAddr = httpRequest.connectionInfo?.remoteAddress;
+    final remoteAddr = _httpRequest.connectionInfo?.remoteAddress;
     if (!config.forwardedByClientIP || !config.features.enableProxySupport) {
       return remoteAddr?.address ?? '';
     }
@@ -228,7 +238,7 @@ class Request {
   /// This allows consuming the request body as a stream without directly
   /// accessing the underlying HttpRequest object.
   Stream<List<int>> get stream =>
-      _BodyStreamWrapper(httpRequest, onListen: () => _bodyConsumed = true);
+      _BodyStreamWrapper(_httpRequest, onListen: () => _bodyConsumed = true);
 
   /// Returns whether the request body has been consumed.
   bool get bodyConsumed => _bodyConsumed;
@@ -239,10 +249,10 @@ class Request {
   /// transfer-encoding is chunked. If content-length is unknown and
   /// not chunked, treat it as no body to avoid hanging drains.
   bool get hasBody {
-    final length = httpRequest.contentLength;
+    final length = _httpRequest.contentLength;
     if (length > 0) return true;
     if (length == 0) return false;
-    return httpRequest.headers.chunkedTransferEncoding;
+    return _httpRequest.headers.chunkedTransferEncoding;
   }
 
   /// Drain the request body to allow keep-alive reuse when handlers
@@ -251,7 +261,7 @@ class Request {
     if (_bodyConsumed || !hasBody) return;
     _bodyConsumed = true;
     try {
-      await httpRequest.drain<void>();
+      await _httpRequest.drain<void>();
     } catch (_) {
       // Ignore: request may already be listened to.
     }

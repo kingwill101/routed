@@ -6,7 +6,7 @@ Server-rendered pages powered by [Routed](https://routed.dev).
 
 ```bash
 dart pub get
-dart run routed dev
+dart run routed_cli dev
 ```
 
 Visit `http://localhost:8080` to see the landing page. Edit

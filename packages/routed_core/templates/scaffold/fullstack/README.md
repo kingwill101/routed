@@ -9,7 +9,7 @@ dart pub get
 ```
 
 ```
-dart run routed dev
+dart run routed_cli dev
 ```
 
 - Visit http://localhost:8080 for the web UI.

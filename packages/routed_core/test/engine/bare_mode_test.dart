@@ -2,7 +2,6 @@ import 'dart:async';
 
 import 'package:routed_core/routed_core.dart';
 import 'package:routed_testing/routed_testing.dart';
-import 'package:routed_core/validation.dart';
 import 'package:server_testing/server_testing.dart';
 
 void main() {
@@ -12,7 +11,6 @@ void main() {
     expect(engine.container.has<Config>(), isFalse);
     expect(engine.container.has<EventManager>(), isFalse);
     expect(engine.container.has<RoutePatternRegistry>(), isTrue);
-    expect(engine.container.has<ValidationRuleRegistry>(), isTrue);
     expect(engine.container.has<MiddlewareRegistry>(), isTrue);
     expect(engine.container.has<EngineConfig>(), isTrue);
   });

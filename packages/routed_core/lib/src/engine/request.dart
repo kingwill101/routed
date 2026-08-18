@@ -517,9 +517,11 @@ extension ServerExtension on Engine {
       ...route.middlewares,
     ];
     chain.add((EngineContext ctx, Next next) async {
+      WebSocket? webSocket;
       try {
         // ignore: close_sinks, handed off to the registered WebSocket handler
-        final webSocket = await WebSocketTransformer.upgrade(httpRequest);
+        webSocket = await WebSocketTransformer.upgrade(httpRequest);
+        ctx.markUpgraded();
         final wsContext = WebSocketContext(IoRoutedWebSocket(webSocket), ctx);
 
         await route.handler.onOpen(wsContext);
@@ -531,6 +533,13 @@ extension ServerExtension on Engine {
           cancelOnError: false,
         );
       } catch (e) {
+        if (ctx.isUpgraded) {
+          try {
+            await webSocket?.close();
+          } catch (_) {}
+          Error.throwWithStackTrace(e, StackTrace.current);
+        }
+
         httpRequest.response
           ..statusCode = HttpStatus.internalServerError
           ..write('WebSocket upgrade failed: $e')
@@ -744,6 +753,13 @@ extension ServerExtension on Engine {
       stack,
       onHookError: reportHookError,
     );
+
+    // Once a WebSocket upgrade has completed, the HTTP response headers have
+    // already been committed by dart:io. There is no HTTP error response left
+    // to write; the upgraded transport is closed by the route handler.
+    if (!handled && ctx.isUpgraded) {
+      handled = true;
+    }
 
     if (!handled &&
         err is HttpException &&

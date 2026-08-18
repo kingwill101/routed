@@ -122,6 +122,7 @@ class Router {
     RouteHandler handler, {
     List<Middleware> middlewares = const [],
     Map<String, dynamic> constraints = const {},
+    Object? schema,
   }) {
     return handle(
       "GET",
@@ -129,6 +130,7 @@ class Router {
       handler,
       middlewares: middlewares,
       constraints: constraints,
+      schema: schema,
     );
   }
 
@@ -144,6 +146,7 @@ class Router {
     RouteHandler handler, {
     List<Middleware> middlewares = const [],
     Map<String, dynamic> constraints = const {},
+    Object? schema,
   }) {
     return handle(
       "POST",
@@ -151,6 +154,7 @@ class Router {
       handler,
       middlewares: middlewares,
       constraints: constraints,
+      schema: schema,
     );
   }
 
@@ -166,6 +170,7 @@ class Router {
     RouteHandler handler, {
     List<Middleware> middlewares = const [],
     Map<String, dynamic> constraints = const {},
+    Object? schema,
   }) {
     return handle(
       "PUT",
@@ -173,6 +178,7 @@ class Router {
       handler,
       middlewares: middlewares,
       constraints: constraints,
+      schema: schema,
     );
   }
 
@@ -188,6 +194,7 @@ class Router {
     RouteHandler handler, {
     List<Middleware> middlewares = const [],
     Map<String, dynamic> constraints = const {},
+    Object? schema,
   }) {
     return handle(
       "DELETE",
@@ -195,6 +202,7 @@ class Router {
       handler,
       middlewares: middlewares,
       constraints: constraints,
+      schema: schema,
     );
   }
 
@@ -210,6 +218,7 @@ class Router {
     RouteHandler handler, {
     List<Middleware> middlewares = const [],
     Map<String, dynamic> constraints = const {},
+    Object? schema,
   }) {
     return handle(
       "PATCH",
@@ -217,6 +226,7 @@ class Router {
       handler,
       middlewares: middlewares,
       constraints: constraints,
+      schema: schema,
     );
   }
 
@@ -232,6 +242,7 @@ class Router {
     RouteHandler handler, {
     List<Middleware> middlewares = const [],
     Map<String, dynamic> constraints = const {},
+    Object? schema,
   }) {
     return handle(
       "HEAD",
@@ -239,6 +250,7 @@ class Router {
       handler,
       middlewares: middlewares,
       constraints: constraints,
+      schema: schema,
     );
   }
 
@@ -254,6 +266,7 @@ class Router {
     RouteHandler handler, {
     List<Middleware> middlewares = const [],
     Map<String, dynamic> constraints = const {},
+    Object? schema,
   }) {
     return handle(
       "OPTIONS",
@@ -261,6 +274,7 @@ class Router {
       handler,
       middlewares: middlewares,
       constraints: constraints,
+      schema: schema,
     );
   }
 
@@ -276,6 +290,7 @@ class Router {
     RouteHandler handler, {
     List<Middleware> middlewares = const [],
     Map<String, dynamic> constraints = const {},
+    Object? schema,
   }) {
     return handle(
       "CONNECT",
@@ -283,6 +298,7 @@ class Router {
       handler,
       middlewares: middlewares,
       constraints: constraints,
+      schema: schema,
     );
   }
 
@@ -298,6 +314,7 @@ class Router {
     Handler handler, {
     List<Middleware> middlewares = const [],
     Map<String, dynamic> constraints = const {},
+    Object? schema,
   }) {
     // Create routes for all common HTTP methods
     final methods = [
@@ -320,6 +337,7 @@ class Router {
         handler,
         middlewares: middlewares,
         constraints: constraints,
+        schema: schema,
       );
 
       firstBuilder ??= builder;
@@ -342,6 +360,7 @@ class Router {
     RouteHandler handler, {
     List<Middleware> middlewares = const [],
     Map<String, dynamic> constraints = const {},
+    Object? schema,
   }) {
     final source = _captureRouteRegistrationSource();
     final fullPath = _joinPaths(_prefix, path);
@@ -354,6 +373,7 @@ class Router {
       sourceFile: source.file,
       sourceLine: source.line,
       sourceColumn: source.column,
+      schema: schema,
     );
     _routes.add(route);
     return RouteBuilder(route, this);

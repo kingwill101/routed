@@ -2,7 +2,8 @@ import 'dart:async';
 import 'dart:io';
 
 import 'package:path/path.dart' as p;
-import 'package:routed_core/routed_core.dart' show EngineConfig;
+import 'package:routed_core/routed_core.dart'
+    show CorsConfig, EngineConfig, EngineFeatures;
 import 'package:routed_core/src/config/specs/core.dart';
 import 'package:routed_core/src/config/specs/http.dart';
 import 'package:routed_core/src/runtime/shutdown.dart';
@@ -16,6 +17,7 @@ import '../../engine/engine.dart';
 import '../../provider/config_utils.dart';
 import '../../provider/provider.dart'
     show ConfigDefaults, ProvidesDefaultConfig, ServiceProvider;
+import '../../security/trusted_proxy_resolver.dart';
 import '../../utils/deep_copy.dart';
 import '../../utils/process_env.dart';
 
@@ -200,6 +202,7 @@ class CoreServiceProvider extends ServiceProvider with ProvidesDefaultConfig {
     final resolvedEngineConfig = _resolveEngineConfig(config, engineConfig);
     container.instance<EngineConfig>(resolvedEngineConfig);
     container.instance<Config>(config);
+    _registerTrustedProxyResolver(container, config);
 
     _registryListener = (entry) {
       if (entry.defaults.isEmpty) return;
@@ -246,6 +249,7 @@ class CoreServiceProvider extends ServiceProvider with ProvidesDefaultConfig {
 
     // Register the in-memory Config
     container.instance<Config>(defaults);
+    _registerTrustedProxyResolver(container, defaults);
 
     // Listen for new provider defaults and render them before merging
     _registryListener = (entry) {
@@ -289,6 +293,7 @@ class CoreServiceProvider extends ServiceProvider with ProvidesDefaultConfig {
     );
     container.instance<EngineConfig>(initialEngineConfig);
     container.instance<Config>(snapshot.config);
+    _registerTrustedProxyResolver(container, snapshot.config);
 
     _registryListener = (entry) {
       final currentSnapshot = _snapshot;
@@ -316,12 +321,29 @@ class CoreServiceProvider extends ServiceProvider with ProvidesDefaultConfig {
 
   @override
   Future<void> boot(Container container) async {
+    // CoreServiceProvider is also used independently in container tests and
+    // tooling. In that composition there is no Engine binding to update.
+    if (!container.has<Engine>()) return;
+
+    final engine = await container.make<Engine>();
+    final config = container.get<Config>();
+    engine.updateConfig(_resolveEngineConfig(config, engine.config));
+    _registerTrustedProxyResolver(container, config);
+
     if (!_useLoader) return;
     final options = _effectiveOptions;
     if (!options.watch) return;
 
-    final engine = await container.make<Engine>();
     await _startWatchers(container, engine);
+  }
+
+  @override
+  Future<void> onConfigReload(Container container, Config config) async {
+    if (!container.has<Engine>()) return;
+
+    final engine = await container.make<Engine>();
+    engine.updateConfig(_resolveEngineConfig(config, engine.config));
+    _registerTrustedProxyResolver(container, config);
   }
 
   @override
@@ -464,6 +486,63 @@ class CoreServiceProvider extends ServiceProvider with ProvidesDefaultConfig {
   }
 
   EngineConfig _resolveEngineConfig(Config config, EngineConfig base) {
+    final trustedEnabled =
+        config.getBoolOrNull('security.trusted_proxies.enabled') ??
+        base.features.enableProxySupport;
+    final forwardClientIp =
+        config.getBoolOrNull('security.trusted_proxies.forward_client_ip') ??
+        base.forwardedByClientIP;
+    final trustedProxies =
+        config.getStringListOrNull('security.trusted_proxies.proxies') ??
+        (base.features.enableProxySupport
+            ? base.trustedProxies
+            : const ['0.0.0.0/0', '::/0']);
+    final remoteIpHeaders =
+        config.getStringListOrNull('security.trusted_proxies.headers') ??
+        base.remoteIPHeaders;
+    final trustedPlatform =
+        config.getStringOrNull('security.trusted_proxies.platform_header') ??
+        base.trustedPlatform;
+    final features = EngineFeatures(
+      enableTrustedPlatform:
+          trustedEnabled &&
+          trustedPlatform != null &&
+          trustedPlatform.isNotEmpty,
+      enableProxySupport: trustedEnabled,
+      enableSecurityFeatures: base.features.enableSecurityFeatures,
+      enableRequestZones: base.features.enableRequestZones,
+      enableRequestContainerFastPath:
+          base.features.enableRequestContainerFastPath,
+      enableTrieRouting: base.features.enableTrieRouting,
+      enableSecureRequestIds: base.features.enableSecureRequestIds,
+    );
+
+    final currentCors = base.security.cors;
+    final cors = CorsConfig(
+      enabled: config.getBoolOrNull('cors.enabled') ?? currentCors.enabled,
+      allowedOrigins:
+          config.getStringListOrNull('cors.allowed_origins') ??
+          currentCors.allowedOrigins,
+      allowedMethods:
+          config.getStringListOrNull('cors.allowed_methods') ??
+          currentCors.allowedMethods,
+      allowedHeaders:
+          config.getStringListOrNull('cors.allowed_headers') ??
+          currentCors.allowedHeaders,
+      allowCredentials:
+          config.getBoolOrNull('cors.allow_credentials') ??
+          currentCors.allowCredentials,
+      maxAge: config.getIntOrNull('cors.max_age') ?? currentCors.maxAge,
+      exposedHeaders:
+          config.getStringListOrNull('cors.exposed_headers') ??
+          currentCors.exposedHeaders,
+    );
+    final security = base.security.copyWith(
+      maxRequestSize:
+          config.getIntOrNull('security.max_request_size') ??
+          base.security.maxRequestSize,
+      cors: cors,
+    );
     final shutdown = resolveShutdownConfig(config, base.shutdown);
     final http2Enabled = config.getBoolOrNull('http.http2.enabled');
     final http2AllowCleartext = config.getBoolOrNull(
@@ -502,6 +581,12 @@ class CoreServiceProvider extends ServiceProvider with ProvidesDefaultConfig {
     final tlsV6Only = config.getBoolOrNull('http.tls.v6_only');
 
     return base.copyWith(
+      features: features,
+      security: security,
+      forwardedByClientIP: forwardClientIp,
+      remoteIPHeaders: remoteIpHeaders,
+      trustedProxies: trustedProxies,
+      trustedPlatform: trustedPlatform,
       shutdown: shutdown,
       http2: http2,
       tlsCertificatePath: tlsCertificatePath ?? base.tlsCertificatePath,
@@ -511,6 +596,27 @@ class CoreServiceProvider extends ServiceProvider with ProvidesDefaultConfig {
           tlsRequestClientCertificate ?? base.tlsRequestClientCertificate,
       tlsShared: tlsShared ?? base.tlsShared,
       tlsV6Only: tlsV6Only ?? base.tlsV6Only,
+    );
+  }
+
+  void _registerTrustedProxyResolver(Container container, Config config) {
+    container.instance<TrustedProxyResolver>(
+      TrustedProxyResolver(
+        enabled: config.getBool('security.trusted_proxies.enabled'),
+        forwardClientIp: config.getBool(
+          'security.trusted_proxies.forward_client_ip',
+          defaultValue: true,
+        ),
+        proxies:
+            config.getStringListOrNull('security.trusted_proxies.proxies') ??
+            const ['0.0.0.0/0', '::/0'],
+        headers:
+            config.getStringListOrNull('security.trusted_proxies.headers') ??
+            const ['X-Forwarded-For', 'X-Real-IP'],
+        trustedPlatform: config.getStringOrNull(
+          'security.trusted_proxies.platform_header',
+        ),
+      ),
     );
   }
 }

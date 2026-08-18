@@ -10,7 +10,6 @@ import 'package:routed_core/src/contracts/contracts.dart' show Config;
 import 'package:routed_core/src/contracts/translation/translator.dart';
 import 'package:routed_core/src/engine/config.dart';
 import 'package:routed_core/src/engine/engine.dart';
-import 'package:routed_core/src/engine/engine_template.dart';
 // file_handler moved
 // negotiation moved to routed_http
 import 'package:routed_core/src/request.dart';
@@ -168,6 +167,15 @@ class EngineContext {
 
   /// Indicates that the connection has been upgraded and detached.
   bool get isUpgraded => _upgraded;
+
+  /// Marks a transport-level upgrade that was performed by the engine.
+  ///
+  /// WebSocket transports upgrade through `dart:io` directly, rather than
+  /// through [upgrade], so the engine records that state explicitly before
+  /// invoking the WebSocket handler.
+  void markUpgraded() {
+    _upgraded = true;
+  }
 
   /// Retrieve the request headers.
   HttpHeaders get headers => request.headers;

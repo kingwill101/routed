@@ -42,6 +42,7 @@ extension EngineRouting on Engine {
           handler,
           middlewares: middlewares,
           constraints: constraints,
+          schema: schema,
         )
         as RouteBuilder);
   }
@@ -76,6 +77,7 @@ extension EngineRouting on Engine {
           handler,
           middlewares: middlewares,
           constraints: constraints,
+          schema: schema,
         )
         as RouteBuilder);
   }
@@ -110,6 +112,7 @@ extension EngineRouting on Engine {
           handler,
           middlewares: middlewares,
           constraints: constraints,
+          schema: schema,
         )
         as RouteBuilder);
   }
@@ -143,6 +146,7 @@ extension EngineRouting on Engine {
           handler,
           middlewares: middlewares,
           constraints: constraints,
+          schema: schema,
         )
         as RouteBuilder);
   }
@@ -177,6 +181,7 @@ extension EngineRouting on Engine {
           handler,
           middlewares: middlewares,
           constraints: constraints,
+          schema: schema,
         )
         as RouteBuilder);
   }
@@ -210,6 +215,7 @@ extension EngineRouting on Engine {
           handler,
           middlewares: middlewares,
           constraints: constraints,
+          schema: schema,
         )
         as RouteBuilder);
   }
@@ -245,6 +251,7 @@ extension EngineRouting on Engine {
           handler,
           middlewares: middlewares,
           constraints: constraints,
+          schema: schema,
         )
         as RouteBuilder);
   }
@@ -268,6 +275,7 @@ extension EngineRouting on Engine {
           path,
           handler,
           middlewares: middlewares,
+          schema: schema,
         )
         as RouteBuilder);
   }
@@ -304,6 +312,7 @@ extension EngineRouting on Engine {
           handler,
           middlewares: middlewares,
           constraints: constraints,
+          schema: schema,
         )
         as RouteBuilder);
   }
