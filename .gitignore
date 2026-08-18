@@ -24,3 +24,4 @@ packages/server_testing/server_testing/test_screenshots/
 
 # Local Netlify folder
 .netlify
+.vercel

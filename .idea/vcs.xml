@@ -2,5 +2,7 @@
 <project version="4">
   <component name="VcsDirectoryMappings">
     <mapping directory="$PROJECT_DIR$" vcs="Git" />
+    <mapping directory="$PROJECT_DIR$/third_party/dart_edge" vcs="Git" />
+    <mapping directory="$PROJECT_DIR$/third_party/osrv" vcs="Git" />
   </component>
 </project>

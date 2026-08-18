@@ -44,7 +44,6 @@ workspace:
   - examples/kitchen_sink
   - examples/config_demo
   - examples/policy_demo/policy_demo
-  - examples/contacts_app
   - examples/error_responses
   - examples/websocket
   - examples/rate_limiting
@@ -61,9 +60,29 @@ dependencies:
   liquify: ^1.4.2
   uuid: ^4.5.2
 
+dependency_overrides:
+  # server_testing 0.4.x uses artisanal ^0.5.0. Keep the workspace on one
+  # version while older routed CLI/testing packages are migrated.
+  artisanal: ^0.5.0
+  # Keep the workspace lockfile on the latest upstream test harness. Published
+  # packages retain their own compatible ranges above.
+  server_testing: ^0.4.0
+
 dev_dependencies:
   coverage: ^1.15.1
   lints: ^6.0.0
 
+  routed: any
+  file: any
+  path: any
+  http: any
+  routed_http: any
+  server_cache: any
+  routed_storage: any
+  routed_sessions: any
+  routed_auth: any
+  server_auth: any
+  server_sessions: any
+  routed_views: any
 tags:
   - workspace

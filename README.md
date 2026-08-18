@@ -11,6 +11,9 @@ layout so packages share tooling, CI, and release notes.
 
 ## Packages
 
+The complete package list, current versions, and package roles are maintained
+in the [Routed package catalog](docs/package-catalog.md).
+
 - [packages/routed](packages/routed) – modular HTTP engine with providers,
   logging, localization, signals, and lifecycle hooks.
 - [packages/routed_cli](packages/routed_cli) – project scaffolding,
@@ -19,6 +22,27 @@ layout so packages share tooling, CI, and release notes.
   for realtime experiences atop Routed.
 - [packages/server_testing/routed_testing](packages/server_testing/routed_testing) –
   Routed transport adapter for `server_testing`.
+
+## Routed application setup
+
+For a standard application, import the public `routed` facade and initialize
+the engine asynchronously. The facade registers the official provider
+catalogue before `Engine.create()` boots it:
+
+```dart
+import 'package:routed/routed.dart';
+
+Future<void> main() async {
+  final engine = await Engine.create();
+  engine.get('/health', (ctx) => ctx.json({'ok': true}));
+  await engine.serve(port: 8080);
+}
+```
+
+When composing a slim application, use `routed_core` and add each feature
+provider explicitly, for example `RoutedSessionsProvider` together with
+`sessionMiddleware` from `routed_sessions`. Feature packages document their
+provider and middleware setup individually.
 
 Testing utilities that were extracted into their own repositories (published
 under the [RoutedDart](https://github.com/RoutedDart) organization):
@@ -35,7 +59,7 @@ Each example lives under `examples/` so you can run it locally:
 
 - [examples/config_demo](examples/config_demo) – configuration + CLI walkthrough.
 - [examples/kitchen_sink](examples/kitchen_sink) – broad feature sampler.
-- [examples/openapi](examples/openapi) – OpenAPI manifest generation example.
+- [examples/openapi_demo](examples/openapi_demo) – OpenAPI manifest generation example.
 - [examples/localization](examples/localization) – translation provider demo.
 - [examples/multipart](examples/multipart) – upload + binding helpers.
 - [examples/liquid_template](examples/liquid_template) – template rendering.
@@ -57,7 +81,7 @@ dart test ./...   # run package tests
 ```
 
 Publishing instructions live in `docs/publishing-checklist.md`. Each package has
-its own changelog and versioned tags (e.g. `routed_cli-0.2.1+1`).
+its own changelog and versioned tags (e.g. `routed_cli-0.1.0`).
 
 ## Funding
 

@@ -13,36 +13,24 @@
 
 include: package:lints/recommended.yaml
 analyzer:
+  exclude:
+    - benchmarks/**
+    - third_party/**
   errors:
     depend_on_referenced_packages: ignore
     invalid_use_of_visible_for_testing_member: ignore
     strict_top_level_inference: ignore
-    inference_failure_on_uninitialized_variable: ignore
-    prefer_typing_uninitialized_variables: ignore
     avoid_renaming_method_parameters: ignore
     implementation_imports: ignore
-    unused_import: ignore
-    unused_local_variable: ignore
-    unused_element: ignore
     sort_pub_dependencies: ignore
-    undefined_shown_name: ignore
     invalid_annotation_target: ignore
     override_on_non_overriding_member: ignore
 linter:
   rules:
     avoid_renaming_method_parameters: false
     implementation_imports: false
-    prefer_typing_uninitialized_variables: false
     strict_top_level_inference: false
-    inference_failure_on_uninitialized_variable: false
-    unused_import: false
-    unused_local_variable: false
-    unused_element: false
     sort_pub_dependencies: false
-    undefined_shown_name: false
-  
-  exclude: 
-    - benchmarks/**
 # Uncomment the following section to specify additional rules.
 
 # linter:
