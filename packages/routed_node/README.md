@@ -50,10 +50,14 @@ The package uses `package:web` for JavaScript Fetch and stream bindings.
 ## Usage
 
 ```dart
+import 'package:routed_core/routed_core.dart';
 import 'package:routed_node/node.dart';
 
-final handle = await serveNode(engine, host: '0.0.0.0', port: 8080);
-await handle.close();
+Future<void> main() async {
+  final engine = await Engine.create(providers: Engine.defaultProviders);
+  final handle = await serveNode(engine, host: '0.0.0.0', port: 8080);
+  await handle.close();
+}
 ```
 
 Bun and Deno use the same application engine:
@@ -62,16 +66,22 @@ Bun and Deno use the same application engine:
 import 'package:routed_node/bun.dart';
 // import 'package:routed_node/deno.dart';
 
-final handle = await serveBun(engine, port: 3000);
-await handle.close();
+Future<void> main() async {
+  final engine = await Engine.create(providers: Engine.defaultProviders);
+  final handle = await serveBun(engine, port: 3000);
+  await handle.close();
+}
 ```
 
 Fetch-export hosts install a JavaScript global entrypoint:
 
 ```dart
+import 'package:routed_core/routed_core.dart';
 import 'package:routed_node/cloudflare.dart';
 
-defineCloudflareFetch(engine);
+defineCloudflareFetchAsync(
+  Engine.create(providers: Engine.defaultProviders),
+);
 ```
 
 The generated JS bootstrap calls `globalThis.__routed_fetch__` with the native

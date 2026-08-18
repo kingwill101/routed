@@ -15,6 +15,8 @@ final class JsServerHandle implements ServerHandle {
     required this.info,
     required this.host,
     required this.port,
+    this.closeSockets,
+    this.waitForSockets,
   });
 
   final JSObject server;
@@ -24,6 +26,8 @@ final class JsServerHandle implements ServerHandle {
   final String host;
   @override
   final int port;
+  final void Function()? closeSockets;
+  final Future<void> Function()? waitForSockets;
   bool _closed = false;
 
   @override
@@ -37,6 +41,8 @@ final class JsServerHandle implements ServerHandle {
         info: info,
       ),
     );
+
+    closeSockets?.call();
 
     final stop = server.getProperty('stop'.toJS);
     if (stop != null && stop.isA<JSFunction>()) {
@@ -53,6 +59,8 @@ final class JsServerHandle implements ServerHandle {
         }
       }
     }
+
+    if (waitForSockets != null) await waitForSockets!();
 
     publishRoutedNodeLifecycle(
       engine,

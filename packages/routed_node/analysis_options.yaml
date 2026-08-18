@@ -1,1 +1,5 @@
 include: package:lints/recommended.yaml
+
+analyzer:
+  errors:
+    invalid_runtime_check_with_js_interop_types: ignore

@@ -1,9 +1,7 @@
 import 'dart:convert';
 
 import 'package:routed_core/routed_core.dart';
-import 'package:routed_node/cloudflare.dart';
-import 'package:routed_node/netlify.dart';
-import 'package:routed_node/vercel.dart';
+import 'package:routed_node/routed_node.dart';
 import 'package:test/test.dart';
 
 void main() {

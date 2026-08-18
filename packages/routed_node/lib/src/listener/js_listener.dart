@@ -9,6 +9,7 @@ import 'package:routed_core/routed_core.dart';
 
 import '../runtime/js_server_handle.dart';
 import '../runtime/runtime.dart';
+import 'bun_websocket_bridge_js.dart';
 import 'listener_views.dart';
 
 /// Starts a JavaScript listener using the supplied host server factory.
@@ -34,6 +35,12 @@ Future<ServerHandle> serveJsListener(
     info: info,
     host: host,
     port: actualPort,
+    closeSockets: info.runtime == RoutedNodeRuntime.bun
+        ? () => closeBunWebSocketsForServer(server)
+        : null,
+    waitForSockets: info.runtime == RoutedNodeRuntime.bun
+        ? () => waitForBunWebSocketsForServer(server)
+        : null,
   );
 }
 

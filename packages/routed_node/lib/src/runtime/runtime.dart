@@ -53,6 +53,18 @@ final class NodeRuntimeExtension implements RoutedNodeExtension {
   RoutedNodeRuntime get runtime => RoutedNodeRuntime.node;
 }
 
+/// Host-native Vercel Node.js request, response, and server handles.
+final class VercelNodeRuntimeExtension implements RoutedNodeExtension {
+  const VercelNodeRuntimeExtension({this.request, this.response, this.server});
+
+  final Object? request;
+  final Object? response;
+  final Object? server;
+
+  @override
+  RoutedNodeRuntime get runtime => RoutedNodeRuntime.vercel;
+}
+
 /// Host-native Bun request and server handles.
 final class BunRuntimeExtension implements RoutedNodeExtension {
   const BunRuntimeExtension({this.request, this.server});
@@ -150,6 +162,18 @@ const RoutedNodeCapabilities vercelCapabilities = RoutedNodeCapabilities(
   streaming: true,
   bufferedResponses: true,
   webSocket: false,
+  fileSystem: false,
+  backgroundWork: false,
+);
+
+/// Vercel Node Functions use the vendor's request-context upgrade boundary
+/// and the `ws` server implementation for native WebSocket connections.
+const RoutedNodeCapabilities vercelNodeCapabilities = RoutedNodeCapabilities(
+  runtime: RoutedNodeRuntime.vercel,
+  entryModel: RoutedNodeEntryModel.listener,
+  streaming: true,
+  bufferedResponses: true,
+  webSocket: true,
   fileSystem: false,
   backgroundWork: false,
 );

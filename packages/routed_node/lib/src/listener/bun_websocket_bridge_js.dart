@@ -17,13 +17,84 @@ extension type _BunWebSocket._(JSObject _) implements JSObject {
   external void close([int code, String reason]);
 }
 
-final class BunWebSocketBridge implements RoutedWebSocket {
-  BunWebSocketBridge();
+/// Owns pending and active WebSocket state for one Bun server.
+final Map<JSObject, BunWebSocketRegistry> _registries =
+    <JSObject, BunWebSocketRegistry>{};
 
+final class BunWebSocketRegistry {
+  final Map<int, BunWebSocketBridge> _bridges = <int, BunWebSocketBridge>{};
+  int _nextId = 0;
+
+  FetchWebSocketUpgrade prepare(JSObject request, JSObject server) {
+    final id = ++_nextId;
+    final bridge = BunWebSocketBridge(id: id, registry: this);
+    _bridges[id] = bridge;
+    final options = JSObject()..setProperty('data'.toJS, id.toJS);
+    final upgraded = server.callMethodVarArgs<JSAny?>('upgrade'.toJS, [
+      request,
+      options,
+    ]);
+    if (upgraded == null ||
+        (upgraded.isA<JSBoolean>() && !(upgraded as JSBoolean).toDart)) {
+      _bridges.remove(id);
+      throw StateError('Bun server rejected the WebSocket upgrade.');
+    }
+    return FetchWebSocketUpgrade(socket: bridge, response: id);
+  }
+
+  void open(JSObject socket, JSAny data) {
+    _bridgeFor(data)?.open(socket);
+  }
+
+  void message(JSAny data, JSAny message) {
+    _bridgeFor(data)?.message(message);
+  }
+
+  void close(JSAny data, {int? code, String? reason}) {
+    final bridge = _remove(_bridgeId(data));
+    bridge?.closeFromHost(code, reason);
+  }
+
+  void error(JSAny data, JSAny error) {
+    final bridge = _remove(_bridgeId(data));
+    bridge?.error(error);
+  }
+
+  void unregister() {
+    _registries.removeWhere((server, registry) => identical(registry, this));
+  }
+
+  void closeAll() {
+    for (final bridge in List<BunWebSocketBridge>.of(_bridges.values)) {
+      unawaited(bridge.close(1001, 'Runtime shutdown'));
+    }
+  }
+
+  Future<void> waitForAll() async {
+    await Future.wait(
+      List<BunWebSocketBridge>.of(
+        _bridges.values,
+      ).map((bridge) => bridge.closed),
+    );
+  }
+
+  BunWebSocketBridge? _bridgeFor(JSAny data) => _bridges[_bridgeId(data)];
+
+  BunWebSocketBridge? _remove(int id) => _bridges.remove(id);
+}
+
+final class BunWebSocketBridge implements RoutedWebSocket {
+  BunWebSocketBridge({required this.id, required this.registry});
+
+  final int id;
+  final BunWebSocketRegistry registry;
   final StreamController<Object?> _messages = StreamController<Object?>();
+  final Completer<void> _closedCompleter = Completer<void>();
   final List<JSAny> _pending = <JSAny>[];
   _BunWebSocket? _socket;
   bool _closed = false;
+  bool _closeSent = false;
+  int? _closeCode;
 
   void open(JSObject socket) {
     if (_closed) return;
@@ -39,27 +110,30 @@ final class BunWebSocketBridge implements RoutedWebSocket {
     _messages.add(_bunMessage(message));
   }
 
-  void closeFromHost() {
+  void closeFromHost([int? code, String? reason]) {
     if (_closed) return;
+    _closeCode = code;
     _closed = true;
-    unawaited(_messages.close());
+    registry._remove(id);
+    if (!_messages.isClosed) unawaited(_messages.close());
+    _completeClosed();
   }
 
   void error(JSAny error) {
     if (_closed) return;
     _messages.addError(StateError('$error'));
-    closeFromHost();
+    closeFromHost(1006, 'error');
   }
 
   @override
   Stream<Object?> get stream => _messages.stream;
 
   @override
-  int? get closeCode => null;
+  int? get closeCode => _closeCode;
 
   @override
   void add(Object? data) {
-    if (_closed) throw StateError('WebSocket is closed.');
+    if (_closed || _closeSent) throw StateError('WebSocket is closed.');
     final message = _bunData(data);
     final socket = _socket;
     if (socket == null) {
@@ -72,61 +146,45 @@ final class BunWebSocketBridge implements RoutedWebSocket {
   @override
   Future<void> close([int? code, String? reason]) async {
     if (_closed) return;
-    _closed = true;
+    _closeSent = true;
     final socket = _socket;
     if (socket != null) socket.close(code ?? 1000, reason ?? '');
-    await _messages.close();
+    await _closedCompleter.future.timeout(
+      const Duration(seconds: 5),
+      onTimeout: () => closeFromHost(code ?? 1000, reason),
+    );
+  }
+
+  Future<void> get closed => _closedCompleter.future;
+
+  void _completeClosed() {
+    if (!_closedCompleter.isCompleted) _closedCompleter.complete();
   }
 }
 
-final Map<int, BunWebSocketBridge> _bridges = <int, BunWebSocketBridge>{};
-int _nextBridgeId = 0;
+void registerBunWebSocketRegistry(
+  JSObject server,
+  BunWebSocketRegistry registry,
+) {
+  _registries[server] = registry;
+}
 
-FetchWebSocketUpgrade prepareBunWebSocket(JSObject request, JSObject server) {
-  final id = ++_nextBridgeId;
-  final bridge = BunWebSocketBridge();
-  _bridges[id] = bridge;
-  final options = JSObject()..setProperty('data'.toJS, id.toJS);
-  final upgraded = server.callMethodVarArgs<JSAny?>('upgrade'.toJS, [
-    request,
-    options,
-  ]);
-  if (upgraded == null ||
-      (upgraded.isA<JSBoolean>() && !(upgraded as JSBoolean).toDart)) {
-    _bridges.remove(id);
-    throw StateError('Bun server rejected the WebSocket upgrade.');
-  }
-  return FetchWebSocketUpgrade(socket: bridge, response: id);
+void closeBunWebSocketsForServer(JSObject server) {
+  _registries[server]?.closeAll();
+}
+
+Future<void> waitForBunWebSocketsForServer(JSObject server) async {
+  final registry = _registries[server];
+  if (registry == null) return;
+  await registry.waitForAll();
+  registry.unregister();
 }
 
 Future<FetchWebSocketUpgrade> acceptBunWebSocket(
   JSObject request,
   JSObject server,
-) async => prepareBunWebSocket(request, server);
-
-void bunWebSocketOpen(JSObject socket, JSAny data) {
-  final bridge = _bridgeFor(data);
-  bridge?.open(socket);
-}
-
-void bunWebSocketMessage(JSAny data, JSAny message) {
-  final bridge = _bridgeFor(data);
-  bridge?.message(message);
-}
-
-void bunWebSocketClose(JSAny data) {
-  final id = _bridgeId(data);
-  final bridge = _bridges.remove(id);
-  bridge?.closeFromHost();
-}
-
-void bunWebSocketError(JSAny data, JSAny error) {
-  final id = _bridgeId(data);
-  final bridge = _bridges.remove(id);
-  bridge?.error(error);
-}
-
-BunWebSocketBridge? _bridgeFor(JSAny data) => _bridges[_bridgeId(data)];
+  BunWebSocketRegistry registry,
+) async => registry.prepare(request, server);
 
 int _bridgeId(JSAny data) {
   if (data.isA<JSNumber>()) return (data as JSNumber).toDartInt;
@@ -141,6 +199,9 @@ Object? _bunMessage(JSAny message) {
   if (message.isA<JSString>()) return (message as JSString).toDart;
   if (message.isA<JSUint8Array>()) {
     return Uint8List.fromList((message as JSUint8Array).toDart);
+  }
+  if (message.isA<JSArrayBuffer>()) {
+    return (message as JSArrayBuffer).toDart.asUint8List();
   }
   return message;
 }

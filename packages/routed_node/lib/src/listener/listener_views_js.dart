@@ -26,19 +26,20 @@ Future<JSObject> hostCreateServer(
     capabilities: runtime == 'Bun' ? bunCapabilities : denoCapabilities,
   );
 
+  final bunSockets = BunWebSocketRegistry();
   late JSObject bunServer;
   final callback = ((JSAny request) {
     final nativeRequest = web.Request(request);
     if (_isWebSocketUpgrade(nativeRequest)) {
       if (runtime == 'Bun') {
-        _handleBunUpgrade(
+        return _handleBunUpgrade(
           engine,
           info,
           nativeRequest,
           request as JSObject,
           bunServer,
-        );
-        return null;
+          bunSockets,
+        ).toJS;
       }
       return _handleDenoUpgrade(
         engine,
@@ -63,7 +64,7 @@ Future<JSObject> hostCreateServer(
   if (runtime == 'Bun') {
     config
       ..setProperty('fetch'.toJS, callback)
-      ..setProperty('websocket'.toJS, _bunWebSocketHandler());
+      ..setProperty('websocket'.toJS, _bunWebSocketHandler(bunSockets));
     final serve = (hostObject as JSObject).getProperty('serve'.toJS);
     if (serve == null || !serve.isA<JSFunction>()) {
       throw StateError('Bun.serve is unavailable');
@@ -73,6 +74,7 @@ Future<JSObject> hostCreateServer(
       throw StateError('Bun.serve did not return a server');
     }
     bunServer = result as JSObject;
+    registerBunWebSocketRegistry(bunServer, bunSockets);
     return bunServer;
   }
 
@@ -95,22 +97,22 @@ Future<JSAny?> _handleDenoUpgrade(
   web.Request request,
   JSObject rawRequest,
 ) async {
-  final upgrade = prepareDenoWebSocket(rawRequest);
   final view = WebFetchRequest(
     request,
     hostContext: RoutedNodeContext(
       info: info,
       extension: FetchRuntimeExtension(runtime: info.runtime, request: request),
     ),
-    acceptWebSocket: () async => upgrade,
   );
   final response = WebStreamingResponseAdapter();
-  unawaited(
-    engine.handleConnection(
-      HttpConnection(_DenoRequestAdapter(view, upgrade), response),
-    ),
+  final adapter = _DenoRequestAdapter(
+    view,
+    acceptFactory: () async => prepareDenoWebSocket(rawRequest),
   );
-  return upgrade.response as JSAny;
+  await engine.handleConnection(HttpConnection(adapter, response));
+  final upgrade = adapter.upgrade;
+  if (upgrade != null) return upgrade.response as JSAny;
+  return webResponseFromStreamingAdapter(response);
 }
 
 bool _isWebSocketUpgrade(web.Request request) {
@@ -125,46 +127,47 @@ bool _isWebSocketUpgrade(web.Request request) {
           false);
 }
 
-JSObject _bunWebSocketHandler() {
+JSObject _bunWebSocketHandler(BunWebSocketRegistry registry) {
   final handler = JSObject();
   handler.setProperty(
     'open'.toJS,
     ((JSObject socket) {
       final data = socket.getProperty('data'.toJS);
-      if (data != null) bunWebSocketOpen(socket, data);
+      if (data != null) registry.open(socket, data);
     }).toJS,
   );
   handler.setProperty(
     'message'.toJS,
     ((JSObject socket, JSAny message) {
       final data = socket.getProperty('data'.toJS);
-      if (data != null) bunWebSocketMessage(data, message);
+      if (data != null) registry.message(data, message);
     }).toJS,
   );
   handler.setProperty(
     'close'.toJS,
     ((JSObject socket) {
       final data = socket.getProperty('data'.toJS);
-      if (data != null) bunWebSocketClose(data);
+      if (data != null) registry.close(data);
     }).toJS,
   );
   handler.setProperty(
     'error'.toJS,
     ((JSObject socket, JSAny error) {
       final data = socket.getProperty('data'.toJS);
-      if (data != null) bunWebSocketError(data, error);
+      if (data != null) registry.error(data, error);
     }).toJS,
   );
   return handler;
 }
 
-void _handleBunUpgrade(
+Future<JSAny?> _handleBunUpgrade(
   Engine engine,
   RoutedNodeRuntimeInfo info,
   web.Request request,
   JSObject rawRequest,
   JSObject server,
-) {
+  BunWebSocketRegistry registry,
+) async {
   final hostContext = RoutedNodeContext(
     info: info,
     extension: FetchRuntimeExtension(runtime: info.runtime, request: request),
@@ -172,20 +175,22 @@ void _handleBunUpgrade(
   final view = WebFetchRequest(
     request,
     hostContext: hostContext,
-    acceptWebSocket: () => acceptBunWebSocket(rawRequest, server),
+    acceptWebSocket: () => acceptBunWebSocket(rawRequest, server, registry),
   );
   final response = WebStreamingResponseAdapter();
-  unawaited(
-    engine.handleConnection(HttpConnection(_BunRequestAdapter(view), response)),
-  );
+  final adapter = _BunRequestAdapter(view);
+  await engine.handleConnection(HttpConnection(adapter, response));
+  if (adapter.upgrade != null) return null;
+  return webResponseFromStreamingAdapter(response);
 }
 
 final class _DenoRequestAdapter
     implements RequestAdapter, WebSocketUpgradeRequest, HostContextCarrier {
-  _DenoRequestAdapter(this.view, this.upgrade);
+  _DenoRequestAdapter(this.view, {required this.acceptFactory});
 
   final WebFetchRequest view;
-  final FetchWebSocketUpgrade upgrade;
+  final Future<FetchWebSocketUpgrade> Function() acceptFactory;
+  FetchWebSocketUpgrade? upgrade;
 
   @override
   Object? get hostContext => view.hostContext;
@@ -203,9 +208,13 @@ final class _DenoRequestAdapter
   @override
   bool get isWebSocketUpgrade => true;
   @override
-  Future<RoutedWebSocket> accept() async => upgrade.socket;
+  Future<RoutedWebSocket> accept() async {
+    upgrade ??= await acceptFactory();
+    return upgrade!.socket;
+  }
+
   @override
-  Object? get nativeUpgradeResponse => upgrade.response;
+  Object? get nativeUpgradeResponse => upgrade?.response;
 }
 
 final class _BunRequestAdapter
@@ -213,6 +222,7 @@ final class _BunRequestAdapter
   _BunRequestAdapter(this.view);
 
   final WebFetchRequest view;
+  FetchWebSocketUpgrade? upgrade;
 
   @override
   Object? get hostContext => view.hostContext;
@@ -240,7 +250,8 @@ final class _BunRequestAdapter
   Future<RoutedWebSocket> accept() async {
     final accept = view.acceptWebSocket;
     if (accept == null) throw UnsupportedError('Bun WebSocket is unavailable.');
-    return (await accept()).socket;
+    upgrade ??= await accept();
+    return upgrade!.socket;
   }
 
   @override

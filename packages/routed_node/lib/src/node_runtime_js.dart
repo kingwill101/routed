@@ -12,6 +12,9 @@ import 'node_views.dart';
 import 'node_websocket.dart';
 import 'node_websocket_dispatch.dart';
 import 'runtime/runtime.dart';
+import 'vercel_websocket_js.dart';
+
+part 'node_runtime_vercel_js.dart';
 
 @JS('process.getBuiltinModule')
 external JSAny? _getBuiltinModule(JSString name);
@@ -287,10 +290,12 @@ List<String> _objectKeys(JSObject obj) {
 
 /// Keeps standalone dart2js Node processes attached to the event loop.
 void keepNodeEventLoopAlive() {
-  final setInterval = globalContext.getProperty('setInterval'.toJS);
-  if (setInterval != null && setInterval.isA<JSFunction>()) {
-    (setInterval as JSFunction).callAsFunction(null, (() {}).toJS, 60_000.toJS);
+  // dart:async's JS timer implementation expects the browser-style `self`
+  // global, while Node exposes the same global object as `globalThis`.
+  if (globalContext.getProperty('self'.toJS) == null) {
+    globalContext.setProperty('self'.toJS, globalContext);
   }
+  Timer.periodic(const Duration(minutes: 1), (_) {});
 }
 
 /// Bind [engine] using Node `http.createServer`.

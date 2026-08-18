@@ -1,6 +1,7 @@
 import 'dart:convert';
 import 'dart:async';
 import 'dart:js_interop';
+import 'dart:typed_data';
 import 'dart:js_interop_unsafe';
 
 import 'package:web/web.dart' as web;
@@ -25,6 +26,7 @@ Future<void> main() async {
     _expect(capabilityJson['bun']['webSocket'], true, 'Bun WebSocket flag');
 
     final socket = web.WebSocket('ws://127.0.0.1:${handle.port}/ws');
+    socket.binaryType = 'arraybuffer';
     final echoed = Completer<void>();
     socket.onopen = (() => socket.send('hello'.toJS)).toJS;
     socket.onmessage = ((JSAny event) {
@@ -37,12 +39,52 @@ Future<void> main() async {
       }
     }).toJS;
     await echoed.future.timeout(const Duration(seconds: 5));
+
+    final binaryEchoed = Completer<void>();
+    socket.onmessage = ((JSAny event) {
+      final data = (event as JSObject).getProperty('data'.toJS);
+      if (data != null && data.isA<JSArrayBuffer>()) {
+        final bytes = (data as JSArrayBuffer).toDart.asUint8List();
+        if (bytes.length == 3 &&
+            bytes[0] == 1 &&
+            bytes[1] == 2 &&
+            bytes[2] == 3 &&
+            !binaryEchoed.isCompleted) {
+          binaryEchoed.complete();
+        }
+      }
+    }).toJS;
+    socket.send(Uint8List.fromList([1, 2, 3]).toJS);
+    await binaryEchoed.future.timeout(const Duration(seconds: 5));
     socket.close();
 
     final echo = await _post(handle.port, '/echo', '{"ok":true}');
     _expect(echo.status, 200, 'POST /echo');
     final echoJson = jsonDecode(echo.body) as Map<String, dynamic>;
     _expect(echoJson['body'], '{"ok":true}', 'echo request body');
+
+    // Verify that multiple sessions remain isolated and that listener shutdown
+    // closes an active Bun socket before the server handle completes.
+    final secondSocket = web.WebSocket('ws://127.0.0.1:${handle.port}/ws');
+    final secondEchoed = Completer<void>();
+    final secondClosed = Completer<void>();
+    secondSocket.onopen = (() => secondSocket.send('second'.toJS)).toJS;
+    secondSocket.onmessage = ((JSAny event) {
+      final data = (event as JSObject).getProperty('data'.toJS);
+      if (data != null &&
+          data.isA<JSString>() &&
+          (data as JSString).toDart == 'echo:second' &&
+          !secondEchoed.isCompleted) {
+        secondEchoed.complete();
+      }
+    }).toJS;
+    secondSocket.onclose = ((JSAny _) {
+      if (!secondClosed.isCompleted) secondClosed.complete();
+    }).toJS;
+    await secondEchoed.future.timeout(const Duration(seconds: 5));
+    final closing = handle.close(force: true);
+    await secondClosed.future.timeout(const Duration(seconds: 5));
+    await closing.timeout(const Duration(seconds: 5));
 
     // ignore: avoid_print
     print('bun integration ok');

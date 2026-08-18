@@ -6,3 +6,5 @@ pubspec.lock
 *.js.deps
 *.js.map
 node_modules/
+.vercel
+.env*
