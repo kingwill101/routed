@@ -8,13 +8,13 @@ This project exposes a JSON API using [Routed](https://routed.dev).
 dart pub get
 
 # Generate the runtime manifest and static OpenAPI outputs
-dart run routed openapi generate
+dart run routed_cli openapi generate
 dart run build_runner build --delete-conflicting-outputs
 ```
 
 ```
 # Run the API locally on port 8080
-dart run routed dev
+dart run routed_cli dev
 ```
 
 ### Example requests

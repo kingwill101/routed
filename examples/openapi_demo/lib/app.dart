@@ -11,7 +11,7 @@
 ///
 /// 3. **Build-runner** (static generation) — run the two-step pipeline:
 ///    ```bash
-///    dart run routed openapi generate       # writes route_manifest.json
+///    dart run routed_cli openapi generate       # writes route_manifest.json
 ///    dart run build_runner build           # generates openapi.json + controller
 ///    ```
 ///
@@ -19,7 +19,7 @@
 ///
 /// ```bash
 /// cd examples/openapi_demo
-/// dart run routed dev
+/// dart run routed_cli dev
 /// ```
 ///
 /// Then try:
@@ -35,7 +35,6 @@ import 'dart:isolate';
 import 'dart:io' as io;
 
 import 'package:routed/routed.dart';
-import 'package:routed_openapi/routed_openapi.dart';
 import 'package:openapi_demo/metadata_routes.dart';
 
 Future<Engine> createEngine({bool initialize = true}) async {

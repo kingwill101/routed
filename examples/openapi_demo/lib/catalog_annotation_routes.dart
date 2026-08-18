@@ -1,5 +1,4 @@
 import 'package:routed/routed.dart';
-import 'package:routed_openapi/routed_openapi.dart';
 
 void registerCatalogAnnotationRoutes(Router router) {
   final handlers = _CatalogHandlers();

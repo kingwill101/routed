@@ -13,7 +13,7 @@ void main(List<String> args) async {
       'tags': 'required|array',
     });
 
-    await ctx.bind(data);
+    await ValidationContext(ctx).bind(data);
     ctx.json(data);
   });
 
@@ -23,7 +23,7 @@ void main(List<String> args) async {
 
     await ctx.validate({'name': 'required', 'age': 'required|numeric'});
 
-    await ctx.bind(data);
+    await ValidationContext(ctx).bind(data);
     ctx.json(data);
   });
 
@@ -37,7 +37,7 @@ void main(List<String> args) async {
       'sort': 'required',
     });
 
-    await ctx.bind(data);
+    await ValidationContext(ctx).bind(data);
     ctx.json(data);
   });
 
@@ -53,7 +53,7 @@ void main(List<String> args) async {
         'tags': 'required|array',
       });
 
-      await ctx.bind(data);
+      await ValidationContext(ctx).bind(data);
       ctx.json(data);
     } on ValidationError catch (e) {
       ctx.status(422);

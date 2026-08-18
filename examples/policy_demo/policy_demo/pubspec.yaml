@@ -17,6 +17,5 @@ dev_dependencies:
   lints: ^6.0.0
   routed_testing:
     path: ../../../packages/server_testing/routed_testing
-  server_testing: ^0.3.2
+  server_testing: ">=0.3.3 <1.0.0"
   test: ^1.26.3
-

@@ -2,7 +2,7 @@ import 'package:kitchen_sink_example/models/recipe.dart';
 import 'package:kitchen_sink_example/services/recipe_service.dart';
 import 'package:routed/routed.dart';
 
-class RecipeUpdateBinding {
+class RecipeUpdateBinding implements Bindable {
   String? name;
   String? description;
   List<String>? ingredients;
@@ -11,7 +11,24 @@ class RecipeUpdateBinding {
   int? cookTime;
   String? category;
   String? image;
+
+  @override
+  void bind(Map<String, dynamic> data) {
+    name = data['name']?.toString();
+    description = data['description']?.toString();
+    ingredients = (data['ingredients'] as List?)
+        ?.map((value) => value.toString())
+        .toList();
+    instructions = data['instructions']?.toString();
+    prepTime = _toInt(data['prepTime']);
+    cookTime = _toInt(data['cookTime']);
+    category = data['category']?.toString();
+    image = data['image']?.toString();
+  }
 }
+
+int? _toInt(Object? value) =>
+    value is num ? value.toInt() : int.tryParse('$value');
 
 Future<Response> updateRecipe(EngineContext ctx) async {
   final id = ctx.mustGetParam('id');
@@ -22,9 +39,9 @@ Future<Response> updateRecipe(EngineContext ctx) async {
   }
 
   final data = RecipeUpdateBinding();
-  await ctx.bind(data);
+  await BindingMethods(ctx).bind(data);
 
-  await ctx.validate({
+  await ValidationContext(ctx).validate({
     'name': 'string|min:3',
     'description': 'nullable|string',
     'ingredients': 'array',

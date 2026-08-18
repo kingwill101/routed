@@ -37,10 +37,7 @@ const Map<String, dynamic> routedConfig = <String, dynamic>{
       'routed.storage',
       'routed.sessions',
       'routed.uploads',
-      'routed.cors',
-      'routed.security',
       'routed.logging',
-      'routed.static',
       'config_demo.mail',
     ],
     'runtime': <String, dynamic>{

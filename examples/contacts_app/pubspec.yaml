@@ -1,9 +1,0 @@
-name: contacts_app
-publish_to: none
-resolution: workspace
-
-environment:
-  sdk: ">=3.9.0 <4.0.0"
-
-dependencies:
-  inertia_dart: ^1.0.0

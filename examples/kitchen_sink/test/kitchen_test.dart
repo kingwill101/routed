@@ -1,89 +1,142 @@
-// import 'dart:convert';
-//
-// import 'package:kitchen_sink_example/app.dart';
-// import 'package:routed_testing/routed_testing.dart';
-// import 'package:server_testing/server_testing.dart';
-//
-// void main() {
-//   engineGroup(
-//     'Kitchen Sink Tests',
-//     engine: buildApp(),
-//     define: (engine, client) {
-//       test('GET /api/recipes requires API key', () async {
-//         final response = await client.get('/api/recipes');
-//         expect(response.statusCode, 401);
-//         expect(response.body, 'Unauthorized');
-//       });
-//
-//       test('GET /api/recipes returns 200 with API key', () async {
-//         final response = await client.get('/api/recipes', headers: {
-//           'X-API-Key': ['YOUR_API_KEY']
-//         });
-//         expect(response.statusCode, 200);
-//       });
-//
-//       test('POST /recipes creates new recipe', () async {
-//         final response = await client.post('/api/recipes', headers: {
-//           'X-API-Key': ['YOUR_API_KEY']
-//         }, {
-//           'name': 'Test Recipe',
-//           'ingredients': ['ingredient1'],
-//           'instructions': 'test instructions',
-//           'prepTime': 10,
-//           'cookTime': 20,
-//           'category': 'dinner'
-//         });
-//         response.assertStatus(201);
-//       });
-//
-//       test('Recipe endpoints use caching', () async {
-//         // Create recipe with valid data
-//         final createResponse = await client.post(
-//             '/api/recipes',
-//             headers: {
-//               'X-API-Key': ['YOUR_API_KEY']
-//             },
-//             jsonEncode({
-//               // Properly encode JSON body
-//               'name': 'Cache Test Recipe', // At least 3 chars
-//               'description': 'Test description',
-//               'ingredients': ['test ingredient'], // Valid array
-//               'instructions': 'Test instructions',
-//               'prepTime': 10,
-//               'cookTime': 20,
-//               'category': 'dinner' // Valid enum value
-//             }));
-//         createResponse.assertStatus(201);
-//
-//         final recipeData = jsonDecode(createResponse.body);
-//         final recipeId = recipeData['id']; // Get actual ID from response
-//
-//         // First request with valid ID
-//         final firstResponse =
-//             await client.get('/api/recipes/$recipeId', headers: {
-//           'X-API-Key': ['YOUR_API_KEY']
-//         });
-//         firstResponse.assertStatus(200);
-//
-//         // Second request to verify cache
-//         final secondResponse =
-//             await client.get('/api/recipes/$recipeId', headers: {
-//           'X-API-Key': ['YOUR_API_KEY']
-//         });
-//         secondResponse.assertStatus(200);
-//         expect(secondResponse.body, equals(firstResponse.body));
-//       });
-//
-//       test('Session persistence works', () async {
-//         await client.get('/set');
-//         final response = await client.get('/test');
-//         expect(response.body, contains('it worked!'));
-//       });
-//
-//       test('Web routes require session for protected endpoints', () async {
-//         final response = await client.get('/recipes/123/edit');
-//         expect(response.statusCode, 401);
-//       });
-//     },
-//   );
-// }
+import 'dart:convert';
+
+import 'package:file/local.dart';
+import 'package:kitchen_sink_example/app.dart';
+import 'package:routed/routed.dart';
+import 'package:test/test.dart';
+
+void main() {
+  late Engine engine;
+  final fs = const LocalFileSystem();
+
+  setUp(() {
+    engine = buildApp(
+      viewsPath: fs.path.join(
+        fs.currentDirectory.path,
+        'examples',
+        'kitchen_sink',
+        'templates',
+      ),
+    );
+  });
+
+  tearDown(() => engine.close());
+
+  Future<PortableResponse> request(
+    String method,
+    String path, {
+    Map<String, List<String>> headers = const {},
+    Object? body,
+  }) {
+    final requestHeaders = PortableHeaders(headers);
+    final encoded = body == null
+        ? null
+        : utf8.encode(body is String ? body : jsonEncode(body));
+    if (encoded != null && !requestHeaders.contains('content-type')) {
+      requestHeaders.set('content-type', 'application/json');
+    }
+    return engine.handlePortable(
+      PortableRequest(
+        method: method,
+        uri: Uri.parse('http://kitchen.test$path'),
+        headers: requestHeaders,
+        body: encoded == null ? null : Stream.value(encoded),
+      ),
+    );
+  }
+
+  Future<String> responseBody(PortableResponse response) async {
+    final bytes =
+        response.bodyBytes ??
+        await response.body.fold<List<int>>(
+          <int>[],
+          (result, chunk) => result..addAll(chunk),
+        );
+    return utf8.decode(bytes);
+  }
+
+  test(
+    'portable API path exercises auth, validation, binding, routing, and JSON',
+    () async {
+      final unauthorized = await request('GET', '/api/recipes');
+      expect(unauthorized.statusCode, 401);
+      expect(await responseBody(unauthorized), 'Unauthorized');
+
+      final response = await request(
+        'POST',
+        '/api/recipes',
+        headers: {
+          'X-API-Key': ['YOUR_API_KEY'],
+        },
+        body: {
+          'name': 'Portable Pasta',
+          'description': 'A portable recipe',
+          'ingredients': ['pasta', 'tomato'],
+          'instructions': 'Cook and serve.',
+          'prepTime': 10,
+          'cookTime': 20,
+          'category': 'dinner',
+        },
+      );
+      expect(response.statusCode, 201);
+      final created = jsonDecode(await responseBody(response)) as Map;
+      final id = created['id'] as String;
+      expect(created['name'], 'Portable Pasta');
+
+      final fetched = await request(
+        'GET',
+        '/api/recipes/$id',
+        headers: {
+          'X-API-Key': ['YOUR_API_KEY'],
+        },
+      );
+      expect(fetched.statusCode, 200);
+      expect((jsonDecode(await responseBody(fetched)) as Map)['id'], id);
+
+      final updated = await request(
+        'PUT',
+        '/api/recipes/$id',
+        headers: {
+          'X-API-Key': ['YOUR_API_KEY'],
+        },
+        body: {
+          'name': 'Updated Pasta',
+          'description': 'Updated portable recipe',
+          'ingredients': ['pasta', 'basil'],
+          'category': 'lunch',
+        },
+      );
+      expect(updated.statusCode, 200);
+      expect(
+        (jsonDecode(await responseBody(updated)) as Map)['name'],
+        'Updated Pasta',
+      );
+    },
+  );
+
+  test('portable session path persists cookies between requests', () async {
+    final set = await request('GET', '/set');
+    expect(set.statusCode, 200);
+    final cookie = set.headers['set-cookie']!.first.split(';').first;
+
+    final read = await request(
+      'GET',
+      '/test',
+      headers: {
+        'cookie': [cookie],
+      },
+    );
+    expect(read.statusCode, 200);
+    expect(await responseBody(read), 'it worked!');
+  });
+
+  test('portable view and fallback paths are wired', () async {
+    final page = await request('GET', '/');
+    expect(page.statusCode, 200);
+    expect(await responseBody(page), contains('Recipes'));
+
+    final fallback = await request('GET', '/does-not-exist');
+    expect(fallback.statusCode, 200);
+    expect(await responseBody(fallback), 'fallback');
+  });
+}

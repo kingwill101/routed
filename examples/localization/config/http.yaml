@@ -6,7 +6,7 @@
 # middleware.global – Middleware executed for every HTTP request. Default: []. Type: list<string>
 # middleware.groups – Named middleware groups applied to route collections. Default: {}. Type: map<string, list<string>>
 # middleware_sources – Localization middleware references injected into the pipeline. Default: {"routed.observability":{"global":["routed.observability.health","routed.observability.tracing","routed.observability.metrics"]}}. Type: map
-# providers – Service providers registered for the HTTP pipeline. Default: ["routed.core","routed.routing","routed.cache","routed.sessions","routed.uploads","routed.cors","routed.security","routed.auth","routed.logging","routed.observability","routed.compression","routed.rate_limit","routed.storage","routed.static","routed.localization","routed.views"]. Type: list<string>
+# providers – Service providers registered for the HTTP pipeline. Default: ["routed.core","routed.routing","routed.uploads","routed.auth","routed.logging","routed.views","routed.localization","routed.observability","routed.cache","routed.sessions","routed.storage","routed.rate_limit"]. Type: list<string>
 # tls.certificate_path – Path to the PEM certificate chain used for TLS. Type: string
 # tls.key_path – Path to the private key corresponding to the TLS certificate. Type: string
 # tls.password – Optional password protecting the certificate/key files. Type: string
@@ -23,12 +23,6 @@ middleware_sources:
       global:
         - routed.auth.jwt
         - routed.auth.oauth2
-    compression:
-      global:
-        - routed.compression.middleware
-    cors:
-      global:
-        - routed.cors
     localization:
       global:
         - routed.localization
@@ -43,37 +37,23 @@ middleware_sources:
     rate_limit:
       global:
         - routed.rate_limit.middleware
-    security:
-      global:
-        - routed.security.trusted_proxy
-        - routed.security.ip_filter
-        - routed.security.headers
-        - routed.security.csrf
-        - routed.security.request_size
     sessions:
       global:
         - routed.sessions.start
       groups:
         web:
           - routed.sessions.start
-    static:
-      global:
-        - routed.static.assets
 providers:
   - routed.core
   - routed.routing
   - routed.cache
   - routed.sessions
   - routed.uploads
-  - routed.cors
-  - routed.security
   - routed.auth
   - routed.logging
   - routed.observability
-  - routed.compression
   - routed.rate_limit
   - routed.storage
-  - routed.static
   - routed.localization
   - routed.views
 

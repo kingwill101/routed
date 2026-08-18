@@ -2,7 +2,6 @@ import 'package:config_demo/drivers/cache/in_memory_cache_driver.dart';
 import 'package:config_demo/drivers/storage/memory_storage_driver.dart';
 import 'package:config_demo/providers/mail_provider.dart';
 import 'package:routed/routed.dart';
-import 'package:routed_core/providers.dart' show ProviderRegistry;
 
 Future<Engine> createEngine() async {
   ProviderRegistry.instance.register(

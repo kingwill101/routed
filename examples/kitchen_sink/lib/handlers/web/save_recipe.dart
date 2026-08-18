@@ -8,7 +8,7 @@ Future<Response> saveRecipe(EngineContext ctx) async {
   Map<String, dynamic> oldInput = {};
 
   try {
-    await ctx.validate({
+    await ValidationContext(ctx).validate({
       'name': 'required|string|min:3',
       'description': 'string',
       'ingredients': 'required|string', // Changed from array to string
@@ -59,7 +59,7 @@ Future<Response> saveRecipe(EngineContext ctx) async {
     ctx.setSession('errors', {});
     ctx.setSession('old', {});
 
-    return ctx.redirect(ctx.route('web.recipe.home'));
+    return await ctx.redirect(ctx.route('web.recipe.home'));
   } catch (e) {
     if (e is ValidationError) {
       errors = e.errors; // Store validation errors
@@ -77,6 +77,6 @@ Future<Response> saveRecipe(EngineContext ctx) async {
 
     ctx.setSession('errors', errors);
     ctx.setSession('old', oldInput);
-    return ctx.redirect(ctx.route('web.recipe.home'));
+    return await ctx.redirect(ctx.route('web.recipe.home'));
   }
 }

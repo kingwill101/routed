@@ -30,7 +30,7 @@ Future<Object> uploadImage(EngineContext ctx) async {
       kAllRecipesCacheKey,
       store: 'array',
     ); // Invalidate the cache
-    return ctx.redirect('/');
+    return await ctx.redirect('/');
   } catch (e) {
     return ctx.string(
       'Error: ${e.toString()}',

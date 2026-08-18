@@ -1,7 +1,6 @@
 import 'dart:async';
 import 'dart:convert';
 
-import 'package:jose/jose.dart';
 import 'package:routed/routed.dart';
 
 const _sharedSecret = 'demo-jwt-secret-key';

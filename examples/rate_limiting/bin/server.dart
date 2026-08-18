@@ -16,6 +16,7 @@ import 'dart:io';
 import 'package:routed/routed.dart';
 
 void main() async {
+  registerRoutedProviders();
   final engine = await Engine.create(providers: Engine.builtins);
 
   // -----------------------------------------------------------------------

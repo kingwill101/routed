@@ -20,5 +20,5 @@ dev_dependencies:
   build_runner: ^2.10.5
   hotreloader: ^4.3.0
   lints: ^6.0.0
-  server_testing: ^0.3.2
+  server_testing: ">=0.3.3 <1.0.0"
   test: ^1.26.3

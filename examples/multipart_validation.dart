@@ -31,7 +31,7 @@ void main() async {
       });
 
       // Bind validated data
-      await ctx.bind(data);
+      await ValidationContext(ctx).bind(data);
 
       // Process file
       final file = await ctx.formFile('file');
@@ -78,7 +78,7 @@ void main() async {
       });
 
       // Bind validated data
-      await ctx.bind(data);
+      await ValidationContext(ctx).bind(data);
 
       // Process files
       final form = await ctx.multipartForm;

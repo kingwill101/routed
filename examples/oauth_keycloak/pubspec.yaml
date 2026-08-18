@@ -20,5 +20,6 @@ dependencies:
   file: ^7.0.1
   path: ^1.9.1
 
+  http: any
 dev_dependencies:
   test: ^1.29.0

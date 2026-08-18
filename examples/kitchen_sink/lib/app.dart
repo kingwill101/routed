@@ -4,10 +4,18 @@ import 'package:kitchen_sink_example/handlers/web.dart' as web;
 import 'package:kitchen_sink_example/middleware/middleware.dart';
 import 'package:routed/routed.dart';
 
-Engine buildApp() {
+Engine buildApp({String? viewsPath}) {
+  final resolvedViewsPath = viewsPath ?? templateDirectory;
   final appKey = 'base64:AQIDBAUGBwgJCgsMDQ4PEBESExQVFhcYGRobHB0eHyA=';
   env["APP_KEY"] = appKey;
-  // Use bare Engine with explicit options for fine-grained control
+  final cacheManager = CacheManager()
+    ..registerStore('array', {'driver': 'array', 'serialize': false})
+    ..registerStore('file', {'driver': 'file', 'path': 'cache'});
+  final sessionStore = CookieStore(
+    codecs: [SecureCookie(useEncryption: true, useSigning: true, key: appKey)],
+  );
+  // Use an explicit provider composition so every feature has its required
+  // application configuration before options are applied.
   final engine = Engine(
     config: EngineConfig(
       appKey: appKey,
@@ -15,25 +23,21 @@ Engine buildApp() {
         maxFileSize: 1024 * 1024,
         allowedExtensions: {'.jpg', '.png'},
       ),
-      templateDirectory: templateDirectory,
+      templateDirectory: resolvedViewsPath,
+      views: ViewConfig(viewPath: resolvedViewsPath),
     ),
+    providers: [...Engine.defaultProviders, ViewServiceProvider()],
+    configItems: {
+      'view': {'directory': resolvedViewsPath},
+    },
     options: [
-      withCacheManager(
-        CacheManager()
-          ..registerStore('file', {'driver': 'file', 'path': 'cache'}),
-      ),
+      withCacheManager(cacheManager),
       withSessionConfig(
-        SessionConfig(
-          store: CookieStore(
-            codecs: [
-              SecureCookie(useEncryption: true, useSigning: true, key: appKey),
-            ],
-          ),
-          cookieName: 'kitchen_sink_session',
-        ),
+        SessionConfig(store: sessionStore, cookieName: 'kitchen_sink_session'),
       ),
     ],
     middlewares: [
+      sessionMiddleware(sessionStore),
       (EngineContext ctx, Next next) async {
         print('Request: ${ctx.method} ${ctx.uri.path}');
         return await next();
@@ -41,9 +45,9 @@ Engine buildApp() {
     ],
   );
 
-  engine.container
-      .get<ViewEngineManager>()
-      .register(LiquidViewEngine(directory: templateDirectory));
+  engine.container.get<ViewEngineManager>().register(
+    LiquidViewEngine(directory: resolvedViewsPath),
+  );
 
   // API Routes
   final apiRouter = Router(
@@ -93,5 +97,12 @@ Engine buildApp() {
   engine.use(apiRouter);
   engine.use(webRouter);
 
+  return engine;
+}
+
+/// Entrypoint consumed by `routed deploy` for host adapters.
+Future<Engine> createEngine({bool initialize = true}) async {
+  final engine = buildApp();
+  if (initialize) await engine.initialize();
   return engine;
 }

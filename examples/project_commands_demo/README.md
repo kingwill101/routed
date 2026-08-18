@@ -6,7 +6,7 @@ user-defined tasks.
 
 ```bash
 dart pub get
-dart run routed project:list
+dart run routed_cli project:list
 ```
 
 Great starting point for building your own CLI command packs.

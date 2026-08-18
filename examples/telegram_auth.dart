@@ -64,7 +64,7 @@ void main() async {
   final sessionConfig = SessionConfig.cookie(
     appKey: 'base64:${base64.encode(List<int>.generate(32, (i) => i + 1))}',
     cookieName: 'telegram_session',
-    options: Options(
+    options: SessionOptions(
       path: '/',
       secure: isSecure == true,
       httpOnly: true,

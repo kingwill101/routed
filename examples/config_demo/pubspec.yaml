@@ -18,5 +18,7 @@ dependencies:
   file: ^7.0.1
   path: ^1.9.1
 
+  routed_storage: any
+  args: any
 dev_dependencies:
   test: ^1.29.0
