@@ -4,7 +4,8 @@ import 'dart:io';
 import 'package:contextual/contextual.dart' as contextual;
 import 'package:routed_core/src/container/container.dart';
 import 'package:routed_core/src/context/context.dart';
-import 'package:routed_core/routed_core.dart' show Config;
+import 'package:routed_core/routed_core.dart'
+    show Config, Engine, EventManager, RoutingErrorEvent;
 import 'package:routed_core/src/engine/middleware_registry.dart';
 import 'package:routed_core/src/config/specs/logging.dart';
 import 'package:routed_core/src/config/specs/logging_drivers.dart';
@@ -31,8 +32,11 @@ class LoggingServiceProvider extends ServiceProvider
   Map<String, dynamic> _extraFields = const {};
   List<String> _headerNames = const [];
   bool _includeStackTraces = false;
+  StreamSubscription<RoutingErrorEvent>? _errorSubscription;
 
   static bool includeStackTraces = false;
+
+  static const _startedAtKey = 'routed.logging.started_at';
 
   @override
   ConfigDefaults get defaultConfig {
@@ -81,11 +85,18 @@ class LoggingServiceProvider extends ServiceProvider
     }
 
     _applyConfig(container.get<Config>(), container);
+    _subscribeToRoutingErrors(container);
   }
 
   @override
   Future<void> onConfigReload(Container container, Config config) async {
     _applyConfig(config, container);
+  }
+
+  @override
+  Future<void> cleanup(Container container) async {
+    await _errorSubscription?.cancel();
+    _errorSubscription = null;
   }
 
   Middleware get _loggingMiddleware {
@@ -95,23 +106,60 @@ class LoggingServiceProvider extends ServiceProvider
       }
 
       final startedAt = DateTime.now();
-      try {
-        final response = await next();
-        if (_logSuccess) {
-          _log(ctx, response.statusCode, DateTime.now().difference(startedAt));
-        }
-        return response;
-      } catch (error, stackTrace) {
-        _log(
-          ctx,
-          ctx.response.statusCode,
-          DateTime.now().difference(startedAt),
-          error: error,
-          stackTrace: stackTrace,
-        );
-        rethrow;
+      ctx.set(_startedAtKey, startedAt);
+      final engine = ctx.engine;
+      if (engine == null) {
+        return await next();
       }
+
+      return LoggingContext.run(engine, ctx, (_) async {
+        try {
+          final response = await next();
+          if (_logSuccess) {
+            _log(
+              ctx,
+              response.statusCode,
+              DateTime.now().difference(startedAt),
+            );
+          }
+          return response;
+        } catch (error, stackTrace) {
+          _log(
+            ctx,
+            ctx.response.statusCode,
+            DateTime.now().difference(startedAt),
+            error: error,
+            stackTrace: stackTrace,
+          );
+          rethrow;
+        }
+      });
     };
+  }
+
+  void _subscribeToRoutingErrors(Container container) {
+    if (!container.has<EventManager>()) {
+      return;
+    }
+    _errorSubscription?.cancel();
+    _errorSubscription = container
+        .get<EventManager>()
+        .listen<RoutingErrorEvent>((event) {
+          if (!_enabled) {
+            return;
+          }
+          final startedAt = event.context.get<DateTime>(_startedAtKey);
+          _log(
+            event.context,
+            event.context.response.statusCode,
+            startedAt == null
+                ? Duration.zero
+                : DateTime.now().difference(startedAt),
+            error: event.error,
+            stackTrace: event.stackTrace,
+            message: 'Unhandled exception',
+          );
+        });
   }
 
   void _log(
@@ -120,6 +168,7 @@ class LoggingServiceProvider extends ServiceProvider
     Duration duration, {
     Object? error,
     StackTrace? stackTrace,
+    String message = 'Request failed',
   }) {
     final method = ctx.request.method;
     final path = ctx.request.uri.path;
@@ -151,14 +200,17 @@ class LoggingServiceProvider extends ServiceProvider
     // Add any extra fields from config
     payload.addAll(_extraFields);
 
-    final logger = RoutedLogger.create(payload);
-
     if (error != null) {
       payload['error'] = error.toString();
       if (_includeStackTraces && stackTrace != null) {
         payload['stack_trace'] = stackTrace.toString();
       }
-      logger.error('Request failed');
+    }
+
+    final logger = RoutedLogger.create(payload);
+
+    if (error != null) {
+      logger.error(message);
       return;
     }
 
@@ -270,8 +322,28 @@ class LoggingServiceProvider extends ServiceProvider
     _headerNames = resolved.requestHeaders;
     _includeStackTraces = resolved.includeStackTraces;
     includeStackTraces = resolved.includeStackTraces;
+    _ensureLoggingMiddleware(config, container);
     RoutedLogger.setGlobalFormat(resolved.format.formatter);
     _configureLoggerFactory(config, container, resolved);
+  }
+
+  void _ensureLoggingMiddleware(Config config, Container container) {
+    final existing =
+        config
+            .get<List<Object?>>('http.middleware.global')
+            ?.whereType<String>()
+            .toList() ??
+        <String>[];
+    if (!existing.contains('routed.logging.http')) {
+      config.set('http.middleware.global', [
+        ...existing,
+        'routed.logging.http',
+      ]);
+      if (container.has<Engine>()) {
+        final engine = container.get<Engine>();
+        engine.updateConfig(engine.config);
+      }
+    }
   }
 
   String _headerKey(String name) {

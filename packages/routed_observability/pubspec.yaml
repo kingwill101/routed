@@ -16,5 +16,5 @@ dev_dependencies:
   file: ^7.0.1
   lints: ^6.0.0
   routed_testing: ^0.3.3
-  server_testing: ^0.3.2
+  server_testing: ">=0.3.3 <1.0.0"
   test: ^1.29.0
