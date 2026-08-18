@@ -32,7 +32,7 @@ import 'package:routed_core/routed_core.dart';
 import 'package:routed_io/routed_io.dart';
 
 Future<void> main() async {
-  final engine = Engine(providers: Engine.defaultProviders);
+  final engine = await Engine.create(providers: Engine.defaultProviders);
   engine.get('/', (ctx) => ctx.string('ok'));
   final handle = await serveIo(engine, host: '127.0.0.1', port: 8080);
   // ...

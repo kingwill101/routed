@@ -18,6 +18,10 @@ This package intentionally contains only contract artifacts:
 
 This package must not contain concrete runtime implementations.
 
+It never initializes a Routed engine or service provider. Use the relevant
+Routed adapter, such as `routed_cache`, `routed_sessions`, or `routed_storage`,
+when these contracts need to participate in a Routed application.
+
 ## Installation
 
 ```yaml

@@ -20,8 +20,7 @@ dependencies:
 
 - `package:server_auth/server_auth.dart` (umbrella export)
 
-Avoid `package:server_auth/src/*` imports from outside this package. The
-public API is exposed through `server_auth.dart`.
+Use the package umbrella library for the public API.
 
 ## Package Selection
 
@@ -50,6 +49,10 @@ final providers = <AuthProvider>[google];
 
 Use `providers` with your framework adapter to wire callback routes, session
 handling, and auth lifecycle.
+
+For Routed applications, use `routed_auth`: initialize `AuthServiceProvider`
+alongside `Engine.defaultProviders`, then add the adapter's auth middleware and
+routes. `server_auth` itself never registers framework providers.
 
 ## Using with Shelf
 

@@ -42,3 +42,6 @@ The plugin registers the following lint rules:
 - Dart SDK `>=3.9.0`
 - An IDE or analysis server supporting analyzer plugins (VS Code, IntelliJ,
   or the Dart CLI analysis server)
+
+This is a development-time analyzer plugin, not an `Engine` provider. It does
+not belong in a Routed application's runtime provider list.
