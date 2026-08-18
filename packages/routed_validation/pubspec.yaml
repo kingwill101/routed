@@ -21,10 +21,11 @@ dependencies:
   file: ^7.0.1
   collection: ^1.19.1
 
+  path: any
 dev_dependencies:
   lints: ^6.0.0
   test: ^1.29.0
   routed_testing: ^0.3.3
-  server_testing: ^0.3.2
+  server_testing: ">=0.3.3 <1.0.0"
   property_testing: ^0.3.2
   coverage: ^1.15.1

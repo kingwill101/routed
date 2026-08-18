@@ -24,7 +24,9 @@ class FileBetweenRule extends AbstractValidationRule {
 
     final minSize = int.tryParse(options[0]) ?? 0;
     final maxSize = int.tryParse(options[1]) ?? 0;
-    final file = asValidationFile(value); if (file == null) return false; final fileSize = file.size / 1024; // Size in KB
+    final file = asValidationFile(value);
+    if (file == null) return false;
+    final fileSize = file.size / 1024; // Size in KB
 
     return fileSize >= minSize && fileSize <= maxSize;
   }

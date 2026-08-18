@@ -16,10 +16,8 @@ ValidationRuleRegistry requireValidationRegistry(Container container) {
   if (!container.has<Config>()) {
     throw StateError('ValidationRuleRegistry not found in container');
   }
-  // Engine's slim core registers a stub ValidationRuleRegistry from
-  // `package:routed`. That type is distinct from this package's registry,
-  // so `has` will be false. Create and register defaults on demand so
-  // validation works even when only the slim core is bootstrapped (tests).
+  // Validation is optional in the slim core. Create and register the
+  // feature-owned registry on demand when validation is first requested.
   final registry = ValidationRuleRegistry.defaults();
   try {
     container.instance<ValidationRuleRegistry>(registry);

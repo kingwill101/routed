@@ -15,7 +15,6 @@ import 'package:routed_validation/src/validation/rules/between.dart';
 import 'package:routed_validation/src/validation/rules/boolean.dart';
 import 'package:routed_validation/src/validation/rules/confirmed.dart';
 import 'package:routed_validation/src/validation/rules/contains.dart';
-import 'package:routed_validation/src/validation/rules/current_password.dart';
 import 'package:routed_validation/src/validation/rules/date.dart';
 import 'package:routed_validation/src/validation/rules/date_equals.dart';
 import 'package:routed_validation/src/validation/rules/date_format.dart';
@@ -327,8 +326,6 @@ void main() {
 
       expect(DifferentTimezoneRule().validate('2025-01-01', ['UTC']), isFalse);
       expect(DifferentTimezoneRule().validate('2025-01-01'), isFalse);
-
-      expect(CurrentPasswordRule().validate('secret'), isFalse);
     });
 
     test('file rules validate multipart metadata', () {

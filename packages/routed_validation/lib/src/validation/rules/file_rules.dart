@@ -71,7 +71,9 @@ class MaxFileSizeRule extends ValidationRule {
     }
     final maxSize = int.tryParse(options[0]);
     if (maxSize == null) return false;
-    final file = asValidationFile(value); if (file == null) return false; return file.size <= maxSize;
+    final file = asValidationFile(value);
+    if (file == null) return false;
+    return file.size <= maxSize;
   }
 }
 
@@ -108,6 +110,8 @@ class AllowedMimeTypesRule extends ValidationRule {
       return false;
     }
     final allowedTypes = options;
-    final file = asValidationFile(value); if (file == null) return false; return allowedTypes.contains(file.contentType);
+    final file = asValidationFile(value);
+    if (file == null) return false;
+    return allowedTypes.contains(file.contentType);
   }
 }
