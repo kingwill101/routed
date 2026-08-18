@@ -2,7 +2,7 @@
 ///
 /// A [RouteSchema] bundles request body, parameter, and response metadata
 /// for a single route. It serves as the single source of truth consumed by:
-/// - Runtime auto-validation (Phase 1)
+/// - Optional runtime validation middleware (Phase 1)
 /// - Build-runner OpenAPI generation (Phase 2)
 /// - Analyzer plugin linting (Phase 3)
 library;

@@ -54,12 +54,16 @@ void registerAdminRoutes(Router router) {
             RouteManifestEntry(
               method: 'GET',
               path: '/api/v1/users/inline',
-              
+              sourceFile: 'lib/users_routes.dart',
+              sourceLine: usersLocation.$1,
+              sourceColumn: usersLocation.$2,
             ),
             RouteManifestEntry(
               method: 'GET',
               path: '/api/v1/admin/inline',
-              
+              sourceFile: 'lib/admin_routes.dart',
+              sourceLine: adminLocation.$1,
+              sourceColumn: adminLocation.$2,
             ),
           ],
         );

@@ -13,7 +13,7 @@ The builder consumes the runtime route manifest produced by the CLI. It does not
 reconstruct or guess the route graph from source code:
 
 ```bash
-dart run routed openapi generate
+dart run routed_cli openapi generate
 dart run build_runner build --delete-conflicting-outputs
 ```
 
@@ -30,3 +30,7 @@ Static annotation and Dartdoc enrichment is most reliable with literal group
 prefixes and named handlers. For dynamically computed prefixes or inline closure
 handlers, attach fluent metadata directly to the `RouteBuilder` when exact
 OpenAPI output is required.
+
+The builder is dev-time tooling, not a runtime provider. Your application still
+initializes its engine with `Engine.create()` and the appropriate provider list;
+the builder only consumes the resulting route manifest.

@@ -16,9 +16,9 @@ import 'schema.dart';
 /// engine's global error handler, which returns a 422 Unprocessable Entity
 /// response with detailed field-level error messages.
 ///
-/// This middleware is intended to be injected automatically by [EngineRoute]
-/// when a route has a schema with validation rules. It runs just before the
-/// route handler in the middleware chain.
+/// Applications can add this middleware to a route's middleware list when
+/// runtime request validation is desired. OpenAPI generation remains separate
+/// from runtime validation.
 ///
 /// Example:
 /// ```dart

@@ -18,8 +18,9 @@ dependencies:
   meta: ^1.18.0
   path: ^1.9.1
 
+  json_schema_builder: any
 dev_dependencies:
   routed_testing: ^0.3.3
-  server_testing: ^0.3.2
+  server_testing: ">=0.3.3 <1.0.0"
   lints: ^6.0.0
   test: ^1.29.0
