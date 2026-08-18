@@ -25,28 +25,6 @@ String resolveLocalStorageRoot(
   return 'storage/$diskName';
 }
 
-/// Compatibility shim for the former `LocalStorageDriver` API.
-///
-/// Historically `LocalStorageDriver` exposed `resolveRoot`. The new
-/// framework-agnostic location uses [resolveLocalStorageRoot] as a
-/// top-level function; this class preserves the old call-site shape for
-/// tests that were moved from `package:routed`.
-class LocalStorageDriver {
-  const LocalStorageDriver();
-
-  String resolveRoot(
-    String? configuredRoot,
-    String diskName, {
-    String? storageRoot,
-  }) {
-    return resolveLocalStorageRoot(
-      configuredRoot,
-      diskName,
-      storageRoot: storageRoot,
-    );
-  }
-}
-
 /// Local file system backed disk.
 class LocalStorageDisk implements StorageDisk {
   LocalStorageDisk({required String root, file.FileSystem? fileSystem})
@@ -100,11 +78,7 @@ class LocalStorageDisk implements StorageDisk {
 
   /// Returns true when [candidate] equals [root] or lies within a
   /// subdirectory of [root].
-  static bool _isSameOrChild(
-    String candidate,
-    String root,
-    String separator,
-  ) {
+  static bool _isSameOrChild(String candidate, String root, String separator) {
     if (candidate == root) {
       return true;
     }

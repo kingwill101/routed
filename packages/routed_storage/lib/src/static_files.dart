@@ -74,9 +74,7 @@ void _mountStaticFile(
   Dir dir,
 ) {
   if (relativePath.contains(':') || relativePath.contains('*')) {
-    throw Exception(
-      'URL parameters cannot be used when serving a static file',
-    );
+    throw Exception('URL parameters cannot be used when serving a static file');
   }
 
   final fileHandler = FileHandler.fromDir(dir);

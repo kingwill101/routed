@@ -3,41 +3,46 @@ import 'package:server_storage/server_storage.dart';
 import 'package:test/test.dart';
 
 void main() {
-  group('LocalStorageDriver.resolveRoot', () {
-    const driver = LocalStorageDriver();
-
+  group('resolveLocalStorageRoot', () {
     test('returns explicit root when provided', () {
-      expect(driver.resolveRoot('/explicit/root', 'local'), '/explicit/root');
+      expect(
+        resolveLocalStorageRoot('/explicit/root', 'local'),
+        '/explicit/root',
+      );
     });
 
     test('returns storageRoot for local disk when no explicit root', () {
       expect(
-        driver.resolveRoot(null, 'local', storageRoot: '/custom/storage'),
+        resolveLocalStorageRoot(null, 'local', storageRoot: '/custom/storage'),
         '/custom/storage',
       );
     });
 
     test('ignores storageRoot for non-local disk', () {
       expect(
-        driver.resolveRoot(null, 'uploads', storageRoot: '/custom/storage'),
+        resolveLocalStorageRoot(
+          null,
+          'uploads',
+          storageRoot: '/custom/storage',
+        ),
         'storage/uploads',
       );
     });
 
     test('falls back to storage/app for local disk with no storageRoot', () {
-      expect(driver.resolveRoot(null, 'local'), 'storage/app');
+      expect(resolveLocalStorageRoot(null, 'local'), 'storage/app');
     });
 
     test('falls back to storage/<disk> for other disks', () {
-      expect(driver.resolveRoot(null, 'backups'), 'storage/backups');
+      expect(resolveLocalStorageRoot(null, 'backups'), 'storage/backups');
     });
 
     test('treats empty string root as not provided', () {
-      expect(driver.resolveRoot('', 'local'), 'storage/app');
+      expect(resolveLocalStorageRoot('', 'local'), 'storage/app');
     });
 
     test('treats whitespace-only root as not provided', () {
-      expect(driver.resolveRoot('   ', 'local'), 'storage/app');
+      expect(resolveLocalStorageRoot('   ', 'local'), 'storage/app');
     });
   });
 
