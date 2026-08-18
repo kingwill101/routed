@@ -19,6 +19,9 @@ class Dir {
   /// Whether to list the contents of the directory.
   final bool listDirectory;
 
+  /// File served when a request targets a directory.
+  final String indexFile;
+
   /// The file system to use.
   final file.FileSystem fileSystem;
 
@@ -27,8 +30,12 @@ class Dir {
   /// The [path] parameter specifies the path to the directory.
   /// The [listDirectory] parameter specifies whether to list the contents of the directory.
   /// The [fileSystem] parameter specifies the file system to use.
-  Dir(this.path, {this.listDirectory = false, file.FileSystem? fileSystem})
-      : fileSystem = fileSystem ?? const local.LocalFileSystem();
+  Dir(
+    this.path, {
+    this.listDirectory = false,
+    this.indexFile = 'index.html',
+    file.FileSystem? fileSystem,
+  }) : fileSystem = fileSystem ?? const local.LocalFileSystem();
 }
 
 /// Handles file operations such as serving files and directories over HTTP.
@@ -44,11 +51,15 @@ class FileHandler {
   /// Whether directory listing is allowed.
   final bool allowDirectoryListing;
 
+  /// File served when a request targets a directory.
+  final String indexFile;
+
   /// Private constructor that takes normalized path.
   const FileHandler._({
     required this.rootPath,
     required this.fileSystem,
     required this.allowDirectoryListing,
+    required this.indexFile,
   });
 
   /// Factory constructor that handles path normalization.
@@ -60,6 +71,7 @@ class FileHandler {
     required String rootPath,
     file.FileSystem fileSystem = const local.LocalFileSystem(),
     bool allowDirectoryListing = false,
+    String indexFile = 'index.html',
   }) {
     final pathContext = fileSystem.path;
     final currentDir = pathContext.normalize(fileSystem.currentDirectory.path);
@@ -73,6 +85,7 @@ class FileHandler {
       rootPath: normalizedPath,
       fileSystem: fileSystem,
       allowDirectoryListing: allowDirectoryListing,
+      indexFile: indexFile,
     );
   }
 
@@ -94,6 +107,7 @@ class FileHandler {
       rootPath: normalizedPath,
       fileSystem: dir.fileSystem,
       allowDirectoryListing: dir.listDirectory,
+      indexFile: dir.indexFile,
     );
   }
 
@@ -144,17 +158,21 @@ class FileHandler {
     final baseDir = pathContext.isAbsolute(dirPath)
         ? dirPath
         : pathContext.join(rootPath, dirPath);
-    // First try to serve index.html if it exists
-    final indexPath = pathContext.join(baseDir, 'index.html');
+    // First try to serve the configured index file if it exists.
+    final indexPath = indexFile.isEmpty
+        ? null
+        : pathContext.join(baseDir, indexFile);
 
     try {
-      final indexFileStat = await fileSystem.stat(indexPath);
-      if (indexFileStat.type == FileSystemEntityType.file) {
-        await _serveFile(sink, indexPath, indexFileStat);
-        return;
+      if (indexPath != null) {
+        final indexFileStat = await fileSystem.stat(indexPath);
+        if (indexFileStat.type == FileSystemEntityType.file) {
+          await _serveFile(sink, indexPath, indexFileStat);
+          return;
+        }
       }
     } catch (_) {
-      // No index.html, continue to directory listing check
+      // No index file, continue to directory listing check.
     }
 
     // Check if directory listing is allowed
