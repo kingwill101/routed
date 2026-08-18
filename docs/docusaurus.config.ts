@@ -9,11 +9,11 @@ const config: Config = {
   tagline: 'A Dart toolkit for shipping backend systems.',
   favicon: 'img/routed-mark.svg',
 
-  // Set the production url of your site here
-  url: 'https://docs.routed.dev',
+  // Set the production URL of your site here.
+  url: 'https://kingwill101.github.io',
   // Set the /<baseUrl>/ pathname under which your site is served
   // For GitHub pages deployment, it is often '/<projectName>/'
-  baseUrl: '/',
+  baseUrl: '/routed/',
 
   // GitHub pages deployment config.
   // If you aren't using GitHub pages, you don't need these.

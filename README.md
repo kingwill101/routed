@@ -1,7 +1,7 @@
 # routed_ecosystem
 
 [![CI](https://github.com/kingwill101/routed/actions/workflows/publish.yaml/badge.svg)](https://github.com/kingwill101/routed/actions/workflows/publish.yaml)
-[![Docs](https://img.shields.io/badge/docs-routed.dev-4f46e5)](https://docs.routed.dev)
+[![Docs](https://img.shields.io/badge/docs-GitHub%20Pages-4f46e5)](https://kingwill101.github.io/routed/)
 [![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 [![Support](https://img.shields.io/badge/support-Buy%20Me%20a%20Coffee-ff813f?logo=buymeacoffee)](https://www.buymeacoffee.com/kingwill101)
 

@@ -1,6 +1,6 @@
 # {{{routed:humanName}}}
 
-Server-rendered pages powered by [Routed](https://routed.dev).
+Server-rendered pages powered by [Routed](https://kingwill101.github.io/routed/).
 
 ## Run locally
 

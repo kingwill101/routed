@@ -1,6 +1,6 @@
 # Policy Demo
 
-This project exposes a JSON API using [Routed](https://routed.dev).
+This project exposes a JSON API using [Routed](https://kingwill101.github.io/routed/).
 
 ## Useful scripts
 

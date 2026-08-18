@@ -1,6 +1,6 @@
 # Static Mounts
 
-A new [Routed](https://routed.dev) application.
+A new [Routed](https://kingwill101.github.io/routed/) application.
 
 ## Getting started
 
