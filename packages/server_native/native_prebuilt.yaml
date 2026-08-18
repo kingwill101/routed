@@ -1,0 +1,57 @@
+schema: 2
+package: server_native
+asset_name: src/ffi.g.dart
+library_stem: server_native
+release:
+  provider: github
+  repository: kingwill101/routed
+  tag: server-native-prebuilt-v0.1.3+1
+artifacts:
+  linux-x64:
+    archive: server_native-linux-x64.tar.gz
+    payload:
+      type: dynamic_library
+  linux-arm64:
+    archive: server_native-linux-arm64.tar.gz
+    payload:
+      type: dynamic_library
+  macos-x64:
+    archive: server_native-macos-x64.tar.gz
+    payload:
+      type: dynamic_library
+  macos-arm64:
+    archive: server_native-macos-arm64.tar.gz
+    payload:
+      type: dynamic_library
+  windows-x64:
+    archive: server_native-windows-x64.tar.gz
+    payload:
+      type: dynamic_library
+  windows-arm64:
+    archive: server_native-windows-arm64.tar.gz
+    payload:
+      type: dynamic_library
+  android-arm64:
+    archive: server_native-android-arm64.tar.gz
+    payload:
+      type: dynamic_library
+  android-arm:
+    archive: server_native-android-armv7.tar.gz
+    payload:
+      type: dynamic_library
+  android-x64:
+    archive: server_native-android-x64.tar.gz
+    payload:
+      type: dynamic_library
+  ios-arm64:
+    archive: server_native-ios-arm64.tar.gz
+    payload:
+      type: static_library
+  ios-sim-arm64:
+    archive: server_native-ios-sim-arm64.tar.gz
+    payload:
+      type: static_library
+  ios-sim-x64:
+    archive: server_native-ios-sim-x64.tar.gz
+    payload:
+      type: static_library

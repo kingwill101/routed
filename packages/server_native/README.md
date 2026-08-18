@@ -40,7 +40,7 @@ bootstrap.
 
 ```yaml
 dependencies:
-  server_native: ^0.1.0
+  server_native: ^0.1.3+1
 ```
 
 ## Quick Start (`HttpServer` Style)
@@ -475,10 +475,13 @@ If you changed Rust FFI symbols/structs, regenerate bindings:
 dart run tool/generate_ffi.dart
 ```
 
-If you bump `pubspec.yaml` version, regenerate prebuilt release metadata:
+Prebuilt metadata is managed by `native_prebuilt.yaml` and a generated
+manifest. Refresh it after publishing a new native release with:
 
 ```bash
-dart run tool/generate_prebuilt_release.dart
+dart run native_prebuilt manifest update \
+  --config native_prebuilt.yaml \
+  --output <generated-manifest>
 ```
 
 ## Prebuilt Native Artifacts
@@ -513,12 +516,10 @@ Pull host prebuilts into your project:
 dart run server_native:setup
 ```
 
-`setup` is optional. Build hooks now auto-download the package-matched prebuilt
-release into `.dart_tool/server_native/prebuilt/<tag>/<platform>/` when no
-local prebuilt is available.
+`setup` is optional. The `native_prebuilt` hook resolves the verified manifest
+artifact from its shared cache (or downloads it) before falling back to a local
+Rust build. Workspace checkouts intentionally use the current Rust sources.
 
-This defaults to the prebuilt tag generated from the local
-`server_native` package version (for example `server-native-prebuilt-v0.1.2`).
 To auto-select the newest available prebuilt release instead, use:
 
 ```bash
@@ -535,19 +536,12 @@ Downloaded files are extracted to:
 
 - `.dart_tool/server_native/prebuilt/<tag>/<platform>/`
 
-Build hook prebuilt lookup order:
+`native_prebuilt` resolution order:
 
-1. `SERVER_NATIVE_PREBUILT` (absolute path to a library file)
-2. `<project-root>/.dart_tool/server_native/prebuilt/<tag>/<platform>/<library>`
-3. `<project-root>/.dart_tool/server_native/prebuilt/<platform>/<library>` (legacy fallback)
-4. `<repo-root>/.dart_tool/server_native/prebuilt/<tag>/<platform>/<library>`
-5. `<repo-root>/.dart_tool/server_native/prebuilt/<platform>/<library>` (legacy fallback)
-6. `<package-root>/native/prebuilt/<tag>/<platform>/<library>` (packaged fallback)
-7. `<package-root>/native/prebuilt/<platform>/<library>` (legacy packaged fallback)
-8. `<package-root>/native/<platform>/<library>` (legacy packaged fallback)
-
-If no prebuilt library is found, the hook falls back to Rust source build
-through `native_toolchain_rust`.
+1. `hooks.user_defines` `prebuilt_path` override
+2. Local `.prebuilt/<platform>/` artifact
+3. Verified shared cache/download from the manifest release
+4. Rust source fallback through `native_toolchain_rust`
 
 ## Troubleshooting
 
