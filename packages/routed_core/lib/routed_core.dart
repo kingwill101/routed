@@ -22,7 +22,6 @@ export 'src/contracts/contracts.dart';
 export 'src/engine/config.dart';
 export 'src/engine/engine.dart';
 export 'src/engine/engine_opt.dart';
-export 'src/engine/engine_template.dart';
 export 'src/engine/middleware_registry.dart';
 export 'src/engine/provider_manifest.dart';
 export 'src/engine/route_manifest.dart';
@@ -41,6 +40,8 @@ export 'src/router/router.dart';
 export 'src/router/controller.dart';
 export 'src/router/types.dart';
 export 'src/runtime/shutdown.dart';
+export 'src/security/network.dart';
+export 'src/security/trusted_proxy_resolver.dart';
 
 export 'src/support/zone.dart';
 export 'src/utils/deep_copy.dart';

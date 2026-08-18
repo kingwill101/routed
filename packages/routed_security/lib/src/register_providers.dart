@@ -1,0 +1,12 @@
+import 'package:routed_core/providers.dart' show ProviderRegistry;
+
+import 'providers/security.dart';
+
+/// Registers the security provider for `http.providers` resolution.
+void registerRoutedSecurityProviders() {
+  ProviderRegistry.instance.register(
+    'routed.security',
+    factory: RoutedSecurityProvider.new,
+    description: 'CORS, trusted proxies, and optional IP filtering.',
+  );
+}

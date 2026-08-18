@@ -1,6 +1,6 @@
 import 'dart:io';
 
-import 'package:routed_core/src/security/network.dart';
+import 'package:routed_core/routed_core.dart' show NetworkMatcher;
 
 /// Defines the default behaviour when no allow/deny rule matches.
 ///
