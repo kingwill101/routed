@@ -322,7 +322,7 @@ Return `AuthRateLimitDecision.block(retryAfter: ...)` to produce a stable
 `rate_limited` failure in an adapter. The adapter owns the client identity
 used for the limit, including any trusted-proxy policy.
 
-Features receive the shared `AuthStore` during configuration. They own one
+Plugins receive the shared `AuthStore` during configuration. They own one
 auth concern at a time and may contribute portable endpoint, logical schema,
 typed-client, and namespaced rate-limit descriptors. The registry rejects
 duplicate plugin IDs and endpoint method/path pairs, then freezes the plugin

@@ -1660,7 +1660,7 @@ class AuthClientCore {
 /// Typed host for the framework-independent auth client contract.
 ///
 /// The host exposes transport controls and only the optional APIs selected in
-/// [plugins]. Feature and provider operations should be accessed through their
+/// [plugins]. Plugin and provider operations should be accessed through their
 /// typed plugin APIs rather than through one global client surface.
 final class AuthClient {
   AuthClient({

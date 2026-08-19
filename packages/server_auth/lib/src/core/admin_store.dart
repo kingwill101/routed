@@ -6,7 +6,7 @@ import 'plugin.dart';
 import 'models.dart';
 import 'store.dart';
 
-/// Feature-owned persistence contract for administrative user operations.
+/// Plugin-owned persistence contract for administrative user operations.
 ///
 /// Mutating methods that mention revocation must commit the user/admin state,
 /// server-session revocation, and JWT version rotation atomically.

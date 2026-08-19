@@ -691,7 +691,7 @@ class AuthManager {
 
   /// Reauthenticates and tombstones the current account.
   ///
-  /// Feature-owned namespaces are deleted before the core transaction.
+  /// Plugin-owned namespaces are deleted before the core transaction.
   /// Production stores must implement the tombstone and purge operations
   /// transactionally before this operation is enabled.
   Future<void> deleteCurrentUser(

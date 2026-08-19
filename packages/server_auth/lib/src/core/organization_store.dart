@@ -64,7 +64,7 @@ final class AuthOrganizationInvitationAcceptanceResult {
   final AuthOrganizationTeamMember? teamMembership;
 }
 
-/// Feature-owned persistence contract. Implementations must preserve the
+/// Plugin-owned persistence contract. Implementations must preserve the
 /// documented atomicity of every mutating method.
 abstract interface class AuthOrganizationStore {
   FutureOr<AuthOrganizationCreateStoredResult> createOrganization(

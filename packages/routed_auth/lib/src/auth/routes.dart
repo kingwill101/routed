@@ -139,18 +139,18 @@ class AuthRoutes {
 
   void register(Router router, {String? basePath}) {
     final root = basePath ?? manager.options.basePath;
-    final allFeatureEndpoints = manager.runtime.registry.endpoints
+    final allPluginEndpoints = manager.runtime.registry.endpoints
         .where((endpoint) => !endpoint.serverOnly)
         .toList(growable: false);
-    final rootFeatureEndpoints = allFeatureEndpoints
+    final rootPluginEndpoints = allPluginEndpoints
         .where((endpoint) => endpoint.path.startsWith('/.well-known/'))
         .toList(growable: false);
-    final featureEndpoints = allFeatureEndpoints
+    final pluginEndpoints = allPluginEndpoints
         .where((endpoint) => !endpoint.path.startsWith('/.well-known/'))
         .toList(growable: false);
-    for (final endpoint in rootFeatureEndpoints) {
+    for (final endpoint in rootPluginEndpoints) {
       Future<Response> handler(EngineContext ctx) =>
-          _featureOperation(ctx, endpoint);
+          _pluginOperation(ctx, endpoint);
       if (endpoint.method == AuthOperationMethod.get) {
         router.get(endpoint.path, handler);
       }
@@ -212,9 +212,9 @@ class AuthRoutes {
             manager.options.sessionStrategy == AuthSessionStrategy.session) {
           auth.post('/api-keys/exchange', _apiKeyExchange);
         }
-        for (final endpoint in featureEndpoints) {
+        for (final endpoint in pluginEndpoints) {
           Future<Response> handler(EngineContext ctx) =>
-              _featureOperation(ctx, endpoint);
+              _pluginOperation(ctx, endpoint);
           switch (endpoint.method) {
             case AuthOperationMethod.get:
               auth.get(endpoint.path, handler);
@@ -228,7 +228,7 @@ class AuthRoutes {
     );
   }
 
-  Future<Response> _featureOperation(
+  Future<Response> _pluginOperation(
     EngineContext ctx,
     AuthEndpointDescriptor<EngineContext> endpoint,
   ) async {
@@ -275,7 +275,7 @@ class AuthRoutes {
       final activeTeamId = mutableSession
           ? ctx.getSession<String>(_activeTeamKey)
           : null;
-      final featureSessionControl = _RoutedPluginSessionControl(
+      final pluginSessionControl = _RoutedPluginSessionControl(
         manager,
         ctx,
         currentSessionId:
@@ -304,7 +304,7 @@ class AuthRoutes {
                   }
                 }
               : null,
-          sessionControl: featureSessionControl,
+          sessionControl: pluginSessionControl,
         ),
         payload,
       );

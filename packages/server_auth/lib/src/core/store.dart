@@ -286,7 +286,7 @@ abstract interface class AuthAdminStoreCapabilities {
   ///
   /// Implementations must retain the stable user ID and deletion timestamp so
   /// future authentication attempts cannot recreate or reuse the account
-  /// accidentally. Feature-owned namespaces are handled by their contributors
+  /// accidentally. Plugin-owned namespaces are handled by their contributors
   /// before this operation.
   FutureOr<bool> tombstoneUserForAdministration(
     String userId, {
