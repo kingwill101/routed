@@ -9,6 +9,7 @@ import 'jwt_version_store.dart';
 import 'webauthn_store.dart';
 import 'users.dart';
 import 'device_authorization_store.dart';
+import 'email_otp_store.dart';
 
 /// Result of an atomic user create-or-find operation.
 class AuthUserCreateResult {
@@ -257,6 +258,8 @@ abstract interface class AuthStore {
   AuthWebAuthnAuthenticatorStore get webAuthnAuthenticators;
 
   AuthDeviceAuthorizationStore get deviceAuthorizations;
+
+  AuthEmailOtpStore get emailOtps;
 }
 
 /// Optional data-plane operations required by the Admin feature.
@@ -313,7 +316,8 @@ class InMemoryAuthStore implements AuthStore, AuthAdminStoreCapabilities {
       emailChangeTokens = InMemoryAuthEmailChangeTokenStore(),
       webAuthnChallenges = InMemoryAuthWebAuthnChallengeStore(),
       webAuthnAuthenticators = InMemoryAuthWebAuthnAuthenticatorStore(),
-      deviceAuthorizations = InMemoryAuthDeviceAuthorizationStore() {
+      deviceAuthorizations = InMemoryAuthDeviceAuthorizationStore(),
+      emailOtps = InMemoryAuthEmailOtpStore() {
     (credentials as _InMemoryCredentialStore).users = users;
   }
 
@@ -352,6 +356,9 @@ class InMemoryAuthStore implements AuthStore, AuthAdminStoreCapabilities {
 
   @override
   final AuthDeviceAuthorizationStore deviceAuthorizations;
+
+  @override
+  final AuthEmailOtpStore emailOtps;
 
   @override
   Future<List<AuthUser>> listUsersForAdministration() async =>
@@ -395,6 +402,7 @@ class InMemoryAuthStore implements AuthStore, AuthAdminStoreCapabilities {
     await verificationTokens.delete(id);
     await emailChangeTokens.deleteForUser(id);
     await deviceAuthorizations.deleteForUser(id);
+    if (user.email != null) await emailOtps.deleteForEmail(user.email!);
     if (user.email != null) await verificationTokens.delete(user.email!);
     _users.delete(id);
     return true;
@@ -416,6 +424,7 @@ class InMemoryAuthStore implements AuthStore, AuthAdminStoreCapabilities {
     await verificationTokens.delete(id);
     await emailChangeTokens.deleteForUser(id);
     await deviceAuthorizations.deleteForUser(id);
+    if (user.email != null) await emailOtps.deleteForEmail(user.email!);
     if (user.email != null) await verificationTokens.delete(user.email!);
     _users.replaceWithTombstone(id, timestamp);
     return true;
@@ -537,6 +546,7 @@ class CallbackAuthStore implements AuthStore {
     AuthWebAuthnChallengeStore? webAuthnChallenges,
     AuthWebAuthnAuthenticatorStore? webAuthnAuthenticators,
     AuthDeviceAuthorizationStore? deviceAuthorizations,
+    AuthEmailOtpStore? emailOtps,
   }) : users = _CallbackUserStore(
          onFindById: onFindUserById,
          onFindByEmail: onFindUserByEmail,
@@ -607,7 +617,8 @@ class CallbackAuthStore implements AuthStore {
        webAuthnAuthenticators =
            webAuthnAuthenticators ?? InMemoryAuthWebAuthnAuthenticatorStore(),
        deviceAuthorizations =
-           deviceAuthorizations ?? InMemoryAuthDeviceAuthorizationStore();
+           deviceAuthorizations ?? InMemoryAuthDeviceAuthorizationStore(),
+       emailOtps = emailOtps ?? InMemoryAuthEmailOtpStore();
 
   @override
   final AuthUserStore users;
@@ -644,6 +655,9 @@ class CallbackAuthStore implements AuthStore {
 
   @override
   final AuthDeviceAuthorizationStore deviceAuthorizations;
+
+  @override
+  final AuthEmailOtpStore emailOtps;
 }
 
 class _CallbackPasswordResetTokenStore implements AuthPasswordResetTokenStore {

@@ -98,6 +98,10 @@ import 'package:routed_sessions/routed_sessions.dart';
 /// - `POST /oauth/device/approve` approves a device flow from a browser session.
 /// - `POST /oauth/device/deny` denies a device flow from a browser session.
 /// - `POST /oauth/token` polls an approved device flow for an access token.
+/// - `POST /email-otp/send-verification-otp` sends a typed email OTP.
+/// - `POST /email-otp/check-verification-otp` checks an email OTP.
+/// - `POST /sign-in/email-otp` signs in or registers with an email OTP.
+/// - `POST /email-otp/verify-email` verifies the current user's email.
 ///
 /// ## Usage
 /// ```dart

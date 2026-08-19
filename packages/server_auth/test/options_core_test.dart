@@ -312,4 +312,7 @@ final class _DurableAuthStore implements AuthStore {
   @override
   AuthDeviceAuthorizationStore get deviceAuthorizations =>
       _delegate.deviceAuthorizations;
+
+  @override
+  AuthEmailOtpStore get emailOtps => _delegate.emailOtps;
 }

@@ -15,6 +15,8 @@ export 'device_authorization_store.dart';
 export 'device_authorization.dart';
 export 'email_change.dart';
 export 'email_change_token_store.dart';
+export 'email_otp_store.dart';
+export 'email_otp.dart';
 export 'exceptions.dart';
 export 'feature.dart';
 export 'gates.dart';

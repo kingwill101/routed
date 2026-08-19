@@ -4,6 +4,7 @@ import 'dart:convert';
 import 'package:http/http.dart' as http;
 import 'package:http_parser/http_parser.dart' show parseHttpDate;
 
+import 'email_otp_store.dart';
 import 'models.dart';
 
 /// A cookie received from an auth response.
@@ -936,6 +937,58 @@ class AuthClient {
     });
   }
 
+  /// Requests an email OTP for sign-in or email verification.
+  Future<void> sendEmailOtp({
+    required String email,
+    required AuthEmailOtpType type,
+  }) async {
+    await _request(
+      'POST',
+      '/email-otp/send-verification-otp',
+      body: {'email': email, 'type': _emailOtpTypeName(type)},
+    );
+  }
+
+  /// Checks and consumes an email OTP without creating a session.
+  Future<void> checkEmailOtp({
+    required String email,
+    required AuthEmailOtpType type,
+    required String otp,
+  }) async {
+    await _request(
+      'POST',
+      '/email-otp/check-verification-otp',
+      body: {'email': email, 'type': _emailOtpTypeName(type), 'otp': otp},
+    );
+  }
+
+  /// Signs in with an email OTP and stores the returned session cookie.
+  Future<AuthSession> signInWithEmailOtp({
+    required String email,
+    required String otp,
+    String? name,
+    String? image,
+  }) async {
+    final response = await _request(
+      'POST',
+      '/sign-in/email-otp',
+      body: {'email': email, 'otp': otp, 'name': ?name, 'image': ?image},
+    );
+    return _sessionFromBody(response.body);
+  }
+
+  /// Verifies the current user's email with an OTP.
+  Future<AuthUser> verifyEmailWithOtp({required String otp}) async {
+    final response = await _mutatingRequest('POST', '/email-otp/verify-email', {
+      'otp': otp,
+    });
+    final value = _mapBody(response.body)['user'];
+    if (value is! Map) {
+      throw const FormatException('Invalid email OTP response');
+    }
+    return AuthUser.fromJson(Map<String, dynamic>.from(value));
+  }
+
   /// Obtains and caches the CSRF token used by state-changing requests.
   Future<String> getCsrfToken() async {
     return transport.getCsrfToken();
@@ -1530,6 +1583,19 @@ DateTime _requiredDate(Map<String, dynamic> json, String key) {
 DateTime? _optionalDate(Map<String, dynamic> json, String key) {
   final raw = json[key];
   return raw == null ? null : DateTime.tryParse(raw.toString());
+}
+
+String _emailOtpTypeName(AuthEmailOtpType type) {
+  switch (type) {
+    case AuthEmailOtpType.signIn:
+      return 'sign-in';
+    case AuthEmailOtpType.emailVerification:
+      return 'email-verification';
+    case AuthEmailOtpType.forgetPassword:
+      return 'forget-password';
+    case AuthEmailOtpType.changeEmail:
+      return 'change-email';
+  }
 }
 
 Duration _requiredSeconds(Map<String, dynamic> json, String key) {

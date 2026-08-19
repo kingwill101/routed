@@ -72,6 +72,9 @@ final class _RecordingAuthStore implements AuthStore {
   @override
   AuthDeviceAuthorizationStore get deviceAuthorizations =>
       _delegate.deviceAuthorizations;
+
+  @override
+  AuthEmailOtpStore get emailOtps => _delegate.emailOtps;
 }
 
 final class _RecordingSessionStore implements AuthSessionStore {
