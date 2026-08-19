@@ -1072,7 +1072,8 @@ class AuthTwoFactorStatus {
 /// [verifyTotp] or [useRecoveryCode] to gate a pending sign-in challenge;
 /// pending sign-in orchestration is intentionally kept in the adapter so the
 /// feature remains framework-agnostic.
-final class TwoFactorFeature<TContext> implements AuthFeature<TContext> {
+final class TwoFactorFeature<TContext>
+    implements AuthFeature<TContext>, AuthUserDataDeletionContributor {
   TwoFactorFeature({
     required this.store,
     required this.secretProtector,
@@ -1188,6 +1189,29 @@ final class TwoFactorFeature<TContext> implements AuthFeature<TContext> {
   void configure(AuthFeatureContext<TContext> context) {
     // The feature owns its additional persistence contract. The shared store
     // remains available for user/session lookups in future composed hooks.
+  }
+
+  @override
+  String get userDataNamespace => 'two_factor';
+
+  @override
+  Future<void> validateUserDeletion(String userId) async {}
+
+  @override
+  Future<void> deleteUserData(String userId) async {
+    await store.delete(userId);
+    final now = DateTime.now().toUtc();
+    final trusted = trustedDeviceStore;
+    if (trusted is InMemoryAuthTwoFactorTrustedDeviceStore) {
+      trusted._records.removeWhere((_, record) => record.userId == userId);
+    } else {
+      await trusted.revokeAll(userId, now: now);
+    }
+    final challenges = challengeStore;
+    if (challenges is InMemoryAuthTwoFactorChallengeStore) {
+      challenges._records.removeWhere((_, record) => record.userId == userId);
+    }
+    await stepUpStore?.revokeAllForUser(userId);
   }
 
   /// Starts a short-lived challenge for a user whose TOTP is enabled.

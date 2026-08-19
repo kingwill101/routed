@@ -201,3 +201,33 @@ Use `Haigate.organizationContext`, `Haigate.canInOrganization`, and
 `Haigate.ownsOrCanInOrganization` for explicit tenant membership, permission,
 and resource-owner checks. These helpers do not merge organization roles into
 the user's global principal.
+
+## Administration
+
+Compose `AdminFeature<EngineContext>` to opt in. `AuthRoutes` automatically
+mounts its portable descriptors under `/auth/admin/`; without the feature,
+those routes do not exist. The API covers user create/list/get/update/delete,
+role/password changes, bans, permission checks, target-session administration,
+and guarded server-session impersonation.
+
+All operations require an authenticated session. Mutations use `POST` and
+inherit Routed's origin, Fetch Metadata, CSRF, namespaced rate-limit, generic
+error, and retry-header handling. User reads and session reads return safe
+projections: password hashes, raw session tokens, token hashes, provider
+tokens, and internal hook errors are never serialized.
+
+Routed consults feature authentication policies before a two-factor challenge,
+before issuing a session, and whenever a session is resolved. Consequently an
+active Admin ban blocks credentials, email, OAuth, two-factor completion,
+server-session reuse, and Routed-issued JWT reuse. Sensitive mutations revoke
+server sessions and rotate JWT versions.
+
+Impersonation is intentionally unavailable with JWT sessions. With server
+sessions it rotates the current session, records the original administrator in
+server-side metadata, defaults to one hour, prevents chaining, and restores a
+fresh administrator session when stopped. The impersonated identity receives
+only the target user's roles and permissions.
+
+See the documentation site's Administrative Auth guide for setup, custom
+permissions, adapter requirements, typed-client usage, and the complete route
+catalogue.

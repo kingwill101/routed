@@ -1,0 +1,275 @@
+---
+title: Administrative Auth
+description: Manage users, roles, bans, sessions, deletion, and impersonation with Routed auth
+authors: routed
+sidebar_position: 6
+---
+
+# Administrative Auth
+
+The Admin capability adds privileged user and session management to Routed
+auth. It is **opt-in**: no admin routes, permissions, persistence requirements,
+or ban checks exist unless you add `AdminFeature` to `AuthOptions.features`.
+
+This feature follows Better Auth's Admin plugin semantics where they fit
+Routed, while keeping Dart APIs typed and persistence independent. Global
+admin roles remain `AuthUser.roles`; organization roles are a separate tenant
+scope and never grant global administration.
+
+## Configure the feature
+
+Use the same core store for normal auth and the Admin store. The in-memory
+stores below are suitable only for tests and local development:
+
+```dart
+import 'package:routed/routed.dart';
+
+final authStore = InMemoryAuthStore();
+final adminStore = InMemoryAuthAdminStore(authStore);
+
+final adminFeature = AdminFeature<EngineContext>(
+  store: adminStore,
+  options: const AuthAdminOptions<EngineContext>(
+    adminRoles: {'admin'},
+    // Useful for bootstrapping the first administrator. Prefer roles after
+    // the application has an administrator-management workflow.
+    adminUserIds: {'bootstrap-user-id'},
+  ),
+);
+
+engine.container.instance<AuthOptions<EngineContext>>(
+  AuthOptions<EngineContext>(
+    providers: providers,
+    store: authStore,
+    storeMode: AuthStoreMode.ephemeral,
+    features: [adminFeature],
+    sessionStrategy: AuthSessionStrategy.session,
+  ),
+);
+```
+
+`AuthRoutes` discovers the feature's descriptors and mounts them beneath the
+configured auth base path. With the default base path, the routes appear under
+`/auth/admin/*`. If the feature is absent, those paths return `404`.
+
+For a durable deployment, implement `AuthAdminStore` against the same database
+as `AuthStore`. Do not wrap an unrelated user database: Admin mutations must
+change the authoritative records used by sign-in and session resolution.
+
+## Bootstrap and authorization
+
+Administrators are recognized from either:
+
+- an ID in `adminUserIds`; or
+- a normalized global role in `adminRoles` (default: `admin`).
+
+Authorization re-reads the actor from the core user store for every operation.
+Changing the role in persistence therefore takes effect immediately even when
+an old session still contains a stale role claim.
+
+The default role map is:
+
+| Role | Permissions |
+| --- | --- |
+| `admin` | User create/list/get/update, email/password/role changes, ban, delete, impersonate, and session list/revoke |
+| `user` | No administrative permissions |
+
+Admin-to-admin impersonation is deliberately excluded. Add the explicit
+`user:impersonate-admins` permission only to a role that should have it:
+
+```dart
+final adminFeature = AdminFeature<EngineContext>(
+  store: adminStore,
+  options: const AuthAdminOptions<EngineContext>(
+    adminRoles: {'admin', 'support-supervisor'},
+    roles: {
+      'support-supervisor': {
+        'user': ['get', 'list', 'impersonate', 'impersonate-admins'],
+        'session': ['list'],
+      },
+    },
+  ),
+);
+```
+
+Multiple roles use union semantics. Resource and action names are normalized.
+The feature blocks self-ban, self-delete, self-impersonation, and removal of
+the actor's own effective admin access. Store transactions also preserve at
+least one effective administrator under concurrent changes.
+
+For a trusted bootstrap or project command, call
+`adminFeature.trustedGrantAdministrator(userId)`. This Dart-only method is not
+an HTTP endpoint.
+
+## User management and bans
+
+Public user creation requires a canonical email, a name, and a password that
+passes `AuthOptions.passwordPolicy`. Passwords are hashed with the configured
+`AuthOptions.passwordHasher`; raw passwords never enter hooks, events,
+warnings, stored attributes, or response models.
+
+`update-user` changes name, image, sanitized attributes, and optionally email.
+Email changes require `user:set-email`. Roles and passwords have dedicated
+operations so their permissions and audit events remain explicit.
+
+Email, password, role, and ban changes revoke all target server sessions and
+rotate the user's JWT version. Existing sessions do not retain old privileges.
+The default ban reason is `No reason provided`; a ban can be permanent or have
+an expiry. Expired bans become inactive without deleting their audit history.
+
+Routed evaluates feature authentication policy:
+
+- after credentials resolve and before a two-factor challenge;
+- before any provider issues a session; and
+- whenever a server or JWT session is resolved.
+
+An active ban therefore blocks credentials, email, OAuth, two-factor
+completion, server-session reuse, and Routed-issued JWT reuse. Public failures
+use the normal sanitized auth error path.
+
+## Sessions and impersonation
+
+Admin session responses contain public record IDs, times, authentication
+method, IP/user-agent metadata, active state, and optional impersonation actor.
+They never contain the client token or persisted token hash. Revocation
+requires both the target user ID and public session ID, preventing accidental
+cross-user revocation.
+
+Impersonation supports server sessions only. Starting it:
+
+1. verifies the actor and target again;
+2. rejects self, banned targets, chained impersonation, and administrator
+   targets without the elevated permission;
+3. revokes and rotates the actor's current session;
+4. issues a target session marked with the original actor ID; and
+5. limits that session to one hour by default.
+
+The impersonated identity receives only the target user's permissions.
+Stopping revokes the impersonated session and issues a fresh session for the
+original actor. If the actor was deleted or banned, Routed signs out instead.
+JWT configurations return `impersonation_requires_server_session`; changing
+the current JWT identity in place would obscure token provenance and revocation.
+
+## Hard deletion and adapters
+
+`remove-user` is a hard delete. A production `AuthAdminStore` must make the
+entire operation atomic and remove:
+
+- the core user and password credentials;
+- linked provider accounts;
+- server sessions and JWT-version state;
+- verification and password-reset state;
+- Admin ban state; and
+- every composed feature namespace, including two-factor/trusted-device state
+  and organization/team membership and invitation relationships.
+
+Use `AuthAdminOptions.validateDeletion` for application invariants that must be
+checked before the transaction, such as rejecting deletion of a last
+organization owner:
+
+```dart
+options: AuthAdminOptions<EngineContext>(
+  validateDeletion: (userId) async {
+    // Query through your durable organization adapter inside the same
+    // transaction used by AuthAdminStore.deleteUser.
+    await organizationDeletionPolicy.requireDeletable(userId);
+  },
+),
+```
+
+The durable Admin adapter still owns the atomic transaction; a validation
+callback is not a substitute for database constraints or transactional
+cascades. `AdminFeature.persistenceSchemas` advertises the logical ban-state
+entity and required atomic operations without prescribing SQL, D1, table
+names, migrations, or query builders.
+
+During runtime freeze, the in-memory Admin store automatically discovers
+composed `AuthUserDataDeletionContributor`s. The organization feature uses
+this path to reject last-owner deletion and remove memberships, team
+memberships, and related invitations in local/test deployments. Durable
+adapters consume the same logical topology but must execute all namespaces in
+their own transaction.
+
+## Hooks, warnings, and audit events
+
+`AuthAdminHooks` provides before/after hooks for user, role, ban, session,
+deletion, and impersonation operations. Before hooks may veto or transform
+non-secret drafts. Once a store mutation commits, an after hook or event sink
+cannot roll it back. The response contains committed data plus a typed warning,
+and `reportFailure` receives the original error for internal diagnostics.
+
+Lifecycle events contain the operation, actor ID, target user ID, timestamp,
+and sanitized data. Passwords, cookies, JWTs, token hashes, provider tokens,
+and internal exceptions are never emitted.
+
+## Typed client
+
+Share one transport so core and Admin clients reuse cookies, bearer auth, CSRF
+state, retries, timeouts, and bounded error parsing:
+
+```dart
+final transport = AuthClientTransport(
+  baseUrl: Uri.parse('https://app.example.com'),
+  cookieStore: persistentCookieStore,
+);
+
+final auth = AuthClient(
+  baseUrl: Uri.parse('https://app.example.com'),
+  transport: transport,
+);
+final admin = AuthAdminClient(transport: transport);
+
+final page = await admin.listUsers(
+  search: 'alex',
+  role: 'user',
+  limit: 50,
+);
+
+final result = await admin.banUser(
+  userId: page.items.first.user.id,
+  reason: 'Terms violation',
+  expiresAt: DateTime.now().toUtc().add(const Duration(days: 7)),
+);
+
+for (final warning in result.warnings) {
+  logger.warning(warning.code);
+}
+```
+
+Pagination defaults to 100 and is bounded by `maximumPageSize`. Search covers
+ID, email, and name; typed filters cover ID, email, name, role, and active ban
+state. Sorting is deterministic by ID, email, or name.
+
+`localRoleAllows` evaluates static role maps without a network call for UI
+hints. It is not an authorization boundary. Use `hasPermission` for a server
+decision, especially when checking a different user.
+
+Admin roles are ordinary global `AuthUser.roles`, so existing Routed guards,
+RBAC abilities, policy bindings, and Haigate gates can protect application
+routes with them. Admin feature permissions remain a separate check for the
+Admin API itself. A role change revokes the target's sessions; the new global
+role set reaches guards and gates only through a newly authenticated session.
+
+## Route catalogue
+
+| Method | Path | Purpose |
+| --- | --- | --- |
+| GET | `list-users` | Search, filter, sort, and page users |
+| GET | `get-user` | Read one safe user projection |
+| POST | `create-user` | Create user and password credential |
+| POST | `update-user` | Change profile, attributes, or email |
+| POST | `set-role` | Replace global roles |
+| POST | `set-user-password` | Create or replace a password credential |
+| POST | `ban-user` / `unban-user` | Change ban state |
+| POST | `list-user-sessions` | List safe target-session projections |
+| POST | `revoke-user-session` | Revoke one target session |
+| POST | `revoke-user-sessions` | Revoke all target sessions |
+| POST | `impersonate-user` | Start server-session impersonation |
+| POST | `stop-impersonating` | Restore the original actor |
+| POST | `remove-user` | Atomically hard-delete a user |
+| POST | `has-permission` | Check an Admin permission |
+
+Prefix every path with `/auth/admin/` when using the default auth base path.
+All operations require authentication. POST operations automatically receive
+Routed's browser-origin, Fetch Metadata, CSRF, namespaced rate-limit,
+generic-error, warning, and retry-header behavior from their descriptors.

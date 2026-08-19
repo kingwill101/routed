@@ -201,7 +201,8 @@ final class OrganizationFeature<TContext>
         AuthEndpointContributor<TContext>,
         AuthPersistenceContributor,
         AuthClientOperationContributor,
-        AuthRateLimitContributor {
+        AuthRateLimitContributor,
+        AuthUserDataDeletionContributor {
   OrganizationFeature({
     required this.store,
     this.options = const AuthOrganizationOptions(),
@@ -223,6 +224,39 @@ final class OrganizationFeature<TContext>
   @override
   void configure(AuthFeatureContext<TContext> context) {
     _userStore ??= context.store.users;
+  }
+
+  @override
+  String get userDataNamespace => 'organization';
+
+  @override
+  Future<void> validateUserDeletion(String userId) async {
+    final target = store;
+    if (target is! AuthOrganizationUserDeletionStore) {
+      throw StateError(
+        'The organization store cannot participate in hard user deletion.',
+      );
+    }
+    await (target as AuthOrganizationUserDeletionStore).validateUserDeletion(
+      userId,
+      creatorRole: _creatorRole,
+    );
+  }
+
+  @override
+  Future<void> deleteUserData(String userId) async {
+    final target = store;
+    if (target is! AuthOrganizationUserDeletionStore) {
+      throw StateError(
+        'The organization store cannot participate in hard user deletion.',
+      );
+    }
+    final user = await _userStore?.findById(userId.trim());
+    await (target as AuthOrganizationUserDeletionStore).deleteUserData(
+      userId,
+      email: user?.email,
+      creatorRole: _creatorRole,
+    );
   }
 
   static const List<String> publicOperationIds = [

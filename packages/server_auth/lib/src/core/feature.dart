@@ -1,6 +1,8 @@
 import 'dart:async';
 
 import 'models.dart';
+import 'password_hasher.dart';
+import 'password_policy.dart';
 import 'rate_limit.dart';
 import 'store.dart';
 
@@ -27,6 +29,7 @@ final class AuthOperationInvocation<TContext> {
     this.activeOrganizationId,
     this.activeTeamId,
     this.writeActiveSelection,
+    this.sessionControl,
   });
 
   final TContext context;
@@ -36,6 +39,53 @@ final class AuthOperationInvocation<TContext> {
   final String? activeTeamId;
   final FutureOr<void> Function(String? organizationId, String? teamId)?
   writeActiveSelection;
+  final AuthFeatureSessionControl? sessionControl;
+}
+
+/// Host-owned session operations available to portable feature endpoints.
+abstract interface class AuthFeatureSessionControl {
+  AuthSessionStrategy get strategy;
+  String? get currentSessionId;
+  FutureOr<AuthSession> replaceIdentity(
+    AuthUser user, {
+    required String authenticationMethod,
+    Duration? maximumAge,
+    String? impersonatedBy,
+  });
+  FutureOr<void> signOut();
+}
+
+enum AuthAuthenticationPolicyPhase { beforeSessionIssue, resolveSession }
+
+final class AuthAuthenticationPolicyRequest<TContext> {
+  const AuthAuthenticationPolicyRequest({
+    required this.context,
+    required this.user,
+    required this.phase,
+  });
+
+  final TContext context;
+  final AuthUser user;
+  final AuthAuthenticationPolicyPhase phase;
+}
+
+/// Optional feature contribution consulted at every authentication boundary.
+abstract interface class AuthAuthenticationPolicyContributor<TContext> {
+  FutureOr<void> enforceAuthenticationPolicy(
+    AuthAuthenticationPolicyRequest<TContext> request,
+  );
+}
+
+/// Feature-owned user data that participates in administrative hard deletion.
+abstract interface class AuthUserDataDeletionContributor {
+  String get userDataNamespace;
+  FutureOr<void> validateUserDeletion(String userId);
+  FutureOr<void> deleteUserData(String userId);
+}
+
+/// Optional second-pass composition after every feature has been registered.
+abstract interface class AuthFeatureTopologyAware<TContext> {
+  void composeAuthFeatureTopology(Iterable<AuthFeature<TContext>> features);
 }
 
 abstract interface class AuthEndpointDescriptor<TContext> {
@@ -192,9 +242,17 @@ final class AuthAtomicOperationDescriptor {
 }
 
 class AuthFeatureContext<TContext> {
-  const AuthFeatureContext({required this.store});
+  const AuthFeatureContext({
+    required this.store,
+    this.passwordHasher,
+    this.passwordPolicy = const PasswordPolicy(),
+    this.sessionStrategy = AuthSessionStrategy.session,
+  });
 
   final AuthStore store;
+  final PasswordHasher? passwordHasher;
+  final PasswordPolicy passwordPolicy;
+  final AuthSessionStrategy sessionStrategy;
 }
 
 abstract interface class AuthFeature<TContext> {
@@ -204,9 +262,20 @@ abstract interface class AuthFeature<TContext> {
 }
 
 class AuthFeatureRegistry<TContext> {
-  AuthFeatureRegistry({required AuthStore store}) : _store = store;
+  AuthFeatureRegistry({
+    required AuthStore store,
+    PasswordHasher? passwordHasher,
+    PasswordPolicy passwordPolicy = const PasswordPolicy(),
+    AuthSessionStrategy sessionStrategy = AuthSessionStrategy.session,
+  }) : _store = store,
+       _passwordHasher = passwordHasher ?? Argon2idPasswordHasher(),
+       _passwordPolicy = passwordPolicy,
+       _sessionStrategy = sessionStrategy;
 
   final AuthStore _store;
+  final PasswordHasher _passwordHasher;
+  final PasswordPolicy _passwordPolicy;
+  final AuthSessionStrategy _sessionStrategy;
   final Map<String, AuthFeature<TContext>> _features =
       <String, AuthFeature<TContext>>{};
   final Map<String, AuthEndpointDescriptor<TContext>> _endpoints =
@@ -250,7 +319,14 @@ class AuthFeatureRegistry<TContext> {
     }
 
     _features[id] = feature;
-    feature.configure(AuthFeatureContext<TContext>(store: _store));
+    feature.configure(
+      AuthFeatureContext<TContext>(
+        store: _store,
+        passwordHasher: _passwordHasher,
+        passwordPolicy: _passwordPolicy,
+        sessionStrategy: _sessionStrategy,
+      ),
+    );
     for (final endpoint in contributed) {
       _endpoints[endpoint.id.trim()] = endpoint;
       _endpointKeys.add(
@@ -259,7 +335,15 @@ class AuthFeatureRegistry<TContext> {
     }
   }
 
-  void freeze() => _frozen = true;
+  void freeze() {
+    if (_frozen) return;
+    final topology = List<AuthFeature<TContext>>.unmodifiable(_features.values);
+    for (final feature
+        in topology.whereType<AuthFeatureTopologyAware<TContext>>()) {
+      feature.composeAuthFeatureTopology(topology);
+    }
+    _frozen = true;
+  }
 
   AuthFeature<TContext>? find(String id) => _features[id.trim()];
 
@@ -270,6 +354,16 @@ class AuthFeatureRegistry<TContext> {
 
   Iterable<AuthEndpointDescriptor<TContext>> get endpoints =>
       List<AuthEndpointDescriptor<TContext>>.unmodifiable(_endpoints.values);
+
+  Future<void> enforceAuthenticationPolicy(
+    AuthAuthenticationPolicyRequest<TContext> request,
+  ) async {
+    for (final feature
+        in _features.values
+            .whereType<AuthAuthenticationPolicyContributor<TContext>>()) {
+      await feature.enforceAuthenticationPolicy(request);
+    }
+  }
 
   Iterable<AuthPersistenceSchema> get persistenceSchemas =>
       List<AuthPersistenceSchema>.unmodifiable(

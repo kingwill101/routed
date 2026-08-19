@@ -128,7 +128,7 @@ The work is intentionally split between framework-agnostic capabilities in
 
 - [x] Add first-class organizations/tenants, memberships, invitations, and
   organization-scoped roles.
-- [ ] Add administrative user/session/account management APIs with explicit
+- [x] Add administrative user/session/account management APIs with explicit
   authorization checks and audit events.
 - [x] Extend the existing RBAC, policy, and Haigate APIs to support tenant
   context and resource ownership without relying on global role strings.

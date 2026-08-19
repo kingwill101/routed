@@ -475,6 +475,7 @@ class AuthSessionRecord {
     this.revokedAt,
     this.ipAddress,
     this.userAgent,
+    this.impersonatedBy,
   });
 
   /// Stable persistence identifier for this session record.
@@ -507,6 +508,9 @@ class AuthSessionRecord {
   /// Authentication mechanism that issued the session.
   final String authenticationMethod;
 
+  /// Original administrator for an impersonated server session.
+  final String? impersonatedBy;
+
   /// Whether this record is valid at [now].
   bool isActive({DateTime? now}) {
     final current = (now ?? DateTime.now()).toUtc();
@@ -526,6 +530,7 @@ class AuthSessionRecord {
       revokedAt: revokedAt ?? this.revokedAt,
       ipAddress: ipAddress,
       userAgent: userAgent,
+      impersonatedBy: impersonatedBy,
     );
   }
 
@@ -541,6 +546,7 @@ class AuthSessionRecord {
     'ip_address': ipAddress,
     'user_agent': userAgent,
     'authentication_method': authenticationMethod,
+    'impersonated_by': impersonatedBy,
   };
 }
 
