@@ -1,3 +1,11 @@
+## 0.1.4
+
+- Updated dependency constraints for the typed core and feature adapter
+  release.
+- Updated Turbo request and response helpers and examples for the current
+  Routed context APIs.
+- Refreshed the integration dependencies and browser-test coverage.
+
 ## 0.1.2
 
 - Fixed "Cannot modify unmodifiable map" error in `_attachLoggingContext` when
@@ -13,4 +21,3 @@
   utilities, and WebSocket broadcasting adapters for the routed framework.
 - Modularized the Hotwire todo example and refreshed docs/config to match the
   latest workspace conventions.
-

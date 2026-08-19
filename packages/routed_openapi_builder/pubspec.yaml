@@ -12,8 +12,8 @@ resolution: workspace
 environment:
   sdk: ">=3.9.0 <4.0.0"
 dependencies:
-  routed_core: ^0.3.3
-  routed_openapi: ^0.1.0
+  routed_core: ">=0.4.0 <1.0.0"
+  routed_openapi: ">=0.1.0 <1.0.0"
   analyzer: ^10.0.1
   build: ^4.0.0
   source_gen: ^4.0.1

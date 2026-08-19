@@ -15,7 +15,7 @@ dependencies:
   uuid: ^4.5.1
   file: ^7.0.1
   collection:
-  routed_node: ^0.1.0
+  routed_node: ">=0.1.0 <1.0.0"
 dev_dependencies:
   routed_testing:
   server_testing:
@@ -23,4 +23,3 @@ dev_dependencies:
 tags:
   - example
   - routed
-

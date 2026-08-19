@@ -1,6 +1,6 @@
 name: oauth_keycloak
 version: 0.0.1
-description: Example Routed app showcasing configuration loader and CLI integration.
+description: Example Routed app showcasing typed Keycloak authentication configuration.
 tags:
   - example
   - routed

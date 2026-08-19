@@ -1,5 +1,5 @@
 name: config_demo
-description: Example Routed app showcasing configuration loader and CLI integration.
+description: Example Routed app showcasing typed provider configuration.
 tags:
   - example
   - routed
@@ -15,10 +15,5 @@ environment:
 
 dependencies:
   routed:
-  file: ^7.0.1
-  path: ^1.9.1
-
-  routed_storage: any
-  args: any
 dev_dependencies:
   test: ^1.29.0

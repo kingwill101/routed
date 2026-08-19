@@ -9,8 +9,8 @@ environment:
   sdk: '>=3.9.0 <4.0.0'
 
 dependencies:
-  routed_core: ^0.3.3
-  routed_node: ^0.1.0
+  routed_core: ">=0.4.0 <1.0.0"
+  routed_node: ">=0.1.0 <1.0.0"
   web: ^1.1.1
 
 dev_dependencies:

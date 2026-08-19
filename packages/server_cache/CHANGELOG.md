@@ -1,3 +1,14 @@
+## 0.2.0
+
+- Replace map-based store configuration and string-driver resolution with
+  concrete `Store` registration and typed `StoreConfiguration` factories.
+- Made store-only-if-absent operations atomic across the file, Redis, array,
+  and null stores.
+- Corrected file-store TTL handling and namespaced tagged-cache keys to avoid
+  cross-scope collisions.
+- Made tag invalidation and file-lock operations consistently await their
+  backing store writes.
+
 ## 0.1.0
 
 - Initial extraction from `server_data/src/cache` (PR F)

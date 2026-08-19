@@ -1,3 +1,9 @@
+## Unreleased
+
+- Replace generated schema/default/field inspection with the Dart type of each
+  provider's typed configuration object.
+- Remove the unused `json_schema_builder` dependency from the analyzer package.
+
 ## 0.1.0
 
 - Initial extraction from `routed`.

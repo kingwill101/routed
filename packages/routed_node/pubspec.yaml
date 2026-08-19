@@ -18,7 +18,7 @@ environment:
 
 dependencies:
   crypto: ^3.0.0
-  routed_core: ^0.3.3
+  routed_core: ">=0.4.0 <1.0.0"
   web: ^1.1.1
 
 dev_dependencies:

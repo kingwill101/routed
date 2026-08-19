@@ -1,3 +1,33 @@
+## 0.4.0
+
+### Breaking configuration API
+- Make typed provider configuration and `ConfigStore` the only supported
+  application configuration surface. Remove the YAML loader, provider
+  manifest, config registry, generated field metadata, and the redundant
+  `package:routed_core/providers.dart` sub-barrel.
+- Simplify driver registries to typed builders and optional validators; driver
+  documentation callbacks and string `requiresConfig` paths are removed.
+- Remove the remaining JSON-schema/config-spec metadata from core logging,
+  routing, and shutdown surfaces; those settings are now supplied as typed
+  Dart configuration values.
+- Remove map-based routing and logging-channel configuration factories; use
+  `RoutingConfig` and typed logging channel constructors directly. Built-in
+  logging channels no longer use driver strings or option maps; custom drivers
+  use an explicit `CustomLoggingChannelConfig` escape hatch.
+- Remove the legacy mutable `Config` store, raw-config zone helpers, and
+  configuration reload events from the core package.
+- Remove the legacy mutable global `Environment` wrapper and `.env` loading;
+  application runtime values belong in `RuntimeContext`.
+
+### Portability
+- Add host-neutral `IpAddress` parsing and `NetworkMatcher.containsText` so
+  trusted-proxy and IP-filter rules can run on Fetch/worker runtimes without
+  invoking `dart:io` socket parsing.
+
+### Maintenance
+- Remove stale monolithic-package analyzer exclusions and suppressions, along
+  with the obsolete cross-package custom-driver example from `routed_core`.
+
 ## 0.3.3
 
 ### Transport

@@ -1,6 +1,6 @@
 name: server_cache
 description: Framework-agnostic cache runtime for server ecosystems (portable, from server_data/cache).
-version: 0.1.0
+version: 0.2.0
 repository: https://github.com/kingwill101/routed/tree/master/packages/server_cache
 tags:
   - cache
@@ -18,7 +18,7 @@ dependencies:
   crypto: ^3.0.0
   file: ^7.0.1
   redis: ^4.0.0
-  server_contracts: ^0.1.0
+  server_contracts: ">=0.1.0 <1.0.0"
   storage_fs: ^0.1.0
 
 dev_dependencies:
