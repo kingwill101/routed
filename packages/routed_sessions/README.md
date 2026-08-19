@@ -14,6 +14,11 @@ dependencies:
   server_sessions: ^0.1.0
 ```
 
+Routed's default session cookies are `Secure`, `HttpOnly`, and
+`SameSite=Lax`. For local HTTP-only development, opt out explicitly on the
+session configuration with `secure: false`; production deployments should
+keep the secure default.
+
 ## Usage
 
 ```dart

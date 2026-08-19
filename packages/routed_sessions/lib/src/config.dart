@@ -18,7 +18,7 @@ class SessionConfig implements ValidatableConfiguration {
   /// The path for which the cookie is valid. Defaults to '/'.
   final String path;
 
-  /// Whether the cookie should only be sent over HTTPS. Defaults to `false`.
+  /// Whether the cookie should only be sent over HTTPS. Defaults to `true`.
   final bool secure;
 
   /// Whether the cookie should be marked as HttpOnly, preventing client-side JavaScript access. Defaults to `true`.
@@ -55,7 +55,7 @@ class SessionConfig implements ValidatableConfiguration {
     required this.store,
     this.maxAge = const Duration(hours: 1),
     this.path = '/',
-    this.secure = false,
+    this.secure = true,
     this.httpOnly = true,
     SessionOptions? defaultOptions,
     this.expireOnClose = false,
@@ -70,7 +70,7 @@ class SessionConfig implements ValidatableConfiguration {
              maxAge: expireOnClose ? null : maxAge.inSeconds,
              secure: secure,
              httpOnly: httpOnly,
-             sameSite: sameSite,
+             sameSite: sameSite ?? SameSite.lax,
              partitioned: partitioned,
            ),
        codecs = codecs ?? const [];

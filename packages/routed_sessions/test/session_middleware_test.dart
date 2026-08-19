@@ -1,3 +1,6 @@
+import 'dart:convert';
+import 'dart:io';
+
 import 'package:routed_core/routed_core.dart';
 import 'package:routed_sessions/routed_sessions.dart';
 import 'package:routed_testing/routed_testing.dart';
@@ -27,6 +30,57 @@ void main() {
       EngineContextHelpers(ctx).string(text);
 
   group('sessionMiddleware lifecycle', () {
+    test(
+      'session cookie defaults are secure with an explicit local opt-out',
+      () {
+        final secure = SessionConfig.cookie(
+          appKey:
+              'base64:${base64Encode(List<int>.generate(32, (i) => i + 1))}',
+        );
+        expect(secure.secure, isTrue);
+        expect(secure.httpOnly, isTrue);
+        expect(secure.sameSite, SameSite.lax);
+
+        final local = SessionConfig.cookie(
+          appKey:
+              'base64:${base64Encode(List<int>.generate(32, (i) => i + 1))}',
+          options: SessionOptions(
+            secure: false,
+            httpOnly: true,
+            sameSite: SameSite.lax,
+          ),
+        );
+        expect(local.secure, isFalse);
+        expect(local.httpOnly, isTrue);
+        expect(local.sameSite, SameSite.lax);
+      },
+    );
+
+    test(
+      'default Routed session cookies use safe browser attributes',
+      () async {
+        final defaultEngine = Engine(
+          providers: [...Engine.defaultProviders, RoutedSessionsProvider()],
+        )..addGlobalMiddleware(sessionMiddleware());
+        defaultEngine.get('/cookie', (ctx) => ctx.string('ok'));
+        await defaultEngine.initialize();
+        addTearDown(defaultEngine.close);
+
+        final defaultClient = TestClient.inMemory(
+          RoutedRequestHandler(defaultEngine),
+        );
+        addTearDown(defaultClient.close);
+
+        final response = await defaultClient.get('/cookie');
+        final cookie = response.cookie('routed_session');
+
+        expect(cookie, isNotNull);
+        expect(cookie!.secure, isTrue);
+        expect(cookie.httpOnly, isTrue);
+        expect(cookie.sameSite, SameSite.lax);
+      },
+    );
+
     test(
       'creates a session, exposes it under ctx, and persists a cookie',
       () async {

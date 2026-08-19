@@ -10,3 +10,8 @@
 
 ## 0.1.0
 - Initial adapter (PR G)
+## Unreleased
+
+- Hardened default Routed session cookies with `Secure`, `HttpOnly`, and
+  `SameSite=Lax`; local HTTP deployments must explicitly opt out with
+  `secure: false`.

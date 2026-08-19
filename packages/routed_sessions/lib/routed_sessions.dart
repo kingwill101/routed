@@ -187,6 +187,7 @@ Middleware sessionMiddleware([SessionStore? store]) {
       // No explicit store — fall back to cookie store derived from config or default
       final SessionOptions opts = SessionOptions(
         path: '/',
+        secure: true,
         httpOnly: true,
         sameSite: SameSite.lax,
       );
@@ -211,7 +212,12 @@ Middleware sessionMiddleware([SessionStore? store]) {
         name: cookieName,
         options: resolvedStore is CookieStore
             ? resolvedStore.defaultOptions
-            : SessionOptions(),
+            : SessionOptions(
+                path: '/',
+                secure: true,
+                httpOnly: true,
+                sameSite: SameSite.lax,
+              ),
       );
     }
 
@@ -233,9 +239,19 @@ class RoutedSessionsProvider extends ServiceProvider
           SessionConfig(
             store: MemorySessionStore(
               codecs: [SecureCookie(useEncryption: true, useSigning: true)],
-              defaultOptions: SessionOptions(path: '/', httpOnly: true),
+              defaultOptions: SessionOptions(
+                path: '/',
+                secure: true,
+                httpOnly: true,
+                sameSite: SameSite.lax,
+              ),
             ),
-            defaultOptions: SessionOptions(path: '/', httpOnly: true),
+            defaultOptions: SessionOptions(
+              path: '/',
+              secure: true,
+              httpOnly: true,
+              sameSite: SameSite.lax,
+            ),
           );
 
   @override
