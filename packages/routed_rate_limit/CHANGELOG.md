@@ -3,6 +3,8 @@
 - Updated the rate-limit adapter documentation and provider setup examples for
   the current portable runtime.
 - Aligned the adapter with the serialized, method-aware rate-limit runtime.
+- Added `RoutedAuthRateLimiter` so existing rate-limit policies can enforce
+  `server_auth` operations through `AuthOptions.rateLimiter`.
 
 ## 0.1.0
 - Initial adapter (PR I)

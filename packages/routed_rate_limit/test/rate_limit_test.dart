@@ -1,6 +1,6 @@
 import 'package:routed_core/routed_core.dart';
-import 'package:test/test.dart';
 import 'package:routed_rate_limit/routed_rate_limit.dart';
+import 'package:test/test.dart';
 
 class _BlockingBackend implements RateLimiterBackend {
   @override
@@ -107,6 +107,59 @@ void main() {
         expect(response.headers.get(HttpHeaders.retryAfterHeader), '4');
         expect(response.bodyText, 'Too Many Requests');
       });
+    });
+
+    group('RoutedAuthRateLimiter', () {
+      test(
+        'uses the existing request service and returns its decision',
+        () async {
+          final service = RateLimitService(
+            compileRateLimitPolicies(
+              specs: [
+                const RateLimitPolicySpec(
+                  name: 'auth',
+                  match: '/auth/signin/**',
+                  method: 'POST',
+                  strategy: RateLimitStrategy.tokenBucket,
+                  capacity: 1,
+                  interval: Duration(seconds: 1),
+                  window: Duration.zero,
+                  period: Duration.zero,
+                  burstMultiplier: null,
+                  key: RateLimitKeySpec.ip(),
+                ),
+              ],
+              backend: _BlockingBackend(),
+              defaultFailover: RateLimitFailoverMode.allow,
+            ),
+          );
+          final limiter = RoutedAuthRateLimiter(service);
+          final engine = Engine()
+            ..post('/auth/signin/credentials', (ctx) async {
+              final decision = await limiter.check(
+                AuthRateLimitRequest<EngineContext>(
+                  action: AuthRateLimitAction.signIn,
+                  providerId: 'credentials',
+                  context: ctx,
+                  identifier: 'alice',
+                ),
+              );
+              return ctx.json(<String, dynamic>{'allowed': decision.allowed});
+            });
+          await engine.initialize();
+          addTearDown(engine.close);
+
+          final response = await engine.handlePortable(
+            PortableRequest(
+              method: 'POST',
+              uri: Uri.parse('https://example.test/auth/signin/credentials'),
+            ),
+          );
+
+          expect(response.statusCode, HttpStatus.ok);
+          expect(response.bodyText, '{"allowed":false}');
+        },
+      );
     });
   });
 }

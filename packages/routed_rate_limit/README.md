@@ -8,7 +8,7 @@ configured policy blocks it.
 
 ```yaml
 dependencies:
-  routed_core: ^0.3.3
+  routed_core: ^0.4.0
   routed_rate_limit: ^0.1.0
   server_rate_limit: ^0.1.0
 ```
@@ -43,3 +43,19 @@ Future<void> main() async {
 In a batteries-included app, call `registerRoutedProviders()` after importing
 `package:routed/routed.dart` so `routed.rate_limit` is included. Use
 `RoutedRateLimitProvider` explicitly when composing a slim `routed_core` engine.
+
+To apply the same policies to `routed_auth`, pass the adapter to
+`AuthOptions.rateLimiter`:
+
+```dart
+final service = RateLimitService(authPolicies);
+final authOptions = AuthOptions<EngineContext>(
+  providers: providers,
+  store: authStore,
+  rateLimiter: RoutedAuthRateLimiter(service),
+);
+```
+
+The adapter evaluates the current request using the existing path, method,
+and key resolver configuration. It does not expose auth secrets to the rate
+limiter; configure trusted proxy ranges before using IP-based policies.

@@ -1,9 +1,17 @@
 library;
 
 import 'package:routed_core/routed_core.dart';
+import 'package:server_auth/server_auth.dart';
 import 'package:server_rate_limit/server_rate_limit.dart';
 
 export 'package:server_rate_limit/server_rate_limit.dart';
+export 'package:server_auth/server_auth.dart'
+    show
+        AuthRateLimitAction,
+        AuthRateLimitDecision,
+        AuthRateLimitException,
+        AuthRateLimitRequest,
+        AuthRateLimiter;
 export 'src/events/rate_limit_events.dart';
 
 extension RateLimitEngineContext on EngineContext {
@@ -21,6 +29,32 @@ extension RateLimitEngineContext on EngineContext {
   bool get hasRateLimitService => container.has<RateLimitService>();
   Future<RateLimitOutcome?> checkRateLimit(RateLimitRequest request) =>
       rateLimitService.check(request);
+}
+
+/// Adapts the existing request rate-limit service to [AuthRateLimiter].
+///
+/// Policies are evaluated against the actual Routed request, so configured
+/// method/path matchers and key resolvers remain the single source of truth.
+/// The adapter does not copy passwords, OAuth codes, or verification tokens
+/// into a rate-limit request. IP-based policies use Routed's trusted-proxy
+/// resolution through [EngineContext.request.clientIP].
+final class RoutedAuthRateLimiter implements AuthRateLimiter<EngineContext> {
+  const RoutedAuthRateLimiter(this.service);
+
+  final RateLimitService service;
+
+  @override
+  Future<AuthRateLimitDecision> check(
+    AuthRateLimitRequest<EngineContext> request,
+  ) async {
+    final outcome = await service.check(
+      _ContextRateLimitRequest(request.context),
+    );
+    if (outcome == null || outcome.allowed) {
+      return const AuthRateLimitDecision.allow();
+    }
+    return AuthRateLimitDecision.block(retryAfter: outcome.retryAfter);
+  }
 }
 
 Middleware rateLimitMiddleware(RateLimitService service) {
