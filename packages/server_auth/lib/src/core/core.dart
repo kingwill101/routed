@@ -28,6 +28,7 @@ export 'models.dart';
 export 'mcp_auth.dart';
 export 'oauth.dart';
 export 'oauth_challenge_store.dart';
+export 'oauth_authorization_code_store.dart';
 export 'organization.dart';
 export 'organization_client.dart';
 export 'organization_models.dart';
