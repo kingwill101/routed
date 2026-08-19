@@ -11,12 +11,12 @@ The Admin capability adds privileged user and session management to Routed
 auth. It is **opt-in**: no admin routes, permissions, persistence requirements,
 or ban checks exist unless you add `AdminPlugin` to `AuthOptions.plugins`.
 
-This feature follows Better Auth's Admin plugin semantics where they fit
+This plugin follows Better Auth's Admin plugin semantics where they fit
 Routed, while keeping Dart APIs typed and persistence independent. Global
 admin roles remain `AuthUser.roles`; organization roles are a separate tenant
 scope and never grant global administration.
 
-## Configure the feature
+## Configure the plugin
 
 Use the same core store for normal auth and the Admin store. The in-memory
 stores below are suitable only for tests and local development:
@@ -48,9 +48,9 @@ engine.container.instance<AuthOptions<EngineContext>>(
 );
 ```
 
-`AuthRoutes` discovers the feature's descriptors and mounts them beneath the
+`AuthRoutes` discovers the plugin's descriptors and mounts them beneath the
 configured auth base path. With the default base path, the routes appear under
-`/auth/admin/*`. If the feature is absent, those paths return `404`.
+`/auth/admin/*`. If the plugin is absent, those paths return `404`.
 
 For a durable deployment, implement `AuthAdminStore` against the same database
 as `AuthStore`. Do not wrap an unrelated user database: Admin mutations must
@@ -93,7 +93,7 @@ final adminFeature = AdminPlugin<EngineContext>(
 ```
 
 Multiple roles use union semantics. Resource and action names are normalized.
-The feature blocks self-ban, self-delete, self-impersonation, and removal of
+The plugin blocks self-ban, self-delete, self-impersonation, and removal of
 the actor's own effective admin access. Store transactions also preserve at
 least one effective administrator under concurrent changes.
 
@@ -117,7 +117,7 @@ rotate the user's JWT version. Existing sessions do not retain old privileges.
 The default ban reason is `No reason provided`; a ban can be permanent or have
 an expiry. Expired bans become inactive without deleting their audit history.
 
-Routed evaluates feature authentication policy:
+Routed evaluates plugin authentication policy:
 
 - after credentials resolve and before a two-factor challenge;
 - before any provider issues a session; and
@@ -160,7 +160,7 @@ entire operation atomic and remove:
 - server sessions and JWT-version state;
 - verification and password-reset state;
 - Admin ban state; and
-- every composed feature namespace, including two-factor/trusted-device state
+- every composed plugin namespace, including two-factor/trusted-device state
   and organization/team membership and invitation relationships.
 
 Use `AuthAdminOptions.validateDeletion` for application invariants that must be
@@ -184,7 +184,7 @@ entity and required atomic operations without prescribing SQL, D1, table
 names, migrations, or query builders.
 
 During runtime freeze, the in-memory Admin store automatically discovers
-composed `AuthUserDataDeletionContributor`s. The organization feature uses
+composed `AuthUserDataDeletionContributor`s. The organization plugin uses
 this path to reject last-owner deletion and remove memberships, team
 memberships, and related invitations in local/test deployments. Durable
 adapters consume the same logical topology but must execute all namespaces in
@@ -246,7 +246,7 @@ decision, especially when checking a different user.
 
 Admin roles are ordinary global `AuthUser.roles`, so existing Routed guards,
 RBAC abilities, policy bindings, and Haigate gates can protect application
-routes with them. Admin feature permissions remain a separate check for the
+routes with them. Admin plugin permissions remain a separate check for the
 Admin API itself. A role change revokes the target's sessions; the new global
 role set reaches guards and gates only through a newly authenticated session.
 

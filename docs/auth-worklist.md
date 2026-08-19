@@ -28,7 +28,7 @@ The work is intentionally split between framework-agnostic capabilities in
   `AuthServiceProvider`.
 - [x] Let plugins contribute endpoint descriptors, hooks, schemas, rate-limit
   rules, and typed client operations without editing a central route switch.
-- [x] Define paired server/client feature contracts so a feature can expose its
+- [x] Define paired server/client plugin contracts so a plugin can expose its
   persistence, routes, response models, client methods, and conformance tests
   as one public capability.
 - [x] Migrate the existing credentials, email, OAuth, and session flows from
@@ -113,11 +113,11 @@ The work is intentionally split between framework-agnostic capabilities in
 - [x] Add `none`-attestation/ES256 registration and assertion verification with
   exact origin/RP-ID binding, user-presence checks, and replay protection.
 - [x] Expose the registration, assertion, listing, and deletion contracts
-  through the typed feature registry, Routed routes, and `AuthClient`.
+  through the typed plugin registry, Routed routes, and `AuthClient`.
 - [ ] Finish the broader WebAuthn subsystem: support additional attestation and
   COSE algorithms. Routed now issues a server-side session after a verified
   assertion when that strategy is configured, and passkeys can be renamed
-  through the owner-checked store, feature endpoint, and client API.
+  through the owner-checked store, plugin endpoint, and client API.
 - [x] Add an optional native `TwoFactorPlugin` with TOTP enrollment
   verification, protected-secret and typed-store boundaries, recovery-code
   hashing and atomic one-time consumption, lockout handling, disablement, and
@@ -162,7 +162,7 @@ The work is intentionally split between framework-agnostic capabilities in
 - [x] Add a small, typed Dart client contract for browser/mobile auth calls
   without requiring application code to duplicate route and cookie
   conventions.
-- [x] Split the client contract into typed feature modules while preserving a
+- [x] Split the client contract into typed plugin modules while preserving a
   shared transport, cookie store, CSRF policy, error model, and request
   lifecycle.
 - [ ] Add ergonomic typed configuration builders or presets for common auth
@@ -174,16 +174,16 @@ The work is intentionally split between framework-agnostic capabilities in
   device-code issuance, browser approval, polling, denial, expiry, and
   client-side backoff semantics.
 - [ ] Add OpenAPI 3.1 endpoint and model generation for core auth routes and
-  composed feature routes, with generated-client compatibility tests.
+  composed plugin routes, with generated-client compatibility tests.
 - [ ] Add reusable auth test utilities for route bootstrapping, cookie/session
-  handling, provider fixtures, and end-to-end feature flows.
+  handling, provider fixtures, and end-to-end plugin flows.
 - [x] Update the package READMEs and examples only after the public APIs and
   security defaults settle.
 
 ## Longer-term plugin-inspired backlog
 
 These capabilities are useful product benchmarks, but should follow the core
-account, session, client, and feature contracts above:
+account, session, client, and plugin contracts above:
 
 - [ ] Add email OTP as a separate one-time-code flow alongside magic links.
 - [ ] Add phone-number authentication with provider-owned delivery and
@@ -272,6 +272,6 @@ native auth model.
 - [ ] Every auth endpoint has documented authentication, CSRF/origin,
   rate-limit, redirect, and error semantics.
 - [ ] The same auth behavior is verified through both `routed_io` and
-  `routed_node` where the feature is advertised.
+  `routed_node` where the plugin is advertised.
 - [ ] Security-sensitive defaults are safe without requiring users to discover
   undocumented configuration switches.

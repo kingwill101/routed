@@ -170,7 +170,7 @@ response until the challenge route verifies TOTP.
 The challenge request may include `trustDevice: true`; after successful TOTP,
 Routed sets an expiring HTTP-only trusted-device cookie. The revoke route
 invalidates all trusted devices for the current user. Pending recovery-code
-completion is available when the feature is configured with an atomic pending
+completion is available when the plugin is configured with an atomic pending
 recovery store.
 When `stepUpStore` is configured, `POST /auth/2fa/step-up` verifies a fresh
 TOTP code and sets a short-lived, session-bound HTTP-only proof cookie. Routed
@@ -188,12 +188,12 @@ Compose `AuthApiKeyPlugin` in `AuthOptions.plugins` to add:
 - `POST /auth/api-keys/exchange` when session exchange is explicitly enabled
 
 The raw secret is returned only by create and rotate. To authenticate service
-requests, add the middleware after the feature is composed:
+requests, add the middleware after the plugin is composed:
 
 ```dart
 final apiKeys = AuthApiKeyPlugin<EngineContext>(store: myApiKeyStore);
 final apiKeyMiddleware = apiKeyAuthentication(
-  feature: apiKeys,
+  plugin: apiKeys,
   userStore: myAuthStore.users,
 );
 ```
@@ -208,7 +208,7 @@ the request principal without creating a browser session. If
 
 Compose `OrganizationPlugin<EngineContext>` to opt in. `AuthRoutes` discovers
 its portable descriptors and automatically mounts the organization API; there
-is no separate route-registration call. If the feature is absent, every
+is no separate route-registration call. If the plugin is absent, every
 organization route is absent.
 
 The API lives under `/auth/organization/` and covers create/check/list/get/
@@ -232,7 +232,7 @@ the user's global principal.
 ## Administration
 
 Compose `AdminPlugin<EngineContext>` to opt in. `AuthRoutes` automatically
-mounts its portable descriptors under `/auth/admin/`; without the feature,
+mounts its portable descriptors under `/auth/admin/`; without the plugin,
 those routes do not exist. The API covers user create/list/get/update/delete,
 role/password changes, bans, permission checks, target-session administration,
 and guarded server-session impersonation.
@@ -243,7 +243,7 @@ error, and retry-header handling. User reads and session reads return safe
 projections: password hashes, raw session tokens, token hashes, provider
 tokens, and internal hook errors are never serialized.
 
-Routed consults feature authentication policies before a two-factor challenge,
+Routed consults plugin authentication policies before a two-factor challenge,
 before issuing a session, and whenever a session is resolved. Consequently an
 active Admin ban blocks credentials, email, OAuth, two-factor completion,
 server-session reuse, and Routed-issued JWT reuse. Sensitive mutations revoke

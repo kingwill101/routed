@@ -515,7 +515,7 @@ final class AuthClientWebAuthnAuthenticationResult {
   }
 }
 
-/// TOTP enrollment data returned by a two-factor feature.
+/// TOTP enrollment data returned by a two-factor plugin.
 class AuthClientTwoFactorEnrollment {
   const AuthClientTwoFactorEnrollment({
     required this.secret,
@@ -646,7 +646,7 @@ final class AuthClientResponse {
   Map<String, String> get headers => response.headers;
 }
 
-/// Shared HTTP transport for core and feature-specific auth clients.
+/// Shared HTTP transport for core and plugin-specific auth clients.
 ///
 /// It owns cookies, bearer authentication, CSRF reuse, timeouts, redirect
 /// policy, bounded error parsing, and response-cookie processing.

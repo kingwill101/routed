@@ -79,9 +79,9 @@ final class AuthDeviceAuthorizationRequest {
 
 /// RFC 8628 device authorization flow.
 ///
-/// The feature owns the one-time approval transaction and delegates actual
+/// The plugin owns the one-time approval transaction and delegates actual
 /// access-token creation to [issueToken]. Applications should persist and
-/// validate those tokens in their own API-token boundary; this feature never
+/// validate those tokens in their own API-token boundary; this plugin never
 /// stores raw access or refresh tokens.
 final class DeviceAuthorizationPlugin<TContext>
     implements

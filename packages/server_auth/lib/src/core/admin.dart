@@ -150,7 +150,7 @@ final class AdminPlugin<TContext>
     final target = store;
     final contributors = plugins
         .whereType<AuthUserDataDeletionContributor>()
-        .where((feature) => !identical(feature, this))
+        .where((plugin) => !identical(plugin, this))
         .toList(growable: false);
     if (target is InMemoryAuthAdminStore) {
       target.composeUserDataContributors(contributors);

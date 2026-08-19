@@ -9,7 +9,7 @@ import 'plugin.dart';
 import 'models.dart';
 import 'tokens.dart';
 
-/// Stable ID for the built-in two-factor feature.
+/// Stable ID for the built-in two-factor plugin.
 const authTwoFactorPluginId = 'two_factor';
 
 const String _base32Alphabet = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ234567';
@@ -17,7 +17,7 @@ const String _base32Alphabet = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ234567';
 /// Protects TOTP secrets before they cross a persistence boundary.
 ///
 /// Production applications should implement this with their key-management
-/// system. The feature never persists the raw secret directly; it only passes
+/// system. The plugin never persists the raw secret directly; it only passes
 /// the protected value to [AuthTwoFactorStore].
 abstract interface class AuthTwoFactorSecretProtector {
   String protect(String secret);
@@ -123,7 +123,7 @@ class AuthTwoFactorRecord {
   }
 }
 
-/// Typed persistence contract owned by the two-factor feature.
+/// Typed persistence contract owned by the two-factor plugin.
 abstract interface class AuthTwoFactorStore {
   FutureOr<AuthTwoFactorRecord?> findByUserId(String userId);
 
@@ -313,7 +313,7 @@ class AuthTwoFactorRecoveryCodes {
   const AuthTwoFactorRecoveryCodes(this.codes);
 
   /// One-time codes. Applications must show these once and encourage secure
-  /// offline storage; the feature does not persist the plaintext values.
+  /// offline storage; the plugin does not persist the plaintext values.
   final List<String> codes;
 
   Map<String, dynamic> toJson() => {'recoveryCodes': codes};
@@ -1065,13 +1065,13 @@ class AuthTwoFactorStatus {
   };
 }
 
-/// Optional TOTP and recovery-code authentication feature.
+/// Optional TOTP and recovery-code authentication plugin.
 ///
-/// The feature covers enrollment, activation, verification, recovery-code
+/// The plugin covers enrollment, activation, verification, recovery-code
 /// consumption, regeneration, and disablement. A framework adapter can use
 /// [verifyTotp] or [useRecoveryCode] to gate a pending sign-in challenge;
 /// pending sign-in orchestration is intentionally kept in the adapter so the
-/// feature remains framework-agnostic.
+/// plugin remains framework-agnostic.
 final class TwoFactorPlugin<TContext>
     implements AuthServerPlugin<TContext>, AuthUserDataDeletionContributor {
   TwoFactorPlugin({
@@ -1187,7 +1187,7 @@ final class TwoFactorPlugin<TContext>
 
   @override
   void configure(AuthServerPluginContext<TContext> context) {
-    // The feature owns its additional persistence contract. The shared store
+    // The plugin owns its additional persistence contract. The shared store
     // remains available for user/session lookups in future composed hooks.
   }
 
@@ -1363,7 +1363,7 @@ final class TwoFactorPlugin<TContext>
   }
 
   /// Issues a trusted-device token after the caller has already completed a
-  /// TOTP proof in this feature.
+  /// TOTP proof in this plugin.
   Future<AuthTwoFactorTrustedDeviceToken> _issueTrustedDevice(
     String userId, {
     DateTime? now,

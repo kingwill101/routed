@@ -22,9 +22,9 @@ an authenticated user. Server-session deployments also need
 `RoutedSessionsProvider` and `sessionMiddleware()`. Configure an application
 mailer before enabling invitation delivery.
 
-## Configure the feature
+## Configure the plugin
 
-Create one organization store and one feature instance, then include that
+Create one organization store and one plugin instance, then include that
 instance in the auth options already consumed by `AuthServiceProvider`:
 
 ```dart
@@ -64,10 +64,10 @@ engine.container.instance<AuthOptions<EngineContext>>(
 );
 ```
 
-`AuthRoutes` discovers feature endpoint descriptors and mounts them beneath the
+`AuthRoutes` discovers plugin endpoint descriptors and mounts them beneath the
 configured auth base path. With the default `basePath`, the routes appear under
 `/auth/organization/*`; there is no second route-registration call. If the
-feature is absent, those routes return `404`.
+plugin is absent, those routes return `404`.
 
 The in-memory organization store is intended for tests and local development.
 Production applications must provide a durable `AuthOrganizationStore`. The
@@ -117,7 +117,7 @@ concurrent requests cannot bypass them.
 
 Supply `sendInvitation` to deliver the action-capable invitation ID through
 your email provider. Never log that ID or copy it into a general audit event.
-The feature excludes it from redacted lifecycle events.
+The plugin excludes it from redacted lifecycle events.
 
 The example uses a URL fragment because fragments are not sent in HTTP requests
 or referrer headers. The browser application should read the fragment, remove
@@ -267,7 +267,7 @@ Use the organization helpers when protecting application resources:
 engine.post('/organizations/{organizationId}/projects/{projectId}', (ctx) async {
   final allowed = await Haigate.canInOrganization(
     ctx: ctx,
-    feature: organizations,
+    plugin: organizations,
     organizationId: ctx.param('organizationId'),
     resource: 'project',
     action: 'update',

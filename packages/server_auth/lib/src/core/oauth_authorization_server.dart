@@ -39,7 +39,7 @@ typedef AuthOAuthAccessTokenIssuer<TContext> =
 /// OAuth 2.1 authorization-code provider mode with mandatory S256 PKCE.
 ///
 /// Client registration, token signing, refresh-token persistence, and user
-/// consent remain application-owned callbacks. This feature owns only the
+/// consent remain application-owned callbacks. This plugin owns only the
 /// protocol validation and one-time authorization-code transaction.
 final class OAuthAuthorizationServerPlugin<TContext>
     implements

@@ -23,7 +23,7 @@ final class AuthOrganizationClientPlugin
   }
 }
 
-/// Typed client for the opt-in organization feature.
+/// Typed client for the opt-in organization plugin.
 final class AuthOrganizationClient {
   AuthOrganizationClient({
     required this.transport,

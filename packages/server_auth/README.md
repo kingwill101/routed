@@ -97,7 +97,7 @@ final twoFactor = TwoFactorPlugin<void>(
 );
 ```
 
-The feature owns enrollment verification, TOTP validation, lockout state,
+The plugin owns enrollment verification, TOTP validation, lockout state,
 recovery-code hashing and atomic consumption, regeneration, disablement, and
 expiring trusted-device tokens. Explicit trusted-device issuance requires a
 fresh TOTP code. Trusted-device records store only token
@@ -115,9 +115,9 @@ step-up requirement helper at those action boundaries.
 so durable applications can use their own key-management system; the
 plaintext protector is intended only for tests and ephemeral examples.
 
-## Optional admin feature
+## Optional admin plugin
 
-Administrative APIs are opt-in. Create a feature-owned admin store over the
+Administrative APIs are opt-in. Create a plugin-owned admin store over the
 same core auth store, then include `AdminPlugin` in `AuthOptions.plugins`:
 
 ```dart
@@ -147,7 +147,7 @@ separate `user:impersonate-admins` permission only through an explicit custom
 role. Self-ban, self-delete, self-impersonation, and removal of your own admin
 access are rejected.
 
-The feature supplies user creation/list/get/update, role and password changes,
+The plugin supplies user creation/list/get/update, role and password changes,
 bans, session listing/revocation, hard deletion, permission checks, and
 server-session impersonation. Email, password, role, and ban mutations revoke
 all target server sessions and rotate the target JWT version. Active bans are
@@ -158,7 +158,7 @@ update the same records exposed through `AuthStore`, preserve normalized email
 uniqueness and the last effective administrator, and make sensitive mutations
 atomic with session revocation and JWT rotation. Hard deletion must include
 credentials, provider accounts, tokens, sessions, and every composed
-user-owned feature namespace. Use `AuthAdminOptions.validateDeletion` to reject
+user-owned plugin namespace. Use `AuthAdminOptions.validateDeletion` to reject
 application invariants such as deleting the last owner of an organization.
 `InMemoryAuthAdminStore` and `InMemoryAuthStore` are for tests and local
 development, not production persistence.
@@ -166,7 +166,7 @@ development, not production persistence.
 The in-memory Admin store discovers composed user-data deletion contributors
 when plugin topology freezes. With `OrganizationPlugin`, it automatically
 enforces last-owner protection and clears organization/team membership data.
-Durable adapters must provide the equivalent cross-feature transaction.
+Durable adapters must provide the equivalent cross-plugin transaction.
 
 The admin client is installed explicitly and shares the host transport:
 
@@ -217,7 +217,7 @@ separate from global `AuthPrincipal.roles`.
 no SQL, D1 bindings, table names, migrations, or query builders. Production
 adapters must implement its create/accept/capacity/last-owner/role-rename and
 cascade operations transactionally. `InMemoryAuthOrganizationStore` is only
-for tests and local development. The feature also advertises logical entity,
+for tests and local development. The plugin also advertises logical entity,
 relationship, uniqueness, index, and atomic-operation descriptors so adapters
 can build physical schemas without coupling `server_auth` to a database.
 
@@ -325,7 +325,7 @@ used for the limit, including any trusted-proxy policy.
 Features receive the shared `AuthStore` during configuration. They own one
 auth concern at a time and may contribute portable endpoint, logical schema,
 typed-client, and namespaced rate-limit descriptors. The registry rejects
-duplicate feature IDs and endpoint method/path pairs, then freezes the feature
+duplicate plugin IDs and endpoint method/path pairs, then freezes the plugin
 topology after runtime boot.
 
 For Routed applications, use `routed_auth`: initialize `AuthServiceProvider`

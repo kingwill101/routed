@@ -37,7 +37,7 @@ final class AuthEmailOtpSignInResult {
   final AuthSession? session;
 }
 
-/// Typed email OTP feature modeled on the common sign-in, verification, and
+/// Typed email OTP plugin modeled on the common sign-in, verification, and
 /// password-recovery OTP flows.
 final class EmailOtpPlugin<TContext>
     implements

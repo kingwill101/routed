@@ -101,7 +101,7 @@ class AuthOptions<TContext> {
   /// List of configured auth providers.
   final List<AuthProvider> providers;
 
-  /// Typed feature modules composed into the auth runtime.
+  /// Typed plugin modules composed into the auth runtime.
   final List<AuthServerPlugin<TContext>> plugins;
 
   /// Typed persistence boundary used by every auth flow.

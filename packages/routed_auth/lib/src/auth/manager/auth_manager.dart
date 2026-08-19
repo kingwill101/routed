@@ -104,19 +104,19 @@ class AuthManager {
 
   AuthStore get store => runtime.store;
 
-  /// The configured two-factor feature, if enabled for this runtime.
+  /// The configured two-factor plugin, if enabled for this runtime.
   TwoFactorPlugin<EngineContext>? get twoFactor =>
       runtime.plugin('two_factor') as TwoFactorPlugin<EngineContext>?;
 
-  /// The configured organization feature, if enabled for this runtime.
+  /// The configured organization plugin, if enabled for this runtime.
   OrganizationPlugin<EngineContext>? get organization =>
       runtime.plugin('organization') as OrganizationPlugin<EngineContext>?;
 
-  /// The configured API-key feature, if enabled for this runtime.
+  /// The configured API-key plugin, if enabled for this runtime.
   AuthApiKeyPlugin<EngineContext>? get apiKeys =>
       runtime.plugin('api_key') as AuthApiKeyPlugin<EngineContext>?;
 
-  /// The configured anonymous-account feature, if enabled.
+  /// The configured anonymous-account plugin, if enabled.
   AnonymousPlugin<EngineContext>? get anonymous =>
       runtime.plugin('anonymous') as AnonymousPlugin<EngineContext>?;
 
@@ -127,8 +127,8 @@ class AuthManager {
   /// server-session strategy; JWT clients should continue using their API key
   /// directly or sign in through the configured provider.
   Future<AuthResult> exchangeApiKeyForSession(EngineContext ctx) async {
-    final feature = apiKeys;
-    if (feature == null || !feature.sessionExchangeEnabled) {
+    final plugin = apiKeys;
+    if (plugin == null || !plugin.sessionExchangeEnabled) {
       throw AuthFlowException('api_key_exchange_unavailable');
     }
     if (options.sessionStrategy != AuthSessionStrategy.session) {
@@ -139,18 +139,18 @@ class AuthManager {
     if (request.malformed || rawKey == null) {
       throw AuthFlowException('invalid_api_key');
     }
-    final authentication = await feature.authenticate(rawKey);
+    final authentication = await plugin.authenticate(rawKey);
     if (authentication == null) throw AuthFlowException('invalid_api_key');
     final user = await store.users.findById(authentication.record.userId);
     if (user == null) throw AuthFlowException('invalid_api_key');
     return _completeSignIn(ctx, user, authenticationMethod: 'api_key');
   }
 
-  /// The configured Admin feature, if enabled for this runtime.
+  /// The configured Admin plugin, if enabled for this runtime.
   AdminPlugin<EngineContext>? get admin =>
       runtime.plugin('admin') as AdminPlugin<EngineContext>?;
 
-  /// The configured WebAuthn/passkey feature, if enabled for this runtime.
+  /// The configured WebAuthn/passkey plugin, if enabled for this runtime.
   WebAuthnPlugin<EngineContext>? get webAuthn =>
       runtime.plugin('webauthn') as WebAuthnPlugin<EngineContext>?;
 
@@ -213,17 +213,17 @@ class AuthManager {
       AuthAuthenticationPolicyPhase.beforeSessionIssue,
     );
 
-    final feature = twoFactor;
-    final challenge = feature == null
+    final plugin = twoFactor;
+    final challenge = plugin == null
         ? null
-        : await feature.beginSignInChallenge(
+        : await plugin.beginSignInChallenge(
             user.id,
             user: user,
             providerId: provider.id,
             credentials: credentials,
             trustedDeviceToken: _requestCookie(
               ctx,
-              feature.trustedDeviceCookieName,
+              plugin.trustedDeviceCookieName,
             )?.value,
           );
     if (challenge != null) {
@@ -245,11 +245,11 @@ class AuthManager {
     required String code,
     bool trustDevice = false,
   }) async {
-    final feature = twoFactor;
-    if (feature == null) {
+    final plugin = twoFactor;
+    if (plugin == null) {
       throw AuthFlowException('two_factor_unavailable');
     }
-    final completion = await feature.completeSignInChallenge(
+    final completion = await plugin.completeSignInChallenge(
       challengeToken,
       code,
       trustDevice: trustDevice,
@@ -277,13 +277,13 @@ class AuthManager {
     final trustedDevice = completion.trustedDevice;
     if (trustedDevice != null) {
       ctx.response.cookies.add(
-        Cookie(feature.trustedDeviceCookieName, trustedDevice.token)
+        Cookie(plugin.trustedDeviceCookieName, trustedDevice.token)
           ..httpOnly = true
           ..secure = _isHttps(ctx)
           ..sameSite = SameSite.lax
           ..path = '/'
           ..expires = trustedDevice.expiresAt
-          ..maxAge = feature.trustedDeviceTtl.inSeconds,
+          ..maxAge = plugin.trustedDeviceTtl.inSeconds,
       );
     }
     return result;
@@ -295,11 +295,11 @@ class AuthManager {
     required String challengeToken,
     required String recoveryCode,
   }) async {
-    final feature = twoFactor;
-    if (feature == null) {
+    final plugin = twoFactor;
+    if (plugin == null) {
       throw AuthFlowException('two_factor_unavailable');
     }
-    final completion = await feature.completeRecoverySignInChallenge(
+    final completion = await plugin.completeRecoverySignInChallenge(
       challengeToken,
       recoveryCode,
     );
@@ -327,16 +327,16 @@ class AuthManager {
 
   /// Revokes all trusted devices for the current user and expires the cookie.
   Future<void> revokeTwoFactorTrustedDevices(EngineContext ctx) async {
-    final feature = twoFactor;
-    if (feature == null) {
+    final plugin = twoFactor;
+    if (plugin == null) {
       throw AuthFlowException('two_factor_unavailable');
     }
     final session = await resolveSession(ctx);
     final userId = session?.user.id.trim() ?? '';
     if (userId.isEmpty) throw AuthFlowException('unauthorized');
-    await feature.revokeAllTrustedDevices(userId);
+    await plugin.revokeAllTrustedDevices(userId);
     ctx.response.cookies.add(
-      Cookie(feature.trustedDeviceCookieName, '')
+      Cookie(plugin.trustedDeviceCookieName, '')
         ..httpOnly = true
         ..secure = _isHttps(ctx)
         ..sameSite = SameSite.lax
@@ -350,46 +350,46 @@ class AuthManager {
     EngineContext ctx, {
     required String code,
   }) async {
-    final feature = twoFactor;
-    if (feature == null) {
+    final plugin = twoFactor;
+    if (plugin == null) {
       throw AuthFlowException('two_factor_unavailable');
     }
     final session = await resolveSession(ctx);
     final userId = session?.user.id.trim() ?? '';
     if (userId.isEmpty) throw AuthFlowException('unauthorized');
-    final token = await feature.verifyStepUp(
+    final token = await plugin.verifyStepUp(
       userId,
       _twoFactorSessionBinding(ctx),
       code,
     );
     ctx.response.cookies.add(
-      Cookie(feature.stepUpCookieName, token.token)
+      Cookie(plugin.stepUpCookieName, token.token)
         ..httpOnly = true
         ..secure = _isHttps(ctx)
         ..sameSite = SameSite.lax
         ..path = '/'
         ..expires = token.expiresAt
-        ..maxAge = feature.stepUpTtl.inSeconds,
+        ..maxAge = plugin.stepUpTtl.inSeconds,
     );
     return token;
   }
 
   /// Returns whether the current request carries a valid step-up proof.
   Future<bool> hasValidTwoFactorStepUp(EngineContext ctx) async {
-    final feature = twoFactor;
-    if (feature == null) return false;
+    final plugin = twoFactor;
+    if (plugin == null) return false;
     final session = await resolveSession(ctx);
     final userId = session?.user.id.trim() ?? '';
     if (userId.isEmpty) return false;
-    final token = _requestCookie(ctx, feature.stepUpCookieName)?.value;
+    final token = _requestCookie(ctx, plugin.stepUpCookieName)?.value;
     if (token == null || token.isEmpty) return false;
-    return feature.isStepUpValid(userId, _twoFactorSessionBinding(ctx), token);
+    return plugin.isStepUpValid(userId, _twoFactorSessionBinding(ctx), token);
   }
 
   /// Requires a recent step-up proof for the current request.
   Future<void> requireTwoFactorStepUp(EngineContext ctx) async {
-    final feature = twoFactor;
-    if (feature == null || feature.stepUpStore == null) {
+    final plugin = twoFactor;
+    if (plugin == null || plugin.stepUpStore == null) {
       throw AuthFlowException('two_factor_step_up_not_supported');
     }
     if (!await hasValidTwoFactorStepUp(ctx)) {
@@ -399,16 +399,16 @@ class AuthManager {
 
   /// Revokes the current session's step-up proofs and expires its cookie.
   Future<void> revokeTwoFactorStepUp(EngineContext ctx) async {
-    final feature = twoFactor;
-    if (feature == null) {
+    final plugin = twoFactor;
+    if (plugin == null) {
       throw AuthFlowException('two_factor_unavailable');
     }
     final session = await resolveSession(ctx);
     final userId = session?.user.id.trim() ?? '';
     if (userId.isEmpty) throw AuthFlowException('unauthorized');
-    await feature.revokeStepUp(userId, _twoFactorSessionBinding(ctx));
+    await plugin.revokeStepUp(userId, _twoFactorSessionBinding(ctx));
     ctx.response.cookies.add(
-      Cookie(feature.stepUpCookieName, '')
+      Cookie(plugin.stepUpCookieName, '')
         ..httpOnly = true
         ..secure = _isHttps(ctx)
         ..sameSite = SameSite.lax
@@ -1072,7 +1072,7 @@ class AuthManager {
     );
   }
 
-  /// Replaces the current server-session identity for a portable feature.
+  /// Replaces the current server-session identity for a portable plugin.
   Future<AuthSession> replacePluginSession(
     EngineContext ctx,
     AuthUser user, {
@@ -1419,7 +1419,7 @@ class AuthManager {
     );
   }
 
-  /// Enforces a namespaced feature rate-limit operation.
+  /// Enforces a namespaced plugin rate-limit operation.
   Future<void> enforceRateLimitOperation(
     EngineContext ctx, {
     required AuthRateLimitOperation operation,

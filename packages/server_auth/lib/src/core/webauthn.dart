@@ -14,7 +14,7 @@ import 'store.dart';
 import 'tokens.dart';
 import 'webauthn_store.dart';
 
-/// Stable ID for the opt-in WebAuthn feature.
+/// Stable ID for the opt-in WebAuthn plugin.
 const String authWebAuthnPluginId = 'webauthn';
 
 /// Public registration options returned to a WebAuthn client.
@@ -115,9 +115,9 @@ final class AuthWebAuthnAuthenticationResult {
   final WebAuthnAuthenticator authenticator;
 }
 
-/// Typed WebAuthn/passkey feature for `server_auth` runtimes.
+/// Typed WebAuthn/passkey plugin for `server_auth` runtimes.
 ///
-/// This feature supports `none` attestation, ES256 (`alg: -7`), and
+/// This plugin supports `none` attestation, ES256 (`alg: -7`), and
 /// RS256 (`alg: -257`) passkeys.
 /// It deliberately rejects unsupported attestation formats and COSE
 /// algorithms instead of accepting an assertion that has not been verified.

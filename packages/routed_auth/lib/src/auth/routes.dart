@@ -82,7 +82,7 @@ import 'package:routed_sessions/routed_sessions.dart';
 /// - `POST /2fa/trusted-devices/revoke` revokes all trusted devices.
 /// - `POST /2fa/step-up` verifies TOTP for a sensitive action.
 /// - `POST /2fa/step-up/revoke` revokes the current step-up proof.
-/// - `GET /api-keys/list` lists API-key metadata when the feature is enabled.
+/// - `GET /api-keys/list` lists API-key metadata when the plugin is enabled.
 /// - `POST /api-keys/create` creates a service API key.
 /// - `POST /api-keys/rotate` replaces a service API key.
 /// - `POST /api-keys/revoke` revokes a service API key.
@@ -184,7 +184,7 @@ class AuthRoutes {
           auth.post('/sessions/revoke', _revokeSession);
           auth.post('/sessions/revoke-others', _revokeOtherSessions);
         }
-        // Register optional feature routes unconditionally. The handlers
+        // Register optional plugin routes unconditionally. The handlers
         // resolve the live manager on each request, so managerOf-based config
         // reloads can activate 2FA after this route table was built.
         auth.get('/2fa/status', _twoFactorStatus);
@@ -850,11 +850,11 @@ class AuthRoutes {
   Future<Response> _twoFactorStatus(EngineContext ctx) async {
     try {
       final userId = await _twoFactorUserId(ctx);
-      final feature = manager.twoFactor;
-      if (feature == null) {
+      final plugin = manager.twoFactor;
+      if (plugin == null) {
         return await _errorResponse(ctx, 'two_factor_unavailable');
       }
-      final status = await feature.status(userId);
+      final status = await plugin.status(userId);
       return ctx.json(status.toJson());
     } on AuthFlowException catch (error) {
       return _flowErrorResponse(ctx, error);
@@ -867,11 +867,11 @@ class AuthRoutes {
     if (protectionError != null) return protectionError;
     try {
       final userId = await _twoFactorUserId(ctx);
-      final feature = manager.twoFactor;
-      if (feature == null) {
+      final plugin = manager.twoFactor;
+      if (plugin == null) {
         return await _errorResponse(ctx, 'two_factor_unavailable');
       }
-      final enrollment = await feature.beginEnrollment(
+      final enrollment = await plugin.beginEnrollment(
         userId,
         accountLabel: payload['accountLabel']?.toString(),
       );
@@ -882,36 +882,36 @@ class AuthRoutes {
   }
 
   Future<Response> _twoFactorVerifyEnrollment(EngineContext ctx) async {
-    return _twoFactorCodeAction(ctx, (feature, userId, code) async {
-      final recovery = await feature.verifyEnrollment(userId, code);
+    return _twoFactorCodeAction(ctx, (plugin, userId, code) async {
+      final recovery = await plugin.verifyEnrollment(userId, code);
       return ctx.json({'enabled': true, ...recovery.toJson()});
     });
   }
 
   Future<Response> _twoFactorVerify(EngineContext ctx) async {
-    return _twoFactorCodeAction(ctx, (feature, userId, code) async {
-      await feature.verifyTotp(userId, code);
+    return _twoFactorCodeAction(ctx, (plugin, userId, code) async {
+      await plugin.verifyTotp(userId, code);
       return ctx.json({'verified': true});
     });
   }
 
   Future<Response> _twoFactorRecoveryCode(EngineContext ctx) async {
-    return _twoFactorCodeAction(ctx, (feature, userId, code) async {
-      await feature.useRecoveryCode(userId, code);
+    return _twoFactorCodeAction(ctx, (plugin, userId, code) async {
+      await plugin.useRecoveryCode(userId, code);
       return ctx.json({'verified': true, 'method': 'recovery_code'});
     }, fieldName: 'recoveryCode');
   }
 
   Future<Response> _twoFactorRegenerateRecoveryCodes(EngineContext ctx) async {
-    return _twoFactorCodeAction(ctx, (feature, userId, code) async {
-      final recovery = await feature.regenerateRecoveryCodes(userId, code);
+    return _twoFactorCodeAction(ctx, (plugin, userId, code) async {
+      final recovery = await plugin.regenerateRecoveryCodes(userId, code);
       return ctx.json(recovery.toJson());
     });
   }
 
   Future<Response> _twoFactorDisable(EngineContext ctx) async {
-    return _twoFactorCodeAction(ctx, (feature, userId, code) async {
-      await feature.disable(userId, code);
+    return _twoFactorCodeAction(ctx, (plugin, userId, code) async {
+      await plugin.disable(userId, code);
       return ctx.json({'disabled': true});
     });
   }
@@ -979,7 +979,7 @@ class AuthRoutes {
   }
 
   Future<Response> _twoFactorStepUp(EngineContext ctx) async {
-    return _twoFactorCodeAction(ctx, (feature, userId, code) async {
+    return _twoFactorCodeAction(ctx, (plugin, userId, code) async {
       final token = await manager.verifyTwoFactorStepUp(ctx, code: code);
       return ctx.json(token.toJson());
     });
@@ -1000,7 +1000,7 @@ class AuthRoutes {
   Future<Response> _twoFactorCodeAction(
     EngineContext ctx,
     Future<Response> Function(
-      TwoFactorPlugin<EngineContext> feature,
+      TwoFactorPlugin<EngineContext> plugin,
       String userId,
       String code,
     )
@@ -1016,20 +1016,20 @@ class AuthRoutes {
     }
     try {
       final userId = await _twoFactorUserId(ctx);
-      final feature = manager.twoFactor;
-      if (feature == null) {
+      final plugin = manager.twoFactor;
+      if (plugin == null) {
         return await _errorResponse(ctx, 'two_factor_unavailable');
       }
-      return await action(feature, userId, code);
+      return await action(plugin, userId, code);
     } on AuthFlowException catch (error) {
       return _flowErrorResponse(ctx, error);
     }
   }
 
   Future<Response> _apiKeyExchange(EngineContext ctx) async {
-    final feature = manager.apiKeys;
-    if (feature == null ||
-        !feature.sessionExchangeEnabled ||
+    final plugin = manager.apiKeys;
+    if (plugin == null ||
+        !plugin.sessionExchangeEnabled ||
         manager.options.sessionStrategy != AuthSessionStrategy.session) {
       return _errorResponse(ctx, 'api_key_exchange_unavailable');
     }

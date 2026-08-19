@@ -82,7 +82,7 @@ final class AuthAuthenticationPolicyRequest<TContext> {
   final AuthAuthenticationPolicyPhase phase;
 }
 
-/// Optional feature contribution consulted at every authentication boundary.
+/// Optional plugin contribution consulted at every authentication boundary.
 abstract interface class AuthAuthenticationPolicyContributor<TContext> {
   FutureOr<void> enforceAuthenticationPolicy(
     AuthAuthenticationPolicyRequest<TContext> request,

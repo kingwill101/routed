@@ -262,7 +262,7 @@ abstract interface class AuthStore {
   AuthEmailOtpStore get emailOtps;
 }
 
-/// Optional data-plane operations required by the Admin feature.
+/// Optional data-plane operations required by the Admin plugin.
 ///
 /// Production adapters implement these operations transactionally. Keeping
 /// them separate from [AuthStore] preserves source compatibility for stores

@@ -20,7 +20,7 @@ final class AuthAdminClientPlugin implements AuthClientPlugin<AuthAdminClient> {
   }
 }
 
-/// Typed client for the opt-in Admin feature.
+/// Typed client for the opt-in Admin plugin.
 final class AuthAdminClient {
   AuthAdminClient({
     required this.transport,
