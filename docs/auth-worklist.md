@@ -72,11 +72,11 @@ The work is intentionally split between framework-agnostic capabilities in
 - [x] Use Routed's explicit trusted-proxy/client-IP policy for auth rate-limit
   keys and persisted session metadata; auth does not read forwarded headers
   directly. Broader proxy configuration ergonomics remain a core concern.
-- [ ] Expand browser protections beyond CSRF tokens where appropriate. Safe
-  default Routed session cookies and CSRF protections cover state-changing
-  Routed auth routes; trusted-origin policy, `Origin` validation, Fetch
-  Metadata checks, broader adapter coverage, and validation of externally
-  supplied session stores remain.
+- [x] Add browser protections beyond CSRF tokens to the Routed adapter. Safe
+  default Routed session cookies and CSRF protections now pair with typed
+  trusted-origin policy, strict `Origin` validation, and Fetch Metadata checks
+  on state-changing auth routes. Other framework adapters and validation of
+  externally supplied session stores remain follow-up work.
 - [x] Keep Routed auth HTTP failures generic while detailed causes remain
   available to Routed's internal error hooks; other framework adapters must
   adopt the same boundary.
