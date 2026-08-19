@@ -105,7 +105,10 @@ void main() {
     );
 
     expect(options.copyWith().requireVerifiedEmail, isTrue);
-    expect(options.copyWith(requireVerifiedEmail: false).requireVerifiedEmail, isFalse);
+    expect(
+      options.copyWith(requireVerifiedEmail: false).requireVerifiedEmail,
+      isFalse,
+    );
   });
 
   test('requireDurableStore rejects an explicitly ephemeral configuration', () {
@@ -305,4 +308,8 @@ final class _DurableAuthStore implements AuthStore {
   @override
   AuthWebAuthnAuthenticatorStore get webAuthnAuthenticators =>
       _delegate.webAuthnAuthenticators;
+
+  @override
+  AuthDeviceAuthorizationStore get deviceAuthorizations =>
+      _delegate.deviceAuthorizations;
 }

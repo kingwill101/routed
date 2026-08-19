@@ -68,6 +68,10 @@ final class _RecordingAuthStore implements AuthStore {
   @override
   AuthWebAuthnAuthenticatorStore get webAuthnAuthenticators =>
       _delegate.webAuthnAuthenticators;
+
+  @override
+  AuthDeviceAuthorizationStore get deviceAuthorizations =>
+      _delegate.deviceAuthorizations;
 }
 
 final class _RecordingSessionStore implements AuthSessionStore {
