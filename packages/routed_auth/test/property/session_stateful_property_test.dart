@@ -56,6 +56,14 @@ final class _RecordingAuthStore implements AuthStore {
   @override
   AuthVerificationTokenStore get verificationTokens =>
       _delegate.verificationTokens;
+
+  @override
+  AuthWebAuthnChallengeStore get webAuthnChallenges =>
+      _delegate.webAuthnChallenges;
+
+  @override
+  AuthWebAuthnAuthenticatorStore get webAuthnAuthenticators =>
+      _delegate.webAuthnAuthenticators;
 }
 
 final class _RecordingSessionStore implements AuthSessionStore {

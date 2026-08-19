@@ -72,6 +72,12 @@ import 'package:routed_sessions/routed_sessions.dart';
 /// - `POST /2fa/trusted-devices/revoke` revokes all trusted devices.
 /// - `POST /2fa/step-up` verifies TOTP for a sensitive action.
 /// - `POST /2fa/step-up/revoke` revokes the current step-up proof.
+/// - `POST /webauthn/register/options` begins passkey registration.
+/// - `POST /webauthn/register/verify` verifies and stores a passkey.
+/// - `POST /webauthn/authenticate/options` begins passkey authentication.
+/// - `POST /webauthn/authenticate/verify` verifies a passkey assertion.
+/// - `GET /webauthn/credentials` lists the current user's passkeys.
+/// - `POST /webauthn/credentials/delete` deletes one current-user passkey.
 ///
 /// ## Usage
 /// ```dart

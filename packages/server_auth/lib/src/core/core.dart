@@ -40,3 +40,5 @@ export 'tokens.dart';
 export 'two_factor.dart';
 export 'users.dart';
 export 'verification_token_store.dart';
+export 'webauthn.dart';
+export 'webauthn_store.dart';

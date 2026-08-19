@@ -1,5 +1,8 @@
 ## Unreleased
 
+- Automatically exposes the typed WebAuthn registration, assertion, passkey
+  listing, and deletion endpoints contributed by `WebAuthnFeature`, with the
+  existing session, browser-origin, CSRF, and rate-limit boundary handling.
 - Keep external JWT middleware independent from Routed's private session-token
   version claim; Routed-issued JWT sessions continue validating that claim in
   `AuthManager`.

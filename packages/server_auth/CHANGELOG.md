@@ -1,5 +1,10 @@
 ## Unreleased
 
+- Added the opt-in typed `WebAuthnFeature` with digest-at-rest one-time
+  challenges, durable authenticator/counter contracts, `none` attestation,
+  ES256 assertion verification, exact origin/RP-ID binding, and replay-safe
+  compare-and-set counter updates. Broader COSE algorithms and session issuance
+  remain follow-up capabilities.
 - Make password reset/change fail closed by rotating JWT versions and revoking
   server sessions before replacing credentials.
 - Derive `AuthStoreMode` when framework composition replaces the configured

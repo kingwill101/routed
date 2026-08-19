@@ -103,10 +103,15 @@ The work is intentionally split between framework-agnostic capabilities in
   separate revocation/versioning capability.
 - [x] Add client session helpers for current-session metadata, session listing,
   session revocation, and device/session labels.
-- [ ] Finish WebAuthn/passkey registration and assertion verification. Persist
-  challenges and authenticators, validate origin and RP ID, enforce counter
-  handling, expose Routed routes for the ceremonies, and provide authenticated
-  list/rename/delete operations for passkeys.
+- [x] Add typed WebAuthn challenge and authenticator stores with one-time
+  challenge consumption, credential uniqueness, and compare-and-set counter
+  updates.
+- [x] Add `none`-attestation/ES256 registration and assertion verification with
+  exact origin/RP-ID binding, user-presence checks, and replay protection.
+- [x] Expose the registration, assertion, listing, and deletion contracts
+  through the typed feature registry, Routed routes, and `AuthClient`.
+- [ ] Finish the broader WebAuthn subsystem: support additional attestation and
+  COSE algorithms, passkey rename, and optional assertion-to-session issuance.
 - [x] Add an optional native `TwoFactorFeature` with TOTP enrollment
   verification, protected-secret and typed-store boundaries, recovery-code
   hashing and atomic one-time consumption, lockout handling, disablement, and
@@ -207,8 +212,9 @@ native auth model.
 - [x] Add stateful/property tests for session rotation, concurrent session
   refresh, and revocation; concurrent verification-token replay is covered by
   the server-auth token-store tests.
-- [x] Add stateful tests for replayed OAuth challenges through the atomic
-  challenge store; passkey challenge lifecycle remains to be implemented.
+- [x] Add stateful tests for replayed OAuth and passkey challenges through their
+  atomic challenge stores, including counter replay and malformed ceremony
+  inputs.
 - [x] Enforce provider-account uniqueness at the account-link boundary and
   reject cross-user OAuth account-link conflicts in both OAuth helper paths.
 - [x] Reject empty or duplicate provider IDs and incomplete user/account
