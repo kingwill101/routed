@@ -230,11 +230,15 @@ final transport = AuthClientTransport(
   cookieStore: persistentCookieStore,
 );
 
-final auth = AuthClient(baseUrl: baseUrl, transport: transport);
-final organizationClient = AuthOrganizationClient(
-  transport: transport,
+final organizationPlugin = AuthOrganizationClientPlugin(
   staticRoles: organizationRoles,
 );
+final auth = AuthClient(
+  baseUrl: baseUrl,
+  transport: transport,
+  plugins: [organizationPlugin],
+);
+final organizationClient = auth.plugins.use(organizationPlugin);
 
 final created = await organizationClient.create(
   name: 'Acme',

@@ -27,7 +27,7 @@ import 'package:routed/routed.dart';
 final authStore = InMemoryAuthStore();
 final adminStore = InMemoryAuthAdminStore(authStore);
 
-final adminFeature = AdminPlugin<EngineContext>(
+final adminPlugin = AdminPlugin<EngineContext>(
   store: adminStore,
   options: const AuthAdminOptions<EngineContext>(
     adminRoles: {'admin'},
@@ -42,7 +42,7 @@ engine.container.instance<AuthOptions<EngineContext>>(
     providers: providers,
     store: authStore,
     storeMode: AuthStoreMode.ephemeral,
-    plugins: [adminFeature],
+    plugins: [adminPlugin],
     sessionStrategy: AuthSessionStrategy.session,
   ),
 );
@@ -78,7 +78,7 @@ Admin-to-admin impersonation is deliberately excluded. Add the explicit
 `user:impersonate-admins` permission only to a role that should have it:
 
 ```dart
-final adminFeature = AdminPlugin<EngineContext>(
+final adminPlugin = AdminPlugin<EngineContext>(
   store: adminStore,
   options: const AuthAdminOptions<EngineContext>(
     adminRoles: {'admin', 'support-supervisor'},
@@ -98,7 +98,7 @@ the actor's own effective admin access. Store transactions also preserve at
 least one effective administrator under concurrent changes.
 
 For a trusted bootstrap or project command, call
-`adminFeature.trustedGrantAdministrator(userId)`. This Dart-only method is not
+`adminPlugin.trustedGrantAdministrator(userId)`. This Dart-only method is not
 an HTTP endpoint.
 
 ## User management and bans
@@ -213,11 +213,13 @@ final transport = AuthClientTransport(
   cookieStore: persistentCookieStore,
 );
 
+final adminPlugin = AuthAdminClientPlugin();
 final auth = AuthClient(
   baseUrl: Uri.parse('https://app.example.com'),
   transport: transport,
+  plugins: [adminPlugin],
 );
-final admin = AuthAdminClient(transport: transport);
+final admin = auth.plugins.use(adminPlugin);
 
 final page = await admin.listUsers(
   search: 'alex',
