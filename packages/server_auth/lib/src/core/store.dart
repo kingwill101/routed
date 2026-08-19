@@ -147,6 +147,9 @@ abstract interface class AuthCredentialStore {
 abstract interface class AuthAccountStore {
   FutureOr<AuthAccount?> find(String providerId, String providerAccountId);
 
+  /// Lists external identities linked to [userId].
+  FutureOr<List<AuthAccount>> listForUser(String userId);
+
   /// Atomically creates an identity link or returns the canonical existing link.
   ///
   /// Implementations must enforce uniqueness for the
@@ -154,6 +157,13 @@ abstract interface class AuthAccountStore {
   /// existing link belonging to another user.
   /// Links [account], which must contain non-empty provider and user IDs.
   FutureOr<AuthAccount> link(AuthAccount account);
+
+  /// Removes one external identity only when it belongs to [userId].
+  FutureOr<bool> unlinkForUser(
+    String userId,
+    String providerId,
+    String providerAccountId,
+  );
 }
 
 /// Persistence contract for server-side sessions.
@@ -381,7 +391,14 @@ class CallbackAuthStore implements AuthStore {
       String providerAccountId,
     )?
     onFindAccount,
+    FutureOr<List<AuthAccount>> Function(String userId)? onListAccountsForUser,
     FutureOr<AuthAccount> Function(AuthAccount account)? onLinkAccount,
+    FutureOr<bool> Function(
+      String userId,
+      String providerId,
+      String providerAccountId,
+    )?
+    onUnlinkAccountForUser,
     FutureOr<AuthSessionRecord?> Function(String tokenHash)? onFindSession,
     FutureOr<AuthSessionRecord> Function(AuthSessionRecord session)?
     onCreateSession,
@@ -453,7 +470,9 @@ class CallbackAuthStore implements AuthStore {
        ),
        accounts = _CallbackAccountStore(
          onFind: onFindAccount,
+         onListForUser: onListAccountsForUser,
          onLink: onLinkAccount,
+         onUnlinkForUser: onUnlinkAccountForUser,
        ),
        sessions = _CallbackSessionStore(
          onFind: onFindSession,
@@ -823,10 +842,32 @@ class _InMemoryAccountStore implements AuthAccountStore {
   }
 
   @override
+  Future<List<AuthAccount>> listForUser(String userId) async {
+    final normalizedUserId = userId.trim();
+    return _accounts.values
+        .where((account) => account.userId == normalizedUserId)
+        .map((account) => account.redacted())
+        .toList(growable: false);
+  }
+
+  @override
   Future<AuthAccount> link(AuthAccount account) async {
     validateAuthAccountForLink(account);
     final key = (account.providerId, account.providerAccountId);
     return _accounts.putIfAbsent(key, () => account);
+  }
+
+  @override
+  Future<bool> unlinkForUser(
+    String userId,
+    String providerId,
+    String providerAccountId,
+  ) async {
+    final key = (providerId.trim(), providerAccountId.trim());
+    final account = _accounts[key];
+    if (account?.userId != userId.trim()) return false;
+    _accounts.remove(key);
+    return true;
   }
 }
 
@@ -1095,22 +1136,46 @@ class _CallbackCredentialStore implements AuthCredentialStore {
 }
 
 class _CallbackAccountStore implements AuthAccountStore {
-  const _CallbackAccountStore({this.onFind, this.onLink});
+  const _CallbackAccountStore({
+    this.onFind,
+    this.onListForUser,
+    this.onLink,
+    this.onUnlinkForUser,
+  });
 
   final FutureOr<AuthAccount?> Function(
     String providerId,
     String providerAccountId,
   )?
   onFind;
+  final FutureOr<List<AuthAccount>> Function(String userId)? onListForUser;
   final FutureOr<AuthAccount> Function(AuthAccount account)? onLink;
+  final FutureOr<bool> Function(
+    String userId,
+    String providerId,
+    String providerAccountId,
+  )?
+  onUnlinkForUser;
 
   @override
   FutureOr<AuthAccount?> find(String providerId, String providerAccountId) =>
       onFind?.call(providerId, providerAccountId);
 
   @override
+  FutureOr<List<AuthAccount>> listForUser(String userId) =>
+      onListForUser?.call(userId) ?? const <AuthAccount>[];
+
+  @override
   FutureOr<AuthAccount> link(AuthAccount account) =>
       onLink?.call(account) ?? account;
+
+  @override
+  FutureOr<bool> unlinkForUser(
+    String userId,
+    String providerId,
+    String providerAccountId,
+  ) =>
+      onUnlinkForUser?.call(userId, providerId, providerAccountId) ?? false;
 }
 
 class _CallbackSessionStore implements AuthSessionStore {

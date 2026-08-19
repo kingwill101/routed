@@ -82,6 +82,16 @@ void main() {
         (await store.accounts.find('github', 'account-1'))?.userId,
         equals(user.id),
       );
+      expect((await store.accounts.listForUser(user.id)).single.providerId, 'github');
+      expect(
+        await store.accounts.unlinkForUser(user.id, 'github', 'account-1'),
+        isTrue,
+      );
+      expect(await store.accounts.listForUser(user.id), isEmpty);
+      expect(
+        await store.accounts.unlinkForUser(user.id, 'github', 'account-1'),
+        isFalse,
+      );
 
       final now = DateTime.now().toUtc();
       final session = AuthSessionRecord(
