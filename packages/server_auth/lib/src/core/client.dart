@@ -255,6 +255,161 @@ final class AuthClientApiKey {
   }
 }
 
+/// Registration options returned by the WebAuthn ceremony-start endpoint.
+///
+/// [publicKey] is shaped for the browser `navigator.credentials.create` API.
+/// Base64url fields remain strings so a platform adapter can convert them to
+/// the byte representation required by its WebAuthn binding.
+final class AuthClientWebAuthnRegistrationOptions {
+  const AuthClientWebAuthnRegistrationOptions({
+    required this.challenge,
+    required this.relyingPartyId,
+    required this.userId,
+    required this.publicKey,
+  });
+
+  final String challenge;
+  final String relyingPartyId;
+  final String userId;
+  final Map<String, dynamic> publicKey;
+
+  factory AuthClientWebAuthnRegistrationOptions.fromJson(
+    Map<String, dynamic> json,
+  ) {
+    final challenge = _requiredString(json, 'challenge');
+    final rp = json['rp'];
+    final user = json['user'];
+    if (rp is! Map || user is! Map) {
+      throw const FormatException('Invalid WebAuthn registration options');
+    }
+    final relyingPartyId = _requiredString(Map<String, dynamic>.from(rp), 'id');
+    final userId = _requiredString(Map<String, dynamic>.from(user), 'id');
+    final timeout = json['timeout'];
+    if (timeout is! int || timeout <= 0) {
+      throw const FormatException('Invalid WebAuthn registration timeout');
+    }
+    return AuthClientWebAuthnRegistrationOptions(
+      challenge: challenge,
+      relyingPartyId: relyingPartyId,
+      userId: userId,
+      publicKey: Map<String, dynamic>.unmodifiable(json),
+    );
+  }
+
+  Map<String, dynamic> toJson() => Map<String, dynamic>.from(publicKey);
+}
+
+/// Authentication options returned by the WebAuthn ceremony-start endpoint.
+final class AuthClientWebAuthnAuthenticationOptions {
+  const AuthClientWebAuthnAuthenticationOptions({
+    required this.challenge,
+    required this.relyingPartyId,
+    required this.timeout,
+    required this.userVerification,
+    required this.allowCredentials,
+    this.userId,
+  });
+
+  final String challenge;
+  final String relyingPartyId;
+  final Duration timeout;
+  final String userVerification;
+  final List<String> allowCredentials;
+  final String? userId;
+
+  factory AuthClientWebAuthnAuthenticationOptions.fromJson(
+    Map<String, dynamic> json, {
+    String? userId,
+  }) {
+    final timeout = json['timeout'];
+    final rawCredentials = json['allowCredentials'];
+    if (timeout is! int ||
+        timeout <= 0 ||
+        (rawCredentials != null && rawCredentials is! List)) {
+      throw const FormatException('Invalid WebAuthn authentication options');
+    }
+    final credentials = rawCredentials == null
+        ? const <String>[]
+        : rawCredentials
+              .map((value) {
+                if (value is! Map) {
+                  throw const FormatException(
+                    'Invalid WebAuthn allowed credential',
+                  );
+                }
+                return _requiredString(Map<String, dynamic>.from(value), 'id');
+              })
+              .toList(growable: false);
+    return AuthClientWebAuthnAuthenticationOptions(
+      challenge: _requiredString(json, 'challenge'),
+      relyingPartyId: _requiredString(json, 'rpId'),
+      timeout: Duration(milliseconds: timeout),
+      userVerification: _requiredString(json, 'userVerification'),
+      allowCredentials: List<String>.unmodifiable(credentials),
+      userId: userId,
+    );
+  }
+
+  Map<String, dynamic> toJson() => <String, dynamic>{
+    'challenge': challenge,
+    'rpId': relyingPartyId,
+    'timeout': timeout.inMilliseconds,
+    'userVerification': userVerification,
+    if (allowCredentials.isNotEmpty)
+      'allowCredentials': allowCredentials
+          .map((id) => <String, dynamic>{'type': 'public-key', 'id': id})
+          .toList(growable: false),
+  };
+}
+
+/// Public metadata for a registered passkey.
+final class AuthClientWebAuthnCredential {
+  const AuthClientWebAuthnCredential({
+    required this.credentialId,
+    required this.userId,
+    required this.counter,
+    this.publicKey,
+    this.transports,
+    this.createdAt,
+    this.lastUsedAt,
+    this.name,
+  });
+
+  final String credentialId;
+  final String userId;
+  final int counter;
+  final String? publicKey;
+  final List<String>? transports;
+  final DateTime? createdAt;
+  final DateTime? lastUsedAt;
+  final String? name;
+
+  factory AuthClientWebAuthnCredential.fromJson(Map<String, dynamic> json) {
+    final rawCounter = json['counter'];
+    if (rawCounter is! int || rawCounter < 0) {
+      throw const FormatException('Invalid WebAuthn credential counter');
+    }
+    final rawTransports = json['transports'];
+    if (rawTransports != null &&
+        (rawTransports is! List ||
+            rawTransports.any((value) => value is! String))) {
+      throw const FormatException('Invalid WebAuthn credential transports');
+    }
+    return AuthClientWebAuthnCredential(
+      credentialId: _requiredString(json, 'credential_id'),
+      userId: _requiredString(json, 'user_id'),
+      counter: rawCounter,
+      publicKey: json['public_key']?.toString(),
+      transports: rawTransports == null
+          ? null
+          : List<String>.unmodifiable(rawTransports.cast<String>()),
+      createdAt: _optionalDate(json, 'created_at'),
+      lastUsedAt: _optionalDate(json, 'last_used_at'),
+      name: json['name']?.toString(),
+    );
+  }
+}
+
 /// The one-time API-key response returned after create or rotate.
 final class AuthClientIssuedApiKey {
   const AuthClientIssuedApiKey({required this.apiKey, required this.key});
@@ -267,6 +422,33 @@ final class AuthClientIssuedApiKey {
     return AuthClientIssuedApiKey(
       apiKey: AuthClientApiKey.fromJson(json),
       key: key,
+    );
+  }
+}
+
+/// Result returned after a passkey assertion is verified.
+final class AuthClientWebAuthnAuthenticationResult {
+  const AuthClientWebAuthnAuthenticationResult({
+    required this.user,
+    required this.credential,
+  });
+
+  final AuthUser user;
+  final AuthClientWebAuthnCredential credential;
+
+  factory AuthClientWebAuthnAuthenticationResult.fromJson(
+    Map<String, dynamic> json,
+  ) {
+    final rawUser = json['user'];
+    final rawCredential = json['credential'];
+    if (rawUser is! Map || rawCredential is! Map) {
+      throw const FormatException('Invalid WebAuthn authentication response');
+    }
+    return AuthClientWebAuthnAuthenticationResult(
+      user: AuthUser.fromJson(Map<String, dynamic>.from(rawUser)),
+      credential: AuthClientWebAuthnCredential.fromJson(
+        Map<String, dynamic>.from(rawCredential),
+      ),
     );
   }
 }
@@ -689,6 +871,90 @@ class AuthClient {
         .toList(growable: false);
   }
 
+  /// Begins a passkey registration ceremony for the signed-in user.
+  Future<AuthClientWebAuthnRegistrationOptions>
+  beginWebAuthnRegistration() async {
+    final response = await _mutatingRequest(
+      'POST',
+      '/webauthn/register/options',
+      const <String, dynamic>{},
+    );
+    return AuthClientWebAuthnRegistrationOptions.fromJson(
+      _mapBody(response.body),
+    );
+  }
+
+  /// Completes passkey registration and returns persisted credential metadata.
+  Future<AuthClientWebAuthnCredential> completeWebAuthnRegistration({
+    required Map<String, dynamic> credential,
+    String? name,
+  }) async {
+    final response = await _mutatingRequest(
+      'POST',
+      '/webauthn/register/verify',
+      <String, dynamic>{
+        'credential': <String, dynamic>{...credential, 'name': ?name},
+      },
+    );
+    final rawCredential = _mapBody(response.body)['credential'];
+    if (rawCredential is! Map) {
+      throw const FormatException('Invalid WebAuthn registration response');
+    }
+    return AuthClientWebAuthnCredential.fromJson(
+      Map<String, dynamic>.from(rawCredential),
+    );
+  }
+
+  /// Begins a discoverable or user-bound passkey authentication ceremony.
+  Future<AuthClientWebAuthnAuthenticationOptions> beginWebAuthnAuthentication({
+    String? userId,
+  }) async {
+    final response = await _mutatingRequest(
+      'POST',
+      '/webauthn/authenticate/options',
+      <String, dynamic>{'userId': ?userId},
+    );
+    return AuthClientWebAuthnAuthenticationOptions.fromJson(
+      _mapBody(response.body),
+      userId: userId,
+    );
+  }
+
+  /// Verifies a browser passkey assertion.
+  Future<AuthClientWebAuthnAuthenticationResult>
+  completeWebAuthnAuthentication({
+    required Map<String, dynamic> credential,
+    String? userId,
+  }) async {
+    final response = await _mutatingRequest(
+      'POST',
+      '/webauthn/authenticate/verify',
+      <String, dynamic>{'credential': credential, 'userId': ?userId},
+    );
+    return AuthClientWebAuthnAuthenticationResult.fromJson(
+      _mapBody(response.body),
+    );
+  }
+
+  /// Lists passkeys registered for the current user.
+  Future<List<AuthClientWebAuthnCredential>> getWebAuthnCredentials() async {
+    final response = await _request('GET', '/webauthn/credentials');
+    final values = _mapBody(response.body)['credentials'];
+    if (values is! List) {
+      throw const FormatException('Invalid WebAuthn credential response');
+    }
+    return values
+        .map((value) {
+          if (value is! Map) {
+            throw const FormatException('Invalid WebAuthn credential');
+          }
+          return AuthClientWebAuthnCredential.fromJson(
+            Map<String, dynamic>.from(value),
+          );
+        })
+        .toList(growable: false);
+  }
+
   /// Creates an API key. The raw key is returned only in this response.
   Future<AuthClientIssuedApiKey> createApiKey({
     required String name,
@@ -732,6 +998,13 @@ class AuthClient {
   Future<AuthSession> exchangeApiKeyForSession() async {
     final response = await _request('POST', '/api-keys/exchange');
     return _sessionFromBody(response.body);
+  }
+
+  /// Deletes one passkey belonging to the current user.
+  Future<void> deleteWebAuthnCredential({required String credentialId}) async {
+    await _mutatingRequest('POST', '/webauthn/credentials/delete', {
+      'credentialId': credentialId,
+    });
   }
 
   /// Returns the current two-factor status for the signed-in user.

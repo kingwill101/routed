@@ -5,6 +5,7 @@ import 'oauth_challenge_store.dart';
 import 'password_reset_token_store.dart';
 import 'verification_token_store.dart';
 import 'jwt_version_store.dart';
+import 'webauthn_store.dart';
 
 /// Result of an atomic user create-or-find operation.
 class AuthUserCreateResult {
@@ -222,6 +223,10 @@ abstract interface class AuthStore {
   AuthJwtVersionStore get jwtVersions;
 
   AuthVerificationTokenStore get verificationTokens;
+
+  AuthWebAuthnChallengeStore get webAuthnChallenges;
+
+  AuthWebAuthnAuthenticatorStore get webAuthnAuthenticators;
 }
 
 /// Optional data-plane operations required by the Admin feature.
@@ -259,7 +264,9 @@ class InMemoryAuthStore implements AuthStore, AuthAdminStoreCapabilities {
       oauthChallenges = InMemoryAuthOAuthChallengeStore(),
       passwordResetTokens = InMemoryAuthPasswordResetTokenStore(),
       jwtVersions = InMemoryAuthJwtVersionStore(),
-      verificationTokens = InMemoryAuthVerificationTokenStore() {
+      verificationTokens = InMemoryAuthVerificationTokenStore(),
+      webAuthnChallenges = InMemoryAuthWebAuthnChallengeStore(),
+      webAuthnAuthenticators = InMemoryAuthWebAuthnAuthenticatorStore() {
     (credentials as _InMemoryCredentialStore).users = users;
   }
 
@@ -286,6 +293,12 @@ class InMemoryAuthStore implements AuthStore, AuthAdminStoreCapabilities {
 
   @override
   final AuthVerificationTokenStore verificationTokens;
+
+  @override
+  final AuthWebAuthnChallengeStore webAuthnChallenges;
+
+  @override
+  final AuthWebAuthnAuthenticatorStore webAuthnAuthenticators;
 
   @override
   Future<List<AuthUser>> listUsersForAdministration() async =>
@@ -422,6 +435,8 @@ class CallbackAuthStore implements AuthStore {
     onConsumeVerificationToken,
     FutureOr<void> Function(String identifier)? onDeleteVerificationTokens,
     AuthVerificationTokenStore? verificationTokens,
+    AuthWebAuthnChallengeStore? webAuthnChallenges,
+    AuthWebAuthnAuthenticatorStore? webAuthnAuthenticators,
   }) : users = _CallbackUserStore(
          onFindById: onFindUserById,
          onFindByEmail: onFindUserByEmail,
@@ -476,7 +491,11 @@ class CallbackAuthStore implements AuthStore {
              onSave: onSaveVerificationToken,
              onConsume: onConsumeVerificationToken,
              onDelete: onDeleteVerificationTokens,
-           );
+           ),
+       webAuthnChallenges =
+           webAuthnChallenges ?? InMemoryAuthWebAuthnChallengeStore(),
+       webAuthnAuthenticators =
+           webAuthnAuthenticators ?? InMemoryAuthWebAuthnAuthenticatorStore();
 
   @override
   final AuthUserStore users;
@@ -501,6 +520,12 @@ class CallbackAuthStore implements AuthStore {
 
   @override
   final AuthVerificationTokenStore verificationTokens;
+
+  @override
+  final AuthWebAuthnChallengeStore webAuthnChallenges;
+
+  @override
+  final AuthWebAuthnAuthenticatorStore webAuthnAuthenticators;
 }
 
 class _CallbackPasswordResetTokenStore implements AuthPasswordResetTokenStore {

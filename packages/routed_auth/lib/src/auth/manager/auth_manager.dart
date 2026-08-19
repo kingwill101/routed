@@ -32,6 +32,7 @@ import 'package:server_auth/server_auth.dart'
         AuthSessionStrategy,
         TwoFactorFeature,
         OrganizationFeature,
+        WebAuthnFeature,
         AuthTwoFactorRequiredException,
         AuthTwoFactorStepUpToken,
         authJwtVersionClaim,
@@ -135,6 +136,10 @@ class AuthManager {
   /// The configured Admin feature, if enabled for this runtime.
   AdminFeature<EngineContext>? get admin =>
       runtime.feature('admin') as AdminFeature<EngineContext>?;
+
+  /// The configured WebAuthn/passkey feature, if enabled for this runtime.
+  WebAuthnFeature<EngineContext>? get webAuthn =>
+      runtime.feature('webauthn') as WebAuthnFeature<EngineContext>?;
 
   SessionAuthService get sessionAuth => _sessionAuth ?? SessionAuth.instance;
 

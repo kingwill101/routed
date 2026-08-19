@@ -82,6 +82,12 @@ import 'package:routed_sessions/routed_sessions.dart';
 /// - `POST /api-keys/revoke` revokes a service API key.
 /// - `POST /api-keys/exchange` exchanges an API key for a server session when
 ///   explicitly enabled.
+/// - `POST /webauthn/register/options` begins passkey registration.
+/// - `POST /webauthn/register/verify` verifies and stores a passkey.
+/// - `POST /webauthn/authenticate/options` begins passkey authentication.
+/// - `POST /webauthn/authenticate/verify` verifies a passkey assertion.
+/// - `GET /webauthn/credentials` lists the current user's passkeys.
+/// - `POST /webauthn/credentials/delete` deletes one current-user passkey.
 ///
 /// ## Usage
 /// ```dart
