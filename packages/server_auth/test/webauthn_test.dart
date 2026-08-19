@@ -177,40 +177,43 @@ void main() {
       );
     });
 
-    test('renames only the owning credential and preserves ceremony state', () async {
-      final store = InMemoryAuthWebAuthnAuthenticatorStore();
-      final created = DateTime.utc(2030, 1, 1);
-      final authenticator = WebAuthnAuthenticator(
-        credentialId: 'credential-1',
-        publicKey: 'cose-key',
-        counter: 4,
-        userId: 'user-1',
-        transports: ['internal'],
-        createdAt: created,
-        lastUsedAt: created.add(const Duration(minutes: 1)),
-        name: 'Old name',
-      );
-      await store.create(authenticator);
+    test(
+      'renames only the owning credential and preserves ceremony state',
+      () async {
+        final store = InMemoryAuthWebAuthnAuthenticatorStore();
+        final created = DateTime.utc(2030, 1, 1);
+        final authenticator = WebAuthnAuthenticator(
+          credentialId: 'credential-1',
+          publicKey: 'cose-key',
+          counter: 4,
+          userId: 'user-1',
+          transports: ['internal'],
+          createdAt: created,
+          lastUsedAt: created.add(const Duration(minutes: 1)),
+          name: 'Old name',
+        );
+        await store.create(authenticator);
 
-      final renamed = await store.renameForUser(
-        'user-1',
-        'credential-1',
-        '  New name  ',
-      );
-      expect(renamed?.name, 'New name');
-      expect(renamed?.credentialId, authenticator.credentialId);
-      expect(renamed?.publicKey, authenticator.publicKey);
-      expect(renamed?.counter, authenticator.counter);
-      expect(renamed?.transports, authenticator.transports);
-      expect(
-        await store.renameForUser('other-user', 'credential-1', 'Hijack'),
-        isNull,
-      );
-      expect(
-        await store.renameForUser('user-1', 'credential-1', '   '),
-        isNull,
-      );
-    });
+        final renamed = await store.renameForUser(
+          'user-1',
+          'credential-1',
+          '  New name  ',
+        );
+        expect(renamed?.name, 'New name');
+        expect(renamed?.credentialId, authenticator.credentialId);
+        expect(renamed?.publicKey, authenticator.publicKey);
+        expect(renamed?.counter, authenticator.counter);
+        expect(renamed?.transports, authenticator.transports);
+        expect(
+          await store.renameForUser('other-user', 'credential-1', 'Hijack'),
+          isNull,
+        );
+        expect(
+          await store.renameForUser('user-1', 'credential-1', '   '),
+          isNull,
+        );
+      },
+    );
   });
 
   group('WebAuthn ceremonies', () {
@@ -255,53 +258,92 @@ void main() {
       expect(result.authenticator.counter, 1);
     });
 
-    test('issues a server session through the authentication endpoint', () async {
+    test('authenticates an RS256 passkey', () async {
       final fixture = _Fixture();
-      await fixture.store.users.create(fixture.user);
-      final registration = await fixture.feature.beginRegistration(
-        context: fixture.context,
-        user: fixture.user,
+      final keyPair = _RsaKeyPair.create();
+      final credentialId = base64UrlNoPadding(
+        Uint8List.fromList(utf8.encode('rsa-credential')),
       );
-      final saved = await fixture.feature.finishRegistration(
-        context: fixture.context,
-        user: fixture.user,
-        credential: _registrationCredential(
-          challenge: registration.challenge,
-          keyPair: fixture.keyPair,
+      await fixture.store.users.create(fixture.user);
+      await fixture.store.webAuthnAuthenticators.create(
+        WebAuthnAuthenticator(
+          credentialId: credentialId,
+          publicKey: base64UrlNoPadding(keyPair.cosePublicKey),
+          counter: 0,
+          userId: fixture.user.id,
+          createdAt: DateTime.now().toUtc(),
         ),
       );
+
       final authentication = await fixture.feature.beginAuthentication(
         context: fixture.context,
         userId: fixture.user.id,
       );
-      final sessionControl = _RecordingSessionControl();
-      final endpoint = fixture.feature.endpoints.firstWhere(
-        (value) => value.id == 'webauthn.authenticationVerify',
-      );
-
-      final response = await endpoint.invoke(
-        AuthOperationInvocation<Object>(
-          context: fixture.context,
-          user: null,
-          sessionControl: sessionControl,
+      final result = await fixture.feature.finishAuthentication(
+        context: fixture.context,
+        credential: _rsaAssertionCredential(
+          challenge: authentication.challenge,
+          credentialId: credentialId,
+          keyPair: keyPair,
+          counter: 1,
         ),
-        <String, dynamic>{
-          'credential': _assertionCredential(
-            challenge: authentication.challenge,
-            credentialId: saved.credentialId,
-            keyPair: fixture.keyPair,
-            counter: 1,
-          ),
-          'userId': fixture.user.id,
-        },
+        userId: fixture.user.id,
       );
 
-      final payload = response! as Map<String, dynamic>;
-      expect(payload['status'], equals('authenticated'));
-      expect(payload['session'], isA<Map<String, dynamic>>());
-      expect(sessionControl.replacedUser?.id, equals(fixture.user.id));
-      expect(sessionControl.authenticationMethod, equals('webauthn'));
+      expect(result.user.id, fixture.user.id);
+      expect(result.authenticator.counter, 1);
     });
+
+    test(
+      'issues a server session through the authentication endpoint',
+      () async {
+        final fixture = _Fixture();
+        await fixture.store.users.create(fixture.user);
+        final registration = await fixture.feature.beginRegistration(
+          context: fixture.context,
+          user: fixture.user,
+        );
+        final saved = await fixture.feature.finishRegistration(
+          context: fixture.context,
+          user: fixture.user,
+          credential: _registrationCredential(
+            challenge: registration.challenge,
+            keyPair: fixture.keyPair,
+          ),
+        );
+        final authentication = await fixture.feature.beginAuthentication(
+          context: fixture.context,
+          userId: fixture.user.id,
+        );
+        final sessionControl = _RecordingSessionControl();
+        final endpoint = fixture.feature.endpoints.firstWhere(
+          (value) => value.id == 'webauthn.authenticationVerify',
+        );
+
+        final response = await endpoint.invoke(
+          AuthOperationInvocation<Object>(
+            context: fixture.context,
+            user: null,
+            sessionControl: sessionControl,
+          ),
+          <String, dynamic>{
+            'credential': _assertionCredential(
+              challenge: authentication.challenge,
+              credentialId: saved.credentialId,
+              keyPair: fixture.keyPair,
+              counter: 1,
+            ),
+            'userId': fixture.user.id,
+          },
+        );
+
+        final payload = response! as Map<String, dynamic>;
+        expect(payload['status'], equals('authenticated'));
+        expect(payload['session'], isA<Map<String, dynamic>>());
+        expect(sessionControl.replacedUser?.id, equals(fixture.user.id));
+        expect(sessionControl.authenticationMethod, equals('webauthn'));
+      },
+    );
 
     test('renames a registered passkey', () async {
       final fixture = _Fixture();
@@ -687,6 +729,44 @@ Uint8List _signEs256(_KeyPair keyPair, List<int> message) {
   ]);
 }
 
+Map<String, dynamic> _rsaAssertionCredential({
+  required String challenge,
+  required String credentialId,
+  required _RsaKeyPair keyPair,
+  required int counter,
+}) {
+  final authenticatorData = <int>[
+    ...crypto.sha256.convert(utf8.encode('example.com')).bytes,
+    0x05,
+    (counter >> 24) & 0xff,
+    (counter >> 16) & 0xff,
+    (counter >> 8) & 0xff,
+    counter & 0xff,
+  ];
+  final clientDataJson = _clientData(
+    type: 'webauthn.get',
+    challenge: challenge,
+    origin: 'https://example.com',
+  );
+  final signedData = <int>[
+    ...authenticatorData,
+    ...crypto.sha256.convert(clientDataJson).bytes,
+  ];
+  final signer = RSASigner(SHA256Digest(), '0609608648016503040201')
+    ..init(true, PrivateKeyParameter<RSAPrivateKey>(keyPair.privateKey));
+  final signature = signer.generateSignature(Uint8List.fromList(signedData));
+  return <String, dynamic>{
+    'id': credentialId,
+    'rawId': credentialId,
+    'type': 'public-key',
+    'response': <String, dynamic>{
+      'clientDataJSON': base64UrlNoPadding(clientDataJson),
+      'authenticatorData': base64UrlNoPadding(authenticatorData),
+      'signature': base64UrlNoPadding(signature.bytes),
+    },
+  };
+}
+
 List<int> _bigIntBytes(BigInt value, int length) {
   final result = List<int>.filled(length, 0);
   var current = value;
@@ -714,4 +794,47 @@ final class _KeyPair {
   final ECPrivateKey privateKey;
   final Uint8List x;
   final Uint8List y;
+}
+
+final class _RsaKeyPair {
+  _RsaKeyPair._({required this.privateKey, required this.cosePublicKey});
+
+  factory _RsaKeyPair.create() {
+    final random = FortunaRandom()
+      ..seed(
+        KeyParameter(Uint8List.fromList(List<int>.generate(32, (i) => i + 7))),
+      );
+    final generator = RSAKeyGenerator()
+      ..init(
+        ParametersWithRandom(
+          RSAKeyGeneratorParameters(BigInt.from(65537), 2048, 64),
+          random,
+        ),
+      );
+    final pair = generator.generateKeyPair();
+    final publicKey = pair.publicKey as RSAPublicKey;
+    final privateKey = pair.privateKey as RSAPrivateKey;
+    final modulus = _bigIntBytes(
+      publicKey.modulus!,
+      (publicKey.modulus!.bitLength + 7) ~/ 8,
+    );
+    final exponent = _bigIntBytes(
+      publicKey.publicExponent!,
+      (publicKey.publicExponent!.bitLength + 7) ~/ 8,
+    );
+    return _RsaKeyPair._(
+      privateKey: privateKey,
+      cosePublicKey: Uint8List.fromList(
+        cbor.cbor.encode(<Object?, Object?>{
+          1: 3,
+          3: -257,
+          -1: modulus,
+          -2: exponent,
+        }),
+      ),
+    );
+  }
+
+  final RSAPrivateKey privateKey;
+  final Uint8List cosePublicKey;
 }

@@ -51,6 +51,7 @@ final class AuthWebAuthnRegistrationOptions {
     },
     'pubKeyCredParams': const <Map<String, dynamic>>[
       <String, dynamic>{'type': 'public-key', 'alg': -7},
+      <String, dynamic>{'type': 'public-key', 'alg': -257},
     ],
     'timeout': timeout.inMilliseconds,
     'attestation': attestation,
@@ -116,7 +117,8 @@ final class AuthWebAuthnAuthenticationResult {
 
 /// Typed WebAuthn/passkey feature for `server_auth` runtimes.
 ///
-/// This feature supports `none` attestation and ES256 (`alg: -7`) passkeys.
+/// This feature supports `none` attestation, ES256 (`alg: -7`), and
+/// RS256 (`alg: -257`) passkeys.
 /// It deliberately rejects unsupported attestation formats and COSE
 /// algorithms instead of accepting an assertion that has not been verified.
 /// Applications that need other WebAuthn algorithms can add them after the
@@ -301,7 +303,8 @@ final class WebAuthnFeature<TContext>
           credential: credential,
           userId: _optionalString(request, 'userId'),
         );
-        final issuedSession = invocation.sessionControl == null ||
+        final issuedSession =
+            invocation.sessionControl == null ||
                 invocation.sessionControl!.strategy !=
                     AuthSessionStrategy.session
             ? null
@@ -616,7 +619,7 @@ final class WebAuthnFeature<TContext>
       ...authenticatorData,
       ...clientDataHash,
     ]);
-    if (!_verifyEs256(
+    if (!_verifySignature(
       coseKey: _decodeBase64Url(authenticator.publicKey),
       message: signedData,
       signature: signature,
@@ -943,62 +946,106 @@ final class WebAuthnFeature<TContext>
     );
   }
 
-  bool _verifyEs256({
+  bool _verifySignature({
     required Uint8List coseKey,
     required Uint8List message,
     required Uint8List signature,
   }) {
-    if (signature.length != 64) return false;
     try {
       final key = _decodeCosePublicKey(coseKey);
-      final parameters = ECDomainParameters('secp256r1');
-      final point = parameters.curve.createPoint(
-        _bytesToBigInt(key.x),
-        _bytesToBigInt(key.y),
-      );
-      if (point.isInfinity) return false;
-      final parsedSignature = ECSignature(
-        _bytesToBigInt(signature.sublist(0, 32)),
-        _bytesToBigInt(signature.sublist(32)),
-      );
-      final verifier = ECDSASigner(SHA256Digest())
-        ..init(
-          false,
-          PublicKeyParameter<ECPublicKey>(ECPublicKey(point, parameters)),
-        );
-      return verifier.verifySignature(message, parsedSignature);
+      switch (key.algorithm) {
+        case -7:
+          if (signature.length != 64 || key.x == null || key.y == null) {
+            return false;
+          }
+          final parameters = ECDomainParameters('secp256r1');
+          final point = parameters.curve.createPoint(
+            _bytesToBigInt(key.x!),
+            _bytesToBigInt(key.y!),
+          );
+          if (point.isInfinity) return false;
+          final parsedSignature = ECSignature(
+            _bytesToBigInt(signature.sublist(0, 32)),
+            _bytesToBigInt(signature.sublist(32)),
+          );
+          final verifier = ECDSASigner(SHA256Digest())
+            ..init(
+              false,
+              PublicKeyParameter<ECPublicKey>(ECPublicKey(point, parameters)),
+            );
+          return verifier.verifySignature(message, parsedSignature);
+        case -257:
+          final modulus = key.modulus;
+          final exponent = key.exponent;
+          if (modulus == null || exponent == null || signature.isEmpty) {
+            return false;
+          }
+          final verifier = RSASigner(SHA256Digest(), '0609608648016503040201')
+            ..init(
+              false,
+              PublicKeyParameter<RSAPublicKey>(
+                RSAPublicKey(_bytesToBigInt(modulus), _bytesToBigInt(exponent)),
+              ),
+            );
+          return verifier.verifySignature(
+            message,
+            RSASignature(Uint8List.fromList(signature)),
+          );
+        default:
+          return false;
+      }
     } catch (_) {
       return false;
     }
   }
 
-  _CoseEs256Key _decodeCosePublicKey(Uint8List bytes) {
+  _CosePublicKey _decodeCosePublicKey(Uint8List bytes) {
     dynamic decoded;
     try {
       decoded = cbor.cbor.decode(bytes, decodeBase64: false);
     } catch (_) {
       throw AuthFlowException('webauthn_public_key_invalid');
     }
-    if (decoded is! Map ||
-        decoded[1] != 2 ||
-        decoded[3] != -7 ||
-        decoded[-1] != 1) {
+    if (decoded is! Map) {
       throw AuthFlowException('webauthn_public_key_unsupported');
     }
-    final x = decoded[-2];
-    final y = decoded[-3];
-    if (x is! List ||
-        y is! List ||
-        x.length != 32 ||
-        y.length != 32 ||
-        x.any((value) => value is! int || value < 0 || value > 255) ||
-        y.any((value) => value is! int || value < 0 || value > 255)) {
+    final algorithm = decoded[3];
+    if (algorithm == -7) {
+      if (decoded[1] != 2 || decoded[-1] != 1) {
+        throw AuthFlowException('webauthn_public_key_unsupported');
+      }
+      final x = _coseBytes(decoded[-2], expectedLength: 32);
+      final y = _coseBytes(decoded[-3], expectedLength: 32);
+      return _CosePublicKey(algorithm: algorithm, x: x, y: y);
+    }
+    if (algorithm == -257) {
+      if (decoded[1] != 3) {
+        throw AuthFlowException('webauthn_public_key_unsupported');
+      }
+      final modulus = _coseBytes(decoded[-1]);
+      final exponent = _coseBytes(decoded[-2]);
+      if (modulus.length < 256 ||
+          modulus.length > 1024 ||
+          exponent.isEmpty ||
+          exponent.length > 8) {
+        throw AuthFlowException('webauthn_public_key_invalid');
+      }
+      return _CosePublicKey(
+        algorithm: algorithm,
+        modulus: modulus,
+        exponent: exponent,
+      );
+    }
+    throw AuthFlowException('webauthn_public_key_unsupported');
+  }
+
+  Uint8List _coseBytes(Object? value, {int? expectedLength}) {
+    if (value is! List ||
+        value.any((item) => item is! int || item < 0 || item > 255) ||
+        (expectedLength != null && value.length != expectedLength)) {
       throw AuthFlowException('webauthn_public_key_invalid');
     }
-    return _CoseEs256Key(
-      x: Uint8List.fromList(x.cast<int>()),
-      y: Uint8List.fromList(y.cast<int>()),
-    );
+    return Uint8List.fromList(value.cast<int>());
   }
 
   static Uint8List _decodeField(Map<String, dynamic> response, String key) {
@@ -1161,11 +1208,20 @@ final class _ParsedAuthenticatorData {
   final Uint8List? publicKeyCose;
 }
 
-final class _CoseEs256Key {
-  const _CoseEs256Key({required this.x, required this.y});
+final class _CosePublicKey {
+  const _CosePublicKey({
+    required this.algorithm,
+    this.x,
+    this.y,
+    this.modulus,
+    this.exponent,
+  });
 
-  final Uint8List x;
-  final Uint8List y;
+  final int algorithm;
+  final Uint8List? x;
+  final Uint8List? y;
+  final Uint8List? modulus;
+  final Uint8List? exponent;
 }
 
 BigInt _bytesToBigInt(List<int> bytes) {
