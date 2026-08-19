@@ -1,1 +1,0 @@
-"use strict";(globalThis.webpackChunkrouted=globalThis.webpackChunkrouted||[]).push([[4857],{1256:e=>{e.exports=JSON.parse('{"name":"docusaurus-plugin-content-docs","id":"routed_inertia"}')}}]);
