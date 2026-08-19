@@ -812,8 +812,8 @@ final class _RsaKeyPair {
         ),
       );
     final pair = generator.generateKeyPair();
-    final publicKey = pair.publicKey as RSAPublicKey;
-    final privateKey = pair.privateKey as RSAPrivateKey;
+    final publicKey = pair.publicKey;
+    final privateKey = pair.privateKey;
     final modulus = _bigIntBytes(
       publicKey.modulus!,
       (publicKey.modulus!.bitLength + 7) ~/ 8,
