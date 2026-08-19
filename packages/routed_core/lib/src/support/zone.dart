@@ -1,7 +1,7 @@
 import 'dart:async';
 
+import 'package:routed_core/src/config/typed.dart';
 import 'package:routed_core/src/context/context.dart';
-import 'package:routed_core/src/contracts/contracts.dart';
 import 'package:routed_core/src/engine/config.dart';
 import 'package:routed_core/src/engine/engine.dart';
 import 'package:routed_core/src/events/event_manager.dart';
@@ -19,30 +19,33 @@ T zoneValue<T>(Symbol key, String name) {
 }
 
 class AppZone {
-  static const _configKey = #config;
+  static const _configurationKey = #configuration;
   static const _engineKey = #engine;
   static const _contextKey = #context;
   static const _signalsKey = #signals;
 
   // Access the current zone's values
-  static Config get config {
+  static ConfigStore get configuration {
     final engine = zoneValue<Engine>(_engineKey, 'Engine');
     final EngineContext? context = Zone.current[_contextKey] as EngineContext?;
 
     if (context != null) {
       try {
-        return context.container.get<Config>();
+        return context.container.get<ConfigStore>();
       } catch (_) {
-        // Fall through to engine-level lookup if context container lacks Config.
+        // Fall through to engine-level lookup if context lacks configuration.
       }
     }
 
     try {
-      return engine.container.get<Config>();
+      return engine.container.get<ConfigStore>();
     } catch (_) {
-      return zoneValue<Config>(_configKey, 'Config');
+      return zoneValue<ConfigStore>(_configurationKey, 'configuration');
     }
   }
+
+  /// Backwards-readable alias for the typed configuration store.
+  static ConfigStore get config => configuration;
 
   static Engine get engine => zoneValue<Engine>(_engineKey, 'Engine');
 
@@ -81,12 +84,10 @@ class AppZone {
     required FutureOr<R> Function() body,
     required Engine engine,
     EngineContext? context,
-    Config? configOverride,
   }) async {
-    final zoneConfig = _resolveConfigForZone(
+    final configuration = _resolveConfiguration(
       engine: engine,
       context: context,
-      override: configOverride,
     );
 
     // Propagate errors to the caller so test failures and exceptions are not swallowed.
@@ -96,7 +97,7 @@ class AppZone {
       () async => await body(),
       zoneValues: {
         _engineKey: engine,
-        _configKey: zoneConfig,
+        _configurationKey: configuration,
         _contextKey: context,
         _signalsKey: ?signalHub,
       },
@@ -104,57 +105,36 @@ class AppZone {
     );
   }
 
-  static FutureOr<R> runWithConfig<R>({
-    required Config config,
+  static FutureOr<R> runWithConfiguration<R>({
+    required ConfigStore configuration,
     required FutureOr<R> Function() body,
   }) async {
     final engine = AppZone.engine;
     final EngineContext? context = Zone.current[_contextKey] as EngineContext?;
-    final container = context != null ? context.container : engine.container;
-
-    Config? previous;
-    if (container.has<Config>()) {
-      try {
-        previous = container.get<Config>();
-      } catch (_) {
-        previous = null;
-      }
-    }
-
-    container.instance<Config>(config);
-
-    try {
-      return await run<R>(
-        body: body,
-        engine: engine,
-        context: context,
-        configOverride: config,
-      );
-    } finally {
-      if (previous != null) {
-        container.instance<Config>(previous);
-      }
-    }
+    return await runZoned(
+      body,
+      zoneValues: {
+        _engineKey: engine,
+        _configurationKey: configuration,
+        _contextKey: context,
+      },
+      zoneSpecification: const ZoneSpecification(),
+    );
   }
 
-  static Config _resolveConfigForZone({
+  static ConfigStore _resolveConfiguration({
     required Engine engine,
     EngineContext? context,
-    Config? override,
   }) {
-    if (override != null) {
-      return override;
-    }
-
     if (context != null) {
       try {
-        return context.container.get<Config>();
+        return context.container.get<ConfigStore>();
       } catch (_) {
-        // Fall back to engine config when request container is missing binding.
+        // Fall back to engine configuration when request scope is unavailable.
       }
     }
 
-    return engine.appConfig;
+    return engine.configStore;
   }
 
   static SignalHub? _resolveSignalHub({

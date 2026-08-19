@@ -233,25 +233,42 @@ router.staticFile('/favicon.ico', 'public/favicon.ico');
 router.static('/assets', 'public/assets');
 ```
 
-The same helpers are available on the engine. When using `staticFile`/`static`, paths are resolved relative to the current working directory—never interpolate untrusted input into these paths. For configuration-driven mounts, enable `routed.static` and describe mounts in `config/static.yaml`:
+The same helpers are available on the engine. When using `staticFile`/`static`,
+paths are resolved relative to the current working directory—never interpolate
+untrusted input into these paths.
 
-```yaml
-static:
-  enabled: true
-  mounts:
-    - route: /assets
-      disk: assets          # storage disk name (see storage.*)
-      path: ''              # subdirectory within the disk root
-      index: index.html     # optional default file for directory requests
-      list_directories: false
+For declarative mounts, use the typed storage and static providers:
+
+```dart
+final engine = await Engine.create(
+  providers: [
+    ...Engine.defaultProviders,
+    RoutedStorageProvider(
+      configuration: StorageConfig(
+        defaultDisk: 'assets',
+        disks: {
+          'assets': const LocalStorageDiskConfig(root: 'public/assets'),
+        },
+      ),
+    ),
+    RoutedStaticProvider(
+      StaticConfig(
+        enabled: true,
+        mounts: [
+          const StaticMountConfig(
+            route: '/assets',
+            disk: 'assets',
+            indexFile: 'index.html',
+          ),
+        ],
+      ),
+    ),
+  ],
+);
 ```
 
-Each mount references a storage disk (`static.mounts[].disk`), so the static provider serves files through the same file-system abstraction as the rest of your app. The `path` is resolved relative to that disk’s root (falls back to `directory` for legacy configs). Directory listings are disabled by default unless you set `list_directories: true`. For safety, the provider normalises and rejects paths that escape the disk root (for example, via `../`); avoid mounting sensitive folders and prefer a dedicated assets disk.
-
-Call `registerRoutedProviders()` before `Engine.create()` when using the
-`routed` facade, or compose `RoutedStorageProvider` and `RoutedStaticProvider`
-directly when using split packages. `provider:list --config` should then show
-`routed.static`.
+Each mount is validated to stay inside its disk or root. Directory listings
+are disabled by default; enable them only for intentionally public content.
 
 ## Method Not Allowed (405)
 
@@ -268,21 +285,26 @@ engine.get('/things', (ctx) => ctx.string('ok'));
 
 You can also inspect allowed methods programmatically via `engine.allowedMethods('/things')`.
 
-### Config-driven routing defaults
+### Typed routing defaults
 
-The routing provider reads defaults from the `routing.*` namespace. Configure `redirectTrailingSlash`, `handle_method_not_allowed`, or other toggles without touching code:
+Pass routing defaults to `RoutingServiceProvider`:
 
-```yaml title="config/http.yaml"
-routing:
-  redirect_trailing_slash: true
-  handle_method_not_allowed: true
-  default_options:
-    cache_max_age: 300
-  etag:
-    strategy: weak
+```dart
+final engine = await Engine.create(
+  providers: [
+    CoreServiceProvider(),
+    RoutingServiceProvider(
+      const RoutingConfig(
+        redirectTrailingSlash: true,
+        handleMethodNotAllowed: true,
+        etagStrategy: EtagStrategy.weak,
+      ),
+    ),
+  ],
+);
 ```
 
-At runtime you can still override behaviour with `EngineConfig` or helper options (`withRedirectTrailingSlash`, `withHandleMethodNotAllowed`). Run `dart run routed_cli provider:list --config` to confirm the routing provider is active and to review the merged defaults.
+The provider validates and applies the immutable `RoutingConfig` during boot.
 
 ## Fallback routes
 

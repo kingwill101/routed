@@ -1,263 +1,112 @@
 ---
-title: Engine Lifecycle
-description: Understand bare vs full boot profiles, explicit provider composition, and how to initialize the Engine.
+title: Engine lifecycle
+description: Compose typed providers and initialize a Routed engine
 sidebar_position: 2
 ---
 
-# Engine Lifecycle
+# Engine lifecycle
 
-The `Engine` owns the container, service providers, middleware stacks, and HTTP
-servers. Routed uses **explicit provider composition** with convenient defaults:
+`Engine` owns the request lifecycle, container, routers, middleware, and server
+transports. Providers are registered explicitly and booted once.
 
-- **Bare**: minimal routing + middleware, no config loader, no provider manifest.
-- **Full** (recommended): config loading + provider registration + manifest discovery.
+## Recommended composition
 
-Use the profile that matches your workload.
-
-## Quick Start
-
-For most applications, register the official providers once, then use
-`Engine.create()`:
-
-```dart title="Recommended: Full-featured engine"
-registerRoutedProviders();
-final engine = await Engine.create();
-
-engine.get('/ping', (ctx) => ctx.text('pong'));
-
-await engine.serve(host: '127.0.0.1', port: 8080);
-```
-
-This gives you the 14 providers currently registered by `package:routed`: core,
-routing, uploads, auth, logging, views, localization, observability, cache,
-sessions, storage, rate limiting, compression, and security. The split
-validation and OpenAPI packages are re-exported by `package:routed/routed.dart`;
-they are opt-in APIs rather than provider registrations.
-
-## `Engine.create()` – async convenience (recommended)
-
-After `registerRoutedProviders()`, `Engine.create()` is the recommended way to
-create an engine. It constructs an engine with all official providers and
-initializes it in one call. It accepts
-optional `configItems` for inline configuration, `providers`, `middlewares`,
-`options`, and `errorHandling` for full customization:
+Use the batteries-included package when you want the official provider set, or
+list only the providers your application needs:
 
 ```dart
-// Full-featured engine with all builtins (default)
-registerRoutedProviders();
-final engine = await Engine.create();
+import 'package:routed/routed.dart';
 
-// Inline configuration — no YAML files needed (recommended)
-final engine = await Engine.create(
-  configItems: {
-    'app.name': 'My Application',
-    'app.env': 'production',
-    'logging.enabled': true,
-  },
-);
-
-// Minimal engine with just core + routing
-final engine = await Engine.create(providers: Engine.defaultProviders);
-
-// Bare engine (no providers)
-final engine = await Engine.create(providers: []);
-
-// Advanced: explicit CoreServiceProvider (e.g. when combining with withLoader)
-registerRoutedProviders();
 final engine = await Engine.create(
   providers: [
-    CoreServiceProvider(configItems: {'app.name': 'MyApp'}),
-    ...Engine.builtins,
+    CoreServiceProvider(
+      EngineConfig(
+        security: EngineSecurityFeatures(
+          maxRequestSize: 10 * 1024 * 1024,
+        ),
+      ),
+    ),
+    RoutingServiceProvider(
+      const RoutingConfig(handleMethodNotAllowed: true),
+    ),
+    UploadsServiceProvider(
+      MultipartConfig(allowedExtensions: {'jpg', 'png'}),
+    ),
   ],
 );
 ```
 
-## `Engine()` – manual construction
+`Engine.create` initializes the engine before returning it. For a bare engine,
+use `Engine()` or `Engine.create(providers: const [])`; bare engines still have
+the router and middleware pipeline but no typed provider configuration.
 
-When you need finer control over the boot process, construct the engine manually
-and call `initialize()`:
+## Provider boot order
 
-### Bare mode
+The lifecycle is:
 
-Calling `Engine()` with no providers returns a bare-bones instance. No config
-files are loaded and no providers are auto-registered:
+1. Construct the engine and register providers.
+2. Register provider services and collect typed configuration objects.
+3. Validate every typed configuration and aggregate all failures.
+4. Boot providers in dependency order.
+5. Register routes and serve requests.
 
-```dart title="Bare engine"
-final engine = Engine();
-engine.get('/ping', (ctx) => ctx.text('pong'));
+Configuration and runtime context are fixed once initialization starts. A
+provider cannot be enabled from a string manifest, and configuration cannot be
+reloaded while requests are active.
 
-await engine.serve(host: '127.0.0.1', port: 8080);
-```
+## Runtime context
 
-**What you get in bare mode**
-- Route matching (including parameter patterns)
-- Middleware execution
-- The standard request/response helpers
-
-**What you do NOT get**
-- Config loader / `.env` processing
-- Provider manifest discovery (`http.providers`)
-- Built-in providers (logging, cache, sessions, etc.)
-
-### Full mode with `Engine.builtins`
-
-Use `Engine.builtins` to get all framework providers:
-
-```dart title="Full mode with all providers"
-registerRoutedProviders();
-final engine = Engine(providers: Engine.builtins);
-
-await engine.initialize();
-```
-
-This includes the providers registered by the imported bundle: core, routing,
-uploads, auth, logging, views, localization, observability, cache, sessions,
-storage, and rate limiting.
-
-### Minimal mode with `Engine.defaultProviders`
-
-Use `Engine.defaultProviders` to get just the essential providers:
-
-```dart title="Minimal mode with core + routing"
-final engine = Engine(providers: Engine.defaultProviders);
-
-await engine.initialize();
-```
-
-This gives you:
-- In-memory configuration with sensible defaults
-- Router registration
-- Event manager
-
-### Inline configuration with `configItems`
-
-For custom configuration values without file I/O, use the `configItems`
-parameter directly on the constructor. This automatically creates a
-`CoreServiceProvider` with your values:
-
-```dart title="Inline configuration (recommended)"
-registerRoutedProviders();
-final engine = Engine(
-  providers: Engine.builtins,
-  configItems: {
-    'app.name': 'My Application',
-    'app.env': 'production',
-    'database.host': 'db.internal',
-  },
-);
-
-await engine.initialize();
-```
-
-This is equivalent to the more verbose pattern of constructing a
-`CoreServiceProvider(configItems: {...})` manually, but shorter and less
-error-prone.
-
-### Custom configuration (explicit CoreServiceProvider)
-
-When you need to combine inline config with a specific `CoreServiceProvider`
-constructor (for example, `withLoader` or `withCachedConfig`), construct it
-explicitly:
-
-```dart title="Explicit CoreServiceProvider"
-final engine = Engine(
-  providers: [
-    CoreServiceProvider(configItems: {
-      'app.name': 'My Application',
-      'app.env': 'production',
-      'database.host': 'db.internal',
-    }),
-    RoutingServiceProvider(),
-  ],
-);
-
-await engine.initialize();
-```
-
-### Loading configuration from disk
-
-To load configuration from files, use `CoreServiceProvider.withLoader`:
-
-```dart title="File-based configuration"
-final engine = Engine(
-  providers: [
-    CoreServiceProvider.withLoader(ConfigLoaderOptions(
-      configDirectory: 'config',
-      envFiles: ['.env', '.env.local'],
-      watch: true,
-    )),
-    RoutingServiceProvider(),
-  ],
-);
-
-await engine.initialize();
-```
-
-### Lazy provider loading via config
-
-You can also configure providers in your `config/http.yaml` and they will be
-lazily loaded from the `ProviderRegistry`. This allows you to use a minimal
-provider set in code while still enabling additional providers via config:
-
-```dart title="Minimal code, config-driven providers"
-final engine = Engine(
-  providers: [
-    CoreServiceProvider.withLoader(ConfigLoaderOptions(
-      configDirectory: 'config',
-    )),
-    RoutingServiceProvider(),
-  ],
-);
-
-await engine.initialize();
-```
-
-```yaml title="config/http.yaml"
-providers:
-  - routed.uploads
-  - routed.logging
-```
-
-The providers listed in `http.providers` will be auto-registered from the
-`ProviderRegistry` during initialization.
-
-## Choosing between them
-
-| Scenario | Recommended API | Notes |
-| --- | --- | --- |
-| Standard applications | `registerRoutedProviders(); Engine.create()` | All official providers, fully featured. |
-| Inline config without YAML | `Engine.create(configItems: {...})` | No file I/O needed. |
-| Minimal applications | `Engine.create(providers: Engine.defaultProviders)` | Just core + routing. |
-| Microbenchmarks / tiny services | `Engine()` or `Engine.create(providers: [])` | Bare mode. Minimal overhead. |
-| Custom provider configuration | `Engine(providers: [...])` + `initialize()` | Explicit provider control. |
-| Config-driven provider loading | `Engine(providers: [CoreServiceProvider.withLoader(...), ...])` | Lazy loading via manifest. |
-| Unit tests | `Engine(providers: [...])` + `initialize()` | Explicit provider control. |
-
-## Notes for config-driven features
-
-Most `EngineOpt` helpers and provider-backed features depend on `Config`. In
-bare mode, `Config` is not bound unless you register `CoreServiceProvider` or
-bind a `Config` instance yourself. If you need config-driven middleware or
-provider defaults, include `CoreServiceProvider` in your providers list.
-
-### Late configuration overrides with `withConfigItems`
-
-If you need to override configuration values *after* providers have registered
-their defaults, use the `withConfigItems` engine option:
+Use `RuntimeContext` for environment values, secrets, and platform bindings:
 
 ```dart
-registerRoutedProviders();
+final engine = await Engine.create(
+  runtime: RuntimeContext(
+    environment: RuntimeEnvironment({'APP_ENV': 'production'}),
+    secrets: RuntimeSecrets({'SESSION_KEY': sessionKey}),
+    bindings: {Object: platformBinding},
+  ),
+  providers: [
+    CoreServiceProvider(),
+    RoutingServiceProvider(),
+  ],
+);
+```
+
+Portable provider configuration should not contain `dart:io`, JavaScript
+interop, or Cloudflare-specific objects. Those belong in runtime bindings and
+are resolved by the platform adapter.
+
+## Engine options
+
+`EngineOpt` is reserved for wiring, not provider configuration:
+
+```dart
 final engine = Engine(
-  providers: Engine.builtins,
+  providers: [CoreServiceProvider(), RoutingServiceProvider()],
   options: [
-    withConfigItems({
-      'app.debug': true,
-      'cache.driver': 'array',
-    }),
+    withMiddleware([requestIdMiddleware()]),
+    withService<AuditWriter>(AuditWriter()),
   ],
 );
+await engine.initialize();
 ```
 
-**Important:** `withConfigItems` runs after provider registration, so it acts as
-a late override. If you need values available *during* provider registration, use
-the `configItems` constructor parameter instead.
+Use the provider constructor for settings such as CORS, trusted proxies,
+logging, storage, sessions, uploads, and views. Provider settings are assembled
+once before startup and remain immutable for the engine lifetime.
+
+## Serve and close
+
+```dart
+final engine = await Engine.create(
+  providers: [CoreServiceProvider(), RoutingServiceProvider()],
+);
+
+engine.get('/health', (ctx) => ctx.json({'status': 'ok'}));
+await engine.serve(host: '127.0.0.1', port: 8080);
+
+await engine.close();
+```
+
+In tests, close every engine and client you create. `routed_testing` and
+`server_testing` provide helpers that manage those lifetimes for you.

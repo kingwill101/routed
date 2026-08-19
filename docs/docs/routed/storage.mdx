@@ -1,56 +1,48 @@
 ---
 title: Storage
-description: Configure storage disks for static assets, views, and uploads
+description: Configure typed storage disks for static assets, views, and uploads.
 sidebar_position: 21
 ---
 
 # Storage
 
-Storage disks provide the shared file abstraction for uploads, views, and
-declarative static mounts. The `routed_storage` package owns both the storage
-provider and the `static.mounts` provider.
-
-## Configuration
-
-```yaml title="config/storage.yaml"
-storage:
-  default: local
-  # Base used by storage helpers (cache/session/storage_path).
-  base: "{{ env.APP_ROOT }}/storage"
-  # Root used for the default local disk when not overridden.
-  root: storage/app
-  disks:
-    local:
-      driver: local
-      root: storage/app
-    assets:
-      driver: local
-      root: public
-    backups:
-      driver: local
-      root: storage/backups
-```
-
-## Driver options
-
-- **Local**: `root`, optional `file_system` (programmatic only).
-- Cloud drivers are not created by `RoutedStorageProvider` in this package;
-  register a compatible `StorageDisk` implementation when you need remote
-  storage.
-
-`storage.root` seeds the default local disk when no explicit disk root is
-provided. The provider does not expose a separate `StorageDefaults` service;
-use `StorageManager.resolve` for disk paths.
-
-## StorageManager usage
+`routed_storage` owns storage configuration and publishes a `StorageManager`.
+Disk definitions are typed Dart values:
 
 ```dart
-final storage = await engine.make<StorageManager>();
-final logoPath = storage.resolve('logo.png', disk: 'assets');
+import 'package:routed/routed.dart';
+
+final storage = StorageConfig(
+  defaultDisk: 'local',
+  disks: {
+    'local': const LocalStorageDiskConfig(root: 'storage/app'),
+    'assets': const LocalStorageDiskConfig(root: 'public'),
+    'backups': const LocalStorageDiskConfig(root: 'storage/backups'),
+  },
+);
+
+final engine = await Engine.create(
+  providers: [
+    ...Engine.defaultProviders,
+    RoutedStorageProvider(configuration: storage),
+  ],
+);
 ```
 
-## Next steps
+Only the local disk driver is currently built in. Applications that need a
+remote disk provide an application-owned `StorageManager` to
+`RoutedStorageProvider`.
 
-- [Configuration: Storage](/docs/routed/fundamentals/configuration#storage-disks)
-- [Views & Templates](/docs/routed/views/)
-- [Static Assets](/docs/routed/static-assets)
+## Using the manager
+
+```dart
+final manager = await engine.make<StorageManager>();
+final logo = manager.resolve('logo.png', disk: 'assets');
+```
+
+The same manager can be exposed to request handlers with
+`storageMiddleware(manager)`. Configuration is validated before provider boot;
+an unknown default disk or empty disk root fails startup.
+
+See [Static Assets](/docs/routed/static-assets) for declarative mounts and
+[Views & Templates](/docs/routed/views/) for template storage.

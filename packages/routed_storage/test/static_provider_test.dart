@@ -1,5 +1,4 @@
 import 'package:file/memory.dart';
-import 'package:routed_core/routed_core.dart';
 import 'package:routed_storage/routed_storage.dart';
 import 'package:routed_testing/routed_testing.dart';
 import 'package:server_testing/server_testing.dart';
@@ -7,6 +6,33 @@ import 'package:server_testing/server_testing.dart';
 import 'test_engine.dart';
 
 void main() {
+  test(
+    'StorageConfig applies typed local disks without a supplied manager',
+    () async {
+      final fs = MemoryFileSystem();
+      fs.directory('/assets').createSync();
+
+      final engine = testEngine(
+        fileSystem: fs,
+        providers: [
+          RoutedStorageProvider(
+            configuration: StorageConfig(
+              defaultDisk: 'assets',
+              disks: {'assets': const LocalStorageDiskConfig(root: '/assets')},
+            ),
+          ),
+        ],
+      );
+      await engine.initialize();
+      addTearDown(engine.close);
+
+      final manager = await engine.container.make<StorageManager>();
+      expect(manager.defaultDisk, 'assets');
+      expect(manager.disk('assets'), isA<LocalStorageDisk>());
+      expect((manager.disk('assets') as LocalStorageDisk).root, '/assets');
+    },
+  );
+
   test('static.mounts serves files from a configured storage disk', () async {
     final fs = MemoryFileSystem();
     final publicDirectory = fs.directory('/public')..createSync();
@@ -21,15 +47,15 @@ void main() {
 
     final engine = testEngine(
       fileSystem: fs,
-      configItems: {
-        'static': {
-          'enabled': true,
-          'mounts': [
-            {'route': '/assets', 'disk': 'assets'},
-          ],
-        },
-      },
-      providers: [RoutedStorageProvider(manager), RoutedStaticProvider()],
+      providers: [
+        RoutedStorageProvider(manager: manager),
+        RoutedStaticProvider(
+          StaticConfig(
+            enabled: true,
+            mounts: [StaticMountConfig(route: '/assets', disk: 'assets')],
+          ),
+        ),
+      ],
     );
     await engine.initialize();
     addTearDown(engine.close);
@@ -46,7 +72,7 @@ void main() {
     missing.assertStatus(404);
   });
 
-  test('static.mounts can be disabled and reconfigured on reload', () async {
+  test('static mounts are fixed for the engine lifetime', () async {
     final fs = MemoryFileSystem();
     fs.directory('/one').createSync();
     fs.directory('/two').createSync();
@@ -59,15 +85,15 @@ void main() {
 
     final engine = testEngine(
       fileSystem: fs,
-      configItems: {
-        'static': {
-          'enabled': true,
-          'mounts': [
-            {'route': '/files', 'disk': 'one'},
-          ],
-        },
-      },
-      providers: [RoutedStorageProvider(manager), RoutedStaticProvider()],
+      providers: [
+        RoutedStorageProvider(manager: manager),
+        RoutedStaticProvider(
+          StaticConfig(
+            enabled: true,
+            mounts: [StaticMountConfig(route: '/files', disk: 'one')],
+          ),
+        ),
+      ],
     );
     await engine.initialize();
     addTearDown(engine.close);
@@ -78,20 +104,8 @@ void main() {
       '/files/one.txt',
     )).assertStatus(200).assertBodyEquals('one');
 
-    await engine.replaceConfig(
-      ConfigImpl({
-        'static': {
-          'enabled': true,
-          'mounts': [
-            {'route': '/assets', 'disk': 'two'},
-          ],
-        },
-      }),
-    );
-
-    (await client.get('/files/one.txt')).assertStatus(404);
     (await client.get(
-      '/assets/two.txt',
-    )).assertStatus(200).assertBodyEquals('two');
+      '/files/one.txt',
+    )).assertStatus(200).assertBodyEquals('one');
   });
 }

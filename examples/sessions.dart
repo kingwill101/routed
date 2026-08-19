@@ -8,8 +8,9 @@ import 'package:routed_sessions/routed_sessions.dart';
 void main(List<String> args) async {
   // Construct an Engine instance with a secure cookie-backed session store.
   final engine = Engine(
-    options: [
-      withSessionConfig(
+    providers: [
+      ...Engine.defaultProviders,
+      RoutedSessionsProvider(
         SessionConfig(
           store: CookieStore(
             defaultOptions: SessionOptions(

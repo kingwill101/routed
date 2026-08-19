@@ -7,7 +7,7 @@ void main() {
 
     setUp(() {
       cacheManager = DataCacheManager();
-      cacheManager.registerStore('array', {'driver': 'array'});
+      cacheManager.registerStore('array', ArrayStore());
     });
 
     test('basic put and get', () async {
@@ -15,6 +15,19 @@ void main() {
       await repo.put('test-key', 'test-value', const Duration(seconds: 60));
       final value = await repo.get('test-key');
       expect(value, equals('test-value'));
+    });
+
+    test('registers a store from typed factory options', () async {
+      final manager = DataCacheManager()
+        ..registerStoreFactory(
+          'array',
+          ArrayStoreFactory(),
+          const ArrayStoreConfiguration(serialize: true),
+        );
+
+      final repository = manager.store('array');
+      await repository.put('typed-key', {'value': 1});
+      expect(await repository.get('typed-key'), equals({'value': 1}));
     });
 
     test('increment and decrement operations', () async {

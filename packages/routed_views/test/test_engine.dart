@@ -2,15 +2,12 @@ import 'package:file/file.dart';
 import 'package:file/memory.dart';
 import 'package:liquify/src/filter_registry.dart' as liquify;
 import 'package:routed_core/routed_core.dart';
-// ignore: implementation_imports
-import 'package:routed_views/src/middleware/localization.dart'
-    show localizationMiddleware;
-// ignore: implementation_imports
-import 'package:routed_views/src/providers/localization.dart';
-import 'package:routed_views/src/providers/view_provider.dart';
-// ignore: implementation_imports
-import 'package:routed_views/src/translation/locale_manager.dart'
-    show LocaleManager;
+import 'package:routed_views/routed_views.dart'
+    show
+        LocalizationConfig,
+        LocalizationServiceProvider,
+        RoutedViewConfig,
+        ViewServiceProvider;
 
 /// Creates a test engine with in-memory configuration.
 ///
@@ -21,9 +18,10 @@ Engine testEngine({
   EngineConfig? config,
   List<Middleware>? middlewares,
   List<EngineOpt>? options,
-  Map<String, dynamic>? configItems,
   ErrorHandlingRegistry? errorHandling,
   List<ServiceProvider>? providers,
+  LocalizationConfig? localizationConfig,
+  RoutedViewConfig? viewConfig,
   bool includeDefaultProviders = true,
   FileSystem? fileSystem,
 }) {
@@ -37,10 +35,10 @@ Engine testEngine({
   List<ServiceProvider> resolvedProviders;
   if (includeDefaultProviders) {
     final defaults = <ServiceProvider>[
-      CoreServiceProvider(configItems: configItems ?? const {}),
+      CoreServiceProvider(resolvedConfig),
       RoutingServiceProvider(),
-      LocalizationServiceProvider(),
-      ViewServiceProvider(),
+      LocalizationServiceProvider(localizationConfig),
+      ViewServiceProvider(viewConfig),
     ];
     resolvedProviders = [...defaults, ...?providers];
   } else {
@@ -70,26 +68,6 @@ Engine testEngine({
     errorHandling: errorHandling,
     providers: resolvedProviders,
   );
-
-  // Inject localization middleware via test harness when translation
-  // config is present. Production registers via http.middleware_sources
-  // and Engine._rebuildMiddlewareStacks, but the test's slim
-  // Engine.defaultProviders does not include a manifest, so we add
-  // it here without touching lib.
-  if (configItems != null && configItems.containsKey('translation')) {
-    try {
-      final manager = engine.container.get<LocaleManager>();
-      // Avoid duplicate if already present via config
-      final already = engine.middlewares.any(
-        (m) => m.toString().contains('localization'),
-      );
-      if (!already) {
-        // Import dynamically to avoid cycle; use container's manager
-        final locMiddleware = localizationMiddleware(manager);
-        engine.middlewares.add(locMiddleware);
-      }
-    } catch (_) {}
-  }
 
   return engine;
 }

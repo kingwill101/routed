@@ -1,32 +1,16 @@
 library;
 
-import 'package:routed_core/src/provider/provider.dart';
 import 'package:routed_core/src/support/named_registry.dart';
 
-/// Signature for driver documentation builders.
-typedef DriverDocBuilder<TContext> =
-    List<ConfigDocEntry> Function(TContext context);
-
 /// Immutable metadata captured when registering a driver.
-class DriverRegistration<TBuilder, TDocContext, TValidator> {
-  DriverRegistration({
-    required this.builder,
-    this.documentation,
-    this.validator,
-    List<String> requiresConfig = const [],
-  }) : requiresConfig = List<String>.unmodifiable(requiresConfig);
+class DriverRegistration<TBuilder, TValidator> {
+  DriverRegistration({required this.builder, this.validator});
 
   /// Function that produces the driver instance.
   final TBuilder builder;
 
-  /// Optional callback that declares configuration documentation entries.
-  final DriverDocBuilder<TDocContext>? documentation;
-
   /// Optional validator invoked before the driver is considered valid.
   final TValidator? validator;
-
-  /// Configuration keys required by the driver builder.
-  final List<String> requiresConfig;
 }
 
 /// Shared infrastructure for Routed driver registries.
@@ -34,36 +18,23 @@ class DriverRegistration<TBuilder, TDocContext, TValidator> {
 /// Base class for string-keyed driver registries.
 abstract class DriverRegistryBase<
   TBuilder,
-  TDocContext,
   TValidator,
-  TRegistration extends DriverRegistration<TBuilder, TDocContext, TValidator>
+  TRegistration extends DriverRegistration<TBuilder, TValidator>
 >
     extends NamedRegistry<TRegistration> {
   DriverRegistryBase();
 
   /// Creates a registration object for the given driver [builder].
-  TRegistration createRegistration(
-    TBuilder builder, {
-    DriverDocBuilder<TDocContext>? documentation,
-    TValidator? validator,
-    List<String> requiresConfig = const [],
-  });
+  TRegistration createRegistration(TBuilder builder, {TValidator? validator});
 
-  /// Registers [builder] under [name], optionally attaching docs and validators.
+  /// Registers [builder] under [name], optionally attaching a validator.
   bool registerDriver(
     String name,
     TBuilder builder, {
-    DriverDocBuilder<TDocContext>? documentation,
     TValidator? validator,
-    List<String> requiresConfig = const [],
     bool overrideExisting = true,
   }) {
-    final registration = createRegistration(
-      builder,
-      documentation: documentation,
-      validator: validator,
-      requiresConfig: requiresConfig,
-    );
+    final registration = createRegistration(builder, validator: validator);
     return registerEntry(
       name,
       registration,
@@ -75,16 +46,12 @@ abstract class DriverRegistryBase<
   bool registerDriverIfAbsent(
     String name,
     TBuilder builder, {
-    DriverDocBuilder<TDocContext>? documentation,
     TValidator? validator,
-    List<String> requiresConfig = const [],
   }) {
     return registerDriver(
       name,
       builder,
-      documentation: documentation,
       validator: validator,
-      requiresConfig: requiresConfig,
       overrideExisting: false,
     );
   }
@@ -104,34 +71,4 @@ abstract class DriverRegistryBase<
     final list = names.toList()..sort();
     return list;
   }
-
-  /// Collects documentation for every registered driver.
-  List<ConfigDocEntry> documentation({required String pathBase}) {
-    final docs = <ConfigDocEntry>[];
-    entries.forEach((driver, registration) {
-      final builder = registration.documentation;
-      if (builder == null) {
-        return;
-      }
-      docs.addAll(builder(buildDocContext(driver, pathBase: pathBase)));
-    });
-    return docs;
-  }
-
-  /// Collects documentation for a single [driver], if provided.
-  List<ConfigDocEntry> documentationFor(
-    String driver, {
-    required String pathBase,
-  }) {
-    final registration = getEntry(driver);
-    if (registration == null || registration.documentation == null) {
-      return const <ConfigDocEntry>[];
-    }
-    return registration.documentation!(
-      buildDocContext(driver, pathBase: pathBase),
-    );
-  }
-
-  /// Builds a documentation context for [driver] rooted at [pathBase].
-  TDocContext buildDocContext(String driver, {required String pathBase});
 }

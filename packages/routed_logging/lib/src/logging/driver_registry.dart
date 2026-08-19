@@ -1,12 +1,11 @@
 import 'package:contextual/contextual.dart' as contextual;
 import 'package:routed_core/src/container/container.dart';
-import 'package:routed_core/src/contracts/contracts.dart' show Config;
+import 'package:routed_core/routed_core.dart' show LoggingConfig;
 import 'package:routed_core/src/support/driver_registry.dart';
 
 typedef LogDriverBuilder =
     contextual.LogDriver Function(LogDriverBuilderContext context);
 typedef LogDriverValidator = void Function(LogDriverBuilderContext context);
-typedef LogDriverDocBuilder = DriverDocBuilder<LogDriverDocContext>;
 
 class LogDriverBuilderContext {
   LogDriverBuilderContext({
@@ -21,64 +20,31 @@ class LogDriverBuilderContext {
   final String name;
   final String configPath;
   final Map<String, Object?> options;
-  final Config config;
+
+  /// The immutable typed logging configuration for this engine.
+  final LoggingConfig config;
   final Container container;
   final contextual.LogDriver Function(String channelName) resolveChannel;
 }
 
-class LogDriverDocContext {
-  LogDriverDocContext({required this.driver, required this.pathBase});
-
-  final String driver;
-  final String pathBase;
-
-  String path(String segment) => '$pathBase.$segment';
-}
-
 class LogDriverRegistration
-    extends
-        DriverRegistration<
-          LogDriverBuilder,
-          LogDriverDocContext,
-          LogDriverValidator
-        > {
-  LogDriverRegistration({
-    required super.builder,
-    super.documentation,
-    super.validator,
-    super.requiresConfig,
-  });
+    extends DriverRegistration<LogDriverBuilder, LogDriverValidator> {
+  LogDriverRegistration({required super.builder, super.validator});
 }
 
 class LogDriverRegistry
     extends
         DriverRegistryBase<
           LogDriverBuilder,
-          LogDriverDocContext,
           LogDriverValidator,
           LogDriverRegistration
         > {
   @override
   LogDriverRegistration createRegistration(
     LogDriverBuilder builder, {
-    DriverDocBuilder<LogDriverDocContext>? documentation,
     LogDriverValidator? validator,
-    List<String> requiresConfig = const [],
   }) {
-    return LogDriverRegistration(
-      builder: builder,
-      documentation: documentation,
-      validator: validator,
-      requiresConfig: requiresConfig,
-    );
-  }
-
-  @override
-  LogDriverDocContext buildDocContext(
-    String driver, {
-    required String pathBase,
-  }) {
-    return LogDriverDocContext(driver: driver, pathBase: pathBase);
+    return LogDriverRegistration(builder: builder, validator: validator);
   }
 
   void register(String name, LogDriverBuilder builder, {bool override = true}) {

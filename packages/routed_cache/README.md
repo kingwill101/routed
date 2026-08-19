@@ -10,8 +10,8 @@ Wraps `server_cache` (array/file/redis/null stores, `DataCacheManager`, `Reposit
 dependencies:
   routed: ^0.4.0
   routed_core: ^0.3.3
-  routed_cache: ^0.1.0
-  server_cache: ^0.1.0
+  routed_cache: ^0.2.0
+  server_cache: ^0.2.0
 ```
 
 ## Usage
@@ -24,12 +24,12 @@ import 'package:server_cache/server_cache.dart';
 void main() async {
   final store = ArrayStore();
   final cacheManager = DataCacheManager()
-    ..registerStore('array', {'driver': 'array', 'serialize': false});
+    ..registerStore('array', store);
 
   final engine = await Engine.create(
     providers: [
       ...Engine.defaultProviders,
-      RoutedCacheProvider(store),
+      RoutedCacheProvider(CacheConfig(store: store)),
     ],
     options: [withCacheManager(cacheManager)],
   );

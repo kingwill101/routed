@@ -12,7 +12,6 @@ Engine testEngine({
   EngineConfig? config,
   List<Middleware>? middlewares,
   List<EngineOpt>? options,
-  Map<String, dynamic>? configItems,
   ErrorHandlingRegistry? errorHandling,
   List<ServiceProvider>? providers,
   bool includeDefaultProviders = true,
@@ -28,7 +27,7 @@ Engine testEngine({
   List<ServiceProvider> resolvedProviders;
   if (includeDefaultProviders) {
     resolvedProviders = [
-      CoreServiceProvider(configItems: configItems ?? const {}),
+      CoreServiceProvider(resolvedConfig),
       RoutingServiceProvider(),
       ...?providers,
     ];
@@ -44,8 +43,8 @@ Engine testEngine({
     providers: resolvedProviders,
   );
 
-  // If SessionConfig is present via withSessionConfig, ensure sessionMiddleware
-  // is added. Production would do this via SessionServiceProvider +
+  // If a RoutedSessionsProvider is present, ensure sessionMiddleware is added.
+  // Production would do this via SessionServiceProvider +
   // http.middleware_sources, but the slim testEngine uses only core+routing,
   // so we add it here without touching lib.
   try {
@@ -55,7 +54,7 @@ Engine testEngine({
       );
       if (!hasMiddleware) {
         final cfg = engine.container.get<SessionConfig>();
-        final store = cfg.store as SessionStore;
+        final store = cfg.store;
         engine.middlewares.add(sessionMiddleware(store));
         // Rebuild middleware stacks if needed
         try {

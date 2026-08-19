@@ -9,10 +9,10 @@ import 'package:routed_sessions/routed_sessions.dart';
 import 'package:routed_storage/routed_storage.dart';
 import 'package:routed_views/routed_views.dart';
 
-/// Registers all official feature providers for `http.providers` resolution.
+/// Registers all official feature provider factories in the shared registry.
 ///
-/// Providers that need custom runtime deps can still be passed explicitly:
-/// `Engine(providers: [RoutedCacheProvider(customStore), ...])`.
+/// Providers that need custom runtime dependencies can still be passed explicitly:
+/// `Engine(providers: [RoutedCacheProvider(CacheConfig(store: customStore)), ...])`.
 void registerRoutedProviders() {
   registerRoutedAuthProviders();
   registerRoutedLoggingProviders();

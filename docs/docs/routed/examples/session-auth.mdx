@@ -40,24 +40,24 @@ final users = <String, Map<String, Object?>>{
 ## 1. Configure the engine
 
 ```dart
-final engine = Engine(
-  config: EngineConfig(
-    security: const EngineSecurityFeatures(csrfProtection: false),
-  ),
-  options: [
-    withSessionConfig(
+final engine = await Engine.create(
+  providers: [
+    ...Engine.defaultProviders,
+    RoutedSessionsProvider(
       SessionConfig.cookie(
         appKey: _appKey,
         cookieName: 'example_session',
       ),
     ),
+    AuthServiceProvider(),
   ],
 );
 
 engine.addGlobalMiddleware(SessionAuth.sessionAuthMiddleware());
 ```
 
-- `withSessionConfig` enables cookie sessions so `ctx.session` and `SessionAuth` work.
+- `RoutedSessionsProvider` enables cookie sessions so `ctx.session` and
+  `SessionAuth` work.
 - The global middleware hydrates principals on every request and rotates remember tokens.
 
 ## 2. Register guards and gates
@@ -149,39 +149,10 @@ await engine.serve(host: 'localhost', port: 8080);
 - Guards short-circuit with their response (or `403`).
 - Gates work both imperatively (`Haigate.authorize`) and declaratively (`Haigate.middleware([...])`) so manifests stay tidy while handlers can still run custom logic before authorization.
 
-## 4. Configuration reference
-
-```yaml title="config/http.yaml"
-auth:
-  session:
-    remember_me:
-      cookie: remember_token
-      duration: 45d
-
-  guards:
-    staff-any:
-      type: roles_any
-      roles: ['support', 'editor']
-
-  features:
-    haigate: { enabled: true }
-  gates:
-    defaults:
-      denied_status: 401
-      denied_message: Gate denied
-    abilities:
-      reports.publish:
-        roles: ['publisher']
-```
-
-- `auth.session.remember_me` houses cookie/timing defaults.
-- `auth.guards` mirrors imperative guard registration for manifest-driven setups.
-- `auth.features.haigate.enabled` toggles provider wiring; entries under `auth.gates.abilities` become middleware IDs (`routed.auth.gate.reports.publish`).
-
-## 5. Migration checklist
+## 4. Migration checklist
 
 1. Replace direct session reads/writes with `SessionAuth.login`, `SessionAuth.current`, and `SessionAuth.logout`.
 2. Attach `SessionAuth.sessionAuthMiddleware()` globally so every request hydrates the principal.
-3. Move coarse checks into guards and register them once (or declare them in config).
+3. Move coarse checks into guards and register them once.
 4. Add gates for per-action authorization and reference them through middleware or `Haigate.authorize`.
 5. Provide a durable `RememberTokenStore` implementation if remember-me must survive restarts (the in-memory default is for tests only).

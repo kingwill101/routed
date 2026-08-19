@@ -1,6 +1,6 @@
 library;
 
-import 'package:routed_core/providers.dart' show ProviderRegistry;
+import 'package:file/file.dart';
 import 'package:routed_core/routed_core.dart';
 import 'package:server_storage/server_storage.dart';
 
@@ -15,10 +15,6 @@ extension StorageEngineContext on EngineContext {
   StorageManager get storageManager {
     if (container.has<StorageManager>()) {
       return container.get<StorageManager>();
-    }
-    if (container.has<dynamic>()) {
-      final dynamic m = container.get<dynamic>();
-      if (m is StorageManager) return m;
     }
     throw StateError('Storage manager not configured');
   }
@@ -37,126 +33,119 @@ Middleware storageMiddleware(StorageManager manager) {
   };
 }
 
-class RoutedStorageProvider extends ServiceProvider with ProvidesDefaultConfig {
-  /// Defaults to a [StorageManager] with a local `storage/app` disk.
-  RoutedStorageProvider([StorageManager? manager])
-    : manager = manager ?? _defaultManager(),
-      _configureManager = manager == null;
+/// A named local storage disk definition.
+final class LocalStorageDiskConfig {
+  const LocalStorageDiskConfig({this.root, this.fileSystem});
 
-  final StorageManager manager;
-  final bool _configureManager;
+  final String? root;
+  final FileSystem? fileSystem;
+}
 
-  static StorageManager _defaultManager() {
-    final m = StorageManager();
-    m.registerDisk('local', LocalStorageDisk(root: 'storage/app'));
-    m.setDefault('local');
-    return m;
-  }
+/// Immutable configuration for [RoutedStorageProvider].
+class StorageConfig implements ValidatableConfiguration {
+  StorageConfig({
+    this.defaultDisk = 'local',
+    this.root = 'storage/app',
+    Map<String, LocalStorageDiskConfig>? disks,
+  }) : disks = Map<String, LocalStorageDiskConfig>.unmodifiable(
+         disks ??
+             <String, LocalStorageDiskConfig>{
+               'local': LocalStorageDiskConfig(root: root),
+             },
+       );
 
-  @override
-  void register(Container container) {
-    container.singleton<StorageManager>((_) async => manager);
-    container.instance<dynamic>(manager);
-  }
-
-  @override
-  ConfigDefaults get defaultConfig => ConfigDefaults(
-    values: {
-      'storage': {
-        'default': 'local',
-        'root': 'storage/app',
-        'disks': {
-          'local': {'driver': 'local', 'root': 'storage/app'},
-        },
-      },
-    },
-    docs: const [
-      ConfigDocEntry(
-        path: 'storage.default',
-        type: 'string',
-        description: 'Default storage disk name.',
-      ),
-      ConfigDocEntry(
-        path: 'storage.disks',
-        type: 'map',
-        description: 'Named storage disk definitions.',
-      ),
-      ConfigDocEntry(
-        path: 'storage.root',
-        type: 'string',
-        description: 'Root for the default local disk.',
-      ),
-    ],
-  );
+  final String defaultDisk;
+  final String root;
+  final Map<String, LocalStorageDiskConfig> disks;
 
   @override
-  Future<void> boot(Container container) async {
-    if (container.has<Config>()) {
-      _applyConfig(container.get<Config>());
-    }
-  }
-
-  @override
-  Future<void> onConfigReload(Container container, Config config) async {
-    _applyConfig(config);
-  }
-
-  void _applyConfig(Config config) {
-    if (!_configureManager) return;
-
-    final disks = parseNestedMap(
-      config.get<Object?>('storage.disks'),
-      context: 'storage.disks',
+  void validate(ConfigValidationContext context) {
+    context.require(
+      defaultDisk.trim().isNotEmpty,
+      'defaultDisk',
+      'default disk name cannot be empty',
     );
-    if (disks.isEmpty) {
-      manager.clear();
-      manager.registerDisk(
-        'local',
-        LocalStorageDisk(
-          root: config.getString('storage.root', defaultValue: 'storage/app'),
-          fileSystem: manager.defaultFileSystem,
-        ),
+    context.require(
+      root.trim().isNotEmpty,
+      'root',
+      'default storage root cannot be empty',
+    );
+    context.require(
+      disks.isNotEmpty,
+      'disks',
+      'at least one storage disk must be configured',
+    );
+    context.require(
+      disks.containsKey(defaultDisk),
+      'defaultDisk',
+      'default disk must name a configured disk',
+    );
+    for (final entry in disks.entries) {
+      final name = entry.key;
+      final disk = entry.value;
+      context.require(
+        name.trim().isNotEmpty,
+        'disks.$name',
+        'disk names cannot be empty',
       );
-    } else {
-      manager.clear();
-      for (final entry in disks.entries) {
-        final driver = parseStringLike(
-          entry.value['driver'],
-          context: 'storage.disks.${entry.key}.driver',
-        );
-        if (driver != null && driver.toLowerCase() != 'local') {
-          throw ProviderConfigException(
-            'storage.disks.${entry.key}.driver only supports local disks '
-            'until a storage driver is registered',
-          );
-        }
-        final root =
-            parseStringLike(
-              entry.value['root'],
-              context: 'storage.disks.${entry.key}.root',
-              allowEmpty: false,
-            ) ??
-            (entry.key == 'local'
-                ? config.getString('storage.root', defaultValue: 'storage/app')
-                : 'storage/${entry.key}');
-        manager.registerDisk(
-          entry.key,
-          LocalStorageDisk(root: root, fileSystem: manager.defaultFileSystem),
+      if (disk.root != null) {
+        context.require(
+          disk.root!.trim().isNotEmpty,
+          'disks.$name.root',
+          'disk roots cannot be empty',
         );
       }
-    }
-
-    final defaultDisk = parseStringLike(
-      config.get<Object?>('storage.default'),
-      context: 'storage.default',
-    );
-    if (defaultDisk != null) {
-      manager.setDefault(defaultDisk);
     }
   }
 }
 
-/// Registers `routed.storage` for `http.providers` resolution.
+class RoutedStorageProvider extends ServiceProvider
+    with ProvidesTypedConfiguration<StorageConfig> {
+  /// Defaults to a [StorageManager] with a local `storage/app` disk.
+  RoutedStorageProvider({StorageConfig? configuration, StorageManager? manager})
+    : configuration = configuration ?? StorageConfig(),
+      manager = manager ?? StorageManager(),
+      _configureManager = manager == null;
+
+  @override
+  final StorageConfig configuration;
+
+  final StorageManager manager;
+  final bool _configureManager;
+
+  @override
+  void register(Container container) {
+    container.instance<StorageManager>(manager);
+  }
+
+  @override
+  Future<void> boot(Container container) async {
+    if (_configureManager) {
+      _applyConfig(configuration);
+    }
+  }
+
+  void _applyConfig(StorageConfig config) {
+    manager.clear();
+    for (final entry in config.disks.entries) {
+      final diskConfig = entry.value;
+      final root =
+          diskConfig.root ??
+          (entry.key == 'local' ? config.root : 'storage/${entry.key}');
+      manager.registerDisk(
+        entry.key,
+        LocalStorageDisk(
+          root: root,
+          fileSystem: diskConfig.fileSystem ?? manager.defaultFileSystem,
+        ),
+      );
+    }
+
+    manager.setDefault(config.defaultDisk);
+  }
+}
+
+/// Registers storage and static provider factories in the shared registry.
 void registerRoutedStorageProviders() {
   ProviderRegistry.instance.register(
     'routed.storage',

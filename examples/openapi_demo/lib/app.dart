@@ -38,18 +38,7 @@ import 'package:routed/routed.dart';
 import 'package:openapi_demo/metadata_routes.dart';
 
 Future<Engine> createEngine({bool initialize = true}) async {
-  final engine = Engine(
-    providers: [
-      CoreServiceProvider.withLoader(
-        const ConfigLoaderOptions(
-          configDirectory: 'config',
-          loadEnvFiles: false,
-          includeEnvironmentSubdirectory: false,
-        ),
-      ),
-      RoutingServiceProvider(),
-    ],
-  );
+  final engine = Engine(providers: Engine.defaultProviders);
 
   if (initialize) {
     await engine.initialize();

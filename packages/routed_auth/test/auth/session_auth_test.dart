@@ -89,7 +89,7 @@ void main() {
           config: EngineConfig(
             security: const EngineSecurityFeatures(csrfProtection: false),
           ),
-          options: [withSessionConfig(_sessionConfig())],
+          providers: [RoutedSessionsProvider(_sessionConfig())],
         );
 
         engine.addGlobalMiddleware(sessionMiddleware());
@@ -183,7 +183,7 @@ void main() {
         config: EngineConfig(
           security: const EngineSecurityFeatures(csrfProtection: false),
         ),
-        options: [withSessionConfig(_sessionConfig())],
+        providers: [RoutedSessionsProvider(_sessionConfig())],
       );
 
       engine.addGlobalMiddleware(sessionMiddleware());
@@ -239,7 +239,7 @@ void main() {
         config: EngineConfig(
           security: const EngineSecurityFeatures(csrfProtection: false),
         ),
-        options: [withSessionConfig(_sessionConfig())],
+        providers: [RoutedSessionsProvider(_sessionConfig())],
       );
 
       engine.addGlobalMiddleware(sessionMiddleware());
@@ -345,7 +345,7 @@ void main() {
           config: EngineConfig(
             security: const EngineSecurityFeatures(csrfProtection: false),
           ),
-          options: [withSessionConfig(_sessionConfig())],
+          providers: [RoutedSessionsProvider(_sessionConfig())],
         );
 
         engine.addGlobalMiddleware(sessionMiddleware());
@@ -399,7 +399,7 @@ void main() {
         config: EngineConfig(
           security: const EngineSecurityFeatures(csrfProtection: false),
         ),
-        options: [withSessionConfig(_sessionConfig())],
+        providers: [RoutedSessionsProvider(_sessionConfig())],
       );
 
       engine.addGlobalMiddleware(sessionMiddleware());
@@ -491,7 +491,7 @@ void main() {
         config: EngineConfig(
           security: const EngineSecurityFeatures(csrfProtection: false),
         ),
-        options: [withSessionConfig(_sessionConfig())],
+        providers: [RoutedSessionsProvider(_sessionConfig())],
       );
 
       engine.addGlobalMiddleware(

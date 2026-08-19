@@ -1,7 +1,8 @@
 # routed_rate_limit
 Routed adapter for `server_rate_limit`. The provider registers a
-`RateLimitService` in the engine container; middleware makes a chosen service
-available to request handlers.
+`RateLimitService` in the engine container; middleware evaluates the current
+request and returns `429 Too Many Requests` with a `Retry-After` header when a
+configured policy blocks it.
 
 ## Install
 
@@ -24,32 +25,19 @@ Future<void> main() async {
   final engine = await Engine.create(
     providers: [
       ...Engine.defaultProviders,
-      RoutedRateLimitProvider(service),
+      RoutedRateLimitProvider(RateLimitConfig(service: service)),
     ],
   );
 
   engine.get(
     '/limited',
-    (ctx) async {
-      final outcome = await ctx.checkRateLimit(
-        _Request('GET', '/limited'),
-      );
-      return ctx.json({'allowed': outcome?.allowed ?? true});
-    },
+    (ctx) => ctx.json({'allowed': true}),
     middlewares: [rateLimitMiddleware(service)],
   );
 
   await engine.serve(port: 8080);
 }
 
-final class _Request implements RateLimitRequest {
-  _Request(this.method, this.path);
-  @override final String method;
-  @override final String path;
-  @override String get clientIP => '127.0.0.1';
-  @override String get remoteAddr => '127.0.0.1';
-  @override String header(String name) => '';
-}
 ```
 
 In a batteries-included app, call `registerRoutedProviders()` after importing

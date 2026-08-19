@@ -38,6 +38,53 @@ class DeployCommand extends BaseCommand {
         'compatibility-date',
         help: 'Cloudflare compatibility date (defaults to today).',
       )
+      ..addMultiOption(
+        'durable-object',
+        help:
+            'Cloudflare Durable Object binding. Use ClassName or '
+            'BINDING=ClassName.',
+        valueHelp: 'BINDING=ClassName',
+      )
+      ..addMultiOption(
+        'd1',
+        help: 'Cloudflare D1 binding. Use BINDING=DATABASE_NAME:DATABASE_ID.',
+        valueHelp: 'BINDING=DATABASE_NAME:DATABASE_ID',
+      )
+      ..addMultiOption(
+        'r2',
+        help: 'Cloudflare R2 binding. Use BINDING=BUCKET_NAME.',
+        valueHelp: 'BINDING=BUCKET_NAME',
+      )
+      ..addMultiOption(
+        'queue',
+        help: 'Cloudflare Queue producer. Use BINDING=QUEUE_NAME.',
+        valueHelp: 'BINDING=QUEUE_NAME',
+      )
+      ..addMultiOption(
+        'service',
+        help: 'Cloudflare service binding. Use BINDING=SERVICE_NAME.',
+        valueHelp: 'BINDING=SERVICE_NAME',
+      )
+      ..addMultiOption(
+        'container',
+        help:
+            'Cloudflare Container binding. Use '
+            'BINDING=CLASS_NAME|IMAGE|PORT|MAX_INSTANCES.',
+        valueHelp: 'BINDING=CLASS_NAME|IMAGE|PORT|MAX_INSTANCES',
+      )
+      ..addMultiOption(
+        'workflow',
+        help:
+            'Cloudflare Workflow binding. Use '
+            'BINDING=WORKFLOW_NAME:CLASS_NAME[:SCRIPT_NAME].',
+        valueHelp: 'BINDING=WORKFLOW_NAME:CLASS_NAME[:SCRIPT_NAME]',
+      )
+      ..addMultiOption(
+        'secrets-store',
+        help:
+            'Cloudflare Secrets Store binding. Use BINDING=STORE_ID:SECRET_NAME.',
+        valueHelp: 'BINDING=STORE_ID:SECRET_NAME',
+      )
       ..addFlag(
         'dry-run',
         help: 'Build and validate without uploading.',
@@ -72,6 +119,33 @@ class DeployCommand extends BaseCommand {
     if (target != 'cloudflare' && target != 'netlify' && target != 'vercel') {
       throw UsageException('Unsupported deployment target: $target', usage);
     }
+    final dartDurableObjects = _parseDurableObjectBindings(target);
+    final containers = _parseContainerBindings(target);
+    final durableObjects = _mergeDurableObjectBindings(
+      dartDurableObjects,
+      containers,
+    );
+    final d1Bindings = _parseD1Bindings(target);
+    final r2Bindings = _parseSimpleCloudflareBindings(
+      target,
+      option: 'r2',
+      resource: 'R2 bucket',
+      valueHelp: 'BINDING=BUCKET_NAME',
+    );
+    final queueBindings = _parseSimpleCloudflareBindings(
+      target,
+      option: 'queue',
+      resource: 'Queue',
+      valueHelp: 'BINDING=QUEUE_NAME',
+    );
+    final serviceBindings = _parseSimpleCloudflareBindings(
+      target,
+      option: 'service',
+      resource: 'Service',
+      valueHelp: 'BINDING=SERVICE_NAME',
+    );
+    final workflowBindings = _parseWorkflowBindings(target);
+    final secretsStoreBindings = _parseSecretsStoreBindings(target);
 
     final packageName = await readPackageName(root);
     if (packageName == null) {
@@ -123,7 +197,12 @@ class DeployCommand extends BaseCommand {
     );
 
     await dartEntry.writeAsString(
-      _workerEntrySource(packageName: packageName, importPath: entry),
+      generateCloudflareWorkerEntry(
+        importPath: entry,
+        durableObjectClasses: dartDurableObjects.map(
+          (binding) => binding.className,
+        ),
+      ),
     );
     await _runDart(root, [
       'compile',
@@ -133,7 +212,16 @@ class DeployCommand extends BaseCommand {
       jsOutput.path,
       '-O2',
     ], label: 'Compiling Cloudflare Worker');
-    await workerOutput.writeAsString(_workerWrapper(jsOutput.path));
+    await workerOutput.writeAsString(
+      generateCloudflareWorkerWrapper(
+        jsOutput.path,
+        dartDurableObjects.map((binding) => binding.className),
+        containerPorts: {
+          for (final container in containers)
+            container.className: container.port,
+        },
+      ),
+    );
 
     final config = <String, Object?>{
       r'$schema':
@@ -143,6 +231,84 @@ class DeployCommand extends BaseCommand {
       'compatibility_date': date,
       'compatibility_flags': ['nodejs_compat'],
     };
+    if (durableObjects.isNotEmpty) {
+      config['durable_objects'] = {
+        'bindings': [
+          for (final binding in durableObjects)
+            {'name': binding.bindingName, 'class_name': binding.className},
+        ],
+      };
+      config['migrations'] = [
+        {
+          'tag': 'routed-v1',
+          'new_sqlite_classes': [
+            for (final binding in durableObjects) binding.className,
+          ],
+        },
+      ];
+    }
+    if (containers.isNotEmpty) {
+      config['containers'] = [
+        for (final container in containers)
+          {
+            'class_name': container.className,
+            'image': _containerImageReference(root, buildRoot, container.image),
+            if (container.maxInstances != null)
+              'max_instances': container.maxInstances,
+          },
+      ];
+    }
+    if (d1Bindings.isNotEmpty) {
+      config['d1_databases'] = [
+        for (final binding in d1Bindings)
+          {
+            'binding': binding.bindingName,
+            'database_name': binding.databaseName,
+            'database_id': binding.databaseId,
+          },
+      ];
+    }
+    if (r2Bindings.isNotEmpty) {
+      config['r2_buckets'] = [
+        for (final binding in r2Bindings)
+          {'binding': binding.bindingName, 'bucket_name': binding.resourceName},
+      ];
+    }
+    if (queueBindings.isNotEmpty) {
+      config['queues'] = {
+        'producers': [
+          for (final binding in queueBindings)
+            {'binding': binding.bindingName, 'queue': binding.resourceName},
+        ],
+      };
+    }
+    if (serviceBindings.isNotEmpty) {
+      config['services'] = [
+        for (final binding in serviceBindings)
+          {'binding': binding.bindingName, 'service': binding.resourceName},
+      ];
+    }
+    if (workflowBindings.isNotEmpty) {
+      config['workflows'] = [
+        for (final binding in workflowBindings)
+          {
+            'name': binding.workflowName,
+            'binding': binding.bindingName,
+            'class_name': binding.className,
+            if (binding.scriptName != null) 'script_name': binding.scriptName,
+          },
+      ];
+    }
+    if (secretsStoreBindings.isNotEmpty) {
+      config['secrets_store_secrets'] = [
+        for (final binding in secretsStoreBindings)
+          {
+            'binding': binding.bindingName,
+            'store_id': binding.storeId,
+            'secret_name': binding.secretName,
+          },
+      ];
+    }
     await configOutput.writeAsString(
       const JsonEncoder.withIndent('  ').convert(config),
     );
@@ -562,29 +728,404 @@ export const config = { path: "/*" };
     return value;
   }
 
-  String _workerEntrySource({
-    required String packageName,
-    required String importPath,
-  }) =>
-      '''
-import 'package:routed_node/cloudflare.dart';
-import '$importPath' as app;
+  List<_CloudflareDurableObjectBinding> _parseDurableObjectBindings(
+    String target,
+  ) {
+    final raw = results?['durable-object'];
+    if (raw == null) return const [];
+    if (target != 'cloudflare') {
+      throw UsageException(
+        '--durable-object is only supported for Cloudflare deployments.',
+        usage,
+      );
+    }
 
-void main() {
-  defineCloudflareFetchFactoryAsync(app.createEngine);
-}
-''';
+    final values = raw is List ? raw.whereType<String>() : <String>[];
+    final identifier = RegExp(r'^[A-Za-z_][A-Za-z0-9_]*$');
+    final bindings = <_CloudflareDurableObjectBinding>[];
+    for (final value in values) {
+      final separator = value.indexOf('=');
+      final className = (separator < 0 ? value : value.substring(separator + 1))
+          .trim();
+      final bindingName =
+          (separator < 0
+                  ? _defaultDurableObjectBindingName(className)
+                  : value.substring(0, separator))
+              .trim();
+      if (!identifier.hasMatch(className)) {
+        throw UsageException(
+          'Invalid Durable Object class name "$className". Use a Dart '
+          'identifier such as Counter.',
+          usage,
+        );
+      }
+      if (!identifier.hasMatch(bindingName)) {
+        throw UsageException(
+          'Invalid Durable Object binding name "$bindingName".',
+          usage,
+        );
+      }
+      if (bindings.any(
+        (binding) =>
+            binding.className == className ||
+            binding.bindingName == bindingName,
+      )) {
+        throw UsageException(
+          'Durable Object class and binding names must be unique: $value.',
+          usage,
+        );
+      }
+      bindings.add(
+        _CloudflareDurableObjectBinding(
+          bindingName: bindingName,
+          className: className,
+        ),
+      );
+    }
+    return bindings;
+  }
 
-  String _workerWrapper(String compiledPath) {
-    final relative = p.basename(compiledPath);
-    return '''import './$relative';
+  List<_CloudflareD1Binding> _parseD1Bindings(String target) {
+    final raw = results?['d1'];
+    if (raw == null) return const [];
+    if (target != 'cloudflare') {
+      throw UsageException(
+        '--d1 is only supported for Cloudflare deployments.',
+        usage,
+      );
+    }
 
-export default {
-  async fetch(request, env, ctx) {
-    return await globalThis.__routed_fetch__(request, ctx, env);
-  },
-};
-''';
+    final values = raw is List ? raw.whereType<String>() : <String>[];
+    final identifier = RegExp(r'^[A-Za-z_][A-Za-z0-9_]*$');
+    final bindings = <_CloudflareD1Binding>[];
+    for (final value in values) {
+      final equals = value.indexOf('=');
+      if (equals < 1 || equals == value.length - 1) {
+        throw UsageException(
+          'Invalid D1 binding "$value". Use BINDING=DATABASE_NAME:DATABASE_ID.',
+          usage,
+        );
+      }
+      final bindingName = value.substring(0, equals).trim();
+      final descriptor = value.substring(equals + 1).trim();
+      final separator = descriptor.lastIndexOf(':');
+      final databaseName = separator < 1
+          ? ''
+          : descriptor.substring(0, separator).trim();
+      final databaseId = separator < 0
+          ? ''
+          : descriptor.substring(separator + 1).trim();
+      if (!identifier.hasMatch(bindingName)) {
+        throw UsageException('Invalid D1 binding name "$bindingName".', usage);
+      }
+      if (databaseName.isEmpty || databaseId.isEmpty) {
+        throw UsageException(
+          'Invalid D1 binding "$value". Use BINDING=DATABASE_NAME:DATABASE_ID.',
+          usage,
+        );
+      }
+      if (bindings.any((binding) => binding.bindingName == bindingName)) {
+        throw UsageException(
+          'D1 binding names must be unique: $bindingName.',
+          usage,
+        );
+      }
+      bindings.add(
+        _CloudflareD1Binding(
+          bindingName: bindingName,
+          databaseName: databaseName,
+          databaseId: databaseId,
+        ),
+      );
+    }
+    return bindings;
+  }
+
+  List<_CloudflareContainerBinding> _parseContainerBindings(String target) {
+    final raw = results?['container'];
+    if (raw == null) return const [];
+    if (target != 'cloudflare') {
+      throw UsageException(
+        '--container is only supported for Cloudflare deployments.',
+        usage,
+      );
+    }
+
+    final values = raw is List ? raw.whereType<String>() : <String>[];
+    final identifier = RegExp(r'^[A-Za-z_][A-Za-z0-9_]*$');
+    final bindings = <_CloudflareContainerBinding>[];
+    for (final value in values) {
+      final equals = value.indexOf('=');
+      final parts = equals < 1
+          ? const <String>[]
+          : value.substring(equals + 1).split('|');
+      if (parts.length < 2 || parts.length > 4) {
+        throw UsageException(
+          'Invalid Container binding "$value". Use '
+          'BINDING=CLASS_NAME|IMAGE[|PORT|MAX_INSTANCES].',
+          usage,
+        );
+      }
+      final bindingName = value.substring(0, equals).trim();
+      final className = parts[0].trim();
+      final image = parts[1].trim();
+      final port = parts.length >= 3 ? int.tryParse(parts[2].trim()) : 8080;
+      final maxInstances = parts.length >= 4
+          ? int.tryParse(parts[3].trim())
+          : null;
+      if (!identifier.hasMatch(bindingName) ||
+          !identifier.hasMatch(className)) {
+        throw UsageException(
+          'Invalid Container binding "$value". Binding and class names '
+          'must be Dart/JavaScript identifiers.',
+          usage,
+        );
+      }
+      if (image.isEmpty || port == null || port < 1 || port > 65535) {
+        throw UsageException(
+          'Invalid Container binding "$value". The image must be non-empty '
+          'and PORT must be between 1 and 65535.',
+          usage,
+        );
+      }
+      if (maxInstances != null && maxInstances < 1) {
+        throw UsageException(
+          'Invalid Container binding "$value". MAX_INSTANCES must be positive.',
+          usage,
+        );
+      }
+      if (bindings.any(
+        (binding) =>
+            binding.bindingName == bindingName ||
+            binding.className == className,
+      )) {
+        throw UsageException(
+          'Container binding and class names must be unique: $value.',
+          usage,
+        );
+      }
+      bindings.add(
+        _CloudflareContainerBinding(
+          bindingName: bindingName,
+          className: className,
+          image: image,
+          port: port,
+          maxInstances: maxInstances,
+        ),
+      );
+    }
+    return bindings;
+  }
+
+  List<_CloudflareDurableObjectBinding> _mergeDurableObjectBindings(
+    List<_CloudflareDurableObjectBinding> dartBindings,
+    List<_CloudflareContainerBinding> containers,
+  ) {
+    final result = [...dartBindings];
+    for (final container in containers) {
+      if (result.any(
+        (binding) =>
+            binding.bindingName == container.bindingName ||
+            binding.className == container.className,
+      )) {
+        throw UsageException(
+          'Container and Durable Object binding/class names must be unique: '
+          '${container.bindingName}.',
+          usage,
+        );
+      }
+      result.add(
+        _CloudflareDurableObjectBinding(
+          bindingName: container.bindingName,
+          className: container.className,
+        ),
+      );
+    }
+    return result;
+  }
+
+  List<_CloudflareWorkflowBinding> _parseWorkflowBindings(String target) {
+    final raw = results?['workflow'];
+    if (raw == null) return const [];
+    if (target != 'cloudflare') {
+      throw UsageException(
+        '--workflow is only supported for Cloudflare deployments.',
+        usage,
+      );
+    }
+
+    final values = raw is List ? raw.whereType<String>() : <String>[];
+    final identifier = RegExp(r'^[A-Za-z_][A-Za-z0-9_]*$');
+    final bindings = <_CloudflareWorkflowBinding>[];
+    for (final value in values) {
+      final equals = value.indexOf('=');
+      final parts = equals < 1
+          ? const <String>[]
+          : value.substring(equals + 1).split(':');
+      if (parts.length < 2 || parts.length > 3) {
+        throw UsageException(
+          'Invalid Workflow binding "$value". Use '
+          'BINDING=WORKFLOW_NAME:CLASS_NAME[:SCRIPT_NAME].',
+          usage,
+        );
+      }
+      final bindingName = value.substring(0, equals).trim();
+      final workflowName = parts[0].trim();
+      final className = parts[1].trim();
+      final scriptName = parts.length == 3 ? parts[2].trim() : null;
+      if (!identifier.hasMatch(bindingName) ||
+          !identifier.hasMatch(className) ||
+          workflowName.isEmpty ||
+          (scriptName != null && scriptName.isEmpty)) {
+        throw UsageException(
+          'Invalid Workflow binding "$value". Binding and class names must '
+          'be identifiers and the Workflow name must be non-empty.',
+          usage,
+        );
+      }
+      if (bindings.any((binding) => binding.bindingName == bindingName)) {
+        throw UsageException(
+          'Workflow binding names must be unique: $bindingName.',
+          usage,
+        );
+      }
+      bindings.add(
+        _CloudflareWorkflowBinding(
+          bindingName: bindingName,
+          workflowName: workflowName,
+          className: className,
+          scriptName: scriptName,
+        ),
+      );
+    }
+    return bindings;
+  }
+
+  List<_CloudflareSecretsStoreBinding> _parseSecretsStoreBindings(
+    String target,
+  ) {
+    final raw = results?['secrets-store'];
+    if (raw == null) return const [];
+    if (target != 'cloudflare') {
+      throw UsageException(
+        '--secrets-store is only supported for Cloudflare deployments.',
+        usage,
+      );
+    }
+
+    final values = raw is List ? raw.whereType<String>() : <String>[];
+    final identifier = RegExp(r'^[A-Za-z_][A-Za-z0-9_]*$');
+    final bindings = <_CloudflareSecretsStoreBinding>[];
+    for (final value in values) {
+      final equals = value.indexOf('=');
+      final separator = value.lastIndexOf(':');
+      final bindingName = equals < 1 ? '' : value.substring(0, equals).trim();
+      final storeId = equals < 1 || separator <= equals
+          ? ''
+          : value.substring(equals + 1, separator).trim();
+      final secretName = separator < 0
+          ? ''
+          : value.substring(separator + 1).trim();
+      if (!identifier.hasMatch(bindingName) ||
+          storeId.isEmpty ||
+          secretName.isEmpty) {
+        throw UsageException(
+          'Invalid Secrets Store binding "$value". Use '
+          'BINDING=STORE_ID:SECRET_NAME.',
+          usage,
+        );
+      }
+      if (bindings.any((binding) => binding.bindingName == bindingName)) {
+        throw UsageException(
+          'Secrets Store binding names must be unique: $bindingName.',
+          usage,
+        );
+      }
+      bindings.add(
+        _CloudflareSecretsStoreBinding(
+          bindingName: bindingName,
+          storeId: storeId,
+          secretName: secretName,
+        ),
+      );
+    }
+    return bindings;
+  }
+
+  List<_CloudflareSimpleBinding> _parseSimpleCloudflareBindings(
+    String target, {
+    required String option,
+    required String resource,
+    required String valueHelp,
+  }) {
+    final raw = results?[option];
+    if (raw == null) return const [];
+    if (target != 'cloudflare') {
+      throw UsageException(
+        '--$option is only supported for Cloudflare deployments.',
+        usage,
+      );
+    }
+
+    final values = raw is List ? raw.whereType<String>() : <String>[];
+    final identifier = RegExp(r'^[A-Za-z_][A-Za-z0-9_]*$');
+    final bindings = <_CloudflareSimpleBinding>[];
+    for (final value in values) {
+      final equals = value.indexOf('=');
+      if (equals < 1 || equals == value.length - 1) {
+        throw UsageException(
+          'Invalid $resource binding "$value". Use $valueHelp.',
+          usage,
+        );
+      }
+      final bindingName = value.substring(0, equals).trim();
+      final resourceName = value.substring(equals + 1).trim();
+      if (!identifier.hasMatch(bindingName)) {
+        throw UsageException(
+          'Invalid $resource binding name "$bindingName".',
+          usage,
+        );
+      }
+      if (resourceName.isEmpty) {
+        throw UsageException(
+          'Invalid $resource binding "$value". Use $valueHelp.',
+          usage,
+        );
+      }
+      if (bindings.any((binding) => binding.bindingName == bindingName)) {
+        throw UsageException(
+          '$resource binding names must be unique: $bindingName.',
+          usage,
+        );
+      }
+      bindings.add(
+        _CloudflareSimpleBinding(
+          bindingName: bindingName,
+          resourceName: resourceName,
+        ),
+      );
+    }
+    return bindings;
+  }
+
+  String _defaultDurableObjectBindingName(String className) => className
+      .replaceAllMapped(
+        RegExp(r'([a-z0-9])([A-Z])'),
+        (match) => '${match.group(1)}_${match.group(2)}',
+      )
+      .toUpperCase();
+
+  String _containerImageReference(
+    fs.Directory root,
+    fs.Directory buildRoot,
+    String image,
+  ) {
+    if (!image.startsWith('.') && !p.isAbsolute(image)) return image;
+    final absolute = p.isAbsolute(image)
+        ? p.normalize(image)
+        : p.normalize(p.join(root.path, image));
+    final relative = p.relative(absolute, from: buildRoot.path);
+    return relative.startsWith('.') ? relative : './$relative';
   }
 
   String _sanitizeWorkerName(String name) {
@@ -595,4 +1136,174 @@ export default {
         .replaceFirst(RegExp(r'-+$'), '');
     return normalized.isEmpty ? 'routed-worker' : normalized;
   }
+}
+
+final class _CloudflareDurableObjectBinding {
+  const _CloudflareDurableObjectBinding({
+    required this.bindingName,
+    required this.className,
+  });
+
+  final String bindingName;
+  final String className;
+}
+
+final class _CloudflareD1Binding {
+  const _CloudflareD1Binding({
+    required this.bindingName,
+    required this.databaseName,
+    required this.databaseId,
+  });
+
+  final String bindingName;
+  final String databaseName;
+  final String databaseId;
+}
+
+final class _CloudflareSimpleBinding {
+  const _CloudflareSimpleBinding({
+    required this.bindingName,
+    required this.resourceName,
+  });
+
+  final String bindingName;
+  final String resourceName;
+}
+
+final class _CloudflareContainerBinding {
+  const _CloudflareContainerBinding({
+    required this.bindingName,
+    required this.className,
+    required this.image,
+    required this.port,
+    required this.maxInstances,
+  });
+
+  final String bindingName;
+  final String className;
+  final String image;
+  final int port;
+  final int? maxInstances;
+}
+
+final class _CloudflareWorkflowBinding {
+  const _CloudflareWorkflowBinding({
+    required this.bindingName,
+    required this.workflowName,
+    required this.className,
+    required this.scriptName,
+  });
+
+  final String bindingName;
+  final String workflowName;
+  final String className;
+  final String? scriptName;
+}
+
+final class _CloudflareSecretsStoreBinding {
+  const _CloudflareSecretsStoreBinding({
+    required this.bindingName,
+    required this.storeId,
+    required this.secretName,
+  });
+
+  final String bindingName;
+  final String storeId;
+  final String secretName;
+}
+
+String generateCloudflareWorkerEntry({
+  required String importPath,
+  Iterable<String> durableObjectClasses = const <String>[],
+}) {
+  final classes = durableObjectClasses.toList(growable: false);
+  final registration = classes.isEmpty
+      ? ''
+      : '''  defineCloudflareDurableObjects({
+${classes.map((name) => "    '$name': app.$name.new,").join('\n')}
+  });
+''';
+  return '''
+import 'package:routed_node/cloudflare.dart';
+import '$importPath' as app;
+
+void main() {
+$registration  defineCloudflareFetchFactoryAsync(app.createEngine);
+}
+''';
+}
+
+String generateCloudflareWorkerWrapper(
+  String compiledPath,
+  Iterable<String> durableObjectClasses, {
+  Map<String, int> containerPorts = const <String, int>{},
+}) {
+  final relative = p.basename(compiledPath);
+  final exports = durableObjectClasses
+      .map((className) {
+        return '''export class $className {
+  constructor(state, env) {
+    const factory = __routedDurableObjects['$className'];
+    if (typeof factory !== 'function') {
+      throw new Error('No Routed Durable Object factory registered for $className.');
+    }
+    this.delegate = factory(state, env);
+  }
+
+  fetch(request) {
+    return this.delegate.fetch(request);
+  }
+
+  alarm() {
+    return this.delegate.alarm();
+  }
+
+  webSocketMessage(webSocket, message) {
+    return this.delegate.webSocketMessage(webSocket, message);
+  }
+
+  webSocketClose(webSocket, code, reason, wasClean) {
+    return this.delegate.webSocketClose(webSocket, code, reason, wasClean);
+  }
+
+  webSocketError(webSocket, error) {
+    return this.delegate.webSocketError(webSocket, error);
+  }
+}''';
+      })
+      .join('\n\n');
+  final containerExports = containerPorts.entries
+      .map((entry) {
+        return '''export class ${entry.key} {
+  constructor(state, env) {
+    if (!state.container) {
+      throw new Error('Cloudflare Container state is unavailable for ${entry.key}.');
+    }
+    this.container = state.container;
+    this.container.start();
+  }
+
+  fetch(request) {
+    return this.container.getTcpPort(${entry.value}).fetch(request);
+  }
+}''';
+      })
+      .join('\n\n');
+  final sections = [
+    if (exports.isNotEmpty) exports,
+    if (containerExports.isNotEmpty) containerExports,
+  ].join('\n\n');
+  return '''import './$relative';
+
+const __routedDurableObjects =
+    globalThis.__routed_durable_objects__ ?? {};
+
+$sections
+
+export default {
+  async fetch(request, env, ctx) {
+    return await globalThis.__routed_fetch__(request, ctx, env);
+  },
+};
+''';
 }

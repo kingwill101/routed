@@ -6,8 +6,6 @@ import 'package:routed_testing/routed_testing.dart';
 import 'package:server_testing/server_testing.dart';
 import '../test_engine.dart';
 
-typedef ConfigMap = Map<String, Object?>;
-
 const _sharedSecret = 'secret-test-key';
 
 Map<String, dynamic> get _testJwk => <String, dynamic>{
@@ -335,16 +333,9 @@ void main() {
   });
 
   group('AuthServiceProvider manifest', () {
-    Engine buildEngine({required ConfigMap authConfig}) {
+    Engine buildEngine({required AuthConfig authConfig}) {
       return testEngine(
-        configItems: {
-          'http': {
-            'features': {
-              'auth': {'enabled': true},
-            },
-          },
-          'auth': authConfig,
-        },
+        providers: [AuthServiceProvider(configuration: authConfig)],
       );
     }
 
@@ -353,15 +344,21 @@ void main() {
       final token = _buildToken(_claims(now: now));
 
       final engine = buildEngine(
-        authConfig: {
-          'jwt': {
-            'enabled': true,
-            'issuer': 'https://issuer.test',
-            'audience': ['api'],
-            'keys': [_testJwk],
-            'algorithms': ['HS256'],
-          },
-        },
+        authConfig: AuthConfig.defaults().copyWith(
+          jwt: AuthJwtConfig(
+            enabled: true,
+            issuer: 'https://issuer.test',
+            audience: const ['api'],
+            requiredClaims: const ['exp'],
+            jwksUri: null,
+            jwksCacheTtl: const Duration(minutes: 5),
+            clockSkew: const Duration(seconds: 60),
+            algorithms: const ['HS256'],
+            inlineKeys: [_testJwk],
+            header: 'Authorization',
+            bearerPrefix: 'Bearer ',
+          ),
+        ),
       );
       addTearDown(() async => await engine.close());
 

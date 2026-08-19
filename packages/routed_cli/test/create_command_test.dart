@@ -59,11 +59,7 @@ void main() {
       final dependencies = pubspec['dependencies'] as YamlMap;
       expect(dependencies.containsKey('routed'), isTrue);
 
-      expect(_exists(projectDir, 'config/http.yaml'), isTrue);
-      expect(_read(projectDir, 'config/http.yaml'), contains('providers:'));
-
-      expect(_exists(projectDir, 'config/cache.yaml'), isFalse);
-      expect(_exists(projectDir, 'config/session.yaml'), isFalse);
+      expect(_exists(projectDir, 'config'), isFalse);
 
       expect(_exists(projectDir, 'analysis_options.yaml'), isTrue);
       expect(_exists(projectDir, 'README.md'), isTrue);
@@ -89,51 +85,10 @@ void main() {
       final manifestScript = _read(projectDir, 'tool/spec_manifest.dart');
       expect(manifestScript, contains('buildRouteManifest'));
 
-      final loggingConfig = _read(projectDir, 'config/logging.yaml');
-      expect(
-        loggingConfig,
-        contains('# Logging configuration quick reference:'),
-      );
-
-      expect(_exists(projectDir, 'config/storage.yaml'), isTrue);
-      expect(_exists(projectDir, 'config/static.yaml'), isTrue);
-
-      final uploadsConfig = _read(projectDir, 'config/uploads.yaml');
-      expect(
-        uploadsConfig,
-        contains('# Uploads configuration quick reference:'),
-      );
-
-      final securityConfig = _read(projectDir, 'config/security.yaml');
-      expect(
-        securityConfig,
-        contains('# Security configuration quick reference:'),
-      );
-
       expect(_exists(projectDir, '.gitignore'), isTrue);
       expect(_read(projectDir, '.gitignore'), contains('.dart_tool/'));
-
-      final envContent = _read(projectDir, '.env');
-      expect(envContent, isNot(contains('change-me')));
-      expect(envContent, contains('SESSION_COOKIE=demo_app_session'));
-      expect(envContent, contains('STORAGE_ROOT=storage/app'));
-
-      final envKeyLine = envContent
-          .split('\n')
-          .firstWhere((line) => line.startsWith('APP_KEY='));
-      final envKey = envKeyLine.substring('APP_KEY='.length);
-      expect(envKey, isNotEmpty);
-      expect(envKey, matches(RegExp(r'^[A-Za-z0-9+/=]+$')));
-
-      final envExample = _read(projectDir, '.env.example');
-      expect(envExample, contains('APP_KEY=$envKey'));
-
-      final appConfig = _read(projectDir, 'config/app.yaml');
-      expect(
-        appConfig,
-        contains("key: \"{{ env.APP_KEY | default: 'change-me' }}\""),
-      );
-      expect(appConfig, isNot(contains(envKey)));
+      expect(_exists(projectDir, '.env'), isFalse);
+      expect(_exists(projectDir, '.env.example'), isFalse);
 
       expect(_exists(projectDir, 'lib/commands.dart'), isTrue);
       expect(
@@ -236,7 +191,7 @@ void main() {
     test('supports all template options', () async {
       const templates = <String, _TemplateExpectation>{
         'basic': _TemplateExpectation(
-          expectedFiles: ['lib/app.dart', 'config/http.yaml'],
+          expectedFiles: ['lib/app.dart'],
           contentChecks: {'lib/app.dart': 'Welcome to'},
         ),
         'api': _TemplateExpectation(

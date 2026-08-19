@@ -1,9 +1,9 @@
-import 'package:routed_core/providers.dart' show ProviderRegistry;
+import 'package:routed_core/routed_core.dart' show ProviderRegistry;
 
 import 'providers/localization.dart';
 import 'providers/view_provider.dart';
 
-/// Registers view + localization providers for `http.providers` resolution.
+/// Registers view and localization provider factories in the shared registry.
 void registerRoutedViewsProviders() {
   final registry = ProviderRegistry.instance;
   registry.register(

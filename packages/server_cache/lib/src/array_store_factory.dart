@@ -3,12 +3,15 @@ import 'package:server_contracts/server_contracts.dart';
 import 'array_store.dart';
 import 'store_factory.dart';
 
-class ArrayStoreFactory implements StoreFactory {
+/// Typed options for [ArrayStore].
+class ArrayStoreConfiguration implements StoreConfiguration {
+  const ArrayStoreConfiguration({this.serialize = false});
+
+  final bool serialize;
+}
+
+class ArrayStoreFactory implements StoreFactory<ArrayStoreConfiguration> {
   @override
-  Store create(Map<String, dynamic> config) {
-    // Create an ArrayStore using configuration values.
-    final dynamic serializeValue = config['serialize'];
-    final bool serialize = serializeValue is bool ? serializeValue : false;
-    return ArrayStore(serialize);
-  }
+  Store create(ArrayStoreConfiguration configuration) =>
+      ArrayStore(configuration.serialize);
 }

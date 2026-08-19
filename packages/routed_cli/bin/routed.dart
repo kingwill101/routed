@@ -1,4 +1,3 @@
-import 'package:routed_cli/src/console/args/commands/config.dart';
 import 'package:routed_cli/src/console/args/commands/create.dart';
 import 'package:routed_cli/src/console/args/commands/dev.dart';
 import 'package:routed_cli/src/console/args/commands/deploy.dart';
@@ -11,7 +10,6 @@ Future<void> main(List<String> args) async {
     ..register([
       SpecGenerateCommand(),
       RoutesCommand(),
-      ConfigInitCommand(),
       CreateCommand(),
       DevCommand(),
       DeployCommand(),

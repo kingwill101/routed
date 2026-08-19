@@ -1,36 +1,30 @@
 import 'package:routed_core/routed_core.dart';
-import 'package:routed_testing/routed_testing.dart';
-import 'package:server_testing/server_testing.dart';
+import 'package:test/test.dart';
 
-import '../test_engine.dart';
 
 void main() {
-  test('caches EventManager absence after the first request', () async {
+  test(
+    'runtime environment is available during typed configuration boot',
+    () async {
+      final engine = Engine(
+        runtime: RuntimeContext(
+          environment: RuntimeEnvironment({'APP_ENV': 'test'}),
+        ),
+        providers: [CoreServiceProvider(), RoutingServiceProvider()],
+      );
+      addTearDown(engine.close);
+
+      await engine.initialize();
+
+      expect(engine.configStore, isNotNull);
+      expect(engine.configStore.get<EngineConfig>(), isA<EngineConfig>());
+    },
+  );
+
+  test('bare engines do not expose application configuration', () async {
     final engine = Engine();
-    engine.get('/', (ctx) => ctx.string('ok'));
+    addTearDown(engine.close);
 
-    final client = TestClient.inMemory(RoutedRequestHandler(engine));
-    addTearDown(() async {
-      await client.close();
-      await engine.close();
-    });
-
-    expect(engine.debugEventManagerChecked, isFalse);
-    await client.get('/');
-    expect(engine.debugEventManagerChecked, isTrue);
-    await client.get('/');
-    expect(engine.debugEventManagerChecked, isTrue);
-  });
-
-  test('logging gating respects config', () async {
-    final engine = testEngine(configItems: const {'logging.enabled': false});
-    await engine.initialize();
-    addTearDown(() async {
-      await engine.close();
-    });
-
-    expect(engine.debugIsLoggingEnabled(engine.container), isFalse);
-    engine.container.get<Config>().set('logging.enabled', true);
-    expect(engine.debugIsLoggingEnabled(engine.container), isTrue);
+    expect(engine.container.has<ConfigStore>(), isFalse);
   });
 }

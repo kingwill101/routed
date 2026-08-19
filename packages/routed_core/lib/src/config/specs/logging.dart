@@ -1,72 +1,113 @@
 import 'package:contextual/contextual.dart' as contextual;
-import 'package:json_schema_builder/json_schema_builder.dart';
-import 'package:routed_core/src/config/schema.dart';
-import 'package:routed_core/src/provider/config_utils.dart';
-import 'package:routed_core/src/provider/provider.dart';
+import 'package:routed_core/src/config/typed.dart';
+import 'package:routed_core/src/provider/typed_provider.dart';
 
-import '../spec.dart';
-
-const Map<String, Object?> _defaultLoggingChannels = {
-  'stack': {
-    'driver': 'stack',
-    'channels': ['single', 'stdout'],
-    'ignore_exceptions': false,
-  },
-  'single': {'driver': 'single', 'path': 'storage/logs/routed.log'},
-  'daily': {
-    'driver': 'daily',
-    'path': 'storage/logs/routed',
-    'days': 14,
-    'use_isolate': false,
-  },
-  'stderr': {'driver': 'stderr'},
-  'stdout': {'driver': 'stdout'},
-  'null': {'driver': 'null'},
-};
-
-class LoggingChannelConfig {
-  LoggingChannelConfig({
-    required this.name,
-    required this.driver,
-    Map<String, dynamic>? options,
-  }) : options = options ?? const <String, dynamic>{};
+/// A typed logging channel definition.
+sealed class LoggingChannelConfig {
+  const LoggingChannelConfig({required this.name});
 
   final String name;
+}
+
+/// Writes logs to the process console.
+final class ConsoleLoggingChannelConfig extends LoggingChannelConfig {
+  const ConsoleLoggingChannelConfig({super.name = 'console'});
+}
+
+/// Writes logs to standard output.
+final class StdoutLoggingChannelConfig extends LoggingChannelConfig {
+  const StdoutLoggingChannelConfig({super.name = 'stdout'});
+}
+
+/// Writes logs to standard error.
+final class StderrLoggingChannelConfig extends LoggingChannelConfig {
+  const StderrLoggingChannelConfig({super.name = 'stderr'});
+}
+
+/// Discards log messages.
+final class NullLoggingChannelConfig extends LoggingChannelConfig {
+  const NullLoggingChannelConfig({super.name = 'null'});
+}
+
+/// Writes logs to one file without rotation.
+final class SingleFileLoggingChannelConfig extends LoggingChannelConfig {
+  const SingleFileLoggingChannelConfig({
+    super.name = 'single',
+    this.path = 'storage/logs/routed.log',
+  });
+
+  final String path;
+}
+
+/// Writes logs to daily rotating files.
+final class DailyFileLoggingChannelConfig extends LoggingChannelConfig {
+  const DailyFileLoggingChannelConfig({
+    super.name = 'daily',
+    this.path = 'storage/logs/routed',
+    this.retentionDays = 14,
+    this.flushInterval = const Duration(milliseconds: 500),
+    this.useIsolate = false,
+  });
+
+  final String path;
+  final int retentionDays;
+  final Duration flushInterval;
+  final bool useIsolate;
+}
+
+/// Sends a message to each named channel.
+final class StackLoggingChannelConfig extends LoggingChannelConfig {
+  StackLoggingChannelConfig({
+    super.name = 'stack',
+    Iterable<String> channels = const [],
+    this.ignoreExceptions = false,
+  }) : channels = List<String>.unmodifiable(channels);
+
+  final List<String> channels;
+  final bool ignoreExceptions;
+}
+
+/// Sends logs to an HTTP webhook.
+final class WebhookLoggingChannelConfig extends LoggingChannelConfig {
+  const WebhookLoggingChannelConfig({
+    required this.url,
+    super.name = 'webhook',
+    this.headers,
+    this.timeout = const Duration(seconds: 5),
+    this.keepAlive = true,
+  });
+
+  final Uri url;
+  final Map<String, String>? headers;
+  final Duration timeout;
+  final bool keepAlive;
+}
+
+/// Samples messages before forwarding them to another channel.
+final class SamplingLoggingChannelConfig extends LoggingChannelConfig {
+  SamplingLoggingChannelConfig({
+    required this.wrappedChannel,
+    super.name = 'sampling',
+    Map<contextual.Level, double> rates = const {},
+  }) : rates = Map<contextual.Level, double>.unmodifiable(rates);
+
+  final String wrappedChannel;
+  final Map<contextual.Level, double> rates;
+}
+
+/// Configuration for a custom driver registered with the logging driver registry.
+///
+/// Custom drivers are intentionally the only configuration that accepts an
+/// options map. Built-in channels use the typed classes above.
+final class CustomLoggingChannelConfig extends LoggingChannelConfig {
+  CustomLoggingChannelConfig({
+    required this.driver,
+    super.name = 'custom',
+    Map<String, Object?> options = const {},
+  }) : options = Map<String, Object?>.unmodifiable(options);
+
   final String driver;
-  final Map<String, dynamic> options;
-
-  factory LoggingChannelConfig.fromMap(
-    String name,
-    Map<String, dynamic> map, {
-    required String context,
-  }) {
-    final rawDriver = map['driver'];
-    final driver = parseStringLike(
-      rawDriver,
-      context: '$context.driver',
-      allowEmpty: true,
-      throwOnInvalid: true,
-    );
-    final resolvedDriver = (driver == null || driver.isEmpty)
-        ? 'stack'
-        : driver.toLowerCase();
-    final options = <String, dynamic>{};
-    map.forEach((key, value) {
-      options[key.toString()] = value;
-    });
-    options['driver'] = resolvedDriver;
-    return LoggingChannelConfig(
-      name: name,
-      driver: resolvedDriver,
-      options: options,
-    );
-  }
-
-  Map<String, dynamic> toMap() {
-    final map = <String, dynamic>{...options};
-    map['driver'] = driver;
-    return map;
-  }
+  final Map<String, Object?> options;
 }
 
 class LoggingFormatConfig {
@@ -76,18 +117,27 @@ class LoggingFormatConfig {
   final contextual.LogMessageFormatter formatter;
 }
 
-class LoggingConfig {
+class LoggingConfig implements ValidatableConfiguration {
   LoggingConfig({
-    required this.enabled,
-    required this.errorsOnly,
-    required this.level,
-    required this.extraFields,
-    required this.requestHeaders,
-    required this.includeStackTraces,
-    required this.format,
-    required this.channels,
-    this.defaultChannel,
-  });
+    this.enabled = true,
+    this.errorsOnly = false,
+    this.level = contextual.Level.info,
+    Map<String, dynamic>? extraFields,
+    List<String>? requestHeaders,
+    this.includeStackTraces = false,
+    LoggingFormatConfig? format,
+    Map<String, LoggingChannelConfig>? channels,
+    this.defaultChannel = 'stack',
+  }) : extraFields = Map<String, dynamic>.unmodifiable(
+         extraFields ?? const <String, dynamic>{},
+       ),
+       requestHeaders = List<String>.unmodifiable(requestHeaders ?? const []),
+       format =
+           format ??
+           LoggingFormatConfig('pretty', contextual.PrettyLogFormatter()),
+       channels = Map<String, LoggingChannelConfig>.unmodifiable(
+         channels ?? _defaultTypedLoggingChannels(),
+       );
 
   final bool enabled;
   final bool errorsOnly;
@@ -100,218 +150,162 @@ class LoggingConfig {
   final Map<String, LoggingChannelConfig> channels;
 
   bool get logSuccess => !errorsOnly;
-}
-
-class LoggingConfigSpec extends ConfigSpec<LoggingConfig> {
-  const LoggingConfigSpec();
 
   @override
-  String get root => 'logging';
-
-  @override
-  Schema? get schema => ConfigSchema.object(
-    title: 'Logging Configuration',
-    description: 'Configuration for structured application logging.',
-    properties: {
-      'default': ConfigSchema.string(
-        description: 'Default log channel name (stack, single, stderr, etc.).',
-        defaultValue: 'stack',
-      ).withMetadata({configDocMetaInheritFromEnv: 'LOG_CHANNEL'}),
-      'channels': ConfigSchema.object(
-        description:
-            'Map of log channel definitions (stack, single, daily, stderr, null).',
-        additionalProperties: true,
-      ).withDefault(_defaultLoggingChannels),
-      'enabled': ConfigSchema.boolean(
-        description: 'Enable structured application logging.',
-        defaultValue: true,
-      ),
-      'level': ConfigSchema.string(
-        description: 'Default log level for application logging.',
-        defaultValue: 'info',
-        // Note: Schema enum support is available via `enumValues` but ConfigSchema helper doesn't expose it directly yet.
-        // We can add it to ConfigSchema or just rely on validation in fromMap for now.
-        // Or access .withEnum() if we add it.
-      ),
-      'errors_only': ConfigSchema.boolean(
-        description: 'Only emit logs for failing requests when true.',
-        defaultValue: false,
-      ),
-      'extra_fields': ConfigSchema.object(
-        description: 'Additional fields appended to every log entry.',
-        additionalProperties: true,
-      ).withDefault(const <String, Object?>{}),
-      'include_stack_traces': ConfigSchema.boolean(
-        description: 'Include stack traces in request error logs when enabled.',
-        defaultValue: false,
-      ),
-      'format': ConfigSchema.string(
-        description: 'Log output format (json or text).',
-        defaultValue: 'pretty',
-      ),
-    },
-  );
-
-  @override
-  LoggingConfig fromMap(
-    Map<String, dynamic> map, {
-    ConfigSpecContext? context,
-  }) {
-    final enabled =
-        parseBoolLike(
-          map['enabled'],
-          context: 'logging.enabled',
-          throwOnInvalid: true,
-        ) ??
-        true;
-
-    final errorsOnly =
-        parseBoolLike(
-          map['errors_only'],
-          context: 'logging.errors_only',
-          throwOnInvalid: true,
-        ) ??
-        false;
-
-    final includeStackTraces =
-        parseBoolLike(
-          map['include_stack_traces'],
-          context: 'logging.include_stack_traces',
-          throwOnInvalid: true,
-        ) ??
-        false;
-
-    String? defaultChannel;
-    final defaultChannelValue = parseStringLike(
-      map['default'],
-      context: 'logging.default',
-      allowEmpty: true,
-      throwOnInvalid: true,
-    );
-    if (defaultChannelValue != null && defaultChannelValue.isNotEmpty) {
-      defaultChannel = defaultChannelValue;
-    }
-
-    final extraFieldsValue = map['extra_fields'];
-    final Map<String, dynamic> extraFields;
-    if (extraFieldsValue == null) {
-      extraFields = const <String, dynamic>{};
-    } else {
-      extraFields = stringKeyedMap(
-        extraFieldsValue as Object,
-        'logging.extra_fields',
+  void validate(ConfigValidationContext context) {
+    final configuredChannels = channels;
+    if (defaultChannel != null) {
+      context.require(
+        defaultChannel!.trim().isNotEmpty,
+        'defaultChannel',
+        'default channel cannot be empty',
+      );
+      context.require(
+        configuredChannels.containsKey(defaultChannel),
+        'defaultChannel',
+        'default channel must name a configured channel',
       );
     }
-
-    final headerNames =
-        parseStringList(
-          map['request_headers'],
-          context: 'logging.request_headers',
-          allowEmptyResult: true,
-          throwOnInvalid: true,
-        ) ??
-        const <String>[];
-
-    final levelValue = parseStringLike(
-      map['level'],
-      context: 'logging.level',
-      allowEmpty: true,
-      throwOnInvalid: true,
-    );
-    final contextual.Level level;
-    if (levelValue == null || levelValue.isEmpty) {
-      level = contextual.Level.info;
-    } else {
-      final needle = levelValue.toLowerCase();
-      contextual.Level? resolved;
-      for (final candidate in contextual.Level.levels) {
-        if (candidate.name.toLowerCase() == needle ||
-            candidate.toString().toLowerCase() == needle) {
-          resolved = candidate;
+    for (final entry in channels.entries) {
+      final name = entry.key;
+      final channel = entry.value;
+      context.require(
+        name.trim().isNotEmpty,
+        'channels.$name',
+        'channel names cannot be empty',
+      );
+      context.require(
+        channel.name.trim().isNotEmpty,
+        'channels.$name.name',
+        'channel names cannot be empty',
+      );
+      context.require(
+        name == channel.name,
+        'channels.$name.name',
+        'channel name must match its map key',
+      );
+      _validateChannel(context, name, channel);
+      switch (channel) {
+        case StackLoggingChannelConfig(:final channels):
+          for (var index = 0; index < channels.length; index++) {
+            context.require(
+              configuredChannels.containsKey(channels[index]),
+              'channels.$name.channels[$index]',
+              'referenced channel must be configured',
+            );
+          }
+        case SamplingLoggingChannelConfig(:final wrappedChannel):
+          context.require(
+            configuredChannels.containsKey(wrappedChannel),
+            'channels.$name.wrappedChannel',
+            'wrapped channel must be configured',
+          );
+        default:
           break;
-        }
       }
-      if (resolved == null) {
-        throw ProviderConfigException(
-          'logging.level must be one of: '
-          '${contextual.Level.levels.map((l) => l.name).join(', ')}',
-        );
-      }
-      level = resolved;
     }
-
-    final formatValue = parseStringLike(
-      map['format'],
-      context: 'logging.format',
-      allowEmpty: true,
-      throwOnInvalid: true,
-    );
-    final LoggingFormatConfig format;
-    if (formatValue == null || formatValue.isEmpty) {
-      format = LoggingFormatConfig('pretty', contextual.PrettyLogFormatter());
-    } else {
-      final token = formatValue.toLowerCase();
-      format = switch (token) {
-        'pretty' => LoggingFormatConfig(
-          'pretty',
-          contextual.PrettyLogFormatter(),
-        ),
-        'raw' => LoggingFormatConfig('raw', contextual.RawLogFormatter()),
-        'null' => LoggingFormatConfig('null', contextual.JsonLogFormatter()),
-        'json' => LoggingFormatConfig('json', contextual.JsonLogFormatter()),
-        'plain' => LoggingFormatConfig(
-          'plain',
-          contextual.PlainTextLogFormatter(),
-        ),
-        _ => LoggingFormatConfig('plain', contextual.PlainTextLogFormatter()),
-      };
-    }
-
-    final channels = <String, LoggingChannelConfig>{};
-    final rawChannels = map['channels'];
-    if (rawChannels != null) {
-      final channelDefs = parseNestedMap(
-        rawChannels,
-        context: 'logging.channels',
-        throwOnInvalid: true,
-        allowNullEntries: false,
+    for (var index = 0; index < requestHeaders.length; index++) {
+      context.require(
+        requestHeaders[index].trim().isNotEmpty,
+        'requestHeaders[$index]',
+        'request header names cannot be empty',
       );
-      channelDefs.forEach((name, channelMap) {
-        channels[name] = LoggingChannelConfig.fromMap(
-          name,
-          Map<String, dynamic>.from(channelMap),
-          context: 'logging.channels.$name',
-        );
-      });
     }
-
-    return LoggingConfig(
-      enabled: enabled,
-      errorsOnly: errorsOnly,
-      level: level,
-      extraFields: extraFields,
-      requestHeaders: headerNames,
-      includeStackTraces: includeStackTraces,
-      format: format,
-      defaultChannel: defaultChannel,
-      channels: channels,
-    );
-  }
-
-  @override
-  Map<String, dynamic> toMap(LoggingConfig value) {
-    return {
-      'default': value.defaultChannel,
-      'channels': value.channels.map(
-        (key, channel) => MapEntry(key, channel.toMap()),
-      ),
-      'enabled': value.enabled,
-      'level': value.level.name,
-      'errors_only': value.errorsOnly,
-      'extra_fields': value.extraFields,
-      'include_stack_traces': value.includeStackTraces,
-      'format': value.format.token,
-      'request_headers': value.requestHeaders,
-    };
   }
 }
+
+void _validateChannel(
+  ConfigValidationContext context,
+  String name,
+  LoggingChannelConfig channel,
+) {
+  final validationPath = 'channels.$name';
+  switch (channel) {
+    case ConsoleLoggingChannelConfig():
+    case StdoutLoggingChannelConfig():
+    case StderrLoggingChannelConfig():
+    case NullLoggingChannelConfig():
+      break;
+    case SingleFileLoggingChannelConfig(:final path):
+      context.require(
+        path.trim().isNotEmpty,
+        '$validationPath.path',
+        'file path cannot be empty',
+      );
+    case DailyFileLoggingChannelConfig(
+      :final path,
+      :final retentionDays,
+      :final flushInterval,
+    ):
+      context.require(
+        path.trim().isNotEmpty,
+        '$validationPath.path',
+        'directory path cannot be empty',
+      );
+      context.require(
+        retentionDays > 0,
+        '$validationPath.retentionDays',
+        'retention days must be greater than zero',
+      );
+      context.require(
+        flushInterval >= Duration.zero,
+        '$validationPath.flushInterval',
+        'flush interval cannot be negative',
+      );
+    case StackLoggingChannelConfig(:final channels):
+      context.require(
+        channels.isNotEmpty,
+        '$validationPath.channels',
+        'stack channel must include at least one channel',
+      );
+      for (var index = 0; index < channels.length; index++) {
+        context.require(
+          channels[index].trim().isNotEmpty,
+          '$validationPath.channels[$index]',
+          'channel names cannot be empty',
+        );
+      }
+    case WebhookLoggingChannelConfig(:final url, :final timeout):
+      context.require(
+        url.hasScheme && url.host.isNotEmpty,
+        '$validationPath.url',
+        'webhook URL must include a host',
+      );
+      context.require(
+        timeout >= Duration.zero,
+        '$validationPath.timeout',
+        'timeout cannot be negative',
+      );
+    case SamplingLoggingChannelConfig(:final wrappedChannel, :final rates):
+      context.require(
+        wrappedChannel.trim().isNotEmpty,
+        '$validationPath.wrappedChannel',
+        'wrapped channel cannot be empty',
+      );
+      for (final entry in rates.entries) {
+        context.require(
+          entry.value >= 0 && entry.value <= 1,
+          '$validationPath.rates.${entry.key.name}',
+          'sampling rates must be between zero and one',
+        );
+      }
+    case CustomLoggingChannelConfig(:final driver):
+      context.require(
+        driver.trim().isNotEmpty,
+        '$validationPath.driver',
+        'custom driver cannot be empty',
+      );
+  }
+}
+
+Map<String, LoggingChannelConfig> _defaultTypedLoggingChannels() => {
+  'stack': StackLoggingChannelConfig(
+    name: 'stack',
+    channels: const ['single', 'stdout'],
+  ),
+  'single': const SingleFileLoggingChannelConfig(name: 'single'),
+  'daily': const DailyFileLoggingChannelConfig(name: 'daily'),
+  'stderr': const StderrLoggingChannelConfig(),
+  'stdout': const StdoutLoggingChannelConfig(),
+  'null': const NullLoggingChannelConfig(),
+};

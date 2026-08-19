@@ -2,15 +2,8 @@ part of 'context.dart';
 
 /// Helper methods that mirror AppZone helpers but operate on EngineContext.
 extension EngineContextHelpers on EngineContext {
-  /// Retrieves a configuration value for this request.
-  T config<T>(String key, [T? defaultValue]) {
-    final resolved = _resolveConfig();
-    if (resolved == null) {
-      return defaultValue as T;
-    }
-    final value = resolved.get<T>(key, defaultValue);
-    return value is T ? value : defaultValue as T;
-  }
+  /// Retrieves a typed configuration value for this request.
+  T config<T extends Object>() => container.get<ConfigStore>().get<T>();
 
   /// Generates a route URL by name.
   String route(String name, [Map<String, dynamic>? parameters]) {
@@ -78,33 +71,6 @@ extension EngineContextHelpers on EngineContext {
       return translator.locale;
     }
     return defaultLocale ?? 'en';
-  }
-
-  Config? _resolveConfig() {
-    final container = _containerOrNull();
-    final fromContainer = _configFromContainer(container);
-    if (fromContainer != null) {
-      return fromContainer;
-    }
-    final engine = this.engine;
-    if (engine == null) {
-      return null;
-    }
-    return _configFromContainer(engine.container);
-  }
-
-  Config? _configFromContainer(Container? container) {
-    if (container == null) {
-      return null;
-    }
-    if (!container.has<Config>()) {
-      return null;
-    }
-    try {
-      return container.get<Config>();
-    } catch (_) {
-      return null;
-    }
   }
 
   TranslatorContract? _translatorOrNull() {

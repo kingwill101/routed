@@ -50,7 +50,7 @@ class Templates {
   static final Map<String, ScaffoldTemplate> _templates = {
     'basic': _buildTemplate(
       id: 'basic',
-      description: 'Minimal JSON welcome route and config files.',
+      description: 'Minimal JSON welcome route with typed provider setup.',
     ),
     'api': _buildTemplate(
       id: 'api',

@@ -5,20 +5,17 @@ import 'package:collection/collection.dart';
 import 'package:fuzzywuzzy/fuzzywuzzy.dart' as fuzzy;
 import 'package:http2/http2.dart' as http2;
 import 'package:meta/meta.dart' show internal, visibleForTesting;
-import 'package:routed_core/src/config/registry.dart';
+import 'package:routed_core/src/config/typed.dart';
 import 'package:routed_core/src/container/container.dart';
 import 'package:routed_core/src/container/container_mixin.dart';
 import 'package:routed_core/src/container/read_only_container.dart';
 import 'package:routed_core/src/context/context.dart';
-import 'package:routed_core/src/contracts/contracts.dart';
 import 'package:routed_core/src/engine/config.dart';
 import 'package:routed_core/src/engine/engine_opt.dart';
-import 'package:routed_core/src/engine/events/config.dart';
 import 'package:routed_core/src/engine/events/request.dart';
 import 'package:routed_core/src/engine/events/route.dart';
 import 'package:routed_core/src/engine/http2_server.dart';
 import 'package:routed_core/src/engine/middleware_registry.dart';
-import 'package:routed_core/src/engine/provider_manifest.dart';
 import 'package:routed_core/src/engine/providers/core.dart';
 import 'package:routed_core/src/engine/providers/registry.dart';
 import 'package:routed_core/src/engine/providers/routing.dart';
@@ -31,7 +28,6 @@ import 'package:routed_core/src/http/constraint_request.dart';
 import 'package:routed_core/src/http/portable_message.dart';
 import 'package:routed_core/src/http/transport.dart';
 import 'package:routed_core/src/provider/provider.dart';
-import 'package:routed_core/src/provider/config_utils.dart';
 import 'package:routed_core/src/request.dart';
 import 'package:routed_core/src/response.dart';
 import 'package:routed_core/src/router/router.dart';
@@ -70,7 +66,7 @@ part 'request.dart';
 /// - **Static File Serving**: Serve static assets from directories or disk storage
 /// - **WebSocket Support**: Handle WebSocket connections with middleware
 /// - **Service Providers**: Extensible architecture through service providers
-/// - **Configuration**: Comprehensive configuration system with YAML/JSON support
+/// - **Configuration**: Provider-owned typed configuration validated at startup
 /// - **HTTP/2 Support**: Optional HTTP/2 protocol support with multiplexing
 /// - **Graceful Shutdown**: Handle shutdown signals with configurable grace periods
 ///
@@ -87,7 +83,7 @@ part 'request.dart';
 /// ## With Default Providers
 ///
 /// ```dart
-/// // Full-featured engine with Config and EventManager
+/// // Core + routing services with typed configuration
 /// final engine = Engine(providers: Engine.defaultProviders);
 ///
 /// engine.get('/users/{id}', (ctx) {
@@ -99,20 +95,6 @@ part 'request.dart';
 /// await engine.serve();
 /// ```
 ///
-/// ## With File-Based Configuration
-///
-/// ```dart
-/// // Load configuration from disk
-/// final engine = Engine(
-///   providers: [
-///     CoreServiceProvider.withLoader(
-///       ConfigLoaderOptions(configDirectory: 'config', watch: true),
-///     ),
-///     RoutingServiceProvider(),
-///   ],
-/// );
-/// ```
-///
 /// ## Custom Provider Composition
 ///
 /// ```dart
@@ -122,9 +104,7 @@ part 'request.dart';
 ///     DatabaseServiceProvider(),
 ///     CacheServiceProvider(),
 ///   ],
-///   options: [
-///     withTrustedProxies(['192.168.1.1']),
-///   ],
+///   options: [withMiddleware([requestIdMiddleware()])],
 /// );
 /// ```
 ///
@@ -152,7 +132,7 @@ class Engine with ContainerMixin {
   /// The default providers for a full-featured engine.
   ///
   /// Includes:
-  /// - [CoreServiceProvider] - In-memory configuration with framework defaults
+  /// - [CoreServiceProvider] - typed engine configuration and core bindings
   /// - [RoutingServiceProvider] - Event manager, signals, and routing config
   ///
   /// Use this for most applications:
@@ -160,15 +140,6 @@ class Engine with ContainerMixin {
   /// final engine = Engine(providers: Engine.defaultProviders);
   /// ```
   ///
-  /// For file-based configuration, construct providers explicitly:
-  /// ```dart
-  /// final engine = Engine(
-  ///   providers: [
-  ///     CoreServiceProvider.withLoader(ConfigLoaderOptions(...)),
-  ///     RoutingServiceProvider(),
-  ///   ],
-  /// );
-  /// ```
   static List<ServiceProvider> get defaultProviders => [
     CoreServiceProvider(),
     RoutingServiceProvider(),
@@ -205,30 +176,6 @@ class Engine with ContainerMixin {
 
   /// The configuration settings for this engine.
   EngineConfig get config => container.get();
-
-  /// The application configuration, providing access to application-level settings.
-  ///
-  /// This is only available if [CoreServiceProvider] is registered. In bare mode
-  /// (no providers), this will throw a [StateError].
-  ///
-  /// ```dart
-  /// // With default providers - appConfig is available
-  /// final engine = Engine(providers: Engine.defaultProviders);
-  /// print(engine.appConfig.getString('app.name'));
-  ///
-  /// // Bare mode - appConfig throws
-  /// final bareEngine = Engine();
-  /// bareEngine.appConfig; // throws StateError
-  /// ```
-  Config get appConfig {
-    if (!container.has<Config>()) {
-      throw StateError(
-        'Config is not available. '
-        'Register CoreServiceProvider or use Engine(providers: Engine.defaultProviders).',
-      );
-    }
-    return container.get<Config>();
-  }
 
   /// A list of [_EngineMount] objects, representing the mounted routers and their prefixes.
   final List<_EngineMount> _mounts = [];
@@ -274,10 +221,6 @@ class Engine with ContainerMixin {
   /// A flag indicating whether the routes have been initialized.
   bool _routesInitialized = false;
   bool _providersBooted = false;
-  bool _configLoadedEmitted = false;
-  ProviderManifest? _providerManifest;
-  final List<String> _unresolvedProviderIds = [];
-  final Set<Middleware> _configuredGlobalSet = {};
   final Map<String, List<Middleware>> _configuredMiddlewareGroups = {};
   final Set<Type> _registeredProviderTypes = {};
 
@@ -315,7 +258,6 @@ class Engine with ContainerMixin {
     _setupShutdownController();
   }
 
-  @visibleForTesting
   Map<String, WebSocketEngineRoute> get debugWebSocketRoutes => _wsRoutes;
 
   @visibleForTesting
@@ -329,10 +271,6 @@ class Engine with ContainerMixin {
 
   @visibleForTesting
   bool get debugEventManagerChecked => _eventManagerChecked;
-
-  @visibleForTesting
-  bool debugIsLoggingEnabled(Container container) =>
-      _isLoggingEnabled(container);
 
   /// Stores WebSocket route handlers mapped by path.
   final Map<String, WebSocketEngineRoute> _wsRoutes = {};
@@ -356,7 +294,7 @@ class Engine with ContainerMixin {
   ///   [ErrorHandlingRegistry]. If not provided, a default registry is used.
   ///
   /// - [providers]: Service providers to register. Use [Engine.defaultProviders]
-  ///   for a full-featured engine with [Config] and [EventManager].
+  ///   for the core + routing profile.
   ///
   /// ## Examples
   ///
@@ -372,18 +310,6 @@ class Engine with ContainerMixin {
   /// await engine.initialize();
   /// ```
   ///
-  /// Inline configuration without YAML files:
-  /// ```dart
-  /// final engine = Engine(
-  ///   providers: Engine.builtins,
-  ///   configItems: {
-  ///     'app.name': 'My App',
-  ///     'logging.enabled': true,
-  ///     'jwt.enabled': true,
-  ///   },
-  /// );
-  /// ```
-  ///
   /// Custom core-provider composition:
   /// ```dart
   /// final engine = Engine(
@@ -391,34 +317,36 @@ class Engine with ContainerMixin {
   ///     security: EngineSecurityFeatures(maxRequestSize: 5 * 1024 * 1024),
   ///   ),
   ///   providers: [
-  ///     CoreServiceProvider.withLoader(ConfigLoaderOptions(watch: true)),
+  ///     CoreServiceProvider(
+  ///       EngineConfig(
+  ///         security: EngineSecurityFeatures(maxRequestSize: 5 * 1024 * 1024),
+  ///       ),
+  ///     ),
   ///     RoutingServiceProvider(),
-  ///   ],
-  ///   options: [
-  ///     withCors(enabled: true),
-  ///     withTrustedProxies(['10.0.0.0/8']),
   ///   ],
   /// );
   /// ```
   Engine({
     EngineConfig? config,
+    RuntimeContext? runtime,
     List<Middleware>? middlewares,
     List<EngineOpt>? options,
     ErrorHandlingRegistry? errorHandling,
     List<ServiceProvider>? providers,
-    Map<String, dynamic>? configItems,
   }) : middlewares = middlewares ?? [],
        errorHooks = errorHandling?.clone() ?? ErrorHandlingRegistry() {
+    setRuntimeContext(runtime ?? RuntimeContext());
     _registerBareDefaults(config: config);
 
-    // When configItems is provided, prepend a CoreServiceProvider with those
-    // items so users don't need to manually construct one. The dedup logic
-    // below ensures only the first CoreServiceProvider instance is used.
-    final effectiveProviders = <ServiceProvider>[
-      if (configItems != null && configItems.isNotEmpty)
-        CoreServiceProvider(configItems: configItems, config: config),
-      ...?providers,
-    ];
+    final effectiveProviders = <ServiceProvider>[...?providers];
+    if (config != null) {
+      final coreIndex = effectiveProviders.indexWhere(
+        (provider) => provider is CoreServiceProvider,
+      );
+      if (coreIndex >= 0) {
+        effectiveProviders[coreIndex] = CoreServiceProvider(config);
+      }
+    }
 
     if (effectiveProviders.isNotEmpty) {
       for (final provider in effectiveProviders) {
@@ -427,15 +355,12 @@ class Engine with ContainerMixin {
           continue;
         }
         registerProvider(provider);
-        // Track registered types to prevent _loadManifestProviders from
-        // creating duplicate instances of the same provider type
         _registeredProviderTypes.add(provider.runtimeType);
       }
     }
 
     // Apply options in order
     options?.forEach((opt) => opt(this));
-    _loadManifestProviders();
     _rebuildMiddlewareStacks();
   }
 
@@ -452,178 +377,12 @@ class Engine with ContainerMixin {
     }
   }
 
-  void _loadManifestProviders() {
-    if (_providerManifest != null) {
-      return;
-    }
-    if (!container.has<Config>()) {
-      return;
-    }
-    final config = container.get<Config>();
-    final manifest = ProviderManifest.fromConfig(config);
-    final registry = ProviderRegistry.instance;
-
-    for (final id in manifest.providers) {
-      final registration = registry.resolve(id);
-      if (registration == null) {
-        if (!_unresolvedProviderIds.contains(id)) {
-          _unresolvedProviderIds.add(id);
-        }
-        continue;
-      }
-      final provider = registration.factory();
-      if (_registeredProviderTypes.contains(provider.runtimeType)) {
-        continue;
-      }
-      if (!_shouldActivateProvider(id, config)) {
-        continue;
-      }
-      registerProvider(provider);
-      _registeredProviderTypes.add(provider.runtimeType);
-    }
-    _providerManifest = manifest;
-    _rebuildMiddlewareStacks();
-    if (_unresolvedProviderIds.isNotEmpty) {
-      debugPrintWarning(
-        'Unknown providers in http.providers manifest: '
-        '${_unresolvedProviderIds.join(', ')}',
-      );
-      _unresolvedProviderIds.clear();
-    }
-  }
-
   void _rebuildMiddlewareStacks() {
-    if (!container.has<MiddlewareRegistry>() || !container.has<Config>()) {
+    if (!container.has<MiddlewareRegistry>()) {
       return;
     }
-    final registry = container.get<MiddlewareRegistry>();
-    final appConfig = container.get<Config>();
-    final manifest = ProviderManifest.fromConfig(appConfig);
-
-    final globalIds = <String>[];
-    final groupIds = <String, List<String>>{};
-
-    void appendUnique(List<String> target, Iterable<String> items) {
-      for (final item in items) {
-        if (!target.contains(item)) {
-          target.add(item);
-        }
-      }
-    }
-
-    appendUnique(
-      globalIds,
-      appConfig.getStringListOrNull('http.middleware.global') ?? [],
-    );
-    final baseGroups = appConfig.getStringListMap('http.middleware.groups');
-    groupIds.addAll(
-      baseGroups,
-    ); // shallow copy is fine as lists recreated below.
-
-    final mergedSources = _collectMiddlewareSources(appConfig);
-
-    for (final providerId in manifest.providers) {
-      if (!_shouldActivateProvider(providerId, appConfig)) {
-        continue;
-      }
-      final contribution = mergedSources[providerId];
-      if (contribution == null) {
-        continue;
-      }
-      appendUnique(globalIds, contribution.global);
-      contribution.groups.forEach((group, ids) {
-        final existing = groupIds.putIfAbsent(group, () => <String>[]);
-        appendUnique(existing, ids);
-      });
-    }
-
-    appConfig.set('http.middleware.global', List<String>.from(globalIds));
-    appConfig.set(
-      'http.middleware.groups',
-      groupIds.map((key, ids) => MapEntry(key, List<String>.from(ids))),
-    );
-
-    final configuredGlobal = <Middleware>[];
-    for (final id in globalIds) {
-      final middleware = registry.build(id, container);
-      if (middleware != null) {
-        configuredGlobal.add(middleware);
-      }
-    }
-
-    final userGlobal = middlewares
-        .where((middleware) => !_configuredGlobalSet.contains(middleware))
-        .toList();
-    middlewares = [...configuredGlobal, ...userGlobal];
-    _configuredGlobalSet
-      ..clear()
-      ..addAll(configuredGlobal);
-
     _configuredMiddlewareGroups.clear();
-    groupIds.forEach((group, ids) {
-      final stack = <Middleware>[];
-      for (final id in ids) {
-        final middleware = registry.build(id, container);
-        if (middleware != null) {
-          stack.add(middleware);
-        }
-      }
-      _configuredMiddlewareGroups[group] = stack;
-    });
     _markRoutesDirty();
-  }
-
-  Map<String, ProviderMiddlewareContribution> _collectMiddlewareSources(
-    Config appConfig,
-  ) {
-    final contributions = <String, _MutableContribution>{};
-
-    void merge(Object? raw) {
-      if (raw is Map) {
-        raw.forEach((key, value) {
-          if (key is! String || value is! Map) {
-            return;
-          }
-          final target = contributions.putIfAbsent(
-            key,
-            () => _MutableContribution(),
-          );
-          target.addGlobal(_stringList(value['global']));
-          target.addGroups(
-            parseStringListMap(
-              value['groups'],
-              context: 'middleware_sources.groups',
-              throwOnInvalid: false,
-            ),
-          );
-        });
-      }
-    }
-
-    final registry = container.get<ConfigRegistry>();
-    for (final entry in registry.entries) {
-      final http = entry.defaults['http'];
-      if (http is Map<String, dynamic>) {
-        merge(http['middleware_sources']);
-      }
-    }
-
-    merge(appConfig.get<Object?>('http.middleware_sources'));
-
-    return contributions.map(
-      (key, value) => MapEntry(key, value.toImmutable()),
-    );
-  }
-
-  static List<String> _stringList(Object? value) {
-    if (value is Iterable) {
-      return value.map((e) => e.toString()).toList();
-    }
-    return const <String>[];
-  }
-
-  bool _shouldActivateProvider(String providerId, Config appConfig) {
-    return true;
   }
 
   /// Creates a new engine instance from an existing engine.
@@ -668,7 +427,16 @@ class Engine with ContainerMixin {
   ///   config: EngineConfig(
   ///     security: EngineSecurityFeatures(maxRequestSize: 10 * 1024 * 1024),
   ///   ),
-  ///   options: [withCors(enabled: true)],
+  ///   providers: [
+  ///     CoreServiceProvider(
+  ///       EngineConfig(
+  ///         security: EngineSecurityFeatures(
+  ///           cors: CorsConfig(enabled: true),
+  ///         ),
+  ///       ),
+  ///     ),
+  ///     RoutingServiceProvider(),
+  ///   ],
   /// );
   /// ```
   factory Engine.d({EngineConfig? config, List<EngineOpt>? options}) {
@@ -1034,13 +802,6 @@ class Engine with ContainerMixin {
     _cachedEventManager = manager;
     _eventManagerChecked = true;
     return manager;
-  }
-
-  bool _isLoggingEnabled(Container container) {
-    if (!container.has<Config>()) {
-      return false;
-    }
-    return container.get<Config>().get<bool>('logging.enabled', false) ?? false;
   }
 
   String _normalizePath(String rawPath) {
@@ -1519,32 +1280,14 @@ class Engine with ContainerMixin {
     await close();
   }
 
-  /// Replaces the current application configuration and notifies listeners.
-  ///
-  /// The [config] is bound into the root container, making it available for
-  /// subsequent resolutions. A [ConfigReloadedEvent] is published so that
-  /// interested listeners (e.g. caches, feature toggles) can react to the
-  /// change. Optional [metadata] can describe the source of the reload.
-  Future<void> replaceConfig(
-    Config config, {
-    Map<String, dynamic>? metadata,
-  }) async {
-    container.instance<Config>(config);
-    await notifyProvidersOfConfigReload(config);
-    _rebuildMiddlewareStacks();
-    await _publishConfigEvent(ConfigReloadedEvent(config, metadata: metadata));
-  }
-
   /// Initialize the engine and boot service providers
   Future<void> initialize() async {
     container.instance<Engine>(this);
-    _loadManifestProviders();
     await bootProviders();
     _warnUnresolvedProviderDependencies();
     _rebuildMiddlewareStacks();
     _cachedEventManager = await _resolveEventManager(container);
     _providersBooted = true;
-    await _emitConfigLoaded();
   }
 
   void _warnUnresolvedProviderDependencies() {
@@ -1581,40 +1324,21 @@ class Engine with ContainerMixin {
   /// // Bare engine (no providers)
   /// final engine = await Engine.create(providers: []);
   ///
-  /// // Inline configuration — no YAML files needed
-  /// final engine = await Engine.create(
-  ///   configItems: {
-  ///     'app.name': 'My App',
-  ///     'app.env': 'production',
-  ///     'logging.enabled': true,
-  ///   },
-  /// );
-  /// ```
-  ///
-  /// To configure specific providers, pass them before the builtins:
-  /// ```dart
-  /// final engine = await Engine.create(
-  ///   providers: [
-  ///     CoreServiceProvider(configItems: {'app.name': 'MyApp'}),
-  ///     ...Engine.builtins,
-  ///   ],
-  /// );
-  /// ```
   static Future<Engine> create({
     EngineConfig? config,
+    RuntimeContext? runtime,
     List<Middleware>? middlewares,
     List<EngineOpt>? options,
     ErrorHandlingRegistry? errorHandling,
     List<ServiceProvider>? providers,
-    Map<String, dynamic>? configItems,
   }) async {
     final engine = Engine(
       config: config,
+      runtime: runtime,
       middlewares: middlewares,
       options: options,
       errorHandling: errorHandling,
       providers: providers ?? builtins,
-      configItems: configItems,
     );
     await engine.initialize();
     return engine;
@@ -1643,26 +1367,6 @@ class Engine with ContainerMixin {
 
   void afterError(EngineErrorObserver observer) {
     errorHooks.addAfter(observer);
-  }
-
-  Future<void> _emitConfigLoaded() async {
-    if (_configLoadedEmitted) {
-      return;
-    }
-    if (!container.has<Config>()) {
-      return;
-    }
-    _configLoadedEmitted = true;
-    final config = container.get<Config>();
-    await _publishConfigEvent(ConfigLoadedEvent(config));
-  }
-
-  Future<void> _publishConfigEvent(ConfigEvent event) async {
-    if (!container.has<EventManager>()) {
-      return;
-    }
-    final manager = await container.make<EventManager>();
-    manager.publish(event);
   }
 }
 
@@ -1774,32 +1478,5 @@ extension SecureEngine on Engine {
     } catch (error, stackTrace) {
       stderr.writeln('HTTP/2 stream error: $error\n$stackTrace');
     }
-  }
-}
-
-class _MutableContribution {
-  final Set<String> global = <String>{};
-  final Map<String, Set<String>> groups = <String, Set<String>>{};
-
-  void addGlobal(Iterable<String> items) {
-    global.addAll(items);
-  }
-
-  void addGroups(Map<String, List<String>> items) {
-    items.forEach((key, values) {
-      final target = groups.putIfAbsent(key, () => <String>{});
-      target.addAll(values);
-    });
-  }
-
-  ProviderMiddlewareContribution toImmutable() {
-    final mappedGroups = <String, List<String>>{};
-    groups.forEach((key, value) {
-      mappedGroups[key] = value.toList();
-    });
-    return ProviderMiddlewareContribution(
-      global: global.toList(),
-      groups: mappedGroups,
-    );
   }
 }

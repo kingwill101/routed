@@ -17,8 +17,8 @@ Routed is a modular HTTP framework for Dart applications. It combines a lightwei
 - **Stateful utilities** – optional cache manager, session middleware, and request-ID helpers.
 - **[Signals & events](/docs/routed/advanced/signals)** – a typed signal hub backed by the event bus so you can hook into request lifecycle changes without manual stream management.
 - **Security & runtime** – the core engine enforces request-size limits and supports trusted-proxy parsing; `routed.security` adds configurable CORS and optional IP filtering. `routed.compression` adds opt-in gzip compression for buffered responses. HTTP/2 and graceful shutdown are built in. CSRF and security headers remain application middleware; declarative static mounts remain a restoration target while direct static helpers are available.
-- **Providers & configuration** – the current bundle registers core, routing, uploads, auth, logging, views, localization, observability, cache, sessions, storage, rate-limit, compression, and security providers. Feature toggles live in `config/http.yaml`, and the CLI (`dart run routed_cli provider:list --config`) shows registered provider defaults and validation errors.
-- **CLI tooling** – `routed` scaffolds projects, runs a hot-reload dev server, publishes config templates (`config:publish`), inspects routes, and generates persisted specs.
+- **Providers & configuration** – the current bundle registers core, routing, uploads, auth, logging, views, localization, observability, cache, sessions, storage, rate-limit, compression, and security providers. Each provider is explicitly configured with a typed Dart object and validated before boot.
+- **CLI tooling** – `routed` scaffolds typed provider setup, runs a development server, inspects routes, and generates persisted specs.
 
 ## Quick Start
 

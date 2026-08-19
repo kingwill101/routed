@@ -1,7 +1,7 @@
 // Rate Limiting Example
 //
-// Demonstrates the routed framework's config-driven rate limiting with
-// multiple strategies (token bucket, sliding window, quota) and key resolvers.
+// Demonstrates typed rate limiting with multiple strategies (token bucket,
+// sliding window, quota) and key resolvers.
 //
 // Run the server:
 //   dart run bin/server.dart
@@ -15,12 +15,76 @@ import 'dart:io';
 
 import 'package:routed/routed.dart';
 
-void main() async {
-  registerRoutedProviders();
-  final engine = await Engine.create(providers: Engine.builtins);
+Future<void> main() async {
+  final backend = CacheRateLimiterBackend(
+    repository: RepositoryImpl(ArrayStore(), 'rate-limit', ''),
+  );
+  final service = RateLimitService(
+    compileRateLimitPolicies(
+      specs: [
+        const RateLimitPolicySpec(
+          name: 'global',
+          match: '**',
+          method: null,
+          strategy: RateLimitStrategy.tokenBucket,
+          capacity: 10,
+          interval: Duration(seconds: 30),
+          window: Duration.zero,
+          period: Duration.zero,
+          burstMultiplier: 1.5,
+          key: RateLimitKeySpec.ip(),
+        ),
+        const RateLimitPolicySpec(
+          name: 'auth',
+          match: '/auth/**',
+          method: null,
+          strategy: RateLimitStrategy.slidingWindow,
+          capacity: 5,
+          interval: Duration.zero,
+          window: Duration(minutes: 1),
+          period: Duration.zero,
+          burstMultiplier: null,
+          key: RateLimitKeySpec.ip(),
+        ),
+        const RateLimitPolicySpec(
+          name: 'api_key',
+          match: '/api/**',
+          method: null,
+          strategy: RateLimitStrategy.slidingWindow,
+          capacity: 3,
+          interval: Duration.zero,
+          window: Duration(minutes: 1),
+          period: Duration.zero,
+          burstMultiplier: null,
+          key: RateLimitKeySpec.header('X-API-Key'),
+        ),
+        const RateLimitPolicySpec(
+          name: 'daily_quota',
+          match: '/quota',
+          method: null,
+          strategy: RateLimitStrategy.quota,
+          capacity: 100,
+          interval: Duration.zero,
+          window: Duration.zero,
+          period: Duration(days: 1),
+          burstMultiplier: null,
+          key: RateLimitKeySpec.ip(),
+        ),
+      ],
+      backend: backend,
+      defaultFailover: RateLimitFailoverMode.allow,
+    ),
+  );
+  final providers =
+      Engine.builtins
+          .where((provider) => provider is! RoutedRateLimitProvider)
+          .toList()
+        ..add(RoutedRateLimitProvider(RateLimitConfig(service: service)));
+  final engine = await Engine.create(providers: providers);
+  engine.addGlobalMiddleware(rateLimitMiddleware(service));
 
   // -----------------------------------------------------------------------
-  // Routes — each demonstrates a different rate limit policy from config.
+  // Routes — each demonstrates a different typed policy.
   // -----------------------------------------------------------------------
 
   // Matches the "global" policy (token bucket, 10 req / 30s)

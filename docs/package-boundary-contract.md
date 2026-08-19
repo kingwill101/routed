@@ -62,7 +62,6 @@ import 'package:routed_node/routed_node.dart';
 
 // Adapter authors / minimal surface
 import 'package:routed_core/routed_core.dart';
-import 'package:routed_core/providers.dart';
 ```
 
 ## Provider IDs

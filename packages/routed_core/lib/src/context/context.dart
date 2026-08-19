@@ -3,10 +3,9 @@ import 'dart:convert';
 import 'dart:io';
 import 'dart:typed_data';
 
-import 'package:path/path.dart' as p;
 // HTTP form/query/SSE helpers live in package:routed_http (import that package).
 import 'package:routed_core/src/container/container.dart' show Container;
-import 'package:routed_core/src/contracts/contracts.dart' show Config;
+import 'package:routed_core/src/config/typed.dart' show ConfigStore;
 import 'package:routed_core/src/contracts/translation/translator.dart';
 import 'package:routed_core/src/engine/config.dart';
 import 'package:routed_core/src/engine/engine.dart';
@@ -63,6 +62,12 @@ class EngineContext {
 
   /// Retrieves the engine configuration.
   EngineConfig get engineConfig => _engine?.config ?? EngineConfig();
+
+  /// Resolves an immutable typed application configuration object.
+  T config<T extends Object>() => container.get<ConfigStore>().get<T>();
+
+  /// Explicit alias for typed configuration lookup.
+  T configuration<T extends Object>() => container.get<ConfigStore>().get<T>();
 
   /// Retrieves the request-scoped container.
   Container get container {
@@ -395,13 +400,6 @@ class EngineContext {
 
   /// Returns the current HTTP status code of the response.
   int get statusCode => _response.statusCode;
-
-  /// Helper method to determine if a body is allowed for the given status code.
-  bool _bodyAllowedForStatus(int statusCode) {
-    return !(statusCode >= 100 && statusCode < 200 ||
-        statusCode == 204 ||
-        statusCode == 304);
-  }
 
   /// Retrieve route parameters.
   Map<String, dynamic> get params {

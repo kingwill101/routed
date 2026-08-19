@@ -1,30 +1,20 @@
 ---
 title: Driver Registries
-description: Register storage, cache, and session drivers the same way the framework does
+description: Extend cache, logging, storage, and authentication integrations
 sidebar_position: 4
 ---
 
 # Driver Registries
 
-Routed ships registries for every subsystem that supports pluggable drivers. The framework registers its built-ins through these registries, which means third-party drivers automatically exercise the same code paths. Use them to add new backends, override existing behaviour, or document per-driver configuration.
-
-All driver registries now share a single implementation (`DriverRegistryBase`) so they behave consistently:
-
-- Keys are normalized (trimmed + lowercased) and duplicate registrations surface a stack trace to the original registration site.
-- `registerDriver` accepts the same optional hooks everywhere (`documentation`, `validator`, `requiresConfig`, plus subsystem-specific builders).
-- Documentation builders receive a context with a `path()` helper rooted at the `pathBase` supplied by the provider, so you never have to concatenate config paths manually.
-- Duplicate registrations throw the same `ProviderConfigException`, so conflicting names are easy to spot regardless of subsystem.
-
-```dart title="Import driver registries"
-import 'package:routed/routed.dart';
-```
+Driver registries are adapter-level extension points. They are not a second
+application configuration system: construct the typed provider configuration
+first, then register the driver or backend during application composition.
 
 ## Storage
 
-`routed_storage` currently creates local disks from `storage.*` configuration;
-it does not expose a generic storage driver registry. For a custom or cloud
-disk, construct a `StorageDisk` and pass a configured `StorageManager` to
-`RoutedStorageProvider`:
+`routed_storage` currently supports local disks through `StorageConfig`. For a
+custom or cloud disk, implement `StorageDisk`, register it on an application-
+owned `StorageManager`, and pass that manager explicitly:
 
 ```dart
 final manager = StorageManager()
@@ -34,197 +24,105 @@ final manager = StorageManager()
 final engine = await Engine.create(
   providers: [
     ...Engine.defaultProviders,
-    RoutedStorageProvider(manager),
+    RoutedStorageProvider(manager: manager),
   ],
 );
 ```
 
-Use `RoutedStaticProvider` alongside it when the app also needs
-`static.mounts`.
+Use `RoutedStaticProvider` with a typed `StaticConfig` when the disk should
+serve public files.
 
 ## Cache
 
-```dart
-CacheManager.registerDriver(
-  'redis',
-  () => RedisStoreFactory(),
-  configBuilder: (context) {
-    final config = Map<String, dynamic>.from(context.userConfig);
+Cache runtime ownership belongs to `routed_cache` and `server_cache`:
 
-    // Provide defaults the user can override later.
-    config['host'] ??= '127.0.0.1';
-    config['port'] = int.tryParse('${config['port'] ?? ''}') ?? 6379;
-    config['url'] ??= 'redis://${config['host']}:${config['port']}/0';
-    config['cache_dir'] ??= 'storage/framework/cache/redis';
-    return config;
-  },
-  validator: (config, driver) {
-    final url = Uri.tryParse(config['url'] as String? ?? '');
-    if (url == null || url.host.isEmpty) {
-      throw ConfigurationException(
-        'Cache driver "$driver" requires `url` to include a host.',
-      );
-    }
-    if (config['db'] != null && config['db'] is! int) {
-      throw ConfigurationException(
-        'Cache driver "$driver" expects `db` to be an integer.',
-      );
-    }
-  },
-  requiresConfig: const ['url'],
-  documentation: (ctx) => <ConfigDocEntry>[
-    ConfigDocEntry(
-      path: ctx.path('url'),
-      type: 'string',
-      description: 'Redis connection URL (e.g. redis://localhost:6379/0).',
-      metadata: const {
-        'validation': 'Must include host information and an optional database.',
-      },
-    ),
-    ConfigDocEntry(
-      path: ctx.path('cache_dir'),
-      type: 'string',
-      description: 'Directory used for Redis driver cache files.',
-      metadata: const {
-        'default_note': 'Defaults to storage/framework/cache/redis.',
-      },
-    ),
+```dart
+final manager = DataCacheManager();
+manager.registerStoreFactory(
+  'custom',
+  CustomStoreFactory(),
+  const CustomStoreConfiguration(/* typed options */),
+);
+
+final engine = await Engine.create(
+  providers: [
+    ...Engine.defaultProviders,
+    RoutedCacheProvider(CacheConfig(store: manager.store('custom').getStore())),
   ],
+  options: [withCacheManager(manager)],
 );
 ```
 
-- **Factories:** Registration wires builders that create `StoreFactory` instances; the provider caches them so every manager sees the same drivers.
-- **Config builders:** `DriverConfigContext` exposes the raw configuration, driver name, and a `get<T>()` helper for container lookups.
-- **Validation:** Declare `requiresConfig` for mandatory keys and throw `ConfigurationException` inside `validator` for richer diagnostics.
-- **Docs:** `CacheServiceProvider` merges documentation entries under `cache.stores.*` and the CLI surfaces metadata like `default_note`, `validation`, and `required` when generating config files.
-
-## Sessions
-
-```dart
-SessionServiceProvider.registerDriver(
-  'dropbox',
-  (context) {
-    final root = context.raw['root']?.toString();
-    final resolvedRoot = (root == null || root.trim().isEmpty)
-        ? 'storage/framework/sessions/dropbox'
-        : root;
-
-    return SessionConfig(
-      cookieName: context.cookieName,
-      store: DropboxSessionStore(
-        token: context.raw['token'] as String,
-        root: resolvedRoot ?? '/sessions',
-      ),
-      maxAge: context.lifetime,
-      defaultOptions: context.options,
-      expireOnClose: context.expireOnClose,
-    );
-  },
-  validator: (context) {
-    final token = context.raw['token'];
-    if (token is! String || token.trim().isEmpty) {
-      throw ProviderConfigException(
-        'Session driver "dropbox" requires a non-empty `token` value.',
-      );
-    }
-  },
-  requiresConfig: const ['token'],
-  documentation: (ctx) => <ConfigDocEntry>[
-    ConfigDocEntry(
-      path: ctx.path('token'),
-      type: 'string',
-      description: 'API token used to authenticate Dropbox requests.',
-      metadata: const {'required': true},
-    ),
-    ConfigDocEntry(
-      path: ctx.path('root'),
-      type: 'string',
-      description: 'Remote folder for storing session payloads.',
-      metadata: const {
-        'default_note': 'Defaults to storage/framework/sessions/dropbox.',
-      },
-    ),
-  ],
-);
-```
-
-- **Context:** `SessionDriverBuilderContext` exposes the merged config and container access so builders can derive paths or look up other services.
-- **Validation:** Throw `ProviderConfigException` inside the validator (or rely on `requiresConfig`) to surface actionable boot-time errors.
-- **Documentation:** Metadata follows the same conventions as cache drivers, ensuring CLI scaffolding and `provider:list --config` pick up default notes, validation hints, and required markers automatically.
+`DataCacheManager` accepts concrete stores, while its factory helper accepts
+typed `StoreConfiguration` values. The manager and `withCacheManager` option
+are exported by
+`package:routed_cache/routed_cache.dart`; they are deliberately absent from
+`routed_core`.
 
 ## Logging
 
+`routed_logging` exposes `LogDriverRegistry`. Register a contextual driver
+before `LoggingServiceProvider` boots:
+
 ```dart
-import 'package:contextual/contextual.dart' as contextual;
-import 'package:routed/routed.dart'; // exposes LogDriverRegistry
-
 final registry = LogDriverRegistry();
+registry.register('webhook', (context) {
+  final url = Uri.parse(context.options['url'] as String);
+  return contextual.WebhookLogDriver.fromOptions(
+    contextual.WebhookOptions(url: url),
+  );
+});
 
-registry.register(
-  'webhook',
-  (ctx) {
-    final url = Uri.parse(ctx.options['url'] as String);
-    final timeout =
-        Duration(milliseconds: ctx.options['timeout_ms'] as int? ?? 5000);
-    final headers = Map<String, String>.from(
-      ctx.options['headers'] as Map? ?? const {},
-    );
-
-    final options = contextual.WebhookOptions(
-      url: url,
-      headers: headers,
-      timeout: timeout,
-      keepAlive: true,
-    );
-    return contextual.WebhookLogDriver.fromOptions(options);
-  },
-  documentation: (ctx) => <ConfigDocEntry>[
-    ConfigDocEntry(
-      path: ctx.path('url'),
-      type: 'string',
-      description: 'Endpoint that receives webhook log payloads.',
-      metadata: const {'required': true},
-    ),
-    ConfigDocEntry(
-      path: ctx.path('timeout_ms'),
-      type: 'int',
-      description: 'HTTP client timeout in milliseconds.',
-      defaultValue: 5000,
+final engine = Engine(
+  providers: [
+    ...Engine.defaultProviders,
+    LoggingServiceProvider(
+      LoggingConfig(
+        channels: {
+          'webhook': LoggingChannelConfig(
+            name: 'webhook',
+            driver: 'webhook',
+            options: {'url': 'https://logs.example.test/ingest'},
+          ),
+        },
+      ),
     ),
   ],
-  validator: (ctx) {
-    final url = ctx.options['url'];
-    if (url is! String || url.trim().isEmpty) {
-      throw ProviderConfigException(
-        'Logging channel "${ctx.name}" must supply a non-empty `url`.',
-      );
-    }
-  },
+);
+engine.container.instance<LogDriverRegistry>(registry);
+await engine.initialize();
+```
+
+`LogDriverBuilderContext` provides the typed `LoggingConfig`, channel name,
+options, and container. Driver validators and documentation callbacks operate
+on the registry entry; invalid typed provider configuration fails before boot.
+
+## Authentication providers
+
+OAuth provider registries are populated with typed provider factories, but a
+Routed engine receives the resulting provider objects through
+`AuthOptions.providers`:
+
+```dart
+final authOptions = AuthOptions<EngineContext>(
+  providers: [
+    googleProvider(
+      GoogleProviderOptions(
+        clientId: clientId,
+        clientSecret: clientSecret,
+        redirectUri: redirectUri,
+      ),
+    ),
+  ],
 );
 ```
 
-- **Resolution:** `LoggingServiceProvider` resolves channels through the registry when it builds each `contextual.LogDriver`.
-- **Access:** Resolve `LogDriverRegistry` from the container (`await engine.container.make<LogDriverRegistry>()`) to inspect or override drivers before `Engine.initialize()`.
-- **Documentation:** Provide a `LogDriverDocContext` -> `ConfigDocEntry` builder to surface channel-specific options in `provider:list --config`.
-- **Validation:** Throw from `validator` when the channel-specific options are incomplete or malformed; the engine surfaces the failure during boot.
+This keeps provider secrets and redirect choices at the application boundary.
 
-## CLI scaffolding
+## Extension rules
 
-Prefer a starter file? Use the CLI to scaffold the boilerplate and documentation hooks:
-
-```bash
-routed provider:driver storage dropbox
-routed provider:driver --type cache redis
-routed provider:driver --type session dropbox
-```
-
-The command writes a driver template under `lib/drivers/<type>/` and wires in the `registerDriver` call plus documentation callback so you can focus on the implementation details.
-
-Need a richer walkthrough? Check the storage and cache driver samples on GitHub: [`custom_storage_driver.dart`](https://github.com/kingwill101/routed/blob/main/examples/custom_storage_driver.dart) and [`custom_cache_driver.dart`](https://github.com/kingwill101/routed/blob/main/examples/custom_cache_driver.dart) for end-to-end implementations that apply config builders, validators, and documentation metadata.
-
-## Tips
-
-- Register drivers at startup (before `Engine.initialize`) or inside a custom provider's `register` method.
-- Use `overrideExisting: true` to replace a built-in driver. This is how the framework supports drop-in replacements.
-- Documentation callbacks are optional but recommended; they keep `provider:list --config` and the Docusaurus docs aligned with the actual configuration surface.
-- When experimenting locally, create integration tests similar to `test/provider/*_provider_test.dart` to ensure your driver and docs stay wired correctly.
+- Register custom drivers before the owning provider initializes.
+- Use `overrideExisting` only when intentionally replacing a built-in driver.
+- Keep driver-specific options close to the typed provider that owns them.
+- Add integration tests for startup, failure, and cleanup paths.
+- Do not expose driver credentials or filesystem paths in client error bodies.

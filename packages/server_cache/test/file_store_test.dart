@@ -1,6 +1,7 @@
 import 'package:file/file.dart';
 import 'package:file/memory.dart';
 import 'package:server_cache/src/file_store.dart';
+import 'package:server_cache/src/file_store_factory.dart';
 import 'package:server_contracts/server_contracts.dart';
 import 'package:test/test.dart';
 
@@ -26,6 +27,20 @@ void main() {
       await store.put('key', 'value', 60);
       final value = await store.get('key');
       expect(value, 'value');
+    });
+
+    test('typed factory configures a file store', () async {
+      final configured = FileStoreFactory().create(
+        FileStoreConfiguration(
+          path: '/configured-cache',
+          lockPath: '/configured-locks',
+          fileSystem: fileSystem,
+        ),
+      );
+
+      await configured.put('typed-key', 'typed-value', 60);
+      expect(await configured.get('typed-key'), 'typed-value');
+      expect(fileSystem.directory('/configured-locks').existsSync(), isTrue);
     });
 
     test('put and forget item', () async {

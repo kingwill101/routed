@@ -142,7 +142,7 @@ class AuthOptions<TContext> {
 }
 
 /// Resolves final auth runtime options by combining base [options] with
-/// adapter/framework overrides and config-driven provider additions.
+/// adapter/framework overrides and explicitly supplied provider additions.
 ///
 /// This helper keeps option merge behavior consistent across framework
 /// integrations (for example Routed and Shelf adapters).

@@ -6,13 +6,15 @@ Future<void> main() async {
   print('cwd: ${Directory.current.path}');
   final engine = await Engine.create(
     providers: [
-      CoreServiceProvider.withLoader(
-        const ConfigLoaderOptions(
-          loadEnvFiles: false,
-          includeEnvironmentSubdirectory: false,
+      ...Engine.defaultProviders,
+      RoutedStorageProvider(
+        configuration: StorageConfig(
+          disks: {
+            'local': const LocalStorageDiskConfig(root: 'storage/app'),
+            'assets': const LocalStorageDiskConfig(root: 'public'),
+          },
         ),
       ),
-      RoutingServiceProvider(),
     ],
   );
   final manager = engine.container.get<StorageManager>();

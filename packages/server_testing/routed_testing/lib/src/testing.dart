@@ -30,8 +30,6 @@ typedef EngineTestFunction =
 /// - `client`: An optional existing `TestClient` instance to use. If not provided,
 ///   a new one is created based on `transportMode`.
 /// - `transportMode`: The transport mode for the `TestClient` (defaults to `inMemory`).
-/// - `configItems`: Initial configuration items for the `Engine` if a new one is created.
-///   These are passed to `CoreServiceProvider`.
 /// - `engineConfig`: An `EngineConfig` instance for the `Engine` if a new one is created.
 /// - `options`: A list of `EngineOpt` for the `Engine` if a new one is created.
 /// - `providers`: Custom providers to use instead of default providers.
@@ -44,7 +42,6 @@ void engineTest(
   TestCallback callback, {
   Engine? engine,
   TransportMode transportMode = TransportMode.inMemory,
-  Map<String, dynamic>? configItems,
   EngineConfig? engineConfig,
   List<EngineOpt>? options,
   List<ServiceProvider>? providers,
@@ -57,7 +54,6 @@ void engineTest(
     final testEngine =
         engine ??
         _createTestEngine(
-          configItems: configItems,
           engineConfig: engineConfig,
           options: options,
           providers: providers,
@@ -92,7 +88,6 @@ void engineGroup(
   required void Function(Engine engine, TestClient client, EngineTestFunction)
   define,
   TransportMode transportMode = TransportMode.inMemory,
-  Map<String, dynamic>? configItems,
   EngineConfig? engineConfig,
   List<EngineOpt>? options,
   List<ServiceProvider>? providers,
@@ -103,7 +98,6 @@ void engineGroup(
         testDescription,
         callback,
         transportMode: transportMode,
-        configItems: configItems,
         engineConfig: engineConfig,
         options: options,
         providers: providers,
@@ -114,7 +108,6 @@ void engineGroup(
     final groupEngine =
         engine ??
         _createTestEngine(
-          configItems: configItems,
           engineConfig: engineConfig,
           options: options,
           providers: providers,
@@ -142,21 +135,16 @@ void engineGroup(
 
 /// Creates a test engine with the given configuration.
 ///
-/// If [providers] is null, uses [Engine.defaultProviders] with a
-/// [CoreServiceProvider] configured with the test [configItems].
+/// If [providers] is null, uses the typed core and routing providers.
 Engine _createTestEngine({
-  Map<String, dynamic>? configItems,
   EngineConfig? engineConfig,
   List<EngineOpt>? options,
   List<ServiceProvider>? providers,
 }) {
-  final effectiveConfigItems =
-      configItems ?? {'app.name': 'Test App', 'app.env': 'testing'};
-
   final effectiveProviders =
       providers ??
       [
-        CoreServiceProvider(configItems: effectiveConfigItems),
+        CoreServiceProvider(engineConfig),
         RoutingServiceProvider(),
       ];
 

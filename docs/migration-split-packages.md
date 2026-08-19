@@ -30,7 +30,7 @@ void main() async {
 ```yaml
 dependencies:
   routed_core: ^0.3.3
-  server_cache: ^0.1.0  # example
+  server_cache: ^0.2.0  # example
 ```
 
 ```dart

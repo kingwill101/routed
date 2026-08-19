@@ -105,8 +105,10 @@ void main() async {
     config: EngineConfig(
       security: const EngineSecurityFeatures(csrfProtection: false),
     ),
-    providers: Engine.defaultProviders,
-    options: [withSessionConfig(sessionConfig)],
+    providers: [
+      ...Engine.defaultProviders,
+      RoutedSessionsProvider(sessionConfig),
+    ],
   );
 
   // Add middleware

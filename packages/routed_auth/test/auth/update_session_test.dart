@@ -18,7 +18,7 @@ Engine _minimalSessionEngine({void Function(Engine engine)? configure}) {
     config: EngineConfig(
       security: const EngineSecurityFeatures(csrfProtection: false),
     ),
-    options: [withSessionConfig(sessionConfig)],
+    providers: [RoutedSessionsProvider(sessionConfig)],
   );
   engine.addGlobalMiddleware(sessionMiddleware());
   engine.addGlobalMiddleware(SessionAuth.sessionAuthMiddleware());
@@ -49,7 +49,7 @@ Engine _authEngine(
     config: EngineConfig(
       security: const EngineSecurityFeatures(csrfProtection: false),
     ),
-    options: [withSessionConfig(sessionConfig)],
+    providers: [RoutedSessionsProvider(sessionConfig)],
   );
   engine.addGlobalMiddleware(sessionMiddleware());
   engine.addGlobalMiddleware(SessionAuth.sessionAuthMiddleware());

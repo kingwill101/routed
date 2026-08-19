@@ -1,9 +1,9 @@
 library;
 
-import 'package:routed_core/providers.dart' show ProviderRegistry;
 import 'package:routed_auth/src/auth/provider.dart' show AuthServiceProvider;
+import 'package:routed_core/routed_core.dart' show ProviderRegistry;
 
-export 'package:server_auth/server_auth.dart' hide NamedRegistry;
+export 'package:server_auth/server_auth.dart';
 export 'src/auth/manager/auth_manager.dart';
 export 'src/auth/hooks.dart';
 export 'src/auth/routes.dart';
@@ -26,7 +26,6 @@ export 'src/auth/session_auth.dart'
         guardMiddleware,
         requireAuthenticated,
         requireRoles;
-export 'src/config/specs/auth.dart' show AuthConfigSpec;
 export 'src/crypto/crypto.dart'
     show
         sha1Digest,

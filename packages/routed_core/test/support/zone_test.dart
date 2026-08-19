@@ -1,5 +1,5 @@
-import 'package:routed_core/src/engine/config.dart';
 import 'package:routed_core/src/engine/engine.dart';
+import 'package:routed_core/src/engine/config.dart';
 import 'package:routed_core/src/support/helpers.dart';
 import 'package:routed_core/src/support/zone.dart';
 import 'package:test/test.dart';
@@ -10,14 +10,8 @@ void main() {
     late Engine engine;
 
     setUp(() {
-      // Create engine with mock config
       engine = testEngine(
         providers: Engine.defaultProviders,
-        configItems: {
-          'app.name': 'Test App',
-          'app.env': 'testing',
-          'database.host': 'localhost',
-        },
         config: EngineConfig(),
       );
 
@@ -26,17 +20,25 @@ void main() {
       engine.get('/posts/{slug}', (ctx) => null).name('posts.show');
     });
 
-    test('config helper returns values from current zone', () async {
-      await AppZone.run(
-        engine: engine,
-        body: () async {
-          expect(config('app.name') as String, equals('Test App'));
-          expect(config('app.env') as String, equals('testing'));
-          expect(config('database.host') as String, equals('localhost'));
-          expect(config('non.existent', 'default'), equals('default'));
-        },
-      );
-    });
+    test(
+      'typed configuration helper returns values from current zone',
+      () async {
+        await engine.initialize();
+        await AppZone.run(
+          engine: engine,
+          body: () async {
+            expect(
+              config<EngineConfig>(),
+              same(engine.configStore.get<EngineConfig>()),
+            );
+            expect(
+              AppZone.configuration.get<EngineConfig>(),
+              isA<EngineConfig>(),
+            );
+          },
+        );
+      },
+    );
 
     test('route helper generates URLs from current zone', () async {
       await AppZone.run(
@@ -61,7 +63,7 @@ void main() {
     });
 
     test('accessing helpers outside zone throws error', () {
-      expect(() => config('app.name') as String, throwsStateError);
+      expect(() => config<EngineConfig>(), throwsStateError);
       expect(() => route('users.show'), throwsStateError);
     });
   });

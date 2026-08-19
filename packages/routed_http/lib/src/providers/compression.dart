@@ -3,18 +3,21 @@ import 'dart:io';
 import 'package:routed_core/routed_core.dart';
 
 /// Configuration for the built-in gzip response compression provider.
-class CompressionConfig {
-  const CompressionConfig({
+class CompressionConfig implements ValidatableConfiguration {
+  CompressionConfig({
     this.enabled = false,
     this.minLength = 1024,
-    this.algorithms = const ['gzip'],
-    this.mimeAllow = const [
-      'text/*',
-      'application/json',
-      'application/javascript',
-    ],
-    this.mimeDeny = const ['image/*', 'audio/*', 'video/*'],
-  });
+    List<String>? algorithms,
+    List<String>? mimeAllow,
+    List<String>? mimeDeny,
+  }) : algorithms = List<String>.unmodifiable(algorithms ?? const ['gzip']),
+       mimeAllow = List<String>.unmodifiable(
+         mimeAllow ??
+             const ['text/*', 'application/json', 'application/javascript'],
+       ),
+       mimeDeny = List<String>.unmodifiable(
+         mimeDeny ?? const ['image/*', 'audio/*', 'video/*'],
+       );
 
   /// Whether response compression is enabled.
   final bool enabled;
@@ -31,6 +34,30 @@ class CompressionConfig {
 
   /// MIME types excluded from compression. A trailing `*` matches a prefix.
   final List<String> mimeDeny;
+
+  @override
+  void validate(ConfigValidationContext context) {
+    context.require(
+      minLength >= 0,
+      'minLength',
+      'minimum response length cannot be negative',
+    );
+    context.require(
+      algorithms.every((algorithm) => algorithm.trim().isNotEmpty),
+      'algorithms',
+      'compression algorithms cannot contain empty names',
+    );
+    context.require(
+      mimeAllow.every((pattern) => pattern.trim().isNotEmpty),
+      'mimeAllow',
+      'allowed MIME patterns cannot be empty',
+    );
+    context.require(
+      mimeDeny.every((pattern) => pattern.trim().isNotEmpty),
+      'mimeDeny',
+      'denied MIME patterns cannot be empty',
+    );
+  }
 }
 
 /// Compresses eligible buffered responses when the client accepts gzip.
@@ -74,77 +101,25 @@ Middleware compressionMiddleware(CompressionConfig config) {
   };
 }
 
-/// Provider that installs [compressionMiddleware] from `compression.*` config.
+/// Provider that installs [compressionMiddleware] from [configuration].
 class RoutedCompressionProvider extends ServiceProvider
-    with ProvidesDefaultConfig {
-  Middleware? _middleware;
+    with ProvidesTypedConfiguration<CompressionConfig> {
+  RoutedCompressionProvider([CompressionConfig? configuration])
+    : configuration = configuration ?? CompressionConfig();
+
+  @override
+  final CompressionConfig configuration;
 
   @override
   void register(Container container) {}
 
   @override
-  ConfigDefaults get defaultConfig => ConfigDefaults(
-    values: {
-      'compression': {
-        'enabled': false,
-        'min_length': 1024,
-        'algorithms': ['gzip'],
-        'mime_allow': ['text/*', 'application/json', 'application/javascript'],
-        'mime_deny': ['image/*', 'audio/*', 'video/*'],
-      },
-    },
-    docs: const [
-      ConfigDocEntry(
-        path: 'compression',
-        type: 'map',
-        description: 'Gzip response compression for buffered responses.',
-      ),
-    ],
-  );
-
-  @override
   Future<void> boot(Container container) async {
-    if (!container.has<Engine>() || !container.has<Config>()) return;
-    _apply(container.get<Engine>(), container.get<Config>());
-  }
-
-  @override
-  Future<void> onConfigReload(Container container, Config config) async {
-    if (!container.has<Engine>()) return;
-    _apply(container.get<Engine>(), config);
-  }
-
-  void _apply(Engine engine, Config config) {
-    final existing = _middleware;
-    if (existing != null) {
-      engine.middlewares.removeWhere(
-        (middleware) => identical(middleware, existing),
-      );
-      _middleware = null;
-    }
-
-    final settings = CompressionConfig(
-      enabled: config.getBoolOrNull('compression.enabled') ?? false,
-      minLength: config.getIntOrNull('compression.min_length') ?? 1024,
-      algorithms:
-          config.getStringListOrNull('compression.algorithms') ??
-          const ['gzip'],
-      mimeAllow:
-          config.getStringListOrNull('compression.mime_allow') ??
-          const ['text/*', 'application/json', 'application/javascript'],
-      mimeDeny:
-          config.getStringListOrNull('compression.mime_deny') ??
-          const ['image/*', 'audio/*', 'video/*'],
+    if (!configuration.enabled || !container.has<Engine>()) return;
+    container.get<Engine>().middlewares.insert(
+      0,
+      compressionMiddleware(configuration),
     );
-    if (!settings.enabled) {
-      engine.updateConfig(engine.config);
-      return;
-    }
-
-    final middleware = compressionMiddleware(settings);
-    _middleware = middleware;
-    engine.middlewares.insert(0, middleware);
-    engine.updateConfig(engine.config);
   }
 }
 

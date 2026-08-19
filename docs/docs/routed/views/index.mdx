@@ -6,9 +6,38 @@ sidebar_position: 0
 
 # Views & Templates
 
-Routed exposes a pluggable view engine API. The built-in Liquid engine lets you render HTML templates with familiar syntax, while the `ViewEngine` interface allows you to integrate other template renderers.
+Routed exposes a pluggable view engine API. The built-in Liquid engine renders
+HTML templates while `ViewEngine` lets applications integrate another
+renderer.
 
-- [Liquid templates](/docs/routed/views/templates) – configure the engine, render views, and pass data to templates.
-- [Custom engines](/docs/routed/views/templates#custom-engines) – implement `ViewEngine` or register additional engines with `ViewEngineManager`.
+`ViewServiceProvider` owns a typed `RoutedViewConfig`. If templates should use
+a named storage disk, register `RoutedStorageProvider` before it:
 
-The view provider reads its settings from the `view.*` namespace and shares storage disks with the rest of the ecosystem. Define disks once under `storage.*`, point `view.disk` (optional) at the disk you want to use, and the provider resolves paths through the shared `StorageManager`. Run `dart run routed_cli provider:list --config` to inspect active providers, view defaults, and catch invalid overrides (`ProviderConfigException`) before booting the engine.
+```dart
+import 'package:routed/routed.dart';
+
+final engine = await Engine.create(
+  providers: [
+    ...Engine.defaultProviders,
+    RoutedStorageProvider(
+      configuration: StorageConfig(
+        defaultDisk: 'resources',
+        disks: {
+          'resources': const LocalStorageDiskConfig(root: 'resources'),
+        },
+      ),
+    ),
+    ViewServiceProvider(
+      RoutedViewConfig(
+        engine: 'liquid',
+        directory: 'views',
+        disk: 'resources',
+      ),
+    ),
+  ],
+);
+```
+
+See [Liquid templates](/docs/routed/views/templates) for rendering and
+extension examples. Provider configuration is fixed for the lifetime of an
+engine and validated before boot.

@@ -1,15 +1,16 @@
 import 'dart:io';
 
 import 'package:file/file.dart';
+import 'package:routed_core/routed_core.dart';
 import 'package:server_sessions/server_sessions.dart';
 
 /// Configuration for session management.
-class SessionConfig {
+class SessionConfig implements ValidatableConfiguration {
   /// The name of the session cookie. Defaults to 'routed_session'.
   final String cookieName;
 
   /// The session store implementation.
-  final dynamic store;
+  final SessionStore store;
 
   /// The maximum age of the session. Defaults to 1 hour.
   final Duration maxAge;
@@ -165,5 +166,16 @@ class SessionConfig {
       codecs: resolvedCodecs,
       lottery: lottery,
     );
+  }
+
+  @override
+  void validate(ConfigValidationContext context) {
+    context.require(
+      cookieName.trim().isNotEmpty,
+      'cookieName',
+      'must not be empty',
+    );
+    context.require(path.trim().isNotEmpty, 'path', 'must not be empty');
+    context.require(maxAge >= Duration.zero, 'maxAge', 'must not be negative');
   }
 }

@@ -1,7 +1,6 @@
 import 'dart:async';
 import 'dart:io';
 
-import 'package:routed_core/src/provider/provider.dart';
 import 'package:routed_core/src/runtime/shutdown.dart';
 import 'package:test/test.dart';
 
@@ -44,54 +43,6 @@ void main() {
       expect(copy.signals, {ProcessSignal.sigterm});
       // Unoveridden fields unchanged.
       expect(copy.gracePeriod, config.gracePeriod);
-    });
-  });
-
-  group('RuntimeConfigSpec.fromMap', () {
-    const spec = RuntimeConfigSpec();
-
-    test('returns defaults for empty map', () {
-      final result = spec.fromMap({});
-      expect(result.shutdown.enabled, isTrue);
-      expect(result.shutdown.gracePeriod, const Duration(seconds: 20));
-      expect(result.shutdown.forceAfter, const Duration(minutes: 1));
-      expect(result.shutdown.exitCode, 0);
-      expect(result.shutdown.notifyReadiness, isTrue);
-    });
-
-    test('negative durations are clamped to zero', () {
-      final result = spec.fromMap({
-        'shutdown': {'grace_period': '-5s', 'force_after': '-10s'},
-      });
-      expect(result.shutdown.gracePeriod, Duration.zero);
-      expect(result.shutdown.forceAfter, Duration.zero);
-    });
-
-    test('parses known signal names', () {
-      final result = spec.fromMap({
-        'shutdown': {
-          'signals': ['sigint', 'sigterm', 'sighup'],
-        },
-      });
-      expect(
-        result.shutdown.signals,
-        containsAll([
-          ProcessSignal.sigint,
-          ProcessSignal.sigterm,
-          ProcessSignal.sighup,
-        ]),
-      );
-    });
-
-    test('unknown signal name throws ProviderConfigException', () {
-      expect(
-        () => spec.fromMap({
-          'shutdown': {
-            'signals': ['BOGUS'],
-          },
-        }),
-        throwsA(isA<ProviderConfigException>()),
-      );
     });
   });
 

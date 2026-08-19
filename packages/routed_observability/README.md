@@ -26,12 +26,13 @@ Future<void> main() async {
   final engine = await Engine.create(
     providers: [
       ...Engine.defaultProviders,
-      ObservabilityServiceProvider(),
+      ObservabilityServiceProvider(
+        ObservabilityConfig(
+          metrics: ObservabilityMetricsConfig(enabled: true),
+          health: ObservabilityHealthConfig(enabled: true),
+        ),
+      ),
     ],
-    configItems: {
-      'observability.metrics.enabled': true,
-      'observability.health.enabled': true,
-    },
   );
 
   // Health defaults to /readyz and /livez; metrics use /metrics when enabled.
@@ -40,7 +41,7 @@ Future<void> main() async {
 ```
 
 The provider supplies health, metrics, tracing, and error-observer services and
-connects their configured middleware. Call
-`registerRoutedObservabilityProviders()` only when a configuration manifest
-needs to resolve `routed.observability` without importing the full `routed`
-facade.
+connects their configured middleware. Configuration is validated before
+provider boot and remains fixed for the lifetime of the engine. The registry
+helper is retained only for discovering the default provider in the facade;
+custom configuration should be passed to `ObservabilityServiceProvider`.

@@ -16,14 +16,7 @@ void main() {
       final engine = testEngine(
         config: EngineConfig(fileSystem: fs),
         fileSystem: fs,
-        configItems: {
-          'view': {
-            'engine': 'liquid',
-            'directory': 'templates',
-            'cache': false,
-          },
-        },
-        providers: [ViewServiceProvider()],
+        viewConfig: RoutedViewConfig(directory: 'templates', cache: false),
       );
       addTearDown(() async => await engine.close());
       await engine.initialize();
@@ -34,33 +27,17 @@ void main() {
       expect(engine.config.templateEngine, isA<LiquidViewEngine>());
     });
 
-    test('config reload updates template directory', () async {
+    test('view configuration is fixed for the engine lifetime', () async {
       final engine = testEngine(
         config: EngineConfig(fileSystem: fs),
         fileSystem: fs,
-        configItems: {
-          'view': {'directory': 'views'},
-        },
-        providers: [ViewServiceProvider()],
+        viewConfig: RoutedViewConfig(directory: 'views'),
       );
       addTearDown(() async => await engine.close());
       await engine.initialize();
 
-      final override = ConfigImpl();
-      override.merge(engine.appConfig.all());
-      override.set('view', {'directory': 'shared/views'});
-
-      await engine.replaceConfig(override);
-      await Future<void>.delayed(Duration.zero);
-
-      expect(
-        engine.config.templateDirectory,
-        endsWith(fs.path.join('shared', 'views')),
-      );
-      expect(
-        engine.config.views.viewPath,
-        endsWith(fs.path.join('shared', 'views')),
-      );
+      expect(engine.config.templateDirectory, endsWith('views'));
+      expect(engine.config.views.viewPath, endsWith('views'));
     });
   });
 }

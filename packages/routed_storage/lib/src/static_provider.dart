@@ -4,131 +4,92 @@ import 'package:server_storage/server_storage.dart';
 
 import 'engine_static_file_sink.dart';
 
-/// Installs declarative static mounts from `static.*` configuration.
-class RoutedStaticProvider extends ServiceProvider with ProvidesDefaultConfig {
-  List<Object> _registeredRoutes = [];
+/// Immutable configuration for [RoutedStaticProvider].
+class StaticConfig implements ValidatableConfiguration {
+  StaticConfig({this.enabled = false, List<StaticMountConfig>? mounts})
+    : mounts = List<StaticMountConfig>.unmodifiable(
+        mounts ?? const <StaticMountConfig>[],
+      );
+
+  final bool enabled;
+  final List<StaticMountConfig> mounts;
+
+  @override
+  void validate(ConfigValidationContext context) {
+    for (var index = 0; index < mounts.length; index++) {
+      final mount = mounts[index];
+      final path = 'mounts[$index]';
+      final route = _normalizeStaticRoute(mount.route);
+      context.require(
+        route.trim().isNotEmpty,
+        '$path.route',
+        'route is required',
+      );
+      context.require(
+        !route.contains(':') && !route.contains('*'),
+        '$path.route',
+        'route cannot contain URL parameters',
+      );
+      context.require(
+        mount.disk != null || mount.root != null,
+        path,
+        'mount requires disk or root',
+      );
+      if (mount.disk != null) {
+        context.require(
+          mount.disk!.trim().isNotEmpty,
+          '$path.disk',
+          'disk name cannot be empty',
+        );
+      }
+      if (mount.root != null) {
+        context.require(
+          mount.root!.trim().isNotEmpty,
+          '$path.root',
+          'root cannot be empty',
+        );
+      }
+      context.require(
+        _isSafeStaticRelativePath(mount.path),
+        '$path.path',
+        'path must stay within the mount root',
+      );
+      context.require(
+        _isSafeStaticRelativePath(mount.indexFile),
+        '$path.indexFile',
+        'index file must stay within the mount root',
+      );
+    }
+  }
+}
+
+/// Installs declarative static mounts from [configuration].
+class RoutedStaticProvider extends ServiceProvider
+    with ProvidesTypedConfiguration<StaticConfig> {
+  RoutedStaticProvider([StaticConfig? configuration])
+    : configuration = configuration ?? StaticConfig();
+
+  @override
+  final StaticConfig configuration;
+
+  final List<Object> _registeredRoutes = [];
 
   @override
   void register(Container container) {}
 
   @override
-  ConfigDefaults get defaultConfig => ConfigDefaults(
-    values: {
-      'static': {'enabled': false, 'mounts': <Map<String, Object?>>[]},
-    },
-    docs: const [
-      ConfigDocEntry(
-        path: 'static.enabled',
-        type: 'bool',
-        description: 'Enable declarative static file mounts.',
-      ),
-      ConfigDocEntry(
-        path: 'static.mounts',
-        type: 'list',
-        description: 'Storage-backed static mount definitions.',
-      ),
-    ],
-  );
-
-  @override
   Future<void> boot(Container container) async {
-    if (!container.has<Engine>() ||
-        !container.has<Config>() ||
+    if (!configuration.enabled ||
+        !container.has<Engine>() ||
         !container.has<StorageManager>()) {
       return;
     }
-    _apply(
-      container.get<Engine>(),
-      container.get<Config>(),
-      await container.make<StorageManager>(),
-    );
-  }
-
-  @override
-  Future<void> onConfigReload(Container container, Config config) async {
-    if (!container.has<Engine>() || !container.has<StorageManager>()) return;
-    _apply(
-      container.get<Engine>(),
-      config,
-      await container.make<StorageManager>(),
-    );
-  }
-
-  void _apply(Engine engine, Config config, StorageManager storage) {
-    _removeRoutes(engine);
-    if (!config.getBool('static.enabled')) return;
-
-    final mounts = parseMapList(
-      config.get<Object?>('static.mounts'),
-      context: 'static.mounts',
-    );
-    for (var index = 0; index < mounts.length; index++) {
-      _registerMount(engine, storage, _parseMount(mounts[index], index));
+    final engine = container.get<Engine>();
+    final storage = await container.make<StorageManager>();
+    for (final mount in configuration.mounts) {
+      _registerMount(engine, storage, mount);
     }
     engine.invalidateRoutes();
-  }
-
-  StaticMountConfig _parseMount(Map<String, dynamic> values, int index) {
-    final context = 'static.mounts[$index]';
-    final route = parseStringLike(
-      values['route'] ?? values['prefix'],
-      context: '$context.route',
-    );
-    if (route == null) {
-      throw ProviderConfigException('$context.route is required');
-    }
-    final normalizedRoute = _normalizeRoute(route);
-    if (normalizedRoute.contains(':') || normalizedRoute.contains('*')) {
-      throw ProviderConfigException(
-        '$context.route cannot contain URL parameters',
-      );
-    }
-
-    final disk = parseStringLike(
-      values['disk'],
-      context: '$context.disk',
-      allowEmpty: true,
-    );
-    final root = parseStringLike(
-      values['root'],
-      context: '$context.root',
-      allowEmpty: false,
-    );
-    if (disk == null && root == null) {
-      throw ProviderConfigException('$context requires disk or root');
-    }
-
-    final path =
-        parseStringLike(
-          values['path'],
-          context: '$context.path',
-          allowEmpty: true,
-        ) ??
-        '';
-    _validateRelativePath(path, '$context.path');
-    final indexFile =
-        parseStringLike(
-          values['index'],
-          context: '$context.index',
-          allowEmpty: true,
-        ) ??
-        'index.html';
-    _validateRelativePath(indexFile, '$context.index');
-    final listDirectories =
-        parseBoolLike(
-          values['list_directories'] ?? values['directory_listing'],
-          context: '$context.list_directories',
-        ) ??
-        false;
-
-    return StaticMountConfig(
-      route: normalizedRoute,
-      disk: disk,
-      root: root,
-      path: path,
-      indexFile: indexFile,
-      listDirectories: listDirectories,
-    );
   }
 
   void _registerMount(
@@ -138,6 +99,7 @@ class RoutedStaticProvider extends ServiceProvider with ProvidesDefaultConfig {
   ) {
     final handler = FileHandler.fromDir(_resolveDir(storage, mount));
     final router = engine.defaultRouter;
+    final route = _normalizeRoute(mount.route);
     final before = router.routes.length;
 
     Future<Response> serve(EngineContext context, [String path = '']) async {
@@ -145,9 +107,9 @@ class RoutedStaticProvider extends ServiceProvider with ProvidesDefaultConfig {
       return context.response;
     }
 
-    router.get(mount.route, (context) => serve(context));
-    router.head(mount.route, (context) => serve(context));
-    final wildcard = p.posix.join(mount.route, '{*filepath}');
+    router.get(route, (context) => serve(context));
+    router.head(route, (context) => serve(context));
+    final wildcard = p.posix.join(route, '{*filepath}');
     router.get(
       wildcard,
       (context) => serve(context, context.param('filepath')?.toString() ?? ''),
@@ -178,13 +140,6 @@ class RoutedStaticProvider extends ServiceProvider with ProvidesDefaultConfig {
     );
   }
 
-  void _removeRoutes(Engine engine) {
-    if (_registeredRoutes.isEmpty) return;
-    engine.defaultRouter.routes.removeWhere(_registeredRoutes.contains);
-    _registeredRoutes = [];
-    engine.invalidateRoutes();
-  }
-
   String _normalizeRoute(String route) {
     final normalized = route.startsWith('/') ? route : '/$route';
     if (normalized.length > 1 && normalized.endsWith('/')) {
@@ -192,26 +147,32 @@ class RoutedStaticProvider extends ServiceProvider with ProvidesDefaultConfig {
     }
     return normalized;
   }
+}
 
-  void _validateRelativePath(String value, String context) {
-    if (value.isEmpty) return;
-    final normalized = p.posix.normalize(value);
-    if (p.posix.isAbsolute(value) ||
-        normalized == '..' ||
-        normalized.startsWith('../')) {
-      throw ProviderConfigException('$context must stay within the mount root');
-    }
+String _normalizeStaticRoute(String route) {
+  final normalized = route.startsWith('/') ? route : '/$route';
+  if (normalized.length > 1 && normalized.endsWith('/')) {
+    return normalized.substring(0, normalized.length - 1);
   }
+  return normalized;
+}
+
+bool _isSafeStaticRelativePath(String value) {
+  if (value.isEmpty) return true;
+  final normalized = p.posix.normalize(value);
+  return !p.posix.isAbsolute(value) &&
+      normalized != '..' &&
+      !normalized.startsWith('../');
 }
 
 final class StaticMountConfig {
   const StaticMountConfig({
     required this.route,
-    required this.disk,
-    required this.root,
-    required this.path,
-    required this.indexFile,
-    required this.listDirectories,
+    this.disk,
+    this.root,
+    this.path = '',
+    this.indexFile = 'index.html',
+    this.listDirectories = false,
   });
 
   final String route;

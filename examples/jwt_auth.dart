@@ -15,20 +15,19 @@ Map<String, dynamic> get _inlineHmacKey => <String, dynamic>{
 Future<void> main() async {
   final engine = Engine(
     providers: [
-      CoreServiceProvider(
-        configItems: {
-          'security': {
-            'ip_filter': {
-              'enabled': true,
-              'default_action': 'deny',
-              'allow': ['127.0.0.1/32', '::1/128'],
-              'deny': ['0.0.0.0/0'],
-              'respect_trusted_proxies': false,
-            },
-          },
-        },
-      ),
+      CoreServiceProvider(),
       RoutingServiceProvider(),
+      RoutedSecurityProvider(
+        RoutedSecurityConfig(
+          ipFilter: IpFilterConfig(
+            enabled: true,
+            defaultAction: IpFilterAction.deny,
+            allow: ['127.0.0.1/32', '::1/128'],
+            deny: ['0.0.0.0/0'],
+            respectTrustedProxies: false,
+          ),
+        ),
+      ),
     ],
   );
 

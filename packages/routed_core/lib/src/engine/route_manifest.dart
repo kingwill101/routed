@@ -326,23 +326,3 @@ Map<String, Object?> _stringKeyed(Map<Object?, Object?>? source) {
   return source.map((key, value) => MapEntry(key?.toString() ?? '', value))
     ..removeWhere((key, _) => key.isEmpty);
 }
-
-String? _extractHandlerFunctionRef(Object handler) {
-  final text = handler.toString();
-
-  final namedMatch = RegExp(r"Function '([^']+)'").firstMatch(text);
-  var candidate = namedMatch?.group(1);
-  if (candidate == null || candidate.isEmpty) {
-    return null;
-  }
-
-  if (candidate.contains('<anonymous closure>')) {
-    return null;
-  }
-
-  if (candidate.startsWith('new ')) {
-    candidate = candidate.substring(4);
-  }
-
-  return candidate;
-}

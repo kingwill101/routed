@@ -1,24 +1,21 @@
 import 'package:routed/routed.dart';
 
 Future<Engine> createEngine() async {
-  registerRoutedProviders();
-  final engine = await Engine.create(
-    providers: [
-      CoreServiceProvider.withLoader(
-        const ConfigLoaderOptions(
-          configDirectory: 'config',
-          loadEnvFiles: false,
-          includeEnvironmentSubdirectory: false,
-        ),
-      ),
-      RoutingServiceProvider(),
-      ...Engine.builtins.where(
-        (provider) =>
-            provider is! CoreServiceProvider &&
-            provider is! RoutingServiceProvider,
-      ),
-    ],
-  );
+  final providers =
+      Engine.builtins
+          .where((provider) => provider is! RoutedStorageProvider)
+          .toList()
+        ..add(
+          RoutedStorageProvider(
+            configuration: StorageConfig(
+              disks: {
+                'local': const LocalStorageDiskConfig(root: 'storage/app'),
+                'assets': const LocalStorageDiskConfig(root: 'public'),
+              },
+            ),
+          ),
+        );
+  final engine = await Engine.create(providers: providers);
 
   // Declarative static mounts are not part of the current provider bundle.
   // Register the supported direct helpers so this example serves real files.

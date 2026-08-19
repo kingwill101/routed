@@ -4,29 +4,27 @@ import 'dart:async';
 import 'package:file/file.dart' as file;
 import 'package:file/local.dart' as local;
 import 'package:routed_core/src/container/container.dart';
-import 'package:routed_core/src/contracts/contracts.dart' show Config;
-import 'package:routed_core/src/config/specs/views.dart';
 import 'package:routed_core/src/engine/config.dart';
-import 'package:routed_core/src/engine/engine.dart';
 import 'package:routed_core/src/provider/provider.dart';
+import 'package:routed_core/src/provider/typed_provider.dart';
 import 'package:server_storage/server_storage.dart';
+import '../config.dart';
 import '../view/engines/liquid_engine.dart';
 import '../view/view_engine.dart';
 import '../view/engine_manager.dart';
 import '../view/view_extensions.dart';
 
-/// Configures view engine defaults driven by configuration/disks.
-class ViewServiceProvider extends ServiceProvider with ProvidesDefaultConfig {
-  StorageManager? _storageManager;
-  file.FileSystem _fallbackFileSystem = const local.LocalFileSystem();
-  static const ViewConfigSpec spec = ViewConfigSpec();
+/// Configures the view engine from an immutable typed configuration.
+class ViewServiceProvider extends ServiceProvider
+    with ProvidesTypedConfiguration<RoutedViewConfig> {
+  ViewServiceProvider([RoutedViewConfig? configuration])
+    : configuration = configuration ?? RoutedViewConfig();
 
   @override
-  ConfigDefaults get defaultConfig => ConfigDefaults(
-    docs: spec.docs(),
-    values: spec.defaultsWithRoot(),
-    schemas: spec.schemaWithRoot(),
-  );
+  final RoutedViewConfig configuration;
+
+  StorageManager? _storageManager;
+  file.FileSystem _fallbackFileSystem = const local.LocalFileSystem();
 
   @override
   void register(Container container) {
@@ -43,14 +41,11 @@ class ViewServiceProvider extends ServiceProvider with ProvidesDefaultConfig {
     }
 
     _fallbackFileSystem = container.get<EngineConfig>().fileSystem;
-    if (container.has<Config>()) {
-      _applyConfig(container, container.get<Config>());
-    }
   }
 
   @override
   Future<void> boot(Container container) async {
-    if (!container.has<Config>()) {
+    if (!container.has<EngineConfig>()) {
       return;
     }
 
@@ -61,19 +56,10 @@ class ViewServiceProvider extends ServiceProvider with ProvidesDefaultConfig {
       _storageManager = await container.make<StorageManager>();
     }
 
-    _applyConfig(container, container.get<Config>());
+    _applyConfig(container, configuration);
   }
 
-  @override
-  Future<void> onConfigReload(Container container, Config config) async {
-    _applyConfig(container, config, notifyEngine: true);
-  }
-
-  void _applyConfig(
-    Container container,
-    Config config, {
-    bool notifyEngine = false,
-  }) {
+  void _applyConfig(Container container, RoutedViewConfig config) {
     final engineConfig = container.get<EngineConfig>();
     final resolved = _resolveViewConfig(config, engineConfig);
 
@@ -90,33 +76,23 @@ class ViewServiceProvider extends ServiceProvider with ProvidesDefaultConfig {
     if (resolved.viewEngine != null && container.has<ViewEngineManager>()) {
       container.get<ViewEngineManager>().register(resolved.viewEngine!);
     }
-
-    if (!notifyEngine) {
-      return;
-    }
-    if (!container.has<Engine>()) {
-      return;
-    }
-    container.get<Engine>().updateConfig(newConfig);
   }
 
-  _ResolvedViewConfig _resolveViewConfig(Config config, EngineConfig current) {
-    final resolved = spec.resolve(
-      config,
-      context: ViewConfigContext(config: config, engineConfig: current),
-    );
-
-    final configuredDirectory = resolved.directory;
-    final cache = resolved.cache;
-    final engineName = resolved.engine;
-    final diskName = resolved.disk;
+  _ResolvedViewConfig _resolveViewConfig(
+    RoutedViewConfig config,
+    EngineConfig current,
+  ) {
+    final configuredDirectory = config.directory;
+    final cache = config.cache;
+    final engineName = config.engine;
+    final diskName = config.disk;
 
     final disk = _storageManager != null
         ? _tryResolveDisk(_storageManager!, diskName)
         : null;
 
     final fs = disk?.fileSystem ?? _fallbackFileSystem;
-    final directory = _resolveDirectory(configuredDirectory, disk, fs, config);
+    final directory = _resolveDirectory(configuredDirectory, disk, fs);
 
     final viewEngine = _createEngine(
       engineName,
@@ -149,23 +125,17 @@ class ViewServiceProvider extends ServiceProvider with ProvidesDefaultConfig {
     String configured,
     StorageDisk? disk,
     file.FileSystem fs,
-    Config config,
   ) {
     final pathValue = configured.isEmpty ? '' : configured;
     if (disk != null) {
       return disk.resolve(pathValue);
     }
-    return _normalizePath(fs, pathValue, config);
+    return _normalizePath(fs, pathValue);
   }
 
-  String _normalizePath(file.FileSystem fs, String value, Config config) {
+  String _normalizePath(file.FileSystem fs, String value) {
     final pathContext = fs.path;
-    final appRoot = config.has('app.root')
-        ? config.get<Object?>('app.root')
-        : null;
-    final base = (appRoot is String && appRoot.trim().isNotEmpty)
-        ? pathContext.normalize(appRoot.trim())
-        : pathContext.normalize(fs.currentDirectory.path);
+    final base = pathContext.normalize(fs.currentDirectory.path);
     if (value.isEmpty) {
       return base;
     }
@@ -175,12 +145,12 @@ class ViewServiceProvider extends ServiceProvider with ProvidesDefaultConfig {
   }
 
   ViewEngine _createEngine(
-    String? engineName,
+    String engineName,
     String directory,
     file.FileSystem fs,
     dynamic fallback,
   ) {
-    final name = (engineName ?? 'liquid').toLowerCase();
+    final name = engineName.toLowerCase();
     switch (name) {
       case '':
       case 'liquid':

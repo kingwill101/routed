@@ -51,18 +51,7 @@ class ProjectPolicy extends Policy<Project> {
 }
 
 Future<Engine> createEngine() async {
-  final engine = await Engine.create(
-    providers: [
-      CoreServiceProvider.withLoader(
-        const ConfigLoaderOptions(
-          configDirectory: 'config',
-          loadEnvFiles: false,
-          includeEnvironmentSubdirectory: false,
-        ),
-      ),
-      RoutingServiceProvider(),
-    ],
-  );
+  final engine = Engine(providers: Engine.builtins);
 
   final policyBindings = [
     PolicyBinding<Project>(
@@ -78,6 +67,8 @@ Future<Engine> createEngine() async {
     ),
   );
   registerPoliciesWithHaigate(policyBindings);
+  engine.addGlobalMiddleware(sessionMiddleware());
+  await engine.initialize();
 
   final users = <String, Map<String, dynamic>>{
     '1': {'id': '1', 'name': 'Ada Lovelace', 'email': 'ada@example.com'},

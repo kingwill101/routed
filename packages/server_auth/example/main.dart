@@ -8,9 +8,6 @@ Future<void> main() async {
 }
 
 void runProviderExample() {
-  final registry = AuthProviderRegistry.instance;
-  registerAllAuthProviders(registry);
-
   final google = googleProvider(
     const GoogleProviderOptions(
       clientId: 'demo-google-client-id',

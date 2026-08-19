@@ -5,13 +5,12 @@ import 'zone.dart';
 
 const kRequestLocaleAttribute = 'routed.locale';
 
-T config<T>(String key, [T? defaultValue]) {
+T config<T extends Object>() {
   final ctx = _contextOrNull();
   if (ctx != null) {
-    return ctx.config<T>(key, defaultValue);
+    return ctx.config<T>();
   }
-  final value = AppZone.config.get(key, defaultValue);
-  return value is T ? value : defaultValue as T;
+  return AppZone.configuration.get<T>();
 }
 
 // Engine get engine => AppZone.engine;

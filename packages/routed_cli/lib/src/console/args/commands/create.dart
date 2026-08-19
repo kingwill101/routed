@@ -1,17 +1,12 @@
 import 'dart:async';
 import 'dart:collection';
-import 'dart:convert';
 import 'dart:io' as io;
 import 'dart:isolate';
-import 'dart:math';
 
 import 'package:args/command_runner.dart';
 import 'package:file/file.dart' as fs;
 import 'package:path/path.dart' as p;
-import 'package:routed_core/routed_core.dart' show ConfigDocEntry;
 import 'package:routed_cli/src/console/args/base_command.dart';
-import 'package:routed_cli/src/console/config/doc_printer.dart';
-import 'package:routed_cli/src/console/config/generator.dart';
 import 'package:routed_cli/src/console/create/templates.dart';
 import 'package:routed_cli/src/console/util/dart_exec.dart';
 import 'package:yaml/yaml.dart';
@@ -27,7 +22,6 @@ typedef PubGetInvoker = Future<int> Function(fs.Directory projectDir);
 /// This produces:
 /// - pubspec.yaml with routed dependency
 /// - bin/server.dart with a starter route
-/// - config/ files (same as `config:init`)
 /// - analysis_options.yaml, README.md, .gitignore
 ///
 /// Options:
@@ -123,14 +117,6 @@ class CreateCommand extends BaseCommand {
         'routed',
         'routed.dart',
       );
-      final appKey = _generateAppKey();
-      Map<String, List<ConfigDocEntry>> docsByRoot;
-      try {
-        docsByRoot = collectConfigDocs();
-      } catch (_) {
-        docsByRoot = const <String, List<ConfigDocEntry>>{};
-      }
-
       final createdFiles = <String>[];
       final createdDirs = <String>[];
       Future<void> write(String relativePath, String contents) async {
@@ -167,41 +153,11 @@ class CreateCommand extends BaseCommand {
         await write(entry.key, entry.value(context));
       }
 
-      final defaultsByRoot = buildConfigDefaults();
-      final configOutputs = generateConfigFiles(
-        defaultsByRoot,
-        docsByRoot,
-      ).entries.toList()..sort((a, b) => a.key.compareTo(b.key));
-      for (final entry in configOutputs) {
-        final content = entry.value;
-        await write(entry.key, content);
-      }
-
       await scaffold('public');
       await scaffold('templates');
       await scaffold('storage/app');
       await scaffold('storage/framework/sessions');
       await scaffold('storage/framework/cache');
-
-      final envConfig = deriveEnvConfig(
-        defaultsByRoot,
-        docsByRoot,
-        overrides: {
-          'APP_NAME': humanName,
-          'APP_ENV': 'development',
-          'APP_DEBUG': true,
-          'APP_KEY': appKey,
-          'SESSION_COOKIE': '${packageName}_session',
-          'STORAGE_ROOT': 'storage/app',
-          'OBSERVABILITY_TRACING_SERVICE_NAME': packageName,
-        },
-      );
-      final envContent = renderEnvFile(
-        envConfig.values,
-        extras: envConfig.commented,
-      );
-      await write('.env', envContent);
-      await write('.env.example', envContent);
 
       if (inWorkspace) {
         await _addToWorkspace(workspaceRoot, targetDir);
@@ -458,12 +414,6 @@ class CreateCommand extends BaseCommand {
 
     await pubspecFile.writeAsString(content);
   }
-}
-
-String _generateAppKey() {
-  final random = Random.secure();
-  final bytes = List<int>.generate(32, (_) => random.nextInt(256));
-  return base64.encode(bytes);
 }
 
 String _versionConstraint(String? version) {

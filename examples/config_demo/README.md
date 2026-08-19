@@ -1,12 +1,14 @@
-# Config Demo
+# Typed configuration demo
 
-Demo server that showcases Routed's configuration manifests and provider docs.
-It lives inside the workspace so you can run it locally while editing config
-files or testing new CLI workflows.
+This small server demonstrates a provider-owned configuration type. The
+`MailProvider` validates `MailConfig` before boot, binds a `MailService`, and
+the routes read the same configuration through typed lookups.
 
 ```bash
 dart pub get
 dart run bin/server.dart
 ```
 
-This package is not published to pub.dev; it's here purely for hands-on demos.
+Open `http://127.0.0.1:8080/` or `/configuration` after starting the server.
+There are no YAML files, generated config snapshots, or dot-notation lookups
+in this example.

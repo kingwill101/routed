@@ -6,13 +6,13 @@ import 'package:routed_http/routed_http.dart';
 import 'package:test/test.dart';
 
 void main() {
-  setUpAll(registerRoutedHttpProviders);
-
   test('compresses eligible JSON when gzip is accepted', () async {
     final engine = await Engine.create(
-      configItems: {
-        'compression': {'enabled': true, 'min_length': 1},
-      },
+      providers: [
+        RoutedCompressionProvider(
+          CompressionConfig(enabled: true, minLength: 1),
+        ),
+      ],
     );
     addTearDown(engine.close);
     final payload = 'payload' * 400;
@@ -40,9 +40,11 @@ void main() {
 
   test('does not compress when the client does not accept gzip', () async {
     final engine = await Engine.create(
-      configItems: {
-        'compression': {'enabled': true, 'min_length': 1},
-      },
+      providers: [
+        RoutedCompressionProvider(
+          CompressionConfig(enabled: true, minLength: 1),
+        ),
+      ],
     );
     addTearDown(engine.close);
     engine.get('/payload', (ctx) => ctx.json({'payload': 'payload' * 400}));
@@ -63,9 +65,11 @@ void main() {
 
   test('does not label streamed responses as compressed', () async {
     final engine = await Engine.create(
-      configItems: {
-        'compression': {'enabled': true, 'min_length': 1},
-      },
+      providers: [
+        RoutedCompressionProvider(
+          CompressionConfig(enabled: true, minLength: 1),
+        ),
+      ],
     );
     addTearDown(engine.close);
     engine.get('/stream', (ctx) async {
@@ -89,30 +93,24 @@ void main() {
     expect(response.bodyText, startsWith('streamed'));
   });
 
-  test('compression config reload replaces the middleware', () async {
-    final engine = await Engine.create(
-      configItems: {
-        'compression': {'enabled': false},
-      },
+  test('rejects invalid configuration before provider boot', () {
+    expect(
+      Engine.create(
+        providers: [
+          RoutedCompressionProvider(CompressionConfig(minLength: -1)),
+        ],
+      ),
+      throwsA(isA<ConfigValidationException>()),
     );
-    addTearDown(engine.close);
-    engine.get('/payload', (ctx) => ctx.json({'payload': 'payload' * 400}));
+  });
 
-    final request = PortableRequest(
-      method: 'GET',
-      uri: Uri.parse('https://api.example/payload'),
-      headers: PortableHeaders({
-        HttpHeaders.acceptEncodingHeader: ['gzip'],
-      }),
-    );
-    final before = await engine.handlePortable(request);
-    expect(before.headers.get(HttpHeaders.contentEncodingHeader), isNull);
+  test('keeps list settings immutable after construction', () {
+    final algorithms = ['gzip'];
+    final config = CompressionConfig(algorithms: algorithms);
 
-    final override = ConfigImpl()..merge(engine.appConfig.all());
-    override.set('compression', {'enabled': true, 'min_length': 1});
-    await engine.replaceConfig(override);
+    algorithms.add('br');
 
-    final after = await engine.handlePortable(request);
-    expect(after.headers.get(HttpHeaders.contentEncodingHeader), 'gzip');
+    expect(config.algorithms, ['gzip']);
+    expect(() => config.algorithms.add('br'), throwsUnsupportedError);
   });
 }

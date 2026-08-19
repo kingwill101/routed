@@ -1,10 +1,10 @@
 import 'package:routed_core/src/config/specs/routing.dart';
-import 'package:routed_core/src/contracts/contracts.dart' show Config;
 import 'package:routed_core/src/events/event_manager.dart';
 import 'package:routed_core/src/events/signals.dart';
 import '../../container/container.dart' show Container;
 import '../../engine/engine.dart';
 import '../../provider/provider.dart';
+import '../../provider/typed_provider.dart';
 
 /// A service provider that registers routing and event-related services.
 ///
@@ -19,16 +19,14 @@ import '../../provider/provider.dart';
 /// engine.registerProvider(RoutingServiceProvider());
 /// ```
 class RoutingServiceProvider extends ServiceProvider
-    with ProvidesDefaultConfig {
-  Engine? _engine;
-  static const RoutingConfigSpec spec = RoutingConfigSpec();
+    with ProvidesTypedConfiguration<RoutingConfig> {
+  RoutingServiceProvider([RoutingConfig? configuration])
+    : configuration = configuration ?? const RoutingConfig();
 
   @override
-  ConfigDefaults get defaultConfig => ConfigDefaults(
-    docs: spec.docs(),
-    values: spec.defaultsWithRoot(),
-    schemas: spec.schemaWithRoot(),
-  );
+  final RoutingConfig configuration;
+
+  Engine? _engine;
 
   @override
   void register(Container container) {
@@ -44,9 +42,7 @@ class RoutingServiceProvider extends ServiceProvider
     Engine? engine;
     if (container.has<Engine>()) {
       engine = await container.make<Engine>();
-      if (container.has<Config>()) {
-        _applyRoutingConfig(engine, container.get<Config>());
-      }
+      _applyRoutingConfig(engine, configuration);
     }
     _engine = engine;
 
@@ -95,22 +91,8 @@ class RoutingServiceProvider extends ServiceProvider
     }
   }
 
-  @override
-  Future<void> onConfigReload(Container container, Config config) async {
-    final engine =
-        _engine ??
-        (container.has<Engine>() ? await container.make<Engine>() : null);
-    if (engine != null) {
-      _applyRoutingConfig(engine, config);
-    }
-  }
-
-  void _applyRoutingConfig(Engine engine, Config config) {
+  void _applyRoutingConfig(Engine engine, RoutingConfig resolved) {
     final current = engine.config;
-    final resolved = spec.resolve(
-      config,
-      context: RoutingConfigContext(config: config, engineConfig: current),
-    );
 
     if (resolved.redirectTrailingSlash != current.redirectTrailingSlash ||
         resolved.handleMethodNotAllowed != current.handleMethodNotAllowed ||

@@ -1,4 +1,4 @@
-import 'package:routed_core/providers.dart' show ProviderRegistry;
+import 'package:routed_core/routed_core.dart' show ProviderRegistry;
 
 import 'providers/compression.dart';
 

@@ -49,8 +49,16 @@ Netlify and Deno Deploy listed as possible future targets.
 ### Direction for Routed
 
 Use `dart_edge` as historical evidence for a separate platform-binding layer
-and generated deployment workflow. Do not use it as the architectural base for
-`routed_node`, and do not copy its bindings or compiler assumptions.
+and generated deployment workflow. Routed now exposes the supported Cloudflare
+binding surface from `package:routed_node/cloudflare.dart`, using current
+Workers D1, Durable Object, Container, R2, Queue, Worker service, Workflow,
+and Secrets Store APIs while retaining VM-safe conditional implementations.
+The public request/response and Durable Object hibernation
+WebSocket boundaries are Routed-owned, so applications do not need
+`package:web` or `dart:js_interop`; the deployment CLI generates Durable Object
+class exports and forwards their lifecycle callbacks. Do not use `dart_edge` as the
+architectural base for `routed_node`, and do not copy its bindings or compiler
+assumptions.
 
 ## osrv
 

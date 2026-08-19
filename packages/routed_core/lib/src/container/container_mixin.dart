@@ -1,10 +1,8 @@
 import 'dart:async';
 import 'dart:io';
 
-import 'package:routed_core/src/config/config.dart';
-import 'package:routed_core/src/config/registry.dart';
+import 'package:routed_core/src/config/typed.dart';
 import 'package:routed_core/src/container/container.dart';
-import 'package:routed_core/src/contracts/contracts.dart';
 import 'package:routed_core/src/engine/providers/request.dart'
     show RequestServiceProvider;
 
@@ -53,8 +51,10 @@ mixin ContainerMixin {
   final Map<ServiceProvider, List<Type>> _pendingProviders = {};
   final Set<Type> _dependencyWatchers = {};
 
-  final ConfigRegistry _configRegistry = ConfigRegistry();
-  bool _configRegistryBound = false;
+  final List<TypedConfigurationProvider> _typedConfigurationProviders = [];
+  ConfigStore _configStore = ConfigStore.empty();
+  RuntimeContext _runtimeContext = RuntimeContext();
+  bool _typedConfigurationFinalized = false;
 
   /// Whether the service providers have been booted.
   ///
@@ -67,6 +67,24 @@ mixin ContainerMixin {
   /// to resolve dependencies outside of request handling.
   Container get container => _container;
 
+  /// Typed application configuration resolved before provider boot.
+  ConfigStore get configStore => _configStore;
+
+  /// Resolves an immutable typed application configuration object.
+  T typedConfig<T extends Object>() => _configStore.get<T>();
+
+  /// Sets the host context used when validating typed provider configuration.
+  ///
+  /// This must be called before [bootProviders].
+  void setRuntimeContext(RuntimeContext runtime) {
+    if (_typedConfigurationFinalized) {
+      throw StateError(
+        'Runtime context cannot change after configuration finalization',
+      );
+    }
+    _runtimeContext = runtime;
+  }
+
   /// Registers a service provider with the container.
   ///
   /// The provider's [register] method is called immediately, but its [boot]
@@ -77,15 +95,13 @@ mixin ContainerMixin {
   /// registerProvider(CoreServiceProvider(engine));
   /// ```
   void registerProvider(ServiceProvider provider) {
-    _ensureConfigRegistryRegistered();
-    if (provider is ProvidesDefaultConfig) {
-      final defaults = provider.defaultConfig.snapshot();
-      _configRegistry.register(
-        defaults.values,
-        source: provider.configSource,
-        docs: defaults.docs,
-        schemas: defaults.schemas,
-      );
+    if (provider case final TypedConfigurationProvider typedProvider) {
+      if (_typedConfigurationFinalized) {
+        throw StateError(
+          'Typed providers cannot be registered after configuration finalization',
+        );
+      }
+      _typedConfigurationProviders.add(typedProvider);
     }
     _providers.add(provider);
     provider.register(_container);
@@ -107,6 +123,7 @@ mixin ContainerMixin {
     if (_booted) {
       return;
     }
+    _finalizeTypedConfiguration();
     for (final provider in _providers) {
       await _bootProviderIfReady(provider);
     }
@@ -142,14 +159,9 @@ mixin ContainerMixin {
   /// Returns a new container with request-scoped bindings.
   Container createRequestContainer(HttpRequest request, HttpResponse response) {
     final container = _container.createChild();
-    container.instance<ConfigRegistry>(_configRegistry);
+    container.instance<ConfigStore>(_configStore);
     final provider = RequestServiceProvider(request, response);
     provider.register(container);
-
-    if (_container.has<Config>()) {
-      final parentConfig = _container.get<Config>();
-      container.instance<Config>(ScopedConfig(parentConfig));
-    }
     return container;
   }
 
@@ -174,14 +186,6 @@ mixin ContainerMixin {
     }
   }
 
-  Future<void> notifyProvidersOfConfigReload(Config config) async {
-    for (final provider in _providers) {
-      if (provider is ProvidesDefaultConfig) {
-        await provider.onConfigReload(_container, config);
-      }
-    }
-  }
-
   /// Makes an instance of type [T] from the container.
   ///
   /// This is a convenience method that delegates to the main container's
@@ -189,7 +193,7 @@ mixin ContainerMixin {
   ///
   /// Example:
   /// ```dart
-  /// final config = await make<Config>();
+  /// final engineConfig = await make<EngineConfig>();
   /// ```
   Future<T> make<T>() => _container.make<T>();
 
@@ -206,12 +210,14 @@ mixin ContainerMixin {
   /// ```
   bool has<T>() => _container.has<T>();
 
-  void _ensureConfigRegistryRegistered() {
-    if (_configRegistryBound) {
-      return;
-    }
-    _container.instance<ConfigRegistry>(_configRegistry);
-    _configRegistryBound = true;
+  void _finalizeTypedConfiguration() {
+    if (_typedConfigurationFinalized) return;
+    _configStore = ConfigStore.fromProviders(
+      _typedConfigurationProviders,
+      runtime: _runtimeContext,
+    );
+    _container.instance<ConfigStore>(_configStore);
+    _typedConfigurationFinalized = true;
   }
 
   List<Type> _resolveDependencies(ServiceProvider provider) {

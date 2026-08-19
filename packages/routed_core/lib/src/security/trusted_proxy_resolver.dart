@@ -36,16 +36,20 @@ class TrustedProxyResolver {
            .map((header) => header.trim())
            .where((h) => h.isNotEmpty)
            .toList(),
-       _networks = proxies
-           .map(NetworkMatcher.maybeParse)
-           .whereType<NetworkMatcher>()
-           .toList();
+       _proxies = List<String>.of(proxies),
+       _networks = enabled ? _parseProxies(proxies) : <NetworkMatcher>[];
 
   bool _enabled;
   bool _forwardClientIp;
   String? _trustedPlatform;
   final List<String> _headers;
+  List<String> _proxies;
   List<NetworkMatcher> _networks;
+
+  static List<NetworkMatcher> _parseProxies(Iterable<String> proxies) => proxies
+      .map(NetworkMatcher.maybeParse)
+      .whereType<NetworkMatcher>()
+      .toList();
 
   /// Updates the resolver's configuration.
   ///
@@ -76,10 +80,10 @@ class TrustedProxyResolver {
       _trustedPlatform = trustedPlatform.isEmpty ? null : trustedPlatform;
     }
     if (proxies != null) {
-      _networks = proxies
-          .map(NetworkMatcher.maybeParse)
-          .whereType<NetworkMatcher>()
-          .toList();
+      _proxies = List<String>.of(proxies);
+    }
+    if (enabled != null || proxies != null) {
+      _networks = _enabled ? _parseProxies(_proxies) : <NetworkMatcher>[];
     }
     if (headers != null) {
       _headers

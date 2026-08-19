@@ -1,621 +1,69 @@
-import 'dart:async';
-import 'dart:io';
+import 'package:routed_core/src/config/typed.dart';
+import 'package:routed_core/src/container/container.dart';
+import 'package:routed_core/src/engine/config.dart';
+import 'package:routed_core/src/engine/engine.dart';
+import 'package:routed_core/src/provider/provider.dart';
+import 'package:routed_core/src/provider/typed_provider.dart';
+import 'package:routed_core/src/security/trusted_proxy_resolver.dart';
 
-import 'package:path/path.dart' as p;
-import 'package:routed_core/routed_core.dart'
-    show CorsConfig, EngineConfig, EngineFeatures;
-import 'package:routed_core/src/config/specs/core.dart';
-import 'package:routed_core/src/config/specs/http.dart';
-import 'package:routed_core/src/runtime/shutdown.dart';
-
-import '../../config/config.dart' show ConfigImpl;
-import '../../config/loader.dart';
-import '../../config/registry.dart';
-import '../../container/container.dart';
-import '../../contracts/contracts.dart' show Config;
-import '../../engine/engine.dart';
-import '../../provider/config_utils.dart';
-import '../../provider/provider.dart'
-    show ConfigDefaults, ProvidesDefaultConfig, ServiceProvider;
-import '../../security/trusted_proxy_resolver.dart';
-import '../../utils/deep_copy.dart';
-import '../../utils/process_env.dart';
-
-ConfigDefaults _coreDefaults() {
-  const coreSpec = CoreConfigSpec();
-  const httpSpec = HttpConfigSpec();
-  const runtimeSpec = RuntimeConfigSpec();
-
-  return ConfigDefaults(
-    docs: [...coreSpec.docs(), ...httpSpec.docs(), ...runtimeSpec.docs()],
-    values: {
-      ...coreSpec.defaultsWithRoot(),
-      ...httpSpec.defaultsWithRoot(),
-      ...runtimeSpec.defaultsWithRoot(),
-    },
-    schemas: {
-      ...coreSpec.schemaWithRoot(),
-      ...httpSpec.schemaWithRoot(),
-      ...runtimeSpec.schemaWithRoot(),
-    },
-  );
-}
-
-/// A service provider that registers core framework services and manages
-/// configuration.
+/// Registers the engine's typed core configuration and host-independent
+/// security services.
 ///
-/// There are two modes of operation:
-///
-/// **In-memory mode (default):** Creates an in-memory [Config] with framework
-/// defaults. No file I/O is performed. This is suitable for testing, benchmarks,
-/// and applications that don't need file-based configuration.
+/// Configuration is supplied as Dart values at the application boundary:
 ///
 /// ```dart
-/// // In-memory config with defaults only
-/// CoreServiceProvider()
-///
-/// // In-memory config with custom values
-/// CoreServiceProvider(configItems: {'app.name': 'MyApp'})
+/// final engine = await Engine.create(
+///   providers: [
+///     CoreServiceProvider(
+///       EngineConfig(
+///         features: const EngineFeatures(enableSecurityFeatures: true),
+///         security: const EngineSecurityFeatures(maxRequestSize: 10 << 20),
+///       ),
+///     ),
+///     RoutingServiceProvider(),
+///   ],
+/// );
 /// ```
 ///
-/// **Loader mode:** Loads configuration from YAML/JSON files on disk,
-/// environment variables, and .env files. Use this for production applications
-/// that need file-based configuration.
-///
-/// ```dart
-/// // Load from default 'config/' directory
-/// CoreServiceProvider.withLoader()
-///
-/// // Load with custom options
-/// CoreServiceProvider.withLoader(
-///   ConfigLoaderOptions(
-///     configDirectory: 'settings',
-///     watch: true,
-///   ),
-/// )
-/// ```
-class CoreServiceProvider extends ServiceProvider with ProvidesDefaultConfig {
-  /// Creates a CoreServiceProvider that uses in-memory configuration only.
-  ///
-  /// No file I/O is performed. The [Config] is populated with framework
-  /// defaults and any values provided in [configItems].
-  ///
-  /// Use [CoreServiceProvider.withLoader] if you need to load configuration
-  /// from disk.
-  CoreServiceProvider({EngineConfig? config, Map<String, dynamic>? configItems})
-    : _config = config,
-      _configItems = configItems,
-      _configOptions = null,
-      _cachedSnapshot = null,
-      _useLoader = false;
-
-  /// Creates a CoreServiceProvider that loads configuration from disk.
-  ///
-  /// This enables loading from YAML/JSON files, environment variables,
-  /// and .env files. Use [options] to customize the loading behavior.
-  ///
-  /// ```dart
-  /// CoreServiceProvider.withLoader(
-  ///   ConfigLoaderOptions(
-  ///     configDirectory: 'config',
-  ///     watch: true,
-  ///     envFiles: ['.env', '.env.local'],
-  ///   ),
-  /// )
-  /// ```
-  CoreServiceProvider.withLoader([
-    ConfigLoaderOptions options = const ConfigLoaderOptions(),
-    Map<String, dynamic>? configItems,
-    EngineConfig? config,
-  ]) : _config = config,
-       _configItems = configItems,
-       _configOptions = options,
-       _cachedSnapshot = null,
-       _useLoader = true;
-
-  /// Creates a CoreServiceProvider from a pre-built [ConfigSnapshot].
-  ///
-  /// Use this with config caches generated by `routed config:cache`.  The
-  /// generated `resolveRoutedConfig()` function returns a [ConfigSnapshot]
-  /// whose `{{ env.* }}` placeholders have already been resolved against the
-  /// current process environment via [ConfigLoader.renderDefaults].
-  ///
-  /// ```dart
-  /// import 'package:my_app/generated/routed_config.dart';
-  ///
-  /// CoreServiceProvider.withCachedConfig(resolveRoutedConfig())
-  /// ```
-  ///
-  /// No file I/O is performed.  The snapshot is used as-is, with framework
-  /// defaults merged underneath.
-  CoreServiceProvider.withCachedConfig(
-    ConfigSnapshot snapshot, {
-    EngineConfig? config,
-    Map<String, dynamic>? configItems,
-  }) : _config = config,
-       _configItems = configItems,
-       _configOptions = null,
-       _cachedSnapshot = snapshot,
-       _useLoader = false;
+/// Environment variables and deployment secrets belong in [RuntimeContext]
+/// and are resolved before providers boot. This provider intentionally has no
+/// file loader, config directory, reload watcher, or string-key override path.
+class CoreServiceProvider extends ServiceProvider
+    with ProvidesTypedConfiguration<EngineConfig> {
+  /// Creates a core provider with [configuration], or the safe framework
+  /// defaults when no configuration is supplied.
+  CoreServiceProvider([EngineConfig? configuration])
+    : configuration = configuration ?? EngineConfig();
 
   @override
-  ConfigDefaults get defaultConfig => _coreDefaults();
-
-  final EngineConfig? _config;
-  final Map<String, dynamic>? _configItems;
-  final ConfigLoaderOptions? _configOptions;
-  final ConfigSnapshot? _cachedSnapshot;
-  final bool _useLoader;
-
-  // Mutable state for loader mode - initialized lazily in register()
-  ConfigLoader? _loader;
-  ConfigSnapshot? _snapshot;
-  Container? _rootContainer;
-  StreamSubscription<FileSystemEvent>? _directoryWatcher;
-  List<StreamSubscription<FileSystemEvent>>? _envFileWatchers;
-  Timer? _debounce;
-  ConfigRegistryListener? _registryListener;
-
-  ConfigLoaderOptions get _effectiveOptions =>
-      _configOptions ?? const ConfigLoaderOptions();
+  final EngineConfig configuration;
 
   @override
   void register(Container container) {
-    _rootContainer = container;
-
-    if (_cachedSnapshot != null) {
-      _registerWithCachedConfig(container, _cachedSnapshot);
-    } else if (_useLoader) {
-      _registerWithLoader(container);
-    } else {
-      _registerInMemory(container);
-    }
-  }
-
-  void _registerWithCachedConfig(Container container, ConfigSnapshot snapshot) {
-    final registry = container.get<ConfigRegistry>();
-    final config = snapshot.config;
-
-    // Merge framework defaults underneath the cached config.
-    final loader = ConfigLoader();
-    final templateContext = buildEnvTemplateContext();
-
-    final rawDefaults = registry.combinedDefaults();
-    final renderedDefaults = loader.renderDefaults(
-      rawDefaults,
-      templateContext,
-    );
-    config.mergeDefaults(renderedDefaults);
-
-    final coreDefaults = _coreDefaults();
-    final renderedCoreDefaults = loader.renderDefaults(
-      coreDefaults.values,
-      templateContext,
-    );
-    config.mergeDefaults(renderedCoreDefaults);
-
-    if (_configItems != null && _configItems.isNotEmpty) {
-      config.merge(_configItems);
-    }
-
-    final engineConfig = _config ?? container.get<EngineConfig>();
-    final resolvedEngineConfig = _resolveEngineConfig(config, engineConfig);
-    container.instance<EngineConfig>(resolvedEngineConfig);
-    container.instance<Config>(config);
-    _registerTrustedProxyResolver(container, config);
-
-    _registryListener = (entry) {
-      if (entry.defaults.isEmpty) return;
-      final rendered = loader.renderDefaults(entry.defaults, templateContext);
-      config.mergeDefaults(rendered);
-    };
-    registry.addListener(_registryListener!);
-  }
-
-  void _registerInMemory(Container container) {
-    final registry = container.get<ConfigRegistry>();
-
-    // Build template context from environment variables (same as ConfigLoader)
-    final templateContext = _buildTemplateContext();
-
-    // Create a ConfigLoader to render templates
-    final loader = ConfigLoader();
-
-    // Get and render combined defaults from registry
-    final rawDefaults = registry.combinedDefaults();
-    final renderedDefaults = loader.renderDefaults(
-      rawDefaults,
-      templateContext,
-    );
-    final defaults = ConfigImpl(renderedDefaults);
-
-    // Apply and render core defaults
-    final coreDefaults = _coreDefaults();
-    final renderedCoreDefaults = loader.renderDefaults(
-      coreDefaults.values,
-      templateContext,
-    );
-    defaults.mergeDefaults(renderedCoreDefaults);
-
-    // Apply any custom config items (these are already concrete values)
-    if (_configItems != null && _configItems.isNotEmpty) {
-      defaults.merge(_configItems);
-    }
-
-    // Update EngineConfig if provided
-    final engineConfig = _config ?? container.get<EngineConfig>();
-    final resolvedEngineConfig = _resolveEngineConfig(defaults, engineConfig);
-    container.instance<EngineConfig>(resolvedEngineConfig);
-
-    // Register the in-memory Config
-    container.instance<Config>(defaults);
-    _registerTrustedProxyResolver(container, defaults);
-
-    // Listen for new provider defaults and render them before merging
-    _registryListener = (entry) {
-      if (entry.defaults.isEmpty) return;
-      final rendered = loader.renderDefaults(entry.defaults, templateContext);
-      defaults.mergeDefaults(rendered);
-    };
-    registry.addListener(_registryListener!);
-  }
-
-  /// Builds a template context from environment variables.
-  ///
-  /// Mirrors [buildEnvTemplateContext] / [ConfigLoader.load] so Liquid
-  /// templates like `{{ env.APP_NAME | default: 'MyApp' }}` resolve on VM
-  /// and Node/JS hosts.
-  Map<String, dynamic> _buildTemplateContext() => buildEnvTemplateContext();
-
-  void _registerWithLoader(Container container) {
-    final options = _resolveLoaderOptions(_configOptions);
-    _loader = ConfigLoader(fileSystem: options.fileSystem);
-
-    final registry = container.get<ConfigRegistry>();
-    final defaultsImpl = ConfigImpl(registry.combinedDefaults());
-    if (options.defaults.isNotEmpty) {
-      defaultsImpl.merge(options.defaults);
-    }
-
-    final effectiveOptions = options.copyWith(
-      defaults: deepCopyMap(defaultsImpl.all()),
-    );
-
-    final snapshot = _loader!.load(
-      effectiveOptions,
-      overrides: _configItems ?? const {},
-    );
-    _snapshot = snapshot;
-
-    final initialEngineConfig = _resolveEngineConfig(
-      snapshot.config,
-      _config ?? EngineConfig(),
-    );
-    container.instance<EngineConfig>(initialEngineConfig);
-    container.instance<Config>(snapshot.config);
-    _registerTrustedProxyResolver(container, snapshot.config);
-
-    _registryListener = (entry) {
-      final currentSnapshot = _snapshot;
-      if (currentSnapshot == null) return;
-      final rendered = _loader!.renderDefaults(
-        entry.defaults,
-        currentSnapshot.templateContext,
-      );
-      if (rendered.isEmpty) return;
-      currentSnapshot.config.mergeDefaults(rendered);
-    };
-    registry.addListener(_registryListener!);
-  }
-
-  static ConfigLoaderOptions _resolveLoaderOptions(
-    ConfigLoaderOptions? provided,
-  ) {
-    final base = provided ?? const ConfigLoaderOptions();
-    final defaultsImpl = ConfigImpl(_coreDefaults().values);
-    if (base.defaults.isNotEmpty) {
-      defaultsImpl.merge(base.defaults);
-    }
-    return base.copyWith(defaults: deepCopyMap(defaultsImpl.all()));
+    // Engine installs a default before providers register. Rebinding here
+    // makes an explicitly supplied CoreServiceProvider authoritative.
+    container.instance<EngineConfig>(configuration);
   }
 
   @override
   Future<void> boot(Container container) async {
-    // CoreServiceProvider is also used independently in container tests and
-    // tooling. In that composition there is no Engine binding to update.
-    if (!container.has<Engine>()) return;
-
-    final engine = await container.make<Engine>();
-    final config = container.get<Config>();
-    engine.updateConfig(_resolveEngineConfig(config, engine.config));
-    _registerTrustedProxyResolver(container, config);
-
-    if (!_useLoader) return;
-    final options = _effectiveOptions;
-    if (!options.watch) return;
-
-    await _startWatchers(container, engine);
-  }
-
-  @override
-  Future<void> onConfigReload(Container container, Config config) async {
-    if (!container.has<Engine>()) return;
-
-    final engine = await container.make<Engine>();
-    engine.updateConfig(_resolveEngineConfig(config, engine.config));
-    _registerTrustedProxyResolver(container, config);
-  }
-
-  @override
-  Future<void> cleanup(Container container) async {
-    if (!identical(container, _rootContainer)) {
-      // Request-scoped cleanup should not tear down application-level watchers.
+    if (!container.has<Engine>()) {
       return;
     }
-    if (_registryListener != null) {
-      try {
-        final registry = container.get<ConfigRegistry>();
-        registry.removeListener(_registryListener!);
-      } catch (_) {
-        // Ignore if registry is no longer available.
-      }
-      _registryListener = null;
-    }
-    await _disposeWatchers();
-  }
 
-  Future<void> _startWatchers(Container container, Engine engine) async {
-    await _disposeWatchers();
+    final engine = await container.make<Engine>();
+    final resolved = container.has<ConfigStore>()
+        ? container.get<ConfigStore>().maybe<EngineConfig>() ?? configuration
+        : configuration;
 
-    final options = _effectiveOptions;
-    final fs = options.resolvedFileSystem;
-    final directory = fs.directory(options.configDirectory);
-    if (directory.existsSync()) {
-      _directoryWatcher = directory
-          .watch(recursive: true)
-          .listen((event) => _handleFileEvent(container, engine, event));
-    }
-
-    _configureEnvFileWatchers(
-      container,
-      engine,
-      environment: _snapshot?.environment ?? '',
-    );
-  }
-
-  void _handleFileEvent(
-    Container container,
-    Engine engine,
-    FileSystemEvent event,
-  ) {
-    if (event.isDirectory) return;
-    if (_loader == null || !_loader!.isWatchedFile(event.path)) return;
-    _scheduleReload(container, engine, source: event.path);
-  }
-
-  void _configureEnvFileWatchers(
-    Container container,
-    Engine engine, {
-    required String environment,
-  }) {
-    _envFileWatchers ??= [];
-    for (final watcher in _envFileWatchers!) {
-      watcher.cancel();
-    }
-    _envFileWatchers!.clear();
-
-    final options = _effectiveOptions;
-    final fs = options.resolvedFileSystem;
-    final files = <String>{...options.envFiles};
-    if (environment.isNotEmpty) {
-      files.addAll(
-        options.envFiles.map(
-          (file) => file.endsWith('.env')
-              ? '$file.$environment'
-              : '$file.$environment',
-        ),
-      );
-    }
-
-    for (final path in files) {
-      final file = fs.file(path);
-      final parent = file.parent;
-      if (!parent.existsSync()) continue;
-      final watcher = parent.watch(recursive: false).listen((event) {
-        final normalizedPath = p.normalize(event.path);
-        if (normalizedPath != p.normalize(file.path)) {
-          return;
-        }
-        _scheduleReload(container, engine, source: normalizedPath);
-      });
-      _envFileWatchers!.add(watcher);
-    }
-  }
-
-  void _scheduleReload(
-    Container container,
-    Engine engine, {
-    required String source,
-  }) {
-    _debounce?.cancel();
-    final options = _effectiveOptions;
-    _debounce = Timer(options.watchDebounce, () {
-      _reload(container, engine, source: source);
-    });
-  }
-
-  Future<void> _reload(
-    Container container,
-    Engine engine, {
-    required String source,
-  }) async {
-    if (_loader == null) return;
-    final options = _effectiveOptions;
-    final snapshot = _loader!.load(
-      options,
-      overrides: _configItems ?? const {},
-    );
-    _snapshot = snapshot;
-
-    final engineConfig = container.get<EngineConfig>();
-    engine.updateConfig(_resolveEngineConfig(snapshot.config, engineConfig));
-
-    await engine.replaceConfig(
-      snapshot.config,
-      metadata: {'source': source, 'environment': snapshot.environment},
-    );
-
-    _configureEnvFileWatchers(
-      container,
-      engine,
-      environment: snapshot.environment,
-    );
-  }
-
-  Future<void> _disposeWatchers() async {
-    await _directoryWatcher?.cancel();
-    _directoryWatcher = null;
-    if (_envFileWatchers != null) {
-      for (final watcher in _envFileWatchers!) {
-        await watcher.cancel();
-      }
-      _envFileWatchers!.clear();
-    }
-    _debounce?.cancel();
-    _debounce = null;
-  }
-
-  EngineConfig _resolveEngineConfig(Config config, EngineConfig base) {
-    final trustedEnabled =
-        config.getBoolOrNull('security.trusted_proxies.enabled') ??
-        base.features.enableProxySupport;
-    final forwardClientIp =
-        config.getBoolOrNull('security.trusted_proxies.forward_client_ip') ??
-        base.forwardedByClientIP;
-    final trustedProxies =
-        config.getStringListOrNull('security.trusted_proxies.proxies') ??
-        (base.features.enableProxySupport
-            ? base.trustedProxies
-            : const ['0.0.0.0/0', '::/0']);
-    final remoteIpHeaders =
-        config.getStringListOrNull('security.trusted_proxies.headers') ??
-        base.remoteIPHeaders;
-    final trustedPlatform =
-        config.getStringOrNull('security.trusted_proxies.platform_header') ??
-        base.trustedPlatform;
-    final features = EngineFeatures(
-      enableTrustedPlatform:
-          trustedEnabled &&
-          trustedPlatform != null &&
-          trustedPlatform.isNotEmpty,
-      enableProxySupport: trustedEnabled,
-      enableSecurityFeatures: base.features.enableSecurityFeatures,
-      enableRequestZones: base.features.enableRequestZones,
-      enableRequestContainerFastPath:
-          base.features.enableRequestContainerFastPath,
-      enableTrieRouting: base.features.enableTrieRouting,
-      enableSecureRequestIds: base.features.enableSecureRequestIds,
-    );
-
-    final currentCors = base.security.cors;
-    final cors = CorsConfig(
-      enabled: config.getBoolOrNull('cors.enabled') ?? currentCors.enabled,
-      allowedOrigins:
-          config.getStringListOrNull('cors.allowed_origins') ??
-          currentCors.allowedOrigins,
-      allowedMethods:
-          config.getStringListOrNull('cors.allowed_methods') ??
-          currentCors.allowedMethods,
-      allowedHeaders:
-          config.getStringListOrNull('cors.allowed_headers') ??
-          currentCors.allowedHeaders,
-      allowCredentials:
-          config.getBoolOrNull('cors.allow_credentials') ??
-          currentCors.allowCredentials,
-      maxAge: config.getIntOrNull('cors.max_age') ?? currentCors.maxAge,
-      exposedHeaders:
-          config.getStringListOrNull('cors.exposed_headers') ??
-          currentCors.exposedHeaders,
-    );
-    final security = base.security.copyWith(
-      maxRequestSize:
-          config.getIntOrNull('security.max_request_size') ??
-          base.security.maxRequestSize,
-      cors: cors,
-    );
-    final shutdown = resolveShutdownConfig(config, base.shutdown);
-    final http2Enabled = config.getBoolOrNull('http.http2.enabled');
-    final http2AllowCleartext = config.getBoolOrNull(
-      'http.http2.allow_cleartext',
-    );
-    int? http2MaxStreams = config.getIntOrNull(
-      'http.http2.max_concurrent_streams',
-    );
-    if (http2MaxStreams != null && http2MaxStreams <= 0) {
-      http2MaxStreams = null;
-    }
-    final http2IdleTimeout = config.getDuration(
-      'http.http2.idle_timeout',
-      defaultValue: const Duration(seconds: 30),
-    );
-
-    final http2 = base.http2.copyWith(
-      enabled: http2Enabled,
-      allowCleartext: http2AllowCleartext,
-      maxConcurrentStreams: http2MaxStreams,
-      idleTimeout: http2IdleTimeout,
-    );
-
-    final tlsCertificatePath = config.getStringOrNull(
-      'http.tls.certificate_path',
-    );
-    final tlsKeyPath = config.getStringOrNull('http.tls.key_path');
-    final tlsPassword = config.getStringOrNull(
-      'http.tls.password',
-      allowEmpty: true,
-    );
-    final tlsRequestClientCertificate = config.getBoolOrNull(
-      'http.tls.request_client_certificate',
-    );
-    final tlsShared = config.getBoolOrNull('http.tls.shared');
-    final tlsV6Only = config.getBoolOrNull('http.tls.v6_only');
-
-    return base.copyWith(
-      features: features,
-      security: security,
-      forwardedByClientIP: forwardClientIp,
-      remoteIPHeaders: remoteIpHeaders,
-      trustedProxies: trustedProxies,
-      trustedPlatform: trustedPlatform,
-      shutdown: shutdown,
-      http2: http2,
-      tlsCertificatePath: tlsCertificatePath ?? base.tlsCertificatePath,
-      tlsKeyPath: tlsKeyPath ?? base.tlsKeyPath,
-      tlsCertificatePassword: tlsPassword ?? base.tlsCertificatePassword,
-      tlsRequestClientCertificate:
-          tlsRequestClientCertificate ?? base.tlsRequestClientCertificate,
-      tlsShared: tlsShared ?? base.tlsShared,
-      tlsV6Only: tlsV6Only ?? base.tlsV6Only,
-    );
-  }
-
-  void _registerTrustedProxyResolver(Container container, Config config) {
+    engine.updateConfig(resolved);
     container.instance<TrustedProxyResolver>(
       TrustedProxyResolver(
-        enabled: config.getBool('security.trusted_proxies.enabled'),
-        forwardClientIp: config.getBool(
-          'security.trusted_proxies.forward_client_ip',
-          defaultValue: true,
-        ),
-        proxies:
-            config.getStringListOrNull('security.trusted_proxies.proxies') ??
-            const ['0.0.0.0/0', '::/0'],
-        headers:
-            config.getStringListOrNull('security.trusted_proxies.headers') ??
-            const ['X-Forwarded-For', 'X-Real-IP'],
-        trustedPlatform: config.getStringOrNull(
-          'security.trusted_proxies.platform_header',
-        ),
+        enabled: resolved.features.enableProxySupport,
+        forwardClientIp: resolved.forwardedByClientIP,
+        proxies: resolved.trustedProxies,
+        headers: resolved.remoteIPHeaders,
+        trustedPlatform: resolved.trustedPlatform,
       ),
     );
   }

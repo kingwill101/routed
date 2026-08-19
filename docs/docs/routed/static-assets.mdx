@@ -1,80 +1,55 @@
 ---
 title: Static Assets
-description: Serve files and directories through routed static mounts
+description: Serve files and directories through typed static mounts.
 sidebar_position: 20
 ---
 
 # Static Assets
 
-The `routed_storage` package owns declarative static mounts. The
-batteries-included `routed` facade registers the provider as `routed.static`.
-Direct router/engine helpers remain useful when a mount is entirely
-programmatic.
-
-Define mounts under `static.mounts` and back them with storage disks:
-
-```yaml title="config/static.yaml"
-static:
-  enabled: true
-  mounts:
-    - route: /assets
-      disk: assets
-      path: ''
-      index: index.html
-      list_directories: false
-```
-
-```yaml title="config/storage.yaml"
-storage:
-  default: assets
-  disks:
-    assets:
-      driver: local
-      root: public
-```
-
-The provider must be included in the engine composition. With the `routed`
-facade, call `registerRoutedProviders()` before `Engine.create()`; with a
-slim composition, use `RoutedStorageProvider` and `RoutedStaticProvider`
-explicitly.
-
-## Mount options
-
-Each mount supports:
-
-- `route` (or `prefix`): URL prefix to match.
-- `disk`: storage disk name to resolve files.
-- `path`: subdirectory within the disk root.
-- `root`: explicit file system root (bypasses disks).
-- `index`: default file for directory requests.
-- `list_directories` / `directory_listing`: enable directory listings.
-
-Programmatic configuration can also supply `file_system` when mounting assets.
-
-## Behavior
-
-- Missing files return `404` from the mount.
-- Directory requests use `index` if configured, otherwise return `404` unless listing is enabled.
-- Paths are normalized and rejected if they escape the disk root.
-
-## Programmatic helpers
-
-You can still register assets directly in code:
+`routed_storage` owns static mounts. Configure them with
+`StaticConfig` and pass the configuration to `RoutedStaticProvider`:
 
 ```dart
-router.static('/assets', 'public/assets');
-router.staticFile('/favicon.ico', 'public/favicon.ico');
+import 'package:routed/routed.dart';
+
+final mounts = StaticConfig(
+  enabled: true,
+  mounts: [
+    const StaticMountConfig(
+      route: '/assets',
+      disk: 'assets',
+      path: '',
+      indexFile: 'index.html',
+      listDirectories: false,
+    ),
+  ],
+);
+
+final engine = await Engine.create(
+  providers: [
+    ...Engine.defaultProviders,
+    RoutedStorageProvider(
+      configuration: StorageConfig(
+        disks: {
+          'local': const LocalStorageDiskConfig(root: 'storage/app'),
+          'assets': const LocalStorageDiskConfig(root: 'public'),
+        },
+      ),
+    ),
+    RoutedStaticProvider(mounts),
+  ],
+);
 ```
 
-## Troubleshooting
+Each mount needs either a named storage disk or an explicit `root`. Paths are
+normalized and validated so a mount cannot escape its configured root.
 
-- If mounts 404, confirm the storage disk root matches your project `public` directory.
-- Use `dart run routed_cli provider:list --config` to verify that `routed.static`
-  is registered, and `dart run routed_cli routes` to inspect the resulting
-  `GET`/`HEAD` routes after the app boots.
+For one-off routes, use the direct helpers instead:
 
-## Next steps
+```dart
+engine.static('/assets', 'public/assets');
+engine.staticFile('/favicon.ico', 'public/favicon.ico');
+```
 
-- [Routing: Static assets](/docs/routed/fundamentals/routing#static-assets)
-- [Configuration: Static assets](/docs/routed/fundamentals/configuration#static-assets)
-- [Responses: Files and static assets](/docs/routed/fundamentals/responses#files-and-static-assets)
+Missing files return `404`. Directory requests use `indexFile` when present;
+directory listings are disabled unless `listDirectories` is explicitly true.

@@ -68,32 +68,22 @@ router.post('/upload', (ctx) async {
 });
 ```
 
-Configure size and extension limits via `EngineConfig.multipart` or the `withMultipart` option:
+Configure size and extension limits with the typed uploads provider:
 
 ```dart
-final engine = Engine(
-  config: EngineConfig(
-    multipart: MultipartConfig(
-      maxFileSize: 10 * 1024 * 1024,
-      maxMemory: 32 * 1024 * 1024,
-      allowedExtensions: {'.jpg', '.png', '.pdf'},
+final engine = await Engine.create(
+  providers: [
+    ...Engine.defaultProviders,
+    UploadsServiceProvider(
+      MultipartConfig(
+        maxFileSize: 10 * 1024 * 1024,
+        maxMemory: 32 * 1024 * 1024,
+        allowedExtensions: {'jpg', 'png', 'pdf'},
+      ),
     ),
-  ),
+  ],
 );
 ```
-
-If you prefer configuration files, describe the same limits under `uploads.*` so the uploads provider applies them:
-
-```yaml title="config/http.yaml"
-uploads:
-  max_memory: 33554432         # bytes
-  max_file_size: 10485760
-  allowed_extensions: ['jpg', 'png', 'pdf']
-  directory: uploads
-  file_permissions: 493        # 0755
-```
-
-`routed.uploads` validates these values (types; for extensions use ".ext" in code and "ext" in config — Routed normalizes both) and feeds them into `EngineConfig`. Run `dart run routed_cli provider:list --config` to review the effective settings and catch malformed overrides.
 
 ## JSON and raw bodies
 
@@ -147,30 +137,23 @@ router.get('/info', (ctx) {
 If your app runs behind a proxy/load balancer, enable proxy support so `clientIP` honors trusted forwarding headers:
 
 ```dart
-final engine = Engine(
-  config: EngineConfig(
-    features: const EngineFeatures(enableProxySupport: true),
-    forwardedByClientIP: true,
-    remoteIPHeaders: ['X-Forwarded-For', 'X-Real-IP'],
-  ),
-  options: [withTrustedProxies(['10.0.0.0/8'])],
+final engine = await Engine.create(
+  providers: [
+    ...Engine.defaultProviders,
+    RoutedSecurityProvider(
+      RoutedSecurityConfig(
+        trustedProxies: TrustedProxyConfig(
+          enabled: true,
+          proxies: ['10.0.0.0/8'],
+          headers: ['X-Forwarded-For', 'X-Real-IP'],
+        ),
+      ),
+    ),
+  ],
 );
 ```
 
-The `routed.security` provider exposes the same proxy knobs via configuration:
-
-```yaml title="config/http.yaml"
-security:
-  trusted_proxies:
-    enabled: true
-    forward_client_ip: true
-    proxies: ['10.0.0.0/8', '::/0']
-    headers: ['X-Forwarded-For', 'X-Real-IP']
-    platform_header: CF-Connecting-IP
-```
-
-The provider validates the configured proxy values during boot and reapplies
-them on configuration reload. The re-exported `routed_security` primitives
-remain available for direct use.
+The provider validates proxy values before boot. The re-exported
+`routed_security` primitives remain available for direct use.
 
 See [proxy support](/docs/routed/security/proxy) for more details.

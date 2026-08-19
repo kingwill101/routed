@@ -219,11 +219,7 @@ void main() {
       body: utf8.encode('hello'),
       remoteAddress: '10.0.0.1',
     );
-    final request = Request.fromAdapter(
-      adapter,
-      const {},
-      EngineConfig(),
-    );
+    final request = Request.fromAdapter(adapter, const {}, EngineConfig());
 
     expect(request.isPortable, isTrue);
     expect(request.hasNativeHttpRequest, isFalse);

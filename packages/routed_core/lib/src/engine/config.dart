@@ -4,6 +4,8 @@ import 'package:file/file.dart';
 import 'package:file/local.dart' as local;
 import 'package:routed_core/src/runtime/shutdown.dart';
 import 'package:routed_core/src/utils/debug.dart';
+import 'package:routed_core/src/config/typed.dart';
+import 'package:routed_core/src/provider/typed_provider.dart';
 
 /// Default ETag generation strategies supported by the engine.
 enum EtagStrategy { disabled, strong, weak }
@@ -23,29 +25,29 @@ enum EtagStrategy { disabled, strong, weak }
 ///   uploadDirectory: 'storage/uploads',
 /// );
 /// ```
-class MultipartConfig {
+class MultipartConfig implements ValidatableConfiguration {
   /// Maximum memory size allowed for file uploads in bytes.
   ///
   /// This limits how much memory can be used for buffering uploads before
   /// they are written to disk. Default is 32MB.
-  int maxMemory;
+  final int maxMemory;
 
   /// Maximum file size allowed for individual uploads in bytes.
   ///
   /// Any file exceeding this size will be rejected. Default is 10MB.
-  int maxFileSize;
+  final int maxFileSize;
 
   /// Maximum total disk usage per request in bytes.
   ///
   /// This limits the total size of all files in a single request.
   /// Default mirrors [maxMemory].
-  int maxDiskUsage;
+  final int maxDiskUsage;
 
   /// Set of allowed file extensions for uploads.
   ///
   /// Only files with these extensions will be accepted. Extensions should be
   /// lowercase without the leading dot. Default includes 'jpg', 'jpeg', 'png', 'gif', 'pdf'.
-  Set<String> allowedExtensions;
+  final Set<String> allowedExtensions;
 
   /// Directory where uploaded files will be stored.
   ///
@@ -64,10 +66,47 @@ class MultipartConfig {
     this.maxMemory = 32 * 1024 * 1024, // 32MB default
     this.maxFileSize = 10 * 1024 * 1024, // 10MB default
     int? maxDiskUsage,
-    this.allowedExtensions = const {'jpg', 'jpeg', 'png', 'gif', 'pdf'},
+    Set<String>? allowedExtensions,
     this.uploadDirectory = 'uploads',
-    this.filePermissions = 0750,
-  }) : maxDiskUsage = maxDiskUsage ?? maxMemory;
+    this.filePermissions = 0x1e8,
+  }) : maxDiskUsage = maxDiskUsage ?? maxMemory,
+       allowedExtensions = Set<String>.unmodifiable(
+         (allowedExtensions ?? const {'jpg', 'jpeg', 'png', 'gif', 'pdf'})
+             .map((extension) => extension.toLowerCase().trim())
+             .where((extension) => extension.isNotEmpty),
+       );
+
+  @override
+  void validate(ConfigValidationContext context) {
+    context.require(maxMemory > 0, 'maxMemory', 'must be greater than zero');
+    context.require(
+      maxFileSize > 0,
+      'maxFileSize',
+      'must be greater than zero',
+    );
+    context.require(
+      maxDiskUsage > 0,
+      'maxDiskUsage',
+      'must be greater than zero',
+    );
+    context.require(
+      uploadDirectory.trim().isNotEmpty,
+      'uploadDirectory',
+      'cannot be empty',
+    );
+    context.require(
+      filePermissions >= 0 && filePermissions <= 0x1ff,
+      'filePermissions',
+      'must be a valid Unix permission value',
+    );
+    for (final extension in allowedExtensions) {
+      context.require(
+        extension.isNotEmpty && !extension.contains('.'),
+        'allowedExtensions',
+        'extensions must be non-empty and omit the leading dot',
+      );
+    }
+  }
 }
 
 /// Configuration for HTTP/2 protocol support.
@@ -447,7 +486,7 @@ class CorsConfig {
 ///   handleMethodNotAllowed: true,
 /// );
 /// ```
-class EngineConfig {
+class EngineConfig implements ValidatableConfiguration {
   final EngineFeatures features;
   final EngineSecurityFeatures security;
   final ViewConfig views;
@@ -745,5 +784,56 @@ class EngineConfig {
     }
 
     return newConfig;
+  }
+
+  @override
+  void validate(ConfigValidationContext context) {
+    context.require(
+      security.maxRequestSize > 0,
+      'security.maxRequestSize',
+      'must be greater than zero',
+    );
+    context.require(
+      pathInternCacheSize > 0,
+      'pathInternCacheSize',
+      'must be greater than zero',
+    );
+    context.require(
+      shutdown.gracePeriod >= Duration.zero,
+      'shutdown.gracePeriod',
+      'cannot be negative',
+    );
+    context.require(
+      shutdown.forceAfter >= Duration.zero,
+      'shutdown.forceAfter',
+      'cannot be negative',
+    );
+    context.require(
+      shutdown.forceAfter >= shutdown.gracePeriod,
+      'shutdown.forceAfter',
+      'must be at least as long as shutdown.gracePeriod',
+    );
+    context.require(
+      !features.enableTrustedPlatform ||
+          (trustedPlatform != null && trustedPlatform!.trim().isNotEmpty),
+      'trustedPlatform',
+      'must be provided when trusted platform support is enabled',
+    );
+    context.require(
+      !features.enableProxySupport || trustedProxies.isNotEmpty,
+      'trustedProxies',
+      'must contain at least one network when proxy support is enabled',
+    );
+    context.require(
+      security.cors.maxAge == null || security.cors.maxAge! >= 0,
+      'security.cors.maxAge',
+      'cannot be negative',
+    );
+    context.require(
+      http2.maxConcurrentStreams == null || http2.maxConcurrentStreams! > 0,
+      'http2.maxConcurrentStreams',
+      'must be greater than zero when provided',
+    );
+    multipart.validate(context);
   }
 }

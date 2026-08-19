@@ -9,19 +9,7 @@ Routed ships built-in HTTP/2 support when you enable it in the engine configurat
 
 ## Enable HTTP/2
 
-HTTP/2 requires TLS. Provide your certificate and enable the feature flag either in configuration manifests or programmatically:
-
-```yaml title="config/http.yaml"
-http:
-  http2:
-    enabled: true
-    allow_cleartext: false
-    max_concurrent_streams: 256
-    idle_timeout: 30s
-  tls:
-    certificate_path: cert.pem
-    key_path: key.pem
-```
+HTTP/2 requires TLS. Provide your certificate and pass a typed `Http2Config`:
 
 ```dart title="main.dart"
 final engine = Engine(

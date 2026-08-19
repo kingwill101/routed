@@ -43,40 +43,41 @@ void main() {
     late TestClient client;
 
     setUp(() {
-      engine = testEngine(options: [withSessionConfig(makeSessionConfig())])
-        ..get('/flash-single', (ctx) {
-          ctx.flash('Hello!');
-          return ctx.string('ok');
-        })
-        ..get('/flash-multiple', (ctx) {
-          ctx.flash('First message');
-          ctx.flash('Second message');
-          ctx.flash('Error occurred', 'error');
-          return ctx.string('ok');
-        })
-        ..get('/has-flash', (ctx) {
-          final has = ctx.hasFlashMessages();
-          return ctx.json({'has': has});
-        })
-        ..get('/get-flash', (ctx) {
-          final messages = ctx.getFlashMessages();
-          return ctx.json({'messages': messages});
-        })
-        ..get('/get-flash-with-categories', (ctx) {
-          final messages = ctx.getFlashMessages(withCategories: true);
-          return ctx.json({'messages': messages});
-        })
-        ..get('/get-flash-filtered', (ctx) {
-          final messages = ctx.getFlashMessages(categoryFilter: ['error']);
-          return ctx.json({'messages': messages});
-        })
-        ..get('/get-flash-filtered-with-categories', (ctx) {
-          final messages = ctx.getFlashMessages(
-            withCategories: true,
-            categoryFilter: ['error'],
-          );
-          return ctx.json({'messages': messages});
-        });
+      engine =
+          testEngine(providers: [RoutedSessionsProvider(makeSessionConfig())])
+            ..get('/flash-single', (ctx) {
+              ctx.flash('Hello!');
+              return ctx.string('ok');
+            })
+            ..get('/flash-multiple', (ctx) {
+              ctx.flash('First message');
+              ctx.flash('Second message');
+              ctx.flash('Error occurred', 'error');
+              return ctx.string('ok');
+            })
+            ..get('/has-flash', (ctx) {
+              final has = ctx.hasFlashMessages();
+              return ctx.json({'has': has});
+            })
+            ..get('/get-flash', (ctx) {
+              final messages = ctx.getFlashMessages();
+              return ctx.json({'messages': messages});
+            })
+            ..get('/get-flash-with-categories', (ctx) {
+              final messages = ctx.getFlashMessages(withCategories: true);
+              return ctx.json({'messages': messages});
+            })
+            ..get('/get-flash-filtered', (ctx) {
+              final messages = ctx.getFlashMessages(categoryFilter: ['error']);
+              return ctx.json({'messages': messages});
+            })
+            ..get('/get-flash-filtered-with-categories', (ctx) {
+              final messages = ctx.getFlashMessages(
+                withCategories: true,
+                categoryFilter: ['error'],
+              );
+              return ctx.json({'messages': messages});
+            });
       client = TestClient(RoutedRequestHandler(engine));
     });
 

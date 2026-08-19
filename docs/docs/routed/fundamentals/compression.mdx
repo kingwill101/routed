@@ -5,48 +5,32 @@ sidebar_position: 8
 description: Configure optional gzip compression for buffered responses.
 ---
 
-Routed includes an opt-in `routed.compression` provider. Call
-`registerRoutedProviders()` before creating the engine, then enable gzip in
-`compression.*` configuration. The provider compresses eligible buffered
-responses and leaves streaming responses untouched.
+Routed includes an opt-in `RoutedCompressionProvider` in `routed_http`. Pass a
+typed `CompressionConfig` when creating the engine. The provider compresses
+eligible buffered responses and leaves streaming responses untouched.
 
 The provider currently supports gzip. Brotli remains a host/proxy concern until
 an encoder is added.
 
 ## Enablement and defaults
 
-Configure it in `config/http.yaml`:
-
-```yaml title="config/http.yaml"
-compression:
-  enabled: true
-  min_length: 1024           # bytes before compression kicks in
-  algorithms: [gzip]
-  mime_allow:
-    - text/*
-    - application/json
-    - application/javascript
-  mime_deny:
-    - image/*
-    - audio/*
-    - video/*
-```
-
-## Programmatic setup
-
 ```dart
 import 'package:routed/routed.dart';
 
 Future<void> main() async {
-  registerRoutedProviders();
   final engine = await Engine.create(
-    configItems: {
-      'compression': {
-        'enabled': true,
-        'min_length': 1024,
-        'algorithms': ['gzip'],
-      },
-    },
+    providers: [
+      ...Engine.defaultProviders,
+      RoutedCompressionProvider(
+        CompressionConfig(
+          enabled: true,
+          minLength: 1024,
+          algorithms: ['gzip'],
+          mimeAllow: ['text/*', 'application/json', 'application/javascript'],
+          mimeDeny: ['image/*', 'audio/*', 'video/*'],
+        ),
+      ),
+    ],
   );
 
   engine.get('/payload', (ctx) => ctx.json({'message': 'large response'}));

@@ -19,11 +19,10 @@ class ProviderRegistration {
   final String description;
 }
 
-/// Registry of known service providers for `http.providers` resolution.
+/// Registry of known service provider factories.
 ///
-/// Foundation only registers core providers that live in `package:routed`.
-/// Feature packages call [register] (via their `registerProviders()` helpers)
-/// when imported — typically through `package:routed`.
+/// The registry is an explicit composition aid for applications and adapters.
+/// It does not load providers from files or resolve string-based configuration.
 class ProviderRegistry extends NamedRegistry<ProviderRegistration> {
   ProviderRegistry._() {
     _registerDefaults();
@@ -35,7 +34,7 @@ class ProviderRegistry extends NamedRegistry<ProviderRegistration> {
     register(
       'routed.core',
       factory: () => CoreServiceProvider(),
-      description: 'Core services: config loader, engine bindings.',
+      description: 'Core services: typed engine configuration and bindings.',
     );
     register(
       'routed.routing',

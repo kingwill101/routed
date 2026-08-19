@@ -38,8 +38,10 @@ Engine _authEngine(AuthManager manager, {SessionConfig? sessionConfig}) {
     config: EngineConfig(
       security: const EngineSecurityFeatures(csrfProtection: false),
     ),
-    providers: Engine.defaultProviders,
-    options: [withSessionConfig(sessionConfig)],
+    providers: [
+      ...Engine.defaultProviders,
+      RoutedSessionsProvider(sessionConfig),
+    ],
   );
   engine.addGlobalMiddleware(sessionMiddleware());
   engine.addGlobalMiddleware(SessionAuth.sessionAuthMiddleware());

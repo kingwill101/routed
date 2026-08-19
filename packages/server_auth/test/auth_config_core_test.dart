@@ -2,69 +2,72 @@ import 'package:server_auth/server_auth.dart';
 import 'package:test/test.dart';
 
 void main() {
-  test('AuthConfig.fromMap parses normalized auth config payload', () {
-    final config = AuthConfig.fromMap({
-      'jwt': {
-        'enabled': true,
-        'issuer': ' https://issuer.example ',
-        'audience': ['app'],
-        'required_claims': ['sub'],
-        'algorithms': ['RS256'],
-        'keys': [
+  test('AuthConfig.defaults provides typed safe defaults', () {
+    final config = AuthConfig.defaults();
+
+    expect(config.jwt.enabled, isFalse);
+    expect(config.jwt.requiredClaims, <String>['exp']);
+    expect(config.oauth2Introspection.enabled, isFalse);
+    expect(config.session.rememberMe.cookieName, 'remember_token');
+    expect(config.haigate.enabled, isFalse);
+    expect(config.guards, isEmpty);
+  });
+
+  test('AuthConfig stores typed sections without map materialization', () {
+    final config = AuthConfig.defaults().copyWith(
+      jwt: const AuthJwtConfig(
+        enabled: true,
+        issuer: 'https://issuer.example',
+        audience: ['app'],
+        requiredClaims: ['sub'],
+        jwksUri: null,
+        jwksCacheTtl: Duration(minutes: 5),
+        clockSkew: Duration(seconds: 60),
+        algorithms: ['RS256'],
+        inlineKeys: [
           {'kty': 'RSA', 'kid': 'one'},
         ],
-      },
-      'oauth2': {
-        'introspection': {
-          'enabled': true,
-          'endpoint': 'https://oauth.example/introspect',
-          'additional': {'resource': 'api'},
+        header: 'Authorization',
+        bearerPrefix: 'Bearer ',
+      ),
+      oauth2Introspection: OAuthIntrospectionConfig(
+        enabled: true,
+        endpoint: Uri.parse('https://oauth.example/introspect'),
+        clientId: null,
+        clientSecret: null,
+        tokenTypeHint: null,
+        cacheTtl: Duration.zero,
+        clockSkew: Duration(seconds: 60),
+        additionalParameters: {'resource': 'api'},
+      ),
+      session: const AuthSessionConfig(
+        strategy: AuthSessionStrategy.jwt,
+        maxAge: null,
+        updateAge: null,
+        rememberMe: SessionRememberMeConfig(
+          cookieName: 'remember',
+          duration: Duration(days: 14),
+        ),
+      ),
+      haigate: const HaigateConfig(
+        enabled: true,
+        defaults: GateDefaults(statusCode: 418),
+        abilities: {
+          'posts.manage': GateDefinition.roles(roles: ['admin'], any: true),
         },
-      },
-      'session': {
-        'strategy': 'jwt',
-        'remember_me': {'cookie': 'remember', 'duration': '14d'},
-      },
-      'features': {
-        'haigate': {'enabled': true},
-      },
-      'gates': {
-        'defaults': {'denied_status': 418},
-        'abilities': {
-          'posts.manage': {
-            'type': 'roles',
-            'roles': ['admin'],
-            'any': true,
-          },
-        },
-      },
-      'guards': {
-        'auth': {'type': 'authenticated', 'realm': 'Members'},
-      },
-    });
+      ),
+      guards: const {'auth': GuardDefinition.authenticated(realm: 'Members')},
+    );
 
     expect(config.jwt.enabled, isTrue);
     expect(config.jwt.issuer, 'https://issuer.example');
     expect(config.oauth2Introspection.endpoint, isNotNull);
     expect(config.session.strategy, AuthSessionStrategy.jwt);
-    expect(config.sessionRememberMe.cookieName, 'remember');
+    expect(config.session.rememberMe.cookieName, 'remember');
     expect(config.haigate.enabled, isTrue);
     expect(config.haigate.defaults.statusCode, 418);
     expect(config.haigate.abilities['posts.manage']?.type, GateType.roles);
     expect(config.guards['auth']?.type, GuardType.authenticated);
-  });
-
-  test('GateDefinition parsing supports string and map shorthand', () {
-    final auth = GateDefinition.fromSpec('authenticated', context: 'g.auth');
-    final roles = GateDefinition.fromSpec({
-      'type': 'roles_any',
-      'roles': ['admin', 'editor'],
-    }, context: 'g.roles');
-
-    expect(auth?.type, GateType.authenticated);
-    expect(roles?.type, GateType.roles);
-    expect(roles?.any, isTrue);
-    expect(roles?.roles, ['admin', 'editor']);
   });
 
   test(

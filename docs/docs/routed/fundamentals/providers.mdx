@@ -1,359 +1,172 @@
 ---
 title: Building Providers
-description: Create custom Routed service providers, wire configuration defaults, and plug them into the CLI + manifest tooling.
+description: Create providers with typed configuration and explicit service wiring.
 ---
 
-Routed’s core features (logging, cache, storage, uploads, etc.) are all implemented as _providers_. A provider boots dependencies into the container, exposes configuration defaults, and participates in reloads + shutdown. You can author your own providers to encapsulate services or framework extensions.
+# Building Providers
 
-> TL;DR: Implement `ServiceProvider`, register it with `Engine.registerProvider`, and (optionally) mix in `ProvidesDefaultConfig` so the CLI and manifests can surface your documentation.
+Providers own a service integration and its configuration. Configuration is
+constructed in Dart, validated before boot, and published through
+`ConfigStore`. There is no YAML manifest, dot-notation override, or reload
+callback in the provider API.
 
 ## Provider lifecycle
 
-Every provider extends the `ServiceProvider` base class:
-
-```dart title="lib/services/email_service_provider.dart"
+```dart
 import 'package:routed/routed.dart';
 
-class EmailServiceProvider extends ServiceProvider {
+class MailConfig implements ValidatableConfiguration {
+  const MailConfig({required this.host, this.port = 587});
+
+  final String host;
+  final int port;
+
+  @override
+  void validate(ConfigValidationContext context) {
+    context.require(host.trim().isNotEmpty, 'host', 'must not be empty');
+    context.require(port > 0 && port < 65536, 'port', 'must be valid');
+  }
+}
+
+class MailProvider extends ServiceProvider
+    with ProvidesTypedConfiguration<MailConfig> {
+  MailProvider(this.configuration);
+
+  @override
+  final MailConfig configuration;
+
   @override
   void register(Container container) {
-    container.singleton<Mailer>((c) async {
-      final config = await c.make<Config>();
-      final settings = config.get('mail') as Map<String, dynamic>;
-      return Mailer.fromConfig(settings);
-    });
+    container.singleton<Mailer>(
+      (_) async => Mailer(host: configuration.host, port: configuration.port),
+    );
   }
 
   @override
   Future<void> boot(Container container) async {
-    final mailer = await container.make<Mailer>();
-    await mailer.verifyConnection();
+    await container.make<Mailer>().connect();
   }
 
   @override
   Future<void> cleanup(Container container) async {
     if (container.has<Mailer>()) {
-      final mailer = await container.make<Mailer>();
-      await mailer.close();
+      await container.make<Mailer>().close();
     }
   }
 }
 ```
 
-- `register` is synchronous and should only declare bindings (no I/O).
-- `boot` runs after all providers register, so you can resolve other bindings safely.
-- `cleanup` runs when the engine shuts down (or a request-scoped container is disposed).
+`register` declares bindings synchronously. `boot` runs after providers have
+registered, and `cleanup` releases owned resources.
 
-Register providers via the constructor or before `engine.initialize()`:
+## Registering providers
+
+Pass providers explicitly when constructing the engine:
 
 ```dart
-registerRoutedProviders();
-// Option 1: Pass providers to the constructor (recommended)
-final engine = Engine(
-  providers: [
-    ...Engine.builtins,
-    EmailServiceProvider(),
-  ],
-);
-await engine.initialize();
-
-// Option 2: Register after construction
-final engine = Engine(providers: Engine.builtins);
-engine.registerProvider(EmailServiceProvider());
-await engine.initialize();
-
-// Option 3: Use Engine.create() for convenience
 final engine = await Engine.create(
   providers: [
-    ...Engine.builtins,
-    EmailServiceProvider(),
-  ],
-);
-
-// Option 4: Use configItems for inline configuration (no YAML needed)
-final engine = await Engine.create(
-  configItems: {
-    'app.name': 'My App',
-    'mail.default': 'smtp',
-  },
-  providers: [
-    ...Engine.builtins,
-    EmailServiceProvider(),
+    CoreServiceProvider(
+      EngineConfig(
+        security: const EngineSecurityFeatures(maxRequestSize: 10 << 20),
+      ),
+    ),
+    RoutingServiceProvider(const RoutingConfig()),
+    MailProvider(const MailConfig(host: 'smtp.example.com')),
   ],
 );
 ```
 
-### Provider deduplication
-
-The engine tracks provider types and skips duplicates by `runtimeType`. The first
-registered instance of each type wins; subsequent instances are silently skipped.
-Call `registerRoutedProviders()` once before using `Engine.builtins` or a
-full-featured `Engine.create()` from `package:routed`.
-
-This means:
-
-- When you pass `configItems` to `Engine()` or `Engine.create()`, a
-  `CoreServiceProvider` is automatically prepended. If `Engine.builtins` also
-  includes one, the duplicate is skipped.
-- Manifest-driven providers (from `config/http.yaml`) also respect deduplication—
-  they will not override providers already registered in code.
-
-### `Engine.defaultProviders` vs `Engine.builtins`
-
-| Getter | Providers | Use case |
-|--------|-----------|----------|
-| `Engine.defaultProviders` | `CoreServiceProvider` + `RoutingServiceProvider` (2 total) | Minimal engine with config and routing only |
-| `Engine.builtins` | The 14 providers registered by `package:routed`: core, routing, uploads, auth, logging, views, localization, observability, cache, sessions, storage, `rate_limit`, compression, and security | Full-featured engine after `registerRoutedProviders()` |
+`Engine.defaultProviders` contains only core and routing. The `package:routed`
+barrel registers official feature providers, so `Engine.builtins` can be used
+when an application wants the complete official catalogue:
 
 ```dart
-// Minimal engine — just config + routing
-final engine = await Engine.create(providers: Engine.defaultProviders);
-
-// Full-featured engine — all builtins (this is the default)
-registerRoutedProviders();
-final engine = await Engine.create();
-```
-
-### Ordering and pre-registration hooks
-
-- Providers run `register` immediately when `Engine.registerProvider` is called.
-  If one provider depends on bindings from another, register them in that order
-  (`engine.registerProvider(CacheProvider())` before
-  `engine.registerProvider(EmailProvider())`, etc.).
-- Built-in providers are registered when you pass them to the `providers` parameter.
-  To seed registries or add container services _before_ those providers finish
-  wiring defaults, pass an `Engine` option:
-
-```dart
-registerRoutedProviders();
-final engine = Engine(
-  providers: [
-    ...Engine.builtins,
-  ],
-  options: [
-    (engine) {
-      final registry = engine.container.get<LocaleResolverRegistry>();
-      registry.register('preview', (_) => PreviewLocaleResolver());
-    },
-  ],
-);
-```
-
-Engine options execute right after the engine is created but before
-`engine.initialize()` (and before provider boot hooks fire). Use them when you
-need to ensure something exists in the container—custom locale resolvers,
-driver registrations, feature flags—before providers rely on that state.
-
-### Dependency-driven booting
-
-When a provider depends on container bindings that might not exist at
-registration time, mix in `ProvidesDependencies`. The engine defers the
-provider's `boot` until all dependency types are available in the container.
-
-```dart title="Provider dependencies"
-class SearchProvider extends ServiceProvider with ProvidesDependencies {
-  @override
-  List<Type> get dependencies => [Config, StorageManager];
-
-  @override
-  void register(Container container) {
-    container.singleton<SearchClient>((c) async {
-      final config = await c.make<Config>();
-      return SearchClient.fromConfig(config.get('search'));
-    });
-  }
-
-  @override
-  Future<void> boot(Container container) async {
-    final client = await container.make<SearchClient>();
-    await client.warm();
-  }
-}
-```
-
-Dependencies are plain container types (not only other providers). If any
-dependencies remain unresolved when the engine initializes, Routed emits a
-warning listing the missing types.
-
-## Shipping configuration defaults
-
-Mix in `ProvidesDefaultConfig` to contribute config defaults + documentation. Use `ConfigDefaults` and `ConfigDocEntry` so the CLI (`provider:list --config`) and generator (`config:init`) can surface the metadata.
-
-```dart title="EmailServiceProvider with defaults"
-class EmailServiceProvider extends ServiceProvider with ProvidesDefaultConfig {
-  @override
-  ConfigDefaults get defaultConfig => const ConfigDefaults(
-        docs: [
-          ConfigDocEntry(
-            path: 'mail.default',
-            type: 'string',
-            description: 'Transport used when none is specified.',
-            defaultValue: 'smtp',
-            metadata: {configDocMetaInheritFromEnv: 'MAIL_MAILER'},
-          ),
-          ConfigDocEntry(
-            path: 'mail.mailers.smtp.host',
-            type: 'string',
-            description: 'SMTP server hostname.',
-            defaultValue: "{{ env.MAIL_HOST | default: 'smtp.example.com' }}",
-          ),
-          // …
-        ],
-      );
-
-  @override
-  void register(Container container) {
-    // bindings
-  }
-}
-```
-
-Providers that implement `ProvidesDefaultConfig` must also implement `onConfigReload` if they cache configuration, because the engine calls it whenever `.env` or `config/*.yaml` changes in watch mode.
-
-```dart
-  @override
-  Future<void> onConfigReload(Container container, Config config) async {
-    if (container.has<Mailer>()) {
-      final mailer = await container.make<Mailer>();
-      mailer.updateSettings(config.get('mail'));
-    }
-  }
-```
-
-### Documenting dynamic defaults
-
-If defaults depend on runtime state (e.g., registered drivers), use `defaultValueBuilder` and `optionsBuilder`:
-
-```dart
-ConfigDocEntry(
-  path: 'mail.mailers.*.driver',
-  type: 'string',
-  description: 'Registered mail driver.',
-  optionsBuilder: MailDriverRegistry.instance.names,
-);
-```
-
-### CLI integration
-
-Once the provider ships defaults, the CLI automatically displays them:
-
-```bash
-dart run routed_cli provider:list --config | grep mail
-```
-
-`config:init` also inlines the doc comments above each `config/*.yaml` entry, so `ConfigDocEntry.description` + `metadata` show up in generated files.
-
-## Provider manifests
-
-When you toggle providers in `config/http.yaml` (for example via `providers: [routed.logging, my.custom.email]`), Routed resolves those IDs through `ProviderRegistry`. To make your provider manifest-friendly, export a factory from a package and register it:
-
-```dart title="lib/providers.dart"
 import 'package:routed/routed.dart';
 
-void registerProviders() {
-  ProviderRegistry.instance.register(
-    'custom.mail',
-    description: 'Application mailer',
-    factory: () => EmailServiceProvider(),
-  );
-}
+final engine = await Engine.create(providers: [
+  ...Engine.builtins,
+  MailProvider(const MailConfig(host: 'smtp.example.com')),
+]);
 ```
 
-Call `registerProviders()` near `main()` before the engine boots. The CLI and `provider:list` will now show `custom.mail` alongside the built-ins, and manifests can reference it by ID.
+Registering the same provider type twice is not a configuration mechanism; the
+first provider wins. Choose one typed configuration instance for each provider.
 
-## Provider CLI commands
+## Runtime environment and secrets
 
-Providers can also register CLI commands so any application including the
-provider gains the associated tooling. Use `ProviderCommandRegistry` to expose
-args-based commands and keep factories lazy:
+Deployment values belong at the application boundary. Pass them as a typed
+`RuntimeContext` instead of having providers read process environment variables
+or configuration files directly:
 
-```dart title="Provider command registration"
-class ReportsProvider extends ServiceProvider {
+```dart
+final runtime = RuntimeContext(
+  environment: RuntimeEnvironment({'PUBLIC_ORIGIN': 'https://example.test'}),
+  secrets: RuntimeSecrets({'SMTP_PASSWORD': passwordFromSecretStore}),
+);
+
+final engine = await Engine.create(
+  runtime: runtime,
+  providers: [
+    CoreServiceProvider(),
+    RoutingServiceProvider(),
+    MailProvider(MailConfig(host: runtime.environment.requiredString('SMTP_HOST'))),
+  ],
+);
+```
+
+Provider validation can also inspect `context.runtime`. Secret values are not
+included in validation summaries or generic error responses.
+
+## Typed lookup
+
+Inside a handler or provider, retrieve configuration by type:
+
+```dart
+final settings = ctx.config<MailConfig>();
+final engineSettings = engine.configStore.get<EngineConfig>();
+```
+
+The lookup is immutable after startup. Missing or duplicate configuration types
+fail explicitly instead of silently falling back to a string key.
+
+## Dependencies and wiring
+
+Use `ProvidesDependencies` when boot requires another service:
+
+```dart
+class ReportsProvider extends ServiceProvider with ProvidesDependencies {
+  @override
+  List<Type> get dependencies => [Mailer];
+
   @override
   void register(Container container) {
-    ProviderCommandRegistry.instance.register(
-      'reports:refresh',
-      factory: () => ReportsRefreshCommand(),
-      description: 'Rebuild reporting caches',
-    );
+    container.singleton<Reports>((c) async => Reports(await c.make<Mailer>()));
   }
 }
 ```
 
-Routed loads provider commands alongside built-ins and project commands. Name
-or alias collisions raise a usage error so you can rename the command.
+Use `withMiddleware` and `withService` only for imperative wiring owned by the
+application. Feature configuration belongs in the provider constructor.
 
-## Testing providers
+## Testing
 
-Because providers are plain Dart classes, you can spin up an `Engine` (or just a `Container`) inside tests:
+Providers can be tested with an in-memory engine and their real typed
+configuration:
 
-```dart title="test/providers/email_provider_test.dart"
-test('Email provider registers Mailer binding', () async {
-  final engine = Engine(
-    providers: [
-      CoreServiceProvider(configItems: {
-        'mail': {'default': 'log'},
-      }),
-      RoutingServiceProvider(),
-      EmailServiceProvider(),
-    ],
-  );
-  await engine.initialize();
+```dart
+test('mail provider publishes its configuration', () async {
+  const config = MailConfig(host: 'smtp.test');
+  final engine = await Engine.create(providers: [
+    CoreServiceProvider(),
+    RoutingServiceProvider(),
+    MailProvider(config),
+  ]);
 
-  final mailer = await engine.make<Mailer>();
-  expect(mailer, isA<Mailer>());
-
+  expect(engine.configStore.get<MailConfig>(), same(config));
   await engine.close();
 });
 ```
 
-If the provider exposes CLI docs, add an assertion against `provider.defaultConfig.docs` to keep paths/descriptions accurate.
-
-## Cheatsheet
-
-| Need | API |
-| --- | --- |
-| Register bindings | Override `register` |
-| Perform async setup | Override `boot` |
-| Release resources | Override `cleanup` |
-| React to config reloads | Implement `onConfigReload` (only when using `ProvidesDefaultConfig`) |
-| Contribute defaults/docs | Return `ConfigDefaults` with `ConfigDocEntry` |
-| Offer CLI/manifest ID | Register with `ProviderRegistry` |
-
-With these building blocks you can package reusable integrations (queues, telemetry, payment gateways) that feel identical to the providers shipped by Routed.
-
-## `CoreServiceProvider` modes
-
-`CoreServiceProvider` supports three construction modes that control how configuration is loaded:
-
-| Mode | Constructor | File I/O | Description |
-|------|------------|----------|-------------|
-| **Default (in-memory)** | `CoreServiceProvider({config, configItems})` | None | In-memory `Config` with framework defaults + optional overrides |
-| **Loader** | `CoreServiceProvider.withLoader([options, configItems, config])` | Yes | Loads YAML/JSON from disk, env vars, `.env` files. Supports `watch` for hot reload |
-| **Cached config** | `CoreServiceProvider.withCachedConfig(snapshot, {config, configItems})` | None | Uses a pre-built `ConfigSnapshot` from `routed config:cache`. No file I/O |
-
-```dart
-// Mode 1: In-memory only (default) — good for tests and simple apps
-final engine = Engine(providers: [
-  CoreServiceProvider(configItems: {'app.name': 'Test'}),
-  RoutingServiceProvider(),
-]);
-
-// Mode 2: File-based loading — for apps with config/ directory
-final engine = Engine(providers: [
-  CoreServiceProvider.withLoader(ConfigLoaderOptions(
-    configDir: 'config',
-    watch: true,  // enables hot-reload of config files
-  )),
-  RoutingServiceProvider(),
-]);
-
-// Mode 3: Cached — for production (no file I/O at startup)
-final snapshot = ConfigSnapshot.fromFile('.dart_tool/routed/config_cache.json');
-final engine = Engine(providers: [
-  CoreServiceProvider.withCachedConfig(snapshot),
-  RoutingServiceProvider(),
-]);
-```
-
-When using `Engine.create()` or passing `configItems` to the `Engine()` constructor, the framework automatically creates a default-mode `CoreServiceProvider` for you — no need to instantiate one manually.
+Invalid configurations fail during initialization with
+`ConfigValidationException`, before requests are accepted.

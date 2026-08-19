@@ -1,8 +1,8 @@
-import 'environment.dart';
+import 'process_env.dart';
 
 void debugPrintWarning(String message) {
   if (const bool.fromEnvironment('dart.vm.product')) return;
-  if (env['ROUTED_MODE'] == 'release') return;
+  if (readProcessEnvironment()['ROUTED_MODE'] == 'release') return;
 
   print('''
 [Routed] WARNING: $message

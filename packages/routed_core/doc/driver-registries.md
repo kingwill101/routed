@@ -11,10 +11,6 @@ All built-in drivers are registered through these entrypoints, so custom impleme
 resolution path. Override an existing driver by passing `overrideExisting: true`, or register new driver identifiers
 before the engine boots. Configuration errors surface the driver name and the registered options when a lookup fails.
 
-## Documenting Driver-Specific Options
-
-Driver registrations can also advertise their configuration surface. Pass a `documentation` callback when calling
-`registerDriver` (storage, cache, or session) and return one or more `ConfigDocEntry` instances. Each callback receives
-a doc context that exposes the driver name and the config path template (`storage.disks.*`, `cache.stores.*`, or
-`session`). The provider merges these entries into its default config docs, so custom drivers show up alongside
-built-ins in generated documentation or CLI inspection tools.
+Driver registries do not generate configuration schemas or documentation. Define driver options as Dart configuration
+values, validate them in the provider, and document the public constructor or driver context alongside the
+implementation.

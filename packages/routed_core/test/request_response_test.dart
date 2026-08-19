@@ -10,12 +10,7 @@ Future<({Engine engine, TestClient client})> _setupClient({
 }) async {
   final engine = await Engine.create(
     config: config,
-    providers: [
-      CoreServiceProvider(
-        configItems: const {'app.name': 'Test App', 'app.env': 'testing'},
-      ),
-      RoutingServiceProvider(),
-    ],
+    providers: [CoreServiceProvider(config), RoutingServiceProvider()],
   );
   final client = TestClient(
     RoutedRequestHandler(engine),

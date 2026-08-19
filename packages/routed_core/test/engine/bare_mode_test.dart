@@ -8,7 +8,7 @@ void main() {
   test('Engine() defaults to bare mode', () {
     final engine = Engine();
 
-    expect(engine.container.has<Config>(), isFalse);
+    expect(engine.container.has<ConfigStore>(), isFalse);
     expect(engine.container.has<EventManager>(), isFalse);
     expect(engine.container.has<RoutePatternRegistry>(), isTrue);
     expect(engine.container.has<MiddlewareRegistry>(), isTrue);
@@ -58,7 +58,7 @@ void main() {
 
     await engine.initialize();
 
-    expect(engine.container.has<Config>(), isTrue);
+    expect(engine.container.has<ConfigStore>(), isTrue);
     expect(engine.container.has<EventManager>(), isTrue);
   });
 }

@@ -24,19 +24,19 @@ extension ContextCache on EngineContext {
     String? store,
   }) {
     return cacheManager
-        .store(store ?? cacheManager.getDefaultDriver())
+        .store(store ?? cacheManager.getDefaultStoreName())
         .put(key, value, Duration(seconds: seconds));
   }
 
   FutureOr<dynamic> getCache(String key, {String? store}) {
     return cacheManager
-        .store(store ?? cacheManager.getDefaultDriver())
+        .store(store ?? cacheManager.getDefaultStoreName())
         .pull(key);
   }
 
   FutureOr<bool> removeCache(String key, {String? store}) {
     return cacheManager
-        .store(store ?? cacheManager.getDefaultDriver())
+        .store(store ?? cacheManager.getDefaultStoreName())
         .forget(key);
   }
 
@@ -46,7 +46,7 @@ extension ContextCache on EngineContext {
     String? store,
   ]) {
     return cacheManager
-        .store(store ?? cacheManager.getDefaultDriver())
+        .store(store ?? cacheManager.getDefaultStoreName())
         .increment(key, value);
   }
 
@@ -56,13 +56,13 @@ extension ContextCache on EngineContext {
     String? store,
   ]) {
     return cacheManager
-        .store(store ?? cacheManager.getDefaultDriver())
+        .store(store ?? cacheManager.getDefaultStoreName())
         .decrement(key, value);
   }
 
   FutureOr<bool> cacheForever(String key, dynamic value, {String? store}) {
     return cacheManager
-        .store(store ?? cacheManager.getDefaultDriver())
+        .store(store ?? cacheManager.getDefaultStoreName())
         .forever(key, value);
   }
 
@@ -73,7 +73,7 @@ extension ContextCache on EngineContext {
     String? store,
   }) {
     return cacheManager
-        .store(store ?? cacheManager.getDefaultDriver())
+        .store(store ?? cacheManager.getDefaultStoreName())
         .remember(key, ttl, callback);
   }
 
@@ -83,7 +83,7 @@ extension ContextCache on EngineContext {
     String? store,
   }) {
     return cacheManager
-        .store(store ?? cacheManager.getDefaultDriver())
+        .store(store ?? cacheManager.getDefaultStoreName())
         .rememberForever(key, callback);
   }
 }

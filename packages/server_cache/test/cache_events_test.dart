@@ -7,7 +7,7 @@ void main() {
 
     setUp(() {
       cacheManager = DataCacheManager();
-      cacheManager.registerStore('array', {'driver': 'array'});
+      cacheManager.registerStore('array', ArrayStore());
     });
 
     test('put, pull and remember simulate cache events', () async {

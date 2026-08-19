@@ -69,21 +69,26 @@ final txnId = ctx.getContextData<String>('transaction_id');
 final timestamp = ctx.getContextData<DateTime>('processed_at');
 ```
 
-## Engine & configuration access
+## Engine & typed configuration access
 
 ```dart
 router.get('/info', (ctx) {
-  final appName = ctx.appConfig.get('app.name');
+  final mail = ctx.config<MailConfig>();
   final engine = ctx.engine; // Engine? (nullable in some tests)
   final requestId = ctx.request.id;
 
   return ctx.json({
-    'app': appName,
+    'mail_host': mail.host,
     'request_id': requestId,
     'active_requests': engine?.activeRequestCount,
   });
 });
 ```
+
+Import the configuration type from the provider that owns it. Keep the
+`RuntimeContext` used to create the engine at the application boundary when
+you need deployment environment values; do not use a global configuration
+map.
 
 ## Middleware Example
 

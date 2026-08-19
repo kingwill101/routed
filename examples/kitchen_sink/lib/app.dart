@@ -7,15 +7,19 @@ import 'package:routed/routed.dart';
 Engine buildApp({String? viewsPath}) {
   final resolvedViewsPath = viewsPath ?? templateDirectory;
   final appKey = 'base64:AQIDBAUGBwgJCgsMDQ4PEBESExQVFhcYGRobHB0eHyA=';
-  env["APP_KEY"] = appKey;
+  final arrayStore = ArrayStore();
   final cacheManager = CacheManager()
-    ..registerStore('array', {'driver': 'array', 'serialize': false})
-    ..registerStore('file', {'driver': 'file', 'path': 'cache'});
+    ..registerStore('array', arrayStore)
+    ..registerStoreFactory(
+      'file',
+      FileStoreFactory(),
+      const FileStoreConfiguration(path: 'cache'),
+    );
   final sessionStore = CookieStore(
     codecs: [SecureCookie(useEncryption: true, useSigning: true, key: appKey)],
   );
-  // Use an explicit provider composition so every feature has its required
-  // application configuration before options are applied.
+  // Use an explicit typed provider composition so every feature has its
+  // required application configuration before boot.
   final engine = Engine(
     config: EngineConfig(
       appKey: appKey,
@@ -26,16 +30,15 @@ Engine buildApp({String? viewsPath}) {
       templateDirectory: resolvedViewsPath,
       views: ViewConfig(viewPath: resolvedViewsPath),
     ),
-    providers: [...Engine.defaultProviders, ViewServiceProvider()],
-    configItems: {
-      'view': {'directory': resolvedViewsPath},
-    },
-    options: [
-      withCacheManager(cacheManager),
-      withSessionConfig(
+    providers: [
+      ...Engine.defaultProviders,
+      RoutedCacheProvider(CacheConfig(store: arrayStore)),
+      RoutedSessionsProvider(
         SessionConfig(store: sessionStore, cookieName: 'kitchen_sink_session'),
       ),
+      ViewServiceProvider(RoutedViewConfig(directory: resolvedViewsPath)),
     ],
+    options: [withCacheManager(cacheManager)],
     middlewares: [
       sessionMiddleware(sessionStore),
       (EngineContext ctx, Next next) async {

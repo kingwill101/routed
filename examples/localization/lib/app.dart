@@ -6,12 +6,23 @@ import 'package:routed/routed.dart';
 /// Builds the example [Engine] with translation-enabled routes.
 Future<Engine> createEngine() async {
   final engine = await Engine.create(
-    providers: Engine.defaultProviders,
-    options: [
-      (engine) {
-        final registry = _ensureResolverRegistry(engine);
-        _registerPreviewResolver(registry);
-      },
+    providers: [
+      ...Engine.defaultProviders,
+      LocalizationServiceProvider(
+        LocalizationConfig(
+          paths: const ['resources/lang'],
+          jsonPaths: const ['resources/lang/json'],
+          resolvers: [
+            _PreviewLocaleResolver(
+              flagParameter: 'preview',
+              localeParameter: 'preview_locale',
+            ),
+            QueryLocaleResolver(parameter: 'lang'),
+            CookieLocaleResolver(cookieName: 'locale'),
+            HeaderLocaleResolver(),
+          ],
+        ),
+      ),
     ],
   );
 
@@ -70,25 +81,6 @@ Map<String, Object?> _localizedPayload(EngineContext ctx, {String? note}) {
     'legal_notice': ctx.trans('legal_notice').toString(),
     'note': ?note,
   };
-}
-
-void _registerPreviewResolver(LocaleResolverRegistry registry) {
-  registry.register('preview', (context) {
-    return _PreviewLocaleResolver(
-      flagParameter: context.option<String>('flag_parameter') ?? 'preview',
-      localeParameter:
-          context.option<String>('locale_parameter') ?? 'preview_locale',
-    );
-  });
-}
-
-LocaleResolverRegistry _ensureResolverRegistry(Engine engine) {
-  if (engine.container.has<LocaleResolverRegistry>()) {
-    return engine.container.get<LocaleResolverRegistry>();
-  }
-  final registry = LocaleResolverRegistry();
-  engine.container.instance<LocaleResolverRegistry>(registry);
-  return registry;
 }
 
 /// Resolves locales when both `preview` and `preview_locale` query params exist.

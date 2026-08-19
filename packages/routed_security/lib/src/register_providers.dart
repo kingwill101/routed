@@ -1,8 +1,8 @@
-import 'package:routed_core/providers.dart' show ProviderRegistry;
+import 'package:routed_core/routed_core.dart' show ProviderRegistry;
 
 import 'providers/security.dart';
 
-/// Registers the security provider for `http.providers` resolution.
+/// Registers the security provider factory in the shared registry.
 void registerRoutedSecurityProviders() {
   ProviderRegistry.instance.register(
     'routed.security',

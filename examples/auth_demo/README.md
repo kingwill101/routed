@@ -16,4 +16,5 @@ The default route responds with a friendly JSON payload. Edit
 
 The demo wires auth callbacks in `lib/app.dart` and listens to auth events
 through the global `EventManager` to mirror the Laravel-style event system.
-Use `config/auth.yaml` to tweak session strategy and update age defaults.
+Edit the typed `AuthOptions` and provider instances in `lib/app.dart` to
+change the session strategy, callbacks, or OAuth providers.

@@ -8,9 +8,9 @@ Engine testEngine({
   EngineConfig? config,
   List<Middleware>? middlewares,
   List<EngineOpt>? options,
-  Map<String, dynamic>? configItems,
   ErrorHandlingRegistry? errorHandling,
   List<ServiceProvider>? providers,
+  ObservabilityConfig? observabilityConfig,
   bool includeDefaultProviders = true,
   FileSystem? fileSystem,
 }) {
@@ -23,9 +23,9 @@ Engine testEngine({
   final List<ServiceProvider> resolvedProviders;
   if (includeDefaultProviders) {
     resolvedProviders = [
-      CoreServiceProvider(configItems: configItems ?? const {}),
+      CoreServiceProvider(resolvedConfig),
       RoutingServiceProvider(),
-      ObservabilityServiceProvider(),
+      ObservabilityServiceProvider(observabilityConfig),
       ...?providers,
     ];
   } else {

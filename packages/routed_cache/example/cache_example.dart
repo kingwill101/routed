@@ -4,12 +4,9 @@ import 'package:routed_core/routed_core.dart';
 import 'package:routed_cache/routed_cache.dart';
 
 void main() async {
-  final cacheManager = DataCacheManager()
-    ..registerStore('array', {'driver': 'array', 'serialize': false});
+  final cacheManager = DataCacheManager()..registerStore('array', ArrayStore());
 
-  final engine = Engine(
-    options: [withCacheManager(cacheManager)],
-  );
+  final engine = Engine(options: [withCacheManager(cacheManager)]);
 
   engine.get('/cache', (ctx) async {
     await ctx.cache('key', 'value', 60);
@@ -27,12 +24,15 @@ void main() async {
 
   // For demo, we avoid actually serving; just show helpers compile.
   // To serve: await engine.serve(port: 8080);
-  print('routed_cache example: Engine configured with DataCacheManager(array).');
+  print(
+    'routed_cache example: Engine configured with DataCacheManager(array).',
+  );
   print('Routes: GET /cache, GET /forever');
   await engine.close();
 }
 
 // Helper alias: getCache uses pull semantics
 extension _PullAlias on EngineContext {
-  FutureOr<dynamic> pullCache(String key, {String? store}) => getCache(key, store: store);
+  FutureOr<dynamic> pullCache(String key, {String? store}) =>
+      getCache(key, store: store);
 }

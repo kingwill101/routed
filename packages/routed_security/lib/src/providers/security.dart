@@ -1,97 +1,155 @@
-import 'dart:io';
-
 import 'package:routed_core/routed_core.dart';
 
 import '../cors.dart';
 import '../ip_filter.dart';
 
-/// Registers CORS, trusted-proxy resolution, and optional IP filtering.
-class RoutedSecurityProvider extends ServiceProvider
-    with ProvidesDefaultConfig {
-  Middleware? _ipFilterMiddleware;
-  Middleware? _corsMiddleware;
+/// Immutable trusted-proxy settings.
+class TrustedProxyConfig {
+  TrustedProxyConfig({
+    this.enabled = false,
+    this.forwardClientIp = true,
+    List<String>? proxies,
+    List<String>? headers,
+    this.platformHeader,
+  }) : proxies = List<String>.unmodifiable(
+         proxies ?? const ['0.0.0.0/0', '::/0'],
+       ),
+       headers = List<String>.unmodifiable(
+         headers ?? const ['X-Forwarded-For', 'X-Real-IP'],
+       );
+
+  final bool enabled;
+  final bool forwardClientIp;
+  final List<String> proxies;
+  final List<String> headers;
+  final String? platformHeader;
+}
+
+/// Immutable IP allow/deny settings.
+class IpFilterConfig {
+  IpFilterConfig({
+    this.enabled = false,
+    this.defaultAction = IpFilterAction.allow,
+    List<String>? allow,
+    List<String>? deny,
+    this.respectTrustedProxies = true,
+  }) : allow = List<String>.unmodifiable(allow ?? const []),
+       deny = List<String>.unmodifiable(deny ?? const []);
+
+  final bool enabled;
+  final IpFilterAction defaultAction;
+  final List<String> allow;
+  final List<String> deny;
+  final bool respectTrustedProxies;
+}
+
+/// Immutable configuration for [RoutedSecurityProvider].
+class RoutedSecurityConfig implements ValidatableConfiguration {
+  RoutedSecurityConfig({
+    this.maxRequestSize = 10 * 1024 * 1024,
+    TrustedProxyConfig? trustedProxies,
+    IpFilterConfig? ipFilter,
+    this.cors = const CorsConfig(),
+  }) : trustedProxies = trustedProxies ?? TrustedProxyConfig(),
+       ipFilter = ipFilter ?? IpFilterConfig();
+
+  final int maxRequestSize;
+  final TrustedProxyConfig trustedProxies;
+  final IpFilterConfig ipFilter;
+  final CorsConfig cors;
 
   @override
-  ConfigDefaults get defaultConfig => ConfigDefaults(
-    values: {
-      'security': {
-        'max_request_size': 10 * 1024 * 1024,
-        'trusted_proxies': {
-          'enabled': false,
-          'proxies': ['0.0.0.0/0', '::/0'],
-          'headers': ['X-Forwarded-For', 'X-Real-IP'],
-          'forward_client_ip': true,
-          'platform_header': null,
-        },
-        'ip_filter': {
-          'enabled': false,
-          'default_action': 'allow',
-          'allow': <String>[],
-          'deny': <String>[],
-          'respect_trusted_proxies': true,
-        },
-      },
-      'cors': {
-        'enabled': false,
-        'allowed_origins': ['*'],
-        'allowed_methods': ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
-        'allowed_headers': <String>[],
-        'allow_credentials': false,
-        'max_age': null,
-        'exposed_headers': <String>[],
-      },
-    },
-    docs: const [
-      ConfigDocEntry(
-        path: 'security.max_request_size',
-        type: 'int',
-        description: 'Maximum request body size in bytes.',
-        defaultValue: 10 * 1024 * 1024,
-      ),
-      ConfigDocEntry(
-        path: 'security.trusted_proxies',
-        type: 'map',
-        description: 'Trusted proxy and forwarded-client-IP settings.',
-      ),
-      ConfigDocEntry(
-        path: 'security.ip_filter',
-        type: 'map',
-        description: 'Optional IP allow and deny rules.',
-      ),
-      ConfigDocEntry(
-        path: 'cors',
-        type: 'map',
-        description: 'Cross-origin request and preflight policy.',
-      ),
-    ],
-  );
+  void validate(ConfigValidationContext context) {
+    context.require(
+      maxRequestSize > 0,
+      'maxRequestSize',
+      'maximum request size must be greater than zero',
+    );
+    _validateNetworkList(
+      context,
+      'trustedProxies.proxies',
+      trustedProxies.proxies,
+    );
+    _validateHeaderList(
+      context,
+      'trustedProxies.headers',
+      trustedProxies.headers,
+    );
+    _validateNetworkList(context, 'ipFilter.allow', ipFilter.allow);
+    _validateNetworkList(context, 'ipFilter.deny', ipFilter.deny);
+
+    context.require(
+      cors.allowedOrigins.every((origin) => origin.trim().isNotEmpty),
+      'cors.allowedOrigins',
+      'allowed origins cannot contain empty values',
+    );
+    context.require(
+      cors.allowedMethods.every((method) => method.trim().isNotEmpty),
+      'cors.allowedMethods',
+      'allowed methods cannot contain empty values',
+    );
+    context.require(
+      cors.maxAge == null || cors.maxAge! >= 0,
+      'cors.maxAge',
+      'maximum age cannot be negative',
+    );
+  }
+
+  void _validateNetworkList(
+    ConfigValidationContext context,
+    String path,
+    Iterable<String> values,
+  ) {
+    for (var index = 0; index < values.length; index++) {
+      final value = values.elementAt(index);
+      context.require(
+        NetworkMatcher.maybeParse(value) != null,
+        '$path[$index]',
+        'must be a valid IP address or CIDR range',
+      );
+    }
+  }
+
+  void _validateHeaderList(
+    ConfigValidationContext context,
+    String path,
+    Iterable<String> values,
+  ) {
+    for (var index = 0; index < values.length; index++) {
+      context.require(
+        values.elementAt(index).trim().isNotEmpty,
+        '$path[$index]',
+        'header names cannot be empty',
+      );
+    }
+  }
+}
+
+/// Registers CORS, trusted-proxy resolution, and optional IP filtering.
+class RoutedSecurityProvider extends ServiceProvider
+    with ProvidesTypedConfiguration<RoutedSecurityConfig> {
+  RoutedSecurityProvider([RoutedSecurityConfig? configuration])
+    : configuration = configuration ?? RoutedSecurityConfig();
+
+  @override
+  final RoutedSecurityConfig configuration;
 
   @override
   void register(Container container) {
-    final config = container.get<Config>();
-    container.instance<TrustedProxyResolver>(_trustedProxyResolver(config));
-
-    final middlewareRegistry = container.get<MiddlewareRegistry>();
-    middlewareRegistry.register(
-      'routed.security.ip_filter',
-      (_) => _ipFilterMiddlewareFor(config),
+    container.instance<TrustedProxyResolver>(
+      _trustedProxyResolver(configuration.trustedProxies),
     );
   }
 
   @override
   Future<void> boot(Container container) async {
-    if (!container.has<Engine>() || !container.has<Config>()) return;
-    _apply(container.get<Engine>(), container.get<Config>());
-  }
-
-  @override
-  Future<void> onConfigReload(Container container, Config config) async {
     if (!container.has<Engine>()) return;
-    _apply(container.get<Engine>(), config);
+    _apply(container);
   }
 
-  void _apply(Engine engine, Config config) {
-    final trusted = _trustedProxySettings(config);
+  void _apply(Container container) {
+    final engine = container.get<Engine>();
+    final trusted = configuration.trustedProxies;
     final current = engine.config;
     final currentFeatures = current.features;
     final features = EngineFeatures(
@@ -105,9 +163,14 @@ class RoutedSecurityProvider extends ServiceProvider
       enableSecureRequestIds: currentFeatures.enableSecureRequestIds,
     );
 
+    final security = current.security.copyWith(
+      maxRequestSize: configuration.maxRequestSize,
+      cors: configuration.cors,
+    );
     engine.updateConfig(
       current.copyWith(
         features: features,
+        security: security,
         forwardedByClientIP: trusted.forwardClientIp,
         remoteIPHeaders: trusted.headers,
         trustedProxies: trusted.proxies,
@@ -115,43 +178,22 @@ class RoutedSecurityProvider extends ServiceProvider
       ),
     );
 
-    final filter = _ipFilterSettings(config);
-    final existingCors = _corsMiddleware;
-    if (existingCors != null) {
-      engine.middlewares.removeWhere(
-        (middleware) => identical(middleware, existingCors),
-      );
-      _corsMiddleware = null;
-    }
-    final cors = current.security.cors;
-    if (cors.enabled) {
-      final middleware = corsMiddleware(cors);
-      _corsMiddleware = middleware;
-      engine.middlewares.insert(0, middleware);
+    if (configuration.cors.enabled) {
+      engine.middlewares.insert(0, corsMiddleware(configuration.cors));
     }
 
-    final existing = _ipFilterMiddleware;
-    if (existing != null) {
-      engine.middlewares.removeWhere(
-        (middleware) => identical(middleware, existing),
-      );
-      _ipFilterMiddleware = null;
-    }
+    final filter = _ipFilterSettings(configuration.ipFilter);
 
     if (filter.enabled) {
-      final middleware = _ipFilterMiddlewareFor(config);
-      _ipFilterMiddleware = middleware;
-      engine.middlewares.insert(0, middleware);
-      engine.updateConfig(engine.config);
+      engine.middlewares.insert(0, _ipFilterMiddlewareFor(filter));
     }
 
     engine.container.instance<TrustedProxyResolver>(
-      _trustedProxyResolver(config),
+      _trustedProxyResolver(trusted),
     );
   }
 
-  Middleware _ipFilterMiddlewareFor(Config config) {
-    final filter = _ipFilterSettings(config);
+  Middleware _ipFilterMiddlewareFor(_IpFilterSettings filter) {
     return (ctx, next) {
       if (!filter.enabled) return next();
 
@@ -165,127 +207,25 @@ class RoutedSecurityProvider extends ServiceProvider
     };
   }
 
-  TrustedProxyResolver _trustedProxyResolver(Config config) {
-    final trusted = _trustedProxySettings(config);
-    return TrustedProxyResolver(
-      enabled: trusted.enabled,
-      forwardClientIp: trusted.forwardClientIp,
-      proxies: trusted.proxies,
-      headers: trusted.headers,
-      trustedPlatform: trusted.platformHeader,
-    );
-  }
-
-  _TrustedProxySettings _trustedProxySettings(Config config) {
-    return _TrustedProxySettings(
-      enabled: _bool(config, 'security.trusted_proxies.enabled', false),
-      forwardClientIp: _bool(
-        config,
-        'security.trusted_proxies.forward_client_ip',
-        true,
-      ),
-      proxies: _strings(config, 'security.trusted_proxies.proxies', const [
-        '0.0.0.0/0',
-        '::/0',
-      ]),
-      headers: _strings(config, 'security.trusted_proxies.headers', const [
-        'X-Forwarded-For',
-        'X-Real-IP',
-      ]),
-      platformHeader: _stringOrNull(
-        config,
-        'security.trusted_proxies.platform_header',
-      ),
-    );
-  }
-
-  _IpFilterSettings _ipFilterSettings(Config config) {
-    final allow = _strings(config, 'security.ip_filter.allow', const []);
-    final deny = _strings(config, 'security.ip_filter.deny', const []);
+  _IpFilterSettings _ipFilterSettings(IpFilterConfig config) {
     return _IpFilterSettings(
-      enabled: _bool(config, 'security.ip_filter.enabled', false),
-      defaultAction:
-          _string(
-                config,
-                'security.ip_filter.default_action',
-                'allow',
-              ).toLowerCase() ==
-              'deny'
-          ? IpFilterAction.deny
-          : IpFilterAction.allow,
-      allow: allow
-          .map(NetworkMatcher.maybeParse)
-          .whereType<NetworkMatcher>()
-          .toList(),
-      deny: deny
-          .map(NetworkMatcher.maybeParse)
-          .whereType<NetworkMatcher>()
-          .toList(),
-      respectTrustedProxies: _bool(
-        config,
-        'security.ip_filter.respect_trusted_proxies',
-        true,
-      ),
+      enabled: config.enabled,
+      defaultAction: config.defaultAction,
+      allow: config.allow.map(NetworkMatcher.parse).toList(growable: false),
+      deny: config.deny.map(NetworkMatcher.parse).toList(growable: false),
+      respectTrustedProxies: config.respectTrustedProxies,
     );
-  }
-
-  static bool _bool(Config config, String key, bool fallback) {
-    final value = config.get<Object?>(key);
-    if (value is bool) return value;
-    if (value is String) {
-      switch (value.trim().toLowerCase()) {
-        case '1':
-        case 'true':
-        case 'yes':
-        case 'on':
-          return true;
-        case '0':
-        case 'false':
-        case 'no':
-        case 'off':
-          return false;
-      }
-    }
-    return fallback;
-  }
-
-  static String _string(Config config, String key, String fallback) {
-    final value = config.get<Object?>(key);
-    return value is String && value.trim().isNotEmpty ? value : fallback;
-  }
-
-  static String? _stringOrNull(Config config, String key) {
-    final value = config.get<Object?>(key);
-    return value is String && value.trim().isNotEmpty ? value.trim() : null;
-  }
-
-  static List<String> _strings(
-    Config config,
-    String key,
-    List<String> fallback,
-  ) {
-    final value = config.get<Object?>(key);
-    if (value is Iterable) {
-      return value.map((item) => item.toString()).toList(growable: false);
-    }
-    return List<String>.from(fallback);
   }
 }
 
-class _TrustedProxySettings {
-  const _TrustedProxySettings({
-    required this.enabled,
-    required this.forwardClientIp,
-    required this.proxies,
-    required this.headers,
-    required this.platformHeader,
-  });
-
-  final bool enabled;
-  final bool forwardClientIp;
-  final List<String> proxies;
-  final List<String> headers;
-  final String? platformHeader;
+TrustedProxyResolver _trustedProxyResolver(TrustedProxyConfig trusted) {
+  return TrustedProxyResolver(
+    enabled: trusted.enabled,
+    forwardClientIp: trusted.forwardClientIp,
+    proxies: trusted.proxies,
+    headers: trusted.headers,
+    trustedPlatform: trusted.platformHeader,
+  );
 }
 
 class _IpFilterSettings {
@@ -305,13 +245,11 @@ class _IpFilterSettings {
 
   bool allows(String ip) {
     if (!enabled) return true;
-    final parsed = InternetAddress.tryParse(ip);
-    if (parsed == null) return defaultAction == IpFilterAction.allow;
     for (final matcher in deny) {
-      if (matcher.contains(parsed)) return false;
+      if (matcher.containsText(ip)) return false;
     }
     for (final matcher in allow) {
-      if (matcher.contains(parsed)) return true;
+      if (matcher.containsText(ip)) return true;
     }
     return defaultAction == IpFilterAction.allow;
   }

@@ -6,18 +6,10 @@ import 'src/config.dart';
 
 export 'src/config.dart';
 
-import 'package:routed_core/providers.dart' show ProviderRegistry;
 import 'package:routed_core/routed_core.dart';
 import 'package:server_sessions/server_sessions.dart';
 
 export 'package:server_sessions/server_sessions.dart';
-/// Registers session configuration in the engine container.
-EngineOpt withSessionConfig(SessionConfig config) {
-  return (Engine engine) {
-    engine.appConfig.set('session.config', config);
-    engine.container.instance<SessionConfig>(config);
-  };
-}
 
 const sessionKey = ContextKey<Session>('routed.session');
 
@@ -175,27 +167,20 @@ class _EngineSessionResponse implements SessionResponse {
   }
 }
 
-Middleware sessionMiddleware([dynamic store]) {
+Middleware sessionMiddleware([SessionStore? store]) {
   return (EngineContext ctx, Next next) async {
     SessionConfig? config;
-    dynamic effectiveStore = store;
+    SessionStore? effectiveStore = store;
     String cookieName = 'routed_session';
 
-    try {
-      final container = (ctx as dynamic).container as Container;
-      if (container.has<SessionConfig>()) {
-        config = container.get<SessionConfig>();
-        cookieName = config.cookieName;
-        effectiveStore ??= (config as dynamic).store;
-      }
-      if (effectiveStore == null && container.has<SessionStore>()) {
-        effectiveStore = await container.make<SessionStore>();
-      }
-    } catch (_) {}
-
-    // Ignore incompatible stores supplied through untyped configuration.
-    if (effectiveStore != null && effectiveStore is! SessionStore) {
-      effectiveStore = null;
+    final container = ctx.container;
+    if (container.has<SessionConfig>()) {
+      config = container.get<SessionConfig>();
+      cookieName = config.cookieName;
+      effectiveStore ??= config.store;
+    }
+    if (effectiveStore == null && container.has<SessionStore>()) {
+      effectiveStore = await container.make<SessionStore>();
     }
 
     if (effectiveStore == null) {
@@ -205,29 +190,10 @@ Middleware sessionMiddleware([dynamic store]) {
         httpOnly: true,
         sameSite: SameSite.lax,
       );
-      List<SecureCookie> codecs;
-      try {
-        if (config != null && (config.codecs as List).isNotEmpty) {
-          final List<dynamic> raw = config.codecs as List;
-          codecs = raw.map((e) {
-            final dynamic d = e as dynamic;
-            final dynamic k = d.key;
-            if (k != null) {
-              return SecureCookie(
-                key: k,
-                useEncryption: d.useEncryption == true,
-                useSigning: d.useSigning == true,
-              );
-            }
-            return SecureCookie(useEncryption: true, useSigning: true);
-          }).toList();
-          if (codecs.isEmpty) throw StateError('empty');
-        } else {
-          codecs = [SecureCookie(useEncryption: true, useSigning: true)];
-        }
-      } catch (_) {
-        codecs = [SecureCookie(useEncryption: true, useSigning: true)];
-      }
+      final configuredCodecs = config?.codecs ?? const <SecureCookie>[];
+      final codecs = configuredCodecs.isNotEmpty
+          ? configuredCodecs
+          : [SecureCookie(useEncryption: true, useSigning: true)];
       effectiveStore = CookieStore(codecs: codecs, defaultOptions: opts);
       cookieName = config?.cookieName ?? cookieName;
     }
@@ -235,17 +201,16 @@ Middleware sessionMiddleware([dynamic store]) {
     final req = _EngineSessionRequest(ctx);
     final res = _EngineSessionResponse(ctx);
 
-    // effectiveStore is now non-null after fallback
-    final dynamic resolvedStore = effectiveStore!;
+    // effectiveStore is now non-null after fallback.
+    final resolvedStore = effectiveStore;
     Session session;
     try {
-      session =
-          await (resolvedStore as dynamic).read(req, cookieName) as Session;
+      session = await resolvedStore.read(req, cookieName);
     } catch (_) {
       session = Session(
         name: cookieName,
         options: resolvedStore is CookieStore
-            ? (resolvedStore as dynamic).defaultOptions as SessionOptions
+            ? resolvedStore.defaultOptions
             : SessionOptions(),
       );
     }
@@ -253,26 +218,33 @@ Middleware sessionMiddleware([dynamic store]) {
     ctx.set(sessionKey.name, session);
     final result = await next();
     try {
-      await (resolvedStore as dynamic).write(req, res, session);
+      await resolvedStore.write(req, res, session);
     } catch (_) {}
     return result;
   };
 }
 
-class RoutedSessionsProvider extends ServiceProvider {
+class RoutedSessionsProvider extends ServiceProvider
+    with ProvidesTypedConfiguration<SessionConfig> {
   /// Defaults to an in-memory session store with signed cookies.
-  RoutedSessionsProvider([SessionStore? store])
-    : store =
-          store ??
-          MemorySessionStore(
-            codecs: [SecureCookie(useEncryption: true, useSigning: true)],
+  RoutedSessionsProvider([SessionConfig? configuration])
+    : configuration =
+          configuration ??
+          SessionConfig(
+            store: MemorySessionStore(
+              codecs: [SecureCookie(useEncryption: true, useSigning: true)],
+              defaultOptions: SessionOptions(path: '/', httpOnly: true),
+            ),
             defaultOptions: SessionOptions(path: '/', httpOnly: true),
           );
 
-  final SessionStore store;
+  @override
+  final SessionConfig configuration;
 
   @override
   void register(Container container) {
+    final store = configuration.store;
+    container.instance<SessionConfig>(configuration);
     container.singleton<SessionStore>((_) async => store);
   }
 
@@ -280,7 +252,7 @@ class RoutedSessionsProvider extends ServiceProvider {
   Future<void> boot(Container container) async {}
 }
 
-/// Registers `routed.sessions` for `http.providers` resolution.
+/// Registers the session provider factory in the shared registry.
 void registerRoutedSessionsProviders() {
   ProviderRegistry.instance.register(
     'routed.sessions',

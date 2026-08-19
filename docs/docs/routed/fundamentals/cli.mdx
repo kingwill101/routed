@@ -1,12 +1,14 @@
 ---
 title: Routed CLI Reference
-description: Scaffold projects, run the dev server, inspect manifests, and manage providers with routed
+description: Scaffold projects, run the dev server, inspect routes, and deploy Routed applications.
 sidebar_position: 15
 ---
 
 # Routed CLI Reference
 
-The `routed_cli` package ships project scaffolding, a hot-reload dev server, route/spec inspection utilities, and manifest helpers. Install it as a development dependency or activate it globally:
+The `routed_cli` package ships project scaffolding, a hot-reload dev server,
+route/spec inspection utilities, and deployment helpers. Install it as a
+development dependency or activate it globally:
 
 ```bash
 dart pub add --dev routed_cli
@@ -23,7 +25,9 @@ Run commands with `dart run routed_cli <command> [...]`. Add `--verbose` to surf
 dart run routed_cli create --name my_app [--output <dir>] [--force]
 ```
 
-Scaffolds a Routed project, writing `bin/server.dart`, config manifests, README, `.env`, analysis options, and storage directories. Options:
+Scaffolds a Routed project with `bin/server.dart`, typed provider setup,
+README, analysis options, and storage directories. It does not generate an
+application configuration directory or `.env` file.
 
 - `--name/-n` – project & package name (required when scaffolding into the current directory).
 - `--output/-o` – destination directory (defaults to `.`).
@@ -96,6 +100,28 @@ dart run routed_cli deploy \
 Use the Node.js runtime when the application needs Node-specific behavior,
 including the WebSocket upgrade path. The Edge runtime is fetch-based and is
 intended for handlers that fit the edge runtime's API constraints.
+
+Cloudflare binding flags map directly to Wrangler configuration:
+
+```bash
+dart run routed_cli deploy --target cloudflare \
+  --d1 DB=app-db:YOUR_DATABASE_ID \
+  --durable-object COUNTER=Counter \
+  --container APP=AppContainer\|./Dockerfile\|8080\|3 \
+  --r2 FILES=app-files \
+  --queue EVENTS=app-events \
+  --service PROFILE_API=profile-api \
+  --workflow BILLING=billing-workflow:BillingWorkflow:billing-worker \
+  --secrets-store PAYMENTS_KEY=STORE_ID:PAYMENTS_API_KEY
+```
+
+The generated Worker exposes D1, Durable Objects, Container, R2, Queue,
+Worker service, Workflow, and Secrets Store bindings through
+`package:routed_node/cloudflare.dart`. `--container` also emits the Container
+Durable Object configuration and a forwarding class for its default port.
+Workflow classes hosted in another Worker should include the optional
+`SCRIPT_NAME`; locally authored Workflow entrypoints still need their own
+Cloudflare Workflow class export.
 
 ### Dry runs and credentials
 
@@ -197,40 +223,14 @@ Generates a starter file for a custom storage, cache, or session driver. The `ty
 | `--output` | `-o` | `lib/drivers/<type>` | Directory where the driver file is written |
 | `--force` | `-f` | `false` | Overwrite the target file if it exists |
 
-## Provider & configuration helpers
+## `provider:list`
 
-Additional commands help manage provider configuration:
-
-- `config:init` – scaffold `config/` and `.env` files for a new project. Pass `--force/-f` to overwrite existing files.
-- `config:publish` – generate configuration stubs into `config/`. Pass `--force/-f` to overwrite, `--only` for a subset.
-- `config:cache` – merge configuration sources and write a generated cache file. Options: `--output/-o`, `--json-output`, `--pretty`, `--docs`, `--docs-output`.
-- `config:clear` – delete generated configuration cache artifacts. Options: `--output/-o`, `--json-output`.
-- `config:schema` – generate a master JSON Schema for configuration validation. Options: `--output/-o` (default: `schemas/config.schema.json`).
-- `provider:list` – list registered providers. Pass a provider ID to filter; add `--config/-c` to show configuration details.
-- `provider:enable` – enable a disabled provider by ID.
-- `provider:disable` – disable a provider by ID.
-
-See [Configuration](/docs/routed/fundamentals/configuration) for details and usage patterns.
-
-`provider:list` accepts an optional provider id to filter output:
+Lists provider registrations available to the current package. Provider
+configuration is supplied in Dart, so this command is an inventory tool rather
+than a manifest editor:
 
 ```bash
-dart run routed_cli provider:list routed.logging --config
-```
-
-### Publishing config templates
-
-Generate the default config templates into `config/`:
-
-```bash
-dart run routed_cli config:publish
-```
-
-Publish only a subset by passing a comma-separated list (or `--only`):
-
-```bash
-dart run routed_cli config:publish app,cache
-dart run routed_cli config:publish --only app,cache
+dart run routed_cli provider:list
 ```
 
 ## Project-defined commands

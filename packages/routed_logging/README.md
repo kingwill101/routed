@@ -38,6 +38,9 @@ Future<void> main() async {
 }
 ```
 
-Provider configuration belongs under the normal logging configuration keys.
-Use `registerRoutedLoggingProviders()` when resolving `routed.logging` from a
-configuration manifest without importing `package:routed/routed.dart`.
+Provider configuration is supplied with the typed `LoggingConfig` constructor,
+for example `LoggingServiceProvider(LoggingConfig(errorsOnly: true))`.
+There is no YAML or dotted-key configuration path. If you use the package's
+provider catalogue directly, call `registerRoutedLoggingProviders()` before
+engine creation; otherwise construct `LoggingServiceProvider` in the provider
+list as shown above.

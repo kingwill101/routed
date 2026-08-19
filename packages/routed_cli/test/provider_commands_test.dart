@@ -28,18 +28,13 @@ void main() {
       memoryFs.currentDirectory = projectRoot;
 
       writeFile('pubspec.yaml', 'name: demo\n');
-      writeFile('config/http.yaml', '''providers:
-  - routed.logging
-  - routed.cache
-''');
-
       logger = _RecordingLogger();
       runner = RoutedCommandRunner(logger: logger)
         ..register([ProviderListCommand(logger: logger, fileSystem: memoryFs)]);
     });
 
     test('provider:list filters by id', () async {
-      await runner.run(['provider:list', 'routed.logging', '--config']);
+      await runner.run(['provider:list', 'routed.logging']);
 
       expect(_hasProviderLine(logger, 'routed.logging'), isTrue);
       expect(_hasProviderLine(logger, 'routed.cache'), isFalse);

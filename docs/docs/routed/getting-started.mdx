@@ -17,7 +17,7 @@ dart pub add routed
 dart pub add --dev routed_cli routed_testing server_testing server_testing_shelf
 ```
 
-> `routed_cli` ships the scaffolding, dev server, manifest inspection, and provider utilities. Keep the framework package (`routed`) in `dependencies`; it is imported by the application. Run the CLI with `dart run routed_cli ...`.
+> `routed_cli` ships scaffolding, the dev server, route inspection, and project commands. Keep the framework package (`routed`) in `dependencies`; it is imported by the application. Run the CLI with `dart run routed_cli ...`.
 
 ## 2. Scaffold (optional) and create an engine
 
@@ -28,9 +28,14 @@ dart run routed_cli create --name hello_world
 cd hello_world
 ```
 
-The generator writes the standard `bin/server.dart`, configuration files under `config/`, and project metadata. It also runs `dart pub get` automatically—if dependency resolution fails, the CLI prints the exit code along with the command to rerun manually. Choose a template with `--template` (`basic`, `api`, `web`, or `fullstack`), supply `--output <directory>` to scaffold into an existing folder, and pass `--force` to overwrite conflicting files. Every template includes `lib/commands.dart`; populate its `buildProjectCommands()` hook and the Routed CLI will surface your custom commands in `dart run routed_cli --help`.
-
-> Tip: Need to regenerate config stubs later? Use `dart run routed_cli config:publish` to recreate the defaults, or `dart run routed_cli config:publish app,cache` to publish a smaller subset.
+The generator writes the standard `bin/server.dart`, typed provider setup, and
+project metadata. It also runs `dart pub get` automatically—if dependency
+resolution fails, the CLI prints the exit code along with the command to rerun
+manually. Choose a template with `--template` (`basic`, `api`, `web`, or
+`fullstack`), supply `--output <directory>` to scaffold into an existing
+folder, and pass `--force` to overwrite conflicting files. Every template
+includes `lib/commands.dart`; populate its `buildProjectCommands()` hook and
+the Routed CLI will surface your custom commands in `dart run routed_cli --help`.
 
 Prefer to wire things manually? Create `bin/server.dart` and copy the snippet below.
 
@@ -85,10 +90,11 @@ final engine = await Engine.create(providers: []);
 registerRoutedProviders();
 final engine = await Engine.create(
   providers: [
-    CoreServiceProvider(configItems: {
-      'app.name': 'My App',
-      'app.env': 'production',
-    }),
+    CoreServiceProvider(EngineConfig(
+      security: EngineSecurityFeatures(
+        maxRequestSize: 10 * 1024 * 1024,
+      ),
+    )),
     ...Engine.builtins,
   ],
 );
@@ -114,7 +120,8 @@ dart run bin/server.dart
 
 Visit [http://127.0.0.1:8080/](http://127.0.0.1:8080/) to see the greeting, or send requests to `/api/users`.
 
-> Tip: Routed ships feature toggles in each provider config file and a CLI (`dart run routed_cli provider:list --config`) that shows provider defaults and configuration validation errors. Use it any time you adjust caching, sessions, or security settings.
+> Tip: Provider configuration is typed and validated during startup. Use the
+> provider's constructor and read the resolved value through `engine.configStore`.
 
 ### Inspect routes and generate specs
 
@@ -171,12 +178,8 @@ configure the view directory:
 registerRoutedProviders();
 final engine = await Engine.create(
   providers: [
-    CoreServiceProvider(configItems: {
-      'view': {
-        'engine': 'liquid',
-        'directory': 'views',
-      },
-    }),
+    CoreServiceProvider(),
+    ViewServiceProvider(RoutedViewConfig(directory: 'views', cache: true)),
     ...Engine.builtins,
   ],
 );
@@ -187,15 +190,6 @@ engine.get('/welcome', (ctx) async {
     data: {'user': 'Taylor'},
   );
 });
-```
-
-Or configure via `config/http.yaml`:
-
-```yaml
-view:
-  engine: liquid
-  directory: views
-  cache: true
 ```
 
 See [Liquid templates](/docs/routed/views/templates) for more.

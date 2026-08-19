@@ -156,27 +156,12 @@ The engine also publishes system-level events:
 
 These events are useful for diagnostics and health monitoring—log them (with sampling), increment counters, or feed them into observability pipelines.
 
-## Configuration events
+## Typed configuration lifecycle
 
-When the configuration loader finishes, Routed publishes:
-
-- `ConfigLoadedEvent` – the initial configuration snapshot after boot.
-- `ConfigReloadedEvent` – any subsequent reload (triggered by watch mode or an explicit `engine.replaceConfig(...)`).
-
-Both events expose the resolved `Config` and optional metadata. Use them to rebuild caches or notify downstream services when configuration changes:
-
-```dart
-final events = await engine.make<EventManager>();
-
-events.on<ConfigLoadedEvent>().listen((event) {
-  logger.info("Config ready for env=${event.config.get('app.env')}");
-});
-
-events.on<ConfigReloadedEvent>().listen((event) {
-  featureFlags.refresh(event.config);
-  metrics.increment('config_reload_count');
-});
-```
+Typed provider configuration is assembled before `Engine.initialize()` and is
+immutable for the lifetime of the engine. If deployment settings change,
+construct a new engine with a new `RuntimeContext` and provider list rather
+than relying on a configuration reload event.
 
 ## Custom events
 

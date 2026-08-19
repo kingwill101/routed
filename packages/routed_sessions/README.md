@@ -26,7 +26,7 @@ void main() async {
   final engine = await Engine.create(
     providers: [
       ...Engine.defaultProviders,
-      RoutedSessionsProvider(store),
+      RoutedSessionsProvider(SessionConfig(store: store)),
     ],
   );
   engine.use(sessionMiddleware(store));

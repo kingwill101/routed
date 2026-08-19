@@ -15,4 +15,3 @@ export 'src/providers/spotify.dart';
 export 'src/providers/telegram.dart';
 export 'src/providers/twitch.dart';
 export 'src/providers/twitter.dart';
-export 'src/registry.dart';

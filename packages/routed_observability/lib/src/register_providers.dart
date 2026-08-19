@@ -1,8 +1,8 @@
-import 'package:routed_core/providers.dart' show ProviderRegistry;
+import 'package:routed_core/routed_core.dart' show ProviderRegistry;
 
 import 'providers/observability.dart';
 
-/// Registers observability providers for `http.providers` resolution.
+/// Registers observability provider factories in the shared registry.
 void registerRoutedObservabilityProviders() {
   ProviderRegistry.instance.register(
     'routed.observability',

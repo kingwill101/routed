@@ -1,5 +1,3 @@
-import 'dart:io';
-
 import 'package:routed_core/routed_core.dart' show NetworkMatcher;
 
 /// Defines the default behaviour when no allow/deny rule matches.
@@ -99,17 +97,13 @@ class IpFilter {
     if (!enabled) {
       return true;
     }
-    final parsed = InternetAddress.tryParse(ip);
-    if (parsed == null) {
-      return defaultAction == IpFilterAction.allow;
-    }
     for (final matcher in deny) {
-      if (matcher.contains(parsed)) {
+      if (matcher.containsText(ip)) {
         return false;
       }
     }
     for (final matcher in allow) {
-      if (matcher.contains(parsed)) {
+      if (matcher.containsText(ip)) {
         return true;
       }
     }

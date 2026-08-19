@@ -3,6 +3,7 @@ import 'package:file/memory.dart';
 import 'package:routed_core/routed_core.dart';
 import 'package:routed_testing/routed_testing.dart';
 import 'package:server_testing/server_testing.dart';
+import 'package:routed_views/routed_views.dart';
 import '../test_engine.dart';
 
 void main() {
@@ -22,14 +23,14 @@ void main() {
       final engine = testEngine(
         config: EngineConfig(fileSystem: fs),
         fileSystem: fs,
-        configItems: {
-          'app': {'locale': 'en', 'fallback_locale': 'en'},
-          'translation': {
-            'paths': [tempDir.path],
-            'resolvers': ['query', 'header'],
-            'query': {'parameter': 'lang'},
-          },
-        },
+        localizationConfig: LocalizationConfig(
+          paths: [tempDir.path],
+          resolvers: [
+            QueryLocaleResolver(parameter: 'lang'),
+            HeaderLocaleResolver(),
+          ],
+          queryParameter: 'lang',
+        ),
       );
 
       engine.get('/greet', (ctx) async {

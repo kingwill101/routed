@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:io';
 
 import 'package:dartastic_opentelemetry/dartastic_opentelemetry.dart' as dotel;
 import 'package:routed_core/routed_core.dart';
@@ -11,13 +12,14 @@ void main() {
   group('ObservabilityServiceProvider', () {
     test('tracing middleware attaches span context', () async {
       final engine = testEngine(
-        configItems: {
-          'observability': {
-            'tracing': {'enabled': true, 'exporter': 'console'},
-            'metrics': {'enabled': false},
-            'health': {'enabled': false},
-          },
-        },
+        observabilityConfig: ObservabilityConfig(
+          tracing: ObservabilityTracingConfig(
+            enabled: true,
+            exporter: 'console',
+          ),
+          metrics: ObservabilityMetricsConfig(enabled: false),
+          health: ObservabilityHealthConfig(enabled: false),
+        ),
       );
       addTearDown(() async => await engine.close());
 
@@ -42,13 +44,11 @@ void main() {
 
     test('metrics endpoint exposes request counters', () async {
       final engine = testEngine(
-        configItems: {
-          'observability': {
-            'tracing': {'enabled': false},
-            'metrics': {'enabled': true, 'path': '/metrics'},
-            'health': {'enabled': false},
-          },
-        },
+        observabilityConfig: ObservabilityConfig(
+          tracing: ObservabilityTracingConfig(enabled: false),
+          metrics: ObservabilityMetricsConfig(enabled: true),
+          health: ObservabilityHealthConfig(enabled: false),
+        ),
       );
       addTearDown(() async => await engine.close());
 
@@ -69,13 +69,11 @@ void main() {
 
     test('health endpoint supports custom readiness checks', () async {
       final engine = testEngine(
-        configItems: {
-          'observability': {
-            'tracing': {'enabled': false},
-            'metrics': {'enabled': false},
-            'health': {'enabled': true},
-          },
-        },
+        observabilityConfig: ObservabilityConfig(
+          tracing: ObservabilityTracingConfig(enabled: false),
+          metrics: ObservabilityMetricsConfig(enabled: false),
+          health: ObservabilityHealthConfig(enabled: true),
+        ),
       );
       addTearDown(() async => await engine.close());
 
@@ -104,13 +102,21 @@ void main() {
 
     test('readiness reports unhealthy during graceful shutdown', () async {
       final engine = testEngine(
-        configItems: {
-          'observability': {
-            'tracing': {'enabled': false},
-            'metrics': {'enabled': false},
-            'health': {'enabled': true},
-          },
-        },
+        config: EngineConfig(
+          shutdown: const ShutdownConfig(
+            enabled: true,
+            gracePeriod: Duration(seconds: 20),
+            forceAfter: Duration(minutes: 1),
+            exitCode: 0,
+            notifyReadiness: true,
+            signals: {ProcessSignal.sigint, ProcessSignal.sigterm},
+          ),
+        ),
+        observabilityConfig: ObservabilityConfig(
+          tracing: ObservabilityTracingConfig(enabled: false),
+          metrics: ObservabilityMetricsConfig(enabled: false),
+          health: ObservabilityHealthConfig(enabled: true),
+        ),
       );
       addTearDown(() async => await engine.close());
 
@@ -136,6 +142,20 @@ void main() {
       expect(draining.ok, isFalse);
 
       await shutdownFuture;
+    });
+
+    test('rejects invalid observability configuration before boot', () {
+      final engine = testEngine(
+        observabilityConfig: ObservabilityConfig(
+          tracing: ObservabilityTracingConfig(exporter: 'unknown'),
+        ),
+      );
+      addTearDown(engine.close);
+
+      return expectLater(
+        engine.initialize(),
+        throwsA(isA<ConfigValidationException>()),
+      );
     });
   });
 }

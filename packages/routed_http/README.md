@@ -39,15 +39,23 @@ extensions such as `ctx.bind(...)`, `ctx.bindJSON(...)`, and
 helpers; SSE encoding/streaming; and an opt-in gzip provider for buffered
 responses.
 
-To use compression directly from this package, register the HTTP providers
-before creating the engine:
+To use compression directly from this package, pass an immutable typed
+configuration to the provider:
 
 ```dart
-registerRoutedHttpProviders();
-final engine = await Engine.create(configItems: {
-  'compression.enabled': true,
-});
+final engine = await Engine.create(
+  providers: [
+    ...Engine.defaultProviders,
+    RoutedCompressionProvider(
+      CompressionConfig(enabled: true, minLength: 1),
+    ),
+  ],
+);
 ```
+
+Provider configuration is assembled in Dart before startup. There is no YAML
+or dotted-key configuration path for compression, and changing a provider's
+configuration requires creating a new engine.
 
 Use `routed_http` directly when you need these utilities without importing the
 full `routed` facade. The facade re-exports the package for batteries-included

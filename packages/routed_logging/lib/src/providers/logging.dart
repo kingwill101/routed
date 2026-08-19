@@ -1,31 +1,42 @@
 import 'dart:async';
-import 'dart:io';
 
 import 'package:contextual/contextual.dart' as contextual;
 import 'package:routed_core/src/container/container.dart';
 import 'package:routed_core/src/context/context.dart';
 import 'package:routed_core/routed_core.dart'
-    show Config, Engine, EventManager, RoutingErrorEvent;
+    show
+        ConsoleLoggingChannelConfig,
+        CustomLoggingChannelConfig,
+        DailyFileLoggingChannelConfig,
+        Engine,
+        EventManager,
+        LoggingChannelConfig,
+        LoggingConfig,
+        NullLoggingChannelConfig,
+        RoutingErrorEvent,
+        SamplingLoggingChannelConfig,
+        SingleFileLoggingChannelConfig,
+        StackLoggingChannelConfig,
+        StderrLoggingChannelConfig,
+        StdoutLoggingChannelConfig,
+        WebhookLoggingChannelConfig;
 import 'package:routed_core/src/engine/middleware_registry.dart';
-import 'package:routed_core/src/config/specs/logging.dart';
-import 'package:routed_core/src/config/specs/logging_drivers.dart';
 import 'package:routed_logging/src/logging/channel_drivers.dart';
 import 'package:routed_logging/src/logging/context.dart';
 import 'package:routed_logging/src/logging/driver_registry.dart';
 import 'package:routed_logging/src/logging/logger.dart';
 import 'package:routed_core/src/provider/provider.dart';
+import 'package:routed_core/src/provider/typed_provider.dart';
 import 'package:routed_core/src/router/types.dart';
 
 class LoggingServiceProvider extends ServiceProvider
-    with ProvidesDefaultConfig {
-  static const LoggingConfigSpec spec = LoggingConfigSpec();
-  static const LoggingSingleDriverSpec _singleSpec = LoggingSingleDriverSpec();
-  static const LoggingDailyDriverSpec _dailySpec = LoggingDailyDriverSpec();
-  static const LoggingStackDriverSpec _stackSpec = LoggingStackDriverSpec();
-  static const LoggingWebhookDriverSpec _webhookSpec =
-      LoggingWebhookDriverSpec();
-  static const LoggingSamplingDriverSpec _samplingSpec =
-      LoggingSamplingDriverSpec();
+    with ProvidesTypedConfiguration<LoggingConfig> {
+  LoggingServiceProvider([LoggingConfig? configuration])
+    : configuration = configuration ?? LoggingConfig();
+
+  @override
+  final LoggingConfig configuration;
+
   bool _enabled = true;
   bool _logSuccess = true;
   contextual.Level _level = contextual.Level.info;
@@ -39,58 +50,23 @@ class LoggingServiceProvider extends ServiceProvider
   static const _startedAtKey = 'routed.logging.started_at';
 
   @override
-  ConfigDefaults get defaultConfig {
-    final values = spec.defaultsWithRoot();
-    values['http'] = {
-      'middleware_sources': {
-        'routed.logging': {
-          'global': ['routed.logging.http'],
-        },
-      },
-    };
-    return ConfigDefaults(
-      docs: [
-        const ConfigDocEntry(
-          path: 'http.middleware_sources',
-          type: 'map',
-          description: 'Logging middleware references injected globally.',
-          defaultValue: <String, Object?>{
-            'routed.logging': <String, Object?>{
-              'global': <String>['routed.logging.http'],
-            },
-          },
-        ),
-        ...spec.docs(),
-      ],
-      values: values,
-      schemas: spec.schemaWithRoot(),
-    );
-  }
-
-  @override
   void register(Container container) {
     _ensureDriverRegistry(container);
-    final registry = container.get<MiddlewareRegistry>();
-    registry.register('routed.logging.http', (_) => _loggingMiddleware);
-
-    if (container.has<Config>()) {
-      _applyConfig(container.get<Config>(), container);
+    if (container.has<MiddlewareRegistry>()) {
+      final registry = container.get<MiddlewareRegistry>();
+      registry.register('routed.logging.http', (_) => _loggingMiddleware);
     }
   }
 
   @override
   Future<void> boot(Container container) async {
-    if (!container.has<Config>()) {
+    if (!container.has<Engine>()) {
       return;
     }
 
-    _applyConfig(container.get<Config>(), container);
+    _applyConfig(configuration, container);
+    container.get<Engine>().middlewares.insert(0, _loggingMiddleware);
     _subscribeToRoutingErrors(container);
-  }
-
-  @override
-  Future<void> onConfigReload(Container container, Config config) async {
-    _applyConfig(config, container);
   }
 
   @override
@@ -221,100 +197,9 @@ class LoggingServiceProvider extends ServiceProvider
     if (!container.has<LogDriverRegistry>()) {
       container.instance<LogDriverRegistry>(LogDriverRegistry());
     }
-    final registry = container.get<LogDriverRegistry>();
-    _registerDefaultDrivers(registry);
   }
 
-  void _registerDefaultDrivers(LogDriverRegistry registry) {
-    registry.registerIfAbsent(
-      'console',
-      (ctx) => contextual.ConsoleLogDriver(),
-    );
-    registry.registerIfAbsent('stdout', (ctx) => contextual.ConsoleLogDriver());
-    registry.registerIfAbsent('stderr', (ctx) => StderrLogDriver());
-    registry.registerIfAbsent('null', (ctx) => NullLogDriver());
-    registry.registerIfAbsent('single', (ctx) {
-      final resolved = _singleSpec.fromMap(
-        loggingDriverOptions(ctx.options),
-        context: LoggingDriverSpecContext(
-          name: ctx.name,
-          pathBase: ctx.configPath,
-          config: ctx.config,
-        ),
-      );
-      return SingleFileLogDriver(resolved.path);
-    });
-    registry.registerIfAbsent('daily', (ctx) {
-      final resolved = _dailySpec.fromMap(
-        loggingDriverOptions(ctx.options),
-        context: LoggingDriverSpecContext(
-          name: ctx.name,
-          pathBase: ctx.configPath,
-          config: ctx.config,
-        ),
-      );
-      final options = contextual.DailyFileOptions(
-        path: resolved.path,
-        retentionDays: resolved.retentionDays,
-        flushInterval: resolved.flushInterval,
-      );
-      // contextual 2.2.0+ defaults file drivers to PlainTextLogFormatter
-      return contextual.DailyFileLogDriver.fromOptions(
-        options,
-        useIsolate: resolved.useIsolate,
-      );
-    });
-    registry.registerIfAbsent('stack', (ctx) {
-      final resolved = _stackSpec.fromMap(
-        loggingDriverOptions(ctx.options),
-        context: LoggingDriverSpecContext(
-          name: ctx.name,
-          pathBase: ctx.configPath,
-          config: ctx.config,
-        ),
-      );
-      final drivers = resolved.channels.map(ctx.resolveChannel).toList();
-      return contextual.StackLogDriver(
-        drivers,
-        ignoreExceptions: resolved.ignoreExceptions,
-      );
-    });
-    registry.registerIfAbsent('webhook', (ctx) {
-      final resolved = _webhookSpec.fromMap(
-        loggingDriverOptions(ctx.options),
-        context: LoggingDriverSpecContext(
-          name: ctx.name,
-          pathBase: ctx.configPath,
-          config: ctx.config,
-        ),
-      );
-      final options = contextual.WebhookOptions(
-        url: resolved.url,
-        headers: resolved.headers,
-        timeout: resolved.timeout,
-        keepAlive: resolved.keepAlive,
-      );
-      return contextual.WebhookLogDriver.fromOptions(options);
-    });
-    registry.registerIfAbsent('sampling', (ctx) {
-      final resolved = _samplingSpec.fromMap(
-        loggingDriverOptions(ctx.options),
-        context: LoggingDriverSpecContext(
-          name: ctx.name,
-          pathBase: ctx.configPath,
-          config: ctx.config,
-        ),
-      );
-      final wrappedDriver = ctx.resolveChannel(resolved.wrapped);
-      return contextual.SamplingLogDriver.fromOptions(
-        wrappedDriver,
-        resolved.rates,
-      );
-    });
-  }
-
-  void _applyConfig(Config config, Container container) {
-    final resolved = spec.resolve(config);
+  void _applyConfig(LoggingConfig resolved, Container container) {
     _enabled = resolved.enabled;
     _logSuccess = resolved.logSuccess;
     _level = resolved.level;
@@ -322,28 +207,8 @@ class LoggingServiceProvider extends ServiceProvider
     _headerNames = resolved.requestHeaders;
     _includeStackTraces = resolved.includeStackTraces;
     includeStackTraces = resolved.includeStackTraces;
-    _ensureLoggingMiddleware(config, container);
     RoutedLogger.setGlobalFormat(resolved.format.formatter);
-    _configureLoggerFactory(config, container, resolved);
-  }
-
-  void _ensureLoggingMiddleware(Config config, Container container) {
-    final existing =
-        config
-            .get<List<Object?>>('http.middleware.global')
-            ?.whereType<String>()
-            .toList() ??
-        <String>[];
-    if (!existing.contains('routed.logging.http')) {
-      config.set('http.middleware.global', [
-        ...existing,
-        'routed.logging.http',
-      ]);
-      if (container.has<Engine>()) {
-        final engine = container.get<Engine>();
-        engine.updateConfig(engine.config);
-      }
-    }
+    _configureLoggerFactory(container, resolved);
   }
 
   String _headerKey(String name) {
@@ -357,99 +222,31 @@ class LoggingServiceProvider extends ServiceProvider
   }
 }
 
-void _configureLoggerFactory(
-  Config config,
-  Container container,
-  LoggingConfig settings,
-) {
-  final resolved = _resolveChannelSettings(settings);
+void _configureLoggerFactory(Container container, LoggingConfig settings) {
   final registry = container.get<LogDriverRegistry>();
   final builder = _LoggerFactoryBuilder(
-    defaultChannel: resolved.defaultChannel,
-    channels: resolved.channels,
+    defaultChannel: settings.defaultChannel ?? 'stdout',
+    channels: settings.channels,
     registry: registry,
-    config: config,
+    config: settings,
     container: container,
   );
   RoutedLogger.configureSystemFactory(builder.createLogger);
 }
 
-_ChannelSettings _resolveChannelSettings(LoggingConfig config) {
-  final defaultChannel = _coerceChannelName(config.defaultChannel);
-  final envChannel = _coerceChannelName(Platform.environment['LOG_CHANNEL']);
-
-  final channels = <String, _ChannelConfig>{};
-  config.channels.forEach((name, channel) {
-    final contextPath = 'logging.channels.$name';
-    channels[name] = _ChannelConfig(
-      name: name,
-      driver: channel.driver,
-      options: channel.toMap(),
-      contextPath: contextPath,
-    );
-  });
-
-  final resolvedDefault =
-      defaultChannel ??
-      envChannel ??
-      (channels.containsKey('stack')
-          ? 'stack'
-          : channels.keys.isNotEmpty
-          ? channels.keys.first
-          : 'stdout');
-
-  return _ChannelSettings(defaultChannel: resolvedDefault, channels: channels);
-}
-
-String? _coerceChannelName(String? value) {
-  if (value == null) return null;
-  final trimmed = value.trim();
-  if (trimmed.isEmpty) {
-    return null;
-  }
-  if (trimmed.contains('{{')) {
-    return null;
-  }
-  return trimmed;
-}
-
-class _ChannelSettings {
-  const _ChannelSettings({
-    required this.defaultChannel,
-    required this.channels,
-  });
-
-  final String defaultChannel;
-  final Map<String, _ChannelConfig> channels;
-}
-
-class _ChannelConfig {
-  const _ChannelConfig({
-    required this.name,
-    required this.driver,
-    required this.options,
-    required this.contextPath,
-  });
-
-  final String name;
-  final String driver;
-  final Map<String, Object?> options;
-  final String contextPath;
-}
-
 class _LoggerFactoryBuilder {
   _LoggerFactoryBuilder({
     required this.defaultChannel,
-    required Map<String, _ChannelConfig> channels,
+    required Map<String, LoggingChannelConfig> channels,
     required this.registry,
     required this.config,
     required this.container,
   }) : _channels = channels;
 
   final String defaultChannel;
-  final Map<String, _ChannelConfig> _channels;
+  final Map<String, LoggingChannelConfig> _channels;
   final LogDriverRegistry registry;
-  final Config config;
+  final LoggingConfig config;
   final Container container;
   final Map<String, contextual.LogDriver> _driverCache = {};
   final Set<String> _resolving = {};
@@ -497,30 +294,79 @@ class _LoggerFactoryBuilder {
   }
 
   contextual.LogDriver _buildDriver(String name) {
-    final spec = _channels[name];
-    if (spec == null) {
+    final channel = _channels[name];
+    if (channel == null) {
       throw ProviderConfigException(
         'Unknown logging channel "$name". Define it under logging.channels.',
       );
     }
 
-    final builder = registry.builderFor(spec.driver);
-    if (builder == null) {
-      throw ProviderConfigException(
-        'Unknown logging driver "${spec.driver}" for channel "$name". '
-        'Register the driver using LogDriverRegistry.',
-      );
+    switch (channel) {
+      case ConsoleLoggingChannelConfig():
+      case StdoutLoggingChannelConfig():
+        return contextual.ConsoleLogDriver();
+      case StderrLoggingChannelConfig():
+        return StderrLogDriver();
+      case NullLoggingChannelConfig():
+        return NullLogDriver();
+      case SingleFileLoggingChannelConfig(:final path):
+        return SingleFileLogDriver(path);
+      case DailyFileLoggingChannelConfig(
+        :final path,
+        :final retentionDays,
+        :final flushInterval,
+        :final useIsolate,
+      ):
+        return contextual.DailyFileLogDriver.fromOptions(
+          contextual.DailyFileOptions(
+            path: path,
+            retentionDays: retentionDays,
+            flushInterval: flushInterval,
+          ),
+          useIsolate: useIsolate,
+        );
+      case StackLoggingChannelConfig(:final channels, :final ignoreExceptions):
+        return contextual.StackLogDriver(
+          channels.map(_driverFor).toList(growable: false),
+          ignoreExceptions: ignoreExceptions,
+        );
+      case WebhookLoggingChannelConfig(
+        :final url,
+        :final headers,
+        :final timeout,
+        :final keepAlive,
+      ):
+        return contextual.WebhookLogDriver.fromOptions(
+          contextual.WebhookOptions(
+            url: url,
+            headers: headers,
+            timeout: timeout,
+            keepAlive: keepAlive,
+          ),
+        );
+      case SamplingLoggingChannelConfig(:final wrappedChannel, :final rates):
+        return contextual.SamplingLogDriver.fromOptions(
+          _driverFor(wrappedChannel),
+          rates,
+        );
+      case CustomLoggingChannelConfig(:final driver, :final options):
+        final builder = registry.builderFor(driver);
+        if (builder == null) {
+          throw ProviderConfigException(
+            'Unknown custom logging driver "$driver" for channel "$name". '
+            'Register it using LogDriverRegistry.',
+          );
+        }
+        return builder(
+          LogDriverBuilderContext(
+            name: channel.name,
+            configPath: 'logging.channels.$name',
+            options: options,
+            config: config,
+            container: container,
+            resolveChannel: _driverFor,
+          ),
+        );
     }
-
-    return builder(
-      LogDriverBuilderContext(
-        name: spec.name,
-        configPath: spec.contextPath,
-        options: spec.options,
-        config: config,
-        container: container,
-        resolveChannel: _driverFor,
-      ),
-    );
   }
 }

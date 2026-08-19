@@ -37,14 +37,15 @@ notifications:
     engine = testEngine(
       config: EngineConfig(fileSystem: fs),
       fileSystem: fs,
-      configItems: {
-        'translation': {
-          'paths': [fs.path.join(rootDir, 'resources', 'lang')],
-          'resolvers': ['query', 'header'],
-          'query': {'parameter': 'lang'},
-        },
-        'view': {'directory': fs.path.join(rootDir, 'views')},
-      },
+      localizationConfig: LocalizationConfig(
+        paths: [fs.path.join(rootDir, 'resources', 'lang')],
+        resolvers: [
+          QueryLocaleResolver(parameter: 'lang'),
+          HeaderLocaleResolver(),
+        ],
+        queryParameter: 'lang',
+      ),
+      viewConfig: RoutedViewConfig(directory: fs.path.join(rootDir, 'views')),
     );
 
     engine.get('/welcome', (ctx) async {
@@ -81,10 +82,11 @@ notifications:
   });
 
   test('translation config', () async {
-    expect(
-      engine.appConfig.getStringListOrNull('translation.resolvers'),
-      equals(['query', 'header']),
-    );
+    await engine.initialize();
+    final resolvers = engine.typedConfig<LocalizationConfig>().resolvers;
+    expect(resolvers, hasLength(2));
+    expect(resolvers[0], isA<QueryLocaleResolver>());
+    expect(resolvers[1], isA<HeaderLocaleResolver>());
 
     final loader = engine.container.get<TranslationLoader>();
     final map = loader.load('en', 'messages');

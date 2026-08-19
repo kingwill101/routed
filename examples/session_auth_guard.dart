@@ -35,13 +35,15 @@ Future<void> main() async {
     config: EngineConfig(
       security: const EngineSecurityFeatures(csrfProtection: false),
     ),
-    options: [
-      withSessionConfig(
+    providers: [
+      ...Engine.defaultProviders,
+      RoutedSessionsProvider(
         SessionConfig.cookie(appKey: _appKey, cookieName: 'example_session'),
       ),
     ],
   );
 
+  engine.addGlobalMiddleware(sessionMiddleware());
   engine.addGlobalMiddleware(SessionAuth.sessionAuthMiddleware());
 
   engine.get('/', (ctx) {

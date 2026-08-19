@@ -1,4 +1,4 @@
-/// Utilities for deeply copying configuration structures without
+/// Utilities for deeply copying nested data structures without
 /// sharing references between maps and lists.
 dynamic deepCopyValue(dynamic value) {
   if (value is Map<String, dynamic>) {

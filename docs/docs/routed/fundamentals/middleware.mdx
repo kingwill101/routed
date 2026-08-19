@@ -41,21 +41,17 @@ import 'package:routed/routed.dart';
 
 The barrel exports helpers such as `timeoutMiddleware`, `basicAuth`, and `requestTrackerMiddleware`.
 
-Prefer configuration? Populate the manifest and let providers merge the stacks:
+Register global middleware on the engine and group or route middleware on the
+router. This keeps ordering visible at the composition site:
 
-```yaml title="config/http.yaml"
-http:
-  middleware:
-    global:
-      - routed.logging        # IDs registered by providers (MiddlewareRef.of)
-      - routed.sessions.start  # available when routed.sessions is enabled
-    groups:
-      api:
-        - auth.ensure_authenticated
-        - rate.limit_api
+```dart
+final engine = Engine(
+  middlewares: [loggerMiddleware],
+);
 ```
 
-Global IDs run before every request, while group entries apply when you call `router.group(name: 'api', ...)`. The CLI (`dart run routed_cli provider:list --config`) prints every registered middleware ID and surfaces validation errors (for example, unknown references). Providers contribute defaults via `http.middleware_sources.*`, keeping the manifest declarative.
+Global middleware runs before groups, groups run before route middleware, and
+provider-owned middleware is installed when that provider boots.
 
 ## Group middleware
 
@@ -114,13 +110,9 @@ References are resolved once when the engine builds routes (not per request). If
 
 `MiddlewareRef` is available from the central `package:routed/routed.dart` barrel.
 
-The current bundle contributes middleware IDs from providers such as
-`routed.logging`, `routed.sessions`, and `routed.security.ip_filter`.
-Configured CORS is installed by `routed.security` as provider-managed
-middleware, while header and CSRF protections remain explicit application
-middleware. Run `dart run
-routed_cli provider:list --config` to inspect the providers and middleware IDs
-that are actually active.
+The current bundle contributes provider-owned middleware such as logging,
+sessions, CORS, and IP filtering when those providers are registered. Header
+and CSRF protections remain explicit application middleware.
 
 
 ## Custom middleware patterns
@@ -228,5 +220,5 @@ Understanding the order helps when composing logging, authentication, and post-p
 - Prefer `try { final res = await next(); } finally { /* cleanup/logging */ }` for logic that must run regardless of handler success.
 - Avoid expensive I/O before `await next()` unless it’s strictly required to admit the request; do it after `next()` when possible.
 - If you abort the pipeline with `ctx.abortWithStatus(...)`, immediately return `ctx.response` and avoid writing additional headers/body later.
-- Use named middleware IDs (via `MiddlewareRef.of('id')`) in config/manifests to decouple routing from implementations and ease swaps.
+- Use named middleware IDs (via `MiddlewareRef.of('id')`) when composing reusable middleware in code; register the implementation before the engine boots.
 - Be mindful of order: engine → group → route → handler, then unwind; put broad cross-cutting concerns (logging, request IDs) early and narrow checks (authorization) later.

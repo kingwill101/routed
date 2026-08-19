@@ -3,8 +3,12 @@ import 'package:routed/routed.dart';
 void main() async {
   // Initialize cache manager with stores
   final cacheManager = CacheManager()
-    ..registerStore('array', {'driver': 'array', 'serialize': false})
-    ..registerStore('file', {'driver': 'file', 'path': 'cache'});
+    ..registerStore('array', ArrayStore())
+    ..registerStoreFactory(
+      'file',
+      FileStoreFactory(),
+      const FileStoreConfiguration(path: 'cache'),
+    );
 
   // Create engine with cache manager
   final engine = Engine(options: [withCacheManager(cacheManager)]);

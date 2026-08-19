@@ -52,6 +52,6 @@ void main() async {
 ```
 
 For a slim composition, import `routed_auth` directly and add
-`AuthServiceProvider()` after `Engine.defaultProviders`. Call
-`registerRoutedAuthProviders()` first if your configuration manifest names
-`routed.auth` and you are not importing the `routed` facade.
+`AuthServiceProvider()` after `Engine.defaultProviders`. Add typed provider
+instances to `AuthOptions.providers`; no auth provider registry or
+configuration manifest is required.

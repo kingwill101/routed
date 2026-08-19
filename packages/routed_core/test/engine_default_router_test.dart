@@ -57,20 +57,23 @@ void main() {
       response.assertStatus(404);
     });
 
-    test('Route schemas passed to Engine routing are preserved in manifests', () {
-      const schema = <String, Object?>{
-        'summary': 'List users',
-        'tags': ['users'],
-      };
-      engine.get(
-        '/users',
-        (ctx) => ctx.json(const <String, Object?>{'users': []}),
-        schema: schema,
-      );
+    test(
+      'Route schemas passed to Engine routing are preserved in manifests',
+      () {
+        const schema = <String, Object?>{
+          'summary': 'List users',
+          'tags': ['users'],
+        };
+        engine.get(
+          '/users',
+          (ctx) => ctx.json(const <String, Object?>{'users': []}),
+          schema: schema,
+        );
 
-      final manifest = engine.buildRouteManifest();
-      expect(manifest.routes.single.schema, equals(schema));
-    });
+        final manifest = engine.buildRouteManifest();
+        expect(manifest.routes.single.schema, equals(schema));
+      },
+    );
 
     test('Can apply middlewares to the Engine directly', () async {
       // Apply a middleware to the engine

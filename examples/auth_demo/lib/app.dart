@@ -23,7 +23,7 @@ Future<Engine> createEngine() async {
     config: EngineConfig(
       security: const EngineSecurityFeatures(csrfProtection: false),
     ),
-    providers: Engine.defaultProviders,
+    providers: Engine.builtins,
     options: [
       (engine) {
         final providers = <AuthProvider>[
@@ -81,6 +81,8 @@ Future<Engine> createEngine() async {
       },
     ],
   );
+
+  engine.addGlobalMiddleware(sessionMiddleware());
 
   await _registerAuthEvents(engine);
 

@@ -3,7 +3,12 @@ import 'package:server_contracts/server_contracts.dart';
 import 'null_store.dart';
 import 'store_factory.dart';
 
-class NullStoreFactory implements StoreFactory {
+/// Typed options for [NullStore].
+class NullStoreConfiguration implements StoreConfiguration {
+  const NullStoreConfiguration();
+}
+
+class NullStoreFactory implements StoreFactory<NullStoreConfiguration> {
   @override
-  Store create(Map<String, dynamic> config) => NullStore();
+  Store create(NullStoreConfiguration configuration) => NullStore();
 }

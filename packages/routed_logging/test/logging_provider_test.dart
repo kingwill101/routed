@@ -22,12 +22,49 @@ void main() {
       await client?.close();
     });
 
-    test('respects logging.enabled false', () async {
-      final engine = testEngine(
-        configItems: {
-          'logging': {'enabled': false},
+    test('typed channel definitions validate references before boot', () {
+      final config = LoggingConfig(
+        defaultChannel: 'stack',
+        channels: {
+          'stack': StackLoggingChannelConfig(
+            name: 'stack',
+            channels: const ['stdout'],
+          ),
+          'stdout': const StdoutLoggingChannelConfig(),
         },
       );
+
+      expect(
+        () => ConfigStore.fromProviders([LoggingServiceProvider(config)]),
+        returnsNormally,
+      );
+    });
+
+    test('typed channel definitions reject missing references', () {
+      final config = LoggingConfig(
+        defaultChannel: 'stack',
+        channels: {
+          'stack': StackLoggingChannelConfig(
+            name: 'stack',
+            channels: const ['missing'],
+          ),
+        },
+      );
+
+      expect(
+        () => ConfigStore.fromProviders([LoggingServiceProvider(config)]),
+        throwsA(
+          isA<ConfigValidationException>().having(
+            (error) => error.toString(),
+            'message',
+            contains('referenced channel must be configured'),
+          ),
+        ),
+      );
+    });
+
+    test('respects logging.enabled false', () async {
+      final engine = testEngine(loggingConfig: LoggingConfig(enabled: false));
       addTearDown(() async => await engine.close());
       engine.get('/ping', (ctx) => ctx.string('pong'));
       await engine.initialize();
@@ -40,11 +77,7 @@ void main() {
     });
 
     test('errors_only logs only failures', () async {
-      final engine = testEngine(
-        configItems: {
-          'logging': {'errors_only': true},
-        },
-      );
+      final engine = testEngine(loggingConfig: LoggingConfig(errorsOnly: true));
       addTearDown(() async => await engine.close());
       engine
         ..get('/ok', (ctx) => ctx.string('ok'))
@@ -67,9 +100,7 @@ void main() {
 
     test('level debug uses debug channel for successful requests', () async {
       final engine = testEngine(
-        configItems: {
-          'logging': {'level': 'debug'},
-        },
+        loggingConfig: LoggingConfig(level: contextual.Level.debug),
       );
       addTearDown(() async => await engine.close());
       engine.get('/ping', (ctx) => ctx.string('pong'));
@@ -85,8 +116,8 @@ void main() {
       );
     });
 
-    test('withLogging helper mutates config', () async {
-      final engine = testEngine(options: [withLogging(enabled: false)]);
+    test('logging configuration is fixed for the engine lifetime', () async {
+      final engine = testEngine(loggingConfig: LoggingConfig(enabled: false));
       addTearDown(() async => await engine.close());
       engine.get('/ping', (ctx) => ctx.string('pong'));
       await engine.initialize();
@@ -97,21 +128,13 @@ void main() {
       expect(factory.messages, isEmpty);
     });
 
-    test('config reload applies logging changes', () async {
+    test('logging configuration is applied at startup', () async {
       final engine = testEngine(
-        configItems: {
-          'logging': {'enabled': false},
-        },
+        loggingConfig: LoggingConfig(level: contextual.Level.debug),
       );
       addTearDown(() async => await engine.close());
       engine.get('/ping', (ctx) => ctx.string('pong'));
       await engine.initialize();
-
-      final override = ConfigImpl();
-      override.merge(engine.appConfig.all());
-      override.set('logging', {'enabled': true, 'level': 'debug'});
-      await engine.replaceConfig(override);
-      await Future<void>.delayed(Duration.zero);
 
       client = TestClient(RoutedRequestHandler(engine));
       final response = await client!.get('/ping');
@@ -125,15 +148,13 @@ void main() {
 
     test('extra fields and request headers appear in log context', () async {
       final engine = testEngine(
-        configItems: {
-          'logging': {
-            'extra_fields': {
-              'service': 'api',
-              'nested': {'tier': 'prod'},
-            },
-            'request_headers': ['X-Correlation-ID'],
+        loggingConfig: LoggingConfig(
+          extraFields: {
+            'service': 'api',
+            'nested': {'tier': 'prod'},
           },
-        },
+          requestHeaders: ['X-Correlation-ID'],
+        ),
       );
       addTearDown(() async => await engine.close());
       engine.get('/ping', (ctx) => ctx.string('pong'));
@@ -159,14 +180,15 @@ void main() {
       RoutedLogger.reset();
 
       final engine = testEngine(
-        configItems: {
-          'logging': {
-            'default': 'custom',
-            'channels': {
-              'custom': {'driver': 'capture'},
-            },
+        loggingConfig: LoggingConfig(
+          defaultChannel: 'custom',
+          channels: {
+            'custom': CustomLoggingChannelConfig(
+              name: 'custom',
+              driver: 'capture',
+            ),
           },
-        },
+        ),
       );
       addTearDown(() async => await engine.close());
 

@@ -9,11 +9,13 @@ void main() {
   group('RedisStore', () {
     test('factory parses config with url and overrides', () {
       final factory = RedisStoreFactory();
-      final store = factory.create({
-        'url': 'redis://:secret@localhost:6380/5',
-        'db': '2',
-        'host': 'override',
-      });
+      final store = factory.create(
+        RedisStoreConfiguration(
+          url: Uri.parse('redis://:secret@localhost:6380/5'),
+          database: 2,
+          host: 'override',
+        ),
+      );
       expect(store, isA<RedisStore>());
       final redisStore = store as RedisStore;
       expect(redisStore.host, equals('override'));
@@ -22,35 +24,46 @@ void main() {
       expect(redisStore.db, equals(2));
     });
 
-    test('fromConfig parses url and overrides', () {
-      final store = RedisStore.fromConfig({
-        'url': 'redis://secret@cache-host:6381/3?db=4',
-        'host': 'override',
-        'port': '6382',
-        'database': '7',
-        'db': 6,
-      });
+    test('typed configuration parses url and overrides', () {
+      final store =
+          RedisStoreFactory().create(
+                RedisStoreConfiguration(
+                  url: Uri.parse('redis://secret@cache-host:6381/3?db=4'),
+                  host: 'override',
+                  port: 6382,
+                  database: 6,
+                ),
+              )
+              as RedisStore;
       expect(store.host, equals('override'));
       expect(store.port, equals(6382));
       expect(store.password, equals('secret'));
       expect(store.db, equals(6));
     });
 
-    test('fromConfig accepts numeric config values', () {
-      final store = RedisStore.fromConfig({
-        'host': 'local',
-        'port': 6383,
-        'database': 5,
-      });
+    test('typed configuration accepts numeric values', () {
+      final store =
+          RedisStoreFactory().create(
+                const RedisStoreConfiguration(
+                  host: 'local',
+                  port: 6383,
+                  database: 5,
+                ),
+              )
+              as RedisStore;
       expect(store.host, equals('local'));
       expect(store.port, equals(6383));
       expect(store.db, equals(5));
     });
 
-    test('fromConfig parses password without colon', () {
-      final store = RedisStore.fromConfig({
-        'url': 'redis://secret@localhost:6379',
-      });
+    test('typed configuration parses password without colon', () {
+      final store =
+          RedisStoreFactory().create(
+                RedisStoreConfiguration(
+                  url: Uri.parse('redis://secret@localhost:6379'),
+                ),
+              )
+              as RedisStore;
       expect(store.password, equals('secret'));
     });
 
@@ -99,9 +112,11 @@ void main() {
   });
 
   group('RedisStoreFactory', () {
-    test('creates RedisStore from config', () {
+    test('creates RedisStore from typed configuration', () {
       final factory = RedisStoreFactory();
-      final store = factory.create({'host': '127.0.0.1', 'port': 6379});
+      final store = factory.create(
+        const RedisStoreConfiguration(host: '127.0.0.1', port: 6379),
+      );
       expect(store, isA<RedisStore>());
     });
   });

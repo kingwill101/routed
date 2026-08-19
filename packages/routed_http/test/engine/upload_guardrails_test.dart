@@ -20,17 +20,14 @@ void main() {
         final engine = testEngine(
           config: EngineConfig(
             fileSystem: fs,
-            multipart: MultipartConfig(uploadDirectory: uploadDir.path),
+            multipart: MultipartConfig(
+              maxFileSize: 1024,
+              maxDiskUsage: 12,
+              uploadDirectory: uploadDir.path,
+              allowedExtensions: {'gif'},
+              filePermissions: 448,
+            ),
           ),
-          configItems: {
-            'uploads': {
-              'max_file_size': 1024,
-              'max_disk_usage': 12,
-              'directory': uploadDir.path,
-              'allowed_extensions': ['gif'],
-              'file_permissions': 448,
-            },
-          },
         );
 
         engine.post('/upload', (ctx) async {
@@ -77,15 +74,12 @@ void main() {
       final engine = testEngine(
         config: EngineConfig(
           fileSystem: fs,
-          multipart: MultipartConfig(uploadDirectory: uploadDir.path),
+          multipart: MultipartConfig(
+            uploadDirectory: uploadDir.path,
+            allowedExtensions: {'jpg'},
+            filePermissions: 448,
+          ),
         ),
-        configItems: {
-          'uploads': {
-            'directory': uploadDir.path,
-            'allowed_extensions': ['jpg'],
-            'file_permissions': 448,
-          },
-        },
       );
 
       engine.post('/upload', (ctx) async {
@@ -132,17 +126,14 @@ void main() {
         final engine = testEngine(
           config: EngineConfig(
             fileSystem: fs,
-            multipart: MultipartConfig(uploadDirectory: uploadDir.path),
+            multipart: MultipartConfig(
+              uploadDirectory: uploadDir.path,
+              allowedExtensions: {'txt'},
+              maxFileSize: 1024,
+              maxDiskUsage: 4096,
+              filePermissions: 448,
+            ),
           ),
-          configItems: {
-            'uploads': {
-              'directory': uploadDir.path,
-              'allowed_extensions': ['txt'],
-              'max_file_size': 1024,
-              'max_disk_usage': 4096,
-              'file_permissions': 448,
-            },
-          },
         );
 
         engine.post('/upload', (ctx) async {

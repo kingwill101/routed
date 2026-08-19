@@ -44,7 +44,7 @@ These areas were checked during the audit and were not added as false-positive g
   current implementation and README (`packages/routed_openapi/README.md` and
   `docs/docs/routed/fundamentals/openapi-facilities.mdx`).
 - `routed_hotwire` site installation currently matches its package version at
-  `^0.1.2` (`docs/docs/routed_hotwire/index.mdx:19-24`).
+  `^0.1.3` (`docs/docs/routed_hotwire/index.mdx:19-24`).
 - The `routed_node` package README documents the current multi-host entrypoint
   matrix; the gap is that the site does not expose or integrate that material,
   not that the README lacks the matrix.

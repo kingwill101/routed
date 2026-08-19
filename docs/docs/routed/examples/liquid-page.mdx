@@ -10,23 +10,27 @@ sidebar_position: 3
 import 'package:routed/routed.dart';
 
 Future<void> main() async {
-  final engine = Engine(
-    configItems: {
-      'storage': {
-        'default': 'templates',
-        'disks': {
-          'templates': {'driver': 'local', 'root': 'resources'},
-        },
-      },
-      'view': {
-        'engine': 'liquid',
-        'disk': 'templates',
-        'directory': 'views',
-        'cache': true,
-      },
-    },
+  final engine = await Engine.create(
+    providers: [
+      ...Engine.defaultProviders,
+      RoutedStorageProvider(
+        configuration: StorageConfig(
+          defaultDisk: 'templates',
+          disks: {
+            'templates': const LocalStorageDiskConfig(root: 'resources'),
+          },
+        ),
+      ),
+      ViewServiceProvider(
+        RoutedViewConfig(
+          engine: 'liquid',
+          disk: 'templates',
+          directory: 'views',
+          cache: true,
+        ),
+      ),
+    ],
   );
-  await engine.initialize();
 
   engine.get('/', (ctx) async {
     return await ctx.template(
@@ -61,4 +65,4 @@ Future<void> main() async {
 </html>
 ```
 
-Run `dart run bin/server.dart` and open [http://127.0.0.1:8080/](http://127.0.0.1:8080/) to see the rendered page. The view provider resolves templates through the shared `storage` disk, so you can reuse the same disks for uploads or static assets. If you move the configuration into `config/http.yaml`, `dart run routed_cli provider:list --config` will list the `routed.views` defaults and warn if `view.*` entries have the wrong shape.
+Run `dart run bin/server.dart` and open [http://127.0.0.1:8080/](http://127.0.0.1:8080/) to see the rendered page. The view provider resolves templates through the named `templates` storage disk.

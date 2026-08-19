@@ -1,2 +1,0 @@
-headers:
-  Referrer-Policy: "{{ security.headers['referrer-policy'] | default: 'strict-origin-when-cross-origin' }}"

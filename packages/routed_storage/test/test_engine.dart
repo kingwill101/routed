@@ -11,7 +11,6 @@ Engine testEngine({
   EngineConfig? config,
   List<Middleware>? middlewares,
   List<EngineOpt>? options,
-  Map<String, dynamic>? configItems,
   ErrorHandlingRegistry? errorHandling,
   List<ServiceProvider>? providers,
   bool includeDefaultProviders = true,
@@ -27,7 +26,7 @@ Engine testEngine({
   List<ServiceProvider> resolvedProviders;
   if (includeDefaultProviders) {
     resolvedProviders = [
-      CoreServiceProvider(configItems: configItems ?? const {}),
+      CoreServiceProvider(resolvedConfig),
       RoutingServiceProvider(),
       ...?providers,
     ];

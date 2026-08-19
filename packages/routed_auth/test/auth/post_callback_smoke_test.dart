@@ -42,7 +42,7 @@ Engine _authEngine(AuthManager manager) {
     config: EngineConfig(
       security: const EngineSecurityFeatures(csrfProtection: false),
     ),
-    options: [withSessionConfig(sessionConfig)],
+    providers: [RoutedSessionsProvider(sessionConfig)],
   );
   engine.addGlobalMiddleware(sessionMiddleware());
   AuthRoutes(manager).register(engine.defaultRouter);
@@ -188,8 +188,8 @@ void main() {
           config: EngineConfig(
             security: const EngineSecurityFeatures(csrfProtection: false),
           ),
-          options: [
-            withSessionConfig(
+          providers: [
+            RoutedSessionsProvider(
               SessionConfig.cookie(
                 appKey:
                     'base64:${base64.encode(List<int>.generate(32, (i) => i + 1))}',

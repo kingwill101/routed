@@ -283,30 +283,22 @@ void main() {
     test('registers config-defined gates and middleware', () async {
       final engine = testEngine(
         includeDefaultProviders: true,
-        providers: [AuthServiceProvider()],
-        configItems: {
-          'http': {
-            'features': {
-              'auth': {'enabled': true},
-            },
-          },
-          'auth': {
-            'features': {
-              'haigate': {'enabled': true},
-            },
-            'gates': {
-              'defaults': {
-                'denied_status': HttpStatus.unauthorized,
-                'denied_message': 'Gate denied',
-              },
-              'abilities': {
-                'publish-post': {
-                  'roles': ['publisher'],
+        providers: [
+          AuthServiceProvider(
+            configuration: AuthConfig.defaults().copyWith(
+              haigate: HaigateConfig(
+                enabled: true,
+                defaults: const GateDefaults(
+                  statusCode: HttpStatus.unauthorized,
+                  message: 'Gate denied',
+                ),
+                abilities: const <String, GateDefinition>{
+                  'publish-post': GateDefinition.roles(roles: ['publisher']),
                 },
-              },
-            },
-          },
-        },
+              ),
+            ),
+          ),
+        ],
       );
 
       engine.addGlobalMiddleware((ctx, next) {

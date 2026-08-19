@@ -1,578 +1,160 @@
 ---
 title: Authentication & Authorization
-description: Configure JWT middleware, guards, and IP filters
+description: Configure JWT middleware, OAuth providers, sessions, and guards
 authors: routed
 sidebar_position: 3
 ---
 
 # Authentication & Authorization
 
-Routed ships with dedicated providers for authentication concerns. Start with JWT bearer tokens
-and tighten ingress with IP filters. The auth provider now includes session-based flows, email
-magic links, OAuth callbacks, and NextAuth-inspired hooks while still leaning on Routed's
-container-driven conventions.
+Routed authentication is composed from typed runtime options and explicit
+middleware. `server_auth` provides the framework-agnostic auth models and
+providers; `routed_auth` connects them to `EngineContext`.
 
-## Auth flows and hooks
+## JWT bearer authentication
 
-The auth routes (`/auth/*`) support credential, email, and OAuth sign-in flows. Session responses
-can be customized with callbacks, and lifecycle events are emitted through the global
-`EventManager` to match Routed's Laravel-style event system.
+Use the direct middleware when an application only needs bearer verification:
 
 ```dart
-engine.container.instance<AuthOptions>(
-  AuthOptions(
-    providers: [CredentialsProvider()],
-    sessionStrategy: AuthSessionStrategy.session,
-    sessionMaxAge: const Duration(days: 30),
-    sessionUpdateAge: const Duration(days: 1),
-    callbacks: AuthCallbacks(
-      signIn: (context) async => const AuthSignInResult.allow(),
-      session: (context) async => {
-        ...context.payload,
-        'role': 'member',
-      },
-      redirect: (context) async => context.url,
+import 'package:routed/routed.dart';
+
+final jwt = jwtAuthentication(
+  JwtOptions(
+    issuer: 'https://issuer.example.com',
+    audience: ['api'],
+    requiredClaims: ['exp', 'scope'],
+    jwksUri: Uri.parse(
+      'https://issuer.example.com/.well-known/jwks.json',
     ),
+    algorithms: ['RS256'],
   ),
 );
 
-final eventManager = await engine.container.make<EventManager>();
-eventManager.listen<AuthSignInEvent>(
-  (event) => logger.info('signed in ${event.user.id}'),
+engine.get(
+  '/profile',
+  (ctx) {
+    final claims = ctx.request.getAttribute<Map<String, dynamic>>(
+      jwtClaimsAttribute,
+    );
+    return ctx.json({'subject': claims?['sub'], 'scope': claims?['scope']});
+  },
+  middlewares: [jwt],
 );
 ```
 
-Session refresh behavior mirrors NextAuth's `updateAge` concept. When `sessionUpdateAge` is
-reached, session cookies are refreshed (and JWTs are reissued) on the next request to `/auth/session`.
-Email verification tokens are also rotated: issuing a new magic link invalidates previous tokens
-for that identifier.
+Verification failures return a generic `401 Unauthorized` response while the
+server-side exception remains available to logging and error observers.
 
-```yaml title="config/auth.yaml"
-session:
-  strategy: session
-  max_age: 30d
-  update_age: 1d
-```
-
-## Auth routes
-
-Use the built-in routes when you enable the auth provider (or register `AuthRoutes` directly).
-Each endpoint is mounted under `basePath` (defaults to `/auth`).
-
-- `GET /auth/providers`: list configured providers.
-- `GET /auth/csrf`: issue a CSRF token for sign-in/sign-out calls.
-- `GET /auth/session`: return the current session payload.
-- `POST /auth/signin/{provider}`: credential/email sign-in entrypoint.
-- `POST /auth/register/{provider}`: credential registration flow.
-- `GET /auth/signin/{provider}`: OAuth provider redirect.
-- `GET /auth/callback/{provider}`: OAuth/email callback handler.
-- `POST /auth/signout`: sign out and clear cookies.
-
-## Provider config
-
-The `routed_auth` package provides 13+ pre-built OAuth providers (Google, Discord, Microsoft,
-Apple, Twitter, Facebook, GitLab, Dropbox, Slack, LinkedIn, Spotify, Twitch, Telegram).
-For per-provider docs and custom provider/adapter guidance, see
-[Auth Providers & Adapters](/docs/routed/security/auth-providers).
+## OAuth token introspection
 
 ```dart
-import 'package:routed_auth/routed_auth.dart';
+final introspection = oauth2Introspection(
+  OAuthIntrospectionOptions(
+    endpoint: Uri.parse('https://auth.example.com/oauth/introspect'),
+    clientId: runtime.secrets.requiredString('OAUTH_CLIENT_ID'),
+    clientSecret: runtime.secrets.requiredString('OAUTH_CLIENT_SECRET'),
+    cacheTtl: const Duration(seconds: 30),
+  ),
+);
 
-final options = AuthOptions(
+engine.get('/account', accountHandler, middlewares: [introspection]);
+```
+
+Keep client credentials in `RuntimeSecrets`, not in source-controlled
+configuration objects.
+
+## Auth provider and routes
+
+For the built-in sign-in routes, bind typed `AuthOptions` before initializing
+the `AuthServiceProvider`:
+
+```dart
+final engine = Engine(
   providers: [
-    googleProvider(GoogleProviderOptions(
-      clientId: env('GOOGLE_CLIENT_ID'),
-      clientSecret: env('GOOGLE_CLIENT_SECRET'),
-      redirectUri: 'https://example.com/auth/callback/google',
-    )),
+    ...Engine.defaultProviders,
+    RoutedSessionsProvider(
+      SessionConfig.cookie(
+        appKey: runtime.secrets.requiredString('SESSION_KEY'),
+      ),
+    ),
+    AuthServiceProvider(),
   ],
+);
+
+engine.container.instance<AuthOptions<EngineContext>>(
+  AuthOptions<EngineContext>(
+    providers: [
+      googleProvider(
+        GoogleProviderOptions(
+          clientId: runtime.secrets.requiredString('GOOGLE_CLIENT_ID'),
+          clientSecret: runtime.secrets.requiredString('GOOGLE_CLIENT_SECRET'),
+          redirectUri: 'https://example.com/auth/callback/google',
+        ),
+      ),
+    ],
+    sessionStrategy: AuthSessionStrategy.session,
+    sessionMaxAge: const Duration(days: 30),
+    sessionUpdateAge: const Duration(days: 1),
+  ),
+);
+
+await engine.initialize();
+```
+
+The provider mounts `/auth/*` routes and resolves the configured auth manager.
+The `AuthOptions` object is the application contract; there is no auth YAML
+manifest or runtime string override.
+
+## Sessions, guards, and gates
+
+Register `RoutedSessionsProvider` and add the session middleware before using
+`SessionAuth`:
+
+```dart
+engine.addGlobalMiddleware(sessionMiddleware());
+
+engine.get(
+  '/admin',
+  (ctx) => ctx.string('private'),
+  middlewares: [
+    guardMiddleware(['authenticated', 'admin']),
+  ],
+);
+
+engine.post(
+  '/reports/publish',
+  (ctx) async {
+    await Haigate.authorize('reports.publish', ctx: ctx);
+    return ctx.string('published');
+  },
+  middlewares: [Haigate.middleware(['reports.publish'])],
 );
 ```
 
-Or configure via YAML with config-driven registration:
+Use `SessionAuth.login`, `SessionAuth.current`, and `SessionAuth.logout` for
+the session lifecycle. Register broad role checks with `GuardRegistry` and
+resource-specific abilities with Haigate. Remember-token storage should be
+durable in production; the in-memory implementation is intended for tests.
 
-```yaml title="config/auth.yaml"
-providers:
-  google:
-    enabled: true
-    client_id: "{{ env.GOOGLE_CLIENT_ID | default: '' }}"
-    client_secret: "{{ env.GOOGLE_CLIENT_SECRET | default: '' }}"
-    redirect_uri: "{{ env.GOOGLE_REDIRECT_URI | default: '' }}"
-```
+## Events and callbacks
 
-## Callbacks
-
-Callbacks let you mutate or gate auth behavior. They run during the auth flow and can be used to
-control redirects or decorate session/JWT data.
-
-- `signIn`: return `AuthSignInResult.deny()` to block sign-in.
-- `redirect`: sanitize or override redirect URLs.
-- `jwt`: mutate JWT claims before issuing tokens.
-- `session`: enrich the session payload returned to clients.
-
-## Events
-
-Auth lifecycle events flow through the global `EventManager`, so you can subscribe with the same
-pattern used for route events:
+Auth lifecycle events are published through the engine’s `EventManager`:
 
 ```dart
 final events = await engine.container.make<EventManager>();
 events.listen<AuthSignInEvent>((event) {
-  logger.info('auth sign in: ${event.user.id}');
+  logger.info('auth sign in', {'user_id': event.user.id});
 });
 ```
 
-Emitted events include: `AuthSignInEvent`, `AuthSignOutEvent`, `AuthCreateUserEvent`,
-`AuthUpdateUserEvent`, `AuthLinkAccountEvent`, and `AuthSessionEvent`.
-
-## Session strategy
-
-Use `sessionStrategy` to pick session storage.
-
-- `session`: server-side sessions via `SessionAuthService`.
-- `jwt`: issue a signed JWT stored in a cookie.
-
-`sessionMaxAge` controls how long sessions persist. `sessionUpdateAge` acts like NextAuth
-`updateAge`: once the duration elapses, the next `/auth/session` request refreshes the cookie
-(and reissues JWTs).
-
-## Policy bindings
-
-Policies wrap authorization decisions for a resource and register Haigate abilities like
-`project.view` or `project.update`.
-
-```dart
-class ProjectPolicy extends Policy<Project> {
-  const ProjectPolicy();
-
-  @override
-  Future<bool> canView(AuthPrincipal? principal, Project project) async {
-    return principal?.roles.contains('admin') ?? false;
-  }
-
-  @override
-  Future<bool> canCreate(AuthPrincipal? principal) async =>
-      principal?.roles.contains('editor') ?? false;
-
-  @override
-  Future<bool> canUpdate(AuthPrincipal? principal, Project project) async {
-    return principal?.roles.contains('editor') ?? false;
-  }
-
-  @override
-  Future<bool> canDelete(AuthPrincipal? principal, Project project) async {
-    return principal?.roles.contains('admin') ?? false;
-  }
-}
-
-engine.container.instance<AuthOptions>(
-  AuthOptions(
-    providers: [CredentialsProvider()],
-    policies: PolicyOptions(
-      bindings: [
-        PolicyBinding<Project>(
-          policy: const ProjectPolicy(),
-          abilityPrefix: 'project',
-        ),
-      ],
-    ),
-  ),
-);
-
-Haigate.registry.authorize('project.update', principal, project);
-```
-
-## Email verification tokens
-
-Email magic links are rotated by default. Issuing a new token for the same identifier removes
-previous tokens in both the adapter and the in-memory fallback. Implement the optional
-`AuthAdapter.deleteVerificationTokens` method if you persist tokens yourself.
-
-## JWT Bearer Middleware
-
-### Middleware helper (opt-in)
-
-Use the `jwtAuthentication` helper when you want to wire JWT verification directly in code. Tokens
-are read from the configured header (default `Authorization`) and, once validated, the middleware
-stores the decoded payload on the request under the exported attribute keys.
-
-```dart
-engine.addGlobalMiddleware(
-  jwtAuthentication(
-    const JwtOptions(
-      issuer: 'https://issuer.example.com',
-      audience: ['api'],
-      inlineKeys: [
-        {
-          'kty': 'oct',
-          'kid': 'local-hmac',
-          'alg': 'HS256',
-          'k': 'c2VjcmV0LXRlc3Qta2V5',
-        },
-      ],
-      algorithms: ['HS256'],
-    ),
-    onVerified: (payload, ctx) {
-      if (!(payload.claims['scope'] as String).contains('profile:read')) {
-        throw JwtAuthException('insufficient_scope');
-      }
-      ctx.request.setAttribute('user', payload.claims['sub']);
-    },
-  ),
-);
-
-router.get('/profile', (ctx) {
-  final claims =
-      ctx.request.getAttribute<Map<String, dynamic>>(jwtClaimsAttribute);
-  final user = ctx.request.getAttribute<String>('user');
-  if (claims == null || user == null) {
-    ctx.response
-      ..statusCode = HttpStatus.unauthorized
-      ..write('missing token');
-    return ctx.response;
-  }
-  return ctx.json({'sub': user, 'scope': claims['scope']});
-});
-```
-
-`jwtClaimsAttribute`, `jwtHeadersAttribute`, and `jwtSubjectAttribute` are exported constants so
-middleware/handlers can pull information from the request without additional helpers.
-
-### Provider & manifest configuration
-
-Prefer declarative configuration? Enable the `routed.auth` provider and fill in the `auth.jwt`
-section. The provider reuses the same verifier internally and populates the same request attributes.
-
-```yaml title="config/http.yaml"
-providers:
-  - routed.core
-  - routed.routing
-  - routed.auth
-  - routed.logging
-
-features:
-  auth: { enabled: true }
-
-auth:
-  jwt:
-    enabled: true
-    issuer: https://issuer.example.com
-    audience:
-      - api
-    required_claims:
-      - scope
-    jwks_url: https://issuer.example.com/.well-known/jwks.json
-    jwks_cache_ttl: 10m
-    algorithms:
-      - RS256
-    clock_skew: 60s
-    keys: []
-    header: Authorization
-    bearer_prefix: "Bearer "
-```
-
-Inline keys let you ship secrets without hitting a JWKS endpoint:
-
-```yaml title="config/auth.yaml"
-jwt:
-  enabled: true
-  keys:
-    - kty: oct
-      kid: local-hmac
-      alg: HS256
-      k: c2VjcmV0LXRlc3Qta2V5
-```
-
-Because the manifest-driven middleware exposes the same attributes, reading claims looks identical:
-
-```dart
-router.get('/profile', (ctx) {
-  final claims =
-      ctx.request.getAttribute<Map<String, dynamic>>(jwtClaimsAttribute);
-  if (claims == null) {
-    ctx.response
-      ..statusCode = HttpStatus.unauthorized
-      ..write('missing token');
-    return ctx.response;
-  }
-  return ctx.json({'sub': claims['sub'], 'scope': claims['scope']});
-});
-```
-
-### JWKS caching
-
-Remote JWKS documents are cached for the TTL you configure (default 5 minutes). Inline keys and
-remote entries share the same `JsonWebKeyStore`, and the provider refreshes automatically on config
-reloads.
-
-> **Toolkit tip:** Routed re-exports the [`jose`](https://pub.dev/packages/jose) primitives from `package:routed/routed.dart`, so you can construct `JsonWebToken`, `JsonWebKey`, or signers/verifiers without adding an extra import.
-
-Use the `clock_skew` option (default `60s`) when your issuer and resource server clocks drift slightly. Tokens remain subject to the normal `exp`/`nbf` checks—values outside the tolerance still produce the same `token_expired` or `token_not_yet_valid` errors.
-
-## OAuth2 Helpers
-
-### Token exchange utilities
-
-Use `OAuth2Client` when you need to exchange authorization codes, request client credentials tokens,
-or refresh access tokens. The helper wraps the standard `/token` endpoint calls.
-
-```dart
-final oauth = OAuth2Client(
-  tokenEndpoint: Uri.parse('https://auth.example.com/oauth/token'),
-  clientId: 'web-app',
-  clientSecret: 'secret',
-);
-
-final tokens = await oauth.exchangeAuthorizationCode(
-  code: 'code-from-callback',
-  redirectUri: Uri.parse('https://app.example.com/callback'),
-);
-print(tokens.accessToken); // ready to use
-```
-
-The same client supports `clientCredentials()` and `refreshToken()`; all methods return an
-`OAuthTokenResponse` exposing `accessToken`, `expiresIn`, `refreshToken`, and the raw JSON payload.
-
-### Token introspection middleware
-
-The `oauth2Introspection` helper implements [RFC 7662](https://datatracker.ietf.org/doc/html/rfc7662)
-introspection. Use it when access tokens are opaque and must be validated against an authorization
-server.
-
-```dart
-engine.addGlobalMiddleware(
-  oauth2Introspection(
-    OAuthIntrospectionOptions(
-      endpoint: Uri.parse('https://auth.example.com/oauth/introspect'),
-      clientId: 'resource-server',
-      clientSecret: 'secret',
-      cacheTtl: const Duration(seconds: 30),
-      clockSkew: const Duration(seconds: 60),
-    ),
-    onValidated: (result, ctx) {
-      ctx.request.setAttribute('user', result.raw['sub']);
-    },
-  ),
-);
-```
-
-The middleware stores the access token, introspection payload, and the resolved scope on the request
-(`oauthTokenAttribute`, `oauthClaimsAttribute`, `oauthScopeAttribute`). Non-active tokens return
-`401 Unauthorized` automatically. Results are cached for the configured TTL to avoid hammering the
-authorization server.
-
-`clockSkew` mirrors the JWT helper: responses whose `exp`/`nbf` fields fall within the configured tolerance are accepted, while anything outside the window still yields a `401` with a descriptive reason.
-
-### Manifest configuration
-
-To configure introspection via the provider manifest, enable the provider and add an
-`auth.oauth2.introspection` block:
-
-```yaml title="config/http.yaml"
-providers:
-  - routed.core
-  - routed.routing
-  - routed.auth
-  - routed.logging
-
-features:
-  auth: { enabled: true }
-
-auth:
-  oauth2:
-    introspection:
-      enabled: true
-      endpoint: https://auth.example.com/oauth/introspect
-      client_id: resource-server
-      client_secret: secret
-      token_type_hint: access_token
-      cache_ttl: 30s
-      clock_skew: 60s
-```
-
-Requests validated through the manifest-driven middleware expose the same request attributes as the
-code-first helper, so consuming handlers look identical.
-
-## Session Authentication & Guards
-
-Cookie-backed sessions remain a common way to keep users signed in. `SessionAuthService` centralises
-remember-me cookies, principal hydration, and logout. Pair it with the session middleware so every
-request can recover the principal:
-
-```dart
-final engine = Engine(
-  config: EngineConfig(
-    security: const EngineSecurityFeatures(csrfProtection: false),
-  ),
-  options: [
-    withSessionConfig(SessionConfig.cookie(
-      appKey: 'base64:...',
-      cookieName: 'app_session',
-    )),
-  ],
-);
-
-engine.addGlobalMiddleware(SessionAuth.sessionAuthMiddleware());
-
-engine.post('/login', (ctx) async {
-  final principal = AuthPrincipal(
-    id: 'user-42',
-    roles: const ['admin'],
-    attributes: {'email': 'user@example.com'},
-  );
-
-  await SessionAuth.login(
-    ctx,
-    principal,
-    rememberMe: ctx.request.body().contains('remember=true'),
-  );
-
-  return ctx.redirect('/dashboard', statusCode: HttpStatus.found);
-});
-
-engine.post('/logout', (ctx) async {
-  await SessionAuth.logout(ctx);
-  return ctx.redirect('/', statusCode: HttpStatus.found);
-});
-```
-
-`SessionAuth.current(ctx)` returns the cached `AuthPrincipal`. If you override `SessionAuth.configure`
-or bind a custom `RememberTokenStore` into the container, the provider will reuse it automatically.
-The new configuration block exposes the cookie name and default TTL:
-
-```yaml
-auth:
-  session:
-    remember_me:
-      cookie: remember_token
-      duration: 45d
-```
-
-### Declarative guard registration
-
-Guards are named policies resolved from the shared `GuardRegistry`. Register them in code:
-
-```dart
-GuardRegistry.instance
-  ..register('authenticated', requireAuthenticated())
-  ..register('admin', requireRoles(['admin']))
-  ..register('staff-any', requireRoles(['support', 'editor'], any: true));
-
-router.get(
-  '/admin',
-  (ctx) => ctx.string('ok'),
-  middlewares: [guardMiddleware(['authenticated', 'admin'])],
-);
-```
-
-Or declare them in `auth.guards` so the provider wires them on boot:
-
-```yaml
-auth:
-  guards:
-    authenticated:
-      type: authenticated
-      realm: Members
-    admin:
-      type: roles
-      roles: ['admin']
-    staff-any:
-      type: roles_any
-      roles: ['support', 'editor']
-```
-
-`requireRoles` defaults to an "all roles" match; set `roles_any` (or `type: roles` plus `mode: any`)
-when any of the listed roles should pass. Guards run before handlers—if they return `GuardResult.deny`
-the middleware short-circuits with the provided `Response` or a default `403 Forbidden`. When a
-remember-me token fails validation, the session middleware removes it, issues an expired cookie, and
-lets `requireAuthenticated` challenge the client with `WWW-Authenticate: Bearer realm="..."`.
-
-### Authorization Gates (Haigate)
-
-For action-specific checks, Haigate offers a lightweight gate registry inspired by Laravel's Gate API.
-Register abilities once, then enforce them declaratively via middleware or imperatively inside a
-handler:
-
-```dart title="Registering and enforcing a gate"
-Haigate.register('publish-post', (evaluation) {
-  final principal = evaluation.principal;
-  if (principal == null) return false; // guests prohibited
-  return principal.hasRole('publisher');
-});
-
-router.get(
-  '/posts/publish',
-  (ctx) async {
-    await Haigate.authorize('publish-post', ctx: ctx);
-    return ctx.string('published');
-  },
-  middlewares: [Haigate.middleware(['publish-post'])],
-);
-```
-
-Haigate observers receive every evaluation (ability, principal, allow/deny) so you can plug in audit
-logging or analytics without wrapping handlers.
-
-#### Config-driven abilities
-
-Enable Haigate via `auth.features.haigate.enabled` and declare abilities under `auth.gates`. The
-provider builds matching middleware IDs (`routed.auth.gate.<ability>`) for manifest-driven stacks.
-
-```yaml title="config/auth.yaml"
-auth:
-  features:
-    haigate: { enabled: true }
-  gates:
-    defaults:
-      denied_status: 401
-      denied_message: Gate denied
-    abilities:
-      publish-post:
-        roles: ['publisher']
-      manage-drafts:
-        type: authenticated
-```
-
-With that config you can reference `MiddlewareRef.of('routed.auth.gate.publish-post')` inside route
-definitions, and Haigate will reuse the defaults for denial responses. Declarative abilities support
-`roles`/`roles_any`, `authenticated`, and `guest` types plus an `allow_guest` override.
-
-## IP Allow/Deny Lists
-
-The security provider now includes an IP filter that runs immediately after trusted-proxy
-resolution. Configure allow/deny CIDRs and decide what to do when no rule matches:
-
-```yaml title="config/security.yaml"
-trusted_proxies:
-  enabled: true
-  forward_client_ip: true
-  proxies:
-    - 10.0.0.0/8
-    - 192.168.0.0/16
-  headers:
-    - X-Forwarded-For
-    - X-Real-IP
-  platform_header: CF-Connecting-IP
-
-ip_filter:
-  enabled: true
-  default_action: deny
-  allow:
-    - 10.10.0.0/16
-    - 203.0.113.5
-  deny:
-    - 0.0.0.0/0
-  respect_trusted_proxies: true
-```
-
-With `respect_trusted_proxies: true`, the middleware evaluates the same forwarded headers as the
-trusted proxy resolver. Requests that fall outside the allowed ranges short-circuit with
-`403 Forbidden` before other middleware executes.
-
-## Roadmap
-
-- **OAuth2 helpers (Task 2.2)**: Authorization code, refresh, client credentials utilities.
-- **Guards & RBAC (Task 2.3)**: Route-level policies, remember-me/session helpers, DI-friendly guard
-  abstractions.
-
-Follow progress in the [Auth Expansion change](https://github.com/kingwill101/routed/tree/master/openspec/changes/expand-auth-features).
+Callbacks on `AuthOptions` can gate sign-in, enrich session payloads, and
+sanitize redirects. Keep redirect targets allow-listed and never return raw
+provider errors to clients.
+
+## Security checklist
+
+- Keep JWT signing keys, OAuth credentials, and session keys in `RuntimeSecrets`.
+- Pin accepted JWT algorithms and issuer/audience values.
+- Configure trusted proxies before using forwarded client IPs in auth policy.
+- Use secure, HttpOnly, appropriately `SameSite` session cookies.
+- Return generic authentication errors and log detailed causes internally.

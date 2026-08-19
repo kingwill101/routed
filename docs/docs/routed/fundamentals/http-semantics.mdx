@@ -149,12 +149,17 @@ final etag = resolveDefaultEtag(bodyBytes, ctx.engineConfig.etagStrategy);
 
 ### ETag Strategy Configuration
 
-Configure the default ETag behaviour in your YAML:
+Configure the default ETag behaviour through `RoutingServiceProvider`:
 
-```yaml title="config/routing.yaml"
-routing:
-  etag:
-    strategy: strong  # strong, weak, or disabled
+```dart
+final engine = await Engine.create(
+  providers: [
+    CoreServiceProvider(),
+    RoutingServiceProvider(
+      const RoutingConfig(etagStrategy: EtagStrategy.strong),
+    ),
+  ],
+);
 ```
 
 | Strategy | Behavior |
@@ -201,22 +206,12 @@ When `routing.default_options` is enabled (the default), Routed returns `204 No 
 
 `405 Method Not Allowed` responses also include `OPTIONS` in the `Allow` header so clients can discover capabilities via CORS preflight or general probing.
 
-```yaml title="config/routing.yaml"
-routing:
-  default_options: true    # default
-```
+The default is enabled. Set `defaultOptionsEnabled: false` on
+`RoutingConfig` when the application owns every `OPTIONS` handler.
 
 Set to `false` if you prefer to author every `OPTIONS` handler manually or want middleware to take full control.
 
-## Routing Configuration Reference
+## Routing configuration reference
 
-All HTTP semantics settings live under the `routing` namespace:
-
-```yaml title="config/routing.yaml"
-routing:
-  redirect_trailing_slash: true   # Redirect /foo/ to /foo (or vice versa)
-  handle_method_not_allowed: true # Return 405 instead of 404 for wrong methods
-  default_options: true           # Auto-generate OPTIONS responses
-  etag:
-    strategy: strong              # strong, weak, or disabled
-```
+All HTTP semantics settings are fields on the typed `RoutingConfig` passed to
+`RoutingServiceProvider`.

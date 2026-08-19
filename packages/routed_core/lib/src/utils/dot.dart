@@ -1,4 +1,4 @@
-/// A utility for interacting with dotted configuration paths.
+/// A utility for interacting with dotted paths in nested data maps.
 ///
 /// Use the top-level constant [dot] for stateless access (`dot.get(...)`,
 /// `dot.set(...)`) or create a scoped instance via `dot(map)` /

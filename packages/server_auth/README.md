@@ -33,9 +33,6 @@ Use the package umbrella library for the public API.
 ```dart
 import 'package:server_auth/server_auth.dart';
 
-final registry = AuthProviderRegistry.instance;
-registerAllAuthProviders(registry);
-
 final google = googleProvider(
   GoogleProviderOptions(
     clientId: 'google-client-id',
@@ -79,17 +76,6 @@ final providers = <AuthProvider>[
 
 final middleware = authProvidersEndpoint(providers: providers);
 ```
-
-## Config-Driven Registration
-
-```dart
-import 'package:server_auth/server_auth.dart';
-
-registerAllAuthProviders(AuthProviderRegistry.instance);
-```
-
-Then map framework config into provider options and resolve providers from the
-registry by key.
 
 ## JWT issue + verify example
 
@@ -435,7 +421,7 @@ final allowed = await gates.can(
 );
 print(allowed); // true
 
-// Config/manifest-driven gate registration that preserves unmanaged entries:
+// Managed gate registration that preserves unmanaged entries:
 final managed = <String>{};
 final registered = registerGateCallbacksSafely<Map<String, dynamic>>(
   gates.registry,

@@ -8,17 +8,19 @@ void main() {
     registerRoutedProviders();
     expect(Engine.builtins.whereType<RoutedSecurityProvider>(), hasLength(1));
     final engine = Engine(
-      configItems: {
-        'security': {
-          'trusted_proxies': {
-            'enabled': true,
-            'forward_client_ip': true,
-            'proxies': ['127.0.0.1/32'],
-            'headers': ['X-Forwarded-For'],
-          },
-        },
-      },
-      providers: [...Engine.defaultProviders, RoutedSecurityProvider()],
+      providers: [
+        ...Engine.defaultProviders,
+        RoutedSecurityProvider(
+          RoutedSecurityConfig(
+            trustedProxies: TrustedProxyConfig(
+              enabled: true,
+              forwardClientIp: true,
+              proxies: ['127.0.0.1/32'],
+              headers: ['X-Forwarded-For'],
+            ),
+          ),
+        ),
+      ],
     )..get('/ip', (ctx) => ctx.string(ctx.request.clientIP));
 
     addTearDown(engine.close);
@@ -46,17 +48,19 @@ void main() {
   test('security provider denies IPs outside the allow list', () async {
     registerRoutedProviders();
     final engine = Engine(
-      configItems: {
-        'security': {
-          'ip_filter': {
-            'enabled': true,
-            'default_action': 'deny',
-            'allow': ['203.0.113.5'],
-            'respect_trusted_proxies': false,
-          },
-        },
-      },
-      providers: [...Engine.defaultProviders, RoutedSecurityProvider()],
+      providers: [
+        ...Engine.defaultProviders,
+        RoutedSecurityProvider(
+          RoutedSecurityConfig(
+            ipFilter: IpFilterConfig(
+              enabled: true,
+              defaultAction: IpFilterAction.deny,
+              allow: ['203.0.113.5'],
+              respectTrustedProxies: false,
+            ),
+          ),
+        ),
+      ],
     )..get('/secure', (ctx) => ctx.string('ok'));
 
     addTearDown(engine.close);
@@ -77,13 +81,18 @@ void main() {
 
   test('batteries-included engine applies configured CORS', () async {
     final engine = await Engine.create(
-      configItems: {
-        'cors': {
-          'enabled': true,
-          'allowed_origins': ['https://app.example'],
-          'allowed_methods': ['GET'],
-        },
-      },
+      providers: [
+        ...Engine.defaultProviders,
+        RoutedSecurityProvider(
+          RoutedSecurityConfig(
+            cors: CorsConfig(
+              enabled: true,
+              allowedOrigins: ['https://app.example'],
+              allowedMethods: ['GET'],
+            ),
+          ),
+        ),
+      ],
     );
     addTearDown(engine.close);
     var handled = false;
@@ -110,45 +119,15 @@ void main() {
     );
   });
 
-  test('CORS configuration reload updates the middleware', () async {
-    final engine = await Engine.create(
-      configItems: {
-        'cors': {'enabled': false},
-      },
+  test('security configuration rejects invalid network values before boot', () {
+    final future = Engine.create(
+      providers: [
+        ...Engine.defaultProviders,
+        RoutedSecurityProvider(
+          RoutedSecurityConfig(ipFilter: IpFilterConfig(allow: ['not-an-ip'])),
+        ),
+      ],
     );
-    addTearDown(engine.close);
-    engine.get('/items', (ctx) => ctx.string('ok'));
-
-    final before = await engine.handlePortable(
-      PortableRequest(
-        method: 'GET',
-        uri: Uri.parse('https://api.example/items'),
-        headers: PortableHeaders({
-          'Origin': ['https://app.example'],
-        }),
-      ),
-    );
-    expect(before.headers.get('Access-Control-Allow-Origin'), isNull);
-
-    final override = ConfigImpl()..merge(engine.appConfig.all());
-    override.set('cors', {
-      'enabled': true,
-      'allowed_origins': ['https://app.example'],
-    });
-    await engine.replaceConfig(override);
-
-    final after = await engine.handlePortable(
-      PortableRequest(
-        method: 'GET',
-        uri: Uri.parse('https://api.example/items'),
-        headers: PortableHeaders({
-          'Origin': ['https://app.example'],
-        }),
-      ),
-    );
-    expect(
-      after.headers.get('Access-Control-Allow-Origin'),
-      'https://app.example',
-    );
+    return expectLater(future, throwsA(isA<ConfigValidationException>()));
   });
 }

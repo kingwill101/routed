@@ -25,6 +25,13 @@ claims.
 - Bun `Bun.serve` HTTP and native `server.upgrade` WebSocket echo.
 - Cloudflare Fetch HTTP, streaming responses, and `WebSocketPair` echo.
 - Lazy Fetch engine initialization for Worker-style hosts.
+- Cloudflare-specific binding wrappers for Worker environments, D1 sessions,
+  Durable Object namespaces/stubs, Container instances and controls, R2,
+  Queues, Worker service bindings, Workflows, Secrets Store, alarms, and
+  SQLite SQL storage through `package:routed_node/cloudflare.dart`.
+- Routed-owned Cloudflare request/response wrappers keep `package:web` and
+  `dart:js_interop` behind the JavaScript implementation; the CLI generates
+  Durable Object registrations and named class exports.
 - CLI-generated Cloudflare and Netlify deployment wrappers.
 - Runtime/capability metadata and typed host extensions.
 - Runtime matrix documentation.
@@ -38,6 +45,11 @@ claims.
 - Vercel and Netlify Fetch behavior beyond the current deployed HTTP checks.
 - Full lifecycle and shutdown behavior for Bun, Deno, and Cloudflare sockets.
 - Protocol edge cases across all JavaScript WebSocket transports.
+
+Cloudflare platform bindings are intentionally kept out of
+`package:routed_node/routed_node.dart`. Applications that use D1 or Durable
+Objects import `package:routed_node/cloudflare.dart`; VM analysis remains safe
+because the native binding implementation is selected only for JavaScript.
 
 ### Reference findings
 
@@ -339,18 +351,22 @@ multiple engines.
 
 ### F2. Cloudflare WebSocket contract
 
-Add tests for:
+The host-neutral Cloudflare surface now covers the hibernation path through
+`CloudflareWebSocketPair`, `CloudflareWebSocket`, and typed Durable Object
+callbacks. Applications do not import `package:web` or `dart:js_interop`.
+Focused VM and JavaScript-target tests cover:
 
 - typed `WebSocketPair` access;
 - handshake response status and headers;
 - `accept()` invocation;
 - text and binary messages;
-- protocol selection;
-- close and error events;
-- malformed upgrade request;
-- handler error after upgrade.
+- attachment serialization;
+- close callback forwarding.
 
 Keep Cloudflare `webSocket: true` only for the native Worker upgrade path.
+Protocol selection, malformed-upgrade behavior, error callback behavior, and
+live Wrangler/deployed verification of a real hibernating Durable Object remain
+the next runtime-level checks.
 
 ### F3. Vercel and Netlify unsupported behavior
 

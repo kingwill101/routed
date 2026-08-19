@@ -1,5 +1,5 @@
 import 'package:routed_core/src/container/container.dart' show Container;
-import 'package:routed_core/src/contracts/contracts.dart' show Config;
+import 'package:routed_core/src/config/typed.dart' show ConfigStore;
 import 'package:routed_core/src/support/named_registry.dart' show NamedRegistry;
 import 'package:routed_validation/src/validation/rule.dart';
 import 'package:routed_validation/src/validation/rules/rules.dart';
@@ -10,20 +10,11 @@ ValidationRuleRegistry requireValidationRegistry(Container container) {
   if (container.has<ValidationRuleRegistry>()) {
     return container.get<ValidationRuleRegistry>();
   }
-  // For empty container (test expects throw), check if it has Config.
-  // Engine's container will have Config via CoreServiceProvider, so create for it.
-  // Empty Container() has no Config, so throw StateError as test expects.
-  if (!container.has<Config>()) {
+  if (!container.has<ConfigStore>()) {
     throw StateError('ValidationRuleRegistry not found in container');
   }
-  // Validation is optional in the slim core. Create and register the
-  // feature-owned registry on demand when validation is first requested.
   final registry = ValidationRuleRegistry.defaults();
-  try {
-    container.instance<ValidationRuleRegistry>(registry);
-  } catch (_) {
-    // Ignore if registration fails due to container state.
-  }
+  container.instance<ValidationRuleRegistry>(registry);
   return registry;
 }
 

@@ -99,6 +99,40 @@ void main() {
 }
 ```
 
+### Cloudflare bindings
+
+Import `package:routed_node/cloudflare.dart` for the supported Worker binding
+surface. Routed keeps JavaScript interop behind Dart contracts, so handlers can
+use D1, Durable Objects, Containers, Worker service bindings, R2, Workflows,
+Queues, and Secrets Store without importing `package:web` or
+`dart:js_interop`:
+
+```dart
+final env = cloudflareEnvironmentOf(ctx);
+final request = cloudflareRequestOf(ctx);
+if (env == null || request == null) return;
+
+final user = await env
+    .d1('DB')
+    .prepare('SELECT id, email FROM users WHERE id = ?')
+    .bind([ctx.param('id')])
+    .first<Map<String, Object?>>();
+
+final workerResponse = await env.worker('PROFILE_API').fetch(request);
+final greeting = await env.worker('PROFILE_API').call<String>('greet', ['Ada']);
+final file = await env.r2('FILES').get('users/${user?['id']}.json');
+final secret = await env.secretsStore('PAYMENTS_KEY').get();
+final workflow = await env.workflow('BILLING').create(
+  options: CloudflareWorkflowCreateOptions(params: {'user': user?['id']}),
+);
+```
+
+Use `env.container('APP').get(sessionId).fetch(request)` for a request to a
+Container's default port. Container-backed Durable Objects additionally expose
+`state.container` for starting, executing, monitoring, and stopping processes.
+The runtime binding surface is JavaScript-only at execution time; the public
+import remains VM-safe for shared application code and tests.
+
 Vercel and Netlify use the corresponding `vercel.dart` and `netlify.dart`
 entrypoints. These hosts receive a native Fetch `Request` and return a Fetch
 `Response`; they do not expose a long-lived listener handle.

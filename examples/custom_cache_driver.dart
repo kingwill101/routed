@@ -10,14 +10,21 @@ void registerFilesystemCacheDriver() {
   manager.registerStoreFactory(
     filesystemCacheDriver,
     FilesystemCacheStoreFactory(),
+    const FilesystemCacheConfiguration(cacheDirectory: 'cache'),
   );
-  return;
 }
 
-class FilesystemCacheStoreFactory extends StoreFactory {
+class FilesystemCacheConfiguration implements StoreConfiguration {
+  const FilesystemCacheConfiguration({required this.cacheDirectory});
+
+  final String cacheDirectory;
+}
+
+class FilesystemCacheStoreFactory
+    implements StoreFactory<FilesystemCacheConfiguration> {
   @override
-  Store create(Map<String, dynamic> config) {
-    final directory = config['cache_dir'] as String;
+  Store create(FilesystemCacheConfiguration configuration) {
+    final directory = configuration.cacheDirectory;
     throw UnimplementedError(
       'Implement the filesystem cache store for "$directory".',
     );
@@ -29,9 +36,10 @@ void main() {
   manager.registerStoreFactory(
     filesystemCacheDriver,
     FilesystemCacheStoreFactory(),
+    const FilesystemCacheConfiguration(cacheDirectory: 'cache'),
   );
   print(
     'Registered $filesystemCacheDriver cache driver: '
-    '${manager.storeFactoryDrivers}',
+    '${manager.storeNames}',
   );
 }

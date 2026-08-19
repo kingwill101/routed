@@ -44,14 +44,17 @@ Pass `providers` to use a different set:
 registerRoutedProviders();
 engineGroup(
   'with cache & sessions',
-  providers: Engine.builtins,  // Use all providers
-  configItems: {'app.env': 'testing'},
-  engineConfig: EngineConfig(
-    cacheManager: CacheManager()
-      ..registerStore('array', {'driver': 'array'}),
-    sessionConfig: SessionConfig.cookie(appKey: 'secret'),
-  ),
+  providers: [
+    ...Engine.defaultProviders,
+    RoutedCacheProvider(CacheConfig(store: ArrayStore())),
+    RoutedSessionsProvider(SessionConfig.cookie(appKey: 'secret')),
+  ],
   options: [
+    withCacheManager(
+      DataCacheManager()
+        ..registerStore('array', ArrayStore()),
+    ),
+    withMiddleware([sessionMiddleware()]),
     withMiddleware([timeoutMiddleware(const Duration(seconds: 5))]),
   ],
   define: (engine, client, test) {
@@ -72,7 +75,9 @@ engineGroup(
 );
 ```
 
-If you need full control, pass `engineConfig` and `options` to shape every engine created by the group. (Each test still receives a fresh engine instance.)
+If you need full control, pass typed providers and wiring options to shape every
+engine created by the group. (Each test still receives a fresh engine
+instance.)
 
 ## Setup and teardown inside the group
 

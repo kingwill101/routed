@@ -128,16 +128,7 @@ extension ServerExtension on Engine {
       await config.ensureTrustedProxiesParsed();
     }
 
-    Object? maxRequestSizeSetting;
-    if (rootContainer.has<Config>()) {
-      final configMap = rootContainer.get<Config>();
-      maxRequestSizeSetting = configMap.get<Object?>(
-        'security.max_request_size',
-      );
-    }
-    final maxRequestSize = maxRequestSizeSetting is int
-        ? maxRequestSizeSetting
-        : config.security.maxRequestSize;
+    final maxRequestSize = config.security.maxRequestSize;
 
     final HttpRequest effectiveRequest = maxRequestSize > 0
         ? WrappedRequest(httpRequest, maxRequestSize)

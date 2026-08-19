@@ -6,7 +6,6 @@ import 'package:crypto/crypto.dart' show sha256;
 import 'package:http/http.dart' as http;
 
 import 'bearer.dart' show extractBearerToken;
-import 'config_utils.dart' show parseStringLike;
 
 /// Attribute key used to store the OAuth2 access token.
 const String oauthTokenAttribute = 'auth.oauth.access_token';
@@ -181,15 +180,15 @@ class OAuthIntrospectionOptions {
   final Map<String, String> additionalParameters;
 }
 
-/// Materializes OAuth introspection options from config-like fields.
+/// Materializes OAuth introspection options from typed provider fields.
 ///
 /// Returns `null` when introspection is disabled or [endpoint] is missing.
 OAuthIntrospectionOptions? materializeOAuthIntrospectionOptions({
   required bool enabled,
   required Uri? endpoint,
-  Object? clientId,
-  Object? clientSecret,
-  Object? tokenTypeHint,
+  String? clientId,
+  String? clientSecret,
+  String? tokenTypeHint,
   Duration cacheTtl = Duration.zero,
   Duration clockSkew = const Duration(seconds: 60),
   Duration requestTimeout = const Duration(seconds: 10),
@@ -201,26 +200,19 @@ OAuthIntrospectionOptions? materializeOAuthIntrospectionOptions({
 
   return OAuthIntrospectionOptions(
     endpoint: endpoint,
-    clientId: parseStringLike(
-      clientId,
-      context: 'oauth.introspection.client_id',
-      throwOnInvalid: false,
-    ),
-    clientSecret: parseStringLike(
-      clientSecret,
-      context: 'oauth.introspection.client_secret',
-      throwOnInvalid: false,
-    ),
-    tokenTypeHint: parseStringLike(
-      tokenTypeHint,
-      context: 'oauth.introspection.token_type_hint',
-      throwOnInvalid: false,
-    ),
+    clientId: _optionalTrimmed(clientId),
+    clientSecret: _optionalTrimmed(clientSecret),
+    tokenTypeHint: _optionalTrimmed(tokenTypeHint),
     cacheTtl: cacheTtl,
     clockSkew: clockSkew,
     requestTimeout: requestTimeout,
     additionalParameters: additionalParameters,
   );
+}
+
+String? _optionalTrimmed(String? value) {
+  final trimmed = value?.trim();
+  return trimmed == null || trimmed.isEmpty ? null : trimmed;
 }
 
 class _CachedIntrospection {

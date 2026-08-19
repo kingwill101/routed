@@ -2,78 +2,87 @@
 id: upload-hardening
 title: Securing file uploads
 sidebar_position: 3
-description: Configure Routed’s uploads provider for safe defaults, extension filtering, and predictable storage.
+description: Configure Routed uploads with strict limits and predictable storage.
 ---
 
-Routed’s uploads provider streams multipart bodies efficiently, but you still need to guard against unsafe files and runaway disk usage. This guide walks through the hardened defaults landing in the next release and how to adopt them.
+# Securing file uploads
 
-> **TL;DR**  
-> Start with a strict extension whitelist, pin uploads to a dedicated storage directory backed by a Routed disk, and let the provider clean up partial files automatically.
+Treat every uploaded filename, MIME type, and byte as untrusted. Configure the
+uploads provider with the smallest useful allow-list and enforce size limits
+before accepting the file into application storage.
 
-## Configure the whitelist
+## Use a strict typed configuration
 
-Define the extensions your application accepts in `config/uploads.yaml` (or the equivalent manifest block). Routed normalises values so you can supply `jpg` (config) or `.jpg` (code) interchangeably.
+```dart
+import 'package:routed_core/routed_core.dart';
 
-```yaml title="config/uploads.yaml"
-allowed_extensions:
-  - jpg
-  - png
-  - pdf
+final uploads = MultipartConfig(
+  maxMemory: 16 * 1024 * 1024,
+  maxFileSize: 5 * 1024 * 1024,
+  maxDiskUsage: 6 * 1024 * 1024,
+  allowedExtensions: {'jpg', 'png', 'pdf'},
+  uploadDirectory: 'storage/uploads',
+  filePermissions: 0x1a0,
+);
+
+final engine = await Engine.create(
+  providers: [
+    ...Engine.defaultProviders,
+    UploadsServiceProvider(uploads),
+  ],
+);
 ```
 
-If a request uploads a file with an extension not on the list, the framework rejects the stream before persisting any bytes and surfaces a 4xx error you can translate to your preferred response shape.
+Configuration validation happens before provider boot. Extensions are
+lowercase and omit the leading dot; the framework normalizes their casing but
+does not treat an extension allow-list as content validation.
 
-## Pin uploads to a storage directory
+## Limit resource consumption
 
-Hardened uploads write every accepted file to the directory configured under `uploads.directory`. Keep it under your storage root so uploads share permissions, quota configuration, and observability with the rest of your storage layer.
+`maxFileSize` bounds one multipart file. `maxDiskUsage` bounds all files in a
+single request, while `maxMemory` limits buffering for multipart parsing. If a
+limit is reached, the parser stops and removes partial files from that
+request.
 
-```yaml title="config/uploads.yaml"
-directory: uploads
-permissions: 0o640
+Keep `uploadDirectory` separate from any directory served by the static-file
+provider. After business validation and optional malware scanning, move or
+copy accepted files into the application’s durable storage policy.
+
+## Validate file content
+
+Use application validation in addition to the extension allow-list:
+
+```dart
+engine.post('/documents', (ctx) async {
+  await ctx.validate({
+    'document': 'file|max_file_size:5242880',
+    'image': 'file|allowed_mime_types:image/jpeg,image/png',
+  });
+
+  final document = ctx.formFile('document');
+  if (document == null) {
+    return ctx.json({'error': 'document is required'}, statusCode: 422);
+  }
+
+  await ctx.saveUploadedFile(
+    document,
+    'storage/uploads/${document.filename}',
+  );
+  return ctx.json({'ok': true});
+});
 ```
 
-```yaml title="config/storage.yaml"
-storage:
-  root: /srv/app
-```
-
-Key behaviours:
-
-- The provider refuses to use system temp directories once an override is supplied.
-- Files inherit the configured permission mask so web servers cannot accidentally serve private content.
-- Static assets or views can reuse the same storage root, keeping IO consistent across subsystems.
-
-## Enforce limits and cleanup
-
-Set per-file and aggregate quotas to prevent exhaustion attacks:
-
-```yaml title="config/uploads.yaml"
-max_file_size: 5242880   # 5 MiB per file
-max_memory: 16777216     # 16 MiB request body buffer
-max_disk_usage: 6291456  # 6 MiB total written to disk per request
-```
-
-Routed streams multipart payloads and enforces these limits as data arrives:
-
-- `max_memory` keeps the overall request size in check.
-- `max_file_size` aborts a single part once it grows beyond the configured size.
-- `max_disk_usage` bounds the bytes written to disk across every file in the request. As soon as the quota is exceeded the framework closes the current stream, deletes partial files, and rejects the upload before it can consume additional storage.
-
-If the client disconnects early or hits any limit, every partially written file is removed immediately—no background sweeps required.
+Do not use the client-provided MIME type as the only security decision. Where
+the file type matters, inspect its bytes or pass it through a trusted scanning
+service before publishing it.
 
 ## Operational checklist
 
-- Audit `allowed_extensions` regularly; accept the smallest useful list and prefer content-type validation in business logic where possible.
-- Monitor the upload directory’s disk usage. A simple `du` alert tied to your storage disk catches unexpected growth.
-- Run `dart run routed_cli provider:list --config` to inspect the merged configuration and ensure extensions, directory, and limit values loaded as expected.
-- Combine uploads with [security headers](/docs/routed/fundamentals/headers#security-headers) so browsers avoid caching sensitive responses.
-
-## Looking ahead
-
-The hardened defaults in this roadmap milestone pave the way for:
-
-- Drive-by scanning hooks so you can plug in antivirus or content validation filters.
-- Storage driver quotas shared across uploads, static assets, and user-generated content.
-- Operator-facing dashboards (via the CLI) that report rejected uploads and cleanup statistics.
-
-Adopting the settings above keeps you aligned with the upcoming release while leaving room for these future additions.
+- Keep upload directories outside static mounts.
+- Use the smallest practical extension and MIME allow-lists.
+- Set both per-file and per-request disk limits.
+- Treat `filename` as display data; never concatenate an untrusted path into a
+  filesystem operation.
+- Handle `FileTooLargeException`, `FileExtensionNotAllowedException`, and
+  `FileQuotaExceededException` as client errors without returning internal
+  filesystem details.

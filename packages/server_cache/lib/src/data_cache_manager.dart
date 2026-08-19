@@ -1,15 +1,7 @@
-import 'package:server_contracts/server_contracts.dart' show Repository;
+import 'package:server_contracts/server_contracts.dart' show Repository, Store;
 
-import 'array_store_factory.dart';
-import 'file_store_factory.dart';
-import 'null_store_factory.dart';
-import 'redis_store_factory.dart';
 import 'repository.dart';
 import 'store_factory.dart';
-
-/// Resolves cache store configuration before a [StoreFactory] is invoked.
-typedef DataCacheConfigResolver =
-    Map<String, dynamic> Function(String driver, Map<String, dynamic> config);
 
 /// Builds repository callbacks for a specific configured store.
 typedef DataCacheCallbacksBuilder =
@@ -17,101 +9,61 @@ typedef DataCacheCallbacksBuilder =
 
 /// Framework-agnostic cache manager for [Repository] instances.
 ///
-/// This manager owns store configurations, resolves repositories lazily, and
-/// delegates concrete storage creation to registered [StoreFactory] instances.
+/// Stores are registered as concrete [Store] objects. When an application
+/// wants reusable construction, [registerStoreFactory] accepts a typed
+/// [StoreConfiguration] and creates the store during composition. The
+/// manager never parses string-keyed configuration maps.
 class DataCacheManager {
   DataCacheManager({
     String prefix = '',
-    DataCacheConfigResolver? configResolver,
     DataCacheCallbacksBuilder? callbacksBuilder,
-    bool registerDefaultStoreFactories = true,
   }) : _prefix = prefix,
-       _configResolver = configResolver,
-       _callbacksBuilder = callbacksBuilder {
-    if (registerDefaultStoreFactories) {
-      _registerDefaultStoreFactories();
-    }
-  }
+       _callbacksBuilder = callbacksBuilder;
 
   final Map<String, Repository> _repositories = <String, Repository>{};
-  final Map<String, Map<String, dynamic>> _configurations =
-      <String, Map<String, dynamic>>{};
-  final Map<String, StoreFactory> _storeFactories = <String, StoreFactory>{};
+  final Map<String, Store> _stores = <String, Store>{};
 
   String _prefix;
-  DataCacheConfigResolver? _configResolver;
   DataCacheCallbacksBuilder? _callbacksBuilder;
 
-  /// Registers a configured store entry.
-  ///
-  /// When [repository] is provided, it is used directly and no factory
-  /// resolution is required for [store].
-  void registerStore(
-    String name,
-    Map<String, dynamic> config, {
-    Repository? repository,
-  }) {
-    _configurations[name] = Map<String, dynamic>.from(config);
+  /// Registers a concrete store under [name].
+  void registerStore(String name, Store store, {Repository? repository}) {
+    _stores[name] = store;
+    _repositories.remove(name);
     if (repository != null) {
       _repositories[name] = _configureRepository(name, repository);
     }
   }
 
-  /// Returns whether [name] has store configuration.
-  bool hasStore(String name) => _configurations.containsKey(name);
+  /// Creates and registers a store from typed [configuration].
+  void registerStoreFactory<T extends StoreConfiguration>(
+    String name,
+    StoreFactory<T> factory,
+    T configuration, {
+    Repository? repository,
+  }) {
+    registerStore(name, factory.create(configuration), repository: repository);
+  }
 
-  /// Names of all configured stores.
-  List<String> get storeNames => _configurations.keys.toList(growable: false);
+  /// Returns whether [name] has a registered store.
+  bool hasStore(String name) => _stores.containsKey(name);
+
+  /// Names of all registered stores.
+  List<String> get storeNames => _stores.keys.toList(growable: false);
 
   /// Resolves (or returns cached) [Repository] for [name].
   Repository store(String name) {
     return _repositories[name] ??= resolve(name);
   }
 
-  /// Resolves a fresh [Repository] for [name] from its configuration.
+  /// Resolves a fresh [Repository] for [name].
   Repository resolve(String name) {
-    final config = _configurations[name];
-    if (config == null) {
+    final store = _stores[name];
+    if (store == null) {
       throw ArgumentError('Cache store [$name] is not defined.');
     }
-
-    final driverValue = config['driver'];
-    final driver = driverValue?.toString();
-    if (driver == null || driver.isEmpty) {
-      throw ArgumentError(
-        'Cache store [$name] must define a non-empty "driver".',
-      );
-    }
-
-    final factory = _storeFactories[driver];
-    if (factory == null) {
-      throw ArgumentError(
-        'Driver [$driver] is not supported. '
-        'Supported drivers are: ${_storeFactories.keys.join(", ")}.',
-      );
-    }
-
-    final resolvedConfig = _resolveConfig(driver, config);
-    final repository = RepositoryImpl(
-      factory.create(resolvedConfig),
-      name,
-      _prefix,
-      _callbacksBuilder?.call(name),
-    );
-    return repository;
+    return RepositoryImpl(store, name, _prefix, _callbacksBuilder?.call(name));
   }
-
-  /// Registers a [StoreFactory] under [driver].
-  void registerStoreFactory(String driver, StoreFactory factory) {
-    _storeFactories[driver] = factory;
-  }
-
-  /// Returns whether a [StoreFactory] exists for [driver].
-  bool hasStoreFactory(String driver) => _storeFactories.containsKey(driver);
-
-  /// Registered store factory driver names.
-  List<String> get storeFactoryDrivers =>
-      _storeFactories.keys.toList(growable: false);
 
   /// Updates the key prefix for current and future repositories.
   void setPrefix(String prefix) {
@@ -126,14 +78,7 @@ class DataCacheManager {
   /// Current key prefix applied by this manager.
   String get prefix => _prefix;
 
-  /// Updates configuration resolver for future repository resolutions.
-  ///
-  /// Existing cached repositories are retained.
-  void setConfigResolver(DataCacheConfigResolver? resolver) {
-    _configResolver = resolver;
-  }
-
-  /// Updates callbacks builder and reapplies it to resolved repositories.
+  /// Updates callbacks and reapplies them to resolved repositories.
   void setCallbacksBuilder(DataCacheCallbacksBuilder? builder) {
     _callbacksBuilder = builder;
     for (final entry in _repositories.entries) {
@@ -144,37 +89,23 @@ class DataCacheManager {
     }
   }
 
-  /// Clears cached resolved repositories while preserving configuration.
+  /// Clears cached resolved repositories while preserving registered stores.
   void clearResolvedStores() {
     _repositories.clear();
   }
 
-  /// Clears all configured and resolved stores.
+  /// Clears all registered and resolved stores.
   void clear() {
     _repositories.clear();
-    _configurations.clear();
+    _stores.clear();
   }
 
   /// Returns the first registered store name.
-  ///
-  /// Throws a [StateError] when no stores are configured.
-  String getDefaultDriver() {
-    if (_configurations.isEmpty) {
+  String getDefaultStoreName() {
+    if (_stores.isEmpty) {
       throw StateError('No stores have been registered.');
     }
-    return _configurations.keys.first;
-  }
-
-  Map<String, dynamic> _resolveConfig(
-    String driver,
-    Map<String, dynamic> config,
-  ) {
-    final copied = Map<String, dynamic>.from(config);
-    final resolver = _configResolver;
-    if (resolver == null) {
-      return copied;
-    }
-    return Map<String, dynamic>.from(resolver(driver, copied));
+    return _stores.keys.first;
   }
 
   Repository _configureRepository(String name, Repository repository) {
@@ -184,12 +115,5 @@ class DataCacheManager {
         ..attachCallbacks(_callbacksBuilder?.call(name));
     }
     return repository;
-  }
-
-  void _registerDefaultStoreFactories() {
-    registerStoreFactory('array', ArrayStoreFactory());
-    registerStoreFactory('file', FileStoreFactory());
-    registerStoreFactory('null', NullStoreFactory());
-    registerStoreFactory('redis', RedisStoreFactory());
   }
 }

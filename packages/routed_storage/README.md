@@ -34,7 +34,7 @@ void main() async {
   final engine = await Engine.create(
     providers: [
       ...Engine.defaultProviders,
-      RoutedStorageProvider(manager),
+      RoutedStorageProvider(manager: manager),
     ],
   );
   engine.use(storageMiddleware(manager));
@@ -48,31 +48,29 @@ void main() async {
 }
 ```
 
-`RoutedStorageProvider` binds the manager for application code. The
-`RoutedStaticProvider` adds the optional `static.mounts` configuration:
+`RoutedStorageProvider` binds the manager for application code. Static mounts
+are supplied as typed configuration:
 
 ```dart
 final engine = await Engine.create(
-  configItems: {
-    'static': {
-      'enabled': true,
-      'mounts': [
-        {'route': '/assets', 'disk': 'local'},
-      ],
-    },
-  },
   providers: [
-    RoutedStorageProvider(manager),
-    RoutedStaticProvider(),
+    RoutedStorageProvider(manager: manager),
+    RoutedStaticProvider(
+      StaticConfig(
+        enabled: true,
+        mounts: [StaticMountConfig(route: '/assets', disk: 'local')],
+      ),
+    ),
   ],
 );
 ```
 
 With the batteries-included `routed` package, call
-`registerRoutedProviders()` and list `routed.storage` and `routed.static` in
-`http.providers` when using a provider manifest. An explicitly supplied
-`StorageManager` remains authoritative; config-created local disks use the
-manager's default file system.
+`registerRoutedProviders()` and include the typed providers you need in the
+engine's provider list. An explicitly supplied `StorageManager` remains
+authoritative; otherwise pass `StorageConfig` as `configuration` to define
+local disks with `LocalStorageDiskConfig`. Configured providers are immutable
+for the lifetime of an engine.
 
 See [`example/storage_example.dart`](example/storage_example.dart).
 

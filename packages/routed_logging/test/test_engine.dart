@@ -1,4 +1,3 @@
-
 import 'package:file/file.dart';
 import 'package:file/memory.dart';
 import 'package:routed_core/routed_core.dart';
@@ -8,7 +7,7 @@ Engine testEngine({
   EngineConfig? config,
   List<Middleware>? middlewares,
   List<EngineOpt>? options,
-  Map<String, dynamic>? configItems,
+  LoggingConfig? loggingConfig,
   ErrorHandlingRegistry? errorHandling,
   List<ServiceProvider>? providers,
   bool includeDefaultProviders = true,
@@ -23,9 +22,9 @@ Engine testEngine({
   final List<ServiceProvider> resolvedProviders;
   if (includeDefaultProviders) {
     resolvedProviders = [
-      CoreServiceProvider(configItems: configItems ?? const {}),
+      CoreServiceProvider(resolvedConfig),
       RoutingServiceProvider(),
-      LoggingServiceProvider(),
+      LoggingServiceProvider(loggingConfig),
       ...?providers,
     ];
   } else {

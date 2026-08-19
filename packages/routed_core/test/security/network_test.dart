@@ -1,9 +1,42 @@
 import 'dart:io';
 
+import 'package:routed_core/src/security/ip_address.dart';
 import 'package:routed_core/src/security/network.dart';
 import 'package:test/test.dart';
 
 void main() {
+  group('IpAddress', () {
+    test('parses IPv4 without socket APIs', () {
+      final address = IpAddress.tryParse('192.0.2.7');
+
+      expect(address, isNotNull);
+      expect(address!.bytes, [192, 0, 2, 7]);
+      expect(address.isIpv4, isTrue);
+    });
+
+    test('parses compressed IPv6', () {
+      final address = IpAddress.tryParse('2001:db8:dead:beef::1');
+
+      expect(address, isNotNull);
+      expect(address!.bytes, hasLength(16));
+      expect(address.isIpv4, isFalse);
+    });
+
+    test('parses IPv4 embedded in IPv6', () {
+      final address = IpAddress.tryParse('::ffff:192.0.2.7');
+
+      expect(address, isNotNull);
+      expect(address!.bytes, hasLength(16));
+      expect(address.bytes.sublist(12), [192, 0, 2, 7]);
+    });
+
+    test('rejects malformed addresses', () {
+      expect(IpAddress.tryParse('999.0.0.1'), isNull);
+      expect(IpAddress.tryParse('2001:db8::1::2'), isNull);
+      expect(IpAddress.tryParse('2001:db8:zz::1'), isNull);
+    });
+  });
+
   group('NetworkMatcher', () {
     group('maybeParse', () {
       test('should parse valid IPv4 CIDR', () {
@@ -151,6 +184,34 @@ void main() {
             expect(matcher.contains(address), isFalse);
           },
         );
+      });
+    });
+
+    group('containsText', () {
+      test('matches textual IPv4 addresses', () {
+        final matcher = NetworkMatcher.parse('192.168.1.0/24');
+
+        expect(matcher.containsText('192.168.1.100'), isTrue);
+        expect(matcher.containsText('192.168.2.1'), isFalse);
+      });
+
+      test('matches textual IPv6 addresses', () {
+        final matcher = NetworkMatcher.parse('2001:db8::/32');
+
+        expect(matcher.containsText('2001:db8:dead::1'), isTrue);
+        expect(matcher.containsText('2001:db9::1'), isFalse);
+      });
+
+      test('normalizes IPv4-mapped IPv6 targets for IPv4 rules', () {
+        final matcher = NetworkMatcher.parse('192.168.1.0/24');
+
+        expect(matcher.containsText('::ffff:192.168.1.10'), isTrue);
+      });
+
+      test('uses false for invalid textual addresses', () {
+        final matcher = NetworkMatcher.parse('192.168.1.0/24');
+
+        expect(matcher.containsText('not-an-ip'), isFalse);
       });
     });
   });

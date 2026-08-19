@@ -6,20 +6,7 @@ import 'src/register_providers.dart';
 // Call registerRoutedProviders() before using Engine.builtins or Engine.create()
 // when the full official provider catalogue is required.
 export 'package:routed_core/routed_core.dart'
-    hide
-        ProviderConfigException,
-        ConfigSchema,
-        stringKeyedMap,
-        parseBoolLike,
-        parseStringLike,
-        parseStringList,
-        parseStringMap,
-        parseStringMapAllowNulls,
-        parseMapList,
-        parseIntLike,
-        parseDoubleLike,
-        parseDurationLike;
-export 'package:routed_core/providers.dart';
+    hide ProviderConfigException;
 export 'package:routed_auth/routed_auth.dart';
 export 'package:routed_cache/routed_cache.dart';
 export 'package:routed_sessions/routed_sessions.dart';

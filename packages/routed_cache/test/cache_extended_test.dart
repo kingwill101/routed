@@ -5,7 +5,7 @@ import 'package:server_testing/server_testing.dart';
 
 void main() {
   CacheManager cacheManager = CacheManager()
-    ..registerStore('array', {'driver': 'array', 'serialize': false});
+    ..registerStore('array', ArrayStore());
 
   group('Cache extension — gap coverage', () {
     engineGroup(

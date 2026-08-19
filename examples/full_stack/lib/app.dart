@@ -9,18 +9,7 @@ Future<Engine> createEngine() async {
   await dataSource.init();
   DataSource.setDefault(dataSource);
 
-  final engine = await Engine.create(
-    providers: [
-      CoreServiceProvider.withLoader(
-        const ConfigLoaderOptions(
-          configDirectory: 'config',
-          loadEnvFiles: true,
-          includeEnvironmentSubdirectory: false,
-        ),
-      ),
-      RoutingServiceProvider(),
-    ],
-  );
+  final engine = await Engine.create();
 
   engine.container.instance<DataSource>(dataSource);
 

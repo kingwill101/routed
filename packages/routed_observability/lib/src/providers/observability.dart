@@ -8,10 +8,15 @@ import '../errors.dart';
 import '../health.dart';
 import '../metrics.dart';
 import '../tracing.dart';
+import '../config.dart';
 
 class ObservabilityServiceProvider extends ServiceProvider
-    with ProvidesDefaultConfig {
-  ObservabilityServiceProvider();
+    with ProvidesTypedConfiguration<ObservabilityConfig> {
+  ObservabilityServiceProvider([ObservabilityConfig? configuration])
+    : configuration = configuration ?? ObservabilityConfig();
+
+  @override
+  final ObservabilityConfig configuration;
 
   static const _metricsRouteName = 'observability.metrics';
   static const _readinessRouteName = 'observability.readiness';
@@ -19,8 +24,6 @@ class ObservabilityServiceProvider extends ServiceProvider
   static const _spanKey = 'routed.observability.span';
   static const _sentrySpanKey = 'routed.observability.sentry_span';
   static const _sentryOp = 'http.server';
-  static const ObservabilityConfigSpec spec = ObservabilityConfigSpec();
-
   bool _tracingEnabled = false;
   bool _metricsEnabled = false;
   bool _healthEnabled = true;
@@ -44,44 +47,6 @@ class ObservabilityServiceProvider extends ServiceProvider
   StreamSubscription<Event>? _eventSubscription;
 
   @override
-  ConfigDefaults get defaultConfig {
-    final values = spec.defaultsWithRoot();
-    values['http'] = {
-      'middleware_sources': {
-        'routed.observability': {
-          'global': [
-            'routed.observability.health',
-            'routed.observability.tracing',
-            'routed.observability.metrics',
-          ],
-        },
-      },
-    };
-
-    return ConfigDefaults(
-      docs: <ConfigDocEntry>[
-        const ConfigDocEntry(
-          path: 'http.middleware_sources',
-          type: 'map',
-          description: 'Observability middleware automatically registered.',
-          defaultValue: <String, Object?>{
-            'routed.observability': <String, Object?>{
-              'global': <String>[
-                'routed.observability.health',
-                'routed.observability.tracing',
-                'routed.observability.metrics',
-              ],
-            },
-          },
-        ),
-        ...spec.docs(),
-      ],
-      values: values,
-      schemas: spec.schemaWithRoot(),
-    );
-  }
-
-  @override
   void register(Container container) {
     final registry = container.get<MiddlewareRegistry>();
     registry.register(
@@ -92,17 +57,10 @@ class ObservabilityServiceProvider extends ServiceProvider
       'routed.observability.metrics',
       (_) => _metricsMiddlewareRef,
     );
-    _configure(container);
   }
 
   @override
   Future<void> boot(Container container) async {
-    _configure(container);
-    await _ensureSentryReady();
-  }
-
-  @override
-  Future<void> onConfigReload(Container container, Config config) async {
     _configure(container);
     await _ensureSentryReady();
   }
@@ -118,14 +76,13 @@ class ObservabilityServiceProvider extends ServiceProvider
   }
 
   void _configure(Container container) {
-    final config = container.has<Config>() ? container.get<Config>() : null;
     final engine = container.has<Engine>() ? container.get<Engine>() : null;
 
-    if (config == null || engine == null) {
+    if (engine == null) {
       return;
     }
 
-    final resolved = spec.resolve(config);
+    final resolved = configuration;
     final enabled = resolved.enabled;
 
     final tracingConfig = TracingConfig(
@@ -142,7 +99,9 @@ class ObservabilityServiceProvider extends ServiceProvider
 
     final metricsConfig = resolved.metrics;
     _metricsEnabled = enabled && metricsConfig.enabled;
-    _metrics = MetricsService(buckets: metricsConfig.buckets);
+    _metrics = MetricsService(
+      buckets: List<double>.from(metricsConfig.buckets),
+    );
     _metricsPath = metricsConfig.path;
 
     final healthConfig = resolved.health;
@@ -168,21 +127,6 @@ class ObservabilityServiceProvider extends ServiceProvider
     container.instance<TracingService>(_tracing);
     container.instance<ErrorObserverRegistry>(_errorObservers);
     container.instance<HealthEndpointRegistry>(_healthRegistry);
-
-    final appConfig = container.get<Config>();
-    final existingGlobal = appConfig.get<Object?>(
-      'http.middleware_sources.routed.observability.global',
-    );
-    final merged = <String>{
-      if (existingGlobal is Iterable)
-        ...existingGlobal.map((entry) => entry.toString()),
-      'routed.observability.tracing',
-      'routed.observability.metrics',
-    }.toList();
-    appConfig.set(
-      'http.middleware_sources.routed.observability.global',
-      merged,
-    );
 
     _attachGlobalMiddleware(engine);
     _registerRoutes(engine);

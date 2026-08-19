@@ -97,6 +97,28 @@ void main() {
       (await client.head('/s/missing.txt')).assertStatus(404);
     });
 
+    test('Middleware runs once for each static-file request', () async {
+      var middlewareCalls = 0;
+      final engine = testEngine(
+        middlewares: [
+          (context, next) async {
+            middlewareCalls++;
+            return next();
+          },
+        ],
+      );
+      addTearDown(engine.close);
+      final dir = fs.directory('middleware')..createSync();
+      engine.static('/static', dir.path, fileSystem: fs);
+      final client = TestClient(RoutedRequestHandler(engine));
+      addTearDown(client.close);
+
+      (await client.get('/static/missing.txt')).assertStatus(404);
+      (await client.head('/static/another.txt')).assertStatus(404);
+
+      expect(middlewareCalls, 2);
+    });
+
     test('Path traversal attempt blocked (../)', () async {
       final engine = testEngine();
       addTearDown(engine.close);

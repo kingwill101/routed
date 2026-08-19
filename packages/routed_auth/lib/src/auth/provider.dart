@@ -11,7 +11,6 @@ import 'package:server_auth/server_auth.dart'
         GuardDefinition,
         AuthGuardRegistry,
         HaigateConfig,
-        AuthProviderRegistry,
         materializeJwtVerifier,
         materializeOAuthIntrospectionOptions,
         RememberTokenStore,
@@ -19,7 +18,6 @@ import 'package:server_auth/server_auth.dart'
         resolveConfiguredGuard,
         AuthVerificationTokenStore,
         JwtVerifier,
-        registerDefaultAuthProviders,
         resolveAuthOptions,
         SessionRememberMeConfig,
         syncManagedGateDefinitions,
@@ -34,13 +32,12 @@ import 'package:routed_auth/src/auth/jwt.dart'
     show jwtAuthenticationWithVerifier;
 import 'package:routed_auth/src/auth/oauth.dart';
 import 'package:routed_auth/src/auth/session_auth.dart';
-import 'package:routed_auth/src/config/specs/auth.dart';
 import 'package:routed_core/src/container/container.dart';
 import 'package:routed_core/src/context/context.dart';
-import 'package:routed_core/src/contracts/config/config.dart' show Config;
 import 'package:routed_core/src/engine/engine.dart';
 import 'package:routed_core/src/engine/middleware_registry.dart';
 import 'package:routed_core/src/provider/provider.dart';
+import 'package:routed_core/src/provider/typed_provider.dart';
 import 'package:routed_core/src/response.dart';
 import 'package:routed_core/src/router/types.dart';
 
@@ -48,11 +45,14 @@ import 'package:routed_core/src/router/types.dart';
 ///
 /// Registers JWT and OAuth middleware, session auth defaults, and binds an
 /// `AuthManager` when `AuthOptions` is available in the container.
-class AuthServiceProvider extends ServiceProvider with ProvidesDefaultConfig {
-  AuthServiceProvider({http.Client? httpClient})
-    : _httpClient = httpClient ?? http.Client() {
-    registerDefaultAuthProviders();
-  }
+class AuthServiceProvider extends ServiceProvider
+    with ProvidesTypedConfiguration<AuthConfig> {
+  AuthServiceProvider({http.Client? httpClient, AuthConfig? configuration})
+    : _httpClient = httpClient ?? http.Client(),
+      configuration = configuration ?? AuthConfig.defaults();
+
+  @override
+  final AuthConfig configuration;
 
   final http.Client _httpClient;
   JwtVerifier? _jwtVerifier;
@@ -65,38 +65,6 @@ class AuthServiceProvider extends ServiceProvider with ProvidesDefaultConfig {
   final Set<String> _managedGateMiddleware = <String>{};
   final Set<String> _managedRbacAbilities = <String>{};
   final Set<String> _managedPolicyAbilities = <String>{};
-  static const AuthConfigSpec spec = AuthConfigSpec();
-
-  @override
-  ConfigDefaults get defaultConfig {
-    final values = spec.defaultsWithRoot();
-    values['http'] = {
-      'middleware_sources': {
-        'routed.auth': {
-          'global': ['routed.auth.jwt', 'routed.auth.oauth2'],
-        },
-      },
-    };
-    return ConfigDefaults(
-      docs: [
-        const ConfigDocEntry(
-          path: 'http.middleware_sources',
-          type: 'map',
-          description:
-              'Authentication middleware references registered globally.',
-          defaultValue: <String, Object?>{
-            'routed.auth': <String, Object?>{
-              'global': <String>['routed.auth.jwt', 'routed.auth.oauth2'],
-            },
-          },
-        ),
-        ...spec.docs(),
-      ],
-      values: values,
-      schemas: spec.schemaWithRoot(),
-    );
-  }
-
   @override
   void register(Container container) {
     final registry = container.get<MiddlewareRegistry>();
@@ -110,17 +78,11 @@ class AuthServiceProvider extends ServiceProvider with ProvidesDefaultConfig {
       'routed.auth.oauth2',
       (_) => _oauthMiddleware ?? _passthrough,
     );
-
-    if (container.has<Config>()) {
-      _applyConfig(container, container.get<Config>());
-    } else {
-      _applyAuthManager(container);
-    }
   }
 
   @override
   Future<void> boot(Container container) async {
-    _applyAuthManager(container);
+    _applyConfig(container, configuration);
 
     final engine = container.has<Engine>() ? container.get<Engine>() : null;
     final manager = container.has<AuthManager>()
@@ -139,13 +101,8 @@ class AuthServiceProvider extends ServiceProvider with ProvidesDefaultConfig {
     ).register(engine.defaultRouter);
   }
 
-  @override
-  Future<void> onConfigReload(Container container, Config config) async {
-    _applyConfig(container, config);
-  }
-
-  void _applyConfig(Container container, Config config) {
-    final resolved = spec.resolve(config);
+  void _applyConfig(Container container, AuthConfig config) {
+    final resolved = config;
     _resolvedConfig = resolved;
 
     final jwt = resolved.jwt;
@@ -188,7 +145,10 @@ class AuthServiceProvider extends ServiceProvider with ProvidesDefaultConfig {
       container.instance<JwtVerifier>(_jwtVerifier!);
     }
 
-    _sessionAuth = _configureSessionAuth(container, resolved.sessionRememberMe);
+    _sessionAuth = _configureSessionAuth(
+      container,
+      resolved.session.rememberMe,
+    );
     container.instance<SessionAuthService>(_sessionAuth!);
 
     final guardRegistry = _resolveGuardRegistry(container);
@@ -236,13 +196,8 @@ class AuthServiceProvider extends ServiceProvider with ProvidesDefaultConfig {
     final adapter = _resolveAuthAdapter(container, options);
     final tokenStore = _resolveTokenStore(container, options);
     final configSession = _resolvedConfig?.session;
-    final configuredProviders = AuthProviderRegistry.instance.buildProviders(
-      _resolvedConfig?.providers ?? const <String, dynamic>{},
-    );
-
     final resolvedOptions = resolveAuthOptions<EngineContext>(
       options: options,
-      configuredProviders: configuredProviders,
       adapter: adapter,
       httpClient: _httpClient,
       tokenStore: tokenStore,

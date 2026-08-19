@@ -1,5 +1,7 @@
 import 'dart:io';
 
+import 'ip_address.dart';
+
 /// Utility for matching IP addresses against CIDR ranges.
 ///
 /// This class provides functionality to parse and match IP addresses
@@ -38,11 +40,11 @@ class NetworkMatcher {
     if (ipPart.isEmpty) {
       return null;
     }
-    final address = InternetAddress.tryParse(ipPart);
+    final address = IpAddress.tryParse(ipPart);
     if (address == null) {
       return null;
     }
-    final bytes = address.rawAddress;
+    final bytes = address.bytes;
     final defaultPrefix = bytes.length == 4 ? 32 : 128;
     final prefix = parts.length > 1
         ? int.tryParse(parts[1].trim()) ?? defaultPrefix
@@ -79,7 +81,28 @@ class NetworkMatcher {
   /// print(matcher.contains(address)); // true
   /// ```
   bool contains(InternetAddress address) {
-    final target = address.rawAddress;
+    final target = _targetBytes(address.rawAddress);
+    return _containsBytes(target);
+  }
+
+  /// Returns whether the textual [address] falls inside this matcher.
+  ///
+  /// This is the portable counterpart to [contains]. It does not use DNS or
+  /// `dart:io`, so it is safe to call from Fetch and other worker runtimes.
+  bool containsText(String address) {
+    final parsed = IpAddress.tryParse(address);
+    if (parsed == null) return false;
+    return _containsBytes(_targetBytes(parsed.bytes));
+  }
+
+  List<int> _targetBytes(List<int> target) {
+    if (_bytes.length == 4 && _isIpv4Mapped(target)) {
+      return target.sublist(12);
+    }
+    return target;
+  }
+
+  bool _containsBytes(List<int> target) {
     if (target.length != _bytes.length) {
       return false;
     }
@@ -92,6 +115,14 @@ class NetworkMatcher {
       bitsRemaining -= 8;
     }
     return true;
+  }
+
+  static bool _isIpv4Mapped(List<int> bytes) {
+    if (bytes.length != 16) return false;
+    for (var i = 0; i < 10; i++) {
+      if (bytes[i] != 0) return false;
+    }
+    return bytes[10] == 0xFF && bytes[11] == 0xFF;
   }
 
   int _mask(int bits) {

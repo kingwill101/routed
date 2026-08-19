@@ -5,7 +5,9 @@ and middleware guards.
 
 ```bash
 dart pub get
-dart run bin/server.dart --config config/oauth.yaml
+KEYCLOAK_BASE_URL=http://localhost:8081 dart run bin/server.dart
 ```
 
-Refer to the config directory for Keycloak-specific settings.
+Set `KEYCLOAK_REALM`, `KEYCLOAK_CLIENT_ID`, and `KEYCLOAK_CLIENT_SECRET` as
+needed. The example constructs `JwtOptions` and `OAuthIntrospectionOptions`
+directly in Dart.

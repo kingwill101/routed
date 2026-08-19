@@ -3,13 +3,7 @@ import 'package:routed_core/routed_core.dart';
 Future<Engine> createEngine({bool initialize = true}) async {
   final engine = Engine(
     providers: [
-      CoreServiceProvider.withLoader(
-        const ConfigLoaderOptions(
-          configDirectory: 'config',
-          loadEnvFiles: false,
-          includeEnvironmentSubdirectory: false,
-        ),
-      ),
+      CoreServiceProvider(),
       RoutingServiceProvider(),
     ],
   );

@@ -18,27 +18,29 @@ dependencies:
 import 'package:routed/routed.dart';
 
 Future<void> main() async {
-  registerRoutedProviders();
   final engine = await Engine.create(
-    configItems: {
-      'cors': {
-        'enabled': true,
-        'allowed_origins': ['https://app.example'],
-        'allowed_methods': ['GET', 'POST'],
-        'allowed_headers': ['Authorization', 'Content-Type'],
-      },
-      'security': {
-        'max_request_size': 5 * 1024 * 1024,
-        'trusted_proxies': {
-          'enabled': true,
-          'proxies': ['10.0.0.0/8'],
-        },
-        'ip_filter': {
-          'enabled': true,
-          'deny': ['203.0.113.0/24'],
-        },
-      },
-    },
+    providers: [
+      ...Engine.defaultProviders,
+      RoutedSecurityProvider(
+        RoutedSecurityConfig(
+          maxRequestSize: 5 * 1024 * 1024,
+          cors: CorsConfig(
+            enabled: true,
+            allowedOrigins: ['https://app.example'],
+            allowedMethods: ['GET', 'POST'],
+            allowedHeaders: ['Authorization', 'Content-Type'],
+          ),
+          trustedProxies: TrustedProxyConfig(
+            enabled: true,
+            proxies: ['10.0.0.0/8'],
+          ),
+          ipFilter: IpFilterConfig(
+            enabled: true,
+            deny: ['203.0.113.0/24'],
+          ),
+        ),
+      ),
+    ],
   );
 
   await engine.serve(port: 8080);
@@ -53,11 +55,27 @@ import 'package:routed_core/routed_core.dart';
 import 'package:routed_security/routed_security.dart';
 
 Future<void> main() async {
-  registerRoutedSecurityProviders();
   final engine = await Engine.create(
     providers: [
       ...Engine.defaultProviders,
-      RoutedSecurityProvider(),
+      RoutedSecurityProvider(
+        RoutedSecurityConfig(
+          cors: CorsConfig(
+            enabled: true,
+            allowedOrigins: ['https://app.example'],
+            allowedMethods: ['GET', 'POST'],
+            allowedHeaders: ['Authorization', 'Content-Type'],
+          ),
+          trustedProxies: TrustedProxyConfig(
+            enabled: true,
+            proxies: ['10.0.0.0/8'],
+          ),
+          ipFilter: IpFilterConfig(
+            enabled: true,
+            deny: ['203.0.113.0/24'],
+          ),
+        ),
+      ),
     ],
   );
   await engine.serve(port: 8080);
@@ -69,8 +87,8 @@ origins and handles `OPTIONS` preflight requests. Keep credentialed requests
 on an explicit origin allow-list; wildcard origins are echoed per request when
 credentials are enabled because browsers reject `*` with credentials.
 
-Call `registerRoutedProviders()` before `Engine.create()` when using the
-batteries-included facade, or call `registerRoutedSecurityProviders()` when
-you compose the security package directly. If you only need a primitive such
-as `TrustedProxyResolver`, import and use it directly without registering a
-provider.
+The security provider validates all network and header values before any
+provider boots. Configuration is typed and fixed for the lifetime of the
+engine; create a new provider/engine for a different policy. If you only need
+a primitive such as `TrustedProxyResolver`, use it directly without
+registering a provider.

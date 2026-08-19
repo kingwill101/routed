@@ -187,16 +187,24 @@ import 'package:server_contracts/server_contracts.dart';
 
 const String $constantName = '$identifier';
 
-/// Implements [StoreFactory] for the `$identifier` cache driver.
+/// Typed options for the `$identifier` cache store.
+class ${pascal}CacheStoreConfiguration implements StoreConfiguration {
+  const ${pascal}CacheStoreConfiguration({
+    this.cacheDirectory = 'storage/framework/cache/$identifier',
+  });
+
+  final String cacheDirectory;
+}
+
+/// Implements [StoreFactory] for the `$identifier` cache adapter.
 ///
-/// Wire into your app with:
-///   final store = $factoryName().create({...});
-///   Engine(providers: [RoutedCacheProvider(store)]);
-class $factoryName implements StoreFactory {
+/// Wire the resulting store into an application-owned cache manager and
+/// `RoutedCacheProvider` during engine composition.
+class $factoryName
+    implements StoreFactory<${pascal}CacheStoreConfiguration> {
   @override
-  Store create(Map<String, dynamic> config) {
-    final directory = config['cache_dir'] as String? ??
-        'storage/framework/cache/$identifier';
+  Store create(${pascal}CacheStoreConfiguration config) {
+    final directory = config.cacheDirectory;
     // TODO: return your [Store] implementation for \$directory.
     throw UnimplementedError(
       'Implement the $identifier cache store for "\$directory".',
@@ -205,7 +213,7 @@ class $factoryName implements StoreFactory {
 }
 
 void $registerName() {
-  // No global CacheManager registry — construct and pass to RoutedCacheProvider.
+  // No global driver registry: construct and pass the typed store explicitly.
 }
 ''';
 }
@@ -222,7 +230,7 @@ import 'package:server_sessions/server_sessions.dart';
 /// Custom [SessionStore] for the `$identifier` driver.
 ///
 /// Wire into your app with:
-///   Engine(providers: [RoutedSessionsProvider(_${pascal}SessionStore(...))]);
+///   Engine(providers: [RoutedSessionsProvider(SessionConfig(store: _${pascal}SessionStore(...)))]);
 class _${pascal}SessionStore implements SessionStore {
   _${pascal}SessionStore({required this.apiKey, required this.root});
 

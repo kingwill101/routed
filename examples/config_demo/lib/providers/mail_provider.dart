@@ -1,129 +1,50 @@
 import 'package:routed/routed.dart';
 
-class MailService {
-  MailService(this.host, this.port);
+class MailConfig implements ValidatableConfiguration {
+  const MailConfig({
+    this.driver = 'smtp',
+    this.host = 'localhost',
+    this.port = 2525,
+    this.from = 'noreply@example.dev',
+  });
 
+  final String driver;
   final String host;
   final int port;
+  final String from;
+
+  @override
+  void validate(ConfigValidationContext context) {
+    context.require(driver.trim().isNotEmpty, 'driver', 'cannot be empty');
+    context.require(host.trim().isNotEmpty, 'host', 'cannot be empty');
+    context.require(
+      port > 0 && port <= 65535,
+      'port',
+      'must be between 1 and 65535',
+    );
+    context.require(from.trim().isNotEmpty, 'from', 'cannot be empty');
+  }
 }
 
-class MailProvider extends ServiceProvider with ProvidesDefaultConfig {
-  static final _schema = ConfigSchema.object(
-    title: 'Mail Configuration',
-    description: 'Mail transport settings for the config demo.',
-    properties: {
-      'driver': ConfigSchema.string(
-        description: 'Mail transport identifier (e.g. smtp).',
-        defaultValue: 'smtp',
-      ),
-      'host': ConfigSchema.string(
-        description: 'SMTP host used for outbound mail.',
-        defaultValue: 'localhost',
-      ),
-      'port': ConfigSchema.integer(
-        description: 'SMTP port (defaults to 2525 for the demo).',
-        defaultValue: 2525,
-      ),
-      'from': ConfigSchema.string(
-        description: 'Sender address applied to outbound messages.',
-        defaultValue: 'noreply@example.dev',
-      ),
-      'credentials': ConfigSchema.object(
-        description: 'Optional mail credentials.',
-        properties: {
-          'username': ConfigSchema.string(
-            description: 'SMTP username.',
-            defaultValue: 'demo',
-          ),
-          'password': ConfigSchema.string(
-            description: 'SMTP password.',
-            defaultValue: 'secret',
-          ),
-        },
-      ),
-    },
-  );
+class MailService {
+  const MailService(this.configuration);
+
+  final MailConfig configuration;
+
+  String get host => configuration.host;
+  int get port => configuration.port;
+}
+
+class MailProvider extends ServiceProvider
+    with ProvidesTypedConfiguration<MailConfig> {
+  MailProvider([MailConfig? configuration])
+    : configuration = configuration ?? const MailConfig();
 
   @override
-  ConfigDefaults get defaultConfig =>
-      ConfigDefaults(schemas: {'mail': _schema});
-
-  @override
-  String get configSource => 'config_demo.mail';
+  final MailConfig configuration;
 
   @override
   void register(Container container) {
-    if (container.has<Config>()) {
-      _validateConfig(container.get<Config>());
-    }
-    container.singleton<MailService>((c) async {
-      final config = await c.make<Config>();
-      final host = config.get('mail.host', 'localhost') as String;
-      final port = config.get('mail.port', 2525) as int;
-      return MailService(host, port);
-    });
-  }
-
-  void _validateConfig(Config config) {
-    Object? node;
-    try {
-      node = config.get('mail');
-    } catch (_) {
-      node = null;
-    }
-    if (node == null) {
-      return;
-    }
-    if (node is! Map) {
-      throw ProviderConfigException('mail must be a map');
-    }
-    final map = node.map((key, value) => MapEntry(key.toString(), value));
-
-    final hostNode = map['host'];
-    if (hostNode != null) {
-      if (hostNode is! String) {
-        throw ProviderConfigException('mail.host must be a string');
-      }
-      final trimmed = hostNode.trim();
-      if (trimmed.isEmpty) {
-        throw ProviderConfigException('mail.host must be a string');
-      }
-      config.set('mail.host', trimmed);
-    }
-
-    final portNode = map['port'];
-    if (portNode != null) {
-      config.set('mail.port', _readPort(portNode));
-    }
-
-    final fromNode = map['from'];
-    if (fromNode != null) {
-      if (fromNode is! String) {
-        throw ProviderConfigException('mail.from must be a string');
-      }
-      final trimmed = fromNode.trim();
-      if (trimmed.isEmpty) {
-        throw ProviderConfigException('mail.from must be a string');
-      }
-      config.set('mail.from', trimmed);
-    }
-  }
-
-  int _readPort(Object value) {
-    if (value is int) {
-      if (value <= 0 || value > 65535) {
-        throw ProviderConfigException('mail.port must be between 1 and 65535');
-      }
-      return value;
-    }
-    if (value is String) {
-      final trimmed = value.trim();
-      final parsed = int.tryParse(trimmed);
-      if (parsed == null) {
-        throw ProviderConfigException('mail.port must be an integer');
-      }
-      return _readPort(parsed);
-    }
-    throw ProviderConfigException('mail.port must be an integer');
+    container.singleton<MailService>((_) async => MailService(configuration));
   }
 }

@@ -1,8 +1,8 @@
 # Kitchen Sink Example
 
 Large catch-all demo exercising most Routed features: routing, middleware,
-sessions, localization, storage, and CLI-driven config. Ideal for manual QA or
-workshops.
+sessions, localization, storage, and typed provider composition. Ideal for
+manual QA or workshops.
 
 ```bash
 dart pub get
