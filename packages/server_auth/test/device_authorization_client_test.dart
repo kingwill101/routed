@@ -10,7 +10,7 @@ void main() {
     'device client uses unconstrained endpoints and parses RFC 8628 data',
     () async {
       final requests = <http.BaseRequest>[];
-      final client = AuthClient(
+      final client = AuthClientCore(
         baseUrl: Uri.parse('https://example.test'),
         httpClient: MockClient((request) async {
           requests.add(request);
@@ -76,7 +76,7 @@ void main() {
   );
 
   test('device approval uses the normal CSRF mutation contract', () async {
-    final client = AuthClient(
+    final client = AuthClientCore(
       baseUrl: Uri.parse('https://example.test'),
       httpClient: MockClient((request) async {
         if (request.url.path == '/auth/csrf') {
@@ -96,7 +96,7 @@ void main() {
   });
 
   test('device client preserves RFC error codes', () async {
-    final client = AuthClient(
+    final client = AuthClientCore(
       baseUrl: Uri.parse('https://example.test'),
       httpClient: MockClient(
         (_) async =>

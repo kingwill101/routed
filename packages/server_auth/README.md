@@ -76,10 +76,11 @@ short-lived clients. Browser, mobile, and desktop applications can implement
 `setBearerToken` when the server is configured for bearer/JWT sessions.
 
 Each optional client plugin returns one typed API and is inactive until
-selected. `AuthMagicLinkClientPlugin`, `AuthEmailOtpClientPlugin`,
-`AuthOrganizationClientPlugin`, and `AuthAdminClientPlugin` are available now;
-the remaining auth APIs are being migrated to the same shape. The client does
-not persist secrets or silently provision local accounts.
+selected. Built-in plugins cover providers, credentials, sessions, OAuth,
+magic links, email OTP, anonymous accounts, device authorization, API keys,
+WebAuthn, two-factor auth, accounts, passwords, organizations, and admin
+operations. The client does not persist secrets or silently provision local
+accounts.
 
 ## Optional two-factor plugin
 

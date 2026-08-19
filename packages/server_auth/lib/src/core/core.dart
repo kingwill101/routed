@@ -11,6 +11,7 @@ export 'bearer.dart';
 export 'callbacks.dart';
 export 'callback_provider_normalization.dart';
 export 'client.dart';
+export 'client_plugins.dart';
 export 'csrf.dart';
 export 'device_authorization_store.dart';
 export 'device_authorization.dart';

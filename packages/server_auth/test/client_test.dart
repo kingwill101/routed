@@ -8,7 +8,7 @@ import 'package:test/test.dart';
 void main() {
   test('credentials sign-in handles CSRF and session cookies', () async {
     final requests = <http.BaseRequest>[];
-    final client = AuthClient(
+    final client = AuthClientCore(
       baseUrl: Uri.parse('https://example.test/api'),
       httpClient: MockClient((request) async {
         requests.add(request);
@@ -64,7 +64,7 @@ void main() {
   });
 
   test('provider metadata and signed-out sessions are typed', () async {
-    final client = AuthClient(
+    final client = AuthClientCore(
       baseUrl: Uri.parse('https://example.test'),
       httpClient: MockClient((request) async {
         if (request.url.path == '/auth/providers') {
@@ -98,7 +98,7 @@ void main() {
   test(
     'OAuth start returns the server redirect without following it',
     () async {
-      final client = AuthClient(
+      final client = AuthClientCore(
         baseUrl: Uri.parse('https://example.test'),
         httpClient: MockClient((request) async {
           expect(request.url.path, '/auth/signin/github');
@@ -125,7 +125,7 @@ void main() {
   );
 
   test('auth failures preserve sanitized code and retry information', () async {
-    final client = AuthClient(
+    final client = AuthClientCore(
       baseUrl: Uri.parse('https://example.test'),
       httpClient: MockClient(
         (_) async => http.Response(
@@ -189,7 +189,7 @@ void main() {
       ),
       const AuthClientCookie(name: 'active', value: 'current'),
     ]);
-    final client = AuthClient(
+    final client = AuthClientCore(
       baseUrl: Uri.parse('https://example.test'),
       cookieStore: cookieStore,
       httpClient: MockClient((request) async {
@@ -214,7 +214,7 @@ void main() {
       return http.Response('null', 200);
     });
 
-    final cleartextClient = AuthClient(
+    final cleartextClient = AuthClientCore(
       baseUrl: Uri.parse('http://example.test'),
       httpClient: httpClient,
       cookieStore: store,
@@ -222,7 +222,7 @@ void main() {
     await cleartextClient.getSession();
     expect(requests.single.headers['cookie'], isNull);
 
-    final tlsClient = AuthClient(
+    final tlsClient = AuthClientCore(
       baseUrl: Uri.parse('https://example.test'),
       httpClient: httpClient,
       cookieStore: store,
@@ -234,7 +234,7 @@ void main() {
   test('invalid CSRF refreshes once and retries the mutation', () async {
     var csrfRequests = 0;
     var mutationRequests = 0;
-    final client = AuthClient(
+    final client = AuthClientCore(
       baseUrl: Uri.parse('https://example.test'),
       httpClient: MockClient((request) async {
         if (request.url.path == '/auth/csrf') {
@@ -274,7 +274,7 @@ void main() {
     () async {
       var csrfRequests = 0;
       var changeRequests = 0;
-      final client = AuthClient(
+      final client = AuthClientCore(
         baseUrl: Uri.parse('https://example.test'),
         httpClient: MockClient((request) async {
           if (request.url.path == '/auth/csrf') {
@@ -320,7 +320,7 @@ void main() {
 
   test('session helpers parse metadata and send revocation requests', () async {
     var csrfRequests = 0;
-    final client = AuthClient(
+    final client = AuthClientCore(
       baseUrl: Uri.parse('https://example.test'),
       httpClient: MockClient((request) async {
         if (request.url.path == '/auth/csrf') {
@@ -376,7 +376,7 @@ void main() {
 
   test('two-factor helpers parse enrollment and send typed actions', () async {
     var csrfRequests = 0;
-    final client = AuthClient(
+    final client = AuthClientCore(
       baseUrl: Uri.parse('https://example.test'),
       httpClient: MockClient((request) async {
         if (request.url.path == '/auth/csrf') {
@@ -430,7 +430,7 @@ void main() {
   });
 
   test('credentials sign-in surfaces and completes a TOTP challenge', () async {
-    final client = AuthClient(
+    final client = AuthClientCore(
       baseUrl: Uri.parse('https://example.test'),
       httpClient: MockClient((request) async {
         if (request.url.path == '/auth/csrf') {
@@ -492,7 +492,7 @@ void main() {
   });
 
   test('completes a pending sign-in with a recovery code', () async {
-    final client = AuthClient(
+    final client = AuthClientCore(
       baseUrl: Uri.parse('https://example.test'),
       httpClient: MockClient((request) async {
         if (request.url.path == '/auth/csrf') {
@@ -552,7 +552,7 @@ void main() {
   });
 
   test('verifies and revokes a two-factor step-up proof', () async {
-    final client = AuthClient(
+    final client = AuthClientCore(
       baseUrl: Uri.parse('https://example.test'),
       httpClient: MockClient((request) async {
         if (request.url.path == '/auth/csrf') {

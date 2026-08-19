@@ -8,7 +8,7 @@ import 'package:test/test.dart';
 void main() {
   test('AuthClient exposes typed WebAuthn ceremony helpers', () async {
     final requests = <http.BaseRequest>[];
-    final client = AuthClient(
+    final client = AuthClientCore(
       baseUrl: Uri.parse('https://example.test'),
       httpClient: MockClient((request) async {
         requests.add(request);

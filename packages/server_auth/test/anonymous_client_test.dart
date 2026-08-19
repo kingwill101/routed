@@ -7,7 +7,7 @@ import 'package:test/test.dart';
 
 void main() {
   test('AuthClient exposes anonymous sign-in and deletion', () async {
-    final client = AuthClient(
+    final client = AuthClientCore(
       baseUrl: Uri.parse('https://example.test'),
       httpClient: MockClient((request) async {
         if (request.url.path == '/auth/sign-in/anonymous') {

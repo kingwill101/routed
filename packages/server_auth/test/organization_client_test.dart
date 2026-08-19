@@ -50,7 +50,7 @@ void main() {
           }
         }),
       );
-      final core = AuthClient(
+      final core = AuthClientCore(
         baseUrl: Uri.parse('https://ignored.test'),
         transport: transport,
       );

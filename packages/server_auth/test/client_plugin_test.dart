@@ -48,6 +48,52 @@ void main() {
     );
   });
 
+  test('built-in optional APIs have distinct installable plugin IDs', () {
+    final plugins = <AuthClientPlugin<dynamic>>[
+      const AuthProviderClientPlugin(),
+      const AuthCredentialsClientPlugin(),
+      const AuthOAuthClientPlugin(),
+      const AuthSessionClientPlugin(),
+      const AuthAnonymousClientPlugin(),
+      const AuthDeviceAuthorizationClientPlugin(),
+      const AuthEmailOtpClientPlugin(),
+      const AuthMagicLinkClientPlugin(),
+      const AuthApiKeyClientPlugin(),
+      const AuthWebAuthnClientPlugin(),
+      const AuthTwoFactorClientPlugin(),
+      const AuthAccountClientPlugin(),
+      const AuthPasswordClientPlugin(),
+      const AuthOrganizationClientPlugin(),
+      const AuthAdminClientPlugin(),
+    ];
+    final client = AuthClient(
+      baseUrl: Uri.parse('https://example.test'),
+      plugins: plugins,
+    );
+
+    expect(client.plugins.ids, hasLength(plugins.length));
+    expect(
+      client.plugins.use(const AuthProviderClientPlugin()),
+      isA<AuthProviderClient>(),
+    );
+    expect(
+      client.plugins.use(const AuthCredentialsClientPlugin()),
+      isA<AuthCredentialsClient>(),
+    );
+    expect(
+      client.plugins.use(const AuthSessionClientPlugin()),
+      isA<AuthSessionClient>(),
+    );
+    expect(
+      client.plugins.use(const AuthWebAuthnClientPlugin()),
+      isA<AuthWebAuthnClient>(),
+    );
+    expect(
+      client.plugins.use(const AuthTwoFactorClientPlugin()),
+      isA<AuthTwoFactorClient>(),
+    );
+  });
+
   test('magic-link plugin owns the email provider client contract', () async {
     final plugin = AuthMagicLinkClientPlugin();
     final client = AuthClient(

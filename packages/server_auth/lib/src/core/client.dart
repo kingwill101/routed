@@ -897,13 +897,14 @@ final class AuthClientPluginRegistry {
   Iterable<String> get ids => List<String>.unmodifiable(_installed.keys);
 }
 
-/// Typed Dart client for the framework-independent auth HTTP contract.
+/// Internal transport-backed implementation used while auth APIs are split
+/// into typed client plugins.
 ///
-/// The client owns route names, JSON shapes, CSRF presentation, and response
-/// parsing. It does not choose how cookies are persisted; provide an
-/// [AuthClientCookieStore] when cookies must survive process restarts.
-class AuthClient {
-  AuthClient({
+/// New applications should use [AuthClient] with the client plugins they need.
+class AuthClientCore {
+  AuthClientCore.fromTransport(this.transport);
+
+  AuthClientCore({
     required Uri baseUrl,
     String basePath = '/auth',
     http.Client? httpClient,
@@ -913,8 +914,6 @@ class AuthClient {
     String? bearerToken,
     String? apiKey,
     AuthClientTransport? transport,
-    Iterable<AuthClientPlugin<dynamic>> plugins =
-        const <AuthClientPlugin<dynamic>>[],
   }) : transport =
            transport ??
            AuthClientTransport(
@@ -926,17 +925,9 @@ class AuthClient {
              headers: headers,
              bearerToken: bearerToken,
              apiKey: apiKey,
-           ) {
-    this.plugins = AuthClientPluginRegistry(
-      context: AuthClientPluginContext(transport: this.transport),
-      plugins: plugins,
-    );
-  }
+           );
 
   final AuthClientTransport transport;
-
-  /// The explicitly selected optional client APIs.
-  late final AuthClientPluginRegistry plugins;
 
   AuthClientCookieStore get cookieStore => transport.cookieStore;
   Duration get timeout => transport.timeout;
@@ -1664,6 +1655,59 @@ class AuthClient {
       followRedirects: followRedirects,
     );
   }
+}
+
+/// Typed host for the framework-independent auth client contract.
+///
+/// The host exposes transport controls and only the optional APIs selected in
+/// [plugins]. Feature and provider operations should be accessed through their
+/// typed plugin APIs rather than through one global client surface.
+final class AuthClient {
+  AuthClient({
+    required Uri baseUrl,
+    String basePath = '/auth',
+    http.Client? httpClient,
+    AuthClientCookieStore? cookieStore,
+    Duration timeout = const Duration(seconds: 15),
+    Map<String, String>? headers,
+    String? bearerToken,
+    String? apiKey,
+    AuthClientTransport? transport,
+    Iterable<AuthClientPlugin<dynamic>> plugins =
+        const <AuthClientPlugin<dynamic>>[],
+  }) : transport =
+           transport ??
+           AuthClientTransport(
+             baseUrl: baseUrl,
+             basePath: basePath,
+             httpClient: httpClient,
+             cookieStore: cookieStore,
+             timeout: timeout,
+             headers: headers,
+             bearerToken: bearerToken,
+             apiKey: apiKey,
+           ) {
+    this.plugins = AuthClientPluginRegistry(
+      context: AuthClientPluginContext(transport: this.transport),
+      plugins: plugins,
+    );
+  }
+
+  final AuthClientTransport transport;
+
+  /// The explicitly selected optional client APIs.
+  late final AuthClientPluginRegistry plugins;
+
+  AuthClientCookieStore get cookieStore => transport.cookieStore;
+  Duration get timeout => transport.timeout;
+
+  void setBearerToken(String? token) => transport.setBearerToken(token);
+
+  void setApiKey(String? key) => transport.setApiKey(key);
+
+  void clearCsrfToken() => transport.clearCsrfToken();
+
+  Future<String> getCsrfToken() => transport.getCsrfToken();
 }
 
 Map<String, dynamic> _mapBody(String body) {
