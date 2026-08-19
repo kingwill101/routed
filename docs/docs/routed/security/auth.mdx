@@ -105,6 +105,14 @@ The provider mounts `/auth/*` routes and resolves the configured auth manager.
 The `AuthOptions` object is the application contract; there is no auth YAML
 manifest or runtime string override.
 
+## Organizations and tenant authorization
+
+Organizations are an optional auth feature. Compose `OrganizationFeature` to
+add memberships, email-bound invitations, scoped roles, teams, automatic
+Routed endpoints, a typed client, and tenant-aware Haigate helpers. See
+[Organizations & Tenancy](/docs/routed/security/organizations) for setup,
+persistence requirements, client usage, and the complete route surface.
+
 ## Sessions, guards, and gates
 
 Register `RoutedSessionsProvider` and add the session middleware before using

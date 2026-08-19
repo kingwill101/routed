@@ -1,0 +1,358 @@
+---
+title: Organizations & Tenancy
+description: Add organizations, memberships, invitations, scoped roles, and teams to Routed auth
+authors: routed
+sidebar_position: 5
+---
+
+# Organizations & Tenancy
+
+The organization capability adds tenant-scoped membership and authorization to
+Routed auth. It is **opt-in**: no organization routes, storage requirements, or
+role behavior exist unless you add `OrganizationFeature` to `AuthOptions.features`.
+
+Organization roles are deliberately separate from `AuthPrincipal.roles`.
+Global roles answer application-wide questions; organization roles answer what
+a member may do inside one explicitly resolved tenant.
+
+Before continuing, configure the core auth flow from
+[Authentication & Authorization](/docs/routed/security/auth): the application
+needs `AuthServiceProvider`, a core `AuthStore`, and a provider that can create
+an authenticated user. Server-session deployments also need
+`RoutedSessionsProvider` and `sessionMiddleware()`. Configure an application
+mailer before enabling invitation delivery.
+
+## Configure the feature
+
+Create one organization store and one feature instance, then include that
+instance in the auth options already consumed by `AuthServiceProvider`:
+
+```dart
+import 'package:routed/routed.dart';
+
+final organizationStore = InMemoryAuthOrganizationStore();
+
+final organizations = OrganizationFeature<EngineContext>(
+  store: organizationStore,
+  options: AuthOrganizationOptions<EngineContext>(
+    teams: const AuthOrganizationTeamsOptions(enabled: true),
+    dynamicRoles: true,
+    sendInvitation: (delivery) async {
+      final link = Uri.https(
+        'app.example.com',
+        '/invitations/accept',
+      ).replace(
+        fragment:
+            'invitation=${Uri.encodeComponent(delivery.invitation.id)}',
+      );
+      await mailer.send(
+        to: delivery.invitation.email,
+        subject: 'Join ${delivery.organization.name}',
+        text: 'Accept your invitation: $link',
+      );
+    },
+  ),
+);
+
+engine.container.instance<AuthOptions<EngineContext>>(
+  AuthOptions<EngineContext>(
+    providers: providers,
+    store: authStore,
+    features: [organizations],
+    sessionStrategy: AuthSessionStrategy.session,
+  ),
+);
+```
+
+`AuthRoutes` discovers feature endpoint descriptors and mounts them beneath the
+configured auth base path. With the default `basePath`, the routes appear under
+`/auth/organization/*`; there is no second route-registration call. If the
+feature is absent, those routes return `404`.
+
+The in-memory organization store is intended for tests and local development.
+Production applications must provide a durable `AuthOrganizationStore`. The
+store is independent from SQL, D1, table names, migrations, and query builders;
+its public persistence topology describes the fields, relationships, indexes,
+uniqueness rules, and atomic operations an adapter must preserve.
+
+Routed currently ships the store interface and the in-memory implementation,
+not a production database adapter. Adapter authors can inspect
+`OrganizationFeature.persistenceSchemas` (or the composed
+`AuthFeatureRegistry.persistenceSchemas`) to map the logical topology onto
+their database. Implement every method on `AuthOrganizationStore`, then make
+the named `atomicOperations` transactional in that persistence engine.
+
+:::warning Production persistence
+Organization creation, invitation acceptance, capacity checks, last-owner
+protection, role renames, team membership changes, and cascading deletion must
+be atomic in a durable adapter. Do not assemble these operations from unrelated
+queries in application handlers.
+:::
+
+## Defaults and limits
+
+The defaults are useful for a conventional owner/admin/member model:
+
+| Setting | Default |
+| --- | --- |
+| User-created organizations | Enabled |
+| Organizations per user | Unlimited |
+| Creator role | `owner` |
+| Members per organization | 100 |
+| Pending invitations | 100 |
+| Invitation lifetime | 48 hours |
+| Reinviting a pending recipient | Reuse the pending invitation |
+| Organization deletion | Enabled |
+| Dynamic roles | Disabled, unlimited when enabled |
+| Teams | Disabled |
+| Default team after enabling teams | Created |
+| Removing the last team | Rejected |
+| Team and team-member limits | Unlimited |
+
+Override these with `AuthOrganizationOptions` and
+`AuthOrganizationTeamsOptions`. Limits are enforced by the store boundary so
+concurrent requests cannot bypass them.
+
+## Invitations
+
+Supply `sendInvitation` to deliver the action-capable invitation ID through
+your email provider. Never log that ID or copy it into a general audit event.
+The feature excludes it from redacted lifecycle events.
+
+The example uses a URL fragment because fragments are not sent in HTTP requests
+or referrer headers. The browser application should read the fragment, remove
+it from browser history, then POST the ID to `accept-invitation`. If an
+application puts the ID in a query string instead, it must redact query strings
+from access logs, analytics, error reports, and tracing.
+
+An invitation can only be inspected, rejected, or accepted by a session whose
+normalized email matches the recipient. Listing all invitations for the
+current user requires a verified email. Inspection, rejection, and acceptance
+also require verification when `requireVerifiedEmailForInvitations` is
+enabled, or when a custom invitation ID generator is not declared opaque.
+
+Calling `inviteMember` again for the same pending recipient reuses the pending
+invitation by default. Set `replacePendingInvitations: true` to replace it.
+Invitations for existing members, disabled teams, missing teams, or teams from
+another organization are rejected before delivery.
+
+```dart
+final result = await organizationClient.inviteMember(
+  email: 'new.member@example.com',
+  roles: const ['member'],
+  teamId: organizationClient.activeTeamId,
+);
+
+for (final warning in result.warnings) {
+  logger.warning('${warning.code}: ${warning.message ?? ''}');
+}
+```
+
+Invitation delivery happens after the mutation commits. A delivery or
+after-hook failure therefore does not roll back committed data or encourage an
+unsafe retry. The mutation returns the committed record plus typed warnings;
+use `reportFailure` to send the original internal error to application
+observability.
+
+## Roles and permissions
+
+The predefined roles are:
+
+- `owner`: full organization, member, invitation, role, team, and team-member
+  management.
+- `admin`: organization updates plus member, invitation, and team management;
+  role definitions are read-only.
+- `member`: read-only access to organization-scoped resources.
+
+Permissions use a resource/action pair such as `member:update` or
+`team:create`. A member may have multiple roles; permission checks use the
+union of every assigned role. Only a member who already has the configured
+creator role may assign it or mutate another creator membership, and the last
+creator cannot leave or be demoted.
+
+Add application-specific static roles without enabling database-backed roles.
+Define the map once so the server and the client's optional local UI checks use
+the same policy:
+
+```dart
+const organizationRoles = <String, AuthOrganizationPermissionSet>{
+  'billing': {
+    'invoice': ['read', 'pay'],
+  },
+};
+
+final organizations = OrganizationFeature<EngineContext>(
+  store: organizationStore,
+  options: AuthOrganizationOptions<EngineContext>(
+    staticRoles: organizationRoles,
+  ),
+);
+```
+
+Enable `dynamicRoles` when each organization needs to create and edit its own
+roles. Renames update member and pending-invitation assignments atomically.
+Predefined or currently referenced roles cannot be deleted.
+
+The client can check configured static roles locally with `localRoleAllows`.
+Use the server-backed `hasPermission` method whenever dynamic roles or current
+membership state matter.
+
+## Teams
+
+Teams are a second, optional scope inside an organization:
+
+```dart
+options: const AuthOrganizationOptions<EngineContext>(
+  teams: AuthOrganizationTeamsOptions(
+    enabled: true,
+    createDefaultTeam: true,
+    defaultTeamName: 'Everyone',
+    teamLimit: 20,
+    teamMemberLimit: 50,
+  ),
+),
+```
+
+Team membership is unique per user and team. Removing a member from an
+organization also clears their team memberships, and deleting an organization
+cascades through its teams and team members.
+
+## Typed client and active context
+
+Share one transport between the core and organization clients so cookies,
+bearer tokens, CSRF refresh, timeouts, redirects, and bounded error parsing
+behave consistently:
+
+```dart
+final baseUrl = Uri.parse('https://api.example.com');
+final transport = AuthClientTransport(
+  baseUrl: baseUrl,
+  cookieStore: persistentCookieStore,
+);
+
+final auth = AuthClient(baseUrl: baseUrl, transport: transport);
+final organizationClient = AuthOrganizationClient(
+  transport: transport,
+  staticRoles: organizationRoles,
+);
+
+final created = await organizationClient.create(
+  name: 'Acme',
+  slug: 'acme',
+);
+
+await organizationClient.setActive(created.data.id);
+final members = await organizationClient.listMembers(limit: 50);
+```
+
+`AuthOrganizationClient` keeps the active organization and team locally and
+sends explicit IDs with scoped operations. Leaving or deleting the active
+organization, or removing the active team, clears the matching local state.
+
+For server-session deployments, `set-active` and `set-active-team` also persist
+convenience selection in the mutable Routed session. Membership is revalidated
+on every scoped request and stale team state is cleared. JWT deployments still
+use the client's local selection; setting active context does not silently
+reissue a JWT.
+
+Pass `organizationId` explicitly when handling a URL or resource that already
+identifies its tenant. Implicit active selection is a convenience, not an
+authorization boundary.
+
+## Tenant-aware Haigate checks
+
+Use the organization helpers when protecting application resources:
+
+```dart
+engine.post('/organizations/{organizationId}/projects/{projectId}', (ctx) async {
+  final allowed = await Haigate.canInOrganization(
+    ctx: ctx,
+    feature: organizations,
+    organizationId: ctx.param('organizationId'),
+    resource: 'project',
+    action: 'update',
+  );
+
+  if (!allowed) {
+    return ctx.json({'error': 'forbidden'}, statusCode: 403);
+  }
+  return ctx.json({'status': 'updated'});
+});
+```
+
+`Haigate.organizationContext` resolves membership and optional team context.
+`Haigate.canInOrganization` checks a scoped permission, while
+`Haigate.ownsOrCanInOrganization` permits the resource owner before checking
+the tenant permission. None of these helpers copy organization roles into the
+global principal.
+
+The ownership fast-path intentionally succeeds before organization membership
+is resolved. Use it only when an authenticated resource owner should retain
+access independently of tenant membership. When membership is mandatory,
+resolve `organizationContext` first and use `canInOrganization` for the
+permission decision.
+
+## Hooks, warnings, and audit events
+
+`AuthOrganizationHooks` exposes typed before/after hooks for organizations,
+members, invitations, roles, teams, and team members. A before hook returns the
+draft to keep or transform it, and may throw to veto the operation. After hooks
+run only after commit.
+
+```dart
+hooks: AuthOrganizationHooks<EngineContext>(
+  beforeOrganization: (event) {
+    return event.data.copyWith(name: event.data.name.trim());
+  },
+  afterMember: (event) async {
+    await metrics.record('organization.member.${event.action}');
+  },
+),
+reportFailure: (failure) {
+  errorReporter.capture(
+    failure.error,
+    failure.stackTrace,
+    operation: failure.operation,
+  );
+},
+emitEvent: auditSink.add,
+```
+
+Lifecycle events contain redacted public projections suitable for audit
+integration. Invitation action IDs and internal hook errors are not included.
+
+## Route reference
+
+All POST operations receive Routed's session, browser-origin, Fetch Metadata,
+CSRF, sanitized-error, and retry-header handling from their descriptors. They
+also invoke the namespaced organization rate-limit operation when
+`AuthOptions.rateLimiter` is configured; no throttling policy is enabled by
+default. To reuse Routed's rate-limit service, pass
+`RoutedAuthRateLimiter(rateLimitService)` to `AuthOptions.rateLimiter` and
+configure matching policies as described in
+[Rate limiting](/docs/routed/security/rate-limit).
+
+| Capability | GET | POST |
+| --- | --- | --- |
+| Organizations | `check-slug`, `list`, `get`, `get-full` | `create`, `update`, `delete`, `set-active` |
+| Members | `list-members`, `get-active-member`, `get-active-member-role` | `remove-member`, `update-member-role`, `leave` |
+| Invitations | `get-invitation`, `list-invitations`, `list-user-invitations` | `invite-member`, `accept-invitation`, `reject-invitation`, `cancel-invitation` |
+| Permissions and roles | `has-permission`, `list-roles`, `get-role` | `create-role`, `update-role`, `delete-role` |
+| Teams | `list-teams`, `list-user-teams`, `list-team-members` | `create-team`, `update-team`, `remove-team`, `set-active-team`, `add-team-member`, `remove-team-member` |
+
+Prefix each name with `/auth/organization/` when using the default auth base
+path. Direct member addition, trusted team-member addition, and creating an
+organization for another user are Dart-only administrative operations and are
+never publicly routed.
+
+## Security checklist
+
+- Use durable stores whose multi-record invariants are transactional.
+- Treat invitation IDs as secrets and require the recipient's matching email.
+- Use explicit organization IDs from resource URLs when available.
+- Revalidate permissions on the server; local role checks are only a UI aid.
+- Keep organization roles out of global principal roles.
+- Inspect mutation warnings and report internal failures without returning
+  stack traces or adapter errors to clients.
+- Configure production session cookies, trusted origins, CSRF, and rate limits
+  as described in [Authentication & Authorization](/docs/routed/security/auth).
