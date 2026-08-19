@@ -1,5 +1,8 @@
 ## Unreleased
 
+- Warn instead of throwing when the compiled route topology contains duplicate
+  HTTP method/path registrations. The first registration remains active and
+  the warning identifies both registration sources.
 - **Breaking security change:** enabling proxy support now requires explicit
   trusted proxy networks; the engine no longer defaults to trusting all IPv4
   and IPv6 addresses.

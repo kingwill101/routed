@@ -28,6 +28,7 @@ class AuthRuntime<TContext> {
     for (final feature in this.features) {
       registry.register(feature);
     }
+    registry.freeze();
   }
 
   final AuthOptions<TContext> options;

@@ -168,4 +168,44 @@ void main() {
       ),
     );
   });
+
+  test('session revocation failure cannot commit a new password', () async {
+    final hasher = _testHasher();
+    final now = DateTime.now().toUtc();
+    var credentialsUpdated = false;
+    final store = CallbackAuthStore(
+      onFindCredential: (_) => AuthPasswordCredential(
+        id: 'credential-1',
+        userId: 'user-1',
+        identifier: 'user@example.com',
+        passwordHash: hasher.hash('old-password-123'),
+        createdAt: now,
+        updatedAt: now,
+      ),
+      onFindUserById: (_) => AuthUser(id: 'user-1', email: 'user@example.com'),
+      onRotateJwtVersion: (_) => 1,
+      onRevokeAllSessionsForUser: (_, {revokedAt}) {
+        throw StateError('session store unavailable');
+      },
+      onUpdatePasswordForUser:
+          ({required userId, required passwordHash, required updatedAt}) {
+            credentialsUpdated = true;
+            return 1;
+          },
+    );
+
+    await expectLater(
+      changeAuthPasswordForUser(
+        store: store,
+        passwordHasher: hasher,
+        userId: 'user-1',
+        identifier: 'user@example.com',
+        currentPassword: 'old-password-123',
+        newPassword: 'new-password-456',
+        now: now,
+      ),
+      throwsStateError,
+    );
+    expect(credentialsUpdated, isFalse);
+  });
 }

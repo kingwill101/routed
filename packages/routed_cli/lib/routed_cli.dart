@@ -12,7 +12,11 @@ export 'src/console/create/templates_embedded.dart' show scaffoldTemplateBytes;
 export 'src/console/dev/dev_server_runner.dart'
     show DevServerRunner, DevServerRunnerException, ExitCode;
 export 'src/console/project/commands_loader.dart'
-    show ProjectCommandInfo, ProjectCommandOption, ProjectCommandsLoader;
+    show
+        ProjectCommandInfo,
+        ProjectCommandOption,
+        ProjectCommandsLoader,
+        shouldLoadProjectCommands;
 export 'src/console/args/provider_commands.dart'
     show
         ProviderCommandRegistry,

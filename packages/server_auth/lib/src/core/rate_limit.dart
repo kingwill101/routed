@@ -35,6 +35,41 @@ enum AuthRateLimitAction {
   twoFactor,
 }
 
+/// Stable namespaced identifier for a rate-limited auth operation.
+final class AuthRateLimitOperation {
+  const AuthRateLimitOperation(this.namespace, this.name)
+    : assert(namespace != ''),
+      assert(name != '');
+
+  factory AuthRateLimitOperation.core(AuthRateLimitAction action) =>
+      AuthRateLimitOperation('core', action.name);
+
+  final String namespace;
+  final String name;
+
+  String get id => '$namespace.$name';
+
+  AuthRateLimitAction? get legacyAction {
+    if (namespace != 'core') return null;
+    for (final action in AuthRateLimitAction.values) {
+      if (action.name == name) return action;
+    }
+    return null;
+  }
+
+  @override
+  bool operator ==(Object other) =>
+      other is AuthRateLimitOperation &&
+      other.namespace == namespace &&
+      other.name == name;
+
+  @override
+  int get hashCode => Object.hash(namespace, name);
+
+  @override
+  String toString() => id;
+}
+
 /// The non-secret context supplied to an auth rate limiter.
 ///
 /// The request deliberately contains no password, OAuth code, bearer token,
@@ -42,14 +77,38 @@ enum AuthRateLimitAction {
 /// for a limiter key (for example, an email address or username), but callers
 /// must still treat it as private user input.
 final class AuthRateLimitRequest<TContext> {
+  @Deprecated('Use AuthRateLimitRequest.operation with a namespaced operation.')
   const AuthRateLimitRequest({
-    required this.action,
+    required AuthRateLimitAction action,
     required this.providerId,
     required this.context,
     this.identifier,
-  });
+  }) : _legacyAction = action,
+       _operation = null;
 
-  final AuthRateLimitAction action;
+  const AuthRateLimitRequest.operation({
+    required AuthRateLimitOperation operation,
+    required this.providerId,
+    required this.context,
+    this.identifier,
+  }) : _operation = operation,
+       _legacyAction = null;
+
+  final AuthRateLimitOperation? _operation;
+  final AuthRateLimitAction? _legacyAction;
+
+  AuthRateLimitOperation get operation =>
+      _operation ?? AuthRateLimitOperation.core(_legacyAction!);
+
+  @Deprecated('Use operation instead.')
+  AuthRateLimitAction get action {
+    final value = _legacyAction ?? operation.legacyAction;
+    if (value == null) {
+      throw StateError('${operation.id} has no legacy AuthRateLimitAction.');
+    }
+    return value;
+  }
+
   final String providerId;
   final TContext context;
   final String? identifier;

@@ -23,7 +23,19 @@ Future<Engine> createEngine() async {
     config: EngineConfig(
       security: const EngineSecurityFeatures(csrfProtection: false),
     ),
-    providers: Engine.builtins,
+    providers: [
+      RoutedSessionsProvider(
+        SessionConfig.cookie(
+          options: SessionOptions(
+            path: '/',
+            secure: false,
+            httpOnly: true,
+            sameSite: SameSite.lax,
+          ),
+        ),
+      ),
+      ...Engine.builtins,
+    ],
     options: [
       (engine) {
         final providers = <AuthProvider>[

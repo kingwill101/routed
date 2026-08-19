@@ -102,6 +102,13 @@ void main() {
       expect(json['status'], equals('ok'));
     });
 
+    test('local HTTP demo uses a non-secure session cookie', () {
+      final config = engine.container.get<SessionConfig>();
+      expect(config.cookieName, _sessionCookieName);
+      expect(config.secure, isFalse);
+      expect(config.defaultOptions.secure, isFalse);
+    });
+
     test('users endpoints return data', () async {
       final listResponse = await client.get('/api/v1/users');
       listResponse.assertStatus(HttpStatus.ok);

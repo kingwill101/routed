@@ -68,6 +68,23 @@ void main() {
       );
     });
 
+    test('built-in and global selections bypass project discovery', () {
+      final runner = RoutedCommandRunner(logger: logger)
+        ..register([cmds.CreateCommand(), cmds.DevCommand()]);
+
+      expect(shouldLoadProjectCommands(const ['--help'], runner), isFalse);
+      expect(shouldLoadProjectCommands(const ['--version'], runner), isFalse);
+      expect(
+        shouldLoadProjectCommands(const ['create', 'app'], runner),
+        isFalse,
+      );
+      expect(shouldLoadProjectCommands(const ['dev'], runner), isFalse);
+      expect(
+        shouldLoadProjectCommands(const ['project-command'], runner),
+        isTrue,
+      );
+    });
+
     test('supports async buildProjectCommands factories', () async {
       await _writeProject(
         projectDir: projectDir,

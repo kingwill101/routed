@@ -16,8 +16,6 @@ import 'package:server_auth/server_auth.dart'
         resolveConfiguredGateCallback,
         resolveConfiguredGuard,
         AuthStore,
-        AuthSessionStrategy,
-        authJwtVersionClaim,
         JwtVerifier,
         AuthRuntime,
         resolveAuthOptions,
@@ -128,7 +126,6 @@ class AuthServiceProvider extends ServiceProvider
       header: jwt.header,
       bearerPrefix: jwt.bearerPrefix,
       httpClient: _httpClient,
-      validateClaims: (claims) => _validateJwtClaims(container, claims),
     );
 
     final oauth = resolved.oauth2Introspection;
@@ -186,34 +183,6 @@ class AuthServiceProvider extends ServiceProvider
     _configureHaigate(resolved.haigate, gateRegistry, middlewareRegistry);
 
     _applyAuthManager(container);
-  }
-
-  Future<bool> _validateJwtClaims(
-    Container container,
-    Map<String, dynamic> claims,
-  ) async {
-    if (!container.has<AuthOptions<EngineContext>>()) {
-      return true;
-    }
-    final options = container.get<AuthOptions<EngineContext>>();
-    if (options.sessionStrategy != AuthSessionStrategy.jwt) {
-      return true;
-    }
-    final store = container.has<AuthStore>()
-        ? container.get<AuthStore>()
-        : options.store;
-    final subject = claims['sub']?.toString().trim() ?? '';
-    final rawVersion = claims[authJwtVersionClaim];
-    final version = switch (rawVersion) {
-      int value when value >= 0 => value,
-      num value when value.isFinite && value == value.toInt() && value >= 0 =>
-        value.toInt(),
-      _ => null,
-    };
-    if (subject.isEmpty || version == null) {
-      return false;
-    }
-    return version == await store.jwtVersions.current(subject);
   }
 
   void _applyAuthManager(Container container) {

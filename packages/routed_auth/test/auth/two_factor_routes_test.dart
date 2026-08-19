@@ -138,7 +138,10 @@ void main() {
     );
     response.assertStatus(HttpStatus.tooManyRequests);
     expect(response.json()['error'], equals('rate_limited'));
-    expect(limiter.lastRequest?.action, AuthRateLimitAction.twoFactor);
+    expect(
+      limiter.lastRequest?.operation,
+      AuthRateLimitOperation.core(AuthRateLimitAction.twoFactor),
+    );
   });
 
   test(

@@ -17,6 +17,7 @@ import 'package:server_auth/server_auth.dart'
         AuthPrincipal,
         AuthProvider,
         AuthRateLimitAction,
+        AuthRateLimitOperation,
         AuthRateLimitRequest,
         enforceAuthRateLimit,
         hashOpaqueToken,
@@ -29,6 +30,7 @@ import 'package:server_auth/server_auth.dart'
         AuthSessionInfo,
         AuthSessionStrategy,
         TwoFactorFeature,
+        OrganizationFeature,
         AuthTwoFactorRequiredException,
         AuthTwoFactorStepUpToken,
         authJwtVersionClaim,
@@ -90,6 +92,10 @@ class AuthManager {
   /// The configured two-factor feature, if enabled for this runtime.
   TwoFactorFeature<EngineContext>? get twoFactor =>
       runtime.feature('two_factor') as TwoFactorFeature<EngineContext>?;
+
+  /// The configured organization feature, if enabled for this runtime.
+  OrganizationFeature<EngineContext>? get organization =>
+      runtime.feature('organization') as OrganizationFeature<EngineContext>?;
 
   SessionAuthService get sessionAuth => _sessionAuth ?? SessionAuth.instance;
 
@@ -702,6 +708,7 @@ class AuthManager {
         context: ctx,
         account: account,
         user: resolvedUser,
+        provider: provider,
         profile: profileMap,
       ),
     );
@@ -1118,8 +1125,26 @@ class AuthManager {
   }) {
     return enforceAuthRateLimit<EngineContext>(
       limiter: options.rateLimiter,
-      request: AuthRateLimitRequest<EngineContext>(
-        action: action,
+      request: AuthRateLimitRequest<EngineContext>.operation(
+        operation: AuthRateLimitOperation.core(action),
+        providerId: providerId,
+        context: ctx,
+        identifier: identifier?.trim(),
+      ),
+    );
+  }
+
+  /// Enforces a namespaced feature rate-limit operation.
+  Future<void> enforceRateLimitOperation(
+    EngineContext ctx, {
+    required AuthRateLimitOperation operation,
+    String providerId = 'organization',
+    String? identifier,
+  }) {
+    return enforceAuthRateLimit<EngineContext>(
+      limiter: options.rateLimiter,
+      request: AuthRateLimitRequest<EngineContext>.operation(
+        operation: operation,
         providerId: providerId,
         context: ctx,
         identifier: identifier?.trim(),

@@ -22,9 +22,9 @@ The work is intentionally split between framework-agnostic capabilities in
 - [x] Add `AuthRuntime` and `AuthFeature` composition with duplicate-ID checks.
 - [x] Expose the composed runtime through `AuthManager` and
   `AuthServiceProvider`.
-- [ ] Let features contribute endpoint descriptors, hooks, schemas, rate-limit
+- [x] Let features contribute endpoint descriptors, hooks, schemas, rate-limit
   rules, and typed client operations without editing a central route switch.
-- [ ] Define paired server/client feature contracts so a feature can expose its
+- [x] Define paired server/client feature contracts so a feature can expose its
   persistence, routes, response models, client methods, and conformance tests
   as one public capability.
 - [x] Migrate the existing credentials, email, OAuth, and session flows from
@@ -126,11 +126,11 @@ The work is intentionally split between framework-agnostic capabilities in
 
 ## P1: authorization and tenancy
 
-- [ ] Add first-class organizations/tenants, memberships, invitations, and
+- [x] Add first-class organizations/tenants, memberships, invitations, and
   organization-scoped roles.
 - [ ] Add administrative user/session/account management APIs with explicit
   authorization checks and audit events.
-- [ ] Extend the existing RBAC, policy, and Haigate APIs to support tenant
+- [x] Extend the existing RBAC, policy, and Haigate APIs to support tenant
   context and resource ownership without relying on global role strings.
 - [ ] Add an OAuth/OIDC provider mode if Routed applications need to act as an
   identity provider, not only consume external providers.
@@ -144,12 +144,12 @@ The work is intentionally split between framework-agnostic capabilities in
 - [x] Add a small, typed Dart client contract for browser/mobile auth calls
   without requiring application code to duplicate route and cookie
   conventions.
-- [ ] Split the client contract into typed feature modules while preserving a
+- [x] Split the client contract into typed feature modules while preserving a
   shared transport, cookie store, CSRF policy, error model, and request
   lifecycle.
 - [ ] Add ergonomic typed configuration builders or presets for common auth
   deployments while keeping security-sensitive defaults explicit and safe.
-- [ ] Make features contribute their routes, schemas, hooks, and rate-limit
+- [x] Make features contribute their routes, schemas, hooks, and rate-limit
   rules through the public composition API instead of requiring consumers to
   edit central route switches.
 - [ ] Add a CLI/device authorization flow for limited-input clients, including
@@ -159,7 +159,7 @@ The work is intentionally split between framework-agnostic capabilities in
   composed feature routes, with generated-client compatibility tests.
 - [ ] Add reusable auth test utilities for route bootstrapping, cookie/session
   handling, provider fixtures, and end-to-end feature flows.
-- [ ] Update the package READMEs and examples only after the public APIs and
+- [x] Update the package READMEs and examples only after the public APIs and
   security defaults settle.
 
 ## Longer-term plugin-inspired backlog

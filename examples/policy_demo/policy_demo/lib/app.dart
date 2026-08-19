@@ -51,7 +51,22 @@ class ProjectPolicy extends Policy<Project> {
 }
 
 Future<Engine> createEngine() async {
-  final engine = Engine(providers: Engine.builtins);
+  final engine = Engine(
+    providers: [
+      RoutedSessionsProvider(
+        SessionConfig.cookie(
+          cookieName: 'policy_session',
+          options: SessionOptions(
+            path: '/',
+            secure: false,
+            httpOnly: true,
+            sameSite: SameSite.lax,
+          ),
+        ),
+      ),
+      ...Engine.builtins,
+    ],
+  );
 
   final policyBindings = [
     PolicyBinding<Project>(

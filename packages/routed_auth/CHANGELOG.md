@@ -1,5 +1,15 @@
 ## Unreleased
 
+- Keep external JWT middleware independent from Routed's private session-token
+  version claim; Routed-issued JWT sessions continue validating that claim in
+  `AuthManager`.
+- Preserve the initiating credentials provider through two-factor challenges,
+  and include the OAuth provider in account-link lifecycle events.
+- Automatically register opt-in feature endpoint descriptors and add the
+  complete `/auth/organization/...` API with shared browser, CSRF, session,
+  rate-limit, and public-error handling.
+- Add tenant-aware Haigate membership, permission, and resource-owner helpers
+  without promoting organization roles into global principal roles.
 - Normalize HTTPS scheme checks when setting or expiring trusted-device and
   step-up cookies so sensitive tokens remain marked `Secure`.
 - Sanitize JWT middleware challenge descriptions so callback diagnostics cannot

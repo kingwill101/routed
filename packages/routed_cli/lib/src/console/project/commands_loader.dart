@@ -11,6 +11,30 @@ import 'package:routed_cli/routed_cli.dart' show CliLogger;
 import '../util/dart_exec.dart';
 import '../util/pubspec.dart';
 
+/// Whether [args] select a command that may be provided by the current project.
+///
+/// Global invocations and registered built-ins bypass project discovery so a
+/// broken `lib/commands.dart` cannot prevent unrelated CLI functionality.
+bool shouldLoadProjectCommands(
+  Iterable<String> args,
+  CommandRunner<void> runner,
+) {
+  final values = args.toList(growable: false);
+  if (values.isEmpty) return false;
+  final selection = values.firstWhere(
+    (value) => !value.startsWith('-'),
+    orElse: () => '',
+  );
+  if (selection.isEmpty || runner.commands.containsKey(selection)) {
+    return false;
+  }
+  // The runner normalizes this documented nested spelling after parsing.
+  if (selection == 'openapi' && values.contains('generate')) {
+    return false;
+  }
+  return true;
+}
+
 /// Metadata describing a single option provided by a project command.
 class ProjectCommandOption {
   ProjectCommandOption({

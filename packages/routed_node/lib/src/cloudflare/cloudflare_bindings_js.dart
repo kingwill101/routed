@@ -688,10 +688,7 @@ final class _CloudflareCache implements CloudflareCache {
     final options = _options(ignoreMethod);
     return _nullableCloudflareResponseFromJavaScript(
       await _promise(
-        _call(_delegate, 'match', <JSAny?>[
-          _nativeRequest(request),
-          if (options != null) options,
-        ]),
+        _call(_delegate, 'match', <JSAny?>[_nativeRequest(request), ?options]),
       ),
     );
   }
@@ -719,7 +716,7 @@ final class _CloudflareCache implements CloudflareCache {
           await _promise(
             _call(_delegate, 'delete', <JSAny?>[
               _nativeRequest(request),
-              if (options != null) options,
+              ?options,
             ]),
           ),
         ) ==
@@ -1054,7 +1051,7 @@ final class _CloudflareQueue implements CloudflareQueue {
     final value = <String, Object?>{
       if (contentType != null)
         'contentType': _queueContentTypeName(contentType),
-      if (delaySeconds != null) 'delaySeconds': delaySeconds,
+      'delaySeconds': ?delaySeconds,
     };
     return value.isEmpty ? null : _jsify(value);
   }
@@ -1415,11 +1412,7 @@ final class _CloudflareDurableObjectNamespace
         ? null
         : _jsify(<String, Object?>{'jurisdiction': jurisdiction});
     return _CloudflareDurableObjectId(
-      _object(
-        _call(_delegate, 'newUniqueId', <JSAny?>[
-          if (options != null) options,
-        ])!,
-      ),
+      _object(_call(_delegate, 'newUniqueId', <JSAny?>[?options])!),
     );
   }
 
@@ -1445,12 +1438,7 @@ final class _CloudflareDurableObjectNamespace
         ? null
         : _jsify(<String, Object?>{'locationHint': locationHint});
     return _CloudflareDurableObjectStub(
-      _object(
-        _call(_delegate, 'get', <JSAny?>[
-          nativeId,
-          if (options != null) options,
-        ])!,
-      ),
+      _object(_call(_delegate, 'get', <JSAny?>[nativeId, ?options])!),
     );
   }
 
@@ -1460,12 +1448,7 @@ final class _CloudflareDurableObjectNamespace
         ? null
         : _jsify(<String, Object?>{'locationHint': locationHint});
     return _CloudflareDurableObjectStub(
-      _object(
-        _call(_delegate, 'getByName', <JSAny?>[
-          name.toJS,
-          if (options != null) options,
-        ])!,
-      ),
+      _object(_call(_delegate, 'getByName', <JSAny?>[name.toJS, ?options])!),
     );
   }
 }
@@ -1616,9 +1599,8 @@ final class _CloudflareDurableObjectStorage
       (await _asyncCall('get', <JSAny?>[
             key.toJS,
             _options({
-              if (allowConcurrency != null)
-                'allowConcurrency': allowConcurrency,
-              if (noCache != null) 'noCache': noCache,
+              'allowConcurrency': ?allowConcurrency,
+              'noCache': ?noCache,
             }),
           ]))
           as T?;
@@ -1631,10 +1613,7 @@ final class _CloudflareDurableObjectStorage
   }) async {
     final value = await _asyncCall('get', <JSAny?>[
       _jsify(keys.toList()),
-      _options({
-        if (allowConcurrency != null) 'allowConcurrency': allowConcurrency,
-        if (noCache != null) 'noCache': noCache,
-      }),
+      _options({'allowConcurrency': ?allowConcurrency, 'noCache': ?noCache}),
     ]);
     return _map(value).map((key, value) => MapEntry(key, value as T));
   }
@@ -1651,9 +1630,9 @@ final class _CloudflareDurableObjectStorage
       key.toJS,
       _jsify(value),
       _options({
-        if (allowConcurrency != null) 'allowConcurrency': allowConcurrency,
-        if (allowUnconfirmed != null) 'allowUnconfirmed': allowUnconfirmed,
-        if (noCache != null) 'noCache': noCache,
+        'allowConcurrency': ?allowConcurrency,
+        'allowUnconfirmed': ?allowUnconfirmed,
+        'noCache': ?noCache,
       }),
     ]);
   }
@@ -1668,9 +1647,9 @@ final class _CloudflareDurableObjectStorage
     await _asyncCall('put', <JSAny?>[
       _jsify(entries),
       _options({
-        if (allowConcurrency != null) 'allowConcurrency': allowConcurrency,
-        if (allowUnconfirmed != null) 'allowUnconfirmed': allowUnconfirmed,
-        if (noCache != null) 'noCache': noCache,
+        'allowConcurrency': ?allowConcurrency,
+        'allowUnconfirmed': ?allowUnconfirmed,
+        'noCache': ?noCache,
       }),
     ]);
   }
@@ -1685,11 +1664,9 @@ final class _CloudflareDurableObjectStorage
       (await _asyncCall('delete', <JSAny?>[
             key.toJS,
             _options({
-              if (allowConcurrency != null)
-                'allowConcurrency': allowConcurrency,
-              if (allowUnconfirmed != null)
-                'allowUnconfirmed': allowUnconfirmed,
-              if (noCache != null) 'noCache': noCache,
+              'allowConcurrency': ?allowConcurrency,
+              'allowUnconfirmed': ?allowUnconfirmed,
+              'noCache': ?noCache,
             }),
           ]))
           as bool? ??
@@ -1703,9 +1680,9 @@ final class _CloudflareDurableObjectStorage
   }) async {
     await _asyncCall('deleteAll', <JSAny?>[
       _options({
-        if (allowConcurrency != null) 'allowConcurrency': allowConcurrency,
-        if (allowUnconfirmed != null) 'allowUnconfirmed': allowUnconfirmed,
-        if (noCache != null) 'noCache': noCache,
+        'allowConcurrency': ?allowConcurrency,
+        'allowUnconfirmed': ?allowUnconfirmed,
+        'noCache': ?noCache,
       }),
     ]);
   }
@@ -1720,11 +1697,9 @@ final class _CloudflareDurableObjectStorage
       (await _asyncCall('delete', <JSAny?>[
             _jsify(keys.toList()),
             _options({
-              if (allowConcurrency != null)
-                'allowConcurrency': allowConcurrency,
-              if (allowUnconfirmed != null)
-                'allowUnconfirmed': allowUnconfirmed,
-              if (noCache != null) 'noCache': noCache,
+              'allowConcurrency': ?allowConcurrency,
+              'allowUnconfirmed': ?allowUnconfirmed,
+              'noCache': ?noCache,
             }),
           ]))
           as bool? ??
@@ -1743,14 +1718,14 @@ final class _CloudflareDurableObjectStorage
   }) async {
     final value = await _asyncCall('list', <JSAny?>[
       _options({
-        if (start != null) 'start': start,
-        if (startAfter != null) 'startAfter': startAfter,
-        if (end != null) 'end': end,
-        if (prefix != null) 'prefix': prefix,
-        if (reverse != null) 'reverse': reverse,
-        if (limit != null) 'limit': limit,
-        if (allowConcurrency != null) 'allowConcurrency': allowConcurrency,
-        if (noCache != null) 'noCache': noCache,
+        'start': ?start,
+        'startAfter': ?startAfter,
+        'end': ?end,
+        'prefix': ?prefix,
+        'reverse': ?reverse,
+        'limit': ?limit,
+        'allowConcurrency': ?allowConcurrency,
+        'noCache': ?noCache,
       }),
     ]);
     return _map(value).map((key, value) => MapEntry(key, value as T));
@@ -1759,9 +1734,7 @@ final class _CloudflareDurableObjectStorage
   @override
   Future<int?> getAlarm({bool? allowConcurrency}) async => _int(
     await _asyncCall('getAlarm', <JSAny?>[
-      _options({
-        if (allowConcurrency != null) 'allowConcurrency': allowConcurrency,
-      }),
+      _options({'allowConcurrency': ?allowConcurrency}),
     ]),
   );
 
@@ -1774,8 +1747,8 @@ final class _CloudflareDurableObjectStorage
     await _asyncCall('setAlarm', <JSAny?>[
       scheduledTime.millisecondsSinceEpoch.toJS,
       _options({
-        if (allowConcurrency != null) 'allowConcurrency': allowConcurrency,
-        if (allowUnconfirmed != null) 'allowUnconfirmed': allowUnconfirmed,
+        'allowConcurrency': ?allowConcurrency,
+        'allowUnconfirmed': ?allowUnconfirmed,
       }),
     ]);
   }
@@ -1787,8 +1760,8 @@ final class _CloudflareDurableObjectStorage
   }) async {
     await _asyncCall('deleteAlarm', <JSAny?>[
       _options({
-        if (allowConcurrency != null) 'allowConcurrency': allowConcurrency,
-        if (allowUnconfirmed != null) 'allowUnconfirmed': allowUnconfirmed,
+        'allowConcurrency': ?allowConcurrency,
+        'allowUnconfirmed': ?allowUnconfirmed,
       }),
     ]);
   }

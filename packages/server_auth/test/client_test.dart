@@ -169,6 +169,38 @@ void main() {
     expect(store.load(), isEmpty);
   });
 
+  test('cookie Max-Age becomes an absolute expiry deadline', () {
+    final receivedAt = DateTime.utc(2030, 1, 1);
+    final cookie = AuthClientCookie.fromSetCookie(
+      'session=secret; Max-Age=60; Path=/',
+      now: receivedAt,
+    );
+
+    expect(cookie.maxAge, 60);
+    expect(cookie.expires, receivedAt.add(const Duration(minutes: 1)));
+  });
+
+  test('transport excludes expired cookies from requests', () async {
+    final cookieStore = _FixedCookieStore([
+      AuthClientCookie(
+        name: 'expired',
+        value: 'secret',
+        expires: DateTime.now().toUtc().subtract(const Duration(seconds: 1)),
+      ),
+      const AuthClientCookie(name: 'active', value: 'current'),
+    ]);
+    final client = AuthClient(
+      baseUrl: Uri.parse('https://example.test'),
+      cookieStore: cookieStore,
+      httpClient: MockClient((request) async {
+        expect(request.headers['cookie'], 'active=current');
+        return http.Response(jsonEncode({'providers': <Object?>[]}), 200);
+      }),
+    );
+
+    await client.getProviders();
+  });
+
   test('AuthClient honors Secure cookies by request scheme', () async {
     final secureCookie = AuthClientCookie.fromSetCookie(
       'session=secret; Secure; HttpOnly; Path=/',
@@ -197,6 +229,44 @@ void main() {
     );
     await tlsClient.getSession();
     expect(requests[1].headers['cookie'], equals('session=secret'));
+  });
+
+  test('invalid CSRF refreshes once and retries the mutation', () async {
+    var csrfRequests = 0;
+    var mutationRequests = 0;
+    final client = AuthClient(
+      baseUrl: Uri.parse('https://example.test'),
+      httpClient: MockClient((request) async {
+        if (request.url.path == '/auth/csrf') {
+          csrfRequests += 1;
+          expect(
+            request.headers['cookie'],
+            csrfRequests == 1 ? isNull : 'session=session-2',
+          );
+          return http.Response(
+            jsonEncode({'csrfToken': 'csrf-$csrfRequests'}),
+            200,
+            headers: {'set-cookie': 'session=session-$csrfRequests; Path=/'},
+          );
+        }
+        mutationRequests += 1;
+        final body = jsonDecode(request.body) as Map<String, dynamic>;
+        expect(body['_csrf'], 'csrf-$mutationRequests');
+        if (mutationRequests == 1) {
+          return http.Response(
+            jsonEncode({'error': 'invalid_csrf'}),
+            403,
+            headers: {'set-cookie': 'session=session-2; Path=/'},
+          );
+        }
+        return http.Response('{}', 200);
+      }),
+    );
+
+    await client.revokeSession('session-1');
+
+    expect(csrfRequests, 2);
+    expect(mutationRequests, 2);
   });
 
   test(
@@ -515,4 +585,16 @@ void main() {
     expect(proof.expiresAt, equals(DateTime.utc(2030, 1, 1, 0, 5)));
     await client.revokeTwoFactorStepUp();
   });
+}
+
+final class _FixedCookieStore implements AuthClientCookieStore {
+  _FixedCookieStore(this.cookies);
+
+  final List<AuthClientCookie> cookies;
+
+  @override
+  Iterable<AuthClientCookie> load() => cookies;
+
+  @override
+  void save(AuthClientCookie cookie) {}
 }

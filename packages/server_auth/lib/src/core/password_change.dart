@@ -62,13 +62,22 @@ Future<AuthPasswordChangeResult> changeAuthPasswordForUser({
     throw AuthFlowException('invalid_current_password');
   }
 
+  final user = await Future.sync(() => store.users.findById(normalizedUserId));
+  if (user == null) {
+    throw AuthFlowException('password_change_failed');
+  }
+
   final changedAt = (now ?? DateTime.now()).toUtc();
   await trustedDeviceStore?.revokeAll(normalizedUserId, now: changedAt);
 
-  // Rotate before changing credentials so an error after this point still
-  // invalidates previously issued JWTs. Durable stores should perform this
-  // alongside the credential update in their persistence transaction.
+  // Fail closed before changing credentials: invalidate JWTs and revoke every
+  // server-side session first. If either operation fails, the password remains
+  // unchanged. Durable adapters may additionally transact these mutations.
   await Future.sync(() => store.jwtVersions.rotate(normalizedUserId));
+  final sessionsRevoked = await Future.sync(
+    () =>
+        store.sessions.revokeAllForUser(normalizedUserId, revokedAt: changedAt),
+  );
 
   final passwordHash = passwordHasher.hash(newPassword);
   if (passwordHash.trim().isEmpty) {
@@ -85,14 +94,6 @@ Future<AuthPasswordChangeResult> changeAuthPasswordForUser({
     throw AuthFlowException('password_change_failed');
   }
 
-  final user = await Future.sync(() => store.users.findById(normalizedUserId));
-  if (user == null) {
-    throw AuthFlowException('password_change_failed');
-  }
-  final sessionsRevoked = await Future.sync(
-    () =>
-        store.sessions.revokeAllForUser(normalizedUserId, revokedAt: changedAt),
-  );
   return AuthPasswordChangeResult(
     user: user,
     credentialsUpdated: credentialsUpdated,

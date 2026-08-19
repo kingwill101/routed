@@ -8,9 +8,10 @@ import 'models.dart';
 
 /// A cookie received from an auth response.
 ///
-/// The client stores the name and value, plus the transport attribute needed
-/// to enforce `Secure`. Other attributes such as `HttpOnly`, `Path`, and
-/// `SameSite` are server instructions and are not sent back as request data.
+/// The client stores the name/value plus expiry and transport metadata needed
+/// to avoid sending stale credentials or `Secure` cookies over HTTP. Other
+/// attributes such as `HttpOnly`, `Path`, and `SameSite` are server instructions
+/// and are not sent back as request data.
 class AuthClientCookie {
   const AuthClientCookie({
     required this.name,
@@ -26,12 +27,13 @@ class AuthClientCookie {
   final int? maxAge;
   final bool secure;
 
-  bool get isDeletion =>
-      (maxAge != null && maxAge! <= 0) ||
-      (expires != null && !expires!.isAfter(DateTime.now()));
+  bool get isDeletion => (maxAge != null && maxAge! <= 0) || isExpired;
+
+  bool get isExpired =>
+      expires != null && !expires!.isAfter(DateTime.now().toUtc());
 
   /// Parses the first cookie in a `Set-Cookie` header.
-  factory AuthClientCookie.fromSetCookie(String header) {
+  factory AuthClientCookie.fromSetCookie(String header, {DateTime? now}) {
     final attributes = header.split(';');
     final first = attributes.first.trim();
     final separator = first.indexOf('=');
@@ -66,6 +68,13 @@ class AuthClientCookie {
       }
     }
 
+    // Max-Age is relative to receipt time and takes precedence over Expires.
+    // Store it as an absolute deadline so persistent and in-memory stores do
+    // not keep sending a credential after its lifetime has elapsed.
+    if (maxAge != null) {
+      expires = (now ?? DateTime.now()).toUtc().add(Duration(seconds: maxAge));
+    }
+
     return AuthClientCookie(
       name: name,
       value: value,
@@ -92,8 +101,10 @@ class InMemoryAuthClientCookieStore implements AuthClientCookieStore {
   final Map<String, AuthClientCookie> _cookies = <String, AuthClientCookie>{};
 
   @override
-  Iterable<AuthClientCookie> load() =>
-      List<AuthClientCookie>.unmodifiable(_cookies.values);
+  Iterable<AuthClientCookie> load() {
+    _cookies.removeWhere((_, cookie) => cookie.isExpired);
+    return List<AuthClientCookie>.unmodifiable(_cookies.values);
+  }
 
   @override
   void save(AuthClientCookie cookie) {
@@ -315,6 +326,177 @@ class AuthClientTwoFactorRequiredException extends AuthClientException {
   final DateTime expiresAt;
 }
 
+/// Raw successful response returned by [AuthClientTransport].
+final class AuthClientResponse {
+  const AuthClientResponse(this.statusCode, this.response);
+
+  final int statusCode;
+  final http.Response response;
+
+  String get body => response.body;
+  Map<String, String> get headers => response.headers;
+}
+
+/// Shared HTTP transport for core and feature-specific auth clients.
+///
+/// It owns cookies, bearer authentication, CSRF reuse, timeouts, redirect
+/// policy, bounded error parsing, and response-cookie processing.
+class AuthClientTransport {
+  AuthClientTransport({
+    required Uri baseUrl,
+    String basePath = '/auth',
+    http.Client? httpClient,
+    AuthClientCookieStore? cookieStore,
+    this.timeout = const Duration(seconds: 15),
+    Map<String, String>? headers,
+    String? bearerToken,
+    this.maximumErrorBodyBytes = 65536,
+  }) : _baseUrl = _normalizeBaseUrl(baseUrl),
+       _basePath = _normalizePath(basePath),
+       _httpClient = httpClient ?? http.Client(),
+       cookieStore = cookieStore ?? InMemoryAuthClientCookieStore(),
+       _headers = Map<String, String>.unmodifiable(headers ?? const {}),
+       _bearerToken = bearerToken;
+
+  final Uri _baseUrl;
+  final String _basePath;
+  final http.Client _httpClient;
+  final AuthClientCookieStore cookieStore;
+  final Duration timeout;
+  final int maximumErrorBodyBytes;
+  final Map<String, String> _headers;
+  String? _bearerToken;
+  String? _csrfToken;
+
+  void setBearerToken(String? token) {
+    _bearerToken = token?.trim().isEmpty == true ? null : token?.trim();
+  }
+
+  void clearCsrfToken() => _csrfToken = null;
+
+  Future<String> getCsrfToken() async {
+    final response = await request('GET', '/csrf');
+    final token = _mapBody(response.body)['csrfToken']?.toString().trim() ?? '';
+    if (token.isEmpty) {
+      throw const FormatException('Invalid auth CSRF response');
+    }
+    _csrfToken = token;
+    return token;
+  }
+
+  Future<AuthClientResponse> mutate(
+    String method,
+    String relativePath,
+    Map<String, dynamic> body,
+  ) async {
+    final csrf = _csrfToken ?? await getCsrfToken();
+    try {
+      return await request(
+        method,
+        relativePath,
+        body: <String, dynamic>{...body, '_csrf': csrf},
+        headers: {'x-csrf-token': csrf},
+      );
+    } on AuthClientException catch (error) {
+      if (error.code != 'invalid_csrf') rethrow;
+      _csrfToken = null;
+      final refreshed = await getCsrfToken();
+      return request(
+        method,
+        relativePath,
+        body: <String, dynamic>{...body, '_csrf': refreshed},
+        headers: {'x-csrf-token': refreshed},
+      );
+    }
+  }
+
+  Future<AuthClientResponse> request(
+    String method,
+    String relativePath, {
+    Map<String, dynamic>? body,
+    Map<String, String>? queryParameters,
+    Map<String, String>? headers,
+    bool followRedirects = true,
+  }) async {
+    final uri = endpoint(relativePath, queryParameters: queryParameters);
+    final request = http.Request(method, uri)
+      ..followRedirects = followRedirects
+      ..headers.addAll({
+        'accept': 'application/json',
+        ..._headers,
+        ...?headers,
+      });
+    if (body != null) {
+      request.headers['content-type'] = 'application/json';
+      request.body = jsonEncode(body);
+    }
+    if (_bearerToken != null) {
+      request.headers['authorization'] = 'Bearer $_bearerToken';
+    }
+    final cookies = (await Future.sync(cookieStore.load))
+        .where(
+          (cookie) =>
+              !cookie.isDeletion && (!cookie.secure || uri.scheme == 'https'),
+        )
+        .toList(growable: false);
+    if (cookies.isNotEmpty) {
+      request.headers['cookie'] = cookies
+          .map((cookie) => '${cookie.name}=${cookie.value}')
+          .join('; ');
+    }
+
+    final streamed = await _httpClient.send(request).timeout(timeout);
+    final response = await http.Response.fromStream(streamed);
+    await _storeResponseCookies(response);
+    final result = AuthClientResponse(response.statusCode, response);
+    if (response.statusCode >= 400) throw _exceptionFor(result);
+    return result;
+  }
+
+  Uri endpoint(String relativePath, {Map<String, String>? queryParameters}) {
+    final normalized = _normalizePath(relativePath);
+    final path =
+        '${_baseUrl.path.replaceFirst(RegExp(r'/*$'), '')}$_basePath$normalized';
+    return _baseUrl.replace(path: path, queryParameters: queryParameters);
+  }
+
+  Future<void> _storeResponseCookies(http.Response response) async {
+    final header = response.headers['set-cookie'];
+    if (header == null || header.trim().isEmpty) return;
+    for (final value in _splitSetCookieHeader(header)) {
+      try {
+        await Future.sync(
+          () => cookieStore.save(AuthClientCookie.fromSetCookie(value)),
+        );
+      } on FormatException {
+        // Ignore malformed cookies from unrelated middleware.
+      }
+    }
+  }
+
+  AuthClientException _exceptionFor(AuthClientResponse response) {
+    String? code;
+    String? message;
+    if (response.body.length <= maximumErrorBodyBytes) {
+      try {
+        final body = _mapBody(response.body);
+        code = body['error']?.toString();
+        message = body['message']?.toString();
+      } on FormatException {
+        // Preserve the HTTP failure when a proxy returns non-JSON content.
+      }
+    }
+    final retryAfter = response.headers['retry-after'];
+    final retrySeconds = retryAfter == null ? null : int.tryParse(retryAfter);
+    return AuthClientException(
+      statusCode: response.statusCode,
+      code: code == null || code.isEmpty ? 'auth_request_failed' : code,
+      message: message,
+      retryAfter: retrySeconds == null ? null : Duration(seconds: retrySeconds),
+    );
+  }
+}
+
 /// Typed Dart client for the framework-independent auth HTTP contract.
 ///
 /// The client owns route names, JSON shapes, CSRF presentation, and response
@@ -326,35 +508,36 @@ class AuthClient {
     String basePath = '/auth',
     http.Client? httpClient,
     AuthClientCookieStore? cookieStore,
-    this.timeout = const Duration(seconds: 15),
+    Duration timeout = const Duration(seconds: 15),
     Map<String, String>? headers,
     String? bearerToken,
-  }) : _baseUrl = _normalizeBaseUrl(baseUrl),
-       _basePath = _normalizePath(basePath),
-       _httpClient = httpClient ?? http.Client(),
-       cookieStore = cookieStore ?? InMemoryAuthClientCookieStore(),
-       _bearerToken = bearerToken {
-    _headers = Map<String, String>.unmodifiable(headers ?? const {});
-  }
+    AuthClientTransport? transport,
+  }) : transport =
+           transport ??
+           AuthClientTransport(
+             baseUrl: baseUrl,
+             basePath: basePath,
+             httpClient: httpClient,
+             cookieStore: cookieStore,
+             timeout: timeout,
+             headers: headers,
+             bearerToken: bearerToken,
+           );
 
-  final Uri _baseUrl;
-  final String _basePath;
-  final http.Client _httpClient;
-  final AuthClientCookieStore cookieStore;
-  final Duration timeout;
-  late final Map<String, String> _headers;
-  String? _bearerToken;
-  String? _csrfToken;
+  final AuthClientTransport transport;
+
+  AuthClientCookieStore get cookieStore => transport.cookieStore;
+  Duration get timeout => transport.timeout;
 
   /// Replaces the bearer token used for JWT-based auth requests.
   void setBearerToken(String? token) {
-    _bearerToken = token?.trim().isEmpty == true ? null : token?.trim();
+    transport.setBearerToken(token);
   }
 
   /// Clears the cached CSRF token so the next state-changing request refreshes
   /// it from the server.
   void clearCsrfToken() {
-    _csrfToken = null;
+    transport.clearCsrfToken();
   }
 
   /// Lists the providers exposed by the auth server.
@@ -379,13 +562,7 @@ class AuthClient {
 
   /// Obtains and caches the CSRF token used by state-changing requests.
   Future<String> getCsrfToken() async {
-    final response = await _request('GET', '/csrf');
-    final token = _mapBody(response.body)['csrfToken']?.toString().trim() ?? '';
-    if (token.isEmpty) {
-      throw const FormatException('Invalid auth CSRF response');
-    }
-    _csrfToken = token;
-    return token;
+    return transport.getCsrfToken();
   }
 
   /// Returns the current session, or `null` when the client is signed out.
@@ -423,7 +600,7 @@ class AuthClient {
     String? accountLabel,
   }) async {
     final response = await _mutatingRequest('POST', '/2fa/enroll', {
-      if (accountLabel != null) 'accountLabel': accountLabel,
+      'accountLabel': ?accountLabel,
     });
     return AuthClientTwoFactorEnrollment.fromJson(_mapBody(response.body));
   }
@@ -527,8 +704,8 @@ class AuthClient {
       '/signin/${_pathSegment(provider)}',
       <String, dynamic>{
         ...?attributes,
-        if (email != null) 'email': email,
-        if (username != null) 'username': username,
+        'email': ?email,
+        'username': ?username,
         'password': password,
       },
     );
@@ -559,8 +736,8 @@ class AuthClient {
       '/register/${_pathSegment(provider)}',
       <String, dynamic>{
         ...?attributes,
-        if (email != null) 'email': email,
-        if (username != null) 'username': username,
+        'email': ?email,
+        'username': ?username,
         'password': password,
       },
     );
@@ -576,10 +753,7 @@ class AuthClient {
     final response = await _mutatingRequest(
       'POST',
       '/signin/${_pathSegment(provider)}',
-      <String, dynamic>{
-        'email': email,
-        if (callbackUrl != null) 'callbackUrl': callbackUrl,
-      },
+      <String, dynamic>{'email': email, 'callbackUrl': ?callbackUrl},
     );
     final body = _mapBody(response.body);
     return AuthClientVerificationSent(
@@ -595,7 +769,7 @@ class AuthClient {
     final response = await _request(
       'GET',
       '/signin/${_pathSegment(provider)}',
-      queryParameters: {if (callbackUrl != null) 'callbackUrl': callbackUrl},
+      queryParameters: {'callbackUrl': ?callbackUrl},
       followRedirects: false,
     );
     final location = response.headers['location'];
@@ -613,10 +787,7 @@ class AuthClient {
   }) {
     return _completeCallback(
       provider: provider,
-      parameters: <String, String>{
-        'code': code,
-        if (state != null) 'state': state,
-      },
+      parameters: <String, String>{'code': code, 'state': ?state},
     );
   }
 
@@ -646,7 +817,7 @@ class AuthClient {
       'currentPassword': currentPassword,
       'newPassword': newPassword,
     });
-    _csrfToken = null;
+    transport.clearCsrfToken();
   }
 
   /// Revokes one server-side session by its public session ID.
@@ -670,7 +841,7 @@ class AuthClient {
   /// Signs the current session out and processes expired auth cookies.
   Future<void> signOut() async {
     await _mutatingRequest('POST', '/signout', const <String, dynamic>{});
-    _csrfToken = null;
+    transport.clearCsrfToken();
   }
 
   Future<AuthClientAuthResult> _completeCallback({
@@ -695,21 +866,15 @@ class AuthClient {
     );
   }
 
-  Future<_AuthClientResponse> _mutatingRequest(
+  Future<AuthClientResponse> _mutatingRequest(
     String method,
     String relativePath,
     Map<String, dynamic> body,
   ) async {
-    final csrf = _csrfToken ?? await getCsrfToken();
-    return _request(
-      method,
-      relativePath,
-      body: <String, dynamic>{...body, '_csrf': csrf},
-      headers: {'x-csrf-token': csrf},
-    );
+    return transport.mutate(method, relativePath, body);
   }
 
-  Future<_AuthClientResponse> _request(
+  Future<AuthClientResponse> _request(
     String method,
     String relativePath, {
     Map<String, dynamic>? body,
@@ -717,93 +882,15 @@ class AuthClient {
     Map<String, String>? headers,
     bool followRedirects = true,
   }) async {
-    final uri = _endpoint(relativePath, queryParameters: queryParameters);
-    final request = http.Request(method, uri)
-      ..followRedirects = followRedirects
-      ..headers.addAll({
-        'accept': 'application/json',
-        ..._headers,
-        ...?headers,
-      });
-    if (body != null) {
-      request.headers['content-type'] = 'application/json';
-      request.body = jsonEncode(body);
-    }
-    if (_bearerToken != null) {
-      request.headers['authorization'] = 'Bearer $_bearerToken';
-    }
-    final cookies = await Future.sync(cookieStore.load);
-    final requestCookies = cookies
-        .where((cookie) => !cookie.secure || uri.scheme == 'https')
-        .toList(growable: false);
-    if (requestCookies.isNotEmpty) {
-      request.headers['cookie'] = requestCookies
-          .map((cookie) => '${cookie.name}=${cookie.value}')
-          .join('; ');
-    }
-
-    final streamed = await _httpClient.send(request).timeout(timeout);
-    final response = await http.Response.fromStream(streamed);
-    await _storeResponseCookies(response);
-    final result = _AuthClientResponse(response.statusCode, response);
-    if (response.statusCode >= 400) {
-      throw _exceptionFor(result);
-    }
-    return result;
-  }
-
-  Future<void> _storeResponseCookies(http.Response response) async {
-    final header = response.headers['set-cookie'];
-    if (header == null || header.trim().isEmpty) return;
-    for (final value in _splitSetCookieHeader(header)) {
-      try {
-        await Future.sync(
-          () => cookieStore.save(AuthClientCookie.fromSetCookie(value)),
-        );
-      } on FormatException {
-        // Ignore malformed cookies from unrelated middleware. Auth state is
-        // never inferred from an invalid cookie header.
-      }
-    }
-  }
-
-  AuthClientException _exceptionFor(_AuthClientResponse response) {
-    String? code;
-    String? message;
-    try {
-      final body = _mapBody(response.body);
-      code = body['error']?.toString();
-      message = body['message']?.toString();
-    } on FormatException {
-      // Preserve the HTTP failure even when a proxy returns non-JSON content.
-    }
-    final retryAfter = response.headers['retry-after'];
-    final retrySeconds = retryAfter == null ? null : int.tryParse(retryAfter);
-    return AuthClientException(
-      statusCode: response.statusCode,
-      code: code == null || code.isEmpty ? 'auth_request_failed' : code,
-      message: message,
-      retryAfter: retrySeconds == null ? null : Duration(seconds: retrySeconds),
+    return transport.request(
+      method,
+      relativePath,
+      body: body,
+      queryParameters: queryParameters,
+      headers: headers,
+      followRedirects: followRedirects,
     );
   }
-
-  Uri _endpoint(String relativePath, {Map<String, String>? queryParameters}) {
-    final path =
-        '${_baseUrl.path.replaceFirst(RegExp(r'/*$'), '')}'
-        '$_basePath$relativePath';
-    return _baseUrl.replace(path: path, queryParameters: queryParameters);
-  }
-}
-
-class _AuthClientResponse {
-  const _AuthClientResponse(this.statusCode, this.response);
-
-  final int statusCode;
-  final http.Response response;
-
-  String get body => response.body;
-
-  Map<String, String> get headers => response.headers;
 }
 
 Map<String, dynamic> _mapBody(String body) {

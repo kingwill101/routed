@@ -5,6 +5,12 @@ import 'package:routed_auth/src/auth/manager/auth_manager.dart';
 import 'package:server_auth/server_auth.dart'
     show
         AuthCredentials,
+        AuthEndpointDescriptor,
+        AuthOperationAuthentication,
+        AuthOperationCsrfPolicy,
+        AuthOperationInvocation,
+        AuthOperationMethod,
+        AuthOperationOriginPolicy,
         AuthCallbackRouteKind,
         authErrorStatusCode,
         authProviderSummaries,
@@ -35,6 +41,7 @@ import 'package:routed_core/src/context/context.dart';
 import 'package:routed_core/src/response.dart';
 import 'package:routed_core/src/router/router.dart';
 import 'package:routed_http/routed_http.dart';
+import 'package:routed_sessions/routed_sessions.dart';
 
 /// Auth HTTP routes for routed.
 ///
@@ -79,6 +86,10 @@ class AuthRoutes {
   final AuthManager _manager;
   final AuthManager Function()? _managerOf;
 
+  static const String _activeOrganizationKey =
+      '__routed.auth.activeOrganizationId';
+  static const String _activeTeamKey = '__routed.auth.activeTeamId';
+
   /// Resolves the manager used by route handlers.
   ///
   /// When [managerOf] is provided (e.g. a container lookup), it is consulted on
@@ -89,6 +100,9 @@ class AuthRoutes {
 
   void register(Router router, {String? basePath}) {
     final root = basePath ?? manager.options.basePath;
+    final featureEndpoints = manager.runtime.registry.endpoints
+        .where((endpoint) => !endpoint.serverOnly)
+        .toList(growable: false);
     router.group(
       path: root,
       builder: (auth) {
@@ -135,8 +149,107 @@ class AuthRoutes {
         );
         auth.post('/2fa/step-up', _twoFactorStepUp);
         auth.post('/2fa/step-up/revoke', _twoFactorStepUpRevoke);
+        for (final endpoint in featureEndpoints) {
+          Future<Response> handler(EngineContext ctx) =>
+              _featureOperation(ctx, endpoint);
+          switch (endpoint.method) {
+            case AuthOperationMethod.get:
+              auth.get(endpoint.path, handler);
+              break;
+            case AuthOperationMethod.post:
+              auth.post(endpoint.path, handler);
+              break;
+          }
+        }
       },
     );
+  }
+
+  Future<Response> _featureOperation(
+    EngineContext ctx,
+    AuthEndpointDescriptor<EngineContext> endpoint,
+  ) async {
+    Map<String, dynamic> payload;
+    try {
+      payload = await _payload(ctx);
+    } catch (_) {
+      return _errorResponse(ctx, 'invalid_request');
+    }
+    if (endpoint.originPolicy == AuthOperationOriginPolicy.browser) {
+      final browserError = manager.validateBrowserRequest(ctx);
+      if (browserError != null) return _errorResponse(ctx, browserError);
+    }
+    if (endpoint.csrfPolicy == AuthOperationCsrfPolicy.required &&
+        !manager.validateCsrf(ctx, payload)) {
+      return ctx.json({
+        'error': 'invalid_csrf',
+      }, statusCode: HttpStatus.forbidden);
+    }
+
+    try {
+      final session =
+          endpoint.authentication == AuthOperationAuthentication.none
+          ? null
+          : await manager.resolveSession(ctx);
+      if (endpoint.authentication == AuthOperationAuthentication.session &&
+          session == null) {
+        throw AuthFlowException('unauthorized');
+      }
+      final operation = endpoint.rateLimitOperation;
+      if (operation != null) {
+        await manager.enforceRateLimitOperation(
+          ctx,
+          operation: operation,
+          identifier: session?.user.id,
+        );
+      }
+      final mutableSession =
+          manager.options.sessionStrategy == AuthSessionStrategy.session &&
+          ctx.hasSession;
+      final activeOrganizationId = mutableSession
+          ? ctx.getSession<String>(_activeOrganizationKey)
+          : null;
+      final activeTeamId = mutableSession
+          ? ctx.getSession<String>(_activeTeamKey)
+          : null;
+      final response = await endpoint.invoke(
+        AuthOperationInvocation<EngineContext>(
+          context: ctx,
+          user: session?.user,
+          emailVerified: session?.user.attributes['emailVerified'] == true,
+          activeOrganizationId: activeOrganizationId,
+          activeTeamId: activeTeamId,
+          writeActiveSelection: mutableSession
+              ? (organizationId, teamId) {
+                  if (organizationId == null) {
+                    ctx.session.values.remove(_activeOrganizationKey);
+                  } else {
+                    ctx.setSession(_activeOrganizationKey, organizationId);
+                  }
+                  if (teamId == null) {
+                    ctx.session.values.remove(_activeTeamKey);
+                  } else {
+                    ctx.setSession(_activeTeamKey, teamId);
+                  }
+                }
+              : null,
+        ),
+        payload,
+      );
+      return ctx.json(response);
+    } on AuthFlowException catch (error) {
+      if (!payload.containsKey('organizationId') &&
+          ctx.hasSession &&
+          (error.code == 'organization_not_found' ||
+              error.code == 'organization_forbidden')) {
+        ctx.session.values
+          ..remove(_activeOrganizationKey)
+          ..remove(_activeTeamKey);
+      }
+      return _flowErrorResponse(ctx, error);
+    } catch (_) {
+      return _errorResponse(ctx, 'auth_request_failed');
+    }
   }
 
   Future<Response> _providers(EngineContext ctx) async {

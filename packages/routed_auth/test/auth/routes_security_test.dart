@@ -222,7 +222,10 @@ void main() {
       response.assertStatus(HttpStatus.tooManyRequests);
       expect(response.json()['error'], equals('rate_limited'));
       expect(response.headers[HttpHeaders.retryAfterHeader], contains('17'));
-      expect(limiter.lastRequest?.action, AuthRateLimitAction.signIn);
+      expect(
+        limiter.lastRequest?.operation,
+        AuthRateLimitOperation.core(AuthRateLimitAction.signIn),
+      );
       expect(limiter.lastRequest?.providerId, equals('credentials'));
       expect(limiter.lastRequest?.identifier, equals('alice'));
     },

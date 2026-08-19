@@ -176,3 +176,28 @@ When `stepUpStore` is configured, `POST /auth/2fa/step-up` verifies a fresh
 TOTP code and sets a short-lived, session-bound HTTP-only proof cookie. Routed
 consumers can enforce it with `AuthManager.requireTwoFactorStepUp` before
 sensitive actions; `POST /auth/2fa/step-up/revoke` clears the proof.
+
+## Organizations
+
+Compose `OrganizationFeature<EngineContext>` to opt in. `AuthRoutes` discovers
+its portable descriptors and automatically mounts the organization API; there
+is no separate route-registration call. If the feature is absent, every
+organization route is absent.
+
+The API lives under `/auth/organization/` and covers create/check/list/get/
+update/delete/set-active; member list/remove/role/leave; invitation invite/
+accept/reject/cancel/get/list; permission checks and dynamic-role CRUD; and
+team/team-member CRUD plus active-team selection. Read operations use `GET`;
+mutations use `POST` and inherit Routed's authentication, origin, Fetch
+Metadata, CSRF, rate-limit, generic-error, and retry-header handling from the
+operation descriptor.
+
+Server-session deployments may persist active organization/team convenience
+state. Membership is still revalidated on every scoped request, and stale
+selection is cleared. JWT clients keep selection locally and send explicit
+organization/team IDs; setting active context never reissues a JWT.
+
+Use `Haigate.organizationContext`, `Haigate.canInOrganization`, and
+`Haigate.ownsOrCanInOrganization` for explicit tenant membership, permission,
+and resource-owner checks. These helpers do not merge organization roles into
+the user's global principal.

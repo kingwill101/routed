@@ -1,6 +1,8 @@
 import 'dart:convert';
 import 'dart:io';
 
+import 'package:http/http.dart' as http;
+import 'package:http/testing.dart';
 import 'package:routed_core/routed_core.dart';
 import 'package:routed_auth/routed_auth.dart';
 import 'package:routed_sessions/routed_sessions.dart';
@@ -254,6 +256,76 @@ void main() {
       expect(events, contains('sign_in:user-1'));
       expect(events, contains('sign_out:user-1'));
       expect(events, contains('session'));
+    });
+
+    test('account-link events identify the OAuth provider', () async {
+      final provider = OAuthProvider<Map<String, dynamic>>(
+        id: 'test-oauth',
+        name: 'Test OAuth',
+        clientId: 'client-id',
+        clientSecret: 'client-secret',
+        authorizationEndpoint: Uri.parse('https://oauth.test/authorize'),
+        tokenEndpoint: Uri.parse('https://oauth.test/token'),
+        userInfoEndpoint: Uri.parse('https://oauth.test/user'),
+        redirectUri: 'https://app.test/auth/callback/test-oauth',
+        usePkce: false,
+        profile: (profile) => AuthUser(
+          id: profile['sub']?.toString() ?? '',
+          email: profile['email']?.toString(),
+        ),
+      );
+      final manager = AuthManager(
+        AuthOptions<EngineContext>(
+          store: InMemoryAuthStore(),
+          storeMode: AuthStoreMode.ephemeral,
+          providers: [provider],
+          enforceCsrf: false,
+          httpClient: MockClient((request) async {
+            if (request.url.path == '/token') {
+              return http.Response(
+                jsonEncode({'access_token': 'access-token'}),
+                HttpStatus.ok,
+              );
+            }
+            expect(request.url.path, '/user');
+            return http.Response(
+              jsonEncode({'sub': 'oauth-user', 'email': 'oauth@example.com'}),
+              HttpStatus.ok,
+            );
+          }),
+        ),
+      );
+      final engine = _authEngine(manager);
+      await engine.initialize();
+      AuthLinkAccountEvent? linked;
+      final eventManager = await engine.container.make<EventManager>();
+      eventManager.listen<AuthLinkAccountEvent>((event) => linked = event);
+
+      final client = TestClient(RoutedRequestHandler(engine));
+      addTearDown(client.close);
+      final csrfResponse = await client.get('/auth/csrf');
+      final initialCookie = csrfResponse.cookie('test_session')!;
+      final started = await client.get(
+        '/auth/signin/test-oauth',
+        headers: {
+          HttpHeaders.cookieHeader: [_cookieHeader(initialCookie)],
+        },
+      );
+      started.assertStatus(HttpStatus.found);
+      final state = Uri.parse(
+        started.headers[HttpHeaders.locationHeader]!.single,
+      ).queryParameters['state']!;
+      final callbackCookie = started.cookie('test_session') ?? initialCookie;
+
+      final completed = await client.get(
+        '/auth/callback/test-oauth?code=code&state=$state',
+        headers: {
+          HttpHeaders.cookieHeader: [_cookieHeader(callbackCookie)],
+        },
+      );
+
+      completed.assertStatus(HttpStatus.ok);
+      expect(linked?.provider?.id, 'test-oauth');
     });
 
     test('event projections do not retain auth secrets', () async {

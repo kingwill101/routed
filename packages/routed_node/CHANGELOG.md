@@ -1,5 +1,8 @@
 ## Unreleased
 
+- Adopted null-aware collection elements in the Cloudflare Fetch binding
+  serialization paths so the host adapter remains analyzer-clean.
+
 - Fix D1 metadata decoding for Cloudflare's snake_case `rows_read` and
   `rows_written` fields.
 - Added host-neutral Cloudflare bindings for Request `cf` metadata, the Cache

@@ -16,7 +16,11 @@ Future<void> main(List<String> args) async {
       DeployCommand(),
     ]);
   final projectLoader = ProjectCommandsLoader(logger: runner.logger);
-  final projectCommands = await projectLoader.loadProjectCommands(runner.usage);
-  projectLoader.registerWithRunner(runner, projectCommands, runner.usage);
+  if (shouldLoadProjectCommands(args, runner)) {
+    final projectCommands = await projectLoader.loadProjectCommands(
+      runner.usage,
+    );
+    projectLoader.registerWithRunner(runner, projectCommands, runner.usage);
+  }
   await runner.run(args);
 }

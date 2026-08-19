@@ -10,6 +10,7 @@ export 'package:server_auth/server_auth.dart'
         AuthRateLimitAction,
         AuthRateLimitDecision,
         AuthRateLimitException,
+        AuthRateLimitOperation,
         AuthRateLimitRequest,
         AuthRateLimiter;
 export 'src/events/rate_limit_events.dart';

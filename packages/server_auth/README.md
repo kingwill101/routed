@@ -107,6 +107,66 @@ step-up requirement helper at those action boundaries.
 so durable applications can use their own key-management system; the
 plaintext protector is intended only for tests and ephemeral examples.
 
+## Optional organization feature
+
+Organizations are opt-in. Nothing is registered unless an
+`OrganizationFeature` is included in `AuthOptions.features`:
+
+```dart
+final organizations = OrganizationFeature<MyRequestContext>(
+  store: myOrganizationStore,
+  options: const AuthOrganizationOptions(
+    teams: AuthOrganizationTeamsOptions(enabled: true),
+    dynamicRoles: true,
+  ),
+);
+
+final options = AuthOptions<MyRequestContext>(
+  providers: providers,
+  store: myAuthStore,
+  features: [organizations],
+);
+```
+
+The feature owns organizations, memberships, email-bound invitations,
+organization-scoped permissions, dynamic roles, teams, typed lifecycle hooks,
+redacted audit events, and post-commit warnings. Organization roles remain
+separate from global `AuthPrincipal.roles`.
+
+`AuthOrganizationStore` is a logical, atomic persistence contract. It contains
+no SQL, D1 bindings, table names, migrations, or query builders. Production
+adapters must implement its create/accept/capacity/last-owner/role-rename and
+cascade operations transactionally. `InMemoryAuthOrganizationStore` is only
+for tests and local development. The feature also advertises logical entity,
+relationship, uniqueness, index, and atomic-operation descriptors so adapters
+can build physical schemas without coupling `server_auth` to a database.
+
+Teams and dynamic roles are separately disabled by default. Default limits
+match the Better Auth benchmark: 100 members, 100 pending invitations, and a
+48-hour invitation lifetime. A built-in opaque ID generator is used unless an
+application supplies one. Custom non-opaque invitation IDs require a verified
+session email before they can be acted upon.
+
+Core and feature clients share `AuthClientTransport` for cookies, bearer
+tokens, CSRF refresh, timeouts, redirects, and bounded error parsing:
+
+```dart
+final transport = AuthClientTransport(
+  baseUrl: Uri.parse('https://example.com'),
+  cookieStore: myCookieStore,
+);
+final auth = AuthClient(
+  baseUrl: Uri.parse('https://example.com'),
+  transport: transport,
+);
+final organization = AuthOrganizationClient(transport: transport);
+```
+
+`AuthOrganizationClient` keeps active organization/team selection locally and
+sends the selected IDs explicitly. This works with JWTs without silently
+reissuing tokens; Routed server sessions may additionally persist the same
+selection as a convenience.
+
 ## Auth runtime and typed stores
 
 Integrations compose an `AuthRuntime` from typed domain stores and feature
@@ -156,11 +216,11 @@ Return `AuthRateLimitDecision.block(retryAfter: ...)` to produce a stable
 `rate_limited` failure in an adapter. The adapter owns the client identity
 used for the limit, including any trusted-proxy policy.
 
-Features receive the shared `AuthStore` during configuration. They should own
-one auth concern at a time—such as credentials, passkeys, or API keys—instead
-of adding more callbacks to a single persistence object. Endpoint, schema, hook, and
-rate-limit contributions will be added to this contract as those features are
-migrated.
+Features receive the shared `AuthStore` during configuration. They own one
+auth concern at a time and may contribute portable endpoint, logical schema,
+typed-client, and namespaced rate-limit descriptors. The registry rejects
+duplicate feature IDs and endpoint method/path pairs, then freezes the feature
+topology after runtime boot.
 
 For Routed applications, use `routed_auth`: initialize `AuthServiceProvider`
 alongside `Engine.defaultProviders`, then add the adapter's auth middleware and

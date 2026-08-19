@@ -1,5 +1,16 @@
 ## Unreleased
 
+- Make password reset/change fail closed by rotating JWT versions and revoking
+  server sessions before replacing credentials.
+- Derive `AuthStoreMode` when framework composition replaces the configured
+  store, expire client cookies using absolute `Max-Age` deadlines, and cover
+  automatic CSRF refresh after stale-session rejection.
+- Add the opt-in `OrganizationFeature`, typed atomic organization store,
+  memberships, invitations, scoped permissions, lifecycle hooks, dynamic
+  roles, teams, logical persistence descriptors, and typed organization client.
+- Add feature-contributed endpoint/client/schema/rate-limit descriptors,
+  immutable runtime topology, namespaced rate-limit operations, and the shared
+  public `AuthClientTransport`.
 - Added the optional `TwoFactorFeature` with RFC 6238 TOTP enrollment,
   protected-secret storage, atomic lockout/recovery-code operations,
   regeneration, disablement, and pending credential sign-in challenges. The

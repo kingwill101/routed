@@ -111,11 +111,14 @@ Future<AuthPasswordResetResult> resetAuthPasswordWithToken({
   final changedAt = (now ?? DateTime.now()).toUtc();
   await trustedDeviceStore?.revokeAll(user.id, now: changedAt);
 
-  // Rotate before changing credentials so a failure after token consumption
-  // still invalidates every previously issued JWT. A store implementation
-  // should execute this operation in the same transaction as its credential
-  // update when its persistence layer supports transactions.
+  // Fail closed before changing credentials: invalidate JWTs and revoke every
+  // server-side session first. If either operation fails, the password remains
+  // unchanged. Durable adapters may additionally wrap these mutations and the
+  // credential replacement in their own transaction.
   await Future.sync(() => store.jwtVersions.rotate(user.id));
+  final sessionsRevoked = await Future.sync(
+    () => store.sessions.revokeAllForUser(user.id, revokedAt: changedAt),
+  );
 
   final passwordHash = passwordHasher.hash(newPassword);
   if (passwordHash.trim().isEmpty) {
@@ -133,9 +136,6 @@ Future<AuthPasswordResetResult> resetAuthPasswordWithToken({
   }
 
   await Future.sync(() => store.passwordResetTokens.deleteForUser(user.id));
-  final sessionsRevoked = await Future.sync(
-    () => store.sessions.revokeAllForUser(user.id, revokedAt: changedAt),
-  );
   return AuthPasswordResetResult(
     user: user,
     credentialsUpdated: credentialsUpdated,

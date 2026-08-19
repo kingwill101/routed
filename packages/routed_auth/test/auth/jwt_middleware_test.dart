@@ -388,5 +388,61 @@ void main() {
       );
       response.assertStatus(200);
     });
+
+    test(
+      'external JWTs do not require Routed session-version claims',
+      () async {
+        final token = _buildToken(_claims(now: DateTime.now()));
+        final engine = buildEngine(
+          authConfig: AuthConfig.defaults().copyWith(
+            jwt: AuthJwtConfig(
+              enabled: true,
+              issuer: 'https://issuer.test',
+              audience: const ['api'],
+              requiredClaims: const ['exp'],
+              jwksUri: null,
+              jwksCacheTtl: const Duration(minutes: 5),
+              clockSkew: const Duration(seconds: 60),
+              algorithms: const ['HS256'],
+              inlineKeys: [_testJwk],
+              header: 'Authorization',
+              bearerPrefix: 'Bearer ',
+            ),
+          ),
+        );
+        engine.container.instance<AuthOptions<EngineContext>>(
+          AuthOptions<EngineContext>(
+            providers: [CredentialsProvider()],
+            store: InMemoryAuthStore(),
+            storeMode: AuthStoreMode.ephemeral,
+            sessionStrategy: AuthSessionStrategy.jwt,
+            jwtOptions: const JwtSessionOptions(secret: 'routed-session-key'),
+          ),
+        );
+        engine.get(
+          '/external',
+          (ctx) => ctx.json({
+            'sub': ctx.request.getAttribute<Map<String, dynamic>>(
+              jwtClaimsAttribute,
+            )?['sub'],
+          }),
+          middlewares: [MiddlewareRef.of('routed.auth.jwt')],
+        );
+        await engine.initialize();
+        addTearDown(engine.close);
+
+        final client = TestClient(RoutedRequestHandler(engine));
+        addTearDown(client.close);
+        final response = await client.get(
+          '/external',
+          headers: {
+            HttpHeaders.authorizationHeader: ['Bearer $token'],
+          },
+        );
+
+        response.assertStatus(HttpStatus.ok);
+        expect(response.json()['sub'], 'user-123');
+      },
+    );
   });
 }

@@ -237,4 +237,48 @@ void main() {
     expect(resolved.sessionMaxAge, explicitMaxAge);
     expect(resolved.sessionUpdateAge, explicitUpdateAge);
   });
+
+  test('resolveAuthOptions derives mode for a replacement store', () {
+    final base = AuthOptions<String>(
+      providers: [CredentialsProvider()],
+      store: InMemoryAuthStore(),
+      storeMode: AuthStoreMode.ephemeral,
+    );
+    final durable = _DurableAuthStore();
+
+    final resolved = resolveAuthOptions<String>(options: base, store: durable);
+
+    expect(resolved.store, same(durable));
+    expect(resolved.storeMode, AuthStoreMode.durable);
+  });
+}
+
+final class _DurableAuthStore implements AuthStore {
+  final InMemoryAuthStore _delegate = InMemoryAuthStore();
+
+  @override
+  AuthAccountStore get accounts => _delegate.accounts;
+
+  @override
+  AuthCredentialStore get credentials => _delegate.credentials;
+
+  @override
+  AuthJwtVersionStore get jwtVersions => _delegate.jwtVersions;
+
+  @override
+  AuthOAuthChallengeStore get oauthChallenges => _delegate.oauthChallenges;
+
+  @override
+  AuthPasswordResetTokenStore get passwordResetTokens =>
+      _delegate.passwordResetTokens;
+
+  @override
+  AuthSessionStore get sessions => _delegate.sessions;
+
+  @override
+  AuthUserStore get users => _delegate.users;
+
+  @override
+  AuthVerificationTokenStore get verificationTokens =>
+      _delegate.verificationTokens;
 }

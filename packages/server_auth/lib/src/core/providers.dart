@@ -544,7 +544,7 @@ Map<String, String> buildOAuthAuthorizationParameters<TProfile extends Object>(
     'client_id': provider.clientId,
     'redirect_uri': provider.redirectUri,
     'state': state,
-    if (nonce != null) 'nonce': nonce,
+    'nonce': ?nonce,
     if (provider.scopes.isNotEmpty) 'scope': provider.scopes.join(' '),
     'code_challenge': ?codeChallenge,
     'code_challenge_method': ?codeChallengeMethod,

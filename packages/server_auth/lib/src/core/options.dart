@@ -273,6 +273,11 @@ AuthOptions<TContext> resolveAuthOptions<TContext>({
   return options.copyWith(
     providers: mergedProviders,
     store: store ?? options.store,
+    storeMode: store == null
+        ? options.storeMode
+        : store is InMemoryAuthStore
+        ? AuthStoreMode.ephemeral
+        : AuthStoreMode.durable,
     httpClient: options.httpClient ?? httpClient,
     sessionStrategy: sessionStrategy ?? options.sessionStrategy,
     sessionMaxAge: options.sessionMaxAge ?? sessionMaxAge,

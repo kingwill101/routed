@@ -626,14 +626,22 @@ class Engine with ContainerMixin {
           sourceColumn: r.sourceColumn,
         );
 
-        // Uniqueness checks
-        if (_engineRoutes.any(
-          (er) =>
-              er.method == engineRoute.method && er.path == engineRoute.path,
-        )) {
-          throw StateError(
-            'Duplicate route registered for [${engineRoute.method}] ${engineRoute.path}',
+        // The engine is the first layer with visibility over the complete route
+        // topology, including groups and mounted routers. Keep the first route
+        // authoritative while surfacing later conflicts during development.
+        final existingRoute = _engineRoutes.firstWhereOrNull(
+          (route) =>
+              route.method == engineRoute.method &&
+              route.path == engineRoute.path,
+        );
+        if (existingRoute != null) {
+          debugPrintWarning(
+            'Duplicate route registered for [${engineRoute.method}] '
+            '${engineRoute.path}. The later registration from '
+            '${_routeSource(engineRoute)} was ignored; the first registration '
+            'from ${_routeSource(existingRoute)} remains active.',
           );
+          continue;
         }
 
         if (engineRoute.name != null) {
@@ -1368,6 +1376,19 @@ class Engine with ContainerMixin {
   void afterError(EngineErrorObserver observer) {
     errorHooks.addAfter(observer);
   }
+}
+
+String _routeSource(EngineRoute route) {
+  final file = route.sourceFile;
+  if (file == null) {
+    return 'an unknown source';
+  }
+  final line = route.sourceLine;
+  final column = route.sourceColumn;
+  if (line == null) {
+    return file;
+  }
+  return column == null ? '$file:$line' : '$file:$line:$column';
 }
 
 extension SecureEngine on Engine {

@@ -137,8 +137,10 @@ void main() {
           final engine = Engine()
             ..post('/auth/signin/credentials', (ctx) async {
               final decision = await limiter.check(
-                AuthRateLimitRequest<EngineContext>(
-                  action: AuthRateLimitAction.signIn,
+                AuthRateLimitRequest<EngineContext>.operation(
+                  operation: AuthRateLimitOperation.core(
+                    AuthRateLimitAction.signIn,
+                  ),
                   providerId: 'credentials',
                   context: ctx,
                   identifier: 'alice',

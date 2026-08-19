@@ -9,6 +9,9 @@ import 'package:server_auth/server_auth.dart'
         AuthGateRegistry,
         AuthGateService,
         AuthGateViolation,
+        AuthFlowException,
+        AuthOrganizationAuthorizationContext,
+        OrganizationFeature,
         PolicyBinding,
         syncManagedPolicyBindings,
         AuthPrincipal;
@@ -16,6 +19,7 @@ import 'package:routed_auth/src/auth/session_auth.dart';
 import 'package:routed_core/src/context/context.dart';
 import 'package:routed_core/src/response.dart';
 import 'package:routed_core/src/router/types.dart';
+import 'package:routed_sessions/routed_sessions.dart';
 
 /// A function that provides a payload for a specific ability in the given
 /// [EngineContext].
@@ -64,6 +68,106 @@ class Haigate {
   static final AuthGateRegistry<EngineContext> _registry = _service.registry;
 
   static AuthGateRegistry<EngineContext> get registry => _registry;
+
+  /// Resolves and revalidates explicit tenant membership for this request.
+  static Future<AuthOrganizationAuthorizationContext<EngineContext>>
+  organizationContext({
+    required EngineContext ctx,
+    required OrganizationFeature<EngineContext> feature,
+    String? organizationId,
+    String? teamId,
+  }) async {
+    final principal = SessionAuth.current(ctx);
+    if (principal == null) throw AuthFlowException('unauthorized');
+    final sessionOrganizationId = ctx.hasSession
+        ? ctx.getSession<String>('__routed.auth.activeOrganizationId')?.trim()
+        : null;
+    final requestedOrganizationId = organizationId != null
+        ? organizationId.trim()
+        : sessionOrganizationId;
+    final inheritsActiveTeam =
+        teamId == null &&
+        requestedOrganizationId != null &&
+        requestedOrganizationId == sessionOrganizationId;
+    final requestedTeamId = teamId != null
+        ? (teamId.trim().isEmpty ? null : teamId.trim())
+        : inheritsActiveTeam && ctx.hasSession
+        ? ctx.getSession<String>('__routed.auth.activeTeamId')?.trim()
+        : null;
+    try {
+      return await feature.authorizeContext(
+        context: ctx,
+        userId: principal.id,
+        organizationId: requestedOrganizationId,
+        teamId: requestedTeamId,
+      );
+    } on AuthFlowException catch (error) {
+      final staleInheritedTeam =
+          inheritsActiveTeam &&
+          requestedTeamId?.isNotEmpty == true &&
+          (error.code == 'team_not_found' || error.code == 'team_forbidden');
+      if (!staleInheritedTeam) rethrow;
+      ctx.removeSession('__routed.auth.activeTeamId');
+      return feature.authorizeContext(
+        context: ctx,
+        userId: principal.id,
+        organizationId: requestedOrganizationId,
+      );
+    }
+  }
+
+  /// Checks an organization permission without copying organization roles into
+  /// the global [AuthPrincipal].
+  static Future<bool> canInOrganization({
+    required EngineContext ctx,
+    required OrganizationFeature<EngineContext> feature,
+    required String resource,
+    required String action,
+    String? organizationId,
+    String? teamId,
+  }) async {
+    final principal = SessionAuth.current(ctx);
+    if (principal == null) return false;
+    try {
+      final organization = await organizationContext(
+        ctx: ctx,
+        feature: feature,
+        organizationId: organizationId,
+        teamId: teamId,
+      );
+      return await feature.hasPermission(
+        context: ctx,
+        userId: principal.id,
+        organizationId: organization.organization.id,
+        resource: resource,
+        action: action,
+      );
+    } on AuthFlowException {
+      return false;
+    }
+  }
+
+  /// Allows the authenticated resource owner, otherwise checks a tenant role.
+  static Future<bool> ownsOrCanInOrganization({
+    required EngineContext ctx,
+    required OrganizationFeature<EngineContext> feature,
+    required String resourceOwnerId,
+    required String resource,
+    required String action,
+    String? organizationId,
+    String? teamId,
+  }) async {
+    final principal = SessionAuth.current(ctx);
+    if (principal?.id == resourceOwnerId.trim()) return true;
+    return canInOrganization(
+      ctx: ctx,
+      feature: feature,
+      resource: resource,
+      action: action,
+      organizationId: organizationId,
+      teamId: teamId,
+    );
+  }
 
   static void register(
     String ability,

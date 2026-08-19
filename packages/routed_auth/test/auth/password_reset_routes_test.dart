@@ -225,8 +225,10 @@ void main() {
       allowed.assertStatus(HttpStatus.tooManyRequests);
       expect(allowed.json()['error'], equals('rate_limited'));
       expect(
-        limiter.lastRequest?.action,
-        equals(AuthRateLimitAction.passwordResetRequest),
+        limiter.lastRequest?.operation,
+        equals(
+          AuthRateLimitOperation.core(AuthRateLimitAction.passwordResetRequest),
+        ),
       );
       expect(limiter.lastRequest?.providerId, equals('password-reset'));
     },

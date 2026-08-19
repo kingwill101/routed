@@ -1,3 +1,8 @@
+## Unreleased
+
+- Defer project-command discovery until an invocation selects a non-built-in
+  command, so broken project commands cannot block global flags or built-ins.
+
 ## 0.3.0
 
 - New projects now get a typed `lib/config.dart` bootstrap. `lib/app.dart`

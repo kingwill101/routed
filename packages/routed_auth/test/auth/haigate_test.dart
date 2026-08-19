@@ -1,5 +1,8 @@
+import 'dart:convert';
+
 import 'package:routed_core/routed_core.dart';
 import 'package:routed_auth/routed_auth.dart';
+import 'package:routed_sessions/routed_sessions.dart';
 import 'package:routed_testing/routed_testing.dart';
 import 'package:server_testing/server_testing.dart';
 import '../test_engine.dart';
@@ -142,6 +145,98 @@ void main() {
       expect(anyResult, isTrue);
       expect(allResult, isFalse);
     });
+
+    test(
+      'organization checks scope active teams and clear stale selections',
+      () async {
+        final store = InMemoryAuthOrganizationStore();
+        final feature = OrganizationFeature<EngineContext>(
+          store: store,
+          options: const AuthOrganizationOptions(
+            teams: AuthOrganizationTeamsOptions(enabled: true),
+          ),
+        );
+        final owner = AuthUser(id: 'owner', email: 'owner@example.com');
+
+        final engine = testEngine(
+          providers: [RoutedSessionsProvider(_haigateSessionConfig())],
+        );
+        engine.addGlobalMiddleware(sessionMiddleware());
+        engine.get('/tenant', (ctx) async {
+          final first = (await feature.createOrganization(
+            context: ctx,
+            user: owner,
+            name: 'First',
+            slug: 'first',
+          )).data;
+          final second = (await feature.createOrganization(
+            context: ctx,
+            user: owner,
+            name: 'Second',
+            slug: 'second',
+          )).data;
+          final firstTeam = (await store.listTeams(first.id)).single;
+          ctx.request.setAttribute(
+            authPrincipalAttribute,
+            AuthPrincipal(id: owner.id),
+          );
+          ctx
+            ..setSession('__routed.auth.activeOrganizationId', first.id)
+            ..setSession('__routed.auth.activeTeamId', firstTeam.id);
+
+          final explicit = await Haigate.organizationContext(
+            ctx: ctx,
+            feature: feature,
+            organizationId: second.id,
+          );
+          final allowed = await Haigate.canInOrganization(
+            ctx: ctx,
+            feature: feature,
+            organizationId: second.id,
+            resource: 'organization',
+            action: 'read',
+          );
+
+          ctx
+            ..setSession('__routed.auth.activeOrganizationId', second.id)
+            ..setSession('__routed.auth.activeTeamId', 'stale-team');
+          final recovered = await Haigate.organizationContext(
+            ctx: ctx,
+            feature: feature,
+          );
+          return ctx.json({
+            'explicitOrganizationMatches':
+                explicit.organization.id == second.id,
+            'explicitTeamId': explicit.team?.id,
+            'allowed': allowed,
+            'recoveredOrganizationMatches':
+                recovered.organization.id == second.id,
+            'recoveredTeamId': recovered.team?.id,
+            'activeTeamCleared': !ctx.hasSessionKey(
+              '__routed.auth.activeTeamId',
+            ),
+          });
+        });
+
+        await engine.initialize();
+        final client = TestClient(RoutedRequestHandler(engine));
+        addTearDown(() async {
+          await client.close();
+          await engine.close();
+        });
+
+        final response = await client.get('/tenant');
+        response.assertStatus(200);
+        expect(response.json(), {
+          'explicitOrganizationMatches': true,
+          'explicitTeamId': null,
+          'allowed': true,
+          'recoveredOrganizationMatches': true,
+          'recoveredTeamId': null,
+          'activeTeamCleared': true,
+        });
+      },
+    );
   });
 
   group('Haigate middleware', () {
@@ -346,4 +441,13 @@ void main() {
       expect(allowed.body, equals('ok'));
     });
   });
+}
+
+SessionConfig _haigateSessionConfig() {
+  final key = base64.encode(List<int>.generate(32, (index) => index + 1));
+  return SessionConfig.cookie(
+    appKey: 'base64:$key',
+    cookieName: 'haigate_test_session',
+    options: SessionOptions(secure: false),
+  );
 }
