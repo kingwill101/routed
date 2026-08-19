@@ -10,7 +10,7 @@ export 'browser.dart';
 export 'bearer.dart';
 export 'callbacks.dart';
 export 'callback_provider_normalization.dart';
-export 'client.dart';
+export 'client.dart' hide AuthClientCore;
 export 'client_plugins.dart';
 export 'csrf.dart';
 export 'device_authorization_store.dart';

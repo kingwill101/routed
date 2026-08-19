@@ -2,7 +2,7 @@ import 'dart:convert';
 
 import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
-import 'package:server_auth/server_auth.dart';
+import 'package:server_auth/src/core/client.dart' show AuthClientCore;
 import 'package:test/test.dart';
 
 void main() {
