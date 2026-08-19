@@ -117,6 +117,14 @@ list-packages:
         echo "  • $pkg"; \
     done
 
+# Generate package-specific agent skills
+routed-skills:
+    @node tool/generate_routed_skills.mjs
+
+# Verify package-specific agent skills are current
+routed-skills-check:
+    @node tool/generate_routed_skills.mjs --check
+
 # Generate JSON Schema for configuration
 generate-schema:
     @echo "📜 Generating master JSON Schema..."
