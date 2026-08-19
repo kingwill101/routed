@@ -13,6 +13,10 @@ core auth model.
 The work is intentionally split between framework-agnostic capabilities in
 `server_auth` and HTTP/session integration in `routed_auth`.
 
+> Status refreshed: 2026-08-19. Checked items describe capabilities currently
+> present in the workspace; unchecked items are the remaining product or
+> validation work.
+
 ## Architecture foundation
 
 - [x] Introduce typed user, credential, account, session, and verification
@@ -68,28 +72,29 @@ The work is intentionally split between framework-agnostic capabilities in
 - [x] Use Routed's explicit trusted-proxy/client-IP policy for auth rate-limit
   keys and persisted session metadata; auth does not read forwarded headers
   directly. Broader proxy configuration ergonomics remain a core concern.
-- [ ] Expand browser protections beyond CSRF tokens where appropriate:
-  trusted origins, `Origin` validation, Fetch Metadata checks, and safe
-  default Routed session cookies are covered for state-changing Routed auth
-  routes; broader adapter coverage and validation of externally supplied
-  session stores remain.
+- [ ] Expand browser protections beyond CSRF tokens where appropriate. Safe
+  default Routed session cookies and CSRF protections cover state-changing
+  Routed auth routes; trusted-origin policy, `Origin` validation, Fetch
+  Metadata checks, broader adapter coverage, and validation of externally
+  supplied session stores remain.
 - [x] Keep Routed auth HTTP failures generic while detailed causes remain
   available to Routed's internal error hooks; other framework adapters must
   adopt the same boundary.
 
 ## P1: complete the account lifecycle
 
-- [ ] Add email/password sign-up and sign-in as a complete flow, including
-  duplicate-account handling, email verification, and
-  disabled/unverified-account states.
+- [ ] Finish the email/password account lifecycle. Registration, sign-in,
+  duplicate-account handling, and email verification exist; explicit
+  disabled/unverified-account policy and complete lifecycle coverage remain.
 - [x] Add Routed password-reset request and confirmation routes with generic
-  account responses, rate limits, and application-owned notification delivery
-  for server-side sessions.
-- [ ] Add JWT session revocation/versioning before exposing password reset for
-  JWT sessions.
-- [x] Add an authenticated password-change flow with reauthentication and
-  session revocation for server-side sessions. JWT sessions remain deferred
-  until revocation/versioning is available.
+  account responses, rate limits, application-owned notification delivery,
+  server-session revocation, and JWT version rotation.
+- [x] Add per-user JWT session versioning and revocation. Password reset and
+  password change rotate the version, and Routed JWT middleware rejects stale
+  tokens.
+- [x] Add an authenticated password-change flow with reauthentication,
+  server-session revocation, trusted-device revocation, and JWT version
+  rotation.
 - [ ] Add email change, account deletion, and linked-account list/link/unlink
   operations with reauthentication where needed.
 - [x] Add a first-class server-session management API: list current sessions
@@ -239,12 +244,15 @@ native auth model.
   in production configuration.
 - [ ] Run integration tests for `routed_io`, `routed_node`, and Cloudflare
   Fetch/D1-compatible adapters where the capability is supported.
-- [ ] Keep `dart analyze`, package tests, property tests, and adapter
-  conformance tests warning-free.
+- [ ] Keep the full auth workspace, adapter integration, and conformance test
+  suites warning-free. The current `server_auth` and `routed_auth` suites and
+  analyzer pass locally; adapter coverage remains.
 
 ## Definition of done
 
-- [ ] No production path stores or compares plaintext passwords.
+- [ ] Audit every production path to ensure plaintext passwords are neither
+  persisted nor compared directly. The built-in credential path uses the
+  configured password hasher.
 - [ ] Every state-changing auth operation has an explicit persistence and
   replay-safety story.
 - [ ] Every auth endpoint has documented authentication, CSRF/origin,
