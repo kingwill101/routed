@@ -40,6 +40,7 @@ import 'package:server_auth/server_auth.dart'
         AuthPasswordResetRequest,
         AuthPasswordResetResult,
         AuthPasswordChangeResult,
+        AuthEmailChangeRequest,
         AuthUser,
         AuthRuntime,
         AdminFeature,
@@ -66,6 +67,9 @@ import 'package:server_auth/server_auth.dart'
         issueAuthPasswordResetTokenForUser,
         resetAuthPasswordWithToken,
         changeAuthPasswordForUser,
+        issueAuthEmailChangeTokenForUser,
+        confirmAuthEmailChange,
+        requireAuthPasswordForUser,
         listAuthSessionsForUser,
         authUserEmailIsVerified,
         authUserIsDisabled,
@@ -581,6 +585,67 @@ class AuthManager {
       }
     }
     return result;
+  }
+
+  /// Reauthenticates the current user and sends an email-change confirmation.
+  Future<void> requestEmailChange(
+    EngineContext ctx, {
+    required String newEmail,
+    required String currentPassword,
+    String? identifier,
+  }) async {
+    final session = await resolveSession(ctx);
+    if (session == null) throw AuthFlowException('not_authenticated');
+    final user = session.user;
+    await requireAuthPasswordForUser(
+      store: store,
+      passwordHasher: options.passwordHasher,
+      passwordPolicy: options.passwordPolicy,
+      userId: user.id,
+      identifier: identifier ?? user.email ?? '',
+      password: currentPassword,
+    );
+    final issuedAt = DateTime.now().toUtc();
+    final token = await issueAuthEmailChangeTokenForUser(
+      store: store,
+      userId: user.id,
+      newEmail: newEmail,
+      ttl: options.emailChangeTtl,
+      now: issuedAt,
+    );
+    final sender = options.emailChangeSender;
+    if (sender == null) throw AuthFlowException('email_change_unavailable');
+    await Future.sync(
+      () => sender(
+        AuthEmailChangeRequest<EngineContext>(
+          context: ctx,
+          user: user.redacted(),
+          newEmail: normalizeAuthEmail(newEmail),
+          token: token,
+          expiresAt: issuedAt.add(options.emailChangeTtl),
+        ),
+      ),
+    );
+  }
+
+  /// Consumes an email-change confirmation and revokes previous sessions.
+  Future<AuthUser> confirmEmailChange(
+    EngineContext ctx, {
+    required String token,
+  }) async {
+    final session = await resolveSession(ctx);
+    if (session == null) throw AuthFlowException('not_authenticated');
+    final updated = await confirmAuthEmailChange(
+      store: store,
+      userId: session.user.id,
+      token: token,
+    );
+    final changedAt = DateTime.now().toUtc();
+    await store.jwtVersions.rotate(updated.id);
+    await store.sessions.revokeAllForUser(updated.id, revokedAt: changedAt);
+    await sessionAuth.logout(ctx);
+    if (ctx.hasSession) ctx.session.destroy();
+    return updated;
   }
 
   /// Lists active server-side sessions belonging to the current user.

@@ -60,6 +60,8 @@ import 'package:routed_sessions/routed_sessions.dart';
 /// - `POST /password-reset/request` requests a reset message when configured.
 /// - `POST /password-reset/confirm` consumes a reset token.
 /// - `POST /password/change` reauthenticates and changes a password.
+/// - `POST /email/change/request` requests a reauthenticated email change.
+/// - `POST /email/change/confirm` consumes an email-change token.
 /// - `GET /sessions` lists active server-side sessions.
 /// - `POST /sessions/revoke` revokes one server-side session.
 /// - `POST /sessions/revoke-others` revokes every other server-side session.
@@ -136,6 +138,10 @@ class AuthRoutes {
           auth.post('/password-reset/confirm', _passwordResetConfirm);
         }
         auth.post('/password/change', _passwordChange);
+        if (manager.options.emailChangeSender != null) {
+          auth.post('/email/change/request', _emailChangeRequest);
+          auth.post('/email/change/confirm', _emailChangeConfirm);
+        }
         if (manager.options.sessionStrategy == AuthSessionStrategy.session) {
           auth.get('/sessions', _sessions);
           auth.post('/sessions/revoke', _revokeSession);
@@ -627,6 +633,57 @@ class AuthRoutes {
     }
 
     return ctx.json({'status': 'password_changed'});
+  }
+
+  Future<Response> _emailChangeRequest(EngineContext ctx) async {
+    final browserError = manager.validateBrowserRequest(ctx);
+    if (browserError != null) return _errorResponse(ctx, browserError);
+    final payload = await _payload(ctx);
+    if (!manager.validateCsrf(ctx, payload)) {
+      return ctx.json({'error': 'invalid_csrf'}, statusCode: HttpStatus.forbidden);
+    }
+    final newEmail = payload['newEmail']?.toString();
+    final currentPassword = payload['currentPassword']?.toString();
+    if (newEmail == null || currentPassword == null) {
+      return _errorResponse(ctx, 'email_change_failed');
+    }
+    try {
+      await manager.requestEmailChange(
+        ctx,
+        newEmail: newEmail,
+        currentPassword: currentPassword,
+        identifier: payload['identifier']?.toString(),
+      );
+      return ctx.json({'status': 'email_change_requested'}, statusCode: 202);
+    } on AuthFlowException catch (error) {
+      return _flowErrorResponse(ctx, error);
+    } catch (_) {
+      return _errorResponse(ctx, 'email_change_failed');
+    }
+  }
+
+  Future<Response> _emailChangeConfirm(EngineContext ctx) async {
+    final browserError = manager.validateBrowserRequest(ctx);
+    if (browserError != null) return _errorResponse(ctx, browserError);
+    final payload = await _payload(ctx);
+    if (!manager.validateCsrf(ctx, payload)) {
+      return ctx.json({'error': 'invalid_csrf'}, statusCode: HttpStatus.forbidden);
+    }
+    final token = payload['token']?.toString();
+    if (token == null || token.trim().isEmpty) {
+      return _errorResponse(ctx, 'invalid_email_change_token');
+    }
+    try {
+      final user = await manager.confirmEmailChange(ctx, token: token);
+      return ctx.json({
+        'status': 'email_changed',
+        'user': user.redacted().toJson(),
+      });
+    } on AuthFlowException catch (error) {
+      return _flowErrorResponse(ctx, error);
+    } catch (_) {
+      return _errorResponse(ctx, 'email_change_failed');
+    }
   }
 
   Future<Response> _sessions(EngineContext ctx) async {

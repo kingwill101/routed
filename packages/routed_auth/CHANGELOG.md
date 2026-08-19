@@ -5,6 +5,9 @@
   status handling.
 - Complete a verified WebAuthn assertion by issuing a normal server-side
   session through the feature session-control boundary.
+- Add authenticated email-change request and confirmation routes with
+  reauthentication, browser/CSRF protections, one-time delivery tokens, and
+  session/JWT revocation after a successful change.
 - Automatically mount the opt-in `/auth/admin/...` API, enforce Admin bans at
   sign-in/session boundaries, and provide rotating server-session identity
   replacement for guarded impersonation.

@@ -1238,6 +1238,34 @@ class AuthClient {
     transport.clearCsrfToken();
   }
 
+  /// Reauthenticates the current user and requests an email-change message.
+  Future<void> requestEmailChange({
+    required String newEmail,
+    required String currentPassword,
+    String? identifier,
+  }) async {
+    await _mutatingRequest('POST', '/email/change/request', <String, dynamic>{
+      'newEmail': newEmail,
+      'currentPassword': currentPassword,
+      'identifier': ?identifier,
+    });
+  }
+
+  /// Confirms an email change and returns the updated user projection.
+  Future<AuthUser> confirmEmailChange({required String token}) async {
+    final response = await _mutatingRequest(
+      'POST',
+      '/email/change/confirm',
+      <String, dynamic>{'token': token},
+    );
+    final value = _mapBody(response.body)['user'];
+    if (value is! Map) {
+      throw const FormatException('Invalid email-change response');
+    }
+    transport.clearCsrfToken();
+    return AuthUser.fromJson(Map<String, dynamic>.from(value));
+  }
+
   /// Revokes one server-side session by its public session ID.
   Future<void> revokeSession(String sessionId) async {
     await _mutatingRequest('POST', '/sessions/revoke', <String, dynamic>{

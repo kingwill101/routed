@@ -35,4 +35,32 @@ void main() {
       isNull,
     );
   });
+
+  test('email change confirmation marks the new address verified', () async {
+    final store = InMemoryAuthStore();
+    await store.users.create(AuthUser(id: 'user-1', email: 'old@example.com'));
+    final token = await issueAuthEmailChangeTokenForUser(
+      store: store,
+      userId: 'user-1',
+      newEmail: 'new@example.com',
+      ttl: const Duration(minutes: 5),
+      generateToken: () => 'email-change-token',
+    );
+
+    final updated = await confirmAuthEmailChange(
+      store: store,
+      userId: 'user-1',
+      token: token,
+    );
+    expect(updated.email, equals('new@example.com'));
+    expect(authUserEmailIsVerified(updated), isTrue);
+    await expectLater(
+      confirmAuthEmailChange(
+        store: store,
+        userId: 'user-1',
+        token: token,
+      ),
+      throwsA(isA<AuthFlowException>()),
+    );
+  });
 }

@@ -3,6 +3,7 @@ import 'package:http/http.dart' as http;
 import 'authorization.dart';
 import 'browser.dart';
 import 'callbacks.dart';
+import 'email_change.dart';
 import 'feature.dart';
 import 'jwt.dart';
 import 'models.dart';
@@ -43,6 +44,8 @@ class AuthOptions<TContext> {
     this.oauthChallengeTtl = const Duration(minutes: 10),
     this.passwordResetTtl = const Duration(minutes: 30),
     this.passwordResetSender,
+    this.emailChangeTtl = const Duration(minutes: 30),
+    this.emailChangeSender,
     this.httpClient,
     this.enforceCsrf = true,
     this.requireVerifiedEmail = false,
@@ -71,6 +74,13 @@ class AuthOptions<TContext> {
       throw ArgumentError.value(
         passwordResetTtl,
         'passwordResetTtl',
+        'must be greater than zero',
+      );
+    }
+    if (emailChangeTtl <= Duration.zero) {
+      throw ArgumentError.value(
+        emailChangeTtl,
+        'emailChangeTtl',
         'must be greater than zero',
       );
     }
@@ -157,6 +167,12 @@ class AuthOptions<TContext> {
   /// is configured. Password resets also rotate the user's JWT version.
   final AuthPasswordResetSender<TContext>? passwordResetSender;
 
+  /// Maximum age of a pending email-change token.
+  final Duration emailChangeTtl;
+
+  /// Application-owned delivery callback for email-change confirmations.
+  final AuthEmailChangeSender<TContext>? emailChangeSender;
+
   /// HTTP client used for OAuth calls.
   final http.Client? httpClient;
 
@@ -220,6 +236,8 @@ class AuthOptions<TContext> {
     Duration? oauthChallengeTtl,
     Duration? passwordResetTtl,
     AuthPasswordResetSender<TContext>? passwordResetSender,
+    Duration? emailChangeTtl,
+    AuthEmailChangeSender<TContext>? emailChangeSender,
     http.Client? httpClient,
     bool? enforceCsrf,
     bool? requireVerifiedEmail,
@@ -250,6 +268,8 @@ class AuthOptions<TContext> {
       oauthChallengeTtl: oauthChallengeTtl ?? this.oauthChallengeTtl,
       passwordResetTtl: passwordResetTtl ?? this.passwordResetTtl,
       passwordResetSender: passwordResetSender ?? this.passwordResetSender,
+      emailChangeTtl: emailChangeTtl ?? this.emailChangeTtl,
+      emailChangeSender: emailChangeSender ?? this.emailChangeSender,
       httpClient: httpClient ?? this.httpClient,
       enforceCsrf: enforceCsrf ?? this.enforceCsrf,
       requireVerifiedEmail: requireVerifiedEmail ?? this.requireVerifiedEmail,

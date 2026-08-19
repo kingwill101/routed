@@ -55,6 +55,85 @@ Map<String, dynamic>? _decodeJson(TestResponse response) {
 
 void main() {
   group('AuthRoutes', () {
+    test('requests and confirms an authenticated email change', () async {
+      final store = InMemoryAuthStore();
+      final user = await store.users.create(
+        AuthUser(id: 'user-1', email: 'old@example.com'),
+      );
+      final hasher = Argon2idPasswordHasher(
+        iterations: 1,
+        memoryKiB: 8,
+        derivedKeyLength: 16,
+      );
+      await store.upsertCredentialForAdministration(
+        AuthPasswordCredential(
+          id: 'credential-1',
+          userId: user.id,
+          identifier: user.email!,
+          passwordHash: hasher.hash('current-password'),
+          createdAt: DateTime.utc(2026),
+          updatedAt: DateTime.utc(2026),
+        ),
+      );
+      AuthEmailChangeRequest<EngineContext>? sent;
+      final manager = AuthManager(
+        AuthOptions<EngineContext>(
+          store: store,
+          storeMode: AuthStoreMode.ephemeral,
+          providers: [
+            CredentialsProvider(
+              authorize: (_, _, credentials) => credentials.password ==
+                  'current-password'
+                  ? user
+                  : null,
+            ),
+          ],
+          passwordHasher: hasher,
+          emailChangeSender: (request) => sent = request,
+          enforceCsrf: false,
+        ),
+      );
+      final engine = _authEngine(manager);
+      await engine.initialize();
+      final client = TestClient(RoutedRequestHandler(engine));
+      addTearDown(() async => await client.close());
+
+      final csrfResponse = await client.get('/auth/csrf');
+      final csrfToken = csrfResponse.json()['csrfToken'] as String;
+      final initialCookie = csrfResponse.cookie('test_session')!;
+      final signIn = await client.postJson(
+        '/auth/signin/credentials',
+        <String, dynamic>{
+          'email': 'old@example.com',
+          'password': 'current-password',
+          '_csrf': csrfToken,
+        },
+        headers: {HttpHeaders.cookieHeader: [_cookieHeader(initialCookie)]},
+      );
+      signIn.assertStatus(HttpStatus.ok);
+      final sessionCookie = signIn.cookie('test_session') ?? initialCookie;
+
+      final request = await client.postJson(
+        '/auth/email/change/request',
+        <String, dynamic>{
+          'newEmail': 'new@example.com',
+          'currentPassword': 'current-password',
+        },
+        headers: {HttpHeaders.cookieHeader: [_cookieHeader(sessionCookie)]},
+      );
+      request.assertStatus(HttpStatus.accepted);
+      expect(sent?.newEmail, equals('new@example.com'));
+
+      final confirmation = await client.postJson(
+        '/auth/email/change/confirm',
+        <String, dynamic>{'token': sent!.token},
+        headers: {HttpHeaders.cookieHeader: [_cookieHeader(sessionCookie)]},
+      );
+      confirmation.assertStatus(HttpStatus.ok);
+      expect(confirmation.json()['user']['email'], equals('new@example.com'));
+      expect((await store.users.findById(user.id))?.email, 'new@example.com');
+    });
+
     test('accepts providers created from package:server_auth', () async {
       final manager = AuthManager(
         AuthOptions<EngineContext>(

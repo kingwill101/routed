@@ -11,6 +11,7 @@ export 'callbacks.dart';
 export 'callback_provider_normalization.dart';
 export 'client.dart';
 export 'csrf.dart';
+export 'email_change.dart';
 export 'email_change_token_store.dart';
 export 'exceptions.dart';
 export 'feature.dart';
