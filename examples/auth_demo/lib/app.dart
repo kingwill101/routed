@@ -60,7 +60,8 @@ Future<Engine> createEngine() async {
         engine.container.instance<AuthOptions>(
           AuthOptions(
             providers: providers,
-            adapter: InMemoryAuthAdapter(),
+            store: InMemoryAuthStore(),
+            storeMode: AuthStoreMode.ephemeral,
             sessionStrategy: AuthSessionStrategy.session,
             callbacks: AuthCallbacks(
               signIn: (context) async {

@@ -63,6 +63,8 @@ Future<Engine> createEngine() async {
   engine.container.instance<AuthOptions>(
     AuthOptions(
       providers: [CredentialsProvider()],
+      store: InMemoryAuthStore(),
+      storeMode: AuthStoreMode.ephemeral,
       policies: PolicyOptions(bindings: policyBindings),
     ),
   );

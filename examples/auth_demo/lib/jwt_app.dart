@@ -62,7 +62,8 @@ Future<Engine> createJwtEngine() async {
         engine.container.instance<AuthOptions>(
           AuthOptions(
             providers: providers,
-            adapter: InMemoryAuthAdapter(),
+            store: InMemoryAuthStore(),
+            storeMode: AuthStoreMode.ephemeral,
             sessionStrategy: AuthSessionStrategy.jwt,
             jwtOptions: const JwtSessionOptions(secret: 'dev-secret'),
             callbacks: AuthCallbacks(

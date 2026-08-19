@@ -149,7 +149,10 @@ events.listen<AuthSignInEvent>((event) {
 
 Callbacks on `AuthOptions` can gate sign-in, enrich session payloads, and
 sanitize redirects. Keep redirect targets allow-listed and never return raw
-provider errors to clients.
+provider errors to clients. Auth event model fields are safe projections:
+provider credentials, account tokens, JWTs, credential fields, and nested
+secret-like values are removed before delivery. Treat `event.context` as a
+request-scoped private object and do not log its headers or cookies.
 
 ## Security checklist
 

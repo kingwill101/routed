@@ -1,0 +1,255 @@
+# Routed Auth Worklist
+
+This is the implementation checklist for bringing `server_auth` and
+`routed_auth` closer to a production-ready, Better Auth-level product while
+preserving Routed's typed Dart and framework-independent architecture.
+
+Better Auth is a capability and developer-experience benchmark for this work,
+not a dependency or an integration target. `server_auth` should provide these
+capabilities through native Dart APIs, contracts, stores, and client tooling.
+Any external Better Auth interoperability is optional and must not shape the
+core auth model.
+
+The work is intentionally split between framework-agnostic capabilities in
+`server_auth` and HTTP/session integration in `routed_auth`.
+
+## Architecture foundation
+
+- [x] Introduce typed user, credential, account, session, and verification
+  token store contracts in `server_auth`.
+- [x] Make `AuthStore` the only auth persistence boundary and remove the flat
+  adapter compatibility API.
+- [x] Add `AuthRuntime` and `AuthFeature` composition with duplicate-ID checks.
+- [x] Expose the composed runtime through `AuthManager` and
+  `AuthServiceProvider`.
+- [ ] Let features contribute endpoint descriptors, hooks, schemas, rate-limit
+  rules, and typed client operations without editing a central route switch.
+- [ ] Define paired server/client feature contracts so a feature can expose its
+  persistence, routes, response models, client methods, and conformance tests
+  as one public capability.
+- [x] Migrate the existing credentials, email, OAuth, and session flows from
+  direct adapter calls to their domain stores.
+
+## P0: production safety
+
+- [x] Keep `InMemoryAuthStore` explicitly limited to tests and local
+  development; unannotated use fails at `AuthOptions` construction and
+  adapters can reject annotated ephemeral storage during production boot.
+- [x] Add a `PasswordHasher` contract with a PointyCastle-backed Argon2id
+  implementation, versioned parameters, rehash-on-login support, and
+  constant-time password verification.
+- [x] Add a typed length-first password policy that bounds verifier input and
+  rejects weak or oversized passwords in the built-in credentials flow.
+- [x] Normalize built-in email identifiers before credential lookup,
+  registration, and verification-token persistence.
+- [x] Treat unverified OAuth email claims as untrusted for account linking,
+  local email persistence, and external account identity selection.
+- [x] Add explicit password-credential records instead of storing passwords in
+  `AuthUser.attributes`; the built-in flow hashes and verifies through the
+  configured `PasswordHasher`.
+- [x] Define a persistent session model containing a hashed session token,
+  user ID, creation time, expiry, last-used time, revocation time, IP address,
+  user agent, and authentication method.
+- [x] Connect routed session issuance and resolution to `AuthSessionStore` so
+  revocation and expiry are enforced on every authenticated request.
+- [x] Make session creation, rotation, refresh, and revocation atomic at the
+  typed store boundary.
+- [x] Make verification-token consumption atomic at the typed store boundary;
+  in-memory storage persists only SHA-256 token digests and rejects replay.
+- [x] Add the typed password-reset token boundary with hashed, expiring,
+  per-user-invalidated, atomically consumed tokens.
+- [x] Add framework-agnostic password-reset issuance and replacement helpers
+  that update password credentials and revoke active server sessions.
+- [x] Add auth-specific rate-limit contracts for sign-in, registration,
+  verification, and callback endpoints. Routed invokes the contract before
+  built-in flows and custom callbacks, and `RoutedAuthRateLimiter` adapts the
+  existing `server_rate_limit` service; password-reset and passkey actions will
+  use the same contract when those features land.
+- [x] Use Routed's explicit trusted-proxy/client-IP policy for auth rate-limit
+  keys and persisted session metadata; auth does not read forwarded headers
+  directly. Broader proxy configuration ergonomics remain a core concern.
+- [ ] Expand browser protections beyond CSRF tokens where appropriate:
+  trusted origins, `Origin` validation, Fetch Metadata checks, and safe
+  default Routed session cookies are covered for state-changing Routed auth
+  routes; broader adapter coverage and validation of externally supplied
+  session stores remain.
+- [x] Keep Routed auth HTTP failures generic while detailed causes remain
+  available to Routed's internal error hooks; other framework adapters must
+  adopt the same boundary.
+
+## P1: complete the account lifecycle
+
+- [ ] Add email/password sign-up and sign-in as a complete flow, including
+  duplicate-account handling, email verification, and
+  disabled/unverified-account states.
+- [x] Add Routed password-reset request and confirmation routes with generic
+  account responses, rate limits, and application-owned notification delivery
+  for server-side sessions.
+- [ ] Add JWT session revocation/versioning before exposing password reset for
+  JWT sessions.
+- [x] Add an authenticated password-change flow with reauthentication and
+  session revocation for server-side sessions. JWT sessions remain deferred
+  until revocation/versioning is available.
+- [ ] Add email change, account deletion, and linked-account list/link/unlink
+  operations with reauthentication where needed.
+- [x] Add a first-class server-session management API: list current sessions
+  with device metadata, revoke one session, revoke all other sessions, and
+  rotate credentials after sensitive changes. JWT session management remains a
+  separate revocation/versioning capability.
+- [x] Add client session helpers for current-session metadata, session listing,
+  session revocation, and device/session labels.
+- [ ] Finish WebAuthn/passkey registration and assertion verification. Persist
+  challenges and authenticators, validate origin and RP ID, enforce counter
+  handling, expose Routed routes for the ceremonies, and provide authenticated
+  list/rename/delete operations for passkeys.
+- [x] Add an optional native `TwoFactorFeature` with TOTP enrollment
+  verification, protected-secret and typed-store boundaries, recovery-code
+  hashing and atomic one-time consumption, lockout handling, disablement, and
+  recovery-code regeneration.
+- [x] Add short-lived, single-use pending credential sign-in challenges that
+  require TOTP verification before session issuance.
+- [x] Add short-lived, session-bound step-up verification proofs and a helper
+  for sensitive-route enforcement.
+- [x] Add typed client helpers for step-up verification and revocation.
+- [x] Add typed client methods and Routed routes for two-factor enrollment,
+  TOTP verification, backup-code generation/use, status, and disablement.
+- [x] Add typed client challenge exceptions and pending TOTP/recovery-code
+  challenge completion methods.
+- [x] Add typed expiring trusted-device handling, cookie issuance, and
+  revoke-all support.
+- [x] Add pending recovery-code flows with an atomic challenge/recovery
+  transaction boundary.
+- [ ] Add API-key issuance, hashing, metadata, expiry, revocation, scopes,
+  built-in rate limits, and optional session exchange for service clients.
+- [ ] Add typed client methods for API-key creation, listing, rotation,
+  revocation, and secure one-time display of the raw key.
+
+## P1: authorization and tenancy
+
+- [ ] Add first-class organizations/tenants, memberships, invitations, and
+  organization-scoped roles.
+- [ ] Add administrative user/session/account management APIs with explicit
+  authorization checks and audit events.
+- [ ] Extend the existing RBAC, policy, and Haigate APIs to support tenant
+  context and resource ownership without relying on global role strings.
+- [ ] Add an OAuth/OIDC provider mode if Routed applications need to act as an
+  identity provider, not only consume external providers.
+
+## P2: Dart developer experience and platform integration
+
+- [ ] Add typed persistence adapters for the supported Routed storage paths,
+  including schema/migration guidance for SQL and D1.
+- [ ] Define a stable adapter conformance suite that can run against every
+  persistence implementation.
+- [x] Add a small, typed Dart client contract for browser/mobile auth calls
+  without requiring application code to duplicate route and cookie
+  conventions.
+- [ ] Split the client contract into typed feature modules while preserving a
+  shared transport, cookie store, CSRF policy, error model, and request
+  lifecycle.
+- [ ] Add ergonomic typed configuration builders or presets for common auth
+  deployments while keeping security-sensitive defaults explicit and safe.
+- [ ] Make features contribute their routes, schemas, hooks, and rate-limit
+  rules through the public composition API instead of requiring consumers to
+  edit central route switches.
+- [ ] Add a CLI/device authorization flow for limited-input clients, including
+  device-code issuance, browser approval, polling, denial, expiry, and
+  client-side backoff semantics.
+- [ ] Add OpenAPI 3.1 endpoint and model generation for core auth routes and
+  composed feature routes, with generated-client compatibility tests.
+- [ ] Add reusable auth test utilities for route bootstrapping, cookie/session
+  handling, provider fixtures, and end-to-end feature flows.
+- [ ] Update the package READMEs and examples only after the public APIs and
+  security defaults settle.
+
+## Longer-term plugin-inspired backlog
+
+These capabilities are useful product benchmarks, but should follow the core
+account, session, client, and feature contracts above:
+
+- [ ] Add email OTP as a separate one-time-code flow alongside magic links.
+- [ ] Add phone-number authentication with provider-owned delivery and
+  verification boundaries.
+- [ ] Add username-first authentication and explicit identifier policy.
+- [ ] Add anonymous/guest sessions with safe account upgrade/linking rules.
+- [ ] Track the last successful authentication method without storing secrets.
+- [ ] Add captcha and breached-password checks as opt-in security features.
+- [ ] Add SSO/SAML and SCIM integrations when enterprise tenancy requirements
+  justify them.
+
+## Optional: interoperability
+
+These capabilities may help applications migrate from or coexist with other
+authentication systems, but they are not part of the core `server_auth`
+product direction and must not introduce an external-auth dependency into the
+native auth model.
+
+- [ ] Add an optional interoperability path for consuming external Better Auth
+  or OIDC identity through JWT verification or OAuth introspection.
+- [ ] Keep external identity resolution separate from `AuthStore`, local
+  account provisioning, and local session ownership.
+
+## Required test coverage
+
+- [x] Property-test public serialization to prove secrets, credentials,
+  session tokens, OAuth tokens, and nested sensitive keys never escape.
+- [x] Redact provider credentials, account tokens, JWT sessions, user/profile
+  attributes, credentials, and session payloads before publishing auth events.
+- [x] Property-test redirect, provider ID, callback state, CSRF, cookie, and
+  header inputs for injection, truncation, and normalization edge cases. The
+  Routed property suite covers HTTP handling and `server_auth` now has a
+  framework-agnostic redirect-origin property suite.
+- [x] Add stateful/property tests for session rotation, concurrent session
+  refresh, and revocation; concurrent verification-token replay is covered by
+  the server-auth token-store tests.
+- [x] Add stateful tests for replayed OAuth challenges through the atomic
+  challenge store; passkey challenge lifecycle remains to be implemented.
+- [x] Enforce provider-account uniqueness at the account-link boundary and
+  reject cross-user OAuth account-link conflicts in both OAuth helper paths.
+- [x] Reject empty or duplicate provider IDs and incomplete user/account
+  identities before they enter auth route or persistence namespaces.
+- [x] Validate session persistence identities and lifetimes, and enforce
+  server-time expiry checks during in-memory session touch.
+- [x] Make in-memory credential registration reject malformed records and
+  preserve identifier uniqueness under concurrent attempts.
+- [x] Preserve user email uniqueness on in-memory create/update and avoid
+  reporting rejected OAuth profile updates as persisted.
+- [x] Freeze configured provider lists after runtime construction so provider
+  namespaces cannot be mutated without revalidation.
+- [x] Prevent the callback-backed test store from being used as auth options or
+  runtime persistence.
+- [x] Reject non-positive OAuth request and email-verification lifetimes during
+  provider construction.
+- [x] Require every successful credential, email, OAuth, and custom callback to
+  resolve a non-empty canonical user identity before session issuance.
+- [x] Convert malformed or unrepresentable JWT/OAuth timestamps into bounded
+  authentication failures rather than uncaught date-range exceptions.
+- [x] Hash in-memory remember-me tokens and reject blank token generators,
+  empty principals, and non-positive remember-token lifetimes.
+- [x] Compare CSRF and OAuth state secrets through fixed-width digest checks.
+- [x] Consume remember-me tokens atomically during hydration before rotation,
+  with concurrent replay coverage.
+- [x] Make asserted-email OAuth and email sign-in user creation atomic at the
+  typed store boundary.
+- [x] Cover the typed Dart client contract for CSRF, cookies, sessions,
+  providers, OAuth redirects, and bounded auth errors.
+- [x] Add negative/configuration tests for weak password registration, missing
+  trusted-proxy configuration, explicit CSRF opt-out behavior, safe cookie
+  defaults with a local insecure opt-out, and accidental in-memory persistence
+  in production configuration.
+- [ ] Run integration tests for `routed_io`, `routed_node`, and Cloudflare
+  Fetch/D1-compatible adapters where the capability is supported.
+- [ ] Keep `dart analyze`, package tests, property tests, and adapter
+  conformance tests warning-free.
+
+## Definition of done
+
+- [ ] No production path stores or compares plaintext passwords.
+- [ ] Every state-changing auth operation has an explicit persistence and
+  replay-safety story.
+- [ ] Every auth endpoint has documented authentication, CSRF/origin,
+  rate-limit, redirect, and error semantics.
+- [ ] The same auth behavior is verified through both `routed_io` and
+  `routed_node` where the feature is advertised.
+- [ ] Security-sensitive defaults are safe without requiring users to discover
+  undocumented configuration switches.

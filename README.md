@@ -83,6 +83,11 @@ dart test ./...   # run package tests
 Publishing instructions live in `docs/publishing-checklist.md`. Each package has
 its own changelog and versioned tags (e.g. `routed_cli-0.2.2`).
 
+Agent workflows for each routed subsystem live in [`skills/INDEX.md`](skills/INDEX.md).
+They point to the package's public barrels, README, focused tests, and boundary
+rules; refresh them with `just routed-skills` and verify them with
+`just routed-skills-check`.
+
 ## Funding
 
 Keep the ecosystem healthy by

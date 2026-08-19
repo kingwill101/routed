@@ -103,12 +103,13 @@ final provider = OAuthProvider<MyProfile>(
 Use the exact callback and profile types from `server_auth` for the custom
 provider implementation.
 
-## Custom adapters
+## Custom stores
 
-Implement `AuthAdapter` when users, accounts, sessions, or verification tokens
-need durable storage. Keep persistence behind the adapter so provider callbacks
-do not access a database directly. Add failure handling and unique constraints
-for provider subject plus provider ID.
+Implement `AuthStore` and its typed user, credential, account, session, and
+verification-token stores when auth data needs durable storage. Keep
+persistence behind those store contracts so provider callbacks do not access a
+database directly. Add failure handling and unique constraints for provider
+subject plus provider ID.
 
 ## Security notes
 

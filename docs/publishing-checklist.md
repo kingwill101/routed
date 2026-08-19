@@ -25,6 +25,49 @@ Internal pre-1.0 dependencies use explicit ranges such as
 releases while preserving `1.0.0` as the next deliberate breaking boundary;
 `<=1.0.0` is not used because it would admit that boundary.
 
+### Current hosted-release status
+
+The following snapshot was produced by `dart run tool/pub_release_audit.dart
+--json` on 2026-08-19. Keep this list updated after each successful publish.
+
+Packages with no release currently visible on pub.dev:
+
+- `routed_auth`
+- `routed_cache`
+- `routed_observability`
+- `routed_openapi`
+- `routed_openapi_builder`
+- `routed_rate_limit`
+- `routed_security`
+- `routed_sessions`
+- `routed_storage`
+- `routed_validation`
+- `routed_views`
+
+Packages previously published, but whose current local version is still
+pending publication:
+
+- `routed` `0.5.0` (pub.dev: `0.3.3`)
+- `routed_cli` `0.3.0` (pub.dev: `0.2.1+1`)
+- `routed_hotwire` `0.1.4` (pub.dev: `0.1.2`)
+
+`server_native` is intentionally excluded from this release even though its
+current version is already published; native assets require a separate
+artifact and metadata release.
+
+Packages with an `Unreleased` changelog whose local version still matches the
+published version and therefore need a version decision before release:
+
+- `routed_analyzer` `0.1.0`
+- `routed_http` `0.1.0`
+- `routed_node` `0.1.0`
+- `server_auth` `0.1.0`
+- `server_rate_limit` `0.1.0`
+- `server_sessions` `0.1.0`
+
+The auth implementation roadmap is tracked in
+[`docs/auth-worklist.md`](auth-worklist.md).
+
 ## Validation Commands
 For each package below, run the validation commands from the package directory:
 

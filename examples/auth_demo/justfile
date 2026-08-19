@@ -30,7 +30,7 @@ session:
     @curl -s -b {{COOKIE_JAR}} {{BASE_URL}}/auth/session
 
 # Register a credentials user
-register email="new@example.com" password="secret":
+register email="new@example.com" password="correct-horse-battery-staple":
     @csrf=$(just csrf | tail -n 1); \
     curl -s -b {{COOKIE_JAR}} -c {{COOKIE_JAR}} \
       -H "Content-Type: application/json" \
@@ -38,7 +38,7 @@ register email="new@example.com" password="secret":
       {{BASE_URL}}/auth/register/credentials
 
 # Sign in with credentials
-signin email="new@example.com" password="secret":
+signin email="new@example.com" password="correct-horse-battery-staple":
     @csrf=$(just csrf | tail -n 1); \
     curl -s -b {{COOKIE_JAR}} -c {{COOKIE_JAR}} \
       -H "Content-Type: application/json" \
@@ -75,14 +75,14 @@ all:
     echo "Register:"; \
     curl -s -b {{COOKIE_JAR}} -c {{COOKIE_JAR}} \
       -H "Content-Type: application/json" \
-      -d "{\"email\":\"new@example.com\",\"password\":\"secret\",\"_csrf\":\"$csrf\"}" \
+      -d "{\"email\":\"new@example.com\",\"password\":\"correct-horse-battery-staple\",\"_csrf\":\"$csrf\"}" \
       {{BASE_URL}}/auth/register/credentials; echo; \
     echo "Session (after register):"; \
     curl -s -b {{COOKIE_JAR}} {{BASE_URL}}/auth/session; echo; \
     echo "Signin:"; \
     curl -s -b {{COOKIE_JAR}} -c {{COOKIE_JAR}} \
       -H "Content-Type: application/json" \
-      -d "{\"email\":\"new@example.com\",\"password\":\"secret\",\"_csrf\":\"$csrf\"}" \
+      -d "{\"email\":\"new@example.com\",\"password\":\"correct-horse-battery-staple\",\"_csrf\":\"$csrf\"}" \
       {{BASE_URL}}/auth/signin/credentials; echo; \
     echo "Email signin:"; \
     curl -s -b {{COOKIE_JAR}} -c {{COOKIE_JAR}} \

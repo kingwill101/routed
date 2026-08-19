@@ -1,0 +1,420 @@
+---
+title: Build a Small Routed Platform with Stem
+description: A step-by-step example of a Routed API that submits work to an in-memory Stem worker
+sidebar_position: 45
+---
+
+# Build a Small Routed Platform with Stem
+
+An API gateway becomes difficult to maintain when it owns everything at once:
+authentication, configuration, task execution, persistence, retries, and the
+HTTP transport. The boundaries become unclear, and a consumer has to guess
+which package owns each lifecycle.
+
+This tutorial builds a small platform with explicit boundaries:
+
+1. Routed owns the HTTP API and application lifecycle.
+2. A typed provider owns platform configuration and runtime wiring.
+3. Stem owns task delivery, worker execution, and task results.
+4. The platform layer owns tenant checks and idempotency rules.
+
+The example uses Stem's in-memory broker and result backend, so it is quick to
+run and easy to test. It is an architecture example, not a durable production
+gateway. Restarting the process loses task metadata, idempotency records, and
+results.
+
+## What we are building
+
+The finished application exposes three useful operations:
+
+- `GET /health` checks that the process is alive.
+- `POST /v1/tasks` accepts an authenticated task request.
+- `GET /v1/tasks/{taskId}` returns the task's Stem status.
+
+The request flow is deliberately small:
+
+```text
+HTTP request
+    -> Routed route and authentication boundary
+    -> platform runtime and idempotency check
+    -> Stem broker
+    -> Stem worker
+    -> Stem result backend
+```
+
+## Prerequisites
+
+- Dart 3.9 or newer
+- A checkout of the Routed workspace, or a new Dart package
+- A terminal
+
+The complete working example is in
+[`examples/routed_platform`](https://github.com/kingwill101/routed/tree/main/examples/routed_platform).
+The sections below explain how its important pieces fit together.
+
+## 1. Start with the Routed CLI scaffold
+
+Use the package-qualified executable name when running the workspace version of
+the CLI:
+
+```bash
+dart run routed_cli:routed create --name routed_platform --template api
+cd routed_platform
+```
+
+The scaffold gives the application a consistent shape:
+
+- `lib/config.dart` is the composition boundary for typed configuration.
+- `lib/app.dart` creates the engine and declares routes.
+- `lib/commands.dart` is where project-specific CLI commands live.
+- `bin/server.dart` is the process entrypoint.
+
+Add the task runtime and the Dart HTTP transport:
+
+```bash
+dart pub add stem
+dart pub add routed_io
+dart pub add --dev routed_testing server_testing
+```
+
+The example currently resolves Stem `0.2.1`. When you update Stem, keep the
+same broker, backend, handler, and worker seams unless the package release
+notes require a migration.
+
+## 2. Put application wiring in typed configuration
+
+Start with a small immutable configuration object. Do not make route handlers
+look up string keys or recreate configuration on every request.
+
+```dart title="lib/platform/platform_config.dart"
+final class PlatformConfig {
+  const PlatformConfig({
+    required this.apiToken,
+    required this.defaultTenant,
+    required this.defaultNamespace,
+  });
+
+  final String apiToken;
+  final String defaultTenant;
+  final String defaultNamespace;
+}
+```
+
+Now create the provider with one configuration instance:
+
+```dart title="lib/config.dart"
+PlatformServiceProvider(
+  const PlatformConfig(
+    apiToken: 'demo-token',
+    defaultTenant: 'demo-tenant',
+    defaultNamespace: 'default',
+  ),
+),
+```
+
+The real example returns fresh providers from `config()`. That matters because
+the same application factory is used by the server, tests, and Routed CLI.
+Each engine gets its own runtime instead of sharing mutable state across runs.
+
+For a real application, load secrets and deployment-specific values at this
+composition boundary. Keep the configuration type stable for the rest of the
+application.
+
+## 3. Make the provider own the worker lifecycle
+
+The provider registers two things:
+
+1. The typed `PlatformConfig` instance.
+2. A singleton `PlatformRuntime` for the process.
+
+The registration is intentionally lazy:
+
+```dart
+container.instance<PlatformConfig>(configuration);
+container.singleton<PlatformRuntime>((container) async {
+  return PlatformRuntime(container.get<PlatformConfig>());
+});
+```
+
+Start the runtime during provider boot:
+
+```dart
+final runtime = await container.make<PlatformRuntime>();
+await runtime.start();
+```
+
+There is one important lifecycle detail. Routed runs provider cleanup for both
+the application container and request-scoped child containers. The worker is a
+process resource, so it must not be closed after the first HTTP request. The
+example records the root container during `register()` and closes the runtime
+only when cleanup is called for that root container.
+
+This is the kind of boundary that prevents a subtle gateway failure: the first
+request succeeds, cleanup closes the worker, and the second request receives a
+misleading runtime error.
+
+## 4. Connect Stem's in-memory worker
+
+The runtime creates one in-memory broker, one in-memory result backend, and a
+small task handler:
+
+```dart title="lib/platform/platform_runtime.dart"
+final handler = FunctionTaskHandler<Map<String, Object?>>.inline(
+  name: 'platform.echo',
+  entrypoint: _echo,
+);
+```
+
+Register the same handler with both Stem and the worker:
+
+```dart
+_stem = Stem(
+  broker: _broker,
+  backend: _backend,
+  tasks: [handler],
+);
+
+_worker = Worker(
+  broker: _broker,
+  backend: _backend,
+  tasks: [handler],
+  concurrency: 1,
+);
+```
+
+The handler receives a `TaskInvocationContext` and arguments. Keep task code
+independent of HTTP types:
+
+```dart
+static Future<Object?> _echo(
+  TaskInvocationContext context,
+  Map<String, Object?> args,
+) async {
+  return {
+    'message': args['message']?.toString() ?? '',
+    'taskId': context.id,
+  };
+}
+```
+
+The `start()` method starts the worker once. The `close()` method stops the
+worker and then closes Stem. This ordering keeps the execution plane explicit:
+stop delivery first, then release the broker and result backend.
+
+## 5. Add idempotent task submission
+
+The platform runtime is the right place for application rules that are not
+generic queue mechanics. In this example, the idempotency key is scoped by
+tenant and namespace:
+
+```dart
+final key = '$tenant/$namespace/$idempotencyKey';
+final existingId = _idempotency[key];
+```
+
+If the key has already been used with the same message, return the original
+task instead of enqueueing duplicate work. If the payload differs, reject the
+request:
+
+```dart
+if (existing.message != message) {
+  throw StateError('Idempotency key was reused with a different payload');
+}
+return existing;
+```
+
+Only after those checks does the runtime enqueue work:
+
+```dart
+final taskId = await _stem.enqueue(
+  'platform.echo',
+  args: {'message': message},
+  headers: {'x-tenant': tenant, 'x-namespace': namespace},
+);
+```
+
+Notice that the idempotency key is not used as the Stem task ID. They have
+different jobs: the key describes a caller's retry intent, while Stem owns task
+identity and execution state.
+
+## 6. Keep routes thin
+
+The route should handle HTTP concerns and delegate platform behavior. First,
+authenticate the request and require an idempotency key:
+
+```dart title="lib/app.dart"
+final auth = _authenticate(ctx);
+if (auth == null) return _unauthorized(ctx);
+
+final idempotencyKey = ctx.requestHeader('Idempotency-Key')?.trim();
+if (idempotencyKey == null || idempotencyKey.isEmpty) {
+  return ctx.json(
+    {'error': 'Idempotency-Key is required'},
+    statusCode: HttpStatus.badRequest,
+  );
+}
+```
+
+Then decode and validate the small request body:
+
+```dart
+final body = Map<String, dynamic>.from(
+  await ctx.bindJSON({}) as Map? ?? const {},
+);
+final message = body['message']?.toString().trim() ?? '';
+```
+
+Finally, resolve the already-booted runtime from the request container and
+translate application conflicts into an HTTP response:
+
+```dart
+final runtime = await ctx.container.make<PlatformRuntime>();
+final task = await runtime.submit(
+  tenant: auth.tenant,
+  namespace: auth.namespace,
+  idempotencyKey: idempotencyKey,
+  message: message,
+);
+
+return ctx.json(
+  {'taskId': task.id, 'accepted': true},
+  statusCode: HttpStatus.accepted,
+);
+```
+
+The status route follows the same pattern: authenticate, resolve the runtime,
+ask Stem for status, and return `404` when the task is outside the caller's
+tenant and namespace.
+
+## 7. Serve through the correct transport package
+
+`routed_core` owns the engine. The Dart VM listener belongs to `routed_io`:
+
+```dart title="bin/server.dart"
+final engine = await app.createEngine();
+await serveIo(engine, host: '127.0.0.1', port: 8080);
+```
+
+Keeping this boundary explicit makes it easier to replace the host transport
+later without moving platform or task code into the server entrypoint.
+
+For local development, the Routed CLI can run the server entrypoint:
+
+```bash
+dart run routed_cli:routed dev --entry bin/server.dart
+```
+
+## 8. Add a practical project command
+
+`lib/commands.dart` is a good place for a smoke test that exercises the full
+composition without requiring Docker or an external queue.
+
+The command creates the same engine as the server, submits one task, waits for
+the result, prints it, and always closes the engine:
+
+```dart title="lib/commands.dart"
+class PlatformE2eCommand extends Command<void> {
+  @override
+  String get name => 'platform:e2e';
+
+  @override
+  Future<void> run() async {
+    final engine = await app.createEngine();
+    try {
+      final runtime = await engine.make<PlatformRuntime>();
+      final task = await runtime.submit(
+        tenant: runtime.config.defaultTenant,
+        namespace: runtime.config.defaultNamespace,
+        idempotencyKey: 'cli-e2e-task',
+        message: 'hello from routed_cli',
+      );
+      stdout.writeln(await runtime.waitForTask(task.id));
+    } finally {
+      await engine.close();
+    }
+  }
+}
+```
+
+Return the command from `buildProjectCommands()`:
+
+```dart
+FutureOr<List<Command<void>>> buildProjectCommands() {
+  return [PlatformE2eCommand()];
+}
+```
+
+Run it from the project directory:
+
+```bash
+dart run routed_cli:routed platform:e2e
+```
+
+This command is more valuable than a synthetic worker unit test because it
+checks provider registration, worker boot, task submission, result retrieval,
+and shutdown together.
+
+## 9. Test the HTTP boundary in memory
+
+The E2E test uses `RoutedRequestHandler` and `TestClient`, so it exercises the
+real engine without binding a port:
+
+```dart title="test/platform_e2e_test.dart"
+final engine = await app.createEngine();
+final client = TestClient(RoutedRequestHandler(engine));
+```
+
+Submit JSON with list-valued headers, as required by `server_testing`:
+
+```dart
+final response = await client.postJson(
+  '/v1/tasks',
+  {'message': 'hello'},
+  headers: {
+    'authorization': ['Bearer demo-token'],
+    'idempotency-key': ['test-task-1'],
+  },
+);
+```
+
+The test should verify behavior that protects consumers from common gateway
+mistakes:
+
+- missing authentication returns `401`;
+- missing idempotency keys return `400`;
+- retrying the same key and payload returns the same task ID;
+- reusing a key with a different payload returns `409`;
+- a valid task eventually reports a Stem state.
+
+Always close both the client and engine in the test. The worker is a real
+background resource even though its broker and backend are in memory.
+
+## What changes for production?
+
+The example's seams are intentionally replaceable:
+
+- Replace the in-memory platform maps with a durable repository.
+- Replace `InMemoryBroker` and `InMemoryResultBackend` with the Stem adapters
+  appropriate for your deployment.
+- Move authentication from the demo token to a real provider or middleware.
+- Make tenant and namespace resolution come from verified identity claims.
+- Add timeouts, retries, structured logging, metrics, and authorization rules.
+
+The route contract and provider composition can remain largely the same. That
+is the main design goal: infrastructure changes should not force consumers to
+rewrite their HTTP handlers or task business logic.
+
+## Run the complete example
+
+From the repository root:
+
+```bash
+dart pub get
+cd examples/routed_platform
+dart run routed_cli:routed platform:e2e
+dart run routed_cli:routed routes
+dart test
+```
+
+You now have a small, testable Routed platform with a clear HTTP boundary, a
+typed configuration boundary, and an explicit Stem execution boundary.

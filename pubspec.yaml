@@ -49,6 +49,7 @@ workspace:
   - examples/rate_limiting
   - examples/openapi_demo
   - examples/full_stack
+  - examples/routed_platform
 
 funding:
   - https://www.buymeacoffee.com/kingwill101

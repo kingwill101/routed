@@ -89,6 +89,8 @@ void main() async {
   final authManager = AuthManager(
     AuthOptions(
       providers: [telegram],
+      store: InMemoryAuthStore(),
+      storeMode: AuthStoreMode.ephemeral,
       sessionStrategy: AuthSessionStrategy.session,
       enforceCsrf: false, // Telegram widget doesn't support CSRF tokens
       callbacks: AuthCallbacks(

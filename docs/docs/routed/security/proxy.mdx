@@ -65,6 +65,10 @@ Trusting every forwarded address lets a client forge its source IP. When the
 filter is enabled, deny rules take precedence and rejected requests receive a
 `403 Forbidden` before the route handler runs.
 
+Proxy support is rejected during engine validation unless `proxies` contains at
+least one explicit network. This prevents a missing configuration from silently
+turning forwarded headers into trusted client identity.
+
 ## Forward selected headers
 
 ```dart
