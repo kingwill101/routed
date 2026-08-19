@@ -93,6 +93,7 @@ import 'package:routed_sessions/routed_sessions.dart';
 /// - `POST /webauthn/authenticate/verify` verifies a passkey assertion.
 /// - `GET /webauthn/credentials` lists the current user's passkeys.
 /// - `POST /webauthn/credentials/delete` deletes one current-user passkey.
+/// - `POST /webauthn/credentials/rename` renames one current-user passkey.
 ///
 /// ## Usage
 /// ```dart

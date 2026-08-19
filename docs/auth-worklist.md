@@ -115,8 +115,9 @@ The work is intentionally split between framework-agnostic capabilities in
 - [x] Expose the registration, assertion, listing, and deletion contracts
   through the typed feature registry, Routed routes, and `AuthClient`.
 - [ ] Finish the broader WebAuthn subsystem: support additional attestation and
-  COSE algorithms and passkey rename. Routed now issues a server-side session
-  after a verified assertion when that strategy is configured.
+  COSE algorithms. Routed now issues a server-side session after a verified
+  assertion when that strategy is configured, and passkeys can be renamed
+  through the owner-checked store, feature endpoint, and client API.
 - [x] Add an optional native `TwoFactorFeature` with TOTP enrollment
   verification, protected-secret and typed-store boundaries, recovery-code
   hashing and atomic one-time consumption, lockout handling, disablement, and

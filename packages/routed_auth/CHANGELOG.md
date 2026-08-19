@@ -11,6 +11,8 @@
 - Add authenticated linked-account listing/unlinking and account deletion
   routes. Deletion composes feature-owned data contributors before the core
   transactional purge and revokes sessions/JWT versions.
+- Add the CSRF-protected `/webauthn/credentials/rename` route contributed by
+  `WebAuthnFeature`.
 - Automatically mount the opt-in `/auth/admin/...` API, enforce Admin bans at
   sign-in/session boundaries, and provide rotating server-session identity
   replacement for guarded impersonation.

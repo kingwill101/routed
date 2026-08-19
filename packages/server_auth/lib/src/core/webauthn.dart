@@ -223,6 +223,14 @@ final class WebAuthnFeature<TContext>
           csrfPolicy: AuthOperationCsrfPolicy.required,
           operationName: 'credential-delete',
         ),
+        _endpoint(
+          id: 'webauthn.credentialRename',
+          method: AuthOperationMethod.post,
+          path: '/webauthn/credentials/rename',
+          authentication: AuthOperationAuthentication.session,
+          csrfPolicy: AuthOperationCsrfPolicy.required,
+          operationName: 'credential-rename',
+        ),
       ];
 
   @override
@@ -322,6 +330,14 @@ final class WebAuthnFeature<TContext>
           credentialId: _requiredString(request, 'credentialId'),
         );
         return const <String, dynamic>{'status': 'credential_deleted'};
+      case 'webauthn.credentialRename':
+        final user = _requireInvocationUser(invocation);
+        final renamed = await renameCredential(
+          userId: user.id,
+          credentialId: _requiredString(request, 'credentialId'),
+          name: _requiredString(request, 'name'),
+        );
+        return <String, dynamic>{'credential': renamed.toJson()};
       default:
         throw StateError('Unknown WebAuthn endpoint $id');
     }
@@ -400,6 +416,11 @@ final class WebAuthnFeature<TContext>
           description:
               'Compare-and-set the signature counter and advance last-used time.',
         ),
+        AuthAtomicOperationDescriptor(
+          id: 'authenticator.rename',
+          description:
+              'Update a passkey name only when the credential belongs to the user.',
+        ),
       ],
     ),
   ];
@@ -412,6 +433,7 @@ final class WebAuthnFeature<TContext>
     AuthRateLimitOperation('webauthn', 'authentication-verify'),
     AuthRateLimitOperation('webauthn', 'credential-list'),
     AuthRateLimitOperation('webauthn', 'credential-delete'),
+    AuthRateLimitOperation('webauthn', 'credential-rename'),
   ];
 
   /// Begins a registration ceremony for the authenticated [user].
@@ -648,6 +670,31 @@ final class WebAuthnFeature<TContext>
       credentialId,
     );
     if (!deleted) throw AuthFlowException('webauthn_credential_not_found');
+  }
+
+  /// Renames one passkey belonging to [userId].
+  Future<WebAuthnAuthenticator> renameCredential({
+    required String userId,
+    required String credentialId,
+    required String name,
+  }) async {
+    _ensureConfigured();
+    if (userId.trim().isEmpty || credentialId.trim().isEmpty) {
+      throw AuthFlowException('webauthn_credential_invalid');
+    }
+    final normalizedName = name.trim();
+    if (normalizedName.isEmpty) {
+      throw AuthFlowException('webauthn_name_invalid');
+    }
+    final renamed = await _authenticatorStore.renameForUser(
+      userId,
+      credentialId,
+      normalizedName,
+    );
+    if (renamed == null) {
+      throw AuthFlowException('webauthn_credential_not_found');
+    }
+    return renamed;
   }
 
   void _ensureConfigured() {

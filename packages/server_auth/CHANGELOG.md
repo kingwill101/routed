@@ -21,6 +21,8 @@
 - Add feature authentication-policy and host session-control contributions so
   portable features can block session issuance/reuse and safely replace a
   server-session identity.
+- Add owner-checked WebAuthn passkey renaming through the typed store, feature
+  endpoint, and client API.
 
 - Added the opt-in typed `WebAuthnFeature` with digest-at-rest one-time
   challenges, durable authenticator/counter contracts, `none` attestation,

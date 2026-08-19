@@ -176,6 +176,41 @@ void main() {
         isNull,
       );
     });
+
+    test('renames only the owning credential and preserves ceremony state', () async {
+      final store = InMemoryAuthWebAuthnAuthenticatorStore();
+      final created = DateTime.utc(2030, 1, 1);
+      final authenticator = WebAuthnAuthenticator(
+        credentialId: 'credential-1',
+        publicKey: 'cose-key',
+        counter: 4,
+        userId: 'user-1',
+        transports: ['internal'],
+        createdAt: created,
+        lastUsedAt: created.add(const Duration(minutes: 1)),
+        name: 'Old name',
+      );
+      await store.create(authenticator);
+
+      final renamed = await store.renameForUser(
+        'user-1',
+        'credential-1',
+        '  New name  ',
+      );
+      expect(renamed?.name, 'New name');
+      expect(renamed?.credentialId, authenticator.credentialId);
+      expect(renamed?.publicKey, authenticator.publicKey);
+      expect(renamed?.counter, authenticator.counter);
+      expect(renamed?.transports, authenticator.transports);
+      expect(
+        await store.renameForUser('other-user', 'credential-1', 'Hijack'),
+        isNull,
+      );
+      expect(
+        await store.renameForUser('user-1', 'credential-1', '   '),
+        isNull,
+      );
+    });
   });
 
   group('WebAuthn ceremonies', () {
@@ -266,6 +301,32 @@ void main() {
       expect(payload['session'], isA<Map<String, dynamic>>());
       expect(sessionControl.replacedUser?.id, equals(fixture.user.id));
       expect(sessionControl.authenticationMethod, equals('webauthn'));
+    });
+
+    test('renames a registered passkey', () async {
+      final fixture = _Fixture();
+      await fixture.store.users.create(fixture.user);
+      final registration = await fixture.feature.beginRegistration(
+        context: fixture.context,
+        user: fixture.user,
+      );
+      final saved = await fixture.feature.finishRegistration(
+        context: fixture.context,
+        user: fixture.user,
+        credential: _registrationCredential(
+          challenge: registration.challenge,
+          keyPair: fixture.keyPair,
+        ),
+      );
+
+      final renamed = await fixture.feature.renameCredential(
+        userId: fixture.user.id,
+        credentialId: saved.credentialId,
+        name: '  Work laptop  ',
+      );
+      expect(renamed.name, 'Work laptop');
+      expect(renamed.publicKey, saved.publicKey);
+      expect(renamed.counter, saved.counter);
     });
 
     test(

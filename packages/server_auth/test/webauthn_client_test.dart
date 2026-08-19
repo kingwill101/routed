@@ -129,6 +129,28 @@ void main() {
             200,
           );
         }
+        if (request.url.path == '/auth/webauthn/credentials/rename') {
+          expect(jsonDecode(request.body), {
+            'credentialId': 'credential-1',
+            'name': 'Desktop',
+            '_csrf': 'csrf-1',
+          });
+          return http.Response(
+            jsonEncode(<String, dynamic>{
+              'credential': <String, dynamic>{
+                'credential_id': 'credential-1',
+                'public_key': 'cose-key',
+                'counter': 1,
+                'user_id': 'user-1',
+                'transports': ['internal'],
+                'created_at': '2030-01-01T00:00:00Z',
+                'last_used_at': '2030-01-01T00:01:00Z',
+                'name': 'Desktop',
+              },
+            }),
+            200,
+          );
+        }
         expect(request.url.path, '/auth/webauthn/credentials/delete');
         expect(jsonDecode(request.body), {
           'credentialId': 'credential-1',
@@ -163,6 +185,11 @@ void main() {
 
     final credentials = await client.getWebAuthnCredentials();
     expect(credentials.single.name, 'Laptop');
+    final renamed = await client.renameWebAuthnCredential(
+      credentialId: 'credential-1',
+      name: 'Desktop',
+    );
+    expect(renamed.name, 'Desktop');
     await client.deleteWebAuthnCredential(credentialId: 'credential-1');
     expect(
       requests.map((request) => request.url.path),

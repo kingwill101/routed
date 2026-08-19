@@ -89,6 +89,13 @@ abstract interface class AuthWebAuthnAuthenticatorStore {
 
   /// Removes a credential only when it belongs to [userId].
   FutureOr<bool> deleteForUser(String userId, String credentialId);
+
+  /// Renames a credential only when it belongs to [userId].
+  FutureOr<WebAuthnAuthenticator?> renameForUser(
+    String userId,
+    String credentialId,
+    String name,
+  );
 }
 
 /// In-memory WebAuthn stores for tests and local development.
@@ -219,6 +226,36 @@ final class InMemoryAuthWebAuthnAuthenticatorStore
     }
     _records.remove(normalizedCredentialId);
     return true;
+  }
+
+  @override
+  Future<WebAuthnAuthenticator?> renameForUser(
+    String userId,
+    String credentialId,
+    String name,
+  ) async {
+    final normalizedUserId = userId.trim();
+    final normalizedCredentialId = credentialId.trim();
+    final normalizedName = name.trim();
+    final current = _records[normalizedCredentialId];
+    if (normalizedUserId.isEmpty ||
+        normalizedCredentialId.isEmpty ||
+        normalizedName.isEmpty ||
+        current?.userId != normalizedUserId) {
+      return null;
+    }
+    final updated = WebAuthnAuthenticator(
+      credentialId: current!.credentialId,
+      publicKey: current.publicKey,
+      counter: current.counter,
+      userId: current.userId,
+      transports: current.transports,
+      createdAt: current.createdAt,
+      lastUsedAt: current.lastUsedAt,
+      name: normalizedName,
+    );
+    _records[normalizedCredentialId] = updated;
+    return updated;
   }
 }
 

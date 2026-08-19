@@ -114,6 +114,27 @@ void main() {
       list.assertStatus(HttpStatus.ok);
       expect(list.json()['credentials'], isEmpty);
 
+      await store.webAuthnAuthenticators.create(
+        WebAuthnAuthenticator(
+          credentialId: 'credential-1',
+          publicKey: 'cose-key',
+          counter: 0,
+          userId: user.id,
+          createdAt: DateTime.utc(2026, 1, 1),
+          name: 'Old name',
+        ),
+      );
+      final renamed = await client.postJson(
+        '/auth/webauthn/credentials/rename',
+        <String, dynamic>{
+          'credentialId': 'credential-1',
+          'name': 'New name',
+        },
+        headers: sessionHeaders,
+      );
+      renamed.assertStatus(HttpStatus.ok);
+      expect(renamed.json()['credential']['name'], 'New name');
+
       final unauthenticated = TestClient(RoutedRequestHandler(engine));
       addTearDown(unauthenticated.close);
       final rejected = await unauthenticated.postJson(

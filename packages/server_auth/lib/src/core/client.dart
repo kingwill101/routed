@@ -1007,6 +1007,25 @@ class AuthClient {
     });
   }
 
+  /// Renames one passkey belonging to the current user.
+  Future<AuthClientWebAuthnCredential> renameWebAuthnCredential({
+    required String credentialId,
+    required String name,
+  }) async {
+    final response = await _mutatingRequest(
+      'POST',
+      '/webauthn/credentials/rename',
+      <String, dynamic>{'credentialId': credentialId, 'name': name},
+    );
+    final rawCredential = _mapBody(response.body)['credential'];
+    if (rawCredential is! Map) {
+      throw const FormatException('Invalid WebAuthn rename response');
+    }
+    return AuthClientWebAuthnCredential.fromJson(
+      Map<String, dynamic>.from(rawCredential),
+    );
+  }
+
   /// Returns the current two-factor status for the signed-in user.
   Future<AuthClientTwoFactorStatus> getTwoFactorStatus() async {
     final response = await _request('GET', '/2fa/status');
