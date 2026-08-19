@@ -42,6 +42,19 @@ final class AuthOperationInvocation<TContext> {
   final AuthFeatureSessionControl? sessionControl;
 }
 
+/// A framework-neutral redirect returned by an auth feature endpoint.
+final class AuthEndpointRedirect {
+  const AuthEndpointRedirect({
+    required this.location,
+    this.statusCode = 302,
+    this.headers = const <String, String>{},
+  });
+
+  final Uri location;
+  final int statusCode;
+  final Map<String, String> headers;
+}
+
 /// Host-owned session operations available to portable feature endpoints.
 abstract interface class AuthFeatureSessionControl {
   AuthSessionStrategy get strategy;

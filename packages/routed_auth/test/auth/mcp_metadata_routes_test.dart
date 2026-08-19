@@ -1,5 +1,3 @@
-import 'dart:io';
-
 import 'package:routed_auth/routed_auth.dart';
 import 'package:routed_core/routed_core.dart';
 import 'package:routed_testing/routed_testing.dart';
@@ -103,4 +101,58 @@ void main() {
       expect(response.json()['client_name'], 'MCP client');
     },
   );
+
+  test('feature redirects are emitted as HTTP redirects by Routed', () async {
+    final manager = AuthManager(
+      AuthOptions<EngineContext>(
+        providers: const [],
+        store: InMemoryAuthStore(),
+        storeMode: AuthStoreMode.ephemeral,
+        features: [_RedirectFeature()],
+      ),
+    );
+    final engine = testEngine();
+    AuthRoutes(manager).register(engine.defaultRouter);
+    await engine.initialize();
+    final client = TestClient(RoutedRequestHandler(engine));
+    addTearDown(client.close);
+
+    final response = await client.get('/auth/redirect');
+    response.assertStatus(HttpStatus.found);
+    expect(response.headers['location'], ['https://client.example/callback']);
+  });
+}
+
+final class _RedirectFeature
+    implements
+        AuthFeature<EngineContext>,
+        AuthEndpointContributor<EngineContext> {
+  @override
+  String get id => 'redirect-test';
+
+  @override
+  void configure(AuthFeatureContext<EngineContext> context) {}
+
+  @override
+  Iterable<AuthEndpointDescriptor<EngineContext>> get endpoints => [
+    TypedAuthEndpointDescriptor<EngineContext, Map<String, dynamic>, Object?>(
+      id: 'redirect-test.endpoint',
+      method: AuthOperationMethod.get,
+      path: '/redirect',
+      requestCodec: AuthOperationCodec<Map<String, dynamic>>(
+        decode: (value) => value,
+        encode: (value) => value,
+      ),
+      responseCodec: AuthOperationCodec<Object?>(
+        decode: (value) => value,
+        encode: (value) => value,
+      ),
+      authentication: AuthOperationAuthentication.none,
+      originPolicy: AuthOperationOriginPolicy.none,
+      csrfPolicy: AuthOperationCsrfPolicy.none,
+      handler: (_, _) => AuthEndpointRedirect(
+        location: Uri.parse('https://client.example/callback'),
+      ),
+    ),
+  ];
 }

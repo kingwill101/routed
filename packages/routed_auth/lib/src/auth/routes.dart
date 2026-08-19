@@ -6,6 +6,7 @@ import 'package:server_auth/server_auth.dart'
     show
         AuthCredentials,
         AuthEndpointDescriptor,
+        AuthEndpointRedirect,
         AuthOperationAuthentication,
         AuthOperationCsrfPolicy,
         AuthOperationInvocation,
@@ -307,6 +308,15 @@ class AuthRoutes {
         ),
         payload,
       );
+      if (response is AuthEndpointRedirect) {
+        response.headers.forEach(
+          (key, value) => ctx.response.headers.set(key, value),
+        );
+        return await ctx.redirect(
+          response.location.toString(),
+          statusCode: response.statusCode,
+        );
+      }
       return ctx.json(response);
     } on AuthFlowException catch (error) {
       if (!payload.containsKey('organizationId') &&
