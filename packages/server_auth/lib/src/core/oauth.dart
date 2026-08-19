@@ -7,6 +7,12 @@ import 'package:http/http.dart' as http;
 
 import 'bearer.dart' show extractBearerToken;
 
+/// Maximum response size accepted from OAuth token and user-info endpoints.
+///
+/// Provider adapters that perform additional OAuth requests should apply the
+/// same bound before decoding a response body.
+const int maxOAuthResponseCharacters = 1024 * 1024;
+
 /// Attribute key used to store the OAuth2 access token.
 const String oauthTokenAttribute = 'auth.oauth.access_token';
 
@@ -143,7 +149,11 @@ class OAuthIntrospectionResult {
   DateTime? get expiresAt {
     final exp = raw['exp'];
     if (exp is num) {
-      return DateTime.fromMillisecondsSinceEpoch(exp.toInt() * 1000);
+      try {
+        return DateTime.fromMillisecondsSinceEpoch(exp.toInt() * 1000);
+      } on ArgumentError {
+        return null;
+      }
     }
     return null;
   }
@@ -151,7 +161,11 @@ class OAuthIntrospectionResult {
   DateTime? get notBefore {
     final nbf = raw['nbf'];
     if (nbf is num) {
-      return DateTime.fromMillisecondsSinceEpoch(nbf.toInt() * 1000);
+      try {
+        return DateTime.fromMillisecondsSinceEpoch(nbf.toInt() * 1000);
+      } on ArgumentError {
+        return null;
+      }
     }
     return null;
   }
@@ -165,6 +179,7 @@ class OAuthIntrospectionOptions {
     this.clientSecret,
     this.tokenTypeHint,
     this.cacheTtl = Duration.zero,
+    this.maxCacheEntries = 1024,
     this.clockSkew = const Duration(seconds: 60),
     this.requestTimeout = const Duration(seconds: 10),
     this.additionalParameters = const <String, String>{},
@@ -175,6 +190,13 @@ class OAuthIntrospectionOptions {
   final String? clientSecret;
   final String? tokenTypeHint;
   final Duration cacheTtl;
+
+  /// Maximum number of distinct token digests retained by the local cache.
+  ///
+  /// Introspection caching is optional, but when enabled the cache must remain
+  /// bounded because callers can present an unlimited number of distinct
+  /// bearer tokens. The oldest entry is evicted when this limit is reached.
+  final int maxCacheEntries;
   final Duration clockSkew;
   final Duration requestTimeout;
   final Map<String, String> additionalParameters;
@@ -190,6 +212,7 @@ OAuthIntrospectionOptions? materializeOAuthIntrospectionOptions({
   String? clientSecret,
   String? tokenTypeHint,
   Duration cacheTtl = Duration.zero,
+  int maxCacheEntries = 1024,
   Duration clockSkew = const Duration(seconds: 60),
   Duration requestTimeout = const Duration(seconds: 10),
   Map<String, String> additionalParameters = const <String, String>{},
@@ -204,6 +227,7 @@ OAuthIntrospectionOptions? materializeOAuthIntrospectionOptions({
     clientSecret: _optionalTrimmed(clientSecret),
     tokenTypeHint: _optionalTrimmed(tokenTypeHint),
     cacheTtl: cacheTtl,
+    maxCacheEntries: maxCacheEntries,
     clockSkew: clockSkew,
     requestTimeout: requestTimeout,
     additionalParameters: additionalParameters,
@@ -241,6 +265,7 @@ class OAuth2TokenIntrospector {
       if (cached != null && !cached.isExpired) {
         return cached.result;
       }
+      _cache.removeWhere((_, entry) => entry.isExpired);
     }
 
     final headers = <String, String>{
@@ -271,13 +296,19 @@ class OAuth2TokenIntrospector {
       );
     }
 
-    final Map<String, dynamic> jsonResponse =
-        json.decode(response.body) as Map<String, dynamic>;
+    final jsonResponse = _decodeJsonObject(
+      response.body,
+      errorCode: 'invalid_introspection_response',
+    );
     final result = OAuthIntrospectionResult(
       active: jsonResponse['active'] == true,
       raw: jsonResponse,
     );
     if (options.cacheTtl > Duration.zero) {
+      _cache.remove(cacheKey);
+      while (_cache.length >= options.maxCacheEntries && _cache.isNotEmpty) {
+        _cache.remove(_cache.keys.first);
+      }
       _cache[cacheKey] = _CachedIntrospection(
         result,
         DateTime.now().add(options.cacheTtl),
@@ -336,13 +367,13 @@ class OAuth2Client {
     Map<String, String>? additionalParameters,
   }) {
     final body = <String, String>{
+      ...?additionalParameters,
       'grant_type': 'authorization_code',
       'code': code,
       'redirect_uri': redirectUri.toString(),
       'scope': ?scope,
       'code_verifier': ?codeVerifier,
       'client_id': ?clientId,
-      ...?additionalParameters,
     };
     return _sendTokenRequest(body);
   }
@@ -352,10 +383,10 @@ class OAuth2Client {
     Map<String, String>? additionalParameters,
   }) {
     final body = <String, String>{
+      ...?additionalParameters,
       'grant_type': 'client_credentials',
       'scope': ?scope,
       'client_id': ?clientId,
-      ...?additionalParameters,
     };
     return _sendTokenRequest(body);
   }
@@ -366,11 +397,11 @@ class OAuth2Client {
     Map<String, String>? additionalParameters,
   }) {
     final body = <String, String>{
+      ...?additionalParameters,
       'grant_type': 'refresh_token',
       'refresh_token': refreshToken,
       'scope': ?scope,
       'client_id': ?clientId,
-      ...?additionalParameters,
     };
     return _sendTokenRequest(body);
   }
@@ -403,18 +434,39 @@ class OAuth2Client {
     if (responseBody.isEmpty) {
       throw OAuth2Exception('Token endpoint returned empty response');
     }
+    if (responseBody.length > maxOAuthResponseCharacters) {
+      throw OAuth2Exception('invalid_token_endpoint_response');
+    }
 
     final contentType =
         response.headers[HttpHeaders.contentTypeHeader]?.toLowerCase() ?? '';
-    Map<String, dynamic> jsonResponse;
-    if (contentType.contains('application/json') ||
-        responseBody.startsWith('{')) {
-      jsonResponse = json.decode(responseBody) as Map<String, dynamic>;
-    } else {
-      final parsed = Uri.splitQueryString(responseBody);
-      jsonResponse = parsed.map((key, value) => MapEntry(key, value));
+    final Map<String, dynamic> jsonResponse;
+    try {
+      if (contentType.contains('application/json') ||
+          responseBody.startsWith('{')) {
+        jsonResponse = _decodeJsonObject(
+          responseBody,
+          errorCode: 'invalid_token_endpoint_response',
+        );
+      } else {
+        final parsed = Uri.splitQueryString(responseBody);
+        jsonResponse = parsed.map((key, value) => MapEntry(key, value));
+      }
+    } catch (error) {
+      if (error is OAuth2Exception) rethrow;
+      throw OAuth2Exception('invalid_token_endpoint_response');
     }
-    return OAuthTokenResponse.fromJson(jsonResponse);
+
+    try {
+      final token = OAuthTokenResponse.fromJson(jsonResponse);
+      if (token.accessToken.trim().isEmpty) {
+        throw OAuth2Exception('invalid_token_endpoint_response');
+      }
+      return token;
+    } catch (error) {
+      if (error is OAuth2Exception) rethrow;
+      throw OAuth2Exception('invalid_token_endpoint_response');
+    }
   }
 
   Future<Map<String, dynamic>> fetchUserInfo(
@@ -436,6 +488,27 @@ class OAuth2Client {
         response.statusCode,
       );
     }
-    return json.decode(response.body) as Map<String, dynamic>;
+    return _decodeJsonObject(
+      response.body,
+      errorCode: 'invalid_userinfo_response',
+    );
+  }
+}
+
+Map<String, dynamic> _decodeJsonObject(
+  String body, {
+  required String errorCode,
+}) {
+  if (body.length > maxOAuthResponseCharacters) {
+    throw OAuth2Exception(errorCode);
+  }
+  try {
+    final decoded = json.decode(body);
+    if (decoded is! Map) {
+      throw const FormatException('expected JSON object');
+    }
+    return decoded.map((key, value) => MapEntry(key.toString(), value));
+  } catch (_) {
+    throw OAuth2Exception(errorCode);
   }
 }

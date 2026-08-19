@@ -101,6 +101,8 @@ class TwitterProfile {
 ///
 /// final manager = AuthManager(
 ///   AuthOptions(
+///     store: InMemoryAuthStore(),
+///     storeMode: AuthStoreMode.ephemeral,
 ///     providers: [
 ///       twitterProvider(
 ///         TwitterProviderOptions(

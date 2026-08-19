@@ -41,6 +41,59 @@ Map<String, dynamic> _oidcJwk() => <String, dynamic>{
 };
 
 void main() {
+  test('provider request and verification lifetimes must be positive', () {
+    expect(
+      () => EmailProvider(
+        tokenExpiry: Duration.zero,
+        sendVerificationRequest: (_, _, _) {},
+      ),
+      throwsArgumentError,
+    );
+    expect(
+      () => OAuthProvider<Map<String, dynamic>>(
+        id: 'example',
+        name: 'Example',
+        clientId: 'client-id',
+        clientSecret: 'client-secret',
+        authorizationEndpoint: Uri.parse('https://auth.test/authorize'),
+        tokenEndpoint: Uri.parse('https://auth.test/token'),
+        redirectUri: 'https://app.test/callback/example',
+        requestTimeout: Duration.zero,
+        profile: (profile) => AuthUser(id: 'user-1'),
+      ),
+      throwsArgumentError,
+    );
+  });
+
+  test('successful credential callbacks must return a user identity', () async {
+    final emptyUser = AuthUser(id: '');
+    final credentials = AuthCredentials(
+      email: 'user@example.com',
+      password: 'test-password',
+    );
+
+    expect(
+      await authorizeCredentialsSignIn(
+        store: CallbackAuthStore(),
+        passwordHasher: Argon2idPasswordHasher(),
+        provider: CredentialsProvider(authorize: (_, _, _) => emptyUser),
+        context: Object(),
+        credentials: credentials,
+      ),
+      isNull,
+    );
+    expect(
+      await authorizeCredentialsRegistration(
+        store: CallbackAuthStore(),
+        passwordHasher: Argon2idPasswordHasher(),
+        provider: CredentialsProvider(register: (_, _, _) => emptyUser),
+        context: Object(),
+        credentials: credentials,
+      ),
+      isNull,
+    );
+  });
+
   test('resolveAuthProviderById finds provider by exact id', () {
     final providers = <AuthProvider>[
       AuthProvider(id: 'google', name: 'Google', type: AuthProviderType.oidc),
@@ -95,75 +148,109 @@ void main() {
     expect(merged.first.name, equals('Google'));
   });
 
+  test('mergeAuthProvidersById preserves lazy provider iterables', () {
+    Iterable<AuthProvider> additional() sync* {
+      yield AuthProvider(
+        id: 'github',
+        name: 'GitHub',
+        type: AuthProviderType.oauth,
+      );
+    }
+
+    final merged = mergeAuthProvidersById(<AuthProvider>[
+      AuthProvider(id: 'google', name: 'Google', type: AuthProviderType.oidc),
+    ], additional());
+
+    expect(merged.map((provider) => provider.id), <String>['google', 'github']);
+  });
+
   test(
-    'authorizeCredentialsSignIn uses provider callback or adapter fallback',
+    'authorizeCredentialsSignIn uses provider callback or store fallback',
     () async {
       final providerUser = AuthUser(id: 'provider-user');
-      final adapterUser = AuthUser(id: 'adapter-user');
+      final adapterUser = AuthUser(id: 'store-user');
       final credentials = AuthCredentials(
         email: 'user@example.com',
-        password: 'pw',
+        password: 'test-password',
       );
 
       final providerBacked = CredentialsProvider(
         authorize: (context, provider, credentials) => providerUser,
       );
       final adapterBacked = CredentialsProvider();
-      final adapter = CallbackAuthAdapter(
-        onVerifyCredentials: (_) => adapterUser,
+      final hasher = Argon2idPasswordHasher();
+      final credential = AuthPasswordCredential(
+        id: 'credential-1',
+        userId: adapterUser.id,
+        identifier: 'user@example.com',
+        passwordHash: hasher.hash('test-password'),
+        createdAt: DateTime.utc(2026),
+        updatedAt: DateTime.utc(2026),
+      );
+      final store = CallbackAuthStore(
+        onFindUserById: (_) => adapterUser,
+        onFindCredential: (_) => credential,
       );
 
       final fromProvider = await authorizeCredentialsSignIn(
-        adapter: adapter,
+        store: store,
+        passwordHasher: hasher,
         provider: providerBacked,
         context: Object(),
         credentials: credentials,
       );
       final fromAdapter = await authorizeCredentialsSignIn(
-        adapter: adapter,
+        store: store,
+        passwordHasher: hasher,
         provider: adapterBacked,
         context: Object(),
         credentials: credentials,
       );
 
       expect(fromProvider?.id, equals('provider-user'));
-      expect(fromAdapter?.id, equals('adapter-user'));
+      expect(fromAdapter?.id, equals('store-user'));
     },
   );
 
   test(
-    'authorizeCredentialsRegistration uses provider callback or adapter fallback',
+    'authorizeCredentialsRegistration uses provider callback or store fallback',
     () async {
       final providerUser = AuthUser(id: 'provider-register');
-      final adapterUser = AuthUser(id: 'adapter-register');
+      final adapterUser = AuthUser(id: 'store-register');
       final credentials = AuthCredentials(
         email: 'new@example.com',
-        password: 'pw',
+        password: 'test-password',
       );
 
       final providerBacked = CredentialsProvider(
         register: (context, provider, credentials) => providerUser,
       );
       final adapterBacked = CredentialsProvider();
-      final adapter = CallbackAuthAdapter(
-        onRegisterCredentials: (_) => adapterUser,
+      final hasher = Argon2idPasswordHasher();
+      final store = CallbackAuthStore(
+        onRegisterCredential: (_, credential) {
+          expect(credential.passwordHash, isNotEmpty);
+          return adapterUser;
+        },
       );
 
       final fromProvider = await authorizeCredentialsRegistration(
-        adapter: adapter,
+        store: store,
+        passwordHasher: hasher,
         provider: providerBacked,
         context: Object(),
         credentials: credentials,
       );
       final fromAdapter = await authorizeCredentialsRegistration(
-        adapter: adapter,
+        store: store,
+        passwordHasher: hasher,
         provider: adapterBacked,
         context: Object(),
         credentials: credentials,
       );
 
       expect(fromProvider?.id, equals('provider-register'));
-      expect(fromAdapter?.id, equals('adapter-register'));
+      expect(fromAdapter?.id, equals('store-register'));
     },
   );
 
@@ -172,7 +259,8 @@ void main() {
     () async {
       await expectLater(
         requireAuthorizedCredentialsSignIn(
-          adapter: CallbackAuthAdapter(onVerifyCredentials: (_) => null),
+          store: CallbackAuthStore(onFindCredential: (_) => null),
+          passwordHasher: Argon2idPasswordHasher(),
           provider: CredentialsProvider(),
           context: Object(),
           credentials: AuthCredentials(email: 'user@example.com'),
@@ -193,7 +281,8 @@ void main() {
     () async {
       await expectLater(
         requireAuthorizedCredentialsRegistration(
-          adapter: CallbackAuthAdapter(onRegisterCredentials: (_) => null),
+          store: CallbackAuthStore(onRegisterCredential: (_, _) => null),
+          passwordHasher: Argon2idPasswordHasher(),
           provider: CredentialsProvider(),
           context: Object(),
           credentials: AuthCredentials(email: 'new@example.com'),
@@ -209,6 +298,38 @@ void main() {
       );
     },
   );
+
+  test('disabled password credentials cannot authenticate', () async {
+    final hasher = Argon2idPasswordHasher();
+    final user = AuthUser(id: 'disabled-user');
+    final credential = AuthPasswordCredential(
+      id: 'disabled-credential',
+      userId: user.id,
+      identifier: 'disabled@example.com',
+      passwordHash: hasher.hash('secret'),
+      createdAt: DateTime.utc(2026),
+      updatedAt: DateTime.utc(2026),
+      enabled: false,
+    );
+    final store = CallbackAuthStore(
+      onFindUserById: (_) => user,
+      onFindCredential: (_) => credential,
+    );
+
+    expect(
+      await authorizeCredentialsSignIn(
+        store: store,
+        passwordHasher: hasher,
+        provider: CredentialsProvider(),
+        context: Object(),
+        credentials: AuthCredentials(
+          email: 'disabled@example.com',
+          password: 'secret',
+        ),
+      ),
+      isNull,
+    );
+  });
 
   test('auth provider session key helpers compose stable keys', () {
     expect(
@@ -282,15 +403,15 @@ void main() {
     'resolveOAuthUserForAccount updates linked users when profile changes',
     () async {
       var updated = false;
-      final adapter = CallbackAuthAdapter(
-        onGetAccount: (providerId, providerAccountId) {
+      final store = CallbackAuthStore(
+        onFindAccount: (providerId, providerAccountId) {
           return AuthAccount(
             providerId: providerId,
             providerAccountId: providerAccountId,
             userId: 'user-1',
           );
         },
-        onGetUserById: (id) async {
+        onFindUserById: (id) async {
           expect(id, equals('user-1'));
           return AuthUser(
             id: 'user-1',
@@ -299,7 +420,7 @@ void main() {
             attributes: const <String, dynamic>{'legacy': true},
           );
         },
-        onGetUserByEmail: (_) => null,
+        onFindUserByEmail: (_) => null,
         onUpdateUser: (user) async {
           updated = true;
           return user;
@@ -307,7 +428,7 @@ void main() {
       );
 
       final resolved = await resolveOAuthUserForAccount(
-        adapter: adapter,
+        store: store,
         providerId: 'github',
         accountId: 'acct-1',
         mappedUser: AuthUser(
@@ -316,6 +437,7 @@ void main() {
           name: 'New Name',
           attributes: const <String, dynamic>{'fresh': true},
         ),
+        emailVerified: true,
       );
 
       expect(resolved.isNewUser, isFalse);
@@ -332,9 +454,9 @@ void main() {
     'resolveOAuthUserForAccount creates user when no records resolve',
     () async {
       var created = false;
-      final adapter = CallbackAuthAdapter(
-        onGetAccount: (_, _) => null,
-        onGetUserByEmail: (_) => null,
+      final store = CallbackAuthStore(
+        onFindAccount: (_, _) => null,
+        onFindUserByEmail: (_) => null,
         onCreateUser: (user) async {
           created = true;
           return AuthUser(
@@ -347,7 +469,7 @@ void main() {
       );
 
       final resolved = await resolveOAuthUserForAccount(
-        adapter: adapter,
+        store: store,
         providerId: 'google',
         accountId: 'acct-2',
         mappedUser: AuthUser(
@@ -370,9 +492,9 @@ void main() {
       // Discord/GitHub mappers supply a non-empty provider ID; the user must
       // still be created rather than left unpersisted.
       var created = false;
-      final adapter = CallbackAuthAdapter(
-        onGetAccount: (_, _) => null,
-        onGetUserByEmail: (_) => null,
+      final store = CallbackAuthStore(
+        onFindAccount: (_, _) => null,
+        onFindUserByEmail: (_) => null,
         onCreateUser: (user) async {
           created = true;
           return AuthUser(id: 'stored-1', email: user.email);
@@ -380,7 +502,7 @@ void main() {
       );
 
       final resolved = await resolveOAuthUserForAccount(
-        adapter: adapter,
+        store: store,
         providerId: 'discord',
         accountId: 'acct-3',
         mappedUser: AuthUser(
@@ -400,9 +522,9 @@ void main() {
     'resolveOAuthUserForAccount does not link unverified email to local user',
     () async {
       var linkedByEmail = false;
-      final adapter = CallbackAuthAdapter(
-        onGetAccount: (_, _) => null,
-        onGetUserByEmail: (email) async {
+      final store = CallbackAuthStore(
+        onFindAccount: (_, _) => null,
+        onFindUserByEmail: (email) async {
           linkedByEmail = true;
           return AuthUser(id: 'victim-1', email: email);
         },
@@ -412,7 +534,7 @@ void main() {
       );
 
       final resolved = await resolveOAuthUserForAccount(
-        adapter: adapter,
+        store: store,
         providerId: 'discord',
         accountId: 'acct-4',
         mappedUser: AuthUser(
@@ -427,116 +549,108 @@ void main() {
       expect(linkedByEmail, isFalse);
       expect(resolved.isNewUser, isTrue);
       expect(resolved.user.id, equals('created-oauth'));
+      expect(resolved.user.email, isNull);
+    },
+  );
+
+  test(
+    'resolveOAuthUserForAccount does not overwrite linked email when unverified',
+    () async {
+      AuthUser? updated;
+      final store = CallbackAuthStore(
+        onFindAccount: (_, _) => AuthAccount(
+          providerId: 'google',
+          providerAccountId: 'acct-6',
+          userId: 'local-2',
+        ),
+        onFindUserById: (_) =>
+            AuthUser(id: 'local-2', email: 'trusted@example.com'),
+        onUpdateUser: (user) async {
+          updated = user;
+          return user;
+        },
+      );
+
+      final resolved = await resolveOAuthUserForAccount(
+        store: store,
+        providerId: 'google',
+        accountId: 'acct-6',
+        mappedUser: AuthUser(
+          id: 'google-sub-6',
+          email: 'attacker@example.com',
+          name: 'Updated Name',
+        ),
+      );
+
+      expect(resolved.user.email, equals('trusted@example.com'));
+      expect(updated?.email, equals('trusted@example.com'));
+      expect(resolved.user.name, equals('Updated Name'));
     },
   );
 
   test(
     'resolveOAuthUserForAccount links verified email to existing local user',
     () async {
-      final adapter = CallbackAuthAdapter(
-        onGetAccount: (_, _) => null,
-        onGetUserByEmail: (email) async {
+      String? lookedUpEmail;
+      final store = CallbackAuthStore(
+        onFindAccount: (_, _) => null,
+        onFindUserByEmail: (email) async {
+          lookedUpEmail = email;
           return AuthUser(id: 'local-1', email: email);
         },
       );
 
       final resolved = await resolveOAuthUserForAccount(
-        adapter: adapter,
+        store: store,
         providerId: 'google',
         accountId: 'acct-5',
         mappedUser: AuthUser(
           id: 'google-sub-123',
-          email: 'existing@example.com',
+          email: ' EXISTING@example.com ',
         ),
         emailVerified: true,
       );
 
       expect(resolved.isNewUser, isFalse);
       expect(resolved.user.id, equals('local-1'));
+      expect(lookedUpEmail, equals('existing@example.com'));
     },
   );
 
-  test(
-    'consumeAuthVerificationToken falls back to secondary token store',
-    () async {
-      final adapter = CallbackAuthAdapter(
-        onUseVerificationToken: (_, _) => null,
-      );
-      final tokenStore = InMemoryAuthVerificationTokenStore();
-      final record = AuthVerificationToken(
-        identifier: 'user@example.com',
-        token: 'token-1',
-        expiresAt: DateTime.now().add(const Duration(minutes: 10)),
-      );
-      await tokenStore.save(record);
+  test('consumeAuthVerificationToken uses one typed token store', () async {
+    final tokenStore = InMemoryAuthVerificationTokenStore();
+    final store = CallbackAuthStore(verificationTokens: tokenStore);
+    final record = AuthVerificationToken(
+      identifier: 'user@example.com',
+      token: 'token-1',
+      expiresAt: DateTime.now().add(const Duration(minutes: 10)),
+    );
+    await tokenStore.save(record);
 
-      final resolved = await consumeAuthVerificationToken(
-        adapter: adapter,
-        tokenStore: tokenStore,
-        identifier: 'user@example.com',
-        token: 'token-1',
-      );
-      expect(resolved, isNotNull);
-      expect(resolved!.identifier, equals('user@example.com'));
-    },
-  );
-
-  test(
-    'consumeAuthVerificationToken drops fallback copy when adapter consumes',
-    () async {
-      // Simulate a single-use adapter: first call consumes, later calls miss.
-      var adapterUses = 0;
-      final adapter = CallbackAuthAdapter(
-        onUseVerificationToken: (identifier, token) {
-          adapterUses += 1;
-          if (adapterUses > 1) {
-            return null;
-          }
-          return AuthVerificationToken(
-            identifier: identifier,
-            token: token,
-            expiresAt: DateTime.now().add(const Duration(minutes: 10)),
-          );
-        },
-      );
-      // Mirror the token in both stores, as persistAuthVerificationToken does.
-      final tokenStore = InMemoryAuthVerificationTokenStore();
-      final record = AuthVerificationToken(
-        identifier: 'user@example.com',
-        token: 'token-1',
-        expiresAt: DateTime.now().add(const Duration(minutes: 10)),
-      );
-      await tokenStore.save(record);
-
-      final first = await consumeAuthVerificationToken(
-        adapter: adapter,
-        tokenStore: tokenStore,
-        identifier: 'user@example.com',
-        token: 'token-1',
-      );
-      expect(first, isNotNull);
-
-      // A replayed magic-link must not be consumable from the fallback store.
-      final second = await consumeAuthVerificationToken(
-        adapter: adapter,
-        tokenStore: tokenStore,
-        identifier: 'user@example.com',
-        token: 'token-1',
-      );
-      expect(second, isNull);
-
-      // And the fallback copy itself is gone.
-      final direct = await tokenStore.use('user@example.com', 'token-1');
-      expect(direct, isNull);
-    },
-  );
+    final resolved = await consumeAuthVerificationToken(
+      store: store,
+      identifier: record.identifier,
+      token: record.token,
+    );
+    expect(resolved?.identifier, equals(record.identifier));
+    expect(resolved?.token, equals(record.token));
+    expect(resolved?.expiresAt, equals(record.expiresAt));
+    expect(
+      await consumeAuthVerificationToken(
+        store: store,
+        identifier: record.identifier,
+        token: record.token,
+      ),
+      isNull,
+    );
+  });
 
   test(
     'resolveAuthUserByEmailOrCreate returns existing or creates new user',
     () async {
       var created = false;
-      final adapter = CallbackAuthAdapter(
-        onGetUserByEmail: (email) async {
+      final store = CallbackAuthStore(
+        onFindUserByEmail: (email) async {
           if (email == 'existing@example.com') {
             return AuthUser(id: 'existing-1', email: email);
           }
@@ -549,11 +663,11 @@ void main() {
       );
 
       final existing = await resolveAuthUserByEmailOrCreate(
-        adapter: adapter,
+        store: store,
         email: 'existing@example.com',
       );
       final createdResult = await resolveAuthUserByEmailOrCreate(
-        adapter: adapter,
+        store: store,
         email: 'new@example.com',
       );
 
@@ -566,43 +680,84 @@ void main() {
   );
 
   test(
-    'clearAuthVerificationTokens removes adapter and store tokens',
+    'normalizes email identifiers across credential and email flows',
     () async {
-      var deletedIdentifier = '';
-      final adapter = CallbackAuthAdapter(
-        onDeleteVerificationTokens: (identifier) async {
-          deletedIdentifier = identifier;
-        },
-      );
-      final tokenStore = InMemoryAuthVerificationTokenStore();
-      await tokenStore.save(
-        AuthVerificationToken(
-          identifier: 'user@example.com',
-          token: 'token-1',
-          expiresAt: DateTime.now().add(const Duration(minutes: 5)),
+      final store = InMemoryAuthStore();
+      final hasher = Argon2idPasswordHasher();
+      final registered = await authorizeCredentialsRegistration(
+        store: store,
+        passwordHasher: hasher,
+        provider: CredentialsProvider(),
+        context: Object(),
+        credentials: AuthCredentials(
+          email: ' User@EXAMPLE.COM ',
+          password: 'test-password',
         ),
       );
 
-      await clearAuthVerificationTokens(
-        adapter: adapter,
-        tokenStore: tokenStore,
-        identifier: 'user@example.com',
+      expect(registered?.email, equals('user@example.com'));
+      expect(
+        (await authorizeCredentialsSignIn(
+          store: store,
+          passwordHasher: hasher,
+          provider: CredentialsProvider(),
+          context: Object(),
+          credentials: AuthCredentials(
+            email: 'USER@example.com',
+            password: 'test-password',
+          ),
+        ))?.id,
+        equals(registered?.id),
       );
 
-      expect(deletedIdentifier, equals('user@example.com'));
-      final consumed = await tokenStore.use('user@example.com', 'token-1');
-      expect(consumed, isNull);
+      final provider = EmailProvider(
+        tokenGenerator: () => 'case-token',
+        sendVerificationRequest: (_, _, _) async {},
+      );
+      final tokenStore = InMemoryAuthVerificationTokenStore();
+      await startAuthEmailSignIn<Object>(
+        store: store,
+        tokenStore: tokenStore,
+        provider: provider,
+        context: Object(),
+        email: ' NEW@Example.COM ',
+        callbackUrl: '/after',
+        sessionStrategy: AuthSessionStrategy.session,
+      );
+      final resolved = await resolveAuthEmailVerificationSignIn(
+        store: store,
+        tokenStore: tokenStore,
+        email: 'new@example.com',
+        token: 'case-token',
+      );
+
+      expect(resolved?.user.email, equals('new@example.com'));
     },
   );
 
-  test('persistAuthVerificationToken saves to adapter and store', () async {
-    AuthVerificationToken? savedToAdapter;
-    final adapter = CallbackAuthAdapter(
-      onSaveVerificationToken: (token) async {
-        savedToAdapter = token;
-      },
-    );
+  test('clearAuthVerificationTokens removes typed store tokens', () async {
     final tokenStore = InMemoryAuthVerificationTokenStore();
+    final store = CallbackAuthStore(verificationTokens: tokenStore);
+    await tokenStore.save(
+      AuthVerificationToken(
+        identifier: 'user@example.com',
+        token: 'token-1',
+        expiresAt: DateTime.now().add(const Duration(minutes: 5)),
+      ),
+    );
+
+    await clearAuthVerificationTokens(
+      store: store,
+      identifier: 'user@example.com',
+    );
+
+    final consumed = await tokenStore.consume('user@example.com', 'token-1');
+    expect(consumed, isNull);
+  });
+
+  test('persistAuthVerificationToken saves to the typed store', () async {
+    final tokenStore = InMemoryAuthVerificationTokenStore();
+    final store = CallbackAuthStore(verificationTokens: tokenStore);
     final verification = AuthVerificationToken(
       identifier: 'user@example.com',
       token: 'token-2',
@@ -610,13 +765,11 @@ void main() {
     );
 
     await persistAuthVerificationToken(
-      adapter: adapter,
-      tokenStore: tokenStore,
+      store: store,
       verification: verification,
     );
 
-    expect(savedToAdapter, isNotNull);
-    final consumed = await tokenStore.use('user@example.com', 'token-2');
+    final consumed = await tokenStore.consume('user@example.com', 'token-2');
     expect(consumed, isNotNull);
   });
 
@@ -651,6 +804,26 @@ void main() {
   );
 
   test(
+    'prepareAuthEmailVerificationPayload rejects empty generated tokens',
+    () {
+      final provider = EmailProvider(
+        tokenGenerator: () => '  ',
+        sendVerificationRequest: (_, _, _) async {},
+      );
+
+      expect(
+        () => prepareAuthEmailVerificationPayload(
+          provider: provider,
+          email: 'user@example.com',
+          callbackUrl: '/dashboard',
+          sessionStrategy: AuthSessionStrategy.jwt,
+        ),
+        throwsArgumentError,
+      );
+    },
+  );
+
+  test(
     'startAuthEmailSignIn clears tokens, persists verification, sends email, and writes callback session',
     () async {
       final sentRequests = <AuthEmailRequest>[];
@@ -661,11 +834,11 @@ void main() {
         },
       );
       final tokenStore = InMemoryAuthVerificationTokenStore();
-      final adapter = CallbackAuthAdapter();
+      final store = CallbackAuthStore();
       final session = <String, String>{};
 
       final payload = await startAuthEmailSignIn<Object>(
-        adapter: adapter,
+        store: store,
         tokenStore: tokenStore,
         provider: provider,
         context: Object(),
@@ -684,7 +857,7 @@ void main() {
         session[authEmailCallbackSessionKey('_auth.callback')],
         equals('/after'),
       );
-      final consumed = await tokenStore.use(
+      final consumed = await tokenStore.consume(
         'user@example.com',
         'generated-token',
       );
@@ -703,15 +876,16 @@ void main() {
           expiresAt: DateTime.now().add(const Duration(minutes: 10)),
         ),
       );
-      final adapter = CallbackAuthAdapter(
-        onGetUserByEmail: (email) async => AuthUser(id: 'user-1', email: email),
+      final store = CallbackAuthStore(
+        onFindUserByEmail: (email) async =>
+            AuthUser(id: 'user-1', email: email),
       );
       final session = <String, String>{
         authEmailCallbackSessionKey('_auth.callback'): '/dashboard',
       };
 
       final resolved = await resolveAuthEmailVerificationSignIn(
-        adapter: adapter,
+        store: store,
         tokenStore: tokenStore,
         email: 'user@example.com',
         token: 'token-1',
@@ -730,7 +904,7 @@ void main() {
     'resolveAuthEmailVerificationSignIn returns null for invalid token',
     () async {
       final resolved = await resolveAuthEmailVerificationSignIn(
-        adapter: CallbackAuthAdapter(),
+        store: CallbackAuthStore(),
         tokenStore: InMemoryAuthVerificationTokenStore(),
         email: 'missing@example.com',
         token: 'missing-token',
@@ -751,7 +925,13 @@ void main() {
       tokenEndpoint: Uri.parse('https://auth.test/token'),
       redirectUri: 'https://app.test/callback/example',
       scopes: const <String>['openid', 'profile'],
-      tokenParams: const <String, String>{'resource': 'api'},
+      tokenParams: const <String, String>{
+        'resource': 'api',
+        'grant_type': 'client_credentials',
+        'code': 'overridden-code',
+        'redirect_uri': 'https://attacker.test/callback',
+        'code_verifier': 'overridden-verifier',
+      },
       profile: (profile) => AuthUser(id: profile['sub']?.toString() ?? ''),
     );
 
@@ -786,13 +966,93 @@ void main() {
   });
 
   test(
+    'OAuth provider extension parameters cannot override protocol fields',
+    () {
+      final provider = OAuthProvider<Map<String, dynamic>>(
+        id: 'example',
+        name: 'Example',
+        clientId: 'client-id',
+        clientSecret: 'client-secret',
+        authorizationEndpoint: Uri.parse('https://auth.test/authorize'),
+        tokenEndpoint: Uri.parse('https://auth.test/token'),
+        redirectUri: 'https://app.test/callback/example',
+        authorizationParams: const <String, String>{
+          'state': 'attacker-state',
+          'redirect_uri': 'https://attacker.test/callback',
+          'code_challenge': 'attacker-challenge',
+          'prompt': 'consent',
+        },
+        tokenParams: const <String, String>{
+          'grant_type': 'client_credentials',
+          'code': 'attacker-code',
+          'code_verifier': 'attacker-verifier',
+          'resource': 'api',
+        },
+        profile: (profile) => AuthUser(id: profile['sub']?.toString() ?? ''),
+      );
+
+      final authorization = buildOAuthAuthorizationParameters(
+        provider,
+        state: 'server-state',
+        codeChallenge: 'server-challenge',
+      );
+      expect(authorization['state'], equals('server-state'));
+      expect(
+        authorization['redirect_uri'],
+        equals('https://app.test/callback/example'),
+      );
+      expect(authorization['code_challenge'], equals('server-challenge'));
+      expect(authorization['prompt'], equals('consent'));
+    },
+  );
+
+  test(
+    'resolveOAuthSignInForProvider bounds token endpoint failures',
+    () async {
+      final provider = OAuthProvider<Map<String, dynamic>>(
+        id: 'example',
+        name: 'Example',
+        clientId: 'client-id',
+        clientSecret: 'client-secret',
+        authorizationEndpoint: Uri.parse('https://auth.test/authorize'),
+        tokenEndpoint: Uri.parse('https://auth.test/token'),
+        redirectUri: 'https://app.test/callback/example',
+        profile: (profile) =>
+            AuthUser(id: '', email: profile['email']?.toString()),
+      );
+
+      await expectLater(
+        resolveOAuthSignInForProvider<Object, Map<String, dynamic>>(
+          store: CallbackAuthStore(),
+          context: Object(),
+          provider: provider,
+          code: 'auth-code',
+          httpClient: MockClient((_) async => http.Response('[]', 200)),
+        ),
+        throwsA(
+          isA<AuthFlowException>().having(
+            (error) => error.code,
+            'code',
+            'token_exchange_failed',
+          ),
+        ),
+      );
+    },
+  );
+
+  test(
     'resolveOAuthSignInForProvider assembles user account and profile payloads',
     () async {
-      final adapter = CallbackAuthAdapter(
-        onGetAccount: (_, _) => null,
-        onGetUserByEmail: (_) => null,
+      AuthAccount? linkedAccount;
+      final store = CallbackAuthStore(
+        onFindAccount: (_, _) => null,
+        onFindUserByEmail: (_) => null,
         onCreateUser: (user) async =>
             AuthUser(id: 'created-user', email: user.email, name: user.name),
+        onLinkAccount: (account) async {
+          linkedAccount = account;
+          return account;
+        },
       );
       final provider = OAuthProvider<Map<String, dynamic>>(
         id: 'example',
@@ -812,7 +1072,7 @@ void main() {
 
       final resolved =
           await resolveOAuthSignInForProvider<Object, Map<String, dynamic>>(
-            adapter: adapter,
+            store: store,
             context: Object(),
             provider: provider,
             code: 'auth-code',
@@ -837,6 +1097,7 @@ void main() {
                   jsonEncode(<String, dynamic>{
                     'sub': 'sub-123',
                     'email': 'user@example.com',
+                    'email_verified': true,
                     'name': 'Example User',
                   }),
                   200,
@@ -858,6 +1119,7 @@ void main() {
       expect(resolved.account.userId, equals('created-user'));
       expect(resolved.account.accessToken, equals('token-1'));
       expect(resolved.account.refreshToken, equals('refresh-1'));
+      expect(linkedAccount, same(resolved.account));
       expect(resolved.profile['sub'], equals('sub-123'));
       expect(resolved.profile['email'], equals('user@example.com'));
     },
@@ -866,8 +1128,8 @@ void main() {
   test(
     'resolveOAuthSignInForProvider uses fallback account id when profile has no identifier',
     () async {
-      final adapter = CallbackAuthAdapter(
-        onGetAccount: (_, _) => null,
+      final store = CallbackAuthStore(
+        onFindAccount: (_, _) => null,
         onCreateUser: (user) async => AuthUser(id: 'created-user'),
       );
       final provider = OAuthProvider<Map<String, dynamic>>(
@@ -879,12 +1141,13 @@ void main() {
         tokenEndpoint: Uri.parse('https://auth.test/token'),
         userInfoEndpoint: Uri.parse('https://auth.test/userinfo'),
         redirectUri: 'https://app.test/callback/example',
-        profile: (_) => AuthUser(id: ''),
+        profile: (profile) =>
+            AuthUser(id: '', email: profile['email']?.toString()),
       );
 
       final resolved =
           await resolveOAuthSignInForProvider<Object, Map<String, dynamic>>(
-            adapter: adapter,
+            store: store,
             context: Object(),
             provider: provider,
             code: 'auth-code',
@@ -904,7 +1167,10 @@ void main() {
               }
               if (request.url.path == '/userinfo') {
                 return http.Response(
-                  jsonEncode(<String, dynamic>{'name': 'No Identifier'}),
+                  jsonEncode(<String, dynamic>{
+                    'name': 'No Identifier',
+                    'email': 'unverified@example.com',
+                  }),
                   200,
                   headers: const <String, String>{
                     'content-type': 'application/json',
@@ -919,6 +1185,7 @@ void main() {
       expect(resolved.isNewUser, isTrue);
       expect(resolved.account.providerAccountId, equals('fallback-account'));
       expect(resolved.account.userId, equals('created-user'));
+      expect(resolved.user.email, isNull);
     },
   );
 
@@ -926,12 +1193,13 @@ void main() {
     'resolveOAuthCallbackSignInForProvider validates state and links account',
     () async {
       AuthAccount? linkedAccount;
-      final adapter = CallbackAuthAdapter(
-        onGetAccount: (_, _) => null,
-        onGetUserByEmail: (_) => null,
+      final store = CallbackAuthStore(
+        onFindAccount: (_, _) => null,
+        onFindUserByEmail: (_) => null,
         onCreateUser: (user) async => AuthUser(id: 'created-user'),
         onLinkAccount: (account) async {
           linkedAccount = account;
+          return account;
         },
       );
       final provider = OAuthProvider<Map<String, dynamic>>(
@@ -958,7 +1226,7 @@ void main() {
             Object,
             Map<String, dynamic>
           >(
-            adapter: adapter,
+            store: store,
             context: Object(),
             provider: provider,
             code: 'auth-code',
@@ -1018,9 +1286,10 @@ void main() {
     'resolveOAuthCallbackSignInForProvider throws invalid_state before token exchange',
     () async {
       var linked = false;
-      final adapter = CallbackAuthAdapter(
-        onLinkAccount: (_) async {
+      final store = CallbackAuthStore(
+        onLinkAccount: (account) async {
           linked = true;
+          return account;
         },
       );
       final provider = OAuthProvider<Map<String, dynamic>>(
@@ -1039,7 +1308,7 @@ void main() {
 
       await expectLater(
         resolveOAuthCallbackSignInForProvider<Object, Map<String, dynamic>>(
-          adapter: adapter,
+          store: store,
           context: Object(),
           provider: provider,
           code: 'auth-code',
@@ -1061,6 +1330,156 @@ void main() {
         ),
       );
       expect(linked, isFalse);
+    },
+  );
+
+  test(
+    'resolveOAuthCallbackSignInForProvider binds typed OAuth challenges once',
+    () async {
+      final challengeStore = InMemoryAuthOAuthChallengeStore();
+      final provider = OAuthProvider<Map<String, dynamic>>(
+        id: 'example',
+        name: 'Example',
+        clientId: 'client-id',
+        clientSecret: 'client-secret',
+        authorizationEndpoint: Uri.parse('https://auth.test/authorize'),
+        tokenEndpoint: Uri.parse('https://auth.test/token'),
+        redirectUri: 'https://app.test/callback/example',
+        profile: (_) => AuthUser(id: ''),
+      );
+      final started =
+          await resolveOAuthAuthorizationStart<Object, Map<String, dynamic>>(
+            context: Object(),
+            provider: provider,
+            stateKey: '_auth.state',
+            pkceKey: '_auth.pkce',
+            callbackKey: '_auth.callback',
+            challengeStore: challengeStore,
+            callbackUrl: '/dashboard',
+            writeSession: (_, _) => fail('OAuth challenge used session state'),
+          );
+
+      final store = CallbackAuthStore(
+        onCreateUser: (user) async => AuthUser(id: 'created-user'),
+      );
+      final httpClient = MockClient(
+        (_) async => http.Response(
+          jsonEncode(<String, dynamic>{'access_token': 'access-token'}),
+          200,
+        ),
+      );
+      Future<AuthOAuthCallbackSignInResolution> finish(String browserState) {
+        return resolveOAuthCallbackSignInForProvider<
+          Object,
+          Map<String, dynamic>
+        >(
+          store: store,
+          context: Object(),
+          provider: provider,
+          code: 'auth-code',
+          receivedState: started.state,
+          stateKey: '_auth.state',
+          pkceKey: '_auth.pkce',
+          callbackKey: '_auth.callback',
+          readSession: (_) => fail('OAuth challenge read session state'),
+          consumeChallenge: challengeStore.consume,
+          expectedBrowserState: browserState,
+          requireBrowserState: true,
+          httpClient: httpClient,
+        );
+      }
+
+      await expectLater(
+        finish('other-browser-state'),
+        throwsA(
+          isA<AuthFlowException>().having(
+            (error) => error.code,
+            'code',
+            'invalid_state',
+          ),
+        ),
+      );
+
+      final resolved = await finish(started.state);
+      expect(resolved.callbackUrl, equals('/dashboard'));
+
+      await expectLater(
+        finish(started.state),
+        throwsA(
+          isA<AuthFlowException>().having(
+            (error) => error.code,
+            'code',
+            'invalid_state',
+          ),
+        ),
+      );
+    },
+  );
+
+  test(
+    'resolveOAuthCallbackSignInForProvider rejects an account link conflict',
+    () async {
+      final provider = OAuthProvider<Map<String, dynamic>>(
+        id: 'example',
+        name: 'Example',
+        clientId: 'client-id',
+        clientSecret: 'client-secret',
+        authorizationEndpoint: Uri.parse('https://auth.test/authorize'),
+        tokenEndpoint: Uri.parse('https://auth.test/token'),
+        redirectUri: 'https://app.test/callback/example',
+        profile: (_) => AuthUser(id: ''),
+      );
+      final challengeStore = InMemoryAuthOAuthChallengeStore();
+      final started =
+          await resolveOAuthAuthorizationStart<Object, Map<String, dynamic>>(
+            context: Object(),
+            provider: provider,
+            stateKey: '_auth.state',
+            pkceKey: '_auth.pkce',
+            callbackKey: '_auth.callback',
+            challengeStore: challengeStore,
+            writeSession: (_, _) {},
+          );
+      final store = CallbackAuthStore(
+        onCreateUser: (user) async => AuthUser(id: 'created-user'),
+        onLinkAccount: (account) async => AuthAccount(
+          providerId: account.providerId,
+          providerAccountId: account.providerAccountId,
+          userId: 'other-user',
+          accessToken: account.accessToken,
+          refreshToken: account.refreshToken,
+          expiresAt: account.expiresAt,
+          metadata: account.metadata,
+        ),
+      );
+
+      await expectLater(
+        resolveOAuthCallbackSignInForProvider<Object, Map<String, dynamic>>(
+          store: store,
+          context: Object(),
+          provider: provider,
+          code: 'auth-code',
+          receivedState: started.state,
+          stateKey: '_auth.state',
+          pkceKey: '_auth.pkce',
+          callbackKey: '_auth.callback',
+          readSession: (_) => throw StateError('session state was used'),
+          consumeChallenge: challengeStore.consume,
+          httpClient: MockClient(
+            (_) async => http.Response(
+              jsonEncode(<String, dynamic>{'access_token': 'access-token'}),
+              200,
+            ),
+          ),
+        ),
+        throwsA(
+          isA<AuthFlowException>().having(
+            (error) => error.code,
+            'code',
+            'account_link_conflict',
+          ),
+        ),
+      );
     },
   );
 
@@ -1088,6 +1507,143 @@ void main() {
     expect(account.expiresAt, equals(DateTime.utc(2026, 2, 24, 12)));
     expect(account.metadata['login'], equals('octocat'));
   });
+
+  test('buildOAuthAuthAccount rejects incomplete identity links', () {
+    final token = OAuthTokenResponse(
+      accessToken: 'access',
+      tokenType: 'Bearer',
+      expiresIn: null,
+      raw: const <String, dynamic>{},
+    );
+
+    expect(
+      () => buildOAuthAuthAccount(
+        providerId: 'github',
+        providerAccountId: '',
+        userId: 'user-1',
+        token: token,
+        metadata: const <String, dynamic>{},
+      ),
+      throwsArgumentError,
+    );
+    expect(
+      () => buildOAuthAuthAccount(
+        providerId: 'github',
+        providerAccountId: 'account-1',
+        userId: '',
+        token: token,
+        metadata: const <String, dynamic>{},
+      ),
+      throwsArgumentError,
+    );
+  });
+
+  test('empty mapped OAuth user IDs use the stable account identity', () async {
+    final store = InMemoryAuthStore();
+
+    final resolved = await resolveOAuthUserForAccount(
+      store: store,
+      providerId: 'github',
+      accountId: 'account-1',
+      mappedUser: AuthUser(id: '', name: 'Example'),
+    );
+
+    expect(resolved.user.id, equals('account-1'));
+    expect(resolved.isNewUser, isTrue);
+    expect(await store.users.findById('account-1'), same(resolved.user));
+  });
+
+  test('OAuth profile updates cannot take a linked user email', () async {
+    final store = InMemoryAuthStore();
+    await store.users.create(
+      AuthUser(id: 'local-user', email: 'trusted@example.com'),
+    );
+    await store.users.create(
+      AuthUser(id: 'other-user', email: 'victim@example.com'),
+    );
+    await store.accounts.link(
+      AuthAccount(
+        providerId: 'google',
+        providerAccountId: 'google-1',
+        userId: 'local-user',
+      ),
+    );
+
+    final resolved = await resolveOAuthUserForAccount(
+      store: store,
+      providerId: 'google',
+      accountId: 'google-1',
+      mappedUser: AuthUser(
+        id: 'google-user',
+        email: 'victim@example.com',
+        name: 'Updated Name',
+      ),
+      emailVerified: true,
+    );
+
+    expect(resolved.user.id, equals('local-user'));
+    expect(resolved.user.email, equals('trusted@example.com'));
+    expect(resolved.userUpdated, isFalse);
+    expect(
+      (await store.users.findByEmail('victim@example.com'))?.id,
+      equals('other-user'),
+    );
+  });
+
+  test(
+    'resolveOAuthSignInForProvider bounds malformed profile parsing',
+    () async {
+      final provider = OAuthProvider<Map<String, dynamic>>(
+        id: 'example',
+        name: 'Example',
+        clientId: 'client-id',
+        clientSecret: 'client-secret',
+        authorizationEndpoint: Uri.parse('https://auth.test/authorize'),
+        tokenEndpoint: Uri.parse('https://auth.test/token'),
+        userInfoEndpoint: Uri.parse('https://auth.test/userinfo'),
+        redirectUri: 'https://app.test/callback/example',
+        profileParser: (_) => throw const FormatException('unexpected detail'),
+        profile: (profile) => AuthUser(id: profile['sub']?.toString() ?? ''),
+      );
+
+      await expectLater(
+        resolveOAuthSignInForProvider<Object, Map<String, dynamic>>(
+          store: CallbackAuthStore(),
+          context: Object(),
+          provider: provider,
+          code: 'auth-code',
+          httpClient: MockClient((request) async {
+            if (request.url.path == '/token') {
+              return http.Response(
+                jsonEncode(<String, dynamic>{
+                  'access_token': 'token-1',
+                  'token_type': 'Bearer',
+                }),
+                200,
+                headers: const <String, String>{
+                  'content-type': 'application/json',
+                },
+              );
+            }
+            return http.Response(
+              jsonEncode(<String, dynamic>{'sub': 'subject-1'}),
+              200,
+              headers: const <String, String>{
+                'content-type': 'application/json',
+              },
+            );
+          }),
+        ),
+        throwsA(
+          isA<AuthFlowException>().having(
+            (error) => error.code,
+            'code',
+            'profile_invalid',
+          ),
+        ),
+      );
+    },
+  );
 
   test(
     'buildOAuthAuthorizationParameters includes scopes, pkce and callback',
@@ -1270,6 +1826,36 @@ void main() {
           authProviderStateSessionKey('_auth.state', 'example'),
         ),
         isTrue,
+      );
+    },
+  );
+
+  test(
+    'resolveOAuthAuthorizationStart rejects a non-positive challenge TTL',
+    () async {
+      final provider = OAuthProvider<Map<String, dynamic>>(
+        id: 'example',
+        name: 'Example',
+        clientId: 'client-id',
+        clientSecret: 'client-secret',
+        authorizationEndpoint: Uri.parse('https://auth.test/authorize'),
+        tokenEndpoint: Uri.parse('https://auth.test/token'),
+        redirectUri: 'https://app.test/callback/example',
+        profile: (_) => AuthUser(id: 'user-1'),
+      );
+
+      await expectLater(
+        resolveOAuthAuthorizationStart<Object, Map<String, dynamic>>(
+          context: Object(),
+          provider: provider,
+          stateKey: '_auth.state',
+          pkceKey: '_auth.pkce',
+          callbackKey: '_auth.callback',
+          challengeStore: InMemoryAuthOAuthChallengeStore(),
+          challengeTtl: Duration.zero,
+          writeSession: (_, _) => fail('session state should not be used'),
+        ),
+        throwsArgumentError,
       );
     },
   );

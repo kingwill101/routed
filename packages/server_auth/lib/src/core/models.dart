@@ -6,6 +6,8 @@ const Set<String> _sensitiveAttributeNames = <String>{
   'credentials',
   'password',
   'passwordhash',
+  'passphrase',
+  'passwd',
   'privatekey',
   'refreshtoken',
   'secret',
@@ -15,28 +17,94 @@ const Set<String> _sensitiveAttributeNames = <String>{
   'sessiontoken',
 };
 
+const Set<String> _sensitiveAttributeFragments = <String>{
+  'apikey',
+  'authorization',
+  'credential',
+  'csrf',
+  'idtoken',
+  'jwt',
+  'password',
+  'passphrase',
+  'passwd',
+  'privatekey',
+  'secret',
+  'sessionid',
+  'sessionkey',
+  'token',
+};
+
+const _maxAuthPublicAttributeDepth = 32;
+
 String _normalizeAttributeName(Object? name) =>
     name.toString().toLowerCase().replaceAll(RegExp(r'[^a-z0-9]'), '');
 
-dynamic _sanitizePublicValue(Object? value) {
+bool _isCredentialSecretAttribute(Object? name) {
+  final normalized = _normalizeAttributeName(name);
+  return normalized == 'password' ||
+      normalized == 'passwordhash' ||
+      normalized == 'passphrase' ||
+      normalized == 'passwd';
+}
+
+bool _isSensitiveAttributeName(Object? name) {
+  final normalized = _normalizeAttributeName(name);
+  return _sensitiveAttributeNames.contains(normalized) ||
+      _sensitiveAttributeFragments.any(normalized.contains);
+}
+
+dynamic _sanitizePublicValue(
+  Object? value, {
+  required Set<Object> ancestors,
+  required int depth,
+}) {
   if (value is Map) {
-    return <String, dynamic>{
-      for (final entry in value.entries)
-        if (!_sensitiveAttributeNames.contains(
-          _normalizeAttributeName(entry.key),
-        ))
-          entry.key.toString(): _sanitizePublicValue(entry.value),
-    };
+    if (depth >= _maxAuthPublicAttributeDepth || !ancestors.add(value)) {
+      return null;
+    }
+    try {
+      return <String, dynamic>{
+        for (final entry in value.entries)
+          if (!_isSensitiveAttributeName(entry.key))
+            entry.key.toString(): _sanitizePublicValue(
+              entry.value,
+              ancestors: ancestors,
+              depth: depth + 1,
+            ),
+      };
+    } finally {
+      ancestors.remove(value);
+    }
   }
   if (value is Iterable) {
-    return value.map(_sanitizePublicValue).toList(growable: false);
+    if (depth >= _maxAuthPublicAttributeDepth || !ancestors.add(value)) {
+      return null;
+    }
+    try {
+      return value
+          .map(
+            (item) => _sanitizePublicValue(
+              item,
+              ancestors: ancestors,
+              depth: depth + 1,
+            ),
+          )
+          .toList(growable: false);
+    } finally {
+      ancestors.remove(value);
+    }
   }
   return value;
 }
 
-Map<String, dynamic> _sanitizePublicAttributes(Map<String, dynamic> value) {
+/// Removes credential-like keys recursively from a public attribute map.
+///
+/// This is used for response projections and event payloads. Persistence and
+/// provider callbacks should use the original private values instead.
+Map<String, dynamic> sanitizeAuthPublicAttributes(Map<String, dynamic> value) {
   return Map<String, dynamic>.from(
-    _sanitizePublicValue(value) as Map<String, dynamic>,
+    _sanitizePublicValue(value, ancestors: Set<Object>.identity(), depth: 0)
+        as Map<String, dynamic>,
   );
 }
 
@@ -59,14 +127,23 @@ class AuthPrincipal {
   Map<String, dynamic> toJson() => {
     'id': id,
     'roles': roles,
-    'attributes': _sanitizePublicAttributes(attributes),
+    'attributes': sanitizeAuthPublicAttributes(attributes),
   };
 
   factory AuthPrincipal.fromJson(Map<String, dynamic> json) {
+    final rolesValue = json['roles'];
+    final attributesValue = json['attributes'];
     return AuthPrincipal(
       id: json['id']?.toString() ?? '',
-      roles: (json['roles'] as List?)?.cast<String>() ?? const <String>[],
-      attributes: (json['attributes'] as Map?)?.cast<String, dynamic>(),
+      roles: rolesValue is List
+          ? rolesValue.whereType<String>().toList(growable: false)
+          : const <String>[],
+      attributes: attributesValue is Map
+          ? sanitizeAuthPublicAttributes(<String, dynamic>{
+              for (final entry in attributesValue.entries)
+                if (entry.key is String) entry.key as String: entry.value,
+            })
+          : const <String, dynamic>{},
     );
   }
 }
@@ -116,6 +193,18 @@ class AuthUser {
     );
   }
 
+  /// Creates a user safe to retain in events and audit records.
+  AuthUser redacted() {
+    return AuthUser(
+      id: id,
+      email: email,
+      name: name,
+      image: image,
+      roles: roles,
+      attributes: sanitizeAuthPublicAttributes(attributes),
+    );
+  }
+
   /// Converts this user to JSON for API responses.
   Map<String, dynamic> toJson() {
     return {
@@ -124,7 +213,7 @@ class AuthUser {
       'name': name,
       'image': image,
       'roles': roles,
-      'attributes': _sanitizePublicAttributes(attributes),
+      'attributes': sanitizeAuthPublicAttributes(attributes),
     };
   }
 
@@ -143,13 +232,22 @@ class AuthUser {
 
   /// Creates a user from a JSON payload.
   factory AuthUser.fromJson(Map<String, dynamic> json) {
+    final rolesValue = json['roles'];
+    final attributesValue = json['attributes'];
     return AuthUser(
       id: json['id']?.toString() ?? '',
       email: json['email']?.toString(),
       name: json['name']?.toString(),
       image: json['image']?.toString(),
-      roles: (json['roles'] as List?)?.cast<String>() ?? const <String>[],
-      attributes: (json['attributes'] as Map?)?.cast<String, dynamic>(),
+      roles: rolesValue is List
+          ? rolesValue.whereType<String>().toList(growable: false)
+          : const <String>[],
+      attributes: attributesValue is Map
+          ? sanitizeAuthPublicAttributes(<String, dynamic>{
+              for (final entry in attributesValue.entries)
+                if (entry.key is String) entry.key as String: entry.value,
+            })
+          : const <String, dynamic>{},
     );
   }
 }
@@ -198,8 +296,22 @@ class AuthAccount {
       if (includeTokens) 'access_token': accessToken,
       if (includeTokens) 'refresh_token': refreshToken,
       'expires_at': expiresAt?.toIso8601String(),
-      'metadata': _sanitizePublicAttributes(metadata),
+      'metadata': sanitizeAuthPublicAttributes(metadata),
     };
+  }
+
+  /// Creates an account safe to retain in events and audit records.
+  ///
+  /// Provider access and refresh tokens are private persistence data and are
+  /// never copied into the redacted projection.
+  AuthAccount redacted() {
+    return AuthAccount(
+      providerId: providerId,
+      providerAccountId: providerAccountId,
+      userId: userId,
+      expiresAt: expiresAt,
+      metadata: sanitizeAuthPublicAttributes(metadata),
+    );
   }
 
   /// Serializes the account for private persistence, including OAuth tokens.
@@ -211,6 +323,71 @@ class AuthAccount {
     'refresh_token': refreshToken,
     'expires_at': expiresAt?.toIso8601String(),
     'metadata': metadata,
+  };
+}
+
+/// Persisted password credential record.
+///
+/// This is a storage model, not request input. It contains only an encoded
+/// password hash and may safely be passed between typed persistence layers.
+class AuthPasswordCredential {
+  AuthPasswordCredential({
+    required this.id,
+    required this.userId,
+    required this.identifier,
+    required this.passwordHash,
+    required this.createdAt,
+    required this.updatedAt,
+    this.enabled = true,
+  });
+
+  /// Stable persistence identifier for this credential.
+  final String id;
+
+  /// User owning the credential.
+  final String userId;
+
+  /// Normalized login identifier, such as an email or username.
+  final String identifier;
+
+  /// Self-contained encoded password hash; never plaintext.
+  final String passwordHash;
+
+  /// Time at which this credential was created.
+  final DateTime createdAt;
+
+  /// Time at which this credential was last changed.
+  final DateTime updatedAt;
+
+  /// Whether this credential may authenticate.
+  final bool enabled;
+
+  /// Creates a changed copy of this credential.
+  AuthPasswordCredential copyWith({
+    String? passwordHash,
+    DateTime? updatedAt,
+    bool? enabled,
+  }) {
+    return AuthPasswordCredential(
+      id: id,
+      userId: userId,
+      identifier: identifier,
+      passwordHash: passwordHash ?? this.passwordHash,
+      createdAt: createdAt,
+      updatedAt: updatedAt ?? this.updatedAt,
+      enabled: enabled ?? this.enabled,
+    );
+  }
+
+  /// Serializes persistence-safe credential data.
+  Map<String, dynamic> toStorageJson() => {
+    'id': id,
+    'user_id': userId,
+    'identifier': identifier,
+    'password_hash': passwordHash,
+    'created_at': createdAt.toUtc().toIso8601String(),
+    'updated_at': updatedAt.toUtc().toIso8601String(),
+    'enabled': enabled,
   };
 }
 
@@ -237,13 +414,28 @@ class AuthCredentials {
   /// Additional credential fields.
   final Map<String, dynamic> attributes;
 
+  /// Returns a copy safe to retain in events and audit records.
+  AuthCredentials redacted() {
+    return AuthCredentials(
+      email: email,
+      username: username,
+      attributes: sanitizeAuthPublicAttributes(<String, dynamic>{
+        for (final entry in attributes.entries)
+          if (!_isCredentialSecretAttribute(entry.key)) entry.key: entry.value,
+      }),
+    );
+  }
+
   /// Builds credentials from a request payload.
   factory AuthCredentials.fromMap(Map<String, dynamic> data) {
     return AuthCredentials(
       email: data['email']?.toString(),
       username: data['username']?.toString(),
       password: data['password']?.toString(),
-      attributes: Map<String, dynamic>.from(data)..remove('password'),
+      attributes: <String, dynamic>{
+        for (final entry in data.entries)
+          if (!_isCredentialSecretAttribute(entry.key)) entry.key: entry.value,
+      },
     );
   }
 }
@@ -266,6 +458,92 @@ class AuthVerificationToken {
   final DateTime expiresAt;
 }
 
+/// Persisted server-side session metadata.
+///
+/// [tokenHash] is the digest of the opaque session token held by the client;
+/// the raw token must never be persisted. This record is deliberately
+/// separate from [AuthSession], which is the public response projection.
+class AuthSessionRecord {
+  AuthSessionRecord({
+    required this.id,
+    required this.tokenHash,
+    required this.userId,
+    required this.createdAt,
+    required this.expiresAt,
+    required this.lastUsedAt,
+    required this.authenticationMethod,
+    this.revokedAt,
+    this.ipAddress,
+    this.userAgent,
+  });
+
+  /// Stable persistence identifier for this session record.
+  final String id;
+
+  /// Digest of the client-held session token.
+  final String tokenHash;
+
+  /// User owning the session.
+  final String userId;
+
+  /// Time at which the session was issued.
+  final DateTime createdAt;
+
+  /// Time after which the session cannot authenticate.
+  final DateTime expiresAt;
+
+  /// Most recent authenticated use of the session.
+  final DateTime lastUsedAt;
+
+  /// Time at which the session was revoked, if any.
+  final DateTime? revokedAt;
+
+  /// Direct connection address observed when the session was issued.
+  final String? ipAddress;
+
+  /// User-agent value observed when the session was issued.
+  final String? userAgent;
+
+  /// Authentication mechanism that issued the session.
+  final String authenticationMethod;
+
+  /// Whether this record is valid at [now].
+  bool isActive({DateTime? now}) {
+    final current = (now ?? DateTime.now()).toUtc();
+    return revokedAt == null && current.isBefore(expiresAt.toUtc());
+  }
+
+  /// Creates a changed copy while preserving immutable session metadata.
+  AuthSessionRecord copyWith({DateTime? lastUsedAt, DateTime? revokedAt}) {
+    return AuthSessionRecord(
+      id: id,
+      tokenHash: tokenHash,
+      userId: userId,
+      createdAt: createdAt,
+      expiresAt: expiresAt,
+      lastUsedAt: lastUsedAt ?? this.lastUsedAt,
+      authenticationMethod: authenticationMethod,
+      revokedAt: revokedAt ?? this.revokedAt,
+      ipAddress: ipAddress,
+      userAgent: userAgent,
+    );
+  }
+
+  /// Serializes persistence-safe session metadata.
+  Map<String, dynamic> toStorageJson() => {
+    'id': id,
+    'token_hash': tokenHash,
+    'user_id': userId,
+    'created_at': createdAt.toUtc().toIso8601String(),
+    'expires_at': expiresAt.toUtc().toIso8601String(),
+    'last_used_at': lastUsedAt.toUtc().toIso8601String(),
+    'revoked_at': revokedAt?.toUtc().toIso8601String(),
+    'ip_address': ipAddress,
+    'user_agent': userAgent,
+    'authentication_method': authenticationMethod,
+  };
+}
+
 /// Session data returned by auth endpoints.
 class AuthSession {
   AuthSession({
@@ -286,6 +564,15 @@ class AuthSession {
 
   /// JWT token when using JWT strategy.
   final String? token;
+
+  /// Creates a session safe to retain in events and audit records.
+  AuthSession redacted() {
+    return AuthSession(
+      user: user.redacted(),
+      expiresAt: expiresAt,
+      strategy: strategy,
+    );
+  }
 
   /// Serializes the session payload.
   Map<String, dynamic> toJson({bool includeToken = false}) {

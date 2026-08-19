@@ -60,6 +60,7 @@ void main() {
     expect(issuedAt, isNotNull);
     expect(issuedAt!.isUtc, isTrue);
     expect(jwtIssuedAtUtc('1700000000'), isNull);
+    expect(jwtIssuedAtUtc(999999999999999999), isNull);
   });
 
   test('shouldRefreshJwtByIssuedAt respects update age threshold', () {
@@ -200,6 +201,24 @@ void main() {
           (error) => error.message,
           'message',
           'missing_claim_exp',
+        ),
+      ),
+    );
+  });
+
+  test('JwtVerifier bounds unrepresentable timestamp claims', () async {
+    final claims = _claims(now: DateTime.now())..['exp'] = 999999999999999999;
+    final verifier = JwtVerifier(
+      options: JwtOptions(inlineKeys: [_testJwk], algorithms: const ['HS256']),
+    );
+
+    await expectLater(
+      verifier.verifyToken(_buildToken(claims)),
+      throwsA(
+        isA<JwtAuthException>().having(
+          (error) => error.message,
+          'message',
+          'invalid_claims',
         ),
       ),
     );
@@ -525,6 +544,49 @@ void main() {
     );
   });
 
+  test(
+    'JwtVerifier reports invalid JWKS JSON without leaking parser errors',
+    () async {
+      final token = _buildToken(_claims(now: DateTime.now()));
+      final verifier = JwtVerifier(
+        options: JwtOptions(
+          jwksUri: Uri.parse('https://auth.test/jwks'),
+          algorithms: const ['HS256'],
+        ),
+        httpClient: MockClient((request) async {
+          return http.Response('{not-json', 200);
+        }),
+      );
+
+      expect(
+        verifier.verifyToken(token),
+        throwsA(
+          isA<JwtAuthException>().having(
+            (error) => error.message,
+            'message',
+            'jwks_invalid_response',
+          ),
+        ),
+      );
+    },
+  );
+
+  test('JwtVerifier normalizes signature-library failures', () async {
+    final verifier = JwtVerifier(
+      options: JwtOptions(
+        inlineKeys: <Map<String, dynamic>>[
+          <String, dynamic>{'kty': 'oct', 'k': '%%%invalid%%%'},
+        ],
+        algorithms: const ['HS256'],
+      ),
+    );
+
+    expect(
+      verifier.verifyToken(_buildToken(_claims(now: DateTime.now()))),
+      throwsA(isA<JwtAuthException>()),
+    );
+  });
+
   test('JwtVerifier caches JWKS responses', () async {
     final token = _buildToken(_claims(now: DateTime.now()));
     var requestCount = 0;
@@ -722,6 +784,21 @@ void main() {
       expect(missingSecret, isNull);
     },
   );
+
+  test('verifyAuthJwtSessionToken rejects a token without a subject', () async {
+    const options = JwtSessionOptions(secret: _sharedSecret);
+    final issued = issueAuthJwtToken(
+      options: options,
+      claims: const <String, dynamic>{'email': 'user@example.com'},
+    );
+
+    final verified = await verifyAuthJwtSessionToken(
+      token: issued.token,
+      options: options,
+    );
+
+    expect(verified, isNull);
+  });
 
   test(
     'resolveAuthJwtSessionWithRefresh returns verified session when no refresh is needed',

@@ -11,6 +11,11 @@ import 'users.dart' show authUserFromJwtClaims;
 
 export 'package:jose/jose.dart';
 
+/// Validates application-specific claims after a JWT signature and standard
+/// claims have been verified.
+typedef JwtClaimsValidator =
+    FutureOr<bool> Function(Map<String, dynamic> claims);
+
 /// Attribute key for JWT claims in framework request context stores.
 const String jwtClaimsAttribute = 'auth.jwt.claims';
 
@@ -20,15 +25,25 @@ const String jwtHeadersAttribute = 'auth.jwt.headers';
 /// Attribute key for the JWT subject in framework request context stores.
 const String jwtSubjectAttribute = 'auth.jwt.subject';
 
+/// Claim carrying the per-user JWT session version.
+const String authJwtVersionClaim = 'auth_version';
+
+const int _maxJwksResponseCharacters = 1024 * 1024;
+const int _maxJwksKeys = 128;
+
 /// Parses a JWT `iat` claim value into a UTC timestamp.
 DateTime? jwtIssuedAtUtc(Object? value) {
   if (value is! num) {
     return null;
   }
-  return DateTime.fromMillisecondsSinceEpoch(
-    value.toInt() * 1000,
-    isUtc: true,
-  ).toUtc();
+  try {
+    return DateTime.fromMillisecondsSinceEpoch(
+      value.toInt() * 1000,
+      isUtc: true,
+    ).toUtc();
+  } on ArgumentError {
+    return null;
+  }
 }
 
 /// Returns true when a JWT should be refreshed based on its `iat` claim.
@@ -390,6 +405,7 @@ JwtVerifier? materializeJwtVerifier({
   String header = 'Authorization',
   String bearerPrefix = 'Bearer ',
   http.Client? httpClient,
+  JwtClaimsValidator? validateClaims,
 }) {
   final options = materializeJwtVerifierOptions(
     enabled: enabled,
@@ -408,7 +424,11 @@ JwtVerifier? materializeJwtVerifier({
   if (options == null) {
     return null;
   }
-  return JwtVerifier(options: options, httpClient: httpClient);
+  return JwtVerifier(
+    options: options,
+    httpClient: httpClient,
+    validateClaims: validateClaims,
+  );
 }
 
 /// Extracts and verifies a bearer JWT token from an authorization header.
@@ -473,7 +493,9 @@ Future<AuthVerifiedJwtSession?> verifyAuthJwtSessionToken({
   }
 
   final verifier = JwtVerifier(
-    options: options.toVerifierOptions(),
+    options: options.toVerifierOptions().copyWith(
+      requiredClaims: const <String>['exp', 'sub'],
+    ),
     httpClient: httpClient,
   );
 
@@ -481,6 +503,10 @@ Future<AuthVerifiedJwtSession?> verifyAuthJwtSessionToken({
   try {
     payload = await verifier.verifyToken(token);
   } on JwtAuthException {
+    return null;
+  }
+
+  if (payload.subject == null || payload.subject!.trim().isEmpty) {
     return null;
   }
 
@@ -530,6 +556,8 @@ Future<AuthResolvedJwtSession?> resolveAuthJwtSessionWithRefresh({
     AuthUser user,
   )?
   resolveClaims,
+  FutureOr<bool> Function(Map<String, dynamic> claims, AuthUser user)?
+  validateClaims,
   http.Client? httpClient,
   DateTime? now,
 }) async {
@@ -540,6 +568,16 @@ Future<AuthResolvedJwtSession?> resolveAuthJwtSessionWithRefresh({
   );
   if (verified == null) {
     return null;
+  }
+
+  if (validateClaims != null) {
+    try {
+      if (!await validateClaims(verified.payload.claims, verified.user)) {
+        return null;
+      }
+    } catch (_) {
+      return null;
+    }
   }
 
   var resolvedToken = verified.token;
@@ -678,12 +716,18 @@ class JwtIssuer {
 class JwtVerifier {
   /// Creates a [JwtVerifier] with the given [options] and optional
   /// [httpClient].
-  JwtVerifier({required JwtOptions options, http.Client? httpClient})
-    : _options = options,
-      _httpClient = httpClient ?? http.Client();
+  JwtVerifier({
+    required JwtOptions options,
+    http.Client? httpClient,
+    this.validateClaims,
+  }) : _options = options,
+       _httpClient = httpClient ?? http.Client();
 
   final JwtOptions _options;
   final http.Client _httpClient;
+
+  /// Optional application-specific claim validator.
+  final JwtClaimsValidator? validateClaims;
 
   JsonWebKeyStore? _cachedStore;
   DateTime? _storeExpiry;
@@ -704,16 +748,29 @@ class JwtVerifier {
     }
 
     final keyStore = await _ensureKeyStore();
-    final verified = await jwt.verify(
-      keyStore,
-      allowedArguments: _options.algorithms,
-    );
+    late bool verified;
+    try {
+      verified = await jwt.verify(
+        keyStore,
+        allowedArguments: _options.algorithms,
+      );
+    } on JwtAuthException {
+      rethrow;
+    } catch (_) {
+      throw JwtAuthException('verification_failed');
+    }
     if (!verified) {
       throw JwtAuthException('signature_verification_failed');
     }
 
     final claims = jwt.claims;
-    _validateClaims(claims);
+    try {
+      _validateClaims(claims);
+    } on JwtAuthException {
+      rethrow;
+    } catch (_) {
+      throw JwtAuthException('invalid_claims');
+    }
 
     final segments = serialized.split('.');
     final headerSegment = segments.isNotEmpty ? segments.first : '';
@@ -725,6 +782,17 @@ class JwtVerifier {
         _decodeHeader(headerSegment) ?? <String, dynamic>{},
       ),
     );
+    if (validateClaims != null) {
+      try {
+        if (!await validateClaims!(payload.claims)) {
+          throw JwtAuthException('claims_rejected');
+        }
+      } on JwtAuthException {
+        rethrow;
+      } catch (_) {
+        throw JwtAuthException('claims_validation_failed');
+      }
+    }
     return payload;
   }
 
@@ -740,7 +808,13 @@ class JwtVerifier {
     final store = JsonWebKeyStore();
     var keyCount = 0;
     for (final key in _options.inlineKeys) {
-      store.addKey(JsonWebKey.fromJson(key));
+      try {
+        store.addKey(JsonWebKey.fromJson(key));
+      } on JwtAuthException {
+        rethrow;
+      } catch (_) {
+        throw JwtAuthException('invalid_key_configuration');
+      }
       keyCount += 1;
     }
 
@@ -751,14 +825,38 @@ class JwtVerifier {
       if (response.statusCode != 200) {
         throw JwtAuthException('jwks_fetch_failed');
       }
-      final body = json.decode(response.body) as Map<String, dynamic>;
+      if (response.body.length > _maxJwksResponseCharacters) {
+        throw JwtAuthException('jwks_response_too_large');
+      }
+      late Map<String, dynamic> body;
+      try {
+        final decoded = json.decode(response.body);
+        if (decoded is! Map) {
+          throw const FormatException('JWKS response is not an object');
+        }
+        body = Map<String, dynamic>.from(decoded);
+      } on JwtAuthException {
+        rethrow;
+      } catch (_) {
+        throw JwtAuthException('jwks_invalid_response');
+      }
+
       final keys = body['keys'];
       if (keys is! List) {
         throw JwtAuthException('jwks_missing_keys');
       }
+      if (keys.length > _maxJwksKeys) {
+        throw JwtAuthException('jwks_too_many_keys');
+      }
       for (final entry in keys) {
         if (entry is Map<String, dynamic>) {
-          store.addKey(JsonWebKey.fromJson(entry));
+          try {
+            store.addKey(JsonWebKey.fromJson(entry));
+          } on JwtAuthException {
+            rethrow;
+          } catch (_) {
+            throw JwtAuthException('jwks_invalid_key');
+          }
           keyCount += 1;
         }
       }

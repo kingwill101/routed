@@ -1,23 +1,37 @@
 import 'package:http/http.dart' as http;
 
-import 'adapter.dart';
 import 'authorization.dart';
+import 'browser.dart';
 import 'callbacks.dart';
+import 'feature.dart';
 import 'jwt.dart';
 import 'models.dart';
+import 'password_hasher.dart';
+import 'password_policy.dart';
+import 'password_reset.dart';
 import 'providers.dart';
-import 'verification_token_store.dart';
+import 'rate_limit.dart';
+import 'store.dart';
+
+/// Declares whether an auth store is durable across process restarts.
+enum AuthStoreMode { durable, ephemeral }
 
 /// Framework-agnostic auth runtime options.
 ///
-/// Adapters should map these options onto framework-specific routing and
-/// session integration.
+/// Framework integrations map these options onto routing and session
+/// infrastructure. Persistence is always supplied through [store].
 class AuthOptions<TContext> {
   AuthOptions({
-    required this.providers,
-    this.adapter = const AuthAdapter(),
+    required List<AuthProvider> providers,
+    required this.store,
+    this.storeMode = AuthStoreMode.durable,
+    this.features = const [],
     this.sessionStrategy = AuthSessionStrategy.session,
+    this.rateLimiter,
+    this.browserProtection = const AuthBrowserProtectionOptions(),
+    this.passwordPolicy = const PasswordPolicy(),
     this.jwtOptions = const JwtSessionOptions(secret: ''),
+    PasswordHasher? passwordHasher,
     this.sessionMaxAge,
     this.sessionUpdateAge,
     this.basePath = '/auth',
@@ -26,26 +40,85 @@ class AuthOptions<TContext> {
     this.pkceKey = '_auth.pkce',
     this.nonceKey = '_auth.nonce',
     this.callbackKey = '_auth.callback',
+    this.oauthChallengeTtl = const Duration(minutes: 10),
+    this.passwordResetTtl = const Duration(minutes: 30),
+    this.passwordResetSender,
     this.httpClient,
-    this.tokenStore,
     this.enforceCsrf = true,
     this.exposeJwtTokenInSessionResponse = false,
     this.rbac = const RbacOptions(),
     this.policies = const PolicyOptions(),
     AuthCallbacks<TContext>? callbacks,
-  }) : callbacks = callbacks ?? AuthCallbacks<TContext>();
+  }) : providers = List<AuthProvider>.unmodifiable(providers),
+       passwordHasher = passwordHasher ?? Argon2idPasswordHasher(),
+       callbacks = callbacks ?? AuthCallbacks<TContext>() {
+    validateAuthProviderConfiguration(this.providers);
+    if (store is CallbackAuthStore) {
+      throw ArgumentError(
+        'CallbackAuthStore is a test utility and cannot back AuthOptions; '
+        'provide a durable AuthStore implementation.',
+      );
+    }
+    if (oauthChallengeTtl <= Duration.zero) {
+      throw ArgumentError.value(
+        oauthChallengeTtl,
+        'oauthChallengeTtl',
+        'must be greater than zero',
+      );
+    }
+    if (passwordResetTtl <= Duration.zero) {
+      throw ArgumentError.value(
+        passwordResetTtl,
+        'passwordResetTtl',
+        'must be greater than zero',
+      );
+    }
+    final isEphemeralStore = store is InMemoryAuthStore;
+    if (isEphemeralStore && storeMode != AuthStoreMode.ephemeral) {
+      throw ArgumentError(
+        'InMemoryAuthStore requires AuthStoreMode.ephemeral; '
+        'use a durable AuthStore for production.',
+      );
+    }
+    if (!isEphemeralStore && storeMode == AuthStoreMode.ephemeral) {
+      throw ArgumentError(
+        'AuthStoreMode.ephemeral requires InMemoryAuthStore.',
+      );
+    }
+  }
 
   /// List of configured auth providers.
   final List<AuthProvider> providers;
 
-  /// Adapter used for persistence (users, accounts, sessions).
-  final AuthAdapter adapter;
+  /// Typed feature modules composed into the auth runtime.
+  final List<AuthFeature<TContext>> features;
+
+  /// Typed persistence boundary used by every auth flow.
+  final AuthStore store;
+
+  /// Declares whether [store] is durable or intentionally in-memory.
+  final AuthStoreMode storeMode;
 
   /// Session storage strategy.
   final AuthSessionStrategy sessionStrategy;
 
+  /// Optional policy for throttling externally reachable auth operations.
+  ///
+  /// Framework adapters must invoke this policy at their auth boundaries. The
+  /// Routed adapter does so for all built-in auth routes.
+  final AuthRateLimiter<TContext>? rateLimiter;
+
+  /// Browser origin and Fetch Metadata checks for state-changing auth routes.
+  final AuthBrowserProtectionOptions browserProtection;
+
+  /// Registration and verifier-input limits for built-in credentials.
+  final PasswordPolicy passwordPolicy;
+
   /// JWT configuration when using [AuthSessionStrategy.jwt].
   final JwtSessionOptions jwtOptions;
+
+  /// Password hashing policy used by the built-in credentials flow.
+  final PasswordHasher passwordHasher;
 
   /// Maximum age for auth sessions.
   final Duration? sessionMaxAge;
@@ -71,11 +144,20 @@ class AuthOptions<TContext> {
   /// Session key used to store callback URLs.
   final String callbackKey;
 
+  /// Maximum age of a persisted OAuth authorization challenge.
+  final Duration oauthChallengeTtl;
+
+  /// Maximum age of a persisted password-reset token.
+  final Duration passwordResetTtl;
+
+  /// Application-owned delivery callback for password-reset messages.
+  ///
+  /// Routed registers its built-in password-reset routes when this callback
+  /// is configured. Password resets also rotate the user's JWT version.
+  final AuthPasswordResetSender<TContext>? passwordResetSender;
+
   /// HTTP client used for OAuth calls.
   final http.Client? httpClient;
-
-  /// Token store used for email verification tokens.
-  final AuthVerificationTokenStore? tokenStore;
 
   /// Whether to enforce CSRF checks on sign-in/sign-out.
   final bool enforceCsrf;
@@ -94,11 +176,30 @@ class AuthOptions<TContext> {
   /// Auth callback hooks.
   final AuthCallbacks<TContext> callbacks;
 
+  /// Throws when this configuration intentionally selects ephemeral storage.
+  ///
+  /// Framework adapters should call this during production boot. The default
+  /// [AuthStoreMode.durable] also makes an unannotated [InMemoryAuthStore]
+  /// fail at option construction time.
+  void requireDurableStore() {
+    if (storeMode == AuthStoreMode.ephemeral) {
+      throw StateError(
+        'Ephemeral auth storage is not allowed for production boot.',
+      );
+    }
+  }
+
   AuthOptions<TContext> copyWith({
     List<AuthProvider>? providers,
-    AuthAdapter? adapter,
+    AuthStore? store,
+    AuthStoreMode? storeMode,
+    List<AuthFeature<TContext>>? features,
     AuthSessionStrategy? sessionStrategy,
+    AuthRateLimiter<TContext>? rateLimiter,
+    AuthBrowserProtectionOptions? browserProtection,
+    PasswordPolicy? passwordPolicy,
     JwtSessionOptions? jwtOptions,
+    PasswordHasher? passwordHasher,
     Duration? sessionMaxAge,
     Duration? sessionUpdateAge,
     String? basePath,
@@ -107,8 +208,10 @@ class AuthOptions<TContext> {
     String? pkceKey,
     String? nonceKey,
     String? callbackKey,
+    Duration? oauthChallengeTtl,
+    Duration? passwordResetTtl,
+    AuthPasswordResetSender<TContext>? passwordResetSender,
     http.Client? httpClient,
-    AuthVerificationTokenStore? tokenStore,
     bool? enforceCsrf,
     bool? exposeJwtTokenInSessionResponse,
     RbacOptions? rbac,
@@ -117,9 +220,15 @@ class AuthOptions<TContext> {
   }) {
     return AuthOptions<TContext>(
       providers: providers ?? this.providers,
-      adapter: adapter ?? this.adapter,
+      store: store ?? this.store,
+      storeMode: storeMode ?? this.storeMode,
+      features: features ?? this.features,
       sessionStrategy: sessionStrategy ?? this.sessionStrategy,
+      rateLimiter: rateLimiter ?? this.rateLimiter,
+      browserProtection: browserProtection ?? this.browserProtection,
+      passwordPolicy: passwordPolicy ?? this.passwordPolicy,
       jwtOptions: jwtOptions ?? this.jwtOptions,
+      passwordHasher: passwordHasher ?? this.passwordHasher,
       sessionMaxAge: sessionMaxAge ?? this.sessionMaxAge,
       sessionUpdateAge: sessionUpdateAge ?? this.sessionUpdateAge,
       basePath: basePath ?? this.basePath,
@@ -128,8 +237,10 @@ class AuthOptions<TContext> {
       pkceKey: pkceKey ?? this.pkceKey,
       nonceKey: nonceKey ?? this.nonceKey,
       callbackKey: callbackKey ?? this.callbackKey,
+      oauthChallengeTtl: oauthChallengeTtl ?? this.oauthChallengeTtl,
+      passwordResetTtl: passwordResetTtl ?? this.passwordResetTtl,
+      passwordResetSender: passwordResetSender ?? this.passwordResetSender,
       httpClient: httpClient ?? this.httpClient,
-      tokenStore: tokenStore ?? this.tokenStore,
       enforceCsrf: enforceCsrf ?? this.enforceCsrf,
       exposeJwtTokenInSessionResponse:
           exposeJwtTokenInSessionResponse ??
@@ -142,16 +253,15 @@ class AuthOptions<TContext> {
 }
 
 /// Resolves final auth runtime options by combining base [options] with
-/// adapter/framework overrides and explicitly supplied provider additions.
+/// framework overrides and explicitly supplied provider additions.
 ///
 /// This helper keeps option merge behavior consistent across framework
 /// integrations (for example Routed and Shelf adapters).
 AuthOptions<TContext> resolveAuthOptions<TContext>({
   required AuthOptions<TContext> options,
   Iterable<AuthProvider> configuredProviders = const <AuthProvider>[],
-  AuthAdapter? adapter,
+  AuthStore? store,
   http.Client? httpClient,
-  AuthVerificationTokenStore? tokenStore,
   AuthSessionStrategy? sessionStrategy,
   Duration? sessionMaxAge,
   Duration? sessionUpdateAge,
@@ -162,9 +272,8 @@ AuthOptions<TContext> resolveAuthOptions<TContext>({
   );
   return options.copyWith(
     providers: mergedProviders,
-    adapter: adapter ?? options.adapter,
+    store: store ?? options.store,
     httpClient: options.httpClient ?? httpClient,
-    tokenStore: options.tokenStore ?? tokenStore,
     sessionStrategy: sessionStrategy ?? options.sessionStrategy,
     sessionMaxAge: options.sessionMaxAge ?? sessionMaxAge,
     sessionUpdateAge: options.sessionUpdateAge ?? sessionUpdateAge,

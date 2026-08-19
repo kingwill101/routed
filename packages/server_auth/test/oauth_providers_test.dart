@@ -1,3 +1,8 @@
+import 'dart:convert';
+
+import 'package:crypto/crypto.dart';
+import 'package:http/http.dart' as http;
+import 'package:http/testing.dart';
 import 'package:server_auth/server_auth.dart';
 import 'package:test/test.dart';
 
@@ -595,6 +600,57 @@ void main() {
 
       expect(options.authDateMaxAge, equals(const Duration(minutes: 5)));
     });
+
+    test('requires a fresh, signed callback with a valid user id', () {
+      const botToken = '123456:ABC-DEF1234ghIkl-zyx57W2v1u123ew11';
+      final provider = TelegramProvider(
+        botToken: botToken,
+        botUsername: 'ExampleBot',
+        redirectUri: 'https://example.com/auth/callback/telegram',
+        profile: (profile) => AuthUser(id: profile.id.toString()),
+      );
+      final authDate = DateTime.now().millisecondsSinceEpoch ~/ 1000;
+      final unsigned = <String, String>{
+        'auth_date': '$authDate',
+        'first_name': 'Ada',
+        'id': '123456789',
+      };
+      final dataCheckString = (unsigned.keys.toList()..sort())
+          .map((key) => '$key=${unsigned[key]}')
+          .join('\n');
+      final secretKey = sha256.convert(utf8.encode(botToken)).bytes;
+      final hash = Hmac(
+        sha256,
+        secretKey,
+      ).convert(utf8.encode(dataCheckString)).toString();
+
+      final profile = provider.verifyAndParseCallback({
+        ...unsigned,
+        'hash': hash,
+      });
+      expect(profile.id, equals(123456789));
+
+      expect(
+        () => provider.verifyAndParseCallback({...unsigned, 'hash': hash}),
+        returnsNormally,
+      );
+      expect(
+        () => provider.verifyAndParseCallback({
+          ...unsigned,
+          'auth_date': 'not-a-timestamp',
+          'hash': hash,
+        }),
+        throwsA(isA<TelegramAuthException>()),
+      );
+      expect(
+        () => provider.verifyAndParseCallback({
+          ...unsigned,
+          'id': '0',
+          'hash': hash,
+        }),
+        throwsA(isA<TelegramAuthException>()),
+      );
+    });
   });
 
   group('Provider type assignments', () {
@@ -897,5 +953,44 @@ void main() {
 
       expect(dropbox.userInfoRequest, isNotNull);
     });
+
+    test(
+      'userinfo failures do not expose the upstream response body',
+      () async {
+        final provider = dropboxProvider(
+          DropboxProviderOptions(
+            clientId: 'id',
+            clientSecret: 'secret',
+            redirectUri: 'https://example.com/callback',
+          ),
+        );
+        final token = OAuthTokenResponse(
+          accessToken: 'access-token',
+          tokenType: 'Bearer',
+          expiresIn: 300,
+          raw: const <String, dynamic>{},
+        );
+        final client = MockClient(
+          (_) async => http.Response('upstream-secret-body', 401),
+        );
+
+        await expectLater(
+          provider.userInfoRequest!(token, client, provider.userInfoEndpoint!),
+          throwsA(
+            isA<AuthFlowException>()
+                .having(
+                  (error) => error.code,
+                  'code',
+                  'dropbox_userinfo_failed',
+                )
+                .having(
+                  (error) => error.toString(),
+                  'public message',
+                  isNot(contains('upstream-secret-body')),
+                ),
+          ),
+        );
+      },
+    );
   });
 }

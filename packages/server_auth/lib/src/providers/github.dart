@@ -296,6 +296,8 @@ class GitHubProfile {
 ///
 /// final manager = AuthManager(
 ///   AuthOptions(
+///     store: InMemoryAuthStore(),
+///     storeMode: AuthStoreMode.ephemeral,
 ///     providers: [
 ///       githubProvider(
 ///         GitHubProviderOptions(
@@ -380,11 +382,16 @@ OAuthProvider<GitHubProfile> githubProvider(GitHubProviderOptions options) {
         attributes: profile.toJson(),
       );
     },
-    profileRequest: (_, _, token, httpClient, profile) async {
+    profileRequest: (_, provider, token, httpClient, profile) async {
       if (profile.email != null && profile.email!.isNotEmpty) {
         return profile;
       }
-      final emails = await _loadGitHubEmails(token, httpClient, apiBaseUrl);
+      final emails = await _loadGitHubEmails(
+        token,
+        httpClient,
+        apiBaseUrl,
+        requestTimeout: provider.requestTimeout,
+      );
       if (emails.isEmpty) return profile;
       final primary = emails.firstWhere(
         (entry) => entry.primary && entry.verified,
@@ -398,17 +405,23 @@ OAuthProvider<GitHubProfile> githubProvider(GitHubProviderOptions options) {
 Future<List<GitHubEmail>> _loadGitHubEmails(
   OAuthTokenResponse token,
   http.Client httpClient,
-  String apiBaseUrl,
-) async {
+  String apiBaseUrl, {
+  required Duration requestTimeout,
+}) async {
   try {
-    final response = await httpClient.get(
-      Uri.parse('$apiBaseUrl/user/emails'),
-      headers: {
-        'Authorization': 'Bearer ${token.accessToken}',
-        'User-Agent': 'server_auth',
-      },
-    );
+    final response = await httpClient
+        .get(
+          Uri.parse('$apiBaseUrl/user/emails'),
+          headers: {
+            'Authorization': 'Bearer ${token.accessToken}',
+            'User-Agent': 'server_auth',
+          },
+        )
+        .timeout(requestTimeout);
     if (response.statusCode < 200 || response.statusCode >= 300) {
+      return const <GitHubEmail>[];
+    }
+    if (response.body.length > maxOAuthResponseCharacters) {
       return const <GitHubEmail>[];
     }
     final decoded = jsonDecode(response.body);

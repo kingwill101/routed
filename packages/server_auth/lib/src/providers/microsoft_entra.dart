@@ -102,6 +102,8 @@ enum MicrosoftEntraTenantType {
 ///
 /// final manager = AuthManager(
 ///   AuthOptions(
+///     store: InMemoryAuthStore(),
+///     storeMode: AuthStoreMode.ephemeral,
 ///     providers: [
 ///       microsoftEntraProvider(
 ///         MicrosoftEntraProviderOptions(

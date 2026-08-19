@@ -1,3 +1,4 @@
+import 'package:property_testing/property_testing.dart';
 import 'package:server_auth/server_auth.dart';
 import 'package:test/test.dart';
 
@@ -98,6 +99,24 @@ void main() {
       expect(sanitized, equals('https://app.test/profile'));
     },
   );
+
+  test('sanitizeRedirectUrl rejects user-info on a trusted host', () {
+    final requestUri = Uri.parse('https://app.test/auth/signin');
+    expect(
+      sanitizeRedirectUrl(
+        'https://user:password@app.test/account',
+        requestUri: requestUri,
+      ),
+      isNull,
+    );
+    expect(
+      sanitizeRedirectUrl(
+        'https://user%40example.test@app.test/account',
+        requestUri: requestUri,
+      ),
+      isNull,
+    );
+  });
 
   test('resolveRedirectCandidate applies payload/query precedence', () {
     expect(
@@ -262,4 +281,65 @@ void main() {
       expect(redirected, isFalse);
     },
   );
+
+  test(
+    'property: accepted redirects never escape the request origin',
+    () async {
+      final requestUri = Uri.parse('https://app.example.test/auth/signin');
+      final candidates = Gen.frequency([
+        (4, Chaos.string(minLength: 0, maxLength: 300)),
+        (
+          2,
+          Gen.oneOf<String>([
+            '',
+            '//evil.example.test/steal',
+            'https://evil.example.test/callback',
+            'https://app.example.test.evil.example.test/callback',
+            'https://user:password@app.example.test/account',
+            'javascript:alert(1)',
+            'data:text/html,<script>alert(1)</script>',
+            'file:///etc/passwd',
+            '\r\nLocation: https://evil.example.test',
+          ]),
+        ),
+        (
+          1,
+          Gen.oneOf<String>([
+            '/account',
+            '/settings?tab=security',
+            'https://app.example.test/account',
+            'https://app.example.test:443/settings',
+          ]),
+        ),
+      ]);
+
+      final runner = PropertyTestRunner<String>(candidates, (candidate) {
+        final sanitized = sanitizeRedirectUrl(
+          candidate,
+          requestUri: requestUri,
+        );
+        if (sanitized == null) return;
+
+        final uri = Uri.parse(sanitized);
+        expect(uri.userInfo, isEmpty, reason: candidate);
+        if (uri.isAbsolute) {
+          expect(uri.scheme, equals('https'), reason: candidate);
+          expect(uri.host, equals('app.example.test'), reason: candidate);
+          expect(uri.port, anyOf(0, 443), reason: candidate);
+        } else {
+          expect(uri.host, isEmpty, reason: candidate);
+          expect(sanitized, startsWith('/'), reason: candidate);
+        }
+      }, PropertyConfig(numTests: 250, seed: 20260819));
+
+      final result = await runner.run();
+      expect(result.success, isTrue, reason: _formatResult(result));
+    },
+  );
+}
+
+String _formatResult(PropertyResult result) {
+  if (result.success) return 'All ${result.numTests} tests passed';
+  return 'Property failed after ${result.numTests} tests: '
+      '${result.error}; input=${result.failingInput}; seed=${result.seed}';
 }

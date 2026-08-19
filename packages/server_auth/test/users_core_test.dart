@@ -28,6 +28,23 @@ void main() {
       ),
       equals('user-id'),
     );
+    expect(
+      resolveAuthAccountId(
+        <String, dynamic>{},
+        AuthUser(id: '', email: 'user@test.dev'),
+        fallbackId: () => 'fallback',
+      ),
+      equals('fallback'),
+    );
+    expect(
+      resolveAuthAccountId(
+        <String, dynamic>{},
+        AuthUser(id: '', email: 'user@test.dev'),
+        fallbackId: () => 'fallback',
+        emailVerified: true,
+      ),
+      equals('user@test.dev'),
+    );
   });
 
   test(
@@ -76,6 +93,25 @@ void main() {
         'active': false,
         'locale': 'en',
       }),
+    );
+  });
+
+  test('trims and rejects an empty fallback account identity', () {
+    expect(
+      resolveAuthAccountId(
+        <String, dynamic>{'sub': '  provider-id  '},
+        AuthUser(id: ''),
+        fallbackId: () => 'fallback',
+      ),
+      equals('provider-id'),
+    );
+    expect(
+      () => resolveAuthAccountId(
+        <String, dynamic>{},
+        AuthUser(id: ''),
+        fallbackId: () => '  ',
+      ),
+      throwsStateError,
     );
   });
 
@@ -151,4 +187,39 @@ void main() {
     expect(user.roles, equals(<String>['admin']));
     expect(user.attributes, equals(<String, dynamic>{'team': 'core'}));
   });
+
+  test(
+    'JWT claims redact nested secrets and tolerate malformed claim types',
+    () {
+      final claims = authJwtClaimsForUser(
+        AuthUser(
+          id: 'u1',
+          attributes: const <String, dynamic>{
+            'team': 'core',
+            'passwordHash': 'hidden',
+            'nested': <String, dynamic>{'access_token': 'hidden', 'ok': true},
+          },
+        ),
+      );
+      expect(
+        claims['attributes'],
+        equals(<String, dynamic>{
+          'team': 'core',
+          'nested': <String, dynamic>{'ok': true},
+        }),
+      );
+
+      final user = authUserFromJwtClaims(<String, dynamic>{
+        'sub': 'u1',
+        'roles': <Object?>['admin', 42, null],
+        'attributes': <Object?, Object?>{
+          'team': 'core',
+          'refresh_token': 'hidden',
+          42: 'ignored',
+        },
+      });
+      expect(user.roles, equals(<String>['admin']));
+      expect(user.attributes, equals(<String, dynamic>{'team': 'core'}));
+    },
+  );
 }

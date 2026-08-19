@@ -106,6 +106,8 @@ class TelegramProfile {
 ///
 /// final manager = AuthManager(
 ///   AuthOptions(
+///     store: InMemoryAuthStore(),
+///     storeMode: AuthStoreMode.ephemeral,
 ///     providers: [
 ///       telegramProvider(
 ///         TelegramProviderOptions(
@@ -254,23 +256,34 @@ class TelegramProvider extends AuthProvider with CallbackProvider {
     final hmac = Hmac(sha256, secretKey);
     final expectedHash = hmac.convert(utf8.encode(dataCheckString)).toString();
 
-    if (hash != expectedHash) {
+    if (!constantTimeStringEquals(hash, expectedHash)) {
       throw TelegramAuthException('Invalid hash - authentication failed');
     }
 
     // Check auth_date freshness
     final authDateStr = params['auth_date'];
-    if (authDateStr != null) {
-      final authDate = int.tryParse(authDateStr);
-      if (authDate != null) {
-        final authTime = DateTime.fromMillisecondsSinceEpoch(authDate * 1000);
-        final now = DateTime.now();
-        if (now.difference(authTime) > authDateMaxAge) {
-          throw TelegramAuthException(
-            'Authentication expired - auth_date too old',
-          );
-        }
-      }
+    final authDate = int.tryParse(authDateStr ?? '');
+    if (authDate == null || authDate <= 0) {
+      throw TelegramAuthException('Invalid auth_date');
+    }
+    late final DateTime authTime;
+    try {
+      authTime = DateTime.fromMillisecondsSinceEpoch(
+        authDate * 1000,
+        isUtc: true,
+      );
+    } on ArgumentError {
+      throw TelegramAuthException('Invalid auth_date');
+    }
+    final now = DateTime.now().toUtc();
+    final age = now.difference(authTime);
+    if (age > authDateMaxAge || age < -const Duration(minutes: 1)) {
+      throw TelegramAuthException('Authentication timestamp is invalid');
+    }
+
+    final id = int.tryParse(params['id'] ?? '');
+    if (id == null || id <= 0) {
+      throw TelegramAuthException('Invalid Telegram user id');
     }
 
     return TelegramProfile.fromJson(params.map((k, v) => MapEntry(k, v)));

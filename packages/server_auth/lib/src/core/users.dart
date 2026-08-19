@@ -1,25 +1,38 @@
-import 'models.dart' show AuthUser;
+import 'models.dart' show AuthUser, sanitizeAuthPublicAttributes;
+
+/// Normalizes an email identifier used by built-in auth flows.
+///
+/// Email providers and local credential lookups use a case-insensitive,
+/// trimmed identifier so equivalent inputs address the same account and
+/// verification-token namespace.
+String normalizeAuthEmail(String email) => email.trim().toLowerCase();
 
 /// Resolves a provider account id from profile/user fields.
 String resolveAuthAccountId(
   Map<String, dynamic> profile,
   AuthUser user, {
   required String Function() fallbackId,
+  bool emailVerified = false,
 }) {
   final candidates = <Object?>[
     profile['sub'],
     profile['id'],
     profile['user_id'],
     user.id,
-    user.email,
+    if (emailVerified) user.email,
   ];
 
   for (final value in candidates) {
-    if (value != null && value.toString().isNotEmpty) {
-      return value.toString();
+    final candidate = value?.toString().trim();
+    if (candidate != null && candidate.isNotEmpty) {
+      return candidate;
     }
   }
-  return fallbackId();
+  final fallback = fallbackId().trim();
+  if (fallback.isEmpty) {
+    throw StateError('OAuth provider returned no stable account identity');
+  }
+  return fallback;
 }
 
 /// Merges [incoming] user data into [existing] using auth manager semantics.
@@ -55,13 +68,14 @@ bool authUsersDiffer(AuthUser left, AuthUser right) {
 
 /// Converts [user] into default JWT auth claims.
 Map<String, dynamic> authJwtClaimsForUser(AuthUser user) {
+  final safeUser = user.redacted();
   return {
-    'sub': user.id,
-    'email': user.email,
-    'name': user.name,
-    'image': user.image,
-    'roles': user.roles,
-    'attributes': user.attributes,
+    'sub': safeUser.id,
+    'email': safeUser.email,
+    'name': safeUser.name,
+    'image': safeUser.image,
+    'roles': safeUser.roles,
+    'attributes': safeUser.attributes,
   };
 }
 
@@ -72,9 +86,27 @@ AuthUser authUserFromJwtClaims(Map<String, dynamic> claims) {
     email: claims['email']?.toString(),
     name: claims['name']?.toString(),
     image: claims['image']?.toString(),
-    roles: (claims['roles'] as List?)?.cast<String>() ?? const <String>[],
-    attributes: (claims['attributes'] as Map?)?.cast<String, dynamic>(),
+    roles: _jwtRoles(claims['roles']),
+    attributes: _jwtAttributes(claims['attributes']),
   );
+}
+
+List<String> _jwtRoles(Object? value) {
+  if (value is! List) {
+    return const <String>[];
+  }
+  return value.whereType<String>().toList(growable: false);
+}
+
+Map<String, dynamic> _jwtAttributes(Object? value) {
+  if (value is! Map) {
+    return <String, dynamic>{};
+  }
+  final attributes = <String, dynamic>{
+    for (final entry in value.entries)
+      if (entry.key is String) entry.key as String: entry.value,
+  };
+  return sanitizeAuthPublicAttributes(attributes);
 }
 
 bool _listEquals(List<String> left, List<String> right) {

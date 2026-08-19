@@ -100,6 +100,8 @@ class DropboxProfile {
 ///
 /// final manager = AuthManager(
 ///   AuthOptions(
+///     store: InMemoryAuthStore(),
+///     storeMode: AuthStoreMode.ephemeral,
 ///     providers: [
 ///       dropboxProvider(
 ///         DropboxProviderOptions(
@@ -195,7 +197,10 @@ OAuthProvider<DropboxProfile> dropboxProvider(DropboxProviderOptions options) {
         body: 'null', // Dropbox requires a body, even if null
       );
       if (response.statusCode != 200) {
-        throw Exception('Failed to fetch Dropbox user info: ${response.body}');
+        throw AuthFlowException('dropbox_userinfo_failed');
+      }
+      if (response.body.length > maxOAuthResponseCharacters) {
+        throw AuthFlowException('dropbox_userinfo_failed');
       }
       return json.decode(response.body) as Map<String, dynamic>;
     },

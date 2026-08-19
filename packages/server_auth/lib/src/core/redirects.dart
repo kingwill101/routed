@@ -33,6 +33,13 @@ String? sanitizeRedirectUrl(
     return null;
   }
 
+  // User-info is not part of a safe application redirect. Reject it even
+  // when the host happens to match, because credentials embedded in a URL
+  // can be exposed through logs, history, referrers, or intermediary tooling.
+  if (uri.userInfo.isNotEmpty) {
+    return null;
+  }
+
   if (!uri.isAbsolute) {
     // Reject protocol-relative URLs (`//evil.test/path`): they parse with
     // an empty scheme but carry a host, and browsers resolve them as

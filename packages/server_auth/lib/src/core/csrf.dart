@@ -1,3 +1,5 @@
+import 'tokens.dart' show constantTimeStringEquals;
+
 /// Returns an existing CSRF token or generates one when missing.
 String resolveCsrfToken({
   required String? existingToken,
@@ -23,5 +25,6 @@ bool validateCsrfToken({
     return false;
   }
   final presented = headerToken ?? formToken;
-  return presented != null && presented == expectedToken;
+  return presented != null &&
+      constantTimeStringEquals(expectedToken, presented);
 }

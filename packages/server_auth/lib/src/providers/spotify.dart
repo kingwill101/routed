@@ -163,6 +163,8 @@ class SpotifyFollowers {
 ///
 /// final manager = AuthManager(
 ///   AuthOptions(
+///     store: InMemoryAuthStore(),
+///     storeMode: AuthStoreMode.ephemeral,
 ///     providers: [
 ///       spotifyProvider(
 ///         SpotifyProviderOptions(

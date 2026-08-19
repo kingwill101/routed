@@ -1,13 +1,22 @@
 import 'dart:async';
 
 import 'package:http/http.dart' as http;
-import 'adapter.dart';
 import 'exceptions.dart' show AuthFlowException;
 import 'jwt.dart' show JwtOptions, JwtVerifier;
 import 'models.dart';
 import 'oauth.dart';
-import 'tokens.dart' show pkceS256CodeChallenge, secureRandomToken;
-import 'users.dart' show authUsersDiffer, mergeAuthUser, resolveAuthAccountId;
+import 'oauth_challenge_store.dart';
+import 'password_hasher.dart';
+import 'password_policy.dart';
+import 'store.dart';
+import 'tokens.dart'
+    show constantTimeStringEquals, pkceS256CodeChallenge, secureRandomToken;
+import 'users.dart'
+    show
+        authUsersDiffer,
+        mergeAuthUser,
+        normalizeAuthEmail,
+        resolveAuthAccountId;
 import 'verification_token_store.dart';
 
 /// Framework-specific auth callback context.
@@ -50,10 +59,11 @@ typedef AuthContext = dynamic;
 /// Credentials provider configuration.
 ///
 /// Provide `authorize` to validate username/email/password input. When omitted,
-/// the `AuthAdapter.verifyCredentials` hook is used.
+/// the configured password credential record store and [PasswordHasher] are
+/// used.
 ///
 /// Provide `register` to create new users. When omitted, the
-/// `AuthAdapter.registerCredentials` hook is used.
+/// configured password credential record store and [PasswordHasher] are used.
 /// {@endtemplate}
 
 /// Supported provider kinds.
@@ -154,34 +164,70 @@ typedef CredentialsRegister =
       AuthCredentials credentials,
     );
 
-/// Resolves credential sign-in via provider callback or adapter fallback.
+/// Resolves credential sign-in via provider callback or password records.
 Future<AuthUser?> authorizeCredentialsSignIn({
-  required AuthAdapter adapter,
+  required AuthStore store,
+  required PasswordHasher passwordHasher,
   required CredentialsProvider provider,
   required AuthContext context,
   required AuthCredentials credentials,
+  PasswordPolicy passwordPolicy = const PasswordPolicy(),
 }) async {
   if (provider.authorize != null) {
-    return Future.sync(
+    final user = await Future.sync(
       () => provider.authorize!(context, provider, credentials),
     );
+    return _usableAuthUser(user);
   }
-  return Future.sync(() => adapter.verifyCredentials(credentials));
+  final identifier = _credentialIdentifier(credentials);
+  final password = credentials.password;
+  if (identifier == null ||
+      password == null ||
+      password.isEmpty ||
+      !passwordPolicy.allowsAuthentication(password)) {
+    return null;
+  }
+  final credential = await Future.sync(
+    () => store.credentials.findByIdentifier(identifier),
+  );
+  if (credential == null || !credential.enabled) {
+    return null;
+  }
+  final verification = passwordHasher.verify(password, credential.passwordHash);
+  if (!verification.matches) {
+    return null;
+  }
+  if (verification.needsRehash) {
+    await Future.sync(
+      () => store.credentials.update(
+        credential.copyWith(
+          passwordHash: passwordHasher.hash(password),
+          updatedAt: DateTime.now().toUtc(),
+        ),
+      ),
+    );
+  }
+  final user = await Future.sync(() => store.users.findById(credential.userId));
+  return _usableAuthUser(user);
 }
 
 /// Resolves credential sign-in and throws [AuthFlowException] when rejected.
 Future<AuthUser> requireAuthorizedCredentialsSignIn({
-  required AuthAdapter adapter,
+  required AuthStore store,
+  required PasswordHasher passwordHasher,
   required CredentialsProvider provider,
   required AuthContext context,
   required AuthCredentials credentials,
+  PasswordPolicy passwordPolicy = const PasswordPolicy(),
   String invalidCode = 'invalid_credentials',
 }) async {
   final user = await authorizeCredentialsSignIn(
-    adapter: adapter,
+    store: store,
+    passwordHasher: passwordHasher,
     provider: provider,
     context: context,
     credentials: credentials,
+    passwordPolicy: passwordPolicy,
   );
   if (user == null) {
     throw AuthFlowException(invalidCode);
@@ -189,38 +235,88 @@ Future<AuthUser> requireAuthorizedCredentialsSignIn({
   return user;
 }
 
-/// Resolves credential registration via provider callback or adapter fallback.
+/// Resolves credential registration via provider callback or password records.
 Future<AuthUser?> authorizeCredentialsRegistration({
-  required AuthAdapter adapter,
+  required AuthStore store,
+  required PasswordHasher passwordHasher,
   required CredentialsProvider provider,
   required AuthContext context,
   required AuthCredentials credentials,
+  PasswordPolicy passwordPolicy = const PasswordPolicy(),
 }) async {
   if (provider.register != null) {
-    return Future.sync(
+    final user = await Future.sync(
       () => provider.register!(context, provider, credentials),
     );
+    return _usableAuthUser(user);
   }
-  return Future.sync(() => adapter.registerCredentials(credentials));
+  final identifier = _credentialIdentifier(credentials);
+  final password = credentials.password;
+  if (identifier == null ||
+      password == null ||
+      passwordPolicy.validateRegistration(password) != null) {
+    return null;
+  }
+  final now = DateTime.now().toUtc();
+  final normalizedEmail = credentials.email == null
+      ? null
+      : normalizeAuthEmail(credentials.email!);
+  final user = AuthUser(
+    id: secureRandomToken(length: 16),
+    email: normalizedEmail == null || normalizedEmail.isEmpty
+        ? null
+        : normalizedEmail,
+    name: credentials.username?.trim() ?? normalizedEmail,
+  );
+  final credential = AuthPasswordCredential(
+    id: secureRandomToken(length: 16),
+    userId: user.id,
+    identifier: identifier,
+    passwordHash: passwordHasher.hash(password),
+    createdAt: now,
+    updatedAt: now,
+  );
+  return Future.sync(() => store.credentials.register(user, credential));
 }
 
 /// Resolves credential registration and throws [AuthFlowException] when
 /// registration fails.
 Future<AuthUser> requireAuthorizedCredentialsRegistration({
-  required AuthAdapter adapter,
+  required AuthStore store,
+  required PasswordHasher passwordHasher,
   required CredentialsProvider provider,
   required AuthContext context,
   required AuthCredentials credentials,
+  PasswordPolicy passwordPolicy = const PasswordPolicy(),
   String invalidCode = 'registration_failed',
 }) async {
   final user = await authorizeCredentialsRegistration(
-    adapter: adapter,
+    store: store,
+    passwordHasher: passwordHasher,
     provider: provider,
     context: context,
     credentials: credentials,
+    passwordPolicy: passwordPolicy,
   );
   if (user == null) {
     throw AuthFlowException(invalidCode);
+  }
+  return user;
+}
+
+String? _credentialIdentifier(AuthCredentials credentials) {
+  final email = credentials.email;
+  final username = credentials.username;
+  final identifier = email == null || normalizeAuthEmail(email).isEmpty
+      ? username
+      : normalizeAuthEmail(email);
+  final normalized = identifier?.trim();
+  return normalized == null || normalized.isEmpty ? null : normalized;
+}
+
+AuthUser? _usableAuthUser(AuthUser? user) {
+  if (user == null || user.id.trim().isEmpty) {
+    return null;
   }
   return user;
 }
@@ -245,6 +341,34 @@ class AuthProvider {
   /// Summary payload used by `/auth/providers`.
   Map<String, dynamic> toJson() {
     return {'id': id, 'name': name, 'type': type.name};
+  }
+
+  /// Creates a provider metadata projection safe for events and audit logs.
+  ///
+  /// OAuth client credentials and other provider implementation details are
+  /// intentionally not copied into the projection.
+  AuthProvider redacted() => AuthProvider(id: id, name: name, type: type);
+}
+
+/// Validates the provider identities used by auth routes and persistence.
+///
+/// Provider IDs are used as route parameters, session/challenge namespaces,
+/// and persistence keys. They must therefore be non-empty, already trimmed,
+/// and unique within one auth runtime.
+void validateAuthProviderConfiguration(Iterable<AuthProvider> providers) {
+  final ids = <String>{};
+  for (final provider in providers) {
+    final id = provider.id;
+    if (id.trim().isEmpty || id != id.trim()) {
+      throw ArgumentError.value(
+        id,
+        'providers',
+        'provider IDs must be non-empty and trimmed',
+      );
+    }
+    if (!ids.add(id)) {
+      throw ArgumentError.value(id, 'providers', 'provider IDs must be unique');
+    }
   }
 }
 
@@ -290,9 +414,13 @@ List<AuthProvider> mergeAuthProvidersById(
   Iterable<AuthProvider> base,
   Iterable<AuthProvider> additional,
 ) {
-  final merged = <AuthProvider>[...base];
+  final baseProviders = <AuthProvider>[...base];
+  final additionalProviders = <AuthProvider>[...additional];
+  validateAuthProviderConfiguration(baseProviders);
+  validateAuthProviderConfiguration(additionalProviders);
+  final merged = <AuthProvider>[...baseProviders];
   final ids = merged.map((provider) => provider.id).toSet();
-  for (final provider in additional) {
+  for (final provider in additionalProviders) {
     if (!ids.contains(provider.id)) {
       merged.add(provider);
       ids.add(provider.id);
@@ -369,10 +497,35 @@ void ensureOAuthStateMatches({
   required String? expectedState,
   required String? receivedState,
 }) {
-  if (expectedState == null || expectedState != receivedState) {
+  if (expectedState == null ||
+      receivedState == null ||
+      !constantTimeStringEquals(expectedState, receivedState)) {
     throw AuthFlowException('invalid_state');
   }
 }
+
+const Set<String> _oauthAuthorizationReservedParameters = <String>{
+  'response_type',
+  'client_id',
+  'redirect_uri',
+  'state',
+  'nonce',
+  'scope',
+  'code_challenge',
+  'code_challenge_method',
+  'callbackUrl',
+};
+
+const Set<String> _oauthTokenReservedParameters = <String>{
+  'grant_type',
+  'code',
+  'redirect_uri',
+  'scope',
+  'code_verifier',
+  'client_id',
+  'client_secret',
+  'refresh_token',
+};
 
 /// Builds OAuth authorization query parameters for [provider].
 Map<String, String> buildOAuthAuthorizationParameters<TProfile extends Object>(
@@ -384,6 +537,9 @@ Map<String, String> buildOAuthAuthorizationParameters<TProfile extends Object>(
 }) {
   final codeChallengeMethod = codeChallenge == null ? null : 'S256';
   final params = <String, String>{
+    for (final entry in provider.authorizationParams.entries)
+      if (!_oauthAuthorizationReservedParameters.contains(entry.key))
+        entry.key: entry.value,
     'response_type': 'code',
     'client_id': provider.clientId,
     'redirect_uri': provider.redirectUri,
@@ -392,7 +548,6 @@ Map<String, String> buildOAuthAuthorizationParameters<TProfile extends Object>(
     if (provider.scopes.isNotEmpty) 'scope': provider.scopes.join(' '),
     'code_challenge': ?codeChallenge,
     'code_challenge_method': ?codeChallengeMethod,
-    ...provider.authorizationParams,
   };
   if (callbackUrl != null && callbackUrl.isNotEmpty) {
     params['callbackUrl'] = callbackUrl;
@@ -467,6 +622,10 @@ AuthOAuthAuthorizationStart prepareOAuthAuthorizationStart<
 }
 
 /// Prepares and persists OAuth authorization state for framework adapters.
+///
+/// When [challengeStore] is provided, state, PKCE, nonce, and callback values
+/// are kept in the typed one-time challenge store. Otherwise the legacy
+/// session callbacks are used for adapters that have not adopted that store.
 Future<AuthOAuthAuthorizationResolution>
 resolveOAuthAuthorizationStart<TContext, TProfile extends Object>({
   required TContext context,
@@ -476,14 +635,24 @@ resolveOAuthAuthorizationStart<TContext, TProfile extends Object>({
   String nonceKey = '_auth.nonce',
   required String callbackKey,
   required void Function(String key, String value) writeSession,
+  AuthOAuthChallengeStore? challengeStore,
+  Duration challengeTtl = const Duration(minutes: 10),
   String? callbackUrl,
 }) async {
+  if (challengeStore != null && challengeTtl <= Duration.zero) {
+    throw ArgumentError.value(challengeTtl, 'challengeTtl');
+  }
   final start = prepareOAuthAuthorizationStart(
     provider,
     callbackUrl: callbackUrl,
   );
 
-  writeSession(authProviderStateSessionKey(stateKey, provider.id), start.state);
+  if (challengeStore == null) {
+    writeSession(
+      authProviderStateSessionKey(stateKey, provider.id),
+      start.state,
+    );
+  }
 
   if (provider.onStateGenerated != null) {
     await Future.sync(
@@ -491,25 +660,40 @@ resolveOAuthAuthorizationStart<TContext, TProfile extends Object>({
     );
   }
 
-  if (start.codeVerifier != null) {
-    writeSession(
-      authProviderPkceSessionKey(pkceKey, provider.id),
-      start.codeVerifier!,
+  if (challengeStore != null) {
+    await Future.sync(
+      () => challengeStore.save(
+        AuthOAuthChallenge(
+          providerId: provider.id,
+          state: start.state,
+          codeVerifier: start.codeVerifier,
+          nonce: start.nonce,
+          callbackUrl: callbackUrl,
+          expiresAt: DateTime.now().toUtc().add(challengeTtl),
+        ),
+      ),
     );
-  }
+  } else {
+    if (start.codeVerifier != null) {
+      writeSession(
+        authProviderPkceSessionKey(pkceKey, provider.id),
+        start.codeVerifier!,
+      );
+    }
 
-  if (start.nonce != null) {
-    writeSession(
-      authProviderNonceSessionKey(nonceKey, provider.id),
-      start.nonce!,
-    );
-  }
+    if (start.nonce != null) {
+      writeSession(
+        authProviderNonceSessionKey(nonceKey, provider.id),
+        start.nonce!,
+      );
+    }
 
-  if (callbackUrl != null && callbackUrl.isNotEmpty) {
-    writeSession(
-      authProviderCallbackSessionKey(callbackKey, provider.id),
-      callbackUrl,
-    );
+    if (callbackUrl != null && callbackUrl.isNotEmpty) {
+      writeSession(
+        authProviderCallbackSessionKey(callbackKey, provider.id),
+        callbackUrl,
+      );
+    }
   }
 
   return AuthOAuthAuthorizationResolution(
@@ -558,7 +742,11 @@ exchangeOAuthAuthorizationCode<TProfile extends Object>(
     scope: scope,
     additionalParameters: provider.tokenParams.isEmpty
         ? null
-        : provider.tokenParams,
+        : <String, String>{
+            for (final entry in provider.tokenParams.entries)
+              if (!_oauthTokenReservedParameters.contains(entry.key))
+                entry.key: entry.value,
+          },
   );
 }
 
@@ -571,7 +759,7 @@ AuthAccount buildOAuthAuthAccount({
   required Map<String, dynamic> metadata,
   DateTime? expiresAt,
 }) {
-  return AuthAccount(
+  final account = AuthAccount(
     providerId: providerId,
     providerAccountId: providerAccountId,
     userId: userId,
@@ -580,47 +768,39 @@ AuthAccount buildOAuthAuthAccount({
     expiresAt: expiresAt,
     metadata: metadata,
   );
+  validateAuthAccountForLink(account);
+  return account;
 }
 
-/// Consumes an email verification token from adapter or fallback store.
-///
-/// Tokens are persisted to both stores, so a successful adapter consumption
-/// also removes the fallback copy to keep the token single-use.
+/// Consumes an email verification token from the configured typed store.
 Future<AuthVerificationToken?> consumeAuthVerificationToken({
-  required AuthAdapter adapter,
-  required AuthVerificationTokenStore tokenStore,
+  required AuthStore store,
+  AuthVerificationTokenStore? tokenStore,
   required String identifier,
   required String token,
 }) async {
-  final fromAdapter = await Future.sync(
-    () => adapter.useVerificationToken(identifier, token),
-  );
-  if (fromAdapter != null) {
-    // Drop the mirrored fallback copy so a replayed link cannot consume it.
-    await Future.sync(() => tokenStore.delete(identifier));
-    return fromAdapter;
-  }
-  return Future.sync(() => tokenStore.use(identifier, token));
+  final tokens = tokenStore ?? store.verificationTokens;
+  return Future.sync(() => tokens.consume(identifier, token));
 }
 
-/// Deletes existing verification tokens from adapter and fallback store.
+/// Deletes existing verification tokens from the configured typed store.
 Future<void> clearAuthVerificationTokens({
-  required AuthAdapter adapter,
-  required AuthVerificationTokenStore tokenStore,
+  required AuthStore store,
+  AuthVerificationTokenStore? tokenStore,
   required String identifier,
 }) async {
-  await Future.sync(() => adapter.deleteVerificationTokens(identifier));
-  await Future.sync(() => tokenStore.delete(identifier));
+  final tokens = tokenStore ?? store.verificationTokens;
+  await Future.sync(() => tokens.delete(identifier));
 }
 
-/// Persists a verification token in adapter and fallback store.
+/// Persists a verification token in the configured typed store.
 Future<void> persistAuthVerificationToken({
-  required AuthAdapter adapter,
-  required AuthVerificationTokenStore tokenStore,
+  required AuthStore store,
+  AuthVerificationTokenStore? tokenStore,
   required AuthVerificationToken verification,
 }) async {
-  await Future.sync(() => adapter.saveVerificationToken(verification));
-  await Future.sync(() => tokenStore.save(verification));
+  final tokens = tokenStore ?? store.verificationTokens;
+  await Future.sync(() => tokens.save(verification));
 }
 
 /// Prepared payload for email verification sign-in flows.
@@ -649,23 +829,31 @@ AuthEmailVerificationPayload prepareAuthEmailVerificationPayload({
   String Function()? generateToken,
   DateTime? now,
 }) {
+  final normalizedEmail = normalizeAuthEmail(email);
   final tokenGenerator = provider.tokenGenerator ?? generateToken;
   final token = tokenGenerator?.call() ?? secureRandomToken();
+  if (token.trim().isEmpty) {
+    throw ArgumentError.value(
+      token,
+      'token',
+      'must be non-empty when generated for email verification',
+    );
+  }
   final current = now ?? DateTime.now();
   final expiresAt = current.add(provider.tokenExpiry);
   final verification = AuthVerificationToken(
-    identifier: email,
+    identifier: normalizedEmail,
     token: token,
     expiresAt: expiresAt,
   );
   final request = AuthEmailRequest(
-    email: email,
+    email: normalizedEmail,
     token: token,
     callbackUrl: callbackUrl,
     expiresAt: expiresAt,
   );
   final session = AuthSession(
-    user: AuthUser(id: '', email: email),
+    user: AuthUser(id: '', email: normalizedEmail),
     expiresAt: expiresAt,
     strategy: sessionStrategy,
   );
@@ -688,24 +876,26 @@ class AuthEmailUserResolution {
 
 /// Loads an existing user by [email] or creates a new record.
 Future<AuthEmailUserResolution> resolveAuthUserByEmailOrCreate({
-  required AuthAdapter adapter,
+  required AuthStore store,
   required String email,
 }) async {
-  final existing = await Future.sync(() => adapter.getUserByEmail(email));
-  if (existing != null) {
-    return AuthEmailUserResolution(user: existing, isNewUser: false);
-  }
-  final created = await Future.sync(
-    () => adapter.createUser(AuthUser(id: email, email: email)),
+  final normalizedEmail = normalizeAuthEmail(email);
+  final result = await Future.sync(
+    () => store.users.createOrFindByEmail(
+      AuthUser(id: normalizedEmail, email: normalizedEmail),
+    ),
   );
-  return AuthEmailUserResolution(user: created, isNewUser: true);
+  if (result.user.id.trim().isEmpty) {
+    throw AuthFlowException('user_resolution_failed');
+  }
+  return AuthEmailUserResolution(user: result.user, isNewUser: result.created);
 }
 
 /// Starts an email verification sign-in flow and dispatches the provider
 /// verification request.
 Future<AuthEmailVerificationPayload> startAuthEmailSignIn<TContext>({
-  required AuthAdapter adapter,
-  required AuthVerificationTokenStore tokenStore,
+  required AuthStore store,
+  AuthVerificationTokenStore? tokenStore,
   required EmailProvider provider,
   required TContext context,
   required String email,
@@ -716,15 +906,16 @@ Future<AuthEmailVerificationPayload> startAuthEmailSignIn<TContext>({
   String? callbackKey,
   DateTime? now,
 }) async {
+  final normalizedEmail = normalizeAuthEmail(email);
   await clearAuthVerificationTokens(
-    adapter: adapter,
+    store: store,
     tokenStore: tokenStore,
-    identifier: email,
+    identifier: normalizedEmail,
   );
 
   final payload = prepareAuthEmailVerificationPayload(
     provider: provider,
-    email: email,
+    email: normalizedEmail,
     callbackUrl: callbackUrl,
     sessionStrategy: sessionStrategy,
     generateToken: generateToken,
@@ -736,7 +927,7 @@ Future<AuthEmailVerificationPayload> startAuthEmailSignIn<TContext>({
   }
 
   await persistAuthVerificationToken(
-    adapter: adapter,
+    store: store,
     tokenStore: tokenStore,
     verification: payload.verification,
   );
@@ -765,17 +956,31 @@ class AuthEmailVerificationSignInResolution {
 /// Returns `null` when the token cannot be consumed.
 Future<AuthEmailVerificationSignInResolution?>
 resolveAuthEmailVerificationSignIn({
-  required AuthAdapter adapter,
-  required AuthVerificationTokenStore tokenStore,
+  required AuthStore store,
+  AuthVerificationTokenStore? tokenStore,
   required String email,
   required String token,
   String? callbackKey,
   String? Function(String key)? readSession,
+
+  /// A browser-bound copy of the verification token, supplied by the
+  /// framework adapter (for example from an HttpOnly state cookie).
+  String? expectedBrowserToken,
+
+  /// Requires the adapter to provide a browser-bound token before consuming
+  /// the one-time verification token.
+  bool requireBrowserToken = false,
 }) async {
+  final normalizedEmail = normalizeAuthEmail(email);
+  if (requireBrowserToken &&
+      (expectedBrowserToken == null ||
+          !constantTimeStringEquals(expectedBrowserToken, token))) {
+    return null;
+  }
   final consumed = await consumeAuthVerificationToken(
-    adapter: adapter,
+    store: store,
     tokenStore: tokenStore,
-    identifier: email,
+    identifier: normalizedEmail,
     token: token,
   );
   if (consumed == null) {
@@ -783,8 +988,8 @@ resolveAuthEmailVerificationSignIn({
   }
 
   final userResolution = await resolveAuthUserByEmailOrCreate(
-    adapter: adapter,
-    email: email,
+    store: store,
+    email: normalizedEmail,
   );
   final callbackUrl = callbackKey == null || readSession == null
       ? null
@@ -848,7 +1053,7 @@ Future<Map<String, dynamic>> loadOAuthProfile<TProfile extends Object>(
           httpClient,
           provider.userInfoEndpoint!,
         ),
-      );
+      ).timeout(provider.requestTimeout);
     } catch (_) {
       throw AuthFlowException('userinfo_failed');
     }
@@ -859,7 +1064,7 @@ Future<Map<String, dynamic>> loadOAuthProfile<TProfile extends Object>(
       provider,
       httpClient: httpClient,
     ).fetchUserInfo(provider.userInfoEndpoint!, token.accessToken);
-  } on OAuth2Exception {
+  } catch (_) {
     throw AuthFlowException('userinfo_failed');
   }
 }
@@ -906,6 +1111,22 @@ class AuthOAuthCallbackSignInResolution {
   final String? callbackUrl;
 }
 
+/// Atomically links an OAuth account and rejects a canonical link owned by a
+/// different user.
+Future<AuthAccount> linkOAuthAccountOrThrow({
+  required AuthStore store,
+  required AuthAccount account,
+}) async {
+  validateAuthAccountForLink(account);
+  final linkedAccount = await Future.sync(() => store.accounts.link(account));
+  if (linkedAccount.providerId != account.providerId ||
+      linkedAccount.providerAccountId != account.providerAccountId ||
+      linkedAccount.userId != account.userId) {
+    throw AuthFlowException('account_link_conflict');
+  }
+  return linkedAccount;
+}
+
 /// Resolves OAuth-mapped users against existing account/email records.
 ///
 /// [emailVerified] indicates whether the provider asserted ownership of the
@@ -913,17 +1134,32 @@ class AuthOAuthCallbackSignInResolution {
 /// `email_verified`). Email-based linking is only attempted when it is true,
 /// so an unverified provider email can never take over a local account.
 Future<AuthOAuthUserResolution> resolveOAuthUserForAccount({
-  required AuthAdapter adapter,
+  required AuthStore store,
   required String providerId,
   required String accountId,
   required AuthUser mappedUser,
   bool emailVerified = false,
 }) async {
+  final normalizedProviderId = providerId.trim();
+  final normalizedAccountId = accountId.trim();
+  if (normalizedProviderId.isEmpty) {
+    throw ArgumentError.value(providerId, 'providerId', 'must be non-empty');
+  }
+  if (normalizedAccountId.isEmpty) {
+    throw ArgumentError.value(accountId, 'accountId', 'must be non-empty');
+  }
   final existingAccount = await Future.sync(
-    () => adapter.getAccount(providerId, accountId),
+    () => store.accounts.find(normalizedProviderId, normalizedAccountId),
   );
 
-  var resolvedUser = mappedUser;
+  final normalizedMappedUser = _ensureAuthUserId(
+    _normalizeAuthUserEmail(mappedUser),
+    normalizedAccountId,
+  );
+  final trustedMappedUser = emailVerified
+      ? normalizedMappedUser
+      : _withoutAuthEmail(normalizedMappedUser);
+  var resolvedUser = trustedMappedUser;
   var isNewUser = false;
   var userUpdated = false;
 
@@ -931,39 +1167,46 @@ Future<AuthOAuthUserResolution> resolveOAuthUserForAccount({
   AuthUser? linkedUser;
   if (existingAccount != null && existingAccount.userId != null) {
     linkedUser = await Future.sync(
-      () => adapter.getUserById(existingAccount.userId!),
+      () => store.users.findById(existingAccount.userId!),
     );
-  }
-
-  // Email matching is only allowed when the provider verified the address,
-  // preventing account takeover via unverified OAuth emails.
-  AuthUser? emailUser;
-  if (linkedUser == null && emailVerified) {
-    final email = mappedUser.email;
-    if (email != null && email.isNotEmpty) {
-      emailUser = await Future.sync(() => adapter.getUserByEmail(email));
-    }
   }
 
   if (linkedUser != null) {
     resolvedUser = linkedUser;
-  } else if (emailUser != null) {
-    resolvedUser = emailUser;
+  } else if (emailVerified &&
+      normalizedMappedUser.email != null &&
+      normalizedMappedUser.email!.isNotEmpty) {
+    // Email matching is only allowed when the provider verified the address,
+    // preventing account takeover via unverified OAuth emails. The store
+    // operation is atomic so concurrent callbacks cannot create duplicates.
+    final result = await Future.sync(
+      () => store.users.createOrFindByEmail(trustedMappedUser),
+    );
+    resolvedUser = result.user;
+    isNewUser = result.created;
   } else {
     // No matching record: persist the mapped user. This runs even when the
     // mapped user carries a non-empty provider ID (Discord, GitHub, ...)
     // so first-time OAuth users are never left unpersisted.
-    resolvedUser = await Future.sync(() => adapter.createUser(mappedUser));
+    resolvedUser = await Future.sync(
+      () => store.users.create(trustedMappedUser),
+    );
     isNewUser = true;
   }
 
   if (!isNewUser) {
-    final mergedUser = mergeAuthUser(resolvedUser, mappedUser);
+    final mergedUser = mergeAuthUser(resolvedUser, trustedMappedUser);
     if (authUsersDiffer(resolvedUser, mergedUser)) {
-      final stored = await Future.sync(() => adapter.updateUser(mergedUser));
-      resolvedUser = stored ?? mergedUser;
-      userUpdated = true;
+      final stored = await Future.sync(() => store.users.update(mergedUser));
+      if (stored != null) {
+        resolvedUser = stored;
+        userUpdated = true;
+      }
     }
+  }
+
+  if (resolvedUser.id.trim().isEmpty) {
+    throw AuthFlowException('user_resolution_failed');
   }
 
   return AuthOAuthUserResolution(
@@ -973,10 +1216,56 @@ Future<AuthOAuthUserResolution> resolveOAuthUserForAccount({
   );
 }
 
+AuthUser _ensureAuthUserId(AuthUser user, String fallbackId) {
+  if (user.id.trim().isNotEmpty) {
+    return user;
+  }
+  return AuthUser(
+    id: fallbackId,
+    email: user.email,
+    name: user.name,
+    image: user.image,
+    roles: user.roles,
+    attributes: user.attributes,
+  );
+}
+
+AuthUser _normalizeAuthUserEmail(AuthUser user) {
+  final email = user.email;
+  if (email == null) {
+    return user;
+  }
+  final normalized = normalizeAuthEmail(email);
+  if (normalized == email) {
+    return user;
+  }
+  return AuthUser(
+    id: user.id,
+    email: normalized,
+    name: user.name,
+    image: user.image,
+    roles: user.roles,
+    attributes: user.attributes,
+  );
+}
+
+AuthUser _withoutAuthEmail(AuthUser user) {
+  if (user.email == null) {
+    return user;
+  }
+  return AuthUser(
+    id: user.id,
+    name: user.name,
+    image: user.image,
+    roles: user.roles,
+    attributes: user.attributes,
+  );
+}
+
 /// Resolves OAuth callback payloads into user/account/profile sign-in data.
 Future<AuthOAuthSignInResolution>
 resolveOAuthSignInForProvider<TContext, TProfile extends Object>({
-  required AuthAdapter adapter,
+  required AuthStore store,
   required TContext context,
   required OAuthProvider<TProfile> provider,
   required String code,
@@ -985,12 +1274,17 @@ resolveOAuthSignInForProvider<TContext, TProfile extends Object>({
   required http.Client httpClient,
   String Function()? fallbackAccountId,
 }) async {
-  final tokenResponse = await exchangeOAuthAuthorizationCode(
-    provider,
-    code: code,
-    codeVerifier: codeVerifier,
-    httpClient: httpClient,
-  );
+  late OAuthTokenResponse tokenResponse;
+  try {
+    tokenResponse = await exchangeOAuthAuthorizationCode(
+      provider,
+      code: code,
+      codeVerifier: codeVerifier,
+      httpClient: httpClient,
+    );
+  } catch (_) {
+    throw AuthFlowException('token_exchange_failed');
+  }
 
   final rawProfile = await loadOAuthProfile(
     provider,
@@ -998,30 +1292,42 @@ resolveOAuthSignInForProvider<TContext, TProfile extends Object>({
     httpClient: httpClient,
     oidcNonce: oidcNonce,
   );
-  final parsedProfile = provider.parseProfile(rawProfile);
-  final enrichedProfile = await Future.sync(
-    () => provider.enrichProfile(
-      context,
-      tokenResponse,
-      httpClient,
-      parsedProfile,
-    ),
-  );
-  final mappedUser = provider.mapProfile(enrichedProfile);
-  final overrideUser = await Future.sync(
-    () => provider.overrideProfile(context, enrichedProfile),
-  );
-  final user = overrideUser ?? mappedUser;
-  final profileMap = provider.serializeProfile(enrichedProfile);
+  late final TProfile enrichedProfile;
+  late final AuthUser user;
+  late final Map<String, dynamic> profileMap;
+  try {
+    final parsedProfile = provider.parseProfile(rawProfile);
+    enrichedProfile = await Future.sync(
+      () => provider.enrichProfile(
+        context,
+        tokenResponse,
+        httpClient,
+        parsedProfile,
+      ),
+    );
+    final mappedUser = provider.mapProfile(enrichedProfile);
+    final overrideUser = await Future.sync(
+      () => provider.overrideProfile(context, enrichedProfile),
+    );
+    user = overrideUser ?? mappedUser;
+    profileMap = provider.serializeProfile(enrichedProfile);
+  } on AuthFlowException {
+    rethrow;
+  } catch (_) {
+    throw AuthFlowException('profile_invalid');
+  }
+  final emailVerified =
+      profileMap['verified'] == true || profileMap['email_verified'] == true;
   final accountId = resolveAuthAccountId(
     profileMap,
     user,
     fallbackId: fallbackAccountId ?? secureRandomToken,
+    emailVerified: emailVerified,
   );
   final accountExpiresAt = oauthTokenExpiryFromSeconds(tokenResponse.expiresIn);
 
   final userResolution = await resolveOAuthUserForAccount(
-    adapter: adapter,
+    store: store,
     providerId: provider.id,
     accountId: accountId,
     mappedUser: user,
@@ -1029,8 +1335,7 @@ resolveOAuthSignInForProvider<TContext, TProfile extends Object>({
     // ownership of the address (Discord `verified`, Google `email_verified`,
     // GitHub `verified`, ...). Unverified profile emails must never take over
     // an existing local user.
-    emailVerified:
-        profileMap['verified'] == true || profileMap['email_verified'] == true,
+    emailVerified: emailVerified,
   );
 
   final account = buildOAuthAuthAccount(
@@ -1041,6 +1346,7 @@ resolveOAuthSignInForProvider<TContext, TProfile extends Object>({
     expiresAt: accountExpiresAt,
     metadata: profileMap,
   );
+  await linkOAuthAccountOrThrow(store: store, account: account);
 
   return AuthOAuthSignInResolution(
     user: userResolution.user,
@@ -1055,7 +1361,7 @@ resolveOAuthSignInForProvider<TContext, TProfile extends Object>({
 /// linking.
 Future<AuthOAuthCallbackSignInResolution>
 resolveOAuthCallbackSignInForProvider<TContext, TProfile extends Object>({
-  required AuthAdapter adapter,
+  required AuthStore store,
   required TContext context,
   required OAuthProvider<TProfile> provider,
   required String code,
@@ -1066,29 +1372,71 @@ resolveOAuthCallbackSignInForProvider<TContext, TProfile extends Object>({
   required String callbackKey,
   required String? Function(String key) readSession,
   void Function(String key)? removeSession,
+  FutureOr<AuthOAuthChallenge?> Function(String providerId, String state)?
+  consumeChallenge,
+
+  /// A browser-bound copy of the received state, supplied by the framework
+  /// adapter (for example from an HttpOnly state cookie).
+  String? expectedBrowserState,
+
+  /// Requires the adapter to provide a browser-bound state value. This keeps
+  /// a durable challenge store from accepting a callback initiated by another
+  /// browser.
+  bool requireBrowserState = false,
   required http.Client httpClient,
   String Function()? fallbackAccountId,
 }) async {
-  final sessionValues = resolveOAuthCallbackSessionValues(
-    providerId: provider.id,
-    stateKey: stateKey,
-    pkceKey: pkceKey,
-    nonceKey: nonceKey,
-    callbackKey: callbackKey,
-    readSession: readSession,
-  );
+  if (requireBrowserState) {
+    // Reject an unbound callback before consuming the durable challenge. An
+    // attacker must not be able to turn a failed login-CSRF attempt into a
+    // denial of service for the browser that started the OAuth flow.
+    ensureOAuthStateMatches(
+      expectedState: expectedBrowserState,
+      receivedState: receivedState,
+    );
+  }
+
+  final AuthOAuthCallbackSessionValues sessionValues;
+  if (consumeChallenge != null) {
+    final challenge = receivedState == null
+        ? null
+        : await Future.sync(() => consumeChallenge(provider.id, receivedState));
+    if (challenge == null) {
+      throw AuthFlowException('invalid_state');
+    }
+    sessionValues = AuthOAuthCallbackSessionValues(
+      expectedState: challenge.state,
+      codeVerifier: challenge.codeVerifier,
+      nonce: challenge.nonce,
+      callbackUrl: challenge.callbackUrl,
+    );
+  } else {
+    sessionValues = resolveOAuthCallbackSessionValues(
+      providerId: provider.id,
+      stateKey: stateKey,
+      pkceKey: pkceKey,
+      nonceKey: nonceKey,
+      callbackKey: callbackKey,
+      readSession: readSession,
+    );
+    ensureOAuthStateMatches(
+      expectedState: sessionValues.expectedState,
+      receivedState: receivedState,
+    );
+
+    removeSession?.call(authProviderStateSessionKey(stateKey, provider.id));
+    removeSession?.call(authProviderPkceSessionKey(pkceKey, provider.id));
+    removeSession?.call(authProviderNonceSessionKey(nonceKey, provider.id));
+    removeSession?.call(
+      authProviderCallbackSessionKey(callbackKey, provider.id),
+    );
+  }
   ensureOAuthStateMatches(
     expectedState: sessionValues.expectedState,
     receivedState: receivedState,
   );
-
-  removeSession?.call(authProviderStateSessionKey(stateKey, provider.id));
-  removeSession?.call(authProviderPkceSessionKey(pkceKey, provider.id));
-  removeSession?.call(authProviderNonceSessionKey(nonceKey, provider.id));
-  removeSession?.call(authProviderCallbackSessionKey(callbackKey, provider.id));
-
   final signIn = await resolveOAuthSignInForProvider<TContext, TProfile>(
-    adapter: adapter,
+    store: store,
     context: context,
     provider: provider,
     code: code,
@@ -1097,8 +1445,6 @@ resolveOAuthCallbackSignInForProvider<TContext, TProfile extends Object>({
     httpClient: httpClient,
     fallbackAccountId: fallbackAccountId,
   );
-
-  await Future.sync(() => adapter.linkAccount(signIn.account));
 
   return AuthOAuthCallbackSignInResolution(
     signIn: signIn,
@@ -1134,7 +1480,15 @@ class OAuthProvider<TProfile extends Object> extends AuthProvider {
     this.onStateGenerated,
     this.onProfile,
     this.profileRequest,
-  });
+  }) {
+    if (requestTimeout <= Duration.zero) {
+      throw ArgumentError.value(
+        requestTimeout,
+        'requestTimeout',
+        'must be greater than zero',
+      );
+    }
+  }
 
   /// OAuth client identifier.
   final String clientId;
@@ -1259,7 +1613,15 @@ class EmailProvider extends AuthProvider {
     required this.sendVerificationRequest,
     this.tokenExpiry = const Duration(minutes: 15),
     this.tokenGenerator,
-  }) : super(type: AuthProviderType.email);
+  }) : super(type: AuthProviderType.email) {
+    if (tokenExpiry <= Duration.zero) {
+      throw ArgumentError.value(
+        tokenExpiry,
+        'tokenExpiry',
+        'must be greater than zero',
+      );
+    }
+  }
 
   /// Sends the verification email (or other delivery mechanism).
   final EmailSendCallback sendVerificationRequest;
@@ -1378,21 +1740,26 @@ class WebAuthnAuthenticator {
   };
 
   factory WebAuthnAuthenticator.fromJson(Map<String, dynamic> json) {
+    final rawCounter = json['counter'];
+    final rawTransports = json['transports'];
     return WebAuthnAuthenticator(
       credentialId: json['credential_id']?.toString() ?? '',
       publicKey: json['public_key']?.toString() ?? '',
-      counter: json['counter'] as int? ?? 0,
+      counter: rawCounter is int && rawCounter >= 0 ? rawCounter : 0,
       userId: json['user_id']?.toString(),
-      transports: (json['transports'] as List?)?.cast<String>(),
-      createdAt: json['created_at'] != null
-          ? DateTime.parse(json['created_at'].toString())
+      transports: rawTransports is List
+          ? rawTransports.whereType<String>().toList(growable: false)
           : null,
-      lastUsedAt: json['last_used_at'] != null
-          ? DateTime.parse(json['last_used_at'].toString())
-          : null,
+      createdAt: _tryParseWebAuthnDate(json['created_at']),
+      lastUsedAt: _tryParseWebAuthnDate(json['last_used_at']),
       name: json['name']?.toString(),
     );
   }
+}
+
+DateTime? _tryParseWebAuthnDate(Object? value) {
+  if (value == null) return null;
+  return DateTime.tryParse(value.toString());
 }
 
 /// Callback to retrieve user info for WebAuthn registration/authentication.

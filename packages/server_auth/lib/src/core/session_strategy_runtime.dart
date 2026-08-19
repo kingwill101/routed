@@ -55,6 +55,7 @@ resolveAuthSessionUpdateForStrategyWithCallbacks<TContext>({
   void Function()? applySessionMaxAge,
   void Function(DateTime issuedAtUtc)? writeSessionIssuedAt,
   DateTime? Function()? resolveSessionExpiry,
+  Map<String, dynamic>? protectedJwtClaims,
   DateTime? now,
 }) async {
   final user = AuthUser.fromPrincipal(principal);
@@ -79,6 +80,7 @@ resolveAuthSessionUpdateForStrategyWithCallbacks<TContext>({
         options: jwtOptions,
         user: user,
         strategy: AuthSessionStrategy.jwt,
+        protectedClaims: protectedJwtClaims,
       );
       return AuthSessionUpdateResolution(
         session: issued.session,
@@ -108,6 +110,9 @@ resolveAuthSessionForStrategyWithCallbacks<TContext>({
   void Function()? touchSession,
   DateTime? Function()? resolveSessionExpiry,
   String? Function()? readJwtToken,
+  FutureOr<bool> Function(Map<String, dynamic> claims, AuthUser user)?
+  validateJwtClaims,
+  Map<String, dynamic>? protectedJwtClaims,
   http.Client? httpClient,
   DateTime? now,
 }) async {
@@ -140,6 +145,7 @@ resolveAuthSessionForStrategyWithCallbacks<TContext>({
         updateAge: sessionUpdateAge,
         httpClient: httpClient,
         now: now,
+        validateClaims: validateJwtClaims,
         resolveClaims: (claims, user) =>
             resolveAuthJwtClaimsWithCallbacks<TContext>(
               callbacks: callbacks,
@@ -147,6 +153,7 @@ resolveAuthSessionForStrategyWithCallbacks<TContext>({
               user: user,
               strategy: AuthSessionStrategy.jwt,
               token: claims,
+              protectedClaims: protectedJwtClaims,
             ),
       );
       if (resolved == null) {

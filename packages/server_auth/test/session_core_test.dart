@@ -227,6 +227,48 @@ void main() {
     expect(restored.roles, contains('admin'));
   });
 
+  test('session principals redact secrets and tolerate malformed JSON', () {
+    final principal = AuthPrincipal.fromJson(<String, dynamic>{
+      'id': 'user-1',
+      'roles': <Object?>['admin', 42],
+      'attributes': <Object?, Object?>{
+        'team': 'core',
+        'password_hash': 'hidden',
+        'nested': <String, dynamic>{'token': 'hidden', 'ok': true},
+        42: 'ignored',
+      },
+    });
+
+    expect(principal.roles, equals(<String>['admin']));
+    expect(
+      principal.attributes,
+      equals(<String, dynamic>{
+        'team': 'core',
+        'nested': <String, dynamic>{'ok': true},
+      }),
+    );
+  });
+
+  test('InMemoryRememberTokenStore consumes a token only once', () async {
+    final now = DateTime.utc(2026, 2, 24, 12);
+    final store = InMemoryRememberTokenStore(clock: () => now);
+    await store.save(
+      'one-time-token',
+      AuthPrincipal(id: 'user-1'),
+      now.add(const Duration(minutes: 5)),
+    );
+
+    final results = await Future.wait(
+      List<Future<AuthPrincipal?>>.generate(
+        32,
+        (_) => store.consume('one-time-token'),
+      ),
+    );
+
+    expect(results.whereType<AuthPrincipal>(), hasLength(1));
+    expect(await store.consume('one-time-token'), isNull);
+  });
+
   test('InMemoryRememberTokenStore evicts expired tokens', () async {
     final now = DateTime.utc(2026, 2, 24, 12);
     final store = InMemoryRememberTokenStore(clock: () => now);
@@ -238,6 +280,96 @@ void main() {
 
     expect(restored, isNull);
   });
+
+  test(
+    'InMemoryRememberTokenStore rejects blank tokens and principals',
+    () async {
+      final store = InMemoryRememberTokenStore();
+      final expiry = DateTime.now().add(const Duration(minutes: 5));
+
+      await expectLater(
+        store.save('  ', AuthPrincipal(id: 'user-1'), expiry),
+        throwsArgumentError,
+      );
+      await expectLater(
+        store.save('token-1', AuthPrincipal(id: '  '), expiry),
+        throwsArgumentError,
+      );
+    },
+  );
+
+  test(
+    'InMemoryRememberTokenStore bounds and cleans up retained tokens',
+    () async {
+      var now = DateTime.utc(2026, 2, 24, 12);
+      final store = InMemoryRememberTokenStore(clock: () => now, maxEntries: 2);
+      final expiresAt = now.add(const Duration(minutes: 5));
+
+      await store.save('token-1', AuthPrincipal(id: 'user-1'), expiresAt);
+      await store.save('token-2', AuthPrincipal(id: 'user-2'), expiresAt);
+      await store.save('token-3', AuthPrincipal(id: 'user-3'), expiresAt);
+
+      expect(await store.read('token-1'), isNull);
+      expect((await store.read('token-2'))?.id, equals('user-2'));
+      expect((await store.read('token-3'))?.id, equals('user-3'));
+
+      now = expiresAt;
+      await store.save(
+        'token-fresh',
+        AuthPrincipal(id: 'user-fresh'),
+        now.add(const Duration(minutes: 5)),
+      );
+      expect(await store.read('token-2'), isNull);
+      expect(await store.read('token-3'), isNull);
+      expect((await store.read('token-fresh'))?.id, equals('user-fresh'));
+    },
+  );
+
+  test('RememberSessionAuthRuntime rejects invalid remember configuration', () {
+    expect(
+      () => RememberSessionAuthRuntime<_FakeSessionContext>(
+        adapter: const _FakeSessionAdapter(),
+        defaultRememberDuration: Duration.zero,
+      ),
+      throwsArgumentError,
+    );
+  });
+
+  test('RememberSessionAuthRuntime rejects blank generated tokens', () async {
+    final runtime = RememberSessionAuthRuntime<_FakeSessionContext>(
+      adapter: const _FakeSessionAdapter(),
+      tokenGenerator: () => '  ',
+    );
+
+    await expectLater(
+      runtime.login(
+        _FakeSessionContext(),
+        AuthPrincipal(id: 'user-1'),
+        rememberMe: true,
+      ),
+      throwsArgumentError,
+    );
+  });
+
+  test(
+    'RememberSessionAuthRuntime rejects non-positive remember duration',
+    () async {
+      final runtime = RememberSessionAuthRuntime<_FakeSessionContext>(
+        adapter: const _FakeSessionAdapter(),
+        tokenGenerator: () => 'token-1',
+      );
+
+      await expectLater(
+        runtime.login(
+          _FakeSessionContext(),
+          AuthPrincipal(id: 'user-1'),
+          rememberMe: true,
+          rememberDuration: Duration.zero,
+        ),
+        throwsArgumentError,
+      );
+    },
+  );
 
   test('RememberSessionAuthRuntime login/current/logout flow', () async {
     final context = _FakeSessionContext();
@@ -270,6 +402,60 @@ void main() {
   });
 
   test(
+    'rotating login without remember-me revokes the previous remember token',
+    () async {
+      final now = DateTime.utc(2026, 2, 24, 12);
+      final store = InMemoryRememberTokenStore(clock: () => now);
+      final context = _FakeSessionContext()
+        ..requestCookies.add(Cookie('remember_token', 'old-token'));
+      await store.save(
+        'old-token',
+        AuthPrincipal(id: 'old-user'),
+        now.add(const Duration(hours: 1)),
+      );
+      final runtime = RememberSessionAuthRuntime<_FakeSessionContext>(
+        adapter: const _FakeSessionAdapter(),
+        rememberStore: store,
+        clock: () => now,
+        sessionPrincipalKey: 'session.principal',
+      );
+
+      await runtime.login(context, AuthPrincipal(id: 'new-user'));
+
+      expect(await store.read('old-token'), isNull);
+      expect(context.responseCookies.last.maxAge, equals(0));
+      expect((runtime.current(context))?.id, equals('new-user'));
+    },
+  );
+
+  test('non-rotating session update preserves remember-me state', () async {
+    final now = DateTime.utc(2026, 2, 24, 12);
+    final store = InMemoryRememberTokenStore(clock: () => now);
+    final context = _FakeSessionContext()
+      ..requestCookies.add(Cookie('remember_token', 'old-token'));
+    await store.save(
+      'old-token',
+      AuthPrincipal(id: 'user-1'),
+      now.add(const Duration(hours: 1)),
+    );
+    final runtime = RememberSessionAuthRuntime<_FakeSessionContext>(
+      adapter: const _FakeSessionAdapter(),
+      rememberStore: store,
+      clock: () => now,
+      sessionPrincipalKey: 'session.principal',
+    );
+
+    await runtime.login(
+      context,
+      AuthPrincipal(id: 'user-1', roles: const ['member']),
+      rotateSession: false,
+    );
+
+    expect(await store.read('old-token'), isNotNull);
+    expect(context.responseCookies, isEmpty);
+  });
+
+  test(
     'RememberSessionAuthRuntime hydrate restores and rotates remember token',
     () async {
       final context = _FakeSessionContext();
@@ -295,6 +481,50 @@ void main() {
       expect(await store.read('token-old'), isNull);
       expect((await store.read('token-new'))?.id, equals('user-2'));
       expect(context.responseCookies.last.value, equals('token-new'));
+    },
+  );
+
+  test(
+    'RememberSessionAuthRuntime hydrate cannot replay one remember token',
+    () async {
+      final now = DateTime.utc(2026, 2, 24, 12);
+      final store = InMemoryRememberTokenStore(clock: () => now);
+      await store.save(
+        'token-old',
+        AuthPrincipal(id: 'user-2'),
+        now.add(const Duration(hours: 1)),
+      );
+      final firstContext = _FakeSessionContext()
+        ..requestCookies.add(Cookie('remember_token', 'token-old'));
+      final secondContext = _FakeSessionContext()
+        ..requestCookies.add(Cookie('remember_token', 'token-old'));
+      var nextToken = 0;
+      final runtime = RememberSessionAuthRuntime<_FakeSessionContext>(
+        adapter: const _FakeSessionAdapter(),
+        rememberStore: store,
+        tokenGenerator: () => 'token-new-${nextToken++}',
+        clock: () => now,
+        sessionPrincipalKey: 'session.principal',
+      );
+
+      await Future.wait([
+        runtime.hydrate(firstContext),
+        runtime.hydrate(secondContext),
+      ]);
+
+      final authenticated = [
+        firstContext,
+        secondContext,
+      ].where((context) => context.session.isNotEmpty).toList();
+      expect(authenticated, hasLength(1));
+      expect(
+        [
+          firstContext,
+          secondContext,
+        ].where((context) => context.responseCookies.isNotEmpty).length,
+        equals(2),
+      );
+      expect(await store.read('token-old'), isNull);
     },
   );
 

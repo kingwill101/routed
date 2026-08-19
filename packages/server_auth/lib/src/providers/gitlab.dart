@@ -129,6 +129,8 @@ class GitLabProfile {
 ///
 /// final manager = AuthManager(
 ///   AuthOptions(
+///     store: InMemoryAuthStore(),
+///     storeMode: AuthStoreMode.ephemeral,
 ///     providers: [
 ///       gitlabProvider(
 ///         GitLabProviderOptions(

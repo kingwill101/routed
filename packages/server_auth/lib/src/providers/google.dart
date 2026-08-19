@@ -87,6 +87,8 @@ class GoogleProfile {
 ///
 /// final manager = AuthManager(
 ///   AuthOptions(
+///     store: InMemoryAuthStore(),
+///     storeMode: AuthStoreMode.ephemeral,
 ///     providers: [
 ///       googleProvider(
 ///         GoogleProviderOptions(

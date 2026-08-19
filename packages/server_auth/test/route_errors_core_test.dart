@@ -1,20 +1,19 @@
-import 'dart:io';
-
 import 'package:server_auth/server_auth.dart';
 import 'package:test/test.dart';
 
 void main() {
-  test('authErrorStatusCode maps known auth error codes', () {
-    expect(authErrorStatusCode('unknown_provider'), HttpStatus.notFound);
-    expect(authErrorStatusCode('invalid_csrf'), HttpStatus.forbidden);
-    expect(
-      authErrorStatusCode('method_not_allowed'),
-      HttpStatus.methodNotAllowed,
-    );
+  test('keeps bounded auth identifiers public', () {
+    expect(sanitizeAuthErrorCode('invalid_credentials'), 'invalid_credentials');
+    expect(sanitizeAuthErrorCode('callback_failed'), 'callback_failed');
   });
 
-  test('authErrorStatusCode defaults to bad request', () {
-    expect(authErrorStatusCode('missing_email'), HttpStatus.badRequest);
-    expect(authErrorStatusCode('anything_else'), HttpStatus.badRequest);
+  test('replaces diagnostic strings with a generic code', () {
+    expect(
+      sanitizeAuthErrorCode('/srv/secrets/auth-production.key'),
+      'auth_error',
+    );
+    expect(sanitizeAuthErrorCode('database password: secret'), 'auth_error');
+    expect(sanitizeAuthErrorCode(''), 'auth_error');
+    expect(sanitizeAuthErrorCode(null), 'auth_error');
   });
 }

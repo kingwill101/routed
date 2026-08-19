@@ -69,6 +69,8 @@ class TwitchProfile {
 ///
 /// final manager = AuthManager(
 ///   AuthOptions(
+///     store: InMemoryAuthStore(),
+///     storeMode: AuthStoreMode.ephemeral,
 ///     providers: [
 ///       twitchProvider(
 ///         TwitchProviderOptions(

@@ -17,6 +17,13 @@ const _sensitiveNames = <String>{
   'accesstoken',
   'idtoken',
   'sessiontoken',
+  'jwt',
+  'csrftoken',
+  'sessionid',
+  'sessionkey',
+  'passwordresettoken',
+  'oauthaccesstoken',
+  'secretvalue',
 };
 
 String _normalizeName(Object? name) =>
@@ -37,6 +44,8 @@ Generator<String> _sensitiveName() {
     'PASSWORD',
     'password_hash',
     'passwordHash',
+    'passphrase',
+    'passwd',
     'access_token',
     'access-token',
     'accessToken',
@@ -56,6 +65,13 @@ Generator<String> _sensitiveName() {
     'authorization',
     'secret',
     'token',
+    'passwordResetToken',
+    'oauthAccessToken',
+    'jwt',
+    'csrfToken',
+    'sessionId',
+    'sessionKey',
+    'secretValue',
   ]);
 }
 
@@ -140,11 +156,22 @@ void main() {
             providerAccountId: 'account-1',
             metadata: attributes,
           ).toJson()['metadata'];
+          final redactedCredentials = AuthCredentials(
+            password: 'password-secret',
+            attributes: attributes,
+          ).redacted().attributes;
+          final restoredUser = AuthUser.fromJson({
+            'id': 'user-1',
+            'roles': <Object?>['admin', 42, null],
+            'attributes': attributes,
+          });
 
           for (final projection in <Object?>[
             userAttributes,
             principalAttributes,
             accountMetadata,
+            redactedCredentials,
+            restoredUser.attributes,
           ]) {
             _expectNoSensitiveKeys(projection);
             expect(
@@ -152,6 +179,7 @@ void main() {
               equals(attributes['publicField']),
             );
           }
+          expect(restoredUser.roles, equals(['admin']));
         },
         PropertyConfig(numTests: 500, seed: 20260818),
       );

@@ -237,6 +237,32 @@ void main() {
     expect(requestCount, equals(1));
   });
 
+  test('OAuth2TokenIntrospector bounds distinct cached tokens', () async {
+    var requestCount = 0;
+    final introspector = OAuth2TokenIntrospector(
+      OAuthIntrospectionOptions(
+        endpoint: Uri.parse('https://auth.test/introspect'),
+        cacheTtl: const Duration(minutes: 5),
+        maxCacheEntries: 2,
+      ),
+      httpClient: MockClient((request) async {
+        requestCount += 1;
+        return http.Response(
+          jsonEncode({'active': true, 'sub': request.bodyFields['token']}),
+          200,
+        );
+      }),
+    );
+
+    await introspector.introspect('token-1');
+    await introspector.introspect('token-2');
+    await introspector.introspect('token-3');
+    await introspector.introspect('token-3');
+    await introspector.introspect('token-1');
+
+    expect(requestCount, equals(4));
+  });
+
   test('OAuth2TokenIntrospector does not cache by default', () async {
     var requestCount = 0;
     final introspector = OAuth2TokenIntrospector(
@@ -306,6 +332,37 @@ void main() {
       ),
     );
   });
+
+  test(
+    'OAuth2TokenIntrospector rejects malformed upstream responses',
+    () async {
+      final introspector = OAuth2TokenIntrospector(
+        OAuthIntrospectionOptions(
+          endpoint: Uri.parse('https://auth.test/introspect'),
+        ),
+        httpClient: MockClient((request) async {
+          return http.Response('not-json', 200);
+        }),
+      );
+
+      await expectLater(
+        introspector.introspect('token'),
+        throwsA(
+          isA<OAuth2Exception>()
+              .having(
+                (error) => error.message,
+                'message',
+                'invalid_introspection_response',
+              )
+              .having(
+                (error) => error.toString(),
+                'public error',
+                isNot(contains('not-json')),
+              ),
+        ),
+      );
+    },
+  );
 
   test(
     'OAuth2TokenIntrospector rejects tokens outside temporal bounds',

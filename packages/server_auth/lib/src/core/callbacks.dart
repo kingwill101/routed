@@ -220,11 +220,12 @@ Future<Map<String, dynamic>> resolveAuthJwtClaimsWithCallbacks<TContext>({
   Map<String, dynamic>? profile,
   bool isNewUser = false,
   Map<String, dynamic>? token,
+  Map<String, dynamic>? protectedClaims,
 }) async {
   final baseToken = Map<String, dynamic>.from(
     token ?? authJwtClaimsForUser(user),
   );
-  return resolveAuthJwtClaims<TContext>(
+  final resolved = await resolveAuthJwtClaims<TContext>(
     callback: callbacks.jwt,
     context: AuthJwtCallbackContext<TContext>(
       context: context,
@@ -237,6 +238,7 @@ Future<Map<String, dynamic>> resolveAuthJwtClaimsWithCallbacks<TContext>({
       isNewUser: isNewUser,
     ),
   );
+  return <String, dynamic>{...resolved, ...?protectedClaims};
 }
 
 /// Resolves session payload through [callbacks.session] using standard auth
@@ -296,6 +298,7 @@ Future<AuthJwtSessionIssue> issueAuthJwtSessionWithCallbacks<TContext>({
   Map<String, dynamic>? profile,
   bool isNewUser = false,
   Map<String, dynamic>? token,
+  Map<String, dynamic>? protectedClaims,
 }) async {
   if (options.secret.isEmpty) {
     throw AuthFlowException('missing_jwt_secret');
@@ -311,6 +314,7 @@ Future<AuthJwtSessionIssue> issueAuthJwtSessionWithCallbacks<TContext>({
     profile: profile,
     isNewUser: isNewUser,
     token: token,
+    protectedClaims: protectedClaims,
   );
 
   final issued = issueAuthJwtToken(options: options, claims: claims);
@@ -348,6 +352,7 @@ resolveAuthSignInResultForStrategyWithCallbacks<TContext>({
   Map<String, dynamic>? profile,
   bool isNewUser = false,
   Map<String, dynamic>? token,
+  Map<String, dynamic>? protectedClaims,
 }) async {
   switch (strategy) {
     case AuthSessionStrategy.session:
@@ -375,6 +380,7 @@ resolveAuthSignInResultForStrategyWithCallbacks<TContext>({
         profile: profile,
         isNewUser: isNewUser,
         token: token,
+        protectedClaims: protectedClaims,
       );
       return AuthResolvedSignInResult(
         result: AuthResult(

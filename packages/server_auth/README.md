@@ -47,6 +47,121 @@ final providers = <AuthProvider>[google];
 Use `providers` with your framework adapter to wire callback routes, session
 handling, and auth lifecycle.
 
+## Typed Dart client
+
+`AuthClient` keeps consumers from duplicating auth route names, JSON parsing,
+CSRF presentation, and session-cookie handling:
+
+```dart
+final auth = AuthClient(
+  baseUrl: Uri.parse('https://example.com'),
+  cookieStore: myPersistentCookieStore, // Optional for mobile persistence.
+);
+
+final session = await auth.signInWithCredentials(
+  email: 'ada@example.com',
+  password: password,
+);
+print(session.user.id);
+```
+
+The default `InMemoryAuthClientCookieStore` is suitable for tests and
+short-lived clients. Browser, mobile, and desktop applications can implement
+`AuthClientCookieStore` with their platform's secure persistence. Use
+`setBearerToken` when the server is configured for bearer/JWT sessions.
+
+The client follows the framework adapter's public auth contract: providers,
+CSRF, sessions, credentials, email verification, OAuth redirects, and
+sign-out. It does not persist secrets or silently provision local accounts.
+
+## Optional two-factor feature
+
+Compose `TwoFactorFeature` when an application needs TOTP and recovery codes:
+
+```dart
+final twoFactor = TwoFactorFeature<void>(
+  store: myTwoFactorStore,
+  challengeStore: myTwoFactorChallengeStore,
+  pendingRecoveryStore: myPendingRecoveryStore,
+  trustedDeviceStore: myTrustedDeviceStore,
+  stepUpStore: myStepUpStore,
+  secretProtector: mySecretProtector,
+);
+```
+
+The feature owns enrollment verification, TOTP validation, lockout state,
+recovery-code hashing and atomic consumption, regeneration, disablement, and
+expiring trusted-device tokens. Explicit trusted-device issuance requires a
+fresh TOTP code. Trusted-device records store only token
+digests; the Routed adapter places the raw token in an HTTP-only cookie and
+supports revoking all devices. Credential sign-ins for enabled users return a
+short-lived pending challenge and issue a session only after TOTP completion.
+The pending challenge can optionally issue a trusted-device cookie after
+successful TOTP verification. Configure `pendingRecoveryStore` with a
+durable implementation when recovery codes must complete pending sign-ins; it
+must consume the recovery digest and challenge in one transaction.
+Configure `stepUpStore` to issue short-lived proofs bound to the current
+authenticated session before sensitive actions. The adapter should call its
+step-up requirement helper at those action boundaries.
+`AuthTwoFactorSecretProtector` is required
+so durable applications can use their own key-management system; the
+plaintext protector is intended only for tests and ephemeral examples.
+
+## Auth runtime and typed stores
+
+Integrations compose an `AuthRuntime` from typed domain stores and feature
+modules. `AuthStore` is the required persistence boundary; there is no legacy
+adapter bridge or implicit fallback:
+
+```dart
+final options = AuthOptions<void>(
+  providers: [google],
+  store: InMemoryAuthStore(), // Use a database-backed AuthStore in production.
+  storeMode: AuthStoreMode.ephemeral,
+  features: [MyAuthFeature()],
+);
+
+final runtime = AuthRuntime<void>(options: options);
+final user = await runtime.store.users.findByEmail('user@example.com');
+```
+
+`InMemoryAuthStore` stores explicit password-credential records but is volatile
+and intended only for tests and local development. The built-in credentials
+flow uses `AuthOptions.passwordHasher` (Argon2id by default) and
+`AuthOptions.passwordPolicy` (12–1,024 characters by default). Durable stores
+must persist only encoded password hashes and apply their own database
+transaction policy around registration and login. Providers that supply custom
+`authorize` or `register` callbacks own validation for those callback inputs.
+
+`AuthOptions` defaults to durable storage and rejects an unannotated
+`InMemoryAuthStore`. If ephemeral storage is intentional for a test or local
+demo, set `storeMode: AuthStoreMode.ephemeral`. Production adapters should
+enable their durable-store boot validation.
+
+Authentication rate limits are configured as a typed policy on
+`AuthOptions.rateLimiter`. The policy receives the operation, provider ID,
+framework context, and optional login identifier; it never receives a
+password, OAuth code, bearer token, or verification token. Routed invokes the
+policy before its built-in auth operations and custom callback providers:
+
+```dart
+final options = AuthOptions<MyRequestContext>(
+  providers: providers,
+  store: myStore,
+  rateLimiter: MyAuthRateLimiter(),
+);
+```
+
+Return `AuthRateLimitDecision.block(retryAfter: ...)` to produce a stable
+`rate_limited` failure in an adapter. The adapter owns the client identity
+used for the limit, including any trusted-proxy policy.
+
+Features receive the shared `AuthStore` during configuration. They should own
+one auth concern at a time—such as credentials, passkeys, or API keys—instead
+of adding more callbacks to a single persistence object. Endpoint, schema, hook, and
+rate-limit contributions will be added to this contract as those features are
+migrated.
+
 For Routed applications, use `routed_auth`: initialize `AuthServiceProvider`
 alongside `Engine.defaultProviders`, then add the adapter's auth middleware and
 routes. `server_auth` itself never registers framework providers.
@@ -168,8 +283,7 @@ Use `startAuthEmailSignIn` to share the email verification start flow:
 
 ```dart
 final payload = await startAuthEmailSignIn<MyContext>(
-  adapter: adapter,
-  tokenStore: tokenStore,
+  store: store,
   provider: emailProvider,
   context: context,
   email: 'user@example.com',
@@ -186,8 +300,7 @@ Use `resolveAuthEmailVerificationSignIn` in callback handlers:
 
 ```dart
 final resolved = await resolveAuthEmailVerificationSignIn(
-  adapter: adapter,
-  tokenStore: tokenStore,
+  store: store,
   email: email,
   token: token,
   callbackKey: '_auth.callback',
@@ -203,7 +316,7 @@ credential resolution with standard auth errors:
 
 ```dart
 final user = await requireAuthorizedCredentialsSignIn(
-  adapter: adapter,
+  store: store,
   provider: credentialsProvider,
   context: context,
   credentials: credentials,
@@ -217,7 +330,7 @@ callback exchange/profile/user resolution logic without depending on Routed.
 
 ```dart
 final resolved = await resolveOAuthSignInForProvider<MyContext, Map<String, dynamic>>(
-  adapter: adapter,
+  store: store,
   context: context,
   provider: oauthProvider,
   code: authorizationCode,
@@ -225,13 +338,40 @@ final resolved = await resolveOAuthSignInForProvider<MyContext, Map<String, dyna
   httpClient: httpClient,
 );
 
-await adapter.linkAccount(resolved.account);
 print(resolved.user.id);
 print(resolved.profile);
 ```
 
-Use `resolveOAuthAuthorizationStart` to share OAuth begin-flow state/PKCE/callback
-session persistence:
+`resolveOAuthSignInForProvider` links the account through the atomic store
+boundary before returning. A conflicting canonical owner fails with
+`account_link_conflict`.
+
+OAuth email linking requires an explicit `verified` or `email_verified` claim
+from the provider. Unverified email values are not persisted as the local
+user's email and cannot be used as the external account identifier; providers
+must supply a stable profile subject or the adapter's fallback account ID.
+
+For framework adapters, prefer the typed OAuth challenge store on `AuthStore`.
+Its `consume` operation must atomically delete and return a matching challenge;
+this prevents concurrent callback replay across processes. Routed uses this path
+by default. Durable stores must protect the PKCE verifier, nonce, and callback
+URL as short-lived secrets.
+
+```dart
+final start = await resolveOAuthAuthorizationStart<MyContext, Map<String, dynamic>>(
+  context: context,
+  provider: oauthProvider,
+  stateKey: '_auth.state',
+  pkceKey: '_auth.pkce',
+  callbackKey: '_auth.callback',
+  challengeStore: store.oauthChallenges,
+  callbackUrl: '/dashboard',
+  writeSession: (key, value) => sessionStore[key] = value,
+);
+```
+
+The session-backed form remains available for adapters that have not adopted
+the typed challenge contract:
 
 ```dart
 final start = await resolveOAuthAuthorizationStart<MyContext, Map<String, dynamic>>(
@@ -265,7 +405,7 @@ and persist linked accounts in one call:
 
 ```dart
 final callback = await resolveOAuthCallbackSignInForProvider<MyContext, Map<String, dynamic>>(
-  adapter: adapter,
+  store: store,
   context: context,
   provider: oauthProvider,
   code: authorizationCode,
@@ -318,6 +458,10 @@ final callbackFromResolver = await resolveAndSanitizeRedirectWithResolver(
   resolveRedirect: (candidate) async => candidate,
 );
 ```
+
+Redirect helpers return only rooted-relative or same-origin URLs. They reject
+cross-origin, executable-scheme, protocol-relative, and user-info URLs; keep
+the final sanitization step in framework adapters before writing `Location`.
 
 ## Callback helper for redirect fallbacks
 
@@ -475,36 +619,83 @@ syncAuthSessionRefresh(
 );
 ```
 
-## Minimal adapter skeleton
+## Minimal store composition
 
-Use a small framework-specific adapter that maps your persistence layer into
-`server_auth` contracts:
+Implement the eight typed store domains against your persistence layer. The
+aggregate store only composes those domains:
 
 ```dart
-class MyAuthAdapter extends AuthAdapter {
-  final Map<String, AuthUser> usersById = <String, AuthUser>{};
+class MyAuthStore implements AuthStore {
+  MyAuthStore({
+    required this.users,
+    required this.credentials,
+    required this.accounts,
+    required this.sessions,
+    required this.oauthChallenges,
+    required this.passwordResetTokens,
+    required this.jwtVersions,
+    required this.verificationTokens,
+  });
 
   @override
-  FutureOr<AuthUser?> getUserById(String id) {
-    return usersById[id];
-  }
-
+  final AuthUserStore users;
   @override
-  FutureOr<AuthUser> createUser(AuthUser user) {
-    usersById[user.id] = user;
-    return user;
-  }
-
+  final AuthCredentialStore credentials;
   @override
-  FutureOr<AuthSession?> getSession(String sessionToken) {
-    // Query your DB or cache here.
-    return null;
-  }
+  final AuthAccountStore accounts;
+  @override
+  final AuthSessionStore sessions;
+  @override
+  final AuthOAuthChallengeStore oauthChallenges;
+  @override
+  final AuthPasswordResetTokenStore passwordResetTokens;
+  @override
+  final AuthJwtVersionStore jwtVersions;
+  @override
+  final AuthVerificationTokenStore verificationTokens;
 }
+
+final store = MyAuthStore(
+  users: myUserStore,
+  credentials: myCredentialStore,
+  accounts: myAccountStore,
+  sessions: mySessionStore,
+  oauthChallenges: myOAuthChallengeStore,
+  passwordResetTokens: myPasswordResetTokenStore,
+  jwtVersions: myJwtVersionStore,
+  verificationTokens: myVerificationTokenStore,
+);
 ```
 
-Keep adapters focused on boundary mapping and keep provider/JWT/gate logic in
-`server_auth`.
+`AuthOAuthChallengeStore.consume` must atomically remove and return the
+matching, unexpired challenge. Protect its PKCE verifier, nonce, and callback
+URL fields as short-lived secrets in durable storage.
+
+`AuthAccountStore.link` must also be atomic and create-if-absent for each
+`(providerId, providerAccountId)` pair. It returns the canonical linked account
+and must never replace an existing link owned by another user.
+
+`AuthUserStore.createOrFindByEmail` must atomically enforce uniqueness for a
+normalized email and report whether the returned user was created. Use this
+operation for verified OAuth email linking and email sign-in callbacks.
+
+`AuthPasswordResetTokenStore` must hash raw reset tokens, invalidate older
+tokens for the same user, and consume tokens atomically. The store boundary is
+available now. The framework-agnostic
+`issueAuthPasswordResetTokenForUser` and `resetAuthPasswordWithToken` helpers
+also cover token issuance, password replacement, JWT-version rotation, and
+server-session revocation.
+Adapters can use `AuthPasswordResetSender` to deliver the raw token without
+persisting it. `AuthJwtVersionStore` must atomically increment a per-user
+version so old JWTs fail validation after password reset or password change.
+
+Keep persistence focused on the store contracts and keep provider/JWT/gate
+logic in `server_auth`.
+
+`AuthSessionStore` persists `AuthSessionRecord` values, not public session
+payloads. The `tokenHash` field must be derived from the client-held opaque
+token with `hashOpaqueToken`; implementations should use `touch`, `revoke`,
+and `rotate` atomically and never store the raw token.
 
 ## Typed Profiles
 

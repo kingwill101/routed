@@ -2,7 +2,7 @@ import 'dart:async';
 import 'dart:io';
 
 import 'models.dart';
-import 'tokens.dart' show secureRandomToken;
+import 'tokens.dart' show hashOpaqueToken, secureRandomToken;
 
 /// Attribute key used to store the authenticated principal in request context.
 const String authPrincipalAttribute = 'auth.principal';
@@ -165,6 +165,10 @@ Cookie buildExpiredRememberTokenCookie(
 }
 
 /// Persistence contract for long-lived "remember me" tokens.
+///
+/// Implementations must treat [token] as a secret: persist only a digest and
+/// compare the digest during [read] and [remove]. Never log or expose the raw
+/// token from a persistence adapter.
 abstract class RememberTokenStore {
   FutureOr<void> save(
     String token,
@@ -174,15 +178,35 @@ abstract class RememberTokenStore {
 
   FutureOr<AuthPrincipal?> read(String token);
 
+  /// Atomically consumes [token] for one request and invalidates it.
+  ///
+  /// Persistent implementations must perform the lookup, expiry check, and
+  /// deletion in one transaction or compare-and-delete operation. A
+  /// read-then-remove implementation is not replay-safe under concurrency.
+  FutureOr<AuthPrincipal?> consume(String token);
+
   FutureOr<void> remove(String token);
 }
 
 class InMemoryRememberTokenStore implements RememberTokenStore {
-  InMemoryRememberTokenStore({DateTime Function()? clock})
-    : _clock = clock ?? DateTime.now;
+  InMemoryRememberTokenStore({
+    DateTime Function()? clock,
+    this.maxEntries = 1024,
+  }) : _clock = clock ?? DateTime.now {
+    if (maxEntries < 1) {
+      throw ArgumentError.value(maxEntries, 'maxEntries', 'must be positive');
+    }
+  }
 
   final Map<String, _RememberRecord> _storage = <String, _RememberRecord>{};
   final DateTime Function() _clock;
+
+  /// Maximum number of remember-me tokens retained by this local store.
+  ///
+  /// Expired records are removed on writes and lookups. If the store is full,
+  /// the oldest record is evicted. Durable stores should enforce equivalent
+  /// expiry and capacity policies in persistence.
+  final int maxEntries;
 
   @override
   Future<void> save(
@@ -190,15 +214,50 @@ class InMemoryRememberTokenStore implements RememberTokenStore {
     AuthPrincipal principal,
     DateTime expiresAt,
   ) async {
-    _storage[token] = _RememberRecord(principal, expiresAt);
+    if (token.trim().isEmpty) {
+      throw ArgumentError.value(token, 'token', 'must be non-empty');
+    }
+    if (principal.id.trim().isEmpty) {
+      throw ArgumentError.value(
+        principal.id,
+        'principal.id',
+        'must be non-empty',
+      );
+    }
+    final now = _clock().toUtc();
+    _removeExpired(now);
+    if (!now.isBefore(expiresAt.toUtc())) {
+      return;
+    }
+    final tokenHash = hashOpaqueToken(token);
+    _storage.remove(tokenHash);
+    while (_storage.length >= maxEntries) {
+      _removeOldest();
+    }
+    _storage[tokenHash] = _RememberRecord(
+      _safePrincipal(principal),
+      expiresAt.toUtc(),
+    );
   }
 
   @override
   Future<AuthPrincipal?> read(String token) async {
-    final record = _storage[token];
+    if (token.trim().isEmpty) return null;
+    final now = _clock().toUtc();
+    _removeExpired(now);
+    final tokenHash = hashOpaqueToken(token);
+    final record = _storage[tokenHash];
     if (record == null) return null;
-    if (_clock().isAfter(record.expiresAt)) {
-      _storage.remove(token);
+    return record.principal;
+  }
+
+  @override
+  Future<AuthPrincipal?> consume(String token) async {
+    if (token.trim().isEmpty) return null;
+    final now = _clock().toUtc();
+    _removeExpired(now);
+    final record = _storage.remove(hashOpaqueToken(token));
+    if (record == null) {
       return null;
     }
     return record.principal;
@@ -206,7 +265,18 @@ class InMemoryRememberTokenStore implements RememberTokenStore {
 
   @override
   Future<void> remove(String token) async {
-    _storage.remove(token);
+    if (token.trim().isEmpty) return;
+    _storage.remove(hashOpaqueToken(token));
+  }
+
+  void _removeExpired(DateTime now) {
+    _storage.removeWhere((_, record) => !now.isBefore(record.expiresAt));
+  }
+
+  void _removeOldest() {
+    if (_storage.isNotEmpty) {
+      _storage.remove(_storage.keys.first);
+    }
   }
 }
 
@@ -271,7 +341,15 @@ class RememberSessionAuthRuntime<TContext> {
   }) : rememberStore =
            rememberStore ??
            InMemoryRememberTokenStore(clock: clock ?? DateTime.now),
-       _clock = clock ?? DateTime.now;
+       _clock = clock ?? DateTime.now {
+    if (defaultRememberDuration <= Duration.zero) {
+      throw ArgumentError.value(
+        defaultRememberDuration,
+        'defaultRememberDuration',
+        'must be greater than zero',
+      );
+    }
+  }
 
   final AuthSessionRuntimeAdapter<TContext> adapter;
   final RememberTokenStore rememberStore;
@@ -290,18 +368,49 @@ class RememberSessionAuthRuntime<TContext> {
     Duration? rememberDuration,
     bool rotateSession = true,
   }) async {
+    final safePrincipal = _safePrincipal(principal);
+    if (safePrincipal.id.trim().isEmpty) {
+      throw ArgumentError.value(
+        principal.id,
+        'principal.id',
+        'must be non-empty',
+      );
+    }
     if (rotateSession) {
       regenerateSession?.call(context);
     }
     adapter.writeSessionPrincipal(
       context,
       sessionPrincipalKey,
-      principal.toJson(),
+      safePrincipal.toJson(),
     );
-    adapter.writePrincipalAttribute(context, principalAttributeKey, principal);
+    adapter.writePrincipalAttribute(
+      context,
+      principalAttributeKey,
+      safePrincipal,
+    );
 
     if (!rememberMe) {
+      if (rotateSession) {
+        final existing = _findRequestCookie(context);
+        if (existing != null && existing.value.isNotEmpty) {
+          await Future.sync(() => rememberStore.remove(existing.value));
+          adapter.setResponseCookie(
+            context,
+            adapter.buildExpiredRememberCookie(context, rememberCookieName),
+          );
+        }
+      }
       return;
+    }
+
+    final duration = rememberDuration ?? defaultRememberDuration;
+    if (duration <= Duration.zero) {
+      throw ArgumentError.value(
+        duration,
+        'rememberDuration',
+        'must be greater than zero',
+      );
     }
 
     final existing = _findRequestCookie(context);
@@ -309,9 +418,11 @@ class RememberSessionAuthRuntime<TContext> {
       await Future.sync(() => rememberStore.remove(existing.value));
     }
 
-    final token = tokenGenerator();
-    final expiresAt = _clock().add(rememberDuration ?? defaultRememberDuration);
-    await Future.sync(() => rememberStore.save(token, principal, expiresAt));
+    final token = _generatedRememberToken();
+    final expiresAt = _clock().add(duration);
+    await Future.sync(
+      () => rememberStore.save(token, safePrincipal, expiresAt),
+    );
     adapter.setResponseCookie(
       context,
       adapter.buildRememberCookie(
@@ -343,7 +454,7 @@ class RememberSessionAuthRuntime<TContext> {
       principalAttributeKey,
     );
     if (cached != null) {
-      return cached;
+      return _safePrincipal(cached);
     }
 
     final stored = adapter.readSessionPrincipal(context, sessionPrincipalKey);
@@ -382,7 +493,7 @@ class RememberSessionAuthRuntime<TContext> {
     }
 
     final principal = await Future.sync(
-      () => rememberStore.read(rememberCookie.value),
+      () => rememberStore.consume(rememberCookie.value),
     );
     if (principal == null) {
       await Future.sync(() => rememberStore.remove(rememberCookie.value));
@@ -393,19 +504,22 @@ class RememberSessionAuthRuntime<TContext> {
       return;
     }
 
+    final safePrincipal = _safePrincipal(principal);
+    final rotatedToken = _generatedRememberToken();
+    final newExpiry = _clock().add(defaultRememberDuration);
+    await Future.sync(
+      () => rememberStore.save(rotatedToken, safePrincipal, newExpiry),
+    );
     adapter.writeSessionPrincipal(
       context,
       sessionPrincipalKey,
-      principal.toJson(),
+      safePrincipal.toJson(),
     );
-    adapter.writePrincipalAttribute(context, principalAttributeKey, principal);
-
-    final rotatedToken = tokenGenerator();
-    final newExpiry = _clock().add(defaultRememberDuration);
-    await Future.sync(
-      () => rememberStore.save(rotatedToken, principal, newExpiry),
+    adapter.writePrincipalAttribute(
+      context,
+      principalAttributeKey,
+      safePrincipal,
     );
-    await Future.sync(() => rememberStore.remove(rememberCookie.value));
     adapter.setResponseCookie(
       context,
       adapter.buildRememberCookie(
@@ -425,4 +539,20 @@ class RememberSessionAuthRuntime<TContext> {
     }
     return null;
   }
+
+  String _generatedRememberToken() {
+    final token = tokenGenerator();
+    if (token.trim().isEmpty) {
+      throw ArgumentError.value(
+        token,
+        'tokenGenerator()',
+        'must return a non-empty token',
+      );
+    }
+    return token;
+  }
+}
+
+AuthPrincipal _safePrincipal(AuthPrincipal principal) {
+  return AuthPrincipal.fromJson(principal.toJson());
 }

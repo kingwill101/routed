@@ -81,6 +81,8 @@ class LinkedInProfile {
 ///
 /// final manager = AuthManager(
 ///   AuthOptions(
+///     store: InMemoryAuthStore(),
+///     storeMode: AuthStoreMode.ephemeral,
 ///     providers: [
 ///       linkedInProvider(
 ///         LinkedInProviderOptions(
