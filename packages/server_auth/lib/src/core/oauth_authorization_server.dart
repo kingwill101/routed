@@ -271,6 +271,10 @@ final class OAuthAuthorizationServerFeature<TContext>
       throw AuthFlowException('unsupported_grant_type');
     }
     final clientId = _required(request, 'client_id');
+    final client = await resolveClient(invocation.context, clientId);
+    if (client == null || client.clientId != clientId) {
+      throw AuthFlowException('invalid_client');
+    }
     final record = await _codeService.exchange(
       rawCode: _required(request, 'code'),
       clientId: clientId,
