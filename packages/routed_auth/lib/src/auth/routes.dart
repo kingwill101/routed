@@ -94,6 +94,10 @@ import 'package:routed_sessions/routed_sessions.dart';
 /// - `GET /webauthn/credentials` lists the current user's passkeys.
 /// - `POST /webauthn/credentials/delete` deletes one current-user passkey.
 /// - `POST /webauthn/credentials/rename` renames one current-user passkey.
+/// - `POST /oauth/device/authorize` starts an RFC 8628 device flow.
+/// - `POST /oauth/device/approve` approves a device flow from a browser session.
+/// - `POST /oauth/device/deny` denies a device flow from a browser session.
+/// - `POST /oauth/token` polls an approved device flow for an access token.
 ///
 /// ## Usage
 /// ```dart
@@ -1095,10 +1099,19 @@ class AuthRoutes {
         retryAfter.toString(),
       );
     }
+    final isDeviceAuthorizationError = const <String>{
+      'authorization_pending',
+      'slow_down',
+      'access_denied',
+      'expired_token',
+      'invalid_grant',
+    }.contains(error.code);
     return ctx.json(
       {'error': sanitizeAuthErrorCode(error.code)},
       statusCode: error is AuthRateLimitException
           ? HttpStatus.tooManyRequests
+          : isDeviceAuthorizationError
+          ? HttpStatus.badRequest
           : HttpStatus.unauthorized,
     );
   }

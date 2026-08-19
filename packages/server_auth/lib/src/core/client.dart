@@ -255,6 +255,67 @@ final class AuthClientApiKey {
   }
 }
 
+/// Device-code response returned by the RFC 8628 authorization endpoint.
+final class AuthClientDeviceAuthorization {
+  const AuthClientDeviceAuthorization({
+    required this.deviceCode,
+    required this.userCode,
+    required this.verificationUri,
+    required this.expiresIn,
+    required this.interval,
+    this.verificationUriComplete,
+  });
+
+  final String deviceCode;
+  final String userCode;
+  final String verificationUri;
+  final Duration expiresIn;
+  final Duration interval;
+  final String? verificationUriComplete;
+
+  factory AuthClientDeviceAuthorization.fromJson(Map<String, dynamic> json) {
+    return AuthClientDeviceAuthorization(
+      deviceCode: _requiredString(json, 'device_code'),
+      userCode: _requiredString(json, 'user_code'),
+      verificationUri: _requiredString(json, 'verification_uri'),
+      expiresIn: _requiredSeconds(json, 'expires_in'),
+      interval: _requiredSeconds(json, 'interval'),
+      verificationUriComplete: json['verification_uri_complete']?.toString(),
+    );
+  }
+}
+
+/// Access-token response returned after a device has been approved.
+final class AuthClientDeviceAccessToken {
+  const AuthClientDeviceAccessToken({
+    required this.accessToken,
+    required this.tokenType,
+    required this.expiresIn,
+    required this.scopes,
+    this.refreshToken,
+  });
+
+  final String accessToken;
+  final String tokenType;
+  final Duration expiresIn;
+  final List<String> scopes;
+  final String? refreshToken;
+
+  factory AuthClientDeviceAccessToken.fromJson(Map<String, dynamic> json) {
+    final rawScope = json['scope'];
+    final scopes = rawScope is String && rawScope.trim().isNotEmpty
+        ? rawScope.trim().split(RegExp(r'\s+'))
+        : const <String>[];
+    return AuthClientDeviceAccessToken(
+      accessToken: _requiredString(json, 'access_token'),
+      tokenType: _requiredString(json, 'token_type'),
+      expiresIn: _requiredSeconds(json, 'expires_in'),
+      scopes: List<String>.unmodifiable(scopes),
+      refreshToken: json['refresh_token']?.toString(),
+    );
+  }
+}
+
 /// Registration options returned by the WebAuthn ceremony-start endpoint.
 ///
 /// [publicKey] is shaped for the browser `navigator.credentials.create` API.
@@ -823,6 +884,56 @@ class AuthClient {
           );
         })
         .toList(growable: false);
+  }
+
+  /// Starts an RFC 8628 device authorization transaction for [clientId].
+  ///
+  /// This endpoint is intentionally unauthenticated and does not use the
+  /// browser CSRF flow because it is called by a constrained device.
+  Future<AuthClientDeviceAuthorization> requestDeviceAuthorization({
+    required String clientId,
+    Iterable<String> scopes = const <String>[],
+  }) async {
+    final response = await _request(
+      'POST',
+      '/oauth/device/authorize',
+      body: {'client_id': clientId, 'scope': scopes.join(' ')},
+    );
+    return AuthClientDeviceAuthorization.fromJson(_mapBody(response.body));
+  }
+
+  /// Polls the device token endpoint.
+  ///
+  /// RFC 8628 errors are surfaced as [AuthClientException] codes such as
+  /// `authorization_pending`, `slow_down`, and `expired_token`.
+  Future<AuthClientDeviceAccessToken> pollDeviceToken({
+    required String clientId,
+    required String deviceCode,
+  }) async {
+    final response = await _request(
+      'POST',
+      '/oauth/token',
+      body: {
+        'grant_type': 'urn:ietf:params:oauth:grant-type:device_code',
+        'client_id': clientId,
+        'device_code': deviceCode,
+      },
+    );
+    return AuthClientDeviceAccessToken.fromJson(_mapBody(response.body));
+  }
+
+  /// Approves a device code from an authenticated browser session.
+  Future<void> approveDeviceAuthorization({required String userCode}) async {
+    await _mutatingRequest('POST', '/oauth/device/approve', {
+      'user_code': userCode,
+    });
+  }
+
+  /// Denies a device code from an authenticated browser session.
+  Future<void> denyDeviceAuthorization({required String userCode}) async {
+    await _mutatingRequest('POST', '/oauth/device/deny', {
+      'user_code': userCode,
+    });
   }
 
   /// Obtains and caches the CSRF token used by state-changing requests.
@@ -1419,6 +1530,15 @@ DateTime _requiredDate(Map<String, dynamic> json, String key) {
 DateTime? _optionalDate(Map<String, dynamic> json, String key) {
   final raw = json[key];
   return raw == null ? null : DateTime.tryParse(raw.toString());
+}
+
+Duration _requiredSeconds(Map<String, dynamic> json, String key) {
+  final value = json[key];
+  final seconds = value is int ? value : int.tryParse(value?.toString() ?? '');
+  if (seconds == null || seconds <= 0) {
+    throw FormatException('Invalid auth duration field: $key');
+  }
+  return Duration(seconds: seconds);
 }
 
 AuthSession _sessionFromBody(String body) {
