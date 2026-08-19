@@ -4,7 +4,7 @@ import 'package:server_auth/server_auth.dart';
 import 'package:test/test.dart';
 
 void main() {
-  group('OrganizationFeature', () {
+  group('OrganizationPlugin', () {
     test('is opt-in and contributes immutable portable topology', () {
       final base = AuthOptions<Object>(
         providers: const [],
@@ -12,17 +12,17 @@ void main() {
         storeMode: AuthStoreMode.ephemeral,
       );
       final without = AuthRuntime<Object>(options: base);
-      expect(without.feature(authOrganizationFeatureId), isNull);
+      expect(without.plugin(authOrganizationPluginId), isNull);
       expect(without.registry.endpoints, isEmpty);
 
-      final feature = OrganizationFeature<Object>(
+      final feature = OrganizationPlugin<Object>(
         store: InMemoryAuthOrganizationStore(),
         userStore: InMemoryAuthStore().users,
       );
       final runtime = AuthRuntime<Object>(
-        options: base.copyWith(features: [feature]),
+        options: base.copyWith(plugins: [feature]),
       );
-      expect(runtime.feature(authOrganizationFeatureId), same(feature));
+      expect(runtime.plugin(authOrganizationPluginId), same(feature));
       expect(runtime.registry.isFrozen, isTrue);
       expect(runtime.registry.endpoints, hasLength(36));
       expect(
@@ -30,14 +30,11 @@ void main() {
         contains('/organization/create'),
       );
       expect(runtime.registry.persistenceSchemas.single.id, 'organization');
-      expect(
-        () => runtime.registry.register(_EmptyFeature()),
-        throwsStateError,
-      );
+      expect(() => runtime.registry.register(_EmptyPlugin()), throwsStateError);
     });
 
     test('concurrent slug creation has one winner', () async {
-      final feature = OrganizationFeature<Object>(
+      final feature = OrganizationPlugin<Object>(
         store: InMemoryAuthOrganizationStore(),
       );
       final users = List.generate(
@@ -67,7 +64,7 @@ void main() {
     });
 
     test('membership limits, duplicates, and last owner are atomic', () async {
-      final feature = OrganizationFeature<Object>(
+      final feature = OrganizationPlugin<Object>(
         store: InMemoryAuthOrganizationStore(),
         options: const AuthOrganizationOptions(membershipLimit: 2),
       );
@@ -112,7 +109,7 @@ void main() {
 
     test('only creator-role actors can mutate creator memberships', () async {
       final store = InMemoryAuthOrganizationStore();
-      final feature = OrganizationFeature<Object>(store: store);
+      final feature = OrganizationPlugin<Object>(store: store);
       final owner = AuthUser(id: 'owner', email: 'owner@example.com');
       final admin = AuthUser(id: 'admin', email: 'admin@example.com');
       final organization = (await feature.createOrganization(
@@ -170,7 +167,7 @@ void main() {
     });
 
     test('creator role normalization preserves the last owner', () async {
-      final feature = OrganizationFeature<Object>(
+      final feature = OrganizationPlugin<Object>(
         store: InMemoryAuthOrganizationStore(),
         options: const AuthOrganizationOptions(creatorRole: ' Owner '),
       );
@@ -191,7 +188,7 @@ void main() {
     });
 
     test('invitation is email-bound and consumed exactly once', () async {
-      final feature = OrganizationFeature<Object>(
+      final feature = OrganizationPlugin<Object>(
         store: InMemoryAuthOrganizationStore(),
         userStore: InMemoryAuthStore().users,
       );
@@ -234,7 +231,7 @@ void main() {
 
     test('invalid invitation teams are rejected before persistence', () async {
       final disabledStore = InMemoryAuthOrganizationStore();
-      final disabled = OrganizationFeature<Object>(store: disabledStore);
+      final disabled = OrganizationPlugin<Object>(store: disabledStore);
       final owner = AuthUser(id: 'owner', email: 'owner@example.com');
       final disabledOrganization = (await disabled.createOrganization(
         context: Object(),
@@ -256,7 +253,7 @@ void main() {
       );
 
       final enabledStore = InMemoryAuthOrganizationStore();
-      final enabled = OrganizationFeature<Object>(
+      final enabled = OrganizationPlugin<Object>(
         store: enabledStore,
         options: const AuthOrganizationOptions(
           teams: AuthOrganizationTeamsOptions(enabled: true),
@@ -293,7 +290,7 @@ void main() {
       await authStore.users.create(owner);
       await authStore.users.create(member);
       final organizationStore = InMemoryAuthOrganizationStore();
-      final feature = OrganizationFeature<Object>(
+      final feature = OrganizationPlugin<Object>(
         store: organizationStore,
         userStore: authStore.users,
       );
@@ -324,7 +321,7 @@ void main() {
       'dynamic role rename preserves assignment and delete rejects use',
       () async {
         final store = InMemoryAuthOrganizationStore();
-        final feature = OrganizationFeature<Object>(
+        final feature = OrganizationPlugin<Object>(
           store: store,
           userStore: InMemoryAuthStore().users,
           options: const AuthOrganizationOptions(dynamicRoles: true),
@@ -382,7 +379,7 @@ void main() {
       'dynamic role rename updates pending invitations atomically',
       () async {
         final store = InMemoryAuthOrganizationStore();
-        final feature = OrganizationFeature<Object>(
+        final feature = OrganizationPlugin<Object>(
           store: store,
           userStore: InMemoryAuthStore().users,
           options: const AuthOrganizationOptions(dynamicRoles: true),
@@ -445,7 +442,7 @@ void main() {
     );
 
     test('persistence topology describes every stored field and relation', () {
-      final schema = OrganizationFeature<Object>(
+      final schema = OrganizationPlugin<Object>(
         store: InMemoryAuthOrganizationStore(),
       ).persistenceSchemas.single;
       final entities = {
@@ -560,7 +557,7 @@ void main() {
 
     test('teams enforce capacity and organization deletion cascades', () async {
       final store = InMemoryAuthOrganizationStore();
-      final feature = OrganizationFeature<Object>(
+      final feature = OrganizationPlugin<Object>(
         store: store,
         options: const AuthOrganizationOptions(
           membershipLimit: 20,
@@ -619,7 +616,7 @@ void main() {
     test('before transforms and after failures return warnings', () async {
       final failures = <AuthOrganizationInternalFailure>[];
       final events = <AuthOrganizationLifecycleEvent>[];
-      final feature = OrganizationFeature<Object>(
+      final feature = OrganizationPlugin<Object>(
         store: InMemoryAuthOrganizationStore(),
         options: AuthOrganizationOptions(
           hooks: AuthOrganizationHooks(
@@ -653,7 +650,7 @@ void main() {
         final failures = <AuthOrganizationInternalFailure>[];
         final events = <AuthOrganizationLifecycleEvent>[];
         var deliveries = 0;
-        final feature = OrganizationFeature<Object>(
+        final feature = OrganizationPlugin<Object>(
           store: store,
           userStore: InMemoryAuthStore().users,
           options: AuthOrganizationOptions(
@@ -703,7 +700,7 @@ void main() {
     );
 
     test('custom non-opaque invitation IDs require verified email', () async {
-      final feature = OrganizationFeature<Object>(
+      final feature = OrganizationPlugin<Object>(
         store: InMemoryAuthOrganizationStore(),
         userStore: InMemoryAuthStore().users,
         options: const AuthOrganizationOptions(
@@ -739,7 +736,7 @@ void main() {
     test(
       'multi-role permissions union without leaking into global roles',
       () async {
-        final feature = OrganizationFeature<Object>(
+        final feature = OrganizationPlugin<Object>(
           store: InMemoryAuthOrganizationStore(),
           options: const AuthOrganizationOptions(
             staticRoles: {
@@ -792,7 +789,7 @@ void main() {
 String _predictableInvitationId() => 'predictable-id';
 
 Future<Object?> _invoke(
-  OrganizationFeature<Object> feature,
+  OrganizationPlugin<Object> feature,
   String id,
   AuthUser user,
   Map<String, dynamic> input, {
@@ -818,10 +815,10 @@ Matcher _flow(String code) => throwsA(
 Map<String, dynamic> _map(Object? value) =>
     Map<String, dynamic>.from(value! as Map);
 
-final class _EmptyFeature implements AuthFeature<Object> {
+final class _EmptyPlugin implements AuthServerPlugin<Object> {
   @override
   String get id => 'empty';
 
   @override
-  void configure(AuthFeatureContext<Object> context) {}
+  void configure(AuthServerPluginContext<Object> context) {}
 }

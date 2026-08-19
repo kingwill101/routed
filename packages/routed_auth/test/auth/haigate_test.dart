@@ -150,7 +150,7 @@ void main() {
       'organization checks scope active teams and clear stale selections',
       () async {
         final store = InMemoryAuthOrganizationStore();
-        final feature = OrganizationFeature<EngineContext>(
+        final feature = OrganizationPlugin<EngineContext>(
           store: store,
           options: const AuthOrganizationOptions(
             teams: AuthOrganizationTeamsOptions(enabled: true),
@@ -186,12 +186,12 @@ void main() {
 
           final explicit = await Haigate.organizationContext(
             ctx: ctx,
-            feature: feature,
+            plugin: feature,
             organizationId: second.id,
           );
           final allowed = await Haigate.canInOrganization(
             ctx: ctx,
-            feature: feature,
+            plugin: feature,
             organizationId: second.id,
             resource: 'organization',
             action: 'read',
@@ -202,7 +202,7 @@ void main() {
             ..setSession('__routed.auth.activeTeamId', 'stale-team');
           final recovered = await Haigate.organizationContext(
             ctx: ctx,
-            feature: feature,
+            plugin: feature,
           );
           return ctx.json({
             'explicitOrganizationMatches':

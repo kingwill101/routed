@@ -1,9 +1,9 @@
 import 'dart:async';
 
 import 'exceptions.dart';
-import 'feature.dart';
+import 'plugin.dart';
 
-const String authMcpFeatureId = 'mcp_auth';
+const String authMcpPluginId = 'mcp_auth';
 
 /// RFC 9728 protected-resource metadata for an MCP HTTP server.
 final class AuthOAuthProtectedResourceMetadata {
@@ -150,12 +150,12 @@ typedef AuthOAuthClientRegistrar<TContext> =
     );
 
 /// Publishes MCP protected-resource and OAuth authorization-server metadata.
-final class McpAuthFeature<TContext>
+final class McpAuthPlugin<TContext>
     implements
-        AuthFeature<TContext>,
+        AuthServerPlugin<TContext>,
         AuthEndpointContributor<TContext>,
         AuthClientOperationContributor {
-  McpAuthFeature({
+  McpAuthPlugin({
     required AuthOAuthProtectedResourceMetadata protectedResource,
     required AuthOAuthAuthorizationServerMetadata authorizationServer,
     AuthOAuthClientRegistrar<TContext>? registerClient,
@@ -168,10 +168,10 @@ final class McpAuthFeature<TContext>
   final AuthOAuthClientRegistrar<TContext>? _registerClient;
 
   @override
-  String get id => authMcpFeatureId;
+  String get id => authMcpPluginId;
 
   @override
-  void configure(AuthFeatureContext<TContext> context) {}
+  void configure(AuthServerPluginContext<TContext> context) {}
 
   @override
   Iterable<AuthEndpointDescriptor<TContext>> get endpoints => [

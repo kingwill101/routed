@@ -12,7 +12,7 @@
   routes. Deletion composes feature-owned data contributors before the core
   transactional purge and revokes sessions/JWT versions.
 - Add the CSRF-protected `/webauthn/credentials/rename` route contributed by
-  `WebAuthnFeature`.
+  `WebAuthnPlugin`.
 - Make self-service account deletion retain an unavailable tombstone until a
   store retention job explicitly purges it.
 - Automatically mount the opt-in `/auth/admin/...` API, enforce Admin bans at
@@ -20,7 +20,7 @@
   replacement for guarded impersonation.
 
 - Automatically exposes the typed WebAuthn registration, assertion, passkey
-  listing, and deletion endpoints contributed by `WebAuthnFeature`, with the
+  listing, and deletion endpoints contributed by `WebAuthnPlugin`, with the
   existing session, browser-origin, CSRF, and rate-limit boundary handling.
 - Keep external JWT middleware independent from Routed's private session-token
   version claim; Routed-issued JWT sessions continue validating that claim in

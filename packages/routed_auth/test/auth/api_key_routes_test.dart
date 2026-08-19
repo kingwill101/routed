@@ -14,7 +14,7 @@ void main() {
     final store = InMemoryAuthStore();
     final user = AuthUser(id: 'user-1', email: 'user@example.com');
     await store.users.create(user);
-    final feature = AuthApiKeyFeature<EngineContext>(
+    final feature = AuthApiKeyPlugin<EngineContext>(
       store: InMemoryAuthApiKeyStore(),
       sessionExchangeEnabled: true,
       keyIdGenerator: _queuedGenerator(['key-id', 'rotated-id']),
@@ -25,7 +25,7 @@ void main() {
         store: store,
         storeMode: AuthStoreMode.ephemeral,
         providers: [CredentialsProvider(authorize: (_, _, _) => user)],
-        features: [feature],
+        plugins: [feature],
       ),
     );
     final engine = testEngine(
@@ -41,7 +41,7 @@ void main() {
         'canRead': currentApiKey(ctx)?.allowsScope('jobs:read') == true,
       }),
       middlewares: [
-        apiKeyAuthentication(feature: feature, userStore: store.users),
+        apiKeyAuthentication(plugin: feature, userStore: store.users),
       ],
     );
     await engine.initialize();

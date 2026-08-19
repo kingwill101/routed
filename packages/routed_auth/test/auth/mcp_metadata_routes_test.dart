@@ -7,7 +7,7 @@ import '../test_engine.dart';
 
 void main() {
   test('MCP metadata is published at standard root well-known paths', () async {
-    final feature = McpAuthFeature<EngineContext>(
+    final feature = McpAuthPlugin<EngineContext>(
       protectedResource: AuthOAuthProtectedResourceMetadata(
         resource: Uri.parse('https://mcp.example.test/mcp'),
         authorizationServers: [Uri.parse('https://auth.example.test')],
@@ -25,7 +25,7 @@ void main() {
         providers: const [],
         store: InMemoryAuthStore(),
         storeMode: AuthStoreMode.ephemeral,
-        features: [feature],
+        plugins: [feature],
       ),
     );
     final engine = testEngine();
@@ -54,7 +54,7 @@ void main() {
   test(
     'MCP dynamic client registration is mounted under the auth base path',
     () async {
-      final feature = McpAuthFeature<EngineContext>(
+      final feature = McpAuthPlugin<EngineContext>(
         protectedResource: AuthOAuthProtectedResourceMetadata(
           resource: Uri.parse('https://mcp.example.test/mcp'),
           authorizationServers: [Uri.parse('https://auth.example.test')],
@@ -83,7 +83,7 @@ void main() {
           providers: const [],
           store: InMemoryAuthStore(),
           storeMode: AuthStoreMode.ephemeral,
-          features: [feature],
+          plugins: [feature],
         ),
       );
       final engine = testEngine();
@@ -108,7 +108,7 @@ void main() {
         providers: const [],
         store: InMemoryAuthStore(),
         storeMode: AuthStoreMode.ephemeral,
-        features: [_RedirectFeature()],
+        plugins: [_RedirectPlugin()],
       ),
     );
     final engine = testEngine();
@@ -123,15 +123,15 @@ void main() {
   });
 }
 
-final class _RedirectFeature
+final class _RedirectPlugin
     implements
-        AuthFeature<EngineContext>,
+        AuthServerPlugin<EngineContext>,
         AuthEndpointContributor<EngineContext> {
   @override
   String get id => 'redirect-test';
 
   @override
-  void configure(AuthFeatureContext<EngineContext> context) {}
+  void configure(AuthServerPluginContext<EngineContext> context) {}
 
   @override
   Iterable<AuthEndpointDescriptor<EngineContext>> get endpoints => [

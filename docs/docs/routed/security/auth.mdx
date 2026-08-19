@@ -107,7 +107,7 @@ manifest or runtime string override.
 
 ## Organizations and tenant authorization
 
-Organizations are an optional auth feature. Compose `OrganizationFeature` to
+Organizations are an optional auth feature. Compose `OrganizationPlugin` to
 add memberships, email-bound invitations, scoped roles, teams, automatic
 Routed endpoints, a typed client, and tenant-aware Haigate helpers. See
 [Organizations & Tenancy](/docs/routed/security/organizations) for setup,
@@ -115,7 +115,7 @@ persistence requirements, client usage, and the complete route surface.
 
 ## Administrative auth
 
-Administration is also opt-in. Compose `AdminFeature` for authoritative global
+Administration is also opt-in. Compose `AdminPlugin` for authoritative global
 role checks, user and session management, bans, hard deletion, audit hooks, and
 guarded server-session impersonation. See
 [Administrative Auth](/docs/routed/security/admin) for setup, adapter

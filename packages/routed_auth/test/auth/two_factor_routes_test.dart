@@ -67,8 +67,8 @@ void main() {
           store: InMemoryAuthStore(),
           storeMode: AuthStoreMode.ephemeral,
           providers: [CredentialsProvider()],
-          features: [
-            TwoFactorFeature<EngineContext>(
+          plugins: [
+            TwoFactorPlugin<EngineContext>(
               store: InMemoryAuthTwoFactorStore(),
               challengeStore: InMemoryAuthTwoFactorChallengeStore(),
               trustedDeviceStore: InMemoryAuthTwoFactorTrustedDeviceStore(),
@@ -105,7 +105,7 @@ void main() {
 
   test('applies the global rate limiter to two-factor routes', () async {
     final limiter = _BlockingAuthLimiter();
-    final feature = TwoFactorFeature<EngineContext>(
+    final feature = TwoFactorPlugin<EngineContext>(
       store: InMemoryAuthTwoFactorStore(),
       challengeStore: InMemoryAuthTwoFactorChallengeStore(),
       trustedDeviceStore: InMemoryAuthTwoFactorTrustedDeviceStore(),
@@ -117,7 +117,7 @@ void main() {
         store: InMemoryAuthStore(),
         storeMode: AuthStoreMode.ephemeral,
         providers: [CredentialsProvider()],
-        features: [feature],
+        plugins: [feature],
         rateLimiter: limiter,
       ),
     );
@@ -147,7 +147,7 @@ void main() {
   test(
     'continues the original callback credential flow after TOTP verification',
     () async {
-      final feature = TwoFactorFeature<EngineContext>(
+      final feature = TwoFactorPlugin<EngineContext>(
         store: InMemoryAuthTwoFactorStore(),
         challengeStore: InMemoryAuthTwoFactorChallengeStore(),
         trustedDeviceStore: InMemoryAuthTwoFactorTrustedDeviceStore(),
@@ -175,7 +175,7 @@ void main() {
                   AuthUser(id: 'callback-user', email: credentials.email),
             ),
           ],
-          features: [feature],
+          plugins: [feature],
           callbacks: AuthCallbacks<EngineContext>(
             signIn: (context) {
               completedProvider = context.provider;
@@ -235,7 +235,7 @@ void main() {
     final factorStore = InMemoryAuthTwoFactorStore();
     final challengeStore = InMemoryAuthTwoFactorChallengeStore();
     final stepUpStore = InMemoryAuthTwoFactorStepUpStore();
-    final feature = TwoFactorFeature<EngineContext>(
+    final feature = TwoFactorPlugin<EngineContext>(
       store: factorStore,
       challengeStore: challengeStore,
       pendingRecoveryStore: InMemoryAuthTwoFactorPendingRecoveryStore(
@@ -252,7 +252,7 @@ void main() {
         storeMode: AuthStoreMode.ephemeral,
         providers: [CredentialsProvider()],
         passwordHasher: _testHasher(),
-        features: [feature],
+        plugins: [feature],
       ),
     );
     await authorizeCredentialsRegistration(

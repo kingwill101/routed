@@ -141,13 +141,13 @@ void main() {
     });
   });
 
-  group('DeviceAuthorizationFeature', () {
+  group('DeviceAuthorizationPlugin', () {
     test('validates client, normalizes scopes, and issues one token', () async {
       final store = InMemoryAuthStore();
       final user = AuthUser(id: 'user-1', email: 'user@example.com');
       await store.users.create(user);
       final issued = <String>[];
-      final feature = DeviceAuthorizationFeature<Object>(
+      final feature = DeviceAuthorizationPlugin<Object>(
         verificationUri: 'https://example.test/device',
         validateClient: (context, clientId, scopes) {
           expect(clientId, 'cli-1');
@@ -175,7 +175,7 @@ void main() {
           providers: const [],
           store: store,
           storeMode: AuthStoreMode.ephemeral,
-          features: [feature],
+          plugins: [feature],
         ),
       );
 
@@ -225,11 +225,11 @@ void main() {
         ),
         _flow('invalid_grant'),
       );
-      expect(runtime.hasFeature(authDeviceAuthorizationFeatureId), isTrue);
+      expect(runtime.hasPlugin(authDeviceAuthorizationPluginId), isTrue);
     });
 
     test('rejects untrusted clients and invalid scopes', () async {
-      final feature = DeviceAuthorizationFeature<Object>(
+      final feature = DeviceAuthorizationPlugin<Object>(
         verificationUri: 'https://example.test/device',
         validateClient: (context, clientId, scopes) => false,
         issueToken:
@@ -249,7 +249,7 @@ void main() {
           providers: const [],
           store: InMemoryAuthStore(),
           storeMode: AuthStoreMode.ephemeral,
-          features: [feature],
+          plugins: [feature],
         ),
       );
 

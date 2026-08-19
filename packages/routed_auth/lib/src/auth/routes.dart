@@ -10,7 +10,7 @@ import 'package:server_auth/server_auth.dart'
         AuthOperationAuthentication,
         AuthOperationCsrfPolicy,
         AuthOperationInvocation,
-        AuthFeatureSessionControl,
+        AuthServerPluginSessionControl,
         AuthOperationMethod,
         AuthOperationOriginPolicy,
         AuthCallbackRouteKind,
@@ -28,7 +28,7 @@ import 'package:server_auth/server_auth.dart'
         AuthSessionStrategy,
         AuthSession,
         AuthUser,
-        TwoFactorFeature,
+        TwoFactorPlugin,
         CallbackProvider,
         CredentialsProvider,
         EmailProvider,
@@ -106,11 +106,11 @@ import 'package:routed_sessions/routed_sessions.dart';
 /// - `POST /sign-in/anonymous` creates an anonymous authenticated session.
 /// - `POST /delete-anonymous-user` deletes the current anonymous account.
 /// - `GET /.well-known/oauth-protected-resource` publishes MCP resource
-///   metadata when [McpAuthFeature] is enabled.
+///   metadata when [McpAuthPlugin] is enabled.
 /// - `GET /.well-known/oauth-authorization-server` publishes OAuth metadata
-///   when [McpAuthFeature] is enabled.
+///   when [McpAuthPlugin] is enabled.
 /// - `POST /oauth/register` handles dynamic OAuth client registration when
-///   [McpAuthFeature] is configured with a registrar callback.
+///   [McpAuthPlugin] is configured with a registrar callback.
 ///
 /// ## Usage
 /// ```dart
@@ -275,7 +275,7 @@ class AuthRoutes {
       final activeTeamId = mutableSession
           ? ctx.getSession<String>(_activeTeamKey)
           : null;
-      final featureSessionControl = _RoutedFeatureSessionControl(
+      final featureSessionControl = _RoutedPluginSessionControl(
         manager,
         ctx,
         currentSessionId:
@@ -686,7 +686,9 @@ class AuthRoutes {
     if (browserError != null) return _errorResponse(ctx, browserError);
     final payload = await _payload(ctx);
     if (!manager.validateCsrf(ctx, payload)) {
-      return ctx.json({'error': 'invalid_csrf'}, statusCode: HttpStatus.forbidden);
+      return ctx.json({
+        'error': 'invalid_csrf',
+      }, statusCode: HttpStatus.forbidden);
     }
     final newEmail = payload['newEmail']?.toString();
     final currentPassword = payload['currentPassword']?.toString();
@@ -713,7 +715,9 @@ class AuthRoutes {
     if (browserError != null) return _errorResponse(ctx, browserError);
     final payload = await _payload(ctx);
     if (!manager.validateCsrf(ctx, payload)) {
-      return ctx.json({'error': 'invalid_csrf'}, statusCode: HttpStatus.forbidden);
+      return ctx.json({
+        'error': 'invalid_csrf',
+      }, statusCode: HttpStatus.forbidden);
     }
     final token = payload['token']?.toString();
     if (token == null || token.trim().isEmpty) {
@@ -748,7 +752,9 @@ class AuthRoutes {
     if (browserError != null) return _errorResponse(ctx, browserError);
     final payload = await _payload(ctx);
     if (!manager.validateCsrf(ctx, payload)) {
-      return ctx.json({'error': 'invalid_csrf'}, statusCode: HttpStatus.forbidden);
+      return ctx.json({
+        'error': 'invalid_csrf',
+      }, statusCode: HttpStatus.forbidden);
     }
     final providerId = payload['providerId']?.toString();
     final providerAccountId = payload['providerAccountId']?.toString();
@@ -776,7 +782,9 @@ class AuthRoutes {
     if (browserError != null) return _errorResponse(ctx, browserError);
     final payload = await _payload(ctx);
     if (!manager.validateCsrf(ctx, payload)) {
-      return ctx.json({'error': 'invalid_csrf'}, statusCode: HttpStatus.forbidden);
+      return ctx.json({
+        'error': 'invalid_csrf',
+      }, statusCode: HttpStatus.forbidden);
     }
     final currentPassword = payload['currentPassword']?.toString();
     if (currentPassword == null) {
@@ -992,7 +1000,7 @@ class AuthRoutes {
   Future<Response> _twoFactorCodeAction(
     EngineContext ctx,
     Future<Response> Function(
-      TwoFactorFeature<EngineContext> feature,
+      TwoFactorPlugin<EngineContext> feature,
       String userId,
       String code,
     )
@@ -1151,8 +1159,10 @@ class AuthRoutes {
     );
   }
 }
-final class _RoutedFeatureSessionControl implements AuthFeatureSessionControl {
-  const _RoutedFeatureSessionControl(
+
+final class _RoutedPluginSessionControl
+    implements AuthServerPluginSessionControl {
+  const _RoutedPluginSessionControl(
     this.manager,
     this.context, {
     required this.currentSessionId,
@@ -1173,7 +1183,7 @@ final class _RoutedFeatureSessionControl implements AuthFeatureSessionControl {
     required String authenticationMethod,
     Duration? maximumAge,
     String? impersonatedBy,
-  }) => manager.replaceFeatureSession(
+  }) => manager.replacePluginSession(
     context,
     user,
     authenticationMethod: authenticationMethod,
@@ -1182,5 +1192,5 @@ final class _RoutedFeatureSessionControl implements AuthFeatureSessionControl {
   );
 
   @override
-  Future<void> signOut() => manager.signOutFeatureSession(context);
+  Future<void> signOut() => manager.signOutPluginSession(context);
 }

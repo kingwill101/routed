@@ -1,7 +1,7 @@
 import 'dart:async';
 
 import 'exceptions.dart';
-import 'feature.dart';
+import 'plugin.dart';
 import 'models.dart';
 import 'organization_models.dart';
 import 'organization_permissions.dart';
@@ -11,7 +11,7 @@ import 'store.dart' show AuthUserStore;
 import 'tokens.dart' show secureRandomToken;
 import 'users.dart' show normalizeAuthEmail;
 
-const String authOrganizationFeatureId = 'organization';
+const String authOrganizationPluginId = 'organization';
 
 typedef AuthOrganizationCreationPolicy = FutureOr<bool> Function(AuthUser user);
 typedef AuthOrganizationInvitationIdGenerator = String Function();
@@ -195,15 +195,15 @@ final class AuthOrganizationLifecycleEvent {
 }
 
 /// Complete organization capability with storage-independent behavior.
-final class OrganizationFeature<TContext>
+final class OrganizationPlugin<TContext>
     implements
-        AuthFeature<TContext>,
+        AuthServerPlugin<TContext>,
         AuthEndpointContributor<TContext>,
         AuthPersistenceContributor,
         AuthClientOperationContributor,
         AuthRateLimitContributor,
         AuthUserDataDeletionContributor {
-  OrganizationFeature({
+  OrganizationPlugin({
     required this.store,
     this.options = const AuthOrganizationOptions(),
     AuthUserStore? userStore,
@@ -219,10 +219,10 @@ final class OrganizationFeature<TContext>
   AuthUserStore? _userStore;
 
   @override
-  String get id => authOrganizationFeatureId;
+  String get id => authOrganizationPluginId;
 
   @override
-  void configure(AuthFeatureContext<TContext> context) {
+  void configure(AuthServerPluginContext<TContext> context) {
     _userStore ??= context.store.users;
   }
 
@@ -2191,7 +2191,7 @@ final class OrganizationFeature<TContext>
     final userStore = _userStore;
     if (userStore == null) {
       throw StateError(
-        'OrganizationFeature must be registered with AuthRuntime or receive '
+        'OrganizationPlugin must be registered with AuthRuntime or receive '
         'a userStore before invitations can be created.',
       );
     }

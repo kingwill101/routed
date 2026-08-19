@@ -48,7 +48,7 @@ void main() {
           updatedAt: DateTime.utc(2026),
         ),
       );
-      final feature = DeviceAuthorizationFeature<EngineContext>(
+      final feature = DeviceAuthorizationPlugin<EngineContext>(
         verificationUri: 'https://example.test/device',
         pollInterval: const Duration(milliseconds: 1),
         validateClient: (context, clientId, scopes) => clientId == 'cli-1',
@@ -76,7 +76,7 @@ void main() {
                   credentials.password == 'password' ? user : null,
             ),
           ],
-          features: [feature],
+          plugins: [feature],
         ),
       );
       final sessionConfig = _sessionConfig();
@@ -156,7 +156,7 @@ void main() {
   test(
     'device approval route rejects missing browser authentication',
     () async {
-      final feature = DeviceAuthorizationFeature<EngineContext>(
+      final feature = DeviceAuthorizationPlugin<EngineContext>(
         verificationUri: 'https://example.test/device',
         validateClient: (context, clientId, scopes) => true,
         issueToken:
@@ -176,7 +176,7 @@ void main() {
           store: InMemoryAuthStore(),
           storeMode: AuthStoreMode.ephemeral,
           providers: const [],
-          features: [feature],
+          plugins: [feature],
         ),
       );
       final sessionConfig = _sessionConfig();

@@ -19,7 +19,7 @@ export 'email_change_token_store.dart';
 export 'email_otp_store.dart';
 export 'email_otp.dart';
 export 'exceptions.dart';
-export 'feature.dart';
+export 'plugin.dart';
 export 'gates.dart';
 export 'guards.dart';
 export 'jwt.dart';

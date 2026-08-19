@@ -14,19 +14,19 @@
   owner-scoped email update operation that enforces normalized uniqueness.
 - Add typed email-change issuance/confirmation helpers with password
   reauthentication and verified-address marking.
-- Add the opt-in `AdminFeature`, typed atomic admin store, authoritative role
+- Add the opt-in `AdminPlugin`, typed atomic admin store, authoritative role
   permissions, bans, session administration, guarded hard deletion,
   server-session impersonation, lifecycle hooks/events, persistence topology,
   and `AuthAdminClient`.
 - Add feature authentication-policy and host session-control contributions so
-  portable features can block session issuance/reuse and safely replace a
+  portable plugins can block session issuance/reuse and safely replace a
   server-session identity.
 - Add owner-checked WebAuthn passkey renaming through the typed store, feature
   endpoint, and client API.
 - Add typed account tombstone and retention-purge capabilities; self-service
   deletion now retains only a stable unavailable user ID and deletion time.
 
-- Added the opt-in typed `WebAuthnFeature` with digest-at-rest one-time
+- Added the opt-in typed `WebAuthnPlugin` with digest-at-rest one-time
   challenges, durable authenticator/counter contracts, `none` attestation,
   ES256 assertion verification, exact origin/RP-ID binding, and replay-safe
   compare-and-set counter updates. Broader COSE algorithms and session issuance
@@ -36,19 +36,19 @@
 - Derive `AuthStoreMode` when framework composition replaces the configured
   store, expire client cookies using absolute `Max-Age` deadlines, and cover
   automatic CSRF refresh after stale-session rejection.
-- Add the opt-in `OrganizationFeature`, typed atomic organization store,
+- Add the opt-in `OrganizationPlugin`, typed atomic organization store,
   memberships, invitations, scoped permissions, lifecycle hooks, dynamic
   roles, teams, logical persistence descriptors, and typed organization client.
 - Add feature-contributed endpoint/client/schema/rate-limit descriptors,
   immutable runtime topology, namespaced rate-limit operations, and the shared
   public `AuthClientTransport`.
-- Add the opt-in `AuthApiKeyFeature` with digest-at-rest keys, scoped metadata,
+- Add the opt-in `AuthApiKeyPlugin` with digest-at-rest keys, scoped metadata,
   bounded expiry, atomic touch/revoke/rotate storage operations, and one-time
   raw-secret responses.
 - Add typed `AuthClient` API-key creation, listing, revocation, rotation, and
   service-client key configuration.
 - Add opt-in, header-only API-key exchange into a server-side session.
-- Added the optional `TwoFactorFeature` with RFC 6238 TOTP enrollment,
+- Added the optional `TwoFactorPlugin` with RFC 6238 TOTP enrollment,
   protected-secret storage, atomic lockout/recovery-code operations,
   regeneration, disablement, and pending credential sign-in challenges. The
   implementation uses `hashlib` for its maintained HOTP/TOTP core.
@@ -133,7 +133,7 @@
   for listing sessions, revoking one session, and revoking all sessions except
   the current session.
 - Added the typed `AuthStore` domain persistence boundary and composable
-  `AuthRuntime`/`AuthFeature` contracts.
+  `AuthRuntime`/`AuthServerPlugin` contracts.
 - Breaking: removed `AuthAdapter`, `CallbackAuthAdapter`, and
   `InMemoryAuthAdapter`; `AuthOptions` now requires an `AuthStore`.
 - Migrated credential, email, OAuth, and session orchestration to typed domain

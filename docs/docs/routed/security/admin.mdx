@@ -9,7 +9,7 @@ sidebar_position: 6
 
 The Admin capability adds privileged user and session management to Routed
 auth. It is **opt-in**: no admin routes, permissions, persistence requirements,
-or ban checks exist unless you add `AdminFeature` to `AuthOptions.features`.
+or ban checks exist unless you add `AdminPlugin` to `AuthOptions.plugins`.
 
 This feature follows Better Auth's Admin plugin semantics where they fit
 Routed, while keeping Dart APIs typed and persistence independent. Global
@@ -27,7 +27,7 @@ import 'package:routed/routed.dart';
 final authStore = InMemoryAuthStore();
 final adminStore = InMemoryAuthAdminStore(authStore);
 
-final adminFeature = AdminFeature<EngineContext>(
+final adminFeature = AdminPlugin<EngineContext>(
   store: adminStore,
   options: const AuthAdminOptions<EngineContext>(
     adminRoles: {'admin'},
@@ -42,7 +42,7 @@ engine.container.instance<AuthOptions<EngineContext>>(
     providers: providers,
     store: authStore,
     storeMode: AuthStoreMode.ephemeral,
-    features: [adminFeature],
+    plugins: [adminFeature],
     sessionStrategy: AuthSessionStrategy.session,
   ),
 );
@@ -78,7 +78,7 @@ Admin-to-admin impersonation is deliberately excluded. Add the explicit
 `user:impersonate-admins` permission only to a role that should have it:
 
 ```dart
-final adminFeature = AdminFeature<EngineContext>(
+final adminFeature = AdminPlugin<EngineContext>(
   store: adminStore,
   options: const AuthAdminOptions<EngineContext>(
     adminRoles: {'admin', 'support-supervisor'},
@@ -179,7 +179,7 @@ options: AuthAdminOptions<EngineContext>(
 
 The durable Admin adapter still owns the atomic transaction; a validation
 callback is not a substitute for database constraints or transactional
-cascades. `AdminFeature.persistenceSchemas` advertises the logical ban-state
+cascades. `AdminPlugin.persistenceSchemas` advertises the logical ban-state
 entity and required atomic operations without prescribing SQL, D1, table
 names, migrations, or query builders.
 

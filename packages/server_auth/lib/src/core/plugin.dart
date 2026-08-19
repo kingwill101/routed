@@ -39,10 +39,10 @@ final class AuthOperationInvocation<TContext> {
   final String? activeTeamId;
   final FutureOr<void> Function(String? organizationId, String? teamId)?
   writeActiveSelection;
-  final AuthFeatureSessionControl? sessionControl;
+  final AuthServerPluginSessionControl? sessionControl;
 }
 
-/// A framework-neutral redirect returned by an auth feature endpoint.
+/// A framework-neutral redirect returned by an auth plugin endpoint.
 final class AuthEndpointRedirect {
   const AuthEndpointRedirect({
     required this.location,
@@ -55,8 +55,8 @@ final class AuthEndpointRedirect {
   final Map<String, String> headers;
 }
 
-/// Host-owned session operations available to portable feature endpoints.
-abstract interface class AuthFeatureSessionControl {
+/// Host-owned session operations available to portable plugin endpoints.
+abstract interface class AuthServerPluginSessionControl {
   AuthSessionStrategy get strategy;
   String? get currentSessionId;
   FutureOr<AuthSession> replaceIdentity(
@@ -89,16 +89,16 @@ abstract interface class AuthAuthenticationPolicyContributor<TContext> {
   );
 }
 
-/// Feature-owned user data that participates in administrative hard deletion.
+/// Plugin-owned user data that participates in administrative hard deletion.
 abstract interface class AuthUserDataDeletionContributor {
   String get userDataNamespace;
   FutureOr<void> validateUserDeletion(String userId);
   FutureOr<void> deleteUserData(String userId);
 }
 
-/// Optional second-pass composition after every feature has been registered.
-abstract interface class AuthFeatureTopologyAware<TContext> {
-  void composeAuthFeatureTopology(Iterable<AuthFeature<TContext>> features);
+/// Optional second-pass composition after every plugin has been registered.
+abstract interface class AuthServerPluginTopologyAware<TContext> {
+  void composePluginTopology(Iterable<AuthServerPlugin<TContext>> plugins);
 }
 
 abstract interface class AuthEndpointDescriptor<TContext> {
@@ -254,8 +254,8 @@ final class AuthAtomicOperationDescriptor {
   final String description;
 }
 
-class AuthFeatureContext<TContext> {
-  const AuthFeatureContext({
+class AuthServerPluginContext<TContext> {
+  const AuthServerPluginContext({
     required this.store,
     this.passwordHasher,
     this.passwordPolicy = const PasswordPolicy(),
@@ -268,14 +268,14 @@ class AuthFeatureContext<TContext> {
   final AuthSessionStrategy sessionStrategy;
 }
 
-abstract interface class AuthFeature<TContext> {
+abstract interface class AuthServerPlugin<TContext> {
   String get id;
 
-  void configure(AuthFeatureContext<TContext> context);
+  void configure(AuthServerPluginContext<TContext> context);
 }
 
-class AuthFeatureRegistry<TContext> {
-  AuthFeatureRegistry({
+class AuthServerPluginRegistry<TContext> {
+  AuthServerPluginRegistry({
     required AuthStore store,
     PasswordHasher? passwordHasher,
     PasswordPolicy passwordPolicy = const PasswordPolicy(),
@@ -289,8 +289,8 @@ class AuthFeatureRegistry<TContext> {
   final PasswordHasher _passwordHasher;
   final PasswordPolicy _passwordPolicy;
   final AuthSessionStrategy _sessionStrategy;
-  final Map<String, AuthFeature<TContext>> _features =
-      <String, AuthFeature<TContext>>{};
+  final Map<String, AuthServerPlugin<TContext>> _plugins =
+      <String, AuthServerPlugin<TContext>>{};
   final Map<String, AuthEndpointDescriptor<TContext>> _endpoints =
       <String, AuthEndpointDescriptor<TContext>>{};
   final Set<String> _endpointKeys = <String>{};
@@ -298,18 +298,18 @@ class AuthFeatureRegistry<TContext> {
 
   bool get isFrozen => _frozen;
 
-  void register(AuthFeature<TContext> feature) {
-    if (_frozen) throw StateError('Auth feature topology is frozen.');
-    final id = feature.id.trim();
+  void register(AuthServerPlugin<TContext> plugin) {
+    if (_frozen) throw StateError('Auth plugin topology is frozen.');
+    final id = plugin.id.trim();
     if (id.isEmpty) {
-      throw ArgumentError.value(feature.id, 'feature.id', 'must not be empty');
+      throw ArgumentError.value(plugin.id, 'plugin.id', 'must not be empty');
     }
-    if (_features.containsKey(id)) {
-      throw StateError('Auth feature "$id" is already registered.');
+    if (_plugins.containsKey(id)) {
+      throw StateError('Auth plugin "$id" is already registered.');
     }
 
-    final contributed = feature is AuthEndpointContributor<TContext>
-        ? (feature as AuthEndpointContributor<TContext>).endpoints.toList(
+    final contributed = plugin is AuthEndpointContributor<TContext>
+        ? (plugin as AuthEndpointContributor<TContext>).endpoints.toList(
             growable: false,
           )
         : <AuthEndpointDescriptor<TContext>>[];
@@ -319,7 +319,7 @@ class AuthFeatureRegistry<TContext> {
       final endpointId = endpoint.id.trim();
       final path = _normalizeEndpointPath(endpoint.path);
       if (endpointId.isEmpty || path.isEmpty) {
-        throw ArgumentError('Feature "$id" contributed an invalid endpoint.');
+        throw ArgumentError('Plugin "$id" contributed an invalid endpoint.');
       }
       if (_endpoints.containsKey(endpointId) ||
           !contributedIds.add(endpointId)) {
@@ -331,9 +331,9 @@ class AuthFeatureRegistry<TContext> {
       }
     }
 
-    _features[id] = feature;
-    feature.configure(
-      AuthFeatureContext<TContext>(
+    _plugins[id] = plugin;
+    plugin.configure(
+      AuthServerPluginContext<TContext>(
         store: _store,
         passwordHasher: _passwordHasher,
         passwordPolicy: _passwordPolicy,
@@ -350,20 +350,22 @@ class AuthFeatureRegistry<TContext> {
 
   void freeze() {
     if (_frozen) return;
-    final topology = List<AuthFeature<TContext>>.unmodifiable(_features.values);
-    for (final feature
-        in topology.whereType<AuthFeatureTopologyAware<TContext>>()) {
-      feature.composeAuthFeatureTopology(topology);
+    final topology = List<AuthServerPlugin<TContext>>.unmodifiable(
+      _plugins.values,
+    );
+    for (final plugin
+        in topology.whereType<AuthServerPluginTopologyAware<TContext>>()) {
+      plugin.composePluginTopology(topology);
     }
     _frozen = true;
   }
 
-  AuthFeature<TContext>? find(String id) => _features[id.trim()];
+  AuthServerPlugin<TContext>? find(String id) => _plugins[id.trim()];
 
   bool contains(String id) => find(id) != null;
 
-  Iterable<AuthFeature<TContext>> get values =>
-      List<AuthFeature<TContext>>.unmodifiable(_features.values);
+  Iterable<AuthServerPlugin<TContext>> get values =>
+      List<AuthServerPlugin<TContext>>.unmodifiable(_plugins.values);
 
   Iterable<AuthEndpointDescriptor<TContext>> get endpoints =>
       List<AuthEndpointDescriptor<TContext>>.unmodifiable(_endpoints.values);
@@ -371,32 +373,32 @@ class AuthFeatureRegistry<TContext> {
   Future<void> enforceAuthenticationPolicy(
     AuthAuthenticationPolicyRequest<TContext> request,
   ) async {
-    for (final feature
-        in _features.values
+    for (final plugin
+        in _plugins.values
             .whereType<AuthAuthenticationPolicyContributor<TContext>>()) {
-      await feature.enforceAuthenticationPolicy(request);
+      await plugin.enforceAuthenticationPolicy(request);
     }
   }
 
   Iterable<AuthPersistenceSchema> get persistenceSchemas =>
       List<AuthPersistenceSchema>.unmodifiable(
-        _features.values.whereType<AuthPersistenceContributor>().expand(
-          (feature) => feature.persistenceSchemas,
+        _plugins.values.whereType<AuthPersistenceContributor>().expand(
+          (plugin) => plugin.persistenceSchemas,
         ),
       );
 
   Iterable<AuthClientOperationDescriptor> get clientOperations =>
       List<AuthClientOperationDescriptor>.unmodifiable(
-        _features.values
+        _plugins.values
             .whereType<AuthClientOperationContributor>()
-            .expand((feature) => feature.clientOperations)
+            .expand((plugin) => plugin.clientOperations)
             .where((operation) => !operation.serverOnly),
       );
 
   Iterable<AuthRateLimitOperation> get rateLimitOperations =>
       List<AuthRateLimitOperation>.unmodifiable(
-        _features.values.whereType<AuthRateLimitContributor>().expand(
-          (feature) => feature.rateLimitOperations,
+        _plugins.values.whereType<AuthRateLimitContributor>().expand(
+          (plugin) => plugin.rateLimitOperations,
         ),
       );
 }

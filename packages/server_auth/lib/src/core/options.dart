@@ -4,7 +4,7 @@ import 'authorization.dart';
 import 'browser.dart';
 import 'callbacks.dart';
 import 'email_change.dart';
-import 'feature.dart';
+import 'plugin.dart';
 import 'jwt.dart';
 import 'models.dart';
 import 'password_hasher.dart';
@@ -26,7 +26,7 @@ class AuthOptions<TContext> {
     required List<AuthProvider> providers,
     required this.store,
     this.storeMode = AuthStoreMode.durable,
-    this.features = const [],
+    this.plugins = const [],
     this.sessionStrategy = AuthSessionStrategy.session,
     this.rateLimiter,
     this.browserProtection = const AuthBrowserProtectionOptions(),
@@ -53,9 +53,9 @@ class AuthOptions<TContext> {
     this.rbac = const RbacOptions(),
     this.policies = const PolicyOptions(),
     AuthCallbacks<TContext>? callbacks,
-  })  : providers = List<AuthProvider>.unmodifiable(providers),
-        passwordHasher = passwordHasher ?? Argon2idPasswordHasher(),
-        callbacks = callbacks ?? AuthCallbacks<TContext>() {
+  }) : providers = List<AuthProvider>.unmodifiable(providers),
+       passwordHasher = passwordHasher ?? Argon2idPasswordHasher(),
+       callbacks = callbacks ?? AuthCallbacks<TContext>() {
     validateAuthProviderConfiguration(this.providers);
     if (store is CallbackAuthStore) {
       throw ArgumentError(
@@ -102,7 +102,7 @@ class AuthOptions<TContext> {
   final List<AuthProvider> providers;
 
   /// Typed feature modules composed into the auth runtime.
-  final List<AuthFeature<TContext>> features;
+  final List<AuthServerPlugin<TContext>> plugins;
 
   /// Typed persistence boundary used by every auth flow.
   final AuthStore store;
@@ -218,7 +218,7 @@ class AuthOptions<TContext> {
     List<AuthProvider>? providers,
     AuthStore? store,
     AuthStoreMode? storeMode,
-    List<AuthFeature<TContext>>? features,
+    List<AuthServerPlugin<TContext>>? plugins,
     AuthSessionStrategy? sessionStrategy,
     AuthRateLimiter<TContext>? rateLimiter,
     AuthBrowserProtectionOptions? browserProtection,
@@ -250,7 +250,7 @@ class AuthOptions<TContext> {
       providers: providers ?? this.providers,
       store: store ?? this.store,
       storeMode: storeMode ?? this.storeMode,
-      features: features ?? this.features,
+      plugins: plugins ?? this.plugins,
       sessionStrategy: sessionStrategy ?? this.sessionStrategy,
       rateLimiter: rateLimiter ?? this.rateLimiter,
       browserProtection: browserProtection ?? this.browserProtection,
@@ -307,8 +307,8 @@ AuthOptions<TContext> resolveAuthOptions<TContext>({
     storeMode: store == null
         ? options.storeMode
         : store is InMemoryAuthStore
-            ? AuthStoreMode.ephemeral
-            : AuthStoreMode.durable,
+        ? AuthStoreMode.ephemeral
+        : AuthStoreMode.durable,
     httpClient: options.httpClient ?? httpClient,
     sessionStrategy: sessionStrategy ?? options.sessionStrategy,
     sessionMaxAge: options.sessionMaxAge ?? sessionMaxAge,

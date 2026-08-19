@@ -9,7 +9,7 @@ void main() {
   test(
     'MCP metadata advertises protected resource and OAuth server contracts',
     () async {
-      final feature = McpAuthFeature<Object>(
+      final feature = McpAuthPlugin<Object>(
         protectedResource: AuthOAuthProtectedResourceMetadata(
           resource: Uri.parse('https://mcp.example.test/mcp'),
           authorizationServers: [Uri.parse('https://auth.example.test')],
@@ -68,7 +68,7 @@ void main() {
 
   test('MCP metadata rejects relative and fragment-bearing URIs', () {
     expect(
-      () => McpAuthFeature<Object>(
+      () => McpAuthPlugin<Object>(
         protectedResource: AuthOAuthProtectedResourceMetadata(
           resource: Uri.parse('/mcp'),
           authorizationServers: [Uri.parse('https://auth.example.test')],
@@ -78,7 +78,7 @@ void main() {
       throwsArgumentError,
     );
     expect(
-      () => McpAuthFeature<Object>(
+      () => McpAuthPlugin<Object>(
         protectedResource: AuthOAuthProtectedResourceMetadata(
           resource: Uri.parse('https://mcp.example.test/mcp#fragment'),
           authorizationServers: [Uri.parse('https://auth.example.test')],
@@ -91,7 +91,7 @@ void main() {
 
   test('dynamic client registration delegates validated requests', () async {
     AuthOAuthClientRegistrationRequest? captured;
-    final feature = McpAuthFeature<String>(
+    final feature = McpAuthPlugin<String>(
       protectedResource: AuthOAuthProtectedResourceMetadata(
         resource: Uri.parse('https://mcp.example.test/mcp'),
         authorizationServers: [Uri.parse('https://auth.example.test')],
@@ -152,7 +152,7 @@ void main() {
   });
 
   test('dynamic client registration rejects unsafe clients', () async {
-    final feature = McpAuthFeature<Object>(
+    final feature = McpAuthPlugin<Object>(
       protectedResource: AuthOAuthProtectedResourceMetadata(
         resource: Uri.parse('https://mcp.example.test/mcp'),
         authorizationServers: [Uri.parse('https://auth.example.test')],

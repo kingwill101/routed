@@ -229,7 +229,7 @@ abstract interface class AuthSessionStore {
   });
 }
 
-/// Authoritative persistence boundary for authentication features.
+/// Authoritative persistence boundary for authentication plugins.
 ///
 /// Implementations expose each auth concern through its own typed store. An
 /// application must provide one store to [AuthOptions]; there is no implicit

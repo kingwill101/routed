@@ -36,13 +36,13 @@ final class _Fixture {
       email: 'user@example.com',
       name: 'Example User',
     );
-    feature = WebAuthnFeature<Object>(provider: provider);
+    feature = WebAuthnPlugin<Object>(provider: provider);
     AuthRuntime<Object>(
       options: AuthOptions<Object>(
         providers: [provider],
         store: store,
         storeMode: AuthStoreMode.ephemeral,
-        features: [feature],
+        plugins: [feature],
       ),
     );
   }
@@ -50,12 +50,12 @@ final class _Fixture {
   late final WebAuthnProvider provider;
   late final InMemoryAuthStore store;
   late final AuthUser user;
-  late final WebAuthnFeature<Object> feature;
+  late final WebAuthnPlugin<Object> feature;
   final Object context = Object();
   final _KeyPair keyPair = _KeyPair.create();
 }
 
-final class _RecordingSessionControl implements AuthFeatureSessionControl {
+final class _RecordingSessionControl implements AuthServerPluginSessionControl {
   AuthUser? replacedUser;
   String? authenticationMethod;
 

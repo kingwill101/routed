@@ -11,7 +11,7 @@ import 'package:server_auth/server_auth.dart'
         AuthGateViolation,
         AuthFlowException,
         AuthOrganizationAuthorizationContext,
-        OrganizationFeature,
+        OrganizationPlugin,
         PolicyBinding,
         syncManagedPolicyBindings,
         AuthPrincipal;
@@ -73,7 +73,7 @@ class Haigate {
   static Future<AuthOrganizationAuthorizationContext<EngineContext>>
   organizationContext({
     required EngineContext ctx,
-    required OrganizationFeature<EngineContext> feature,
+    required OrganizationPlugin<EngineContext> plugin,
     String? organizationId,
     String? teamId,
   }) async {
@@ -95,7 +95,7 @@ class Haigate {
         ? ctx.getSession<String>('__routed.auth.activeTeamId')?.trim()
         : null;
     try {
-      return await feature.authorizeContext(
+      return await plugin.authorizeContext(
         context: ctx,
         userId: principal.id,
         organizationId: requestedOrganizationId,
@@ -108,7 +108,7 @@ class Haigate {
           (error.code == 'team_not_found' || error.code == 'team_forbidden');
       if (!staleInheritedTeam) rethrow;
       ctx.removeSession('__routed.auth.activeTeamId');
-      return feature.authorizeContext(
+      return plugin.authorizeContext(
         context: ctx,
         userId: principal.id,
         organizationId: requestedOrganizationId,
@@ -120,7 +120,7 @@ class Haigate {
   /// the global [AuthPrincipal].
   static Future<bool> canInOrganization({
     required EngineContext ctx,
-    required OrganizationFeature<EngineContext> feature,
+    required OrganizationPlugin<EngineContext> plugin,
     required String resource,
     required String action,
     String? organizationId,
@@ -131,11 +131,11 @@ class Haigate {
     try {
       final organization = await organizationContext(
         ctx: ctx,
-        feature: feature,
+        plugin: plugin,
         organizationId: organizationId,
         teamId: teamId,
       );
-      return await feature.hasPermission(
+      return await plugin.hasPermission(
         context: ctx,
         userId: principal.id,
         organizationId: organization.organization.id,
@@ -150,7 +150,7 @@ class Haigate {
   /// Allows the authenticated resource owner, otherwise checks a tenant role.
   static Future<bool> ownsOrCanInOrganization({
     required EngineContext ctx,
-    required OrganizationFeature<EngineContext> feature,
+    required OrganizationPlugin<EngineContext> plugin,
     required String resourceOwnerId,
     required String resource,
     required String action,
@@ -161,7 +161,7 @@ class Haigate {
     if (principal?.id == resourceOwnerId.trim()) return true;
     return canInOrganization(
       ctx: ctx,
-      feature: feature,
+      plugin: plugin,
       resource: resource,
       action: action,
       organizationId: organizationId,

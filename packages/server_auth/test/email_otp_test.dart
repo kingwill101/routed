@@ -105,11 +105,11 @@ void main() {
     });
   });
 
-  group('EmailOtpFeature', () {
+  group('EmailOtpPlugin', () {
     test('sends a hashed OTP and signs in a new user once verified', () async {
       final store = InMemoryAuthStore();
       String? sentCode;
-      final feature = EmailOtpFeature<Object>(
+      final feature = EmailOtpPlugin<Object>(
         generateOtp: (_) => '123456',
         sendCode: (delivery) {
           sentCode = delivery.code;
@@ -122,7 +122,7 @@ void main() {
           providers: const [],
           store: store,
           storeMode: AuthStoreMode.ephemeral,
-          features: [feature],
+          plugins: [feature],
         ),
       );
 
@@ -142,7 +142,7 @@ void main() {
       expect(user.user.email, 'ada@example.com');
       expect(user.user.attributes['emailVerified'], isTrue);
       expect(await store.users.findByEmail('ada@example.com'), isNotNull);
-      expect(runtime.hasFeature(authEmailOtpFeatureId), isTrue);
+      expect(runtime.hasPlugin(authEmailOtpPluginId), isTrue);
       await expectLater(
         feature.signInWithOtp(
           context: Object(),
@@ -165,7 +165,7 @@ void main() {
             attributes: const {'emailVerified': false},
           ),
         );
-        final feature = EmailOtpFeature<Object>(
+        final feature = EmailOtpPlugin<Object>(
           disableSignUp: true,
           generateOtp: (_) => '123456',
           sendCode: (delivery) async {},
@@ -175,7 +175,7 @@ void main() {
             providers: const [],
             store: store,
             storeMode: AuthStoreMode.ephemeral,
-            features: [feature],
+            plugins: [feature],
           ),
         );
 

@@ -9,7 +9,7 @@ sidebar_position: 5
 
 The organization capability adds tenant-scoped membership and authorization to
 Routed auth. It is **opt-in**: no organization routes, storage requirements, or
-role behavior exist unless you add `OrganizationFeature` to `AuthOptions.features`.
+role behavior exist unless you add `OrganizationPlugin` to `AuthOptions.plugins`.
 
 Organization roles are deliberately separate from `AuthPrincipal.roles`.
 Global roles answer application-wide questions; organization roles answer what
@@ -32,7 +32,7 @@ import 'package:routed/routed.dart';
 
 final organizationStore = InMemoryAuthOrganizationStore();
 
-final organizations = OrganizationFeature<EngineContext>(
+final organizations = OrganizationPlugin<EngineContext>(
   store: organizationStore,
   options: AuthOrganizationOptions<EngineContext>(
     teams: const AuthOrganizationTeamsOptions(enabled: true),
@@ -58,7 +58,7 @@ engine.container.instance<AuthOptions<EngineContext>>(
   AuthOptions<EngineContext>(
     providers: providers,
     store: authStore,
-    features: [organizations],
+    plugins: [organizations],
     sessionStrategy: AuthSessionStrategy.session,
   ),
 );
@@ -77,8 +77,8 @@ uniqueness rules, and atomic operations an adapter must preserve.
 
 Routed currently ships the store interface and the in-memory implementation,
 not a production database adapter. Adapter authors can inspect
-`OrganizationFeature.persistenceSchemas` (or the composed
-`AuthFeatureRegistry.persistenceSchemas`) to map the logical topology onto
+`OrganizationPlugin.persistenceSchemas` (or the composed
+`AuthServerPluginRegistry.persistenceSchemas`) to map the logical topology onto
 their database. Implement every method on `AuthOrganizationStore`, then make
 the named `atomicOperations` transactional in that persistence engine.
 
@@ -181,7 +181,7 @@ const organizationRoles = <String, AuthOrganizationPermissionSet>{
   },
 };
 
-final organizations = OrganizationFeature<EngineContext>(
+final organizations = OrganizationPlugin<EngineContext>(
   store: organizationStore,
   options: AuthOrganizationOptions<EngineContext>(
     staticRoles: organizationRoles,

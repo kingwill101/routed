@@ -5,7 +5,7 @@ void main() {
   test(
     'authorization endpoint issues a bound code and token exchange is one-time',
     () async {
-      final feature = OAuthAuthorizationServerFeature<String>(
+      final feature = OAuthAuthorizationServerPlugin<String>(
         authorizationCodes: InMemoryAuthOAuthAuthorizationCodeStore(),
         resolveClient: (_, clientId) async => clientId == 'client-1'
             ? AuthOAuthAuthorizationClient(
@@ -82,7 +82,7 @@ void main() {
   );
 
   test('authorization endpoint never redirects an unregistered URI', () async {
-    final feature = OAuthAuthorizationServerFeature<Object>(
+    final feature = OAuthAuthorizationServerPlugin<Object>(
       authorizationCodes: InMemoryAuthOAuthAuthorizationCodeStore(),
       resolveClient: (_, _) => AuthOAuthAuthorizationClient(
         clientId: 'client-1',

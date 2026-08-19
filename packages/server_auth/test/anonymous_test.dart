@@ -4,15 +4,13 @@ import 'package:test/test.dart';
 void main() {
   test('anonymous users are typed, session-safe, and deletable', () async {
     final store = InMemoryAuthStore();
-    final feature = AnonymousFeature<Object>(
-      generateName: (context) => 'Guest',
-    );
+    final feature = AnonymousPlugin<Object>(generateName: (context) => 'Guest');
     final runtime = AuthRuntime<Object>(
       options: AuthOptions<Object>(
         providers: const [],
         store: store,
         storeMode: AuthStoreMode.ephemeral,
-        features: [feature],
+        plugins: [feature],
       ),
     );
 
@@ -47,15 +45,13 @@ void main() {
       final regular = await store.users.create(
         AuthUser(id: 'user-1', email: 'user@example.com'),
       );
-      final feature = AnonymousFeature<Object>(
-        disableDeleteAnonymousUser: true,
-      );
+      final feature = AnonymousPlugin<Object>(disableDeleteAnonymousUser: true);
       AuthRuntime<Object>(
         options: AuthOptions<Object>(
           providers: const [],
           store: store,
           storeMode: AuthStoreMode.ephemeral,
-          features: [feature],
+          plugins: [feature],
         ),
       );
 
@@ -74,7 +70,7 @@ void main() {
   test('link hook runs before the anonymous identity is removed', () async {
     final store = InMemoryAuthStore();
     AuthUser? linkedFrom;
-    final feature = AnonymousFeature<Object>(
+    final feature = AnonymousPlugin<Object>(
       onLinkAccount:
           ({required context, required anonymousUser, required newUser}) {
             linkedFrom = anonymousUser;
@@ -85,7 +81,7 @@ void main() {
         providers: const [],
         store: store,
         storeMode: AuthStoreMode.ephemeral,
-        features: [feature],
+        plugins: [feature],
       ),
     );
     final anonymous = (await feature.signInAnonymous(context: Object())).user;

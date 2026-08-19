@@ -27,13 +27,13 @@ String _cookieHeader(Cookie cookie) => '${cookie.name}=${cookie.value}';
 
 void main() {
   test('Routed supports anonymous sessions and account deletion', () async {
-    final feature = AnonymousFeature<EngineContext>();
+    final feature = AnonymousPlugin<EngineContext>();
     final manager = AuthManager(
       AuthOptions<EngineContext>(
         store: InMemoryAuthStore(),
         storeMode: AuthStoreMode.ephemeral,
         providers: const [],
-        features: [feature],
+        plugins: [feature],
       ),
     );
     final sessionConfig = _sessionConfig();

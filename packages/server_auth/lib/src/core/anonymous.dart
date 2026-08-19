@@ -1,13 +1,13 @@
 import 'dart:async';
 
 import 'exceptions.dart';
-import 'feature.dart';
+import 'plugin.dart';
 import 'models.dart';
 import 'rate_limit.dart';
 import 'store.dart';
 import 'tokens.dart' show secureRandomToken;
 
-const String authAnonymousFeatureId = 'anonymous';
+const String authAnonymousPluginId = 'anonymous';
 
 typedef AuthAnonymousNameGenerator<TContext> =
     FutureOr<String?> Function(TContext context);
@@ -28,14 +28,14 @@ final class AuthAnonymousSignInResult {
 
 /// Anonymous authenticated identities that can later be linked to a real
 /// sign-in method by the host integration.
-final class AnonymousFeature<TContext>
+final class AnonymousPlugin<TContext>
     implements
-        AuthFeature<TContext>,
+        AuthServerPlugin<TContext>,
         AuthEndpointContributor<TContext>,
         AuthPersistenceContributor,
         AuthClientOperationContributor,
         AuthRateLimitContributor {
-  AnonymousFeature({
+  AnonymousPlugin({
     this.generateName,
     this.onLinkAccount,
     this.disableDeleteAnonymousUser = false,
@@ -49,10 +49,10 @@ final class AnonymousFeature<TContext>
   bool _configured = false;
 
   @override
-  String get id => authAnonymousFeatureId;
+  String get id => authAnonymousPluginId;
 
   @override
-  void configure(AuthFeatureContext<TContext> context) {
+  void configure(AuthServerPluginContext<TContext> context) {
     _store = context.store;
     _configured = true;
   }
@@ -101,7 +101,7 @@ final class AnonymousFeature<TContext>
   @override
   Iterable<AuthPersistenceSchema> get persistenceSchemas => const [
     AuthPersistenceSchema(
-      id: authAnonymousFeatureId,
+      id: authAnonymousPluginId,
       entities: <AuthEntityDescriptor>[
         AuthEntityDescriptor(
           id: 'user',
@@ -115,7 +115,7 @@ final class AnonymousFeature<TContext>
 
   Future<AuthAnonymousSignInResult> signInAnonymous({
     required TContext context,
-    AuthFeatureSessionControl? sessionControl,
+    AuthServerPluginSessionControl? sessionControl,
   }) async {
     _ensureConfigured();
     final name = await generateName?.call(context);
@@ -204,7 +204,7 @@ final class AnonymousFeature<TContext>
   }
 
   void _ensureConfigured() {
-    if (!_configured) throw StateError('AnonymousFeature is not configured');
+    if (!_configured) throw StateError('AnonymousPlugin is not configured');
   }
 
   static final AuthOperationCodec<Map<String, dynamic>> _mapCodec =

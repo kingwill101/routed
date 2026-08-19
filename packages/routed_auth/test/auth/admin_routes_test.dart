@@ -67,7 +67,7 @@ void main() {
       );
       await core.users.create(admin);
       final limiter = _RecordingLimiter();
-      final feature = AdminFeature<EngineContext>(
+      final feature = AdminPlugin<EngineContext>(
         store: InMemoryAuthAdminStore(core),
       );
       final manager = AuthManager(
@@ -80,7 +80,7 @@ void main() {
                   core.users.findByEmail(credentials.email!),
             ),
           ],
-          features: [feature],
+          plugins: [feature],
           rateLimiter: limiter,
         ),
       );

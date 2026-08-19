@@ -92,8 +92,8 @@ void main() {
           storeMode: AuthStoreMode.ephemeral,
           providers: [CredentialsProvider()],
           passwordHasher: hasher,
-          features: [
-            TwoFactorFeature<EngineContext>(
+          plugins: [
+            TwoFactorPlugin<EngineContext>(
               store: InMemoryAuthTwoFactorStore(),
               challengeStore: InMemoryAuthTwoFactorChallengeStore(),
               trustedDeviceStore: trustedDeviceStore,

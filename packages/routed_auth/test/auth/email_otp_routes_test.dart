@@ -30,7 +30,7 @@ void main() {
     'email OTP routes send, sign in, and verify with typed sessions',
     () async {
       String? sentCode;
-      final feature = EmailOtpFeature<EngineContext>(
+      final feature = EmailOtpPlugin<EngineContext>(
         generateOtp: (_) => '123456',
         sendCode: (delivery) {
           sentCode = delivery.code;
@@ -41,7 +41,7 @@ void main() {
           store: InMemoryAuthStore(),
           storeMode: AuthStoreMode.ephemeral,
           providers: const [],
-          features: [feature],
+          plugins: [feature],
         ),
       );
       final sessionConfig = _sessionConfig();
@@ -109,7 +109,7 @@ void main() {
   );
 
   test('invalid email OTP stays a bounded auth error', () async {
-    final feature = EmailOtpFeature<EngineContext>(
+    final feature = EmailOtpPlugin<EngineContext>(
       sendCode: (delivery) async {},
     );
     final manager = AuthManager(
@@ -117,7 +117,7 @@ void main() {
         store: InMemoryAuthStore(),
         storeMode: AuthStoreMode.ephemeral,
         providers: const [],
-        features: [feature],
+        plugins: [feature],
       ),
     );
     final engine = testEngine(

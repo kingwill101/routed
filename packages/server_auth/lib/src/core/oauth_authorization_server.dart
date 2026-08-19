@@ -2,13 +2,13 @@ import 'dart:async';
 
 import 'device_authorization.dart' show AuthDeviceAccessToken;
 import 'exceptions.dart';
-import 'feature.dart';
+import 'plugin.dart';
 import 'oauth_authorization_code_store.dart';
 import 'rate_limit.dart';
 import 'tokens.dart' show secureRandomToken;
 import 'users.dart' show authUserIsDisabled;
 
-const String authOAuthAuthorizationServerFeatureId =
+const String authOAuthAuthorizationServerPluginId =
     'oauth_authorization_server';
 
 /// An OAuth client accepted by the application authorization server.
@@ -41,15 +41,15 @@ typedef AuthOAuthAccessTokenIssuer<TContext> =
 /// Client registration, token signing, refresh-token persistence, and user
 /// consent remain application-owned callbacks. This feature owns only the
 /// protocol validation and one-time authorization-code transaction.
-final class OAuthAuthorizationServerFeature<TContext>
+final class OAuthAuthorizationServerPlugin<TContext>
     implements
-        AuthFeature<TContext>,
+        AuthServerPlugin<TContext>,
         AuthEndpointContributor<TContext>,
         AuthClientOperationContributor,
         AuthPersistenceContributor,
         AuthRateLimitContributor,
         AuthUserDataDeletionContributor {
-  OAuthAuthorizationServerFeature({
+  OAuthAuthorizationServerPlugin({
     required this.authorizationCodes,
     required this.resolveClient,
     required this.issueAccessToken,
@@ -66,10 +66,10 @@ final class OAuthAuthorizationServerFeature<TContext>
   final AuthOAuthAuthorizationCodeService _codeService;
 
   @override
-  String get id => authOAuthAuthorizationServerFeatureId;
+  String get id => authOAuthAuthorizationServerPluginId;
 
   @override
-  void configure(AuthFeatureContext<TContext> context) {}
+  void configure(AuthServerPluginContext<TContext> context) {}
 
   @override
   String get userDataNamespace => 'oauth_authorization_server';
@@ -126,7 +126,7 @@ final class OAuthAuthorizationServerFeature<TContext>
   @override
   Iterable<AuthPersistenceSchema> get persistenceSchemas => const [
     AuthPersistenceSchema(
-      id: authOAuthAuthorizationServerFeatureId,
+      id: authOAuthAuthorizationServerPluginId,
       entities: <AuthEntityDescriptor>[
         AuthEntityDescriptor(
           id: 'auth_oauth_authorization_code',
@@ -184,7 +184,7 @@ final class OAuthAuthorizationServerFeature<TContext>
     originPolicy: originPolicy,
     csrfPolicy: csrfPolicy,
     rateLimitOperation: AuthRateLimitOperation(
-      authOAuthAuthorizationServerFeatureId,
+      authOAuthAuthorizationServerPluginId,
       operationName,
     ),
     handler: (invocation, request) => _invoke(id, invocation, request),

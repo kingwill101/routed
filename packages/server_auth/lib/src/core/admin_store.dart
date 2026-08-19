@@ -2,7 +2,7 @@ import 'dart:async';
 
 import 'admin_models.dart';
 import 'exceptions.dart';
-import 'feature.dart';
+import 'plugin.dart';
 import 'models.dart';
 import 'store.dart';
 

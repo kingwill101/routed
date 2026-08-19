@@ -2,10 +2,10 @@ import 'package:server_auth/server_auth.dart';
 import 'package:test/test.dart';
 
 void main() {
-  group('AdminFeature', () {
+  group('AdminPlugin', () {
     late InMemoryAuthStore core;
     late InMemoryAuthAdminStore adminStore;
-    late AdminFeature<Object> feature;
+    late AdminPlugin<Object> feature;
     late AuthUser admin;
     late AuthUser member;
 
@@ -26,14 +26,14 @@ void main() {
       );
       await _seed(core, admin);
       await _seed(core, member);
-      feature = AdminFeature<Object>(store: adminStore);
+      feature = AdminPlugin<Object>(store: adminStore);
       AuthRuntime<Object>(
         options: AuthOptions(
           providers: const [],
           store: core,
           storeMode: AuthStoreMode.ephemeral,
           passwordHasher: const _Hasher(),
-          features: [feature],
+          plugins: [feature],
         ),
       );
     });
@@ -46,14 +46,14 @@ void main() {
           storeMode: AuthStoreMode.ephemeral,
         ),
       );
-      expect(without.feature(authAdminFeatureId), isNull);
+      expect(without.plugin(authAdminPluginId), isNull);
 
       final runtime = AuthRuntime<Object>(
         options: AuthOptions(
           providers: const [],
           store: core,
           storeMode: AuthStoreMode.ephemeral,
-          features: [feature],
+          plugins: [feature],
         ),
       );
       expect(runtime.registry.endpoints, hasLength(15));
@@ -232,7 +232,7 @@ void main() {
       'after-commit failures become warnings and events are redacted',
       () async {
         final events = <AuthAdminLifecycleEvent>[];
-        feature = AdminFeature<Object>(
+        feature = AdminPlugin<Object>(
           store: adminStore,
           options: AuthAdminOptions(
             hooks: AuthAdminHooks(
@@ -247,7 +247,7 @@ void main() {
             store: core,
             storeMode: AuthStoreMode.ephemeral,
             passwordHasher: const _Hasher(),
-            features: [feature],
+            plugins: [feature],
           ),
         );
         final response = _map(
@@ -277,7 +277,7 @@ void main() {
             userId: member.id,
           ),
         );
-        final guarded = AdminFeature<Object>(
+        final guarded = AdminPlugin<Object>(
           store: adminStore,
           options: AuthAdminOptions(
             validateDeletion: (_) => throw AuthFlowException('last_owner'),
@@ -288,7 +288,7 @@ void main() {
             providers: const [],
             store: core,
             storeMode: AuthStoreMode.ephemeral,
-            features: [guarded],
+            plugins: [guarded],
           ),
         );
         await expectLater(
@@ -363,16 +363,16 @@ void main() {
       'composed organization data rejects last-owner deletion and cascades',
       () async {
         final organizationStore = InMemoryAuthOrganizationStore();
-        final organizations = OrganizationFeature<Object>(
+        final organizations = OrganizationPlugin<Object>(
           store: organizationStore,
         );
-        feature = AdminFeature<Object>(store: adminStore);
+        feature = AdminPlugin<Object>(store: adminStore);
         AuthRuntime<Object>(
           options: AuthOptions(
             providers: const [],
             store: core,
             storeMode: AuthStoreMode.ephemeral,
-            features: [organizations, feature],
+            plugins: [organizations, feature],
           ),
         );
         final organization = (await organizations.createOrganization(
@@ -406,7 +406,7 @@ void main() {
 }
 
 Future<Object?> _invoke(
-  AdminFeature<Object> feature,
+  AdminPlugin<Object> feature,
   String id,
   AuthUser user,
   Map<String, dynamic> input,
@@ -421,11 +421,11 @@ Future<Object?> _invoke(
 }
 
 Future<Object?> _invokeWithControl(
-  AdminFeature<Object> feature,
+  AdminPlugin<Object> feature,
   String id,
   AuthUser user,
   Map<String, dynamic> input,
-  AuthFeatureSessionControl control,
+  AuthServerPluginSessionControl control,
 ) {
   final endpoint = feature.endpoints.singleWhere((value) => value.id == id);
   return Future<Object?>.value(
@@ -493,7 +493,7 @@ final class _Hasher implements PasswordHasher {
       );
 }
 
-final class _SessionControl implements AuthFeatureSessionControl {
+final class _SessionControl implements AuthServerPluginSessionControl {
   _SessionControl({this.strategy = AuthSessionStrategy.session});
 
   @override

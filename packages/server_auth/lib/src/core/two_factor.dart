@@ -5,12 +5,12 @@ import 'dart:typed_data';
 import 'package:hashlib/hashlib.dart';
 
 import 'exceptions.dart';
-import 'feature.dart';
+import 'plugin.dart';
 import 'models.dart';
 import 'tokens.dart';
 
 /// Stable ID for the built-in two-factor feature.
-const authTwoFactorFeatureId = 'two_factor';
+const authTwoFactorPluginId = 'two_factor';
 
 const String _base32Alphabet = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ234567';
 
@@ -1072,9 +1072,9 @@ class AuthTwoFactorStatus {
 /// [verifyTotp] or [useRecoveryCode] to gate a pending sign-in challenge;
 /// pending sign-in orchestration is intentionally kept in the adapter so the
 /// feature remains framework-agnostic.
-final class TwoFactorFeature<TContext>
-    implements AuthFeature<TContext>, AuthUserDataDeletionContributor {
-  TwoFactorFeature({
+final class TwoFactorPlugin<TContext>
+    implements AuthServerPlugin<TContext>, AuthUserDataDeletionContributor {
+  TwoFactorPlugin({
     required this.store,
     required this.secretProtector,
     this.issuer = 'server_auth',
@@ -1163,7 +1163,7 @@ final class TwoFactorFeature<TContext>
   }
 
   @override
-  String get id => authTwoFactorFeatureId;
+  String get id => authTwoFactorPluginId;
 
   final AuthTwoFactorStore store;
   final AuthTwoFactorSecretProtector secretProtector;
@@ -1186,7 +1186,7 @@ final class TwoFactorFeature<TContext>
   final List<int> Function(int length) _secretGenerator;
 
   @override
-  void configure(AuthFeatureContext<TContext> context) {
+  void configure(AuthServerPluginContext<TContext> context) {
     // The feature owns its additional persistence contract. The shared store
     // remains available for user/session lookups in future composed hooks.
   }

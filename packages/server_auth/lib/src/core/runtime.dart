@@ -1,4 +1,4 @@
-import 'feature.dart';
+import 'plugin.dart';
 import 'options.dart';
 import 'store.dart';
 
@@ -11,12 +11,12 @@ class AuthRuntime<TContext> {
   AuthRuntime({
     required this.options,
     AuthStore? store,
-    Iterable<AuthFeature<TContext>> features = const [],
+    Iterable<AuthServerPlugin<TContext>> plugins = const [],
     bool requireDurableStore = false,
   }) : store = store ?? options.store,
-       features = List<AuthFeature<TContext>>.unmodifiable([
-         ...options.features,
-         ...features,
+       plugins = List<AuthServerPlugin<TContext>>.unmodifiable([
+         ...options.plugins,
+         ...plugins,
        ]) {
     if (store is CallbackAuthStore) {
       throw ArgumentError(
@@ -24,28 +24,28 @@ class AuthRuntime<TContext> {
       );
     }
     if (requireDurableStore) requireDurableStoreOrThrow();
-    registry = AuthFeatureRegistry<TContext>(
+    registry = AuthServerPluginRegistry<TContext>(
       store: this.store,
       passwordHasher: options.passwordHasher,
       passwordPolicy: options.passwordPolicy,
       sessionStrategy: options.sessionStrategy,
     );
-    for (final feature in this.features) {
-      registry.register(feature);
+    for (final plugin in this.plugins) {
+      registry.register(plugin);
     }
     registry.freeze();
   }
 
   final AuthOptions<TContext> options;
 
-  /// Typed domain stores used by auth features.
+  /// Typed domain stores used by auth plugins.
   final AuthStore store;
 
-  /// The features configured for this runtime.
-  final List<AuthFeature<TContext>> features;
+  /// The plugins configured for this runtime.
+  final List<AuthServerPlugin<TContext>> plugins;
 
-  /// Registry of features active in this runtime.
-  late final AuthFeatureRegistry<TContext> registry;
+  /// Registry of plugins active in this runtime.
+  late final AuthServerPluginRegistry<TContext> registry;
 
   /// Throws when this runtime is backed by intentionally ephemeral storage.
   void requireDurableStoreOrThrow() {
@@ -58,7 +58,7 @@ class AuthRuntime<TContext> {
     }
   }
 
-  AuthFeature<TContext>? feature(String id) => registry.find(id);
+  AuthServerPlugin<TContext>? plugin(String id) => registry.find(id);
 
-  bool hasFeature(String id) => registry.contains(id);
+  bool hasPlugin(String id) => registry.contains(id);
 }

@@ -2,14 +2,14 @@ import 'dart:async';
 
 import 'email_otp_store.dart';
 import 'exceptions.dart';
-import 'feature.dart';
+import 'plugin.dart';
 import 'models.dart';
 import 'rate_limit.dart';
 import 'store.dart';
 import 'tokens.dart' show secureRandomToken;
 import 'users.dart' show authUserIsDisabled;
 
-const String authEmailOtpFeatureId = 'email_otp';
+const String authEmailOtpPluginId = 'email_otp';
 
 typedef AuthEmailOtpSender<TContext> =
     FutureOr<void> Function(AuthEmailOtpDelivery<TContext> delivery);
@@ -39,15 +39,15 @@ final class AuthEmailOtpSignInResult {
 
 /// Typed email OTP feature modeled on the common sign-in, verification, and
 /// password-recovery OTP flows.
-final class EmailOtpFeature<TContext>
+final class EmailOtpPlugin<TContext>
     implements
-        AuthFeature<TContext>,
+        AuthServerPlugin<TContext>,
         AuthEndpointContributor<TContext>,
         AuthPersistenceContributor,
         AuthClientOperationContributor,
         AuthRateLimitContributor,
         AuthUserDataDeletionContributor {
-  EmailOtpFeature({
+  EmailOtpPlugin({
     required this.sendCode,
     this.otpLength = 6,
     this.expiresIn = const Duration(minutes: 5),
@@ -71,13 +71,13 @@ final class EmailOtpFeature<TContext>
   bool _configured = false;
 
   @override
-  String get id => authEmailOtpFeatureId;
+  String get id => authEmailOtpPluginId;
 
   @override
-  String get userDataNamespace => authEmailOtpFeatureId;
+  String get userDataNamespace => authEmailOtpPluginId;
 
   @override
-  void configure(AuthFeatureContext<TContext> context) {
+  void configure(AuthServerPluginContext<TContext> context) {
     _store = context.store.emailOtps;
     _users = context.store.users;
     _configured = true;
@@ -170,7 +170,7 @@ final class EmailOtpFeature<TContext>
   @override
   Iterable<AuthPersistenceSchema> get persistenceSchemas => const [
     AuthPersistenceSchema(
-      id: authEmailOtpFeatureId,
+      id: authEmailOtpPluginId,
       entities: <AuthEntityDescriptor>[
         AuthEntityDescriptor(
           id: 'auth_email_otp',
@@ -255,7 +255,7 @@ final class EmailOtpFeature<TContext>
     String? name,
     String? image,
     DateTime? now,
-    AuthFeatureSessionControl? sessionControl,
+    AuthServerPluginSessionControl? sessionControl,
   }) async {
     await _verify(
       email: email,
@@ -407,7 +407,7 @@ final class EmailOtpFeature<TContext>
   }
 
   void _ensureConfigured() {
-    if (!_configured) throw StateError('EmailOtpFeature is not configured');
+    if (!_configured) throw StateError('EmailOtpPlugin is not configured');
   }
 
   static final AuthOperationCodec<Map<String, dynamic>> _mapCodec =

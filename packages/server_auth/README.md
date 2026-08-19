@@ -76,10 +76,10 @@ sign-out. It does not persist secrets or silently provision local accounts.
 
 ## Optional two-factor feature
 
-Compose `TwoFactorFeature` when an application needs TOTP and recovery codes:
+Compose `TwoFactorPlugin` when an application needs TOTP and recovery codes:
 
 ```dart
-final twoFactor = TwoFactorFeature<void>(
+final twoFactor = TwoFactorPlugin<void>(
   store: myTwoFactorStore,
   challengeStore: myTwoFactorChallengeStore,
   pendingRecoveryStore: myPendingRecoveryStore,
@@ -110,13 +110,13 @@ plaintext protector is intended only for tests and ephemeral examples.
 ## Optional admin feature
 
 Administrative APIs are opt-in. Create a feature-owned admin store over the
-same core auth store, then include `AdminFeature` in `AuthOptions.features`:
+same core auth store, then include `AdminPlugin` in `AuthOptions.plugins`:
 
 ```dart
 final authStore = InMemoryAuthStore();
 final adminStore = InMemoryAuthAdminStore(authStore);
 
-final admin = AdminFeature<MyRequestContext>(
+final admin = AdminPlugin<MyRequestContext>(
   store: adminStore,
   options: const AuthAdminOptions(
     adminRoles: {'admin'},
@@ -128,7 +128,7 @@ final options = AuthOptions<MyRequestContext>(
   providers: providers,
   store: authStore,
   storeMode: AuthStoreMode.ephemeral,
-  features: [admin],
+  plugins: [admin],
 );
 ```
 
@@ -156,7 +156,7 @@ application invariants such as deleting the last owner of an organization.
 development, not production persistence.
 
 The in-memory Admin store discovers composed user-data deletion contributors
-when feature topology freezes. With `OrganizationFeature`, it automatically
+when feature topology freezes. With `OrganizationPlugin`, it automatically
 enforces last-owner protection and clears organization/team membership data.
 Durable adapters must provide the equivalent cross-feature transaction.
 
@@ -181,10 +181,10 @@ warnings when an after-commit hook or audit sink fails.
 ## Optional organization feature
 
 Organizations are opt-in. Nothing is registered unless an
-`OrganizationFeature` is included in `AuthOptions.features`:
+`OrganizationPlugin` is included in `AuthOptions.plugins`:
 
 ```dart
-final organizations = OrganizationFeature<MyRequestContext>(
+final organizations = OrganizationPlugin<MyRequestContext>(
   store: myOrganizationStore,
   options: const AuthOrganizationOptions(
     teams: AuthOrganizationTeamsOptions(enabled: true),
@@ -195,7 +195,7 @@ final organizations = OrganizationFeature<MyRequestContext>(
 final options = AuthOptions<MyRequestContext>(
   providers: providers,
   store: myAuthStore,
-  features: [organizations],
+  plugins: [organizations],
 );
 ```
 
@@ -240,10 +240,10 @@ selection as a convenience.
 
 ## Optional API-key feature
 
-Compose `AuthApiKeyFeature` for service-client credentials:
+Compose `AuthApiKeyPlugin` for service-client credentials:
 
 ```dart
-final apiKeys = AuthApiKeyFeature<MyRequestContext>(
+final apiKeys = AuthApiKeyPlugin<MyRequestContext>(
   store: myApiKeyStore,
   sessionExchangeEnabled: true, // Only when API keys may create sessions.
 );
@@ -251,7 +251,7 @@ final apiKeys = AuthApiKeyFeature<MyRequestContext>(
 final options = AuthOptions<MyRequestContext>(
   store: myAuthStore,
   providers: providers,
-  features: [apiKeys],
+  plugins: [apiKeys],
 );
 ```
 
@@ -274,7 +274,7 @@ final options = AuthOptions<void>(
   providers: [google],
   store: InMemoryAuthStore(), // Use a database-backed AuthStore in production.
   storeMode: AuthStoreMode.ephemeral,
-  features: [MyAuthFeature()],
+  plugins: [MyAuthServerPlugin()],
 );
 
 final runtime = AuthRuntime<void>(options: options);

@@ -6,7 +6,7 @@ import 'package:crypto/crypto.dart' as crypto;
 import 'package:pointycastle/export.dart';
 
 import 'exceptions.dart';
-import 'feature.dart';
+import 'plugin.dart';
 import 'models.dart';
 import 'providers.dart';
 import 'rate_limit.dart';
@@ -15,7 +15,7 @@ import 'tokens.dart';
 import 'webauthn_store.dart';
 
 /// Stable ID for the opt-in WebAuthn feature.
-const String authWebAuthnFeatureId = 'webauthn';
+const String authWebAuthnPluginId = 'webauthn';
 
 /// Public registration options returned to a WebAuthn client.
 final class AuthWebAuthnRegistrationOptions {
@@ -123,15 +123,15 @@ final class AuthWebAuthnAuthenticationResult {
 /// algorithms instead of accepting an assertion that has not been verified.
 /// Applications that need other WebAuthn algorithms can add them after the
 /// same parsing and replay guarantees are implemented.
-final class WebAuthnFeature<TContext>
+final class WebAuthnPlugin<TContext>
     implements
-        AuthFeature<TContext>,
+        AuthServerPlugin<TContext>,
         AuthEndpointContributor<TContext>,
         AuthPersistenceContributor,
         AuthClientOperationContributor,
         AuthRateLimitContributor,
         AuthUserDataDeletionContributor {
-  WebAuthnFeature({
+  WebAuthnPlugin({
     required this.provider,
     this.challengeTtl = const Duration(minutes: 5),
   }) : assert(challengeTtl > Duration.zero);
@@ -145,7 +145,7 @@ final class WebAuthnFeature<TContext>
   bool _configured = false;
 
   @override
-  String get id => authWebAuthnFeatureId;
+  String get id => authWebAuthnPluginId;
 
   @override
   String get userDataNamespace => 'webauthn';
@@ -166,7 +166,7 @@ final class WebAuthnFeature<TContext>
   }
 
   @override
-  void configure(AuthFeatureContext<TContext> context) {
+  void configure(AuthServerPluginContext<TContext> context) {
     _challengeStore = context.store.webAuthnChallenges;
     _authenticatorStore = context.store.webAuthnAuthenticators;
     _userStore = context.store.users;
@@ -361,7 +361,7 @@ final class WebAuthnFeature<TContext>
   @override
   Iterable<AuthPersistenceSchema> get persistenceSchemas => const [
     AuthPersistenceSchema(
-      id: authWebAuthnFeatureId,
+      id: authWebAuthnPluginId,
       entities: <AuthEntityDescriptor>[
         AuthEntityDescriptor(
           id: 'auth_webauthn_challenge',
@@ -702,7 +702,7 @@ final class WebAuthnFeature<TContext>
 
   void _ensureConfigured() {
     if (!_configured) {
-      throw StateError('WebAuthnFeature must be registered with AuthRuntime');
+      throw StateError('WebAuthnPlugin must be registered with AuthRuntime');
     }
   }
 

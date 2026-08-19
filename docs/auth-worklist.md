@@ -23,10 +23,10 @@ The work is intentionally split between framework-agnostic capabilities in
   token store contracts in `server_auth`.
 - [x] Make `AuthStore` the only auth persistence boundary and remove the flat
   adapter compatibility API.
-- [x] Add `AuthRuntime` and `AuthFeature` composition with duplicate-ID checks.
+- [x] Add `AuthRuntime` and `AuthServerPlugin` composition with duplicate-ID checks.
 - [x] Expose the composed runtime through `AuthManager` and
   `AuthServiceProvider`.
-- [x] Let features contribute endpoint descriptors, hooks, schemas, rate-limit
+- [x] Let plugins contribute endpoint descriptors, hooks, schemas, rate-limit
   rules, and typed client operations without editing a central route switch.
 - [x] Define paired server/client feature contracts so a feature can expose its
   persistence, routes, response models, client methods, and conformance tests
@@ -68,7 +68,7 @@ The work is intentionally split between framework-agnostic capabilities in
   verification, and callback endpoints. Routed invokes the contract before
   built-in flows and custom callbacks, and `RoutedAuthRateLimiter` adapts the
   existing `server_rate_limit` service; password-reset and passkey actions will
-  use the same contract when those features land.
+  use the same contract when those plugins land.
 - [x] Use Routed's explicit trusted-proxy/client-IP policy for auth rate-limit
   keys and persisted session metadata; auth does not read forwarded headers
   directly. Broader proxy configuration ergonomics remain a core concern.
@@ -118,7 +118,7 @@ The work is intentionally split between framework-agnostic capabilities in
   COSE algorithms. Routed now issues a server-side session after a verified
   assertion when that strategy is configured, and passkeys can be renamed
   through the owner-checked store, feature endpoint, and client API.
-- [x] Add an optional native `TwoFactorFeature` with TOTP enrollment
+- [x] Add an optional native `TwoFactorPlugin` with TOTP enrollment
   verification, protected-secret and typed-store boundaries, recovery-code
   hashing and atomic one-time consumption, lockout handling, disablement, and
   recovery-code regeneration.
@@ -167,7 +167,7 @@ The work is intentionally split between framework-agnostic capabilities in
   lifecycle.
 - [ ] Add ergonomic typed configuration builders or presets for common auth
   deployments while keeping security-sensitive defaults explicit and safe.
-- [x] Make features contribute their routes, schemas, hooks, and rate-limit
+- [x] Make plugins contribute their routes, schemas, hooks, and rate-limit
   rules through the public composition API instead of requiring consumers to
   edit central route switches.
 - [ ] Add a CLI/device authorization flow for limited-input clients, including
@@ -191,7 +191,7 @@ account, session, client, and feature contracts above:
 - [ ] Add username-first authentication and explicit identifier policy.
 - [ ] Add anonymous/guest sessions with safe account upgrade/linking rules.
 - [ ] Track the last successful authentication method without storing secrets.
-- [ ] Add captcha and breached-password checks as opt-in security features.
+- [ ] Add captcha and breached-password checks as opt-in security plugins.
 - [ ] Add SSO/SAML and SCIM integrations when enterprise tenancy requirements
   justify them.
 

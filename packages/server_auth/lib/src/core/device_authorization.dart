@@ -1,7 +1,7 @@
 import 'dart:async';
 
 import 'exceptions.dart';
-import 'feature.dart';
+import 'plugin.dart';
 import 'models.dart';
 import 'rate_limit.dart';
 import 'store.dart';
@@ -9,7 +9,7 @@ import 'tokens.dart' show secureRandomToken;
 import 'users.dart' show authUserIsDisabled;
 import 'device_authorization_store.dart';
 
-const String authDeviceAuthorizationFeatureId = 'device_authorization';
+const String authDeviceAuthorizationPluginId = 'device_authorization';
 
 typedef AuthDeviceAuthorizationClientValidator<TContext> =
     FutureOr<bool> Function(
@@ -83,15 +83,15 @@ final class AuthDeviceAuthorizationRequest {
 /// access-token creation to [issueToken]. Applications should persist and
 /// validate those tokens in their own API-token boundary; this feature never
 /// stores raw access or refresh tokens.
-final class DeviceAuthorizationFeature<TContext>
+final class DeviceAuthorizationPlugin<TContext>
     implements
-        AuthFeature<TContext>,
+        AuthServerPlugin<TContext>,
         AuthEndpointContributor<TContext>,
         AuthPersistenceContributor,
         AuthClientOperationContributor,
         AuthRateLimitContributor,
         AuthUserDataDeletionContributor {
-  DeviceAuthorizationFeature({
+  DeviceAuthorizationPlugin({
     required this.verificationUri,
     required this.validateClient,
     required this.issueToken,
@@ -112,13 +112,13 @@ final class DeviceAuthorizationFeature<TContext>
   bool _configured = false;
 
   @override
-  String get id => authDeviceAuthorizationFeatureId;
+  String get id => authDeviceAuthorizationPluginId;
 
   @override
   String get userDataNamespace => 'device_authorization';
 
   @override
-  void configure(AuthFeatureContext<TContext> context) {
+  void configure(AuthServerPluginContext<TContext> context) {
     _store = context.store.deviceAuthorizations;
     _userStore = context.store.users;
     _configured = true;
@@ -214,7 +214,7 @@ final class DeviceAuthorizationFeature<TContext>
   @override
   Iterable<AuthPersistenceSchema> get persistenceSchemas => const [
     AuthPersistenceSchema(
-      id: authDeviceAuthorizationFeatureId,
+      id: authDeviceAuthorizationPluginId,
       entities: <AuthEntityDescriptor>[
         AuthEntityDescriptor(
           id: 'auth_device_authorization',
@@ -416,7 +416,7 @@ final class DeviceAuthorizationFeature<TContext>
   void _ensureConfigured() {
     if (!_configured) {
       throw StateError(
-        'DeviceAuthorizationFeature must be registered with AuthRuntime',
+        'DeviceAuthorizationPlugin must be registered with AuthRuntime',
       );
     }
   }

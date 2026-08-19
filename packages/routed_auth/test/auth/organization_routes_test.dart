@@ -48,7 +48,7 @@ void main() {
           store: InMemoryAuthStore(),
           storeMode: AuthStoreMode.ephemeral,
           providers: const [],
-          features: [_CollisionFeature(serverOnly: serverOnly)],
+          plugins: [_CollisionPlugin(serverOnly: serverOnly)],
         ),
       );
 
@@ -111,7 +111,7 @@ void main() {
     'contributed routes share session, CSRF, active state, and limiter',
     () async {
       final limiter = _RecordingLimiter();
-      final organization = OrganizationFeature<EngineContext>(
+      final organization = OrganizationPlugin<EngineContext>(
         store: InMemoryAuthOrganizationStore(),
       );
       final manager = AuthManager(
@@ -127,7 +127,7 @@ void main() {
               ),
             ),
           ],
-          features: [organization],
+          plugins: [organization],
           rateLimiter: limiter,
         ),
       );
@@ -222,11 +222,11 @@ final class _RecordingLimiter implements AuthRateLimiter<EngineContext> {
   }
 }
 
-final class _CollisionFeature
+final class _CollisionPlugin
     implements
-        AuthFeature<EngineContext>,
+        AuthServerPlugin<EngineContext>,
         AuthEndpointContributor<EngineContext> {
-  const _CollisionFeature({required this.serverOnly});
+  const _CollisionPlugin({required this.serverOnly});
 
   final bool serverOnly;
 
@@ -239,7 +239,7 @@ final class _CollisionFeature
   ];
 
   @override
-  void configure(AuthFeatureContext<EngineContext> context) {}
+  void configure(AuthServerPluginContext<EngineContext> context) {}
 }
 
 final class _CollisionEndpoint

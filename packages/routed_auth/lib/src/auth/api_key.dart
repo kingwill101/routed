@@ -7,7 +7,7 @@ import 'package:routed_core/src/router/types.dart';
 import 'package:server_auth/server_auth.dart'
     show
         AuthApiKeyAuthentication,
-        AuthApiKeyFeature,
+        AuthApiKeyPlugin,
         AuthPrincipal,
         AuthUser,
         AuthUserStore,
@@ -39,7 +39,7 @@ AuthApiKeyAuthentication? currentApiKey(EngineContext context) => context
 /// allowing applications to compose API-key, session, and JWT middleware. An
 /// invalid supplied key returns a generic 401 response.
 Middleware apiKeyAuthentication({
-  required AuthApiKeyFeature<EngineContext> feature,
+  required AuthApiKeyPlugin<EngineContext> plugin,
   required AuthUserStore userStore,
   String headerName = 'x-api-key',
   FutureOr<void> Function(
@@ -60,7 +60,7 @@ Middleware apiKeyAuthentication({
     final rawKey = request.value;
     if (rawKey == null) return next();
 
-    final authentication = await feature.authenticate(rawKey);
+    final authentication = await plugin.authenticate(rawKey);
     final user = authentication == null
         ? null
         : await userStore.findById(authentication.record.userId);

@@ -148,7 +148,7 @@ Server-side session management is available through:
 Session responses include safe device metadata and never include the persisted
 session-token digest. These routes are not registered for JWT sessions.
 
-When `TwoFactorFeature` is composed, Routed also registers:
+When `TwoFactorPlugin` is composed, Routed also registers:
 
 - `GET /auth/2fa/status`
 - `POST /auth/2fa/enroll`
@@ -179,7 +179,7 @@ sensitive actions; `POST /auth/2fa/step-up/revoke` clears the proof.
 
 ## API-key authentication
 
-Compose `AuthApiKeyFeature` in `AuthOptions.features` to add:
+Compose `AuthApiKeyPlugin` in `AuthOptions.plugins` to add:
 
 - `GET /auth/api-keys/list`
 - `POST /auth/api-keys/create`
@@ -191,7 +191,7 @@ The raw secret is returned only by create and rotate. To authenticate service
 requests, add the middleware after the feature is composed:
 
 ```dart
-final apiKeys = AuthApiKeyFeature<EngineContext>(store: myApiKeyStore);
+final apiKeys = AuthApiKeyPlugin<EngineContext>(store: myApiKeyStore);
 final apiKeyMiddleware = apiKeyAuthentication(
   feature: apiKeys,
   userStore: myAuthStore.users,
@@ -206,7 +206,7 @@ the request principal without creating a browser session. If
 
 ## Organizations
 
-Compose `OrganizationFeature<EngineContext>` to opt in. `AuthRoutes` discovers
+Compose `OrganizationPlugin<EngineContext>` to opt in. `AuthRoutes` discovers
 its portable descriptors and automatically mounts the organization API; there
 is no separate route-registration call. If the feature is absent, every
 organization route is absent.
@@ -231,7 +231,7 @@ the user's global principal.
 
 ## Administration
 
-Compose `AdminFeature<EngineContext>` to opt in. `AuthRoutes` automatically
+Compose `AdminPlugin<EngineContext>` to opt in. `AuthRoutes` automatically
 mounts its portable descriptors under `/auth/admin/`; without the feature,
 those routes do not exist. The API covers user create/list/get/update/delete,
 role/password changes, bans, permission checks, target-session administration,

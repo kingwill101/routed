@@ -81,7 +81,7 @@ void main() {
   test('hostile TOTP and recovery inputs stay inside auth errors', () async {
     final now = DateTime.utc(2030, 1, 1);
     final runner = PropertyTestRunner<String>(_hostileCodes(), (code) async {
-      final feature = TwoFactorFeature<Object>(
+      final feature = TwoFactorPlugin<Object>(
         store: InMemoryAuthTwoFactorStore(),
         challengeStore: InMemoryAuthTwoFactorChallengeStore(),
         trustedDeviceStore: InMemoryAuthTwoFactorTrustedDeviceStore(),
@@ -139,7 +139,7 @@ void main() {
           enrollmentExpiresAt: now.add(const Duration(hours: 1)),
         ),
       );
-      final feature = TwoFactorFeature<Object>(
+      final feature = TwoFactorPlugin<Object>(
         store: store,
         challengeStore: InMemoryAuthTwoFactorChallengeStore(),
         trustedDeviceStore: InMemoryAuthTwoFactorTrustedDeviceStore(),

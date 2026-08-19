@@ -1,13 +1,13 @@
 import 'dart:async';
 
 import 'exceptions.dart';
-import 'feature.dart';
+import 'plugin.dart';
 import 'models.dart';
 import 'rate_limit.dart';
 import 'tokens.dart'
     show constantTimeStringEquals, hashOpaqueToken, secureRandomToken;
 
-const String authApiKeyFeatureId = 'api_key';
+const String authApiKeyPluginId = 'api_key';
 
 typedef AuthApiKeyTokenGenerator = String Function({int length});
 
@@ -322,15 +322,15 @@ final class InMemoryAuthApiKeyStore implements AuthApiKeyStore {
 }
 
 /// Complete API-key capability with lifecycle endpoints and client metadata.
-final class AuthApiKeyFeature<TContext>
+final class AuthApiKeyPlugin<TContext>
     implements
-        AuthFeature<TContext>,
+        AuthServerPlugin<TContext>,
         AuthEndpointContributor<TContext>,
         AuthPersistenceContributor,
         AuthClientOperationContributor,
         AuthRateLimitContributor,
         AuthUserDataDeletionContributor {
-  AuthApiKeyFeature({
+  AuthApiKeyPlugin({
     required this.store,
     this.keyPrefix = 'rka',
     this.defaultLifetime = const Duration(days: 90),
@@ -380,7 +380,7 @@ final class AuthApiKeyFeature<TContext>
   final DateTime Function() _clock;
 
   @override
-  String get id => authApiKeyFeatureId;
+  String get id => authApiKeyPluginId;
 
   @override
   String get userDataNamespace => 'api_keys';
@@ -398,7 +398,7 @@ final class AuthApiKeyFeature<TContext>
   }
 
   @override
-  void configure(AuthFeatureContext<TContext> context) {}
+  void configure(AuthServerPluginContext<TContext> context) {}
 
   /// Issues a key and returns the raw secret exactly once.
   Future<AuthApiKeyIssued> issue({
@@ -586,7 +586,7 @@ final class AuthApiKeyFeature<TContext>
   @override
   Iterable<AuthPersistenceSchema> get persistenceSchemas => [
     AuthPersistenceSchema(
-      id: authApiKeyFeatureId,
+      id: authApiKeyPluginId,
       entities: [
         AuthEntityDescriptor(
           id: 'api_key',

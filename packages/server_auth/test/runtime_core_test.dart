@@ -516,23 +516,20 @@ void main() {
       );
     });
 
-    test('configures features in order against one shared store', () {
-      final first = _RecordingFeature('first');
-      final second = _RecordingFeature('second');
+    test('configures plugins in order against one shared store', () {
+      final first = _RecordingPlugin('first');
+      final second = _RecordingPlugin('second');
       final options = AuthOptions<String>(
         providers: const <AuthProvider>[],
         store: InMemoryAuthStore(),
         storeMode: AuthStoreMode.ephemeral,
-        features: [first],
+        plugins: [first],
       );
-      final runtime = AuthRuntime<String>(options: options, features: [second]);
+      final runtime = AuthRuntime<String>(options: options, plugins: [second]);
 
-      expect(runtime.features.map((feature) => feature.id), [
-        'first',
-        'second',
-      ]);
-      expect(runtime.feature(' first '), same(first));
-      expect(runtime.hasFeature('second'), isTrue);
+      expect(runtime.plugins.map((feature) => feature.id), ['first', 'second']);
+      expect(runtime.plugin(' first '), same(first));
+      expect(runtime.hasPlugin('second'), isTrue);
       expect(first.configuredStore, same(runtime.store));
       expect(second.configuredStore, same(runtime.store));
     });
@@ -544,22 +541,22 @@ void main() {
             providers: const <AuthProvider>[],
             store: InMemoryAuthStore(),
             storeMode: AuthStoreMode.ephemeral,
-            features: [_RecordingFeature('')],
+            plugins: [_RecordingPlugin('')],
           ),
         ),
         throwsArgumentError,
       );
 
-      final duplicate = _RecordingFeature('duplicate');
+      final duplicate = _RecordingPlugin('duplicate');
       expect(
         () => AuthRuntime<String>(
           options: AuthOptions<String>(
             providers: const <AuthProvider>[],
             store: InMemoryAuthStore(),
             storeMode: AuthStoreMode.ephemeral,
-            features: [duplicate],
+            plugins: [duplicate],
           ),
-          features: [_RecordingFeature('duplicate')],
+          plugins: [_RecordingPlugin('duplicate')],
         ),
         throwsStateError,
       );
@@ -567,8 +564,8 @@ void main() {
   });
 }
 
-class _RecordingFeature implements AuthFeature<String> {
-  _RecordingFeature(this.id);
+class _RecordingPlugin implements AuthServerPlugin<String> {
+  _RecordingPlugin(this.id);
 
   @override
   final String id;
@@ -576,7 +573,7 @@ class _RecordingFeature implements AuthFeature<String> {
   AuthStore? configuredStore;
 
   @override
-  void configure(AuthFeatureContext<String> context) {
+  void configure(AuthServerPluginContext<String> context) {
     configuredStore = context.store;
   }
 }

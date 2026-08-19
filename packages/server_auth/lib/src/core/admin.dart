@@ -3,7 +3,7 @@ import 'dart:async';
 import 'admin_models.dart';
 import 'admin_store.dart';
 import 'exceptions.dart';
-import 'feature.dart';
+import 'plugin.dart';
 import 'models.dart';
 import 'password_hasher.dart';
 import 'password_policy.dart';
@@ -12,7 +12,7 @@ import 'store.dart';
 import 'tokens.dart' show secureRandomToken;
 import 'users.dart' show normalizeAuthEmail;
 
-const String authAdminFeatureId = 'admin';
+const String authAdminPluginId = 'admin';
 
 typedef AuthAdminPermissionSet = Map<String, Iterable<String>>;
 typedef AuthAdminFailureReporter =
@@ -93,16 +93,16 @@ final class AuthAdminAccessControl {
   }
 }
 
-final class AdminFeature<TContext>
+final class AdminPlugin<TContext>
     implements
-        AuthFeature<TContext>,
+        AuthServerPlugin<TContext>,
         AuthEndpointContributor<TContext>,
         AuthPersistenceContributor,
         AuthClientOperationContributor,
         AuthRateLimitContributor,
         AuthAuthenticationPolicyContributor<TContext>,
-        AuthFeatureTopologyAware<TContext> {
-  AdminFeature({required this.store, AuthAdminOptions<TContext>? options})
+        AuthServerPluginTopologyAware<TContext> {
+  AdminPlugin({required this.store, AuthAdminOptions<TContext>? options})
     : options = options ?? AuthAdminOptions<TContext>(),
       accessControl = AuthAdminAccessControl(roles: options?.roles) {
     if (this.options.impersonationDuration <= Duration.zero) {
@@ -120,7 +120,7 @@ final class AdminFeature<TContext>
   }
 
   @override
-  String get id => authAdminFeatureId;
+  String get id => authAdminPluginId;
 
   final AuthAdminStore store;
   final AuthAdminOptions<TContext> options;
@@ -138,7 +138,7 @@ final class AdminFeature<TContext>
       .toSet();
 
   @override
-  void configure(AuthFeatureContext<TContext> context) {
+  void configure(AuthServerPluginContext<TContext> context) {
     _coreStore = context.store;
     _passwordHasher = context.passwordHasher ?? Argon2idPasswordHasher();
     _passwordPolicy = context.passwordPolicy;
@@ -146,9 +146,9 @@ final class AdminFeature<TContext>
   }
 
   @override
-  void composeAuthFeatureTopology(Iterable<AuthFeature<TContext>> features) {
+  void composePluginTopology(Iterable<AuthServerPlugin<TContext>> plugins) {
     final target = store;
-    final contributors = features
+    final contributors = plugins
         .whereType<AuthUserDataDeletionContributor>()
         .where((feature) => !identical(feature, this))
         .toList(growable: false);

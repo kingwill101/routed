@@ -1,12 +1,12 @@
 import 'package:server_auth/server_auth.dart';
 import 'package:test/test.dart';
 
-TwoFactorFeature<Object> _feature({
+TwoFactorPlugin<Object> _feature({
   int maxFailedVerificationAttempts = 5,
   Duration lockoutDuration = const Duration(minutes: 15),
   int period = 30,
 }) {
-  return TwoFactorFeature<Object>(
+  return TwoFactorPlugin<Object>(
     store: InMemoryAuthTwoFactorStore(),
     challengeStore: InMemoryAuthTwoFactorChallengeStore(),
     trustedDeviceStore: InMemoryAuthTwoFactorTrustedDeviceStore(),
@@ -141,12 +141,12 @@ void main() {
     });
   });
 
-  group('TwoFactorFeature', () {
+  group('TwoFactorPlugin', () {
     test(
       'atomically activates one enrollment under concurrent verification',
       () async {
         final now = DateTime.utc(2030, 1, 1);
-        final feature = TwoFactorFeature<Object>(
+        final feature = TwoFactorPlugin<Object>(
           store: _YieldingTwoFactorStore(InMemoryAuthTwoFactorStore()),
           challengeStore: InMemoryAuthTwoFactorChallengeStore(),
           trustedDeviceStore: InMemoryAuthTwoFactorTrustedDeviceStore(),
@@ -176,7 +176,7 @@ void main() {
       'atomically replaces recovery codes under concurrent regeneration',
       () async {
         final now = DateTime.utc(2030, 1, 1);
-        final feature = TwoFactorFeature<Object>(
+        final feature = TwoFactorPlugin<Object>(
           store: _YieldingTwoFactorStore(InMemoryAuthTwoFactorStore()),
           challengeStore: InMemoryAuthTwoFactorChallengeStore(),
           trustedDeviceStore: InMemoryAuthTwoFactorTrustedDeviceStore(),
@@ -206,7 +206,7 @@ void main() {
     test('enrolls, activates, and consumes recovery codes once', () async {
       final generator = _queuedGenerator();
       final store = InMemoryAuthTwoFactorStore();
-      final feature = TwoFactorFeature<Object>(
+      final feature = TwoFactorPlugin<Object>(
         store: store,
         challengeStore: InMemoryAuthTwoFactorChallengeStore(),
         trustedDeviceStore: InMemoryAuthTwoFactorTrustedDeviceStore(),
@@ -313,7 +313,7 @@ void main() {
     test('bounds a repeating recovery-code generator', () async {
       final now = DateTime.utc(2030, 1, 1);
       var calls = 0;
-      final feature = TwoFactorFeature<Object>(
+      final feature = TwoFactorPlugin<Object>(
         store: InMemoryAuthTwoFactorStore(),
         challengeStore: InMemoryAuthTwoFactorChallengeStore(),
         trustedDeviceStore: InMemoryAuthTwoFactorTrustedDeviceStore(),
@@ -348,7 +348,7 @@ void main() {
 
     test('locks repeated invalid TOTP attempts', () async {
       final generator = _queuedGenerator();
-      final feature = TwoFactorFeature<Object>(
+      final feature = TwoFactorPlugin<Object>(
         store: InMemoryAuthTwoFactorStore(),
         challengeStore: InMemoryAuthTwoFactorChallengeStore(),
         trustedDeviceStore: InMemoryAuthTwoFactorTrustedDeviceStore(),
@@ -389,7 +389,7 @@ void main() {
 
     test('creates a single-use pending sign-in challenge', () async {
       final now = DateTime.utc(2030, 1, 1);
-      final feature = TwoFactorFeature<Object>(
+      final feature = TwoFactorPlugin<Object>(
         store: InMemoryAuthTwoFactorStore(),
         challengeStore: InMemoryAuthTwoFactorChallengeStore(),
         trustedDeviceStore: InMemoryAuthTwoFactorTrustedDeviceStore(),
@@ -438,7 +438,7 @@ void main() {
         final now = DateTime.utc(2030, 1, 1);
         final factorStore = InMemoryAuthTwoFactorStore();
         final challengeStore = InMemoryAuthTwoFactorChallengeStore();
-        final feature = TwoFactorFeature<Object>(
+        final feature = TwoFactorPlugin<Object>(
           store: factorStore,
           challengeStore: challengeStore,
           pendingRecoveryStore: InMemoryAuthTwoFactorPendingRecoveryStore(
@@ -496,7 +496,7 @@ void main() {
     test('issues, expires, and revokes trusted devices', () async {
       final now = DateTime.utc(2030, 1, 1);
       final trustedStore = InMemoryAuthTwoFactorTrustedDeviceStore();
-      final feature = TwoFactorFeature<Object>(
+      final feature = TwoFactorPlugin<Object>(
         store: InMemoryAuthTwoFactorStore(),
         challengeStore: InMemoryAuthTwoFactorChallengeStore(),
         trustedDeviceStore: trustedStore,
@@ -587,7 +587,7 @@ void main() {
     test('issues session-bound step-up proofs with bounded expiry', () async {
       final now = DateTime.utc(2030, 1, 1);
       final stepUpStore = InMemoryAuthTwoFactorStepUpStore();
-      final feature = TwoFactorFeature<Object>(
+      final feature = TwoFactorPlugin<Object>(
         store: InMemoryAuthTwoFactorStore(),
         challengeStore: InMemoryAuthTwoFactorChallengeStore(),
         trustedDeviceStore: InMemoryAuthTwoFactorTrustedDeviceStore(),
@@ -668,7 +668,7 @@ void main() {
     test('revokes every step-up proof when two-factor is disabled', () async {
       final now = DateTime.utc(2030, 1, 1);
       final stepUpStore = InMemoryAuthTwoFactorStepUpStore();
-      final feature = TwoFactorFeature<Object>(
+      final feature = TwoFactorPlugin<Object>(
         store: InMemoryAuthTwoFactorStore(),
         challengeStore: InMemoryAuthTwoFactorChallengeStore(),
         trustedDeviceStore: InMemoryAuthTwoFactorTrustedDeviceStore(),
@@ -707,7 +707,7 @@ void main() {
       () async {
         final now = DateTime.utc(2030, 1, 1);
         final factorStore = InMemoryAuthTwoFactorStore();
-        final feature = TwoFactorFeature<Object>(
+        final feature = TwoFactorPlugin<Object>(
           store: factorStore,
           challengeStore: InMemoryAuthTwoFactorChallengeStore(),
           trustedDeviceStore: InMemoryAuthTwoFactorTrustedDeviceStore(),
@@ -787,7 +787,7 @@ void main() {
           enrollmentExpiresAt: now.add(const Duration(hours: 1)),
         ),
       );
-      final feature = TwoFactorFeature<Object>(
+      final feature = TwoFactorPlugin<Object>(
         store: store,
         challengeStore: InMemoryAuthTwoFactorChallengeStore(),
         trustedDeviceStore: InMemoryAuthTwoFactorTrustedDeviceStore(),

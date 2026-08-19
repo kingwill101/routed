@@ -65,9 +65,7 @@ void main() {
             CredentialsProvider(authorize: (_, _, _) => user),
             webAuthnProvider,
           ],
-          features: [
-            WebAuthnFeature<EngineContext>(provider: webAuthnProvider),
-          ],
+          plugins: [WebAuthnPlugin<EngineContext>(provider: webAuthnProvider)],
           enforceCsrf: false,
         ),
       );
@@ -126,10 +124,7 @@ void main() {
       );
       final renamed = await client.postJson(
         '/auth/webauthn/credentials/rename',
-        <String, dynamic>{
-          'credentialId': 'credential-1',
-          'name': 'New name',
-        },
+        <String, dynamic>{'credentialId': 'credential-1', 'name': 'New name'},
         headers: sessionHeaders,
       );
       renamed.assertStatus(HttpStatus.ok);
