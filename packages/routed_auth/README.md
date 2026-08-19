@@ -64,7 +64,7 @@ accidental in-memory store.
 For a slim composition, import `routed_auth` directly and add
 `AuthServiceProvider()` after `Engine.defaultProviders`. Add typed provider
 instances to `AuthOptions.providers`; no auth provider registry or
-configuration manifest is required. Feature modules can be composed directly
+configuration manifest is required. Server plugins can be composed directly
 on the same options object:
 
 ```dart

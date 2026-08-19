@@ -817,6 +817,86 @@ class AuthClientTransport {
   }
 }
 
+/// Context supplied when an optional client plugin is installed.
+///
+/// Plugins share the host transport so cookies, bearer credentials, API keys,
+/// CSRF state, timeouts, and response handling remain consistent across the
+/// selected client APIs.
+final class AuthClientPluginContext {
+  const AuthClientPluginContext({required this.transport});
+
+  final AuthClientTransport transport;
+}
+
+/// A typed, opt-in client API.
+///
+/// A plugin should expose only the operations owned by one server plugin or
+/// provider. Applications install the client plugins they use instead of
+/// receiving every optional auth operation on one client object.
+abstract interface class AuthClientPlugin<TApi extends Object> {
+  String get id;
+
+  TApi install(AuthClientPluginContext context);
+}
+
+final class _InstalledAuthClientPlugin {
+  const _InstalledAuthClientPlugin({required this.plugin, required this.api});
+
+  final AuthClientPlugin<dynamic> plugin;
+  final Object api;
+}
+
+/// Registry of the client plugins selected for one [AuthClient].
+final class AuthClientPluginRegistry {
+  AuthClientPluginRegistry({
+    required AuthClientPluginContext context,
+    Iterable<AuthClientPlugin<dynamic>> plugins =
+        const <AuthClientPlugin<dynamic>>[],
+  }) {
+    for (final plugin in plugins) {
+      final id = plugin.id.trim();
+      if (id.isEmpty) {
+        throw ArgumentError.value(plugin.id, 'plugin.id', 'must not be empty');
+      }
+      if (_installed.containsKey(id)) {
+        throw StateError('Auth client plugin "$id" is already installed.');
+      }
+      _installed[id] = _InstalledAuthClientPlugin(
+        plugin: plugin,
+        api: plugin.install(context),
+      );
+    }
+  }
+
+  final Map<String, _InstalledAuthClientPlugin> _installed =
+      <String, _InstalledAuthClientPlugin>{};
+
+  /// Returns the typed API for an installed [plugin].
+  ///
+  /// Passing a plugin that was not included in the host client's constructor
+  /// is an error, making accidental use of optional auth APIs explicit.
+  TApi use<TApi extends Object>(AuthClientPlugin<TApi> plugin) {
+    final installed = _installed[plugin.id.trim()];
+    if (installed == null) {
+      throw StateError(
+        'Auth client plugin "${plugin.id}" is not installed. '
+        'Add it to AuthClient.plugins.',
+      );
+    }
+    if (installed.plugin.runtimeType != plugin.runtimeType) {
+      throw StateError(
+        'Auth client plugin ID "${plugin.id}" is registered by '
+        '${installed.plugin.runtimeType}, not ${plugin.runtimeType}.',
+      );
+    }
+    return installed.api as TApi;
+  }
+
+  bool contains(String id) => _installed.containsKey(id.trim());
+
+  Iterable<String> get ids => List<String>.unmodifiable(_installed.keys);
+}
+
 /// Typed Dart client for the framework-independent auth HTTP contract.
 ///
 /// The client owns route names, JSON shapes, CSRF presentation, and response
@@ -833,6 +913,8 @@ class AuthClient {
     String? bearerToken,
     String? apiKey,
     AuthClientTransport? transport,
+    Iterable<AuthClientPlugin<dynamic>> plugins =
+        const <AuthClientPlugin<dynamic>>[],
   }) : transport =
            transport ??
            AuthClientTransport(
@@ -844,9 +926,17 @@ class AuthClient {
              headers: headers,
              bearerToken: bearerToken,
              apiKey: apiKey,
-           );
+           ) {
+    this.plugins = AuthClientPluginRegistry(
+      context: AuthClientPluginContext(transport: this.transport),
+      plugins: plugins,
+    );
+  }
 
   final AuthClientTransport transport;
+
+  /// The explicitly selected optional client APIs.
+  late final AuthClientPluginRegistry plugins;
 
   AuthClientCookieStore get cookieStore => transport.cookieStore;
   Duration get timeout => transport.timeout;

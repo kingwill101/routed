@@ -49,20 +49,25 @@ handling, and auth lifecycle.
 
 ## Typed Dart client
 
-`AuthClient` keeps consumers from duplicating auth route names, JSON parsing,
-CSRF presentation, and session-cookie handling:
+`AuthClient` owns the shared transport and installs only the optional client
+plugins selected by the application:
 
 ```dart
+final magicLinkPlugin = AuthMagicLinkClientPlugin();
+final organizationPlugin = AuthOrganizationClientPlugin();
 final auth = AuthClient(
   baseUrl: Uri.parse('https://example.com'),
   cookieStore: myPersistentCookieStore, // Optional for mobile persistence.
+  plugins: [magicLinkPlugin, organizationPlugin],
 );
 
-final session = await auth.signInWithCredentials(
+final magicLink = auth.plugins.use(magicLinkPlugin);
+await magicLink.send(
   email: 'ada@example.com',
-  password: password,
+  callbackUrl: 'https://example.com/welcome',
 );
-print(session.user.id);
+final organizations = auth.plugins.use(organizationPlugin);
+final values = await organizations.list();
 ```
 
 The default `InMemoryAuthClientCookieStore` is suitable for tests and
@@ -70,11 +75,13 @@ short-lived clients. Browser, mobile, and desktop applications can implement
 `AuthClientCookieStore` with their platform's secure persistence. Use
 `setBearerToken` when the server is configured for bearer/JWT sessions.
 
-The client follows the framework adapter's public auth contract: providers,
-CSRF, sessions, credentials, email verification, OAuth redirects, and
-sign-out. It does not persist secrets or silently provision local accounts.
+Each optional client plugin returns one typed API and is inactive until
+selected. `AuthMagicLinkClientPlugin`, `AuthEmailOtpClientPlugin`,
+`AuthOrganizationClientPlugin`, and `AuthAdminClientPlugin` are available now;
+the remaining auth APIs are being migrated to the same shape. The client does
+not persist secrets or silently provision local accounts.
 
-## Optional two-factor feature
+## Optional two-factor plugin
 
 Compose `TwoFactorPlugin` when an application needs TOTP and recovery codes:
 
@@ -156,11 +163,11 @@ application invariants such as deleting the last owner of an organization.
 development, not production persistence.
 
 The in-memory Admin store discovers composed user-data deletion contributors
-when feature topology freezes. With `OrganizationPlugin`, it automatically
+when plugin topology freezes. With `OrganizationPlugin`, it automatically
 enforces last-owner protection and clears organization/team membership data.
 Durable adapters must provide the equivalent cross-feature transaction.
 
-Core and admin clients can share one transport:
+The admin client is installed explicitly and shares the host transport:
 
 ```dart
 final transport = AuthClientTransport(
@@ -170,15 +177,16 @@ final transport = AuthClientTransport(
 final auth = AuthClient(
   baseUrl: Uri.parse('https://example.com'),
   transport: transport,
+  plugins: const [AuthAdminClientPlugin()],
 );
-final admin = AuthAdminClient(transport: transport);
+final admin = auth.plugins.use(const AuthAdminClientPlugin());
 ```
 
 The shared transport owns cookies, bearer tokens, CSRF refresh, timeouts, and
 bounded error parsing. Mutation results retain committed data and expose typed
 warnings when an after-commit hook or audit sink fails.
 
-## Optional organization feature
+## Optional organization plugin
 
 Organizations are opt-in. Nothing is registered unless an
 `OrganizationPlugin` is included in `AuthOptions.plugins`:
@@ -199,7 +207,7 @@ final options = AuthOptions<MyRequestContext>(
 );
 ```
 
-The feature owns organizations, memberships, email-bound invitations,
+The plugin owns organizations, memberships, email-bound invitations,
 organization-scoped permissions, dynamic roles, teams, typed lifecycle hooks,
 redacted audit events, and post-commit warnings. Organization roles remain
 separate from global `AuthPrincipal.roles`.
@@ -218,7 +226,7 @@ match the Better Auth benchmark: 100 members, 100 pending invitations, and a
 application supplies one. Custom non-opaque invitation IDs require a verified
 session email before they can be acted upon.
 
-Core and feature clients share `AuthClientTransport` for cookies, bearer
+The organization client shares `AuthClientTransport` for cookies, bearer
 tokens, CSRF refresh, timeouts, redirects, and bounded error parsing:
 
 ```dart
@@ -229,8 +237,9 @@ final transport = AuthClientTransport(
 final auth = AuthClient(
   baseUrl: Uri.parse('https://example.com'),
   transport: transport,
+  plugins: const [AuthOrganizationClientPlugin()],
 );
-final organization = AuthOrganizationClient(transport: transport);
+final organization = auth.plugins.use(const AuthOrganizationClientPlugin());
 ```
 
 `AuthOrganizationClient` keeps active organization/team selection locally and
@@ -238,7 +247,7 @@ sends the selected IDs explicitly. This works with JWTs without silently
 reissuing tokens; Routed server sessions may additionally persist the same
 selection as a convenience.
 
-## Optional API-key feature
+## Optional API-key plugin
 
 Compose `AuthApiKeyPlugin` for service-client credentials:
 
@@ -265,8 +274,8 @@ and creates a normal server-side session; it is disabled by default.
 
 ## Auth runtime and typed stores
 
-Integrations compose an `AuthRuntime` from typed domain stores and feature
-modules. `AuthStore` is the required persistence boundary; there is no legacy
+Integrations compose an `AuthRuntime` from typed domain stores and server
+plugins. `AuthStore` is the required persistence boundary; there is no legacy
 adapter bridge or implicit fallback:
 
 ```dart

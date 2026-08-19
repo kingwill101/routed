@@ -4,6 +4,25 @@ import 'client.dart';
 import 'organization_models.dart';
 import 'organization_permissions.dart';
 
+/// Installs the typed organization API on an [AuthClient].
+final class AuthOrganizationClientPlugin
+    implements AuthClientPlugin<AuthOrganizationClient> {
+  const AuthOrganizationClientPlugin({this.staticRoles});
+
+  final Map<String, AuthOrganizationPermissionSet>? staticRoles;
+
+  @override
+  String get id => 'organization';
+
+  @override
+  AuthOrganizationClient install(AuthClientPluginContext context) {
+    return AuthOrganizationClient(
+      transport: context.transport,
+      staticRoles: staticRoles,
+    );
+  }
+}
+
 /// Typed client for the opt-in organization feature.
 final class AuthOrganizationClient {
   AuthOrganizationClient({

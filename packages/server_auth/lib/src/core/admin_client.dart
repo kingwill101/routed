@@ -5,6 +5,21 @@ import 'admin_models.dart';
 import 'client.dart';
 import 'models.dart';
 
+/// Installs the typed administrative API on an [AuthClient].
+final class AuthAdminClientPlugin implements AuthClientPlugin<AuthAdminClient> {
+  const AuthAdminClientPlugin({this.roles});
+
+  final Map<String, AuthAdminPermissionSet>? roles;
+
+  @override
+  String get id => 'admin';
+
+  @override
+  AuthAdminClient install(AuthClientPluginContext context) {
+    return AuthAdminClient(transport: context.transport, roles: roles);
+  }
+}
+
 /// Typed client for the opt-in Admin feature.
 final class AuthAdminClient {
   AuthAdminClient({
