@@ -4,6 +4,11 @@ All notable changes to `server_native` will be documented in this file.
 
 ## Unreleased
 
+- Added verified prebuilt-native metadata and streamlined native asset
+  resolution for supported platforms.
+- Expanded native HTTP compatibility coverage for callbacks, headers,
+  transfer encoding, and framework integrations.
+
 ## 0.1.3+1
 
 - Fixed native-callback direct frame handling in `server_boot_proxy_direct.dart` to avoid routing single-frame direct requests through the stream path, improving shelf compatibility stability under repeated request/response cycles.
