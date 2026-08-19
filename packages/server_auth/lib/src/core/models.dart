@@ -324,6 +324,24 @@ class AuthAccount {
     'expires_at': expiresAt?.toIso8601String(),
     'metadata': metadata,
   };
+
+  /// Creates a public linked-account projection from JSON.
+  factory AuthAccount.fromJson(Map<String, dynamic> json) => AuthAccount(
+    providerId: json['provider_id']?.toString() ?? json['providerId']?.toString() ?? '',
+    providerAccountId:
+        json['provider_account_id']?.toString() ??
+        json['providerAccountId']?.toString() ??
+        '',
+    userId: json['user_id']?.toString() ?? json['userId']?.toString(),
+    expiresAt: DateTime.tryParse(
+      json['expires_at']?.toString() ?? json['expiresAt']?.toString() ?? '',
+    ),
+    metadata: json['metadata'] is Map
+        ? sanitizeAuthPublicAttributes(
+            Map<String, dynamic>.from(json['metadata'] as Map),
+          )
+        : const <String, dynamic>{},
+  );
 }
 
 /// Persisted password credential record.

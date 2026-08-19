@@ -41,6 +41,8 @@ import 'package:server_auth/server_auth.dart'
         AuthPasswordResetResult,
         AuthPasswordChangeResult,
         AuthEmailChangeRequest,
+        AuthAdminStoreCapabilities,
+        AuthUserDataDeletionContributor,
         AuthUser,
         AuthRuntime,
         AdminFeature,
@@ -646,6 +648,84 @@ class AuthManager {
     await sessionAuth.logout(ctx);
     if (ctx.hasSession) ctx.session.destroy();
     return updated;
+  }
+
+  /// Lists the current user's linked external identities without provider
+  /// access or refresh tokens.
+  Future<List<AuthAccount>> listLinkedAccounts(EngineContext ctx) async {
+    final session = await resolveSession(ctx);
+    if (session == null) throw AuthFlowException('not_authenticated');
+    return store.accounts.listForUser(session.user.id);
+  }
+
+  /// Reauthenticates and removes one linked external identity.
+  Future<void> unlinkAccount(
+    EngineContext ctx, {
+    required String providerId,
+    required String providerAccountId,
+    required String currentPassword,
+  }) async {
+    final session = await resolveSession(ctx);
+    if (session == null) throw AuthFlowException('not_authenticated');
+    final user = session.user;
+    await requireAuthPasswordForUser(
+      store: store,
+      passwordHasher: options.passwordHasher,
+      passwordPolicy: options.passwordPolicy,
+      userId: user.id,
+      identifier: user.email ?? '',
+      password: currentPassword,
+    );
+    final removed = await store.accounts.unlinkForUser(
+      user.id,
+      providerId,
+      providerAccountId,
+    );
+    if (!removed) throw AuthFlowException('account_not_found');
+  }
+
+  /// Reauthenticates and permanently removes the current account.
+  ///
+  /// Feature-owned namespaces are deleted before the core transaction. A
+  /// production store must expose [AuthAdminStoreCapabilities] with a
+  /// transactional implementation before this operation is enabled.
+  Future<void> deleteCurrentUser(
+    EngineContext ctx, {
+    required String currentPassword,
+  }) async {
+    final session = await resolveSession(ctx);
+    if (session == null) throw AuthFlowException('not_authenticated');
+    final user = session.user;
+    await requireAuthPasswordForUser(
+      store: store,
+      passwordHasher: options.passwordHasher,
+      passwordPolicy: options.passwordPolicy,
+      userId: user.id,
+      identifier: user.email ?? '',
+      password: currentPassword,
+    );
+    final capabilities = store is AuthAdminStoreCapabilities
+        ? store as AuthAdminStoreCapabilities
+        : null;
+    if (capabilities == null) {
+      throw AuthFlowException('account_deletion_unavailable');
+    }
+    final contributors = runtime.registry.values
+        .whereType<AuthUserDataDeletionContributor>()
+        .toList(growable: false);
+    for (final contributor in contributors) {
+      await contributor.validateUserDeletion(user.id);
+    }
+    for (final contributor in contributors) {
+      await contributor.deleteUserData(user.id);
+    }
+    await store.sessions.revokeAllForUser(user.id);
+    await store.jwtVersions.rotate(user.id);
+    if (!await capabilities.deleteUserForAdministration(user.id)) {
+      throw AuthFlowException('account_deletion_failed');
+    }
+    await sessionAuth.logout(ctx);
+    if (ctx.hasSession) ctx.session.destroy();
   }
 
   /// Lists active server-side sessions belonging to the current user.

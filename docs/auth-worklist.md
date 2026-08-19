@@ -98,8 +98,9 @@ The work is intentionally split between framework-agnostic capabilities in
   rotation.
 - [ ] Add email change, account deletion, and linked-account list/link/unlink
   operations with reauthentication where needed. Email-change request and
-  confirmation are now implemented; deletion and linked-account HTTP flows
-  remain.
+  confirmation plus authenticated account listing, unlinking, and deletion
+  are now implemented; tombstone retention and broader credential fallback
+  rules remain.
 - [x] Add a first-class server-session management API: list current sessions
   with device metadata, revoke one session, revoke all other sessions, and
   rotate credentials after sensitive changes. JWT session management remains a

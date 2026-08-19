@@ -1251,6 +1251,44 @@ class AuthClient {
     });
   }
 
+  /// Lists linked external identities without provider tokens.
+  Future<List<AuthAccount>> getLinkedAccounts() async {
+    final response = await _request('GET', '/accounts');
+    final values = _mapBody(response.body)['accounts'];
+    if (values is! List) {
+      throw const FormatException('Invalid linked-account response');
+    }
+    return values
+        .map((value) {
+          if (value is! Map) {
+            throw const FormatException('Invalid linked-account metadata');
+          }
+          return AuthAccount.fromJson(Map<String, dynamic>.from(value));
+        })
+        .toList(growable: false);
+  }
+
+  /// Reauthenticates and unlinks one external identity.
+  Future<void> unlinkAccount({
+    required String providerId,
+    required String providerAccountId,
+    required String currentPassword,
+  }) async {
+    await _mutatingRequest('POST', '/accounts/unlink', <String, dynamic>{
+      'providerId': providerId,
+      'providerAccountId': providerAccountId,
+      'currentPassword': currentPassword,
+    });
+  }
+
+  /// Reauthenticates and permanently deletes the current account.
+  Future<void> deleteAccount({required String currentPassword}) async {
+    await _mutatingRequest('POST', '/account/delete', <String, dynamic>{
+      'currentPassword': currentPassword,
+    });
+    transport.clearCsrfToken();
+  }
+
   /// Confirms an email change and returns the updated user projection.
   Future<AuthUser> confirmEmailChange({required String token}) async {
     final response = await _mutatingRequest(

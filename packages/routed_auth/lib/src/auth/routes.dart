@@ -62,6 +62,9 @@ import 'package:routed_sessions/routed_sessions.dart';
 /// - `POST /password/change` reauthenticates and changes a password.
 /// - `POST /email/change/request` requests a reauthenticated email change.
 /// - `POST /email/change/confirm` consumes an email-change token.
+/// - `GET /accounts` lists linked external identities.
+/// - `POST /accounts/unlink` removes one linked external identity.
+/// - `POST /account/delete` permanently deletes the current account.
 /// - `GET /sessions` lists active server-side sessions.
 /// - `POST /sessions/revoke` revokes one server-side session.
 /// - `POST /sessions/revoke-others` revokes every other server-side session.
@@ -142,6 +145,9 @@ class AuthRoutes {
           auth.post('/email/change/request', _emailChangeRequest);
           auth.post('/email/change/confirm', _emailChangeConfirm);
         }
+        auth.get('/accounts', _accounts);
+        auth.post('/accounts/unlink', _unlinkAccount);
+        auth.post('/account/delete', _deleteAccount);
         if (manager.options.sessionStrategy == AuthSessionStrategy.session) {
           auth.get('/sessions', _sessions);
           auth.post('/sessions/revoke', _revokeSession);
@@ -683,6 +689,64 @@ class AuthRoutes {
       return _flowErrorResponse(ctx, error);
     } catch (_) {
       return _errorResponse(ctx, 'email_change_failed');
+    }
+  }
+
+  Future<Response> _accounts(EngineContext ctx) async {
+    try {
+      final accounts = await manager.listLinkedAccounts(ctx);
+      return ctx.json({
+        'accounts': accounts.map((account) => account.toJson()).toList(),
+      });
+    } on AuthFlowException catch (error) {
+      return _flowErrorResponse(ctx, error);
+    }
+  }
+
+  Future<Response> _unlinkAccount(EngineContext ctx) async {
+    final browserError = manager.validateBrowserRequest(ctx);
+    if (browserError != null) return _errorResponse(ctx, browserError);
+    final payload = await _payload(ctx);
+    if (!manager.validateCsrf(ctx, payload)) {
+      return ctx.json({'error': 'invalid_csrf'}, statusCode: HttpStatus.forbidden);
+    }
+    final providerId = payload['providerId']?.toString();
+    final providerAccountId = payload['providerAccountId']?.toString();
+    final currentPassword = payload['currentPassword']?.toString();
+    if (providerId == null ||
+        providerAccountId == null ||
+        currentPassword == null) {
+      return _errorResponse(ctx, 'account_unlink_failed');
+    }
+    try {
+      await manager.unlinkAccount(
+        ctx,
+        providerId: providerId,
+        providerAccountId: providerAccountId,
+        currentPassword: currentPassword,
+      );
+      return ctx.json({'status': 'account_unlinked'});
+    } on AuthFlowException catch (error) {
+      return _flowErrorResponse(ctx, error);
+    }
+  }
+
+  Future<Response> _deleteAccount(EngineContext ctx) async {
+    final browserError = manager.validateBrowserRequest(ctx);
+    if (browserError != null) return _errorResponse(ctx, browserError);
+    final payload = await _payload(ctx);
+    if (!manager.validateCsrf(ctx, payload)) {
+      return ctx.json({'error': 'invalid_csrf'}, statusCode: HttpStatus.forbidden);
+    }
+    final currentPassword = payload['currentPassword']?.toString();
+    if (currentPassword == null) {
+      return _errorResponse(ctx, 'account_deletion_failed');
+    }
+    try {
+      await manager.deleteCurrentUser(ctx, currentPassword: currentPassword);
+      return ctx.json({'status': 'account_deleted'});
+    } on AuthFlowException catch (error) {
+      return _flowErrorResponse(ctx, error);
     }
   }
 

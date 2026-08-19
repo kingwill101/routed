@@ -134,6 +134,98 @@ void main() {
       expect((await store.users.findById(user.id))?.email, 'new@example.com');
     });
 
+    test('lists, unlinks, and deletes the authenticated account', () async {
+      final store = InMemoryAuthStore();
+      final user = await store.users.create(
+        AuthUser(id: 'user-1', email: 'user@example.com'),
+      );
+      final hasher = Argon2idPasswordHasher(
+        iterations: 1,
+        memoryKiB: 8,
+        derivedKeyLength: 16,
+      );
+      await store.upsertCredentialForAdministration(
+        AuthPasswordCredential(
+          id: 'credential-1',
+          userId: user.id,
+          identifier: user.email!,
+          passwordHash: hasher.hash('current-password'),
+          createdAt: DateTime.utc(2026),
+          updatedAt: DateTime.utc(2026),
+        ),
+      );
+      await store.accounts.link(
+        AuthAccount(
+          providerId: 'github',
+          providerAccountId: 'github-1',
+          userId: user.id,
+          accessToken: 'private-token',
+        ),
+      );
+      final manager = AuthManager(
+        AuthOptions<EngineContext>(
+          store: store,
+          storeMode: AuthStoreMode.ephemeral,
+          providers: [
+            CredentialsProvider(
+              authorize: (_, _, credentials) => credentials.password ==
+                  'current-password'
+                  ? user
+                  : null,
+            ),
+          ],
+          passwordHasher: hasher,
+          enforceCsrf: false,
+        ),
+      );
+      final engine = _authEngine(manager);
+      await engine.initialize();
+      final client = TestClient(RoutedRequestHandler(engine));
+      addTearDown(() async => await client.close());
+
+      final csrfResponse = await client.get('/auth/csrf');
+      final csrfToken = csrfResponse.json()['csrfToken'] as String;
+      final initialCookie = csrfResponse.cookie('test_session')!;
+      final signIn = await client.postJson(
+        '/auth/signin/credentials',
+        <String, dynamic>{
+          'email': user.email,
+          'password': 'current-password',
+          '_csrf': csrfToken,
+        },
+        headers: {HttpHeaders.cookieHeader: [_cookieHeader(initialCookie)]},
+      );
+      signIn.assertStatus(HttpStatus.ok);
+      final sessionCookie = signIn.cookie('test_session') ?? initialCookie;
+      final accounts = await client.get(
+        '/auth/accounts',
+        headers: {HttpHeaders.cookieHeader: [_cookieHeader(sessionCookie)]},
+      );
+      accounts.assertStatus(HttpStatus.ok);
+      expect(accounts.json()['accounts'].single['provider_id'], 'github');
+      expect(accounts.body, isNot(contains('private-token')));
+
+      final unlink = await client.postJson(
+        '/auth/accounts/unlink',
+        <String, dynamic>{
+          'providerId': 'github',
+          'providerAccountId': 'github-1',
+          'currentPassword': 'current-password',
+        },
+        headers: {HttpHeaders.cookieHeader: [_cookieHeader(sessionCookie)]},
+      );
+      unlink.assertStatus(HttpStatus.ok);
+      expect(await store.accounts.listForUser(user.id), isEmpty);
+
+      final deletion = await client.postJson(
+        '/auth/account/delete',
+        <String, dynamic>{'currentPassword': 'current-password'},
+        headers: {HttpHeaders.cookieHeader: [_cookieHeader(sessionCookie)]},
+      );
+      deletion.assertStatus(HttpStatus.ok);
+      expect(await store.users.findById(user.id), isNull);
+    });
+
     test('accepts providers created from package:server_auth', () async {
       final manager = AuthManager(
         AuthOptions<EngineContext>(
