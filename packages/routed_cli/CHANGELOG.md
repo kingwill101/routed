@@ -1,5 +1,10 @@
 ## 0.3.0
 
+- New projects now get a typed `lib/config.dart` bootstrap. `lib/app.dart`
+  consumes that bootstrap so CLI route inspection, OpenAPI generation, and
+  deployment use the same provider composition as the application runtime.
+- API and full-stack templates now accept any `routed_testing` 0.x minor from
+  `0.4.0` up to (but not including) `1.0.0`.
 - Cloudflare deploys now generate Container Durable Object wrappers and
   `containers` configuration with `--container`.
 - Cloudflare deploys now emit `workflows` and `secrets_store_secrets` binding

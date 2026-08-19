@@ -60,6 +60,7 @@ void main() {
       expect(dependencies.containsKey('routed'), isTrue);
 
       expect(_exists(projectDir, 'config'), isFalse);
+      expect(_exists(projectDir, 'lib/config.dart'), isTrue);
 
       expect(_exists(projectDir, 'analysis_options.yaml'), isTrue);
       expect(_exists(projectDir, 'README.md'), isTrue);
@@ -80,7 +81,14 @@ void main() {
         appContent,
         contains('Future<Engine> createEngine({bool initialize = true}) async'),
       );
+      expect(appContent, contains("import 'config.dart';"));
+      expect(appContent, contains('final setup = config();'));
       expect(appContent, contains('Welcome to Demo App!'));
+
+      final configContent = _read(projectDir, 'lib/config.dart');
+      expect(configContent, contains('final class AppConfig'));
+      expect(configContent, contains('AppConfig config()'));
+      expect(configContent, contains('CoreServiceProvider()'));
 
       final manifestScript = _read(projectDir, 'tool/spec_manifest.dart');
       expect(manifestScript, contains('buildRouteManifest'));
@@ -143,6 +151,7 @@ void main() {
       final pubspec = loadYaml(_read(projectDir, 'pubspec.yaml')) as YamlMap;
       final devDeps = pubspec['dev_dependencies'] as YamlMap? ?? YamlMap();
       expect(devDeps.containsKey('routed_testing'), isTrue);
+      expect(devDeps['routed_testing'], equals('>=0.4.0 <1.0.0'));
     });
 
     test('scaffolds web template with HTML helpers', () async {
@@ -186,24 +195,25 @@ void main() {
       final pubspec = loadYaml(_read(projectDir, 'pubspec.yaml')) as YamlMap;
       final devDeps = pubspec['dev_dependencies'] as YamlMap? ?? YamlMap();
       expect(devDeps.containsKey('routed_testing'), isTrue);
+      expect(devDeps['routed_testing'], equals('>=0.4.0 <1.0.0'));
     });
 
     test('supports all template options', () async {
       const templates = <String, _TemplateExpectation>{
         'basic': _TemplateExpectation(
-          expectedFiles: ['lib/app.dart'],
+          expectedFiles: ['lib/app.dart', 'lib/config.dart'],
           contentChecks: {'lib/app.dart': 'Welcome to'},
         ),
         'api': _TemplateExpectation(
-          expectedFiles: ['test/api_test.dart'],
+          expectedFiles: ['test/api_test.dart', 'lib/config.dart'],
           contentChecks: {'lib/app.dart': "router.get('/users'"},
         ),
         'web': _TemplateExpectation(
-          expectedFiles: ['templates/home.liquid'],
+          expectedFiles: ['templates/home.liquid', 'lib/config.dart'],
           contentChecks: {'templates/home.liquid': 'cdn.tailwindcss.com'},
         ),
         'fullstack': _TemplateExpectation(
-          expectedFiles: ['templates/todos.liquid'],
+          expectedFiles: ['templates/todos.liquid', 'lib/config.dart'],
           contentChecks: {'lib/app.dart': "templateName: 'todos.liquid'"},
         ),
       };

@@ -337,15 +337,21 @@ class CreateCommand extends BaseCommand {
       ..writeln()
       ..writeln('dependencies:');
     dependencies.forEach((name, constraint) {
-      buffer.writeln('  $name: $constraint');
+      buffer.writeln('  $name: ${_formatDependencyConstraint(constraint)}');
     });
     buffer.writeln();
     buffer.writeln('dev_dependencies:');
     devDependencies.forEach((name, constraint) {
-      buffer.writeln('  $name: $constraint');
+      buffer.writeln('  $name: ${_formatDependencyConstraint(constraint)}');
     });
     buffer.writeln();
     return buffer.toString();
+  }
+
+  String _formatDependencyConstraint(String constraint) {
+    if (!constraint.contains(RegExp(r'\s'))) return constraint;
+    final escaped = constraint.replaceAll('"', '\\"');
+    return '"$escaped"';
   }
 
   /// Walk up from [start] looking for a parent `pubspec.yaml` that contains

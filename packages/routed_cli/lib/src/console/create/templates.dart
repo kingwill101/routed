@@ -56,7 +56,7 @@ class Templates {
       id: 'api',
       description: 'JSON-first API skeleton with sample routes and tests.',
       extraDevDependencies: const {
-        'routed_testing': '^0.3.3',
+        'routed_testing': '>=0.4.0 <1.0.0',
         'server_testing': '^0.4.0',
       },
     ),
@@ -68,7 +68,7 @@ class Templates {
       id: 'fullstack',
       description: 'Combined HTML + JSON starter, handy for SPAs or HTMX.',
       extraDevDependencies: const {
-        'routed_testing': '^0.3.3',
+        'routed_testing': '>=0.4.0 <1.0.0',
         'server_testing': '^0.4.0',
       },
     ),
@@ -127,9 +127,72 @@ Map<String, FileBuilder> _buildFileBuilders(String templateId) {
     }
   }
 
-  return sources.map(
-    (dest, source) =>
-        MapEntry(dest, (context) => _renderTemplateFile(source, context)),
+  final builders = sources.map(
+    (dest, source) => MapEntry(dest, (TemplateContext context) {
+      final rendered = _renderTemplateFile(source, context);
+      return dest == 'lib/app.dart'
+          ? _wireApplicationConfig(rendered)
+          : rendered;
+    }),
+  );
+
+  builders['lib/config.dart'] = _renderConfigTemplate;
+  return builders;
+}
+
+String _renderConfigTemplate(TemplateContext context) => '''
+import 'package:routed/routed.dart';
+
+/// Typed application wiring shared by the runtime and Routed CLI flows.
+///
+/// Return fresh provider instances here. The CLI may construct a separate
+/// engine for route inspection, OpenAPI generation, or deployment.
+final class AppConfig {
+  AppConfig({
+    required Iterable<ServiceProvider> providers,
+    RuntimeContext? runtime,
+  }) : providers = List<ServiceProvider>.unmodifiable(providers),
+       runtime = runtime ?? RuntimeContext();
+
+  final List<ServiceProvider> providers;
+  final RuntimeContext runtime;
+}
+
+AppConfig config() => AppConfig(
+  providers: [
+    CoreServiceProvider(),
+    RoutingServiceProvider(),
+  ],
+);
+''';
+
+String _wireApplicationConfig(String content) {
+  const configuredBlock = '''  final setup = config();
+  final engine = Engine(
+    runtime: setup.runtime,
+    providers: setup.providers,
+  );''';
+
+  final providerBlock = RegExp(
+    r'  final engine = Engine\(\s*'
+    r'providers:\s*\[\s*'
+    r'CoreServiceProvider(?:\.withLoader)?\([\s\S]*?\),\s*'
+    r'RoutingServiceProvider\(\),\s*'
+    r'\],\s*'
+    r'\);',
+    multiLine: true,
+  );
+
+  if (!providerBlock.hasMatch(content)) {
+    throw StateError(
+      'The embedded app scaffold no longer contains the expected provider '
+      'block. Update _wireApplicationConfig with the new template shape.',
+    );
+  }
+
+  return "import 'config.dart';\n\n$content".replaceFirst(
+    providerBlock,
+    configuredBlock,
   );
 }
 

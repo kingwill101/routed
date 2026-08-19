@@ -15,8 +15,16 @@ It is intended for internal ecosystem composition and advanced custom command
 integrations.
 
 `routed_cli` is a command-line package, not an `Engine` provider. Install it as
-a development dependency and run commands with `dart run routed_cli ...`; keep
-runtime provider initialization in `routed` or the relevant adapter package.
+a development dependency and run commands with
+`dart run routed_cli:routed ...`; keep runtime provider initialization in
+`routed` or the relevant adapter package. The executable discovers
+`lib/commands.dart` and exposes its `buildProjectCommands()` commands alongside
+the built-in CLI commands.
+
+New projects created by `routed create` use a typed `lib/config.dart` bootstrap.
+Add provider-owned configuration there and let `lib/app.dart` continue to own
+routes. The CLI loads `createEngine()`, so route inspection, OpenAPI generation,
+and deployment use the same typed provider setup as the running application.
 
 For a Cloudflare Durable Object, pass each binding as `BINDING=ClassName`.
 Routed generates the Dart factory registration, Wrangler binding, SQLite
