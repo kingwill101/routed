@@ -146,6 +146,26 @@ void main() {
       },
     );
 
+    test('tombstones users before retention purge', () async {
+      final deletedAt = DateTime.utc(2026, 8, 19, 12);
+      final tombstoned = await core.tombstoneUserForAdministration(
+        member.id,
+        deletedAt: deletedAt,
+      );
+      expect(tombstoned, isTrue);
+      final retained = await core.users.findById(member.id);
+      expect(retained, isNotNull);
+      expect(retained?.email, isNull);
+      expect(retained?.attributes['deletedAt'], deletedAt.toIso8601String());
+      expect(await core.users.findByEmail(member.email!), isNull);
+      expect(await core.credentials.findByIdentifier(member.email!), isNull);
+      expect(
+        await core.purgeTombstonedUserForAdministration(member.id),
+        isTrue,
+      );
+      expect(await core.users.findById(member.id), isNull);
+    });
+
     test(
       'ban policy blocks sign-in and session resolution then expires',
       () async {

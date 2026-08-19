@@ -7,6 +7,7 @@ import 'password_reset_token_store.dart';
 import 'verification_token_store.dart';
 import 'jwt_version_store.dart';
 import 'webauthn_store.dart';
+import 'users.dart';
 
 /// Result of an atomic user create-or-find operation.
 class AuthUserCreateResult {
@@ -273,6 +274,21 @@ abstract interface class AuthAdminStoreCapabilities {
 
   /// Deletes all core user-owned records as one transaction.
   FutureOr<bool> deleteUserForAdministration(String userId);
+
+  /// Replaces a user with a minimal unavailable tombstone and removes the
+  /// user's core credentials, identities, sessions, and reset tokens.
+  ///
+  /// Implementations must retain the stable user ID and deletion timestamp so
+  /// future authentication attempts cannot recreate or reuse the account
+  /// accidentally. Feature-owned namespaces are handled by their contributors
+  /// before this operation.
+  FutureOr<bool> tombstoneUserForAdministration(
+    String userId, {
+    DateTime? deletedAt,
+  });
+
+  /// Permanently removes a previously tombstoned user during retention purge.
+  FutureOr<bool> purgeTombstonedUserForAdministration(String userId);
 }
 
 /// In-memory store for tests, examples, and local development.
@@ -372,6 +388,35 @@ class InMemoryAuthStore implements AuthStore, AuthAdminStoreCapabilities {
     await verificationTokens.delete(id);
     await emailChangeTokens.deleteForUser(id);
     if (user.email != null) await verificationTokens.delete(user.email!);
+    _users.delete(id);
+    return true;
+  }
+
+  @override
+  Future<bool> tombstoneUserForAdministration(
+    String userId, {
+    DateTime? deletedAt,
+  }) async {
+    final id = userId.trim();
+    final user = await users.findById(id);
+    if (user == null || authUserIsDisabled(user)) return false;
+    final timestamp = (deletedAt ?? DateTime.now()).toUtc();
+    _credentials.deleteForUser(id);
+    _accounts.deleteForUser(id);
+    _sessions.deleteForUser(id);
+    await passwordResetTokens.deleteForUser(id);
+    await verificationTokens.delete(id);
+    await emailChangeTokens.deleteForUser(id);
+    if (user.email != null) await verificationTokens.delete(user.email!);
+    _users.replaceWithTombstone(id, timestamp);
+    return true;
+  }
+
+  @override
+  Future<bool> purgeTombstonedUserForAdministration(String userId) async {
+    final id = userId.trim();
+    final user = await users.findById(id);
+    if (user == null || !authUserIsDisabled(user)) return false;
     _users.delete(id);
     return true;
   }
@@ -475,8 +520,7 @@ class CallbackAuthStore implements AuthStore {
     onConsumeVerificationToken,
     FutureOr<void> Function(String identifier)? onDeleteVerificationTokens,
     AuthVerificationTokenStore? verificationTokens,
-    FutureOr<void> Function(AuthEmailChangeToken token)?
-    onSaveEmailChangeToken,
+    FutureOr<void> Function(AuthEmailChangeToken token)? onSaveEmailChangeToken,
     FutureOr<AuthEmailChangeToken?> Function(String token)?
     onConsumeEmailChangeToken,
     FutureOr<void> Function(String userId)? onDeleteEmailChangeTokens,
@@ -665,6 +709,17 @@ class _InMemoryUserStore implements AuthUserStore {
   void delete(String id) {
     final removed = _usersById.remove(id);
     if (removed?.email != null) _usersByEmail.remove(removed!.email);
+  }
+
+  void replaceWithTombstone(String id, DateTime deletedAt) {
+    final previous = _usersById[id];
+    if (previous?.email != null) _usersByEmail.remove(previous!.email);
+    _usersById[id] = AuthUser(
+      id: id,
+      attributes: <String, dynamic>{
+        'deletedAt': deletedAt.toUtc().toIso8601String(),
+      },
+    );
   }
 
   @override
@@ -1111,7 +1166,8 @@ class _CallbackUserStore implements AuthUserStore {
   final FutureOr<AuthUserCreateResult> Function(AuthUser user)?
   onCreateOrFindByEmail;
   final FutureOr<AuthUser?> Function(AuthUser user)? onUpdate;
-  final FutureOr<AuthUser?> Function(String userId, String email)? onUpdateEmail;
+  final FutureOr<AuthUser?> Function(String userId, String email)?
+  onUpdateEmail;
 
   @override
   FutureOr<AuthUser?> findById(String id) => onFindById?.call(id);
@@ -1243,8 +1299,7 @@ class _CallbackAccountStore implements AuthAccountStore {
     String userId,
     String providerId,
     String providerAccountId,
-  ) =>
-      onUnlinkForUser?.call(userId, providerId, providerAccountId) ?? false;
+  ) => onUnlinkForUser?.call(userId, providerId, providerAccountId) ?? false;
 }
 
 class _CallbackSessionStore implements AuthSessionStore {

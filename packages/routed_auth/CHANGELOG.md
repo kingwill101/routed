@@ -13,6 +13,8 @@
   transactional purge and revokes sessions/JWT versions.
 - Add the CSRF-protected `/webauthn/credentials/rename` route contributed by
   `WebAuthnFeature`.
+- Make self-service account deletion retain an unavailable tombstone until a
+  store retention job explicitly purges it.
 - Automatically mount the opt-in `/auth/admin/...` API, enforce Admin bans at
   sign-in/session boundaries, and provide rotating server-session identity
   replacement for guarded impersonation.

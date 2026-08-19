@@ -23,6 +23,8 @@
   server-session identity.
 - Add owner-checked WebAuthn passkey renaming through the typed store, feature
   endpoint, and client API.
+- Add typed account tombstone and retention-purge capabilities; self-service
+  deletion now retains only a stable unavailable user ID and deletion time.
 
 - Added the opt-in typed `WebAuthnFeature` with digest-at-rest one-time
   challenges, durable authenticator/counter contracts, `none` attestation,

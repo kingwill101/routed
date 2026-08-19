@@ -684,11 +684,11 @@ class AuthManager {
     if (!removed) throw AuthFlowException('account_not_found');
   }
 
-  /// Reauthenticates and permanently removes the current account.
+  /// Reauthenticates and tombstones the current account.
   ///
-  /// Feature-owned namespaces are deleted before the core transaction. A
-  /// production store must expose [AuthAdminStoreCapabilities] with a
-  /// transactional implementation before this operation is enabled.
+  /// Feature-owned namespaces are deleted before the core transaction.
+  /// Production stores must implement the tombstone and purge operations
+  /// transactionally before this operation is enabled.
   Future<void> deleteCurrentUser(
     EngineContext ctx, {
     required String currentPassword,
@@ -721,7 +721,7 @@ class AuthManager {
     }
     await store.sessions.revokeAllForUser(user.id);
     await store.jwtVersions.rotate(user.id);
-    if (!await capabilities.deleteUserForAdministration(user.id)) {
+    if (!await capabilities.tombstoneUserForAdministration(user.id)) {
       throw AuthFlowException('account_deletion_failed');
     }
     await sessionAuth.logout(ctx);

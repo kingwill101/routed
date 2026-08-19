@@ -64,7 +64,7 @@ import 'package:routed_sessions/routed_sessions.dart';
 /// - `POST /email/change/confirm` consumes an email-change token.
 /// - `GET /accounts` lists linked external identities.
 /// - `POST /accounts/unlink` removes one linked external identity.
-/// - `POST /account/delete` permanently deletes the current account.
+/// - `POST /account/delete` tombstones the current account and revokes access.
 /// - `GET /sessions` lists active server-side sessions.
 /// - `POST /sessions/revoke` revokes one server-side session.
 /// - `POST /sessions/revoke-others` revokes every other server-side session.
@@ -1103,7 +1103,6 @@ class AuthRoutes {
     );
   }
 }
-
 final class _RoutedFeatureSessionControl implements AuthFeatureSessionControl {
   const _RoutedFeatureSessionControl(
     this.manager,

@@ -24,7 +24,6 @@ SessionConfig _sessionConfig() {
     ),
   );
 }
-
 Engine _authEngine(AuthManager manager) {
   final sessionConfig = _sessionConfig();
   final engine = testEngine(
@@ -223,6 +222,11 @@ void main() {
         headers: {HttpHeaders.cookieHeader: [_cookieHeader(sessionCookie)]},
       );
       deletion.assertStatus(HttpStatus.ok);
+      final tombstone = await store.users.findById(user.id);
+      expect(tombstone, isNotNull);
+      expect(tombstone?.email, isNull);
+      expect(tombstone?.attributes['deletedAt'], isA<String>());
+      expect(await store.purgeTombstonedUserForAdministration(user.id), isTrue);
       expect(await store.users.findById(user.id), isNull);
     });
 
