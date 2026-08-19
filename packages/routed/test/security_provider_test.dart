@@ -130,4 +130,19 @@ void main() {
     );
     return expectLater(future, throwsA(isA<ConfigValidationException>()));
   });
+
+  test('trusted proxy support requires explicit proxy networks', () {
+    final future = Engine.create(
+      providers: [
+        ...Engine.defaultProviders,
+        RoutedSecurityProvider(
+          RoutedSecurityConfig(
+            trustedProxies: TrustedProxyConfig(enabled: true),
+          ),
+        ),
+      ],
+    );
+
+    return expectLater(future, throwsA(isA<ConfigValidationException>()));
+  });
 }

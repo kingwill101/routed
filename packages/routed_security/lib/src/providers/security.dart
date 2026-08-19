@@ -11,9 +11,7 @@ class TrustedProxyConfig {
     List<String>? proxies,
     List<String>? headers,
     this.platformHeader,
-  }) : proxies = List<String>.unmodifiable(
-         proxies ?? const ['0.0.0.0/0', '::/0'],
-       ),
+  }) : proxies = List<String>.unmodifiable(proxies ?? const []),
        headers = List<String>.unmodifiable(
          headers ?? const ['X-Forwarded-For', 'X-Real-IP'],
        );
@@ -64,6 +62,11 @@ class RoutedSecurityConfig implements ValidatableConfiguration {
       maxRequestSize > 0,
       'maxRequestSize',
       'maximum request size must be greater than zero',
+    );
+    context.require(
+      !trustedProxies.enabled || trustedProxies.proxies.isNotEmpty,
+      'trustedProxies.proxies',
+      'must contain at least one network when trusted proxy support is enabled',
     );
     _validateNetworkList(
       context,

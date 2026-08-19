@@ -210,7 +210,8 @@ class FeaturesConfig {
   /// Whether to enable proxy support.
   ///
   /// When enabled, the engine will process proxy headers like `X-Forwarded-For`
-  /// to determine the real client IP address.
+  /// to determine the real client IP address. `trustedProxies` must contain
+  /// the explicit proxy networks before this feature can boot.
   final bool enableProxySupport;
 
   /// Whether to redirect trailing slashes.
@@ -598,7 +599,10 @@ class EngineConfig implements ValidatableConfiguration {
        http2 = http2 ?? const Http2Config() {
     final engineFeatures = features ?? const EngineFeatures();
     if (engineFeatures.enableProxySupport) {
-      _trustedProxies = trustedProxies ?? ['0.0.0.0/0', '::/0'];
+      // Forwarded client-IP headers are attacker-controlled until the
+      // immediate proxy network is explicitly configured. Do not silently
+      // trust every IPv4/IPv6 address when proxy support is enabled.
+      _trustedProxies = trustedProxies ?? [];
     }
 
     if (engineFeatures.enableTrustedPlatform) {

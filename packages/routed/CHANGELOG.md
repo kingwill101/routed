@@ -1,3 +1,8 @@
+## Unreleased
+
+- **Breaking security change:** proxy support requires explicit trusted proxy
+  networks and no longer trusts all forwarded addresses by default.
+
 ## 0.5.0
 
 - **Breaking:** Consolidate provider and registry imports on

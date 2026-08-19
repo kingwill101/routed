@@ -91,4 +91,6 @@ The security provider validates all network and header values before any
 provider boots. Configuration is typed and fixed for the lifetime of the
 engine; create a new provider/engine for a different policy. If you only need
 a primitive such as `TrustedProxyResolver`, use it directly without
-registering a provider.
+registering a provider. Enabling trusted-proxy support also requires at least
+one explicit proxy network; Routed never defaults to trusting all forwarded
+addresses.

@@ -1,3 +1,9 @@
+## Unreleased
+
+- **Breaking security change:** enabling proxy support now requires explicit
+  trusted proxy networks; the engine no longer defaults to trusting all IPv4
+  and IPv6 addresses.
+
 ## 0.4.0
 
 ### Breaking configuration API

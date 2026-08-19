@@ -49,6 +49,17 @@ void main() {
     await engine.close();
   });
 
+  test('proxy support requires explicit trusted networks', () async {
+    final engine = testEngine(
+      config: EngineConfig(
+        features: const EngineFeatures(enableProxySupport: true),
+      ),
+    );
+
+    expect(engine.initialize, throwsA(isA<ConfigValidationException>()));
+    await engine.close();
+  });
+
   test('runtime configuration is fixed after initialization', () async {
     final engine = testEngine();
     await engine.initialize();
