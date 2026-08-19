@@ -5,6 +5,17 @@ import 'package:routed_core/routed_core.dart';
 import 'src/fetch/fetch_entry.dart';
 import 'src/runtime/runtime.dart';
 
+export 'src/cloudflare/cloudflare_types.dart';
+export 'src/cloudflare/cloudflare_bindings_stub.dart'
+    if (dart.library.js_interop) 'src/cloudflare/cloudflare_bindings_js.dart'
+    show
+        cloudflareEnvironmentOf,
+        cloudflareRequestOf,
+        createCloudflareRequest,
+        cloudflareCache,
+        cloudflareWebSocketPair,
+        cloudflareExecutionContextOf,
+        defineCloudflareDurableObjects;
 export 'src/runtime/runtime.dart'
     show
         RoutedNodeCapabilities,

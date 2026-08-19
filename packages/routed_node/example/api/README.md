@@ -27,6 +27,8 @@ example/api/
 | `GET` | `/capabilities` | Runtime capability matrix |
 | `GET` | `/stream` | Progressive response / flush |
 | `POST` | `/echo` | Request body and header echo |
+| `GET` | `/bindings/d1` | Live D1 write/read check |
+| `GET` | `/bindings/durable-object` | Live SQLite Durable Object check |
 
 Seed data: items `1` (alpha) and `2` (beta).
 
@@ -83,8 +85,42 @@ compilation, Fetch bootstrap generation, Wrangler configuration, and upload:
 routed deploy --target cloudflare --name routed-api-demo
 ```
 
+To deploy the binding-enabled sample, create a D1 database and pass its name
+and ID together with the Durable Object class:
+
+```bash
+routed deploy --target cloudflare --name routed-bindings-demo \
+  --d1 DB=DATABASE_NAME:DATABASE_ID \
+  --durable-object COUNTER=Counter
+```
+
+The D1 smoke route expects this table in the remote database:
+
+```sql
+CREATE TABLE IF NOT EXISTS routed_live_checks (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  marker TEXT NOT NULL
+);
+```
+
 Use `--dry-run` to compile and validate without uploading. Authentication is
 handled by Wrangler (`wrangler login` or `CLOUDFLARE_API_TOKEN`). No Worker entrypoint, shell script, or hand-written `wrangler.jsonc` is required.
+
+### Live Cloudflare binding smoke test
+
+The repository includes a disposable end-to-end smoke harness. It creates
+temporary D1, R2, Queue, and Secrets Store resources; deploys service and
+Workflow fixtures; deploys this sample through the Routed CLI; checks the live
+binding routes; and removes everything when it finishes:
+
+```bash
+dart run tool/cloudflare_live_smoke.dart --deploy
+```
+
+Add `--containers` to attempt the Container check. Cloudflare Containers must
+be enabled on a Workers Paid account; otherwise that check is reported as
+skipped while the other bindings are still tested. Use `--keep` only while
+debugging a live deployment.
 
 ## Deploy to Netlify
 
