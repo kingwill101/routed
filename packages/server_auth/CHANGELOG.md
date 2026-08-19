@@ -1,5 +1,13 @@
 ## Unreleased
 
+- Add the opt-in `AdminFeature`, typed atomic admin store, authoritative role
+  permissions, bans, session administration, guarded hard deletion,
+  server-session impersonation, lifecycle hooks/events, persistence topology,
+  and `AuthAdminClient`.
+- Add feature authentication-policy and host session-control contributions so
+  portable features can block session issuance/reuse and safely replace a
+  server-session identity.
+
 - Make password reset/change fail closed by rotating JWT versions and revoking
   server sessions before replacing credentials.
 - Derive `AuthStoreMode` when framework composition replaces the configured

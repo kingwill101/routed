@@ -107,6 +107,77 @@ step-up requirement helper at those action boundaries.
 so durable applications can use their own key-management system; the
 plaintext protector is intended only for tests and ephemeral examples.
 
+## Optional admin feature
+
+Administrative APIs are opt-in. Create a feature-owned admin store over the
+same core auth store, then include `AdminFeature` in `AuthOptions.features`:
+
+```dart
+final authStore = InMemoryAuthStore();
+final adminStore = InMemoryAuthAdminStore(authStore);
+
+final admin = AdminFeature<MyRequestContext>(
+  store: adminStore,
+  options: const AuthAdminOptions(
+    adminRoles: {'admin'},
+    adminUserIds: {'bootstrap-user-id'},
+  ),
+);
+
+final options = AuthOptions<MyRequestContext>(
+  providers: providers,
+  store: authStore,
+  storeMode: AuthStoreMode.ephemeral,
+  features: [admin],
+);
+```
+
+`adminUserIds` is a bootstrap mechanism; normal administrators are recognized
+from authoritative global user roles. The default `admin` role can manage
+users and sessions but cannot impersonate another administrator. Grant the
+separate `user:impersonate-admins` permission only through an explicit custom
+role. Self-ban, self-delete, self-impersonation, and removal of your own admin
+access are rejected.
+
+The feature supplies user creation/list/get/update, role and password changes,
+bans, session listing/revocation, hard deletion, permission checks, and
+server-session impersonation. Email, password, role, and ban mutations revoke
+all target server sessions and rotate the target JWT version. Active bans are
+checked before two-factor challenges, session issuance, and session reuse.
+
+`AuthAdminStore` is a logical atomic contract. A durable implementation must
+update the same records exposed through `AuthStore`, preserve normalized email
+uniqueness and the last effective administrator, and make sensitive mutations
+atomic with session revocation and JWT rotation. Hard deletion must include
+credentials, provider accounts, tokens, sessions, and every composed
+user-owned feature namespace. Use `AuthAdminOptions.validateDeletion` to reject
+application invariants such as deleting the last owner of an organization.
+`InMemoryAuthAdminStore` and `InMemoryAuthStore` are for tests and local
+development, not production persistence.
+
+The in-memory Admin store discovers composed user-data deletion contributors
+when feature topology freezes. With `OrganizationFeature`, it automatically
+enforces last-owner protection and clears organization/team membership data.
+Durable adapters must provide the equivalent cross-feature transaction.
+
+Core and admin clients can share one transport:
+
+```dart
+final transport = AuthClientTransport(
+  baseUrl: Uri.parse('https://example.com'),
+  cookieStore: myCookieStore,
+);
+final auth = AuthClient(
+  baseUrl: Uri.parse('https://example.com'),
+  transport: transport,
+);
+final admin = AuthAdminClient(transport: transport);
+```
+
+The shared transport owns cookies, bearer tokens, CSRF refresh, timeouts, and
+bounded error parsing. Mutation results retain committed data and expose typed
+warnings when an after-commit hook or audit sink fails.
+
 ## Optional organization feature
 
 Organizations are opt-in. Nothing is registered unless an

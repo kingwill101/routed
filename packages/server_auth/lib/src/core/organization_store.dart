@@ -166,8 +166,22 @@ abstract interface class AuthOrganizationStore {
   );
 }
 
+/// Optional organization namespace support for atomic administrative deletion.
+abstract interface class AuthOrganizationUserDeletionStore {
+  FutureOr<void> validateUserDeletion(
+    String userId, {
+    required String creatorRole,
+  });
+  FutureOr<void> deleteUserData(
+    String userId, {
+    String? email,
+    required String creatorRole,
+  });
+}
+
 /// Serialized, process-local organization store for tests and development.
-final class InMemoryAuthOrganizationStore implements AuthOrganizationStore {
+final class InMemoryAuthOrganizationStore
+    implements AuthOrganizationStore, AuthOrganizationUserDeletionStore {
   final Map<String, AuthOrganization> _organizations = {};
   final Map<String, AuthOrganizationMember> _members = {};
   final Map<String, AuthOrganizationInvitation> _invitations = {};
@@ -786,6 +800,48 @@ final class InMemoryAuthOrganizationStore implements AuthOrganizationStore {
     final removed = _teamMembers.remove(_teamMemberKey(teamId, userId));
     _require(removed != null, 'team_member_not_found');
     return removed!;
+  });
+
+  @override
+  Future<void> validateUserDeletion(
+    String userId, {
+    required String creatorRole,
+  }) => _atomic(() {
+    final normalizedRole = _normalizeCreatorRole(creatorRole);
+    for (final member in _members.values.where(
+      (member) => member.userId == userId.trim(),
+    )) {
+      if (member.roles.contains(normalizedRole) &&
+          _creatorCount(member.organizationId, normalizedRole) <= 1) {
+        throw AuthFlowException('last_owner');
+      }
+    }
+  });
+
+  @override
+  Future<void> deleteUserData(
+    String userId, {
+    String? email,
+    required String creatorRole,
+  }) => _atomic(() {
+    final id = userId.trim();
+    final normalizedEmail = email == null ? null : normalizeAuthEmail(email);
+    final normalizedRole = _normalizeCreatorRole(creatorRole);
+    for (final member in _members.values.where(
+      (member) => member.userId == id,
+    )) {
+      if (member.roles.contains(normalizedRole) &&
+          _creatorCount(member.organizationId, normalizedRole) <= 1) {
+        throw AuthFlowException('last_owner');
+      }
+    }
+    _members.removeWhere((_, member) => member.userId == id);
+    _teamMembers.removeWhere((_, member) => member.userId == id);
+    _invitations.removeWhere(
+      (_, invitation) =>
+          invitation.inviterId == id ||
+          normalizedEmail != null && invitation.email == normalizedEmail,
+    );
   });
 
   int _creatorCount(String organizationId, String creatorRole) => _members

@@ -24,7 +24,12 @@ class AuthRuntime<TContext> {
       );
     }
     if (requireDurableStore) requireDurableStoreOrThrow();
-    registry = AuthFeatureRegistry<TContext>(store: this.store);
+    registry = AuthFeatureRegistry<TContext>(
+      store: this.store,
+      passwordHasher: options.passwordHasher,
+      passwordPolicy: options.passwordPolicy,
+      sessionStrategy: options.sessionStrategy,
+    );
     for (final feature in this.features) {
       registry.register(feature);
     }

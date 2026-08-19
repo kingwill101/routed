@@ -9,6 +9,7 @@ import 'package:server_auth/server_auth.dart'
         AuthOperationAuthentication,
         AuthOperationCsrfPolicy,
         AuthOperationInvocation,
+        AuthFeatureSessionControl,
         AuthOperationMethod,
         AuthOperationOriginPolicy,
         AuthCallbackRouteKind,
@@ -24,6 +25,8 @@ import 'package:server_auth/server_auth.dart'
         AuthRegisterRouteKind,
         AuthSignInRouteKind,
         AuthSessionStrategy,
+        AuthSession,
+        AuthUser,
         TwoFactorFeature,
         CallbackProvider,
         CredentialsProvider,
@@ -223,6 +226,14 @@ class AuthRoutes {
       final activeTeamId = mutableSession
           ? ctx.getSession<String>(_activeTeamKey)
           : null;
+      final featureSessionControl = _RoutedFeatureSessionControl(
+        manager,
+        ctx,
+        currentSessionId:
+            manager.options.sessionStrategy == AuthSessionStrategy.session
+            ? await manager.currentStoredSessionId(ctx)
+            : null,
+      );
       final response = await endpoint.invoke(
         AuthOperationInvocation<EngineContext>(
           context: ctx,
@@ -244,6 +255,7 @@ class AuthRoutes {
                   }
                 }
               : null,
+          sessionControl: featureSessionControl,
         ),
         payload,
       );
@@ -274,12 +286,16 @@ class AuthRoutes {
   }
 
   Future<Response> _session(EngineContext ctx) async {
-    final session = await manager.resolveSession(ctx);
-    if (session == null) {
-      return ctx.json(null);
+    try {
+      final session = await manager.resolveSession(ctx);
+      if (session == null) {
+        return ctx.json(null);
+      }
+      final payload = await manager.buildSessionPayload(ctx, session);
+      return ctx.json(payload);
+    } on AuthFlowException catch (error) {
+      return _flowErrorResponse(ctx, error);
     }
-    final payload = await manager.buildSessionPayload(ctx, session);
-    return ctx.json(payload);
   }
 
   Future<Response> _signIn(EngineContext ctx) async {
@@ -958,4 +974,38 @@ class AuthRoutes {
           : HttpStatus.unauthorized,
     );
   }
+}
+
+final class _RoutedFeatureSessionControl implements AuthFeatureSessionControl {
+  const _RoutedFeatureSessionControl(
+    this.manager,
+    this.context, {
+    required this.currentSessionId,
+  });
+
+  final AuthManager manager;
+  final EngineContext context;
+
+  @override
+  final String? currentSessionId;
+
+  @override
+  AuthSessionStrategy get strategy => manager.options.sessionStrategy;
+
+  @override
+  Future<AuthSession> replaceIdentity(
+    AuthUser user, {
+    required String authenticationMethod,
+    Duration? maximumAge,
+    String? impersonatedBy,
+  }) => manager.replaceFeatureSession(
+    context,
+    user,
+    authenticationMethod: authenticationMethod,
+    maximumAge: maximumAge,
+    impersonatedBy: impersonatedBy,
+  );
+
+  @override
+  Future<void> signOut() => manager.signOutFeatureSession(context);
 }

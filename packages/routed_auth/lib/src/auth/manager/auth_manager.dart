@@ -41,6 +41,9 @@ import 'package:server_auth/server_auth.dart'
         AuthPasswordChangeResult,
         AuthUser,
         AuthRuntime,
+        AdminFeature,
+        AuthAuthenticationPolicyPhase,
+        AuthAuthenticationPolicyRequest,
         AuthStore,
         resolveAuthEmailVerificationSignIn,
         normalizeAuthEmail,
@@ -129,6 +132,10 @@ class AuthManager {
     return _completeSignIn(ctx, user, authenticationMethod: 'api_key');
   }
 
+  /// The configured Admin feature, if enabled for this runtime.
+  AdminFeature<EngineContext>? get admin =>
+      runtime.feature('admin') as AdminFeature<EngineContext>?;
+
   SessionAuthService get sessionAuth => _sessionAuth ?? SessionAuth.instance;
 
   http.Client get httpClient => _httpClient ??= http.Client();
@@ -181,6 +188,11 @@ class AuthManager {
       context: ctx,
       credentials: credentials,
       passwordPolicy: options.passwordPolicy,
+    );
+    await _enforceAuthenticationPolicy(
+      ctx,
+      user,
+      AuthAuthenticationPolicyPhase.beforeSessionIssue,
     );
 
     final feature = twoFactor;
@@ -876,7 +888,55 @@ class AuthManager {
         storedSession.userId != resolved.session!.user.id) {
       return null;
     }
-    return resolved.session;
+    final session = resolved.session;
+    if (session != null) {
+      await _enforceAuthenticationPolicy(
+        ctx,
+        session.user,
+        AuthAuthenticationPolicyPhase.resolveSession,
+      );
+    }
+    return session;
+  }
+
+  Future<void> _enforceAuthenticationPolicy(
+    EngineContext ctx,
+    AuthUser user,
+    AuthAuthenticationPolicyPhase phase,
+  ) => runtime.registry.enforceAuthenticationPolicy(
+    AuthAuthenticationPolicyRequest(context: ctx, user: user, phase: phase),
+  );
+
+  /// Replaces the current server-session identity for a portable feature.
+  Future<AuthSession> replaceFeatureSession(
+    EngineContext ctx,
+    AuthUser user, {
+    required String authenticationMethod,
+    Duration? maximumAge,
+    String? impersonatedBy,
+  }) async {
+    if (options.sessionStrategy != AuthSessionStrategy.session) {
+      throw AuthFlowException('impersonation_requires_server_session');
+    }
+    if (ctx.hasSession) {
+      await store.sessions.revoke(hashOpaqueToken(ctx.sessionId));
+    }
+    final result = await _completeSignIn(
+      ctx,
+      user,
+      authenticationMethod: authenticationMethod,
+      maximumAge: maximumAge,
+      impersonatedBy: impersonatedBy,
+    );
+    return result.session;
+  }
+
+  Future<String?> currentStoredSessionId(EngineContext ctx) async =>
+      (await _resolveStoredSession(ctx))?.id;
+
+  Future<void> signOutFeatureSession(EngineContext ctx) async {
+    await logout(ctx);
+    if (ctx.hasSession) ctx.session.destroy();
   }
 
   /// Revokes the persisted server-side session before clearing framework
@@ -968,12 +1028,19 @@ class AuthManager {
     AuthAccount? account,
     Map<String, dynamic>? profile,
     AuthCredentials? credentials,
-    String? authenticationMethod,
     bool isNewUser = false,
+    String? authenticationMethod,
+    Duration? maximumAge,
+    String? impersonatedBy,
   }) async {
     if (user.id.trim().isEmpty) {
       throw AuthFlowException('user_resolution_failed');
     }
+    await _enforceAuthenticationPolicy(
+      ctx,
+      user,
+      AuthAuthenticationPolicyPhase.beforeSessionIssue,
+    );
     final resolvedRedirect =
         await resolveAuthSignInRedirectTarget<EngineContext>(
           callbacks: callbacks,
@@ -1005,6 +1072,9 @@ class AuthManager {
     DateTime? sessionExpiresAt;
     if (options.sessionStrategy == AuthSessionStrategy.session) {
       _applySessionMaxAge(ctx);
+      if (maximumAge != null) {
+        ctx.session.options.setMaxAge(maximumAge.inSeconds);
+      }
       await sessionAuth.login(ctx, user.toPrincipal());
       _setSessionIssuedAt(ctx, DateTime.now().toUtc());
       sessionExpiresAt = _sessionExpiry(ctx);
@@ -1013,8 +1083,9 @@ class AuthManager {
         user: user,
         provider: provider,
         credentials: credentials,
-        authenticationMethod: authenticationMethod,
         expiresAt: sessionExpiresAt,
+        authenticationMethod: authenticationMethod,
+        impersonatedBy: impersonatedBy,
       );
     }
 
@@ -1282,8 +1353,9 @@ class AuthManager {
     required AuthUser user,
     required AuthProvider? provider,
     required AuthCredentials? credentials,
-    String? authenticationMethod,
     required DateTime? expiresAt,
+    String? authenticationMethod,
+    String? impersonatedBy,
   }) async {
     if (!ctx.hasSession) {
       return;
@@ -1304,6 +1376,7 @@ class AuthManager {
           authenticationMethod ??
           provider?.id ??
           (credentials == null ? 'unknown' : 'credentials'),
+      impersonatedBy: impersonatedBy,
     );
     final previousId = ctx.session.previousId;
     if (previousId != null) {

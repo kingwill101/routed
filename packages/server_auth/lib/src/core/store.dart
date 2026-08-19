@@ -224,13 +224,33 @@ abstract interface class AuthStore {
   AuthVerificationTokenStore get verificationTokens;
 }
 
+/// Optional data-plane operations required by the Admin feature.
+///
+/// Production adapters implement these operations transactionally. Keeping
+/// them separate from [AuthStore] preserves source compatibility for stores
+/// that do not opt into administrative APIs.
+abstract interface class AuthAdminStoreCapabilities {
+  FutureOr<List<AuthUser>> listUsersForAdministration();
+
+  FutureOr<AuthUser?> updateUserForAdministration(AuthUser user);
+
+  FutureOr<AuthPasswordCredential?> findCredentialForUser(String userId);
+
+  FutureOr<AuthPasswordCredential> upsertCredentialForAdministration(
+    AuthPasswordCredential credential,
+  );
+
+  /// Deletes all core user-owned records as one transaction.
+  FutureOr<bool> deleteUserForAdministration(String userId);
+}
+
 /// In-memory store for tests, examples, and local development.
 ///
 /// This implementation deliberately keeps password hashes outside [AuthUser]
 /// attributes. It is not intended for production persistence; production
 /// applications should provide an implementation backed by their database and
 /// password-hashing policy.
-class InMemoryAuthStore implements AuthStore {
+class InMemoryAuthStore implements AuthStore, AuthAdminStoreCapabilities {
   InMemoryAuthStore()
     : users = _InMemoryUserStore(),
       credentials = _InMemoryCredentialStore(),
@@ -266,6 +286,51 @@ class InMemoryAuthStore implements AuthStore {
 
   @override
   final AuthVerificationTokenStore verificationTokens;
+
+  @override
+  Future<List<AuthUser>> listUsersForAdministration() async =>
+      List<AuthUser>.unmodifiable(
+        (_users).values.toList()..sort((a, b) => a.id.compareTo(b.id)),
+      );
+
+  _InMemoryUserStore get _users => users as _InMemoryUserStore;
+  _InMemoryCredentialStore get _credentials =>
+      credentials as _InMemoryCredentialStore;
+  _InMemoryAccountStore get _accounts => accounts as _InMemoryAccountStore;
+  _InMemorySessionStore get _sessions => sessions as _InMemorySessionStore;
+
+  @override
+  Future<AuthUser?> updateUserForAdministration(AuthUser user) =>
+      _users.update(user);
+
+  @override
+  Future<AuthPasswordCredential?> findCredentialForUser(String userId) async =>
+      _credentials.values
+          .where((credential) => credential.userId == userId.trim())
+          .firstOrNull;
+
+  @override
+  Future<AuthPasswordCredential> upsertCredentialForAdministration(
+    AuthPasswordCredential credential,
+  ) async {
+    _credentials.upsertForAdministration(credential);
+    return credential;
+  }
+
+  @override
+  Future<bool> deleteUserForAdministration(String userId) async {
+    final id = userId.trim();
+    final user = await users.findById(id);
+    if (user == null) return false;
+    _credentials.deleteForUser(id);
+    _accounts.deleteForUser(id);
+    _sessions.deleteForUser(id);
+    await passwordResetTokens.deleteForUser(id);
+    await verificationTokens.delete(id);
+    if (user.email != null) await verificationTokens.delete(user.email!);
+    _users.delete(id);
+    return true;
+  }
 }
 
 /// Callback-backed typed store useful for focused unit tests.
@@ -510,6 +575,14 @@ class _InMemoryUserStore implements AuthUserStore {
   final Map<String, AuthUser> _usersById = <String, AuthUser>{};
   final Map<String, AuthUser> _usersByEmail = <String, AuthUser>{};
 
+  Iterable<AuthUser> get values => _usersById.values;
+  bool contains(String id) => _usersById.containsKey(id);
+
+  void delete(String id) {
+    final removed = _usersById.remove(id);
+    if (removed?.email != null) _usersByEmail.remove(removed!.email);
+  }
+
   @override
   Future<AuthUser?> findById(String id) async => _usersById[id];
 
@@ -584,6 +657,34 @@ class _InMemoryCredentialStore implements AuthCredentialStore {
   final Map<String, String> _credentialIdsByIdentifier = <String, String>{};
   final Set<String> _inFlightIdentifiers = <String>{};
   final Set<String> _inFlightCredentialIds = <String>{};
+
+  Iterable<AuthPasswordCredential> get values => _credentialsById.values;
+
+  void upsertForAdministration(AuthPasswordCredential credential) {
+    final previous = _credentialsById[credential.id];
+    if (previous != null && previous.identifier != credential.identifier) {
+      _credentialIdsByIdentifier.remove(previous.identifier);
+    }
+    final conflictingId = _credentialIdsByIdentifier[credential.identifier];
+    if (conflictingId != null && conflictingId != credential.id) {
+      throw StateError('Auth user email already exists');
+    }
+    _credentialsById[credential.id] = credential;
+    _credentialIdsByIdentifier[credential.identifier] = credential.id;
+  }
+
+  void deleteForUser(String userId) {
+    final ids = _credentialsById.values
+        .where((credential) => credential.userId == userId)
+        .map((credential) => credential.id)
+        .toList(growable: false);
+    for (final id in ids) {
+      final removed = _credentialsById.remove(id);
+      if (removed != null) {
+        _credentialIdsByIdentifier.remove(removed.identifier);
+      }
+    }
+  }
 
   @override
   Future<AuthPasswordCredential?> findByIdentifier(String identifier) async {
@@ -688,6 +789,9 @@ class _InMemoryAccountStore implements AuthAccountStore {
   final Map<(String, String), AuthAccount> _accounts =
       <(String, String), AuthAccount>{};
 
+  void deleteForUser(String userId) =>
+      _accounts.removeWhere((_, account) => account.userId == userId);
+
   @override
   Future<AuthAccount?> find(String providerId, String providerAccountId) async {
     return _accounts[(providerId, providerAccountId)];
@@ -704,6 +808,9 @@ class _InMemoryAccountStore implements AuthAccountStore {
 class _InMemorySessionStore implements AuthSessionStore {
   final Map<String, AuthSessionRecord> _sessions =
       <String, AuthSessionRecord>{};
+
+  void deleteForUser(String userId) =>
+      _sessions.removeWhere((_, session) => session.userId == userId);
 
   @override
   Future<AuthSessionRecord?> find(String tokenHash) async =>

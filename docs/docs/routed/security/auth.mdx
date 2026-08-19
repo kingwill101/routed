@@ -113,6 +113,14 @@ Routed endpoints, a typed client, and tenant-aware Haigate helpers. See
 [Organizations & Tenancy](/docs/routed/security/organizations) for setup,
 persistence requirements, client usage, and the complete route surface.
 
+## Administrative auth
+
+Administration is also opt-in. Compose `AdminFeature` for authoritative global
+role checks, user and session management, bans, hard deletion, audit hooks, and
+guarded server-session impersonation. See
+[Administrative Auth](/docs/routed/security/admin) for setup, adapter
+requirements, typed-client usage, and the route catalogue.
+
 ## Sessions, guards, and gates
 
 Register `RoutedSessionsProvider` and add the session middleware before using

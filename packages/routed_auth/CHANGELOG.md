@@ -1,5 +1,9 @@
 ## Unreleased
 
+- Automatically mount the opt-in `/auth/admin/...` API, enforce Admin bans at
+  sign-in/session boundaries, and provide rotating server-session identity
+  replacement for guarded impersonation.
+
 - Keep external JWT middleware independent from Routed's private session-token
   version claim; Routed-issued JWT sessions continue validating that claim in
   `AuthManager`.
