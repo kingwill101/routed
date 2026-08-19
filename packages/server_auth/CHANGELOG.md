@@ -1,9 +1,13 @@
 ## Unreleased
 
+- Rename auth capability APIs to server plugins and add an opt-in typed client plugin
+  registry so applications select only the client APIs they use.
+- Keep the shared auth transport public while hiding the transport-backed core
+  implementation from the package umbrella library.
 - Add central authentication-policy helpers for verified-email enforcement and
   disabled, tombstoned, or unavailable accounts. Email verification now marks
   the persisted user before session issuance.
-- Include API-key and WebAuthn credential namespaces in the feature-owned
+- Include API-key and WebAuthn credential namespaces in the plugin-owned
   account-deletion transaction.
 - Issue a normal server-side session after a successful Routed WebAuthn
   assertion, using the same session rotation, policy, and revocation path as
@@ -18,10 +22,10 @@
   permissions, bans, session administration, guarded hard deletion,
   server-session impersonation, lifecycle hooks/events, persistence topology,
   and `AuthAdminClient`.
-- Add feature authentication-policy and host session-control contributions so
+- Add plugin authentication-policy and host session-control contributions so
   portable plugins can block session issuance/reuse and safely replace a
   server-session identity.
-- Add owner-checked WebAuthn passkey renaming through the typed store, feature
+- Add owner-checked WebAuthn passkey renaming through the typed store, plugin
   endpoint, and client API.
 - Add typed account tombstone and retention-purge capabilities; self-service
   deletion now retains only a stable unavailable user ID and deletion time.
@@ -39,7 +43,7 @@
 - Add the opt-in `OrganizationPlugin`, typed atomic organization store,
   memberships, invitations, scoped permissions, lifecycle hooks, dynamic
   roles, teams, logical persistence descriptors, and typed organization client.
-- Add feature-contributed endpoint/client/schema/rate-limit descriptors,
+- Add plugin-contributed endpoint/client/schema/rate-limit descriptors,
   immutable runtime topology, namespaced rate-limit operations, and the shared
   public `AuthClientTransport`.
 - Add the opt-in `AuthApiKeyPlugin` with digest-at-rest keys, scoped metadata,
@@ -101,7 +105,7 @@
   default 30-second period.
 - Revoke all session-bound step-up proofs when two-factor authentication is
   disabled.
-- Revoke feature-owned trusted-device bypass tokens during password resets and
+- Revoke plugin-owned trusted-device bypass tokens during password resets and
   password changes.
 - Add atomic compare-and-set factor writes for TOTP enrollment activation and
   recovery-code regeneration.

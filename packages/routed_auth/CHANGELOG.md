@@ -1,15 +1,18 @@
 ## Unreleased
 
+- Use plugin terminology consistently across Routed auth endpoint mounting and
+  management internals, and update public examples to compose typed client
+  plugins through `AuthClient`.
 - Enforce configured verified-email and account-availability policy before
   issuing or resolving Routed sessions, while retaining generic auth-flow
   status handling.
 - Complete a verified WebAuthn assertion by issuing a normal server-side
-  session through the feature session-control boundary.
+  session through the plugin session-control boundary.
 - Add authenticated email-change request and confirmation routes with
   reauthentication, browser/CSRF protections, one-time delivery tokens, and
   session/JWT revocation after a successful change.
 - Add authenticated linked-account listing/unlinking and account deletion
-  routes. Deletion composes feature-owned data contributors before the core
+  routes. Deletion composes plugin-owned data contributors before the core
   transactional purge and revokes sessions/JWT versions.
 - Add the CSRF-protected `/webauthn/credentials/rename` route contributed by
   `WebAuthnPlugin`.
@@ -27,7 +30,7 @@
   `AuthManager`.
 - Preserve the initiating credentials provider through two-factor challenges,
   and include the OAuth provider in account-link lifecycle events.
-- Automatically register opt-in feature endpoint descriptors and add the
+- Automatically register opt-in plugin endpoint descriptors and add the
   complete `/auth/organization/...` API with shared browser, CSRF, session,
   rate-limit, and public-error handling.
 - Add tenant-aware Haigate membership, permission, and resource-owner helpers
@@ -56,7 +59,7 @@
   `AuthManager.requireTwoFactorStepUp` for sensitive actions.
 - Applied the configured global auth rate limiter to all state-changing 2FA
   routes, including pending challenge verification.
-- Register 2FA routes independently of the initial feature configuration so
+- Register 2FA routes independently of the initial plugin configuration so
   managerOf-based config reloads can activate them without rebuilding routes.
 - Revoke configured two-factor trusted-device tokens when routed password reset
   and password-change flows replace credentials.
