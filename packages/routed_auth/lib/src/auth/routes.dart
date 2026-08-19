@@ -104,6 +104,10 @@ import 'package:routed_sessions/routed_sessions.dart';
 /// - `POST /email-otp/verify-email` verifies the current user's email.
 /// - `POST /sign-in/anonymous` creates an anonymous authenticated session.
 /// - `POST /delete-anonymous-user` deletes the current anonymous account.
+/// - `GET /.well-known/oauth-protected-resource` publishes MCP resource
+///   metadata when [McpAuthFeature] is enabled.
+/// - `GET /.well-known/oauth-authorization-server` publishes OAuth metadata
+///   when [McpAuthFeature] is enabled.
 ///
 /// ## Usage
 /// ```dart
@@ -132,9 +136,22 @@ class AuthRoutes {
 
   void register(Router router, {String? basePath}) {
     final root = basePath ?? manager.options.basePath;
-    final featureEndpoints = manager.runtime.registry.endpoints
+    final allFeatureEndpoints = manager.runtime.registry.endpoints
         .where((endpoint) => !endpoint.serverOnly)
         .toList(growable: false);
+    final rootFeatureEndpoints = allFeatureEndpoints
+        .where((endpoint) => endpoint.path.startsWith('/.well-known/'))
+        .toList(growable: false);
+    final featureEndpoints = allFeatureEndpoints
+        .where((endpoint) => !endpoint.path.startsWith('/.well-known/'))
+        .toList(growable: false);
+    for (final endpoint in rootFeatureEndpoints) {
+      Future<Response> handler(EngineContext ctx) =>
+          _featureOperation(ctx, endpoint);
+      if (endpoint.method == AuthOperationMethod.get) {
+        router.get(endpoint.path, handler);
+      }
+    }
     router.group(
       path: root,
       builder: (auth) {

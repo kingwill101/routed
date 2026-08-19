@@ -146,6 +146,19 @@ class OAuthIntrospectionResult {
 
   String? get scope => raw['scope'] as String?;
 
+  List<String> get audience {
+    final value = raw['aud'];
+    if (value is String && value.trim().isNotEmpty) return [value.trim()];
+    if (value is List) {
+      return value
+          .whereType<String>()
+          .map((item) => item.trim())
+          .where((item) => item.isNotEmpty)
+          .toList(growable: false);
+    }
+    return const <String>[];
+  }
+
   DateTime? get expiresAt {
     final exp = raw['exp'];
     if (exp is num) {
@@ -182,6 +195,7 @@ class OAuthIntrospectionOptions {
     this.maxCacheEntries = 1024,
     this.clockSkew = const Duration(seconds: 60),
     this.requestTimeout = const Duration(seconds: 10),
+    this.requiredAudience,
     this.additionalParameters = const <String, String>{},
   });
 
@@ -199,6 +213,7 @@ class OAuthIntrospectionOptions {
   final int maxCacheEntries;
   final Duration clockSkew;
   final Duration requestTimeout;
+  final String? requiredAudience;
   final Map<String, String> additionalParameters;
 }
 
@@ -215,6 +230,7 @@ OAuthIntrospectionOptions? materializeOAuthIntrospectionOptions({
   int maxCacheEntries = 1024,
   Duration clockSkew = const Duration(seconds: 60),
   Duration requestTimeout = const Duration(seconds: 10),
+  String? requiredAudience,
   Map<String, String> additionalParameters = const <String, String>{},
 }) {
   if (!enabled || endpoint == null) {
@@ -230,6 +246,9 @@ OAuthIntrospectionOptions? materializeOAuthIntrospectionOptions({
     maxCacheEntries: maxCacheEntries,
     clockSkew: clockSkew,
     requestTimeout: requestTimeout,
+    requiredAudience: requiredAudience?.trim().isEmpty == true
+        ? null
+        : requiredAudience?.trim(),
     additionalParameters: additionalParameters,
   );
 }
@@ -333,6 +352,12 @@ class OAuth2TokenIntrospector {
     if (notBefore != null &&
         notBefore.subtract(options.clockSkew).isAfter(now)) {
       throw OAuth2Exception('token not yet valid');
+    }
+
+    final requiredAudience = options.requiredAudience;
+    if (requiredAudience != null &&
+        !result.audience.contains(requiredAudience)) {
+      throw OAuth2Exception('token audience mismatch');
     }
 
     return result;

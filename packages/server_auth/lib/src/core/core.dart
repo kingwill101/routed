@@ -25,6 +25,7 @@ export 'guards.dart';
 export 'jwt.dart';
 export 'jwt_version_store.dart';
 export 'models.dart';
+export 'mcp_auth.dart';
 export 'oauth.dart';
 export 'oauth_challenge_store.dart';
 export 'organization.dart';
