@@ -1,3 +1,6 @@
+import 'dart:async';
+
+import 'exceptions.dart';
 import 'feature.dart';
 
 const String authMcpFeatureId = 'mcp_auth';
@@ -79,17 +82,90 @@ final class AuthOAuthAuthorizationServerMetadata {
   };
 }
 
+/// A validated dynamic-client-registration request.
+///
+/// The registrar callback remains responsible for persistence, client ID
+/// allocation, and any secret generation. The framework only validates the
+/// protocol shape and redirect URI security boundary.
+final class AuthOAuthClientRegistrationRequest {
+  const AuthOAuthClientRegistrationRequest({
+    required this.clientName,
+    required this.redirectUris,
+    required this.grantTypes,
+    required this.responseTypes,
+    required this.tokenEndpointAuthMethod,
+    this.scope,
+    this.clientUri,
+    this.softwareId,
+  });
+
+  final String clientName;
+  final List<Uri> redirectUris;
+  final List<String> grantTypes;
+  final List<String> responseTypes;
+  final String tokenEndpointAuthMethod;
+  final String? scope;
+  final Uri? clientUri;
+  final String? softwareId;
+}
+
+/// The application-owned result of registering an OAuth client.
+final class AuthOAuthClientRegistration {
+  const AuthOAuthClientRegistration({
+    required this.clientId,
+    required this.redirectUris,
+    required this.grantTypes,
+    required this.responseTypes,
+    required this.tokenEndpointAuthMethod,
+    this.clientSecret,
+    this.clientName,
+  });
+
+  final String clientId;
+  final String? clientSecret;
+  final String? clientName;
+  final List<Uri> redirectUris;
+  final List<String> grantTypes;
+  final List<String> responseTypes;
+  final String tokenEndpointAuthMethod;
+
+  Map<String, dynamic> toJson() => <String, dynamic>{
+    'client_id': clientId,
+    if (clientSecret != null) 'client_secret': clientSecret,
+    if (clientName != null) 'client_name': clientName,
+    'redirect_uris': redirectUris
+        .map((uri) => uri.toString())
+        .toList(growable: false),
+    'grant_types': grantTypes,
+    'response_types': responseTypes,
+    'token_endpoint_auth_method': tokenEndpointAuthMethod,
+  };
+}
+
+/// Application-owned dynamic client registration boundary.
+typedef AuthOAuthClientRegistrar<TContext> =
+    FutureOr<AuthOAuthClientRegistration> Function(
+      TContext context,
+      AuthOAuthClientRegistrationRequest request,
+    );
+
 /// Publishes MCP protected-resource and OAuth authorization-server metadata.
 final class McpAuthFeature<TContext>
-    implements AuthFeature<TContext>, AuthEndpointContributor<TContext> {
+    implements
+        AuthFeature<TContext>,
+        AuthEndpointContributor<TContext>,
+        AuthClientOperationContributor {
   McpAuthFeature({
     required AuthOAuthProtectedResourceMetadata protectedResource,
     required AuthOAuthAuthorizationServerMetadata authorizationServer,
+    AuthOAuthClientRegistrar<TContext>? registerClient,
   }) : protectedResource = _validatedResource(protectedResource),
-       authorizationServer = _validatedAuthorizationServer(authorizationServer);
+       authorizationServer = _validatedAuthorizationServer(authorizationServer),
+       _registerClient = registerClient;
 
   final AuthOAuthProtectedResourceMetadata protectedResource;
   final AuthOAuthAuthorizationServerMetadata authorizationServer;
+  final AuthOAuthClientRegistrar<TContext>? _registerClient;
 
   @override
   String get id => authMcpFeatureId;
@@ -109,7 +185,21 @@ final class McpAuthFeature<TContext>
       path: '/.well-known/oauth-authorization-server',
       payload: authorizationServer.toJson(),
     ),
+    if (_registerClient != null) _registrationEndpoint(),
   ];
+
+  @override
+  Iterable<AuthClientOperationDescriptor> get clientOperations =>
+      _registerClient == null
+      ? const <AuthClientOperationDescriptor>[]
+      : const <AuthClientOperationDescriptor>[
+          AuthClientOperationDescriptor(
+            id: 'mcpAuth.registerClient',
+            method: AuthOperationMethod.post,
+            path: '/oauth/register',
+            serverOnly: true,
+          ),
+        ];
 
   AuthEndpointDescriptor<TContext> _metadataEndpoint({
     required String id,
@@ -127,6 +217,35 @@ final class McpAuthFeature<TContext>
     handler: (invocation, request) => payload,
   );
 
+  AuthEndpointDescriptor<TContext> _registrationEndpoint() =>
+      TypedAuthEndpointDescriptor<
+        TContext,
+        Map<String, dynamic>,
+        Map<String, dynamic>
+      >(
+        id: 'mcpAuth.registerClient',
+        method: AuthOperationMethod.post,
+        path: '/oauth/register',
+        requestCodec: AuthOperationCodec<Map<String, dynamic>>(
+          decode: (value) => value,
+          encode: (value) => value,
+        ),
+        responseCodec: AuthOperationCodec<Map<String, dynamic>>(
+          decode: (value) => value,
+          encode: (value) => value,
+        ),
+        authentication: AuthOperationAuthentication.none,
+        originPolicy: AuthOperationOriginPolicy.none,
+        csrfPolicy: AuthOperationCsrfPolicy.none,
+        handler: (invocation, input) async {
+          final registrar = _registerClient;
+          if (registrar == null) throw StateError('Registrar is unavailable.');
+          final request = _parseRegistration(input);
+          final registration = await registrar(invocation.context, request);
+          return registration.toJson();
+        },
+      );
+
   static final AuthOperationCodec<Map<String, dynamic>> _requestCodec =
       AuthOperationCodec<Map<String, dynamic>>(
         decode: (value) => Map<String, dynamic>.from(value),
@@ -138,6 +257,95 @@ final class McpAuthFeature<TContext>
         decode: (value) => value,
         encode: (value) => value,
       );
+}
+
+AuthOAuthClientRegistrationRequest _parseRegistration(
+  Map<String, dynamic> input,
+) {
+  final redirectUris = _requiredUris(input, 'redirect_uris');
+  final grantTypes =
+      _stringList(input, 'grant_types') ?? const ['authorization_code'];
+  final responseTypes = _stringList(input, 'response_types') ?? const ['code'];
+  final authMethod =
+      _requiredString(input, 'token_endpoint_auth_method') ?? 'none';
+  if (authMethod != 'none') {
+    throw AuthFlowException('unsupported_token_endpoint_auth_method');
+  }
+  if (!grantTypes.contains('authorization_code') ||
+      !responseTypes.contains('code')) {
+    throw AuthFlowException('unsupported_client_configuration');
+  }
+  final clientUriValue = input['client_uri'];
+  Uri? clientUri;
+  if (clientUriValue != null) {
+    clientUri = _parseAbsoluteUri(clientUriValue, 'client_uri');
+  }
+  return AuthOAuthClientRegistrationRequest(
+    clientName: _requiredString(input, 'client_name') ?? 'MCP client',
+    redirectUris: redirectUris,
+    grantTypes: List<String>.unmodifiable(grantTypes),
+    responseTypes: List<String>.unmodifiable(responseTypes),
+    tokenEndpointAuthMethod: authMethod,
+    scope: input['scope'] is String ? input['scope'] as String : null,
+    clientUri: clientUri,
+    softwareId: input['software_id'] is String
+        ? input['software_id'] as String
+        : null,
+  );
+}
+
+String? _requiredString(Map<String, dynamic> input, String key) {
+  final value = input[key];
+  if (value == null) return null;
+  if (value is! String || value.trim().isEmpty) {
+    throw AuthFlowException('invalid_$key');
+  }
+  return value.trim();
+}
+
+List<Uri> _requiredUris(Map<String, dynamic> input, String key) {
+  final value = input[key];
+  if (value is! List || value.isEmpty) {
+    throw AuthFlowException('invalid_$key');
+  }
+  return List<Uri>.unmodifiable(
+    value.map((entry) => _parseRedirectUri(entry, key)),
+  );
+}
+
+Uri _parseRedirectUri(Object? value, String key) {
+  final uri = _parseAbsoluteUri(value, key);
+  final isLocalHttp =
+      uri.scheme == 'http' &&
+      (uri.host == 'localhost' || uri.host == '127.0.0.1');
+  if (uri.scheme != 'https' && !isLocalHttp) {
+    throw AuthFlowException('invalid_$key');
+  }
+  return uri;
+}
+
+Uri _parseAbsoluteUri(Object? value, String key) {
+  if (value is! String) throw AuthFlowException('invalid_$key');
+  final uri = Uri.tryParse(value);
+  if (uri == null ||
+      !uri.isAbsolute ||
+      uri.host.isEmpty ||
+      uri.fragment.isNotEmpty) {
+    throw AuthFlowException('invalid_$key');
+  }
+  return uri;
+}
+
+List<String>? _stringList(Map<String, dynamic> input, String key) {
+  final value = input[key];
+  if (value == null) return null;
+  if (value is! List ||
+      value.any((entry) => entry is! String || entry.trim().isEmpty)) {
+    throw AuthFlowException('invalid_$key');
+  }
+  final result = value.cast<String>();
+  if (result.isEmpty) throw AuthFlowException('invalid_$key');
+  return result;
 }
 
 AuthOAuthProtectedResourceMetadata _validatedResource(

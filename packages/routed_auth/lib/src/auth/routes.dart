@@ -108,6 +108,8 @@ import 'package:routed_sessions/routed_sessions.dart';
 ///   metadata when [McpAuthFeature] is enabled.
 /// - `GET /.well-known/oauth-authorization-server` publishes OAuth metadata
 ///   when [McpAuthFeature] is enabled.
+/// - `POST /oauth/register` handles dynamic OAuth client registration when
+///   [McpAuthFeature] is configured with a registrar callback.
 ///
 /// ## Usage
 /// ```dart
