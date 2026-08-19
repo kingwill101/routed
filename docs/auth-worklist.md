@@ -185,11 +185,11 @@ The work is intentionally split between framework-agnostic capabilities in
 These capabilities are useful product benchmarks, but should follow the core
 account, session, client, and plugin contracts above:
 
-- [ ] Add email OTP as a separate one-time-code flow alongside magic links.
+- [x] Add email OTP as a separate one-time-code flow alongside magic links.
 - [ ] Add phone-number authentication with provider-owned delivery and
   verification boundaries.
 - [ ] Add username-first authentication and explicit identifier policy.
-- [ ] Add anonymous/guest sessions with safe account upgrade/linking rules.
+- [x] Add anonymous/guest sessions with safe account upgrade/linking rules.
 - [ ] Track the last successful authentication method without storing secrets.
 - [ ] Add captcha and breached-password checks as opt-in security plugins.
 - [ ] Add SSO/SAML and SCIM integrations when enterprise tenancy requirements
