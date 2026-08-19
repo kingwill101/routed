@@ -102,6 +102,8 @@ import 'package:routed_sessions/routed_sessions.dart';
 /// - `POST /email-otp/check-verification-otp` checks an email OTP.
 /// - `POST /sign-in/email-otp` signs in or registers with an email OTP.
 /// - `POST /email-otp/verify-email` verifies the current user's email.
+/// - `POST /sign-in/anonymous` creates an anonymous authenticated session.
+/// - `POST /delete-anonymous-user` deletes the current anonymous account.
 ///
 /// ## Usage
 /// ```dart

@@ -989,6 +989,22 @@ class AuthClient {
     return AuthUser.fromJson(Map<String, dynamic>.from(value));
   }
 
+  /// Creates an anonymous authenticated session without collecting PII.
+  Future<AuthSession> signInAnonymously() async {
+    final response = await _request(
+      'POST',
+      '/sign-in/anonymous',
+      body: const {},
+    );
+    return _sessionFromBody(response.body);
+  }
+
+  /// Deletes the current anonymous account and signs the client out.
+  Future<void> deleteAnonymousUser() async {
+    await _mutatingRequest('POST', '/delete-anonymous-user', const {});
+    transport.clearCsrfToken();
+  }
+
   /// Obtains and caches the CSRF token used by state-changing requests.
   Future<String> getCsrfToken() async {
     return transport.getCsrfToken();

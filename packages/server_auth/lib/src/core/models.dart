@@ -156,6 +156,7 @@ class AuthUser {
     this.name,
     this.image,
     this.roles = const <String>[],
+    this.isAnonymous = false,
     Map<String, dynamic>? attributes,
   }) : attributes = attributes == null
            ? <String, dynamic>{}
@@ -176,6 +177,9 @@ class AuthUser {
   /// Role labels used by guards and gates.
   final List<String> roles;
 
+  /// Whether this account has no verified authentication identity yet.
+  final bool isAnonymous;
+
   /// Additional provider-specific attributes.
   final Map<String, dynamic> attributes;
 
@@ -189,6 +193,7 @@ class AuthUser {
         if (email != null) 'email': email,
         if (name != null) 'name': name,
         if (image != null) 'image': image,
+        if (isAnonymous) 'isAnonymous': true,
       },
     );
   }
@@ -201,6 +206,7 @@ class AuthUser {
       name: name,
       image: image,
       roles: roles,
+      isAnonymous: isAnonymous,
       attributes: sanitizeAuthPublicAttributes(attributes),
     );
   }
@@ -213,6 +219,7 @@ class AuthUser {
       'name': name,
       'image': image,
       'roles': roles,
+      'isAnonymous': isAnonymous,
       'attributes': sanitizeAuthPublicAttributes(attributes),
     };
   }
@@ -226,6 +233,7 @@ class AuthUser {
       email: attributes.remove('email')?.toString(),
       name: attributes.remove('name')?.toString(),
       image: attributes.remove('image')?.toString(),
+      isAnonymous: attributes.remove('isAnonymous') == true,
       attributes: attributes,
     );
   }
@@ -239,6 +247,7 @@ class AuthUser {
       email: json['email']?.toString(),
       name: json['name']?.toString(),
       image: json['image']?.toString(),
+      isAnonymous: json['isAnonymous'] == true,
       roles: rolesValue is List
           ? rolesValue.whereType<String>().toList(growable: false)
           : const <String>[],

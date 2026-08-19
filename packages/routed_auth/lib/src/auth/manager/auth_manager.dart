@@ -7,6 +7,7 @@ import 'package:server_auth/server_auth.dart'
     show
         AuthAccount,
         AuthApiKeyFeature,
+        AnonymousFeature,
         AuthCallbacks,
         AuthCredentials,
         requireAuthorizedCredentialsRegistration,
@@ -114,6 +115,10 @@ class AuthManager {
   /// The configured API-key feature, if enabled for this runtime.
   AuthApiKeyFeature<EngineContext>? get apiKeys =>
       runtime.feature('api_key') as AuthApiKeyFeature<EngineContext>?;
+
+  /// The configured anonymous-account feature, if enabled.
+  AnonymousFeature<EngineContext>? get anonymous =>
+      runtime.feature('anonymous') as AnonymousFeature<EngineContext>?;
 
   /// Exchanges an enabled API key for a normal server-side session.
   ///
@@ -1195,6 +1200,21 @@ class AuthManager {
   }) async {
     if (user.id.trim().isEmpty) {
       throw AuthFlowException('user_resolution_failed');
+    }
+    final anonymous = this.anonymous;
+    final principal = SessionAuth.current(ctx);
+    if (anonymous != null &&
+        principal != null &&
+        principal.id != user.id &&
+        principal.attributes['isAnonymous'] == true) {
+      final anonymousUser = await store.users.findById(principal.id);
+      if (anonymousUser?.isAnonymous == true) {
+        await anonymous.linkAnonymousAccount(
+          context: ctx,
+          anonymousUser: anonymousUser!,
+          newUser: user,
+        );
+      }
     }
     await _enforceAuthenticationPolicy(
       ctx,
