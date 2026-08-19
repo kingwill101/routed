@@ -2,13 +2,15 @@ import 'dart:convert';
 
 import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
-import 'package:server_auth/src/core/client.dart' show AuthClientCore;
+import 'package:server_auth/server_auth.dart';
 import 'package:test/test.dart';
 
 void main() {
-  test('AuthClient exposes anonymous sign-in and deletion', () async {
-    final client = AuthClientCore(
+  test('anonymous client plugin exposes sign-in and deletion', () async {
+    final plugin = const AuthAnonymousClientPlugin();
+    final auth = AuthClient(
       baseUrl: Uri.parse('https://example.test'),
+      plugins: [plugin],
       httpClient: MockClient((request) async {
         if (request.url.path == '/auth/sign-in/anonymous') {
           expect(jsonDecode(request.body), isEmpty);
@@ -35,9 +37,10 @@ void main() {
         return http.Response(jsonEncode({'status': 'anonymous_deleted'}), 200);
       }),
     );
+    final client = auth.plugins.use(plugin);
 
-    final session = await client.signInAnonymously();
-    await client.deleteAnonymousUser();
+    final session = await client.signIn();
+    await client.deleteUser();
 
     expect(session.user.isAnonymous, isTrue);
   });
