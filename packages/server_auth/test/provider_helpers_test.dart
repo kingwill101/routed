@@ -34,11 +34,11 @@ String _signedOidcToken({String nonce = 'nonce-1', String? issuer}) {
 }
 
 Map<String, dynamic> _oidcJwk() => <String, dynamic>{
-  'kty': 'oct',
-  'kid': 'oidc-key',
-  'alg': 'HS256',
-  'k': base64UrlEncode(utf8.encode(_oidcSecret)).replaceAll('=', ''),
-};
+      'kty': 'oct',
+      'kid': 'oidc-key',
+      'alg': 'HS256',
+      'k': base64UrlEncode(utf8.encode(_oidcSecret)).replaceAll('=', ''),
+    };
 
 void main() {
   test('provider request and verification lifetimes must be positive', () {
@@ -895,6 +895,7 @@ void main() {
 
       expect(resolved, isNotNull);
       expect(resolved!.user.id, equals('user-1'));
+      expect(resolved.user.attributes['emailVerified'], isTrue);
       expect(resolved.isNewUser, isFalse);
       expect(resolved.callbackUrl, equals('/dashboard'));
     },
@@ -1072,43 +1073,43 @@ void main() {
 
       final resolved =
           await resolveOAuthSignInForProvider<Object, Map<String, dynamic>>(
-            store: store,
-            context: Object(),
-            provider: provider,
-            code: 'auth-code',
-            codeVerifier: 'pkce-verifier',
-            httpClient: MockClient((request) async {
-              if (request.url.path == '/token') {
-                return http.Response(
-                  jsonEncode(<String, dynamic>{
-                    'access_token': 'token-1',
-                    'token_type': 'Bearer',
-                    'refresh_token': 'refresh-1',
-                    'expires_in': 3600,
-                  }),
-                  200,
-                  headers: const <String, String>{
-                    'content-type': 'application/json',
-                  },
-                );
-              }
-              if (request.url.path == '/userinfo') {
-                return http.Response(
-                  jsonEncode(<String, dynamic>{
-                    'sub': 'sub-123',
-                    'email': 'user@example.com',
-                    'email_verified': true,
-                    'name': 'Example User',
-                  }),
-                  200,
-                  headers: const <String, String>{
-                    'content-type': 'application/json',
-                  },
-                );
-              }
-              return http.Response('not-found', 404);
-            }),
-          );
+        store: store,
+        context: Object(),
+        provider: provider,
+        code: 'auth-code',
+        codeVerifier: 'pkce-verifier',
+        httpClient: MockClient((request) async {
+          if (request.url.path == '/token') {
+            return http.Response(
+              jsonEncode(<String, dynamic>{
+                'access_token': 'token-1',
+                'token_type': 'Bearer',
+                'refresh_token': 'refresh-1',
+                'expires_in': 3600,
+              }),
+              200,
+              headers: const <String, String>{
+                'content-type': 'application/json',
+              },
+            );
+          }
+          if (request.url.path == '/userinfo') {
+            return http.Response(
+              jsonEncode(<String, dynamic>{
+                'sub': 'sub-123',
+                'email': 'user@example.com',
+                'email_verified': true,
+                'name': 'Example User',
+              }),
+              200,
+              headers: const <String, String>{
+                'content-type': 'application/json',
+              },
+            );
+          }
+          return http.Response('not-found', 404);
+        }),
+      );
 
       expect(resolved.isNewUser, isTrue);
       expect(resolved.userUpdated, isFalse);
@@ -1147,40 +1148,40 @@ void main() {
 
       final resolved =
           await resolveOAuthSignInForProvider<Object, Map<String, dynamic>>(
-            store: store,
-            context: Object(),
-            provider: provider,
-            code: 'auth-code',
-            httpClient: MockClient((request) async {
-              if (request.url.path == '/token') {
-                return http.Response(
-                  jsonEncode(<String, dynamic>{
-                    'access_token': 'token-1',
-                    'token_type': 'Bearer',
-                    'expires_in': 3600,
-                  }),
-                  200,
-                  headers: const <String, String>{
-                    'content-type': 'application/json',
-                  },
-                );
-              }
-              if (request.url.path == '/userinfo') {
-                return http.Response(
-                  jsonEncode(<String, dynamic>{
-                    'name': 'No Identifier',
-                    'email': 'unverified@example.com',
-                  }),
-                  200,
-                  headers: const <String, String>{
-                    'content-type': 'application/json',
-                  },
-                );
-              }
-              return http.Response('not-found', 404);
-            }),
-            fallbackAccountId: () => 'fallback-account',
-          );
+        store: store,
+        context: Object(),
+        provider: provider,
+        code: 'auth-code',
+        httpClient: MockClient((request) async {
+          if (request.url.path == '/token') {
+            return http.Response(
+              jsonEncode(<String, dynamic>{
+                'access_token': 'token-1',
+                'token_type': 'Bearer',
+                'expires_in': 3600,
+              }),
+              200,
+              headers: const <String, String>{
+                'content-type': 'application/json',
+              },
+            );
+          }
+          if (request.url.path == '/userinfo') {
+            return http.Response(
+              jsonEncode(<String, dynamic>{
+                'name': 'No Identifier',
+                'email': 'unverified@example.com',
+              }),
+              200,
+              headers: const <String, String>{
+                'content-type': 'application/json',
+              },
+            );
+          }
+          return http.Response('not-found', 404);
+        }),
+        fallbackAccountId: () => 'fallback-account',
+      );
 
       expect(resolved.isNewUser, isTrue);
       expect(resolved.account.providerAccountId, equals('fallback-account'));
@@ -1226,42 +1227,42 @@ void main() {
             Object,
             Map<String, dynamic>
           >(
-            store: store,
-            context: Object(),
-            provider: provider,
-            code: 'auth-code',
-            receivedState: 'state-1',
-            stateKey: '_auth.state',
-            pkceKey: '_auth.pkce',
-            callbackKey: '_auth.callback',
-            readSession: (key) => session[key],
-            removeSession: removedSessionKeys.add,
-            httpClient: MockClient((request) async {
-              if (request.url.path == '/token') {
-                return http.Response(
-                  jsonEncode(<String, dynamic>{
-                    'access_token': 'token-1',
-                    'token_type': 'Bearer',
-                    'expires_in': 3600,
-                  }),
-                  200,
-                  headers: const <String, String>{
-                    'content-type': 'application/json',
-                  },
-                );
-              }
-              if (request.url.path == '/userinfo') {
-                return http.Response(
-                  jsonEncode(<String, dynamic>{'sub': 'sub-1'}),
-                  200,
-                  headers: const <String, String>{
-                    'content-type': 'application/json',
-                  },
-                );
-              }
-              return http.Response('not-found', 404);
-            }),
-          );
+        store: store,
+        context: Object(),
+        provider: provider,
+        code: 'auth-code',
+        receivedState: 'state-1',
+        stateKey: '_auth.state',
+        pkceKey: '_auth.pkce',
+        callbackKey: '_auth.callback',
+        readSession: (key) => session[key],
+        removeSession: removedSessionKeys.add,
+        httpClient: MockClient((request) async {
+          if (request.url.path == '/token') {
+            return http.Response(
+              jsonEncode(<String, dynamic>{
+                'access_token': 'token-1',
+                'token_type': 'Bearer',
+                'expires_in': 3600,
+              }),
+              200,
+              headers: const <String, String>{
+                'content-type': 'application/json',
+              },
+            );
+          }
+          if (request.url.path == '/userinfo') {
+            return http.Response(
+              jsonEncode(<String, dynamic>{'sub': 'sub-1'}),
+              200,
+              headers: const <String, String>{
+                'content-type': 'application/json',
+              },
+            );
+          }
+          return http.Response('not-found', 404);
+        }),
+      );
 
       expect(resolved.callbackUrl, equals('/dashboard'));
       expect(resolved.signIn.account.providerId, equals('example'));
@@ -1349,15 +1350,15 @@ void main() {
       );
       final started =
           await resolveOAuthAuthorizationStart<Object, Map<String, dynamic>>(
-            context: Object(),
-            provider: provider,
-            stateKey: '_auth.state',
-            pkceKey: '_auth.pkce',
-            callbackKey: '_auth.callback',
-            challengeStore: challengeStore,
-            callbackUrl: '/dashboard',
-            writeSession: (_, _) => fail('OAuth challenge used session state'),
-          );
+        context: Object(),
+        provider: provider,
+        stateKey: '_auth.state',
+        pkceKey: '_auth.pkce',
+        callbackKey: '_auth.callback',
+        challengeStore: challengeStore,
+        callbackUrl: '/dashboard',
+        writeSession: (_, _) => fail('OAuth challenge used session state'),
+      );
 
       final store = CallbackAuthStore(
         onCreateUser: (user) async => AuthUser(id: 'created-user'),
@@ -1432,14 +1433,14 @@ void main() {
       final challengeStore = InMemoryAuthOAuthChallengeStore();
       final started =
           await resolveOAuthAuthorizationStart<Object, Map<String, dynamic>>(
-            context: Object(),
-            provider: provider,
-            stateKey: '_auth.state',
-            pkceKey: '_auth.pkce',
-            callbackKey: '_auth.callback',
-            challengeStore: challengeStore,
-            writeSession: (_, _) {},
-          );
+        context: Object(),
+        provider: provider,
+        stateKey: '_auth.state',
+        pkceKey: '_auth.pkce',
+        callbackKey: '_auth.callback',
+        challengeStore: challengeStore,
+        writeSession: (_, _) {},
+      );
       final store = CallbackAuthStore(
         onCreateUser: (user) async => AuthUser(id: 'created-user'),
         onLinkAccount: (account) async => AuthAccount(
@@ -1752,14 +1753,14 @@ void main() {
 
       final resolved =
           await resolveOAuthAuthorizationStart<Object, Map<String, dynamic>>(
-            context: Object(),
-            provider: provider,
-            stateKey: '_auth.state',
-            pkceKey: '_auth.pkce',
-            callbackKey: '_auth.callback',
-            callbackUrl: '/dashboard',
-            writeSession: (key, value) => persisted[key] = value,
-          );
+        context: Object(),
+        provider: provider,
+        stateKey: '_auth.state',
+        pkceKey: '_auth.pkce',
+        callbackKey: '_auth.callback',
+        callbackUrl: '/dashboard',
+        writeSession: (key, value) => persisted[key] = value,
+      );
 
       expect(resolved.state, isNotEmpty);
       expect(resolved.codeVerifier, isNotNull);

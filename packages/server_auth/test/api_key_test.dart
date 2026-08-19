@@ -149,6 +149,24 @@ void main() {
         ]),
       );
     });
+
+    test('deletes every key owned by an account', () async {
+      final store = InMemoryAuthApiKeyStore();
+      final feature = AuthApiKeyFeature<Never>(
+        store: store,
+        keyIdGenerator: _queuedGenerator(['one', 'two', 'other']),
+        secretGenerator:
+            _queuedGenerator(['secret-one', 'secret-two', 'secret-other']),
+      );
+      await feature.issue(userId: 'user-1', name: 'one');
+      await feature.issue(userId: 'user-1', name: 'two');
+      final other = await feature.issue(userId: 'user-2', name: 'other');
+
+      await feature.deleteUserData('user-1');
+
+      expect(await feature.list('user-1'), isEmpty);
+      expect(await feature.authenticate(other.key), isNotNull);
+    });
   });
 }
 

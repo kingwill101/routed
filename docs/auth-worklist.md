@@ -84,8 +84,9 @@ The work is intentionally split between framework-agnostic capabilities in
 ## P1: complete the account lifecycle
 
 - [ ] Finish the email/password account lifecycle. Registration, sign-in,
-  duplicate-account handling, and email verification exist; explicit
-  disabled/unverified-account policy and complete lifecycle coverage remain.
+  duplicate-account handling, email verification, and opt-in
+  disabled/unverified-account policy now exist; email change, deletion, and
+  complete lifecycle coverage remain.
 - [x] Add Routed password-reset request and confirmation routes with generic
   account responses, rate limits, application-owned notification delivery,
   server-session revocation, and JWT version rotation.

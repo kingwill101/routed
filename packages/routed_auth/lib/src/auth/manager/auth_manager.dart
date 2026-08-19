@@ -67,6 +67,8 @@ import 'package:server_auth/server_auth.dart'
         resetAuthPasswordWithToken,
         changeAuthPasswordForUser,
         listAuthSessionsForUser,
+        authUserEmailIsVerified,
+        authUserIsDisabled,
         resolveAuthSignOutForStrategy,
         secureRandomToken;
 import 'package:routed_auth/src/auth/hooks.dart';
@@ -248,9 +250,9 @@ class AuthManager {
     }
     final provider = completion.providerId == null
         ? options.providers.whereType<CredentialsProvider>().firstWhere(
-            (_) => true,
-            orElse: CredentialsProvider.new,
-          )
+              (_) => true,
+              orElse: CredentialsProvider.new,
+            )
         : options.providers.firstWhere(
             (candidate) => candidate.id == completion.providerId,
             orElse: () => throw AuthFlowException('provider_resolution_failed'),
@@ -297,9 +299,9 @@ class AuthManager {
     }
     final provider = completion.providerId == null
         ? options.providers.whereType<CredentialsProvider>().firstWhere(
-            (_) => true,
-            orElse: CredentialsProvider.new,
-          )
+              (_) => true,
+              orElse: CredentialsProvider.new,
+            )
         : options.providers.firstWhere(
             (candidate) => candidate.id == completion.providerId,
             orElse: () => throw AuthFlowException('provider_resolution_failed'),
@@ -680,17 +682,17 @@ class AuthManager {
     );
     final resolved =
         await resolveOAuthAuthorizationStart<EngineContext, TProfile>(
-          context: ctx,
-          provider: provider,
-          stateKey: options.stateKey,
-          pkceKey: options.pkceKey,
-          nonceKey: options.nonceKey,
-          callbackKey: options.callbackKey,
-          challengeStore: store.oauthChallenges,
-          challengeTtl: options.oauthChallengeTtl,
-          callbackUrl: callbackUrl,
-          writeSession: ctx.setSession,
-        );
+      context: ctx,
+      provider: provider,
+      stateKey: options.stateKey,
+      pkceKey: options.pkceKey,
+      nonceKey: options.nonceKey,
+      callbackKey: options.callbackKey,
+      challengeStore: store.oauthChallenges,
+      challengeTtl: options.oauthChallengeTtl,
+      callbackUrl: callbackUrl,
+      writeSession: ctx.setSession,
+    );
     ctx.response.cookies.add(
       _buildOAuthStateCookie(
         ctx,
@@ -717,23 +719,23 @@ class AuthManager {
     final browserState = _requestCookie(ctx, stateCookieName)?.value;
     final resolved =
         await resolveOAuthCallbackSignInForProvider<EngineContext, TProfile>(
-          store: store,
-          context: ctx,
-          provider: provider,
-          code: code,
-          receivedState: state,
-          stateKey: options.stateKey,
-          pkceKey: options.pkceKey,
-          nonceKey: options.nonceKey,
-          callbackKey: options.callbackKey,
-          readSession: (key) => ctx.getSession<String>(key),
-          removeSession: ctx.removeSession,
-          consumeChallenge: store.oauthChallenges.consume,
-          expectedBrowserState: browserState,
-          requireBrowserState: true,
-          httpClient: httpClient,
-          fallbackAccountId: secureRandomToken,
-        );
+      store: store,
+      context: ctx,
+      provider: provider,
+      code: code,
+      receivedState: state,
+      stateKey: options.stateKey,
+      pkceKey: options.pkceKey,
+      nonceKey: options.nonceKey,
+      callbackKey: options.callbackKey,
+      readSession: (key) => ctx.getSession<String>(key),
+      removeSession: ctx.removeSession,
+      consumeChallenge: store.oauthChallenges.consume,
+      expectedBrowserState: browserState,
+      requireBrowserState: true,
+      httpClient: httpClient,
+      fallbackAccountId: secureRandomToken,
+    );
     ctx.response.cookies.add(_buildExpiredOAuthStateCookie(ctx, provider));
     final signIn = resolved.signIn;
     final resolvedUser = signIn.user;
@@ -836,21 +838,21 @@ class AuthManager {
   ) async {
     final resolved =
         await resolveAuthSessionUpdateForStrategyWithCallbacks<EngineContext>(
-          strategy: options.sessionStrategy,
-          callbacks: callbacks,
-          context: ctx,
-          principal: principal,
-          jwtOptions: options.jwtOptions,
-          protectedJwtClaims: options.sessionStrategy == AuthSessionStrategy.jwt
-              ? await _jwtVersionClaims(AuthUser.fromPrincipal(principal))
-              : null,
-          applySessionMaxAge: () => _applySessionMaxAge(ctx),
-          persistSessionPrincipal: (nextPrincipal) =>
-              sessionAuth.update(ctx, nextPrincipal),
-          writeSessionIssuedAt: (issuedAtUtc) =>
-              _setSessionIssuedAt(ctx, issuedAtUtc),
-          resolveSessionExpiry: () => _sessionExpiry(ctx),
-        );
+      strategy: options.sessionStrategy,
+      callbacks: callbacks,
+      context: ctx,
+      principal: principal,
+      jwtOptions: options.jwtOptions,
+      protectedJwtClaims: options.sessionStrategy == AuthSessionStrategy.jwt
+          ? await _jwtVersionClaims(AuthUser.fromPrincipal(principal))
+          : null,
+      applySessionMaxAge: () => _applySessionMaxAge(ctx),
+      persistSessionPrincipal: (nextPrincipal) =>
+          sessionAuth.update(ctx, nextPrincipal),
+      writeSessionIssuedAt: (issuedAtUtc) =>
+          _setSessionIssuedAt(ctx, issuedAtUtc),
+      resolveSessionExpiry: () => _sessionExpiry(ctx),
+    );
     final jwtCookie = resolved.jwtCookie;
     if (jwtCookie != null) {
       ctx.response.cookies.add(jwtCookie);
@@ -867,23 +869,23 @@ class AuthManager {
     }
     final resolved =
         await resolveAuthSessionForStrategyWithCallbacks<EngineContext>(
-          strategy: options.sessionStrategy,
-          callbacks: callbacks,
-          context: ctx,
-          jwtOptions: options.jwtOptions,
-          sessionUpdateAge: options.sessionUpdateAge,
-          readSessionPrincipal: () => sessionAuth.current(ctx),
-          applySessionMaxAge: () => _applySessionMaxAge(ctx),
+      strategy: options.sessionStrategy,
+      callbacks: callbacks,
+      context: ctx,
+      jwtOptions: options.jwtOptions,
+      sessionUpdateAge: options.sessionUpdateAge,
+      readSessionPrincipal: () => sessionAuth.current(ctx),
+      applySessionMaxAge: () => _applySessionMaxAge(ctx),
           readSessionIssuedAt: () =>
               ctx.getSession<String>(authSessionIssuedAtKey),
-          writeSessionIssuedAt: (issuedAtUtc) =>
-              _setSessionIssuedAt(ctx, issuedAtUtc),
-          touchSession: ctx.session.touch,
-          resolveSessionExpiry: () => _sessionExpiry(ctx),
-          readJwtToken: () => _resolveJwtToken(ctx),
-          validateJwtClaims: _validateJwtClaims,
-          httpClient: httpClient,
-        );
+      writeSessionIssuedAt: (issuedAtUtc) =>
+          _setSessionIssuedAt(ctx, issuedAtUtc),
+      touchSession: ctx.session.touch,
+      resolveSessionExpiry: () => _sessionExpiry(ctx),
+      readJwtToken: () => _resolveJwtToken(ctx),
+      validateJwtClaims: _validateJwtClaims,
+      httpClient: httpClient,
+    );
     final refreshCookie = resolved.refreshCookie;
     if (refreshCookie != null) {
       ctx.response.cookies.add(refreshCookie);
@@ -908,9 +910,17 @@ class AuthManager {
     EngineContext ctx,
     AuthUser user,
     AuthAuthenticationPolicyPhase phase,
-  ) => runtime.registry.enforceAuthenticationPolicy(
-    AuthAuthenticationPolicyRequest(context: ctx, user: user, phase: phase),
-  );
+  ) async {
+    if (authUserIsDisabled(user)) {
+      throw AuthFlowException('account_unavailable');
+    }
+    if (options.requireVerifiedEmail && !authUserEmailIsVerified(user)) {
+      throw AuthFlowException('email_verification_required');
+    }
+    await runtime.registry.enforceAuthenticationPolicy(
+      AuthAuthenticationPolicyRequest(context: ctx, user: user, phase: phase),
+    );
+  }
 
   /// Replaces the current server-session identity for a portable feature.
   Future<AuthSession> replaceFeatureSession(
@@ -979,15 +989,15 @@ class AuthManager {
   }) async {
     final finalPayload =
         await resolveAuthSessionPayloadWithCallbacks<EngineContext>(
-          callbacks: callbacks,
-          context: ctx,
-          session: session,
-          strategy: session.strategy ?? options.sessionStrategy,
-          provider: provider,
-          payload: session.toJson(
-            includeToken: options.exposeJwtTokenInSessionResponse,
-          ),
-        );
+      callbacks: callbacks,
+      context: ctx,
+      session: session,
+      strategy: session.strategy ?? options.sessionStrategy,
+      provider: provider,
+      payload: session.toJson(
+        includeToken: options.exposeJwtTokenInSessionResponse,
+      ),
+    );
     await _emitAuthEvent(
       ctx,
       AuthSessionEvent(
@@ -1048,19 +1058,19 @@ class AuthManager {
     );
     final resolvedRedirect =
         await resolveAuthSignInRedirectTarget<EngineContext>(
-          callbacks: callbacks,
-          context: ctx,
-          user: user,
-          strategy: options.sessionStrategy,
-          provider: provider,
-          account: account,
-          profile: profile,
-          credentials: credentials,
-          isNewUser: isNewUser,
-          callbackUrl: redirectUrl,
-          resolveRedirect: (candidate) =>
-              resolveRedirect(ctx, candidate, provider: provider),
-        );
+      callbacks: callbacks,
+      context: ctx,
+      user: user,
+      strategy: options.sessionStrategy,
+      provider: provider,
+      account: account,
+      profile: profile,
+      credentials: credentials,
+      isNewUser: isNewUser,
+      callbackUrl: redirectUrl,
+      resolveRedirect: (candidate) =>
+          resolveRedirect(ctx, candidate, provider: provider),
+    );
 
     if (isNewUser) {
       await _emitAuthEvent(
@@ -1096,21 +1106,21 @@ class AuthManager {
 
     final resolvedSignIn =
         await resolveAuthSignInResultForStrategyWithCallbacks<EngineContext>(
-          callbacks: callbacks,
-          context: ctx,
-          strategy: options.sessionStrategy,
-          user: user,
-          redirectUrl: resolvedRedirect,
-          jwtOptions: options.jwtOptions,
-          sessionExpiresAt: sessionExpiresAt,
-          protectedClaims: options.sessionStrategy == AuthSessionStrategy.jwt
-              ? await _jwtVersionClaims(user)
-              : null,
-          provider: provider,
-          account: account,
-          profile: profile,
-          isNewUser: isNewUser,
-        );
+      callbacks: callbacks,
+      context: ctx,
+      strategy: options.sessionStrategy,
+      user: user,
+      redirectUrl: resolvedRedirect,
+      jwtOptions: options.jwtOptions,
+      sessionExpiresAt: sessionExpiresAt,
+      protectedClaims: options.sessionStrategy == AuthSessionStrategy.jwt
+          ? await _jwtVersionClaims(user)
+          : null,
+      provider: provider,
+      account: account,
+      profile: profile,
+      isNewUser: isNewUser,
+    );
 
     final issuedJwt = resolvedSignIn.issuedJwt;
     if (issuedJwt != null) {

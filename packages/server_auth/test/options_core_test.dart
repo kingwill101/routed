@@ -96,6 +96,18 @@ void main() {
     );
   });
 
+  test('preserves verified-email policy through option merges', () {
+    final options = AuthOptions<String>(
+      providers: const <AuthProvider>[],
+      store: InMemoryAuthStore(),
+      storeMode: AuthStoreMode.ephemeral,
+      requireVerifiedEmail: true,
+    );
+
+    expect(options.copyWith().requireVerifiedEmail, isTrue);
+    expect(options.copyWith(requireVerifiedEmail: false).requireVerifiedEmail, isFalse);
+  });
+
   test('requireDurableStore rejects an explicitly ephemeral configuration', () {
     final options = AuthOptions<String>(
       providers: const <AuthProvider>[],

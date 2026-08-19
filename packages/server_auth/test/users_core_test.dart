@@ -2,6 +2,33 @@ import 'package:server_auth/server_auth.dart';
 import 'package:test/test.dart';
 
 void main() {
+  test('recognizes verified and unavailable account lifecycle markers', () {
+    expect(
+      authUserEmailIsVerified(
+        AuthUser(id: 'verified', attributes: {'email_verified': true}),
+      ),
+      isTrue,
+    );
+    expect(
+      authUserEmailIsVerified(
+        AuthUser(id: 'unverified', attributes: {'emailVerified': false}),
+      ),
+      isFalse,
+    );
+    expect(
+      authUserIsDisabled(
+          AuthUser(id: 'disabled', attributes: {'disabled': true})),
+      isTrue,
+    );
+    expect(
+      authUserIsDisabled(
+        AuthUser(id: 'deleted', attributes: {'deletedAt': '2026-08-19'}),
+      ),
+      isTrue,
+    );
+    expect(authUserIsDisabled(AuthUser(id: 'active')), isFalse);
+  });
+
   test('resolveAuthAccountId prefers profile then user fields', () {
     final user = AuthUser(id: 'user-id', email: 'user@test.dev');
     expect(

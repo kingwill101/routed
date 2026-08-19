@@ -1,5 +1,10 @@
 ## Unreleased
 
+- Add central authentication-policy helpers for verified-email enforcement and
+  disabled, tombstoned, or unavailable accounts. Email verification now marks
+  the persisted user before session issuance.
+- Include API-key and WebAuthn credential namespaces in the feature-owned
+  account-deletion transaction.
 - Add the opt-in `AdminFeature`, typed atomic admin store, authoritative role
   permissions, bans, session administration, guarded hard deletion,
   server-session impersonation, lifecycle hooks/events, persistence topology,

@@ -991,12 +991,27 @@ resolveAuthEmailVerificationSignIn({
     store: store,
     email: normalizedEmail,
   );
+  final resolvedUser = userResolution.user;
+  final verifiedUser = AuthUser(
+    id: resolvedUser.id,
+    email: resolvedUser.email,
+    name: resolvedUser.name,
+    image: resolvedUser.image,
+    roles: resolvedUser.roles,
+    attributes: <String, dynamic>{
+      ...resolvedUser.attributes,
+      'emailVerified': true,
+    },
+  );
+  final persistedUser = await Future.sync(
+    () => store.users.update(verifiedUser),
+  );
   final callbackUrl = callbackKey == null || readSession == null
       ? null
       : readSession(authEmailCallbackSessionKey(callbackKey));
 
   return AuthEmailVerificationSignInResolution(
-    user: userResolution.user,
+    user: persistedUser ?? verifiedUser,
     isNewUser: userResolution.isNewUser,
     callbackUrl: callbackUrl,
   );

@@ -7,6 +7,27 @@ import 'models.dart' show AuthUser, sanitizeAuthPublicAttributes;
 /// verification-token namespace.
 String normalizeAuthEmail(String email) => email.trim().toLowerCase();
 
+/// Returns whether [user] has an explicitly verified email address.
+///
+/// The canonical flag is `emailVerified`. The snake-case spelling is accepted
+/// for provider profile data so OAuth mappings can retain their source claims
+/// without a lossy conversion.
+bool authUserEmailIsVerified(AuthUser user) {
+  return user.attributes['emailVerified'] == true ||
+      user.attributes['email_verified'] == true;
+}
+
+/// Returns whether [user] is unavailable for authentication.
+///
+/// `disabled` is the stable application-facing flag. `deletedAt` and
+/// `accountDisabled` are recognized as defensive tombstone/legacy markers so
+/// a stale session cannot continue after an account lifecycle mutation.
+bool authUserIsDisabled(AuthUser user) {
+  return user.attributes['disabled'] == true ||
+      user.attributes['accountDisabled'] == true ||
+      user.attributes['deletedAt'] != null;
+}
+
 /// Resolves a provider account id from profile/user fields.
 String resolveAuthAccountId(
   Map<String, dynamic> profile,

@@ -48,6 +48,59 @@ final class _BlockingAuthLimiter implements AuthRateLimiter<EngineContext> {
 }
 
 void main() {
+  test(
+    'blocks unverified and disabled users before issuing a session',
+    () async {
+      final manager = AuthManager(
+        AuthOptions<EngineContext>(
+          store: InMemoryAuthStore(),
+          storeMode: AuthStoreMode.ephemeral,
+          providers: [
+            CredentialsProvider(
+              authorize: (_, _, credentials) async {
+                if (credentials.email == 'unverified@example.com') {
+                  return AuthUser(id: 'unverified', email: credentials.email);
+                }
+                return AuthUser(
+                  id: 'disabled',
+                  email: credentials.email,
+                  attributes: const {'disabled': true},
+                );
+              },
+            ),
+          ],
+          requireVerifiedEmail: true,
+          enforceCsrf: false,
+        ),
+      );
+
+      final engine = _authEngine(manager);
+      await engine.initialize();
+      final client = TestClient(RoutedRequestHandler(engine));
+      addTearDown(() async => await client.close());
+
+      final unverified = await client.postJson(
+        '/auth/signin/credentials',
+        <String, dynamic>{
+          'email': 'unverified@example.com',
+          'password': 'secret',
+        },
+      );
+      unverified.assertStatus(HttpStatus.unauthorized);
+      expect(unverified.json()['error'], equals('email_verification_required'));
+
+      final disabled = await client.postJson(
+        '/auth/signin/credentials',
+        <String, dynamic>{
+          'email': 'disabled@example.com',
+          'password': 'secret',
+        },
+      );
+      disabled.assertStatus(HttpStatus.unauthorized);
+      expect(disabled.json()['error'], equals('account_unavailable'));
+    },
+  );
+
   test('rejects credential requests from an untrusted origin', () async {
     final manager = AuthManager(
       AuthOptions<EngineContext>(

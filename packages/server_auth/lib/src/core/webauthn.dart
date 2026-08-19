@@ -127,7 +127,8 @@ final class WebAuthnFeature<TContext>
         AuthEndpointContributor<TContext>,
         AuthPersistenceContributor,
         AuthClientOperationContributor,
-        AuthRateLimitContributor {
+        AuthRateLimitContributor,
+        AuthUserDataDeletionContributor {
   WebAuthnFeature({
     required this.provider,
     this.challengeTtl = const Duration(minutes: 5),
@@ -143,6 +144,24 @@ final class WebAuthnFeature<TContext>
 
   @override
   String get id => authWebAuthnFeatureId;
+
+  @override
+  String get userDataNamespace => 'webauthn';
+
+  @override
+  Future<void> validateUserDeletion(String userId) async {
+    if (userId.trim().isEmpty) {
+      throw ArgumentError.value(userId, 'userId', 'must be non-empty');
+    }
+  }
+
+  @override
+  Future<void> deleteUserData(String userId) async {
+    final credentials = await _authenticatorStore.listForUser(userId);
+    for (final credential in credentials) {
+      await _authenticatorStore.deleteForUser(userId, credential.credentialId);
+    }
+  }
 
   @override
   void configure(AuthFeatureContext<TContext> context) {

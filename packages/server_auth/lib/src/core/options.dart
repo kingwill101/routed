@@ -45,13 +45,14 @@ class AuthOptions<TContext> {
     this.passwordResetSender,
     this.httpClient,
     this.enforceCsrf = true,
+    this.requireVerifiedEmail = false,
     this.exposeJwtTokenInSessionResponse = false,
     this.rbac = const RbacOptions(),
     this.policies = const PolicyOptions(),
     AuthCallbacks<TContext>? callbacks,
-  }) : providers = List<AuthProvider>.unmodifiable(providers),
-       passwordHasher = passwordHasher ?? Argon2idPasswordHasher(),
-       callbacks = callbacks ?? AuthCallbacks<TContext>() {
+  })  : providers = List<AuthProvider>.unmodifiable(providers),
+        passwordHasher = passwordHasher ?? Argon2idPasswordHasher(),
+        callbacks = callbacks ?? AuthCallbacks<TContext>() {
     validateAuthProviderConfiguration(this.providers);
     if (store is CallbackAuthStore) {
       throw ArgumentError(
@@ -162,6 +163,14 @@ class AuthOptions<TContext> {
   /// Whether to enforce CSRF checks on sign-in/sign-out.
   final bool enforceCsrf;
 
+  /// Whether every authentication boundary must have a verified email.
+  ///
+  /// Provider profile claims are accepted only when they use the explicit
+  /// boolean verified flags understood by [authUserEmailIsVerified]. Email
+  /// magic-link completion marks the local user verified before a session is
+  /// issued.
+  final bool requireVerifiedEmail;
+
   /// Whether session endpoint payloads may include the raw JWT bearer token.
   ///
   /// Keep this disabled when the JWT is delivered through an HTTP-only cookie.
@@ -213,6 +222,7 @@ class AuthOptions<TContext> {
     AuthPasswordResetSender<TContext>? passwordResetSender,
     http.Client? httpClient,
     bool? enforceCsrf,
+    bool? requireVerifiedEmail,
     bool? exposeJwtTokenInSessionResponse,
     RbacOptions? rbac,
     PolicyOptions? policies,
@@ -242,6 +252,7 @@ class AuthOptions<TContext> {
       passwordResetSender: passwordResetSender ?? this.passwordResetSender,
       httpClient: httpClient ?? this.httpClient,
       enforceCsrf: enforceCsrf ?? this.enforceCsrf,
+      requireVerifiedEmail: requireVerifiedEmail ?? this.requireVerifiedEmail,
       exposeJwtTokenInSessionResponse:
           exposeJwtTokenInSessionResponse ??
           this.exposeJwtTokenInSessionResponse,
@@ -276,8 +287,8 @@ AuthOptions<TContext> resolveAuthOptions<TContext>({
     storeMode: store == null
         ? options.storeMode
         : store is InMemoryAuthStore
-        ? AuthStoreMode.ephemeral
-        : AuthStoreMode.durable,
+            ? AuthStoreMode.ephemeral
+            : AuthStoreMode.durable,
     httpClient: options.httpClient ?? httpClient,
     sessionStrategy: sessionStrategy ?? options.sessionStrategy,
     sessionMaxAge: options.sessionMaxAge ?? sessionMaxAge,

@@ -210,6 +210,12 @@ abstract interface class AuthApiKeyStore {
     required AuthApiKeyRecord replacement,
     DateTime? revokedAt,
   });
+
+  /// Removes every API key owned by [userId] as part of account deletion.
+  ///
+  /// Durable implementations must execute this operation in the same
+  /// deletion transaction as the rest of the user's auth data.
+  FutureOr<void> deleteForUser(String userId);
 }
 
 /// Bounded in-memory API-key store for tests and local development.
@@ -299,6 +305,13 @@ final class InMemoryAuthApiKeyStore implements AuthApiKeyStore {
     return replacement;
   }
 
+  @override
+  Future<void> deleteForUser(String userId) async {
+    final normalizedUserId = userId.trim();
+    if (normalizedUserId.isEmpty) return;
+    _records.removeWhere((_, record) => record.userId == normalizedUserId);
+  }
+
   void _prune(DateTime now) {
     _records.removeWhere(
       (_, record) =>
@@ -315,7 +328,8 @@ final class AuthApiKeyFeature<TContext>
         AuthEndpointContributor<TContext>,
         AuthPersistenceContributor,
         AuthClientOperationContributor,
-        AuthRateLimitContributor {
+        AuthRateLimitContributor,
+        AuthUserDataDeletionContributor {
   AuthApiKeyFeature({
     required this.store,
     this.keyPrefix = 'rka',
@@ -367,6 +381,21 @@ final class AuthApiKeyFeature<TContext>
 
   @override
   String get id => authApiKeyFeatureId;
+
+  @override
+  String get userDataNamespace => 'api_keys';
+
+  @override
+  Future<void> validateUserDeletion(String userId) async {
+    if (userId.trim().isEmpty) {
+      throw ArgumentError.value(userId, 'userId', 'must be non-empty');
+    }
+  }
+
+  @override
+  Future<void> deleteUserData(String userId) async {
+    await store.deleteForUser(userId);
+  }
 
   @override
   void configure(AuthFeatureContext<TContext> context) {}
