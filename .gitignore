@@ -19,8 +19,12 @@ storage/
 
 # Test artifacts
 **/templates/test/logs/
+packages/routed_hotwire/test/logs/
 **/coverage/
 packages/server_testing/server_testing/test_screenshots/
+
+# Local Cloudflare Wrangler state
+.wrangler/
 
 # Local Netlify folder
 .netlify
