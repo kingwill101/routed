@@ -58,6 +58,10 @@ final class _RecordingAuthStore implements AuthStore {
       _delegate.verificationTokens;
 
   @override
+  AuthEmailChangeTokenStore get emailChangeTokens =>
+      _delegate.emailChangeTokens;
+
+  @override
   AuthWebAuthnChallengeStore get webAuthnChallenges =>
       _delegate.webAuthnChallenges;
 

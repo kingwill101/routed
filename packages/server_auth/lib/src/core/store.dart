@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'email_change_token_store.dart';
 import 'models.dart';
 import 'oauth_challenge_store.dart';
 import 'password_reset_token_store.dart';
@@ -111,6 +112,9 @@ abstract interface class AuthUserStore {
   FutureOr<AuthUserCreateResult> createOrFindByEmail(AuthUser user);
 
   FutureOr<AuthUser?> update(AuthUser user);
+
+  /// Atomically replaces a user's email while enforcing email uniqueness.
+  FutureOr<AuthUser?> updateEmailForUser(String userId, String email);
 }
 
 /// Persistence contract for credential authentication.
@@ -164,6 +168,16 @@ abstract interface class AuthAccountStore {
     String providerId,
     String providerAccountId,
   );
+}
+
+/// Persistence contract for one-time email-change confirmations.
+abstract interface class AuthEmailChangeTokenStore {
+  FutureOr<void> save(AuthEmailChangeToken token);
+
+  /// Atomically consumes an active token and returns its user/email binding.
+  FutureOr<AuthEmailChangeToken?> consume(String token);
+
+  FutureOr<void> deleteForUser(String userId);
 }
 
 /// Persistence contract for server-side sessions.
@@ -234,6 +248,8 @@ abstract interface class AuthStore {
 
   AuthVerificationTokenStore get verificationTokens;
 
+  AuthEmailChangeTokenStore get emailChangeTokens;
+
   AuthWebAuthnChallengeStore get webAuthnChallenges;
 
   AuthWebAuthnAuthenticatorStore get webAuthnAuthenticators;
@@ -275,6 +291,7 @@ class InMemoryAuthStore implements AuthStore, AuthAdminStoreCapabilities {
       passwordResetTokens = InMemoryAuthPasswordResetTokenStore(),
       jwtVersions = InMemoryAuthJwtVersionStore(),
       verificationTokens = InMemoryAuthVerificationTokenStore(),
+      emailChangeTokens = InMemoryAuthEmailChangeTokenStore(),
       webAuthnChallenges = InMemoryAuthWebAuthnChallengeStore(),
       webAuthnAuthenticators = InMemoryAuthWebAuthnAuthenticatorStore() {
     (credentials as _InMemoryCredentialStore).users = users;
@@ -303,6 +320,9 @@ class InMemoryAuthStore implements AuthStore, AuthAdminStoreCapabilities {
 
   @override
   final AuthVerificationTokenStore verificationTokens;
+
+  @override
+  final AuthEmailChangeTokenStore emailChangeTokens;
 
   @override
   final AuthWebAuthnChallengeStore webAuthnChallenges;
@@ -350,6 +370,7 @@ class InMemoryAuthStore implements AuthStore, AuthAdminStoreCapabilities {
     _sessions.deleteForUser(id);
     await passwordResetTokens.deleteForUser(id);
     await verificationTokens.delete(id);
+    await emailChangeTokens.deleteForUser(id);
     if (user.email != null) await verificationTokens.delete(user.email!);
     _users.delete(id);
     return true;
@@ -368,6 +389,8 @@ class CallbackAuthStore implements AuthStore {
     FutureOr<AuthUserCreateResult> Function(AuthUser user)?
     onCreateOrFindUserByEmail,
     FutureOr<AuthUser?> Function(AuthUser user)? onUpdateUser,
+    FutureOr<AuthUser?> Function(String userId, String email)?
+    onUpdateUserEmail,
     FutureOr<AuthPasswordCredential?> Function(String identifier)?
     onFindCredential,
     FutureOr<AuthUser?> Function(
@@ -452,6 +475,12 @@ class CallbackAuthStore implements AuthStore {
     onConsumeVerificationToken,
     FutureOr<void> Function(String identifier)? onDeleteVerificationTokens,
     AuthVerificationTokenStore? verificationTokens,
+    FutureOr<void> Function(AuthEmailChangeToken token)?
+    onSaveEmailChangeToken,
+    FutureOr<AuthEmailChangeToken?> Function(String token)?
+    onConsumeEmailChangeToken,
+    FutureOr<void> Function(String userId)? onDeleteEmailChangeTokens,
+    AuthEmailChangeTokenStore? emailChangeTokens,
     AuthWebAuthnChallengeStore? webAuthnChallenges,
     AuthWebAuthnAuthenticatorStore? webAuthnAuthenticators,
   }) : users = _CallbackUserStore(
@@ -460,6 +489,7 @@ class CallbackAuthStore implements AuthStore {
          onCreate: onCreateUser,
          onCreateOrFindByEmail: onCreateOrFindUserByEmail,
          onUpdate: onUpdateUser,
+         onUpdateEmail: onUpdateUserEmail,
        ),
        credentials = _CallbackCredentialStore(
          onFind: onFindCredential,
@@ -511,6 +541,13 @@ class CallbackAuthStore implements AuthStore {
              onConsume: onConsumeVerificationToken,
              onDelete: onDeleteVerificationTokens,
            ),
+       emailChangeTokens =
+           emailChangeTokens ??
+           _CallbackEmailChangeTokenStore(
+             onSave: onSaveEmailChangeToken,
+             onConsume: onConsumeEmailChangeToken,
+             onDeleteForUser: onDeleteEmailChangeTokens,
+           ),
        webAuthnChallenges =
            webAuthnChallenges ?? InMemoryAuthWebAuthnChallengeStore(),
        webAuthnAuthenticators =
@@ -539,6 +576,9 @@ class CallbackAuthStore implements AuthStore {
 
   @override
   final AuthVerificationTokenStore verificationTokens;
+
+  @override
+  final AuthEmailChangeTokenStore emailChangeTokens;
 
   @override
   final AuthWebAuthnChallengeStore webAuthnChallenges;
@@ -691,6 +731,29 @@ class _InMemoryUserStore implements AuthUserStore {
       _usersByEmail[email] = user;
     }
     return user;
+  }
+
+  @override
+  Future<AuthUser?> updateEmailForUser(String userId, String email) async {
+    final normalizedUserId = userId.trim();
+    final normalizedEmail = email.trim().toLowerCase();
+    if (normalizedUserId.isEmpty || normalizedEmail.isEmpty) return null;
+    final current = _usersById[normalizedUserId];
+    if (current == null) return null;
+    final existing = _usersByEmail[normalizedEmail];
+    if (existing != null && existing.id != normalizedUserId) return null;
+    final updated = AuthUser(
+      id: current.id,
+      email: normalizedEmail,
+      name: current.name,
+      image: current.image,
+      roles: current.roles,
+      attributes: current.attributes,
+    );
+    if (current.email != null) _usersByEmail.remove(current.email);
+    _usersById[normalizedUserId] = updated;
+    _usersByEmail[normalizedEmail] = updated;
+    return updated;
   }
 }
 
@@ -1039,6 +1102,7 @@ class _CallbackUserStore implements AuthUserStore {
     this.onCreate,
     this.onCreateOrFindByEmail,
     this.onUpdate,
+    this.onUpdateEmail,
   });
 
   final FutureOr<AuthUser?> Function(String id)? onFindById;
@@ -1047,6 +1111,7 @@ class _CallbackUserStore implements AuthUserStore {
   final FutureOr<AuthUserCreateResult> Function(AuthUser user)?
   onCreateOrFindByEmail;
   final FutureOr<AuthUser?> Function(AuthUser user)? onUpdate;
+  final FutureOr<AuthUser?> Function(String userId, String email)? onUpdateEmail;
 
   @override
   FutureOr<AuthUser?> findById(String id) => onFindById?.call(id);
@@ -1075,6 +1140,10 @@ class _CallbackUserStore implements AuthUserStore {
 
   @override
   FutureOr<AuthUser?> update(AuthUser user) => onUpdate?.call(user) ?? user;
+
+  @override
+  FutureOr<AuthUser?> updateEmailForUser(String userId, String email) =>
+      onUpdateEmail?.call(userId, email);
 }
 
 class _CallbackCredentialStore implements AuthCredentialStore {
@@ -1306,4 +1375,26 @@ class _CallbackVerificationTokenStore implements AuthVerificationTokenStore {
 
   @override
   FutureOr<void> delete(String identifier) => onDelete?.call(identifier);
+}
+
+class _CallbackEmailChangeTokenStore implements AuthEmailChangeTokenStore {
+  const _CallbackEmailChangeTokenStore({
+    this.onSave,
+    this.onConsume,
+    this.onDeleteForUser,
+  });
+
+  final FutureOr<void> Function(AuthEmailChangeToken token)? onSave;
+  final FutureOr<AuthEmailChangeToken?> Function(String token)? onConsume;
+  final FutureOr<void> Function(String userId)? onDeleteForUser;
+
+  @override
+  FutureOr<void> save(AuthEmailChangeToken token) => onSave?.call(token);
+
+  @override
+  FutureOr<AuthEmailChangeToken?> consume(String token) =>
+      onConsume?.call(token);
+
+  @override
+  FutureOr<void> deleteForUser(String userId) => onDeleteForUser?.call(userId);
 }

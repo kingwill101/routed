@@ -458,6 +458,24 @@ class AuthVerificationToken {
   final DateTime expiresAt;
 }
 
+/// One-time confirmation token for changing a user's email address.
+///
+/// The raw [token] is delivery-only. Typed stores must persist only its
+/// digest and return this value only to the caller that atomically consumes it.
+class AuthEmailChangeToken {
+  AuthEmailChangeToken({
+    required this.userId,
+    required this.newEmail,
+    required this.token,
+    required this.expiresAt,
+  });
+
+  final String userId;
+  final String newEmail;
+  final String token;
+  final DateTime expiresAt;
+}
+
 /// Persisted server-side session metadata.
 ///
 /// [tokenHash] is the digest of the opaque session token held by the client;

@@ -269,6 +269,10 @@ final class _DurableAuthStore implements AuthStore {
   final InMemoryAuthStore _delegate = InMemoryAuthStore();
 
   @override
+  AuthEmailChangeTokenStore get emailChangeTokens =>
+      _delegate.emailChangeTokens;
+
+  @override
   AuthAccountStore get accounts => _delegate.accounts;
 
   @override
