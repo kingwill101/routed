@@ -357,6 +357,22 @@ void main() {
       expect(authenticator.createdAt, isNull);
       expect(authenticator.name, isNull);
     });
+
+    test('fromJson tolerates malformed persisted fields', () {
+      final authenticator = WebAuthnAuthenticator.fromJson({
+        'credential_id': 'cred-hostile',
+        'public_key': 'pk-hostile',
+        'counter': -1,
+        'transports': ['usb', 42, null],
+        'created_at': 'not-a-date',
+        'last_used_at': <String, dynamic>{'unexpected': true},
+      });
+
+      expect(authenticator.counter, equals(0));
+      expect(authenticator.transports, equals(['usb']));
+      expect(authenticator.createdAt, isNull);
+      expect(authenticator.lastUsedAt, isNull);
+    });
   });
 
   group('WebAuthnFormField', () {

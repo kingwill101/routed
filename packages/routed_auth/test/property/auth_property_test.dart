@@ -277,6 +277,27 @@ Generator<String> chaoticHeaderValue({int maxLength = 200}) {
   ]);
 }
 
+/// Generates cookie values that exercise parser boundaries without creating a
+/// real authenticated session.
+Generator<String> chaoticCookieValue({int maxLength = 200}) {
+  return Gen.frequency([
+    (3, Gen.string(minLength: 0, maxLength: maxLength)),
+    (
+      2,
+      Gen.oneOf<String>([
+        '',
+        'quoted"value',
+        'session; attacker=true',
+        'session, attacker=true',
+        'session%0d%0aX-Injected:%20yes',
+        'session%0aSet-Cookie:%20stolen=true',
+        'a' * 10000,
+        '🔐session',
+      ]),
+    ),
+  ]);
+}
+
 // ============================================================================
 // TEST UTILITIES
 // ============================================================================
@@ -331,6 +352,8 @@ void main() {
       setUp(() async {
         manager = AuthManager(
           AuthOptions(
+            store: InMemoryAuthStore(),
+            storeMode: AuthStoreMode.ephemeral,
             providers: [
               CredentialsProvider(
                 authorize: (ctx, provider, credentials) async {
@@ -497,6 +520,8 @@ void main() {
 
         manager = AuthManager(
           AuthOptions(
+            store: InMemoryAuthStore(),
+            storeMode: AuthStoreMode.ephemeral,
             providers: [
               EmailProvider(
                 sendVerificationRequest: (ctx, provider, request) async {
@@ -598,6 +623,8 @@ void main() {
       setUp(() async {
         manager = AuthManager(
           AuthOptions(
+            store: InMemoryAuthStore(),
+            storeMode: AuthStoreMode.ephemeral,
             providers: [
               OAuthProvider<Map<String, dynamic>>(
                 id: 'test-oauth',
@@ -713,6 +740,8 @@ void main() {
       setUp(() async {
         manager = AuthManager(
           AuthOptions(
+            store: InMemoryAuthStore(),
+            storeMode: AuthStoreMode.ephemeral,
             providers: [
               CredentialsProvider(
                 authorize: (ctx, provider, credentials) async {
@@ -827,6 +856,8 @@ void main() {
       setUp(() async {
         manager = AuthManager(
           AuthOptions(
+            store: InMemoryAuthStore(),
+            storeMode: AuthStoreMode.ephemeral,
             enforceCsrf: true, // Enable CSRF
             providers: [
               CredentialsProvider(
@@ -915,7 +946,12 @@ void main() {
 
       setUp(() async {
         manager = AuthManager(
-          AuthOptions(providers: [CredentialsProvider()], enforceCsrf: false),
+          AuthOptions(
+            providers: [CredentialsProvider()],
+            store: InMemoryAuthStore(),
+            storeMode: AuthStoreMode.ephemeral,
+            enforceCsrf: false,
+          ),
         );
         engine = _authEngine(manager);
         await engine.initialize();
@@ -996,6 +1032,8 @@ void main() {
       setUp(() async {
         manager = AuthManager(
           AuthOptions(
+            store: InMemoryAuthStore(),
+            storeMode: AuthStoreMode.ephemeral,
             providers: [
               CredentialsProvider(
                 authorize: (ctx, provider, credentials) async {
@@ -1088,9 +1126,9 @@ void main() {
     });
 
     // ========================================================================
-    // 8. STATEFUL AUTH FLOW TESTING
+    // 8. HEADER INJECTION TESTING
     // ========================================================================
-    group('8. Stateful Auth Flow Testing', () {
+    group('8. Header Injection Testing', () {
       late AuthManager manager;
       late Engine engine;
       late TestClient client;
@@ -1098,83 +1136,8 @@ void main() {
       setUp(() async {
         manager = AuthManager(
           AuthOptions(
-            providers: [
-              CredentialsProvider(
-                authorize: (ctx, provider, credentials) async {
-                  if (credentials.username == 'user' &&
-                      credentials.password == 'pass') {
-                    return AuthUser(id: 'user-1', email: 'user@example.com');
-                  }
-                  return null;
-                },
-              ),
-            ],
-            sessionStrategy: AuthSessionStrategy.session,
-            enforceCsrf: false,
-          ),
-        );
-        engine = _authEngine(manager);
-        await engine.initialize();
-        client = TestClient(RoutedRequestHandler(engine));
-      });
-
-      tearDown(() => client.close());
-
-      test(
-        'session invariant: session only exists after successful login',
-        () async {
-          // Model: whether user is logged in
-          // Commands: login, logout, check session
-          final commands = Gen.oneOf([
-            'login_valid',
-            'login_invalid',
-            'logout',
-            'check_session',
-          ]);
-
-          final config = StatefulPropertyConfig(
-            numTests: 50,
-            maxCommandSequenceLength: 20,
-          );
-
-          final runner = StatefulPropertyRunner<bool, String>(
-            commands,
-            () => false, // Initial state: not logged in
-            (model) => true, // Invariant always holds (we check behavior)
-            (model, command) {
-              switch (command) {
-                case 'login_valid':
-                  return true;
-                case 'login_invalid':
-                  return model; // Invalid login doesn't change state
-                case 'logout':
-                  return false;
-                case 'check_session':
-                  return model; // Check doesn't change state
-                default:
-                  return model;
-              }
-            },
-            config,
-          );
-
-          final result = await runner.run();
-          expect(result.success, isTrue, reason: _formatResult(result));
-        },
-      );
-    });
-
-    // ========================================================================
-    // 9. HEADER INJECTION TESTING
-    // ========================================================================
-    group('9. Header Injection Testing', () {
-      late AuthManager manager;
-      late Engine engine;
-      late TestClient client;
-
-      setUp(() async {
-        manager = AuthManager(
-          AuthOptions(
+            store: InMemoryAuthStore(),
+            storeMode: AuthStoreMode.ephemeral,
             providers: [
               CredentialsProvider(
                 authorize: (ctx, provider, credentials) async => null,
@@ -1185,7 +1148,12 @@ void main() {
         );
         engine = _authEngine(manager);
         await engine.initialize();
-        client = TestClient(RoutedRequestHandler(engine));
+        // Use real HTTP so every generated Cookie header reaches the parser;
+        // the in-memory test client replaces explicit cookies from its jar.
+        client = TestClient(
+          RoutedRequestHandler(engine),
+          mode: TransportMode.ephemeralServer,
+        );
       });
 
       tearDown(() => client.close());
@@ -1238,12 +1206,48 @@ void main() {
           }
         }
       });
+
+      test(
+        'property: malformed cookie values never create a session',
+        () async {
+          final runner = PropertyTestRunner<String>(chaoticCookieValue(), (
+            cookieValue,
+          ) async {
+            try {
+              final response = await client.get(
+                '/auth/session',
+                headers: {
+                  HttpHeaders.cookieHeader: ['test_session=$cookieValue'],
+                },
+              );
+
+              expect(
+                response.statusCode,
+                lessThan(500),
+                reason: 'Server crashed with cookie: ${_sanitize(cookieValue)}',
+              );
+              final responseHeaders = response.headers.entries
+                  .map((entry) => '${entry.key}: ${entry.value.join(",")}')
+                  .join('\n')
+                  .toLowerCase();
+              expect(responseHeaders, isNot(contains('x-injected')));
+              expect(responseHeaders, isNot(contains('stolen=true')));
+            } on FormatException {
+              // The real HTTP client rejects non-wire-safe header values before
+              // they reach the server; that is a safe boundary outcome.
+            }
+          }, PropertyConfig(numTests: 100, seed: 20260819));
+
+          final result = await runner.run();
+          expect(result.success, isTrue, reason: _formatResult(result));
+        },
+      );
     });
 
     // ========================================================================
-    // 10. TIMING ATTACK RESILIENCE
+    // 9. TIMING ATTACK RESILIENCE
     // ========================================================================
-    group('10. Timing Attack Resilience', () {
+    group('9. Timing Attack Resilience', () {
       late AuthManager manager;
       late Engine engine;
       late TestClient client;
@@ -1251,6 +1255,8 @@ void main() {
       setUp(() async {
         manager = AuthManager(
           AuthOptions(
+            store: InMemoryAuthStore(),
+            storeMode: AuthStoreMode.ephemeral,
             providers: [
               CredentialsProvider(
                 authorize: (ctx, provider, credentials) async {

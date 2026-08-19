@@ -58,6 +58,8 @@ void main() {
     test('accepts providers created from package:server_auth', () async {
       final manager = AuthManager(
         AuthOptions<EngineContext>(
+          store: InMemoryAuthStore(),
+          storeMode: AuthStoreMode.ephemeral,
           providers: [
             server_auth.CredentialsProvider(
               authorize: (_, _, credentials) async {
@@ -106,6 +108,8 @@ void main() {
     test('credentials flow establishes a session', () async {
       final manager = AuthManager(
         AuthOptions<EngineContext>(
+          store: InMemoryAuthStore(),
+          storeMode: AuthStoreMode.ephemeral,
           providers: [
             CredentialsProvider(
               authorize: (ctx, provider, credentials) async {
@@ -173,6 +177,8 @@ void main() {
     test('credentials register creates a session', () async {
       final manager = AuthManager(
         AuthOptions<EngineContext>(
+          store: InMemoryAuthStore(),
+          storeMode: AuthStoreMode.ephemeral,
           providers: [
             CredentialsProvider(
               register: (ctx, provider, credentials) async {
@@ -228,6 +234,8 @@ void main() {
       late AuthEmailRequest capturedRequest;
       final manager = AuthManager(
         AuthOptions<EngineContext>(
+          store: InMemoryAuthStore(),
+          storeMode: AuthStoreMode.ephemeral,
           providers: [
             EmailProvider(
               sendVerificationRequest: (ctx, provider, request) async {
@@ -260,11 +268,20 @@ void main() {
       signInResponse.assertStatus(HttpStatus.ok);
       expect(signInResponse.json()['status'], equals('verification_sent'));
       expect(capturedRequest.email, equals('mail@example.com'));
+      final emailStateCookie =
+          (signInResponse.headers[HttpHeaders.setCookieHeader] ?? [])
+              .map(Cookie.fromSetCookieValue)
+              .firstWhere(
+                (cookie) => cookie.name.startsWith('routed_email_state_'),
+              );
 
       final callbackResponse = await client.get(
         '/auth/callback/email?token=${capturedRequest.token}&email=${capturedRequest.email}',
         headers: {
-          HttpHeaders.cookieHeader: [_cookieHeader(sessionCookie)],
+          HttpHeaders.cookieHeader: [
+            _cookieHeader(sessionCookie),
+            _cookieHeader(emailStateCookie),
+          ],
         },
       );
       callbackResponse.assertStatus(HttpStatus.ok);
@@ -278,6 +295,8 @@ void main() {
       final requests = <AuthEmailRequest>[];
       final manager = AuthManager(
         AuthOptions<EngineContext>(
+          store: InMemoryAuthStore(),
+          storeMode: AuthStoreMode.ephemeral,
           providers: [
             EmailProvider(
               sendVerificationRequest: (ctx, provider, request) async {
@@ -317,13 +336,22 @@ void main() {
         },
       );
       sessionCookie = secondSignIn.cookie('test_session') ?? sessionCookie;
+      final emailStateCookie =
+          (secondSignIn.headers[HttpHeaders.setCookieHeader] ?? [])
+              .map(Cookie.fromSetCookieValue)
+              .firstWhere(
+                (cookie) => cookie.name.startsWith('routed_email_state_'),
+              );
 
       expect(requests.length, equals(2));
 
       final invalidResponse = await client.get(
         '/auth/callback/email?token=${requests.first.token}&email=${requests.first.email}',
         headers: {
-          HttpHeaders.cookieHeader: [_cookieHeader(sessionCookie)],
+          HttpHeaders.cookieHeader: [
+            _cookieHeader(sessionCookie),
+            _cookieHeader(emailStateCookie),
+          ],
         },
       );
       invalidResponse.assertStatus(HttpStatus.unauthorized);
@@ -332,7 +360,10 @@ void main() {
       final validResponse = await client.get(
         '/auth/callback/email?token=${requests.last.token}&email=${requests.last.email}',
         headers: {
-          HttpHeaders.cookieHeader: [_cookieHeader(sessionCookie)],
+          HttpHeaders.cookieHeader: [
+            _cookieHeader(sessionCookie),
+            _cookieHeader(emailStateCookie),
+          ],
         },
       );
       validResponse.assertStatus(HttpStatus.ok);
@@ -356,6 +387,7 @@ void main() {
             json.encode({
               'id': 'oauth-user',
               'email': 'oauth@example.com',
+              'email_verified': true,
               'name': 'OAuth User',
             }),
             200,
@@ -366,6 +398,8 @@ void main() {
 
       final manager = AuthManager(
         AuthOptions<EngineContext>(
+          store: InMemoryAuthStore(),
+          storeMode: AuthStoreMode.ephemeral,
           providers: [
             OAuthProvider<Map<String, dynamic>>(
               id: 'oauth',
@@ -431,6 +465,8 @@ void main() {
     test('jwt strategy issues token cookie', () async {
       final manager = AuthManager(
         AuthOptions<EngineContext>(
+          store: InMemoryAuthStore(),
+          storeMode: AuthStoreMode.ephemeral,
           providers: [
             CredentialsProvider(
               authorize: (ctx, provider, credentials) async {
@@ -479,6 +515,8 @@ void main() {
     test('session update age refreshes session cookie', () async {
       final manager = AuthManager(
         AuthOptions<EngineContext>(
+          store: InMemoryAuthStore(),
+          storeMode: AuthStoreMode.ephemeral,
           providers: [
             CredentialsProvider(
               authorize: (ctx, provider, credentials) async {
@@ -530,6 +568,8 @@ void main() {
     test('jwt update age refreshes token cookie', () async {
       final manager = AuthManager(
         AuthOptions<EngineContext>(
+          store: InMemoryAuthStore(),
+          storeMode: AuthStoreMode.ephemeral,
           providers: [
             CredentialsProvider(
               authorize: (ctx, provider, credentials) async {

@@ -52,6 +52,17 @@ class TrackingRememberStore implements RememberTokenStore {
   }
 
   @override
+  Future<AuthPrincipal?> consume(String token) async {
+    final principal = saved.remove(token);
+    final expiry = expirations.remove(token);
+    if (principal == null ||
+        (expiry != null && DateTime.now().isAfter(expiry))) {
+      return null;
+    }
+    return principal;
+  }
+
+  @override
   Future<void> remove(String token) async {
     removed.add(token);
     saved.remove(token);
@@ -71,6 +82,9 @@ class MissingRememberStore implements RememberTokenStore {
 
   @override
   Future<AuthPrincipal?> read(String token) async => null;
+
+  @override
+  Future<AuthPrincipal?> consume(String token) async => null;
 
   @override
   Future<void> remove(String token) async {

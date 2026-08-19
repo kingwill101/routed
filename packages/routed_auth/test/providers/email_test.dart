@@ -150,8 +150,8 @@ void main() {
   });
 
   group('Email verification flow integration', () {
-    test('full flow with InMemoryAuthAdapter', () async {
-      final adapter = InMemoryAuthAdapter();
+    test('full flow with InMemoryAuthStore', () async {
+      final store = InMemoryAuthStore();
       final sentTokens = <AuthEmailRequest>[];
 
       final provider = EmailProvider(
@@ -171,8 +171,8 @@ void main() {
         expiresAt: expiresAt,
       );
 
-      // Step 2: Save token to adapter
-      await adapter.saveVerificationToken(verificationToken);
+      // Step 2: Save token to store
+      await store.verificationTokens.save(verificationToken);
 
       // Step 3: Send email with magic link
       final emailRequest = AuthEmailRequest(
@@ -192,17 +192,17 @@ void main() {
       expect(sentTokens.first.email, equals(email));
 
       // Step 4: User clicks link, system verifies token
-      final verified = await adapter.useVerificationToken(email, token);
+      final verified = await store.verificationTokens.consume(email, token);
       expect(verified, isNotNull);
       expect(verified?.identifier, equals(email));
 
       // Step 5: Token is consumed (cannot be reused)
-      final reused = await adapter.useVerificationToken(email, token);
+      final reused = await store.verificationTokens.consume(email, token);
       expect(reused, isNull);
     });
 
     test('expired tokens are rejected', () async {
-      final adapter = InMemoryAuthAdapter();
+      final store = InMemoryAuthStore();
 
       final expiredToken = AuthVerificationToken(
         identifier: 'expired@example.com',
@@ -210,9 +210,9 @@ void main() {
         expiresAt: DateTime.now().subtract(const Duration(minutes: 1)),
       );
 
-      await adapter.saveVerificationToken(expiredToken);
+      await store.verificationTokens.save(expiredToken);
 
-      final result = await adapter.useVerificationToken(
+      final result = await store.verificationTokens.consume(
         'expired@example.com',
         'expired-token',
       );
@@ -221,7 +221,7 @@ void main() {
     });
 
     test('wrong token is rejected', () async {
-      final adapter = InMemoryAuthAdapter();
+      final store = InMemoryAuthStore();
 
       final token = AuthVerificationToken(
         identifier: 'user@example.com',
@@ -229,9 +229,9 @@ void main() {
         expiresAt: DateTime.now().add(const Duration(minutes: 15)),
       );
 
-      await adapter.saveVerificationToken(token);
+      await store.verificationTokens.save(token);
 
-      final result = await adapter.useVerificationToken(
+      final result = await store.verificationTokens.consume(
         'user@example.com',
         'wrong-token',
       );
@@ -240,7 +240,7 @@ void main() {
     });
 
     test('wrong email is rejected', () async {
-      final adapter = InMemoryAuthAdapter();
+      final store = InMemoryAuthStore();
 
       final token = AuthVerificationToken(
         identifier: 'user@example.com',
@@ -248,9 +248,9 @@ void main() {
         expiresAt: DateTime.now().add(const Duration(minutes: 15)),
       );
 
-      await adapter.saveVerificationToken(token);
+      await store.verificationTokens.save(token);
 
-      final result = await adapter.useVerificationToken(
+      final result = await store.verificationTokens.consume(
         'other@example.com',
         'the-token',
       );
@@ -261,9 +261,9 @@ void main() {
     test(
       'deleteVerificationTokens removes all tokens for identifier',
       () async {
-        final adapter = InMemoryAuthAdapter();
+        final store = InMemoryAuthStore();
 
-        await adapter.saveVerificationToken(
+        await store.verificationTokens.save(
           AuthVerificationToken(
             identifier: 'user@example.com',
             token: 'token-1',
@@ -271,7 +271,7 @@ void main() {
           ),
         );
 
-        await adapter.saveVerificationToken(
+        await store.verificationTokens.save(
           AuthVerificationToken(
             identifier: 'user@example.com',
             token: 'token-2',
@@ -279,13 +279,13 @@ void main() {
           ),
         );
 
-        await adapter.deleteVerificationTokens('user@example.com');
+        await store.verificationTokens.delete('user@example.com');
 
-        final result1 = await adapter.useVerificationToken(
+        final result1 = await store.verificationTokens.consume(
           'user@example.com',
           'token-1',
         );
-        final result2 = await adapter.useVerificationToken(
+        final result2 = await store.verificationTokens.consume(
           'user@example.com',
           'token-2',
         );
@@ -296,7 +296,7 @@ void main() {
     );
 
     test('createUser on first email sign-in', () async {
-      final adapter = InMemoryAuthAdapter();
+      final store = InMemoryAuthStore();
 
       // Simulate successful token verification
       final token = AuthVerificationToken(
@@ -304,27 +304,27 @@ void main() {
         token: 'verify-token',
         expiresAt: DateTime.now().add(const Duration(minutes: 15)),
       );
-      await adapter.saveVerificationToken(token);
+      await store.verificationTokens.save(token);
 
-      final verified = await adapter.useVerificationToken(
+      final verified = await store.verificationTokens.consume(
         'newuser@example.com',
         'verify-token',
       );
       expect(verified, isNotNull);
 
       // Check if user exists
-      var user = await adapter.getUserByEmail('newuser@example.com');
+      var user = await store.users.findByEmail('newuser@example.com');
       expect(user, isNull);
 
       // Create user on first sign-in (like NextAuth does)
-      user = await adapter.createUser(
+      user = await store.users.create(
         AuthUser(id: 'auto-generated-id', email: 'newuser@example.com'),
       );
 
       expect(user.email, equals('newuser@example.com'));
 
       // Subsequent sign-in finds existing user
-      final existingUser = await adapter.getUserByEmail('newuser@example.com');
+      final existingUser = await store.users.findByEmail('newuser@example.com');
       expect(existingUser, isNotNull);
       expect(existingUser?.id, equals('auto-generated-id'));
     });

@@ -44,6 +44,8 @@ void main() {
     test('signIn callback can deny sign-in', () async {
       final manager = AuthManager(
         AuthOptions<EngineContext>(
+          store: InMemoryAuthStore(),
+          storeMode: AuthStoreMode.ephemeral,
           providers: [
             CredentialsProvider(
               authorize: (ctx, provider, credentials) async {
@@ -81,6 +83,8 @@ void main() {
     test('session callback decorates payload', () async {
       final manager = AuthManager(
         AuthOptions<EngineContext>(
+          store: InMemoryAuthStore(),
+          storeMode: AuthStoreMode.ephemeral,
           providers: [
             CredentialsProvider(
               authorize: (ctx, provider, credentials) async {
@@ -135,6 +139,8 @@ void main() {
       const jwtSecret = 'jwt-secret';
       final manager = AuthManager(
         AuthOptions<EngineContext>(
+          store: InMemoryAuthStore(),
+          storeMode: AuthStoreMode.ephemeral,
           providers: [
             CredentialsProvider(
               authorize: (ctx, provider, credentials) async {
@@ -186,8 +192,11 @@ void main() {
 
     test('events fire on sign-in and sign-out', () async {
       final events = <String>[];
+      AuthSignInEvent? signInEvent;
       final manager = AuthManager(
         AuthOptions<EngineContext>(
+          store: InMemoryAuthStore(),
+          storeMode: AuthStoreMode.ephemeral,
           providers: [
             CredentialsProvider(
               authorize: (ctx, provider, credentials) async {
@@ -203,9 +212,10 @@ void main() {
       await engine.initialize();
 
       final eventManager = await engine.container.make<EventManager>();
-      eventManager.listen<AuthSignInEvent>(
-        (event) => events.add('sign_in:${event.user.id}'),
-      );
+      eventManager.listen<AuthSignInEvent>((event) {
+        signInEvent = event;
+        events.add('sign_in:${event.user.id}');
+      });
       eventManager.listen<AuthSignOutEvent>(
         (event) => events.add('sign_out:${event.user?.id}'),
       );
@@ -227,6 +237,7 @@ void main() {
         },
       );
       signInResponse.assertStatus(HttpStatus.ok);
+      expect(signInEvent?.credentials?.password, isNull);
 
       final authCookie = signInResponse.cookie('test_session');
       expect(authCookie, isNotNull);
@@ -245,11 +256,103 @@ void main() {
       expect(events, contains('session'));
     });
 
+    test('event projections do not retain auth secrets', () async {
+      final manager = AuthManager(
+        AuthOptions<EngineContext>(
+          store: InMemoryAuthStore(),
+          storeMode: AuthStoreMode.ephemeral,
+          providers: [CredentialsProvider()],
+          enforceCsrf: false,
+        ),
+      );
+      final engine = _authEngine(manager);
+      engine.defaultRouter.get('/event-probe', (ctx) {
+        final provider = OAuthProvider<Map<String, dynamic>>(
+          id: 'oauth',
+          name: 'OAuth',
+          clientId: 'client-id',
+          clientSecret: 'client-secret',
+          authorizationEndpoint: Uri.parse('https://auth.test/authorize'),
+          tokenEndpoint: Uri.parse('https://auth.test/token'),
+          redirectUri: 'https://app.test/auth/callback/oauth',
+          profile: (_) => AuthUser(id: 'user-1'),
+        );
+        final account = AuthAccount(
+          providerId: 'oauth',
+          providerAccountId: 'account-1',
+          accessToken: 'access-secret',
+          refreshToken: 'refresh-secret',
+          metadata: {
+            'nested': {'client_secret': 'nested-secret'},
+          },
+        );
+        final session = AuthSession(
+          user: AuthUser(
+            id: 'user-1',
+            attributes: {
+              'nested': {'token': 'nested-secret'},
+            },
+          ),
+          expiresAt: DateTime.utc(2030),
+          strategy: AuthSessionStrategy.jwt,
+          token: 'jwt-secret',
+        );
+        final signIn = AuthSignInEvent(
+          context: ctx,
+          user: session.user,
+          session: session,
+          strategy: AuthSessionStrategy.jwt,
+          provider: provider,
+          account: account,
+          profile: {
+            'name': 'Alice',
+            'nested': {'access_token': 'profile-secret'},
+          },
+          credentials: AuthCredentials(
+            password: 'password-secret',
+            attributes: {
+              'nested': {'password': 'nested-secret'},
+            },
+          ),
+        );
+        final sessionEvent = AuthSessionEvent(
+          context: ctx,
+          session: session,
+          strategy: AuthSessionStrategy.jwt,
+          provider: provider,
+          payload: {'token': 'payload-secret', 'visible': true},
+        );
+
+        expect(signIn.provider, isNot(same(provider)));
+        expect(signIn.provider, isNot(isA<OAuthProvider>()));
+        expect(signIn.account!.accessToken, isNull);
+        expect(signIn.account!.refreshToken, isNull);
+        expect(signIn.session.token, isNull);
+        expect(signIn.user.attributes, equals({'nested': {}}));
+        expect(signIn.profile, equals({'name': 'Alice', 'nested': {}}));
+        expect(signIn.credentials!.password, isNull);
+        expect(signIn.credentials!.attributes, equals({'nested': {}}));
+        expect(sessionEvent.session.token, isNull);
+        expect(sessionEvent.payload, equals({'visible': true}));
+
+        return ctx.json({'ok': true});
+      });
+      await engine.initialize();
+
+      final client = TestClient(RoutedRequestHandler(engine));
+      addTearDown(() async => await client.close());
+      final response = await client.get('/event-probe');
+
+      response.assertStatus(HttpStatus.ok);
+    });
+
     test('redirect callback receives request baseUrl', () async {
       String? observedBaseUrl;
 
       final manager = AuthManager(
         AuthOptions<EngineContext>(
+          store: InMemoryAuthStore(),
+          storeMode: AuthStoreMode.ephemeral,
           providers: [
             CredentialsProvider(
               authorize: (ctx, provider, credentials) async {

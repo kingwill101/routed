@@ -55,6 +55,8 @@ void main() {
       Map<String, String>? receivedParams;
       final manager = AuthManager(
         AuthOptions<EngineContext>(
+          store: InMemoryAuthStore(),
+          storeMode: AuthStoreMode.ephemeral,
           providers: [
             _CustomCallbackProvider(
               onCallback: (ctx, params) {
@@ -99,6 +101,8 @@ void main() {
       Map<String, String>? receivedParams;
       final manager = AuthManager(
         AuthOptions<EngineContext>(
+          store: InMemoryAuthStore(),
+          storeMode: AuthStoreMode.ephemeral,
           providers: [
             _CustomCallbackProvider(
               onCallback: (ctx, params) {
@@ -132,9 +136,39 @@ void main() {
       expect(receivedParams!['email'], equals('get@example.com'));
     });
 
+    test('custom callbacks cannot establish an empty user identity', () async {
+      final manager = AuthManager(
+        AuthOptions<EngineContext>(
+          store: InMemoryAuthStore(),
+          storeMode: AuthStoreMode.ephemeral,
+          providers: [
+            _CustomCallbackProvider(
+              onCallback: (_, _) => server_auth.CallbackResult.success(
+                server_auth.AuthUser(id: ''),
+              ),
+            ),
+          ],
+          enforceCsrf: false,
+        ),
+      );
+      final engine = _authEngine(manager);
+      await engine.initialize();
+      final client = TestClient(RoutedRequestHandler(engine));
+      addTearDown(() async => await client.close());
+
+      final response = await client.get(
+        '/auth/callback/custom?code=code123&state=state123',
+      );
+
+      expect(response.statusCode, equals(HttpStatus.unauthorized));
+      expect(response.json()['error'], equals('user_resolution_failed'));
+    });
+
     test('callback failures do not disclose exception details', () async {
       final manager = AuthManager(
         AuthOptions<EngineContext>(
+          store: InMemoryAuthStore(),
+          storeMode: AuthStoreMode.ephemeral,
           providers: [
             _CustomCallbackProvider(
               onCallback: (_, _) => throw StateError('/secret/config/path'),
@@ -156,6 +190,38 @@ void main() {
       expect(response.json()['error'], equals('callback_error'));
       expect(response.body, isNot(contains('/secret/config/path')));
     });
+
+    test(
+      'callback failure messages are reduced to generic public codes',
+      () async {
+        final manager = AuthManager(
+          AuthOptions<EngineContext>(
+            store: InMemoryAuthStore(),
+            storeMode: AuthStoreMode.ephemeral,
+            providers: [
+              _CustomCallbackProvider(
+                onCallback: (_, _) => const server_auth.CallbackResult.failure(
+                  '/srv/secrets/provider.key',
+                ),
+              ),
+            ],
+            enforceCsrf: false,
+          ),
+        );
+        final engine = _authEngine(manager);
+        await engine.initialize();
+        final client = TestClient(RoutedRequestHandler(engine));
+        addTearDown(() async => await client.close());
+
+        final response = await client.get(
+          '/auth/callback/custom?code=code123&state=state123',
+        );
+
+        expect(response.statusCode, equals(HttpStatus.unauthorized));
+        expect(response.json()['error'], equals('auth_error'));
+        expect(response.body, isNot(contains('/srv/secrets/provider.key')));
+      },
+    );
   });
 
   group('AuthRoutes manager binding', () {
@@ -165,6 +231,8 @@ void main() {
         AuthManager? current;
         AuthManager newManager() => AuthManager(
           AuthOptions<EngineContext>(
+            store: InMemoryAuthStore(),
+            storeMode: AuthStoreMode.ephemeral,
             providers: [
               CredentialsProvider(
                 authorize: (_, _, credentials) async {

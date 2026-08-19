@@ -196,7 +196,7 @@ void main() {
               if (!(payload.claims['scope'] as String).contains(
                 'read:orders',
               )) {
-                throw JwtAuthException('scope');
+                throw JwtAuthException('/srv/secrets/jwt-config.json');
               }
             },
           ),
@@ -218,6 +218,9 @@ void main() {
         },
       );
       expect(failure.statusCode, equals(401));
+      final challenge = failure.header(HttpHeaders.wwwAuthenticateHeader).first;
+      expect(challenge, contains('error_description="invalid_token"'));
+      expect(challenge, isNot(contains('/srv/secrets/jwt-config.json')));
     });
 
     test('rejects expired tokens', () async {

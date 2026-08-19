@@ -40,6 +40,8 @@ void main() {
         (engine) {
           engine.container.instance<AuthOptions<EngineContext>>(
             AuthOptions<EngineContext>(
+              store: InMemoryAuthStore(),
+              storeMode: AuthStoreMode.ephemeral,
               providers: const [],
               rbac: RbacOptions(
                 abilities: {'admin.only': RbacAbility.role('admin')},

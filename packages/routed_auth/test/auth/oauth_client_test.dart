@@ -53,6 +53,7 @@ void main() {
       expect(header, equals('Basic $expected'));
       final parsed = Uri.splitQueryString(request.body);
       expect(parsed['client_id'], equals('id'));
+      expect(parsed['grant_type'], equals('client_credentials'));
       return http.Response(jsonEncode({'access_token': 'abc'}), 200);
     });
 
@@ -63,7 +64,12 @@ void main() {
       httpClient: client,
     );
 
-    final token = await oauth.clientCredentials();
+    final token = await oauth.clientCredentials(
+      additionalParameters: const {
+        'grant_type': 'authorization_code',
+        'client_id': 'attacker-client',
+      },
+    );
     expect(token.accessToken, equals('abc'));
   });
 
@@ -130,6 +136,69 @@ void main() {
       'token',
     );
     expect(profile['id'], equals('user'));
+  });
+
+  test('OAuth2Client rejects malformed token responses', () async {
+    final client = MockClient((request) async {
+      return http.Response('[]', 200);
+    });
+
+    final oauth = OAuth2Client(
+      tokenEndpoint: Uri.parse('https://auth.test/token'),
+      httpClient: client,
+    );
+
+    await expectLater(
+      oauth.clientCredentials(),
+      throwsA(
+        isA<OAuth2Exception>().having(
+          (error) => error.message,
+          'message',
+          'invalid_token_endpoint_response',
+        ),
+      ),
+    );
+  });
+
+  test(
+    'OAuth2Client rejects token responses without an access token',
+    () async {
+      final client = MockClient((request) async {
+        return http.Response(json.encode({'token_type': 'Bearer'}), 200);
+      });
+
+      final oauth = OAuth2Client(
+        tokenEndpoint: Uri.parse('https://auth.test/token'),
+        httpClient: client,
+      );
+
+      await expectLater(
+        oauth.clientCredentials(),
+        throwsA(isA<OAuth2Exception>()),
+      );
+    },
+  );
+
+  test('OAuth2Client rejects malformed userinfo responses', () async {
+    final client = MockClient((request) async {
+      return http.Response('[]', 200);
+    });
+
+    final oauth = OAuth2Client(
+      tokenEndpoint: Uri.parse('https://auth.test/token'),
+      httpClient: client,
+    );
+
+    await expectLater(
+      oauth.fetchUserInfo(Uri.parse('https://auth.test/user'), 'token'),
+      throwsA(
+        isA<OAuth2Exception>().having(
+          (error) => error.message,
+          'message',
+          'invalid_userinfo_response',
+        ),
+      ),
+    );
   });
 
   test('OAuth2Client throws on non-success token response', () async {
@@ -214,7 +283,12 @@ void main() {
     final token = await oauth.refreshToken(
       refreshToken: 'refresh-token',
       scope: 'read',
-      additionalParameters: const {'prompt': 'consent'},
+      additionalParameters: const {
+        'prompt': 'consent',
+        'grant_type': 'client_credentials',
+        'refresh_token': 'overridden-refresh-token',
+        'scope': 'overridden-scope',
+      },
     );
 
     expect(token.accessToken, equals('refreshed'));
@@ -244,10 +318,23 @@ void main() {
       redirectUri: Uri.parse('https://app.test/callback'),
       codeVerifier: 'verifier',
       scope: 'read',
-      additionalParameters: const {'prompt': 'login'},
+      additionalParameters: const {
+        'prompt': 'login',
+        'grant_type': 'client_credentials',
+        'code': 'overridden-code',
+        'redirect_uri': 'https://attacker.test/callback',
+        'code_verifier': 'overridden-verifier',
+        'scope': 'overridden-scope',
+      },
     );
 
     expect(captured.headers['X-Test'], equals('1'));
+    expect(captured.bodyFields['grant_type'], equals('authorization_code'));
+    expect(captured.bodyFields['code'], equals('code'));
+    expect(
+      captured.bodyFields['redirect_uri'],
+      equals('https://app.test/callback'),
+    );
     expect(captured.bodyFields['code_verifier'], equals('verifier'));
     expect(captured.bodyFields['scope'], equals('read'));
     expect(captured.bodyFields['prompt'], equals('login'));

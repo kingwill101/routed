@@ -6,24 +6,35 @@ import 'package:server_auth/server_auth.dart'
         AuthSessionStrategy,
         AuthUser,
         AuthCredentials,
-        AuthProvider;
+        AuthProvider,
+        sanitizeAuthPublicAttributes;
 import 'package:routed_core/src/context/context.dart';
 import 'package:routed_core/src/events/event.dart';
 
 /// Event emitted after a successful sign-in.
+///
+/// Authentication model fields are redacted before the event is published;
+/// credentials, provider secrets, account tokens, JWTs, and nested
+/// secret-like values must not escape into event listeners or audit pipelines.
 final class AuthSignInEvent extends Event {
   AuthSignInEvent({
     required this.context,
-    required this.user,
-    required this.session,
+    required AuthUser user,
     required this.strategy,
-    this.provider,
-    this.account,
-    this.profile,
-    this.credentials,
+    required AuthSession session,
+    AuthProvider? provider,
+    AuthAccount? account,
+    Map<String, dynamic>? profile,
+    AuthCredentials? credentials,
     this.redirectUrl,
     this.isNewUser = false,
-  }) : super();
+  }) : user = user.redacted(),
+       session = session.redacted(),
+       provider = provider?.redacted(),
+       credentials = credentials?.redacted(),
+       account = account?.redacted(),
+       profile = profile == null ? null : sanitizeAuthPublicAttributes(profile),
+       super();
 
   final EngineContext context;
   final AuthUser user;
@@ -42,9 +53,11 @@ final class AuthSignOutEvent extends Event {
   AuthSignOutEvent({
     required this.context,
     required this.strategy,
-    this.session,
-    this.user,
-  }) : super();
+    AuthSession? session,
+    AuthUser? user,
+  }) : session = session?.redacted(),
+       user = user?.redacted(),
+       super();
 
   final EngineContext context;
   final AuthSessionStrategy strategy;
@@ -56,10 +69,13 @@ final class AuthSignOutEvent extends Event {
 final class AuthCreateUserEvent extends Event {
   AuthCreateUserEvent({
     required this.context,
-    required this.user,
-    this.provider,
-    this.profile,
-  }) : super();
+    required AuthUser user,
+    AuthProvider? provider,
+    Map<String, dynamic>? profile,
+  }) : user = user.redacted(),
+       provider = provider?.redacted(),
+       profile = profile == null ? null : sanitizeAuthPublicAttributes(profile),
+       super();
 
   final EngineContext context;
   final AuthUser user;
@@ -71,9 +87,11 @@ final class AuthCreateUserEvent extends Event {
 final class AuthUpdateUserEvent extends Event {
   AuthUpdateUserEvent({
     required this.context,
-    required this.user,
-    this.provider,
-  }) : super();
+    required AuthUser user,
+    AuthProvider? provider,
+  }) : user = user.redacted(),
+       provider = provider?.redacted(),
+       super();
 
   final EngineContext context;
   final AuthUser user;
@@ -84,14 +102,20 @@ final class AuthUpdateUserEvent extends Event {
 final class AuthLinkAccountEvent extends Event {
   AuthLinkAccountEvent({
     required this.context,
-    required this.account,
-    this.user,
-    this.profile,
-  }) : super();
+    required AuthAccount account,
+    AuthUser? user,
+    AuthProvider? provider,
+    Map<String, dynamic>? profile,
+  }) : account = account.redacted(),
+       user = user?.redacted(),
+       provider = provider?.redacted(),
+       profile = profile == null ? null : sanitizeAuthPublicAttributes(profile),
+       super();
 
   final EngineContext context;
   final AuthAccount account;
   final AuthUser? user;
+  final AuthProvider? provider;
   final Map<String, dynamic>? profile;
 }
 
@@ -99,11 +123,14 @@ final class AuthLinkAccountEvent extends Event {
 final class AuthSessionEvent extends Event {
   AuthSessionEvent({
     required this.context,
-    required this.session,
-    required this.payload,
+    required AuthSession session,
+    required Map<String, dynamic> payload,
     required this.strategy,
-    this.provider,
-  }) : super();
+    AuthProvider? provider,
+  }) : session = session.redacted(),
+       provider = provider?.redacted(),
+       payload = sanitizeAuthPublicAttributes(payload),
+       super();
 
   final EngineContext context;
   final AuthSession session;

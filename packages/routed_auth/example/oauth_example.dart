@@ -40,7 +40,11 @@ Future<void> main() async {
   );
 
   engine.container.instance<AuthOptions<EngineContext>>(
-    AuthOptions<EngineContext>(providers: [google]),
+    AuthOptions<EngineContext>(
+      providers: [google],
+      store: InMemoryAuthStore(),
+      storeMode: AuthStoreMode.ephemeral,
+    ),
   );
 
   // 3. Redirect the user to Google's consent screen.

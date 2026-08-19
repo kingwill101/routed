@@ -4,7 +4,6 @@ import 'dart:async';
 import 'package:http/http.dart' as http;
 import 'package:server_auth/server_auth.dart'
     show
-        AuthAdapter,
         AuthConfig,
         AuthGateRegistry,
         GateDefinition,
@@ -16,8 +15,11 @@ import 'package:server_auth/server_auth.dart'
         RememberTokenStore,
         resolveConfiguredGateCallback,
         resolveConfiguredGuard,
-        AuthVerificationTokenStore,
+        AuthStore,
+        AuthSessionStrategy,
+        authJwtVersionClaim,
         JwtVerifier,
+        AuthRuntime,
         resolveAuthOptions,
         SessionRememberMeConfig,
         syncManagedGateDefinitions,
@@ -47,14 +49,21 @@ import 'package:routed_core/src/router/types.dart';
 /// `AuthManager` when `AuthOptions` is available in the container.
 class AuthServiceProvider extends ServiceProvider
     with ProvidesTypedConfiguration<AuthConfig> {
-  AuthServiceProvider({http.Client? httpClient, AuthConfig? configuration})
-    : _httpClient = httpClient ?? http.Client(),
-      configuration = configuration ?? AuthConfig.defaults();
+  AuthServiceProvider({
+    http.Client? httpClient,
+    AuthConfig? configuration,
+    this.requireDurableStore = false,
+  }) : _httpClient = httpClient ?? http.Client(),
+       configuration = configuration ?? AuthConfig.defaults();
 
   @override
   final AuthConfig configuration;
 
   final http.Client _httpClient;
+
+  /// Rejects intentionally ephemeral auth storage during provider boot.
+  /// Enable this for production deployments.
+  final bool requireDurableStore;
   JwtVerifier? _jwtVerifier;
   Middleware? _oauthMiddleware;
   SessionAuthService? _sessionAuth;
@@ -119,6 +128,7 @@ class AuthServiceProvider extends ServiceProvider
       header: jwt.header,
       bearerPrefix: jwt.bearerPrefix,
       httpClient: _httpClient,
+      validateClaims: (claims) => _validateJwtClaims(container, claims),
     );
 
     final oauth = resolved.oauth2Introspection;
@@ -178,6 +188,34 @@ class AuthServiceProvider extends ServiceProvider
     _applyAuthManager(container);
   }
 
+  Future<bool> _validateJwtClaims(
+    Container container,
+    Map<String, dynamic> claims,
+  ) async {
+    if (!container.has<AuthOptions<EngineContext>>()) {
+      return true;
+    }
+    final options = container.get<AuthOptions<EngineContext>>();
+    if (options.sessionStrategy != AuthSessionStrategy.jwt) {
+      return true;
+    }
+    final store = container.has<AuthStore>()
+        ? container.get<AuthStore>()
+        : options.store;
+    final subject = claims['sub']?.toString().trim() ?? '';
+    final rawVersion = claims[authJwtVersionClaim];
+    final version = switch (rawVersion) {
+      int value when value >= 0 => value,
+      num value when value.isFinite && value == value.toInt() && value >= 0 =>
+        value.toInt(),
+      _ => null,
+    };
+    if (subject.isEmpty || version == null) {
+      return false;
+    }
+    return version == await store.jwtVersions.current(subject);
+  }
+
   void _applyAuthManager(Container container) {
     if (!container.has<AuthOptions<EngineContext>>()) {
       if (_ownsAuthManager) {
@@ -193,20 +231,25 @@ class AuthServiceProvider extends ServiceProvider
     }
 
     final options = container.get<AuthOptions<EngineContext>>();
-    final adapter = _resolveAuthAdapter(container, options);
-    final tokenStore = _resolveTokenStore(container, options);
+    final store = container.has<AuthStore>()
+        ? container.get<AuthStore>()
+        : options.store;
     final configSession = _resolvedConfig?.session;
     final resolvedOptions = resolveAuthOptions<EngineContext>(
       options: options,
-      adapter: adapter,
+      store: store,
       httpClient: _httpClient,
-      tokenStore: tokenStore,
       sessionStrategy: configSession?.strategy,
       sessionMaxAge: configSession?.maxAge,
       sessionUpdateAge: configSession?.updateAge,
     );
 
-    final manager = AuthManager(resolvedOptions, sessionAuth: _sessionAuth);
+    final runtime = _resolveAuthRuntime(container, resolvedOptions);
+    final manager = AuthManager(
+      resolvedOptions,
+      sessionAuth: _sessionAuth,
+      runtime: runtime,
+    );
     container.instance<AuthManager>(manager);
     _ownsAuthManager = true;
 
@@ -225,30 +268,21 @@ class AuthServiceProvider extends ServiceProvider
     );
   }
 
-  AuthAdapter _resolveAuthAdapter(
+  AuthRuntime<EngineContext> _resolveAuthRuntime(
     Container container,
     AuthOptions<EngineContext> options,
   ) {
-    if (!container.has<AuthAdapter>()) {
-      return options.adapter;
+    if (container.has<AuthRuntime<EngineContext>>()) {
+      final runtime = container.get<AuthRuntime<EngineContext>>();
+      if (requireDurableStore) runtime.requireDurableStoreOrThrow();
+      return runtime;
     }
-    if (options.adapter.runtimeType != AuthAdapter) {
-      return options.adapter;
-    }
-    return container.get<AuthAdapter>();
-  }
-
-  AuthVerificationTokenStore? _resolveTokenStore(
-    Container container,
-    AuthOptions<EngineContext> options,
-  ) {
-    if (options.tokenStore != null) {
-      return options.tokenStore;
-    }
-    if (container.has<AuthVerificationTokenStore>()) {
-      return container.get<AuthVerificationTokenStore>();
-    }
-    return null;
+    final runtime = AuthRuntime<EngineContext>(
+      options: options,
+      requireDurableStore: requireDurableStore,
+    );
+    container.instance<AuthRuntime<EngineContext>>(runtime);
+    return runtime;
   }
 
   AuthGuardRegistry<EngineContext, Response> _resolveGuardRegistry(

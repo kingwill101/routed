@@ -1,11 +1,11 @@
 // ignore_for_file: implementation_imports
 import 'dart:async';
+import 'dart:io';
 
 import 'package:http/http.dart' as http;
 import 'package:server_auth/server_auth.dart'
     show
         AuthAccount,
-        AuthAdapter,
         AuthCallbacks,
         AuthCredentials,
         requireAuthorizedCredentialsRegistration,
@@ -16,17 +16,31 @@ import 'package:server_auth/server_auth.dart'
         resolveAuthSignInRedirectTarget,
         AuthPrincipal,
         AuthProvider,
+        AuthRateLimitAction,
+        AuthRateLimitRequest,
+        enforceAuthRateLimit,
+        hashOpaqueToken,
         baseUrlFromUri,
         resolveOAuthAuthorizationStart,
         resolveOAuthCallbackSignInForProvider,
         AuthResult,
         AuthSession,
+        AuthSessionRecord,
+        AuthSessionInfo,
         AuthSessionStrategy,
+        TwoFactorFeature,
+        AuthTwoFactorRequiredException,
+        AuthTwoFactorStepUpToken,
+        authJwtVersionClaim,
         AuthFlowException,
+        AuthPasswordResetRequest,
+        AuthPasswordResetResult,
+        AuthPasswordChangeResult,
         AuthUser,
-        AuthVerificationTokenStore,
-        InMemoryAuthVerificationTokenStore,
+        AuthRuntime,
+        AuthStore,
         resolveAuthEmailVerificationSignIn,
+        normalizeAuthEmail,
         startAuthEmailSignIn,
         resolveBearerOrCookieToken,
         resolveAuthSessionForStrategyWithCallbacks,
@@ -42,8 +56,14 @@ import 'package:server_auth/server_auth.dart'
         resolveAuthSessionMaxAgeSeconds,
         resolveAuthSessionExpiry,
         serializeAuthSessionIssuedAt,
+        issueAuthPasswordResetTokenForUser,
+        resetAuthPasswordWithToken,
+        changeAuthPasswordForUser,
+        listAuthSessionsForUser,
+        resolveAuthSignOutForStrategy,
         secureRandomToken;
 import 'package:routed_auth/src/auth/hooks.dart';
+import 'package:routed_auth/src/auth/browser_protection.dart';
 import 'package:routed_auth/src/auth/session_auth.dart';
 import 'package:routed_core/src/context/context.dart';
 import 'package:routed_sessions/routed_sessions.dart';
@@ -52,17 +72,24 @@ import 'package:routed_core/src/events/event_manager.dart';
 
 /// High-level auth coordinator for routed.
 class AuthManager {
-  AuthManager(this.options, {SessionAuthService? sessionAuth})
-    : _tokenStore = options.tokenStore ?? InMemoryAuthVerificationTokenStore(),
-      _sessionAuth = sessionAuth,
-      _httpClient = options.httpClient;
+  AuthManager(
+    this.options, {
+    SessionAuthService? sessionAuth,
+    AuthRuntime<EngineContext>? runtime,
+  }) : runtime = runtime ?? AuthRuntime<EngineContext>(options: options),
+       _sessionAuth = sessionAuth,
+       _httpClient = options.httpClient;
 
   final AuthOptions<EngineContext> options;
-  final AuthVerificationTokenStore _tokenStore;
+  final AuthRuntime<EngineContext> runtime;
   final SessionAuthService? _sessionAuth;
   http.Client? _httpClient;
 
-  AuthAdapter get adapter => options.adapter;
+  AuthStore get store => runtime.store;
+
+  /// The configured two-factor feature, if enabled for this runtime.
+  TwoFactorFeature<EngineContext>? get twoFactor =>
+      runtime.feature('two_factor') as TwoFactorFeature<EngineContext>?;
 
   SessionAuthService get sessionAuth => _sessionAuth ?? SessionAuth.instance;
 
@@ -91,17 +118,49 @@ class AuthManager {
     );
   }
 
+  /// Returns an auth error code when browser request protections reject [ctx].
+  String? validateBrowserRequest(EngineContext ctx) {
+    return validateRoutedAuthBrowserRequest(ctx, options.browserProtection);
+  }
+
   Future<AuthResult> signInWithCredentials(
     EngineContext ctx,
     CredentialsProvider provider,
     AuthCredentials credentials,
   ) async {
+    await enforceRateLimit(
+      ctx,
+      provider,
+      action: AuthRateLimitAction.signIn,
+      identifier: credentials.email == null
+          ? credentials.username
+          : normalizeAuthEmail(credentials.email!),
+    );
     final user = await requireAuthorizedCredentialsSignIn(
-      adapter: adapter,
+      store: store,
+      passwordHasher: options.passwordHasher,
       provider: provider,
       context: ctx,
       credentials: credentials,
+      passwordPolicy: options.passwordPolicy,
     );
+
+    final feature = twoFactor;
+    final challenge = feature == null
+        ? null
+        : await feature.beginSignInChallenge(
+            user.id,
+            user: user,
+            providerId: provider.id,
+            credentials: credentials,
+            trustedDeviceToken: _requestCookie(
+              ctx,
+              feature.trustedDeviceCookieName,
+            )?.value,
+          );
+    if (challenge != null) {
+      throw AuthTwoFactorRequiredException(challenge: challenge);
+    }
 
     return _completeSignIn(
       ctx,
@@ -111,16 +170,205 @@ class AuthManager {
     );
   }
 
+  /// Completes a pending credential sign-in after TOTP verification.
+  Future<AuthResult> completeTwoFactorSignIn(
+    EngineContext ctx, {
+    required String challengeToken,
+    required String code,
+    bool trustDevice = false,
+  }) async {
+    final feature = twoFactor;
+    if (feature == null) {
+      throw AuthFlowException('two_factor_unavailable');
+    }
+    final completion = await feature.completeSignInChallenge(
+      challengeToken,
+      code,
+      trustDevice: trustDevice,
+    );
+    final user =
+        completion.user ?? await store.users.findById(completion.userId);
+    if (user == null) {
+      throw AuthFlowException('user_resolution_failed');
+    }
+    final provider = completion.providerId == null
+        ? options.providers.whereType<CredentialsProvider>().firstWhere(
+            (_) => true,
+            orElse: CredentialsProvider.new,
+          )
+        : options.providers.firstWhere(
+            (candidate) => candidate.id == completion.providerId,
+            orElse: () => throw AuthFlowException('provider_resolution_failed'),
+          );
+    final result = await _completeSignIn(
+      ctx,
+      user,
+      provider: provider,
+      credentials: completion.credentials,
+    );
+    final trustedDevice = completion.trustedDevice;
+    if (trustedDevice != null) {
+      ctx.response.cookies.add(
+        Cookie(feature.trustedDeviceCookieName, trustedDevice.token)
+          ..httpOnly = true
+          ..secure = _isHttps(ctx)
+          ..sameSite = SameSite.lax
+          ..path = '/'
+          ..expires = trustedDevice.expiresAt
+          ..maxAge = feature.trustedDeviceTtl.inSeconds,
+      );
+    }
+    return result;
+  }
+
+  /// Completes a pending credential sign-in after recovery-code verification.
+  Future<AuthResult> completeTwoFactorRecoverySignIn(
+    EngineContext ctx, {
+    required String challengeToken,
+    required String recoveryCode,
+  }) async {
+    final feature = twoFactor;
+    if (feature == null) {
+      throw AuthFlowException('two_factor_unavailable');
+    }
+    final completion = await feature.completeRecoverySignInChallenge(
+      challengeToken,
+      recoveryCode,
+    );
+    final user =
+        completion.user ?? await store.users.findById(completion.userId);
+    if (user == null) {
+      throw AuthFlowException('user_resolution_failed');
+    }
+    final provider = completion.providerId == null
+        ? options.providers.whereType<CredentialsProvider>().firstWhere(
+            (_) => true,
+            orElse: CredentialsProvider.new,
+          )
+        : options.providers.firstWhere(
+            (candidate) => candidate.id == completion.providerId,
+            orElse: () => throw AuthFlowException('provider_resolution_failed'),
+          );
+    return _completeSignIn(
+      ctx,
+      user,
+      provider: provider,
+      credentials: completion.credentials,
+    );
+  }
+
+  /// Revokes all trusted devices for the current user and expires the cookie.
+  Future<void> revokeTwoFactorTrustedDevices(EngineContext ctx) async {
+    final feature = twoFactor;
+    if (feature == null) {
+      throw AuthFlowException('two_factor_unavailable');
+    }
+    final session = await resolveSession(ctx);
+    final userId = session?.user.id.trim() ?? '';
+    if (userId.isEmpty) throw AuthFlowException('unauthorized');
+    await feature.revokeAllTrustedDevices(userId);
+    ctx.response.cookies.add(
+      Cookie(feature.trustedDeviceCookieName, '')
+        ..httpOnly = true
+        ..secure = _isHttps(ctx)
+        ..sameSite = SameSite.lax
+        ..path = '/'
+        ..maxAge = 0,
+    );
+  }
+
+  /// Verifies TOTP for a sensitive action and sets a short-lived proof cookie.
+  Future<AuthTwoFactorStepUpToken> verifyTwoFactorStepUp(
+    EngineContext ctx, {
+    required String code,
+  }) async {
+    final feature = twoFactor;
+    if (feature == null) {
+      throw AuthFlowException('two_factor_unavailable');
+    }
+    final session = await resolveSession(ctx);
+    final userId = session?.user.id.trim() ?? '';
+    if (userId.isEmpty) throw AuthFlowException('unauthorized');
+    final token = await feature.verifyStepUp(
+      userId,
+      _twoFactorSessionBinding(ctx),
+      code,
+    );
+    ctx.response.cookies.add(
+      Cookie(feature.stepUpCookieName, token.token)
+        ..httpOnly = true
+        ..secure = _isHttps(ctx)
+        ..sameSite = SameSite.lax
+        ..path = '/'
+        ..expires = token.expiresAt
+        ..maxAge = feature.stepUpTtl.inSeconds,
+    );
+    return token;
+  }
+
+  /// Returns whether the current request carries a valid step-up proof.
+  Future<bool> hasValidTwoFactorStepUp(EngineContext ctx) async {
+    final feature = twoFactor;
+    if (feature == null) return false;
+    final session = await resolveSession(ctx);
+    final userId = session?.user.id.trim() ?? '';
+    if (userId.isEmpty) return false;
+    final token = _requestCookie(ctx, feature.stepUpCookieName)?.value;
+    if (token == null || token.isEmpty) return false;
+    return feature.isStepUpValid(userId, _twoFactorSessionBinding(ctx), token);
+  }
+
+  /// Requires a recent step-up proof for the current request.
+  Future<void> requireTwoFactorStepUp(EngineContext ctx) async {
+    final feature = twoFactor;
+    if (feature == null || feature.stepUpStore == null) {
+      throw AuthFlowException('two_factor_step_up_not_supported');
+    }
+    if (!await hasValidTwoFactorStepUp(ctx)) {
+      throw AuthFlowException('two_factor_step_up_required');
+    }
+  }
+
+  /// Revokes the current session's step-up proofs and expires its cookie.
+  Future<void> revokeTwoFactorStepUp(EngineContext ctx) async {
+    final feature = twoFactor;
+    if (feature == null) {
+      throw AuthFlowException('two_factor_unavailable');
+    }
+    final session = await resolveSession(ctx);
+    final userId = session?.user.id.trim() ?? '';
+    if (userId.isEmpty) throw AuthFlowException('unauthorized');
+    await feature.revokeStepUp(userId, _twoFactorSessionBinding(ctx));
+    ctx.response.cookies.add(
+      Cookie(feature.stepUpCookieName, '')
+        ..httpOnly = true
+        ..secure = _isHttps(ctx)
+        ..sameSite = SameSite.lax
+        ..path = '/'
+        ..maxAge = 0,
+    );
+  }
+
   Future<AuthResult> registerWithCredentials(
     EngineContext ctx,
     CredentialsProvider provider,
     AuthCredentials credentials,
   ) async {
+    await enforceRateLimit(
+      ctx,
+      provider,
+      action: AuthRateLimitAction.register,
+      identifier: credentials.email == null
+          ? credentials.username
+          : normalizeAuthEmail(credentials.email!),
+    );
     final user = await requireAuthorizedCredentialsRegistration(
-      adapter: adapter,
+      store: store,
+      passwordHasher: options.passwordHasher,
       provider: provider,
       context: ctx,
       credentials: credentials,
+      passwordPolicy: options.passwordPolicy,
     );
 
     return _completeSignIn(
@@ -138,19 +386,193 @@ class AuthManager {
     String email,
     String callbackUrl,
   ) async {
+    final normalizedEmail = normalizeAuthEmail(email);
+    await enforceRateLimit(
+      ctx,
+      provider,
+      action: AuthRateLimitAction.emailVerification,
+      identifier: normalizedEmail,
+    );
     final payload = await startAuthEmailSignIn<EngineContext>(
-      adapter: adapter,
-      tokenStore: _tokenStore,
+      store: store,
       provider: provider,
       context: ctx,
-      email: email,
+      email: normalizedEmail,
       callbackUrl: callbackUrl,
       sessionStrategy: options.sessionStrategy,
       generateToken: secureRandomToken,
       writeSession: ctx.setSession,
       callbackKey: options.callbackKey,
     );
+    ctx.response.cookies.add(
+      _buildEmailStateCookie(
+        ctx,
+        provider,
+        payload.token,
+        expiresAt: payload.expiresAt,
+      ),
+    );
     return payload.pendingResult;
+  }
+
+  /// Delivers a password-reset token through the application-owned sender.
+  ///
+  /// Unknown emails intentionally complete without invoking the sender. The
+  /// routed HTTP route returns the same accepted response in either case.
+  /// Password reset is available for both session strategies when a sender is
+  /// configured.
+  Future<void> requestPasswordReset(EngineContext ctx, String email) async {
+    if (options.passwordResetSender == null) {
+      throw AuthFlowException('password_reset_unavailable');
+    }
+    final normalizedEmail = normalizeAuthEmail(email);
+    if (normalizedEmail.isEmpty) {
+      throw AuthFlowException('invalid_email');
+    }
+    await enforceRateLimitForProviderId(
+      ctx,
+      'password-reset',
+      action: AuthRateLimitAction.passwordResetRequest,
+      identifier: normalizedEmail,
+    );
+
+    final user = await Future.sync(
+      () => store.users.findByEmail(normalizedEmail),
+    );
+    if (user == null || user.email == null) {
+      return;
+    }
+
+    final issuedAt = DateTime.now().toUtc();
+    final token = await issueAuthPasswordResetTokenForUser(
+      store: store,
+      userId: user.id,
+      ttl: options.passwordResetTtl,
+      now: issuedAt,
+    );
+    if (token == null) {
+      return;
+    }
+    await Future.sync(
+      () => options.passwordResetSender!(
+        AuthPasswordResetRequest<EngineContext>(
+          context: ctx,
+          user: user.redacted(),
+          token: token,
+          expiresAt: issuedAt.add(options.passwordResetTtl),
+        ),
+      ),
+    );
+  }
+
+  /// Consumes a password-reset token and revokes the user's sessions.
+  Future<AuthPasswordResetResult> confirmPasswordReset(
+    EngineContext ctx, {
+    required String token,
+    required String newPassword,
+  }) async {
+    await enforceRateLimitForProviderId(
+      ctx,
+      'password-reset',
+      action: AuthRateLimitAction.passwordResetConfirm,
+    );
+    return resetAuthPasswordWithToken(
+      store: store,
+      passwordHasher: options.passwordHasher,
+      token: token,
+      newPassword: newPassword,
+      trustedDeviceStore: twoFactor?.trustedDeviceStore,
+      passwordPolicy: options.passwordPolicy,
+    );
+  }
+
+  /// Reauthenticates the current user, changes their password, and revokes
+  /// every server-side session or JWT version for that user.
+  Future<AuthPasswordChangeResult> changePassword(
+    EngineContext ctx, {
+    required String identifier,
+    required String currentPassword,
+    required String newPassword,
+  }) async {
+    final session = await resolveSession(ctx);
+    if (session == null) {
+      throw AuthFlowException('not_authenticated');
+    }
+    final result = await changeAuthPasswordForUser(
+      store: store,
+      passwordHasher: options.passwordHasher,
+      userId: session.user.id,
+      identifier: identifier,
+      currentPassword: currentPassword,
+      newPassword: newPassword,
+      trustedDeviceStore: twoFactor?.trustedDeviceStore,
+      passwordPolicy: options.passwordPolicy,
+    );
+    if (options.sessionStrategy == AuthSessionStrategy.session) {
+      await sessionAuth.logout(ctx);
+      ctx.session.destroy();
+    } else {
+      final signedOut = await resolveAuthSignOutForStrategy(
+        strategy: AuthSessionStrategy.jwt,
+        jwtCookieName: options.jwtOptions.cookieName,
+        jwtCookieSecure: options.jwtOptions.secure,
+        jwtCookieSameSite: options.jwtOptions.sameSite,
+      );
+      final expiredCookie = signedOut.expiredJwtCookie;
+      if (expiredCookie != null) {
+        ctx.response.cookies.add(expiredCookie);
+      }
+    }
+    return result;
+  }
+
+  /// Lists active server-side sessions belonging to the current user.
+  Future<List<AuthSessionInfo>> listSessions(EngineContext ctx) async {
+    final current = await _requireCurrentStoredSession(ctx);
+    return listAuthSessionsForUser(
+      store: store,
+      userId: current.userId,
+      currentSessionId: current.id,
+    );
+  }
+
+  /// Revokes one server-side session belonging to the current user.
+  Future<void> revokeSession(EngineContext ctx, String sessionId) async {
+    final current = await _requireCurrentStoredSession(ctx);
+    final revoked = await Future.sync(
+      () => store.sessions.revokeById(current.userId, sessionId),
+    );
+    if (revoked == null) {
+      throw AuthFlowException('session_not_found');
+    }
+    if (revoked.id == current.id) {
+      await sessionAuth.logout(ctx);
+      ctx.session.destroy();
+    }
+  }
+
+  /// Revokes every other active server-side session for the current user.
+  Future<int> revokeOtherSessions(EngineContext ctx) async {
+    final current = await _requireCurrentStoredSession(ctx);
+    return Future.sync(
+      () => store.sessions.revokeAllForUserExcept(current.userId, current.id),
+    );
+  }
+
+  Future<AuthSessionRecord> _requireCurrentStoredSession(
+    EngineContext ctx,
+  ) async {
+    if (options.sessionStrategy == AuthSessionStrategy.jwt) {
+      throw AuthFlowException('session_management_unavailable');
+    }
+    if (!ctx.hasSession) {
+      throw AuthFlowException('not_authenticated');
+    }
+    final current = await _resolveStoredSession(ctx);
+    if (current == null) {
+      throw AuthFlowException('not_authenticated');
+    }
+    return current;
   }
 
   Future<AuthResult> verifyEmail(
@@ -159,17 +581,28 @@ class AuthManager {
     String email,
     String token,
   ) async {
+    final normalizedEmail = normalizeAuthEmail(email);
+    await enforceRateLimit(
+      ctx,
+      provider,
+      action: AuthRateLimitAction.emailCallback,
+      identifier: normalizedEmail,
+    );
+    final stateCookieName = _emailStateCookieName(provider);
+    final browserToken = _requestCookie(ctx, stateCookieName)?.value;
     final resolved = await resolveAuthEmailVerificationSignIn(
-      adapter: adapter,
-      tokenStore: _tokenStore,
-      email: email,
+      store: store,
+      email: normalizedEmail,
       token: token,
       callbackKey: options.callbackKey,
       readSession: (key) => ctx.getSession<String>(key),
+      expectedBrowserToken: browserToken,
+      requireBrowserToken: true,
     );
     if (resolved == null) {
       throw AuthFlowException('invalid_token');
     }
+    ctx.response.cookies.add(_buildExpiredEmailStateCookie(ctx, provider));
 
     return _completeSignIn(
       ctx,
@@ -185,6 +618,11 @@ class AuthManager {
     OAuthProvider<TProfile> provider, {
     String? callbackUrl,
   }) async {
+    await enforceRateLimit(
+      ctx,
+      provider,
+      action: AuthRateLimitAction.oauthStart,
+    );
     final resolved =
         await resolveOAuthAuthorizationStart<EngineContext, TProfile>(
           context: ctx,
@@ -193,9 +631,19 @@ class AuthManager {
           pkceKey: options.pkceKey,
           nonceKey: options.nonceKey,
           callbackKey: options.callbackKey,
+          challengeStore: store.oauthChallenges,
+          challengeTtl: options.oauthChallengeTtl,
           callbackUrl: callbackUrl,
           writeSession: ctx.setSession,
         );
+    ctx.response.cookies.add(
+      _buildOAuthStateCookie(
+        ctx,
+        provider,
+        resolved.state,
+        expiresAt: DateTime.now().toUtc().add(options.oauthChallengeTtl),
+      ),
+    );
     return resolved.authorizationUri;
   }
 
@@ -205,9 +653,16 @@ class AuthManager {
     String code,
     String? state,
   ) async {
+    await enforceRateLimit(
+      ctx,
+      provider,
+      action: AuthRateLimitAction.oauthCallback,
+    );
+    final stateCookieName = _oauthStateCookieName(provider);
+    final browserState = _requestCookie(ctx, stateCookieName)?.value;
     final resolved =
         await resolveOAuthCallbackSignInForProvider<EngineContext, TProfile>(
-          adapter: adapter,
+          store: store,
           context: ctx,
           provider: provider,
           code: code,
@@ -218,9 +673,13 @@ class AuthManager {
           callbackKey: options.callbackKey,
           readSession: (key) => ctx.getSession<String>(key),
           removeSession: ctx.removeSession,
+          consumeChallenge: store.oauthChallenges.consume,
+          expectedBrowserState: browserState,
+          requireBrowserState: true,
           httpClient: httpClient,
           fallbackAccountId: secureRandomToken,
         );
+    ctx.response.cookies.add(_buildExpiredOAuthStateCookie(ctx, provider));
     final signIn = resolved.signIn;
     final resolvedUser = signIn.user;
     final isNewUser = signIn.isNewUser;
@@ -326,6 +785,9 @@ class AuthManager {
           context: ctx,
           principal: principal,
           jwtOptions: options.jwtOptions,
+          protectedJwtClaims: options.sessionStrategy == AuthSessionStrategy.jwt
+              ? await _jwtVersionClaims(AuthUser.fromPrincipal(principal))
+              : null,
           applySessionMaxAge: () => _applySessionMaxAge(ctx),
           persistSessionPrincipal: (nextPrincipal) =>
               sessionAuth.update(ctx, nextPrincipal),
@@ -341,6 +803,12 @@ class AuthManager {
   }
 
   Future<AuthSession?> resolveSession(EngineContext ctx) async {
+    final storedSession = await _resolveStoredSession(ctx);
+    if (options.sessionStrategy == AuthSessionStrategy.session &&
+        ctx.hasSession &&
+        storedSession == null) {
+      return null;
+    }
     final resolved =
         await resolveAuthSessionForStrategyWithCallbacks<EngineContext>(
           strategy: options.sessionStrategy,
@@ -357,13 +825,29 @@ class AuthManager {
           touchSession: ctx.session.touch,
           resolveSessionExpiry: () => _sessionExpiry(ctx),
           readJwtToken: () => _resolveJwtToken(ctx),
+          validateJwtClaims: _validateJwtClaims,
           httpClient: httpClient,
         );
     final refreshCookie = resolved.refreshCookie;
     if (refreshCookie != null) {
       ctx.response.cookies.add(refreshCookie);
     }
+    if (storedSession != null &&
+        resolved.session != null &&
+        storedSession.userId != resolved.session!.user.id) {
+      return null;
+    }
     return resolved.session;
+  }
+
+  /// Revokes the persisted server-side session before clearing framework
+  /// session state.
+  Future<void> logout(EngineContext ctx) async {
+    if (options.sessionStrategy == AuthSessionStrategy.session &&
+        ctx.hasSession) {
+      await store.sessions.revoke(hashOpaqueToken(ctx.sessionId));
+    }
+    await sessionAuth.logout(ctx);
   }
 
   Future<String?> resolveRedirect(
@@ -447,6 +931,9 @@ class AuthManager {
     AuthCredentials? credentials,
     bool isNewUser = false,
   }) async {
+    if (user.id.trim().isEmpty) {
+      throw AuthFlowException('user_resolution_failed');
+    }
     final resolvedRedirect =
         await resolveAuthSignInRedirectTarget<EngineContext>(
           callbacks: callbacks,
@@ -481,6 +968,13 @@ class AuthManager {
       await sessionAuth.login(ctx, user.toPrincipal());
       _setSessionIssuedAt(ctx, DateTime.now().toUtc());
       sessionExpiresAt = _sessionExpiry(ctx);
+      await _persistStoredSession(
+        ctx,
+        user: user,
+        provider: provider,
+        credentials: credentials,
+        expiresAt: sessionExpiresAt,
+      );
     }
 
     final resolvedSignIn =
@@ -492,6 +986,9 @@ class AuthManager {
           redirectUrl: resolvedRedirect,
           jwtOptions: options.jwtOptions,
           sessionExpiresAt: sessionExpiresAt,
+          protectedClaims: options.sessionStrategy == AuthSessionStrategy.jwt
+              ? await _jwtVersionClaims(user)
+              : null,
           provider: provider,
           account: account,
           profile: profile,
@@ -547,6 +1044,29 @@ class AuthManager {
     );
   }
 
+  Future<Map<String, dynamic>> _jwtVersionClaims(AuthUser user) async {
+    return <String, dynamic>{
+      authJwtVersionClaim: await store.jwtVersions.current(user.id),
+    };
+  }
+
+  Future<bool> _validateJwtClaims(
+    Map<String, dynamic> claims,
+    AuthUser user,
+  ) async {
+    final rawVersion = claims[authJwtVersionClaim];
+    final version = switch (rawVersion) {
+      int value when value >= 0 => value,
+      num value when value.isFinite && value == value.toInt() && value >= 0 =>
+        value.toInt(),
+      _ => null,
+    };
+    if (version == null || user.id.trim().isEmpty) {
+      return false;
+    }
+    return version == await store.jwtVersions.current(user.id);
+  }
+
   String? _resolveJwtToken(EngineContext ctx) {
     return resolveBearerOrCookieToken(
       authorizationHeader: ctx.request.headers.value(options.jwtOptions.header),
@@ -556,5 +1076,183 @@ class AuthManager {
         (cookie) => MapEntry<String, String>(cookie.name, cookie.value),
       ),
     );
+  }
+
+  Future<AuthSessionRecord?> _resolveStoredSession(EngineContext ctx) async {
+    if (!ctx.hasSession) {
+      return null;
+    }
+    final tokenHash = hashOpaqueToken(ctx.sessionId);
+    final record = await store.sessions.find(tokenHash);
+    if (record == null || !record.isActive()) {
+      return null;
+    }
+    return await store.sessions.touch(tokenHash, DateTime.now().toUtc());
+  }
+
+  /// Enforces the configured limiter for an adapter-specific auth boundary.
+  ///
+  /// Routed uses this before invoking a custom callback provider, because the
+  /// provider callback itself may perform expensive or externally visible
+  /// work. Built-in auth methods call this internally.
+  Future<void> enforceRateLimit(
+    EngineContext ctx,
+    AuthProvider provider, {
+    required AuthRateLimitAction action,
+    String? identifier,
+  }) {
+    return enforceRateLimitForProviderId(
+      ctx,
+      provider.id,
+      action: action,
+      identifier: identifier,
+    );
+  }
+
+  /// Enforces a limiter for a boundary without a configured auth provider.
+  Future<void> enforceRateLimitForProviderId(
+    EngineContext ctx,
+    String providerId, {
+    required AuthRateLimitAction action,
+    String? identifier,
+  }) {
+    return enforceAuthRateLimit<EngineContext>(
+      limiter: options.rateLimiter,
+      request: AuthRateLimitRequest<EngineContext>(
+        action: action,
+        providerId: providerId,
+        context: ctx,
+        identifier: identifier?.trim(),
+      ),
+    );
+  }
+
+  Cookie? _requestCookie(EngineContext ctx, String name) {
+    for (final cookie in ctx.request.cookies) {
+      if (cookie.name == name) return cookie;
+    }
+    return null;
+  }
+
+  String _twoFactorSessionBinding(EngineContext ctx) {
+    final rawBinding = options.sessionStrategy == AuthSessionStrategy.jwt
+        ? _resolveJwtToken(ctx)
+        : ctx.sessionId;
+    if (rawBinding == null || rawBinding.trim().isEmpty) {
+      throw AuthFlowException('unauthorized');
+    }
+    return hashOpaqueToken(rawBinding);
+  }
+
+  bool _isHttps(EngineContext ctx) => ctx.scheme.toLowerCase() == 'https';
+
+  String _oauthStateCookieName(AuthProvider provider) {
+    return 'routed_oauth_state_${hashOpaqueToken(provider.id).substring(0, 16)}';
+  }
+
+  String _emailStateCookieName(EmailProvider provider) {
+    return 'routed_email_state_${hashOpaqueToken(provider.id).substring(0, 16)}';
+  }
+
+  Cookie _buildEmailStateCookie(
+    EngineContext ctx,
+    EmailProvider provider,
+    String token, {
+    required DateTime expiresAt,
+  }) {
+    final secure = ctx.scheme.toLowerCase() == 'https';
+    return Cookie(_emailStateCookieName(provider), token)
+      ..httpOnly = true
+      ..expires = expiresAt
+      ..path = _oauthCookiePath()
+      ..secure = secure
+      ..sameSite = secure ? SameSite.none : SameSite.lax;
+  }
+
+  Cookie _buildExpiredEmailStateCookie(
+    EngineContext ctx,
+    EmailProvider provider,
+  ) {
+    final cookie = _buildEmailStateCookie(
+      ctx,
+      provider,
+      '',
+      expiresAt: DateTime.fromMillisecondsSinceEpoch(0),
+    );
+    cookie.maxAge = 0;
+    return cookie;
+  }
+
+  Cookie _buildOAuthStateCookie(
+    EngineContext ctx,
+    AuthProvider provider,
+    String state, {
+    required DateTime expiresAt,
+  }) {
+    final secure = ctx.scheme.toLowerCase() == 'https';
+    return Cookie(_oauthStateCookieName(provider), state)
+      ..httpOnly = true
+      ..expires = expiresAt
+      ..path = _oauthCookiePath()
+      ..secure = secure
+      ..sameSite = secure ? SameSite.none : SameSite.lax;
+  }
+
+  Cookie _buildExpiredOAuthStateCookie(
+    EngineContext ctx,
+    AuthProvider provider,
+  ) {
+    final cookie = _buildOAuthStateCookie(
+      ctx,
+      provider,
+      '',
+      expiresAt: DateTime.fromMillisecondsSinceEpoch(0),
+    );
+    cookie.maxAge = 0;
+    return cookie;
+  }
+
+  String _oauthCookiePath() {
+    final path = options.basePath.trim();
+    if (path.isEmpty || path == '/') return '/';
+    return path.startsWith('/') ? path : '/$path';
+  }
+
+  Future<void> _persistStoredSession(
+    EngineContext ctx, {
+    required AuthUser user,
+    required AuthProvider? provider,
+    required AuthCredentials? credentials,
+    required DateTime? expiresAt,
+  }) async {
+    if (!ctx.hasSession) {
+      return;
+    }
+    final now = DateTime.now().toUtc();
+    final sessionId = ctx.sessionId;
+    final tokenHash = hashOpaqueToken(sessionId);
+    final record = AuthSessionRecord(
+      id: secureRandomToken(length: 16),
+      tokenHash: tokenHash,
+      userId: user.id,
+      createdAt: now,
+      expiresAt: expiresAt ?? now.add(const Duration(hours: 1)),
+      lastUsedAt: now,
+      ipAddress: ctx.request.clientIP,
+      userAgent: ctx.request.headers.value(HttpHeaders.userAgentHeader),
+      authenticationMethod:
+          provider?.id ?? (credentials == null ? 'unknown' : 'credentials'),
+    );
+    final previousId = ctx.session.previousId;
+    if (previousId != null) {
+      final rotated = await store.sessions.rotate(
+        previousTokenHash: hashOpaqueToken(previousId),
+        replacement: record,
+      );
+      if (rotated != null) {
+        return;
+      }
+    }
+    await store.sessions.create(record);
   }
 }

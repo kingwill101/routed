@@ -37,10 +37,232 @@ Engine _authEngine(AuthManager manager) {
 
 String _cookieHeader(Cookie cookie) => '${cookie.name}=${cookie.value}';
 
+final class _BlockingAuthLimiter implements AuthRateLimiter<EngineContext> {
+  AuthRateLimitRequest<EngineContext>? lastRequest;
+
+  @override
+  AuthRateLimitDecision check(AuthRateLimitRequest<EngineContext> request) {
+    lastRequest = request;
+    return const AuthRateLimitDecision.block(retryAfter: Duration(seconds: 17));
+  }
+}
+
 void main() {
+  test('rejects credential requests from an untrusted origin', () async {
+    final manager = AuthManager(
+      AuthOptions<EngineContext>(
+        store: InMemoryAuthStore(),
+        storeMode: AuthStoreMode.ephemeral,
+        providers: [CredentialsProvider()],
+        enforceCsrf: false,
+      ),
+    );
+
+    final engine = _authEngine(manager);
+    await engine.initialize();
+
+    final client = TestClient(RoutedRequestHandler(engine));
+    addTearDown(() async => await client.close());
+
+    final response = await client.postJson(
+      '/auth/signin/credentials',
+      <String, dynamic>{'username': 'alice', 'password': 'secret'},
+      headers: <String, List<String>>{
+        'Origin': ['https://evil.example'],
+      },
+    );
+
+    response.assertStatus(HttpStatus.forbidden);
+    expect(response.json()['error'], equals('invalid_origin'));
+  });
+
+  test('rejects origins that hide user-info before a trusted host', () async {
+    final manager = AuthManager(
+      AuthOptions<EngineContext>(
+        store: InMemoryAuthStore(),
+        storeMode: AuthStoreMode.ephemeral,
+        providers: [CredentialsProvider()],
+        enforceCsrf: false,
+      ),
+    );
+
+    final engine = _authEngine(manager);
+    await engine.initialize();
+
+    final client = TestClient(RoutedRequestHandler(engine));
+    addTearDown(() async => await client.close());
+
+    final response = await client.postJson(
+      '/auth/signin/credentials',
+      <String, dynamic>{'username': 'alice', 'password': 'secret'},
+      headers: <String, List<String>>{
+        'Origin': ['http://attacker@localhost'],
+      },
+    );
+
+    response.assertStatus(HttpStatus.forbidden);
+    expect(response.json()['error'], equals('invalid_origin'));
+  });
+
+  test('allows an explicitly configured browser origin', () async {
+    final manager = AuthManager(
+      AuthOptions<EngineContext>(
+        store: InMemoryAuthStore(),
+        storeMode: AuthStoreMode.ephemeral,
+        providers: [CredentialsProvider()],
+        enforceCsrf: false,
+        browserProtection: const AuthBrowserProtectionOptions(
+          allowedOrigins: ['https://app.example'],
+        ),
+      ),
+    );
+
+    final engine = _authEngine(manager);
+    await engine.initialize();
+
+    final client = TestClient(RoutedRequestHandler(engine));
+    addTearDown(() async => await client.close());
+
+    final response = await client.postJson(
+      '/auth/signin/credentials',
+      <String, dynamic>{'username': 'alice', 'password': 'secret'},
+      headers: <String, List<String>>{
+        'Origin': ['https://app.example'],
+      },
+    );
+
+    response.assertStatus(HttpStatus.unauthorized);
+    expect(response.json()['error'], equals('invalid_credentials'));
+  });
+
+  test('rejects Fetch Metadata cross-site credential requests', () async {
+    final manager = AuthManager(
+      AuthOptions<EngineContext>(
+        store: InMemoryAuthStore(),
+        storeMode: AuthStoreMode.ephemeral,
+        providers: [CredentialsProvider()],
+        enforceCsrf: false,
+      ),
+    );
+
+    final engine = _authEngine(manager);
+    await engine.initialize();
+
+    final client = TestClient(RoutedRequestHandler(engine));
+    addTearDown(() async => await client.close());
+
+    final response = await client.postJson(
+      '/auth/signin/credentials',
+      <String, dynamic>{'username': 'alice', 'password': 'secret'},
+      headers: <String, List<String>>{
+        'Sec-Fetch-Site': ['cross-site'],
+      },
+    );
+
+    response.assertStatus(HttpStatus.forbidden);
+    expect(response.json()['error'], equals('cross_site_request'));
+  });
+
+  test(
+    'explicit CSRF opt-out does not reject a request for CSRF absence',
+    () async {
+      final manager = AuthManager(
+        AuthOptions<EngineContext>(
+          store: InMemoryAuthStore(),
+          storeMode: AuthStoreMode.ephemeral,
+          providers: [CredentialsProvider()],
+          enforceCsrf: false,
+        ),
+      );
+
+      final engine = _authEngine(manager);
+      await engine.initialize();
+
+      final client = TestClient(RoutedRequestHandler(engine));
+      addTearDown(() async => await client.close());
+
+      final response = await client.postJson(
+        '/auth/signin/credentials',
+        <String, dynamic>{'username': 'alice', 'password': 'secret'},
+      );
+
+      response.assertStatus(HttpStatus.unauthorized);
+      expect(response.json()['error'], equals('invalid_credentials'));
+    },
+  );
+
+  test(
+    'credentials sign-in is rate limited before password processing',
+    () async {
+      final limiter = _BlockingAuthLimiter();
+      final manager = AuthManager(
+        AuthOptions<EngineContext>(
+          store: InMemoryAuthStore(),
+          storeMode: AuthStoreMode.ephemeral,
+          providers: [CredentialsProvider()],
+          enforceCsrf: false,
+          rateLimiter: limiter,
+        ),
+      );
+
+      final engine = _authEngine(manager);
+      await engine.initialize();
+
+      final client = TestClient(RoutedRequestHandler(engine));
+      addTearDown(() async => await client.close());
+
+      final response = await client.postJson(
+        '/auth/signin/credentials',
+        <String, dynamic>{
+          'username': 'alice',
+          'password': 'must-not-reach-the-limiter',
+        },
+      );
+
+      response.assertStatus(HttpStatus.tooManyRequests);
+      expect(response.json()['error'], equals('rate_limited'));
+      expect(response.headers[HttpHeaders.retryAfterHeader], contains('17'));
+      expect(limiter.lastRequest?.action, AuthRateLimitAction.signIn);
+      expect(limiter.lastRequest?.providerId, equals('credentials'));
+      expect(limiter.lastRequest?.identifier, equals('alice'));
+    },
+  );
+
+  test(
+    'built-in registration rejects weak passwords before persistence',
+    () async {
+      final store = InMemoryAuthStore();
+      final manager = AuthManager(
+        AuthOptions<EngineContext>(
+          store: store,
+          storeMode: AuthStoreMode.ephemeral,
+          providers: [CredentialsProvider()],
+          enforceCsrf: false,
+        ),
+      );
+
+      final engine = _authEngine(manager);
+      await engine.initialize();
+
+      final client = TestClient(RoutedRequestHandler(engine));
+      addTearDown(() async => await client.close());
+
+      final response = await client.postJson(
+        '/auth/register/credentials',
+        <String, dynamic>{'email': 'weak@example.com', 'password': 'short'},
+      );
+
+      response.assertStatus(HttpStatus.unauthorized);
+      expect(response.json()['error'], equals('registration_failed'));
+      expect(await store.users.findByEmail('weak@example.com'), isNull);
+    },
+  );
+
   test('GET sign-in for credentials is rejected', () async {
     final manager = AuthManager(
       AuthOptions<EngineContext>(
+        store: InMemoryAuthStore(),
+        storeMode: AuthStoreMode.ephemeral,
         providers: [CredentialsProvider()],
         enforceCsrf: false,
       ),
@@ -57,9 +279,47 @@ void main() {
     expect(response.json()['error'], equals('method_not_allowed'));
   });
 
+  test(
+    'unexpected credential failures do not expose exception details',
+    () async {
+      final manager = AuthManager(
+        AuthOptions<EngineContext>(
+          store: InMemoryAuthStore(),
+          storeMode: AuthStoreMode.ephemeral,
+          providers: [
+            CredentialsProvider(
+              authorize: (_, _, _) async {
+                throw StateError('/srv/secrets/auth-production.key');
+              },
+            ),
+          ],
+          enforceCsrf: false,
+        ),
+      );
+
+      final engine = _authEngine(manager);
+      await engine.initialize();
+
+      final client = TestClient(RoutedRequestHandler(engine));
+      addTearDown(() async => await client.close());
+
+      final response = await client.postJson(
+        '/auth/signin/credentials',
+        <String, dynamic>{'username': 'alice', 'password': 'secret'},
+      );
+
+      response.assertStatus(HttpStatus.internalServerError);
+      expect(response.body, isNot(contains('auth-production.key')));
+      expect(response.body, isNot(contains('/srv/secrets')));
+      expect(response.body, contains('unexpected error'));
+    },
+  );
+
   test('callbackUrl sanitization ignores external redirects', () async {
     final manager = AuthManager(
       AuthOptions<EngineContext>(
+        store: InMemoryAuthStore(),
+        storeMode: AuthStoreMode.ephemeral,
         providers: [
           OAuthProvider<Map<String, dynamic>>(
             id: 'oauth',
@@ -90,9 +350,109 @@ void main() {
     expect(uri.queryParameters.containsKey('callbackUrl'), isFalse);
   });
 
+  test(
+    'OAuth callback is bound to the browser that started the flow',
+    () async {
+      final manager = AuthManager(
+        AuthOptions<EngineContext>(
+          store: InMemoryAuthStore(),
+          storeMode: AuthStoreMode.ephemeral,
+          providers: [
+            OAuthProvider<Map<String, dynamic>>(
+              id: 'oauth',
+              name: 'OAuth',
+              clientId: 'client-id',
+              clientSecret: 'client-secret',
+              authorizationEndpoint: Uri.parse('https://auth.test/authorize'),
+              tokenEndpoint: Uri.parse('https://auth.test/token'),
+              redirectUri: 'https://app.test/auth/callback/oauth',
+              profile: (profile) => AuthUser(id: 'attacker-user'),
+            ),
+          ],
+        ),
+      );
+
+      final engine = _authEngine(manager);
+      await engine.initialize();
+
+      final attacker = TestClient(RoutedRequestHandler(engine));
+      final victim = TestClient(RoutedRequestHandler(engine));
+      addTearDown(() async {
+        await attacker.close();
+        await victim.close();
+      });
+
+      final start = await attacker.get('/auth/signin/oauth');
+      start.assertStatus(HttpStatus.movedTemporarily);
+      final location = Uri.parse(
+        start.headers[HttpHeaders.locationHeader]!.first,
+      );
+      final state = location.queryParameters['state'];
+      expect(state, isNotNull);
+      final stateCookie = (start.headers[HttpHeaders.setCookieHeader] ?? [])
+          .map(Cookie.fromSetCookieValue)
+          .firstWhere(
+            (cookie) => cookie.name.startsWith('routed_oauth_state_'),
+          );
+
+      final callback = await victim.get(
+        '/auth/callback/oauth?code=attacker-code&state=$state',
+      );
+
+      callback.assertStatus(HttpStatus.unauthorized);
+      expect(callback.json()['error'], equals('invalid_state'));
+      expect(stateCookie.value, equals(state));
+    },
+  );
+
+  test(
+    'email callback is bound to the browser that requested the link',
+    () async {
+      late AuthEmailRequest request;
+      final manager = AuthManager(
+        AuthOptions<EngineContext>(
+          store: InMemoryAuthStore(),
+          storeMode: AuthStoreMode.ephemeral,
+          providers: [
+            EmailProvider(
+              sendVerificationRequest: (_, _, sent) async {
+                request = sent;
+              },
+            ),
+          ],
+          enforceCsrf: false,
+        ),
+      );
+
+      final engine = _authEngine(manager);
+      await engine.initialize();
+
+      final attacker = TestClient(RoutedRequestHandler(engine));
+      final victim = TestClient(RoutedRequestHandler(engine));
+      addTearDown(() async {
+        await attacker.close();
+        await victim.close();
+      });
+
+      final start = await attacker.postJson('/auth/signin/email', {
+        'email': 'attacker@example.com',
+      });
+      start.assertStatus(HttpStatus.ok);
+
+      final callback = await victim.get(
+        '/auth/callback/email?token=${request.token}&email=${request.email}',
+      );
+
+      callback.assertStatus(HttpStatus.unauthorized);
+      expect(callback.json()['error'], equals('invalid_token'));
+    },
+  );
+
   test('unknown providers return not found responses', () async {
     final manager = AuthManager(
       AuthOptions<EngineContext>(
+        store: InMemoryAuthStore(),
+        storeMode: AuthStoreMode.ephemeral,
         providers: [CredentialsProvider()],
         enforceCsrf: false,
       ),
@@ -126,6 +486,8 @@ void main() {
   test('rejects missing OAuth callback code', () async {
     final manager = AuthManager(
       AuthOptions<EngineContext>(
+        store: InMemoryAuthStore(),
+        storeMode: AuthStoreMode.ephemeral,
         providers: [
           OAuthProvider<Map<String, dynamic>>(
             id: 'oauth',
@@ -155,6 +517,8 @@ void main() {
   test('rejects missing email verification tokens', () async {
     final manager = AuthManager(
       AuthOptions<EngineContext>(
+        store: InMemoryAuthStore(),
+        storeMode: AuthStoreMode.ephemeral,
         providers: [EmailProvider(sendVerificationRequest: (_, _, _) async {})],
         enforceCsrf: false,
       ),
@@ -174,6 +538,8 @@ void main() {
   test('register rejects unsupported providers', () async {
     final manager = AuthManager(
       AuthOptions<EngineContext>(
+        store: InMemoryAuthStore(),
+        storeMode: AuthStoreMode.ephemeral,
         providers: [EmailProvider(sendVerificationRequest: (_, _, _) async {})],
         enforceCsrf: false,
       ),
@@ -196,6 +562,8 @@ void main() {
   test('rejects invalid CSRF tokens on sign-in', () async {
     final manager = AuthManager(
       AuthOptions<EngineContext>(
+        store: InMemoryAuthStore(),
+        storeMode: AuthStoreMode.ephemeral,
         providers: [CredentialsProvider()],
         enforceCsrf: true,
       ),
@@ -225,6 +593,8 @@ void main() {
   test('signout clears JWT cookies', () async {
     final manager = AuthManager(
       AuthOptions<EngineContext>(
+        store: InMemoryAuthStore(),
+        storeMode: AuthStoreMode.ephemeral,
         providers: [CredentialsProvider()],
         sessionStrategy: AuthSessionStrategy.jwt,
         enforceCsrf: false,

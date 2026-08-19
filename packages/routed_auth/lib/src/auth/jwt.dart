@@ -11,6 +11,7 @@ import 'package:server_auth/server_auth.dart'
         buildBearerAuthenticateHeader,
         JwtOptions,
         JwtVerifier,
+        sanitizeAuthErrorCode,
         verifyJwtBearerAuthorizationAndWriteAttributes;
 
 /// Creates a JWT authentication [Middleware] with the given [options].
@@ -60,7 +61,10 @@ void _writeUnauthorized(EngineContext ctx, String reason) {
     HttpHeaders.wwwAuthenticateHeader,
     buildBearerAuthenticateHeader(
       error: 'invalid_token',
-      errorDescription: reason,
+      errorDescription: sanitizeAuthErrorCode(
+        reason,
+        fallback: 'invalid_token',
+      ),
     ),
   );
   if (!ctx.response.isClosed) {

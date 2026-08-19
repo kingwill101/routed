@@ -73,6 +73,8 @@ void main() {
       setUp(() async {
         manager = AuthManager(
           AuthOptions(
+            store: InMemoryAuthStore(),
+            storeMode: AuthStoreMode.ephemeral,
             providers: [
               CredentialsProvider(
                 authorize: (ctx, provider, credentials) async {
@@ -277,6 +279,8 @@ void main() {
 
         manager = AuthManager(
           AuthOptions(
+            store: InMemoryAuthStore(),
+            storeMode: AuthStoreMode.ephemeral,
             providers: [
               EmailProvider(
                 sendVerificationRequest: (ctx, provider, request) async {
@@ -330,19 +334,28 @@ void main() {
         var sessionCookie = csrfResponse.cookie('test_session')!;
 
         // Step 1: Request magic link
-        await client.postJson(
+        final signInResponse = await client.postJson(
           '/auth/signin/email',
           {'email': 'magicuser@example.com'},
           headers: {
             HttpHeaders.cookieHeader: [_cookieHeader(sessionCookie)],
           },
         );
+        final emailStateCookie =
+            (signInResponse.headers[HttpHeaders.setCookieHeader] ?? [])
+                .map(Cookie.fromSetCookieValue)
+                .firstWhere(
+                  (cookie) => cookie.name.startsWith('routed_email_state_'),
+                );
 
         // Step 2: Use the captured token to verify
         final callbackResponse = await client.get(
           '/auth/callback/email?token=$capturedToken&email=$capturedEmail',
           headers: {
-            HttpHeaders.cookieHeader: [_cookieHeader(sessionCookie)],
+            HttpHeaders.cookieHeader: [
+              _cookieHeader(sessionCookie),
+              _cookieHeader(emailStateCookie),
+            ],
           },
         );
 
@@ -393,6 +406,8 @@ void main() {
       setUp(() async {
         manager = AuthManager(
           AuthOptions(
+            store: InMemoryAuthStore(),
+            storeMode: AuthStoreMode.ephemeral,
             providers: [
               CredentialsProvider(
                 authorize: (ctx, provider, credentials) async {
@@ -524,6 +539,8 @@ void main() {
       setUp(() async {
         manager = AuthManager(
           AuthOptions(
+            store: InMemoryAuthStore(),
+            storeMode: AuthStoreMode.ephemeral,
             providers: [
               OAuthProvider<Map<String, dynamic>>(
                 id: 'test-oauth',
@@ -628,6 +645,8 @@ void main() {
       setUp(() async {
         manager = AuthManager(
           AuthOptions(
+            store: InMemoryAuthStore(),
+            storeMode: AuthStoreMode.ephemeral,
             providers: [
               CredentialsProvider(),
               EmailProvider(
@@ -698,6 +717,8 @@ void main() {
       setUp(() async {
         manager = AuthManager(
           AuthOptions(
+            store: InMemoryAuthStore(),
+            storeMode: AuthStoreMode.ephemeral,
             enforceCsrf: true, // Enable CSRF
             providers: [
               CredentialsProvider(
@@ -791,6 +812,8 @@ void main() {
       setUp(() async {
         manager = AuthManager(
           AuthOptions(
+            store: InMemoryAuthStore(),
+            storeMode: AuthStoreMode.ephemeral,
             enforceCsrf: false,
             providers: [
               CredentialsProvider(
@@ -887,6 +910,8 @@ void main() {
 
         manager = AuthManager(
           AuthOptions(
+            store: InMemoryAuthStore(),
+            storeMode: AuthStoreMode.ephemeral,
             enforceCsrf: false,
             providers: [
               CredentialsProvider(
