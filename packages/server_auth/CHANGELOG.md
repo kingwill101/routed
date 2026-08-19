@@ -5,6 +5,9 @@
   the persisted user before session issuance.
 - Include API-key and WebAuthn credential namespaces in the feature-owned
   account-deletion transaction.
+- Issue a normal server-side session after a successful Routed WebAuthn
+  assertion, using the same session rotation, policy, and revocation path as
+  other authentication methods.
 - Add the opt-in `AdminFeature`, typed atomic admin store, authoritative role
   permissions, bans, session administration, guarded hard deletion,
   server-session impersonation, lifecycle hooks/events, persistence topology,

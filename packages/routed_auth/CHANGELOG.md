@@ -3,6 +3,8 @@
 - Enforce configured verified-email and account-availability policy before
   issuing or resolving Routed sessions, while retaining generic auth-flow
   status handling.
+- Complete a verified WebAuthn assertion by issuing a normal server-side
+  session through the feature session-control boundary.
 - Automatically mount the opt-in `/auth/admin/...` API, enforce Admin bans at
   sign-in/session boundaries, and provide rotating server-session identity
   replacement for guarded impersonation.

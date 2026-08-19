@@ -55,6 +55,36 @@ final class _Fixture {
   final _KeyPair keyPair = _KeyPair.create();
 }
 
+final class _RecordingSessionControl implements AuthFeatureSessionControl {
+  AuthUser? replacedUser;
+  String? authenticationMethod;
+
+  @override
+  AuthSessionStrategy get strategy => AuthSessionStrategy.session;
+
+  @override
+  String? get currentSessionId => null;
+
+  @override
+  Future<AuthSession> replaceIdentity(
+    AuthUser user, {
+    required String authenticationMethod,
+    Duration? maximumAge,
+    String? impersonatedBy,
+  }) async {
+    replacedUser = user;
+    this.authenticationMethod = authenticationMethod;
+    return AuthSession(
+      user: user,
+      expiresAt: DateTime.utc(2030, 1, 1),
+      strategy: AuthSessionStrategy.session,
+    );
+  }
+
+  @override
+  Future<void> signOut() async {}
+}
+
 void main() {
   group('WebAuthn stores', () {
     test('challenge consumption is bound and one-time', () async {
@@ -188,6 +218,54 @@ void main() {
       );
       expect(result.user.id, fixture.user.id);
       expect(result.authenticator.counter, 1);
+    });
+
+    test('issues a server session through the authentication endpoint', () async {
+      final fixture = _Fixture();
+      await fixture.store.users.create(fixture.user);
+      final registration = await fixture.feature.beginRegistration(
+        context: fixture.context,
+        user: fixture.user,
+      );
+      final saved = await fixture.feature.finishRegistration(
+        context: fixture.context,
+        user: fixture.user,
+        credential: _registrationCredential(
+          challenge: registration.challenge,
+          keyPair: fixture.keyPair,
+        ),
+      );
+      final authentication = await fixture.feature.beginAuthentication(
+        context: fixture.context,
+        userId: fixture.user.id,
+      );
+      final sessionControl = _RecordingSessionControl();
+      final endpoint = fixture.feature.endpoints.firstWhere(
+        (value) => value.id == 'webauthn.authenticationVerify',
+      );
+
+      final response = await endpoint.invoke(
+        AuthOperationInvocation<Object>(
+          context: fixture.context,
+          user: null,
+          sessionControl: sessionControl,
+        ),
+        <String, dynamic>{
+          'credential': _assertionCredential(
+            challenge: authentication.challenge,
+            credentialId: saved.credentialId,
+            keyPair: fixture.keyPair,
+            counter: 1,
+          ),
+          'userId': fixture.user.id,
+        },
+      );
+
+      final payload = response! as Map<String, dynamic>;
+      expect(payload['status'], equals('authenticated'));
+      expect(payload['session'], isA<Map<String, dynamic>>());
+      expect(sessionControl.replacedUser?.id, equals(fixture.user.id));
+      expect(sessionControl.authenticationMethod, equals('webauthn'));
     });
 
     test(
