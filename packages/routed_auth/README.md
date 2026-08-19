@@ -177,6 +177,33 @@ TOTP code and sets a short-lived, session-bound HTTP-only proof cookie. Routed
 consumers can enforce it with `AuthManager.requireTwoFactorStepUp` before
 sensitive actions; `POST /auth/2fa/step-up/revoke` clears the proof.
 
+## API-key authentication
+
+Compose `AuthApiKeyFeature` in `AuthOptions.features` to add:
+
+- `GET /auth/api-keys/list`
+- `POST /auth/api-keys/create`
+- `POST /auth/api-keys/rotate`
+- `POST /auth/api-keys/revoke`
+- `POST /auth/api-keys/exchange` when session exchange is explicitly enabled
+
+The raw secret is returned only by create and rotate. To authenticate service
+requests, add the middleware after the feature is composed:
+
+```dart
+final apiKeys = AuthApiKeyFeature<EngineContext>(store: myApiKeyStore);
+final apiKeyMiddleware = apiKeyAuthentication(
+  feature: apiKeys,
+  userStore: myAuthStore.users,
+);
+```
+
+It accepts `X-API-Key` and `Authorization: ApiKey ...`. A verified key becomes
+the request principal without creating a browser session. If
+`sessionExchangeEnabled: true` is configured, the same header can be posted to
+`/auth/api-keys/exchange` to create a normal server session. Use
+`currentApiKey` to inspect scopes in application middleware or handlers.
+
 ## Organizations
 
 Compose `OrganizationFeature<EngineContext>` to opt in. `AuthRoutes` discovers

@@ -10,6 +10,11 @@
   rate-limit, and public-error handling.
 - Add tenant-aware Haigate membership, permission, and resource-owner helpers
   without promoting organization roles into global principal roles.
+- Add API-key lifecycle routes and `apiKeyAuthentication` middleware. API keys
+  use `X-API-Key` or `Authorization: ApiKey`, expose scopes through request
+  metadata, and never persist raw secrets.
+- Add the opt-in `POST /auth/api-keys/exchange` route and typed client helper
+  for creating a server-side session from an API-key header.
 - Normalize HTTPS scheme checks when setting or expiring trusted-device and
   step-up cookies so sensitive tokens remain marked `Secure`.
 - Sanitize JWT middleware challenge descriptions so callback diagnostics cannot

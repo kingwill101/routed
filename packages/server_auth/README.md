@@ -167,6 +167,31 @@ sends the selected IDs explicitly. This works with JWTs without silently
 reissuing tokens; Routed server sessions may additionally persist the same
 selection as a convenience.
 
+## Optional API-key feature
+
+Compose `AuthApiKeyFeature` for service-client credentials:
+
+```dart
+final apiKeys = AuthApiKeyFeature<MyRequestContext>(
+  store: myApiKeyStore,
+  sessionExchangeEnabled: true, // Only when API keys may create sessions.
+);
+
+final options = AuthOptions<MyRequestContext>(
+  store: myAuthStore,
+  providers: providers,
+  features: [apiKeys],
+);
+```
+
+Only a digest is persisted. The raw key is returned once when it is created or
+rotated; listing returns metadata, scopes, expiry, last-use, and revocation
+state. Production applications should provide a durable `AuthApiKeyStore` and
+implement its atomic touch, revoke, and rotate operations transactionally.
+Routed can additionally expose `POST /auth/api-keys/exchange` when
+`sessionExchangeEnabled` is true. It accepts the API key from an auth header
+and creates a normal server-side session; it is disabled by default.
+
 ## Auth runtime and typed stores
 
 Integrations compose an `AuthRuntime` from typed domain stores and feature

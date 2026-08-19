@@ -11,6 +11,12 @@
 - Add feature-contributed endpoint/client/schema/rate-limit descriptors,
   immutable runtime topology, namespaced rate-limit operations, and the shared
   public `AuthClientTransport`.
+- Add the opt-in `AuthApiKeyFeature` with digest-at-rest keys, scoped metadata,
+  bounded expiry, atomic touch/revoke/rotate storage operations, and one-time
+  raw-secret responses.
+- Add typed `AuthClient` API-key creation, listing, revocation, rotation, and
+  service-client key configuration.
+- Add opt-in, header-only API-key exchange into a server-side session.
 - Added the optional `TwoFactorFeature` with RFC 6238 TOTP enrollment,
   protected-secret storage, atomic lockout/recovery-code operations,
   regeneration, disablement, and pending credential sign-in challenges. The

@@ -1,4 +1,5 @@
 export 'auth_config.dart';
+export 'api_key.dart';
 export 'authorization.dart';
 export 'browser.dart';
 export 'bearer.dart';

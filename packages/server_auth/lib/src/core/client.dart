@@ -206,6 +206,71 @@ class AuthClientSession {
   }
 }
 
+/// Public API-key metadata returned by the auth API.
+final class AuthClientApiKey {
+  const AuthClientApiKey({
+    required this.id,
+    required this.userId,
+    required this.name,
+    required this.keyPrefix,
+    required this.scopes,
+    required this.createdAt,
+    required this.updatedAt,
+    required this.active,
+    this.expiresAt,
+    this.lastUsedAt,
+    this.revokedAt,
+  });
+
+  final String id;
+  final String userId;
+  final String name;
+  final String keyPrefix;
+  final List<String> scopes;
+  final DateTime createdAt;
+  final DateTime updatedAt;
+  final DateTime? expiresAt;
+  final DateTime? lastUsedAt;
+  final DateTime? revokedAt;
+  final bool active;
+
+  factory AuthClientApiKey.fromJson(Map<String, dynamic> json) {
+    final scopes = json['scopes'];
+    if (scopes is! List || scopes.any((value) => value is! String)) {
+      throw const FormatException('Invalid API-key scopes');
+    }
+    return AuthClientApiKey(
+      id: _requiredString(json, 'id'),
+      userId: _requiredString(json, 'userId'),
+      name: _requiredString(json, 'name'),
+      keyPrefix: _requiredString(json, 'keyPrefix'),
+      scopes: List<String>.unmodifiable(scopes.cast<String>()),
+      createdAt: _requiredDate(json, 'createdAt'),
+      updatedAt: _requiredDate(json, 'updatedAt'),
+      expiresAt: _optionalDate(json, 'expiresAt'),
+      lastUsedAt: _optionalDate(json, 'lastUsedAt'),
+      revokedAt: _optionalDate(json, 'revokedAt'),
+      active: json['active'] == true,
+    );
+  }
+}
+
+/// The one-time API-key response returned after create or rotate.
+final class AuthClientIssuedApiKey {
+  const AuthClientIssuedApiKey({required this.apiKey, required this.key});
+
+  final AuthClientApiKey apiKey;
+  final String key;
+
+  factory AuthClientIssuedApiKey.fromJson(Map<String, dynamic> json) {
+    final key = _requiredString(json, 'apiKey');
+    return AuthClientIssuedApiKey(
+      apiKey: AuthClientApiKey.fromJson(json),
+      key: key,
+    );
+  }
+}
+
 /// TOTP enrollment data returned by a two-factor feature.
 class AuthClientTwoFactorEnrollment {
   const AuthClientTwoFactorEnrollment({
@@ -350,13 +415,15 @@ class AuthClientTransport {
     this.timeout = const Duration(seconds: 15),
     Map<String, String>? headers,
     String? bearerToken,
+    String? apiKey,
     this.maximumErrorBodyBytes = 65536,
   }) : _baseUrl = _normalizeBaseUrl(baseUrl),
        _basePath = _normalizePath(basePath),
        _httpClient = httpClient ?? http.Client(),
        cookieStore = cookieStore ?? InMemoryAuthClientCookieStore(),
        _headers = Map<String, String>.unmodifiable(headers ?? const {}),
-       _bearerToken = bearerToken;
+       _bearerToken = bearerToken,
+       _apiKey = apiKey;
 
   final Uri _baseUrl;
   final String _basePath;
@@ -366,10 +433,16 @@ class AuthClientTransport {
   final int maximumErrorBodyBytes;
   final Map<String, String> _headers;
   String? _bearerToken;
+  String? _apiKey;
   String? _csrfToken;
 
   void setBearerToken(String? token) {
     _bearerToken = token?.trim().isEmpty == true ? null : token?.trim();
+  }
+
+  /// Replaces the API key used for service-client requests.
+  void setApiKey(String? key) {
+    _apiKey = key?.trim().isEmpty == true ? null : key?.trim();
   }
 
   void clearCsrfToken() => _csrfToken = null;
@@ -432,6 +505,9 @@ class AuthClientTransport {
     }
     if (_bearerToken != null) {
       request.headers['authorization'] = 'Bearer $_bearerToken';
+    }
+    if (_apiKey != null) {
+      request.headers['x-api-key'] = _apiKey!;
     }
     final cookies = (await Future.sync(cookieStore.load))
         .where(
@@ -511,6 +587,7 @@ class AuthClient {
     Duration timeout = const Duration(seconds: 15),
     Map<String, String>? headers,
     String? bearerToken,
+    String? apiKey,
     AuthClientTransport? transport,
   }) : transport =
            transport ??
@@ -522,6 +599,7 @@ class AuthClient {
              timeout: timeout,
              headers: headers,
              bearerToken: bearerToken,
+             apiKey: apiKey,
            );
 
   final AuthClientTransport transport;
@@ -532,6 +610,11 @@ class AuthClient {
   /// Replaces the bearer token used for JWT-based auth requests.
   void setBearerToken(String? token) {
     transport.setBearerToken(token);
+  }
+
+  /// Replaces the API key used for service-client requests.
+  void setApiKey(String? key) {
+    transport.setApiKey(key);
   }
 
   /// Clears the cached CSRF token so the next state-changing request refreshes
@@ -587,6 +670,68 @@ class AuthClient {
           return AuthClientSession.fromJson(Map<String, dynamic>.from(session));
         })
         .toList(growable: false);
+  }
+
+  /// Lists API-key metadata for the current user.
+  Future<List<AuthClientApiKey>> getApiKeys() async {
+    final response = await _request('GET', '/api-keys/list');
+    final values = _mapBody(response.body)['apiKeys'];
+    if (values is! List) {
+      throw const FormatException('Invalid API-key response');
+    }
+    return values
+        .map((value) {
+          if (value is! Map) {
+            throw const FormatException('Invalid API-key metadata');
+          }
+          return AuthClientApiKey.fromJson(Map<String, dynamic>.from(value));
+        })
+        .toList(growable: false);
+  }
+
+  /// Creates an API key. The raw key is returned only in this response.
+  Future<AuthClientIssuedApiKey> createApiKey({
+    required String name,
+    Iterable<String> scopes = const <String>[],
+    DateTime? expiresAt,
+  }) async {
+    final response = await _mutatingRequest('POST', '/api-keys/create', {
+      'name': name,
+      'scopes': scopes.toList(growable: false),
+      'expiresAt': expiresAt?.toUtc().toIso8601String(),
+    });
+    return AuthClientIssuedApiKey.fromJson(_mapBody(response.body));
+  }
+
+  /// Revokes one API key belonging to the current user.
+  Future<void> revokeApiKey({required String id}) async {
+    await _mutatingRequest('POST', '/api-keys/revoke', {'id': id});
+  }
+
+  /// Atomically rotates one API key. The replacement secret is returned once.
+  Future<AuthClientIssuedApiKey> rotateApiKey({
+    required String id,
+    String? name,
+    Iterable<String>? scopes,
+    DateTime? expiresAt,
+  }) async {
+    final response = await _mutatingRequest('POST', '/api-keys/rotate', {
+      'id': id,
+      'name': ?name,
+      'scopes': scopes?.toList(growable: false),
+      'expiresAt': expiresAt?.toUtc().toIso8601String(),
+    });
+    return AuthClientIssuedApiKey.fromJson(_mapBody(response.body));
+  }
+
+  /// Exchanges the configured API key for a normal server-side session.
+  ///
+  /// The server must opt into this boundary with
+  /// `sessionExchangeEnabled: true`. The transport stores the returned
+  /// session cookie alongside its existing cookies.
+  Future<AuthSession> exchangeApiKeyForSession() async {
+    final response = await _request('POST', '/api-keys/exchange');
+    return _sessionFromBody(response.body);
   }
 
   /// Returns the current two-factor status for the signed-in user.

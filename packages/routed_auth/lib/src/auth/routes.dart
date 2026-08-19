@@ -19,6 +19,7 @@ import 'package:server_auth/server_auth.dart'
         AuthProvider,
         AuthRateLimitException,
         AuthRateLimitAction,
+        apiKeyExchangeRateLimitOperation,
         AuthResult,
         AuthRegisterRouteKind,
         AuthSignInRouteKind,
@@ -72,6 +73,12 @@ import 'package:routed_sessions/routed_sessions.dart';
 /// - `POST /2fa/trusted-devices/revoke` revokes all trusted devices.
 /// - `POST /2fa/step-up` verifies TOTP for a sensitive action.
 /// - `POST /2fa/step-up/revoke` revokes the current step-up proof.
+/// - `GET /api-keys/list` lists API-key metadata when the feature is enabled.
+/// - `POST /api-keys/create` creates a service API key.
+/// - `POST /api-keys/rotate` replaces a service API key.
+/// - `POST /api-keys/revoke` revokes a service API key.
+/// - `POST /api-keys/exchange` exchanges an API key for a server session when
+///   explicitly enabled.
 ///
 /// ## Usage
 /// ```dart
@@ -149,6 +156,10 @@ class AuthRoutes {
         );
         auth.post('/2fa/step-up', _twoFactorStepUp);
         auth.post('/2fa/step-up/revoke', _twoFactorStepUpRevoke);
+        if (manager.apiKeys?.sessionExchangeEnabled == true &&
+            manager.options.sessionStrategy == AuthSessionStrategy.session) {
+          auth.post('/api-keys/exchange', _apiKeyExchange);
+        }
         for (final endpoint in featureEndpoints) {
           Future<Response> handler(EngineContext ctx) =>
               _featureOperation(ctx, endpoint);
@@ -819,6 +830,25 @@ class AuthRoutes {
         return await _errorResponse(ctx, 'two_factor_unavailable');
       }
       return await action(feature, userId, code);
+    } on AuthFlowException catch (error) {
+      return _flowErrorResponse(ctx, error);
+    }
+  }
+
+  Future<Response> _apiKeyExchange(EngineContext ctx) async {
+    final feature = manager.apiKeys;
+    if (feature == null ||
+        !feature.sessionExchangeEnabled ||
+        manager.options.sessionStrategy != AuthSessionStrategy.session) {
+      return _errorResponse(ctx, 'api_key_exchange_unavailable');
+    }
+    try {
+      await manager.enforceRateLimitOperation(
+        ctx,
+        operation: apiKeyExchangeRateLimitOperation,
+      );
+      final result = await manager.exchangeApiKeyForSession(ctx);
+      return await _respond(ctx, result);
     } on AuthFlowException catch (error) {
       return _flowErrorResponse(ctx, error);
     }

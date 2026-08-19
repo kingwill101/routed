@@ -6,6 +6,7 @@ import 'package:http/http.dart' as http;
 import 'package:server_auth/server_auth.dart'
     show
         AuthAccount,
+        AuthApiKeyFeature,
         AuthCallbacks,
         AuthCredentials,
         requireAuthorizedCredentialsRegistration,
@@ -66,6 +67,7 @@ import 'package:server_auth/server_auth.dart'
         secureRandomToken;
 import 'package:routed_auth/src/auth/hooks.dart';
 import 'package:routed_auth/src/auth/browser_protection.dart';
+import 'package:routed_auth/src/auth/api_key.dart';
 import 'package:routed_auth/src/auth/session_auth.dart';
 import 'package:routed_core/src/context/context.dart';
 import 'package:routed_sessions/routed_sessions.dart';
@@ -96,6 +98,36 @@ class AuthManager {
   /// The configured organization feature, if enabled for this runtime.
   OrganizationFeature<EngineContext>? get organization =>
       runtime.feature('organization') as OrganizationFeature<EngineContext>?;
+
+  /// The configured API-key feature, if enabled for this runtime.
+  AuthApiKeyFeature<EngineContext>? get apiKeys =>
+      runtime.feature('api_key') as AuthApiKeyFeature<EngineContext>?;
+
+  /// Exchanges an enabled API key for a normal server-side session.
+  ///
+  /// The API key is read from request headers only and is never accepted from
+  /// the request body. This boundary is deliberately restricted to the
+  /// server-session strategy; JWT clients should continue using their API key
+  /// directly or sign in through the configured provider.
+  Future<AuthResult> exchangeApiKeyForSession(EngineContext ctx) async {
+    final feature = apiKeys;
+    if (feature == null || !feature.sessionExchangeEnabled) {
+      throw AuthFlowException('api_key_exchange_unavailable');
+    }
+    if (options.sessionStrategy != AuthSessionStrategy.session) {
+      throw AuthFlowException('api_key_exchange_unavailable');
+    }
+    final request = parseApiKeyRequest(ctx);
+    final rawKey = request.value;
+    if (request.malformed || rawKey == null) {
+      throw AuthFlowException('invalid_api_key');
+    }
+    final authentication = await feature.authenticate(rawKey);
+    if (authentication == null) throw AuthFlowException('invalid_api_key');
+    final user = await store.users.findById(authentication.record.userId);
+    if (user == null) throw AuthFlowException('invalid_api_key');
+    return _completeSignIn(ctx, user, authenticationMethod: 'api_key');
+  }
 
   SessionAuthService get sessionAuth => _sessionAuth ?? SessionAuth.instance;
 
@@ -936,6 +968,7 @@ class AuthManager {
     AuthAccount? account,
     Map<String, dynamic>? profile,
     AuthCredentials? credentials,
+    String? authenticationMethod,
     bool isNewUser = false,
   }) async {
     if (user.id.trim().isEmpty) {
@@ -980,6 +1013,7 @@ class AuthManager {
         user: user,
         provider: provider,
         credentials: credentials,
+        authenticationMethod: authenticationMethod,
         expiresAt: sessionExpiresAt,
       );
     }
@@ -1248,6 +1282,7 @@ class AuthManager {
     required AuthUser user,
     required AuthProvider? provider,
     required AuthCredentials? credentials,
+    String? authenticationMethod,
     required DateTime? expiresAt,
   }) async {
     if (!ctx.hasSession) {
@@ -1266,7 +1301,9 @@ class AuthManager {
       ipAddress: ctx.request.clientIP,
       userAgent: ctx.request.headers.value(HttpHeaders.userAgentHeader),
       authenticationMethod:
-          provider?.id ?? (credentials == null ? 'unknown' : 'credentials'),
+          authenticationMethod ??
+          provider?.id ??
+          (credentials == null ? 'unknown' : 'credentials'),
     );
     final previousId = ctx.session.previousId;
     if (previousId != null) {

@@ -124,10 +124,12 @@ The work is intentionally split between framework-agnostic capabilities in
   revoke-all support.
 - [x] Add pending recovery-code flows with an atomic challenge/recovery
   transaction boundary.
-- [ ] Add API-key issuance, hashing, metadata, expiry, revocation, scopes,
-  built-in rate limits, and optional session exchange for service clients.
-- [ ] Add typed client methods for API-key creation, listing, rotation,
-  revocation, and secure one-time display of the raw key.
+- [x] Add API-key issuance, hashing, metadata, expiry, revocation, scopes,
+  built-in lifecycle rate limits, and atomic touch/revoke/rotate operations.
+  Add an opt-in, header-only exchange into a server-side session.
+- [x] Add typed client methods for API-key creation, listing, rotation,
+  revocation, secure one-time display of the raw key, and opt-in session
+  exchange.
 
 ## P1: authorization and tenancy
 
