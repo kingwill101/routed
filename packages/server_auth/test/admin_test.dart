@@ -517,14 +517,23 @@ void main() {
       'impersonation is server-session-only and preserves actor metadata',
       () async {
         final control = _SessionControl();
+        final startedIntent =
+            await _invokeWithControl(feature, 'admin.impersonateUser', admin, {
+                  'userId': member.id,
+                }, control)
+                as AuthEndpointAuthenticationIntent;
         final started = _map(
-          await _invokeWithControl(feature, 'admin.impersonateUser', admin, {
-            'userId': member.id,
-          }, control),
+          await startedIntent.projectResponse(
+            AuthSession(
+              user: startedIntent.user,
+              expiresAt: DateTime.now().toUtc().add(const Duration(hours: 1)),
+              strategy: AuthSessionStrategy.session,
+            ).toJson(),
+          ),
         );
         expect(_map(started['data'])['user']['id'], member.id);
-        expect(control.impersonatedBy, admin.id);
-        expect(control.authenticationMethod, 'impersonation');
+        expect(startedIntent.impersonatedBy, admin.id);
+        expect(startedIntent.authenticationMethod, 'impersonation');
 
         final now = DateTime.now().toUtc();
         await core.sessions.create(
@@ -540,17 +549,26 @@ void main() {
           ),
         );
         control.currentSessionId = 'impersonated-session';
+        final stoppedIntent =
+            await _invokeWithControl(
+                  feature,
+                  'admin.stopImpersonating',
+                  member,
+                  const {},
+                  control,
+                )
+                as AuthEndpointAuthenticationIntent;
         final stopped = _map(
-          await _invokeWithControl(
-            feature,
-            'admin.stopImpersonating',
-            member,
-            const {},
-            control,
+          await stoppedIntent.projectResponse(
+            AuthSession(
+              user: stoppedIntent.user,
+              expiresAt: DateTime.now().toUtc().add(const Duration(hours: 1)),
+              strategy: AuthSessionStrategy.session,
+            ).toJson(),
           ),
         );
         expect(_map(_map(stopped['data'])['session'])['user']['id'], admin.id);
-        expect(control.authenticationMethod, 'impersonation-return');
+        expect(stoppedIntent.authenticationMethod, 'impersonation-return');
 
         final jwt = _SessionControl(strategy: AuthSessionStrategy.jwt);
         await expectLater(
@@ -729,27 +747,7 @@ final class _SessionControl implements AuthServerPluginSessionControl {
   final AuthSessionStrategy strategy;
   @override
   String? currentSessionId;
-  String? authenticationMethod;
-  String? impersonatedBy;
   bool signedOut = false;
-
-  @override
-  Future<AuthSession> replaceIdentity(
-    AuthUser user, {
-    required String authenticationMethod,
-    Duration? maximumAge,
-    String? impersonatedBy,
-  }) async {
-    this.authenticationMethod = authenticationMethod;
-    this.impersonatedBy = impersonatedBy;
-    return AuthSession(
-      user: user,
-      expiresAt: DateTime.now().toUtc().add(
-        maximumAge ?? const Duration(hours: 1),
-      ),
-      strategy: strategy,
-    );
-  }
 
   @override
   Future<void> signOut() async {

@@ -67,30 +67,11 @@ final class _Fixture {
 }
 
 final class _RecordingSessionControl implements AuthServerPluginSessionControl {
-  AuthUser? replacedUser;
-  String? authenticationMethod;
-
   @override
   AuthSessionStrategy get strategy => AuthSessionStrategy.session;
 
   @override
   String? get currentSessionId => null;
-
-  @override
-  Future<AuthSession> replaceIdentity(
-    AuthUser user, {
-    required String authenticationMethod,
-    Duration? maximumAge,
-    String? impersonatedBy,
-  }) async {
-    replacedUser = user;
-    this.authenticationMethod = authenticationMethod;
-    return AuthSession(
-      user: user,
-      expiresAt: DateTime.utc(2030, 1, 1),
-      strategy: AuthSessionStrategy.session,
-    );
-  }
 
   @override
   Future<void> signOut() async {}
@@ -2503,11 +2484,18 @@ void main() {
           },
         );
 
-        final payload = response! as Map<String, dynamic>;
-        expect(payload['status'], equals('authenticated'));
-        expect(payload['session'], isA<Map<String, dynamic>>());
-        expect(sessionControl.replacedUser?.id, equals(fixture.user.id));
-        expect(sessionControl.authenticationMethod, equals('webauthn'));
+        final intent = response! as AuthEndpointAuthenticationIntent;
+        expect(intent.user.id, equals(fixture.user.id));
+        expect(intent.authenticationMethod, equals('webauthn'));
+        final payload = await intent.projectResponse(
+          AuthSession(
+            user: intent.user,
+            expiresAt: DateTime.utc(2030),
+            strategy: AuthSessionStrategy.session,
+          ).toJson(),
+        );
+        expect((payload as Map<String, dynamic>)['status'], 'authenticated');
+        expect(payload['credential'], isA<Map<String, dynamic>>());
       },
     );
 

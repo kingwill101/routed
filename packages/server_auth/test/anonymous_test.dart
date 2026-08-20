@@ -15,7 +15,6 @@ void main() {
     );
 
     final result = await feature.signInAnonymous(context: Object());
-    expect(result.session, isNull);
     expect(result.user.isAnonymous, isTrue);
     expect(result.user.name, 'Guest');
     expect(result.user.toJson()['isAnonymous'], isTrue);

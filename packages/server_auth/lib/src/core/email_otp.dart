@@ -32,10 +32,9 @@ final class AuthEmailOtpDelivery<TContext> {
 }
 
 final class AuthEmailOtpSignInResult {
-  const AuthEmailOtpSignInResult({required this.user, this.session});
+  const AuthEmailOtpSignInResult({required this.user});
 
   final AuthUser user;
-  final AuthSession? session;
 }
 
 /// Typed email OTP plugin modeled on the common sign-in, verification, and
@@ -262,7 +261,6 @@ final class EmailOtpPlugin<TContext>
     String? name,
     String? image,
     DateTime? now,
-    AuthServerPluginSessionControl? sessionControl,
   }) async {
     await _verify(
       email: email,
@@ -304,14 +302,7 @@ final class EmailOtpPlugin<TContext>
       );
       user = await _users.update(user) ?? user;
     }
-    AuthSession? session;
-    if (sessionControl != null) {
-      session = await sessionControl.replaceIdentity(
-        user,
-        authenticationMethod: 'email_otp',
-      );
-    }
-    return AuthEmailOtpSignInResult(user: user, session: session);
+    return AuthEmailOtpSignInResult(user: user);
   }
 
   Future<AuthUser> verifyEmail({
@@ -389,14 +380,12 @@ final class EmailOtpPlugin<TContext>
           code: _string(input, 'otp'),
           name: input['name']?.toString(),
           image: input['image']?.toString(),
-          sessionControl: invocation.sessionControl,
         );
-        final session = result.session;
-        if (session != null) return session.redacted().toJson();
-        return <String, dynamic>{
-          'status': 'authenticated',
-          'user': result.user.redacted().toJson(),
-        };
+        return AuthEndpointAuthenticationIntent(
+          user: result.user,
+          authenticationMethod: 'email_otp',
+          metadata: const <String, dynamic>{'status': 'authenticated'},
+        );
       case 'emailOtp.verifyEmail':
         final user = invocation.user;
         if (user == null) throw AuthFlowException('unauthorized');

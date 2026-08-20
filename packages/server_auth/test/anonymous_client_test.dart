@@ -24,7 +24,8 @@ void main() {
                 'attributes': {},
               },
               'expires': '2030-01-01T00:00:00Z',
-              'strategy': 'session',
+              'strategy': 'jwt',
+              'token': 'anonymous-jwt',
             }),
             200,
           );
@@ -43,5 +44,6 @@ void main() {
     await client.deleteUser();
 
     expect(session.user.isAnonymous, isTrue);
+    expect(session.token, 'anonymous-jwt');
   });
 }

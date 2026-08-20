@@ -806,24 +806,26 @@ final class AdminPlugin<TContext>
       target.user.redacted(),
       userId,
     );
-    final session = await invocation.sessionControl!.replaceIdentity(
-      target.user,
+    return AuthEndpointAuthenticationIntent(
+      user: target.user,
       authenticationMethod: 'impersonation',
       maximumAge: options.impersonationDuration,
       impersonatedBy: actor.id,
+      projectResponse: (sessionPayload) async {
+        final warnings = await _afterAndEmit(
+          options.hooks.afterImpersonation,
+          invocation.context,
+          'impersonation.started',
+          actor,
+          userId,
+          target.user.redacted(),
+        );
+        return AuthAdminMutationResult(
+          data: sessionPayload,
+          warnings: warnings,
+        ).toJson((value) => value);
+      },
     );
-    final warnings = await _afterAndEmit(
-      options.hooks.afterImpersonation,
-      invocation.context,
-      'impersonation.started',
-      actor,
-      userId,
-      target.user.redacted(),
-    );
-    return AuthAdminMutationResult(
-      data: session,
-      warnings: warnings,
-    ).toJson((value) => value.toJson());
   }
 
   Future<Object?> _stopImpersonating(
@@ -848,25 +850,27 @@ final class AdminPlugin<TContext>
         data: AuthAdminStopImpersonatingResult(signedOut: true),
       ).toJson((value) => value.toJson());
     }
-    final session = await control.replaceIdentity(
-      actor.user,
+    return AuthEndpointAuthenticationIntent(
+      user: actor.user,
       authenticationMethod: 'impersonation-return',
+      projectResponse: (sessionPayload) async {
+        final warnings = await _afterAndEmit(
+          options.hooks.afterImpersonation,
+          invocation.context,
+          'impersonation.stopped',
+          actor.user,
+          currentUser.id,
+          currentUser.redacted(),
+        );
+        return AuthAdminMutationResult(
+          data: <String, dynamic>{
+            'signedOut': false,
+            'session': sessionPayload,
+          },
+          warnings: warnings,
+        ).toJson((value) => value);
+      },
     );
-    final warnings = await _afterAndEmit(
-      options.hooks.afterImpersonation,
-      invocation.context,
-      'impersonation.stopped',
-      actor.user,
-      currentUser.id,
-      currentUser.redacted(),
-    );
-    return AuthAdminMutationResult(
-      data: AuthAdminStopImpersonatingResult(
-        signedOut: false,
-        session: session,
-      ),
-      warnings: warnings,
-    ).toJson((value) => value.toJson());
   }
 
   Future<AuthAdminMutationResult<bool>> _removeUser(

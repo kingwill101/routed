@@ -223,19 +223,22 @@ void main() {
       },
     );
 
-    test('verification responses never serialize session tokens', () {
-      final response = AuthPhoneNumberVerifyResponse(
+    test('verification responses defer token projection to the host', () async {
+      final intent = AuthPhoneNumberVerifyResponse(
         phoneNumber: '+18765551234',
         user: AuthUser(id: 'user-1'),
-        session: AuthSession(
+      ).toAuthenticationIntent();
+      final response = await intent.projectResponse(
+        AuthSession(
           user: AuthUser(id: 'user-1'),
           expiresAt: DateTime.utc(2030),
           strategy: AuthSessionStrategy.jwt,
           token: 'secret-jwt',
-        ),
-      ).toJson();
+        ).toJson(),
+      );
 
-      expect(response['user'], isNotNull);
+      expect(intent.authenticationMethod, authPhoneNumberAuthenticationMethod);
+      expect((response as Map<String, dynamic>)['user'], isNotNull);
       expect(response, isNot(contains('token')));
       expect(response.toString(), isNot(contains('secret-jwt')));
     });
@@ -279,7 +282,6 @@ void main() {
       'signs up once, marks verification, and issues a named session',
       () async {
         final store = InMemoryAuthPhoneNumberStore();
-        final sessionControl = _SessionControl();
         final plugin = PhoneNumberPlugin<Object>(
           store: store,
           sendCode: (_) {},
@@ -300,13 +302,10 @@ void main() {
           code: '123456',
           name: 'Ada',
           now: DateTime.utc(2026, 1, 1, 0, 1),
-          sessionControl: sessionControl,
         );
 
         expect(result.user.name, 'Ada');
         expect(result.user.attributes['phoneNumberVerified'], isTrue);
-        expect(result.session, isNotNull);
-        expect(sessionControl.authenticationMethod, 'phone_number');
         expect(runtime.hasPlugin(authPhoneNumberPluginId), isTrue);
         await expectLater(
           () => plugin.verifyCode(
@@ -480,32 +479,4 @@ final class _CapturingPhoneStore implements AuthPhoneNumberStore {
 
   @override
   Future<void> deleteForUser(String userId) => delegate.deleteForUser(userId);
-}
-
-final class _SessionControl implements AuthServerPluginSessionControl {
-  String? authenticationMethod;
-
-  @override
-  String? get currentSessionId => null;
-
-  @override
-  AuthSessionStrategy get strategy => AuthSessionStrategy.session;
-
-  @override
-  Future<AuthSession> replaceIdentity(
-    AuthUser user, {
-    required String authenticationMethod,
-    Duration? maximumAge,
-    String? impersonatedBy,
-  }) async {
-    this.authenticationMethod = authenticationMethod;
-    return AuthSession(
-      user: user,
-      expiresAt: DateTime.utc(2030),
-      strategy: strategy,
-    );
-  }
-
-  @override
-  Future<void> signOut() async {}
 }

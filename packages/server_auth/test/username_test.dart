@@ -23,18 +23,6 @@ final class _SessionControl implements AuthServerPluginSessionControl {
   AuthSessionStrategy get strategy => AuthSessionStrategy.session;
 
   @override
-  Future<AuthSession> replaceIdentity(
-    AuthUser user, {
-    required String authenticationMethod,
-    Duration? maximumAge,
-    String? impersonatedBy,
-  }) async => AuthSession(
-    user: user,
-    expiresAt: DateTime.utc(2030),
-    strategy: AuthSessionStrategy.session,
-  );
-
-  @override
   Future<void> signOut() async {}
 }
 

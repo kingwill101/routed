@@ -7,7 +7,7 @@ import 'package:server_auth/server_auth.dart'
         AuthCredentials,
         AuthEndpointDescriptor,
         AuthEndpointRateLimitIdentifierDescriptor,
-        AuthEndpointSessionResponse,
+        AuthEndpointAuthenticationIntent,
         AuthEndpointRedirect,
         AuthOperationAuthentication,
         AuthOperationCsrfPolicy,
@@ -28,8 +28,6 @@ import 'package:server_auth/server_auth.dart'
         AuthRegisterRouteKind,
         AuthSignInRouteKind,
         AuthSessionStrategy,
-        AuthSession,
-        AuthUser,
         TwoFactorPlugin,
         CallbackProvider,
         CredentialsProvider,
@@ -346,16 +344,17 @@ class AuthRoutes {
           statusCode: response.statusCode,
         );
       }
-      if (response is AuthEndpointSessionResponse) {
+      if (response is AuthEndpointAuthenticationIntent) {
+        final result = await liveManager.completePluginAuthentication(
+          ctx,
+          response,
+        );
         final sessionPayload = await liveManager.buildSessionPayload(
           ctx,
-          response.session,
+          result.session,
           provider: response.provider,
         );
-        return ctx.json(<String, dynamic>{
-          ...response.metadata,
-          ...sessionPayload,
-        });
+        return ctx.json(await response.projectResponse(sessionPayload));
       }
       return ctx.json(response);
     } on AuthTwoFactorRequiredException catch (error) {
@@ -1326,20 +1325,6 @@ final class _RoutedPluginSessionControl
 
   @override
   AuthSessionStrategy get strategy => manager.options.sessionStrategy;
-
-  @override
-  Future<AuthSession> replaceIdentity(
-    AuthUser user, {
-    required String authenticationMethod,
-    Duration? maximumAge,
-    String? impersonatedBy,
-  }) => manager.replacePluginSession(
-    context,
-    user,
-    authenticationMethod: authenticationMethod,
-    maximumAge: maximumAge,
-    impersonatedBy: impersonatedBy,
-  );
 
   @override
   Future<void> signOut() => manager.signOutPluginSession(context);

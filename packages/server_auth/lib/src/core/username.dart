@@ -198,32 +198,33 @@ final class AuthUsernameAuthenticationResult {
   const AuthUsernameAuthenticationResult({
     required this.username,
     required this.user,
-    this.session,
   });
 
   final String username;
   final AuthUser user;
-  final AuthSession? session;
 }
 
 final class AuthUsernameAuthenticationResponse {
   const AuthUsernameAuthenticationResponse({
     required this.username,
-    required this.session,
+    required this.user,
   });
 
   final String username;
-  final AuthSession session;
+  final AuthUser user;
 
-  AuthEndpointSessionResponse toEndpointResponse(AuthProvider provider) =>
-      AuthEndpointSessionResponse(
-        session: session,
-        provider: provider,
-        metadata: <String, dynamic>{
-          'status': 'authenticated',
-          'username': username,
-        },
-      );
+  AuthEndpointAuthenticationIntent toAuthenticationIntent(
+    AuthProvider provider, {
+    required String authenticationMethod,
+  }) => AuthEndpointAuthenticationIntent(
+    user: user,
+    authenticationMethod: authenticationMethod,
+    provider: provider,
+    metadata: <String, dynamic>{
+      'status': 'authenticated',
+      'username': username,
+    },
+  );
 }
 
 /// Opt-in username-first password authentication.
@@ -334,11 +335,9 @@ final class UsernamePlugin<TContext>
               request: request,
               sessionControl: invocation.sessionControl,
             );
-            final session = result.session;
-            if (session == null) throw AuthFlowException('auth_request_failed');
             return AuthUsernameAuthenticationResponse(
               username: result.username,
-              session: session,
+              user: result.user,
             );
           },
         ),
@@ -363,11 +362,9 @@ final class UsernamePlugin<TContext>
               request: request,
               sessionControl: invocation.sessionControl,
             );
-            final session = result.session;
-            if (session == null) throw AuthFlowException('auth_request_failed');
             return AuthUsernameAuthenticationResponse(
               username: result.username,
-              session: session,
+              user: result.user,
             );
           },
         ),
@@ -449,15 +446,7 @@ final class UsernamePlugin<TContext>
       created,
       sessionControl,
     );
-    final session = await sessionControl?.replaceIdentity(
-      created,
-      authenticationMethod: authenticationMethod,
-    );
-    return AuthUsernameAuthenticationResult(
-      username: username,
-      user: created,
-      session: session,
-    );
+    return AuthUsernameAuthenticationResult(username: username, user: created);
   }
 
   Future<AuthUsernameAuthenticationResult> signIn({
@@ -520,7 +509,11 @@ final class UsernamePlugin<TContext>
     if (username is! String || username != credential.identifier) {
       throw AuthFlowException('invalid_credentials');
     }
-    await _enforceAuthenticationPolicies(context, user);
+    await _enforceAuthenticationPoliciesIfPortable(
+      context,
+      user,
+      sessionControl,
+    );
     final challenge = await _twoFactor?.beginSignInChallenge(
       user.id,
       user: user,
@@ -529,14 +522,9 @@ final class UsernamePlugin<TContext>
     if (challenge != null) {
       throw AuthTwoFactorRequiredException(challenge: challenge);
     }
-    final session = await sessionControl?.replaceIdentity(
-      user,
-      authenticationMethod: authenticationMethod,
-    );
     return AuthUsernameAuthenticationResult(
       username: credential.identifier,
       user: user,
-      session: session,
     );
   }
 
@@ -576,21 +564,6 @@ final class UsernamePlugin<TContext>
     }
   }
 
-  Future<void> _enforceAuthenticationPolicies(
-    TContext context,
-    AuthUser user,
-  ) async {
-    for (final policy in _authenticationPolicies) {
-      await policy.enforceAuthenticationPolicy(
-        AuthAuthenticationPolicyRequest<TContext>(
-          context: context,
-          user: user,
-          phase: AuthAuthenticationPolicyPhase.beforeSessionIssue,
-        ),
-      );
-    }
-  }
-
   void _ensureConfigured() {
     if (!_configured) {
       throw StateError('UsernamePlugin must be configured by AuthRuntime.');
@@ -616,7 +589,10 @@ final class UsernamePlugin<TContext>
   AuthOperationCodec<AuthUsernameAuthenticationResponse> get _responseCodec =>
       AuthOperationCodec(
         decode: (_) => throw UnsupportedError('Response-only codec'),
-        encode: (response) => response.toEndpointResponse(_provider),
+        encode: (response) => response.toAuthenticationIntent(
+          _provider,
+          authenticationMethod: authenticationMethod,
+        ),
         schema: _authenticationResponseSchema,
       );
 }

@@ -55,8 +55,9 @@ final class AuthPluginEndpointFixture<TContext> {
       return AuthTestHttpResponse.error('not_found', statusCode: 404);
     }
     try {
+      final endpointInvocation = invocation(request);
       final result = await endpoint.invoke(
-        invocation(request),
+        endpointInvocation,
         request.jsonObject(),
       );
       if (result is AuthEndpointRedirect) {
@@ -69,11 +70,15 @@ final class AuthPluginEndpointFixture<TContext> {
           },
         );
       }
-      if (result is AuthEndpointSessionResponse) {
-        return AuthTestHttpResponse.json(<String, dynamic>{
-          ...result.session.redacted().toJson(),
-          ...result.metadata,
-        });
+      if (result is AuthEndpointAuthenticationIntent) {
+        final control = endpointInvocation.sessionControl;
+        if (control is! AuthTestSessionControl) {
+          return AuthTestHttpResponse.error('authentication_host_unavailable');
+        }
+        final session = control.completeAuthentication(result);
+        return AuthTestHttpResponse.json(
+          await result.projectResponse(session.redacted().toJson()),
+        );
       }
       return AuthTestHttpResponse.json(result);
     } on AuthFlowException catch (error) {
@@ -99,7 +104,7 @@ final class AuthTestSessionControl implements AuthServerPluginSessionControl {
   @override
   final AuthSessionStrategy strategy;
 
-  /// Default session lifetime for [replaceIdentity].
+  /// Default session lifetime for [completeAuthentication].
   final Duration maximumAge;
 
   @override
@@ -114,17 +119,12 @@ final class AuthTestSessionControl implements AuthServerPluginSessionControl {
   /// Whether [signOut] was invoked.
   bool signedOut = false;
 
-  @override
-  Future<AuthSession> replaceIdentity(
-    AuthUser user, {
-    required String authenticationMethod,
-    Duration? maximumAge,
-    String? impersonatedBy,
-  }) async {
-    authenticationMethods.add(authenticationMethod);
+  /// Completes one endpoint authentication intent for portable fixture tests.
+  AuthSession completeAuthentication(AuthEndpointAuthenticationIntent intent) {
+    authenticationMethods.add(intent.authenticationMethod);
     final session = AuthSession(
-      user: user,
-      expiresAt: _clock().toUtc().add(maximumAge ?? this.maximumAge),
+      user: intent.user,
+      expiresAt: _clock().toUtc().add(intent.maximumAge ?? maximumAge),
       strategy: strategy,
     );
     sessions.add(session);

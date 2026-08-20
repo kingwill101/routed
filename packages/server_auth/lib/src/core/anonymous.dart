@@ -20,10 +20,9 @@ typedef AuthAnonymousLinkHandler<TContext> =
     });
 
 final class AuthAnonymousSignInResult {
-  const AuthAnonymousSignInResult({required this.user, this.session});
+  const AuthAnonymousSignInResult({required this.user});
 
   final AuthUser user;
-  final AuthSession? session;
 }
 
 /// Anonymous authenticated identities that can later be linked to a real
@@ -115,7 +114,6 @@ final class AnonymousPlugin<TContext>
 
   Future<AuthAnonymousSignInResult> signInAnonymous({
     required TContext context,
-    AuthServerPluginSessionControl? sessionControl,
   }) async {
     _ensureConfigured();
     final name = await generateName?.call(context);
@@ -126,14 +124,7 @@ final class AnonymousPlugin<TContext>
         isAnonymous: true,
       ),
     );
-    AuthSession? session;
-    if (sessionControl != null) {
-      session = await sessionControl.replaceIdentity(
-        user,
-        authenticationMethod: 'anonymous',
-      );
-    }
-    return AuthAnonymousSignInResult(user: user, session: session);
+    return AuthAnonymousSignInResult(user: user);
   }
 
   Future<void> deleteAnonymousUser({required AuthUser user}) async {
@@ -205,16 +196,12 @@ final class AnonymousPlugin<TContext>
   Future<Object?> _signInEndpoint(
     AuthOperationInvocation<TContext> invocation,
   ) async {
-    final result = await signInAnonymous(
-      context: invocation.context,
-      sessionControl: invocation.sessionControl,
+    final result = await signInAnonymous(context: invocation.context);
+    return AuthEndpointAuthenticationIntent(
+      user: result.user,
+      authenticationMethod: 'anonymous',
+      metadata: const <String, dynamic>{'status': 'authenticated'},
     );
-    final session = result.session;
-    if (session != null) return session.redacted().toJson();
-    return <String, dynamic>{
-      'status': 'authenticated',
-      'user': result.user.redacted().toJson(),
-    };
   }
 
   Future<Object?> _deleteEndpoint(

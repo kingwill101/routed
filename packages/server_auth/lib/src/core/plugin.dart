@@ -84,12 +84,6 @@ final class AuthEndpointRedirect {
 abstract interface class AuthServerPluginSessionControl {
   AuthSessionStrategy get strategy;
   String? get currentSessionId;
-  FutureOr<AuthSession> replaceIdentity(
-    AuthUser user, {
-    required String authenticationMethod,
-    Duration? maximumAge,
-    String? impersonatedBy,
-  });
   FutureOr<void> signOut();
 }
 
@@ -249,21 +243,72 @@ abstract interface class AuthEndpointRateLimitIdentifierDescriptor {
 typedef AuthEndpointRateLimitIdentifierResolver<TRequest> =
     String? Function(TRequest request);
 
-/// A successful plugin authentication that the host must serialize.
-///
-/// Framework integrations use their normal session projection and callback
-/// pipeline instead of letting a portable plugin decide whether a JWT token
-/// is publicly exposed.
-final class AuthEndpointSessionResponse {
-  AuthEndpointSessionResponse({
-    required this.session,
-    this.provider,
-    Map<String, dynamic> metadata = const <String, dynamic>{},
-  }) : metadata = Map<String, dynamic>.unmodifiable(metadata);
+typedef AuthEndpointAuthenticationProjector =
+    FutureOr<Object?> Function(Map<String, dynamic> sessionPayload);
 
-  final AuthSession session;
+/// A successful plugin authentication that must be completed by the host.
+///
+/// Portable plugins verify credentials and describe the identity transition,
+/// but they never issue or serialize a session. Framework integrations must
+/// apply their central authentication policy, issue the configured session
+/// strategy, run callbacks and lifecycle events, and only then call
+/// [projectResponse] with the host-owned public session payload.
+final class AuthEndpointAuthenticationIntent {
+  AuthEndpointAuthenticationIntent({
+    required this.user,
+    required this.authenticationMethod,
+    this.provider,
+    this.maximumAge,
+    this.impersonatedBy,
+    Map<String, dynamic> metadata = const <String, dynamic>{},
+    AuthEndpointAuthenticationProjector? projectResponse,
+  }) : metadata = Map<String, dynamic>.unmodifiable(
+         _validateAuthenticationMetadata(metadata),
+       ),
+       _projectResponse = projectResponse {
+    if (authenticationMethod.trim().isEmpty) {
+      throw ArgumentError.value(
+        authenticationMethod,
+        'authenticationMethod',
+        'must not be empty',
+      );
+    }
+  }
+
+  final AuthUser user;
+  final String authenticationMethod;
   final AuthProvider? provider;
+  final Duration? maximumAge;
+  final String? impersonatedBy;
   final Map<String, dynamic> metadata;
+  final AuthEndpointAuthenticationProjector? _projectResponse;
+
+  FutureOr<Object?> projectResponse(Map<String, dynamic> sessionPayload) {
+    final projector = _projectResponse;
+    if (projector != null) return projector(sessionPayload);
+    return <String, dynamic>{...metadata, ...sessionPayload};
+  }
+}
+
+const Set<String> _authSessionPayloadKeys = <String>{
+  'user',
+  'expires',
+  'strategy',
+  'token',
+};
+
+Map<String, dynamic> _validateAuthenticationMetadata(
+  Map<String, dynamic> metadata,
+) {
+  final reserved = metadata.keys.where(_authSessionPayloadKeys.contains);
+  if (reserved.isNotEmpty) {
+    throw ArgumentError.value(
+      metadata,
+      'metadata',
+      'must not define host-owned session fields: ${reserved.join(', ')}',
+    );
+  }
+  return metadata;
 }
 
 /// Optional typed request/response contracts exposed by an auth endpoint.

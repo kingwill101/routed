@@ -505,21 +505,14 @@ final class WebAuthnPlugin<TContext>
           credential: credential,
           userId: _optionalString(request, 'userId'),
         );
-        final issuedSession =
-            invocation.sessionControl == null ||
-                invocation.sessionControl!.strategy !=
-                    AuthSessionStrategy.session
-            ? null
-            : await invocation.sessionControl!.replaceIdentity(
-                result.user,
-                authenticationMethod: 'webauthn',
-              );
-        return <String, dynamic>{
-          'status': 'authenticated',
-          'user': result.user.toJson(),
-          'credential': result.authenticator.toJson(),
-          if (issuedSession != null) 'session': issuedSession.toJson(),
-        };
+        return AuthEndpointAuthenticationIntent(
+          user: result.user,
+          authenticationMethod: 'webauthn',
+          metadata: <String, dynamic>{
+            'status': 'authenticated',
+            'credential': result.authenticator.toJson(),
+          },
+        );
       case 'webauthn.credentialList':
         final user = _requireInvocationUser(invocation);
         final credentials = await listCredentials(user.id);

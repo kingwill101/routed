@@ -605,17 +605,20 @@ final class AuthClientWebAuthnAuthenticationResult {
   const AuthClientWebAuthnAuthenticationResult({
     required this.user,
     required this.credential,
+    required this.session,
   });
 
   final AuthUser user;
   final AuthClientWebAuthnCredential credential;
+  final AuthSession session;
 
   factory AuthClientWebAuthnAuthenticationResult.fromJson(
     Map<String, dynamic> json,
   ) {
     final rawUser = json['user'];
     final rawCredential = json['credential'];
-    if (rawUser is! Map || rawCredential is! Map) {
+    final session = _sessionFromMapOrNull(json);
+    if (rawUser is! Map || rawCredential is! Map || session == null) {
       throw const FormatException('Invalid WebAuthn authentication response');
     }
     return AuthClientWebAuthnAuthenticationResult(
@@ -623,6 +626,7 @@ final class AuthClientWebAuthnAuthenticationResult {
       credential: AuthClientWebAuthnCredential.fromJson(
         Map<String, dynamic>.from(rawCredential),
       ),
+      session: session,
     );
   }
 }

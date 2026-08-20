@@ -91,6 +91,9 @@ void main() {
           return http.Response(
             jsonEncode(<String, dynamic>{
               'status': 'authenticated',
+              'expires': '2030-01-01T01:00:00Z',
+              'strategy': 'jwt',
+              'token': 'webauthn-jwt',
               'user': <String, dynamic>{
                 'id': 'user-1',
                 'email': 'ada@example.test',
@@ -183,6 +186,8 @@ void main() {
     );
     expect(result.user.id, 'user-1');
     expect(result.credential.counter, 1);
+    expect(result.session.user.id, 'user-1');
+    expect(result.session.token, 'webauthn-jwt');
 
     final credentials = await client.list();
     expect(credentials.single.name, 'Laptop');

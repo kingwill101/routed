@@ -13,6 +13,7 @@ import 'package:server_auth/server_auth.dart'
         AuthCredentialPolicyOperation,
         AuthCredentialPolicyRequest,
         AuthCredentials,
+        AuthEndpointAuthenticationIntent,
         requireAuthorizedCredentialsRegistration,
         requireAuthorizedCredentialsSignIn,
         resolveAuthRedirectWithCallbacks,
@@ -1390,15 +1391,12 @@ class AuthManager {
     );
   }
 
-  /// Replaces the current identity for a portable plugin.
-  Future<AuthSession> replacePluginSession(
+  /// Completes a portable plugin authentication through the host policy.
+  Future<AuthResult> completePluginAuthentication(
     EngineContext ctx,
-    AuthUser user, {
-    required String authenticationMethod,
-    Duration? maximumAge,
-    String? impersonatedBy,
-  }) async {
-    if (impersonatedBy != null &&
+    AuthEndpointAuthenticationIntent intent,
+  ) async {
+    if (intent.impersonatedBy != null &&
         options.sessionStrategy != AuthSessionStrategy.session) {
       throw AuthFlowException('impersonation_requires_server_session');
     }
@@ -1408,12 +1406,13 @@ class AuthManager {
     }
     final result = await _completeSignIn(
       ctx,
-      user,
-      authenticationMethod: authenticationMethod,
-      maximumAge: maximumAge,
-      impersonatedBy: impersonatedBy,
+      intent.user,
+      provider: intent.provider,
+      authenticationMethod: intent.authenticationMethod,
+      maximumAge: intent.maximumAge,
+      impersonatedBy: intent.impersonatedBy,
     );
-    return result.session;
+    return result;
   }
 
   Future<String?> currentStoredSessionId(EngineContext ctx) async =>

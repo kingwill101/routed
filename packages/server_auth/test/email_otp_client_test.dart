@@ -36,7 +36,8 @@ void main() {
                 'attributes': {'emailVerified': true},
               },
               'expires': '2030-01-01T00:00:00Z',
-              'strategy': 'session',
+              'strategy': 'jwt',
+              'token': 'email-otp-jwt',
             }),
             200,
           );
@@ -87,6 +88,7 @@ void main() {
     final user = await client.verifyEmail(otp: '123456');
 
     expect(session.user.id, 'user-1');
+    expect(session.token, 'email-otp-jwt');
     expect(user.attributes['emailVerified'], isTrue);
   });
 }

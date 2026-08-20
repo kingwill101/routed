@@ -91,12 +91,10 @@ final class AuthPhoneNumberSignInResult {
   const AuthPhoneNumberSignInResult({
     required this.phoneNumber,
     required this.user,
-    this.session,
   });
 
   final String phoneNumber;
   final AuthUser user;
-  final AuthSession? session;
 }
 
 final class AuthPhoneNumberSendCodeRequest {
@@ -154,32 +152,20 @@ final class AuthPhoneNumberVerifyResponse {
   const AuthPhoneNumberVerifyResponse({
     required this.phoneNumber,
     required this.user,
-    this.session,
   });
 
   final String phoneNumber;
   final AuthUser user;
-  final AuthSession? session;
 
-  Map<String, dynamic> toJson() {
-    final sourceSession = session;
-    final safeSession = sourceSession == null
-        ? null
-        : AuthSession(
-            user: sourceSession.user.redacted(),
-            expiresAt: sourceSession.expiresAt,
-            strategy: sourceSession.strategy,
-            token: sourceSession.token,
-          );
-    return <String, dynamic>{
-      'status': 'authenticated',
-      'phoneNumber': phoneNumber,
-      if (safeSession != null)
-        ...safeSession.toJson()
-      else
-        'user': user.redacted().toJson(),
-    };
-  }
+  AuthEndpointAuthenticationIntent toAuthenticationIntent() =>
+      AuthEndpointAuthenticationIntent(
+        user: user,
+        authenticationMethod: authPhoneNumberAuthenticationMethod,
+        metadata: <String, dynamic>{
+          'status': 'authenticated',
+          'phoneNumber': phoneNumber,
+        },
+      );
 }
 
 /// Phone-number OTP authentication as an opt-in server plugin.
@@ -302,12 +288,10 @@ final class PhoneNumberPlugin<TContext>
               phoneNumber: request.phoneNumber,
               code: request.code,
               name: request.name,
-              sessionControl: invocation.sessionControl,
             );
             return AuthPhoneNumberVerifyResponse(
               phoneNumber: result.phoneNumber,
               user: result.user,
-              session: result.session,
             );
           },
         ),
@@ -440,7 +424,6 @@ final class PhoneNumberPlugin<TContext>
     required String code,
     String? name,
     DateTime? now,
-    AuthServerPluginSessionControl? sessionControl,
   }) async {
     _ensureConfigured();
     final normalized = _normalizePhoneNumber(phoneNumber);
@@ -530,17 +513,7 @@ final class PhoneNumberPlugin<TContext>
       user = await _users.update(verifiedUser) ?? verifiedUser;
     }
     await onVerified?.call(context, normalized, user);
-    final session = sessionControl == null
-        ? null
-        : await sessionControl.replaceIdentity(
-            user,
-            authenticationMethod: authPhoneNumberAuthenticationMethod,
-          );
-    return AuthPhoneNumberSignInResult(
-      phoneNumber: normalized,
-      user: user,
-      session: session,
-    );
+    return AuthPhoneNumberSignInResult(phoneNumber: normalized, user: user);
   }
 
   @override
@@ -611,7 +584,7 @@ final class PhoneNumberPlugin<TContext>
   static final AuthOperationCodec<AuthPhoneNumberVerifyResponse>
   _verifyResponseCodec = AuthOperationCodec<AuthPhoneNumberVerifyResponse>(
     decode: (_) => throw UnsupportedError('Response-only codec'),
-    encode: (value) => value.toJson(),
+    encode: (value) => value.toAuthenticationIntent(),
     schema: _verifyResponseSchema,
   );
 }
