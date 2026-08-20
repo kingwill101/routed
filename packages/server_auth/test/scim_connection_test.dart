@@ -14,6 +14,37 @@ void main() {
   });
 
   group('managed SCIM issuance', () {
+    test('rejects an authorizer principal for another session user', () async {
+      final plugin = AuthScimConnectionPlugin<Object>(
+        store: InMemoryAuthScimConnectionStore(),
+        authorize: (_) => AuthScimConnectionManagementPrincipal(
+          tenantId: 'tenant-a',
+          organizationId: 'organization-a',
+          subjectId: 'different-user',
+        ),
+      );
+      final endpoint = plugin.endpoints.singleWhere(
+        (candidate) => candidate.id == 'scimConnections.list',
+      );
+
+      await expectLater(
+        () => endpoint.invoke(
+          AuthOperationInvocation<Object>(
+            context: Object(),
+            user: AuthUser(id: 'session-user'),
+          ),
+          <String, dynamic>{'organizationId': 'organization-a'},
+        ),
+        throwsA(
+          isA<AuthFlowException>().having(
+            (error) => error.code,
+            'code',
+            'forbidden',
+          ),
+        ),
+      );
+    });
+
     test(
       'raw credential is returned once and only a digest is stored',
       () async {

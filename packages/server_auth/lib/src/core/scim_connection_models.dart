@@ -450,6 +450,11 @@ final class AuthScimConnectionAuthorizationRequest<TContext> {
 }
 
 /// Exact principal and tenancy binding selected by application policy.
+///
+/// For session-authenticated management endpoints, [subjectId] must equal the
+/// authenticated user's canonical ID. The plugin rejects a mismatched subject
+/// so credential ownership and coordinated user deletion cannot be assigned to
+/// another account by a faulty authorizer.
 final class AuthScimConnectionManagementPrincipal {
   AuthScimConnectionManagementPrincipal({
     required String tenantId,

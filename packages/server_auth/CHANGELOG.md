@@ -1,5 +1,8 @@
 ## 0.2.0 - 2026-08-20
 
+- Bind managed SCIM authorization principals to the authenticated session user
+  so credential ownership and coordinated deletion cannot be assigned to a
+  different account by a faulty application authorizer.
 - Replace independent Admin store writes with typed backend-owned mutation
   commands that revalidate exact custom-role permissions inside the
   transaction, serialize competing user changes, and roll credentials,

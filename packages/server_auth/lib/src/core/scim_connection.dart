@@ -516,9 +516,11 @@ final class AuthScimConnectionPlugin<TContext>
           organizationId: organizationId,
         ),
       );
-      if (invocation.user == null ||
+      final user = invocation.user;
+      if (user == null ||
           principal == null ||
-          principal.organizationId != organizationId) {
+          principal.organizationId != organizationId ||
+          principal.subjectId != user.id) {
         throw AuthFlowException('forbidden');
       }
       try {
