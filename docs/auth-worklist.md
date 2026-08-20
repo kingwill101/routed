@@ -389,10 +389,15 @@ account, session, client, and plugin contracts above:
   and native `routed_node`, and native Cloudflare Fetch request paths. The
   provider-free plugin matrix also covers typed magic-link client/server
   composition, provider-path placeholder binding, browser-bound one-time
-  callbacks, hostile-token sanitization, concurrent replay, email OTP,
-  username, API-key exchange, successful browser-shaped WebAuthn registration
-  and DER-signed authentication, challenge/counter replay, sanitized WebAuthn
-  errors, anonymous auth, and two-factor route gating on each applicable host.
+  callbacks, hostile-token sanitization, concurrent replay, and typed
+  phone-number client/server composition. The phone flow covers provider-owned
+  delivery, exact send/verify paths, browser-origin and CSRF policy,
+  cookie-backed sessions, hostile phones/codes, generic delivery failures,
+  bounded attempt lockout, sequential replay, and eight-way verification with
+  exactly one winner. Email OTP, username, API-key exchange, successful
+  browser-shaped WebAuthn registration and DER-signed authentication,
+  challenge/counter replay, sanitized WebAuthn errors, anonymous auth, and
+  two-factor route gating also run on each applicable host.
   Deterministic OAuth/OIDC and custom callback
   providers now cover state, PKCE, nonce, browser binding, replay, account
   linking, redirect safety, provider failures, and host-owned session/JWT
@@ -446,10 +451,13 @@ account, session, client, and plugin contracts above:
   applicable host runtimes. Provider-free flows now run across IO, Node, and
   Cloudflare Fetch, and deterministic external-provider callbacks run across
   IO, portable/native Node, and portable/native Cloudflare Fetch, including
-  successful browser-shaped WebAuthn ceremonies. An opt-in, token-protected
-  deployed Worker harness now compiles and runs every suite without invoking
-  Cloudflare control-plane APIs; an authorized run against an actual deployed
-  Worker remains.
+  successful browser-shaped WebAuthn ceremonies. Typed phone-number auth now
+  has the same IO, portable/native Node, and portable/native Cloudflare Fetch
+  coverage, including delivery, browser/session boundaries, lockout, secrecy,
+  and one-winner consumption. An opt-in, token-protected deployed Worker
+  harness now compiles and runs every suite without invoking Cloudflare
+  control-plane APIs; an authorized run against an actual deployed Worker
+  remains.
 - [x] Security-sensitive defaults are safe without requiring users to discover
   undocumented configuration switches. Durable options fail closed as
   production posture and require an exact HTTPS origin/proxy boundary, secure

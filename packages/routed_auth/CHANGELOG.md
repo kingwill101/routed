@@ -79,6 +79,12 @@
   authentication, challenge/counter replay, WebAuthn error boundaries,
   anonymous auth, and two-factor route gating across IO, Node, and Cloudflare
   Fetch hosts.
+- Extend the shared host fixture with independently installed phone-number
+  server and typed client plugins. IO, portable/native Node, and
+  portable/native Cloudflare Fetch now exercise provider-owned delivery,
+  exact send/verify paths, origin and CSRF policy, cookie-backed sessions,
+  bounded hostile input, generic provider failures, attempt lockout,
+  sequential replay, and concurrent verification with exactly one winner.
 - Add the Routed browser adapter for the opt-in last-authentication-method
   plugin, using a Secure, HttpOnly, SameSite cookie and host-owned successful
   authentication/sign-out/account-deletion lifecycle events.
