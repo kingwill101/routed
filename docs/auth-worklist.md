@@ -118,9 +118,9 @@ The work is intentionally split between framework-agnostic capabilities in
 - [x] Expose the registration, assertion, listing, and deletion contracts
   through the typed plugin registry, Routed routes, and `AuthClient`.
 - [ ] Finish the broader WebAuthn subsystem. Session issuance, passkey rename,
-  and an explicit accept/reject/downgrade attestation-root trust policy are
-  implemented, but EdDSA, FIDO metadata, and the remaining attestation formats
-  are still pending.
+  Ed25519, and an explicit accept/reject/downgrade attestation-root trust policy
+  are implemented, but FIDO metadata and the remaining attestation formats are
+  still pending.
 - [x] Add an optional native `TwoFactorPlugin` with TOTP enrollment
   verification, protected-secret and typed-store boundaries, recovery-code
   hashing and atomic one-time consumption, lockout handling, disablement, and
@@ -200,7 +200,7 @@ account, session, client, and plugin contracts above:
 - [ ] Add username-first authentication and explicit identifier policy.
 - [x] Add anonymous/guest sessions with safe account upgrade/linking rules.
 - [ ] Track the last successful authentication method without storing secrets.
-- [ ] Add captcha and breached-password checks as opt-in security plugins.
+- [x] Add captcha and breached-password checks as opt-in security plugins.
 - [ ] Add SSO/SAML and SCIM integrations when enterprise tenancy requirements
   justify them.
 

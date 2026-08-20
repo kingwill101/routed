@@ -1,5 +1,10 @@
 ## Unreleased
 
+- Mount phone-number send/verify operations from the opt-in server plugin and
+  issue normal Routed sessions after successful verification.
+- Apply opt-in captcha checks to credential sign-in/registration and
+  breached-password checks to registration, reset, and password change while
+  preserving generic HTTP failures and existing rate limits.
 - Add `RoutedAuthDeploymentBinding` helpers to bind typed auth options, create
   the matching service provider, and apply explicit proxy policy to the Routed
   engine configuration.
