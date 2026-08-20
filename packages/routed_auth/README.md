@@ -168,11 +168,37 @@ await authClient.plugins.use(captchaClient).signIn(
 Installing a server plugin does not add unrelated client methods, and omitting
 a server plugin means its routes are not mounted.
 
+To let a browser-facing sign-in screen read only the most recently successful
+method, compose the portable plugin with Routed's cookie adapter and install
+its client plugin separately:
+
+```dart
+final lastMethod = AuthLastAuthenticationMethodPlugin<EngineContext>(
+  signingKey: lastMethodSigningKey,
+  browserStore: const RoutedAuthLastAuthenticationMethodBrowserStore(),
+  policy: AuthLastAuthenticationMethodPolicy(
+    allowedMethods: const {
+      AuthLastAuthenticationMethodId.credentials,
+      AuthLastAuthenticationMethodId.passkey,
+    },
+  ),
+);
+
+const lastMethodClient = AuthLastAuthenticationMethodClientPlugin();
+final authClient = AuthClient(
+  baseUrl: Uri.parse('https://api.example.com/auth'),
+  plugins: const [lastMethodClient],
+);
+final previous = await authClient.plugins.use(lastMethodClient).read();
+```
+
+The cookie is Secure, HttpOnly, SameSite, signed, and cleared by Routed after
+sign-out or account deletion. Failed authentication never replaces it.
+
 The public [auth endpoint security contract](https://kingwill101.github.io/routed/docs/routed/security/auth-endpoint-contract)
 catalogues every core and opt-in operation with its authentication, browser
 Origin, CSRF, rate-limit key, redirect, session/JWT, and generic-error
-behavior. The one current adapter exception is 2FA: its route shell remains
-mounted and returns `two_factor_unavailable` until `TwoFactorPlugin` is
+behavior. Two-factor routes are mounted only when `TwoFactorPlugin` is
 composed.
 
 `AuthServiceProvider` creates the `AuthRuntime` and exposes it through the

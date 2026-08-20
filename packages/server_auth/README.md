@@ -155,6 +155,38 @@ CSRF, rate-limit keys, redirects, session/JWT projection, and generic public
 errors. `server_auth` defines the portable descriptors; a framework adapter is
 responsible for enforcing that contract.
 
+## Optional last-authentication-method plugin
+
+Install this plugin only when the sign-in UI needs to remember which method a
+browser used most recently. It stores an allowlisted method ID in an expiring,
+HMAC-protected cookie; it never stores a user ID, provider payload, credential,
+or token:
+
+```dart
+final lastMethod = AuthLastAuthenticationMethodPlugin<MyRequestContext>(
+  signingKey: lastMethodSigningKey,
+  browserStore: myLastMethodBrowserStore,
+  policy: AuthLastAuthenticationMethodPolicy(
+    allowedMethods: const {
+      AuthLastAuthenticationMethodId.credentials,
+      AuthLastAuthenticationMethodId.passkey,
+    },
+  ),
+);
+
+final options = AuthOptions<MyRequestContext>(
+  providers: [CredentialsProvider()],
+  store: authStore,
+  storeMode: AuthStoreMode.durable,
+  plugins: [lastMethod],
+);
+```
+
+The host updates the cookie only after successful session or JWT issuance and
+clears it on sign-out and account deletion. Client access is independently
+opted in with `AuthLastAuthenticationMethodClientPlugin`; the HttpOnly cookie
+itself is never exposed.
+
 ## Optional username plugin
 
 Username-first authentication is opt-in and keeps its client API separately
@@ -225,6 +257,38 @@ step-up requirement helper at those action boundaries.
 `AuthTwoFactorSecretProtector` is required
 so durable applications can use their own key-management system; the
 plaintext protector is intended only for tests and ephemeral examples.
+
+## Optional FIDO metadata trust evaluation
+
+`FidoMetadataBlobLoader` parses a caller-downloaded MDS 3.1.1 compact JWT with
+bounded inputs, monotonic blob checks, and optional freshness enforcement.
+The application must verify the JWS signature, RFC 5280 certificate path, and
+revocation state through `FidoMetadataJwsVerifier`; the package performs no
+network requests and does not silently trust `x5u`:
+
+```dart
+final blob = await FidoMetadataBlobLoader(
+  trustAnchors: mdsSigningTrustAnchors,
+  verifyJws: verifyMdsJwsAndCertificatePath,
+).load(
+  downloadedCompactJwt,
+  now: DateTime.now().toUtc(),
+  previousBlobNumber: cachedBlobNumber,
+);
+
+final metadata = FidoMetadataWebAuthnTrustEvaluator(blob: blob);
+final passkeys = WebAuthnPlugin<MyRequestContext>(
+  provider: WebAuthnProvider(
+    getUserInfo: resolvePasskeyUser,
+    getRelyingParty: (_, _) => const WebAuthnRelyingParty(
+      id: 'example.com',
+      name: 'Example',
+      origin: 'https://example.com',
+    ),
+  ),
+  attestationTrustPolicy: metadata.asWebAuthnTrustPolicy(),
+);
+```
 
 ## Optional admin plugin
 
