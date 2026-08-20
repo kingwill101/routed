@@ -145,9 +145,10 @@ abstract interface class AuthUsernameStore {
   /// Removes the exact username credential only when another usable method
   /// remains.
   ///
-  /// [loadInventory] is a bounded topology snapshot, not authorization to use
-  /// a callback transaction. Durable adapters must recheck every supported
-  /// fallback in their own transaction and return [AuthAuthenticationMethodMutationResult.atomicityUnavailable]
+  /// [AuthUsernameRemovalCommand.loadInventory] supplies a bounded topology
+  /// snapshot; it is not authorization to use a callback transaction. Durable
+  /// adapters must recheck every supported fallback in their own transaction
+  /// and return [AuthAuthenticationMethodMutationResult.atomicityUnavailable]
   /// when the composed topology cannot join that transaction.
   FutureOr<AuthAuthenticationMethodMutationResult> removeUsernameIfSafe(
     AuthUsernameRemovalCommand command,
