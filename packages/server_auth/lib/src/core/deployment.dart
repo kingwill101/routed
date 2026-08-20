@@ -94,30 +94,26 @@ final class AuthProductionBoundary {
 /// provide all supported delivery callbacks or deliberately disable these
 /// optional routes. No callback is synthesized and no raw token is logged.
 final class AuthLifecycleDelivery<TContext> {
-  const AuthLifecycleDelivery.disabled() : this._();
-
-  factory AuthLifecycleDelivery.enabled({
-    required AuthPasswordResetSender<TContext> passwordReset,
-    required AuthEmailChangeSender<TContext> emailChange,
-    required AuthAccountDeletionSender<TContext> accountDeletion,
-  }) => AuthLifecycleDelivery<TContext>._(
-    passwordReset: passwordReset,
-    emailChange: emailChange,
-    accountDeletion: accountDeletion,
-  );
-
-  const AuthLifecycleDelivery._({
+  /// Enables only the lifecycle delivery capabilities supplied by the app.
+  ///
+  /// Omitted callbacks leave their corresponding routes unavailable; presets
+  /// never synthesize delivery or force unrelated lifecycle capabilities to
+  /// be enabled together.
+  const AuthLifecycleDelivery({
     this.passwordReset,
     this.emailChange,
     this.accountDeletion,
   });
 
+  /// Explicitly disables every optional lifecycle delivery capability.
+  const AuthLifecycleDelivery.disabled() : this();
+
   final AuthPasswordResetSender<TContext>? passwordReset;
   final AuthEmailChangeSender<TContext>? emailChange;
   final AuthAccountDeletionSender<TContext>? accountDeletion;
 
-  bool get enabled =>
-      passwordReset != null && emailChange != null && accountDeletion != null;
+  bool get hasAny =>
+      passwordReset != null || emailChange != null || accountDeletion != null;
 }
 
 /// A typed auth deployment assembled from framework-neutral runtime options.
