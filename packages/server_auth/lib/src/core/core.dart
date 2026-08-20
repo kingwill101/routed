@@ -84,6 +84,7 @@ export 'saml.dart';
 export 'saml_client.dart';
 export 'saml_models.dart';
 export 'saml_store.dart';
+export 'saml_xmldsig.dart';
 export 'session.dart';
 export 'session_management.dart';
 export 'session_strategy_runtime.dart';
