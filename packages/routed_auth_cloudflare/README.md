@@ -23,6 +23,13 @@ Future<CloudflareD1AuthStore> authStore(CloudflareEnvironment env) {
 YAML configuration and application code does not import `package:web` or use
 `dart:js_interop`.
 
+This adapter does not currently own the OAuth provider-mode authorization-code
+or access-token tables, so it does not implement
+`OAuthAuthorizationCodeExchangeStore`. Provider-mode code grants therefore
+cannot be configured with D1 yet; use an adapter with an authoritative atomic
+exchange implementation instead of composing independent D1 statements and
+claiming transaction safety.
+
 The local tests run `AuthStoreConformanceSuite` against a deterministic
 SQLite-backed implementation of the public `CloudflareD1Database` API. The
 separate [live harness](test/live/README.md) is intentionally not part of the

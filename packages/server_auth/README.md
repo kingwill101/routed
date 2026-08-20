@@ -753,6 +753,47 @@ Routed can additionally expose `POST /auth/api-keys/exchange` when
 `sessionExchangeEnabled` is true. It accepts the API key from an auth header
 and creates a normal server-side session; it is disabled by default.
 
+## Optional OAuth/OIDC provider mode
+
+Applications acting as an authorization server install
+`OAuthProviderModePlugin` with one authoritative authorization-code exchange
+store. The exchange store owns both the authorization-code and access-token
+stores, which prevents provider mode from composing a code-consume operation
+with a separate token write.
+
+```dart
+import 'package:server_auth/server_auth.dart';
+
+final exchangeStore = InMemoryOAuthAuthorizationCodeExchangeStore();
+
+final oauthProvider = OAuthProviderModePlugin<MyRequestContext>(
+  clientStore: InMemoryOAuthClientStore(),
+  authorizationCodeExchangeStore: exchangeStore,
+  options: const OAuthProviderModeOptions(
+    supportedGrantTypes: ['authorization_code'],
+  ),
+);
+```
+
+The in-memory exchange store is for tests and local development. A production
+adapter implements `OAuthAuthorizationCodeExchangeStore` with one backend
+transaction that revalidates the code digest, stable authorization ID, client,
+redirect URI, S256 verifier, and expiry, consumes the code, and persists the
+prepared token-digest record. Run
+`verifyOAuthAuthorizationCodeExchangeStoreConformance` from
+`package:server_auth/testing.dart` in every durable adapter test suite.
+
+Raw authorization codes, access tokens, and refresh tokens are delivery-only.
+They are generated before commit and never enter persistence, diagnostics, or
+replay state. If the transaction commits but the HTTP response is lost, the
+client must restart authorization: the server reports `invalid_grant` and does
+not mint a second grant or persist raw tokens to replay the response.
+
+The token endpoint advertises atomic, single-use mutation semantics only when
+authorization code is its sole grant. A mixed endpoint remains explicitly
+non-atomic and unguarded because client credentials, refresh, or contributed
+grants cannot share one truthful replay contract.
+
 ## Auth runtime and typed stores
 
 Integrations compose an `AuthRuntime` from typed domain stores and server

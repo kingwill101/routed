@@ -28,6 +28,16 @@
 - Require an application-owned `AuthSamlAssertionVerifier` until portable
   XMLDSig reference binding is proven, and publish a verifier conformance
   runner instead of presenting synthetic test signatures as production SAML.
+- Replace split authorization-code consumption and access-token persistence
+  with a required typed exchange store owned by `OAuthProviderModePlugin`.
+  Code bindings are revalidated and consumed with the digest-only prepared
+  token record in one adapter transaction; in-memory rollback, contention,
+  collision, expiry, wrong-binding, disabled-account/client, and property
+  coverage are included.
+- Add public durable-adapter conformance for authorization-code exchange and
+  declare atomic single-use token-endpoint semantics only for code-only grant
+  configurations. A lost post-commit HTTP response remains intentionally
+  non-replayable because raw token values are never persisted.
 - Require every portable and host-owned endpoint to publish typed read or
   mutation semantics, including persistence boundary, atomicity, replay
   behavior, and validated persistence-schema/atomic-operation references.

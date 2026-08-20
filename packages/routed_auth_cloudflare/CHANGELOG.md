@@ -1,5 +1,9 @@
 ## 0.1.0
 
+- Document that D1 does not yet own the OAuth provider-mode code/token tables
+  or implement the atomic authorization-code exchange capability. Durable D1
+  applications now fail configuration instead of silently combining D1 auth
+  state with the in-memory exchange store.
 - Add exact owner-checked OAuth account unlinking by provider ID and provider
   account ID. D1 binds an authoritative topology backed by its own users,
   credentials, accounts, and email-OTP stores, rechecks a usable fallback in

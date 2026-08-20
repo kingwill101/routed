@@ -167,6 +167,12 @@ The work is intentionally split between framework-agnostic capabilities in
 - [x] Add an OAuth/OIDC provider mode for applications acting as an identity
   provider, with hashed one-time authorization codes, PKCE, grants, refresh,
   introspection, userinfo, discovery, asymmetric ID-token signing, and JWKS.
+- [x] Replace split provider-mode authorization-code consumption and token
+  persistence with a typed backend-owned atomic exchange. The in-memory store
+  has rollback/fault injection, one-winner contention, digest and authorization
+  ID collision checks, binding/expiry/account/client coverage, secret-safety
+  properties, and public durable-adapter conformance. Lost post-commit token
+  responses are deliberately not replayed because raw tokens are never stored.
 
 ## P2: Dart developer experience and platform integration
 
@@ -175,10 +181,13 @@ The work is intentionally split between framework-agnostic capabilities in
   and a backend-owned deletion coordinator that pass local conformance,
   rollback, contention, and fault tests. A deployed live-D1 run, broader SQL
   adapters, and D1 plans for plugins beyond device authorization and email OTP
-  remain open. D1's authentication-method coordinator accepts its own users,
-  credentials, accounts, and email-OTP stores; external method stores require a
-  future backend-bound plan. Mixed topologies remain usable but account unlink
-  fails closed. Removed external plugins are not discoverable automatically:
+  remain open. D1 does not yet own OAuth provider-mode code/token tables and
+  cannot configure authorization-code grants until it implements the typed
+  atomic exchange capability. D1's authentication-method coordinator accepts
+  its own users, credentials, accounts, and email-OTP stores; external method
+  stores require a future backend-bound plan. Mixed topologies remain usable
+  but account unlink fails closed. Removed external plugins are not
+  discoverable automatically:
   durable adapters must retain a historical namespace inventory or reject
   deletion until that namespace has backend-owned cleanup.
 - [x] Define a stable public adapter conformance suite that can run against
