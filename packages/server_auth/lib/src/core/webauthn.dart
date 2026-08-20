@@ -1091,6 +1091,12 @@ final class WebAuthnPlugin<TContext>
       throw AuthFlowException('webauthn_credential_invalid');
     }
     final result = switch (_authenticatorStore) {
+      InMemoryAuthWebAuthnAuthenticatorStore _ =>
+        await _authenticationMethods.removeIfSafe(
+          userId: userId,
+          target: AuthAuthenticationMethod.passkey(credentialId),
+          mutate: () => _authenticatorStore.deleteForUser(userId, credentialId),
+        ),
       AuthWebAuthnAuthenticatorMutationStore mutationStore =>
         await mutationStore.removeCredentialIfSafe(
           AuthWebAuthnCredentialRemovalCommand(

@@ -349,6 +349,65 @@ void main() {
     expect(snapshot.methods, hasLength(1));
   });
 
+  test(
+    'concurrent in-memory passkey and API-key removals preserve one method',
+    () async {
+      final root = InMemoryAuthStore();
+      final keyStore = InMemoryAuthApiKeyStore();
+      final webAuthn = _webAuthnPlugin();
+      var keySequence = 0;
+      final apiKeys = AuthApiKeyPlugin<Object>(
+        store: keyStore,
+        countsAsPrimaryAuthenticationMethod: true,
+        keyIdGenerator: ({int length = 32}) => 'key-${keySequence++}',
+        secretGenerator: ({int length = 32}) => 'secret-$keySequence',
+      );
+      final methods = AuthAuthenticationMethodService(store: root);
+      final context = AuthServerPluginContext<Object>(
+        store: root,
+        authenticationMethods: methods,
+      );
+      webAuthn.configure(context);
+      apiKeys.configure(context);
+      methods.composeContributors(
+        <AuthAuthenticationMethodInventoryContributor>[
+          webAuthn,
+          apiKeys,
+          _TwoPartyInventoryBarrier(),
+        ],
+      );
+      await root.webAuthnAuthenticators.create(
+        WebAuthnAuthenticator(
+          credentialId: 'passkey-1',
+          publicKey: 'AQ',
+          counter: 0,
+          userId: 'user-1',
+          createdAt: DateTime.utc(2026, 8, 20),
+        ),
+      );
+      final issued = await apiKeys.issue(userId: 'user-1', name: 'primary');
+
+      final outcomes = await Future.wait<Object>([
+        _capture(
+          () => webAuthn.deleteCredential(
+            userId: 'user-1',
+            credentialId: 'passkey-1',
+          ),
+        ),
+        _capture(() async {
+          await apiKeys.revoke('user-1', issued.apiKey.id);
+        }),
+      ]);
+      final errors = outcomes.whereType<AuthFlowException>().toList();
+      final snapshot = await methods.snapshotForUser('user-1');
+
+      expect(errors, hasLength(1));
+      expect(errors.single.code, 'last_authentication_method');
+      expect(snapshot.isComplete, isTrue);
+      expect(snapshot.methods, hasLength(1));
+    },
+  );
+
   test('property: every removal ordering preserves a fallback', () async {
     final runner = PropertyTestRunner<int>(
       Gen.integer(min: 0, max: 5),

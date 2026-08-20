@@ -249,13 +249,9 @@ final class InMemoryAuthWebAuthnChallengeStore
 
 /// In-memory registered-passkey store for tests and local development.
 final class InMemoryAuthWebAuthnAuthenticatorStore
-    implements
-        AuthWebAuthnAuthenticatorStore,
-        AuthWebAuthnAuthenticatorMutationStore,
-        AuthInMemoryUserDeletionStore {
+    implements AuthWebAuthnAuthenticatorStore, AuthInMemoryUserDeletionStore {
   final Map<String, WebAuthnAuthenticator> _records =
       <String, WebAuthnAuthenticator>{};
-  Future<void> _mutationTail = Future<void>.value();
 
   @override
   Object captureDeletionState() =>
@@ -343,40 +339,6 @@ final class InMemoryAuthWebAuthnAuthenticatorStore
     }
     _records.remove(normalizedCredentialId);
     return true;
-  }
-
-  @override
-  Future<AuthAuthenticationMethodMutationResult> removeCredentialIfSafe(
-    AuthWebAuthnCredentialRemovalCommand command,
-  ) => _serializeMutation(() async {
-    final snapshot = await command.loadInventory();
-    if (!snapshot.isComplete) {
-      return AuthAuthenticationMethodMutationResult.atomicityUnavailable;
-    }
-    final target = AuthAuthenticationMethod.passkey(command.credentialId);
-    if (!snapshot.methods.contains(target)) {
-      return AuthAuthenticationMethodMutationResult.notFound;
-    }
-    if (!snapshot.methods.any(
-      (method) => method.canAuthenticate && method != target,
-    )) {
-      return AuthAuthenticationMethodMutationResult.lastAuthenticationMethod;
-    }
-    return await deleteForUser(command.userId, command.credentialId)
-        ? AuthAuthenticationMethodMutationResult.mutated
-        : AuthAuthenticationMethodMutationResult.notFound;
-  });
-
-  Future<T> _serializeMutation<T>(Future<T> Function() operation) async {
-    final completer = Completer<T>();
-    _mutationTail = _mutationTail.then((_) async {
-      try {
-        completer.complete(await operation());
-      } catch (error, stackTrace) {
-        completer.completeError(error, stackTrace);
-      }
-    });
-    return completer.future;
   }
 
   @override
