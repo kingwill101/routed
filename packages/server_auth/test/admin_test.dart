@@ -77,6 +77,53 @@ void main() {
     });
 
     test(
+      'custom administrator roles retain their restricted permissions',
+      () async {
+        final supervisor = AuthUser(
+          id: 'support-1',
+          email: 'support@example.com',
+          roles: const ['support-supervisor'],
+        );
+        await _seed(core, supervisor);
+        final restricted = AdminPlugin<Object>(
+          store: adminStore,
+          options: const AuthAdminOptions(
+            adminRoles: {'admin', 'support-supervisor'},
+            roles: {
+              'support-supervisor': {
+                'user': ['get'],
+              },
+            },
+          ),
+        );
+        AuthRuntime<Object>(
+          options: AuthOptions(
+            providers: const [],
+            store: core,
+            storeMode: AuthStoreMode.ephemeral,
+            plugins: [restricted],
+          ),
+        );
+
+        expect(
+          await restricted.hasPermission(supervisor.id, 'user', 'get'),
+          isTrue,
+        );
+        expect(
+          await restricted.hasPermission(supervisor.id, 'user', 'delete'),
+          isFalse,
+        );
+        await expectLater(
+          _invoke(restricted, 'admin.removeUser', supervisor, {
+            'userId': member.id,
+          }),
+          _flow('admin_forbidden'),
+        );
+        expect(await core.users.findById(member.id), member);
+      },
+    );
+
+    test(
       'creates, lists, filters, and updates users without exposing secrets',
       () async {
         final created = await _invoke(feature, 'admin.createUser', admin, {

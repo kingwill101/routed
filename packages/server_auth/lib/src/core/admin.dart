@@ -863,7 +863,7 @@ final class AdminPlugin<TContext>
   }
 
   Iterable<String> _effectiveRoles(AuthUser user) =>
-      isAdministrator(user) ? {...user.roles, 'admin'} : user.roles;
+      _adminUserIds.contains(user.id) ? {...user.roles, 'admin'} : user.roles;
 
   Future<AuthAdminUser> _requiredUser(String userId) async {
     final value = await store.findUser(userId);
