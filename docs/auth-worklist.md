@@ -387,10 +387,12 @@ account, session, client, and plugin contracts above:
   in production configuration.
 - [x] Run the public auth runtime contract through native `routed_io`, portable
   and native `routed_node`, and native Cloudflare Fetch request paths. The
-  provider-free plugin matrix also covers email OTP, username, API-key
-  exchange, successful browser-shaped WebAuthn registration and DER-signed
-  authentication, challenge/counter replay, sanitized WebAuthn errors,
-  anonymous auth, and two-factor route gating on each applicable host.
+  provider-free plugin matrix also covers typed magic-link client/server
+  composition, provider-path placeholder binding, browser-bound one-time
+  callbacks, hostile-token sanitization, concurrent replay, email OTP,
+  username, API-key exchange, successful browser-shaped WebAuthn registration
+  and DER-signed authentication, challenge/counter replay, sanitized WebAuthn
+  errors, anonymous auth, and two-factor route gating on each applicable host.
   Deterministic OAuth/OIDC and custom callback
   providers now cover state, PKCE, nonce, browser binding, replay, account
   linking, redirect safety, provider failures, and host-owned session/JWT

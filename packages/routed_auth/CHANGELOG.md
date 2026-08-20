@@ -72,11 +72,13 @@
   OAuth/OIDC and custom callback providers, covering state, PKCE, nonce,
   browser binding, replay, account linking, redirect safety, bounded failures,
   and host-owned session/JWT issuance across IO, Node, and Cloudflare Fetch.
-- Publish a framework-neutral plugin runtime conformance fixture covering email
-  OTP, username, API-key exchange, successful browser-shaped WebAuthn
-  registration and DER-signed authentication, challenge/counter replay,
-  WebAuthn error boundaries, anonymous auth, and two-factor route gating across
-  IO, Node, and Cloudflare Fetch hosts.
+- Publish a framework-neutral plugin runtime conformance fixture covering
+  typed magic-link client/server composition, browser-bound one-time callbacks,
+  hostile-token sanitization, concurrent replay, email OTP, username, API-key
+  exchange, successful browser-shaped WebAuthn registration and DER-signed
+  authentication, challenge/counter replay, WebAuthn error boundaries,
+  anonymous auth, and two-factor route gating across IO, Node, and Cloudflare
+  Fetch hosts.
 - Add the Routed browser adapter for the opt-in last-authentication-method
   plugin, using a Secure, HttpOnly, SameSite cookie and host-owned successful
   authentication/sign-out/account-deletion lifecycle events.
