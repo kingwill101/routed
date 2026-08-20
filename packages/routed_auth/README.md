@@ -99,6 +99,67 @@ auth.bindTo(engine);
 await engine.initialize();
 ```
 
+### Compose only the auth plugins you use
+
+Server plugins are ordinary typed constructor arguments. Provider callbacks,
+stores, and secrets are supplied by the application; Routed does not discover
+them from YAML or a global registry. This local-development factory enables
+phone sign-in, captcha, and breached-password checks explicitly:
+
+```dart
+AuthDeployment<EngineContext> buildAuth({
+  required String phoneCodeHashKey,
+  required AuthPhoneNumberCodeSender<EngineContext> sendPhoneCode,
+  required AuthCaptchaVerifier<EngineContext> captchaVerifier,
+  required AuthBreachedPasswordLookup<EngineContext> breachedPasswordLookup,
+}) {
+  final phone = PhoneNumberPlugin<EngineContext>(
+    store: InMemoryAuthPhoneNumberStore(), // use a durable store in production
+    sendCode: sendPhoneCode,
+    codeHashKey: phoneCodeHashKey,
+    allowSignUp: true,
+  );
+
+  return AuthDeploymentPresets.localDevelopment<EngineContext>(
+    providers: [CredentialsProvider()],
+    plugins: [
+      phone,
+      CaptchaPlugin<EngineContext>(verifier: captchaVerifier),
+      BreachedPasswordPlugin<EngineContext>(
+        lookup: breachedPasswordLookup,
+      ),
+    ],
+    trustedOrigins: [Uri.parse('http://localhost:3000')],
+  );
+}
+```
+
+Client APIs are selected independently. A client that needs phone and
+captcha-aware credentials installs only those two client plugins:
+
+```dart
+const phoneClient = AuthPhoneNumberClientPlugin();
+const captchaClient = AuthCaptchaClientPlugin();
+
+final authClient = AuthClient(
+  baseUrl: Uri.parse('https://api.example.com'),
+  plugins: const [phoneClient, captchaClient],
+);
+
+await authClient.plugins.use(phoneClient).sendCode(
+  phoneNumber: '+18765551234',
+);
+
+await authClient.plugins.use(captchaClient).signIn(
+  email: 'ada@example.com',
+  password: password,
+  captchaToken: captchaToken,
+);
+```
+
+Installing a server plugin does not add unrelated client methods, and omitting
+a server plugin means its routes are not mounted.
+
 `AuthServiceProvider` creates the `AuthRuntime` and exposes it through the
 `AuthManager`. Applications provide a typed `AuthStore`; persistence is not
 created implicitly by the framework. `RoutedAuthRateLimiter` is exported by
