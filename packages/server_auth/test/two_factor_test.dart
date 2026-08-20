@@ -493,6 +493,106 @@ void main() {
       },
     );
 
+    test(
+      'pending recovery deletion is reversible and validates user IDs',
+      () async {
+        final now = DateTime.utc(2030, 1, 1);
+        final factorStore = InMemoryAuthTwoFactorStore();
+        final challengeStore = InMemoryAuthTwoFactorChallengeStore();
+        final pendingStore = InMemoryAuthTwoFactorPendingRecoveryStore(
+          factorStore: factorStore,
+          challengeStore: challengeStore,
+        );
+        final record = AuthTwoFactorChallengeRecord(
+          id: 'challenge-1',
+          tokenHash: 'challenge-hash-1',
+          userId: 'user-1',
+          createdAt: now,
+          expiresAt: now.add(const Duration(minutes: 5)),
+        );
+        challengeStore.create(record);
+        final checkpoint = pendingStore.createInMemoryCheckpoint();
+
+        pendingStore.deleteForUser('user-1');
+        expect(challengeStore.findByTokenHash(record.tokenHash), isNull);
+
+        pendingStore.restoreInMemoryCheckpoint(checkpoint);
+        expect(challengeStore.findByTokenHash(record.tokenHash), record);
+        expect(() => pendingStore.deleteForUser('   '), throwsArgumentError);
+      },
+    );
+
+    test('hard deletion removes every user-owned two-factor record', () async {
+      final fixture = await _createDeletionFixture();
+
+      await fixture.plugin.deleteUserData(fixture.userId);
+
+      await _expectDeletionFixtureAbsent(fixture);
+    });
+
+    test(
+      'later contributor failure restores every two-factor record',
+      () async {
+        final core = InMemoryAuthStore();
+        final user = AuthUser(
+          id: 'user-1',
+          email: 'user@example.com',
+          roles: const ['user'],
+        );
+        await _seedUser(core, user);
+        final fixture = await _createDeletionFixture(userId: user.id);
+        final adminStore = InMemoryAuthAdminStore(core)
+          ..composeUserDataContributors([
+            fixture.plugin,
+            _FailingDeletionPlugin(),
+          ]);
+
+        await expectLater(
+          adminStore.deleteUser(
+            user.id,
+            administratorRoles: const {'admin'},
+            administratorUserIds: const {},
+          ),
+          throwsStateError,
+        );
+
+        expect(await core.users.findById(user.id), user);
+        await _expectDeletionFixturePresent(fixture);
+      },
+    );
+
+    test(
+      'core deletion failure checkpoint restores every two-factor record',
+      () async {
+        final fixture = await _createDeletionFixture();
+        final checkpoint = fixture.plugin.checkpointUserData(fixture.userId);
+
+        await expectLater(
+          _deleteThenFailCore(fixture, checkpoint),
+          throwsStateError,
+        );
+
+        await _expectDeletionFixturePresent(fixture);
+      },
+    );
+
+    test('hard deletion entry points reject blank user IDs', () async {
+      final fixture = await _createDeletionFixture();
+
+      await expectLater(
+        fixture.plugin.validateUserDeletion('  '),
+        throwsArgumentError,
+      );
+      await expectLater(
+        fixture.plugin.deleteUserData('\t'),
+        throwsArgumentError,
+      );
+      expect(
+        () => fixture.plugin.checkpointUserData('\n'),
+        throwsArgumentError,
+      );
+    });
+
     test('issues, expires, and revokes trusted devices', () async {
       final now = DateTime.utc(2030, 1, 1);
       final trustedStore = InMemoryAuthTwoFactorTrustedDeviceStore();
@@ -821,4 +921,192 @@ List<int> Function(int length) _queuedGenerator() {
     if (next.length != length) throw StateError('unexpected test size');
     return next;
   };
+}
+
+final class _TwoFactorDeletionFixture {
+  const _TwoFactorDeletionFixture({
+    required this.userId,
+    required this.now,
+    required this.plugin,
+    required this.factorStore,
+    required this.challengeStore,
+    required this.trustedDeviceStore,
+    required this.stepUpStore,
+    required this.challenge,
+    required this.trustedDevice,
+    required this.stepUp,
+  });
+
+  final String userId;
+  final DateTime now;
+  final TwoFactorPlugin<Object> plugin;
+  final InMemoryAuthTwoFactorStore factorStore;
+  final InMemoryAuthTwoFactorChallengeStore challengeStore;
+  final InMemoryAuthTwoFactorTrustedDeviceStore trustedDeviceStore;
+  final InMemoryAuthTwoFactorStepUpStore stepUpStore;
+  final AuthTwoFactorSignInChallenge challenge;
+  final AuthTwoFactorTrustedDeviceToken trustedDevice;
+  final AuthTwoFactorStepUpToken stepUp;
+}
+
+Future<_TwoFactorDeletionFixture> _createDeletionFixture({
+  String userId = 'user-1',
+}) async {
+  final now = DateTime.utc(2030, 1, 1);
+  final factorStore = InMemoryAuthTwoFactorStore();
+  final challengeStore = InMemoryAuthTwoFactorChallengeStore();
+  final trustedDeviceStore = InMemoryAuthTwoFactorTrustedDeviceStore();
+  final stepUpStore = InMemoryAuthTwoFactorStepUpStore();
+  final pendingRecoveryStore = InMemoryAuthTwoFactorPendingRecoveryStore(
+    factorStore: factorStore,
+    challengeStore: challengeStore,
+  );
+  final plugin = TwoFactorPlugin<Object>(
+    store: factorStore,
+    challengeStore: challengeStore,
+    pendingRecoveryStore: pendingRecoveryStore,
+    trustedDeviceStore: trustedDeviceStore,
+    stepUpStore: stepUpStore,
+    secretProtector: const PlaintextAuthTwoFactorSecretProtector(),
+    secretGenerator: _queuedGenerator(),
+  );
+  final enrollment = await plugin.beginEnrollment(userId, now: now);
+  final code = generateAuthTotpCode(
+    enrollment.secret,
+    timestampSeconds: now.millisecondsSinceEpoch ~/ 1000,
+  );
+  await plugin.verifyEnrollment(userId, code, now: now);
+  final challenge = (await plugin.beginSignInChallenge(userId, now: now))!;
+  final trustedDevice = await plugin.issueTrustedDevice(userId, code, now: now);
+  final stepUp = await plugin.verifyStepUp(
+    userId,
+    'session-binding',
+    code,
+    now: now,
+  );
+  return _TwoFactorDeletionFixture(
+    userId: userId,
+    now: now,
+    plugin: plugin,
+    factorStore: factorStore,
+    challengeStore: challengeStore,
+    trustedDeviceStore: trustedDeviceStore,
+    stepUpStore: stepUpStore,
+    challenge: challenge,
+    trustedDevice: trustedDevice,
+    stepUp: stepUp,
+  );
+}
+
+Future<void> _expectDeletionFixturePresent(
+  _TwoFactorDeletionFixture fixture,
+) async {
+  expect(fixture.factorStore.findByUserId(fixture.userId), isNotNull);
+  expect(
+    fixture.challengeStore.findByTokenHash(
+      hashOpaqueToken(fixture.challenge.token),
+    ),
+    isNotNull,
+  );
+  expect(
+    fixture.trustedDeviceStore.findActive(
+      fixture.userId,
+      hashOpaqueToken(fixture.trustedDevice.token),
+      now: fixture.now,
+    ),
+    isNotNull,
+  );
+  expect(
+    await fixture.plugin.isStepUpValid(
+      fixture.userId,
+      'session-binding',
+      fixture.stepUp.token,
+      now: fixture.now,
+    ),
+    isTrue,
+  );
+}
+
+Future<void> _expectDeletionFixtureAbsent(
+  _TwoFactorDeletionFixture fixture,
+) async {
+  expect(fixture.factorStore.findByUserId(fixture.userId), isNull);
+  expect(
+    fixture.challengeStore.findByTokenHash(
+      hashOpaqueToken(fixture.challenge.token),
+    ),
+    isNull,
+  );
+  expect(
+    fixture.trustedDeviceStore.findActive(
+      fixture.userId,
+      hashOpaqueToken(fixture.trustedDevice.token),
+      now: fixture.now,
+    ),
+    isNull,
+  );
+  expect(
+    await fixture.plugin.isStepUpValid(
+      fixture.userId,
+      'session-binding',
+      fixture.stepUp.token,
+      now: fixture.now,
+    ),
+    isFalse,
+  );
+}
+
+Future<void> _deleteThenFailCore(
+  _TwoFactorDeletionFixture fixture,
+  AuthUserDataDeletionCheckpoint checkpoint,
+) async {
+  try {
+    await fixture.plugin.deleteUserData(fixture.userId);
+    throw StateError('simulated core deletion failure');
+  } catch (error, stackTrace) {
+    await checkpoint.restore();
+    Error.throwWithStackTrace(error, stackTrace);
+  }
+}
+
+Future<void> _seedUser(InMemoryAuthStore store, AuthUser user) async {
+  final now = DateTime.utc(2030, 1, 1);
+  final created = await store.credentials.register(
+    user,
+    AuthPasswordCredential(
+      id: 'credential-${user.id}',
+      userId: user.id,
+      identifier: user.email!,
+      passwordHash: 'test-hash',
+      createdAt: now,
+      updatedAt: now,
+    ),
+  );
+  if (created == null) throw StateError('could not seed test user');
+}
+
+final class _FailingDeletionPlugin
+    implements
+        AuthServerPlugin<Object>,
+        AuthReversibleUserDataDeletionContributor {
+  @override
+  String get id => 'failing-two-factor-deletion-test';
+
+  @override
+  String get userDataNamespace => 'failing-two-factor-deletion-test';
+
+  @override
+  void configure(AuthServerPluginContext<Object> context) {}
+
+  @override
+  void validateUserDeletion(String userId) {}
+
+  @override
+  AuthUserDataDeletionCheckpoint checkpointUserData(String userId) =>
+      AuthUserDataDeletionCheckpoint.capture(const []);
+
+  @override
+  void deleteUserData(String userId) {
+    throw StateError('simulated later contributor failure');
+  }
 }

@@ -800,6 +800,9 @@ abstract interface class AuthTwoFactorPendingRecoveryStore {
     required int maxAttempts,
     required Duration lockoutDuration,
   });
+
+  /// Deletes every pending recovery challenge owned by [userId].
+  FutureOr<void> deleteForUser(String userId);
 }
 
 /// In-memory atomic pending-recovery store for tests and local examples.
@@ -807,7 +810,9 @@ abstract interface class AuthTwoFactorPendingRecoveryStore {
 /// Pass the same in-memory factor and challenge stores to this coordinator;
 /// its operation performs all state changes synchronously in one isolate turn.
 final class InMemoryAuthTwoFactorPendingRecoveryStore
-    implements AuthTwoFactorPendingRecoveryStore {
+    implements
+        AuthTwoFactorPendingRecoveryStore,
+        AuthInMemoryTransactionParticipant {
   const InMemoryAuthTwoFactorPendingRecoveryStore({
     required this.factorStore,
     required this.challengeStore,
@@ -815,6 +820,25 @@ final class InMemoryAuthTwoFactorPendingRecoveryStore
 
   final InMemoryAuthTwoFactorStore factorStore;
   final InMemoryAuthTwoFactorChallengeStore challengeStore;
+
+  @override
+  Object createInMemoryCheckpoint() => (
+    factors: factorStore.createInMemoryCheckpoint(),
+    challenges: challengeStore.createInMemoryCheckpoint(),
+  );
+
+  @override
+  void restoreInMemoryCheckpoint(Object checkpoint) {
+    final state = checkpoint as ({Object factors, Object challenges});
+    factorStore.restoreInMemoryCheckpoint(state.factors);
+    challengeStore.restoreInMemoryCheckpoint(state.challenges);
+  }
+
+  @override
+  void deleteForUser(String userId) {
+    _requireUserId(userId);
+    challengeStore._records.removeWhere((_, record) => record.userId == userId);
+  }
 
   @override
   AuthTwoFactorPendingRecoveryAttempt recordRecoveryAttempt(
@@ -1249,11 +1273,15 @@ final class TwoFactorPlugin<TContext>
   String get userDataNamespace => 'two_factor';
 
   @override
-  Future<void> validateUserDeletion(String userId) async {}
+  Future<void> validateUserDeletion(String userId) async {
+    _requireUserId(userId);
+  }
 
   @override
   Future<void> deleteUserData(String userId) async {
+    _requireUserId(userId);
     await store.delete(userId);
+    await pendingRecoveryStore?.deleteForUser(userId);
     final now = DateTime.now().toUtc();
     final trusted = trustedDeviceStore;
     if (trusted is InMemoryAuthTwoFactorTrustedDeviceStore) {
@@ -1269,13 +1297,16 @@ final class TwoFactorPlugin<TContext>
   }
 
   @override
-  AuthUserDataDeletionCheckpoint checkpointUserData(String userId) =>
-      AuthUserDataDeletionCheckpoint.capture([
-        store,
-        trustedDeviceStore,
-        challengeStore,
-        ?stepUpStore,
-      ]);
+  AuthUserDataDeletionCheckpoint checkpointUserData(String userId) {
+    _requireUserId(userId);
+    return AuthUserDataDeletionCheckpoint.capture([
+      store,
+      trustedDeviceStore,
+      challengeStore,
+      ?pendingRecoveryStore,
+      ?stepUpStore,
+    ]);
+  }
 
   /// Starts a short-lived challenge for a user whose TOTP is enabled.
   Future<AuthTwoFactorSignInChallenge?> beginSignInChallenge(
