@@ -1,6 +1,6 @@
 import 'dart:convert';
 
-import 'admin.dart' show AuthAdminAccessControl, AuthAdminPermissionSet;
+import 'admin.dart' show AuthAdminAccessControl;
 import 'admin_models.dart';
 import 'client.dart';
 import 'models.dart';

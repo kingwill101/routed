@@ -16,7 +16,6 @@ import 'users.dart' show normalizeAuthEmail;
 
 const String authAdminPluginId = 'admin';
 
-typedef AuthAdminPermissionSet = Map<String, Iterable<String>>;
 typedef AuthAdminFailureReporter =
     FutureOr<void> Function(AuthAdminInternalFailure failure);
 typedef AuthAdminEventSink =
@@ -240,13 +239,27 @@ final class AdminPlugin<TContext>
     if (operation == 'admin.impersonateUser') {
       return const AuthOperationSemantics.mutation(
         persistence: AuthMutationPersistence.session(),
-        replaySafety: AuthMutationReplaySafety.repeatable,
+        replaySafety: AuthMutationReplaySafety.singleUse,
       );
     }
     if (operation == 'admin.stopImpersonating') {
       return const AuthOperationSemantics.mutation(
         persistence: AuthMutationPersistence.session(),
-        replaySafety: AuthMutationReplaySafety.idempotent,
+        replaySafety: AuthMutationReplaySafety.singleUse,
+      );
+    }
+    if (operation == 'admin.revokeUserSession') {
+      return const AuthOperationSemantics.mutation(
+        persistence: AuthMutationPersistence.session(),
+        replaySafety: AuthMutationReplaySafety.singleUse,
+      );
+    }
+    if (operation == 'admin.banUser' || operation == 'admin.disableUser') {
+      return const AuthOperationSemantics.mutation(
+        persistence: AuthMutationPersistence.durable(
+          atomicity: AuthMutationAtomicity.nonAtomic,
+        ),
+        replaySafety: AuthMutationReplaySafety.unguarded,
       );
     }
     final atomicOperation = switch (operation) {
@@ -254,13 +267,12 @@ final class AdminPlugin<TContext>
       'admin.setRole' => 'preserveAdministrator',
       'admin.removeUser' => 'hardDeleteUser',
       'admin.updateUser' ||
-      'admin.setUserPassword' ||
-      'admin.banUser' ||
+      'admin.setUserPassword' => 'mutateUserAndRevokeAccess',
+      'admin.revokeUserSessions' => 'revokeUserAccess',
       'admin.unbanUser' ||
-      'admin.disableUser' ||
       'admin.enableUser' ||
       'admin.verifyEmail' ||
-      'admin.unlockUser' => 'mutateUserAndRevokeAccess',
+      'admin.unlockUser' => 'mutateUserState',
       _ => null,
     };
     return AuthOperationSemantics.mutation(
@@ -275,9 +287,12 @@ final class AdminPlugin<TContext>
                 atomicOperationId: atomicOperation,
               ),
       ),
-      replaySafety: operation == 'admin.revokeUserSessions'
-          ? AuthMutationReplaySafety.idempotent
-          : AuthMutationReplaySafety.singleUse,
+      replaySafety: switch (operation) {
+        'admin.revokeUserSessions' => AuthMutationReplaySafety.repeatable,
+        'admin.createUser' ||
+        'admin.setUserPassword' => AuthMutationReplaySafety.singleUse,
+        _ => AuthMutationReplaySafety.unguarded,
+      },
     );
   }
 
@@ -345,6 +360,15 @@ final class AdminPlugin<TContext>
               name: 'banExpiresAt',
               kind: 'nullable_datetime',
             ),
+            AuthFieldDescriptor(name: 'emailVerified', kind: 'boolean'),
+            AuthFieldDescriptor(name: 'disabled', kind: 'boolean'),
+            AuthFieldDescriptor(
+              name: 'disabledReason',
+              kind: 'nullable_string',
+            ),
+            AuthFieldDescriptor(name: 'disabledAt', kind: 'nullable_datetime'),
+            AuthFieldDescriptor(name: 'lockedUntil', kind: 'nullable_datetime'),
+            AuthFieldDescriptor(name: 'failedLoginAttempts', kind: 'integer'),
             AuthFieldDescriptor(name: 'createdAt', kind: 'datetime'),
             AuthFieldDescriptor(name: 'updatedAt', kind: 'datetime'),
           ],
@@ -362,6 +386,23 @@ final class AdminPlugin<TContext>
             ['banned', 'banExpiresAt'],
           ],
         ),
+        AuthEntityDescriptor(
+          id: 'admin_audit_record',
+          fields: [
+            AuthFieldDescriptor(name: 'id', kind: 'id'),
+            AuthFieldDescriptor(name: 'operation', kind: 'string'),
+            AuthFieldDescriptor(name: 'initiatorUserId', kind: 'id'),
+            AuthFieldDescriptor(name: 'targetUserId', kind: 'id'),
+            AuthFieldDescriptor(name: 'occurredAt', kind: 'datetime'),
+          ],
+          uniqueConstraints: [
+            ['id'],
+          ],
+          indexes: [
+            ['targetUserId', 'occurredAt'],
+            ['initiatorUserId', 'occurredAt'],
+          ],
+        ),
       ],
       atomicOperations: [
         AuthAtomicOperationDescriptor(
@@ -373,6 +414,16 @@ final class AdminPlugin<TContext>
           id: 'mutateUserAndRevokeAccess',
           description:
               'Change sensitive user state, revoke sessions, and rotate JWT version.',
+        ),
+        AuthAtomicOperationDescriptor(
+          id: 'mutateUserState',
+          description:
+              'Change administrative account state after transactional authorization.',
+        ),
+        AuthAtomicOperationDescriptor(
+          id: 'revokeUserAccess',
+          description:
+              'Revoke every server session and rotate the JWT version together.',
         ),
         AuthAtomicOperationDescriptor(
           id: 'preserveAdministrator',
@@ -431,11 +482,13 @@ final class AdminPlugin<TContext>
     final current = await store.findUser(userId);
     if (current == null) throw AuthFlowException('user_not_found');
     final role = _adminRoles.firstOrNull ?? 'admin';
-    return store.replaceRoles(
-      userId,
-      {...current.user.roles, role},
-      administratorRoles: _adminRoles,
-      administratorUserIds: _adminUserIds,
+    return store.execute(
+      AuthAdminTrustedReplaceRolesMutation(
+        userId: userId,
+        roles: <String>[...current.user.roles, role],
+        administratorRoles: _adminRoles,
+        administratorUserIds: _adminUserIds,
+      ),
     );
   }
 
@@ -454,7 +507,6 @@ final class AdminPlugin<TContext>
         await _require(actor.id, 'user', 'get');
         return (await _requiredUser(_string(input, 'userId'))).toJson();
       case 'admin.createUser':
-        await _require(actor.id, 'user', 'create');
         return (await _createUser(
           invocation.context,
           actor,
@@ -467,21 +519,18 @@ final class AdminPlugin<TContext>
           input,
         )).toJson((value) => value.toJson());
       case 'admin.setRole':
-        await _require(actor.id, 'user', 'set-role');
         return (await _setRoles(
           invocation.context,
           actor,
           input,
         )).toJson((value) => value.toJson());
       case 'admin.setUserPassword':
-        await _require(actor.id, 'user', 'set-password');
         return (await _setPassword(
           invocation.context,
           actor,
           input,
         )).toJson((value) => value.toJson());
       case 'admin.banUser':
-        await _require(actor.id, 'user', 'ban');
         return (await _setBan(
           invocation.context,
           actor,
@@ -489,7 +538,6 @@ final class AdminPlugin<TContext>
           true,
         )).toJson((value) => value.toJson());
       case 'admin.unbanUser':
-        await _require(actor.id, 'user', 'ban');
         return (await _setBan(
           invocation.context,
           actor,
@@ -507,25 +555,38 @@ final class AdminPlugin<TContext>
               .toList(),
         };
       case 'admin.revokeUserSession':
-        await _require(actor.id, 'session', 'revoke');
         final userId = _string(input, 'userId');
-        final value = await _coreStore.sessions.revokeById(
-          userId,
-          _string(input, 'sessionId'),
+        final value = await store.execute(
+          AuthAdminRevokeSessionMutation(
+            authorization: _mutationAuthorization(
+              actor.id,
+              'session',
+              'revoke',
+            ),
+            userId: userId,
+            sessionId: _string(input, 'sessionId'),
+          ),
         );
-        if (value == null) throw AuthFlowException('session_not_found');
-        return {'revoked': true};
+        return {'revoked': value};
       case 'admin.revokeUserSessions':
-        await _require(actor.id, 'session', 'revoke');
         final userId = _string(input, 'userId');
-        await _requiredUser(userId);
-        return {'revoked': await _coreStore.sessions.revokeAllForUser(userId)};
+        return {
+          'revoked': await store.execute(
+            AuthAdminRevokeSessionsMutation(
+              authorization: _mutationAuthorization(
+                actor.id,
+                'session',
+                'revoke',
+              ),
+              userId: userId,
+            ),
+          ),
+        };
       case 'admin.impersonateUser':
         return _impersonate(invocation, actor, input);
       case 'admin.stopImpersonating':
         return _stopImpersonating(invocation, actor);
       case 'admin.removeUser':
-        await _require(actor.id, 'user', 'delete');
         return (await _removeUser(
           invocation.context,
           actor,
@@ -542,16 +603,12 @@ final class AdminPlugin<TContext>
           ),
         ).toJson();
       case 'admin.disableUser':
-        await _require(actor.id, 'user', 'ban');
         return _disableUser(invocation.context, actor, input);
       case 'admin.enableUser':
-        await _require(actor.id, 'user', 'ban');
         return _enableUser(invocation.context, actor, input);
       case 'admin.verifyEmail':
-        await _require(actor.id, 'user', 'update');
         return _verifyEmail(invocation.context, actor, input);
       case 'admin.unlockUser':
-        await _require(actor.id, 'user', 'ban');
         return _unlockUser(invocation.context, actor, input);
       case 'admin.getAccountState':
         final targetId = _optionalString(input, 'userId') ?? actor.id;
@@ -646,15 +703,18 @@ final class AdminPlugin<TContext>
             )
             as AuthAdminCreateUserDraft;
     final now = DateTime.now().toUtc();
-    final user = await store.createUser(
-      draft.toUser(),
-      AuthPasswordCredential(
-        id: secureRandomToken(length: 16),
-        userId: draft.id,
-        identifier: draft.email,
-        passwordHash: _passwordHasher.hash(password),
-        createdAt: now,
-        updatedAt: now,
+    final user = await store.execute(
+      AuthAdminCreateUserMutation(
+        authorization: _mutationAuthorization(actor.id, 'user', 'create'),
+        user: draft.toUser(),
+        credential: AuthPasswordCredential(
+          id: secureRandomToken(length: 16),
+          userId: draft.id,
+          identifier: draft.email,
+          passwordHash: _passwordHasher.hash(password),
+          createdAt: now,
+          updatedAt: now,
+        ),
       ),
     );
     return _completeMutation(
@@ -673,14 +733,12 @@ final class AdminPlugin<TContext>
     Map<String, dynamic> input,
   ) async {
     final userId = _string(input, 'userId');
-    await _require(actor.id, 'user', 'update');
     final current = await _requiredUser(userId);
     final requestedEmail = _optionalString(input, 'email');
     final email = requestedEmail == null
         ? current.user.email
         : normalizeAuthEmail(requestedEmail);
     final emailChanged = email != current.user.email;
-    if (emailChanged) await _require(actor.id, 'user', 'set-email');
     var draft = AuthAdminUpdateUserDraft(
       user: current.user,
       name: _optionalString(input, 'name'),
@@ -708,7 +766,23 @@ final class AdminPlugin<TContext>
       roles: current.user.roles,
       attributes: draft.attributes ?? current.user.attributes,
     );
-    final stored = await store.updateUser(updated, revokeAccess: emailChanged);
+    final stored = await store.execute(
+      AuthAdminUpdateUserMutation(
+        authorization: _mutationAuthorization(
+          actor.id,
+          'user',
+          'update',
+          additional: emailChanged
+              ? const <AuthAdminPermissionRequirement>[
+                  AuthAdminPermissionRequirement('user', 'set-email'),
+                ]
+              : const <AuthAdminPermissionRequirement>[],
+        ),
+        expectedUser: current.user,
+        user: updated,
+        revokeAccess: emailChanged,
+      ),
+    );
     return _completeMutation(
       context,
       actor,
@@ -726,11 +800,6 @@ final class AdminPlugin<TContext>
   ) async {
     final userId = _string(input, 'userId');
     final roles = _roles(input);
-    if (actor.id == userId &&
-        !_adminUserIds.contains(actor.id) &&
-        !roles.any(_adminRoles.contains)) {
-      throw AuthFlowException('self_admin_removal');
-    }
     final transformed = await _before(
       options.hooks.beforeRole,
       context,
@@ -739,11 +808,12 @@ final class AdminPlugin<TContext>
       roles,
       userId,
     );
-    final stored = await store.replaceRoles(
-      userId,
-      (transformed as Iterable).map((value) => '$value'),
-      administratorRoles: _adminRoles,
-      administratorUserIds: _adminUserIds,
+    final stored = await store.execute(
+      AuthAdminReplaceRolesMutation(
+        authorization: _mutationAuthorization(actor.id, 'user', 'set-role'),
+        userId: userId,
+        roles: (transformed as Iterable).map((value) => '$value').toList(),
+      ),
     );
     return _completeMutation(
       context,
@@ -768,15 +838,18 @@ final class AdminPlugin<TContext>
     final email = target.user.email;
     if (email == null) throw AuthFlowException('email_required');
     final now = DateTime.now().toUtc();
-    final stored = await store.setPassword(
-      userId,
-      AuthPasswordCredential(
-        id: secureRandomToken(length: 16),
+    final stored = await store.execute(
+      AuthAdminSetPasswordMutation(
+        authorization: _mutationAuthorization(actor.id, 'user', 'set-password'),
         userId: userId,
-        identifier: email,
-        passwordHash: _passwordHasher.hash(password),
-        createdAt: now,
-        updatedAt: now,
+        credential: AuthPasswordCredential(
+          id: secureRandomToken(length: 16),
+          userId: userId,
+          identifier: email,
+          passwordHash: _passwordHasher.hash(password),
+          createdAt: now,
+          updatedAt: now,
+        ),
       ),
     );
     return _completeMutation(
@@ -796,7 +869,6 @@ final class AdminPlugin<TContext>
     bool banned,
   ) async {
     final userId = _string(input, 'userId');
-    if (banned && actor.id == userId) throw AuthFlowException('self_ban');
     final expiresAt = _optionalDate(input['banExpiresAt']);
     if (expiresAt != null && !expiresAt.isAfter(DateTime.now().toUtc())) {
       throw AuthFlowException('invalid_ban_expiry');
@@ -817,11 +889,14 @@ final class AdminPlugin<TContext>
     );
     final data = Map<String, Object?>.from(transformed as Map);
     final nextBanned = data['banned'] == true;
-    final stored = await store.setBan(
-      userId,
-      banned: nextBanned,
-      reason: data['reason']?.toString(),
-      expiresAt: data['expiresAt'] as DateTime?,
+    final stored = await store.execute(
+      AuthAdminSetBanMutation(
+        authorization: _mutationAuthorization(actor.id, 'user', 'ban'),
+        userId: userId,
+        banned: nextBanned,
+        reason: data['reason']?.toString(),
+        expiresAt: data['expiresAt'] as DateTime?,
+      ),
     );
     if (nextBanned) {
       for (final contributor in _accessRevocationContributors) {
@@ -843,36 +918,30 @@ final class AdminPlugin<TContext>
     AuthUser actor,
     Map<String, dynamic> input,
   ) async {
-    await _require(actor.id, 'user', 'impersonate');
     if (_sessionStrategy != AuthSessionStrategy.session ||
         invocation.sessionControl?.strategy != AuthSessionStrategy.session) {
       throw AuthFlowException('impersonation_requires_server_session');
     }
     final userId = _string(input, 'userId');
-    if (userId == actor.id) throw AuthFlowException('self_impersonation');
-    final target = await _requiredUser(userId);
-    if (target.state.isBanned()) throw AuthFlowException('account_unavailable');
-    if (isAdministrator(target.user) &&
-        !await hasPermission(actor.id, 'user', 'impersonate-admins')) {
-      throw AuthFlowException('admin_impersonation_forbidden');
-    }
     final currentId = invocation.sessionControl!.currentSessionId;
-    if (currentId != null) {
-      final current = (await _coreStore.sessions.listForUser(
-        actor.id,
-      )).where((session) => session.id == currentId).firstOrNull;
-      if (current?.impersonatedBy != null) {
-        throw AuthFlowException('impersonation_chaining_forbidden');
-      }
-    }
+    if (currentId == null) throw AuthFlowException('session_not_found');
+    final requestedTarget = await _requiredUser(userId);
     await _before(
       options.hooks.beforeImpersonation,
       invocation.context,
       'start',
       actor,
-      target.user.redacted(),
+      requestedTarget.user.redacted(),
       userId,
     );
+    final decision = await store.execute(
+      AuthAdminPrepareImpersonationMutation(
+        authorization: _mutationAuthorization(actor.id, 'user', 'impersonate'),
+        userId: userId,
+        currentSessionId: currentId,
+      ),
+    );
+    final target = decision.target;
     return AuthEndpointAuthenticationIntent(
       user: target.user,
       authenticationMethod: 'impersonation',
@@ -905,13 +974,14 @@ final class AdminPlugin<TContext>
     }
     final currentId = control.currentSessionId;
     if (currentId == null) throw AuthFlowException('not_impersonating');
-    final record = (await _coreStore.sessions.listForUser(
-      currentUser.id,
-    )).where((session) => session.id == currentId).firstOrNull;
-    final actorId = record?.impersonatedBy;
-    if (actorId == null) throw AuthFlowException('not_impersonating');
-    final actor = await store.findUser(actorId);
-    if (actor == null || actor.state.isBanned()) {
+    final decision = await store.execute(
+      AuthAdminPrepareStopImpersonatingMutation(
+        currentUserId: currentUser.id,
+        currentSessionId: currentId,
+      ),
+    );
+    final actor = decision.actor;
+    if (actor == null) {
       await control.signOut();
       return const AuthAdminMutationResult<AuthAdminStopImpersonatingResult>(
         data: AuthAdminStopImpersonatingResult(signedOut: true),
@@ -946,7 +1016,6 @@ final class AdminPlugin<TContext>
     Map<String, dynamic> input,
   ) async {
     final userId = _string(input, 'userId');
-    if (actor.id == userId) throw AuthFlowException('self_delete');
     await _before(
       options.hooks.beforeDelete,
       context,
@@ -956,10 +1025,11 @@ final class AdminPlugin<TContext>
       userId,
     );
     await options.validateDeletion?.call(userId);
-    final deleted = await store.deleteUser(
-      userId,
-      administratorRoles: _adminRoles,
-      administratorUserIds: _adminUserIds,
+    final deleted = await store.execute(
+      AuthAdminDeleteUserMutation(
+        authorization: _mutationAuthorization(actor.id, 'user', 'delete'),
+        userId: userId,
+      ),
     );
     return _completeMutation(
       context,
@@ -991,6 +1061,22 @@ final class AdminPlugin<TContext>
 
   Iterable<String> _effectiveRoles(AuthUser user) =>
       _adminUserIds.contains(user.id) ? {...user.roles, 'admin'} : user.roles;
+
+  AuthAdminMutationAuthorization _mutationAuthorization(
+    String actorId,
+    String resource,
+    String action, {
+    Iterable<AuthAdminPermissionRequirement> additional = const [],
+  }) => AuthAdminMutationAuthorization(
+    actorId: actorId,
+    administratorRoles: _adminRoles,
+    administratorUserIds: _adminUserIds,
+    rolePermissions: accessControl.roles,
+    requirements: <AuthAdminPermissionRequirement>[
+      AuthAdminPermissionRequirement(resource, action),
+      ...additional,
+    ],
+  );
 
   Future<AuthAdminUser> _requiredUser(String userId) async {
     final value = await store.findUser(userId);
@@ -1087,9 +1173,15 @@ final class AdminPlugin<TContext>
     Map<String, dynamic> input,
   ) async {
     final userId = _string(input, 'userId');
-    if (actor.id == userId) throw AuthFlowException('self_disable');
     final reason = _optionalString(input, 'reason');
-    final updated = await store.disableUser(userId, reason: reason);
+    final updated = await store.execute(
+      AuthAdminSetAccountStateMutation(
+        authorization: _mutationAuthorization(actor.id, 'user', 'ban'),
+        userId: userId,
+        action: AuthAdminAccountStateAction.disable,
+        reason: reason,
+      ),
+    );
     for (final contributor in _accessRevocationContributors) {
       await contributor.revokeUserAccess(userId);
     }
@@ -1109,7 +1201,13 @@ final class AdminPlugin<TContext>
     Map<String, dynamic> input,
   ) async {
     final userId = _string(input, 'userId');
-    final updated = await store.enableUser(userId);
+    final updated = await store.execute(
+      AuthAdminSetAccountStateMutation(
+        authorization: _mutationAuthorization(actor.id, 'user', 'ban'),
+        userId: userId,
+        action: AuthAdminAccountStateAction.enable,
+      ),
+    );
     return _completeMutation(
       context,
       actor,
@@ -1126,7 +1224,13 @@ final class AdminPlugin<TContext>
     Map<String, dynamic> input,
   ) async {
     final userId = _string(input, 'userId');
-    final updated = await store.verifyEmail(userId);
+    final updated = await store.execute(
+      AuthAdminSetAccountStateMutation(
+        authorization: _mutationAuthorization(actor.id, 'user', 'update'),
+        userId: userId,
+        action: AuthAdminAccountStateAction.verifyEmail,
+      ),
+    );
     return _completeMutation(
       context,
       actor,
@@ -1143,7 +1247,13 @@ final class AdminPlugin<TContext>
     Map<String, dynamic> input,
   ) async {
     final userId = _string(input, 'userId');
-    final updated = await store.unlockUser(userId);
+    final updated = await store.execute(
+      AuthAdminSetAccountStateMutation(
+        authorization: _mutationAuthorization(actor.id, 'user', 'ban'),
+        userId: userId,
+        action: AuthAdminAccountStateAction.unlock,
+      ),
+    );
     return _completeMutation(
       context,
       actor,

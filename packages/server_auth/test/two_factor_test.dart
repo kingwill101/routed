@@ -587,12 +587,31 @@ void main() {
         failure.configure(AuthServerPluginContext<Object>(store: core));
         core.bindUserDeletionPlanContributors([fixture.plugin, failure]);
         final adminStore = InMemoryAuthAdminStore(core);
+        final administrator = AuthUser(
+          id: 'admin-1',
+          email: 'admin@example.com',
+          roles: const ['admin'],
+        );
+        await _seedUser(core, administrator);
 
         await expectLater(
-          adminStore.deleteUser(
-            user.id,
-            administratorRoles: const {'admin'},
-            administratorUserIds: const {},
+          adminStore.execute(
+            AuthAdminDeleteUserMutation(
+              authorization: AuthAdminMutationAuthorization(
+                actorId: administrator.id,
+                administratorRoles: const {'admin'},
+                administratorUserIds: const {},
+                rolePermissions: const {
+                  'admin': {
+                    'user': ['delete'],
+                  },
+                },
+                requirements: const [
+                  AuthAdminPermissionRequirement('user', 'delete'),
+                ],
+              ),
+              userId: user.id,
+            ),
           ),
           throwsStateError,
         );

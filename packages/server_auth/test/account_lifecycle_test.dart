@@ -678,7 +678,14 @@ void main() {
     });
 
     test('disableUser persists disabled state', () async {
-      final result = await adminStore.disableUser('user-1', reason: 'spam');
+      final result = await adminStore.execute(
+        AuthAdminSetAccountStateMutation(
+          authorization: _adminMutationAuthorization('ban'),
+          userId: 'user-1',
+          action: AuthAdminAccountStateAction.disable,
+          reason: 'spam',
+        ),
+      );
       expect(result.state.disabled, isTrue);
       expect(result.state.disabledReason, equals('spam'));
 
@@ -688,8 +695,20 @@ void main() {
     });
 
     test('enableUser clears disabled state', () async {
-      await adminStore.disableUser('user-1');
-      final enabled = await adminStore.enableUser('user-1');
+      await adminStore.execute(
+        AuthAdminSetAccountStateMutation(
+          authorization: _adminMutationAuthorization('ban'),
+          userId: 'user-1',
+          action: AuthAdminAccountStateAction.disable,
+        ),
+      );
+      final enabled = await adminStore.execute(
+        AuthAdminSetAccountStateMutation(
+          authorization: _adminMutationAuthorization('ban'),
+          userId: 'user-1',
+          action: AuthAdminAccountStateAction.enable,
+        ),
+      );
       expect(enabled.state.disabled, isFalse);
 
       final lookedUp = await adminStore.findUser('user-1');
@@ -697,7 +716,13 @@ void main() {
     });
 
     test('verifyEmail sets emailVerified', () async {
-      final result = await adminStore.verifyEmail('user-1');
+      final result = await adminStore.execute(
+        AuthAdminSetAccountStateMutation(
+          authorization: _adminMutationAuthorization('update'),
+          userId: 'user-1',
+          action: AuthAdminAccountStateAction.verifyEmail,
+        ),
+      );
       expect(result.state.emailVerified, isTrue);
 
       final lookedUp = await adminStore.findUser('user-1');
@@ -705,7 +730,13 @@ void main() {
     });
 
     test('unlockUser clears lockout', () async {
-      final unlocked = await adminStore.unlockUser('user-1');
+      final unlocked = await adminStore.execute(
+        AuthAdminSetAccountStateMutation(
+          authorization: _adminMutationAuthorization('ban'),
+          userId: 'user-1',
+          action: AuthAdminAccountStateAction.unlock,
+        ),
+      );
       expect(unlocked.state.isLocked(), isFalse);
       expect(unlocked.state.failedLoginAttempts, equals(0));
     });
@@ -1204,6 +1235,21 @@ void main() {
 }
 
 // --- Helpers ---
+
+AuthAdminMutationAuthorization _adminMutationAuthorization(String action) =>
+    AuthAdminMutationAuthorization(
+      actorId: 'admin-1',
+      administratorRoles: const <String>{'admin'},
+      administratorUserIds: const <String>{},
+      rolePermissions: const <String, AuthAdminPermissionSet>{
+        'admin': <String, Iterable<String>>{
+          'user': <String>['update', 'ban'],
+        },
+      },
+      requirements: <AuthAdminPermissionRequirement>[
+        AuthAdminPermissionRequirement('user', action),
+      ],
+    );
 
 AuthAuthenticationMethodService _authenticationMethods(
   InMemoryAuthStore store, {

@@ -3,6 +3,100 @@ import 'dart:async';
 import 'models.dart';
 import 'users.dart' show normalizeAuthEmail;
 
+/// Resource/action permissions assigned to one administrative role.
+typedef AuthAdminPermissionSet = Map<String, Iterable<String>>;
+
+/// One permission that must still be held when an admin mutation commits.
+final class AuthAdminPermissionRequirement {
+  const AuthAdminPermissionRequirement(this.resource, this.action);
+
+  final String resource;
+  final String action;
+}
+
+/// Immutable authorization policy carried into a backend-owned admin command.
+///
+/// The backend reloads [actorId] after entering its transaction and evaluates
+/// every [requirements] entry against that authoritative user. Explicit
+/// administrator IDs receive the built-in `admin` role. Role-based
+/// administrators retain only the permissions assigned to their actual roles.
+final class AuthAdminMutationAuthorization {
+  AuthAdminMutationAuthorization({
+    required String actorId,
+    required Iterable<String> administratorRoles,
+    required Iterable<String> administratorUserIds,
+    required Map<String, AuthAdminPermissionSet> rolePermissions,
+    required Iterable<AuthAdminPermissionRequirement> requirements,
+  }) : actorId = actorId.trim(),
+       administratorRoles = Set<String>.unmodifiable(
+         normalizeAuthAdminRoles(administratorRoles),
+       ),
+       administratorUserIds = Set<String>.unmodifiable(
+         administratorUserIds
+             .map((value) => value.trim())
+             .where((value) => value.isNotEmpty),
+       ),
+       rolePermissions = Map<String, Map<String, List<String>>>.unmodifiable({
+         for (final entry in rolePermissions.entries)
+           entry.key
+               .trim()
+               .toLowerCase(): Map<String, List<String>>.unmodifiable({
+             for (final permission in entry.value.entries)
+               permission.key.trim().toLowerCase(): List<String>.unmodifiable(
+                 permission.value
+                     .map((value) => value.trim().toLowerCase())
+                     .where((value) => value.isNotEmpty)
+                     .toSet(),
+               ),
+           }),
+       }),
+       requirements = List<AuthAdminPermissionRequirement>.unmodifiable(
+         requirements,
+       ) {
+    if (this.actorId.isEmpty) {
+      throw ArgumentError.value(actorId, 'actorId', 'must be non-empty');
+    }
+    if (this.requirements.isEmpty) {
+      throw ArgumentError.value(
+        requirements,
+        'requirements',
+        'must not be empty',
+      );
+    }
+  }
+
+  final String actorId;
+  final Set<String> administratorRoles;
+  final Set<String> administratorUserIds;
+  final Map<String, Map<String, List<String>>> rolePermissions;
+  final List<AuthAdminPermissionRequirement> requirements;
+
+  bool allows(
+    AuthUser actor, {
+    Iterable<AuthAdminPermissionRequirement>? additionalRequirements,
+  }) {
+    final actorRoles = normalizeAuthAdminRoles(actor.roles);
+    final idAdministrator = administratorUserIds.contains(actor.id);
+    final roleAdministrator = actorRoles.any(administratorRoles.contains);
+    if (!idAdministrator && !roleAdministrator) return false;
+    final effectiveRoles = idAdministrator
+        ? <String>{...actorRoles, 'admin'}
+        : actorRoles;
+    return <AuthAdminPermissionRequirement>[
+      ...requirements,
+      ...?additionalRequirements,
+    ].every((requirement) {
+      final resource = requirement.resource.trim().toLowerCase();
+      final action = requirement.action.trim().toLowerCase();
+      return effectiveRoles.any((role) {
+        final permissions = rolePermissions[role];
+        final actions = permissions?[resource] ?? permissions?['*'];
+        return actions?.any((value) => value == action || value == '*') == true;
+      });
+    });
+  }
+}
+
 List<String> normalizeAuthAdminRoles(Iterable<String> roles) =>
     List<String>.unmodifiable(
       roles
@@ -314,6 +408,31 @@ final class AuthAdminMutationResult<T> {
   Map<String, dynamic> toJson(Object? Function(T value) encode) => {
     'data': encode(data),
     'warnings': warnings.map((warning) => warning.toJson()).toList(),
+  };
+}
+
+/// Secret-free audit fact persisted with one administrative mutation.
+final class AuthAdminAuditRecord {
+  AuthAdminAuditRecord({
+    required this.id,
+    required this.operation,
+    required this.initiatorUserId,
+    required this.targetUserId,
+    required DateTime occurredAt,
+  }) : occurredAt = occurredAt.toUtc();
+
+  final String id;
+  final String operation;
+  final String initiatorUserId;
+  final String targetUserId;
+  final DateTime occurredAt;
+
+  Map<String, dynamic> toJson() => <String, dynamic>{
+    'id': id,
+    'operation': operation,
+    'initiatorUserId': initiatorUserId,
+    'targetUserId': targetUserId,
+    'occurredAt': occurredAt.toIso8601String(),
   };
 }
 

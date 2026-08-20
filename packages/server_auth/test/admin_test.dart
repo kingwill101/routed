@@ -295,11 +295,13 @@ void main() {
           _flow('self_admin_removal'),
         );
         await expectLater(
-          adminStore.replaceRoles(
-            admin.id,
-            const ['user'],
-            administratorRoles: const {'admin'},
-            administratorUserIds: const {},
+          adminStore.execute(
+            AuthAdminTrustedReplaceRolesMutation(
+              userId: admin.id,
+              roles: const ['user'],
+              administratorRoles: const {'admin'},
+              administratorUserIds: const {},
+            ),
           ),
           _flow('last_admin'),
         );
@@ -514,6 +516,8 @@ void main() {
       'impersonation is server-session-only and preserves actor metadata',
       () async {
         final control = _SessionControl();
+        await core.sessions.create(_session(admin.id));
+        control.currentSessionId = 'session-${admin.id}';
         final startedIntent =
             await _invokeWithControl(feature, 'admin.impersonateUser', admin, {
                   'userId': member.id,
