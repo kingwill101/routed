@@ -489,8 +489,8 @@ final class AuthScimConnectionPlugin<TContext>
     method: method,
     path: path,
     semantics: semantics,
-    requestCodec: _requestCodec,
-    responseCodec: _responseCodec,
+    requestCodec: _requestCodecFor(operation),
+    responseCodec: _responseCodecFor(operation),
     authentication: AuthOperationAuthentication.session,
     originPolicy: method == AuthOperationMethod.get
         ? AuthOperationOriginPolicy.none
@@ -820,34 +820,219 @@ AuthOperationSemantics _atomic(
   replaySafety: replaySafety,
 );
 
-const AuthOperationCodec<Map<String, dynamic>>
-_requestCodec = AuthOperationCodec<Map<String, dynamic>>(
-  decode: _identityMap,
-  encode: _identityMap,
-  required: true,
-  schema: <String, Object?>{
-    r'$id': 'AuthScimConnectionManagementRequest',
-    'type': 'object',
-    'additionalProperties': true,
-    'properties': <String, Object?>{
-      'organizationId': <String, Object?>{'type': 'string', 'maxLength': 256},
-      'idempotencyKey': <String, Object?>{'type': 'string', 'maxLength': 128},
-    },
-  },
-);
+AuthOperationCodec<Map<String, dynamic>> _requestCodecFor(
+  AuthScimConnectionManagementOperation operation,
+) {
+  final properties = <String, Object?>{'organizationId': _stringSchema(256)};
+  final required = <String>['organizationId'];
+  void add(String name, Map<String, Object?> schema, {bool isRequired = true}) {
+    properties[name] = schema;
+    if (isRequired) required.add(name);
+  }
 
-const AuthOperationCodec<Object?> _responseCodec = AuthOperationCodec<Object?>(
+  switch (operation) {
+    case AuthScimConnectionManagementOperation.create:
+      add('name', _stringSchema(128));
+      add('provisioningDomainId', _stringSchema(256));
+      add('scopes', _scopeArraySchema);
+      add('credentialName', _stringSchema(128));
+      add('idempotencyKey', _stringSchema(128));
+      add('expiresAt', _dateSchema, isRequired: false);
+    case AuthScimConnectionManagementOperation.list:
+      add('limit', _integerSchema(1, 200), isRequired: false);
+      add('offset', _integerSchema(0, 1000000), isRequired: false);
+    case AuthScimConnectionManagementOperation.update:
+      add('connectionId', _stringSchema(256));
+      add('expectedUpdatedAt', _dateSchema);
+      add('name', _stringSchema(128));
+      add('provisioningDomainId', _stringSchema(256));
+      add('scopes', _scopeArraySchema);
+    case AuthScimConnectionManagementOperation.disable:
+      add('connectionId', _stringSchema(256));
+    case AuthScimConnectionManagementOperation.credentialsList:
+      add('connectionId', _stringSchema(256));
+      add('limit', _integerSchema(1, 200), isRequired: false);
+      add('offset', _integerSchema(0, 1000000), isRequired: false);
+    case AuthScimConnectionManagementOperation.credentialsIssue:
+      add('connectionId', _stringSchema(256));
+      add('name', _stringSchema(128));
+      add('scopes', _scopeArraySchema);
+      add('idempotencyKey', _stringSchema(128));
+      add('expiresAt', _dateSchema, isRequired: false);
+    case AuthScimConnectionManagementOperation.credentialsRotate:
+      add('connectionId', _stringSchema(256));
+      add('credentialId', _stringSchema(256));
+      add('name', _stringSchema(128));
+      add('scopes', _scopeArraySchema);
+      add('idempotencyKey', _stringSchema(128));
+      add('expiresAt', _dateSchema, isRequired: false);
+    case AuthScimConnectionManagementOperation.credentialsRevoke:
+      add('connectionId', _stringSchema(256));
+      add('credentialId', _stringSchema(256));
+  }
+  return AuthOperationCodec<Map<String, dynamic>>(
+    decode: _identityMap,
+    encode: _identityMap,
+    required: true,
+    schema: <String, Object?>{
+      'type': 'object',
+      'additionalProperties': false,
+      'properties': properties,
+      'required': required,
+    },
+  );
+}
+
+AuthOperationCodec<Object?> _responseCodecFor(
+  AuthScimConnectionManagementOperation operation,
+) => AuthOperationCodec<Object?>(
   decode: _identityObject,
   encode: _identityObject,
-  schema: <String, Object?>{
-    r'$id': 'AuthScimConnectionManagementResponse',
-    'type': 'object',
-    'additionalProperties': true,
+  schema: switch (operation) {
+    AuthScimConnectionManagementOperation.create => <String, Object?>{
+      'type': 'object',
+      'additionalProperties': false,
+      'properties': <String, Object?>{
+        'connection': _connectionSchema,
+        'issuance': _issuanceSchema,
+      },
+      'required': <String>['connection', 'issuance'],
+    },
+    AuthScimConnectionManagementOperation.list => _pageSchema(
+      _connectionSchema,
+    ),
+    AuthScimConnectionManagementOperation.update ||
+    AuthScimConnectionManagementOperation.disable => _connectionSchema,
+    AuthScimConnectionManagementOperation.credentialsList => _pageSchema(
+      _credentialSchema,
+    ),
+    AuthScimConnectionManagementOperation.credentialsIssue ||
+    AuthScimConnectionManagementOperation.credentialsRotate => _issuanceSchema,
+    AuthScimConnectionManagementOperation.credentialsRevoke =>
+      _credentialSchema,
   },
 );
 
 Map<String, dynamic> _identityMap(Map<String, dynamic> value) => value;
 Object? _identityObject(Object? value) => value;
+
+Map<String, Object?> _stringSchema(int maximum) => <String, Object?>{
+  'type': 'string',
+  'minLength': 1,
+  'maxLength': maximum,
+};
+
+Map<String, Object?> _integerSchema(int minimum, int maximum) =>
+    <String, Object?>{
+      'type': 'integer',
+      'minimum': minimum,
+      'maximum': maximum,
+    };
+
+const Map<String, Object?> _dateSchema = <String, Object?>{
+  'type': 'string',
+  'format': 'date-time',
+};
+
+const Map<String, Object?> _scopeArraySchema = <String, Object?>{
+  'type': 'array',
+  'minItems': 1,
+  'maxItems': 4,
+  'uniqueItems': true,
+  'items': <String, Object?>{
+    'type': 'string',
+    'enum': <String>['usersRead', 'usersWrite', 'groupsRead', 'groupsWrite'],
+  },
+};
+
+final Map<String, Object?> _connectionSchema = <String, Object?>{
+  'type': 'object',
+  'additionalProperties': false,
+  'properties': <String, Object?>{
+    'id': _stringSchema(256),
+    'tenantId': _stringSchema(256),
+    'organizationId': _stringSchema(256),
+    'provisioningDomainId': _stringSchema(256),
+    'subjectId': _stringSchema(256),
+    'name': _stringSchema(128),
+    'scopes': _scopeArraySchema,
+    'state': <String, Object?>{
+      'type': 'string',
+      'enum': <String>['active', 'disabled'],
+    },
+    'createdAt': _dateSchema,
+    'updatedAt': _dateSchema,
+    'disabledAt': _dateSchema,
+  },
+  'required': <String>[
+    'id',
+    'tenantId',
+    'organizationId',
+    'provisioningDomainId',
+    'subjectId',
+    'name',
+    'scopes',
+    'state',
+    'createdAt',
+    'updatedAt',
+  ],
+};
+
+final Map<String, Object?> _credentialSchema = <String, Object?>{
+  'type': 'object',
+  'additionalProperties': false,
+  'properties': <String, Object?>{
+    'id': _stringSchema(256),
+    'connectionId': _stringSchema(256),
+    'name': _stringSchema(128),
+    'keyPrefix': _stringSchema(32),
+    'scopes': _scopeArraySchema,
+    'active': <String, Object?>{'type': 'boolean'},
+    'createdAt': _dateSchema,
+    'updatedAt': _dateSchema,
+    'expiresAt': _dateSchema,
+    'lastUsedAt': _dateSchema,
+    'revokedAt': _dateSchema,
+  },
+  'required': <String>[
+    'id',
+    'connectionId',
+    'name',
+    'keyPrefix',
+    'scopes',
+    'active',
+    'createdAt',
+    'updatedAt',
+  ],
+};
+
+final Map<String, Object?> _issuanceSchema = <String, Object?>{
+  'type': 'object',
+  'additionalProperties': false,
+  'properties': <String, Object?>{
+    'credential': _credentialSchema,
+    'secret': <String, Object?>{
+      'type': 'string',
+      'writeOnly': true,
+      'description': 'Returned only for the first committed response.',
+    },
+    'replayed': <String, Object?>{'type': 'boolean'},
+  },
+  'required': <String>['credential', 'replayed'],
+};
+
+Map<String, Object?> _pageSchema(Map<String, Object?> item) =>
+    <String, Object?>{
+      'type': 'object',
+      'additionalProperties': false,
+      'properties': <String, Object?>{
+        'items': <String, Object?>{'type': 'array', 'items': item},
+        'total': _integerSchema(0, 2147483647),
+        'limit': _integerSchema(1, 200),
+        'offset': _integerSchema(0, 1000000),
+      },
+      'required': <String>['items', 'total', 'limit', 'offset'],
+    };
 
 Set<AuthScimScope> _requireScopes(Iterable<AuthScimScope> scopes) {
   final values = Set<AuthScimScope>.unmodifiable(scopes.toSet());
