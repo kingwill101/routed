@@ -8,6 +8,7 @@ import 'package:cryptography/cryptography.dart' as cryptography;
 import 'package:pointycastle/asn1.dart';
 import 'package:pointycastle/export.dart';
 
+import 'authentication_methods.dart';
 import 'deletion_transaction.dart';
 import 'exceptions.dart';
 import 'plugin.dart';
@@ -303,15 +304,24 @@ final class WebAuthnPlugin<TContext>
         AuthPersistenceContributor,
         AuthClientOperationContributor,
         AuthRateLimitContributor,
+        AuthAuthenticationMethodInventoryContributor,
+        AuthAuthenticationMethodInventoryBinding,
         AuthUserDeletionPlanContributor {
   WebAuthnPlugin({
     required this.provider,
+    this.storage,
     this.challengeTtl = const Duration(minutes: 5),
     this.attestationTrustPolicy =
         const WebAuthnAttestationTrustPolicy.passkeys(),
   }) : assert(challengeTtl > Duration.zero);
 
   final WebAuthnProvider provider;
+
+  /// Optional passkey storage when the root auth store does not own WebAuthn.
+  ///
+  /// Durable account unlink remains available only when the root mutation
+  /// coordinator can transact this store together with every other method.
+  final AuthWebAuthnStoreCapabilities? storage;
   final Duration challengeTtl;
   final WebAuthnAttestationTrustPolicy attestationTrustPolicy;
 
@@ -319,6 +329,7 @@ final class WebAuthnPlugin<TContext>
   late AuthWebAuthnAuthenticatorStore _authenticatorStore;
   late AuthUserStore _userStore;
   late AuthUserDeletionDomain _deletionDomain;
+  late AuthAuthenticationMethodService _authenticationMethods;
   bool _configured = false;
 
   @override
@@ -326,6 +337,31 @@ final class WebAuthnPlugin<TContext>
 
   @override
   String get userDataNamespace => 'webauthn';
+
+  @override
+  String get authenticationMethodNamespace => authWebAuthnPluginId;
+
+  @override
+  Object get authenticationMethodStore => _authenticatorStore;
+
+  @override
+  Set<AuthAuthenticationMethodKind> get authenticationMethodKinds => const {
+    AuthAuthenticationMethodKind.passkey,
+  };
+
+  @override
+  Future<AuthAuthenticationMethodSnapshot> authenticationMethodsForUser(
+    String userId,
+  ) async {
+    _ensureConfigured();
+    final credentials = await _authenticatorStore.listForUser(userId);
+    return AuthAuthenticationMethodSnapshot.complete(
+      credentials.map(
+        (credential) =>
+            AuthAuthenticationMethod.passkey(credential.credentialId),
+      ),
+    );
+  }
 
   @override
   Future<AuthUserDeletionPlan> createUserDeletionPlan(AuthUser user) {
@@ -356,16 +392,26 @@ final class WebAuthnPlugin<TContext>
 
   @override
   void configure(AuthServerPluginContext<TContext> context) {
-    final store = context.store;
-    if (store is! AuthWebAuthnStoreCapabilities) {
+    final capabilities =
+        storage ??
+        switch (context.store) {
+          AuthWebAuthnStoreCapabilities capabilities => capabilities,
+          _ => null,
+        };
+    if (capabilities == null) {
       throw StateError(
-        'WebAuthnPlugin requires AuthWebAuthnStoreCapabilities.',
+        'WebAuthnPlugin requires AuthWebAuthnStoreCapabilities through the '
+        'root store or its explicit storage option.',
       );
     }
-    final capabilities = store as AuthWebAuthnStoreCapabilities;
     _challengeStore = capabilities.webAuthnChallenges;
     _authenticatorStore = capabilities.webAuthnAuthenticators;
     _userStore = context.store.users;
+    _authenticationMethods =
+        context.authenticationMethods ??
+        (throw StateError(
+          'WebAuthnPlugin requires an authentication-method coordinator.',
+        ));
     final host = context.store;
     if (host is! AuthUserDeletionCoordinatorHost) {
       throw StateError(
@@ -1028,11 +1074,21 @@ final class WebAuthnPlugin<TContext>
     if (userId.trim().isEmpty || credentialId.trim().isEmpty) {
       throw AuthFlowException('webauthn_credential_invalid');
     }
-    final deleted = await _authenticatorStore.deleteForUser(
-      userId,
-      credentialId,
+    final result = await _authenticationMethods.removeIfSafe(
+      userId: userId,
+      target: AuthAuthenticationMethod.passkey(credentialId),
+      mutate: () => _authenticatorStore.deleteForUser(userId, credentialId),
     );
-    if (!deleted) throw AuthFlowException('webauthn_credential_not_found');
+    switch (result) {
+      case AuthAuthenticationMethodMutationResult.mutated:
+        return;
+      case AuthAuthenticationMethodMutationResult.notFound:
+        throw AuthFlowException('webauthn_credential_not_found');
+      case AuthAuthenticationMethodMutationResult.lastAuthenticationMethod:
+        throw AuthFlowException('last_authentication_method');
+      case AuthAuthenticationMethodMutationResult.atomicityUnavailable:
+        throw AuthFlowException('authentication_method_mutation_unavailable');
+    }
   }
 
   /// Renames one passkey belonging to [userId].

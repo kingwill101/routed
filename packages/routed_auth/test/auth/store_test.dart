@@ -87,23 +87,13 @@ void main() {
         'github',
       );
       expect(
-        await store.accounts.unlinkForUserIfSafe(
-          user.id,
-          'github',
-          'account-1',
-          hasEnabledPasswordCredential: true,
-        ),
-        AuthAccountUnlinkResult.unlinked,
+        await store.accounts.unlinkForUser(user.id, 'github', 'account-1'),
+        isTrue,
       );
       expect(await store.accounts.listForUser(user.id), isEmpty);
       expect(
-        await store.accounts.unlinkForUserIfSafe(
-          user.id,
-          'github',
-          'account-1',
-          hasEnabledPasswordCredential: true,
-        ),
-        AuthAccountUnlinkResult.notFound,
+        await store.accounts.unlinkForUser(user.id, 'github', 'account-1'),
+        isFalse,
       );
 
       final now = DateTime.now().toUtc();

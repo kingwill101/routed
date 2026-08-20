@@ -47,7 +47,7 @@ void main() {
     });
 
     test(
-      'does not require optional WebAuthn or deletion capabilities',
+      'does not require optional mutation or deletion capabilities',
       () async {
         final coreOnlySuite = AuthStoreConformanceSuite.fromStoreFactory(
           createStore: () => _CoreOnlyAuthStore(InMemoryAuthStore()),
@@ -65,6 +65,8 @@ void main() {
         expect(
           skipped,
           equals({
+            'accounts.safe-unlink':
+                'Adapter does not expose authenticationMethodMutation.',
             'account-deletion.transaction':
                 'Adapter does not expose accountDeletion.',
           }),

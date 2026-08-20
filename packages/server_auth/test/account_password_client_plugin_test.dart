@@ -118,4 +118,30 @@ void main() {
     expect(updated.attributes['emailVerified'], isTrue);
     expect(csrfCalls, 3);
   });
+
+  test('account unlink omits a password when recent auth is used', () async {
+    final accountPlugin = const AuthAccountClientPlugin();
+    final auth = AuthClient(
+      baseUrl: Uri.parse('https://example.test'),
+      plugins: [accountPlugin],
+      httpClient: MockClient((request) async {
+        if (request.url.path == '/auth/csrf') {
+          return http.Response(jsonEncode({'csrfToken': 'csrf-1'}), 200);
+        }
+        expect(request.url.path, '/auth/accounts/unlink');
+        final body = jsonDecode(request.body) as Map<String, dynamic>;
+        expect(body, {
+          'providerId': 'github',
+          'providerAccountId': 'github-1',
+          '_csrf': 'csrf-1',
+        });
+        expect(body, isNot(contains('currentPassword')));
+        return http.Response('{}', 200);
+      }),
+    );
+
+    await auth.plugins
+        .use(accountPlugin)
+        .unlink(providerId: 'github', providerAccountId: 'github-1');
+  });
 }

@@ -1,4 +1,5 @@
 export 'auth_config.dart';
+export 'authentication_methods.dart';
 export 'api_key.dart';
 export 'account_deletion.dart';
 export 'account_lifecycle_flows.dart';

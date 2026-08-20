@@ -8,6 +8,11 @@
   DELETE while forwarding its bearer credential only to the application-owned
   atomic connection resolver,
   preserving SCIM media types/status codes, and never creating a user session.
+- Make linked-account unlinking password-optional when the request has a valid
+  two-factor step-up proof or a sufficiently recent original server-session or
+  JWT issue time. Exact provider/account targets are removed through the shared
+  atomic authentication-method coordinator; stale authentication is rejected
+  and stores without that transaction capability fail closed.
 - Add a public deterministic external-provider runtime conformance fixture for
   OAuth/OIDC and custom callback providers, covering state, PKCE, nonce,
   browser binding, replay, account linking, redirect safety, bounded failures,

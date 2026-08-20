@@ -43,6 +43,8 @@ import 'package:server_auth/server_auth.dart'
         AuthTwoFactorRequiredException,
         AuthTwoFactorStepUpToken,
         authJwtVersionClaim,
+        jwtClaimsAttribute,
+        jwtIssuedAtUtc,
         AuthFlowException,
         AuthPasswordResetRequest,
         AuthPasswordResetResult,
@@ -115,13 +117,16 @@ class AuthManager {
     this.options, {
     SessionAuthService? sessionAuth,
     AuthRuntime<EngineContext>? runtime,
+    DateTime Function()? clock,
   }) : runtime = runtime ?? AuthRuntime<EngineContext>(options: options),
        _sessionAuth = sessionAuth,
-       _httpClient = options.httpClient;
+       _httpClient = options.httpClient,
+       _clock = clock ?? DateTime.now;
 
   final AuthOptions<EngineContext> options;
   final AuthRuntime<EngineContext> runtime;
   final SessionAuthService? _sessionAuth;
+  final DateTime Function() _clock;
   http.Client? _httpClient;
 
   AuthStore get store => runtime.store;
@@ -889,12 +894,12 @@ class AuthManager {
     );
   }
 
-  /// Reauthenticates and removes one linked external identity.
+  /// Removes one linked identity after explicit recent-auth/step-up policy.
   Future<void> unlinkAccount(
     EngineContext ctx, {
     required String providerId,
     required String providerAccountId,
-    required String currentPassword,
+    String? currentPassword,
   }) async {
     final session = await resolveSession(ctx);
     if (session == null) throw AuthFlowException('not_authenticated');
@@ -905,9 +910,14 @@ class AuthManager {
       action: AuthRateLimitAction.accountUnlink,
       identifier: user.id,
     );
-    await _requireCurrentPassword(user, currentPassword);
+    await _requireAccountUnlinkProof(
+      ctx,
+      user,
+      currentPassword: currentPassword,
+    );
     await unlinkProviderAccount(
       store: store,
+      authenticationMethods: runtime.authenticationMethods,
       userId: user.id,
       providerId: providerId,
       providerAccountId: providerAccountId,
@@ -1278,6 +1288,7 @@ class AuthManager {
           resolveSessionExpiry: () => _sessionExpiry(ctx),
           readJwtToken: () => _resolveJwtToken(ctx),
           validateJwtClaims: _validateJwtClaims,
+          writeJwtAttribute: ctx.set,
           httpClient: httpClient,
         );
     final refreshCookie = resolved.refreshCookie;
@@ -1328,6 +1339,40 @@ class AuthManager {
     await runtime.registry.enforceAuthenticationPolicy(
       AuthAuthenticationPolicyRequest(context: ctx, user: user, phase: phase),
     );
+  }
+
+  Future<void> _requireAccountUnlinkProof(
+    EngineContext ctx,
+    AuthUser user, {
+    String? currentPassword,
+  }) async {
+    final password = currentPassword?.trim();
+    if (password != null) {
+      if (password.isEmpty) throw AuthFlowException('invalid_credentials');
+      await _requireCurrentPassword(user, currentPassword!);
+      return;
+    }
+
+    final policy = options.accountPolicy;
+    final hasStepUp = await hasValidTwoFactorStepUp(ctx);
+    DateTime? authenticatedAt;
+    switch (options.sessionStrategy) {
+      case AuthSessionStrategy.session:
+        authenticatedAt = (await _resolveStoredSession(ctx))?.createdAt;
+        break;
+      case AuthSessionStrategy.jwt:
+        final claims = ctx.get<Map<String, dynamic>>(jwtClaimsAttribute);
+        authenticatedAt = jwtIssuedAtUtc(claims?['iat']);
+        break;
+    }
+    if (policy.allowsSensitiveAction(
+      authenticatedAt: authenticatedAt,
+      stepUpVerified: hasStepUp,
+      now: _clock().toUtc(),
+    )) {
+      return;
+    }
+    throw AuthFlowException('recent_authentication_required');
   }
 
   Future<bool> _passwordResetAllowed(AuthUser user) async {

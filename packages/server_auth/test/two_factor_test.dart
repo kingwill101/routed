@@ -143,11 +143,19 @@ void main() {
 
   group('TwoFactorPlugin', () {
     test('publishes host-owned endpoint contracts only when selected', () {
+      final withoutStore = InMemoryAuthStore();
       final without = AuthServerPluginRegistry<Object>(
-        store: InMemoryAuthStore(),
+        store: withoutStore,
+        authenticationMethods: AuthAuthenticationMethodService(
+          store: withoutStore,
+        ),
       )..freeze();
+      final withStore = InMemoryAuthStore();
       final withPlugin = AuthServerPluginRegistry<Object>(
-        store: InMemoryAuthStore(),
+        store: withStore,
+        authenticationMethods: AuthAuthenticationMethodService(
+          store: withStore,
+        ),
       )..register(_feature());
       withPlugin.freeze();
 

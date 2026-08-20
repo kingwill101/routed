@@ -109,6 +109,15 @@
         "x-routed-auth-plugin": "anonymous",
         "x-routed-auth-origin-policy": "browser",
         "x-routed-auth-csrf-policy": "none",
+        "x-routed-auth-operation-semantics": {
+          "effect": "mutation",
+          "persistence": "durable",
+          "atomicity": "nonAtomic",
+          "replaySafety": "repeatable",
+          "persistenceReference": {
+            "schemaId": "anonymous"
+          }
+        },
         "x-routed-auth-rate-limit-operation": {
           "id": "anonymous.sign_in",
           "namespace": "anonymous",
@@ -226,6 +235,16 @@
         "x-routed-auth-plugin": "anonymous",
         "x-routed-auth-origin-policy": "browser",
         "x-routed-auth-csrf-policy": "required",
+        "x-routed-auth-operation-semantics": {
+          "effect": "mutation",
+          "persistence": "durable",
+          "atomicity": "atomic",
+          "replaySafety": "singleUse",
+          "persistenceReference": {
+            "schemaId": "anonymous",
+            "atomicOperationId": "anonymous.deleteUser"
+          }
+        },
         "x-routed-auth-rate-limit-operation": {
           "id": "anonymous.delete",
           "namespace": "anonymous",
@@ -344,6 +363,15 @@
         "x-routed-auth-plugin": "api_key",
         "x-routed-auth-origin-policy": "browser",
         "x-routed-auth-csrf-policy": "required",
+        "x-routed-auth-operation-semantics": {
+          "effect": "mutation",
+          "persistence": "durable",
+          "atomicity": "nonAtomic",
+          "replaySafety": "repeatable",
+          "persistenceReference": {
+            "schemaId": "api_key"
+          }
+        },
         "x-routed-auth-rate-limit-operation": {
           "id": "api_key.create",
           "namespace": "api_key",
@@ -420,6 +448,9 @@
         "x-routed-auth-plugin": "api_key",
         "x-routed-auth-origin-policy": "none",
         "x-routed-auth-csrf-policy": "none",
+        "x-routed-auth-operation-semantics": {
+          "effect": "readOnly"
+        },
         "x-routed-auth-rate-limit-operation": {
           "id": "api_key.list",
           "namespace": "api_key",
@@ -538,6 +569,16 @@
         "x-routed-auth-plugin": "api_key",
         "x-routed-auth-origin-policy": "browser",
         "x-routed-auth-csrf-policy": "required",
+        "x-routed-auth-operation-semantics": {
+          "effect": "mutation",
+          "persistence": "durable",
+          "atomicity": "atomic",
+          "replaySafety": "singleUse",
+          "persistenceReference": {
+            "schemaId": "api_key",
+            "atomicOperationId": "api_key.revoke_for_user"
+          }
+        },
         "x-routed-auth-rate-limit-operation": {
           "id": "api_key.revoke",
           "namespace": "api_key",
@@ -656,6 +697,16 @@
         "x-routed-auth-plugin": "api_key",
         "x-routed-auth-origin-policy": "browser",
         "x-routed-auth-csrf-policy": "required",
+        "x-routed-auth-operation-semantics": {
+          "effect": "mutation",
+          "persistence": "durable",
+          "atomicity": "atomic",
+          "replaySafety": "singleUse",
+          "persistenceReference": {
+            "schemaId": "api_key",
+            "atomicOperationId": "api_key.rotate_for_user"
+          }
+        },
         "x-routed-auth-rate-limit-operation": {
           "id": "api_key.rotate",
           "namespace": "api_key",
@@ -738,6 +789,12 @@
         "x-routed-auth-plugin": "api_key",
         "x-routed-auth-origin-policy": "none",
         "x-routed-auth-csrf-policy": "none",
+        "x-routed-auth-operation-semantics": {
+          "effect": "mutation",
+          "persistence": "session",
+          "atomicity": "notApplicable",
+          "replaySafety": "repeatable"
+        },
         "x-routed-auth-rate-limit-operation": {
           "id": "api_key.exchange",
           "namespace": "api_key",
@@ -794,7 +851,10 @@
         ],
         "x-routed-auth-plugin": "two_factor",
         "x-routed-auth-origin-policy": "none",
-        "x-routed-auth-csrf-policy": "none"
+        "x-routed-auth-csrf-policy": "none",
+        "x-routed-auth-operation-semantics": {
+          "effect": "readOnly"
+        }
       }
     },
     "/auth/2fa/enroll": {
@@ -907,6 +967,12 @@
         "x-routed-auth-plugin": "two_factor",
         "x-routed-auth-origin-policy": "browser",
         "x-routed-auth-csrf-policy": "required",
+        "x-routed-auth-operation-semantics": {
+          "effect": "mutation",
+          "persistence": "boundedEphemeral",
+          "atomicity": "notApplicable",
+          "replaySafety": "repeatable"
+        },
         "x-routed-auth-rate-limit-operation": {
           "id": "core.twoFactor",
           "namespace": "core",
@@ -1025,6 +1091,12 @@
         "x-routed-auth-plugin": "two_factor",
         "x-routed-auth-origin-policy": "browser",
         "x-routed-auth-csrf-policy": "required",
+        "x-routed-auth-operation-semantics": {
+          "effect": "mutation",
+          "persistence": "durable",
+          "atomicity": "nonAtomic",
+          "replaySafety": "singleUse"
+        },
         "x-routed-auth-rate-limit-operation": {
           "id": "core.twoFactor",
           "namespace": "core",
@@ -1143,6 +1215,12 @@
         "x-routed-auth-plugin": "two_factor",
         "x-routed-auth-origin-policy": "browser",
         "x-routed-auth-csrf-policy": "required",
+        "x-routed-auth-operation-semantics": {
+          "effect": "mutation",
+          "persistence": "durable",
+          "atomicity": "nonAtomic",
+          "replaySafety": "unguarded"
+        },
         "x-routed-auth-rate-limit-operation": {
           "id": "core.twoFactor",
           "namespace": "core",
@@ -1261,6 +1339,12 @@
         "x-routed-auth-plugin": "two_factor",
         "x-routed-auth-origin-policy": "browser",
         "x-routed-auth-csrf-policy": "required",
+        "x-routed-auth-operation-semantics": {
+          "effect": "mutation",
+          "persistence": "durable",
+          "atomicity": "nonAtomic",
+          "replaySafety": "singleUse"
+        },
         "x-routed-auth-rate-limit-operation": {
           "id": "core.twoFactor",
           "namespace": "core",
@@ -1379,6 +1463,12 @@
         "x-routed-auth-plugin": "two_factor",
         "x-routed-auth-origin-policy": "browser",
         "x-routed-auth-csrf-policy": "required",
+        "x-routed-auth-operation-semantics": {
+          "effect": "mutation",
+          "persistence": "durable",
+          "atomicity": "nonAtomic",
+          "replaySafety": "repeatable"
+        },
         "x-routed-auth-rate-limit-operation": {
           "id": "core.twoFactor",
           "namespace": "core",
@@ -1497,6 +1587,12 @@
         "x-routed-auth-plugin": "two_factor",
         "x-routed-auth-origin-policy": "browser",
         "x-routed-auth-csrf-policy": "required",
+        "x-routed-auth-operation-semantics": {
+          "effect": "mutation",
+          "persistence": "durable",
+          "atomicity": "nonAtomic",
+          "replaySafety": "singleUse"
+        },
         "x-routed-auth-rate-limit-operation": {
           "id": "core.twoFactor",
           "namespace": "core",
@@ -1608,6 +1704,12 @@
         "x-routed-auth-plugin": "two_factor",
         "x-routed-auth-origin-policy": "browser",
         "x-routed-auth-csrf-policy": "required",
+        "x-routed-auth-operation-semantics": {
+          "effect": "mutation",
+          "persistence": "session",
+          "atomicity": "notApplicable",
+          "replaySafety": "singleUse"
+        },
         "x-routed-auth-rate-limit-operation": {
           "id": "core.twoFactor",
           "namespace": "core",
@@ -1719,6 +1821,12 @@
         "x-routed-auth-plugin": "two_factor",
         "x-routed-auth-origin-policy": "browser",
         "x-routed-auth-csrf-policy": "required",
+        "x-routed-auth-operation-semantics": {
+          "effect": "mutation",
+          "persistence": "session",
+          "atomicity": "notApplicable",
+          "replaySafety": "singleUse"
+        },
         "x-routed-auth-rate-limit-operation": {
           "id": "core.twoFactor",
           "namespace": "core",
@@ -1836,6 +1944,12 @@
         "x-routed-auth-plugin": "two_factor",
         "x-routed-auth-origin-policy": "browser",
         "x-routed-auth-csrf-policy": "required",
+        "x-routed-auth-operation-semantics": {
+          "effect": "mutation",
+          "persistence": "durable",
+          "atomicity": "nonAtomic",
+          "replaySafety": "idempotent"
+        },
         "x-routed-auth-rate-limit-operation": {
           "id": "core.twoFactor",
           "namespace": "core",
@@ -1954,6 +2068,12 @@
         "x-routed-auth-plugin": "two_factor",
         "x-routed-auth-origin-policy": "browser",
         "x-routed-auth-csrf-policy": "required",
+        "x-routed-auth-operation-semantics": {
+          "effect": "mutation",
+          "persistence": "boundedEphemeral",
+          "atomicity": "notApplicable",
+          "replaySafety": "repeatable"
+        },
         "x-routed-auth-rate-limit-operation": {
           "id": "core.twoFactor",
           "namespace": "core",
@@ -2071,6 +2191,12 @@
         "x-routed-auth-plugin": "two_factor",
         "x-routed-auth-origin-policy": "browser",
         "x-routed-auth-csrf-policy": "required",
+        "x-routed-auth-operation-semantics": {
+          "effect": "mutation",
+          "persistence": "boundedEphemeral",
+          "atomicity": "notApplicable",
+          "replaySafety": "idempotent"
+        },
         "x-routed-auth-rate-limit-operation": {
           "id": "core.twoFactor",
           "namespace": "core",
@@ -2965,9 +3091,8 @@
       },
       "authBearer": {
         "type": "http",
-        "description": "Routed auth bearer token.",
-        "scheme": "bearer",
-        "bearerFormat": "JWT"
+        "description": "Bearer token accepted by the selected auth plugin.",
+        "scheme": "bearer"
       },
       "authApiKey": {
         "type": "apiKey",

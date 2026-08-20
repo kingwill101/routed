@@ -23,6 +23,97 @@ SessionConfig _sessionConfig() {
   );
 }
 
+Future<_PasswordlessUnlinkFixture> _passwordlessUnlinkFixture({
+  DateTime Function()? clock,
+  bool supportsAtomicMutation = true,
+}) async {
+  final user = AuthUser(id: 'user-1', email: 'user@example.com');
+  final memoryStore = InMemoryAuthStore();
+  final AuthStore store = supportsAtomicMutation
+      ? memoryStore
+      : _NonAtomicAuthStore(memoryStore);
+  await memoryStore.users.create(user);
+  await memoryStore.accounts.link(
+    AuthAccount(
+      providerId: 'github',
+      providerAccountId: 'github-1',
+      userId: user.id,
+    ),
+  );
+  await memoryStore.webAuthnAuthenticators.create(
+    WebAuthnAuthenticator(
+      credentialId: 'passkey-1',
+      publicKey: 'cose-key',
+      counter: 0,
+      userId: user.id,
+      createdAt: DateTime.utc(2026, 1, 1),
+    ),
+  );
+  final webAuthnProvider = WebAuthnProvider(
+    getUserInfo: (_, _, _) => null,
+    getRelyingParty: (_, _) => const WebAuthnRelyingParty(
+      id: 'localhost',
+      name: 'Local test',
+      origin: 'http://localhost',
+    ),
+  );
+  final manager = AuthManager(
+    AuthOptions<EngineContext>(
+      store: store,
+      storeMode: supportsAtomicMutation
+          ? AuthStoreMode.ephemeral
+          : AuthStoreMode.durable,
+      runtimeMode: AuthRuntimeMode.localDevelopment,
+      providers: <AuthProvider>[
+        CredentialsProvider(authorize: (_, _, _) => user),
+      ],
+      plugins: <AuthServerPlugin<EngineContext>>[
+        WebAuthnPlugin<EngineContext>(provider: webAuthnProvider),
+      ],
+      enforceCsrf: false,
+    ),
+    clock: clock,
+  );
+  final engine = _engine(manager);
+  await engine.initialize();
+  final client = TestClient(RoutedRequestHandler(engine));
+  final csrfResponse = await client.get('/auth/csrf');
+  final csrf = csrfResponse.json()['csrfToken'] as String;
+  final initialCookie = csrfResponse.cookie('test_session')!;
+  final signIn = await client.postJson(
+    '/auth/signin/credentials',
+    <String, dynamic>{
+      'email': user.email,
+      'password': 'external-proof',
+      '_csrf': csrf,
+    },
+    headers: <String, List<String>>{
+      HttpHeaders.cookieHeader: [_cookieHeader(initialCookie)],
+    },
+  );
+  signIn.assertStatus(HttpStatus.ok);
+  final sessionCookie = signIn.cookie('test_session') ?? initialCookie;
+  return _PasswordlessUnlinkFixture(
+    client: client,
+    store: memoryStore,
+    sessionHeaders: <String, List<String>>{
+      HttpHeaders.cookieHeader: [_cookieHeader(sessionCookie)],
+    },
+  );
+}
+
+final class _PasswordlessUnlinkFixture {
+  const _PasswordlessUnlinkFixture({
+    required this.client,
+    required this.store,
+    required this.sessionHeaders,
+  });
+
+  final TestClient client;
+  final InMemoryAuthStore store;
+  final Map<String, List<String>> sessionHeaders;
+}
+
 Engine _engine(AuthManager manager) {
   final engine = testEngine(
     config: EngineConfig(
@@ -37,6 +128,18 @@ Engine _engine(AuthManager manager) {
 }
 
 String _cookieHeader(Cookie cookie) => '${cookie.name}=${cookie.value}';
+
+OAuthProvider<Map<String, dynamic>> _oauthProvider(String id) =>
+    OAuthProvider<Map<String, dynamic>>(
+      id: id,
+      name: id,
+      clientId: 'client',
+      clientSecret: 'secret',
+      authorizationEndpoint: Uri.https('$id.test', '/authorize'),
+      tokenEndpoint: Uri.https('$id.test', '/token'),
+      profile: (_) => AuthUser(id: 'unused'),
+      redirectUri: 'http://localhost/auth/callback/$id',
+    );
 
 void main() {
   test(
@@ -63,6 +166,7 @@ void main() {
           storeMode: AuthStoreMode.ephemeral,
           providers: [
             CredentialsProvider(authorize: (_, _, _) => user),
+            _oauthProvider('github'),
             webAuthnProvider,
           ],
           plugins: [WebAuthnPlugin<EngineContext>(provider: webAuthnProvider)],
@@ -130,6 +234,36 @@ void main() {
       renamed.assertStatus(HttpStatus.ok);
       expect(renamed.json()['credential']['name'], 'New name');
 
+      final lastMethod = await client.postJson(
+        '/auth/webauthn/credentials/delete',
+        const <String, dynamic>{'credentialId': 'credential-1'},
+        headers: sessionHeaders,
+      );
+      lastMethod.assertStatus(HttpStatus.forbidden);
+      expect(lastMethod.json()['error'], 'last_authentication_method');
+      expect(
+        await store.webAuthnAuthenticators.findByCredentialId('credential-1'),
+        isNotNull,
+      );
+
+      await store.accounts.link(
+        AuthAccount(
+          providerId: 'github',
+          providerAccountId: 'github-1',
+          userId: user.id,
+        ),
+      );
+      final deleted = await client.postJson(
+        '/auth/webauthn/credentials/delete',
+        const <String, dynamic>{'credentialId': 'credential-1'},
+        headers: sessionHeaders,
+      );
+      deleted.assertStatus(HttpStatus.ok);
+      expect(
+        await store.webAuthnAuthenticators.findByCredentialId('credential-1'),
+        isNull,
+      );
+
       final unauthenticated = TestClient(RoutedRequestHandler(engine));
       addTearDown(unauthenticated.close);
       final rejected = await unauthenticated.postJson(
@@ -151,4 +285,123 @@ void main() {
       expect(crossSite.json()['error'], 'invalid_origin');
     },
   );
+
+  test(
+    'fresh passwordless authentication can unlink with passkey fallback',
+    () async {
+      final fixture = await _passwordlessUnlinkFixture();
+      addTearDown(fixture.client.close);
+
+      final response = await fixture.client.postJson(
+        '/auth/accounts/unlink',
+        const <String, dynamic>{
+          'providerId': 'github',
+          'providerAccountId': 'github-1',
+        },
+        headers: fixture.sessionHeaders,
+      );
+
+      response.assertStatus(HttpStatus.ok);
+      expect(await fixture.store.accounts.listForUser('user-1'), isEmpty);
+      expect(
+        await fixture.store.webAuthnAuthenticators.findByCredentialId(
+          'passkey-1',
+        ),
+        isNotNull,
+      );
+    },
+  );
+
+  test('stale passwordless authentication requires a new proof', () async {
+    final fixture = await _passwordlessUnlinkFixture(
+      clock: () => DateTime.utc(2100),
+    );
+    addTearDown(fixture.client.close);
+
+    final response = await fixture.client.postJson(
+      '/auth/accounts/unlink',
+      const <String, dynamic>{
+        'providerId': 'github',
+        'providerAccountId': 'github-1',
+      },
+      headers: fixture.sessionHeaders,
+    );
+
+    response.assertStatus(HttpStatus.forbidden);
+    expect(response.json()['error'], 'recent_authentication_required');
+    expect(await fixture.store.accounts.find('github', 'github-1'), isNotNull);
+  });
+
+  test('unlink is unavailable when the store cannot join atomically', () async {
+    final fixture = await _passwordlessUnlinkFixture(
+      supportsAtomicMutation: false,
+    );
+    addTearDown(fixture.client.close);
+
+    final response = await fixture.client.postJson(
+      '/auth/accounts/unlink',
+      const <String, dynamic>{
+        'providerId': 'github',
+        'providerAccountId': 'github-1',
+      },
+      headers: fixture.sessionHeaders,
+    );
+
+    response.assertStatus(HttpStatus.serviceUnavailable);
+    expect(
+      response.json()['error'],
+      'authentication_method_mutation_unavailable',
+    );
+    expect(await fixture.store.accounts.listForUser('user-1'), hasLength(1));
+  });
+}
+
+final class _NonAtomicAuthStore
+    implements
+        AuthStore,
+        AuthWebAuthnStoreCapabilities,
+        AuthUserDeletionCoordinatorHost {
+  const _NonAtomicAuthStore(this.delegate);
+
+  final InMemoryAuthStore delegate;
+
+  @override
+  AuthAccountStore get accounts => delegate.accounts;
+  @override
+  AuthCredentialStore get credentials => delegate.credentials;
+  @override
+  AuthDeviceAuthorizationStore get deviceAuthorizations =>
+      delegate.deviceAuthorizations;
+  @override
+  AuthEmailChangeTokenStore get emailChangeTokens => delegate.emailChangeTokens;
+  @override
+  AuthEmailOtpStore get emailOtps => delegate.emailOtps;
+  @override
+  AuthJwtVersionStore get jwtVersions => delegate.jwtVersions;
+  @override
+  AuthOAuthChallengeStore get oauthChallenges => delegate.oauthChallenges;
+  @override
+  AuthPasswordResetTokenStore get passwordResetTokens =>
+      delegate.passwordResetTokens;
+  @override
+  AuthSessionStore get sessions => delegate.sessions;
+  @override
+  AuthUserStore get users => delegate.users;
+  @override
+  AuthVerificationTokenStore get verificationTokens =>
+      delegate.verificationTokens;
+  @override
+  AuthWebAuthnChallengeStore get webAuthnChallenges =>
+      delegate.webAuthnChallenges;
+  @override
+  AuthWebAuthnAuthenticatorStore get webAuthnAuthenticators =>
+      delegate.webAuthnAuthenticators;
+  @override
+  AuthUserDeletionCoordinator get userDeletionCoordinator =>
+      delegate.userDeletionCoordinator;
+
+  @override
+  void bindUserDeletionPlanContributors(
+    Iterable<AuthUserDeletionPlanContributor> contributors,
+  ) => delegate.bindUserDeletionPlanContributors(contributors);
 }

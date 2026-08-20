@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'authentication_methods.dart';
 import 'deletion_transaction.dart';
 import 'models.dart';
 import 'password_hasher.dart';
@@ -718,12 +719,14 @@ final class AuthAtomicOperationDescriptor {
 class AuthServerPluginContext<TContext> {
   const AuthServerPluginContext({
     required this.store,
+    this.authenticationMethods,
     this.passwordHasher,
     this.passwordPolicy = const PasswordPolicy(),
     this.sessionStrategy = AuthSessionStrategy.session,
   });
 
   final AuthStore store;
+  final AuthAuthenticationMethodService? authenticationMethods;
   final PasswordHasher? passwordHasher;
   final PasswordPolicy passwordPolicy;
   final AuthSessionStrategy sessionStrategy;
@@ -738,15 +741,18 @@ abstract interface class AuthServerPlugin<TContext> {
 class AuthServerPluginRegistry<TContext> {
   AuthServerPluginRegistry({
     required AuthStore store,
+    required AuthAuthenticationMethodService authenticationMethods,
     PasswordHasher? passwordHasher,
     PasswordPolicy passwordPolicy = const PasswordPolicy(),
     AuthSessionStrategy sessionStrategy = AuthSessionStrategy.session,
   }) : _store = store,
+       _authenticationMethods = authenticationMethods,
        _passwordHasher = passwordHasher ?? Argon2idPasswordHasher(),
        _passwordPolicy = passwordPolicy,
        _sessionStrategy = sessionStrategy;
 
   final AuthStore _store;
+  final AuthAuthenticationMethodService _authenticationMethods;
   final PasswordHasher _passwordHasher;
   final PasswordPolicy _passwordPolicy;
   final AuthSessionStrategy _sessionStrategy;
@@ -776,6 +782,7 @@ class AuthServerPluginRegistry<TContext> {
     plugin.configure(
       AuthServerPluginContext<TContext>(
         store: _store,
+        authenticationMethods: _authenticationMethods,
         passwordHasher: _passwordHasher,
         passwordPolicy: _passwordPolicy,
         sessionStrategy: _sessionStrategy,
@@ -789,6 +796,9 @@ class AuthServerPluginRegistry<TContext> {
       _plugins.values,
     );
     _bindDeletionTopology(topology);
+    _authenticationMethods.composeContributors(
+      topology.whereType<AuthAuthenticationMethodInventoryContributor>(),
+    );
     for (final plugin
         in topology.whereType<AuthServerPluginTopologyAware<TContext>>()) {
       plugin.composePluginTopology(topology);

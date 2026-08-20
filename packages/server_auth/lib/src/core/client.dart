@@ -1671,16 +1671,16 @@ class AuthClientCore {
         .toList(growable: false);
   }
 
-  /// Reauthenticates and unlinks one external identity.
+  /// Unlinks one external identity using password or recent-auth/step-up proof.
   Future<void> unlinkAccount({
     required String providerId,
     required String providerAccountId,
-    required String currentPassword,
+    String? currentPassword,
   }) async {
     await _mutatingRequest('POST', '/accounts/unlink', <String, dynamic>{
       'providerId': providerId,
       'providerAccountId': providerAccountId,
-      'currentPassword': currentPassword,
+      'currentPassword': ?currentPassword,
     });
   }
 

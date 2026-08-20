@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:http/http.dart' as http;
 
+import 'authentication_methods.dart';
 import 'exceptions.dart';
 import 'models.dart';
 import 'oauth.dart';
@@ -320,6 +321,7 @@ Future<AuthAccountLinked> linkProviderAccount({
 /// will no longer be able to sign in with that provider.
 Future<AuthAccountUnlinked> unlinkProviderAccount({
   required AuthStore store,
+  required AuthAuthenticationMethodService authenticationMethods,
   required String userId,
   required String providerId,
   required String providerAccountId,
@@ -359,22 +361,20 @@ Future<AuthAccountUnlinked> unlinkProviderAccount({
     throw AuthFlowException('linked_account_not_found');
   }
 
-  final credential = await findAuthCredentialForUser(store, normalizedUserId);
-  final result = await Future.sync(
-    () => store.accounts.unlinkForUserIfSafe(
-      normalizedUserId,
-      normalizedProviderId,
-      normalizedProviderAccountId,
-      hasEnabledPasswordCredential: credential?.enabled == true,
-    ),
+  final result = await authenticationMethods.removeOAuthAccountIfSafe(
+    userId: normalizedUserId,
+    providerId: normalizedProviderId,
+    providerAccountId: normalizedProviderAccountId,
   );
   switch (result) {
-    case AuthAccountUnlinkResult.unlinked:
+    case AuthAuthenticationMethodMutationResult.mutated:
       break;
-    case AuthAccountUnlinkResult.notFound:
+    case AuthAuthenticationMethodMutationResult.notFound:
       throw AuthFlowException('linked_account_not_found');
-    case AuthAccountUnlinkResult.lastAuthenticationMethod:
+    case AuthAuthenticationMethodMutationResult.lastAuthenticationMethod:
       throw AuthFlowException('last_authentication_method');
+    case AuthAuthenticationMethodMutationResult.atomicityUnavailable:
+      throw AuthFlowException('authentication_method_mutation_unavailable');
   }
 
   return AuthAccountUnlinked(
@@ -386,43 +386,38 @@ Future<AuthAccountUnlinked> unlinkProviderAccount({
 
 /// Safety check: determines if a provider account can be unlinked.
 ///
-/// Returns `true` if unlinking would leave the user with no authentication
-/// methods. This should be checked before allowing unlinking.
+/// Returns `true` only when the exact account exists and another authoritative
+/// authentication method would remain after unlinking.
 Future<bool> canUnlinkProvider({
   required AuthStore store,
+  required AuthAuthenticationMethodService authenticationMethods,
   required String userId,
   required String providerId,
-  String? providerAccountId,
+  required String providerAccountId,
 }) async {
   final normalizedUserId = userId.trim();
-
-  // Check if user has a password credential
-  final user = await Future.sync(() => store.users.findById(normalizedUserId));
-  if (user == null) return false;
-
-  final hasPassword = await findAuthCredentialForUser(store, normalizedUserId);
-
-  if (hasPassword != null && hasPassword.enabled) {
-    // User has a password, can unlink any provider
-    return true;
+  final normalizedProviderId = providerId.trim();
+  final normalizedProviderAccountId = providerAccountId.trim();
+  if (normalizedUserId.isEmpty ||
+      normalizedProviderId.isEmpty ||
+      normalizedProviderAccountId.isEmpty) {
+    return false;
   }
 
-  // User only has OAuth, check if they have other linked providers
-  final linkedAccounts = await Future.sync(
-    () => store.accounts.listForUser(normalizedUserId),
+  final user = await Future.sync(() => store.users.findById(normalizedUserId));
+  if (user == null) return false;
+  final snapshot = await authenticationMethods.snapshotForUser(
+    normalizedUserId,
   );
-
-  // Count active links, excluding only the exact account being unlinked.
-  final otherLinks = linkedAccounts
-      .where(
-        (account) =>
-            account.userId == normalizedUserId &&
-            (account.providerId != providerId ||
-                account.providerAccountId != providerAccountId),
-      )
-      .length;
-
-  return otherLinks > 0;
+  if (!snapshot.isComplete) return false;
+  final target = AuthAuthenticationMethod.oauthProvider(
+    providerId: normalizedProviderId,
+    providerAccountId: normalizedProviderAccountId,
+  );
+  return snapshot.methods.contains(target) &&
+      snapshot.methods.any(
+        (method) => method.canAuthenticate && method != target,
+      );
 }
 
 DateTime _parseLinkedAt(Map<String, dynamic> metadata) {

@@ -30,6 +30,19 @@
 - Extend portable plugin contracts with PUT, PATCH, DELETE, plugin-owned bearer
   authentication, explicit HTTP status/media-type responses, path parameters,
   and conformance validation for duplicate or malformed response contracts.
+- Add a typed, plugin-composed authentication-method inventory spanning
+  credentials, exact OAuth accounts, passkeys, phone, email OTP/link,
+  usernames, opt-in primary API keys, and future plugin methods. Breaking:
+  destructive method removal now uses one backend-bound atomic coordinator,
+  fails closed for incomplete/non-transactional stores, and has no legacy
+  safe-unlink adapter path.
+- Add an explicit sensitive-action policy for account unlinking. A verified
+  password, a valid step-up proof, or a session/JWT issued inside the configured
+  recent-authentication window can authorize passwordless unlinking.
+- Allow `WebAuthnPlugin` to use explicit typed WebAuthn storage when the root
+  auth store does not own passkey tables. Mixed-backend runtimes remain usable,
+  while destructive method removal fails closed unless the root coordinator can
+  transact every active inventory.
 - Replace callback-based hard deletion with immutable, backend-bound plugin
   plans executed alongside core deletion by one storage coordinator. Freeze
   the deletion topology, reject incomplete or foreign-domain plans before

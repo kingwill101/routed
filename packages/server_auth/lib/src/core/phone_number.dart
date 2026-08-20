@@ -4,6 +4,7 @@ import 'dart:math';
 
 import 'package:crypto/crypto.dart' show Hmac, sha256;
 
+import 'authentication_methods.dart';
 import 'deletion_transaction.dart';
 import 'exceptions.dart';
 import 'models.dart';
@@ -176,6 +177,8 @@ final class PhoneNumberPlugin<TContext>
         AuthPersistenceContributor,
         AuthClientOperationContributor,
         AuthRateLimitContributor,
+        AuthAuthenticationMethodInventoryContributor,
+        AuthAuthenticationMethodInventoryBinding,
         AuthUserDeletionPlanContributor {
   PhoneNumberPlugin({
     required this.store,
@@ -233,6 +236,29 @@ final class PhoneNumberPlugin<TContext>
 
   @override
   String get userDataNamespace => authPhoneNumberPluginId;
+
+  @override
+  String get authenticationMethodNamespace => authPhoneNumberPluginId;
+
+  @override
+  Object get authenticationMethodStore => store;
+
+  @override
+  Set<AuthAuthenticationMethodKind> get authenticationMethodKinds => const {
+    AuthAuthenticationMethodKind.phone,
+  };
+
+  @override
+  Future<AuthAuthenticationMethodSnapshot> authenticationMethodsForUser(
+    String userId,
+  ) async {
+    _ensureConfigured();
+    final identity = await store.findIdentityForUser(userId);
+    return AuthAuthenticationMethodSnapshot.complete([
+      if (identity != null)
+        AuthAuthenticationMethod.phone(identity.phoneNumber),
+    ]);
+  }
 
   @override
   void configure(AuthServerPluginContext<TContext> context) {

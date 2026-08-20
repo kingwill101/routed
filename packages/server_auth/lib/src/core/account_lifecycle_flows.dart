@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'account_deletion.dart';
 import 'account_linking.dart';
+import 'authentication_methods.dart';
 import 'email_change.dart';
 import 'password_hasher.dart';
 import 'providers.dart';
@@ -109,12 +110,14 @@ Future<AuthAccountLinked> linkProviderAccountFlow({
 /// Unlinks a provider account flow.
 Future<AuthAccountUnlinked> unlinkProviderAccountFlow({
   required AuthStore store,
+  required AuthAuthenticationMethodService authenticationMethods,
   required String userId,
   required String providerId,
   required String providerAccountId,
 }) async {
   return unlinkProviderAccount(
     store: store,
+    authenticationMethods: authenticationMethods,
     userId: userId,
     providerId: providerId,
     providerAccountId: providerAccountId,

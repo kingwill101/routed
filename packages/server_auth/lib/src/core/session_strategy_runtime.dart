@@ -112,6 +112,7 @@ resolveAuthSessionForStrategyWithCallbacks<TContext>({
   String? Function()? readJwtToken,
   FutureOr<bool> Function(Map<String, dynamic> claims, AuthUser user)?
   validateJwtClaims,
+  void Function(String key, Object? value)? writeJwtAttribute,
   Map<String, dynamic>? protectedJwtClaims,
   http.Client? httpClient,
   DateTime? now,
@@ -158,6 +159,13 @@ resolveAuthSessionForStrategyWithCallbacks<TContext>({
       );
       if (resolved == null) {
         return const AuthSessionResolution();
+      }
+      final writeAttribute = writeJwtAttribute;
+      if (writeAttribute != null) {
+        writeJwtPayloadAttributes(
+          resolved.payload,
+          setAttribute: writeAttribute,
+        );
       }
       return AuthSessionResolution(
         session: AuthSession(

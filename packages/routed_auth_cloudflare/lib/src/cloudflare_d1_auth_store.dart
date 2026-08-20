@@ -12,7 +12,11 @@ import 'cloudflare_d1_auth_schema.dart';
 /// `package:routed_node/cloudflare.dart`; callers never handle JavaScript or
 /// `package:web` values.
 final class CloudflareD1AuthStore
-    implements AuthStore, AuthUserDeletionCoordinatorHost {
+    implements
+        AuthStore,
+        AuthUserDeletionCoordinatorHost,
+        AuthOAuthAccountMutationStore,
+        AuthAuthenticationMethodTopologyStore {
   CloudflareD1AuthStore(
     CloudflareD1Database database, {
     this.schema = const CloudflareD1AuthSchema(),
@@ -20,6 +24,7 @@ final class CloudflareD1AuthStore
   }) : _database = database,
        _clock = clock ?? DateTime.now {
     final sql = _D1(database);
+    _sql = sql;
     users = _D1Users(sql, schema);
     credentials = _D1Credentials(sql, schema);
     accounts = _D1Accounts(sql, schema);
@@ -50,9 +55,12 @@ final class CloudflareD1AuthStore
   }
 
   final CloudflareD1Database _database;
+  late final _D1 _sql;
   final DateTime Function() _clock;
   final CloudflareD1AuthSchema schema;
   late final CloudflareD1UserDeletionCoordinator _deletionCoordinator;
+  bool _authenticationMethodTopologyBound = false;
+  bool _authenticationMethodInventoryAuthoritative = false;
 
   @override
   AuthUserDeletionCoordinator get userDeletionCoordinator =>
@@ -62,6 +70,150 @@ final class CloudflareD1AuthStore
   void bindUserDeletionPlanContributors(
     Iterable<AuthUserDeletionPlanContributor> contributors,
   ) => _deletionCoordinator.bind(contributors);
+
+  @override
+  void bindAuthenticationMethodInventory(
+    Iterable<AuthAuthenticationMethodInventoryContributor> contributors,
+  ) {
+    if (_authenticationMethodTopologyBound) {
+      throw StateError('Authentication method inventory is already bound.');
+    }
+    var authoritative = true;
+    for (final contributor in contributors) {
+      final binding = switch (contributor) {
+        AuthAuthenticationMethodInventoryBinding binding => binding,
+        _ => null,
+      };
+      if (binding == null) {
+        authoritative = false;
+        continue;
+      }
+      final allowedKinds = identical(binding.authenticationMethodStore, users)
+          ? const {AuthAuthenticationMethodKind.emailLink}
+          : identical(binding.authenticationMethodStore, credentials)
+          ? const {
+              AuthAuthenticationMethodKind.password,
+              AuthAuthenticationMethodKind.username,
+            }
+          : identical(binding.authenticationMethodStore, accounts)
+          ? const {AuthAuthenticationMethodKind.oauthProvider}
+          : identical(binding.authenticationMethodStore, emailOtps)
+          ? const {AuthAuthenticationMethodKind.emailOtp}
+          : const <AuthAuthenticationMethodKind>{};
+      if (binding.authenticationMethodKinds.isEmpty ||
+          binding.authenticationMethodKinds.any(
+            (kind) => !allowedKinds.contains(kind),
+          )) {
+        authoritative = false;
+      }
+    }
+    _authenticationMethodInventoryAuthoritative = authoritative;
+    _authenticationMethodTopologyBound = true;
+  }
+
+  @override
+  Future<AuthAuthenticationMethodMutationResult> unlinkOAuthAccountIfSafe({
+    required String userId,
+    required String providerId,
+    required String providerAccountId,
+    required AuthAuthenticationMethodInventoryLoader loadInventory,
+  }) async {
+    if (!_authenticationMethodTopologyBound ||
+        !_authenticationMethodInventoryAuthoritative) {
+      return AuthAuthenticationMethodMutationResult.atomicityUnavailable;
+    }
+    final snapshot = await loadInventory();
+    if (!snapshot.isComplete) {
+      return AuthAuthenticationMethodMutationResult.atomicityUnavailable;
+    }
+    final target = AuthAuthenticationMethod.oauthProvider(
+      providerId: providerId,
+      providerAccountId: providerAccountId,
+    );
+    if (!snapshot.methods.contains(target)) {
+      return AuthAuthenticationMethodMutationResult.notFound;
+    }
+    final fallbacks = snapshot.methods
+        .where((method) => method.canAuthenticate && method != target)
+        .toList(growable: false);
+    if (fallbacks.isEmpty) {
+      return AuthAuthenticationMethodMutationResult.lastAuthenticationMethod;
+    }
+
+    var hasCredentialFallback = false;
+    var hasEmailFallback = false;
+    final oauthProviderIds = <String>{};
+    for (final method in fallbacks) {
+      switch (method.kind) {
+        case AuthAuthenticationMethodKind.password:
+        case AuthAuthenticationMethodKind.username:
+          hasCredentialFallback = true;
+        case AuthAuthenticationMethodKind.oauthProvider:
+          final id = method.providerId;
+          if (id == null || method.providerAccountId == null) {
+            return AuthAuthenticationMethodMutationResult.atomicityUnavailable;
+          }
+          oauthProviderIds.add(id);
+        case AuthAuthenticationMethodKind.emailOtp:
+        case AuthAuthenticationMethodKind.emailLink:
+          hasEmailFallback = true;
+        case AuthAuthenticationMethodKind.passkey:
+        case AuthAuthenticationMethodKind.phone:
+        case AuthAuthenticationMethodKind.apiKey:
+        case AuthAuthenticationMethodKind.plugin:
+          return AuthAuthenticationMethodMutationResult.atomicityUnavailable;
+      }
+    }
+
+    final clauses = <String>[];
+    final fallbackValues = <Object?>[];
+    if (hasCredentialFallback) {
+      clauses.add('''EXISTS (SELECT 1 FROM ${schema.table('credentials')}
+           WHERE user_id = ? AND enabled = 1)''');
+      fallbackValues.add(userId);
+    }
+    if (oauthProviderIds.isNotEmpty) {
+      final providerParameters = List.filled(
+        oauthProviderIds.length,
+        '?',
+      ).join(', ');
+      clauses.add('''EXISTS (SELECT 1 FROM ${schema.table('accounts')}
+           WHERE user_id = ?
+             AND NOT (provider_id = ? AND provider_account_id = ?)
+             AND provider_id IN ($providerParameters))''');
+      fallbackValues.addAll([
+        userId,
+        providerId,
+        providerAccountId,
+        ...oauthProviderIds,
+      ]);
+    }
+    if (hasEmailFallback) {
+      clauses.add('''EXISTS (SELECT 1 FROM ${schema.table('users')}
+           WHERE id = ? AND email IS NOT NULL AND email <> ''
+             AND COALESCE(json_extract(payload, '\$.attributes.disabled'), 0) <> 1
+             AND COALESCE(json_extract(payload, '\$.attributes.accountDisabled'), 0) <> 1
+             AND json_extract(payload, '\$.attributes.deletedAt') IS NULL)''');
+      fallbackValues.add(userId);
+    }
+    if (clauses.isEmpty) {
+      return AuthAuthenticationMethodMutationResult.atomicityUnavailable;
+    }
+
+    final result = await _sql.run(
+      '''DELETE FROM ${schema.table('accounts')}
+         WHERE user_id = ? AND provider_id = ? AND provider_account_id = ?
+           AND (${clauses.join(' OR ')})''',
+      [userId, providerId, providerAccountId, ...fallbackValues],
+    );
+    if ((result.meta?.changes ?? 0) == 1) {
+      return AuthAuthenticationMethodMutationResult.mutated;
+    }
+    final existing = await accounts.find(providerId, providerAccountId);
+    return existing?.userId == userId
+        ? AuthAuthenticationMethodMutationResult.lastAuthenticationMethod
+        : AuthAuthenticationMethodMutationResult.notFound;
+  }
 
   @override
   late final AuthUserStore users;
@@ -703,31 +855,17 @@ final class _D1Accounts implements AuthAccountStore {
   }
 
   @override
-  Future<AuthAccountUnlinkResult> unlinkForUserIfSafe(
+  Future<bool> unlinkForUser(
     String userId,
     String providerId,
-    String providerAccountId, {
-    required bool hasEnabledPasswordCredential,
-  }) async {
-    final id = userId.trim();
+    String providerAccountId,
+  ) async {
     final result = await sql.run(
       '''DELETE FROM $table
-         WHERE user_id = ? AND provider_id = ? AND provider_account_id = ?
-           AND (? = 1 OR (SELECT COUNT(*) FROM $table WHERE user_id = ?) > 1)''',
-      [
-        id,
-        providerId.trim(),
-        providerAccountId.trim(),
-        hasEnabledPasswordCredential ? 1 : 0,
-        id,
-      ],
+         WHERE user_id = ? AND provider_id = ? AND provider_account_id = ?''',
+      [userId.trim(), providerId.trim(), providerAccountId.trim()],
     );
-    if ((result.meta?.changes ?? 0) == 1) {
-      return AuthAccountUnlinkResult.unlinked;
-    }
-    final existing = await find(providerId, providerAccountId);
-    if (existing?.userId != id) return AuthAccountUnlinkResult.notFound;
-    return AuthAccountUnlinkResult.lastAuthenticationMethod;
+    return (result.meta?.changes ?? 0) == 1;
   }
 
   @override

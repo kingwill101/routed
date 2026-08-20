@@ -223,7 +223,11 @@ OpenApiSpec _authSpec() => _registry(<AuthServerPlugin<Object>>[
 AuthServerPluginRegistry<Object> _registry(
   Iterable<AuthServerPlugin<Object>> plugins,
 ) {
-  final registry = AuthServerPluginRegistry<Object>(store: InMemoryAuthStore());
+  final store = InMemoryAuthStore();
+  final registry = AuthServerPluginRegistry<Object>(
+    store: store,
+    authenticationMethods: AuthAuthenticationMethodService(store: store),
+  );
   for (final plugin in plugins) {
     registry.register(plugin);
   }

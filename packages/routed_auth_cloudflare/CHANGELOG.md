@@ -1,5 +1,11 @@
 ## 0.1.0
 
+- Add exact owner-checked OAuth account unlinking by provider ID and provider
+  account ID. D1 binds an authoritative topology backed by its own users,
+  credentials, accounts, and email-OTP stores, rechecks a usable fallback in
+  the conditional delete statement, and records mixed external-store
+  topologies as non-authoritative. Those applications still boot and use their
+  plugins, while destructive unlink fails closed until every store can join.
 - Add a typed Cloudflare D1 `AuthStore` with prefix-isolated, idempotent
   migrations.
 - Cover every required public store-conformance case plus concurrent session,

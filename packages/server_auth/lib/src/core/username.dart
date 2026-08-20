@@ -1,3 +1,4 @@
+import 'authentication_methods.dart';
 import 'exceptions.dart';
 import 'models.dart';
 import 'password_hasher.dart';
@@ -234,6 +235,8 @@ final class UsernamePlugin<TContext>
         AuthServerPluginTopologyAware<TContext>,
         AuthEndpointContributor<TContext>,
         AuthClientOperationContributor,
+        AuthAuthenticationMethodInventoryContributor,
+        AuthAuthenticationMethodInventoryBinding,
         AuthRateLimitContributor {
   UsernamePlugin({
     AuthUsernameIdentifierPolicy? identifierPolicy,
@@ -262,6 +265,29 @@ final class UsernamePlugin<TContext>
 
   @override
   String get id => authUsernamePluginId;
+
+  @override
+  String get authenticationMethodNamespace => authUsernamePluginId;
+
+  @override
+  Object get authenticationMethodStore => _credentials;
+
+  @override
+  Set<AuthAuthenticationMethodKind> get authenticationMethodKinds => const {
+    AuthAuthenticationMethodKind.username,
+  };
+
+  @override
+  Future<AuthAuthenticationMethodSnapshot> authenticationMethodsForUser(
+    String userId,
+  ) async {
+    _ensureConfigured();
+    final credential = await _credentials.findUsernameForUser(userId);
+    return AuthAuthenticationMethodSnapshot.complete([
+      if (credential?.enabled == true)
+        AuthAuthenticationMethod.username(credential!.id),
+    ]);
+  }
 
   @override
   void configure(AuthServerPluginContext<TContext> context) {

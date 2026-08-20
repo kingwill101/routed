@@ -105,8 +105,10 @@ void main() {
 
   group('UsernamePlugin', () {
     test('requires an explicitly capable atomic store', () {
+      final store = CallbackAuthStore();
       final registry = AuthServerPluginRegistry<String>(
-        store: CallbackAuthStore(),
+        store: store,
+        authenticationMethods: AuthAuthenticationMethodService(store: store),
         passwordHasher: _Hasher(),
       );
       expect(

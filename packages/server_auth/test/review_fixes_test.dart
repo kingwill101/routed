@@ -686,6 +686,7 @@ void main() {
       expect(
         await canUnlinkProvider(
           store: store,
+          authenticationMethods: _linkedAuthenticationMethods(store),
           userId: 'user-1',
           providerId: 'github',
           providerAccountId: 'github-1',
@@ -708,6 +709,10 @@ void main() {
       expect(
         () => unlinkProviderAccount(
           store: store,
+          authenticationMethods: _linkedAuthenticationMethods(
+            store,
+            includeCredentials: false,
+          ),
           userId: 'user-1',
           providerId: 'github',
           providerAccountId: 'github-1',
@@ -833,6 +838,29 @@ String _clientSecretHash(String secret) =>
     sha256.convert(utf8.encode(secret)).toString();
 
 // --- Helpers ---
+
+AuthAuthenticationMethodService _linkedAuthenticationMethods(
+  InMemoryAuthStore store, {
+  bool includeCredentials = true,
+}) => AuthRuntime<Object>(
+  options: AuthOptions<Object>(
+    providers: <AuthProvider>[
+      if (includeCredentials) CredentialsProvider(),
+      OAuthProvider<Map<String, dynamic>>(
+        id: 'github',
+        name: 'GitHub',
+        clientId: 'client',
+        clientSecret: 'secret',
+        authorizationEndpoint: Uri.https('github.test', '/authorize'),
+        tokenEndpoint: Uri.https('github.test', '/token'),
+        profile: (_) => AuthUser(id: 'unused'),
+        redirectUri: 'https://app.test/auth/callback/github',
+      ),
+    ],
+    store: store,
+    storeMode: AuthStoreMode.ephemeral,
+  ),
+).authenticationMethods;
 
 Future<void> _seedUser(
   InMemoryAuthStore store,

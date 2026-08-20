@@ -115,6 +115,9 @@ abstract interface class AuthPhoneNumberStore {
 
   FutureOr<AuthPhoneNumberIdentity?> findIdentity(String phoneNumber);
 
+  /// Finds the verified phone identity currently owned by [userId].
+  FutureOr<AuthPhoneNumberIdentity?> findIdentityForUser(String userId);
+
   /// Binds a phone number, returning the canonical identity if already bound.
   FutureOr<AuthPhoneNumberIdentity> bindIdentity(
     AuthPhoneNumberIdentity identity,
@@ -242,6 +245,12 @@ final class InMemoryAuthPhoneNumberStore
   @override
   Future<AuthPhoneNumberIdentity?> findIdentity(String phoneNumber) async =>
       _identitiesByPhone[phoneNumber];
+
+  @override
+  Future<AuthPhoneNumberIdentity?> findIdentityForUser(String userId) async {
+    final phone = _phoneByUser[userId.trim()];
+    return phone == null ? null : _identitiesByPhone[phone];
+  }
 
   @override
   Future<AuthPhoneNumberIdentity> bindIdentity(

@@ -470,7 +470,7 @@ final class AuthAccountClient {
   Future<void> unlink({
     required String providerId,
     required String providerAccountId,
-    required String currentPassword,
+    String? currentPassword,
   }) => _core.unlinkAccount(
     providerId: providerId,
     providerAccountId: providerAccountId,

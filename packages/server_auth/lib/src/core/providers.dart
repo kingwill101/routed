@@ -1,6 +1,8 @@
 import 'dart:async';
 
 import 'package:http/http.dart' as http;
+
+import 'authentication_methods.dart';
 import 'exceptions.dart' show AuthFlowException;
 import 'jwt.dart' show JwtOptions, JwtVerifier;
 import 'models.dart';
@@ -14,6 +16,7 @@ import 'tokens.dart'
 import 'users.dart'
     show
         authUsersDiffer,
+        authUserIsDisabled,
         mergeAuthUser,
         normalizeAuthEmail,
         resolveAuthAccountId;
@@ -348,6 +351,11 @@ class AuthProvider {
   /// OAuth client credentials and other provider implementation details are
   /// intentionally not copied into the projection.
   AuthProvider redacted() => AuthProvider(id: id, name: name, type: type);
+
+  /// Builds this provider's authoritative usable-method inventory.
+  AuthAuthenticationMethodInventoryContributor? authenticationMethodInventory(
+    AuthStore store,
+  ) => null;
 }
 
 /// Validates the provider identities used by auth routes and persistence.
@@ -1646,6 +1654,11 @@ class EmailProvider extends AuthProvider {
 
   /// Custom token generator. Defaults to a secure random token.
   final String Function()? tokenGenerator;
+
+  @override
+  AuthAuthenticationMethodInventoryContributor authenticationMethodInventory(
+    AuthStore store,
+  ) => _EmailAuthenticationMethodInventory(store.users, id);
 }
 
 /// {@macro server_auth_credentials_provider}
@@ -1662,6 +1675,81 @@ class CredentialsProvider extends AuthProvider {
 
   /// Custom registration callback for credentials.
   final CredentialsRegister? register;
+
+  @override
+  AuthAuthenticationMethodInventoryContributor authenticationMethodInventory(
+    AuthStore store,
+  ) => _PasswordAuthenticationMethodInventory(store, id);
+}
+
+final class _PasswordAuthenticationMethodInventory
+    implements
+        AuthAuthenticationMethodInventoryContributor,
+        AuthAuthenticationMethodInventoryBinding {
+  const _PasswordAuthenticationMethodInventory(this.store, this.providerId);
+
+  final AuthStore store;
+  final String providerId;
+
+  @override
+  String get authenticationMethodNamespace => 'password:$providerId';
+
+  @override
+  Object get authenticationMethodStore => store.credentials;
+
+  @override
+  Set<AuthAuthenticationMethodKind> get authenticationMethodKinds => const {
+    AuthAuthenticationMethodKind.password,
+  };
+
+  @override
+  Future<AuthAuthenticationMethodSnapshot> authenticationMethodsForUser(
+    String userId,
+  ) async {
+    final credential = await findAuthCredentialForUser(store, userId);
+    return AuthAuthenticationMethodSnapshot.complete([
+      if (credential?.enabled == true)
+        AuthAuthenticationMethod.password(
+          credential!.id,
+          providerId: providerId,
+        ),
+    ]);
+  }
+}
+
+final class _EmailAuthenticationMethodInventory
+    implements
+        AuthAuthenticationMethodInventoryContributor,
+        AuthAuthenticationMethodInventoryBinding {
+  const _EmailAuthenticationMethodInventory(this.store, this.providerId);
+
+  final AuthUserStore store;
+  final String providerId;
+
+  @override
+  String get authenticationMethodNamespace => 'email:$providerId';
+
+  @override
+  Object get authenticationMethodStore => store;
+
+  @override
+  Set<AuthAuthenticationMethodKind> get authenticationMethodKinds => const {
+    AuthAuthenticationMethodKind.emailLink,
+  };
+
+  @override
+  Future<AuthAuthenticationMethodSnapshot> authenticationMethodsForUser(
+    String userId,
+  ) async {
+    final user = await store.findById(userId);
+    return AuthAuthenticationMethodSnapshot.complete([
+      if (user?.email?.isNotEmpty == true && !authUserIsDisabled(user!))
+        AuthAuthenticationMethod.emailLink(
+          providerId: providerId,
+          userId: userId,
+        ),
+    ]);
+  }
 }
 
 /// Email verification payload shared with provider callbacks.

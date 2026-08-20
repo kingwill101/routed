@@ -911,9 +911,7 @@ class AuthRoutes {
     final providerId = payload['providerId']?.toString();
     final providerAccountId = payload['providerAccountId']?.toString();
     final currentPassword = payload['currentPassword']?.toString();
-    if (providerId == null ||
-        providerAccountId == null ||
-        currentPassword == null) {
+    if (providerId == null || providerAccountId == null) {
       return _errorResponse(ctx, 'account_unlink_failed');
     }
     try {
@@ -1364,11 +1362,21 @@ class AuthRoutes {
       'phone_code_too_many_attempts',
     }.contains(error.code);
     final isMalformedPhoneNumber = error.code == 'invalid_phone_number';
+    final isAuthenticationMethodMutationUnavailable =
+        error.code == 'authentication_method_mutation_unavailable';
+    final isAccountSafetyError = const <String>{
+      'last_authentication_method',
+      'recent_authentication_required',
+    }.contains(error.code);
     return ctx.json(
       {'error': sanitizeAuthErrorCode(error.code)},
       statusCode: error is AuthRateLimitException
           ? HttpStatus.tooManyRequests
+          : isAuthenticationMethodMutationUnavailable
+          ? HttpStatus.serviceUnavailable
           : isAttemptLockout
+          ? HttpStatus.forbidden
+          : isAccountSafetyError
           ? HttpStatus.forbidden
           : isMalformedPhoneNumber
           ? HttpStatus.badRequest

@@ -1,5 +1,7 @@
+import 'authentication_methods.dart';
 import 'plugin.dart';
 import 'options.dart';
+import 'providers.dart' show AuthProviderType;
 import 'runtime_posture.dart';
 import 'store.dart';
 
@@ -27,8 +29,28 @@ class AuthRuntime<TContext> {
       options.requireProductionBoot();
       requireDurableStoreOrThrow();
     }
+    authenticationMethods = AuthAuthenticationMethodService(
+      store: this.store,
+      contributors: <AuthAuthenticationMethodInventoryContributor>[
+        _AuthAccountAuthenticationMethodInventory(
+          this.store.accounts,
+          activeProviderIds: {
+            for (final provider in options.providers)
+              if (provider.type == AuthProviderType.oauth ||
+                  provider.type == AuthProviderType.oidc)
+                provider.id,
+          },
+        ),
+        ...options.providers
+            .map(
+              (provider) => provider.authenticationMethodInventory(this.store),
+            )
+            .whereType<AuthAuthenticationMethodInventoryContributor>(),
+      ],
+    );
     registry = AuthServerPluginRegistry<TContext>(
       store: this.store,
+      authenticationMethods: authenticationMethods,
       passwordHasher: options.passwordHasher,
       passwordPolicy: options.passwordPolicy,
       sessionStrategy: options.sessionStrategy,
@@ -47,6 +69,9 @@ class AuthRuntime<TContext> {
   /// The plugins configured for this runtime.
   final List<AuthServerPlugin<TContext>> plugins;
 
+  /// Atomic inventory and mutation boundary shared by all auth methods.
+  late final AuthAuthenticationMethodService authenticationMethods;
+
   /// Registry of plugins active in this runtime.
   late final AuthServerPluginRegistry<TContext> registry;
 
@@ -64,4 +89,41 @@ class AuthRuntime<TContext> {
   AuthServerPlugin<TContext>? plugin(String id) => registry.find(id);
 
   bool hasPlugin(String id) => registry.contains(id);
+}
+
+final class _AuthAccountAuthenticationMethodInventory
+    implements
+        AuthAuthenticationMethodInventoryContributor,
+        AuthAuthenticationMethodInventoryBinding {
+  _AuthAccountAuthenticationMethodInventory(
+    this.store, {
+    required Set<String> activeProviderIds,
+  }) : activeProviderIds = Set<String>.unmodifiable(activeProviderIds);
+
+  final AuthAccountStore store;
+  final Set<String> activeProviderIds;
+
+  @override
+  String get authenticationMethodNamespace => 'oauth';
+
+  @override
+  Object get authenticationMethodStore => store;
+
+  @override
+  Set<AuthAuthenticationMethodKind> get authenticationMethodKinds => const {
+    AuthAuthenticationMethodKind.oauthProvider,
+  };
+
+  @override
+  Future<AuthAuthenticationMethodSnapshot> authenticationMethodsForUser(
+    String userId,
+  ) async => AuthAuthenticationMethodSnapshot.complete(
+    (await store.listForUser(userId)).map(
+      (account) => AuthAuthenticationMethod.oauthProvider(
+        providerId: account.providerId,
+        providerAccountId: account.providerAccountId,
+        canAuthenticate: activeProviderIds.contains(account.providerId),
+      ),
+    ),
+  );
 }

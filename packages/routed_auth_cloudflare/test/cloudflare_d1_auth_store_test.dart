@@ -37,6 +37,261 @@ void main() {
     }
   });
 
+  test('D1 unlink excludes the exact provider and account pair', () async {
+    final database = FakeCloudflareD1Database();
+    addTearDown(database.close);
+    final store = await CloudflareD1AuthStore.open(database);
+    final service = _accountMethodService(store, {'github', 'gitlab'});
+    await store.users.create(AuthUser(id: 'user-1'));
+    await store.accounts.link(
+      AuthAccount(
+        providerId: 'github',
+        providerAccountId: 'shared-id',
+        userId: 'user-1',
+      ),
+    );
+    await store.accounts.link(
+      AuthAccount(
+        providerId: 'gitlab',
+        providerAccountId: 'shared-id',
+        userId: 'user-1',
+      ),
+    );
+
+    final result = await service.removeOAuthAccountIfSafe(
+      userId: 'user-1',
+      providerId: 'github',
+      providerAccountId: 'shared-id',
+    );
+
+    expect(result, AuthAuthenticationMethodMutationResult.mutated);
+    expect(await store.accounts.find('github', 'shared-id'), isNull);
+    expect(await store.accounts.find('gitlab', 'shared-id'), isNotNull);
+  });
+
+  test('D1 unlink recognizes a durable password fallback', () async {
+    final database = FakeCloudflareD1Database();
+    addTearDown(database.close);
+    final store = await CloudflareD1AuthStore.open(database);
+    final runtime = AuthRuntime<Object>(
+      options: AuthOptions<Object>(
+        providers: <AuthProvider>[
+          CredentialsProvider(),
+          _oauthProvider('github'),
+        ],
+        store: store,
+        runtimeMode: AuthRuntimeMode.localDevelopment,
+      ),
+    );
+    final now = DateTime.utc(2026, 8, 20);
+    await store.credentials.register(
+      AuthUser(id: 'user-1', email: 'user@example.com'),
+      AuthPasswordCredential(
+        id: 'credential-1',
+        userId: 'user-1',
+        identifier: 'user@example.com',
+        passwordHash: 'hash',
+        createdAt: now,
+        updatedAt: now,
+      ),
+    );
+    await store.accounts.link(
+      AuthAccount(
+        providerId: 'github',
+        providerAccountId: 'github-1',
+        userId: 'user-1',
+      ),
+    );
+
+    final result = await runtime.authenticationMethods.removeOAuthAccountIfSafe(
+      userId: 'user-1',
+      providerId: 'github',
+      providerAccountId: 'github-1',
+    );
+
+    expect(result, AuthAuthenticationMethodMutationResult.mutated);
+    expect(await store.accounts.find('github', 'github-1'), isNull);
+  });
+
+  test('concurrent D1 unlinks preserve one usable account', () async {
+    final database = FakeCloudflareD1Database();
+    addTearDown(database.close);
+    final store = await CloudflareD1AuthStore.open(database);
+    final providers = {'github', 'gitlab', 'bitbucket'};
+    final service = _accountMethodService(store, providers);
+    await store.users.create(AuthUser(id: 'user-1'));
+    for (final providerId in providers) {
+      await store.accounts.link(
+        AuthAccount(
+          providerId: providerId,
+          providerAccountId: '$providerId-account',
+          userId: 'user-1',
+        ),
+      );
+    }
+
+    final results = await Future.wait([
+      for (final providerId in providers)
+        service.removeOAuthAccountIfSafe(
+          userId: 'user-1',
+          providerId: providerId,
+          providerAccountId: '$providerId-account',
+        ),
+    ]);
+
+    final remaining = await store.accounts.listForUser('user-1');
+    expect(remaining, hasLength(1));
+    expect(
+      results.where(
+        (result) => result == AuthAuthenticationMethodMutationResult.mutated,
+      ),
+      hasLength(2),
+    );
+    expect(
+      results,
+      contains(AuthAuthenticationMethodMutationResult.lastAuthenticationMethod),
+    );
+  });
+
+  test(
+    'D1 records external method stores and makes unlink unavailable',
+    () async {
+      final database = FakeCloudflareD1Database();
+      addTearDown(database.close);
+      final store = await CloudflareD1AuthStore.open(database);
+      final service = AuthAuthenticationMethodService(
+        store: store,
+        contributors: [
+          _D1AccountMethodInventory(store.accounts, {'github', 'gitlab'}),
+          _ExternalMethodInventory(),
+        ],
+      )..composeContributors(const []);
+      await store.users.create(AuthUser(id: 'user-1'));
+      await store.accounts.link(
+        AuthAccount(
+          providerId: 'github',
+          providerAccountId: 'github-1',
+          userId: 'user-1',
+        ),
+      );
+      await store.accounts.link(
+        AuthAccount(
+          providerId: 'gitlab',
+          providerAccountId: 'gitlab-1',
+          userId: 'user-1',
+        ),
+      );
+
+      final result = await service.removeOAuthAccountIfSafe(
+        userId: 'user-1',
+        providerId: 'github',
+        providerAccountId: 'github-1',
+      );
+
+      expect(
+        result,
+        AuthAuthenticationMethodMutationResult.atomicityUnavailable,
+      );
+      expect(await store.accounts.listForUser('user-1'), hasLength(2));
+    },
+  );
+
+  test(
+    'D1 boots with external auth plugins while unlink fails closed',
+    () async {
+      final database = FakeCloudflareD1Database();
+      addTearDown(database.close);
+      final store = await CloudflareD1AuthStore.open(database);
+      final webAuthnStorage = InMemoryAuthStore();
+      final phoneStore = InMemoryAuthPhoneNumberStore();
+      final apiKeyStore = InMemoryAuthApiKeyStore();
+      final webAuthn = WebAuthnPlugin<Object>(
+        provider: WebAuthnProvider(
+          getUserInfo: (_, _, _) => null,
+          getRelyingParty: (_, _) => const WebAuthnRelyingParty(
+            id: 'app.test',
+            name: 'App',
+            origin: 'https://app.test',
+          ),
+        ),
+        storage: webAuthnStorage,
+      );
+      final phone = PhoneNumberPlugin<Object>(
+        store: phoneStore,
+        sendCode: (_) {},
+        codeHashKey: '0123456789abcdef0123456789abcdef',
+        allowSignUp: true,
+        generateCode: (_) => '123456',
+      );
+      final apiKeys = AuthApiKeyPlugin<Object>(
+        store: apiKeyStore,
+        countsAsPrimaryAuthenticationMethod: true,
+        keyIdGenerator: ({int length = 32}) => 'key-id',
+        secretGenerator: ({int length = 32}) => 'key-secret',
+      );
+      final runtime = AuthRuntime<Object>(
+        options: AuthOptions<Object>(
+          providers: <AuthProvider>[
+            _oauthProvider('github'),
+            _oauthProvider('gitlab'),
+          ],
+          store: store,
+          runtimeMode: AuthRuntimeMode.localDevelopment,
+          plugins: <AuthServerPlugin<Object>>[webAuthn, phone, apiKeys],
+        ),
+      );
+      final user = await store.users.create(
+        AuthUser(id: 'user-1', email: 'user@example.com'),
+      );
+      await webAuthnStorage.webAuthnAuthenticators.create(
+        WebAuthnAuthenticator(
+          credentialId: 'passkey-1',
+          publicKey: 'AQ',
+          counter: 0,
+          userId: user.id,
+          createdAt: DateTime.utc(2026, 8, 20),
+        ),
+      );
+      final options = await webAuthn.beginUserBoundAuthentication(
+        context: Object(),
+        user: user,
+      );
+      expect(options.challenge, isNotEmpty);
+
+      await phone.issueCode(context: Object(), phoneNumber: '+18765551234');
+      final phoneAuthentication = await phone.verifyCode(
+        context: Object(),
+        phoneNumber: '+18765551234',
+        code: '123456',
+      );
+      expect(phoneAuthentication.user.id, isNotEmpty);
+
+      final issued = await apiKeys.issue(userId: user.id, name: 'primary');
+      expect((await apiKeys.authenticate(issued.key))?.record.userId, user.id);
+
+      for (final providerId in ['github', 'gitlab']) {
+        await store.accounts.link(
+          AuthAccount(
+            providerId: providerId,
+            providerAccountId: '$providerId-account',
+            userId: user.id,
+          ),
+        );
+      }
+      final unlink = await runtime.authenticationMethods
+          .removeOAuthAccountIfSafe(
+            userId: user.id,
+            providerId: 'github',
+            providerAccountId: 'github-account',
+          );
+      expect(
+        unlink,
+        AuthAuthenticationMethodMutationResult.atomicityUnavailable,
+      );
+      expect(await store.accounts.listForUser(user.id), hasLength(2));
+    },
+  );
+
   test('typed migrations are idempotent and prefixes are isolated', () async {
     final database = FakeCloudflareD1Database();
     addTearDown(database.close);
@@ -468,6 +723,84 @@ void main() {
       hasLength(1),
     );
   });
+}
+
+AuthAuthenticationMethodService _accountMethodService(
+  CloudflareD1AuthStore store,
+  Set<String> activeProviderIds,
+) => AuthAuthenticationMethodService(
+  store: store,
+  contributors: [_D1AccountMethodInventory(store.accounts, activeProviderIds)],
+)..composeContributors(const []);
+
+OAuthProvider<Map<String, dynamic>> _oauthProvider(String id) =>
+    OAuthProvider<Map<String, dynamic>>(
+      id: id,
+      name: id,
+      clientId: 'client',
+      clientSecret: 'secret',
+      authorizationEndpoint: Uri.https('$id.test', '/authorize'),
+      tokenEndpoint: Uri.https('$id.test', '/token'),
+      profile: (_) => AuthUser(id: 'unused'),
+      redirectUri: 'https://app.test/auth/callback/$id',
+    );
+
+final class _D1AccountMethodInventory
+    implements
+        AuthAuthenticationMethodInventoryContributor,
+        AuthAuthenticationMethodInventoryBinding {
+  _D1AccountMethodInventory(this.store, Set<String> activeProviderIds)
+    : activeProviderIds = Set.unmodifiable(activeProviderIds);
+
+  final AuthAccountStore store;
+  final Set<String> activeProviderIds;
+
+  @override
+  String get authenticationMethodNamespace => 'oauth';
+
+  @override
+  Object get authenticationMethodStore => store;
+
+  @override
+  Set<AuthAuthenticationMethodKind> get authenticationMethodKinds => const {
+    AuthAuthenticationMethodKind.oauthProvider,
+  };
+
+  @override
+  Future<AuthAuthenticationMethodSnapshot> authenticationMethodsForUser(
+    String userId,
+  ) async => AuthAuthenticationMethodSnapshot.complete(
+    (await store.listForUser(userId)).map(
+      (account) => AuthAuthenticationMethod.oauthProvider(
+        providerId: account.providerId,
+        providerAccountId: account.providerAccountId,
+        canAuthenticate: activeProviderIds.contains(account.providerId),
+      ),
+    ),
+  );
+}
+
+final class _ExternalMethodInventory
+    implements
+        AuthAuthenticationMethodInventoryContributor,
+        AuthAuthenticationMethodInventoryBinding {
+  final Object _store = Object();
+
+  @override
+  String get authenticationMethodNamespace => 'external_passkeys';
+
+  @override
+  Object get authenticationMethodStore => _store;
+
+  @override
+  Set<AuthAuthenticationMethodKind> get authenticationMethodKinds => const {
+    AuthAuthenticationMethodKind.passkey,
+  };
+
+  @override
+  AuthAuthenticationMethodSnapshot authenticationMethodsForUser(
+    String userId,
+  ) => AuthAuthenticationMethodSnapshot.complete(const []);
 }
 
 final class _D1DeletionContributor implements AuthUserDeletionPlanContributor {

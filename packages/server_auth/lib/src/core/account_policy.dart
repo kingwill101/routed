@@ -44,6 +44,29 @@ class AuthAccountPolicy {
   /// Time window for reauthentication validity.
   final Duration reauthenticationWindow;
 
+  /// Decides whether a sensitive action has an explicit recent proof.
+  ///
+  /// A verified password or step-up proof is authoritative. Otherwise the
+  /// original authentication time must be present, not in the future, and
+  /// inside [reauthenticationWindow]. Session activity does not refresh this
+  /// boundary.
+  bool allowsSensitiveAction({
+    DateTime? authenticatedAt,
+    bool passwordReauthenticated = false,
+    bool stepUpVerified = false,
+    DateTime? now,
+  }) {
+    if (!requireReauthenticationForSensitiveActions) return true;
+    if (passwordReauthenticated || stepUpVerified) return true;
+    if (authenticatedAt == null || reauthenticationWindow <= Duration.zero) {
+      return false;
+    }
+    final current = (now ?? DateTime.now()).toUtc();
+    final issued = authenticatedAt.toUtc();
+    if (issued.isAfter(current)) return false;
+    return current.difference(issued) <= reauthenticationWindow;
+  }
+
   /// Returns safe defaults for development.
   static const AuthAccountPolicy development = AuthAccountPolicy(
     requireEmailVerification: false,

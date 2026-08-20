@@ -3,6 +3,7 @@ import 'dart:convert';
 
 import 'package:crypto/crypto.dart' show Hmac, sha256;
 
+import 'authentication_methods.dart';
 import 'deletion_transaction.dart';
 import 'email_otp_store.dart';
 import 'exceptions.dart';
@@ -49,6 +50,8 @@ final class EmailOtpPlugin<TContext>
         AuthPersistenceContributor,
         AuthClientOperationContributor,
         AuthRateLimitContributor,
+        AuthAuthenticationMethodInventoryContributor,
+        AuthAuthenticationMethodInventoryBinding,
         AuthUserDeletionPlanContributor {
   EmailOtpPlugin({
     required this.sendCode,
@@ -89,6 +92,29 @@ final class EmailOtpPlugin<TContext>
 
   @override
   String get userDataNamespace => authEmailOtpPluginId;
+
+  @override
+  String get authenticationMethodNamespace => authEmailOtpPluginId;
+
+  @override
+  Object get authenticationMethodStore => _store;
+
+  @override
+  Set<AuthAuthenticationMethodKind> get authenticationMethodKinds => const {
+    AuthAuthenticationMethodKind.emailOtp,
+  };
+
+  @override
+  Future<AuthAuthenticationMethodSnapshot> authenticationMethodsForUser(
+    String userId,
+  ) async {
+    _ensureConfigured();
+    final user = await _users.findById(userId);
+    return AuthAuthenticationMethodSnapshot.complete([
+      if (user?.email?.isNotEmpty == true && !authUserIsDisabled(user!))
+        AuthAuthenticationMethod.emailOtp(userId),
+    ]);
+  }
 
   @override
   void configure(AuthServerPluginContext<TContext> context) {

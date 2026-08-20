@@ -96,11 +96,17 @@ The work is intentionally split between framework-agnostic capabilities in
 - [x] Add an authenticated password-change flow with reauthentication,
   server-session revocation, trusted-device revocation, and JWT version
   rotation.
-- [ ] Finish linked-account fallback rules so unlinking cannot strand an
-  account across password, OAuth, passkey, phone, email-OTP, username, or
-  future plugin credentials. Email change, account deletion, authenticated
-  account listing/unlinking, reauthentication, and typed tombstone
-  retention/purge are implemented.
+- [ ] Protect linked-account and removable plugin credentials with a typed,
+  de-duplicated inventory across password, exact OAuth provider accounts,
+  passkeys, phone, email OTP/link, username, opt-in primary API keys, and
+  future plugin methods. In-memory removals serialize inventory and mutation
+  atomically per user. D1 binds only its authoritative core method stores,
+  atomically rechecks the exact OAuth target and fallback in SQL, and records
+  mixed external-store topologies without blocking plugin composition; unlink
+  then fails closed. Backend-bound D1 plans for external passkey, phone, API-key,
+  and future plugin stores remain. Passwordless unlinking requires a recent
+  original authentication or explicit step-up proof rather than merely an
+  active session.
 - [x] Add a first-class server-session management API: list current sessions
   with device metadata, revoke one session, revoke all other sessions, and
   rotate credentials after sensitive changes. JWT session management remains a
@@ -169,7 +175,10 @@ The work is intentionally split between framework-agnostic capabilities in
   and a backend-owned deletion coordinator that pass local conformance,
   rollback, contention, and fault tests. A deployed live-D1 run, broader SQL
   adapters, and D1 plans for plugins beyond device authorization and email OTP
-  remain open. Removed external plugins are not discoverable automatically:
+  remain open. D1's authentication-method coordinator accepts its own users,
+  credentials, accounts, and email-OTP stores; external method stores require a
+  future backend-bound plan. Mixed topologies remain usable but account unlink
+  fails closed. Removed external plugins are not discoverable automatically:
   durable adapters must retain a historical namespace inventory or reject
   deletion until that namespace has backend-owned cleanup.
 - [x] Define a stable public adapter conformance suite that can run against

@@ -472,6 +472,10 @@ final class _CapturingPhoneStore implements AuthPhoneNumberStore {
       delegate.findIdentity(phoneNumber);
 
   @override
+  Future<AuthPhoneNumberIdentity?> findIdentityForUser(String userId) =>
+      delegate.findIdentityForUser(userId);
+
+  @override
   Future<AuthPhoneNumberIdentity> bindIdentity(
     AuthPhoneNumberIdentity identity,
   ) => delegate.bindIdentity(identity);

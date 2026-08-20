@@ -171,8 +171,10 @@ void main() {
         required bool exchange,
         required AuthSessionStrategy strategy,
       }) {
+        final store = InMemoryAuthStore();
         final result = AuthServerPluginRegistry<Object>(
-          store: InMemoryAuthStore(),
+          store: store,
+          authenticationMethods: AuthAuthenticationMethodService(store: store),
           sessionStrategy: strategy,
         );
         result.register(
@@ -229,7 +231,12 @@ void main() {
       await feature.issue(userId: 'user-1', name: 'two');
       final other = await feature.issue(userId: 'user-2', name: 'other');
       await core.users.create(AuthUser(id: 'user-1'));
-      feature.configure(AuthServerPluginContext<Never>(store: core));
+      feature.configure(
+        AuthServerPluginContext<Never>(
+          store: core,
+          authenticationMethods: AuthAuthenticationMethodService(store: core),
+        ),
+      );
       core.bindUserDeletionPlanContributors([feature]);
 
       expect(await core.userDeletionCoordinator.deleteUser('user-1'), isTrue);

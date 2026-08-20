@@ -504,8 +504,10 @@ void main() {
     });
 
     test('requires the registry topology to be frozen', () {
+      final store = InMemoryAuthStore();
       final registry = AuthServerPluginRegistry<Object>(
-        store: InMemoryAuthStore(),
+        store: store,
+        authenticationMethods: AuthAuthenticationMethodService(store: store),
       );
 
       expect(
@@ -521,7 +523,11 @@ const _info = OpenApiInfo(title: 'Auth API', version: '1.0.0');
 AuthServerPluginRegistry<Object> _registry(
   Iterable<AuthServerPlugin<Object>> plugins,
 ) {
-  final registry = AuthServerPluginRegistry<Object>(store: InMemoryAuthStore());
+  final store = InMemoryAuthStore();
+  final registry = AuthServerPluginRegistry<Object>(
+    store: store,
+    authenticationMethods: AuthAuthenticationMethodService(store: store),
+  );
   for (final plugin in plugins) {
     registry.register(plugin);
   }

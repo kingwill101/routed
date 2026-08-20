@@ -409,10 +409,12 @@ void main() {
 
   group('Account linking', () {
     late InMemoryAuthStore store;
+    late AuthAuthenticationMethodService authenticationMethods;
 
     setUp(() async {
       store = InMemoryAuthStore();
       await _seedUser(store, 'u1', 'user@example.com');
+      authenticationMethods = _authenticationMethods(store);
     });
 
     test('listLinkedAccounts returns linked accounts', () async {
@@ -444,6 +446,7 @@ void main() {
 
       final unlinked = await unlinkProviderAccount(
         store: store,
+        authenticationMethods: authenticationMethods,
         userId: 'u1',
         providerId: 'github',
         providerAccountId: 'gh-123',
@@ -459,6 +462,7 @@ void main() {
       expect(
         () => unlinkProviderAccount(
           store: store,
+          authenticationMethods: authenticationMethods,
           userId: 'u1',
           providerId: 'github',
           providerAccountId: 'gh-999',
@@ -486,6 +490,7 @@ void main() {
       expect(
         () => unlinkProviderAccount(
           store: store,
+          authenticationMethods: authenticationMethods,
           userId: 'u2',
           providerId: 'github',
           providerAccountId: 'gh-123',
@@ -511,6 +516,7 @@ void main() {
 
       await unlinkProviderAccount(
         store: store,
+        authenticationMethods: authenticationMethods,
         userId: 'u1',
         providerId: 'github',
         providerAccountId: 'gh-123',
@@ -578,6 +584,10 @@ void main() {
       'concurrent unlinks preserve one provider authentication method',
       () async {
         final oauthOnlyStore = InMemoryAuthStore();
+        final oauthMethods = _authenticationMethods(
+          oauthOnlyStore,
+          includeCredentials: false,
+        );
         await oauthOnlyStore.users.create(AuthUser(id: 'oauth-user'));
         await oauthOnlyStore.accounts.link(
           AuthAccount(
@@ -598,6 +608,7 @@ void main() {
           try {
             return await unlinkProviderAccount(
               store: oauthOnlyStore,
+              authenticationMethods: oauthMethods,
               userId: 'oauth-user',
               providerId: provider,
               providerAccountId: accountId,
@@ -624,12 +635,21 @@ void main() {
     );
 
     test('canUnlinkProvider returns true when user has password', () async {
+      await store.accounts.link(
+        AuthAccount(
+          providerId: 'github',
+          providerAccountId: 'github-1',
+          userId: 'u1',
+        ),
+      );
       // _seedUser already creates a credential for u1, so canUnlink should
       // return true because the user has a password credential.
       final canUnlink = await canUnlinkProvider(
         store: store,
+        authenticationMethods: authenticationMethods,
         userId: 'u1',
         providerId: 'github',
+        providerAccountId: 'github-1',
       );
       expect(canUnlink, isTrue);
     });
@@ -1114,13 +1134,12 @@ void main() {
         ),
       );
 
-      final unlinked = await store.accounts.unlinkForUserIfSafe(
+      final unlinked = await store.accounts.unlinkForUser(
         'u1',
         'github',
         'gh-1',
-        hasEnabledPasswordCredential: true,
       );
-      expect(unlinked, AuthAccountUnlinkResult.unlinked);
+      expect(unlinked, isTrue);
 
       // Record should be gone, not just nullified
       final found = await store.accounts.find('github', 'gh-1');
@@ -1183,6 +1202,30 @@ void main() {
 }
 
 // --- Helpers ---
+
+AuthAuthenticationMethodService _authenticationMethods(
+  InMemoryAuthStore store, {
+  bool includeCredentials = true,
+}) => AuthRuntime<Object>(
+  options: AuthOptions<Object>(
+    providers: <AuthProvider>[
+      if (includeCredentials) CredentialsProvider(),
+      for (final id in const ['github', 'google'])
+        OAuthProvider<Map<String, dynamic>>(
+          id: id,
+          name: id,
+          clientId: 'client',
+          clientSecret: 'secret',
+          authorizationEndpoint: Uri.https('$id.test', '/authorize'),
+          tokenEndpoint: Uri.https('$id.test', '/token'),
+          profile: (_) => AuthUser(id: 'unused'),
+          redirectUri: 'https://app.test/auth/callback/$id',
+        ),
+    ],
+    store: store,
+    storeMode: AuthStoreMode.ephemeral,
+  ),
+).authenticationMethods;
 
 Future<void> _seedUser(
   InMemoryAuthStore store,

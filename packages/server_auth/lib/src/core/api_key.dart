@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'authentication_methods.dart';
 import 'deletion_transaction.dart';
 import 'exceptions.dart';
 import 'plugin.dart';
@@ -380,6 +381,9 @@ final class AuthApiKeyPlugin<TContext>
         AuthPersistenceContributor,
         AuthClientOperationContributor,
         AuthRateLimitContributor,
+        AuthAuthenticationMethodInventoryContributor,
+        AuthAuthenticationMethodInventoryBinding,
+        AuthAuthenticationMethodInventoryControl,
         AuthUserDeletionPlanContributor,
         AuthUserAccessRevocationContributor {
   AuthApiKeyPlugin({
@@ -388,6 +392,7 @@ final class AuthApiKeyPlugin<TContext>
     this.defaultLifetime = const Duration(days: 90),
     this.maxLifetime = const Duration(days: 365),
     this.sessionExchangeEnabled = false,
+    this.countsAsPrimaryAuthenticationMethod = false,
     this.keyIdGenerator = secureRandomToken,
     this.secretGenerator = secureRandomToken,
     DateTime Function()? clock,
@@ -427,11 +432,18 @@ final class AuthApiKeyPlugin<TContext>
   /// This is disabled by default because an API key is usually intended for
   /// service authentication, not browser-session creation.
   final bool sessionExchangeEnabled;
+
+  /// Whether active keys are valid fallback login methods for account safety.
+  ///
+  /// Keep this false for narrowly scoped service credentials. Enable it only
+  /// when the application accepts the key as a primary principal.
+  final bool countsAsPrimaryAuthenticationMethod;
   final AuthApiKeyTokenGenerator keyIdGenerator;
   final AuthApiKeyTokenGenerator secretGenerator;
   final DateTime Function() _clock;
   AuthSessionStrategy _sessionStrategy = AuthSessionStrategy.session;
   late AuthUserDeletionDomain _deletionDomain;
+  late AuthAuthenticationMethodService _authenticationMethods;
 
   @override
   String get id => authApiKeyPluginId;
@@ -441,6 +453,37 @@ final class AuthApiKeyPlugin<TContext>
 
   @override
   String get userAccessNamespace => 'api_keys';
+
+  @override
+  String get authenticationMethodNamespace => authApiKeyPluginId;
+
+  @override
+  Object get authenticationMethodStore => store;
+
+  @override
+  Set<AuthAuthenticationMethodKind> get authenticationMethodKinds => const {
+    AuthAuthenticationMethodKind.apiKey,
+  };
+
+  @override
+  bool get authenticationMethodInventoryEnabled =>
+      countsAsPrimaryAuthenticationMethod;
+
+  @override
+  Future<AuthAuthenticationMethodSnapshot> authenticationMethodsForUser(
+    String userId,
+  ) async {
+    if (!countsAsPrimaryAuthenticationMethod) {
+      return AuthAuthenticationMethodSnapshot.complete(const []);
+    }
+    final current = _clock().toUtc();
+    final records = await store.listForUser(userId);
+    return AuthAuthenticationMethodSnapshot.complete(
+      records
+          .where((record) => record.isActive(now: current))
+          .map((record) => AuthAuthenticationMethod.apiKey(record.id)),
+    );
+  }
 
   @override
   Future<AuthUserDeletionPlan> createUserDeletionPlan(AuthUser user) {
@@ -492,6 +535,11 @@ final class AuthApiKeyPlugin<TContext>
 
   @override
   void configure(AuthServerPluginContext<TContext> context) {
+    _authenticationMethods =
+        context.authenticationMethods ??
+        (throw StateError(
+          'AuthApiKeyPlugin requires an authentication-method coordinator.',
+        ));
     _sessionStrategy = context.sessionStrategy;
     final host = context.store;
     if (host is! AuthUserDeletionCoordinatorHost) {
@@ -547,11 +595,39 @@ final class AuthApiKeyPlugin<TContext>
 
   Future<AuthApiKey?> revoke(String userId, String id, {DateTime? now}) async {
     final current = (now ?? _clock()).toUtc();
-    final revoked = await store.revokeForUser(
-      _required(userId, 'userId'),
-      _required(id, 'id'),
-      revokedAt: current,
-    );
+    final normalizedUserId = _required(userId, 'userId');
+    final normalizedId = _required(id, 'id');
+    AuthApiKeyRecord? revoked;
+    if (countsAsPrimaryAuthenticationMethod) {
+      final result = await _authenticationMethods.removeIfSafe(
+        userId: normalizedUserId,
+        target: AuthAuthenticationMethod.apiKey(normalizedId),
+        mutate: () async {
+          revoked = await store.revokeForUser(
+            normalizedUserId,
+            normalizedId,
+            revokedAt: current,
+          );
+          return revoked != null;
+        },
+      );
+      switch (result) {
+        case AuthAuthenticationMethodMutationResult.mutated:
+          break;
+        case AuthAuthenticationMethodMutationResult.notFound:
+          return null;
+        case AuthAuthenticationMethodMutationResult.lastAuthenticationMethod:
+          throw AuthFlowException('last_authentication_method');
+        case AuthAuthenticationMethodMutationResult.atomicityUnavailable:
+          throw AuthFlowException('authentication_method_mutation_unavailable');
+      }
+    } else {
+      revoked = await store.revokeForUser(
+        normalizedUserId,
+        normalizedId,
+        revokedAt: current,
+      );
+    }
     return revoked?.toPublic(now: current);
   }
 

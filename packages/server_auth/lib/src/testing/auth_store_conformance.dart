@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import '../core/authentication_methods.dart';
 import '../core/deletion_transaction.dart';
 import '../core/device_authorization_store.dart';
 import '../core/email_otp_store.dart';
@@ -46,6 +47,9 @@ enum AuthStoreConformanceCapability {
 
   /// Transactional confirmation-token account deletion.
   accountDeletion,
+
+  /// Serializable authentication-method mutation.
+  authenticationMethodMutation,
 }
 
 /// The result of running one conformance case.
@@ -210,6 +214,9 @@ final class AuthStoreConformanceSuite {
         _case(
           id: 'accounts.safe-unlink',
           description: 'prevents unlinking the last authentication method',
+          capability:
+              AuthStoreConformanceCapability.authenticationMethodMutation,
+          supports: (store) => store is AuthOAuthAccountMutationStore,
           verify: _verifySafeAccountUnlink,
         ),
         _case(
@@ -574,41 +581,61 @@ Future<void> _verifySafeAccountUnlink(AuthStore store) async {
   await Future.sync(() => store.accounts.link(first));
   await Future.sync(() => store.accounts.link(second));
 
-  final firstResult = await Future.sync(
-    () => store.accounts.unlinkForUserIfSafe(
-      'user-1',
-      first.providerId,
-      first.providerAccountId,
-      hasEnabledPasswordCredential: false,
-    ),
+  final service = AuthAuthenticationMethodService(
+    store: store,
+    contributors: [_ConformanceAccountInventory(store.accounts)],
+  )..composeContributors(const []);
+  final firstResult = await service.removeOAuthAccountIfSafe(
+    userId: 'user-1',
+    providerId: first.providerId,
+    providerAccountId: first.providerAccountId,
   );
   _check(
-    firstResult == AuthAccountUnlinkResult.unlinked,
+    firstResult == AuthAuthenticationMethodMutationResult.mutated,
     'an account with another provider identity could not be unlinked',
   );
-  final blocked = await Future.sync(
-    () => store.accounts.unlinkForUserIfSafe(
-      'user-1',
-      second.providerId,
-      second.providerAccountId,
-      hasEnabledPasswordCredential: false,
-    ),
+  final blocked = await service.removeOAuthAccountIfSafe(
+    userId: 'user-1',
+    providerId: second.providerId,
+    providerAccountId: second.providerAccountId,
   );
   _check(
-    blocked == AuthAccountUnlinkResult.lastAuthenticationMethod,
+    blocked == AuthAuthenticationMethodMutationResult.lastAuthenticationMethod,
     'the last authentication method was removed',
   );
-  final removed = await Future.sync(
-    () => store.accounts.unlinkForUserIfSafe(
-      'user-1',
-      second.providerId,
-      second.providerAccountId,
-      hasEnabledPasswordCredential: true,
-    ),
-  );
-  _check(
-    removed == AuthAccountUnlinkResult.unlinked,
-    'password-backed account could not unlink its last provider',
+}
+
+final class _ConformanceAccountInventory
+    implements
+        AuthAuthenticationMethodInventoryContributor,
+        AuthAuthenticationMethodInventoryBinding {
+  const _ConformanceAccountInventory(this.store);
+
+  final AuthAccountStore store;
+
+  @override
+  String get authenticationMethodNamespace => 'oauth';
+
+  @override
+  Object get authenticationMethodStore => store;
+
+  @override
+  Set<AuthAuthenticationMethodKind> get authenticationMethodKinds => const {
+    AuthAuthenticationMethodKind.oauthProvider,
+  };
+
+  @override
+  Future<AuthAuthenticationMethodSnapshot> authenticationMethodsForUser(
+    String userId,
+  ) async => AuthAuthenticationMethodSnapshot.complete(
+    (await store.listForUser(userId))
+        .where((account) => account.providerId == 'conformance-provider')
+        .map(
+          (account) => AuthAuthenticationMethod.oauthProvider(
+            providerId: account.providerId,
+            providerAccountId: account.providerAccountId,
+          ),
+        ),
   );
 }
 
