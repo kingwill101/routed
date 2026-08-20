@@ -18,6 +18,11 @@
 - Include pending two-factor recovery challenges in plugin-owned hard deletion
   and rollback checkpoints so account removal cannot leave reusable recovery
   state behind.
+- Require browser-origin validation for anonymous and email-OTP sign-in, and
+  begin captcha replay retention only after provider verification succeeds.
+- Make public WebAuthn authentication options enrollment-indistinguishable and
+  validate certificate paths against configured trust anchors even when the
+  authenticator omits the root from `x5c`.
 - Extend the public durable-store conformance suite with contention cases for
   users, credentials, accounts, sessions, tokens, OAuth challenges, JWT
   versions, device authorization, and email OTP.

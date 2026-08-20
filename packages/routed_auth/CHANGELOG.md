@@ -11,6 +11,11 @@
 - Add `RoutedAuthDeploymentBinding` helpers to bind typed auth options, create
   the matching service provider, and apply explicit proxy policy to the Routed
   engine configuration.
+- Restrict Routed deployment helpers to `EngineContext`, reject substituted or
+  missing auth option bindings at startup, and cover invalid contexts with a
+  compile-failure fixture.
+- Enforce trusted browser origins for anonymous and email-OTP sign-in while
+  preserving explicit native-client requests.
 - Publish `package:routed_auth/testing.dart` with a framework-neutral auth
   runtime conformance contract shared by IO, Node, and Fetch host tests.
 - Use plugin terminology consistently across Routed auth endpoint mounting and
