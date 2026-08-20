@@ -1,5 +1,8 @@
 ## 0.2.0 - 2026-08-20
 
+- Route Admin mutations through backend-owned typed commands, consume
+  impersonation source sessions once before host replacement-session creation,
+  and preserve the explicit host-session and post-commit audit boundary.
 - Route device-token polling through the bounded issuance-lease protocol so
   issuer failures can retry with the same stable authorization ID while
   concurrent, stale, disabled-account, and consumed grants fail generically.

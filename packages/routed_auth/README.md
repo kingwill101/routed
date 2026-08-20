@@ -394,13 +394,18 @@ Routed consults plugin authentication policies before a two-factor challenge,
 before issuing a session, and whenever a session is resolved. Consequently an
 active Admin ban blocks credentials, email, OAuth, two-factor completion,
 server-session reuse, and Routed-issued JWT reuse. Sensitive mutations revoke
-server sessions and rotate JWT versions.
+server sessions and rotate JWT versions through the backend-owned admin
+command. Revoking one named server session does not revoke a JWT; revoking all
+sessions rotates the user's JWT version.
 
 Impersonation is intentionally unavailable with JWT sessions. With server
-sessions it rotates the current session, records the original administrator in
-server-side metadata, defaults to one hour, prevents chaining, and restores a
-fresh administrator session when stopped. The impersonated identity receives
-only the target user's roles and permissions.
+sessions the admin store consumes the current session as a single-use
+transition, records the original administrator in server-side metadata,
+defaults to one hour, prevents chaining, and restores a fresh administrator
+session when stopped. The impersonated identity receives only the target
+user's roles and permissions. Replacement session creation remains a Routed
+host operation after the store commit; a host failure leaves the consumed
+session revoked rather than replaying the transition.
 
 See the documentation site's Administrative Auth guide for setup, custom
 permissions, adapter requirements, typed-client usage, and the complete route

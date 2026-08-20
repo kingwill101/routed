@@ -7,6 +7,9 @@
   semantics through the existing auth operation OpenAPI extension.
 - Generate SAML metadata, sign-in, and ACS contracts with exact XML/form media
   types and durable atomic replay semantics.
+- Preserve the Admin plugin's strengthened atomic command references,
+  single-use impersonation transitions, and intentionally non-atomic external
+  revocation boundaries in generated operation semantics.
 - Preserve public auth persistence, atomicity, and replay semantics in the
   generated `x-routed-auth-operation-semantics` operation extension.
 - Generate plugin-declared PUT, PATCH, DELETE, bearer-security, path-parameter,

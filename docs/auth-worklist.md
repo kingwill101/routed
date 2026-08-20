@@ -160,8 +160,12 @@ The work is intentionally split between framework-agnostic capabilities in
 
 - [x] Add first-class organizations/tenants, memberships, invitations, and
   organization-scoped roles.
-- [x] Add administrative user/session/account management APIs with explicit
-  authorization checks and audit events.
+- [x] Add administrative user/session/account management APIs with typed
+  backend-owned commands that revalidate exact custom-role permissions inside
+  the transaction, roll core user/credential/session/JWT/admin state back on
+  failure, preserve the deletion coordinator, and expose durable-adapter
+  conformance. Impersonation consumes source sessions once; replacement-session
+  creation and audit delivery remain honest post-commit host boundaries.
 - [x] Extend the existing RBAC, policy, and Haigate APIs to support tenant
   context and resource ownership without relying on global role strings.
 - [x] Add an OAuth/OIDC provider mode for applications acting as an identity
@@ -385,9 +389,11 @@ account, session, client, and plugin contracts above:
   claiming, and application token delivery are separate steps; WebAuthn
   verification consumes a challenge separately from authenticator creation or
   counter updates; username registration does not yet publish a persistence
-  descriptor; organization update plus its host callbacks and several
-  two-factor mutations span store or host boundaries without one declared
-  transaction. These operations remain
+  descriptor; Admin ban/disable can require separately persisted plugin
+  revocation; Admin impersonation replacement sessions are host-owned; and
+  organization update plus its host callbacks and several two-factor mutations
+  span store or host boundaries without one declared transaction. These
+  operations remain
   `nonAtomic` or `unguarded` until their adapters expose a stronger bounded
   operation.
 - [x] Every advertised auth endpoint has documented authentication,

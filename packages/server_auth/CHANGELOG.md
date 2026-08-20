@@ -1,5 +1,11 @@
 ## 0.2.0 - 2026-08-20
 
+- Replace independent Admin store writes with typed backend-owned mutation
+  commands that revalidate exact custom-role permissions inside the
+  transaction, serialize competing user changes, and roll credentials,
+  sessions, JWT versions, and admin state back on failure. Make impersonation
+  session transitions single-use, preserve the existing deletion coordinator,
+  and add public durable-adapter conformance plus stateful/property coverage.
 - Replace pre-issuance device-grant consumption with bounded digest-only
   issuance leases and a typed authorization-ID-idempotent application token
   issuer. Matching completion/release transitions make ambiguous failures and

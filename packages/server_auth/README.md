@@ -612,24 +612,46 @@ access are rejected.
 
 The plugin supplies user creation/list/get/update, role and password changes,
 bans, session listing/revocation, hard deletion, permission checks, and
-server-session impersonation. Email, password, role, and ban mutations revoke
-all target server sessions and rotate the target JWT version. Active bans are
-checked before two-factor challenges, session issuance, and session reuse.
+server-session impersonation. Email, password, and role changes, plus ban and
+disable operations, revoke all target server sessions and rotate the target
+JWT version. Revoking all sessions also rotates the JWT version; revoking one
+server session cannot revoke one already-issued JWT. Active bans are checked
+before two-factor challenges, session issuance, and session reuse.
 
-`AuthAdminStore` is a logical atomic contract. A durable implementation must
-update the same records exposed through `AuthStore`, preserve normalized email
-uniqueness and the last effective administrator, and make sensitive mutations
-atomic with session revocation and JWT rotation. Hard deletion must include
-credentials, provider accounts, tokens, sessions, and every composed
-user-owned plugin namespace. Use `AuthAdminOptions.validateDeletion` to reject
-application invariants such as deleting the last owner of an organization.
-`InMemoryAuthAdminStore` and `InMemoryAuthStore` are for tests and local
-development, not production persistence.
+`AuthAdminStore.execute` accepts typed commands rather than independent write
+callbacks. A durable implementation must reload the administrator and evaluate
+the command's exact resource/action requirements after entering its backend
+transaction. It must then update the same records exposed through `AuthStore`,
+preserve normalized email uniqueness and the last effective administrator,
+and commit sensitive state, credential, server-session, and JWT-version changes
+together with a secret-free operation/initiator/target audit fact. Role-based
+administrators keep only their configured permissions;
+only IDs in `adminUserIds` receive the synthesized bootstrap `admin` role.
+
+Hard deletion continues through the backend-owned deletion coordinator and
+must include credentials, provider accounts, tokens, sessions, and every
+composed user-owned plugin namespace. Use `AuthAdminOptions.validateDeletion`
+to reject application invariants such as deleting the last owner of an
+organization. Run `AuthAdminStoreConformanceSuite` from
+`package:server_auth/testing.dart` against every durable adapter, including a
+test-only transaction fault point. `InMemoryAuthAdminStore` and
+`InMemoryAuthStore` are for tests and local development, not production
+persistence.
 
 The in-memory Admin store discovers composed user-data deletion contributors
 when plugin topology freezes. With `OrganizationPlugin`, it automatically
 enforces last-owner protection and clears organization/team membership data.
 Durable adapters must provide the equivalent cross-plugin transaction.
+
+Impersonation consumes the current server session inside the admin command, so
+start and stop are single-use even under concurrent requests. Routed creates
+the replacement session afterward. If host session creation fails, the old
+session stays revoked and the caller must sign in again; the plugin does not
+claim an exactly-once cross-host transaction. Application hooks, lifecycle
+events, and audit delivery also run after commit and can return warnings.
+Revocation contributed by separately persisted plugins cannot share the core
+admin transaction; ban and disable therefore advertise `nonAtomic` semantics
+and fail visibly if that follow-up revocation is incomplete.
 
 The admin client is installed explicitly and shares the host transport:
 
