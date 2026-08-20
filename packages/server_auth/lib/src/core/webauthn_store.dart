@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'authentication_methods.dart';
 import 'deletion_transaction.dart';
+import 'models.dart';
 import 'providers.dart';
 
 /// The WebAuthn ceremony for which a challenge was issued.
@@ -157,6 +158,20 @@ abstract interface class AuthWebAuthnStoreCapabilities {
   AuthWebAuthnAuthenticatorStore get webAuthnAuthenticators;
 }
 
+/// Optional backend-owned hard-deletion plan for both WebAuthn stores.
+///
+/// This capability belongs on the object that owns the complete challenge and
+/// authenticator persistence domain. It is intentionally separate from each
+/// individual store so split or mixed durable storage cannot claim one atomic
+/// deletion boundary.
+abstract interface class AuthWebAuthnUserDeletionPlanFactory {
+  FutureOr<AuthUserDeletionPlan> createWebAuthnDeletionPlan({
+    required AuthUserDeletionDomain domain,
+    required AuthUser user,
+    required String namespace,
+  });
+}
+
 /// In-memory WebAuthn stores for tests and local development.
 ///
 /// Production applications must provide durable implementations with the
@@ -296,6 +311,10 @@ final class InMemoryAuthWebAuthnAuthenticatorStore
     }
     final current = _records[credentialId];
     if (current == null || current.counter != expectedCounter) return null;
+    if (current.createdAt case final createdAt?
+        when lastUsedAt.toUtc().isBefore(createdAt.toUtc())) {
+      return null;
+    }
     final previousLastUsed = current.lastUsedAt;
     final updated = WebAuthnAuthenticator(
       credentialId: current.credentialId,

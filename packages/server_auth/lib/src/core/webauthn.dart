@@ -327,6 +327,7 @@ final class WebAuthnPlugin<TContext>
 
   late AuthWebAuthnChallengeStore _challengeStore;
   late AuthWebAuthnAuthenticatorStore _authenticatorStore;
+  AuthWebAuthnUserDeletionPlanFactory? _deletionPlanFactory;
   late AuthUserStore _userStore;
   late AuthUserDeletionDomain _deletionDomain;
   late AuthAuthenticationMethodService _authenticationMethods;
@@ -366,6 +367,16 @@ final class WebAuthnPlugin<TContext>
   @override
   Future<AuthUserDeletionPlan> createUserDeletionPlan(AuthUser user) {
     _ensureConfigured();
+    final factory = _deletionPlanFactory;
+    if (factory != null) {
+      return Future.sync(
+        () => factory.createWebAuthnDeletionPlan(
+          domain: _deletionDomain,
+          user: user,
+          namespace: userDataNamespace,
+        ),
+      );
+    }
     if (_deletionDomain is! AuthInMemoryUserDeletionDomain ||
         _challengeStore is! AuthInMemoryUserDeletionStore ||
         _authenticatorStore is! AuthInMemoryUserDeletionStore) {
@@ -406,6 +417,10 @@ final class WebAuthnPlugin<TContext>
     }
     _challengeStore = capabilities.webAuthnChallenges;
     _authenticatorStore = capabilities.webAuthnAuthenticators;
+    _deletionPlanFactory = switch (capabilities) {
+      AuthWebAuthnUserDeletionPlanFactory factory => factory,
+      _ => null,
+    };
     _userStore = context.store.users;
     _authenticationMethods =
         context.authenticationMethods ??
