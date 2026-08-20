@@ -146,7 +146,6 @@ final class AuthSamlPlugin<TContext>
       id: 'saml.acs',
       method: AuthOperationMethod.post,
       path: '/sso/saml/acs/{providerId}',
-      serverOnly: true,
       semantics: const AuthOperationSemantics.mutation(
         persistence: AuthMutationPersistence.durable(
           atomicity: AuthMutationAtomicity.atomic,
@@ -174,7 +173,6 @@ final class AuthSamlPlugin<TContext>
     )
     handler,
     AuthRateLimitOperation? rateLimitOperation,
-    bool serverOnly = false,
   }) => TypedAuthEndpointDescriptor(
     id: id,
     method: method,
@@ -205,7 +203,6 @@ final class AuthSamlPlugin<TContext>
         ? AuthOperationCsrfPolicy.required
         : AuthOperationCsrfPolicy.none,
     rateLimitOperation: rateLimitOperation,
-    serverOnly: serverOnly,
   );
 
   Future<Object?> _metadata(
@@ -582,7 +579,7 @@ final class AuthSamlPlugin<TContext>
       id: endpoint.id,
       method: endpoint.method,
       path: endpoint.path,
-      serverOnly: endpoint.serverOnly,
+      serverOnly: endpoint.id == 'saml.acs',
     ),
   );
 

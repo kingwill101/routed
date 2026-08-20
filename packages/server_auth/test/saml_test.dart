@@ -14,6 +14,15 @@ void main() {
   stabilizeNodeCryptoBinding();
 
   group('AuthSamlPlugin', () {
+    test('keeps ACS out of the selected client operation surface', () {
+      expect(
+        _plugin().clientOperations
+            .where((operation) => !operation.serverOnly)
+            .map((operation) => operation.id),
+        isNot(contains('saml.acs')),
+      );
+    });
+
     test('requires durable atomic replay persistence by default', () {
       expect(() => _plugin(allowTestStore: false), throwsA(isA<StateError>()));
       expect(_plugin().validateProductionPosture, throwsA(isA<StateError>()));
@@ -36,7 +45,13 @@ void main() {
           plugins: [plugin],
         ),
       );
-      final suite = AuthPluginConformanceSuite<String>.fromRuntime(runtime);
+      final suite = AuthPluginConformanceSuite<String>.fromRuntime(
+        runtime,
+        publicEndpointClientExceptions: const <String, String>{
+          'saml.acs':
+              'The identity provider posts assertions directly to the ACS.',
+        },
+      );
       for (final conformanceCase in suite.cases) {
         final result = await conformanceCase.run();
         expect(result.isPassed, isTrue, reason: conformanceCase.id);
