@@ -29,6 +29,7 @@ dependencies:
   hashlib: ^2.4.2
   pointycastle: ^4.0.0
   server_contracts: ">=0.1.0 <1.0.0"
+  xml: ">=6.5.0 <8.0.0"
 
 dev_dependencies:
   lints: ^6.0.0

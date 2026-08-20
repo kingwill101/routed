@@ -10,3 +10,4 @@ export 'src/testing/auth_webauthn_ceremony_fixture.dart';
 export 'src/testing/auth_plugin_conformance.dart';
 export 'src/testing/auth_store_conformance.dart';
 export 'src/testing/organization_store_conformance.dart';
+export 'src/testing/saml_verifier_conformance.dart';
