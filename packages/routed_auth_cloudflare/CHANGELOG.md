@@ -9,8 +9,10 @@
   never store an `AuthUser` payload.
 - Run the public anonymous-store conformance suite against the local D1 fake,
   including contention, replay mismatch, target binding, hard-deletion scrub,
-  and injected rollback coverage. Add the non-fault cases to the opt-in live D1
-  executor without running or creating live Cloudflare resources.
+  and injected rollback coverage. A disposable live D1 run also passed the six
+  non-fault anonymous cases together with the existing core, SCIM, username,
+  OAuth-exchange, rollback, and prefix-isolation cases; the owned database was
+  independently confirmed deleted afterward.
 - Add a plugin-scoped D1 managed-SCIM connection store with exact tenant and
   organization lookup, digest-only bearer credentials, database-constrained
   issuance replay identity, atomic rotation and disablement, and typed replay
@@ -23,7 +25,8 @@
   live-control-plane adapter tests.
 - Run the public managed-SCIM adapter conformance suite locally and from the
   opt-in live-D1 executor, with property, contention, digest-persistence, and
-  injected rollback tests. No deployed D1 run is claimed by this release.
+  injected rollback tests. The non-fault SCIM cases passed the disposable live
+  D1 run described above.
 - Add prefix-isolated D1 OAuth client, authorization-code, access-token, and
   refresh-token persistence with digest-only secrets and credentials.
 - Add a backend-native atomic authorization-code exchange that revalidates all

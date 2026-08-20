@@ -186,8 +186,10 @@ The work is intentionally split between framework-agnostic capabilities in
   rollback, contention, and fault tests. It now owns OAuth provider-mode
   code/token exchange, managed SCIM connections, username mutations, and the
   typed anonymous create/delete/upgrade contract through append-only migration
-  version 7. A fresh live-D1 run for the anonymous v7 cases, broader SQL
-  adapters, and D1 plans for external plugin stores remain open. D1's
+  version 7. A disposable live-D1 run passed all 41 enabled cases, including
+  the anonymous v7 cases, and its owned database was independently confirmed
+  deleted. Broader SQL adapters and D1 plans for external plugin stores remain
+  open. D1's
   authentication-method coordinator accepts its own users, credentials,
   accounts, and email-OTP stores; external method stores require a future
   backend-bound plan. Mixed topologies remain usable but account unlink fails

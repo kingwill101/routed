@@ -119,9 +119,11 @@ and fails closed for mixed or unsupported authentication-method stores.
 The local tests also run `verifyAuthUsernameStoreConformance` against that
 deterministic public D1 fake. The separate
 [live harness](test/live/README.md) is intentionally not part of the default
-test command. Anonymous non-fault cases are included in that harness, but this
-release does not claim that migration v7 or those cases ran against live
-Cloudflare D1.
+test command. On 2026-08-20, a disposable live D1 run applied migration v7 and
+passed all 41 enabled cases, including six anonymous cases plus the core,
+managed-SCIM, username, OAuth-exchange, rollback, and prefix-isolation cases.
+Fault-injection cases remain local-only. The harness deleted its owned database,
+and a separate Wrangler listing confirmed that no matching resource remained.
 
 The independent
 [deployed Worker auth harness](tool/deployed_worker/README.md) verifies Routed's
