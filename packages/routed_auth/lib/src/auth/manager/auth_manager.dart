@@ -10,6 +10,8 @@ import 'package:server_auth/server_auth.dart'
         AuthApiKeyPlugin,
         AnonymousPlugin,
         AuthCallbacks,
+        AuthCredentialPolicyOperation,
+        AuthCredentialPolicyRequest,
         AuthCredentials,
         requireAuthorizedCredentialsRegistration,
         requireAuthorizedCredentialsSignIn,
@@ -42,6 +44,8 @@ import 'package:server_auth/server_auth.dart'
         AuthFlowException,
         AuthPasswordResetRequest,
         AuthPasswordResetResult,
+        AuthPasswordPolicyOperation,
+        AuthPasswordPolicyRequest,
         AuthPasswordChangeResult,
         AuthEmailChangeRequest,
         AuthAccountDeletionDelivery,
@@ -207,8 +211,9 @@ class AuthManager {
   Future<AuthResult> signInWithCredentials(
     EngineContext ctx,
     CredentialsProvider provider,
-    AuthCredentials credentials,
-  ) async {
+    AuthCredentials credentials, {
+    String? captchaToken,
+  }) async {
     await enforceRateLimit(
       ctx,
       provider,
@@ -216,6 +221,17 @@ class AuthManager {
       identifier: credentials.email == null
           ? credentials.username
           : normalizeAuthEmail(credentials.email!),
+    );
+    await runtime.registry.enforceCredentialPolicy(
+      AuthCredentialPolicyRequest<EngineContext>(
+        context: ctx,
+        provider: provider,
+        operation: AuthCredentialPolicyOperation.signIn,
+        identifier: credentials.email == null
+            ? credentials.username
+            : normalizeAuthEmail(credentials.email!),
+        verificationToken: captchaToken,
+      ),
     );
     late final AuthUser user;
     try {
@@ -435,8 +451,9 @@ class AuthManager {
   Future<AuthResult> registerWithCredentials(
     EngineContext ctx,
     CredentialsProvider provider,
-    AuthCredentials credentials,
-  ) async {
+    AuthCredentials credentials, {
+    String? captchaToken,
+  }) async {
     await enforceRateLimit(
       ctx,
       provider,
@@ -445,6 +462,27 @@ class AuthManager {
           ? credentials.username
           : normalizeAuthEmail(credentials.email!),
     );
+    await runtime.registry.enforceCredentialPolicy(
+      AuthCredentialPolicyRequest<EngineContext>(
+        context: ctx,
+        provider: provider,
+        operation: AuthCredentialPolicyOperation.registration,
+        identifier: credentials.email == null
+            ? credentials.username
+            : normalizeAuthEmail(credentials.email!),
+        verificationToken: captchaToken,
+      ),
+    );
+    final password = credentials.password;
+    if (password != null) {
+      await runtime.registry.enforcePasswordPolicy(
+        AuthPasswordPolicyRequest<EngineContext>(
+          context: ctx,
+          operation: AuthPasswordPolicyOperation.registration,
+          password: password,
+        ),
+      );
+    }
     final user = await requireAuthorizedCredentialsRegistration(
       store: store,
       passwordHasher: options.passwordHasher,
@@ -570,6 +608,14 @@ class AuthManager {
     if (user == null || !await _passwordResetAllowed(user)) {
       throw AuthFlowException('invalid_password_reset_token');
     }
+    await runtime.registry.enforcePasswordPolicy(
+      AuthPasswordPolicyRequest<EngineContext>(
+        context: ctx,
+        operation: AuthPasswordPolicyOperation.passwordReset,
+        password: newPassword,
+        user: user,
+      ),
+    );
     return resetAuthPasswordWithToken(
       store: store,
       passwordHasher: options.passwordHasher,
@@ -601,6 +647,14 @@ class AuthManager {
       newPassword: newPassword,
       trustedDeviceStore: twoFactor?.trustedDeviceStore,
       passwordPolicy: options.passwordPolicy,
+      beforeCommit: (user) => runtime.registry.enforcePasswordPolicy(
+        AuthPasswordPolicyRequest<EngineContext>(
+          context: ctx,
+          operation: AuthPasswordPolicyOperation.passwordChange,
+          password: newPassword,
+          user: user,
+        ),
+      ),
     );
     if (options.sessionStrategy == AuthSessionStrategy.session) {
       await sessionAuth.logout(ctx);

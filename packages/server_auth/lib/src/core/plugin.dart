@@ -4,6 +4,7 @@ import 'deletion_transaction.dart';
 import 'models.dart';
 import 'password_hasher.dart';
 import 'password_policy.dart';
+import 'providers.dart';
 import 'rate_limit.dart';
 import 'store.dart';
 
@@ -110,6 +111,66 @@ final class AuthAuthenticationPolicyRequest<TContext> {
 abstract interface class AuthAuthenticationPolicyContributor<TContext> {
   FutureOr<void> enforceAuthenticationPolicy(
     AuthAuthenticationPolicyRequest<TContext> request,
+  );
+}
+
+/// Credential operation at which an application-owned credential policy runs.
+enum AuthCredentialPolicyOperation { signIn, registration }
+
+/// Non-password input supplied to credential policy contributors.
+///
+/// [verificationToken] is delivery-only request data. It is deliberately not
+/// serializable and must not be logged, persisted, or copied into a provider
+/// response. The value is supplied only to the policy contributor that needs
+/// it, before the credential provider is invoked.
+final class AuthCredentialPolicyRequest<TContext> {
+  const AuthCredentialPolicyRequest({
+    required this.context,
+    required this.provider,
+    required this.operation,
+    this.identifier,
+    this.verificationToken,
+  });
+
+  final TContext context;
+  final AuthProvider provider;
+  final AuthCredentialPolicyOperation operation;
+  final String? identifier;
+  final String? verificationToken;
+}
+
+/// Optional policy consulted immediately before a credential provider runs.
+abstract interface class AuthCredentialPolicyContributor<TContext> {
+  FutureOr<void> enforceCredentialPolicy(
+    AuthCredentialPolicyRequest<TContext> request,
+  );
+}
+
+/// Password mutation protected by an application-owned password policy.
+enum AuthPasswordPolicyOperation { registration, passwordReset, passwordChange }
+
+/// Request passed to password policy contributors.
+///
+/// [password] is a secret and exists only for the duration of the policy
+/// call. This type intentionally has no JSON or diagnostic representation.
+final class AuthPasswordPolicyRequest<TContext> {
+  const AuthPasswordPolicyRequest({
+    required this.context,
+    required this.operation,
+    required this.password,
+    this.user,
+  });
+
+  final TContext context;
+  final AuthPasswordPolicyOperation operation;
+  final String password;
+  final AuthUser? user;
+}
+
+/// Optional policy consulted before a new password is accepted.
+abstract interface class AuthPasswordPolicyContributor<TContext> {
+  FutureOr<void> enforcePasswordPolicy(
+    AuthPasswordPolicyRequest<TContext> request,
   );
 }
 
@@ -444,6 +505,26 @@ class AuthServerPluginRegistry<TContext> {
         in _plugins.values
             .whereType<AuthAuthenticationPolicyContributor<TContext>>()) {
       await plugin.enforceAuthenticationPolicy(request);
+    }
+  }
+
+  Future<void> enforceCredentialPolicy(
+    AuthCredentialPolicyRequest<TContext> request,
+  ) async {
+    for (final plugin
+        in _plugins.values
+            .whereType<AuthCredentialPolicyContributor<TContext>>()) {
+      await plugin.enforceCredentialPolicy(request);
+    }
+  }
+
+  Future<void> enforcePasswordPolicy(
+    AuthPasswordPolicyRequest<TContext> request,
+  ) async {
+    for (final plugin
+        in _plugins.values
+            .whereType<AuthPasswordPolicyContributor<TContext>>()) {
+      await plugin.enforcePasswordPolicy(request);
     }
   }
 

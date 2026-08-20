@@ -437,13 +437,16 @@ class AuthRoutes {
           'email': decision.email,
         });
       case AuthSignInRouteKind.credentials:
-        final credentials = AuthCredentials.fromMap(payload);
+        final credentials = AuthCredentials.fromMap(
+          _withoutCaptchaToken(payload),
+        );
         final credentialsProvider = provider as CredentialsProvider;
         try {
           final result = await manager.signInWithCredentials(
             ctx,
             credentialsProvider,
             credentials,
+            captchaToken: _captchaToken(payload),
           );
           return await _respond(ctx, result, provider: provider);
         } on AuthTwoFactorRequiredException catch (error) {
@@ -477,13 +480,16 @@ class AuthRoutes {
       case AuthRegisterRouteKind.error:
         return _errorResponse(ctx, decision.errorCode!);
       case AuthRegisterRouteKind.credentials:
-        final credentials = AuthCredentials.fromMap(payload);
+        final credentials = AuthCredentials.fromMap(
+          _withoutCaptchaToken(payload),
+        );
         final credentialsProvider = provider as CredentialsProvider;
         try {
           final result = await manager.registerWithCredentials(
             ctx,
             credentialsProvider,
             credentials,
+            captchaToken: _captchaToken(payload),
           );
           return await _respond(ctx, result, provider: provider);
         } on AuthFlowException catch (error) {
@@ -1186,6 +1192,17 @@ class AuthRoutes {
     }
 
     return Map<String, dynamic>.from(ctx.queryCache);
+  }
+
+  String? _captchaToken(Map<String, dynamic> payload) {
+    final value = payload['captchaToken'];
+    return value is String ? value : null;
+  }
+
+  Map<String, dynamic> _withoutCaptchaToken(Map<String, dynamic> payload) {
+    final credentials = Map<String, dynamic>.from(payload);
+    credentials.remove('captchaToken');
+    return credentials;
   }
 
   Future<String?> _callbackUrl(

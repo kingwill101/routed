@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'exceptions.dart';
 import 'models.dart';
 import 'password_hasher.dart';
@@ -35,6 +37,7 @@ Future<AuthPasswordChangeResult> changeAuthPasswordForUser({
   AuthTwoFactorTrustedDeviceStore? trustedDeviceStore,
   PasswordPolicy passwordPolicy = const PasswordPolicy(),
   DateTime? now,
+  FutureOr<void> Function(AuthUser user)? beforeCommit,
 }) async {
   final normalizedUserId = userId.trim();
   final normalizedIdentifier = _normalizeIdentifier(identifier);
@@ -66,6 +69,10 @@ Future<AuthPasswordChangeResult> changeAuthPasswordForUser({
   if (user == null) {
     throw AuthFlowException('password_change_failed');
   }
+
+  // Policy contributors run only after the current password has been
+  // reauthenticated and before any session or credential mutation begins.
+  await beforeCommit?.call(user);
 
   final changedAt = (now ?? DateTime.now()).toUtc();
   await trustedDeviceStore?.revokeAll(normalizedUserId, now: changedAt);
