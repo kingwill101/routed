@@ -276,8 +276,31 @@ void main() {
         requireVerifiedEmail: true,
       );
 
-      expect(disabled.enabled, isFalse);
+      expect(disabled.hasAny, isFalse);
       expect(deployment.options.passwordResetSender, isNull);
+      expect(deployment.options.emailChangeSender, isNull);
+      expect(deployment.options.accountDeletionSender, isNull);
+    });
+
+    test('lifecycle delivery composes capabilities independently', () {
+      Future<void> sendPasswordReset(
+        AuthPasswordResetRequest<String> request,
+      ) async {}
+      final delivery = AuthLifecycleDelivery<String>(
+        passwordReset: sendPasswordReset,
+      );
+
+      final deployment = AuthDeploymentPresets.secureSessionProduction<String>(
+        store: _DurableAuthStore(),
+        providers: [CredentialsProvider()],
+        boundary: _directBoundary(),
+        lifecycleDelivery: delivery,
+        rateLimiter: _AllowAllRateLimiter(),
+        requireVerifiedEmail: true,
+      );
+
+      expect(delivery.hasAny, isTrue);
+      expect(deployment.options.passwordResetSender, same(sendPasswordReset));
       expect(deployment.options.emailChangeSender, isNull);
       expect(deployment.options.accountDeletionSender, isNull);
     });
@@ -313,12 +336,11 @@ AuthProductionBoundary _directBoundary() => AuthProductionBoundary(
   proxyPolicy: const AuthProxyPolicy.direct(),
 );
 
-AuthLifecycleDelivery<String> _delivery() =>
-    AuthLifecycleDelivery<String>.enabled(
-      passwordReset: (_) async {},
-      emailChange: (_) async {},
-      accountDeletion: (_) async {},
-    );
+AuthLifecycleDelivery<String> _delivery() => AuthLifecycleDelivery<String>(
+  passwordReset: (_) async {},
+  emailChange: (_) async {},
+  accountDeletion: (_) async {},
+);
 
 final class _AllowAllRateLimiter implements AuthRateLimiter<String> {
   @override
