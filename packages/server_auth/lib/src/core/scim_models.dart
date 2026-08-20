@@ -1,6 +1,10 @@
 /// SCIM 2.0 core User schema identifier.
 const String authScimUserSchema = 'urn:ietf:params:scim:schemas:core:2.0:User';
 
+/// SCIM 2.0 core Group schema identifier.
+const String authScimGroupSchema =
+    'urn:ietf:params:scim:schemas:core:2.0:Group';
+
 /// SCIM 2.0 service-provider configuration schema identifier.
 const String authScimServiceProviderConfigSchema =
     'urn:ietf:params:scim:schemas:core:2.0:ServiceProviderConfig';
@@ -26,7 +30,7 @@ const String authScimErrorSchema =
     'urn:ietf:params:scim:api:messages:2.0:Error';
 
 /// Operation scope granted to one authenticated SCIM credential.
-enum AuthScimScope { usersRead, usersWrite }
+enum AuthScimScope { usersRead, usersWrite, groupsRead, groupsWrite }
 
 /// Immutable connection identity resolved atomically from one bearer token.
 ///
@@ -67,7 +71,9 @@ final class AuthScimConnectionIdentity {
   bool allows(AuthScimScope scope) =>
       scopes.contains(scope) ||
       scope == AuthScimScope.usersRead &&
-          scopes.contains(AuthScimScope.usersWrite);
+          scopes.contains(AuthScimScope.usersWrite) ||
+      scope == AuthScimScope.groupsRead &&
+          scopes.contains(AuthScimScope.groupsWrite);
 
   bool isExpiredAt(DateTime instant) =>
       expiresAt != null && !expiresAt!.toUtc().isAfter(instant.toUtc());
@@ -257,20 +263,23 @@ final class AuthScimResourceMeta {
   AuthScimResourceMeta({
     required DateTime created,
     required DateTime lastModified,
+    this.resourceType = 'User',
     this.location,
     this.version,
   }) : created = created.toUtc(),
        lastModified = lastModified.toUtc() {
+    _requiredBounded(resourceType, 'resourceType', 64);
     if (version != null) _bounded(version!, 'version', 256);
   }
 
   final DateTime created;
   final DateTime lastModified;
+  final String resourceType;
   final Uri? location;
   final String? version;
 
   Map<String, Object?> toJson() => <String, Object?>{
-    'resourceType': 'User',
+    'resourceType': resourceType,
     'created': created.toIso8601String(),
     'lastModified': lastModified.toIso8601String(),
     if (location != null) 'location': location.toString(),
@@ -302,6 +311,9 @@ final class AuthScimUser {
          256,
        ),
        id = _requiredBounded(id, 'id', 256) {
+    if (meta.resourceType != 'User') {
+      throw ArgumentError('SCIM User metadata must use resourceType User.');
+    }
     if ((state == AuthScimDirectoryUserState.active) != data.active) {
       throw ArgumentError(
         'SCIM directory lifecycle state must match the active attribute.',
@@ -433,6 +445,420 @@ final class AuthScimUserPage {
 
   final List<AuthScimUser> resources;
   final int totalResults;
+}
+
+/// Kind of SCIM resource referenced directly by a Group member.
+enum AuthScimGroupMemberType { user, group }
+
+/// One direct, stable SCIM resource reference in a Group.
+///
+/// [value] is always the SCIM resource identifier. The optional display and
+/// reference values are presentation metadata and must never be used to infer
+/// an authentication user, application role, or access grant.
+final class AuthScimGroupMember {
+  AuthScimGroupMember({
+    required String value,
+    required this.type,
+    this.display,
+    this.reference,
+  }) : value = _requiredBounded(value, 'member.value', 256) {
+    if (display != null) _bounded(display!, 'member.display', 256);
+    if (reference != null && reference!.toString().length > 2048) {
+      throw const FormatException('Invalid SCIM member reference.');
+    }
+  }
+
+  final String value;
+  final AuthScimGroupMemberType type;
+  final String? display;
+  final Uri? reference;
+
+  factory AuthScimGroupMember.fromJson(Map<String, dynamic> json) {
+    _onlyKeys(json, const <String>{'value', 'type', 'display', r'$ref'});
+    final rawType = _requiredString(json, 'type', 16).toLowerCase();
+    final rawReference = _optionalString(json, r'$ref', 2048);
+    return AuthScimGroupMember(
+      value: _requiredString(json, 'value', 256),
+      type: switch (rawType) {
+        'user' => AuthScimGroupMemberType.user,
+        'group' => AuthScimGroupMemberType.group,
+        _ => throw const FormatException('Invalid SCIM member type.'),
+      },
+      display: _optionalString(json, 'display', 256),
+      reference: rawReference == null ? null : Uri.parse(rawReference),
+    );
+  }
+
+  Map<String, Object?> toJson() => <String, Object?>{
+    'value': value,
+    r'$ref': ?reference?.toString(),
+    'display': ?display,
+    'type': switch (type) {
+      AuthScimGroupMemberType.user => 'User',
+      AuthScimGroupMemberType.group => 'Group',
+    },
+  };
+}
+
+/// Strict application-owned data accepted for SCIM Group provisioning.
+final class AuthScimGroupData {
+  AuthScimGroupData({
+    required String displayName,
+    this.externalId,
+    Iterable<AuthScimGroupMember> members = const <AuthScimGroupMember>[],
+    int maximumMembers = 1000,
+  }) : displayName = _requiredBounded(displayName, 'displayName', 256),
+       members = List<AuthScimGroupMember>.unmodifiable(members) {
+    if (externalId != null) _bounded(externalId!, 'externalId', 256);
+    _validateGroupMembers(this.members, maximumMembers: maximumMembers);
+  }
+
+  final String displayName;
+  final String? externalId;
+  final List<AuthScimGroupMember> members;
+
+  factory AuthScimGroupData.fromJson(
+    Map<String, dynamic> json, {
+    int maximumMembers = 1000,
+  }) {
+    _onlyKeys(json, const <String>{
+      'schemas',
+      'externalId',
+      'displayName',
+      'members',
+    });
+    _requireSchemas(json, authScimGroupSchema);
+    return AuthScimGroupData(
+      displayName: _requiredString(json, 'displayName', 256),
+      externalId: _optionalString(json, 'externalId', 256),
+      members: _groupMembers(json['members'], maximumMembers: maximumMembers),
+      maximumMembers: maximumMembers,
+    );
+  }
+
+  Map<String, Object?> toJson() => <String, Object?>{
+    'schemas': const <String>[authScimGroupSchema],
+    if (externalId != null) 'externalId': externalId,
+    'displayName': displayName,
+    if (members.isNotEmpty)
+      'members': members.map((value) => value.toJson()).toList(growable: false),
+  };
+}
+
+/// Explicit internal lifecycle of a connection-owned directory group.
+enum AuthScimDirectoryGroupState { active, tombstoned }
+
+/// Connection-bound SCIM Group resource returned by an application store.
+final class AuthScimGroup {
+  AuthScimGroup({
+    required String connectionId,
+    required String tenantId,
+    required String organizationId,
+    required String provisioningDomainId,
+    required String id,
+    required this.data,
+    required this.meta,
+    required this.state,
+    this.tombstonedAt,
+  }) : connectionId = _requiredBounded(connectionId, 'connectionId', 256),
+       tenantId = _requiredBounded(tenantId, 'tenantId', 256),
+       organizationId = _requiredBounded(organizationId, 'organizationId', 256),
+       provisioningDomainId = _requiredBounded(
+         provisioningDomainId,
+         'provisioningDomainId',
+         256,
+       ),
+       id = _requiredBounded(id, 'id', 256) {
+    if (meta.resourceType != 'Group') {
+      throw ArgumentError('SCIM Group metadata must use resourceType Group.');
+    }
+    if ((state == AuthScimDirectoryGroupState.tombstoned) !=
+        (tombstonedAt != null)) {
+      throw ArgumentError(
+        'Only tombstoned SCIM groups may carry a tombstone timestamp.',
+      );
+    }
+  }
+
+  final String connectionId;
+  final String tenantId;
+  final String organizationId;
+  final String provisioningDomainId;
+  final String id;
+  final AuthScimGroupData data;
+  final AuthScimResourceMeta meta;
+  final AuthScimDirectoryGroupState state;
+  final DateTime? tombstonedAt;
+
+  Map<String, Object?> toJson() => <String, Object?>{
+    ...data.toJson(),
+    'id': id,
+    'meta': meta.toJson(),
+  };
+}
+
+enum AuthScimGroupFilterAttribute { id, displayName, externalId }
+
+/// A bounded equality filter for Group listing.
+final class AuthScimGroupFilter {
+  const AuthScimGroupFilter({required this.attribute, required this.value});
+
+  final AuthScimGroupFilterAttribute attribute;
+  final String value;
+
+  static final RegExp _expression = RegExp(
+    r'^\s*(id|displayName|externalId)\s+eq\s+"((?:[^"\\]|\\["\\])*)"\s*$',
+    caseSensitive: false,
+  );
+
+  factory AuthScimGroupFilter.parse(String source) {
+    if (source.length > 512 || _containsControl(source)) {
+      throw const FormatException('Invalid SCIM Group filter.');
+    }
+    final match = _expression.firstMatch(source);
+    if (match == null) {
+      throw const FormatException('Invalid SCIM Group filter.');
+    }
+    final value = match
+        .group(2)!
+        .replaceAll(r'\"', '"')
+        .replaceAll(r'\\', r'\');
+    _requiredBounded(value, 'filter.value', 256);
+    return AuthScimGroupFilter(
+      attribute: switch (match.group(1)!.toLowerCase()) {
+        'id' => AuthScimGroupFilterAttribute.id,
+        'displayname' => AuthScimGroupFilterAttribute.displayName,
+        'externalid' => AuthScimGroupFilterAttribute.externalId,
+        _ => throw const FormatException('Invalid SCIM Group filter.'),
+      },
+      value: value,
+    );
+  }
+}
+
+/// Bounded query supplied to [AuthScimProvisioningStore.listGroups].
+final class AuthScimListGroupsQuery {
+  const AuthScimListGroupsQuery({
+    required this.startIndex,
+    required this.count,
+    this.filter,
+  });
+
+  final int startIndex;
+  final int count;
+  final AuthScimGroupFilter? filter;
+
+  factory AuthScimListGroupsQuery.fromJson(
+    Map<String, dynamic> json, {
+    required int defaultPageSize,
+    required int maximumPageSize,
+    required int maximumStartIndex,
+  }) {
+    final startIndex = _integer(json['startIndex'], fallback: 1);
+    final requestedCount = _integer(json['count'], fallback: defaultPageSize);
+    if (startIndex < 1 || startIndex > maximumStartIndex) {
+      throw const FormatException('Invalid SCIM startIndex.');
+    }
+    if (requestedCount < 0) throw const FormatException('Invalid SCIM count.');
+    final rawFilter = json['filter'];
+    if (rawFilter != null && rawFilter is! String) {
+      throw const FormatException('Invalid SCIM Group filter.');
+    }
+    return AuthScimListGroupsQuery(
+      startIndex: startIndex,
+      count: requestedCount.clamp(0, maximumPageSize),
+      filter: rawFilter == null || rawFilter.trim().isEmpty
+          ? null
+          : AuthScimGroupFilter.parse(rawFilter),
+    );
+  }
+}
+
+final class AuthScimGroupPage {
+  AuthScimGroupPage({
+    required Iterable<AuthScimGroup> resources,
+    required this.totalResults,
+  }) : resources = List<AuthScimGroup>.unmodifiable(resources) {
+    if (totalResults < 0) {
+      throw ArgumentError.value(totalResults, 'totalResults');
+    }
+  }
+
+  final List<AuthScimGroup> resources;
+  final int totalResults;
+}
+
+enum AuthScimGroupPatchPath { displayName, externalId, members }
+
+final class AuthScimGroupPatchOperation {
+  const AuthScimGroupPatchOperation._({
+    required this.kind,
+    required this.path,
+    required this.value,
+  });
+
+  final AuthScimPatchOperationKind kind;
+  final AuthScimGroupPatchPath path;
+  final Object? value;
+
+  factory AuthScimGroupPatchOperation.fromJson(
+    Map<String, dynamic> json, {
+    required int maximumMembers,
+  }) {
+    _onlyKeys(json, const <String>{'op', 'path', 'value'});
+    final kind = switch (_requiredString(json, 'op', 16).toLowerCase()) {
+      'add' => AuthScimPatchOperationKind.add,
+      'replace' => AuthScimPatchOperationKind.replace,
+      'remove' => AuthScimPatchOperationKind.remove,
+      _ => throw const FormatException('Invalid SCIM patch operation.'),
+    };
+    final path = switch (_requiredString(json, 'path', 64).toLowerCase()) {
+      'displayname' => AuthScimGroupPatchPath.displayName,
+      'externalid' => AuthScimGroupPatchPath.externalId,
+      'members' => AuthScimGroupPatchPath.members,
+      _ => throw const FormatException('Invalid SCIM Group patch path.'),
+    };
+    final hasValue = json.containsKey('value');
+    if (kind == AuthScimPatchOperationKind.remove) {
+      if (path == AuthScimGroupPatchPath.displayName) {
+        throw const FormatException(
+          'Required SCIM attributes cannot be removed.',
+        );
+      }
+      if (!hasValue) {
+        return AuthScimGroupPatchOperation._(
+          kind: kind,
+          path: path,
+          value: null,
+        );
+      }
+    } else if (!hasValue) {
+      throw const FormatException('SCIM patch value is required.');
+    }
+    final value = switch (path) {
+      AuthScimGroupPatchPath.displayName => _requiredPatchString(
+        json['value'],
+        'displayName',
+      ),
+      AuthScimGroupPatchPath.externalId => _optionalPatchString(
+        json['value'],
+        'externalId',
+      ),
+      AuthScimGroupPatchPath.members => _groupMembers(
+        json['value'],
+        maximumMembers: maximumMembers,
+      ),
+    };
+    return AuthScimGroupPatchOperation._(kind: kind, path: path, value: value);
+  }
+}
+
+/// Strict, bounded SCIM Group PatchOp document.
+final class AuthScimGroupPatchDocument {
+  AuthScimGroupPatchDocument({
+    required Iterable<AuthScimGroupPatchOperation> operations,
+  }) : operations = List<AuthScimGroupPatchOperation>.unmodifiable(operations) {
+    if (this.operations.isEmpty || this.operations.length > 32) {
+      throw const FormatException('Invalid SCIM patch operation count.');
+    }
+  }
+
+  final List<AuthScimGroupPatchOperation> operations;
+
+  factory AuthScimGroupPatchDocument.fromJson(
+    Map<String, dynamic> json, {
+    int maximumOperations = 32,
+    int maximumMembers = 1000,
+  }) {
+    _onlyKeys(json, const <String>{'schemas', 'Operations'});
+    _requireSchemas(json, authScimPatchOperationSchema);
+    final raw = json['Operations'];
+    if (raw is! List ||
+        raw.isEmpty ||
+        raw.length > maximumOperations ||
+        maximumOperations < 1) {
+      throw const FormatException('Invalid SCIM patch operations.');
+    }
+    return AuthScimGroupPatchDocument(
+      operations: raw.map((value) {
+        if (value is! Map) {
+          throw const FormatException('Invalid SCIM patch operation.');
+        }
+        return AuthScimGroupPatchOperation.fromJson(
+          Map<String, dynamic>.from(value),
+          maximumMembers: maximumMembers,
+        );
+      }),
+    );
+  }
+
+  AuthScimGroupData apply(
+    AuthScimGroupData current, {
+    required int maximumMembers,
+  }) {
+    var displayName = current.displayName;
+    var externalId = current.externalId;
+    var members = current.members;
+    for (final operation in operations) {
+      switch (operation.path) {
+        case AuthScimGroupPatchPath.displayName:
+          displayName = operation.value! as String;
+        case AuthScimGroupPatchPath.externalId:
+          externalId = operation.value as String?;
+        case AuthScimGroupPatchPath.members:
+          final values = operation.value as List<AuthScimGroupMember>?;
+          members = switch (operation.kind) {
+            AuthScimPatchOperationKind.add => <AuthScimGroupMember>[
+              ...members,
+              ...?values,
+            ],
+            AuthScimPatchOperationKind.replace =>
+              values ?? const <AuthScimGroupMember>[],
+            AuthScimPatchOperationKind.remove =>
+              values == null
+                  ? const <AuthScimGroupMember>[]
+                  : members
+                        .where(
+                          (member) => !values.any(
+                            (removed) =>
+                                removed.value == member.value &&
+                                removed.type == member.type,
+                          ),
+                        )
+                        .toList(growable: false),
+          };
+      }
+    }
+    return AuthScimGroupData(
+      displayName: displayName,
+      externalId: externalId,
+      members: members,
+      maximumMembers: maximumMembers,
+    );
+  }
+}
+
+enum AuthScimGroupMembershipMutationKind { add, remove, replace }
+
+/// Atomic direct-membership mutation requested from an application store.
+final class AuthScimGroupMembershipMutation {
+  AuthScimGroupMembershipMutation({
+    required String groupResourceId,
+    required this.kind,
+    required Iterable<AuthScimGroupMember> members,
+    int maximumMembers = 1000,
+  }) : groupResourceId = _requiredBounded(
+         groupResourceId,
+         'groupResourceId',
+         256,
+       ),
+       members = List<AuthScimGroupMember>.unmodifiable(members) {
+    _validateGroupMembers(this.members, maximumMembers: maximumMembers);
+  }
+
+  final String groupResourceId;
+  final AuthScimGroupMembershipMutationKind kind;
+  final List<AuthScimGroupMember> members;
 }
 
 /// SCIM patch operation kind.
@@ -624,6 +1050,21 @@ final class AuthScimResourceType {
   };
 }
 
+/// Typed ResourceType response for the supported SCIM Group resource.
+final class AuthScimGroupResourceType {
+  const AuthScimGroupResourceType();
+
+  Map<String, Object?> toJson() => const <String, Object?>{
+    'schemas': <String>[authScimResourceTypeSchema],
+    'id': 'Group',
+    'name': 'Group',
+    'endpoint': '/Groups',
+    'description': 'Connection-owned directory group.',
+    'schema': authScimGroupSchema,
+    'schemaExtensions': <Object?>[],
+  };
+}
+
 /// Typed Schema response for the bounded core User attributes.
 final class AuthScimUserSchemaDefinition {
   const AuthScimUserSchemaDefinition();
@@ -685,6 +1126,49 @@ final class AuthScimUserSchemaDefinition {
         'required': false,
         'mutability': 'readWrite',
         'returned': 'default',
+      },
+    ],
+  };
+}
+
+/// Typed Schema response for bounded core Group attributes.
+final class AuthScimGroupSchemaDefinition {
+  const AuthScimGroupSchemaDefinition();
+
+  Map<String, Object?> toJson() => const <String, Object?>{
+    'schemas': <String>[authScimSchemaSchema],
+    'id': authScimGroupSchema,
+    'name': 'Group',
+    'description': 'Routed SCIM core Group schema.',
+    'attributes': <Object?>[
+      <String, Object?>{
+        'name': 'displayName',
+        'type': 'string',
+        'multiValued': false,
+        'required': true,
+        'caseExact': false,
+        'mutability': 'readWrite',
+        'returned': 'default',
+        'uniqueness': 'server',
+      },
+      <String, Object?>{
+        'name': 'externalId',
+        'type': 'string',
+        'multiValued': false,
+        'required': false,
+        'caseExact': true,
+        'mutability': 'readWrite',
+        'returned': 'default',
+        'uniqueness': 'none',
+      },
+      <String, Object?>{
+        'name': 'members',
+        'type': 'complex',
+        'multiValued': true,
+        'required': false,
+        'mutability': 'readWrite',
+        'returned': 'default',
+        'uniqueness': 'none',
       },
     ],
   };
@@ -811,6 +1295,153 @@ const Map<String, Object?> authScimUserListResponseJsonSchema =
       },
     };
 
+const Map<String, Object?> _authScimGroupMemberJsonSchema = <String, Object?>{
+  'type': 'object',
+  'additionalProperties': false,
+  'required': <String>['value', 'type'],
+  'properties': <String, Object?>{
+    'value': <String, Object?>{
+      'type': 'string',
+      'minLength': 1,
+      'maxLength': 256,
+    },
+    r'$ref': <String, Object?>{
+      'type': 'string',
+      'format': 'uri-reference',
+      'maxLength': 2048,
+    },
+    'display': <String, Object?>{'type': 'string', 'maxLength': 256},
+    'type': <String, Object?>{
+      'type': 'string',
+      'enum': <String>['User', 'Group'],
+    },
+  },
+};
+
+const Map<String, Object?> _authScimGroupPropertiesJsonSchema =
+    <String, Object?>{
+      'schemas': <String, Object?>{
+        'type': 'array',
+        'minItems': 1,
+        'maxItems': 1,
+        'items': <String, Object?>{'const': authScimGroupSchema},
+      },
+      'externalId': <String, Object?>{'type': 'string', 'maxLength': 256},
+      'displayName': <String, Object?>{
+        'type': 'string',
+        'minLength': 1,
+        'maxLength': 256,
+      },
+      'members': <String, Object?>{
+        'type': 'array',
+        'maxItems': 1000,
+        'items': _authScimGroupMemberJsonSchema,
+      },
+    };
+
+/// JSON Schema contract for strict SCIM Group mutation input.
+const Map<String, Object?> authScimGroupInputJsonSchema = <String, Object?>{
+  'type': 'object',
+  'additionalProperties': false,
+  'required': <String>['schemas', 'displayName'],
+  'properties': _authScimGroupPropertiesJsonSchema,
+};
+
+/// JSON Schema contract for SCIM Group responses.
+const Map<String, Object?> authScimGroupResponseJsonSchema = <String, Object?>{
+  'type': 'object',
+  'additionalProperties': false,
+  'required': <String>['schemas', 'id', 'displayName', 'meta'],
+  'properties': <String, Object?>{
+    ..._authScimGroupPropertiesJsonSchema,
+    'id': <String, Object?>{'type': 'string', 'minLength': 1},
+    'meta': <String, Object?>{
+      'type': 'object',
+      'additionalProperties': false,
+      'required': <String>['resourceType', 'created', 'lastModified'],
+      'properties': <String, Object?>{
+        'resourceType': <String, Object?>{'const': 'Group'},
+        'created': <String, Object?>{'type': 'string', 'format': 'date-time'},
+        'lastModified': <String, Object?>{
+          'type': 'string',
+          'format': 'date-time',
+        },
+        'location': <String, Object?>{
+          'type': 'string',
+          'format': 'uri-reference',
+        },
+        'version': <String, Object?>{'type': 'string', 'maxLength': 256},
+      },
+    },
+  },
+};
+
+/// JSON Schema contract for a SCIM ListResponse containing groups.
+const Map<String, Object?> authScimGroupListResponseJsonSchema =
+    <String, Object?>{
+      'type': 'object',
+      'additionalProperties': false,
+      'required': <String>[
+        'schemas',
+        'totalResults',
+        'startIndex',
+        'itemsPerPage',
+        'Resources',
+      ],
+      'properties': <String, Object?>{
+        'schemas': <String, Object?>{
+          'type': 'array',
+          'minItems': 1,
+          'maxItems': 1,
+          'items': <String, Object?>{'const': authScimListResponseSchema},
+        },
+        'totalResults': <String, Object?>{'type': 'integer', 'minimum': 0},
+        'startIndex': <String, Object?>{'type': 'integer', 'minimum': 1},
+        'itemsPerPage': <String, Object?>{'type': 'integer', 'minimum': 0},
+        'Resources': <String, Object?>{
+          'type': 'array',
+          'items': authScimGroupResponseJsonSchema,
+        },
+      },
+    };
+
+/// Strict JSON Schema contract for a SCIM Group PatchOp document.
+const Map<String, Object?> authScimGroupPatchDocumentJsonSchema =
+    <String, Object?>{
+      'type': 'object',
+      'additionalProperties': false,
+      'required': <String>['schemas', 'Operations'],
+      'properties': <String, Object?>{
+        'schemas': <String, Object?>{
+          'type': 'array',
+          'minItems': 1,
+          'maxItems': 1,
+          'items': <String, Object?>{'const': authScimPatchOperationSchema},
+        },
+        'Operations': <String, Object?>{
+          'type': 'array',
+          'minItems': 1,
+          'maxItems': 32,
+          'items': <String, Object?>{
+            'type': 'object',
+            'additionalProperties': false,
+            'required': <String>['op', 'path'],
+            'properties': <String, Object?>{
+              'op': <String, Object?>{
+                'type': 'string',
+                'enum': <String>['add', 'replace', 'remove'],
+              },
+              'path': <String, Object?>{
+                'type': 'string',
+                'enum': <String>['displayName', 'externalId', 'members'],
+              },
+              'value': <String, Object?>{},
+            },
+          },
+        },
+      },
+    };
+
 /// Strict JSON Schema contract for a SCIM PatchOp document.
 const Map<String, Object?> authScimPatchDocumentJsonSchema = <String, Object?>{
   'type': 'object',
@@ -916,6 +1547,65 @@ List<AuthScimUserEmail> _emails(Object? value) {
       .toList(growable: false);
   _validateEmails(result);
   return result;
+}
+
+List<AuthScimGroupMember> _groupMembers(
+  Object? value, {
+  required int maximumMembers,
+}) {
+  if (value == null) return const <AuthScimGroupMember>[];
+  if (maximumMembers < 0 ||
+      maximumMembers > 1000 ||
+      value is! List ||
+      value.length > maximumMembers) {
+    throw const FormatException('Invalid SCIM Group members.');
+  }
+  final result = value
+      .map((entry) {
+        if (entry is! Map) {
+          throw const FormatException('Invalid SCIM Group member.');
+        }
+        return AuthScimGroupMember.fromJson(Map<String, dynamic>.from(entry));
+      })
+      .toList(growable: false);
+  _validateGroupMembers(result, maximumMembers: maximumMembers);
+  return result;
+}
+
+void _validateGroupMembers(
+  List<AuthScimGroupMember> members, {
+  required int maximumMembers,
+}) {
+  if (maximumMembers < 0 ||
+      maximumMembers > 1000 ||
+      members.length > maximumMembers) {
+    throw const FormatException('Invalid SCIM Group members.');
+  }
+  final identities = <String, AuthScimGroupMemberType>{};
+  for (final member in members) {
+    final previous = identities[member.value];
+    if (previous != null) {
+      throw const FormatException(
+        'Duplicate or conflicting SCIM Group member.',
+      );
+    }
+    identities[member.value] = member.type;
+  }
+}
+
+String _requiredPatchString(Object? value, String name) {
+  if (value is! String) {
+    throw const FormatException('Invalid SCIM Group patch value.');
+  }
+  return _requiredBounded(value, name, 256);
+}
+
+String? _optionalPatchString(Object? value, String name) {
+  if (value == null) return null;
+  if (value is! String) {
+    throw const FormatException('Invalid SCIM Group patch value.');
+  }
+  return _bounded(value, name, 256);
 }
 
 void _validateEmails(List<AuthScimUserEmail> emails) {

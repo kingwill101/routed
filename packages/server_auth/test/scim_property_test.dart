@@ -103,9 +103,105 @@ void main() {
             contains(filter.attribute),
           );
         } on FormatException catch (error) {
-          expect(error.toString(), isNot(contains(source)));
+          if (source.isNotEmpty) {
+            expect(error.toString(), isNot(contains(source)));
+          }
         }
       }, PropertyConfig(numTests: 500, seed: 20260821));
+
+      final result = await runner.run();
+      expect(result.success, isTrue, reason: _report(result));
+    },
+  );
+
+  test(
+    'hostile Group filters fail closed or remain bounded equality',
+    () async {
+      final generator = Gen.frequency<String>([
+        (7, Chaos.string(minLength: 0, maxLength: 700)),
+        (
+          3,
+          Gen.oneOf<String>([
+            'displayName eq "Operators"',
+            'externalId eq "directory-group"',
+            'members.value eq "user-1"',
+            'displayName eq "value\r\nheader"',
+            'id eq "${'a' * 257}"',
+          ]),
+        ),
+      ]);
+      final runner = PropertyTestRunner<String>(generator, (source) {
+        try {
+          final filter = AuthScimGroupFilter.parse(source);
+          expect(filter.value, isNotEmpty);
+          expect(filter.value.length, lessThanOrEqualTo(256));
+          expect(
+            filter.value.codeUnits,
+            everyElement(allOf(greaterThanOrEqualTo(0x20), isNot(0x7f))),
+          );
+          expect(
+            AuthScimGroupFilterAttribute.values,
+            contains(filter.attribute),
+          );
+        } on FormatException catch (error) {
+          if (source.isNotEmpty) {
+            expect(error.toString(), isNot(contains(source)));
+          }
+        }
+      }, PropertyConfig(numTests: 500, seed: 20260822));
+
+      final result = await runner.run();
+      expect(result.success, isTrue, reason: _report(result));
+    },
+  );
+
+  test(
+    'stateful Group patches never exceed or duplicate direct members',
+    () async {
+      final generator = Gen.integer(
+        min: -1000,
+        max: 1000,
+      ).list(minLength: 1, maxLength: 100);
+      final runner = PropertyTestRunner<List<int>>(generator, (operations) {
+        var group = AuthScimGroupData(
+          displayName: 'Stateful',
+          maximumMembers: 8,
+        );
+        for (final input in operations) {
+          final member = <String, Object?>{
+            'value': 'resource-${input.abs() % 8}',
+            'type': input % 5 == 0 ? 'Group' : 'User',
+          };
+          final kind = switch (input.abs() % 3) {
+            0 => 'add',
+            1 => 'remove',
+            _ => 'replace',
+          };
+          try {
+            final patch = AuthScimGroupPatchDocument.fromJson(<String, dynamic>{
+              'schemas': const <String>[authScimPatchOperationSchema],
+              'Operations': <Object?>[
+                <String, Object?>{
+                  'op': kind,
+                  'path': 'members',
+                  'value': <Object?>[member],
+                },
+              ],
+            }, maximumMembers: 8);
+            group = patch.apply(group, maximumMembers: 8);
+            expect(group.members.length, lessThanOrEqualTo(8));
+            expect(
+              group.members.map((value) => value.value).toSet().length,
+              group.members.length,
+            );
+          } on FormatException catch (error) {
+            expect(
+              error.toString(),
+              isNot(contains(member['value']! as String)),
+            );
+          }
+        }
+      }, PropertyConfig(numTests: 400, seed: 20260823));
 
       final result = await runner.run();
       expect(result.success, isTrue, reason: _report(result));
@@ -162,6 +258,50 @@ final class _NoopScimStore implements AuthScimProvisioningStore {
 
   @override
   AuthScimUser? tombstoneUser(
+    AuthScimProvisioningContext context,
+    String resourceId,
+  ) => null;
+
+  @override
+  AuthScimGroupPage listGroups(
+    AuthScimProvisioningContext context,
+    AuthScimListGroupsQuery query,
+  ) => AuthScimGroupPage(resources: const <AuthScimGroup>[], totalResults: 0);
+
+  @override
+  AuthScimGroup? findGroup(
+    AuthScimProvisioningContext context,
+    String resourceId,
+  ) => null;
+
+  @override
+  AuthScimGroup createGroup(
+    AuthScimProvisioningContext context,
+    AuthScimGroupData group,
+  ) => throw const AuthScimConflictException();
+
+  @override
+  AuthScimGroup? replaceGroup(
+    AuthScimProvisioningContext context,
+    String resourceId,
+    AuthScimGroupData group,
+  ) => null;
+
+  @override
+  AuthScimGroup? patchGroup(
+    AuthScimProvisioningContext context,
+    String resourceId,
+    AuthScimGroupPatchDocument patch,
+  ) => null;
+
+  @override
+  AuthScimGroup? mutateGroupMembership(
+    AuthScimProvisioningContext context,
+    AuthScimGroupMembershipMutation mutation,
+  ) => null;
+
+  @override
+  AuthScimGroup? tombstoneGroup(
     AuthScimProvisioningContext context,
     String resourceId,
   ) => null;

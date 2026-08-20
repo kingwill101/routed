@@ -8,6 +8,11 @@
   boundary. Rename the corresponding public store-conformance case from
   `device-authorization.approve-claim-contention` to
   `device-authorization.approve-lease-contention`.
+- Extend the opt-in SCIM server plugin with typed, connection-owned Groups,
+  bounded equality filters and pagination, direct User/Group member references,
+  atomic create/replace/patch/membership/tombstone store boundaries, exact Group
+  scopes, stable-ID-only application role projection, generic failures, and
+  stateful/property coverage for isolation, bounds, conflicts, and replay.
 - Require every portable and host-owned endpoint to publish typed read or
   mutation semantics, including persistence boundary, atomicity, replay
   behavior, and validated persistence-schema/atomic-operation references.

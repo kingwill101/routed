@@ -89,6 +89,50 @@ abstract interface class AuthScimProvisioningStore {
     AuthScimProvisioningContext context,
     String resourceId,
   );
+
+  FutureOr<AuthScimGroupPage> listGroups(
+    AuthScimProvisioningContext context,
+    AuthScimListGroupsQuery query,
+  );
+
+  FutureOr<AuthScimGroup?> findGroup(
+    AuthScimProvisioningContext context,
+    String resourceId,
+  );
+
+  FutureOr<AuthScimGroup> createGroup(
+    AuthScimProvisioningContext context,
+    AuthScimGroupData group,
+  );
+
+  FutureOr<AuthScimGroup?> replaceGroup(
+    AuthScimProvisioningContext context,
+    String resourceId,
+    AuthScimGroupData group,
+  );
+
+  /// Applies scalar and direct-membership patch operations atomically.
+  FutureOr<AuthScimGroup?> patchGroup(
+    AuthScimProvisioningContext context,
+    String resourceId,
+    AuthScimGroupPatchDocument patch,
+  );
+
+  /// Applies one explicit direct-membership mutation atomically.
+  ///
+  /// The store must validate every referenced SCIM resource against the same
+  /// exact connection and tenancy binding. It must reject duplicate or
+  /// conflicting references and must not infer application users or roles.
+  FutureOr<AuthScimGroup?> mutateGroupMembership(
+    AuthScimProvisioningContext context,
+    AuthScimGroupMembershipMutation mutation,
+  );
+
+  /// Atomically transitions an existing Group resource to a tombstone.
+  FutureOr<AuthScimGroup?> tombstoneGroup(
+    AuthScimProvisioningContext context,
+    String resourceId,
+  );
 }
 
 /// Stable application identity selected without an email lookup.
@@ -176,6 +220,49 @@ abstract interface class AuthScimLifecycleCapability {
   FutureOr<void> apply(AuthScimLifecycleChange change);
 }
 
+/// Stable SCIM identity supplied to application-owned membership projection.
+final class AuthScimStableResourceIdentity {
+  AuthScimStableResourceIdentity({
+    required String resourceId,
+    required this.type,
+  }) : resourceId = _boundedIdentifier(resourceId, 'resourceId');
+
+  final String resourceId;
+  final AuthScimGroupMemberType type;
+}
+
+/// Exact, connection-bound direct-membership projection input.
+final class AuthScimRoleMembershipProjectionChange {
+  AuthScimRoleMembershipProjectionChange({
+    required this.context,
+    required String groupResourceId,
+    required Iterable<AuthScimStableResourceIdentity> before,
+    required Iterable<AuthScimStableResourceIdentity> after,
+  }) : groupResourceId = _boundedIdentifier(groupResourceId, 'groupResourceId'),
+       before = List<AuthScimStableResourceIdentity>.unmodifiable(before),
+       after = List<AuthScimStableResourceIdentity>.unmodifiable(after) {
+    _requireUniqueStableResources(this.before);
+    _requireUniqueStableResources(this.after);
+  }
+
+  final AuthScimProvisioningContext context;
+  final String groupResourceId;
+  final List<AuthScimStableResourceIdentity> before;
+  final List<AuthScimStableResourceIdentity> after;
+}
+
+/// Optional application-owned role and membership projection boundary.
+///
+/// Routed supplies only stable SCIM resource identities and the exact
+/// connection, tenant, organization, and provisioning-domain binding. The
+/// application decides whether a Group maps to any role or access policy. The
+/// provisioning store must invoke this capability inside the same real backend
+/// transaction as the Group mutation when rollback across both is required.
+/// Routed does not claim atomicity across unrelated stores or external systems.
+abstract interface class AuthScimRoleMembershipProjectionCapability {
+  FutureOr<void> apply(AuthScimRoleMembershipProjectionChange change);
+}
+
 /// Signals a persistence uniqueness conflict without exposing store details.
 final class AuthScimConflictException implements Exception {
   const AuthScimConflictException();
@@ -213,6 +300,7 @@ final class AuthScimOptions {
     this.maximumPageSize = 200,
     this.maximumStartIndex = 1000000,
     this.maximumPatchOperations = 32,
+    this.maximumGroupMembers = 1000,
     this.maximumBearerTokenLength = 4096,
   }) {
     if (defaultPageSize < 1 ||
@@ -231,6 +319,9 @@ final class AuthScimOptions {
         'maximumPatchOperations',
       );
     }
+    if (maximumGroupMembers < 1 || maximumGroupMembers > 1000) {
+      throw ArgumentError.value(maximumGroupMembers, 'maximumGroupMembers');
+    }
     if (maximumBearerTokenLength < 32 || maximumBearerTokenLength > 65536) {
       throw ArgumentError.value(
         maximumBearerTokenLength,
@@ -243,6 +334,7 @@ final class AuthScimOptions {
   final int maximumPageSize;
   final int maximumStartIndex;
   final int maximumPatchOperations;
+  final int maximumGroupMembers;
   final int maximumBearerTokenLength;
 }
 
@@ -298,6 +390,48 @@ final class ScimPlugin<TContext>
             ],
           ],
         ),
+        AuthEntityDescriptor(
+          id: 'directoryGroup',
+          fields: [
+            AuthFieldDescriptor(name: 'connectionId', kind: 'string'),
+            AuthFieldDescriptor(name: 'tenantId', kind: 'string'),
+            AuthFieldDescriptor(name: 'organizationId', kind: 'string'),
+            AuthFieldDescriptor(name: 'provisioningDomainId', kind: 'string'),
+            AuthFieldDescriptor(name: 'resourceId', kind: 'string'),
+            AuthFieldDescriptor(name: 'state', kind: 'string'),
+          ],
+          uniqueConstraints: [
+            [
+              'connectionId',
+              'tenantId',
+              'organizationId',
+              'provisioningDomainId',
+              'resourceId',
+            ],
+          ],
+        ),
+        AuthEntityDescriptor(
+          id: 'directoryGroupMember',
+          fields: [
+            AuthFieldDescriptor(name: 'connectionId', kind: 'string'),
+            AuthFieldDescriptor(name: 'tenantId', kind: 'string'),
+            AuthFieldDescriptor(name: 'organizationId', kind: 'string'),
+            AuthFieldDescriptor(name: 'provisioningDomainId', kind: 'string'),
+            AuthFieldDescriptor(name: 'groupResourceId', kind: 'string'),
+            AuthFieldDescriptor(name: 'memberResourceId', kind: 'string'),
+            AuthFieldDescriptor(name: 'memberType', kind: 'string'),
+          ],
+          uniqueConstraints: [
+            [
+              'connectionId',
+              'tenantId',
+              'organizationId',
+              'provisioningDomainId',
+              'groupResourceId',
+              'memberResourceId',
+            ],
+          ],
+        ),
       ],
       atomicOperations: [
         AuthAtomicOperationDescriptor(
@@ -317,6 +451,29 @@ final class ScimPlugin<TContext>
           id: 'tombstoneUser',
           description: 'Transitions one live directory user to a tombstone.',
         ),
+        AuthAtomicOperationDescriptor(
+          id: 'createGroup',
+          description:
+              'Creates one bounded directory Group and its direct members.',
+        ),
+        AuthAtomicOperationDescriptor(
+          id: 'replaceGroup',
+          description: 'Replaces one live Group and direct membership set.',
+        ),
+        AuthAtomicOperationDescriptor(
+          id: 'patchGroup',
+          description:
+              'Applies one bounded Group and membership patch atomically.',
+        ),
+        AuthAtomicOperationDescriptor(
+          id: 'mutateGroupMembership',
+          description:
+              'Applies one bounded direct-membership mutation atomically.',
+        ),
+        AuthAtomicOperationDescriptor(
+          id: 'tombstoneGroup',
+          description: 'Transitions one live directory Group to a tombstone.',
+        ),
       ],
     ),
   ];
@@ -330,6 +487,7 @@ final class ScimPlugin<TContext>
           path: '/scim/v2/ServiceProviderConfig',
           semantics: const AuthOperationSemantics.readOnly(),
           scope: AuthScimScope.usersRead,
+          alternateScopes: const <AuthScimScope>{AuthScimScope.groupsRead},
           requestCodec: _emptyRequestCodec,
           responseCodec: _serviceProviderConfigResponseCodec,
           handler: _serviceProviderConfig,
@@ -340,6 +498,7 @@ final class ScimPlugin<TContext>
           path: '/scim/v2/ResourceTypes',
           semantics: const AuthOperationSemantics.readOnly(),
           scope: AuthScimScope.usersRead,
+          alternateScopes: const <AuthScimScope>{AuthScimScope.groupsRead},
           requestCodec: _emptyRequestCodec,
           responseCodec: _resourceTypesResponseCodec,
           handler: _resourceTypes,
@@ -350,6 +509,7 @@ final class ScimPlugin<TContext>
           path: '/scim/v2/Schemas',
           semantics: const AuthOperationSemantics.readOnly(),
           scope: AuthScimScope.usersRead,
+          alternateScopes: const <AuthScimScope>{AuthScimScope.groupsRead},
           requestCodec: _emptyRequestCodec,
           responseCodec: _schemasResponseCodec,
           handler: _schemas,
@@ -453,6 +613,105 @@ final class ScimPlugin<TContext>
           responseHasBody: false,
           handler: _deleteUser,
         ),
+        _endpoint(
+          id: 'scim.groups.list',
+          method: AuthOperationMethod.get,
+          path: '/scim/v2/Groups',
+          semantics: const AuthOperationSemantics.readOnly(),
+          scope: AuthScimScope.groupsRead,
+          requestCodec: _listGroupsRequestCodec,
+          responseCodec: _groupListResponseCodec,
+          handler: _listGroups,
+        ),
+        _endpoint(
+          id: 'scim.groups.get',
+          method: AuthOperationMethod.get,
+          path: '/scim/v2/Groups/{id}',
+          semantics: const AuthOperationSemantics.readOnly(),
+          scope: AuthScimScope.groupsRead,
+          requestCodec: _resourceIdRequestCodec,
+          responseCodec: _groupResponseCodec,
+          handler: _getGroup,
+        ),
+        _endpoint(
+          id: 'scim.groups.create',
+          method: AuthOperationMethod.post,
+          path: '/scim/v2/Groups',
+          semantics: const AuthOperationSemantics.mutation(
+            persistence: AuthMutationPersistence.durable(
+              atomicity: AuthMutationAtomicity.atomic,
+              reference: AuthPersistenceOperationReference(
+                schemaId: _scimPersistenceSchemaId,
+                atomicOperationId: 'createGroup',
+              ),
+            ),
+            replaySafety: AuthMutationReplaySafety.unguarded,
+          ),
+          scope: AuthScimScope.groupsWrite,
+          requestCodec: _groupRequestCodec,
+          responseCodec: _groupResponseCodec,
+          successStatusCode: 201,
+          handler: _createGroup,
+        ),
+        _endpoint(
+          id: 'scim.groups.replace',
+          method: AuthOperationMethod.put,
+          path: '/scim/v2/Groups/{id}',
+          semantics: const AuthOperationSemantics.mutation(
+            persistence: AuthMutationPersistence.durable(
+              atomicity: AuthMutationAtomicity.atomic,
+              reference: AuthPersistenceOperationReference(
+                schemaId: _scimPersistenceSchemaId,
+                atomicOperationId: 'replaceGroup',
+              ),
+            ),
+            replaySafety: AuthMutationReplaySafety.idempotent,
+          ),
+          scope: AuthScimScope.groupsWrite,
+          requestCodec: _groupWithIdRequestCodec,
+          responseCodec: _groupResponseCodec,
+          handler: _replaceGroup,
+        ),
+        _endpoint(
+          id: 'scim.groups.patch',
+          method: AuthOperationMethod.patch,
+          path: '/scim/v2/Groups/{id}',
+          semantics: const AuthOperationSemantics.mutation(
+            persistence: AuthMutationPersistence.durable(
+              atomicity: AuthMutationAtomicity.atomic,
+              reference: AuthPersistenceOperationReference(
+                schemaId: _scimPersistenceSchemaId,
+                atomicOperationId: 'patchGroup',
+              ),
+            ),
+            replaySafety: AuthMutationReplaySafety.unguarded,
+          ),
+          scope: AuthScimScope.groupsWrite,
+          requestCodec: _groupPatchWithIdRequestCodec,
+          responseCodec: _groupResponseCodec,
+          handler: _patchGroup,
+        ),
+        _endpoint(
+          id: 'scim.groups.delete',
+          method: AuthOperationMethod.delete,
+          path: '/scim/v2/Groups/{id}',
+          semantics: const AuthOperationSemantics.mutation(
+            persistence: AuthMutationPersistence.durable(
+              atomicity: AuthMutationAtomicity.atomic,
+              reference: AuthPersistenceOperationReference(
+                schemaId: _scimPersistenceSchemaId,
+                atomicOperationId: 'tombstoneGroup',
+              ),
+            ),
+            replaySafety: AuthMutationReplaySafety.idempotent,
+          ),
+          scope: AuthScimScope.groupsWrite,
+          requestCodec: _resourceIdRequestCodec,
+          responseCodec: _emptyResponseCodec,
+          successStatusCode: 204,
+          responseHasBody: false,
+          handler: _deleteGroup,
+        ),
       ];
 
   AuthEndpointDescriptor<TContext> _endpoint({
@@ -461,6 +720,7 @@ final class ScimPlugin<TContext>
     required String path,
     required AuthOperationSemantics semantics,
     required AuthScimScope scope,
+    Set<AuthScimScope> alternateScopes = const <AuthScimScope>{},
     required AuthOperationCodec<Map<String, dynamic>> requestCodec,
     required AuthOperationCodec<Object?> responseCodec,
     required FutureOr<AuthEndpointHttpResponse> Function(
@@ -508,15 +768,20 @@ final class ScimPlugin<TContext>
     authentication: AuthOperationAuthentication.bearer,
     originPolicy: AuthOperationOriginPolicy.none,
     csrfPolicy: AuthOperationCsrfPolicy.none,
-    handler: (invocation, request) =>
-        _authorized(id, invocation.context, request, scope, handler),
+    handler: (invocation, request) => _authorized(
+      id,
+      invocation.context,
+      request,
+      <AuthScimScope>{scope, ...alternateScopes},
+      handler,
+    ),
   );
 
   Future<AuthEndpointHttpResponse> _authorized(
     String operation,
     TContext context,
     Map<String, dynamic> rawRequest,
-    AuthScimScope scope,
+    Set<AuthScimScope> scopes,
     FutureOr<AuthEndpointHttpResponse> Function(
       AuthScimProvisioningContext context,
       Map<String, dynamic> request,
@@ -543,7 +808,7 @@ final class ScimPlugin<TContext>
     if (connection == null || connection.isExpiredAt(DateTime.now().toUtc())) {
       return _error(401, 'Unauthorized.');
     }
-    if (!connection.allows(scope)) {
+    if (!scopes.any(connection.allows)) {
       return _error(403, 'Insufficient SCIM scope.');
     }
     final provisioningContext = AuthScimProvisioningContext(
@@ -623,7 +888,10 @@ final class ScimPlugin<TContext>
   ) {
     _requireOnlyKeys(request, const <String>{});
     return _json(
-      _listResponse(<Object?>[const AuthScimResourceType().toJson()]),
+      _listResponse(<Object?>[
+        const AuthScimResourceType().toJson(),
+        const AuthScimGroupResourceType().toJson(),
+      ]),
     );
   }
 
@@ -633,7 +901,10 @@ final class ScimPlugin<TContext>
   ) {
     _requireOnlyKeys(request, const <String>{});
     return _json(
-      _listResponse(<Object?>[const AuthScimUserSchemaDefinition().toJson()]),
+      _listResponse(<Object?>[
+        const AuthScimUserSchemaDefinition().toJson(),
+        const AuthScimGroupSchemaDefinition().toJson(),
+      ]),
     );
   }
 
@@ -736,6 +1007,112 @@ final class ScimPlugin<TContext>
     return _json(null, statusCode: 204);
   }
 
+  Future<AuthEndpointHttpResponse> _listGroups(
+    AuthScimProvisioningContext context,
+    Map<String, dynamic> request,
+  ) async {
+    _requireOnlyKeys(request, const <String>{'startIndex', 'count', 'filter'});
+    final query = AuthScimListGroupsQuery.fromJson(
+      request,
+      defaultPageSize: options.defaultPageSize,
+      maximumPageSize: options.maximumPageSize,
+      maximumStartIndex: options.maximumStartIndex,
+    );
+    final page = await store.listGroups(context, query);
+    if (page.resources.length > query.count ||
+        page.totalResults < page.resources.length) {
+      throw StateError('SCIM store returned an invalid bounded Group page.');
+    }
+    for (final resource in page.resources) {
+      _requireGroupBinding(context, resource);
+    }
+    return _json(<String, Object?>{
+      'schemas': const <String>[authScimListResponseSchema],
+      'totalResults': page.totalResults,
+      'startIndex': query.startIndex,
+      'itemsPerPage': page.resources.length,
+      'Resources': page.resources
+          .map((resource) => resource.toJson())
+          .toList(growable: false),
+    });
+  }
+
+  Future<AuthEndpointHttpResponse> _getGroup(
+    AuthScimProvisioningContext context,
+    Map<String, dynamic> request,
+  ) async {
+    _requireOnlyKeys(request, const <String>{'id'});
+    final resource = await store.findGroup(context, _resourceId(request));
+    if (resource == null) return _error(404, 'SCIM resource not found.');
+    _requireGroupBinding(context, resource);
+    return _groupResourceResponse(resource);
+  }
+
+  Future<AuthEndpointHttpResponse> _createGroup(
+    AuthScimProvisioningContext context,
+    Map<String, dynamic> request,
+  ) async {
+    final resource = await store.createGroup(
+      context,
+      AuthScimGroupData.fromJson(
+        request,
+        maximumMembers: options.maximumGroupMembers,
+      ),
+    );
+    _requireGroupBinding(context, resource);
+    return _groupResourceResponse(resource, statusCode: 201);
+  }
+
+  Future<AuthEndpointHttpResponse> _replaceGroup(
+    AuthScimProvisioningContext context,
+    Map<String, dynamic> request,
+  ) async {
+    final id = _resourceId(request);
+    final body = Map<String, dynamic>.of(request)..remove('id');
+    final resource = await store.replaceGroup(
+      context,
+      id,
+      AuthScimGroupData.fromJson(
+        body,
+        maximumMembers: options.maximumGroupMembers,
+      ),
+    );
+    if (resource == null) return _error(404, 'SCIM resource not found.');
+    _requireGroupBinding(context, resource);
+    return _groupResourceResponse(resource);
+  }
+
+  Future<AuthEndpointHttpResponse> _patchGroup(
+    AuthScimProvisioningContext context,
+    Map<String, dynamic> request,
+  ) async {
+    final id = _resourceId(request);
+    final body = Map<String, dynamic>.of(request)..remove('id');
+    final patch = AuthScimGroupPatchDocument.fromJson(
+      body,
+      maximumOperations: options.maximumPatchOperations,
+      maximumMembers: options.maximumGroupMembers,
+    );
+    final resource = await store.patchGroup(context, id, patch);
+    if (resource == null) return _error(404, 'SCIM resource not found.');
+    _requireGroupBinding(context, resource);
+    return _groupResourceResponse(resource);
+  }
+
+  Future<AuthEndpointHttpResponse> _deleteGroup(
+    AuthScimProvisioningContext context,
+    Map<String, dynamic> request,
+  ) async {
+    _requireOnlyKeys(request, const <String>{'id'});
+    final resource = await store.tombstoneGroup(context, _resourceId(request));
+    if (resource == null) return _error(404, 'SCIM resource not found.');
+    _requireGroupBinding(context, resource, allowTombstone: true);
+    if (resource.state != AuthScimDirectoryGroupState.tombstoned) {
+      throw StateError('SCIM store did not return a Group tombstone.');
+    }
+    return _json(null, statusCode: 204);
+  }
+
   void _requireBinding(
     AuthScimProvisioningContext context,
     AuthScimUser resource, {
@@ -753,6 +1130,26 @@ final class ScimPlugin<TContext>
     }
   }
 
+  void _requireGroupBinding(
+    AuthScimProvisioningContext context,
+    AuthScimGroup resource, {
+    bool allowTombstone = false,
+  }) {
+    if (resource.connectionId != context.connectionId ||
+        resource.tenantId != context.tenantId ||
+        resource.organizationId != context.organizationId ||
+        resource.provisioningDomainId != context.provisioningDomainId) {
+      throw StateError('SCIM store violated its Group connection boundary.');
+    }
+    if (!allowTombstone &&
+        resource.state == AuthScimDirectoryGroupState.tombstoned) {
+      throw StateError('SCIM store exposed a tombstoned Group resource.');
+    }
+    if (resource.data.members.length > options.maximumGroupMembers) {
+      throw StateError('SCIM store returned an unbounded Group resource.');
+    }
+  }
+
   AuthEndpointHttpResponse _resourceResponse(
     AuthScimUser resource, {
     int statusCode = 200,
@@ -766,6 +1163,18 @@ final class ScimPlugin<TContext>
       },
     );
   }
+
+  AuthEndpointHttpResponse _groupResourceResponse(
+    AuthScimGroup resource, {
+    int statusCode = 200,
+  }) => _json(
+    resource.toJson(),
+    statusCode: statusCode,
+    headers: <String, String>{
+      'Location': ?resource.meta.location?.toString(),
+      'ETag': ?resource.meta.version,
+    },
+  );
 }
 
 /// Secret-safe marker reported when application bearer resolution throws.
@@ -846,6 +1255,17 @@ bool _matchesContext(
     resource.organizationId == context.organizationId &&
     resource.provisioningDomainId == context.provisioningDomainId;
 
+void _requireUniqueStableResources(
+  List<AuthScimStableResourceIdentity> resources,
+) {
+  final ids = <String>{};
+  for (final resource in resources) {
+    if (!ids.add(resource.resourceId)) {
+      throw ArgumentError('SCIM projection identities must be unique.');
+    }
+  }
+}
+
 String _errorDescription(int status) => switch (status) {
   400 => 'Invalid SCIM request.',
   401 => 'Bearer authentication failed or is required.',
@@ -882,6 +1302,8 @@ const Map<String, Object?> _listUsersRequestSchema = <String, Object?>{
   },
 };
 
+const Map<String, Object?> _listGroupsRequestSchema = _listUsersRequestSchema;
+
 final Map<String, Object?> _userWithIdRequestSchema = <String, Object?>{
   'type': 'object',
   'additionalProperties': false,
@@ -902,6 +1324,30 @@ final Map<String, Object?> _patchWithIdRequestSchema = <String, Object?>{
     'id': <String, Object?>{'type': 'string', 'minLength': 1, 'maxLength': 256},
     ...Map<String, Object?>.from(
       authScimPatchDocumentJsonSchema['properties']! as Map,
+    ),
+  },
+};
+
+final Map<String, Object?> _groupWithIdRequestSchema = <String, Object?>{
+  'type': 'object',
+  'additionalProperties': false,
+  'required': <String>['id', 'schemas', 'displayName'],
+  'properties': <String, Object?>{
+    'id': <String, Object?>{'type': 'string', 'minLength': 1, 'maxLength': 256},
+    ...Map<String, Object?>.from(
+      authScimGroupInputJsonSchema['properties']! as Map,
+    ),
+  },
+};
+
+final Map<String, Object?> _groupPatchWithIdRequestSchema = <String, Object?>{
+  'type': 'object',
+  'additionalProperties': false,
+  'required': <String>['id', 'schemas', 'Operations'],
+  'properties': <String, Object?>{
+    'id': <String, Object?>{'type': 'string', 'minLength': 1, 'maxLength': 256},
+    ...Map<String, Object?>.from(
+      authScimGroupPatchDocumentJsonSchema['properties']! as Map,
     ),
   },
 };
@@ -1007,11 +1453,19 @@ const Map<String, Object?> _resourceTypeSchema = <String, Object?>{
       'type': 'array',
       'items': <String, Object?>{'const': authScimResourceTypeSchema},
     },
-    'id': <String, Object?>{'const': 'User'},
-    'name': <String, Object?>{'const': 'User'},
-    'endpoint': <String, Object?>{'const': '/Users'},
+    'id': <String, Object?>{
+      'enum': <String>['User', 'Group'],
+    },
+    'name': <String, Object?>{
+      'enum': <String>['User', 'Group'],
+    },
+    'endpoint': <String, Object?>{
+      'enum': <String>['/Users', '/Groups'],
+    },
     'description': <String, Object?>{'type': 'string'},
-    'schema': <String, Object?>{'const': authScimUserSchema},
+    'schema': <String, Object?>{
+      'enum': <String>[authScimUserSchema, authScimGroupSchema],
+    },
     'schemaExtensions': <String, Object?>{'type': 'array', 'maxItems': 0},
   },
 };
@@ -1025,8 +1479,12 @@ const Map<String, Object?> _schemaDefinitionSchema = <String, Object?>{
       'type': 'array',
       'items': <String, Object?>{'const': authScimSchemaSchema},
     },
-    'id': <String, Object?>{'const': authScimUserSchema},
-    'name': <String, Object?>{'const': 'User'},
+    'id': <String, Object?>{
+      'enum': <String>[authScimUserSchema, authScimGroupSchema],
+    },
+    'name': <String, Object?>{
+      'enum': <String>['User', 'Group'],
+    },
     'description': <String, Object?>{'type': 'string'},
     'attributes': <String, Object?>{
       'type': 'array',
@@ -1126,6 +1584,13 @@ const AuthOperationCodec<Map<String, dynamic>> _listUsersRequestCodec =
       schema: _listUsersRequestSchema,
       contentType: authScimMediaType,
     );
+const AuthOperationCodec<Map<String, dynamic>> _listGroupsRequestCodec =
+    AuthOperationCodec<Map<String, dynamic>>(
+      decode: _identityMap,
+      encode: _identityMap,
+      schema: _listGroupsRequestSchema,
+      contentType: authScimMediaType,
+    );
 const AuthOperationCodec<Map<String, dynamic>> _resourceIdRequestCodec =
     AuthOperationCodec<Map<String, dynamic>>(
       decode: _identityMap,
@@ -1154,6 +1619,30 @@ final AuthOperationCodec<Map<String, dynamic>> _patchWithIdRequestCodec =
       decode: _identityMap,
       encode: _identityMap,
       schema: _patchWithIdRequestSchema,
+      contentType: authScimMediaType,
+      required: true,
+    );
+const AuthOperationCodec<Map<String, dynamic>> _groupRequestCodec =
+    AuthOperationCodec<Map<String, dynamic>>(
+      decode: _identityMap,
+      encode: _identityMap,
+      schema: authScimGroupInputJsonSchema,
+      contentType: authScimMediaType,
+      required: true,
+    );
+final AuthOperationCodec<Map<String, dynamic>> _groupWithIdRequestCodec =
+    AuthOperationCodec<Map<String, dynamic>>(
+      decode: _identityMap,
+      encode: _identityMap,
+      schema: _groupWithIdRequestSchema,
+      contentType: authScimMediaType,
+      required: true,
+    );
+final AuthOperationCodec<Map<String, dynamic>> _groupPatchWithIdRequestCodec =
+    AuthOperationCodec<Map<String, dynamic>>(
+      decode: _identityMap,
+      encode: _identityMap,
+      schema: _groupPatchWithIdRequestSchema,
       contentType: authScimMediaType,
       required: true,
     );
@@ -1190,6 +1679,20 @@ const AuthOperationCodec<Object?> _userListResponseCodec =
       decode: _identityMap,
       encode: _identityObject,
       schema: authScimUserListResponseJsonSchema,
+      contentType: authScimMediaType,
+    );
+const AuthOperationCodec<Object?> _groupResponseCodec =
+    AuthOperationCodec<Object?>(
+      decode: _identityMap,
+      encode: _identityObject,
+      schema: authScimGroupResponseJsonSchema,
+      contentType: authScimMediaType,
+    );
+const AuthOperationCodec<Object?> _groupListResponseCodec =
+    AuthOperationCodec<Object?>(
+      decode: _identityMap,
+      encode: _identityObject,
+      schema: authScimGroupListResponseJsonSchema,
       contentType: authScimMediaType,
     );
 const AuthOperationCodec<Object?> _errorResponseCodec =

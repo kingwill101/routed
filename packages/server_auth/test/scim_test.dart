@@ -804,6 +804,50 @@ final class _MemoryScimStore implements AuthScimProvisioningStore {
     seed(tombstone);
     return tombstone;
   }
+
+  @override
+  AuthScimGroupPage listGroups(
+    AuthScimProvisioningContext context,
+    AuthScimListGroupsQuery query,
+  ) => AuthScimGroupPage(resources: const <AuthScimGroup>[], totalResults: 0);
+
+  @override
+  AuthScimGroup? findGroup(
+    AuthScimProvisioningContext context,
+    String resourceId,
+  ) => null;
+
+  @override
+  AuthScimGroup createGroup(
+    AuthScimProvisioningContext context,
+    AuthScimGroupData group,
+  ) => throw const AuthScimConflictException();
+
+  @override
+  AuthScimGroup? replaceGroup(
+    AuthScimProvisioningContext context,
+    String resourceId,
+    AuthScimGroupData group,
+  ) => null;
+
+  @override
+  AuthScimGroup? patchGroup(
+    AuthScimProvisioningContext context,
+    String resourceId,
+    AuthScimGroupPatchDocument patch,
+  ) => null;
+
+  @override
+  AuthScimGroup? mutateGroupMembership(
+    AuthScimProvisioningContext context,
+    AuthScimGroupMembershipMutation mutation,
+  ) => null;
+
+  @override
+  AuthScimGroup? tombstoneGroup(
+    AuthScimProvisioningContext context,
+    String resourceId,
+  ) => null;
 }
 
 _ResourceKey _key(AuthScimProvisioningContext context, String resourceId) => (

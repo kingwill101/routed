@@ -237,6 +237,7 @@ final scim = ScimPlugin<MyRequestContext>(
     defaultPageSize: 50,
     maximumPageSize: 200,
     maximumPatchOperations: 16,
+    maximumGroupMembers: 500,
   ),
 );
 
@@ -251,9 +252,10 @@ final options = AuthOptions<MyRequestContext>(
 The resolver must digest the presented token immediately and atomically return
 one immutable `AuthScimConnectionIdentity`: connection ID, credential ID,
 tenant ID, organization ID, provisioning-domain ID, subject, expiry, and exact
-User scopes. It must reject revoked or expired credentials and must never
-persist, log, or return a raw token. This plugin does not issue tokens; if an
-application adds issuance later, the raw value may be displayed only once.
+User or Group read/write scopes. It must reject revoked or expired credentials
+and must never persist, log, or return a raw token. This plugin does not issue
+tokens; if an application adds issuance later, the raw value may be displayed
+only once.
 
 Each provisioning-store call receives the resolved connection context and must
 enforce the exact connection, tenant, organization, and provisioning domain in
@@ -262,7 +264,8 @@ require a real atomic store mutation. Do not advertise an adapter as SCIM-safe
 when its backend cannot provide those semantics; in particular, this package
 does not claim interactive multi-step transaction support for Cloudflare D1.
 
-SCIM Users are directory resources, not authentication users. The plugin never
+SCIM Users and Groups are directory resources, not authentication users,
+application roles, or organization memberships. The plugin never
 creates a sign-in method, grants application access, or links an existing auth
 user by email. Directory lifecycle is explicit (`active`, `inactive`, or
 `tombstoned`). Applications that need a stable link can implement
@@ -272,14 +275,30 @@ projection, access changes, or session revocation belong in an application-owned
 `AuthScimLifecycleCapability`, composed by the provisioning store within the
 same backend transaction when rollback is required.
 
+Groups contain only bounded direct references to stable SCIM User or Group
+resource IDs. The provisioning store atomically owns group create, replace,
+patch, direct membership mutation, and tombstoning. It must validate every
+reference against the same connection, tenant, organization, and provisioning
+domain, reject duplicate or conflicting members, and remove live memberships
+when tombstoning. No role or access grant is inferred from a display name,
+email, or Group membership.
+
+Applications may implement `AuthScimRoleMembershipProjectionCapability` to
+translate stable directory Group/member resource IDs into their own roles or
+memberships. The provisioning store invokes that capability inside the same
+real backend transaction when rollback across directory state and application
+projection is required. Routed cannot make unrelated stores or external
+systems atomic.
+
 The selected framework adapter mounts Bearer-authenticated
-`ServiceProviderConfig`, `ResourceTypes`, `Schemas`, and bounded User
+`ServiceProviderConfig`, `ResourceTypes`, `Schemas`, and bounded User and Group
 list/get/create/replace/patch/delete operations under its auth base path (for
-Routed, `/auth/scim/v2`). Public failures use generic SCIM error documents and
-never include bearer tokens or persistence exception details. This bounded
-foundation is Users-only. Groups, application projection orchestration, and a
-managed connection/credential catalog remain explicitly deferred; there is no
-SCIM client plugin because directories consume the protocol directly.
+Routed, `/auth/scim/v2`). Group endpoints require exact Group scopes and all
+responses use `application/scim+json`. Public failures use generic SCIM error
+documents and never include bearer tokens or persistence exception details.
+Managed connection/credential APIs and application projection orchestration
+remain explicitly deferred; there is no SCIM client plugin because directories
+consume the protocol directly.
 
 ## Device authorization issuance
 
