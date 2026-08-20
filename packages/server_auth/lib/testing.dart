@@ -10,6 +10,7 @@ export 'src/testing/auth_webauthn_ceremony_fixture.dart';
 export 'src/testing/auth_plugin_conformance.dart';
 export 'src/testing/auth_store_conformance.dart';
 export 'src/testing/admin_store_conformance.dart';
+export 'src/testing/api_key_store_conformance.dart';
 export 'src/testing/anonymous_store_conformance.dart';
 export 'src/testing/email_auth_backend_conformance.dart';
 export 'src/testing/oauth_authorization_code_exchange_conformance.dart';
