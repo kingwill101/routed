@@ -533,6 +533,44 @@ void main() {
       },
     );
 
+    test(
+      'rejects packed attestation certificates without basic constraints',
+      () async {
+        final fixture = _Fixture();
+        final attestationKey = _KeyPair.create(privateValue: BigInt.two);
+        final registration = await fixture.feature.beginRegistration(
+          context: fixture.context,
+          user: fixture.user,
+        );
+
+        await expectLater(
+          () => fixture.feature.finishRegistration(
+            context: fixture.context,
+            user: fixture.user,
+            credential: _registrationCredential(
+              challenge: registration.challenge,
+              keyPair: fixture.keyPair,
+              attestationFormat: 'packed',
+              packedSigningKey: attestationKey,
+              packedCertificateChain: <Object?>[
+                _packedAttestationCertificate(
+                  attestationKey,
+                  includeBasicConstraints: false,
+                ),
+              ],
+            ),
+          ),
+          throwsA(
+            isA<AuthFlowException>().having(
+              (error) => error.code,
+              'code',
+              'webauthn_attestation_invalid',
+            ),
+          ),
+        );
+      },
+    );
+
     test('authenticates an RS256 passkey', () async {
       final fixture = _Fixture();
       final keyPair = _RsaKeyPair.create();
@@ -1142,6 +1180,7 @@ List<int> _bigIntBytes(BigInt value, int length) {
 Uint8List _packedAttestationCertificate(
   _KeyPair keyPair, {
   String organizationalUnit = 'Authenticator Attestation',
+  bool includeBasicConstraints = true,
 }) {
   final signatureAlgorithm = ASN1Sequence()
     ..add(ASN1ObjectIdentifier.fromIdentifierString('1.2.840.10045.4.3.2'));
@@ -1153,24 +1192,26 @@ Uint8List _packedAttestationCertificate(
     ..add(publicKeyAlgorithm)
     ..add(ASN1BitString(stringValues: <int>[0x04, ...keyPair.x, ...keyPair.y]));
   final basicConstraints = ASN1Sequence();
-  final extensions = ASN1Sequence()
-    ..add(
+  final extensions = ASN1Sequence();
+  if (includeBasicConstraints) {
+    extensions.add(
       ASN1Sequence()
         ..add(ASN1ObjectIdentifier.fromIdentifierString('2.5.29.19'))
         ..add(ASN1Boolean(true))
         ..add(ASN1OctetString(octets: basicConstraints.encode())),
-    )
-    ..add(
-      ASN1Sequence()
-        ..add(
-          ASN1ObjectIdentifier.fromIdentifierString('1.3.6.1.4.1.45724.1.1.4'),
-        )
-        ..add(
-          ASN1OctetString(
-            octets: ASN1OctetString(octets: Uint8List(16)).encode(),
-          ),
-        ),
     );
+  }
+  extensions.add(
+    ASN1Sequence()
+      ..add(
+        ASN1ObjectIdentifier.fromIdentifierString('1.3.6.1.4.1.45724.1.1.4'),
+      )
+      ..add(
+        ASN1OctetString(
+          octets: ASN1OctetString(octets: Uint8List(16)).encode(),
+        ),
+      ),
+  );
   final tbsCertificate = ASN1Sequence()
     ..add(_explicitAsn1(0xa0, ASN1Integer(BigInt.two).encode()))
     ..add(ASN1Integer(BigInt.one))

@@ -1011,6 +1011,7 @@ final class WebAuthnPlugin<TContext>
     }
     final leaf = certificates.first;
     if (!leaf.isVersion3 ||
+        !leaf.hasBasicConstraints ||
         leaf.isCertificateAuthority ||
         leaf.country?.isNotEmpty != true ||
         leaf.organization?.isNotEmpty != true ||
@@ -1080,6 +1081,7 @@ final class WebAuthnPlugin<TContext>
       }
       _validateCertificateValidity(validity);
       final names = _certificateNames(subject);
+      var hasBasicConstraints = false;
       var isCertificateAuthority = false;
       Uint8List? certificateAaguid;
       for (final element in elements.skip(offset + 6)) {
@@ -1108,14 +1110,26 @@ final class WebAuthnPlugin<TContext>
             throw const FormatException();
           }
           if (identifier.objectIdentifierAsString == '2.5.29.19') {
-            final basicConstraints = ASN1Parser(value.octets).nextObject();
-            if (basicConstraints is! ASN1Sequence) {
+            if (hasBasicConstraints) throw const FormatException();
+            final basicConstraintsParser = ASN1Parser(value.octets);
+            final basicConstraints = basicConstraintsParser.nextObject();
+            if (basicConstraintsParser.hasNext() ||
+                basicConstraints is! ASN1Sequence) {
               throw const FormatException();
             }
-            final fields = basicConstraints.elements;
-            if (fields?.isNotEmpty == true && fields!.first is ASN1Boolean) {
+            hasBasicConstraints = true;
+            final fields = basicConstraints.elements ?? const <ASN1Object>[];
+            if (fields.length > 2 ||
+                (fields.isNotEmpty && fields.first is! ASN1Boolean) ||
+                (fields.length == 2 && fields[1] is! ASN1Integer)) {
+              throw const FormatException();
+            }
+            if (fields.isNotEmpty) {
               isCertificateAuthority =
                   (fields.first as ASN1Boolean).boolValue == true;
+              if (!isCertificateAuthority && fields.length == 2) {
+                throw const FormatException();
+              }
             }
           } else if (identifier.objectIdentifierAsString ==
               '1.3.6.1.4.1.45724.1.1.4') {
@@ -1140,6 +1154,7 @@ final class WebAuthnPlugin<TContext>
         issuer: Uint8List.fromList(issuer.encodedBytes!),
         subject: Uint8List.fromList(subject.encodedBytes!),
         isVersion3: isVersion3,
+        hasBasicConstraints: hasBasicConstraints,
         isCertificateAuthority: isCertificateAuthority,
         country: names['2.5.4.6'],
         organization: names['2.5.4.10'],
@@ -1699,6 +1714,7 @@ final class _PackedAttestationCertificate {
     required this.issuer,
     required this.subject,
     required this.isVersion3,
+    required this.hasBasicConstraints,
     required this.isCertificateAuthority,
     this.country,
     this.organization,
@@ -1714,6 +1730,7 @@ final class _PackedAttestationCertificate {
   final Uint8List issuer;
   final Uint8List subject;
   final bool isVersion3;
+  final bool hasBasicConstraints;
   final bool isCertificateAuthority;
   final String? country;
   final String? organization;
