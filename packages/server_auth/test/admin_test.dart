@@ -310,6 +310,100 @@ void main() {
       },
     );
 
+    test('hard deletion cascades into API-key and WebAuthn data', () async {
+      final apiKeyStore = InMemoryAuthApiKeyStore();
+      final apiKeys = AuthApiKeyPlugin<Object>(
+        store: apiKeyStore,
+        keyIdGenerator: ({length = 32}) => 'member-key',
+        secretGenerator: ({length = 32}) => 'member-secret',
+      );
+      final webAuthn = WebAuthnPlugin<Object>(
+        provider: WebAuthnProvider(
+          getUserInfo: (_, _, _) => null,
+          getRelyingParty: (_, _) => const WebAuthnRelyingParty(
+            id: 'example.com',
+            name: 'Example',
+            origin: 'https://example.com',
+          ),
+        ),
+      );
+      feature = AdminPlugin<Object>(store: adminStore);
+      AuthRuntime<Object>(
+        options: AuthOptions(
+          providers: const [],
+          store: core,
+          storeMode: AuthStoreMode.ephemeral,
+          plugins: [apiKeys, webAuthn, feature],
+        ),
+      );
+      final issued = await apiKeys.issue(userId: member.id, name: 'CLI');
+      final createdAt = DateTime.now().toUtc();
+      await core.webAuthnAuthenticators.create(
+        WebAuthnAuthenticator(
+          credentialId: 'member-passkey',
+          publicKey: 'member-public-key',
+          counter: 0,
+          userId: member.id,
+          createdAt: createdAt,
+        ),
+      );
+      await core.webAuthnChallenges.save(
+        AuthWebAuthnChallenge(
+          id: 'member-challenge',
+          challengeHash: 'member-challenge-hash',
+          ceremony: AuthWebAuthnCeremony.registration,
+          relyingPartyId: 'example.com',
+          origin: 'https://example.com',
+          createdAt: createdAt,
+          expiresAt: createdAt.add(const Duration(minutes: 5)),
+          userId: member.id,
+        ),
+      );
+
+      await _invoke(feature, 'admin.removeUser', admin, {'userId': member.id});
+
+      expect(await apiKeys.authenticate(issued.key), isNull);
+      expect(
+        await core.webAuthnAuthenticators.findByCredentialId('member-passkey'),
+        isNull,
+      );
+      expect(
+        await core.webAuthnChallenges.consume(
+          challengeHash: 'member-challenge-hash',
+          ceremony: AuthWebAuthnCeremony.registration,
+          relyingPartyId: 'example.com',
+          origin: 'https://example.com',
+          userId: member.id,
+          now: createdAt,
+        ),
+        isNull,
+      );
+    });
+
+    test(
+      'rejected email conflicts preserve credential lookup indexes',
+      () async {
+        await expectLater(
+          _invoke(feature, 'admin.updateUser', admin, {
+            'userId': member.id,
+            'email': admin.email,
+          }),
+          _flow('email_taken'),
+        );
+
+        final memberCredential = await core.credentials.findByIdentifier(
+          member.email!,
+        );
+        final adminCredential = await core.credentials.findByIdentifier(
+          admin.email!,
+        );
+        expect(memberCredential?.userId, member.id);
+        expect(adminCredential?.userId, admin.id);
+        expect(await core.users.findByEmail(member.email!), member);
+        expect(await core.users.findByEmail(admin.email!), admin);
+      },
+    );
+
     test(
       'impersonation is server-session-only and preserves actor metadata',
       () async {

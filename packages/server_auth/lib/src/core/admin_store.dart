@@ -148,6 +148,12 @@ final class InMemoryAuthAdminStore implements AuthAdminStore {
     final current = await _core.users.findById(user.id);
     if (current == null) throw AuthFlowException('user_not_found');
     final changesEmail = user.email != null && user.email != current.email;
+    if (changesEmail) {
+      final existing = await _core.users.findByEmail(user.email!);
+      if (existing != null && existing.id != user.id) {
+        throw AuthFlowException('email_taken');
+      }
+    }
     final credential = changesEmail
         ? await _capabilities.findCredentialForUser(user.id)
         : null;

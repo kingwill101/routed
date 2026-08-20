@@ -52,6 +52,12 @@ final class AuthWebAuthnChallenge {
 abstract interface class AuthWebAuthnChallengeStore {
   FutureOr<void> save(AuthWebAuthnChallenge challenge);
 
+  /// Removes every pending challenge bound to [userId].
+  ///
+  /// Durable implementations must include this operation in the same account
+  /// deletion transaction as the user's authenticators and core auth data.
+  FutureOr<void> deleteForUser(String userId);
+
   /// Atomically consumes a matching, active challenge.
   ///
   /// Implementations must remove the challenge before returning it. A
@@ -147,6 +153,13 @@ final class InMemoryAuthWebAuthnChallengeStore
     }
     _records.remove(challengeHash.trim());
     return record;
+  }
+
+  @override
+  Future<void> deleteForUser(String userId) async {
+    final normalized = userId.trim();
+    if (normalized.isEmpty) return;
+    _records.removeWhere((_, record) => record.userId == normalized);
   }
 }
 

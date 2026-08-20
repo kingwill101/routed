@@ -853,12 +853,12 @@ class _InMemoryCredentialStore implements AuthCredentialStore {
 
   void upsertForAdministration(AuthPasswordCredential credential) {
     final previous = _credentialsById[credential.id];
-    if (previous != null && previous.identifier != credential.identifier) {
-      _credentialIdsByIdentifier.remove(previous.identifier);
-    }
     final conflictingId = _credentialIdsByIdentifier[credential.identifier];
     if (conflictingId != null && conflictingId != credential.id) {
       throw StateError('Auth user email already exists');
+    }
+    if (previous != null && previous.identifier != credential.identifier) {
+      _credentialIdsByIdentifier.remove(previous.identifier);
     }
     _credentialsById[credential.id] = credential;
     _credentialIdsByIdentifier[credential.identifier] = credential.id;

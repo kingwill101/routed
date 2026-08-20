@@ -159,6 +159,7 @@ final class WebAuthnPlugin<TContext>
 
   @override
   Future<void> deleteUserData(String userId) async {
+    await _challengeStore.deleteForUser(userId);
     final credentials = await _authenticatorStore.listForUser(userId);
     for (final credential in credentials) {
       await _authenticatorStore.deleteForUser(userId, credential.credentialId);
