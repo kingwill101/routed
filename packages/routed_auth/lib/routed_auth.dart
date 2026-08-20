@@ -19,6 +19,8 @@ export 'src/auth/haigate.dart'
         gateRegistry,
         Haigate;
 export 'src/auth/jwt.dart' show jwtAuthentication;
+export 'src/auth/last_authentication_method.dart'
+    show RoutedAuthLastAuthenticationMethodBrowserStore;
 export 'src/auth/provider.dart' show AuthServiceProvider;
 export 'src/auth/oauth.dart' show oauth2Introspection;
 export 'src/auth/session_auth.dart'

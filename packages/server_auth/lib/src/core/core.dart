@@ -38,6 +38,8 @@ export 'gates.dart';
 export 'guards.dart';
 export 'jwt.dart';
 export 'jwt_version_store.dart';
+export 'last_authentication_method.dart';
+export 'last_authentication_method_client.dart';
 export 'models.dart';
 export 'mcp_auth.dart';
 export 'oauth.dart';

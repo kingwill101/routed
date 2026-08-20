@@ -54,6 +54,8 @@ import 'package:server_auth/server_auth.dart'
         AuthAccountDeletionConfirmed,
         AuthAccountDeletionStore,
         AuthAdminStoreCapabilities,
+        AuthAuthenticationLifecycleEvent,
+        AuthAuthenticationLifecycleEventType,
         AuthUserDataDeletionContributor,
         AuthUser,
         AuthRuntime,
@@ -843,6 +845,13 @@ class AuthManager {
     if (!deleted) throw AuthFlowException('invalid_deletion_token');
     await sessionAuth.logout(ctx);
     if (ctx.hasSession) ctx.session.destroy();
+    await runtime.registry.emitAuthenticationLifecycleEvent(
+      AuthAuthenticationLifecycleEvent<EngineContext>(
+        type: AuthAuthenticationLifecycleEventType.accountDeleted,
+        context: ctx,
+        strategy: options.sessionStrategy,
+      ),
+    );
     return AuthAccountDeletionConfirmed(userId: session.user.id, deleted: true);
   }
 
@@ -975,6 +984,13 @@ class AuthManager {
     }
     await sessionAuth.logout(ctx);
     if (ctx.hasSession) ctx.session.destroy();
+    await runtime.registry.emitAuthenticationLifecycleEvent(
+      AuthAuthenticationLifecycleEvent<EngineContext>(
+        type: AuthAuthenticationLifecycleEventType.accountDeleted,
+        context: ctx,
+        strategy: options.sessionStrategy,
+      ),
+    );
   }
 
   /// Lists active server-side sessions belonging to the current user.
@@ -1431,6 +1447,13 @@ class AuthManager {
       await store.sessions.revoke(hashOpaqueToken(ctx.sessionId));
     }
     await sessionAuth.logout(ctx);
+    await runtime.registry.emitAuthenticationLifecycleEvent(
+      AuthAuthenticationLifecycleEvent<EngineContext>(
+        type: AuthAuthenticationLifecycleEventType.signedOut,
+        context: ctx,
+        strategy: options.sessionStrategy,
+      ),
+    );
   }
 
   Future<String?> resolveRedirect(
@@ -1585,6 +1608,19 @@ class AuthManager {
       );
     }
 
+    final providedAuthenticationMethod = authenticationMethod?.trim();
+    final providerAuthenticationMethod = provider?.id.trim();
+    final resolvedAuthenticationMethod =
+        providedAuthenticationMethod != null &&
+            providedAuthenticationMethod.isNotEmpty
+        ? providedAuthenticationMethod
+        : providerAuthenticationMethod != null &&
+              providerAuthenticationMethod.isNotEmpty
+        ? providerAuthenticationMethod
+        : credentials == null
+        ? 'unknown'
+        : 'credentials';
+
     DateTime? sessionExpiresAt;
     if (options.sessionStrategy == AuthSessionStrategy.session) {
       _applySessionMaxAge(ctx);
@@ -1647,6 +1683,15 @@ class AuthManager {
         credentials: credentials,
         redirectUrl: resolvedRedirect,
         isNewUser: isNewUser,
+      ),
+    );
+    await runtime.registry.emitAuthenticationLifecycleEvent(
+      AuthAuthenticationLifecycleEvent<EngineContext>(
+        type: AuthAuthenticationLifecycleEventType.authenticationSucceeded,
+        context: ctx,
+        strategy: options.sessionStrategy,
+        authenticationMethod: resolvedAuthenticationMethod,
+        oauthProviderNamespace: provider is OAuthProvider ? provider.id : null,
       ),
     );
     return result;

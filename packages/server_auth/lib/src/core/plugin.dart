@@ -87,6 +87,44 @@ abstract interface class AuthServerPluginSessionControl {
   FutureOr<void> signOut();
 }
 
+/// Lifecycle phase emitted by the host after it completes an authentication
+/// transition or clears one.
+enum AuthAuthenticationLifecycleEventType {
+  authenticationSucceeded,
+  signedOut,
+  accountDeleted,
+}
+
+/// Typed, in-memory host lifecycle event for optional authentication plugins.
+///
+/// The event is intentionally not serializable. [authenticationMethod] is a
+/// host-owned stable method label, never a credential, token, identifier, or
+/// provider response. OAuth hosts may additionally provide the bounded
+/// provider namespace in [oauthProviderNamespace].
+final class AuthAuthenticationLifecycleEvent<TContext> {
+  const AuthAuthenticationLifecycleEvent({
+    required this.type,
+    required this.context,
+    required this.strategy,
+    this.authenticationMethod,
+    this.oauthProviderNamespace,
+  });
+
+  final AuthAuthenticationLifecycleEventType type;
+  final TContext context;
+  final AuthSessionStrategy strategy;
+  final String? authenticationMethod;
+  final String? oauthProviderNamespace;
+}
+
+/// Optional plugin contributor notified only after host-owned lifecycle work
+/// has completed.
+abstract interface class AuthAuthenticationLifecycleContributor<TContext> {
+  FutureOr<void> onAuthenticationLifecycleEvent(
+    AuthAuthenticationLifecycleEvent<TContext> event,
+  );
+}
+
 enum AuthAuthenticationPolicyPhase { beforeSessionIssue, resolveSession }
 
 final class AuthAuthenticationPolicyRequest<TContext> {
@@ -602,6 +640,15 @@ class AuthServerPluginRegistry<TContext> {
         in _plugins.values
             .whereType<AuthAuthenticationPolicyContributor<TContext>>()) {
       await plugin.enforceAuthenticationPolicy(request);
+    }
+  }
+
+  Future<void> emitAuthenticationLifecycleEvent(
+    AuthAuthenticationLifecycleEvent<TContext> event,
+  ) async {
+    for (final plugin in _plugins.values
+        .whereType<AuthAuthenticationLifecycleContributor<TContext>>()) {
+      await plugin.onAuthenticationLifecycleEvent(event);
     }
   }
 
