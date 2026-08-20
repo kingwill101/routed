@@ -164,6 +164,72 @@ void main() {
     expect(rotated.key, 'rk_live_rotated');
     expect(session.user.id, 'user-1');
   });
+
+  test('provider and OAuth plugins compose through the public host', () async {
+    final providerPlugin = const AuthProviderClientPlugin();
+    final oauthPlugin = const AuthOAuthClientPlugin();
+    final auth = AuthClient(
+      baseUrl: Uri.parse('https://example.test'),
+      plugins: [providerPlugin, oauthPlugin],
+      httpClient: MockClient((request) async {
+        switch (request.url.path) {
+          case '/auth/providers':
+            expect(request.method, 'GET');
+            return http.Response(
+              jsonEncode({
+                'providers': [
+                  {
+                    'id': 'credentials',
+                    'name': 'Password',
+                    'type': 'credentials',
+                  },
+                  {'id': 'github', 'name': 'GitHub', 'type': 'oauth'},
+                ],
+              }),
+              200,
+            );
+          case '/auth/signin/github':
+            expect(request.followRedirects, isFalse);
+            expect(request.url.queryParameters, {
+              'callbackUrl': 'app://callback',
+            });
+            return http.Response(
+              '',
+              302,
+              headers: {
+                'location': 'https://github.test/oauth/authorize?state=state-1',
+              },
+            );
+          case '/auth/callback/github':
+            expect(request.followRedirects, isFalse);
+            expect(request.url.queryParameters, {
+              'code': 'code-1',
+              'state': 'state-1',
+            });
+            return http.Response(jsonEncode(_sessionJson), 200);
+          default:
+            fail('Unexpected request: ${request.method} ${request.url}');
+        }
+      }),
+    );
+    final providers = auth.plugins.use(providerPlugin);
+    final oauth = auth.plugins.use(oauthPlugin);
+
+    final available = await providers.list();
+    final redirect = await oauth.begin(
+      provider: 'github',
+      callbackUrl: 'app://callback',
+    );
+    final completed = await oauth.complete(
+      provider: 'github',
+      code: 'code-1',
+      state: 'state-1',
+    );
+
+    expect(available.map((provider) => provider.id), ['credentials', 'github']);
+    expect(redirect.host, 'github.test');
+    expect(completed.session?.user.id, 'user-1');
+  });
 }
 
 final Map<String, dynamic> _sessionJson = {
