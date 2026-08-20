@@ -1,8 +1,10 @@
 ## 0.2.0 - 2026-08-20
 
 - Publish a framework-neutral plugin runtime conformance fixture covering email
-  OTP, username, API-key exchange, WebAuthn error boundaries, anonymous auth,
-  and two-factor route gating across IO, Node, and Cloudflare Fetch hosts.
+  OTP, username, API-key exchange, successful browser-shaped WebAuthn
+  registration and DER-signed authentication, challenge/counter replay,
+  WebAuthn error boundaries, anonymous auth, and two-factor route gating across
+  IO, Node, and Cloudflare Fetch hosts.
 - Add the Routed browser adapter for the opt-in last-authentication-method
   plugin, using a Secure, HttpOnly, SameSite cookie and host-owned successful
   authentication/sign-out/account-deletion lifecycle events.

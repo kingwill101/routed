@@ -6,6 +6,7 @@ import 'package:routed_sessions/routed_sessions.dart';
 
 import '../../routed_auth.dart';
 import 'runtime_auth_conformance.dart';
+import 'webauthn_runtime_auth_conformance.dart';
 
 /// Session cookie used by [createAuthPluginRuntimeConformanceEngine].
 const authPluginRuntimeConformanceCookieName = 'runtime_plugin_auth_session';
@@ -138,6 +139,14 @@ Future<void> verifyAuthPluginRuntimeConformance({
     originHeader: originHeader,
     sessionCookie: csrf.cookie,
     csrf: csrf.token,
+  );
+  await verifyAuthWebAuthnBrowserRuntimeConformance(
+    transportOrigin: origin,
+    send: send,
+    sessionCookie: csrf.cookie,
+    sessionCookieName: authPluginRuntimeConformanceCookieName,
+    csrfToken: csrf.token,
+    expectedUserEmail: authPluginRuntimeConformanceUsernameEmail,
   );
   await _verifyAnonymous(send, originHeader);
   await _verifyTwoFactorGating(send, sendWithoutTwoFactor);

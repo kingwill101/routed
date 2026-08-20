@@ -1,5 +1,8 @@
 ## 0.2.0 - 2026-08-20
 
+- Add deterministic browser-shaped WebAuthn test ceremonies with real ES256
+  keys, `none` attestation, and ASN.1 DER assertion signatures for offline host
+  conformance suites.
 - Extend the public plugin conformance suite with executable installed-client
   contracts that verify real method/path/request behavior, server request-codec
   and response-schema alignment, response decoding, optional topology,

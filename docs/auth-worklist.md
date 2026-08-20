@@ -295,8 +295,9 @@ account, session, client, and plugin contracts above:
 - [x] Run the public auth runtime contract through native `routed_io`, portable
   and native `routed_node`, and native Cloudflare Fetch request paths. The
   provider-free plugin matrix also covers email OTP, username, API-key
-  exchange, WebAuthn error boundaries, anonymous auth, and two-factor route
-  gating on each applicable host.
+  exchange, successful browser-shaped WebAuthn registration and DER-signed
+  authentication, challenge/counter replay, sanitized WebAuthn errors,
+  anonymous auth, and two-factor route gating on each applicable host.
 - [ ] Run the D1 conformance harness against a deployed or remote-bound
   Cloudflare database; compilation and local emulation are not live validation.
 - [x] Keep the current auth packages, host adapter integrations, and public
@@ -318,7 +319,7 @@ account, session, client, and plugin contracts above:
   `routed_io`, native Node, and native Cloudflare Fetch request paths.
 - [ ] Every advertised plugin flow has matching end-to-end coverage across its
   applicable host runtimes. Provider-free flows now run across IO, Node, and
-  Cloudflare Fetch; successful browser WebAuthn ceremonies, external-provider
-  callbacks, and a deployed Worker run remain.
+  Cloudflare Fetch, including successful browser WebAuthn ceremonies;
+  external-provider callbacks and a deployed Worker run remain.
 - [ ] Security-sensitive defaults are safe without requiring users to discover
   undocumented configuration switches.
