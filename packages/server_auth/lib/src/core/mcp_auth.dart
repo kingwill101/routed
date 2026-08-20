@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'exceptions.dart';
 import 'plugin.dart';
+import 'rate_limit.dart';
 
 const String authMcpPluginId = 'mcp_auth';
 
@@ -154,7 +155,8 @@ final class McpAuthPlugin<TContext>
     implements
         AuthServerPlugin<TContext>,
         AuthEndpointContributor<TContext>,
-        AuthClientOperationContributor {
+        AuthClientOperationContributor,
+        AuthRateLimitContributor {
   McpAuthPlugin({
     required AuthOAuthProtectedResourceMetadata protectedResource,
     required AuthOAuthAuthorizationServerMetadata authorizationServer,
@@ -201,6 +203,11 @@ final class McpAuthPlugin<TContext>
           ),
         ];
 
+  @override
+  Iterable<AuthRateLimitOperation> get rateLimitOperations => endpoints
+      .map((endpoint) => endpoint.rateLimitOperation)
+      .whereType<AuthRateLimitOperation>();
+
   AuthEndpointDescriptor<TContext> _metadataEndpoint({
     required String id,
     required String path,
@@ -237,6 +244,10 @@ final class McpAuthPlugin<TContext>
         authentication: AuthOperationAuthentication.none,
         originPolicy: AuthOperationOriginPolicy.none,
         csrfPolicy: AuthOperationCsrfPolicy.none,
+        rateLimitOperation: const AuthRateLimitOperation(
+          'mcp_auth',
+          'register_client',
+        ),
         handler: (invocation, input) async {
           final registrar = _registerClient;
           if (registrar == null) throw StateError('Registrar is unavailable.');

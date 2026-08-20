@@ -37,6 +37,12 @@ abstract interface class AuthPasswordResetTokenStore {
   /// replay-safe under concurrent reset requests.
   FutureOr<AuthPasswordResetToken?> consume(String token);
 
+  /// Returns active token metadata without consuming or extending it.
+  ///
+  /// This capability is required so account policy can be checked before the
+  /// one-time token is consumed.
+  FutureOr<AuthPasswordResetToken?> findActive(String token);
+
   /// Invalidates all outstanding reset tokens for [userId].
   FutureOr<void> deleteForUser(String userId);
 }
@@ -62,6 +68,17 @@ class InMemoryAuthPasswordResetTokenStore
   Future<AuthPasswordResetToken?> consume(String token) async {
     if (token.trim().isEmpty) return null;
     final record = _tokens.remove(hashOpaqueToken(token));
+    if (record == null ||
+        !_clock().toUtc().isBefore(record.expiresAt.toUtc())) {
+      return null;
+    }
+    return record;
+  }
+
+  @override
+  Future<AuthPasswordResetToken?> findActive(String token) async {
+    if (token.trim().isEmpty) return null;
+    final record = _tokens[hashOpaqueToken(token)];
     if (record == null ||
         !_clock().toUtc().isBefore(record.expiresAt.toUtc())) {
       return null;

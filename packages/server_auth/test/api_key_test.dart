@@ -160,6 +160,7 @@ void main() {
         containsAll(<String>[
           'api_key.touch_if_active',
           'api_key.revoke_for_user',
+          'api_key.revoke_all_for_user',
           'api_key.rotate_for_user',
         ]),
       );
@@ -184,6 +185,34 @@ void main() {
 
       expect(await feature.list('user-1'), isEmpty);
       expect(await feature.authenticate(other.key), isNotNull);
+    });
+
+    test('revokes every key when user access is disabled', () async {
+      final store = InMemoryAuthApiKeyStore();
+      final feature = AuthApiKeyPlugin<Never>(
+        store: store,
+        keyIdGenerator: _queuedGenerator(['one', 'two', 'other']),
+        secretGenerator: _queuedGenerator([
+          'secret-one',
+          'secret-two',
+          'secret-other',
+        ]),
+      );
+      final one = await feature.issue(userId: 'user-1', name: 'one');
+      final two = await feature.issue(userId: 'user-1', name: 'two');
+      final other = await feature.issue(userId: 'user-2', name: 'other');
+
+      await feature.revokeUserAccess('user-1');
+
+      expect(await feature.authenticate(one.key), isNull);
+      expect(await feature.authenticate(two.key), isNull);
+      expect(await feature.authenticate(other.key), isNotNull);
+      expect(
+        (await store.listForUser(
+          'user-1',
+        )).every((record) => record.revokedAt != null),
+        isTrue,
+      );
     });
   });
 }

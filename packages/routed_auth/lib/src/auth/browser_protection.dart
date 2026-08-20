@@ -14,7 +14,32 @@ String? validateRoutedAuthBrowserRequest(
 ) {
   if (!options.enabled) return null;
 
+  // The method allowlist applies before origin trust. Trusted browser origins
+  // do not gain access to HTTP methods the auth surface did not enable.
+  final method = context.request.method.trim().toUpperCase();
+  final methodAllowed = options.allowedMethods.any(
+    (allowed) => allowed.trim().toUpperCase() == method,
+  );
+  if (!methodAllowed) return 'method_not_allowed';
+
+  // Trusted origins bypass the remaining origin and browser-header checks.
   final origin = context.request.headers.value('origin')?.trim();
+  if (origin != null) {
+    for (final trusted in options.trustedOrigins) {
+      final trustedUri = Uri.tryParse(trusted);
+      if (trustedUri != null) {
+        final normalizedTrusted = _originOf(trustedUri);
+        final normalizedOrigin = _originOf(Uri.tryParse(origin));
+        if (normalizedTrusted != null &&
+            normalizedOrigin != null &&
+            normalizedTrusted == normalizedOrigin) {
+          return null; // Trusted origin, bypass all checks
+        }
+      }
+    }
+  }
+
+  // Original origin validation
   final requestOrigin = _originOf(context.requestedUri);
   final allowed =
       origin != null &&
@@ -30,12 +55,44 @@ String? validateRoutedAuthBrowserRequest(
     return 'invalid_origin';
   }
 
+  if (options.requireContentType &&
+      context.request.method.toUpperCase() != 'GET' &&
+      context.request.method.toUpperCase() != 'HEAD') {
+    final contentType =
+        context.request.headers.value('content-type')?.trim() ?? '';
+    final mimeType = contentType.split(';').first.trim().toLowerCase();
+    const allowedContentTypes = {
+      'application/json',
+      'application/x-www-form-urlencoded',
+      'multipart/form-data',
+    };
+    if (mimeType.isEmpty) return 'missing_content_type';
+    if (!allowedContentTypes.contains(mimeType)) {
+      return 'unsupported_content_type';
+    }
+  }
+
+  // Fetch Metadata validation
   final fetchSite = context.request.headers.value('sec-fetch-site')?.trim();
   if (options.enforceFetchMetadata &&
       fetchSite != null &&
       fetchSite.toLowerCase() == 'cross-site' &&
       !allowed) {
     return 'cross_site_request';
+  }
+
+  // Referer validation as fallback when Origin header is absent
+  if (options.enforceReferrer && origin == null) {
+    final referrer = context.request.headers.value('referer')?.trim();
+    if (referrer != null && referrer.isNotEmpty) {
+      final referrerUri = Uri.tryParse(referrer);
+      if (referrerUri != null && requestOrigin != null) {
+        final referrerOrigin = _originOf(referrerUri);
+        if (referrerOrigin != null && referrerOrigin != requestOrigin) {
+          return 'referrer_mismatch';
+        }
+      }
+    }
   }
 
   return null;

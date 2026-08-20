@@ -101,6 +101,89 @@ void main() {
     },
   );
 
+  test(
+    'verified provider results synchronize existing account state',
+    () async {
+      final store = InMemoryAuthStore();
+      await store.upsert(
+        const AuthAccountState(userId: 'verified-user', emailVerified: false),
+      );
+      final manager = AuthManager(
+        AuthOptions<EngineContext>(
+          store: store,
+          storeMode: AuthStoreMode.ephemeral,
+          providers: [
+            CredentialsProvider(
+              authorize: (_, _, credentials) => AuthUser(
+                id: 'verified-user',
+                email: credentials.email,
+                attributes: const {'emailVerified': true},
+              ),
+            ),
+          ],
+          accountPolicy: AuthAccountPolicy.production,
+          enforceCsrf: false,
+        ),
+      );
+      final engine = _authEngine(manager);
+      await engine.initialize();
+      final client = TestClient(RoutedRequestHandler(engine));
+      addTearDown(client.close);
+
+      final response = await client.postJson('/auth/signin/credentials', {
+        'email': 'verified@example.com',
+        'password': 'secret',
+      });
+
+      expect(response.statusCode, HttpStatus.ok, reason: response.body);
+      expect((await store.find('verified-user'))?.emailVerified, isTrue);
+    },
+  );
+
+  test('failed username sign-ins update the owning account lockout', () async {
+    final store = InMemoryAuthStore();
+    final hasher = Argon2idPasswordHasher(
+      iterations: 1,
+      memoryKiB: 8,
+      derivedKeyLength: 16,
+    );
+    final now = DateTime.now().toUtc();
+    await store.credentials.register(
+      AuthUser(id: 'user-1'),
+      AuthPasswordCredential(
+        id: 'credential-1',
+        userId: 'user-1',
+        identifier: 'alice',
+        passwordHash: hasher.hash('correct-password'),
+        createdAt: now,
+        updatedAt: now,
+      ),
+    );
+    final manager = AuthManager(
+      AuthOptions<EngineContext>(
+        store: store,
+        storeMode: AuthStoreMode.ephemeral,
+        providers: [CredentialsProvider()],
+        passwordHasher: hasher,
+        accountPolicy: const AuthAccountPolicy(maxLoginAttempts: 1),
+        enforceCsrf: false,
+      ),
+    );
+    final engine = _authEngine(manager);
+    await engine.initialize();
+    final client = TestClient(RoutedRequestHandler(engine));
+    addTearDown(() async => await client.close());
+
+    final response = await client.postJson(
+      '/auth/signin/credentials',
+      <String, dynamic>{'username': 'alice', 'password': 'wrong-password'},
+    );
+
+    response.assertStatus(HttpStatus.unauthorized);
+    expect((await store.find('user-1'))?.failedLoginAttempts, equals(1));
+    expect((await store.find('user-1'))?.isLocked(), isTrue);
+  });
+
   test('rejects credential requests from an untrusted origin', () async {
     final manager = AuthManager(
       AuthOptions<EngineContext>(
@@ -450,6 +533,8 @@ void main() {
           .firstWhere(
             (cookie) => cookie.name.startsWith('routed_oauth_state_'),
           );
+      expect(stateCookie.secure, isTrue);
+      expect(stateCookie.sameSite, SameSite.none);
 
       final callback = await victim.get(
         '/auth/callback/oauth?code=attacker-code&state=$state',

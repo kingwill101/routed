@@ -271,6 +271,210 @@ void main() {
         throwsA(isA<AuthFlowException>()),
       );
     });
+
+    test(
+      'does not issue after the approving account becomes disabled',
+      () async {
+        final store = InMemoryAuthStore();
+        await store.users.create(AuthUser(id: 'user-1'));
+        var issued = false;
+        final feature = DeviceAuthorizationPlugin<Object>(
+          verificationUri: 'https://example.test/device',
+          validateClient: (_, _, _) => true,
+          issueToken:
+              ({
+                required context,
+                required user,
+                required clientId,
+                required scopes,
+                required authorizationId,
+              }) {
+                issued = true;
+                return const AuthDeviceAccessToken(
+                  accessToken: 'must-not-be-issued',
+                  expiresIn: Duration(minutes: 5),
+                );
+              },
+        );
+        AuthRuntime<Object>(
+          options: AuthOptions<Object>(
+            providers: const [],
+            store: store,
+            storeMode: AuthStoreMode.ephemeral,
+            plugins: [feature],
+          ),
+        );
+        final request = await feature.authorizeDevice(
+          context: Object(),
+          clientId: 'cli-1',
+          scopes: const ['openid'],
+        );
+        await feature.approveDevice(
+          userId: 'user-1',
+          userCode: request.userCode,
+        );
+        await store.disable('user-1', reason: 'security');
+
+        await expectLater(
+          feature.pollDeviceToken(
+            context: Object(),
+            clientId: 'cli-1',
+            deviceCode: request.deviceCode,
+          ),
+          _flow('invalid_grant'),
+        );
+        expect(issued, isFalse);
+      },
+    );
+
+    test('access revocation removes approved device grants', () async {
+      final store = InMemoryAuthStore();
+      await store.users.create(AuthUser(id: 'user-1'));
+      final feature = DeviceAuthorizationPlugin<Object>(
+        verificationUri: 'https://example.test/device',
+        validateClient: (_, _, _) => true,
+        issueToken:
+            ({
+              required context,
+              required user,
+              required clientId,
+              required scopes,
+              required authorizationId,
+            }) => const AuthDeviceAccessToken(
+              accessToken: 'must-not-be-issued',
+              expiresIn: Duration(minutes: 5),
+            ),
+      );
+      AuthRuntime<Object>(
+        options: AuthOptions<Object>(
+          providers: const [],
+          store: store,
+          storeMode: AuthStoreMode.ephemeral,
+          plugins: [feature],
+        ),
+      );
+      final request = await feature.authorizeDevice(
+        context: Object(),
+        clientId: 'cli-1',
+        scopes: const ['openid'],
+      );
+      await feature.approveDevice(userId: 'user-1', userCode: request.userCode);
+
+      await feature.revokeUserAccess('user-1');
+
+      await expectLater(
+        feature.pollDeviceToken(
+          context: Object(),
+          clientId: 'cli-1',
+          deviceCode: request.deviceCode,
+        ),
+        _flow('invalid_grant'),
+      );
+    });
+
+    test('shares one token endpoint with OAuth provider mode', () async {
+      final store = InMemoryAuthStore();
+      await store.users.create(AuthUser(id: 'user-1'));
+      final device = DeviceAuthorizationPlugin<Object>(
+        verificationUri: 'https://example.test/device',
+        validateClient: (_, _, _) => true,
+        issueToken:
+            ({
+              required context,
+              required user,
+              required clientId,
+              required scopes,
+              required authorizationId,
+            }) => AuthDeviceAccessToken(
+              accessToken: 'device-access-token',
+              expiresIn: const Duration(minutes: 5),
+              scopes: scopes,
+            ),
+      );
+      final provider = OAuthProviderModePlugin<Object>(
+        clientStore: InMemoryOAuthClientStore(),
+        authorizationCodeStore: InMemoryOAuthAuthorizationCodeStore(),
+        accessTokenStore: InMemoryOAuthAccessTokenStore(),
+      );
+      final runtime = AuthRuntime<Object>(
+        options: AuthOptions<Object>(
+          providers: const [],
+          store: store,
+          storeMode: AuthStoreMode.ephemeral,
+          plugins: [provider, device],
+        ),
+      );
+      final tokenEndpoints = runtime.registry.endpoints
+          .where(
+            (endpoint) =>
+                endpoint.method == AuthOperationMethod.post &&
+                endpoint.path == '/oauth/token',
+          )
+          .toList(growable: false);
+      expect(tokenEndpoints, hasLength(1));
+      final request = await device.authorizeDevice(
+        context: Object(),
+        clientId: 'cli-1',
+        scopes: const ['openid'],
+      );
+      await device.approveDevice(userId: 'user-1', userCode: request.userCode);
+
+      final response =
+          await tokenEndpoints.single.invoke(
+                AuthOperationInvocation<Object>(context: Object(), user: null),
+                <String, dynamic>{
+                  'grant_type': 'urn:ietf:params:oauth:grant-type:device_code',
+                  'client_id': 'cli-1',
+                  'device_code': request.deviceCode,
+                },
+              )
+              as Map<String, dynamic>;
+      expect(response['access_token'], 'device-access-token');
+    });
+
+    test('shares one token endpoint with authorization-code mode', () {
+      final store = InMemoryAuthStore();
+      final device = DeviceAuthorizationPlugin<Object>(
+        verificationUri: 'https://example.test/device',
+        validateClient: (_, _, _) => true,
+        issueToken:
+            ({
+              required context,
+              required user,
+              required clientId,
+              required scopes,
+              required authorizationId,
+            }) => const AuthDeviceAccessToken(
+              accessToken: 'unused',
+              expiresIn: Duration(minutes: 5),
+            ),
+      );
+      final authorization = OAuthAuthorizationServerPlugin<Object>(
+        authorizationCodes: InMemoryAuthOAuthAuthorizationCodeStore(),
+        resolveClient: (_, _) => null,
+        issueAccessToken: (_, _) => const AuthDeviceAccessToken(
+          accessToken: 'unused',
+          expiresIn: Duration(minutes: 5),
+        ),
+      );
+      final runtime = AuthRuntime<Object>(
+        options: AuthOptions<Object>(
+          providers: const [],
+          store: store,
+          storeMode: AuthStoreMode.ephemeral,
+          plugins: [authorization, device],
+        ),
+      );
+
+      expect(
+        runtime.registry.endpoints.where(
+          (endpoint) =>
+              endpoint.method == AuthOperationMethod.post &&
+              endpoint.path == '/oauth/token',
+        ),
+        hasLength(1),
+      );
+    });
   });
 }
 

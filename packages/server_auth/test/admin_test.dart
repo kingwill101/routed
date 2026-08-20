@@ -56,7 +56,7 @@ void main() {
           plugins: [feature],
         ),
       );
-      expect(runtime.registry.endpoints, hasLength(15));
+      expect(runtime.registry.endpoints, hasLength(20));
       expect(
         runtime.registry.endpoints.map((endpoint) => endpoint.path),
         containsAll([
@@ -244,6 +244,40 @@ void main() {
         );
       },
     );
+
+    test('ban and disable revoke composed API-key credentials', () async {
+      var keyId = 0;
+      var secretId = 0;
+      final apiKeys = AuthApiKeyPlugin<Object>(
+        store: InMemoryAuthApiKeyStore(),
+        keyIdGenerator: ({int length = 32}) => 'key-${keyId++}',
+        secretGenerator: ({int length = 32}) => 'secret-${secretId++}',
+      );
+      feature = AdminPlugin<Object>(store: adminStore);
+      AuthRuntime<Object>(
+        options: AuthOptions(
+          providers: const [],
+          store: core,
+          storeMode: AuthStoreMode.ephemeral,
+          plugins: [apiKeys, feature],
+        ),
+      );
+
+      final bannedKey = await apiKeys.issue(
+        userId: member.id,
+        name: 'before-ban',
+      );
+      await _invoke(feature, 'admin.banUser', admin, {'userId': member.id});
+      expect(await apiKeys.authenticate(bannedKey.key), isNull);
+
+      await _invoke(feature, 'admin.unbanUser', admin, {'userId': member.id});
+      final disabledKey = await apiKeys.issue(
+        userId: member.id,
+        name: 'before-disable',
+      );
+      await _invoke(feature, 'admin.disableUser', admin, {'userId': member.id});
+      expect(await apiKeys.authenticate(disabledKey.key), isNull);
+    });
 
     test(
       'blocks dangerous self actions and preserves the last administrator',

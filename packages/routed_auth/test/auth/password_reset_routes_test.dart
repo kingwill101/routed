@@ -234,6 +234,92 @@ void main() {
     },
   );
 
+  test('password reset policy blocks disabled and unverified accounts without '
+      'consuming an existing token', () async {
+    final store = InMemoryAuthStore();
+    final hasher = _testHasher();
+    final user = await authorizeCredentialsRegistration(
+      store: store,
+      passwordHasher: hasher,
+      provider: CredentialsProvider(),
+      context: Object(),
+      credentials: AuthCredentials(
+        email: 'policy@example.com',
+        password: 'old-password-123',
+      ),
+    );
+    expect(user, isNotNull);
+    await store.markEmailVerified(user!.id);
+
+    final deliveries = <AuthPasswordResetRequest<EngineContext>>[];
+    final manager = AuthManager(
+      AuthOptions<EngineContext>(
+        store: store,
+        storeMode: AuthStoreMode.ephemeral,
+        providers: [CredentialsProvider()],
+        passwordHasher: hasher,
+        accountPolicy: const AuthAccountPolicy(
+          allowPasswordResetForDisabled: false,
+          allowPasswordResetForUnverified: false,
+        ),
+        passwordResetSender: deliveries.add,
+      ),
+    );
+    final engine = _authEngine(manager);
+    await engine.initialize();
+    final client = TestClient(RoutedRequestHandler(engine));
+    addTearDown(client.close);
+    final csrf = await _csrf(client);
+    final headers = <String, List<String>>{
+      HttpHeaders.cookieHeader: [_cookieHeader(csrf.session)],
+    };
+
+    final allowed = await client.postJson('/auth/password-reset/request', {
+      'email': user.email,
+      '_csrf': csrf.csrf,
+    }, headers: headers);
+    allowed.assertStatus(HttpStatus.accepted);
+    expect(deliveries, hasLength(1));
+    final token = deliveries.single.token;
+
+    await store.disable(user.id, reason: 'review');
+    final disabledRequest = await client.postJson(
+      '/auth/password-reset/request',
+      {'email': user.email, '_csrf': csrf.csrf},
+      headers: headers,
+    );
+    disabledRequest.assertStatus(HttpStatus.accepted);
+    expect(deliveries, hasLength(1));
+
+    final disabledConfirm = await client.postJson(
+      '/auth/password-reset/confirm',
+      {'token': token, 'newPassword': 'new-password-456', '_csrf': csrf.csrf},
+      headers: headers,
+    );
+    disabledConfirm.assertStatus(HttpStatus.unauthorized);
+    expect(
+      disabledConfirm.json()['error'],
+      equals('invalid_password_reset_token'),
+    );
+
+    await store.enable(user.id);
+    final retry = await client.postJson('/auth/password-reset/confirm', {
+      'token': token,
+      'newPassword': 'new-password-456',
+      '_csrf': csrf.csrf,
+    }, headers: headers);
+    retry.assertStatus(HttpStatus.ok);
+
+    await store.upsert(AuthAccountState(userId: user.id, emailVerified: false));
+    final unverifiedRequest = await client.postJson(
+      '/auth/password-reset/request',
+      {'email': user.email, '_csrf': csrf.csrf},
+      headers: headers,
+    );
+    unverifiedRequest.assertStatus(HttpStatus.accepted);
+    expect(deliveries, hasLength(1));
+  });
+
   test(
     'password reset revokes old JWTs and permits newly issued JWTs',
     () async {

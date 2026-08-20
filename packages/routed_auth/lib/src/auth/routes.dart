@@ -64,8 +64,11 @@ import 'package:routed_sessions/routed_sessions.dart';
 /// - `POST /email/change/request` requests a reauthenticated email change.
 /// - `POST /email/change/confirm` consumes an email-change token.
 /// - `GET /accounts` lists linked external identities.
+/// - `POST /accounts/link` verifies and links an external identity.
 /// - `POST /accounts/unlink` removes one linked external identity.
 /// - `POST /account/delete` tombstones the current account and revokes access.
+/// - `POST /account/delete/request` delivers a one-time deletion token.
+/// - `POST /account/delete/confirm` atomically confirms account deletion.
 /// - `GET /sessions` lists active server-side sessions.
 /// - `POST /sessions/revoke` revokes one server-side session.
 /// - `POST /sessions/revoke-others` revokes every other server-side session.
@@ -150,7 +153,7 @@ class AuthRoutes {
         .toList(growable: false);
     for (final endpoint in rootPluginEndpoints) {
       Future<Response> handler(EngineContext ctx) =>
-          _pluginOperation(ctx, endpoint);
+          _pluginOperation(ctx, endpoint.id);
       if (endpoint.method == AuthOperationMethod.get) {
         router.get(endpoint.path, handler);
       }
@@ -177,8 +180,13 @@ class AuthRoutes {
           auth.post('/email/change/confirm', _emailChangeConfirm);
         }
         auth.get('/accounts', _accounts);
+        auth.post('/accounts/link', _linkAccount);
         auth.post('/accounts/unlink', _unlinkAccount);
         auth.post('/account/delete', _deleteAccount);
+        if (manager.options.accountDeletionSender != null) {
+          auth.post('/account/delete/request', _accountDeletionRequest);
+          auth.post('/account/delete/confirm', _accountDeletionConfirm);
+        }
         if (manager.options.sessionStrategy == AuthSessionStrategy.session) {
           auth.get('/sessions', _sessions);
           auth.post('/sessions/revoke', _revokeSession);
@@ -214,7 +222,7 @@ class AuthRoutes {
         }
         for (final endpoint in pluginEndpoints) {
           Future<Response> handler(EngineContext ctx) =>
-              _pluginOperation(ctx, endpoint);
+              _pluginOperation(ctx, endpoint.id);
           switch (endpoint.method) {
             case AuthOperationMethod.get:
               auth.get(endpoint.path, handler);
@@ -230,20 +238,33 @@ class AuthRoutes {
 
   Future<Response> _pluginOperation(
     EngineContext ctx,
-    AuthEndpointDescriptor<EngineContext> endpoint,
+    String endpointId,
   ) async {
+    final liveManager = manager;
+    AuthEndpointDescriptor<EngineContext>? endpoint;
+    for (final candidate in liveManager.runtime.registry.endpoints) {
+      if (candidate.id == endpointId) {
+        endpoint = candidate;
+        break;
+      }
+    }
+    if (endpoint == null) return _errorResponse(ctx, 'operation_not_found');
     Map<String, dynamic> payload;
     try {
       payload = await _payload(ctx);
+      final authorization = ctx.request.headers.value('authorization');
+      if (authorization != null) {
+        payload = {...payload, '_authorization': authorization};
+      }
     } catch (_) {
       return _errorResponse(ctx, 'invalid_request');
     }
     if (endpoint.originPolicy == AuthOperationOriginPolicy.browser) {
-      final browserError = manager.validateBrowserRequest(ctx);
+      final browserError = liveManager.validateBrowserRequest(ctx);
       if (browserError != null) return _errorResponse(ctx, browserError);
     }
     if (endpoint.csrfPolicy == AuthOperationCsrfPolicy.required &&
-        !manager.validateCsrf(ctx, payload)) {
+        !liveManager.validateCsrf(ctx, payload)) {
       return ctx.json({
         'error': 'invalid_csrf',
       }, statusCode: HttpStatus.forbidden);
@@ -253,21 +274,21 @@ class AuthRoutes {
       final session =
           endpoint.authentication == AuthOperationAuthentication.none
           ? null
-          : await manager.resolveSession(ctx);
+          : await liveManager.resolveSession(ctx);
       if (endpoint.authentication == AuthOperationAuthentication.session &&
           session == null) {
         throw AuthFlowException('unauthorized');
       }
       final operation = endpoint.rateLimitOperation;
       if (operation != null) {
-        await manager.enforceRateLimitOperation(
+        await liveManager.enforceRateLimitOperation(
           ctx,
           operation: operation,
           identifier: session?.user.id,
         );
       }
       final mutableSession =
-          manager.options.sessionStrategy == AuthSessionStrategy.session &&
+          liveManager.options.sessionStrategy == AuthSessionStrategy.session &&
           ctx.hasSession;
       final activeOrganizationId = mutableSession
           ? ctx.getSession<String>(_activeOrganizationKey)
@@ -276,11 +297,11 @@ class AuthRoutes {
           ? ctx.getSession<String>(_activeTeamKey)
           : null;
       final pluginSessionControl = _RoutedPluginSessionControl(
-        manager,
+        liveManager,
         ctx,
         currentSessionId:
-            manager.options.sessionStrategy == AuthSessionStrategy.session
-            ? await manager.currentStoredSessionId(ctx)
+            liveManager.options.sessionStrategy == AuthSessionStrategy.session
+            ? await liveManager.currentStoredSessionId(ctx)
             : null,
       );
       final response = await endpoint.invoke(
@@ -747,6 +768,37 @@ class AuthRoutes {
     }
   }
 
+  Future<Response> _linkAccount(EngineContext ctx) async {
+    final browserError = manager.validateBrowserRequest(ctx);
+    if (browserError != null) return _errorResponse(ctx, browserError);
+    final payload = await _payload(ctx);
+    if (!manager.validateCsrf(ctx, payload)) {
+      return ctx.json({
+        'error': 'invalid_csrf',
+      }, statusCode: HttpStatus.forbidden);
+    }
+    final providerId = payload['providerId']?.toString();
+    final providerAccountId = payload['providerAccountId']?.toString();
+    final accessToken = payload['accessToken']?.toString();
+    if (providerId == null ||
+        providerAccountId == null ||
+        accessToken == null ||
+        accessToken.isEmpty) {
+      return _errorResponse(ctx, 'account_link_failed');
+    }
+    try {
+      final linked = await manager.linkAccount(
+        ctx,
+        providerId: providerId,
+        providerAccountId: providerAccountId,
+        accessToken: accessToken,
+      );
+      return ctx.json(linked.toJson());
+    } on AuthFlowException catch (error) {
+      return _flowErrorResponse(ctx, error);
+    }
+  }
+
   Future<Response> _unlinkAccount(EngineContext ctx) async {
     final browserError = manager.validateBrowserRequest(ctx);
     if (browserError != null) return _errorResponse(ctx, browserError);
@@ -792,6 +844,53 @@ class AuthRoutes {
     }
     try {
       await manager.deleteCurrentUser(ctx, currentPassword: currentPassword);
+      return ctx.json({'status': 'account_deleted'});
+    } on AuthFlowException catch (error) {
+      return _flowErrorResponse(ctx, error);
+    }
+  }
+
+  Future<Response> _accountDeletionRequest(EngineContext ctx) async {
+    final browserError = manager.validateBrowserRequest(ctx);
+    if (browserError != null) return _errorResponse(ctx, browserError);
+    final payload = await _payload(ctx);
+    if (!manager.validateCsrf(ctx, payload)) {
+      return ctx.json({
+        'error': 'invalid_csrf',
+      }, statusCode: HttpStatus.forbidden);
+    }
+    final currentPassword = payload['currentPassword']?.toString();
+    if (currentPassword == null || currentPassword.isEmpty) {
+      return _errorResponse(ctx, 'account_deletion_failed');
+    }
+    try {
+      await manager.requestAccountDeletion(
+        ctx,
+        currentPassword: currentPassword,
+      );
+      return ctx.json({
+        'status': 'account_deletion_confirmation_sent',
+      }, statusCode: HttpStatus.accepted);
+    } on AuthFlowException catch (error) {
+      return _flowErrorResponse(ctx, error);
+    }
+  }
+
+  Future<Response> _accountDeletionConfirm(EngineContext ctx) async {
+    final browserError = manager.validateBrowserRequest(ctx);
+    if (browserError != null) return _errorResponse(ctx, browserError);
+    final payload = await _payload(ctx);
+    if (!manager.validateCsrf(ctx, payload)) {
+      return ctx.json({
+        'error': 'invalid_csrf',
+      }, statusCode: HttpStatus.forbidden);
+    }
+    final token = payload['token']?.toString();
+    if (token == null || token.trim().isEmpty) {
+      return _errorResponse(ctx, 'invalid_deletion_token');
+    }
+    try {
+      await manager.confirmCurrentAccountDeletion(ctx, token: token);
       return ctx.json({'status': 'account_deleted'});
     } on AuthFlowException catch (error) {
       return _flowErrorResponse(ctx, error);

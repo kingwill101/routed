@@ -6,6 +6,7 @@ import 'package:http/http.dart' as http;
 import 'package:server_auth/server_auth.dart'
     show
         AuthAccount,
+        AuthAccountLinked,
         AuthApiKeyPlugin,
         AnonymousPlugin,
         AuthCallbacks,
@@ -42,6 +43,9 @@ import 'package:server_auth/server_auth.dart'
         AuthPasswordResetResult,
         AuthPasswordChangeResult,
         AuthEmailChangeRequest,
+        AuthAccountDeletionDelivery,
+        AuthAccountDeletionConfirmed,
+        AuthAccountDeletionStore,
         AuthAdminStoreCapabilities,
         AuthUserDataDeletionContributor,
         AuthUser,
@@ -49,6 +53,10 @@ import 'package:server_auth/server_auth.dart'
         AdminPlugin,
         AuthAuthenticationPolicyPhase,
         AuthAuthenticationPolicyRequest,
+        AuthAccountState,
+        AuthAccountStateStore,
+        AuthEmailChangeTokenConditionalDeleteStore,
+        AuthVerificationTokenConditionalDeleteStore,
         AuthStore,
         resolveAuthEmailVerificationSignIn,
         normalizeAuthEmail,
@@ -72,6 +80,11 @@ import 'package:server_auth/server_auth.dart'
         changeAuthPasswordForUser,
         issueAuthEmailChangeTokenForUser,
         confirmAuthEmailChange,
+        unlinkProviderAccount,
+        findAuthCredentialForUser,
+        initiateAccountDeletion,
+        verifyOAuthProviderAccount,
+        linkProviderAccountFlow,
         requireAuthPasswordForUser,
         listAuthSessionsForUser,
         authUserEmailIsVerified,
@@ -199,14 +212,21 @@ class AuthManager {
           ? credentials.username
           : normalizeAuthEmail(credentials.email!),
     );
-    final user = await requireAuthorizedCredentialsSignIn(
-      store: store,
-      passwordHasher: options.passwordHasher,
-      provider: provider,
-      context: ctx,
-      credentials: credentials,
-      passwordPolicy: options.passwordPolicy,
-    );
+    late final AuthUser user;
+    try {
+      user = await requireAuthorizedCredentialsSignIn(
+        store: store,
+        passwordHasher: options.passwordHasher,
+        provider: provider,
+        context: ctx,
+        credentials: credentials,
+        passwordPolicy: options.passwordPolicy,
+      );
+    } on AuthFlowException {
+      await _recordFailedCredentialSignIn(credentials);
+      rethrow;
+    }
+    await _synchronizeAccountState(user, provider: provider);
     await _enforceAuthenticationPolicy(
       ctx,
       user,
@@ -277,13 +297,13 @@ class AuthManager {
     final trustedDevice = completion.trustedDevice;
     if (trustedDevice != null) {
       ctx.response.cookies.add(
-        Cookie(plugin.trustedDeviceCookieName, trustedDevice.token)
-          ..httpOnly = true
-          ..secure = _isHttps(ctx)
-          ..sameSite = SameSite.lax
-          ..path = '/'
-          ..expires = trustedDevice.expiresAt
-          ..maxAge = plugin.trustedDeviceTtl.inSeconds,
+        _buildManagedCookie(
+          ctx,
+          plugin.trustedDeviceCookieName,
+          trustedDevice.token,
+          expiresAt: trustedDevice.expiresAt,
+          maxAge: plugin.trustedDeviceTtl.inSeconds,
+        ),
       );
     }
     return result;
@@ -336,12 +356,7 @@ class AuthManager {
     if (userId.isEmpty) throw AuthFlowException('unauthorized');
     await plugin.revokeAllTrustedDevices(userId);
     ctx.response.cookies.add(
-      Cookie(plugin.trustedDeviceCookieName, '')
-        ..httpOnly = true
-        ..secure = _isHttps(ctx)
-        ..sameSite = SameSite.lax
-        ..path = '/'
-        ..maxAge = 0,
+      _buildManagedCookie(ctx, plugin.trustedDeviceCookieName, '', maxAge: 0),
     );
   }
 
@@ -363,13 +378,13 @@ class AuthManager {
       code,
     );
     ctx.response.cookies.add(
-      Cookie(plugin.stepUpCookieName, token.token)
-        ..httpOnly = true
-        ..secure = _isHttps(ctx)
-        ..sameSite = SameSite.lax
-        ..path = '/'
-        ..expires = token.expiresAt
-        ..maxAge = plugin.stepUpTtl.inSeconds,
+      _buildManagedCookie(
+        ctx,
+        plugin.stepUpCookieName,
+        token.token,
+        expiresAt: token.expiresAt,
+        maxAge: plugin.stepUpTtl.inSeconds,
+      ),
     );
     return token;
   }
@@ -408,12 +423,7 @@ class AuthManager {
     if (userId.isEmpty) throw AuthFlowException('unauthorized');
     await plugin.revokeStepUp(userId, _twoFactorSessionBinding(ctx));
     ctx.response.cookies.add(
-      Cookie(plugin.stepUpCookieName, '')
-        ..httpOnly = true
-        ..secure = _isHttps(ctx)
-        ..sameSite = SameSite.lax
-        ..path = '/'
-        ..maxAge = 0,
+      _buildManagedCookie(ctx, plugin.stepUpCookieName, '', maxAge: 0),
     );
   }
 
@@ -510,6 +520,9 @@ class AuthManager {
     if (user == null || user.email == null) {
       return;
     }
+    if (!await _passwordResetAllowed(user)) {
+      return;
+    }
 
     final issuedAt = DateTime.now().toUtc();
     final token = await issueAuthPasswordResetTokenForUser(
@@ -544,6 +557,14 @@ class AuthManager {
       'password-reset',
       action: AuthRateLimitAction.passwordResetConfirm,
     );
+    final tokenStore = store.passwordResetTokens;
+    final pending = await tokenStore.findActive(token);
+    final user = pending == null
+        ? null
+        : await store.users.findById(pending.userId);
+    if (user == null || !await _passwordResetAllowed(user)) {
+      throw AuthFlowException('invalid_password_reset_token');
+    }
     return resetAuthPasswordWithToken(
       store: store,
       passwordHasher: options.passwordHasher,
@@ -604,6 +625,12 @@ class AuthManager {
     final session = await resolveSession(ctx);
     if (session == null) throw AuthFlowException('not_authenticated');
     final user = session.user;
+    await enforceRateLimitForProviderId(
+      ctx,
+      'account_lifecycle',
+      action: AuthRateLimitAction.emailChangeRequest,
+      identifier: user.id,
+    );
     await requireAuthPasswordForUser(
       store: store,
       passwordHasher: options.passwordHasher,
@@ -622,17 +649,26 @@ class AuthManager {
     );
     final sender = options.emailChangeSender;
     if (sender == null) throw AuthFlowException('email_change_unavailable');
-    await Future.sync(
-      () => sender(
-        AuthEmailChangeRequest<EngineContext>(
-          context: ctx,
-          user: user.redacted(),
-          newEmail: normalizeAuthEmail(newEmail),
-          token: token,
-          expiresAt: issuedAt.add(options.emailChangeTtl),
+    try {
+      await Future.sync(
+        () => sender(
+          AuthEmailChangeRequest<EngineContext>(
+            context: ctx,
+            user: user.redacted(),
+            newEmail: normalizeAuthEmail(newEmail),
+            token: token,
+            expiresAt: issuedAt.add(options.emailChangeTtl),
+          ),
         ),
-      ),
-    );
+      );
+    } catch (_) {
+      final tokenStore = store.emailChangeTokens;
+      if (tokenStore is AuthEmailChangeTokenConditionalDeleteStore) {
+        await (tokenStore as AuthEmailChangeTokenConditionalDeleteStore)
+            .deleteTokenForUser(user.id, token);
+      }
+      rethrow;
+    }
   }
 
   /// Consumes an email-change confirmation and revokes previous sessions.
@@ -642,6 +678,12 @@ class AuthManager {
   }) async {
     final session = await resolveSession(ctx);
     if (session == null) throw AuthFlowException('not_authenticated');
+    await enforceRateLimitForProviderId(
+      ctx,
+      'account_lifecycle',
+      action: AuthRateLimitAction.emailChangeConfirm,
+      identifier: session.user.id,
+    );
     final updated = await confirmAuthEmailChange(
       store: store,
       userId: session.user.id,
@@ -655,12 +697,139 @@ class AuthManager {
     return updated;
   }
 
+  /// Reauthenticates and delivers a one-time account-deletion token.
+  Future<void> requestAccountDeletion(
+    EngineContext ctx, {
+    required String currentPassword,
+  }) async {
+    final session = await resolveSession(ctx);
+    if (session == null) throw AuthFlowException('not_authenticated');
+    final sender = options.accountDeletionSender;
+    if (sender == null) {
+      throw AuthFlowException('account_deletion_unavailable');
+    }
+    await enforceRateLimitForProviderId(
+      ctx,
+      'account_lifecycle',
+      action: AuthRateLimitAction.accountDeletion,
+      identifier: session.user.id,
+    );
+    final initiated = await initiateAccountDeletion(
+      store: store,
+      passwordHasher: options.passwordHasher,
+      userId: session.user.id,
+      password: currentPassword,
+      ttl: options.accountDeletionTtl,
+    );
+    try {
+      await Future.sync(
+        () => sender(
+          AuthAccountDeletionDelivery<EngineContext>(
+            context: ctx,
+            user: session.user.redacted(),
+            token: initiated.confirmationToken,
+            expiresAt: initiated.expiresAt,
+          ),
+        ),
+      );
+    } catch (_) {
+      final tokenStore = store.verificationTokens;
+      if (tokenStore is AuthVerificationTokenConditionalDeleteStore) {
+        await (tokenStore as AuthVerificationTokenConditionalDeleteStore)
+            .deleteToken(
+              'account_deletion:${session.user.id}',
+              initiated.confirmationToken,
+            );
+      }
+      rethrow;
+    }
+  }
+
+  /// Confirms a deletion token and runs the canonical tombstoning lifecycle.
+  Future<AuthAccountDeletionConfirmed> confirmCurrentAccountDeletion(
+    EngineContext ctx, {
+    required String token,
+  }) async {
+    final session = await resolveSession(ctx);
+    if (session == null) throw AuthFlowException('not_authenticated');
+    await enforceRateLimitForProviderId(
+      ctx,
+      'account_lifecycle',
+      action: AuthRateLimitAction.accountDeletion,
+      identifier: session.user.id,
+    );
+    final deletionStore = store is AuthAccountDeletionStore
+        ? store as AuthAccountDeletionStore
+        : null;
+    if (deletionStore == null) {
+      throw AuthFlowException('account_deletion_unavailable');
+    }
+    final contributors = runtime.registry.values
+        .whereType<AuthUserDataDeletionContributor>()
+        .toList(growable: false);
+    for (final contributor in contributors) {
+      await contributor.validateUserDeletion(session.user.id);
+    }
+    final deleted = await deletionStore.confirmAndDeleteUser(
+      userId: session.user.id,
+      token: token,
+      deleteContributedData: () async {
+        for (final contributor in contributors) {
+          await contributor.deleteUserData(session.user.id);
+        }
+      },
+    );
+    if (!deleted) throw AuthFlowException('invalid_deletion_token');
+    await sessionAuth.logout(ctx);
+    if (ctx.hasSession) ctx.session.destroy();
+    return AuthAccountDeletionConfirmed(userId: session.user.id, deleted: true);
+  }
+
   /// Lists the current user's linked external identities without provider
   /// access or refresh tokens.
   Future<List<AuthAccount>> listLinkedAccounts(EngineContext ctx) async {
     final session = await resolveSession(ctx);
     if (session == null) throw AuthFlowException('not_authenticated');
     return store.accounts.listForUser(session.user.id);
+  }
+
+  /// Verifies provider ownership with a provider-issued token before linking.
+  Future<AuthAccountLinked> linkAccount(
+    EngineContext ctx, {
+    required String providerId,
+    required String providerAccountId,
+    required String accessToken,
+  }) async {
+    final session = await resolveSession(ctx);
+    if (session == null) throw AuthFlowException('not_authenticated');
+    await enforceRateLimitForProviderId(
+      ctx,
+      providerId,
+      action: AuthRateLimitAction.accountLink,
+      identifier: session.user.id,
+    );
+    final provider = options.providers.firstWhere(
+      (candidate) => candidate.id == providerId,
+      orElse: () => throw AuthFlowException('invalid_provider'),
+    );
+    final verified = await verifyOAuthProviderAccount(
+      provider: provider,
+      accessToken: accessToken,
+      expectedProviderAccountId: providerAccountId,
+      userId: session.user.id,
+      context: ctx,
+      httpClient: httpClient,
+    );
+    return linkProviderAccountFlow(
+      store: store,
+      userId: session.user.id,
+      providerId: verified.providerId,
+      providerAccountId: verified.providerAccountId,
+      accessToken: verified.accessToken,
+      refreshToken: verified.refreshToken,
+      expiresAt: verified.expiresAt,
+      metadata: verified.metadata,
+    );
   }
 
   /// Reauthenticates and removes one linked external identity.
@@ -673,20 +842,19 @@ class AuthManager {
     final session = await resolveSession(ctx);
     if (session == null) throw AuthFlowException('not_authenticated');
     final user = session.user;
-    await requireAuthPasswordForUser(
+    await enforceRateLimitForProviderId(
+      ctx,
+      'account_lifecycle',
+      action: AuthRateLimitAction.accountUnlink,
+      identifier: user.id,
+    );
+    await _requireCurrentPassword(user, currentPassword);
+    await unlinkProviderAccount(
       store: store,
-      passwordHasher: options.passwordHasher,
-      passwordPolicy: options.passwordPolicy,
       userId: user.id,
-      identifier: user.email ?? '',
-      password: currentPassword,
+      providerId: providerId,
+      providerAccountId: providerAccountId,
     );
-    final removed = await store.accounts.unlinkForUser(
-      user.id,
-      providerId,
-      providerAccountId,
-    );
-    if (!removed) throw AuthFlowException('account_not_found');
   }
 
   /// Reauthenticates and tombstones the current account.
@@ -701,14 +869,29 @@ class AuthManager {
     final session = await resolveSession(ctx);
     if (session == null) throw AuthFlowException('not_authenticated');
     final user = session.user;
+    await enforceRateLimitForProviderId(
+      ctx,
+      'account_lifecycle',
+      action: AuthRateLimitAction.accountDeletion,
+      identifier: user.id,
+    );
+    await _requireCurrentPassword(user, currentPassword);
+    await _deleteUserLifecycle(ctx, user);
+  }
+
+  Future<void> _requireCurrentPassword(AuthUser user, String password) async {
+    final credential = await findAuthCredentialForUser(store, user.id);
     await requireAuthPasswordForUser(
       store: store,
       passwordHasher: options.passwordHasher,
       passwordPolicy: options.passwordPolicy,
       userId: user.id,
-      identifier: user.email ?? '',
-      password: currentPassword,
+      identifier: credential?.identifier ?? '',
+      password: password,
     );
+  }
+
+  Future<void> _deleteUserLifecycle(EngineContext ctx, AuthUser user) async {
     final capabilities = store is AuthAdminStoreCapabilities
         ? store as AuthAdminStoreCapabilities
         : null;
@@ -1067,12 +1250,87 @@ class AuthManager {
     if (options.requireVerifiedEmail && !authUserEmailIsVerified(user)) {
       throw AuthFlowException('email_verification_required');
     }
+    final accountStates = store is AuthAccountStateStore
+        ? store as AuthAccountStateStore
+        : null;
+    final state = await accountStates?.find(user.id);
+    final policy = options.accountPolicy;
+    if (state == null) {
+      if (policy.requireEmailVerification && !policy.allowUnverifiedSignIn) {
+        throw AuthFlowException('email_verification_required');
+      }
+    } else if (!state.canAuthenticate(policy: policy)) {
+      if (state.disabled) throw AuthFlowException('account_disabled');
+      if (state.isLocked()) throw AuthFlowException('account_locked');
+      throw AuthFlowException('email_verification_required');
+    }
     await runtime.registry.enforceAuthenticationPolicy(
       AuthAuthenticationPolicyRequest(context: ctx, user: user, phase: phase),
     );
   }
 
-  /// Replaces the current server-session identity for a portable plugin.
+  Future<bool> _passwordResetAllowed(AuthUser user) async {
+    final policy = options.accountPolicy;
+    final accountStates = store is AuthAccountStateStore
+        ? store as AuthAccountStateStore
+        : null;
+    final state = await accountStates?.find(user.id);
+    final disabled = authUserIsDisabled(user) || state?.disabled == true;
+    if (disabled && !policy.allowPasswordResetForDisabled) return false;
+    final verified =
+        authUserEmailIsVerified(user) || state?.emailVerified == true;
+    if (!verified && !policy.allowPasswordResetForUnverified) return false;
+    return true;
+  }
+
+  Future<void> _synchronizeAccountState(
+    AuthUser user, {
+    AuthProvider? provider,
+    Map<String, dynamic>? profile,
+    bool isNewUser = false,
+  }) async {
+    final accountStates = store is AuthAccountStateStore
+        ? store as AuthAccountStateStore
+        : null;
+    if (accountStates == null) return;
+    final profileVerified =
+        profile?['verified'] == true || profile?['email_verified'] == true;
+    final emailVerified =
+        provider is EmailProvider ||
+        profileVerified ||
+        authUserEmailIsVerified(user);
+    final state = await accountStates.find(user.id);
+    if (state == null && (isNewUser || emailVerified)) {
+      await accountStates.upsert(
+        AuthAccountState(userId: user.id, emailVerified: emailVerified),
+      );
+    } else if (emailVerified && state?.emailVerified == false) {
+      await accountStates.markEmailVerified(user.id);
+    }
+  }
+
+  Future<void> _recordFailedCredentialSignIn(
+    AuthCredentials credentials,
+  ) async {
+    final accountStates = store is AuthAccountStateStore
+        ? store as AuthAccountStateStore
+        : null;
+    if (accountStates == null) return;
+    final identifier = credentials.email == null
+        ? credentials.username?.trim()
+        : normalizeAuthEmail(credentials.email!);
+    if (identifier == null || identifier.isEmpty) return;
+    final credential = await store.credentials.findByIdentifier(identifier);
+    if (credential == null) return;
+    final user = await store.users.findById(credential.userId);
+    if (user == null) return;
+    await accountStates.recordFailedLogin(
+      user.id,
+      policy: options.accountPolicy,
+    );
+  }
+
+  /// Replaces the current identity for a portable plugin.
   Future<AuthSession> replacePluginSession(
     EngineContext ctx,
     AuthUser user, {
@@ -1080,10 +1338,12 @@ class AuthManager {
     Duration? maximumAge,
     String? impersonatedBy,
   }) async {
-    if (options.sessionStrategy != AuthSessionStrategy.session) {
+    if (impersonatedBy != null &&
+        options.sessionStrategy != AuthSessionStrategy.session) {
       throw AuthFlowException('impersonation_requires_server_session');
     }
-    if (ctx.hasSession) {
+    if (options.sessionStrategy == AuthSessionStrategy.session &&
+        ctx.hasSession) {
       await store.sessions.revoke(hashOpaqueToken(ctx.sessionId));
     }
     final result = await _completeSignIn(
@@ -1202,25 +1462,34 @@ class AuthManager {
       throw AuthFlowException('user_resolution_failed');
     }
     final anonymous = this.anonymous;
-    final principal = SessionAuth.current(ctx);
-    if (anonymous != null &&
-        principal != null &&
-        principal.id != user.id &&
-        principal.attributes['isAnonymous'] == true) {
-      final anonymousUser = await store.users.findById(principal.id);
-      if (anonymousUser?.isAnonymous == true) {
-        await anonymous.linkAnonymousAccount(
-          context: ctx,
-          anonymousUser: anonymousUser!,
-          newUser: user,
-        );
+    AuthUser? anonymousUser;
+    if (anonymous != null) {
+      final current = await resolveSession(ctx);
+      final principal = current?.user;
+      if (principal != null &&
+          principal.id != user.id &&
+          principal.isAnonymous) {
+        final stored = await store.users.findById(principal.id);
+        if (stored?.isAnonymous == true) anonymousUser = stored;
       }
     }
+    await _synchronizeAccountState(
+      user,
+      provider: provider,
+      profile: profile,
+      isNewUser: isNewUser,
+    );
     await _enforceAuthenticationPolicy(
       ctx,
       user,
       AuthAuthenticationPolicyPhase.beforeSessionIssue,
     );
+    final accountStates = store is AuthAccountStateStore
+        ? store as AuthAccountStateStore
+        : null;
+    if (accountStates != null) {
+      await accountStates.recordLogin(user.id);
+    }
     final resolvedRedirect =
         await resolveAuthSignInRedirectTarget<EngineContext>(
           callbacks: callbacks,
@@ -1236,6 +1505,14 @@ class AuthManager {
           resolveRedirect: (candidate) =>
               resolveRedirect(ctx, candidate, provider: provider),
         );
+
+    if (anonymousUser != null) {
+      await anonymous!.migrateAnonymousAccount(
+        context: ctx,
+        anonymousUser: anonymousUser,
+        newUser: user,
+      );
+    }
 
     if (isNewUser) {
       await _emitAuthEvent(
@@ -1290,6 +1567,10 @@ class AuthManager {
     final issuedJwt = resolvedSignIn.issuedJwt;
     if (issuedJwt != null) {
       ctx.response.cookies.add(issuedJwt.cookie);
+    }
+
+    if (anonymousUser != null) {
+      await anonymous!.deleteMigratedAnonymousUser(anonymousUser);
     }
 
     final result = resolvedSignIn.result;
@@ -1454,7 +1735,26 @@ class AuthManager {
     return hashOpaqueToken(rawBinding);
   }
 
-  bool _isHttps(EngineContext ctx) => ctx.scheme.toLowerCase() == 'https';
+  Cookie _buildManagedCookie(
+    EngineContext ctx,
+    String name,
+    String value, {
+    DateTime? expiresAt,
+    int? maxAge,
+    SameSite? sameSite,
+    String? path,
+  }) {
+    final policy = options.cookiePolicy;
+    final cookie = Cookie(name, value)
+      ..httpOnly = policy.httpOnly
+      ..secure = policy.secure
+      ..sameSite = sameSite ?? policy.sameSite
+      ..path = path ?? policy.path
+      ..domain = policy.domain
+      ..expires = expiresAt;
+    cookie.maxAge = maxAge ?? policy.maxAge;
+    return cookie;
+  }
 
   String _oauthStateCookieName(AuthProvider provider) {
     return 'routed_oauth_state_${hashOpaqueToken(provider.id).substring(0, 16)}';
@@ -1470,13 +1770,15 @@ class AuthManager {
     String token, {
     required DateTime expiresAt,
   }) {
-    final secure = ctx.scheme.toLowerCase() == 'https';
-    return Cookie(_emailStateCookieName(provider), token)
-      ..httpOnly = true
-      ..expires = expiresAt
-      ..path = _oauthCookiePath()
-      ..secure = secure
-      ..sameSite = secure ? SameSite.none : SameSite.lax;
+    final secure = options.cookiePolicy.secure;
+    return _buildManagedCookie(
+      ctx,
+      _emailStateCookieName(provider),
+      token,
+      expiresAt: expiresAt,
+      path: _oauthCookiePath(),
+      sameSite: secure ? SameSite.none : SameSite.lax,
+    );
   }
 
   Cookie _buildExpiredEmailStateCookie(
@@ -1499,13 +1801,15 @@ class AuthManager {
     String state, {
     required DateTime expiresAt,
   }) {
-    final secure = ctx.scheme.toLowerCase() == 'https';
-    return Cookie(_oauthStateCookieName(provider), state)
-      ..httpOnly = true
-      ..expires = expiresAt
-      ..path = _oauthCookiePath()
-      ..secure = secure
-      ..sameSite = secure ? SameSite.none : SameSite.lax;
+    final secure = options.cookiePolicy.secure;
+    return _buildManagedCookie(
+      ctx,
+      _oauthStateCookieName(provider),
+      state,
+      expiresAt: expiresAt,
+      path: _oauthCookiePath(),
+      sameSite: secure ? SameSite.none : SameSite.lax,
+    );
   }
 
   Cookie _buildExpiredOAuthStateCookie(

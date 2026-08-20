@@ -153,9 +153,8 @@ final class AnonymousPlugin<TContext>
     }
   }
 
-  /// Runs the host link hook and removes the anonymous identity after the new
-  /// identity has been durably created.
-  Future<void> linkAnonymousAccount({
+  /// Runs the host-owned data migration while retaining the anonymous user.
+  Future<void> migrateAnonymousAccount({
     required TContext context,
     required AuthUser anonymousUser,
     required AuthUser newUser,
@@ -169,6 +168,14 @@ final class AnonymousPlugin<TContext>
       anonymousUser: anonymousUser,
       newUser: newUser,
     );
+  }
+
+  /// Removes a migrated anonymous identity after replacement sign-in succeeds.
+  Future<void> deleteMigratedAnonymousUser(AuthUser anonymousUser) async {
+    _ensureConfigured();
+    if (!anonymousUser.isAnonymous) {
+      throw AuthFlowException('anonymous_required');
+    }
     final capabilities = _store is AuthAdminStoreCapabilities
         ? _store as AuthAdminStoreCapabilities
         : null;
@@ -176,6 +183,23 @@ final class AnonymousPlugin<TContext>
         !await capabilities.deleteUserForAdministration(anonymousUser.id)) {
       throw AuthFlowException('anonymous_link_unavailable');
     }
+  }
+
+  /// Migrates and removes an anonymous account.
+  ///
+  /// Prefer the split migration/finalization methods when replacement session
+  /// issuance can fail between these steps.
+  Future<void> linkAnonymousAccount({
+    required TContext context,
+    required AuthUser anonymousUser,
+    required AuthUser newUser,
+  }) async {
+    await migrateAnonymousAccount(
+      context: context,
+      anonymousUser: anonymousUser,
+      newUser: newUser,
+    );
+    await deleteMigratedAnonymousUser(anonymousUser);
   }
 
   Future<Object?> _signInEndpoint(

@@ -336,7 +336,8 @@ class AuthAccount {
 
   /// Creates a public linked-account projection from JSON.
   factory AuthAccount.fromJson(Map<String, dynamic> json) => AuthAccount(
-    providerId: json['provider_id']?.toString() ?? json['providerId']?.toString() ?? '',
+    providerId:
+        json['provider_id']?.toString() ?? json['providerId']?.toString() ?? '',
     providerAccountId:
         json['provider_account_id']?.toString() ??
         json['providerAccountId']?.toString() ??
@@ -473,7 +474,10 @@ class AuthVerificationToken {
     required this.identifier,
     required this.token,
     required this.expiresAt,
-  });
+    Map<String, dynamic>? metadata,
+  }) : metadata = metadata == null
+           ? const <String, dynamic>{}
+           : Map<String, dynamic>.unmodifiable(metadata);
 
   /// Identifier for the verification target (email).
   final String identifier;
@@ -483,6 +487,10 @@ class AuthVerificationToken {
 
   /// Expiration timestamp.
   final DateTime expiresAt;
+
+  /// Server-side data associated with the token. Implementations must persist
+  /// this data with the token and must never expose the raw token in it.
+  final Map<String, dynamic> metadata;
 }
 
 /// One-time confirmation token for changing a user's email address.

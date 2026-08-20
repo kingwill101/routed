@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'account_policy.dart';
 import 'email_change_token_store.dart';
 import 'models.dart';
 import 'oauth_challenge_store.dart';
@@ -118,6 +119,9 @@ abstract interface class AuthUserStore {
 
   /// Atomically replaces a user's email while enforcing email uniqueness.
   FutureOr<AuthUser?> updateEmailForUser(String userId, String email);
+
+  /// Deletes a user record by ID and reports whether it existed.
+  FutureOr<bool> delete(String userId);
 }
 
 /// Persistence contract for credential authentication.
@@ -148,6 +152,49 @@ abstract interface class AuthCredentialStore {
 
   /// Removes a password credential by persistence identifier.
   FutureOr<void> delete(String credentialId);
+
+  /// Removes every password credential owned by [userId].
+  FutureOr<void> deleteForUser(String userId);
+}
+
+/// Optional credential-store capability for resolving a user's password
+/// credential without assuming that their login identifier is an email.
+abstract interface class AuthCredentialUserLookupStore {
+  FutureOr<AuthPasswordCredential?> findForUser(String userId);
+}
+
+/// Resolves the password credential owned by [userId].
+///
+/// Username-based accounts require an explicit user lookup capability because
+/// their credential identifier cannot be derived from the public user record.
+/// Email lookup remains as a compatibility fallback for older adapters.
+Future<AuthPasswordCredential?> findAuthCredentialForUser(
+  AuthStore store,
+  String userId,
+) async {
+  final normalizedUserId = userId.trim();
+  if (normalizedUserId.isEmpty) return null;
+
+  final credentialStore = store.credentials;
+  if (credentialStore is AuthCredentialUserLookupStore) {
+    final lookup = credentialStore as AuthCredentialUserLookupStore;
+    final credential = await Future.sync(
+      () => lookup.findForUser(normalizedUserId),
+    );
+    if (credential != null) return credential;
+  }
+  if (store is AuthAdminStoreCapabilities) {
+    final capabilities = store as AuthAdminStoreCapabilities;
+    final credential = await Future.sync(
+      () => capabilities.findCredentialForUser(normalizedUserId),
+    );
+    if (credential != null) return credential;
+  }
+
+  final user = await Future.sync(() => store.users.findById(normalizedUserId));
+  final email = user?.email;
+  if (email == null || email.isEmpty) return null;
+  return Future.sync(() => credentialStore.findByIdentifier(email));
 }
 
 /// Persistence contract for external provider accounts.
@@ -165,13 +212,26 @@ abstract interface class AuthAccountStore {
   /// Links [account], which must contain non-empty provider and user IDs.
   FutureOr<AuthAccount> link(AuthAccount account);
 
-  /// Removes one external identity only when it belongs to [userId].
-  FutureOr<bool> unlinkForUser(
+  /// Atomically removes one user-owned identity only when another
+  /// authentication method remains available.
+  ///
+  /// The enabled-password flag is resolved immediately before this call. The
+  /// account-store transaction must still count the user's remaining provider
+  /// identities while removing the requested record so concurrent unlinks
+  /// cannot both remove the last provider method.
+  FutureOr<AuthAccountUnlinkResult> unlinkForUserIfSafe(
     String userId,
     String providerId,
-    String providerAccountId,
-  );
+    String providerAccountId, {
+    required bool hasEnabledPasswordCredential,
+  });
+
+  /// Removes every external identity owned by [userId].
+  FutureOr<void> deleteForUser(String userId);
 }
+
+/// Result of an ownership-checked, last-method-safe account unlink.
+enum AuthAccountUnlinkResult { unlinked, notFound, lastAuthenticationMethod }
 
 /// Persistence contract for one-time email-change confirmations.
 abstract interface class AuthEmailChangeTokenStore {
@@ -181,6 +241,12 @@ abstract interface class AuthEmailChangeTokenStore {
   FutureOr<AuthEmailChangeToken?> consume(String token);
 
   FutureOr<void> deleteForUser(String userId);
+}
+
+/// Optional compare-and-delete capability for failed email-change delivery.
+abstract interface class AuthEmailChangeTokenConditionalDeleteStore {
+  /// Deletes the token only when it is still the active issuance for [userId].
+  FutureOr<bool> deleteTokenForUser(String userId, String token);
 }
 
 /// Persistence contract for server-side sessions.
@@ -258,6 +324,23 @@ abstract interface class AuthStore {
   AuthEmailOtpStore get emailOtps;
 }
 
+/// Transactional boundary for confirmation-token account deletion.
+///
+/// Durable adapters must consume the token and remove the user-owned core data
+/// in one transaction. Returning `false` leaves both the token and account
+/// unchanged so callers can safely retry. [deleteContributedData] is invoked
+/// after the token is validated but before the transaction commits; it must be
+/// idempotent, and any exception must roll the token consumption and core
+/// deletion back.
+abstract interface class AuthAccountDeletionStore {
+  FutureOr<bool> confirmAndDeleteUser({
+    required String userId,
+    required String token,
+    required FutureOr<void> Function() deleteContributedData,
+    DateTime? now,
+  });
+}
+
 /// Optional data-plane operations required by the Admin plugin.
 ///
 /// Production adapters implement these operations transactionally. Keeping
@@ -303,7 +386,9 @@ class InMemoryAuthStore
     implements
         AuthStore,
         AuthAdminStoreCapabilities,
-        AuthWebAuthnStoreCapabilities {
+        AuthWebAuthnStoreCapabilities,
+        AuthAccountDeletionStore,
+        AuthAccountStateStore {
   InMemoryAuthStore()
     : users = _InMemoryUserStore(),
       credentials = _InMemoryCredentialStore(),
@@ -317,7 +402,8 @@ class InMemoryAuthStore
       webAuthnChallenges = InMemoryAuthWebAuthnChallengeStore(),
       webAuthnAuthenticators = InMemoryAuthWebAuthnAuthenticatorStore(),
       deviceAuthorizations = InMemoryAuthDeviceAuthorizationStore(),
-      emailOtps = InMemoryAuthEmailOtpStore() {
+      emailOtps = InMemoryAuthEmailOtpStore(),
+      _accountStates = InMemoryAuthAccountStateStore() {
     (credentials as _InMemoryCredentialStore).users = users;
   }
 
@@ -359,6 +445,110 @@ class InMemoryAuthStore
 
   @override
   final AuthEmailOtpStore emailOtps;
+
+  final InMemoryAuthAccountStateStore _accountStates;
+
+  @override
+  Future<AuthAccountState?> find(String userId) => _accountStates.find(userId);
+
+  @override
+  Future<void> delete(String userId) => _accountStates.delete(userId);
+
+  @override
+  Future<AuthAccountState> upsert(AuthAccountState state) =>
+      _accountStates.upsert(state);
+
+  @override
+  Future<AuthAccountState> recordLogin(String userId, {DateTime? now}) =>
+      _accountStates.recordLogin(userId, now: now);
+
+  @override
+  Future<AuthAccountState> recordFailedLogin(
+    String userId, {
+    required AuthAccountPolicy policy,
+    DateTime? now,
+  }) => _accountStates.recordFailedLogin(userId, policy: policy, now: now);
+
+  @override
+  Future<AuthAccountState> resetFailedAttempts(
+    String userId, {
+    DateTime? now,
+  }) => _accountStates.resetFailedAttempts(userId, now: now);
+
+  @override
+  Future<AuthAccountState> markEmailVerified(String userId, {DateTime? now}) =>
+      _accountStates.markEmailVerified(userId, now: now);
+
+  @override
+  Future<AuthAccountState> disable(
+    String userId, {
+    String? reason,
+    DateTime? now,
+  }) => _accountStates.disable(userId, reason: reason, now: now);
+
+  @override
+  Future<AuthAccountState> enable(String userId, {DateTime? now}) =>
+      _accountStates.enable(userId, now: now);
+
+  @override
+  Future<AuthAccountState> unlock(String userId, {DateTime? now}) =>
+      _accountStates.unlock(userId, now: now);
+
+  @override
+  Future<AuthAccountState> recordEmailVerificationSent(
+    String userId, {
+    DateTime? now,
+  }) => _accountStates.recordEmailVerificationSent(userId, now: now);
+
+  @override
+  Future<List<AuthAccountState>> findInactiveAccounts({
+    required int inactiveDays,
+    DateTime? now,
+  }) =>
+      _accountStates.findInactiveAccounts(inactiveDays: inactiveDays, now: now);
+
+  @override
+  Future<bool> confirmAndDeleteUser({
+    required String userId,
+    required String token,
+    required FutureOr<void> Function() deleteContributedData,
+    DateTime? now,
+  }) async {
+    final id = userId.trim();
+    if (id.isEmpty || token.trim().isEmpty) return false;
+    final user = await users.findById(id);
+    if (user == null) return false;
+    final consumed = await verificationTokens.consume(
+      'account_deletion:$id',
+      token,
+    );
+    if (consumed == null) return false;
+
+    try {
+      await deleteContributedData();
+      // All following mutations are in-memory and non-failing. Durable stores
+      // implement this interface with their database transaction primitive.
+      await _credentials.deleteForUser(id);
+      await _accounts.deleteForUser(id);
+      _sessions.deleteForUser(id);
+      await passwordResetTokens.deleteForUser(id);
+      await emailChangeTokens.deleteForUser(id);
+      await deviceAuthorizations.deleteForUser(id);
+      await _accountStates.delete(id);
+      if (user.email != null) {
+        await emailOtps.deleteForEmail(user.email!);
+        await verificationTokens.delete(user.email!);
+      }
+      await jwtVersions.rotate(id);
+      return await _users.delete(id);
+    } catch (_) {
+      // The local store has no failing core mutations. Restoring the consumed
+      // token makes contributor failures retryable. Durable implementations
+      // must roll the complete transaction back instead.
+      await verificationTokens.save(consumed);
+      rethrow;
+    }
+  }
 
   @override
   Future<List<AuthUser>> listUsersForAdministration() async =>
@@ -402,6 +592,7 @@ class InMemoryAuthStore
     await verificationTokens.delete(id);
     await emailChangeTokens.deleteForUser(id);
     await deviceAuthorizations.deleteForUser(id);
+    await _accountStates.delete(id);
     if (user.email != null) await emailOtps.deleteForEmail(user.email!);
     if (user.email != null) await verificationTokens.delete(user.email!);
     _users.delete(id);
@@ -436,6 +627,7 @@ class InMemoryAuthStore
     final user = await users.findById(id);
     if (user == null || !authUserIsDisabled(user)) return false;
     _users.delete(id);
+    await _accountStates.delete(id);
     return true;
   }
 }
@@ -454,8 +646,11 @@ class CallbackAuthStore implements AuthStore, AuthWebAuthnStoreCapabilities {
     FutureOr<AuthUser?> Function(AuthUser user)? onUpdateUser,
     FutureOr<AuthUser?> Function(String userId, String email)?
     onUpdateUserEmail,
+    FutureOr<bool> Function(String userId)? onDeleteUser,
     FutureOr<AuthPasswordCredential?> Function(String identifier)?
     onFindCredential,
+    FutureOr<AuthPasswordCredential?> Function(String userId)?
+    onFindCredentialForUser,
     FutureOr<AuthUser?> Function(
       AuthUser user,
       AuthPasswordCredential credential,
@@ -472,6 +667,7 @@ class CallbackAuthStore implements AuthStore, AuthWebAuthnStoreCapabilities {
     })?
     onUpdatePasswordForUser,
     FutureOr<void> Function(String credentialId)? onDeleteCredential,
+    FutureOr<void> Function(String userId)? onDeleteCredentialsForUser,
     FutureOr<AuthAccount?> Function(
       String providerId,
       String providerAccountId,
@@ -479,12 +675,14 @@ class CallbackAuthStore implements AuthStore, AuthWebAuthnStoreCapabilities {
     onFindAccount,
     FutureOr<List<AuthAccount>> Function(String userId)? onListAccountsForUser,
     FutureOr<AuthAccount> Function(AuthAccount account)? onLinkAccount,
-    FutureOr<bool> Function(
+    FutureOr<AuthAccountUnlinkResult> Function(
       String userId,
       String providerId,
-      String providerAccountId,
-    )?
-    onUnlinkAccountForUser,
+      String providerAccountId, {
+      required bool hasEnabledPasswordCredential,
+    })?
+    onUnlinkAccountForUserIfSafe,
+    FutureOr<void> Function(String userId)? onDeleteAccountsForUser,
     FutureOr<AuthSessionRecord?> Function(String tokenHash)? onFindSession,
     FutureOr<AuthSessionRecord> Function(AuthSessionRecord session)?
     onCreateSession,
@@ -527,6 +725,8 @@ class CallbackAuthStore implements AuthStore, AuthWebAuthnStoreCapabilities {
     onSavePasswordResetToken,
     FutureOr<AuthPasswordResetToken?> Function(String token)?
     onConsumePasswordResetToken,
+    FutureOr<AuthPasswordResetToken?> Function(String token)?
+    onFindPasswordResetToken,
     FutureOr<void> Function(String userId)? onDeletePasswordResetTokens,
     AuthPasswordResetTokenStore? passwordResetTokens,
     FutureOr<int> Function(String userId)? onCurrentJwtVersion,
@@ -536,11 +736,15 @@ class CallbackAuthStore implements AuthStore, AuthWebAuthnStoreCapabilities {
     onSaveVerificationToken,
     FutureOr<AuthVerificationToken?> Function(String identifier, String token)?
     onConsumeVerificationToken,
+    FutureOr<bool> Function(String identifier, String token)?
+    onDeleteVerificationToken,
     FutureOr<void> Function(String identifier)? onDeleteVerificationTokens,
     AuthVerificationTokenStore? verificationTokens,
     FutureOr<void> Function(AuthEmailChangeToken token)? onSaveEmailChangeToken,
     FutureOr<AuthEmailChangeToken?> Function(String token)?
     onConsumeEmailChangeToken,
+    FutureOr<bool> Function(String userId, String token)?
+    onDeleteEmailChangeToken,
     FutureOr<void> Function(String userId)? onDeleteEmailChangeTokens,
     AuthEmailChangeTokenStore? emailChangeTokens,
     AuthWebAuthnChallengeStore? webAuthnChallenges,
@@ -554,19 +758,23 @@ class CallbackAuthStore implements AuthStore, AuthWebAuthnStoreCapabilities {
          onCreateOrFindByEmail: onCreateOrFindUserByEmail,
          onUpdate: onUpdateUser,
          onUpdateEmail: onUpdateUserEmail,
+         onDelete: onDeleteUser,
        ),
        credentials = _CallbackCredentialStore(
          onFind: onFindCredential,
+         onFindForUser: onFindCredentialForUser,
          onRegister: onRegisterCredential,
          onUpdate: onUpdateCredential,
          onUpdatePasswordForUser: onUpdatePasswordForUser,
          onDelete: onDeleteCredential,
+         onDeleteForUser: onDeleteCredentialsForUser,
        ),
        accounts = _CallbackAccountStore(
          onFind: onFindAccount,
          onListForUser: onListAccountsForUser,
          onLink: onLinkAccount,
-         onUnlinkForUser: onUnlinkAccountForUser,
+         onUnlinkForUserIfSafe: onUnlinkAccountForUserIfSafe,
+         onDeleteForUser: onDeleteAccountsForUser,
        ),
        sessions = _CallbackSessionStore(
          onFind: onFindSession,
@@ -590,6 +798,7 @@ class CallbackAuthStore implements AuthStore, AuthWebAuthnStoreCapabilities {
            _CallbackPasswordResetTokenStore(
              onSave: onSavePasswordResetToken,
              onConsume: onConsumePasswordResetToken,
+             onFindActive: onFindPasswordResetToken,
              onDeleteForUser: onDeletePasswordResetTokens,
            ),
        jwtVersions =
@@ -603,6 +812,7 @@ class CallbackAuthStore implements AuthStore, AuthWebAuthnStoreCapabilities {
            _CallbackVerificationTokenStore(
              onSave: onSaveVerificationToken,
              onConsume: onConsumeVerificationToken,
+             onDeleteToken: onDeleteVerificationToken,
              onDelete: onDeleteVerificationTokens,
            ),
        emailChangeTokens =
@@ -610,6 +820,7 @@ class CallbackAuthStore implements AuthStore, AuthWebAuthnStoreCapabilities {
            _CallbackEmailChangeTokenStore(
              onSave: onSaveEmailChangeToken,
              onConsume: onConsumeEmailChangeToken,
+             onDeleteTokenForUser: onDeleteEmailChangeToken,
              onDeleteForUser: onDeleteEmailChangeTokens,
            ),
        webAuthnChallenges =
@@ -664,11 +875,13 @@ class _CallbackPasswordResetTokenStore implements AuthPasswordResetTokenStore {
   const _CallbackPasswordResetTokenStore({
     this.onSave,
     this.onConsume,
+    this.onFindActive,
     this.onDeleteForUser,
   });
 
   final FutureOr<void> Function(AuthPasswordResetToken token)? onSave;
   final FutureOr<AuthPasswordResetToken?> Function(String token)? onConsume;
+  final FutureOr<AuthPasswordResetToken?> Function(String token)? onFindActive;
   final FutureOr<void> Function(String userId)? onDeleteForUser;
 
   @override
@@ -677,6 +890,10 @@ class _CallbackPasswordResetTokenStore implements AuthPasswordResetTokenStore {
   @override
   FutureOr<AuthPasswordResetToken?> consume(String token) =>
       onConsume?.call(token);
+
+  @override
+  FutureOr<AuthPasswordResetToken?> findActive(String token) =>
+      onFindActive?.call(token);
 
   @override
   FutureOr<void> deleteForUser(String userId) => onDeleteForUser?.call(userId);
@@ -735,9 +952,11 @@ class _InMemoryUserStore implements AuthUserStore {
   Iterable<AuthUser> get values => _usersById.values;
   bool contains(String id) => _usersById.containsKey(id);
 
-  void delete(String id) {
+  @override
+  Future<bool> delete(String id) async {
     final removed = _usersById.remove(id);
     if (removed?.email != null) _usersByEmail.remove(removed!.email);
+    return removed != null;
   }
 
   void replaceWithTombstone(String id, DateTime deletedAt) {
@@ -841,7 +1060,8 @@ class _InMemoryUserStore implements AuthUserStore {
   }
 }
 
-class _InMemoryCredentialStore implements AuthCredentialStore {
+class _InMemoryCredentialStore
+    implements AuthCredentialStore, AuthCredentialUserLookupStore {
   AuthUserStore? users;
   final Map<String, AuthPasswordCredential> _credentialsById =
       <String, AuthPasswordCredential>{};
@@ -864,7 +1084,8 @@ class _InMemoryCredentialStore implements AuthCredentialStore {
     _credentialIdsByIdentifier[credential.identifier] = credential.id;
   }
 
-  void deleteForUser(String userId) {
+  @override
+  Future<void> deleteForUser(String userId) async {
     final ids = _credentialsById.values
         .where((credential) => credential.userId == userId)
         .map((credential) => credential.id)
@@ -884,6 +1105,16 @@ class _InMemoryCredentialStore implements AuthCredentialStore {
     }
     final credentialId = _credentialIdsByIdentifier[identifier];
     return credentialId == null ? null : _credentialsById[credentialId];
+  }
+
+  @override
+  Future<AuthPasswordCredential?> findForUser(String userId) async {
+    final normalizedUserId = userId.trim();
+    if (normalizedUserId.isEmpty) return null;
+    for (final credential in _credentialsById.values) {
+      if (credential.userId == normalizedUserId) return credential;
+    }
+    return null;
   }
 
   @override
@@ -980,7 +1211,8 @@ class _InMemoryAccountStore implements AuthAccountStore {
   final Map<(String, String), AuthAccount> _accounts =
       <(String, String), AuthAccount>{};
 
-  void deleteForUser(String userId) =>
+  @override
+  Future<void> deleteForUser(String userId) async =>
       _accounts.removeWhere((_, account) => account.userId == userId);
 
   @override
@@ -1005,16 +1237,26 @@ class _InMemoryAccountStore implements AuthAccountStore {
   }
 
   @override
-  Future<bool> unlinkForUser(
+  Future<AuthAccountUnlinkResult> unlinkForUserIfSafe(
     String userId,
     String providerId,
-    String providerAccountId,
-  ) async {
+    String providerAccountId, {
+    required bool hasEnabledPasswordCredential,
+  }) async {
     final key = (providerId.trim(), providerAccountId.trim());
     final account = _accounts[key];
-    if (account?.userId != userId.trim()) return false;
+    final normalizedUserId = userId.trim();
+    if (account?.userId != normalizedUserId) {
+      return AuthAccountUnlinkResult.notFound;
+    }
+    final hasAnotherProvider = _accounts.entries.any(
+      (entry) => entry.key != key && entry.value.userId == normalizedUserId,
+    );
+    if (!hasEnabledPasswordCredential && !hasAnotherProvider) {
+      return AuthAccountUnlinkResult.lastAuthenticationMethod;
+    }
     _accounts.remove(key);
-    return true;
+    return AuthAccountUnlinkResult.unlinked;
   }
 }
 
@@ -1187,6 +1429,7 @@ class _CallbackUserStore implements AuthUserStore {
     this.onCreateOrFindByEmail,
     this.onUpdate,
     this.onUpdateEmail,
+    this.onDelete,
   });
 
   final FutureOr<AuthUser?> Function(String id)? onFindById;
@@ -1197,6 +1440,7 @@ class _CallbackUserStore implements AuthUserStore {
   final FutureOr<AuthUser?> Function(AuthUser user)? onUpdate;
   final FutureOr<AuthUser?> Function(String userId, String email)?
   onUpdateEmail;
+  final FutureOr<bool> Function(String userId)? onDelete;
 
   @override
   FutureOr<AuthUser?> findById(String id) => onFindById?.call(id);
@@ -1229,18 +1473,26 @@ class _CallbackUserStore implements AuthUserStore {
   @override
   FutureOr<AuthUser?> updateEmailForUser(String userId, String email) =>
       onUpdateEmail?.call(userId, email);
+
+  @override
+  FutureOr<bool> delete(String userId) => onDelete?.call(userId) ?? false;
 }
 
-class _CallbackCredentialStore implements AuthCredentialStore {
+class _CallbackCredentialStore
+    implements AuthCredentialStore, AuthCredentialUserLookupStore {
   const _CallbackCredentialStore({
     this.onFind,
+    this.onFindForUser,
     this.onRegister,
     this.onUpdate,
     this.onUpdatePasswordForUser,
     this.onDelete,
+    this.onDeleteForUser,
   });
 
   final FutureOr<AuthPasswordCredential?> Function(String identifier)? onFind;
+  final FutureOr<AuthPasswordCredential?> Function(String userId)?
+  onFindForUser;
   final FutureOr<AuthUser?> Function(
     AuthUser user,
     AuthPasswordCredential credential,
@@ -1257,10 +1509,15 @@ class _CallbackCredentialStore implements AuthCredentialStore {
   })?
   onUpdatePasswordForUser;
   final FutureOr<void> Function(String credentialId)? onDelete;
+  final FutureOr<void> Function(String userId)? onDeleteForUser;
 
   @override
   FutureOr<AuthPasswordCredential?> findByIdentifier(String identifier) =>
       onFind?.call(identifier);
+
+  @override
+  FutureOr<AuthPasswordCredential?> findForUser(String userId) =>
+      onFindForUser?.call(userId);
 
   @override
   FutureOr<AuthUser?> register(
@@ -1287,6 +1544,9 @@ class _CallbackCredentialStore implements AuthCredentialStore {
 
   @override
   FutureOr<void> delete(String credentialId) => onDelete?.call(credentialId);
+
+  @override
+  FutureOr<void> deleteForUser(String userId) => onDeleteForUser?.call(userId);
 }
 
 class _CallbackAccountStore implements AuthAccountStore {
@@ -1294,7 +1554,8 @@ class _CallbackAccountStore implements AuthAccountStore {
     this.onFind,
     this.onListForUser,
     this.onLink,
-    this.onUnlinkForUser,
+    this.onUnlinkForUserIfSafe,
+    this.onDeleteForUser,
   });
 
   final FutureOr<AuthAccount?> Function(
@@ -1304,12 +1565,14 @@ class _CallbackAccountStore implements AuthAccountStore {
   onFind;
   final FutureOr<List<AuthAccount>> Function(String userId)? onListForUser;
   final FutureOr<AuthAccount> Function(AuthAccount account)? onLink;
-  final FutureOr<bool> Function(
+  final FutureOr<AuthAccountUnlinkResult> Function(
     String userId,
     String providerId,
-    String providerAccountId,
-  )?
-  onUnlinkForUser;
+    String providerAccountId, {
+    required bool hasEnabledPasswordCredential,
+  })?
+  onUnlinkForUserIfSafe;
+  final FutureOr<void> Function(String userId)? onDeleteForUser;
 
   @override
   FutureOr<AuthAccount?> find(String providerId, String providerAccountId) =>
@@ -1324,11 +1587,22 @@ class _CallbackAccountStore implements AuthAccountStore {
       onLink?.call(account) ?? account;
 
   @override
-  FutureOr<bool> unlinkForUser(
+  FutureOr<AuthAccountUnlinkResult> unlinkForUserIfSafe(
     String userId,
     String providerId,
-    String providerAccountId,
-  ) => onUnlinkForUser?.call(userId, providerId, providerAccountId) ?? false;
+    String providerAccountId, {
+    required bool hasEnabledPasswordCredential,
+  }) =>
+      onUnlinkForUserIfSafe?.call(
+        userId,
+        providerId,
+        providerAccountId,
+        hasEnabledPasswordCredential: hasEnabledPasswordCredential,
+      ) ??
+      AuthAccountUnlinkResult.notFound;
+
+  @override
+  FutureOr<void> deleteForUser(String userId) => onDeleteForUser?.call(userId);
 }
 
 class _CallbackSessionStore implements AuthSessionStore {
@@ -1435,10 +1709,14 @@ class _CallbackSessionStore implements AuthSessionStore {
   );
 }
 
-class _CallbackVerificationTokenStore implements AuthVerificationTokenStore {
+class _CallbackVerificationTokenStore
+    implements
+        AuthVerificationTokenStore,
+        AuthVerificationTokenConditionalDeleteStore {
   const _CallbackVerificationTokenStore({
     this.onSave,
     this.onConsume,
+    this.onDeleteToken,
     this.onDelete,
   });
 
@@ -1448,6 +1726,7 @@ class _CallbackVerificationTokenStore implements AuthVerificationTokenStore {
     String token,
   )?
   onConsume;
+  final FutureOr<bool> Function(String identifier, String token)? onDeleteToken;
   final FutureOr<void> Function(String identifier)? onDelete;
 
   @override
@@ -1458,18 +1737,28 @@ class _CallbackVerificationTokenStore implements AuthVerificationTokenStore {
       onConsume?.call(identifier, token);
 
   @override
+  FutureOr<bool> deleteToken(String identifier, String token) =>
+      onDeleteToken?.call(identifier, token) ?? false;
+
+  @override
   FutureOr<void> delete(String identifier) => onDelete?.call(identifier);
 }
 
-class _CallbackEmailChangeTokenStore implements AuthEmailChangeTokenStore {
+class _CallbackEmailChangeTokenStore
+    implements
+        AuthEmailChangeTokenStore,
+        AuthEmailChangeTokenConditionalDeleteStore {
   const _CallbackEmailChangeTokenStore({
     this.onSave,
     this.onConsume,
+    this.onDeleteTokenForUser,
     this.onDeleteForUser,
   });
 
   final FutureOr<void> Function(AuthEmailChangeToken token)? onSave;
   final FutureOr<AuthEmailChangeToken?> Function(String token)? onConsume;
+  final FutureOr<bool> Function(String userId, String token)?
+  onDeleteTokenForUser;
   final FutureOr<void> Function(String userId)? onDeleteForUser;
 
   @override
@@ -1478,6 +1767,10 @@ class _CallbackEmailChangeTokenStore implements AuthEmailChangeTokenStore {
   @override
   FutureOr<AuthEmailChangeToken?> consume(String token) =>
       onConsume?.call(token);
+
+  @override
+  FutureOr<bool> deleteTokenForUser(String userId, String token) =>
+      onDeleteTokenForUser?.call(userId, token) ?? false;
 
   @override
   FutureOr<void> deleteForUser(String userId) => onDeleteForUser?.call(userId);

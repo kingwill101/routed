@@ -1,11 +1,14 @@
 import 'dart:async';
 
+import 'account_policy.dart';
 import 'deletion_transaction.dart';
 import 'device_authorization.dart' show AuthDeviceAccessToken;
 import 'exceptions.dart';
+import 'models.dart';
 import 'plugin.dart';
 import 'oauth_authorization_code_store.dart';
 import 'rate_limit.dart';
+import 'store.dart';
 import 'tokens.dart' show secureRandomToken;
 import 'users.dart' show authUserIsDisabled;
 
@@ -49,7 +52,9 @@ final class OAuthAuthorizationServerPlugin<TContext>
         AuthClientOperationContributor,
         AuthPersistenceContributor,
         AuthRateLimitContributor,
-        AuthReversibleUserDataDeletionContributor {
+        AuthReversibleUserDataDeletionContributor,
+        AuthUserAccessRevocationContributor,
+        AuthOAuthTokenEndpointHost<TContext> {
   OAuthAuthorizationServerPlugin({
     required this.authorizationCodes,
     required this.resolveClient,
@@ -65,15 +70,22 @@ final class OAuthAuthorizationServerPlugin<TContext>
   final AuthOAuthAccessTokenIssuer<TContext> issueAccessToken;
   final Duration codeLifetime;
   final AuthOAuthAuthorizationCodeService _codeService;
+  final Map<String, AuthOAuthTokenGrantHandler<TContext>> _grantHandlers = {};
+  late AuthStore _store;
 
   @override
   String get id => authOAuthAuthorizationServerPluginId;
 
   @override
-  void configure(AuthServerPluginContext<TContext> context) {}
+  void configure(AuthServerPluginContext<TContext> context) {
+    _store = context.store;
+  }
 
   @override
   String get userDataNamespace => 'oauth_authorization_server';
+
+  @override
+  String get userAccessNamespace => 'oauth_authorization_server';
 
   @override
   Future<void> validateUserDeletion(String userId) async {
@@ -90,6 +102,23 @@ final class OAuthAuthorizationServerPlugin<TContext>
   @override
   AuthUserDataDeletionCheckpoint checkpointUserData(String userId) =>
       AuthUserDataDeletionCheckpoint.capture([authorizationCodes]);
+
+  @override
+  Future<void> revokeUserAccess(String userId) async {
+    await authorizationCodes.deleteForUser(userId);
+  }
+
+  @override
+  void registerOAuthTokenGrant(
+    String grantType,
+    AuthOAuthTokenGrantHandler<TContext> handler,
+  ) {
+    final normalized = grantType.trim();
+    if (normalized.isEmpty || _grantHandlers.containsKey(normalized)) {
+      throw StateError('OAuth token grant "$grantType" is already registered.');
+    }
+    _grantHandlers[normalized] = handler;
+  }
 
   @override
   Iterable<AuthEndpointDescriptor<TContext>> get endpoints => [
@@ -272,7 +301,16 @@ final class OAuthAuthorizationServerPlugin<TContext>
     AuthOperationInvocation<TContext> invocation,
     Map<String, dynamic> request,
   ) async {
-    if (_required(request, 'grant_type') != 'authorization_code') {
+    final grantType = _required(request, 'grant_type');
+    final contributed = _grantHandlers[grantType];
+    if (contributed != null) {
+      final result = await contributed(invocation, request);
+      if (result is! Map<String, dynamic>) {
+        throw StateError('OAuth token grant returned a non-object response.');
+      }
+      return result;
+    }
+    if (grantType != 'authorization_code') {
       throw AuthFlowException('unsupported_grant_type');
     }
     final clientId = _required(request, 'client_id');
@@ -287,8 +325,22 @@ final class OAuthAuthorizationServerPlugin<TContext>
       codeVerifier: _required(request, 'code_verifier'),
     );
     if (record == null) throw AuthFlowException('invalid_grant');
+    if (await _findCredentialEligibleUser(record.userId) == null) {
+      throw AuthFlowException('invalid_grant');
+    }
     final token = await issueAccessToken(invocation.context, record);
     return token.toJson();
+  }
+
+  Future<AuthUser?> _findCredentialEligibleUser(String userId) async {
+    final user = await _store.users.findById(userId);
+    if (user == null || authUserIsDisabled(user)) return null;
+    final states = _store is AuthAccountStateStore
+        ? _store as AuthAccountStateStore
+        : null;
+    final state = await states?.find(userId);
+    if (state?.disabled == true || state?.isLocked() == true) return null;
+    return user;
   }
 
   static final AuthOperationCodec<Map<String, dynamic>> _mapCodec =

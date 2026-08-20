@@ -121,6 +121,49 @@ void main() {
     response.assertStatus(HttpStatus.found);
     expect(response.headers['location'], ['https://client.example/callback']);
   });
+
+  test('well-known metadata resolves the live manager after reload', () async {
+    AuthManager buildManager(String host) => AuthManager(
+      AuthOptions<EngineContext>(
+        providers: const [],
+        store: InMemoryAuthStore(),
+        storeMode: AuthStoreMode.ephemeral,
+        plugins: [
+          McpAuthPlugin<EngineContext>(
+            protectedResource: AuthOAuthProtectedResourceMetadata(
+              resource: Uri.parse('https://mcp.example.test/mcp'),
+              authorizationServers: [Uri.parse('https://$host')],
+            ),
+            authorizationServer: AuthOAuthAuthorizationServerMetadata(
+              issuer: Uri.parse('https://$host'),
+              authorizationEndpoint: Uri.parse('https://$host/oauth/authorize'),
+              tokenEndpoint: Uri.parse('https://$host/oauth/token'),
+            ),
+          ),
+        ],
+      ),
+    );
+
+    final initial = buildManager('old-auth.example.test');
+    var live = initial;
+    final engine = testEngine();
+    AuthRoutes(initial, managerOf: () => live).register(engine.defaultRouter);
+    await engine.initialize();
+    final client = TestClient(RoutedRequestHandler(engine));
+    addTearDown(client.close);
+
+    live = buildManager('new-auth.example.test');
+    final response = await client.get(
+      '/.well-known/oauth-authorization-server',
+    );
+
+    response.assertStatus(HttpStatus.ok);
+    expect(response.json()['issuer'], 'https://new-auth.example.test');
+    expect(
+      response.json()['token_endpoint'],
+      'https://new-auth.example.test/oauth/token',
+    );
+  });
 }
 
 final class _RedirectPlugin

@@ -97,6 +97,7 @@ Map<String, dynamic> authJwtClaimsForUser(AuthUser user) {
     'image': safeUser.image,
     'roles': safeUser.roles,
     'attributes': safeUser.attributes,
+    'isAnonymous': safeUser.isAnonymous,
   };
 }
 
@@ -109,6 +110,7 @@ AuthUser authUserFromJwtClaims(Map<String, dynamic> claims) {
     image: claims['image']?.toString(),
     roles: _jwtRoles(claims['roles']),
     attributes: _jwtAttributes(claims['attributes']),
+    isAnonymous: claims['isAnonymous'] == true,
   );
 }
 

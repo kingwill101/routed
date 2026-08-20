@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'account_policy.dart';
 import 'deletion_transaction.dart';
 import 'exceptions.dart';
 import 'plugin.dart';
@@ -91,7 +92,9 @@ final class DeviceAuthorizationPlugin<TContext>
         AuthPersistenceContributor,
         AuthClientOperationContributor,
         AuthRateLimitContributor,
-        AuthReversibleUserDataDeletionContributor {
+        AuthReversibleUserDataDeletionContributor,
+        AuthUserAccessRevocationContributor,
+        AuthServerPluginTopologyAware<TContext> {
   DeviceAuthorizationPlugin({
     required this.verificationUri,
     required this.validateClient,
@@ -100,7 +103,7 @@ final class DeviceAuthorizationPlugin<TContext>
     this.pollInterval = const Duration(seconds: 5),
   }) : assert(deviceCodeTtl > Duration.zero),
        assert(pollInterval > Duration.zero),
-       _userStore = null;
+       _authStore = null;
 
   final String verificationUri;
   final AuthDeviceAuthorizationClientValidator<TContext> validateClient;
@@ -109,7 +112,8 @@ final class DeviceAuthorizationPlugin<TContext>
   final Duration pollInterval;
 
   late AuthDeviceAuthorizationStore _store;
-  AuthUserStore? _userStore;
+  AuthStore? _authStore;
+  bool _contributesTokenEndpoint = true;
   bool _configured = false;
 
   @override
@@ -119,9 +123,12 @@ final class DeviceAuthorizationPlugin<TContext>
   String get userDataNamespace => 'device_authorization';
 
   @override
+  String get userAccessNamespace => 'device_authorization';
+
+  @override
   void configure(AuthServerPluginContext<TContext> context) {
     _store = context.store.deviceAuthorizations;
-    _userStore = context.store.users;
+    _authStore = context.store;
     _configured = true;
   }
 
@@ -141,6 +148,30 @@ final class DeviceAuthorizationPlugin<TContext>
   AuthUserDataDeletionCheckpoint checkpointUserData(String userId) {
     _ensureConfigured();
     return AuthUserDataDeletionCheckpoint.capture([_store]);
+  }
+
+  @override
+  Future<void> revokeUserAccess(String userId) async {
+    await _store.deleteForUser(userId);
+  }
+
+  @override
+  void composePluginTopology(Iterable<AuthServerPlugin<TContext>> plugins) {
+    final hosts = plugins
+        .where((plugin) => !identical(plugin, this))
+        .whereType<AuthOAuthTokenEndpointHost<TContext>>()
+        .toList(growable: false);
+    if (hosts.length > 1) {
+      throw StateError(
+        'Device authorization found multiple OAuth token hosts.',
+      );
+    }
+    if (hosts.isEmpty) return;
+    hosts.single.registerOAuthTokenGrant(
+      'urn:ietf:params:oauth:grant-type:device_code',
+      (invocation, request) => _deviceTokenGrant(invocation, request),
+    );
+    _contributesTokenEndpoint = false;
   }
 
   @override
@@ -168,15 +199,16 @@ final class DeviceAuthorizationPlugin<TContext>
       authentication: AuthOperationAuthentication.session,
       operationName: 'deny',
     ),
-    _endpoint(
-      id: 'deviceAuthorization.token',
-      method: AuthOperationMethod.post,
-      path: '/oauth/token',
-      authentication: AuthOperationAuthentication.none,
-      originPolicy: AuthOperationOriginPolicy.none,
-      csrfPolicy: AuthOperationCsrfPolicy.none,
-      operationName: 'token',
-    ),
+    if (_contributesTokenEndpoint)
+      _endpoint(
+        id: 'deviceAuthorization.token',
+        method: AuthOperationMethod.post,
+        path: '/oauth/token',
+        authentication: AuthOperationAuthentication.none,
+        originPolicy: AuthOperationOriginPolicy.none,
+        csrfPolicy: AuthOperationCsrfPolicy.none,
+        operationName: 'token',
+      ),
   ];
 
   AuthEndpointDescriptor<TContext> _endpoint({
@@ -362,6 +394,11 @@ final class DeviceAuthorizationPlugin<TContext>
       case AuthDeviceAuthorizationPollStatus.approved:
         break;
     }
+    final approvedUserId = result.authorization?.userId;
+    if (approvedUserId == null ||
+        await _findCredentialEligibleUser(approvedUserId) == null) {
+      throw AuthFlowException('invalid_grant');
+    }
     final claimed = await _store.claimApproved(
       hash,
       clientId: normalizedClientId,
@@ -371,8 +408,8 @@ final class DeviceAuthorizationPlugin<TContext>
     if (claimed == null || userId == null) {
       throw AuthFlowException('invalid_grant');
     }
-    final user = await _userStore!.findById(userId);
-    if (user == null || authUserIsDisabled(user)) {
+    final user = await _findCredentialEligibleUser(userId);
+    if (user == null) {
       throw AuthFlowException('invalid_grant');
     }
     return issueToken(
@@ -383,6 +420,27 @@ final class DeviceAuthorizationPlugin<TContext>
       authorizationId: claimed.id,
     );
   }
+
+  Future<AuthUser?> _findCredentialEligibleUser(String userId) async {
+    final store = _authStore!;
+    final user = await store.users.findById(userId);
+    if (user == null || authUserIsDisabled(user)) return null;
+    final states = store is AuthAccountStateStore
+        ? store as AuthAccountStateStore
+        : null;
+    final state = await states?.find(userId);
+    if (state?.disabled == true || state?.isLocked() == true) return null;
+    return user;
+  }
+
+  Future<Object?> _deviceTokenGrant(
+    AuthOperationInvocation<TContext> invocation,
+    Map<String, dynamic> input,
+  ) => pollDeviceToken(
+    context: invocation.context,
+    clientId: _string(input, 'client_id'),
+    deviceCode: _string(input, 'device_code'),
+  ).then((token) => token.toJson());
 
   Future<Object?> _invokeEndpoint(
     String id,

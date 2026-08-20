@@ -17,7 +17,8 @@ void main() {
     );
     expect(
       authUserIsDisabled(
-          AuthUser(id: 'disabled', attributes: {'disabled': true})),
+        AuthUser(id: 'disabled', attributes: {'disabled': true}),
+      ),
       isTrue,
     );
     expect(
@@ -193,8 +194,18 @@ void main() {
         'image': 'avatar.png',
         'roles': <String>['admin'],
         'attributes': <String, dynamic>{'team': 'core'},
+        'isAnonymous': false,
       }),
     );
+  });
+
+  test('JWT claims preserve anonymous identity', () {
+    final claims = authJwtClaimsForUser(
+      AuthUser(id: 'anonymous-1', isAnonymous: true),
+    );
+
+    expect(claims['isAnonymous'], isTrue);
+    expect(authUserFromJwtClaims(claims).isAnonymous, isTrue);
   });
 
   test('authUserFromJwtClaims maps standard auth claims to user', () {

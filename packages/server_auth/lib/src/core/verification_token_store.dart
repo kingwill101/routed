@@ -17,8 +17,20 @@ abstract class AuthVerificationTokenStore {
   FutureOr<void> delete(String identifier);
 }
 
+/// Optional compare-and-delete capability for failed token delivery cleanup.
+///
+/// Implementations must delete only the record matching both [identifier] and
+/// [token]. This prevents one failed delivery from invalidating a newer token
+/// issued concurrently for the same identifier.
+abstract interface class AuthVerificationTokenConditionalDeleteStore {
+  FutureOr<bool> deleteToken(String identifier, String token);
+}
+
 /// In-memory token store for development and tests.
-class InMemoryAuthVerificationTokenStore implements AuthVerificationTokenStore {
+class InMemoryAuthVerificationTokenStore
+    implements
+        AuthVerificationTokenStore,
+        AuthVerificationTokenConditionalDeleteStore {
   InMemoryAuthVerificationTokenStore({
     DateTime Function()? clock,
     this.maxTokens = 1024,
@@ -28,8 +40,8 @@ class InMemoryAuthVerificationTokenStore implements AuthVerificationTokenStore {
     }
   }
 
-  final Map<String, Map<String, DateTime>> _tokens =
-      <String, Map<String, DateTime>>{};
+  final Map<String, Map<String, _StoredVerificationToken>> _tokens =
+      <String, Map<String, _StoredVerificationToken>>{};
   final DateTime Function() _clock;
 
   /// Maximum number of token digests retained by this local store.
@@ -55,7 +67,7 @@ class InMemoryAuthVerificationTokenStore implements AuthVerificationTokenStore {
     final digest = hashOpaqueToken(token.token);
     final byDigest = _tokens.putIfAbsent(
       token.identifier,
-      () => <String, DateTime>{},
+      () => <String, _StoredVerificationToken>{},
     );
     final alreadyStored = byDigest.containsKey(digest);
     if (!alreadyStored) {
@@ -63,7 +75,10 @@ class InMemoryAuthVerificationTokenStore implements AuthVerificationTokenStore {
         _removeOldest();
       }
     }
-    byDigest[digest] = token.expiresAt;
+    byDigest[digest] = _StoredVerificationToken(
+      expiresAt: token.expiresAt,
+      metadata: token.metadata,
+    );
   }
 
   @override
@@ -80,17 +95,18 @@ class InMemoryAuthVerificationTokenStore implements AuthVerificationTokenStore {
     if (byDigest == null) {
       return null;
     }
-    final expiresAt = byDigest.remove(hashOpaqueToken(token));
+    final stored = byDigest.remove(hashOpaqueToken(token));
     if (byDigest.isEmpty) {
       _tokens.remove(identifier);
     }
-    if (expiresAt == null || !now.isBefore(expiresAt)) {
+    if (stored == null || !now.isBefore(stored.expiresAt)) {
       return null;
     }
     return AuthVerificationToken(
       identifier: identifier,
       token: token,
-      expiresAt: expiresAt,
+      expiresAt: stored.expiresAt,
+      metadata: stored.metadata,
     );
   }
 
@@ -99,12 +115,22 @@ class InMemoryAuthVerificationTokenStore implements AuthVerificationTokenStore {
     _tokens.remove(identifier);
   }
 
+  @override
+  Future<bool> deleteToken(String identifier, String token) async {
+    if (identifier.isEmpty || token.isEmpty) return false;
+    final byDigest = _tokens[identifier];
+    if (byDigest == null) return false;
+    final removed = byDigest.remove(hashOpaqueToken(token)) != null;
+    if (byDigest.isEmpty) _tokens.remove(identifier);
+    return removed;
+  }
+
   int get _tokenCount =>
       _tokens.values.fold<int>(0, (count, tokens) => count + tokens.length);
 
   void _removeExpired(DateTime now) {
     _tokens.removeWhere((_, tokens) {
-      tokens.removeWhere((_, expiresAt) => !now.isBefore(expiresAt));
+      tokens.removeWhere((_, token) => !now.isBefore(token.expiresAt));
       return tokens.isEmpty;
     });
   }
@@ -118,4 +144,14 @@ class InMemoryAuthVerificationTokenStore implements AuthVerificationTokenStore {
     tokens.remove(tokens.keys.first);
     if (tokens.isEmpty) _tokens.remove(identifier);
   }
+}
+
+final class _StoredVerificationToken {
+  const _StoredVerificationToken({
+    required this.expiresAt,
+    required this.metadata,
+  });
+
+  final DateTime expiresAt;
+  final Map<String, dynamic> metadata;
 }

@@ -104,9 +104,30 @@ abstract interface class AuthReversibleUserDataDeletionContributor
   FutureOr<AuthUserDataDeletionCheckpoint> checkpointUserData(String userId);
 }
 
+/// Plugin-owned credentials or tokens that must be revoked when a user is
+/// made unavailable without deleting their data.
+abstract interface class AuthUserAccessRevocationContributor {
+  String get userAccessNamespace;
+  FutureOr<void> revokeUserAccess(String userId);
+}
+
 /// Optional second-pass composition after every plugin has been registered.
 abstract interface class AuthServerPluginTopologyAware<TContext> {
   void composePluginTopology(Iterable<AuthServerPlugin<TContext>> plugins);
+}
+
+typedef AuthOAuthTokenGrantHandler<TContext> =
+    FutureOr<Object?> Function(
+      AuthOperationInvocation<TContext> invocation,
+      Map<String, dynamic> request,
+    );
+
+/// Host for grant handlers sharing a single OAuth token endpoint.
+abstract interface class AuthOAuthTokenEndpointHost<TContext> {
+  void registerOAuthTokenGrant(
+    String grantType,
+    AuthOAuthTokenGrantHandler<TContext> handler,
+  );
 }
 
 abstract interface class AuthEndpointDescriptor<TContext> {
@@ -316,29 +337,6 @@ class AuthServerPluginRegistry<TContext> {
       throw StateError('Auth plugin "$id" is already registered.');
     }
 
-    final contributed = plugin is AuthEndpointContributor<TContext>
-        ? (plugin as AuthEndpointContributor<TContext>).endpoints.toList(
-            growable: false,
-          )
-        : <AuthEndpointDescriptor<TContext>>[];
-    final contributedIds = <String>{};
-    final contributedKeys = <String>{};
-    for (final endpoint in contributed) {
-      final endpointId = endpoint.id.trim();
-      final path = _normalizeEndpointPath(endpoint.path);
-      if (endpointId.isEmpty || path.isEmpty) {
-        throw ArgumentError('Plugin "$id" contributed an invalid endpoint.');
-      }
-      if (_endpoints.containsKey(endpointId) ||
-          !contributedIds.add(endpointId)) {
-        throw StateError('Auth endpoint "$endpointId" is already registered.');
-      }
-      final key = '${endpoint.method.name}:$path';
-      if (_endpointKeys.contains(key) || !contributedKeys.add(key)) {
-        throw StateError('Auth endpoint path "$key" is already registered.');
-      }
-    }
-
     _plugins[id] = plugin;
     plugin.configure(
       AuthServerPluginContext<TContext>(
@@ -348,12 +346,6 @@ class AuthServerPluginRegistry<TContext> {
         sessionStrategy: _sessionStrategy,
       ),
     );
-    for (final endpoint in contributed) {
-      _endpoints[endpoint.id.trim()] = endpoint;
-      _endpointKeys.add(
-        '${endpoint.method.name}:${_normalizeEndpointPath(endpoint.path)}',
-      );
-    }
   }
 
   void freeze() {
@@ -364,6 +356,29 @@ class AuthServerPluginRegistry<TContext> {
     for (final plugin
         in topology.whereType<AuthServerPluginTopologyAware<TContext>>()) {
       plugin.composePluginTopology(topology);
+    }
+    for (final plugin
+        in topology.whereType<AuthEndpointContributor<TContext>>()) {
+      for (final endpoint in plugin.endpoints) {
+        final endpointId = endpoint.id.trim();
+        final path = _normalizeEndpointPath(endpoint.path);
+        if (endpointId.isEmpty || path.isEmpty) {
+          throw ArgumentError(
+            'Plugin "${(plugin as AuthServerPlugin<TContext>).id}" '
+            'contributed an invalid endpoint.',
+          );
+        }
+        if (_endpoints.containsKey(endpointId)) {
+          throw StateError(
+            'Auth endpoint "$endpointId" is already registered.',
+          );
+        }
+        final key = '${endpoint.method.name}:$path';
+        if (!_endpointKeys.add(key)) {
+          throw StateError('Auth endpoint path "$key" is already registered.');
+        }
+        _endpoints[endpointId] = endpoint;
+      }
     }
     _frozen = true;
   }
