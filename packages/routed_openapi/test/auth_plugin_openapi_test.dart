@@ -447,6 +447,8 @@ void main() {
       final schemas = spec.components!.schemas;
       final registration = spec.paths['/auth/username/register']!.post!;
       final signIn = spec.paths['/auth/username/sign-in']!.post!;
+      final change = spec.paths['/auth/username/change']!.post!;
+      final remove = spec.paths['/auth/username/remove']!.post!;
       final registrationRequest = schemas['AuthUsernameRegisterRequest']!;
       final registrationProperties =
           registrationRequest['properties']! as Map<String, Object?>;
@@ -476,6 +478,50 @@ void main() {
         containsAll(<String>['400', '401', '403', '429']),
       );
       expect(signIn.responses, contains('202'));
+      expect(change.security, isNotEmpty);
+      expect(remove.security, isNotEmpty);
+      expect(
+        registration.extensions[AuthPluginOpenApiGenerator
+            .operationSemanticsExtension],
+        <String, Object?>{
+          'effect': 'mutation',
+          'persistence': 'durable',
+          'atomicity': 'atomic',
+          'replaySafety': 'singleUse',
+          'persistenceReference': <String, Object?>{
+            'schemaId': 'username',
+            'atomicOperationId': 'username.register',
+          },
+        },
+      );
+      expect(
+        change.extensions[AuthPluginOpenApiGenerator
+            .operationSemanticsExtension],
+        <String, Object?>{
+          'effect': 'mutation',
+          'persistence': 'durable',
+          'atomicity': 'atomic',
+          'replaySafety': 'idempotent',
+          'persistenceReference': <String, Object?>{
+            'schemaId': 'username',
+            'atomicOperationId': 'username.change',
+          },
+        },
+      );
+      expect(
+        remove.extensions[AuthPluginOpenApiGenerator
+            .operationSemanticsExtension],
+        <String, Object?>{
+          'effect': 'mutation',
+          'persistence': 'durable',
+          'atomicity': 'atomic',
+          'replaySafety': 'idempotent',
+          'persistenceReference': <String, Object?>{
+            'schemaId': 'username',
+            'atomicOperationId': 'username.remove',
+          },
+        },
+      );
       expect(
         schemas[AuthPluginOpenApiGenerator.twoFactorChallengeSchema],
         containsPair('required', <String>[

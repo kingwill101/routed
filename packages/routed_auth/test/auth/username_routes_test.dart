@@ -103,6 +103,27 @@ void main() {
       );
       expect(events, ['captcha:routed.user']);
 
+      final collision = await fixture.client
+          .postJson('/auth/username/register', const <String, dynamic>{
+            'username': 'ROUTED.USER',
+            'email': 'different@example.com',
+            'password': password,
+            'captchaToken': captcha,
+          });
+      final malformed = await fixture.client
+          .postJson('/auth/username/register', const <String, dynamic>{
+            'username': 'not-a-username@',
+            'email': 'another@example.com',
+            'password': password,
+            'captchaToken': captcha,
+          });
+      collision.assertStatus(HttpStatus.unauthorized);
+      malformed.assertStatus(HttpStatus.unauthorized);
+      expect(collision.json(), <String, dynamic>{
+        'error': 'registration_failed',
+      });
+      expect(malformed.json(), collision.json());
+
       final userId = registered.json()['user']['id'] as String;
       final sessions = await store.sessions.listForUser(userId);
       expect(
@@ -123,6 +144,61 @@ void main() {
       expect(
         limiter.requests.last.operation,
         authUsernameSignInRateLimitOperation,
+      );
+
+      final csrfResponse = await fixture.client.get('/auth/csrf');
+      csrfResponse.assertStatus(HttpStatus.ok);
+      final csrf = csrfResponse.json()['csrfToken'] as String;
+      final changed = await fixture.client.postJson(
+        '/auth/username/change',
+        <String, dynamic>{'username': ' Routed.Changed ', '_csrf': csrf},
+      );
+      changed.assertStatus(HttpStatus.ok);
+      expect(changed.json()['status'], 'username_changed');
+      expect(changed.json()['username'], 'routed.changed');
+      expect(
+        changed.json()['user']['attributes']['username'],
+        'routed.changed',
+      );
+      expect(changed.body, isNot(contains(password)));
+      expect(
+        limiter.requests.last.operation,
+        authUsernameChangeRateLimitOperation,
+      );
+
+      final oldUsername = await fixture.client.postJson(
+        '/auth/username/sign-in',
+        const <String, dynamic>{
+          'identifier': 'routed.user',
+          'password': password,
+          'captchaToken': captcha,
+        },
+      );
+      oldUsername.assertStatus(HttpStatus.unauthorized);
+      expect(oldUsername.json(), <String, dynamic>{
+        'error': 'invalid_credentials',
+      });
+      final newUsername = await fixture.client
+          .postJson('/auth/username/sign-in', const <String, dynamic>{
+            'identifier': 'ROUTED.CHANGED',
+            'password': password,
+            'captchaToken': captcha,
+          });
+      newUsername.assertStatus(HttpStatus.ok);
+
+      final removalCsrfResponse = await fixture.client.get('/auth/csrf');
+      final removalCsrf = removalCsrfResponse.json()['csrfToken'] as String;
+      final lastMethod = await fixture.client.postJson(
+        '/auth/username/remove',
+        <String, dynamic>{'_csrf': removalCsrf},
+      );
+      lastMethod.assertStatus(HttpStatus.forbidden);
+      expect(lastMethod.json(), <String, dynamic>{
+        'error': 'last_authentication_method',
+      });
+      expect(
+        limiter.requests.last.operation,
+        authUsernameRemovalRateLimitOperation,
       );
 
       final unknown = await fixture.client

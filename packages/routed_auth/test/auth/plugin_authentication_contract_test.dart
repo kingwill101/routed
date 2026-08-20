@@ -304,15 +304,17 @@ Future<_PreparedPlugin> _prepareUsername({
     email: 'username@example.com',
     attributes: const <String, dynamic>{'username': 'username-user'},
   );
-  await (store.credentials as AuthUsernameCredentialStore).registerUsername(
-    user,
-    AuthPasswordCredential(
-      id: 'username-credential',
-      userId: user.id,
-      identifier: 'username-user',
-      passwordHash: 'hash:$_password',
-      createdAt: now,
-      updatedAt: now,
+  await store.registerUsername(
+    AuthUsernameRegistrationCommand(
+      user: user,
+      credential: AuthPasswordCredential(
+        id: 'username-credential',
+        userId: user.id,
+        identifier: 'username-user',
+        passwordHash: 'hash:$_password',
+        createdAt: now,
+        updatedAt: now,
+      ),
     ),
   );
   final manager = _manager(
