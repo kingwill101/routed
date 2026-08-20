@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import '../core/providers.dart';
+import '../core/tokens.dart' show hashOpaqueToken;
 import '../core/webauthn_store.dart';
 
 typedef AuthWebAuthnStoreConformanceFactory =
@@ -232,6 +233,16 @@ final class AuthWebAuthnStoreConformanceSuite {
     _require(
       await store.updateUsage(
             credentialId: credential.credentialId,
+            expectedCounter: 7,
+            newCounter: 8,
+            lastUsedAt: _now.subtract(const Duration(seconds: 1)),
+          ) ==
+          null,
+      'pre-creation usage time mutated record',
+    );
+    _require(
+      await store.updateUsage(
+            credentialId: credential.credentialId,
             expectedCounter: 6,
             newCounter: 8,
             lastUsedAt: _now.add(const Duration(minutes: 1)),
@@ -351,7 +362,7 @@ final DateTime _now = DateTime.utc(2099, 1, 1);
 
 AuthWebAuthnChallenge _challenge(String suffix) => AuthWebAuthnChallenge(
   id: 'challenge-$suffix',
-  challengeHash: 'digest-$suffix',
+  challengeHash: hashOpaqueToken('challenge-$suffix'),
   ceremony: AuthWebAuthnCeremony.authentication,
   relyingPartyId: 'example.com',
   origin: 'https://example.com',
